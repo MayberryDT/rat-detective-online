@@ -70,7 +70,10 @@ export class NetworkManager {
         this.cheeseGun = cheeseGun;
 
         const url = serverUrl || (import.meta as any).env?.VITE_SERVER_URL || 'http://localhost:3000';
-        this.socket = io(url);
+        this.socket = io(url, {
+            withCredentials: true,
+            transports: ['websocket', 'polling']
+        });
 
         this.setupListeners();
     }

@@ -8,8 +8,12 @@ const PORT = process.env.PORT || 3000;
 
 const io = new Server(httpServer, {
     cors: {
-        origin: '*',
-        methods: ['GET', 'POST']
+        origin: (origin, callback) => {
+            // Allow all origins (for development and custom domains)
+            callback(null, true);
+        },
+        methods: ['GET', 'POST'],
+        credentials: true
     }
 });
 
