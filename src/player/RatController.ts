@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
 import { CheeseGun } from '../weapons/CheeseGun';
+import { RatOptions } from '../utils/RatModel';
 
 // ─── TUNING CONSTANTS ─────────────────────────────────────────────
 const MOVE_SPEED = 18;
@@ -22,11 +23,11 @@ export class RatController {
     private canJump = false;
     private elapsed = 0;
 
-    constructor(scene: THREE.Scene, world: CANNON.World, camera: THREE.PerspectiveCamera) {
+    constructor(scene: THREE.Scene, world: CANNON.World, camera: THREE.PerspectiveCamera, name: string = 'Player', options?: RatOptions) {
         this.camera = camera;
 
-        // Create the Player Entity
-        this.entity = new RatEntity(scene, world, new THREE.Vector3(15, 2, 15), "Player");
+        // Create the Player Entity with the player's chosen name and appearance
+        this.entity = new RatEntity(scene, world, new THREE.Vector3(15, 2, 15), name, options);
 
         // Listen for ground contact
         this.entity.body.addEventListener('collide', (evt: any) => {

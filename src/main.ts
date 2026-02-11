@@ -3,8 +3,25 @@ import * as CANNON from 'cannon-es';
 import { CityGenerator } from './world/CityGenerator';
 import { RatController } from './player/RatController';
 import { CheeseGun } from './weapons/CheeseGun';
-import { TestRat } from './enemies/TestRat';
+import { NetworkManager } from './network/NetworkManager';
 import { initEntitySounds } from './entities/RatEntity';
+import { HatType, RatOptions } from './utils/RatModel';
+
+// ─── COLOR PALETTES (must match RatEntity.ts) ────────────────────
+const HAT_COLORS = [0xDC4A3C, 0x3498DB, 0x2ECC71, 0xA855F7, 0xE67E22];
+const FUR_COLORS = [0xE8B84D, 0xC8C8D0, 0xD4A06A, 0xCD6839, 0xF0E0C0];
+const COAT_COLORS = [0xBE4545, 0x3A5F95, 0x45945A, 0xA08050, 0x7E4F99];
+const HAT_TYPES: HatType[] = ['fedora', 'trilby', 'porkpie'];
+
+function pickRandom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function generateRandomAppearance(): RatOptions {
+  return {
+    hatType: pickRandom(HAT_TYPES),
+    hatColor: pickRandom(HAT_COLORS),
+    furColor: pickRandom(FUR_COLORS),
+    coatColor: pickRandom(COAT_COLORS),
+  };
+}
 
 // ─── RENDERER ─────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -29,34 +46,28 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   600
 );
-camera.layers.enable(1); // Render layer 1 (billboard sprites) but raycasters stay on layer 0
+camera.layers.enable(1);
 
 // ─── AUDIO ────────────────────────────────────────────────────────
 const listener = new THREE.AudioListener();
 camera.add(listener);
 
-// Initialize entity sound effects (rat hit, rat death, player hit)
 initEntitySounds(listener);
 
 const backgroundMusic = new THREE.Audio(listener);
 const audioLoader = new THREE.AudioLoader();
 
 let musicBufferReady = false;
-let gameStarted = false; // Declared early for visibility in loader callback
+let gameStarted = false;
 
-/**
- * Robust helper to play background music once ready and context is live
- */
 const playMusic = () => {
   if (musicBufferReady && !backgroundMusic.isPlaying) {
     if (listener.context.state === 'suspended') {
       listener.context.resume().then(() => {
         backgroundMusic.play();
-        console.log("Audio context resumed and music started.");
       });
     } else {
       backgroundMusic.play();
-      console.log("Music started (context already running).");
     }
   }
 };
@@ -66,17 +77,11 @@ audioLoader.load('/music/main-theme.mp3', (buffer) => {
   backgroundMusic.setLoop(true);
   backgroundMusic.setVolume(0.4);
   musicBufferReady = true;
-  // If the user already clicked start before loading finished
-  if (gameStarted) {
-    playMusic();
-  }
+  if (gameStarted) playMusic();
 });
 
-// Global "prime" to unlock audio context on any first interaction
 const unlockAudio = () => {
-  if (listener.context.state === 'suspended') {
-    listener.context.resume();
-  }
+  if (listener.context.state === 'suspended') listener.context.resume();
   window.removeEventListener('click', unlockAudio);
   window.removeEventListener('mousedown', unlockAudio);
   window.removeEventListener('touchstart', unlockAudio);
@@ -88,16 +93,12 @@ window.addEventListener('touchstart', unlockAudio);
 window.addEventListener('keydown', unlockAudio);
 
 // ─── LIGHTING ─────────────────────────────────────────────────────
-
-// 1. Ambient — purple-grey wash so nothing is ever pitch black
 const ambient = new THREE.AmbientLight(0x664488, 0.7);
 scene.add(ambient);
 
-// 1b. Hemisphere — sky/ground fill to ensure base visibility
 const hemiLight = new THREE.HemisphereLight(0x8866aa, 0x222222, 1.2);
 scene.add(hemiLight);
 
-// 2. Directional — the Moon (pale blue)
 const moonLight = new THREE.DirectionalLight(0xaaaaff, 1.2);
 moonLight.position.set(50, 100, 50);
 moonLight.target.position.set(0, 0, 0);
@@ -113,7 +114,6 @@ moonLight.shadow.bias = -0.0005;
 scene.add(moonLight);
 scene.add(moonLight.target);
 
-// 3. Player Flashlight — warm yellow cone that follows the rat
 const flashlight = new THREE.SpotLight(0xfffebb, 2.0, 40, 0.6, 0.5, 1.2);
 flashlight.castShadow = true;
 flashlight.shadow.mapSize.set(512, 512);
@@ -131,7 +131,6 @@ world.broadphase = new CANNON.NaiveBroadphase();
 world.defaultContactMaterial.friction = 0.0;
 world.defaultContactMaterial.restitution = 0.05;
 
-// Ground physics body
 const groundBody = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
 groundBody.addShape(new CANNON.Plane());
 groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
@@ -161,73 +160,185 @@ const city = new CityGenerator(scene, world, {
 });
 city.generate();
 
-// ─── CHEESE GUN (Manager) ─────────────────────────────────────────
+// ─── CHEESE GUN ───────────────────────────────────────────────────
 const cheeseGun = new CheeseGun(scene, world, listener);
-
-// ─── PLAYER ───────────────────────────────────────────────────────
-const rat = new RatController(scene, world, camera);
-
-// Wire up the camera-based aiming for the player
-cheeseGun.setPlayer(camera, rat.entity);
-
-// Mark as player entity (for correct hit/death sounds)
-rat.entity.isPlayer = true;
-
-// Player billboard stays visible so you can see your name and health
-
-// ─── ENEMIES (Spread Throughout City) ─────────────────────────────
-const MAX_ENEMIES = 6;
-const enemies: TestRat[] = [];
-
-// Spawn NPCs at a reasonable distance from the player (40-100 units)
-// so they're visible in the fog and reachable
-function spawnEnemy(): void {
-  const playerPos = rat.entity.mesh.position;
-
-  // Random direction from player
-  const angle = Math.random() * Math.PI * 2;
-  const dist = 40 + Math.random() * 60; // 40-100 units from player
-
-  const x = playerPos.x + Math.cos(angle) * dist;
-  const z = playerPos.z + Math.sin(angle) * dist;
-
-  const pos = new THREE.Vector3(x, 2, z);
-  enemies.push(new TestRat(scene, world, pos, rat.entity, cheeseGun));
-}
-
-// Initial spawn
-for (let i = 0; i < 4; i++) spawnEnemy();
 
 // ─── INPUT ────────────────────────────────────────────────────────
 const keys: Record<string, boolean> = {};
 window.addEventListener('keydown', (e) => { keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-// ─── GAME STATE ───────────────────────────────────────────────────
-// (gameStarted declared above in Audio section)
+// ─── MULTIPLAYER STATE ────────────────────────────────────────────
+let rat: RatController | null = null;
+let networkManager: NetworkManager | null = null;
 
-const entryScreen = document.getElementById('entry-screen');
-const startButton = document.getElementById('start-prompt');
+// ─── UI ELEMENTS ──────────────────────────────────────────────────
+const titleScreen = document.getElementById('title-screen')!;
+const nameInput = document.getElementById('player-name') as HTMLInputElement;
+const enterBtn = document.getElementById('enter-city-btn')!;
+const scoreboardList = document.getElementById('scoreboard-list')!;
+const scoreboardPanel = document.getElementById('scoreboard')!;
+const killFeed = document.getElementById('kill-feed')!;
+const victoryOverlay = document.getElementById('victory-overlay')!;
+const victoryText = document.getElementById('victory-text')!;
+const respawnOverlay = document.getElementById('respawn-overlay')!;
+const respawnTimer = document.getElementById('respawn-timer')!;
 
-if (startButton && entryScreen) {
-  startButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    gameStarted = true;
-    renderer.domElement.requestPointerLock();
-    entryScreen.classList.add('fade-out');
+// ─── TITLE SCREEN → ENTER CITY ────────────────────────────────────
+let hasJoined = false; // Prevent double-click ghost players
 
-    // Resume Audio Context & Play Music
-    playMusic();
+enterBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (hasJoined) return; // ← Guard: only allow one join
+  hasJoined = true;
+  enterBtn.setAttribute('disabled', 'true');
 
-    setTimeout(() => entryScreen.remove(), 1500);
-  });
-}
+  const playerName = nameInput.value.trim() || 'Anonymous Rat';
 
-// Fallback click on body to request pointer lock ONLY if game started
+  gameStarted = true;
+  renderer.domElement.requestPointerLock();
+  titleScreen.classList.add('fade-out');
+  playMusic();
+
+  setTimeout(() => titleScreen.style.display = 'none', 1500);
+
+  // Show scoreboard
+  scoreboardPanel.style.display = 'block';
+
+  // ── Generate random appearance (synced across all clients) ──
+  const localAppearance = generateRandomAppearance();
+
+  // ── Spawn local player with chosen name + appearance ──
+  rat = new RatController(scene, world, camera, playerName, localAppearance);
+  cheeseGun.setPlayer(camera, rat.entity);
+  rat.entity.isPlayer = true;
+
+  // ── Initialize Network ──
+  networkManager = new NetworkManager(scene, world, cheeseGun);
+
+  // Send the SAME appearance to the server so everyone sees the same colors
+  networkManager.connect(playerName, localAppearance);
+
+  // ── Wire up CheeseGun hit → Network ──
+  cheeseGun.onHitEntity = (victim, damage) => {
+    if (networkManager && victim.isRemote) {
+      const victimId = networkManager.getSocketIdForEntity(victim);
+      if (victimId) {
+        networkManager.sendHit(victimId, damage);
+      }
+    }
+  };
+
+  // ── Network Callbacks ──
+  networkManager.onScoreboardUpdate = (scores) => {
+    scoreboardList.innerHTML = scores.map((s, i) => `
+      <li class="${s.id === networkManager!.myId ? 'you' : ''}">
+        <span class="rank">#${i + 1}</span>
+        <span class="name">${s.name}</span>
+        <span class="stats">${s.kills}K / ${s.deaths}D</span>
+      </li>
+    `).join('');
+  };
+
+  networkManager.onPlayerDamaged = (data) => {
+    if (data.id === networkManager!.myId && rat) {
+      rat.entity.hp = data.hp;
+      rat.entity.billboard.setHealth(data.hp);
+      if (data.hp > 0) {
+        rat.entity.flashColor(0xff0000);
+      }
+    }
+  };
+
+  networkManager.onLocalRespawn = (data) => {
+    if (!rat) return;
+
+    // ── Fully reset the entity state (undo everything die() changed) ──
+    rat.entity.dead = false;
+    rat.entity.hp = data.hp;
+    rat.entity.billboard.setHealth(data.hp);
+    rat.entity.mesh.visible = true;
+    rat.entity.billboard.sprite.visible = true;
+    scene.add(rat.entity.billboard.sprite);
+    rat.entity.mesh.userData.deathLogged = false;
+
+    // ── Restore physics body to alive state ──
+    // die() changes: mass→2, fixedRotation→false, damping→low, body.sleep()
+    // We must undo ALL of these:
+    const body = rat.entity.body;
+    body.mass = 5;                  // Restore original mass (die sets to 2)
+    body.fixedRotation = true;      // Lock rotation (die unlocks it)
+    body.linearDamping = 0.01;      // Default damping
+    body.angularDamping = 0.01;
+    body.type = CANNON.Body.DYNAMIC; // Ensure dynamic (not sleeping/static)
+    body.updateMassProperties();
+
+    // Set position
+    body.position.set(data.x, data.y, data.z);
+    body.velocity.set(0, 0, 0);
+    body.angularVelocity.set(0, 0, 0);
+    body.quaternion.set(0, 0, 0, 1);
+    body.wakeUp();                  // Crucial: body.sleep() is called during death!
+
+    // Sync visuals
+    rat.entity.mesh.position.set(data.x, data.y, data.z);
+    rat.entity.mesh.quaternion.set(0, 0, 0, 1);
+  };
+
+  networkManager.onKillFeedMessage = (msg) => {
+    const entry = document.createElement('div');
+    entry.className = 'kill-entry';
+    entry.textContent = msg;
+    killFeed.appendChild(entry);
+
+    // Fade out after 4 seconds
+    setTimeout(() => {
+      entry.classList.add('fade-out');
+      setTimeout(() => entry.remove(), 500);
+    }, 4000);
+
+    // Keep only last 5 entries
+    while (killFeed.children.length > 5) {
+      killFeed.removeChild(killFeed.firstChild!);
+    }
+  };
+
+  // ── Game Won ──
+  networkManager.onGameWon = (data) => {
+    victoryText.textContent = `🏆 ${data.winnerName} wins with ${data.kills} kills!`;
+    victoryOverlay.style.display = 'flex';
+  };
+
+  // ── Game Reset ──
+  networkManager.onGameReset = () => {
+    victoryOverlay.style.display = 'none';
+    // Local player will be respawned via the normal playerRespawn event
+  };
+
+  // ── Local player died — show respawn countdown ──
+  networkManager.onPlayerDied = (data) => {
+    if (data.victimId === networkManager!.myId && rat) {
+      console.log('YOU DIED!');
+      // Show 5-second countdown
+      let countdown = 5;
+      respawnTimer.textContent = String(countdown);
+      respawnOverlay.style.display = 'flex';
+      const interval = setInterval(() => {
+        countdown--;
+        if (countdown <= 0) {
+          clearInterval(interval);
+          respawnOverlay.style.display = 'none';
+        } else {
+          respawnTimer.textContent = String(countdown);
+        }
+      }, 1000);
+    }
+  };
+});
+
+// ── Pointer lock fallback ──
 document.addEventListener('click', () => {
-  if (gameStarted) {
-    renderer.domElement.requestPointerLock();
-  }
+  if (gameStarted) renderer.domElement.requestPointerLock();
 });
 
 let isPointerLocked = false;
@@ -236,66 +347,32 @@ document.addEventListener('pointerlockchange', () => {
 });
 
 document.addEventListener('mousemove', (e) => {
-  if (!isPointerLocked) return;
+  if (!isPointerLocked || !rat) return;
   rat.onMouseMove(e.movementX, e.movementY);
 });
 
 // ─── FIRE (Left Mouse Button) ─────────────────────────────────────
 document.addEventListener('mousedown', (e) => {
-  // ★ GUARD: Don't fire if game hasn't started
-  if (!gameStarted) return;
-
-  // Only fire if pointer is locked (in-game)
+  if (!gameStarted || !rat) return;
   if (document.pointerLockElement !== renderer.domElement) return;
 
-  // Respawn if dead
-  if (rat.entity.dead) {
-    console.log("Respawning Player...");
-    rat.entity.dead = false;
-    rat.entity.hp = 3;
-    rat.entity.billboard.setHealth(3);
-    rat.entity.mesh.visible = true;
-    rat.entity.billboard.sprite.visible = true;
-    rat.entity.mesh.userData.deathLogged = false;
-
-    // Reset Physics
-    const safeX = (Math.random() - 0.5) * 80;
-    const safeZ = (Math.random() - 0.5) * 80;
-    const spawnPos = new CANNON.Vec3(safeX, 5, safeZ);
-
-    rat.entity.body.position.copy(spawnPos);
-    rat.entity.body.velocity.set(0, 0, 0);
-    rat.entity.body.angularVelocity.set(0, 0, 0);
-    rat.entity.body.quaternion.set(0, 0, 0, 1);
-    rat.entity.body.fixedRotation = true;
-    rat.entity.body.updateMassProperties();
-    rat.entity.body.wakeUp();
-
-    rat.entity.mesh.position.copy(spawnPos as any);
-    rat.entity.mesh.quaternion.set(0, 0, 0, 1);
-
-    // Push enemies away from spawn
-    enemies.forEach(npc => {
-      const dist = npc.entity.mesh.position.distanceTo(spawnPos as any);
-      if (dist < 10) {
-        const dir = npc.entity.mesh.position.clone().sub(spawnPos as any).normalize();
-        npc.entity.body.position.x += dir.x * 20;
-        npc.entity.body.position.z += dir.z * 20;
-        npc.entity.body.wakeUp();
-      }
-    });
-
-    return;
-  }
+  // Respawn handled by server now — don't allow local respawn on click
+  if (rat.entity.dead) return;
 
   if (e.button !== 0) return;
 
-  // Aim where camera looks
   const cameraDir = new THREE.Vector3();
   camera.getWorldDirection(cameraDir);
   const target = camera.position.clone().add(cameraDir.multiplyScalar(200));
 
   cheeseGun.shoot(rat.entity, target);
+
+  // Tell network about the shot
+  if (networkManager) {
+    const origin = rat.entity.mesh.position.clone();
+    origin.y += 1.45;
+    networkManager.sendShoot(origin, target);
+  }
 });
 
 // ─── GAME LOOP ────────────────────────────────────────────────────
@@ -305,7 +382,6 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  // Don't run game logic until started
   if (!gameStarted) {
     renderer.render(scene, camera);
     return;
@@ -314,42 +390,43 @@ function animate() {
   // Physics
   world.step(1 / 60, dt, 3);
 
-  // Player
-  rat.update(dt, keys, cheeseGun);
-  if (rat.entity.dead && !rat.entity.mesh.userData.deathLogged) {
-    console.log("GAME OVER - Player is dead");
-    rat.entity.mesh.userData.deathLogged = true;
-  }
+  // ── Local Player ──
+  if (rat) {
+    rat.update(dt, keys, cheeseGun);
 
-  // Cheese ball physics sync
-  cheeseGun.update(dt);
+    if (rat.entity.dead && !rat.entity.mesh.userData.deathLogged) {
+      console.log("GAME OVER - Player is dead");
+      rat.entity.mesh.userData.deathLogged = true;
+    }
 
-  // ── Update enemies & cull dead ones ──
-  for (let i = enemies.length - 1; i >= 0; i--) {
-    const shouldRemove = enemies[i].update(dt);
-    if (shouldRemove) {
-      enemies.splice(i, 1);
+    // Send position to network
+    if (networkManager && !rat.entity.dead) {
+      networkManager.sendMovement(rat.entity);
     }
   }
 
-  // ── Respawn: keep at least MAX_ENEMIES alive ──
-  if (enemies.length < MAX_ENEMIES && Math.random() < 0.01) {
-    spawnEnemy();
+  // ── Cheese ball physics ──
+  cheeseGun.update(dt);
+
+  // ── Update Remote Players (Interpolation) ──
+  if (networkManager) {
+    networkManager.updateRemoteRats(dt);
   }
 
-  // ── Flashlight follows the rat ──
-  const ratPos = rat.entity.mesh.position;
-  const viewDir = new THREE.Vector3();
-  camera.getWorldDirection(viewDir);
+  // ── Flashlight follows rat ──
+  if (rat) {
+    const ratPos = rat.entity.mesh.position;
+    const viewDir = new THREE.Vector3();
+    camera.getWorldDirection(viewDir);
 
-  flashlight.position.set(ratPos.x, ratPos.y + 2, ratPos.z);
-  flashlight.target.position.set(
-    ratPos.x + viewDir.x * 15,
-    ratPos.y + viewDir.y * 15,
-    ratPos.z + viewDir.z * 15
-  );
+    flashlight.position.set(ratPos.x, ratPos.y + 2, ratPos.z);
+    flashlight.target.position.set(
+      ratPos.x + viewDir.x * 15,
+      ratPos.y + viewDir.y * 15,
+      ratPos.z + viewDir.z * 15
+    );
+  }
 
-  // Render
   renderer.render(scene, camera);
 }
 

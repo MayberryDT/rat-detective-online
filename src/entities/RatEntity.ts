@@ -94,6 +94,7 @@ function playOneShot(buffer: AudioBuffer | null, volume: number = 0.5): void {
 // ─── ENTITY CLASS ────────────────────────────────────────────────
 
 export class RatEntity {
+    public isRemote: boolean = false;
     public scene: THREE.Scene;
     public world: CANNON.World;
 
@@ -134,11 +135,13 @@ export class RatEntity {
         world: CANNON.World,
         position: THREE.Vector3,
         name: string,
-        options?: RatOptions
+        options?: RatOptions,
+        isRemote: boolean = false
     ) {
         this.scene = scene;
         this.world = world;
         this.name = name;
+        this.isRemote = isRemote;
 
         // 1. GENERATE UNIQUE APPEARANCE
         const opts = options || this.generateRandomOptions();
@@ -174,11 +177,13 @@ export class RatEntity {
         this.scene.add(this.billboard.sprite);
 
         // 4. PHYSICS — Compound shape: Body + Chest + Head
+        // Remote entities get kinematic bodies (mass=0, no gravity)
         this.body = new CANNON.Body({
-            mass: 5,
+            mass: isRemote ? 0 : 5,
+            type: isRemote ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC,
             fixedRotation: true,
-            linearDamping: 0.1,
-            angularDamping: 1.0,
+            linearDamping: isRemote ? 0 : 0.1,
+            angularDamping: isRemote ? 0 : 1.0,
             position: new CANNON.Vec3(position.x, position.y, position.z)
         });
 
@@ -404,7 +409,7 @@ export class RatEntity {
         }
     }
 
-    private flashColor(color: number) {
+    public flashColor(color: number) {
         this.flashTimer = FLASH_DURATION;
         this.allMaterials.forEach(m => {
             m.color.setHex(color);

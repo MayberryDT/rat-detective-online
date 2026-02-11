@@ -31,6 +31,9 @@ export class CheeseGun {
 
     private balls: CheeseBall[] = [];
 
+    // Network callback: fires when a local projectile hits an entity
+    public onHitEntity: ((victim: RatEntity, damage: number) => void) | null = null;
+
     private listener: THREE.AudioListener;
     private gunshotSound: THREE.Audio;
 
@@ -175,7 +178,16 @@ export class CheeseGun {
                             const isHead = (result.shape === victim.headShape);
                             const dmg = isHead ? 3 : 1;
 
-                            victim.takeDamage(dmg, isHead, ball.velocity);
+                            // Only apply local damage for LOCAL entities
+                            // Remote entity damage is handled by the server
+                            if (!victim.isRemote) {
+                                victim.takeDamage(dmg, isHead, ball.velocity);
+                            }
+
+                            // Notify network manager (for remote hits → server)
+                            if (this.onHitEntity) {
+                                this.onHitEntity(victim, dmg);
+                            }
 
                             // Destroy ball on entity hit
                             this.removeBall(i);

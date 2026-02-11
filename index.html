@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap"
         rel="stylesheet">
     <style>
         :root {
@@ -39,8 +39,8 @@
             display: block;
         }
 
-        /* ── Entry Screen ── */
-        #entry-screen {
+        /* ── Title Screen ── */
+        #title-screen {
             position: fixed;
             inset: 0;
             z-index: 100;
@@ -53,7 +53,7 @@
             transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        #entry-screen.fade-out {
+        #title-screen.fade-out {
             opacity: 0;
             pointer-events: none;
         }
@@ -106,9 +106,50 @@
             opacity: 0.8;
         }
 
-        /* ── Start Prompt ── */
-        #start-prompt {
-            margin-top: 4rem;
+        /* ── Name Input ── */
+        .name-input-group {
+            margin-top: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .name-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+
+        #player-name {
+            width: 280px;
+            padding: 0.75rem 1.25rem;
+            background: rgba(139, 92, 246, 0.08);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            text-align: center;
+            outline: none;
+            transition: all 0.3s ease;
+            letter-spacing: 0.05em;
+        }
+
+        #player-name::placeholder {
+            color: rgba(148, 163, 184, 0.5);
+        }
+
+        #player-name:focus {
+            border-color: var(--accent-purple);
+            background: rgba(139, 92, 246, 0.15);
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+        }
+
+        /* ── Enter Button ── */
+        #enter-city-btn {
+            margin-top: 1.5rem;
             padding: 1rem 2.5rem;
             background: rgba(139, 92, 246, 0.1);
             border: 1px solid rgba(139, 92, 246, 0.3);
@@ -124,9 +165,10 @@
             letter-spacing: 0.1em;
             text-transform: uppercase;
             font-size: 0.9rem;
+            font-family: 'Outfit', sans-serif;
         }
 
-        #start-prompt:hover {
+        #enter-city-btn:hover {
             background: rgba(139, 92, 246, 0.2);
             border-color: var(--accent-purple);
             transform: translateY(-2px);
@@ -134,7 +176,7 @@
             color: #fff;
         }
 
-        #start-prompt:active {
+        #enter-city-btn:active {
             transform: translateY(0);
         }
 
@@ -145,6 +187,19 @@
             border-radius: 50%;
             box-shadow: 0 0 10px var(--accent-purple);
             animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+
+        .online-count {
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            opacity: 0.7;
+            letter-spacing: 0.1em;
+        }
+
+        .online-count span {
+            color: #4ade80;
+            font-weight: 600;
         }
 
         @keyframes float {
@@ -170,6 +225,118 @@
             50% {
                 opacity: 1;
                 transform: scale(1.2);
+            }
+        }
+
+        /* ── Scoreboard ── */
+        #scoreboard {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 50;
+            background: rgba(7, 4, 10, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(139, 92, 246, 0.15);
+            border-radius: 12px;
+            padding: 12px 16px;
+            min-width: 220px;
+            pointer-events: none;
+            user-select: none;
+            display: none;
+        }
+
+        .scoreboard-title {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--accent-purple);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        #scoreboard-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #scoreboard-list li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        #scoreboard-list li:last-child {
+            border-bottom: none;
+        }
+
+        #scoreboard-list li.you {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        #scoreboard-list li .rank {
+            color: rgba(139, 92, 246, 0.7);
+            font-size: 0.7rem;
+            min-width: 24px;
+        }
+
+        #scoreboard-list li .name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #scoreboard-list li .stats {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            white-space: nowrap;
+        }
+
+        /* ── Kill Feed ── */
+        #kill-feed {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .kill-entry {
+            background: rgba(7, 4, 10, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 70, 70, 0.2);
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 0.75rem;
+            color: #ff8888;
+            letter-spacing: 0.03em;
+            animation: slideIn 0.3s ease-out;
+            transition: opacity 0.5s ease;
+        }
+
+        .kill-entry.fade-out {
+            opacity: 0;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(30px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
             }
         }
 
@@ -206,12 +373,95 @@
             box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
             mix-blend-mode: difference;
         }
+
+        /* ── Victory Overlay ── */
+        #victory-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(16px);
+            pointer-events: none;
+        }
+
+        #victory-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 3rem;
+            font-weight: 700;
+            color: #ffd700;
+            text-align: center;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.5), 0 0 60px rgba(255, 215, 0, 0.2);
+            animation: victoryPulse 2s ease-in-out infinite;
+            letter-spacing: 0.02em;
+        }
+
+        @keyframes victoryPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.05);
+                opacity: 0.9;
+            }
+        }
+
+        /* ── Respawn Overlay ── */
+        #respawn-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 150;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(80, 0, 0, 0.35);
+            pointer-events: none;
+        }
+
+        .respawn-label {
+            font-size: 1.2rem;
+            color: #ff6666;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        #respawn-timer {
+            font-family: 'Playfair Display', serif;
+            font-size: 5rem;
+            font-weight: 700;
+            color: #ff4444;
+            text-shadow: 0 0 20px rgba(255, 68, 68, 0.6);
+            animation: respawnPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes respawnPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+
+            50% {
+                transform: scale(1.15);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 
 <body>
-    <!-- Entry Screen -->
-    <div id="entry-screen">
+    <!-- Title Screen -->
+    <div id="title-screen">
         <div class="logo-container">
             <img src="/logo.png" alt="Rat Detective Logo" id="main-logo">
             <div class="title-group">
@@ -220,10 +470,40 @@
             </div>
         </div>
 
-        <button id="start-prompt">
+        <div class="name-input-group">
+            <label class="name-label" for="player-name">Choose Your Name</label>
+            <input type="text" id="player-name" placeholder="Anonymous Rat" maxlength="20" autocomplete="off"
+                spellcheck="false">
+        </div>
+
+        <button id="enter-city-btn">
             <div class="pulse-dot"></div>
-            Begin Investigation
+            Enter City
         </button>
+
+        <div class="online-count">
+            <span>●</span> Multiplayer Online
+        </div>
+    </div>
+
+    <!-- Scoreboard -->
+    <div id="scoreboard">
+        <div class="scoreboard-title">Scoreboard</div>
+        <ul id="scoreboard-list"></ul>
+    </div>
+
+    <!-- Kill Feed -->
+    <div id="kill-feed"></div>
+
+    <!-- Victory Overlay -->
+    <div id="victory-overlay">
+        <div id="victory-text"></div>
+    </div>
+
+    <!-- Respawn Countdown -->
+    <div id="respawn-overlay">
+        <div class="respawn-label">You Died</div>
+        <div id="respawn-timer">5</div>
     </div>
 
     <!-- Crosshair -->
@@ -231,7 +511,8 @@
 
     <!-- HUD -->
     <div id="hud">
-        <div>WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Space — Jump</div>
+        <div>WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Space — Jump &nbsp;|&nbsp; LMB — Shoot &nbsp;|&nbsp;
+            First to 20 kills wins!</div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>
