@@ -174,3 +174,24 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
 
     return group;
 }
+
+/**
+ * Calculates and returns the hit box (AABB) of the rat model
+ * based on its scale and center of mass.
+ */
+export function getRatHitBox(position: THREE.Vector3, scale: number = 1.0): THREE.Box3 {
+    // Standard rat detective dimensions: 
+    // - Width/Depth: ~1.0 units (radius 0.5)
+    // - Height: ~2.0 units (from ground to top of hat)
+    const min = new THREE.Vector3(
+        position.x - 0.5 * scale,
+        position.y,
+        position.z - 0.5 * scale
+    );
+    const max = new THREE.Vector3(
+        position.x + 0.5 * scale,
+        position.y + 2.0 * scale,
+        position.z + 0.5 * scale
+    );
+    return new THREE.Box3(min, max);
+}
