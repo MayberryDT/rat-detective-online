@@ -91,6 +91,14 @@ function playOneShot(buffer: AudioBuffer | null, volume: number = 0.5): void {
     sound.onEnded = () => { sound.disconnect(); };
 }
 
+export function playHitSound(): void {
+    playOneShot(soundBuffers.ratHit, 0.5);
+}
+
+export function playPlayerHitSound(): void {
+    playOneShot(soundBuffers.playerHit, 0.6);
+}
+
 // ─── ENTITY CLASS ────────────────────────────────────────────────
 
 export class RatEntity {
@@ -459,11 +467,15 @@ export class RatEntity {
         this.deathTargetQuat = new THREE.Quaternion().setFromAxisAngle(fallAxis, Math.PI / 2);
 
         // ── RAGDOLL PHYSICS — DRAMATIC LAUNCH ──
+        if (this.isRemote) {
+            this.body.type = CANNON.Body.DYNAMIC;
+        }
         this.body.fixedRotation = false;
         this.body.mass = 2;              // Lighter during ragdoll = more dramatic flight
         this.body.updateMassProperties();
         this.body.linearDamping = 0.02;  // Near-zero — let them FLY
         this.body.angularDamping = 0.02;
+        this.body.wakeUp();
 
         // MASSIVE death blow: launch UP + backward for dramatic hang time
         const impulse = new CANNON.Vec3(

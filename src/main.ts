@@ -4,7 +4,7 @@ import { CityGenerator } from './world/CityGenerator';
 import { RatController } from './player/RatController';
 import { CheeseGun } from './weapons/CheeseGun';
 import { NetworkManager } from './network/NetworkManager';
-import { initEntitySounds } from './entities/RatEntity';
+import { initEntitySounds, playPlayerHitSound } from './entities/RatEntity';
 import { HatType, RatOptions } from './utils/RatModel';
 
 // ─── COLOR PALETTES (must match RatEntity.ts) ────────────────────
@@ -208,16 +208,8 @@ enterBtn.addEventListener('click', (e) => {
   // ── Generate random appearance (synced across all clients) ──
   const localAppearance = generateRandomAppearance();
 
-  // ── Spawn local player with chosen name + appearance ──
-  rat = new RatController(scene, world, camera, playerName, localAppearance);
-  cheeseGun.setPlayer(camera, rat.entity);
-  rat.entity.isPlayer = true;
-
   // ── Initialize Network ──
   networkManager = new NetworkManager(scene, world, cheeseGun);
-
-  // Send the SAME appearance to the server so everyone sees the same colors
-  networkManager.connect(playerName, localAppearance);
 
   // ── Wire up CheeseGun hit → Network ──
   cheeseGun.onHitEntity = (victim, damage) => {
@@ -230,6 +222,16 @@ enterBtn.addEventListener('click', (e) => {
   };
 
   // ── Network Callbacks ──
+  networkManager.onWelcome = (player) => {
+    if (rat) return;
+
+    const spawn = new THREE.Vector3(player.x, player.y, player.z);
+    rat = new RatController(scene, world, camera, playerName, localAppearance, spawn);
+    cheeseGun.setPlayer(camera, rat.entity);
+    rat.entity.isPlayer = true;
+    networkManager!.setLocalPlayer(rat.entity);
+  };
+
   networkManager.onScoreboardUpdate = (scores) => {
     scoreboardList.innerHTML = scores.map((s, i) => `
       <li class="${s.id === networkManager!.myId ? 'you' : ''}">
@@ -246,6 +248,14 @@ enterBtn.addEventListener('click', (e) => {
       rat.entity.billboard.setHealth(data.hp);
       if (data.hp > 0) {
         rat.entity.flashColor(0xff0000);
+        playPlayerHitSound();
+      } else if (!rat.entity.dead) {
+        const impactDir = new THREE.Vector3(
+          (Math.random() - 0.5) * 2,
+          0,
+          (Math.random() - 0.5) * 2
+        ).normalize().multiplyScalar(50);
+        rat.entity.takeDamage(0, false, impactDir);
       }
     }
   };
@@ -334,6 +344,9 @@ enterBtn.addEventListener('click', (e) => {
       }, 1000);
     }
   };
+
+  // Send the SAME appearance to the server so everyone sees the same colors
+  networkManager.connect(playerName, localAppearance);
 });
 
 // ── Pointer lock fallback ──

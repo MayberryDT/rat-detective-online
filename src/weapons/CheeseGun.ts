@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { RatEntity } from '../entities/RatEntity';
+import { RatEntity, playHitSound } from '../entities/RatEntity';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
 const BALL_RADIUS = 0.15;
@@ -173,6 +173,12 @@ export class CheeseGun {
                     // Check if we hit a RatEntity (enemy)
                     if (hitBody && (hitBody as any).userData && (hitBody as any).userData.entity instanceof RatEntity) {
                         const victim = (hitBody as any).userData.entity as RatEntity;
+
+                        if (ball.owner.isRemote) {
+                            ball.position.copy(nextPos);
+                            continue;
+                        }
+
                         if (!victim.dead) {
                             // ── PRECISE HEADSHOT CHECK ──
                             const isHead = (result.shape === victim.headShape);
@@ -182,6 +188,8 @@ export class CheeseGun {
                             // Remote entity damage is handled by the server
                             if (!victim.isRemote) {
                                 victim.takeDamage(dmg, isHead, ball.velocity);
+                            } else {
+                                playHitSound();
                             }
 
                             // Notify network manager (for remote hits → server)
