@@ -23,9 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local Netlify folder
-.netlify
-
 # Cloudflare local state
 .wrangler
 .dev.vars*

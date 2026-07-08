@@ -2,6 +2,7 @@
   "name": "rat-detective",
   "private": true,
   "version": "0.0.0",
+  "description": "A Three.js browser game served by a Cloudflare Worker with Durable Object WebSocket state.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +13,8 @@
     "dev:worker": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "test": "vitest run",
-    "audit": "npm audit --audit-level=high"
+    "audit": "npm audit --audit-level=high",
+    "smoke:ws": "node scripts/smoke-ws.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.18.2",

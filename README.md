@@ -1,33 +1,68 @@
 # Rat Detective Online
 
-A fast-paced 3D browser-game prototype built with Three.js, TypeScript, Vite, and physics-based interactions.
-
-## Why It Exists
-
-Rat Detective Online is a creative-range project. It is not part of Tyler's core AI-systems positioning, but it shows comfort building interactive experiences, working with 3D web tooling, and turning a strange idea into a playable prototype.
-
-## What It Shows
-
-- Three.js scene design and browser-based 3D rendering.
-- Physics-backed movement and projectile interactions with Cannon-es.
-- TypeScript application structure for interactive gameplay.
-- Rapid prototyping of a distinctive product/game concept.
-- Willingness to explore unusual ideas and still ship something usable.
-
-## Tech Stack
-
-- Three.js
-- Cannon-es
-- TypeScript
-- Vite
+Rat Detective Online is a fast-paced 3D browser game built with Three.js,
+TypeScript, Vite, and physics-backed interactions. Players join a shared city
+arena as detective rats, move through the level, and exchange real-time game
+state over a same-origin WebSocket.
 
 ## Status
 
-Creative prototype / portfolio artifact. Useful as evidence of range, not as the primary job-search positioning.
+Portfolio prototype. The current city arena, movement, shooting, scoring,
+respawn, and round reset flows are playable locally through Cloudflare Workers.
 
-## Development
+## Runtime
+
+The production app runs on Cloudflare Workers:
+
+- Vite builds the static browser assets into `dist`.
+- The Worker serves those static assets.
+- `/ws` is handled by the Worker and backed by a Durable Object game room.
+- `/health` is handled by the Worker for deployment smoke checks.
+
+## Local Development
+
+Install dependencies, build the app, and start the local Worker:
 
 ```bash
 npm install
-npm run dev
+npm run dev:worker
 ```
+
+`npm run dev:worker` runs the production-style path locally by building the Vite
+assets and starting `wrangler dev`.
+
+## Controls
+
+- `WASD` / arrow keys: move
+- Mouse: look
+- Space: jump
+- Left mouse button: shoot
+
+## Checks
+
+```bash
+npm run test
+npm run build
+npm run audit
+npm run smoke:ws
+```
+
+`npm run build` regenerates Cloudflare Worker types, type-checks the project,
+and builds the Vite assets.
+
+Run `npm run smoke:ws` while `npm run dev:worker` is running to verify that two
+native WebSocket clients can join the Worker-backed room.
+
+## Deployment
+
+```bash
+npm run deploy
+```
+
+Deployment uses Wrangler and the Worker configuration in `wrangler.jsonc`. The
+configured Worker serves the static game and routes WebSocket traffic through
+`/ws`.
+
+## Contributing
+
+See `CONTRIBUTING.md` and `SECURITY.md` before opening issues or pull requests.

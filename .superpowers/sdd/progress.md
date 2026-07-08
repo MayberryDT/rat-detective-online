@@ -9,3 +9,7 @@ Task 6: complete (Worker /health and /ws tests red/green; Durable Object room im
 Task 7: complete (NetworkManager migrated to native WebSocket; npm run test and npm run build passed)
 Task 8: complete (server-authoritative welcome spawn wired into local RatController; local/remote damage and respawn behavior preserved; npm run build passed)
 Task 9: complete (Socket.IO dependency, Railway config, and legacy server removed; stale infra rg check clean; npm run audit passed)
+Task 10: complete (local Wrangler health/static/WebSocket smoke passed; browser screenshot nonblank; WebSocket close-handler bug fixed and resmoked)
+Task 11: complete (deployed to Cloudflare custom domain; production /health, static HEAD, WebSocket smoke, and browser screenshot passed)
+Task 12: complete except LICENSE holder decision (README, CONTRIBUTING, SECURITY, .editorconfig, CI, package metadata, and smoke script added; LICENSE intentionally not created until holder string is confirmed)
+Task 13: complete with noted LICENSE exception (npm run test/build/audit/smoke:ws passed; stale infra rg check clean; production smoke passed)
