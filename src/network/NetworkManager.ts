@@ -18,17 +18,21 @@ interface RemoteRat {
 function resolveWebSocketUrl(serverUrl?: string): string {
     const configured = serverUrl
         || (import.meta as any).env?.VITE_WS_URL;
+    const roomName = new URLSearchParams(window.location.search).get('room');
 
     if (configured) {
         const url = new URL(configured, window.location.href);
         if (url.protocol === 'http:') url.protocol = 'ws:';
         if (url.protocol === 'https:') url.protocol = 'wss:';
         if (url.pathname === '/' || url.pathname === '') url.pathname = '/ws';
+        if (roomName && !url.searchParams.has('room')) url.searchParams.set('room', roomName);
         return url.toString();
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.host}/ws`;
+    const url = new URL(`${protocol}//${window.location.host}/ws`);
+    if (roomName) url.searchParams.set('room', roomName);
+    return url.toString();
 }
 
 export class NetworkManager {

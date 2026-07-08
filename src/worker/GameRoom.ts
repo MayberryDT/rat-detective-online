@@ -19,6 +19,11 @@ interface SocketAttachment {
 interface StoredPlayerRow extends Record<string, SqlStorageValue> {
   id: string;
   data: string;
+  updated_at: number;
+}
+
+interface ExpiredPlayerRow extends Record<string, SqlStorageValue> {
+  id: string;
 }
 
 interface PendingEventRow extends Record<string, SqlStorageValue> {
@@ -29,6 +34,7 @@ interface PendingEventRow extends Record<string, SqlStorageValue> {
 }
 
 const GAME_IN_PROGRESS_KEY = 'gameInProgress';
+const STALE_PLAYER_MS = 2 * 60_000;
 
 export class GameRoom extends DurableObject<Env> {
   private players = new Map<string, PlayerData>();
@@ -128,7 +134,11 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private hydrate(): void {
-    const rows = this.ctx.storage.sql.exec<StoredPlayerRow>('SELECT id, data FROM players').toArray();
+    const cutoff = Date.now() - STALE_PLAYER_MS;
+    this.ctx.storage.sql.exec('DELETE FROM players WHERE updated_at < ?', cutoff);
+    this.ctx.storage.sql.exec('DELETE FROM pending_events WHERE player_id IS NOT NULL AND player_id NOT IN (SELECT id FROM players)');
+
+    const rows = this.ctx.storage.sql.exec<StoredPlayerRow>('SELECT id, data, updated_at FROM players').toArray();
     for (const row of rows) {
       try {
         this.players.set(row.id, JSON.parse(row.data) as PlayerData);
@@ -148,6 +158,7 @@ export class GameRoom extends DurableObject<Env> {
     if (existingPlayerId) {
       this.removePlayerById(existingPlayerId);
     }
+    this.pruneStalePlayers();
 
     const id = crypto.randomUUID();
     const player = createPlayer(id, message.name, message.appearance, createRandomCitySpawn());
@@ -159,6 +170,17 @@ export class GameRoom extends DurableObject<Env> {
     this.send(ws, { type: 'currentPlayers', players: this.playersRecord() });
     this.broadcast({ type: 'playerJoined', player }, id);
     this.broadcastScoreboard();
+  }
+
+  private pruneStalePlayers(): void {
+    const cutoff = Date.now() - STALE_PLAYER_MS;
+    const rows = this.ctx.storage.sql
+      .exec<ExpiredPlayerRow>('SELECT id FROM players WHERE updated_at < ?', cutoff)
+      .toArray();
+
+    for (const row of rows) {
+      this.removePlayerById(row.id);
+    }
   }
 
   private handleMovement(playerId: string, message: Extract<ClientMessage, { type: 'updateMovement' }>): void {

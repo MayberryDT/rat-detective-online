@@ -1,4 +1,4 @@
-const targetUrl = process.argv[2] || 'ws://127.0.0.1:8787/ws';
+const targetUrl = withSmokeRoom(process.argv[2] || 'ws://127.0.0.1:8787/ws');
 
 const appearance = {
   hatType: 'fedora',
@@ -6,6 +6,14 @@ const appearance = {
   furColor: 0xe8b84d,
   coatColor: 0xbe4545,
 };
+
+function withSmokeRoom(rawUrl) {
+  const url = new URL(rawUrl);
+  if (!url.searchParams.has('room')) {
+    url.searchParams.set('room', `smoke-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  }
+  return url.toString();
+}
 
 function waitFor(socket, type, timeoutMs = 5_000) {
   return new Promise((resolve, reject) => {

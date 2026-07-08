@@ -45,6 +45,7 @@ npm run test
 npm run build
 npm run audit
 npm run smoke:ws
+npm run smoke:browser
 ```
 
 `npm run build` regenerates Cloudflare Worker types, type-checks the project,
@@ -52,6 +53,9 @@ and builds the Vite assets.
 
 Run `npm run smoke:ws` while `npm run dev:worker` is running to verify that two
 native WebSocket clients can join the Worker-backed room.
+
+Run `npm run smoke:browser` while `npm run dev:worker` is running to verify that
+a real browser click can enter the game at a short desktop viewport.
 
 ## Deployment
 

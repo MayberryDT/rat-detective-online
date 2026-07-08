@@ -27,6 +27,7 @@ run this in another:
 
 ```bash
 npm run smoke:ws
+npm run smoke:browser
 ```
 
 ## Scope

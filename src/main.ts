@@ -348,6 +348,7 @@ enterBtn.addEventListener('click', (e) => {
   // Send the SAME appearance to the server so everyone sees the same colors
   networkManager.connect(playerName, localAppearance);
 });
+enterBtn.removeAttribute('disabled');
 
 // ── Pointer lock fallback ──
 document.addEventListener('click', () => {
