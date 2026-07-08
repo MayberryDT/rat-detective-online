@@ -61,6 +61,35 @@
             pointer-events: none;
         }
 
+        #title-screen.webgl-error {
+            gap: 1rem;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .webgl-error-panel {
+            width: min(560px, calc(100vw - 32px));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .webgl-error-panel h1 {
+            font-size: clamp(2rem, 8vw, 3rem);
+        }
+
+        .webgl-error-panel p {
+            max-width: 46ch;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .webgl-error-panel code {
+            color: #fff;
+            overflow-wrap: anywhere;
+        }
+
         .logo-container {
             position: relative;
             margin-bottom: clamp(0.75rem, 3vh, 2rem);

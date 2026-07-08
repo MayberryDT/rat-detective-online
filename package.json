@@ -15,7 +15,8 @@
     "test": "vitest run",
     "audit": "npm audit --audit-level=high",
     "smoke:ws": "node scripts/smoke-ws.mjs",
-    "smoke:browser": "node scripts/smoke-browser.mjs"
+    "smoke:browser": "node scripts/smoke-browser.mjs",
+    "smoke:webgl-error": "EXPECT_WEBGL_ERROR=1 CHROME_EXTRA_ARGS='--disable-webgl --disable-3d-apis' node scripts/smoke-browser.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.18.2",

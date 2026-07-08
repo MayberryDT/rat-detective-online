@@ -28,6 +28,7 @@ run this in another:
 ```bash
 npm run smoke:ws
 npm run smoke:browser
+npm run smoke:webgl-error
 ```
 
 ## Scope

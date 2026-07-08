@@ -6,6 +6,11 @@ import net from 'node:net';
 
 const targetUrl = withBrowserSmokeRoom(process.argv[2] || process.env.BROWSER_SMOKE_URL || 'http://localhost:8787/');
 const viewport = { width: 780, height: 493 };
+const expectWebglError = process.env.EXPECT_WEBGL_ERROR === '1';
+const extraChromeArgs = process.env.CHROME_EXTRA_ARGS
+  ? process.env.CHROME_EXTRA_ARGS.split(/\s+/).filter(Boolean)
+  : [];
+const smokeComplete = Symbol('smokeComplete');
 
 function withBrowserSmokeRoom(rawUrl) {
   const url = new URL(rawUrl);
@@ -140,7 +145,7 @@ function fail(message, details) {
 const chromePath = findChrome();
 const port = await getFreePort();
 const userDataDir = mkdtempSync(join(tmpdir(), 'rat-detective-browser-smoke-'));
-const chrome = spawn(chromePath, [
+const chromeArgs = [
   '--headless=new',
   `--remote-debugging-port=${port}`,
   `--user-data-dir=${userDataDir}`,
@@ -149,8 +154,10 @@ const chrome = spawn(chromePath, [
   '--no-default-browser-check',
   '--disable-gpu',
   '--disable-dev-shm-usage',
+  ...extraChromeArgs,
   'about:blank',
-], { stdio: 'ignore' });
+];
+const chrome = spawn(chromePath, chromeArgs, { stdio: 'ignore' });
 
 try {
   await waitForJson(`http://127.0.0.1:${port}/json/version`);
@@ -184,11 +191,14 @@ try {
       expression: `(() => {
         const button = document.querySelector('#enter-city-btn');
         const input = document.querySelector('#player-name');
+        const webglError = document.querySelector('.webgl-error-panel');
         const rect = button?.getBoundingClientRect();
         return {
           viewport: { width: innerWidth, height: innerHeight },
           button: Boolean(button),
           input: Boolean(input),
+          webglError: Boolean(webglError),
+          webglText: webglError?.textContent?.slice(0, 300) || '',
           disabled: Boolean(button?.disabled),
           rect: rect && { x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: rect.bottom },
           centerVisible: rect
@@ -201,8 +211,27 @@ try {
       })()`,
     });
     beforeState = before.result.result.value;
+    if (expectWebglError && beforeState.webglError) break;
     if (beforeState.button && beforeState.input && !beforeState.disabled) break;
     await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  if (expectWebglError) {
+    if (!beforeState.webglError) fail('WebGL error panel did not appear', { beforeState, events });
+
+    const screenshot = await send('Page.captureScreenshot', { format: 'png' });
+    const screenshotPath = join(tmpdir(), 'rat-detective-webgl-error-smoke.png');
+    writeFileSync(screenshotPath, Buffer.from(screenshot.result.data, 'base64'));
+
+    console.log(JSON.stringify({
+      ok: true,
+      targetUrl,
+      mode: 'webgl-error',
+      before: beforeState,
+      screenshot: screenshotPath,
+    }, null, 2));
+    cdp.socket.close();
+    throw smokeComplete;
   }
 
   if (!beforeState.button || !beforeState.input) fail('Title screen controls missing', { beforeState, events });
@@ -280,9 +309,11 @@ try {
 
   cdp.socket.close();
 } catch (error) {
-  console.error(error.message);
-  if (error.details) console.error(JSON.stringify(error.details, null, 2));
-  process.exitCode = 1;
+  if (error !== smokeComplete) {
+    console.error(error.message);
+    if (error.details) console.error(JSON.stringify(error.details, null, 2));
+    process.exitCode = 1;
+  }
 } finally {
   if (!chrome.killed) {
     chrome.kill('SIGTERM');

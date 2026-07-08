@@ -23,16 +23,58 @@ function generateRandomAppearance(): RatOptions {
   };
 }
 
+function showWebGLError(error: unknown): void {
+  const titleScreen = document.getElementById('title-screen');
+  const message = error instanceof Error ? error.message : String(error);
+  const escapedMessage = message
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  if (!titleScreen) {
+    document.body.textContent = 'WebGL is unavailable in this browser.';
+    return;
+  }
+
+  titleScreen.classList.add('webgl-error');
+  titleScreen.innerHTML = `
+    <div class="webgl-error-panel">
+      <h1>WebGL Unavailable</h1>
+      <p>Rat Detective needs WebGL to render the 3D city. Your browser reported that WebGL is disabled or blocked.</p>
+      <p>Turn on hardware acceleration/WebGL, try another browser, or check <code>chrome://gpu</code> for the exact graphics status.</p>
+      <p><code>${escapedMessage}</code></p>
+    </div>
+  `;
+}
+
+function createRenderer(): THREE.WebGLRenderer | null {
+  try {
+    return new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  } catch (error) {
+    console.error('[Rat Detective] WebGL renderer failed to start', error);
+    showWebGLError(error);
+    return null;
+  }
+}
+
 // ─── RENDERER ─────────────────────────────────────────────────────
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-document.body.appendChild(renderer.domElement);
+const renderer = createRenderer();
+
+if (!renderer) {
+  await new Promise<never>(() => {});
+}
+
+const appRenderer = renderer as THREE.WebGLRenderer;
+appRenderer.setSize(window.innerWidth, window.innerHeight);
+appRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+appRenderer.shadowMap.enabled = true;
+appRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+appRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+appRenderer.toneMappingExposure = 1.1;
+appRenderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(appRenderer.domElement);
 
 // ─── SCENE ────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
@@ -196,7 +238,7 @@ enterBtn.addEventListener('click', (e) => {
   const playerName = nameInput.value.trim() || 'Anonymous Rat';
 
   gameStarted = true;
-  renderer.domElement.requestPointerLock();
+  appRenderer.domElement.requestPointerLock();
   titleScreen.classList.add('fade-out');
   playMusic();
 
@@ -352,12 +394,12 @@ enterBtn.removeAttribute('disabled');
 
 // ── Pointer lock fallback ──
 document.addEventListener('click', () => {
-  if (gameStarted) renderer.domElement.requestPointerLock();
+  if (gameStarted) appRenderer.domElement.requestPointerLock();
 });
 
 let isPointerLocked = false;
 document.addEventListener('pointerlockchange', () => {
-  isPointerLocked = document.pointerLockElement === renderer.domElement;
+  isPointerLocked = document.pointerLockElement === appRenderer.domElement;
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -368,7 +410,7 @@ document.addEventListener('mousemove', (e) => {
 // ─── FIRE (Left Mouse Button) ─────────────────────────────────────
 document.addEventListener('mousedown', (e) => {
   if (!gameStarted || !rat) return;
-  if (document.pointerLockElement !== renderer.domElement) return;
+  if (document.pointerLockElement !== appRenderer.domElement) return;
 
   // Respawn handled by server now — don't allow local respawn on click
   if (rat.entity.dead) return;
@@ -397,7 +439,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
 
   if (!gameStarted) {
-    renderer.render(scene, camera);
+    appRenderer.render(scene, camera);
     return;
   }
 
@@ -441,14 +483,14 @@ function animate() {
     );
   }
 
-  renderer.render(scene, camera);
+  appRenderer.render(scene, camera);
 }
 
 // ─── RESIZE ───────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  appRenderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 animate();
