@@ -8,6 +8,10 @@
       "DOM",
       "DOM.Iterable"
     ],
+    "types": [
+      "./worker-configuration.d.ts",
+      "node"
+    ],
     "skipLibCheck": true,
     /* Bundler mode */
     "moduleResolution": "Bundler",

@@ -5,13 +5,23 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "cf:types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run cf:types && tsc && vite build",
+    "preview": "vite preview",
+    "dev:worker": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
+    "test": "vitest run",
+    "audit": "npm audit --audit-level=high"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.2",
+    "@types/node": "^26.1.0",
     "@types/three": "^0.182.0",
     "typescript": "~5.6.2",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.108.0"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
