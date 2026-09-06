@@ -4,7 +4,7 @@ import { CityGenerator } from './world/CityGenerator';
 import { RatController } from './player/RatController';
 import { CheeseGun } from './weapons/CheeseGun';
 import { NetworkManager } from './network/NetworkManager';
-import { initEntitySounds } from './entities/RatEntity';
+import { initEntitySounds, playPlayerHitSound } from './entities/RatEntity';
 import { HatType, RatOptions } from './utils/RatModel';
 
 // ─── COLOR PALETTES (must match RatEntity.ts) ────────────────────
@@ -23,16 +23,58 @@ function generateRandomAppearance(): RatOptions {
   };
 }
 
+function showWebGLError(error: unknown): void {
+  const titleScreen = document.getElementById('title-screen');
+  const message = error instanceof Error ? error.message : String(error);
+  const escapedMessage = message
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  if (!titleScreen) {
+    document.body.textContent = 'WebGL is unavailable in this browser.';
+    return;
+  }
+
+  titleScreen.classList.add('webgl-error');
+  titleScreen.innerHTML = `
+    <div class="webgl-error-panel">
+      <h1>WebGL Unavailable</h1>
+      <p>Rat Detective needs WebGL to render the 3D city. Your browser reported that WebGL is disabled or blocked.</p>
+      <p>Turn on hardware acceleration/WebGL, try another browser, or check <code>chrome://gpu</code> for the exact graphics status.</p>
+      <p><code>${escapedMessage}</code></p>
+    </div>
+  `;
+}
+
+function createRenderer(): THREE.WebGLRenderer | null {
+  try {
+    return new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  } catch (error) {
+    console.error('[Rat Detective] WebGL renderer failed to start', error);
+    showWebGLError(error);
+    return null;
+  }
+}
+
 // ─── RENDERER ─────────────────────────────────────────────────────
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-document.body.appendChild(renderer.domElement);
+const renderer = createRenderer();
+
+if (!renderer) {
+  await new Promise<never>(() => {});
+}
+
+const appRenderer = renderer as THREE.WebGLRenderer;
+appRenderer.setSize(window.innerWidth, window.innerHeight);
+appRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+appRenderer.shadowMap.enabled = true;
+appRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+appRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+appRenderer.toneMappingExposure = 1.1;
+appRenderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(appRenderer.domElement);
 
 // ─── SCENE ────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
@@ -196,7 +238,7 @@ enterBtn.addEventListener('click', (e) => {
   const playerName = nameInput.value.trim() || 'Anonymous Rat';
 
   gameStarted = true;
-  renderer.domElement.requestPointerLock();
+  appRenderer.domElement.requestPointerLock();
   titleScreen.classList.add('fade-out');
   playMusic();
 
@@ -208,16 +250,8 @@ enterBtn.addEventListener('click', (e) => {
   // ── Generate random appearance (synced across all clients) ──
   const localAppearance = generateRandomAppearance();
 
-  // ── Spawn local player with chosen name + appearance ──
-  rat = new RatController(scene, world, camera, playerName, localAppearance);
-  cheeseGun.setPlayer(camera, rat.entity);
-  rat.entity.isPlayer = true;
-
   // ── Initialize Network ──
   networkManager = new NetworkManager(scene, world, cheeseGun);
-
-  // Send the SAME appearance to the server so everyone sees the same colors
-  networkManager.connect(playerName, localAppearance);
 
   // ── Wire up CheeseGun hit → Network ──
   cheeseGun.onHitEntity = (victim, damage) => {
@@ -230,6 +264,16 @@ enterBtn.addEventListener('click', (e) => {
   };
 
   // ── Network Callbacks ──
+  networkManager.onWelcome = (player) => {
+    if (rat) return;
+
+    const spawn = new THREE.Vector3(player.x, player.y, player.z);
+    rat = new RatController(scene, world, camera, playerName, localAppearance, spawn);
+    cheeseGun.setPlayer(camera, rat.entity);
+    rat.entity.isPlayer = true;
+    networkManager!.setLocalPlayer(rat.entity);
+  };
+
   networkManager.onScoreboardUpdate = (scores) => {
     scoreboardList.innerHTML = scores.map((s, i) => `
       <li class="${s.id === networkManager!.myId ? 'you' : ''}">
@@ -246,6 +290,14 @@ enterBtn.addEventListener('click', (e) => {
       rat.entity.billboard.setHealth(data.hp);
       if (data.hp > 0) {
         rat.entity.flashColor(0xff0000);
+        playPlayerHitSound();
+      } else if (!rat.entity.dead) {
+        const impactDir = new THREE.Vector3(
+          (Math.random() - 0.5) * 2,
+          0,
+          (Math.random() - 0.5) * 2
+        ).normalize().multiplyScalar(50);
+        rat.entity.takeDamage(0, false, impactDir);
       }
     }
   };
@@ -334,16 +386,20 @@ enterBtn.addEventListener('click', (e) => {
       }, 1000);
     }
   };
+
+  // Send the SAME appearance to the server so everyone sees the same colors
+  networkManager.connect(playerName, localAppearance);
 });
+enterBtn.removeAttribute('disabled');
 
 // ── Pointer lock fallback ──
 document.addEventListener('click', () => {
-  if (gameStarted) renderer.domElement.requestPointerLock();
+  if (gameStarted) appRenderer.domElement.requestPointerLock();
 });
 
 let isPointerLocked = false;
 document.addEventListener('pointerlockchange', () => {
-  isPointerLocked = document.pointerLockElement === renderer.domElement;
+  isPointerLocked = document.pointerLockElement === appRenderer.domElement;
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -354,7 +410,7 @@ document.addEventListener('mousemove', (e) => {
 // ─── FIRE (Left Mouse Button) ─────────────────────────────────────
 document.addEventListener('mousedown', (e) => {
   if (!gameStarted || !rat) return;
-  if (document.pointerLockElement !== renderer.domElement) return;
+  if (document.pointerLockElement !== appRenderer.domElement) return;
 
   // Respawn handled by server now — don't allow local respawn on click
   if (rat.entity.dead) return;
@@ -383,7 +439,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
 
   if (!gameStarted) {
-    renderer.render(scene, camera);
+    appRenderer.render(scene, camera);
     return;
   }
 
@@ -427,14 +483,14 @@ function animate() {
     );
   }
 
-  renderer.render(scene, camera);
+  appRenderer.render(scene, camera);
 }
 
 // ─── RESIZE ───────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  appRenderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 animate();

@@ -48,6 +48,9 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            min-height: 100svh;
+            padding: clamp(16px, 4vh, 40px) 16px;
+            overflow-y: auto;
             background: radial-gradient(circle at center, #1a0b2e 0%, #07040a 100%);
             color: var(--text-main);
             transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -58,9 +61,38 @@
             pointer-events: none;
         }
 
+        #title-screen.webgl-error {
+            gap: 1rem;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .webgl-error-panel {
+            width: min(560px, calc(100vw - 32px));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .webgl-error-panel h1 {
+            font-size: clamp(2rem, 8vw, 3rem);
+        }
+
+        .webgl-error-panel p {
+            max-width: 46ch;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .webgl-error-panel code {
+            color: #fff;
+            overflow-wrap: anywhere;
+        }
+
         .logo-container {
             position: relative;
-            margin-bottom: 2rem;
+            margin-bottom: clamp(0.75rem, 3vh, 2rem);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -68,7 +100,8 @@
         }
 
         #main-logo {
-            width: 320px;
+            width: clamp(140px, 28vh, 320px);
+            max-width: 72vw;
             height: auto;
             filter: drop-shadow(0 0 20px var(--accent-glow));
             transition: transform 0.3s ease;
@@ -85,9 +118,9 @@
 
         h1 {
             font-family: 'Playfair Display', serif;
-            font-size: 3.5rem;
+            font-size: clamp(2.25rem, 8vw, 3.5rem);
             font-weight: 700;
-            letter-spacing: -0.02em;
+            letter-spacing: 0;
             background: linear-gradient(to bottom, #fff, #a78bfa);
             -webkit-background-clip: text;
             background-clip: text;
@@ -98,17 +131,17 @@
         }
 
         .subtitle {
-            font-size: 1.1rem;
+            font-size: clamp(0.85rem, 2.5vw, 1.1rem);
             color: var(--text-muted);
             letter-spacing: 0.3em;
             text-transform: uppercase;
-            margin-top: 0.5rem;
+            margin-top: clamp(0.25rem, 1vh, 0.5rem);
             opacity: 0.8;
         }
 
         /* ── Name Input ── */
         .name-input-group {
-            margin-top: 2.5rem;
+            margin-top: clamp(1rem, 4vh, 2.5rem);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -149,7 +182,7 @@
 
         /* ── Enter Button ── */
         #enter-city-btn {
-            margin-top: 1.5rem;
+            margin-top: clamp(0.85rem, 3vh, 1.5rem);
             padding: 1rem 2.5rem;
             background: rgba(139, 92, 246, 0.1);
             border: 1px solid rgba(139, 92, 246, 0.3);
@@ -176,6 +209,13 @@
             color: #fff;
         }
 
+        #enter-city-btn:disabled {
+            opacity: 0.55;
+            cursor: wait;
+            transform: none;
+            box-shadow: none;
+        }
+
         #enter-city-btn:active {
             transform: translateY(0);
         }
@@ -190,7 +230,7 @@
         }
 
         .online-count {
-            margin-top: 1.5rem;
+            margin-top: clamp(0.85rem, 3vh, 1.5rem);
             font-size: 0.85rem;
             color: var(--text-muted);
             opacity: 0.7;
@@ -225,6 +265,16 @@
             50% {
                 opacity: 1;
                 transform: scale(1.2);
+            }
+        }
+
+        @media (max-height: 620px) {
+            .logo-container {
+                animation: none;
+            }
+
+            #enter-city-btn {
+                padding: 0.85rem 2rem;
             }
         }
 
@@ -476,7 +526,7 @@
                 spellcheck="false">
         </div>
 
-        <button id="enter-city-btn">
+        <button id="enter-city-btn" disabled>
             <div class="pulse-dot"></div>
             Enter City
         </button>

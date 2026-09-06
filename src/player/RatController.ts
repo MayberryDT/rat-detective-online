@@ -23,11 +23,19 @@ export class RatController {
     private canJump = false;
     private elapsed = 0;
 
-    constructor(scene: THREE.Scene, world: CANNON.World, camera: THREE.PerspectiveCamera, name: string = 'Player', options?: RatOptions) {
+    constructor(
+        scene: THREE.Scene,
+        world: CANNON.World,
+        camera: THREE.PerspectiveCamera,
+        name: string = 'Player',
+        options?: RatOptions,
+        spawnPos?: THREE.Vector3
+    ) {
         this.camera = camera;
 
         // Create the Player Entity with the player's chosen name and appearance
-        this.entity = new RatEntity(scene, world, new THREE.Vector3(15, 2, 15), name, options);
+        const pos = spawnPos ?? new THREE.Vector3(15, 2, 15);
+        this.entity = new RatEntity(scene, world, pos, name, options);
 
         // Listen for ground contact
         this.entity.body.addEventListener('collide', (evt: any) => {
