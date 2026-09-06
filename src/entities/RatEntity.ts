@@ -20,7 +20,7 @@ const DEATH_PHASE_SPIN = 1.8;   // Airborne spin ends
 const DEATH_PHASE_SETTLE = 2.5;   // Fully settled on ground
 
 // ─── OUTLINE GLOW CONFIG ───
-const GLOW_SCALE = 1.08;          // How much larger the outline is
+const GLOW_THICKNESS = 0.025;    // Surface offset, without moving body-part centers
 const GLOW_OPACITY = 0.25;        // Outline transparency
 const GLOW_COLOR = 0xffffff;      // Base glow tint (will blend with coat color)
 const EMISSIVE_INTENSITY = 0.35;  // Subtle self-illumination on all rat materials
@@ -200,7 +200,7 @@ export class RatEntity {
     }
 
     /**
-     * Creates a glowing outline mesh — a slightly larger clone rendered
+     * Creates a glowing outline mesh — a surface-expanded clone rendered
      * with BackSide + Additive blending to create a visible aura.
      */
     private createGlowOutline(opts: RatOptions): THREE.Group {
@@ -210,9 +210,25 @@ export class RatEntity {
         const coatColor = new THREE.Color(opts.coatColor ?? 0x5c4a3a);
         const tint = coatColor.clone().lerp(new THREE.Color(GLOW_COLOR), 0.5);
 
+        // Expand along each vertex normal instead of scaling from the feet.
+        // Eyes/ears can share geometry, so expand each geometry only once.
+        const expandedGeometries = new Set<THREE.BufferGeometry>();
         const replacedMaterials = new Set<THREE.Material>();
         glowGroup.traverse((c) => {
             if (c instanceof THREE.Mesh) {
+                if (!expandedGeometries.has(c.geometry)) {
+                    expandedGeometries.add(c.geometry);
+                    const positions = c.geometry.getAttribute('position');
+                    const normals = c.geometry.getAttribute('normal');
+                    for (let i = 0; i < positions.count; i++) {
+                        positions.setXYZ(i,
+                            positions.getX(i) + normals.getX(i) * GLOW_THICKNESS,
+                            positions.getY(i) + normals.getY(i) * GLOW_THICKNESS,
+                            positions.getZ(i) + normals.getZ(i) * GLOW_THICKNESS);
+                    }
+                    positions.needsUpdate = true;
+                    c.geometry.computeBoundingSphere();
+                }
                 for (const material of Array.isArray(c.material) ? c.material : [c.material]) {
                     replacedMaterials.add(material);
                 }
@@ -230,7 +246,6 @@ export class RatEntity {
         });
         replacedMaterials.forEach(material => material.dispose());
 
-        glowGroup.scale.setScalar(GLOW_SCALE);
         // Position will be synced each frame
         this.scene.add(glowGroup);
         return glowGroup;
