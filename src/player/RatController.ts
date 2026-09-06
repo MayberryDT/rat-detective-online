@@ -66,6 +66,7 @@ export class RatController {
         if (this.entity.dead) return; // Stop input/movement if dead
 
         this.applyMovement(keys);
+        this.entity.syncGlowTransform();
     }
 
     private applyMovement(keys: Record<string, boolean>): void {

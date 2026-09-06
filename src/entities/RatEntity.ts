@@ -150,6 +150,7 @@ export class RatEntity {
         // ── OUTLINE GLOW MESH ──
         // Create a slightly larger, additive, backface-only clone for the glow halo
         this.glowMesh = this.createGlowOutline(opts);
+        this.syncGlowTransform();
 
         // 3. UI
         this.billboard = new RatBillboard(name, this.hp);
@@ -247,17 +248,20 @@ export class RatEntity {
         this.mesh.position.set(p.x, p.y, p.z);
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
 
-        // Sync glow outline position + rotation
-        if (this.glowMesh) {
-            this.glowMesh.position.copy(this.mesh.position);
-            this.glowMesh.quaternion.copy(this.mesh.quaternion);
-        }
-
+        this.syncGlowTransform();
 
         // Flash Logic
         if (this.flashTimer > 0) {
             this.flashTimer -= dt;
             if (this.flashTimer <= 0) this.resetColor();
+        }
+    }
+
+    /** Also called after the controller applies this frame's character rotation. */
+    public syncGlowTransform(): void {
+        if (this.glowMesh) {
+            this.glowMesh.position.copy(this.mesh.position);
+            this.glowMesh.quaternion.copy(this.mesh.quaternion);
         }
     }
 
@@ -487,6 +491,7 @@ export class RatEntity {
         body.wakeUp();
         this.mesh.position.set(data.x, data.y, data.z);
         this.mesh.quaternion.set(0, 0, 0, 1);
+        this.syncGlowTransform();
     }
 
     public dispose() {
