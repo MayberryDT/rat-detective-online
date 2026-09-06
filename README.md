@@ -56,8 +56,12 @@ npm run smoke:webgl-error
 `npm run build` regenerates Cloudflare Worker types, type-checks the project,
 and builds the Vite assets.
 
-Run `npm run smoke:ws` while `npm run dev:worker` is running to verify that two
-native WebSocket clients can join the Worker-backed room.
+Run `npm run smoke:ws` while `npm run dev:worker` is running to verify two-player
+joining, movement, shooting, damage, scoring, automatic respawn, and leaving.
+For `npm run dev` on port 5173, use `npm run smoke:ws -- ws://localhost:5173/ws`.
+
+`npm test` covers Worker rules and client projectile trajectories, ricochets,
+headshots, resource ownership, and local/remote respawn behavior.
 
 Run `npm run smoke:browser` while `npm run dev:worker` is running to verify that
 a real browser click can enter the game at a short desktop viewport.
