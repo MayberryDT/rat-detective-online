@@ -1,0 +1,80 @@
+{
+  "ok": true,
+  "seed": 20260905,
+  "origin": "http://127.0.0.1:37531",
+  "captures": [
+    {
+      "state": "alive",
+      "path": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-alive.png"
+    },
+    {
+      "state": "turned",
+      "path": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-turned.png"
+    },
+    {
+      "state": "damaged",
+      "path": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-damaged.png"
+    },
+    {
+      "state": "dead",
+      "path": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-dead.png"
+    },
+    {
+      "state": "respawn",
+      "path": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-respawn.png"
+    }
+  ],
+  "comparisons": [
+    {
+      "state": "alive",
+      "status": "match",
+      "mean": 0,
+      "percent": 0,
+      "maxMean": 2.5,
+      "maxPercent": 1.5,
+      "expectedPath": "/home/tyler/Projects/rat-detective/test/visual/baselines/seed-20260905-alive.png",
+      "actualPath": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-alive.png"
+    },
+    {
+      "state": "turned",
+      "status": "match",
+      "mean": 0,
+      "percent": 0,
+      "maxMean": 2.5,
+      "maxPercent": 1.5,
+      "expectedPath": "/home/tyler/Projects/rat-detective/test/visual/baselines/seed-20260905-turned.png",
+      "actualPath": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-turned.png"
+    },
+    {
+      "state": "damaged",
+      "status": "match",
+      "mean": 0,
+      "percent": 0,
+      "maxMean": 2.5,
+      "maxPercent": 1.5,
+      "expectedPath": "/home/tyler/Projects/rat-detective/test/visual/baselines/seed-20260905-damaged.png",
+      "actualPath": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-damaged.png"
+    },
+    {
+      "state": "dead",
+      "status": "match",
+      "mean": 0,
+      "percent": 0,
+      "maxMean": 2.5,
+      "maxPercent": 1.5,
+      "expectedPath": "/home/tyler/Projects/rat-detective/test/visual/baselines/seed-20260905-dead.png",
+      "actualPath": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-dead.png"
+    },
+    {
+      "state": "respawn",
+      "status": "match",
+      "mean": 0.19230704218026734,
+      "percent": 0.6984969053934571,
+      "maxMean": 2.5,
+      "maxPercent": 1.5,
+      "expectedPath": "/home/tyler/Projects/rat-detective/test/visual/baselines/seed-20260905-respawn.png",
+      "actualPath": "/home/tyler/Projects/rat-detective/test-results/visual-reference/seed-20260905-respawn.png"
+    }
+  ],
+  "baselinesRecorded": false
+}

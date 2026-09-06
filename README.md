@@ -21,19 +21,29 @@ The production app runs on Cloudflare Workers:
 
 ## Local Development
 
-Install dependencies, build the app, and start the local Worker:
-
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run dev` builds the Vite assets and starts the complete Worker-backed game
-at `http://localhost:5173`, including the WebSocket game room. Restart it after
-editing client code to rebuild the assets. Vite alone does not run the game server.
+`npm run dev` is the fullstack watch workflow. It rebuilds client assets on
+change and serves the Worker-backed game, including `/ws`, at
+`http://localhost:5173`.
 
-`npm run dev:worker` runs the same game on Wrangler's default port, `8787`.
-The smoke commands below target that port by default.
+`npm run preview` builds once and serves the same Worker-backed game at
+`http://localhost:5173`. Vite's static preview is not used because it does not
+run the game server.
+
+Smoke commands default to that origin:
+
+```bash
+npm run smoke:ws
+npm run smoke:browser
+npm run smoke:webgl-error
+```
+
+Override with a URL argument or `SMOKE_WS_URL` / `SMOKE_URL`. Isolated rooms are
+used unless `room` is already in the URL.
 
 ## Controls
 
@@ -45,40 +55,35 @@ The smoke commands below target that port by default.
 ## Checks
 
 ```bash
+npm run typecheck
 npm run test
 npm run build
 npm run audit
-npm run smoke:ws
-npm run smoke:browser
-npm run smoke:webgl-error
+npm run smoke:ci
 ```
 
-`npm run build` regenerates Cloudflare Worker types, type-checks the project,
-and builds the Vite assets.
+`npm run typecheck` type-checks application sources and tests.
+`npm run smoke:ci` builds, starts an isolated local Worker, and runs the
+WebSocket smoke against it.
 
-Run `npm run smoke:ws` while `npm run dev:worker` is running to verify two-player
-joining, movement, shooting, damage, scoring, automatic respawn, and leaving.
-For `npm run dev` on port 5173, use `npm run smoke:ws -- ws://localhost:5173/ws`.
-
-`npm test` covers Worker rules and client projectile trajectories, ricochets,
-headshots, resource ownership, and local/remote respawn behavior.
-
-Run `npm run smoke:browser` while `npm run dev:worker` is running to verify that
-a real browser click can enter the game at a short desktop viewport.
-
-Run `npm run smoke:webgl-error` while `npm run dev:worker` is running to verify
-that browsers with WebGL disabled see a clear error state instead of a dead app.
+Visual fixture comparison (all hats, turning, damage, death and respawn, fixed seed) is separate
+from the game server. See `docs/tooling.md` and `test/visual/README.md`.
 
 ## Deployment
 
+Do not run a bare `wrangler deploy`. Production routes live only on the
+`production` environment.
+
 ```bash
-npm run deploy
+npm run deploy:staging
+npm run deploy:production
 ```
 
-Deployment uses Wrangler and the Worker configuration in `wrangler.jsonc`. The
-configured Worker serves the static game and routes WebSocket traffic through
-`/ws`.
+Staging deploys Worker `rat-detective-staging` with no production routes.
+Production deploys the existing `rat-detective-preview` Worker and
+`rat-detective.animasai.co`.
 
 ## Contributing
 
-See `CONTRIBUTING.md` and `SECURITY.md` before opening issues or pull requests.
+See `CONTRIBUTING.md`, `SECURITY.md`, and `docs/tooling.md` before opening
+issues or pull requests.

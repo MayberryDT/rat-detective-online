@@ -1,0 +1,44 @@
+{
+  "scenario": "Default 12x12 noir city, seed 1, no players; actual reference revision 08e8005",
+  "before": {
+    "sceneChildren": 1683,
+    "meshes": 1683,
+    "instancedMeshes": 0,
+    "uniqueGeometries": 1683,
+    "uniqueMaterials": 653,
+    "uniqueTextures": 144,
+    "physicsBodies": 144
+  },
+  "after": {
+    "sceneChildren": 424,
+    "meshes": 424,
+    "instancedMeshes": 56,
+    "uniqueGeometries": 204,
+    "uniqueMaterials": 150,
+    "uniqueTextures": 144,
+    "physicsBodies": 144,
+    "counts": {
+      "buildings": 144,
+      "buildingBodies": 144,
+      "rooftops": 53,
+      "roadMeshes": 24,
+      "dashBatches": 24,
+      "dashInstances": 1008,
+      "lampCells": 16,
+      "lampPoles": 147,
+      "lampHeads": 147,
+      "lampCones": 147,
+      "sceneObjects": 424,
+      "geometries": 204,
+      "materials": 150,
+      "textures": 144,
+      "physicsBodies": 144
+    }
+  },
+  "reductions": {
+    "sceneChildren": 1259,
+    "uniqueGeometries": 1479,
+    "uniqueMaterials": 503
+  },
+  "notes": "Before executes reference08e8005 with seeded Math.random. After separates layout/decor RNG, so procedural layouts differ; these are scene resource counts, not identical-view frame-time comparisons. Dashes remain1008 instances in24batches. Transparent cones remain individual meshes sharing resources."
+}

@@ -1,0 +1,12 @@
+{
+  "date": "2026-09-06",
+  "surface": "Codex in-app Chromium, same-machine sequential run",
+  "seed": 20260905,
+  "viewport": [780, 493],
+  "warmupFramesPerMode": 60,
+  "samplesPerMode": 300,
+  "separateMeshes": {"frameMedianMs":16.7,"frameP95Ms":16.8,"renderCpuMedianMs":2.4,"renderCpuP95Ms":4.5,"calls":637,"triangles":10450,"geometries":259,"textures":68},
+  "instanced": {"frameMedianMs":16.7,"frameP95Ms":16.7,"renderCpuMedianMs":2,"renderCpuP95Ms":4.5,"calls":302,"triangles":13800,"geometries":259,"textures":68},
+  "method": "Expand existing instances into equivalent separate meshes sharing geometry and materials. Same generated world, three rats, camera, lights, viewport. This isolates batching; it is not a historical whole-game comparison.",
+  "interpretation": "Draw calls decreased 52.6%; batch culling submitted 32.1% more triangles. Frame median and render CPU p95 did not improve. No FPS gain established. Geometry counts match because expanded controls intentionally share resources. See world-scenery-benchmark.json for historical allocation counts."
+}

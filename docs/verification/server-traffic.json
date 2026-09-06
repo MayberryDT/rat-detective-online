@@ -1,0 +1,9 @@
+{
+  "date": "2026-09-06",
+  "test": "test/worker/gameRoom.test.ts: checkpoints actual 25 Hz WebSocket movement and preserves it through a heartbeat",
+  "workload": {"joinedPlayers":4,"movingPlayers":1,"updatesPerSecond":25,"seconds":6,"movementMessages":150},
+  "measured": {"movementSerializations":150,"recipientDeliveries":450,"positionCheckpoints":2,"checkpointTimesSeconds":[2.52,5.04]},
+  "referencePolicyCounts": {"playerRowWrites":150,"movementSerializations":450,"recipientDeliveries":450},
+  "recovery": "At 8 seconds a normal heartbeat checkpoints x=15; after Durable Object eviction a late-join snapshot recovers x=15.",
+  "scope": "Actual GameRoom.webSocketMessage, real Durable Object sockets and SQLite with deterministic clock. Checkpoints counted by changed SQL updated_at plus exact stored pose; JSON.stringify spied for playerMoved; deliveries observed at all three recipients. Historical counts derive from the reference per-event/per-recipient policy, not a live historical load test. Critical lifecycle writes excluded."
+}
