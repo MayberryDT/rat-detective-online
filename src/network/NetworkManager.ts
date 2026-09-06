@@ -12,7 +12,6 @@ interface RemoteRat {
     entity: RatEntity;
     targetPos: THREE.Vector3;
     targetMeshQuat: THREE.Quaternion;
-    lastUpdate: number;
 }
 
 function resolveWebSocketUrl(serverUrl?: string): string {
@@ -145,7 +144,6 @@ export class NetworkManager {
 
                 remote.targetPos.set(data.x, data.y, data.z);
                 remote.targetMeshQuat.set(data.meshQx, data.meshQy, data.meshQz, data.meshQw);
-                remote.lastUpdate = performance.now();
                 break;
             }
 
@@ -244,7 +242,7 @@ export class NetworkManager {
                     (Math.random() - 0.5) * 2
                 ).normalize().multiplyScalar(50);
             }
-            remote.entity.takeDamage(999, false, impactDir);
+            remote.entity.takeDamage(999, impactDir);
         }
 
         this.onPlayerDied?.(data);
@@ -267,8 +265,7 @@ export class NetworkManager {
         this.remoteRats.set(id, {
             entity,
             targetPos: pos.clone(),
-            targetMeshQuat: new THREE.Quaternion(data.meshQx, data.meshQy, data.meshQz, data.meshQw),
-            lastUpdate: performance.now()
+            targetMeshQuat: new THREE.Quaternion(data.meshQx, data.meshQy, data.meshQz, data.meshQw)
         });
 
         console.log(`[Network] Spawned remote rat: ${data.name} (${id})`);

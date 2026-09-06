@@ -216,10 +216,6 @@ export class CityGenerator {
             roughness: 0.95,
             metalness: 0.0,
         });
-        const curbMat = new THREE.MeshStandardMaterial({
-            color: 0x888888,
-            roughness: 0.8,
-        });
         const lineMat = new THREE.MeshBasicMaterial({
             color: 0xccaa22,
             transparent: true,

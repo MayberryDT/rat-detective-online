@@ -128,12 +128,10 @@ export class RatEntity {
 
     // Timers
     private flashTimer: number = 0;
-    private elapsed: number = 0;
 
     // Ragdoll / death state
     private deathTimer: number = 0;
     private deathTargetQuat: THREE.Quaternion | null = null;
-    private ragdollSettled: boolean = false;
     private deathPosition: THREE.Vector3 | null = null;
     private impactPlayed: boolean = false;
     private deathPhase: 'launch' | 'spin' | 'settle' | 'done' = 'launch';
@@ -269,7 +267,7 @@ export class RatEntity {
     public update(dt: number) {
         if (this.dead) {
             this.deathTimer += dt;
-            this.updateDeathRagdoll(dt);
+            this.updateDeathRagdoll();
             return;
         }
 
@@ -284,7 +282,6 @@ export class RatEntity {
             this.glowMesh.quaternion.copy(this.mesh.quaternion);
         }
 
-        this.elapsed += dt;
 
         // Flash Logic
         if (this.flashTimer > 0) {
@@ -299,7 +296,7 @@ export class RatEntity {
      *   Phase 2 (SPIN):    0.6 – 1.2s — Airborne tumble, damping ramps up
      *   Phase 3 (SETTLE):  1.2 – 2.0s — Slam to ground, snap to laying-flat, "thunk"
      */
-    private updateDeathRagdoll(dt: number) {
+    private updateDeathRagdoll() {
         const t = this.deathTimer;
 
         if (this.deathPhase === 'launch') {
@@ -364,7 +361,6 @@ export class RatEntity {
 
             if (settleProgress >= 1.0) {
                 this.deathPhase = 'done';
-                this.ragdollSettled = true;
                 // Force final flat pose
                 if (this.deathTargetQuat) {
                     this.mesh.quaternion.copy(this.deathTargetQuat);
@@ -394,7 +390,7 @@ export class RatEntity {
         );
     }
 
-    public takeDamage(amount: number, isHeadshot: boolean, impactVel: THREE.Vector3) {
+    public takeDamage(amount: number, impactVel: THREE.Vector3) {
         if (this.dead) return;
 
         this.hp -= amount;
@@ -440,7 +436,6 @@ export class RatEntity {
         console.log(`${this.name} died!`);
         this.dead = true;
         this.deathTimer = 0;
-        this.ragdollSettled = false;
         this.impactPlayed = false;
         this.deathPhase = 'launch';
         this.resetColor();

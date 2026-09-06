@@ -1,6 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
-  MAX_HP,
   RESPAWN_DELAY_MS,
   WIN_DISPLAY_MS,
   type ClientMessage,

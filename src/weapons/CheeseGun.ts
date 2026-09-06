@@ -187,7 +187,7 @@ export class CheeseGun {
                             // Only apply local damage for LOCAL entities
                             // Remote entity damage is handled by the server
                             if (!victim.isRemote) {
-                                victim.takeDamage(dmg, isHead, ball.velocity);
+                                victim.takeDamage(dmg, ball.velocity);
                             } else {
                                 playHitSound();
                             }

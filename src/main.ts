@@ -297,7 +297,7 @@ enterBtn.addEventListener('click', (e) => {
           0,
           (Math.random() - 0.5) * 2
         ).normalize().multiplyScalar(50);
-        rat.entity.takeDamage(0, false, impactDir);
+        rat.entity.takeDamage(0, impactDir);
       }
     }
   };
@@ -448,7 +448,7 @@ function animate() {
 
   // ── Local Player ──
   if (rat) {
-    rat.update(dt, keys, cheeseGun);
+    rat.update(dt, keys);
 
     if (rat.entity.dead && !rat.entity.mesh.userData.deathLogged) {
       console.log("GAME OVER - Player is dead");

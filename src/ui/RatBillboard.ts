@@ -8,7 +8,6 @@ export class RatBillboard {
 
     private name: string;
     private health: number;
-    private maxHealth: number = 3;
 
     constructor(name: string, initialHealth: number = 3) {
         this.name = name;
@@ -94,9 +93,4 @@ export class RatBillboard {
         this.texture.needsUpdate = true;
     }
 
-    public update(camera: THREE.Camera) {
-        // Billboard logic is handled automatically by THREE.Sprite! 
-        // It always faces the camera.
-        // We just need to make sure the parent position is correct.
-    }
 }

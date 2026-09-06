@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
-import { CheeseGun } from '../weapons/CheeseGun';
 import { RatOptions } from '../utils/RatModel';
 
 // ─── TUNING CONSTANTS ─────────────────────────────────────────────
@@ -12,7 +11,6 @@ const JUMP_IMPULSE = 16;
 
 const CAM_RADIUS = 6.0;
 const CAM_PIVOT_Y = 3.5;
-const CAM_LERP = 0.12;
 const MOUSE_SENS = 0.002;
 
 export class RatController {
@@ -21,7 +19,6 @@ export class RatController {
     private spherical = new THREE.Spherical(CAM_RADIUS, Math.PI * 0.4, Math.PI);
 
     private canJump = false;
-    private elapsed = 0;
 
     constructor(
         scene: THREE.Scene,
@@ -62,21 +59,13 @@ export class RatController {
         this.spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.spherical.phi));
     }
 
-    /** Expose theta so others can see look direction */
-    get yaw(): number {
-        return this.spherical.theta;
-    }
-
-    update(dt: number, keys: Record<string, boolean>, gun: CheeseGun): void {
-        this.elapsed += dt;
+    update(dt: number, keys: Record<string, boolean>): void {
         this.entity.update(dt); // Updates mesh position
         this.updateCamera();    // Keeps camera following
 
         if (this.entity.dead) return; // Stop input/movement if dead
 
-        this.applyMovement(keys); // <--- RESTORED: This was missing!
-
-        // Shooting Input (handled in main, but we provide data or Could do it here if passed keys)
+        this.applyMovement(keys);
     }
 
     private applyMovement(keys: Record<string, boolean>): void {
