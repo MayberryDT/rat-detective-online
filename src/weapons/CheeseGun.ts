@@ -19,7 +19,6 @@ interface CheeseBall {
     velocity: THREE.Vector3;
     position: THREE.Vector3;
     age: number;
-    toRemove: boolean;
     owner: RatEntity;
 }
 
@@ -30,6 +29,30 @@ export class CheeseGun {
     private playerEntity: RatEntity | null = null;
 
     private balls: CheeseBall[] = [];
+    // Ball meshes own their transforms; the gun owns the shared GPU resources.
+    private readonly ballGeometry = new THREE.SphereGeometry(BALL_RADIUS, 8, 8);
+    private readonly ballMaterial = new THREE.MeshStandardMaterial({
+        color: BALL_COLOR,
+        roughness: 0,
+        emissive: BALL_COLOR,
+        emissiveIntensity: 3,
+    });
+    private disposed = false;
+    private readonly aimRay = new THREE.Raycaster();
+    private readonly aimCenter = new THREE.Vector2(0, 0);
+    private readonly gravityStep = new THREE.Vector3();
+    private readonly moveStep = new THREE.Vector3();
+    private readonly nextPos = new THREE.Vector3();
+    private readonly hitPoint = new THREE.Vector3();
+    private readonly hitNormal = new THREE.Vector3();
+    private readonly rayFrom = new CANNON.Vec3();
+    private readonly rayTo = new CANNON.Vec3();
+    private readonly rayResult = new CANNON.RaycastResult();
+    private readonly rayOptions: CANNON.RayOptions = {
+        collisionFilterGroup: GROUP_PROJECTILE,
+        collisionFilterMask: GROUP_DEFAULT,
+        skipBackfaces: true,
+    };
 
     // Network callback: fires when a local projectile hits an entity
     public onHitEntity: ((victim: RatEntity, damage: number) => void) | null = null;
@@ -63,14 +86,15 @@ export class CheeseGun {
      * For NPCs: shoots directly at the provided targetPoint.
      */
     shoot(owner: RatEntity, targetPoint: THREE.Vector3): void {
+        if (this.disposed) return;
         this.playFireSound();
 
         let finalTarget: THREE.Vector3;
 
         // ── PLAYER AIM: Camera Raycasting for Convergence ──
         if (this.camera && this.playerEntity && owner === this.playerEntity) {
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+            const raycaster = this.aimRay;
+            raycaster.setFromCamera(this.aimCenter, this.camera);
 
             const intersects = raycaster.intersectObjects(this.scene.children, true);
             let hitTarget: THREE.Vector3 | null = null;
@@ -115,17 +139,13 @@ export class CheeseGun {
     }
 
     update(dt: number): void {
-        const gravityStep = new THREE.Vector3(0, BALL_GRAVITY * dt, 0);
+        const gravityStep = this.gravityStep.set(0, BALL_GRAVITY * dt, 0);
 
         for (let i = this.balls.length - 1; i >= 0; i--) {
             const ball = this.balls[i];
             ball.age += dt;
 
             if (ball.age > BALL_LIFETIME) {
-                ball.toRemove = true;
-            }
-
-            if (ball.toRemove) {
                 this.removeBall(i);
                 continue;
             }
@@ -136,25 +156,19 @@ export class CheeseGun {
             ball.velocity.add(gravityStep);
 
             // 2. Calculate projected movement
-            const moveStep = ball.velocity.clone().multiplyScalar(dt);
+            const moveStep = this.moveStep.copy(ball.velocity).multiplyScalar(dt);
             const moveDist = moveStep.length();
 
             if (moveDist < 0.0001) continue;
 
-            const nextPos = ball.position.clone().add(moveStep);
+            const nextPos = this.nextPos.copy(ball.position).add(moveStep);
 
             // 3. Raycast for physics collision
-            const from = new CANNON.Vec3(ball.position.x, ball.position.y, ball.position.z);
-            const to = new CANNON.Vec3(nextPos.x, nextPos.y, nextPos.z);
-
-            const rayOptions: CANNON.RayOptions = {
-                collisionFilterGroup: GROUP_PROJECTILE,
-                collisionFilterMask: GROUP_DEFAULT,
-                skipBackfaces: true
-            };
-
-            const result = new CANNON.RaycastResult();
-            const hasHit = this.world.raycastClosest(from, to, rayOptions, result);
+            this.rayFrom.set(ball.position.x, ball.position.y, ball.position.z);
+            this.rayTo.set(nextPos.x, nextPos.y, nextPos.z);
+            // Cannon resets this result on every raycast, including misses.
+            const result = this.rayResult;
+            const hasHit = this.world.raycastClosest(this.rayFrom, this.rayTo, this.rayOptions, result);
 
             if (hasHit) {
                 const hitBody = result.body;
@@ -164,8 +178,8 @@ export class CheeseGun {
                     // Pass through own body — just move normally
                     ball.position.copy(nextPos);
                 } else {
-                    const hitPoint = new THREE.Vector3(result.hitPointWorld.x, result.hitPointWorld.y, result.hitPointWorld.z);
-                    const hitNormal = new THREE.Vector3(result.hitNormalWorld.x, result.hitNormalWorld.y, result.hitNormalWorld.z);
+                    const hitPoint = this.hitPoint.set(result.hitPointWorld.x, result.hitPointWorld.y, result.hitPointWorld.z);
+                    const hitNormal = this.hitNormal.set(result.hitNormalWorld.x, result.hitNormalWorld.y, result.hitNormalWorld.z);
 
                     // Move ball to hit point
                     ball.position.copy(hitPoint).addScaledVector(hitNormal, 0.05);
@@ -218,6 +232,19 @@ export class CheeseGun {
         }
     }
 
+    dispose(): void {
+        if (this.disposed) return;
+        this.disposed = true;
+        while (this.balls.length) this.removeBall(this.balls.length - 1);
+        this.ballGeometry.dispose();
+        this.ballMaterial.dispose();
+        if (this.gunshotSound.isPlaying) this.gunshotSound.stop();
+        this.gunshotSound.disconnect();
+        this.onHitEntity = null;
+        this.playerEntity = null;
+        this.camera = null;
+    }
+
     private playFireSound(): void {
         if (this.gunshotSound.buffer) {
             if (this.gunshotSound.isPlaying) this.gunshotSound.stop();
@@ -227,14 +254,7 @@ export class CheeseGun {
 
     private createBall(origin: THREE.Vector3, direction: THREE.Vector3, owner: RatEntity): void {
         // Visuals
-        const geo = new THREE.SphereGeometry(BALL_RADIUS, 8, 8);
-        const mat = new THREE.MeshStandardMaterial({
-            color: BALL_COLOR,
-            roughness: 0,
-            emissive: BALL_COLOR,
-            emissiveIntensity: 3
-        });
-        const mesh = new THREE.Mesh(geo, mat);
+        const mesh = new THREE.Mesh(this.ballGeometry, this.ballMaterial);
         mesh.position.copy(origin);
         this.scene.add(mesh);
 
@@ -246,7 +266,6 @@ export class CheeseGun {
             velocity,
             position: origin.clone(),
             age: 0,
-            toRemove: false,
             owner
         });
     }
@@ -255,8 +274,6 @@ export class CheeseGun {
         if (index < 0 || index >= this.balls.length) return;
         const ball = this.balls[index];
         this.scene.remove(ball.mesh);
-        ball.mesh.geometry.dispose();
-        (ball.mesh.material as THREE.Material).dispose();
         this.balls.splice(index, 1);
     }
 }

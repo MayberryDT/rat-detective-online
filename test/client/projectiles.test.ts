@@ -14,6 +14,47 @@ function setup() {
 }
 
 describe('projectile behavior', () => {
+  it('shares GPU resources across shots and retains them until gun disposal', () => {
+    const { gun, owner, projectiles } = setup();
+    gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
+    const first = projectiles()[0];
+    const geometryDispose = vi.spyOn(first.geometry, 'dispose');
+    const materialDispose = vi.spyOn(first.material as THREE.Material, 'dispose');
+    gun.update(4.99);
+    for (let i = 0; i < 100; i++) gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
+    gun.update(0.02);
+    expect(projectiles()).toHaveLength(100);
+    expect(new Set(projectiles().map(ball => ball.geometry)).size).toBe(1);
+    expect(new Set(projectiles().map(ball => ball.material)).size).toBe(1);
+    expect(geometryDispose).not.toHaveBeenCalled();
+    expect(materialDispose).not.toHaveBeenCalled();
+    gun.dispose();
+    gun.dispose();
+    expect(projectiles()).toHaveLength(0);
+    expect(geometryDispose).toHaveBeenCalledTimes(1);
+    expect(materialDispose).toHaveBeenCalledTimes(1);
+    gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
+    expect(projectiles()).toHaveLength(0);
+  });
+
+  it('keeps camera-based aim convergence rather than aiming at the supplied fallback', () => {
+    const { gun, owner, scene, projectiles } = setup();
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.set(0, 4, 10);
+    camera.lookAt(0, 4, 0);
+    camera.updateMatrixWorld();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 1), new THREE.MeshBasicMaterial());
+    wall.position.set(0, 4, -10);
+    scene.add(wall);
+    scene.updateMatrixWorld(true);
+    gun.setPlayer(camera, owner);
+    gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
+    const ball = projectiles().find(mesh => mesh !== wall)!;
+    const expectedDirection = new THREE.Vector3(0, 4 - 1.45, -9.5).normalize();
+    const expectedOrigin = new THREE.Vector3(0, 1.45, 0).addScaledVector(expectedDirection, 0.6);
+    expect(ball.position.distanceTo(expectedOrigin)).toBeLessThan(1e-12);
+  });
+
   it('preserves launch offset, speed, gravity, and five-second lifetime', () => {
     const { gun, owner, projectiles } = setup();
     gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
