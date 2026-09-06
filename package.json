@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "dev:worker": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
-    "test": "vitest run",
+    "test": "vitest run && vitest run --config vitest.client.config.ts",
     "audit": "npm audit --audit-level=high",
     "smoke:ws": "node scripts/smoke-ws.mjs",
     "smoke:browser": "node scripts/smoke-browser.mjs",

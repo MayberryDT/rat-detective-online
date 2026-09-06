@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions, HatType } from '../utils/RatModel';
 import { RatBillboard } from '../ui/RatBillboard';
+import { disposeMeshResources } from '../utils/disposeMeshResources';
 
 // ─── PHYSICS CONSTANTS ───
 const HEAD_RADIUS = 0.28;
@@ -114,6 +115,7 @@ export class RatEntity {
     public mesh: THREE.Group;
     public billboard: RatBillboard;
     private glowMesh: THREE.Group | null = null;
+    private disposed = false;
     private allMaterials: THREE.MeshStandardMaterial[] = [];
     private originalColors: { color: THREE.Color; emissive: THREE.Color; emissiveIntensity: number }[] = [];
 
@@ -243,8 +245,12 @@ export class RatEntity {
         const coatColor = new THREE.Color(opts.coatColor ?? 0x5c4a3a);
         const tint = coatColor.clone().lerp(new THREE.Color(GLOW_COLOR), 0.5);
 
+        const replacedMaterials = new Set<THREE.Material>();
         glowGroup.traverse((c) => {
             if (c instanceof THREE.Mesh) {
+                for (const material of Array.isArray(c.material) ? c.material : [c.material]) {
+                    replacedMaterials.add(material);
+                }
                 c.material = new THREE.MeshBasicMaterial({
                     color: tint,
                     transparent: true,
@@ -257,6 +263,7 @@ export class RatEntity {
                 c.receiveShadow = false;
             }
         });
+        replacedMaterials.forEach(material => material.dispose());
 
         glowGroup.scale.setScalar(GLOW_SCALE);
         // Position will be synced each frame
@@ -492,23 +499,23 @@ export class RatEntity {
     }
 
     public dispose() {
+        if (this.disposed) return;
+        this.disposed = true;
         // Release unique combination
         if (this.comboKeyStr) {
             usedCombinations.delete(this.comboKeyStr);
         }
         this.scene.remove(this.mesh);
-        this.scene.remove(this.billboard.sprite);
+        disposeMeshResources(this.mesh);
+        this.billboard.dispose();
         // Remove glow outline
         if (this.glowMesh) {
-            this.glowMesh.traverse((c) => {
-                if (c instanceof THREE.Mesh) {
-                    c.geometry.dispose();
-                    if (c.material instanceof THREE.Material) c.material.dispose();
-                }
-            });
+            disposeMeshResources(this.glowMesh);
             this.scene.remove(this.glowMesh);
             this.glowMesh = null;
         }
         this.world.removeBody(this.body);
+        this.allMaterials.length = 0;
+        this.originalColors.length = 0;
     }
 }

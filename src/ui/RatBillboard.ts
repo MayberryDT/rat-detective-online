@@ -8,6 +8,7 @@ export class RatBillboard {
 
     private name: string;
     private health: number;
+    private disposed = false;
 
     constructor(name: string, initialHealth: number = 3) {
         this.name = name;
@@ -93,4 +94,12 @@ export class RatBillboard {
         this.texture.needsUpdate = true;
     }
 
+    public dispose(): void {
+        if (this.disposed) return;
+        this.disposed = true;
+        this.sprite.removeFromParent();
+        this.texture.dispose();
+        this.sprite.material.dispose();
+        // Sprite geometry belongs to Three.js and is shared by every sprite.
+    }
 }
