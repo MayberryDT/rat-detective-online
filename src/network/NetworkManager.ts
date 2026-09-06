@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
-import { RatOptions, HatType } from '../utils/RatModel';
+import { RatOptions } from '../utils/RatModel';
+import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
 import { CheeseGun } from '../weapons/CheeseGun';
 import type { ClientMessage, PlayerData, ScoreEntry, ServerMessage } from '../shared/networkProtocol';
 
@@ -80,10 +81,10 @@ export class NetworkManager {
                 type: 'join',
                 name,
                 appearance: {
-                    hatType: (options.hatType as HatType) || 'fedora',
-                    hatColor: options.hatColor ?? 0xDC4A3C,
-                    furColor: options.furColor ?? 0xE8B84D,
-                    coatColor: options.coatColor ?? 0xBE4545,
+                    hatType: options.hatType || DEFAULT_APPEARANCE.hatType,
+                    hatColor: options.hatColor ?? DEFAULT_APPEARANCE.hatColor,
+                    furColor: options.furColor ?? DEFAULT_APPEARANCE.furColor,
+                    coatColor: options.coatColor ?? DEFAULT_APPEARANCE.coatColor,
                 },
             });
         });
@@ -254,7 +255,7 @@ export class NetworkManager {
 
         const pos = new THREE.Vector3(data.x, data.y, data.z);
         const opts: RatOptions = {
-            hatType: (data.hatType as HatType) || 'fedora',
+            hatType: data.hatType || DEFAULT_APPEARANCE.hatType,
             hatColor: data.hatColor,
             furColor: data.furColor,
             coatColor: data.coatColor
@@ -272,35 +273,8 @@ export class NetworkManager {
     }
 
     private respawnRemoteRat(remote: RemoteRat, data: { x: number; y: number; z: number; hp: number }): void {
-        const entity = remote.entity;
-
-        entity.dead = false;
-        entity.hp = data.hp;
-        entity.billboard.setHealth(data.hp);
-        entity.mesh.visible = true;
-        entity.billboard.sprite.visible = true;
-        this.scene.add(entity.billboard.sprite);
-        entity.mesh.userData.deathLogged = false;
-
-        const body = entity.body;
-        body.mass = 0;
-        body.type = CANNON.Body.KINEMATIC;
-        body.fixedRotation = true;
-        body.linearDamping = 0;
-        body.angularDamping = 0;
-        body.updateMassProperties();
-
-        const newPos = new THREE.Vector3(data.x, data.y, data.z);
-        body.position.set(data.x, data.y, data.z);
-        body.velocity.set(0, 0, 0);
-        body.angularVelocity.set(0, 0, 0);
-        body.quaternion.set(0, 0, 0, 1);
-        body.wakeUp();
-
-        entity.mesh.position.copy(newPos);
-        entity.mesh.quaternion.set(0, 0, 0, 1);
-
-        remote.targetPos.copy(newPos);
+        remote.entity.respawn(data);
+        remote.targetPos.set(data.x, data.y, data.z);
         remote.targetMeshQuat.set(0, 0, 0, 1);
     }
 

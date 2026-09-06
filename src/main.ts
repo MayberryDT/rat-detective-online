@@ -5,23 +5,7 @@ import { RatController } from './player/RatController';
 import { CheeseGun } from './weapons/CheeseGun';
 import { NetworkManager } from './network/NetworkManager';
 import { initEntitySounds, playPlayerHitSound } from './entities/RatEntity';
-import { HatType, RatOptions } from './utils/RatModel';
-
-// ─── COLOR PALETTES (must match RatEntity.ts) ────────────────────
-const HAT_COLORS = [0xDC4A3C, 0x3498DB, 0x2ECC71, 0xA855F7, 0xE67E22];
-const FUR_COLORS = [0xE8B84D, 0xC8C8D0, 0xD4A06A, 0xCD6839, 0xF0E0C0];
-const COAT_COLORS = [0xBE4545, 0x3A5F95, 0x45945A, 0xA08050, 0x7E4F99];
-const HAT_TYPES: HatType[] = ['fedora', 'trilby', 'porkpie'];
-
-function pickRandom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
-function generateRandomAppearance(): RatOptions {
-  return {
-    hatType: pickRandom(HAT_TYPES),
-    hatColor: pickRandom(HAT_COLORS),
-    furColor: pickRandom(FUR_COLORS),
-    coatColor: pickRandom(COAT_COLORS),
-  };
-}
+import { generateRandomAppearance } from './shared/ratAppearance';
 
 function showWebGLError(error: unknown): void {
   const titleScreen = document.getElementById('title-screen');
@@ -305,36 +289,7 @@ enterBtn.addEventListener('click', (e) => {
   networkManager.onLocalRespawn = (data) => {
     if (!rat) return;
 
-    // ── Fully reset the entity state (undo everything die() changed) ──
-    rat.entity.dead = false;
-    rat.entity.hp = data.hp;
-    rat.entity.billboard.setHealth(data.hp);
-    rat.entity.mesh.visible = true;
-    rat.entity.billboard.sprite.visible = true;
-    scene.add(rat.entity.billboard.sprite);
-    rat.entity.mesh.userData.deathLogged = false;
-
-    // ── Restore physics body to alive state ──
-    // die() changes: mass→2, fixedRotation→false, damping→low, body.sleep()
-    // We must undo ALL of these:
-    const body = rat.entity.body;
-    body.mass = 5;                  // Restore original mass (die sets to 2)
-    body.fixedRotation = true;      // Lock rotation (die unlocks it)
-    body.linearDamping = 0.01;      // Default damping
-    body.angularDamping = 0.01;
-    body.type = CANNON.Body.DYNAMIC; // Ensure dynamic (not sleeping/static)
-    body.updateMassProperties();
-
-    // Set position
-    body.position.set(data.x, data.y, data.z);
-    body.velocity.set(0, 0, 0);
-    body.angularVelocity.set(0, 0, 0);
-    body.quaternion.set(0, 0, 0, 1);
-    body.wakeUp();                  // Crucial: body.sleep() is called during death!
-
-    // Sync visuals
-    rat.entity.mesh.position.set(data.x, data.y, data.z);
-    rat.entity.mesh.quaternion.set(0, 0, 0, 1);
+    rat.entity.respawn(data);
   };
 
   networkManager.onKillFeedMessage = (msg) => {

@@ -1,13 +1,10 @@
 import * as THREE from 'three';
 
-export type HatType = 'fedora' | 'trilby' | 'porkpie';
+import type { HatTypeName, RatAppearance } from '../shared/networkProtocol';
 
-export interface RatOptions {
-    coatColor?: number;
-    furColor?: number;
-    hatType?: HatType;
-    hatColor?: number;  // Independent hat color (if omitted, derived from coat)
-}
+export type HatType = HatTypeName;
+// Omitted hat color retains the model's coat-derived palette.
+export type RatOptions = Partial<RatAppearance>;
 
 /**
  * Creates the shared Rat Detective mesh used by both the Player and Enemies.

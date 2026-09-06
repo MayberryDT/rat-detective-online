@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions, HatType } from '../utils/RatModel';
+import { MAX_HP, type Vec3Data } from '../shared/networkProtocol';
+import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppearance';
 import { RatBillboard } from '../ui/RatBillboard';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 
@@ -9,7 +11,6 @@ const HEAD_RADIUS = 0.28;
 const HEAD_OFFSET_Y = 1.9;
 
 // ─── GAMEPLAY CONSTANTS ───
-const MAX_HP = 3;
 const FLASH_DURATION = 0.15;
 const DEATH_FORCE = 35;
 
@@ -23,35 +24,6 @@ const GLOW_SCALE = 1.08;          // How much larger the outline is
 const GLOW_OPACITY = 0.25;        // Outline transparency
 const GLOW_COLOR = 0xffffff;      // Base glow tint (will blend with coat color)
 const EMISSIVE_INTENSITY = 0.35;  // Subtle self-illumination on all rat materials
-
-// ─── COLOR PALETTES ──────────────────────────────────────────────
-// Bright and saturated — must stand out against the dark purple city
-
-const HAT_COLORS = [
-    0xDC4A3C, // Bright Red
-    0x3498DB, // Sky Blue
-    0x2ECC71, // Emerald
-    0xA855F7, // Vivid Purple
-    0xE67E22, // Tangerine
-];
-
-const FUR_COLORS = [
-    0xE8B84D, // Rich Gold
-    0xC8C8D0, // Bright Silver
-    0xD4A06A, // Warm Honey
-    0xCD6839, // Copper
-    0xF0E0C0, // Light Cream
-];
-
-const COAT_COLORS = [
-    0xBE4545, // Bright Burgundy
-    0x3A5F95, // Rich Navy
-    0x45945A, // Sage Green
-    0xA08050, // Warm Tan
-    0x7E4F99, // Rich Purple
-];
-
-const HAT_TYPES: HatType[] = ['fedora', 'trilby', 'porkpie'];
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
 // 3 hats × 5 hat colors × 5 furs × 5 coats = 375 unique combos
@@ -211,10 +183,7 @@ export class RatEntity {
     private generateRandomOptions(): RatOptions {
         let attempts = 0;
         while (attempts < 500) {
-            const hatType = HAT_TYPES[Math.floor(Math.random() * HAT_TYPES.length)];
-            const hatColor = HAT_COLORS[Math.floor(Math.random() * HAT_COLORS.length)];
-            const furColor = FUR_COLORS[Math.floor(Math.random() * FUR_COLORS.length)];
-            const coatColor = COAT_COLORS[Math.floor(Math.random() * COAT_COLORS.length)];
+            const { hatType, hatColor, furColor, coatColor } = generateRandomAppearance();
 
             const key = makeComboKey(hatType, hatColor, furColor, coatColor);
             if (!usedCombinations.has(key)) {
@@ -226,12 +195,7 @@ export class RatEntity {
         }
 
         // Fallback (shouldn't happen — 375 combos available, max ~7 entities)
-        return {
-            hatType: HAT_TYPES[0],
-            hatColor: HAT_COLORS[0],
-            furColor: FUR_COLORS[0],
-            coatColor: COAT_COLORS[0]
-        };
+        return { ...DEFAULT_APPEARANCE };
     }
 
     /**
@@ -496,6 +460,33 @@ export class RatEntity {
 
         // Remove UI billboard
         this.scene.remove(this.billboard.sprite);
+    }
+
+    /** Restore the existing local/remote alive-body settings after a server respawn. */
+    public respawn(data: Vec3Data & { hp: number }): void {
+        this.dead = false;
+        this.hp = data.hp;
+        this.billboard.setHealth(data.hp);
+        this.mesh.visible = true;
+        this.billboard.sprite.visible = true;
+        this.scene.add(this.billboard.sprite);
+        this.mesh.userData.deathLogged = false;
+
+        const body = this.body;
+        body.mass = this.isRemote ? 0 : 5;
+        body.type = this.isRemote ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC;
+        body.fixedRotation = true;
+        // Respawn damping intentionally differs from constructor damping.
+        body.linearDamping = this.isRemote ? 0 : 0.01;
+        body.angularDamping = this.isRemote ? 0 : 0.01;
+        body.updateMassProperties();
+        body.position.set(data.x, data.y, data.z);
+        body.velocity.set(0, 0, 0);
+        body.angularVelocity.set(0, 0, 0);
+        body.quaternion.set(0, 0, 0, 1);
+        body.wakeUp();
+        this.mesh.position.set(data.x, data.y, data.z);
+        this.mesh.quaternion.set(0, 0, 0, 1);
     }
 
     public dispose() {
