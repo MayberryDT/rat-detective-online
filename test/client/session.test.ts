@@ -1,0 +1,446 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
+
+const harness = vi.hoisted(() => {
+    const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
+
+    class FakeTransport {
+        state = 'idle';
+        onMessage: ((message: ServerMessage) => void) | null = null;
+        onState: ((state: string, message?: string) => void) | null = null;
+        sent: unknown[] = [];
+        connect = vi.fn();
+        retry = vi.fn();
+        send = vi.fn((message: unknown) => { this.sent.push(message); return true; });
+        destroy = vi.fn();
+        constructor() { harness.transports.push(this); }
+    }
+
+    class FakeHud {
+        setConnection = vi.fn();
+        enterPlaying = vi.fn();
+        setScores = vi.fn();
+        addKillFeed = vi.fn();
+        showVictory = vi.fn();
+        hideVictory = vi.fn();
+        showRespawn = vi.fn();
+        hideRespawn = vi.fn();
+        dispose = vi.fn();
+        constructor(_doc: Document, public onRetry?: () => void) { harness.huds.push(this); }
+    }
+
+    class FakeGun {
+        onHitEntity: ((victim: unknown, damage: number) => void) | null = null;
+        setPlayer = vi.fn();
+        shoot = vi.fn(() => ({ shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 } }));
+        replayShot = vi.fn();
+        clearProjectiles = vi.fn();
+        update = vi.fn();
+        dispose = vi.fn();
+        constructor() { harness.guns.push(this); }
+    }
+
+    class FakeRemotes {
+        snapshot = vi.fn();
+        add = vi.fn();
+        move = vi.fn();
+        get = vi.fn();
+        idFor = vi.fn();
+        update = vi.fn();
+        remove = vi.fn();
+        respawn = vi.fn();
+        clear = vi.fn();
+        dispose = vi.fn();
+        constructor() { harness.remotes.push(this); }
+    }
+
+    class FakeCity {
+        generate = vi.fn();
+        dispose = vi.fn();
+        spec: { seed: number; version: number } | undefined;
+        constructor(_scene: unknown, _world: unknown, _opts: unknown, spec?: { seed: number; version: number }) {
+            this.spec = spec;
+            harness.cities.push(this);
+        }
+    }
+
+    class FakeRat {
+        entity: {
+            isPlayer: boolean;
+            dead: boolean;
+            hp: number;
+            mesh: { position: { x: number; y: number; z: number; clone(): { x: number; y: number; z: number }; sub(): { y: number; normalize(): { multiplyScalar(): { x: number; y: number; z: number } } } } };
+            body: { position: { x: number; y: number; z: number }; quaternion: { x: number; y: number; z: number; w: number } };
+            applySnapshot: ReturnType<typeof vi.fn>;
+            respawn: ReturnType<typeof vi.fn>;
+            takeDamage: ReturnType<typeof vi.fn>;
+        };
+        onMouseMove = vi.fn();
+        update = vi.fn();
+        prepareMovement = vi.fn();
+        syncAfterPhysics = vi.fn();
+        updateView = vi.fn();
+        resetGrounding = vi.fn();
+        dispose = vi.fn();
+        constructor(_scene: unknown, _world: unknown, _camera: unknown, _name: string, options: { hp?: number }, spawn: { x: number; y: number; z: number }) {
+            const vec = () => ({
+                x: spawn.x, y: spawn.y, z: spawn.z,
+                clone() { return vec(); },
+                sub() { return vec(); },
+                normalize() { return vec(); },
+                multiplyScalar() { return vec(); },
+            });
+            this.entity = {
+                isPlayer: false,
+                dead: (options?.hp ?? 3) <= 0,
+                hp: options?.hp ?? 3,
+                mesh: {
+                    position: vec(),
+                },
+                body: { position: { x: spawn.x, y: spawn.y, z: spawn.z }, quaternion: { x: 0, y: 0, z: 0, w: 1 } },
+                applySnapshot: vi.fn(),
+                respawn: vi.fn(),
+                takeDamage: vi.fn(),
+            };
+            harness.rats.push(this);
+        }
+    }
+
+    const harness = {
+        appearance,
+        FakeTransport,
+        FakeHud,
+        FakeGun,
+        FakeRemotes,
+        FakeCity,
+        FakeRat,
+        transports: [] as FakeTransport[],
+        huds: [] as FakeHud[],
+        guns: [] as FakeGun[],
+        remotes: [] as FakeRemotes[],
+        cities: [] as FakeCity[],
+        rats: [] as FakeRat[],
+        inputs: [] as { clear: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn>; keys: Record<string, boolean> }[],
+        music: [] as { start: ReturnType<typeof vi.fn>; unlock: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }[],
+        stages: [] as { dispose: ReturnType<typeof vi.fn>; world: { step: ReturnType<typeof vi.fn> } }[],
+        stats: [] as unknown[],
+        initSounds: vi.fn(),
+        disposeSounds: vi.fn(),
+        reset() {
+            this.transports.length = 0;
+            this.huds.length = 0;
+            this.guns.length = 0;
+            this.remotes.length = 0;
+            this.cities.length = 0;
+            this.rats.length = 0;
+            this.inputs.length = 0;
+            this.music.length = 0;
+            this.stages.length = 0;
+            this.stats.length = 0;
+            this.initSounds.mockClear();
+            this.disposeSounds.mockClear();
+        },
+    };
+    return harness;
+});
+
+vi.mock('../../src/network/NetworkManager', () => ({ NetworkManager: harness.FakeTransport }));
+vi.mock('../../src/ui/GameHud', () => ({ GameHud: harness.FakeHud }));
+vi.mock('../../src/weapons/CheeseGun', () => ({ CheeseGun: harness.FakeGun }));
+vi.mock('../../src/session/RemotePlayers', () => ({ RemotePlayers: harness.FakeRemotes }));
+vi.mock('../../src/world/CityGenerator', () => ({ CityGenerator: harness.FakeCity }));
+vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));
+vi.mock('../../src/session/InputState', () => ({
+    InputState: class {
+        keys: Record<string, boolean> = {};
+        clear = vi.fn();
+        dispose = vi.fn();
+        constructor() { harness.inputs.push(this); }
+    },
+}));
+vi.mock('../../src/session/SessionMusic', () => ({
+    SessionMusic: class {
+        start = vi.fn();
+        unlock = vi.fn(async () => undefined);
+        dispose = vi.fn();
+        constructor() { harness.music.push(this); }
+    },
+}));
+vi.mock('../../src/session/createStage', () => ({
+    createStage: (renderer: { setSize?: unknown }) => {
+        const stage = {
+            renderer,
+            scene: {},
+            camera: {
+                aspect: 1,
+                position: { clone: () => ({ addScaledVector: () => ({ x: 0, y: 4, z: 10 }) }) },
+                getWorldDirection: (target: Record<string, unknown>) => Object.assign(target, { x: 0, y: 0, z: -1 }),
+                updateProjectionMatrix: vi.fn(),
+            },
+            listener: {},
+            world: { step: vi.fn() },
+            flashlight: {
+                position: { set: vi.fn() },
+                target: { position: { copy: () => ({ addScaledVector: vi.fn() }) } },
+            },
+            dispose: vi.fn(),
+        };
+        harness.stages.push(stage);
+        return stage;
+    },
+}));
+vi.mock('../../src/session/PerformanceStats', () => ({
+    PerformanceStats: class {
+        record = vi.fn();
+        dispose = vi.fn();
+        constructor() { harness.stats.push(this); }
+    },
+}));
+vi.mock('../../src/entities/RatEntity', () => ({
+    initEntitySounds: (...args: unknown[]) => harness.initSounds(...args),
+    disposeEntitySounds: (...args: unknown[]) => harness.disposeSounds(...args),
+}));
+vi.mock('../../src/shared/ratAppearance', () => ({
+    generateRandomAppearance: () => harness.appearance,
+}));
+
+import { GameSession } from '../../src/session/GameSession';
+
+const appearance = harness.appearance;
+
+function player(id: string, hp = 3, extra: Partial<PlayerData> = {}): PlayerData {
+    return {
+        id, name: id, ...appearance, x: 15, y: 2, z: 15,
+        qx: 0, qy: 0, qz: 0, qw: 1, meshQx: 0, meshQy: 0, meshQz: 0, meshQw: 1,
+        hp, kills: 0, deaths: 0, ...extra,
+    };
+}
+
+function welcome(overrides: Partial<Extract<ServerMessage, { type: 'welcome' }>> = {}): Extract<ServerMessage, { type: 'welcome' }> {
+    const local = player('me');
+    const other = player('other', 1);
+    return {
+        type: 'welcome',
+        protocolVersion: PROTOCOL_VERSION,
+        id: 'me',
+        player: local,
+        players: { me: local, other },
+        world: { seed: 1, version: 1 },
+        round: { phase: 'playing' },
+        serverTime: Date.now(),
+        ...overrides,
+    };
+}
+
+function createDocument() {
+    const listeners = new Map<string, Array<(event: Event) => void>>();
+    const enterClicks: Array<(event: Event) => void> = [];
+    const enter = {
+        disabled: true,
+        addEventListener: (_type: string, fn: (event: Event) => void) => { enterClicks.push(fn); },
+        click() {
+            for (const fn of enterClicks) fn(Object.assign(new Event('click'), { stopPropagation() {} }));
+        },
+    };
+    const nameInput = { value: '' };
+    const doc = {
+        getElementById: (id: string) => id === 'enter-city-btn' ? enter : id === 'player-name' ? nameInput : null,
+        addEventListener: (type: string, fn: (event: Event) => void) => {
+            if (!listeners.has(type)) listeners.set(type, []);
+            listeners.get(type)!.push(fn);
+        },
+        pointerLockElement: null as unknown,
+        hidden: false,
+        body: { appendChild() {} },
+        dispatch(type: string, event: Event) {
+            for (const fn of listeners.get(type) ?? []) fn(event);
+        },
+    };
+    return { doc: doc as unknown as Document & { dispatch(type: string, event: Event): void; pointerLockElement: unknown }, enter, nameInput };
+}
+
+describe('GameSession', () => {
+    let frames: FrameRequestCallback[];
+    let cancel: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-09-05T12:00:00Z'));
+        frames = [];
+        cancel = vi.fn();
+        harness.reset();
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frames.push(cb); return frames.length; });
+        vi.stubGlobal('cancelAnimationFrame', cancel);
+        const fakeWindow = {
+            location: { search: '', href: 'http://localhost/', reload: vi.fn() },
+            innerWidth: 1280,
+            innerHeight: 720,
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+        };
+        vi.stubGlobal('window', fakeWindow);
+        vi.stubGlobal('location', fakeWindow.location);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+    });
+
+    function start() {
+        const page = createDocument();
+        vi.stubGlobal('document', page.doc);
+        const renderer = {
+            domElement: { requestPointerLock: vi.fn(() => Promise.resolve()) },
+            setSize: vi.fn(),
+            render: vi.fn(),
+        };
+        const session = new GameSession(renderer as never);
+        return {
+            ...page, renderer, session,
+            transport: harness.transports.at(-1)!,
+            hud: harness.huds.at(-1)!,
+            gun: harness.guns.at(-1)!,
+            remotes: harness.remotes.at(-1)!,
+        };
+    }
+
+    it('joins from the title screen and applies a complete welcome snapshot before gameplay', () => {
+        const { enter, nameInput, transport, hud, remotes, gun } = start();
+        expect(harness.stats).toHaveLength(0);
+        nameInput.value = 'Detective';
+        enter.click();
+        expect(enter.disabled).toBe(false);
+        expect(transport.connect).toHaveBeenCalledWith('Detective', appearance);
+        expect(harness.music.at(-1)!.unlock).toHaveBeenCalled();
+        transport.onState?.('connecting');
+        expect(hud.setConnection).toHaveBeenCalledWith('connecting', undefined);
+        expect(hud.enterPlaying).not.toHaveBeenCalled();
+        const snapshot = welcome();
+        transport.onMessage?.(snapshot);
+        transport.onState?.('playing');
+        expect(harness.rats).toHaveLength(1);
+        expect(harness.rats[0].entity.isPlayer).toBe(true);
+        expect(harness.rats[0].entity.applySnapshot).toHaveBeenCalledWith(snapshot.player);
+        expect(gun.setPlayer).toHaveBeenCalled();
+        expect(gun.clearProjectiles).toHaveBeenCalled();
+        expect(remotes.clear).toHaveBeenCalled();
+        expect(remotes.snapshot).toHaveBeenCalledWith(snapshot.players, 'me');
+        expect(hud.setScores).toHaveBeenCalledWith(
+            [snapshot.players.me, snapshot.players.other],
+            'me',
+        );
+        expect(hud.hideRespawn).toHaveBeenCalled();
+        expect(hud.hideVictory).toHaveBeenCalled();
+        expect(hud.enterPlaying).toHaveBeenCalled();
+        expect(harness.music.at(-1)!.start).toHaveBeenCalled();
+        expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
+    });
+
+    it('rebuilds identity and world on reconnect and uses server deadlines for late-join overlays', () => {
+        const { transport, hud, remotes, gun } = start();
+        transport.onMessage?.(welcome());
+        const firstRat = harness.rats[0];
+        const firstCity = harness.cities[0];
+        const dead = player('me', 0, { respawnAt: Date.now() + 4_000, name: '<Rat & Co>' });
+        const injured = player('other', 1);
+        transport.onMessage?.(welcome({
+            player: dead,
+            players: { me: dead, other: injured },
+            world: { seed: 99, version: 1 },
+            round: { phase: 'won', winnerName: '<Rat & Co>', kills: 20 },
+            serverTime: Date.now() + 1_000,
+        }));
+        expect(gun.clearProjectiles).toHaveBeenCalledTimes(2);
+        expect(remotes.clear).toHaveBeenCalledTimes(2);
+        expect(firstRat.dispose).toHaveBeenCalledTimes(1);
+        expect(firstCity.dispose).toHaveBeenCalledTimes(1);
+        expect(harness.cities).toHaveLength(2);
+        expect(harness.cities[1].spec).toEqual({ seed: 99, version: 1 });
+        expect(harness.cities[1].generate).toHaveBeenCalled();
+        expect(harness.rats).toHaveLength(2);
+        expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 3_000);
+        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20);
+        transport.onMessage?.({ type: 'currentPlayers', players: { me: dead } });
+        expect(harness.rats).toHaveLength(2);
+    });
+
+    it('routes death, respawn, victory, reset, and notice errors through the HUD', () => {
+        const { transport, hud, remotes } = start();
+        const local = player('me');
+        transport.onMessage?.(welcome({ player: local, players: { me: local } }));
+        const rat = harness.rats[0];
+        remotes.get.mockImplementation((id: string) => id === 'other'
+            ? { mesh: rat.entity.mesh, dead: false, hp: 3, takeDamage: vi.fn() }
+            : undefined);
+        transport.onMessage?.({
+            type: 'playerDied', victimId: 'me', killerId: 'other', killerName: 'other',
+            victimName: '<Rat & Co>', respawnAt: Date.now() + 5_000,
+        });
+        expect(rat.entity.takeDamage).toHaveBeenCalled();
+        expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 5_000);
+        expect(hud.addKillFeed).toHaveBeenCalledWith('other eliminated <Rat & Co>');
+        transport.onMessage?.({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: 3 });
+        expect(rat.entity.respawn).toHaveBeenCalledWith({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: 3 });
+        expect(hud.hideRespawn).toHaveBeenCalled();
+        expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
+        transport.onMessage?.({ type: 'gameWon', winnerId: 'me', winnerName: '<Rat & Co>', kills: 20, resetAt: Date.now() + 6_000 });
+        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20);
+        transport.onMessage?.({ type: 'gameReset', round: { phase: 'playing' } });
+        expect(hud.hideVictory).toHaveBeenCalled();
+        expect(hud.hideRespawn).toHaveBeenCalled();
+        expect(harness.guns.at(-1)!.clearProjectiles).toHaveBeenCalled();
+        transport.onMessage?.({ type: 'error', message: 'Room is full.' });
+        expect(hud.setConnection).toHaveBeenCalledWith('notice', 'Room is full.');
+    });
+
+    it('sends the resolved shot and remote hit, then can start a fresh session after dispose', () => {
+        const first = start();
+        const { doc, renderer, session, transport, gun, remotes } = first;
+        transport.onMessage?.(welcome());
+        transport.state = 'playing';
+        doc.pointerLockElement = renderer.domElement as unknown as Element;
+        doc.dispatch('mousedown', Object.assign(new Event('mousedown'), { button: 0 }));
+        expect(gun.shoot).toHaveBeenCalled();
+        expect(transport.send).toHaveBeenCalledWith({
+            type: 'shoot', shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 },
+        });
+        remotes.idFor.mockReturnValue('other');
+        gun.onHitEntity?.({} as never, 3);
+        expect(transport.send).toHaveBeenCalledWith({ type: 'hit', victimId: 'other', damage: 3 });
+        const remote = { mesh: { position: { clone() { return this; }, sub() { return this; } } } };
+        remotes.get.mockReturnValue(remote);
+        transport.onMessage?.({
+            type: 'playerShot', shooterId: 'other', shotId: 'shot-2',
+            origin: { x: 0, y: 1.45, z: 0 }, direction: { x: 1, y: 0, z: 0 },
+        });
+        expect(gun.replayShot).toHaveBeenCalledWith(remote, expect.objectContaining({ type: 'playerShot', shotId: 'shot-2' }));
+        const city = harness.cities[0];
+        const rat = harness.rats[0];
+        session.dispose();
+        session.dispose();
+        expect(cancel).toHaveBeenCalled();
+        expect(transport.destroy).toHaveBeenCalledTimes(1);
+        expect(harness.huds[0].dispose).toHaveBeenCalledTimes(1);
+        expect(gun.dispose).toHaveBeenCalledTimes(1);
+        expect(rat.dispose).toHaveBeenCalledTimes(1);
+        expect(remotes.dispose).toHaveBeenCalledTimes(1);
+        expect(city.dispose).toHaveBeenCalledTimes(1);
+        expect(harness.music[0].dispose).toHaveBeenCalledTimes(1);
+        expect(harness.inputs[0].dispose).toHaveBeenCalledTimes(1);
+        expect(harness.disposeSounds).toHaveBeenCalledTimes(1);
+        expect(harness.stages[0].dispose).toHaveBeenCalledTimes(1);
+        const pending = frames.length;
+        frames.at(-1)?.(16);
+        expect(frames.length).toBe(pending);
+
+        const second = start();
+        expect(harness.transports).toHaveLength(2);
+        expect(harness.huds).toHaveLength(2);
+        expect(harness.cities).toHaveLength(2);
+        expect(harness.stats).toHaveLength(0);
+        second.enter.click();
+        expect(second.transport.connect).toHaveBeenCalledWith('Anonymous Rat', appearance);
+        second.session.dispose();
+    });
+});

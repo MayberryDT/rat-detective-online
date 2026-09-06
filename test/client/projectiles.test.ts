@@ -45,6 +45,7 @@ describe('projectile behavior', () => {
     camera.updateMatrixWorld();
     const wall = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 1), new THREE.MeshBasicMaterial());
     wall.position.set(0, 4, -10);
+    wall.userData.aimTarget = true;
     scene.add(wall);
     scene.updateMatrixWorld(true);
     gun.setPlayer(camera, owner);
@@ -117,6 +118,7 @@ describe('projectile behavior', () => {
     expect(victim.hp).toBe(3);
     expect(hit).not.toHaveBeenCalled();
     expect(projectiles()).toHaveLength(1);
+    expect(projectiles()[0].position.x).toBeCloseTo(4.1);
   });
 
   it('reports remote victim hits without locally changing their health', () => {
@@ -129,4 +131,39 @@ describe('projectile behavior', () => {
     expect(victim.hp).toBe(3);
     expect(hit).toHaveBeenCalledWith(victim, 1);
   });
+  it('replays the resolved origin/direction despite a different interpolated owner position', () => {
+    const local = setup();
+    const remote = setup();
+    remote.owner.isRemote = true;
+    remote.owner.mesh.position.set(50, 20, -30);
+    const shot = local.gun.shoot(local.owner, new THREE.Vector3(100, 4, 10))!;
+    remote.gun.replayShot(remote.owner, shot);
+    expect(remote.projectiles()[0].position.toArray()).toEqual(local.projectiles()[0].position.toArray());
+    for (let i = 0; i < 60; i++) {
+      local.gun.update(1 / 60); remote.gun.update(1 / 60);
+      expect(remote.projectiles()[0].position.toArray()).toEqual(local.projectiles()[0].position.toArray());
+    }
+    local.gun.clearProjectiles(); remote.gun.clearProjectiles();
+    expect(local.projectiles()).toHaveLength(0);
+    expect(remote.projectiles()).toHaveLength(0);
+    local.gun.dispose(); remote.gun.dispose(); local.owner.dispose(); remote.owner.dispose();
+  });
+
+  it('does not let cosmetic geometry change camera aim convergence', () => {
+    const { gun, owner, scene } = setup();
+    const camera = new THREE.PerspectiveCamera(60, 1, .1, 100);
+    camera.position.set(0, 4, 10); camera.lookAt(0, 4, 0); camera.updateMatrixWorld();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 1), new THREE.MeshBasicMaterial());
+    wall.position.set(0, 4, -10); wall.userData.aimTarget = true; scene.add(wall);
+    scene.updateMatrixWorld(true); gun.setPlayer(camera, owner);
+    const first = gun.shoot(owner, new THREE.Vector3())!;
+    const decoration = new THREE.Mesh(new THREE.SphereGeometry(2), new THREE.MeshBasicMaterial({ transparent: true, opacity: .06 }));
+    decoration.position.set(0, 4, 5); scene.add(decoration); scene.updateMatrixWorld(true);
+    const next = gun.shoot(owner, new THREE.Vector3())!;
+    expect(next.origin).toEqual(first.origin);
+    expect(next.direction).toEqual(first.direction);
+    gun.dispose(); owner.dispose(); wall.geometry.dispose(); (wall.material as THREE.Material).dispose();
+    decoration.geometry.dispose(); (decoration.material as THREE.Material).dispose();
+  });
+
 });

@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions, HatType } from '../utils/RatModel';
-import { MAX_HP, type Vec3Data } from '../shared/networkProtocol';
+import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
 import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppearance';
 import { RatBillboard } from '../ui/RatBillboard';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
+import { playEntitySound } from '../audio/EntityAudio';
+export { initEntitySounds, disposeEntitySounds, playHitSound, playPlayerHitSound } from '../audio/EntityAudio';
 
 // ─── PHYSICS CONSTANTS ───
 const HEAD_RADIUS = 0.28;
@@ -31,45 +33,6 @@ const usedCombinations = new Set<string>();
 
 function makeComboKey(hat: HatType, hatCol: number, fur: number, coat: number): string {
     return `${hat}-${hatCol}-${fur}-${coat}`;
-}
-
-// ─── SHARED AUDIO (loaded once, reused by all entities) ──────────
-let audioListener: THREE.AudioListener | null = null;
-
-const soundBuffers: {
-    ratHit: AudioBuffer | null;
-    ratDeath: AudioBuffer | null;
-    playerHit: AudioBuffer | null;
-} = { ratHit: null, ratDeath: null, playerHit: null };
-
-let soundsLoaded = false;
-
-export function initEntitySounds(listener: THREE.AudioListener): void {
-    if (soundsLoaded) return;
-    soundsLoaded = true;
-    audioListener = listener;
-
-    const loader = new THREE.AudioLoader();
-    loader.load('/sounds/rathit.mp3', (buf) => { soundBuffers.ratHit = buf; });
-    loader.load('/sounds/ratdeath.mp3', (buf) => { soundBuffers.ratDeath = buf; });
-    loader.load('/sounds/playerhit.mp3', (buf) => { soundBuffers.playerHit = buf; });
-}
-
-function playOneShot(buffer: AudioBuffer | null, volume: number = 0.5): void {
-    if (!buffer || !audioListener) return;
-    const sound = new THREE.Audio(audioListener);
-    sound.setBuffer(buffer);
-    sound.setVolume(volume);
-    sound.play();
-    sound.onEnded = () => { sound.disconnect(); };
-}
-
-export function playHitSound(): void {
-    playOneShot(soundBuffers.ratHit, 0.5);
-}
-
-export function playPlayerHitSound(): void {
-    playOneShot(soundBuffers.playerHit, 0.6);
 }
 
 // ─── ENTITY CLASS ────────────────────────────────────────────────
@@ -129,11 +92,12 @@ export class RatEntity {
         // 2. VISUALS
         this.mesh = createRatMesh(opts);
         this.mesh.position.copy(position);
+        this.mesh.userData.aimTarget = true;
         this.scene.add(this.mesh);
 
         // Cache materials for hit flash + apply emissive glow
         this.mesh.traverse((c) => {
-            if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshStandardMaterial) {
+            if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshStandardMaterial && !this.allMaterials.includes(c.material)) {
                 // Add subtle emissive self-illumination so rats glow from distance
                 c.material.emissive.copy(c.material.color).multiplyScalar(0.5);
                 c.material.emissiveIntensity = EMISSIVE_INTENSITY;
@@ -346,7 +310,7 @@ export class RatEntity {
             // Play impact thunk at start of settle phase (once)
             if (!this.impactPlayed) {
                 this.impactPlayed = true;
-                playOneShot(soundBuffers.ratHit, 0.7);
+                playEntitySound('ratHit', 0.7);
             }
 
             if (settleProgress >= 1.0) {
@@ -392,9 +356,9 @@ export class RatEntity {
         // ── SOUND EFFECTS ──
         if (this.hp > 0) {
             if (this.isPlayer) {
-                playOneShot(soundBuffers.playerHit, 0.6);
+                playEntitySound('playerHit', 0.6);
             } else {
-                playOneShot(soundBuffers.ratHit, 0.5);
+                playEntitySound('ratHit', 0.5);
             }
         }
 
@@ -423,7 +387,6 @@ export class RatEntity {
 
     private die(impactVel: THREE.Vector3) {
         if (this.dead) return;
-        console.log(`${this.name} died!`);
         this.dead = true;
         this.deathTimer = 0;
         this.impactPlayed = false;
@@ -431,11 +394,11 @@ export class RatEntity {
         this.resetColor();
 
         // ── DEATH SOUND ──
-        playOneShot(soundBuffers.ratDeath, 0.6);
+        playEntitySound('ratDeath', 0.6);
         if (this.isPlayer) {
-            playOneShot(soundBuffers.playerHit, 0.6);
+            playEntitySound('playerHit', 0.6);
         } else {
-            playOneShot(soundBuffers.ratHit, 0.4);
+            playEntitySound('ratHit', 0.4);
         }
 
         // ── COMPUTE "LAYING DOWN" TARGET QUATERNION ──
@@ -481,15 +444,70 @@ export class RatEntity {
         this.scene.remove(this.billboard.sprite);
     }
 
+    private resetAlivePresentation(): void {
+        this.flashTimer = 0;
+        this.deathTimer = 0;
+        this.deathTargetQuat = null;
+        this.deathPosition = null;
+        this.impactPlayed = false;
+        this.deathPhase = 'launch';
+        this.resetColor();
+        this.glowMesh?.traverse(child => {
+            if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+                child.material.opacity = GLOW_OPACITY;
+            }
+        });
+    }
+
+    /** Apply authoritative state without replaying historical hit/death sounds or impulses. */
+    public applySnapshot(data: PlayerData): void {
+        if (this.disposed) return;
+        if (data.hp > 0 && this.dead) this.respawn(data);
+        this.hp = data.hp;
+        this.dead = data.hp <= 0;
+        this.body.position.set(data.x, data.y, data.z);
+        this.body.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+        this.body.velocity.set(0, 0, 0);
+        this.body.angularVelocity.set(0, 0, 0);
+        this.body.aabbNeedsUpdate = true;
+        this.mesh.position.set(data.x, data.y, data.z);
+        this.mesh.quaternion.set(data.meshQx, data.meshQy, data.meshQz, data.meshQw);
+        this.billboard.setHealth(data.hp);
+        if (this.dead) {
+            // A snapshot depicts an existing corpse, not a new death event.
+            this.deathTimer = DEATH_PHASE_SETTLE;
+            this.deathPhase = 'done';
+            this.body.sleep();
+            this.mesh.position.y = 0.3;
+            this.mesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
+            this.body.position.set(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
+            this.body.quaternion.set(this.mesh.quaternion.x, this.mesh.quaternion.y, this.mesh.quaternion.z, this.mesh.quaternion.w);
+            this.body.type = CANNON.Body.DYNAMIC;
+            this.body.mass = 2;
+            this.body.fixedRotation = false;
+            this.body.updateMassProperties();
+            this.body.sleep();
+            this.billboard.sprite.removeFromParent();
+            this.updateDeathRagdoll();
+        } else {
+            this.resetAlivePresentation();
+            this.mesh.visible = true;
+            this.scene.add(this.billboard.sprite);
+            this.billboard.sprite.visible = true;
+            this.billboard.sprite.position.set(data.x, data.y + 2.2, data.z);
+            this.syncGlowTransform();
+        }
+    }
+
     /** Restore the existing local/remote alive-body settings after a server respawn. */
     public respawn(data: Vec3Data & { hp: number }): void {
         this.dead = false;
+        this.resetAlivePresentation();
         this.hp = data.hp;
         this.billboard.setHealth(data.hp);
         this.mesh.visible = true;
         this.billboard.sprite.visible = true;
         this.scene.add(this.billboard.sprite);
-        this.mesh.userData.deathLogged = false;
 
         const body = this.body;
         body.mass = this.isRemote ? 0 : 5;
@@ -506,6 +524,8 @@ export class RatEntity {
         body.wakeUp();
         this.mesh.position.set(data.x, data.y, data.z);
         this.mesh.quaternion.set(0, 0, 0, 1);
+        this.billboard.sprite.position.set(data.x, data.y + 2.2, data.z);
+        this.body.aabbNeedsUpdate = true;
         this.syncGlowTransform();
     }
 

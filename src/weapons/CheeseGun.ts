@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import type { ShotDescriptor } from '../shared/networkProtocol';
 import { RatEntity, playHitSound } from '../entities/RatEntity';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
@@ -69,9 +70,10 @@ export class CheeseGun {
         this.gunshotSound = new THREE.Audio(this.listener);
         const audioLoader = new THREE.AudioLoader();
         audioLoader.load('/sounds/gunshot.mp3', (buffer) => {
+            if (this.disposed) return;
             this.gunshotSound.setBuffer(buffer);
             this.gunshotSound.setVolume(0.4);
-        });
+        }, undefined, () => { if (!this.disposed) console.warn('Gunshot sound could not be loaded.'); });
     }
 
     /** Call once after player is created to enable camera-based aiming */
@@ -85,8 +87,8 @@ export class CheeseGun {
      * For the PLAYER: uses camera raycasting for precise aim convergence.
      * For NPCs: shoots directly at the provided targetPoint.
      */
-    shoot(owner: RatEntity, targetPoint: THREE.Vector3): void {
-        if (this.disposed) return;
+    shoot(owner: RatEntity, targetPoint: THREE.Vector3): ShotDescriptor | null {
+        if (this.disposed) return null;
         this.playFireSound();
 
         let finalTarget: THREE.Vector3;
@@ -96,7 +98,7 @@ export class CheeseGun {
             const raycaster = this.aimRay;
             raycaster.setFromCamera(this.aimCenter, this.camera);
 
-            const intersects = raycaster.intersectObjects(this.scene.children, true);
+            const intersects = raycaster.intersectObjects(this.scene.children.filter(object => object.userData.aimTarget === true), true);
             let hitTarget: THREE.Vector3 | null = null;
 
             for (const hit of intersects) {
@@ -136,6 +138,20 @@ export class CheeseGun {
         origin.addScaledVector(finalDir, 0.6);
 
         this.createBall(origin, finalDir, owner);
+        return { shotId: crypto.randomUUID(), origin: { x: origin.x, y: origin.y, z: origin.z },
+            direction: { x: finalDir.x, y: finalDir.y, z: finalDir.z } };
+    }
+
+    /** Replay the resolved trajectory; never re-aim from an interpolated remote rat. */
+    replayShot(owner: RatEntity, shot: ShotDescriptor): void {
+        if (this.disposed) return;
+        this.playFireSound();
+        this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
+            new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
+    }
+
+    clearProjectiles(): void {
+        while (this.balls.length) this.removeBall(this.balls.length - 1);
     }
 
     update(dt: number): void {
@@ -190,6 +206,7 @@ export class CheeseGun {
 
                         if (ball.owner.isRemote) {
                             ball.position.copy(nextPos);
+                            ball.mesh.position.copy(ball.position);
                             continue;
                         }
 
@@ -235,7 +252,7 @@ export class CheeseGun {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
-        while (this.balls.length) this.removeBall(this.balls.length - 1);
+        this.clearProjectiles();
         this.ballGeometry.dispose();
         this.ballMaterial.dispose();
         if (this.gunshotSound.isPlaying) this.gunshotSound.stop();

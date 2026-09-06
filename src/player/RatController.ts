@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
+import type * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
 import { RatOptions } from '../utils/RatModel';
 
@@ -18,7 +18,13 @@ export class RatController {
     private camera: THREE.PerspectiveCamera;
     private spherical = new THREE.Spherical(CAM_RADIUS, Math.PI * 0.4, Math.PI);
 
-    private canJump = false;
+    private groundGrace = 0;
+    private disposed = false;
+    private readonly forward = new THREE.Vector3();
+    private readonly right = new THREE.Vector3();
+    private readonly up = new THREE.Vector3(0, 1, 0);
+    private readonly pivot = new THREE.Vector3();
+    private readonly offset = new THREE.Vector3();
 
     constructor(
         scene: THREE.Scene,
@@ -34,22 +40,6 @@ export class RatController {
         const pos = spawnPos ?? new THREE.Vector3(15, 2, 15);
         this.entity = new RatEntity(scene, world, pos, name, options);
 
-        // Listen for ground contact
-        this.entity.body.addEventListener('collide', (evt: any) => {
-            const contactNormal = new CANNON.Vec3();
-            const contact = evt.contact;
-
-            // Normalize direction
-            if (contact.bi.id === this.entity.body.id) {
-                contact.ni.negate(contactNormal);
-            } else {
-                contactNormal.copy(contact.ni);
-            }
-
-            if (contactNormal.y > 0.5) {
-                this.canJump = true;
-            }
-        });
     }
 
     onMouseMove(dx: number, dy: number): void {
@@ -60,19 +50,49 @@ export class RatController {
     }
 
     update(dt: number, keys: Record<string, boolean>): void {
-        this.entity.update(dt); // Updates mesh position
-        this.updateCamera();    // Keeps camera following
+        this.prepareMovement(dt, keys);
+        this.syncAfterPhysics(dt);
+    }
 
-        if (this.entity.dead) return; // Stop input/movement if dead
+    /** Apply controls before the fixed physics step. Factors match the original at60Hz. */
+    prepareMovement(dt: number, keys: Record<string, boolean>): void {
+        if (this.disposed) return;
+        this.groundGrace = Math.max(0, this.groundGrace - dt);
+        if (!this.entity.dead && this.entity.hp > 0) this.applyMovement(dt, keys);
+    }
 
-        this.applyMovement(keys);
+    syncAfterPhysics(dt: number): void {
+        if (this.disposed) return;
+        this.entity.update(dt);
+        if (!this.entity.dead && this.entity.body.velocity.y <= 1) {
+            const body = this.entity.body;
+            for (const contact of this.entity.world.contacts) {
+                const normalY = contact.bi === body ? -contact.ni.y : contact.bj === body ? contact.ni.y : 0;
+                // Explicit80ms grace permits forgiving edge jumps, never unlimited air jumps.
+                if (normalY > 0.5) { this.groundGrace = 0.08; break; }
+            }
+        }
+        this.updateView();
+    }
+
+    updateView(): void {
+        this.updateCamera();
         this.entity.syncGlowTransform();
     }
 
-    private applyMovement(keys: Record<string, boolean>): void {
+    resetGrounding(): void { this.groundGrace = 0; }
+
+    dispose(): void {
+        if (this.disposed) return;
+        this.disposed = true;
+        this.resetGrounding();
+        this.entity.dispose();
+    }
+
+    private applyMovement(dt: number, keys: Record<string, boolean>): void {
         // Camera-relative directions
-        const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.spherical.theta);
-        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.spherical.theta);
+        const forward = this.forward.set(0, 0, -1).applyAxisAngle(this.up, this.spherical.theta);
+        const right = this.right.set(1, 0, 0).applyAxisAngle(this.up, this.spherical.theta);
 
         let desiredX = 0;
         let desiredZ = 0;
@@ -91,20 +111,22 @@ export class RatController {
 
         const v = this.entity.body.velocity;
 
+        const acceleration = 1 - Math.pow(1 - ACCEL, dt * 60);
+        const braking = Math.pow(1 - DECEL, dt * 60);
         // Apply
         if (len > 0) {
             this.entity.body.wakeUp();
-            v.x += (desiredX - v.x) * ACCEL;
-            v.z += (desiredZ - v.z) * ACCEL;
+            v.x += (desiredX - v.x) * acceleration;
+            v.z += (desiredZ - v.z) * acceleration;
         } else {
-            v.x *= (1.0 - DECEL);
-            v.z *= (1.0 - DECEL);
+            v.x *= braking;
+            v.z *= braking;
         }
 
         // Jump
-        if (keys['Space'] && this.canJump) {
+        if (keys['Space'] && this.groundGrace > 0) {
             v.y = JUMP_IMPULSE;
-            this.canJump = false;
+            this.groundGrace = 0;
         }
 
         // Rotate Character to face camera (Always Strafe mode for shooting)
@@ -112,18 +134,18 @@ export class RatController {
         let diff = targetAngle - this.entity.mesh.rotation.y;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
-        this.entity.mesh.rotation.y += diff * 0.35;
+        this.entity.mesh.rotation.y += diff * (1 - Math.pow(1 - 0.35, dt * 60));
     }
 
     private updateCamera(): void {
         const mesh = this.entity.mesh;
-        const pivot = new THREE.Vector3(mesh.position.x, mesh.position.y + CAM_PIVOT_Y, mesh.position.z);
-        const offset = new THREE.Vector3().setFromSpherical(this.spherical);
-        const desired = pivot.clone().add(offset);
+        const pivot = this.pivot.set(mesh.position.x, mesh.position.y + CAM_PIVOT_Y, mesh.position.z);
+        const offset = this.offset.setFromSpherical(this.spherical);
+
 
         // Direct copy — NO lerp. Lerp causes snap-back when whipping around fast
         // because it interpolates through 3D space, not spherical space.
-        this.camera.position.copy(desired);
+        this.camera.position.copy(pivot).add(offset);
         this.camera.lookAt(pivot);
     }
 }

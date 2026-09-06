@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { RatAppearance } from '../../src/shared/networkProtocol';
+import { createWorldSpec } from '../../src/shared/worldSpec';
 import {
   applyHit,
   buildScoreboard,
   createPlayer,
-  createRandomCitySpawn,
   resetRound,
+  spawnForWorld,
 } from '../../src/worker/gameState';
 
 const appearance: RatAppearance = {
@@ -16,11 +17,13 @@ const appearance: RatAppearance = {
 };
 
 describe('game state', () => {
-  it('creates deterministic city spawns when a random source is injected', () => {
-    const values = [0, 1];
-    const spawn = createRandomCitySpawn(() => values.shift() ?? 0.5);
+  it('creates finite safe spawns for a shared world spec', () => {
+    const spec = createWorldSpec(7);
+    const spawn = spawnForWorld(spec, () => 0.1);
 
-    expect(spawn).toEqual({ x: -50, y: 2, z: 50 });
+    expect(spawn.y).toBe(2);
+    expect(Number.isFinite(spawn.x)).toBe(true);
+    expect(Number.isFinite(spawn.z)).toBe(true);
   });
 
   it('sorts the scoreboard by kills, deaths, then name', () => {

@@ -3,16 +3,14 @@ import {
   MAX_HP,
   type PlayerData,
   type RatAppearance,
+  type RoundState,
   type ScoreEntry,
   type Vec3Data,
 } from '../shared/networkProtocol';
+import { createSafeSpawn, type WorldSpec } from '../shared/worldSpec';
 
-export function createRandomCitySpawn(random = Math.random): Vec3Data {
-  return {
-    x: (random() - 0.5) * 100,
-    y: 2,
-    z: (random() - 0.5) * 100,
-  };
+export function spawnForWorld(spec: WorldSpec, random = Math.random): Vec3Data {
+  return createSafeSpawn(spec, random);
 }
 
 export function createPlayer(
@@ -113,6 +111,7 @@ export function respawnPlayer(player: PlayerData, spawn: Vec3Data): PlayerData {
   player.meshQy = 0;
   player.meshQz = 0;
   player.meshQw = 1;
+  delete player.respawnAt;
   return player;
 }
 
@@ -124,4 +123,17 @@ export function resetRound(players: Iterable<PlayerData>, spawnFor: (id: string)
     resetPlayers.push(respawnPlayer(player, spawnFor(player.id)));
   }
   return resetPlayers;
+}
+
+export function playingRound(): RoundState {
+  return { phase: 'playing' };
+}
+
+export function wonRound(
+  winnerId: string,
+  winnerName: string,
+  kills: number,
+  resetAt: number,
+): RoundState {
+  return { phase: 'won', winnerId, winnerName, kills, resetAt };
 }

@@ -1,361 +1,181 @@
-import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
-import { RatEntity } from '../entities/RatEntity';
-import { RatOptions } from '../utils/RatModel';
-import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
-import { CheeseGun } from '../weapons/CheeseGun';
-import type { ClientMessage, PlayerData, ScoreEntry, ServerMessage } from '../shared/networkProtocol';
+import { PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
+import { WORLD_LAYOUT_VERSION } from '../shared/worldSpec';
+import { parseServerMessage } from '../shared/messageValidation';
 
-const SEND_RATE_HZ = 25;
-const SEND_INTERVAL = 1000 / SEND_RATE_HZ;
-
-interface RemoteRat {
-    entity: RatEntity;
-    targetPos: THREE.Vector3;
-    targetMeshQuat: THREE.Quaternion;
+export type ConnectionState = 'idle' | 'connecting' | 'playing' | 'reconnecting' | 'disconnected' | 'stopped';
+export interface TransportOptions {
+    url?: string;
+    createSocket?: (url: string) => WebSocket;
+    joinTimeoutMs?: number;
+    heartbeatMs?: number;
+    maxRetries?: number;
 }
 
-function resolveWebSocketUrl(serverUrl?: string): string {
-    const configured = serverUrl
-        || (import.meta as any).env?.VITE_WS_URL;
-    const roomName = new URLSearchParams(window.location.search).get('room');
-
-    if (configured) {
-        const url = new URL(configured, window.location.href);
-        if (url.protocol === 'http:') url.protocol = 'ws:';
-        if (url.protocol === 'https:') url.protocol = 'wss:';
-        if (url.pathname === '/' || url.pathname === '') url.pathname = '/ws';
-        if (roomName && !url.searchParams.has('room')) url.searchParams.set('room', roomName);
-        return url.toString();
-    }
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = new URL(`${protocol}//${window.location.host}/ws`);
-    if (roomName) url.searchParams.set('room', roomName);
+export function resolveWebSocketUrl(serverUrl?: string): string {
+    const configured = serverUrl || (import.meta as ImportMeta & { env?: { VITE_WS_URL?: string } }).env?.VITE_WS_URL;
+    const url = new URL(configured || '/ws', window.location.href);
+    if (url.protocol === 'http:') url.protocol = 'ws:';
+    if (url.protocol === 'https:') url.protocol = 'wss:';
+    if (url.pathname === '/') url.pathname = '/ws';
+    const room = new URLSearchParams(window.location.search).get('room');
+    if (room && !url.searchParams.has('room')) url.searchParams.set('room', room);
     return url.toString();
 }
 
+/** Owns the connection only. Session code applies validated messages to the game. */
 export class NetworkManager {
+    public state: ConnectionState = 'idle';
+    public onState: ((state: ConnectionState, message?: string) => void) | null = null;
+    public onMessage: ((message: ServerMessage) => void) | null = null;
     private socket: WebSocket | null = null;
-    private scene: THREE.Scene;
-    private world: CANNON.World;
-    private cheeseGun: CheeseGun;
-    private url: string;
-    private localPlayerEntity: RatEntity | null = null;
+    private credentials: { name: string; appearance: RatAppearance } | null = null;
+    private retryTimer: ReturnType<typeof setTimeout> | null = null;
+    private joinTimer: ReturnType<typeof setTimeout> | null = null;
+    private heartbeat: ReturnType<typeof setInterval> | null = null;
+    private retries = 0;
+    private generation = 0;
+    private lastReceived = 0;
+    private readonly url: string;
+    private readonly options: TransportOptions;
 
-    public remoteRats: Map<string, RemoteRat> = new Map();
-    public myId: string = '';
-
-    private lastSendTime: number = 0;
-
-    public onWelcome: ((player: PlayerData) => void) | null = null;
-    public onScoreboardUpdate: ((scores: ScoreEntry[]) => void) | null = null;
-    public onPlayerDied: ((data: { victimId: string; killerId: string; killerName: string; victimName: string }) => void) | null = null;
-    public onPlayerDamaged: ((data: { id: string; hp: number; attackerId: string }) => void) | null = null;
-    public onLocalRespawn: ((data: { x: number; y: number; z: number; hp: number }) => void) | null = null;
-    public onKillFeedMessage: ((msg: string) => void) | null = null;
-    public onGameWon: ((data: { winnerName: string; kills: number }) => void) | null = null;
-    public onGameReset: (() => void) | null = null;
-
-    constructor(
-        scene: THREE.Scene,
-        world: CANNON.World,
-        cheeseGun: CheeseGun,
-        serverUrl?: string
-    ) {
-        this.scene = scene;
-        this.world = world;
-        this.cheeseGun = cheeseGun;
-        this.url = resolveWebSocketUrl(serverUrl);
+    constructor(options: TransportOptions = {}) {
+        this.options = options;
+        this.url = options.url ?? resolveWebSocketUrl();
     }
 
-    connect(name: string, options: RatOptions): void {
-        if (this.socket && this.socket.readyState !== WebSocket.CLOSED) return;
-
-        const socket = new WebSocket(this.url);
-        this.socket = socket;
-
-        socket.addEventListener('open', () => {
-            console.log(`[Network] Connected to ${this.url}`);
-            this.send({
-                type: 'join',
-                name,
-                appearance: {
-                    hatType: options.hatType || DEFAULT_APPEARANCE.hatType,
-                    hatColor: options.hatColor ?? DEFAULT_APPEARANCE.hatColor,
-                    furColor: options.furColor ?? DEFAULT_APPEARANCE.furColor,
-                    coatColor: options.coatColor ?? DEFAULT_APPEARANCE.coatColor,
-                },
-            });
-        });
-
-        socket.addEventListener('message', (event) => {
-            this.handleMessage(event.data);
-        });
-
-        socket.addEventListener('close', () => {
-            console.log('[Network] Disconnected from server');
-        });
-
-        socket.addEventListener('error', () => {
-            console.warn('[Network] WebSocket error');
-        });
+    connect(name: string, appearance: RatAppearance): void {
+        if (this.state === 'playing' || this.state === 'connecting' || this.state === 'reconnecting') return;
+        this.credentials = { name, appearance };
+        this.retries = 0;
+        this.open();
     }
 
-    setLocalPlayer(entity: RatEntity): void {
-        this.localPlayerEntity = entity;
+    retry(): void {
+        if (!this.credentials || this.state === 'stopped') return;
+        this.cancelConnection();
+        this.retries = 0;
+        this.open();
     }
 
-    private handleMessage(raw: unknown): void {
-        if (typeof raw !== 'string') return;
+    private setState(state: ConnectionState, message?: string): void {
+        this.state = state;
+        this.onState?.(state, message);
+    }
 
-        let message: ServerMessage;
+    private open(): void {
+        if (!this.credentials) return;
+        const generation = ++this.generation;
+        this.setState(this.retries ? 'reconnecting' : 'connecting');
+        let socket: WebSocket;
         try {
-            message = JSON.parse(raw) as ServerMessage;
+            socket = (this.options.createSocket ?? (url => new WebSocket(url)))(this.url);
         } catch {
-            console.warn('[Network] Ignoring invalid server message');
+            this.failed(generation, 'Could not connect to the game.');
             return;
         }
-
-        switch (message.type) {
-            case 'welcome':
-                this.myId = message.id;
-                console.log(`[Network] Joined as ${this.myId}`);
-                this.onWelcome?.(message.player);
-                break;
-
-            case 'currentPlayers':
-                console.log(`[Network] Received ${Object.keys(message.players).length} existing players`);
-                for (const [id, data] of Object.entries(message.players)) {
-                    if (id === this.myId) continue;
-                    this.spawnRemoteRat(id, data);
+        this.socket = socket;
+        const current = () => generation === this.generation && this.socket === socket;
+        this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
+        socket.addEventListener('open', () => {
+            if (!current() || !this.credentials) return;
+            this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials });
+        });
+        socket.addEventListener('message', event => {
+            if (!current()) return;
+            const message = parseServerMessage(event.data);
+            if (!message) {
+                this.failed(generation, 'The server sent an incompatible game update.');
+                return;
+            }
+            this.lastReceived = Date.now();
+            if (message.type === 'welcome') {
+                if (message.protocolVersion !== PROTOCOL_VERSION || message.world.version !== WORLD_LAYOUT_VERSION) {
+                    this.cancelConnection();
+                    this.setState('disconnected', 'The game has updated. Reload to continue.');
+                    return;
                 }
-                break;
-
-            case 'playerJoined':
-                if (message.player.id === this.myId) return;
-                console.log(`[Network] Player joined: ${message.player.name}`);
-                this.spawnRemoteRat(message.player.id, message.player);
-                break;
-
-            case 'playerMoved': {
-                const data = message.player;
-                const remote = this.remoteRats.get(data.id);
-                if (!remote) return;
-
-                remote.targetPos.set(data.x, data.y, data.z);
-                remote.targetMeshQuat.set(data.meshQx, data.meshQy, data.meshQz, data.meshQw);
-                break;
-            }
-
-            case 'playerShot': {
-                const remote = this.remoteRats.get(message.shooterId);
-                if (!remote) return;
-
-                const target = new THREE.Vector3(message.target.x, message.target.y, message.target.z);
-                this.cheeseGun.shoot(remote.entity, target);
-                break;
-            }
-
-            case 'playerDamaged':
-                this.handlePlayerDamaged(message);
-                break;
-
-            case 'playerDied':
-                this.handlePlayerDied(message);
-                break;
-
-            case 'scoreboardUpdate':
-                this.onScoreboardUpdate?.(message.scores);
-                break;
-
-            case 'playerRespawn':
-                if (message.id === this.myId) {
-                    this.onLocalRespawn?.(message);
-                } else {
-                    const remote = this.remoteRats.get(message.id);
-                    if (remote) this.respawnRemoteRat(remote, message);
+                this.clearJoinTimer();
+                this.retries = 0;
+                // Apply the complete snapshot before enabling input.
+                try { this.onMessage?.(message); } catch (error) {
+                    console.error('Could not restore game state', error);
+                    this.failed(generation, 'Could not restore the game.');
+                    return;
                 }
-                break;
-
-            case 'playerLeft':
-                console.log(`[Network] Player left: ${message.id}`);
-                this.removeRemoteRat(message.id);
-                break;
-
-            case 'gameWon':
-                console.log(`[Network] ${message.winnerName} wins with ${message.kills} kills!`);
-                this.onGameWon?.(message);
-                break;
-
-            case 'gameReset':
-                console.log('[Network] Game reset - new round starting');
-                this.onGameReset?.();
-                break;
-
-            case 'pong':
-                break;
-
-            case 'error':
-                console.warn(`[Network] ${message.message}`);
-                break;
-        }
-    }
-
-    private handlePlayerDamaged(data: Extract<ServerMessage, { type: 'playerDamaged' }>): void {
-        const remote = this.remoteRats.get(data.id);
-        if (remote) {
-            remote.entity.hp = data.hp;
-            remote.entity.billboard.setHealth(data.hp);
-            if (data.hp > 0) {
-                remote.entity.flashColor(0xff0000);
+                this.setState('playing');
+                this.startHeartbeat(generation);
+                return;
             }
-        }
-
-        this.onPlayerDamaged?.(data);
-    }
-
-    private handlePlayerDied(data: Extract<ServerMessage, { type: 'playerDied' }>): void {
-        console.log(`[Network] ${data.killerName} killed ${data.victimName}`);
-
-        const remote = this.remoteRats.get(data.victimId);
-        if (remote && !remote.entity.dead) {
-            let impactDir: THREE.Vector3;
-            const killer = this.remoteRats.get(data.killerId);
-            if (killer) {
-                impactDir = new THREE.Vector3().subVectors(
-                    remote.entity.mesh.position,
-                    killer.entity.mesh.position
-                );
-                impactDir.y = 0;
-                impactDir.normalize().multiplyScalar(50);
-            } else if (data.killerId === this.myId && this.localPlayerEntity) {
-                impactDir = new THREE.Vector3().subVectors(
-                    remote.entity.mesh.position,
-                    this.localPlayerEntity.mesh.position
-                );
-                impactDir.y = 0;
-                impactDir.normalize().multiplyScalar(50);
-            } else {
-                impactDir = new THREE.Vector3(
-                    (Math.random() - 0.5) * 2,
-                    0,
-                    (Math.random() - 0.5) * 2
-                ).normalize().multiplyScalar(50);
+            if (message.type === 'error' && this.state !== 'playing') {
+                this.failed(generation, message.message);
+                return;
             }
-            remote.entity.takeDamage(999, impactDir);
-        }
-
-        this.onPlayerDied?.(data);
-        this.onKillFeedMessage?.(`${data.killerName} eliminated ${data.victimName}`);
-    }
-
-    private spawnRemoteRat(id: string, data: PlayerData): void {
-        if (this.remoteRats.has(id)) return;
-
-        const pos = new THREE.Vector3(data.x, data.y, data.z);
-        const opts: RatOptions = {
-            hatType: data.hatType || DEFAULT_APPEARANCE.hatType,
-            hatColor: data.hatColor,
-            furColor: data.furColor,
-            coatColor: data.coatColor
-        };
-
-        const entity = new RatEntity(this.scene, this.world, pos, data.name, opts, true);
-
-        this.remoteRats.set(id, {
-            entity,
-            targetPos: pos.clone(),
-            targetMeshQuat: new THREE.Quaternion(data.meshQx, data.meshQy, data.meshQz, data.meshQw)
+            this.onMessage?.(message);
         });
-
-        console.log(`[Network] Spawned remote rat: ${data.name} (${id})`);
+        socket.addEventListener('close', () => { if (current()) this.failed(generation, 'Connection lost.'); });
+        socket.addEventListener('error', () => { if (current()) this.failed(generation, 'Connection failed.'); });
     }
 
-    private respawnRemoteRat(remote: RemoteRat, data: { x: number; y: number; z: number; hp: number }): void {
-        remote.entity.respawn(data);
-        remote.targetPos.set(data.x, data.y, data.z);
-        remote.targetMeshQuat.set(0, 0, 0, 1);
-    }
-
-    private removeRemoteRat(id: string): void {
-        const remote = this.remoteRats.get(id);
-        if (remote) {
-            remote.entity.dispose();
-            this.remoteRats.delete(id);
-        }
-    }
-
-    sendMovement(entity: RatEntity): void {
-        const now = performance.now();
-        if (now - this.lastSendTime < SEND_INTERVAL) return;
-        this.lastSendTime = now;
-
-        const p = entity.body.position;
-        const q = entity.body.quaternion;
-
-        this.send({
-            type: 'updateMovement',
-            position: { x: p.x, y: p.y, z: p.z },
-            rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
-            meshRotation: {
-                x: entity.mesh.quaternion.x,
-                y: entity.mesh.quaternion.y,
-                z: entity.mesh.quaternion.z,
-                w: entity.mesh.quaternion.w
+    private startHeartbeat(generation: number): void {
+        if (this.heartbeat) clearInterval(this.heartbeat);
+        const interval = this.options.heartbeatMs ?? 20_000;
+        this.heartbeat = setInterval(() => {
+            if (generation !== this.generation) return;
+            if (Date.now() - this.lastReceived > interval * 3) {
+                this.failed(generation, 'The connection stopped responding.');
+                return;
             }
-        });
+            this.send({ type: 'ping', sentAt: Date.now() });
+        }, interval);
     }
 
-    sendShoot(origin: THREE.Vector3, target: THREE.Vector3): void {
-        this.send({
-            type: 'shoot',
-            origin: { x: origin.x, y: origin.y, z: origin.z },
-            target: { x: target.x, y: target.y, z: target.z }
-        });
-    }
-
-    sendHit(victimId: string, damage: number): void {
-        this.send({ type: 'hit', victimId, damage });
-    }
-
-    getSocketIdForEntity(entity: RatEntity): string | null {
-        for (const [id, remote] of this.remoteRats) {
-            if (remote.entity === entity) return id;
+    private failed(generation: number, message: string): void {
+        if (generation !== this.generation || this.state === 'stopped') return;
+        this.cancelConnection();
+        if (this.retries >= (this.options.maxRetries ?? 5)) {
+            this.setState('disconnected', `${message} Retry when ready.`);
+            return;
         }
-        return null;
+        const delay = Math.min(500 * 2 ** this.retries++, 8_000);
+        this.setState('reconnecting', message);
+        this.retryTimer = setTimeout(() => { this.retryTimer = null; this.open(); }, delay);
     }
 
-    updateRemoteRats(dt: number): void {
-        const lerpFactor = Math.min(dt * 12, 1);
-
-        for (const [_id, remote] of this.remoteRats) {
-            if (remote.entity.dead) {
-                remote.entity.update(dt);
-                continue;
-            }
-
-            remote.entity.mesh.position.lerp(remote.targetPos, lerpFactor);
-            remote.entity.mesh.quaternion.slerp(remote.targetMeshQuat, lerpFactor);
-            remote.entity.body.position.set(
-                remote.entity.mesh.position.x,
-                remote.entity.mesh.position.y,
-                remote.entity.mesh.position.z
-            );
-            remote.entity.update(dt);
+    send(message: ClientMessage): boolean {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+        // Movement is replaceable; never keep queuing old positions behind a slow connection.
+        if (message.type === 'updateMovement' && this.socket.bufferedAmount > 64 * 1024) return false;
+        try {
+            this.socket.send(JSON.stringify(message));
+            return true;
+        } catch {
+            this.failed(this.generation, 'Sending a game update failed.');
+            return false;
         }
+    }
+
+    private clearJoinTimer(): void {
+        if (this.joinTimer) clearTimeout(this.joinTimer);
+        this.joinTimer = null;
+    }
+
+    private cancelConnection(): void {
+        ++this.generation;
+        this.clearJoinTimer();
+        if (this.retryTimer) clearTimeout(this.retryTimer);
+        if (this.heartbeat) clearInterval(this.heartbeat);
+        this.retryTimer = null;
+        this.heartbeat = null;
+        const socket = this.socket;
+        this.socket = null;
+        socket?.close();
     }
 
     destroy(): void {
-        for (const [id] of this.remoteRats) {
-            this.removeRemoteRat(id);
-        }
-        this.socket?.close();
-        this.socket = null;
-    }
-
-    private send(message: ClientMessage): void {
-        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
-        this.socket.send(JSON.stringify(message));
+        this.cancelConnection();
+        this.credentials = null;
+        this.setState('stopped');
+        this.onMessage = null;
+        this.onState = null;
     }
 }

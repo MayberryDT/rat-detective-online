@@ -1,10 +1,19 @@
+import type { WorldSpec } from './worldSpec';
+
+export const PROTOCOL_VERSION = 1;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 5_000;
 export const WIN_DISPLAY_MS = 6_000;
 export const DEFAULT_ROOM_NAME = 'public';
+export const MAX_PLAYERS = 24;
+/** Open sockets allowed, including clients that have not finished joining. */
+export const MAX_CONNECTIONS = MAX_PLAYERS + 8;
+export const MAX_MESSAGE_BYTES = 8_192;
+export const MAX_SERVER_MESSAGE_BYTES = 65_536;
 
 export type HatTypeName = 'fedora' | 'trilby' | 'porkpie';
+export type RoundPhase = 'playing' | 'won';
 
 export interface Vec3Data {
   x: number;
@@ -43,6 +52,8 @@ export interface PlayerData extends RatAppearance {
   hp: number;
   kills: number;
   deaths: number;
+  /** Present while dead: authoritative respawn (or round-reset) deadline. */
+  respawnAt?: number;
 }
 
 export interface ScoreEntry {
@@ -52,15 +63,38 @@ export interface ScoreEntry {
   deaths: number;
 }
 
+export interface RoundState {
+  phase: RoundPhase;
+  winnerId?: string;
+  winnerName?: string;
+  kills?: number;
+  resetAt?: number;
+}
+
+export interface ShotDescriptor {
+  shotId: string;
+  origin: Vec3Data;
+  direction: Vec3Data;
+}
+
 export type ClientMessage =
-  | { type: 'join'; name: string; appearance: RatAppearance }
+  | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance }
   | { type: 'updateMovement'; position: Vec3Data; rotation: QuatData; meshRotation: QuatData }
-  | { type: 'shoot'; origin: Vec3Data; target: Vec3Data }
+  | { type: 'shoot'; shotId: string; origin: Vec3Data; direction: Vec3Data }
   | { type: 'hit'; victimId: string; damage: number }
   | { type: 'ping'; sentAt: number };
 
 export type ServerMessage =
-  | { type: 'welcome'; id: string; player: PlayerData }
+  | {
+      type: 'welcome';
+      id: string;
+      player: PlayerData;
+      players: Record<string, PlayerData>;
+      round: RoundState;
+      world: WorldSpec;
+      protocolVersion: number;
+      serverTime: number;
+    }
   | { type: 'currentPlayers'; players: Record<string, PlayerData> }
   | { type: 'playerJoined'; player: PlayerData }
   | {
@@ -70,13 +104,29 @@ export type ServerMessage =
         'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'
       >;
     }
-  | { type: 'playerShot'; shooterId: string; origin: Vec3Data; target: Vec3Data }
+  | {
+      type: 'playerCorrected';
+      player: Pick<
+        PlayerData,
+        'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'
+      >;
+    }
+  | { type: 'playerShot'; shooterId: string; shotId: string; origin: Vec3Data; direction: Vec3Data }
   | { type: 'playerDamaged'; id: string; hp: number; attackerId: string }
-  | { type: 'playerDied'; victimId: string; killerId: string; killerName: string; victimName: string }
+  | {
+      type: 'playerDied';
+      victimId: string;
+      killerId: string;
+      killerName: string;
+      victimName: string;
+      respawnAt: number;
+    }
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }
   | { type: 'playerLeft'; id: string }
-  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number }
-  | { type: 'gameReset' }
+  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number }
+  | { type: 'gameReset'; round: RoundState }
   | { type: 'pong'; sentAt: number; receivedAt: number }
   | { type: 'error'; message: string };
+
+export type { WorldSpec };

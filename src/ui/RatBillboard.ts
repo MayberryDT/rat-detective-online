@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MAX_HP } from '../shared/networkProtocol';
 
 export class RatBillboard {
     public sprite: THREE.Sprite;
@@ -10,7 +11,7 @@ export class RatBillboard {
     private health: number;
     private disposed = false;
 
-    constructor(name: string, initialHealth: number = 3) {
+    constructor(name: string, initialHealth: number = MAX_HP) {
         this.name = name;
         this.health = initialHealth;
 
@@ -77,9 +78,9 @@ export class RatBillboard {
         ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
 
         // Segments
-        const segW = (barW - 4) / 3; // 3 segments with small gaps
+        const segW = (barW - 4) / MAX_HP; // 3 segments with small gaps
 
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < MAX_HP; i++) {
             let color = '#550000'; // Empty
 
             if (i < this.health) {

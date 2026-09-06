@@ -1,100 +1,77 @@
-import type { ClientMessage, HatTypeName, QuatData, RatAppearance, Vec3Data } from '../shared/networkProtocol';
+import type { Vec3Data } from '../shared/networkProtocol';
 
-const HAT_TYPES = new Set<HatTypeName>(['fedora', 'trilby', 'porkpie']);
-const MAX_MESSAGE_BYTES = 8_192;
+export { parseClientMessage } from '../shared/messageValidation';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+export const MOVEMENT_RATE = { limit: 30, windowMs: 1_000 };
+export const SHOOT_RATE = { limit: 12, windowMs: 1_000 };
+export const HIT_RATE = { limit: 12, windowMs: 1_000 };
+export const PING_RATE = { limit: 4, windowMs: 1_000 };
+export const JOIN_RATE = { limit: 3, windowMs: 10_000 };
+
+/**
+ * Far envelope only. Local physics is unbounded; a rat walking at speed 18
+ * reaches 400 units in ~22s, so this must not reject ordinary city motion.
+ * Crossing the envelope is clamped and echoed as playerCorrected.
+ */
+export const PLAY_BOUNDS = {
+  xz: 2_000,
+  yMin: -8,
+  yMax: 250,
+} as const;
+
+const SHOT_ORIGIN_MAX_DISTANCE = 12;
+const SHOT_DIRECTION_MIN = 0.05;
+const SHOT_DIRECTION_MAX = 8;
+
+export class RateLimiter {
+  private readonly buckets = new Map<string, { count: number; resetAt: number }>();
+
+  allow(key: string, limit: number, windowMs: number, now = Date.now()): boolean {
+    const bucket = this.buckets.get(key);
+    if (!bucket || now >= bucket.resetAt) {
+      this.buckets.set(key, { count: 1, resetAt: now + windowMs });
+      return true;
+    }
+    if (bucket.count >= limit) return false;
+    bucket.count += 1;
+    return true;
+  }
+
+  clear(keyPrefix: string): void {
+    for (const key of this.buckets.keys()) {
+      if (key === keyPrefix || key.startsWith(`${keyPrefix}:`)) {
+        this.buckets.delete(key);
+      }
+    }
+  }
 }
 
-function numberOr(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+export function isPlausiblePosition(position: Vec3Data): boolean {
+  return (
+    Math.abs(position.x) <= PLAY_BOUNDS.xz &&
+    Math.abs(position.z) <= PLAY_BOUNDS.xz &&
+    position.y >= PLAY_BOUNDS.yMin &&
+    position.y <= PLAY_BOUNDS.yMax
+  );
 }
 
-function colorOr(value: unknown, fallback: number): number {
-  const number = numberOr(value, fallback);
-  return Math.max(0x000000, Math.min(0xffffff, Math.trunc(number)));
-}
-
-function vec3(value: unknown): Vec3Data | null {
-  if (!isRecord(value)) return null;
+export function clampPosition(position: Vec3Data): { position: Vec3Data; corrected: boolean } {
+  const x = Math.max(-PLAY_BOUNDS.xz, Math.min(PLAY_BOUNDS.xz, position.x));
+  const y = Math.max(PLAY_BOUNDS.yMin, Math.min(PLAY_BOUNDS.yMax, position.y));
+  const z = Math.max(-PLAY_BOUNDS.xz, Math.min(PLAY_BOUNDS.xz, position.z));
   return {
-    x: numberOr(value.x, 0),
-    y: numberOr(value.y, 0),
-    z: numberOr(value.z, 0),
+    position: { x, y, z },
+    corrected: x !== position.x || y !== position.y || z !== position.z,
   };
 }
 
-function quat(value: unknown): QuatData | null {
-  if (!isRecord(value)) return null;
-  return {
-    x: numberOr(value.x, 0),
-    y: numberOr(value.y, 0),
-    z: numberOr(value.z, 0),
-    w: numberOr(value.w, 1),
-  };
-}
-
-function appearance(value: unknown): RatAppearance | null {
-  if (!isRecord(value)) return null;
-  const hatType = HAT_TYPES.has(value.hatType as HatTypeName) ? (value.hatType as HatTypeName) : 'fedora';
-  return {
-    hatType,
-    hatColor: colorOr(value.hatColor, 0xdc4a3c),
-    furColor: colorOr(value.furColor, 0xe8b84d),
-    coatColor: colorOr(value.coatColor, 0xbe4545),
-  };
-}
-
-export function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | null {
-  if (raw instanceof ArrayBuffer) return null;
-  if (new TextEncoder().encode(raw).byteLength > MAX_MESSAGE_BYTES) return null;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-
-  if (!isRecord(parsed) || typeof parsed.type !== 'string') return null;
-
-  if (parsed.type === 'join') {
-    const parsedAppearance = appearance(parsed.appearance);
-    if (!parsedAppearance) return null;
-    return {
-      type: 'join',
-      name: typeof parsed.name === 'string' ? parsed.name.slice(0, 32) : 'Anonymous Rat',
-      appearance: parsedAppearance,
-    };
-  }
-
-  if (parsed.type === 'updateMovement') {
-    const position = vec3(parsed.position);
-    const rotation = quat(parsed.rotation);
-    const meshRotation = quat(parsed.meshRotation);
-    if (!position || !rotation || !meshRotation) return null;
-    return { type: 'updateMovement', position, rotation, meshRotation };
-  }
-
-  if (parsed.type === 'shoot') {
-    const origin = vec3(parsed.origin);
-    const target = vec3(parsed.target);
-    if (!origin || !target) return null;
-    return { type: 'shoot', origin, target };
-  }
-
-  if (parsed.type === 'hit') {
-    return {
-      type: 'hit',
-      victimId: typeof parsed.victimId === 'string' ? parsed.victimId : '',
-      damage: numberOr(parsed.damage, 0),
-    };
-  }
-
-  if (parsed.type === 'ping') {
-    return { type: 'ping', sentAt: numberOr(parsed.sentAt, Date.now()) };
-  }
-
-  return null;
+export function isPlausibleShot(origin: Vec3Data, direction: Vec3Data, player: Vec3Data): boolean {
+  if (!isPlausiblePosition(origin)) return false;
+  const dx = origin.x - player.x;
+  const dy = origin.y - player.y;
+  const dz = origin.z - player.z;
+  const distance = Math.hypot(dx, dy, dz);
+  if (distance > SHOT_ORIGIN_MAX_DISTANCE) return false;
+  const magnitude = Math.hypot(direction.x, direction.y, direction.z);
+  return magnitude >= SHOT_DIRECTION_MIN && magnitude <= SHOT_DIRECTION_MAX;
 }
