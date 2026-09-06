@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { resolveSmokeWsUrl } from './lib/process.mjs';
 
-const targetUrl = new URL(process.argv[2] || 'ws://127.0.0.1:8787/ws');
+const PROTOCOL_VERSION = 1;
+const targetUrl = resolveSmokeWsUrl(process.argv[2]);
 if (!targetUrl.searchParams.has('room')) {
   targetUrl.searchParams.set('room', `smoke-${crypto.randomUUID()}`);
 }
@@ -11,7 +13,6 @@ async function openClient(name) {
   const socket = new WebSocket(targetUrl);
   const messages = [];
   const waiters = new Set();
-  // Capture messages before open: welcome/currentPlayers may arrive together.
   socket.addEventListener('message', event => {
     const message = JSON.parse(event.data);
     const waiter = [...waiters].find(entry => entry.matches(message));
@@ -48,13 +49,17 @@ async function openClient(name) {
     socket.addEventListener('open', () => { clearTimeout(timeout); resolve(); }, { once: true });
     socket.addEventListener('error', () => { clearTimeout(timeout); reject(new Error(`Connection failed: ${name}`)); }, { once: true });
   });
-  client.send({ type: 'join', name, appearance });
+  client.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, name, appearance });
   return client;
 }
 
 try {
   const first = await openClient('Smoke Rat 1');
   const firstWelcome = await first.waitFor('welcome');
+  assert.equal(firstWelcome.protocolVersion, PROTOCOL_VERSION);
+  assert.ok(firstWelcome.player);
+  assert.ok(firstWelcome.world);
+  assert.ok(firstWelcome.round);
   await first.waitFor('currentPlayers');
   const second = await openClient('Smoke Rat 2');
   const secondWelcome = await second.waitFor('welcome');
@@ -62,19 +67,26 @@ try {
   assert.ok(secondPlayers.players[firstWelcome.id]);
   assert.equal((await first.waitFor('playerJoined')).player.id, secondWelcome.id);
 
-  const position = { x: 15, y: 2, z: 15 };
+  const position = {
+    x: firstWelcome.player.x,
+    y: firstWelcome.player.y,
+    z: firstWelcome.player.z,
+  };
   const rotation = { x: 0, y: 0, z: 0, w: 1 };
   first.send({ type: 'updateMovement', position, rotation, meshRotation: rotation });
   const moved = await second.waitFor('playerMoved');
   assert.equal(moved.player.id, firstWelcome.id);
-  assert.deepEqual([moved.player.x, moved.player.y, moved.player.z], [15, 2, 15]);
+  assert.deepEqual([moved.player.x, moved.player.y, moved.player.z], [position.x, position.y, position.z]);
 
-  const target = { x: 20, y: 2, z: 15 };
-  first.send({ type: 'shoot', origin: position, target });
+  const origin = { x: position.x, y: position.y + 1.45, z: position.z };
+  const direction = { x: 1, y: 0, z: 0 };
+  const shotId = crypto.randomUUID();
+  first.send({ type: 'shoot', shotId, origin, direction });
   const shot = await second.waitFor('playerShot');
   assert.equal(shot.shooterId, firstWelcome.id);
-  assert.deepEqual(shot.origin, position);
-  assert.deepEqual(shot.target, target);
+  assert.equal(shot.shotId, shotId);
+  assert.deepEqual(shot.origin, origin);
+  assert.deepEqual(shot.direction, direction);
 
   first.send({ type: 'hit', victimId: secondWelcome.id, damage: 3 });
   const damaged = await second.waitFor('playerDamaged');
@@ -93,7 +105,7 @@ try {
 
   second.socket.close(1000, 'smoke complete');
   assert.equal((await first.waitFor('playerLeft')).id, secondWelcome.id);
-  console.log('WebSocket smoke passed: join, movement, shot, damage, death, scoring, respawn, leave');
+  console.log(`WebSocket smoke passed at ${targetUrl}: join v${PROTOCOL_VERSION}, movement, shot, damage, death, scoring, respawn, leave`);
 } finally {
   for (const { socket } of clients) socket.close(1000, 'smoke complete');
 }

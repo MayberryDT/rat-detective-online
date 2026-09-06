@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=780, height=493, initial-scale=1" />
+  <title>Rat Detective visual fixture</title>
+  <style>
+    html, body { margin: 0; background: #07040a; color: #e2e8f0; font: 14px/1.4 ui-sans-serif, system-ui, sans-serif; }
+    canvas { display: block; width: 780px; height: 493px; }
+    #fixture-controls {
+      position: fixed; left: 12px; bottom: 12px; z-index: 4;
+      display: flex; gap: 8px; align-items: center;
+    }
+    #fixture-controls button {
+      appearance: none; border: 0; border-radius: 4px; padding: 8px 12px;
+      background: #1f1630; color: #f8fafc; cursor: pointer;
+    }
+    #fixture-controls button[aria-pressed="true"] { background: #6d28d9; }
+    #fixture-status {
+      position: fixed; left: 12px; top: 12px; z-index: 4;
+      white-space: pre-wrap; max-width: 520px;
+      background: rgba(7, 4, 10, 0.72); padding: 8px 10px; border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <output id="fixture-status" for="btn-alive btn-dead btn-respawn">loading</output>
+  <div id="fixture-controls">
+    <button id="btn-alive" type="button">Alive</button>
+    <button id="btn-turned" type="button">Turned</button>
+    <button id="btn-damaged" type="button">Damaged</button>
+    <button id="btn-dead" type="button">Dead</button>
+    <button id="btn-respawn" type="button">Respawn</button>
+  </div>
+  <script type="module" src="./fixture.ts"></script>
+</body>
+</html>

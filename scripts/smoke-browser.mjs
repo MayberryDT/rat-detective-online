@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import net from 'node:net';
 
-const targetUrl = withBrowserSmokeRoom(process.argv[2] || process.env.BROWSER_SMOKE_URL || 'http://localhost:8787/');
+import { resolveSmokeHttpUrl } from './lib/process.mjs';
+
+const targetUrl = withBrowserSmokeRoom(resolveSmokeHttpUrl(process.argv[2]));
 const viewport = { width: 780, height: 493 };
 const expectWebglError = process.env.EXPECT_WEBGL_ERROR === '1';
 const extraChromeArgs = process.env.CHROME_EXTRA_ARGS
@@ -105,6 +107,10 @@ function makeCdpClient(socketUrl) {
 
     if (message.method === 'Network.webSocketCreated') {
       events.push({ kind: 'ws-created', url: message.params.url });
+    }
+
+    if (message.method === 'Network.webSocketFrameSent') {
+      try { events.push({ kind: 'ws-sent', message: JSON.parse(message.params.response.payloadData) }); } catch { /* Non-JSON transport frame. */ }
     }
 
     if (message.method === 'Network.webSocketFrameReceived') {
@@ -295,6 +301,36 @@ try {
   if (!receivedWelcome) fail('WebSocket welcome was not received', { beforeState, afterState, events });
   if (blockingEvents.length > 0) fail('Browser smoke saw blocking console/network errors', { beforeState, afterState, blockingEvents });
 
+  let gameplay;
+  if (process.env.SMOKE_GAMEPLAY === '1') {
+    if (!afterState.pointerLock) fail('Gameplay smoke requires real pointer lock', afterState);
+    const movement = () => events.filter(event => event.kind === 'ws-sent' && event.message.type === 'updateMovement').map(event => event.message);
+    const initial = movement().at(-1);
+    if (!initial) fail('No initial movement state');
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'w', code: 'KeyW', windowsVirtualKeyCode: 87 });
+    await new Promise(resolve => setTimeout(resolve, 400));
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'w', code: 'KeyW', windowsVirtualKeyCode: 87 });
+    const moved = movement().at(-1);
+    const distance = Math.hypot(moved.position.x - initial.position.x, moved.position.z - initial.position.z);
+    if (distance < .05) fail('Real keyboard input did not move the rat', { distance });
+    const jumpStart = events.length;
+    const groundedY = moved.position.y;
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
+    const peakY = Math.max(...events.slice(jumpStart).filter(event => event.kind === 'ws-sent' && event.message.type === 'updateMovement').map(event => event.message.position.y));
+    if (peakY < groundedY + .2) fail('Real Space input did not produce a jump', { groundedY, peakY });
+    const shotStart = events.length;
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 390, y: 246, button: 'left', buttons: 1, clickCount: 1 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 390, y: 246, button: 'left', buttons: 0, clickCount: 1 });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const shot = events.slice(shotStart).find(event => event.kind === 'ws-sent' && event.message.type === 'shoot')?.message;
+    if (!shot || !shot.shotId || !Object.values(shot.origin).every(Number.isFinite)) fail('Real mouse click did not send a resolved shot');
+    const directionLength = Math.hypot(shot.direction.x, shot.direction.y, shot.direction.z);
+    if (Math.abs(directionLength - 1) > 1e-6) fail('Shot direction was not normalized', shot);
+    gameplay = { pointerLock: true, movementDistance: distance, jumpRise: peakY - groundedY, resolvedShot: true, directionLength };
+  }
+
   const screenshot = await send('Page.captureScreenshot', { format: 'png' });
   const screenshotPath = join(tmpdir(), 'rat-detective-browser-smoke.png');
   writeFileSync(screenshotPath, Buffer.from(screenshot.result.data, 'base64'));
@@ -304,6 +340,7 @@ try {
     targetUrl,
     before: beforeState,
     after: afterState,
+    gameplay,
     screenshot: screenshotPath,
   }, null, 2));
 

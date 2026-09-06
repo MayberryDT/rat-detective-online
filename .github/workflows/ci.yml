@@ -20,6 +20,20 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run test
       - run: npm run build
       - run: npm run audit
+      - name: Isolated Worker WebSocket smoke
+        run: node scripts/with-local-worker.mjs -- npm run smoke:ws
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+      - name: Real browser movement, jump, and shooting
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+        run: node scripts/with-local-worker.mjs -- npm run smoke:gameplay
+      - run: npm run visual:build
+      - name: Visual fixture comparison
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+        run: npm run smoke:visual
