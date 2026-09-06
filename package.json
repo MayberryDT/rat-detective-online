@@ -5,7 +5,7 @@
   "description": "A Three.js browser game served by a Cloudflare Worker with Durable Object WebSocket state.",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run dev:worker -- --port 5173",
     "cf:types": "wrangler types",
     "typecheck": "tsc --noEmit",
     "build": "npm run cf:types && tsc && vite build",

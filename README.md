@@ -25,11 +25,15 @@ Install dependencies, build the app, and start the local Worker:
 
 ```bash
 npm install
-npm run dev:worker
+npm run dev
 ```
 
-`npm run dev:worker` runs the production-style path locally by building the Vite
-assets and starting `wrangler dev`.
+`npm run dev` builds the Vite assets and starts the complete Worker-backed game
+at `http://localhost:5173`, including the WebSocket game room. Restart it after
+editing client code to rebuild the assets. Vite alone does not run the game server.
+
+`npm run dev:worker` runs the same game on Wrangler's default port, `8787`.
+The smoke commands below target that port by default.
 
 ## Controls
 
