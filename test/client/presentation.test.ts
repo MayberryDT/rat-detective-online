@@ -22,7 +22,7 @@ it.each(hats)('restores the %s outline and colors after complete death/respawn',
         for (let frame = 0; frame < 180; frame++) entity.update(1 / 60);
         expect(opacity().every(value => value === 0)).toBe(true);
         entity.respawn({ x: 15, y: 2, z: 15, hp: 3 });
-        expect(opacity().every(value => value === .25)).toBe(true);
+        expect(opacity().every(value => value === .10)).toBe(true);
         expect(entity.billboard.sprite.position.toArray()).toEqual([15, 4.2, 15]);
         const colors: number[] = [];
         entity.mesh.traverse(child => { if (child instanceof THREE.Mesh) colors.push((child.material as THREE.MeshStandardMaterial).color.getHex()); });

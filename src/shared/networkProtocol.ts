@@ -69,6 +69,23 @@ export interface RoundState {
   winnerName?: string;
   kills?: number;
   resetAt?: number;
+  startedAt?: number;
+}
+
+export interface PublicScore {
+  name: string;
+  kills: number;
+  deaths: number;
+}
+
+export interface PublicRoomStatus {
+  room: string;
+  players: number;
+  phase: RoundPhase;
+  startedAt: number;
+  resetAt?: number;
+  winnerName?: string;
+  scores: PublicScore[];
 }
 
 export interface ShotDescriptor {

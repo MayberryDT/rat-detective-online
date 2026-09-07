@@ -157,6 +157,9 @@ class FakeNode extends EventTarget {
     }
 
     requestPointerLock() { return Promise.resolve(); }
+    focus(_options?: { preventScroll?: boolean }) {}
+    select() {}
+    tabIndex = 0;
 }
 
 class FakeWindow extends EventTarget {
@@ -205,7 +208,8 @@ function createPage() {
     add('respawn-timer').textContent = '5';
     const enter = add('enter-city-btn', 'button');
     enter.disabled = true;
-    add('player-name', 'input');
+    add('player-name');
+    add('reroll-name-btn', 'button');
 
     const doc = new EventTarget() as EventTarget & {
         hidden: boolean;

@@ -22,6 +22,31 @@ export default {
         return json({ ok: true, service: 'rat-detective', runtime: 'cloudflare-workers' });
       }
 
+      if (url.pathname === '/status') {
+        if (request.method === 'OPTIONS') {
+          return new Response(null, {
+            status: 204,
+            headers: {
+              'access-control-allow-origin': '*',
+              'access-control-allow-methods': 'GET',
+              'access-control-max-age': '600',
+            },
+          });
+        }
+        if (request.method !== 'GET') {
+          return json({ error: 'Method not allowed' }, { status: 405 });
+        }
+        const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
+        return json(
+          { room: DEFAULT_ROOM_NAME, ...(await room.status()) },
+          {
+            headers: {
+              'access-control-allow-origin': '*',
+            },
+          },
+        );
+      }
+
       if (url.pathname === '/ws') {
         if (request.headers.get('Upgrade') !== 'websocket') {
           return json({ error: 'Expected WebSocket upgrade' }, { status: 400 });

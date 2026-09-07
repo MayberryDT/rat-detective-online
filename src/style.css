@@ -37,7 +37,7 @@ canvas {
     min-height: 100svh;
     padding: clamp(16px, 4vh, 40px) 16px;
     overflow-y: auto;
-    background: radial-gradient(circle at center, #1a0b2e 0%, #07040a 100%);
+    background: radial-gradient(ellipse at 50% 40%, rgba(16, 11, 25, 0.62), rgba(7, 4, 10, 0.94));
     color: var(--text-main);
     transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -82,14 +82,14 @@ canvas {
     display: flex;
     flex-direction: column;
     align-items: center;
-    animation: float 6s ease-in-out infinite;
+
 }
 
 #main-logo {
     width: clamp(140px, 28vh, 320px);
     max-width: 72vw;
     height: auto;
-    filter: drop-shadow(0 0 20px var(--accent-glow));
+    filter: drop-shadow(0 12px 24px #000);
     transition: transform 0.3s ease;
 }
 
@@ -107,7 +107,7 @@ h1 {
     font-size: clamp(2.25rem, 8vw, 3.5rem);
     font-weight: 700;
     letter-spacing: 0;
-    background: linear-gradient(to bottom, #fff, #a78bfa);
+    background: linear-gradient(to bottom, #fff4dc, #d7ad67);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -116,70 +116,119 @@ h1 {
     font-style: italic;
 }
 
-.subtitle {
-    font-size: clamp(0.85rem, 2.5vw, 1.1rem);
-    color: var(--text-muted);
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    margin-top: clamp(0.25rem, 1vh, 0.5rem);
-    opacity: 0.8;
-}
-
-/* ── Name Input ── */
+/* ── Assigned name ── */
 .name-input-group {
     margin-top: clamp(1rem, 4vh, 2.5rem);
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 0.75rem;
-}
-
-.name-label {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
+    justify-content: center;
+    gap: 0.65rem;
 }
 
 #player-name {
-    width: 280px;
+    min-width: 0;
+    width: min(280px, calc(100vw - 96px));
     padding: 0.75rem 1.25rem;
-    background: rgba(139, 92, 246, 0.08);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    border-radius: 12px;
+    background: rgba(20, 15, 24, 0.85);
+    border: 1px solid rgba(222, 183, 112, 0.35);
+    border-radius: 6px;
     color: #fff;
     font-family: 'Outfit', sans-serif;
     font-size: 1.1rem;
     text-align: center;
-    outline: none;
-    transition: all 0.3s ease;
     letter-spacing: 0.05em;
+    user-select: none;
 }
 
-#player-name::placeholder {
-    color: rgba(148, 163, 184, 0.5);
+#player-name.shuffling {
+    animation: name-shuffle 0.09s ease-out;
 }
 
-#player-name:focus {
-    border-color: var(--accent-purple);
-    background: rgba(139, 92, 246, 0.15);
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+#reroll-name-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+#reroll-name-btn svg {
+    display: block;
+    width: 26px;
+    height: 22px;
+    transform-origin: 50% 60%;
+}
+
+#reroll-name-btn:hover {
+    color: #e5bd78;
+    background: rgba(222, 183, 112, 0.08);
+}
+
+#reroll-name-btn:hover:not(.rolling) svg {
+    animation: dice-nudge 0.45s ease-in-out;
+}
+
+#reroll-name-btn.rolling svg {
+    animation: dice-tumble 0.45s ease-in-out;
+}
+
+@keyframes name-shuffle {
+    from {
+        opacity: 0.4;
+        transform: translateY(5px);
+        filter: blur(2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+@keyframes dice-nudge {
+    0%,
+    100% { transform: rotate(0deg); }
+    40% { transform: rotate(-14deg); }
+    70% { transform: rotate(8deg); }
+}
+
+@keyframes dice-tumble {
+    0% { transform: rotate(0deg) scale(1); }
+    28% { transform: rotate(-42deg) scale(1.12); }
+    55% { transform: rotate(28deg) scale(1.08); }
+    78% { transform: rotate(-10deg) scale(1.02); }
+    100% { transform: rotate(0deg) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #player-name.shuffling,
+    #reroll-name-btn:hover:not(.rolling) svg,
+    #reroll-name-btn.rolling svg {
+        animation: none;
+    }
 }
 
 /* ── Enter Button ── */
 #enter-city-btn {
     margin-top: clamp(0.85rem, 3vh, 1.5rem);
     padding: 1rem 2.5rem;
-    background: rgba(139, 92, 246, 0.1);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    border-radius: 50px;
+    background: rgba(222, 183, 112, 0.08);
+    border: 1px solid rgba(222, 183, 112, 0.35);
+    border-radius: 6px;
     cursor: pointer;
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
     gap: 1rem;
-    color: var(--accent-purple);
+    color: #e5bd78;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -188,10 +237,10 @@ h1 {
 }
 
 #enter-city-btn:hover {
-    background: rgba(139, 92, 246, 0.2);
-    border-color: var(--accent-purple);
+    background: rgba(222, 183, 112, 0.16);
+    border-color: #e5bd78;
     transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3), 0 0 15px var(--accent-glow);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3), 0 0 15px rgba(222, 183, 112, 0.12);
     color: #fff;
 }
 
@@ -209,23 +258,10 @@ h1 {
 .pulse-dot {
     width: 8px;
     height: 8px;
-    background: var(--accent-purple);
+    background: #e5bd78;
     border-radius: 50%;
-    box-shadow: 0 0 10px var(--accent-purple);
+    box-shadow: 0 0 10px #e5bd78;
     animation: pulse-dot 1.5s ease-in-out infinite;
-}
-
-.online-count {
-    margin-top: clamp(0.85rem, 3vh, 1.5rem);
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    opacity: 0.7;
-    letter-spacing: 0.1em;
-}
-
-.online-count span {
-    color: #4ade80;
-    font-weight: 600;
 }
 
 @keyframes float {
@@ -492,3 +528,10 @@ h1 {
         opacity: 1;
     }
 }
+
+#title-screen button:focus-visible { outline: 2px solid #fff0cc; outline-offset: 5px; }
+@media (prefers-reduced-motion: reduce) {
+    #title-screen .pulse-dot { animation: none; }
+}
+
+#title-screen:not(.fade-out) ~ #hud { visibility: hidden; }

@@ -7,6 +7,7 @@ import {
   type ScoreEntry,
   type Vec3Data,
 } from '../shared/networkProtocol';
+import { generateRandomName } from '../shared/ratNames';
 import { createSafeSpawn, type WorldSpec } from '../shared/worldSpec';
 
 export function spawnForWorld(spec: WorldSpec, random = Math.random): Vec3Data {
@@ -21,7 +22,7 @@ export function createPlayer(
 ): PlayerData {
   return {
     id,
-    name: name.trim() || 'Anonymous Rat',
+    name: name.trim() || generateRandomName(),
     x: spawn.x,
     y: spawn.y,
     z: spawn.z,
@@ -125,8 +126,8 @@ export function resetRound(players: Iterable<PlayerData>, spawnFor: (id: string)
   return resetPlayers;
 }
 
-export function playingRound(): RoundState {
-  return { phase: 'playing' };
+export function playingRound(startedAt = Date.now()): RoundState {
+  return { phase: 'playing', startedAt };
 }
 
 export function wonRound(
@@ -134,6 +135,14 @@ export function wonRound(
   winnerName: string,
   kills: number,
   resetAt: number,
+  startedAt?: number,
 ): RoundState {
-  return { phase: 'won', winnerId, winnerName, kills, resetAt };
+  return {
+    phase: 'won',
+    winnerId,
+    winnerName,
+    kills,
+    resetAt,
+    ...(startedAt !== undefined ? { startedAt } : {}),
+  };
 }

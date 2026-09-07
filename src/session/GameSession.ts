@@ -5,6 +5,7 @@ import { RatController } from '../player/RatController';
 import { CheeseGun } from '../weapons/CheeseGun';
 import { initEntitySounds, disposeEntitySounds } from '../entities/RatEntity';
 import { generateRandomAppearance } from '../shared/ratAppearance';
+import { generateRandomName } from '../shared/ratNames';
 import type { ClientMessage, ServerMessage } from '../shared/networkProtocol';
 import { NetworkManager } from '../network/NetworkManager';
 import { GameHud } from '../ui/GameHud';
@@ -36,6 +37,8 @@ export class GameSession {
     private serverOffset = 0;
     private lastMovementAt = 0;
     private lastMovement = '';
+    private assignedName = '';
+    private nameRollTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly simulation = new SimulationClock();
     private readonly direction = new THREE.Vector3();
 
@@ -62,19 +65,108 @@ export class GameSession {
             if (victimId && this.transport.state === 'playing') this.transport.send({ type: 'hit', victimId, damage });
         };
         this.bindInput();
+        this.rollName();
+        this.focusTitleControls();
         this.frame = requestAnimationFrame(time => this.animate(time));
+    }
+
+    private enterCity(): void {
+        if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
+        this.transport.connect(this.assignedName || generateRandomName(), generateRandomAppearance());
+        void this.music.unlock();
+        this.requestPointerLock();
+    }
+
+    private prefersReducedMotion(): boolean {
+        return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    private pickName(exclude = ''): string {
+        let next = generateRandomName();
+        for (let tries = 0; tries < 8 && next === exclude; tries += 1) next = generateRandomName();
+        return next;
+    }
+
+    private restartAnimation(el: HTMLElement | null, className: string): void {
+        if (!el) return;
+        el.classList.remove(className);
+        void el.offsetWidth;
+        el.classList.add(className);
+    }
+
+    private showName(name: string, shuffle = false): void {
+        const namePlate = document.getElementById('player-name');
+        if (!namePlate) return;
+        namePlate.textContent = name;
+        if (shuffle) this.restartAnimation(namePlate, 'shuffling');
+    }
+
+    private clearNameRoll(): void {
+        if (this.nameRollTimer) {
+            clearTimeout(this.nameRollTimer);
+            this.nameRollTimer = null;
+        }
+        document.getElementById('player-name')?.classList.remove('shuffling');
+        document.getElementById('reroll-name-btn')?.classList.remove('rolling');
+    }
+
+    private rollName(animate = false): void {
+        this.clearNameRoll();
+        this.assignedName = this.pickName(this.assignedName);
+        if (!animate || this.prefersReducedMotion()) {
+            this.showName(this.assignedName);
+            return;
+        }
+
+        const dice = document.getElementById('reroll-name-btn');
+        this.restartAnimation(dice, 'rolling');
+        const flashes = 4;
+        const tick = (step: number) => {
+            if (this.disposed) return;
+            if (step >= flashes) {
+                this.showName(this.assignedName, true);
+                this.nameRollTimer = setTimeout(() => {
+                    this.nameRollTimer = null;
+                    document.getElementById('player-name')?.classList.remove('shuffling');
+                    dice?.classList.remove('rolling');
+                }, 180);
+                return;
+            }
+            this.showName(this.pickName(this.assignedName), true);
+            this.nameRollTimer = setTimeout(() => tick(step + 1), 55);
+        };
+        tick(0);
+    }
+
+    private focusTitleControls(): void {
+        if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
+        const enter = document.getElementById('enter-city-btn') as HTMLButtonElement | null;
+        enter?.focus({ preventScroll: true });
     }
 
     private bindInput(): void {
         const options = { signal: this.events.signal };
         const enter = document.getElementById('enter-city-btn') as HTMLButtonElement;
+        const reroll = document.getElementById('reroll-name-btn') as HTMLButtonElement;
+        this.stage.renderer.domElement.tabIndex = -1;
         enter.disabled = false;
         enter.addEventListener('click', event => {
             event.stopPropagation();
-            const name = (document.getElementById('player-name') as HTMLInputElement).value.trim() || 'Anonymous Rat';
-            this.transport.connect(name, generateRandomAppearance());
-            void this.music.unlock();
-            this.requestPointerLock();
+            this.enterCity();
+        }, options);
+        reroll.addEventListener('click', event => {
+            event.stopPropagation();
+            this.rollName(true);
+        }, options);
+        document.addEventListener('keydown', event => {
+            if (event.key !== 'Enter' && event.code !== 'Enter') return;
+            if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
+            event.preventDefault();
+            this.enterCity();
+        }, options);
+        window.addEventListener('focus', () => this.focusTitleControls(), options);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) this.focusTitleControls();
         }, options);
         document.addEventListener('click', () => {
             if (this.transport.state === 'playing') this.requestPointerLock();
@@ -237,6 +329,7 @@ export class GameSession {
                 flashlight.target.position.copy(position).addScaledVector(this.direction, 15);
             }
         }
+        this.city.update(dt, camera);
         renderer.render(scene, camera);
         this.stats?.record(frameMs, now, this.worldSpec);
         this.frame = requestAnimationFrame(time => this.animate(time));
@@ -245,6 +338,7 @@ export class GameSession {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.clearNameRoll();
         cancelAnimationFrame(this.frame);
         this.events.abort();
         this.input.dispose();

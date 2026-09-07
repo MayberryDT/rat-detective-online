@@ -7,6 +7,7 @@ import {
   WIN_DISPLAY_MS,
   type ClientMessage,
   type PlayerData,
+  type PublicRoomStatus,
   type RoundState,
   type ServerMessage,
 } from '../shared/networkProtocol';
@@ -96,6 +97,20 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /** Public city board. Attached joined players only — names and scores, no positions. */
+  async status(): Promise<Omit<PublicRoomStatus, 'room'>> {
+    const attached = this.attachedPlayerIds();
+    const live = Array.from(this.players.values()).filter((player) => attached.has(player.id));
+    return {
+      players: live.length,
+      phase: this.round.phase,
+      startedAt: this.round.startedAt ?? this.now(),
+      ...(this.round.resetAt !== undefined ? { resetAt: this.round.resetAt } : {}),
+      ...(this.round.winnerName ? { winnerName: this.round.winnerName } : {}),
+      scores: buildScoreboard(live).map(({ name, kills, deaths }) => ({ name, kills, deaths })),
+    };
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
@@ -232,14 +247,15 @@ export class GameRoom extends DurableObject<Env> {
       try {
         this.round = JSON.parse(roundRow) as RoundState;
       } catch {
-        this.round = playingRound();
+        this.round = playingRound(this.now());
         this.persistRound();
       }
     } else {
       const legacy = this.readRoomState('gameInProgress');
-      this.round = legacy === 'false' ? { phase: 'won' } : playingRound();
+      this.round = legacy === 'false' ? { phase: 'won' } : playingRound(this.now());
       this.persistRound();
     }
+    this.ensureRoundClock();
 
     const now = this.now();
     const rows = this.ctx.storage.sql
@@ -417,7 +433,7 @@ export class GameRoom extends DurableObject<Env> {
     this.broadcastScoreboard();
 
     if (result.roundWon) {
-      this.round = wonRound(shooter.id, shooter.name, shooter.kills, respawnAt);
+      this.round = wonRound(shooter.id, shooter.name, shooter.kills, respawnAt, this.round.startedAt);
       this.persistRound();
       this.reconcileDeadlinesOnWin(respawnAt);
       this.broadcast({
@@ -466,7 +482,7 @@ export class GameRoom extends DurableObject<Env> {
       }
 
       if (event.type === 'reset') {
-        this.round = playingRound();
+        this.round = playingRound(this.now());
         this.persistRound();
 
         const resetPlayers = resetRound(this.players.values(), () => spawnForWorld(this.world));
@@ -559,6 +575,13 @@ export class GameRoom extends DurableObject<Env> {
 
   private persistRound(): void {
     this.writeRoomState(ROUND_KEY, JSON.stringify(this.round));
+  }
+
+  private ensureRoundClock(): void {
+    if (this.round.phase === 'playing' && !this.round.startedAt) {
+      this.round = { ...this.round, startedAt: this.now() };
+      this.persistRound();
+    }
   }
 
   private readRoomState(key: string): string | undefined {

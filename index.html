@@ -21,24 +21,33 @@
             <img src="/logo.png" alt="Rat Detective Logo" id="main-logo">
             <div class="title-group">
                 <h1>Rat Detective</h1>
-                <div class="subtitle">City Under Siege</div>
             </div>
         </div>
 
         <div class="name-input-group">
-            <label class="name-label" for="player-name">Choose Your Name</label>
-            <input type="text" id="player-name" placeholder="Anonymous Rat" maxlength="20" autocomplete="off"
-                spellcheck="false">
+            <div id="player-name"></div>
+            <button type="button" id="reroll-name-btn" aria-label="Roll another name">
+                <svg viewBox="0 0 28 24" aria-hidden="true">
+                    <rect x="10.5" y="1.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/>
+                    <circle cx="15.5" cy="6.5" r="1.15" fill="currentColor"/>
+                    <circle cx="21.5" cy="6.5" r="1.15" fill="currentColor"/>
+                    <circle cx="18.5" cy="9.5" r="1.15" fill="currentColor"/>
+                    <circle cx="15.5" cy="12.5" r="1.15" fill="currentColor"/>
+                    <circle cx="21.5" cy="12.5" r="1.15" fill="currentColor"/>
+                    <rect x="1.5" y="6.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/>
+                    <circle cx="5.5" cy="11.5" r="1.15" fill="currentColor"/>
+                    <circle cx="13.5" cy="11.5" r="1.15" fill="currentColor"/>
+                    <circle cx="9.5" cy="14.5" r="1.15" fill="currentColor"/>
+                    <circle cx="5.5" cy="17.5" r="1.15" fill="currentColor"/>
+                    <circle cx="13.5" cy="17.5" r="1.15" fill="currentColor"/>
+                </svg>
+            </button>
         </div>
 
-        <button id="enter-city-btn" disabled>
+        <button id="enter-city-btn" disabled autofocus>
             <div class="pulse-dot"></div>
             Enter City
         </button>
-
-        <div class="online-count">
-            <span>●</span> Multiplayer Online
-        </div>
     </div>
 
     <!-- Scoreboard -->

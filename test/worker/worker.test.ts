@@ -21,4 +21,21 @@ describe('worker', () => {
       error: 'Expected WebSocket upgrade',
     });
   });
+
+  it('returns the public-room board', async () => {
+    const empty = await SELF.fetch('https://rat-detective.test/status');
+    expect(empty.status).toBe(200);
+    await expect(empty.json()).resolves.toEqual({
+      room: 'public',
+      players: 0,
+      phase: 'playing',
+      startedAt: expect.any(Number),
+      scores: [],
+    });
+    expect(empty.headers.get('access-control-allow-origin')).toBe('*');
+    expect(empty.headers.get('cache-control')).toBe('no-store');
+
+    const options = await SELF.fetch('https://rat-detective.test/status', { method: 'OPTIONS' });
+    expect(options.status).toBe(204);
+  });
 });

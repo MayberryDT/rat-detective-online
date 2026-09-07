@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import type { ShotDescriptor } from '../shared/networkProtocol';
+import { CheeseImpactEffects } from './CheeseImpactEffects';
+import { createCheeseBallGeometry } from './CheeseProjectileModel';
 import { RatEntity, playHitSound } from '../entities/RatEntity';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
-const BALL_RADIUS = 0.15;
 const BALL_SPEED = 175;       // Fast and chaotic!
 const BALL_RESTITUTION = 0.9; // Bouncy
 const BALL_GRAVITY = -25;     // Matches world gravity
 const BALL_LIFETIME = 5;
-const BALL_COLOR = 0xffaa00;  // Neon Orange
+const BALL_COLOR = 0xffc34a;
 
 // Collision Groups
 const GROUP_DEFAULT = 1;
@@ -20,6 +21,7 @@ interface CheeseBall {
     velocity: THREE.Vector3;
     position: THREE.Vector3;
     age: number;
+    squash: number;
     owner: RatEntity;
 }
 
@@ -31,14 +33,15 @@ export class CheeseGun {
 
     private balls: CheeseBall[] = [];
     // Ball meshes own their transforms; the gun owns the shared GPU resources.
-    private readonly ballGeometry = new THREE.SphereGeometry(BALL_RADIUS, 8, 8);
+    private readonly ballGeometry = createCheeseBallGeometry();
     private readonly ballMaterial = new THREE.MeshStandardMaterial({
         color: BALL_COLOR,
-        roughness: 0,
+        roughness: 0.65,
         emissive: BALL_COLOR,
-        emissiveIntensity: 3,
+        emissiveIntensity: 0.7,
     });
     private disposed = false;
+    private readonly impacts: CheeseImpactEffects;
     private readonly aimRay = new THREE.Raycaster();
     private readonly aimCenter = new THREE.Vector2(0, 0);
     private readonly gravityStep = new THREE.Vector3();
@@ -65,6 +68,7 @@ export class CheeseGun {
         this.scene = scene;
         this.world = world;
         this.listener = listener;
+        this.impacts = new CheeseImpactEffects(scene);
 
         // Audio
         this.gunshotSound = new THREE.Audio(this.listener);
@@ -128,14 +132,11 @@ export class CheeseGun {
         }
 
         // ── Spawn Origin ──
-        const origin = owner.mesh.position.clone();
-        origin.y += 1.45; // Gun / neck height
+        owner.playShootAnimation(finalTarget);
+        const origin = owner.getMuzzlePosition();
 
         // ── Direction (no gravity compensation — consistent power at all distances) ──
         const finalDir = new THREE.Vector3().subVectors(finalTarget, origin).normalize();
-
-        // Nudge origin forward to avoid self-hit
-        origin.addScaledVector(finalDir, 0.6);
 
         this.createBall(origin, finalDir, owner);
         return { shotId: crypto.randomUUID(), origin: { x: origin.x, y: origin.y, z: origin.z },
@@ -146,20 +147,29 @@ export class CheeseGun {
     replayShot(owner: RatEntity, shot: ShotDescriptor): void {
         if (this.disposed) return;
         this.playFireSound();
+        owner.playShootAnimation(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z)
+            .addScaledVector(new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), 30));
         this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
             new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
     }
 
     clearProjectiles(): void {
         while (this.balls.length) this.removeBall(this.balls.length - 1);
+        this.impacts.clear();
     }
 
     update(dt: number): void {
+        if (this.disposed || !Number.isFinite(dt) || dt < 0) return;
+        this.impacts.update(dt);
         const gravityStep = this.gravityStep.set(0, BALL_GRAVITY * dt, 0);
 
         for (let i = this.balls.length - 1; i >= 0; i--) {
             const ball = this.balls[i];
             ball.age += dt;
+            ball.squash *= Math.exp(-20 * dt);
+            ball.mesh.rotation.x += dt * 15;
+            ball.mesh.rotation.y += dt * 9;
+            ball.mesh.scale.setScalar(1 - ball.squash * 0.1);
 
             if (ball.age > BALL_LIFETIME) {
                 this.removeBall(i);
@@ -228,12 +238,17 @@ export class CheeseGun {
                                 this.onHitEntity(victim, dmg);
                             }
 
+                            this.impacts.emit(hitPoint, hitNormal, false);
+
                             // Destroy ball on entity hit
                             this.removeBall(i);
                             continue;
                         }
                     }
 
+                    this.impacts.emit(hitPoint, hitNormal, true);
+                    ball.squash = 1;
+                    ball.mesh.scale.setScalar(0.9);
                     // HIT WALL / GROUND → BOUNCE
                     const dot = ball.velocity.dot(hitNormal);
                     ball.velocity.addScaledVector(hitNormal, -2 * dot);
@@ -253,6 +268,7 @@ export class CheeseGun {
         if (this.disposed) return;
         this.disposed = true;
         this.clearProjectiles();
+        this.impacts.dispose();
         this.ballGeometry.dispose();
         this.ballMaterial.dispose();
         if (this.gunshotSound.isPlaying) this.gunshotSound.stop();
@@ -283,6 +299,7 @@ export class CheeseGun {
             velocity,
             position: origin.clone(),
             age: 0,
+            squash: 0,
             owner
         });
     }

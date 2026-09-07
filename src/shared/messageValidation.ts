@@ -114,7 +114,8 @@ function parseRound(value: unknown): RoundState | null {
   if (winnerId === null || winnerName === null) return null;
   const kills = value.kills === undefined ? undefined : boundedInteger(value.kills, 0, 10_000);
   const resetAt = value.resetAt === undefined ? undefined : integer(value.resetAt);
-  if (kills === null || resetAt === null) return null;
+  const startedAt = value.startedAt === undefined ? undefined : integer(value.startedAt);
+  if (kills === null || resetAt === null || startedAt === null) return null;
   if (value.phase === 'won' && (resetAt === undefined || !winnerName)) return null;
   return {
     phase: value.phase,
@@ -122,6 +123,7 @@ function parseRound(value: unknown): RoundState | null {
     ...(winnerName !== undefined ? { winnerName } : {}),
     ...(kills !== undefined ? { kills } : {}),
     ...(resetAt !== undefined ? { resetAt } : {}),
+    ...(startedAt !== undefined ? { startedAt } : {}),
   };
 }
 

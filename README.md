@@ -10,6 +10,12 @@ state over a same-origin WebSocket.
 Portfolio prototype. The current city arena, movement, shooting, scoring,
 respawn, and round reset flows are playable locally through Cloudflare Workers.
 
+## Omarchy
+
+The game stays a web app. Omarchy users also get a bar launcher that installs
+that same URL as a Super+Space Chromium app. See `docs/omarchy.md` and
+`omarchy/plugin/`.
+
 ## Runtime
 
 The production app runs on Cloudflare Workers:

@@ -77,6 +77,7 @@ describe('city generator', () => {
           owned.add(material);
           const standard = material as THREE.MeshStandardMaterial;
           if (standard.emissiveMap) owned.add(standard.emissiveMap);
+          if (standard.map) owned.add(standard.map);
         }
       }
     });
@@ -98,6 +99,18 @@ describe('city generator', () => {
     city.dispose();
     leftover.geometry.dispose();
     leftover.material.dispose();
+  });
+
+  it('animates only decorations without adding bodies or changing collision layout', () => {
+    const {city, world, scene} = makeCity(20260905);
+    const poses = world.bodies.map(body => body.position.toArray());
+    const count = scene.children.length;
+    const camera = new THREE.PerspectiveCamera();
+    for (let frame = 0; frame < 350; frame++) city.update(0.1, camera);
+    expect(world.bodies.map(body => body.position.toArray())).toEqual(poses);
+    expect(scene.children).toHaveLength(count);
+    city.dispose(); city.update(1, camera);
+    expect(scene.children).toHaveLength(0);
   });
 
   it('accepts a custom numeric city for tests and benchmarks', () => {

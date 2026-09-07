@@ -13,8 +13,8 @@ export function createStage(appRenderer: THREE.WebGLRenderer) {
 
     // ─── SCENE ────────────────────────────────────────────────────────
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x150a20);
-    scene.fog = new THREE.FogExp2(0x150a20, 0.005);
+    scene.background = new THREE.Color(0x100b19);
+    scene.fog = new THREE.FogExp2(0x100b19, 0.008);
 
     // ─── CAMERA ───────────────────────────────────────────────────────
     const camera = new THREE.PerspectiveCamera(
@@ -24,17 +24,20 @@ export function createStage(appRenderer: THREE.WebGLRenderer) {
       600
     );
     camera.layers.enable(1);
+    // Frame the real city behind the title screen before the player takes over.
+    camera.position.set(23, 7, 24);
+    camera.lookAt(0, 9, 0);
 
     const listener = new THREE.AudioListener();
     camera.add(listener);
     // ─── LIGHTING ─────────────────────────────────────────────────────
-    const ambient = new THREE.AmbientLight(0x664488, 0.7);
+    const ambient = new THREE.AmbientLight(0x664488, 0.38);
     scene.add(ambient);
 
-    const hemiLight = new THREE.HemisphereLight(0x8866aa, 0x222222, 1.2);
+    const hemiLight = new THREE.HemisphereLight(0x776a9b, 0x17131c, 0.65);
     scene.add(hemiLight);
 
-    const moonLight = new THREE.DirectionalLight(0xaaaaff, 1.2);
+    const moonLight = new THREE.DirectionalLight(0x929cdb, 0.85);
     moonLight.position.set(50, 100, 50);
     moonLight.target.position.set(0, 0, 0);
     moonLight.castShadow = true;
@@ -74,7 +77,7 @@ export function createStage(appRenderer: THREE.WebGLRenderer) {
     // ─── GROUND MESH ──────────────────────────────────────────────────
     const groundGeo = new THREE.PlaneGeometry(800, 800);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x555555,
+      color: 0x25232d,
       roughness: 0.9,
       metalness: 0.05,
     });

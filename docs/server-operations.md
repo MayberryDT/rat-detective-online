@@ -57,7 +57,7 @@ Existing rooms may have `players(id, data, updated_at)` without `last_active_at`
 
 ## Metrics
 
-Join and leave log structured `room metrics`: `connections`, `players`, `pendingEvents`, `messagesIn`, `broadcasts`, `lastSnapshotAt`, `reconnects`, `roundPhase`. The legacy `reconnects` field counts attached players restored during hydration; it is not a count of new browser socket reconnection attempts (those receive fresh identities). `/health` only proves Worker routing, not a live room.
+Join and leave log structured `room metrics`: `connections`, `players`, `pendingEvents`, `messagesIn`, `broadcasts`, `lastSnapshotAt`, `reconnects`, `roundPhase`. The legacy `reconnects` field counts attached players restored during hydration; it is not a count of new browser socket reconnection attempts (those receive fresh identities). `/health` only proves Worker routing. `GET /status` returns the public-room board (`room`, `players`, `phase`, `startedAt`, optional `resetAt` / `winnerName`, and `scores` with names and K/D). Attached joined players only; no positions.
 
 ## Physics benchmark counts
 

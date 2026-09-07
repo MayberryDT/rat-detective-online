@@ -196,13 +196,15 @@ try {
       returnByValue: true,
       expression: `(() => {
         const button = document.querySelector('#enter-city-btn');
-        const input = document.querySelector('#player-name');
+        const name = document.querySelector('#player-name');
+        const reroll = document.querySelector('#reroll-name-btn');
         const webglError = document.querySelector('.webgl-error-panel');
         const rect = button?.getBoundingClientRect();
         return {
           viewport: { width: innerWidth, height: innerHeight },
           button: Boolean(button),
-          input: Boolean(input),
+          input: Boolean(name) && Boolean(reroll),
+          assignedName: name?.textContent?.trim() || '',
           webglError: Boolean(webglError),
           webglText: webglError?.textContent?.slice(0, 300) || '',
           disabled: Boolean(button?.disabled),
@@ -218,7 +220,7 @@ try {
     });
     beforeState = before.result.result.value;
     if (expectWebglError && beforeState.webglError) break;
-    if (beforeState.button && beforeState.input && !beforeState.disabled) break;
+    if (beforeState.button && beforeState.input && beforeState.assignedName && !beforeState.disabled) break;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
@@ -244,9 +246,7 @@ try {
   if (beforeState.disabled) fail('Enter button never became enabled', { beforeState, events });
   if (!beforeState.centerVisible) fail('Enter button center is outside the viewport', beforeState);
 
-  await send('Runtime.evaluate', {
-    expression: `document.querySelector('#player-name').value = 'Browser Smoke';`,
-  });
+  if (!beforeState.assignedName) fail('Assigned name never appeared', { beforeState, events });
 
   const x = Math.floor(beforeState.rect.x + beforeState.rect.width / 2);
   const y = Math.floor(beforeState.rect.y + beforeState.rect.height / 2);

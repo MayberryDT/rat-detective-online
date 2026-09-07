@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "co.animasai.rat-detective",
+  "name": "Rat Detective",
+  "version": "0.3.0",
+  "author": "Tyler Mayberry",
+  "license": "MIT",
+  "homepage": "https://rat-detective.animasai.co",
+  "description": "See who’s in the city, then play from the bar.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Rat Detective",
+    "description": "See who’s in the city, then play from the bar.",
+    "category": "Fun",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

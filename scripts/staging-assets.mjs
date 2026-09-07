@@ -280,7 +280,7 @@ function workerMetadata({
       jwt: completionJwt,
       config: {
         not_found_handling: "single-page-application",
-        run_worker_first: ["/ws", "/health"],
+        run_worker_first: ["/ws", "/health", "/status"],
       },
     },
     observability: {

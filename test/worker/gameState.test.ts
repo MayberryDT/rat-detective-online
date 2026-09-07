@@ -5,9 +5,11 @@ import {
   applyHit,
   buildScoreboard,
   createPlayer,
+  playingRound,
   resetRound,
   spawnForWorld,
 } from '../../src/worker/gameState';
+import { RAT_SURNAMES, RAT_TITLES } from '../../src/shared/ratNames';
 
 const appearance: RatAppearance = {
   hatType: 'fedora',
@@ -68,6 +70,18 @@ describe('game state', () => {
     shooter.hp = 0;
     expect(applyHit(players, 'shooter', 'victim', 1).applied).toBe(false);
     expect(victim.hp).toBe(3);
+  });
+
+  it('fills a blank name from the detective bank', () => {
+    const player = createPlayer('id', '  ', appearance, { x: 0, y: 2, z: 0 });
+    const [title, surname] = player.name.split(' ');
+    expect(RAT_TITLES).toContain(title);
+    expect(RAT_SURNAMES).toContain(surname);
+    expect(player.name.length).toBeLessThanOrEqual(20);
+  });
+
+  it('stamps a start time on a new playing round', () => {
+    expect(playingRound(1000)).toEqual({ phase: 'playing', startedAt: 1000 });
   });
 
   it('resets round stats and respawns players', () => {

@@ -1,6 +1,6 @@
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
+import { MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import { WORLD_LAYOUT_VERSION } from '../../src/shared/worldSpec';
 import { CHECKPOINT_MS, GameRoom, STALE_PLAYER_MS } from '../../src/worker/GameRoom';
 
@@ -440,5 +440,46 @@ describe('GameRoom websockets', () => {
       watcher.ws.close(1000, 'done');
     }
     client.ws.close(1000, 'done'); late.ws.close(1000, 'done');
+  });
+
+  it('lists attached public-room names and scores on GET /status', async () => {
+    const first = await openClient(DEFAULT_ROOM_NAME);
+    first.ws.send(joinPayload('One'));
+    await first.inbox.waitFor('welcome');
+
+    const one = await SELF.fetch('https://rat-detective.test/status');
+    const oneBoard = (await one.json()) as {
+      room: string;
+      players: number;
+      phase: string;
+      startedAt: number;
+      scores: Array<{ name: string; kills: number; deaths: number }>;
+    };
+    expect(oneBoard).toEqual({
+      room: 'public',
+      players: 1,
+      phase: 'playing',
+      startedAt: expect.any(Number),
+      scores: [{ name: 'One', kills: 0, deaths: 0 }],
+    });
+
+    const second = await openClient(DEFAULT_ROOM_NAME);
+    second.ws.send(joinPayload('Two'));
+    await second.inbox.waitFor('welcome');
+
+    const two = await SELF.fetch('https://rat-detective.test/status');
+    await expect(two.json()).resolves.toEqual({
+      room: 'public',
+      players: 2,
+      phase: 'playing',
+      startedAt: oneBoard.startedAt,
+      scores: [
+        { name: 'One', kills: 0, deaths: 0 },
+        { name: 'Two', kills: 0, deaths: 0 },
+      ],
+    });
+
+    first.ws.close(1000, 'done');
+    second.ws.close(1000, 'done');
   });
 });

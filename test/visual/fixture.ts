@@ -127,7 +127,7 @@ function setState(state: FixtureState) {
         rats.forEach(rat => rat.update(0.05));
     } else if (state === 'dead' || state === 'respawn') {
         rats.forEach(rat => rat.takeDamage(3, new THREE.Vector3(1, 0, 0)));
-        stepPhysics(180);
+        stepPhysics(600);
         if (state === 'dead') {
             const center = rats.reduce((sum, rat) => sum.add(rat.mesh.position), new THREE.Vector3()).multiplyScalar(1 / rats.length);
             stage.camera.position.set(center.x, 4.5, center.z + 8);

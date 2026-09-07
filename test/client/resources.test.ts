@@ -22,7 +22,7 @@ describe('character resource ownership', () => {
     const disposal = [...owned].map(resource => vi.spyOn(resource, 'dispose'));
 
     const second = new RatEntity(scene, world, new THREE.Vector3(4, 0, 0), 'Staying', {});
-    const secondGeometry = (second.mesh.children[0] as THREE.Mesh).geometry;
+    const secondGeometry = (second.mesh.getObjectByProperty('isMesh', true) as THREE.Mesh).geometry;
     const secondDispose = vi.spyOn(secondGeometry, 'dispose');
     const spriteGeometryDispose = vi.spyOn(second.billboard.sprite.geometry, 'dispose');
 

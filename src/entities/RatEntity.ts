@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions, HatType } from '../utils/RatModel';
+import { RatAnimator } from '../utils/RatAnimator';
 import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
 import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppearance';
 import { RatBillboard } from '../ui/RatBillboard';
@@ -13,19 +14,16 @@ const HEAD_RADIUS = 0.28;
 const HEAD_OFFSET_Y = 1.9;
 
 // ─── GAMEPLAY CONSTANTS ───
-const FLASH_DURATION = 0.15;
-const DEATH_FORCE = 35;
+const FLASH_DURATION = 0.24;
+const DEATH_FORCE = 46;
 
-// ─── RAGDOLL DEATH PHASES ───
-const DEATH_PHASE_LAUNCH = 0.8;   // Violent launch duration (longer = more airtime)
-const DEATH_PHASE_SPIN = 1.8;   // Airborne spin ends
-const DEATH_PHASE_SETTLE = 2.5;   // Fully settled on ground
+const DEATH_GLOW_FADE = 2.5;
 
 // ─── OUTLINE GLOW CONFIG ───
-const GLOW_THICKNESS = 0.025;    // Surface offset, without moving body-part centers
-const GLOW_OPACITY = 0.25;        // Outline transparency
+const GLOW_THICKNESS = 0.012;    // Surface offset, without moving body-part centers
+const GLOW_OPACITY = 0.10;        // Outline transparency
 const GLOW_COLOR = 0xffffff;      // Base glow tint (will blend with coat color)
-const EMISSIVE_INTENSITY = 0.35;  // Subtle self-illumination on all rat materials
+const EMISSIVE_INTENSITY = 0.12;  // Subtle self-illumination on all rat materials
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
 // 3 hats × 5 hat colors × 5 furs × 5 coats = 375 unique combos
@@ -49,6 +47,7 @@ export class RatEntity {
     // Visuals
     public mesh: THREE.Group;
     public billboard: RatBillboard;
+    private readonly animator: RatAnimator;
     private glowMesh: THREE.Group | null = null;
     private disposed = false;
     private allMaterials: THREE.MeshStandardMaterial[] = [];
@@ -68,10 +67,27 @@ export class RatEntity {
 
     // Ragdoll / death state
     private deathTimer: number = 0;
-    private deathTargetQuat: THREE.Quaternion | null = null;
-    private deathPosition: THREE.Vector3 | null = null;
-    private impactPlayed: boolean = false;
-    private deathPhase: 'launch' | 'spin' | 'settle' | 'done' = 'launch';
+    private deathPhase: 'launch' | 'settle' | 'done' = 'launch';
+    private deathContactTime = -10;
+    private deathImpact = 0;
+    private deathContacts = 0;
+    private restTime = 0;
+    private ragdollCenter = 0;
+    private readonly centerOffset = new THREE.Vector3();
+    private readonly hitColor = new THREE.Color(0xffa16b);
+    private readonly hitHighlight = new THREE.Color(0xffe8b0);
+    private readonly onRagdollContact = (event: { contact: CANNON.ContactEquation }) => {
+        if (!this.dead || this.deathPhase === 'done' || this.deathTimer < 0.16) return;
+        const contact = event.contact;
+        const speed = Math.abs(contact.getImpactVelocityAlongNormal());
+        // Let the solver produce real rebounds; later contacts lose more energy.
+        contact.restitution = this.deathContacts === 0 ? 0.48 : 0.22;
+        if (speed < 1.5 || this.deathTimer - this.deathContactTime < 0.12) return;
+        this.deathContactTime = this.deathTimer;
+        this.deathContacts++;
+        this.deathImpact = Math.min(speed / 12, 1);
+        playEntitySound('ratHit', Math.min(0.25 + speed * 0.025, 0.65));
+    };
 
     constructor(
         scene: THREE.Scene,
@@ -114,6 +130,7 @@ export class RatEntity {
         // ── OUTLINE GLOW MESH ──
         // Create a slightly larger, additive, backface-only clone for the glow halo
         this.glowMesh = this.createGlowOutline(opts);
+        this.animator = new RatAnimator(this.mesh, this.glowMesh);
         this.syncGlowTransform();
 
         // 3. UI
@@ -142,6 +159,7 @@ export class RatEntity {
         this.body.addShape(this.headShape, new CANNON.Vec3(0, HEAD_OFFSET_Y, 0));
 
         (this.body as any).userData = { entity: this };
+        this.body.addEventListener('collide', this.onRagdollContact);
         this.world.addBody(this.body);
     }
 
@@ -206,6 +224,7 @@ export class RatEntity {
                 });
                 c.castShadow = false;
                 c.receiveShadow = false;
+                if (c.userData.noOutline) c.visible = false;
             }
         });
         replacedMaterials.forEach(material => material.dispose());
@@ -215,10 +234,21 @@ export class RatEntity {
         return glowGroup;
     }
 
+    public playShootAnimation(target?: THREE.Vector3): void {
+        if (!this.dead && !this.disposed) {
+            this.syncGlowTransform();
+            this.animator.shoot(target);
+        }
+    }
+
+    public getMuzzlePosition(): THREE.Vector3 {
+        return this.mesh.getObjectByName('rat-muzzle')!.getWorldPosition(new THREE.Vector3());
+    }
+
     public update(dt: number) {
         if (this.dead) {
             this.deathTimer += dt;
-            this.updateDeathRagdoll();
+            this.updateDeathRagdoll(dt);
             return;
         }
 
@@ -226,13 +256,14 @@ export class RatEntity {
         const p = this.body.position;
         this.mesh.position.set(p.x, p.y, p.z);
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
-
         this.syncGlowTransform();
+        this.animator.update(dt);
 
         // Flash Logic
         if (this.flashTimer > 0) {
             this.flashTimer -= dt;
             if (this.flashTimer <= 0) this.resetColor();
+            else this.applyHitColor();
         }
     }
 
@@ -244,91 +275,37 @@ export class RatEntity {
         }
     }
 
-    /**
-     * 3-phase dramatic ragdoll death:
-     *   Phase 1 (LAUNCH):  0 – 0.6s — Violent launch backward + spin, low damping
-     *   Phase 2 (SPIN):    0.6 – 1.2s — Airborne tumble, damping ramps up
-     *   Phase 3 (SETTLE):  1.2 – 2.0s — Slam to ground, snap to laying-flat, "thunk"
-     */
-    private updateDeathRagdoll() {
+    /** Physics owns the entire fall, including rebounds and the resting orientation. */
+    private updateDeathRagdoll(dt = 0) {
         const t = this.deathTimer;
-
-        if (this.deathPhase === 'launch') {
-            // ── PHASE 1: LAUNCH (0 – 0.6s) ──
-            // Keep physics very active — low damping, body flies
-            const p = this.body.position;
-            this.mesh.position.set(p.x, p.y, p.z);
-            this.mesh.quaternion.copy(this.body.quaternion);
-
-            this.body.linearDamping = 0.05;
-            this.body.angularDamping = 0.05;
-
-            if (t >= DEATH_PHASE_LAUNCH) {
-                this.deathPhase = 'spin';
-            }
-        }
-        else if (this.deathPhase === 'spin') {
-            // ── PHASE 2: AIRBORNE SPIN (0.6 – 1.2s) ──
-            // Body tumbles in air, damping ramps up to slow rotation
-            const p = this.body.position;
-            this.mesh.position.set(p.x, p.y, p.z);
-            this.mesh.quaternion.copy(this.body.quaternion);
-
-            const spinProgress = (t - DEATH_PHASE_LAUNCH) / (DEATH_PHASE_SPIN - DEATH_PHASE_LAUNCH);
-            this.body.linearDamping = THREE.MathUtils.lerp(0.1, 0.7, spinProgress);
-            this.body.angularDamping = THREE.MathUtils.lerp(0.1, 0.8, spinProgress);
-
-            if (t >= DEATH_PHASE_SPIN) {
-                this.deathPhase = 'settle';
-                // Freeze physics — we take over positioning
+        if (this.deathPhase !== 'done') {
+            const supported = this.world.contacts.some(contact =>
+                (contact.bi === this.body || contact.bj === this.body) && Math.abs(contact.ni.y) > 0.35);
+            this.body.linearDamping = supported && t > 0.2 ? 0.75 : 0.08;
+            this.body.angularDamping = supported && t > 0.2 ? 0.82 : 0.06;
+            if (this.deathContacts > 0) this.deathPhase = 'settle';
+            const quiet = supported && this.body.velocity.length() < 0.35 && this.body.angularVelocity.length() < 0.45;
+            this.restTime = quiet ? this.restTime + dt : 0;
+            if (this.restTime > 0.4) {
+                this.deathPhase = 'done';
                 this.body.velocity.set(0, 0, 0);
                 this.body.angularVelocity.set(0, 0, 0);
-                this.body.linearDamping = 0.99;
-                this.body.angularDamping = 0.99;
                 this.body.sleep();
-                this.deathPosition = this.mesh.position.clone();
             }
         }
-        else if (this.deathPhase === 'settle') {
-            // ── PHASE 3: SETTLE TO GROUND (1.2 – 2.0s) ──
-            // Slam down, snap rotation to flat, play thunk
-            const settleProgress = Math.min((t - DEATH_PHASE_SPIN) / (DEATH_PHASE_SETTLE - DEATH_PHASE_SPIN), 1.0);
-
-            // Ease-out slam to ground
-            const eased = 1 - Math.pow(1 - settleProgress, 3);
-
-            // Y position: slam to flat on ground (0.3 = laying on side height)
-            if (this.deathPosition) {
-                this.mesh.position.y = THREE.MathUtils.lerp(this.deathPosition.y, 0.3, eased);
-            }
-
-            // Snap rotation to laying-down pose
-            if (this.deathTargetQuat) {
-                this.mesh.quaternion.slerp(this.deathTargetQuat, eased * 0.3 + 0.05);
-            }
-
-            // Play impact thunk at start of settle phase (once)
-            if (!this.impactPlayed) {
-                this.impactPlayed = true;
-                playEntitySound('ratHit', 0.7);
-            }
-
-            if (settleProgress >= 1.0) {
-                this.deathPhase = 'done';
-                // Force final flat pose
-                if (this.deathTargetQuat) {
-                    this.mesh.quaternion.copy(this.deathTargetQuat);
-                }
-                this.mesh.position.y = 0.3;
-            }
-        }
+        this.mesh.quaternion.copy(this.body.quaternion);
+        this.centerOffset.set(0, this.ragdollCenter, 0).applyQuaternion(this.mesh.quaternion);
+        this.mesh.position.copy(this.body.position).sub(this.centerOffset);
+        this.animator.poseDeath(t, dt, this.body.angularVelocity, this.deathImpact,
+            this.deathPhase === 'done');
+        this.deathImpact = 0;
 
         // Sync glow outline to ragdoll position (fade out during death)
         if (this.glowMesh) {
             this.glowMesh.position.copy(this.mesh.position);
             this.glowMesh.quaternion.copy(this.mesh.quaternion);
             // Fade out glow as they die
-            const fadeOut = Math.max(0, 1 - t / DEATH_PHASE_SETTLE);
+            const fadeOut = Math.max(0, 1 - t / DEATH_GLOW_FADE);
             this.glowMesh.traverse((c) => {
                 if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshBasicMaterial) {
                     c.material.opacity = GLOW_OPACITY * fadeOut;
@@ -351,10 +328,11 @@ export class RatEntity {
         this.billboard.setHealth(this.hp);
 
         // Flash Red
-        this.flashColor(0xff0000);
+        this.flashColor(0xffa16b);
 
         // ── SOUND EFFECTS ──
         if (this.hp > 0) {
+            this.animator.takeHit();
             if (this.isPlayer) {
                 playEntitySound('playerHit', 0.6);
             } else {
@@ -368,11 +346,24 @@ export class RatEntity {
     }
 
     public flashColor(color: number) {
+        this.hitColor.setHex(color);
         this.flashTimer = FLASH_DURATION;
-        this.allMaterials.forEach(m => {
-            m.color.setHex(color);
-            m.emissive.setHex(color);
-            m.emissiveIntensity = 2.0;
+        this.applyHitColor();
+    }
+
+    private applyHitColor(): void {
+        const age = FLASH_DURATION - this.flashTimer;
+        const fade = Math.pow(Math.max(0, this.flashTimer / FLASH_DURATION), 1.5);
+        const highlight = Math.exp(-age * 65) * 0.45;
+        this.allMaterials.forEach((material, i) => {
+            const original = this.originalColors[i];
+            // Keep dark facial details readable instead of turning the rat into neon.
+            const dark = Math.max(original.color.r, original.color.g, original.color.b) < 0.08;
+            const strength = dark ? 0.08 : 1;
+            material.color.copy(original.color).lerp(this.hitColor, fade * 0.38 * strength)
+                .lerp(this.hitHighlight, highlight * strength);
+            material.emissive.copy(original.emissive).lerp(this.hitColor, fade * 0.25 * strength);
+            material.emissiveIntensity = original.emissiveIntensity + fade * 0.22 * strength;
         });
     }
 
@@ -388,8 +379,10 @@ export class RatEntity {
     private die(impactVel: THREE.Vector3) {
         if (this.dead) return;
         this.dead = true;
+        this.animator.reset();
         this.deathTimer = 0;
-        this.impactPlayed = false;
+        this.deathContactTime = -10;
+        this.deathImpact = this.deathContacts = this.restTime = 0;
         this.deathPhase = 'launch';
         this.resetColor();
 
@@ -412,7 +405,20 @@ export class RatEntity {
         // Rotation axis perpendicular to impact = topple axis
         const upVec = new THREE.Vector3(0, 1, 0);
         const fallAxis = new THREE.Vector3().crossVectors(upVec, impDir).normalize();
-        this.deathTargetQuat = new THREE.Quaternion().setFromAxisAngle(fallAxis, Math.PI / 2);
+
+
+        // Move the physics origin into the torso for the tumble. The living
+        // controller uses a feet origin, which otherwise makes a dead rat a
+        // bottom-weighted toy that rights itself after every fall.
+        this.body.quaternion.set(this.mesh.quaternion.x, this.mesh.quaternion.y, this.mesh.quaternion.z, this.mesh.quaternion.w);
+        this.ragdollCenter = 0.95;
+        for (const offset of this.body.shapeOffsets) offset.y -= this.ragdollCenter;
+        this.centerOffset.set(0, this.ragdollCenter, 0).applyQuaternion(this.mesh.quaternion);
+        this.body.position.x += this.centerOffset.x;
+        this.body.position.y += this.centerOffset.y;
+        this.body.position.z += this.centerOffset.z;
+        this.body.updateBoundingRadius();
+        this.body.aabbNeedsUpdate = true;
 
         // ── RAGDOLL PHYSICS — DRAMATIC LAUNCH ──
         if (this.isRemote) {
@@ -428,28 +434,39 @@ export class RatEntity {
         // MASSIVE death blow: launch UP + backward for dramatic hang time
         const impulse = new CANNON.Vec3(
             impDir.x * DEATH_FORCE,
-            80,                           // HUGE upward pop — they need to FLY
+            60 + Math.random() * 8,         // Huge airborne arc; physics still owns the landing
             impDir.z * DEATH_FORCE
         );
         this.body.applyImpulse(impulse, new CANNON.Vec3(0, 1.0, 0));
 
         // Aggressive spin — multiple rotations in the air
         this.body.angularVelocity.set(
-            fallAxis.x * 12 + (Math.random() - 0.5) * 4,
-            (Math.random() - 0.5) * 6,     // Random yaw spin
-            fallAxis.z * 12 + (Math.random() - 0.5) * 4
+            fallAxis.x * 16 + (Math.random() - 0.5) * 5,
+            (Math.random() - 0.5) * 5,     // Off-axis twist keeps each tumble different
+            fallAxis.z * 16 + (Math.random() - 0.5) * 5
         );
 
         // Remove UI billboard
         this.scene.remove(this.billboard.sprite);
     }
 
+    private restoreBodyOrigin(): void {
+        if (!this.ragdollCenter) return;
+        for (const offset of this.body.shapeOffsets) offset.y += this.ragdollCenter;
+        this.ragdollCenter = 0;
+        this.body.updateBoundingRadius();
+        this.body.updateMassProperties();
+        this.body.aabbNeedsUpdate = true;
+    }
+
     private resetAlivePresentation(): void {
+        this.restoreBodyOrigin();
+        this.animator.reset();
         this.flashTimer = 0;
         this.deathTimer = 0;
-        this.deathTargetQuat = null;
-        this.deathPosition = null;
-        this.impactPlayed = false;
+
+        this.deathContactTime = -10;
+        this.deathImpact = this.deathContacts = this.restTime = 0;
         this.deathPhase = 'launch';
         this.resetColor();
         this.glowMesh?.traverse(child => {
@@ -463,6 +480,7 @@ export class RatEntity {
     public applySnapshot(data: PlayerData): void {
         if (this.disposed) return;
         if (data.hp > 0 && this.dead) this.respawn(data);
+        this.restoreBodyOrigin();
         this.hp = data.hp;
         this.dead = data.hp <= 0;
         this.body.position.set(data.x, data.y, data.z);
@@ -475,7 +493,7 @@ export class RatEntity {
         this.billboard.setHealth(data.hp);
         if (this.dead) {
             // A snapshot depicts an existing corpse, not a new death event.
-            this.deathTimer = DEATH_PHASE_SETTLE;
+            this.deathTimer = DEATH_GLOW_FADE;
             this.deathPhase = 'done';
             this.body.sleep();
             this.mesh.position.y = 0.3;
@@ -503,6 +521,7 @@ export class RatEntity {
     public respawn(data: Vec3Data & { hp: number }): void {
         this.dead = false;
         this.resetAlivePresentation();
+        this.animator.playRespawn();
         this.hp = data.hp;
         this.billboard.setHealth(data.hp);
         this.mesh.visible = true;
@@ -545,6 +564,7 @@ export class RatEntity {
             this.scene.remove(this.glowMesh);
             this.glowMesh = null;
         }
+        this.body.removeEventListener('collide', this.onRagdollContact);
         this.world.removeBody(this.body);
         this.allMaterials.length = 0;
         this.originalColors.length = 0;

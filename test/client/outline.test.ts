@@ -16,7 +16,7 @@ it('aligns the glow on spawn, in the same frame as turning, and on respawn', () 
   };
   expectAligned();
   // Check the actual shell, not just the root transform: every part stays
-  // anchored and expands by 2.5cm along its normals, including shared ears/eyes.
+  // anchored and expands by 1.2cm along its normals, including shared ears/eyes.
   const modelParts: THREE.Mesh[] = [];
   const glowParts: THREE.Mesh[] = [];
   entity.mesh.traverse(child => { if (child instanceof THREE.Mesh) modelParts.push(child); });
@@ -32,7 +32,7 @@ it('aligns the glow on spawn, in the same frame as turning, and on respawn', () 
     const expanded = outline.geometry.getAttribute('position');
     for (let i = 0; i < original.count; i++) {
       for (const axis of ['getX', 'getY', 'getZ'] as const) {
-        expect(expanded[axis](i)).toBeCloseTo(original[axis](i) + normals[axis](i) * 0.025, 6);
+        expect(expanded[axis](i)).toBeCloseTo(original[axis](i) + normals[axis](i) * 0.012, 6);
       }
     }
   });

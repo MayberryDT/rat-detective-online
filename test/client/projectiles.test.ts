@@ -49,24 +49,25 @@ describe('projectile behavior', () => {
     scene.add(wall);
     scene.updateMatrixWorld(true);
     gun.setPlayer(camera, owner);
-    gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
+    const shot = gun.shoot(owner, new THREE.Vector3(100, 1.45, 0))!;
     const ball = projectiles().find(mesh => mesh !== wall)!;
-    const expectedDirection = new THREE.Vector3(0, 4 - 1.45, -9.5).normalize();
-    const expectedOrigin = new THREE.Vector3(0, 1.45, 0).addScaledVector(expectedDirection, 0.6);
-    expect(ball.position.distanceTo(expectedOrigin)).toBeLessThan(1e-12);
+    expect(ball.position.distanceTo(owner.getMuzzlePosition())).toBeLessThan(1e-12);
+    const direction = new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z);
+    const convergence = ball.position.clone().addScaledVector(direction, (-9.5 - ball.position.z) / direction.z);
+    expect(convergence.distanceTo(new THREE.Vector3(0, 4, -9.5))).toBeLessThan(1e-10);
   });
 
-  it('preserves launch offset, speed, gravity, and five-second lifetime', () => {
+  it('launches from the pistol and preserves speed, gravity, and five-second lifetime', () => {
     const { gun, owner, projectiles } = setup();
-    gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
+    const shot = gun.shoot(owner, new THREE.Vector3(100, 1.45, 0))!;
     const ball = projectiles()[0];
-    expect(ball.position.toArray()).toEqual([0.6, 1.45, 0]);
+    expect(ball.position.distanceTo(owner.getMuzzlePosition())).toBeLessThan(1e-12);
+    const origin = ball.position.clone();
+    const direction = new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z);
     gun.update(0.02);
-    expect(ball.position.x).toBeCloseTo(4.1, 12);
-    expect(ball.position.y).toBeCloseTo(1.44, 12);
+    expect(ball.position.distanceTo(origin.clone().addScaledVector(direction, 3.5).add(new THREE.Vector3(0, -0.01, 0)))).toBeLessThan(1e-10);
     gun.update(0.02);
-    expect(ball.position.x).toBeCloseTo(7.6, 12);
-    expect(ball.position.y).toBeCloseTo(1.42, 12);
+    expect(ball.position.distanceTo(origin.clone().addScaledVector(direction, 7).add(new THREE.Vector3(0, -0.03, 0)))).toBeLessThan(1e-10);
     gun.update(4.96);
     expect(projectiles()).toHaveLength(1);
     gun.update(0.001);
@@ -74,19 +75,22 @@ describe('projectile behavior', () => {
   });
 
   it('keeps wall ricochets at 90% speed and clears ray results between shots', () => {
-    const { gun, owner, world, projectiles } = setup();
+    const { gun, owner, world, scene, projectiles } = setup();
     const wall = new CANNON.Body({ mass: 0 });
     wall.addShape(new CANNON.Box(new CANNON.Vec3(0.5, 10, 10)));
     wall.position.set(4, 0, 0);
     world.addBody(wall);
-    gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
+    gun.replayShot(owner, { shotId: 'bounce', origin: { x: 0.6, y: 1.45, z: 0 }, direction: { x: 1, y: 0, z: 0 } });
     const ball = projectiles()[0];
     gun.update(0.02);
     expect(ball.position.x).toBeCloseTo(3.45, 12);
+    const effects = scene.getObjectByName('cheese-impact-effects')!;
+    expect((effects.children[0] as THREE.InstancedMesh).count).toBe(7);
+    expect((effects.children[1] as THREE.InstancedMesh).count).toBe(1);
     gun.update(0.01);
     expect(ball.position.x).toBeCloseTo(1.875, 12);
     // An opposite-direction shot must not inherit the preceding ray's hit.
-    gun.shoot(owner, new THREE.Vector3(-100, 1.45, 0));
+    gun.replayShot(owner, { shotId: 'opposite', origin: { x: -0.6, y: 1.45, z: 0 }, direction: { x: -1, y: 0, z: 0 } });
     const other = projectiles()[1];
     gun.update(0.01);
     expect(other.position.x).toBeCloseTo(-2.35, 12);
@@ -113,12 +117,12 @@ describe('projectile behavior', () => {
     const victim = new RatEntity(scene, world, new THREE.Vector3(3, 0, 0), 'Target', {});
     const hit = vi.fn();
     gun.onHitEntity = hit;
-    gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
+    const shot = gun.shoot(owner, new THREE.Vector3(100, 1.45, 0))!;
     gun.update(0.02);
     expect(victim.hp).toBe(3);
     expect(hit).not.toHaveBeenCalled();
     expect(projectiles()).toHaveLength(1);
-    expect(projectiles()[0].position.x).toBeCloseTo(4.1);
+    expect(projectiles()[0].position.x).toBeCloseTo(shot.origin.x + shot.direction.x * 3.5);
   });
 
   it('reports remote victim hits without locally changing their health', () => {

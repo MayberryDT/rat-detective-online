@@ -9,7 +9,7 @@ const harness = vi.hoisted(() => {
         onMessage: ((message: ServerMessage) => void) | null = null;
         onState: ((state: string, message?: string) => void) | null = null;
         sent: unknown[] = [];
-        connect = vi.fn();
+        connect = vi.fn(() => { this.state = 'connecting'; });
         retry = vi.fn();
         send = vi.fn((message: unknown) => { this.sent.push(message); return true; });
         destroy = vi.fn();
@@ -126,6 +126,8 @@ const harness = vi.hoisted(() => {
         stats: [] as unknown[],
         initSounds: vi.fn(),
         disposeSounds: vi.fn(),
+        names: ['Inspector Whisker', 'Gumshoe Fuzz'],
+        nameIndex: 0,
         reset() {
             this.transports.length = 0;
             this.huds.length = 0;
@@ -137,6 +139,7 @@ const harness = vi.hoisted(() => {
             this.music.length = 0;
             this.stages.length = 0;
             this.stats.length = 0;
+            this.nameIndex = 0;
             this.initSounds.mockClear();
             this.disposeSounds.mockClear();
         },
@@ -203,6 +206,13 @@ vi.mock('../../src/entities/RatEntity', () => ({
 vi.mock('../../src/shared/ratAppearance', () => ({
     generateRandomAppearance: () => harness.appearance,
 }));
+vi.mock('../../src/shared/ratNames', () => ({
+    generateRandomName: () => {
+        const name = harness.names[harness.nameIndex % harness.names.length];
+        harness.nameIndex += 1;
+        return name;
+    },
+}));
 
 import { GameSession } from '../../src/session/GameSession';
 
@@ -235,16 +245,35 @@ function welcome(overrides: Partial<Extract<ServerMessage, { type: 'welcome' }>>
 function createDocument() {
     const listeners = new Map<string, Array<(event: Event) => void>>();
     const enterClicks: Array<(event: Event) => void> = [];
+    const rerollClicks: Array<(event: Event) => void> = [];
     const enter = {
         disabled: true,
+        focus: vi.fn(),
         addEventListener: (_type: string, fn: (event: Event) => void) => { enterClicks.push(fn); },
         click() {
             for (const fn of enterClicks) fn(Object.assign(new Event('click'), { stopPropagation() {} }));
         },
     };
-    const nameInput = { value: '' };
+    const reroll = {
+        classList: { add: vi.fn(), remove: vi.fn() },
+        offsetWidth: 40,
+        addEventListener: (_type: string, fn: (event: Event) => void) => { rerollClicks.push(fn); },
+        click() {
+            for (const fn of rerollClicks) fn(Object.assign(new Event('click'), { stopPropagation() {} }));
+        },
+    };
+    const namePlate = {
+        textContent: '',
+        offsetWidth: 280,
+        classList: { add: vi.fn(), remove: vi.fn() },
+    };
     const doc = {
-        getElementById: (id: string) => id === 'enter-city-btn' ? enter : id === 'player-name' ? nameInput : null,
+        getElementById: (id: string) => {
+            if (id === 'enter-city-btn') return enter;
+            if (id === 'player-name') return namePlate;
+            if (id === 'reroll-name-btn') return reroll;
+            return null;
+        },
         addEventListener: (type: string, fn: (event: Event) => void) => {
             if (!listeners.has(type)) listeners.set(type, []);
             listeners.get(type)!.push(fn);
@@ -255,13 +284,24 @@ function createDocument() {
         dispatch(type: string, event: Event) {
             for (const fn of listeners.get(type) ?? []) fn(event);
         },
+        pressEnter() {
+            const event = { key: 'Enter', code: 'Enter', preventDefault() {} } as unknown as Event;
+            this.dispatch('keydown', event);
+        },
     };
-    return { doc: doc as unknown as Document & { dispatch(type: string, event: Event): void; pointerLockElement: unknown }, enter, nameInput };
+    return { doc: doc as unknown as Document & { dispatch(type: string, event: Event): void; pointerLockElement: unknown; pressEnter(): void }, enter, reroll, namePlate };
 }
 
 describe('GameSession', () => {
     let frames: FrameRequestCallback[];
     let cancel: ReturnType<typeof vi.fn>;
+    let fakeWindow: EventTarget & {
+        location: { search: string; href: string; reload: ReturnType<typeof vi.fn> };
+        innerWidth: number;
+        innerHeight: number;
+        addEventListener: EventTarget['addEventListener'];
+        removeEventListener: EventTarget['removeEventListener'];
+    };
 
     beforeEach(() => {
         vi.useFakeTimers();
@@ -271,13 +311,11 @@ describe('GameSession', () => {
         harness.reset();
         vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { frames.push(cb); return frames.length; });
         vi.stubGlobal('cancelAnimationFrame', cancel);
-        const fakeWindow = {
+        fakeWindow = Object.assign(new EventTarget(), {
             location: { search: '', href: 'http://localhost/', reload: vi.fn() },
             innerWidth: 1280,
             innerHeight: 720,
-            addEventListener: vi.fn(),
-            removeEventListener: vi.fn(),
-        };
+        });
         vi.stubGlobal('window', fakeWindow);
         vi.stubGlobal('location', fakeWindow.location);
     });
@@ -291,7 +329,7 @@ describe('GameSession', () => {
         const page = createDocument();
         vi.stubGlobal('document', page.doc);
         const renderer = {
-            domElement: { requestPointerLock: vi.fn(() => Promise.resolve()) },
+            domElement: { requestPointerLock: vi.fn(() => Promise.resolve()), tabIndex: 0 },
             setSize: vi.fn(),
             render: vi.fn(),
         };
@@ -306,12 +344,12 @@ describe('GameSession', () => {
     }
 
     it('joins from the title screen and applies a complete welcome snapshot before gameplay', () => {
-        const { enter, nameInput, transport, hud, remotes, gun } = start();
+        const { enter, namePlate, transport, hud, remotes, gun } = start();
         expect(harness.stats).toHaveLength(0);
-        nameInput.value = 'Detective';
+        expect(namePlate.textContent).toBe('Inspector Whisker');
         enter.click();
         expect(enter.disabled).toBe(false);
-        expect(transport.connect).toHaveBeenCalledWith('Detective', appearance);
+        expect(transport.connect).toHaveBeenCalledWith('Inspector Whisker', appearance);
         expect(harness.music.at(-1)!.unlock).toHaveBeenCalled();
         transport.onState?.('connecting');
         expect(hud.setConnection).toHaveBeenCalledWith('connecting', undefined);
@@ -335,6 +373,40 @@ describe('GameSession', () => {
         expect(hud.enterPlaying).toHaveBeenCalled();
         expect(harness.music.at(-1)!.start).toHaveBeenCalled();
         expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
+    });
+
+    it('joins from the title screen when Enter is pressed', () => {
+        const { doc, transport } = start();
+        doc.pressEnter();
+        expect(transport.connect).toHaveBeenCalledWith('Inspector Whisker', appearance);
+        doc.pressEnter();
+        expect(transport.connect).toHaveBeenCalledTimes(1);
+    });
+
+    it('rolls another assigned name from the bank', () => {
+        const { reroll, namePlate, enter, transport } = start();
+        expect(namePlate.textContent).toBe('Inspector Whisker');
+        reroll.click();
+        expect(transport.connect).toHaveBeenCalledTimes(0);
+        vi.advanceTimersByTime(600);
+        expect(namePlate.textContent).toBe('Gumshoe Fuzz');
+        enter.click();
+        expect(transport.connect).toHaveBeenCalledWith('Gumshoe Fuzz', appearance);
+    });
+
+    it('focuses Enter City on the title screen', () => {
+        const { enter, renderer, transport } = start();
+        expect(enter.focus).toHaveBeenCalled();
+        expect(renderer.domElement.tabIndex).toBe(-1);
+
+        enter.focus.mockClear();
+        fakeWindow.dispatchEvent(new Event('focus'));
+        expect(enter.focus).toHaveBeenCalled();
+
+        transport.state = 'playing';
+        enter.focus.mockClear();
+        fakeWindow.dispatchEvent(new Event('focus'));
+        expect(enter.focus).not.toHaveBeenCalled();
     });
 
     it('rebuilds identity and world on reconnect and uses server deadlines for late-join overlays', () => {
@@ -440,7 +512,7 @@ describe('GameSession', () => {
         expect(harness.cities).toHaveLength(2);
         expect(harness.stats).toHaveLength(0);
         second.enter.click();
-        expect(second.transport.connect).toHaveBeenCalledWith('Anonymous Rat', appearance);
+        expect(second.transport.connect).toHaveBeenCalledWith(second.namePlate.textContent, appearance);
         second.session.dispose();
     });
 });
