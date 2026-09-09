@@ -3,13 +3,10 @@ import * as CANNON from 'cannon-es';
 import type { ShotDescriptor } from '../shared/networkProtocol';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
 import { createCheeseBallGeometry } from './CheeseProjectileModel';
-import { RatEntity, playHitSound } from '../entities/RatEntity';
+import { RatEntity } from '../entities/RatEntity';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
-const BALL_SPEED = 175;       // Fast and chaotic!
-const BALL_RESTITUTION = 0.9; // Bouncy
-const BALL_GRAVITY = -25;     // Matches world gravity
-const BALL_LIFETIME = 5;
+import { BALL_SPEED, BALL_RESTITUTION, BALL_GRAVITY, BALL_LIFETIME } from '../shared/ballTuning';
 const BALL_COLOR = 0xffc34a;
 
 // Collision Groups
@@ -23,9 +20,11 @@ interface CheeseBall {
     age: number;
     squash: number;
     owner: RatEntity;
+    predictionId?: string;
 }
 
 export class CheeseGun {
+    public authoritative = false;
     private scene: THREE.Scene;
     private world: CANNON.World;
     private camera: THREE.PerspectiveCamera | null = null;
@@ -138,7 +137,7 @@ export class CheeseGun {
         // ── Direction (no gravity compensation — consistent power at all distances) ──
         const finalDir = new THREE.Vector3().subVectors(finalTarget, origin).normalize();
 
-        this.createBall(origin, finalDir, owner);
+        if(!this.authoritative)this.createBall(origin, finalDir, owner);
         return { shotId: crypto.randomUUID(), origin: { x: origin.x, y: origin.y, z: origin.z },
             direction: { x: finalDir.x, y: finalDir.y, z: finalDir.z } };
     }
@@ -149,8 +148,29 @@ export class CheeseGun {
         this.playFireSound();
         owner.playShootAnimation(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z)
             .addScaledVector(new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), 30));
-        this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
+        if(!this.authoritative)this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
             new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
+    }
+
+    /** Immediate muzzle feedback only. The server remains the sole damage owner. */
+    predictShot(owner: RatEntity, shot: ShotDescriptor): void {
+        if (this.disposed || !this.authoritative || this.balls.some(ball => ball.predictionId === shot.shotId)) return;
+        // Pending shots are short lived and bounded, including on a stalled connection.
+        if (this.balls.length >= 32) this.removeBall(0);
+        const ball = this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
+            new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
+        ball.predictionId = shot.shotId;
+    }
+
+    get predictedBallCount(): number { return this.authoritative ? this.balls.length : 0; }
+
+    reconcilePredictedShots(shots: readonly { id: string }[]): void {
+        if (!this.balls.length) return;
+        const confirmed = new Set(shots.map(shot => shot.id));
+        for (let i = this.balls.length - 1; i >= 0; i--) {
+            const id = this.balls[i].predictionId;
+            if (id && confirmed.has(id)) this.removeBall(i);
+        }
     }
 
     clearProjectiles(): void {
@@ -160,7 +180,6 @@ export class CheeseGun {
 
     update(dt: number): void {
         if (this.disposed || !Number.isFinite(dt) || dt < 0) return;
-        this.impacts.update(dt);
         const gravityStep = this.gravityStep.set(0, BALL_GRAVITY * dt, 0);
 
         for (let i = this.balls.length - 1; i >= 0; i--) {
@@ -171,7 +190,7 @@ export class CheeseGun {
             ball.mesh.rotation.y += dt * 9;
             ball.mesh.scale.setScalar(1 - ball.squash * 0.1);
 
-            if (ball.age > BALL_LIFETIME) {
+            if (ball.age > (ball.predictionId ? .5 : BALL_LIFETIME)) {
                 this.removeBall(i);
                 continue;
             }
@@ -214,6 +233,11 @@ export class CheeseGun {
                     if (hitBody && (hitBody as any).userData && (hitBody as any).userData.entity instanceof RatEntity) {
                         const victim = (hitBody as any).userData.entity as RatEntity;
 
+                        if (ball.predictionId) {
+                            this.removeBall(i);
+                            continue;
+                        }
+
                         if (ball.owner.isRemote) {
                             ball.position.copy(nextPos);
                             ball.mesh.position.copy(ball.position);
@@ -229,9 +253,9 @@ export class CheeseGun {
                             // Remote entity damage is handled by the server
                             if (!victim.isRemote) {
                                 victim.takeDamage(dmg, ball.velocity);
-                            } else {
-                                playHitSound();
                             }
+                            // Remote hit audio belongs to the confirmed health/death
+                            // event, avoiding a second impact when the server replies.
 
                             // Notify network manager (for remote hits → server)
                             if (this.onHitEntity) {
@@ -246,7 +270,7 @@ export class CheeseGun {
                         }
                     }
 
-                    this.impacts.emit(hitPoint, hitNormal, true);
+                    if (!ball.predictionId) this.impacts.emit(hitPoint, hitNormal, true);
                     ball.squash = 1;
                     ball.mesh.scale.setScalar(0.9);
                     // HIT WALL / GROUND → BOUNCE
@@ -262,6 +286,7 @@ export class CheeseGun {
             // Sync Visuals
             ball.mesh.position.copy(ball.position);
         }
+        this.impacts.update(dt);
     }
 
     dispose(): void {
@@ -285,7 +310,7 @@ export class CheeseGun {
         }
     }
 
-    private createBall(origin: THREE.Vector3, direction: THREE.Vector3, owner: RatEntity): void {
+    private createBall(origin: THREE.Vector3, direction: THREE.Vector3, owner: RatEntity): CheeseBall {
         // Visuals
         const mesh = new THREE.Mesh(this.ballGeometry, this.ballMaterial);
         mesh.position.copy(origin);
@@ -294,14 +319,16 @@ export class CheeseGun {
         // Kinematic state (no physics body — we raycast manually for reliability)
         const velocity = direction.clone().normalize().multiplyScalar(BALL_SPEED);
 
-        this.balls.push({
+        const ball: CheeseBall = {
             mesh,
             velocity,
             position: origin.clone(),
             age: 0,
             squash: 0,
             owner
-        });
+        };
+        this.balls.push(ball);
+        return ball;
     }
 
     private removeBall(index: number): void {

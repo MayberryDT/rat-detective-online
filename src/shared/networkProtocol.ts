@@ -1,3 +1,4 @@
+import type { ChaosState } from './chaosState';
 import type { WorldSpec } from './worldSpec';
 
 export const PROTOCOL_VERSION = 1;
@@ -5,7 +6,9 @@ export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 5_000;
 export const WIN_DISPLAY_MS = 6_000;
-export const DEFAULT_ROOM_NAME = 'public';
+export const DEFAULT_ROOM_NAME = 'public-live-v2';
+/** Wire-format ceiling for private capacity experiments; not an admission limit. */
+export const MAX_SCORE_ENTRIES = 100;
 export const MAX_PLAYERS = 24;
 /** Open sockets allowed, including clients that have not finished joining. */
 export const MAX_CONNECTIONS = MAX_PLAYERS + 8;
@@ -88,6 +91,12 @@ export interface PublicRoomStatus {
   scores: PublicScore[];
 }
 
+export const MAX_MOVEMENT_BATCH = 100;
+export interface MovementSample {
+  at: number;
+  player: Pick<PlayerData, 'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'>;
+}
+
 export interface ShotDescriptor {
   shotId: string;
   origin: Vec3Data;
@@ -99,9 +108,12 @@ export type ClientMessage =
   | { type: 'updateMovement'; position: Vec3Data; rotation: QuatData; meshRotation: QuatData }
   | { type: 'shoot'; shotId: string; origin: Vec3Data; direction: Vec3Data }
   | { type: 'hit'; victimId: string; damage: number }
-  | { type: 'ping'; sentAt: number };
+  | { type: 'chaosAck'; stream: string; seq: number }
+  | { type: 'ping'; sentAt: number }
+  | { type: 'diagnostics'; report: Record<string, unknown> };
 
 export type ServerMessage =
+  | { type: 'chaos'; state: ChaosState }
   | {
       type: 'welcome';
       id: string;
@@ -114,8 +126,11 @@ export type ServerMessage =
     }
   | { type: 'currentPlayers'; players: Record<string, PlayerData> }
   | { type: 'playerJoined'; player: PlayerData }
+  | { type: 'playersMoved'; players: MovementSample[] }
   | {
       type: 'playerMoved';
+      /** Authoritative sample time; optional for older previews. */
+      at?: number;
       player: Pick<
         PlayerData,
         'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'
@@ -123,6 +138,7 @@ export type ServerMessage =
     }
   | {
       type: 'playerCorrected';
+      at?: number;
       player: Pick<
         PlayerData,
         'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'
@@ -137,6 +153,8 @@ export type ServerMessage =
       killerName: string;
       victimName: string;
       respawnAt: number;
+      incoming?: Vec3Data;
+      incident?: boolean;
     }
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }

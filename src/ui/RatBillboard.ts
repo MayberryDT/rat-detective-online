@@ -20,6 +20,9 @@ export class RatBillboard {
         this.canvas.height = 128; // 2:1 aspect ratio
         this.ctx = this.canvas.getContext('2d')!;
 
+        this.ctx.font = 'bold 32px "Courier New", monospace';
+        const nameWidth=typeof this.ctx.measureText==='function'?this.ctx.measureText(name).width:name.length*19.2;
+        this.canvas.width=Math.max(256,Math.min(1024,Math.ceil(nameWidth+32)));
         this.texture = new THREE.CanvasTexture(this.canvas);
         this.texture.minFilter = THREE.LinearFilter;
 
@@ -31,7 +34,7 @@ export class RatBillboard {
         });
 
         this.sprite = new THREE.Sprite(material);
-        this.sprite.scale.set(1.5, 0.75, 1); // World size
+        this.sprite.scale.set(this.canvas.width / 128 * .75, 0.75, 1); // World size
         this.sprite.center.set(0.5, 0); // Pivot at bottom center so it sits on head
 
         this.draw();
@@ -65,8 +68,8 @@ export class RatBillboard {
         let displayText = this.name;
         if (isDead) displayText = "DEAD";
 
-        ctx.strokeText(displayText, w / 2, 40);
-        ctx.fillText(displayText, w / 2, 40);
+        ctx.strokeText(displayText, w / 2, 40, w-32);
+        ctx.fillText(displayText, w / 2, 40, w-32);
 
         // Health Bar Background
         const barW = 160;

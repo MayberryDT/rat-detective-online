@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { CityGenerator } from '../../src/world/CityGenerator';
+import {CENTRAL_BUILDINGS,skylineMasses} from '../../src/shared/skyline';
+import {grayboxBoxes} from '../../src/shared/grayboxLayout';
 import {
   DEFAULT_CITY_OPTIONS,
   createWorldSpec,
@@ -111,6 +113,55 @@ describe('city generator', () => {
     expect(scene.children).toHaveLength(count);
     city.dispose(); city.update(1, camera);
     expect(scene.children).toHaveLength(0);
+  });
+
+  it('animates room uniforms without texture uploads or additional scene objects', () => {
+    const {city, scene} = makeCity(17);
+    const materials: THREE.MeshStandardMaterial[] = [];
+    scene.traverse(object => {
+      if (object instanceof THREE.Mesh && object.userData.aimTarget) materials.push(object.material as THREE.MeshStandardMaterial);
+    });
+    const textures = materials.map(material => material.emissiveMap!);
+    const versions = textures.map(texture => texture.version);
+    const initialCount = scene.children.length;
+    const uniformValues: {value: number}[] = [];
+    for (const material of materials) {
+      const shader = {uniforms: {} as Record<string, {value: unknown}>,
+        vertexShader: '', fragmentShader: '#include <common>\n#include <emissivemap_fragment>'};
+      material.onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, {} as THREE.WebGLRenderer);
+      expect(shader.fragmentShader).toContain('roomLight5');
+      expect(shader.fragmentShader).toContain('totalEmissiveRadiance *= occupancy');
+      expect(shader.fragmentShader).toContain('diffuseColor.rgb = mix');
+      const lower = shader.uniforms.roomRect0.value as THREE.Vector4;
+      expect(lower.toArray()).toEqual([0,0,.5,1/3]);
+      uniformValues.push(shader.uniforms.roomLight0 as {value: number});
+    }
+    expect(uniformValues).toHaveLength(materials.length);
+    for (let frame = 0; frame < 170; frame++) city.update(0.1);
+    expect(uniformValues.some(uniform => uniform.value < 0.5)).toBe(true);
+    expect(textures.map(texture => texture.version)).toEqual(versions);
+    expect(scene.children.length).toBe(initialCount);
+    city.dispose();
+  });
+
+  it('renders all six downtown towers with the exact shared physical setbacks', () => {
+    const scene=new THREE.Scene(),world=new CANNON.World();
+    const city=new CityGenerator(scene,world,DEFAULT_CITY_OPTIONS,createWorldSpec(42));
+    city.generate(CENTRAL_BUILDINGS,true);
+    const expected=CENTRAL_BUILDINGS.flatMap(skylineMasses);
+    const bodies=city.getBuildingBodies();
+    expect(bodies).toHaveLength(18);
+    const server=grayboxBoxes();
+    bodies.forEach((body,i)=>{
+      const m=expected[i],half=(body.shapes[0] as CANNON.Box).halfExtents;
+      expect(body.position.toArray()).toEqual([m.x,m.y,m.z]);
+      expect(half.toArray()).toEqual([m.w/2,m.h/2,m.d/2]);
+      expect(server.some(box=>box.original&&box.x===m.x&&box.y===m.y&&box.z===m.z&&box.w===m.w&&box.h===m.h&&box.d===m.d)).toBe(true);
+    });
+    const targets=scene.children.filter(o=>o.userData.aimTarget) as THREE.Mesh[];
+    expect(targets).toHaveLength(18);
+    targets.forEach((mesh,i)=>expect(mesh.position.toArray()).toEqual([expected[i].x,expected[i].y,expected[i].z]));
+    city.dispose();
   });
 
   it('accepts a custom numeric city for tests and benchmarks', () => {

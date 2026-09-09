@@ -1,12 +1,15 @@
 # Rat Detective improvement plan
 
+
+> **Historical record — completed early architecture plan.** Classified on 2026-09-08. Statements below describe that pass, including its then-current code, deployment, authorization and test counts. They are not present-day instructions or a current feature inventory. Use [the current reference](current-state.md) before acting. Preserve the measurements; do not restore obsolete behavior from this report.
+
 ## Objective and constraints
 
 Address the architecture audit incrementally while preserving the established shooting, collision tuning, camera, rat model, outline alignment, lighting, audio assets and visual style. Keep Three.js, Cannon and the Worker/Durable Object architecture. Use small, reversible commits on main; avoid a framework or ECS rewrite.
 
 Source: [architecture audit](architecture-audit.md), baseline `08e8005`, and GBrain `brain:sessions/2026/09/rat-detective-deep-audit-08e8005`.
 
-## Current status
+## Status at the time of this plan
 
 Implementation commits: `12f96e0` (sessions/shared multiplayer state), `4edf9fa` (development and verification tooling), and `090d347` (rate-limit regression tests). The completion review reconciled phases 1–7 with current source/tests. All 86 tests and type-checking pass; local visual and gameplay verification and staging session checks pass. See the [checklist](implementation-checklist.md) and [evidence](verification/implementation-evidence.md) for the exact scope and retained design decisions. Production publishing remains a separate action.
 

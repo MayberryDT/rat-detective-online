@@ -3,9 +3,28 @@ import * as THREE from 'three';
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;
 
+export const RAT_CARRY_SHOULDER = new THREE.Vector3(.43, 1.23, .02);
+
+/** One shared shoulder pivot keeps the sleeve, gripping paw and case together. */
+export function getRatCarryAnchor(root: THREE.Group): THREE.Object3D {
+    let anchor = root.getObjectByName('rat-carry-anchor');
+    if (!anchor) {
+        anchor = new THREE.Object3D();
+        anchor.name = 'rat-carry-anchor';
+        anchor.position.copy(RAT_CARRY_SHOULDER);
+        root.getObjectByName('rat-body')!.add(anchor);
+    }
+    return anchor;
+}
+
 /** Small procedural poses shared by the visible character and its outline shell. */
 export class RatAnimator {
     private readonly rigs;
+    private readonly carryAnchor: THREE.Object3D;
+    private verticalSpeed = 0;
+    private airPose = 0;
+    private jumpLift = 0;
+    private jumpLanding = 0;
     private readonly tails;
     private tailMotion = 0;
     private tailTurn = 0;
@@ -13,6 +32,8 @@ export class RatAnimator {
     private stride = 0;
     private movement = 0;
     private recoil = 0;
+    private flashAge = 1;
+    private readonly muzzleFlash: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
     private acceleration = 0;
     private coatTurn = 0;
     private respawnAge = 1;
@@ -40,15 +61,38 @@ export class RatAnimator {
     private lastYaw = 0;
     private readonly orientation = new THREE.Euler(0, 0, 0, 'YXZ');
 
-    constructor(private readonly root: THREE.Group, outline: THREE.Group) {
-        this.tails = [root, outline].map(model => {
+    constructor(private readonly root: THREE.Group, outline?: THREE.Group) {
+        const models = outline ? [root, outline] : [root];
+        this.carryAnchor = getRatCarryAnchor(root);
+        // The firing cue follows the actual animated barrel. A ball frozen at a
+        // prior world-space muzzle appears behind the gun as the rat moves.
+        const vertices: number[] = [];
+        for (let i = 0; i < 12; i++) {
+            const a = i * Math.PI / 6, b = (i + 1) * Math.PI / 6;
+            const r = i % 2 ? .045 : .11, next = i % 2 ? .11 : .045;
+            vertices.push(0, 0, .23, Math.cos(a) * r, Math.sin(a) * r, .015,
+                Math.cos(b) * next, Math.sin(b) * next, .015);
+        }
+        const flashGeometry = new THREE.BufferGeometry();
+        flashGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        flashGeometry.computeVertexNormals();
+        this.muzzleFlash = new THREE.Mesh(flashGeometry, new THREE.MeshStandardMaterial({
+            color: 0xffe9b0, emissive: 0xffe9b0, emissiveIntensity: .3, toneMapped: false,
+            transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+            side: THREE.DoubleSide, fog: false,
+        }));
+        this.muzzleFlash.name = 'rat-muzzle-flash';
+        this.muzzleFlash.visible = false;
+        this.muzzleFlash.raycast = () => {};
+        root.getObjectByName('rat-muzzle')!.add(this.muzzleFlash);
+        this.tails = models.map(model => {
             const tail = model.getObjectByName('rat-tail') as THREE.Mesh<THREE.TubeGeometry>;
             const positions = tail.geometry.getAttribute('position') as THREE.BufferAttribute;
             positions.setUsage(THREE.DynamicDrawUsage);
             return { tail, rest: positions.array.slice(), tip: tail.children[0],
                 tipRest: tail.children[0].position.clone() };
         });
-        this.rigs = [root, outline].map(model => PARTS.map(name => {
+        this.rigs = models.map(model => PARTS.map(name => {
             const part = model.getObjectByName(name)!;
             return { part, position: part.position.clone(), rotation: part.rotation.clone(), scale: part.scale.clone() };
         }));
@@ -64,6 +108,7 @@ export class RatAnimator {
     poseDeath(time: number, dt: number, spin: { x: number; y: number; z: number }, impact: number, resting: boolean): void {
         this.restore();
         this.deathAnimation = true;
+        this.muzzleFlash.visible = false;
         this.parentRotation.copy(this.root.quaternion).invert();
         this.localSpin.set(spin.x, spin.y, spin.z).applyQuaternion(this.parentRotation);
         this.localGravity.set(0, -1, 0).applyQuaternion(this.parentRotation);
@@ -108,6 +153,9 @@ export class RatAnimator {
     shoot(target?: THREE.Vector3): void {
         this.aimTarget = target?.clone() ?? null;
         this.recoil = 1;
+        this.flashAge = 0;
+        this.muzzleFlash.visible = true;
+        this.muzzleFlash.material.opacity = 1;
         this.aimHold = 0.7;
         this.aim = 1;
         this.applyPose();
@@ -120,9 +168,12 @@ export class RatAnimator {
     reset(): void {
         this.time = this.stride = this.movement = this.recoil = this.turn = this.hit = 0;
         this.acceleration = this.coatTurn = 0;
+        this.verticalSpeed = this.airPose = this.jumpLift = this.jumpLanding = 0;
         this.respawnAge = 1;
         this.aimHold = this.aim = 0;
         this.aimTarget = null;
+        this.flashAge = 1;
+        this.muzzleFlash.visible = false;
         this.lastPosition = null;
         this.hitAge = 10;
         this.flop.set(0, 0); this.flopVelocity.set(0, 0);
@@ -135,6 +186,8 @@ export class RatAnimator {
     }
 
     private restore(): void {
+        this.carryAnchor.position.copy(RAT_CARRY_SHOULDER);
+        this.carryAnchor.rotation.set(0, 0, 0);
         for (const rig of this.rigs) for (const { part, position, rotation, scale } of rig) {
             part.position.copy(position);
             part.rotation.copy(rotation);
@@ -142,22 +195,50 @@ export class RatAnimator {
         }
     }
 
+    /** Rebase locomotion after a stream discontinuity without erasing action cues. */
+    resetMotionHistory(): void {
+        this.lastPosition = null;
+        this.verticalSpeed = this.airPose = this.jumpLift = this.jumpLanding = 0;
+        this.movement = this.acceleration = this.turn = this.coatTurn = 0;
+    }
+
     update(dt: number): void {
         if (!(dt > 0) || !Number.isFinite(dt)) return;
+        const motionDt = dt;
         dt = Math.min(dt, 0.1);
         const position = this.root.position;
         const yaw = this.orientation.setFromQuaternion(this.root.quaternion, 'YXZ').y;
         let speed = 0;
         let turnRate = 0;
+        let verticalSpeed = 0;
+        let correction = false;
         if (this.lastPosition) {
             const distance = Math.hypot(position.x - this.lastPosition.x, position.z - this.lastPosition.z);
+            const height = position.y - this.lastPosition.y;
+            correction = distance >= 2 || Math.abs(height) >= 2;
+            if (!correction) verticalSpeed = height / motionDt;
             // Teleports/corrections do not trigger a sprint pose.
-            if (distance < 2) speed = distance / dt;
-            turnRate = Math.atan2(Math.sin(yaw - this.lastYaw), Math.cos(yaw - this.lastYaw)) / dt;
+            if (distance < 2) speed = distance / motionDt;
+            turnRate = Math.atan2(Math.sin(yaw - this.lastYaw), Math.cos(yaw - this.lastYaw)) / motionDt;
         } else this.lastPosition = new THREE.Vector3();
         this.lastPosition.copy(position);
         this.lastYaw = yaw;
         const blend = 1 - Math.exp(-10 * dt);
+        // Read render-space vertical motion for local and interpolated remote rats.
+        // These small secondary poses never feed back into the controller/body.
+        if (correction) this.airPose = this.jumpLift = this.jumpLanding = 0;
+        else {
+            if (verticalSpeed > 5 && this.verticalSpeed <= 5) this.jumpLift = 1;
+            if (this.verticalSpeed < -2 && verticalSpeed > -1) this.jumpLanding = Math.min(1, -this.verticalSpeed / 9);
+            // Follow the velocity through the apex instead of holding one
+            // airborne pose during both ascent and descent. A quicker release
+            // keeps the hat/coat from looking suspended after the rat falls.
+            const airTarget=THREE.MathUtils.clamp(verticalSpeed / 7,-.65,1);
+            this.airPose = THREE.MathUtils.lerp(this.airPose,airTarget,1-Math.exp(-22*dt));
+            this.jumpLift *= Math.exp(-15 * dt);
+            this.jumpLanding *= Math.exp(-18 * dt);
+        }
+        this.verticalSpeed = verticalSpeed;
         const previousMovement = this.movement;
         this.movement = THREE.MathUtils.lerp(this.movement, Math.min(speed / 7, 1), blend);
         this.turn = THREE.MathUtils.lerp(this.turn, THREE.MathUtils.clamp(turnRate * 0.08, -0.3, 0.3), blend);
@@ -172,6 +253,9 @@ export class RatAnimator {
         // Slower, distinct alternating steps read better than a fast vibration.
         this.stride += dt * (4 + this.movement * 5);
         this.recoil *= Math.exp(-14 * dt);
+        this.flashAge += dt;
+        this.muzzleFlash.visible = this.flashAge < .065;
+        this.muzzleFlash.material.opacity = Math.max(0, 1 - this.flashAge / .065);
         this.hitAge += dt;
         this.hit = Math.exp(-this.hitAge * 16) * Math.cos(this.hitAge * 22);
         this.aimHold = Math.max(0, this.aimHold - dt);
@@ -191,6 +275,8 @@ export class RatAnimator {
         const blink = blinkPhase > 4.48 ? Math.sin((blinkPhase - 4.48) / 0.22 * Math.PI) : 0;
         const twitchPhase = this.time % 6.1;
         const twitch = twitchPhase > 5.7 ? Math.sin((twitchPhase - 5.7) * Math.PI / 0.4) * 0.12 : 0;
+        this.carryAnchor.rotation.x = followThrough * .48 - this.airPose * .12 + this.jumpLanding * .08;
+        this.carryAnchor.rotation.z = sway * .035;
         for (const rig of this.rigs) {
             const [{ part: body }, { part: head }, { part: hat }, { part: tail },
                 { part: leftEye }, { part: rightEye }, { part: leftEar }, { part: rightEar },
@@ -209,13 +295,19 @@ export class RatAnimator {
             body.scale.y -= entrance * 0.4;
             body.scale.x += entrance * 0.22;
             body.scale.z += entrance * 0.22;
+            const jumpStretch = this.jumpLift * .045 - this.jumpLanding * .055;
+            body.scale.y += jumpStretch;
+            body.scale.x -= jumpStretch * .4;
+            body.scale.z -= jumpStretch * .4;
+            body.rotation.x -= this.airPose * .035;
             body.position.z = -this.recoil * 0.055;
             head.rotation.y += this.turn * 0.9;
             head.rotation.z = -sway * 0.06;
             head.rotation.x = -this.hit * 0.025 + breath * 0.009 - compression * 0.02 - this.recoil * 0.035;
             hat.rotation.x += Math.sin(this.hitAge * 22) * Math.exp(-this.hitAge * 13) * 0.035 + this.recoil * 0.11 + followThrough * 0.045;
             hat.rotation.z += followThrough * 0.035 + (this.turn - this.coatTurn) * 0.2;
-            hat.position.y += entrance * 0.24;
+            hat.position.y += entrance * 0.24 + this.jumpLift * .035 + this.jumpLanding * .02;
+            hat.rotation.x += this.airPose * .045 - this.jumpLanding * .06;
             hat.rotation.x += entrance * 0.14;
             // Keep the dragging section planted instead of inheriting the step bounce.
             tail.rotation.y = -this.turn * 0.2;
@@ -241,6 +333,9 @@ export class RatAnimator {
     }
 
     private deformTails(reset = false): void {
+        // The longitudinal wave is identical around each ring and across rigs.
+        // Death contact projection remains per rig in world space below.
+        const waves = new Map<number, {x:number;y:number}>();
         for (const { tail, rest, tip, tipRest } of this.tails) {
             const positions = tail.geometry.getAttribute('position') as THREE.BufferAttribute;
             const uv = tail.geometry.getAttribute('uv');
@@ -254,15 +349,21 @@ export class RatAnimator {
                 // The root stays attached; a delayed wave bends the middle before
                 // reaching the tip, instead of swinging the whole tail rigidly.
                 const weight = u * u;
-                let x = reset ? 0 : weight * (
-                    Math.sin(this.time * 1.5 - u * 2.4) * 0.07 * (this.deathAnimation ? this.tailMotion : 1) +
-                    Math.sin(this.stride - u * 2.8) * this.tailMotion * 0.38 +
-                    this.tailTurn * 1.1);
-                // Ground contact stays steady through the middle. Only the last
-                // quarter lifts slightly as the tip flicks across the floor.
-                const tipWeight = Math.max(0, (u - 0.75) / 0.25);
-                let y = reset ? 0 : tipWeight * tipWeight *
-                    (1 + Math.sin(this.stride - u * 2.8 - 0.8)) * this.tailMotion * 0.025;
+                let wave = waves.get(u);
+                if (!wave) {
+                    let x = reset ? 0 : weight * (
+                        Math.sin(this.time * 1.5 - u * 2.4) * 0.07 * (this.deathAnimation ? this.tailMotion : 1) +
+                        Math.sin(this.stride - u * 2.8) * this.tailMotion * 0.38 +
+                        this.tailTurn * 1.1);
+                    // Ground contact stays steady through the middle. Only the last
+                    // quarter lifts slightly as the tip flicks across the floor.
+                    const tipWeight = Math.max(0, (u - 0.75) / 0.25);
+                    let y = reset ? 0 : tipWeight * tipWeight *
+                        (1 + Math.sin(this.stride - u * 2.8 - 0.8)) * this.tailMotion * 0.025;
+                    if (!this.deathAnimation && !reset) y += weight * Math.max(0,this.airPose) * .12;
+                    wave={x,y};waves.set(u,wave);
+                }
+                let {x,y}=wave;
                 let z = 0;
                 if (this.deathAnimation && !reset) {
                     x += weight * this.tailFall.x * 0.85;
@@ -285,8 +386,16 @@ export class RatAnimator {
             tip.position.y += tipY;
             tip.position.z += tipZ;
             positions.needsUpdate = true;
-            tail.geometry.computeVertexNormals();
-            tail.geometry.computeBoundingSphere();
+            // The additive outline is unlit and casts no shadow: its deformed
+            // normals are never consumed. Keep lit-tail normals exact.
+            if(!(tail.material instanceof THREE.MeshBasicMaterial&&!tail.castShadow&&!tail.material.envMap))tail.geometry.computeVertexNormals();
+            if(this.deathAnimation)tail.geometry.computeBoundingSphere();
+            else {
+                // Living-tail displacement is bounded by the clamped motion/turn
+                // wave; avoid a per-vertex bounds scan on every display frame.
+                tail.geometry.boundingSphere??=new THREE.Sphere();
+                tail.geometry.boundingSphere.center.set(0,0,-.6);tail.geometry.boundingSphere.radius=2;
+            }
         }
     }
 }

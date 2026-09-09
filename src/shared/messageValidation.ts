@@ -1,5 +1,9 @@
+import { sanitizeDiagnosticReport } from './diagnosticReport';
+import { INCIDENTS, incidentInfo } from './incidentCatalog';
 import {
   MAX_HP,
+  MAX_SCORE_ENTRIES,
+  MAX_MOVEMENT_BATCH,
   MAX_MESSAGE_BYTES,
   MAX_SERVER_MESSAGE_BYTES,
   PROTOCOL_VERSION,
@@ -14,6 +18,7 @@ import {
   type Vec3Data,
   type WorldSpec,
 } from './networkProtocol';
+import { CHAOS_TUNING, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, type ChaosState } from './chaosState';
 import { isSupportedWorldVersion } from './worldSpec';
 
 const HAT_TYPES = new Set<HatTypeName>(['fedora', 'trilby', 'porkpie']);
@@ -203,7 +208,7 @@ function parsePlayersRecord(value: unknown): Record<string, PlayerData> | null {
 }
 
 function parseScores(value: unknown): ScoreEntry[] | null {
-  if (!Array.isArray(value) || value.length > 64) return null;
+  if (!Array.isArray(value) || value.length > MAX_SCORE_ENTRIES) return null;
   const scores: ScoreEntry[] = [];
   for (const entry of value) {
     if (!isRecord(entry)) return null;
@@ -275,6 +280,11 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
   const parsed = parseRaw(raw, MAX_MESSAGE_BYTES);
   if (!isRecord(parsed) || typeof parsed.type !== 'string') return null;
 
+  if (parsed.type === 'diagnostics') {
+    const report = sanitizeDiagnosticReport(parsed.report);
+    return report ? { type: 'diagnostics', report } : null;
+  }
+
   if (parsed.type === 'join') {
     const protocolVersion = integer(parsed.protocolVersion);
     const appearance = parseAppearance(parsed.appearance);
@@ -309,6 +319,11 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     return { type: 'hit', victimId, damage };
   }
 
+  if (parsed.type === 'chaosAck') {
+    const stream=nonEmptyString(parsed.stream,64),seq=integer(parsed.seq);
+    return stream && seq!==null && Number.isSafeInteger(seq) && seq>0 ? {type:'chaosAck',stream,seq}:null;
+  }
+
   if (parsed.type === 'ping') {
     const sentAt = integer(parsed.sentAt);
     if (sentAt === null) return null;
@@ -316,6 +331,40 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
   }
 
   return null;
+}
+
+function parseChaos(value:unknown):ChaosState|null{
+  if(!isRecord(value)||finiteNumber(value.time)===null||!isRecord(value.case)||!isRecord(value.dispatch)||!isRecord(value.possession)||!isRecord(value.notice))return null;
+  const pose=(v:unknown)=>isRecord(v)&&!!parseVec3(v.p)&&!!parseQuat(v.q)&&!!parseVec3(v.v)&&!!parseVec3(v.spin);
+  const c=value.case,d=value.dispatch;
+  const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
+    (c.previousOwner===null||nonEmptyString(c.previousOwner,64))&&(c.missileOwner===undefined||nonEmptyString(c.missileOwner,64))&&
+    finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null;
+  if(!validCase(c))return null;
+  if(value.extraCases!==undefined){
+    if(!Array.isArray(value.extraCases)||value.extraCases.length>EXTRA_CASE_IDS.length||
+      !value.extraCases.every(c=>isRecord(c)&&EXTRA_CASE_IDS.some(id=>id===c.id)&&validCase(c)))return null;
+    if(new Set(value.extraCases.map(c=>c.id)).size!==value.extraCases.length)return null;
+    const owners=[c,...value.extraCases].map(c=>c.owner).filter(owner=>owner!==null);
+    if(new Set(owners).size!==owners.length)return null;
+  }
+  if(!['ready','rolling','active','cooldown'].includes(String(d.phase))||finiteNumber(d.started)===null||finiteNumber(d.until)===null||integer(d.serial)===null)return null;
+  if(d.incident!==undefined&&d.incident!=='after-hours-collection'&&d.incident!=='kickback'&&!INCIDENTS.some(incident=>incident.id===d.incident))return null;
+  if(Object.keys(value.possession).length>64||Object.values(value.possession).some(v=>finiteNumber(v)===null))return null;
+  if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
+  if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
+  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&nonEmptyString(s.owner,64)&&parseVec3(s.p)&&parseVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.returned===undefined||typeof s.returned==='boolean')))return null;
+  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&parseVec3(i.p)&&parseVec3(i.n)&&typeof i.surface==='boolean'))return null;
+  if(value.pressure!==undefined){
+    const p=value.pressure;
+    if(!isRecord(p)||integer(p.serial)===null||finiteNumber(p.until)===null||!Array.isArray(p.launches)||p.launches.length>MAX_LAUNCH_EVENTS)return null;
+    if(p.cooldowns!==undefined&&(!isRecord(p.cooldowns)||Object.keys(p.cooldowns).length>LAUNCH_MACHINES.length||
+      Object.entries(p.cooldowns).some(([id,until])=>!LAUNCH_MACHINES.some(m=>m.id===id)||finiteNumber(until)===null)))return null;
+    if(!p.launches.every(e=>isRecord(e)&&nonEmptyString(e.id,128)&&nonEmptyString(e.playerId,64)&&
+      finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&parseVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)))return null;
+  }
+  if(d.incident==='after-hours-collection'||d.incident==='kickback')return {...value,dispatch:{...d,incident:incidentInfo(d.incident).id}} as unknown as ChaosState;
+  return value as unknown as ChaosState;
 }
 
 export function parseServerMessage(raw: unknown): ServerMessage | null {
@@ -326,6 +375,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   if (!isRecord(parsed) || typeof parsed.type !== 'string') return null;
 
   switch (parsed.type) {
+    case 'chaos': { const state=parseChaos(parsed.state);return state?{type:'chaos',state}:null; }
     case 'welcome': {
       const id = nonEmptyString(parsed.id, 64);
       const player = parsePlayer(parsed.player);
@@ -348,13 +398,28 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const player = parsePlayer(parsed.player);
       return player ? { type: 'playerJoined', player } : null;
     }
+    case 'playersMoved': {
+      if(!Array.isArray(parsed.players)||parsed.players.length<1||parsed.players.length>MAX_MOVEMENT_BATCH)return null;
+      const players:Extract<ServerMessage,{type:'playersMoved'}>['players']=[],ids=new Set<string>();
+      for(const sample of parsed.players){
+        if(!isRecord(sample))return null;
+        const player=parsePosePlayer(sample.player),at=finiteNumber(sample.at);
+        if(!player||at===null||at<0||ids.has(player.id))return null;
+        ids.add(player.id);players.push({player,at});
+      }
+      return {type:'playersMoved',players};
+    }
     case 'playerMoved': {
       const player = parsePosePlayer(parsed.player);
-      return player ? { type: 'playerMoved', player } : null;
+      const at = parsed.at === undefined ? undefined : finiteNumber(parsed.at);
+      if (at === null || (at !== undefined && at < 0)) return null;
+      return player ? { type: 'playerMoved', player, ...(at !== undefined ? { at } : {}) } : null;
     }
     case 'playerCorrected': {
       const player = parsePosePlayer(parsed.player);
-      return player ? { type: 'playerCorrected', player } : null;
+      const at = parsed.at === undefined ? undefined : finiteNumber(parsed.at);
+      if (at === null || (at !== undefined && at < 0)) return null;
+      return player ? { type: 'playerCorrected', player, ...(at !== undefined ? { at } : {}) } : null;
     }
     case 'playerShot': {
       const shooterId = nonEmptyString(parsed.shooterId, 64);
@@ -376,7 +441,10 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const victimName = typeof parsed.victimName === 'string' && parsed.victimName.length <= 32 ? parsed.victimName : null;
       const respawnAt = integer(parsed.respawnAt);
       if (!victimId || !killerId || killerName === null || victimName === null || respawnAt === null) return null;
-      return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt };
+      const incoming=parsed.incoming===undefined?undefined:parseVec3(parsed.incoming);
+      if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean'))return null;
+      return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
+        ...(incoming?{incoming,incident:parsed.incident===true}:{}) };
     }
     case 'scoreboardUpdate': {
       const scores = parseScores(parsed.scores);

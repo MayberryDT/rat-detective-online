@@ -1,3 +1,4 @@
+import { GRAYBOX_VERSION, GRAYBOX_SPAWNS, grayboxBoxes } from './grayboxLayout';
 export interface WorldSpec {
   seed: number;
   version: number;
@@ -7,7 +8,7 @@ export const WORLD_LAYOUT_VERSION = 1;
 export const WORLD_VERSION = WORLD_LAYOUT_VERSION;
 
 export function isSupportedWorldVersion(version: number): boolean {
-  return version === WORLD_LAYOUT_VERSION;
+  return version === WORLD_LAYOUT_VERSION || version === GRAYBOX_VERSION;
 }
 
 export interface CityOptions {
@@ -73,6 +74,13 @@ export function generateBuildingLayout(
   spec: WorldSpec,
   options?: Partial<CityOptions>,
 ): BuildingFootprint[] {
+  // Version 1 is the only seeded generator. Parent grayboxBoxes calls this
+  // with version:1 for outer-city reservations; never recurse from that path.
+  if (spec.version === GRAYBOX_VERSION) {
+    return grayboxBoxes({ seed: spec.seed, version: spec.version })
+      .filter((box) => box.building)
+      .map((box) => ({ cx: box.x, cz: box.z, bw: box.w, bd: box.d, bh: box.h }));
+  }
   const { gridSize, blockSpacing, minHeight, maxHeight, buildingWidthMin, buildingWidthMax } = {
     ...DEFAULT_CITY_OPTIONS,
     ...options,
@@ -129,6 +137,7 @@ export function createSafeSpawn(
   random = Math.random,
   options?: Partial<CityOptions>,
 ): { x: number; y: number; z: number } {
+  if (spec.version === GRAYBOX_VERSION) return { ...GRAYBOX_SPAWNS[Math.min(GRAYBOX_SPAWNS.length-1, Math.floor(random()*GRAYBOX_SPAWNS.length))] };
   const opts = { ...DEFAULT_CITY_OPTIONS, ...options };
   const buildings = generateBuildingLayout(spec, opts);
   for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {

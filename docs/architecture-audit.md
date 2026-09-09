@@ -1,8 +1,11 @@
 # Rat Detective architecture and code audit
 
+
+> **Historical record — 08e8005 architecture audit.** Classified on 2026-09-08. Statements below describe that pass, including its then-current code, deployment, authorization and test counts. They are not present-day instructions or a current feature inventory. Use [the current reference](current-state.md) before acting. Preserve the measurements; do not restore obsolete behavior from this report.
+
 Reviewed local `main` at `08e8005`. Source review only; application code is unchanged. Existing checks rerun: 19 tests pass, TypeScript passes, npm audit reports zero vulnerabilities. No new GPU/frame-time or multiplayer load benchmarks were run. Performance recommendations below are candidates supported by source structure, not measured speedups.
 
-## Architectural assessment
+## Architectural assessment at the audited revision
 
 The Three.js + Cannon + Worker/Durable Object stack fits this game. Keep it. The main weaknesses are ownership of state, inconsistent representations of the same action/world, and missing session recovery. A framework or ECS rewrite would add risk without fixing those problems by itself.
 

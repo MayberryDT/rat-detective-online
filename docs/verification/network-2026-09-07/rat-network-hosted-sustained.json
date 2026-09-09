@@ -1,0 +1,70 @@
+{
+  "target": "ws://127.0.0.1:5174",
+  "room": "graybox-practice-probe-72f9c897-cefe-479f-9533-30ee8e9e59b7",
+  "startedAt": "2026-09-08T06:22:08.144Z",
+  "durationMs": 300000,
+  "clients": 12,
+  "mode": "one-feed-eleven-welcome-only",
+  "workload": "20Hz human / 10Hz bot poses; each shoots every 500ms, pings every 1s",
+  "gapsMs": {
+    "count": 9082,
+    "mean": 33.03,
+    "p50": 32,
+    "p95": 75,
+    "p99": 114,
+    "max": 381,
+    "over250": 3
+  },
+  "pingRttMs": {
+    "count": 3588,
+    "mean": 27.42,
+    "p50": 17,
+    "p95": 65,
+    "p99": 113,
+    "max": 245,
+    "over250": 0
+  },
+  "probeLoopDelayMs": {
+    "p99": 10.85,
+    "max": 11.48
+  },
+  "sent": 49041,
+  "shotsSent": 7148,
+  "disconnects": 0,
+  "errors": 0,
+  "peakBalls": 256,
+  "messages": {
+    "chaos": 9083,
+    "playerMoved": 32443,
+    "playerShot": 6548,
+    "pong": 299,
+    "playerDamaged": 19,
+    "playerDied": 3,
+    "scoreboardUpdate": 3,
+    "playerRespawn": 3
+  },
+  "bytes": {
+    "chaos": 272265846,
+    "playerMoved": 8286337,
+    "playerShot": 1659244,
+    "pong": 19435,
+    "playerDamaged": 2413,
+    "playerDied": 896,
+    "scoreboardUpdate": 3291,
+    "playerRespawn": 293
+  },
+  "anomalies": [
+    {
+      "at": 1788848600724,
+      "gapMs": 281
+    },
+    {
+      "at": 1788848639698,
+      "gapMs": 381
+    },
+    {
+      "at": 1788848814933,
+      "gapMs": 262
+    }
+  ]
+}

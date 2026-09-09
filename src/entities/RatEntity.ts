@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions, HatType } from '../utils/RatModel';
+import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import { RatAnimator } from '../utils/RatAnimator';
 import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
 import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppearance';
@@ -72,6 +73,7 @@ export class RatEntity {
     private deathImpact = 0;
     private deathContacts = 0;
     private restTime = 0;
+    private sharedDeath = false;
     private ragdollCenter = 0;
     private readonly centerOffset = new THREE.Vector3();
     private readonly hitColor = new THREE.Color(0xffa16b);
@@ -194,6 +196,12 @@ export class RatEntity {
 
         // Expand along each vertex normal instead of scaling from the feet.
         // Eyes/ears can share geometry, so expand each geometry only once.
+        // Every shell part has the same tint and lifetime. Share one owned
+        // material per rat so a crowd does not switch identical GPU state.
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: tint, transparent: true, opacity: GLOW_OPACITY,
+            side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false,
+        });
         const expandedGeometries = new Set<THREE.BufferGeometry>();
         const replacedMaterials = new Set<THREE.Material>();
         glowGroup.traverse((c) => {
@@ -214,14 +222,7 @@ export class RatEntity {
                 for (const material of Array.isArray(c.material) ? c.material : [c.material]) {
                     replacedMaterials.add(material);
                 }
-                c.material = new THREE.MeshBasicMaterial({
-                    color: tint,
-                    transparent: true,
-                    opacity: GLOW_OPACITY,
-                    side: THREE.BackSide,
-                    blending: THREE.AdditiveBlending,
-                    depthWrite: false,
-                });
+                c.material = glowMaterial;
                 c.castShadow = false;
                 c.receiveShadow = false;
                 if (c.userData.noOutline) c.visible = false;
@@ -255,6 +256,22 @@ export class RatEntity {
         // ── ALIVE ──
         const p = this.body.position;
         this.mesh.position.set(p.x, p.y, p.z);
+        this.presentAlive(dt);
+    }
+
+    /** Preserve the procedural rig and picking while batching its rigid leaves. */
+    public enableRigidBatching():void {
+        if(this.mesh.getObjectByName('rat-rigid-batch'))return;
+        batchRigidMeshes(this.mesh);
+        if(this.glowMesh)batchRigidMeshes(this.glowMesh);
+    }
+
+    public resetMotionHistory(): void { this.animator.resetMotionHistory(); }
+
+    /** Animate the current render root; remote presentation need not read physics. */
+    public presentAlive(dt: number): void {
+        if (this.dead) return;
+        const p = this.mesh.position;
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
         this.syncGlowTransform();
         this.animator.update(dt);
@@ -277,6 +294,7 @@ export class RatEntity {
 
     /** Physics owns the entire fall, including rebounds and the resting orientation. */
     private updateDeathRagdoll(dt = 0) {
+        if(this.sharedDeath)return;
         const t = this.deathTimer;
         if (this.deathPhase !== 'done') {
             const supported = this.world.contacts.some(contact =>
@@ -319,6 +337,17 @@ export class RatEntity {
             this.mesh.position.y + 1.5,
             this.mesh.position.z
         );
+    }
+
+    /** The incident corpse is a separate shared object; this player waits for respawn. */
+    public useSharedCorpse():void {
+        if(this.sharedDeath)return;
+        this.sharedDeath=true;this.dead=true;this.hp=0;
+        this.mesh.visible=false;if(this.glowMesh)this.glowMesh.visible=false;
+        this.billboard.sprite.removeFromParent();
+        this.body.velocity.setZero();this.body.angularVelocity.setZero();
+        this.body.collisionFilterMask=0;this.body.sleep();
+        playEntitySound('ratDeath',.6);
     }
 
     public takeDamage(amount: number, impactVel: THREE.Vector3) {
@@ -520,6 +549,7 @@ export class RatEntity {
     /** Restore the existing local/remote alive-body settings after a server respawn. */
     public respawn(data: Vec3Data & { hp: number }): void {
         this.dead = false;
+        this.sharedDeath=false;this.body.collisionFilterMask=-1;if(this.glowMesh)this.glowMesh.visible=true;
         this.resetAlivePresentation();
         this.animator.playRespawn();
         this.hp = data.hp;

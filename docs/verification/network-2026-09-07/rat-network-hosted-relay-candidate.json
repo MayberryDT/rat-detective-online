@@ -1,0 +1,56 @@
+{
+  "target": "ws://127.0.0.1:5175",
+  "room": "graybox-practice-probe-49e0767a-4273-4d1c-b3b8-871a8802554c",
+  "startedAt": "2026-09-08T06:10:52.170Z",
+  "durationMs": 45000,
+  "clients": 12,
+  "mode": "one-feed-eleven-welcome-only",
+  "workload": "20Hz human / 10Hz bot poses; each shoots every 1.2s, pings every 1s",
+  "gapsMs": {
+    "count": 1363,
+    "mean": 32.99,
+    "p50": 32,
+    "p95": 61,
+    "p99": 81,
+    "max": 254,
+    "over250": 1
+  },
+  "pingRttMs": {
+    "count": 540,
+    "mean": 22.79,
+    "p50": 18,
+    "p95": 42,
+    "p99": 75,
+    "max": 258,
+    "over250": 1
+  },
+  "probeLoopDelayMs": {
+    "p99": 10.85,
+    "max": 11.43
+  },
+  "sent": 6756,
+  "shotsSent": 456,
+  "disconnects": 0,
+  "errors": 0,
+  "peakBalls": 178,
+  "messages": {
+    "chaos": 1364,
+    "pong": 45,
+    "playerMoved": 4874,
+    "playerShot": 418,
+    "playerDamaged": 3
+  },
+  "bytes": {
+    "chaos": 30138654,
+    "pong": 2925,
+    "playerMoved": 1244386,
+    "playerShot": 105903,
+    "playerDamaged": 381
+  },
+  "anomalies": [
+    {
+      "at": 1788847859257,
+      "gapMs": 254
+    }
+  ]
+}

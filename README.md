@@ -1,95 +1,41 @@
 # Rat Detective Online
 
-Rat Detective Online is a fast-paced 3D browser game built with Three.js,
-TypeScript, Vite, and physics-backed interactions. Players join a shared city
-arena as detective rats, move through the level, and exchange real-time game
-state over a same-origin WebSocket.
+**[Play Rat Detective](https://ratdetective.online/)** — a free multiplayer browser shooter about detective rats, ricocheting cheese balls and spectacular physical chaos in a dark, run-down city.
 
-## Status
+Grab the Hot Case for double kill credit, shoot Dispatch to trigger a citywide incident, and turn launchers, flying bodies and loose evidence into trouble. The public game runs continuously on Cloudflare, with **8–11 server-owned AI rats and fresh names each round**. Up to thirteen humans can join. No player browser or local machine hosts the public AI.
 
-Portfolio prototype. The current city arena, movement, shooting, scoring,
-respawn, and round reset flows are playable locally through Cloudflare Workers.
+## Start here
 
-## Omarchy
+- [Agent instructions](AGENTS.md)
+- [Current game, architecture and known limits](docs/current-state.md)
+- [Documentation index](docs/README.md)
+- [Live deployment and recovery](docs/live-service.md)
+- [Development and testing](docs/tooling.md)
 
-The game stays a web app. Omarchy users also get a bar launcher that installs
-that same URL as a Super+Space Chromium app. See `docs/omarchy.md` and
-`omarchy/plugin/`.
-
-## Runtime
-
-The production app runs on Cloudflare Workers:
-
-- Vite builds the static browser assets into `dist`.
-- The Worker serves those static assets.
-- `/ws` is handled by the Worker and backed by a Durable Object game room.
-- `/health` is handled by the Worker for deployment smoke checks.
-
-## Local Development
-
-```bash
-npm install
-npm run dev
-```
-
-`npm run dev` is the fullstack watch workflow. It rebuilds client assets on
-change and serves the Worker-backed game, including `/ws`, at
-`http://localhost:5173`.
-
-`npm run preview` builds once and serves the same Worker-backed game at
-`http://localhost:5173`. Vite's static preview is not used because it does not
-run the game server.
-
-Smoke commands default to that origin:
-
-```bash
-npm run smoke:ws
-npm run smoke:browser
-npm run smoke:webgl-error
-```
-
-Override with a URL argument or `SMOKE_WS_URL` / `SMOKE_URL`. Isolated rooms are
-used unless `room` is already in the URL.
+The current release uses a shared version-2 city: landmarks with interiors, streets and alleys, sewers, vehicles, debris, animated rats and interactive machines. “Graybox” in source filenames is historical naming; those modules also power production.
 
 ## Controls
 
-- `WASD` / arrow keys: move
-- Mouse: look
-- Space: jump
-- Left mouse button: shoot
+WASD / arrow keys move, mouse looks, Space jumps, and left mouse shoots. Pointer lock owns gameplay input; menus must not intercept clicks while playing.
 
-## Checks
+## Development
 
-```bash
+```sh
+npm ci
 npm run typecheck
-npm run test
+npm test
 npm run build
-npm run audit
-npm run smoke:ci
 ```
 
-`npm run typecheck` type-checks application sources and tests.
-`npm run smoke:ci` builds, starts an isolated local Worker, and runs the
-WebSocket smoke against it.
+For normal local playtesting, the configured hosted relay serves the built client at `http://127.0.0.1:5174/`. See [tooling](docs/tooling.md) for its service, private backend requirements and the distinction between hosted, legacy local and static model previews. `npm run dev` and `npm run preview` still start local workerd on 5173; they are retained tools, not the recommended long-running playtest runtime after repeated local stalls.
 
-Visual fixture comparison (all hats, turning, damage, death and respawn, fixed seed) is separate
-from the game server. See `docs/tooling.md` and `test/visual/README.md`.
+## Publishing
 
-## Deployment
-
-Do not run a bare `wrangler deploy`. Production routes live only on the
-`production` environment.
-
-```bash
+```sh
 npm run deploy:staging
 npm run deploy:production
 ```
 
-Staging deploys Worker `rat-detective-staging` with no production routes.
-Production deploys the existing `rat-detective-preview` Worker and
-`rat-detective.animasai.co`.
+Use the intended environment; a bare default deploy is not a production release. Production Worker `rat-detective-preview` serves [ratdetective.online](https://ratdetective.online/). The previous `rat-detective.animasai.co` redirects there, preserving path and query. Sharing the canonical URL includes the title-screen screenshot and game description.
 
-## Contributing
-
-See `CONTRIBUTING.md`, `SECURITY.md`, and `docs/tooling.md` before opening
-issues or pull requests.
+[CONTRIBUTING.md](CONTRIBUTING.md) describes checks and change expectations. [SECURITY.md](SECURITY.md) describes the trust boundary. The optional [Omarchy companion](docs/omarchy.md) launches the web game and shows the public scoreboard; it does not run the game server.

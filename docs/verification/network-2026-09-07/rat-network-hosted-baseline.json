@@ -1,0 +1,55 @@
+{
+  "target": "wss://rat-detective-network-test.mayberrydt.workers.dev",
+  "room": "graybox-practice-probe-2fb8a5a1-f4e2-4123-8305-a94a249bc81e",
+  "startedAt": "2026-09-08T05:58:49.165Z",
+  "durationMs": 45000,
+  "clients": 12,
+  "mode": "one-feed-eleven-welcome-only",
+  "workload": "20Hz human / 10Hz bot poses; each shoots every 1.2s, pings every 1s",
+  "gapsMs": {
+    "count": 1365,
+    "mean": 32.95,
+    "p50": 32,
+    "p95": 67,
+    "p99": 79,
+    "max": 167,
+    "over250": 0
+  },
+  "pingRttMs": {
+    "count": 540,
+    "mean": 21.77,
+    "p50": 16,
+    "p95": 49,
+    "p99": 57,
+    "max": 97,
+    "over250": 0
+  },
+  "probeLoopDelayMs": {
+    "p99": 10.87,
+    "max": 11.03
+  },
+  "sent": 6772,
+  "shotsSent": 456,
+  "disconnects": 0,
+  "errors": 0,
+  "peakBalls": 60,
+  "messages": {
+    "playerJoined": 1,
+    "scoreboardUpdate": 1,
+    "chaos": 1366,
+    "playerMoved": 4906,
+    "playerShot": 418,
+    "pong": 45,
+    "playerDamaged": 1
+  },
+  "bytes": {
+    "playerJoined": 301,
+    "scoreboardUpdate": 1097,
+    "chaos": 14439069,
+    "playerMoved": 1159197,
+    "playerShot": 105859,
+    "pong": 2925,
+    "playerDamaged": 127
+  },
+  "anomalies": []
+}

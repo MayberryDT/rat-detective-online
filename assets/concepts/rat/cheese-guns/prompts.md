@@ -1,3 +1,5 @@
+> **Historical concept provenance.** Reviewed 2026-09-08. These are prompts used for earlier visual exploration, not instructions to replace the current models. See [current approved direction](../../../../docs/current-state.md).
+
 # Cheese gun attachment mockups
 
 Built-in imagegen concepts, not implemented models. References: approved logo-upgrades/02-logo-expression.png and current test/visual/baselines/seed-20260905-turned.png. Carry/fire views are illustrative; generated paw placement is not a precise rig specification.

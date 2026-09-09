@@ -1,5 +1,8 @@
 # Staging verification
 
+
+> **Historical record — September 6 staging deployment.** Classified on 2026-09-08. Statements below describe that pass, including its then-current code, deployment, authorization and test counts. They are not present-day instructions or a current feature inventory. Use [the current reference](../live-service.md) before acting. Preserve the measurements; do not restore obsolete behavior from this report.
+
 Separate Worker `rat-detective-staging` only. Production `rat-detective-preview` and custom domain `rat-detective.animasai.co` were not mutated.
 
 URL: https://rat-detective-staging.mayberrydt.workers.dev

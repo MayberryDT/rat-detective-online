@@ -199,3 +199,79 @@ it('settles respawn and turn follow-through without altering the body or ground-
     expect(rat.body.position.toArray()).toEqual([0, 0, 0]);
     rat.dispose();
 });
+
+
+it('keeps the brief firing flash attached to the moving barrel instead of parking a ball behind it', () => {
+    const scene = new THREE.Scene(), world = new CANNON.World();
+    const rat = new RatEntity(scene, world, new THREE.Vector3(), 'Rat', {});
+    const gun = new CheeseGun(scene, world, {} as THREE.AudioListener);
+    gun.authoritative = true;
+    const shot = gun.shoot(rat, new THREE.Vector3(8, 3, 20))!;
+    const flash = rat.mesh.getObjectByName('rat-muzzle-flash')!;
+    expect(flash.visible).toBe(true);
+    expect(flash.getWorldPosition(new THREE.Vector3()).toArray()).toEqual([shot.origin.x, shot.origin.y, shot.origin.z]);
+    rat.body.position.x += .3;
+    rat.mesh.rotation.y = .2;
+    rat.update(1 / 60);
+    expect(flash.visible).toBe(true);
+    expect(flash.getWorldPosition(new THREE.Vector3()).distanceTo(rat.getMuzzlePosition())).toBeLessThan(1e-12);
+    expect(flash.getWorldPosition(new THREE.Vector3()).distanceTo(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z))).toBeGreaterThan(.2);
+    for (let frame = 0; frame < 4; frame++) rat.update(1 / 60);
+    expect(flash.visible).toBe(false);
+    gun.replayShot(rat, shot);
+    expect(flash.visible).toBe(true);
+    rat.respawn({ x: 0, y: 0, z: 0, hp: 3 });
+    expect(flash.visible).toBe(false);
+    gun.dispose(); rat.dispose();
+});
+
+
+it('adds small airborne follow-through and a landing settle without moving physics or changing aim', () => {
+    const rat = new RatEntity(new THREE.Scene(), new CANNON.World(), new THREE.Vector3(), 'Rat', {});
+    const body = rat.mesh.getObjectByName('rat-body')!;
+    const hat = rat.mesh.getObjectByName('rat-hat')!;
+    const hatRest = hat.position.y;
+    rat.update(1 / 60);
+    for (let frame = 0; frame < 12; frame++) {
+        rat.body.position.y += .12;
+        rat.update(1 / 60);
+    }
+    expect(body.rotation.x).toBeLessThan(-.02);
+    expect(hat.position.y).toBeGreaterThan(hatRest);
+    expect(hat.position.y - hatRest).toBeLessThan(.04);
+    for (let frame = 0; frame < 12; frame++) {
+        rat.body.position.y -= .12;
+        rat.update(1 / 60);
+    }
+    const landed = rat.body.position.clone();
+    rat.update(1 / 60);
+    expect(body.scale.y).toBeLessThan(.98);
+    expect(rat.body.position).toEqual(landed);
+    for (let frame = 0; frame < 120; frame++) rat.update(1 / 60);
+    expect(Math.abs(body.rotation.x)).toBeLessThan(.00001);
+    expect(hat.position.y).toBeCloseTo(hatRest, 6);
+    rat.respawn({x:0,y:20,z:0,hp:3});
+    rat.update(1 / 60);
+    expect(body.rotation.x).toBeCloseTo(0, 10);
+    rat.dispose();
+});
+
+it('releases the upward jump pose at the apex and follows descent without a suspended hat or tail', () => {
+    const rat = new RatEntity(new THREE.Scene(), new CANNON.World(), new THREE.Vector3(), 'Rat', {});
+    const body = rat.mesh.getObjectByName('rat-body')!;
+    const hat = rat.mesh.getObjectByName('rat-hat')!;
+    const hatRest = hat.position.y;
+    rat.update(1 / 60);
+    for (let frame=0;frame<12;frame++) { rat.body.position.y+=.12;rat.update(1/60); }
+    expect(body.rotation.x).toBeLessThan(-.03);
+    for (let frame=0;frame<5;frame++) rat.update(1/60);
+    expect(Math.abs(body.rotation.x)).toBeLessThan(.007);
+    expect(hat.position.y-hatRest).toBeLessThan(.001);
+    for (let frame=0;frame<5;frame++) { rat.body.position.y-=.1;rat.update(1/60); }
+    expect(body.rotation.x).toBeGreaterThan(.015);
+    const position=rat.body.position.clone();
+    for (let frame=0;frame<12;frame++) rat.update(1/60);
+    expect(Math.abs(body.rotation.x)).toBeLessThan(.001);
+    expect(rat.body.position).toEqual(position);
+    rat.dispose();
+});

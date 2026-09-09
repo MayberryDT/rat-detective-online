@@ -1,0 +1,175 @@
+{
+  "verifiedAt": "2026-09-08T06:50:49.410Z",
+  "origin": "https://rat-detective-network-test.mayberrydt.workers.dev",
+  "seconds": 30,
+  "initial": {
+    "room": "public-live-v2",
+    "players": 11,
+    "bots": 11,
+    "phase": "playing",
+    "startedAt": 1788850182793,
+    "scores": [
+      {
+        "name": "Captain Cheddar",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Constable Alley",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Constable Trap",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Deputy Squeaks",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Detective Crumbs",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Detective Rind",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Inspector Gouda",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Inspector Nibbles",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Officer Whiskers",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Sergeant Scurry",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Sergeant Stilton",
+        "kills": 0,
+        "deaths": 0
+      }
+    ]
+  },
+  "before": {
+    "world": {
+      "seed": 3105880694,
+      "version": 2
+    },
+    "stateTime": 1788850213009.667,
+    "counts": {
+      "welcome": 1,
+      "currentPlayers": 1,
+      "chaos": 910,
+      "scoreboardUpdate": 6,
+      "playerMoved": 2896,
+      "pong": 29,
+      "playerShot": 58,
+      "playerDamaged": 17,
+      "playerDied": 5,
+      "playerRespawn": 4
+    },
+    "gaps": {
+      "count": 909,
+      "max": 115,
+      "mean": 32.993399339933994
+    }
+  },
+  "after": {
+    "stateTime": 1788850248659.667,
+    "counts": {
+      "welcome": 1,
+      "currentPlayers": 1,
+      "chaos": 154,
+      "scoreboardUpdate": 1,
+      "playerMoved": 382,
+      "pong": 4,
+      "playerRespawn": 2
+    },
+    "gaps": {
+      "count": 153,
+      "max": 107,
+      "mean": 32.568627450980394
+    }
+  },
+  "moved": 11,
+  "final": {
+    "room": "public-live-v2",
+    "players": 11,
+    "bots": 11,
+    "phase": "playing",
+    "startedAt": 1788850182793,
+    "scores": [
+      {
+        "name": "Constable Alley",
+        "kills": 3,
+        "deaths": 1
+      },
+      {
+        "name": "Deputy Squeaks",
+        "kills": 3,
+        "deaths": 2
+      },
+      {
+        "name": "Detective Rind",
+        "kills": 3,
+        "deaths": 2
+      },
+      {
+        "name": "Constable Trap",
+        "kills": 2,
+        "deaths": 1
+      },
+      {
+        "name": "Sergeant Scurry",
+        "kills": 1,
+        "deaths": 1
+      },
+      {
+        "name": "Captain Cheddar",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Detective Crumbs",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Inspector Nibbles",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Inspector Gouda",
+        "kills": 0,
+        "deaths": 1
+      },
+      {
+        "name": "Officer Whiskers",
+        "kills": 0,
+        "deaths": 1
+      },
+      {
+        "name": "Sergeant Stilton",
+        "kills": 0,
+        "deaths": 1
+      }
+    ]
+  }
+}

@@ -1,3 +1,8 @@
+import {isCentralBuilding,skylineMasses} from '../shared/skyline';
+import { WindowLightCycle } from './WindowLightCycle';
+import {CITY_STREETS} from '../shared/cityPlan';
+import { STREET_LAMPS, originalCityBuildingAllowed, isRampOpening } from '../shared/grayboxLayout';
+import { generatedStreetLamps } from '../shared/streetLampLayout';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import {
@@ -52,7 +57,7 @@ export class CityGenerator {
     private animationTime = 0;
     private flickerHeads: THREE.InstancedMesh[] = [];
     private steam: {mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>; x: number; z: number; phase: number}[] = [];
-    private windowStates: {texture: THREE.CanvasTexture; x: number; y: number; color: string; on: boolean; phase: number}[] = [];
+    private windowStates: {cycle: WindowLightCycle; uniform: {value: number}}[] = [];
     private readonly lightColor = new THREE.Color();
     private counts: CityCounts = emptyCounts();
 
@@ -63,9 +68,13 @@ export class CityGenerator {
         this.spec = spec ?? createWorldSpec();
     }
 
-    generate(): void {
+    private extension = false;
+    private extensionLayout:BuildingFootprint[]=[];
+    generate(layoutOverride?:BuildingFootprint[], extension=false): void {
+        this.extension=extension;
         if (this.generated) this.dispose();
-        const layout = generateBuildingLayout(this.spec, this.opts);
+        const layout = layoutOverride ?? generateBuildingLayout(this.spec, this.opts);
+        this.extensionLayout=layout;
         const decorate = createDecorationRandom(this.spec);
         this.generateBuildings(layout, decorate);
         this.generateLampProps(decorate);
@@ -89,15 +98,7 @@ export class CityGenerator {
             heads.setColorAt(0, this.lightColor.setRGB(brightness, brightness, brightness));
             heads.instanceColor!.needsUpdate = true;
         });
-        for (const window of this.windowStates) {
-            const on = (this.animationTime + window.phase) % 31 < 25;
-            if (on === window.on) continue;
-            window.on = on;
-            const ctx = window.texture.image.getContext('2d') as CanvasRenderingContext2D;
-            ctx.fillStyle = on ? window.color : '#000000'; ctx.fillRect(window.x, window.y, 12, 16);
-            ctx.fillStyle = '#000000'; ctx.fillRect(window.x + 5, window.y, 2, 16); ctx.fillRect(window.x, window.y + 8, 12, 1);
-            window.texture.needsUpdate = true;
-        }
+        for (const window of this.windowStates) window.uniform.value = window.cycle.update(this.animationTime);
         for (const puff of this.steam) {
             const phase = (this.animationTime * 0.2 + puff.phase) % 1;
             puff.mesh.position.set(puff.x + Math.sin(phase * 4 + puff.phase) * phase * 0.35, 0.12 + phase * 1.5, puff.z);
@@ -166,15 +167,107 @@ export class CityGenerator {
         const propRandom = createDecorationRandom({...this.spec, seed: this.spec.seed ^ 0x51f15e});
         const bin = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x293c39, roughness: 0.83, metalness: 0.3}));
         const wood = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x594431, roughness: 0.95}));
+        const canvas = this.trackMaterial(new THREE.MeshStandardMaterial({color:0x443239,roughness:1}));
         for (const building of layout) {
             this.addBuilding(building, rooftopMat, random);
             const { cx, cz, bw, bd, bh } = building;
+            if(isCentralBuilding(building)){
+                this.downtownDetails(building,trim,dark,brass);
+                continue;
+            }
             // Cornices and stone plinths give the original box silhouettes depth.
             for (const y of [0.22, 3.4, bh - 0.35]) {
                 this.boxDetail(trim, cx, y, cz, bw + 0.22, 0.18, bd + 0.22);
             }
             for (const x of [-1, 1]) for (const z of [-1, 1]) {
                 this.boxDetail(trim, cx + x * (bw / 2 - 0.08), bh / 2, cz + z * (bd / 2 - 0.08), 0.2, bh, 0.2);
+            }
+            const style = Math.abs(Math.round(cx * 13 + cz * 7)) % 3;
+            // Low shops, sawtooth workshops and stepped tenements read as different roofs.
+            if(this.extension && bh<=16){
+                for(const side of [-1,1]){
+                    this.boxDetail(trim,cx,bh+.35,cz+side*(bd/2-.3),bw,.7,.6);
+                    this.boxDetail(trim,cx+side*(bw/2-.3),bh+.35,cz,.6,.7,bd);
+                    this.boxDetail(dark,cx,3.05,cz+side*(bd/2+.35),Math.min(bw-2,12),.2,.8);
+                }
+                if(style===0){
+                    this.boxDetail(trim,cx,bh+1,cz+bd/2-.35,bw*.52,2,.7);
+                    this.boxDetail(trim,cx,bh+2.1,cz+bd/2-.35,bw*.55,.2,.82);
+                    for(const side of [-1,1]){
+                        this.boxDetail(canvas,cx,3.32,cz+side*(bd/2+.66),Math.min(bw-1,14),.26,1.35);
+                        this.boxDetail(trim,cx,3.12,cz+side*(bd/2+1.3),Math.min(bw-1,14),.3,.1);
+                        for(let i=-2;i<=2;i++)this.boxDetail(brass,cx+i*1.1,2,cz+side*(bd/2+.07),.06,1.7,.06);
+                    }
+                }else if(style===1){
+                    const strip=bd/3;
+                    for(let i=0;i<3;i++){
+                        const rz=cz-bd/2+(i+.5)*strip;
+                        this.boxDetail(dark,cx,bh+.9,rz,bw*.86,.16,strip*.94,.22);
+                        this.boxDetail(trim,cx,bh+1.15,rz+strip*.42,bw*.86,.48,.14);
+                        for(const x of [-.28,0,.28])this.boxDetail(dark,cx+bw*x,bh+1.1,rz,.1,.16,strip*.94,.22);
+                    }
+                }else{
+                    this.boxDetail(dark,cx,bh+.85,cz,bw*.62,1.7,Math.min(bd*.5,7));
+                    this.boxDetail(trim,cx,bh+1.8,cz,bw*.65,.18,Math.min(bd*.5,7)+.35);
+                    for(const dx of [-.3,.3]){
+                        this.boxDetail(trim,cx+bw*dx,bh+1.1,cz-bd*.25,.65,2.2,.65);
+                        this.boxDetail(dark,cx+bw*dx,bh+2.25,cz-bd*.25,.9,.16,.9);
+                    }
+                }
+            }
+            // Restrained architectural families share the existing instance batches.
+            // All relief is shallow; the original box remains the playable boundary.
+            const capHeight = bh <= 16 ? 0.48 : 0.32;
+            this.boxDetail(trim, cx, bh - 0.65, cz, bw + 0.38, capHeight, bd + 0.38);
+            this.boxDetail(dark, cx, bh - 1.05, cz, bw + 0.12, 0.16, bd + 0.12);
+            for (const side of [-1, 1]) {
+                const faceZ = cz + side * (bd / 2 + 0.06);
+                const faceX = cx + side * (bw / 2 + 0.06);
+                // Framed entrance, glazed transom, handles, and a strong lintel.
+                for (const offset of [-1.02, 1.02]) {
+                    this.boxDetail(trim, cx + offset, 1.45, faceZ, 0.2, 2.9, 0.18);
+                    this.boxDetail(brass, cx + offset * 0.25, 1.1, faceZ + side * 0.07, 0.035, 0.32, 0.08);
+                }
+                this.boxDetail(trim, cx, 2.98, faceZ, 2.24, 0.24, 0.22);
+                this.boxDetail(dark, cx, 2.67, faceZ + side * 0.015, 1.82, 0.34, 0.06);
+                this.boxDetail(brass, cx, 2.67, faceZ + side * 0.055, 0.035, 0.32, 0.04);
+                // Masonry bays on every elevation, not just a decorated front.
+                const bays = Math.max(2, Math.min(5, Math.floor(bw / 5)));
+                for (let bay = 0; bay <= bays; bay++) {
+                    const x = cx - bw / 2 + 0.3 + bay * (bw - 0.6) / bays;
+                    if (style === 0) {
+                        this.boxDetail(trim, x, 2, faceZ, 0.22, 3.5, 0.14);
+                    } else {
+                        this.boxDetail(style === 1 ? trim : dark, x, (bh + 3.6) / 2, faceZ,
+                            style === 1 ? 0.26 : 0.16, Math.max(0.4, bh - 4.8), 0.13);
+                    }
+                }
+                for (const offset of [-0.28, 0.28]) {
+                    this.boxDetail(style === 1 ? trim : dark, faceX, (bh + 3.6) / 2, cz + bd * offset,
+                        0.13, Math.max(0.4, bh - 4.8), 0.25);
+                }
+                if (style === 0 || bh <= 16) {
+                    // Workshop side vent and horizontal lintels break up blank slabs.
+                    this.boxDetail(dark, faceX, 2.2, cz, 0.08, 1.25, Math.min(3, bd * 0.35));
+                    for (let slat = 0; slat < 4; slat++) this.boxDetail(trim, faceX + side * 0.045,
+                        1.75 + slat * 0.27, cz, 0.04, 0.06, Math.min(2.8, bd * 0.32));
+                    this.boxDetail(trim, cx, Math.min(6.4, bh - 2), faceZ, bw, 0.2, 0.18);
+                } else if (style === 2) {
+                    for (let y = 9; y < bh - 5; y += 12) this.boxDetail(trim, cx, y, cz,
+                        bw + 0.15, 0.15, bd + 0.15);
+                }
+            }
+            if (bh > 16) {
+                // Rooftop service housing, louver slats, and paired exhaust caps.
+                const roofW = Math.min(4.5, bw * 0.4), roofD = Math.min(3, bd * 0.35);
+                this.boxDetail(dark, cx, bh + 0.75, cz, roofW, 1.5, roofD);
+                this.boxDetail(trim, cx, bh + 1.55, cz, roofW + 0.25, 0.16, roofD + 0.25);
+                for (let row = 0; row < 3; row++) this.boxDetail(trim, cx, bh + 0.4 + row * 0.3,
+                    cz + roofD / 2 + 0.025, roofW * 0.8, 0.06, 0.04);
+                for (const offset of [-0.25, 0.25]) {
+                    this.boxDetail(dark, cx + bw * offset, bh + 0.6, cz - bd * 0.24, 0.35, 1.2, 0.35);
+                    this.boxDetail(trim, cx + bw * offset, bh + 1.23, cz - bd * 0.24, 0.65, 0.12, 0.65);
+                }
             }
             // Small service props hug the building edge, leaving street routes open.
             const serviceZ = cz + bd / 2 + 0.45;
@@ -189,7 +282,7 @@ export class CityGenerator {
                 for (const offset of [-0.23, 0.23]) this.boxDetail(dark, crateX + offset, 0.36, serviceZ + 0.33, 0.055, 0.67, 0.035);
             }
             if (propRandom() < 0.2) {
-                for (let level = 0; level < 3; level++) {
+                for (let level = 0; level < 3 && 5.3 + level * 3 < bh; level++) {
                     const y = 4.5 + level * 3;
                     this.boxDetail(dark, cx + bw / 2 + 0.45, y, cz, 0.9, 0.10, 2.4);
                     this.boxDetail(dark, cx + bw / 2 + 0.87, y + 0.7, cz, 0.055, 0.055, 2.4);
@@ -209,43 +302,113 @@ export class CityGenerator {
 
     private addBuilding(building: BuildingFootprint, rooftopMat: THREE.Material, random: () => number): void {
         const { cx, cz, bw, bd, bh } = building;
-        const { facade, glow } = this.createWindowTexture(Math.ceil(bw), Math.ceil(bh), random, Math.abs(cx) < 65 && Math.abs(cz) < 65);
+        const { facade, glow, rooms } = this.createWindowTexture(Math.ceil(bw), Math.ceil(bh), random);
         this.textures.add(facade); this.textures.add(glow);
 
         const mat = this.trackMaterial(new THREE.MeshStandardMaterial({
-            color: new THREE.Color().setHSL(0.60 + random() * 0.12, 0.10 + random() * 0.08, 0.22 + random() * 0.09),
+            color: new THREE.Color().setHSL(0.60 + random() * 0.12, 0.10 + random() * 0.08, 0.065 + random() * 0.025),
             map: facade,
             roughness: 0.8,
             metalness: 0.08,
             emissiveMap: glow,
             emissive: 0xffffff,
-            emissiveIntensity: 1.65,
+            emissiveIntensity: 1.1,
         }));
 
-        const geo = this.trackGeometry(new THREE.BoxGeometry(bw, bh, bd));
-        // Sample blank facade texels on the roof/foundation without adding draw calls.
-        const uv = geo.getAttribute('uv');
-        const indices = geo.getIndex()!;
-        for (const group of geo.groups) if (group.materialIndex === 2 || group.materialIndex === 3) {
-            for (let i = group.start; i < group.start + group.count; i++) uv.setXY(indices.getX(i), 0, 0);
-        }
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(cx, bh / 2, cz);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.userData.aimTarget = true;
-        this.addObject(mesh);
+        // Six apartment/office sections share per-building uniforms. Whole groups
+        // change occupancy visibly, with no new lights or per-frame texture uploads.
+        const roomUniforms = rooms.map((room, i) => {
+            const seed = this.spec.seed ^ Math.imul(Math.round(cx * 100), 73856093)
+                ^ Math.imul(Math.round(cz * 100), 19349663) ^ Math.imul(i + 1, 83492791);
+            const cycle = new WindowLightCycle(seed);
+            const uniform = {value: cycle.brightness};
+            this.windowStates.push({cycle, uniform});
+            return {rect: {value: room}, light: uniform};
+        });
+        mat.onBeforeCompile = shader => {
+            let declarations = '';
+            let emission = '#include <emissivemap_fragment>\nfloat occupancy = 1.0;\n';
+            roomUniforms.forEach((room, i) => {
+                shader.uniforms[`roomRect${i}`] = room.rect;
+                shader.uniforms[`roomLight${i}`] = room.light;
+                declarations += `uniform vec4 roomRect${i};\nuniform float roomLight${i};\n`;
+                emission += `\n#ifdef USE_EMISSIVEMAP\n{
+                    vec2 insideRoom = step(roomRect${i}.xy, vEmissiveMapUv) * step(vEmissiveMapUv, roomRect${i}.zw);
+                    occupancy *= mix(1.0, roomLight${i}, insideRoom.x * insideRoom.y);
+                }\n#endif\n`;
+            });
+            emission += `\n#ifdef USE_EMISSIVEMAP\nfloat roomPixel = step(0.015, max(emissiveColor.r, max(emissiveColor.g, emissiveColor.b)));\ndiffuseColor.rgb = mix(diffuseColor.rgb, min(diffuseColor.rgb, vec3(0.018, 0.024, 0.032)), roomPixel * (1.0 - occupancy));\ntotalEmissiveRadiance *= occupancy;\n#endif\n`;
+            shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + declarations)
+                .replace('#include <emissivemap_fragment>', emission);
+        };
+        mat.customProgramCacheKey = () => `city-room-occupancy-v2-${roomUniforms.length}`;
 
-        if (random() < 0.4) {
+        for(const mass of skylineMasses(building)){
+            const geo = this.trackGeometry(new THREE.BoxGeometry(mass.w, mass.h, mass.d));
+            const uv = geo.getAttribute('uv');
+            const base = mass.y - mass.h / 2;
+            for(let i=0;i<uv.count;i++)uv.setY(i,(base+uv.getY(i)*mass.h)/bh);
+            // Roof/foundation sample blank texels rather than sideways windows.
+            const indices = geo.getIndex()!;
+            for (const group of geo.groups) if (group.materialIndex === 2 || group.materialIndex === 3) {
+                for (let i = group.start; i < group.start + group.count; i++) uv.setXY(indices.getX(i), 0, 0);
+            }
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(mass.x,mass.y,mass.z);
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            mesh.userData.aimTarget = true;
+            this.addObject(mesh);
+            const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
+            body.addShape(new CANNON.Box(new CANNON.Vec3(mass.w/2,mass.h/2,mass.d/2)));
+            body.position.set(mass.x,mass.y,mass.z);
+            body.updateAABB(); this.world.addBody(body); this.bodies.push(body);
+        }
+        if (!isCentralBuilding(building) && random() < 0.4) {
             this.addRooftopDetail(cx, cz, bw, bd, bh, rooftopMat, random);
             this.counts.rooftops += 1;
         }
+    }
 
-        const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-        body.addShape(new CANNON.Box(new CANNON.Vec3(bw / 2, bh / 2, bd / 2)));
-        body.position.set(cx, bh / 2, cz);
-        this.world.addBody(body);
-        this.bodies.push(body);
+    /** Deeply articulated downtown towers, built around their real stepped masses. */
+    private downtownDetails(b:BuildingFootprint,stone:THREE.Material,steel:THREE.Material,brass:THREE.Material):void {
+        const style=Math.abs(Math.round(b.cx+b.cz))%3;
+        for(const m of skylineMasses(b)){
+            const bottom=m.y-m.h/2,top=m.y+m.h/2;
+            // Setback cornices, recessed window bays, and continuous slender piers.
+            this.boxDetail(stone,m.x,top-.3,m.z,m.w+.38,.6,m.d+.38);
+            this.boxDetail(steel,m.x,top-1.05,m.z,m.w+.15,.24,m.d+.15);
+            for(const side of [-1,1]){
+                const z=m.z+side*(m.d/2+.07),x=m.x+side*(m.w/2+.07);
+                for(let i=0;i<=Math.floor(m.w/4);i++){
+                    const px=m.x-m.w/2+.22+i*(m.w-.44)/Math.floor(m.w/4);
+                    this.boxDetail(style===2?steel:stone,px,m.y,z,.28,m.h-.65,.2);
+                    if(style===0)this.boxDetail(brass,px,top-2.5,z+side*.11,.085,3,.04);
+                }
+                for(let i=0;i<=Math.floor(m.d/4);i++){
+                    const pz=m.z-m.d/2+.22+i*(m.d-.44)/Math.floor(m.d/4);
+                    this.boxDetail(style===2?steel:stone,x,m.y,pz,.2,m.h-.65,.28);
+                }
+                for(let y=bottom+6;y<top-3;y+=style===1?6:12){
+                    this.boxDetail(style===1?stone:steel,m.x,y,z,m.w,.18,.18);
+                    this.boxDetail(style===1?stone:steel,x,y,m.z,.18,.18,m.d);
+                }
+            }
+        }
+        // A grounded entrance and textured plinth at the original walkable boundary.
+        for(const side of [-1,1]){
+            const z=b.cz+side*(b.bd/2+.09);
+            this.boxDetail(stone,b.cx,1.2,z,b.bw,2.4,.2);
+            this.boxDetail(steel,b.cx,2,z+side*.13,3.8,4,.08);
+            for(const x of [-2.2,2.2])this.boxDetail(stone,b.cx+x,2.2,z+side*.16,.48,4.4,.36);
+            this.boxDetail(brass,b.cx,4.5,z+side*.16,5.1,.16,.42);
+            this.boxDetail(steel,b.cx,4.78,z+side*.43,5.8,.25,1.1);
+            for(const x of [-.9,0,.9])this.boxDetail(brass,b.cx+x,2,z+side*.2,.065,3.8,.065);
+            for(const x of [-3.2,3.2])this.boxDetail(brass,b.cx+x,3.6,z+side*.22,.25,.75,.18);
+        }
+        const crown=skylineMasses(b)[2];
+        this.boxDetail(steel,b.cx,b.bh+.7,b.cz,crown.w*.62,1.4,crown.d*.62);
+        this.boxDetail(stone,b.cx,b.bh+1.5,b.cz,crown.w*.7,.2,crown.d*.7);
+        for(const side of [-1,1])this.boxDetail(brass,b.cx+side*crown.w*.28,b.bh+2,b.cz,.13,2.5,.13);
     }
 
     private addRooftopDetail(
@@ -271,8 +434,8 @@ export class CityGenerator {
         this.addObject(detail);
     }
 
-    private boxDetail(material: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number): void {
-        dummy.position.set(x, y, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix();
+    private boxDetail(material: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number, slope=0): void {
+        dummy.position.set(x, y, z); dummy.rotation.set(slope, 0, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix();
         const list = this.details.get(material) ?? [];
         list.push(dummy.matrix.clone()); this.details.set(material, list);
     }
@@ -290,27 +453,32 @@ export class CityGenerator {
         this.details.clear();
     }
 
-    private createWindowTexture(widthUnits: number, heightUnits: number, random: () => number, animate: boolean) {
+    private createWindowTexture(widthUnits: number, heightUnits: number, random: () => number) {
         const canvas = document.createElement('canvas'), emission = document.createElement('canvas');
         canvas.width = emission.width = Math.max(64, Math.ceil(widthUnits / 2.4) * 24);
         canvas.height = emission.height = Math.max(64, Math.ceil(heightUnits / 3) * 28);
         const ctx = canvas.getContext('2d')!, light = emission.getContext('2d')!;
-        let animatedWindow: {x:number; y:number; color:string} | undefined;
-        ctx.fillStyle = '#a5a1a2'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#49434f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         light.fillStyle = '#000000'; light.fillRect(0, 0, canvas.width, canvas.height);
         for (let y = 0; y < canvas.height; y += 7) {
-            ctx.fillStyle = y % 28 === 0 ? '#777582' : '#95919a';
+            ctx.fillStyle = y % 28 === 0 ? '#302b37' : '#403947';
             ctx.fillRect(0, y, canvas.width, 1);
         }
+        for (let y = 0; y < canvas.height; y += 7) {
+            ctx.fillStyle = '#37323e';
+            for (let x = (y / 7) % 2 === 0 ? 0 : 12; x < canvas.width; x += 24) ctx.fillRect(x, y, 1, 7);
+        }
+        // The street floor has a darker stone base, keeping bright rooms above it.
+        ctx.fillStyle = '#332f3a'; ctx.fillRect(0, canvas.height - 26, canvas.width, 26);
+        ctx.fillStyle = '#5a5260'; ctx.fillRect(0, canvas.height - 28, canvas.width, 2);
         for (let y = 12; y < canvas.height - 28; y += 28) for (let x = 6; x < canvas.width - 10; x += 24) {
-            ctx.fillStyle = '#777079'; ctx.fillRect(x - 2, y - 2, 16, 20);
+            ctx.fillStyle = '#38303e'; ctx.fillRect(x - 2, y - 2, 16, 20);
             ctx.fillStyle = '#202c3b'; ctx.fillRect(x, y, 12, 16);
-            ctx.fillStyle = '#837985'; ctx.fillRect(x - 2, y + 16, 16, 2);
+            ctx.fillStyle = '#45394b'; ctx.fillRect(x - 2, y + 16, 16, 2);
             if (random() < 0.32) {
                 const palette = ['#ffd27a', '#ffc04b', '#ffe5a0', '#7fc9e8', '#e37754'];
                 const selection = random();
                 const color = palette[selection < 0.40 ? 0 : selection < 0.65 ? 1 : selection < 0.80 ? 2 : selection < 0.93 ? 3 : 4];
-                if (animate && y >= canvas.height - 84 && !animatedWindow) animatedWindow = {x,y,color};
                 ctx.fillStyle = color; light.fillStyle = color;
                 ctx.fillRect(x, y, 12, 16); light.fillRect(x, y, 12, 16);
                 // Mullions and occasional lowered blinds preserve window structure.
@@ -325,8 +493,11 @@ export class CityGenerator {
         const facade = new THREE.CanvasTexture(canvas), glow = new THREE.CanvasTexture(emission);
         facade.colorSpace = glow.colorSpace = THREE.SRGBColorSpace;
         facade.anisotropy = glow.anisotropy = 4;
-        if (animatedWindow) this.windowStates.push({texture: glow, ...animatedWindow, on: true, phase: this.windowStates.length * 1.7});
-        return { facade, glow };
+        const rooms:THREE.Vector4[]=[];
+        for(let row=0;row<3;row++)for(let column=0;column<2;column++){
+            rooms.push(new THREE.Vector4(column/2,row/3,(column+1)/2,(row+1)/3));
+        }
+        return { facade, glow, rooms };
     }
 
     private generateLampProps(random: () => number): void {
@@ -335,6 +506,9 @@ export class CityGenerator {
         const offset = streetWidth / 2 + 1.5;
         const cells = new Map<string, THREE.Vector3[]>();
 
+        if(this.extension){
+            for(const [x,z] of generatedStreetLamps(this.extensionLayout,STREET_LAMPS))this.pushLamp(cells,x,z);
+        }else{
         for (let gx = -half; gx < half; gx++) {
             for (let gz = -half; gz < half; gz++) {
                 const ix = (gx + 0.5) * blockSpacing;
@@ -344,6 +518,7 @@ export class CityGenerator {
             }
         }
 
+        }
         if (cells.size === 0) return;
 
         const poleGeo = this.trackGeometry(new THREE.LatheGeometry([[0.25,0],[0.25,0.18],[0.18,0.25],[0.12,0.8],[0.09,5.7],[0.22,5.9],[0.22,6]].map(([r,y]) => new THREE.Vector2(r,y - 3)), 10));
@@ -492,6 +667,15 @@ export class CityGenerator {
         const horizRoadGeo = this.trackGeometry(new THREE.PlaneGeometry(totalLen, streetWidth));
         const vertRoadGeo = this.trackGeometry(new THREE.PlaneGeometry(streetWidth, totalLen));
 
+        if(this.extension){
+            const segmentGeo=this.trackGeometry(new THREE.PlaneGeometry(2,2));
+            const positions: [number,number][]=[];
+            for(let x=-195;x<166;x+=2)for(let z=-195;z<166;z+=2){
+                if(isRampOpening(x,z))continue;
+                if(CITY_STREETS.some(r=>Math.abs(x-r.x)<r.w/2 && Math.abs(z-r.z)<r.d/2))positions.push([x,z]);
+            }
+            this.addDashStrip(segmentGeo,asphaltMat,positions);
+        }else{
         for (let gz = -half; gz < half; gz++) {
             const z = (gz + 0.5) * blockSpacing;
             const road = new THREE.Mesh(horizRoadGeo, asphaltMat);
@@ -512,6 +696,8 @@ export class CityGenerator {
             this.counts.roadMeshes += 1;
         }
 
+        }
+
         const paving = document.createElement('canvas'); paving.width = paving.height = 128;
         const pavingCtx = paving.getContext('2d')!;
         pavingCtx.fillStyle = '#646778'; pavingCtx.fillRect(0,0,128,128);
@@ -528,9 +714,29 @@ export class CityGenerator {
         const paint = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x77716f, roughness: 0.9}));
         paint.userData.receiveDetailShadow = false;
         const drain = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x202b38, roughness: 0.6, metalness: 0.5}));
+        if(this.extension){
+            for(const b of this.extensionLayout){
+                this.boxDetail(sidewalk,b.cx,0.015,b.cz,b.bw+2,.06,b.bd+2);
+                for(const side of [-1,1]){
+                    this.boxDetail(curb,b.cx+side*(b.bw/2+1),.04,b.cz,.16,.08,b.bd+2);
+                    this.boxDetail(curb,b.cx,.04,b.cz+side*(b.bd/2+1),b.bw+2,.08,.16);
+                }
+            }
+            for(const r of CITY_STREETS){
+                const horizontal=r.w>r.d,span=horizontal?r.w:r.d;
+                for(let t=-span/2+4;t<span/2-4;t+=7){
+                    const x=r.x+(horizontal?t:0),z=r.z+(horizontal?0:t);
+                    if(isRampOpening(x,z))continue;
+                    if(CITY_STREETS.some(other=>other!==r&&Math.abs(x-other.x)<other.w/2+2&&Math.abs(z-other.z)<other.d/2+2))continue;
+                    this.boxDetail(paint,x,.035,z,horizontal?2.5:.12,.015,horizontal?.12:2.5);
+                }
+            }
+            return;
+        }
         const block = blockSpacing - streetWidth;
         for (let gx = -half; gx < half; gx++) for (let gz = -half; gz < half; gz++) {
             const x = gx * blockSpacing, z = gz * blockSpacing;
+            if(this.extension && !originalCityBuildingAllowed(x,z))continue;
             this.boxDetail(sidewalk, x, 0.005, z, block, 0.05, block);
             for (const side of [-1, 1]) {
                 this.boxDetail(curb, x + side * block / 2, 0.025, z, 0.18, 0.08, block);
@@ -586,6 +792,7 @@ export class CityGenerator {
         material: THREE.Material,
         positions: readonly (readonly [number, number])[],
     ): void {
+        if(this.extension)positions=positions.filter(([x,z])=>!isRampOpening(x,z));
         if (positions.length === 0) return;
         const mesh = new THREE.InstancedMesh(geometry, material, positions.length);
         mesh.frustumCulled = true;

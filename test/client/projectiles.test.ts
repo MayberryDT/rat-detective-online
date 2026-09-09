@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { CheeseGun } from '../../src/weapons/CheeseGun';
 import { RatEntity } from '../../src/entities/RatEntity';
+import { RatController } from '../../src/player/RatController';
 
 function setup() {
   const scene = new THREE.Scene();
@@ -14,6 +15,38 @@ function setup() {
 }
 
 describe('projectile behavior', () => {
+  it('shows an authoritative local shot at the muzzle immediately and hands off by shot ID', () => {
+    const {gun,owner,projectiles}=setup();gun.authoritative=true;
+    const shot=gun.shoot(owner,new THREE.Vector3(100,1.45,0))!;
+    expect(projectiles()).toHaveLength(0);
+    gun.predictShot(owner,shot);gun.predictShot(owner,shot);
+    expect(projectiles()).toHaveLength(1);
+    expect(projectiles()[0].position.toArray()).toEqual([shot.origin.x,shot.origin.y,shot.origin.z]);
+    gun.update(1/60);
+    expect(projectiles()[0].position.x).toBeCloseTo(shot.origin.x+shot.direction.x*175/60);
+    gun.reconcilePredictedShots([{id:'other-shot'}]);expect(projectiles()).toHaveLength(1);
+    gun.reconcilePredictedShots([{id:shot.shotId}]);expect(projectiles()).toHaveLength(0);
+    gun.dispose();owner.dispose();
+  });
+
+  it('never applies damage or sends a hit for a visual prediction', () => {
+    const {gun,owner,world,scene,projectiles}=setup();gun.authoritative=true;
+    const victim=new RatEntity(scene,world,new THREE.Vector3(3,0,0),'Target',{});
+    const hit=vi.fn();gun.onHitEntity=hit;
+    gun.predictShot(owner,{shotId:'prediction',origin:{x:1,y:1.45,z:0},direction:{x:1,y:0,z:0}});
+    gun.update(.02);
+    expect(victim.hp).toBe(3);expect(hit).not.toHaveBeenCalled();expect(projectiles()).toHaveLength(0);
+    gun.dispose();owner.dispose();victim.dispose();
+  });
+
+  it('bounds pending prediction memory and removes unconfirmed shots after half a second', () => {
+    const {gun,owner,projectiles}=setup();gun.authoritative=true;
+    for(let i=0;i<100;i++)gun.predictShot(owner,{shotId:`pending-${i}`,origin:{x:10,y:10,z:10},direction:{x:1,y:0,z:0}});
+    expect(projectiles()).toHaveLength(32);
+    gun.update(.51);expect(projectiles()).toHaveLength(0);
+    gun.dispose();owner.dispose();
+  });
+
   it('shares GPU resources across shots and retains them until gun disposal', () => {
     const { gun, owner, projectiles } = setup();
     gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
@@ -55,6 +88,47 @@ describe('projectile behavior', () => {
     const direction = new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z);
     const convergence = ball.position.clone().addScaledVector(direction, (-9.5 - ball.position.z) / direction.z);
     expect(convergence.distanceTo(new THREE.Vector3(0, 4, -9.5))).toBeLessThan(1e-10);
+  });
+
+  it.each([0, 1.2, 3])('converges on the reticle after a shoulder-camera update without rendering (rear wall: %s)', rearWall => {
+    const scene = new THREE.Scene(), world = new CANNON.World();
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 600);
+    const material = new THREE.MeshBasicMaterial();
+    if (rearWall) {
+      const obstruction = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 1), material);
+      obstruction.position.set(0, 5, -rearWall);
+      obstruction.userData.aimTarget = true;
+      scene.add(obstruction);
+    }
+    const player = new RatController(scene, world, camera, '', {}, new THREE.Vector3());
+    player.updateView();
+    // Compute the expected screen center independently without refreshing the
+    // real camera matrix. This recreates firing before the renderer sees it.
+    const expectedCamera = camera.clone();
+    expectedCamera.updateMatrixWorld(true);
+    const viewRay = new THREE.Raycaster();
+    viewRay.setFromCamera(new THREE.Vector2(), expectedCamera);
+    const target = viewRay.ray.at(25, new THREE.Vector3());
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), material);
+    wall.position.copy(target);
+    wall.quaternion.copy(expectedCamera.quaternion);
+    wall.userData.aimTarget = true;
+    scene.add(wall);
+    scene.updateMatrixWorld(true);
+    const gun = new CheeseGun(scene, world, {} as THREE.AudioListener);
+    gun.authoritative = true;
+    gun.setPlayer(camera, player.entity);
+    const shot = gun.shoot(player.entity, new THREE.Vector3(100, 0, 0))!;
+    const ray = new THREE.Ray(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
+      new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z));
+    const convergence = ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(viewRay.ray.direction, target), new THREE.Vector3())!;
+    expect(convergence.distanceTo(target)).toBeLessThan(1e-9);
+    const screen = convergence.project(expectedCamera);
+    expect(Math.abs(screen.x)).toBeLessThan(1e-9);
+    expect(Math.abs(screen.y)).toBeLessThan(1e-9);
+    gun.dispose(); player.dispose();
+    scene.traverse(object => { if (object instanceof THREE.Mesh) object.geometry.dispose(); });
+    material.dispose();
   });
 
   it('launches from the pistol and preserves speed, gravity, and five-second lifetime', () => {

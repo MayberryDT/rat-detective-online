@@ -1,3 +1,5 @@
+> **Historical concept provenance.** Reviewed 2026-09-08. These are prompts used for earlier visual exploration, not instructions to replace the current models. See [current approved direction](../../../docs/current-state.md).
+
 # Rat design concepts
 
 Generated using the built-in image generation tool. These are concept images, not completed 3D models.

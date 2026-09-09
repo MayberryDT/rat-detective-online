@@ -30,10 +30,13 @@ const harness = vi.hoisted(() => {
     }
 
     class FakeGun {
+        authoritative = false;
         onHitEntity: ((victim: unknown, damage: number) => void) | null = null;
         setPlayer = vi.fn();
         shoot = vi.fn(() => ({ shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 } }));
         replayShot = vi.fn();
+        predictShot = vi.fn();
+        reconcilePredictedShots = vi.fn();
         clearProjectiles = vi.fn();
         update = vi.fn();
         dispose = vi.fn();
@@ -41,6 +44,9 @@ const harness = vi.hoisted(() => {
     }
 
     class FakeRemotes {
+        prepareFrame = vi.fn();
+        updateDeaths = vi.fn();
+        presentFrame = vi.fn();
         snapshot = vi.fn();
         add = vi.fn();
         move = vi.fn();
@@ -477,6 +483,14 @@ describe('GameSession', () => {
         expect(transport.send).toHaveBeenCalledWith({
             type: 'shoot', shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 },
         });
+        expect(gun.predictShot).not.toHaveBeenCalled();
+        gun.authoritative=true;
+        doc.dispatch('mousedown', Object.assign(new Event('mousedown'), { button: 0 }));
+        expect(gun.predictShot).toHaveBeenCalledTimes(1);
+        expect(gun.predictShot).toHaveBeenCalledWith(harness.rats[0].entity,gun.shoot.mock.results[1].value);
+        transport.send.mockReturnValueOnce(false);
+        doc.dispatch('mousedown', Object.assign(new Event('mousedown'), { button: 0 }));
+        expect(gun.predictShot).toHaveBeenCalledTimes(1);
         remotes.idFor.mockReturnValue('other');
         gun.onHitEntity?.({} as never, 3);
         expect(transport.send).toHaveBeenCalledWith({ type: 'hit', victimId: 'other', damage: 3 });

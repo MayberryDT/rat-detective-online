@@ -1,0 +1,95 @@
+{
+  "target": "ws://127.0.0.1:5175",
+  "room": "graybox-practice-probe-e4aaf872-9aa9-432e-80c5-bf2948767d65",
+  "startedAt": "2026-09-08T06:04:16.070Z",
+  "durationMs": 45001,
+  "clients": 12,
+  "mode": "one-feed-eleven-welcome-only",
+  "workload": "20Hz human / 10Hz bot poses; each shoots every 1.2s, pings every 1s",
+  "gapsMs": {
+    "count": 1266,
+    "mean": 35.51,
+    "p50": 35,
+    "p95": 37,
+    "p99": 39,
+    "max": 44,
+    "over250": 0
+  },
+  "pingRttMs": {
+    "count": 540,
+    "mean": 2.14,
+    "p50": 2,
+    "p95": 4,
+    "p99": 4,
+    "max": 5,
+    "over250": 0
+  },
+  "probeLoopDelayMs": {
+    "p99": 10.84,
+    "max": 11.03
+  },
+  "sent": 6756,
+  "shotsSent": 456,
+  "disconnects": 0,
+  "errors": 0,
+  "peakBalls": 60,
+  "messages": {
+    "scoreboardUpdate": 1,
+    "chaos": 1267,
+    "pong": 45,
+    "playerMoved": 4884,
+    "playerShot": 418,
+    "playerDamaged": 1
+  },
+  "bytes": {
+    "scoreboardUpdate": 1097,
+    "chaos": 13418974,
+    "pong": 2925,
+    "playerMoved": 1246706,
+    "playerShot": 105871,
+    "playerDamaged": 127
+  },
+  "hostBefore": {
+    "at": 1788847456070,
+    "processes": [
+      {
+        "pid": 55775,
+        "majorFaults": 4,
+        "minorFaults": 11226,
+        "cpuNs": 107447803,
+        "waitNs": 194918,
+        "swapKb": 0
+      },
+      {
+        "pid": 55811,
+        "majorFaults": 22,
+        "minorFaults": 28722,
+        "cpuNs": 337656575,
+        "waitNs": 166727,
+        "swapKb": 0
+      }
+    ]
+  },
+  "hostAfter": {
+    "at": 1788847501071,
+    "processes": [
+      {
+        "pid": 55775,
+        "majorFaults": 4,
+        "minorFaults": 11328,
+        "cpuNs": 328529418,
+        "waitNs": 1415584,
+        "swapKb": 0
+      },
+      {
+        "pid": 55811,
+        "majorFaults": 26,
+        "minorFaults": 47077,
+        "cpuNs": 5671979171,
+        "waitNs": 4558647,
+        "swapKb": 0
+      }
+    ]
+  },
+  "anomalies": []
+}

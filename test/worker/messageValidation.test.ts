@@ -190,4 +190,32 @@ describe('parseServerMessage', () => {
       }),
     ).toMatchObject({ type: 'playerCorrected', player: { id: 'a', x: 2000 } });
   });
+  it('preserves optional server pose timestamps and rejects invalid clocks', () => {
+    const player = { id: 'a', x: 0, y: 2, z: 0, qx: 0, qy: 0, qz: 0, qw: 1,
+      meshQx: 0, meshQy: 0, meshQz: 0, meshQw: 1 };
+    for (const type of ['playerMoved', 'playerCorrected']) {
+      expect(parseServerMessage({ type, player, at: 1234 })).toMatchObject({ type, at: 1234 });
+      expect(parseServerMessage({ type, player })).toEqual({ type, player });
+      for (const at of [-1, '1234', Infinity, NaN, null]) {
+        expect(parseServerMessage({ type, player, at })).toBeNull();
+      }
+    }
+  });
+});
+
+
+describe('capacity scoreboard compatibility', () => {
+  const scores = (count: number) => Array.from({ length: count }, (_, i) => ({
+    id: `rat-${i}`, name: `Rat ${i}`, kills: i, deaths: 0,
+  }));
+  it.each([24, 64, 75, 100])('accepts %i valid scoreboard entries on the wire', count => {
+    const message = { type: 'scoreboardUpdate', scores: scores(count) };
+    expect(parseServerMessage(JSON.stringify(message))).toEqual(message);
+  });
+  it('rejects an oversized roster and invalid fields at the expanded boundary', () => {
+    expect(parseServerMessage(JSON.stringify({ type: 'scoreboardUpdate', scores: scores(101) }))).toBeNull();
+    const entries = scores(100);
+    entries[99].kills = -1;
+    expect(parseServerMessage(JSON.stringify({ type: 'scoreboardUpdate', scores: entries }))).toBeNull();
+  });
 });

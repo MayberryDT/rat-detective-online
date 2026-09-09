@@ -1,3 +1,5 @@
+> **Historical concept provenance.** Reviewed 2026-09-08. These are prompts used for earlier visual exploration, not instructions to replace the current models. See [current approved direction](../../../../docs/current-state.md).
+
 # Logo-inspired incremental upgrades
 
 Generated with the built-in imagegen tool. Concept mockups only; the city strips are generated illustrations, not gameplay captures. No game models changed.

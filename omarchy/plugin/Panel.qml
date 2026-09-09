@@ -32,7 +32,7 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color mutedColor: Qt.darker(foreground, 1.6)
   readonly property string appName: "Rat Detective"
-  readonly property string appUrl: "https://rat-detective.animasai.co"
+  readonly property string appUrl: "https://ratdetective.online"
   readonly property string statusUrl: appUrl + "/status"
   readonly property int scoreRowPitch: Style.font.body + Style.space(10)
   readonly property int scoreListMaxHeight: scoreRowPitch * 6

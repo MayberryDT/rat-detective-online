@@ -1,0 +1,31 @@
+/* Both views use the same geometric center as the camera's (0, 0) aim ray.
+   Draw bars rather than a font glyph, whose ink can sit below its line box. */
+#crosshair,
+#cross {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    transform: translate(-50%, -50%);
+    z-index: 45;
+    pointer-events: none;
+    filter: drop-shadow(0 0 2px #100b19);
+}
+
+#crosshair::before,
+#crosshair::after,
+#cross::before,
+#cross::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff1ce;
+}
+
+#crosshair::before,
+#cross::before { width: 12px; height: 2px; }
+#crosshair::after,
+#cross::after { width: 2px; height: 12px; }

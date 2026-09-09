@@ -4,7 +4,7 @@ set -euo pipefail
 
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="Rat Detective"
-APP_URL="${RAT_DETECTIVE_URL:-https://rat-detective.animasai.co}"
+APP_URL="${RAT_DETECTIVE_URL:-https://ratdetective.online}"
 ICON="$PLUGIN_DIR/icon.png"
 
 if ! command -v omarchy-webapp-install >/dev/null 2>&1; then

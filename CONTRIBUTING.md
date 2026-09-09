@@ -1,45 +1,24 @@
 # Contributing
 
-Rat Detective Online is a portfolio game and open-source learning project.
+Start with [AGENTS.md](AGENTS.md), [current state](docs/current-state.md), and [tooling](docs/tooling.md). Rat Detective is a live game built around physical comedy, not a competitive-balance exercise or a blank-slate rewrite.
 
-## Local Setup
+## Setup and checks
 
-```bash
-npm install
-npm run dev
-```
-
-`npm run dev` watches client assets and serves the Worker, static assets, and
-`/ws` route at `http://localhost:5173`. Use `npm run preview` for a one-shot
-build of that same stack.
-
-## Checks
-
-Before opening a pull request, run:
-
-```bash
+```sh
+npm ci
 npm run typecheck
-npm run test
+npm test
 npm run build
-npm run audit
 ```
 
-For multiplayer smoke testing, start `npm run dev` in one terminal and run this
-in another (defaults to port 5173):
+Use focused tests for the changed system before the full checks. `npm test` includes Worker, client and Node relay tests. Dependency audit is available as `npm run audit` and runs in CI. For docs-only changes, verify facts and links rather than running gameplay or load tests.
 
-```bash
-npm run smoke:ws
-npm run smoke:browser
-npm run smoke:webgl-error
-```
+The configured local gameplay preview uses the hosted relay on port 5174. Legacy `npm run dev` / `npm run preview` run local workerd on 5173 and are not the preferred long-running playtest setup. Read the tooling guide before starting or restarting a service.
 
-CI also runs an isolated local Worker WebSocket smoke. Visual fixture captures
-need recorded baselines under `test/visual/baselines/` before they can pass.
+## Change expectations
 
-## Scope
+Preserve tuned ordinary ball physics, shared map collision truth, case kill credit, recovery and resource cleanup. Cosmetic changes should retain the established rat and noir identity. Describe what changed and why, distinguish code/protocol tests from browser or multiplayer playtests, and state remaining uncertainty. Browser-input automation is currently left to the user's playtests unless requested; CI's browser checks are a separate existing workflow.
 
-Keep gameplay changes small and explain how they were smoke-tested in the
-browser. The current multiplayer model validates basic message shape and scoring
-rules, but it is not designed as a competitive anti-cheat server.
+Inspect the working tree and preserve uncommitted work. A deployed release may contain source not in HEAD. Do not clean or reset it as setup. Commit, publish and restart services only within the task's authorization. Update current documentation with behavior changes and keep dated evidence historical.
 
-See `docs/tooling.md` for watch, preview, staging, and visual harness details.
+See [SECURITY.md](SECURITY.md) for the authority boundary and private reporting policy.

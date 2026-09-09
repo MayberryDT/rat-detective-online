@@ -1,0 +1,109 @@
+import {afterEach,describe,expect,it,vi} from 'vitest';
+import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
+import {CHAOS_TUNING as T,DISPATCH_TARGET,LAUNCH_MACHINES} from '../../src/shared/chaosState';
+import {INCIDENTS,incidentInfo,type IncidentId} from '../../src/shared/incidentCatalog';
+import {BALL_SPEED} from '../../src/shared/ballTuning';
+import {parseServerMessage} from '../../src/shared/messageValidation';
+import {createPlayer} from '../../src/worker/gameState';
+vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SEWER_FLOOR:-7,grayboxBoxes:()=>[]}));
+const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
+const now=Date.now();
+afterEach(()=>vi.restoreAllMocks());
+function fixture(incident?:IncidentId,legacy=false){
+ const shooter=createPlayer('shooter','Shooter',appearance,{x:-50,y:20,z:0});
+ const victim=createPlayer('victim','Victim',appearance,{x:0,y:20,z:0});
+ const players=new Map([shooter,victim].map(p=>[p.id,p]));
+ let sim=new ChaosSimulation(players,()=>{});sim.step(0,now);
+ if(incident||legacy){const saved=sim.snapshot(false);saved.dispatch={phase:'active',started:now,until:now+T.activeMs,serial:1,...(incident?{incident}:{})};sim=new ChaosSimulation(players,()=>{},saved);}
+ return {sim,shooter,victim,players};
+}
+const shoot=(sim:ChaosSimulation,id='shot')=>sim.shoot('shooter',{shotId:id,origin:{x:0,y:30,z:0},direction:{x:1,y:0,z:0}});
+function fireDispatch(sim:ChaosSimulation,time=now){
+ sim.shoot('shooter',{shotId:crypto.randomUUID(),origin:{x:DISPATCH_TARGET.x,y:DISPATCH_TARGET.y,z:DISPATCH_TARGET.z+1},direction:{x:0,y:0,z:-1}});sim.step(.01,time);
+}
+function caseKick(sim:ChaosSimulation,time=now+10){
+ sim.caseBody.position.set(0,21,10);sim.caseBody.velocity.setZero();sim.caseBody.angularVelocity.setZero();
+ sim.shoot('shooter',{shotId:crypto.randomUUID(),origin:{x:-2,y:21,z:10},direction:{x:1,y:0,z:0}});sim.step(.01,time);
+ return sim.caseBody.velocity.x;
+}
+function bodyKick(sim:ChaosSimulation,victim:ReturnType<typeof createPlayer>,time=now+10){
+ victim.hp=0;sim.death(victim,{x:1,y:0,z:0},'shooter');
+ const body=[...sim.targets].filter(([,t])=>t.kind==='corpse').at(-1)![0];body.velocity.setZero();body.angularVelocity.setZero();
+ sim.shoot('shooter',{shotId:crypto.randomUUID(),origin:{x:-2,y:body.position.y,z:0},direction:{x:1,y:0,z:0}});sim.step(.01,time);
+ return body;
+}
+describe('authoritative Dispatch incidents',()=>{
+ it('can select every catalog result from a fresh authoritative roll',()=>{
+  const random=vi.spyOn(Math,'random');
+  INCIDENTS.forEach((incident,index)=>{
+   random.mockReturnValue((index+.1)/INCIDENTS.length);const {sim}=fixture();fireDispatch(sim);
+   expect(sim.snapshot(false).dispatch.incident).toBe(incident.id);
+  });
+ });
+ it('selects once, persists through restore and busy hits, and avoids immediately repeating',()=>{
+  vi.spyOn(Math,'random').mockReturnValue(0);const {sim,players}=fixture();fireDispatch(sim);
+  const selected=sim.snapshot(false);expect(selected.dispatch.incident).toBe('improper-disposal');
+  fireDispatch(sim,now+10);expect(sim.snapshot(false).dispatch).toEqual(selected.dispatch);
+  const restored=new ChaosSimulation(players,()=>{},selected);expect(restored.snapshot(false).dispatch).toEqual(selected.dispatch);
+  restored.step(0,now+T.rollMs);expect(restored.snapshot(false).dispatch.phase).toBe('active');
+  restored.step(0,now+T.rollMs+T.activeMs);expect(restored.snapshot(false).dispatch.phase).toBe('cooldown');
+  restored.step(0,now+T.rollMs+T.activeMs+T.cooldownMs);expect(restored.snapshot(false).dispatch.phase).toBe('ready');
+  fireDispatch(restored,now+T.rollMs+T.activeMs+T.cooldownMs+10);
+  expect(restored.snapshot(false).dispatch.incident).toBe('bad-ammunition');
+ });
+ it('keeps exact Improper Disposal behavior and interprets missing legacy IDs as that incident',()=>{
+  for(const legacy of [false,true]){
+   const {sim,victim}=fixture(legacy?undefined:'improper-disposal',legacy);victim.hp=0;sim.death(victim,{x:1,y:0,z:0},'shooter');
+   const state=sim.snapshot(false);expect(state.corpses[0].v.x).toBe(95);expect(state.shots).toHaveLength(120);
+  }
+  expect(incidentInfo().id).toBe('improper-disposal');
+ });
+ it.each(INCIDENTS.filter(i=>i.id!=='improper-disposal').map(i=>i.id))('%s does not accidentally enable explosive deaths',incident=>{
+  const {sim,victim}=fixture(incident);victim.hp=0;sim.death(victim,{x:1,y:0,z:0},'shooter');
+  expect(sim.snapshot(false).corpses[0].v.x).toBe(T.normalCorpseSpeed);expect(sim.snapshot(false).shots).toHaveLength(0);
+ });
+ it('always fires exactly two ordinary balls per trigger, even at capacity',()=>{
+  const random=vi.spyOn(Math,'random').mockReturnValue(.9),{sim}=fixture('bad-ammunition');shoot(sim,'normal');expect(sim.snapshot(false).shots).toHaveLength(2);
+  random.mockReturnValue(0);shoot(sim,'split');let shots=sim.snapshot(false).shots;expect(shots).toHaveLength(4);
+  for(const s of shots)expect(Math.hypot(s.v.x,s.v.y,s.v.z)).toBeCloseTo(BALL_SPEED);
+  expect(shots[0].v).toEqual({x:BALL_SPEED,y:0,z:0});expect(shots[2].v).toEqual(shots[0].v);expect(shots[3].v).toEqual(shots[1].v);expect(shots[1].v.z).not.toBe(0);
+  sim.step(.001,now+1);expect(sim.snapshot(false).shots).toHaveLength(4);
+  for(let i=0;i<200;i++)shoot(sim,`fill-${i}`);shots=sim.snapshot(false).shots;expect(shots).toHaveLength(T.maxShots);expect(shots.some(s=>s.id==='fill-199')).toBe(true);
+  sim.step(0,now+T.activeMs);shoot(sim,'expired');expect(sim.snapshot(false).shots.at(-1)!.id).toBe('expired');
+ });
+ it('fires all launchers every three seconds through cooldowns, without replaying restored pulses',()=>{
+  const {sim,players}=fixture('pressure-surge');sim.step(0,now+2999);expect(sim.snapshot(false).pressure!.serial).toBe(0);
+  sim.step(0,now+3000);let s=sim.snapshot(false);expect(s.pressure!.serial).toBe(6);for(const m of LAUNCH_MACHINES)expect(s.pressure!.cooldowns![m.id]).toBe(now+8000);
+  const restored=new ChaosSimulation(players,()=>{},s);restored.step(0,now+3001);expect(restored.snapshot(false).pressure!.serial).toBe(6);
+  restored.step(0,now+6000);s=restored.snapshot(false);expect(s.pressure!.serial).toBe(12);for(const m of LAUNCH_MACHINES)expect(s.pressure!.cooldowns![m.id]).toBe(now+11000);
+  restored.step(0,now+T.activeMs);const before=restored.snapshot(false).pressure!.serial;restored.step(0,now+T.activeMs+3000);expect(restored.snapshot(false).pressure!.serial).toBe(before);
+  const cooling=fixture('pressure-surge');const saved=cooling.sim.snapshot(false);saved.pressure!.cooldowns={[LAUNCH_MACHINES[0].id]:now+9000};
+  const blocked=new ChaosSimulation(cooling.players,()=>{},saved);blocked.step(0,now+3000);expect(blocked.snapshot(false).pressure!.serial).toBe(6);
+ });
+ it('makes loose evidence more physical only during Evidence Tampering',()=>{
+  const {sim}=fixture('evidence-tampering');expect(caseKick(sim)).toBeCloseTo(110,2);expect(Math.abs(sim.caseBody.angularVelocity.z)).toBeGreaterThan(10);
+  sim.step(0,now+T.activeMs);expect(caseKick(sim,now+T.activeMs+10)).toBeCloseTo(13,2);
+ });
+ it('keeps ordinary corpse relaunch force during Crossfire',()=>{
+  const {sim,victim}=fixture('crossfire');const body=bodyKick(sim,victim);
+  expect(body.velocity.x).toBeCloseTo(T.corpseShotKick,1);
+ });
+ it('accepts all known and legacy snapshot IDs but rejects unknown or non-string IDs',()=>{
+  const {sim}=fixture(),state=sim.snapshot(false);expect(parseServerMessage({type:'chaos',state})).not.toBeNull();
+  for(const incident of INCIDENTS){state.dispatch.incident=incident.id;expect(parseServerMessage({type:'chaos',state})).not.toBeNull();}
+  for(const incident of ['unknown',null,123])expect(parseServerMessage({type:'chaos',state:{...state,dispatch:{...state.dispatch,incident}}})).toBeNull();
+ });
+ it.each(INCIDENTS.map(i=>i.id))('%s expires back to ordinary shooting and ordinary deaths',incident=>{
+  vi.spyOn(Math,'random').mockReturnValue(0);const {sim,victim}=fixture(incident);
+  sim.step(0,now+T.activeMs);expect(sim.snapshot(false).dispatch.phase).toBe('cooldown');
+  shoot(sim);expect(sim.snapshot(false).shots).toHaveLength(1);
+  victim.hp=0;sim.death(victim,{x:1,y:0,z:0},'shooter');
+  expect(sim.snapshot(false).corpses[0].v.x).toBe(T.normalCorpseSpeed);expect(sim.snapshot(false).shots).toHaveLength(1);
+ });
+ it('skips a fully elapsed rolling and active window after restore without firing old launch pulses',()=>{
+  const {sim,players}=fixture('pressure-surge'),saved=sim.snapshot(false);
+  saved.dispatch.phase='rolling';saved.dispatch.until=now+T.rollMs;
+  const restored=new ChaosSimulation(players,()=>{},saved);restored.step(0,now+T.rollMs+T.activeMs+T.cooldownMs+1);
+  expect(restored.snapshot(false).dispatch.phase).toBe('ready');expect(restored.snapshot(false).pressure!.serial).toBe(0);
+ });
+});

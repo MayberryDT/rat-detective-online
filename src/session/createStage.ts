@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { StaticCityBroadphase } from '../shared/StaticCityBroadphase';
 
 export function createStage(appRenderer: THREE.WebGLRenderer) {
     appRenderer.setSize(window.innerWidth, window.innerHeight);
@@ -64,7 +65,12 @@ export function createStage(appRenderer: THREE.WebGLRenderer) {
     const world = new CANNON.World({
       gravity: new CANNON.Vec3(0, -25, 0),
     });
-    world.broadphase = new CANNON.NaiveBroadphase();
+    // Match the playable city prototype: thousands of static wall/stair bodies
+    // must not be compared against one another on every physics step.
+    world.broadphase = new StaticCityBroadphase(world);
+    world.collisionMatrix=new CANNON.ObjectCollisionMatrix() as unknown as CANNON.ArrayCollisionMatrix;
+    world.collisionMatrixPrevious=new CANNON.ObjectCollisionMatrix() as unknown as CANNON.ArrayCollisionMatrix;
+    world.broadphase.useBoundingBoxes = true;
     (world.solver as CANNON.GSSolver).iterations = 10;
     world.defaultContactMaterial.friction = 0.0;
     world.defaultContactMaterial.restitution = 0.05;

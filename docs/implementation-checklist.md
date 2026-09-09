@@ -1,5 +1,8 @@
 # Implementation verification checklist
 
+
+> **Historical record — completed early architecture checklist.** Classified on 2026-09-08. Statements below describe that pass, including its then-current code, deployment, authorization and test counts. They are not present-day instructions or a current feature inventory. Use [the current reference](README.md) before acting. Preserve the measurements; do not restore obsolete behavior from this report.
+
 This is a completion checklist, not a claim that unchecked work is finished. Baseline: `08e8005`. Production deployment is outside the automatic release gate.
 
 - [x] Record gameplay/render/collision baseline constants.

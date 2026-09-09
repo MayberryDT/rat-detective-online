@@ -17,6 +17,13 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.hostname === 'rat-detective.animasai.co') {
+      url.protocol = 'https:';
+      url.hostname = 'ratdetective.online';
+      url.port = '';
+      return Response.redirect(url.href, 301);
+    }
+
     try {
       if (url.pathname === '/health') {
         return json({ ok: true, service: 'rat-detective', runtime: 'cloudflare-workers' });
@@ -37,6 +44,7 @@ export default {
           return json({ error: 'Method not allowed' }, { status: 405 });
         }
         const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
+        await room.ensurePersistentBots();
         return json(
           { room: DEFAULT_ROOM_NAME, ...(await room.status()) },
           {
@@ -54,6 +62,7 @@ export default {
 
         const roomName = url.searchParams.get('room') || DEFAULT_ROOM_NAME;
         const room = env.GAME_ROOM.getByName(roomName);
+        if (roomName === DEFAULT_ROOM_NAME) await room.ensurePersistentBots();
         return room.fetch(request);
       }
 

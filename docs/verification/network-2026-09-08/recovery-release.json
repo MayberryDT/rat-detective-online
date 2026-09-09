@@ -1,0 +1,153 @@
+{
+  "at": "2026-09-08T07:27:56.114Z",
+  "before": {
+    "room": "public-live-v2",
+    "players": 11,
+    "bots": 11,
+    "phase": "playing",
+    "startedAt": 1788851918641,
+    "scores": [
+      {
+        "name": "Inspector Nibbles",
+        "kills": 11,
+        "deaths": 4
+      },
+      {
+        "name": "Sergeant Scurry",
+        "kills": 5,
+        "deaths": 2
+      },
+      {
+        "name": "Detective Crumbs",
+        "kills": 5,
+        "deaths": 3
+      },
+      {
+        "name": "Inspector Gouda",
+        "kills": 5,
+        "deaths": 3
+      },
+      {
+        "name": "Deputy Squeaks",
+        "kills": 4,
+        "deaths": 5
+      },
+      {
+        "name": "Constable Trap",
+        "kills": 2,
+        "deaths": 3
+      },
+      {
+        "name": "Officer Whiskers",
+        "kills": 2,
+        "deaths": 6
+      },
+      {
+        "name": "Captain Cheddar",
+        "kills": 1,
+        "deaths": 1
+      },
+      {
+        "name": "Detective Rind",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Sergeant Stilton",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Constable Alley",
+        "kills": 0,
+        "deaths": 1
+      }
+    ]
+  },
+  "after": {
+    "room": "public-live-v2",
+    "players": 11,
+    "bots": 11,
+    "phase": "playing",
+    "startedAt": 1788851918641,
+    "scores": [
+      {
+        "name": "Inspector Nibbles",
+        "kills": 11,
+        "deaths": 4
+      },
+      {
+        "name": "Sergeant Scurry",
+        "kills": 5,
+        "deaths": 2
+      },
+      {
+        "name": "Inspector Gouda",
+        "kills": 5,
+        "deaths": 3
+      },
+      {
+        "name": "Detective Crumbs",
+        "kills": 5,
+        "deaths": 4
+      },
+      {
+        "name": "Deputy Squeaks",
+        "kills": 4,
+        "deaths": 5
+      },
+      {
+        "name": "Constable Trap",
+        "kills": 2,
+        "deaths": 3
+      },
+      {
+        "name": "Officer Whiskers",
+        "kills": 2,
+        "deaths": 6
+      },
+      {
+        "name": "Sergeant Stilton",
+        "kills": 1,
+        "deaths": 0
+      },
+      {
+        "name": "Captain Cheddar",
+        "kills": 1,
+        "deaths": 1
+      },
+      {
+        "name": "Detective Rind",
+        "kills": 0,
+        "deaths": 0
+      },
+      {
+        "name": "Constable Alley",
+        "kills": 0,
+        "deaths": 1
+      }
+    ]
+  },
+  "counts": {
+    "welcome": 1,
+    "currentPlayers": 1,
+    "chaos": 1213,
+    "scoreboardUpdate": 108,
+    "playerMoved": 4301,
+    "playerJoined": 53,
+    "playerLeft": 53,
+    "pong": 39,
+    "playerShot": 35,
+    "playerDamaged": 6,
+    "playerDied": 1,
+    "playerRespawn": 11
+  },
+  "snapshotGaps": {
+    "mean": 33.01732673267327,
+    "max": 293
+  },
+  "errors": 0,
+  "unexpectedDisconnects": 0,
+  "botsWithMovementMessages": 11,
+  "note": "Movement message count does not by itself prove displacement. 53 other joins/leaves were observed; source undetermined. This observer had no unexpected disconnects."
+}

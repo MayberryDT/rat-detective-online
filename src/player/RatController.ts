@@ -2,15 +2,20 @@ import * as THREE from 'three';
 import type * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
 import { RatOptions } from '../utils/RatModel';
+import { PRESSURE_LAUNCH, type ChaosState } from '../shared/chaosState';
 
 // ─── TUNING CONSTANTS ─────────────────────────────────────────────
 const MOVE_SPEED = 18;
 const ACCEL = 0.28;
 const DECEL = 0.12;
-const JUMP_IMPULSE = 16;
+// A quicker player-only arc: v scales with sqrt(g), preserving the old apex.
+// This shortens a normal hop about 12% without changing world/ball gravity.
+const JUMP_GRAVITY_SCALE = 1.28;
+const JUMP_IMPULSE = 16 * Math.sqrt(JUMP_GRAVITY_SCALE);
 
 const CAM_RADIUS = 6.0;
 const CAM_PIVOT_Y = 3.5;
+const CAM_SHOULDER = 1.25;
 const MOUSE_SENS = 0.002;
 
 export class RatController {
@@ -18,12 +23,20 @@ export class RatController {
     private camera: THREE.PerspectiveCamera;
     private spherical = new THREE.Spherical(CAM_RADIUS, Math.PI * 0.4, Math.PI);
 
+    private readonly cameraBlockers: THREE.Object3D[];
+    private readonly cameraRay = new THREE.Raycaster();
     private groundGrace = 0;
+    private launchTime = 0;
+    private launcherFlight = false;
+    private normalJump = false;
+    private readonly appliedLaunches = new Set<string>();
     private disposed = false;
     private readonly forward = new THREE.Vector3();
     private readonly right = new THREE.Vector3();
     private readonly up = new THREE.Vector3(0, 1, 0);
     private readonly pivot = new THREE.Vector3();
+    private readonly viewDirection = new THREE.Vector3();
+    private readonly shoulder = new THREE.Vector3();
     private readonly offset = new THREE.Vector3();
 
     constructor(
@@ -32,9 +45,12 @@ export class RatController {
         camera: THREE.PerspectiveCamera,
         name: string = 'Player',
         options?: RatOptions,
-        spawnPos?: THREE.Vector3
+        spawnPos?: THREE.Vector3,
+        private readonly launcherBounds?: {min:number;max:number}
     ) {
         this.camera = camera;
+        scene.updateMatrixWorld(true);
+        this.cameraBlockers = scene.children.filter(o=>o.userData.aimTarget===true);
 
         // Create the Player Entity with the player's chosen name and appearance
         const pos = spawnPos ?? new THREE.Vector3(15, 2, 15);
@@ -58,18 +74,21 @@ export class RatController {
     prepareMovement(dt: number, keys: Record<string, boolean>): void {
         if (this.disposed) return;
         this.groundGrace = Math.max(0, this.groundGrace - dt);
+        this.launchTime = Math.max(0, this.launchTime - dt);
         if (!this.entity.dead && this.entity.hp > 0) this.applyMovement(dt, keys);
+        else this.normalJump=false;
     }
 
     syncAfterPhysics(dt: number): void {
         if (this.disposed) return;
+        this.containLauncherFlight();
         this.entity.update(dt);
         if (!this.entity.dead && this.entity.body.velocity.y <= 1) {
             const body = this.entity.body;
             for (const contact of this.entity.world.contacts) {
                 const normalY = contact.bi === body ? -contact.ni.y : contact.bj === body ? contact.ni.y : 0;
                 // Explicit80ms grace permits forgiving edge jumps, never unlimited air jumps.
-                if (normalY > 0.5) { this.groundGrace = 0.08; break; }
+                if (normalY > 0.5) { this.groundGrace = 0.08; this.launchTime=0; this.launcherFlight=false; this.normalJump=false; break; }
             }
         }
         this.updateView();
@@ -77,10 +96,45 @@ export class RatController {
 
     updateView(): void {
         this.updateCamera();
+        // Keep the camera ray current when input arrives before the next render.
+        this.camera.updateWorldMatrix(true, false);
         this.entity.syncGlowTransform();
     }
 
-    resetGrounding(): void { this.groundGrace = 0; }
+    /** Server-selected launch events are retained briefly in snapshots and applied once. */
+    applyPressureLaunches(state:ChaosState,playerId:string):void {
+        for(const event of state.pressure?.launches||[]){
+            if(event.playerId!==playerId || this.appliedLaunches.has(event.id))continue;
+            this.appliedLaunches.add(event.id);
+            if(this.appliedLaunches.size>32)this.appliedLaunches.delete(this.appliedLaunches.values().next().value!);
+            if(state.time-event.at<0 || state.time-event.at>PRESSURE_LAUNCH.eventMs || this.entity.dead || this.entity.hp<=0)continue;
+            this.entity.body.velocity.set(event.velocity.x,event.velocity.y,event.velocity.z);
+            this.entity.body.wakeUp();this.groundGrace=0;this.normalJump=false;
+            this.launcherFlight=!!this.launcherBounds;
+            // Let these deliberate machine impulses travel before normal walking
+            // braking resumes; landing restores ordinary controls immediately.
+            this.launchTime=Math.min(2.6,Math.max(1.4,event.velocity.y/25));
+        }
+    }
+
+    /** Keep launcher flights in the prototype city even after air steering resumes.
+     * A gentle inward deflection precedes the hard body inset, which also catches
+     * collision kicks that cross the boundary within a single physics step.
+     */
+    private containLauncherFlight():void {
+        if(this.entity.dead || this.entity.hp<=0){this.launcherFlight=false;return;}
+        if(!this.launcherFlight || !this.launcherBounds)return;
+        const body=this.entity.body,min=this.launcherBounds.min+3,max=this.launcherBounds.max-3;
+        for(const axis of ['x','z'] as const){
+            const position=body.position[axis],velocity=body.velocity[axis];
+            if(position<min+5 && velocity<0)body.velocity[axis]=Math.max(8,-velocity*.45);
+            else if(position>max-5 && velocity>0)body.velocity[axis]=-Math.max(8,velocity*.45);
+            body.position[axis]=Math.max(min,Math.min(max,position));
+            if(body.position[axis]!==position)body.aabbNeedsUpdate=true;
+        }
+    }
+
+    resetGrounding(): void { this.groundGrace = 0; this.launchTime=0; this.launcherFlight=false; this.normalJump=false; }
 
     dispose(): void {
         if (this.disposed) return;
@@ -114,7 +168,11 @@ export class RatController {
         const acceleration = 1 - Math.pow(1 - ACCEL, dt * 60);
         const braking = Math.pow(1 - DECEL, dt * 60);
         // Apply
-        if (len > 0) {
+        if(this.launchTime>0){
+            // Retain the machine's actual physical impulse while allowing modest air steering.
+            // Ordinary acceleration/braking resumes after this short explicit launch window.
+            v.x+=desiredX*dt*.35;v.z+=desiredZ*dt*.35;
+        } else if (len > 0) {
             this.entity.body.wakeUp();
             v.x += (desiredX - v.x) * acceleration;
             v.z += (desiredZ - v.z) * acceleration;
@@ -127,7 +185,12 @@ export class RatController {
         if (keys['Space'] && this.groundGrace > 0) {
             v.y = JUMP_IMPULSE;
             this.groundGrace = 0;
+            this.normalJump = true;
         }
+        // Only keyboard jumps receive the extra gravity. Falling off ledges,
+        // ragdolls, and any of the machine throws retain their original arc.
+        if(this.normalJump)this.entity.body.force.y +=
+            this.entity.body.mass*this.entity.world.gravity.y*(JUMP_GRAVITY_SCALE-1);
 
         // Rotate Character to face camera (Always Strafe mode for shooting)
         const targetAngle = this.spherical.theta + Math.PI;
@@ -146,6 +209,23 @@ export class RatController {
         // Direct copy — NO lerp. Lerp causes snap-back when whipping around fast
         // because it interpolates through 3D space, not spherical space.
         this.camera.position.copy(pivot).add(offset);
-        this.camera.lookAt(pivot);
+        pivot.y = mesh.position.y + 2.2;
+        // Translate the view sideways without toeing it back into the rat's head.
+        this.viewDirection.copy(pivot).sub(this.camera.position).normalize();
+        this.shoulder.set(1,0,0).applyAxisAngle(this.up,this.spherical.theta).multiplyScalar(CAM_SHOULDER);
+        // Resolve the shoulder first, then the boom: backing into a wall must
+        // shorten distance without collapsing the view back onto the rat.
+        this.cameraRay.set(pivot,this.shoulder.clone().normalize());
+        this.cameraRay.far=CAM_SHOULDER;
+        const shoulderHit=this.cameraRay.intersectObjects(this.cameraBlockers,true)[0];
+        if(shoulderHit)this.shoulder.setLength(Math.max(0,shoulderHit.distance-.3));
+        this.camera.position.add(this.shoulder);
+        pivot.add(this.shoulder);
+        offset.copy(this.camera.position).sub(pivot);
+        this.cameraRay.far = offset.length();
+        this.cameraRay.set(pivot, offset.normalize());
+        const hit = this.cameraRay.intersectObjects(this.cameraBlockers,true)[0];
+        if(hit) this.camera.position.copy(pivot).addScaledVector(this.cameraRay.ray.direction,Math.max(.3,hit.distance-.3));
+        this.camera.lookAt(this.offset.copy(this.camera.position).add(this.viewDirection));
     }
 }

@@ -9,8 +9,13 @@ export class CheeseImpactEffects {
     private readonly splatMaterial = new THREE.MeshBasicMaterial({color: 0xdba32f, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide});
     private readonly crumbs = new THREE.InstancedMesh(this.crumbGeometry, this.crumbMaterial, 160);
     private readonly splats;
-    private particles: {position: THREE.Vector3; velocity: THREE.Vector3; age: number; lifetime: number; spin: number}[] = [];
-    private marks: {position: THREE.Vector3; rotation: THREE.Quaternion; age: number; size: number}[] = [];
+    private readonly particles = Array.from({length:160},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,lifetime:0,spin:0}));
+    private particleCursor=0;
+    private readonly marks = Array.from({length:40},()=>({position:new THREE.Vector3(),rotation:new THREE.Quaternion(),age:Infinity,size:0}));
+    private markCursor=0;
+    private active=false;
+    private readonly axis=new THREE.Vector3(0,0,1);
+    private readonly twist=new THREE.Quaternion();
     private readonly dummy = new THREE.Object3D();
     private readonly tangent = new THREE.Vector3();
     private readonly bitangent = new THREE.Vector3();
@@ -42,25 +47,31 @@ export class CheeseImpactEffects {
         const phase = ++this.sequence * 2.39996;
         for (let i = 0; i < 7; i++) {
             const angle = phase + i * Math.PI * 2 / 7;
-            const velocity = this.normal.clone().multiplyScalar(1.5 + (i % 3) * 0.6)
-                .addScaledVector(this.tangent, Math.cos(angle) * 2.2)
-                .addScaledVector(this.bitangent, Math.sin(angle) * 2.2);
-            this.particles.push({position: point.clone().addScaledVector(this.normal, 0.04), velocity, age: 0, lifetime: 0.5 + i * 0.05, spin: angle});
+            const particle=this.particles[this.particleCursor++%160];
+            particle.velocity.copy(this.normal).multiplyScalar(1.5+(i%3)*.6)
+                .addScaledVector(this.tangent,Math.cos(angle)*2.2)
+                .addScaledVector(this.bitangent,Math.sin(angle)*2.2);
+            particle.position.copy(point).addScaledVector(this.normal,.04);
+            particle.age=0;particle.lifetime=.5+i*.05;particle.spin=angle;
         }
-        if (this.particles.length > 160) this.particles.splice(0, this.particles.length - 160);
-        if (surface) {
-            const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), this.normal);
-            rotation.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1), phase));
-            this.marks.push({position: point.clone().addScaledVector(this.normal, 0.035), rotation, age: 0, size: 0.7 + (this.sequence % 3) * 0.15});
-            if (this.marks.length > 40) this.marks.shift();
+        if(surface){
+            const mark=this.marks[this.markCursor++%40];
+            mark.rotation.setFromUnitVectors(this.axis,this.normal);
+            mark.rotation.multiply(this.twist.setFromAxisAngle(this.axis,phase));
+            mark.position.copy(point).addScaledVector(this.normal,.035);
+            mark.age=0;mark.size=.7+(this.sequence%3)*.15;
         }
-        this.update(0);
+        // Emission only fills bounded slots. The frame owner flushes all impacts once.
+        this.active=true;
     }
 
     update(dt: number): void {
-        if (this.disposed) return;
-        this.particles = this.particles.filter(particle => (particle.age += dt) < particle.lifetime);
-        this.particles.forEach((particle, i) => {
+        if(this.disposed||!this.active)return;
+        let particleCount=0,markCount=0;
+        // Ring order preserves oldest-to-newest draw order when slots wrap.
+        for(let slot=0;slot<160;slot++){
+            const particle=this.particles[(this.particleCursor+slot)%160];
+            if((particle.age+=dt)>=particle.lifetime)continue;
             particle.velocity.y -= dt * 10;
             particle.position.addScaledVector(particle.velocity, dt);
             if (particle.position.y < 0.04 && particle.velocity.y < 0) {
@@ -70,22 +81,26 @@ export class CheeseImpactEffects {
             this.dummy.position.copy(particle.position);
             this.dummy.rotation.set(particle.spin + particle.age * 9, particle.age * 12, particle.spin);
             this.dummy.scale.setScalar(Math.min(1, (particle.lifetime - particle.age) * 7));
-            this.dummy.updateMatrix(); this.crumbs.setMatrixAt(i, this.dummy.matrix);
-        });
-        this.marks = this.marks.filter(mark => (mark.age += dt) < 3);
-        this.marks.forEach((mark, i) => {
+            this.dummy.updateMatrix(); this.crumbs.setMatrixAt(particleCount++, this.dummy.matrix);
+        }
+        for(let slot=0;slot<40;slot++){
+            const mark=this.marks[(this.markCursor+slot)%40];
+            if((mark.age+=dt)>=3)continue;
             this.dummy.position.copy(mark.position); this.dummy.quaternion.copy(mark.rotation);
             const grow = 0.4 + 0.6 * Math.min(1, mark.age / 0.07);
             const shrink = Math.min(1, (3 - mark.age) / 0.4);
             this.dummy.scale.setScalar(mark.size * grow * shrink);
-            this.dummy.updateMatrix(); this.splats.setMatrixAt(i, this.dummy.matrix);
-        });
-        this.crumbs.count = this.particles.length; this.splats.count = this.marks.length;
+            this.dummy.updateMatrix(); this.splats.setMatrixAt(markCount++, this.dummy.matrix);
+        }
+        this.crumbs.count=particleCount;this.splats.count=markCount;
+        this.active=particleCount+markCount>0;
         this.crumbs.instanceMatrix.needsUpdate = this.splats.instanceMatrix.needsUpdate = true;
     }
 
     clear(): void {
-        this.particles = []; this.marks = []; this.crumbs.count = this.splats.count = 0;
+        for(const particle of this.particles)particle.age=Infinity;
+        for(const mark of this.marks)mark.age=Infinity;
+        this.active=false;this.particleCursor=this.markCursor=0;this.crumbs.count=this.splats.count=0;
     }
 
     dispose(): void {

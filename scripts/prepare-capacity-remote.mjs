@@ -1,0 +1,16 @@
+import {build} from 'esbuild';
+import {mkdir,copyFile,readFile} from 'node:fs/promises';
+import {parseArgs,promisify} from 'node:util';
+import {execFile} from 'node:child_process';
+import {homedir} from 'node:os';
+const {values}=parseArgs({options:{deployment:{type:'string'}}});
+if(!values.deployment)throw Error('Supply --deployment');
+const receipt=JSON.parse(await readFile(values.deployment,'utf8'));
+const directory=`/tmp/rat-capacity-${receipt.fixtureId.slice(0,16)}`;
+const out=`output/distributed-capacity-${receipt.fixtureId.slice(0,16)}`;await mkdir(out,{recursive:true});
+await build({entryPoints:['scripts/lib/capacity-clients.mjs'],outfile:`${out}/capacity-clients.mjs`,bundle:true,platform:'node',format:'esm',banner:{js:"import {createRequire} from 'node:module';const require=createRequire(import.meta.url);"}});
+await copyFile('scripts/lib/capacity-agent.mjs',`${out}/capacity-agent.mjs`);await copyFile(receipt.validator,`${out}/validator.mjs`);
+const exec=promisify(execFile),args=['-F',`${homedir()}/.ssh/config`,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=10'];
+await exec('ssh',[...args,'halla',`mkdir -m 700 -p ${directory}`]);
+await exec('scp',[...args,...['capacity-clients.mjs','capacity-agent.mjs','validator.mjs'].map(f=>`${out}/${f}`),`halla:${directory}/`]);
+console.log(JSON.stringify({event:'remote-ready',host:'Halla',directory,fixtureId:receipt.fixtureId}));

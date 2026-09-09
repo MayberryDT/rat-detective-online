@@ -12,7 +12,7 @@ export default defineConfig({
     outDir: resolve(rootDir, process.env.VISUAL_REFERENCE === '1' ? 'dist-visual-reference' : 'dist-visual'),
     emptyOutDir: true,
     rollupOptions: {
-      input: [resolve(rootDir, 'test/visual/cheese-preview.html'), resolve(rootDir, 'test/visual/city-preview.html'), resolve(rootDir, 'test/visual/model-preview.html'), resolve(rootDir, 'test/visual/visual-fixture.html'), resolve(rootDir, 'test/visual/performance-fixture.html')],
+      input: [resolve(rootDir, 'test/visual/capacity-render.html'), resolve(rootDir, 'test/visual/stage-prototype.html'), resolve(rootDir, 'test/visual/cheese-preview.html'), resolve(rootDir, 'test/visual/city-preview.html'), resolve(rootDir, 'test/visual/model-preview.html'), resolve(rootDir, 'test/visual/visual-fixture.html'), resolve(rootDir, 'test/visual/performance-fixture.html')],
     },
   },
 });

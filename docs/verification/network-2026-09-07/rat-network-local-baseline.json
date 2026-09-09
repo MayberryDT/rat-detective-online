@@ -1,0 +1,546 @@
+{
+  "target": "ws://127.0.0.1:5174",
+  "room": "graybox-practice-probe-fd7ea0d6-7d0a-4d9c-95bb-d91ed0fa452d",
+  "startedAt": "2026-09-08T05:57:48.746Z",
+  "durationMs": 45001,
+  "clients": 12,
+  "mode": "one-feed-eleven-welcome-only",
+  "workload": "20Hz human / 10Hz bot poses; each shoots every 1.2s, pings every 1s",
+  "gapsMs": {
+    "count": 143,
+    "mean": 305.38,
+    "p50": 62,
+    "p95": 1718,
+    "p99": 4512,
+    "max": 4512,
+    "over250": 18
+  },
+  "pingRttMs": {
+    "count": 434,
+    "mean": 2003.56,
+    "p50": 771,
+    "p95": 6727,
+    "p99": 7721,
+    "max": 7721,
+    "over250": 269
+  },
+  "probeLoopDelayMs": {
+    "p99": 10.8,
+    "max": 11.83
+  },
+  "sent": 6758,
+  "shotsSent": 456,
+  "disconnects": 0,
+  "errors": 0,
+  "peakBalls": 256,
+  "messages": {
+    "scoreboardUpdate": 1,
+    "chaos": 144,
+    "pong": 34,
+    "playerMoved": 3412,
+    "playerShot": 399,
+    "playerDamaged": 2
+  },
+  "bytes": {
+    "scoreboardUpdate": 1097,
+    "chaos": 1845584,
+    "pong": 2210,
+    "playerMoved": 806794,
+    "playerShot": 101116,
+    "playerDamaged": 254
+  },
+  "hostBefore": {
+    "at": 1788847068746,
+    "processes": [
+      {
+        "pid": 4169069,
+        "majorFaults": 1269,
+        "minorFaults": 14787,
+        "cpuNs": 2946559831,
+        "waitNs": 67275259,
+        "swapKb": 26288
+      },
+      {
+        "pid": 4169105,
+        "majorFaults": 8314,
+        "minorFaults": 120891,
+        "cpuNs": 97088136736,
+        "waitNs": 888355357,
+        "swapKb": 118628
+      }
+    ]
+  },
+  "hostAfter": {
+    "at": 1788847113746,
+    "processes": [
+      {
+        "pid": 4169069,
+        "majorFaults": 1482,
+        "minorFaults": 15949,
+        "cpuNs": 3307788868,
+        "waitNs": 69320706,
+        "swapKb": 25440
+      },
+      {
+        "pid": 4169105,
+        "majorFaults": 21605,
+        "minorFaults": 153010,
+        "cpuNs": 108373635689,
+        "waitNs": 1025048779,
+        "swapKb": 56508
+      }
+    ]
+  },
+  "anomalies": [
+    {
+      "at": 1788847076815,
+      "gapMs": 2783,
+      "host": {
+        "at": 1788847076747,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1309,
+            "minorFaults": 15161,
+            "cpuNs": 2999391604,
+            "waitNs": 67398111,
+            "swapKb": 26132
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 14125,
+            "minorFaults": 121243,
+            "cpuNs": 98260648897,
+            "waitNs": 898139991,
+            "swapKb": 91660
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847078533,
+      "gapMs": 1718,
+      "host": {
+        "at": 1788847078247,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1309,
+            "minorFaults": 15167,
+            "cpuNs": 3009772531,
+            "waitNs": 67429919,
+            "swapKb": 26132
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 18633,
+            "minorFaults": 127460,
+            "cpuNs": 98744297182,
+            "waitNs": 904314978,
+            "swapKb": 73640
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847079306,
+      "gapMs": 773,
+      "host": {
+        "at": 1788847079247,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1310,
+            "minorFaults": 15207,
+            "cpuNs": 3016784337,
+            "waitNs": 67469225,
+            "swapKb": 26128
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 18846,
+            "minorFaults": 127507,
+            "cpuNs": 99043134379,
+            "waitNs": 907774860,
+            "swapKb": 72788
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847079776,
+      "gapMs": 470,
+      "host": {
+        "at": 1788847079747,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1435,
+            "minorFaults": 15237,
+            "cpuNs": 3022736388,
+            "waitNs": 67510848,
+            "swapKb": 25628
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 18978,
+            "minorFaults": 129620,
+            "cpuNs": 99207887777,
+            "waitNs": 909513987,
+            "swapKb": 72260
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847083499,
+      "gapMs": 294,
+      "host": {
+        "at": 1788847083247,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1437,
+            "minorFaults": 15842,
+            "cpuNs": 3085729797,
+            "waitNs": 67676324,
+            "swapKb": 25620
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 20884,
+            "minorFaults": 129797,
+            "cpuNs": 100500665803,
+            "waitNs": 922147867,
+            "swapKb": 64636
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847083848,
+      "gapMs": 349,
+      "host": {
+        "at": 1788847083747,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1437,
+            "minorFaults": 15842,
+            "cpuNs": 3089250655,
+            "waitNs": 67686779,
+            "swapKb": 25620
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 20927,
+            "minorFaults": 129817,
+            "cpuNs": 100651774923,
+            "waitNs": 923889696,
+            "swapKb": 64464
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847084220,
+      "gapMs": 372,
+      "host": {
+        "at": 1788847083747,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1437,
+            "minorFaults": 15842,
+            "cpuNs": 3089250655,
+            "waitNs": 67686779,
+            "swapKb": 25620
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 20927,
+            "minorFaults": 129817,
+            "cpuNs": 100651774923,
+            "waitNs": 923889696,
+            "swapKb": 64464
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847084515,
+      "gapMs": 295,
+      "host": {
+        "at": 1788847084246,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1437,
+            "minorFaults": 15842,
+            "cpuNs": 3094092077,
+            "waitNs": 67686779,
+            "swapKb": 25620
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 20987,
+            "minorFaults": 129837,
+            "cpuNs": 100831263659,
+            "waitNs": 926372869,
+            "swapKb": 64224
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847084886,
+      "gapMs": 371,
+      "host": {
+        "at": 1788847084747,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15872,
+            "cpuNs": 3099298075,
+            "waitNs": 67697759,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21017,
+            "minorFaults": 129853,
+            "cpuNs": 100981031749,
+            "waitNs": 928233209,
+            "swapKb": 64104
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847086106,
+      "gapMs": 1220,
+      "host": {
+        "at": 1788847085748,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15873,
+            "cpuNs": 3108281326,
+            "waitNs": 67779054,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21073,
+            "minorFaults": 129865,
+            "cpuNs": 101093873459,
+            "waitNs": 929737805,
+            "swapKb": 63880
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847086993,
+      "gapMs": 887,
+      "host": {
+        "at": 1788847086747,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15873,
+            "cpuNs": 3116854992,
+            "waitNs": 67841965,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21129,
+            "minorFaults": 129901,
+            "cpuNs": 101362182941,
+            "waitNs": 932689740,
+            "swapKb": 63656
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847088051,
+      "gapMs": 1058,
+      "host": {
+        "at": 1788847087747,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15877,
+            "cpuNs": 3125998346,
+            "waitNs": 67906301,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21179,
+            "minorFaults": 129939,
+            "cpuNs": 101679630827,
+            "waitNs": 936179941,
+            "swapKb": 63456
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847092563,
+      "gapMs": 4512,
+      "host": {
+        "at": 1788847092247,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15879,
+            "cpuNs": 3155207611,
+            "waitNs": 67992258,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21218,
+            "minorFaults": 129971,
+            "cpuNs": 102104184596,
+            "waitNs": 941259987,
+            "swapKb": 63300
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847096182,
+      "gapMs": 3619,
+      "host": {
+        "at": 1788847095748,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15887,
+            "cpuNs": 3182250488,
+            "waitNs": 68635131,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21230,
+            "minorFaults": 142645,
+            "cpuNs": 103116653958,
+            "waitNs": 954275265,
+            "swapKb": 57992
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847100297,
+      "gapMs": 4115,
+      "host": {
+        "at": 1788847100248,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15893,
+            "cpuNs": 3214202290,
+            "waitNs": 68775391,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21283,
+            "minorFaults": 146046,
+            "cpuNs": 104463487911,
+            "waitNs": 970434345,
+            "swapKb": 57796
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847104067,
+      "gapMs": 3770,
+      "host": {
+        "at": 1788847103748,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15900,
+            "cpuNs": 3241659023,
+            "waitNs": 68891813,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21460,
+            "minorFaults": 149394,
+            "cpuNs": 105487853511,
+            "waitNs": 984578828,
+            "swapKb": 57088
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847108579,
+      "gapMs": 4512,
+      "host": {
+        "at": 1788847108248,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1481,
+            "minorFaults": 15921,
+            "cpuNs": 3274838242,
+            "waitNs": 69096959,
+            "swapKb": 25444
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21501,
+            "minorFaults": 151714,
+            "cpuNs": 106751506270,
+            "waitNs": 1003566896,
+            "swapKb": 56924
+          }
+        ]
+      }
+    },
+    {
+      "at": 1788847112422,
+      "gapMs": 3843,
+      "host": {
+        "at": 1788847112248,
+        "processes": [
+          {
+            "pid": 4169069,
+            "majorFaults": 1482,
+            "minorFaults": 15949,
+            "cpuNs": 3296949257,
+            "waitNs": 69290060,
+            "swapKb": 25440
+          },
+          {
+            "pid": 4169105,
+            "majorFaults": 21582,
+            "minorFaults": 152951,
+            "cpuNs": 107909258095,
+            "waitNs": 1019774715,
+            "swapKb": 56600
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,8 +1,13 @@
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
+import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
+import { worldSpawnPoints } from '../../src/shared/playerSpawns';
+import { parseServerMessage } from '../../src/shared/messageValidation';
 import { WORLD_LAYOUT_VERSION } from '../../src/shared/worldSpec';
 import { CHECKPOINT_MS, GameRoom, STALE_PLAYER_MS } from '../../src/worker/GameRoom';
+import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
+import type { ClientMessage, RoundState } from '../../src/shared/networkProtocol';
 
 const appearance = {
   hatType: 'fedora' as const,
@@ -56,8 +61,8 @@ afterEach(async () => {
   openSockets.clear();
 });
 
-async function openClient(room: string) {
-  const response = await SELF.fetch(`https://rat-detective.test/ws?room=${room}`, {
+async function openClient(room: string, sharedFeed = false) {
+  const response = await SELF.fetch(`https://rat-detective.test/ws?room=${room}${sharedFeed ? '&receive=welcome-only' : ''}`, {
     headers: { Upgrade: 'websocket' },
   });
   expect(response.status).toBe(101);
@@ -73,6 +78,129 @@ function joinPayload(name: string, protocolVersion = PROTOCOL_VERSION) {
 }
 
 describe('GameRoom websockets', () => {
+  it('accepts bounded diagnostics on the joined local socket at most once per four seconds', async () => {
+    const stub = env.GAME_ROOM.getByName(`diagnostics-${crypto.randomUUID()}`);
+    const response = await stub.fetch('http://localhost/ws', {
+      headers: { Upgrade: 'websocket', Origin: 'http://localhost' },
+    });
+    const ws = response.webSocket!;
+    ws.accept(); openSockets.add(ws);
+    const inbox = collect(ws);
+    ws.send(joinPayload('Local tester'));
+    await inbox.waitFor('welcome');
+    await runInDurableObject(stub, async (instance, ctx) => {
+      const room = instance as GameRoom;
+      const internals = room as unknown as { clock: () => number };
+      let now = Date.now(); internals.clock = () => now;
+      const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const server = ctx.getWebSockets()[0];
+        const report = JSON.stringify({ type: 'diagnostics', report: { longestFrameMs: 42 } });
+        await room.webSocketMessage(server, report);
+        await room.webSocketMessage(server, report);
+        expect(spy.mock.calls.filter(call => String(call[0]).includes('client diagnostics'))).toHaveLength(1);
+        now += 4000;
+        await room.webSocketMessage(server, report);
+        expect(spy.mock.calls.filter(call => String(call[0]).includes('client diagnostics'))).toHaveLength(2);
+      } finally { spy.mockRestore(); }
+    });
+  });
+
+  it('keeps shared-feed bot sockets authoritative without sending eleven redundant world feeds', async () => {
+    const room = `shared-feed-${crypto.randomUUID()}`;
+    const human = await openClient(room);
+    human.ws.send(joinPayload('Human'));
+    await human.inbox.waitFor('welcome');
+    const bot = await openClient(room, true);
+    bot.ws.send(joinPayload('Bot'));
+    const welcome = await bot.inbox.waitFor('welcome');
+    await human.inbox.waitFor('playerJoined');
+    bot.ws.send(JSON.stringify({ type: 'updateMovement', position: { x: 20, y: 2, z: 15 },
+      rotation: { x: 0, y: 0, z: 0, w: 1 }, meshRotation: { x: 0, y: 0, z: 0, w: 1 } }));
+    const moved = await human.inbox.waitFor('playerMoved');
+    expect(moved.at).toBeGreaterThan(0);
+    expect(moved.player.id).toBe(welcome.id);
+    expect(moved.player.x).toBe(20);
+    bot.ws.send(JSON.stringify({ type: 'shoot', shotId: 'shared-feed-shot', origin: { x: 20, y: 3, z: 15 }, direction: { x: 0, y: 0, z: 1 } }));
+    expect((await human.inbox.waitFor('playerShot')).shooterId).toBe(welcome.id);
+    bot.ws.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }));
+    await bot.inbox.waitFor('pong');
+    expect(bot.inbox.messages).toEqual([]);
+    const stub = env.GAME_ROOM.getByName(room);
+    await runInDurableObject(stub, async (_instance: GameRoom, state) => {
+      const attachments = state.getWebSockets().map(ws => ws.deserializeAttachment() as {playerId: string; receiveMode?: string});
+      expect(attachments.find(a => a.playerId === welcome.id)?.receiveMode).toBe('welcome-only');
+    });
+    await evictDurableObject(stub);
+    const late = await openClient(room);
+    late.ws.send(joinPayload('Late'));
+    await late.inbox.waitFor('welcome');
+    await human.inbox.waitFor('playerJoined');
+    bot.ws.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }));
+    await bot.inbox.waitFor('pong');
+    expect(bot.inbox.messages).toEqual([]);
+  });
+
+  it('shares the graybox layout and safe spawn positions between room participants', async () => {
+    const room = 'graybox-' + crypto.randomUUID();
+    const first = await openClient(room);
+    first.ws.send(joinPayload('Alpha'));
+    const welcome = await first.inbox.waitFor('welcome');
+    expect(welcome.world.version).toBe(GRAYBOX_VERSION);
+    expect(worldSpawnPoints(welcome.world)).toContainEqual({x:welcome.player.x,y:welcome.player.y,z:welcome.player.z});
+    const second = await openClient(room);
+    second.ws.send(joinPayload('Beta'));
+    const other = await second.inbox.waitFor('welcome');
+    expect(other.world).toEqual(welcome.world);
+    expect(worldSpawnPoints(other.world)).toContainEqual({x:other.player.x,y:other.player.y,z:other.player.z});
+    expect(Math.hypot(other.player.x-welcome.player.x,other.player.z-welcome.player.z)).toBeGreaterThan(60);
+  });
+
+  it('allocates twelve separated server joins, respawns, and full-round reset positions',async()=>{
+    const room=`graybox-spawn-${crypto.randomUUID()}`;
+    const ids:string[]=[];
+    let watcher:Awaited<ReturnType<typeof openClient>>|undefined;
+    for (let i=0;i<12;i++) {
+      const client=await openClient(room);
+      watcher??=client;
+      client.ws.send(joinPayload(`Rat ${i}`));
+      const welcome=await client.inbox.waitFor('welcome');
+      ids.push(welcome.id);
+    }
+    const stub=env.GAME_ROOM.getByName(room);
+    type Internals={players:Map<string,PlayerData>;chaosTimer:ReturnType<typeof setInterval>|null};
+    const assertSpread=(players:PlayerData[])=>{
+      expect(players).toHaveLength(12);
+      for (let i=0;i<players.length;i++) for (let j=0;j<i;j++) {
+        expect(Math.hypot(players[i].x-players[j].x,players[i].z-players[j].z)).toBeGreaterThan(60);
+      }
+    };
+    await runInDurableObject(stub,async(instance:GameRoom,state)=>{
+      const game=instance as unknown as Internals;
+      if(game.chaosTimer)clearInterval(game.chaosTimer);
+      game.chaosTimer=null;
+      assertSpread([...game.players.values()]);
+      const dead=game.players.get(ids[0])!;
+      dead.hp=0;
+      state.storage.sql.exec('INSERT INTO pending_events (id,type,player_id,due_at) VALUES (?,?,?,?)','spawn-test','respawn',dead.id,0);
+      await state.storage.setAlarm(Date.now()+60_000);
+    });
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    await watcher!.inbox.waitFor('playerRespawn',m=>m.id===ids[0]);
+    await runInDurableObject(stub,async(instance:GameRoom,state)=>{
+      const game=instance as unknown as Internals;
+      assertSpread([...game.players.values()]);
+      for(const player of game.players.values()){player.hp=0;player.x=0;player.z=0;}
+      state.storage.sql.exec('INSERT INTO pending_events (id,type,player_id,due_at) VALUES (?,?,?,?)','reset-test','reset',null,0);
+      await state.storage.setAlarm(Date.now()+60_000);
+    });
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    await watcher!.inbox.waitFor('gameReset');
+    await runInDurableObject(stub,(instance:GameRoom)=>{
+      assertSpread([...(instance as unknown as Internals).players.values()]);
+    });
+  });
+
   it('sends an atomic welcome snapshot with protocol, world, round, and currentPlayers', async () => {
     const room = `snap-${crypto.randomUUID()}`;
     const first = await openClient(room);
@@ -99,6 +227,26 @@ describe('GameRoom websockets', () => {
     client.ws.send(joinPayload('Old Rat', 0));
     const error = await client.inbox.waitFor('error');
     expect(error.message).toMatch(/protocol version/i);
+  });
+
+  it('delivers an accepted graybox shot in a client-valid authoritative snapshot and rejects shots after victory', async () => {
+    const room = `graybox-shots-${crypto.randomUUID()}`;
+    const client = await openClient(room);
+    client.ws.send(joinPayload('Shooter'));
+    const welcome = await client.inbox.waitFor('welcome');
+    const shot = { type: 'shoot' as const, shotId: 'visible-shot',
+      origin: { x: welcome.player.x, y: welcome.player.y + 1.5, z: welcome.player.z },
+      direction: { x: 0, y: 1, z: 0 } };
+    client.ws.send(JSON.stringify(shot));
+    const snapshot = await client.inbox.waitFor('chaos', message => message.state.shots.some(ball => ball.id === shot.shotId));
+    expect(parseServerMessage(JSON.stringify(snapshot))).not.toBeNull();
+    expect(snapshot.state.shots.find(ball => ball.id === shot.shotId)?.owner).toBe(welcome.id);
+    await runInDurableObject(env.GAME_ROOM.getByName(room), (instance: GameRoom) => {
+      const game = instance as unknown as { round: RoundState; handleShoot: (id:string, descriptor:Extract<ClientMessage,{type:'shoot'}>) => void; chaos: ChaosSimulation };
+      game.round = { phase:'won', startedAt:Date.now(), winnerId:welcome.id, winnerName:'Shooter', kills:20, resetAt:Date.now()+6000 };
+      game.handleShoot(welcome.id, {...shot,shotId:'after-victory'});
+      expect(game.chaos.snapshot(false).shots.some(ball=>ball.id==='after-victory')).toBe(false);
+    });
   });
 
   it('relays shot descriptors and restores a dead player through the alarm', async () => {
@@ -183,6 +331,70 @@ describe('GameRoom websockets', () => {
     expect(await runDurableObjectAlarm(stub)).toBe(true);
     const reset = await lostClient.inbox.waitFor('gameReset');
     expect(reset.round.phase).toBe('playing');
+  });
+
+  it('uses authoritative case ownership to cross the win target, freezes combat, and resets the full round', async () => {
+    const room = `graybox-case-win-${crypto.randomUUID()}`;
+    const first = await openClient(room);
+    first.ws.send(joinPayload('Carrier'));
+    const carrier = await first.inbox.waitFor('welcome');
+    const second = await openClient(room);
+    second.ws.send(joinPayload('Victim'));
+    const victim = await second.inbox.waitFor('welcome');
+    const third = await openClient(room);
+    third.ws.send(joinPayload('Observer'));
+    const observer = await third.inbox.waitFor('welcome');
+    const stub = env.GAME_ROOM.getByName(room);
+    const now = Date.now();
+    type Internals = {
+      players: Map<string, PlayerData>;
+      chaos: ChaosSimulation;
+      chaosTimer: ReturnType<typeof setInterval> | null;
+      round: RoundState;
+      now: () => number;
+      handleHit: (id: string, hit: Extract<ClientMessage, {type:'hit'}>, incoming?: {x:number;y:number;z:number}) => Promise<void>;
+    };
+    await runInDurableObject(stub, async (instance: GameRoom, state) => {
+      const game = instance as unknown as Internals;
+      if (game.chaosTimer) clearInterval(game.chaosTimer);
+      game.chaosTimer = null;
+      game.now = () => now;
+      const champion = game.players.get(carrier.id)!;
+      // Acquire through the real simulation; no client-supplied bonus field.
+      game.chaos.caseBody.position.set(champion.x, champion.y + .8, champion.z);
+      game.chaos.step(0, now);
+      expect(game.chaos.caseHolderId).toBe(carrier.id);
+      champion.kills = 19;
+      await game.handleHit(carrier.id, {type:'hit',victimId:victim.id,damage:3}, {x:1,y:0,z:0});
+      expect(champion.kills).toBe(21);
+      expect(game.players.get(victim.id)!.deaths).toBe(1);
+      expect(game.round).toMatchObject({phase:'won',winnerId:carrier.id,kills:21,resetAt:now+6000});
+      await game.handleHit(carrier.id, {type:'hit',victimId:observer.id,damage:3}, {x:1,y:0,z:0});
+      await game.handleHit(observer.id, {type:'hit',victimId:carrier.id,damage:3}, {x:1,y:0,z:0});
+      expect(game.players.get(observer.id)!.hp).toBe(3);
+      expect(champion.hp).toBe(3);
+      expect(champion.kills).toBe(21);
+      expect(state.storage.sql.exec<{type:string;due_at:number}>('SELECT type, due_at FROM pending_events').toArray())
+        .toEqual([{type:'reset',due_at:now+6000}]);
+      state.storage.sql.exec('UPDATE pending_events SET due_at = 0');
+    });
+    const won = await first.inbox.waitFor('gameWon');
+    expect(won).toMatchObject({winnerId:carrier.id,kills:21,resetAt:now+6000});
+    const board = await first.inbox.waitFor('scoreboardUpdate', message => message.scores.some(p => p.id === carrier.id && p.kills === 21));
+    expect(board.scores.find(p => p.id === victim.id)!.deaths).toBe(1);
+    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    await first.inbox.waitFor('gameReset');
+    await runInDurableObject(stub, (instance: GameRoom, state) => {
+      const game = instance as unknown as Internals;
+      expect(game.round.phase).toBe('playing');
+      expect(game.chaos.caseHolderId).toBeNull();
+      for (const player of game.players.values()) {
+        expect(player).toMatchObject({hp:3,kills:0,deaths:0});
+        expect(player.respawnAt).toBeUndefined();
+      }
+      expect(state.storage.sql.exec('SELECT * FROM pending_events').toArray()).toEqual([]);
+    });
+    expect(first.inbox.messages.filter(message => message.type === 'gameWon')).toHaveLength(0);
   });
 
   it('recovers a 2.5s movement checkpoint without a forced persist', async () => {
@@ -442,6 +654,44 @@ describe('GameRoom websockets', () => {
     client.ws.close(1000, 'done'); late.ws.close(1000, 'done');
   });
 
+  it('suppresses redundant stationary poses while preserving the stop sample, timestamps, and checkpoints', async () => {
+    const room = `stationary-${crypto.randomUUID()}`;
+    const client = await openClient(room);
+    client.ws.send(joinPayload('Still Rat'));
+    const welcome = await client.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room), async (instance: GameRoom, state) => {
+      const internal = instance as unknown as { clock: () => number; broadcasts: number; lastCheckpointAt: Map<string, number> };
+      const originalClock = internal.clock, start = Date.now();
+      let now = start;
+      internal.clock = () => now; internal.lastCheckpointAt.set(welcome.id, start);
+      const socket = state.getWebSockets().find(ws =>
+        (ws.deserializeAttachment() as { playerId?: string }).playerId === welcome.id)!;
+      const move = (x: number) => JSON.stringify({ type: 'updateMovement', position: { x, y: 2, z: 15 },
+        rotation: { x: 0, y: 0, z: 0, w: 1 }, meshRotation: { x: 0, y: 0, z: 0, w: 1 } });
+      const before = internal.broadcasts;
+      try {
+        for (let i = 1; i <= 150; i++) {
+          now = start + i * 40;
+          await instance.webSocketMessage(socket, move(15));
+          if (i <= 2) expect(internal.broadcasts - before).toBe(i);
+        }
+        // At least 90% fewer broadcasts/serializations for idle clients, with
+        // regular fresh samples and unchanged durable pose/liveness checkpoints.
+        expect(internal.broadcasts - before).toBeGreaterThanOrEqual(12);
+        expect(internal.broadcasts - before).toBeLessThanOrEqual(15);
+        const stored = state.storage.sql.exec<{ data: string; updated_at: number }>('SELECT data, updated_at FROM players WHERE id = ?', welcome.id).one();
+        expect(JSON.parse(stored.data).x).toBe(15); expect(stored.updated_at).toBeGreaterThanOrEqual(start + 5000);
+        const idleBroadcasts = internal.broadcasts;
+        now += 40; await instance.webSocketMessage(socket, move(16));
+        expect(internal.broadcasts).toBe(idleBroadcasts + 1);
+        now += 40; await instance.webSocketMessage(socket, move(9000));
+        now += 40; await instance.webSocketMessage(socket, move(9000));
+        expect(internal.broadcasts).toBe(idleBroadcasts + 3); // Every correction is delivered.
+      } finally { internal.clock = originalClock; }
+    });
+    client.ws.close(1000, 'done');
+  });
+
   it('lists attached public-room names and scores on GET /status', async () => {
     const first = await openClient(DEFAULT_ROOM_NAME);
     first.ws.send(joinPayload('One'));
@@ -451,16 +701,19 @@ describe('GameRoom websockets', () => {
     const oneBoard = (await one.json()) as {
       room: string;
       players: number;
+      bots: number;
       phase: string;
       startedAt: number;
       scores: Array<{ name: string; kills: number; deaths: number }>;
     };
-    expect(oneBoard).toEqual({
-      room: 'public',
-      players: 1,
+    expect(oneBoard.bots).toBeGreaterThanOrEqual(8);expect(oneBoard.bots).toBeLessThanOrEqual(11);
+    expect(oneBoard).toMatchObject({
+      room: DEFAULT_ROOM_NAME,
+      players: oneBoard.bots+1,
+      bots: oneBoard.bots,
       phase: 'playing',
       startedAt: expect.any(Number),
-      scores: [{ name: 'One', kills: 0, deaths: 0 }],
+      scores: expect.arrayContaining([{ name: 'One', kills: 0, deaths: 0 }]),
     });
 
     const second = await openClient(DEFAULT_ROOM_NAME);
@@ -468,18 +721,80 @@ describe('GameRoom websockets', () => {
     await second.inbox.waitFor('welcome');
 
     const two = await SELF.fetch('https://rat-detective.test/status');
-    await expect(two.json()).resolves.toEqual({
-      room: 'public',
-      players: 2,
+    await expect(two.json()).resolves.toMatchObject({
+      room: DEFAULT_ROOM_NAME,
+      players: oneBoard.bots+2,
+      bots: oneBoard.bots,
       phase: 'playing',
       startedAt: oneBoard.startedAt,
-      scores: [
+      scores: expect.arrayContaining([
         { name: 'One', kills: 0, deaths: 0 },
         { name: 'Two', kills: 0, deaths: 0 },
-      ],
+      ]),
     });
 
     first.ws.close(1000, 'done');
     second.ws.close(1000, 'done');
+    await runInDurableObject(env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME), async (instance: GameRoom, ctx) => {
+      const game = instance as unknown as { chaosTimer: ReturnType<typeof setInterval> | null; persistentBots: boolean; serverBots: { dispose(): void } | null };
+      if (game.chaosTimer) clearInterval(game.chaosTimer);
+      game.chaosTimer = null; game.persistentBots = false; game.serverBots?.dispose();
+      ctx.storage.sql.exec("DELETE FROM room_state WHERE key = 'persistent-bots-v1'");
+      await ctx.storage.deleteAlarm();
+    });
   });
+});
+
+describe('capacity persistence work', () => {
+  it('persists final lethal state once and does not rewrite an unchanged nonlethal shooter', async () => {
+    const room=`write-count-${crypto.randomUUID()}`;
+    const a=await openClient(room),b=await openClient(room);
+    a.ws.send(joinPayload('Shooter'));b.ws.send(joinPayload('Victim'));
+    const aw=await a.inbox.waitFor('welcome'),bw=await b.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom,ctx)=>{
+      const internal=instance as unknown as {handleHit:(id:string,m:{type:'hit';victimId:string;damage:number})=>Promise<void>};
+      const writes=vi.spyOn(ctx.storage.sql,'exec');
+      try {
+        await internal.handleHit(aw.id,{type:'hit',victimId:bw.id,damage:1});
+        const playerWrites=()=>writes.mock.calls.filter(([sql])=>String(sql).includes('INSERT INTO players'));
+        expect(playerWrites()).toHaveLength(1);
+        expect(playerWrites()[0][1]).toBe(bw.id);
+        writes.mockClear();
+        await internal.handleHit(aw.id,{type:'hit',victimId:bw.id,damage:99});
+        expect(playerWrites()).toHaveLength(2);
+        const victim=JSON.parse(String(playerWrites().find(call=>call[1]===bw.id)![2]));
+        expect(victim.hp).toBe(0);expect(victim.respawnAt).toBeGreaterThan(0);
+        const saved=ctx.storage.sql.exec<{data:string}>('SELECT data FROM players WHERE id = ?',bw.id).one();
+        expect(JSON.parse(saved.data)).toEqual(victim);
+        expect(ctx.storage.sql.exec<{n:number}>("SELECT COUNT(*) AS n FROM pending_events WHERE type = 'respawn' AND player_id = ?",bw.id).one().n).toBe(1);
+      } finally {writes.mockRestore();}
+    });
+  });
+  it('retains an unchanged alarm and updates it for an earlier deadline',async()=>{
+    const stub=env.GAME_ROOM.getByName(`alarm-count-${crypto.randomUUID()}`);
+    await runInDurableObject(stub,async(instance:GameRoom,ctx)=>{
+      const internal=instance as unknown as {scheduleNextAlarm:()=>Promise<void>};
+      const due=Date.now()+60000;
+      ctx.storage.sql.exec("INSERT INTO pending_events (id,type,player_id,due_at) VALUES ('a','respawn',NULL,?)",due);
+      await internal.scheduleNextAlarm();
+      const set=vi.spyOn(ctx.storage,'setAlarm');
+      try {
+        await internal.scheduleNextAlarm();expect(set).not.toHaveBeenCalled();
+        ctx.storage.sql.exec("INSERT INTO pending_events (id,type,player_id,due_at) VALUES ('b','respawn',NULL,?)",due-1000);
+        await internal.scheduleNextAlarm();expect(await ctx.storage.getAlarm()).toBe(due-1000);
+        expect(set).toHaveBeenCalledTimes(1);
+      } finally {set.mockRestore();await ctx.storage.deleteAlarm();}
+    });
+  });
+});
+it('negotiates delta motion while retaining the previous compact mode',async()=>{
+ for(const mode of ['compact-v1','compact-v2']){
+  const room=`wire-mode-${crypto.randomUUID()}`;
+  const response=await SELF.fetch(`https://rat-detective.test/ws?room=${room}&chaos=${mode}`,{headers:{Upgrade:'websocket'}});
+  const ws=response.webSocket!;ws.accept();openSockets.add(ws);
+  await runInDurableObject(env.GAME_ROOM.getByName(room),(_instance,ctx)=>{
+   const attachment=ctx.getWebSockets()[0].deserializeAttachment() as {compactChaos?:boolean;compactChaosDelta?:boolean};
+   expect(attachment.compactChaos).toBe(true);expect(!!attachment.compactChaosDelta).toBe(mode==='compact-v2');
+  });
+ }
 });

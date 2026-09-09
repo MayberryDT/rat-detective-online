@@ -36,3 +36,6 @@ playwright-report
 dist-visual
 
 dist-visual-reference/
+
+# Generated capacity captures, private deployment receipts and staging
+/output/

@@ -1,11 +1,13 @@
 # Omarchy launcher (alongside the web app)
 
+Reviewed 2026-09-08 against the companion source. Public counts include 8–11 AI rats per round plus humans. The plugin does not host bots or keep the game alive. See [live service](live-service.md) for the current game deployment. Desktop installation commands below are optional user actions, not part of a game deployment.
+
 Rat Detective stays a browser game on Cloudflare. The public URL remains
-`https://rat-detective.animasai.co`. Omarchy users also get a shell plugin that
+`https://ratdetective.online`. Omarchy users also get a shell plugin that
 discovers the game in the plugin marketplace and, on first use, installs the
 same title as an Omarchy web app so it launches from Super+Space.
 
-The bar chip shows how many rats are in the public city (`GET /status`).
+The bar chip shows how many rats, including server-owned AI, are in the public city (`GET /status`).
 Click opens a live room panel (names, scoreboard, round clock). Play is a
 button in that panel. First use can still add the game to the Super+Space menu.
 
@@ -13,7 +15,7 @@ button in that panel. First use can still add the game to the Super+Space menu.
 
 | Surface | Role | Permanent? |
 |---|---|---|
-| Web app at `rat-detective.animasai.co` | The game. Anyone with a browser can play. | Yes |
+| Web app at `ratdetective.online` | The game. Anyone with a browser can play. | Yes |
 | Omarchy web-app launcher (`.desktop`) | Super+Space → Rat Detective, chrome-less Chromium window | Yes, once a user installs it |
 | Omarchy shell plugin | Live public-room board + Add to menu / Play | Yes as a companion, not as the game runtime |
 

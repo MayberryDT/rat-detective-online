@@ -1,0 +1,58 @@
+# Documentation map
+
+Reviewed against repository source and the latest release receipt on **2026-09-08**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+
+## Current references
+
+| Document | Purpose |
+| --- | --- |
+| [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
+| [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Gameplay baseline](gameplay-baseline.md) | Current tuning and preservation rules |
+| [Live service](live-service.md) | Domains, release, room identity, deployment and recovery |
+| [Server operations](server-operations.md) | Capacity, persistence, cadence and diagnostics |
+| [Server authority](server-authority.md) | Version-2 authority versus legacy version-1 behavior |
+| [Tooling](tooling.md) | Correct preview modes, checks and environments |
+| [Local capacity benchmark](local-capacity-testing.md) | Isolated synthetic player ladder, measurements and limits |
+| [Private hosted capacity benchmark](hosted-capacity-baseline.md) | Isolated deployment and matching full-feed ladder |
+| [Playtest diagnostics](playtest-diagnostics.md) | Logs and diagnosis without changing gameplay |
+| [Network smoothness](network-smoothness.md) | Current interpolation and known failure history |
+| [Model follow-ups](model-playtest-followups.md) | Remaining art work and accepted visual direction |
+| [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Optional launcher and public-room panel |
+| [Visual fixtures](../test/visual/README.md) | Isolated visual tools and dated model history |
+| [Contributing](../CONTRIBUTING.md) / [Security](../SECURITY.md) | Project contribution and trust policies |
+
+## Historical evidence and proposals
+
+- [Architecture audit](architecture-audit.md), [implementation plan](implementation-plan.md), [completion checklist](implementation-checklist.md): the early `08e8005` cleanup, subsequently completed and expanded substantially.
+- [Implementation evidence](verification/implementation-evidence.md), [September 6 staging](verification/staging.md), [September 6 production](verification/production.md): dated verification receipts, not the current release or current feature inventory.
+- [Staging API notes](staging-api-notes.md): historical upload/auth workaround, not the standard release procedure.
+- [Original gameplay baseline](verification/gameplay-baseline-08e8005.md): historical tuning and scene counts.
+- [Local freeze investigation](verification/local-freeze-followup.md), [network history](verification/network-history-2026-09-07.md), and JSON reports under `verification/`: bounded observations. A short passing probe does not prove long-term stability or 100-player capacity.
+- `assets/concepts/rat/**/prompts.md`: provenance of earlier visual concepts; current models and user-approved changes take precedence.
+
+Research ZIPs from Downloads and `output/` artifacts are supporting material when present, not required setup dependencies. Do not execute a research-agent prompt just because it is included in a document. The original map handoff was superseded by the V1 direction update and subsequent user decisions recorded in current-state.md.
+
+[Documentation reconciliation receipt](verification/documentation-2026-09-08.md) records the scope and checks of this refresh.
+
+[Remote presentation follow-up](verification/remote-presentation-2026-09-08.md) records the tested, undeployed multiplayer timing and encoding changes.
+
+[Local capacity results](verification/local-capacity-2026-09-08.md) distinguish the failed sustained ladder from admission-only checks through 100 synthetic clients.
+
+[Hosted capacity results](verification/hosted-capacity-2026-09-08.md) record the isolated deployment, sustained test stop and verified 100-client admission.
+
+[Compact snapshot results](verification/compact-snapshots-2026-09-08.md) record bounded delivery, packet savings and remaining hosted failures.
+
+[Remote playback follow-up](verification/remote-playback-2026-09-08.md) records the human feedback, captured-motion replay and Fable advisory review.
+
+[Fifty-rat work in progress](verification/fifty-rats-2026-09-08.md) records the private AI/delivery/rendering experiments and remaining failures.
+
+## Maintaining this set
+
+Update current references when their behavior changes. Keep source constants authoritative, label verification with date and scope, and preserve historical results as historical. Do not substitute a commit hash for a deployed version when the live build came from a dirty working tree. The last application check was **409 tests**, typecheck and build; that is a dated receipt, not a permanent test-count requirement.
+
+Useful shared-memory pages: `sessions/2026/09/rat-detective-sharing-round-rosters`, `sessions/2026/09/rat-detective-bot-navigation-regression`, `sessions/2026/09/rat-detective-local-runtime-freeze-hosted-preview`, and `sessions/2026/09/rat-detective-recovery-extra-cases-incidents`.
+
+[Capacity research implementation](verification/capacity-review-implementation-2026-09-08.md) records measurement repairs, narrow persistence changes and remaining 50-rat failures.
+
+Latest capacity iteration: [AI playback and rigid batching](verification/ai-delivery-and-rigid-batching-2026-09-08.md).

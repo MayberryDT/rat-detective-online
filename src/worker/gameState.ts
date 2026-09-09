@@ -8,10 +8,21 @@ import {
   type Vec3Data,
 } from '../shared/networkProtocol';
 import { generateRandomName } from '../shared/ratNames';
-import { createSafeSpawn, type WorldSpec } from '../shared/worldSpec';
+import type { WorldSpec } from '../shared/worldSpec';
+import { choosePlayerSpawn } from '../shared/playerSpawns';
 
-export function spawnForWorld(spec: WorldSpec, random = Math.random): Vec3Data {
-  return createSafeSpawn(spec, random);
+export function spawnForWorld(spec: WorldSpec, random = Math.random, players: Iterable<PlayerData> = [], excludeId?: string): Vec3Data {
+  return choosePlayerSpawn(spec, [...players].filter(p => p.hp > 0 && p.id !== excludeId), random);
+}
+
+/** A new round reserves its new positions, never the previous round's corpses. */
+export function resetRoundForWorld(players: Iterable<PlayerData>, spec: WorldSpec, random = Math.random): PlayerData[] {
+  const assigned: Vec3Data[] = [];
+  return resetRound(players, () => {
+    const spawn=choosePlayerSpawn(spec,assigned,random);
+    assigned.push(spawn);
+    return spawn;
+  });
 }
 
 export function createPlayer(
@@ -69,6 +80,8 @@ export function applyHit(
   shooterId: string,
   victimId: string,
   requestedDamage: number,
+  allowPosthumous = false,
+  caseHolderId: string | null = null,
 ): HitResult {
   const shooter = players.get(shooterId);
   const victim = players.get(victimId);
@@ -78,7 +91,7 @@ export function applyHit(
     return { applied: false, killed: false, roundWon: false, damage: 0 };
   }
 
-  if (shooter.hp <= 0 || victim.hp <= 0) {
+  if ((!allowPosthumous && shooter.hp <= 0) || victim.hp <= 0) {
     return { applied: false, killed: false, roundWon: false, damage: 0 };
   }
 
@@ -88,7 +101,8 @@ export function applyHit(
     return { applied: true, killed: false, roundWon: false, damage };
   }
 
-  shooter.kills += 1;
+  // Ownership comes from the authoritative simulation at kill resolution.
+  shooter.kills += shooterId === caseHolderId ? 2 : 1;
   victim.deaths += 1;
 
   return {

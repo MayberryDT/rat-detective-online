@@ -6,6 +6,7 @@ let listener: THREE.AudioListener | null = null;
 let generation = 0;
 const buffers = new Map<SoundName, AudioBuffer>();
 const playing = new Set<THREE.Audio>();
+const MAX_ENTITY_VOICES = 12;
 
 export function initEntitySounds(next: THREE.AudioListener): void {
     if (listener === next) return;
@@ -24,7 +25,14 @@ export function initEntitySounds(next: THREE.AudioListener): void {
 
 export function playEntitySound(name: SoundName, volume = 0.5): void {
     const buffer = buffers.get(name);
-    if (!buffer || !listener) return;
+    // Hits during a suspended context should not queue up and burst on unlock.
+    if (!buffer || !listener || listener.context.state !== 'running') return;
+    if (playing.size >= MAX_ENTITY_VOICES) {
+        const oldest = playing.values().next().value!;
+        if (oldest.isPlaying) oldest.stop();
+        oldest.disconnect();
+        playing.delete(oldest);
+    }
     const sound = new THREE.Audio(listener);
     sound.setBuffer(buffer);
     sound.setVolume(volume);

@@ -1,10 +1,13 @@
 # Staging API notes
 
+
+> **Historical record — September 5–6 staging upload workaround.** Classified on 2026-09-08. Statements below describe that pass, including its then-current code, deployment, authorization and test counts. They are not present-day instructions or a current feature inventory. Use [the current reference](live-service.md) before acting. Preserve the measurements; do not restore obsolete behavior from this report.
+
 Preparation for a **separate** `rat-detective-staging` Worker. This is not a production
 deploy. Live Worker `rat-detective-preview` and custom domain `rat-detective.animasai.co`
 must stay untouched.
 
-Wrangler CLI is unauthenticated in this session. Authenticated reads/writes go through
+At the time of this historical session, Wrangler CLI was unauthenticated. Authenticated reads/writes go through
 the installed Cloudflare API connector (`mcp__cloudflare_api__execute`) on account
 `e0f9e82703380afb5e7022ade62b906c`. Local Node only handles hashing, JWT-authenticated
 asset-bucket upload, and multipart packaging.

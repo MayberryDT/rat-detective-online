@@ -1,5 +1,8 @@
 # Production release — 2026-09-06
 
+
+> **Historical record — September 6 production deployment.** Classified on 2026-09-08. Statements below describe that pass, including its then-current code, deployment, authorization and test counts. They are not present-day instructions or a current feature inventory. Use [the current reference](../live-service.md) before acting. Preserve the measurements; do not restore obsolete behavior from this report.
+
 User explicitly authorized publishing the verified staging build. Source release: `be09014749f221176176c39b26b97e6235630b61` on main; application code is unchanged from the tested staging release.
 
 - URL: https://rat-detective.animasai.co

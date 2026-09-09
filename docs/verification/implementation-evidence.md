@@ -1,5 +1,8 @@
 # Implementation evidence
 
+
+> **Historical record — September 6 implementation verification.** Classified on 2026-09-08. Statements below describe that pass, including its then-current code, deployment, authorization and test counts. They are not present-day instructions or a current feature inventory. Use [the current reference](../README.md) before acting. Preserve the measurements; do not restore obsolete behavior from this report.
+
 Reference: `08e8005`. These checks describe their actual scope; unit tests are not presented as manual gameplay tests.
 
 | Requirement | Evidence |

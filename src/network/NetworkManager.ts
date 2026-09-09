@@ -1,6 +1,6 @@
 import { PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
-import { WORLD_LAYOUT_VERSION } from '../shared/worldSpec';
-import { parseServerMessage } from '../shared/messageValidation';
+import { isSupportedWorldVersion } from '../shared/worldSpec';
+import { ChaosDecoder, CHAOS_WIRE_MODE } from '../shared/chaosWire';
 
 export type ConnectionState = 'idle' | 'connecting' | 'playing' | 'reconnecting' | 'disconnected' | 'stopped';
 export interface TransportOptions {
@@ -9,6 +9,40 @@ export interface TransportOptions {
     joinTimeoutMs?: number;
     heartbeatMs?: number;
     maxRetries?: number;
+    /** Local bot sockets share the human's validated world feed. They only
+     * consume their own welcome; connection control messages remain validated. */
+    receiveMode?: 'all' | 'welcome-only';
+    /** Explicit legacy mode supports transport comparisons and old previews. */
+    chaosTransport?: 'compact-v1' | 'compact-v2' | 'legacy';
+}
+
+export interface NetworkDiagnostics {
+    receivedCount: number;
+    /** UTF-16 string length, not wire bytes. */
+    receivedChars: number;
+    parseMs: number;
+    parseMaxMs: number;
+    invalidCount: number;
+    ignoredCount: number;
+    lastReceivedAt: number;
+    sentCount: number;
+    sendFailures: number;
+    bufferedAmount: number;
+}
+
+const SHARED_UPDATES = new Set<string>([
+    'chaos', 'currentPlayers', 'playerJoined', 'playersMoved', 'playerMoved', 'playerCorrected',
+    'playerShot', 'playerDamaged', 'playerDied', 'scoreboardUpdate', 'playerRespawn',
+    'playerLeft', 'gameWon', 'gameReset',
+]);
+
+/** The server serializes its type first. Inspect only the bounded envelope for
+ * messages this socket will discard; never expose an unvalidated payload. Other
+ * property orders and unknown envelopes take the normal validation path. */
+function isDiscardedSharedUpdate(raw: unknown): boolean {
+    if (typeof raw !== 'string') return false;
+    const type = /^\s*\{\s*"type"\s*:\s*"([A-Za-z]+)"\s*[,}]/.exec(raw.slice(0, 96))?.[1];
+    return !!type && SHARED_UPDATES.has(type);
 }
 
 export function resolveWebSocketUrl(serverUrl?: string): string {
@@ -37,10 +71,17 @@ export class NetworkManager {
     private lastReceived = 0;
     private readonly url: string;
     private readonly options: TransportOptions;
+    private readonly diagnostics = {
+        receivedCount: 0, receivedChars: 0, parseMs: 0, parseMaxMs: 0,
+        invalidCount: 0, ignoredCount: 0, sentCount: 0, sendFailures: 0,
+    };
 
     constructor(options: TransportOptions = {}) {
         this.options = options;
-        this.url = options.url ?? resolveWebSocketUrl();
+        const url = new URL(options.url ?? resolveWebSocketUrl());
+        if(options.receiveMode!=='welcome-only' && options.chaosTransport!=='legacy'){url.searchParams.set('chaos',options.chaosTransport??CHAOS_WIRE_MODE);url.searchParams.set('movement','batch-v1');}
+        if(options.receiveMode==='welcome-only')url.searchParams.set('receive','welcome-only');
+        this.url = url.toString();
     }
 
     connect(name: string, appearance: RatAppearance): void {
@@ -74,6 +115,7 @@ export class NetworkManager {
             return;
         }
         this.socket = socket;
+        const decoder=new ChaosDecoder();
         const current = () => generation === this.generation && this.socket === socket;
         this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
         socket.addEventListener('open', () => {
@@ -82,14 +124,28 @@ export class NetworkManager {
         });
         socket.addEventListener('message', event => {
             if (!current()) return;
-            const message = parseServerMessage(event.data);
+            const started = performance.now();
+            this.diagnostics.receivedCount++;
+            if (typeof event.data === 'string') this.diagnostics.receivedChars += event.data.length;
+            const discard = this.options.receiveMode === 'welcome-only' && isDiscardedSharedUpdate(event.data);
+            const decoded=discard?null:decoder.read(event.data);
+            const message=decoded?.message;
+            const elapsed = performance.now() - started;
+            this.diagnostics.parseMs += elapsed;
+            this.diagnostics.parseMaxMs = Math.max(this.diagnostics.parseMaxMs, elapsed);
+            if (discard) {
+                this.diagnostics.ignoredCount++;
+                this.lastReceived = Date.now();
+                return;
+            }
             if (!message) {
+                this.diagnostics.invalidCount++;
                 this.failed(generation, 'The server sent an incompatible game update.');
                 return;
             }
             this.lastReceived = Date.now();
             if (message.type === 'welcome') {
-                if (message.protocolVersion !== PROTOCOL_VERSION || message.world.version !== WORLD_LAYOUT_VERSION) {
+                if (message.protocolVersion !== PROTOCOL_VERSION || !isSupportedWorldVersion(message.world.version)) {
                     this.cancelConnection();
                     this.setState('disconnected', 'The game has updated. Reload to continue.');
                     return;
@@ -110,7 +166,18 @@ export class NetworkManager {
                 this.failed(generation, message.message);
                 return;
             }
-            this.onMessage?.(message);
+            if (this.options.receiveMode === 'welcome-only' && SHARED_UPDATES.has(message.type)) {
+                this.diagnostics.ignoredCount++;
+            } else {
+                try {
+                    if(message.type==='playersMoved')for(const sample of message.players)this.onMessage?.({type:'playerMoved',...sample});
+                    else this.onMessage?.(message);
+                } catch(error) {
+                    console.error('Could not apply game update',error);
+                    this.failed(generation,'Could not apply the game update.');return;
+                }
+            }
+            if(decoded?.ack)this.send(decoded.ack);
         });
         socket.addEventListener('close', () => { if (current()) this.failed(generation, 'Connection lost.'); });
         socket.addEventListener('error', () => { if (current()) this.failed(generation, 'Connection failed.'); });
@@ -142,16 +209,29 @@ export class NetworkManager {
     }
 
     send(message: ClientMessage): boolean {
-        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            this.diagnostics.sendFailures++;
+            return false;
+        }
         // Movement is replaceable; never keep queuing old positions behind a slow connection.
-        if (message.type === 'updateMovement' && this.socket.bufferedAmount > 64 * 1024) return false;
+        if (message.type === 'updateMovement' && this.socket.bufferedAmount > 64 * 1024) {
+            this.diagnostics.sendFailures++;
+            return false;
+        }
         try {
             this.socket.send(JSON.stringify(message));
+            this.diagnostics.sentCount++;
             return true;
         } catch {
+            this.diagnostics.sendFailures++;
             this.failed(this.generation, 'Sending a game update failed.');
             return false;
         }
+    }
+
+    /** Lifetime counters survive reconnects so an export includes the failure. */
+    getDiagnostics(): NetworkDiagnostics {
+        return { ...this.diagnostics, lastReceivedAt: this.lastReceived, bufferedAmount: this.socket?.bufferedAmount ?? 0 };
     }
 
     private clearJoinTimer(): void {

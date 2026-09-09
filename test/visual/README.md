@@ -1,4 +1,10 @@
-# Visual verification
+# Visual verification and model tools
+
+Reviewed **2026-09-08**. Current gameplay/design constraints are in [current state](../../docs/current-state.md); preview setup is in [tooling](../../docs/tooling.md). The model/city sections below are a chronological art-development record. Early tiny-graybox, fixed-count, camera and layout descriptions are superseded by the shipped version-2 city and later approved changes.
+
+The user currently handles interactive gameplay testing. Run browser-input automation only when requested; static/model screenshots and existing CI checks are separate. The title-screen share image is [share-title-v1.png](../../public/share-title-v1.png), a real 1200×630 capture. It is not a regenerated concept image.
+
+Normal multiplayer playtesting uses the hosted relay on port 5174, subject to its private backend version. Port 5180 is a separately served static visual build. Do not use the old 5173 workerd instructions below as the normal long-running playtest service. Static solo stage success does not establish network authority, bot roster persistence or multiplayer smoothness.
 
 `npm run visual:build` builds separate test pages, excluded from production assets. `npm run smoke:visual` captures five states and compares them against checked-in images. Missing Chrome or baselines fails the command. Record updates only after reviewing the changes: `UPDATE_VISUAL_BASELINES=1 npm run smoke:visual`.
 
@@ -101,3 +107,121 @@ batched decorations. Their independent decoration RNG preserves established wind
 and lamp placement. CityGenerator.update drives occasional lantern flicker,
 individual window changes and faint drain steam; gameplay and the city preview
 call it without touching the collision layout. Street props provides a close-up.
+
+## Neighborhood graybox
+
+Full multiplayer: `http://127.0.0.1:5174/?room=graybox-first` through the configured hosted relay; see the current tooling guide.
+Room names beginning `graybox-` select shared world version 2; ordinary rooms
+keep version 1. Use the same room URL in two browsers for a local match.
+
+Solo tour: `http://127.0.0.1:5180/stage-prototype.html` after `npm run visual:build`.
+WASD, mouse, Space, click to shoot; Esc opens the menu, M shows the overview.
+Tour buttons visit Records, Gate, Icebox and the sewer junction.
+
+The prototype now fills the original 12×12 city footprint (362 units across,
+roughly nine times the old graybox area). Most original seeded building positions
+and sizes remain, using the existing detailed noir renderer. Reservations replace
+central blocks with Records and varied streets, place Gate to the west and Icebox
+to the east, and open a southern drain approach. Additional service wings create
+longer alleys and blind receiving pockets among the original blocks.
+
+Three continuous ramps connect to a longer T-shaped sewer seven units below the
+streets. Gate is at (-138,0), Icebox service at (138,0), south exit at (0,138).
+The old ±60 boundary and fake surrounding towers are removed. The visible city
+edge is now -196 to166 on each axis. Pipes, repeated lights and exit signs support
+navigation. Records, case and Dispatch remain central. This is an integrated
+layout for human feedback, not a finished city-wide art pass.
+
+Shared geometry lives in src/shared/grayboxLayout.ts. Neighborhood creates both
+visible solids and Cannon bodies from it, updating transformed AABBs for immediate
+projectile raycasts. RatController uses the prototype camera framing and wall
+avoidance throughout. Movement and cheese-ball tuning remain unchanged.
+
+Existing test fixtures cover ramps, sewer branches, spawns and raycasts, but have
+not been rerun for this expansion. Earlier multiplayer results do not validate it.
+Art is deliberately preliminary. The next test is whether human chases and
+crossfire make these three places memorable and fun.
+
+## Records / Hot Case integrated slice
+
+Solo: http://127.0.0.1:5180/stage-prototype.html?view=approach
+Multiplayer: http://127.0.0.1:5174/?room=graybox-records-v1
+
+The solo page runs the same ChaosSimulation used by the graybox room, with a
+stationary practice rat that respawns after five seconds. Walk to the red case;
+shoot the Dispatch box beside the Records door, wait for the roll, then shoot
+the practice rat. A case hit reflects and releases; a rat hit consumes the shot.
+The through-wall outline belongs only to the case. The preview minimap is removed.
+
+Gameplay-camera review positions are ?view=approach, ?view=side, ?view=rear,
+?view=gate and ?view=icebox.
+The existing mouse controls and shoulder camera are used for all three.
+
+Confirmed slice behavior implemented:
+- one room-owned case and one Dispatch lifecycle, included for late joiners;
+- off-hand carry, nearby unobstructed pickup, disarm, death/disconnect release;
+- case recovery from out-of-bounds, inaccessible high resting places or embedding;
+- final incoming shot direction drives separate incident corpses;
+- corpses hit architecture and shove the case without colliding with living rats;
+- existing kill scoring; possession time is informational, not a new win condition.
+
+Proposed defaults in src/shared/chaosState.ts:
+pickup radius 1.6; previous-carrier restriction 900ms; roll 2.4s;
+incident 25s; cooldown 16s; corpse speed 38 and lifetime 10s.
+Limits: 16 active incident corpses and 256 active shots.
+Own case hits disarm; self damage is excluded. Current FFA has no team system.
+Future teams must preserve friendly health immunity without silently changing
+the chosen genuine-case-hit disarm policy.
+
+Version-2 graybox rooms now resolve bullets in the room's simulation. They retain
+175 speed, -25 gravity, .9 ricochet retention, five-second lifetime, and existing
+body/head hit shapes. Version-1 ordinary rooms retain their original hit flow.
+Clients render snapshots with short extrapolation. Network latency feel and
+high-player-count performance need human/network playtesting.
+
+The room checkpoints shared state and transitions; a recovered loose case may
+briefly return to Records after a prolonged process interruption. Corpses have
+independent identities/lifetimes and do not delay player respawning.
+
+Validation for this slice: TypeScript and build checks plus a gameplay-camera
+visual review. No new automated gameplay or multiplayer tests were run, at the
+user's request. Earlier multiplayer smoke results do NOT validate this slice.
+
+## Four-landmark scale pass
+
+The surrounding masonry now uses much darker facade albedo, while window emission
+remains independently high contrast. Street fill is reduced moderately; sewer
+lighting is retained. Records gains a 110-unit stepped tower, broad civic wings,
+a taller entry frame and larger statues. Gate has 64-unit twin towers and a high
+connecting arch. Icebox gains a 48-unit-wide warehouse and an 86-unit refrigeration
+tower. Needleworks is the fourth playable destination in the southwest, with a
+factory court, arcades, scissors sign and 108-unit clock-tower silhouette.
+
+The shared box layout includes new structural collision, and clears surrounding
+building reservations for each enlarged landmark. Case/Dispatch positions,
+sewers, movement and ball tuning remain unchanged. Visit Needleworks or use
+?view=needleworks for its gameplay-camera approach. These dimensions and the
+fourth landmark are a feedback iteration, not a final map commitment.
+
+## Enterable landmarks and authored streets
+
+This pass follows the supplied multiplayer research's local-loop, threshold,
+vertical-connection and sewer-destination guidance, with the V1 addendum's
+chaotic-comedy priority taking precedence over competitive parity.
+
+Records, Icebox, Needleworks and the new pumping hall each have a ground-floor
+hall and two stair-connected galleries (0/8/16). Tall skyline masses begin above
+those occupied floors; this does not open every floor of each skyscraper.
+Doorways connect different street approaches, and the interior atriums keep
+upper/lower relationships visible. Cosmetic stair treads sit over shared smooth
+collision inclines; movement and cheese-ball tuning are unchanged.
+
+The street network is now authored in cityPlan.ts: a main avenue, staggered
+junctions, service approaches and loading courts. Original building frontages
+are relocated/filtered against those streets. Freestanding alley walls are
+removed. The new sewer loop serves a fourth entrance by Needleworks, and a
+maintenance spur creates another underground choice. This remains a playable
+layout iteration for human feedback, not a finished balance or art pass.
+
+Case recovery distinguishes reachable gallery/stair surfaces from inaccessible
+roofs. New structural geometry is shared by the solo preview and room simulation.

@@ -25,20 +25,20 @@ vi.mock('three', async original => ({
 afterEach(() => { disposeEntitySounds(); state.loads.length = 0; state.sounds.length = 0; vi.restoreAllMocks(); });
 
 it('ignores completed loads from disposed sessions and permits a fresh load', () => {
-    initEntitySounds({} as THREE.AudioListener);
+    initEntitySounds({ context: { state: 'running' } } as THREE.AudioListener);
     const old = state.loads[0];
     disposeEntitySounds();
     old.done({} as AudioBuffer);
     playEntitySound('ratHit');
     expect(state.sounds).toHaveLength(0);
-    initEntitySounds({} as THREE.AudioListener);
+    initEntitySounds({ context: { state: 'running' } } as THREE.AudioListener);
     state.loads[3].done({} as AudioBuffer);
     playEntitySound('ratHit');
     expect(state.sounds).toHaveLength(1);
 });
 
 it('preserves Three audio end-state and disconnects active sounds on teardown', () => {
-    initEntitySounds({} as THREE.AudioListener);
+    initEntitySounds({ context: { state: 'running' } } as THREE.AudioListener);
     state.loads[0].done({} as AudioBuffer);
     playEntitySound('ratHit');
     const ended = state.sounds[0];
@@ -55,10 +55,33 @@ it('preserves Three audio end-state and disconnects active sounds on teardown', 
 
 it('reports an asset failure without preventing other sounds from loading', () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    initEntitySounds({} as THREE.AudioListener);
+    initEntitySounds({ context: { state: 'running' } } as THREE.AudioListener);
     state.loads[0].error();
     state.loads[1].done({} as AudioBuffer);
     playEntitySound('ratDeath');
     expect(warning).toHaveBeenCalledTimes(1);
     expect(state.sounds).toHaveLength(1);
+});
+
+
+it('drops hits while audio is suspended rather than playing a backlog after unlock', () => {
+    const listener = { context: { state: 'suspended' } } as THREE.AudioListener;
+    initEntitySounds(listener);
+    state.loads[0].done({} as AudioBuffer);
+    playEntitySound('ratHit');
+    expect(state.sounds).toHaveLength(0);
+    Object.assign(listener.context, { state: 'running' });
+    expect(state.sounds).toHaveLength(0);
+    playEntitySound('ratHit');
+    expect(state.sounds).toHaveLength(1);
+});
+
+it('bounds overlapping chaos audio while allowing a new hit to be heard', () => {
+    initEntitySounds({ context: { state: 'running' } } as THREE.AudioListener);
+    state.loads[0].done({} as AudioBuffer);
+    for (let hit = 0; hit < 20; hit++) playEntitySound('ratHit');
+    expect(state.sounds.filter(sound => sound.isPlaying)).toHaveLength(12);
+    expect(state.sounds.at(-1)?.isPlaying).toBe(true);
+    expect(state.sounds[0].stop).toHaveBeenCalledTimes(1);
+    expect(state.sounds[0].disconnect).toHaveBeenCalledTimes(1);
 });
