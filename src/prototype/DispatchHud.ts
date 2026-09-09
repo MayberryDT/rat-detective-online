@@ -48,7 +48,10 @@ export class DispatchHud {
         const holder=ownerName||'A detective';
         this.caseLine.textContent=state.case.owner?`${ownerIsLocal?'YOU':holder} · ON THE CASE`:'LOOSE CASE';
         this.caseDetail.textContent=state.case.owner?`${ownerIsLocal?'YOUR KILLS COUNT DOUBLE':'KILLS COUNT DOUBLE'} · ${Math.floor(state.possession[state.case.owner]||0)}s`:state.case.returningUntil?'Case returning':'';
-        if(state.extraCases?.length){
+        if(info.id==='evidence-tampering'&&d.phase==='active'){
+            this.caseLine.textContent=`${(state.extraCases?.length??0)+1} CASES ARE MISSILES`;
+            this.caseDetail.textContent='PICKUP PROHIBITED · SHOOT THE EVIDENCE';
+        }else if(state.extraCases?.length){
             if(!ownerIsLocal)this.caseLine.textContent=`${state.extraCases.length+1} HOT CASES IN PLAY`;
             this.caseDetail.textContent=ownerIsLocal?`YOUR KILLS COUNT DOUBLE · ${state.extraCases.length+1} CASES IN PLAY`:'CARRY ANY CASE FOR DOUBLE KILLS';
         }

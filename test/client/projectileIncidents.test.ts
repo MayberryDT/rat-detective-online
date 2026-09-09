@@ -1,7 +1,8 @@
 import {describe,it,expect,vi} from 'vitest';
+import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
-import {CHAOS_TUNING as T,type ChaosState} from '../../src/shared/chaosState';
-import {BALL_SPEED,BALL_LIFETIME} from '../../src/shared/ballTuning';
+import {CHAOS_TUNING as T,INCIDENT_TUNING as I,type ChaosState} from '../../src/shared/chaosState';
+import {BALL_SPEED,BALL_LIFETIME,BALL_RADIUS} from '../../src/shared/ballTuning';
 import {INCIDENTS,incidentInfo,type IncidentId} from '../../src/shared/incidentCatalog';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {createPlayer} from '../../src/worker/gameState';
@@ -14,6 +15,10 @@ function fixture(incident:IncidentId){
  const sim=new ChaosSimulation(players,()=>{},state);return {sim,players,now};
 }
 function shoot(sim:ChaosSimulation,id='shot'){sim.shoot('a',{shotId:id,origin:{x:0,y:200,z:0},direction:{x:0,y:0,z:1}});}
+function wall(sim:ChaosSimulation,z:number){
+ const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(8,8,.05)),position:new C.Vec3(0,200,z)});
+ sim.world.addBody(body);sim.targets.set(body,{kind:'world'});
+}
 describe('projectile-only replacement incidents',()=>{
  it('fires five owned, normal-speed balls in a horizontal fan with no player launch and bounded capacity',()=>{
   const {sim}=fixture('scattershot');shoot(sim);let s=sim.snapshot(false);
@@ -23,34 +28,43 @@ describe('projectile-only replacement incidents',()=>{
   for(let i=0;i<60;i++)shoot(sim,`shot-${i}`);s=sim.snapshot(false);
   expect(s.shots).toHaveLength(T.maxShots);expect(s.shots.slice(-5).some(b=>b.id==='shot-59')).toBe(true);
  });
- it('reverses a ball exactly once after .8 seconds, including across snapshot restore',()=>{
-  const {sim,players,now}=fixture('return-to-sender');shoot(sim);
-  sim.step(.79,now+790);let ball=sim.snapshot(false).shots[0];expect(ball.v.z).toBe(BALL_SPEED);expect(ball.returned).toBeUndefined();
-  sim.step(.02,now+810);const state=sim.snapshot(false);ball=state.shots[0];
-  expect(ball.returned).toBe(true);expect(ball.v.z).toBe(-BALL_SPEED);expect(ball.v.y).toBeGreaterThan(0);expect(ball.owner).toBe('a');expect(ball.age).toBeCloseTo(.81);
-  expect(parseServerMessage({type:'chaos',state})).not.toBeNull();
-  const restored=new ChaosSimulation(players,()=>{},state);restored.step(.1,now+910);
-  expect(restored.snapshot(false).shots[0].v.z).toBe(-BALL_SPEED);
-  restored.step(BALL_LIFETIME,now+7000);expect(restored.snapshot(false).shots).toHaveLength(0);
+ it('sticks a ball once on its first wall, then releases along the reflected path',()=>{
+  vi.spyOn(Math,'random').mockReturnValue(0);
+  const {sim,players,now}=fixture('delayed-reaction');wall(sim,2);shoot(sim);
+  sim.step(.02,now+20);let ball=sim.snapshot(false).shots[0];
+  expect(ball.delayed).toBe(true);expect(ball.stuckUntil).toBeGreaterThan(now);
+  expect(ball.v.z).toBeLessThan(0);const held=ball.p.z;
+  sim.step(.2,now+220);expect(sim.snapshot(false).shots[0].p.z).toBeCloseTo(held,3);
+  sim.step(.55,now+770);ball=sim.snapshot(false).shots[0];
+  expect(ball.stuckUntil).toBeUndefined();expect(ball.v.z).toBeLessThan(0);expect(ball.p.z).toBeLessThan(held);
+  wall(sim,ball.p.z-1);sim.step(.02,now+790);ball=sim.snapshot(false).shots[0];
+  expect(ball.v.z).toBeGreaterThan(0);expect(ball.stuckUntil).toBeUndefined();
+  expect(parseServerMessage({type:'chaos',state:sim.snapshot(false)})).not.toBeNull();
+  const restored=new ChaosSimulation(players,()=>{},sim.snapshot(false));
+  expect(restored.snapshot(false).shots[0].delayed).toBe(true);
  });
- it('hops existing cheese every three seconds without multiplying shots or replaying pulses after restore',()=>{
-  const {sim,players,now}=fixture('cheesequake');shoot(sim);
-  sim.step(0,now+2999);expect(sim.snapshot(false).shots[0].v.y).toBe(0);
-  sim.step(0,now+3000);let s=sim.snapshot(false);expect(s.shots).toHaveLength(1);expect(s.shots[0].v).toEqual({x:0,y:24,z:BALL_SPEED});
-  const restored=new ChaosSimulation(players,()=>{},s);restored.step(0,now+3001);expect(restored.snapshot(false).shots[0].v.y).toBe(24);
-  restored.step(0,now+6000);s=restored.snapshot(false);expect(s.shots[0].v.y).toBe(45);expect(s.pressure!.launches).toEqual([]);
-  restored.step(0,now+15000);expect(restored.snapshot(false).shots).toHaveLength(1);expect(restored.snapshot(false).shots[0].v.y).toBe(45);
+ it('grows collision and render size together before the ball expires',()=>{
+  const {sim,now}=fixture('big-cheese');wall(sim,2);shoot(sim);
+  expect(sim.snapshot(false).shots[0].radius).toBeUndefined();
+  sim.step(.02,now+20);expect(sim.snapshot(false).shots[0].radius).toBe(I.cheeseRadii[1]);
+  wall(sim,-2);sim.step(.04,now+60);expect(sim.snapshot(false).shots[0].radius).toBe(I.cheeseRadii[2]);
+  wall(sim,2);sim.step(.04,now+100);expect(sim.snapshot(false).shots[0].radius).toBe(I.cheeseRadii[3]);
+  expect(sim.snapshot(false).shots[0].age).toBeLessThan(BALL_LIFETIME-1);
+  sim.step(0,now+T.activeMs);expect(sim.snapshot(false).shots[0].radius??BALL_RADIUS).toBeCloseTo(BALL_RADIUS);
  });
- it.each(['scattershot','return-to-sender','cheesequake'] as const)('%s stops modifying new projectiles when its window ends',incident=>{
+ it.each(['scattershot','delayed-reaction','big-cheese'] as const)('%s stops modifying new projectiles when its window ends',incident=>{
   const {sim,now}=fixture(incident);sim.step(0,now+T.activeMs);shoot(sim);sim.step(.81,now+T.activeMs+810);
-  const s=sim.snapshot(false);expect(s.shots).toHaveLength(1);expect(s.shots[0].v.z).toBe(BALL_SPEED);expect(s.shots[0].returned).toBeUndefined();expect(s.pressure!.launches).toEqual([]);
+  const s=sim.snapshot(false);expect(s.shots).toHaveLength(1);expect(s.shots[0].v.z).toBe(BALL_SPEED);expect(s.shots[0].delayed).toBeUndefined();expect(s.pressure!.launches).toEqual([]);
  });
- it('migrates old Kickback snapshots to Scattershot and never queues the removed shooter impulse',()=>{
+ it('migrates old Kickback snapshots to Scattershot and maps Return/Cheesequake onto the new roster',()=>{
   const {sim,players}=fixture('scattershot');const state=sim.snapshot(false);
   const legacy={...state,dispatch:{...state.dispatch,incident:'kickback'}} as unknown as ChaosState;
   const parsed=parseServerMessage({type:'chaos',state:legacy});expect(parsed).toMatchObject({state:{dispatch:{incident:'scattershot'}}});
   const restored=new ChaosSimulation(players,()=>{},legacy);shoot(restored);
   expect(restored.snapshot(false).shots).toHaveLength(5);expect(restored.snapshot(false).pressure!.launches).toHaveLength(0);
   expect(incidentInfo('kickback').id).toBe('scattershot');expect(INCIDENTS.some(i=>(i.id as string)==='kickback')).toBe(false);
+  expect(incidentInfo('return-to-sender').id).toBe('delayed-reaction');
+  expect(incidentInfo('cheesequake').id).toBe('big-cheese');
+  expect(INCIDENTS.some(i=>['return-to-sender','cheesequake'].includes(i.id))).toBe(false);
  });
 });

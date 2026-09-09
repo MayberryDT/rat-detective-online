@@ -1,4 +1,5 @@
 import { DISPATCH_STATIONS, type ChaosState } from './chaosState';
+import { incidentInfo } from './incidentCatalog';
 import type { PlayerData, Vec3Data } from './networkProtocol';
 
 export interface ObjectiveNavigation {
@@ -92,7 +93,7 @@ export class ObjectiveBotBrain {
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
         clearControl: (target: Vec3Data) => boolean = clear): ObjectiveBotIntent {
         if(self.hp<=0){this.stalled=false;return{x:0,z:0,jump:false,facing:this.heading};}
-        const cases=state?[{key:'case',value:state.case},...(state.extraCases??[]).slice(0,3).map(value=>({key:`case:${value.id}`,value}))]:[];
+        const cases=state?[{key:'case',value:state.case},...(state.extraCases??[]).map(value=>({key:`case:${value.id}`,value}))]:[];
         // Keep each case's failed position independent. Picking up one extra
         // must not erase the evidence that the primary case is unreachable.
         let ownershipChanged=false;
@@ -133,7 +134,8 @@ export class ObjectiveBotBrain {
             this.dispatchTarget=state?.dispatch.phase==='ready' ? DISPATCH_STATIONS.map(station=>station.target)
                 .filter(target=>distance(self,target)<26&&clearControl(target))
                 .sort((a,b)=>distance(self,a)-distance(self,b))[0] : undefined;
-            const available=carrying?undefined:cases.filter(({key,value})=>!value.owner&&value.returningUntil<=(state?.time??now)&&
+            const evidence=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='evidence-tampering';
+            const available=carrying||evidence?undefined:cases.filter(({key,value})=>!value.owner&&value.returningUntil<=(state?.time??now)&&
                 (value.previousOwner!==self.id||value.pickupAfter<=(state?.time??now))&&!this.suppressed(key,value.p,now))
                 .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
             const combat=visible.find(p=>!this.suppressed(`combat:${p.id}`,p,now));

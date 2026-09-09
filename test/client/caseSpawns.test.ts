@@ -13,15 +13,16 @@ describe('Hot Case citywide spawns in actual playable geometry',()=>{
    const p=sim.caseBody.position,key=`${p.x},${p.z}`;
    expect(CASE_SPAWNS.some(s=>s.x===p.x&&s.z===p.z)).toBe(true);
    expect(key).not.toBe(previous);previous=key;seen.add(key);
+   const rest=CASE_SPAWNS.find(s=>s.x===p.x&&s.z===p.z)!;
    for(const dx of [-CASE_SIZE.x*CASE_LOOSE_SCALE/2,0,CASE_SIZE.x*CASE_LOOSE_SCALE/2]){
     for(const dz of [-CASE_SIZE.z*CASE_LOOSE_SCALE/2,0,CASE_SIZE.z*CASE_LOOSE_SCALE/2]){
-     const hit=new C.RaycastResult();sim.world.raycastClosest(new C.Vec3(p.x+dx,.1,p.z+dz),new C.Vec3(p.x+dx,-.4,p.z+dz),{collisionFilterMask:1},hit);
+     const hit=new C.RaycastResult();sim.world.raycastClosest(new C.Vec3(p.x+dx,rest.y+.2,p.z+dz),new C.Vec3(p.x+dx,rest.y-1.8,p.z+dz),{collisionFilterMask:1},hit);
      expect(hit.hasHit).toBe(true);
     }
    }
    for(const [body,target] of sim.targets){
     if(target.kind!=='world')continue;body.updateAABB();const a=body.aabb.lowerBound,b=body.aabb.upperBound;
-    const overlaps=b.y>.05&&a.y<1.95&&b.x>p.x-.82&&a.x<p.x+.82&&b.z>p.z-.34&&a.z<p.z+.34;
+    const overlaps=b.y>rest.y-.35&&a.y<rest.y+.65&&b.x>p.x-.82&&a.x<p.x+.82&&b.z>p.z-.34&&a.z<p.z+.34;
     expect(overlaps).toBe(false);
    }
    if(i===12){sim.caseBody.position.y=-30;sim.step(0,Date.now());sim.step(0,Date.now()+1000);}

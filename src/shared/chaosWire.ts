@@ -1,5 +1,6 @@
 import type { ChaosState, ChaosShot } from './chaosState';
 import { CHAOS_TUNING } from './chaosState';
+import { BALL_RADIUS } from './ballTuning';
 import { MAX_SERVER_MESSAGE_BYTES, type ServerMessage } from './networkProtocol';
 import { parseServerMessage } from './messageValidation';
 export { parseServerMessage } from './messageValidation';
@@ -20,7 +21,13 @@ export interface PreparedChaos {
 }
 export function prepareChaos(state:ChaosState):PreparedChaos {
   const flag=(v:boolean|undefined)=>v===undefined?0:v?2:1;
-  return {shots:state.shots.map(s=>{const values=[...[s.p.x,s.p.y,s.p.z,s.v.x,s.v.y,s.v.z,s.age].map(n=>Math.round(n*1000)),flag(s.wallBounced)|(flag(s.returned)<<2)];return {id:s.id,owner:s.owner,values,motion:values.join(',')};}),
+  return {shots:state.shots.map(s=>{
+    const flags=flag(s.wallBounced)|(flag(s.delayed)<<2)|(flag(s.original)<<4);
+    const radius=Math.round((s.radius??BALL_RADIUS)*1000),stuck=s.stuckUntil?Math.round(s.stuckUntil):0,pop=s.popAt?Math.round(s.popAt):0;
+    const values=[...[s.p.x,s.p.y,s.p.z,s.v.x,s.v.y,s.v.z,s.age].map(n=>Math.round(n*1000)),flags];
+    if(radius!==Math.round(BALL_RADIUS*1000)||stuck||pop)values.push(radius,stuck,pop);
+    return {id:s.id,owner:s.owner,values,motion:values.join(',')};
+  }),
     rest:new Map(REST_KEYS.filter(k=>k!=='pressure').map(key=>[key,rounded(state[key]??(key==='extraCases'?[]:undefined))]))};
 }
 
@@ -44,7 +51,7 @@ export class ChaosEncoder {
       if(!entry){entry={handle:this.nextHandle++,owner:s.owner};this.shots.set(s.id,entry);definitions.push([entry.handle,s.id,s.owner]);}
       else if(full||entry.owner!==s.owner){definitions.push([entry.handle,s.id,s.owner]);entry.owner=s.owner;}
       const previous=this.motions.get(entry.handle);
-      const delta=this.deltaMotion&&!define&&previous?s.values.map((value,i)=>value-previous[i]):undefined;
+      const delta=this.deltaMotion&&!define&&previous&&previous.length===s.values.length?s.values.map((value,i)=>value-previous[i]):undefined;
       const deltaText=delta?.join(',');
       motion.push('['+(deltaText!==undefined&&deltaText.length<s.motion.length?-entry.handle+','+deltaText:entry.handle+','+s.motion)+']');
       this.motions.set(entry.handle,s.values);
@@ -94,17 +101,20 @@ export class ChaosDecoder {
     const shots:ChaosShot[]=[],active=new Set<number>(),ids=new Set<string>();
     const motions=new Map<number,number[]>();
     for(const encoded of f.motion){
-      if(!Array.isArray(encoded)||encoded.length!==9||!encoded.every(integer)||encoded[0]===0)return null;
+      if(!Array.isArray(encoded)||(encoded.length!==9&&encoded.length!==11&&encoded.length!==12)||!encoded.every(integer)||encoded[0]===0)return null;
       const handle=Math.abs(encoded[0]);if(active.has(handle))return null;
       const previous=this.motions.get(handle);
-      if(encoded[0]<0&&(f.motionEncoding!=='delta-v1'||full||changed.has(handle)||!previous))return null;
+      if(encoded[0]<0&&(f.motionEncoding!=='delta-v1'||full||changed.has(handle)||!previous||previous.length!==encoded.length-1))return null;
       const row=encoded[0]<0?[handle,...encoded.slice(1).map((n,i)=>n+previous![i])]:encoded;
       if(!row.every(integer))return null;
       const d=definitions.get(handle),flags=row[8];
-      if(!d||ids.has(d[0])||flags<0||flags>10||(flags&3)===3||((flags>>2)&3)===3)return null;
+      if(!d||ids.has(d[0])||flags<0||flags>42||(flags&3)===3||((flags>>2)&3)===3||((flags>>4)&3)===3)return null;
       active.add(handle);ids.add(d[0]);motions.set(handle,row.slice(1));
+      const radius=row[9],stuck=row[10],pop=row[11];
+      const bounced=flags&3,delayed=(flags>>2)&3,original=(flags>>4)&3;
       shots.push({id:d[0],owner:d[1],p:{x:row[1]/1000,y:row[2]/1000,z:row[3]/1000},v:{x:row[4]/1000,y:row[5]/1000,z:row[6]/1000},age:row[7]/1000,
-        ...((flags&3)?{wallBounced:(flags&3)===2}:{}),...((flags>>2)?{returned:(flags>>2)===2}:{})});
+        ...(bounced?{wallBounced:bounced===2}:{}),...(delayed?{delayed:delayed===2}:{}),...(original?{original:original===2}:{}),
+        ...(radius&&radius!==Math.round(BALL_RADIUS*1000)?{radius:radius/1000}:{}),...(stuck?{stuckUntil:stuck}:{}),...(pop?{popAt:pop}:{})});
     }
     // Membership is complete on every frame, so omitted projectiles cannot linger.
     for(const handle of definitions.keys())if(!active.has(handle))definitions.delete(handle);

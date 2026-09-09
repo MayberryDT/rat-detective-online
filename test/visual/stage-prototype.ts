@@ -8,8 +8,9 @@ import {createStage} from '../../src/session/createStage';
 import {Neighborhood} from '../../src/prototype/Neighborhood';
 import {RatController} from '../../src/player/RatController';
 import {InputState} from '../../src/session/InputState';
+import {bindPointerLockMenu} from '../../src/session/PointerLockMenu';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
-import {INCIDENTS} from '../../src/shared/incidentCatalog';
+import {INCIDENTS,incidentInfo} from '../../src/shared/incidentCatalog';
 import {CITY_BOUNDS,CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../../src/shared/grayboxLayout';
 import {ChaosView} from '../../src/prototype/ChaosView';
 import {RatEntity} from '../../src/entities/RatEntity';
@@ -56,7 +57,12 @@ const status=document.getElementById('status')!;
 const panel=document.getElementById('panel')!;
 if(search.has('review'))panel.hidden=true;
 function play(){overview=false;void canvas.requestPointerLock();void stage.listener.context.resume();}
-document.getElementById('play')!.onclick=play;
+const playButton=document.getElementById('play') as HTMLButtonElement;
+playButton.textContent='Play / resume';
+const veil=document.createElement('div');
+veil.id='pause-veil';
+Object.assign(veil.style,{position:'fixed',inset:'0',zIndex:'1',background:'#100b19aa'});
+document.body.insertBefore(veil,panel);
 document.getElementById('overview')!.onclick=()=>{overview=true;document.exitPointerLock();};
 function reset(x:number,y:number,z:number,heading=0){life.respawn('local',{x,y,z});player.onMouseMove((viewTheta-heading)/.002,0);viewTheta=heading;player.entity.respawn({x,y,z,hp:3});player.resetGrounding();gun.clearProjectiles();input.clear();overview=false;player.entity.billboard.sprite.visible=false;}
 document.getElementById('reset')!.onclick=()=>reset(-10,0,-27);
@@ -114,29 +120,10 @@ if(reviewView==='pump-upper')reset(146,8,112,Math.PI);
 if(reviewView==='needleworks-upper')reset(-85,16,75,Math.PI);
 window.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas){player.onMouseMove(e.movementX,e.movementY);viewTheta-=e.movementX*.002;}},options);
 window.addEventListener('keydown',e=>{if(e.code==='KeyM'){overview=!overview;if(overview)document.exitPointerLock();}if(e.code==='Space')e.preventDefault();},options);
-const menuAnchor=document.createComment('practice menu');panel.parentNode!.insertBefore(menuAnchor,panel);
-let menuUnlockAt=0;
-function syncMenuLock(){
- const locked=document.pointerLockElement===canvas;
- document.body.classList.toggle('playing',locked);
- panel.inert=locked;panel.hidden=locked||search.has('review');
- for(const control of panel.querySelectorAll('button,select'))(control as unknown as {disabled:boolean}).disabled=locked;
- if(locked){
-  if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
-  // Remove the menu from hit testing entirely, including stale pointer targets.
-  panel.remove();
- }else{
-  menuAnchor.parentNode!.insertBefore(panel,menuAnchor.nextSibling);menuUnlockAt=performance.now()+250;
- }
- input.clear();
-}
-document.addEventListener('pointerlockchange',syncMenuLock,options);
-// Block a captured click even if pointer lock ended between its down/up events.
-window.addEventListener('click',e=>{
- if(document.pointerLockElement===canvas||performance.now()<menuUnlockAt){e.preventDefault();e.stopImmediatePropagation();}
-},{...options,capture:true});
-canvas.addEventListener('click',()=>{if(document.pointerLockElement!==canvas)play();},options);
-// Handle shooting before a stale button/select target can consume the mouse press.
+panel.style.zIndex='3';
+const pointerMenu=search.has('review')?{dispose(){panel.hidden=true;veil.hidden=true;}} :
+ bindPointerLockMenu({canvas,panel,play:playButton,lock:play,veil,signal:abort.signal});
+if(search.has('review')){panel.hidden=true;veil.hidden=true;}
 window.addEventListener('mousedown',e=>{
  if(document.pointerLockElement!==canvas)return;
  e.preventDefault();e.stopImmediatePropagation();
@@ -145,7 +132,6 @@ window.addEventListener('mousedown',e=>{
   const shot=gun.shoot(player.entity,target);if(shot)chaos.shoot('local',shot);
  }
 },{...options,capture:true});
-syncMenuLock();
 function resize(){stage.renderer.setSize(innerWidth,innerHeight);stage.camera.aspect=innerWidth/innerHeight;stage.camera.updateProjectionMatrix();}window.addEventListener('resize',resize,options);resize();
 const direction=new THREE.Vector3();
 const rayFrom=new C.Vec3(),rayTo=new C.Vec3(),rayResult=new C.RaycastResult();
@@ -206,6 +192,7 @@ if(new URLSearchParams(location.search).has('review')&&reviewView?.startsWith('d
 }
 player.applyPressureLaunches(chaosState,'local');
 for(const event of chaosState.pressure?.launches||[]){const entity=entities.get(event.playerId);if(event.playerId!=='local' && entity && !seenLaunches.has(event.id) && !entity.dead){seenLaunches.add(event.id);if(seenLaunches.size>64)seenLaunches.delete(seenLaunches.values().next().value!);entity.body.velocity.set(event.velocity.x,event.velocity.y,event.velocity.z);entity.body.wakeUp();launched.set(event.playerId,Date.now()+2600);}}
+gun.fireCue=chaosState.dispatch.phase==='active'&&incidentInfo(chaosState.dispatch.incident).id==='bad-ammunition'?'malfunction':'normal';
 chaosView.apply(chaosState);
 const p=player.entity.mesh.position;
 if(p.y < -20 && !player.entity.dead)reset(-10,0,-27);
@@ -219,4 +206,4 @@ neighborhood.update(dt,stage.camera);
 if(practiceScores && now>=scoreAt){scoreAt=now+500;practiceScores.textContent=buildScoreboard(players.values()).map(p=>`${p.name.padEnd(20)} ${p.kills} / ${p.deaths}`).join('\n');}
 status.textContent=player.entity.dead?`Respawning in ${Math.max(1,Math.ceil(((life.respawns.get('local')??Date.now())-Date.now())/1000))}…`:overview?'Full city overview':p.y < -3?'Sewers · follow the lit passages':'Street level · M overview · Esc menu';chaosView.update(dt,stage.camera);stage.renderer.render(stage.scene,stage.camera);
 });
-window.addEventListener('pagehide',()=>{stage.renderer.setAnimationLoop(null);abort.abort();input.dispose();chaosView.dispose();gun.dispose();for(const [id,entity] of entities)if(id!=='local')entity.dispose();player.dispose();neighborhood.dispose();disposeEntitySounds();stage.dispose();},{once:true});
+window.addEventListener('pagehide',()=>{stage.renderer.setAnimationLoop(null);abort.abort();pointerMenu.dispose();input.dispose();chaosView.dispose();gun.dispose();for(const [id,entity] of entities)if(id!=='local')entity.dispose();player.dispose();neighborhood.dispose();disposeEntitySounds();stage.dispose();},{once:true});

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type {RatEntity} from '../entities/RatEntity';
 import {CASE_HAND,CASE_CARRY_ROTATION,CASE_LOOSE_SCALE,type ChaosState} from '../shared/chaosState';
+import {incidentInfo} from '../shared/incidentCatalog';
 import {ChaosPresentation,copyPresentationPose,type PresentationPose} from '../shared/ChaosPresentation';
 import {RAT_CARRY_SHOULDER} from '../utils/RatAnimator';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
@@ -16,6 +17,7 @@ export class ExtraCaseVisual {
     private readonly pose:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
     private readonly offset=new THREE.Vector3();
     private state?:ChaosState['case'];
+    private incident?:ChaosState['dispatch'];
     private carrier:RatEntity|null=null;
     private arm:THREE.Group|null=null;
     constructor(scene:THREE.Scene,id:string,private readonly resolve:(id:string)=>RatEntity|undefined,private readonly extrapolate=true){
@@ -23,7 +25,7 @@ export class ExtraCaseVisual {
         addLeatherBriefcase(this.root);scene.add(this.root);this.beacon=new CaseBeacon(scene);
     }
     apply(state:ChaosState,extra:ChaosState['case'],arrival:number):void {
-        this.state=extra;
+        this.state=extra;this.incident=state.dispatch;
         if(this.extrapolate)this.presentation.apply({...state,case:extra,shots:[],corpses:[]},arrival);
     }
     update(camera:THREE.Camera,renderTime:number,now:number):void {
@@ -36,6 +38,14 @@ export class ExtraCaseVisual {
         }
         this.root.scale.setScalar(state.owner?1:CASE_LOOSE_SCALE);
         this.root.visible=!state.returningUntil||Math.floor(now/100)%2===0;
+        const evidence=!!this.incident&&this.incident.phase==='active'&&incidentInfo(this.incident.incident).id==='evidence-tampering';
+        const hot=!state.owner&&(!!state.missileOwner||evidence);
+        this.root.traverse(object=>{
+            const material=(object as THREE.Mesh).material;
+            if(!(material instanceof THREE.MeshStandardMaterial)||object.name!=='leather-case-shell')return;
+            material.emissive.setHex(hot?0xff2208:0x633d29);
+            material.emissiveIntensity=hot?1.4:.28;
+        });
         if(carrier&&this.arm?.parent){
             const anchor=this.arm.parent;
             this.root.position.set(CASE_HAND.x,CASE_HAND.y+.43,CASE_HAND.z).sub(RAT_CARRY_SHOULDER);

@@ -9,7 +9,7 @@ export class CheeseImpactEffects {
     private readonly splatMaterial = new THREE.MeshBasicMaterial({color: 0xdba32f, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide});
     private readonly crumbs = new THREE.InstancedMesh(this.crumbGeometry, this.crumbMaterial, 160);
     private readonly splats;
-    private readonly particles = Array.from({length:160},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,lifetime:0,spin:0}));
+    private readonly particles = Array.from({length:160},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,lifetime:0,spin:0,size:1}));
     private particleCursor=0;
     private readonly marks = Array.from({length:40},()=>({position:new THREE.Vector3(),rotation:new THREE.Quaternion(),age:Infinity,size:0}));
     private markCursor=0;
@@ -39,27 +39,29 @@ export class CheeseImpactEffects {
         this.root.add(this.crumbs, this.splats); scene.add(this.root);
     }
 
-    emit(point: THREE.Vector3, normal: THREE.Vector3, surface: boolean): void {
+    emit(point: THREE.Vector3, normal: THREE.Vector3, surface: boolean, scale=1): void {
         if (this.disposed) return;
+        const size=Math.max(.6,Math.min(8,scale));
         this.normal.copy(normal).normalize();
         this.tangent.set(Math.abs(this.normal.y) < 0.9 ? 0 : 1, Math.abs(this.normal.y) < 0.9 ? 1 : 0, 0).cross(this.normal).normalize();
         this.bitangent.crossVectors(this.normal, this.tangent);
         const phase = ++this.sequence * 2.39996;
-        for (let i = 0; i < 7; i++) {
-            const angle = phase + i * Math.PI * 2 / 7;
+        const crumbs=Math.min(12,5+Math.round(size*2));
+        for (let i = 0; i < crumbs; i++) {
+            const angle = phase + i * Math.PI * 2 / crumbs;
             const particle=this.particles[this.particleCursor++%160];
-            particle.velocity.copy(this.normal).multiplyScalar(1.5+(i%3)*.6)
-                .addScaledVector(this.tangent,Math.cos(angle)*2.2)
-                .addScaledVector(this.bitangent,Math.sin(angle)*2.2);
-            particle.position.copy(point).addScaledVector(this.normal,.04);
-            particle.age=0;particle.lifetime=.5+i*.05;particle.spin=angle;
+            particle.velocity.copy(this.normal).multiplyScalar((1.5+(i%3)*.6)*Math.min(2.4,size))
+                .addScaledVector(this.tangent,Math.cos(angle)*2.2*Math.min(2.2,size))
+                .addScaledVector(this.bitangent,Math.sin(angle)*2.2*Math.min(2.2,size));
+            particle.position.copy(point).addScaledVector(this.normal,.04*size);
+            particle.age=0;particle.lifetime=.5+i*.05;particle.spin=angle;particle.size=Math.min(3.2,.7+size*.35);
         }
         if(surface){
             const mark=this.marks[this.markCursor++%40];
             mark.rotation.setFromUnitVectors(this.axis,this.normal);
             mark.rotation.multiply(this.twist.setFromAxisAngle(this.axis,phase));
             mark.position.copy(point).addScaledVector(this.normal,.035);
-            mark.age=0;mark.size=.7+(this.sequence%3)*.15;
+            mark.age=0;mark.size=(.7+(this.sequence%3)*.15)*size;
         }
         // Emission only fills bounded slots. The frame owner flushes all impacts once.
         this.active=true;
@@ -80,7 +82,7 @@ export class CheeseImpactEffects {
             }
             this.dummy.position.copy(particle.position);
             this.dummy.rotation.set(particle.spin + particle.age * 9, particle.age * 12, particle.spin);
-            this.dummy.scale.setScalar(Math.min(1, (particle.lifetime - particle.age) * 7));
+            this.dummy.scale.setScalar(particle.size*Math.min(1, (particle.lifetime - particle.age) * 7));
             this.dummy.updateMatrix(); this.crumbs.setMatrixAt(particleCount++, this.dummy.matrix);
         }
         for(let slot=0;slot<40;slot++){

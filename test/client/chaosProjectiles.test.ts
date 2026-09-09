@@ -51,7 +51,9 @@ describe('authoritative ball presentation', () => {
     state.dispatch={phase:'active',incident:'crossfire',started:1000,until:26000,serial:1};
     const root=scene.getObjectByName('records-chaos')!,yellow=root.children[0] as THREE.InstancedMesh;
     const red=scene.getObjectByName('crossfire-balls') as THREE.InstancedMesh;
-    view.apply(state);view.update(1/60,camera);expect(yellow.count).toBe(1);expect(red.count).toBe(1);
+    const glow=scene.getObjectByName('crossfire-glow') as THREE.InstancedMesh;
+    view.apply(state);view.update(1/60,camera);expect(yellow.count).toBe(1);expect(red.count).toBe(1);expect(glow.count).toBe(1);
+    expect((glow.material as THREE.Material).depthTest).toBe(true);
     const matrix=new THREE.Matrix4();red.getMatrixAt(0,matrix);expect(new THREE.Vector3().setFromMatrixPosition(matrix).x).toBe(1);
     state.dispatch.phase='cooldown';view.apply(state);view.update(1/60,camera);expect(yellow.count).toBe(2);expect(red.count).toBe(0);
     view.dispose();

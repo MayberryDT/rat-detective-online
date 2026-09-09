@@ -62,14 +62,31 @@ describe('authoritative Dispatch incidents',()=>{
   const {sim,victim}=fixture(incident);victim.hp=0;sim.death(victim,{x:1,y:0,z:0},'shooter');
   expect(sim.snapshot(false).corpses[0].v.x).toBe(T.normalCorpseSpeed);expect(sim.snapshot(false).shots).toHaveLength(0);
  });
- it('always fires exactly two ordinary balls per trigger, even at capacity',()=>{
-  const random=vi.spyOn(Math,'random').mockReturnValue(.9),{sim}=fixture('bad-ammunition');shoot(sim,'normal');expect(sim.snapshot(false).shots).toHaveLength(2);
-  random.mockReturnValue(0);shoot(sim,'split');let shots=sim.snapshot(false).shots;expect(shots).toHaveLength(4);
-  for(const s of shots)expect(Math.hypot(s.v.x,s.v.y,s.v.z)).toBeCloseTo(BALL_SPEED);
-  expect(shots[0].v).toEqual({x:BALL_SPEED,y:0,z:0});expect(shots[2].v).toEqual(shots[0].v);expect(shots[3].v).toEqual(shots[1].v);expect(shots[1].v.z).not.toBe(0);
-  sim.step(.001,now+1);expect(sim.snapshot(false).shots).toHaveLength(4);
-  for(let i=0;i<200;i++)shoot(sim,`fill-${i}`);shots=sim.snapshot(false).shots;expect(shots).toHaveLength(T.maxShots);expect(shots.some(s=>s.id==='fill-199')).toBe(true);
+ it('fires crooked, uneven volleys instead of a fixed double shot, even at capacity',()=>{
+  let n=0;const seq=[0.01,0.9,0.2,0.8,0.55,0.1,0.7,0.3,0.95,0.4,0.15,0.6];
+  vi.spyOn(Math,'random').mockImplementation(()=>seq[n++%seq.length]);
+  const {sim}=fixture('bad-ammunition');shoot(sim,'quiet');
+  expect(sim.snapshot(false).shots.length).toBeGreaterThanOrEqual(1);
+  const first=sim.snapshot(false).shots.length;
+  shoot(sim,'cluster');
+  const shots=sim.snapshot(false).shots;
+  expect(shots.length).toBeGreaterThan(first);
+  expect(new Set(shots.map(s=>`${s.v.x.toFixed(1)},${s.v.z.toFixed(1)}`)).size).toBeGreaterThan(1);
+  for(const s of shots)expect(Math.hypot(s.v.x,s.v.y,s.v.z)).toBeCloseTo(BALL_SPEED,1);
+  for(let i=0;i<200;i++)shoot(sim,`fill-${i}`);expect(sim.snapshot(false).shots).toHaveLength(T.maxShots);
+  expect(sim.snapshot(false).shots.some(s=>s.id.startsWith('fill-'))).toBe(true);
   sim.step(0,now+T.activeMs);shoot(sim,'expired');expect(sim.snapshot(false).shots.at(-1)!.id).toBe('expired');
+ });
+ it.each([[.0,1],[.6999,1],[.7,2],[.8999,2],[.9,3],[.9999,3]])('caps count for roll %s, with no straight shots or delayed extras', (roll,count)=>{
+  const {sim}=fixture('bad-ammunition');
+  vi.spyOn(Math,'random').mockReturnValue(.5).mockReturnValueOnce(roll);
+  shoot(sim);
+  let shots=sim.snapshot(false).shots;expect(shots).toHaveLength(count);
+  for(const shot of shots){
+   expect(Math.acos(shot.v.x/BALL_SPEED)).toBeGreaterThanOrEqual(.1199);
+   expect(Math.hypot(shot.v.x,shot.v.y,shot.v.z)).toBeCloseTo(BALL_SPEED);
+  }
+  sim.step(0,now+500);shots=sim.snapshot(false).shots;expect(shots).toHaveLength(count);
  });
  it('fires all launchers every three seconds through cooldowns, without replaying restored pulses',()=>{
   const {sim,players}=fixture('pressure-surge');sim.step(0,now+2999);expect(sim.snapshot(false).pressure!.serial).toBe(0);
@@ -81,7 +98,7 @@ describe('authoritative Dispatch incidents',()=>{
   const blocked=new ChaosSimulation(cooling.players,()=>{},saved);blocked.step(0,now+3000);expect(blocked.snapshot(false).pressure!.serial).toBe(6);
  });
  it('makes loose evidence more physical only during Evidence Tampering',()=>{
-  const {sim}=fixture('evidence-tampering');expect(caseKick(sim)).toBeCloseTo(110,2);expect(Math.abs(sim.caseBody.angularVelocity.z)).toBeGreaterThan(10);
+  const {sim}=fixture('evidence-tampering');expect(caseKick(sim)).toBeCloseTo(220,2);expect(Math.abs(sim.caseBody.angularVelocity.z)).toBeGreaterThan(10);
   sim.step(0,now+T.activeMs);expect(caseKick(sim,now+T.activeMs+10)).toBeCloseTo(13,2);
  });
  it('keeps ordinary corpse relaunch force during Crossfire',()=>{

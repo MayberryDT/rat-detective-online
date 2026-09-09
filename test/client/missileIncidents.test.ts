@@ -26,7 +26,7 @@ function arm(f:ReturnType<typeof fixture>){
  f.sim.caseBody.position.set(0,21,0);f.sim.caseBody.velocity.setZero();
  f.sim.shoot(f.shooter.id,{shotId:'case-kick',origin:{x:-2,y:21,z:0},direction:{x:1,y:0,z:0}});
  f.sim.step(.01,f.now+10);
- expect(f.sim.caseBody.velocity.x).toBeCloseTo(110);
+ expect(f.sim.caseBody.velocity.x).toBeCloseTo(220);
  expect(f.sim.snapshot(false).case.missileOwner).toBe(f.shooter.id);
 }
 describe('Evidence Tampering missile case',()=>{
@@ -37,17 +37,31 @@ describe('Evidence Tampering missile case',()=>{
   expect(f.hits.filter(h=>h.victim===f.victim.id)).toEqual([expect.objectContaining({owner:f.shooter.id,damage:3})]);
   expect(f.hits.some(h=>h.victim===f.shooter.id)).toBe(false);
   expect(f.sim.snapshot(false).case.owner).toBeNull();
-  // Repeat contacts cannot apply damage every physics substep.
   f.sim.caseBody.position.set(1,21,0);f.sim.caseBody.velocity.set(110,0,0);f.sim.step(.02,f.now+70);
   expect(f.hits.filter(h=>h.victim===f.victim.id)).toHaveLength(1);
  });
  it('reflects before a thin wall with ball restitution and does not hit rats behind it',()=>{
   const f=fixture('evidence-tampering');arm(f);wall(f.sim,2);f.victim.x=3;
-  f.sim.caseBody.velocity.set(110,0,0);f.sim.caseBody.angularVelocity.setZero();
+  f.sim.caseBody.velocity.set(220,0,0);f.sim.caseBody.angularVelocity.setZero();
   f.sim.step(.03,f.now+40);
   expect(f.sim.caseBody.position.x).toBeLessThan(2);
-  expect(f.sim.caseBody.velocity.x).toBeCloseTo(-99,4);
+  expect(f.sim.caseBody.velocity.x).toBeLessThan(-150);
   expect(f.hits).toHaveLength(0);
+ });
+ it('redirects an already flying kinematic case again and preserves upward shot speed',()=>{
+  const f=fixture('evidence-tampering');arm(f);
+  f.sim.caseBody.position.set(0,21,0);f.sim.caseBody.velocity.set(0,0,64);
+  f.sim.caseBody.angularVelocity.setZero();f.sim.caseBody.quaternion.set(0,0,0,1);
+  f.sim.shoot(f.victim.id,{shotId:'redirect',origin:{x:2,y:20.6,z:.32},direction:{x:-1,y:.2,z:0}});
+  f.sim.step(.01,f.now+20);
+  expect(f.sim.caseBody.velocity.x).toBeLessThan(-200);
+  expect(f.sim.caseBody.velocity.y).toBeGreaterThan(40);
+  expect(f.sim.snapshot(false).case.missileOwner).toBe(f.victim.id);
+  // Isolate subsequent flight from another redirect by the earlier reflected bullet.
+  const state=f.sim.snapshot(false);state.shots=[];
+  const flight=new ChaosSimulation(f.players,()=>{},state);
+  flight.step(.01,f.now+30);
+  expect(flight.caseBody.velocity.y).toBeGreaterThan(40);
  });
  it('returns to ordinary harmless and collectible evidence when the incident ends',()=>{
   const f=fixture('evidence-tampering');arm(f);
@@ -59,10 +73,30 @@ describe('Evidence Tampering missile case',()=>{
   f.sim.step(0,f.now+T.activeMs+1);
   expect(f.sim.snapshot(false).case.owner).toBe(f.victim.id);expect(f.hits).toHaveLength(0);
  });
- it('allows a slowed case to be picked up while the incident is still active',()=>{
+ it('hits a walking rat with an unclaimed auto-launched case',()=>{
+  const f=fixture('evidence-tampering');
+  f.sim.caseBody.position.set(0,21,0);f.sim.caseBody.velocity.set(40,0,0);
+  f.victim.x=1;f.victim.y=20;f.shooter.x=-40;
+  f.sim.step(.04,f.now+50);
+  expect(f.hits.some(h=>h.victim===f.victim.id)).toBe(true);
+  expect(f.hits.some(h=>h.victim===f.shooter.id)).toBe(false);
+ });
+ it('keeps slow cases armed and uncollectible for the whole incident',()=>{
   const f=fixture('evidence-tampering');arm(f);
   f.sim.caseBody.position.set(f.victim.x,f.victim.y+.8,f.victim.z);f.sim.caseBody.velocity.set(3,0,0);
-  f.sim.step(0,f.now+50);expect(f.sim.snapshot(false).case.owner).toBe(f.victim.id);
+  f.sim.step(0,f.now+50);expect(f.sim.snapshot(false).case.owner).toBeNull();
+  expect(f.sim.snapshot(false).case.missileOwner).toBe(f.shooter.id);
+ });
+ it('ejects a carried case immediately and never lets the former holder reacquire it',()=>{
+  const f=fixture('crossfire');
+  f.sim.caseBody.position.set(f.victim.x,f.victim.y+.8,f.victim.z);f.sim.step(0,f.now);
+  expect(f.sim.snapshot(false).case.owner).toBe(f.victim.id);
+  const saved=f.sim.snapshot(false);saved.dispatch={phase:'active',incident:'evidence-tampering',started:f.now,until:f.now+T.activeMs,serial:2};
+  const armed=new ChaosSimulation(f.players,h=>f.hits.push(h),saved);
+  expect(armed.snapshot(false).case.owner).toBeNull();
+  expect(armed.snapshot(false).extraCases).toHaveLength(7);
+  armed.caseBody.position.set(f.victim.x,f.victim.y+.8,f.victim.z);armed.caseBody.velocity.setZero();
+  armed.step(0,f.now+20);expect(armed.snapshot(false).case.owner).toBeNull();
  });
  it('preserves missile attribution through snapshots and rejects malformed metadata',()=>{
   const f=fixture('evidence-tampering');arm(f);const state=f.sim.snapshot(false);
