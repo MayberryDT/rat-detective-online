@@ -47,6 +47,20 @@ describe('network session transport', () => {
         expect(new URL(urls[1]).searchParams.get('chaos')).toBe('compact-v1');
     });
 
+    it('remembers the assigned room as a reconnect preference without leaving its matchmaking pool',()=>{
+        const urls:string[]=[];
+        network.destroy();
+        network=makeNetwork({url:'ws://localhost/ws?room=graybox-benchmark-match-preview',createSocket:url=>{
+            urls.push(url);const socket=new FakeSocket();sockets.push(socket);return socket as unknown as WebSocket;
+        }});
+        network.connect('Rat',appearance);sockets[0].open();
+        sockets[0].receive({...welcome(),matchRoom:'graybox-benchmark-match-preview-overflow'});
+        network.retry();
+        const url=new URL(urls[1]);
+        expect(url.searchParams.get('room')).toBe('graybox-benchmark-match-preview');
+        expect(url.searchParams.get('preferred')).toBe('graybox-benchmark-match-preview-overflow');
+    });
+
     it('expands negotiated movement batches with each source timestamp intact',()=>{
         const receive=vi.fn();network.onMessage=receive;
         network.connect('Rat',appearance);sockets[0].open();sockets[0].receive(welcome());receive.mockClear();

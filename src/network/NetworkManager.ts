@@ -69,7 +69,7 @@ export class NetworkManager {
     private retries = 0;
     private generation = 0;
     private lastReceived = 0;
-    private readonly url: string;
+    private url: string;
     private readonly options: TransportOptions;
     private readonly diagnostics = {
         receivedCount: 0, receivedChars: 0, parseMs: 0, parseMaxMs: 0,
@@ -150,6 +150,7 @@ export class NetworkManager {
                     this.setState('disconnected', 'The game has updated. Reload to continue.');
                     return;
                 }
+                if (message.matchRoom) { const url = new URL(this.url); url.searchParams.set('preferred',message.matchRoom); this.url = url.toString(); }
                 this.clearJoinTimer();
                 this.retries = 0;
                 // Apply the complete snapshot before enabling input.

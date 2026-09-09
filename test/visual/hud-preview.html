@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rat Detective HUD review</title></head><body>
+<div id="title-screen"></div><div id="scoreboard"><div class="scoreboard-title">Top 5 · K / D</div><ul id="scoreboard-list"></ul></div><div id="kill-feed"></div><div id="victory-overlay"><div id="victory-text"></div></div><div id="respawn-overlay"><div id="respawn-timer"></div></div>
+<script type="module">
+import '../../src/style.css';import '../../src/prototype/dispatchHud.css';
+import {GameHud} from '../../src/ui/GameHud';import {DispatchHud} from '../../src/prototype/DispatchHud';
+document.body.style.background='radial-gradient(ellipse at 55% 65%,#26352c,#0a100e 70%)';
+const hud=new GameHud();hud.enterPlaying();
+let scores=Array.from({length:8},(_,i)=>({id:String(i),name:['Inspector Nightwhisker','Detective Trap','Sergeant Stilton','Constable Squeak','Marshal Breadcrumb','Inspector Cheese','Deputy Nibbles','Chief Scurry'][i],kills:12-i,deaths:i+1}));
+hud.setScores(scores,'6');
+const dispatch=new DispatchHud(()=>{});const state={dispatch:{phase:'active',started:0,until:25000,serial:1,incident:'pressure-surge'},case:{owner:null},possession:{}};
+dispatch.update(state,8000);dispatch.update(state,12000);
+window.swapRanks=()=>{const first=scores[0];scores[0]=scores[2];scores[2]=first;hud.setScores(scores,'6');};
+setInterval(window.swapRanks,4000);
+</script></body></html>

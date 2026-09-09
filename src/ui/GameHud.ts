@@ -54,6 +54,10 @@ export class GameHud {
     private readonly titleScreen: HTMLElement;
     private readonly scoreboard: HTMLElement;
     private readonly scoreboardList: HTMLElement;
+    private readonly playerCard: HTMLElement;
+    private readonly scoreboardStack: HTMLElement;
+    private readonly scoreRows = new Map<string, HTMLElement>();
+    private readonly rankAnimations = new Map<string, Animation>();
     private readonly killFeed: HTMLElement;
     private readonly victoryOverlay: HTMLElement;
     private readonly victoryText: HTMLElement;
@@ -74,6 +78,13 @@ export class GameHud {
         this.titleScreen = this.require('title-screen');
         this.scoreboard = this.require('scoreboard');
         this.scoreboardList = this.require('scoreboard-list');
+        this.playerCard = this.doc.createElement('section');
+        this.playerCard.id = 'scoreboard-player';
+        this.scoreboardStack = this.doc.createElement('div');
+        this.scoreboardStack.id = 'scoreboard-stack';
+        this.doc.body.appendChild(this.scoreboardStack);
+        this.scoreboardStack.appendChild(this.scoreboard);
+        this.scoreboardStack.appendChild(this.playerCard);
         this.killFeed = this.require('kill-feed');
         this.victoryOverlay = this.require('victory-overlay');
         this.victoryText = this.require('victory-text');
@@ -117,28 +128,63 @@ export class GameHud {
             if (!this.disposed) this.titleScreen.style.display = 'none';
         }, TITLE_FADE_MS);
         this.scoreboard.style.display = 'block';
+        this.scoreboardStack.style.display = 'block';
     }
 
     setScores(scores: readonly ScoreEntry[], myId: string | null): void {
         if (this.disposed) return;
-        this.clearList(this.scoreboardList);
-        scores.forEach((score, index) => {
-            const row = this.doc.createElement('li');
-            if (score.id === myId) row.classList.add('you');
-            const rank = this.doc.createElement('span');
-            rank.className = 'rank';
-            rank.textContent = `#${index + 1}`;
-            const name = this.doc.createElement('span');
-            name.className = 'name';
-            name.textContent = score.name;
-            const stats = this.doc.createElement('span');
-            stats.className = 'stats';
-            stats.textContent = `${score.kills}K / ${score.deaths}D`;
-            row.appendChild(rank);
-            row.appendChild(name);
-            row.appendChild(stats);
+        const top = scores.slice(0, 5);
+        const positions = new Map<string, number>();
+        for (const [id, row] of this.scoreRows) {
+            if (row.getBoundingClientRect) positions.set(id, row.getBoundingClientRect().top);
+        }
+        for (const animation of this.rankAnimations.values()) animation.cancel();
+        this.rankAnimations.clear();
+        for (const [id, row] of this.scoreRows) {
+            if (!top.some(score => score.id === id)) { row.remove(); this.scoreRows.delete(id); }
+        }
+        top.forEach((score, index) => {
+            let row = this.scoreRows.get(score.id);
+            if (!row) {
+                row = this.doc.createElement('li');
+                for (const className of ['rank', 'name', 'stats']) {
+                    const span = this.doc.createElement('span'); span.className = className; row.appendChild(span);
+                }
+                this.scoreRows.set(score.id, row);
+            }
+            if (score.id === myId) row.classList.add('you'); else row.classList.remove('you');
+            row.children[0].textContent = `#${index + 1}`;
+            row.children[1].textContent = score.name;
+            row.children[2].textContent = `${score.kills}K / ${score.deaths}D`;
             this.scoreboardList.appendChild(row);
         });
+        const reducedMotion = this.doc.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        if (!reducedMotion && this.scoreboardStack.style.display !== 'none') {
+            for (const [id, row] of this.scoreRows) {
+                if (!row.animate || !row.getBoundingClientRect) continue;
+                const before = positions.get(id);
+                const delta = before === undefined ? 0 : before - row.getBoundingClientRect().top;
+                if (before !== undefined && Math.abs(delta) < 1) continue;
+                const animation = row.animate(before === undefined
+                    ? [{opacity:0, transform:'translateX(-8px)'}, {opacity:1, transform:'translateX(0)'}]
+                    : [{transform:`translateY(${delta}px)`}, {transform:'translateY(0)'}],
+                    {duration:280, easing:'cubic-bezier(.2,.7,.2,1)'});
+                this.rankAnimations.set(id, animation);
+                animation.onfinish = () => { if (this.rankAnimations.get(id) === animation) this.rankAnimations.delete(id); };
+            }
+        }
+        this.clearList(this.playerCard);
+        const position = scores.findIndex(score => score.id === myId);
+        this.playerCard.style.display = position < 0 ? 'none' : 'flex';
+        if (position >= 0) {
+            const score = scores[position];
+            for (const [className, text] of [
+                ['rank', `#${position + 1}`], ['name', score.name], ['stats', `${score.kills}K / ${score.deaths}D`],
+            ]) {
+                const line = this.doc.createElement('span'); line.className = className;
+                line.textContent = text; this.playerCard.appendChild(line);
+            }
+        }
     }
 
     addKillFeed(msg: string): void {
@@ -192,6 +238,9 @@ export class GameHud {
         for (const id of this.timeouts) clearTimeout(id);
         this.timeouts.clear();
         this.retryButton.removeEventListener('click', this.handleRetry);
+        this.playerCard.remove();
+        this.doc.body.appendChild(this.scoreboard);
+        this.scoreboardStack.remove();
         this.statusPanel.remove();
         this.styleEl.remove();
     }
@@ -206,12 +255,18 @@ export class GameHud {
         this.titleScreen.classList.remove('fade-out');
         this.titleScreen.style.display = 'flex';
         this.scoreboard.style.display = 'none';
+        this.scoreboardStack.style.display = 'none';
+        for (const animation of this.rankAnimations.values()) animation.cancel();
+        this.rankAnimations.clear();
+        this.scoreRows.clear();
         this.victoryOverlay.style.display = 'none';
         this.victoryText.textContent = '';
         this.respawnOverlay.style.display = 'none';
         this.respawnTimer.textContent = '5';
         this.clearList(this.scoreboardList);
         this.clearList(this.killFeed);
+        this.clearList(this.playerCard);
+        this.playerCard.style.display = 'none';
         this.statusPanel.style.display = 'none';
         this.retryButton.style.display = 'none';
         this.statusMessage.textContent = '';

@@ -57,6 +57,7 @@ function createHudDocument() {
                 for (const child of nodes) node.appendChild(child);
             },
             appendChild(child: FakeNode) {
+                if (child.parent) child.remove();
                 child.parent = node;
                 node.children.push(child);
                 if (child.id) byId.set(child.id, child);
@@ -172,6 +173,47 @@ describe('GameHud', () => {
         expect(rows[0].children[0].textContent).toBe('#1');
         expect(rows[0].children[1].textContent).toBe('<Rat & Co>');
         expect(rows[0].children[2].textContent).toBe('3K / 1D');
+        hud.dispose();
+    });
+
+    it('shows only the top five while retaining the local full-roster rank and clearing stale identity', () => {
+        const { doc, byId } = createHudDocument();
+        const hud = new GameHud(doc);
+        const scores = Array.from({length:24}, (_, i) => ({id:`rat-${i}`, name:`Rat ${i}`, kills:24-i, deaths:i}));
+        hud.setScores(scores, 'rat-23');
+        expect(byId.get('scoreboard-list')!.children).toHaveLength(5);
+        const card = byId.get('scoreboard-player')!;
+        expect(card.parent).toBe(byId.get('scoreboard-stack'));
+        expect(card.parent).not.toBe(byId.get('scoreboard'));
+        expect(card.children.map(child => child.textContent)).toEqual(['#24', 'Rat 23', '1K / 23D']);
+        hud.setScores(scores, 'rat-0');
+        expect(card.children[0].textContent).toBe('#1');
+        hud.setScores([], null);
+        expect(card.children).toHaveLength(0);
+        expect(card.style.display).toBe('none');
+        hud.dispose();
+    });
+
+    it('reuses ranked cards and animates their displacement, with reduced-motion support', () => {
+        const {doc, byId} = createHudDocument();
+        const hud = new GameHud(doc); hud.enterPlaying();
+        const scores = [{id:'a',name:'Alpha',kills:2,deaths:0},{id:'b',name:'Beta',kills:1,deaths:1}];
+        hud.setScores(scores,'a');
+        const list = byId.get('scoreboard-list')!;
+        const [alpha,beta] = [...list.children];
+        const animations = [alpha,beta].map(row => {
+            const animation = {cancel:vi.fn(),onfinish:null};
+            const animate = vi.fn(()=>animation);
+            Object.assign(row,{getBoundingClientRect:()=>({top:list.children.indexOf(row)*44}),animate});
+            return {animate,animation};
+        });
+        hud.setScores([scores[1],scores[0]],'a');
+        expect(list.children).toEqual([beta,alpha]);
+        expect(animations[0].animate).toHaveBeenCalledWith([{transform:'translateY(-44px)'},{transform:'translateY(0)'}],expect.objectContaining({duration:280}));
+        Object.assign(doc,{defaultView:{matchMedia:()=>({matches:true})}});
+        hud.setScores(scores,'a');
+        expect(animations[0].animation.cancel).toHaveBeenCalledOnce();
+        expect(animations[0].animate).toHaveBeenCalledOnce();
         hud.dispose();
     });
 

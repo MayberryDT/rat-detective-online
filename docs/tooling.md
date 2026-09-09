@@ -61,3 +61,15 @@ Check the port is free first. `/model-preview.html` is the rat model tool, `/sta
 Use `npm run deploy:production` or `npm run deploy:staging` only within release authorization. The default deploy script refuses unspecified environments. The historical API-upload workaround is not the standard current workflow. See [live service](live-service.md) for current release receipts and rollback compatibility.
 
 Local dev state directories remain `.wrangler/state/dev` and `.wrangler/state/preview`; CI uses a temporary directory. Do not delete any durable state or service configuration as incidental setup.
+
+## Current 24-rat full-game preview
+
+For the user’s private full-game playtest, build then prepare with `node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=23 --cap=24`. Start `scripts/preview-capacity.mjs` with the returned absolute deployment receipt, port 5180 and room `graybox-benchmark-ai-human-twentyfour`. This copied fixture enforces 24 total rats and currently reserves 23 AI slots; dynamic human replacement is not implemented. The relay closes at the receipt expiry. Normal benchmarks retain a default cap of 100; neither setting changes public production.
+
+## Automatic-room preview (supersedes the fixed roster above)
+
+Build and prepare `node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=11 --cap=24`, then launch `scripts/preview-capacity.mjs` with the receipt and room `graybox-benchmark-match-playtest`. This authenticated pool uses dynamic backfill, not the fixed benchmark AI override. Use `node scripts/verify-matchmaking.mjs http://127.0.0.1:5180` for a bounded 44-connection admission/backfill check in a separate private pool; it closes its sockets afterward. The live user room stays separate.
+
+`test/visual/hud-preview.html` is a no-input UI fixture under the Vite visual development server. It exercises rank swaps and the personal/incident cards without booting gameplay.
+
+All Worker configs include the additive `v2-matchmaking` migration and `MATCHMAKER` binding. Production remains unchanged until a separately authorized deployment; preserve `public-live-v2` and existing migrations when releasing.

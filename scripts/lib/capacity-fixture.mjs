@@ -9,8 +9,9 @@ export function replaceOnce(text, before, after) {
   if (text.split(before).length !== 2) throw new Error(`Capacity fixture anchor changed: ${before.slice(0, 90)}`);
   return text.replace(before, after);
 }
-export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 4, serverBots = 11, checkpointControl = false } = {}) {
+export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 4, serverBots = 11, maxPlayers = 100, checkpointControl = false } = {}) {
   if(!Number.isInteger(serverBots)||serverBots<11||serverBots>99)throw Error('Fixture serverBots must be 11–99');
+  if(!Number.isInteger(maxPlayers)||maxPlayers<24||maxPlayers>100||serverBots>=maxPlayers)throw Error('Fixture cap must be 24–100 with room for a human');
   await mkdir(out, { recursive: true });
   const stage = await mkdtemp(join(out, 'runtime-'));
   for (const name of ['src', 'worker-configuration.d.ts', 'tsconfig.json', 'package.json']) await cp(join(projectRoot, name), join(stage, name), { recursive: true });
@@ -26,7 +27,7 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   }
   await hashTree('src');
   const controlHash=createHash('sha256').update(await readFile(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'))).digest('hex');
-  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 8, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
+  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 9, maxPlayers, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
   async function patch(name, before, after) { const path=join(stage,name); await writeFile(path,replaceOnce(await readFile(path,'utf8'),before,after)); }
   if(checkpointControl){
     if(!hosted)throw Error('Checkpoint control is hosted-private only');
@@ -36,7 +37,7 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   if(![4,8].includes(window))throw Error('Benchmark window must be 4 or 8');
   await patch('src/worker/ChaosDelivery.ts','MAX_CHAOS_IN_FLIGHT=4;',`MAX_CHAOS_IN_FLIGHT=${window};`);
   await patch('src/worker/GameRoom.ts', "this.send(ws, { type: 'pong', sentAt: message.sentAt, receivedAt: this.now() });", "ws.send(JSON.stringify({type:'pong',sentAt:message.sentAt,receivedAt:this.now(),capacityDelivery:{coalesced:this.chaosDelivery.get(ws)?.coalesced??0,inFlight:this.chaosDelivery.get(ws)?.inFlight??0}}));");
-  await patch('src/shared/networkProtocol.ts', 'export const MAX_PLAYERS = 24;', 'export const MAX_PLAYERS = 100;');
+  await patch('src/shared/networkProtocol.ts', 'export const MAX_PLAYERS = 24;', `export const MAX_PLAYERS = ${maxPlayers};`);
   await patch('src/shared/ChaosSimulation.ts', '    private activate(){', "    benchmarkIncident():void { this.dispatch={phase:'active',started:this.now,until:this.now+25000,serial:this.dispatch.serial+1,incident:'scattershot'}; }\n    private activate(){");
   await patch('src/worker/GameRoom.ts', 'this.world = { ...createWorldSpec(), version: GRAYBOX_VERSION };', 'this.world = { ...createWorldSpec(341283204), version: GRAYBOX_VERSION };');
   await patch('src/worker/GameRoom.ts', '  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {', '  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {\n    if(raw===\'{"type":"benchmarkIncident","incident":"scattershot"}\' && this.getPlayerId(ws)){this.chaos?.benchmarkIncident();return;}');
@@ -70,7 +71,7 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   }
   if (!hosted) await patch('src/worker/index.ts','    const url = new URL(request.url);',"    const url = new URL(request.url);\n    if(url.hostname!=='127.0.0.1')return new Response('Local benchmark only',{status:403});");
   const config = hosted ? JSON.parse(await readFile(join(projectRoot, 'wrangler.capacity-test.jsonc'), 'utf8')) : {
-    name:'rat-detective-local-benchmark', main:'src/worker/index.ts', compatibility_date:'2026-07-08', compatibility_flags:['nodejs_compat'], workers_dev:false, preview_urls:false, routes:[], assets:{directory:'./dist',binding:'ASSETS'}, durable_objects:{bindings:[{name:'GAME_ROOM',class_name:'GameRoom'}]}, migrations:[{tag:'v1',new_sqlite_classes:['GameRoom']}], observability:{enabled:true},
+    name:'rat-detective-local-benchmark', main:'src/worker/index.ts', compatibility_date:'2026-07-08', compatibility_flags:['nodejs_compat'], workers_dev:false, preview_urls:false, routes:[], assets:{directory:'./dist',binding:'ASSETS'}, durable_objects:{bindings:[{name:'GAME_ROOM',class_name:'GameRoom'},{name:'MATCHMAKER',class_name:'Matchmaker'}]}, migrations:[{tag:'v1',new_sqlite_classes:['GameRoom']},{tag:'v2-matchmaking',new_sqlite_classes:['Matchmaker']}], observability:{enabled:true},
   };
   if (hosted) {
     if (config.name !== PRIVATE_WORKER || config.routes.length || config.durable_objects.bindings.some(b => b.script_name)) throw new Error('Private namespace configuration changed');
@@ -81,8 +82,8 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   const validator = join(stage, 'validator.mjs');
   await cp(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'),join(stage,'approved-buffer.ts'));
   await build({ stdin:{contents:"export * from './src/shared/chaosWire.ts'; export {SnapshotBuffer,BotSnapshotBuffer} from './src/shared/SnapshotBuffer.ts'; export {SnapshotBuffer as ApprovedSnapshotBuffer} from './approved-buffer.ts';",resolveDir:stage}, outfile:validator, bundle:true, platform:'node', format:'esm' });
-  const manifest = { createdAt:new Date().toISOString(), fixtureId, sourceHashes, controlHash, hosted, expiresAt, window, serverBots, checkpointControl,
-    overrides:[...(checkpointControl?['DIAGNOSTIC ONLY: copied periodic player and chaos checkpoint intervals 10 seconds; forced writes unchanged']:[]),'copied MAX_PLAYERS=100, MAX_CONNECTIONS=108', 'fixed city seed 341283204', 'copied 25-second Scattershot control', `private AI rooms use ${serverBots} production-controller bots, with hosted expiry`], stage, validator, configPath };
+  const manifest = { createdAt:new Date().toISOString(), fixtureId, sourceHashes, controlHash, hosted, expiresAt, window, serverBots, maxPlayers, checkpointControl,
+    overrides:[...(checkpointControl?['DIAGNOSTIC ONLY: copied periodic player and chaos checkpoint intervals 10 seconds; forced writes unchanged']:[]),`copied MAX_PLAYERS=${maxPlayers}, MAX_CONNECTIONS=${maxPlayers+8}`, 'fixed city seed 341283204', 'copied 25-second Scattershot control', `private AI rooms use ${serverBots} production-controller bots, with hosted expiry`], stage, validator, configPath };
   await writeFile(join(out,'fixture.json'), JSON.stringify(manifest,null,2));
   return manifest;
 }

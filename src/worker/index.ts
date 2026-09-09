@@ -2,6 +2,7 @@ import { DEFAULT_ROOM_NAME } from '../shared/networkProtocol';
 import { log } from './logging';
 
 export { GameRoom } from './GameRoom';
+export { Matchmaker } from './Matchmaker';
 
 function json(data: unknown, init: ResponseInit = {}): Response {
   return Response.json(data, {
@@ -44,7 +45,7 @@ export default {
           return json({ error: 'Method not allowed' }, { status: 405 });
         }
         const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
-        await room.ensurePersistentBots();
+        await room.enableMatchmaking(DEFAULT_ROOM_NAME);
         return json(
           { room: DEFAULT_ROOM_NAME, ...(await room.status()) },
           {
@@ -61,6 +62,9 @@ export default {
         }
 
         const roomName = url.searchParams.get('room') || DEFAULT_ROOM_NAME;
+        if (roomName === DEFAULT_ROOM_NAME) {
+          return env.MATCHMAKER.getByName(roomName).fetch(request);
+        }
         const room = env.GAME_ROOM.getByName(roomName);
         if (roomName === DEFAULT_ROOM_NAME) await room.ensurePersistentBots();
         return room.fetch(request);

@@ -26,3 +26,21 @@
 @media(max-width:700px){.dispatch-ledger{right:10px;top:10px;width:220px;padding:9px}.roulette-heading span{display:none}.dispatch-roulette{padding:10px}.case-broadcast{top:24%}.roulette-stamp{right:8px;font-size:11px}.roulette-description{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.dispatch-roulette,.roulette-stamp,.broadcast-enter{animation:none}.roulette-strip{will-change:auto}}
 body:has(.dispatch-hud) #kill-feed{top:195px}
+
+/* Selected Evidence Scraps treatment; the center broadcast stays unframed. */
+.dispatch-ledger{right:16px;top:16px;width:190px;padding:12px;color:#d2c5aa;background:repeating-linear-gradient(0deg,#ffffff03 0 1px,transparent 1px 3px),#232821;border:0;border-top:4px solid #945b45;box-shadow:2px 3px 0 #060b0999;text-shadow:none;rotate:.7deg;clip-path:polygon(0 0,98% 0,100% 15%,100% 95%,2% 100%,0 85%)}
+.dispatch-ledger::before{content:"INCIDENT";display:block;font:bold 9px monospace;letter-spacing:.13em;color:#c38b6a;margin-bottom:6px}
+.dispatch-status-row{gap:10px}
+.dispatch-status{font:bold 18px Georgia,serif;letter-spacing:0;text-transform:none;min-width:0;overflow-wrap:anywhere}
+.dispatch-timer{font:bold 28px monospace;color:#d2c5aa}
+.dispatch-time-track{height:4px;background:#c6b48b22;margin:12px 0 10px}
+.dispatch-time-track div{background:#a99a77}
+.dispatch-next{font:10px monospace;color:#b0a38a;letter-spacing:0}
+.dispatch-hud[data-phase=active] .dispatch-next{display:none}
+.dispatch-hud[data-phase=ready] .dispatch-status{color:#d2c5aa}
+.dispatch-hud[data-phase=active] .dispatch-ledger{border-top-color:#945b45}
+.case-ledger{margin-top:8px;padding:0;border:0;background:none;box-shadow:none;gap:4px}
+.case-ledger strong{font:bold 11px monospace;color:#d2c5aa}
+.case-ledger strong::before{content:"◆ ";color:#c38b6a}
+.case-ledger small{font:10px monospace;letter-spacing:0;color:#b0a38a}
+@media(max-width:700px){.dispatch-ledger{right:10px;top:10px;width:min(190px,calc(47vw - 15px));padding:10px}.dispatch-status{font-size:16px}.dispatch-status-row{gap:6px}.dispatch-timer{font-size:24px}}

@@ -22,6 +22,10 @@
       {
         "name": "GAME_ROOM",
         "class_name": "GameRoom"
+      },
+      {
+        "name": "MATCHMAKER",
+        "class_name": "Matchmaker"
       }
     ]
   },
@@ -30,6 +34,12 @@
       "tag": "v1",
       "new_sqlite_classes": [
         "GameRoom"
+      ]
+    },
+    {
+      "tag": "v2-matchmaking",
+      "new_sqlite_classes": [
+        "Matchmaker"
       ]
     }
   ],
@@ -60,6 +70,10 @@
           {
             "name": "GAME_ROOM",
             "class_name": "GameRoom"
+          },
+          {
+            "name": "MATCHMAKER",
+            "class_name": "Matchmaker"
           }
         ]
       }
@@ -88,6 +102,10 @@
           {
             "name": "GAME_ROOM",
             "class_name": "GameRoom"
+          },
+          {
+            "name": "MATCHMAKER",
+            "class_name": "Matchmaker"
           }
         ]
       }

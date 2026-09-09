@@ -116,6 +116,7 @@ export type ServerMessage =
   | { type: 'chaos'; state: ChaosState }
   | {
       type: 'welcome';
+      matchRoom?: string;
       id: string;
       player: PlayerData;
       players: Record<string, PlayerData>;

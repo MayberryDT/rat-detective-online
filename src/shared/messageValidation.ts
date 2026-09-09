@@ -388,7 +388,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         return null;
       }
       if (player.id !== id || !players[id]) return null;
-      return { type: 'welcome', id, player, players, round, world, protocolVersion, serverTime };
+      const matchRoom = parsed.matchRoom === undefined ? undefined : nonEmptyString(parsed.matchRoom, 160);
+      if (matchRoom === null || (matchRoom !== undefined && !/^[a-z0-9-]+$/.test(matchRoom))) return null;
+      return { type: 'welcome', id, player, players, round, world, protocolVersion, serverTime, ...(matchRoom ? {matchRoom} : {}) };
     }
     case 'currentPlayers': {
       const players = parsePlayersRecord(parsed.players);

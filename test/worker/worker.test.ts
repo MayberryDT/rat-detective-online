@@ -28,7 +28,7 @@ describe('worker', () => {
     expect(empty.status).toBe(200);
     const board = await empty.json<{room:string;players:number;bots:number;phase:string;startedAt:number;scores:Array<{name:string;kills:number;deaths:number}>}>();
     expect(board).toMatchObject({room:DEFAULT_ROOM_NAME,phase:'playing',startedAt:expect.any(Number)});
-    expect(board.bots).toBeGreaterThanOrEqual(8);expect(board.bots).toBeLessThanOrEqual(11);
+    expect(board.bots).toBe(0); // Empty public rooms sleep until someone joins.
     expect(board.players).toBe(board.bots);expect(board.scores).toHaveLength(board.bots);
     expect(new Set(board.scores.map(p=>p.name)).size).toBe(board.bots);
     expect(board.scores.every(p=>p.kills===0&&p.deaths===0)).toBe(true);

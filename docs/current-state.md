@@ -16,9 +16,15 @@ The fifty-total-rat follow-up is in progress on the private capacity Worker. It 
 
 The latest private follow-up adds receiver-timed presentation for server-owned AI and rigid remote-mesh batching with material/shadow preservation. The 49-AI-plus-observer workload passed all five combined 50-rat stages, including the original raw hold threshold; the renderer fixture achieved a 16.8 ms p95 frame time at 50 rats and 256 balls. Application validation passed 480 tests, typecheck and build; a subsequent harness reconnect regression also passes. Bounded lower-count regressions now pass at 12, 24 and 32 rats (12 across four initial stages plus a corrected churn rerun). Work stopped at the user’s request; no final preview was started. Earlier delivery spikes and the randomized navigation-test failure remain documented, and public capacity is unchanged. See [AI playback and batching](verification/ai-delivery-and-rigid-batching-2026-09-08.md).
 
-## Fifty-rat human preview — September 8 closeout
+## Current private human preview — automatic rooms and HUD
 
-At the user’s request, the completed working tree is being committed and a full-game private preview is available at `http://127.0.0.1:5180/?room=graybox-benchmark-ai-human-fifty`. It uses 49 server-owned AI plus the human player, with the normal city and game loop. Private deployment `fa4f7eaf-2b38-4cb4-9257-e8375a555496` expires September 9 at 08:10 UTC (1:10 AM PDT); the relay shuts down at expiry. Public production is unchanged. Build passed again for this preview. Raw generated captures and deployment staging remain outside Git under `output/`, with the separate evidence ZIP in Downloads.
+The local implementation now caps each automatic room at 24 humans/total rats and fills occupied rooms to eight total rats with AI (`max(0, 8 - humans)`). Human joins remove surplus AI immediately; departures trigger a ten-second refill grace period. Empty rooms stop their simulation and overflow rooms leave the admission directory. A small persistent Matchmaker handles admission only; live sockets remain in individual GameRooms. The canonical `public-live-v2` world identity is preserved. Reconnects prefer their assigned room if it still has space; the pre-existing reconnect behavior still creates a new player identity and does not reserve their score or slot.
+
+Private preview: `http://127.0.0.1:5180/?room=graybox-benchmark-match-playtest`. Expect one human plus seven AI when playing alone, not a fixed 23 AI roster. Public production has **not** been deployed with these changes and retains its dated release behavior below. Private matchmaking pools are available only through the authenticated capacity entry point; public automatic entry uses the canonical public pool.
+
+The top five use reusable file-style cards with brief positional animations. The larger personal card is a separate sibling below the leaderboard and contains only rank, name and `K / D`. Incident/case panels share restrained borders and paper colors. Reduced-motion settings suppress ranking animation.
+
+Validation: 487 tests (100 Worker, 365 client, 22 scripts), typecheck and build passed; final route-restriction changes also received focused validation. A hosted 44-human protocol check produced rooms of 24 and 20, then returned the remaining player to seven AI after departures. Screenshots were checked at desktop, compact and narrow widths, without gameplay input automation. See [the implementation receipt](verification/matchmaking-and-hud-2026-09-08.md).
 
 ## Creative direction
 
@@ -95,3 +101,9 @@ Version 2 uses shared server-authoritative chaos simulation. Version 1 retains t
 - Latest application validation: 409 tests, typecheck and build passed for release `e3a70ae3-246f-4712-94dc-a692495ac045`. Sharing HTML/image and redirect were checked live. Roster replacement was tested in Durable Object integration tests; no forced live reset or browser-input test was performed for that release.
 
 Private capacity research follow-up is recorded in [the implementation receipt](verification/capacity-review-implementation-2026-09-08.md). These working-tree changes do not represent a new production release or a verified public capacity increase.
+
+HUD design follow-up: removed the newly added border/shadow frame from the center case broadcast. Five unselected scoreboard/incident design studies are served from the temporary `output/hud-options/index.html`; these are not gameplay UI changes. Await the user’s choice before applying one.
+
+The user selected HUD option 1, **Evidence Scraps**. The scoreboard now uses compact 228px paper slips, red-ink ranks, lightly irregular edges and a larger separate personal slip. The incident panel uses matching warm paper at 190px. Rank animations, full-roster personal rank and the unframed center broadcast remain intact.
+
+Evidence Scraps palette follow-up: charcoal paper, muted parchment lettering and subdued rust accents replace the bright cream cards after the user’s in-game feedback. Card geometry, compact spacing and animations are unchanged.

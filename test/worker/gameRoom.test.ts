@@ -706,7 +706,7 @@ describe('GameRoom websockets', () => {
       startedAt: number;
       scores: Array<{ name: string; kills: number; deaths: number }>;
     };
-    expect(oneBoard.bots).toBeGreaterThanOrEqual(8);expect(oneBoard.bots).toBeLessThanOrEqual(11);
+    expect(oneBoard.bots).toBe(7);
     expect(oneBoard).toMatchObject({
       room: DEFAULT_ROOM_NAME,
       players: oneBoard.bots+1,
@@ -723,8 +723,8 @@ describe('GameRoom websockets', () => {
     const two = await SELF.fetch('https://rat-detective.test/status');
     await expect(two.json()).resolves.toMatchObject({
       room: DEFAULT_ROOM_NAME,
-      players: oneBoard.bots+2,
-      bots: oneBoard.bots,
+      players: 8,
+      bots: 6,
       phase: 'playing',
       startedAt: oneBoard.startedAt,
       scores: expect.arrayContaining([

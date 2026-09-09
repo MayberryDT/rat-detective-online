@@ -56,3 +56,5 @@ Useful shared-memory pages: `sessions/2026/09/rat-detective-sharing-round-roster
 [Capacity research implementation](verification/capacity-review-implementation-2026-09-08.md) records measurement repairs, narrow persistence changes and remaining 50-rat failures.
 
 Latest capacity iteration: [AI playback and rigid batching](verification/ai-delivery-and-rigid-batching-2026-09-08.md).
+
+- [Automatic rooms and card HUD receipt](verification/matchmaking-and-hud-2026-09-08.md) — local/private implementation; public release unchanged.

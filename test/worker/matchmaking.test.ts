@@ -1,0 +1,111 @@
+import { env, evictDurableObject, runInDurableObject } from 'cloudflare:test';
+import { afterEach, describe, expect, it } from 'vitest';
+import { BOT_REFILL_MS, type GameRoom } from '../../src/worker/GameRoom';
+import type { ServerMessage } from '../../src/shared/networkProtocol';
+import { parseServerMessage } from '../../src/shared/messageValidation';
+
+const sockets: WebSocket[] = [];
+const rooms = new Set<string>();
+const appearance = {hatType:'fedora',hatColor:1,furColor:2,coatColor:3};
+const pool = () => `graybox-benchmark-match-${crypto.randomUUID().slice(0,8)}`;
+async function until(test:()=>boolean) {
+  const end=Date.now()+8000;
+  while(!test()){if(Date.now()>end)throw Error('Timed out');await new Promise(resolve=>setTimeout(resolve,10));}
+}
+async function open(group:string, preferred?:string, join=true) {
+  rooms.add(group);
+  const response=await env.MATCHMAKER.getByName(group).fetch(new Request(`https://game.test/ws?room=${group}${preferred?`&preferred=${preferred}`:''}`,{headers:{Upgrade:'websocket'}}));
+  expect(response.status).toBe(101);
+  const ws=response.webSocket!;ws.accept();sockets.push(ws);
+  const messages:ServerMessage[]=[];
+  ws.addEventListener('message',event=>{const message=parseServerMessage(String(event.data));if(message)messages.push(message);});
+  if(!join)return {ws,messages,welcome:undefined};
+  ws.send(JSON.stringify({type:'join',protocolVersion:1,name:'Human Rat',appearance}));
+  await until(()=>messages.some(m=>m.type==='welcome'));
+  const welcome=messages.find(m=>m.type==='welcome') as Extract<ServerMessage,{type:'welcome'}>;
+  rooms.add(welcome.matchRoom!);
+  return {ws,messages,welcome};
+}
+async function close(ws:WebSocket){ws.close(1000,'test done');await until(()=>ws.readyState===WebSocket.CLOSED);}
+afterEach(async()=>{
+  for(const name of rooms){
+    await runInDurableObject(env.GAME_ROOM.getByName(name),(instance:GameRoom,ctx)=>{
+      const game=instance as any;
+      if(game.chaosTimer)clearInterval(game.chaosTimer);
+      game.chaosTimer=null;game.serverBots?.dispose();game.serverBots=null;game.persistentBots=false;game.matchRoom=null;game.refillAt=0;
+      ctx.storage.sql.exec("DELETE FROM room_state WHERE key IN ('match-room-v1','persistent-bots-v1')");
+      return ctx.storage.deleteAlarm();
+    });
+  }
+  for(const ws of sockets.splice(0))if(ws.readyState===WebSocket.OPEN)await close(ws);
+  rooms.clear();
+});
+
+describe('automatic public room population',()=>{
+  it('fills to eight, replaces AI without resetting remaining bots, refills after grace and sleeps empty',async()=>{
+    const group=pool();const first=await open(group);
+    expect(Object.keys(first.welcome!.players)).toHaveLength(8);
+    const stub=env.GAME_ROOM.getByName(group);
+    await runInDurableObject(stub,(instance:GameRoom)=>{
+      const game=instance as any;
+      if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;
+      game.players.get('rd-ai-00').kills=6;
+      game.testController=game.serverBots;
+    });
+    const second=await open(group);
+    expect(Object.keys(second.welcome!.players)).toHaveLength(8);
+    expect(second.welcome!.players['rd-ai-00'].kills).toBe(6);
+    expect(Object.keys(second.welcome!.players).filter(id=>id.startsWith('rd-ai-'))).toHaveLength(6);
+    await runInDurableObject(stub,(instance:GameRoom)=>{
+      const game=instance as any;expect(game.serverBots).toBe(game.testController);
+      // The eviction helper requires timer I/O to drain; retain durable state.
+      if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;
+    });
+    await evictDurableObject(stub);
+    expect((await stub.status()).bots).toBe(6);
+    await close(second.ws);
+    await until(()=>first.messages.some(m=>m.type==='playerLeft'&&m.id===second.welcome!.id));
+    expect((await stub.status()).bots).toBe(6);
+    await runInDurableObject(stub,async(instance:GameRoom)=>{
+      const game=instance as any; const now=Date.now();game.clock=()=>now+BOT_REFILL_MS+1;await instance.alarm();
+    });
+    expect((await stub.status()).bots).toBe(7);
+    await close(first.ws);
+    await runInDurableObject(stub,async(instance:GameRoom)=>{
+      const game=instance as any;
+      expect(game.botRoster).toHaveLength(0);expect(game.chaosTimer).toBeNull();expect(game.serverBots).toBeNull();
+    });
+    expect((await stub.status()).players).toBe(0);
+  });
+
+  it('places 44 concurrent humans into 24 and 20, keeping preferred-room reconnects and reusing freed slots',async()=>{
+    const group=pool();
+    const joined=await Promise.all(Array.from({length:44},()=>open(group)));
+    const counts=new Map<string,number>();
+    for(const c of joined)counts.set(c.welcome!.matchRoom!,(counts.get(c.welcome!.matchRoom!)??0)+1);
+    expect([...counts.values()].sort((a,b)=>b-a)).toEqual([24,20]);
+    for(const name of counts.keys()){const status=await env.GAME_ROOM.getByName(name).status();expect(status.bots).toBe(0);expect(status.players).toBeLessThanOrEqual(24);}
+    const last=joined.at(-1)!;const preferred=last.welcome!.matchRoom!;
+    await close(last.ws);
+    const resumed=await open(group,preferred);
+    expect(resumed.welcome!.matchRoom).toBe(preferred);
+    await evictDurableObject(env.MATCHMAKER.getByName(group));
+    const next=await open(group);
+    expect(next.welcome!.matchRoom).toBe(preferred);
+  },30000);
+
+  it('reserves pending joins, expires them, and rejects an expired join',async()=>{
+    const group=pool();
+    const pending=await Promise.all(Array.from({length:24},()=>open(group,undefined,false)));
+    const extra=await open(group);
+    expect(extra.welcome!.matchRoom).not.toBe(group);
+    const stub=env.GAME_ROOM.getByName(group);
+    await runInDurableObject(stub,async(instance:GameRoom)=>{
+      const game=instance as any;const now=Date.now();game.clock=()=>now+11000;
+      await instance.alarm();expect(await instance.occupiedSlots()).toBe(0);
+    });
+    await until(()=>pending.every(c=>c.ws.readyState===WebSocket.CLOSED));
+    const reused=await open(group,group);
+    expect(reused.welcome!.matchRoom).toBe(group);
+  },30000);
+});

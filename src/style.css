@@ -302,17 +302,6 @@ h1 {
     }
 }
 
-/* Precinct ledger: square rules, clear rank/name/K-D columns. */
-#scoreboard{position:fixed;top:16px;left:16px;z-index:50;background:#0e1512e8;border:1px solid #84765b;border-top:3px solid #c8b485;border-radius:0;padding:12px 14px;min-width:230px;width:min(290px,30vw);pointer-events:none;user-select:none;display:none;color:#ddcfb4;box-shadow:3px 3px 0 #0005;font-family:Georgia,serif}
-.scoreboard-title{font:bold 11px monospace;text-transform:uppercase;letter-spacing:.18em;color:#d1b67a;padding-bottom:10px;border-bottom:1px solid #b4a17b66;margin-bottom:5px}
-#scoreboard-list{list-style:none;padding:0;margin:0;max-height:34vh;overflow:hidden;counter-reset:rank}
-#scoreboard-list li{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:.84rem;color:#c2bbaa;border-bottom:1px solid #a190681f}
-#scoreboard-list li:last-child{border-bottom:0}#scoreboard-list li.you{color:#f8e3b4;font-weight:bold;background:#d7b56e12;box-shadow:-3px 0 #c9a15b;padding-left:5px}
-#scoreboard-list li .rank{font:11px monospace;color:#9e987f;min-width:24px}
-#scoreboard-list li .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#scoreboard-list li .stats{font:11px monospace;font-variant-numeric:tabular-nums;white-space:nowrap;color:#c9b98e}
-@media(max-width:700px){#scoreboard{min-width:180px;width:190px;left:10px;top:10px;padding:8px}#scoreboard-list li{font-size:12px}.scoreboard-title{font-size:9px}}
-
 /* ── Kill Feed ── */
 #kill-feed {
     position: fixed;
@@ -463,3 +452,22 @@ h1 {
 }
 
 #title-screen:not(.fade-out) ~ #hud { visibility: hidden; }
+
+/* Evidence scraps: compact paper slips, with the personal record below. */
+#scoreboard-stack{position:fixed;top:16px;left:16px;z-index:50;width:228px;pointer-events:none;user-select:none;font-family:Georgia,serif}
+#scoreboard{display:none;color:#d2c5aa;background:none;border:0;padding:0;box-shadow:none}
+.scoreboard-title{font:bold 10px monospace;letter-spacing:.14em;color:#b4a78d;margin:0 0 7px 4px;text-shadow:0 2px 3px #000}
+#scoreboard-list{list-style:none;padding:0;margin:0;display:grid;gap:4px}
+#scoreboard-list li,#scoreboard-player{position:relative;display:flex;align-items:center;gap:6px;min-width:0;padding:9px 7px;color:#d2c5aa;background:repeating-linear-gradient(0deg,#ffffff03 0 1px,transparent 1px 3px),#232821;box-shadow:2px 3px 0 #060b0999;clip-path:polygon(0 0,98% 0,100% 15%,100% 95%,2% 100%,0 85%);font:14px Georgia,serif}
+/* Individual rotation composes with the rank animation's transform. */
+#scoreboard-list li:nth-child(even){rotate:-.4deg}
+#scoreboard-list li .rank{font:bold 12px monospace;color:#cf9877;min-width:20px}
+#scoreboard-list li .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#scoreboard-list li .stats{font:bold 11px monospace;white-space:nowrap;font-variant-numeric:tabular-nums;color:#d2c5aa}
+#scoreboard-list li.you{background-color:#30342a;box-shadow:inset 3px 0 #945b45;font-weight:bold}
+#scoreboard-player{display:none;margin-top:12px;min-height:48px;padding:11px 8px;background-color:#30342a;border-left:4px solid #945b45}
+#scoreboard-player .rank{font:bold 16px monospace;color:#cf9877}
+#scoreboard-player .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:bold 16px Georgia,serif}
+#scoreboard-player .stats{font:bold 12px monospace;white-space:nowrap;font-variant-numeric:tabular-nums}
+@media(max-width:700px){#scoreboard-stack{left:10px;top:10px;width:min(228px,calc(53vw - 15px))}#scoreboard-list li{padding:8px 5px;gap:4px;font-size:12px}#scoreboard-list li .rank{min-width:18px}#scoreboard-player{padding:10px 6px;gap:5px}#scoreboard-player .name{font-size:15px}}
+@media(max-width:480px){#scoreboard-list li .stats{font-size:10px}#scoreboard-player{flex-wrap:wrap}#scoreboard-player .name{white-space:normal;overflow-wrap:anywhere}#scoreboard-player .stats{margin-left:auto}}

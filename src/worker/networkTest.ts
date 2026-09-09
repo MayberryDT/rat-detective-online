@@ -1,6 +1,7 @@
 import worker from './index';
 
 export { GameRoom } from './GameRoom';
+export { Matchmaker } from './Matchmaker';
 
 /** Isolated hosted probe entry point; never used by the game deployments. */
 export default {
