@@ -10,7 +10,7 @@ Reviewed **2026-09-08**. This describes the current game; the [08e8005 reference
 | Camera | Radius 6, pivot 3.5, shoulder 1.25, mouse sensitivity 0.002, obstruction checks |
 | Ordinary ball | Speed 175, gravity −25, restitution 0.9, lifetime 5 seconds (`ballTuning.ts`) |
 | Damage / round | 3 HP; body 1, head 3; 20 credited kills; 5-second respawn, 6-second victory |
-| Case bonus | 2× credited kills, not damage; applies to each of the four possible carriers |
+| Case bonus | 2× credited kills, not damage, while carrying the Hot Case. Evidence Tampering temporarily prohibits pickup of eight flying cases |
 | Player collision | Spheres 0.6 at y0.6, 0.45 at y1.3, 0.28 at y1.9 |
 | Shot origin | Animated barrel/muzzle pose via `muzzlePose.ts`; send resolved descriptor |
 | Case | Opaque leather/document model, red outline, loose scale 2, normal scale carried at side |

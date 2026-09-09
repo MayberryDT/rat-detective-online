@@ -20,6 +20,7 @@ import { PerformanceStats } from './PerformanceStats';
 import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
+import { incidentInfo } from '../shared/incidentCatalog';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
@@ -268,6 +269,7 @@ export class GameSession {
         this.bots?.receive(message);
         switch (message.type) {
             case 'chaos':
+                this.gun.fireCue=message.state.dispatch.phase==='active'&&incidentInfo(message.state.dispatch.incident).id==='bad-ammunition'?'malfunction':'normal';
                 this.gun.reconcilePredictedShots(message.state.shots);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);break;
             case 'welcome': this.welcome(message); break;

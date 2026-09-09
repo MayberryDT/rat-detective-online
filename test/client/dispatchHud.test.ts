@@ -17,13 +17,13 @@ function fixture(){
  return {hud,root,state,sound};
 }
 describe('Dispatch broadcast lifecycle',()=>{
- it('explains the temporary four-case bonus and removes it when the extras expire',()=>{
+ it('explains that Evidence Tampering weaponizes every case and restores ordinary copy afterward',()=>{
   const {hud,root,state}=fixture();
-  state.extraCases=[1,2,3].map(i=>({...state.case,id:`evidence-${i}`}));
-  hud.update(state,1000);expect(root.querySelector('.case-ledger strong').textContent).toBe('4 HOT CASES IN PLAY');
-  state.case.owner='local';hud.update(state,1100,'You',true);
-  expect(root.querySelector('.case-ledger small').textContent).toContain('YOUR KILLS COUNT DOUBLE');
-  state.extraCases=[];state.case.owner=null;hud.update(state,2000);
+  state.dispatch={phase:'active',started:1000,until:26000,serial:1,incident:'evidence-tampering'};
+  state.extraCases=[1,2,3,4,5,6,7].map(i=>({...state.case,id:`evidence-${i}`}));
+  hud.update(state,1000);expect(root.querySelector('.case-ledger strong').textContent).toBe('8 CASES ARE MISSILES');
+  expect(root.querySelector('.case-ledger small').textContent).toContain('PICKUP PROHIBITED');
+  state.dispatch={phase:'ready',started:0,until:0,serial:1};state.extraCases=[];state.case.owner=null;hud.update(state,2000);
   expect(root.querySelector('.case-ledger strong').textContent).toBe('LOOSE CASE');
   expect(root.querySelector('.case-ledger small').textContent).not.toContain('DOUBLE');hud.dispose();
  });

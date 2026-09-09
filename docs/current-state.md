@@ -4,6 +4,10 @@ Verified from source and release records on **2026-09-08**. This is the handoff 
 
 ## Pending local changes
 
+September 9 incident feel follow-up: [implementation and validation](verification/incident-feel-2026-09-09.md).
+
+This isolated worktree (`codex/incident-roster-update`) revises the ten-incident roster: Bad Ammunition, Evidence Tampering, Crossfire presentation, Popcorn Panic, Delayed Reaction, and Big Cheese. Improper Disposal, Pressure Surge, Scattershot and Ricochet Racket are preserved. The final 400 ms Popcorn timing and recorded cartoon pop received human acceptance on September 9. Typecheck, focused tests and visual build passed after that revision; the preceding full suite passed 499 tests. These changes are not deployed. Public production is unchanged.
+
 The September 8 multiplayer review follow-up separates remote presentation from fixed-step physics and unifies chaos wire encoding. It passed 418 tests, typecheck and build, but is **not deployed or human-playtested**. See [the implementation receipt](verification/remote-presentation-2026-09-08.md). The shipped baseline below remains the release record.
 
 The capacity follow-up accepts up to 100 scoreboard entries while preserving 24-player admission, and adds an isolated authenticated hosted ladder. The private copied fixture is deployed for measurement; the public game is unchanged. The hosted ladder completed four phases through 12 clients, stopped at 24 on a delivery gap, and verified complete rosters/scoreboards through 100 in a separate admission check. These do not establish supported capacity. See [hosted capacity testing](hosted-capacity-baseline.md) and [results](verification/hosted-capacity-2026-09-08.md).
@@ -44,17 +48,17 @@ Landmarks include Records Bureau, Icebox, Needleworks, Pump Hall / pumping stati
 | Incident | Current behavior |
 | --- | --- |
 | Improper Disposal | Fast corpse missiles plus death bursts, up to 120 balls subject to the shared cap |
-| Bad Ammunition | Every shot fires two balls |
+| Bad Ammunition | 70% one crooked ball, 20% two, 10% three; 0.12–0.50 rad aim error, no delayed extras |
 | Pressure Surge | Every launcher fires together every three seconds |
-| Evidence Tampering | Three extra carryable cases, four total; loose shot cases become deadly ricocheting missiles |
-| Crossfire | Balls become visibly red and lethal after their first wall bounce |
+| Evidence Tampering | Eight weaponized cases; idle speed 64, shot redirect speed 220, claimed speed floor 158.4; pickup prohibited |
+| Crossfire | Balls become red-hot and lethal after their first wall bounce |
 | Scattershot | Five-ball fan per shot |
-| Return to Sender | Balls reverse once after about 0.8 seconds |
-| Cheesequake | Existing balls hop every three seconds |
+| Delayed Reaction | First wall contact sticks a ball briefly, then it ricochets normally |
+| Big Cheese | Rebounds grow a shot into an enormous cheese ball |
 | Ricochet Racket | First wall bounce splits a shot into three balls |
-| Popcorn Panic | Surviving a ball hit launches the rat upward |
+| Popcorn Panic | Original balls pop 0.4 seconds after firing into lofted smaller balls; children cannot pop |
 
-Evidence Tampering extras are removed at expiry, including carried extras, models, physics bodies and bonuses. One case per rat. Original case remains. Kickback is removed and legacy snapshots map it to Scattershot. After Hours Collection maps to Crossfire. Do not reintroduce either removed incident from old notes.
+Evidence Tampering extras are removed at expiry. Pickup stays blocked until the original Hot Case is restored. Kickback maps to Scattershot, After Hours Collection to Crossfire, Return to Sender to Delayed Reaction, and Cheesequake to Big Cheese. Do not reintroduce removed incidents from old notes.
 
 ## AI and rounds
 

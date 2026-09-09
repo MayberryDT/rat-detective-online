@@ -40,7 +40,7 @@ afterEach(async () => {
 });
 
 describe('persistent hosted bots', () => {
-  it('awards double kills to an extra-case carrier only until incident expiry',async()=>{
+  it('blocks extra-case pickup during Evidence Tampering and restores ordinary double credit afterward',async()=>{
     const stub=room();await stub.ensurePersistentBots();
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as unknown as Internals;
@@ -51,10 +51,13 @@ describe('persistent hosted bots', () => {
       const extra=game.chaos.snapshot(false).extraCases![0];
       const killer=game.players.get(PERSISTENT_BOT_IDS[0])!,victim=game.players.get(PERSISTENT_BOT_IDS[1])!;
       Object.assign(killer,{x:extra.p.x,y:extra.p.y-.8,z:extra.p.z,kills:0});
-      game.chaos.step(0,now+1);expect(game.chaos.isCaseHolder(killer.id)).toBe(true);
-      expect(game.chaos.caseHolderId).not.toBe(killer.id);
-      await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:3});expect(killer.kills).toBe(2);
-      game.chaos.step(0,now+25000);expect(game.chaos.isCaseHolder(killer.id)).toBe(false);
+      game.chaos.step(0,now+1);expect(game.chaos.isCaseHolder(killer.id)).toBe(false);
+      expect(game.chaos.snapshot(false).extraCases).toHaveLength(7);
+      await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:3});expect(killer.kills).toBe(1);
+      game.chaos.step(0,now+25000);expect(game.chaos.snapshot(false).extraCases).toEqual([]);
+      Object.assign(killer,{x:game.chaos.caseBody.position.x,y:game.chaos.caseBody.position.y-.8,z:game.chaos.caseBody.position.z});
+      game.chaos.caseBody.velocity.setZero();
+      game.chaos.step(0,now+25001);expect(game.chaos.isCaseHolder(killer.id)).toBe(true);
       victim.hp=3;await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:3});expect(killer.kills).toBe(3);
     });
   });

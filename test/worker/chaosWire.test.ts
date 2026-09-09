@@ -5,7 +5,7 @@ import { serializeServerMessage } from '../../src/worker/serializeServerMessage'
 import { parseClientMessage } from '../../src/shared/messageValidation';
 import type { ChaosState } from '../../src/shared/chaosState';
 function state(count=2):ChaosState {
- return {time:1000,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:1.123456,y:1,z:2},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},extraCases:[],dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},notice:{serial:0,text:'test 🧀'},corpses:[],impacts:[],shots:Array.from({length:count},(_,i)=>({id:`projectile-${String(i).padStart(26,'0')}`,owner:'owner-12345678-1234-1234-123456789012',p:{x:45.123456+i,y:7.456789,z:123.456789},v:{x:123.4567,y:8.34567,z:32.56789},age:1.234567,...(i%2?{wallBounced:true}:{}),...(i%3?{returned:false}:{})}))};
+ return {time:1000,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:1.123456,y:1,z:2},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},extraCases:[],dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},notice:{serial:0,text:'test 🧀'},corpses:[],impacts:[],shots:Array.from({length:count},(_,i)=>({id:`projectile-${String(i).padStart(26,'0')}`,owner:'owner-12345678-1234-1234-123456789012',p:{x:45.123456+i,y:7.456789,z:123.456789},v:{x:123.4567,y:8.34567,z:32.56789},age:1.234567,...(i%2?{wallBounced:true}:{}),...(i%3?{delayed:false}:{}),...(i%5?{original:true}:{})}))};
 }
 it('round trips keyframes, changing poses, stable metadata, deletion and recreation',()=>{
  const e=new ChaosEncoder(),d=new ChaosDecoder(),s=state();

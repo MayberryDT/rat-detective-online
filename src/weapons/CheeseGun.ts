@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import type { ShotDescriptor } from '../shared/networkProtocol';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
+import { bindIncidentAudio, playMalfunctionShot } from '../audio/IncidentAudio';
 import { createCheeseBallGeometry } from './CheeseProjectileModel';
 import { RatEntity } from '../entities/RatEntity';
 
@@ -25,6 +26,7 @@ interface CheeseBall {
 
 export class CheeseGun {
     public authoritative = false;
+    public fireCue: 'normal' | 'malfunction' = 'normal';
     private scene: THREE.Scene;
     private world: CANNON.World;
     private camera: THREE.PerspectiveCamera | null = null;
@@ -304,6 +306,8 @@ export class CheeseGun {
     }
 
     private playFireSound(): void {
+        bindIncidentAudio(this.listener.context as AudioContext);
+        if (this.fireCue === 'malfunction') { playMalfunctionShot(); return; }
         if (this.gunshotSound.buffer) {
             if (this.gunshotSound.isPlaying) this.gunshotSound.stop();
             this.gunshotSound.play();

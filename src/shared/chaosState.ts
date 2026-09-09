@@ -8,6 +8,12 @@ export const CHAOS_TUNING = {
     corpseHitMinSpeed: 12, corpseHitCooldownMs: 700, corpseShotKick: 19, deathBurstBalls: 120,
     maxShots: 256, recoverMs: 900, stuckMs: 18000,
 } as const;
+export const INCIDENT_TUNING = {
+    popcornPulseMs: 400, popcornChildren: 5,
+    delayedMin: .7, delayedMax: 1.15,
+    cheeseRadii: [0.15, 0.5, 1.35, 2.4] as const,
+    caseMissileSpeed: 64, caseShotSpeed: 220, caseMissileLift: 11, caseEjectSpeed: 22,
+} as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
 export const CASE_LOOSE_SCALE = 2;
 // Street-level frontages distributed around the city; the simulation verifies
@@ -17,6 +23,9 @@ export const CASE_SPAWNS = [CASE_HOME,
     {x:-166,y:1.3,z:35},{x:130,y:1.3,z:-24},{x:15,y:1.3,z:135},
     {x:-75,y:1.3,z:-87},{x:77,y:1.3,z:75},{x:-105,y:1.3,z:120},
     {x:46,y:1.3,z:53},{x:138,y:1.3,z:135},
+    {x:-9.8,y:1.3,z:-28},{x:115,y:1.3,z:-22},{x:-110,y:1.3,z:118},
+    {x:145,y:1.3,z:128},{x:-150,y:1.3,z:18},
+    {x:0,y:-5.7,z:0},{x:-84,y:-5.7,z:0},{x:48,y:-5.7,z:0},
 ] as const;
 export const CASE_SIZE = { x: .82, y: .62, z: .34 };
 // Hang from the unused hand, with the broad face running along the rat's side.
@@ -67,12 +76,12 @@ export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec
 export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string; appearance: RatAppearance; born: number; expires: number;
 }
-export interface ChaosShot { id: string; owner: string; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; returned?: boolean }
-export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean }
+export interface ChaosShot { id: string; owner: string; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number }
+export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz' }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
 }
-export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3'] as const;
+export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
 export interface ChaosState {
     time: number;
     case: CaseState;

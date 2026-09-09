@@ -1,7 +1,7 @@
 import {describe,it,expect,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
-import {CASE_SIZE,CASE_LOOSE_SCALE,CHAOS_TUNING as T} from '../../src/shared/chaosState';
+import {CASE_SIZE,CASE_LOOSE_SCALE,CHAOS_TUNING as T,INCIDENT_TUNING as I} from '../../src/shared/chaosState';
 import {boundedIncidentVelocity,LAUNCH_BOUNDARY_MARGIN} from '../../src/shared/launcherVelocity';
 import {createPlayer,applyHit} from '../../src/worker/gameState';
 import type {IncidentId} from '../../src/shared/incidentCatalog';
@@ -33,11 +33,32 @@ describe('expanded physical Dispatch incidents',()=>{
    }
   }
  });
- it('launches a surviving ball-hit victim, while lethal hits retain their normal death',()=>{
-  const {sim,b,c}=fixture('popcorn-panic',true);c.hp=0;shoot(sim);sim.step(.003,now+3);
-  expect(b.hp).toBe(2);expect(sim.snapshot(false).pressure!.launches[0]).toMatchObject({playerId:'b',velocity:{y:60,z:0}});expect(sim.snapshot(false).pressure!.launches[0].velocity.x).toBeGreaterThan(25);
-  const lethal=fixture('popcorn-panic',true);lethal.c.hp=0;lethal.b.hp=1;shoot(lethal.sim);lethal.sim.step(.003,now+3);
-  expect(lethal.b.hp).toBe(0);expect(lethal.sim.snapshot(false).pressure!.launches).toHaveLength(0);
+ it('pops each original 0.4 seconds after it is fired, lofting children that cannot pop',()=>{
+  const {sim,b}=fixture('popcorn-panic',true);expect(I.popcornPulseMs).toBe(400);
+  sim.shoot('a',{shotId:'air',origin:{x:-4,y:40,z:0},direction:{x:0,y:0,z:1}});
+  sim.step(.003,now+3);expect(b.hp).toBe(3);expect(sim.snapshot(false).pressure!.launches).toHaveLength(0);
+  expect(sim.snapshot(false).shots[0]).toMatchObject({original:true});
+  expect(sim.snapshot(false).shots[0].popAt).toBeGreaterThan(now);
+  sim.step(0,now+I.popcornPulseMs-1);expect(sim.snapshot(false).shots).toHaveLength(1);
+  sim.step(0,now+I.popcornPulseMs);const popped=sim.snapshot(false);
+  expect(popped.shots.length).toBe(I.popcornChildren);
+  expect(popped.shots.every(s=>s.original!==true&&s.v.y>0)).toBe(true);
+  expect(popped.impacts.some(hit=>hit.cue==='pop')).toBe(true);
+  const childCount=popped.shots.length;
+  sim.shoot('a',{shotId:'fresh',origin:{x:-8,y:40,z:0},direction:{x:0,y:0,z:1}});
+  sim.step(0,now+I.popcornPulseMs+10);
+  expect(sim.snapshot(false).shots.some(s=>s.original&&s.id==='fresh')).toBe(true);
+  sim.step(0,now+I.popcornPulseMs*2+10);
+  expect(sim.snapshot(false).shots.some(s=>s.original)).toBe(false);
+  expect(sim.snapshot(false).shots.length).toBeGreaterThan(childCount);
+ });
+ it('does not delete an original at a nearly full pool without spawning children',()=>{
+  const {sim}=fixture('popcorn-panic');
+  for(let i=0;i<T.maxShots-1;i++)sim.shoot('a',{shotId:`fill-${i}`,origin:{x:-20,y:40,z:0},direction:{x:0,y:0,z:1}});
+  expect(sim.snapshot(false).shots).toHaveLength(T.maxShots-1);
+  sim.step(0,now+I.popcornPulseMs);
+  const s=sim.snapshot(false);expect(s.shots.length).toBeLessThanOrEqual(T.maxShots);
+  expect(s.shots.length).toBeGreaterThanOrEqual(T.maxShots-1);
  });
  it('splits the first wall bounce into three owned balls only once, across restore and later bounces',()=>{
   const {sim,players}=fixture('ricochet-racket');
@@ -53,7 +74,6 @@ describe('expanded physical Dispatch incidents',()=>{
   const {sim,a,b,c,hits}=fixture('improper-disposal',true);b.hp=1;c.hp=1;
   shoot(sim);sim.step(.003,now+3);expect(b.hp).toBe(0);expect(a.kills).toBe(1);
   expect(sim.snapshot(false).shots).toHaveLength(T.deathBurstBalls);
-  // B's corpse travels right; C is left, so only the exploding balls reach C.
   a.hp=0;
   for(let i=1;i<=20&&c.hp>0;i++)sim.step(.01,now+3+i*10);
   expect(c.hp).toBe(0);expect(a.kills).toBe(2);expect(c.deaths).toBe(1);
