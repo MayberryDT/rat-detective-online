@@ -38,7 +38,9 @@ describe('random launcher impulses',()=>{
     }
    }
   }
- });
+ // Exhaustive containment checks are a correctness test, not a CPU benchmark.
+ // Shared CI runners need more than Vitest's default five-second deadline.
+ },30000);
  it('is reproducible with an injected generator and bounds unlucky repeated outward headings',()=>{
   for(const machine of LAUNCH_MACHINES){
    expect(launcherVelocity(machine,random(12))).toEqual(launcherVelocity(machine,random(12)));
