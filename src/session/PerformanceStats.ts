@@ -7,6 +7,7 @@ export class PerformanceStats {
     private readonly frames:number[]=[];
     private readonly reports:unknown[]=[];
     private readonly events:unknown[]=[];
+    private readonly input={lockLosses:0,escapeLosses:0,focusedLosses:0,windowBlurs:0,requestFailures:0,ignoredClicks:0,lastLossAt:0};
     private lastPublish=0;
     private stalls=0;
     private longest=0;
@@ -27,12 +28,27 @@ export class PerformanceStats {
         window.addEventListener('error',e=>this.event('error',{message:e.message.slice(0,400)}),options);
         window.addEventListener('unhandledrejection',e=>this.event('unhandledrejection',{message:String(e.reason).slice(0,400)}),options);
         renderer.domElement?.addEventListener('webglcontextlost',()=>this.event('webglcontextlost'),options);
+        window.addEventListener('blur',()=>this.event('window-blur'),options);
+        window.addEventListener('focus',()=>this.event('window-focus'),options);
+        document.addEventListener('visibilitychange',()=>this.event('visibility',{hidden:document.hidden}),options);
+        document.addEventListener('pointerlockerror',()=>this.event('pointer-lock-error'),options);
+        window.addEventListener('keydown',e=>{if(e.code==='Escape')this.event('escape');},options);
         window.addEventListener('pagehide',()=>this.persist(),options);
     }
     event(type:string,detail:unknown=null):void {
         this.events.push({at:Date.now(),type,detail});if(this.events.length>100)this.events.shift();
+        if(type==='window-blur')this.input.windowBlurs++;
+        if(type==='pointer-lock-request-failed')this.input.requestFailures++;
+        if(type==='pointer-lock-ignored-click')this.input.ignoredClicks++;
+        if(type==='pointer-lock' && detail && typeof detail==='object' && 'locked' in detail && detail.locked===false){
+            const loss=detail as {recentEscape?:boolean;focused?:boolean;hidden?:boolean};
+            this.input.lockLosses++;this.input.lastLossAt=Date.now();
+            if(loss.recentEscape)this.input.escapeLosses++;
+            if(loss.focused&&!loss.hidden)this.input.focusedLosses++;
+            this.persist();
+        }
     }
-    snapshot():unknown{return {version:1,startedAt:this.startedAt,capturedAt:new Date().toISOString(),reports:this.reports,events:this.events};}
+    snapshot():unknown{return {version:1,startedAt:this.startedAt,capturedAt:new Date().toISOString(),reports:this.reports,events:this.events,input:{...this.input}};}
     private persist():void{try{localStorage.setItem('rat-detective-last-diagnostics',JSON.stringify(this.snapshot()));}catch{/* Diagnostics must never interrupt play. */}}
     download():void {
         const url=URL.createObjectURL(new Blob([JSON.stringify(this.snapshot(),null,2)],{type:'application/json'}));
@@ -44,7 +60,7 @@ export class PerformanceStats {
         if(phases)for(const key of Object.keys(this.phases) as (keyof FramePhases)[])this.phases[key]=Math.max(this.phases[key],phases[key]);
         if(now-this.lastPublish<5000)return;this.lastPublish=now;
         const sorted=[...this.frames].sort((a,b)=>a-b),{render,memory}=this.renderer.info;
-        const report={at:Date.now(),world,hidden:document.hidden,samples:sorted.length,frameMedianMs:sorted[Math.floor(sorted.length*.5)]??0,frameP95Ms:sorted[Math.floor(sorted.length*.95)]??0,longestFrameMs:this.longest,stallsOver100Ms:this.stalls,phaseMaxMs:{...this.phases},calls:render.calls,triangles:render.triangles,geometries:memory.geometries,textures:memory.textures,details};
+        const report={at:Date.now(),world,input:{...this.input},hidden:document.hidden,samples:sorted.length,frameMedianMs:sorted[Math.floor(sorted.length*.5)]??0,frameP95Ms:sorted[Math.floor(sorted.length*.95)]??0,longestFrameMs:this.longest,stallsOver100Ms:this.stalls,phaseMaxMs:{...this.phases},calls:render.calls,triangles:render.triangles,geometries:memory.geometries,textures:memory.textures,details};
         this.reports.push(report);if(this.reports.length>120)this.reports.shift();
         this.persist();console.info('[rat-diagnostics]',report);
         this.publish?.(report);

@@ -21,17 +21,20 @@ import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo } from '../shared/incidentCatalog';
+import { bindGamePointerLock } from './GamePointerLock';
+import { FeedbackAudio } from '../audio/FeedbackAudio';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
     private readonly stage;
     private readonly transport = new NetworkManager();
-    private readonly hud = new GameHud(document, () => this.transport.retry());
+    private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue));
     private readonly input = new InputState();
     private readonly events = new AbortController();
     private readonly gun;
     private readonly remotes;
     private readonly music;
+    private readonly feedback: FeedbackAudio;
     private readonly stats: PerformanceStats | null;
     private diagnosticChaos={receivedAt:0,serverTime:0,shots:0};
     private shotsAttempted=0;
@@ -55,13 +58,15 @@ export class GameSession {
 
     constructor(renderer: THREE.WebGLRenderer) {
         this.stage = createStage(renderer);
-        const showDiagnostics=new URLSearchParams(window.location.search).has('diagnostics');
-        this.stats = showDiagnostics || normalGameBotCount(window.location) ? new PerformanceStats(renderer,showDiagnostics,report=>{
+        const diagnostics=new URLSearchParams(window.location.search).get('diagnostics');
+        const showDiagnostics=diagnostics!==null && diagnostics!=='quiet';
+        this.stats = diagnostics!==null || normalGameBotCount(window.location) ? new PerformanceStats(renderer,showDiagnostics,report=>{
             if(['localhost','127.0.0.1','[::1]'].includes(window.location.hostname)&&this.transport.state==='playing')this.transport.send({type:'diagnostics',report});
         }) : null;
         const { scene, world, listener } = this.stage;
         initEntitySounds(listener);
         this.music = new SessionMusic(listener);
+        this.feedback = new FeedbackAudio(listener);
         this.gun = new CheeseGun(scene, world, listener);
         this.remotes = new RemotePlayers(scene, world);
         this.worldSpec = createWorldSpec(1);
@@ -159,6 +164,7 @@ export class GameSession {
         enter?.focus({ preventScroll: true });
     }
 
+    private pointerLock!: ReturnType<typeof bindGamePointerLock>;
     private bindInput(): void {
         const options = { signal: this.events.signal };
         const enter = document.getElementById('enter-city-btn') as HTMLButtonElement;
@@ -179,12 +185,14 @@ export class GameSession {
             event.preventDefault();
             this.enterCity();
         }, options);
+        this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
+            playing:()=>this.transport.state==='playing',signal:this.events.signal,
+            record:(type,detail)=>this.stats?.event(type,detail)});
         window.addEventListener('focus', () => this.focusTitleControls(), options);
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) this.focusTitleControls();
         }, options);
-        document.addEventListener('click', () => {
-            if (this.transport.state === 'playing') this.requestPointerLock();
+        document.addEventListener('pointerdown', () => {
             void this.music.unlock();
         }, options);
         document.addEventListener('mousemove', event => {
@@ -215,13 +223,7 @@ export class GameSession {
         window.addEventListener('pagehide', () => this.dispose(), options);
     }
 
-    private requestPointerLock(): void {
-        if (document.pointerLockElement === this.stage.renderer.domElement) return;
-        try {
-            const result = this.stage.renderer.domElement.requestPointerLock();
-            result?.catch(() => { /* Keep the game usable when pointer lock is unavailable. */ });
-        } catch { /* A later click retries pointer lock. */ }
-    }
+    private requestPointerLock(): void { this.pointerLock.request(); }
 
     private welcome(message: Extract<ServerMessage, { type: 'welcome' }>): void {
         this.serverOffset = message.serverTime - Date.now();
@@ -229,6 +231,7 @@ export class GameSession {
         this.chaos?.dispose();this.chaos=null;
         this.gun.clearProjectiles();
         this.remotes.clear();
+        this.gun.setIncident();
         this.rat?.dispose();
         this.rat = null;
         if (message.world.seed !== this.worldSpec.seed || message.world.version !== this.worldSpec.version) {
@@ -246,7 +249,7 @@ export class GameSession {
         this.gun.setPlayer(this.stage.camera, this.rat.entity);
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
-        if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext);
+        if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin));
         this.hud.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.hud.hideRespawn();
         this.hud.hideVictory();
@@ -269,7 +272,7 @@ export class GameSession {
         this.bots?.receive(message);
         switch (message.type) {
             case 'chaos':
-                this.gun.fireCue=message.state.dispatch.phase==='active'&&incidentInfo(message.state.dispatch.incident).id==='bad-ammunition'?'malfunction':'normal';
+                this.gun.setIncident(message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined);
                 this.gun.reconcilePredictedShots(message.state.shots);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);break;
             case 'welcome': this.welcome(message); break;
@@ -296,6 +299,7 @@ export class GameSession {
                 break;
             }
             case 'playerDamaged': {
+                if(message.attackerId===this.myId && message.id!==this.myId)this.hud.showHitMarker();
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 if (entity && !entity.dead) {
                     if (message.hp === 0) {
@@ -320,12 +324,15 @@ export class GameSession {
                     entity.takeDamage(entity.hp, impact.normalize().multiplyScalar(50));
                     }
                 }
-                if (message.victimId === this.myId) this.hud.showRespawn(message.respawnAt - this.serverOffset);
+                if (message.victimId === this.myId) {
+                    this.stats?.event('death',{respawnAt:message.respawnAt-this.serverOffset,incident:message.incident});
+                    this.hud.showRespawn(message.respawnAt - this.serverOffset);
+                }
                 this.hud.addKillFeed(`${message.killerName} eliminated ${message.victimName}`);
                 break;
             }
             case 'playerRespawn':
-                if (message.id === this.myId) { this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.input.clear(); this.hud.hideRespawn(); }
+                if (message.id === this.myId) { this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.input.clear(); this.hud.hideRespawn(); }
                 else this.remotes.respawn(message.id, message);
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
@@ -404,6 +411,7 @@ export class GameSession {
         this.remotes.dispose();
         this.city.dispose();
         this.music.dispose();
+        this.feedback.dispose();
         disposeEntitySounds();
         this.stats?.dispose();
         this.stage.dispose();

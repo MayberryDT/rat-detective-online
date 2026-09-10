@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
+import type { ChaosState } from '../../src/shared/chaosState';
 
 const harness = vi.hoisted(() => {
     const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
@@ -24,6 +25,7 @@ const harness = vi.hoisted(() => {
         showVictory = vi.fn();
         hideVictory = vi.fn();
         showRespawn = vi.fn();
+        showHitMarker = vi.fn();
         hideRespawn = vi.fn();
         dispose = vi.fn();
         constructor(_doc: Document, public onRetry?: () => void) { harness.huds.push(this); }
@@ -33,6 +35,7 @@ const harness = vi.hoisted(() => {
         authoritative = false;
         onHitEntity: ((victim: unknown, damage: number) => void) | null = null;
         setPlayer = vi.fn();
+        setIncident = vi.fn();
         shoot = vi.fn(() => ({ shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 } }));
         replayShot = vi.fn();
         predictShot = vi.fn();
@@ -286,6 +289,7 @@ function createDocument() {
         },
         pointerLockElement: null as unknown,
         hidden: false,
+        hasFocus: () => true,
         body: { appendChild() {} },
         dispatch(type: string, event: Event) {
             for (const fn of listeners.get(type) ?? []) fn(event);
@@ -348,6 +352,33 @@ describe('GameSession', () => {
             remotes: harness.remotes.at(-1)!,
         };
     }
+
+    it('uses only active incidents for shot presentation and resets it on a fresh welcome',()=>{
+        const {transport,gun,session}=start();
+        const state={time:1000,shots:[],dispatch:{phase:'active',incident:'bad-ammunition',started:1000,until:26000,serial:1}} as unknown as ChaosState;
+        transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith('bad-ammunition');
+        state.dispatch.phase='cooldown';
+        transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith(undefined);
+        state.dispatch.phase='active';state.dispatch.incident='popcorn-panic';
+        transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith('popcorn-panic');
+        transport.onMessage?.(welcome());expect(gun.setIncident).toHaveBeenLastCalledWith();session.dispose();
+    });
+
+    it('shows hit confirmation only for damage credited to this player',()=>{
+        const {transport,hud,session}=start(),snapshot=welcome();transport.onMessage?.(snapshot);
+        transport.onMessage?.({type:'playerDamaged',id:'other',hp:2,attackerId:snapshot.id});
+        expect(hud.showHitMarker).toHaveBeenCalledTimes(1);
+        transport.onMessage?.({type:'playerDamaged',id:snapshot.id,hp:2,attackerId:'other'});
+        transport.onMessage?.({type:'playerDamaged',id:'other',hp:1,attackerId:'third'});
+        expect(hud.showHitMarker).toHaveBeenCalledTimes(1);session.dispose();
+    });
+
+    it('keeps audio unlock on a fresh pointer gesture while click events are guarded', () => {
+        const {doc,session}=start();
+        doc.dispatch('pointerdown', Object.assign(new Event('pointerdown'), {button:0}));
+        expect(harness.music.at(-1)!.unlock).toHaveBeenCalled();
+        session.dispose();
+    });
 
     it('joins from the title screen and applies a complete welcome snapshot before gameplay', () => {
         const { enter, namePlate, transport, hud, remotes, gun } = start();

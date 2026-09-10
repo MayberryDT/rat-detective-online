@@ -31,14 +31,14 @@ function fixture(){
     return{controller,players,bot,human,move,shoot,events,recover,recoverCase};
 }
 describe('hosted server bot controller',()=>{
-    it('publishes smooth normal-speed movement at twenty updates per second with source timestamps',()=>{
+    it('publishes normal-speed movement at twenty Hz plus pre-shot poses with source timestamps',()=>{
         const {controller,players,bot,move}=fixture();players.delete('human');
         for(let i=0;i<=120;i++)controller.step(1/60,1000+i*1000/60,players,state(1000+i*1000/60),true);
         expect(bot.x).toBeGreaterThan(11);expect(bot.x).toBeLessThan(14);
         expect(move.mock.calls.length).toBeGreaterThanOrEqual(39);
-        expect(move.mock.calls.length).toBeLessThanOrEqual(42);
+        expect(move.mock.calls.length).toBeLessThanOrEqual(50);
         const times=(move.mock.calls as unknown as [string,Vec3Data,number,number][]).map(c=>c[3]);
-        for(let i=1;i<times.length;i++)expect(times[i]-times[i-1]).toBeCloseTo(50,5);
+        for(let i=1;i<times.length;i++){expect(times[i]-times[i-1]).toBeGreaterThanOrEqual(0);expect(times[i]-times[i-1]).toBeLessThanOrEqual(50.0001);}
         controller.dispose();
     });
     it('rescues a genuinely trapped bot even when the planner claims a usable route',()=>{
@@ -79,11 +79,15 @@ describe('hosted server bot controller',()=>{
     it('steers physically toward the case, sends pose before a muzzle shot and never moves humans',()=>{
         const {controller,players,bot,human,move,shoot,events}=fixture(),humanBefore={...human};
         controller.step(1/60,1000,players,state(),true);
-        expect(events.slice(0,2)).toEqual(['move','shoot']);expect(shoot).toHaveBeenCalledTimes(1);
+        expect(shoot).not.toHaveBeenCalled();
+        let now=1017;
+        for(;now<1600&&!shoot.mock.calls.length;now+=17)controller.step(1/60,now,players,state(now),true);
+        const shotIndex=events.indexOf('shoot');expect(shotIndex).toBeGreaterThan(0);
+        expect(events[shotIndex-1]).toBe('move');expect(shoot).toHaveBeenCalledTimes(1);
         const call=shoot.mock.calls[0] as unknown as [string,Vec3Data,Vec3Data];
         expect(call[0]).toBe('bot');expect(Math.hypot(call[2].x,call[2].y,call[2].z)).toBeCloseTo(1);
         expect(Math.hypot(call[1].x-bot.x,call[1].y-bot.y,call[1].z-bot.z)).toBeLessThan(2);
-        for(let i=1;i<=12;i++)controller.step(1/60,1000+i*17,players,state(1000+i*17),true);
+        for(let i=1;i<=12;i++)controller.step(1/60,now+i*17,players,state(now+i*17),true);
         expect(bot.x).toBeGreaterThan(0);expect(human).toEqual(humanBefore);
         expect(move.mock.calls.every(([id])=>id==='bot')).toBe(true);
         expect(navigation.update).toHaveBeenCalledWith(2,96);controller.dispose();

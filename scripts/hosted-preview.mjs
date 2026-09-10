@@ -9,7 +9,7 @@ import {sanitizeDiagnosticReport} from '../src/shared/diagnosticReport.ts';
 const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
   '.svg':'image/svg+xml','.webp':'image/webp','.ico':'image/x-icon','.mp3':'audio/mpeg','.ogg':'audio/ogg','.wav':'audio/wav',
-  '.wasm':'application/wasm','.woff2':'font/woff2'};
+  '.wasm':'application/wasm','.woff2':'font/woff2','.ttf':'font/ttf'};
 const MAX_PENDING_BYTES=512*1024,MAX_PENDING_MESSAGES=32,MAX_SEND_BYTES=4*1024*1024;
 
 /** Local static preview plus an authenticated private-worker relay. The injected

@@ -13,6 +13,7 @@ export function sanitizeDiagnosticReport(value: unknown): Record<string, unknown
   return {
     ...numbers(body, ['at', 'samples', 'frameMedianMs', 'frameP95Ms', 'longestFrameMs', 'stallsOver100Ms', 'calls', 'triangles', 'geometries', 'textures']),
     world: numbers(body.world, ['seed', 'version']), hidden: body.hidden === true,
+    input: numbers(body.input, ['lockLosses', 'escapeLosses', 'focusedLosses', 'windowBlurs', 'requestFailures', 'ignoredClicks', 'lastLossAt']),
     phaseMaxMs: numbers(body.phaseMaxMs, ['simulationMs', 'botsMs', 'presentationMs', 'renderMs']),
     details: {
       ...numbers(details, ['shotsAttempted', 'shotsSent', 'snapshotAgeMs']),

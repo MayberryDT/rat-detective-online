@@ -1,3 +1,5 @@
+import { BotOpportunisticFire } from './BotOpportunisticFire';
+import { BotCombat, combatRandom } from './BotCombat';
 import { DISPATCH_STATIONS, type ChaosState } from './chaosState';
 import { incidentInfo } from './incidentCatalog';
 import type { PlayerData, Vec3Data } from './networkProtocol';
@@ -16,7 +18,8 @@ const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-
 const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
 
 /** Objective selection knows the same globally advertised case position as a
- * human. Shooting still requires actual visibility and deliberately imperfect aim. */
+ * human. Combat uses visible observations and imperfect aim; speculative shots
+ * follow local routes without reading hidden opponents. */
 export class ObjectiveBotBrain {
     objective: BotObjective = 'explore';
     private key = '';
@@ -38,6 +41,8 @@ export class ObjectiveBotBrain {
     private decisionAt = 0;
     private planAt = 0;
     private shotAt = 0;
+    private readonly combat: BotCombat;
+    private readonly opportunisticFire: BotOpportunisticFire;
     private jumpAt = 0;
     private progressAt = 0;
     private progressPosition?: Vec3Data;
@@ -48,6 +53,8 @@ export class ObjectiveBotBrain {
     private explorationAt = 0;
     private readonly places: Vec3Data[];
     constructor(private readonly navigation: ObjectiveNavigation, seed = 0, private readonly random: () => number = Math.random) {
+        this.combat = new BotCombat(combatRandom(seed));
+        this.opportunisticFire = new BotOpportunisticFire(combatRandom(seed+10000));
         this.places = navigation.explorationTargets();
         this.wanderIndex = seed * 7;
     }
@@ -55,6 +62,7 @@ export class ObjectiveBotBrain {
     get navigationStalled():boolean{return this.stalled;}
     get failedCasePosition():Readonly<Vec3Data>|undefined{return this.failedCase;}
     reset(): void {
+        this.combat.reset();this.opportunisticFire.reset();this.shotAt=0;
         this.key='';this.target=undefined;this.dispatchTarget=undefined;this.destination=undefined;this.route=[];this.routeIndex=0;
         this.plannedDestination=undefined;this.pendingPlan=undefined;this.decisionAt=0;this.planAt=0;this.progressPosition=undefined;this.recoverUntil=0;
         this.routeWaitStarted=undefined;this.failedGoals.clear();this.failedCase=undefined;this.stalled=false;
@@ -92,7 +100,7 @@ export class ObjectiveBotBrain {
     step(now: number, self: PlayerData, others: Iterable<PlayerData>, state: ChaosState | undefined,
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
         clearControl: (target: Vec3Data) => boolean = clear): ObjectiveBotIntent {
-        if(self.hp<=0){this.stalled=false;return{x:0,z:0,jump:false,facing:this.heading};}
+        if(self.hp<=0){this.combat.reset();this.opportunisticFire.reset();this.stalled=false;return{x:0,z:0,jump:false,facing:this.heading};}
         const cases=state?[{key:'case',value:state.case},...(state.extraCases??[]).map(value=>({key:`case:${value.id}`,value}))]:[];
         // Keep each case's failed position independent. Picking up one extra
         // must not erase the evidence that the primary case is unreachable.
@@ -165,7 +173,7 @@ export class ObjectiveBotBrain {
             const selected=cases.find(c=>c.key===this.key);
             if(selected&&!selected.value.owner)this.destination=selected.value.p;
         }
-        if(this.target?.hp===0)this.target=undefined;
+        if(this.target?.hp===0){this.combat.reset();this.target=undefined;}
         if(!this.progressPosition){this.progressPosition={...self};this.progressAt=now;}
         if(now-this.progressAt>1500){
             if(!this.pendingPlan&&this.routeIndex<this.route.length&&this.destination&&distance(self,this.destination)>3&&distance(self,this.progressPosition)<1.1&&grounded){
@@ -223,19 +231,29 @@ export class ObjectiveBotBrain {
         if(!this.pendingPlan&&now<this.recoverUntil){const turn=this.wanderIndex%2?1:-1;x=Math.sin(this.heading+turn*1.05)*5;z=Math.cos(this.heading+turn*1.05)*5;}
         // Stop at the objective rather than repeatedly running across the case.
         if(this.objective==='case'&&this.destination&&distance(self,this.destination)<1.15){x=0;z=0;}
-        let facing=this.target?.hp?Math.atan2(this.target.x-self.x,this.target.z-self.z):this.heading;
+        let facing=this.heading;
         const jump=grounded&&now>=this.jumpAt&&(!this.pendingPlan&&now<this.recoverUntil||blocked&&!!waypoint||!!waypoint&&waypoint.y-self.y>1.1);
         if(jump)this.jumpAt=now+1800+this.random()*1400;
+        const visibleTarget=!!this.target?.hp&&distance(self,this.target)<85&&clear(this.target);
+        const dispatchReady=this.dispatchTarget&&state?.dispatch.phase==='ready'&&now>=this.shotAt&&clearControl(this.dispatchTarget);
+        const combat=this.combat.step(now,self,this.target,visibleTarget,now>=this.shotAt&&!dispatchReady);
+        if(combat.aim)facing=Math.atan2(combat.aim.x-self.x,combat.aim.z-self.z);
+        const speculative=this.opportunisticFire.step(now,self,this.heading,waypoint,
+            !visibleTarget&&!dispatchReady,now>=this.shotAt&&!combat.aim);
+        const speculativeFacing=this.opportunisticFire.facing(now);
+        if(!combat.aim&&speculativeFacing!==undefined)facing=speculativeFacing;
         let shoot:Vec3Data|undefined;
-        if(this.dispatchTarget&&state?.dispatch.phase==='ready'&&now>=this.shotAt&&clearControl(this.dispatchTarget)){
+        if(this.dispatchTarget&&dispatchReady){
             this.shotAt=now+350+this.random()*400;
             // Shoot the visible red face while passing; it never replaces the
             // case route with a detour to a control somewhere else in the city.
             shoot={x:this.dispatchTarget.x+(this.random()-.5)*.15,y:this.dispatchTarget.y+(this.random()-.5)*.15,z:this.dispatchTarget.z};
             facing=Math.atan2(this.dispatchTarget.x-self.x,this.dispatchTarget.z-self.z);
-        } else if(this.target?.hp&&now>=this.shotAt&&distance(self,this.target)<85&&clear(this.target)){
-            this.shotAt=now+350+this.random()*400;
-            shoot={x:this.target.x+(this.random()-.5)*2.5,y:this.target.y+.9+(this.random()-.5)*.6,z:this.target.z+(this.random()-.5)*2.5};
+        } else if(combat.shoot){
+            shoot=combat.shoot;this.shotAt=now+240;
+        } else if(speculative){
+            shoot=speculative;this.shotAt=now+240;
+            facing=Math.atan2(shoot.x-self.x,shoot.z-self.z);
         }
         return{x,z,jump,shoot,facing};
     }

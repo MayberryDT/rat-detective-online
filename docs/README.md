@@ -58,3 +58,6 @@ Useful shared-memory pages: `sessions/2026/09/rat-detective-sharing-round-roster
 Latest capacity iteration: [AI playback and rigid batching](verification/ai-delivery-and-rigid-batching-2026-09-08.md).
 
 - [Automatic rooms and card HUD receipt](verification/matchmaking-and-hud-2026-09-08.md) — local/private implementation; public release unchanged.
+- [Mild global audio and cartoon foley](verification/cartoon-foley-and-global-mix-2026-09-09.md) — current private sound iteration, superseding the steep shot fade and musical feedback cues.
+- [Performance cleanup and case bounce](verification/performance-and-case-bounce-2026-09-09.md) — audio voice reuse, stable HUD text, pitched Bad Ammunition and stronger physical case shots.
+- [Cartoon HUD and incident distance](verification/cartoon-hud-and-incident-distance-2026-09-09.md) — current private preview, muted comic emergency graphics and positional Popcorn/thud/case buzz.

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import type { ShotDescriptor } from '../shared/networkProtocol';
+import type { IncidentId } from '../shared/incidentCatalog';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
-import { bindIncidentAudio, playMalfunctionShot } from '../audio/IncidentAudio';
+import { GunshotAudio } from '../audio/GunshotAudio';
 import { createCheeseBallGeometry } from './CheeseProjectileModel';
 import { RatEntity } from '../entities/RatEntity';
 
@@ -27,6 +28,7 @@ interface CheeseBall {
 export class CheeseGun {
     public authoritative = false;
     public fireCue: 'normal' | 'malfunction' = 'normal';
+    private predictTrajectory = true;
     private scene: THREE.Scene;
     private world: CANNON.World;
     private camera: THREE.PerspectiveCamera | null = null;
@@ -62,23 +64,14 @@ export class CheeseGun {
     // Network callback: fires when a local projectile hits an entity
     public onHitEntity: ((victim: RatEntity, damage: number) => void) | null = null;
 
-    private listener: THREE.AudioListener;
-    private gunshotSound: THREE.Audio;
+    private readonly fireAudio: GunshotAudio;
 
     constructor(scene: THREE.Scene, world: CANNON.World, listener: THREE.AudioListener) {
         this.scene = scene;
         this.world = world;
-        this.listener = listener;
         this.impacts = new CheeseImpactEffects(scene);
 
-        // Audio
-        this.gunshotSound = new THREE.Audio(this.listener);
-        const audioLoader = new THREE.AudioLoader();
-        audioLoader.load('/sounds/gunshot.mp3', (buffer) => {
-            if (this.disposed) return;
-            this.gunshotSound.setBuffer(buffer);
-            this.gunshotSound.setVolume(0.4);
-        }, undefined, () => { if (!this.disposed) console.warn('Gunshot sound could not be loaded.'); });
+        this.fireAudio = new GunshotAudio(listener);
     }
 
     /** Call once after player is created to enable camera-based aiming */
@@ -94,7 +87,6 @@ export class CheeseGun {
      */
     shoot(owner: RatEntity, targetPoint: THREE.Vector3): ShotDescriptor | null {
         if (this.disposed) return null;
-        this.playFireSound();
 
         let finalTarget: THREE.Vector3;
 
@@ -135,6 +127,7 @@ export class CheeseGun {
         // ── Spawn Origin ──
         owner.playShootAnimation(finalTarget);
         const origin = owner.getMuzzlePosition();
+        this.fireAudio.play(origin, owner === this.playerEntity, this.fireCue);
 
         // ── Direction (no gravity compensation — consistent power at all distances) ──
         const finalDir = new THREE.Vector3().subVectors(finalTarget, origin).normalize();
@@ -147,16 +140,28 @@ export class CheeseGun {
     /** Replay the resolved trajectory; never re-aim from an interpolated remote rat. */
     replayShot(owner: RatEntity, shot: ShotDescriptor): void {
         if (this.disposed) return;
-        this.playFireSound();
+        this.fireAudio.play(shot.origin, false, this.fireCue);
         owner.playShootAnimation(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z)
             .addScaledVector(new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), 30));
         if(!this.authoritative)this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
             new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
     }
 
-    /** Immediate muzzle feedback only. The server remains the sole damage owner. */
+    setIncident(incident?: IncidentId): void {
+        this.fireCue = incident === 'bad-ammunition' ? 'malfunction' : 'normal';
+        // Bad Ammunition's random direction is chosen by the server. A guessed
+        // straight ball falsely shows a second trajectory before that result.
+        this.predictTrajectory = incident !== 'bad-ammunition';
+        if (!this.predictTrajectory) {
+            for (let i = this.balls.length - 1; i >= 0; i--) {
+                if (this.balls[i].predictionId) this.removeBall(i);
+            }
+        }
+    }
+
+    /** Immediate visual prediction when the launch direction is already known. */
     predictShot(owner: RatEntity, shot: ShotDescriptor): void {
-        if (this.disposed || !this.authoritative || this.balls.some(ball => ball.predictionId === shot.shotId)) return;
+        if (this.disposed || !this.authoritative || !this.predictTrajectory || this.balls.some(ball => ball.predictionId === shot.shotId)) return;
         // Pending shots are short lived and bounded, including on a stalled connection.
         if (this.balls.length >= 32) this.removeBall(0);
         const ball = this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
@@ -298,20 +303,10 @@ export class CheeseGun {
         this.impacts.dispose();
         this.ballGeometry.dispose();
         this.ballMaterial.dispose();
-        if (this.gunshotSound.isPlaying) this.gunshotSound.stop();
-        this.gunshotSound.disconnect();
+        this.fireAudio.dispose();
         this.onHitEntity = null;
         this.playerEntity = null;
         this.camera = null;
-    }
-
-    private playFireSound(): void {
-        bindIncidentAudio(this.listener.context as AudioContext);
-        if (this.fireCue === 'malfunction') { playMalfunctionShot(); return; }
-        if (this.gunshotSound.buffer) {
-            if (this.gunshotSound.isPlaying) this.gunshotSound.stop();
-            this.gunshotSound.play();
-        }
     }
 
     private createBall(origin: THREE.Vector3, direction: THREE.Vector3, owner: RatEntity): CheeseBall {

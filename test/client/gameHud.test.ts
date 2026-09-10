@@ -251,6 +251,26 @@ describe('GameHud', () => {
         expect(feed.children.every(child => !child.classList.contains('fade-out'))).toBe(true);
     });
 
+    it('flashes an X for confirmed hits, extends it on another hit, and cleans it up',()=>{
+        const {doc}=createHudDocument(),crosshair=doc.createElement('div');crosshair.id='crosshair';doc.body.appendChild(crosshair);
+        const hud=new GameHud(doc);hud.showHitMarker();expect(crosshair.classList.contains('hit-confirmed')).toBe(true);
+        vi.advanceTimersByTime(100);hud.showHitMarker();vi.advanceTimersByTime(100);
+        expect(crosshair.classList.contains('hit-confirmed')).toBe(true);
+        vi.advanceTimersByTime(81);expect(crosshair.classList.contains('hit-confirmed')).toBe(false);
+        hud.showHitMarker();hud.dispose();expect(crosshair.classList.contains('hit-confirmed')).toBe(false);
+    });
+
+    it('plays death/respawn cues once and prevents an old exit animation hiding a new death',()=>{
+        const {doc,byId}=createHudDocument(),feedback=vi.fn(),hud=new GameHud(doc,undefined,feedback);
+        const overlay=byId.get('respawn-overlay')!,animations:Array<{cancel:ReturnType<typeof vi.fn>;onfinish?:()=>void}>=[];
+        Object.assign(overlay,{animate:()=>{const animation={cancel:vi.fn()};animations.push(animation);return animation;}});
+        hud.showRespawn(Date.now()+5000);hud.showRespawn(Date.now()+5000);
+        expect(feedback.mock.calls).toEqual([['death']]);
+        hud.hideRespawn();const exit=animations.at(-1)!;hud.showRespawn(Date.now()+5000);exit.onfinish?.();
+        expect(overlay.style.display).toBe('flex');expect(exit.cancel).toHaveBeenCalled();
+        expect(feedback.mock.calls).toEqual([['death'],['respawn'],['death']]);hud.dispose();
+    });
+
     it('keeps the respawn overlay up after the deadline until hideRespawn', () => {
         const { doc, byId } = createHudDocument();
         const hud = new GameHud(doc);

@@ -453,21 +453,31 @@ h1 {
 
 #title-screen:not(.fade-out) ~ #hud { visibility: hidden; }
 
-/* Evidence scraps: compact paper slips, with the personal record below. */
-#scoreboard-stack{position:fixed;top:16px;left:16px;z-index:50;width:228px;pointer-events:none;user-select:none;font-family:Georgia,serif}
-#scoreboard{display:none;color:#d2c5aa;background:none;border:0;padding:0;box-shadow:none}
-.scoreboard-title{font:bold 10px monospace;letter-spacing:.14em;color:#b4a78d;margin:0 0 7px 4px;text-shadow:0 2px 3px #000}
+/* Crooked comic score slips; local record remains separate from the top five. */
+@font-face{font-family:'Bangers';src:url('/fonts/bangers/Bangers-Regular.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}
+#scoreboard-stack{position:fixed;top:20px;left:18px;z-index:50;width:236px;pointer-events:none;user-select:none;font-family:'Outfit',Arial,sans-serif}
+#scoreboard{display:none;color:#c6bba0;background:none;border:0;padding:0;box-shadow:none}
+.scoreboard-title{display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 8px 6px;font:24px/1 'Bangers',Impact,sans-serif;letter-spacing:1px;color:#c0b18e;text-shadow:2px 2px 0 #090e0a;rotate:-2deg}
+.scoreboard-title small{font:bold 9px monospace;letter-spacing:.05em;color:#9f9b86}
 #scoreboard-list{list-style:none;padding:0;margin:0;display:grid;gap:4px}
-#scoreboard-list li,#scoreboard-player{position:relative;display:flex;align-items:center;gap:6px;min-width:0;padding:9px 7px;color:#d2c5aa;background:repeating-linear-gradient(0deg,#ffffff03 0 1px,transparent 1px 3px),#232821;box-shadow:2px 3px 0 #060b0999;clip-path:polygon(0 0,98% 0,100% 15%,100% 95%,2% 100%,0 85%);font:14px Georgia,serif}
-/* Individual rotation composes with the rank animation's transform. */
-#scoreboard-list li:nth-child(even){rotate:-.4deg}
-#scoreboard-list li .rank{font:bold 12px monospace;color:#cf9877;min-width:20px}
-#scoreboard-list li .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#scoreboard-list li .stats{font:bold 11px monospace;white-space:nowrap;font-variant-numeric:tabular-nums;color:#d2c5aa}
-#scoreboard-list li.you{background-color:#30342a;box-shadow:inset 3px 0 #945b45;font-weight:bold}
-#scoreboard-player{display:none;margin-top:12px;min-height:48px;padding:11px 8px;background-color:#30342a;border-left:4px solid #945b45}
-#scoreboard-player .rank{font:bold 16px monospace;color:#cf9877}
-#scoreboard-player .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:bold 16px Georgia,serif}
+#scoreboard-list li,#scoreboard-player{position:relative;display:flex;align-items:center;gap:8px;min-width:0;padding:6px 8px 6px 5px;color:#c6bba0;background:#242923;border:2px solid #0a110d;border-radius:3px 7px 2px 5px;box-shadow:3px 3px 0 #060c09b3;font:13px/1.2 'Outfit',Arial,sans-serif}
+/* Individual rotation composes with the existing rank-change animation. */
+#scoreboard-list li:nth-child(odd){rotate:.6deg}
+#scoreboard-list li:nth-child(even){rotate:-1deg;translate:3px 0}
+#scoreboard-list li .rank{display:grid;place-items:center;flex:0 0 26px;height:28px;color:#b6a783;background:#171e17;border:1px solid #090e0a;border-radius:4px 2px 5px 2px;rotate:-5deg;font:24px/1 'Bangers',Impact,sans-serif}
+#scoreboard-list li:first-child .rank{background:#62553b;color:#e0c696;box-shadow:1px 1px 0 #0a100b}
+#scoreboard-list li .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+#scoreboard-list li .stats{font:bold 11px monospace;white-space:nowrap;font-variant-numeric:tabular-nums;color:#b9b49e}
+#scoreboard-list li.you{background-color:#34372b;border-left-color:#a47552}
+#scoreboard-player{display:none;margin-top:16px;min-height:49px;padding:8px 9px 8px 6px;background-color:#33362b;border-left:4px solid #a47552;rotate:-1.2deg;box-shadow:3px 4px 0 #060c09bb}
+#scoreboard-player .rank{font:30px/1 'Bangers',Impact,sans-serif;color:#c9a47b;rotate:-5deg}
+#scoreboard-player .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:bold 14px/1.2 'Outfit',Arial,sans-serif}
 #scoreboard-player .stats{font:bold 12px monospace;white-space:nowrap;font-variant-numeric:tabular-nums}
-@media(max-width:700px){#scoreboard-stack{left:10px;top:10px;width:min(228px,calc(53vw - 15px))}#scoreboard-list li{padding:8px 5px;gap:4px;font-size:12px}#scoreboard-list li .rank{min-width:18px}#scoreboard-player{padding:10px 6px;gap:5px}#scoreboard-player .name{font-size:15px}}
-@media(max-width:480px){#scoreboard-list li .stats{font-size:10px}#scoreboard-player{flex-wrap:wrap}#scoreboard-player .name{white-space:normal;overflow-wrap:anywhere}#scoreboard-player .stats{margin-left:auto}}
+@media(max-width:700px){#scoreboard-stack{left:10px;top:18px;width:min(236px,calc(52vw - 15px))}.scoreboard-title{font-size:22px}.scoreboard-title small{font-size:8px}#scoreboard-list li{padding:5px 4px;gap:5px;font-size:11px}#scoreboard-list li .rank{flex-basis:21px;height:25px;font-size:22px}#scoreboard-player{padding:8px 6px;gap:5px}#scoreboard-player .name{font-size:12px}}
+@media(max-width:480px){#scoreboard-list li .stats{font-size:9px}#scoreboard-player{flex-wrap:wrap}#scoreboard-player .name{white-space:normal;overflow-wrap:anywhere}#scoreboard-player .stats{margin-left:auto}}
+
+/* Brief text arrivals; overlay fades are owned by GameHud so re-entry cancels exits. */
+.respawn-label{animation:feedback-text-arrival 180ms ease-out both}
+@keyframes feedback-text-arrival{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
+.kill-entry.fade-out{translate:8px 0;transition:opacity .2s ease,translate .2s ease}
+@media(prefers-reduced-motion:reduce){.respawn-label,#respawn-timer,#victory-text,.kill-entry{animation:none}.kill-entry.fade-out{translate:none;transition:none}}

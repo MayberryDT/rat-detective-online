@@ -4,7 +4,7 @@ import { disposeEntitySounds, initEntitySounds, playEntitySound } from '../../sr
 
 const state = vi.hoisted(() => ({
     loads: [] as { done: (buffer: AudioBuffer) => void; error: () => void }[],
-    sounds: [] as { isPlaying: boolean; onEnded: () => void; disconnect: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[],
+    sounds: [] as { isPlaying: boolean; volume: number; gain: {disconnect: ReturnType<typeof vi.fn>}; onEnded: () => void; disconnect: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[],
 }));
 vi.mock('three', async original => ({
     ...await original<typeof import('three')>(),
@@ -13,9 +13,11 @@ vi.mock('three', async original => ({
     },
     Audio: class {
         isPlaying = false;
+        volume = 0;
+        gain = {disconnect: vi.fn()};
         onEnded = () => { this.isPlaying = false; };
         setBuffer() {}
-        setVolume() {}
+        setVolume(volume: number) { this.volume = volume; }
         play() { this.isPlaying = true; }
         stop = vi.fn(() => { this.isPlaying = false; });
         disconnect = vi.fn();
@@ -46,11 +48,12 @@ it('preserves Three audio end-state and disconnects active sounds on teardown', 
     expect(ended.isPlaying).toBe(false);
     expect(ended.disconnect).toHaveBeenCalledTimes(1);
     playEntitySound('ratHit');
-    const active = state.sounds[1];
+    const active = state.sounds[0];
+    expect(state.sounds).toHaveLength(1);
     disposeEntitySounds();
     expect(active.stop).toHaveBeenCalledTimes(1);
-    expect(active.disconnect).toHaveBeenCalledTimes(1);
-    expect(ended.disconnect).toHaveBeenCalledTimes(1);
+    expect(active.disconnect).toHaveBeenCalledTimes(2);
+    expect(active.gain.disconnect).toHaveBeenCalledTimes(1);
 });
 
 it('reports an asset failure without preventing other sounds from loading', () => {
@@ -84,4 +87,20 @@ it('bounds overlapping chaos audio while allowing a new hit to be heard', () => 
     expect(state.sounds.at(-1)?.isPlaying).toBe(true);
     expect(state.sounds[0].stop).toHaveBeenCalledTimes(1);
     expect(state.sounds[0].disconnect).toHaveBeenCalledTimes(1);
+    expect(state.sounds).toHaveLength(12);
+});
+
+it('gently fades both rat hits and deaths from their positions while keeping your own reactions full', () => {
+    const ear = new THREE.Vector3(100, 10, 0);
+    initEntitySounds({ context: { state: 'running' }, getWorldPosition: (target: THREE.Vector3) => target.copy(ear) } as THREE.AudioListener);
+    state.loads.forEach(load => load.done({} as AudioBuffer));
+    playEntitySound('ratHit', .5, {x:100,y:10,z:0});
+    playEntitySound('ratHit', .5, {x:230,y:10,z:0});
+    playEntitySound('ratDeath', .6, {x:100,y:510,z:0});
+    playEntitySound('ratHit', .4, {x:100,y:10,z:-500});
+    playEntitySound('playerHit', .6);
+    playEntitySound('ratDeath', .6);
+    expect(state.sounds.map(sound => sound.volume)).toEqual([.5, .45, .48, .4*.8, .6, .6]);
+    playEntitySound('ratHit', .5, {x:NaN,y:0,z:0});
+    expect(state.sounds).toHaveLength(6);
 });

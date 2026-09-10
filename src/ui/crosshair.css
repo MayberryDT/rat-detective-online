@@ -29,3 +29,14 @@
 #cross::before { width: 12px; height: 2px; }
 #crosshair::after,
 #cross::after { width: 2px; height: 12px; }
+
+/* Confirmed damage turns the existing centered bars into a brief X. */
+#crosshair.hit-confirmed { animation: hit-confirmation 180ms ease-out both; }
+@keyframes hit-confirmation {
+    0% { transform:translate(-50%,-50%) rotate(45deg) scale(1.7); }
+    35%,75% { transform:translate(-50%,-50%) rotate(45deg) scale(1.25); }
+    100% { transform:translate(-50%,-50%) rotate(45deg) scale(1); }
+}
+@media(prefers-reduced-motion:reduce) {
+    #crosshair.hit-confirmed { animation:none;transform:translate(-50%,-50%) rotate(45deg); }
+}

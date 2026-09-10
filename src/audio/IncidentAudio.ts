@@ -1,15 +1,21 @@
+import type {Vec3Data} from '../shared/networkProtocol';
+import {worldSoundGain} from './worldSoundGain';
+
 /** Recorded and pre-rendered foley through the game's existing Web Audio context. */
 const MAX_VOICES = 10;
-const FILES = ['malfunction', 'pop-0', 'pop-1', 'pop-2', 'case-saw'] as const;
+const FILES = ['pop-0', 'pop-1', 'pop-2', 'case-saw'] as const;
 type Cue = typeof FILES[number];
 let context: AudioContext | undefined;
 let buffers = new Map<Cue, AudioBuffer>();
 let loading: Promise<void> | undefined;
 let generation = 0;
 let buzzWanted = false;
-let saw: {source: AudioBufferSourceNode; gain: GainNode} | undefined;
-const voices = new Set<AudioBufferSourceNode>();
+let buzzVolume = .19;
+let saw: {source: AudioBufferSourceNode; gain: GainNode; volume: number} | undefined;
+const listener = {x:0,y:0,z:0};
+const voices = new Map<AudioBufferSourceNode, GainNode>();
 let popVariant = 0;
+let thudBuffer: AudioBuffer | undefined;
 
 function preload(ctx: AudioContext): Promise<void> {
     if (loading) return loading;
@@ -25,35 +31,37 @@ function preload(ctx: AudioContext): Promise<void> {
     return loading;
 }
 
-function play(cue: Cue, volume: number, pitch = 1): void {
-    const ctx = context, buffer = buffers.get(cue);
-    if (!ctx || ctx.state !== 'running' || !buffer || voices.size >= MAX_VOICES) return;
+function distanceGain(origin?: Vec3Data): number {
+    return origin ? worldSoundGain(Math.hypot(origin.x-listener.x,origin.y-listener.y,origin.z-listener.z)) : 1;
+}
+
+function playBuffer(buffer: AudioBuffer, volume: number, pitch = 1): void {
+    const ctx = context;
+    if (!ctx || ctx.state !== 'running' || voices.size >= MAX_VOICES) return;
     const source = ctx.createBufferSource(), gain = ctx.createGain();
     source.buffer = buffer; source.playbackRate.value = pitch; gain.gain.value = volume;
-    source.connect(gain); gain.connect(ctx.destination); voices.add(source);
+    source.connect(gain); gain.connect(ctx.destination); voices.set(source,gain);
     source.onended = () => { voices.delete(source); source.disconnect(); gain.disconnect(); };
     source.start();
 }
 
-export function playMalfunctionShot(): void {
-    play('malfunction', .72, .88 + Math.random() * .24);
-}
-
-export function playDelayedThud(): void {
+export function playDelayedThud(origin?: Vec3Data): void {
     const ctx = context; if (!ctx || ctx.state !== 'running' || voices.size >= MAX_VOICES) return;
     // Preserve the separate Delayed Reaction thud as a short rendered buffer.
-    const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .18), ctx.sampleRate);
-    const samples = buffer.getChannelData(0);
-    for (let i = 0; i < samples.length; i++) {
-        const t = i / ctx.sampleRate;
-        samples[i] = Math.sin(2 * Math.PI * (90 * t - 130 * t * t)) * Math.exp(-t * 28) * .16;
+    if (!thudBuffer) {
+        thudBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .18), ctx.sampleRate);
+        const samples = thudBuffer.getChannelData(0);
+        for (let i = 0; i < samples.length; i++) {
+            const t = i / ctx.sampleRate;
+            samples[i] = Math.sin(2 * Math.PI * (90 * t - 130 * t * t)) * Math.exp(-t * 28) * .16;
+        }
     }
-    const source = ctx.createBufferSource(); source.buffer = buffer; source.connect(ctx.destination);
-    voices.add(source); source.onended = () => { voices.delete(source); source.disconnect(); }; source.start();
+    playBuffer(thudBuffer, distanceGain(origin));
 }
 
-export function playPopcornPop(): void {
-    play(`pop-${popVariant++ % 3}` as Cue, .82, .97 + Math.random() * .06);
+export function playPopcornPop(origin?: Vec3Data): void {
+    const buffer = buffers.get(`pop-${popVariant++ % 3}` as Cue);
+    if (buffer) playBuffer(buffer, .82 * distanceGain(origin), .97 + Math.random() * .06);
 }
 
 function stopSaw(): void {
@@ -66,27 +74,39 @@ function stopSaw(): void {
     old.source.stop(now + .08);
 }
 
-export function startCaseBuzz(active: boolean): void {
+export function startCaseBuzz(active: boolean, origin?: Vec3Data): void {
     buzzWanted = active;
     if (!active) { stopSaw(); return; }
+    // Keep the most recent distance when asynchronous loading starts the loop.
+    if (origin) buzzVolume = .19 * distanceGain(origin);
     const ctx = context, buffer = buffers.get('case-saw');
-    if (saw || !ctx || ctx.state !== 'running' || !buffer) return;
+    if (!ctx || ctx.state !== 'running' || !buffer) return;
+    if (saw) {
+        // Track the nearest case without scheduling a new ramp on every frame.
+        if (Math.abs(saw.volume-buzzVolume) > .001) {
+            saw.gain.gain.setTargetAtTime(buzzVolume,ctx.currentTime,.08);
+            saw.volume = buzzVolume;
+        }
+        return;
+    }
     const source = ctx.createBufferSource(), gain = ctx.createGain();
     source.buffer = buffer; source.loop = true;
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(.19, ctx.currentTime + .12);
-    source.connect(gain); gain.connect(ctx.destination); source.start(); saw = {source, gain};
+    gain.gain.linearRampToValueAtTime(buzzVolume, ctx.currentTime + .12);
+    source.connect(gain); gain.connect(ctx.destination); source.start(); saw = {source, gain, volume:buzzVolume};
 }
 
-export function bindIncidentAudio(next?: AudioContext): void {
+export function bindIncidentAudio(next?: AudioContext, position?: Vec3Data): void {
     if (next && context !== next) {
         disposeIncidentAudio(); context = next; void preload(next);
     }
+    if (position) { listener.x=position.x;listener.y=position.y;listener.z=position.z; }
     if (context?.state === 'suspended') void context.resume().catch(() => {});
 }
 
 export function disposeIncidentAudio(): void {
     buzzWanted = false; stopSaw(); generation++;
-    for (const voice of voices) { voice.stop(); voice.disconnect(); }
-    voices.clear(); buffers = new Map(); loading = undefined; context = undefined;
+    for (const [voice,gain] of voices) { voice.onended=null;voice.stop();voice.disconnect();gain.disconnect(); }
+    voices.clear(); buffers = new Map(); loading = undefined; context = undefined; thudBuffer = undefined;
+    listener.x=listener.y=listener.z=0; buzzVolume=.19;
 }

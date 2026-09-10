@@ -308,7 +308,7 @@ export class ChaosSimulation {
         // Bound ordinary travel to .8 units per substep; swept world checks catch thin walls.
         // Swept rat checks cover the entire path, including between network ticks.
         const missiles=[...this.cases.values()].filter(c=>this.caseDangerous(c));
-        const fastest=Math.max(0,...missiles.map(c=>c.body.velocity.length()),...[...this.corpses.values()].map(c=>c.body.velocity.length()));
+        const fastest=Math.max(0,...[...this.cases.values()].filter(c=>!c.owner).map(c=>c.body.velocity.length()),...[...this.corpses.values()].map(c=>c.body.velocity.length()));
         const substeps=Math.max(1,Math.min(4,Math.ceil(fastest*dt/.8)));
         for(let sub=0;sub<substeps;sub++){
             const previous=[...this.corpses.values()].map(c=>({c,p:c.body.position.clone(),v:c.body.velocity.clone()}));
@@ -598,10 +598,14 @@ export class ChaosSimulation {
                     if(c.owner)this.releaseCase(c);
                     this.launchCaseMissile(c,vec(incoming));
                     c.missileOwner=shot.owner;
-                }else if(c.owner)this.releaseCase(c,incoming);
-                else{
-                    const kick=vec(incoming);kick.normalize();kick.scale(13,kick);
-                    c.body.velocity.vadd(kick,c.body.velocity);c.body.velocity.y+=2.6;
+                }else{
+                    if(c.owner)this.releaseCase(c);
+                    const kick=vec(incoming);kick.normalize();kick.scale(T.caseShotKick,kick);
+                    c.body.velocity.vadd(kick,c.body.velocity);
+                    c.body.velocity.y=Math.max(c.body.velocity.y,T.caseShotLift);
+                    const speed=c.body.velocity.length();
+                    if(speed>T.caseShotMaxSpeed)c.body.velocity.scale(T.caseShotMaxSpeed/speed,c.body.velocity);
+                    c.body.angularVelocity.set(kick.z*.45,6,-kick.x*.45);
                     c.body.wakeUp();c.looseSince=now;
                 }
             }
@@ -640,7 +644,7 @@ export class ChaosSimulation {
                     this.burstShots.add(extra);this.shots.push(extra);
                 }
             }
-            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS});
+            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:{})});
         }
         for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -20||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
         for(const c of this.cases.values())this.stepLooseCase(c,now,playing);
@@ -661,7 +665,7 @@ export class ChaosSimulation {
                 if(this.casesWeaponized)this.launchCaseMissile(c);
                 else {c.missileOwner=undefined;c.armed=false;}
             }
-            if(!c.returningUntil && playing && !this.casesWeaponized && !this.caseDangerous(c)){
+            if(!c.returningUntil && playing && !this.casesWeaponized && !this.caseDangerous(c) && c.body.velocity.length()<=T.casePickupMaxSpeed){
                 for(const player of this.players.values()){
                     if(player.hp<=0 || this.isCaseHolder(player.id) || (player.id===c.previousOwner&&now<c.pickupAfter))continue;
                     const reach=new C.Vec3(player.x,player.y+.8,player.z);

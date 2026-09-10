@@ -15,6 +15,30 @@ function setup() {
 }
 
 describe('projectile behavior', () => {
+  it('keeps immediate gun feedback but never draws a guessed straight ball during Bad Ammunition', () => {
+    const {gun,owner,projectiles}=setup();gun.authoritative=true;
+    gun.setIncident('bad-ammunition');
+    const animate=vi.spyOn(owner,'playShootAnimation');
+    const shot=gun.shoot(owner,new THREE.Vector3(100,1.45,0))!;
+    expect(animate).toHaveBeenCalledOnce();expect(gun.fireCue).toBe('malfunction');
+    expect(owner.mesh.getObjectByName('rat-muzzle-flash')!.visible).toBe(true);
+    gun.predictShot(owner,shot);gun.update(1/60);
+    expect(projectiles()).toHaveLength(0);expect(gun.predictedBallCount).toBe(0);
+    // Ordinary/centered shots become immediate again at incident expiry.
+    gun.setIncident();expect(gun.fireCue).toBe('normal');
+    gun.predictShot(owner,{...shot,shotId:'after-expiry'});expect(projectiles()).toHaveLength(1);
+    gun.dispose();owner.dispose();
+  });
+
+  it('clears pending straight previews when Bad Ammunition starts, preserving other incident predictions', () => {
+    const {gun,owner,projectiles}=setup();gun.authoritative=true;
+    const shot={shotId:'pending',origin:{x:0,y:2,z:0},direction:{x:1,y:0,z:0}};
+    gun.setIncident('scattershot');gun.predictShot(owner,shot);expect(projectiles()).toHaveLength(1);
+    gun.setIncident('bad-ammunition');expect(projectiles()).toHaveLength(0);
+    gun.setIncident('popcorn-panic');gun.predictShot(owner,shot);expect(projectiles()).toHaveLength(1);
+    gun.dispose();owner.dispose();
+  });
+
   it('shows an authoritative local shot at the muzzle immediately and hands off by shot ID', () => {
     const {gun,owner,projectiles}=setup();gun.authoritative=true;
     const shot=gun.shoot(owner,new THREE.Vector3(100,1.45,0))!;

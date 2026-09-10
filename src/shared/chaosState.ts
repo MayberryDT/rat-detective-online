@@ -3,6 +3,7 @@ import type { IncidentId } from './incidentCatalog';
 
 export const CHAOS_TUNING = {
     pickupRadius: 1.6, formerCarrierDelay: 900,
+    caseShotKick: 30, caseShotLift: 10, caseShotMaxSpeed: 48, casePickupMaxSpeed: 18,
     rollMs: 2400, activeMs: 25000, cooldownMs: 16000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
     corpseHitMinSpeed: 12, corpseHitCooldownMs: 700, corpseShotKick: 19, deathBurstBalls: 120,
@@ -77,7 +78,7 @@ export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string; appearance: RatAppearance; born: number; expires: number;
 }
 export interface ChaosShot { id: string; owner: string; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number }
-export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz' }
+export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit' }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
 }

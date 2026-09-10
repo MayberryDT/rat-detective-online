@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ObjectiveBotBrain, type ObjectiveNavigation } from '../../src/shared/ObjectiveBotBrain';
 import { createPlayer } from '../../src/worker/gameState';
 import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
+import type { Vec3Data } from '../../src/shared/networkProtocol';
 import { DISPATCH_STATIONS, type ChaosState } from '../../src/shared/chaosState';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
@@ -12,12 +13,21 @@ function fixture(seed=0){
     const navigation:ObjectiveNavigation={route:vi.fn((_from,to)=>[{...to}]),explorationTargets:()=>Array.from({length:24},(_,i)=>({x:i*4+20,y:i%2?-7:0,z:60}))};
     return {brain:new ObjectiveBotBrain(navigation,seed,()=>.5),navigation,self:player('me',0),near:player('near',0,8),holder:player('holder',35)};
 }
+function aimedNear(shot:Vec3Data|undefined,self:Vec3Data,target:Vec3Data){
+    expect(shot).toBeDefined();
+    const a={x:shot!.x-self.x,y:shot!.y-self.y-.9,z:shot!.z-self.z};
+    const b={x:target.x-self.x,y:target.y-self.y,z:target.z-self.z};
+    const cosine=(a.x*b.x+a.y*b.y+a.z*b.z)/(Math.hypot(a.x,a.y,a.z)*Math.hypot(b.x,b.y,b.z));
+    expect(cosine).toBeGreaterThan(Math.cos(9*Math.PI/180));
+    expect(cosine).toBeLessThan(.9999);
+}
 describe('case-first normal match bots',()=>{
     it('walks to the loose case while opportunistically shooting a visible enemy',()=>{
         const {brain,self,near}=fixture();
         const intent=brain.step(1000,self,[self,near],state(),()=>true,false,true);
         expect(brain.objective).toBe('case');expect(intent.x).toBeCloseTo(6.5);expect(intent.z).toBeCloseTo(0);
-        expect(intent.shoot?.z).toBe(8);
+        expect(intent.shoot).toBeUndefined();
+        aimedNear(brain.step(1500,self,[self,near],state(),()=>true,false,true).shoot,self,near);
     });
     it('immediately switches to the carrier and prefers shooting them over a nearer enemy',()=>{
         const {brain,self,near,holder,navigation}=fixture();
@@ -25,7 +35,7 @@ describe('case-first normal match bots',()=>{
         const intent=brain.step(1010,self,[self,near,holder],state('holder'),()=>true,false,true);
         expect(brain.objective).toBe('carrier');expect(navigation.route).toHaveBeenLastCalledWith({x:self.x,y:self.y,z:self.z},holder);
         const later=brain.step(4000,self,[self,near,holder],state('holder'),()=>true,false,true);
-        expect(later.shoot?.x).toBe(35);expect(intent.facing).toBeCloseTo(Math.PI/2);
+        aimedNear(later.shoot,self,holder);expect(Math.abs(intent.facing-Math.PI/2)).toBeLessThan(.15);
     });
     it('pursues an unseen carrier via navigation but never shoots through walls',()=>{
         const {brain,self,holder}=fixture();
@@ -35,7 +45,7 @@ describe('case-first normal match bots',()=>{
     it('engages a visible enemy when carrying the case itself',()=>{
         const {brain,self,near}=fixture();
         const intent=brain.step(1000,self,[self,near],state('me'),()=>true,false,true);
-        expect(brain.objective).toBe('combat');expect(intent.shoot).toBeDefined();
+        expect(brain.objective).toBe('combat');expect(intent.shoot).toBeUndefined();
     });
     it('uses distinct exploration destinations without visible enemies or an available case',()=>{
         const a=fixture(0),b=fixture(1),returning=state();returning.case.returningUntil=2000;
@@ -92,13 +102,13 @@ describe('case-first normal match bots',()=>{
         expect(clearControl).toHaveBeenCalledWith(target);expect(Math.hypot(intent.x,intent.z)).toBeCloseTo(6.5);
         loose.dispatch.phase='active';
         const next=brain.step(1600,self,[self,near],loose,()=>true,false,true,clearControl);
-        expect(next.shoot).toEqual({x:near.x,y:near.y+.9,z:near.z});
+        aimedNear(next.shoot,self,near);
     });
     it('does not shoot a blocked Dispatch target and fires visible enemies more frequently',()=>{
         const {brain,self,near}=fixture(),loose=state(),target=DISPATCH_STATIONS[0].target;
         self.x=target.x;self.z=target.z+12;
         const first=brain.step(1000,self,[self,near],loose,()=>true,false,true,()=>false);
-        expect(first.shoot).toEqual({x:near.x,y:near.y+.9,z:near.z});
+        expect(first.shoot).toBeUndefined();
         expect(brain.step(1550,self,[self,near],loose,()=>true,false,true,()=>false).shoot).toBeDefined();
     });
     it('leaves an impossible loose case after six seconds, keeps shooting, and retries after the suppression expires',()=>{
@@ -118,7 +128,7 @@ describe('case-first normal match bots',()=>{
         brain.step(1000,self,[self,near,holder],state('holder'),()=>true,false,true);
         const fallback=brain.step(7000,self,[self,near,holder],state('holder'),()=>true,false,true);
         expect(brain.objective).toBe('combat');expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},near);
-        expect(fallback.shoot?.x).toBe(holder.x); // Still shoot the visible carrier even when their route failed.
+        aimedNear(fallback.shoot,self,holder); // Still shoot the visible carrier even when their route failed.
         expect(brain.navigationStalled).toBe(false);expect(brain.failedCasePosition).toBeUndefined();
     });
     it('retries a moved case early and clears its failure vote once a valid case route exists',()=>{
@@ -141,7 +151,8 @@ describe('case-first normal match bots',()=>{
         brain.step(7000,self,[self,near,holder],state('me'),()=>true,false,true);
         expect(brain.objective).toBe('combat');expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},holder);
         const exploring=brain.step(13000,self,[self,near,holder],state('me'),()=>true,false,true);
-        expect(brain.objective).toBe('explore');expect(brain.navigationStalled).toBe(false);expect(exploring.shoot).toBeDefined();
+        expect(brain.objective).toBe('explore');expect(brain.navigationStalled).toBe(false);expect(exploring.shoot).toBeUndefined();
+        aimedNear(brain.step(13700,self,[self,near,holder],state('me'),()=>true,false,true).shoot,self,near);
     });
     it('bounds repeated failures when every goal is unreachable and reports continuous navigation stalls',()=>{
         const {brain,self,near,navigation}=fixture();vi.mocked(navigation.route).mockReturnValue([]);
@@ -198,7 +209,7 @@ describe('case-first normal match bots',()=>{
         const {brain,self,near,navigation}=fixture(),primary=state();
         const multiple={...primary,extraCases:[{...primary.case,id:'extra-a',owner:self.id,p:{x:1,y:0,z:0}}]};
         const intent=brain.step(1000,self,[self,near],multiple,()=>true,false,true);
-        expect(brain.objective).toBe('combat');expect(intent.shoot).toBeDefined();
+        expect(brain.objective).toBe('combat');expect(intent.shoot).toBeUndefined();
         expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},near);
     });
     it('hunts the nearest extra-case carrier and prioritizes their visible shot over an ordinary rat',()=>{
@@ -206,7 +217,8 @@ describe('case-first normal match bots',()=>{
         const distant=player('distant',60),multiple={...primary,extraCases:[{...primary.case,id:'extra-a',owner:holder.id}]};
         const intent=brain.step(1000,self,[self,near,holder,distant],multiple,()=>true,false,true);
         expect(brain.objective).toBe('carrier');expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},holder);
-        expect(intent.shoot?.x).toBe(holder.x);
+        expect(intent.shoot).toBeUndefined();
+        aimedNear(brain.step(1500,self,[self,near,holder,distant],multiple,()=>true,false,true).shoot,self,holder);
     });
     it('reacts immediately to an extra being released and respects that case former-carrier delay',()=>{
         const {brain,self,holder,navigation}=fixture(),primary=state(holder.id);

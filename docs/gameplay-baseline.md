@@ -9,7 +9,7 @@ Reviewed **2026-09-08**. This describes the current game; the [08e8005 reference
 | Keyboard jump | Base 16 × sqrt(1.28), extra jump-only gravity factor 1.28; world/ball gravity unchanged |
 | Camera | Radius 6, pivot 3.5, shoulder 1.25, mouse sensitivity 0.002, obstruction checks |
 | Ordinary ball | Speed 175, gravity −25, restitution 0.9, lifetime 5 seconds (`ballTuning.ts`) |
-| Damage / round | 3 HP; body 1, head 3; 20 credited kills; 5-second respawn, 6-second victory |
+| Damage / round | 3 HP; body 1, head 3; 20 credited kills; 3-second respawn (September 9 private update), 6-second victory |
 | Case bonus | 2× credited kills, not damage, while carrying the Hot Case. Evidence Tampering temporarily prohibits pickup of eight flying cases |
 | Player collision | Spheres 0.6 at y0.6, 0.45 at y1.3, 0.28 at y1.9 |
 | Shot origin | Animated barrel/muzzle pose via `muzzlePose.ts`; send resolved descriptor |

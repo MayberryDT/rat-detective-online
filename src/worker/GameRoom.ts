@@ -771,6 +771,20 @@ export class GameRoom extends DurableObject<Env> {
     await this.scheduleNextAlarm();
   }
 
+  // Active rooms should not wait for alarm delivery to finish a respawn.
+  // The event drain deletes/applies rows synchronously before its first await,
+  // so a concurrent alarm cannot apply the same event twice.
+  private gameEventDrainPending = false;
+  private processLiveDeadlines(now: number): void {
+    if(this.gameEventDrainPending)return;
+    const due=this.round.phase==='won' ? typeof this.round.resetAt==='number' && this.round.resetAt<=now
+      : [...this.players.values()].some(player=>player.hp<=0 && typeof player.respawnAt==='number' && player.respawnAt<=now);
+    if(!due)return;
+    this.gameEventDrainPending=true;
+    void this.processDueEvents().catch(error=>log('error','live deadline failed',{error:String(error)}))
+      .finally(()=>{this.gameEventDrainPending=false;});
+  }
+
   private async processDueEvents(): Promise<void> {
     const now = this.now();
     const events = this.ctx.storage.sql
@@ -907,6 +921,7 @@ export class GameRoom extends DurableObject<Env> {
       // scheduled timer clamping can conceal physical execution lateness.
       const now=this.now(), tickStart=performance.now();
       this.diagnostics.event(now);
+      this.processLiveDeadlines(now);
       const gapMs=Math.max(0,now-this.chaosLast);
       let steps=0;
       this.chaosAccumulator+=Math.min(.2,gapMs/1000);this.chaosLast=now;

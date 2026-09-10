@@ -88,7 +88,7 @@ export class RatEntity {
         this.deathContactTime = this.deathTimer;
         this.deathContacts++;
         this.deathImpact = Math.min(speed / 12, 1);
-        playEntitySound('ratHit', Math.min(0.25 + speed * 0.025, 0.65));
+        playEntitySound('ratHit', Math.min(0.25 + speed * 0.025, 0.65), this.isPlayer ? undefined : this.body.position);
     };
 
     constructor(
@@ -347,7 +347,7 @@ export class RatEntity {
         this.billboard.sprite.removeFromParent();
         this.body.velocity.setZero();this.body.angularVelocity.setZero();
         this.body.collisionFilterMask=0;this.body.sleep();
-        playEntitySound('ratDeath',.6);
+        playEntitySound('ratDeath',.6, this.isPlayer ? undefined : this.body.position);
     }
 
     public takeDamage(amount: number, impactVel: THREE.Vector3) {
@@ -365,7 +365,7 @@ export class RatEntity {
             if (this.isPlayer) {
                 playEntitySound('playerHit', 0.6);
             } else {
-                playEntitySound('ratHit', 0.5);
+                playEntitySound('ratHit', 0.5, this.body.position);
             }
         }
 
@@ -416,11 +416,11 @@ export class RatEntity {
         this.resetColor();
 
         // ── DEATH SOUND ──
-        playEntitySound('ratDeath', 0.6);
+        playEntitySound('ratDeath', 0.6, this.isPlayer ? undefined : this.body.position);
         if (this.isPlayer) {
             playEntitySound('playerHit', 0.6);
         } else {
-            playEntitySound('ratHit', 0.4);
+            playEntitySound('ratHit', 0.4, this.body.position);
         }
 
         // ── COMPUTE "LAYING DOWN" TARGET QUATERNION ──

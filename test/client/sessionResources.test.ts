@@ -213,6 +213,7 @@ function createPage() {
 
     const doc = new EventTarget() as EventTarget & {
         hidden: boolean;
+        hasFocus(): boolean;
         pointerLockElement: FakeNode | null;
         body: FakeNode;
         head: FakeNode;
@@ -220,6 +221,7 @@ function createPage() {
         getElementById(id: string): FakeNode | null;
     };
     doc.hidden = false;
+    doc.hasFocus = () => true;
     doc.pointerLockElement = null;
     doc.body = body;
     doc.head = head;

@@ -4,7 +4,7 @@ import type { WorldSpec } from './worldSpec';
 export const PROTOCOL_VERSION = 1;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
-export const RESPAWN_DELAY_MS = 5_000;
+export const RESPAWN_DELAY_MS = 3_000;
 export const WIN_DISPLAY_MS = 6_000;
 export const DEFAULT_ROOM_NAME = 'public-live-v2';
 /** Wire-format ceiling for private capacity experiments; not an admission limit. */

@@ -3,6 +3,7 @@ import * as C from 'cannon-es';
 import { ChaosSimulation, type ChaosHit } from '../../src/shared/ChaosSimulation';
 import { CHAOS_TUNING as T, DISPATCH_BOX, DISPATCH_TARGET } from '../../src/shared/chaosState';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_LIFETIME } from '../../src/shared/ballTuning';
+import { ChaosEncoder, ChaosDecoder } from '../../src/shared/chaosWire';
 import { createPlayer, applyHit } from '../../src/worker/gameState';
 
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},grayboxBoxes:()=>[]}));
@@ -108,10 +109,17 @@ describe('shared physical death chaos',()=>{
   sim.world.addBody(wall);sim.targets.set(wall,{kind:'world'});sim.step(1/60,1017);
   expect(body.position.x).toBeLessThan(1);expect(body.velocity.x).toBeLessThan(0);
  });
- it('increases loose and carried case response by exactly thirty percent',()=>{
+ it('kicks and tumbles shot evidence while preserving ordinary death drops and impact cues',()=>{
   const {sim,shooter}=fixture();sim.caseBody.position.set(0,21,10);
   sim.shoot(shooter.id,{shotId:'case-shot',origin:{x:-2,y:21,z:10},direction:{x:1,y:0,z:0}});
-  sim.step(.01,1010);expect(sim.caseBody.velocity.x).toBeCloseTo(13,2);
+  sim.step(.01,1010);expect(sim.caseBody.velocity.x).toBeCloseTo(T.caseShotKick,2);
+  expect(sim.caseBody.velocity.y).toBeGreaterThanOrEqual(T.caseShotLift);
+  expect(sim.caseBody.angularVelocity.length()).toBeGreaterThan(10);
+  expect(sim.snapshot(false).impacts.some(hit=>hit.cue==='case-hit')).toBe(true);
+  const frame=new ChaosEncoder().encode(sim.snapshot(false)).payload;
+  const decoded=new ChaosDecoder().read(frame)?.message;
+  expect(decoded?.type).toBe('chaos');
+  if(decoded?.type==='chaos')expect(decoded.state.impacts.some(hit=>hit.cue==='case-hit')).toBe(true);
   const carry=createPlayer('carry','Carry',appearance,{x:0,y:20,z:10});
   const carrySim=new ChaosSimulation(new Map([[carry.id,carry]]),()=>{});
   carrySim.caseBody.position.set(0,20.8,10);carrySim.step(0,1000);

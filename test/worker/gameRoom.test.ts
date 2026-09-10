@@ -272,12 +272,16 @@ describe('GameRoom websockets', () => {
     expect(shot).toMatchObject({ shooterId: shooter.id, shotId: 'shot-1', direction: { x: 0, y: 0, z: 1 } });
     expect('target' in shot).toBe(false);
 
+    const stub = env.GAME_ROOM.getByName(room);
+    const killedAt = Date.now();
+    await runInDurableObject(stub, instance => {
+      (instance as unknown as {clock: () => number}).clock = () => killedAt;
+    });
     first.ws.send(JSON.stringify({ type: 'hit', victimId: victim.id, damage: 3 }));
     const died = await second.inbox.waitFor('playerDied');
     expect(died.victimId).toBe(victim.id);
-    expect(died.respawnAt).toBeGreaterThan(Date.now() - 1_000);
+    expect(died.respawnAt).toBe(killedAt + 3_000);
 
-    const stub = env.GAME_ROOM.getByName(room);
     await runInDurableObject(stub, (_instance, state) => {
       state.storage.sql.exec('UPDATE pending_events SET due_at = 0');
     });
@@ -285,6 +289,28 @@ describe('GameRoom websockets', () => {
     const respawn = await second.inbox.waitFor('playerRespawn');
     expect(respawn).toMatchObject({ id: victim.id, hp: 3 });
     expect(Number.isFinite(respawn.x)).toBe(true);
+  });
+
+  it('drains overdue respawns from live ticks without waiting for an alarm, once only', async () => {
+    const room = `live-respawn-${crypto.randomUUID()}`;
+    const first = await openClient(room);first.ws.send(joinPayload('Shooter'));
+    await first.inbox.waitFor('welcome');
+    const second = await openClient(room);second.ws.send(joinPayload('Victim'));
+    const victim = await second.inbox.waitFor('welcome');
+    first.ws.send(JSON.stringify({type:'hit',victimId:victim.id,damage:3}));
+    await second.inbox.waitFor('playerDied');
+    const stub=env.GAME_ROOM.getByName(room);
+    await runInDurableObject(stub, (instance, state) => {
+      const live=instance as unknown as {players:Map<string,PlayerData>;processLiveDeadlines:(now:number)=>void};
+      live.players.get(victim.id)!.respawnAt=0;
+      state.storage.sql.exec('UPDATE pending_events SET due_at = 0');
+      live.processLiveDeadlines(Date.now());
+      live.processLiveDeadlines(Date.now());
+      expect(live.players.get(victim.id)!.hp).toBe(3);
+      expect(state.storage.sql.exec('SELECT * FROM pending_events').toArray()).toHaveLength(0);
+    });
+    expect(await second.inbox.waitFor('playerRespawn')).toMatchObject({id:victim.id,hp:3});
+    expect(second.inbox.messages.filter(m=>m.type==='playerRespawn')).toHaveLength(0);
   });
 
   it('pins every dead player to resetAt and cancels pending respawns on a winning hit', async () => {

@@ -1,4 +1,5 @@
 import type { ScoreEntry } from '../shared/networkProtocol';
+import type { FeedbackCue } from '../audio/FeedbackAudio';
 
 const TITLE_FADE_MS = 1500;
 const KILL_FEED_LIMIT = 5;
@@ -71,8 +72,13 @@ export class GameHud {
     private titleTimer: ReturnType<typeof setTimeout> | null = null;
     private respawnInterval: ReturnType<typeof setInterval> | null = null;
     private disposed = false;
+    private connectionVisible = false;
+    private respawnVisible = false;
+    private victoryVisible = false;
+    private hitTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly overlayAnimations = new Map<HTMLElement, Animation>();
 
-    constructor(doc: Document = document, onRetry?: () => void) {
+    constructor(doc: Document = document, onRetry?: () => void, private readonly feedback:(cue:FeedbackCue)=>void=()=>{}) {
         this.doc = doc;
         this.onRetry = onRetry;
         this.titleScreen = this.require('title-screen');
@@ -103,7 +109,8 @@ export class GameHud {
         if (this.disposed) return;
         const hidden = state === 'playing' || state === 'idle' || state === 'stopped';
         if (hidden) {
-            this.statusPanel.style.display = 'none';
+            if(this.connectionVisible)this.feedback('menu-close');
+            this.connectionVisible=false;this.overlay(this.statusPanel,false);
             this.retryButton.style.display = 'none';
             return;
         }
@@ -114,13 +121,16 @@ export class GameHud {
                 : state === 'disconnected'
                     ? 'Disconnected.'
                     : state;
+        if(!this.connectionVisible)this.feedback('menu-open');
+        this.connectionVisible=true;
         this.statusMessage.textContent = message ?? fallback;
-        this.statusPanel.style.display = 'flex';
+        this.overlay(this.statusPanel,true);
         this.retryButton.style.display = state === 'disconnected' && this.onRetry ? 'inline-flex' : 'none';
     }
 
     enterPlaying(): void {
         if (this.disposed) return;
+        if(!this.titleScreen.classList.contains('fade-out'))this.feedback('menu-open');
         this.titleScreen.classList.add('fade-out');
         this.clearTitleTimer();
         this.titleTimer = setTimeout(() => {
@@ -189,6 +199,7 @@ export class GameHud {
 
     addKillFeed(msg: string): void {
         if (this.disposed) return;
+        this.feedback('notice');
         const entry = this.doc.createElement('div');
         entry.className = 'kill-entry';
         entry.textContent = msg;
@@ -205,18 +216,21 @@ export class GameHud {
     showVictory(winnerName: string, kills: number): void {
         if (this.disposed) return;
         this.victoryText.textContent = `🏆 ${winnerName} wins with ${kills} kills!`;
-        this.victoryOverlay.style.display = 'flex';
+        if(!this.victoryVisible)this.feedback('victory');
+        this.victoryVisible=true;this.overlay(this.victoryOverlay,true);
     }
 
     hideVictory(): void {
         if (this.disposed) return;
-        this.victoryOverlay.style.display = 'none';
+        const wasVisible=this.victoryVisible;this.victoryVisible=false;
+        if(wasVisible)this.feedback('menu-close');this.overlay(this.victoryOverlay,false);
     }
 
     showRespawn(respawnAt: number): void {
         if (this.disposed) return;
         this.clearRespawnTimer();
-        this.respawnOverlay.style.display = 'flex';
+        if(!this.respawnVisible)this.feedback('death');
+        this.respawnVisible=true;this.clearHitMarker();this.overlay(this.respawnOverlay,true);
         const tick = () => {
             this.respawnTimer.textContent = String(Math.max(0, Math.ceil((respawnAt - Date.now()) / 1000)));
         };
@@ -227,12 +241,44 @@ export class GameHud {
     hideRespawn(): void {
         if (this.disposed) return;
         this.clearRespawnTimer();
-        this.respawnOverlay.style.display = 'none';
+        const wasVisible=this.respawnVisible;this.respawnVisible=false;
+        if(wasVisible)this.feedback('respawn');this.overlay(this.respawnOverlay,false);
+    }
+
+    showHitMarker(): void {
+        if(this.disposed)return;
+        const reticle=this.doc.getElementById('crosshair');if(!reticle)return;
+        this.clearHitMarker();void reticle.offsetWidth;
+        reticle.classList.add('hit-confirmed');
+        this.hitTimer=setTimeout(()=>{this.hitTimer=null;reticle.classList.remove('hit-confirmed');},180);
+    }
+
+    private clearHitMarker():void {
+        if(this.hitTimer!==null)clearTimeout(this.hitTimer);this.hitTimer=null;
+        this.doc.getElementById('crosshair')?.classList.remove('hit-confirmed');
+    }
+
+    private overlay(element:HTMLElement,visible:boolean):void {
+        this.overlayAnimations.get(element)?.cancel();this.overlayAnimations.delete(element);
+        const reduce=this.doc.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        if(!element.animate||reduce){element.style.display=visible?'flex':'none';return;}
+        if(!visible&&element.style.display==='none')return;
+        element.style.display='flex';
+        const animation=element.animate(visible?[{opacity:0},{opacity:1}]:[{opacity:1},{opacity:0}],
+            {duration:visible?180:160,easing:'ease-out'});
+        this.overlayAnimations.set(element,animation);
+        animation.onfinish=()=>{
+            if(this.overlayAnimations.get(element)!==animation)return;
+            this.overlayAnimations.delete(element);if(!visible)element.style.display='none';
+        };
     }
 
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.clearHitMarker();
+        for(const animation of this.overlayAnimations.values())animation.cancel();
+        this.overlayAnimations.clear();
         this.clearTitleTimer();
         this.clearRespawnTimer();
         for (const id of this.timeouts) clearTimeout(id);

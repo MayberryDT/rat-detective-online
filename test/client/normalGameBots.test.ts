@@ -45,6 +45,7 @@ describe('ordinary local practice match clients',()=>{
  });
  it('sends normal movement and muzzle-origin shooting, never client-awarded damage',()=>{
   const {coordinator,transports,joined}=fixture();joined(0);coordinator.step(1/60,1000);
+  for(let now=1017;now<=1600;now+=17)coordinator.step(1/60,now);
   const shot=transports[0].messages.find(m=>m.type==='shoot');expect(shot).toBeDefined();
   const shotIndex=transports[0].messages.findIndex(m=>m.type==='shoot');
   expect(transports[0].messages[shotIndex-1]?.type).toBe('updateMovement');

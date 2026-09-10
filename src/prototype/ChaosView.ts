@@ -1,4 +1,5 @@
 import { createCaseGrip } from './CaseGrip';
+import {setText} from '../ui/setText';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { ChaosState, CorpseState } from '../shared/chaosState';
@@ -13,6 +14,8 @@ import { bindIncidentAudio, disposeIncidentAudio, playDelayedThud, playPopcornPo
 import type { RatEntity } from '../entities/RatEntity';
 import { incidentInfo } from '../shared/incidentCatalog';
 import { DispatchHud } from './DispatchHud';
+import type { FeedbackCue } from '../audio/FeedbackAudio';
+import type { Vec3Data } from '../shared/networkProtocol';
 import { locateCase } from './caseLocator';
 import { PressureMachine } from './PressureMachine';
 import { CaseBeacon } from './CaseBeacon';
@@ -60,7 +63,8 @@ export class ChaosView {
     private readonly p=new THREE.Vector3();
     private readonly impactPoint=new THREE.Vector3();
     private readonly impactNormal=new THREE.Vector3();
-    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true){
+    private readonly audioPosition=new THREE.Vector3();
+    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
         this.bullets.count=0;this.bullets.frustumCulled=false;this.root.add(this.bullets);
         this.chargedBullets.count=0;this.chargedBullets.frustumCulled=false;this.chargedBullets.name='crossfire-balls';this.root.add(this.chargedBullets);
         this.chargedGlow.count=0;this.chargedGlow.frustumCulled=false;this.chargedGlow.name='crossfire-glow';this.root.add(this.chargedGlow);
@@ -80,7 +84,7 @@ export class ChaosView {
             cabinet.name='dispatch-'+station.id;this.dispatch.add(cabinet);
             this.kiosks.push(buildDispatchModel(cabinet,this.textTexture));
         }
-        this.hud=new DispatchHud(frequency=>this.bell(frequency));
+        this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
         // DOM projection stays crisp at city scale and visible through all architecture.
         // It adds no dynamic lights, raycasts, or physics to the physical case.
         Object.assign(this.caseMarker.style,{position:'fixed',left:'0',top:'0',display:'none',width:'174px',
@@ -120,8 +124,9 @@ export class ChaosView {
         }
         for(const hit of state.impacts){
             this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
-            if(hit.cue==='pop')playPopcornPop();
-            if(hit.cue==='thud')playDelayedThud();
+            if(hit.cue==='pop')playPopcornPop(hit.p);
+            if(hit.cue==='thud')playDelayedThud(hit.p);
+            if(hit.cue==='case-hit')this.feedback?.('case-hit',hit.p);
             reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
@@ -145,7 +150,8 @@ export class ChaosView {
     }
     update(dt:number,camera:THREE.Camera){
         this.impacts.update(dt);
-        if(this.audio)bindIncidentAudio(this.audio);
+        camera.getWorldPosition(this.audioPosition);
+        if(this.audio)bindIncidentAudio(this.audio,this.audioPosition);
         const s=this.state;if(!s)return;
         // The solo preview already stepped physics this frame. Extrapolating it
         // again counted CPU/render preparation time as extra ball travel.
@@ -198,7 +204,12 @@ export class ChaosView {
             }
         }
         const missiles=[s.case,...s.extraCases??[]].filter(c=>!c.owner&&(c.missileOwner||evidence));
-        startCaseBuzz(evidence);
+        let nearestCase=missiles[0],nearestDistance=Infinity;
+        for(const missile of missiles){
+            const distance=(this.audioPosition.x-missile.p.x)**2+(this.audioPosition.y-missile.p.y)**2+(this.audioPosition.z-missile.p.z)**2;
+            if(distance<nearestDistance){nearestDistance=distance;nearestCase=missile;}
+        }
+        startCaseBuzz(evidence&&!!nearestCase,nearestCase?.p);
         for(const missile of missiles.slice(0,8)){
             this.ballPose.position.set(missile.p.x,missile.p.y,missile.p.z);
             this.ballPose.scale.set(2.2,1.1,3.4);this.ballPose.updateMatrix();
@@ -249,7 +260,7 @@ export class ChaosView {
         this.caseMarkerArrow.style.display=location.edge?'block':'none';
         this.caseMarkerArrow.style.transform=`rotate(${location.angle}rad) translate(29px,-6px)`;
         const status=s.case.returningUntil?'RETURNING':s.case.owner?'CARRIED':'LOOSE';
-        this.caseMarkerDetail.textContent=`${status} · ${Math.round(location.distance)} m${location.behind?' · BEHIND':''}`;
+        setText(this.caseMarkerDetail,`${status} · ${Math.round(location.distance)} m${location.behind?' · BEHIND':''}`);
         this.caseMarkerIcon.style.background=s.case.owner?'#583315f2':'#311a15f2';
     }
     private bell(frequency:number){

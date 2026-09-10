@@ -1,0 +1,1 @@
+Bangers by Vernon Adams. Unmodified font from https://github.com/google/fonts/tree/main/ofl/bangers, retrieved 2026-09-09. Distributed under the SIL Open Font License 1.1; see OFL.txt. Used locally for the comic HUD headings and rank numerals.
