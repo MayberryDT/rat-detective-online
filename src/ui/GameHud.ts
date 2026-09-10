@@ -3,7 +3,6 @@ import { ASSIGNMENTS, type AssignmentState } from '../shared/assignments';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import { MunicipalQuips } from './municipalQuips';
 
-const TITLE_FADE_MS = 1500;
 const KILL_FEED_LIMIT = 5;
 const KILL_FEED_FADE_MS = 4000;
 const KILL_FEED_REMOVE_MS = 500;
@@ -65,7 +64,6 @@ export class GameHud {
     private readonly retryButton: HTMLButtonElement;
     private readonly styleEl: HTMLStyleElement;
     private readonly timeouts = new Set<ReturnType<typeof setTimeout>>();
-    private titleTimer: ReturnType<typeof setTimeout> | null = null;
     private respawnInterval: ReturnType<typeof setInterval> | null = null;
     private disposed = false;
     private connectionVisible = false;
@@ -122,11 +120,7 @@ export class GameHud {
         if(!this.titleScreen.classList.contains('fade-out'))this.feedback('menu-open');
         this.titleScreen.classList.add('fade-out');
         this.titleScreen.inert=true;
-        this.clearTitleTimer();
-        this.titleTimer = setTimeout(() => {
-            this.titleTimer = null;
-            if (!this.disposed) this.titleScreen.style.display = 'none';
-        }, TITLE_FADE_MS);
+        this.titleScreen.style.display = 'none';
     }
 
     addKillFeed(msg: string): void {
@@ -229,7 +223,6 @@ export class GameHud {
         this.clearHitMarker();
         for(const animation of this.overlayAnimations.values())animation.cancel();
         this.overlayAnimations.clear();
-        this.clearTitleTimer();
         this.clearRespawnTimer();
         for (const id of this.timeouts) clearTimeout(id);
         this.timeouts.clear();
@@ -304,11 +297,6 @@ export class GameHud {
             if (!this.disposed) fn();
         }, ms);
         this.timeouts.add(id);
-    }
-
-    private clearTitleTimer(): void {
-        if (this.titleTimer) clearTimeout(this.titleTimer);
-        this.titleTimer = null;
     }
 
     private clearRespawnTimer(): void {

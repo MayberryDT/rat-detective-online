@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GameSession } from './session/GameSession';
+import { loadTitleWorld } from './session/titleWorld';
 
 function showWebGLError(error: unknown): void {
   const titleScreen = document.getElementById('title-screen');
@@ -38,8 +39,13 @@ function createRenderer(): THREE.WebGLRenderer | null {
 }
 
 
-const renderer = createRenderer();
-if (renderer) new GameSession(renderer);
+const startup = new AbortController();
+window.addEventListener('pagehide', () => startup.abort(), { once: true });
+void loadTitleWorld(startup.signal).then(world => {
+  if (startup.signal.aborted) return;
+  const renderer = createRenderer();
+  if (renderer) new GameSession(renderer, world);
+});
 
 // A back/forward-cache restore needs a fresh socket and disposed renderer.
 window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload(); });

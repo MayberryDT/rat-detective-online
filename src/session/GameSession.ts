@@ -69,7 +69,7 @@ export class GameSession {
     private touch?: TouchControls;
     private roundWon = false;
 
-    constructor(renderer: THREE.WebGLRenderer) {
+    constructor(renderer: THREE.WebGLRenderer, initialWorld?: WorldSpec) {
         this.stage = createStage(renderer);
         const diagnostics=new URLSearchParams(window.location.search).get('diagnostics');
         const showDiagnostics=diagnostics!==null && diagnostics!=='quiet';
@@ -85,8 +85,8 @@ export class GameSession {
         this.foley.setEnabled(false);
         this.gun = new CheeseGun(scene, world, listener);
         this.remotes = new RemotePlayers(scene, world);
-        this.worldSpec = createWorldSpec(1);
-        if(new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
+        this.worldSpec = initialWorld ? { ...initialWorld } : createWorldSpec(1);
+        if(!initialWorld && new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
         this.city = this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(scene,world,this.worldSpec) : new CityGenerator(scene, world, DEFAULT_CITY_OPTIONS, this.worldSpec);
         this.city.generate();
         this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);

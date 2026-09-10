@@ -18,6 +18,7 @@ import { STREET_LAMPS, grayboxBoxes, CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '
 import {cityStreetBuildings} from '../shared/cityPlan';
 import {landmarkStairDetails,LANDMARK_INTERIORS,LANDMARK_STAIR_LIGHTS} from '../shared/landmarkLayout';
 import {SEWER_LIGHTS} from '../shared/sewerLayout';
+import { SEWER_PORTAL_LIGHTS, sewerLightingActive } from './SewerLighting';
 import {CityGenerator} from '../world/CityGenerator';
 import {generateBuildingLayout, type WorldSpec} from '../shared/worldSpec';
 export { BLOCKS, ENTRIES, isRampOpening } from '../shared/grayboxLayout';
@@ -98,6 +99,13 @@ export class Neighborhood {
             this.glow(x,-1.3,z,1.2,.2,.8,0x8fc0ad);
             const light=new THREE.PointLight(0x89bfac,35,32,1.5);light.position.set(x,-2,z);this.add(light);
         }
+        for(const source of SEWER_PORTAL_LIGHTS){
+            const light=new THREE.PointLight(source.color,source.intensity,source.distance,1.5);
+            light.position.set(source.x,source.y,source.z);
+            // Upper tunnel lamps are above street height, but must use the
+            // sewer pool rather than being mistaken for a baked city light.
+            this.lampSources.push(light);
+        }
         // Pipe runs and repeated collars give the long sewer a municipal scale.
         for(const x of [-90,-54,-18,18,54,90]){
             const pipe=this.add(new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,34,10),this.material(0x526457)));
@@ -166,7 +174,7 @@ export class Neighborhood {
         this.grime.update(_dt);
         // Outdoor bounce light supplies a visibility floor; existing sewer lighting stays intact.
         if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera,anchor);}
-        this.syncLampPool(camera);
+        this.syncLampPool(camera,anchor);
     }
     private addInteriorFixture(f:InteriorFixture):void {
         const {x,y,z,color,style,ceiling}=f;
@@ -262,6 +270,7 @@ export class Neighborhood {
     private initLampPool() {
         for(let i=0;i<8;i++){
             const light=new THREE.PointLight(0xffffff,0,1,1.5);
+            light.name='sewer-pooled-light';
             this.scene.add(light);this.lampPool.push(light);
         }
     }
@@ -298,11 +307,12 @@ export class Neighborhood {
             batch.raycast=()=>{};
         }
     }
-    private syncLampPool(camera?:THREE.Camera) {
+    private syncLampPool(camera?:THREE.Camera,anchor?:{x:number;y:number;z:number}) {
         if(!camera)return;
         // Only sewer lamps follow the player. Street and interior light is baked once.
-        if(camera.position.y>=0){for(const light of this.lampPool)light.intensity=0;return;}
-        const px=camera.position.x,py=camera.position.y,pz=camera.position.z;
+        const p=anchor??camera.position;
+        if(!sewerLightingActive(p)){for(const light of this.lampPool)light.intensity=0;return;}
+        const px=p.x,py=p.y,pz=p.z;
         const ranked=this.lampSources.map(source=>{
             const dx=source.position.x-px,dy=source.position.y-py,dz=source.position.z-pz;
             return {source,d:dx*dx+dy*dy+dz*dz};

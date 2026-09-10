@@ -160,7 +160,7 @@ describe('GameHud', () => {
         hud.enterPlaying();
         expect(byId.has('scoreboard-stack')).toBe(false);
         expect(byId.get('title-screen')!.classList.contains('fade-out')).toBe(true);
-        vi.advanceTimersByTime(1500);
+        // Entry is immediate in this call, with no delayed title overlay.
         expect(byId.get('title-screen')!.style.display).toBe('none');
         hud.setConnection('playing');
         expect(byId.get('connection-status')!.style.display).toBe('none');
@@ -250,7 +250,7 @@ describe('GameHud', () => {
         hud.dispose();
     });
 
-    it('cancels the title fade and respawn interval on dispose', () => {
+    it('keeps the entered title hidden and cancels the respawn interval on dispose', () => {
         const { doc, byId } = createHudDocument();
         const hud = new GameHud(doc);
         hud.enterPlaying();
@@ -258,7 +258,7 @@ describe('GameHud', () => {
         hud.dispose();
         expect(byId.get('connection-status')).toBeUndefined();
         vi.advanceTimersByTime(1500);
-        expect(byId.get('title-screen')!.style.display).not.toBe('none');
+        expect(byId.get('title-screen')!.style.display).toBe('none');
         vi.advanceTimersByTime(5000);
         expect(byId.get('respawn-timer')!.textContent).toBe('5');
     });

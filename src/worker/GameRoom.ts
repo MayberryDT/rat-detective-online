@@ -388,10 +388,11 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /** Public city board includes managed rats, with names/scores but no positions. */
-  async status(): Promise<Omit<PublicRoomStatus, 'room'> & { bots: number }> {
+  async status(): Promise<Omit<PublicRoomStatus, 'room'> & { bots: number; world: WorldSpec }> {
     const attached = this.attachedPlayerIds();
     const live = Array.from(this.players.values()).filter((player) => attached.has(player.id) || this.isManagedBot(player.id));
     return {
+      world: { ...this.world },
       players: live.length,
       bots: live.filter(player => this.isManagedBot(player.id)).length,
       phase: this.round.phase,

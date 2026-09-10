@@ -36,6 +36,11 @@ describe('worker', () => {
     expect(empty.headers.get('access-control-allow-origin')).toBe('*');
     expect(empty.headers.get('cache-control')).toBe('no-store');
 
+    const world=(board as typeof board & {world:{seed:number;version:number}}).world;
+    expect(world).toEqual({seed:expect.any(Number),version:2});
+    const prepared=await (await SELF.fetch('https://rat-detective.test/status')).json();
+    expect(prepared).toMatchObject({world,players:0,bots:0});
+
     const options = await SELF.fetch('https://rat-detective.test/status', { method: 'OPTIONS' });
     expect(options.status).toBe(204);
   });

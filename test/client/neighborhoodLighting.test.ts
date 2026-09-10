@@ -4,6 +4,8 @@ import * as CANNON from 'cannon-es';
 import { Neighborhood } from '../../src/prototype/Neighborhood';
 import { LANDMARK_INTERIORS } from '../../src/shared/landmarkLayout';
 import { STREET_LAMPS } from '../../src/shared/grayboxLayout';
+import { SEWER_MANHOLE, SEWER_PIPE_ENTRANCES, sewerPipePoint } from '../../src/shared/sewerLayout';
+import { SEWER_PORTAL_LIGHTS } from '../../src/prototype/SewerLighting';
 
 // Isolate the prototype's real hall geometry and lighting from unrelated city decoration.
 vi.mock('../../src/world/CityGenerator', () => ({
@@ -56,7 +58,7 @@ describe('steady landmark illumination and sewer-only moving lights', () => {
     }
   });
 
-  it('uses no moving lights above ground, and only underground sources in the sewer', () => {
+  it('keeps sewer lights off away from entrances and uses underground sources in the main sewer', () => {
     const lights = scene.children.filter((child): child is THREE.PointLight => child instanceof THREE.PointLight);
     expect(lights).toHaveLength(8);
     for (const point of [[-30, 20, -70], [146, 12, 112], [-85, 20, 75], [20, 4, 20]]) {
@@ -67,6 +69,31 @@ describe('steady landmark illumination and sewer-only moving lights', () => {
     camera.position.set(0, -3, 0);
     neighborhood.update(.016, camera);
     expect(lights.every(light => light.intensity > 0 && light.position.y < 0)).toBe(true);
+  });
+
+  it('lights every entrance and the complete descending throat with the same eight lights',()=>{
+    const lights=scene.children.filter((child):child is THREE.PointLight=>child instanceof THREE.PointLight);
+    expect(lights).toHaveLength(8);
+    for(const entry of SEWER_PIPE_ENTRANCES)for(const distance of [-5,0,6,14,22,30]){
+      const point=sewerPipePoint(entry,distance);
+      const anchor={x:point.x,y:point.floorY+.3,z:point.z};
+      camera.position.set(point.x,point.floorY+5,point.z);
+      neighborhood.update(.016,camera,anchor);
+      const nearby=lights.filter(l=>l.intensity>0&&l.position.distanceTo(new THREE.Vector3(point.x,point.floorY+1,point.z))<l.distance);
+      expect(nearby.length,`${entry.name} at ${distance}`).toBeGreaterThan(0);
+      expect(nearby.some(l=>SEWER_PORTAL_LIGHTS.some(s=>s.x===l.position.x&&s.y===l.position.y&&s.z===l.position.z))).toBe(true);
+      expect(lights.every(l=>!l.castShadow)).toBe(true);
+    }
+    expect(scene.children.filter(o=>o instanceof THREE.PointLight)).toHaveLength(8);
+  });
+
+  it('lights the open shaft and shuts entrance lighting off above rooftops',()=>{
+    const lights=scene.children.filter((child):child is THREE.PointLight=>child instanceof THREE.PointLight);
+    camera.position.set(SEWER_MANHOLE.x,6,SEWER_MANHOLE.z);
+    neighborhood.update(.016,camera,{x:SEWER_MANHOLE.x,y:.3,z:SEWER_MANHOLE.z});
+    expect(lights.some(l=>l.intensity>0&&l.position.y===-.9)).toBe(true);
+    neighborhood.update(.016,camera,{x:SEWER_MANHOLE.x,y:10,z:SEWER_MANHOLE.z});
+    expect(lights.every(l=>l.intensity===0)).toBe(true);
   });
 
   it('keeps the rendered ceiling and gallery at the same positions as their simple aim proxies', () => {

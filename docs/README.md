@@ -18,6 +18,7 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Paperwork race and city lights](verification/paperwork-race-city-lights-2026-09-09.md) | Personal delivery race, stronger bots, missile cases, rat visibility, city lamps and prior private preview |
 | [Ricochet and lighting trial](verification/tampering-ricochets-lighting-2026-09-09.md) | Smoother bouncing cases, quieter buzz, reversible overhead lighting and private preview |
 | [September 10 full production release](verification/production-release-2026-09-10.md) | Commit, deployment version, exact assets, public room checks and validation |
+| [Mobile entry and sewer lighting](verification/mobile-entry-sewer-2026-09-10.md) | Prepared public city, immediate title dismissal, lit sewer approaches/throats and deployment checks |
 | [Live service](live-service.md) | Domains, release, room identity, deployment and recovery |
 | [Server operations](server-operations.md) | Capacity, persistence, cadence and diagnostics |
 | [Server authority](server-authority.md) | Version-2 authority versus legacy version-1 behavior |

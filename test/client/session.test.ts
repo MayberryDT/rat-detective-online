@@ -177,6 +177,12 @@ vi.mock('../../src/ui/MatchScoreboard', () => ({ MatchScoreboard: harness.FakeSc
 vi.mock('../../src/weapons/CheeseGun', () => ({ CheeseGun: harness.FakeGun }));
 vi.mock('../../src/session/RemotePlayers', () => ({ RemotePlayers: harness.FakeRemotes }));
 vi.mock('../../src/world/CityGenerator', () => ({ CityGenerator: harness.FakeCity }));
+vi.mock('../../src/prototype/Neighborhood', () => ({ Neighborhood: class extends harness.FakeCity {
+    constructor(scene: unknown, world: unknown, spec: {seed:number;version:number}) { super(scene,world,undefined,spec); }
+} }));
+vi.mock('../../src/prototype/ChaosView', () => ({ ChaosView: class {
+    setScores() {} dispose() {} apply() {} update() {} renderOutline() {}
+} }));
 vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));
 vi.mock('../../src/session/InputState', () => ({
     InputState: class {
@@ -351,7 +357,7 @@ describe('GameSession', () => {
         vi.unstubAllGlobals();
     });
 
-    function start() {
+    function start(initialWorld?: {seed:number;version:number}) {
         const page = createDocument();
         vi.stubGlobal('document', page.doc);
         const renderer = {
@@ -359,7 +365,7 @@ describe('GameSession', () => {
             setSize: vi.fn(),
             render: vi.fn(),
         };
-        const session = new GameSession(renderer as never);
+        const session = new GameSession(renderer as never,initialWorld);
         return {
             ...page, renderer, session,
             transport: harness.transports.at(-1)!,
@@ -429,6 +435,25 @@ describe('GameSession', () => {
         expect(hud.enterPlaying).toHaveBeenCalled();
         expect(harness.music.at(-1)!.start).toHaveBeenCalledTimes(1);
         expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
+    });
+
+    it('reuses the prepared city on entry and still rebuilds for a different assigned room', () => {
+        const spec={seed:341283204,version:2};
+        const {session,enter,transport}=start(spec);
+        const prepared=harness.cities[0];
+        expect(prepared.spec).toEqual(spec);
+        expect(prepared.generate).toHaveBeenCalledOnce();
+        expect(harness.rats).toHaveLength(0);
+        expect(transport.connect).not.toHaveBeenCalled();
+        enter.click();
+        transport.onMessage?.({...welcome(),world:spec});
+        expect(harness.cities).toHaveLength(1);
+        expect(prepared.dispose).not.toHaveBeenCalled();
+        transport.onMessage?.({...welcome(),world:{seed:42,version:2}});
+        expect(prepared.dispose).toHaveBeenCalledOnce();
+        expect(harness.cities).toHaveLength(2);
+        expect(harness.cities[1].spec).toEqual({seed:42,version:2});
+        session.dispose();
     });
 
     it('joins from the title screen when Enter is pressed', () => {

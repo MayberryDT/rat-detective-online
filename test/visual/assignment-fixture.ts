@@ -28,6 +28,13 @@ const interiors:Record<string,{p:[number,number,number];heading:number}>={
     pumpinside:{p:[125,.3,132],heading:0},sluiceinside:{p:[-137,.3,0],heading:Math.PI/2},
     alleywindow:{p:[-54,.3,15],heading:0},alleydoor:{p:[-40,.3,24],heading:0},
     alleycorner:{p:[23,.3,49],heading:Math.PI/2},
+    sewerwestmouth:{p:[-149,.3,0],heading:-Math.PI/2},
+    sewerwestthroat:{p:[-130,-1.45,0],heading:-Math.PI/2},
+    sewereastthroat:{p:[130,-1.45,0],heading:Math.PI/2},
+    sewersouthmouth:{p:[0,.3,148],heading:0},
+    sewersouthdeep:{p:[0,-4.95,118],heading:0},
+    sewerneedlemouth:{p:[-54,.3,76],heading:0},
+    sewermanhole:{p:[72,.3,7],heading:0},
 };
 const interior=view?interiors[view]:undefined;
 const position=interior?new THREE.Vector3(...interior.p):view==='streetlight'?new THREE.Vector3(-4,.3,-24.6):view==='dispatch'?new THREE.Vector3(-11,.3,-26):view==='city'?new THREE.Vector3(85,.3,35):view==='maintenance'?new THREE.Vector3(63,-6.7,-35.7):view==='sewer'?new THREE.Vector3(55,-6.7,-36):view==='icebox'?new THREE.Vector3(130,.3,-15):view==='archive'?new THREE.Vector3(-64,.3,-59):new THREE.Vector3(-16,.3,-21);
