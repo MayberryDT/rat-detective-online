@@ -6,6 +6,7 @@ import { CheeseImpactEffects } from './CheeseImpactEffects';
 import { GunshotAudio } from '../audio/GunshotAudio';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from './CheeseProjectileModel';
 import { RatEntity } from '../entities/RatEntity';
+import { createShotId } from './shotId';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
 import { BALL_SPEED, BALL_RESTITUTION, BALL_GRAVITY, BALL_LIFETIME } from '../shared/ballTuning';
@@ -127,7 +128,7 @@ export class CheeseGun {
         const finalDir = new THREE.Vector3().subVectors(finalTarget, origin).normalize();
 
         if(!this.authoritative)this.createBall(origin, finalDir, owner);
-        return { shotId: crypto.randomUUID(), origin: { x: origin.x, y: origin.y, z: origin.z },
+        return { shotId: createShotId(), origin: { x: origin.x, y: origin.y, z: origin.z },
             direction: { x: finalDir.x, y: finalDir.y, z: finalDir.z } };
     }
 
