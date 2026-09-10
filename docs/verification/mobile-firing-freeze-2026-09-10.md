@@ -25,3 +25,5 @@ Frozen client `output/mobile-freeze-fix-2026-09-10/client`, assets `index-C2eMX0
 [Tailscale retry](http://100.79.24.11:5192/?room=graybox-benchmark-match-mobile-v18&lighting=pools&revision=shot-fix-v19). Reload or reopen the page to replace a stopped animation loop. The query marks the revision; the script itself has a new immutable filename.
 
 Local build/test logs, source hashes, preview metadata and passive connection receipts are under `output/mobile-freeze-fix-2026-09-10/`.
+
+Human follow-up: Tyler subsequently reported that the phone build works really well, then requested the compact mobile HUD documented in [the next receipt](mobile-hud-compact-2026-09-10.md).

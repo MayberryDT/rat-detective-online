@@ -52,6 +52,11 @@ if(id==='excessive-force')assignment.caseKills={local:6,'other-0':8,'other-2':4,
 sim.setAssignment(assignment);
 const state=sim.snapshot(false);state.time=now;
 if(query.get('dispatch')==='busy')state.dispatch={phase:'cooldown',started:now,until:now+16000,serial:1};
+// Static incident states for reviewing simultaneous objective/mobile cards.
+if(query.get('dispatch')==='rolling')state.dispatch={phase:'rolling',incident:'popcorn-panic',started:now-800,until:now+1600,serial:1};
+if(query.get('dispatch')==='reveal')state.dispatch={phase:'active',incident:'popcorn-panic',started:now-1000,until:now+24000,serial:1};
+if(query.get('dispatch')==='active')state.dispatch={phase:'active',incident:'popcorn-panic',started:now-5000,until:now+20000,serial:1};
+if(query.get('dispatch')==='ending')state.dispatch={phase:'active',incident:'popcorn-panic',started:now-20000,until:now+5000,serial:1};
 state.case.p={x:position.x+(view==='archive'?4:0),y:position.y+.9,z:position.z+(view==='archive'?0:-4)};
 if(query.has('held'))state.case.owner=actor.id;
 const caseEvent=query.get('caseEvent');

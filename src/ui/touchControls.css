@@ -14,3 +14,19 @@
 @media(max-height:370px){.touch-controls .touch-fire{width:92px;height:92px}.touch-controls .touch-jump{height:58px}.touch-mode .assignment-rankings li{font-size:14px;padding:1px 0}.touch-mode .assignment-ledger[data-mode=chain-of-custody] .assignment-title{font-size:18px}.touch-mode .dispatch-ledger{width:145px}.touch-stick{left:85px;top:calc(100% - 70px)}}
 
 @media(max-height:500px){.touch-mode .assignment-ledger[data-mode=chain-of-custody]{gap:2px;padding:6px 8px}.touch-mode .assignment-ledger[data-mode=chain-of-custody] .assignment-rankings li{font-size:14px;padding:1px 0}.touch-mode .assignment-ledger[data-mode=chain-of-custody] .assignment-counter{font-size:12px}.touch-mode .assignment-ledger[data-mode=chain-of-custody] .assignment-title{font-size:19px}}
+
+/* Mobile paperwork occupies 70% of its previous width/height. Keep touch
+   targets and text opacity intact; only the card surfaces show the city. */
+.touch-mode .assignment-ledger{scale:.7;transform-origin:top left}
+.touch-mode .dispatch-ledger{scale:.7;transform-origin:top right}
+.touch-mode .dispatch-roulette,.touch-mode .assignment-reveal{transform:translateX(-50%) rotate(-2deg) scale(.7);transform-origin:top center;animation-name:touch-dispatch-arrival}
+.touch-mode .dispatch-roulette.roulette-leaving{animation-name:touch-dispatch-departure}
+.touch-mode :is(.assignment-ledger,.dispatch-ledger,.dispatch-roulette,.assignment-reveal){background:repeating-linear-gradient(0deg,#1a1022a3 0 3px,#1b1123a8 3px 4px);border-color:#130e2080;box-shadow:3px 4px #09060d40}
+.touch-mode .assignment-detail,.touch-mode .assignment-ledger[data-phase=suspended] .assignment-detail{background:#110b1866}
+.touch-mode .assignment-rankings li[data-local=true]{background:#2b1c3570;box-shadow:-7px 0 #74588580}
+.touch-mode .roulette-window{background:#140c1c55;border-color:#170e2480}
+.touch-mode .dispatch-hud .dispatch-alert-label,.touch-mode .roulette-stamp{background:#28172fb3;border-color:#170e2470;box-shadow:none}
+.touch-mode .dispatch-time-track{display:block;height:6px;margin:6px 0 0;background:#0f0a1480}
+.touch-mode .dispatch-hud:has(.dispatch-roulette:not([hidden])) .assignment-ledger{visibility:visible}
+@keyframes touch-dispatch-arrival{from{opacity:0;transform:translateX(-50%) translateY(-18px) rotate(-7deg) scale(.84)}to{opacity:1;transform:translateX(-50%) rotate(-2deg) scale(.7)}}
+@keyframes touch-dispatch-departure{to{opacity:0;transform:translateX(-50%) translateY(-7px) rotate(-2deg) scale(.7)}}
