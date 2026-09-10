@@ -23,6 +23,13 @@ it('makes the lighting trial reversible with a local query option',()=>{
  expect(readLightingMode('')).toBe('pools');expect(readLightingMode('?lighting=classic')).toBe('classic');
  expect(readLightingMode('?lighting=unknown')).toBe('pools');
 });
+it.each([0,-.003])('keeps nine-unit street lamps on at settled foot height %s',height=>{
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
+ const pool=new StreetLightPool(scene,[{x:0,y:9,z:0,color:0xffcf96,intensity:180}]);
+ camera.position.set(0,5,6);pool.update(camera,{x:2,y:height,z:0});
+ expect(scene.children.filter(o=>o instanceof THREE.SpotLight&&o.intensity>0)).toHaveLength(1);
+ pool.dispose();
+});
 it('bounds the eight-case material draw budget while preserving the shell and real handle geometry',()=>{
  const root=new THREE.Group();addLeatherBriefcase(root);root.updateMatrixWorld(true);
  expect(root.children.filter(o=>o instanceof THREE.Mesh)).toHaveLength(9);

@@ -3,13 +3,14 @@ import * as THREE from 'three';
 import type {BuildingFootprint} from '../shared/worldSpec';
 import type {GrayboxBox} from '../shared/grayboxLayout';
 import {isCentralBuilding} from '../shared/skyline';
+import type {OverheadLight} from './StreetLightPool';
 
 export interface SpillSource {
     x:number; z:number; y:number; nx:number; nz:number;
     kind:'window'|'door'|'sign'; color:number; reach:number;
 }
 export interface SpillBlocker {x:number;z:number;w:number;d:number}
-const SIZE=512, MIN=-200, SPAN=376, MAX_LIGHT=.125;
+const SIZE=512, MIN=-200, SPAN=376, MAX_LIGHT=.35;
 
 /** A presentation-only switch: the accepted streetlamp/ambient settings remain. */
 export function streetReadabilityEnabled(search=typeof location==='undefined'?'':location.search):boolean {
@@ -25,8 +26,13 @@ export function streetSpillSources(layout:readonly BuildingFootprint[]):SpillSou
             // upstairs apartment occupancy never leaves an invisible light source.
             sources.push({x:b.cx,z:b.cz+side*(b.bd/2+(central?1.1:.65)),y:central?4.45:2.82,nx:0,nz:side,
                 kind:'door',color:0xe0bd82,reach:10});
-            sources.push({x:b.cx+side*(b.bw/2+.18),z:b.cz,y:3.6,nx:side,nz:0,
-                kind:i%3===0?'sign':'window',color:i%3===0?0x9ebbc4:i%2?0xc5ab87:0x91aaa6,reach:12});
+            // Long alley walls need spaced workshop panes, not one small pool
+            // at the middle of an otherwise dark frontage. Keep the two batches.
+            for(const offset of b.bd>=16?[-b.bd*.3,0,b.bd*.3]:[0]){
+                const sign=offset===0&&i%3===0;
+                sources.push({x:b.cx+side*(b.bw/2+.18),z:b.cz+offset,y:3.6,nx:side,nz:0,
+                    kind:sign?'sign':'window',color:sign?0x9ebbc4:i%2?0xc5ab87:0x91aaa6,reach:12});
+            }
         }
     });
     // Small sign washers at existing street-facing landmark signs/entrances.
@@ -59,13 +65,14 @@ export function sampleStreetSpill(s:SpillSource,x:number,z:number,blockers:reado
     const across=Math.abs(dx*s.nz-dz*s.nx),width=(s.kind==='door'?1.1:1.5)+depth*.3;
     if(across>=width||blocked(s.x,s.z,x,z,blockers))return 0;
     const edge=1-across/width;
-    return .05*edge*edge*(1-depth/s.reach)**2;
+    return .14*edge*edge*(1-depth/s.reach)**2;
 }
 
-/** Fixed, occluded street spill in one 1 MiB atlas. No live lights, shadow maps,
- * world bodies, frame updates or per-player work. Existing material batching stays. */
+/** Fixed, occluded street spill in one 1 MiB atlas. The same visible fixtures
+ * also feed the existing four-light pool so moving rats receive directional light. */
 export class StreetReadability {
     readonly sources:readonly SpillSource[];
+    readonly lights:readonly OverheadLight[];
     private readonly texture:THREE.DataTexture;
     private readonly geometry=new THREE.BoxGeometry(1,1,1);
     private readonly fixtureMaterials=[new THREE.MeshStandardMaterial({color:0x29252d,roughness:.85}),new THREE.MeshBasicMaterial({color:0xffffff})];
@@ -76,6 +83,12 @@ export class StreetReadability {
         const blockers:SpillBlocker[]=[...layout.map(b=>({x:b.cx,z:b.cz,w:b.bw,d:b.bd})),
             ...boxes.filter(b=>!b.original&&!b.debris&&!b.rx&&!b.rz&&b.y-b.h/2<2&&b.y+b.h/2>2)
                 .map(b=>({x:b.x,z:b.z,w:b.w,d:b.d}))];
+        this.lights=this.sources.map(s=>{
+            const nearby=blockers.filter(b=>Math.abs(b.x-s.x)<s.reach+b.w/2&&Math.abs(b.z-s.z)<s.reach+b.d/2);
+            return {x:s.x,y:s.y,z:s.z,color:s.color,intensity:s.kind==='door'?65:85,distance:18,angle:.9,penumbra:.5,
+                target:{x:s.x+s.nx*5,y:.4,z:s.z+s.nz*5},
+                illuminates:(p)=>p.y<5.5&&sampleStreetSpill(s,p.x,p.z,nearby)>0};
+        });
         const field=new Float32Array(SIZE*SIZE*3),color=new THREE.Color();
         for(const s of this.sources){
             color.setHex(s.color);
@@ -91,7 +104,7 @@ export class StreetReadability {
             }
         }
         const data=new Uint8Array(SIZE*SIZE*4);
-        for(let i=0;i<SIZE*SIZE;i++)for(let c=0;c<3;c++)data[i*4+c]=Math.round(Math.min(MAX_LIGHT,Math.min(.055,field[i*3+c])*AUTHORED_LIGHT_GAIN)/MAX_LIGHT*255);
+        for(let i=0;i<SIZE*SIZE;i++)for(let c=0;c<3;c++)data[i*4+c]=Math.round(Math.min(MAX_LIGHT,Math.min(.18,field[i*3+c])*AUTHORED_LIGHT_GAIN)/MAX_LIGHT*255);
         this.texture=new THREE.DataTexture(data,SIZE,SIZE,THREE.RGBAFormat);
         this.texture.minFilter=this.texture.magFilter=THREE.LinearFilter;
         this.texture.generateMipmaps=false;this.texture.needsUpdate=true;
@@ -149,7 +162,7 @@ export class StreetReadability {
                     diffuseColor.rgb+=streetSurfaceLift*streetHeight*vec3(.014,.017,.022);
                 }`);
         };
-        material.customProgramCacheKey=()=>cacheKey+'-street-spill-v1-'+lift;
+        material.customProgramCacheKey=()=>cacheKey+'-street-spill-v2-'+lift;
         material.needsUpdate=true;
     }
     dispose():void {

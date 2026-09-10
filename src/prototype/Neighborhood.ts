@@ -166,11 +166,6 @@ export class Neighborhood {
         this.grime=new CityGrime(scene,spec);
         yield;
         this.sewerPortals=new SewerPortals(scene);
-        if(lighting==='pools')this.overhead=new StreetLightPool(scene,[
-            ...STREET_LAMPS.map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:180})),
-            ...generatedStreetLamps(layout,STREET_LAMPS).map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:180})),
-            ...fixtures,
-        ],LIGHT_ROOMS);
         yield* this.bakeFixedLighting();
         yield;
         this.batchStaticMeshes();
@@ -187,6 +182,11 @@ export class Neighborhood {
                 }
             });
         }
+        if(lighting==='pools')this.overhead=new StreetLightPool(scene,[
+            ...[...STREET_LAMPS,...generatedStreetLamps(layout,STREET_LAMPS)]
+                .map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:260,distance:24,angle:.88,penumbra:.5})),
+            ...(this.readability?.lights??[]),...fixtures,
+        ],LIGHT_ROOMS);
     }
     private readonly groundBodies:CANNON.Body[]=[];
     private readonly groundMeshes:THREE.Object3D[]=[];

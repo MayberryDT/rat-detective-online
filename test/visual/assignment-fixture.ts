@@ -27,6 +27,7 @@ const interiors:Record<string,{p:[number,number,number];heading:number}>={
     iceinside:{p:[130,.3,-40],heading:0},needleinside:{p:[-94,.3,63],heading:Math.PI},
     pumpinside:{p:[125,.3,132],heading:0},sluiceinside:{p:[-137,.3,0],heading:Math.PI/2},
     alleywindow:{p:[-54,.3,15],heading:0},alleydoor:{p:[-40,.3,24],heading:0},
+    windowspill:{p:[-54,.3,9],heading:0},
     alleycorner:{p:[23,.3,49],heading:Math.PI/2},
     sewerwestmouth:{p:[-149,.3,0],heading:-Math.PI/2},
     sewerwestthroat:{p:[-130,-1.45,0],heading:-Math.PI/2},
@@ -38,6 +39,8 @@ const interiors:Record<string,{p:[number,number,number];heading:number}>={
 };
 const interior=view?interiors[view]:undefined;
 const position=interior?new THREE.Vector3(...interior.p):view==='streetlight'?new THREE.Vector3(-4,.3,-24.6):view==='dispatch'?new THREE.Vector3(-11,.3,-26):view==='city'?new THREE.Vector3(85,.3,35):view==='maintenance'?new THREE.Vector3(63,-6.7,-35.7):view==='sewer'?new THREE.Vector3(55,-6.7,-36):view==='icebox'?new THREE.Vector3(130,.3,-15):view==='archive'?new THREE.Vector3(-64,.3,-59):new THREE.Vector3(-16,.3,-21);
+// Static contact-height review: physics can settle feet just below zero.
+if(query.has('grounded')&&position.y===.3)position.y=-.003;
 const heading=interior?interior.heading:view==='city'?-Math.atan2(45,96):view==='sewer'||view==='maintenance'||view==='streetlight'?-Math.PI/2:view==='offscreen'?Math.PI:view==='archive'?-Math.PI/2:0;
 const spec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION};
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
@@ -151,6 +154,8 @@ stage.renderer.setAnimationLoop(()=>{
         textures:stage.renderer.info.memory.textures,bodies:stage.world.bodies.length,
         lights:stage.scene.children.filter(o=>o instanceof THREE.Light).length,
         shadows:stage.scene.children.filter(o=>o instanceof THREE.Light&&o.castShadow).length,
+        overhead:stage.scene.children.filter((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight&&o.name==='noir-overhead-light')
+            .map(light=>({position:light.position.toArray(),target:light.target.position.toArray(),intensity:light.intensity})),
     };
     chaosView.renderOutline(stage.renderer,stage.camera);
     if(sirenAudition){stage.camera.getWorldPosition(audioPosition);const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.box.x-audioPosition.x,s.box.y+2.1-audioPosition.y,s.box.z-audioPosition.z)),Infinity);sirenAudition.update(state.dispatch.phase==='ready',nearest);}
