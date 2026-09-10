@@ -3,7 +3,7 @@ import type { Vec3Data } from '../shared/networkProtocol';
 export { parseClientMessage } from '../shared/messageValidation';
 
 export const MOVEMENT_RATE = { limit: 30, windowMs: 1_000 };
-export const SHOOT_RATE = { limit: 12, windowMs: 1_000 };
+export { SHOOT_RATE } from '../shared/shotTiming';
 export const HIT_RATE = { limit: 12, windowMs: 1_000 };
 export const PING_RATE = { limit: 4, windowMs: 1_000 };
 export const JOIN_RATE = { limit: 3, windowMs: 10_000 };

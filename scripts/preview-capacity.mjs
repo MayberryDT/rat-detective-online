@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { createHostedPreview } from './hosted-preview.mjs';
 import { checkReceipt } from './benchmark-hosted.mjs';
-const {values}=parseArgs({options:{deployment:{type:'string'},dist:{type:'string'},port:{type:'string',default:'5180'},room:{type:'string',default:'graybox-benchmark-human-playtest'}}});
+const {values}=parseArgs({options:{deployment:{type:'string'},dist:{type:'string'},'browser-origin':{type:'string'},'listen-address':{type:'string'},port:{type:'string',default:'5180'},room:{type:'string',default:'graybox-benchmark-human-playtest'}}});
 if(!/^graybox-benchmark-[a-z0-9-]{1,80}$/.test(values.room))throw Error('Expected a private benchmark room');
 if(!values.deployment)throw new Error('Use --deployment=/absolute/deployment.json');
 const receipt=JSON.parse(await readFile(values.deployment,'utf8'));
@@ -13,7 +13,7 @@ const {CAPACITY_TEST_TOKEN:token}=JSON.parse(await readFile(receipt.tokenFile,'u
 checkReceipt(receipt,token);
 const health=await fetch(`${receipt.url}/health`,{headers:{Authorization:`Bearer ${token}`},redirect:'error',signal:AbortSignal.timeout(10000)});
 if(!health.ok||(await health.json()).fixtureId!==receipt.fixtureId)throw new Error('Private fixture is unavailable or changed');
-const preview=createHostedPreview({distDir:values.dist??join(receipt.stage,'dist'),upstreamOrigin:receipt.url,token});
+const preview=createHostedPreview({distDir:values.dist??join(receipt.stage,'dist'),upstreamOrigin:receipt.url,token,browserOrigin:values['browser-origin'],listenAddress:values['listen-address']});
 const origin=await preview.listen(Number(values.port));
 console.log(JSON.stringify({event:'playtest-ready',url:`${origin}/?room=${values.room}`,version:receipt.version,expiresAt:receipt.expiresAt,pid:process.pid}));
 let expiry;

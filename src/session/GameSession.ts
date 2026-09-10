@@ -27,6 +27,7 @@ import { bindGamePointerLock } from './GamePointerLock';
 import { FeedbackAudio } from '../audio/FeedbackAudio';
 import { MatchScoreboard } from '../ui/MatchScoreboard';
 import { bindScoreboardHold } from './ScoreboardHold';
+import {TouchControls, touchControlsAvailable} from '../ui/TouchControls';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
@@ -62,6 +63,8 @@ export class GameSession {
     private nameRollTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly simulation = new SimulationClock();
     private readonly direction = new THREE.Vector3();
+    private touch?: TouchControls;
+    private roundWon = false;
 
     constructor(renderer: THREE.WebGLRenderer) {
         this.stage = createStage(renderer);
@@ -85,11 +88,12 @@ export class GameSession {
         this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
-            this.input.clear();
+            this.clearInput();
             this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
             this.scoreboard.setAvailable(state === 'playing');
+            this.touch?.setPlaying(state === 'playing');
             if (state === 'playing') { this.hud.enterPlaying(); this.music.start(); }
         };
         this.gun.onHitEntity = (victim, damage) => {
@@ -208,8 +212,11 @@ export class GameSession {
             event.preventDefault();
             this.enterCity();
         }, options);
+        if (touchControlsAvailable()) this.touch = new TouchControls({canvas:this.stage.renderer.domElement,
+            look:(dx,dy)=>this.rat?.onMouseMove(dx,dy),shoot:()=>this.shoot(),
+            scores:visible=>this.scoreboard.setVisible(visible),clearKeys:()=>this.input.clear()});
         this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
-            playing:()=>this.transport.state==='playing',signal:this.events.signal,
+            playing:()=>this.transport.state==='playing',enabled:()=>!this.touch?.active,signal:this.events.signal,
             record:(type,detail)=>this.stats?.event(type,detail)});
         bindScoreboardHold({available:()=>this.transport.state==='playing',
             show:visible=>this.scoreboard.setVisible(visible),scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
@@ -220,25 +227,15 @@ export class GameSession {
         }, options);
         document.addEventListener('pointerdown', () => {
             void this.music.unlock();
-        }, options);
+        }, {...options,capture:true});
         document.addEventListener('mousemove', event => {
-            if (this.transport.state === 'playing' && document.pointerLockElement === this.stage.renderer.domElement) {
+            if (!this.touch?.active && this.transport.state === 'playing' && document.pointerLockElement === this.stage.renderer.domElement) {
                 this.rat?.onMouseMove(event.movementX, event.movementY);
             }
         }, options);
         document.addEventListener('mousedown', event => {
-            if (event.button !== 0 || this.transport.state !== 'playing' || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
-            if (document.pointerLockElement !== this.stage.renderer.domElement) return;
-            this.stage.camera.getWorldDirection(this.direction);
-            const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
-            this.shotsAttempted++;
-            const shot = this.gun.shoot(this.rat.entity, target);
-            if (shot) {
-                if(this.transport.send({ type: 'shoot', ...shot })){
-                    this.shotsSent++;
-                    if(this.gun.authoritative)this.gun.predictShot(this.rat.entity,shot);
-                }
-            }
+            if (this.touch?.active || event.button !== 0 || document.pointerLockElement !== this.stage.renderer.domElement) return;
+            this.shoot();
         }, options);
         window.addEventListener('resize', () => {
             const { camera, renderer } = this.stage;
@@ -249,9 +246,25 @@ export class GameSession {
         window.addEventListener('pagehide', () => this.dispose(), options);
     }
 
-    private requestPointerLock(): void { this.pointerLock.request(); }
+    private clearInput(): void { this.input.clear(); this.touch?.clear(); }
+
+    /** Both input devices use the real camera ray, animated muzzle and transport. */
+    private shoot(): void {
+        if (this.transport.state !== 'playing' || this.roundWon || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
+        this.rat.updateView();
+        this.stage.camera.getWorldDirection(this.direction);
+        const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
+        this.shotsAttempted++;
+        const shot = this.gun.shoot(this.rat.entity, target);
+        if (shot && this.transport.send({type:'shoot', ...shot})) {
+            this.shotsSent++;
+            if (this.gun.authoritative) this.gun.predictShot(this.rat.entity, shot);
+        }
+    }
+    private requestPointerLock(): void { if (!this.touch?.active) this.pointerLock.request(); }
 
     private welcome(message: Extract<ServerMessage, { type: 'welcome' }>): void {
+        this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
         this.bots?.dispose();this.bots=null;
@@ -315,7 +328,7 @@ export class GameSession {
                     body.position.set(pose.x, pose.y, pose.z);
                     body.velocity.set(0, 0, 0);
                     body.aabbNeedsUpdate = true;
-                    this.input.clear();
+                    this.clearInput();
                     this.rat.syncAfterPhysics(0);
                     this.rat.resetGrounding();
                     this.lastMovement = '';
@@ -354,6 +367,7 @@ export class GameSession {
                     }
                 }
                 if (message.victimId === this.myId) {
+                    this.clearInput();
                     this.stats?.event('death',{respawnAt:message.respawnAt-this.serverOffset,incident:message.incident});
                     this.hud.showRespawn(message.respawnAt - this.serverOffset);
                 }
@@ -361,13 +375,13 @@ export class GameSession {
                 break;
             }
             case 'playerRespawn':
-                if (message.id === this.myId) { this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.input.clear(); this.hud.hideRespawn(); }
+                if (message.id === this.myId) { this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.clearInput(); this.hud.hideRespawn(); }
                 else this.remotes.respawn(message.id, message);
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
-            case 'gameWon': this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
-            case 'gameReset': this.foleyWorld.reset();this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+            case 'gameWon': this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
+            case 'gameReset': this.roundWon=false;this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -395,7 +409,7 @@ export class GameSession {
             this.remotes.prepareFrame();
             this.simulation.advance(dt, step => {
                 this.remotes.updateDeaths(step);
-                this.rat?.prepareMovement(step, this.input.keys);
+                this.rat?.prepareMovement(step, this.input.keys, this.touch?.active ? this.touch.input.movement : undefined);
                 world.step(step);
                 this.rat?.syncAfterPhysics(step);
                 this.gun.update(step);
@@ -406,6 +420,7 @@ export class GameSession {
             });
             this.remotes.presentFrame();
             this.rat?.updateView();
+            this.touch?.update(now, !!this.rat && !this.rat.entity.dead && this.rat.entity.hp > 0 && !this.roundWon);
             this.sendMovement(now);
             if (this.rat) {
                 const position = this.rat.entity.mesh.position;
@@ -435,6 +450,7 @@ export class GameSession {
         this.clearNameRoll();
         cancelAnimationFrame(this.frame);
         this.events.abort();
+        this.touch?.dispose();
         this.input.dispose();
         this.bots?.dispose();this.bots=null;
         this.transport.destroy();

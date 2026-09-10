@@ -6,3 +6,4 @@
 @media(max-width:900px){.match-scoreboard{width:calc(100vw - 24px)}.match-scoreboard-heading{padding:12px 14px 8px}.match-scoreboard h2{font-size:31px}.match-scoreboard-mode{margin-inline:14px}.match-scoreboard table{font-size:13px}.match-scoreboard-summary{font-size:11px}.match-scoreboard footer{padding:9px 14px;font-size:10px}}
 @media(max-height:620px){.match-scoreboard{max-height:calc(100dvh - 36px)}.match-scoreboard-heading{padding-block:8px}.match-scoreboard-heading small{display:none}.match-scoreboard h2{font-size:27px}.match-scoreboard-mode{padding-block:4px;margin-bottom:4px}.match-scoreboard td,.match-scoreboard tbody th{padding-block:4px}.match-scoreboard footer{padding-block:7px}}
 @media(prefers-reduced-motion:reduce){.match-scoreboard{animation:none}}
+.scoreboard-touch-hint{display:none}

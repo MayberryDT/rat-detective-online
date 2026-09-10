@@ -1,11 +1,11 @@
 import {expect,it,vi} from 'vitest';
 import {bindGamePointerLock} from '../../src/session/GamePointerLock';
-function fixture(){
+function fixture(enabled=()=>true){
  const doc=Object.assign(new EventTarget(),{pointerLockElement:null as unknown,hidden:false,hasFocus:()=>true,activeElement:{blur:vi.fn()}});
  const target=new EventTarget(),abort=new AbortController(),request=vi.fn(),record=vi.fn();
  const canvas={requestPointerLock:request,isConnected:true};let now=0;
  const lock=bindGamePointerLock({canvas:canvas as unknown as HTMLElement,doc:doc as unknown as Document,target:target as Window,
-  playing:()=>true,now:()=>now,signal:abort.signal,record});
+  playing:()=>true,enabled,now:()=>now,signal:abort.signal,record});
  const event=(type:string,detail:object={})=>{const e=new Event(type,{cancelable:true});
   for(const [k,v] of Object.entries({button:0,target:canvas,...detail}))Object.defineProperty(e,k,{value:v});doc.dispatchEvent(e);return e;};
  return {doc,target,abort,request,record,canvas,lock,event,setNow:(n:number)=>{now=n;},
@@ -39,4 +39,10 @@ it('allows a new gesture after rejection without an old rejected request canceli
  f.request.mockReturnValueOnce(new Promise<void>((_,r)=>{reject=r;}));f.lock.request();
  f.event('pointerlockerror');f.click();expect(f.request).toHaveBeenCalledTimes(2);f.acquire();reject(new Error('late rejection'));await Promise.resolve();
  expect(f.record.mock.calls.filter(([type])=>type==='pointer-lock-request-failed')).toHaveLength(0);f.abort.abort();
+});
+
+it('touch mode bypasses mouse lock and leaves touch UI clicks usable',()=>{
+ let enabled=false;const f=fixture(()=>enabled);
+ f.lock.request();f.event('pointerdown',{pointerType:'touch'});expect(f.event('click',{target:{tagName:'BUTTON'}}).defaultPrevented).toBe(false);
+ expect(f.request).not.toHaveBeenCalled();enabled=true;f.click();expect(f.request).toHaveBeenCalledOnce();f.abort.abort();
 });

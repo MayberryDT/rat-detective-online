@@ -35,7 +35,7 @@ export class MatchScoreboard {
         this.root.className = 'match-scoreboard';
         this.root.hidden = true;
         this.root.setAttribute('aria-label', 'Full lobby scoreboard');
-        this.root.innerHTML = `<header class="match-scoreboard-heading"><div><small>DEPARTMENT PERSONNEL FILE</small><h2>ROUND STATS</h2></div><p class="match-scoreboard-summary"></p></header><div class="match-scoreboard-mode"><strong></strong><span></span></div><div class="match-scoreboard-scroll"><table aria-label="Every investigator in this round"><thead></thead><tbody></tbody></table></div><footer><span></span><b>HOLD TAB · SCROLL TO BROWSE</b></footer>`;
+        this.root.innerHTML = `<header class="match-scoreboard-heading"><div><small>DEPARTMENT PERSONNEL FILE</small><h2>ROUND STATS</h2></div><p class="match-scoreboard-summary"></p></header><div class="match-scoreboard-mode"><strong></strong><span></span></div><div class="match-scoreboard-scroll"><table aria-label="Every investigator in this round"><thead></thead><tbody></tbody></table></div><footer><span></span><b class="scoreboard-desktop-hint">HOLD TAB · SCROLL TO BROWSE</b><b class="scoreboard-touch-hint">SWIPE TO BROWSE</b></footer>`;
         const get = (selector: string) => this.root.querySelector<HTMLElement>(selector)!;
         this.title = get('h2'); this.summary = get('.match-scoreboard-summary');
         this.mode = get('.match-scoreboard-mode strong'); this.context = get('.match-scoreboard-mode span');

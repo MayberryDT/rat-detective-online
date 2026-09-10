@@ -14,6 +14,7 @@ import { DispatchSirenAudio } from '../../src/audio/DispatchSirenAudio';
 import {RatEntity} from '../../src/entities/RatEntity';
 import {MatchScoreboard} from '../../src/ui/MatchScoreboard';
 import {PROTOCOL_VERSION} from '../../src/shared/networkProtocol';
+import {TouchControls} from '../../src/ui/TouchControls';
 
 // Fixed presentation states over the real city and shoulder camera. This page
 // has no gameplay input, matchmaking, scoring loop or network.
@@ -95,6 +96,12 @@ if(query.has('scoreboard')){
     fullScoreboard.receive({type:'welcome',id:actor.id,player:actor,players:Object.fromEntries(roster.map(p=>[p.id,p])),round:{phase:'playing',assignment:state.assignment},world:spec,protocolVersion:PROTOCOL_VERSION,serverTime:now});
     fullScoreboard.receive({type:'chaos',state:boardState});fullScoreboard.setAvailable(true);fullScoreboard.setVisible(true);
 }
+let touch:TouchControls|undefined;
+if(query.get('controls')==='touch'){
+    touch=new TouchControls({canvas:stage.renderer.domElement,look:()=>{},shoot:()=>{},scores:visible=>fullScoreboard?.setVisible(visible),clearKeys:()=>{}});
+    touch.setPlaying(phase!=='title');touch.update(0,phase!=='death'&&phase!=='closed');
+    if(query.has('scoreboard'))touch.showScores(true);
+}
 if(caseEvent)setTimeout(()=>{state.case.owner=caseEvent==='pickup'?actor.id:caseEvent==='taken'?'other-0':null;state.time=now+20;chaosView.apply(state);},500);
 if(query.has('confirm'))setTimeout(()=>{
     if(id==='excessive-force')state.assignment!.caseKills.local++;
@@ -126,4 +133,4 @@ stage.renderer.setAnimationLoop(()=>{
     if(sirenAudition){stage.camera.getWorldPosition(audioPosition);const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.box.x-audioPosition.x,s.box.y+2.1-audioPosition.y,s.box.z-audioPosition.z)),Infinity);sirenAudition.update(state.dispatch.phase==='ready',nearest);}
 });
 window.addEventListener('resize',()=>{stage.camera.aspect=innerWidth/innerHeight;stage.camera.updateProjectionMatrix();stage.renderer.setSize(innerWidth,innerHeight);});
-window.addEventListener('pagehide',()=>{stage.renderer.setAnimationLoop(null);sirenAudition?.dispose();if(deathReplay)clearInterval(deathReplay);for(const rat of distantRats)rat.dispose();fullScoreboard?.dispose();hud.dispose();chaosView.dispose();player.dispose();city.dispose();stage.dispose();},{once:true});
+window.addEventListener('pagehide',()=>{stage.renderer.setAnimationLoop(null);sirenAudition?.dispose();if(deathReplay)clearInterval(deathReplay);for(const rat of distantRats)rat.dispose();touch?.dispose();fullScoreboard?.dispose();hud.dispose();chaosView.dispose();player.dispose();city.dispose();stage.dispose();},{once:true});

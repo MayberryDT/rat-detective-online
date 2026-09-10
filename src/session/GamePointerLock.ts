@@ -2,6 +2,7 @@
  * Never re-lock from timers, focus events, or the trailing click of locked fire. */
 export function bindGamePointerLock(options: {
     canvas: HTMLElement; playing: () => boolean; signal: AbortSignal;
+    enabled?: () => boolean;
     record?: (type: string, detail: unknown) => void;
     doc?: Document; target?: Window; now?: () => number;
 }): { request(): void } {
@@ -13,7 +14,7 @@ export function bindGamePointerLock(options: {
     const cancel=()=>{pending=false;freshDown=false;generation++;};
     const swallow=(event:Event)=>{event.preventDefault();event.stopImmediatePropagation();};
     const request=()=>{
-        if(options.signal.aborted||locked()||pending||doc.hidden||!doc.hasFocus())return;
+        if(options.enabled?.()===false||options.signal.aborted||locked()||pending||doc.hidden||!doc.hasFocus())return;
         pending=true;const current=++generation;
         record('pointer-lock-request');
         const failed=(error:unknown)=>{
@@ -40,12 +41,14 @@ export function bindGamePointerLock(options: {
     },listeners);
     doc.addEventListener('pointerdown',event=>{
         freshDown=false;
+        if(options.enabled?.()===false||event.pointerType==='touch')return;
         if(locked()){if(event.button!==0)swallow(event);return;}
         if(options.playing() && event.button===0 && event.target===options.canvas &&
             !doc.hidden && doc.hasFocus() && now()-unlockedAt>=100)freshDown=true;
     },listeners);
     doc.addEventListener('mousedown',event=>{if(locked()&&event.button!==0)swallow(event);},listeners);
     doc.addEventListener('click',event=>{
+        if(options.enabled?.()===false)return;
         const link=event.target as HTMLAnchorElement|null;
         // F8 diagnostics intentionally initiates a programmatic download.
         if(!event.isTrusted && link?.tagName==='A' && link.hasAttribute('download'))return;

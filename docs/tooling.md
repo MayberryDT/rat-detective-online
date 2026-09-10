@@ -73,3 +73,7 @@ Build and prepare `node scripts/prepare-hosted-capacity.mjs --deploy --minutes=2
 `test/visual/hud-preview.html` is a no-input UI fixture under the Vite visual development server. It exercises rank swaps and the personal/incident cards without booting gameplay.
 
 All Worker configs include the additive `v2-matchmaking` migration and `MATCHMAKER` binding. Production remains unchanged until a separately authorized deployment; preserve `public-live-v2` and existing migrations when releasing.
+
+## Phone preview (September 10 follow-up)
+
+The current phone preview uses explicit private-interface relays on Wi-Fi port 5191 and Tailscale port 5192; the desktop relay stays loopback on 5190. All use the same frozen build, private Worker and expiry. [Mobile controls](mobile-controls.md) records current links and checks. `scripts/preview-capacity.mjs` accepts `--listen-address` and `--browser-origin`; non-loopback binding requires an exact matching private IPv4 origin. Default binding remains loopback. Public/wildcard interfaces and unrelated WebSocket origins are rejected. HTTPS reverse-proxy origins are optional; they do not configure Tailscale or grant administrator access. No token value is placed in a browser URL.

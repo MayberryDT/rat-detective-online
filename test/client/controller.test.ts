@@ -141,3 +141,21 @@ it('clears normal jump gravity for machine launches, landing, death and respawn'
     }
     rat.dispose();
 });
+
+it('uses proportional touch movement and clamps combined keyboard/stick input to ordinary speed', () => {
+    const rat = new RatController(new THREE.Scene(), new CANNON.World(), new THREE.PerspectiveCamera());
+    rat.prepareMovement(1 / 60, {}, {x:0,y:.5,jump:false});
+    expect(rat.entity.body.velocity.z).toBeCloseTo(9*.28);
+    rat.entity.body.velocity.setZero();
+    rat.prepareMovement(1 / 60, {KeyW:true,KeyD:true}, {x:1,y:1,jump:false});
+    expect(Math.hypot(rat.entity.body.velocity.x,rat.entity.body.velocity.z)).toBeCloseTo(18*.28);
+    rat.dispose();
+});
+it('touch jump has the same grounded impulse and cannot jump again in midair', () => {
+    const world=new CANNON.World(),rat=new RatController(new THREE.Scene(),world,new THREE.PerspectiveCamera());
+    const floor=new CANNON.Body({mass:0}),contact=new CANNON.ContactEquation(floor,rat.entity.body);contact.ni.set(0,1,0);world.contacts.push(contact);
+    rat.syncAfterPhysics(1/60);rat.prepareMovement(1/60,{}, {x:0,y:0,jump:true});
+    expect(rat.entity.body.velocity.y).toBeCloseTo(16*Math.sqrt(1.28));
+    world.contacts.length=0;rat.entity.body.velocity.y=0;rat.prepareMovement(1/60,{}, {x:0,y:0,jump:true});
+    expect(rat.entity.body.velocity.y).toBe(0);rat.dispose();
+});

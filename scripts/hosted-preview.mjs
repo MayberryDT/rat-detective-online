@@ -11,10 +11,16 @@ const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=u
   '.svg':'image/svg+xml','.webp':'image/webp','.ico':'image/x-icon','.mp3':'audio/mpeg','.ogg':'audio/ogg','.wav':'audio/wav',
   '.wasm':'application/wasm','.woff2':'font/woff2','.ttf':'font/ttf'};
 const MAX_PENDING_BYTES=512*1024,MAX_PENDING_MESSAGES=32,MAX_SEND_BYTES=4*1024*1024;
+function privateIPv4(host){
+  const p=host.split('.').map(Number);
+  return p.length===4&&p.every(n=>Number.isInteger(n)&&n>=0&&n<=255)&&
+    (p[0]===127||p[0]===10||p[0]===192&&p[1]===168||p[0]===172&&p[1]>=16&&p[1]<=31||p[0]===100&&p[1]>=64&&p[1]<=127);
+}
 
 /** Local static preview plus an authenticated private-worker relay. The injected
  * transport factory is only for focused tests; the executable requires HTTPS. */
 export function createHostedPreview({distDir,upstreamOrigin,token,
+  browserOrigin,listenAddress='127.0.0.1',
   createUpstream=(url,options)=>new WebSocket(url,options),
   onDiagnostic=report=>console.log(JSON.stringify({event:'client diagnostics',report})),
 }) {
@@ -22,11 +28,19 @@ export function createHostedPreview({distDir,upstreamOrigin,token,
   if(origin.protocol!=='https:'||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)
     throw new Error('RAT_NETWORK_ORIGIN must be an HTTPS origin.');
   if(typeof token!=='string'||!token||/[\r\n]/.test(token))throw new Error('A valid private relay token is required.');
+  // Explicit private preview addresses only. Never bind all/public interfaces,
+  // accept wildcard origins, or put the upstream credential into a browser URL.
+  const browser=browserOrigin?new URL(browserOrigin):undefined;
+  if(!privateIPv4(listenAddress))throw new Error('Listen address must be a private IPv4 address.');
+  if(browser&&((browser.protocol!=='https:'&&!(browser.protocol==='http:'&&privateIPv4(browser.hostname)))||browser.username||browser.password||browser.pathname!=='/'||browser.search||browser.hash))
+    throw new Error('browserOrigin must be an HTTPS origin or a private-IP HTTP origin.');
+  if(!listenAddress.startsWith('127.')&&(!browser||browser.hostname!==listenAddress))
+    throw new Error('Non-loopback preview requires a matching explicit browser origin.');
   const root=resolve(distDir),rootReady=realpath(root),pairs=new Set();
   let closing=false;
   function localHost(request){
     const port=server.address()?.port;
-    return request.headers.host===`127.0.0.1:${port}`||request.headers.host===`localhost:${port}`;
+    return request.headers.host===`${listenAddress}:${port}`||request.headers.host===`localhost:${port}`||!!browser&&request.headers.host===browser.host;
   }
   const server=createServer(async(request,response)=>{
     if(!localHost(request)){response.writeHead(403);response.end();return;}
@@ -54,7 +68,9 @@ export function createHostedPreview({distDir,upstreamOrigin,token,
   const sockets=new WebSocketServer({noServer:true,maxPayload:64*1024,perMessageDeflate:false});
   server.on('upgrade',(request,socket,head)=>{
     let url;try{url=new URL(request.url,'http://127.0.0.1');}catch{socket.destroy();return;}
-    if(closing||url.pathname!=='/ws'||!localHost(request)||request.headers.origin!==`http://${request.headers.host}`){
+    const expectedOrigin=browser&&request.headers.host===browser.host?browser.origin:`http://${request.headers.host}`;
+    if(closing||url.pathname!=='/ws'||!localHost(request)||
+      (request.headers.origin!==expectedOrigin&&(!browser||request.headers.origin!==browser.origin))){
       socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');return;
     }
     sockets.handleUpgrade(request,socket,head,client=>{
@@ -109,8 +125,8 @@ export function createHostedPreview({distDir,upstreamOrigin,token,
     async listen(port=5175){
       await rootReady;
       if(!Number.isInteger(port)||port<0||port>65535)throw new Error('Invalid preview port.');
-      await new Promise((ok,fail)=>{server.once('error',fail);server.listen(port,'127.0.0.1',()=>{server.off('error',fail);ok();});});
-      return `http://127.0.0.1:${server.address().port}`;
+      await new Promise((ok,fail)=>{server.once('error',fail);server.listen(port,listenAddress,()=>{server.off('error',fail);ok();});});
+      return `http://${listenAddress}:${server.address().port}`;
     },
     async close(){
       if(closing)return;closing=true;for(const stop of [...pairs])stop(1001,'Preview stopping');

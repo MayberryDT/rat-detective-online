@@ -4,6 +4,7 @@ import type * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
 import { RatOptions } from '../utils/RatModel';
 import { PRESSURE_LAUNCH, type ChaosState } from '../shared/chaosState';
+import type {TouchMovement} from '../session/TouchInput';
 
 // ─── TUNING CONSTANTS ─────────────────────────────────────────────
 const MOVE_SPEED = 18;
@@ -73,11 +74,11 @@ export class RatController {
     }
 
     /** Apply controls before the fixed physics step. Factors match the original at60Hz. */
-    prepareMovement(dt: number, keys: Record<string, boolean>): void {
+    prepareMovement(dt: number, keys: Record<string, boolean>, touch?: TouchMovement): void {
         if (this.disposed) return;
         this.groundGrace = Math.max(0, this.groundGrace - dt);
         this.launchTime = Math.max(0, this.launchTime - dt);
-        if (!this.entity.dead && this.entity.hp > 0) this.applyMovement(dt, keys);
+        if (!this.entity.dead && this.entity.hp > 0) this.applyMovement(dt, keys, touch);
         else this.normalJump=false;
     }
 
@@ -145,7 +146,7 @@ export class RatController {
         this.entity.dispose();
     }
 
-    private applyMovement(dt: number, keys: Record<string, boolean>): void {
+    private applyMovement(dt: number, keys: Record<string, boolean>, touch?: TouchMovement): void {
         // Camera-relative directions
         const forward = this.forward.set(0, 0, -1).applyAxisAngle(this.up, this.spherical.theta);
         const right = this.right.set(1, 0, 0).applyAxisAngle(this.up, this.spherical.theta);
@@ -157,12 +158,16 @@ export class RatController {
         if (keys['KeyS'] || keys['ArrowDown']) { desiredX -= forward.x; desiredZ -= forward.z; }
         if (keys['KeyA'] || keys['ArrowLeft']) { desiredX -= right.x; desiredZ -= right.z; }
         if (keys['KeyD'] || keys['ArrowRight']) { desiredX += right.x; desiredZ += right.z; }
+        if (touch) {
+            desiredX += forward.x * touch.y + right.x * touch.x;
+            desiredZ += forward.z * touch.y + right.z * touch.x;
+        }
 
         // Normalize
         const len = Math.sqrt(desiredX * desiredX + desiredZ * desiredZ);
         if (len > 0) {
-            desiredX = (desiredX / len) * MOVE_SPEED;
-            desiredZ = (desiredZ / len) * MOVE_SPEED;
+            desiredX = (desiredX / Math.max(1, len)) * MOVE_SPEED;
+            desiredZ = (desiredZ / Math.max(1, len)) * MOVE_SPEED;
         }
 
         const v = this.entity.body.velocity;
@@ -184,13 +189,13 @@ export class RatController {
         }
 
         // Jump
-        if (keys['Space'] && this.groundGrace > 0) {
+        if ((keys['Space'] || touch?.jump) && this.groundGrace > 0) {
             v.y = JUMP_IMPULSE;
             emitWorldSound(this.entity.scene,'jump',this.entity.body.position,{key:'local-jump'});
             this.groundGrace = 0;
             this.normalJump = true;
         }
-        // Only keyboard jumps receive the extra gravity. Falling off ledges,
+        // Only deliberate player jumps receive the extra gravity. Falling off ledges,
         // ragdolls, and any of the machine throws retain their original arc.
         if(this.normalJump)this.entity.body.force.y +=
             this.entity.body.mass*this.entity.world.gravity.y*(JUMP_GRAVITY_SCALE-1);
