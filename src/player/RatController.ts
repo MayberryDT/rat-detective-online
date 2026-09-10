@@ -1,3 +1,4 @@
+import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import type * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
@@ -26,6 +27,7 @@ export class RatController {
     private readonly cameraBlockers: THREE.Object3D[];
     private readonly cameraRay = new THREE.Raycaster();
     private groundGrace = 0;
+    get grounded():boolean {return this.groundGrace>0;}
     private launchTime = 0;
     private launcherFlight = false;
     private normalJump = false;
@@ -184,6 +186,7 @@ export class RatController {
         // Jump
         if (keys['Space'] && this.groundGrace > 0) {
             v.y = JUMP_IMPULSE;
+            emitWorldSound(this.entity.scene,'jump',this.entity.body.position,{key:'local-jump'});
             this.groundGrace = 0;
             this.normalJump = true;
         }

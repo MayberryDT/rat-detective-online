@@ -1,3 +1,5 @@
+import {FoleyAudio} from '../audio/FoleyAudio';
+import {FoleyWorld} from '../audio/FoleyWorld';
 import * as THREE from 'three';
 import { ChaosView } from '../prototype/ChaosView';
 import { Neighborhood } from '../prototype/Neighborhood';
@@ -28,13 +30,15 @@ import { FeedbackAudio } from '../audio/FeedbackAudio';
 export class GameSession {
     private readonly stage;
     private readonly transport = new NetworkManager();
-    private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue));
+    private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue),(...args)=>this.foley?.play(...args));
     private readonly input = new InputState();
     private readonly events = new AbortController();
     private readonly gun;
     private readonly remotes;
     private readonly music;
     private readonly feedback: FeedbackAudio;
+    private readonly foley:FoleyAudio;
+    private foleyWorld!:FoleyWorld;
     private readonly stats: PerformanceStats | null;
     private diagnosticChaos={receivedAt:0,serverTime:0,shots:0};
     private shotsAttempted=0;
@@ -67,15 +71,19 @@ export class GameSession {
         initEntitySounds(listener);
         this.music = new SessionMusic(listener);
         this.feedback = new FeedbackAudio(listener);
+        this.foley=new FoleyAudio(listener);
+        this.foley.setEnabled(false);
         this.gun = new CheeseGun(scene, world, listener);
         this.remotes = new RemotePlayers(scene, world);
         this.worldSpec = createWorldSpec(1);
         if(new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
         this.city = this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(scene,world,this.worldSpec) : new CityGenerator(scene, world, DEFAULT_CITY_OPTIONS, this.worldSpec);
         this.city.generate();
+        this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
             this.input.clear();
+            this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
             if (state === 'playing') { this.hud.enterPlaying(); this.music.start(); }
@@ -92,6 +100,7 @@ export class GameSession {
 
     private enterCity(): void {
         if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
+        this.clearNameRoll();
         this.transport.connect(this.assignedName || generateRandomName(), generateRandomAppearance());
         void this.music.unlock();
         this.requestPointerLock();
@@ -135,6 +144,13 @@ export class GameSession {
         this.assignedName = this.pickName(this.assignedName);
         if (!animate || this.prefersReducedMotion()) {
             this.showName(this.assignedName);
+            if(animate){
+                const name=this.assignedName;
+                void this.music.unlock().then(()=>{
+                    if(this.disposed||document.hidden||name!==this.assignedName||!['idle','disconnected'].includes(this.transport.state))return;
+                    this.foley.setEnabled(true);this.foley.play('name-stamp');
+                });
+            }
             return;
         }
 
@@ -145,6 +161,7 @@ export class GameSession {
             if (this.disposed) return;
             if (step >= flashes) {
                 this.showName(this.assignedName, true);
+                this.foley.setEnabled(!document.hidden);this.foley.play('name-stamp');
                 this.nameRollTimer = setTimeout(() => {
                     this.nameRollTimer = null;
                     document.getElementById('player-name')?.classList.remove('shuffling');
@@ -152,6 +169,7 @@ export class GameSession {
                 }, 180);
                 return;
             }
+            this.foley.setEnabled(!document.hidden);this.foley.play('name-tick');
             this.showName(this.pickName(this.assignedName), true);
             this.nameRollTimer = setTimeout(() => tick(step + 1), 55);
         };
@@ -177,6 +195,7 @@ export class GameSession {
         }, options);
         reroll.addEventListener('click', event => {
             event.stopPropagation();
+            void this.music.unlock();
             this.rollName(true);
         }, options);
         document.addEventListener('keydown', event => {
@@ -190,6 +209,7 @@ export class GameSession {
             record:(type,detail)=>this.stats?.event(type,detail)});
         window.addEventListener('focus', () => this.focusTitleControls(), options);
         document.addEventListener('visibilitychange', () => {
+            this.foleyWorld.setEnabled(!document.hidden&&this.transport.state==='playing');
             if (!document.hidden) this.focusTitleControls();
         }, options);
         document.addEventListener('pointerdown', () => {
@@ -227,6 +247,7 @@ export class GameSession {
 
     private welcome(message: Extract<ServerMessage, { type: 'welcome' }>): void {
         this.serverOffset = message.serverTime - Date.now();
+        this.foleyWorld.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
         this.gun.clearProjectiles();
@@ -239,6 +260,7 @@ export class GameSession {
             this.worldSpec = message.world;
             this.city = this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(this.stage.scene,this.stage.world,this.worldSpec) : new CityGenerator(this.stage.scene, this.stage.world, DEFAULT_CITY_OPTIONS, this.worldSpec);
             this.city.generate();
+            this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         }
         this.myId = message.id;
         const player = message.player;
@@ -249,7 +271,7 @@ export class GameSession {
         this.gun.setPlayer(this.stage.camera, this.rat.entity);
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
-        if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin));
+        if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld);
         this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.hud.hideRespawn();
         this.hud.hideVictory();
@@ -299,7 +321,7 @@ export class GameSession {
                 break;
             }
             case 'playerDamaged': {
-                if(message.attackerId===this.myId && message.id!==this.myId)this.hud.showHitMarker();
+                if(message.attackerId===this.myId && message.id!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 if (entity && !entity.dead) {
                     if (message.hp === 0) {
@@ -338,7 +360,7 @@ export class GameSession {
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
-            case 'gameReset': this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+            case 'gameReset': this.foleyWorld.reset();this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -386,6 +408,11 @@ export class GameSession {
             }
         }
         const simulationEnd=measure?performance.now():0;
+        this.foleyWorld.listener(camera);
+        if(this.transport.state==='playing'&&!document.hidden){
+            if(this.rat&&!this.rat.entity.dead)this.foleyWorld.motion.update(this.rat.entity.mesh.position,dt,this.rat.grounded);
+            else this.foleyWorld.motion.clear();
+        }
         this.chaos?.update(dt,camera);
         this.city.update(dt, camera);
         const presentationEnd=measure?performance.now():0;
@@ -413,6 +440,7 @@ export class GameSession {
         this.city.dispose();
         this.music.dispose();
         this.feedback.dispose();
+        this.foleyWorld.dispose();this.foley.dispose();
         disposeEntitySounds();
         this.stats?.dispose();
         this.stage.dispose();

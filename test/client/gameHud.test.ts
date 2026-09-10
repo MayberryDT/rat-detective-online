@@ -135,6 +135,14 @@ function createHudDocument() {
 }
 
 describe('GameHud', () => {
+    it('uses a dedicated victory cue and ticks only new positive respawn digits',()=>{
+        const {doc}=createHudDocument(),feedback=vi.fn(),foley=vi.fn(),hud=new GameHud(doc,undefined,feedback,foley);
+        hud.showVictory('Rat',10);hud.showVictory('Rat',10);
+        expect(foley.mock.calls).toEqual([['victory']]);expect(feedback).not.toHaveBeenCalledWith('victory');
+        hud.showRespawn(Date.now()+3000);hud.showRespawn(Date.now()+3000);vi.advanceTimersByTime(3100);
+        expect(foley.mock.calls.filter(([cue])=>cue==='respawn-tick')).toHaveLength(3);
+        hud.dispose();const count=foley.mock.calls.length;vi.advanceTimersByTime(5000);expect(foley).toHaveBeenCalledTimes(count);
+    });
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-09-05T12:00:00Z'));

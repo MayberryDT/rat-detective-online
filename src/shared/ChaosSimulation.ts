@@ -1,4 +1,5 @@
 import * as C from 'cannon-es';
+import type {WorldFoleyCue} from './foleyEvents';
 import { SpatialRayQuery } from './SpatialRayQuery';
 import { StaticCityBroadphase } from './StaticCityBroadphase';
 import { launcherVelocity } from './launcherVelocity';
@@ -42,6 +43,8 @@ export class ChaosSimulation {
     private shots:ChaosShot[]=[];
     private readonly burstShots=new WeakSet<ChaosShot>();
     private impacts:ChaosState['impacts']=[];
+    private audioImpacts:ChaosState['impacts']=[];
+    private readonly contactSoundAt=new WeakMap<C.Body,number>();
     private possession:Record<string,number>={};
     private dispatch:ChaosState['dispatch']={phase:'ready',started:0,until:0,serial:0};
     private lastSurgePulse=0;
@@ -90,6 +93,7 @@ export class ChaosSimulation {
         const c:CaseRuntime={id,body,owner:null,previousOwner:null,hitAfter:new Map(),pickupAfter:0,
             returningUntil:0,looseSince:this.now,scale:1,lastSpawn:CASE_HOME,armed:false};
         this.world.addBody(body);this.targets.set(body,{kind:'case',caseId:id});this.cases.set(id,c);
+        this.listenForContacts(body,'case-bounce');
         this.scaleCase(CASE_LOOSE_SCALE,c);return c;
     }
     private syncExtraCases(){
@@ -301,6 +305,7 @@ export class ChaosSimulation {
         if(incident)this.deathBurst(state);return true;
     }
     private deathBurst(corpse:CorpseState){
+        this.sound('burst',corpse.p);
         // Shared global shot capacity and fixed lifetime bound even a chain reaction.
         // Start inside the body so rays leave it without striking an artificial shell.
         for(let i=0;i<T.deathBurstBalls && this.shots.length<T.maxShots;i++){
@@ -312,9 +317,28 @@ export class ChaosSimulation {
             this.burstShots.add(shot);this.shots.push(shot);
         }
     }
+    private sound(cue:WorldFoleyCue,p:Vec3Data,n:Vec3Data={x:0,y:1,z:0},energy=20):void {
+        if(!Number.isFinite(p.x+p.y+p.z+energy))return;
+        this.audioImpacts.push({p:data(p),n:data(n),surface:false,audioOnly:true,foley:cue,energy:Math.max(0,Math.min(300,energy))});
+        if(this.audioImpacts.length>16)this.audioImpacts.shift();
+    }
+    private contactSound(body:C.Body,cue:WorldFoleyCue,p:Vec3Data,n:Vec3Data,energy:number):void {
+        if(energy<2||this.now-(this.contactSoundAt.get(body)??-Infinity)<120)return;
+        this.contactSoundAt.set(body,this.now);this.sound(cue,p,n,energy);
+    }
+    private listenForContacts(body:C.Body,cue:WorldFoleyCue):void {
+        body.addEventListener('collide',(event:{contact:C.ContactEquation})=>{
+            const c=event.contact,other=c.bi===body?c.bj:c.bi;
+            if(other.type!==C.Body.STATIC)return;
+            const offset=c.bi===body?c.ri:c.rj;
+            const normal=c.bi===body?c.ni.negate():c.ni;
+            this.contactSound(body,cue,body.position.vadd(offset),normal,Math.abs(c.getImpactVelocityAlongNormal()));
+        });
+    }
     private addCorpse(body:C.Body,state:CorpseState){
         this.world.addBody(body);this.targets.set(body,{kind:'corpse',corpseId:state.id});
         this.corpses.set(state.id,{body,state,hitAfter:new Map()});
+        this.listenForContacts(body,'corpse-bounce');
     }
     private stepBodies(dt:number,playing:boolean){
         // Bound ordinary travel to .8 units per substep; swept world checks catch thin walls.
@@ -334,6 +358,7 @@ export class ChaosSimulation {
                 const body=c.body;
                 const obstruction=this.ray(p,body.position,1);
                 if(obstruction.hasHit){
+                    this.contactSound(body,'corpse-bounce',obstruction.hitPointWorld,obstruction.hitNormalWorld,v.length());
                     body.position.copy(obstruction.hitPointWorld.vadd(obstruction.hitNormalWorld.scale(.5)));
                     v.vadd(obstruction.hitNormalWorld.scale(-2*v.dot(obstruction.hitNormalWorld)),body.velocity);
                     body.velocity.scale(.72,body.velocity);body.updateAABB();
@@ -350,7 +375,7 @@ export class ChaosSimulation {
                     if(nearest.distanceTo(center)>1.15||this.ray(nearest,center,1).hasHit)continue;
                     c.hitAfter.set(player.id,this.now+T.corpseHitCooldownMs);
                     this.hit({owner,victim:player.id,damage:v.length()>55?2:1,incoming:data(v)});
-                    this.impacts.push({p:data(center),n:data(v.unit()),surface:false});
+                    this.impacts.push({p:data(center),n:data(v.unit()),surface:false,foley:'corpse-hit',energy:Math.min(300,v.length())});
                 }
             }
         }
@@ -456,7 +481,7 @@ export class ChaosSimulation {
             if(dot<0)body.velocity.vadd(normal.scale(-2*dot),body.velocity);
             body.velocity.scale(BALL_RESTITUTION,body.velocity);
             if(normal.y>.65)body.velocity.y=Math.max(I.caseBounceLift,Math.min(I.caseMaxLift,body.velocity.y));
-            this.impacts.push({p:data(end),n:data(normal),surface:true});
+            this.impacts.push({p:data(end),n:data(normal),surface:true,foley:'case-bounce',energy:Math.min(300,body.velocity.length())});
             remaining*=1-fraction;
         }
         // Keep this objective inside the playable city even after a rooftop shot.
@@ -597,7 +622,7 @@ export class ChaosSimulation {
             for(const shot of due)this.popShot(shot);
         }else for(const shot of this.shots)shot.popAt=undefined;
         if(!this.incidentActive('delayed-reaction')){
-            for(const shot of this.shots)if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);}
+            for(const shot of this.shots)if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);}
         }
         if(!this.incidentActive('big-cheese')){
             for(const shot of this.shots)if((shot.radius??BALL_RADIUS)>BALL_RADIUS+.001){shot.radius=BALL_RADIUS;this.unstickShot(shot);}
@@ -612,7 +637,7 @@ export class ChaosSimulation {
             if(shot.age>BALL_LIFETIME){this.shots.splice(i,1);continue;}
             if(shot.stuckUntil){
                 if(now<shot.stuckUntil)continue;
-                shot.stuckUntil=undefined;this.unstickShot(shot);
+                shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);
             }
             shot.v.y+=BALL_GRAVITY*dt;
             const radius=shotRadius(shot);
@@ -675,6 +700,7 @@ export class ChaosSimulation {
                     corpse.body.velocity.vadd(kick,corpse.body.velocity);corpse.body.velocity.y+=3;
                     // Re-shooting redirects the missile and transfers its damage credit.
                     corpse.state.owner=shot.owner;corpse.body.wakeUp();
+                    this.sound('corpse-kick',hit.hitPointWorld,normal);
                     corpse.body.angularVelocity.x+=kick.z*.3;corpse.body.angularVelocity.z-=kick.x*.3;
                 }
             }
@@ -682,9 +708,10 @@ export class ChaosSimulation {
             const split=firstWorld&&this.incidentActive('ricochet-racket');
             const delay=firstWorld&&this.incidentActive('delayed-reaction')&&!shot.delayed;
             if(target?.kind==='world')shot.wallBounced=true;
-            if(target?.kind==='dispatch'&&playing)this.activate(shot.owner);
-            if(target?.kind==='pressure'&&playing)this.activatePressure(target.machineId!);
+            if(target?.kind==='dispatch'&&playing){this.sound(this.dispatch.phase==='ready'?'trigger':'trigger-busy',hit.hitPointWorld,normal);this.activate(shot.owner);}
+            if(target?.kind==='pressure'&&playing){this.sound(now<(this.pressure.cooldowns?.[target.machineId!]??0)?'trigger-busy':'trigger',hit.hitPointWorld,normal);this.activatePressure(target.machineId!);}
             const v=this.reflect(shot,normal);
+            const radiusBefore=shotRadius(shot);
             if(target?.kind==='world')this.growShot(shot);
             if(delay){
                 shot.delayed=true;
@@ -703,7 +730,7 @@ export class ChaosSimulation {
                     this.burstShots.add(extra);this.shots.push(extra);
                 }
             }
-            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:{})});
+            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:shotRadius(shot)>radiusBefore?'grow' as const:split?'split' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,v.length())}:{})});
         }
         for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -20||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
         for(const c of this.cases.values())this.stepLooseCase(c,now,playing);
@@ -782,10 +809,10 @@ export class ChaosSimulation {
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
             extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,cooldowns:{...this.pressure.cooldowns},launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
-            shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts],notice:{...this.notice}};
-        if(drain)this.impacts=[];return state;
+            shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts.slice(-64),...(this.impacts.length<64?this.audioImpacts.slice(-(64-this.impacts.length)):[])].slice(0,64),notice:{...this.notice}};
+        if(drain){this.impacts=[];this.audioImpacts=[];}return state;
     }
-    reset(){for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
+    reset(){this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
         this.assignment=undefined;
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();

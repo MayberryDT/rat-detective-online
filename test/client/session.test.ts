@@ -183,7 +183,7 @@ vi.mock('../../src/session/createStage', () => ({
     createStage: (renderer: { setSize?: unknown }) => {
         const stage = {
             renderer,
-            scene: {},
+            scene: { children: [] },
             camera: {
                 aspect: 1,
                 position: { clone: () => ({ addScaledVector: () => ({ x: 0, y: 4, z: 10 }) }) },

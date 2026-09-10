@@ -1,3 +1,4 @@
+import type {FoleyWorld} from '../audio/FoleyWorld';
 import {DispatchSirenAudio} from '../audio/DispatchSirenAudio';
 import { createCaseGrip } from './CaseGrip';
 import {setText} from '../ui/setText';
@@ -69,7 +70,7 @@ export class ChaosView {
     private readonly impactNormal=new THREE.Vector3();
     private readonly audioPosition=new THREE.Vector3();
     setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.hud.setScores(scores,myId);}
-    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
+    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld){
         this.sirenAudio=new DispatchSirenAudio(this.audio);
         this.bullets.count=0;this.bullets.frustumCulled=false;this.root.add(this.bullets);
         this.chargedBullets.count=0;this.chargedBullets.frustumCulled=false;this.chargedBullets.name='crossfire-balls';this.root.add(this.chargedBullets);
@@ -120,6 +121,7 @@ export class ChaosView {
         this.impacts=new CheeseImpactEffects(scene);
     }
     apply(state:ChaosState){
+        this.foley?.apply(state);
         this.state=state;this.receivedAt=performance.now();
         this.assignmentDestinations.update(state.assignment);
         if(this.extrapolate)this.presentation.apply(state,this.receivedAt);
@@ -131,11 +133,11 @@ export class ChaosView {
             visual.apply(state,extra,this.receivedAt);
         }
         for(const hit of state.impacts){
-            this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
+            if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
             if(hit.cue==='pop')playPopcornPop(hit.p);
             if(hit.cue==='thud')playDelayedThud(hit.p);
             if(hit.cue==='case-hit')this.feedback?.('case-hit',hit.p);
-            reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);
+            if(!hit.audioOnly)reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
         for(const [id,c] of this.corpses)if(!corpses.has(id)){this.root.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}

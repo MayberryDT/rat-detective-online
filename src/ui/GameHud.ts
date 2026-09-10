@@ -1,3 +1,4 @@
+import type {FoleyPlay} from '../audio/foleyCatalog';
 import { ASSIGNMENTS, type AssignmentState } from '../shared/assignments';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 
@@ -72,7 +73,7 @@ export class GameHud {
     private hitTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly overlayAnimations = new Map<HTMLElement, Animation>();
 
-    constructor(doc: Document = document, onRetry?: () => void, private readonly feedback:(cue:FeedbackCue)=>void=()=>{}) {
+    constructor(doc: Document = document, onRetry?: () => void, private readonly feedback:(cue:FeedbackCue)=>void=()=>{},private readonly foley?:FoleyPlay) {
         this.doc = doc;
         this.onRetry = onRetry;
         this.titleScreen = this.require('title-screen');
@@ -153,7 +154,7 @@ export class GameHud {
         for(const [className,text] of lines){
             const line=this.doc.createElement('div');line.className=className;line.textContent=text;this.victoryText.appendChild(line);
         }
-        if(!this.victoryVisible)this.feedback('victory');
+        if(!this.victoryVisible){if(this.foley)this.foley('victory');else this.feedback('victory');}
         this.victoryVisible=true;this.overlay(this.victoryOverlay,true);
     }
 
@@ -166,11 +167,14 @@ export class GameHud {
     showRespawn(respawnAt: number): void {
         if (this.disposed) return;
         this.clearRespawnTimer();
+        let firstTick=!this.respawnVisible;
         if(!this.respawnVisible){this.feedback('death');this.respawnOverlay.classList.remove('comic-impact');void this.respawnOverlay.offsetWidth;this.respawnOverlay.classList.add('comic-impact');}
         this.respawnVisible=true;this.clearHitMarker();this.overlay(this.respawnOverlay,true);
         const tick = () => {
             const value=String(Math.max(0, Math.ceil((respawnAt-Date.now())/1000)));
-            if(this.respawnTimer.textContent!==value){this.respawnTimer.textContent=value;this.respawnTimer.classList.remove('count-pop');void this.respawnTimer.offsetWidth;this.respawnTimer.classList.add('count-pop');}
+            const changed=this.respawnTimer.textContent!==value;
+            if(Number(value)>0&&(changed||firstTick))this.foley?.('respawn-tick');firstTick=false;
+            if(changed){this.respawnTimer.textContent=value;this.respawnTimer.classList.remove('count-pop');void this.respawnTimer.offsetWidth;this.respawnTimer.classList.add('count-pop');}
         };
         tick();
         this.respawnInterval = setInterval(tick, RESPAWN_TICK_MS);

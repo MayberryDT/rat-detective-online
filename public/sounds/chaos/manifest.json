@@ -1,0 +1,80 @@
+[
+  {
+    "file": "jump.wav",
+    "seconds": 0.24,
+    "peak": 0.819976806640625,
+    "rms": 0.2075870522865098
+  },
+  {
+    "file": "land-heavy.wav",
+    "seconds": 0.22,
+    "peak": 0.819976806640625,
+    "rms": 0.19094098018301292
+  },
+  {
+    "file": "wall-bonk.wav",
+    "seconds": 0.24,
+    "peak": 0.819976806640625,
+    "rms": 0.22718719448972788
+  },
+  {
+    "file": "corpse-bounce.wav",
+    "seconds": 0.24,
+    "peak": 0.819976806640625,
+    "rms": 0.2164752678917713
+  },
+  {
+    "file": "corpse-kick.wav",
+    "seconds": 0.15,
+    "peak": 0.819976806640625,
+    "rms": 0.22341327708914277
+  },
+  {
+    "file": "corpse-hit.wav",
+    "seconds": 0.2,
+    "peak": 0.819976806640625,
+    "rms": 0.26110264315837906
+  },
+  {
+    "file": "case-floor.wav",
+    "seconds": 0.23,
+    "peak": 0.819976806640625,
+    "rms": 0.11050887481225061
+  },
+  {
+    "file": "case-wall.wav",
+    "seconds": 0.23,
+    "peak": 0.819976806640625,
+    "rms": 0.09757106190686327
+  },
+  {
+    "file": "name-tick.wav",
+    "seconds": 0.12,
+    "peak": 0.819976806640625,
+    "rms": 0.14513136212928565
+  },
+  {
+    "file": "name-stamp.wav",
+    "seconds": 0.38,
+    "peak": 0.819976806640625,
+    "rms": 0.16228467146591657
+  },
+  {
+    "file": "hit-confirm.wav",
+    "seconds": 0.075,
+    "peak": 0.819976806640625,
+    "rms": 0.24302605785946269
+  },
+  {
+    "file": "respawn-tick.wav",
+    "seconds": 0.55,
+    "peak": 0.819976806640625,
+    "rms": 0.23473470278538283
+  },
+  {
+    "file": "victory.wav",
+    "seconds": 2.1,
+    "peak": 0.819976806640625,
+    "rms": 0.1995293996931962
+  }
+]
