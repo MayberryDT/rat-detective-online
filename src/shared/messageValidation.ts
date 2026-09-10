@@ -1,3 +1,4 @@
+import {isWorldFoleyCue} from './foleyEvents';
 import { sanitizeDiagnosticReport } from './diagnosticReport';
 import { parseAssignment } from './assignments';
 import { INCIDENTS, incidentInfo } from './incidentCatalog';
@@ -361,7 +362,7 @@ function parseChaos(value:unknown):ChaosState|null{
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
   if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
   if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&nonEmptyString(s.owner,64)&&parseVec3(s.p)&&parseVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.delayed===undefined||typeof s.delayed==='boolean')&&(s.original===undefined||typeof s.original==='boolean')&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.stuckUntil===undefined||finiteNumber(s.stuckUntil)!==null)&&(s.popAt===undefined||finiteNumber(s.popAt)!==null)))return null;
-  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&parseVec3(i.p)&&parseVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='pop'||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit')))return null;
+  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&parseVec3(i.p)&&parseVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='pop'||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
   if(value.pressure!==undefined){
     const p=value.pressure;
     if(!isRecord(p)||integer(p.serial)===null||finiteNumber(p.until)===null||!Array.isArray(p.launches)||p.launches.length>MAX_LAUNCH_EVENTS)return null;

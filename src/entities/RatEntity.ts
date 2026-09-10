@@ -1,3 +1,4 @@
+import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions, HatType } from '../utils/RatModel';
@@ -84,7 +85,12 @@ export class RatEntity {
     private readonly hitColor = new THREE.Color(0xffa16b);
     private readonly hitHighlight = new THREE.Color(0xffe8b0);
     private readonly onRagdollContact = (event: { contact: CANNON.ContactEquation }) => {
-        if (!this.dead || this.deathPhase === 'done' || this.deathTimer < 0.16) return;
+        if(!this.dead){
+            const speed=Math.abs(event.contact.getImpactVelocityAlongNormal());
+            if(speed>8&&Math.abs(event.contact.ni.y)<.5)emitWorldSound(this.scene,'wall-bonk',this.body.position,{key:String(this.body.id),gain:Math.min(1.3,speed/20)});
+            return;
+        }
+        if (this.deathPhase === 'done' || this.deathTimer < 0.16) return;
         const contact = event.contact;
         const speed = Math.abs(contact.getImpactVelocityAlongNormal());
         // Let the solver produce real rebounds; later contacts lose more energy.

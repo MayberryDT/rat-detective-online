@@ -1,6 +1,7 @@
 import type { PlayerData, QuatData, RatAppearance, Vec3Data } from './networkProtocol';
 import type { IncidentId } from './incidentCatalog';
 import type { AssignmentState } from './assignments';
+import type { WorldFoleyCue } from './foleyEvents';
 
 export const CHAOS_TUNING = {
     pickupRadius: 1.6, formerCarrierDelay: 900,
@@ -80,7 +81,7 @@ export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string; appearance: RatAppearance; born: number; expires: number;
 }
 export interface ChaosShot { id: string; owner: string; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number }
-export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit' }
+export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
 }

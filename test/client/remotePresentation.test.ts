@@ -5,6 +5,7 @@ import { RemotePlayers } from '../../src/session/RemotePlayers';
 import { GameSession } from '../../src/session/GameSession';
 import { createCaseGrip } from '../../src/prototype/CaseGrip';
 import { SimulationClock } from '../../src/session/SimulationClock';
+import { MotionFoley } from '../../src/audio/MotionFoley';
 import type { PlayerData } from '../../src/shared/networkProtocol';
 
 const player: PlayerData = { id: 'remote', name: 'Remote', hatType: 'fedora', hatColor: 1,
@@ -26,6 +27,7 @@ function replay(fps: number, speed: number) {
         stage: { scene: new THREE.Scene(), world, camera: new THREE.PerspectiveCamera(), renderer: { render() {} } },
         transport: { state: 'playing' }, simulation: new SimulationClock(), remotes,
         gun: { update() {} }, city: { update() {} },
+        foleyWorld:{listener(){},motion:new MotionFoley(()=>{})},
     });
     vi.stubGlobal('requestAnimationFrame', () => 1);
     vi.spyOn(performance, 'now').mockImplementation(() => now);

@@ -8,6 +8,7 @@ Reviewed against repository source and the latest release receipt on **2026-09-0
 | --- | --- |
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Chaos foley](chaos-foley.md) | Integrated audio: 13 accepted physical/personal accents and restrained noir countdown/result |
 | [Gameplay baseline](gameplay-baseline.md) | Current tuning and preservation rules |
 | [Dispatch Assignments](dispatch-assignments.md) | Local three-mode rules, shuffled landmarks, noir UI and validation |
 | [Tab scoreboard and local outline](verification/tab-scoreboard-local-outline-2026-09-10.md) | Full held-Tab round stats, opponent-only outline halo and current private preview |
