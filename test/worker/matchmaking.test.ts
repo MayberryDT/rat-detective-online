@@ -14,7 +14,16 @@ async function until(test:()=>boolean) {
 }
 async function open(group:string, preferred?:string, join=true) {
   rooms.add(group);
-  const response=await env.MATCHMAKER.getByName(group).fetch(new Request(`https://game.test/ws?room=${group}${preferred?`&preferred=${preferred}`:''}`,{headers:{Upgrade:'websocket'}}));
+  const request=()=>new Request(`https://game.test/ws?room=${group}${preferred?`&preferred=${preferred}`:''}`,{headers:{Upgrade:'websocket'}});
+  let response=await env.MATCHMAKER.getByName(group).fetch(request());
+  // Placement is independent of runner speed. A concurrent burst may exhaust
+  // the intentional five-second admission deadline; clients retry that 503.
+  // Keep retries bounded and fail immediately for any other response.
+  for(let retry=0;response.status===503&&retry<2;retry++){
+    expect(await response.text()).toMatch(/^Admission (?:timed out|busy; retry shortly)$/);
+    await new Promise(resolve=>setTimeout(resolve,250));
+    response=await env.MATCHMAKER.getByName(group).fetch(request());
+  }
   expect(response.status).toBe(101);
   const ws=response.webSocket!;ws.accept();sockets.push(ws);
   const messages:ServerMessage[]=[];
