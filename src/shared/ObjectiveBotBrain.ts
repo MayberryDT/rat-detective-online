@@ -2,6 +2,7 @@ import { BotOpportunisticFire } from './BotOpportunisticFire';
 import { BotCombat, combatRandom } from './BotCombat';
 import { DISPATCH_STATIONS, type ChaosState } from './chaosState';
 import { incidentInfo } from './incidentCatalog';
+import { activeDestination, destinationPoint } from './assignments';
 import type { PlayerData, Vec3Data } from './networkProtocol';
 
 export interface ObjectiveNavigation {
@@ -13,7 +14,7 @@ export interface ObjectiveNavigation {
     update?(budgetMs?: number): void;
 }
 export interface ObjectiveBotIntent { x: number; z: number; jump: boolean; shoot?: Vec3Data; facing: number }
-export type BotObjective = 'case' | 'carrier' | 'combat' | 'explore';
+export type BotObjective = 'case' | 'carrier' | 'combat' | 'explore' | 'delivery';
 const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
 const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
 
@@ -51,6 +52,9 @@ export class ObjectiveBotBrain {
     private wanderIndex: number;
     private readonly caseLifecycles=new Map<string,{owner:string|null;returning:boolean}>();
     private explorationAt = 0;
+    private deliveryKey = '';
+    private deliveryEntering = false;
+    private assignmentSignature = '';
     private readonly places: Vec3Data[];
     constructor(private readonly navigation: ObjectiveNavigation, seed = 0, private readonly random: () => number = Math.random) {
         this.combat = new BotCombat(combatRandom(seed));
@@ -68,6 +72,7 @@ export class ObjectiveBotBrain {
         this.routeWaitStarted=undefined;this.failedGoals.clear();this.failedCase=undefined;this.stalled=false;
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
         this.caseLifecycles.clear();
+        this.deliveryKey='';this.deliveryEntering=false;this.assignmentSignature='';
     }
     private setObjective(objective: BotObjective, key: string, destination: Vec3Data | undefined): void {
         if(this.key!==key){this.route=[];this.routeIndex=0;this.plannedDestination=undefined;this.pendingPlan=undefined;this.routeWaitStarted=undefined;this.recoverUntil=0;this.planAt=0;this.key=key;
@@ -105,6 +110,9 @@ export class ObjectiveBotBrain {
         // Keep each case's failed position independent. Picking up one extra
         // must not erase the evidence that the primary case is unreachable.
         let ownershipChanged=false;
+        const assignment=state?.assignment;
+        const signature=assignment?`${assignment.roundId}:${assignment.phase}:${assignment.stamps}`:'';
+        if(signature!==this.assignmentSignature){this.assignmentSignature=signature;this.decisionAt=0;}
         for(const {key,value} of cases){
             const before=this.caseLifecycles.get(key),returning=value.returningUntil>(state?.time??now);
             if(!before||before.owner!==value.owner||before.returning!==returning){
@@ -147,8 +155,21 @@ export class ObjectiveBotBrain {
                 (value.previousOwner!==self.id||value.pickupAfter<=(state?.time??now))&&!this.suppressed(key,value.p,now))
                 .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
             const combat=visible.find(p=>!this.suppressed(`combat:${p.id}`,p,now));
+            const destination=assignment?.phase==='active'&&state?.case.owner===self.id?activeDestination(assignment):undefined;
+            let delivery:Vec3Data|undefined,deliveryKey='';
+            if(destination&&assignment){
+                const key=`${assignment.roundId}:${destination}`;
+                if(key!==this.deliveryKey){this.deliveryKey=key;this.deliveryEntering=false;}
+                const approach=destinationPoint(destination);
+                if(!this.deliveryEntering&&distance(self,approach)<2)this.deliveryEntering=true;
+                else if(this.deliveryEntering&&distance(self,destinationPoint(destination,false))<2)this.deliveryEntering=false;
+                const point=destinationPoint(destination,!this.deliveryEntering);
+                deliveryKey=`delivery:${key}:${this.deliveryEntering?'enter':'approach'}`;
+                if(!this.suppressed(deliveryKey,point,now))delivery=point;
+            }else {this.deliveryKey='';this.deliveryEntering=false;}
             if(available)this.setObjective('case',available.key,available.value.p);
             else if(!carrying&&carrier)this.setObjective('carrier',`carrier:${carrier.id}`,carrier);
+            else if(delivery)this.setObjective('delivery',deliveryKey,delivery);
             else if(combat)this.setObjective('combat',`combat:${combat.id}`,combat);
             else {
                 if(this.objective!=='explore'||!this.destination||this.suppressed(this.key,this.destination,now)||distance(self,this.destination)<3||now>this.explorationAt+20000){

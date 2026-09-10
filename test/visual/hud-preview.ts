@@ -13,11 +13,11 @@ import {createRatMesh} from '../../src/utils/RatModel';
 const params=new URLSearchParams(location.search);
 const hud=new GameHud();hud.enterPlaying();
 const scores=Array.from({length:8},(_,i)=>({id:String(i),name:['Inspector Nightwhisker','Detective Trap','Sergeant Stilton','Constable Squeak','Marshal Breadcrumb','Inspector Cheese','Deputy Nibbles','Chief Scurry'][i],kills:12-i,deaths:i+1}));
-hud.setScores(scores,'6');
+
 const requested=params.get('incident');
 const incident=INCIDENTS.some(i=>i.id===requested)?requested as IncidentId:'popcorn-panic';
 const phase=params.get('phase')||'active';
-const dispatch=new DispatchHud(()=>{});
+const dispatch=new DispatchHud(()=>{});dispatch.setScores(scores,'6');
 const state={dispatch:{phase:'active',started:0,until:25000,serial:1,incident},case:{owner:null},possession:{}} as unknown as ChaosState;
 if(incident==='evidence-tampering'&&(phase==='active'||phase==='reveal'))state.extraCases=Array.from({length:7},(_,i)=>({...state.case,id:`evidence-${i}`}));
 if(phase==='ready')state.dispatch={phase:'ready',started:0,until:0,serial:0};

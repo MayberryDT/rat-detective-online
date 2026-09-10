@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SEWER_ENTRIES, sewerBoxes, sewerRampOpening } from '../../src/shared/sewerLayout';
+import { SEWER_ENTRIES, SEWER_MAINTENANCE_FURNISHINGS, sewerBoxes, sewerRampOpening } from '../../src/shared/sewerLayout';
 import type { GrayboxBox } from '../../src/shared/grayboxLayout';
 
 function axisAligned(b: GrayboxBox) {
@@ -16,6 +16,20 @@ function wallAt(boxes: GrayboxBox[], x: number, y: number, z: number) {
 }
 
 describe('sewer layout', () => {
+  it('keeps Maintenance furniture solid at the perimeter and the rat-width entry and center clear', () => {
+    const boxes=sewerBoxes();
+    for(const b of SEWER_MAINTENANCE_FURNISHINGS){
+      expect(boxes).toContainEqual(b);
+      expect(b.y-b.h/2).toBeCloseTo(-7);
+      expect(b.x-b.w/2).toBeGreaterThan(60);
+      expect(b.x+b.w/2).toBeLessThanOrEqual(70);
+      expect(b.z-b.d/2).toBeGreaterThan(-42);
+      expect(b.z+b.d/2).toBeLessThanOrEqual(-30);
+    }
+    // A .6-radius player can enter along the hallway and cross the room.
+    for(let x=54;x<=68;x+=.5)for(const dz of [-.6,0,.6])for(const y of [-6.4,-5.4,-4.8])
+      expect(boxes.some(b=>contains(b,x,y,-36+dz)),`blocked at ${x},${y},${-36+dz}`).toBe(false);
+  });
   it('keeps union junctions open and builds the fourth Needleworks ramp', () => {
     const boxes = sewerBoxes();
     const open: Array<[number, number, number]> = [

@@ -1,4 +1,4 @@
-import type { ScoreEntry } from '../shared/networkProtocol';
+import { ASSIGNMENTS, type AssignmentState } from '../shared/assignments';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 
 const TITLE_FADE_MS = 1500;
@@ -48,17 +48,11 @@ const CONNECTION_STYLE = `
 }
 `;
 
-/** Owns title, scoreboard, kill feed, overlays, and connection status. */
+/** Owns title, kill feed, overlays, and connection status. */
 export class GameHud {
     private readonly doc: Document;
     private readonly onRetry?: () => void;
     private readonly titleScreen: HTMLElement;
-    private readonly scoreboard: HTMLElement;
-    private readonly scoreboardList: HTMLElement;
-    private readonly playerCard: HTMLElement;
-    private readonly scoreboardStack: HTMLElement;
-    private readonly scoreRows = new Map<string, HTMLElement>();
-    private readonly rankAnimations = new Map<string, Animation>();
     private readonly killFeed: HTMLElement;
     private readonly victoryOverlay: HTMLElement;
     private readonly victoryText: HTMLElement;
@@ -82,15 +76,6 @@ export class GameHud {
         this.doc = doc;
         this.onRetry = onRetry;
         this.titleScreen = this.require('title-screen');
-        this.scoreboard = this.require('scoreboard');
-        this.scoreboardList = this.require('scoreboard-list');
-        this.playerCard = this.doc.createElement('section');
-        this.playerCard.id = 'scoreboard-player';
-        this.scoreboardStack = this.doc.createElement('div');
-        this.scoreboardStack.id = 'scoreboard-stack';
-        this.doc.body.appendChild(this.scoreboardStack);
-        this.scoreboardStack.appendChild(this.scoreboard);
-        this.scoreboardStack.appendChild(this.playerCard);
         this.killFeed = this.require('kill-feed');
         this.victoryOverlay = this.require('victory-overlay');
         this.victoryText = this.require('victory-text');
@@ -137,64 +122,6 @@ export class GameHud {
             this.titleTimer = null;
             if (!this.disposed) this.titleScreen.style.display = 'none';
         }, TITLE_FADE_MS);
-        this.scoreboard.style.display = 'block';
-        this.scoreboardStack.style.display = 'block';
-    }
-
-    setScores(scores: readonly ScoreEntry[], myId: string | null): void {
-        if (this.disposed) return;
-        const top = scores.slice(0, 5);
-        const positions = new Map<string, number>();
-        for (const [id, row] of this.scoreRows) {
-            if (row.getBoundingClientRect) positions.set(id, row.getBoundingClientRect().top);
-        }
-        for (const animation of this.rankAnimations.values()) animation.cancel();
-        this.rankAnimations.clear();
-        for (const [id, row] of this.scoreRows) {
-            if (!top.some(score => score.id === id)) { row.remove(); this.scoreRows.delete(id); }
-        }
-        top.forEach((score, index) => {
-            let row = this.scoreRows.get(score.id);
-            if (!row) {
-                row = this.doc.createElement('li');
-                for (const className of ['rank', 'name', 'stats']) {
-                    const span = this.doc.createElement('span'); span.className = className; row.appendChild(span);
-                }
-                this.scoreRows.set(score.id, row);
-            }
-            if (score.id === myId) row.classList.add('you'); else row.classList.remove('you');
-            row.children[0].textContent = `#${index + 1}`;
-            row.children[1].textContent = score.name;
-            row.children[2].textContent = `${score.kills}K / ${score.deaths}D`;
-            this.scoreboardList.appendChild(row);
-        });
-        const reducedMotion = this.doc.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        if (!reducedMotion && this.scoreboardStack.style.display !== 'none') {
-            for (const [id, row] of this.scoreRows) {
-                if (!row.animate || !row.getBoundingClientRect) continue;
-                const before = positions.get(id);
-                const delta = before === undefined ? 0 : before - row.getBoundingClientRect().top;
-                if (before !== undefined && Math.abs(delta) < 1) continue;
-                const animation = row.animate(before === undefined
-                    ? [{opacity:0, transform:'translateX(-8px)'}, {opacity:1, transform:'translateX(0)'}]
-                    : [{transform:`translateY(${delta}px)`}, {transform:'translateY(0)'}],
-                    {duration:280, easing:'cubic-bezier(.2,.7,.2,1)'});
-                this.rankAnimations.set(id, animation);
-                animation.onfinish = () => { if (this.rankAnimations.get(id) === animation) this.rankAnimations.delete(id); };
-            }
-        }
-        this.clearList(this.playerCard);
-        const position = scores.findIndex(score => score.id === myId);
-        this.playerCard.style.display = position < 0 ? 'none' : 'flex';
-        if (position >= 0) {
-            const score = scores[position];
-            for (const [className, text] of [
-                ['rank', `#${position + 1}`], ['name', score.name], ['stats', `${score.kills}K / ${score.deaths}D`],
-            ]) {
-                const line = this.doc.createElement('span'); line.className = className;
-                line.textContent = text; this.playerCard.appendChild(line);
-            }
-        }
     }
 
     addKillFeed(msg: string): void {
@@ -213,9 +140,19 @@ export class GameHud {
         }
     }
 
-    showVictory(winnerName: string, kills: number): void {
+    showVictory(winnerName: string, kills: number, assignment?: AssignmentState): void {
         if (this.disposed) return;
-        this.victoryText.textContent = `🏆 ${winnerName} wins with ${kills} kills!`;
+        this.victoryText.replaceChildren();
+        const lines = [
+            ['victory-kicker', assignment ? ASSIGNMENTS[assignment.id].title : 'OUTSTANDING MISCONDUCT'],
+            ['victory-headline', 'CASE CLOSED!'],
+            ['victory-winner', winnerName],
+            ['victory-verdict', assignment?.id==='closing-time'?'STOLE THE LAST SECOND!':assignment?.id==='chain-of-custody'?'PAPERWORK. ABSOLUTELY DESTROYED.':assignment?'10 CASE KILLS. ZERO RESTRAINT.':`${kills} KILLS. ZERO RESTRAINT.`],
+            ['victory-stamp', 'PROMOTED?!'],
+        ];
+        for(const [className,text] of lines){
+            const line=this.doc.createElement('div');line.className=className;line.textContent=text;this.victoryText.appendChild(line);
+        }
         if(!this.victoryVisible)this.feedback('victory');
         this.victoryVisible=true;this.overlay(this.victoryOverlay,true);
     }
@@ -229,10 +166,11 @@ export class GameHud {
     showRespawn(respawnAt: number): void {
         if (this.disposed) return;
         this.clearRespawnTimer();
-        if(!this.respawnVisible)this.feedback('death');
+        if(!this.respawnVisible){this.feedback('death');this.respawnOverlay.classList.remove('comic-impact');void this.respawnOverlay.offsetWidth;this.respawnOverlay.classList.add('comic-impact');}
         this.respawnVisible=true;this.clearHitMarker();this.overlay(this.respawnOverlay,true);
         const tick = () => {
-            this.respawnTimer.textContent = String(Math.max(0, Math.ceil((respawnAt - Date.now()) / 1000)));
+            const value=String(Math.max(0, Math.ceil((respawnAt-Date.now())/1000)));
+            if(this.respawnTimer.textContent!==value){this.respawnTimer.textContent=value;this.respawnTimer.classList.remove('count-pop');void this.respawnTimer.offsetWidth;this.respawnTimer.classList.add('count-pop');}
         };
         tick();
         this.respawnInterval = setInterval(tick, RESPAWN_TICK_MS);
@@ -284,9 +222,6 @@ export class GameHud {
         for (const id of this.timeouts) clearTimeout(id);
         this.timeouts.clear();
         this.retryButton.removeEventListener('click', this.handleRetry);
-        this.playerCard.remove();
-        this.doc.body.appendChild(this.scoreboard);
-        this.scoreboardStack.remove();
         this.statusPanel.remove();
         this.styleEl.remove();
     }
@@ -300,19 +235,11 @@ export class GameHud {
     private reset(): void {
         this.titleScreen.classList.remove('fade-out');
         this.titleScreen.style.display = 'flex';
-        this.scoreboard.style.display = 'none';
-        this.scoreboardStack.style.display = 'none';
-        for (const animation of this.rankAnimations.values()) animation.cancel();
-        this.rankAnimations.clear();
-        this.scoreRows.clear();
         this.victoryOverlay.style.display = 'none';
         this.victoryText.textContent = '';
         this.respawnOverlay.style.display = 'none';
-        this.respawnTimer.textContent = '5';
-        this.clearList(this.scoreboardList);
+        this.respawnTimer.textContent = '3';
         this.clearList(this.killFeed);
-        this.clearList(this.playerCard);
-        this.playerCard.style.display = 'none';
         this.statusPanel.style.display = 'none';
         this.retryButton.style.display = 'none';
         this.statusMessage.textContent = '';

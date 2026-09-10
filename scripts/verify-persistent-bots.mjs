@@ -16,7 +16,7 @@ async function observe(duration){
   const ws=new WebSocket(url,{headers});let welcome,state,closed=false,error;const gaps=[],counts={},positions=new Map();let last=0;
   const ready=new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>reject(new Error('welcome timeout')),20000);
-    ws.on('open',()=>ws.send(JSON.stringify({type:'join',protocolVersion:1,name:'Launch Observer',appearance:{hatType:'fedora',hatColor:0xdc4a3c,furColor:0xe8b84d,coatColor:0xbe4545}})));
+    ws.on('open',()=>ws.send(JSON.stringify({type:'join',protocolVersion:4,name:'Launch Observer',appearance:{hatType:'fedora',hatColor:0xdc4a3c,furColor:0xe8b84d,coatColor:0xbe4545}})));
     ws.on('message',raw=>{const m=JSON.parse(raw.toString());counts[m.type]=(counts[m.type]??0)+1;
       if(m.type==='welcome'){welcome=m;clearTimeout(timeout);resolve();}
       if(m.type==='chaos'){if(last)gaps.push(Date.now()-last);last=Date.now();state=m.state;}

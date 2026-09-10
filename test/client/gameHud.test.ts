@@ -118,8 +118,6 @@ function createHudDocument() {
     };
 
     add('title-screen');
-    add('scoreboard').style.display = 'none';
-    add('scoreboard-list', 'ul');
     add('kill-feed');
     add('victory-overlay').style.display = 'none';
     add('victory-text');
@@ -146,74 +144,16 @@ describe('GameHud', () => {
         vi.useRealTimers();
     });
 
-    it('hides the title, shows the scoreboard, and keeps connection status off while playing', () => {
+    it('hides the title, does not create the retired scoreboard, and keeps connection status off while playing', () => {
         const { doc, byId } = createHudDocument();
         const hud = new GameHud(doc);
         hud.enterPlaying();
+        expect(byId.has('scoreboard-stack')).toBe(false);
         expect(byId.get('title-screen')!.classList.contains('fade-out')).toBe(true);
-        expect(byId.get('scoreboard')!.style.display).toBe('block');
         vi.advanceTimersByTime(1500);
         expect(byId.get('title-screen')!.style.display).toBe('none');
         hud.setConnection('playing');
         expect(byId.get('connection-status')!.style.display).toBe('none');
-        hud.dispose();
-    });
-
-    it('renders scores with textContent and marks the local player', () => {
-        const { doc, byId } = createHudDocument();
-        const hud = new GameHud(doc);
-        hud.setScores([
-            { id: 'a', name: '<Rat & Co>', kills: 3, deaths: 1 },
-            { id: 'b', name: 'You', kills: 1, deaths: 0 },
-        ], 'b');
-        const rows = byId.get('scoreboard-list')!.children;
-        expect(rows).toHaveLength(2);
-        expect(rows[0].classList.contains('you')).toBe(false);
-        expect(rows[1].classList.contains('you')).toBe(true);
-        expect(rows[0].children[0].textContent).toBe('#1');
-        expect(rows[0].children[1].textContent).toBe('<Rat & Co>');
-        expect(rows[0].children[2].textContent).toBe('3K / 1D');
-        hud.dispose();
-    });
-
-    it('shows only the top five while retaining the local full-roster rank and clearing stale identity', () => {
-        const { doc, byId } = createHudDocument();
-        const hud = new GameHud(doc);
-        const scores = Array.from({length:24}, (_, i) => ({id:`rat-${i}`, name:`Rat ${i}`, kills:24-i, deaths:i}));
-        hud.setScores(scores, 'rat-23');
-        expect(byId.get('scoreboard-list')!.children).toHaveLength(5);
-        const card = byId.get('scoreboard-player')!;
-        expect(card.parent).toBe(byId.get('scoreboard-stack'));
-        expect(card.parent).not.toBe(byId.get('scoreboard'));
-        expect(card.children.map(child => child.textContent)).toEqual(['#24', 'Rat 23', '1K / 23D']);
-        hud.setScores(scores, 'rat-0');
-        expect(card.children[0].textContent).toBe('#1');
-        hud.setScores([], null);
-        expect(card.children).toHaveLength(0);
-        expect(card.style.display).toBe('none');
-        hud.dispose();
-    });
-
-    it('reuses ranked cards and animates their displacement, with reduced-motion support', () => {
-        const {doc, byId} = createHudDocument();
-        const hud = new GameHud(doc); hud.enterPlaying();
-        const scores = [{id:'a',name:'Alpha',kills:2,deaths:0},{id:'b',name:'Beta',kills:1,deaths:1}];
-        hud.setScores(scores,'a');
-        const list = byId.get('scoreboard-list')!;
-        const [alpha,beta] = [...list.children];
-        const animations = [alpha,beta].map(row => {
-            const animation = {cancel:vi.fn(),onfinish:null};
-            const animate = vi.fn(()=>animation);
-            Object.assign(row,{getBoundingClientRect:()=>({top:list.children.indexOf(row)*44}),animate});
-            return {animate,animation};
-        });
-        hud.setScores([scores[1],scores[0]],'a');
-        expect(list.children).toEqual([beta,alpha]);
-        expect(animations[0].animate).toHaveBeenCalledWith([{transform:'translateY(-44px)'},{transform:'translateY(0)'}],expect.objectContaining({duration:280}));
-        Object.assign(doc,{defaultView:{matchMedia:()=>({matches:true})}});
-        hud.setScores(scores,'a');
-        expect(animations[0].animation.cancel).toHaveBeenCalledOnce();
-        expect(animations[0].animate).toHaveBeenCalledOnce();
         hud.dispose();
     });
 
@@ -288,7 +228,7 @@ describe('GameHud', () => {
         expect(overlay.style.display).toBe('none');
         hud.showVictory('<Rat & Co>', 20);
         expect(byId.get('victory-overlay')!.style.display).toBe('flex');
-        expect(byId.get('victory-text')!.textContent).toBe('🏆 <Rat & Co> wins with 20 kills!');
+        expect(byId.get('victory-text')!.children.map(c=>c.textContent)).toEqual(['OUTSTANDING MISCONDUCT','CASE CLOSED!','<Rat & Co>','20 KILLS. ZERO RESTRAINT.','PROMOTED?!']);
         hud.hideVictory();
         expect(byId.get('victory-overlay')!.style.display).toBe('none');
         hud.dispose();
@@ -311,7 +251,6 @@ describe('GameHud', () => {
         const { doc, byId } = createHudDocument();
         const first = new GameHud(doc);
         first.enterPlaying();
-        first.setScores([{ id: 'a', name: '<Rat & Co>', kills: 2, deaths: 1 }], 'a');
         first.addKillFeed('A eliminated B');
         first.showVictory('<Rat & Co>', 20);
         first.showRespawn(Date.now() + 4000);
@@ -320,8 +259,6 @@ describe('GameHud', () => {
         const second = new GameHud(doc);
         expect(byId.get('title-screen')!.classList.contains('fade-out')).toBe(false);
         expect(byId.get('title-screen')!.style.display).toBe('flex');
-        expect(byId.get('scoreboard')!.style.display).toBe('none');
-        expect(byId.get('scoreboard-list')!.children).toHaveLength(0);
         expect(byId.get('kill-feed')!.children).toHaveLength(0);
         expect(byId.get('victory-overlay')!.style.display).toBe('none');
         expect(byId.get('victory-text')!.textContent).toBe('');

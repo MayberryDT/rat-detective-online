@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {LANDMARK_INTERIORS, LANDMARK_FURNISHINGS, landmarkBoxes} from '../shared/landmarkLayout';
 import {registerLandmarkReactions} from './LandmarkReactions';
+import {SEWER_MAINTENANCE_FURNISHINGS} from '../shared/sewerLayout';
 
 type Finish='stone'|'steel'|'brick'|'patina'|'trim'|'iron'|'brass'|'glass'|'warm'|'cream'|'cyan'|'rose'|'green'|'wood'|'paper'|'tile'|'machine'|'cloth'|'linen';
 interface Skin {body:Finish; light:Finish; pitch:number; windowW:number; windowH:number}
@@ -32,7 +33,7 @@ export class LandmarkArchitecture {
     constructor(private readonly scene:THREE.Scene){
         for(const hall of LANDMARK_INTERIORS)this.shell(hall.cx,hall.cz,hall.w,hall.d,0,36,SKINS[hall.id],hall.id);
         this.records();this.icebox();this.needleworks();this.pump();this.gate();
-        this.interiors();
+        this.interiors();this.maintenanceRoom();
         this.craftDetails();
         this.flush();
         this.unregister=registerLandmarkReactions(scene,point=>{
@@ -250,7 +251,7 @@ export class LandmarkArchitecture {
         this.box('iron',x,y+1.48*scale,z,.85*scale,.06*scale,.06*scale);
         for(const yy of [-.5,0,.5])this.box('brass',x,y+yy*scale,z+.1*scale,.055*scale,.055*scale,.035*scale);
     }
-    private sign(lines:string[],x:number,y:number,z:number,w:number,h:number,bg:string,ink:string){
+    private sign(lines:string[],x:number,y:number,z:number,w:number,h:number,bg:string,ink:string,yaw=0){
         const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=256;
         const ctx=canvas.getContext('2d')!;ctx.fillStyle=bg;ctx.fillRect(0,0,1024,256);
         ctx.fillStyle=ink;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -258,7 +259,61 @@ export class LandmarkArchitecture {
         lines.forEach((line,i)=>ctx.fillText(line,512,(i+.5)*256/lines.length,980));
         const texture=new THREE.CanvasTexture(canvas);this.textures.push(texture);
         const material=new THREE.MeshStandardMaterial({map:texture,roughness:.95,emissive:0x332b1c,emissiveIntensity:.08});this.materials.push(material);
-        const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),material);mesh.position.set(x,y,z);this.scene.add(mesh);this.signs.push(mesh);
+        const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),material);mesh.position.set(x,y,z);mesh.rotation.y=yaw;this.scene.add(mesh);this.signs.push(mesh);
+    }
+    private maintenanceRoom(){
+        // A modest municipal workshop: two built-ins at the perimeter, open
+        // center and west entrance. Fittings join the existing static batches.
+        const [bench,rack]=SEWER_MAINTENANCE_FURNISHINGS;
+        this.box('wood',bench.x,-4.57,bench.z,.98,.12,5.25);
+        for(const z of [-39.35,-37.2,-35.05]){
+            this.box('iron',68.985,-5.8,z,.04,2.16,1.96);
+            for(const y of [-5.18,-5.87]){
+                this.box('steel',68.955,y,z,.025,.61,1.82);
+                this.box('brass',68.93,y+.15,z,.05,.065,.48);
+            }
+        }
+        // Pegboard, a large wrench, hammer and pliers read from the doorway.
+        this.box('wood',69.94,-3.38,-37.1,.10,2.0,4.8);
+        for(const z of [-39.2,-38.5,-37.8,-37.1,-36.4,-35.7])for(const y of [-4.1,-3.4,-2.7])
+            this.box('iron',69.875,y,z,.025,.045,.045);
+        this.box('trim',69.82,-3.48,-38.45,.08,1.05,.17);
+        this.box('trim',69.82,-2.94,-38.45,.08,.13,.60);
+        for(const z of [-38.69,-38.21])this.box('trim',69.82,-2.80,z,.08,.32,.13);
+        this.box('wood',69.80,-3.50,-37.25,.13,1.10,.13);
+        this.box('trim',69.80,-2.97,-37.25,.22,.26,.65);
+        for(const angle of [-.23,.23])this.box('trim',69.80,-3.44,-36.03,.09,1.15,.10,angle);
+        this.round('brass',69.75,-3.17,-36.03,.15,.06,.15,0,0,Math.PI/2);
+        // A squat vise and a closed parts box on the bench.
+        this.box('iron',69.36,-4.43,-38.55,.54,.16,.72);
+        this.box('steel',69.36,-4.23,-38.55,.46,.28,.42);
+        this.box('brass',69.05,-4.22,-38.55,.42,.06,.07);
+        this.box('brick',69.43,-4.32,-35.7,.62,.40,.90);
+        this.box('iron',69.43,-4.07,-35.7,.11,.13,.42);
+        // Supply rack: recessed bins, two paint/oil tins and a folded rag.
+        for(const x of [rack.x-1.5,rack.x+1.5])this.box('iron',x,-5.3,-30.93,.11,3.4,.06);
+        for(const y of [-6.86,-5.75,-4.63,-3.61])this.box('trim',rack.x,y,-30.91,3.12,.10,.12);
+        for(const x of [65.65,67.10])for(const y of [-6.31,-5.19,-4.12]){
+            this.box('iron',x,y,-30.914,1.26,.94,.035);
+            this.box('brass',x,y+.21,-30.943,.25,.09,.02);
+        }
+        for(const x of [65.8,66.7]){
+            this.round('patina',x,-3.31,-30.48,.48,.54,.48);
+            this.round('trim',x,-3.01,-30.48,.5,.06,.5);
+        }
+        this.box('cloth',67.38,-3.50,-30.51,.62,.19,.54,0,.13);
+        // Wall power cabinet, breakers and a short conduit. Existing sewer
+        // lamps light the room; no added light sources or blinking screens.
+        this.box('steel',63.2,-3.65,-41.80,2.2,2.15,.34);
+        this.box('iron',63.2,-3.65,-41.61,1.9,1.85,.045);
+        for(const x of [62.7,63.2,63.7])for(const y of [-3.4,-3.94]){
+            this.box('trim',x,y,-41.56,.29,.37,.06);
+            this.box('iron',x,y-.035,-41.50,.09,.17,.07);
+        }
+        this.round('steel',63.2,-2.2,-41.8,.15,.9,.15);
+        this.round('steel',65.1,-1.79,-41.8,.15,3.9,.15,0,0,Math.PI/2);
+        this.sign(['MAINTENANCE'],69.94,-1.93,-37.1,4.7,.61,'#1d2326','#a39d87',-Math.PI/2);
+        this.sign(['POWER'],63.2,-2.85,-41.57,1.22,.28,'#24282b','#a39d87');
     }
     private pump(){
         this.round('patina',125,49,112,20,14,20);
@@ -411,8 +466,8 @@ export class LandmarkArchitecture {
     private box(finish:Finish,x:number,y:number,z:number,w:number,h:number,d:number,rx=0,ry=0,rz=0){
         this.instance(finish,'box',x,y,z,w,h,d,rx,ry,rz);
     }
-    private round(finish:Finish,x:number,y:number,z:number,w:number,h:number,d:number,rx=0,ry=0){
-        this.instance(finish,'round',x,y,z,w,h,d,rx,ry,0);
+    private round(finish:Finish,x:number,y:number,z:number,w:number,h:number,d:number,rx=0,ry=0,rz=0){
+        this.instance(finish,'round',x,y,z,w,h,d,rx,ry,rz);
     }
     private instance(finish:Finish,shape:string,x:number,y:number,z:number,w:number,h:number,d:number,rx:number,ry:number,rz:number){
         this.dummy.position.set(x,y,z);this.dummy.scale.set(w,h,d);this.dummy.rotation.set(rx,ry,rz);this.dummy.updateMatrix();

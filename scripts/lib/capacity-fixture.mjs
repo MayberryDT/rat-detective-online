@@ -45,7 +45,7 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   // eleven-rat roster. Only explicit benchmark-ai rooms enable it.
   await patch('src/shared/botRoster.ts', 'names.map((name, i)', `Array.from({length:${serverBots}},(_,i)=>names[i%names.length]).map((name, i)`);
   await patch('src/shared/botRoster.ts', 'const count = MIN_PERSISTENT_BOTS + Math.floor(random() * (MAX_PERSISTENT_BOTS - MIN_PERSISTENT_BOTS + 1));', 'const count = MAX_PERSISTENT_BOTS;');
-  await patch('src/worker/index.ts', 'if (roomName === DEFAULT_ROOM_NAME) await room.ensurePersistentBots();', "if (roomName === DEFAULT_ROOM_NAME || roomName.startsWith('graybox-benchmark-ai-')) await room.ensurePersistentBots();");
+  await patch('src/worker/index.ts', '        return room.fetch(request);', "        if (roomName.startsWith('graybox-benchmark-ai-')) await room.ensurePersistentBots();\n        return room.fetch(request);");
   if(hosted){
     await patch('src/worker/GameRoom.ts', '  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {', `  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
       if(typeof raw==='string'&&raw.length<160&&raw.startsWith('{"type":"benchmarkEcho",')&&this.getPlayerId(ws)){

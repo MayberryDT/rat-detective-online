@@ -11,6 +11,8 @@ import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose } from './chaosState';
 import type { PlayerData, ShotDescriptor, Vec3Data } from './networkProtocol';
 import type { WorldSpec } from './worldSpec';
+import { AssignmentRules } from './AssignmentRules';
+import { activeDestination, ASSIGNMENT_DESTINATIONS, destinationPoint, restoreAssignment, type AssignmentState, type DestinationId } from './assignments';
 
 const caseCarryRotation=new C.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
 
@@ -48,7 +50,16 @@ export class ChaosSimulation {
     private pressure:NonNullable<ChaosState['pressure']>={serial:0,until:0,cooldowns:{},launches:[]};
     private notice={serial:0,text:'Find the Hot Case. Shoot Dispatch.'};
     private now=Date.now();
+    private assignment?:AssignmentRules;
+    get assignmentState():AssignmentState|undefined{return this.assignment?.state;}
+    setAssignment(state:AssignmentState):void{this.assignment=new AssignmentRules(structuredClone(state),this.players);}
+    private hit(hit:ChaosHit):void{if(!this.assignment?.closed)this.onHit(hit);}
     get caseHolderId():string|null{return this.primaryCase.owner;}
+    /** Called synchronously by authoritative damage resolution, never at launch. */
+    creditCaseKill(killerId:string):boolean {
+        if(this.casesWeaponized || this.primaryCase.returningUntil)return false;
+        return this.assignment?.kill(killerId,this.primaryCase.owner,this.now)??false;
+    }
     isCaseHolder(id:string):boolean{for(const c of this.cases.values())if(c.owner===id)return true;return false;}
     constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, spec?:WorldSpec) {
         // The city is mostly static boxes; sweep-and-prune avoids testing every
@@ -257,6 +268,7 @@ export class ChaosSimulation {
         this.tell('CASE LOOSE · This is no longer your problem.');
     }
     removePlayer(id:string){
+        this.assignment?.disconnect(id);
         this.release(id);delete this.possession[id];
         if(this.dispatchActivator===id)this.dispatchActivator=null;
     }
@@ -308,17 +320,16 @@ export class ChaosSimulation {
         // Bound ordinary travel to .8 units per substep; swept world checks catch thin walls.
         // Swept rat checks cover the entire path, including between network ticks.
         const missiles=[...this.cases.values()].filter(c=>this.caseDangerous(c));
-        const fastest=Math.max(0,...[...this.cases.values()].filter(c=>!c.owner).map(c=>c.body.velocity.length()),...[...this.corpses.values()].map(c=>c.body.velocity.length()));
+        const caseMotion=missiles.map(c=>({c,p:c.body.position.clone(),v:c.body.velocity.clone()}));
+        // Weaponized cases have their own continuous sweep. They must not force
+        // extra Cannon steps or repeat all nine world rays on every substep.
+        const fastest=Math.max(0,...[...this.cases.values()].filter(c=>!c.owner&&!this.caseDangerous(c)).map(c=>c.body.velocity.length()),...[...this.corpses.values()].map(c=>c.body.velocity.length()));
         const substeps=Math.max(1,Math.min(4,Math.ceil(fastest*dt/.8)));
+        for(const c of missiles){c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;}
         for(let sub=0;sub<substeps;sub++){
             const previous=[...this.corpses.values()].map(c=>({c,p:c.body.position.clone(),v:c.body.velocity.clone()}));
-            const caseMotion=missiles.map(c=>({c,p:c.body.position.clone(),v:c.body.velocity.clone()}));
             // Cannon advances rotation; swept integration owns missile translation.
-            for(const c of missiles){c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;}
             this.world.step(dt/substeps);
-            for(const {c,p,v} of caseMotion){
-                c.body.position.copy(p);c.body.velocity.copy(v);this.stepCaseMissile(dt/substeps,playing,c);
-            }
             for(const {c,p,v} of previous){
                 const body=c.body;
                 const obstruction=this.ray(p,body.position,1);
@@ -338,10 +349,13 @@ export class ChaosSimulation {
                     const nearest=p.vadd(delta.scale(fraction));
                     if(nearest.distanceTo(center)>1.15||this.ray(nearest,center,1).hasHit)continue;
                     c.hitAfter.set(player.id,this.now+T.corpseHitCooldownMs);
-                    this.onHit({owner,victim:player.id,damage:v.length()>55?2:1,incoming:data(v)});
+                    this.hit({owner,victim:player.id,damage:v.length()>55?2:1,incoming:data(v)});
                     this.impacts.push({p:data(center),n:data(v.unit()),surface:false});
                 }
             }
+        }
+        for(const {c,p,v} of caseMotion){
+            c.body.position.copy(p);c.body.velocity.copy(v);this.stepCaseMissile(dt,playing,c);
         }
     }
     private caseDangerous(c=this.primaryCase){
@@ -367,7 +381,7 @@ export class ChaosSimulation {
             const blocked=this.ray(nearest,center,1);
             if(blocked.hasHit&&blocked.distance>0.35)continue;
             c.hitAfter.set(player.id,this.now+700);
-            this.onHit({owner,victim:player.id,damage:velocity.length()>=28?3:1,incoming:data(velocity)});
+            this.hit({owner,victim:player.id,damage:velocity.length()>=28?3:1,incoming:data(velocity)});
             this.impacts.push({p:data(center),n:data(velocity.unit()),surface:false,cue:'thud'});
         }
     }
@@ -375,13 +389,15 @@ export class ChaosSimulation {
         c.armed=true;c.hitAfter.clear();c.returningUntil=0;
         c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;c.body.wakeUp();c.looseSince=this.now;
         if(incoming&&incoming.lengthSquared()>.01){
-            const kick=incoming.clone();kick.normalize();kick.scale(I.caseShotSpeed,kick);
-            c.body.velocity.copy(kick);c.body.angularVelocity.set(kick.z*.4,12,-kick.x*.4);
+            const kick=incoming.clone();kick.normalize();
+            const yaw=Math.hypot(kick.x,kick.z)>.01?Math.atan2(kick.z,kick.x):Math.atan2(c.body.velocity.z,c.body.velocity.x);
+            c.body.velocity.set(Math.cos(yaw)*I.caseShotSpeed,Math.max(-I.caseMaxLift,Math.min(I.caseMaxLift,kick.y*I.caseShotSpeed)),Math.sin(yaw)*I.caseShotSpeed);
+            c.body.angularVelocity.set(c.body.velocity.z*.09,3.5,-c.body.velocity.x*.09);
             return;
         }
         const yaw=Math.random()*Math.PI*2;
         c.body.velocity.set(Math.cos(yaw)*I.caseMissileSpeed,I.caseMissileLift,Math.sin(yaw)*I.caseMissileSpeed);
-        c.body.angularVelocity.set(c.body.velocity.z*.3,10,-c.body.velocity.x*.3);
+        c.body.angularVelocity.set(c.body.velocity.z*.09,3.5,-c.body.velocity.x*.09);
     }
     private beginEvidenceTampering(){
         this.casesWeaponized=true;
@@ -410,14 +426,12 @@ export class ChaosSimulation {
             if(c.body.velocity.length()>16)c.body.velocity.scale(16/c.body.velocity.length(),c.body.velocity);
             c.body.type=C.Body.DYNAMIC;c.body.collisionFilterMask=1|8|16;c.body.updateMassProperties();
         }
+        this.restoreObjectiveApproach(c);
     }
     private stepCaseMissile(dt:number,playing:boolean,c=this.primaryCase){
         const body=c.body;
         body.velocity.y+=BALL_GRAVITY*dt;
-        if(!c.missileOwner){
-            if(body.velocity.y>18)body.velocity.y=18;
-            if(body.position.y>7&&body.velocity.y>0)body.velocity.y*=.82;
-        }
+        body.velocity.y=Math.min(I.caseMaxLift,body.velocity.y);
         // Sweep the center and eight rotated corners. Even at missile speed a
         // thin wall intercepts the case before it can cross between physics ticks.
         const offsets=[new C.Vec3()];
@@ -441,6 +455,7 @@ export class ChaosSimulation {
             const dot=body.velocity.dot(normal);
             if(dot<0)body.velocity.vadd(normal.scale(-2*dot),body.velocity);
             body.velocity.scale(BALL_RESTITUTION,body.velocity);
+            if(normal.y>.65)body.velocity.y=Math.max(I.caseBounceLift,Math.min(I.caseMaxLift,body.velocity.y));
             this.impacts.push({p:data(end),n:data(normal),surface:true});
             remaining*=1-fraction;
         }
@@ -450,12 +465,12 @@ export class ChaosSimulation {
             if(body.position[axis]<low){body.position[axis]=low;body.velocity[axis]=Math.abs(body.velocity[axis])*.9;}
             if(body.position[axis]>high){body.position[axis]=high;body.velocity[axis]=-Math.abs(body.velocity[axis])*.9;}
         }
-        const minimumSpeed=c.missileOwner?I.caseShotSpeed*.72:18;
-        if(c.missileOwner&&body.velocity.length()>0.01&&body.velocity.length()<minimumSpeed){
-            body.velocity.scale(minimumSpeed/body.velocity.length(),body.velocity);
-        }else if(body.velocity.length()<18){
-            const yaw=Math.atan2(body.velocity.z||Math.sin(this.now*.001),body.velocity.x||Math.cos(this.now*.001));
-            body.velocity.set(Math.cos(yaw)*I.caseMissileSpeed*.72,Math.max(6,body.velocity.y),Math.sin(yaw)*I.caseMissileSpeed*.72);
+        // Replenish lateral motion only. Boosting total velocity turned a floor
+        // rebound into an ever-rising rocket, especially after a shot claimed it.
+        const lateral=Math.hypot(body.velocity.x,body.velocity.z);
+        if(lateral<I.caseRicochetMinSpeed){
+            const yaw=lateral>.01?Math.atan2(body.velocity.z,body.velocity.x):Math.atan2(c.body.angularVelocity.x,-c.body.angularVelocity.z);
+            body.velocity.x=Math.cos(yaw)*I.caseRicochetMinSpeed;body.velocity.z=Math.sin(yaw)*I.caseRicochetMinSpeed;
         }
         body.updateAABB();
     }
@@ -506,8 +521,52 @@ export class ChaosSimulation {
     private reflect(shot:ChaosShot,normal:C.Vec3){
         const v=vec(shot.v);v.vadd(normal.scale(-2*v.dot(normal)),v);v.scale(BALL_RESTITUTION,v);shot.v=data(v);return v;
     }
+    private advanceAssignment(dt:number,now:number,playing:boolean):void{
+        const rules=this.assignment;if(!rules||rules.closed)return;
+        const d=this.dispatch,from=now-Math.max(0,dt)*1000;
+        let start=Infinity,end=Infinity;
+        if(d.incident==='evidence-tampering'){
+            if(d.phase==='rolling'){start=d.until;end=start+T.activeMs;}
+            else if(d.phase==='active'){start=d.started;end=d.until;}
+            else if(d.phase==='cooldown'){end=d.started;start=end-T.activeMs;}
+        }
+        const cuts=[from,...[start,end,rules.state.liveAt].filter(t=>t>from&&t<now),now].sort((a,b)=>a-b);
+        for(let i=0;i<cuts.length-1;i++){
+            const a=cuts[i],b=cuts[i+1];
+            rules.setPhase(a,a>=start&&a<end);
+            if(playing)rules.advance(a,b,this.primaryCase.returningUntil?null:this.primaryCase.owner);
+        }
+        rules.setPhase(now,now>=start&&now<end);
+    }
+    private returnAtDestination(c:CaseRuntime,id:DestinationId):void{
+        const p=destinationPoint(id);p.y+=1;
+        c.body.position.copy(vec(p));c.body.velocity.setZero();c.body.angularVelocity.setZero();
+        c.body.updateAABB();c.body.wakeUp();c.looseSince=this.now;
+    }
+    private restoreObjectiveApproach(c:CaseRuntime):void{
+        if(c!==this.primaryCase||!this.assignment||this.assignment.closed)return;
+        // Include the case's physical extent at a building edge, not only its
+        // center: incident cleanup must not turn an overlapping missile into a stamp.
+        c.body.updateAABB();const {lowerBound:l,upperBound:u}=c.body.aabb;
+        const id=this.assignment.state.destinations.find(id=>{
+            const b=ASSIGNMENT_DESTINATIONS[id].bounds;
+            return u.x>b.xmin&&l.x<b.xmax&&u.y>b.ymin&&l.y<b.ymax&&u.z>b.zmin&&l.z<b.zmax;
+        });
+        if(id&&!c.owner){this.returnAtDestination(c,id);this.tell('EVIDENCE RETURNED · Fresh entry required.');}
+    }
+    private checkAssignmentLocation(c:CaseRuntime):void {
+        const rules=this.assignment,holder=c.owner?this.players.get(c.owner):undefined;
+        if(c!==this.primaryCase||!rules?.active||rules.closed||c.returningUntil||this.casesWeaponized||!holder)return;
+        const outcome=rules.visit(holder.id,holder,this.now);
+        if(outcome==='verified'){
+            const next=activeDestination(rules.state);
+            this.tell(`STAMPED! ${rules.state.stamps}/${rules.state.destinations.length} · NEXT: ${next?ASSIGNMENT_DESTINATIONS[next].label:''}`);
+        }
+    }
     step(dt:number,now:number,playing=true){
         this.now=now;this.syncRats();this.rayQuery.refresh();
+        this.advanceAssignment(dt,now,playing);
+        playing=playing&&!this.assignment?.closed;
         this.pressure.launches=this.pressure.launches.filter(event=>now-event.at<=PRESSURE_LAUNCH.eventMs);
         // A restored room can cross multiple deadlines while asleep. Advance
         // without briefly applying an incident whose active window already ended.
@@ -574,7 +633,7 @@ export class ChaosSimulation {
                         const nearest=from.vadd(motion.scale(fraction));
                         if(nearest.distanceTo(center)>radius+1.05||this.ray(nearest,center,1).hasHit)continue;
                         const damage=(this.incidentActive('crossfire')&&shot.wallBounced)?3:1;
-                        this.onHit({owner:shot.owner,victim:player.id,damage,incoming:{...shot.v}});
+                        this.hit({owner:shot.owner,victim:player.id,damage,incoming:{...shot.v}});
                         const n=center.vsub(nearest);if(n.lengthSquared()<.0001)n.set(0,1,0);else n.normalize();
                         this.impacts.push({p:data(nearest),n:data(n),surface:false});
                         this.shots.splice(i,1);consumed=true;break;
@@ -588,7 +647,7 @@ export class ChaosSimulation {
             const incoming={...shot.v};
             if(target?.kind==='rat' && target.player && target.player.hp>0){
                 const damage=hit.shape===target.head||(this.incidentActive('crossfire')&&shot.wallBounced)?3:1;
-                if(playing)this.onHit({owner:shot.owner,victim:target.player.id,damage,incoming});
+                if(playing)this.hit({owner:shot.owner,victim:target.player.id,damage,incoming});
                 this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:false});
                 this.shots.splice(i,1);continue;
             }
@@ -656,7 +715,9 @@ export class ChaosSimulation {
             const invalid=!Number.isFinite(p.x+p.y+p.z)||outsideCity(p.x,p.z)||p.y< -9 ||
                 (c.body.velocity.length()<.4 && p.y>1.5 && !isReachableLandmarkPosition(p.x,p.y,p.z) && !isReachableVehiclePosition(p.x,p.y,p.z) && now-c.looseSince>4000) ||
                 (now-c.looseSince>T.stuckMs && this.embedded(p));
-            if(invalid && !c.returningUntil){c.returningUntil=now+T.recoverMs;this.tell('CASE RETURNING · Evidence misplaced.');}
+            if(invalid && !c.returningUntil){
+                c.returningUntil=now+T.recoverMs;this.tell('CASE RETURNING · Evidence misplaced.');
+            }
             if(c.returningUntil && now>=c.returningUntil){
                 this.placeCaseAtSpawn(c);c.body.quaternion.set(0,0,0,1);c.body.velocity.setZero();c.body.angularVelocity.setZero();
                 c.hitAfter.clear();
@@ -664,14 +725,16 @@ export class ChaosSimulation {
                 c.body.wakeUp();c.returningUntil=0;c.looseSince=now;
                 if(this.casesWeaponized)this.launchCaseMissile(c);
                 else {c.missileOwner=undefined;c.armed=false;}
+                this.restoreObjectiveApproach(c);
             }
-            if(!c.returningUntil && playing && !this.casesWeaponized && !this.caseDangerous(c) && c.body.velocity.length()<=T.casePickupMaxSpeed){
+            if(!c.returningUntil && playing && !this.assignment?.closed && !this.casesWeaponized && !this.caseDangerous(c) && c.body.velocity.length()<=T.casePickupMaxSpeed){
                 for(const player of this.players.values()){
                     if(player.hp<=0 || this.isCaseHolder(player.id) || (player.id===c.previousOwner&&now<c.pickupAfter))continue;
                     const reach=new C.Vec3(player.x,player.y+.8,player.z);
                     if(reach.distanceTo(p)>T.pickupRadius)continue;
                     if(this.ray(reach,p,1).hasHit)continue;
-                    c.owner=player.id;this.carry(player,c);this.tell('This rat is on the case · '+player.name);break;
+                    c.owner=player.id;this.carry(player,c);this.checkAssignmentLocation(c);
+                    this.tell('This rat is on the case · '+player.name);break;
                 }
             }
         }
@@ -681,6 +744,7 @@ export class ChaosSimulation {
             const p=this.players.get(c.owner);
             if(!p||p.hp<=0)this.releaseCase(c);else{
                 this.carry(p,c);
+                if(playing)this.checkAssignmentLocation(c);
                 if(playing)this.possession[p.id]=(this.possession[p.id]||0)+dt;
             }
         }
@@ -715,12 +779,15 @@ export class ChaosSimulation {
     }
     snapshot(drain=true):ChaosState{
         const state:ChaosState={time:this.now,case:this.caseSnapshot(this.primaryCase),
+            ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
             extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,cooldowns:{...this.pressure.cooldowns},launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
             shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts],notice:{...this.notice}};
         if(drain)this.impacts=[];return state;
     }
     reset(){for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
+        this.assignment=undefined;
+        this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.lastSurgePulse=0;this.dispatchActivator=null;
         this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};
@@ -737,6 +804,7 @@ export class ChaosSimulation {
         c.armed=this.incidentActive('evidence-tampering')&&!c.owner;
     }
     private restore(s:ChaosState){
+        const assignment=restoreAssignment(s.assignment,Date.now());if(assignment)this.setAssignment(assignment);
         this.pressure={serial:s.pressure?.serial||0,until:s.pressure?.until||0,
             cooldowns:{...s.pressure?.cooldowns,[PRESSURE_LAUNCH.id]:s.pressure?.cooldowns?.[PRESSURE_LAUNCH.id]??s.pressure?.until??0},launches:[]};
         this.now=s.time;this.dispatch={...s.dispatch,...(s.dispatch.incident?{incident:incidentInfo(s.dispatch.incident).id}:{})};
@@ -765,6 +833,7 @@ export class ChaosSimulation {
                 position:vec(c.p),collisionFilterGroup:8,collisionFilterMask:1|4|16,linearDamping:.015,angularDamping:.04});
             Object.assign(body.quaternion,c.q);body.velocity.copy(vec(c.v));body.angularVelocity.copy(vec(c.spin));this.addCorpse(body,c);
         }
-        if(elapsed>2)for(const c of this.cases.values())if(!c.owner)c.returningUntil=Date.now()+T.recoverMs;
+        if(elapsed>2&&!this.assignment)for(const c of this.cases.values())if(!c.owner)c.returningUntil=Date.now()+T.recoverMs;
+        if(this.assignment?.state.phase==='suspended'&&!this.casesWeaponized)this.restoreObjectiveApproach(this.primaryCase);
     }
 }

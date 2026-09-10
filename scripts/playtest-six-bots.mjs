@@ -37,7 +37,7 @@ try{
  for(let i=0;i<6;i++)await new Promise((resolve,reject)=>{
   const c={ws:new WebSocket(`ws://127.0.0.1:5190/ws?room=${room}&chaos=compact-v1`,{headers:{Origin:origin}}),decoder:new ChaosDecoder(),id:null};clients.push(c);
   const timeout=setTimeout(()=>reject(Error('Bot join timeout')),15000);
-  c.ws.on('open',()=>c.ws.send(JSON.stringify({type:'join',protocolVersion:1,name:names[i],appearance:{hatType:'fedora',hatColor:0x554433,furColor:0x777777,coatColor:0x333344}})));
+  c.ws.on('open',()=>c.ws.send(JSON.stringify({type:'join',protocolVersion:4,name:names[i],appearance:{hatType:'fedora',hatColor:0x554433,furColor:0x777777,coatColor:0x333344}})));
   c.ws.on('error',error=>{clearTimeout(timeout);reject(error);stop();});
   c.ws.on('close',(code)=>{clearTimeout(timeout);if(!stopping){console.error(JSON.stringify({event:'bot-disconnected',name:names[i],code}));stop();}});
   c.ws.on('message',raw=>{

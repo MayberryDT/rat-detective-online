@@ -20,7 +20,7 @@ async function open(group:string, preferred?:string, join=true) {
   const messages:ServerMessage[]=[];
   ws.addEventListener('message',event=>{const message=parseServerMessage(String(event.data));if(message)messages.push(message);});
   if(!join)return {ws,messages,welcome:undefined};
-  ws.send(JSON.stringify({type:'join',protocolVersion:1,name:'Human Rat',appearance}));
+  ws.send(JSON.stringify({type:'join',protocolVersion:4,name:'Human Rat',appearance}));
   await until(()=>messages.some(m=>m.type==='welcome'));
   const welcome=messages.find(m=>m.type==='welcome') as Extract<ServerMessage,{type:'welcome'}>;
   rooms.add(welcome.matchRoom!);

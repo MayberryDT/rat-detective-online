@@ -6,10 +6,11 @@ Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md]
 
 - Rat Detective is wild physical comedy in a dark noir metropolis. Favor chaotic, interacting systems and spectacular consequences over competitive balance. Preserve usable controls, camera, navigation and continued participation.
 - Cheese projectiles remain **balls**. Ordinary speed, gravity, bounce and lifetime are deliberately tuned; do not change them as an optimization or map workaround. Read `src/shared/ballTuning.ts` and the current gameplay baseline.
-- Keep dark buildings with varied high-contrast windows and lights. Aboveground illumination is steady; proximity lighting belongs only in sewers. Preserve approved landmark scale, distinct interiors, dense streets, alleys and sewer connections.
+- Keep dark buildings with varied high-contrast windows and lights. Authored lamps and baked illumination stay steady. The September 9 lighting trial adds four nearby downward lights on moving rats and lowers ambient fill; `lighting=classic` restores the prior sewer-only moving lights. Preserve approved landmark scale, distinct interiors, dense streets, alleys and sewer connections.
 - Preserve the current shoulder camera, animated pistol muzzle, case grip and rat silhouette. Cosmetic upgrades should evolve them. Do not restore an old camera or move projectile origins forward to conceal a problem.
 - No self-damage, no friendly-fire damage, and no current minimap. The current game is free-for-all; this does not imply an implemented team system.
-- The Hot Case awards **2× kill credit**, not double damage. Evidence Tampering adds three carryable cases; all extras, including carried ones and their bonuses, disappear at incident expiry.
+- The local version-2 playlist uses **Dispatch Assignments** to win; kills are actual secondary statistics, with no carrier multiplier or kill-limit finish. The dated shipped/legacy deathmatch rules differ. Read [the assignment implementation](docs/dispatch-assignments.md).
+- Evidence Tampering makes **eight uncollectible weaponized cases** that ricochet with short hops. Replenish lateral speed only; do not restore the old 220-speed upward rockets. All assignment progress pauses and is retained; the seven extras disappear at expiry. Restore the primary case with its existing progress and require a fresh valid entry.
 
 ## Work safely in this project
 

@@ -15,6 +15,13 @@ const WALL_COLOR = 0x2a322f;
 const CEILING_COLOR = 0x1a1e1c;
 const RAMP_COLOR = 0x323a36;
 
+/** Wall-hugging workbench and supply rack in Maintenance. Shared solids keep
+ * the visible furniture, ball rebounds and bot navigation in agreement. */
+export const SEWER_MAINTENANCE_FURNISHINGS: readonly GrayboxBox[] = [
+    {x:69.45,y:-5.8,z:-37.2,w:.9,h:2.4,d:5.2,color:0x24323c,rx:0,rz:0},
+    {x:66.4,y:-5.3,z:-30.45,w:3.2,h:3.4,d:.9,color:0x24323c,rx:0,rz:0},
+];
+
 interface Rect {xmin:number; xmax:number; zmin:number; zmax:number}
 
 /** Hall rectangles. Overlaps at junctions are the open floorplan union. */
@@ -211,7 +218,7 @@ export function sewerBoxes():GrayboxBox[] {
         for(const c of ceilingPieces(r))boxes.push(make((c.xmin+c.xmax)/2,CEILING+WALL/2,
             (c.zmin+c.zmax)/2,c.xmax-c.xmin,WALL,c.zmax-c.zmin,CEILING_COLOR));
     }
-    boxes.push(...boundaryWalls(),...ramps(),...landings(),...sewerPipeBoxes());
+    boxes.push(...boundaryWalls(),...ramps(),...landings(),...sewerPipeBoxes(),...SEWER_MAINTENANCE_FURNISHINGS);
     const m=SEWER_MANHOLE, half=m.halfWidth, depth=-m.shaftBottom;
     for(const side of [-1,1]){
         boxes.push({...make(m.x+side*(half+.15),-depth/2,m.z,.3,depth,half*2+.6,WALL_COLOR),hidden:true});

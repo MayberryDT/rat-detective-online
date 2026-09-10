@@ -250,11 +250,11 @@ export class GameSession {
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin));
-        this.hud.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
+        this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.hud.hideRespawn();
         this.hud.hideVictory();
         if (player.hp <= 0 && player.respawnAt) this.hud.showRespawn(player.respawnAt - this.serverOffset);
-        if (message.round.phase === 'won') this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0);
+        if (message.round.phase === 'won') {this.hud.hideRespawn();this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0,message.round.assignment);}
         this.lastMovement = '';
         this.lastMovementAt = 0;
         if(normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
@@ -336,8 +336,8 @@ export class GameSession {
                 else this.remotes.respawn(message.id, message);
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
-            case 'scoreboardUpdate': this.hud.setScores(message.scores, this.myId); break;
-            case 'gameWon': this.hud.showVictory(message.winnerName, message.kills); break;
+            case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
+            case 'gameWon': this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
             case 'gameReset': this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
@@ -390,6 +390,7 @@ export class GameSession {
         this.city.update(dt, camera);
         const presentationEnd=measure?performance.now():0;
         renderer.render(scene, camera);
+        this.chaos?.renderOutline(renderer,camera);
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:{...this.chaos?.getDiagnostics(),predictedBalls:this.gun.predictedBallCount}});
         this.frame = requestAnimationFrame(time => this.animate(time));
     }

@@ -1,4 +1,5 @@
 import { sanitizeDiagnosticReport } from './diagnosticReport';
+import { parseAssignment } from './assignments';
 import { INCIDENTS, incidentInfo } from './incidentCatalog';
 import {
   MAX_HP,
@@ -122,6 +123,9 @@ function parseRound(value: unknown): RoundState | null {
   const startedAt = value.startedAt === undefined ? undefined : integer(value.startedAt);
   if (kills === null || resetAt === null || startedAt === null) return null;
   if (value.phase === 'won' && (resetAt === undefined || !winnerName)) return null;
+  const assignment=value.assignment===undefined?undefined:parseAssignment(value.assignment);
+  if(assignment===null || (assignment && (value.phase==='won') !== (assignment.phase==='closed')))return null;
+  if(assignment?.result && (assignment.result.winnerId!==winnerId || assignment.result.winnerName!==winnerName))return null;
   return {
     phase: value.phase,
     ...(winnerId !== undefined ? { winnerId } : {}),
@@ -129,6 +133,7 @@ function parseRound(value: unknown): RoundState | null {
     ...(kills !== undefined ? { kills } : {}),
     ...(resetAt !== undefined ? { resetAt } : {}),
     ...(startedAt !== undefined ? { startedAt } : {}),
+    ...(assignment ? { assignment } : {}),
   };
 }
 
@@ -335,6 +340,8 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
 
 function parseChaos(value:unknown):ChaosState|null{
   if(!isRecord(value)||finiteNumber(value.time)===null||!isRecord(value.case)||!isRecord(value.dispatch)||!isRecord(value.possession)||!isRecord(value.notice))return null;
+  const assignment=value.assignment===undefined?undefined:parseAssignment(value.assignment);
+  if(assignment===null)return null;
   const pose=(v:unknown)=>isRecord(v)&&!!parseVec3(v.p)&&!!parseQuat(v.q)&&!!parseVec3(v.v)&&!!parseVec3(v.spin);
   const c=value.case,d=value.dispatch;
   const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
@@ -363,8 +370,9 @@ function parseChaos(value:unknown):ChaosState|null{
     if(!p.launches.every(e=>isRecord(e)&&nonEmptyString(e.id,128)&&nonEmptyString(e.playerId,64)&&
       finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&parseVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)))return null;
   }
-  if(d.incident==='after-hours-collection'||d.incident==='kickback'||d.incident==='return-to-sender'||d.incident==='cheesequake')return {...value,dispatch:{...d,incident:incidentInfo(d.incident).id}} as unknown as ChaosState;
-  return value as unknown as ChaosState;
+  const validated={...value,...(assignment?{assignment}:{})};
+  if(d.incident==='after-hours-collection'||d.incident==='kickback'||d.incident==='return-to-sender'||d.incident==='cheesequake')return {...validated,dispatch:{...d,incident:incidentInfo(d.incident).id}} as unknown as ChaosState;
+  return validated as unknown as ChaosState;
 }
 
 export function parseServerMessage(raw: unknown): ServerMessage | null {
@@ -471,7 +479,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const kills = boundedInteger(parsed.kills, 0, 10_000);
       const resetAt = integer(parsed.resetAt);
       if (!winnerId || winnerName === null || kills === null || resetAt === null) return null;
-      return { type: 'gameWon', winnerId, winnerName, kills, resetAt };
+      const assignment=parsed.assignment===undefined?undefined:parseAssignment(parsed.assignment);
+      if(assignment===null || assignment && (assignment.result?.winnerId!==winnerId || assignment.result.winnerName!==winnerName))return null;
+      return { type: 'gameWon', winnerId, winnerName, kills, resetAt, ...(assignment?{assignment}:{}) };
     }
     case 'gameReset': {
       const round = parseRound(parsed.round);

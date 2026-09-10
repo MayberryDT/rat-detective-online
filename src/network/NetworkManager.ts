@@ -53,6 +53,8 @@ export function resolveWebSocketUrl(serverUrl?: string): string {
     if (url.pathname === '/') url.pathname = '/ws';
     const room = new URLSearchParams(window.location.search).get('room');
     if (room && !url.searchParams.has('room')) url.searchParams.set('room', room);
+    const assignment = new URLSearchParams(window.location.search).get('assignment');
+    if (assignment && !url.searchParams.has('assignment')) url.searchParams.set('assignment', assignment);
     return url.toString();
 }
 

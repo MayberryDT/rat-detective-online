@@ -10,7 +10,8 @@ let buffers = new Map<Cue, AudioBuffer>();
 let loading: Promise<void> | undefined;
 let generation = 0;
 let buzzWanted = false;
-let buzzVolume = .19;
+const CASE_BUZZ_VOLUME = .055;
+let buzzVolume = CASE_BUZZ_VOLUME;
 let saw: {source: AudioBufferSourceNode; gain: GainNode; volume: number} | undefined;
 const listener = {x:0,y:0,z:0};
 const voices = new Map<AudioBufferSourceNode, GainNode>();
@@ -78,7 +79,7 @@ export function startCaseBuzz(active: boolean, origin?: Vec3Data): void {
     buzzWanted = active;
     if (!active) { stopSaw(); return; }
     // Keep the most recent distance when asynchronous loading starts the loop.
-    if (origin) buzzVolume = .19 * distanceGain(origin);
+    if (origin) buzzVolume = CASE_BUZZ_VOLUME * distanceGain(origin);
     const ctx = context, buffer = buffers.get('case-saw');
     if (!ctx || ctx.state !== 'running' || !buffer) return;
     if (saw) {
@@ -108,5 +109,5 @@ export function disposeIncidentAudio(): void {
     buzzWanted = false; stopSaw(); generation++;
     for (const [voice,gain] of voices) { voice.onended=null;voice.stop();voice.disconnect();gain.disconnect(); }
     voices.clear(); buffers = new Map(); loading = undefined; context = undefined; thudBuffer = undefined;
-    listener.x=listener.y=listener.z=0; buzzVolume=.19;
+    listener.x=listener.y=listener.z=0; buzzVolume=CASE_BUZZ_VOLUME;
 }

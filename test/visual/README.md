@@ -229,3 +229,10 @@ layout iteration for human feedback, not a finished balance or art pass.
 
 Case recovery distinguishes reachable gallery/stair surfaces from inaccessible
 roofs. New structural geometry is shared by the solo preview and room simulation.
+# Dispatch Assignment review
+
+`assignment-fixture.html` is a static review of the distinct assignment HUDs and whole-landmark destinations in the real city/shoulder camera. It accepts `assignment=closing-time|chain-of-custody|excessive-force`, `view=city|icebox|archive|offscreen|sewer|maintenance|dispatch`, `stamps=0..5`, `phase=title|briefing|suspended|closed|death`, `held`, `remaining` (milliseconds), and `confirm`. It contains no gameplay input or network and does not demonstrate multiplayer scoring. See [the implementation receipt](../../docs/dispatch-assignments.md).
+
+The assignment fixture now includes navigation links for all three distinct HUDs, the six-stop Chain route, Maintenance, the title, victory and death screens. It pins the route for reproducible visual states; live matches shuffle all six landmarks. The death visual replays its three-second countdown every 4.5 seconds for inspection. The latest palette is deep logo-purple and dark textured paper. Whole-building outlines show only the exterior silhouette through walls. `view=maintenance` places the actual shoulder camera inside the furnished workshop; `view=sewer` shows its approach. `view=dispatch` exposes an opt-in LISTEN button for the actual ready siren. Add `dispatch=busy` to inspect its off state. There is no automatic sound playback.
+
+`view=streetlight` places the rat beneath an authored pole using the real shoulder camera. Compare `lighting=pools` (the new lower ambient/downlight trial) with `lighting=classic` (the exact previous lighting values). Both options also work in the full game and change only local presentation. Static screenshots are visual review, not input, multiplayer, sound or frame-rate validation.

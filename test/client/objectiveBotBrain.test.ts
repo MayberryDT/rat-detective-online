@@ -4,6 +4,7 @@ import { createPlayer } from '../../src/worker/gameState';
 import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
 import { DISPATCH_STATIONS, type ChaosState } from '../../src/shared/chaosState';
+import { createAssignment, destinationPoint, CHAIN_ROUTE } from '../../src/shared/assignments';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 function state(owner:string|null=null):ChaosState {
@@ -22,6 +23,29 @@ function aimedNear(shot:Vec3Data|undefined,self:Vec3Data,target:Vec3Data){
     expect(cosine).toBeLessThan(.9999);
 }
 describe('case-first normal match bots',()=>{
+    it('carries through the active verification approach while retaining combat',()=>{
+        const {brain,self,near,navigation}=fixture(),s=state('me');
+        s.assignment=createAssignment('chain-of-custody',0);s.assignment.destinations=[...CHAIN_ROUTE];s.assignment.phase='active';
+        brain.step(3000,self,[self,near],s,()=>true,false,true);
+        expect(brain.objective).toBe('delivery');
+        expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('icebox'));
+        Object.assign(self,destinationPoint('icebox'));
+        brain.step(3500,self,[self,near],s,()=>true,false,true);
+        expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('icebox',false));
+        s.assignment.stamps=1;brain.step(3510,self,[self,near],s,()=>true,false,true);
+        expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('maintenance'));
+        s.assignment.phase='suspended';s.case.owner=null;s.dispatch={phase:'active',incident:'evidence-tampering',serial:1,started:3500,until:28500};
+        brain.step(3520,self,[self,near],s,()=>true,false,true);
+        expect(brain.objective).not.toBe('delivery');expect(brain.objective).not.toBe('case');
+    });
+    it('fights with the case in Excessive Force and keeps Closing Time mobile',()=>{
+        const {brain,self,near}=fixture(),s=state('me');
+        s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
+        brain.step(3000,self,[self,near],s,()=>true,false,true);
+        expect(brain.objective).toBe('combat');
+        s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';
+        brain.step(3010,self,[self,near],s,()=>true,false,true);expect(brain.objective).toBe('combat');
+    });
     it('walks to the loose case while opportunistically shooting a visible enemy',()=>{
         const {brain,self,near}=fixture();
         const intent=brain.step(1000,self,[self,near],state(),()=>true,false,true);

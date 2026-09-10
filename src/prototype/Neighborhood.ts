@@ -8,6 +8,9 @@ import { CityGrime } from './CityGrime';
 import { ParkedVehicles } from './ParkedVehicles';
 import { LandmarkArchitecture } from './LandmarkArchitecture';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
+import {StreetLightPool} from './StreetLightPool';
+import {readLightingMode,type LightingMode} from '../session/lightingMode';
+import {generatedStreetLamps} from '../shared/streetLampLayout';
 
 import { STREET_LAMPS, grayboxBoxes, CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import {cityStreetBuildings} from '../shared/cityPlan';
@@ -32,12 +35,15 @@ export class Neighborhood {
     private readonly lampSources:THREE.PointLight[]=[];
     private readonly fixedLights:THREE.PointLight[]=[];
     private readonly lampPool:THREE.PointLight[]=[];
-    constructor(private scene:THREE.Scene, private world:CANNON.World, spec:WorldSpec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION}) {
+    private readonly overhead?:StreetLightPool;
+    constructor(private scene:THREE.Scene, private world:CANNON.World, spec:WorldSpec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION},private readonly lighting:LightingMode=readLightingMode()) {
+        this.streetFill.intensity=lighting==='classic'?1.25:.32;
         this.add(this.streetFill);
         for(const body of [...world.bodies]) if(body.shapes.some(shape=>shape instanceof CANNON.Plane)) {this.groundBodies.push(body);world.removeBody(body);}
         for(const obj of [...scene.children]) if(obj instanceof THREE.Mesh && obj.geometry instanceof THREE.PlaneGeometry) {this.groundMeshes.push(obj);scene.remove(obj);}
         this.city=new CityGenerator(scene,world,undefined,{...spec,version:1});
-        this.city.generate([...cityStreetBuildings(generateBuildingLayout({...spec,version:1})),...CENTRAL_BUILDINGS],true);
+        const layout=[...cityStreetBuildings(generateBuildingLayout({...spec,version:1})),...CENTRAL_BUILDINGS];
+        this.city.generate(layout,true);
         for(const b of grayboxBoxes(spec)){if(b.original)continue;const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz);if(b.hidden)mesh.visible=false;}
         for(const dispatch of [...DISPATCH_STATIONS.map(s=>s.box),...LAUNCH_MACHINES.map(s=>s.box)])
             this.box(dispatch.x,dispatch.y,dispatch.z,dispatch.w,dispatch.h,dispatch.d,0x182936).visible=false;
@@ -117,6 +123,13 @@ export class Neighborhood {
         this.vehicles=new ParkedVehicles(scene);
         this.grime=new CityGrime(scene,spec);
         this.sewerPortals=new SewerPortals(scene);
+        if(lighting==='pools')this.overhead=new StreetLightPool(scene,[
+            ...STREET_LAMPS.map(([x,z])=>({x,y:5,z,color:0xffcf96})),
+            ...generatedStreetLamps(layout,STREET_LAMPS).map(([x,z])=>({x,y:6.2,z,color:0xffcf96})),
+            // Interior fixtures stay steady in the baked city; their nearby
+            // downward light also catches moving rats at the matching floor.
+            ...this.fixedLights.filter(light=>light.position.y!==4.5).map(light=>({x:light.position.x,y:light.position.y,z:light.position.z,color:light.color.getHex()})),
+        ]);
         this.bakeFixedLighting();
         this.batchStaticMeshes();
         this.initLampPool();
@@ -129,7 +142,7 @@ export class Neighborhood {
         this.architecture.update(_dt);
         this.grime.update(_dt);
         // Outdoor bounce light supplies a visibility floor; existing sewer lighting stays intact.
-        if(camera) this.streetFill.intensity=1.25*THREE.MathUtils.smoothstep(camera.position.y,-2,1);
+        if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera);}
         this.syncLampPool(camera);
     }
     private material(color:number) {
@@ -272,6 +285,7 @@ export class Neighborhood {
         // Navigation is expressed by architectural signs; floating map labels are retired.
     }
     dispose() {
+        this.overhead?.dispose();
         this.architecture.dispose();
         this.vehicles.dispose();
         this.grime.dispose();

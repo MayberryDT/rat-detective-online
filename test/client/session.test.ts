@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosState } from '../../src/shared/chaosState';
+import { createAssignment } from '../../src/shared/assignments';
 
 const harness = vi.hoisted(() => {
     const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
@@ -401,10 +402,6 @@ describe('GameSession', () => {
         expect(gun.clearProjectiles).toHaveBeenCalled();
         expect(remotes.clear).toHaveBeenCalled();
         expect(remotes.snapshot).toHaveBeenCalledWith(snapshot.players, 'me');
-        expect(hud.setScores).toHaveBeenCalledWith(
-            [snapshot.players.me, snapshot.players.other],
-            'me',
-        );
         expect(hud.hideRespawn).toHaveBeenCalled();
         expect(hud.hideVictory).toHaveBeenCalled();
         expect(hud.enterPlaying).toHaveBeenCalled();
@@ -469,11 +466,22 @@ describe('GameSession', () => {
         expect(harness.cities[1].generate).toHaveBeenCalled();
         expect(harness.rats).toHaveLength(2);
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 3_000);
-        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20);
+        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, undefined);
         transport.onMessage?.({ type: 'currentPlayers', players: { me: dead } });
         expect(harness.rats).toHaveLength(2);
     });
 
+    it('presents the objective result on both a finish and a late join while hiding respawn',()=>{
+        const {transport,hud}=start();transport.onMessage?.(welcome());
+        const assignment=createAssignment('excessive-force',0);assignment.phase='closed';
+        assignment.result={winnerId:'me',winnerName:'Inspector Brie',at:Date.now(),method:'kills',posthumous:false};
+        const result={winnerId:'me',winnerName:'Inspector Brie',kills:0,resetAt:Date.now()+6000,assignment};
+        transport.onMessage?.({type:'gameWon',...result});
+        expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,assignment);
+        expect(hud.hideRespawn).toHaveBeenCalled();
+        transport.onMessage?.(welcome({round:{phase:'won',...result}}));
+        expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,assignment);
+    });
     it('routes death, respawn, victory, reset, and notice errors through the HUD', () => {
         const { transport, hud, remotes } = start();
         const local = player('me');
@@ -494,7 +502,7 @@ describe('GameSession', () => {
         expect(hud.hideRespawn).toHaveBeenCalled();
         expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
         transport.onMessage?.({ type: 'gameWon', winnerId: 'me', winnerName: '<Rat & Co>', kills: 20, resetAt: Date.now() + 6_000 });
-        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20);
+        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, undefined);
         transport.onMessage?.({ type: 'gameReset', round: { phase: 'playing' } });
         expect(hud.hideVictory).toHaveBeenCalled();
         expect(hud.hideRespawn).toHaveBeenCalled();

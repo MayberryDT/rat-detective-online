@@ -47,5 +47,25 @@ export function buildDispatchModel(root:THREE.Group,screen:THREE.Texture){
     }
     const lamp=put(.74,.16,.2,0,1.83,0,red,true);
     for(const x of [-.56,.56])put(.12,.28,.14,x,1.81,0,chrome,true);
-    return {switchHandle,lamp};
+    // A small rotating reflector under a red glass dome. No dynamic light,
+    // collision or extra shoot target: readiness changes only this roof fitting.
+    const siren=new THREE.Group();siren.name='dispatch-ready-siren';siren.position.y=1.98;root.add(siren);
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(.34,.36,.12,16),dark);siren.add(base);
+    const glass=new THREE.Mesh(new THREE.SphereGeometry(.30,20,12,0,Math.PI*2,0,Math.PI/2),
+        new THREE.MeshStandardMaterial({color:0x67271e,emissive:0x8d3221,emissiveIntensity:.06,transparent:true,opacity:.65,roughness:.22,metalness:.1,depthWrite:false}));
+    glass.position.y=.05;glass.scale.y=1.3;siren.add(glass);
+    const rotor=new THREE.Group();rotor.name='dispatch-siren-reflector';rotor.position.y=.18;siren.add(rotor);
+    const reflector=new THREE.Mesh(new THREE.SphereGeometry(.19,12,8,0,Math.PI,0,Math.PI),
+        new THREE.MeshBasicMaterial({color:0xe3a16f,toneMapped:false}));
+    reflector.rotation.y=Math.PI/2;reflector.scale.z=.35;rotor.add(reflector);
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(.34,16,10),new THREE.MeshBasicMaterial({color:0xb75131,transparent:true,opacity:.06,depthWrite:false,toneMapped:false}));
+    glow.position.y=.17;glow.scale.y=.85;siren.add(glow);rotor.visible=false;glow.visible=false;
+    return {switchHandle,lamp,siren,glass,rotor,glow};
+}
+
+export function updateDispatchSiren(model:ReturnType<typeof buildDispatchModel>,ready:boolean,time:number):void {
+    model.rotor.visible=ready;model.glow.visible=ready;
+    const material=model.glass.material as THREE.MeshStandardMaterial;
+    material.emissiveIntensity=ready?.55:.06;
+    if(ready)model.rotor.rotation.y=time*2.6;
 }

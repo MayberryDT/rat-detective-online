@@ -8,6 +8,25 @@ function snapshot(time=1000,x=0):ChaosState {
     return {time,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x,y:1,z:0},v:{x:100,y:0,z:0},q:{x:0,y:0,z:0,w:1},spin:{x:0,y:0,z:0}},dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},corpses:[],shots:[{id:'ball',owner:'rat',p:{x,y:0,z:0},v:{x:100,y:0,z:0},age:time-1000}],impacts:[],notice:{serial:0,text:''}};
 }
 describe('bounded chaos presentation buffer',()=>{
+    it('keeps the case interpolation clock continuous through frequent observed ricochets',()=>{
+        const view=new ChaosPresentation(),out=output();let packet=0,previous=0,maxStep=0;
+        for(let now=0;now<=3000;now+=1000/60){
+            while(packet*25<=now){
+                const time=packet*25,phase=time%300,positive=phase<150;
+                const state=snapshot(1000+time,(positive?phase:300-phase)*.04);
+                state.case.v.x=positive?40:-40;state.shots=[];view.apply(state,time);packet++;
+            }
+            view.looseCase(now,out);
+            expect(out.p.x).toBeGreaterThanOrEqual(-.001);expect(out.p.x).toBeLessThanOrEqual(6.001);
+            if(now>400){
+                maxStep=Math.max(maxStep,Math.abs(out.p.x-previous));
+                const phase=(now-75)%300,expected=(phase<150?phase:300-phase)*.04;
+                expect(out.p.x).toBeCloseTo(expected,3);
+            }
+            previous=out.p.x;
+        }
+        expect(maxStep).toBeLessThan(.71);
+    });
     it('shows new balls immediately and gradually acquires a 75 ms interpolation buffer',()=>{
         const view=new ChaosPresentation(),out=output();view.apply(snapshot(),0);
         expect(view.shot('ball',0,out)).toBe(true);expect(out.p.x).toBe(0);

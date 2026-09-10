@@ -9,7 +9,7 @@ import {addLeatherBriefcase} from './CaseModel';
 import {CaseBeacon} from './CaseBeacon';
 import {createCaseGrip} from './CaseGrip';
 const rotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
-/** Three bounded incident props, using the same model, outline, grip and smoothing. */
+/** Seven bounded incident props, using the same model, outline, grip and smoothing. */
 export class ExtraCaseVisual {
     readonly root=new THREE.Group();
     private readonly beacon:CaseBeacon;

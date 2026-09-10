@@ -118,7 +118,7 @@ async function clients() {
       const c={decoder:ChaosDecoder?new ChaosDecoder():null,index:workerData.offset+index,ws:new Socket(url,{headers:{Origin:url.origin.replace(/^ws/, 'http'),...(workerData.token?{Authorization:`Bearer ${workerData.token}`}:{})}}),players:new Map(),base:null,id:null,playing:true,moveAt:0,shotAt:receiverNow()+index*17,pingAt:receiverNow()+index*11,lastChaos:0,lastServerChaos:0,lastObservedChaos:receiverNow()};all[index]=c;
       await new Promise((resolve,reject)=>{
         const timeout=setTimeout(()=>reject(new Error('Join timeout')),15000);
-        c.ws.on('open',()=>c.ws.send(JSON.stringify({type:'join',protocolVersion:1,name:`Bench ${c.index}`,appearance})));
+        c.ws.on('open',()=>c.ws.send(JSON.stringify({type:'join',protocolVersion:4,name:`Bench ${c.index}`,appearance})));
         c.ws.on('error',()=>{active.errors++;clearTimeout(timeout);reject(new Error('Client socket error'));});
         c.ws.on('close',(code,reason)=>{if(!stopping&&!c.intentionalClose){active.disconnects++;console.error(JSON.stringify({event:'client-close',client:c.index,code,reason:reason.toString().slice(0,123)}));}});
         c.ws.on('message',raw=>{

@@ -1,5 +1,6 @@
 import worker from './index';
 import { MAX_PLAYERS, MAX_SCORE_ENTRIES } from '../shared/networkProtocol';
+import { isAssignmentId } from '../shared/assignments';
 export { GameRoom } from './GameRoom';
 export { Matchmaker } from './Matchmaker';
 
@@ -23,6 +24,13 @@ export default {
       return new Response('Not found', { status: 404 });
     }
     const room = url.searchParams.get('room') ?? '';
+    const selection=url.searchParams.get('assignment');
+    if(selection!==null){
+      if(room.startsWith('graybox-benchmark-match-')||selection!=='auto'&&!isAssignmentId(selection))return new Response('Select an assignment in a fixed private room',{status:400});
+      if(!await env.GAME_ROOM.getByName(room).configureAssignment(selection==='auto'?null:selection as import('../shared/assignments').AssignmentId))return new Response('Choose a new private room for another assignment',{status:409});
+      url.searchParams.delete('assignment');
+      request=new Request(url,request);
+    }
     if (/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(room)) return env.MATCHMAKER.getByName(room).fetch(request);
     return worker.fetch(request, env);
   },

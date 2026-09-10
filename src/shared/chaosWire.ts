@@ -6,7 +6,7 @@ import { parseServerMessage } from './messageValidation';
 export { parseServerMessage } from './messageValidation';
 
 export const CHAOS_WIRE_MODE = 'compact-v2';
-const REST_KEYS = ['case','extraCases','dispatch','pressure','possession','corpses','notice'] as const;
+const REST_KEYS = ['case','extraCases','dispatch','pressure','possession','corpses','notice','assignment'] as const;
 type Definition = [number, string, string];
 export interface ChaosAck { type:'chaosAck'; stream:string; seq:number }
 const rounded = (value: unknown): string => JSON.stringify(value, (_key,v)=>typeof v==='number'?Math.round(v*1000)/1000:v);
@@ -28,7 +28,7 @@ export function prepareChaos(state:ChaosState):PreparedChaos {
     if(radius!==Math.round(BALL_RADIUS*1000)||stuck||pop)values.push(radius,stuck,pop);
     return {id:s.id,owner:s.owner,values,motion:values.join(',')};
   }),
-    rest:new Map(REST_KEYS.filter(k=>k!=='pressure').map(key=>[key,rounded(state[key]??(key==='extraCases'?[]:undefined))]))};
+    rest:new Map(REST_KEYS.filter(k=>k!=='pressure').map(key=>[key,rounded(state[key]??(key==='extraCases'?[]:key==='assignment'?null:undefined))]))};
 }
 
 /** Ordered WebSocket frames use the previous SENT baseline. Acks bound flow,
@@ -60,7 +60,7 @@ export class ChaosEncoder {
     const rest:string[]=[];
     for(const key of REST_KEYS){
       // Optional fields use their canonical empty representation so deletions travel.
-      const value=state[key]??(key==='extraCases'?[]:key==='pressure'?null:undefined);
+      const value=state[key]??(key==='extraCases'?[]:key==='pressure'||key==='assignment'?null:undefined);
       const encoded=key==='pressure'?rounded(value):prepared.rest.get(key)!;
       if(full||this.rest.get(key)!==encoded){rest.push(JSON.stringify(key)+':'+encoded);this.rest.set(key,encoded);}
     }
@@ -120,6 +120,7 @@ export class ChaosDecoder {
     for(const handle of definitions.keys())if(!active.has(handle))definitions.delete(handle);
     const rest={...(full?{}:this.rest),...f.rest};
     if(rest.pressure===null)delete rest.pressure;
+    if(rest.assignment===null)delete rest.assignment;
     const message=parseServerMessage({type:'chaos',state:{...rest,time:f.time,shots,impacts:f.impacts}});
     if(!message||message.type!=='chaos')return null;
     this.stream=f.stream;this.seq=f.seq;this.definitions=definitions;this.rest=structuredClone(rest);this.motions=motions;

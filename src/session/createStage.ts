@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { StaticCityBroadphase } from '../shared/StaticCityBroadphase';
+import {readLightingMode,type LightingMode} from './lightingMode';
 
-export function createStage(appRenderer: THREE.WebGLRenderer) {
+export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
     appRenderer.setSize(window.innerWidth, window.innerHeight);
     appRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     appRenderer.shadowMap.enabled = true;
@@ -32,13 +33,13 @@ export function createStage(appRenderer: THREE.WebGLRenderer) {
     const listener = new THREE.AudioListener();
     camera.add(listener);
     // ─── LIGHTING ─────────────────────────────────────────────────────
-    const ambient = new THREE.AmbientLight(0x664488, 0.38);
+    const ambient = new THREE.AmbientLight(0x664488, lighting==='classic'?.38:.2);
     scene.add(ambient);
 
-    const hemiLight = new THREE.HemisphereLight(0x776a9b, 0x17131c, 0.65);
+    const hemiLight = new THREE.HemisphereLight(0x776a9b, 0x17131c, lighting==='classic'?.65:.4);
     scene.add(hemiLight);
 
-    const moonLight = new THREE.DirectionalLight(0x929cdb, 0.85);
+    const moonLight = new THREE.DirectionalLight(0x929cdb, lighting==='classic'?.85:.7);
     moonLight.position.set(50, 100, 50);
     moonLight.target.position.set(0, 0, 0);
     moonLight.castShadow = true;

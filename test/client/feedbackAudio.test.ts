@@ -5,7 +5,7 @@ const state=vi.hoisted(()=>({loads:[] as Array<(b:AudioBuffer)=>void>,sounds:[] 
 vi.mock('three',async original=>({...await original<typeof import('three')>(),
  AudioLoader:class{load(_url:string,done:(b:AudioBuffer)=>void){state.loads.push(done);}},
  Audio:class{
-  isPlaying=false;volume=0;gain={disconnect:vi.fn()};setBuffer(){}setVolume(v:number){this.volume=v;}play(){this.isPlaying=true;}
+  isPlaying=false;volume=0;gain={disconnect:vi.fn()};setBuffer(){}setPlaybackRate=vi.fn();setVolume(v:number){this.volume=v;}play(){this.isPlaying=true;}
   stop=vi.fn(()=>{this.isPlaying=false;});disconnect=vi.fn();onEnded=()=>{this.isPlaying=false;};
   constructor(){state.sounds.push(this);}
  }

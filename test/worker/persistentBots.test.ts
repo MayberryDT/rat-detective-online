@@ -6,6 +6,7 @@ import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import { MAX_PLAYERS, PROTOCOL_VERSION, RESPAWN_DELAY_MS, WIN_DISPLAY_MS, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
+import { createAssignment } from '../../src/shared/assignments';
 
 type Stub = DurableObjectStub<GameRoom>;
 type Internals = {
@@ -14,6 +15,7 @@ type Internals = {
   serverBots: ServerBotController | null; persistentBots: boolean; nextBotHeartbeat: number;
   clock: () => number; persistPlayer: (player: PlayerData, force: boolean) => void;
   recoverManagedBot: (id:string)=>void;
+  finishAssignment: () => void;
   botRoster: PersistentBot[]; broadcast: (message: ServerMessage) => void;
   handleHit: (id: string, message: { type: 'hit'; victimId: string; damage: number }) => Promise<void>;
 };
@@ -40,7 +42,7 @@ afterEach(async () => {
 });
 
 describe('persistent hosted bots', () => {
-  it('blocks extra-case pickup during Evidence Tampering and restores ordinary double credit afterward',async()=>{
+  it('blocks extra-case pickup during Evidence Tampering and retains actual kill counts afterward',async()=>{
     const stub=room();await stub.ensurePersistentBots();
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as unknown as Internals;
@@ -58,7 +60,7 @@ describe('persistent hosted bots', () => {
       Object.assign(killer,{x:game.chaos.caseBody.position.x,y:game.chaos.caseBody.position.y-.8,z:game.chaos.caseBody.position.z});
       game.chaos.caseBody.velocity.setZero();
       game.chaos.step(0,now+25001);expect(game.chaos.isCaseHolder(killer.id)).toBe(true);
-      victim.hp=3;await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:3});expect(killer.kills).toBe(3);
+      victim.hp=3;await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:3});expect(killer.kills).toBe(2);
     });
   });
   it('rescues only the stranded bot, keeps scores/health, and returns its case without resetting the match',async()=>{
@@ -149,6 +151,12 @@ describe('persistent hosted bots', () => {
         expect(victim.hp).toBe(3); expect(reset).toHaveBeenCalledWith(victim.id, expect.any(Object));
         killer.kills = 19;
         await game.handleHit(killer.id, { type: 'hit', victimId: victim.id, damage: 3 });
+        expect(game.round.phase).toBe('playing');
+        const assignment=createAssignment('closing-time',now);assignment.liveAt=now;assignment.remainingMs=1;
+        game.chaos.setAssignment(assignment);
+        game.chaos.caseBody.position.set(killer.x,killer.y+.8,killer.z);game.chaos.caseBody.velocity.setZero();
+        game.chaos.step(0,now);expect(game.chaos.caseHolderId).toBe(killer.id);
+        game.chaos.step(.001,now+1);game.finishAssignment();await instance.alarm();
         expect(game.round.phase).toBe('won');
         expect(await ctx.storage.getAlarm()).toBe(now + WIN_DISPLAY_MS);
         now += WIN_DISPLAY_MS; await instance.alarm();
@@ -216,6 +224,7 @@ describe('persistent hosted bots', () => {
       game.players.set(human.id, human); game.persistPlayer(human, true);
       const appearance = { hatType: human.hatType, hatColor: human.hatColor, coatColor: human.coatColor, furColor: human.furColor };
       const now = Date.now();
+      game.round={phase:'won',resetAt:now};
       ctx.storage.sql.exec("INSERT INTO pending_events (id, type, player_id, due_at) VALUES ('reset-test', 'reset', NULL, ?)", now);
       for (const id of PERSISTENT_BOT_IDS) {
         ctx.storage.sql.exec("INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, 'respawn', ?, ?)", `future-${id}`, id, now + 60_000);
