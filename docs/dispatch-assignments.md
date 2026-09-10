@@ -1,6 +1,6 @@
 # Dispatch Assignments — personal delivery race and noir UI
 
-Updated September 10, 2026. Tyler’s first-to-three delivery request supersedes the earlier shared six-stamp finish; the latest revision adds a held-Tab full-lobby scoreboard and hides only the local rat’s outline halo. Preserve the existing dirty working tree. No Git commit or production deployment was made; the private playtest build is described below.
+Updated September 10, 2026. Tyler’s first-to-three delivery request supersedes the earlier shared six-stamp finish; the latest revision adds a held-Tab full-lobby scoreboard and hides only the local rat’s outline halo. These changes are committed and included in the [September 10 production release](verification/production-release-2026-09-10.md). Private playtest records below retain their dated scope.
 
 ## Current rules
 

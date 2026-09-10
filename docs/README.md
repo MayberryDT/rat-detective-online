@@ -1,6 +1,6 @@
 # Documentation map
 
-Reviewed against repository source and the latest release receipt on **2026-09-08**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+Reviewed against repository source and the latest release receipt on **2026-09-10**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
 
 ## Current references
 
@@ -11,28 +11,29 @@ Reviewed against repository source and the latest release receipt on **2026-09-0
 | [Mobile controls](mobile-controls.md) | Landscape touch input, compact phone HUD and private phone previews |
 | [Chaos foley](chaos-foley.md) | Integrated audio: 13 accepted physical/personal accents and restrained noir countdown/result |
 | [Gameplay baseline](gameplay-baseline.md) | Current tuning and preservation rules |
-| [Dispatch Assignments](dispatch-assignments.md) | Local three-mode rules, shuffled landmarks, noir UI and validation |
+| [Dispatch Assignments](dispatch-assignments.md) | Live three-mode rules, shuffled landmarks, noir UI and validation |
 | [Tab scoreboard and local outline](verification/tab-scoreboard-local-outline-2026-09-10.md) | Full held-Tab round stats, opponent-only outline halo and current private preview |
 | [Crossfire colors and case banter](verification/crossfire-case-banter-2026-09-10.md) | Four shot treatments, contextual case jokes, concise status copy and prior private preview |
 | [Cheese, interior lights and delivery respawns](verification/cheese-interior-delivery-2026-09-10.md) | Earlier cheese danger cues, scoped interior pools, random delivery respawns and prior private preview |
 | [Paperwork race and city lights](verification/paperwork-race-city-lights-2026-09-09.md) | Personal delivery race, stronger bots, missile cases, rat visibility, city lamps and prior private preview |
 | [Ricochet and lighting trial](verification/tampering-ricochets-lighting-2026-09-09.md) | Smoother bouncing cases, quieter buzz, reversible overhead lighting and private preview |
+| [September 10 full production release](verification/production-release-2026-09-10.md) | Commit, deployment version, exact assets, public room checks and validation |
 | [Live service](live-service.md) | Domains, release, room identity, deployment and recovery |
 | [Server operations](server-operations.md) | Capacity, persistence, cadence and diagnostics |
 | [Server authority](server-authority.md) | Version-2 authority versus legacy version-1 behavior |
 | [Tooling](tooling.md) | Correct preview modes, checks and environments |
 | [Local capacity benchmark](local-capacity-testing.md) | Isolated synthetic player ladder, measurements and limits |
 | [Private hosted capacity benchmark](hosted-capacity-baseline.md) | Isolated deployment and matching full-feed ladder |
-| [Creator and music credits](verification/game-credits-2026-09-10.md) | Current preview: subtle portfolio link, pointer-capture protection, bottom-left title music credit and small-screen visibility |
+| [Creator and music credits](verification/game-credits-2026-09-10.md) | Accepted release: subtle portfolio link, pointer-capture protection, bottom-left title music credit and small-screen visibility |
 | [Title music](verification/title-music-2026-09-10.md) | Start the background loop on arrival, with browser-permission fallback and continuity into gameplay |
-| [Alley lighting and surface clarity](verification/alley-lighting-2026-09-10.md) | Current preview: fixed window/door/sign spill, readable ground and obstacles, unchanged live-light budget |
-| [Audio lift and alley-lighting proposal](verification/world-audio-lift-2026-09-10.md) | Current desktop client: 50% world-distance gain increase; lighting proposal only |
-| [16-rat tuning and preview](verification/sixteen-rat-tuning-2026-09-10.md) | Current desktop preview, human/bot replacement, shared world sound fade and uncredited case deaths |
+| [Alley lighting and surface clarity](verification/alley-lighting-2026-09-10.md) | Accepted release: fixed window/door/sign spill, readable ground and obstacles, unchanged live-light budget |
+| [Audio lift and alley-lighting proposal](verification/world-audio-lift-2026-09-10.md) | Dated 50% world-distance gain increase and the earlier lighting proposal |
+| [16-rat tuning and preview](verification/sixteen-rat-tuning-2026-09-10.md) | Accepted 16-rat tuning, human/bot replacement, shared world sound fade and uncredited case deaths |
 | [Prior full 24-rat preview](verification/full-lobby-preview-2026-09-10.md) | Historical desktop/phone preview; verified 24 bots, human replacement and refill; private protocol 6 |
 | [Playtest diagnostics](playtest-diagnostics.md) | Logs and diagnosis without changing gameplay |
 | [Network smoothness](network-smoothness.md) | Current interpolation and known failure history |
 | [Network and scaling audit, September 10](network-audit-2026-09-10.md) | Prioritized gameplay-preserving fixes, isolated reproductions and human-capacity verification gaps; audit only |
-| [Network fixes, September 10](verification/network-fixes-2026-09-10.md) | Protocol-6 delivery bounds and optimizations, regression checks, 24-client local results and remaining hosted/rendering limits; not deployed |
+| [Network fixes, September 10](verification/network-fixes-2026-09-10.md) | Protocol-6 delivery bounds and optimizations, regression checks, 24-client local results and remaining hosted/rendering limits; superseded by live protocol 7 |
 | [Model follow-ups](model-playtest-followups.md) | Remaining art work and accepted visual direction |
 | [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Optional launcher and public-room panel |
 | [Visual fixtures](../test/visual/README.md) | Isolated visual tools and dated model history |
@@ -65,7 +66,7 @@ Research ZIPs from Downloads and `output/` artifacts are supporting material whe
 
 ## Maintaining this set
 
-Update current references when their behavior changes. Keep source constants authoritative, label verification with date and scope, and preserve historical results as historical. Do not substitute a commit hash for a deployed version when the live build came from a dirty working tree. The last application check was **409 tests**, typecheck and build; that is a dated receipt, not a permanent test-count requirement.
+Update current references when their behavior changes. Keep source constants authoritative, label verification with date and scope, and preserve historical results as historical. Do not substitute a commit hash for a deployed version when the live build came from a dirty working tree. The September 10 release passed **762 tests**, typecheck, both builds and dependency audit; these are dated receipts, not permanent test-count requirements.
 
 Useful shared-memory pages: `sessions/2026/09/rat-detective-sharing-round-rosters`, `sessions/2026/09/rat-detective-bot-navigation-regression`, `sessions/2026/09/rat-detective-local-runtime-freeze-hosted-preview`, and `sessions/2026/09/rat-detective-recovery-extra-cases-incidents`.
 
@@ -73,7 +74,7 @@ Useful shared-memory pages: `sessions/2026/09/rat-detective-sharing-round-roster
 
 Latest capacity iteration: [AI playback and rigid batching](verification/ai-delivery-and-rigid-batching-2026-09-08.md).
 
-- [Automatic rooms and card HUD receipt](verification/matchmaking-and-hud-2026-09-08.md) — local/private implementation; public release unchanged.
+- [Automatic rooms and card HUD receipt](verification/matchmaking-and-hud-2026-09-08.md) — implementation history, included in the September 10 production release.
 - [Mild global audio and cartoon foley](verification/cartoon-foley-and-global-mix-2026-09-09.md) — current private sound iteration, superseding the steep shot fade and musical feedback cues.
 - [Performance cleanup and case bounce](verification/performance-and-case-bounce-2026-09-09.md) — audio voice reuse, stable HUD text, pitched Bad Ammunition and stronger physical case shots.
 - [Cartoon HUD and incident distance](verification/cartoon-hud-and-incident-distance-2026-09-09.md) — current private preview, muted comic emergency graphics and positional Popcorn/thud/case buzz.

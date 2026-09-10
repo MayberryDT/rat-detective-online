@@ -1,10 +1,10 @@
 # Current gameplay preservation baseline
 
-Reviewed **2026-09-10**, including the local [Dispatch Assignments](dispatch-assignments.md) update. The [08e8005 reference](verification/gameplay-baseline-08e8005.md) and dated shipped loop in current-state.md are historical. Do not restore their older muzzle, camera, models or map wholesale.
+Reviewed **2026-09-10**, including the live [Dispatch Assignments](dispatch-assignments.md) update and [full production release](verification/production-release-2026-09-10.md). The [08e8005 reference](verification/gameplay-baseline-08e8005.md) and dated shipped loop in current-state.md are historical. Do not restore their older muzzle, camera, models or map wholesale.
 
 | Behavior | Current source / value |
 | --- | --- |
-| Stage capacity | 16 total rats, including humans and server-owned bots; private full-lobby mode replaces bots on human joins |
+| Stage capacity | 16 total rats; automatic public rooms fill occupied lobbies to eight with server-owned AI, yield to humans and sleep when empty. Private full-lobby mode fills all 16 slots and replaces bots on human joins |
 | World sound | Shared 3D distance gain raised 50% after all range fades, capped at near volume: about 37% at 50 units, 9.8% at 100, 1.8% at 250. Gun base gain .30; close foley/sirens retain their range limits. Personal UI cues remain local |
 | Human movement | 18; acceleration/braking 0.28 / 0.12 at fixed 60 Hz (`RatController.ts`) |
 | AI movement | 12 on flat active-objective routes; 6.5 near goals/stairs, 8 for supported combat strafes (`ObjectiveBotBrain.ts`), independent of human speed |
@@ -28,7 +28,7 @@ Reviewed **2026-09-10**, including the local [Dispatch Assignments](dispatch-ass
 | Main map | Version 2 shared city geometry, landmarks/interiors/sewers; Maintenance wall bench and supply cabinet share collision geometry. Old 12×12 source counts are not current scene counts |
 | Dispatch readiness | Alternating red/blue roof beacons; nearest ready machine emits a 1.6-second whoop at most every four seconds within 85 units. Stops when busy |
 | Accepted lighting | Nine-unit lamps on paired curb rows; lower ambient fill and four nearby overhead lights aligned with street/interior fixtures; no extra shadows. Interior fixtures have explicit power and rat-based landmark/floor selection, with bounded static pools. Existing sewer pool retained. `lighting=classic` restores previous illumination settings locally, keeping the new lamp layout |
-| Alley clarity trial | Fixed transom/window/sign spill baked into a 512² atlas with street-plane wall occlusion; subtle street-level ground, curb, stair and obstacle material lift. No additional live lights or shadow maps. Height fade excludes upper floors and underground surfaces. `readability=off` restores the preceding dark-pools appearance without changing rooms or gameplay; [verification](verification/alley-lighting-2026-09-10.md) |
+| Accepted alley clarity | Fixed transom/window/sign spill baked into a 512² atlas with street-plane wall occlusion; subtle street-level ground, curb, stair and obstacle material lift. No additional live lights or shadow maps. Height fade excludes upper floors and underground surfaces. `readability=off` restores the preceding dark-pools appearance without changing rooms or gameplay; [verification](verification/alley-lighting-2026-09-10.md) |
 
 The [September 9 ricochet/lighting receipt](verification/tampering-ricochets-lighting-2026-09-09.md) records case smoothing, rigid detail batching and the quieter Evidence Tampering buzz. Tyler subsequently said the cheese/interior/delivery build was feeling good and requested stronger shot color distinctions and case banter. See [the color/copy receipt](verification/crossfire-case-banter-2026-09-10.md) and the latest [Tab scoreboard/outline receipt](verification/tab-scoreboard-local-outline-2026-09-10.md). Human review of the new scoreboard and local outline change remains pending.
 

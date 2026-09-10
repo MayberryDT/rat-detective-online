@@ -1,8 +1,18 @@
 # Current Rat Detective state
 
-Verified from source and release records on **2026-09-08**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production on **2026-09-10**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
-## Local changes and private previews
+## Current production release
+
+All accepted work is committed and live at **https://ratdetective.online/**: application commit `5c7d5d8`, Worker `e28b2d9c-0b7d-46a9-8195-24f1ce860939`, protocol **7**. The canonical `public-live-v2` world remains version 2 / seed **341283204**. See the [release receipt](verification/production-release-2026-09-10.md) and [current gameplay baseline](gameplay-baseline.md).
+
+Rooms cap at **16 total rats**. Automatic matchmaking fills occupied rooms to at least eight participants with server-owned AI, removes surplus bots as humans join, and refills vacancies after ten seconds. Empty rooms sleep; additional rooms open when needed. Version-2 rounds use Dispatch Assignments and three-second respawns. The release includes the network delivery audit fixes, accepted incidents and case jokes, spatial world audio, landscape mobile controls, held-Tab scoreboard, creator/music credits, title music and accepted window/door/sign spill with clearer ground and obstacles.
+
+Release checks passed: **762 tests**, typecheck, production and visual builds, and zero dependency audit findings. All **45** production assets match the build. A passive public join received **208** valid snapshots and **200** movement packets, with seven AI plus the observer, zero invalid packets/errors, and the original world seed. The isolated combat protocol smoke passed. Browser gameplay input remains for human playtests; this is not a new load-capacity certification.
+
+## Dated implementation and private-preview history
+
+The entries below preserve their original verification scope. References to undeployed/local work describe the state at that time; the accepted final implementations are included in the September 10 production release above. Private preview URLs and expirations are historical, not the live entry point.
 
 September 10 **alley lighting and surface clarity**: [updated desktop preview](http://127.0.0.1:5190/?room=graybox-benchmark-ai-sixteen-v20&diagnostics=quiet&lighting=pools&revision=alley-v26) / [preceding pools appearance](http://127.0.0.1:5190/?room=graybox-benchmark-ai-sixteen-v20&diagnostics=quiet&lighting=pools&revision=alley-v26&readability=off). Fixed window/transom/sign spill and subtle ground, curb, lower-stair and obstacle material lifts make dark routes more readable. One baked atlas and two fixture batches; ambient, moon, exposure, player lighting and the live-light/shadow budgets stay unchanged. `readability=off` compares without changing rooms. **762 tests**, typecheck and both builds pass; six static camera comparisons checked. Client `index-DrJGrWDb.js`, same private protocol-7 backend and **3:33 PM Pacific** expiry. Human lighting review remains; see [verification and limits](verification/alley-lighting-2026-09-10.md).
 
@@ -106,7 +116,9 @@ The city is a dark noir metropolis with varied high-contrast windows and lights.
 
 Landmarks include Records Bureau, Icebox, Needleworks, Pump Hall / pumping station, and Gate. Their roles and current scale matter more than literal old research layouts. Needleworks was an alternate in the original research but is now implemented. Interiors have distinct layouts and stairs. Pipes and manholes connect sewers; vehicles and grime support the rat-city identity. Current approved model detail supersedes old concept prompts.
 
-## Shipped game loop
+## Historical September 8 shipped game loop
+
+Superseded by the [current gameplay baseline](gameplay-baseline.md), especially assignment wins, actual kills and three-second respawns.
 
 - Free-for-all multiplayer with 3 HP, body damage 1, head damage 3, 20 credited kills to win, 5-second respawns and a 6-second victory display before reset.
 - The Hot Case is auto-collected nearby, carried in the unused hand beside the rat, and knocked loose when hit by bullets, which reflect off it. Loose cases are enlarged; carried cases shrink to the normal model. Opaque leather, protruding documents, animated grip and a prominent red outline are intentional. Locator text is subtle, without the old giant icon/arrow. Carriers do not need their own overhead locator.
@@ -115,7 +127,7 @@ Landmarks include Records Bureau, Icebox, Needleworks, Pump Hall / pumping stati
 - Six launcher types: pressure, dumpster/compactor, freight ram, sewer geyser, mousetrap and fan. Each has a separated red-topped trigger, related nearby launcher, distinct animation/audio and randomized launch direction constrained to the city. Launch effects currently last 1.5 seconds; do not restore the overlong versions.
 - Dead rats are physical, shootable missiles with damage attribution. Improper Disposal greatly increases launch force and adds damaging cheese-ball bursts. Burst kills credit the rat that caused the death, allowing chains; shooting a missile can transfer its damage credit. Ordinary cheese balls remain spherical.
 
-## Dispatch catalog
+## Historical September 8 Dispatch catalog
 
 `src/shared/incidentCatalog.ts` is the authoritative ID/copy list; simulation behavior is in `ChaosSimulation.ts`.
 
@@ -134,7 +146,7 @@ Landmarks include Records Bureau, Icebox, Needleworks, Pump Hall / pumping stati
 
 Evidence Tampering extras are removed at expiry. Pickup stays blocked until the original Hot Case is restored. Kickback maps to Scattershot, After Hours Collection to Crossfire, Return to Sender to Delayed Reaction, and Cheesequake to Big Cheese. Do not reintroduce removed incidents from old notes.
 
-## AI and rounds
+## Historical September 8 AI and rounds
 
 Public bots run in the Durable Object, independent of browsers. Each new round selects 8, 9, 10 or 11 bots and fresh distinct names from the existing rat-name pool. IDs come from `rd-ai-00` through `rd-ai-10`; active names/count persist through reconnects, status requests and eviction. Legacy fixed-eleven rooms migrate without rerolling a running round. Eleven slots remain reserved, leaving thirteen human slots under the 24-player cap.
 
@@ -165,12 +177,12 @@ Version 2 uses shared server-authoritative chaos simulation. Version 1 retains t
 ## Known limits and next-work boundaries
 
 - Current global shot cap is **256**, maximum corpses **16**. Bursts yield capacity to fresh trigger pulls. These are current implementation limits, not approval to raise caps or reduce chaos arbitrarily.
-- The ambition of 50–100 players has not been achieved or certified. Public admission remains thirteen humans plus 8–11 AI. Bounded probes and unit tests do not constitute a capacity benchmark or 24-hour soak.
+- The ambition of 50–100 players in one stage has not been achieved or certified. Current rooms cap at 16 total rats; matchmaking opens additional rooms. Bounded probes and unit tests do not constitute a capacity benchmark or 24-hour soak.
 - Local workerd showed multi-second authoritative stalls even with zero swap; the hosted relay bypasses that runtime. Root cause was not conclusively identified.
 - The separate slow/choppy AI regression was reproduced as stalled pathfinding plus misguided recovery. The shared-navigation fix improved it; occasional local obstruction remained in a live observation. Do not blame the new domain without evidence.
 - Client human movement remains trusted within a finite envelope; the game is not cheat-proof. See the authority document.
 - Short-building facade variety and model polish can improve. Gun immediacy, dense-map visibility, routes, collision truth and real network feel still need human playtesting when changed.
-- Latest application validation: 409 tests, typecheck and build passed for release `e3a70ae3-246f-4712-94dc-a692495ac045`. Sharing HTML/image and redirect were checked live. Roster replacement was tested in Durable Object integration tests; no forced live reset or browser-input test was performed for that release.
+- Latest application validation is the September 10 release receipt above. The historical September 8 release `e3a70ae3-246f-4712-94dc-a692495ac045` passed 409 tests, typecheck/build and sharing/redirect checks.
 
 Private capacity research follow-up is recorded in [the implementation receipt](verification/capacity-review-implementation-2026-09-08.md). These working-tree changes do not represent a new production release or a verified public capacity increase.
 

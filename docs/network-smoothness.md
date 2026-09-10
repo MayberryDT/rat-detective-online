@@ -2,9 +2,9 @@
 
 Current guidance, **2026-09-10**. The [September 7 investigation](verification/network-history-2026-09-07.md) contains dated measurements and a local mitigation that subsequently failed.
 
-September 10 source follow-up: protocol 6 bounds the entire joined connection, shares immutable snapshot encoding work, uses lossless movement tuples and applies a shot's pending pose from the same packet before displaying the shot. Cumulative delivery ACKs piggyback on input with a 33 ms fallback; source defaults to eight outstanding chaos snapshots. Large logical snapshots use bounded atomic fragmentation. Interpolation, animation, physics and gameplay cadence remain unchanged. [Implementation and local measurements](verification/network-fixes-2026-09-10.md) include 24 full-feed clients and all ten incidents; no hosted/rendering capacity increase is certified. Existing frozen previews remain on their recorded builds.
+September 10 production release: protocol 7 bounds the entire joined connection, shares immutable snapshot encoding work, uses lossless movement tuples and applies a shot's pending pose from the same packet before displaying the shot. Cumulative delivery ACKs piggyback on input with a 33 ms fallback; source defaults to eight outstanding chaos snapshots. Large logical snapshots use bounded atomic fragmentation. Interpolation, animation, physics and gameplay cadence remain unchanged. [Implementation and local measurements](verification/network-fixes-2026-09-10.md) include 24 full-feed clients and all ten incidents; no hosted/rendering capacity increase is certified. The [full release receipt](verification/production-release-2026-09-10.md) identifies the deployed version; frozen private previews retain their recorded builds.
 
-## Local implementation follow-up (not deployed)
+## Presentation implementation history (now deployed)
 
 On September 8, the returned multiplayer review was checked against the actual code. Real-mesh regressions reproduced held display frames at 120 Hz and reduced body bob at 30 Hz (about 49% of the 60 Hz value at AI speed, 47% at human speed). This demonstrates a scheduling defect; it does not establish the sole cause of the player's observation.
 
@@ -12,11 +12,11 @@ The working tree now samples alive remote roots once per display frame, synchron
 
 Initial and periodic chaos messages now share the existing three-decimal wire serializer. Simulation and persistence keep full precision; protocol limits and gameplay caps are unchanged. This fixes the inconsistent encoding path, not a proof that every possible legal state fits the envelope.
 
-Validation and remaining work: [presentation timing receipt](verification/remote-presentation-2026-09-08.md). These changes have not been deployed; the following baseline describes the previously shipped behavior.
+Validation and remaining work: [presentation timing receipt](verification/remote-presentation-2026-09-08.md). The accepted final implementation is included in the September 10 release; the linked receipt preserves its original test scope.
 
 ## Current presentation and server behavior
 
-The private September 8 playback candidate uses timestamped SnapshotBuffer history with 100–350 ms adaptive delay, a gently adjusted playback clock and no extrapolation through walls. See [the playback receipt](verification/remote-playback-2026-09-08.md); production retains its release baseline. Server timestamps preserve spacing within delayed batches. Respawns, teleports and long gaps reset history. Bot movement now publishes at 20 Hz plus before firing, from simulation timestamps; this does not increase bot speed.
+The current human-player presentation uses timestamped SnapshotBuffer history with 100–350 ms adaptive delay, a gently adjusted playback clock and no extrapolation through walls. See [the playback receipt](verification/remote-playback-2026-09-08.md) for its original validation scope. Server timestamps preserve spacing within delayed batches. Respawns, teleports and long gaps reset history. Bot movement now publishes at 20 Hz plus before firing, from simulation timestamps; this does not increase bot speed.
 
 Balls, cases and corpses use ChaosPresentation: approximately 75 ms interpolation, bounded sample history and limited extrapolation. New balls appear immediately and acquire delay gradually; removals and ownership/HUD changes remain immediate. Bounces/charged-state transitions must not interpolate through incompatible paths. These are rendering policies, not projectile-physics changes.
 
@@ -41,7 +41,7 @@ The historical hosted five-minute probe had 7,148 accepted test shots, a peak of
 
 ## Fifty-rat follow-up (private testing)
 
-The current working tree negotiates `movement=batch-v1` independently of compact chaos. The room coalesces pending poses by rat and sends a bounded batch each chaos tick, flushing before critical control events to preserve ordering. Each pose retains its authoritative timestamp. Older clients continue receiving individual movement messages. The browser transport expands batches into the same presentation events.
+The earlier capacity implementation negotiated `movement=batch-v1` independently of compact chaos; the current client uses `movement=tuple-v1`. The room coalesces pending poses by rat and sends a bounded batch each chaos tick, flushing before critical control events to preserve ordering. Each pose retains its authoritative timestamp. Older clients continue receiving individual movement messages. The browser transport expands batches into the same presentation events.
 
 Remote playback also fits bounded source-clock rate over longer observation windows, separating sustained clock drift from individual late packets. History and cursor move together when the mapping changes. This remains under capacity evaluation; see [the ongoing fifty-rat receipt](verification/fifty-rats-2026-09-08.md).
 
