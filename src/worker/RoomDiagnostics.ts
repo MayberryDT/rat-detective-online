@@ -3,6 +3,19 @@ import { MAX_SERVER_MESSAGE_BYTES } from '../shared/networkProtocol';
 export type ShotOutcome = 'accepted' | 'rateLimited' | 'dead' | 'roundOver' | 'implausible' | 'duplicate';
 const outcomes = (): Record<ShotOutcome, number> => ({ accepted: 0, rateLimited: 0, dead: 0, roundOver: 0, implausible: 0, duplicate: 0 });
 export class RoomDiagnostics {
+  private traffic: Record<string,{messages:number;bytes:number}> = {};
+  private closes: Record<string,number> = {};
+  private flow = { inFlight:0,inFlightBytes:0,queued:0,queuedBytes:0,coalesced:0,ackLagMaxMs:0 };
+  sent(payload: string, bytes: number): void {
+    const types = [...payload.slice(0,256).matchAll(/"type":"([A-Za-z]{1,32})"/g)];
+    const kind = types[types.length-1]?.[1] ?? 'other';
+    const counter = this.traffic[kind] ??= {messages:0,bytes:0};
+    counter.messages++;counter.bytes+=bytes;
+  }
+  closed(code: number): void { this.closes[String(code)] = (this.closes[String(code)]??0)+1; }
+  delivery(sample: typeof this.flow): void {
+    for (const key of Object.keys(this.flow) as Array<keyof typeof this.flow>) this.flow[key] = Math.max(this.flow[key],sample[key]);
+  }
   private operations: Record<string, number> = {};
   count(kind: 'playerWrite'|'roomWrite'|'alarmRead'|'alarmSet'|'alarmDelete'|'movementOverwrite'|'snapshotOffer'|'snapshotAccepted', amount = 1): void {
     this.operations[kind] = (this.operations[kind] ?? 0) + amount;
@@ -61,6 +74,7 @@ export class RoomDiagnostics {
     const round = (n: number) => Math.round(n * 100) / 100;
     const result = {
       operations: this.operations, movementBatches: this.batches,
+      traffic: this.traffic, connectionCloses: this.closes, deliveryHighWater: this.flow,
       clockDomain: 'runtime-exposed-source-time',
       sourceNow: now,
       sourceTickGapMaxMs: round(this.maxGap), sourceCheckpointSpanMaxMs: round(this.maxCheckpointSettlement),
@@ -76,6 +90,7 @@ export class RoomDiagnostics {
       suppressedMovementBroadcasts: this.suppressedMovementCount,
     };
     this.operations={};this.batches={tick:0,event:0,poses:0,maxPoses:0};
+    this.traffic={};this.closes={};this.flow={inFlight:0,inFlightBytes:0,queued:0,queuedBytes:0,coalesced:0,ackLagMaxMs:0};
     this.started = now; this.shots = outcomes(); this.ticks = this.steps = this.elapsed = this.maxGap = this.cost = this.maxCost = this.dropped = this.peakBalls = this.snapshotBytes = this.maxSnapshotBytes = this.sentBytes = this.overBudget = 0;
     this.maxEventSilence = this.receivedEvents = this.checkpointSettlements = this.maxCheckpointSettlement = this.checkpointFailures = 0;
     this.suppressedMovementCount = 0;

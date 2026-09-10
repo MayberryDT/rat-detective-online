@@ -121,6 +121,7 @@ export class GameHud {
         if (this.disposed) return;
         if(!this.titleScreen.classList.contains('fade-out'))this.feedback('menu-open');
         this.titleScreen.classList.add('fade-out');
+        this.titleScreen.inert=true;
         this.clearTitleTimer();
         this.titleTimer = setTimeout(() => {
             this.titleTimer = null;
@@ -245,6 +246,7 @@ export class GameHud {
 
     private reset(): void {
         this.titleScreen.classList.remove('fade-out');
+        this.titleScreen.inert=false;
         this.titleScreen.style.display = 'flex';
         this.victoryOverlay.style.display = 'none';
         this.victoryText.textContent = '';

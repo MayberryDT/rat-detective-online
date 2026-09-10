@@ -25,10 +25,15 @@ const SHOT_DIRECTION_MAX = 8;
 
 export class RateLimiter {
   private readonly buckets = new Map<string, { count: number; resetAt: number }>();
+  private readonly namespaces = new Map<string, Set<string>>();
 
   allow(key: string, limit: number, windowMs: number, now = Date.now()): boolean {
     const bucket = this.buckets.get(key);
     if (!bucket || now >= bucket.resetAt) {
+      const namespace = key.split(':', 1)[0];
+      let keys = this.namespaces.get(namespace);
+      if (!keys) this.namespaces.set(namespace, keys = new Set());
+      keys.add(key);
       this.buckets.set(key, { count: 1, resetAt: now + windowMs });
       return true;
     }
@@ -38,12 +43,10 @@ export class RateLimiter {
   }
 
   clear(keyPrefix: string): void {
-    for (const key of this.buckets.keys()) {
-      if (key === keyPrefix || key.startsWith(`${keyPrefix}:`)) {
-        this.buckets.delete(key);
-      }
-    }
+    for (const key of this.namespaces.get(keyPrefix) ?? []) this.buckets.delete(key);
+    this.namespaces.delete(keyPrefix);
   }
+  get size(): number { return this.buckets.size; }
 }
 
 export function isPlausiblePosition(position: Vec3Data): boolean {

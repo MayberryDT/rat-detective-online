@@ -1,7 +1,8 @@
+import {readSocketMessage,PROTOCOL_VERSION} from './lib/network-codec.mjs';
 import assert from 'node:assert/strict';
 import { resolveSmokeWsUrl } from './lib/process.mjs';
 
-const PROTOCOL_VERSION = 5;
+
 const targetUrl = resolveSmokeWsUrl(process.argv[2]);
 if (!targetUrl.searchParams.has('room')) {
   targetUrl.searchParams.set('room', `smoke-${crypto.randomUUID()}`);
@@ -14,7 +15,7 @@ async function openClient(name) {
   const messages = [];
   const waiters = new Set();
   socket.addEventListener('message', event => {
-    const message = JSON.parse(event.data);
+    const message = readSocketMessage(socket,event.data);if(!message)return;
     const waiter = [...waiters].find(entry => entry.matches(message));
     if (waiter) waiter.resolve(message);
     else messages.push(message);
@@ -60,10 +61,10 @@ try {
   assert.ok(firstWelcome.player);
   assert.ok(firstWelcome.world);
   assert.ok(firstWelcome.round);
-  await first.waitFor('currentPlayers');
+
   const second = await openClient('Smoke Rat 2');
   const secondWelcome = await second.waitFor('welcome');
-  const secondPlayers = await second.waitFor('currentPlayers');
+  const secondPlayers = secondWelcome;
   assert.ok(secondPlayers.players[firstWelcome.id]);
   assert.equal((await first.waitFor('playerJoined')).player.id, secondWelcome.id);
 

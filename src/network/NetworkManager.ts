@@ -1,6 +1,7 @@
 import { PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
 import { isSupportedWorldVersion } from '../shared/worldSpec';
-import { ChaosDecoder, CHAOS_WIRE_MODE } from '../shared/chaosWire';
+import { CHAOS_WIRE_MODE } from '../shared/chaosWire';
+import { DeliveryDecoder, type DeliveryAck } from '../shared/deliveryWire';
 
 export type ConnectionState = 'idle' | 'connecting' | 'playing' | 'reconnecting' | 'disconnected' | 'stopped';
 export interface TransportOptions {
@@ -9,6 +10,8 @@ export interface TransportOptions {
     joinTimeoutMs?: number;
     heartbeatMs?: number;
     maxRetries?: number;
+    random?: () => number;
+    stablePlayingMs?: number;
     /** Local bot sockets share the human's validated world feed. They only
      * consume their own welcome; connection control messages remain validated. */
     receiveMode?: 'all' | 'welcome-only';
@@ -28,6 +31,12 @@ export interface NetworkDiagnostics {
     sentCount: number;
     sendFailures: number;
     bufferedAmount: number;
+    receivedBytes: number;
+    applyMs: number;
+    applyMaxMs: number;
+    joinMs: number;
+    reconnectCount: number;
+    lastCloseCode: number;
 }
 
 const SHARED_UPDATES = new Set<string>([
@@ -68,6 +77,9 @@ export class NetworkManager {
     private retryTimer: ReturnType<typeof setTimeout> | null = null;
     private joinTimer: ReturnType<typeof setTimeout> | null = null;
     private heartbeat: ReturnType<typeof setInterval> | null = null;
+    private stableTimer: ReturnType<typeof setTimeout> | null = null;
+    private ackTimer: ReturnType<typeof setTimeout> | null = null;
+    private pendingAck: DeliveryAck | null = null;
     private retries = 0;
     private generation = 0;
     private lastReceived = 0;
@@ -76,12 +88,13 @@ export class NetworkManager {
     private readonly diagnostics = {
         receivedCount: 0, receivedChars: 0, parseMs: 0, parseMaxMs: 0,
         invalidCount: 0, ignoredCount: 0, sentCount: 0, sendFailures: 0,
+        receivedBytes: 0, applyMs: 0, applyMaxMs: 0, joinMs: 0, reconnectCount: 0, lastCloseCode: 0,
     };
 
     constructor(options: TransportOptions = {}) {
         this.options = options;
         const url = new URL(options.url ?? resolveWebSocketUrl());
-        if(options.receiveMode!=='welcome-only' && options.chaosTransport!=='legacy'){url.searchParams.set('chaos',options.chaosTransport??CHAOS_WIRE_MODE);url.searchParams.set('movement','batch-v1');}
+        if(options.receiveMode!=='welcome-only' && options.chaosTransport!=='legacy'){url.searchParams.set('chaos',options.chaosTransport??CHAOS_WIRE_MODE);url.searchParams.set('movement','tuple-v1');}
         if(options.receiveMode==='welcome-only')url.searchParams.set('receive','welcome-only');
         this.url = url.toString();
     }
@@ -117,7 +130,8 @@ export class NetworkManager {
             return;
         }
         this.socket = socket;
-        const decoder=new ChaosDecoder();
+        const decoder=new DeliveryDecoder();
+        const openedAt=performance.now();
         const current = () => generation === this.generation && this.socket === socket;
         this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
         socket.addEventListener('open', () => {
@@ -131,6 +145,7 @@ export class NetworkManager {
             if (typeof event.data === 'string') this.diagnostics.receivedChars += event.data.length;
             const discard = this.options.receiveMode === 'welcome-only' && isDiscardedSharedUpdate(event.data);
             const decoded=discard?null:decoder.read(event.data);
+            if(!discard)this.diagnostics.receivedBytes+=decoder.lastWireBytes;
             const message=decoded?.message;
             const elapsed = performance.now() - started;
             this.diagnostics.parseMs += elapsed;
@@ -141,6 +156,7 @@ export class NetworkManager {
                 return;
             }
             if (!message) {
+                if (decoded?.ack) { this.acknowledge(decoded.ack); return; }
                 this.diagnostics.invalidCount++;
                 this.failed(generation, 'The server sent an incompatible game update.');
                 return;
@@ -154,15 +170,18 @@ export class NetworkManager {
                 }
                 if (message.matchRoom) { const url = new URL(this.url); url.searchParams.set('preferred',message.matchRoom); this.url = url.toString(); }
                 this.clearJoinTimer();
-                this.retries = 0;
+                this.diagnostics.joinMs=performance.now()-openedAt;
                 // Apply the complete snapshot before enabling input.
-                try { this.onMessage?.(message); } catch (error) {
+                try { this.apply(message); } catch (error) {
                     console.error('Could not restore game state', error);
                     this.failed(generation, 'Could not restore the game.');
                     return;
                 }
                 this.setState('playing');
                 this.startHeartbeat(generation);
+                if (this.stableTimer) clearTimeout(this.stableTimer);
+                this.stableTimer=setTimeout(()=>{if(current()&&this.state==='playing')this.retries=0;this.stableTimer=null;},this.options.stablePlayingMs??30_000);
+                if(decoded?.ack)this.acknowledge(decoded.ack);
                 return;
             }
             if (message.type === 'error' && this.state !== 'playing') {
@@ -173,16 +192,15 @@ export class NetworkManager {
                 this.diagnostics.ignoredCount++;
             } else {
                 try {
-                    if(message.type==='playersMoved')for(const sample of message.players)this.onMessage?.({type:'playerMoved',...sample});
-                    else this.onMessage?.(message);
+                    this.apply(message);
                 } catch(error) {
                     console.error('Could not apply game update',error);
                     this.failed(generation,'Could not apply the game update.');return;
                 }
             }
-            if(decoded?.ack)this.send(decoded.ack);
+            if(decoded?.ack)this.acknowledge(decoded.ack);
         });
-        socket.addEventListener('close', () => { if (current()) this.failed(generation, 'Connection lost.'); });
+        socket.addEventListener('close', event => { if (current()) { this.diagnostics.lastCloseCode=event.code;this.failed(generation, 'Connection lost.'); } });
         socket.addEventListener('error', () => { if (current()) this.failed(generation, 'Connection failed.'); });
     }
 
@@ -206,7 +224,8 @@ export class NetworkManager {
             this.setState('disconnected', `${message} Retry when ready.`);
             return;
         }
-        const delay = Math.min(500 * 2 ** this.retries++, 8_000);
+        const delay = Math.min(500 * 2 ** this.retries++, 8_000) * (0.5 + 0.5 * (this.options.random ?? Math.random)());
+        this.diagnostics.reconnectCount++;
         this.setState('reconnecting', message);
         this.retryTimer = setTimeout(() => { this.retryTimer = null; this.open(); }, delay);
     }
@@ -221,8 +240,15 @@ export class NetworkManager {
             this.diagnostics.sendFailures++;
             return false;
         }
+        if (this.socket.bufferedAmount > 256 * 1024) {
+            this.diagnostics.sendFailures++;
+            this.failed(this.generation,'The connection is congested.');
+            return false;
+        }
         try {
-            this.socket.send(JSON.stringify(message));
+            const ack=this.pendingAck;
+            this.socket.send(JSON.stringify(ack&&message.type!=='deliveryAck'?{...message,deliveryAck:{stream:ack.stream,seq:ack.seq}}:message));
+            if(ack){this.pendingAck=null;if(this.ackTimer)clearTimeout(this.ackTimer);this.ackTimer=null;}
             this.diagnostics.sentCount++;
             return true;
         } catch {
@@ -237,6 +263,28 @@ export class NetworkManager {
         return { ...this.diagnostics, lastReceivedAt: this.lastReceived, bufferedAmount: this.socket?.bufferedAmount ?? 0 };
     }
 
+    private apply(message: ServerMessage): void {
+        const start=performance.now();
+        try {
+            if(message.type==='playerShot'&&message.movement)this.onMessage?.({type:'playerMoved',...message.movement});
+            if(message.type==='playersMoved')for(const sample of message.players)this.onMessage?.({type:'playerMoved',...sample});
+            else this.onMessage?.(message);
+        } finally {
+            const elapsed=performance.now()-start;this.diagnostics.applyMs+=elapsed;this.diagnostics.applyMaxMs=Math.max(this.diagnostics.applyMaxMs,elapsed);
+        }
+    }
+
+    private acknowledge(ack: NonNullable<ReturnType<DeliveryDecoder['read']>>['ack']): void {
+        if (!ack) return;
+        if (ack.type==='chaosAck') { this.send(ack);return; }
+        this.pendingAck=ack;
+        // Cumulative ACKs cover all applied events. This limits uplink traffic
+        // during combat bursts without delaying application or interpolation.
+        if (!this.ackTimer) this.ackTimer=setTimeout(()=>{
+            this.ackTimer=null;const pending=this.pendingAck;this.pendingAck=null;if(pending)this.send(pending);
+        },33);
+    }
+
     private clearJoinTimer(): void {
         if (this.joinTimer) clearTimeout(this.joinTimer);
         this.joinTimer = null;
@@ -247,6 +295,9 @@ export class NetworkManager {
         this.clearJoinTimer();
         if (this.retryTimer) clearTimeout(this.retryTimer);
         if (this.heartbeat) clearInterval(this.heartbeat);
+        if (this.stableTimer) clearTimeout(this.stableTimer);
+        if (this.ackTimer) clearTimeout(this.ackTimer);
+        this.stableTimer=null;this.ackTimer=null;this.pendingAck=null;
         this.retryTimer = null;
         this.heartbeat = null;
         const socket = this.socket;

@@ -1,3 +1,4 @@
+import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import {afterEach,expect,it,vi} from 'vitest';
 import {FeedbackAudio} from '../../src/audio/FeedbackAudio';
 import type {AudioListener} from 'three';
@@ -24,7 +25,7 @@ it('debounces repeated snapshots/collision chatter but keeps ownership changes d
 });
 it('bounds chatter without blocking a fresh important cue and cleans every voice',()=>{
  const ctx=fixture();for(let i=0;i<30;i++){ctx.currentTime+=.1;audio.play('case-hit',{x:50,y:0,z:0});}
- expect(state.sounds).toHaveLength(6);expect(state.sounds[0].volume).toBeGreaterThan(.4);expect(state.sounds[0].volume).toBeLessThan(.48);
+ expect(state.sounds).toHaveLength(6);expect(state.sounds[0].volume).toBeCloseTo(.48*worldSoundGain(50));
  audio.play('case-pickup');audio.play('case-lost');audio.play('death');
  expect(state.sounds.filter(s=>s.isPlaying)).toHaveLength(8);expect(state.sounds.at(-1).isPlaying).toBe(true);
  state.sounds.at(-1).onEnded();audio.dispose();expect(state.sounds.filter(s=>s.isPlaying)).toHaveLength(0);

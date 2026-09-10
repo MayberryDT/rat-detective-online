@@ -169,11 +169,15 @@ export class ServerBotController {
             this.lastNavigationAt=now;
         }
         this.ray.refresh();
+        const groundedBodies=new Set<C.Body>();
+        for(const contact of this.world.contacts){
+            if(-contact.ni.y>.5)groundedBodies.add(contact.bi);
+            if(contact.ni.y>.5)groundedBodies.add(contact.bj);
+        }
         for(const bot of this.bots.values()){
             const self=bot.actor,body=bot.body;
             if(!self||!bot.alive||(players.get(bot.id)?.hp??0)<=0)continue;
-            let grounded=false;
-            for(const contact of this.world.contacts){const normal=contact.bi===body?-contact.ni.y:contact.bj===body?contact.ni.y:0;if(normal>.5){grounded=true;break;}}
+            const grounded=groundedBodies.has(body);
             if(grounded)bot.normalJump=false;
             const intent=bot.brain.step(now,self,this.actors.values(),chaos,target=>this.visible(bot,target),
                 grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visible(bot,target,true));

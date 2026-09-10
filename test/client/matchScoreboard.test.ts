@@ -12,7 +12,7 @@ class Element {
     dataset: Record<string, string> = {}; children: Element[] = []; selectors = new Map<string, Element>();
     classes = new Set<string>(); classList = {toggle: (name: string, value: boolean) => value ? this.classes.add(name) : this.classes.delete(name)};
     setAttribute() {} appendChild(node: Element) { this.children.push(node); return node; }
-    replaceChildren() { this.children = []; } remove() { this.removed = true; }
+    replaceChildren(...children:Element[]) { this.children = children; } remove() { this.removed = true; }
     querySelector(selector: string) { if (!this.selectors.has(selector)) this.selectors.set(selector, new Element()); return this.selectors.get(selector)!; }
 }
 function fixture(mode: AssignmentId = 'excessive-force', count = 8) {
@@ -30,6 +30,13 @@ function fixture(mode: AssignmentId = 'excessive-force', count = 8) {
     return {board, root, body, state, assignment, people, rows, row, cells};
 }
 describe('full lobby scoreboard', () => {
+    it('retains unrelated row elements when one rat takes damage',()=>{
+        const f=fixture();f.board.setVisible(true);
+        const other=f.row('rd-ai-2'),mine=f.row('me');
+        f.board.receive({type:'playerDamaged',id:'me',hp:1,attackerId:'rd-ai-1'});
+        expect(f.row('rd-ai-2')).toBe(other);expect(f.row('me')).not.toBe(mine);expect(f.cells('me')).toContain('1 / 3 HP');
+        f.board.dispose();
+    });
     it.each(['closing-time', 'excessive-force', 'chain-of-custody'] as const)('uses authoritative mode scores and all players in %s', mode => {
         const f = fixture(mode);
         if (mode === 'excessive-force') f.assignment.caseKills = {'rd-ai-1': 7, me: 4};

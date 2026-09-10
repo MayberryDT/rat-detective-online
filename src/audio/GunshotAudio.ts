@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import type { Vec3Data } from '../shared/networkProtocol';
-import { worldSoundGain } from './worldSoundGain';
 import { AudioVoicePool } from './AudioVoicePool';
+import { worldSoundGain as gunshotGain } from './worldSoundGain';
+export { worldSoundGain as gunshotGain } from './worldSoundGain';
 
 const MAX_VOICES = 12;
-export { worldSoundGain as gunshotGain } from './worldSoundGain';
+export const GUNSHOT_VOLUME = .3;
 
 type Voice = { sound: THREE.Audio; priority: number };
 /** Independent, bounded voices keep distant AI from cutting off your own pistol. */
@@ -24,7 +25,7 @@ export class GunshotAudio {
         const buffer = this.buffer;
         if (this.disposed || !buffer || this.listener.context.state !== 'running') return;
         this.listener.getWorldPosition(this.ear);
-        const gain = local ? 1 : worldSoundGain(Math.hypot(origin.x-this.ear.x, origin.y-this.ear.y, origin.z-this.ear.z));
+        const gain = local ? 1 : gunshotGain(Math.hypot(origin.x-this.ear.x, origin.y-this.ear.y, origin.z-this.ear.z));
         if (gain < .001) return;
         const priority = local ? 2 : gain;
         if (this.voices.size >= MAX_VOICES) {
@@ -37,7 +38,7 @@ export class GunshotAudio {
         const sound = this.pool.acquire();
         if (!sound) return;
         sound.setBuffer(buffer);
-        sound.setVolume(.4 * gain);
+        sound.setVolume(GUNSHOT_VOLUME * gain);
         sound.setPlaybackRate(cue === 'malfunction' ? 1.45 : 1);
         const voice = {sound, priority};
         sound.onEnded = () => { this.pool.finish(sound); this.voices.delete(voice); };

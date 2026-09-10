@@ -1,6 +1,32 @@
 import type {IncidentId} from '../shared/incidentCatalog';
 
 export const MUNICIPAL_QUIPS = {
+    caseDeath: [
+        'The case closed {name}.',
+        '{name} was filed under FLATTENED.',
+        'The paperwork was too much for {name}.',
+        '{name} received a crushing performance review.',
+        'The case rested. On {name}.',
+        '{name} became supporting documentation.',
+        'The evidence found {name} guilty of standing there.',
+        '{name} was hit with the full weight of bureaucracy.',
+        '{name} forgot to duck the paperwork.',
+        'The briefcase made {name} redundant.',
+        '{name} has been moved to dead storage.',
+        '{name} tried to handle the case. The case handled {name}.',
+        '{name} was stamped RETURN TO FLOOR.',
+        'The paper trail ran over {name}.',
+        '{name} lost an argument with the luggage.',
+        '{name} is now an attachment.',
+        'The case knocked the qualifications out of {name}.',
+        '{name} was caught between a case and a hard place.',
+        'The evidence has a solid alibi. {name} does not.',
+        '{name} requested fewer forms. Request denied.',
+        'The briefcase took {name} off the case.',
+        '{name} met the department\'s impact assessment.',
+        '{name} has been professionally compressed.',
+        'The case promoted {name} to floor manager.',
+    ],
     death: ['A MINOR CAREER SETBACK.', 'TEMPORARILY OUT OF OFFICE.', 'YOUR PENSION IS UNDER REVIEW.', 'UNSCHEDULED FLOOR INSPECTION.', 'PLEASE RESUBMIT YOURSELF.', 'ANOTHER WORKPLACE INCIDENT.', 'HORIZONTAL. STILL EMPLOYED.', 'THE REPORT WILL BE UNFLATTERING.', 'PAID LEAVE DENIED.', 'YOUR HAT HAS FILED A COMPLAINT.', 'CURRENTLY BETWEEN HEARTBEATS.', 'OFFICER DOWN. MORALE UNCLEAR.'],
     victory: ['PROMOTED?!', 'MANAGEMENT HAS QUESTIONS.', 'EMPLOYEE OF THE INCIDENT.', 'A RAISE IS NOT GUARANTEED.', 'YOUR METHODS WERE NOTED.', 'SOMEHOW, THIS COUNTS.', 'CORNER OFFICE. NO WINDOWS.', 'OUTSTANDING QUESTIONABLE CONDUCT.', 'THE MAYOR DENIES INVOLVEMENT.', 'PLEASE TRAIN YOUR REPLACEMENT.', 'A MODEL OF MUNICIPAL EFFICIENCY.', 'THE PAPERWORK CHECKS OUT.'],
     casePickup: [
@@ -64,6 +90,7 @@ export class MunicipalQuips {
     private readonly bags=new Map<keyof typeof MUNICIPAL_QUIPS,string[]>();
     private readonly last=new Map<keyof typeof MUNICIPAL_QUIPS,string>();
     constructor(private readonly random= Math.random){}
+    caseDeath(name:string):string{return this.next('caseDeath').replace(/\{name\}/g,()=>name);}
     next(kind:keyof typeof MUNICIPAL_QUIPS):string {
         let bag=this.bags.get(kind);
         if(!bag?.length){

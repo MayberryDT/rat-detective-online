@@ -58,6 +58,11 @@ test('combined quality does not average away a failing host',async()=>{
  assert.equal(qualityHealthy({...healthy,byHost:{a:healthy}},'both'),true);
  assert.equal(qualityHealthy({...healthy,byHost:{a:healthy,b:{...healthy,gaps:{...healthy.gaps,p95:101}}}},'both'),false);
  assert.equal(qualityHealthy({...healthy,playback:{frames:10000,held:200}},'both'),false);
+ const idle={...healthy,playback:{frames:0,held:0}};
+ assert.equal(qualityHealthy(idle,'both'),false);
+ assert.equal(qualityHealthy(idle,'both',false),true);
+ assert.equal(qualityHealthy({...idle,errors:1},'both',false),false);
+ assert.equal(qualityHealthy({...idle,byHost:{a:{...idle,gaps:{...idle.gaps,p95:101}}}},'both',false),false);
 });
 test('perfect stop/go delivery separates delayed stationary poses from actual underrun',async()=>{
  const {build}=await import('esbuild');const {CapacityPlayback}=await import('../../scripts/lib/capacity-playback.mjs');

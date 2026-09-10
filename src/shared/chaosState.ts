@@ -78,9 +78,9 @@ export interface PressureLaunchEvent { id:string; playerId:string; at:number; ve
 export type DispatchPhase = 'ready' | 'rolling' | 'active' | 'cooldown';
 export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec3Data }
 export interface CorpseState extends PhysicalPose {
-    id: string; victimId: string; owner?: string; appearance: RatAppearance; born: number; expires: number;
+    id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
-export interface ChaosShot { id: string; owner: string; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number }
+export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number }
 export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;

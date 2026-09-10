@@ -2,7 +2,7 @@ import { env, evictDurableObject, runInDurableObject, SELF } from 'cloudflare:te
 import { afterEach, describe, expect, it } from 'vitest';
 import { GameRoom } from '../../src/worker/GameRoom';
 import { ASSIGNMENT_IDS, destinationPoint, type AssignmentId, type AssignmentState } from '../../src/shared/assignments';
-import { ChaosDecoder } from '../../src/shared/chaosWire';
+import { DeliveryDecoder } from '../../src/shared/deliveryWire';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import { PROTOCOL_VERSION, WIN_DISPLAY_MS, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
 
@@ -16,11 +16,11 @@ function pause(game:Internals){if(game.chaosTimer)clearInterval(game.chaosTimer)
 async function open(name:string,compact=false){
     const response=await SELF.fetch(`https://rat.test/ws?room=${name}${compact?'&chaos=compact-v2':''}`,{headers:{Upgrade:'websocket'}});
     expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
-    const messages:ServerMessage[]=[],invalid:string[]=[],decoder=new ChaosDecoder();
+    const messages:ServerMessage[]=[],invalid:string[]=[],decoder=new DeliveryDecoder();
     ws.addEventListener('message',event=>{
         const decoded=decoder.read(String(event.data));
         if(!decoded){invalid.push(String(event.data));return;}
-        if(decoded.ack)ws.send(JSON.stringify(decoded.ack));messages.push(decoded.message);
+        if(decoded.ack)try{ws.send(JSON.stringify(decoded.ack));}catch{/* closing */}if(decoded.message)messages.push(decoded.message);
     });
     const wait=async<T extends ServerMessage['type']>(type:T):Promise<Extract<ServerMessage,{type:T}>>=>{
         const end=Date.now()+3000;

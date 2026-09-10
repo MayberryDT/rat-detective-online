@@ -77,22 +77,22 @@ export interface HitResult {
 
 export function applyHit(
   players: Map<string, PlayerData>,
-  shooterId: string,
+  shooterId: string | null,
   victimId: string,
   requestedDamage: number,
   allowPosthumous = false,
   caseHolderId: string | null = null,
   assignmentMode = false,
 ): HitResult {
-  const shooter = players.get(shooterId);
+  const shooter = shooterId === null ? undefined : players.get(shooterId);
   const victim = players.get(victimId);
   const damage = clampDamage(requestedDamage);
 
-  if (!shooter || !victim || shooterId === victimId || damage <= 0) {
+  if ((shooterId !== null && !shooter) || !victim || shooterId === victimId || damage <= 0) {
     return { applied: false, killed: false, roundWon: false, damage: 0 };
   }
 
-  if ((!allowPosthumous && shooter.hp <= 0) || victim.hp <= 0) {
+  if ((!allowPosthumous && shooter && shooter.hp <= 0) || victim.hp <= 0) {
     return { applied: false, killed: false, roundWon: false, damage: 0 };
   }
 
@@ -103,13 +103,13 @@ export function applyHit(
   }
 
   // Ownership comes from the authoritative simulation at kill resolution.
-  shooter.kills += !assignmentMode && shooterId === caseHolderId ? 2 : 1;
+  if (shooter) shooter.kills += !assignmentMode && shooterId === caseHolderId ? 2 : 1;
   victim.deaths += 1;
 
   return {
     applied: true,
     killed: true,
-    roundWon: !assignmentMode && shooter.kills >= KILLS_TO_WIN,
+    roundWon: !!shooter && !assignmentMode && shooter.kills >= KILLS_TO_WIN,
     damage,
   };
 }

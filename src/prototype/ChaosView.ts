@@ -217,7 +217,7 @@ export class ChaosView {
             this.ballPose.rotation.set(now*.015+i,now*.009,0);
             const pulse=shot.stuckUntil?1+Math.sin(now*.03)*.16:1;
             this.ballPose.scale.setScalar(scale*pulse);this.ballPose.updateMatrix();
-            const own=shot.owner===this.myId||!!this.resolveRat(shot.owner)?.isPlayer;
+            const own=shot.owner===this.myId||!!(shot.owner&&this.resolveRat(shot.owner)?.isPlayer);
             const hot=crossfire&&shot.wallBounced;
             const batch=hot?this.chargedBullets:this.bullets;
             const ballIndex=batch.count++;batch.setMatrixAt(ballIndex,this.ballPose.matrix);

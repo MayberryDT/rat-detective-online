@@ -61,7 +61,11 @@ describe('distributed controls and physical pressure launch',()=>{
   sim.step(.01,1020,false);expect(sim.snapshot(false).pressure!.serial).toBe(0);
  });
  it('applies each snapshot event once to a real controller and retains launch momentum through physics',()=>{
-  const {sim}=fixture();fire(sim,PRESSURE_LAUNCH.target);
+  const {sim}=fixture();
+  // Test retained momentum with an inward launch. Random outward headings can
+  // legitimately be shortened by city containment (covered by launcherVelocity).
+  const random=vi.spyOn(Math,'random').mockReturnValue(.625);
+  try{fire(sim,PRESSURE_LAUNCH.target);}finally{random.mockRestore();}
   const state=sim.snapshot(),world=new C.World({gravity:new C.Vec3(0,-25,0)});
   const rat=new RatController(new THREE.Scene(),world,new THREE.PerspectiveCamera(),'',{},new THREE.Vector3(150,0,147));
   rat.applyPressureLaunches(state,'local');expect(rat.entity.body.velocity.toArray()).toEqual(Object.values(state.pressure!.launches[0].velocity));

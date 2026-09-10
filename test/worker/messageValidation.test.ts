@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_HP,
   MAX_SERVER_MESSAGE_BYTES,
@@ -40,6 +40,18 @@ function player(id: string, overrides: Partial<PlayerData> = {}): PlayerData {
 }
 
 describe('parseClientMessage', () => {
+  it('validates piggybacked acknowledgements without weakening the underlying message',()=>{
+    expect(parseClientMessage({type:'ping',sentAt:1,deliveryAck:{stream:'s',seq:2}})).toEqual({type:'ping',sentAt:1,deliveryAck:{stream:'s',seq:2}});
+    for(const deliveryAck of [{stream:'s',seq:NaN},{stream:'s',seq:0},{stream:'',seq:1},'bad'])expect(parseClientMessage({type:'ping',sentAt:1,deliveryAck})).toBeNull();
+    expect(parseClientMessage({type:'shoot',deliveryAck:{stream:'s',seq:2}})).toBeNull();
+  });
+  it('rejects huge envelopes before UTF-8 allocation while retaining the exact multibyte limit',()=>{
+    const encode=vi.spyOn(TextEncoder.prototype,'encode');
+    try {
+      expect(parseClientMessage('x'.repeat(1024*1024))).toBeNull();expect(encode).not.toHaveBeenCalled();
+      expect(parseClientMessage('🧀'.repeat(3000))).toBeNull();expect(encode).toHaveBeenCalledTimes(1);
+    } finally { encode.mockRestore(); }
+  });
   it('requires a protocol version on join and a shot descriptor on shoot', () => {
     expect(parseClientMessage(JSON.stringify({ type: 'join', name: 'A', appearance }))).toBeNull();
     expect(
@@ -167,6 +179,16 @@ describe('parseServerMessage', () => {
         respawnAt: 123,
       }),
     ).toMatchObject({ type: 'playerDied', respawnAt: 123 });
+  });
+
+  it('accepts explicit environmental deaths while rejecting mixed or missing attribution',()=>{
+    const death={type:'playerDied',victimId:'v',victimName:'Captain Crawley',killerId:null,killerName:null,cause:'evidence-tampering',respawnAt:1000};
+    expect(parseServerMessage(death)).toEqual(death);
+    for(const patch of [{cause:undefined},{cause:'unknown'},{killerId:'a'},{killerName:'A'}])expect(parseServerMessage({...death,...patch})).toBeNull();
+    const damage={type:'playerDamaged',id:'v',hp:0,attackerId:null,cause:'evidence-tampering'};
+    expect(parseServerMessage(damage)).toEqual(damage);
+    expect(parseServerMessage({...damage,cause:undefined})).toBeNull();
+    expect(parseServerMessage({...damage,attackerId:'a'})).toBeNull();
   });
 
   it('parses playerCorrected poses', () => {

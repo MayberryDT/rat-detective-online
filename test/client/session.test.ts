@@ -93,6 +93,7 @@ const harness = vi.hoisted(() => {
             applySnapshot: ReturnType<typeof vi.fn>;
             respawn: ReturnType<typeof vi.fn>;
             takeDamage: ReturnType<typeof vi.fn>;
+            useSharedCorpse: ReturnType<typeof vi.fn>;
         };
         onMouseMove = vi.fn();
         update = vi.fn();
@@ -120,6 +121,7 @@ const harness = vi.hoisted(() => {
                 applySnapshot: vi.fn(),
                 respawn: vi.fn(),
                 takeDamage: vi.fn(),
+                useSharedCorpse: vi.fn(),
             };
             harness.rats.push(this);
         }
@@ -387,10 +389,15 @@ describe('GameSession', () => {
         expect(hud.showHitMarker).toHaveBeenCalledTimes(1);session.dispose();
     });
 
-    it('keeps audio unlock on a fresh pointer gesture while click events are guarded', () => {
-        const {doc,session}=start();
-        doc.dispatch('pointerdown', Object.assign(new Event('pointerdown'), {button:0}));
-        expect(harness.music.at(-1)!.unlock).toHaveBeenCalled();
+    it('starts title music before joining and retries permission on mouse, touch and keyboard gestures', () => {
+        const {doc,session,transport}=start(),music=harness.music.at(-1)!;
+        expect(music.start).toHaveBeenCalledTimes(1);
+        for (const type of ['pointerdown','pointerup','click','keydown']) {
+            music.unlock.mockClear();
+            doc.dispatch(type, Object.assign(new Event(type), {button:0,key:'Tab',code:'Tab'}));
+            expect(music.unlock).toHaveBeenCalled();
+        }
+        expect(transport.connect).not.toHaveBeenCalled();
         session.dispose();
     });
 
@@ -420,7 +427,7 @@ describe('GameSession', () => {
         expect(hud.hideRespawn).toHaveBeenCalled();
         expect(hud.hideVictory).toHaveBeenCalled();
         expect(hud.enterPlaying).toHaveBeenCalled();
-        expect(harness.music.at(-1)!.start).toHaveBeenCalled();
+        expect(harness.music.at(-1)!.start).toHaveBeenCalledTimes(1);
         expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
     });
 
@@ -524,6 +531,18 @@ describe('GameSession', () => {
         expect(harness.guns.at(-1)!.clearProjectiles).toHaveBeenCalled();
         transport.onMessage?.({ type: 'error', message: 'Room is full.' });
         expect(hud.setConnection).toHaveBeenCalledWith('notice', 'Room is full.');
+    });
+
+    it('uses a named case joke for an environmental death without looking up a killer',()=>{
+        const {transport,hud,remotes}=start();transport.onMessage?.(welcome());
+        remotes.get.mockClear();
+        transport.onMessage?.({type:'playerDied',victimId:'me',killerId:null,killerName:null,
+            cause:'evidence-tampering',victimName:'Captain Crawley',respawnAt:Date.now()+3000,
+            incoming:{x:145,y:0,z:0},incident:true});
+        expect(hud.addKillFeed).toHaveBeenCalledWith(expect.stringContaining('Captain Crawley'));
+        expect(hud.addKillFeed.mock.calls.at(-1)![0]).not.toContain('eliminated');
+        expect(remotes.get).not.toHaveBeenCalledWith(null);
+        expect(hud.showRespawn).toHaveBeenCalledWith(Date.now()+3000);
     });
 
     it('sends the resolved shot and remote hit, then can start a fresh session after dispose', () => {

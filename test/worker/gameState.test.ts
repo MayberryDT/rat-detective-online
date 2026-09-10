@@ -22,6 +22,15 @@ const appearance: RatAppearance = {
 };
 
 describe('game state', () => {
+  it('records environmental damage and death without any kill credit or win',()=>{
+    const victim=createPlayer('victim','Victim',appearance,{x:0,y:2,z:0});
+    const other=createPlayer('other','Other',appearance,{x:5,y:2,z:0});other.kills=19;
+    const players=new Map([victim,other].map(p=>[p.id,p]));
+    expect(applyHit(players,null,victim.id,1,true)).toMatchObject({applied:true,killed:false});
+    expect(applyHit(players,null,victim.id,3,true)).toMatchObject({applied:true,killed:true,roundWon:false});
+    expect(victim.deaths).toBe(1);expect(victim.kills).toBe(0);expect(other.kills).toBe(19);
+    expect(applyHit(players,null,victim.id,3,true).applied).toBe(false);expect(victim.deaths).toBe(1);
+  });
   it.each([7, 20260907, 918273])('spreads twelve live players and round resets throughout world %s', seed => {
     const spec={seed,version:GRAYBOX_VERSION};
     const players=[] as ReturnType<typeof createPlayer>[];

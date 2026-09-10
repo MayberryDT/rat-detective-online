@@ -65,7 +65,7 @@ describe('Evidence Tampering missile case',()=>{
   const f=fixture('evidence-tampering');arm(f);
   f.victim.x=2;f.shooter.x=1;
   f.sim.step(.04,f.now+50);
-  expect(f.hits.filter(h=>h.victim===f.victim.id)).toEqual([expect.objectContaining({owner:f.shooter.id,damage:3})]);
+  expect(f.hits.filter(h=>h.victim===f.victim.id)).toEqual([expect.objectContaining({owner:null,damage:3})]);
   expect(f.hits.some(h=>h.victim===f.shooter.id)).toBe(false);
   expect(f.sim.snapshot(false).case.owner).toBeNull();
   f.sim.caseBody.position.set(1,21,0);f.sim.caseBody.velocity.set(110,0,0);f.sim.step(.02,f.now+70);
@@ -82,7 +82,7 @@ describe('Evidence Tampering missile case',()=>{
   expect(sim.caseBody.velocity.x).toBeLessThan(-150);
   expect(f.hits).toHaveLength(0);
  });
- it('redirects a bouncing case with a bounded loft and preserves attribution on restore',()=>{
+ it('redirects a bouncing case with a bounded loft and preserves shooter protection on restore',()=>{
   const f=fixture('evidence-tampering');arm(f);
   f.sim.caseBody.position.set(0,21,0);f.sim.caseBody.velocity.set(0,0,64);
   f.sim.caseBody.angularVelocity.setZero();f.sim.caseBody.quaternion.set(0,0,0,1);
@@ -116,6 +116,12 @@ describe('Evidence Tampering missile case',()=>{
   expect(f.hits.some(h=>h.victim===f.victim.id)).toBe(true);
   expect(f.hits.some(h=>h.victim===f.shooter.id)).toBe(false);
  });
+ it('can hit the sole living rat without inventing another player as killer',()=>{
+  const f=fixture('evidence-tampering');f.players.delete(f.shooter.id);
+  f.sim.caseBody.position.set(0,21,0);f.sim.caseBody.velocity.set(40,0,0);f.victim.x=1;
+  f.sim.step(.04,f.now+50);
+  expect(f.hits).toContainEqual(expect.objectContaining({victim:f.victim.id,owner:null,damage:3}));
+ });
  it('keeps slow cases armed and uncollectible for the whole incident',()=>{
   const f=fixture('evidence-tampering');arm(f);
   f.sim.caseBody.position.set(f.victim.x,f.victim.y+.8,f.victim.z);f.sim.caseBody.velocity.set(3,0,0);
@@ -133,12 +139,12 @@ describe('Evidence Tampering missile case',()=>{
   armed.caseBody.position.set(f.victim.x,f.victim.y+.8,f.victim.z);armed.caseBody.velocity.setZero();
   armed.step(0,f.now+20);expect(armed.snapshot(false).case.owner).toBeNull();
  });
- it('preserves missile attribution through snapshots and rejects malformed metadata',()=>{
+ it('preserves missile shooter protection through snapshots and rejects malformed metadata',()=>{
   const f=fixture('evidence-tampering');arm(f);const state=f.sim.snapshot(false);
   expect(parseServerMessage({type:'chaos',state})).not.toBeNull();
   expect(parseServerMessage({type:'chaos',state:{...state,case:{...state.case,missileOwner:123}}})).toBeNull();
   const restored=new ChaosSimulation(f.players,h=>f.hits.push(h),state);f.victim.x=2;
-  restored.step(.04,f.now+50);expect(f.hits[0]).toMatchObject({owner:f.shooter.id,damage:3});
+  restored.step(.04,f.now+50);expect(f.hits[0]).toMatchObject({owner:null,damage:3});
  });
 });
 describe('Crossfire bank shots',()=>{

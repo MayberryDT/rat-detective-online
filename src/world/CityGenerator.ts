@@ -167,6 +167,7 @@ export class CityGenerator {
         const propRandom = createDecorationRandom({...this.spec, seed: this.spec.seed ^ 0x51f15e});
         const bin = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x293c39, roughness: 0.83, metalness: 0.3}));
         const wood = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x594431, roughness: 0.95}));
+        bin.userData.streetSurface=wood.userData.streetSurface='obstacle';
         const canvas = this.trackMaterial(new THREE.MeshStandardMaterial({color:0x443239,roughness:1}));
         for (const building of layout) {
             this.addBuilding(building, rooftopMat, random);
@@ -659,6 +660,7 @@ export class CityGenerator {
             roughness: 0.68,
             metalness: 0.12,
         }));
+        asphaltMat.userData.streetSurface='ground';
         const lineMat = this.trackMaterial(new THREE.MeshBasicMaterial({
             color: 0xd6b777,
             transparent: true,
@@ -711,6 +713,7 @@ export class CityGenerator {
         this.textures.add(pavingTexture);
         const sidewalk = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x4b4b5a, map: pavingTexture, roughness: 0.85}));
         const curb = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x55505e, roughness: 0.8}));
+        sidewalk.userData.streetSurface='ground';curb.userData.streetSurface='curb';
         const paint = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x77716f, roughness: 0.9}));
         paint.userData.receiveDetailShadow = false;
         const drain = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x202b38, roughness: 0.6, metalness: 0.5}));

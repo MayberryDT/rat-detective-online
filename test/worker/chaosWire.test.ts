@@ -59,20 +59,20 @@ it('bounds in-flight snapshots, coalesces poses, retains impacts and rejects inv
  const s=state(),delivery=new ChaosDelivery(),decoder=new ChaosDecoder();
  const acks=[];
  for(let i=0;i<MAX_CHAOS_IN_FLIGHT;i++)acks.push(decoder.read(delivery.offer(s,i*33)!)!.ack!);
- expect(delivery.inFlight).toBe(4);
+ expect(delivery.inFlight).toBe(MAX_CHAOS_IN_FLIGHT);
  const impact={p:{x:2,y:3,z:4},n:{x:0,y:1,z:0},surface:true};
  s.impacts=[impact];s.shots=[];expect(delivery.offer(s,150)).toBeNull();
  s.impacts=[];s.case.p.x=50;expect(delivery.offer(s,183)).toBeNull();
- delivery.acknowledge({...acks[3],seq:999});delivery.acknowledge({...acks[3],stream:'wrong'});
- expect(delivery.inFlight).toBe(4);
- delivery.acknowledge(acks[3]);
+ delivery.acknowledge({...acks[MAX_CHAOS_IN_FLIGHT-1],seq:999});delivery.acknowledge({...acks[MAX_CHAOS_IN_FLIGHT-1],stream:'wrong'});
+ expect(delivery.inFlight).toBe(MAX_CHAOS_IN_FLIGHT);
+ delivery.acknowledge(acks[MAX_CHAOS_IN_FLIGHT-1]);
  const recovered=decoder.read(delivery.offer(s,200)!)!;
  expect(recovered.message.type==='chaos'&&recovered.message.state).toMatchObject({shots:[],impacts:[impact],case:{p:{x:50}}});
  expect(delivery.coalesced).toBe(2);
 });
 it('preserves a launcher event that disappears from current state while blocked',()=>{
  const s=state(),delivery=new ChaosDelivery(),decoder=new ChaosDecoder();let ack;
- for(let i=0;i<4;i++)ack=decoder.read(delivery.offer(s,i)!)!.ack!;
+ for(let i=0;i<MAX_CHAOS_IN_FLIGHT;i++)ack=decoder.read(delivery.offer(s,i)!)!.ack!;
  const launch={id:'launch-1',playerId:'rat',at:10,velocity:{x:1,y:2,z:3}};
  s.pressure={serial:1,until:50,launches:[launch]};expect(delivery.offer(s,10)).toBeNull();
  s.pressure.launches=[];delivery.acknowledge(ack!);
@@ -82,7 +82,7 @@ it('preserves a launcher event that disappears from current state while blocked'
 it('bounds cosmetic impact backlog while retaining timeout and launch overflow protection',()=>{
  const s=state(),delivery=new ChaosDelivery();delivery.offer(s,0);
  expect(()=>delivery.offer(s,CHAOS_ACK_TIMEOUT_MS+1)).toThrow(/timed out/);
- const congested=new ChaosDelivery(),decoder=new ChaosDecoder();let ack;for(let i=0;i<4;i++)ack=decoder.read(congested.offer(s,i)!)!.ack;
+ const congested=new ChaosDelivery(),decoder=new ChaosDecoder();let ack;for(let i=0;i<MAX_CHAOS_IN_FLIGHT;i++)ack=decoder.read(congested.offer(s,i)!)!.ack;
  s.impacts=Array.from({length:64},()=>({p:{x:0,y:0,z:0},n:{x:0,y:1,z:0},surface:true}));
  for(let i=0;i<4;i++)expect(congested.offer(s,10+i)).toBeNull();
  s.impacts=s.impacts.map(v=>({...v,p:{x:99,y:0,z:0}}));

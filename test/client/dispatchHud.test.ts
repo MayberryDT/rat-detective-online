@@ -142,7 +142,7 @@ describe('Dispatch broadcast lifecycle',()=>{
   expect(root.querySelector('.case-broadcast strong').textContent).toBe('YOU LOST THE CASE');
   expect(MUNICIPAL_QUIPS.caseLost).toContain(root.querySelector('.case-broadcast span').textContent);
   state.case.owner=null;hud.update(state,300);state.case.owner='third';hud.update(state,400,'Third');
-  expect(feedback.mock.calls.slice(-2)).toEqual([['case-drop'],['case-taken']]);hud.dispose();
+  expect(feedback.mock.calls.slice(-2)).toEqual([['case-drop',state.case.p],['case-taken',state.case.p]]);hud.dispose();
  });
  it('settles on the authoritative result and does not replay the reveal sound on snapshots',()=>{
   const {hud,root,state,sound}=fixture();hud.update(state,1000);

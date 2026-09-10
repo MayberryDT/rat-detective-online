@@ -1,4 +1,7 @@
 import { ChaosDelivery } from './ChaosDelivery';
+import { ConnectionDelivery } from './ConnectionDelivery';
+import { wireBytes } from '../shared/deliveryWire';
+import { serializeMovement } from '../shared/movementWire';
 import { CHAOS_WIRE_MODE, prepareChaos, type PreparedChaos } from '../shared/chaosWire';
 import { ObjectCollisionMatrix, type ArrayCollisionMatrix } from 'cannon-es';
 import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
@@ -9,6 +12,7 @@ import { createAssignment, isAssignmentId, nextAssignment, type AssignmentId, ty
 import { DurableObject } from 'cloudflare:workers';
 import {
   MAX_CONNECTIONS,
+  MAX_SERVER_MESSAGE_BYTES,
   MAX_PLAYERS,
   PROTOCOL_VERSION,
   RESPAWN_DELAY_MS,
@@ -57,6 +61,9 @@ interface SocketAttachment {
   compactChaos?: boolean;
   compactChaosDelta?: boolean;
   batchMovement?: boolean;
+  tupleMovement?: boolean;
+  delivery?: boolean;
+  delivered?: boolean;
   admissionUntil?: number;
 }
 
@@ -93,6 +100,19 @@ export class GameRoom extends DurableObject<Env> {
   private readonly diagnostics = new RoomDiagnostics();
   private readonly socketAttachments = new WeakMap<WebSocket, SocketAttachment>();
   private readonly chaosDelivery=new WeakMap<WebSocket,ChaosDelivery>();
+  private readonly connectionDelivery=new WeakMap<WebSocket,ConnectionDelivery>();
+  private readonly failedSockets=new WeakSet<WebSocket>();
+  private audience: WebSocket[] | null = null;
+  private readonly joining = new WeakSet<WebSocket>();
+  private batchScoreboards = false;
+  private transportEventAt = Date.now();
+  private noteTransportActivity(): void {
+    const now=Date.now();
+    if(this.chaosTimer && now-this.transportEventAt>1000)for(const ws of this.recipients()){
+      this.connectionDelivery.get(ws)?.resumed(now);this.chaosDelivery.get(ws)?.resumed(now);
+    }
+    this.transportEventAt=now;
+  }
   private chaos:ChaosSimulation|null=null;
   private chaosTimer:ReturnType<typeof setInterval>|null=null;
   private chaosLast=0;
@@ -147,6 +167,8 @@ export class GameRoom extends DurableObject<Env> {
 
     // Opt-in graybox rooms keep the existing public world's identity intact.
     const requestUrl = new URL(request.url);
+    const admissionDeadline = Number(request.headers.get('x-rat-admission-deadline')) || Infinity;
+    if (this.matchRoom && Date.now() >= admissionDeadline) return new Response('Admission expired',{status:503});
     const roomName = requestUrl.searchParams.get('room') || '';
     if (roomName.startsWith('graybox-') && this.world.version !== GRAYBOX_VERSION &&
         this.players.size === 0 && this.ctx.getWebSockets().length === 0) {
@@ -165,11 +187,16 @@ export class GameRoom extends DurableObject<Env> {
       localDiagnostics: allowsLocalDiagnostics(request),
       ...([CHAOS_WIRE_MODE,'compact-v1'].includes(requestUrl.searchParams.get('chaos')??'')?{compactChaos:true}:{}),
       ...(requestUrl.searchParams.get('chaos')===CHAOS_WIRE_MODE?{compactChaosDelta:true}:{}),
-      ...(requestUrl.searchParams.get('movement')==='batch-v1'?{batchMovement:true}:{}),
+      ...(['batch-v1','tuple-v1'].includes(requestUrl.searchParams.get('movement')??'')?{batchMovement:true}:{}),
+      ...(requestUrl.searchParams.get('movement')==='tuple-v1'?{tupleMovement:true}:{}),
       ...(requestUrl.searchParams.get('receive') === 'welcome-only' ? { receiveMode: 'welcome-only' as const } : {}),
     });
     this.ctx.acceptWebSocket(server);
+    this.audience = null;
     if (this.matchRoom) await this.scheduleNextAlarm();
+    if (this.matchRoom && Date.now() >= admissionDeadline) {
+      server.close(1001,'Admission expired');return new Response('Admission expired',{status:503});
+    }
 
     return new Response(null, { status: 101, webSocket: client, headers: this.matchRoom ? {'x-rat-slots': String(this.humanSlots())} : {} });
   }
@@ -197,8 +224,6 @@ export class GameRoom extends DurableObject<Env> {
       this.writeRoomState('match-pool-v1',pool);
     }
     await this.ensurePersistentBots();
-    this.rebalanceBots();
-    await this.scheduleNextAlarm();
   }
 
   async occupiedSlots(): Promise<number> { this.expireAdmissions(); return this.humanSlots(); }
@@ -228,8 +253,8 @@ export class GameRoom extends DurableObject<Env> {
     const humans = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
     const desired = humans ? Math.max(0, 8 - humans) : 0;
     if (desired > this.botRoster.length && this.refillAt > this.now()) return;
-    this.refillAt = 0;
-    this.writeRoomState('bot-refill-at', '0');
+    if (this.refillAt) { this.refillAt = 0; this.writeRoomState('bot-refill-at', '0'); }
+    const rosterChanged = this.botRoster.length !== desired;
     if (this.botRoster.length > desired) {
       const removed = this.botRoster.slice(desired);
       for (const {id} of removed) this.removePlayerById(id, true);
@@ -241,12 +266,12 @@ export class GameRoom extends DurableObject<Env> {
         if (!used.has(bot.id) && this.botRoster.length < desired) this.botRoster.push(bot);
       }
     }
-    this.writeRoomState(BOT_ROSTER_KEY, JSON.stringify(this.botRoster));
-    if (humans) this.activatePersistentBots();
+    if (rosterChanged) this.writeRoomState(BOT_ROSTER_KEY, JSON.stringify(this.botRoster));
+    if (humans) { if (rosterChanged || !this.serverBots) this.activatePersistentBots(); }
     else {
       this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined;
       if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; }
-      if (this.chaos) this.checkpointGame();
+      if (this.chaos && wasRunning) this.checkpointGame();
       this.nextBotHeartbeat = 0;
       if (wasRunning && this.matchPool && !this.humanSlots()) this.ctx.waitUntil(this.env.MATCHMAKER.getByName(this.matchPool).retire(this.matchRoom, this.matchPool));
     }
@@ -342,7 +367,9 @@ export class GameRoom extends DurableObject<Env> {
     this.serverBots = null;
     this.botState = undefined;
     // Stable IDs need leave/join events: respawns do not refresh client nameplates.
-    for (const { id } of this.botRoster) this.removePlayerById(id, true);
+    this.batchScoreboards = true;
+    try { for (const { id } of this.botRoster) this.removePlayerById(id, true); }
+    finally { this.batchScoreboards = false; }
     this.writeRoomState(BOT_ROSTER_KEY, JSON.stringify(roster));
     this.botRoster = roster;
     this.activatePersistentBots();
@@ -376,18 +403,26 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+    this.noteTransportActivity();
     this.diagnostics.event(this.now(), true);
     this.messagesIn += 1;
+    if (this.failedSockets.has(ws)) return;
+    const connectionId = this.getAttachment(ws).connectionId ?? 'unknown';
+    // Above the sum of legitimate movement, firing, ping and ACK bursts. Runs
+    // before parsing, including pre-join traffic and malformed input.
+    if (!this.rateLimiter.allow(`${connectionId}:ingress`, 240, 1000, this.now())) {
+      this.failSocket(ws, 'Inbound message budget exceeded', 1008); return;
+    }
     const message = parseClientMessage(raw);
     if (!message) {
-      this.send(ws, { type: 'error', message: 'Invalid message' });
+      this.rejectMessage(ws, connectionId, 'Invalid message');
       return;
     }
 
-    const connectionId = this.getAttachment(ws).connectionId ?? 'unknown';
+    if(message.deliveryAck){this.ackDelivery(ws,{type:'deliveryAck',...message.deliveryAck});if(this.failedSockets.has(ws))return;}
     if (message.type === 'join') {
       if (!this.rateLimiter.allow(`${connectionId}:join`, JOIN_RATE.limit, JOIN_RATE.windowMs, this.now())) {
-        this.send(ws, { type: 'error', message: 'Too many join attempts' });
+        this.rejectMessage(ws, connectionId, 'Too many join attempts');
         return;
       }
       this.handleJoin(ws, message);
@@ -401,9 +436,11 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
 
+    if (message.type === 'deliveryAck') {this.ackDelivery(ws,message);return;}
+
     const playerId = this.getPlayerId(ws);
     if (!playerId || !this.players.has(playerId)) {
-      this.send(ws, { type: 'error', message: 'Join before sending game messages' });
+      this.rejectMessage(ws, connectionId, 'Join before sending game messages');
       return;
     }
 
@@ -445,7 +482,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
-    ws.close();
+    try { ws.close(); } catch { /* Already gone. Cleanup still runs. */ }
     this.removePlayer(ws);
   }
 
@@ -591,10 +628,8 @@ export class GameRoom extends DurableObject<Env> {
 
   private handleJoin(ws: WebSocket, message: Extract<ClientMessage, { type: 'join' }>): void {
     if (message.protocolVersion !== PROTOCOL_VERSION) {
-      this.send(ws, {
-        type: 'error',
-        message: `Protocol version ${message.protocolVersion} is unsupported. Reload to continue.`,
-      });
+      this.rejectMessage(ws, this.getAttachment(ws).connectionId ?? 'unknown',
+        `Protocol version ${message.protocolVersion} is unsupported. Reload to continue.`);
       return;
     }
 
@@ -617,11 +652,12 @@ export class GameRoom extends DurableObject<Env> {
       const bot = this.botRoster[this.botRoster.length - 1];
       this.removePlayerById(bot.id, true); this.botRoster.pop();
     }
+    this.joining.add(ws);
     const id = crypto.randomUUID();
     const player = createPlayer(id, message.name, message.appearance, spawnForWorld(this.world, Math.random, this.players.values()));
     this.players.set(id, player);
     this.persistPlayer(player, true);
-    this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined });
+    this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined, delivery: true });
     if (this.matchRoom) this.rebalanceBots();
 
     this.chaosDelivery.delete(ws);
@@ -629,9 +665,9 @@ export class GameRoom extends DurableObject<Env> {
     const snapshot = this.welcomeMessage(id, player);
     this.send(ws, snapshot);
     if (this.getAttachment(ws).receiveMode !== 'welcome-only') {
-      this.send(ws, { type: 'currentPlayers', players: snapshot.players });
       if(this.chaos)this.sendChaos(ws,this.chaos.snapshot(false));
     }
+    this.joining.delete(ws);this.audience=null;
     this.broadcast({ type: 'playerJoined', player }, id);
     this.broadcastScoreboard();
     this.logMetrics('join');
@@ -734,13 +770,14 @@ export class GameRoom extends DurableObject<Env> {
     );
   }
 
-  private async handleHit(playerId: string, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming']): Promise<void> {
+  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming']): Promise<void> {
     if (this.round.phase !== 'playing') return;
 
     const victim = this.players.get(message.victimId);
-    const shooter = this.players.get(playerId);
-    const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, this.chaos?.isCaseHolder(playerId) ? playerId : null, !!this.chaos?.assignmentState);
-    if (!result.applied || !victim || !shooter) return;
+    const shooter = playerId === null ? undefined : this.players.get(playerId);
+    const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, playerId && this.chaos?.isCaseHolder(playerId) ? playerId : null, !!this.chaos?.assignmentState);
+    if (!result.applied || !victim) return;
+    const cause = playerId === null ? {cause:'evidence-tampering' as const} : {};
 
     // Final mutations precede persistence and externally visible events.
     // Nonlethal hits do not change the shooter; lethal hits persist the victim
@@ -749,55 +786,28 @@ export class GameRoom extends DurableObject<Env> {
     const respawnAt = result.roundWon ? now + WIN_DISPLAY_MS : now + RESPAWN_DELAY_MS;
     if (result.killed) victim.respawnAt = respawnAt;
     this.persistPlayer(victim, true);
-    if (result.killed) this.persistPlayer(shooter, true);
+    if (result.killed && shooter) this.persistPlayer(shooter, true);
 
-    this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId });
-
-    if (!result.killed) return;
-
-    const casePoint=this.chaos?.creditCaseKill(shooter.id)??false;
+    const casePoint=result.killed && (this.chaos?.creditCaseKill(playerId)??false);
     if(casePoint)this.checkpointGame();
-    const incident=incoming?this.chaos?.death(victim,incoming,shooter.id):false;
-    this.broadcast({
-      type: 'playerDied',
-      victimId: victim.id,
-      killerId: shooter.id,
-      killerName: shooter.name,
-      victimName: victim.name,
-      respawnAt,
-      ...(incoming?{incoming,incident:!!incident}:{}),
-    });
-    this.broadcastScoreboard();
-
-    if(casePoint && this.chaos?.assignmentState?.result){this.finishAssignment();return;}
-
-    if (result.roundWon) {
-      this.round = wonRound(shooter.id, shooter.name, shooter.kills, respawnAt, this.round.startedAt);
-      this.persistRound();
-      this.reconcileDeadlinesOnWin(respawnAt);
-      this.broadcast({
-        type: 'gameWon',
-        winnerId: shooter.id,
-        winnerName: shooter.name,
-        kills: shooter.kills,
-        resetAt: respawnAt,
-      });
-      await this.schedulePendingEvent('reset', null, respawnAt);
-      return;
+    const incident=result.killed && incoming?this.chaos?.death(victim,incoming,playerId):false;
+    const assignmentWon=casePoint && !!this.chaos?.assignmentState?.result;
+    if (result.killed && !assignmentWon) {
+      if (result.roundWon && shooter) {
+        this.round = wonRound(shooter.id, shooter.name, shooter.kills, respawnAt, this.round.startedAt);
+        this.persistRound();this.reconcileDeadlinesOnWin(respawnAt);
+      }
+      // Complete the durable transition before the first socket operation.
+      this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',
+        crypto.randomUUID(),result.roundWon?'reset':'respawn',result.roundWon?null:victim.id,respawnAt);
     }
-
-    await this.schedulePendingEvent('respawn', victim.id, respawnAt);
-  }
-
-  private async schedulePendingEvent(type: 'respawn' | 'reset', playerId: string | null, dueAt: number): Promise<void> {
-    const id = crypto.randomUUID();
-    this.ctx.storage.sql.exec(
-      'INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',
-      id,
-      type,
-      playerId,
-      dueAt,
-    );
+    this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
+    if (!result.killed) return;
+    this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
+      respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{})});
+    this.broadcastScoreboard();
+    if(assignmentWon){this.finishAssignment();return;}
+    if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt});
     await this.scheduleNextAlarm();
   }
 
@@ -884,6 +894,10 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private removePlayer(ws: WebSocket): void {
+    this.audience = null;
+    this.rateLimiter.clear(this.getAttachment(ws).connectionId ?? 'unknown');
+    this.connectionDelivery.delete(ws);
+    this.chaosDelivery.delete(ws);
     const playerId = this.getPlayerId(ws);
     if (playerId) {
       this.removePlayerById(playerId);
@@ -949,6 +963,7 @@ export class GameRoom extends DurableObject<Env> {
     if(this.chaosTimer)return;
     this.chaosLast=this.now();this.chaosAccumulator=0;
     this.chaosTimer=setInterval(()=>{
+      this.noteTransportActivity();
       if(!this.chaos)return;
       const attached=this.attachedPlayerIds();
       for(const id of [...this.players.keys()])if(!attached.has(id) && !this.isManagedBot(id))this.removePlayerById(id);
@@ -984,13 +999,14 @@ export class GameRoom extends DurableObject<Env> {
       // Legacy recipients share one serialization. Compact recipients use their
       // own delivered baseline and bounded acknowledgement window.
       let recipients=0,maxBytes=0,sentBytes=0;
-      let legacyPayload:string|undefined;
+      let legacyPayload:{payload:string;bytes:number}|undefined;
       let prepared:PreparedChaos|undefined;
-      for(const ws of this.ctx.getWebSockets()){
+      for(const ws of this.recipients()){
         const a=this.getAttachment(ws);
         if(ws.readyState!==WebSocket.OPEN||!a.playerId||a.receiveMode==='welcome-only')continue;
-        if(!a.compactChaos)legacyPayload??=serializeServerMessage({type:'chaos',state});
+
         if(a.compactChaos)prepared??=prepareChaos(state);
+        else if(!legacyPayload){const payload=serializeServerMessage({type:'chaos',state});legacyPayload={payload,bytes:wireBytes(payload)};}
         this.diagnostics.count('snapshotOffer');
         const bytes=this.sendChaos(ws,state,legacyPayload,prepared);
         if(bytes)this.diagnostics.count('snapshotAccepted');
@@ -1115,6 +1131,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private broadcastScoreboard(): void {
+    if (this.batchScoreboards) return;
     this.broadcast({ type: 'scoreboardUpdate', scores: buildScoreboard(this.players.values()) });
   }
 
@@ -1126,62 +1143,136 @@ export class GameRoom extends DurableObject<Env> {
     return players;
   }
 
-  private sendChaos(ws:WebSocket,state:ChaosState,legacyPayload?:string,prepared?:PreparedChaos):number {
-    if(ws.readyState!==WebSocket.OPEN)return 0;
-    try{
-      let payload:string|null;
-      if(this.getAttachment(ws).compactChaos){
-        let delivery=this.chaosDelivery.get(ws);
-        if(!delivery){delivery=new ChaosDelivery(!!this.getAttachment(ws).compactChaosDelta);this.chaosDelivery.set(ws,delivery);}
-        payload=delivery.offer(state,this.now(),prepared);
-      }else payload=legacyPayload??serializeServerMessage({type:'chaos',state});
-      if(!payload)return 0;
-      ws.send(payload);return new TextEncoder().encode(payload).byteLength;
-    }catch(error){
-      log('warn','snapshot stream reset',{reason:error instanceof Error?error.message:String(error)});
-      ws.close(1013,'Snapshot stream needs reconnect');return 0;
+  private recipients(): WebSocket[] {
+    return this.audience ??= this.ctx.getWebSockets().filter(ws => {
+      const a = this.getAttachment(ws);
+      return a.playerId && a.receiveMode !== 'welcome-only' && !this.failedSockets.has(ws) && !this.joining.has(ws);
+    });
+  }
+
+  private deliveryFor(ws: WebSocket): ConnectionDelivery {
+    let delivery = this.connectionDelivery.get(ws);
+    if (!delivery) {
+      delivery = new ConnectionDelivery((payload, bytes) => {
+        ws.send(payload);
+        this.diagnostics.sent(payload, bytes);
+      });
+      this.connectionDelivery.set(ws, delivery);
+      const attachment=this.getAttachment(ws),player=attachment.playerId?this.players.get(attachment.playerId):undefined;
+      const resumed=attachment.delivered;
+      this.setAttachment(ws,{...attachment,delivered:true});
+      if(resumed&&player)delivery.offer(serializeServerMessage(this.welcomeMessage(player.id,player)),Date.now());
     }
+    return delivery;
+  }
+
+  private ackDelivery(ws:WebSocket,ack:import('../shared/deliveryWire').DeliveryAck):void {
+    try {const snapshot=this.connectionDelivery.get(ws)?.acknowledge(ack,Date.now());if(snapshot)this.chaosDelivery.get(ws)?.acknowledge(snapshot);}
+    catch(error){this.failSocket(ws,String(error));}
+  }
+
+  private failSocket(ws: WebSocket, reason: string, code = 1013): void {
+    if (this.failedSockets.has(ws)) return;
+    this.failedSockets.add(ws); this.audience = null;
+    this.diagnostics.closed(code);
+    log('warn', 'connection reset', { reason, code });
+    try { ws.close(code, 'Connection needs reconnect'); } catch { /* Transport already gone. */ }
+    // Never recursively change the roster in the middle of a broadcast/death.
+    this.ctx.waitUntil(Promise.resolve().then(() => this.removePlayer(ws)));
+  }
+
+  private rejectMessage(ws: WebSocket, id: string, message: string): void {
+    if (!this.rateLimiter.allow(`${id}:invalid`, 8, 10_000, this.now())) {
+      this.failSocket(ws, 'Repeated invalid messages', 1008); return;
+    }
+    if (this.rateLimiter.allow(`${id}:invalidReply`, 1, 1000, this.now())) this.send(ws, { type: 'error', message });
+  }
+
+  private sendChaos(ws:WebSocket,state:ChaosState,legacyPayload?:{payload:string;bytes:number},prepared?:PreparedChaos):number {
+    if(ws.readyState!==WebSocket.OPEN || this.failedSockets.has(ws))return 0;
+    try{
+      const transport = this.deliveryFor(ws);
+      transport.check(Date.now());
+      let delivery=this.chaosDelivery.get(ws);
+      if(!delivery){delivery=new ChaosDelivery(!!this.getAttachment(ws).compactChaosDelta, !this.getAttachment(ws).compactChaos);this.chaosDelivery.set(ws,delivery);}
+      const payload=delivery.offer(state,Date.now(),prepared,transport.ready,legacyPayload);
+      this.diagnostics.delivery(transport.stats);
+      if(!payload)return 0;
+      transport.offer(payload, Date.now(), undefined, delivery.lastFrame!.ack, delivery.lastFrame!.bytes);
+      return delivery.lastFrame!.bytes;
+    }catch(error){
+      this.failSocket(ws, error instanceof Error ? error.message : String(error)); return 0;
+    }
+  }
+
+  private safeSend(ws: WebSocket, payload: string, replaceKey?: string, knownBytes?:number): boolean {
+    if (ws.readyState !== WebSocket.OPEN || this.failedSockets.has(ws)) return false;
+    try {
+      if (this.getAttachment(ws).delivery) this.deliveryFor(ws).offer(payload, Date.now(), replaceKey, undefined, knownBytes);
+      else {
+        const bytes = wireBytes(payload);
+        if (bytes > MAX_SERVER_MESSAGE_BYTES) throw new Error('Control message budget exceeded');
+        ws.send(payload); this.diagnostics.sent(payload, bytes);
+      }
+      return true;
+    } catch (error) { this.failSocket(ws, error instanceof Error ? error.message : String(error)); return false; }
   }
 
   private send(ws: WebSocket, message: ServerMessage): void {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(serializeServerMessage(message));
-    }
+    try { this.safeSend(ws, serializeServerMessage(message)); }
+    catch (error) { this.failSocket(ws, String(error)); }
   }
 
   private broadcast(message: ServerMessage, exceptPlayerId?: string): void {
-    if (this.ctx.getWebSockets().length === 0) return;
+    const audience = this.recipients();
+    if (!audience.length) return;
     if(message.type==='playerMoved'&&this.chaosTimer&&this.world.version===GRAYBOX_VERSION){
-      if(this.ctx.getWebSockets().some(ws=>this.getAttachment(ws).batchMovement)){
+      if(audience.some(ws=>this.getAttachment(ws).batchMovement)){
         if(this.pendingMovement.has(message.player.id))this.diagnostics.count('movementOverwrite');
         this.pendingMovement.set(message.player.id,{player:message.player,at:message.at??this.now()});
       }
-      if(this.ctx.getWebSockets().some(ws=>!this.getAttachment(ws).batchMovement))this.broadcastSerialized(serializeServerMessage(message),exceptPlayerId,'individual');
+      if(audience.some(ws=>!this.getAttachment(ws).batchMovement))this.broadcastSerialized(serializeServerMessage(message),exceptPlayerId,'individual',undefined,'move:'+message.player.id);
       return;
     }
-    // Preserve movement-before-shot, correction, death and roster ordering.
-    this.flushMovement();
+    if(message.type==='playerShot' && this.pendingMovement.has(message.shooterId)){
+      const sample=this.pendingMovement.get(message.shooterId)!;this.pendingMovement.delete(message.shooterId);
+      const plain=serializeServerMessage(message),batch=serializeServerMessage({type:'playersMoved',players:[sample]});
+      const combined=JSON.stringify({...message,move:[sample.player.id,sample.at,...POSE_FIELDS.map(key=>sample.player[key])]});
+      const plainBytes=wireBytes(plain),combinedBytes=wireBytes(combined),batchBytes=wireBytes(batch);
+      this.diagnostics.movementBatch('event',1);this.broadcasts++;
+      for(const ws of audience){
+        const a=this.getAttachment(ws);
+        if(a.batchMovement&&!a.tupleMovement)this.safeSend(ws,batch,'movementBatch',batchBytes);
+        if(a.playerId===exceptPlayerId)continue;
+        this.safeSend(ws,a.tupleMovement?combined:plain,undefined,a.tupleMovement?combinedBytes:plainBytes);
+      }
+      return;
+    }
+    // A shot needs its shooter's pose first. Lifecycle/correction broadcasts
+    // remain full barriers; unrelated poses can stay in the regular tick batch.
+    this.flushMovement('event', message.type === 'playerShot' ? message.shooterId : undefined);
     this.broadcastSerialized(serializeServerMessage(message), exceptPlayerId);
   }
 
-  private flushMovement(reason:'tick'|'event'='event'):void {
-    if(!this.pendingMovement.size)return;
-    const players=[...this.pendingMovement.values()];this.pendingMovement.clear();
+  private flushMovement(reason:'tick'|'event'='event', playerId?: string):void {
+    const players = playerId ? (this.pendingMovement.has(playerId) ? [this.pendingMovement.get(playerId)!] : []) : [...this.pendingMovement.values()];
+    if (!players.length) return;
+    for (const sample of players) this.pendingMovement.delete(sample.player.id);
     this.diagnostics.movementBatch(reason,players.length);
-    this.broadcastSerialized(serializeServerMessage({type:'playersMoved',players}),undefined,'batch');
+    const message: Extract<ServerMessage,{type:'playersMoved'}> = {type:'playersMoved',players};
+    this.broadcastSerialized(serializeServerMessage(message),undefined,'batch',serializeMovement(message),'movementBatch');
   }
 
-  private broadcastSerialized(payload: string, exceptPlayerId?: string, movementMode?:'individual'|'batch'): number {
+  private broadcastSerialized(payload: string, exceptPlayerId?: string, movementMode?:'individual'|'batch', tuple?: string, replaceKey?: string): number {
     let recipients = 0;
     this.broadcasts += 1;
-    for (const ws of this.ctx.getWebSockets()) {
+    const bytes=wireBytes(payload),tupleBytes=tuple?wireBytes(tuple):undefined;
+    for (const ws of this.recipients()) {
       const attachment = this.getAttachment(ws);
       if(movementMode==='batch'&&!attachment.batchMovement||movementMode==='individual'&&attachment.batchMovement)continue;
-      if (!attachment.playerId || attachment.receiveMode === 'welcome-only' || (exceptPlayerId && attachment.playerId === exceptPlayerId)) continue;
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(payload);
-        recipients++;
-      }
+      if (exceptPlayerId && attachment.playerId === exceptPlayerId) continue;
+      const useTuple=attachment.tupleMovement&&tuple;
+      if (this.safeSend(ws, useTuple ? tuple : payload, replaceKey, useTuple?tupleBytes:bytes)) recipients++;
     }
     return recipients;
   }
@@ -1233,6 +1324,7 @@ export class GameRoom extends DurableObject<Env> {
   private setAttachment(ws: WebSocket, attachment: SocketAttachment): void {
     ws.serializeAttachment(attachment);
     this.socketAttachments.set(ws, attachment);
+    this.audience = null;
   }
 
   private getPlayerId(ws: WebSocket): string | undefined {

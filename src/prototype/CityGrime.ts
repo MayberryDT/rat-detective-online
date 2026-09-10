@@ -87,6 +87,7 @@ export class CityGrime {
         for(const [key,matrices] of this.batches){
             const [shape,color]=key.split(':');const tone=Number(color);
             const material=new THREE.MeshStandardMaterial({color:tone,roughness:tone===0x253c31?.25:.95,metalness:shape==='round'?.25:0,emissive:tone,emissiveIntensity:.06});this.materials.push(material);
+            material.userData.streetSurface='obstacle';
             const mesh=new THREE.InstancedMesh(this.geometry[shape as keyof CityGrime['geometry']],material,matrices.length);
             matrices.forEach((m,i)=>mesh.setMatrixAt(i,m));mesh.computeBoundingSphere();mesh.receiveShadow=true;scene.add(mesh);this.meshes.push(mesh);
         }

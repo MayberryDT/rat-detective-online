@@ -16,6 +16,7 @@ export class ParkedVehicles {
         for(const group of this.groups.values()){
             const mat=new THREE.MeshStandardMaterial({color:group.color,roughness:.72,metalness:group.shape==='wheel'?.05:.25,emissive:group.emissive?group.color:0,emissiveIntensity:group.emissive?.6:0});
             this.materials.push(mat);
+            if(!group.emissive)mat.userData.streetSurface='obstacle';
             const mesh=new THREE.InstancedMesh(this.geometry[group.shape],mat,group.matrices.length);
             group.matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));
             mesh.computeBoundingSphere();mesh.castShadow=group.shape==='body';mesh.receiveShadow=true;

@@ -1,3 +1,4 @@
+import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
 import { createAssignment } from '../../src/shared/assignments';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,15 +18,10 @@ const appearance = {
   coatColor: 0xbe4545,
 };
 
-function parseEvent(event: MessageEvent): ServerMessage {
-  const raw = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data as ArrayBuffer);
-  return JSON.parse(raw) as ServerMessage;
-}
-
 function collect(ws: WebSocket) {
   const messages: ServerMessage[] = [];
   ws.addEventListener('message', (event) => {
-    messages.push(parseEvent(event as MessageEvent));
+    const message=readSocketMessage(ws,event.data);if(message)messages.push(message);
   });
   return {
     messages,
@@ -62,8 +58,8 @@ afterEach(async () => {
   openSockets.clear();
 });
 
-async function openClient(room: string, sharedFeed = false) {
-  const response = await SELF.fetch(`https://rat-detective.test/ws?room=${room}${sharedFeed ? '&receive=welcome-only' : ''}`, {
+async function openClient(room: string, sharedFeed = false, query = '') {
+  const response = await SELF.fetch(`https://rat-detective.test/ws?room=${room}${sharedFeed ? '&receive=welcome-only' : ''}${query}`, {
     headers: { Upgrade: 'websocket' },
   });
   expect(response.status).toBe(101);
@@ -79,6 +75,87 @@ function joinPayload(name: string, protocolVersion = PROTOCOL_VERSION) {
 }
 
 describe('GameRoom websockets', () => {
+  it('combines a pending shooter pose with its shot for the negotiated tuple audience',async()=>{
+    const room=`graybox-combined-${crypto.randomUUID()}`,observer=await openClient(room,false,'&chaos=compact-v2&movement=tuple-v1'),shooter=await openClient(room);
+    observer.ws.send(joinPayload('Observer'));const ow=await observer.inbox.waitFor('welcome');
+    shooter.ws.send(joinPayload('Shooter'));const sw=await shooter.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom,ctx)=>{
+      const socket=ctx.getWebSockets().find(ws=>(ws.deserializeAttachment() as {playerId:string}).playerId===ow.id)!;
+      const send=vi.spyOn(socket,'send');
+      try {
+        const game=instance as any;
+        game.handleMovement(sw.id,{type:'updateMovement',position:{x:20,y:2,z:-18},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}});
+        game.handleShoot(sw.id,{type:'shoot',shotId:'combined',origin:{x:20,y:3.4,z:-18},direction:{x:1,y:0,z:0}});
+        const messages=send.mock.calls.map(call=>JSON.parse(String(call[0])).message);
+        expect(messages).toHaveLength(1);expect(messages[0]).toMatchObject({type:'playerShot',shooterId:sw.id});
+        expect(messages[0].move[0]).toBe(sw.id);expect(messages[0].move[2]).toBe(20);
+      } finally {send.mockRestore();}
+    });
+    expect((await observer.inbox.waitFor('playerShot')).movement?.player.x).toBe(20);
+  });
+  it('isolates a throwing socket and persists a death before delivering it to healthy peers',async()=>{
+    const room=`failure-${crypto.randomUUID()}`,bad=await openClient(room),a=await openClient(room),b=await openClient(room);
+    bad.ws.send(joinPayload('Broken'));const badWelcome=await bad.inbox.waitFor('welcome');
+    a.ws.send(joinPayload('Shooter'));const aw=await a.inbox.waitFor('welcome');
+    b.ws.send(joinPayload('Victim'));const bw=await b.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom,ctx)=>{
+      const socket=ctx.getWebSockets().find(ws=>(ws.deserializeAttachment() as {playerId:string}).playerId===badWelcome.id)!;
+      const fail=vi.spyOn(socket,'send').mockImplementation(()=>{throw Error('Injected send failure');});
+      try {
+        await (instance as any).handleHit(aw.id,{type:'hit',victimId:bw.id,damage:3});
+        expect(ctx.storage.sql.exec<{count:number}>("SELECT COUNT(*) AS count FROM pending_events WHERE player_id = ? AND type = 'respawn'",bw.id).one().count).toBe(1);
+      } finally { fail.mockRestore(); }
+    });
+    expect((await a.inbox.waitFor('playerDamaged')).id).toBe(bw.id);
+    expect((await a.inbox.waitFor('playerDied')).victimId).toBe(bw.id);
+    await a.inbox.waitFor('scoreboardUpdate');
+  });
+
+  it('bounds malformed ingress and clears unjoined connection buckets on close',async()=>{
+    const room=`ingress-${crypto.randomUUID()}`,client=await openClient(room),stub=env.GAME_ROOM.getByName(room);
+    await runInDurableObject(stub,async(instance:GameRoom,ctx)=>{
+      const socket=ctx.getWebSockets()[0];
+      for(let i=0;i<100;i++)await instance.webSocketMessage(socket,'!');
+      await instance.webSocketClose(socket);
+      expect((instance as any).rateLimiter.size).toBe(0);
+    });
+    expect(client.inbox.messages.filter(m=>m.type==='error').length).toBeLessThanOrEqual(1);
+  });
+
+  it('persists Tampering death and respawn with no player kill or false kill feed attribution',async()=>{
+    const room=`graybox-case-death-${crypto.randomUUID()}`;
+    const observer=await openClient(room),victim=await openClient(room);
+    observer.ws.send(joinPayload('Observer'));const ow=await observer.inbox.waitFor('welcome');
+    victim.ws.send(joinPayload('Captain Crawley'));const vw=await victim.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom,ctx)=>{
+      const game=instance as any;
+      await game.handleHit(null,{type:'hit',victimId:vw.id,damage:3},{x:145,y:0,z:0});
+      expect(game.players.get(ow.id).kills).toBe(0);
+      expect(game.players.get(vw.id)).toMatchObject({hp:0,deaths:1,kills:0});
+      expect(game.chaos.snapshot(false).corpses.find((c:any)=>c.victimId===vw.id).owner).toBeNull();
+      expect(ctx.storage.sql.exec<{count:number}>("SELECT COUNT(*) AS count FROM pending_events WHERE player_id = ? AND type = 'respawn'",vw.id).one().count).toBe(1);
+    });
+    expect(await observer.inbox.waitFor('playerDamaged')).toMatchObject({id:vw.id,attackerId:null,cause:'evidence-tampering'});
+    expect(await observer.inbox.waitFor('playerDied')).toMatchObject({victimName:'Captain Crawley',killerId:null,killerName:null,cause:'evidence-tampering'});
+    const scores=await observer.inbox.waitFor('scoreboardUpdate',m=>m.scores.some(s=>s.id===vw.id&&s.deaths===1));
+    expect(scores.scores.every(s=>s.kills===0)).toBe(true);
+  });
+
+  it('bounds repeated incompatible joins, including join rate-limit replies',async()=>{
+    const room=`join-ingress-${crypto.randomUUID()}`,client=await openClient(room);
+    await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom,ctx)=>{
+      const socket=ctx.getWebSockets()[0],send=vi.spyOn(socket,'send');
+      const payload=JSON.stringify({...JSON.parse(joinPayload('Old client')),protocolVersion:PROTOCOL_VERSION-1});
+      for(let i=0;i<100;i++)await instance.webSocketMessage(socket,payload);
+      expect(send).toHaveBeenCalledTimes(1);
+      expect((instance as any).failedSockets.has(socket)).toBe(true);
+      send.mockRestore();
+      await instance.webSocketClose(socket);
+      expect((instance as any).rateLimiter.size).toBe(0);
+    });
+    client.ws.close(1000,'done');
+  });
+
   it('accepts bounded diagnostics on the joined local socket at most once per four seconds', async () => {
     const stub = env.GAME_ROOM.getByName(`diagnostics-${crypto.randomUUID()}`);
     const response = await stub.fetch('http://localhost/ws', {
@@ -139,6 +216,7 @@ describe('GameRoom websockets', () => {
     await human.inbox.waitFor('playerJoined');
     bot.ws.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }));
     await bot.inbox.waitFor('pong');
+    expect((await bot.inbox.waitFor('welcome')).id).toBe(welcome.id);
     expect(bot.inbox.messages).toEqual([]);
   });
 
@@ -208,7 +286,7 @@ describe('GameRoom websockets', () => {
     const first = await openClient(room);
     first.ws.send(joinPayload('Alpha'));
     const welcome = await first.inbox.waitFor('welcome');
-    await first.inbox.waitFor('currentPlayers');
+    expect(first.inbox.messages.some(m=>m.type==='currentPlayers')).toBe(false);
 
     expect(welcome.protocolVersion).toBe(PROTOCOL_VERSION);
     expect(welcome.world.version).toBe(WORLD_LAYOUT_VERSION);

@@ -1,10 +1,12 @@
 # Mobile controls
 
+September 10 desktop follow-up: the user has paused phone testing. The current 16-rat preview is desktop-only; the prior phone relays and links below are inactive. See [current preview](verification/sixteen-rat-tuning-2026-09-10.md).
+
 Implemented September 10, 2026. Landscape touch controls use the existing shoulder camera, animated muzzle, movement physics, assignment rules and server shooting checks. Desktop keyboard/mouse and held-Tab controls remain available.
 
-Mobile HUD refinement: assignment/top-five, incident and roulette/reveal cards are 30% smaller, with translucent dark surfaces and solid lettering. The incident time bar is visible, and the assignment card stays visible during roulette. Desktop presentation, full SCORES table and touch button sizes are unchanged. [Current Tailscale preview](http://100.79.24.11:5192/?room=graybox-benchmark-match-mobile-v18&lighting=pools&revision=mobile-aim-v21); [camera/layout verification](verification/mobile-hud-compact-2026-09-10.md).
+Mobile HUD refinement: assignment/top-five, incident and roulette/reveal cards are 30% smaller, with translucent dark surfaces and solid lettering. The incident time bar is visible, and the assignment card stays visible during roulette. Desktop presentation, full SCORES table and touch button sizes are unchanged. [Current Tailscale preview](http://100.79.24.11:5192/?room=graybox-benchmark-ai-full-lobby-v19&lighting=pools&revision=mobile-aim-v21); [camera/layout verification](verification/mobile-hud-compact-2026-09-10.md).
 
-September 10 firing fix: shot IDs support HTTP private-IP previews through a cryptographic UUID fallback. This fixes a reproduced exception that stopped animation during held FIRE while audio/SCORES continued. The new client is `index-C2eMX0ZR.js`; [retry on Tailscale](http://100.79.24.11:5192/?room=graybox-benchmark-match-mobile-v18&lighting=pools&revision=shot-fix-v19). See [investigation and 719-test verification](verification/mobile-firing-freeze-2026-09-10.md). Tyler subsequently confirmed the phone build works well.
+September 10 firing fix: shot IDs support HTTP private-IP previews through a cryptographic UUID fallback. This fixes a reproduced exception that stopped animation during held FIRE while audio/SCORES continued. The new client is `index-C2eMX0ZR.js`; [retry on Tailscale](http://100.79.24.11:5192/?room=graybox-benchmark-ai-full-lobby-v19&lighting=pools&revision=shot-fix-v19). See [investigation and 719-test verification](verification/mobile-firing-freeze-2026-09-10.md). Tyler subsequently confirmed the phone build works well.
 
 ## Controls and presentation
 
@@ -29,11 +31,11 @@ The shared `SHOOT_RATE` declaration moved to `shared/shotTiming.ts` and is re-ex
 
 ## Private phone preview
 
-- [Tailscale](http://100.79.24.11:5192/?room=graybox-benchmark-match-mobile-v18&lighting=pools): phone must have Tailscale connected.
-- [Wi-Fi](http://10.129.181.26:5191/?room=graybox-benchmark-match-mobile-v18&lighting=pools): phone must reach this computer on the same Wi-Fi network.
-- [Desktop](http://127.0.0.1:5190/?room=graybox-benchmark-match-mobile-v18&diagnostics=quiet&lighting=pools).
+- [Tailscale](http://100.79.24.11:5192/?room=graybox-benchmark-ai-full-lobby-v19&lighting=pools): phone must have Tailscale connected.
+- [Wi-Fi](http://10.129.181.26:5191/?room=graybox-benchmark-ai-full-lobby-v19&lighting=pools): phone must reach this computer on the same Wi-Fi network.
+- [Desktop](http://127.0.0.1:5190/?room=graybox-benchmark-ai-full-lobby-v19&diagnostics=quiet&lighting=pools).
 
-The three links join the same private automatic pool. Renewed backend expiry is **September 10, 2026, 12:25 PM Pacific**, private Worker `1c91db50-d6d7-44aa-856a-364beca8aa6c`. The original renewal used `2e94e83`; the relays now serve the mobile aim/card follow-up, compact HUD and firing fix described above. Initial renewal receipts are under `output/mobile-preview-renewal-2026-09-10T15-25-11Z/`, with current client receipts under `output/mobile-aim-card-2026-09-10/`. See [implementation verification](verification/mobile-controls-2026-09-10.md) for the original checks. These are private preview addresses, not a production release.
+The three links now join the same full private room: 24 bots before joining, 23 bots plus the first human, with vacancy refill after ten seconds. Protocol **6**, private Worker `ca922117-7fc4-4a97-a603-5a54f44e3787`, frozen client `index-7qTByXE_.js`, expiry **September 10, 2026, 2:57 PM Pacific**. See [full-lobby readiness and replacement checks](verification/full-lobby-preview-2026-09-10.md). The earlier protocol-5 mobile preview was superseded. The original renewal used `2e94e83`; the relays now serve the mobile aim/card follow-up, compact HUD and firing fix described above. Initial renewal receipts are under `output/mobile-preview-renewal-2026-09-10T15-25-11Z/`, with earlier client receipts under `output/mobile-aim-card-2026-09-10/`. See [implementation verification](verification/mobile-controls-2026-09-10.md) for the original checks. These are private preview addresses, not a production release.
 
 Initial renewal checks (before the firing fix): all 122 recorded source hashes and 45 frozen client files matched. Each route served exact HTML/JS/CSS and all 13 WAVs. Separate six-second passive sessions received eight rats, protocol 5 and zero invalid packets: desktop 157 snapshots, Wi-Fi 163, Tailscale 165. Halla independently reached the Tailscale relay. These are asset/protocol checks, not new phone gameplay or performance tests; unchanged application tests were not rerun.
 

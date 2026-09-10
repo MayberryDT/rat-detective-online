@@ -27,6 +27,7 @@ export class MatchScoreboard {
     private myId = '';
     private available = false;
     private signature = '';
+    private readonly renderedRows = new Map<string,{row:HTMLElement;signature:string}>();
     private columns = '';
     private disposed = false;
 
@@ -127,8 +128,13 @@ export class MatchScoreboard {
         // Stable snapshots must not churn the table or reset its scroll position.
         const signature = JSON.stringify([mode, view]);
         if (signature !== this.signature) {
-            this.signature = signature; this.body.replaceChildren();
-            view.forEach(p => {
+            this.signature = signature;
+            const active = new Set(view.map(p=>p.id));
+            for(const id of this.renderedRows.keys())if(!active.has(id))this.renderedRows.delete(id);
+            const ordered = view.map(p => {
+                const rowSignature=JSON.stringify([mode,p]);
+                const cached=this.renderedRows.get(p.id);
+                if(cached?.signature===rowSignature)return cached.row;
                 const row = this.doc.createElement('tr'); row.dataset.player = p.id;
                 row.dataset.local = String(p.local); row.dataset.carrier = String(p.holder); row.dataset.down = String(p.down);
                 p.cells.forEach((value, i) => {
@@ -143,8 +149,9 @@ export class MatchScoreboard {
                     else if ((i === 1 && (mode === 'excessive-force' || mode === 'chain-of-custody')) || (i === 4 && mode === 'closing-time')) cell.className = 'investigator-objective';
                     row.appendChild(cell);
                 });
-                this.body.appendChild(row);
+                this.renderedRows.set(p.id,{row,signature:rowSignature});return row;
             });
+            this.body.replaceChildren(...ordered);
         }
         const rank = rows.findIndex(p => p.id === this.myId) + 1;
         text(this.footer, `${rank ? `YOU #${rank} · ` : ''}${caseTime(totalHeld)} TOTAL CASE TIME`);
@@ -152,6 +159,6 @@ export class MatchScoreboard {
     }
     dispose(): void {
         if (this.disposed) return;
-        this.setVisible(false); this.disposed = true; this.players.clear(); this.root.remove();
+        this.setVisible(false); this.disposed = true; this.players.clear(); this.renderedRows.clear(); this.root.remove();
     }
 }

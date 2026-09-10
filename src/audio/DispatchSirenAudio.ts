@@ -1,8 +1,10 @@
+import {worldSoundGain} from './worldSoundGain';
+
 /** A short mechanical whoop from the nearest ready kiosk. One reusable buffer,
  * at most one voice, no autoplay/resume, no missed-cue backlog or citywide chorus. */
 export class DispatchSirenAudio {
     private buffer?:AudioBuffer;
-    private voice?:{source:AudioBufferSourceNode;gain:GainNode};
+    private voice?:{source:AudioBufferSourceNode;gain:GainNode;volume:number};
     private nextAt=0;
     private disposed=false;
     constructor(private readonly context?:AudioContext){}
@@ -11,7 +13,14 @@ export class DispatchSirenAudio {
         if(this.disposed||!ctx)return;
         if(!ready){this.nextAt=0;this.stop();return;}
         if(ctx.state!=='running'||!Number.isFinite(distance)||distance>=85){this.stop();return;}
-        if(this.voice||ctx.currentTime<this.nextAt)return;
+        const volume=.38*worldSoundGain(distance,Math.max(0,1-Math.max(0,distance-12)/73));
+        if(this.voice){
+            if(Math.abs(this.voice.volume-volume)>.0001){
+                this.voice.gain.gain.setTargetAtTime(volume,ctx.currentTime,.04);this.voice.volume=volume;
+            }
+            return;
+        }
+        if(ctx.currentTime<this.nextAt)return;
         if(!this.buffer){
             const duration=1.6;this.buffer=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*duration),ctx.sampleRate);
             const pcm=this.buffer.getChannelData(0);let phase=0;
@@ -24,9 +33,9 @@ export class DispatchSirenAudio {
             }
         }
         const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=this.buffer;
-        gain.gain.value=.38*Math.max(0,1-Math.max(0,distance-12)/73);
+        gain.gain.value=volume;
         source.connect(gain);gain.connect(ctx.destination);
-        const voice={source,gain};this.voice=voice;this.nextAt=ctx.currentTime+4;
+        const voice={source,gain,volume};this.voice=voice;this.nextAt=ctx.currentTime+4;
         source.onended=()=>{source.disconnect();gain.disconnect();if(this.voice===voice)this.voice=undefined;};
         try{source.start();}catch{this.stop();}
     }

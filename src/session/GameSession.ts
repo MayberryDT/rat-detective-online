@@ -14,6 +14,8 @@ import { generateRandomName } from '../shared/ratNames';
 import type { ClientMessage, ServerMessage } from '../shared/networkProtocol';
 import { NetworkManager } from '../network/NetworkManager';
 import { GameHud } from '../ui/GameHud';
+import { bindGameCredits } from '../ui/GameCredits';
+import { MunicipalQuips } from '../ui/municipalQuips';
 import { createStage } from './createStage';
 import { RemotePlayers } from './RemotePlayers';
 import { InputState } from './InputState';
@@ -34,6 +36,7 @@ export class GameSession {
     private readonly stage;
     private readonly transport = new NetworkManager();
     private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue),(...args)=>this.foley?.play(...args));
+    private readonly deathQuips = new MunicipalQuips();
     private readonly scoreboard = new MatchScoreboard();
     private readonly input = new InputState();
     private readonly events = new AbortController();
@@ -58,7 +61,7 @@ export class GameSession {
     private disposed = false;
     private serverOffset = 0;
     private lastMovementAt = 0;
-    private lastMovement = '';
+    private lastMovement: number[] = [];
     private assignedName = '';
     private nameRollTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly simulation = new SimulationClock();
@@ -76,6 +79,7 @@ export class GameSession {
         const { scene, world, listener } = this.stage;
         initEntitySounds(listener);
         this.music = new SessionMusic(listener);
+        this.music.start();
         this.feedback = new FeedbackAudio(listener);
         this.foley=new FoleyAudio(listener);
         this.foley.setEnabled(false);
@@ -94,7 +98,7 @@ export class GameSession {
             this.hud.setConnection(state, message);
             this.scoreboard.setAvailable(state === 'playing');
             this.touch?.setPlaying(state === 'playing');
-            if (state === 'playing') { this.hud.enterPlaying(); this.music.start(); }
+            if (state === 'playing') this.hud.enterPlaying();
         };
         this.gun.onHitEntity = (victim, damage) => {
             const victimId = this.remotes.idFor(victim);
@@ -193,6 +197,7 @@ export class GameSession {
     private pointerLock!: ReturnType<typeof bindGamePointerLock>;
     private bindInput(): void {
         const options = { signal: this.events.signal };
+        const credits=bindGameCredits(this.events.signal);
         const enter = document.getElementById('enter-city-btn') as HTMLButtonElement;
         const reroll = document.getElementById('reroll-name-btn') as HTMLButtonElement;
         this.stage.renderer.domElement.tabIndex = -1;
@@ -208,6 +213,7 @@ export class GameSession {
         }, options);
         document.addEventListener('keydown', event => {
             if (event.key !== 'Enter' && event.code !== 'Enter') return;
+            if (credits.isLink(event.target)) return;
             if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
             event.preventDefault();
             this.enterCity();
@@ -217,6 +223,7 @@ export class GameSession {
             scores:visible=>this.scoreboard.setVisible(visible),clearKeys:()=>this.input.clear()});
         this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
             playing:()=>this.transport.state==='playing',enabled:()=>!this.touch?.active,signal:this.events.signal,
+            allowUnlockedClick:credits.allowUnlockedClick,
             record:(type,detail)=>this.stats?.event(type,detail)});
         bindScoreboardHold({available:()=>this.transport.state==='playing',
             show:visible=>this.scoreboard.setVisible(visible),scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
@@ -225,9 +232,13 @@ export class GameSession {
             this.foleyWorld.setEnabled(!document.hidden&&this.transport.state==='playing');
             if (!document.hidden) this.focusTitleControls();
         }, options);
-        document.addEventListener('pointerdown', () => {
-            void this.music.unlock();
-        }, {...options,capture:true});
+        // Autoplay can wait for permission. Retry on mouse, touch completion and
+        // keyboard activation without requiring the player to leave the title.
+        for (const type of ['pointerdown', 'pointerup', 'click', 'keydown']) {
+            document.addEventListener(type, () => {
+                void this.music.unlock();
+            }, {...options,capture:true});
+        }
         document.addEventListener('mousemove', event => {
             if (!this.touch?.active && this.transport.state === 'playing' && document.pointerLockElement === this.stage.renderer.domElement) {
                 this.rat?.onMouseMove(event.movementX, event.movementY);
@@ -296,7 +307,7 @@ export class GameSession {
         this.hud.hideVictory();
         if (player.hp <= 0 && player.respawnAt) this.hud.showRespawn(player.respawnAt - this.serverOffset);
         if (message.round.phase === 'won') {this.hud.hideRespawn();this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0,message.round.assignment);}
-        this.lastMovement = '';
+        this.lastMovement = [];
         this.lastMovementAt = 0;
         if(normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
             this.bots=new NormalGameBots(this.worldSpec,message.players,{muzzle:(id,position,facing)=>{
@@ -331,7 +342,7 @@ export class GameSession {
                     this.clearInput();
                     this.rat.syncAfterPhysics(0);
                     this.rat.resetGrounding();
-                    this.lastMovement = '';
+                    this.lastMovement = [];
                 } else this.remotes.move(pose, message.at);
                 break;
             }
@@ -357,7 +368,7 @@ export class GameSession {
             }
             case 'playerDied': {
                 const entity = message.victimId === this.myId ? this.rat?.entity : this.remotes.get(message.victimId);
-                const killer = message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
+                const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
                 if (entity && !entity.dead) {
                     if(message.incident){entity.useSharedCorpse();}
                     else {
@@ -371,7 +382,9 @@ export class GameSession {
                     this.stats?.event('death',{respawnAt:message.respawnAt-this.serverOffset,incident:message.incident});
                     this.hud.showRespawn(message.respawnAt - this.serverOffset);
                 }
-                this.hud.addKillFeed(`${message.killerName} eliminated ${message.victimName}`);
+                this.hud.addKillFeed(message.cause==='evidence-tampering'
+                    ? this.deathQuips.caseDeath(message.victimName)
+                    : `${message.killerName} eliminated ${message.victimName}`);
                 break;
             }
             case 'playerRespawn':
@@ -391,11 +404,11 @@ export class GameSession {
         if (!this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0 || now - this.lastMovementAt < 50) return;
         const { position: p, quaternion: q } = this.rat.entity.body;
         const mq = this.rat.entity.mesh.quaternion;
+        const pose=[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w];
+        if (pose.every((value,i)=>value===this.lastMovement[i]) && now-this.lastMovementAt<1_000) return;
         const message: ClientMessage = { type: 'updateMovement', position: { x: p.x, y: p.y, z: p.z },
             rotation: { x: q.x, y: q.y, z: q.z, w: q.w }, meshRotation: { x: mq.x, y: mq.y, z: mq.z, w: mq.w } };
-        const serialized = JSON.stringify(message);
-        if (serialized === this.lastMovement && now - this.lastMovementAt < 1_000) return;
-        if (this.transport.send(message)) { this.lastMovement = serialized; this.lastMovementAt = now; }
+        if (this.transport.send(message)) { this.lastMovement = pose; this.lastMovementAt = now; }
     }
 
     private animate(now: number): void {

@@ -1,0 +1,11 @@
+.game-credit{font:11px/1.5 'Outfit',Arial,sans-serif;color:#93839e;letter-spacing:.15px;pointer-events:none;user-select:none}
+.game-credit a{color:inherit;text-decoration:none;pointer-events:auto;cursor:pointer;touch-action:manipulation}
+.game-credit a:hover{color:#c9bccb;text-decoration:underline;text-underline-offset:3px}
+.game-credit a:focus-visible{color:#decfd9;outline:1px solid #ad94ba;outline-offset:4px;border-radius:1px}
+.game-credit a[aria-disabled="true"],#title-screen.fade-out .game-credit a{pointer-events:none;cursor:default}
+#creator-credit{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:101;text-shadow:0 1px 3px #100919;white-space:nowrap}
+.music-credit{position:absolute;left:max(16px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));margin:0;max-width:calc(100% - 200px);text-align:left}
+body:not(.touch-mode) #hud{max-width:calc(100vw - 235px)}
+.touch-mode #title-screen.fade-out ~ #creator-credit{display:none}
+@media(max-width:900px),(max-height:500px){#title-screen.fade-out ~ #creator-credit{display:none}body:not(.touch-mode) #hud{max-width:calc(100vw - 36px)}}
+@media(max-height:500px){.music-credit,#creator-credit{bottom:max(9px,env(safe-area-inset-bottom));font-size:10px}}

@@ -1,6 +1,8 @@
 # Network and movement smoothness
 
-Current guidance, **2026-09-08**. The [September 7 investigation](verification/network-history-2026-09-07.md) contains dated measurements and a local mitigation that subsequently failed.
+Current guidance, **2026-09-10**. The [September 7 investigation](verification/network-history-2026-09-07.md) contains dated measurements and a local mitigation that subsequently failed.
+
+September 10 source follow-up: protocol 6 bounds the entire joined connection, shares immutable snapshot encoding work, uses lossless movement tuples and applies a shot's pending pose from the same packet before displaying the shot. Cumulative delivery ACKs piggyback on input with a 33 ms fallback; source defaults to eight outstanding chaos snapshots. Large logical snapshots use bounded atomic fragmentation. Interpolation, animation, physics and gameplay cadence remain unchanged. [Implementation and local measurements](verification/network-fixes-2026-09-10.md) include 24 full-feed clients and all ten incidents; no hosted/rendering capacity increase is certified. Existing frozen previews remain on their recorded builds.
 
 ## Local implementation follow-up (not deployed)
 

@@ -2,7 +2,7 @@ import type { ChaosState } from './chaosState';
 import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 7;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
@@ -10,7 +10,7 @@ export const WIN_DISPLAY_MS = 6_000;
 export const DEFAULT_ROOM_NAME = 'public-live-v2';
 /** Wire-format ceiling for private capacity experiments; not an admission limit. */
 export const MAX_SCORE_ENTRIES = 100;
-export const MAX_PLAYERS = 24;
+export const MAX_PLAYERS = 16;
 /** Open sockets allowed, including clients that have not finished joining. */
 export const MAX_CONNECTIONS = MAX_PLAYERS + 8;
 export const MAX_MESSAGE_BYTES = 8_192;
@@ -105,14 +105,16 @@ export interface ShotDescriptor {
   direction: Vec3Data;
 }
 
-export type ClientMessage =
+export type ClientMessage = (
   | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance }
   | { type: 'updateMovement'; position: Vec3Data; rotation: QuatData; meshRotation: QuatData }
   | { type: 'shoot'; shotId: string; origin: Vec3Data; direction: Vec3Data }
   | { type: 'hit'; victimId: string; damage: number }
   | { type: 'chaosAck'; stream: string; seq: number }
+  | { type: 'deliveryAck'; stream: string; seq: number }
   | { type: 'ping'; sentAt: number }
-  | { type: 'diagnostics'; report: Record<string, unknown> };
+  | { type: 'diagnostics'; report: Record<string, unknown> }
+) & { deliveryAck?: {stream:string;seq:number} };
 
 export type ServerMessage =
   | { type: 'chaos'; state: ChaosState }
@@ -147,13 +149,14 @@ export type ServerMessage =
         'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'
       >;
     }
-  | { type: 'playerShot'; shooterId: string; shotId: string; origin: Vec3Data; direction: Vec3Data }
-  | { type: 'playerDamaged'; id: string; hp: number; attackerId: string }
+  | { type: 'playerShot'; shooterId: string; shotId: string; origin: Vec3Data; direction: Vec3Data; movement?:MovementSample }
+  | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: 'evidence-tampering' }
   | {
       type: 'playerDied';
       victimId: string;
-      killerId: string;
-      killerName: string;
+      killerId: string | null;
+      killerName: string | null;
+      cause?: 'evidence-tampering';
       victimName: string;
       respawnAt: number;
       incoming?: Vec3Data;

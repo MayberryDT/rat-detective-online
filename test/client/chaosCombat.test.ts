@@ -102,6 +102,15 @@ describe('shared physical death chaos',()=>{
   expect(hits.filter(h=>h.victim===other.id)).toHaveLength(1);
   expect(hits.some(h=>h.victim===shooter.id||h.victim===victim.id)).toBe(false);
  });
+ it('keeps environmental corpse collisions uncredited after snapshot restore',()=>{
+  vi.spyOn(Date,'now').mockReturnValue(1000);
+  const {sim,victim,other,players}=fixture();victim.hp=0;other.x=1;
+  sim.death(victim,{x:1,y:0,z:0},null);corpseBody(sim).velocity.set(95,0,0);
+  const saved=sim.snapshot(false),hits:ChaosHit[]=[];
+  const restored=new ChaosSimulation(players,h=>hits.push(h),saved);
+  restored.step(1/60,1017);
+  expect(hits).toContainEqual(expect.objectContaining({victim:other.id,owner:null}));
+ });
  it('bounces a fast corpse off a thin wall instead of tunneling',()=>{
   const {sim,victim}=fixture();victim.hp=0;sim.death(victim,{x:1,y:0,z:0},'shooter');
   const body=corpseBody(sim);body.velocity.set(95,0,0);

@@ -1,4 +1,4 @@
-import type {ScoreEntry} from '../shared/networkProtocol';
+import type {ScoreEntry,Vec3Data} from '../shared/networkProtocol';
 import type {ChaosState} from '../shared/chaosState';
 import {CHAOS_TUNING} from '../shared/chaosState';
 import {INCIDENTS,incidentInfo} from '../shared/incidentCatalog';
@@ -64,7 +64,7 @@ export class DispatchHud {
     private destinationLabel:HTMLElement;
     private rankingSignature='';
     setScores(scores:readonly ScoreEntry[], myId:string):void {this.scores=scores;this.myId=myId;}
-    constructor(private sound:(frequency:number)=>void,private feedback?:(cue:FeedbackCue)=>void){
+    constructor(private sound:(frequency:number)=>void,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
         this.root.className='dispatch-hud';
         this.root.innerHTML=`<div class="dispatch-ledger"><div class="dispatch-alert-label"></div><div class="dispatch-status-row"><div class="dispatch-artwork" aria-hidden="true"></div><strong class="dispatch-status"></strong></div><p class="dispatch-brief"></p><div class="dispatch-clock"><small class="dispatch-next"></small><span class="dispatch-timer"></span></div><div class="dispatch-time-track"><div></div></div><div class="case-ledger"><strong></strong><small></small></div></div><div class="case-broadcast" hidden aria-live="polite"><small>HOT CASE</small><strong></strong><span></span></div><div class="dispatch-roulette" hidden><div class="roulette-heading"><span>! DISPATCH !</span><b>SELECTING INCIDENT</b></div><div class="roulette-window"><div class="roulette-strip"></div><i class="roulette-pointer">▶</i></div><div class="roulette-stamp">CITYWIDE EMERGENCY!</div><p class="roulette-description"></p><div class="roulette-footer">DEPARTMENT OF BAD IDEAS <span>● LIVE</span></div></div>`;
         this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><strong></strong><p></p><span></span></div>`;
@@ -112,7 +112,7 @@ export class DispatchHud {
             if(initialized&&!deliveryRespawn){
                 if(wasLocal&&!ownerIsLocal)this.feedback?.('case-lost');
                 else if(ownerIsLocal)this.feedback?.('case-pickup');
-                else this.feedback?.(state.case.owner?'case-taken':'case-drop');
+                else this.feedback?.(state.case.owner?'case-taken':'case-drop',state.case.p);
             }
             this.previousLocal=ownerIsLocal;
             this.previousOwner=state.case.owner;this.announceUntil=now+2800;

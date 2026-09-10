@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
-import {GunshotAudio,gunshotGain} from '../../src/audio/GunshotAudio';
+import {GunshotAudio,gunshotGain,GUNSHOT_VOLUME} from '../../src/audio/GunshotAudio';
 const state=vi.hoisted(()=>({loads:[] as Array<(buffer:AudioBuffer)=>void>,sounds:[] as any[]}));
 vi.mock('three',async original=>{
  const real=await original<typeof import('three')>();
@@ -23,20 +23,22 @@ function fixture(){
  state.loads.slice(-1).forEach(load=>load({} as AudioBuffer));
  return {audio,ear,context};
 }
-it('only softens the global mix a little, with an 80% floor across the map',()=>{
- expect(gunshotGain(0)).toBe(1);expect(gunshotGain(10)).toBe(1);
- expect(gunshotGain(50)).toBeCloseTo(.9666667);
- expect(gunshotGain(100)).toBeCloseTo(.925);expect(gunshotGain(130)).toBeCloseTo(.9);
- expect(gunshotGain(250)).toBe(.8);expect(gunshotGain(500)).toBe(.8);
- for(let d=11;d<550;d++)expect(gunshotGain(d)).toBeLessThanOrEqual(gunshotGain(d-1));
- expect(gunshotGain(NaN)).toBe(0);
+it('raises distance-faded shots by 50% with the nearby ceiling and cross-city fade intact',()=>{
+ expect(gunshotGain(0)).toBe(1);expect(gunshotGain(8)).toBe(1);
+ expect(gunshotGain(20)).toBe(1);expect(gunshotGain(25)).toBeGreaterThan(.99);
+ expect(gunshotGain(50)).toBeCloseTo(.3714923,5);
+ expect(gunshotGain(100)).toBeLessThan(.105);expect(gunshotGain(100)).toBeGreaterThan(.095);
+ expect(gunshotGain(250)).toBeLessThan(.018);expect(gunshotGain(250)).toBeGreaterThan(.017);
+ expect(gunshotGain(500)).toBeLessThan(.0075);expect(gunshotGain(500)).toBeGreaterThan(.006);
+ for(let d=9;d<550;d++)expect(gunshotGain(d)).toBeLessThanOrEqual(gunshotGain(d-1));
+ expect(gunshotGain(NaN)).toBe(0);expect(GUNSHOT_VOLUME).toBe(.3);
 });
 it('uses the listener and shot origin for remote normal and malfunction volume, preserving local volume',()=>{
  const {audio,ear}=fixture();ear.set(100,2,0);
  audio.play({x:100,y:2,z:0},false,'normal');audio.play({x:125,y:2,z:0},false,'normal');
  audio.play({x:125,y:2,z:0},false,'malfunction');audio.play({x:500,y:2,z:0},true,'normal');
- expect(state.sounds[0].volume).toBe(.4);expect(state.sounds[1].volume).toBeCloseTo(.4*gunshotGain(25));
- expect(state.sounds[2].volume).toBeCloseTo(.4*gunshotGain(25));expect(state.sounds[3].volume).toBe(.4);
+ expect(state.sounds[0].volume).toBe(GUNSHOT_VOLUME);expect(state.sounds[1].volume).toBeCloseTo(GUNSHOT_VOLUME*gunshotGain(25));
+ expect(state.sounds[2].volume).toBeCloseTo(GUNSHOT_VOLUME*gunshotGain(25));expect(state.sounds[3].volume).toBe(GUNSHOT_VOLUME);
  expect(state.sounds[2].buffer).toBe(state.sounds[0].buffer);
  expect(state.sounds[2].setPlaybackRate).toHaveBeenLastCalledWith(1.45);
  expect(state.sounds[3].setPlaybackRate).toHaveBeenLastCalledWith(1);

@@ -62,9 +62,11 @@ Use `npm run deploy:production` or `npm run deploy:staging` only within release 
 
 Local dev state directories remain `.wrangler/state/dev` and `.wrangler/state/preview`; CI uses a temporary directory. Do not delete any durable state or service configuration as incidental setup.
 
-## Current 24-rat full-game preview
+## Current 16-rat full-game preview
 
-For the user’s private full-game playtest, build then prepare with `node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=23 --cap=24`. Start `scripts/preview-capacity.mjs` with the returned absolute deployment receipt, port 5180 and room `graybox-benchmark-ai-human-twentyfour`. This copied fixture enforces 24 total rats and currently reserves 23 AI slots; dynamic human replacement is not implemented. The relay closes at the receipt expiry. Normal benchmarks retain a default cap of 100; neither setting changes public production.
+September 10 current setup: `node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=16 --cap=16 --full-lobby`, then start the relay with the resulting receipt and `--room=graybox-benchmark-ai-sixteen-v20`. This explicit private option starts all 16 bots before humans arrive, uses existing bot replacement on human join, refills after ten seconds and stays active until expiry. It changes only the copied Worker. [Current desktop link and verified roster transitions](verification/sixteen-rat-tuning-2026-09-10.md). The fixed-23 and eight-rat automatic-room instructions below are alternative/historical configurations.
+
+Historical fixed-bot alternative: build then prepare with `node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=23 --cap=24`. Start `scripts/preview-capacity.mjs` with the returned absolute deployment receipt, port 5180 and room `graybox-benchmark-ai-human-twentyfour`. This copied fixture enforces 24 total rats and currently reserves 23 AI slots; dynamic human replacement is not implemented. The relay closes at the receipt expiry. Normal benchmarks retain a default cap of 100; neither setting changes public production.
 
 ## Automatic-room preview (supersedes the fixed roster above)
 
@@ -76,4 +78,4 @@ All Worker configs include the additive `v2-matchmaking` migration and `MATCHMAK
 
 ## Phone preview (September 10 follow-up)
 
-The current phone preview uses explicit private-interface relays on Wi-Fi port 5191 and Tailscale port 5192; the desktop relay stays loopback on 5190. All use the same frozen build, private Worker and expiry. [Mobile controls](mobile-controls.md) records current links and checks. `scripts/preview-capacity.mjs` accepts `--listen-address` and `--browser-origin`; non-loopback binding requires an exact matching private IPv4 origin. Default binding remains loopback. Public/wildcard interfaces and unrelated WebSocket origins are rejected. HTTPS reverse-proxy origins are optional; they do not configure Tailscale or grant administrator access. No token value is placed in a browser URL.
+The user currently tests on desktop only; the latest relay stays loopback on 5190 and the old phone relays are stopped. Earlier phone previews used explicit private-interface relays on Wi-Fi port 5191 and Tailscale port 5192 with the same frozen build, private Worker and expiry. [Mobile controls](mobile-controls.md) records current links and checks. `scripts/preview-capacity.mjs` accepts `--listen-address` and `--browser-origin`; non-loopback binding requires an exact matching private IPv4 origin. Default binding remains loopback. Public/wildcard interfaces and unrelated WebSocket origins are rejected. HTTPS reverse-proxy origins are optional; they do not configure Tailscale or grant administrator access. No token value is placed in a browser URL.

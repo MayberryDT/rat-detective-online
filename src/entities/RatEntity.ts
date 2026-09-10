@@ -99,7 +99,7 @@ export class RatEntity {
         this.deathContactTime = this.deathTimer;
         this.deathContacts++;
         this.deathImpact = Math.min(speed / 12, 1);
-        playEntitySound('ratHit', Math.min(0.25 + speed * 0.025, 0.65), this.isPlayer ? undefined : this.body.position);
+        playEntitySound('ratHit', Math.min(0.25 + speed * 0.025, 0.65), this.body.position);
     };
 
     constructor(

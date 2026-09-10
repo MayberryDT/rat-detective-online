@@ -32,12 +32,12 @@ export function summarize(items) {
 export function phaseHealthy(m) {
   return m.gaps.count>0&&m.gaps.p95<=100&&m.gaps.p99<=250&&m.gaps.max<1000&&m.maxSilence<1000&&m.loop.count>0&&m.loop.p99<=25&&m.invalid===0&&m.errors===0&&m.disconnects===0&&m.skipped===0;
 }
-function stats() { return { gaps: new Metric(), serverGaps: new Metric(), worstGaps: [], ages: new Metric(), rtts: new Metric(), echoRtts: new Metric(), decodeMs: new Metric(), pongAges: new Metric(), moveAges: new Metric(), loop: new Metric(), bytes: 0, wireBytesByType: {}, messages: 0, invalid: 0, errors: 0, disconnects: 0, sentMoves: 0, sentShots: 0, shotEvents: 0, deaths: 0, respawns: 0, peakBalls: 0, maxBuffered: 0, maxSilence: 0, skipped: 0, shotSamples: 0, oldShots: 0, wireSamples:0, sampledWireBytes:0, sampledLegacyBytes:0,coalescedSnapshots:0,maxInFlight:0 }; }
+function stats() { return { gaps: new Metric(), serverGaps: new Metric(), worstGaps: [], ages: new Metric(), rtts: new Metric(), echoRtts: new Metric(), decodeMs: new Metric(), pongAges: new Metric(), moveAges: new Metric(), loop: new Metric(), bytes: 0, wireBytesByType: {}, messages: 0, invalid: 0, errors: 0, disconnects: 0, sentMoves: 0, sentShots: 0, shotEvents: 0, deaths: 0, respawns: 0, peakBalls: 0, maxBuffered: 0, maxSilence: 0, skipped: 0, shotSamples: 0, oldShots: 0, wireSamples:0, sampledWireBytes:0, sampledLegacyBytes:0,incidentsSeen:{},tamperingSnapshots:0,missingCaseSnapshots:0,coalescedSnapshots:0,maxInFlight:0 }; }
 async function clients() {
-  const { parseServerMessage, CHAOS_WIRE_MODE, ChaosDecoder, SnapshotBuffer, BotSnapshotBuffer, ApprovedSnapshotBuffer } = await import(pathToFileURL(workerData.validator));
+  const { parseServerMessage, CHAOS_WIRE_MODE, DeliveryDecoder, PROTOCOL_VERSION, TOUCH_SHOT_INTERVAL_MS, INCIDENTS, SnapshotBuffer, BotSnapshotBuffer, ApprovedSnapshotBuffer } = await import(pathToFileURL(workerData.validator));
   const url = new URL(workerData.url);
   validateClientTarget(url, workerData.token);
-  if(workerData.transport!=='legacy'){url.searchParams.set('chaos',workerData.transport==='compact-v1'?'compact-v1':CHAOS_WIRE_MODE??'compact-v1');url.searchParams.set('movement','batch-v1');}
+  if(workerData.transport!=='legacy'){url.searchParams.set('chaos',workerData.transport==='compact-v1'?'compact-v1':CHAOS_WIRE_MODE??'compact-v1');url.searchParams.set('movement','tuple-v1');}
   const Socket=(workerData.latency||workerData.jitter)?class extends DelayedSocket{constructor(url,options){super(url,options,{latency:workerData.latency,jitter:workerData.jitter,seed:workerData.offset+1});}}:WebSocket;
   const all = []; let churnOne; let phase = 'joining', active = stats(), stopping = false;
   const loop = monitorEventLoopDelay({ resolution: 10 }); loop.enable();
@@ -55,6 +55,7 @@ async function clients() {
   const probes=[playback,control,candidate,noScaleCandidate,reserveCandidate,adaptiveCandidate,receiptCandidate,anchoredCandidate,deliveryCandidate,fullReserve].filter(Boolean);
   const presentationTimer=setInterval(()=>{if(all[0]&&!all[0].intentionalClose&&all[0].ws.readyState===WebSocket.OPEN){const now=receiverNow();for(const probe of probes)probe.sample(now,all[0].players);}},1000/60);
   const appearance = { hatType: 'fedora', hatColor: 1, furColor: 2, coatColor: 3 };
+  function sendClient(c,message){const ack=c.pendingAck;c.ws.send(JSON.stringify(ack&&message.type!=='deliveryAck'?{...message,deliveryAck:{stream:ack.stream,seq:ack.seq}}:message));if(ack){c.pendingAck=null;clearTimeout(c.ackTimer);c.ackTimer=null;}}
   const tick = setInterval(() => {
     if (phase === 'joining') return;
     const now = receiverNow(), t = (performance.now()-start)/1000;
@@ -62,26 +63,27 @@ async function clients() {
       if (!c.id || c.ws.readyState !== WebSocket.OPEN) continue;
       active.maxBuffered = Math.max(active.maxBuffered,c.ws.bufferedAmount);
       if(c.ws.bufferedAmount>65536){active.skipped++;continue;}
-      if (now-c.pingAt>=1000) { c.pingAt=now; c.ws.send(JSON.stringify({type:'ping',sentAt:now})); if(workerData.token)c.ws.send(JSON.stringify({type:'benchmarkEcho',sentAt:now})); }
+      if (now-c.pingAt>=1000) { c.pingAt=now; sendClient(c,{type:'ping',sentAt:now}); if(workerData.token)sendClient(c,{type:'benchmarkEcho',sentAt:now}); }
       const p = c.players.get(c.id); if (!p || p.hp<=0 || !c.playing) continue;
       const period = phase==='idle' ? 1000 : 50;
       const theta=t*2+c.index;
       const base=workerData.layout==='clustered'?{x:-10+(c.index%5)*1.5,y:2,z:-27+Math.floor(c.index/5)*.7}:c.base;
       const position = phase==='idle' ? {...base} : {x:base.x+Math.sin(theta)*.4,y:base.y,z:base.z+Math.cos(theta)*.4};
-      if(now-c.moveAt>=period){c.moveAt=now;c.position=position;active.sentMoves++;c.ws.send(JSON.stringify({type:'updateMovement',position,rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:Math.sin(theta/2),z:0,w:Math.cos(theta/2)}}));}
+      if(now-c.moveAt>=period){c.moveAt=now;c.position=position;active.sentMoves++;sendClient(c,{type:'updateMovement',position,rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:Math.sin(theta/2),z:0,w:Math.cos(theta/2)}});}
       const shooting=phase==='combat'||phase==='incident';
-      if(shooting&&now-c.shotAt>=(phase==='incident'?500:1200)) {
+      if(shooting&&now-c.shotAt>=TOUCH_SHOT_INTERVAL_MS) {
         c.shotAt=now;let nearest,nearestD=Infinity;
         for(const other of c.players.values())if(other.id!==c.id&&other.hp>0){const d=Math.hypot(other.x-position.x,other.z-position.z);if(d<nearestD){nearest=other;nearestD=d;}}
         const origin={...position,y:position.y+1.45};
         const target=nearest?{x:nearest.x-origin.x,y:nearest.y+.9-origin.y,z:nearest.z-origin.z}:{x:Math.sin(theta),y:0,z:Math.cos(theta)};
         const length=Math.hypot(target.x,target.y,target.z)||1;
-        active.sentShots++;c.ws.send(JSON.stringify({type:'shoot',shotId:randomUUID(),origin,direction:{x:target.x/length,y:target.y/length,z:target.z/length}}));
+        active.sentShots++;sendClient(c,{type:'shoot',shotId:randomUUID(),origin,direction:{x:target.x/length,y:target.y/length,z:target.z/length}});
       }
     }
   },5);
   const meter=setInterval(()=>{active.loop.add(loop.percentile(99)/1e6);loop.reset();for(const c of all)if(c.id&&!c.intentionalClose)active.maxSilence=Math.max(active.maxSilence,receiverNow()-c.lastObservedChaos);},1000);
-  function controlIncident(){if(workerData.first)all[0]?.ws.send('{"type":"benchmarkIncident","incident":"scattershot"}');}
+  let incidentIndex=0;
+  function controlIncident(){if(workerData.first)all[0]?.ws.send(JSON.stringify({type:'benchmarkIncident',incident:INCIDENTS[incidentIndex++%INCIDENTS.length].id}));}
   let incidentTimer;
   parentPort.on('message', async command => {
     if(command.type==='churn'){
@@ -89,7 +91,7 @@ async function clients() {
     } else if(command.type==='phase') {
       phase=command.phase;active=stats();probes.forEach(p=>p.resetMetrics());loop.reset();all.forEach(c=>{c.lastChaos=0;c.lastServerChaos=0;});
       clearInterval(incidentTimer);
-      if(phase==='incident'){controlIncident();incidentTimer=setInterval(controlIncident,24000);}
+      if(phase==='incident'){controlIncident();incidentTimer=setInterval(controlIncident,25000);}
       parentPort.postMessage({type:'phaseReady',phase});
     } else if(command.type==='report') {
       for(const c of all)if(c.id&&!c.intentionalClose)active.maxSilence=Math.max(active.maxSilence,receiverNow()-c.lastObservedChaos);
@@ -112,13 +114,14 @@ async function clients() {
       parentPort.postMessage({type:'stopped'});parentPort.close();
     }
   });
+  function queueAck(c,ack){c.pendingAck=ack;if(!c.ackTimer)c.ackTimer=setTimeout(()=>{c.ackTimer=null;const ack=c.pendingAck;c.pendingAck=null;if(c.ws.readyState===WebSocket.OPEN)sendClient(c,ack);},33);}
   try {
     async function joinClient(index) {
       if(index===0)probes.forEach(p=>p.tracks.clear());
-      const c={decoder:ChaosDecoder?new ChaosDecoder():null,index:workerData.offset+index,ws:new Socket(url,{headers:{Origin:url.origin.replace(/^ws/, 'http'),...(workerData.token?{Authorization:`Bearer ${workerData.token}`}:{})}}),players:new Map(),base:null,id:null,playing:true,moveAt:0,shotAt:receiverNow()+index*17,pingAt:receiverNow()+index*11,lastChaos:0,lastServerChaos:0,lastObservedChaos:receiverNow()};all[index]=c;
+      const c={decoder:new DeliveryDecoder(),index:workerData.offset+index,ws:new Socket(url,{headers:{Origin:url.origin.replace(/^ws/, 'http'),...(workerData.token?{Authorization:`Bearer ${workerData.token}`}:{})}}),players:new Map(),base:null,id:null,playing:true,moveAt:0,shotAt:receiverNow()+index*17,pingAt:receiverNow()+index*11,lastChaos:0,lastServerChaos:0,lastObservedChaos:receiverNow()};all[index]=c;
       await new Promise((resolve,reject)=>{
         const timeout=setTimeout(()=>reject(new Error('Join timeout')),15000);
-        c.ws.on('open',()=>c.ws.send(JSON.stringify({type:'join',protocolVersion:5,name:`Bench ${c.index}`,appearance})));
+        c.ws.on('open',()=>sendClient(c,{type:'join',protocolVersion:PROTOCOL_VERSION,name:`Bench ${c.index}`,appearance}));
         c.ws.on('error',()=>{active.errors++;clearTimeout(timeout);reject(new Error('Client socket error'));});
         c.ws.on('close',(code,reason)=>{if(!stopping&&!c.intentionalClose){active.disconnects++;console.error(JSON.stringify({event:'client-close',client:c.index,code,reason:reason.toString().slice(0,123)}));}});
         c.ws.on('message',raw=>{
@@ -126,9 +129,11 @@ async function clients() {
           const enteredAt=receiverNow();
           active.bytes+=raw.length;active.messages++;
           const decoded=c.decoder?c.decoder.read(raw.toString()):{message:parseServerMessage(raw.toString())};
-          const m=decoded?.message;if(!m){active.invalid++;return;}
+          const m=decoded?.message;if(!decoded){active.invalid++;return;}
+          if(!m){if(decoded.ack)queueAck(c,decoded.ack);return;}
           active.wireBytesByType[m.type]=(active.wireBytesByType[m.type]??0)+raw.length;
           const now=receiverNow();
+          if(m.type==='playerShot'&&m.movement){const sample=m.movement;if(index===0&&sample.player.id!==c.id)probes.forEach(p=>p.move(sample.player,now,sample.at));if(c.players.has(sample.player.id))Object.assign(c.players.get(sample.player.id),sample.player);active.moveAges.add(now-sample.at);}
           switch(m.type){
             case 'welcome':if(index===0)probes.forEach(p=>p.reconnect());c.id=m.id;c.base={x:m.player.x,y:m.player.y,z:m.player.z};c.players=new Map(Object.values(m.players).map(p=>[p.id,p]));c.playing=m.round.phase==='playing';clearTimeout(timeout);resolve();break;
             case 'scoreboardUpdate':c.scoreboardEntries=m.scores.length;break;
@@ -142,10 +147,11 @@ async function clients() {
             case 'playerRespawn':if(index===0)probes.forEach(p=>p.respawn(m.id,m,now));active.respawns++;if(c.players.has(m.id))Object.assign(c.players.get(m.id),m);if(m.id===c.id)c.base={x:m.x,y:m.y,z:m.z};break;
             case 'gameWon':c.playing=false;break;
             case 'gameReset':c.playing=true;break;
-            case 'pong':{if(JSON.parse(raw.toString()).capacityEcho){active.echoRtts.add(now-m.sentAt);break;}active.rtts.add(now-m.sentAt);active.pongAges.add(now-m.receivedAt);const d=JSON.parse(raw.toString()).capacityDelivery;if(d){active.coalescedSnapshots+=Math.max(0,d.coalesced-(c.lastCoalesced??d.coalesced));c.lastCoalesced=d.coalesced;active.maxInFlight=Math.max(active.maxInFlight,d.inFlight);}break;}
+            case 'pong':{if((JSON.parse(raw.toString()).message??JSON.parse(raw.toString())).capacityEcho){active.echoRtts.add(now-m.sentAt);break;}active.rtts.add(now-m.sentAt);active.pongAges.add(now-m.receivedAt);const d=(JSON.parse(raw.toString()).message??JSON.parse(raw.toString())).capacityDelivery;if(d){active.coalescedSnapshots+=Math.max(0,d.coalesced-(c.lastCoalesced??d.coalesced));c.lastCoalesced=d.coalesced;active.maxInFlight=Math.max(active.maxInFlight,d.inFlight);}break;}
             case 'playerShot':active.shotEvents++;break;
             case 'error':active.errors++;break;
             case 'chaos':
+              if(m.state.dispatch.phase==='active'&&m.state.dispatch.incident){active.incidentsSeen[m.state.dispatch.incident]=true;if(m.state.dispatch.incident==='evidence-tampering'){active.tamperingSnapshots++;if(m.state.extraCases?.length!==7)active.missingCaseSnapshots++;}}
               if(c.index===0&&now-(c.lastWireSample??0)>=1000){c.lastWireSample=now;active.wireSamples++;active.sampledWireBytes+=raw.length;active.sampledLegacyBytes+=Buffer.byteLength(JSON.stringify(m,(_k,v)=>typeof v==='number'?Math.round(v*1000)/1000:v));}
               c.lastObservedChaos=now;
               if(c.lastChaos){
@@ -156,7 +162,7 @@ async function clients() {
               c.lastChaos=now;c.lastServerChaos=m.state.time;active.ages.add(now-m.state.time);active.peakBalls=Math.max(active.peakBalls,m.state.shots.length);active.shotSamples+=m.state.shots.length;active.oldShots+=m.state.shots.filter(s=>s.age>1).length;break;
           }
           active.decodeMs.add(receiverNow()-enteredAt);
-          if(decoded.ack)c.ws.send(JSON.stringify(decoded.ack));
+          if(decoded.ack)queueAck(c,decoded.ack);
         });
       });
       return c;

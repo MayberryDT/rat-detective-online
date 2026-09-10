@@ -23,8 +23,16 @@ Reviewed against repository source and the latest release receipt on **2026-09-0
 | [Tooling](tooling.md) | Correct preview modes, checks and environments |
 | [Local capacity benchmark](local-capacity-testing.md) | Isolated synthetic player ladder, measurements and limits |
 | [Private hosted capacity benchmark](hosted-capacity-baseline.md) | Isolated deployment and matching full-feed ladder |
+| [Creator and music credits](verification/game-credits-2026-09-10.md) | Current preview: subtle portfolio link, pointer-capture protection, bottom-left title music credit and small-screen visibility |
+| [Title music](verification/title-music-2026-09-10.md) | Start the background loop on arrival, with browser-permission fallback and continuity into gameplay |
+| [Alley lighting and surface clarity](verification/alley-lighting-2026-09-10.md) | Current preview: fixed window/door/sign spill, readable ground and obstacles, unchanged live-light budget |
+| [Audio lift and alley-lighting proposal](verification/world-audio-lift-2026-09-10.md) | Current desktop client: 50% world-distance gain increase; lighting proposal only |
+| [16-rat tuning and preview](verification/sixteen-rat-tuning-2026-09-10.md) | Current desktop preview, human/bot replacement, shared world sound fade and uncredited case deaths |
+| [Prior full 24-rat preview](verification/full-lobby-preview-2026-09-10.md) | Historical desktop/phone preview; verified 24 bots, human replacement and refill; private protocol 6 |
 | [Playtest diagnostics](playtest-diagnostics.md) | Logs and diagnosis without changing gameplay |
 | [Network smoothness](network-smoothness.md) | Current interpolation and known failure history |
+| [Network and scaling audit, September 10](network-audit-2026-09-10.md) | Prioritized gameplay-preserving fixes, isolated reproductions and human-capacity verification gaps; audit only |
+| [Network fixes, September 10](verification/network-fixes-2026-09-10.md) | Protocol-6 delivery bounds and optimizations, regression checks, 24-client local results and remaining hosted/rendering limits; not deployed |
 | [Model follow-ups](model-playtest-followups.md) | Remaining art work and accepted visual direction |
 | [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Optional launcher and public-room panel |
 | [Visual fixtures](../test/visual/README.md) | Isolated visual tools and dated model history |

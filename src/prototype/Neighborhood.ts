@@ -12,6 +12,7 @@ import {StreetLightPool,insideLightRoom} from './StreetLightPool';
 import {interiorFixtures,LIGHT_ROOMS,type InteriorFixture} from './InteriorLighting';
 import {readLightingMode,type LightingMode} from '../session/lightingMode';
 import {generatedStreetLamps,STREET_LAMP_HEIGHT} from '../shared/streetLampLayout';
+import {StreetReadability,streetReadabilityEnabled} from './StreetReadability';
 
 import { STREET_LAMPS, grayboxBoxes, CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import {cityStreetBuildings} from '../shared/cityPlan';
@@ -37,8 +38,10 @@ export class Neighborhood {
     private readonly fixedLights:THREE.PointLight[]=[];
     private readonly lampPool:THREE.PointLight[]=[];
     private readonly overhead?:StreetLightPool;
+    private readonly readability?:StreetReadability;
     private readonly interiorSources=new Map<THREE.PointLight,InteriorFixture>();
     constructor(private scene:THREE.Scene, private world:CANNON.World, spec:WorldSpec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION},private readonly lighting:LightingMode=readLightingMode()) {
+        const existingObjects=new Set(scene.children);
         this.streetFill.intensity=lighting==='classic'?1.25:.32;
         this.add(this.streetFill);
         for(const body of [...world.bodies]) if(body.shapes.some(shape=>shape instanceof CANNON.Plane)) {this.groundBodies.push(body);world.removeBody(body);}
@@ -46,7 +49,14 @@ export class Neighborhood {
         this.city=new CityGenerator(scene,world,undefined,{...spec,version:1});
         const layout=[...cityStreetBuildings(generateBuildingLayout({...spec,version:1})),...CENTRAL_BUILDINGS];
         this.city.generate(layout,true);
-        for(const b of grayboxBoxes(spec)){if(b.original)continue;const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz);if(b.hidden)mesh.visible=false;}
+        const boxes=grayboxBoxes(spec);
+        for(const b of boxes){
+            if(b.original)continue;
+            const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz);
+            if(b.hidden)mesh.visible=false;
+            if(b.y+b.h/2<=.15&&b.y+b.h/2>=-.1)mesh.material.userData.streetSurface='ground';
+            else if(b.rx||b.rz)mesh.material.userData.streetSurface='stairs';
+        }
         for(const dispatch of [...DISPATCH_STATIONS.map(s=>s.box),...LAUNCH_MACHINES.map(s=>s.box)])
             this.box(dispatch.x,dispatch.y,dispatch.z,dispatch.w,dispatch.h,dispatch.d,0x182936).visible=false;
         if(lighting==='classic')for(const [x,y,z,color] of [[130,5,-30,0x9ddbea],[130,5,-40,0x91bbd8],[-16,4,-34,0xffc982],[-136,4,0,0xffc982],[-16,4,-55,0xffc982],[-30,4,-43,0x9fb5ce]]) {
@@ -59,7 +69,8 @@ export class Neighborhood {
         this.label(-16,6.5,-81.6,'ARCHIVE RECEIVING',0xc9b890);
         this.label(150.6,6.7,118,'PUMP HALL',0x9dbfac);
         for(const b of landmarkStairDetails()){
-            const tread=this.add(new THREE.Mesh(new THREE.BoxGeometry(b.w,b.h,b.d),this.material(b.color)));
+            const material=this.material(b.color);material.userData.streetSurface='stairs';
+            const tread=this.add(new THREE.Mesh(new THREE.BoxGeometry(b.w,b.h,b.d),material));
             tread.position.set(b.x,b.y,b.z);tread.rotation.set(b.rx,0,b.rz);tread.receiveShadow=true;
         }
         // Small pools at each stair landing and mid-flight preserve the dark interiors.
@@ -134,6 +145,17 @@ export class Neighborhood {
         this.bakeFixedLighting();
         this.batchStaticMeshes();
         this.initLampPool();
+        if(lighting==='pools'&&streetReadabilityEnabled()){
+            this.readability=new StreetReadability(scene,layout,boxes);
+            // Only this city's owned scenery: never mutate an existing rat,
+            // projectile, stage light or a previous scene during replacement.
+            for(const object of scene.children)if(!existingObjects.has(object))object.traverse(child=>{
+                if(!(child instanceof THREE.Mesh))return;
+                for(const material of Array.isArray(child.material)?child.material:[child.material]){
+                    if(material instanceof THREE.MeshStandardMaterial)this.readability!.apply(material);
+                }
+            });
+        }
     }
     private readonly groundBodies:CANNON.Body[]=[];
     private readonly groundMeshes:THREE.Object3D[]=[];
@@ -312,6 +334,7 @@ export class Neighborhood {
         // Navigation is expressed by architectural signs; floating map labels are retired.
     }
     dispose() {
+        this.readability?.dispose();
         this.overhead?.dispose();
         this.architecture.dispose();
         this.vehicles.dispose();

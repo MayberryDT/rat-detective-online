@@ -1,3 +1,4 @@
+import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import {FoleyAudio} from '../../src/audio/FoleyAudio';
@@ -59,6 +60,18 @@ it('rejects distant or missing world sources and never turns repeated events int
     audio.setEnabled(false);ctx.state='running';audio.play('victory');expect(sources).toHaveLength(1);
     audio.setEnabled(true);ctx.currentTime+=1;audio.play('victory');expect(sources).toHaveLength(2);
     audio.dispose();ctx.currentTime+=2;audio.play('victory');expect(sources).toHaveLength(2);
+});
+it('fades an active physics sound as the listener moves away while personal feedback stays full',()=>{
+    const {audio,ctx,sources,gains}=fixture();audio.update({x:0,y:0,z:0});
+    audio.play('case-floor',{x:0,y:0,z:0});
+    const volume=()=>gains[0].gain.setTargetAtTime.mock.calls.at(-1)[0];
+    expect(volume()).toBe(.19);
+    audio.update({x:0,y:10,z:0});
+    expect(volume()).toBeCloseTo(.19*worldSoundGain(10,.36));
+    expect(volume()).toBeCloseTo(.19*.9931172414*.36*1.5);
+    audio.update({x:0,y:250,z:0});expect(volume()).toBe(0);
+    sources[0].onended();ctx.currentTime=1;audio.play('hit-confirm');
+    expect(volume()).toBe(.12);audio.dispose();
 });
 it('loads only the 13 deliberate cues with at most four concurrent loads and ignores disposed completions',()=>{
     const loads:Array<(b:AudioBuffer)=>void>=[],urls:string[]=[];

@@ -1,8 +1,8 @@
+import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runInDurableObject } from 'cloudflare:test';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOT_REFILL_MS, type GameRoom } from '../../src/worker/GameRoom';
-import type { ServerMessage } from '../../src/shared/networkProtocol';
-import { parseServerMessage } from '../../src/shared/messageValidation';
+import { MAX_PLAYERS, type ServerMessage } from '../../src/shared/networkProtocol';
 
 const sockets: WebSocket[] = [];
 const rooms = new Set<string>();
@@ -18,9 +18,9 @@ async function open(group:string, preferred?:string, join=true) {
   expect(response.status).toBe(101);
   const ws=response.webSocket!;ws.accept();sockets.push(ws);
   const messages:ServerMessage[]=[];
-  ws.addEventListener('message',event=>{const message=parseServerMessage(String(event.data));if(message)messages.push(message);});
+  ws.addEventListener('message',event=>{const message=readSocketMessage(ws,event.data);if(message)messages.push(message);});
   if(!join)return {ws,messages,welcome:undefined};
-  ws.send(JSON.stringify({type:'join',protocolVersion:5,name:'Human Rat',appearance}));
+  ws.send(JSON.stringify({type:'join',protocolVersion:7,name:'Human Rat',appearance}));
   await until(()=>messages.some(m=>m.type==='welcome'));
   const welcome=messages.find(m=>m.type==='welcome') as Extract<ServerMessage,{type:'welcome'}>;
   rooms.add(welcome.matchRoom!);
@@ -42,6 +42,36 @@ afterEach(async()=>{
 });
 
 describe('automatic public room population',()=>{
+  it('bounds queued admission and uses the availability index',async()=>{
+    const group=pool(),matcher=env.MATCHMAKER.getByName(group);
+    await runInDurableObject(matcher,async(instance,ctx)=>{
+      const directory=instance as any;directory.queued=64;
+      try {
+        const response=await directory.fetch(new Request(`https://game.test/ws?room=${group}`,{headers:{Upgrade:'websocket'}}));
+        expect(response.status).toBe(503);
+        const plan=ctx.storage.sql.exec("EXPLAIN QUERY PLAN SELECT name FROM rooms WHERE checked = 0 ORDER BY slots DESC, name LIMIT 16").toArray();
+        expect(JSON.stringify(plan)).toContain('rooms_available');
+      } finally {directory.queued=0;}
+    });
+    await open(group);
+    await runInDurableObject(env.GAME_ROOM.getByName(group),async(instance:GameRoom,ctx)=>{
+      const before=ctx.getWebSockets().length;
+      const response=await instance.fetch(new Request('https://game.test/ws',{headers:{Upgrade:'websocket','x-rat-admission-deadline':String(Date.now()-1)}}));
+      expect(response.status).toBe(503);expect(ctx.getWebSockets()).toHaveLength(before);
+    });
+  });
+  it('performs no room writes or bot resets for unchanged setup',async()=>{
+    const group=pool();await open(group);
+    await runInDurableObject(env.GAME_ROOM.getByName(group),async(instance:GameRoom,ctx)=>{
+      const game=instance as any,controller=game.serverBots;
+      const writes=vi.spyOn(ctx.storage.sql,'exec');
+      try {
+        await instance.enableMatchmaking(group,group);
+        expect(writes.mock.calls.filter(call=>String(call[0]).includes('INSERT INTO room_state'))).toHaveLength(0);
+        expect(game.serverBots).toBe(controller);
+      } finally { writes.mockRestore(); }
+    });
+  });
   it('fills to eight, replaces AI without resetting remaining bots, refills after grace and sleeps empty',async()=>{
     const group=pool();const first=await open(group);
     expect(Object.keys(first.welcome!.players)).toHaveLength(8);
@@ -78,13 +108,13 @@ describe('automatic public room population',()=>{
     expect((await stub.status()).players).toBe(0);
   });
 
-  it('places 44 concurrent humans into 24 and 20, keeping preferred-room reconnects and reusing freed slots',async()=>{
+  it('places 44 concurrent humans into 16, 16 and 12, keeping preferred-room reconnects and reusing freed slots',async()=>{
     const group=pool();
     const joined=await Promise.all(Array.from({length:44},()=>open(group)));
     const counts=new Map<string,number>();
     for(const c of joined)counts.set(c.welcome!.matchRoom!,(counts.get(c.welcome!.matchRoom!)??0)+1);
-    expect([...counts.values()].sort((a,b)=>b-a)).toEqual([24,20]);
-    for(const name of counts.keys()){const status=await env.GAME_ROOM.getByName(name).status();expect(status.bots).toBe(0);expect(status.players).toBeLessThanOrEqual(24);}
+    expect([...counts.values()].sort((a,b)=>b-a)).toEqual([16,16,12]);
+    for(const name of counts.keys()){const status=await env.GAME_ROOM.getByName(name).status();expect(status.bots).toBe(0);expect(status.players).toBeLessThanOrEqual(MAX_PLAYERS);}
     const last=joined.at(-1)!;const preferred=last.welcome!.matchRoom!;
     await close(last.ws);
     const resumed=await open(group,preferred);
@@ -96,7 +126,7 @@ describe('automatic public room population',()=>{
 
   it('reserves pending joins, expires them, and rejects an expired join',async()=>{
     const group=pool();
-    const pending=await Promise.all(Array.from({length:24},()=>open(group,undefined,false)));
+    const pending=await Promise.all(Array.from({length:MAX_PLAYERS},()=>open(group,undefined,false)));
     const extra=await open(group);
     expect(extra.welcome!.matchRoom).not.toBe(group);
     const stub=env.GAME_ROOM.getByName(group);

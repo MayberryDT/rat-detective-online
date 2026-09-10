@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { PLAY_BOUNDS, RateLimiter, clampPosition, isPlausiblePosition, isPlausibleShot } from '../../src/worker/validation';
 
 describe('rate windows', () => {
+  it('reclaims thousands of connection namespaces without touching a live player',()=>{
+    const limiter=new RateLimiter();limiter.allow('live:move',1,1000,0);
+    for(let i=0;i<2000;i++){
+      limiter.allow(`c-${i}:join`,3,10000,0);limiter.allow(`c-${i}:ping`,4,1000,0);limiter.clear(`c-${i}`);
+    }
+    expect(limiter.size).toBe(1);expect(limiter.allow('live:move',1,1000,1)).toBe(false);
+  });
   it('enforces the quota until the exact reset boundary without extending it on rejection', () => {
     const limiter = new RateLimiter();
     expect(limiter.allow('player:move', 2, 1000, 100)).toBe(true);

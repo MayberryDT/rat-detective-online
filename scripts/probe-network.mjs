@@ -1,3 +1,4 @@
+import {readSocketMessage,PROTOCOL_VERSION} from './lib/network-codec.mjs';
 // Bounded transport probe, not a capacity or browser-render benchmark.
 // node scripts/probe-network.mjs http://127.0.0.1:5174 --seconds=45 --output=/tmp/baseline.json
 // Optional --token-file=/tmp/private-secret.json reads NETWORK_TEST_TOKEN without logging it.
@@ -53,7 +54,7 @@ async function sampleHost() {
 }
 function onMessage(client, raw) {
   let message;
-  try { message = JSON.parse(raw.toString()); } catch { errors++; return; }
+  try { message = readSocketMessage(client.ws,raw);if(!message)return; } catch { errors++; return; }
   if (message.type === 'welcome') {
     client.id = message.id; Object.values(message.players).forEach(p => players.set(p.id, p)); client.welcome(message);
   }
@@ -95,7 +96,7 @@ async function open(index) {
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Rat ${index}: welcome timeout`)), 10_000);
     client.welcome = message => { clearTimeout(timeout); client.base = { ...message.player }; resolve(); };
-    client.ws.on('open', () => client.ws.send(JSON.stringify({ type: 'join', protocolVersion: 5, name: `Probe Rat ${index + 1}`, appearance })));
+    client.ws.on('open', () => client.ws.send(JSON.stringify({ type: 'join', protocolVersion: PROTOCOL_VERSION, name: `Probe Rat ${index + 1}`, appearance })));
     client.ws.on('message', raw => onMessage(client, raw));
     client.ws.on('error', () => { errors++; clearTimeout(timeout); reject(new Error(`Rat ${index}: connection failed`)); });
     client.ws.on('close', () => { if (!stopping) disconnects++; });

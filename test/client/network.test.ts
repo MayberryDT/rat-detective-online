@@ -25,7 +25,7 @@ describe('network session transport', () => {
     let sockets: FakeSocket[];
     let network: NetworkManager;
     const makeNetwork = (options: TransportOptions = {}) => new NetworkManager({
-        url: 'ws://localhost/ws', joinTimeoutMs: 100, heartbeatMs: 1_000, maxRetries: 2,
+        random:()=>1, url: 'ws://localhost/ws', joinTimeoutMs: 100, heartbeatMs: 1_000, maxRetries: 2,
         createSocket: () => { const socket = new FakeSocket(); sockets.push(socket); return socket as unknown as WebSocket; },
         ...options,
     });
@@ -69,6 +69,18 @@ describe('network session transport', () => {
         expect(network.state).toBe('playing');
     });
 
+    it('accepts a fresh recovery welcome after an interrupted fragmented message',()=>{
+        const receive=vi.fn();network.onMessage=receive;
+        network.connect('Rat',appearance);sockets[0].open();
+        sockets[0].receive({type:'delivery',stream:'before-eviction',seq:1,message:welcome()});
+        sockets[0].receive({type:'delivery',stream:'before-eviction',seq:2,
+            message:{type:'fragment',index:0,count:2,data:'{"type":"chaos",'}});
+        receive.mockClear();
+        sockets[0].receive({type:'delivery',stream:'after-eviction',seq:1,message:welcome()});
+        expect(network.state).toBe('playing');
+        expect(receive).toHaveBeenCalledWith(expect.objectContaining({type:'welcome'}));
+    });
+
     it('joins once and applies the snapshot before enabling gameplay', () => {
         const order: string[] = [];
         network.onMessage = () => order.push('snapshot');
@@ -80,6 +92,50 @@ describe('network session transport', () => {
         expect(JSON.parse(sockets[0].sent[0])).toEqual({ type: 'join', protocolVersion: PROTOCOL_VERSION, name: 'Rat', appearance });
         sockets[0].receive(welcome());
         expect(order).toEqual(['connecting', 'snapshot', 'playing']);
+    });
+
+    it('acknowledges an applied burst cumulatively and cancels a pending ACK on disposal',()=>{
+        network.connect('Rat',appearance);sockets[0].open();
+        const packet=(seq:number,message:unknown)=>({type:'delivery',stream:'stream',seq,message});
+        sockets[0].receive(packet(1,welcome()));
+        const applied:number[]=[];
+        network.onMessage=m=>{if(m.type==='pong')applied.push(m.sentAt);};
+        sockets[0].receive(packet(2,{type:'pong',sentAt:2,receivedAt:2}));
+        sockets[0].receive(packet(3,{type:'pong',sentAt:3,receivedAt:3}));
+        expect(applied).toEqual([2,3]);expect(sockets[0].sent.filter(p=>JSON.parse(p).type==='deliveryAck')).toHaveLength(0);
+        vi.advanceTimersByTime(33);
+        expect(sockets[0].sent.filter(p=>JSON.parse(p).type==='deliveryAck').map(p=>JSON.parse(p).seq)).toEqual([3]);
+        sockets[0].receive(packet(4,{type:'pong',sentAt:4,receivedAt:4}));network.destroy();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+    it('piggybacks an ACK and applies an inline shooter pose before its shot',()=>{
+        network.connect('Rat',appearance);sockets[0].open();
+        sockets[0].receive({type:'delivery',stream:'s',seq:1,message:welcome()});
+        network.send({type:'ping',sentAt:10});
+        expect(JSON.parse(sockets[0].sent.at(-1)!)).toEqual({type:'ping',sentAt:10,deliveryAck:{stream:'s',seq:1}});
+        const messages:any[]=[];network.onMessage=m=>messages.push(m);
+        sockets[0].receive({type:'delivery',stream:'s',seq:2,message:{type:'playerShot',shooterId:'other',shotId:'shot',origin:{x:1,y:2,z:3},direction:{x:1,y:0,z:0},move:['other',123,1.123456789,2,3,0,0,0,1,0,0,0,1]}});
+        expect(messages.map(m=>m.type)).toEqual(['playerMoved','playerShot']);
+        expect(messages[0]).toMatchObject({at:123,player:{id:'other',x:1.123456789}});
+        vi.advanceTimersByTime(33);expect(JSON.parse(sockets[0].sent.at(-1)!)).toEqual({type:'deliveryAck',stream:'s',seq:2});
+    });
+
+    it('backs off short-lived welcomes and resets retries only after stable play',()=>{
+        network.destroy();network=makeNetwork({maxRetries:5,stablePlayingMs:2000});
+        network.connect('Rat',appearance);sockets[0].open();sockets[0].receive(welcome());sockets[0].close();
+        vi.advanceTimersByTime(500);expect(sockets).toHaveLength(2);
+        sockets[1].open();sockets[1].receive(welcome());sockets[1].close();
+        vi.advanceTimersByTime(999);expect(sockets).toHaveLength(2);vi.advanceTimersByTime(1);expect(sockets).toHaveLength(3);
+        sockets[2].open();sockets[2].receive(welcome());vi.advanceTimersByTime(2000);sockets[2].close();
+        vi.advanceTimersByTime(500);expect(sockets).toHaveLength(4);
+    });
+
+    it('jitters automatic retries and bounds non-movement uplink traffic',()=>{
+        network.destroy();network=makeNetwork({random:()=>0});
+        network.connect('Rat',appearance);sockets[0].open();sockets[0].receive(welcome());
+        sockets[0].bufferedAmount=300_000;
+        expect(network.send({type:'ping',sentAt:1})).toBe(false);expect(network.state).toBe('reconnecting');
+        vi.advanceTimersByTime(249);expect(sockets).toHaveLength(1);vi.advanceTimersByTime(1);expect(sockets).toHaveLength(2);
     });
 
     it('keeps a 100-player roster connected through scoreboard updates', () => {

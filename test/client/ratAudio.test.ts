@@ -21,7 +21,7 @@ it.each([false,true])('supplies the source for remote hit/death/corpse audio, le
         else expect(play).toHaveBeenLastCalledWith('ratHit',.4,rat.body.position);
         rat.update(.2);
         rat.body.dispatchEvent({type:'collide',contact:{getImpactVelocityAlongNormal:()=>8}});
-        expect(play).toHaveBeenLastCalledWith('ratHit',.45,local?undefined:rat.body.position);
+        expect(play).toHaveBeenLastCalledWith('ratHit',.45,rat.body.position);
         rat.respawn({x:150,y:0,z:20,hp:3});
         play.mockClear();
         rat.useSharedCorpse();rat.useSharedCorpse();

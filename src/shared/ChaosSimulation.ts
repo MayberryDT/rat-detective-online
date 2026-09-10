@@ -29,7 +29,8 @@ interface CaseRuntime {
     hitAfter:Map<string,number>;pickupAfter:number;returningUntil:number;looseSince:number;
     scale:number;lastSpawn:Vec3Data;armed:boolean;
 }
-export interface ChaosHit { owner:string; victim:string; damage:number; incoming:Vec3Data }
+/** null ownership is an environmental Tampering hit, including neutral chains. */
+export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data }
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
 export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
@@ -59,8 +60,8 @@ export class ChaosSimulation {
     private hit(hit:ChaosHit):void{if(!this.assignment?.closed)this.onHit(hit);}
     get caseHolderId():string|null{return this.primaryCase.owner;}
     /** Called synchronously by authoritative damage resolution, never at launch. */
-    creditCaseKill(killerId:string):boolean {
-        if(this.casesWeaponized || this.primaryCase.returningUntil)return false;
+    creditCaseKill(killerId:string|null):boolean {
+        if(killerId===null || this.casesWeaponized || this.primaryCase.returningUntil)return false;
         return this.assignment?.kill(killerId,this.primaryCase.owner,this.now)??false;
     }
     isCaseHolder(id:string):boolean{for(const c of this.cases.values())if(c.owner===id)return true;return false;}
@@ -176,7 +177,7 @@ export class ChaosSimulation {
     }
     private tell(text:string){this.notice={serial:this.notice.serial+1,text};}
     private incidentActive(id:IncidentId){return this.dispatch.phase==='active'&&incidentInfo(this.dispatch.incident).id===id;}
-    private activate(owner?:string){
+    private activate(owner?:string|null){
         if(this.dispatch.phase!=='ready')return;
         const previous=this.dispatch.incident??(this.dispatch.serial>0?incidentInfo().id:undefined);
         const choices=INCIDENTS.filter(incident=>incident.id!==previous);
@@ -298,7 +299,7 @@ export class ChaosSimulation {
         const c=[...this.cases.values()].find(c=>c.owner===id);if(!c)return false;
         this.releaseCase(c);return this.recoverLooseCase(c.id);
     }
-    death(victim:PlayerData,incoming:Vec3Data,owner=victim.id):boolean{
+    death(victim:PlayerData,incoming:Vec3Data,owner:string|null=victim.id):boolean{
         this.release(victim.id,incoming);
         const incident=this.incidentActive('improper-disposal');
         if(this.corpses.size>=T.maxCorpses){const first=this.corpses.keys().next().value;if(first)this.removeCorpse(first);}
@@ -322,7 +323,7 @@ export class ChaosSimulation {
             const angle=i*Math.PI*2/T.deathBurstBalls;
             const direction=new C.Vec3(Math.cos(angle),.12+(i%3)*.12,Math.sin(angle));direction.normalize();
             direction.scale(BALL_SPEED,direction);
-            const shot:ChaosShot={id:crypto.randomUUID(),owner:corpse.owner||corpse.victimId,
+            const shot:ChaosShot={id:crypto.randomUUID(),owner:corpse.owner===undefined?corpse.victimId:corpse.owner,
                 p:{...corpse.p},v:data(direction),age:0,original:false,radius:BALL_RADIUS};
             this.burstShots.add(shot);this.shots.push(shot);
         }
@@ -376,7 +377,7 @@ export class ChaosSimulation {
                 if(!playing||v.length()<T.corpseHitMinSpeed)continue;
                 const delta=body.position.vsub(p),length=delta.lengthSquared();
                 for(const player of this.players.values()){
-                    const owner=c.state.owner||c.state.victimId;
+                    const owner=c.state.owner===undefined?c.state.victimId:c.state.owner;
                     if(player.hp<=0||player.id===owner||player.id===c.state.victimId||
                         (c.hitAfter.get(player.id)||0)>this.now)continue;
                     const center=new C.Vec3(player.x,player.y+1,player.z);
@@ -396,11 +397,6 @@ export class ChaosSimulation {
     private caseDangerous(c=this.primaryCase){
         return !c.owner&&c.armed&&this.incidentActive('evidence-tampering');
     }
-    private missileCredit(c:CaseRuntime,victim:string){
-        if(c.missileOwner&&c.missileOwner!==victim&&this.players.has(c.missileOwner))return c.missileOwner;
-        if(this.dispatchActivator&&this.dispatchActivator!==victim&&this.players.has(this.dispatchActivator))return this.dispatchActivator;
-        return [...this.players.values()].find(player=>player.hp>0&&player.id!==victim)?.id;
-    }
     private hitCasePath(from:C.Vec3,to:C.Vec3,velocity:C.Vec3,playing:boolean,c=this.primaryCase){
         if(!playing||velocity.length()<8)return;
         const delta=to.vsub(from),length=delta.lengthSquared();
@@ -408,7 +404,6 @@ export class ChaosSimulation {
         for(const player of this.players.values()){
             if(player.hp<=0||(c.hitAfter.get(player.id)||0)>this.now)continue;
             if(player.id===c.missileOwner)continue;
-            const owner=this.missileCredit(c,player.id);if(!owner)continue;
             const center=new C.Vec3(player.x,player.y+1,player.z);
             const fraction=length?Math.max(0,Math.min(1,center.vsub(from).dot(delta)/length)):0;
             const nearest=from.vadd(delta.scale(fraction));
@@ -416,7 +411,9 @@ export class ChaosSimulation {
             const blocked=this.ray(nearest,center,1);
             if(blocked.hasHit&&blocked.distance>0.35)continue;
             c.hitAfter.set(player.id,this.now+700);
-            this.hit({owner,victim:player.id,damage:velocity.length()>=28?3:1,incoming:data(velocity)});
+            // Redirect ownership still protects the shooter from self-damage,
+            // but the weaponized evidence never awards a player a kill.
+            this.hit({owner:null,victim:player.id,damage:velocity.length()>=28?3:1,incoming:data(velocity)});
             this.impacts.push({p:data(center),n:data(velocity.unit()),surface:false,cue:'thud'});
         }
     }
@@ -680,7 +677,7 @@ export class ChaosSimulation {
                 if(this.incidentActive('evidence-tampering')){
                     if(c.owner)this.releaseCase(c);
                     this.launchCaseMissile(c,vec(incoming));
-                    c.missileOwner=shot.owner;
+                    c.missileOwner=shot.owner??undefined;
                 }else{
                     if(c.owner)this.releaseCase(c);
                     const kick=vec(incoming);kick.normalize();kick.scale(T.caseShotKick,kick);

@@ -1,4 +1,5 @@
 @import './ui/crosshair.css';
+@import './ui/gameCredits.css';
 @font-face{font-family:'Bangers';src:url('/fonts/bangers/Bangers-Regular.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}
 :root{--bg-dark:#100919;--accent-purple:#9775aa;--accent-glow:#9775aa44;--text-main:#decfd9;--text-muted:#bba4c5}
 *{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Outfit',Arial,sans-serif}canvas{display:block}

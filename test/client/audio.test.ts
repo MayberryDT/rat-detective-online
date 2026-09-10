@@ -1,3 +1,4 @@
+import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import { afterEach, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { disposeEntitySounds, initEntitySounds, playEntitySound } from '../../src/audio/EntityAudio';
@@ -90,7 +91,7 @@ it('bounds overlapping chaos audio while allowing a new hit to be heard', () => 
     expect(state.sounds).toHaveLength(12);
 });
 
-it('gently fades both rat hits and deaths from their positions while keeping your own reactions full', () => {
+it('strongly fades both rat hits and deaths from their positions while keeping your own reactions full', () => {
     const ear = new THREE.Vector3(100, 10, 0);
     initEntitySounds({ context: { state: 'running' }, getWorldPosition: (target: THREE.Vector3) => target.copy(ear) } as THREE.AudioListener);
     state.loads.forEach(load => load.done({} as AudioBuffer));
@@ -100,7 +101,7 @@ it('gently fades both rat hits and deaths from their positions while keeping you
     playEntitySound('ratHit', .4, {x:100,y:10,z:-500});
     playEntitySound('playerHit', .6);
     playEntitySound('ratDeath', .6);
-    expect(state.sounds.map(sound => sound.volume)).toEqual([.5, .45, .48, .4*.8, .6, .6]);
+    expect(state.sounds.map(sound => sound.volume)).toEqual([.5, .5*worldSoundGain(130), .6*worldSoundGain(500), .4*worldSoundGain(500), .6, .6]);
     playEntitySound('ratHit', .5, {x:NaN,y:0,z:0});
     expect(state.sounds).toHaveLength(6);
 });

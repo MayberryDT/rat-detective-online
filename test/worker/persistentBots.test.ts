@@ -1,3 +1,4 @@
+import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOT_HEARTBEAT_MS, GameRoom, STALE_PLAYER_MS } from '../../src/worker/GameRoom';
@@ -178,7 +179,7 @@ describe('persistent hosted bots', () => {
       const response = await stub.fetch('https://rat-detective.test/ws', { headers: { Upgrade: 'websocket' } });
       const ws = response.webSocket!; ws.accept(); sockets.push(ws);
       const first = new Promise<{ type: string; message?: string; players?: Record<string, PlayerData> }>(resolve => {
-        ws.addEventListener('message', event => resolve(JSON.parse(event.data as string)), { once: true });
+        ws.addEventListener('message', event => { const message=readSocketMessage(ws,event.data);if(message?.type==='welcome'||message?.type==='error')resolve(message); });
       });
       ws.send(join); const message = await first;
       if (i < MAX_PLAYERS - 11) expect(message.type).toBe('welcome');

@@ -3,6 +3,7 @@
 export function bindGamePointerLock(options: {
     canvas: HTMLElement; playing: () => boolean; signal: AbortSignal;
     enabled?: () => boolean;
+    allowUnlockedClick?: (target:EventTarget|null) => boolean;
     record?: (type: string, detail: unknown) => void;
     doc?: Document; target?: Window; now?: () => number;
 }): { request(): void } {
@@ -53,6 +54,7 @@ export function bindGamePointerLock(options: {
         // F8 diagnostics intentionally initiates a programmatic download.
         if(!event.isTrusted && link?.tagName==='A' && link.hasAttribute('download'))return;
         if(locked()){swallow(event);return;}
+        if(options.allowUnlockedClick?.(event.target)){freshDown=false;return;}
         if(!options.playing())return;
         const resume=freshDown&&event.button===0&&event.target===options.canvas;
         freshDown=false;swallow(event);

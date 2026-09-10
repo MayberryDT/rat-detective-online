@@ -1,3 +1,4 @@
+import {expandMovement} from './movementWire';
 import {isWorldFoleyCue} from './foleyEvents';
 import { sanitizeDiagnosticReport } from './diagnosticReport';
 import { parseAssignment } from './assignments';
@@ -281,11 +282,22 @@ function parsePosePlayer(value: unknown): Extract<ServerMessage, { type: 'player
 
 export function parseClientMessage(raw: unknown): ClientMessage | null {
   if (raw instanceof ArrayBuffer) return null;
-  if (typeof raw === 'string' && new TextEncoder().encode(raw).byteLength > MAX_MESSAGE_BYTES) return null;
+  if (typeof raw === 'string' && (raw.length > MAX_MESSAGE_BYTES || new TextEncoder().encode(raw).byteLength > MAX_MESSAGE_BYTES)) return null;
 
   const parsed = parseRaw(raw, MAX_MESSAGE_BYTES);
   if (!isRecord(parsed) || typeof parsed.type !== 'string') return null;
 
+  const message=parseClientBody(parsed);
+  if(!message)return null;
+  if(parsed.deliveryAck!==undefined){
+    if(!isRecord(parsed.deliveryAck))return null;
+    const stream=nonEmptyString(parsed.deliveryAck.stream,64),seq=integer(parsed.deliveryAck.seq);
+    if(!stream||seq===null||seq<1||!Number.isSafeInteger(seq))return null;
+    message.deliveryAck={stream,seq};
+  }
+  return message;
+}
+function parseClientBody(parsed:Record<string,unknown>):ClientMessage|null {
   if (parsed.type === 'diagnostics') {
     const report = sanitizeDiagnosticReport(parsed.report);
     return report ? { type: 'diagnostics', report } : null;
@@ -325,9 +337,9 @@ export function parseClientMessage(raw: unknown): ClientMessage | null {
     return { type: 'hit', victimId, damage };
   }
 
-  if (parsed.type === 'chaosAck') {
+  if (parsed.type === 'chaosAck' || parsed.type === 'deliveryAck') {
     const stream=nonEmptyString(parsed.stream,64),seq=integer(parsed.seq);
-    return stream && seq!==null && Number.isSafeInteger(seq) && seq>0 ? {type:'chaosAck',stream,seq}:null;
+    return stream && seq!==null && Number.isSafeInteger(seq) && seq>0 ? {type:parsed.type,stream,seq}:null;
   }
 
   if (parsed.type === 'ping') {
@@ -360,8 +372,8 @@ function parseChaos(value:unknown):ChaosState|null{
   if(d.incident!==undefined&&d.incident!=='after-hours-collection'&&d.incident!=='kickback'&&d.incident!=='return-to-sender'&&d.incident!=='cheesequake'&&!INCIDENTS.some(incident=>incident.id===d.incident))return null;
   if(Object.keys(value.possession).length>64||Object.values(value.possession).some(v=>finiteNumber(v)===null))return null;
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
-  if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
-  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&nonEmptyString(s.owner,64)&&parseVec3(s.p)&&parseVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.delayed===undefined||typeof s.delayed==='boolean')&&(s.original===undefined||typeof s.original==='boolean')&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.stuckUntil===undefined||finiteNumber(s.stuckUntil)!==null)&&(s.popAt===undefined||finiteNumber(s.popAt)!==null)))return null;
+  if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||c.owner===null||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
+  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&parseVec3(s.p)&&parseVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.delayed===undefined||typeof s.delayed==='boolean')&&(s.original===undefined||typeof s.original==='boolean')&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.stuckUntil===undefined||finiteNumber(s.stuckUntil)!==null)&&(s.popAt===undefined||finiteNumber(s.popAt)!==null)))return null;
   if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&parseVec3(i.p)&&parseVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='pop'||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
   if(value.pressure!==undefined){
     const p=value.pressure;
@@ -378,7 +390,7 @@ function parseChaos(value:unknown):ChaosState|null{
 
 export function parseServerMessage(raw: unknown): ServerMessage | null {
   if (raw instanceof ArrayBuffer) return null;
-  if (typeof raw === 'string' && new TextEncoder().encode(raw).byteLength > MAX_SERVER_MESSAGE_BYTES) return null;
+  if (typeof raw === 'string' && (raw.length > MAX_SERVER_MESSAGE_BYTES || new TextEncoder().encode(raw).byteLength > MAX_SERVER_MESSAGE_BYTES)) return null;
 
   const parsed = parseRaw(raw, MAX_SERVER_MESSAGE_BYTES);
   if (!isRecord(parsed) || typeof parsed.type !== 'string') return null;
@@ -436,14 +448,23 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const shooterId = nonEmptyString(parsed.shooterId, 64);
       const shot = parseShotFields(parsed);
       if (!shooterId || !shot) return null;
-      return { type: 'playerShot', shooterId, ...shot };
+      let movement: Extract<ServerMessage,{type:'playerShot'}>['movement'];
+      if(parsed.move!==undefined||parsed.movement!==undefined){
+        const expanded=parsed.move!==undefined?expandMovement({players:[parsed.move]}):{type:'playersMoved',players:[parsed.movement]};
+        const moves=parseServerMessage(expanded);
+        if(moves?.type!=='playersMoved'||moves.players[0].player.id!==shooterId)return null;
+        movement=moves.players[0];
+      }
+      return { type: 'playerShot', shooterId, ...shot, ...(movement?{movement}:{}) };
     }
     case 'playerDamaged': {
       const id = nonEmptyString(parsed.id, 64);
       const hp = boundedInteger(parsed.hp, 0, MAX_HP);
       const attackerId = nonEmptyString(parsed.attackerId, 64);
-      if (!id || hp === null || !attackerId) return null;
-      return { type: 'playerDamaged', id, hp, attackerId };
+      const environmental=parsed.cause==='evidence-tampering'&&parsed.attackerId===null;
+      if (!id || hp === null || (!environmental&&!attackerId) ||
+          (parsed.cause!==undefined&&!environmental)) return null;
+      return { type: 'playerDamaged', id, hp, attackerId, ...(environmental?{cause:'evidence-tampering' as const}:{}) };
     }
     case 'playerDied': {
       const victimId = nonEmptyString(parsed.victimId, 64);
@@ -451,11 +472,13 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const killerName = typeof parsed.killerName === 'string' && parsed.killerName.length <= 32 ? parsed.killerName : null;
       const victimName = typeof parsed.victimName === 'string' && parsed.victimName.length <= 32 ? parsed.victimName : null;
       const respawnAt = integer(parsed.respawnAt);
-      if (!victimId || !killerId || killerName === null || victimName === null || respawnAt === null) return null;
+      const environmental=parsed.cause==='evidence-tampering'&&parsed.killerId===null&&parsed.killerName===null;
+      if (!victimId || (!environmental&&(!killerId||killerName===null)) || victimName === null || respawnAt === null ||
+          (parsed.cause!==undefined&&!environmental)) return null;
       const incoming=parsed.incoming===undefined?undefined:parseVec3(parsed.incoming);
       if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean'))return null;
       return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
-        ...(incoming?{incoming,incident:parsed.incident===true}:{}) };
+        ...(environmental?{cause:'evidence-tampering' as const}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}) };
     }
     case 'scoreboardUpdate': {
       const scores = parseScores(parsed.scores);

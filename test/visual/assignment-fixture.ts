@@ -26,6 +26,8 @@ const interiors:Record<string,{p:[number,number,number];heading:number}>={
     recordsinside:{p:[-36,.3,-43],heading:0},recordsupstairs:{p:[-36,8.3,-43],heading:0},
     iceinside:{p:[130,.3,-40],heading:0},needleinside:{p:[-94,.3,63],heading:Math.PI},
     pumpinside:{p:[125,.3,132],heading:0},sluiceinside:{p:[-137,.3,0],heading:Math.PI/2},
+    alleywindow:{p:[-54,.3,15],heading:0},alleydoor:{p:[-40,.3,24],heading:0},
+    alleycorner:{p:[23,.3,49],heading:Math.PI/2},
 };
 const interior=view?interiors[view]:undefined;
 const position=interior?new THREE.Vector3(...interior.p):view==='streetlight'?new THREE.Vector3(-4,.3,-24.6):view==='dispatch'?new THREE.Vector3(-11,.3,-26):view==='city'?new THREE.Vector3(85,.3,35):view==='maintenance'?new THREE.Vector3(63,-6.7,-35.7):view==='sewer'?new THREE.Vector3(55,-6.7,-36):view==='icebox'?new THREE.Vector3(130,.3,-15):view==='archive'?new THREE.Vector3(-64,.3,-59):new THREE.Vector3(-16,.3,-21);
@@ -136,7 +138,14 @@ stage.renderer.setAnimationLoop(()=>{
     player.syncAfterPhysics(0);player.updateView();
     stage.flashlight.position.copy(position).add(new THREE.Vector3(0,2,0));stage.camera.getWorldDirection(direction);
     stage.flashlight.target.position.copy(stage.flashlight.position).addScaledVector(direction,15);
-    city.update(0,stage.camera,position);chaosView.update(0,stage.camera);stage.renderer.render(stage.scene,stage.camera);chaosView.renderOutline(stage.renderer,stage.camera);
+    city.update(0,stage.camera,position);chaosView.update(0,stage.camera);stage.renderer.render(stage.scene,stage.camera);
+    (window as unknown as {lightingReview:object}).lightingReview={
+        calls:stage.renderer.info.render.calls,triangles:stage.renderer.info.render.triangles,
+        textures:stage.renderer.info.memory.textures,bodies:stage.world.bodies.length,
+        lights:stage.scene.children.filter(o=>o instanceof THREE.Light).length,
+        shadows:stage.scene.children.filter(o=>o instanceof THREE.Light&&o.castShadow).length,
+    };
+    chaosView.renderOutline(stage.renderer,stage.camera);
     if(sirenAudition){stage.camera.getWorldPosition(audioPosition);const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.box.x-audioPosition.x,s.box.y+2.1-audioPosition.y,s.box.z-audioPosition.z)),Infinity);sirenAudition.update(state.dispatch.phase==='ready',nearest);}
 });
 window.addEventListener('resize',()=>{stage.camera.aspect=innerWidth/innerHeight;stage.camera.updateProjectionMatrix();stage.renderer.setSize(innerWidth,innerHeight);});

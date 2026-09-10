@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {AudioVoicePool} from './AudioVoicePool';
 import {FOLEY,type FoleyCue,type FoleyPlay} from './foleyCatalog';
+import {worldSoundGain} from './worldSoundGain';
 
 type Point={x:number;y:number;z:number};
 type Voice={sound:THREE.Audio;pan:StereoPannerNode;cue:FoleyCue;origin?:Point;gain:number};
@@ -38,7 +39,8 @@ export class FoleyAudio {
         if(!origin)return FOLEY[cue].range===0?1:0;
         const distance=Math.hypot(origin.x-this.ear.x,origin.y-this.ear.y,origin.z-this.ear.z),range=FOLEY[cue].range;
         if(!Number.isFinite(distance)||range<=0)return 0;
-        return distance<=6?1:Math.max(0,1-(distance-6)/(range-6))**2;
+        const rangeGain=distance<=6?1:Math.max(0,1-(distance-6)/(range-6))**2;
+        return worldSoundGain(distance,rangeGain);
     }
     private position(voice:Voice):void {
         let pan=0;

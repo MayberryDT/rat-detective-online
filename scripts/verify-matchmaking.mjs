@@ -1,3 +1,4 @@
+import {readSocketMessage,PROTOCOL_VERSION,MAX_PLAYERS} from './lib/network-codec.mjs';
 // Bounded protocol check through the existing local authenticated relay; no gameplay input.
 import WebSocket from 'ws';
 const origin=new URL(process.argv[2]??'http://127.0.0.1:5180');
@@ -9,10 +10,10 @@ const join=()=>new Promise((resolve,reject)=>{
  const ws=new WebSocket(url,{origin:origin.origin});sockets.push(ws);
  const timer=setTimeout(()=>{ws.terminate();reject(Error('Join timeout'));},20000);
  const players=new Map();let welcome;
- ws.on('open',()=>ws.send(JSON.stringify({type:'join',protocolVersion:5,name:'Lobby Check',appearance:{hatType:'fedora',hatColor:1,furColor:2,coatColor:3}})));
+ ws.on('open',()=>ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Lobby Check',appearance:{hatType:'fedora',hatColor:1,furColor:2,coatColor:3}})));
  ws.on('error',error=>{clearTimeout(timer);reject(error);});
  ws.on('message',raw=>{
-  const m=JSON.parse(raw);
+  const m=readSocketMessage(ws,raw);if(!m)return;
   if(m.type==='error'){clearTimeout(timer);reject(Error(m.message));}
   if(m.type==='welcome'){welcome=m;for(const [id,p] of Object.entries(m.players))players.set(id,p);clearTimeout(timer);resolve({ws,welcome,players});}
   if(m.type==='playerJoined')players.set(m.player.id,m.player);
@@ -25,7 +26,8 @@ try{
  if(first.players.size!==8)throw Error(`Initial roster ${first.players.size}`);
  const joined=[first,...await Promise.all(Array.from({length:43},join))];
  const rooms={};for(const c of joined)rooms[c.welcome.matchRoom]=(rooms[c.welcome.matchRoom]??0)+1;
- const sizes=Object.values(rooms).sort((a,b)=>b-a);if(JSON.stringify(sizes)!=='[24,20]')throw Error(`Room sizes ${sizes}`);
+ const expected=[];for(let n=44;n>0;n-=MAX_PLAYERS)expected.push(Math.min(n,MAX_PLAYERS));
+ const sizes=Object.values(rooms).sort((a,b)=>b-a);if(JSON.stringify(sizes)!==JSON.stringify(expected))throw Error(`Room sizes ${sizes}`);
  console.log(JSON.stringify({stage:'admission',humans:44,roomSizes:sizes,initialTotal:8,roomCount:Object.keys(rooms).length}));
  await Promise.all(joined.slice(1).map(c=>close(c.ws)));
  const end=Date.now()+16000;

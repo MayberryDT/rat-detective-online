@@ -1,3 +1,4 @@
+import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import {afterEach,expect,it,vi} from 'vitest';
 import {bindIncidentAudio,disposeIncidentAudio,playDelayedThud,playPopcornPop,startCaseBuzz} from '../../src/audio/IncidentAudio';
 afterEach(()=>{disposeIncidentAudio();vi.unstubAllGlobals();});
@@ -36,17 +37,17 @@ it('renders the delayed thud once per context, then reuses the identical PCM buf
  expect(new Set(nodes.map(n=>n.buffer)).size).toBe(1);
 });
 
-it('keeps nearby popcorn full and applies the accepted mild world fade, including height',async()=>{
+it('keeps nearby popcorn full and applies the shared strong world fade, including height',async()=>{
  const {ctx,nodes,gains}=await fixture();bindIncidentAudio(ctx,{x:10,y:20,z:30});
  playPopcornPop({x:10,y:25,z:30});playPopcornPop({x:110,y:20,z:30});playPopcornPop({x:10,y:270,z:30});
- expect(gains.map(g=>g.gain.value)).toEqual([.82,.82*.925,.82*.8]);
+ expect(gains.map(g=>g.gain.value)).toEqual([.82,.82*worldSoundGain(100),.82*worldSoundGain(250)]);
  expect(nodes.every(n=>n.playbackRate.value>=.97&&n.playbackRate.value<=1.03)).toBe(true);
 });
 
 it('fades delayed wall thuds without regenerating PCM and disconnects every output on teardown',async()=>{
  const {ctx,gains}=await fixture();bindIncidentAudio(ctx,{x:0,y:10,z:0});
  playDelayedThud({x:0,y:10,z:0});playDelayedThud({x:0,y:260,z:0});
- expect(gains.map(g=>g.gain.value)).toEqual([1,.8]);expect(ctx.createBuffer).toHaveBeenCalledTimes(1);
+ expect(gains.map(g=>g.gain.value)).toEqual([1,worldSoundGain(250)]);expect(ctx.createBuffer).toHaveBeenCalledTimes(1);
  disposeIncidentAudio();expect(gains.every(g=>g.disconnect.mock.calls.length===1)).toBe(true);
 });
 
@@ -55,7 +56,7 @@ it('smoothly follows the nearest case with one loop and avoids scheduling identi
  startCaseBuzz(true,{x:0,y:0,z:0});
  expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.055,.12);
  startCaseBuzz(true,{x:0,y:250,z:0});
- expect(gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(.055*.8,0,.08);
+ expect(gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(.055*worldSoundGain(250),0,.08);
  for(let i=0;i<600;i++)startCaseBuzz(true,{x:0,y:250,z:0});
  expect(nodes).toHaveLength(1);expect(gains[0].gain.setTargetAtTime).toHaveBeenCalledTimes(1);
  bindIncidentAudio(ctx,{x:0,y:250,z:0});startCaseBuzz(true,{x:0,y:250,z:0});
@@ -68,5 +69,5 @@ it('retains the requested case distance when loading finishes after the incident
  bindIncidentAudio(ctx,{x:10,y:0,z:0});startCaseBuzz(true,{x:260,y:0,z:0});
  expect(nodes).toHaveLength(0);
  await vi.waitFor(()=>expect(nodes).toHaveLength(1));
- expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.055*.8,.12);
+ expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.055*worldSoundGain(250),.12);
 });

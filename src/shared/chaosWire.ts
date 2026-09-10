@@ -3,21 +3,27 @@ import { CHAOS_TUNING } from './chaosState';
 import { BALL_RADIUS } from './ballTuning';
 import { MAX_SERVER_MESSAGE_BYTES, type ServerMessage } from './networkProtocol';
 import { parseServerMessage } from './messageValidation';
+import { expandMovement } from './movementWire';
 export { parseServerMessage } from './messageValidation';
 
 export const CHAOS_WIRE_MODE = 'compact-v2';
 const REST_KEYS = ['case','extraCases','dispatch','pressure','possession','corpses','notice','assignment'] as const;
-type Definition = [number, string, string];
+type Definition = [number, string, string | null];
 export interface ChaosAck { type:'chaosAck'; stream:string; seq:number }
 const rounded = (value: unknown): string => JSON.stringify(value, (_key,v)=>typeof v==='number'?Math.round(v*1000)/1000:v);
 const integer = (n: unknown): n is number => typeof n==='number' && Number.isSafeInteger(n);
 const record = (v: unknown): v is Record<string,unknown> => !!v && typeof v==='object' && !Array.isArray(v);
 const id = (v: unknown): v is string => typeof v==='string' && v.length>0 && v.length<=64;
+const textEncoder = new TextEncoder();
 
 /** Prepared once for one broadcast; never cached across mutable simulation states. */
 export interface PreparedChaos {
-  shots: Array<{id:string;owner:string;motion:string;values:number[]}>;
+  shots: Array<{id:string;owner:string|null;motion:string;values:number[];deltas:WeakMap<number[],string>}>;
   rest: Map<string,string>;
+  impacts: ChaosState['impacts'];
+  impactText: string;
+  pressure: ChaosState['pressure'];
+  pressureText: string;
 }
 export function prepareChaos(state:ChaosState):PreparedChaos {
   const flag=(v:boolean|undefined)=>v===undefined?0:v?2:1;
@@ -26,8 +32,9 @@ export function prepareChaos(state:ChaosState):PreparedChaos {
     const radius=Math.round((s.radius??BALL_RADIUS)*1000),stuck=s.stuckUntil?Math.round(s.stuckUntil):0,pop=s.popAt?Math.round(s.popAt):0;
     const values=[...[s.p.x,s.p.y,s.p.z,s.v.x,s.v.y,s.v.z,s.age].map(n=>Math.round(n*1000)),flags];
     if(radius!==Math.round(BALL_RADIUS*1000)||stuck||pop)values.push(radius,stuck,pop);
-    return {id:s.id,owner:s.owner,values,motion:values.join(',')};
+    return {id:s.id,owner:s.owner,values,motion:values.join(','),deltas:new WeakMap<number[],string>()};
   }),
+    impacts:state.impacts,impactText:rounded(state.impacts),pressure:state.pressure,pressureText:rounded(state.pressure??null),
     rest:new Map(REST_KEYS.filter(k=>k!=='pressure').map(key=>[key,rounded(state[key]??(key==='extraCases'?[]:key==='assignment'?null:undefined))]))};
 }
 
@@ -36,11 +43,11 @@ export function prepareChaos(state:ChaosState):PreparedChaos {
 export class ChaosEncoder {
   private seq=0;
   private nextHandle=1;
-  private shots=new Map<string,{handle:number;owner:string}>();
+  private shots=new Map<string,{handle:number;owner:string|null}>();
   private rest=new Map<string,string>();
   private motions=new Map<number,number[]>();
   constructor(readonly stream: string = crypto.randomUUID(), private readonly deltaMotion=false) {}
-  encode(state: ChaosState, prepared=prepareChaos(state)): {payload:string;seq:number} {
+  encode(state: ChaosState, prepared=prepareChaos(state)): {payload:string;seq:number;bytes:number;ack:ChaosAck} {
     const seq=++this.seq, full=seq===1||seq%300===0;
     const definitions:Definition[]=[],motion:string[]=[];
     const present=new Set<string>();
@@ -51,8 +58,14 @@ export class ChaosEncoder {
       if(!entry){entry={handle:this.nextHandle++,owner:s.owner};this.shots.set(s.id,entry);definitions.push([entry.handle,s.id,s.owner]);}
       else if(full||entry.owner!==s.owner){definitions.push([entry.handle,s.id,s.owner]);entry.owner=s.owner;}
       const previous=this.motions.get(entry.handle);
-      const delta=this.deltaMotion&&!define&&previous&&previous.length===s.values.length?s.values.map((value,i)=>value-previous[i]):undefined;
-      const deltaText=delta?.join(',');
+      let deltaText:string|undefined;
+      if(this.deltaMotion&&!define&&previous&&previous.length===s.values.length){
+        deltaText=s.deltas.get(previous);
+        if(deltaText===undefined){
+          deltaText='';for(let i=0;i<s.values.length;i++)deltaText+=(i?',':'')+(s.values[i]-previous[i]);
+          s.deltas.set(previous,deltaText);
+        }
+      }
       motion.push('['+(deltaText!==undefined&&deltaText.length<s.motion.length?-entry.handle+','+deltaText:entry.handle+','+s.motion)+']');
       this.motions.set(entry.handle,s.values);
     }
@@ -61,12 +74,13 @@ export class ChaosEncoder {
     for(const key of REST_KEYS){
       // Optional fields use their canonical empty representation so deletions travel.
       const value=state[key]??(key==='extraCases'?[]:key==='pressure'||key==='assignment'?null:undefined);
-      const encoded=key==='pressure'?rounded(value):prepared.rest.get(key)!;
+      const encoded=key==='pressure'?(state.pressure===prepared.pressure?prepared.pressureText:rounded(value)):prepared.rest.get(key)!;
       if(full||this.rest.get(key)!==encoded){rest.push(JSON.stringify(key)+':'+encoded);this.rest.set(key,encoded);}
     }
-    const payload='{"type":"chaosFrame",'+(this.deltaMotion?'"motionEncoding":"delta-v1",':'')+'"stream":'+JSON.stringify(this.stream)+',"seq":'+seq+',"base":'+(full?0:seq-1)+',"time":'+rounded(state.time)+',"definitions":'+JSON.stringify(definitions)+',"motion":['+motion.join(',')+'],"rest":{'+rest.join(',')+'},"impacts":'+rounded(state.impacts)+'}';
-    if(new TextEncoder().encode(payload).byteLength>MAX_SERVER_MESSAGE_BYTES)throw new Error('Compact snapshot budget exceeded');
-    return {payload,seq};
+    const payload='{"type":"chaosFrame",'+(this.deltaMotion?'"motionEncoding":"delta-v1",':'')+'"stream":'+JSON.stringify(this.stream)+',"seq":'+seq+',"base":'+(full?0:seq-1)+',"time":'+rounded(state.time)+',"definitions":'+JSON.stringify(definitions)+',"motion":['+motion.join(',')+'],"rest":{'+rest.join(',')+'},"impacts":'+(state.impacts===prepared.impacts?prepared.impactText:rounded(state.impacts))+'}';
+    const bytes=textEncoder.encode(payload).byteLength;
+    if(bytes>MAX_SERVER_MESSAGE_BYTES)throw new Error('Compact snapshot budget exceeded');
+    return {payload,seq,bytes,ack:{type:'chaosAck',stream:this.stream,seq}};
   }
 }
 
@@ -75,14 +89,19 @@ export class ChaosEncoder {
 export class ChaosDecoder {
   private stream='';
   private seq=0;
-  private definitions=new Map<number,[string,string]>();
+  private definitions=new Map<number,[string,string|null]>();
   private rest:Record<string,unknown>={};
   private motions=new Map<number,number[]>();
   read(raw: unknown): {message:ServerMessage;ack?:ChaosAck}|null {
     if(typeof raw!=='string')return null;
-    if(raw.length>MAX_SERVER_MESSAGE_BYTES||new TextEncoder().encode(raw).byteLength>MAX_SERVER_MESSAGE_BYTES)return null;
+    if(raw.length>MAX_SERVER_MESSAGE_BYTES||textEncoder.encode(raw).byteLength>MAX_SERVER_MESSAGE_BYTES)return null;
     let value:unknown;try{value=JSON.parse(raw);}catch{return null;}
+    return this.readValue(value);
+  }
+  /** Used only after the bounded delivery decoder has reconstructed an envelope. */
+  readValue(value: unknown): {message:ServerMessage;ack?:ChaosAck}|null {
     if(!record(value))return null;
+    if(value.type==='movementFrame'){const message=parseServerMessage(expandMovement(value));return message?{message}:null;}
     if(value.type!=='chaosFrame'){const message=parseServerMessage(value);return message?{message}:null;}
     const f=value;
     if(f.motionEncoding!==undefined&&f.motionEncoding!=='delta-v1')return null;
@@ -92,10 +111,10 @@ export class ChaosDecoder {
     if(!full&&(f.stream!==this.stream||f.base!==this.seq||f.seq!==this.seq+1))return null;
     if(full&&f.stream===this.stream&&f.seq<=this.seq)return null;
     if(Object.keys(f.rest).some(k=>!REST_KEYS.some(allowed=>allowed===k)))return null;
-    const definitions=full?new Map<number,[string,string]>():new Map(this.definitions);
+    const definitions=full?new Map<number,[string,string|null]>():new Map(this.definitions);
     const changed=new Set<number>();
     for(const d of f.definitions){
-      if(!Array.isArray(d)||d.length!==3||!integer(d[0])||d[0]<1||!id(d[1])||!id(d[2])||changed.has(d[0]))return null;
+      if(!Array.isArray(d)||d.length!==3||!integer(d[0])||d[0]<1||!id(d[1])||(d[2]!==null&&!id(d[2]))||changed.has(d[0]))return null;
       changed.add(d[0]);definitions.set(d[0],[d[1],d[2]]);
     }
     const shots:ChaosShot[]=[],active=new Set<number>(),ids=new Set<string>();

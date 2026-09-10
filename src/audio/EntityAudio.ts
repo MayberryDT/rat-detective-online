@@ -29,7 +29,7 @@ export function initEntitySounds(next: THREE.AudioListener): void {
     }
 }
 
-/** Omit origin for your own reactions; remote rats share the gun's mild fade. */
+/** Omit origin for your own reactions; world reactions share the distance mix. */
 export function playEntitySound(name: SoundName, volume = 0.5, origin?: Vec3Data): void {
     const buffer = buffers.get(name);
     // Hits during a suspended context should not queue up and burst on unlock.

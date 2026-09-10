@@ -16,13 +16,14 @@ export function hostedOptions(args) {
   if (receipts.length!==1) throw new Error('Supply exactly one --deployment=/absolute/deployment.json');
   const serverBots=Number(args.find(a=>a.startsWith('--server-bots='))?.slice('--server-bots='.length)??0);
   if(!Number.isInteger(serverBots)||serverBots<0||serverBots>99)throw Error('server-bots must be 0–99');
-  const quality=args.find(a=>a.startsWith('--quality='))?.slice('--quality='.length)??'arrival';
+  const quality=args.find(a=>a.startsWith('--quality='))?.slice('--quality='.length)??'both';
   if(!['arrival','playback','both'].includes(quality))throw Error('quality must be arrival, playback or both');
   const playbackCandidates=args.includes('--playback-candidates');
   const remoteFirst=args.includes('--remote-first');
   const remote=args.find(a=>a.startsWith('--remote-runtime='))?.slice('--remote-runtime='.length);
   if(remote&&!/^\/tmp\/rat-capacity-[a-zA-Z0-9-]+$/.test(remote))throw Error('Invalid remote runtime');
   const opts = options(args.filter(a=>a!=='--playback-candidates'&&!a.startsWith('--deployment=')&&!a.startsWith('--remote-runtime=')&&!a.startsWith('--server-bots=')&&a!=='--remote-first'&&!a.startsWith('--quality=')));
+  if(opts.storage!=='disk')throw Error('tmpfs is only supported by the local runner');
   if(opts.players.some((n,i)=>i>0&&n<=opts.players[i-1]))throw new Error('Hosted levels must increase');
   if(opts.players.some(n=>n-serverBots<1))throw Error('Total rats must exceed server bots');
   if(remoteFirst&&!remote)throw Error('remote-first requires a remote runtime');
@@ -34,31 +35,15 @@ export function checkReceipt(receipt, token, now=Date.now()) {
   url.protocol='wss:';url.pathname='/ws';url.searchParams.set('room','graybox-benchmark-check');
   validateClientTarget(url,token);
 }
-export function playbackHoldRate(p){
-  const classes=p.holdClasses;
-  // Historical reports without classification retain their conservative raw rate.
-  if(!classes)return p.held/p.frames;
-  const keys=['newest','oldest','stationaryInterior','movingInterior','unknown'];
-  if(keys.some(k=>!Number.isInteger(classes[k])||classes[k]<0)||keys.reduce((n,k)=>n+classes[k],0)!==p.held)return Infinity;
-  const stationary=classes.stationaryInterior;
-  return (p.held-stationary)/(p.frames-stationary);
-}
-export function playbackHealthy(m){
-  return m.gaps.count>0&&m.gaps.max<1000&&m.maxSilence<1000&&m.serverGaps.p95<=100&&m.serverGaps.p99<=250&&
-    m.loop.count>0&&m.loop.p99<=25&&m.invalid===0&&m.errors===0&&m.disconnects===0&&m.skipped===0&&
-    m.playback.frames-(m.playback.holdClasses?.stationaryInterior??0)>=600&&playbackHoldRate(m.playback)<=.01&&
-    (m.playback.forwardSkips??0)===0&&(m.playback.maxRenderAgeMs??0)<=600;
-}
-export function qualityHealthy(metrics,quality) {
-  if(quality==='both')return phaseHealthy(metrics)&&playbackHealthy(metrics)&&Object.values(metrics.byHost??{}).every(m=>phaseHealthy(m)&&playbackHealthy(m));
-  return quality==='playback'?playbackHealthy(metrics):phaseHealthy(metrics);
-}
+export {playbackHoldRate,playbackHealthy,qualityHealthy} from './lib/capacity-quality.mjs';
+import {playbackHoldRate,playbackHealthy,qualityHealthy} from './lib/capacity-quality.mjs';
 function merge(samples) {
   const m={wireBytesByType:{}};
   for(const s of samples)for(const [type,bytes] of Object.entries(s.wireBytesByType??{}))m.wireBytesByType[type]=(m.wireBytesByType[type]??0)+bytes;
   for(const key of ['gaps','serverGaps','ages','rtts','echoRtts','decodeMs','pongAges','moveAges','loop']) m[key]=summarize(samples.map(s=>s[key]));
-  for(const key of ['bytes','messages','invalid','errors','disconnects','sentMoves','sentShots','shotEvents','deaths','respawns','skipped','shotSamples','oldShots','wireSamples','sampledWireBytes','sampledLegacyBytes','coalescedSnapshots'])m[key]=samples.reduce((a,s)=>a+s[key],0);
+  for(const key of ['bytes','messages','invalid','errors','disconnects','sentMoves','sentShots','shotEvents','deaths','respawns','skipped','shotSamples','oldShots','wireSamples','sampledWireBytes','sampledLegacyBytes','coalescedSnapshots','tamperingSnapshots','missingCaseSnapshots'])m[key]=samples.reduce((a,s)=>a+s[key],0);
   for(const key of ['peakBalls','maxBuffered','maxSilence','maxInFlight'])m[key]=Math.max(...samples.map(s=>s[key]));
+  m.incidentsSeen=[...new Set(samples.flatMap(s=>Object.keys(s.incidentsSeen??{})))];
   m.minRosterSize=Math.min(...samples.map(s=>s.minRosterSize));
   m.minScoreboardSize=Math.min(...samples.map(s=>s.minScoreboardSize));
   m.approvedPlayback={};
@@ -183,9 +168,10 @@ async function main() {
             metrics??=await report();
             const durationMs=Date.now()-started;
             const rosterRecovered=metrics.minRosterSize===count&&metrics.minScoreboardSize===count;
-            const arrivalPassed=phaseHealthy(metrics),playbackPassed=playbackHealthy(metrics);
-            const qualityPassed=qualityHealthy(metrics,opts.quality);
-            const passed=!stopping&&qualityPassed&&rosterRecovered&&(name!=='churn'||churns>0);
+            const playbackRequired=name!=='idle'||opts.serverBots>0;
+            const arrivalPassed=phaseHealthy(metrics),playbackPassed=playbackRequired?playbackHealthy(metrics):null;
+            const qualityPassed=qualityHealthy(metrics,opts.quality,playbackRequired);
+            const passed=!stopping&&metrics.missingCaseSnapshots===0&&qualityPassed&&rosterRecovered&&(name!=='churn'||churns>0);
             result.phases.push({phase:name,durationMs,passed,arrivalPassed,playbackPassed,metrics,tcp,churns,generatorRssMb:process.memoryUsage().rss/1048576});
             console.log(JSON.stringify({event:'phase-result',players:count,phase:name,passed,gapP95:metrics.gaps.p95,gapP99:metrics.gaps.p99,gapMax:metrics.gaps.max,maxSilence:metrics.maxSilence,loopP99:metrics.loop.p99,invalid:metrics.invalid,errors:metrics.errors,peakBalls:metrics.peakBalls,mbps:metrics.bytes*8000/durationMs/1e6}));
             await writeFile(join(out,`${count}.json`),JSON.stringify(result,null,2));
