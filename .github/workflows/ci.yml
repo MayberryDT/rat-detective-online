@@ -21,8 +21,9 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run test
+      # Hosted fixture tests copy the production assets into an isolated build.
       - run: npm run build
+      - run: npm run test
       - run: npm run audit
       - name: Isolated Worker WebSocket smoke
         run: node scripts/with-local-worker.mjs -- npm run smoke:ws
