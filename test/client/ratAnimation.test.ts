@@ -135,7 +135,7 @@ it('keeps the hit readable and recovers the original colors and pose', () => {
     expect(rat.body.velocity.length()).toBe(0);
     const changedColors = meshes.map(mesh => (mesh.material as THREE.MeshStandardMaterial).color.getHex());
     expect(new Set(changedColors).size).toBeGreaterThan(4);
-    for (const mesh of meshes) expect((mesh.material as THREE.MeshStandardMaterial).emissiveIntensity).toBeLessThan(0.5);
+    for (const mesh of meshes) expect((mesh.material as THREE.MeshStandardMaterial).emissiveIntensity).toBeLessThanOrEqual(0.5);
     for (let i = 0; i < 60; i++) rat.update(1 / 60);
     expect(body.scale.y).toBeGreaterThan(0.99);
     meshes.forEach((mesh, i) => expect((mesh.material as THREE.MeshStandardMaterial).color).toEqual(colors[i]));

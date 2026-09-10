@@ -27,6 +27,15 @@ function fixture(){
 const owned:TouchControls[]=[];afterEach(()=>{owned.splice(0).forEach(c=>c.dispose());vi.restoreAllMocks();});
 function setup(){const f=fixture();owned.push(f.controls);return f;}
 
+it('fires once on touch-down and never repeats while held or dragged',()=>{
+ const f=setup();f.down('touch-fire',1,700,300);
+ for(let now=16;now<10_000;now+=16){f.controls.update(now,true);f.doc.dispatchEvent(f.event('pointermove',1,720,310));}
+ expect(f.shoot).toHaveBeenCalledOnce();
+ f.doc.dispatchEvent(f.event('pointerup',1));vi.mocked(performance.now).mockReturnValue(10_000);
+ f.down('touch-fire',2,700,300);expect(f.shoot).toHaveBeenCalledTimes(2);
+ f.controls.update(20_000,true);expect(f.shoot).toHaveBeenCalledTimes(2);
+});
+
 it('captures independent touches and supports dragging beyond the visible control',()=>{
  const f=setup();const start=f.down('touch-move-zone',1);expect(start.defaultPrevented).toBe(true);expect(f.find('touch-move-zone').captured.has(1)).toBe(true);
  f.doc.dispatchEvent(f.event('pointermove',1,1000,-400));expect(Math.hypot(f.controls.input.movement.x,f.controls.input.movement.y)).toBeCloseTo(1);

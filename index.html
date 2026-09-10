@@ -22,12 +22,14 @@
     <meta name="twitter:description" content="Grab the Hot Case, sling ricocheting cheese balls, and send rival rats flying. A chaotic multiplayer shooter in a run-down noir city. Play free in your browser." />
     <meta name="twitter:image" content="https://ratdetective.online/share-title-v1.png" />
     <meta name="twitter:image:alt" content="The Rat Detective title screen, with its detective rat logo against the dark purple city backdrop." />
-    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preload" href="/logo-title.webp" as="image" fetchpriority="high">
+    <link rel="preload" href="/fonts/bangers/Bangers-Regular.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap"
-        rel="stylesheet">
+        rel="stylesheet" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="/src/style.css" />
 </head>
 
@@ -36,7 +38,7 @@
     <div id="title-screen">
         <div class="title-kicker">DEPARTMENT OF BAD IDEAS PRESENTS</div>
         <div class="logo-container">
-            <img src="/logo.png" alt="Rat Detective Logo" id="main-logo">
+            <img src="/logo-title.webp" alt="Rat Detective Logo" id="main-logo" width="600" height="600" fetchpriority="high" decoding="async">
             <div class="title-group">
                 <h1><span>Rat</span> Detective</h1>
             </div>
@@ -63,7 +65,7 @@
 
         <button id="enter-city-btn" disabled autofocus>
             <div class="pulse-dot"></div>
-            ENTER CITY!
+            <span id="enter-city-label">ENTER CITY!</span>
         </button>
         <p class="music-credit game-credit">Music: <a id="music-credit-link" href="https://www.youtube.com/watch?v=k4hjX6ZsplU" target="_blank" rel="noopener noreferrer">Rat Detective Boogie</a> by Stellar Cruise</p>
     </div>

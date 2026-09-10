@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {AUTHORED_LIGHT_GAIN} from '../../src/session/lightingTuning';
 import {expect,it} from 'vitest';
 import {StreetLightPool} from '../../src/prototype/StreetLightPool';
 import {readLightingMode} from '../../src/session/lightingMode';
@@ -11,9 +12,9 @@ it('bounds overhead lighting, aligns it with actual fixtures, fades distant ligh
  const lights=scene.children.filter((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight);
  expect(lights).toHaveLength(4);expect(lights.every(l=>!l.castShadow)).toBe(true);
  camera.position.set(1,3,0);pool.update(camera);
- expect(lights[0].position.toArray()).toEqual([0,6.2,0]);expect(lights[0].intensity).toBe(45);
+ expect(lights[0].position.toArray()).toEqual([0,6.2,0]);expect(lights[0].intensity).toBe(45*AUTHORED_LIGHT_GAIN);
  expect(lights[0].target.position.y).toBeLessThan(lights[0].position.y);
- expect(lights.at(-1)!.intensity).toBeLessThan(45);
+ expect(lights.at(-1)!.intensity).toBeLessThan(45*AUTHORED_LIGHT_GAIN);
  camera.position.y=-3;pool.update(camera);expect(lights.every(l=>l.intensity===0)).toBe(true);
  camera.position.set(0,20,0);pool.update(camera);expect(lights.every(l=>l.intensity===0)).toBe(true);
  pool.dispose();expect(scene.children).toHaveLength(0);
@@ -39,10 +40,10 @@ it('uses the rat room and floor, explicit fixture power, and the same four light
  const lights=scene.children.filter((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight);
  camera.position.set(-52,12,-59); // Camera outside, rat inside the ground-floor west aisle.
  pool.update(camera,{x:-38,y:.3,z:-58});
- expect(lights.filter(l=>l.intensity>0).every(l=>l.position.y===5.8&&l.intensity<=75)).toBe(true);
- expect(lights[0].intensity).toBe(75);
+ expect(lights.filter(l=>l.intensity>0).every(l=>l.position.y===5.8&&l.intensity<=75*AUTHORED_LIGHT_GAIN)).toBe(true);
+ expect(lights[0].intensity).toBe(75*AUTHORED_LIGHT_GAIN);
  pool.update(camera,{x:-38,y:8.3,z:-74});
- expect(lights.filter(l=>l.intensity>0).every(l=>l.position.y===13.8&&l.intensity<=75)).toBe(true);
+ expect(lights.filter(l=>l.intensity>0).every(l=>l.position.y===13.8&&l.intensity<=75*AUTHORED_LIGHT_GAIN)).toBe(true);
  pool.update(camera,{x:65,y:-6.7,z:-35});
  expect(lights.filter(l=>l.intensity>0)).toHaveLength(2);expect(lights[0].position.y).toBe(-2.2);
  pool.update(camera,{x:55,y:-6.7,z:-35});expect(lights.every(l=>l.intensity===0)).toBe(true);

@@ -37,6 +37,29 @@ describe('network session transport', () => {
     });
     afterEach(() => { network.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+    it('prepares one silent title connection and joins over it only after entry',()=>{
+        network.prepare();network.prepare();expect(sockets).toHaveLength(1);
+        sockets[0].open();expect(sockets[0].sent).toHaveLength(0);expect(network.state).toBe('idle');
+        const order:string[]=[];network.onMessage=()=>order.push('welcome');network.onState=s=>order.push(s);
+        network.connect('Captain Crawley',appearance);
+        expect(sockets).toHaveLength(1);expect(JSON.parse(sockets[0].sent[0]).name).toBe('Captain Crawley');
+        sockets[0].receive(welcome());expect(order).toEqual(['connecting','welcome','playing']);
+    });
+    it('reuses a still-opening title connection and bounds unused connections',()=>{
+        network.prepare();network.connect('Rat',appearance);expect(sockets).toHaveLength(1);
+        sockets[0].open();expect(sockets[0].sent).toHaveLength(1);network.destroy();
+        network=makeNetwork();network.prepare();sockets[1].open();vi.advanceTimersByTime(25_000);
+        expect(sockets[1].readyState).toBe(FakeSocket.CLOSED);expect(network.state).toBe('idle');
+        network.connect('Rat',appearance);expect(sockets).toHaveLength(3);
+    });
+    it('falls back quietly after failed preparation and cancels it on disposal',()=>{
+        network.prepare();sockets[0].dispatchEvent(new Event('error'));
+        expect(network.state).toBe('idle');expect(vi.getTimerCount()).toBe(0);
+        network.connect('Rat',appearance);expect(sockets).toHaveLength(2);network.destroy();
+        network=makeNetwork();network.prepare();network.destroy();
+        expect(sockets[2].readyState).toBe(FakeSocket.CLOSED);expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('advertises delta snapshots by default and preserves explicit v1 fallback',()=>{
         const urls:string[]=[];
         for(const chaosTransport of [undefined,'compact-v1'] as const){

@@ -30,6 +30,13 @@ function fixture(mode: AssignmentId = 'excessive-force', count = 8) {
     return {board, root, body, state, assignment, people, rows, row, cells};
 }
 describe('full lobby scoreboard', () => {
+    it('shows names and stats without AI counts or identity labels',()=>{
+        const f=fixture();f.board.setVisible(true);
+        const allText=(node:Element):string=>[node.textContent,...node.children.map(allText),...[...node.selectors.values()].map(allText)].join(' ');
+        expect(allText(f.root)).not.toMatch(/\bAI\b|\bPLAYER\b/);
+        expect(allText(f.row('rd-ai-1'))).toContain('Rat 1');expect(allText(f.row('me'))).toContain('YOU');
+        f.board.dispose();
+    });
     it('retains unrelated row elements when one rat takes damage',()=>{
         const f=fixture();f.board.setVisible(true);
         const other=f.row('rd-ai-2'),mine=f.row('me');

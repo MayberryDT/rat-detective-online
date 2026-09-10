@@ -1,3 +1,4 @@
+import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import * as THREE from 'three';
 
 export interface LightRoom {id:string;xmin:number;xmax:number;zmin:number;zmax:number;ymin:number;ymax:number}
@@ -31,7 +32,7 @@ export class StreetLightPool {
             const {source:s,d}=entry;
             light.position.set(s.x,s.y,s.z);light.target.position.set(s.x,s.y-8,s.z);light.color.setHex(s.color);
             light.distance=s.distance??15;light.angle=s.angle??.68;
-            light.intensity=(s.intensity??45)*(1-THREE.MathUtils.smoothstep(d,18,32));
+            light.intensity=AUTHORED_LIGHT_GAIN*(s.intensity??45)*(1-THREE.MathUtils.smoothstep(d,18,32));
         });
     }
     dispose():void {for(const light of this.lights){this.scene.remove(light,light.target);light.dispose();}this.lights.length=0;}

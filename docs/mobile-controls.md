@@ -1,6 +1,6 @@
 # Mobile controls
 
-September 10 desktop follow-up: the user has paused phone testing. The current 16-rat preview is desktop-only; the prior phone relays and links below are inactive. See [current preview](verification/sixteen-rat-tuning-2026-09-10.md).
+Current entry point: [Rat Detective](https://ratdetective.online/). The private phone links below are historical and inactive. The latest follow-up makes title controls usable before the engine loads, prepares the public connection without reserving a slot, and changes FIRE to one shot per tap. See [load/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md).
 
 Implemented September 10, 2026. Landscape touch controls use the existing shoulder camera, animated muzzle, movement physics, assignment rules and server shooting checks. Desktop keyboard/mouse and held-Tab controls remain available.
 
@@ -12,7 +12,7 @@ September 10 firing fix: shot IDs support HTTP private-IP previews through a cry
 
 - Left floating joystick: camera-relative movement, eight-pixel dead zone, proportional speed up to the normal 18-unit maximum. The joystick stays anchored to the finger's initial contact; diagonals and combined keyboard/touch input cannot increase maximum walking speed.
 - Right-side swipe: aim without firing. A drag keeps ownership even outside its original touch area.
-- FIRE: hold to repeat; dragging the same finger continues aiming. Repeats are paced at least 85 ms apart, bounded by the unchanged 12-shot-per-second server ceiling and rendered frames. No catch-up bursts; rapidly tapping does not bypass the touch cadence. Desktop click behavior is unchanged.
+- FIRE: one tap fires once; holding never repeats. Dragging the same finger continues aiming. A valid pointer-down fires immediately; taps within the existing 85 ms cadence are consumed without a delayed shot. The unchanged server ceiling is 12 shots per second. Desktop click behavior is unchanged.
 - JUMP: the same grounded jump impulse/gravity and launcher behavior as keyboard jumping. Jump can be held alongside movement and firing using an additional finger. Two-thumb play can momentarily move the right thumb from FIRE to JUMP.
 - SCORES: tap open/close, swipe the full table in either direction. Opening it releases touch movement/fire; the multiplayer match continues. The desktop Tab behavior is unchanged.
 - AIM: a persisted .4–2× look-sensitivity slider, default **1.5×**. Explicit saved preferences override the default. Fullscreen is offered only when the browser exposes it; it is optional. Portrait displays TURN YOUR PHONE and clears held controls.
@@ -29,7 +29,7 @@ Release, lost capture, touch cancellation, backgrounding, focus loss, resize/rot
 
 The shared `SHOOT_RATE` declaration moved to `shared/shotTiming.ts` and is re-exported from Worker validation with identical values. There is no server rules or protocol change. Existing lighting/shadow settings and rendering resolution are retained until actual device performance is measured.
 
-## Private phone preview
+## Historical private phone preview
 
 - [Tailscale](http://100.79.24.11:5192/?room=graybox-benchmark-ai-full-lobby-v19&lighting=pools): phone must have Tailscale connected.
 - [Wi-Fi](http://10.129.181.26:5191/?room=graybox-benchmark-ai-full-lobby-v19&lighting=pools): phone must reach this computer on the same Wi-Fi network.

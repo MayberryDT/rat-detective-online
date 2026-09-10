@@ -1,3 +1,4 @@
+import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import {isCentralBuilding,skylineMasses} from '../shared/skyline';
 import { WindowLightCycle } from './WindowLightCycle';
 import {CITY_STREETS} from '../shared/cityPlan';
@@ -71,12 +72,16 @@ export class CityGenerator {
     private extension = false;
     private extensionLayout:BuildingFootprint[]=[];
     generate(layoutOverride?:BuildingFootprint[], extension=false): void {
+        for (const _step of this.generateSteps(layoutOverride, extension)) { /* Synchronous callers retain identical geometry. */ }
+    }
+
+    *generateSteps(layoutOverride?:BuildingFootprint[], extension=false): Generator<void> {
         this.extension=extension;
         if (this.generated) this.dispose();
         const layout = layoutOverride ?? generateBuildingLayout(this.spec, this.opts);
         this.extensionLayout=layout;
         const decorate = createDecorationRandom(this.spec);
-        this.generateBuildings(layout, decorate);
+        yield* this.generateBuildings(layout, decorate);
         this.generateLampProps(decorate);
         this.generateRoadMarkings();
         this.flushDetails();
@@ -157,7 +162,7 @@ export class CityGenerator {
         this.objects.push(object);
     }
 
-    private generateBuildings(layout: BuildingFootprint[], random: () => number): void {
+    private *generateBuildings(layout: BuildingFootprint[], random: () => number): Generator<void> {
         this.counts.buildings = layout.length;
         const rooftopMat = this.trackMaterial(new THREE.MeshStandardMaterial({ color: 0x34303f, roughness: 0.75 }));
 
@@ -170,6 +175,7 @@ export class CityGenerator {
         bin.userData.streetSurface=wood.userData.streetSurface='obstacle';
         const canvas = this.trackMaterial(new THREE.MeshStandardMaterial({color:0x443239,roughness:1}));
         for (const building of layout) {
+            yield;
             this.addBuilding(building, rooftopMat, random);
             const { cx, cz, bw, bd, bh } = building;
             if(isCentralBuilding(building)){
@@ -313,7 +319,7 @@ export class CityGenerator {
             metalness: 0.08,
             emissiveMap: glow,
             emissive: 0xffffff,
-            emissiveIntensity: 1.1,
+            emissiveIntensity: 1.1*AUTHORED_LIGHT_GAIN,
         }));
 
         // Six apartment/office sections share per-building uniforms. Whole groups
@@ -528,7 +534,7 @@ export class CityGenerator {
         const headMat = this.trackMaterial(new THREE.MeshStandardMaterial({
             color: 0xffdfac,
             emissive: 0xffbd62,
-            emissiveIntensity: 2.2,
+            emissiveIntensity: 2.2*AUTHORED_LIGHT_GAIN,
             roughness: 0.2,
         }));
         headMat.onBeforeCompile = shader => {

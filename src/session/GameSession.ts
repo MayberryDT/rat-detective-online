@@ -10,11 +10,10 @@ import { RatController } from '../player/RatController';
 import { CheeseGun } from '../weapons/CheeseGun';
 import { initEntitySounds, disposeEntitySounds } from '../entities/RatEntity';
 import { generateRandomAppearance } from '../shared/ratAppearance';
-import { generateRandomName } from '../shared/ratNames';
 import type { ClientMessage, ServerMessage } from '../shared/networkProtocol';
 import { NetworkManager } from '../network/NetworkManager';
 import { GameHud } from '../ui/GameHud';
-import { bindGameCredits } from '../ui/GameCredits';
+import { TitleScreen } from '../ui/TitleScreen';
 import { MunicipalQuips } from '../ui/municipalQuips';
 import { createStage } from './createStage';
 import { RemotePlayers } from './RemotePlayers';
@@ -34,7 +33,8 @@ import {TouchControls, touchControlsAvailable} from '../ui/TouchControls';
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
     private readonly stage;
-    private readonly transport = new NetworkManager();
+    private readonly transport: NetworkManager;
+    private readonly title: TitleScreen;
     private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue),(...args)=>this.foley?.play(...args));
     private readonly deathQuips = new MunicipalQuips();
     private readonly scoreboard = new MatchScoreboard();
@@ -62,15 +62,21 @@ export class GameSession {
     private serverOffset = 0;
     private lastMovementAt = 0;
     private lastMovement: number[] = [];
-    private assignedName = '';
-    private nameRollTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly simulation = new SimulationClock();
     private readonly direction = new THREE.Vector3();
     private touch?: TouchControls;
     private roundWon = false;
+    private releasePreparedModels?:()=>void;
 
-    constructor(renderer: THREE.WebGLRenderer, initialWorld?: WorldSpec) {
-        this.stage = createStage(renderer);
+    constructor(renderer: THREE.WebGLRenderer, initialWorld?: WorldSpec, prepared: {
+        title?: TitleScreen; transport?: NetworkManager; music?: Pick<SessionMusic, 'start' | 'unlock' | 'dispose'>;
+        stage?: ReturnType<typeof createStage>; city?: CityGenerator | Neighborhood;
+        releasePreparedModels?:()=>void;
+    } = {}) {
+        this.transport = prepared.transport ?? new NetworkManager();
+        this.title = prepared.title ?? new TitleScreen();
+        this.stage = prepared.stage ?? createStage(renderer);
+        this.releasePreparedModels=prepared.releasePreparedModels;
         const diagnostics=new URLSearchParams(window.location.search).get('diagnostics');
         const showDiagnostics=diagnostics!==null && diagnostics!=='quiet';
         this.stats = diagnostics!==null || normalGameBotCount(window.location) ? new PerformanceStats(renderer,showDiagnostics,report=>{
@@ -78,7 +84,7 @@ export class GameSession {
         }) : null;
         const { scene, world, listener } = this.stage;
         initEntitySounds(listener);
-        this.music = new SessionMusic(listener);
+        this.music = prepared.music ?? new SessionMusic(listener);
         this.music.start();
         this.feedback = new FeedbackAudio(listener);
         this.foley=new FoleyAudio(listener);
@@ -87,8 +93,8 @@ export class GameSession {
         this.remotes = new RemotePlayers(scene, world);
         this.worldSpec = initialWorld ? { ...initialWorld } : createWorldSpec(1);
         if(!initialWorld && new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
-        this.city = this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(scene,world,this.worldSpec) : new CityGenerator(scene, world, DEFAULT_CITY_OPTIONS, this.worldSpec);
-        this.city.generate();
+        this.city = prepared.city ?? (this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(scene,world,this.worldSpec) : new CityGenerator(scene, world, DEFAULT_CITY_OPTIONS, this.worldSpec));
+        if (!prepared.city) this.city.generate();
         this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
@@ -105,119 +111,30 @@ export class GameSession {
             if (victimId && this.transport.state === 'playing') this.transport.send({ type: 'hit', victimId, damage });
         };
         this.bindInput();
-        this.rollName();
-        this.focusTitleControls();
+        this.title.focus();
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 
-    private enterCity(): void {
+    enterCity(): void {
         if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
-        this.clearNameRoll();
-        this.transport.connect(this.assignedName || generateRandomName(), generateRandomAppearance());
-        void this.music.unlock();
+        this.transport.connect(this.title.name, generateRandomAppearance());
+        this.title.onGesture();
         this.requestPointerLock();
-    }
-
-    private prefersReducedMotion(): boolean {
-        return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    }
-
-    private pickName(exclude = ''): string {
-        let next = generateRandomName();
-        for (let tries = 0; tries < 8 && next === exclude; tries += 1) next = generateRandomName();
-        return next;
-    }
-
-    private restartAnimation(el: HTMLElement | null, className: string): void {
-        if (!el) return;
-        el.classList.remove(className);
-        void el.offsetWidth;
-        el.classList.add(className);
-    }
-
-    private showName(name: string, shuffle = false): void {
-        const namePlate = document.getElementById('player-name');
-        if (!namePlate) return;
-        namePlate.textContent = name;
-        if (shuffle) this.restartAnimation(namePlate, 'shuffling');
-    }
-
-    private clearNameRoll(): void {
-        if (this.nameRollTimer) {
-            clearTimeout(this.nameRollTimer);
-            this.nameRollTimer = null;
-        }
-        document.getElementById('player-name')?.classList.remove('shuffling');
-        document.getElementById('reroll-name-btn')?.classList.remove('rolling');
-    }
-
-    private rollName(animate = false): void {
-        this.clearNameRoll();
-        this.assignedName = this.pickName(this.assignedName);
-        if (!animate || this.prefersReducedMotion()) {
-            this.showName(this.assignedName);
-            if(animate){
-                const name=this.assignedName;
-                void this.music.unlock().then(()=>{
-                    if(this.disposed||document.hidden||name!==this.assignedName||!['idle','disconnected'].includes(this.transport.state))return;
-                    this.foley.setEnabled(true);this.foley.play('name-stamp');
-                });
-            }
-            return;
-        }
-
-        const dice = document.getElementById('reroll-name-btn');
-        this.restartAnimation(dice, 'rolling');
-        const flashes = 4;
-        const tick = (step: number) => {
-            if (this.disposed) return;
-            if (step >= flashes) {
-                this.showName(this.assignedName, true);
-                this.foley.setEnabled(!document.hidden);this.foley.play('name-stamp');
-                this.nameRollTimer = setTimeout(() => {
-                    this.nameRollTimer = null;
-                    document.getElementById('player-name')?.classList.remove('shuffling');
-                    dice?.classList.remove('rolling');
-                }, 180);
-                return;
-            }
-            this.foley.setEnabled(!document.hidden);this.foley.play('name-tick');
-            this.showName(this.pickName(this.assignedName), true);
-            this.nameRollTimer = setTimeout(() => tick(step + 1), 55);
-        };
-        tick(0);
-    }
-
-    private focusTitleControls(): void {
-        if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
-        const enter = document.getElementById('enter-city-btn') as HTMLButtonElement | null;
-        enter?.focus({ preventScroll: true });
     }
 
     private pointerLock!: ReturnType<typeof bindGamePointerLock>;
     private bindInput(): void {
         const options = { signal: this.events.signal };
-        const credits=bindGameCredits(this.events.signal);
-        const enter = document.getElementById('enter-city-btn') as HTMLButtonElement;
-        const reroll = document.getElementById('reroll-name-btn') as HTMLButtonElement;
+        const credits = this.title.credits;
         this.stage.renderer.domElement.tabIndex = -1;
-        enter.disabled = false;
-        enter.addEventListener('click', event => {
-            event.stopPropagation();
-            this.enterCity();
-        }, options);
-        reroll.addEventListener('click', event => {
-            event.stopPropagation();
+        this.title.available = () => ['idle', 'disconnected'].includes(this.transport.state);
+        this.title.onEnter = () => this.enterCity();
+        this.title.onGesture = () => {
+            this.transport.prepare();
             void this.music.unlock();
-            this.rollName(true);
-        }, options);
-        document.addEventListener('keydown', event => {
-            if (event.key !== 'Enter' && event.code !== 'Enter') return;
-            if (credits.isLink(event.target)) return;
-            if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
-            event.preventDefault();
-            this.enterCity();
-        }, options);
+            if (this.stage.listener.context.state === 'suspended') void this.stage.listener.context.resume().catch(() => {});
+        };
+        this.title.onCue = cue => { this.foley.setEnabled(!document.hidden); this.foley.play(cue); };
         if (touchControlsAvailable()) this.touch = new TouchControls({canvas:this.stage.renderer.domElement,
             look:(dx,dy)=>this.rat?.onMouseMove(dx,dy),shoot:()=>this.shoot(),
             scores:visible=>this.scoreboard.setVisible(visible),clearKeys:()=>this.input.clear()});
@@ -227,18 +144,9 @@ export class GameSession {
             record:(type,detail)=>this.stats?.event(type,detail)});
         bindScoreboardHold({available:()=>this.transport.state==='playing',
             show:visible=>this.scoreboard.setVisible(visible),scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
-        window.addEventListener('focus', () => this.focusTitleControls(), options);
         document.addEventListener('visibilitychange', () => {
             this.foleyWorld.setEnabled(!document.hidden&&this.transport.state==='playing');
-            if (!document.hidden) this.focusTitleControls();
         }, options);
-        // Autoplay can wait for permission. Retry on mouse, touch completion and
-        // keyboard activation without requiring the player to leave the title.
-        for (const type of ['pointerdown', 'pointerup', 'click', 'keydown']) {
-            document.addEventListener(type, () => {
-                void this.music.unlock();
-            }, {...options,capture:true});
-        }
         document.addEventListener('mousemove', event => {
             if (!this.touch?.active && this.transport.state === 'playing' && document.pointerLockElement === this.stage.renderer.domElement) {
                 this.rat?.onMouseMove(event.movementX, event.movementY);
@@ -413,6 +321,12 @@ export class GameSession {
 
     private animate(now: number): void {
         if (this.disposed) return;
+        // The prepared title backdrop is static; do not spend phone frame time
+        // drawing the whole city while somebody is choosing a name.
+        if(!this.rat && this.transport.state==='idle'){
+            this.previousTime=now;
+            this.frame=requestAnimationFrame(time=>this.animate(time));return;
+        }
         const frameMs = this.previousTime ? now - this.previousTime : 0;
         const dt = this.previousTime ? Math.min((now - this.previousTime) / 1000, 0.05) : 1 / 60;
         this.previousTime = now;
@@ -452,6 +366,10 @@ export class GameSession {
         this.city.update(dt, camera, this.rat?.entity.body.position);
         const presentationEnd=measure?performance.now():0;
         renderer.render(scene, camera);
+        if(this.rat && this.transport.state==='playing' && this.releasePreparedModels){
+            this.releasePreparedModels();this.releasePreparedModels=undefined;
+            performance.mark('city-first-play-frame');
+        }
         this.chaos?.renderOutline(renderer,camera);
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:{...this.chaos?.getDiagnostics(),predictedBalls:this.gun.predictedBallCount}});
         this.frame = requestAnimationFrame(time => this.animate(time));
@@ -460,7 +378,8 @@ export class GameSession {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
-        this.clearNameRoll();
+        this.title.dispose();
+        this.releasePreparedModels?.();this.releasePreparedModels=undefined;
         cancelAnimationFrame(this.frame);
         this.events.abort();
         this.touch?.dispose();

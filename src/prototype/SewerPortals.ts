@@ -1,3 +1,4 @@
+import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import * as THREE from 'three';
 import {SEWER_MANHOLE,SEWER_PIPE_ENTRANCES,sewerPipeBoxes,sewerPipePoint,type SewerPipeEntrance} from '../shared/sewerLayout';
 import { SEWER_TUNNEL_LAMP_DISTANCES } from './SewerLighting';
@@ -37,12 +38,12 @@ export class SewerPortals {
             this.box(foot.x,.36,foot.z,horizontal?.5:.82,.9,horizontal?.82:.5,0x68604b);
             const lamp=sewerPipePoint(entry,-.24,side*3.5);
             const light=this.box(lamp.x,3.48,lamp.z,horizontal?.08:.25,.55,horizontal?.25:.08,0xcaa969);
-            (light.material as THREE.MeshStandardMaterial).emissiveIntensity=.8;
+            (light.material as THREE.MeshStandardMaterial).emissiveIntensity=.8*AUTHORED_LIGHT_GAIN;
         }
         for(const distance of SEWER_TUNNEL_LAMP_DISTANCES){
             const p=sewerPipePoint(entry,distance);
             const lamp=this.box(p.x,p.floorY+4.92,p.z,horizontal?.75:.48,.12,horizontal?.48:.75,0x8dbfa5);
-            (lamp.material as THREE.MeshStandardMaterial).emissiveIntensity=.8;
+            (lamp.material as THREE.MeshStandardMaterial).emissiveIntensity=.8*AUTHORED_LIGHT_GAIN;
         }
         // Long mineral runs and rust streaks sit against the inner wall of each curved throat.
         for(const side of [-1,1])for(let distance=3;distance<entry.length;distance+=4){
@@ -60,7 +61,7 @@ export class SewerPortals {
             this.box(m.x+side*2.15,-1.5,m.z,.3,3,4.6,0x384236);
             this.box(m.x,-1.5,m.z+side*2.15,4,3,.3,0x384236);
             const lamp=this.box(m.x+side*1.86,-1,m.z,.12,.35,.7,0x8dbfa5);
-            (lamp.material as THREE.MeshStandardMaterial).emissiveIntensity=.8;
+            (lamp.material as THREE.MeshStandardMaterial).emissiveIntensity=.8*AUTHORED_LIGHT_GAIN;
         }
         const collar=new THREE.Shape();collar.moveTo(-2.4,-2.4);collar.lineTo(2.4,-2.4);collar.lineTo(2.4,2.4);collar.lineTo(-2.4,2.4);collar.closePath();
         const hole=new THREE.Path();hole.absarc(0,0,2.05,0,Math.PI*2,true);collar.holes.push(hole);

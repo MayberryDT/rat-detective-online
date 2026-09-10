@@ -13,6 +13,7 @@ const harness = vi.hoisted(() => {
         sent: unknown[] = [];
         connect = vi.fn(() => { this.state = 'connecting'; });
         retry = vi.fn();
+        prepare = vi.fn();
         send = vi.fn((message: unknown) => { this.sent.push(message); return true; });
         destroy = vi.fn();
         constructor() { harness.transports.push(this); }
@@ -211,7 +212,7 @@ vi.mock('../../src/session/createStage', () => ({
                 getWorldDirection: (target: Record<string, unknown>) => Object.assign(target, { x: 0, y: 0, z: -1 }),
                 updateProjectionMatrix: vi.fn(),
             },
-            listener: {},
+            listener: {context:{state:'running',resume:vi.fn(async()=>{})}},
             world: { step: vi.fn() },
             flashlight: {
                 position: { set: vi.fn() },

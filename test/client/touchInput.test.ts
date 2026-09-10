@@ -1,6 +1,5 @@
 import {expect,it,vi} from 'vitest';
 import {TouchInput} from '../../src/session/TouchInput';
-import {TOUCH_SHOT_INTERVAL_MS,SHOOT_RATE} from '../../src/shared/shotTiming';
 
 it('supports moving, drag-aim firing and jumping with independently owned fingers',()=>{
  const look=vi.fn(),shoot=vi.fn(),input=new TouchInput(look);
@@ -28,12 +27,14 @@ it('ignores unknown fingers and invalid coordinates',()=>{
  const look=vi.fn(),input=new TouchInput(look);expect(input.start(1,'look',NaN,0)).toBe(false);
  input.move(5,10,10);input.end(5);input.start(2,'move',0,0);input.move(2,Infinity,10);expect(input.movement.x).toBe(0);expect(look).not.toHaveBeenCalled();
 });
-it('paces held fire below the existing server ceiling, without catch-up bursts or rapid-retap bypass',()=>{
+it('fires once per press, with no held repeats, delayed shot or rapid-retap bypass',()=>{
  const shoot=vi.fn(),input=new TouchInput(()=>{});input.start(1,'fire',0,0);
- for(let t=0;t<1000;t++)input.tick(t,shoot);expect(shoot.mock.calls.length).toBe(SHOOT_RATE.limit);
- input.tick(5000,shoot);expect(shoot).toHaveBeenCalledTimes(SHOOT_RATE.limit+1);
- input.end(1);input.start(2,'fire',0,0);input.tick(5001,shoot);expect(shoot).toHaveBeenCalledTimes(SHOOT_RATE.limit+1);
- input.tick(5000+TOUCH_SHOT_INTERVAL_MS,shoot);expect(shoot).toHaveBeenCalledTimes(SHOOT_RATE.limit+2);
+ for(let t=0;t<1000;t++)input.tick(t,shoot);expect(shoot).toHaveBeenCalledOnce();
+ input.tick(5000,shoot);expect(shoot).toHaveBeenCalledOnce();
+ input.end(1);input.start(2,'fire',0,0);input.tick(5001,shoot);expect(shoot).toHaveBeenCalledTimes(2);
+ input.end(2);input.start(3,'fire',0,0);input.tick(5002,shoot);expect(shoot).toHaveBeenCalledTimes(2);
+ input.tick(10000,shoot);expect(shoot).toHaveBeenCalledTimes(2);
+ input.end(3);input.start(4,'fire',0,0);input.tick(10001,shoot);expect(shoot).toHaveBeenCalledTimes(3);
 });
 it('clear cancels every held action and old pointers cannot resume them',()=>{
  const shoot=vi.fn(),look=vi.fn(),input=new TouchInput(look);input.start(1,'move',0,0);input.move(1,50,0);input.start(2,'fire',0,0);input.start(3,'jump',0,0);

@@ -1,3 +1,5 @@
+import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
+import { yieldToPage } from '../session/yieldToPage';
 import {CENTRAL_BUILDINGS} from '../shared/skyline';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
@@ -30,18 +32,32 @@ export class Neighborhood {
     private readonly bodies: CANNON.Body[] = [];
     private readonly materials = new Map<number,THREE.MeshStandardMaterial>();
     private readonly glowMaterials = new Map<number,THREE.MeshBasicMaterial>();
-    private readonly architecture:LandmarkArchitecture;
-    private readonly vehicles:ParkedVehicles;
-    private readonly grime:CityGrime;
-    private readonly sewerPortals:SewerPortals;
-    private readonly city:CityGenerator;
+    private architecture!: LandmarkArchitecture;
+    private vehicles!: ParkedVehicles;
+    private grime!: CityGrime;
+    private sewerPortals!: SewerPortals;
+    private city!: CityGenerator;
     private readonly lampSources:THREE.PointLight[]=[];
     private readonly fixedLights:THREE.PointLight[]=[];
     private readonly lampPool:THREE.PointLight[]=[];
-    private readonly overhead?:StreetLightPool;
-    private readonly readability?:StreetReadability;
+    private overhead?:StreetLightPool;
+    private readability?:StreetReadability;
     private readonly interiorSources=new Map<THREE.PointLight,InteriorFixture>();
-    constructor(private scene:THREE.Scene, private world:CANNON.World, spec:WorldSpec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION},private readonly lighting:LightingMode=readLightingMode()) {
+    constructor(private scene:THREE.Scene, private world:CANNON.World, spec:WorldSpec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION},private readonly lighting:LightingMode=readLightingMode(), deferred=false) {
+        if (!deferred) for (const _step of this.build(spec)) { /* Preserve synchronous fixtures and reconnects. */ }
+    }
+    static async prepare(scene:THREE.Scene, world:CANNON.World, spec:WorldSpec, signal?:AbortSignal):Promise<Neighborhood> {
+        const city = new Neighborhood(scene,world,spec,readLightingMode(),true);
+        let slice=performance.now();
+        try { for (const _step of city.build(spec)) {
+            if(signal?.aborted)throw new DOMException('Page closed','AbortError');
+            if(performance.now()-slice>=8){await yieldToPage(signal);slice=performance.now();}
+        } }
+        catch (error) { city.dispose(); throw error; }
+        return city;
+    }
+    private *build(spec:WorldSpec):Generator<void> {
+        const {scene,world,lighting}=this;
         const existingObjects=new Set(scene.children);
         this.streetFill.intensity=lighting==='classic'?1.25:.32;
         this.add(this.streetFill);
@@ -49,9 +65,11 @@ export class Neighborhood {
         for(const obj of [...scene.children]) if(obj instanceof THREE.Mesh && obj.geometry instanceof THREE.PlaneGeometry) {this.groundMeshes.push(obj);scene.remove(obj);}
         this.city=new CityGenerator(scene,world,undefined,{...spec,version:1});
         const layout=[...cityStreetBuildings(generateBuildingLayout({...spec,version:1})),...CENTRAL_BUILDINGS];
-        this.city.generate(layout,true);
+        yield* this.city.generateSteps(layout,true);
         const boxes=grayboxBoxes(spec);
+        let builtBoxes=0;
         for(const b of boxes){
+            if (++builtBoxes % 40 === 0) yield;
             if(b.original)continue;
             const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz);
             if(b.hidden)mesh.visible=false;
@@ -142,16 +160,21 @@ export class Neighborhood {
         const fixtures=lighting==='pools'?interiorFixtures():[];
         for(const fixture of fixtures)this.addInteriorFixture(fixture);
         this.architecture=new LandmarkArchitecture(scene,lighting==='classic');
+        yield;
         this.vehicles=new ParkedVehicles(scene);
+        yield;
         this.grime=new CityGrime(scene,spec);
+        yield;
         this.sewerPortals=new SewerPortals(scene);
         if(lighting==='pools')this.overhead=new StreetLightPool(scene,[
             ...STREET_LAMPS.map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:180})),
             ...generatedStreetLamps(layout,STREET_LAMPS).map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:180})),
             ...fixtures,
         ],LIGHT_ROOMS);
-        this.bakeFixedLighting();
+        yield* this.bakeFixedLighting();
+        yield;
         this.batchStaticMeshes();
+        yield;
         this.initLampPool();
         if(lighting==='pools'&&streetReadabilityEnabled()){
             this.readability=new StreetReadability(scene,layout,boxes);
@@ -208,7 +231,7 @@ export class Neighborhood {
     }
     /** Bake a modest diffuse contribution into static architecture. Unlike live point
      * lights this stays identical from every camera position, with no shader light limit. */
-    private bakeFixedLighting() {
+    private *bakeFixedLighting():Generator<void> {
         const position=new THREE.Vector3(),normal=new THREE.Vector3(),toward=new THREE.Vector3();
         const bounds=new THREE.Box3(),normalMatrix=new THREE.Matrix3();
         for(const obj of this.objects){
@@ -249,12 +272,13 @@ export class Neighborhood {
                     const facing=Math.max(0,normal.dot(toward.multiplyScalar(1/distance)));
                     const falloff=1-distance/source.distance;
                     const cone=fixture?THREE.MathUtils.smoothstep(toward.y,Math.cos(fixture.angle??.85),.96):1;
-                    const amount=Math.min(.075,source.intensity*(fixture ? .16 : .08)/(12+distance*distance))*falloff*facing*cone;
+                    const amount=AUTHORED_LIGHT_GAIN*Math.min(.075,source.intensity*(fixture ? .16 : .08)/(12+distance*distance))*falloff*facing*cone;
                     red+=source.color.r*amount;green+=source.color.g*amount;blue+=source.color.b*amount;
                 }
-                colors[i*3]=Math.min(red,.12);colors[i*3+1]=Math.min(green,.12);colors[i*3+2]=Math.min(blue,.12);
+                colors[i*3]=Math.min(red,.12*AUTHORED_LIGHT_GAIN);colors[i*3+1]=Math.min(green,.12*AUTHORED_LIGHT_GAIN);colors[i*3+2]=Math.min(blue,.12*AUTHORED_LIGHT_GAIN);
             }
             obj.geometry.setAttribute('fixedIllumination',new THREE.BufferAttribute(colors,3));
+            yield;
         }
         for(const material of this.materials.values()){
             material.onBeforeCompile=shader=>{
@@ -322,7 +346,7 @@ export class Neighborhood {
             if(!source){light.intensity=0;continue;}
             light.position.copy(source.position);
             light.color.copy(source.color);
-            light.intensity=source.intensity;
+            light.intensity=source.intensity*AUTHORED_LIGHT_GAIN;
             light.distance=source.distance;
             light.decay=source.decay;
         }
@@ -346,11 +370,11 @@ export class Neighborhood {
     dispose() {
         this.readability?.dispose();
         this.overhead?.dispose();
-        this.architecture.dispose();
-        this.vehicles.dispose();
-        this.grime.dispose();
-        this.sewerPortals.dispose();
-        this.city.dispose();
+        this.architecture?.dispose();
+        this.vehicles?.dispose();
+        this.grime?.dispose();
+        this.sewerPortals?.dispose();
+        this.city?.dispose();
         for(const light of this.lampPool){this.scene.remove(light);light.dispose();}
         this.lampPool.length=0;
         for(const light of [...this.lampSources,...this.fixedLights])light.dispose();

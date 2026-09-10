@@ -8,7 +8,7 @@ type Finger = { role: TouchRole; x: number; y: number; originX: number; originY:
 export class TouchInput {
     readonly movement: TouchMovement = {x: 0, y: 0, jump: false};
     readonly fingers = new Map<number, Finger>();
-    private firing = false;
+    private pendingShot = false;
     private nextShot = -Infinity;
     constructor(private readonly look: (dx: number, dy: number) => void) {}
     start(id: number, role: TouchRole, x: number, y: number): boolean {
@@ -17,7 +17,7 @@ export class TouchInput {
         if ([...this.fingers.values()].some(f => f.role === role || (aiming(role) && aiming(f.role)))) return false;
         this.fingers.set(id, {role, x, y, originX: x, originY: y});
         if (role === 'jump') this.movement.jump = true;
-        if (role === 'fire') this.firing = true;
+        if (role === 'fire') this.pendingShot = true;
         return true;
     }
     move(id: number, x: number, y: number): void {
@@ -38,15 +38,18 @@ export class TouchInput {
         this.fingers.delete(id);
         if (finger.role === 'move') { this.movement.x = 0; this.movement.y = 0; }
         if (finger.role === 'jump') this.movement.jump = false;
-        if (finger.role === 'fire') this.firing = false;
+        if (finger.role === 'fire') this.pendingShot = false;
     }
     tick(now: number, shoot: () => void): void {
-        if (this.firing && Number.isFinite(now) && now >= this.nextShot) {
-            this.nextShot = now + TOUCH_SHOT_INTERVAL_MS; shoot();
+        if (this.pendingShot && Number.isFinite(now)) {
+            // Consume this press even during cooldown. Holding, dragging, or a
+            // slow frame must never turn one tap into another shot later.
+            this.pendingShot = false;
+            if (now >= this.nextShot) { this.nextShot = now + TOUCH_SHOT_INTERVAL_MS; shoot(); }
         }
     }
     clear(): void {
-        this.fingers.clear(); this.firing = false;
+        this.fingers.clear(); this.pendingShot = false;
         this.movement.x = 0; this.movement.y = 0; this.movement.jump = false;
     }
 }

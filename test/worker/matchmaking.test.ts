@@ -2,7 +2,7 @@ import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOT_REFILL_MS, type GameRoom } from '../../src/worker/GameRoom';
-import { MAX_PLAYERS, type ServerMessage } from '../../src/shared/networkProtocol';
+import { DEFAULT_ROOM_NAME, MAX_PLAYERS, type ServerMessage } from '../../src/shared/networkProtocol';
 
 const sockets: WebSocket[] = [];
 const rooms = new Set<string>();
@@ -51,6 +51,41 @@ afterEach(async()=>{
 });
 
 describe('automatic public room population',()=>{
+  it('prepares bounded title sockets without reserving slots, creating overflow or waking bots',async()=>{
+    const group=DEFAULT_ROOM_NAME,matcher=env.MATCHMAKER.getByName(group),stub=env.GAME_ROOM.getByName(group);
+    rooms.add(group);
+    const titles:WebSocket[]=[];
+    for(let i=0;i<16;i++){
+      const response=await matcher.fetch(new Request('https://game.test/ws?prepare=1',{headers:{Upgrade:'websocket'}}));
+      expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);titles.push(ws);
+    }
+    expect(await stub.occupiedSlots()).toBe(0);expect(await stub.status()).toMatchObject({players:0,bots:0});
+    await runInDurableObject(stub,(instance:GameRoom)=>expect((instance as any).chaosTimer).toBeNull());
+    const extra=await matcher.fetch(new Request('https://game.test/ws?prepare=1',{headers:{Upgrade:'websocket'}}));
+    expect(extra.status).toBe(503);
+    await runInDurableObject(matcher,(_instance,ctx)=>expect(ctx.storage.sql.exec('SELECT name FROM rooms').toArray()).toHaveLength(0));
+    const messages:ServerMessage[]=[];
+    titles[0].addEventListener('message',e=>{const m=readSocketMessage(titles[0],e.data);if(m)messages.push(m);});
+    titles[0].send(JSON.stringify({type:'join',protocolVersion:7,name:'Captain Crawley',appearance}));
+    await until(()=>messages.some(m=>m.type==='welcome'));
+    expect(await stub.occupiedSlots()).toBe(1);expect(await stub.status()).toMatchObject({players:8,bots:7});
+    await runInDurableObject(stub,async(instance:GameRoom)=>{
+      const game=instance as any,now=Date.now();game.clock=()=>now+31_000;await instance.alarm();
+    });
+    await until(()=>titles.slice(1).every(ws=>ws.readyState===WebSocket.CLOSED));
+    expect(titles[0].readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('does not let an unreserved title connection steal a promised admission slot',async()=>{
+    const group=DEFAULT_ROOM_NAME,matcher=env.MATCHMAKER.getByName(group),stub=env.GAME_ROOM.getByName(group);rooms.add(group);
+    const prepared=await matcher.fetch(new Request('https://game.test/ws?prepare=1',{headers:{Upgrade:'websocket'}}));
+    const title=prepared.webSocket!;title.accept();sockets.push(title);
+    await Promise.all(Array.from({length:MAX_PLAYERS},()=>open(group,undefined,false)));
+    const messages:ServerMessage[]=[];title.addEventListener('message',e=>{const m=readSocketMessage(title,e.data);if(m)messages.push(m);});
+    title.send(JSON.stringify({type:'join',protocolVersion:7,name:'Late Title',appearance}));
+    await until(()=>messages.some(m=>m.type==='error'));
+    expect(await stub.occupiedSlots()).toBe(MAX_PLAYERS);expect(await stub.status()).toMatchObject({players:0,bots:0});
+  });
   it('bounds queued admission and uses the availability index',async()=>{
     const group=pool(),matcher=env.MATCHMAKER.getByName(group);
     await runInDurableObject(matcher,async(instance,ctx)=>{

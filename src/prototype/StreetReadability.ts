@@ -1,3 +1,4 @@
+import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import * as THREE from 'three';
 import type {BuildingFootprint} from '../shared/worldSpec';
 import type {GrayboxBox} from '../shared/grayboxLayout';
@@ -90,7 +91,7 @@ export class StreetReadability {
             }
         }
         const data=new Uint8Array(SIZE*SIZE*4);
-        for(let i=0;i<SIZE*SIZE;i++)for(let c=0;c<3;c++)data[i*4+c]=Math.round(Math.min(.055,field[i*3+c])/MAX_LIGHT*255);
+        for(let i=0;i<SIZE*SIZE;i++)for(let c=0;c<3;c++)data[i*4+c]=Math.round(Math.min(MAX_LIGHT,Math.min(.055,field[i*3+c])*AUTHORED_LIGHT_GAIN)/MAX_LIGHT*255);
         this.texture=new THREE.DataTexture(data,SIZE,SIZE,THREE.RGBAFormat);
         this.texture.minFilter=this.texture.magFilter=THREE.LinearFilter;
         this.texture.generateMipmaps=false;this.texture.needsUpdate=true;

@@ -9,7 +9,7 @@ import { SEWER_PORTAL_LIGHTS } from '../../src/prototype/SewerLighting';
 
 // Isolate the prototype's real hall geometry and lighting from unrelated city decoration.
 vi.mock('../../src/world/CityGenerator', () => ({
-  CityGenerator: class { generate() {} update() {} dispose() {} },
+  CityGenerator: class { generate() {} *generateSteps() {} update() {} dispose() {} },
 }));
 vi.mock('../../src/utils/RatModel', async () => {
   const THREE = await import('three');
@@ -24,6 +24,12 @@ it('lights the authored street poles as well as supplemental lamps in the trial'
   expect(lights).toHaveLength(4);
   expect(lights.some(l=>l.position.x===x&&l.position.z===z&&l.position.y===9&&l.intensity>0)).toBe(true);
   neighborhood.dispose();expect(scene.children.some(o=>o instanceof THREE.SpotLight)).toBe(false);
+});
+
+it('releases partially prepared city resources when the page closes',async()=>{
+  const scene=new THREE.Scene(),world=new CANNON.World(),page=new AbortController();page.abort();
+  await expect(Neighborhood.prepare(scene,world,{seed:1,version:2},page.signal)).rejects.toMatchObject({name:'AbortError'});
+  expect(scene.children).toHaveLength(0);expect(world.bodies).toHaveLength(0);
 });
 
 describe('steady landmark illumination and sewer-only moving lights', () => {

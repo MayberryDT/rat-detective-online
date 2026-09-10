@@ -25,7 +25,7 @@ const DEATH_GLOW_FADE = 2.5;
 const GLOW_THICKNESS = 0.025;    // Surface offset, without moving body-part centers
 const GLOW_OPACITY = 0.22;        // Readable against the dark city between lamps
 const GLOW_COLOR = 0xffffff;      // Base glow tint (will blend with coat color)
-const EMISSIVE_INTENSITY = 0.22;  // Rat-only fill; overhead lights still model the hat and coat
+const EMISSIVE_INTENSITY = 0.28;  // Rat-only lift; lamps still model the hat and coat
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
 // 3 hats × 5 hat colors × 5 furs × 5 coats = 375 unique combos
@@ -128,7 +128,7 @@ export class RatEntity {
         this.mesh.traverse((c) => {
             if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshStandardMaterial && !this.allMaterials.includes(c.material)) {
                 // Add subtle emissive self-illumination so rats glow from distance
-                c.material.color.multiplyScalar(1.1);
+                c.material.color.multiplyScalar(1.16);
                 c.material.emissive.copy(c.material.color).lerp(new THREE.Color(0x73697b),.15).multiplyScalar(0.5);
                 c.material.emissiveIntensity = EMISSIVE_INTENSITY;
 

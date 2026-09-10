@@ -1,3 +1,4 @@
+import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import * as THREE from 'three';
 import {LANDMARK_INTERIORS, LANDMARK_FURNISHINGS, landmarkBoxes} from '../shared/landmarkLayout';
 import {registerLandmarkReactions} from './LandmarkReactions';
@@ -485,7 +486,7 @@ export class LandmarkArchitecture {
         for(const [key,matrices] of this.batches){
             const [name,shape]=key.split(':');const finish=name as Finish;
             const glowing=['warm','cream','cyan','rose','green'].includes(finish);
-            const material=new THREE.MeshStandardMaterial({color:colors[finish],roughness:.85,metalness:finish==='brass'?.45:.05,emissive:glowing?colors[finish]:0,emissiveIntensity:glowing?.65:0});
+            const material=new THREE.MeshStandardMaterial({color:colors[finish],roughness:.85,metalness:finish==='brass'?.45:.05,emissive:glowing?colors[finish]:0,emissiveIntensity:glowing?.65*AUTHORED_LIGHT_GAIN:0});
             this.materials.push(material);
             const mesh=new THREE.InstancedMesh(shape==='round'?this.roundGeometry:this.geometry,material,matrices.length);
             matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));

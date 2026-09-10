@@ -98,9 +98,8 @@ export class MatchScoreboard {
             (mode ? points(b.id) - points(a.id) : b.kills - a.kills) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
         const totalHeld = rows.reduce((sum, p) => sum + held(p.id), 0);
         const totalKills = rows.reduce((sum, p) => sum + p.kills, 0);
-        const ai = rows.filter(p => /^rd-ai-\d+$/.test(p.id)).length;
         text(this.title, assignment?.result ? 'CASE CLOSED' : 'ROUND STATS');
-        text(this.summary, `${rows.length} INVESTIGATORS · ${ai} AI · ${totalKills} KILLS`);
+        text(this.summary, `${rows.length} INVESTIGATORS · ${totalKills} KILLS`);
         text(this.mode, mode ? ASSIGNMENTS[mode].title : 'DEATHMATCH');
         text(this.context, assignment?.result ? `${assignment.result.winnerName} WINS` : assignment?.phase === 'suspended' ? 'TAMPERING · OBJECTIVE PAUSED' :
             mode === 'closing-time' ? `${caseTime(Math.ceil(assignment!.remainingMs / 1000))} REMAINING` : mode === 'chain-of-custody' ? 'FIRST TO 3 DELIVERIES' : mode === 'excessive-force' ? 'FIRST TO 10 CASE KILLS' : 'THIS ROUND');
@@ -117,10 +116,10 @@ export class MatchScoreboard {
             this.head.appendChild(row);
         }
         const view = rows.map((p, i) => {
-            const local = p.id === this.myId, bot = /^rd-ai-\d+$/.test(p.id);
+            const local = p.id === this.myId;
             const holder = p.id === this.state?.case.owner;
             const status = p.id === winner ? 'WINNER' : p.hp === 0 ? 'RAT DOWN' : holder ? 'ON THE CASE' : p.hp === undefined ? 'IN THE CITY' : `${p.hp} / 3 HP`;
-            return {id: p.id, local, holder, down: p.hp === 0, name: p.name, tag: local ? 'YOU' : bot ? 'AI' : 'PLAYER',
+            return {id: p.id, local, holder, down: p.hp === 0, name: p.name, tag: local ? 'YOU' : '',
                 cells: [String(i + 1), ...(mode === 'excessive-force' ? [`${points(p.id)} / 10`] : mode === 'chain-of-custody' ? [`${points(p.id)} / 3`] : []),
                     String(p.kills), String(p.deaths), p.deaths ? (p.kills / p.deaths).toFixed(2) : p.kills ? '∞' : '—',
                     this.state ? caseTime(held(p.id)) : '—', this.state && totalHeld ? `${Math.round(held(p.id) / totalHeld * 100)}%` : '—', status]};
@@ -141,8 +140,9 @@ export class MatchScoreboard {
                     if (i === 1) {
                         const name = this.doc.createElement('th'); name.scope = 'row'; name.className = 'investigator-name';
                         const label = this.doc.createElement('span'); label.textContent = p.name;
-                        const tag = this.doc.createElement('small'); tag.textContent = p.tag;
-                        name.appendChild(label); name.appendChild(tag); row.appendChild(name);
+                        name.appendChild(label);
+                        if(p.tag){const tag=this.doc.createElement('small');tag.textContent=p.tag;name.appendChild(tag);}
+                        row.appendChild(name);
                     }
                     const cell = this.doc.createElement('td'); cell.textContent = value;
                     if (i === p.cells.length - 1) cell.className = 'investigator-status';

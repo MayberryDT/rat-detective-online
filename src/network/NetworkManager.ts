@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
+import { DEFAULT_ROOM_NAME, PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
 import { isSupportedWorldVersion } from '../shared/worldSpec';
 import { CHAOS_WIRE_MODE } from '../shared/chaosWire';
 import { DeliveryDecoder, type DeliveryAck } from '../shared/deliveryWire';
@@ -84,6 +84,7 @@ export class NetworkManager {
     private generation = 0;
     private lastReceived = 0;
     private url: string;
+    private prepared: {socket:WebSocket; cleanup:()=>void} | null = null;
     private readonly options: TransportOptions;
     private readonly diagnostics = {
         receivedCount: 0, receivedChars: 0, parseMs: 0, parseMaxMs: 0,
@@ -106,6 +107,22 @@ export class NetworkManager {
         this.open();
     }
 
+    /** Complete transport setup on the title without joining or reserving a rat slot. */
+    prepare(): void {
+        if (this.state !== 'idle' || this.prepared) return;
+        const url=new URL(this.url),room=url.searchParams.get('room');
+        if(room && room!==DEFAULT_ROOM_NAME)return;
+        url.searchParams.set('prepare','1');
+        let socket:WebSocket;
+        try {socket=(this.options.createSocket??(url=>new WebSocket(url)))(url.toString());} catch{return;}
+        const events=new AbortController();
+        const cleanup=()=>{clearTimeout(timer);events.abort();};
+        const discard=()=>{if(this.prepared?.socket===socket)this.prepared=null;cleanup();socket.close();};
+        const timer=setTimeout(discard,25_000);
+        this.prepared={socket,cleanup};
+        for(const event of ['close','error','message'])socket.addEventListener(event,discard,{signal:events.signal});
+    }
+
     retry(): void {
         if (!this.credentials || this.state === 'stopped') return;
         this.cancelConnection();
@@ -124,7 +141,9 @@ export class NetworkManager {
         this.setState(this.retries ? 'reconnecting' : 'connecting');
         let socket: WebSocket;
         try {
-            socket = (this.options.createSocket ?? (url => new WebSocket(url)))(this.url);
+            const prepared=this.prepared;this.prepared=null;prepared?.cleanup();
+            socket = prepared && prepared.socket.readyState<=WebSocket.OPEN ? prepared.socket
+                : (this.options.createSocket ?? (url => new WebSocket(url)))(this.url);
         } catch {
             this.failed(generation, 'Could not connect to the game.');
             return;
@@ -134,10 +153,11 @@ export class NetworkManager {
         const openedAt=performance.now();
         const current = () => generation === this.generation && this.socket === socket;
         this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
-        socket.addEventListener('open', () => {
+        const join = () => {
             if (!current() || !this.credentials) return;
             this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials });
-        });
+        };
+        socket.addEventListener('open', join, {once:true});
         socket.addEventListener('message', event => {
             if (!current()) return;
             const started = performance.now();
@@ -202,6 +222,7 @@ export class NetworkManager {
         });
         socket.addEventListener('close', event => { if (current()) { this.diagnostics.lastCloseCode=event.code;this.failed(generation, 'Connection lost.'); } });
         socket.addEventListener('error', () => { if (current()) this.failed(generation, 'Connection failed.'); });
+        if(socket.readyState===WebSocket.OPEN)join();
     }
 
     private startHeartbeat(generation: number): void {
@@ -306,6 +327,7 @@ export class NetworkManager {
     }
 
     destroy(): void {
+        const prepared=this.prepared;this.prepared=null;prepared?.cleanup();prepared?.socket.close();
         this.cancelConnection();
         this.credentials = null;
         this.setState('stopped');

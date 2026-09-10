@@ -14,6 +14,16 @@ export class Matchmaker extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade') !== 'websocket') return new Response('WebSocket required', {status:400});
+    const url=new URL(request.url);
+    if(url.searchParams.get('prepare')==='1') {
+      // Title visitors may warm the canonical transport, never create overflow
+      // rooms or compete for player reservations before pressing Enter City.
+      const pool=url.searchParams.get('room')||DEFAULT_ROOM_NAME;
+      if(pool!==DEFAULT_ROOM_NAME)return new Response('Unknown pool',{status:404});
+      const room=this.env.GAME_ROOM.getByName(pool);
+      await room.enableMatchmaking(pool);
+      return room.fetch(request);
+    }
     if (this.queued >= 64) return new Response('Admission busy; retry shortly', {status:503});
     this.queued++;
     const deadline = Date.now() + 5_000;

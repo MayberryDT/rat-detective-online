@@ -65,6 +65,7 @@ interface SocketAttachment {
   delivery?: boolean;
   delivered?: boolean;
   admissionUntil?: number;
+  titleUntil?: number;
 }
 
 interface StoredPlayerRow extends Record<string, SqlStorageValue> {
@@ -167,6 +168,9 @@ export class GameRoom extends DurableObject<Env> {
 
     // Opt-in graybox rooms keep the existing public world's identity intact.
     const requestUrl = new URL(request.url);
+    const preparing=this.matchRoom && requestUrl.searchParams.get('prepare')==='1';
+    if(preparing && this.ctx.getWebSockets().filter(ws=>!this.getPlayerId(ws)&&this.getAttachment(ws).titleUntil!==undefined).length>=16)
+      return new Response('Title connections busy',{status:503});
     const admissionDeadline = Number(request.headers.get('x-rat-admission-deadline')) || Infinity;
     if (this.matchRoom && Date.now() >= admissionDeadline) return new Response('Admission expired',{status:503});
     const roomName = requestUrl.searchParams.get('room') || '';
@@ -178,12 +182,12 @@ export class GameRoom extends DurableObject<Env> {
 
     if (this.matchRoom) {
       this.expireAdmissions();
-      if (this.humanSlots() >= MAX_PLAYERS) return Response.json({ error: 'This room is full' }, { status: 503 });
+      if (!preparing && this.humanSlots() >= MAX_PLAYERS) return Response.json({ error: 'This room is full' }, { status: 503 });
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.setAttachment(server, { connectionId: crypto.randomUUID(),
-      ...(this.matchRoom ? { admissionUntil: this.now() + JOIN_LEASE_MS } : {}),
+      ...(preparing ? {titleUntil:this.now()+30_000} : this.matchRoom ? { admissionUntil: this.now() + JOIN_LEASE_MS } : {}),
       localDiagnostics: allowsLocalDiagnostics(request),
       ...([CHAOS_WIRE_MODE,'compact-v1'].includes(requestUrl.searchParams.get('chaos')??'')?{compactChaos:true}:{}),
       ...(requestUrl.searchParams.get('chaos')===CHAOS_WIRE_MODE?{compactChaosDelta:true}:{}),
@@ -241,7 +245,8 @@ export class GameRoom extends DurableObject<Env> {
   private expireAdmissions(): void {
     for (const ws of this.ctx.getWebSockets()) {
       const a = this.getAttachment(ws);
-      if (!a.playerId && a.admissionUntil !== undefined && a.admissionUntil <= this.now()) {
+      const deadline=a.admissionUntil??a.titleUntil;
+      if (!a.playerId && deadline !== undefined && deadline <= this.now()) {
         ws.close(1008, 'Joining timed out');
       }
     }
@@ -634,7 +639,8 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
 
-    if (this.matchRoom && !this.getPlayerId(ws) && (this.getAttachment(ws).admissionUntil ?? 0) <= this.now()) {
+    const attachment=this.getAttachment(ws);
+    if (this.matchRoom && !this.getPlayerId(ws) && (attachment.admissionUntil ?? attachment.titleUntil ?? 0) <= this.now()) {
       ws.close(1008, 'Joining timed out'); return;
     }
     const existingPlayerId = this.getPlayerId(ws);
@@ -644,7 +650,7 @@ export class GameRoom extends DurableObject<Env> {
     this.reconcileLiveness();
 
     const humanCount = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
-    if (humanCount >= MAX_PLAYERS || (!this.matchRoom && (this.players.size >= MAX_PLAYERS || (this.persistentBots && humanCount >= MAX_PLAYERS - MAX_PERSISTENT_BOTS)))) {
+    if ((attachment.titleUntil!==undefined && this.humanSlots()>=MAX_PLAYERS) || humanCount >= MAX_PLAYERS || (!this.matchRoom && (this.players.size >= MAX_PLAYERS || (this.persistentBots && humanCount >= MAX_PLAYERS - MAX_PERSISTENT_BOTS)))) {
       this.send(ws, { type: 'error', message: 'This room is full' });
       return;
     }
@@ -658,7 +664,7 @@ export class GameRoom extends DurableObject<Env> {
     const player = createPlayer(id, message.name, message.appearance, spawnForWorld(this.world, Math.random, this.players.values()));
     this.players.set(id, player);
     this.persistPlayer(player, true);
-    this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined, delivery: true });
+    this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined, titleUntil:undefined, delivery: true });
     if (this.matchRoom) this.rebalanceBots();
 
     this.chaosDelivery.delete(ws);
@@ -884,7 +890,7 @@ export class GameRoom extends DurableObject<Env> {
     const dueAt = Math.min(typeof row?.due_at === 'number' ? row.due_at : Infinity,
       this.persistentBots && (!this.matchRoom || this.humanSlots() > 0) ? this.nextBotHeartbeat || this.now() + BOT_HEARTBEAT_MS : Infinity,
       this.refillAt || Infinity,
-      ...this.ctx.getWebSockets().map(ws => { const a = this.getAttachment(ws); return !a.playerId && (a.admissionUntil ?? 0) > this.now() ? a.admissionUntil! : Infinity; }));
+      ...this.ctx.getWebSockets().map(ws => { const a = this.getAttachment(ws), deadline=a.admissionUntil??a.titleUntil; return !a.playerId && (deadline ?? 0) > this.now() ? deadline! : Infinity; }));
     if (Number.isFinite(dueAt)) {
       const alarmAt=Math.max(1,dueAt);
       if (scheduled !== alarmAt) { this.diagnostics.count('alarmSet'); await this.ctx.storage.setAlarm(alarmAt); }

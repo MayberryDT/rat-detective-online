@@ -20,6 +20,16 @@ function makeCity(seed = 42, options = DEFAULT_CITY_OPTIONS) {
 }
 
 describe('city generator', () => {
+  it('can yield between buildings while preserving the complete synchronous city',()=>{
+    const reference=makeCity(42),scene=new THREE.Scene(),world=new CANNON.World();
+    const incremental=new CityGenerator(scene,world,DEFAULT_CITY_OPTIONS,reference.spec);
+    const steps=incremental.generateSteps();expect(steps.next().done).toBe(false);
+    expect(world.bodies.length).toBeLessThan(reference.world.bodies.length);
+    for(const _step of steps) { /* Each next call represents a separate preparation slice. */ }
+    expect(incremental.getCounts()).toEqual(reference.city.getCounts());
+    expect(world.bodies.map(b=>b.position.toArray())).toEqual(reference.world.bodies.map(b=>b.position.toArray()));
+    incremental.dispose();reference.city.dispose();
+  });
   it('builds static colliders that match the shared layout', () => {
     const { city, spec } = makeCity(42);
     const layout = generateBuildingLayout(spec);
