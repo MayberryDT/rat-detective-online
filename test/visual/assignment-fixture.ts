@@ -15,6 +15,7 @@ import {RatEntity} from '../../src/entities/RatEntity';
 import {MatchScoreboard} from '../../src/ui/MatchScoreboard';
 import {PROTOCOL_VERSION} from '../../src/shared/networkProtocol';
 import {TouchControls} from '../../src/ui/TouchControls';
+import {INCIDENTS} from '../../src/shared/incidentCatalog';
 
 // Fixed presentation states over the real city and shoulder camera. This page
 // has no gameplay input, matchmaking, scoring loop or network.
@@ -53,10 +54,11 @@ sim.setAssignment(assignment);
 const state=sim.snapshot(false);state.time=now;
 if(query.get('dispatch')==='busy')state.dispatch={phase:'cooldown',started:now,until:now+16000,serial:1};
 // Static incident states for reviewing simultaneous objective/mobile cards.
-if(query.get('dispatch')==='rolling')state.dispatch={phase:'rolling',incident:'popcorn-panic',started:now-800,until:now+1600,serial:1};
-if(query.get('dispatch')==='reveal')state.dispatch={phase:'active',incident:'popcorn-panic',started:now-1000,until:now+24000,serial:1};
-if(query.get('dispatch')==='active')state.dispatch={phase:'active',incident:'popcorn-panic',started:now-5000,until:now+20000,serial:1};
-if(query.get('dispatch')==='ending')state.dispatch={phase:'active',incident:'popcorn-panic',started:now-20000,until:now+5000,serial:1};
+const fixtureIncident=INCIDENTS.find(incident=>incident.id===query.get('incident'))?.id??'popcorn-panic';
+if(query.get('dispatch')==='rolling')state.dispatch={phase:'rolling',incident:fixtureIncident,started:now-800,until:now+1600,serial:1};
+if(query.get('dispatch')==='reveal')state.dispatch={phase:'active',incident:fixtureIncident,started:now-1000,until:now+24000,serial:1};
+if(query.get('dispatch')==='active')state.dispatch={phase:'active',incident:fixtureIncident,started:now-5000,until:now+20000,serial:1};
+if(query.get('dispatch')==='ending')state.dispatch={phase:'active',incident:fixtureIncident,started:now-20000,until:now+5000,serial:1};
 state.case.p={x:position.x+(view==='archive'?4:0),y:position.y+.9,z:position.z+(view==='archive'?0:-4)};
 if(query.has('held'))state.case.owner=actor.id;
 const caseEvent=query.get('caseEvent');

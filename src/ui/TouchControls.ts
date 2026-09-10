@@ -34,7 +34,7 @@ export class TouchControls {
     private board = false;
     private portrait = false;
     private disposed = false;
-    private sensitivity = 1;
+    private sensitivity = 1.5;
     active = false;
     constructor(private readonly options: Options) {
         this.doc = options.doc ?? document; this.target = options.target ?? window;
@@ -58,7 +58,7 @@ export class TouchControls {
         this.settingsButton.setAttribute('aria-expanded', 'false');
         this.settings = make('div', 'touch-settings', this.root); this.settings.hidden = true;
         const label = make('label', '', this.settings, 'LOOK SENSITIVITY');
-        const slider = make('input', '', label); slider.type = 'range'; slider.min = '.4'; slider.max = '2'; slider.step = '.1'; slider.value = '1';
+        const slider = make('input', '', label); slider.type = 'range'; slider.min = '.4'; slider.max = '2'; slider.step = '.1';
         try { const saved = Number(this.target.localStorage.getItem('rat-touch-sensitivity')); if (saved >= .4 && saved <= 2) this.sensitivity = saved; } catch { /* Storage can be unavailable in private browsing. */ }
         slider.value = String(this.sensitivity);
         this.rotate = make('div', 'touch-rotate', this.root, 'TURN YOUR PHONE');

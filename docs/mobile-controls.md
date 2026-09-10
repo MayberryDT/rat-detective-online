@@ -2,7 +2,7 @@
 
 Implemented September 10, 2026. Landscape touch controls use the existing shoulder camera, animated muzzle, movement physics, assignment rules and server shooting checks. Desktop keyboard/mouse and held-Tab controls remain available.
 
-Mobile HUD refinement: assignment/top-five, incident and roulette/reveal cards are 30% smaller, with translucent dark surfaces and solid lettering. The incident time bar is visible, and the assignment card stays visible during roulette. Desktop presentation, full SCORES table and touch button sizes are unchanged. [Current Tailscale preview](http://100.79.24.11:5192/?room=graybox-benchmark-match-mobile-v18&lighting=pools&revision=mobile-hud-v20); [camera/layout verification](verification/mobile-hud-compact-2026-09-10.md).
+Mobile HUD refinement: assignment/top-five, incident and roulette/reveal cards are 30% smaller, with translucent dark surfaces and solid lettering. The incident time bar is visible, and the assignment card stays visible during roulette. Desktop presentation, full SCORES table and touch button sizes are unchanged. [Current Tailscale preview](http://100.79.24.11:5192/?room=graybox-benchmark-match-mobile-v18&lighting=pools&revision=mobile-aim-v21); [camera/layout verification](verification/mobile-hud-compact-2026-09-10.md).
 
 September 10 firing fix: shot IDs support HTTP private-IP previews through a cryptographic UUID fallback. This fixes a reproduced exception that stopped animation during held FIRE while audio/SCORES continued. The new client is `index-C2eMX0ZR.js`; [retry on Tailscale](http://100.79.24.11:5192/?room=graybox-benchmark-match-mobile-v18&lighting=pools&revision=shot-fix-v19). See [investigation and 719-test verification](verification/mobile-firing-freeze-2026-09-10.md). Tyler subsequently confirmed the phone build works well.
 
@@ -13,9 +13,11 @@ September 10 firing fix: shot IDs support HTTP private-IP previews through a cry
 - FIRE: hold to repeat; dragging the same finger continues aiming. Repeats are paced at least 85 ms apart, bounded by the unchanged 12-shot-per-second server ceiling and rendered frames. No catch-up bursts; rapidly tapping does not bypass the touch cadence. Desktop click behavior is unchanged.
 - JUMP: the same grounded jump impulse/gravity and launcher behavior as keyboard jumping. Jump can be held alongside movement and firing using an additional finger. Two-thumb play can momentarily move the right thumb from FIRE to JUMP.
 - SCORES: tap open/close, swipe the full table in either direction. Opening it releases touch movement/fire; the multiplayer match continues. The desktop Tab behavior is unchanged.
-- AIM: a persisted .4–2× look-sensitivity slider. Fullscreen is offered only when the browser exposes it; it is optional. Portrait displays TURN YOUR PHONE and clears held controls.
+- AIM: a persisted .4–2× look-sensitivity slider, default **1.5×**. Explicit saved preferences override the default. Fullscreen is offered only when the browser exposes it; it is optional. Portrait displays TURN YOUR PHONE and clears held controls.
 
 Controls appear based on coarse-pointer/touch capability, with actual touch enabling the surface on hybrid devices. `controls=touch` forces the layout for review, and `controls=mouse` disables it. Neither choice changes game rules. Controls use dark translucent paper, generous touch areas, and notch/home-indicator insets. Compact objective cards retain top-five progress, destination and essential scoring status. The reticle stays clear. The title/death/result screens fit short landscape viewports.
+
+The incident card uses 24 px plus the right safe-area inset, an internal header, wrapping title and a contained entrance animation. Its timer/bar remain visible. See [mobile aim/card checks](verification/mobile-aim-card-2026-09-10.md).
 
 ## Input lifetime
 
@@ -31,7 +33,7 @@ The shared `SHOOT_RATE` declaration moved to `shared/shotTiming.ts` and is re-ex
 - [Wi-Fi](http://10.129.181.26:5191/?room=graybox-benchmark-match-mobile-v18&lighting=pools): phone must reach this computer on the same Wi-Fi network.
 - [Desktop](http://127.0.0.1:5190/?room=graybox-benchmark-match-mobile-v18&diagnostics=quiet&lighting=pools).
 
-The three links join the same private automatic pool. Renewed backend expiry is **September 10, 2026, 12:25 PM Pacific**, private Worker `1c91db50-d6d7-44aa-856a-364beca8aa6c`. The original renewal used `2e94e83`; the relays now serve the compact HUD and firing fix described above. Initial renewal receipts are under `output/mobile-preview-renewal-2026-09-10T15-25-11Z/`, with current client receipts under `output/mobile-hud-compact-2026-09-10/`. See [implementation verification](verification/mobile-controls-2026-09-10.md) for the original checks. These are private preview addresses, not a production release.
+The three links join the same private automatic pool. Renewed backend expiry is **September 10, 2026, 12:25 PM Pacific**, private Worker `1c91db50-d6d7-44aa-856a-364beca8aa6c`. The original renewal used `2e94e83`; the relays now serve the mobile aim/card follow-up, compact HUD and firing fix described above. Initial renewal receipts are under `output/mobile-preview-renewal-2026-09-10T15-25-11Z/`, with current client receipts under `output/mobile-aim-card-2026-09-10/`. See [implementation verification](verification/mobile-controls-2026-09-10.md) for the original checks. These are private preview addresses, not a production release.
 
 Initial renewal checks (before the firing fix): all 122 recorded source hashes and 45 frozen client files matched. Each route served exact HTML/JS/CSS and all 13 WAVs. Separate six-second passive sessions received eight rats, protocol 5 and zero invalid packets: desktop 157 snapshots, Wi-Fi 163, Tailscale 165. Halla independently reached the Tailscale relay. These are asset/protocol checks, not new phone gameplay or performance tests; unchanged application tests were not rerun.
 
