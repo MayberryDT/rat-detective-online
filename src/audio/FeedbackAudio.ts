@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {worldSoundGain} from './worldSoundGain';
 import {AudioVoicePool} from './AudioVoicePool';
-export type FeedbackCue='case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice';
-const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number}>={
+export type FeedbackCue='case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
+const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
     'case-pickup':{file:'case-pickup',volume:.6,cooldown:150},
     'case-lost':{file:'case-lost',volume:.6,cooldown:150},
     'case-taken':{file:'case-taken',volume:.24,cooldown:300},
@@ -17,6 +17,10 @@ const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number}>={
     dispatch:{file:'dispatch',volume:.4,cooldown:300},
     ready:{file:'case-taken',volume:.24,cooldown:300},
     tick:{file:'tick',volume:.1,cooldown:65},
+    'case-point':{file:'case-pickup',volume:.65,cooldown:100,rate:1.3},
+    verified:{file:'dispatch',volume:.5,cooldown:200,rate:1.2},
+    countdown:{file:'tick',volume:.3,cooldown:200},
+    'countdown-final':{file:'tick',volume:.48,cooldown:200,rate:1.5},
     notice:{file:'menu-open',volume:.1,cooldown:200},
 };
 /** Edited cartoon foley, with no backlog and bounded overlap. */
@@ -35,7 +39,7 @@ export class FeedbackAudio {
                 ()=>{if(!this.disposed)console.warn(`Feedback sound could not load: ${file}`);});
     }
     play(cue:FeedbackCue,origin?:Vec3Data):void {
-        const {file,volume,cooldown}=cues[cue],buffer=this.buffers.get(file);
+        const {file,volume,cooldown,rate=1}=cues[cue],buffer=this.buffers.get(file);
         if(this.disposed||!buffer||this.listener.context.state!=='running')return;
         const now=this.listener.context.currentTime*1000;
         if(now-(this.last.get(cue)??-Infinity)<cooldown)return;
@@ -46,7 +50,7 @@ export class FeedbackAudio {
         if(this.voices.size>=6&&(cue==='case-hit'||cue==='tick'||cue==='notice'))return;
         if(this.voices.size>=8)this.release(this.voices.values().next().value!);
         const sound=this.pool.acquire();if(!sound)return;
-        sound.setBuffer(buffer);sound.setVolume(volume*gain);
+        sound.setBuffer(buffer);sound.setVolume(volume*gain);sound.setPlaybackRate(rate);
         sound.onEnded=()=>{this.pool.finish(sound);this.voices.delete(sound);};
         this.voices.add(sound);try{sound.play();}catch{this.release(sound);}
     }

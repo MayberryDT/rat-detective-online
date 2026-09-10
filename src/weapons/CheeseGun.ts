@@ -4,12 +4,11 @@ import type { ShotDescriptor } from '../shared/networkProtocol';
 import type { IncidentId } from '../shared/incidentCatalog';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
 import { GunshotAudio } from '../audio/GunshotAudio';
-import { createCheeseBallGeometry } from './CheeseProjectileModel';
+import { createCheeseBallGeometry, createCheeseBallMaterial } from './CheeseProjectileModel';
 import { RatEntity } from '../entities/RatEntity';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
 import { BALL_SPEED, BALL_RESTITUTION, BALL_GRAVITY, BALL_LIFETIME } from '../shared/ballTuning';
-const BALL_COLOR = 0xffc34a;
 
 // Collision Groups
 const GROUP_DEFAULT = 1;
@@ -37,12 +36,7 @@ export class CheeseGun {
     private balls: CheeseBall[] = [];
     // Ball meshes own their transforms; the gun owns the shared GPU resources.
     private readonly ballGeometry = createCheeseBallGeometry();
-    private readonly ballMaterial = new THREE.MeshStandardMaterial({
-        color: BALL_COLOR,
-        roughness: 0.65,
-        emissive: BALL_COLOR,
-        emissiveIntensity: 0.7,
-    });
+    private readonly ballMaterial = createCheeseBallMaterial();
     private disposed = false;
     private readonly impacts: CheeseImpactEffects;
     private readonly aimRay = new THREE.Raycaster();

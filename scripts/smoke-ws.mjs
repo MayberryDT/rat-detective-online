@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { resolveSmokeWsUrl } from './lib/process.mjs';
 
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 5;
 const targetUrl = resolveSmokeWsUrl(process.argv[2]);
 if (!targetUrl.searchParams.has('room')) {
   targetUrl.searchParams.set('room', `smoke-${crypto.randomUUID()}`);

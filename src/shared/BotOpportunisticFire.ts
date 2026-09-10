@@ -1,10 +1,10 @@
 import type { Vec3Data } from './networkProtocol';
 
 export const BOT_OPPORTUNISTIC_FIRE = {
-    pauseMinMs: 450, pauseMaxMs: 1500,
+    pauseMinMs: 450/1.2, pauseMaxMs: 1500/1.2,
     quietMinMs: 3000, quietMaxMs: 7000,
     activeMinMs: 6000, activeMaxMs: 10000,
-    shotMinMs: 280, shotMaxMs: 450,
+    shotMinMs: 280/1.2, shotMaxMs: 450/1.2,
     rangeMin: 18, rangeMax: 42,
     wallShotChance: .35,
 } as const;

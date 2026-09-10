@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rat Detective — assignment visual review</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>#fixture-nav{position:fixed;bottom:10px;right:12px;z-index:250;display:flex;gap:7px;flex-wrap:wrap;max-width:92vw;justify-content:flex-end;font:14px Bangers,Impact,sans-serif}#fixture-nav a,#fixture-nav button{padding:5px 9px;background:#25172e;color:#cbbfcc;border:1px solid #5d4868;text-decoration:none;font:inherit}#fixture-note{position:fixed;bottom:43px;right:12px;z-index:250;font:11px monospace;color:#93849c;pointer-events:none}</style>
+</head><body>
+    <!-- Title Screen -->
+    <div id="title-screen">
+        <div class="title-kicker">DEPARTMENT OF BAD IDEAS PRESENTS</div>
+        <div class="logo-container">
+            <img src="/logo.png" alt="Rat Detective Logo" id="main-logo">
+            <div class="title-group">
+                <h1><span>Rat</span> Detective</h1>
+            </div>
+        </div>
+        <div class="name-input-group">
+            <div id="player-name"></div>
+            <button type="button" id="reroll-name-btn" aria-label="Roll another name">
+                <svg viewBox="0 0 28 24" aria-hidden="true">
+                    <rect x="10.5" y="1.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/>
+                    <circle cx="15.5" cy="6.5" r="1.15" fill="currentColor"/>
+                    <circle cx="21.5" cy="6.5" r="1.15" fill="currentColor"/>
+                    <circle cx="18.5" cy="9.5" r="1.15" fill="currentColor"/>
+                    <circle cx="15.5" cy="12.5" r="1.15" fill="currentColor"/>
+                    <circle cx="21.5" cy="12.5" r="1.15" fill="currentColor"/>
+                    <rect x="1.5" y="6.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/>
+                    <circle cx="5.5" cy="11.5" r="1.15" fill="currentColor"/>
+                    <circle cx="13.5" cy="11.5" r="1.15" fill="currentColor"/>
+                    <circle cx="9.5" cy="14.5" r="1.15" fill="currentColor"/>
+                    <circle cx="5.5" cy="17.5" r="1.15" fill="currentColor"/>
+                    <circle cx="13.5" cy="17.5" r="1.15" fill="currentColor"/>
+                </svg>
+            </button>
+        </div>
+
+        <button id="enter-city-btn" disabled autofocus>
+            <div class="pulse-dot"></div>
+            ENTER CITY!
+        </button>
+    </div>
+
+    <!-- Kill Feed -->
+    <div id="kill-feed"></div>
+
+    <!-- Victory Overlay -->
+    <div id="victory-overlay">
+        <div id="victory-text"></div>
+    </div>
+
+    <!-- Respawn Countdown -->
+    <div id="respawn-overlay">
+        <div class="death-burst" aria-hidden="true">POW!</div>
+        <div class="respawn-label">RAT DOWN!</div>
+        <div id="respawn-note" class="respawn-note">A MINOR CAREER SETBACK.</div>
+        <div class="respawn-count">BACK IN <span id="respawn-timer">3</span></div>
+    </div>
+
+<div id="crosshair"></div><div id="fixture-note">STATIC CAMERA REVIEW · NO GAMEPLAY INPUT</div>
+<nav id="fixture-nav"><a href="?assignment=excessive-force&view=icebox&held">KILL RACE</a><a href="?assignment=closing-time&held">CLOCK</a><a href="?assignment=chain-of-custody&view=city">CHAIN</a><a href="?assignment=chain-of-custody&stop=1&view=sewer">SEWER</a><a href="?view=dispatch">SIREN</a><button id="fixture-listen" type="button" hidden>LISTEN</button><a href="?phase=title">TITLE</a><a href="?phase=closed">WIN!</a><a href="?phase=death">RAT DOWN!</a></nav>
+<script type="module" src="./assignment-fixture.ts"></script></body></html>

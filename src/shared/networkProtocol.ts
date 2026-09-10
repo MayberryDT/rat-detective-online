@@ -1,7 +1,8 @@
 import type { ChaosState } from './chaosState';
 import type { WorldSpec } from './worldSpec';
+import type { AssignmentState } from './assignments';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 5;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
@@ -73,6 +74,7 @@ export interface RoundState {
   kills?: number;
   resetAt?: number;
   startedAt?: number;
+  assignment?: AssignmentState;
 }
 
 export interface PublicScore {
@@ -160,7 +162,7 @@ export type ServerMessage =
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }
   | { type: 'playerLeft'; id: string }
-  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number }
+  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState }
   | { type: 'gameReset'; round: RoundState }
   | { type: 'pong'; sentAt: number; receivedAt: number }
   | { type: 'error'; message: string };

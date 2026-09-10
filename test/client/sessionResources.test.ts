@@ -94,6 +94,7 @@ class FakeNode extends EventTarget {
     children: FakeNode[] = [];
     style: Record<string, string> = {};
     private classes = new Set<string>();
+    private selectors = new Map<string, FakeNode>();
     readonly classList = {
         add: (name: string) => {
             this.classes.add(name);
@@ -104,6 +105,7 @@ class FakeNode extends EventTarget {
             this.className = [...this.classes].join(' ');
         },
         contains: (name: string) => this.classes.has(name),
+        toggle: (name: string, value: boolean) => value ? this.classes.add(name) : this.classes.delete(name),
     };
 
     constructor(tag: string, private readonly registry: Map<string, FakeNode>) {
@@ -121,6 +123,11 @@ class FakeNode extends EventTarget {
     }
 
     get firstChild() { return this.children[0] ?? null; }
+
+    querySelector(selector: string) {
+        if (!this.selectors.has(selector)) this.selectors.set(selector, this.appendChild(new FakeNode('div', this.registry)));
+        return this.selectors.get(selector)!;
+    }
 
     appendChild(child: FakeNode) {
         child.parent = this;

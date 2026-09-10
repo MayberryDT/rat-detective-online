@@ -47,5 +47,30 @@ export function buildDispatchModel(root:THREE.Group,screen:THREE.Texture){
     }
     const lamp=put(.74,.16,.2,0,1.83,0,red,true);
     for(const x of [-.56,.56])put(.12,.28,.14,x,1.81,0,chrome,true);
-    return {switchHandle,lamp};
+    // A municipal red/blue lightbar: alternating visible lamps, not a dim ornament.
+    const siren=new THREE.Group();siren.name='dispatch-ready-siren';siren.position.y=1.98;root.add(siren);
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1.45,.14,.65),dark);siren.add(base);
+    const glass=new THREE.Mesh(new THREE.SphereGeometry(.30,20,12,0,Math.PI*2,0,Math.PI/2),
+        new THREE.MeshStandardMaterial({color:0xb82720,emissive:0xff2812,emissiveIntensity:.06,roughness:.22,metalness:.1}));
+    glass.position.set(-.4,.08,0);glass.scale.set(1.15,1.55,1.15);siren.add(glass);
+    const blueGlass=glass.clone();blueGlass.material=(glass.material as THREE.MeshStandardMaterial).clone();
+    blueGlass.material.color.setHex(0x294a96);blueGlass.material.emissive.setHex(0x537fff);blueGlass.position.x=.4;siren.add(blueGlass);
+    const rotor=new THREE.Group();rotor.name='dispatch-siren-reflector';rotor.position.y=.18;siren.add(rotor);
+    const reflector=new THREE.Mesh(new THREE.SphereGeometry(.19,12,8,0,Math.PI,0,Math.PI),
+        new THREE.MeshBasicMaterial({color:0xe3a16f,toneMapped:false}));
+    reflector.rotation.y=Math.PI/2;reflector.scale.z=.35;rotor.add(reflector);
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(.48,16,10),new THREE.MeshBasicMaterial({color:0xff3820,transparent:true,opacity:.2,depthWrite:false,toneMapped:false,blending:THREE.AdditiveBlending}));
+    glow.position.set(-.4,.24,0);glow.scale.y=.85;siren.add(glow);
+    const blueGlow=glow.clone();blueGlow.material=(glow.material as THREE.MeshBasicMaterial).clone();blueGlow.material.color.setHex(0x608dff);blueGlow.position.x=.4;siren.add(blueGlow);
+    rotor.visible=false;glow.visible=false;blueGlow.visible=false;
+    return {switchHandle,lamp,siren,glass,blueGlass,rotor,glow,blueGlow};
+}
+
+export function updateDispatchSiren(model:ReturnType<typeof buildDispatchModel>,ready:boolean,time:number):void {
+    const red=Math.sin(time*9)>0;
+    model.rotor.visible=ready;model.glow.visible=ready&&red;model.blueGlow.visible=ready&&!red;
+    const material=model.glass.material as THREE.MeshStandardMaterial;
+    material.emissiveIntensity=ready?(red?5:.25):.06;
+    (model.blueGlass.material as THREE.MeshStandardMaterial).emissiveIntensity=ready?(!red?5:.25):.06;
+    if(ready)model.rotor.rotation.y=time*5;
 }

@@ -1,5 +1,7 @@
+import {DispatchSirenAudio} from '../audio/DispatchSirenAudio';
 import { createCaseGrip } from './CaseGrip';
 import {setText} from '../ui/setText';
+import {clearAimLabel} from '../ui/aimClearance';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { ChaosState, CorpseState } from '../shared/chaosState';
@@ -8,18 +10,19 @@ import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh } from '../utils/RatModel';
 import { RatAnimator, RAT_CARRY_SHOULDER } from '../utils/RatAnimator';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
-import { createCheeseBallGeometry } from '../weapons/CheeseProjectileModel';
+import { createCheeseBallGeometry, createCheeseBallMaterial } from '../weapons/CheeseProjectileModel';
 import { CheeseImpactEffects } from '../weapons/CheeseImpactEffects';
 import { bindIncidentAudio, disposeIncidentAudio, playDelayedThud, playPopcornPop, startCaseBuzz } from '../audio/IncidentAudio';
 import type { RatEntity } from '../entities/RatEntity';
 import { incidentInfo } from '../shared/incidentCatalog';
 import { DispatchHud } from './DispatchHud';
+import { AssignmentDestinations } from './AssignmentDestinations';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import type { Vec3Data } from '../shared/networkProtocol';
 import { locateCase } from './caseLocator';
 import { PressureMachine } from './PressureMachine';
 import { CaseBeacon } from './CaseBeacon';
-import { buildDispatchModel } from './DispatchModel';
+import { buildDispatchModel, updateDispatchSiren } from './DispatchModel';
 import { reactToLandmarkImpact } from './LandmarkReactions';
 import { addLeatherBriefcase } from './CaseModel';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
@@ -32,24 +35,36 @@ export class ChaosView {
     private readonly extraCases=new Map<string,ExtraCaseVisual>();
     private readonly caseBeacon:CaseBeacon;
     private readonly dispatch=new THREE.Group();
-    private readonly kiosks:Array<{switchHandle:THREE.Mesh;lamp:THREE.Mesh}>=[];
+    private readonly kiosks:Array<ReturnType<typeof buildDispatchModel>>=[];
+    private readonly sirenAudio:DispatchSirenAudio;
     private readonly pressureMachine:PressureMachine;
     private readonly textCanvas=document.createElement('canvas');
     private readonly textTexture:THREE.CanvasTexture;
     private readonly hud:DispatchHud;
+    private readonly assignmentDestinations:AssignmentDestinations;
     private readonly caseMarker=document.createElement('div');
     private readonly caseMarkerIcon=document.createElement('div');
     private readonly caseMarkerArrow=document.createElement('div');
     private readonly caseMarkerDetail=document.createElement('div');
     private readonly impacts:CheeseImpactEffects;
     private readonly ballGeometry=createCheeseBallGeometry();
-    private readonly ballMaterial=new THREE.MeshStandardMaterial({color:0xffc34a,emissive:0xffc34a,emissiveIntensity:.7,roughness:.65});
+    private readonly ballMaterial=createCheeseBallMaterial();
     private readonly bullets=new THREE.InstancedMesh(this.ballGeometry,this.ballMaterial,CHAOS_TUNING.maxShots);
-    private readonly chargedMaterial=new THREE.MeshStandardMaterial({color:0xff3a1a,emissive:0xff2208,emissiveIntensity:3.4,roughness:.28,toneMapped:false});
+    private readonly chargedMaterial=createCheeseBallMaterial(true);
     private readonly chargedBullets=new THREE.InstancedMesh(this.ballGeometry,this.chargedMaterial,CHAOS_TUNING.maxShots);
-    private readonly glowGeometry=new THREE.SphereGeometry(.22,12,8);
-    private readonly glowMaterial=new THREE.MeshBasicMaterial({color:0xff2208,side:THREE.BackSide,transparent:true,opacity:.55,blending:THREE.AdditiveBlending,depthTest:true,depthWrite:false,toneMapped:false});
+    private readonly glowGeometry=new THREE.SphereGeometry(.17,24,16);
+    private readonly glowMaterial=new THREE.MeshBasicMaterial({color:0xff240b,side:THREE.BackSide,transparent:true,opacity:.96,blending:THREE.AdditiveBlending,depthTest:true,depthWrite:false,toneMapped:false});
     private readonly chargedGlow=new THREE.InstancedMesh(this.glowGeometry,this.glowMaterial,CHAOS_TUNING.maxShots);
+    private readonly dangerGlow=new THREE.InstancedMesh(this.glowGeometry,new THREE.MeshBasicMaterial({color:0xff4822,side:THREE.BackSide,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false}),CHAOS_TUNING.maxShots);
+    private readonly dangerTrails=new THREE.InstancedMesh(new THREE.SphereGeometry(.1,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.65,depthWrite:false,toneMapped:false}),CHAOS_TUNING.maxShots);
+    private readonly trailPose=new THREE.Object3D();
+    private readonly trailDirection=new THREE.Vector3();
+    private readonly trailAxis=new THREE.Vector3(0,0,1);
+    private readonly dangerColor=new THREE.Color(0xff602a);
+    private readonly lethalColor=new THREE.Color(0xff3015);
+    private readonly ownCrossfireTint=new THREE.Color(1,1,1);
+    private readonly enemyCrossfireTint=new THREE.Color(2.4,1.4,1.2);
+    private myId='';
     private readonly ballPose=new THREE.Object3D();
     private readonly missileTrail=new THREE.InstancedMesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff2a12,transparent:true,opacity:.42,toneMapped:false,depthWrite:false}),12);
     private corpses=new Map<string,{mesh:THREE.Group;animator:RatAnimator;state:CorpseState}>();
@@ -64,10 +79,13 @@ export class ChaosView {
     private readonly impactPoint=new THREE.Vector3();
     private readonly impactNormal=new THREE.Vector3();
     private readonly audioPosition=new THREE.Vector3();
+    setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
     constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
+        this.sirenAudio=new DispatchSirenAudio(this.audio);
         this.bullets.count=0;this.bullets.frustumCulled=false;this.root.add(this.bullets);
         this.chargedBullets.count=0;this.chargedBullets.frustumCulled=false;this.chargedBullets.name='crossfire-balls';this.root.add(this.chargedBullets);
         this.chargedGlow.count=0;this.chargedGlow.frustumCulled=false;this.chargedGlow.name='crossfire-glow';this.root.add(this.chargedGlow);
+        for(const [mesh,name] of [[this.dangerGlow,'danger-cheese-rims'],[this.dangerTrails,'danger-cheese-trails']] as const){mesh.count=0;mesh.frustumCulled=false;mesh.name=name;this.root.add(mesh);}
         this.missileTrail.count=0;this.missileTrail.frustumCulled=false;this.missileTrail.name='case-missile-trail';this.root.add(this.missileTrail);
         bindIncidentAudio(this.audio);
         this.root.name='records-chaos';scene.add(this.root);scene.add(this.caseRoot,this.dispatch);
@@ -85,6 +103,7 @@ export class ChaosView {
             this.kiosks.push(buildDispatchModel(cabinet,this.textTexture));
         }
         this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
+        this.assignmentDestinations=new AssignmentDestinations(scene);
         // DOM projection stays crisp at city scale and visible through all architecture.
         // It adds no dynamic lights, raycasts, or physics to the physical case.
         Object.assign(this.caseMarker.style,{position:'fixed',left:'0',top:'0',display:'none',width:'174px',
@@ -114,6 +133,7 @@ export class ChaosView {
     }
     apply(state:ChaosState){
         this.state=state;this.receivedAt=performance.now();
+        this.assignmentDestinations.update(state.assignment);
         if(this.extrapolate)this.presentation.apply(state,this.receivedAt);
         const extraIds=new Set((state.extraCases??[]).map(c=>c.id));
         for(const [id,visual] of this.extraCases)if(!extraIds.has(id)){visual.dispose();this.extraCases.delete(id);}
@@ -185,7 +205,7 @@ export class ChaosView {
         this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer);
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         this.updateCaseMarker(camera,now);
-        this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;
+        this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const crossfire=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='crossfire';
         for(let i=0;i<Math.min(s.shots.length,CHAOS_TUNING.maxShots);i++){
             const shot=s.shots[i];
@@ -195,12 +215,22 @@ export class ChaosView {
             this.ballPose.rotation.set(now*.015+i,now*.009,0);
             const pulse=shot.stuckUntil?1+Math.sin(now*.03)*.16:1;
             this.ballPose.scale.setScalar(scale*pulse);this.ballPose.updateMatrix();
+            const own=shot.owner===this.myId||!!this.resolveRat(shot.owner)?.isPlayer;
             const hot=crossfire&&shot.wallBounced;
             const batch=hot?this.chargedBullets:this.bullets;
-            batch.setMatrixAt(batch.count++,this.ballPose.matrix);
-            if(hot){
-                this.ballPose.scale.setScalar(scale*pulse*1.7);this.ballPose.updateMatrix();
-                this.chargedGlow.setMatrixAt(this.chargedGlow.count++,this.ballPose.matrix);
+            const ballIndex=batch.count++;batch.setMatrixAt(ballIndex,this.ballPose.matrix);
+            if(hot)batch.setColorAt(ballIndex,own?this.ownCrossfireTint:this.enemyCrossfireTint);
+            if(!own){
+                this.ballPose.scale.setScalar(scale*pulse*(hot?1.14:1));this.ballPose.updateMatrix();
+                const rim=hot?this.chargedGlow:this.dangerGlow;rim.setMatrixAt(rim.count++,this.ballPose.matrix);
+                this.trailDirection.set(shot.v.x,shot.v.y,shot.v.z);
+                if(!shot.stuckUntil&&this.trailDirection.lengthSq()>.01){
+                    this.trailDirection.normalize();const length=Math.min(2.4,(hot?1.4:.85)*Math.sqrt(scale));
+                    this.trailPose.position.copy(this.ballPose.position).addScaledVector(this.trailDirection,-scale*BALL_RADIUS-length/2);
+                    this.trailPose.quaternion.setFromUnitVectors(this.trailAxis,this.trailDirection);
+                    this.trailPose.scale.set(.5*Math.sqrt(scale),.5*Math.sqrt(scale),length/.2);this.trailPose.updateMatrix();
+                    const at=this.dangerTrails.count++;this.dangerTrails.setMatrixAt(at,this.trailPose.matrix);this.dangerTrails.setColorAt(at,hot?this.lethalColor:this.dangerColor);
+                }
             }
         }
         const missiles=[s.case,...s.extraCases??[]].filter(c=>!c.owner&&(c.missileOwner||evidence));
@@ -211,12 +241,17 @@ export class ChaosView {
         }
         startCaseBuzz(evidence&&!!nearestCase,nearestCase?.p);
         for(const missile of missiles.slice(0,8)){
-            this.ballPose.position.set(missile.p.x,missile.p.y,missile.p.z);
-            this.ballPose.scale.set(2.2,1.1,3.4);this.ballPose.updateMatrix();
+            const visual=missile===s.case?this.caseRoot:'id' in missile&&typeof missile.id==='string'?this.extraCases.get(missile.id)?.root:undefined;
+            if(!visual)continue;
+            this.ballPose.position.copy(visual.position);this.ballPose.quaternion.copy(visual.quaternion);
+            this.ballPose.scale.set(1.5,.8,1.2);this.ballPose.updateMatrix();
             this.missileTrail.setMatrixAt(this.missileTrail.count++,this.ballPose.matrix);
         }
         this.bullets.instanceMatrix.needsUpdate=true;this.chargedBullets.instanceMatrix.needsUpdate=true;
+        if(this.chargedBullets.instanceColor)this.chargedBullets.instanceColor.needsUpdate=true;
         this.chargedGlow.instanceMatrix.needsUpdate=true;this.missileTrail.instanceMatrix.needsUpdate=true;
+        this.dangerGlow.instanceMatrix.needsUpdate=true;this.dangerTrails.instanceMatrix.needsUpdate=true;
+        if(this.dangerTrails.instanceColor)this.dangerTrails.instanceColor.needsUpdate=true;
         for(const c of this.corpses.values()){
             const b=c.state;
             if(!this.extrapolate||!this.presentation.corpse(b.id,renderTime,this.presented))copyPresentationPose(b,this.presented);
@@ -229,13 +264,17 @@ export class ChaosView {
         const localCase=[s.case,...s.extraCases??[]].find(c=>c.owner&&this.resolveRat(c.owner)?.isPlayer);
         const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
         this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer);
+        this.assignmentDestinations.updateCue(s.assignment,camera);
         this.pressureMachine.update(s.pressure,now,camera);
         for(const kiosk of this.kiosks){
+        updateDispatchSiren(kiosk,d.phase==='ready',renderTime/1000);
         kiosk.switchHandle.position.z=d.phase==='ready'?.58:.55;
         const material=kiosk.lamp.material as THREE.MeshStandardMaterial;
         material.emissive.setHex(d.phase==='ready'?0xffdc8c:d.phase==='active'?0xee793a:0x352d38);
         material.emissiveIntensity=d.phase==='rolling'?(Math.floor(now/120)%2)*1.5:d.phase==='ready'?1.2:.3;
         }
+        const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.box.x-this.audioPosition.x,s.box.y+2.1-this.audioPosition.y,s.box.z-this.audioPosition.z)),Infinity);
+        this.sirenAudio.update(d.phase==='ready',nearest);
         if(this.lastDispatch!==d.phase){
             this.lastDispatch=d.phase;
 
@@ -255,7 +294,8 @@ export class ChaosView {
         const location=locateCase(this.p,camera,window.innerWidth,window.innerHeight);
         this.caseMarker.style.display='block';
         // The badge follows the case in world space; its label hangs below it.
-        this.caseMarker.style.transform=`translate(${location.x-87}px,${location.y-17}px)`;
+        const label=clearAimLabel(location.x,location.y+15,190,90,window.innerWidth,window.innerHeight);
+        this.caseMarker.style.transform=`translate(${label.x-87}px,${label.y-32}px)`;
         this.caseMarkerIcon.style.transform=`scale(${1+Math.sin(now*.003)*.045})`;
         this.caseMarkerArrow.style.display=location.edge?'block':'none';
         this.caseMarkerArrow.style.transform=`rotate(${location.angle}rad) translate(29px,-6px)`;
@@ -272,13 +312,15 @@ export class ChaosView {
         oscillator.connect(gain);gain.connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+duration);
         oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
     }
+    renderOutline(renderer:THREE.WebGLRenderer,camera:THREE.Camera):void {this.assignmentDestinations.render(renderer,camera);}
     getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
+        this.sirenAudio.dispose();this.assignmentDestinations.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         this.pressureMachine.dispose();this.caseBeacon.dispose();this.setCarrier(null);this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();this.dispatch.removeFromParent();
         disposeMeshResources(this.caseRoot);disposeMeshResources(this.dispatch);
         startCaseBuzz(false);disposeIncidentAudio();this.impacts.dispose();this.textTexture.dispose();
-        disposeMeshResources(this.root);this.bullets.dispose();this.chargedBullets.dispose();this.chargedGlow.dispose();this.missileTrail.dispose();this.ballGeometry.dispose();this.glowGeometry.dispose();this.ballMaterial.dispose();this.chargedMaterial.dispose();this.glowMaterial.dispose();
+        disposeMeshResources(this.root);this.bullets.dispose();this.chargedBullets.dispose();this.chargedGlow.dispose();this.dangerGlow.dispose();this.dangerTrails.dispose();this.missileTrail.dispose();this.ballGeometry.dispose();this.glowGeometry.dispose();this.ballMaterial.dispose();this.chargedMaterial.dispose();this.glowMaterial.dispose();
     }
 }

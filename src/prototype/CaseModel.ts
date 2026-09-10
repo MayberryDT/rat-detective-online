@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASE_SIZE } from '../shared/chaosState';
 
 /** A closed, overstuffed leather document case. All detail is unlit geometry;
  * the shared shell and handle dimensions retain the physical collision shape.
  */
 export function addLeatherBriefcase(root:THREE.Group){
+    const firstChild=root.children.length;
     const leather=new THREE.MeshStandardMaterial({color:0x633d29,roughness:.8,emissive:0x633d29,emissiveIntensity:.28});
     const panel=new THREE.MeshStandardMaterial({color:0x78513a,roughness:.87,emissive:0x78513a,emissiveIntensity:.25});
     const edge=new THREE.MeshStandardMaterial({color:0x3d271d,roughness:.86});
@@ -50,4 +52,21 @@ export function addLeatherBriefcase(root:THREE.Group){
         part('case-handle-support',.055,.13,.08,leather,x,.36);
         part('handle-anchor',.075,.025,.1,brass,x,.306);
     }
+    // Eight tumbling cases used to draw every stitch, clasp and sheet separately.
+    // They are rigid: merge equal-material details once, preserving every vertex
+    // and the separate glow shells, without skinning or per-frame batch work.
+    const groups=new Map<THREE.Material,THREE.Mesh[]>();
+    for(const object of root.children.slice(firstChild)){
+        const mesh=object as THREE.Mesh,material=mesh.material as THREE.Material;
+        if(!groups.has(material))groups.set(material,[]);groups.get(material)!.push(mesh);
+    }
+    for(const [material,meshes] of groups){
+        if(meshes.length<2)continue;
+        const pieces=meshes.map(mesh=>{mesh.updateMatrix();return (mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone()).applyMatrix4(mesh.matrix);});
+        const merged=new THREE.Mesh(mergeGeometries(pieces)!,material);
+        merged.name=meshes.some(mesh=>mesh.name==='leather-case-shell')?'leather-case-shell':'case-detail-'+meshes[0].name;
+        pieces.forEach(g=>g.dispose());meshes.forEach(mesh=>{mesh.removeFromParent();mesh.geometry.dispose();});root.add(merged);
+    }
+    // Keep the named grip reference after its vertices join the rigid batch.
+    const grip=new THREE.Object3D();grip.name='case-handle-grip';grip.position.y=.43;root.add(grip);
 }

@@ -2,8 +2,11 @@ import {CITY_STREETS, landmarkReservation} from './cityPlan';
 import {CENTRAL_BUILDINGS} from './skyline';
 import {SEWER_ENTRIES, SEWER_MANHOLE, sewerGroundOpening} from './sewerLayout';
 import type {BuildingFootprint} from './worldSpec';
+import {DISPATCH_STATIONS,LAUNCH_MACHINES} from './chaosState';
 
 export type StreetLampPosition = [number, number];
+export const STREET_LAMP_HEIGHT=9;
+export const STREET_LAMP_SPACING=24;
 const CURB_OFFSET = .6;
 
 /** A pole must be outside every carriageway, including intersecting streets. */
@@ -12,6 +15,8 @@ export function isStreetLampSite(x:number,z:number,buildings:BuildingFootprint[]
     if(CITY_STREETS.some(r=>Math.abs(x-r.x)<r.w/2+.3 && Math.abs(z-r.z)<r.d/2+.3))return false;
     if(!CITY_STREETS.some(r=>Math.abs(x-r.x)<=r.w/2+1 && Math.abs(z-r.z)<=r.d/2+1))return false;
     if(landmarkReservation(x,z))return false;
+    if([...DISPATCH_STATIONS,...LAUNCH_MACHINES].some(s=>[s.box,s.target].some(b=>Math.abs(x-b.x)<b.w/2+1&&Math.abs(z-b.z)<b.d/2+1)))return false;
+    if(LAUNCH_MACHINES.some(({pad})=>Math.hypot(x-pad.x,z-pad.z)<pad.radius+1))return false;
     if([...buildings,...CENTRAL_BUILDINGS].some(b=>Math.abs(x-b.cx)<b.bw/2+.35 && Math.abs(z-b.cz)<b.bd/2+.35))return false;
     if(sewerGroundOpening(x,z) || Math.hypot(x-SEWER_MANHOLE.x,z-SEWER_MANHOLE.z)<7)return false;
     // Keep both the full descending pipe and its street-level approach empty.
@@ -48,17 +53,21 @@ export function relocateStreetLamps(sites:StreetLampPosition[],buildings:Buildin
 
 /** Supplemental decorative lamps use exactly the same curb and entrance rules. */
 export function generatedStreetLamps(buildings:BuildingFootprint[],fixed:StreetLampPosition[]):StreetLampPosition[] {
+    return regularStreetLamps(buildings,STREET_LAMP_SPACING,fixed);
+}
+
+/** Opposing curb rows on a shared city grid. Openings and intersections create
+ * deliberate gaps; poles never wander into traffic to fill those gaps. */
+export function regularStreetLamps(buildings:BuildingFootprint[],spacing=STREET_LAMP_SPACING,avoid:StreetLampPosition[]=[]):StreetLampPosition[] {
     const placed:StreetLampPosition[]=[];
     for(const road of CITY_STREETS){
-        const horizontal=road.w>road.d, span=horizontal?road.w:road.d;
-        for(let t=-span/2+12;t<span/2-8;t+=30){
-            // Alternate sidewalks; try the opposite one when a frontage is blocked.
-            const preferred=(Math.round((t+span/2)/30)%2)?-1:1;
-            for(const side of [preferred,-preferred]){
-                const x=road.x+(horizontal?t:side*(road.w/2+CURB_OFFSET));
-                const z=road.z+(horizontal?side*(road.d/2+CURB_OFFSET):t);
-                if(!isStreetLampSite(x,z,buildings) || [...fixed,...placed].some(([px,pz])=>Math.hypot(px-x,pz-z)<10))continue;
-                placed.push([x,z]);break;
+        const horizontal=road.w>road.d,span=horizontal?road.w:road.d,center=horizontal?road.x:road.z;
+        for(let along=Math.ceil((center-span/2+10)/spacing)*spacing;along<center+span/2-10;along+=spacing){
+            for(const side of [-1,1]){
+                const x=horizontal?along:road.x+side*(road.w/2+CURB_OFFSET);
+                const z=horizontal?road.z+side*(road.d/2+CURB_OFFSET):along;
+                if(!isStreetLampSite(x,z,buildings)||[...avoid,...placed].some(([px,pz])=>Math.hypot(px-x,pz-z)<10))continue;
+                placed.push([x,z]);
             }
         }
     }

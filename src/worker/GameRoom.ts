@@ -5,6 +5,7 @@ import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import { serializeServerMessage } from './serializeServerMessage';
 import type { ChaosState } from '../shared/chaosState';
 import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
+import { createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation } from '../shared/assignments';
 import { DurableObject } from 'cloudflare:workers';
 import {
   MAX_CONNECTIONS,
@@ -75,6 +76,7 @@ interface PendingEventRow extends Record<string, SqlStorageValue> {
 
 const WORLD_KEY = 'world';
 const ROUND_KEY = 'round';
+const ASSIGNMENT_ROTATION_KEY = 'assignment-rotation-v1';
 const PERSISTENT_BOTS_KEY = 'persistent-bots-v1';
 const BOT_ROSTER_KEY = 'persistent-bot-roster-v1';
 const MATCH_ROOM_KEY = 'match-room-v1';
@@ -108,6 +110,7 @@ export class GameRoom extends DurableObject<Env> {
   private nextBotHeartbeat = 0;
   private players = new Map<string, PlayerData>();
   private round: RoundState = playingRound();
+  private assignmentRotation: AssignmentRotation = { remaining: [] };
   private world: WorldSpec = createWorldSpec();
   private lastCheckpointAt = new Map<string, number>();
   private lastActiveAt = new Map<string, number>();
@@ -171,6 +174,20 @@ export class GameRoom extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: client, headers: this.matchRoom ? {'x-rat-slots': String(this.humanSlots())} : {} });
   }
 
+  /** Trusted local/private entry points only. An announced active assignment
+   * never changes in response to another participant's connection. */
+  configureAssignment(id: AssignmentId | null): boolean {
+    if (id !== null && !isAssignmentId(id)) return false;
+    if (this.assignmentRotation.forced === (id ?? undefined)) return true;
+    if (this.players.size || this.ctx.getWebSockets().length) return false;
+    this.assignmentRotation = { remaining: [], last: this.assignmentRotation.last, ...(id ? { forced: id } : {}) };
+    this.chaos?.reset();
+    this.round = playingRound(this.now());
+    if(this.chaos)this.beginAssignment();
+    this.checkpointGame();
+    return true;
+  }
+
   /** Trusted matchmaker RPC. Fixed benchmark rooms retain their separate roster policy. */
   async enableMatchmaking(name: string, pool = name): Promise<void> {
     if (!this.matchRoom) {
@@ -229,7 +246,7 @@ export class GameRoom extends DurableObject<Env> {
     else {
       this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined;
       if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; }
-      if (this.chaos) this.writeRoomState('chaos-v1', JSON.stringify(this.chaos.snapshot(false)));
+      if (this.chaos) this.checkpointGame();
       this.nextBotHeartbeat = 0;
       if (wasRunning && this.matchPool && !this.humanSlots()) this.ctx.waitUntil(this.env.MATCHMAKER.getByName(this.matchPool).retire(this.matchRoom, this.matchPool));
     }
@@ -491,6 +508,15 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private hydrate(): void {
+    try {
+      const saved:unknown=JSON.parse(this.readRoomState(ASSIGNMENT_ROTATION_KEY)??'null',(_key,value)=>value==='misfiled-evidence'?'excessive-force':value);
+      if(saved&&typeof saved==='object'&&'remaining' in saved&&Array.isArray(saved.remaining)&&
+          saved.remaining.length<=3&&saved.remaining.every(isAssignmentId)&&new Set(saved.remaining).size===saved.remaining.length){
+        this.assignmentRotation={remaining:[...saved.remaining],
+          ...('last' in saved&&isAssignmentId(saved.last)?{last:saved.last}:{}),
+          ...('forced' in saved&&isAssignmentId(saved.forced)?{forced:saved.forced}:{})};
+      }
+    }catch{/* A missing legacy bag starts a fresh cycle; never replace a valid active assignment. */}
     this.matchRoom = this.readRoomState(MATCH_ROOM_KEY) ?? null;
     this.matchPool = this.readRoomState('match-pool-v1') ?? this.matchRoom;
     this.refillAt = Number(this.readRoomState('bot-refill-at')) || 0;
@@ -619,7 +645,7 @@ export class GameRoom extends DurableObject<Env> {
       id,
       player,
       players: this.playersRecord(),
-      round: this.round,
+      round: this.currentRound(),
       world: this.world,
       protocolVersion: PROTOCOL_VERSION,
       serverTime: this.lastSnapshotAt,
@@ -713,7 +739,7 @@ export class GameRoom extends DurableObject<Env> {
 
     const victim = this.players.get(message.victimId);
     const shooter = this.players.get(playerId);
-    const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, this.chaos?.isCaseHolder(playerId) ? playerId : null);
+    const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, this.chaos?.isCaseHolder(playerId) ? playerId : null, !!this.chaos?.assignmentState);
     if (!result.applied || !victim || !shooter) return;
 
     // Final mutations precede persistence and externally visible events.
@@ -729,6 +755,8 @@ export class GameRoom extends DurableObject<Env> {
 
     if (!result.killed) return;
 
+    const casePoint=this.chaos?.creditCaseKill(shooter.id)??false;
+    if(casePoint)this.checkpointGame();
     const incident=incoming?this.chaos?.death(victim,incoming,shooter.id):false;
     this.broadcast({
       type: 'playerDied',
@@ -740,6 +768,8 @@ export class GameRoom extends DurableObject<Env> {
       ...(incoming?{incoming,incident:!!incident}:{}),
     });
     this.broadcastScoreboard();
+
+    if(casePoint && this.chaos?.assignmentState?.result){this.finishAssignment();return;}
 
     if (result.roundWon) {
       this.round = wonRound(shooter.id, shooter.name, shooter.kills, respawnAt, this.round.startedAt);
@@ -807,10 +837,13 @@ export class GameRoom extends DurableObject<Env> {
       }
 
       if (event.type === 'reset') {
+        // Only this assignment's committed result may reset it. An old match
+        // deadline cannot consume held time, change mode or choose a winner.
+        if(this.chaos?.assignmentState&&(this.round.phase!=='won'||this.round.resetAt!==event.due_at))continue;
         this.lastMovementBroadcast.clear();
         this.chaos?.reset();
         this.round = playingRound(this.now());
-        this.persistRound();
+        this.beginAssignment();
 
         const resetPlayers = resetRoundForWorld(
           [...this.players.values()].filter(player => !this.isManagedBot(player.id)), this.world);
@@ -819,7 +852,8 @@ export class GameRoom extends DurableObject<Env> {
           this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
         }
         if (this.persistentBots) this.replaceRoundBots();
-        this.broadcast({ type: 'gameReset', round: this.round });
+        this.checkpointGame();
+        this.broadcast({ type: 'gameReset', round: this.currentRound() });
         this.broadcastScoreboard();
       }
     }
@@ -841,7 +875,8 @@ export class GameRoom extends DurableObject<Env> {
       this.refillAt || Infinity,
       ...this.ctx.getWebSockets().map(ws => { const a = this.getAttachment(ws); return !a.playerId && (a.admissionUntil ?? 0) > this.now() ? a.admissionUntil! : Infinity; }));
     if (Number.isFinite(dueAt)) {
-      if (scheduled !== dueAt) { this.diagnostics.count('alarmSet'); await this.ctx.storage.setAlarm(dueAt); }
+      const alarmAt=Math.max(1,dueAt);
+      if (scheduled !== alarmAt) { this.diagnostics.count('alarmSet'); await this.ctx.storage.setAlarm(alarmAt); }
     } else if (scheduled !== null) {
       this.diagnostics.count('alarmDelete');
       await this.ctx.storage.deleteAlarm();
@@ -895,6 +930,9 @@ export class GameRoom extends DurableObject<Env> {
     if(!this.chaos){
       let saved:ChaosState|undefined;
       try{const raw=this.readRoomState('chaos-v1');if(raw)saved=JSON.parse(raw) as ChaosState;}catch{/* start a recoverable case */}
+      const previous=saved?.assignment as {id?:string;destinations?:string[]}|undefined;
+      const retiredAssignment=previous?.id==='misfiled-evidence'||(previous?.id==='chain-of-custody'&&previous.destinations?.includes('icebox-check'));
+      if(retiredAssignment){this.round=playingRound(this.now());this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");}
       this.chaos=new ChaosSimulation(this.players,hit=>{
         void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming)
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
@@ -904,6 +942,9 @@ export class GameRoom extends DurableObject<Env> {
       // built-in sparse implementation preserves collision/event semantics.
       this.chaos.world.collisionMatrix = new ObjectCollisionMatrix() as unknown as ArrayCollisionMatrix;
       this.chaos.world.collisionMatrixPrevious = new ObjectCollisionMatrix() as unknown as ArrayCollisionMatrix;
+      if(this.round.phase==='playing'&&!this.chaos.assignmentState){this.beginAssignment();this.checkpointGame();}
+      this.finishAssignment();
+      if(retiredAssignment)this.checkpointGame();
     }
     if(this.chaosTimer)return;
     this.chaosLast=this.now();this.chaosAccumulator=0;
@@ -913,7 +954,7 @@ export class GameRoom extends DurableObject<Env> {
       for(const id of [...this.players.keys()])if(!attached.has(id) && !this.isManagedBot(id))this.removePlayerById(id);
       if(this.matchRoom && ![...attached].some(id=>this.players.has(id))){this.rebalanceBots();return;}
       if(!this.persistentBots && ![...attached].some(id=>this.players.has(id))){
-        this.writeRoomState('chaos-v1',JSON.stringify(this.chaos.snapshot(false)));
+        this.checkpointGame();
         clearInterval(this.chaosTimer!);this.chaosTimer=null;return;
       }
       // Workers may freeze high-resolution clocks within one event; cost=0 is
@@ -930,13 +971,14 @@ export class GameRoom extends DurableObject<Env> {
         const stepAt = now-this.chaosAccumulator*1000;
         this.serverBots?.step(1/60, stepAt, this.players, this.botState, this.round.phase==='playing');
         this.chaos.step(1/60,stepAt,this.round.phase==='playing');
+        this.finishAssignment();
       }
       this.flushMovement('tick');
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
-      const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase;
+      const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
       if(now-this.chaosSavedAt>=1000 || signature!==this.chaosSignature){
-        this.writeRoomState('chaos-v1',JSON.stringify(state));this.chaosSavedAt=now;this.chaosSignature=signature;
+        this.checkpointGame(state);this.chaosSavedAt=now;this.chaosSignature=signature;
         this.observeCheckpointSettlement();
       }
       // Legacy recipients share one serialization. Compact recipients use their
@@ -1011,7 +1053,41 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private persistRound(): void {
-    this.writeRoomState(ROUND_KEY, JSON.stringify(this.round));
+    this.writeRoomState(ROUND_KEY, JSON.stringify(this.currentRound()));
+  }
+
+  private currentRound():RoundState {
+    const assignment=this.chaos?.assignmentState;
+    return {...this.round,...(assignment?{assignment:structuredClone(assignment)}:{})};
+  }
+  private beginAssignment():void {
+    if(!this.chaos)return;
+    const id=nextAssignment(this.assignmentRotation);
+    this.chaos.setAssignment(createAssignment(id,this.now()));
+    this.botState=this.chaos.snapshot(false);
+  }
+  /** Case, progress, bag and result are one synchronous SQLite checkpoint. */
+  private checkpointGame(state=this.chaos?.snapshot(false)):void {
+    this.ctx.storage.transactionSync(()=>{
+      this.persistRound();
+      if(state)this.writeRoomState('chaos-v1',JSON.stringify(state));
+      this.writeRoomState(ASSIGNMENT_ROTATION_KEY,JSON.stringify(this.assignmentRotation));
+    });
+  }
+  private finishAssignment():void {
+    const assignment=this.chaos?.assignmentState,result=assignment?.result;
+    if(!assignment||!result||this.round.phase!=='playing')return;
+    const resetAt=this.now()+WIN_DISPLAY_MS;
+    const kills=this.players.get(result.winnerId)?.kills??0;
+    this.round=wonRound(result.winnerId,result.winnerName,kills,resetAt,this.round.startedAt);
+    this.ctx.storage.transactionSync(()=>{
+      this.reconcileDeadlinesOnWin(resetAt);
+      this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type = 'reset'");
+      this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',crypto.randomUUID(),'reset',null,resetAt);
+      this.checkpointGame();
+    });
+    this.broadcast({type:'gameWon',winnerId:result.winnerId,winnerName:result.winnerName,kills,resetAt,assignment:structuredClone(assignment)});
+    this.ctx.waitUntil(this.scheduleNextAlarm());
   }
 
   private ensureRoundClock(): void {

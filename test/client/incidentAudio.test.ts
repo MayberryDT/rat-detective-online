@@ -53,13 +53,13 @@ it('fades delayed wall thuds without regenerating PCM and disconnects every outp
 it('smoothly follows the nearest case with one loop and avoids scheduling identical frame gains',async()=>{
  const {ctx,nodes,gains}=await fixture();bindIncidentAudio(ctx,{x:0,y:0,z:0});
  startCaseBuzz(true,{x:0,y:0,z:0});
- expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.19,.12);
+ expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.055,.12);
  startCaseBuzz(true,{x:0,y:250,z:0});
- expect(gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(.19*.8,0,.08);
+ expect(gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(.055*.8,0,.08);
  for(let i=0;i<600;i++)startCaseBuzz(true,{x:0,y:250,z:0});
  expect(nodes).toHaveLength(1);expect(gains[0].gain.setTargetAtTime).toHaveBeenCalledTimes(1);
  bindIncidentAudio(ctx,{x:0,y:250,z:0});startCaseBuzz(true,{x:0,y:250,z:0});
- expect(gains[0].gain.setTargetAtTime).toHaveBeenLastCalledWith(.19,0,.08);
+ expect(gains[0].gain.setTargetAtTime).toHaveBeenLastCalledWith(.055,0,.08);
  startCaseBuzz(false);nodes[0].onended();expect(gains[0].disconnect).toHaveBeenCalledTimes(1);
 });
 
@@ -68,5 +68,5 @@ it('retains the requested case distance when loading finishes after the incident
  bindIncidentAudio(ctx,{x:10,y:0,z:0});startCaseBuzz(true,{x:260,y:0,z:0});
  expect(nodes).toHaveLength(0);
  await vi.waitFor(()=>expect(nodes).toHaveLength(1));
- expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.19*.8,.12);
+ expect(gains[0].gain.linearRampToValueAtTime).toHaveBeenCalledWith(.055*.8,.12);
 });

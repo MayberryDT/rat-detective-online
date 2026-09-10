@@ -4,6 +4,7 @@ import { createPlayer } from '../../src/worker/gameState';
 import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
 import { DISPATCH_STATIONS, type ChaosState } from '../../src/shared/chaosState';
+import { createAssignment, destinationPoint, CHAIN_ROUTE } from '../../src/shared/assignments';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 function state(owner:string|null=null):ChaosState {
@@ -22,6 +23,29 @@ function aimedNear(shot:Vec3Data|undefined,self:Vec3Data,target:Vec3Data){
     expect(cosine).toBeLessThan(.9999);
 }
 describe('case-first normal match bots',()=>{
+    it('carries through the active verification approach while retaining combat',()=>{
+        const {brain,self,near,navigation}=fixture(),s=state('me');
+        s.assignment=createAssignment('chain-of-custody',0);s.assignment.destinations=[...CHAIN_ROUTE];s.assignment.phase='active';
+        brain.step(3000,self,[self,near],s,()=>true,false,true);
+        expect(brain.objective).toBe('delivery');
+        expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('icebox'));
+        Object.assign(self,destinationPoint('icebox'));
+        brain.step(3500,self,[self,near],s,()=>true,false,true);
+        expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('icebox',false));
+        s.assignment.deliverySerial=1;brain.step(3510,self,[self,near],s,()=>true,false,true);
+        expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('maintenance'));
+        s.assignment.phase='suspended';s.case.owner=null;s.dispatch={phase:'active',incident:'evidence-tampering',serial:1,started:3500,until:28500};
+        brain.step(3520,self,[self,near],s,()=>true,false,true);
+        expect(brain.objective).not.toBe('delivery');expect(brain.objective).not.toBe('case');
+    });
+    it('fights with the case in Excessive Force and keeps Closing Time mobile',()=>{
+        const {brain,self,near}=fixture(),s=state('me');
+        s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
+        brain.step(3000,self,[self,near],s,()=>true,false,true);
+        expect(brain.objective).toBe('combat');
+        s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';
+        brain.step(3010,self,[self,near],s,()=>true,false,true);expect(brain.objective).toBe('combat');
+    });
     it('walks to the loose case while opportunistically shooting a visible enemy',()=>{
         const {brain,self,near}=fixture();
         const intent=brain.step(1000,self,[self,near],state(),()=>true,false,true);
@@ -93,15 +117,16 @@ describe('case-first normal match bots',()=>{
         brain.step(2000,self,[self],loose,()=>false,false,true);
         expect(vi.mocked(navigation.route).mock.calls.at(-1)?.[1].x).toBe(80);
     });
-    it('shoots a visible ready Dispatch button while passing without abandoning the case',()=>{
+    it('shoots a visible ready Dispatch button in a quiet stretch, then prioritizes an enemy',()=>{
         const {brain,self,near}=fixture(),loose=state(),target=DISPATCH_STATIONS[0].target;
         self.x=target.x;self.z=target.z+12;
         const clearControl=vi.fn(()=>true);
-        const intent=brain.step(1000,self,[self,near],loose,()=>true,false,true,clearControl);
+        const intent=brain.step(1000,self,[self],loose,()=>true,false,true,clearControl);
         expect(brain.objective).toBe('case');expect(intent.shoot).toEqual({x:target.x,y:target.y,z:target.z});
         expect(clearControl).toHaveBeenCalledWith(target);expect(Math.hypot(intent.x,intent.z)).toBeCloseTo(6.5);
         loose.dispatch.phase='active';
-        const next=brain.step(1600,self,[self,near],loose,()=>true,false,true,clearControl);
+        expect(brain.step(1600,self,[self,near],loose,()=>true,false,true,clearControl).shoot).toBeUndefined();
+        const next=brain.step(2100,self,[self,near],loose,()=>true,false,true,clearControl);
         aimedNear(next.shoot,self,near);
     });
     it('does not shoot a blocked Dispatch target and fires visible enemies more frequently',()=>{
@@ -288,4 +313,27 @@ describe('case-first normal match bots',()=>{
         expect(navigation.route).toHaveBeenCalledWith({x:0,y:0,z:0},{x:8,y:0,z:0});
         expect(intent.x).toBe(0);expect(intent.z).toBe(0);expect(brain.navigationStalled).toBe(true);
     });
+});
+
+it('sprints along short flat navigation cells, slows at pickup, and does not blast the nearby case away',()=>{
+ const {brain,self,navigation}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
+ vi.mocked(navigation.route).mockReturnValue([{x:2,y:0,z:0},{x:4,y:0,z:0},{x:40,y:0,z:0}]);
+ expect(brain.step(1000,self,[self],s,()=>false,false,true).x).toBe(12);
+ brain.reset();s.case.p.x=4;
+ for(let now=2000;now<8000;now+=100){const intent=brain.step(now,self,[self],s,()=>false,false,true);expect(Math.hypot(intent.x,intent.z)).toBeLessThanOrEqual(6.5);expect(intent.shoot).toBeUndefined();}
+});
+it('takes the Closing case away from visible danger while still returning fire',()=>{
+ const self=player('me',0),enemy=player('enemy',10),s=state('me');s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';
+ const nav:ObjectiveNavigation={route:vi.fn((_from,to)=>[to]),explorationTargets:()=>[{x:-25,y:0,z:0},{x:25,y:0,z:0}]};
+ const brain=new ObjectiveBotBrain(nav,1,()=>.5);
+ expect(brain.step(1000,self,[self,enemy],s,()=>true,false,true).x).toBe(-12);expect(brain.objective).toBe('evade');
+ expect(brain.step(1500,self,[self,enemy],s,()=>true,false,true).shoot).toBeDefined();
+});
+it('intercepts a distant Chain carrier at the next landmark when already closer to it',()=>{
+ const {brain,self,holder,navigation}=fixture(0),s=state('holder');s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';s.assignment.destinations=[...CHAIN_ROUTE];
+ Object.assign(self,destinationPoint('icebox'));self.x-=8;holder.x=-100;holder.z=-100;
+ brain.step(1000,self,[self,holder],s,()=>false,false,true);
+ expect(brain.objective).toBe('intercept');expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('icebox'));
+ s.assignment.deliverySerial=1;brain.step(1010,self,[self,holder],s,()=>false,false,true);
+ expect(vi.mocked(navigation.route).mock.calls.at(-1)?.[1]).not.toEqual(destinationPoint('icebox'));
 });

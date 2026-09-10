@@ -2,7 +2,7 @@ import { CHAOS_TUNING, type ChaosState, type PhysicalPose } from './chaosState';
 import type { QuatData, Vec3Data } from './networkProtocol';
 
 export interface PresentationPose { p: Vec3Data; q: QuatData }
-interface Sample { time:number; p:Vec3Data; v:Vec3Data; q:QuatData; charged:boolean }
+interface Sample { time:number; p:Vec3Data; v:Vec3Data; q:QuatData; charged:boolean; corner?:{time:number;p:Vec3Data} }
 interface Track { samples:Sample[]; arrived:number; seen:number; blockExtrapolation:boolean; lastTime:number; clockCorrection:number }
 const identity:QuatData={x:0,y:0,z:0,w:1};
 const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -52,9 +52,9 @@ export class ChaosPresentation {
         const lifecycle=`${state.case.owner??'loose'}:${state.case.returningUntil}`;
         if(lifecycle!==this.caseLifecycle){this.caseTrack=undefined;this.caseLifecycle=lifecycle;}
         if(state.case.owner)this.caseTrack=undefined;
-        else this.caseTrack=this.push(this.caseTrack,state.time,arrival,state.case.p,state.case.v,state.case.q,false);
+        else this.caseTrack=this.push(this.caseTrack,state.time,arrival,state.case.p,state.case.v,state.case.q,false,true);
     }
-    private push(track:Track|undefined,time:number,arrival:number,p:Vec3Data,v:Vec3Data,q:QuatData,charged:boolean):Track {
+    private push(track:Track|undefined,time:number,arrival:number,p:Vec3Data,v:Vec3Data,q:QuatData,charged:boolean,continuousRicochet=false):Track {
         const sample:Sample={time,p,v,q,charged};
         if(!track)return{samples:[sample],arrived:arrival,seen:this.serial,blockExtrapolation:false,lastTime:-Infinity,clockCorrection:time-(arrival+this.offset)};
         const previous=track.samples[track.samples.length-1],dt=Math.max(0,(time-previous.time)/1000);
@@ -62,10 +62,22 @@ export class ChaosPresentation {
         const dot=previous.v.x*v.x+previous.v.y*v.y+previous.v.z*v.z;
         const bounce=charged!==previous.charged||(oldSpeed>2&&newSpeed>2&&dot/(oldSpeed*newSpeed)<.55);
         const teleport=distance(previous.p,p)>Math.max(8,Math.max(oldSpeed,newSpeed)*dt*1.8+3);
-        if(bounce||teleport){
+        if(bounce&&continuousRicochet&&!teleport&&dt>0){
+            // Reconstruct a single rebound between two observed endpoints. No
+            // collision prediction: reject inconsistent/multiple-bounce fits.
+            const dv={x:previous.v.x-v.x,y:previous.v.y-v.y,z:previous.v.z-v.z};
+            const length=dv.x*dv.x+dv.y*dv.y+dv.z*dv.z;
+            const at=((p.x-previous.p.x-v.x*dt)*dv.x+(p.y-previous.p.y-v.y*dt)*dv.y+(p.z-previous.p.z-v.z*dt)*dv.z)/length;
+            if(at>0&&at<dt){
+                const a={x:previous.p.x+previous.v.x*at,y:previous.p.y+previous.v.y*at,z:previous.p.z+previous.v.z*at};
+                const b={x:p.x-v.x*(dt-at),y:p.y-v.y*(dt-at),z:p.z-v.z*(dt-at)};
+                if(distance(a,b)<.6)sample.corner={time:previous.time+at*1000,p:{x:(a.x+b.x)/2,y:(a.y+b.y)/2,z:(a.z+b.z)/2}};
+            }
+        }
+        if((bounce&&!continuousRicochet)||teleport){
             track.samples.length=0;track.arrived=arrival;track.blockExtrapolation=true;track.lastTime=-Infinity;
             track.clockCorrection=time-(arrival+this.offset);
-        } else if(time>previous.time)track.blockExtrapolation=false;
+        } else if(time>previous.time)track.blockExtrapolation=bounce;
         if(track.samples.length&&time===previous.time)track.samples[track.samples.length-1]=sample;
         else {track.samples.push(sample);if(track.samples.length>HISTORY)track.samples.shift();}
         track.seen=this.serial;return track;
@@ -92,6 +104,12 @@ export class ChaosPresentation {
         }
         const t=a.time===b.time?0:Math.min(1,Math.max(0,(time-a.time)/(b.time-a.time)));
         out.p.x=a.p.x+(b.p.x-a.p.x)*t;out.p.y=a.p.y+(b.p.y-a.p.y)*t;out.p.z=a.p.z+(b.p.z-a.p.z)*t;
+        if(b.corner&&a.time<b.corner.time&&b.corner.time<b.time){
+            const before=time<=b.corner.time,from=before?a.p:b.corner.p,to=before?b.corner.p:b.p;
+            const start=before?a.time:b.corner.time,end=before?b.corner.time:b.time;
+            const u=Math.max(0,Math.min(1,(time-start)/(end-start)));
+            out.p.x=from.x+(to.x-from.x)*u;out.p.y=from.y+(to.y-from.y)*u;out.p.z=from.z+(to.z-from.z)*u;
+        }
         // Shortest-arc quaternion interpolation; normalize without allocating a
         // Three.js quaternion for each ragdoll on every presentation frame.
         const sign=a.q.x*b.q.x+a.q.y*b.q.y+a.q.z*b.q.z+a.q.w*b.q.w<0?-1:1;

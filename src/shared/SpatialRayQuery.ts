@@ -1,4 +1,5 @@
 import * as C from 'cannon-es';
+import {sweepSphereBody} from './sweepSphere';
 
 type Node = { bounds:C.AABB; bodies?:C.Body[]; left?:Node; right?:Node };
 /** A static-body BVH for ray broadphase only. Cannon still performs every exact
@@ -74,5 +75,20 @@ export class SpatialRayQuery {
         ray.hasHit=false;ray.skipBackfaces=true;ray.checkCollisionResponse=true;
         ray.collisionFilterGroup=16;ray.collisionFilterMask=mask;
         ray.intersectBodies(this.candidates,result);return result;
+    }
+    /** Reuse the static BVH for the larger Big Cheese collision volume. */
+    sphere(from:C.Vec3,to:C.Vec3,radius:number,mask:number,accept:(body:C.Body)=>boolean):C.RaycastResult {
+        if(this.changed)this.refresh();
+        this.bounds.lowerBound.set(Math.min(from.x,to.x)-radius,Math.min(from.y,to.y)-radius,Math.min(from.z,to.z)-radius);
+        this.bounds.upperBound.set(Math.max(from.x,to.x)+radius,Math.max(from.y,to.y)+radius,Math.max(from.z,to.z)+radius);
+        this.candidates.length=0;this.collect(this.root);
+        for(const body of this.moving){if(body.aabbNeedsUpdate)body.updateAABB();if(body.aabb.overlaps(this.bounds))this.candidates.push(body);}
+        let result=new C.RaycastResult();
+        for(const body of this.candidates){
+            if(!(body.collisionFilterGroup&mask)||!(body.collisionFilterMask&16)||!body.collisionResponse||!accept(body))continue;
+            const hit=sweepSphereBody(from,to,radius,body);
+            if(hit.hasHit&&(!result.hasHit||hit.distance<result.distance))result=hit;
+        }
+        return result;
     }
 }

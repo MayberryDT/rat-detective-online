@@ -9,7 +9,7 @@ const join=()=>new Promise((resolve,reject)=>{
  const ws=new WebSocket(url,{origin:origin.origin});sockets.push(ws);
  const timer=setTimeout(()=>{ws.terminate();reject(Error('Join timeout'));},20000);
  const players=new Map();let welcome;
- ws.on('open',()=>ws.send(JSON.stringify({type:'join',protocolVersion:1,name:'Lobby Check',appearance:{hatType:'fedora',hatColor:1,furColor:2,coatColor:3}})));
+ ws.on('open',()=>ws.send(JSON.stringify({type:'join',protocolVersion:5,name:'Lobby Check',appearance:{hatType:'fedora',hatColor:1,furColor:2,coatColor:3}})));
  ws.on('error',error=>{clearTimeout(timer);reject(error);});
  ws.on('message',raw=>{
   const m=JSON.parse(raw);

@@ -229,3 +229,21 @@ layout iteration for human feedback, not a finished balance or art pass.
 
 Case recovery distinguishes reachable gallery/stair surfaces from inaccessible
 roofs. New structural geometry is shared by the solo preview and room simulation.
+# Dispatch Assignment review
+
+`assignment-fixture.html` is a static review of the distinct assignment HUDs and whole-landmark destinations in the real city/shoulder camera. It accepts `assignment=closing-time|chain-of-custody|excessive-force`, `view=city|icebox|archive|offscreen|sewer|maintenance|dispatch`, `stop=0..5` (destination cursor, not score), `phase=title|briefing|suspended|closed|death`, `held`, `remaining` (milliseconds), and `confirm`. It contains no gameplay input or network and does not demonstrate multiplayer scoring. See [the implementation receipt](../../docs/dispatch-assignments.md).
+
+The assignment fixture now includes navigation links for all three distinct HUDs, the three-delivery Chain scoreboard, Maintenance, the title, victory and death screens. It pins the route for reproducible visual states; live matches rotate all six eligible landmarks until a rat scores three deliveries. The death visual replays its three-second countdown every 4.5 seconds for inspection. The latest palette is deep logo-purple and dark textured paper. Whole-building outlines show only the exterior silhouette through walls. `view=maintenance` places the actual shoulder camera inside the furnished workshop; `view=sewer` shows its approach. `view=dispatch` exposes an opt-in LISTEN button for the actual ready siren. Add `dispatch=busy` to inspect its off state. There is no automatic sound playback.
+
+`view=streetlight` places the rat beneath an authored pole using the real shoulder camera. Compare `lighting=pools` (the new lower ambient/downlight trial) with `lighting=classic` (the exact previous lighting values). Both options also work in the full game and change only local presentation. Static screenshots are visual review, not input, multiplayer, sound or frame-rate validation.
+
+Latest camera follow-up: `view=streetlight&rats` places three additional dark-coated rats at different distances along the curb. It is a visibility fixture only. Current evidence: [paperwork race and city lights](../../docs/verification/paperwork-race-city-lights-2026-09-09.md).
+
+## Cheese and interior lighting review (September 9 night / September 10 UTC)
+
+`assignment-fixture.html?assignment=closing-time&view=streetlight&cheese&held&remaining=95000` poses the actual shoulder camera with four shot columns, left to right: own yellow, own red Crossfire, enemy yellow with red-orange rim, enemy glowing red Crossfire. Each has ordinary and enlarged sizes. The street view leaves all four columns unobstructed. These are static presentation states, not gameplay inputs. Interior views also include `recordsinside`, `recordsupstairs`, `iceinside`, `needleinside`, `pumpinside`, `sluiceinside` and `maintenance`; `lighting=classic` provides the earlier lighting comparison. A Chain fixture with `confirm` shows its delivery score, relocated loose case and next landmark. `caseEvent=pickup|lost|taken|loose` triggers a contextual announcement after 500 ms; capture within its 2.8-second animation. See the [current implementation receipt](../../docs/verification/crossfire-case-banter-2026-09-10.md) and [earlier lighting/respawn checks](../../docs/verification/cheese-interior-delivery-2026-09-10.md).
+
+
+### September 10 full scoreboard and local outline
+
+Add `scoreboard` to an assignment fixture for a static full table over the actual camera. `roster=12` is the default; `roster=24` reviews a larger lobby and the compact rows. Use any of the three assignment IDs to check its mode column. Example: `assignment-fixture.html?assignment=chain-of-custody&view=recordsinside&held&scoreboard`. The fixture supplies posed sample stats; it does not simulate Tab or gameplay. Without `scoreboard`, `view=streetlight&rats&held` shows the local rat without an outline and three opponents with their existing outlines. See [the receipt](../../docs/verification/tab-scoreboard-local-outline-2026-09-10.md).

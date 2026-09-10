@@ -30,7 +30,7 @@ function frame(now:number){
  if(!first){first=now;packetAt=now;}const dt=previous?Math.min(.05,(now-previous)/1000):1/60;const start=performance.now();
  while(now-packetAt>=50){packetAt+=50;for(const [i,p] of players.entries()){const a=packetAt*.00325+i;remotes.move({...p,x:p.x+Math.sin(a)*2,z:p.z+Math.cos(a)*2,meshQy:Math.sin(a/2),meshQw:Math.cos(a/2)},packetAt);}
  state.time=packetAt;state.shots=Array.from({length:balls},(_,i)=>({id:`ball-${i}`,owner:'rat-0',p:{x:-24+Math.floor(i/16)*1.8,y:1+Math.sin(packetAt*.002+i),z:-23+(i%16)*.65},v:{x:0,y:0,z:0},age:1}));chaos.apply(state);}
- remotes.prepareFrame(now);remotes.presentFrame();chaos.update(dt,stage.camera);city.update(dt,stage.camera);const beforeRender=performance.now();stage.renderer.info.reset();if(now-first>5000&&!gpuWarm){gpu.reset();gpuWarm=true;}gpu.begin();stage.renderer.render(stage.scene,stage.camera);gpu.end();
+ remotes.prepareFrame(now);remotes.presentFrame();chaos.update(dt,stage.camera);city.update(dt,stage.camera);const beforeRender=performance.now();stage.renderer.info.reset();if(now-first>5000&&!gpuWarm){gpu.reset();gpuWarm=true;}gpu.begin();stage.renderer.render(stage.scene,stage.camera);chaos.renderOutline(stage.renderer,stage.camera);gpu.end();
  if(now-first>5000){frames.push(now-previous);cpu.push(performance.now()-beforeRender);present.push(beforeRender-start);samples++;}
  previous=now;
  if(now-first<20000){requestAnimationFrame(frame);return;}
@@ -39,9 +39,9 @@ function frame(now:number){
  if(params.get('compare')==='1'){
   const batches:THREE.Mesh[]=[];stage.scene.traverse(o=>{if(o instanceof THREE.Mesh&&o.userData.rigidSources)batches.push(o);});
   const target=new THREE.WebGLRenderTarget(1280,720,{samples:4}),a=new Uint8Array(1280*720*4),b=new Uint8Array(a.length);
-  stage.renderer.setRenderTarget(target);stage.renderer.render(stage.scene,stage.camera);stage.renderer.readRenderTargetPixels(target,0,0,1280,720,a);
+  stage.renderer.setRenderTarget(target);stage.renderer.render(stage.scene,stage.camera);chaos.renderOutline(stage.renderer,stage.camera);stage.renderer.readRenderTargetPixels(target,0,0,1280,720,a);
   for(const batch of batches){batch.visible=false;for(const source of batch.userData.rigidSources as THREE.Mesh[])source.visible=true;}
-  stage.renderer.render(stage.scene,stage.camera);stage.renderer.readRenderTargetPixels(target,0,0,1280,720,b);
+  stage.renderer.render(stage.scene,stage.camera);chaos.renderOutline(stage.renderer,stage.camera);stage.renderer.readRenderTargetPixels(target,0,0,1280,720,b);
   for(const batch of batches){batch.visible=true;for(const source of batch.userData.rigidSources as THREE.Mesh[])source.visible=false;}
   stage.renderer.setRenderTarget(null);target.dispose();
   let sum=0,max=0,changed=0;for(let i=0;i<a.length;i++){if(i%4===3)continue;const delta=Math.abs(a[i]-b[i]);sum+=delta;max=Math.max(max,delta);if(delta>2)changed++;}

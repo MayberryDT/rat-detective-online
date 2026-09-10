@@ -18,7 +18,7 @@ describe('human-like combat rhythm and perception',()=>{
   for(let i=1;i<shots.length;i++){if(shots[i]-shots[i-1]>450){groups.push(group);group=1;}else group++;}
   expect(groups).toContain(1);expect(groups.some(size=>size>=3)).toBe(true);
   expect(new Set(groups).size).toBeGreaterThanOrEqual(3);
-  for(let i=1;i<shots.length;i++)expect(shots[i]-shots[i-1]).toBeGreaterThanOrEqual(239.99);
+  for(let i=1;i<shots.length;i++)expect(shots[i]-shots[i-1]).toBeGreaterThanOrEqual(199.99);
   for(const t of shots)expect(shots.filter(s=>s>=t&&s<t+1000).length).toBeLessThanOrEqual(5);
  });
  it('uses angular error that grows with range and holds it across shots',()=>{

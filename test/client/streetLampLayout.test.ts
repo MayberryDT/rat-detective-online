@@ -10,8 +10,8 @@ const generated=generatedStreetLamps(layout,STREET_LAMPS);
 const all=[...STREET_LAMPS,...generated];
 describe('street lamp clearance',()=>{
     it('places every pole beside a real curb, outside every intersecting street and building',()=>{
-        expect(STREET_LAMPS.length).toBeGreaterThan(8);
-        expect(generated.length).toBeGreaterThan(15);
+        expect(STREET_LAMPS.length).toBeGreaterThan(50);
+        expect(generated.length).toBeGreaterThan(40);
         for(const [x,z] of all){
             expect(CITY_STREETS.some(r=>Math.abs(x-r.x)<r.w/2+.3&&Math.abs(z-r.z)<r.d/2+.3),`pole ${x},${z} in street`).toBe(false);
             expect(CITY_STREETS.some(r=>Math.abs(x-r.x)<=r.w/2+1&&Math.abs(z-r.z)<=r.d/2+1)).toBe(true);
@@ -31,8 +31,8 @@ describe('street lamp clearance',()=>{
         }
     });
     it('moves the physical prototype poles with their shared glow/light coordinates and avoids duplicate props',()=>{
-        const poles=grayboxBoxes().filter(b=>b.w===.16&&b.d===.16&&b.h===5);
-        expect(poles.map(b=>[b.x,b.z])).toEqual(STREET_LAMPS);
+        const poles=grayboxBoxes().filter(b=>b.w===.16&&b.d===.16&&b.h===9);
+        expect(poles.map(b=>[b.x,b.z])).toEqual(all);
         for(let i=0;i<all.length;i++)for(let j=i+1;j<all.length;j++){
             expect(Math.hypot(all[i][0]-all[j][0],all[i][1]-all[j][1])).toBeGreaterThan(8);
         }

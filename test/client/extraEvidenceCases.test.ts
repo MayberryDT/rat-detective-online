@@ -26,16 +26,18 @@ describe('weaponized Evidence Tampering cases',()=>{
   expect(2*(body(sim,'evidence-1').shapes[0] as C.Box).halfExtents.x).toBeCloseTo(CASE_SIZE.x*CASE_LOOSE_SCALE);
  });
  it('turns extras into deadly owned missiles that reflect off walls',()=>{
-  const {sim,rats,now,hits}=fixture();
+  let {sim,rats,now,hits,players}=fixture();
   for(const rat of rats)rat.y=40;
-  const target=body(sim,'evidence-1');target.position.set(0,20.8,10);target.velocity.setZero();
+  let target=body(sim,'evidence-1');target.position.set(0,20.8,10);target.velocity.setZero();
   sim.shoot('0',{shotId:'disarm',origin:{x:2.2,y:20.8,z:10},direction:{x:-1,y:0,z:0}});
   sim.step(.012,now+12);
   const extra=sim.snapshot(false).extraCases!.find(c=>c.id==='evidence-1')!;
   expect(extra).toMatchObject({owner:null,missileOwner:'0'});
   expect(target.velocity.x).toBeLessThan(-50);expect(sim.isCaseHolder('1')).toBe(false);
   rats[1].x=-3;rats[1].y=20;sim.step(.03,now+42);expect(hits.some(hit=>hit.owner==='0'&&hit.victim==='1'&&hit.damage===3)).toBe(true);
-  const wall=new C.Body({mass:0,shape:new C.Box(new C.Vec3(.03,8,8)),position:new C.Vec3(target.position.x-5,21,10)});sim.world.addBody(wall);sim.targets.set(wall,{kind:'world'});
+  // Remove the original bullet before measuring the case's own rebound.
+  const saved=sim.snapshot(false);saved.shots=[];sim=new ChaosSimulation(players,hit=>hits.push(hit),saved);target=body(sim,'evidence-1');
+  const wall=new C.Body({mass:0,shape:new C.Box(new C.Vec3(.03,8,8)),position:new C.Vec3(target.position.x-3,21,10)});sim.world.addBody(wall);sim.targets.set(wall,{kind:'world'});
   sim.step(.05,now+92);expect(target.velocity.x).toBeGreaterThan(0);expect(target.position.x).toBeGreaterThan(wall.position.x);
   expect(hits.some(hit=>hit.victim==='0')).toBe(false);
  });

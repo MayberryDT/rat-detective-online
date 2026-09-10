@@ -98,7 +98,7 @@ describe('authoritative Dispatch incidents',()=>{
   const blocked=new ChaosSimulation(cooling.players,()=>{},saved);blocked.step(0,now+3000);expect(blocked.snapshot(false).pressure!.serial).toBe(6);
  });
  it('restores the ordinary bouncy case kick after Evidence Tampering missile speed expires',()=>{
-  const {sim}=fixture('evidence-tampering');expect(caseKick(sim)).toBeCloseTo(220,2);expect(Math.abs(sim.caseBody.angularVelocity.z)).toBeGreaterThan(10);
+  const {sim}=fixture('evidence-tampering');expect(caseKick(sim)).toBeCloseTo(160,2);expect(Math.abs(sim.caseBody.angularVelocity.z)).toBeGreaterThan(5);
   sim.step(0,now+T.activeMs);expect(caseKick(sim,now+T.activeMs+10)).toBeCloseTo(T.caseShotKick,2);
  });
  it('keeps ordinary corpse relaunch force during Crossfire',()=>{

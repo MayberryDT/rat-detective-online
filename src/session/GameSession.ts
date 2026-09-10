@@ -23,12 +23,15 @@ import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo } from '../shared/incidentCatalog';
 import { bindGamePointerLock } from './GamePointerLock';
 import { FeedbackAudio } from '../audio/FeedbackAudio';
+import { MatchScoreboard } from '../ui/MatchScoreboard';
+import { bindScoreboardHold } from './ScoreboardHold';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
     private readonly stage;
     private readonly transport = new NetworkManager();
     private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue));
+    private readonly scoreboard = new MatchScoreboard();
     private readonly input = new InputState();
     private readonly events = new AbortController();
     private readonly gun;
@@ -78,6 +81,7 @@ export class GameSession {
             this.input.clear();
             this.simulation.reset();
             this.hud.setConnection(state, message);
+            this.scoreboard.setAvailable(state === 'playing');
             if (state === 'playing') { this.hud.enterPlaying(); this.music.start(); }
         };
         this.gun.onHitEntity = (victim, damage) => {
@@ -188,6 +192,8 @@ export class GameSession {
         this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
             playing:()=>this.transport.state==='playing',signal:this.events.signal,
             record:(type,detail)=>this.stats?.event(type,detail)});
+        bindScoreboardHold({available:()=>this.transport.state==='playing',
+            show:visible=>this.scoreboard.setVisible(visible),scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
         window.addEventListener('focus', () => this.focusTitleControls(), options);
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) this.focusTitleControls();
@@ -250,11 +256,11 @@ export class GameSession {
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin));
-        this.hud.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
+        this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.hud.hideRespawn();
         this.hud.hideVictory();
         if (player.hp <= 0 && player.respawnAt) this.hud.showRespawn(player.respawnAt - this.serverOffset);
-        if (message.round.phase === 'won') this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0);
+        if (message.round.phase === 'won') {this.hud.hideRespawn();this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0,message.round.assignment);}
         this.lastMovement = '';
         this.lastMovementAt = 0;
         if(normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
@@ -267,6 +273,7 @@ export class GameSession {
     }
 
     private receive(message: ServerMessage): void {
+        this.scoreboard.receive(message);
         if(message.type==='chaos'){this.diagnosticChaos={receivedAt:Date.now(),serverTime:message.state.time,shots:message.state.shots.length};}
 
         this.bots?.receive(message);
@@ -336,8 +343,8 @@ export class GameSession {
                 else this.remotes.respawn(message.id, message);
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
-            case 'scoreboardUpdate': this.hud.setScores(message.scores, this.myId); break;
-            case 'gameWon': this.hud.showVictory(message.winnerName, message.kills); break;
+            case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
+            case 'gameWon': this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
             case 'gameReset': this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
@@ -387,9 +394,10 @@ export class GameSession {
         }
         const simulationEnd=measure?performance.now():0;
         this.chaos?.update(dt,camera);
-        this.city.update(dt, camera);
+        this.city.update(dt, camera, this.rat?.entity.body.position);
         const presentationEnd=measure?performance.now():0;
         renderer.render(scene, camera);
+        this.chaos?.renderOutline(renderer,camera);
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:{...this.chaos?.getDiagnostics(),predictedBalls:this.gun.predictedBallCount}});
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
@@ -404,6 +412,7 @@ export class GameSession {
         this.bots?.dispose();this.bots=null;
         this.transport.destroy();
         this.hud.dispose();
+        this.scoreboard.dispose();
         this.chaos?.dispose();
         this.gun.dispose();
         this.rat?.dispose();

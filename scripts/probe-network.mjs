@@ -95,7 +95,7 @@ async function open(index) {
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Rat ${index}: welcome timeout`)), 10_000);
     client.welcome = message => { clearTimeout(timeout); client.base = { ...message.player }; resolve(); };
-    client.ws.on('open', () => client.ws.send(JSON.stringify({ type: 'join', protocolVersion: 1, name: `Probe Rat ${index + 1}`, appearance })));
+    client.ws.on('open', () => client.ws.send(JSON.stringify({ type: 'join', protocolVersion: 5, name: `Probe Rat ${index + 1}`, appearance })));
     client.ws.on('message', raw => onMessage(client, raw));
     client.ws.on('error', () => { errors++; clearTimeout(timeout); reject(new Error(`Rat ${index}: connection failed`)); });
     client.ws.on('close', () => { if (!stopping) disconnects++; });

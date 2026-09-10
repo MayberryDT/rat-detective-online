@@ -1,4 +1,5 @@
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
+import { createAssignment } from '../../src/shared/assignments';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
@@ -168,7 +169,7 @@ describe('GameRoom websockets', () => {
       ids.push(welcome.id);
     }
     const stub=env.GAME_ROOM.getByName(room);
-    type Internals={players:Map<string,PlayerData>;chaosTimer:ReturnType<typeof setInterval>|null};
+    type Internals={round:RoundState;players:Map<string,PlayerData>;chaosTimer:ReturnType<typeof setInterval>|null};
     const assertSpread=(players:PlayerData[])=>{
       expect(players).toHaveLength(12);
       for (let i=0;i<players.length;i++) for (let j=0;j<i;j++) {
@@ -191,6 +192,7 @@ describe('GameRoom websockets', () => {
       const game=instance as unknown as Internals;
       assertSpread([...game.players.values()]);
       for(const player of game.players.values()){player.hp=0;player.x=0;player.z=0;}
+      game.round={phase:'won',resetAt:0};
       state.storage.sql.exec('INSERT INTO pending_events (id,type,player_id,due_at) VALUES (?,?,?,?)','reset-test','reset',null,0);
       await state.storage.setAlarm(Date.now()+60_000);
     });
@@ -359,7 +361,7 @@ describe('GameRoom websockets', () => {
     expect(reset.round.phase).toBe('playing');
   });
 
-  it('uses authoritative case ownership to cross the win target, freezes combat, and resets the full round', async () => {
+  it('keeps playing at twenty actual kills, then closes the assignment, freezes combat and resets', async () => {
     const room = `graybox-case-win-${crypto.randomUUID()}`;
     const first = await openClient(room);
     first.ws.send(joinPayload('Carrier'));
@@ -378,6 +380,7 @@ describe('GameRoom websockets', () => {
       chaosTimer: ReturnType<typeof setInterval> | null;
       round: RoundState;
       now: () => number;
+      finishAssignment: () => void;
       handleHit: (id: string, hit: Extract<ClientMessage, {type:'hit'}>, incoming?: {x:number;y:number;z:number}) => Promise<void>;
     };
     await runInDurableObject(stub, async (instance: GameRoom, state) => {
@@ -392,23 +395,28 @@ describe('GameRoom websockets', () => {
       expect(game.chaos.caseHolderId).toBe(carrier.id);
       champion.kills = 19;
       await game.handleHit(carrier.id, {type:'hit',victimId:victim.id,damage:3}, {x:1,y:0,z:0});
-      expect(champion.kills).toBe(21);
+      expect(champion.kills).toBe(20);
+      expect(game.round.phase).toBe('playing');
+      const assignment=createAssignment('closing-time',now);assignment.liveAt=now;assignment.remainingMs=1;
+      game.chaos.setAssignment(assignment);game.chaos.step(.001,now+1);game.finishAssignment();
       expect(game.players.get(victim.id)!.deaths).toBe(1);
-      expect(game.round).toMatchObject({phase:'won',winnerId:carrier.id,kills:21,resetAt:now+6000});
+      expect(game.round).toMatchObject({phase:'won',winnerId:carrier.id,kills:20,resetAt:now+6000});
       await game.handleHit(carrier.id, {type:'hit',victimId:observer.id,damage:3}, {x:1,y:0,z:0});
       await game.handleHit(observer.id, {type:'hit',victimId:carrier.id,damage:3}, {x:1,y:0,z:0});
       expect(game.players.get(observer.id)!.hp).toBe(3);
       expect(champion.hp).toBe(3);
-      expect(champion.kills).toBe(21);
+      expect(champion.kills).toBe(20);
       expect(state.storage.sql.exec<{type:string;due_at:number}>('SELECT type, due_at FROM pending_events').toArray())
         .toEqual([{type:'reset',due_at:now+6000}]);
-      state.storage.sql.exec('UPDATE pending_events SET due_at = 0');
     });
     const won = await first.inbox.waitFor('gameWon');
-    expect(won).toMatchObject({winnerId:carrier.id,kills:21,resetAt:now+6000});
-    const board = await first.inbox.waitFor('scoreboardUpdate', message => message.scores.some(p => p.id === carrier.id && p.kills === 21));
+    expect(won).toMatchObject({winnerId:carrier.id,kills:20,resetAt:now+6000,assignment:{id:'closing-time',phase:'closed'}});
+    const board = await first.inbox.waitFor('scoreboardUpdate', message => message.scores.some(p => p.id === carrier.id && p.kills === 20));
     expect(board.scores.find(p => p.id === victim.id)!.deaths).toBe(1);
-    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    await runInDurableObject(stub, async (instance:GameRoom) => {
+      (instance as unknown as Internals).now=()=>now+6000;
+      await instance.alarm();
+    });
     await first.inbox.waitFor('gameReset');
     await runInDurableObject(stub, (instance: GameRoom, state) => {
       const game = instance as unknown as Internals;

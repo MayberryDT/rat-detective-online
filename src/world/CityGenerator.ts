@@ -2,7 +2,7 @@ import {isCentralBuilding,skylineMasses} from '../shared/skyline';
 import { WindowLightCycle } from './WindowLightCycle';
 import {CITY_STREETS} from '../shared/cityPlan';
 import { STREET_LAMPS, originalCityBuildingAllowed, isRampOpening } from '../shared/grayboxLayout';
-import { generatedStreetLamps } from '../shared/streetLampLayout';
+import { generatedStreetLamps,STREET_LAMP_HEIGHT } from '../shared/streetLampLayout';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import {
@@ -507,7 +507,7 @@ export class CityGenerator {
         const cells = new Map<string, THREE.Vector3[]>();
 
         if(this.extension){
-            for(const [x,z] of generatedStreetLamps(this.extensionLayout,STREET_LAMPS))this.pushLamp(cells,x,z);
+            for(const [x,z] of [...STREET_LAMPS,...generatedStreetLamps(this.extensionLayout,STREET_LAMPS)])this.pushLamp(cells,x,z);
         }else{
         for (let gx = -half; gx < half; gx++) {
             for (let gz = -half; gz < half; gz++) {
@@ -535,7 +535,7 @@ export class CityGenerator {
                 '#include <emissivemap_fragment>\n#ifdef USE_INSTANCING_COLOR\n totalEmissiveRadiance *= vColor;\n#endif');
         };
         headMat.customProgramCacheKey = () => 'lantern-instance-flicker-v1';
-        const coneGeo = this.trackGeometry(new THREE.ConeGeometry(3.7, 6, 20, 1, true));
+        const coneGeo = this.trackGeometry(new THREE.ConeGeometry(5.7, STREET_LAMP_HEIGHT, 20, 1, true));
         const coneMat = this.trackMaterial(new THREE.MeshBasicMaterial({
             color: 0xffcc89,
             transparent: true,
@@ -570,11 +570,11 @@ export class CityGenerator {
             lamps.forEach(({x,z}, i) => {
                 dummy.position.set(x, 0.055, z); dummy.rotation.set(-Math.PI / 2, 0, 0);
                 dummy.scale.set(1, 1, 1); dummy.updateMatrix(); pools.setMatrixAt(i, dummy.matrix);
-                this.boxDetail(poleMat, x, 6.62, z, 0.95, 0.12, 0.95);
-                this.boxDetail(poleMat, x, 5.85, z, 0.65, 0.1, 0.65);
+                this.boxDetail(poleMat, x, STREET_LAMP_HEIGHT+.62, z, 0.95, 0.12, 0.95);
+                this.boxDetail(poleMat, x, STREET_LAMP_HEIGHT-.15, z, 0.65, 0.1, 0.65);
                 for (const side of [-1, 1]) {
-                    this.boxDetail(poleMat, x + side * 0.24, 6.2, z, 0.055, 0.65, 0.055);
-                    this.boxDetail(poleMat, x, 6.2, z + side * 0.24, 0.055, 0.65, 0.055);
+                    this.boxDetail(poleMat, x + side * 0.24, STREET_LAMP_HEIGHT+.2, z, 0.055, 0.65, 0.055);
+                    this.boxDetail(poleMat, x, STREET_LAMP_HEIGHT+.2, z + side * 0.24, 0.055, 0.65, 0.055);
                 }
             });
             pools.computeBoundingSphere(); this.addObject(pools);
@@ -604,6 +604,7 @@ export class CityGenerator {
     ): void {
         const poles = new THREE.InstancedMesh(poleGeo, poleMat, lamps.length);
         const heads = new THREE.InstancedMesh(headGeo, headMat, lamps.length);
+        const cones = new THREE.InstancedMesh(coneGeo, coneMat, lamps.length);
         for (let i = 0; i < lamps.length; i++) heads.setColorAt(i, new THREE.Color(1,1,1));
         this.flickerHeads.push(heads);
         poles.castShadow = true;
@@ -613,23 +614,22 @@ export class CityGenerator {
 
         for (let i = 0; i < lamps.length; i++) {
             const { x, z } = lamps[i];
-            dummy.position.set(x, 3, z);
+            dummy.position.set(x, STREET_LAMP_HEIGHT/2, z);
             dummy.rotation.set(0, 0, 0);
-            dummy.scale.set(1, 1, 1);
+            dummy.scale.set(1, STREET_LAMP_HEIGHT/6, 1);
             dummy.updateMatrix();
             poles.setMatrixAt(i, dummy.matrix);
-            dummy.position.set(x, 6.2, z);
+            dummy.position.set(x, STREET_LAMP_HEIGHT+.2, z);dummy.scale.set(1,1,1);
             dummy.updateMatrix();
             heads.setMatrixAt(i, dummy.matrix);
 
-            const cone = new THREE.Mesh(coneGeo, coneMat);
-            cone.position.set(x, 3, z);
-            this.addObject(cone);
+            dummy.position.set(x,STREET_LAMP_HEIGHT/2,z);dummy.updateMatrix();cones.setMatrixAt(i,dummy.matrix);
             this.counts.lampCones += 1;
         }
 
         poles.instanceMatrix.needsUpdate = true;
         heads.instanceMatrix.needsUpdate = true;
+        cones.instanceMatrix.needsUpdate = true;cones.computeBoundingSphere();this.addObject(cones);
         poles.computeBoundingSphere();
         heads.computeBoundingSphere();
         this.addObject(poles);

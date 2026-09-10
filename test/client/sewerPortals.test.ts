@@ -6,7 +6,8 @@ import {SEWER_MANHOLE,SEWER_PIPE_ENTRANCES,sewerPipePoint,sewerBoxes,sewerPipeBo
 function physicalMap(entry?:SewerPipeEntrance){
     const world=new C.World({gravity:new C.Vec3(0,-30,0)});
     world.broadphase=new C.SAPBroadphase(world);world.defaultContactMaterial.friction=0;world.defaultContactMaterial.restitution=.05;
-    const mouth=entry?sewerPipePoint(entry,-10):null,end=entry?sewerPipePoint(entry,40):null;
+    const mouth=entry?sewerPipePoint(entry,-10):SEWER_MANHOLE;
+    const end=entry?sewerPipePoint(entry,40):{x:SEWER_MANHOLE.x+24,z:SEWER_MANHOLE.z};
     for(const b of grayboxBoxes()){
         // Keep all actual map colliders overlapping this traversal corridor; distant city blocks
         // cannot affect a fixed-rotation walker and only make the CPU physics fixture slower.

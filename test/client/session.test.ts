@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosState } from '../../src/shared/chaosState';
+import { createAssignment } from '../../src/shared/assignments';
 
 const harness = vi.hoisted(() => {
     const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
@@ -29,6 +30,15 @@ const harness = vi.hoisted(() => {
         hideRespawn = vi.fn();
         dispose = vi.fn();
         constructor(_doc: Document, public onRetry?: () => void) { harness.huds.push(this); }
+    }
+
+    class FakeScoreboard {
+        setAvailable = vi.fn();
+        setVisible = vi.fn();
+        scroll = vi.fn();
+        receive = vi.fn();
+        dispose = vi.fn();
+        constructor() { harness.scoreboards.push(this); }
     }
 
     class FakeGun {
@@ -119,12 +129,14 @@ const harness = vi.hoisted(() => {
         appearance,
         FakeTransport,
         FakeHud,
+        FakeScoreboard,
         FakeGun,
         FakeRemotes,
         FakeCity,
         FakeRat,
         transports: [] as FakeTransport[],
         huds: [] as FakeHud[],
+        scoreboards: [] as FakeScoreboard[],
         guns: [] as FakeGun[],
         remotes: [] as FakeRemotes[],
         cities: [] as FakeCity[],
@@ -140,6 +152,7 @@ const harness = vi.hoisted(() => {
         reset() {
             this.transports.length = 0;
             this.huds.length = 0;
+            this.scoreboards.length = 0;
             this.guns.length = 0;
             this.remotes.length = 0;
             this.cities.length = 0;
@@ -158,6 +171,7 @@ const harness = vi.hoisted(() => {
 
 vi.mock('../../src/network/NetworkManager', () => ({ NetworkManager: harness.FakeTransport }));
 vi.mock('../../src/ui/GameHud', () => ({ GameHud: harness.FakeHud }));
+vi.mock('../../src/ui/MatchScoreboard', () => ({ MatchScoreboard: harness.FakeScoreboard }));
 vi.mock('../../src/weapons/CheeseGun', () => ({ CheeseGun: harness.FakeGun }));
 vi.mock('../../src/session/RemotePlayers', () => ({ RemotePlayers: harness.FakeRemotes }));
 vi.mock('../../src/world/CityGenerator', () => ({ CityGenerator: harness.FakeCity }));
@@ -394,6 +408,8 @@ describe('GameSession', () => {
         const snapshot = welcome();
         transport.onMessage?.(snapshot);
         transport.onState?.('playing');
+        expect(harness.scoreboards[0].receive).toHaveBeenCalledWith(snapshot);
+        expect(harness.scoreboards[0].setAvailable).toHaveBeenLastCalledWith(true);
         expect(harness.rats).toHaveLength(1);
         expect(harness.rats[0].entity.isPlayer).toBe(true);
         expect(harness.rats[0].entity.applySnapshot).toHaveBeenCalledWith(snapshot.player);
@@ -401,10 +417,6 @@ describe('GameSession', () => {
         expect(gun.clearProjectiles).toHaveBeenCalled();
         expect(remotes.clear).toHaveBeenCalled();
         expect(remotes.snapshot).toHaveBeenCalledWith(snapshot.players, 'me');
-        expect(hud.setScores).toHaveBeenCalledWith(
-            [snapshot.players.me, snapshot.players.other],
-            'me',
-        );
         expect(hud.hideRespawn).toHaveBeenCalled();
         expect(hud.hideVictory).toHaveBeenCalled();
         expect(hud.enterPlaying).toHaveBeenCalled();
@@ -469,11 +481,22 @@ describe('GameSession', () => {
         expect(harness.cities[1].generate).toHaveBeenCalled();
         expect(harness.rats).toHaveLength(2);
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 3_000);
-        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20);
+        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, undefined);
         transport.onMessage?.({ type: 'currentPlayers', players: { me: dead } });
         expect(harness.rats).toHaveLength(2);
     });
 
+    it('presents the objective result on both a finish and a late join while hiding respawn',()=>{
+        const {transport,hud}=start();transport.onMessage?.(welcome());
+        const assignment=createAssignment('excessive-force',0);assignment.phase='closed';
+        assignment.result={winnerId:'me',winnerName:'Inspector Brie',at:Date.now(),method:'kills',posthumous:false};
+        const result={winnerId:'me',winnerName:'Inspector Brie',kills:0,resetAt:Date.now()+6000,assignment};
+        transport.onMessage?.({type:'gameWon',...result});
+        expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,assignment);
+        expect(hud.hideRespawn).toHaveBeenCalled();
+        transport.onMessage?.(welcome({round:{phase:'won',...result}}));
+        expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,assignment);
+    });
     it('routes death, respawn, victory, reset, and notice errors through the HUD', () => {
         const { transport, hud, remotes } = start();
         const local = player('me');
@@ -494,7 +517,7 @@ describe('GameSession', () => {
         expect(hud.hideRespawn).toHaveBeenCalled();
         expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
         transport.onMessage?.({ type: 'gameWon', winnerId: 'me', winnerName: '<Rat & Co>', kills: 20, resetAt: Date.now() + 6_000 });
-        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20);
+        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, undefined);
         transport.onMessage?.({ type: 'gameReset', round: { phase: 'playing' } });
         expect(hud.hideVictory).toHaveBeenCalled();
         expect(hud.hideRespawn).toHaveBeenCalled();
@@ -539,6 +562,7 @@ describe('GameSession', () => {
         expect(cancel).toHaveBeenCalled();
         expect(transport.destroy).toHaveBeenCalledTimes(1);
         expect(harness.huds[0].dispose).toHaveBeenCalledTimes(1);
+        expect(harness.scoreboards[0].dispose).toHaveBeenCalledTimes(1);
         expect(gun.dispose).toHaveBeenCalledTimes(1);
         expect(rat.dispose).toHaveBeenCalledTimes(1);
         expect(remotes.dispose).toHaveBeenCalledTimes(1);

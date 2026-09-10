@@ -34,13 +34,13 @@
 <body>
     <!-- Title Screen -->
     <div id="title-screen">
+        <div class="title-kicker">DEPARTMENT OF BAD IDEAS PRESENTS</div>
         <div class="logo-container">
             <img src="/logo.png" alt="Rat Detective Logo" id="main-logo">
             <div class="title-group">
-                <h1>Rat Detective</h1>
+                <h1><span>Rat</span> Detective</h1>
             </div>
         </div>
-
         <div class="name-input-group">
             <div id="player-name"></div>
             <button type="button" id="reroll-name-btn" aria-label="Roll another name">
@@ -63,14 +63,8 @@
 
         <button id="enter-city-btn" disabled autofocus>
             <div class="pulse-dot"></div>
-            Enter City
+            ENTER CITY!
         </button>
-    </div>
-
-    <!-- Scoreboard -->
-    <div id="scoreboard">
-        <div class="scoreboard-title">Top Rats <small>TOP 5 · K / D</small></div>
-        <ul id="scoreboard-list"></ul>
     </div>
 
     <!-- Kill Feed -->
@@ -83,8 +77,10 @@
 
     <!-- Respawn Countdown -->
     <div id="respawn-overlay">
-        <div class="respawn-label">You Died</div>
-        <div id="respawn-timer">3</div>
+        <div class="death-burst" aria-hidden="true">POW!</div>
+        <div class="respawn-label">RAT DOWN!</div>
+        <div id="respawn-note" class="respawn-note">A MINOR CAREER SETBACK.</div>
+        <div class="respawn-count">BACK IN <span id="respawn-timer">3</span></div>
     </div>
 
     <!-- Crosshair -->
@@ -92,8 +88,8 @@
 
     <!-- HUD -->
     <div id="hud">
-        <div>WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Space — Jump &nbsp;|&nbsp; LMB — Shoot &nbsp;|&nbsp;
-            First to 20 kills wins!</div>
+        <div>WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Space — Jump &nbsp;|&nbsp; LMB — Shoot &nbsp;|&nbsp; <kbd>Tab</kbd> — Hold for scoreboard &nbsp;|&nbsp;
+            Close the case to win.</div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

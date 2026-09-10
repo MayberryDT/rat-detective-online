@@ -82,6 +82,7 @@ export function applyHit(
   requestedDamage: number,
   allowPosthumous = false,
   caseHolderId: string | null = null,
+  assignmentMode = false,
 ): HitResult {
   const shooter = players.get(shooterId);
   const victim = players.get(victimId);
@@ -102,13 +103,13 @@ export function applyHit(
   }
 
   // Ownership comes from the authoritative simulation at kill resolution.
-  shooter.kills += shooterId === caseHolderId ? 2 : 1;
+  shooter.kills += !assignmentMode && shooterId === caseHolderId ? 2 : 1;
   victim.deaths += 1;
 
   return {
     applied: true,
     killed: true,
-    roundWon: shooter.kills >= KILLS_TO_WIN,
+    roundWon: !assignmentMode && shooter.kills >= KILLS_TO_WIN,
     damage,
   };
 }

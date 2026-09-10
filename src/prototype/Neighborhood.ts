@@ -8,6 +8,10 @@ import { CityGrime } from './CityGrime';
 import { ParkedVehicles } from './ParkedVehicles';
 import { LandmarkArchitecture } from './LandmarkArchitecture';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
+import {StreetLightPool,insideLightRoom} from './StreetLightPool';
+import {interiorFixtures,LIGHT_ROOMS,type InteriorFixture} from './InteriorLighting';
+import {readLightingMode,type LightingMode} from '../session/lightingMode';
+import {generatedStreetLamps,STREET_LAMP_HEIGHT} from '../shared/streetLampLayout';
 
 import { STREET_LAMPS, grayboxBoxes, CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import {cityStreetBuildings} from '../shared/cityPlan';
@@ -32,16 +36,20 @@ export class Neighborhood {
     private readonly lampSources:THREE.PointLight[]=[];
     private readonly fixedLights:THREE.PointLight[]=[];
     private readonly lampPool:THREE.PointLight[]=[];
-    constructor(private scene:THREE.Scene, private world:CANNON.World, spec:WorldSpec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION}) {
+    private readonly overhead?:StreetLightPool;
+    private readonly interiorSources=new Map<THREE.PointLight,InteriorFixture>();
+    constructor(private scene:THREE.Scene, private world:CANNON.World, spec:WorldSpec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION},private readonly lighting:LightingMode=readLightingMode()) {
+        this.streetFill.intensity=lighting==='classic'?1.25:.32;
         this.add(this.streetFill);
         for(const body of [...world.bodies]) if(body.shapes.some(shape=>shape instanceof CANNON.Plane)) {this.groundBodies.push(body);world.removeBody(body);}
         for(const obj of [...scene.children]) if(obj instanceof THREE.Mesh && obj.geometry instanceof THREE.PlaneGeometry) {this.groundMeshes.push(obj);scene.remove(obj);}
         this.city=new CityGenerator(scene,world,undefined,{...spec,version:1});
-        this.city.generate([...cityStreetBuildings(generateBuildingLayout({...spec,version:1})),...CENTRAL_BUILDINGS],true);
+        const layout=[...cityStreetBuildings(generateBuildingLayout({...spec,version:1})),...CENTRAL_BUILDINGS];
+        this.city.generate(layout,true);
         for(const b of grayboxBoxes(spec)){if(b.original)continue;const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz);if(b.hidden)mesh.visible=false;}
         for(const dispatch of [...DISPATCH_STATIONS.map(s=>s.box),...LAUNCH_MACHINES.map(s=>s.box)])
             this.box(dispatch.x,dispatch.y,dispatch.z,dispatch.w,dispatch.h,dispatch.d,0x182936).visible=false;
-        for(const [x,y,z,color] of [[130,5,-30,0x9ddbea],[130,5,-40,0x91bbd8],[-16,4,-34,0xffc982],[-136,4,0,0xffc982],[-16,4,-55,0xffc982],[-30,4,-43,0x9fb5ce]]) {
+        if(lighting==='classic')for(const [x,y,z,color] of [[130,5,-30,0x9ddbea],[130,5,-40,0x91bbd8],[-16,4,-34,0xffc982],[-136,4,0,0xffc982],[-16,4,-55,0xffc982],[-30,4,-43,0x9fb5ce]]) {
             this.glow(x,y+.5,z,1.5,.2,.5,color);
             const light=new THREE.PointLight(color,65,20,1.5);light.position.set(x,y,z);this.add(light);
         }
@@ -62,7 +70,7 @@ export class Neighborhood {
         }
         for(const hall of LANDMARK_INTERIORS){
             const color=hall.id==='icebox'?0x86b4c5:hall.id==='needleworks'?0xc2979d:hall.id==='pump'?0x8bb6a7:0xc4ab80;
-            for(const y of hall.levels){
+            if(lighting==='classic')for(const y of hall.levels){
                 // Four steady corner lamps per level, including the rear lofts and top gallery.
                 for(const side of [-1,1])for(const end of [-1,1]){
                     const x=hall.cx+side*(hall.w/2-5),z=hall.cz+end*(hall.d/2-5);
@@ -110,13 +118,19 @@ export class Neighborhood {
         this.label(15,-3.5,-3.9,'ICEBOX →',0x96c9b6);
         this.label(0,-3.5,6,'ALLEY EXIT ↓',0x96c9b6);
         for(const [x,z] of STREET_LAMPS) {
-            this.glow(x,5,z,0.65,0.8,0.65,0xffd087);
-            const light=new THREE.PointLight(0xffcd87,Math.abs(z)>50?40:20,Math.abs(z)>50?28:20,1.5);light.position.set(x,4.5,z);this.add(light);
+            const light=new THREE.PointLight(0xffcd87,65,24,1.5);light.position.set(x,STREET_LAMP_HEIGHT,z);this.add(light);
         }
-        this.architecture=new LandmarkArchitecture(scene);
+        const fixtures=lighting==='pools'?interiorFixtures():[];
+        for(const fixture of fixtures)this.addInteriorFixture(fixture);
+        this.architecture=new LandmarkArchitecture(scene,lighting==='classic');
         this.vehicles=new ParkedVehicles(scene);
         this.grime=new CityGrime(scene,spec);
         this.sewerPortals=new SewerPortals(scene);
+        if(lighting==='pools')this.overhead=new StreetLightPool(scene,[
+            ...STREET_LAMPS.map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:180})),
+            ...generatedStreetLamps(layout,STREET_LAMPS).map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:180})),
+            ...fixtures,
+        ],LIGHT_ROOMS);
         this.bakeFixedLighting();
         this.batchStaticMeshes();
         this.initLampPool();
@@ -124,13 +138,33 @@ export class Neighborhood {
     private readonly groundBodies:CANNON.Body[]=[];
     private readonly groundMeshes:THREE.Object3D[]=[];
     generate() {}
-    update(_dt:number,camera?:THREE.Camera) {
+    update(_dt:number,camera?:THREE.Camera,anchor?:{x:number;y:number;z:number}) {
         this.city.update(_dt,camera);
         this.architecture.update(_dt);
         this.grime.update(_dt);
         // Outdoor bounce light supplies a visibility floor; existing sewer lighting stays intact.
-        if(camera) this.streetFill.intensity=1.25*THREE.MathUtils.smoothstep(camera.position.y,-2,1);
+        if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera,anchor);}
         this.syncLampPool(camera);
+    }
+    private addInteriorFixture(f:InteriorFixture):void {
+        const {x,y,z,color,style,ceiling}=f;
+        const mesh=(geometry:THREE.BufferGeometry,px:number,py:number,pz:number,finish=0x292a32)=>{
+            const object=this.add(new THREE.Mesh(geometry,this.material(finish)));object.position.set(px,py,pz);return object;
+        };
+        // Simple municipal hardware, hung above all playable headroom.
+        mesh(new THREE.CylinderGeometry(.045,.045,ceiling-y,6),x,(ceiling+y)/2,z);
+        if(style==='pendant'){
+            mesh(new THREE.CylinderGeometry(.28,.85,.42,12),x,y+.15,z,0x514334);
+            this.glow(x,y-.08,z,1.25,.08,1.25,color);
+        }else{
+            const width=style==='strip'?3.2:1.1;
+            mesh(new THREE.BoxGeometry(width+.25,.24,.65),x,y+.15,z);
+            this.glow(x,y,z,width,.08,.4,color);
+            for(const dx of [-1,1])mesh(new THREE.BoxGeometry(.08,.3,.75),x+dx*width*.4,y+.04,z);
+        }
+        const light=new THREE.PointLight(color,f.intensity,f.distance,1.5);light.position.set(x,y,z);
+        // Even underground, these are baked fixtures, not extra live point lights.
+        this.fixedLights.push(light);this.interiorSources.set(light,f);
     }
     private material(color:number) {
         if(!this.materials.has(color)) this.materials.set(color,new THREE.MeshStandardMaterial({color,roughness:0.95}));
@@ -166,20 +200,26 @@ export class Neighborhood {
             for(let i=0;i<vertices.count;i++){
                 position.fromBufferAttribute(vertices,i).applyMatrix4(obj.matrixWorld);
                 normal.fromBufferAttribute(normals,i).applyNormalMatrix(normalMatrix);
-                if(position.y<-.05)continue;
+                if(position.y<-.05&&this.lighting==='classic')continue;
                 let red=0,green=0,blue=0;
                 // A restrained room-only bounce term keeps the unlit side of a stair
                 // readable; it never raises the city-wide ambient or skyline brightness.
                 const hall=LANDMARK_INTERIORS.find(h=>position.y>=-.05&&position.y<24
                     &&Math.abs(position.x-h.cx)<h.w/2-.3&&Math.abs(position.z-h.cz)<h.d/2-.3);
-                if(hall){red=.014;green=.016;blue=.020;}
+                if(hall){const fill=this.lighting==='classic'?1:.65;red=.014*fill;green=.016*fill;blue=.020*fill;}
+                const vertexRoom=this.lighting==='pools'?LIGHT_ROOMS.find(r=>insideLightRoom(position,r)):undefined;
                 for(const source of sources){
+                    const fixture=this.interiorSources.get(source);
+                    if(fixture){
+                        if(vertexRoom?.id!==fixture.room.id||position.y<fixture.floor-.05||position.y>fixture.floor+7.5)continue;
+                    }else if(this.lighting==='pools'&&vertexRoom&&source.position.y>=4.5)continue;
                     toward.copy(source.position).sub(position);
                     const distance=toward.length();
                     if(distance>=source.distance||distance<.001)continue;
                     const facing=Math.max(0,normal.dot(toward.multiplyScalar(1/distance)));
                     const falloff=1-distance/source.distance;
-                    const amount=Math.min(.075,source.intensity*.08/(12+distance*distance))*falloff*facing;
+                    const cone=fixture?THREE.MathUtils.smoothstep(toward.y,Math.cos(fixture.angle??.85),.96):1;
+                    const amount=Math.min(.075,source.intensity*(fixture ? .16 : .08)/(12+distance*distance))*falloff*facing*cone;
                     red+=source.color.r*amount;green+=source.color.g*amount;blue+=source.color.b*amount;
                 }
                 colors[i*3]=Math.min(red,.12);colors[i*3+1]=Math.min(green,.12);colors[i*3+2]=Math.min(blue,.12);
@@ -272,6 +312,7 @@ export class Neighborhood {
         // Navigation is expressed by architectural signs; floating map labels are retired.
     }
     dispose() {
+        this.overhead?.dispose();
         this.architecture.dispose();
         this.vehicles.dispose();
         this.grime.dispose();
@@ -280,7 +321,7 @@ export class Neighborhood {
         for(const light of this.lampPool){this.scene.remove(light);light.dispose();}
         this.lampPool.length=0;
         for(const light of [...this.lampSources,...this.fixedLights])light.dispose();
-        this.fixedLights.length=0;
+        this.fixedLights.length=0;this.interiorSources.clear();
         this.lampSources.length=0;
         for(const body of this.bodies)this.world.removeBody(body);
         const sharedMaterials=new Set<THREE.Material>([...this.materials.values(),...this.glowMaterials.values()]);

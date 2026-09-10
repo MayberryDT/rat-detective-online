@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { Neighborhood } from '../../src/prototype/Neighborhood';
 import { LANDMARK_INTERIORS } from '../../src/shared/landmarkLayout';
+import { STREET_LAMPS } from '../../src/shared/grayboxLayout';
 
 // Isolate the prototype's real hall geometry and lighting from unrelated city decoration.
 vi.mock('../../src/world/CityGenerator', () => ({
@@ -13,11 +14,21 @@ vi.mock('../../src/utils/RatModel', async () => {
   return { createRatMesh: () => new THREE.Group() };
 });
 
+it('lights the authored street poles as well as supplemental lamps in the trial',()=>{
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
+  const neighborhood=new Neighborhood(scene,new CANNON.World(),undefined,'pools');
+  const [x,z]=STREET_LAMPS[1];camera.position.set(x,3,z);neighborhood.update(.016,camera);
+  const lights=scene.children.filter((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight);
+  expect(lights).toHaveLength(4);
+  expect(lights.some(l=>l.position.x===x&&l.position.z===z&&l.position.y===9&&l.intensity>0)).toBe(true);
+  neighborhood.dispose();expect(scene.children.some(o=>o instanceof THREE.SpotLight)).toBe(false);
+});
+
 describe('steady landmark illumination and sewer-only moving lights', () => {
   let neighborhood: Neighborhood;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera();
-  beforeAll(() => { neighborhood = new Neighborhood(scene, new CANNON.World()); });
+  beforeAll(() => { neighborhood = new Neighborhood(scene, new CANNON.World(),undefined,'classic'); });
   afterAll(() => neighborhood.dispose());
 
   it('keeps actual upper-floor surfaces readable, including the rear of every landmark', () => {

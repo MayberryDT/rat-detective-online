@@ -1,4 +1,4 @@
-import {relocateStreetLamps} from './streetLampLayout';
+import {regularStreetLamps,generatedStreetLamps,STREET_LAMP_HEIGHT} from './streetLampLayout';
 import {streetDebris,type DebrisKind} from './streetDebris';
 import {CENTRAL_BUILDINGS,skylineMasses} from './skyline';
 import { generateBuildingLayout } from './worldSpec';
@@ -12,7 +12,7 @@ export const CITY_BOUNDS = {min:-196,max:166};
 export const CITY_PREVIEW_SEED = 20260907;
 export const originalCityBuildingAllowed=(x:number,z:number)=>!landmarkReservation(x,z) && !(Math.abs(x)<65&&Math.abs(z)<75);
 export const BLOCKS = CENTRAL_BUILDINGS.map(b=>[b.cx,b.cz,b.bw,b.bd,b.bh]);
-export const STREET_LAMPS=relocateStreetLamps([[-50,-29],[-5,-31],[25,-29],[-5,23],[50,22],[-48,35],[30,35],[-151,0],[143,0],[0,143],[-54,-95],[85,-95],[-58,72],[58,125],[-100,-31],[-5,112],[57,90],[103,85],[152,91],[96,121],[151,142]],cityStreetBuildings([]));
+export const STREET_LAMPS=regularStreetLamps(cityStreetBuildings([]),48);
 export const ENTRIES=SEWER_ENTRIES;
 export const GRAYBOX_SPAWNS = [
     {x:-10,y:2,z:-27},{x:22,y:2,z:-28},{x:82,y:2,z:-24},{x:-55,y:2,z:25},
@@ -61,8 +61,9 @@ export function grayboxBoxes(spec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSIO
     for(const x of [118,132])box(x,6,137.4,1.4,12,1.4,0x4a554b);
     box(125,12.4,137.4,16,.8,2,0x56604f);
     box(-128,2,117.5,8,4,1.8,0x252331);boxes[boxes.length-1].hidden=true;
-    for(const b of cityStreetBuildings(generateBuildingLayout({...spec,version:1}))){box(b.cx,b.bh/2,b.cz,b.bw,b.bh,b.bd,0x25212e,0,0,true);boxes[boxes.length-1].original=true;}
-    for(const [x,z] of STREET_LAMPS){box(x,2.5,z,.16,5,.16,0x17131d);box(x,5,z,.65,.8,.65,0xffd087);boxes[boxes.length-1].hidden=true;}
+    const buildings=cityStreetBuildings(generateBuildingLayout({...spec,version:1}));
+    for(const b of buildings){box(b.cx,b.bh/2,b.cz,b.bw,b.bh,b.bd,0x25212e,0,0,true);boxes[boxes.length-1].original=true;}
+    for(const [x,z] of [...STREET_LAMPS,...generatedStreetLamps(buildings,STREET_LAMPS)]){box(x,STREET_LAMP_HEIGHT/2,z,.16,STREET_LAMP_HEIGHT,.16,0x17131d);boxes[boxes.length-1].hidden=true;box(x,STREET_LAMP_HEIGHT+.2,z,.65,.8,.65,0xffd087);boxes[boxes.length-1].hidden=true;}
     boxes.push(...streetDebris(boxes,isRampOpening));
     return boxes;
 }

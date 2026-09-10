@@ -1,12 +1,13 @@
 # Multiplayer authority and recovery
 
-Current as of **2026-09-08**. The old proposal to add server collision authority has already been implemented for the production version-2 world. Do not restore the old client-hit path there.
+Updated **2026-09-09** for the local assignment implementation. The old proposal to add server collision authority has already been implemented for the production version-2 world. Do not restore the old client-hit path there. New local behavior is distinct from the dated production release.
 
 ## Authority by system
 
 | System | Current owner |
 | --- | --- |
-| Membership, HP, scoring, kill bonus, spawns, death/respawn and rounds | GameRoom / shared game rules |
+| Membership, HP, combat statistics, spawns, death/respawn and rounds | GameRoom / shared game rules |
+| Assignment selection, progress, case-kill credit and final result | GameRoom rotation plus ChaosSimulation / AssignmentRules |
 | Version-2 projectiles, collision hits, cases, corpse missiles, incidents and launch events | Server ChaosSimulation |
 | Public AI movement and firing decisions | ServerBotController plus shared brain/navigation |
 | Human movement | Local physics, sent to server; finite envelope/clamp checks, not full server movement simulation |
@@ -20,13 +21,17 @@ GameRoom rejects external `hit` reports in version 2. Its simulation's `onHit` c
 
 Every participant uses the room's WorldSpec and the same versioned collision layout. Render decoration must not silently alter collision or aim targets. The muzzle descriptor is resolved once; do not reconstruct remote shots from an interpolated rat or camera.
 
-Balls retain owners, death bursts inherit killer credit, and redirecting physical missiles can transfer credit through their own simulation rules. A case holder gets two credited kills per kill; damage is unchanged. There is no self-damage. Teams are not currently implemented. Extra case expiry must clear ownership, physics, visuals and bonuses together.
+Balls retain owners, death bursts inherit killer credit, and redirecting physical missiles can transfer credit through their own simulation rules. Assignment rooms count actual kills and end only on objective completion; the old 2× carrier score applies only to the retained legacy path. There is no self-damage. Teams are not currently implemented. Extra case expiry clears ownership, physics and visuals together.
+
+Excessive Force case-kill credit is awarded at attributed kill resolution only when the living killer holds the legitimate primary case. Each kill awards exactly one objective point, independent of the old multiplier. Personal points survive death/disarm and are transmitted and persisted independently from total kills. Retired Misfiled delivery cannot win. Once closed, the result cannot change. Chain requires a living carrier inside the entire current landmark volume. Each carried visit awards one personal delivery point. First to three wins. All six eligible landmarks are shuffled and used once per cycle, then reshuffled without repeating the last immediately if the match continues. The carrier keeps the case after each delivery. Closing Time counts 120 seconds of cumulative simulated living held time, divided at briefing and Evidence Tampering boundaries. Clients display received progress; they do not award wins or run a winning timer. Stale reset deadlines cannot interrupt an active assignment.
 
 ## Recovery contract
 
 Attached sockets and persistent bots are distinct liveness sources. Reconnection applies an atomic welcome snapshot, clears old entities/projectiles, and uses the new authoritative identity. Unattached human records can be pruned; bots remain alive without sockets. Active roster count/names survive eviction and change only at round creation/reset.
 
 Position checkpoints may lag in-memory motion by up to the checkpoint interval. HP, scores and lifecycle changes are persisted immediately. Pending respawn/reset events and the bot heartbeat share the Durable Object alarm. A victory clears old respawn deadlines so rats do not return during the winner screen.
+
+The assignment, physical chaos state, round and remaining shuffle bag share a synchronous SQLite checkpoint, normally each second and on objective/contact lifecycle changes. The final result and one reset event are written atomically before broadcasting the winner. Eviction restores current personal scores and landmark order without rerolling or crediting elapsed offline possession. Storage-only migration restarts an obsolete shared-stamp Chain; other compatible progress remains. Timer/position recovery is bounded by the latest checkpoint, not a guarantee of retaining every uncheckpointed millisecond. Ordinary and compact snapshots, welcome, gameWon and gameReset carry validated assignment state. Wire protocol **5** requires a matching client and Worker; this is separate from world version 2 and the existing compact-v1/compact-v2 codec names.
 
 ## Verification boundaries
 

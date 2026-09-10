@@ -2,11 +2,11 @@ import type { PlayerData, Vec3Data } from './networkProtocol';
 
 export const BOT_COMBAT = {
     reactionMinMs: 200, reactionMaxMs: 450,
-    shotMinMs: 240, shotMaxMs: 380,
-    pauseMinMs: 300, pauseMaxMs: 650,
+    shotMinMs: 200, shotMaxMs: 380/1.2,
+    pauseMinMs: 250, pauseMaxMs: 650/1.2,
     observationMinMs: 160, observationMaxMs: 260,
     trackingMs: 200, correctionMinMs: 250, correctionMaxMs: 500,
-    errorMinRadians: 4 * Math.PI / 180, errorMaxRadians: 8 * Math.PI / 180,
+    errorMinRadians: 2.8 * Math.PI / 180, errorMaxRadians: 5.6 * Math.PI / 180,
     followThroughMs: 180, followThroughChance: .25,
 } as const;
 

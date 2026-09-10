@@ -14,7 +14,7 @@ it('negotiates mixed clients and bounds snapshots while still delivering control
     const decoded=decoder.read(String(e.data));expect(decoded).not.toBeNull();
     if(decoded?.ack)frames.push(decoded.ack);
   });
-  ws.send(JSON.stringify({type:'join',protocolVersion:1,name:compact?'Compact':'Legacy',appearance}));
+  ws.send(JSON.stringify({type:'join',protocolVersion:5,name:compact?'Compact':'Legacy',appearance}));
   await wait(()=>types.includes('welcome'));
   return {ws,types,frames};
  };

@@ -2,6 +2,26 @@ import { expect, it } from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatController } from '../../src/player/RatController';
+import { RatEntity } from '../../src/entities/RatEntity';
+
+it('hides only the local outline through normal death, shared death and respawn', () => {
+  const scene = new THREE.Scene(), world = new CANNON.World();
+  const local = new RatEntity(scene, world, new THREE.Vector3(), 'You', {});
+  const localGlow = scene.children.find(child => child instanceof THREE.Group && child !== local.mesh)!;
+  const remote = new RatEntity(scene, world, new THREE.Vector3(8, 0, 0), 'Enemy', {}, true);
+  const remoteGlow = scene.children.find(child => child instanceof THREE.Group && child !== local.mesh && child !== localGlow && child !== remote.mesh)!;
+  local.isPlayer = true;
+  expect(localGlow.visible).toBe(false); expect(remoteGlow.visible).toBe(true);
+  local.takeDamage(3, new THREE.Vector3(10, 0, 0)); local.update(1 / 60);
+  expect(localGlow.visible).toBe(false);
+  local.respawn({x: 0, y: 0, z: 0, hp: 3});
+  expect(localGlow.visible).toBe(false);
+  local.useSharedCorpse(); local.respawn({x: 0, y: 0, z: 0, hp: 3});
+  expect(localGlow.visible).toBe(false);
+  remote.useSharedCorpse(); expect(remoteGlow.visible).toBe(false);
+  remote.respawn({x: 8, y: 0, z: 0, hp: 3}); expect(remoteGlow.visible).toBe(true);
+  local.dispose(); remote.dispose();
+});
 
 it('aligns the glow on spawn, in the same frame as turning, and on respawn', () => {
   const scene = new THREE.Scene();
@@ -16,7 +36,7 @@ it('aligns the glow on spawn, in the same frame as turning, and on respawn', () 
   };
   expectAligned();
   // Check the actual shell, not just the root transform: every part stays
-  // anchored and expands by 1.2cm along its normals, including shared ears/eyes.
+  // anchored and expands by 2.5cm along its normals, including shared ears/eyes.
   const modelParts: THREE.Mesh[] = [];
   const glowParts: THREE.Mesh[] = [];
   const flash = entity.mesh.getObjectByName('rat-muzzle-flash');
@@ -49,7 +69,7 @@ it('aligns the glow on spawn, in the same frame as turning, and on respawn', () 
     const expanded = outline.geometry.getAttribute('position');
     for (let i = 0; i < original.count; i++) {
       for (const axis of ['getX', 'getY', 'getZ'] as const) {
-        expect(expanded[axis](i)).toBeCloseTo(original[axis](i) + normals[axis](i) * 0.012, 6);
+        expect(expanded[axis](i)).toBeCloseTo(original[axis](i) + normals[axis](i) * 0.025, 6);
       }
     }
   });

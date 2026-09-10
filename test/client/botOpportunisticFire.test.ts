@@ -11,11 +11,13 @@ it('fires sporadic groups with no opponents, with bounded cadence and no catch-u
  for(let now=0;now<60000;now+=17)if(fire.step(now,self,0,undefined,true,true))shots.push(now);
  expect(shots.length).toBeGreaterThan(40);expect(shots.length).toBeLessThan(95);
  expect(shots[0]).toBeGreaterThanOrEqual(800);
- for(let i=1;i<shots.length;i++)expect(shots[i]-shots[i-1]).toBeGreaterThanOrEqual(280);
+ for(let i=1;i<shots.length;i++)expect(shots[i]-shots[i-1]).toBeGreaterThanOrEqual(280/1.2);
  expect(shots.some((t,i)=>i>0&&t-shots[i-1]>=3000)).toBe(true);
  // A suspended frame expires the active window rather than replaying it.
- expect(fire.step(100000,self,0,undefined,true,true)).toBeUndefined();
- expect(fire.step(100000,self,0,undefined,true,true)).toBeUndefined();
+ const stalled=new BotOpportunisticFire(()=>.5);stalled.step(0,self,0,undefined,true,true);
+ expect(stalled.step(1800,self,0,undefined,true,true)).toBeDefined();
+ expect(stalled.step(100000,self,0,undefined,true,true)).toBeUndefined();
+ expect(stalled.step(100000,self,0,undefined,true,true)).toBeUndefined();
 });
 it('mixes corridor and oblique wall directions while following downhill routes',()=>{
  const fire=new BotOpportunisticFire(combatRandom(13)),angles:number[]=[],heights:number[]=[];

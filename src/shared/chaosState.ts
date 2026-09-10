@@ -1,5 +1,6 @@
 import type { PlayerData, QuatData, RatAppearance, Vec3Data } from './networkProtocol';
 import type { IncidentId } from './incidentCatalog';
+import type { AssignmentState } from './assignments';
 
 export const CHAOS_TUNING = {
     pickupRadius: 1.6, formerCarrierDelay: 900,
@@ -13,7 +14,8 @@ export const INCIDENT_TUNING = {
     popcornPulseMs: 400, popcornChildren: 5,
     delayedMin: .7, delayedMax: 1.15,
     cheeseRadii: [0.15, 0.5, 1.35, 2.4] as const,
-    caseMissileSpeed: 64, caseShotSpeed: 220, caseMissileLift: 11, caseEjectSpeed: 22,
+    caseMissileSpeed: 145, caseShotSpeed: 160, caseMissileLift: 6, caseEjectSpeed: 22,
+    caseRicochetMinSpeed: 140, caseBounceLift: 7, caseMaxLift: 10,
 } as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
 export const CASE_LOOSE_SCALE = 2;
@@ -85,6 +87,7 @@ export interface CaseState extends PhysicalPose {
 export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
 export interface ChaosState {
     time: number;
+    assignment?: AssignmentState;
     case: CaseState;
     extraCases?: Array<CaseState & {id:string}>;
     dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId };

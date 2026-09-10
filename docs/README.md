@@ -9,6 +9,12 @@ Reviewed against repository source and the latest release receipt on **2026-09-0
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
 | [Gameplay baseline](gameplay-baseline.md) | Current tuning and preservation rules |
+| [Dispatch Assignments](dispatch-assignments.md) | Local three-mode rules, shuffled landmarks, noir UI and validation |
+| [Tab scoreboard and local outline](verification/tab-scoreboard-local-outline-2026-09-10.md) | Full held-Tab round stats, opponent-only outline halo and current private preview |
+| [Crossfire colors and case banter](verification/crossfire-case-banter-2026-09-10.md) | Four shot treatments, contextual case jokes, concise status copy and prior private preview |
+| [Cheese, interior lights and delivery respawns](verification/cheese-interior-delivery-2026-09-10.md) | Earlier cheese danger cues, scoped interior pools, random delivery respawns and prior private preview |
+| [Paperwork race and city lights](verification/paperwork-race-city-lights-2026-09-09.md) | Personal delivery race, stronger bots, missile cases, rat visibility, city lamps and prior private preview |
+| [Ricochet and lighting trial](verification/tampering-ricochets-lighting-2026-09-09.md) | Smoother bouncing cases, quieter buzz, reversible overhead lighting and private preview |
 | [Live service](live-service.md) | Domains, release, room identity, deployment and recovery |
 | [Server operations](server-operations.md) | Capacity, persistence, cadence and diagnostics |
 | [Server authority](server-authority.md) | Version-2 authority versus legacy version-1 behavior |

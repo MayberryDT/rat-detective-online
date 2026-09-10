@@ -21,10 +21,10 @@ const DEATH_FORCE = 46;
 const DEATH_GLOW_FADE = 2.5;
 
 // ─── OUTLINE GLOW CONFIG ───
-const GLOW_THICKNESS = 0.012;    // Surface offset, without moving body-part centers
-const GLOW_OPACITY = 0.10;        // Outline transparency
+const GLOW_THICKNESS = 0.025;    // Surface offset, without moving body-part centers
+const GLOW_OPACITY = 0.22;        // Readable against the dark city between lamps
 const GLOW_COLOR = 0xffffff;      // Base glow tint (will blend with coat color)
-const EMISSIVE_INTENSITY = 0.12;  // Subtle self-illumination on all rat materials
+const EMISSIVE_INTENSITY = 0.22;  // Rat-only fill; overhead lights still model the hat and coat
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
 // 3 hats × 5 hat colors × 5 furs × 5 coats = 375 unique combos
@@ -58,7 +58,12 @@ export class RatEntity {
     public hp: number = MAX_HP;
     public dead: boolean = false;
     public name: string;
-    public isPlayer: boolean = false;
+    private localPlayer = false;
+    public get isPlayer(): boolean { return this.localPlayer; }
+    public set isPlayer(value: boolean) {
+        this.localPlayer = value;
+        if (this.glowMesh) this.glowMesh.visible = !value && !this.sharedDeath;
+    }
 
     // Combo tracking
     private comboKeyStr: string | null = null;
@@ -117,7 +122,8 @@ export class RatEntity {
         this.mesh.traverse((c) => {
             if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshStandardMaterial && !this.allMaterials.includes(c.material)) {
                 // Add subtle emissive self-illumination so rats glow from distance
-                c.material.emissive.copy(c.material.color).multiplyScalar(0.5);
+                c.material.color.multiplyScalar(1.1);
+                c.material.emissive.copy(c.material.color).lerp(new THREE.Color(0x73697b),.15).multiplyScalar(0.5);
                 c.material.emissiveIntensity = EMISSIVE_INTENSITY;
 
                 this.allMaterials.push(c.material);
@@ -192,7 +198,7 @@ export class RatEntity {
 
         // Determine glow tint from coat color
         const coatColor = new THREE.Color(opts.coatColor ?? 0x5c4a3a);
-        const tint = coatColor.clone().lerp(new THREE.Color(GLOW_COLOR), 0.5);
+        const tint = coatColor.clone().lerp(new THREE.Color(GLOW_COLOR), 0.6);
 
         // Expand along each vertex normal instead of scaling from the feet.
         // Eyes/ears can share geometry, so expand each geometry only once.
@@ -200,7 +206,7 @@ export class RatEntity {
         // material per rat so a crowd does not switch identical GPU state.
         const glowMaterial = new THREE.MeshBasicMaterial({
             color: tint, transparent: true, opacity: GLOW_OPACITY,
-            side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false,
+            side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
         });
         const expandedGeometries = new Set<THREE.BufferGeometry>();
         const replacedMaterials = new Set<THREE.Material>();
@@ -549,7 +555,7 @@ export class RatEntity {
     /** Restore the existing local/remote alive-body settings after a server respawn. */
     public respawn(data: Vec3Data & { hp: number }): void {
         this.dead = false;
-        this.sharedDeath=false;this.body.collisionFilterMask=-1;if(this.glowMesh)this.glowMesh.visible=true;
+        this.sharedDeath=false;this.body.collisionFilterMask=-1;if(this.glowMesh)this.glowMesh.visible=!this.isPlayer;
         this.resetAlivePresentation();
         this.animator.playRespawn();
         this.hp = data.hp;

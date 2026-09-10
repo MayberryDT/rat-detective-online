@@ -1,5 +1,7 @@
 import { DEFAULT_ROOM_NAME } from '../shared/networkProtocol';
 import { log } from './logging';
+import { isAssignmentId } from '../shared/assignments';
+import { allowsLocalDiagnostics } from './clientDiagnostics';
 
 export { GameRoom } from './GameRoom';
 export { Matchmaker } from './Matchmaker';
@@ -62,11 +64,17 @@ export default {
         }
 
         const roomName = url.searchParams.get('room') || DEFAULT_ROOM_NAME;
+        const selection=url.searchParams.get('assignment');
         if (roomName === DEFAULT_ROOM_NAME) {
+          if(selection!==null)return json({error:'Assignment selection requires a private room'},{status:400});
           return env.MATCHMAKER.getByName(roomName).fetch(request);
         }
         const room = env.GAME_ROOM.getByName(roomName);
-        if (roomName === DEFAULT_ROOM_NAME) await room.ensurePersistentBots();
+        if(selection!==null){
+          if(!roomName.startsWith('graybox-practice-')||!allowsLocalDiagnostics(request)||
+              selection!=='auto'&&!isAssignmentId(selection))return json({error:'Assignment selection requires a local private practice room'},{status:400});
+          if(!await room.configureAssignment(selection==='auto'?null:selection as import('../shared/assignments').AssignmentId))return json({error:'Choose a new private room to select another assignment'},{status:409});
+        }
         return room.fetch(request);
       }
 
