@@ -22,6 +22,17 @@ Selection follows the rat's position and includes the street approach, instead o
 - Focused coverage verifies public metadata and empty-room behavior, no title join, matching-world reuse, authoritative fallback on a changed world, timeout/cancellation and immediate title dismissal.
 - Sewer checks cover every entrance from street approach through the full descent, the manhole, upper-floor exclusion, and the unchanged eight-light/no-new-shadow budget.
 - Eight fixed 844×390 shoulder-camera renders cover three mouths, both horizontal throats, the deep south tunnel, manhole approach and Maintenance. Screenshots were inspected with no rendering errors; all retain **1,423 bodies, 17 scene lights and two shadow-casting lights**. These are scene counts, not a phone frame-rate benchmark.
-- Browser gameplay input and physical-phone performance remain for human playtests. The requested production deployment is recorded below after release verification.
+- Browser gameplay input and physical-phone performance remain for human playtests. The preceding release’s CI-only Chromium startup failure is documented in its receipt; no local browser input suite was run for this follow-up.
 
 Evidence is retained under `output/mobile-entry-sewer-2026-09-10/`. The preceding release is [the full accepted game](production-release-2026-09-10.md). Historical sewer-pool context: `brain:sessions/2026/09/rat-detective-steady-landmark-lighting-lowrise-reticle-2026-09-07`; its older ambient/street settings remain superseded by the accepted current baseline.
+
+
+## Production receipt
+
+Live at **https://ratdetective.online/**. Application commit **`c4381049870302875ec831e20e0503f1d9a66d68`**, Worker **`ebe0f20e-3f68-46a9-b175-1929faf2c436`**, environment `production`, protocol **7**. Predecessor: `e28b2d9c-0b7d-46a9-8195-24f1ce860939`. The existing namespace, routes and `public-live-v2` identity remain.
+
+All **45** served files match the reviewed build byte-for-byte, including client `/assets/index-CC_ayc-e.js` (1,001,511 bytes, SHA-256 `dd742c7c3adc5d48ab1f993a110018ae32b208cafa61e0ea79111550555bdfea`). Health, static credits/sharing metadata and both old-host redirect checks pass. `/status` preparation and the accepted welcome agree on **version 2 / seed 341283204**.
+
+The September 10 22:42 UTC passive probe measured **217 ms** for metadata and **1,150 ms** from opening its new WebSocket through welcome. This is a Node connection observation from the workstation, not mobile browser timing; remaining network/admission latency is real. Eight seconds of observation received **228 valid snapshots and 218 movement packets**, seven bots plus the observer, a Chain of Custody assignment, and zero invalid packets/errors. The canonical room had zero rats before preparation and returned to zero after departure. The separate isolated-room protocol smoke passed join, movement, shot, damage, death, scoring, respawn and leave. No public round reset or load test was performed.
+
+Temporary static-render browser and Vite processes were stopped. Source and release documentation are committed and pushed to `origin/master`.
