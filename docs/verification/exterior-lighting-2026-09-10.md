@@ -26,4 +26,8 @@ These checks do not automate browser gameplay or input. No real-phone frame-rate
 
 ## Publication
 
-Production release and asset checks are recorded here after deployment.
+Application commit **`cd7af572e8066761020a854bdda8682a3c232c13`** is pushed to `origin/master` and live at **https://ratdetective.online/**. Worker **`rat-detective-preview`**, environment **production**, version **`d5fc60bf-78a8-44e2-821b-f7c794233e68`** replaces **`ae032bb2-01f2-4baa-b09f-e9033b41141e`**. Protocol 7, room `public-live-v2`, namespaces, domains and world 2 / seed **341283204** remain unchanged.
+
+All **51** served files match the production build bytes. Health, social metadata/image, credits and old-host path/query redirects pass. The public room was empty and sleeping normally (zero rats/bots) during read-only status verification. No live player was joined or round reset forced for this lighting-only verification. The temporary static-render server was stopped.
+
+Client artifact hashes are recorded in ignored `output/exterior-lighting-2026-09-10/live-verification.json`; the previous performance/tap-fire release remains documented in [its receipt](title-fast-tap-lighting-2026-09-10.md).
