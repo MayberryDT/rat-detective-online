@@ -17,8 +17,8 @@ describe('bounded playtest diagnostics',()=>{
   expect(publish).toHaveBeenCalledTimes(1);expect(fetch).not.toHaveBeenCalled();stats.dispose();
  });
  it('retains multi-second freezes and phase timings instead of discarding them',()=>{
-  const {stats,save}=fixture();stats.record(2200,5000,{seed:1,version:2},{simulationMs:100,botsMs:70,presentationMs:3,renderMs:12});
-  const report=JSON.parse(save.mock.calls[0][1]).reports[0];expect(report.longestFrameMs).toBe(2200);expect(report.stallsOver100Ms).toBe(1);expect(report.phaseMaxMs.botsMs).toBe(70);stats.dispose();
+  const publish=vi.fn(),{stats}=fixture(publish);stats.record(2200,5000,{seed:1,version:2},{simulationMs:100,botsMs:70,presentationMs:3,renderMs:12});
+  const report=publish.mock.calls[0][0];expect(report.longestFrameMs).toBe(2200);expect(report.stallsOver100Ms).toBe(1);expect(report.phaseMaxMs.botsMs).toBe(70);stats.dispose();
  });
  it('records focus and lock errors and removes listeners on disposal',()=>{
   const {stats,window}=fixture();
@@ -41,6 +41,8 @@ describe('bounded playtest diagnostics',()=>{
  });
  it('bounds report/event history and persists a report without DOM controls',()=>{
   const {stats,save,window}=fixture();for(let i=1;i<=130;i++){stats.event('test');stats.record(16,i*5000,{seed:1,version:2});}
+  expect(save).not.toHaveBeenCalled();expect(console.info).not.toHaveBeenCalled();
+  window.dispatchEvent(new Event('pagehide'));
   const report=JSON.parse(save.mock.calls.at(-1)![1]);expect(report.reports).toHaveLength(120);expect(report.events).toHaveLength(100);
   stats.dispose();expect('ratDiagnostics' in window).toBe(false);
  });

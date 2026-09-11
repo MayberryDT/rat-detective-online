@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import {SpatialRayQuery} from '../shared/SpatialRayQuery';
+import type {ShotTrace} from '../shared/LocalShotPresentation';
 import type { ShotDescriptor } from '../shared/networkProtocol';
 import type { IncidentId } from '../shared/incidentCatalog';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
@@ -29,6 +31,9 @@ export class CheeseGun {
     public fireCue: 'normal' | 'malfunction' = 'normal';
     private scene: THREE.Scene;
     private world: CANNON.World;
+    private presentationRay?:SpatialRayQuery;
+    private readonly acceptPresentationBody=(body:CANNON.Body)=>
+        (body as CANNON.Body&{userData?:{entity?:RatEntity}}).userData?.entity!==this.playerEntity;
     private camera: THREE.PerspectiveCamera | null = null;
     private playerEntity: RatEntity | null = null;
 
@@ -143,6 +148,18 @@ export class CheeseGun {
     setIncident(incident?: IncidentId): void {
         this.fireCue = incident === 'bad-ammunition' ? 'malfunction' : 'normal';
     }
+
+    /** Presentation sweeps never damage entities or emit hit feedback. Exclude
+     * the owner before selecting the closest hit, so it cannot mask a wall. */
+    readonly tracePresentation:ShotTrace=(from,to)=>{
+        this.rayFrom.set(from.x,from.y,from.z);this.rayTo.set(to.x,to.y,to.z);
+        this.presentationRay??=new SpatialRayQuery(this.world);
+        const hit=this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptPresentationBody,GROUP_PROJECTILE);
+        if(!hit.hasHit)return undefined;
+        const entity=(hit.body as CANNON.Body&{userData?:{entity?:RatEntity}}|null)?.userData?.entity;
+        return{p:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},
+            n:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z},rat:!!entity&&!entity.dead};
+    };
 
     clearProjectiles(): void {
         while (this.balls.length) this.removeBall(this.balls.length - 1);
@@ -262,7 +279,7 @@ export class CheeseGun {
         this.impacts.dispose();
         this.ballGeometry.dispose();
         this.ballMaterial.dispose();
-        this.fireAudio.dispose();
+        this.fireAudio.dispose();this.presentationRay?.dispose();this.presentationRay=undefined;
         this.onHitEntity = null;
         this.playerEntity = null;
         this.camera = null;

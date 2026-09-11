@@ -114,6 +114,9 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const skin = material(0xc99089, 0.68);
     const hatColor = options.hatColor ?? new THREE.Color(coatColor).multiplyScalar(0.8);
     const felt = material(hatColor), band = material(0xddc79b);
+    // Named owned materials let a reusable rig change colors without rebuilding
+    // its geometry or invalidating the rigid batch's palette references.
+    root.userData.ratAppearanceMaterials={coat,fur,felt};
     const body = pivot(root, 'rat-body');
     // One clean tapered coat with a rounded shoulder and a subtle finished hem.
     const profile = [[0, 0], [0.485, 0], [0.505, 0.025], [0.503, 0.07],
@@ -191,4 +194,11 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     mesh(tail, new THREE.SphereGeometry(0.052, 12, 8), skin, 0.2, -0.17, -1.17);
     cheesePistol(body, coat, skin);
     return root;
+}
+
+export function setRatAppearanceColors(root:THREE.Group,appearance:RatAppearance):void {
+    const materials=root.userData.ratAppearanceMaterials as {coat:THREE.MeshStandardMaterial;fur:THREE.MeshStandardMaterial;felt:THREE.MeshStandardMaterial};
+    materials.coat.color.setHex(appearance.coatColor);
+    materials.fur.color.setHex(appearance.furColor);
+    materials.felt.color.setHex(appearance.hatColor);
 }

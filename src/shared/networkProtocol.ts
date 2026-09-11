@@ -1,8 +1,10 @@
+import type {PickupStatus} from './pickupEligibility';
+import type {ShotOutcome,ShotRejectReason} from './shotOutcome';
 import type { ChaosState } from './chaosState';
 import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
@@ -151,9 +153,12 @@ export type ServerMessage =
     }
   | { type: 'playerShot'; shooterId: string; shotId: string; origin: Vec3Data; direction: Vec3Data; movement?:MovementSample;
       launch?: {at:number; balls:Array<{id:string; velocity:Vec3Data}>} }
-  | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: 'evidence-tampering' }
+  | { type: 'pickupStatus'; status:PickupStatus }
+  | { type: 'shotOutcomes'; outcomes:ShotOutcome[] }
+  | { type: 'shotRejected'; shotId:string; at:number; reason:ShotRejectReason }
+  | { type: 'playerDamaged'; at?:number; id: string; hp: number; attackerId: string | null; cause?: 'evidence-tampering' }
   | {
-      type: 'playerDied';
+      type: 'playerDied'; at?:number;
       victimId: string;
       killerId: string | null;
       killerName: string | null;
@@ -164,7 +169,7 @@ export type ServerMessage =
       incident?: boolean;
     }
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
-  | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }
+  | { type: 'playerRespawn'; at?:number; id: string; x: number; y: number; z: number; hp: number }
   | { type: 'playerLeft'; id: string }
   | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState }
   | { type: 'gameReset'; round: RoundState }

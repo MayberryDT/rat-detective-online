@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosState } from '../../src/shared/chaosState';
 import { createAssignment } from '../../src/shared/assignments';
+import {ChaosView} from '../../src/prototype/ChaosView';
 
 const harness = vi.hoisted(() => {
     const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
@@ -56,6 +57,7 @@ const harness = vi.hoisted(() => {
     }
 
     class FakeRemotes {
+        useSharedClock = vi.fn();
         prepareFrame = vi.fn();
         updateDeaths = vi.fn();
         presentFrame = vi.fn();
@@ -180,7 +182,7 @@ vi.mock('../../src/prototype/Neighborhood', () => ({ Neighborhood: class extends
     constructor(scene: unknown, world: unknown, spec: {seed:number;version:number}) { super(scene,world,undefined,spec); }
 } }));
 vi.mock('../../src/prototype/ChaosView', () => ({ ChaosView: class {
-    setScores() {} dispose() {} apply() {} launch() {} update() {} renderOutline() {}
+    setScores() {} dispose() {} apply() {} launch() {} fire() {} clearPresentation() {} resetProjectiles() {} update() {} renderOutline() {}
 } }));
 vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));
 vi.mock('../../src/session/InputState', () => ({
@@ -569,6 +571,28 @@ describe('GameSession', () => {
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now()+3000);
     });
 
+    it('uses births only for the firing player and never replays their gun animation or sound',()=>{
+        const launched=vi.spyOn(ChaosView.prototype,'launch');
+        const {transport,gun,session}=start({seed:1,version:2});
+        const joined=welcome({world:{seed:1,version:2}});transport.onMessage?.(joined);
+        const shot:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:joined.id,shotId:'own',
+            origin:{x:0,y:2,z:0},direction:{x:1,y:0,z:0},launch:{at:1000,balls:[{id:'own',velocity:{x:175,y:0,z:0}}]}};
+        transport.onMessage?.(shot);expect(launched).toHaveBeenCalledExactlyOnceWith(shot);
+        expect(gun.replayShot).not.toHaveBeenCalled();
+        transport.onMessage?.({...shot,shooterId:'other'});
+        expect(launched).toHaveBeenCalledTimes(1);
+        session.dispose();launched.mockRestore();
+    });
+
+    it('starts a single local ball only when the authoritative shot was sent',()=>{
+        const {transport,doc,renderer,session}=start();const joined=welcome();joined.world.version=2;
+        transport.onMessage?.(joined);transport.state='playing';doc.pointerLockElement=renderer.domElement as unknown as Element;
+        const fire=vi.spyOn(ChaosView.prototype,'fire');
+        doc.dispatch('mousedown',Object.assign(new Event('mousedown'),{button:0}));expect(fire).toHaveBeenCalledOnce();
+        transport.send.mockReturnValueOnce(false);
+        doc.dispatch('mousedown',Object.assign(new Event('mousedown'),{button:0}));expect(fire).toHaveBeenCalledOnce();
+        session.dispose();
+    });
     it('sends the resolved shot and remote hit, then can start a fresh session after dispose', () => {
         const first = start();
         const { doc, renderer, session, transport, gun, remotes } = first;

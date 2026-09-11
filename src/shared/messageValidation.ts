@@ -1,3 +1,5 @@
+import {PICKUP_REASONS,type PickupReason} from './pickupEligibility';
+import {SHOT_END_REASONS,SHOT_REJECT_REASONS,SHOT_OUTCOME_BATCH,type ShotOutcome,type ShotRejectReason} from './shotOutcome';
 import {expandMovement} from './movementWire';
 import {BALL_SPEED} from './ballTuning';
 import {isWorldFoleyCue} from './foleyEvents';
@@ -397,6 +399,32 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
   if (!isRecord(parsed) || typeof parsed.type !== 'string') return null;
 
   switch (parsed.type) {
+    case 'pickupStatus': {
+      const v=parsed.status;if(!isRecord(v))return null;
+      const at=finiteNumber(v.at),distance=finiteNumber(v.distance),speed=finiteNumber(v.speed),waitMs=finiteNumber(v.waitMs);
+      if(at===null||distance===null||distance<0||speed===null||speed<0||waitMs===null||waitMs<0||!PICKUP_REASONS.includes(v.reason as PickupReason))return null;
+      return {type:'pickupStatus',status:{at,distance,speed,waitMs,reason:v.reason as PickupReason}};
+    }
+    case 'shotRejected': {
+      const shotId=nonEmptyString(parsed.shotId,64),at=finiteNumber(parsed.at);
+      if(!shotId||at===null||!SHOT_REJECT_REASONS.includes(parsed.reason as ShotRejectReason))return null;
+      return {type:'shotRejected',shotId,at,reason:parsed.reason as ShotRejectReason};
+    }
+    case 'shotOutcomes': {
+      if(!Array.isArray(parsed.outcomes)||!parsed.outcomes.length||parsed.outcomes.length>SHOT_OUTCOME_BATCH)return null;
+      const outcomes:ShotOutcome[]=[];
+      for(const item of parsed.outcomes){
+        if(!isRecord(item))return null;
+        const id=nonEmptyString(item.id,96),shotId=nonEmptyString(item.shotId,64),at=finiteNumber(item.at),p=parseVec3(item.p);
+        const victimId=optionalString(item.victimId,64);
+        if(!id||!shotId||at===null||!p||victimId===null||!SHOT_END_REASONS.includes(item.reason as ShotOutcome['reason'])||
+          (item.part!==undefined&&item.part!=='head'&&item.part!=='body')||
+          (item.reason==='contact'&&(!victimId||!item.part))||
+          (item.reason!=='contact'&&(victimId!==undefined||item.part!==undefined)))return null;
+        outcomes.push({id,shotId,at,p,reason:item.reason as ShotOutcome['reason'],...(victimId?{victimId,part:item.part as 'head'|'body'}:{})});
+      }
+      return {type:'shotOutcomes',outcomes};
+    }
     case 'chaos': { const state=parseChaos(parsed.state);return state?{type:'chaos',state}:null; }
     case 'welcome': {
       const id = nonEmptyString(parsed.id, 64);
@@ -474,15 +502,17 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       return { type: 'playerShot', shooterId, ...shot, ...(movement?{movement}:{}), ...(launch?{launch}:{}) };
     }
     case 'playerDamaged': {
+      const at=parsed.at===undefined?undefined:finiteNumber(parsed.at);if(at===null)return null;
       const id = nonEmptyString(parsed.id, 64);
       const hp = boundedInteger(parsed.hp, 0, MAX_HP);
       const attackerId = nonEmptyString(parsed.attackerId, 64);
       const environmental=parsed.cause==='evidence-tampering'&&parsed.attackerId===null;
       if (!id || hp === null || (!environmental&&!attackerId) ||
           (parsed.cause!==undefined&&!environmental)) return null;
-      return { type: 'playerDamaged', id, hp, attackerId, ...(environmental?{cause:'evidence-tampering' as const}:{}) };
+      return { type: 'playerDamaged', ...(at!==undefined?{at}:{}), id, hp, attackerId, ...(environmental?{cause:'evidence-tampering' as const}:{}) };
     }
     case 'playerDied': {
+      const at=parsed.at===undefined?undefined:finiteNumber(parsed.at);if(at===null)return null;
       const victimId = nonEmptyString(parsed.victimId, 64);
       const killerId = nonEmptyString(parsed.killerId, 64);
       const killerName = typeof parsed.killerName === 'string' && parsed.killerName.length <= 32 ? parsed.killerName : null;
@@ -493,7 +523,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
           (parsed.cause!==undefined&&!environmental)) return null;
       const incoming=parsed.incoming===undefined?undefined:parseVec3(parsed.incoming);
       if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean'))return null;
-      return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
+      return { type: 'playerDied', ...(at!==undefined?{at}:{}), victimId, killerId, killerName, victimName, respawnAt,
         ...(environmental?{cause:'evidence-tampering' as const}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}) };
     }
     case 'scoreboardUpdate': {
@@ -501,13 +531,14 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       return scores ? { type: 'scoreboardUpdate', scores } : null;
     }
     case 'playerRespawn': {
+      const at=parsed.at===undefined?undefined:finiteNumber(parsed.at);if(at===null)return null;
       const id = nonEmptyString(parsed.id, 64);
       const x = finiteNumber(parsed.x);
       const y = finiteNumber(parsed.y);
       const z = finiteNumber(parsed.z);
       const hp = boundedInteger(parsed.hp, 1, MAX_HP);
       if (!id || x === null || y === null || z === null || hp === null) return null;
-      return { type: 'playerRespawn', id, x, y, z, hp };
+      return { type: 'playerRespawn', ...(at!==undefined?{at}:{}), id, x, y, z, hp };
     }
     case 'playerLeft': {
       const id = nonEmptyString(parsed.id, 64);

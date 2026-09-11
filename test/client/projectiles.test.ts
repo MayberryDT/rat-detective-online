@@ -35,6 +35,13 @@ describe('projectile behavior', () => {
     gun.dispose();owner.dispose();victim.dispose();
   });
 
+  it('ignores its owner before choosing the nearest presentation collision',()=>{
+    const {gun,owner,world}=setup();gun.setPlayer(new THREE.PerspectiveCamera(),owner);
+    const wall=new CANNON.Body({mass:0,shape:new CANNON.Box(new CANNON.Vec3(.05,2,2)),position:new CANNON.Vec3(2,1,0)});world.addBody(wall);
+    const hit=gun.tracePresentation({x:-1,y:1,z:0},{x:4,y:1,z:0});
+    expect(hit?.rat).toBe(false);expect(hit?.p.x).toBeCloseTo(1.95);expect(owner.hp).toBe(3);
+    gun.dispose();owner.dispose();
+  });
   it('shares GPU resources across shots and retains them until gun disposal', () => {
     const { gun, owner, projectiles } = setup();
     gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));

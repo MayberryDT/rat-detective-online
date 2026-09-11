@@ -1,3 +1,5 @@
+import {PresentationEvents} from '../../src/shared/PresentationEvents';
+import {WorldPresentationClock} from '../../src/shared/WorldPresentationClock';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
@@ -23,7 +25,7 @@ function replay(fps: number, speed: number) {
     // Run the production frame orchestration with real remotes/physics; only
     // replace the GPU, transport and unrelated city work. No constructor UI.
     const session = Object.assign(Object.create(GameSession.prototype), {
-        disposed: false, previousTime: 0, stats: null, rat: null, bots: null, chaos: null,
+        disposed: false, previousTime: 0, stats: null, remoteEvents:new PresentationEvents(),worldPresentation:new WorldPresentationClock(), rat: null, bots: null, chaos: null,
         stage: { scene: new THREE.Scene(), world, camera: new THREE.PerspectiveCamera(), renderer: { render() {} } },
         transport: { state: 'playing' }, simulation: new SimulationClock(), remotes,
         gun: { update() {} }, city: { update() {} },
@@ -41,7 +43,7 @@ function replay(fps: number, speed: number) {
             remotes.move({ ...player, x: packetAt * speed / 1000 }, 10000 + packetAt);
             packetAt += 50;
         }
-        Reflect.get(GameSession.prototype, 'animate').call(session, now + 1000);
+        Reflect.get(GameSession.prototype, 'animate').call(session, now);
         if (frame > fps) samples.push({ x: entity.mesh.position.x, bob: body.position.y });
         expect(entity.mesh.position.x).toBe(entity.body.position.x);
     }

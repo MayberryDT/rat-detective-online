@@ -1,3 +1,4 @@
+import {SHOT_OUTCOME_BATCH,type ShotOutcome,type ShotRejectReason} from '../shared/shotOutcome';
 import { ChaosDelivery } from './ChaosDelivery';
 import { ConnectionDelivery } from './ConnectionDelivery';
 import { wireBytes } from '../shared/deliveryWire';
@@ -388,7 +389,7 @@ export class GameRoom extends DurableObject<Env> {
     Object.assign(player,spawnForWorld(this.world,Math.random,this.players.values(),id));
     this.serverBots?.reset(id,player);
     this.lastMovementBroadcast.delete(id);this.persistPlayer(player,true);
-    this.broadcast({type:'playerRespawn',id,x:player.x,y:player.y,z:player.z,hp:player.hp});
+    this.broadcast({type:'playerRespawn',at:this.now(),id,x:player.x,y:player.y,z:player.z,hp:player.hp});
     log('info','stranded bot recovered',{playerId:id});
   }
 
@@ -474,7 +475,7 @@ export class GameRoom extends DurableObject<Env> {
 
     if (message.type === 'shoot') {
       if (!this.rateLimiter.allow(`${playerId}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) {
-        this.diagnostics.shot('rateLimited');
+        this.rejectShot(playerId,message.shotId,'rateLimited');
         return;
       }
       this.handleShoot(playerId, message);
@@ -755,31 +756,36 @@ export class GameRoom extends DurableObject<Env> {
     this.broadcast({ type: 'playerMoved', player: pose, at }, playerId);
   }
 
+  private pickupReports=new Map<string,{reason:string;at:number}>();
+  private shotOutcomes:ShotOutcome[]=[];
+  private flushShotOutcomes():void {
+    while(this.shotOutcomes.length)this.broadcast({type:'shotOutcomes',outcomes:this.shotOutcomes.splice(0,SHOT_OUTCOME_BATCH)});
+  }
+  private rejectShot(playerId:string,shotId:string,reason:ShotRejectReason):void {
+    this.diagnostics.shot(reason);
+    if(!this.rateLimiter.allow(`${playerId}:shotResult`,32,1000,this.now()))return;
+    for(const ws of this.recipients())if(this.getPlayerId(ws)===playerId)this.send(ws,{type:'shotRejected',shotId,at:this.now(),reason});
+  }
   private handleShoot(playerId: string, message: Extract<ClientMessage, { type: 'shoot' }>): void {
     const player = this.players.get(playerId);
-    if (!player || player.hp <= 0) { this.diagnostics.shot('dead'); return; }
-    if (this.round.phase !== 'playing') { this.diagnostics.shot('roundOver'); return; }
-    if (!isPlausibleShot(message.origin, message.direction, player)) { this.diagnostics.shot('implausible'); return; }
-    if (!this.rememberShot(playerId, message.shotId)) { this.diagnostics.shot('duplicate'); return; }
+    if (!player || player.hp <= 0) { this.rejectShot(playerId,message.shotId,'dead'); return; }
+    if (this.round.phase !== 'playing') { this.rejectShot(playerId,message.shotId,'roundOver'); return; }
+    if (!isPlausibleShot(message.origin, message.direction, player)) { this.rejectShot(playerId,message.shotId,'implausible'); return; }
+    if (!this.rememberShot(playerId, message.shotId)) { this.rejectShot(playerId,message.shotId,'duplicate'); return; }
     this.startChaos();
     const fired=this.chaos?.shoot(playerId,message);
-    const launch=this.world.version===GRAYBOX_VERSION&&fired?.length
-      ? {at:this.chaos!.time,balls:fired.map(ball=>({id:ball.id,velocity:{...ball.v}}))}:undefined;
     this.diagnostics.shot('accepted');
-
-    this.broadcast(
-      {
-        type: 'playerShot',
-        shooterId: playerId,
-        shotId: message.shotId,
-        origin: message.origin,
-        direction: message.direction,
-        ...(launch?{launch}:{}),
-      },
-      // The shooter also needs the real age-zero balls, before a later physics
-      // snapshot has already advanced them several units away from the barrel.
-      launch?undefined:playerId,
-    );
+    const event:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:playerId,
+      shotId:message.shotId,origin:message.origin,direction:message.direction};
+    // Only the firing human needs the immediate muzzle sample. Observers keep
+    // the production pose/shot packet and snapshot playback; bot volleys never
+    // add birth payloads or presentation tracks to every connected client.
+    if(this.world.version===GRAYBOX_VERSION&&fired?.length){
+      for(const ws of this.recipients())if(this.getAttachment(ws).playerId===playerId){
+        this.send(ws,{...event,launch:{at:this.chaos!.time,balls:fired.map(ball=>({id:ball.id,velocity:{...ball.v}}))}});
+      }
+    }
+    this.broadcast(event,playerId);
   }
 
   private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming']): Promise<void> {
@@ -813,9 +819,9 @@ export class GameRoom extends DurableObject<Env> {
       this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',
         crypto.randomUUID(),result.roundWon?'reset':'respawn',result.roundWon?null:victim.id,respawnAt);
     }
-    this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
+    this.broadcast({ type: 'playerDamaged', at:this.chaos?.time??now, id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
     if (!result.killed) return;
-    this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
+    this.broadcast({type:'playerDied',at:this.chaos?.time??now,victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
       respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{})});
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
@@ -855,7 +861,7 @@ export class GameRoom extends DurableObject<Env> {
         this.lastMovementBroadcast.delete(player.id);
         if (this.isManagedBot(player.id)) this.serverBots?.reset(player.id, { x: player.x, y: player.y, z: player.z });
         this.persistPlayer(player, true);
-        this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
+        this.broadcast({ type: 'playerRespawn', at:this.now(), id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
       }
 
       if (event.type === 'reset') {
@@ -871,7 +877,7 @@ export class GameRoom extends DurableObject<Env> {
           [...this.players.values()].filter(player => !this.isManagedBot(player.id)), this.world);
         for (const player of resetPlayers) {
           this.persistPlayer(player, true);
-          this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
+          this.broadcast({ type: 'playerRespawn', at:this.now(), id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
         }
         if (this.persistentBots) this.replaceRoundBots();
         this.checkpointGame();
@@ -933,7 +939,7 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.storage.sql.exec('DELETE FROM pending_events WHERE player_id = ?', playerId);
     this.lastCheckpointAt.delete(playerId);
     this.lastActiveAt.delete(playerId);
-    this.recentShots.delete(playerId);
+    this.recentShots.delete(playerId);this.pickupReports.delete(playerId);
     this.lastMovementBroadcast.delete(playerId);
     this.rateLimiter.clear(playerId);
     this.broadcast({ type: 'playerLeft', id: playerId });
@@ -963,6 +969,10 @@ export class GameRoom extends DurableObject<Env> {
         void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming)
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
       },saved,this.world);
+      this.chaos.onShotOutcome(outcome=>{
+        this.shotOutcomes.push(outcome);
+        if(this.shotOutcomes.length>=SHOT_OUTCOME_BATCH)this.flushShotOutcomes();
+      });
       // Contact history is sparse: clearing N*(N-1)/2 entries for the city's
       // static scenery each substep dwarfs the few real contacts. Cannon's
       // built-in sparse implementation preserves collision/event semantics.
@@ -1000,6 +1010,7 @@ export class GameRoom extends DurableObject<Env> {
         this.chaos.step(1/60,stepAt,this.round.phase==='playing');
         this.finishAssignment();
       }
+      this.flushShotOutcomes();
       this.flushMovement('tick');
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
@@ -1016,6 +1027,14 @@ export class GameRoom extends DurableObject<Env> {
       for(const ws of this.recipients()){
         const a=this.getAttachment(ws);
         if(ws.readyState!==WebSocket.OPEN||!a.playerId||a.receiveMode==='welcome-only')continue;
+        const pickup=this.chaos.pickupEligibility(a.playerId,this.round.phase==='playing');
+        if(pickup){
+          const previous=this.pickupReports.get(a.playerId);
+          if((pickup.distance<5||previous?.reason!==pickup.reason)&&(!previous||now-previous.at>=250)&&
+              (!previous||previous.reason!==pickup.reason||now-previous.at>=1000)){
+            this.send(ws,{type:'pickupStatus',status:pickup});this.pickupReports.set(a.playerId,{reason:pickup.reason,at:now});
+          }
+        }
 
         if(a.compactChaos)prepared??=prepareChaos(state);
         else if(!legacyPayload){const payload=serializeServerMessage({type:'chaos',state});legacyPayload={payload,bytes:wireBytes(payload)};}

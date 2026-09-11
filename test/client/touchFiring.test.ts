@@ -1,3 +1,5 @@
+import {PresentationEvents} from '../../src/shared/PresentationEvents';
+import {WorldPresentationClock} from '../../src/shared/WorldPresentationClock';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
@@ -32,7 +34,7 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
     // Exercise the production frame -> touch tap -> shoot -> transport path.
     // GPU, city and transport are replaced; no browser input automation.
     const session = Object.assign(Object.create(GameSession.prototype), {
-        disposed: false, previousTime: 0, stats: null, bots: null, chaos: null, rat, gun, remotes,
+        disposed: false, previousTime: 0, stats: null, remoteEvents:new PresentationEvents(),worldPresentation:new WorldPresentationClock(), bots: null, chaos: null, rat, gun, remotes,
         roundWon: false, myId: 'phone', shotsAttempted: 0, shotsSent: 0,
         lastMovementAt: 0, lastMovement: '', direction: new THREE.Vector3(), input: {keys: {}},
         stage: {scene, world, camera, renderer: {render}, flashlight: new THREE.SpotLight()},

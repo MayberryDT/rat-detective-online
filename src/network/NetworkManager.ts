@@ -1,4 +1,4 @@
-import { DEFAULT_ROOM_NAME, PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
+import { DEFAULT_ROOM_NAME, MAX_MESSAGE_BYTES, PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
 import { isSupportedWorldVersion } from '../shared/worldSpec';
 import { CHAOS_WIRE_MODE } from '../shared/chaosWire';
 import { DeliveryDecoder, type DeliveryAck } from '../shared/deliveryWire';
@@ -30,6 +30,8 @@ export interface NetworkDiagnostics {
     lastReceivedAt: number;
     sentCount: number;
     sendFailures: number;
+    /** Outbound messages dropped because they exceeded the client message budget. */
+    oversizeCount: number;
     bufferedAmount: number;
     receivedBytes: number;
     applyMs: number;
@@ -41,7 +43,7 @@ export interface NetworkDiagnostics {
 
 const SHARED_UPDATES = new Set<string>([
     'chaos', 'currentPlayers', 'playerJoined', 'playersMoved', 'playerMoved', 'playerCorrected',
-    'playerShot', 'playerDamaged', 'playerDied', 'scoreboardUpdate', 'playerRespawn',
+    'pickupStatus', 'shotRejected', 'shotOutcomes', 'playerShot', 'playerDamaged', 'playerDied', 'scoreboardUpdate', 'playerRespawn',
     'playerLeft', 'gameWon', 'gameReset',
 ]);
 
@@ -82,13 +84,14 @@ export class NetworkManager {
     private pendingAck: DeliveryAck | null = null;
     private retries = 0;
     private generation = 0;
+    private oversizeWarned = false;
     private lastReceived = 0;
     private url: string;
     private prepared: {socket:WebSocket; cleanup:()=>void} | null = null;
     private readonly options: TransportOptions;
     private readonly diagnostics = {
         receivedCount: 0, receivedChars: 0, parseMs: 0, parseMaxMs: 0,
-        invalidCount: 0, ignoredCount: 0, sentCount: 0, sendFailures: 0,
+        invalidCount: 0, ignoredCount: 0, sentCount: 0, sendFailures: 0, oversizeCount: 0,
         receivedBytes: 0, applyMs: 0, applyMaxMs: 0, joinMs: 0, reconnectCount: 0, lastCloseCode: 0,
     };
 
@@ -268,7 +271,15 @@ export class NetworkManager {
         }
         try {
             const ack=this.pendingAck;
-            this.socket.send(JSON.stringify(ack&&message.type!=='deliveryAck'?{...message,deliveryAck:{stream:ack.stream,seq:ack.seq}}:message));
+            const payload=JSON.stringify(ack&&message.type!=='deliveryAck'?{...message,deliveryAck:{stream:ack.stream,seq:ack.seq}}:message);
+            // The server classifies an over-budget client message as invalid input
+            // and eventually closes the socket, so never put one on the wire.
+            if(payload.length>MAX_MESSAGE_BYTES){
+                this.diagnostics.sendFailures++;this.diagnostics.oversizeCount++;
+                if(!this.oversizeWarned){this.oversizeWarned=true;console.warn('[rat-detective] dropped an oversized client message',message.type,payload.length);}
+                return false;
+            }
+            this.socket.send(payload);
             if(ack){this.pendingAck=null;if(this.ackTimer)clearTimeout(this.ackTimer);this.ackTimer=null;}
             this.diagnostics.sentCount++;
             return true;

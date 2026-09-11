@@ -31,7 +31,7 @@ describe('launcher spatial audio', () => {
         }
         camera.position.x=100;audio.play('pressure',pad,camera);
         expect(gains.at(-3)!.gain.value).toBeCloseTo(.85*.7*worldSoundGain(100,20/112));
-        expect(gains.at(-3)!.gain.value/(.85*.7)).toBeLessThan(.02);
+        expect(gains.at(-3)!.gain.value/(.85*.7)).toBeLessThan(.03);
         audio.dispose();expect(nodes.every(node=>node.disconnect.mock.calls.length===1)).toBe(true);
     });
 

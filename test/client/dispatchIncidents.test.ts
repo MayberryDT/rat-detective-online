@@ -3,6 +3,7 @@ import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,DISPATCH_TARGET,LAUNCH_MACHINES} from '../../src/shared/chaosState';
 import {INCIDENTS,incidentInfo,type IncidentId} from '../../src/shared/incidentCatalog';
+import {resolveShotPattern} from '../../src/shared/shotPattern';
 import {BALL_SPEED} from '../../src/shared/ballTuning';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {createPlayer} from '../../src/worker/gameState';
@@ -78,10 +79,11 @@ describe('authoritative Dispatch incidents',()=>{
   expect(sim.snapshot(false).shots.some(s=>s.id.startsWith('fill-'))).toBe(true);
   sim.step(0,now+T.activeMs);shoot(sim,'expired');expect(sim.snapshot(false).shots.at(-1)!.id).toBe('expired');
  });
- it.each([[.0,1],[.6999,1],[.7,2],[.8999,2],[.9,3],[.9999,3]])('caps count for roll %s, with no straight shots or delayed extras', (roll,count)=>{
+ it.each([1,2,3])('keeps a %s-ball seeded volley with no straight shots or delayed extras', count=>{
   const {sim}=fixture('bad-ammunition');
-  vi.spyOn(Math,'random').mockReturnValue(.5).mockReturnValueOnce(roll);
-  shoot(sim);
+  const descriptor={shotId:'',origin:{x:0,y:30,z:0},direction:{x:1,y:0,z:0}};
+  for(let seed=0;seed<1000;seed++){descriptor.shotId=`count-${seed}`;if(resolveShotPattern(descriptor,'bad-ammunition').length===count)break;}
+  sim.shoot('shooter',descriptor);
   let shots=sim.snapshot(false).shots;expect(shots).toHaveLength(count);
   for(const shot of shots){
    expect(Math.acos(shot.v.x/BALL_SPEED)).toBeGreaterThanOrEqual(.1199);

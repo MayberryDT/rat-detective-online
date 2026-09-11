@@ -8,8 +8,8 @@ import * as THREE from 'three';
 import type { ChaosState, CorpseState } from '../shared/chaosState';
 import { CHAOS_TUNING, CASE_LOOSE_SCALE, CASE_HAND, CASE_CARRY_ROTATION, DISPATCH_STATIONS } from '../shared/chaosState';
 import { BALL_RADIUS } from '../shared/ballTuning';
-import { createRatMesh } from '../utils/RatModel';
-import { RatAnimator, RAT_CARRY_SHOULDER } from '../utils/RatAnimator';
+import {CorpseRigPool,type CorpseRig} from './CorpseRigPool';
+import { RAT_CARRY_SHOULDER } from '../utils/RatAnimator';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from '../weapons/CheeseProjectileModel';
 import { CheeseImpactEffects } from '../weapons/CheeseImpactEffects';
@@ -19,7 +19,7 @@ import { incidentInfo } from '../shared/incidentCatalog';
 import { DispatchHud } from './DispatchHud';
 import { AssignmentDestinations } from './AssignmentDestinations';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
-import type { Vec3Data, ServerMessage } from '../shared/networkProtocol';
+import type { Vec3Data, ServerMessage, ShotDescriptor } from '../shared/networkProtocol';
 import { locateCase } from './caseLocator';
 import { PressureMachine } from './PressureMachine';
 import { CaseBeacon } from './CaseBeacon';
@@ -27,6 +27,8 @@ import { buildDispatchModel, updateDispatchSiren } from './DispatchModel';
 import { reactToLandmarkImpact } from './LandmarkReactions';
 import { addLeatherBriefcase } from './CaseModel';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
+import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentation';
+import type {WorldPresentationClock} from '../shared/WorldPresentationClock';
 
 const caseCarryRotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
 
@@ -68,12 +70,17 @@ export class ChaosView {
     private myId='';
     private readonly ballPose=new THREE.Object3D();
     private readonly missileTrail=new THREE.InstancedMesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff2a12,transparent:true,opacity:.42,toneMapped:false,depthWrite:false}),12);
-    private corpses=new Map<string,{mesh:THREE.Group;animator:RatAnimator;state:CorpseState}>();
+    private corpses=new Map<string,CorpseRig & {state:CorpseState}>();
+    private readonly corpsePool:CorpseRigPool;
+    private readonly ownsCorpsePool:boolean;
     private arm:THREE.Group|null=null;
     private carrier:RatEntity|null=null;
     private state:ChaosState|null=null;
+    private history:ChaosState[]=[];
+    private corpseState?:ChaosState;
     private receivedAt=0;
-    private readonly presentation=new ChaosPresentation();
+    private readonly presentation:ChaosPresentation;
+    private readonly localShots:LocalShotPresentation;
     private readonly presented:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
     private lastDispatch='';
     private readonly p=new THREE.Vector3();
@@ -81,7 +88,10 @@ export class ChaosView {
     private readonly impactNormal=new THREE.Vector3();
     private readonly audioPosition=new THREE.Vector3();
     setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
-    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld){
+    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace,corpsePool?:CorpseRigPool,private readonly worldClock?:WorldPresentationClock){
+        this.presentation=new ChaosPresentation(75,worldClock);
+        this.localShots=new LocalShotPresentation(traceShot);
+        this.corpsePool=corpsePool??new CorpseRigPool(CHAOS_TUNING.maxCorpses);this.ownsCorpsePool=!corpsePool;
         this.sirenAudio=new DispatchSirenAudio(this.audio);
         this.bullets.count=0;this.bullets.frustumCulled=false;this.root.add(this.bullets);
         this.chargedBullets.count=0;this.chargedBullets.frustumCulled=false;this.chargedBullets.name='crossfire-balls';this.root.add(this.chargedBullets);
@@ -132,19 +142,35 @@ export class ChaosView {
         document.body.appendChild(this.caseMarker);
         this.impacts=new CheeseImpactEffects(scene);
     }
+    private readonly localMuzzle=()=>this.resolveRat(this.myId)?.getMuzzlePosition()??this.presented.p;
+    outcome(event:import('../shared/shotOutcome').ShotOutcome):void {this.presentation.outcome(event);}
+    clearPresentation():void {
+        this.localShots.clear();this.presentation.clear();this.history=[];this.state=null;this.corpseState=undefined;
+        for(const model of this.corpses.values())this.corpsePool.release(model);
+        this.corpses.clear();this.setCarrier(null);
+    }
+    /** Starts one immediate real-ID ball at the animated muzzle after a
+     * successful local send. Presentation only; the server owns damage. */
+    fire(shot:ShotDescriptor):void {
+        if(!this.extrapolate)return;
+        const dispatch=this.state?.dispatch;
+        const incident=dispatch?.phase==='active'?incidentInfo(dispatch.incident).id:undefined;
+        this.localShots.fire(this.myId,shot,incident,performance.now());
+    }
     launch(message:Extract<ServerMessage,{type:'playerShot'}>):void {
-        if(this.extrapolate)this.presentation.launch(message,performance.now());
+        if(this.extrapolate&&!this.localShots.confirm(message,performance.now()))this.presentation.launch(message,performance.now());
     }
     apply(state:ChaosState){
         this.foley?.apply(state);
         this.state=state;this.receivedAt=performance.now();
+        this.history.push(state);if(this.history.length>16)this.history.shift();
         this.assignmentDestinations.update(state.assignment);
-        if(this.extrapolate)this.presentation.apply(state,this.receivedAt);
+        if(this.extrapolate){this.presentation.apply(state,this.receivedAt);this.localShots.apply(state,this.receivedAt);}
         const extraIds=new Set((state.extraCases??[]).map(c=>c.id));
         for(const [id,visual] of this.extraCases)if(!extraIds.has(id)){visual.dispose();this.extraCases.delete(id);}
         for(const extra of state.extraCases??[]){
             let visual=this.extraCases.get(extra.id);
-            if(!visual){visual=new ExtraCaseVisual(this.scene,extra.id,this.resolveRat,this.extrapolate);this.extraCases.set(extra.id,visual);}
+            if(!visual){visual=new ExtraCaseVisual(this.scene,extra.id,this.resolveRat,this.extrapolate,this.worldClock);this.extraCases.set(extra.id,visual);}
             visual.apply(state,extra,this.receivedAt);
         }
         for(const hit of state.impacts){
@@ -154,14 +180,18 @@ export class ChaosView {
             if(hit.cue==='case-hit')this.feedback?.('case-hit',hit.p);
             if(!hit.audioOnly)reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);
         }
+        if(!this.worldClock)this.applyCorpses(state);
+    }
+    private applyCorpses(state:ChaosState):void {
+        if(this.corpseState===state)return;
+        this.corpseState=state;
         const corpses=new Set(state.corpses.map(c=>c.id));
-        for(const [id,c] of this.corpses)if(!corpses.has(id)){this.root.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}
+        for(const [id,c] of this.corpses)if(!corpses.has(id)){this.corpsePool.release(c);this.corpses.delete(id);}
         for(const c of state.corpses){
             const victim=this.resolveRat(c.victimId);if(victim?.dead)victim.useSharedCorpse();
             let model=this.corpses.get(c.id);
             if(!model){
-                const mesh=createRatMesh(c.appearance);
-                model={mesh,animator:new RatAnimator(mesh),state:c};this.corpses.set(c.id,model);this.root.add(mesh);
+                model=Object.assign(this.corpsePool.acquire(c.appearance),{state:c});this.corpses.set(c.id,model);this.root.add(model.mesh);
             }
             model.state=c;
         }
@@ -173,15 +203,25 @@ export class ChaosView {
         if(!entity)return;
         this.arm=createCaseGrip(entity);
     }
-    update(dt:number,camera:THREE.Camera){
+    update(dt:number,camera:THREE.Camera,frameAt=performance.now()){
         this.impacts.update(dt);
         camera.getWorldPosition(this.audioPosition);
         if(this.audio)bindIncidentAudio(this.audio,this.audioPosition);
-        const s=this.state;if(!s)return;
+        const latest=this.state;if(!latest)return;
+        const sampledAt=this.worldClock?.sample(frameAt);
+        const displayAt=sampledAt!==undefined&&Number.isFinite(sampledAt)?sampledAt:latest.time;
+        let s=latest;
+        if(this.worldClock&&Number.isFinite(displayAt)){
+            s=this.history[0]??latest;
+            for(const sample of this.history){if(sample.time>displayAt)break;s=sample;}
+            this.applyCorpses(s);
+        }
+        // Authoritative local possession and HUD feedback are immediate.
+        if(s.case.owner===this.myId||latest.case.owner===this.myId)s={...s,case:latest.case};
         // The solo preview already stepped physics this frame. Extrapolating it
         // again counted CPU/render preparation time as extra ball travel.
-        const renderTime=performance.now();
-        const elapsed=this.extrapolate?Math.min((renderTime-this.receivedAt)/1000,.08):0,now=s.time+elapsed*1000;
+        const renderTime=frameAt;
+        const elapsed=this.extrapolate?Math.min((renderTime-this.receivedAt)/1000,.08):0,now=this.worldClock?displayAt:s.time+elapsed*1000;
         const owner=s.case.owner?this.resolveRat(s.case.owner):undefined;
         this.setCarrier(owner&&!owner.dead?owner:null);
         this.caseRoot.scale.setScalar(s.case.owner?1:CASE_LOOSE_SCALE);
@@ -212,10 +252,10 @@ export class ChaosView {
         this.updateCaseMarker(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const crossfire=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='crossfire';
-        const shots=this.extrapolate?this.presentation.renderShots(s.shots,renderTime):s.shots;
+        const shots=this.extrapolate?this.localShots.render(this.presentation.renderShots(s.shots,renderTime),renderTime):s.shots;
         for(let i=0;i<Math.min(shots.length,CHAOS_TUNING.maxShots);i++){
             const shot=shots[i];
-            const p=shot.stuckUntil||!(this.extrapolate&&this.presentation.shot(shot.id,renderTime,this.presented))?shot.p:this.presented.p;
+            const p=this.localShots.owns(shot.id)||shot.stuckUntil||!(this.extrapolate&&this.presentation.shot(shot.id,renderTime,this.presented,shot.owner===this.myId?this.localMuzzle:undefined))?shot.p:this.presented.p;
             const scale=(shot.radius??BALL_RADIUS)/BALL_RADIUS;
             this.ballPose.position.set(p.x,p.y,p.z);
             this.ballPose.rotation.set(now*.015+i,now*.009,0);
@@ -267,9 +307,9 @@ export class ChaosView {
             c.animator.poseDeath((now-b.born)/1000,dt,b.spin,0,false);
         }
         const d=s.dispatch;
-        const localCase=[s.case,...s.extraCases??[]].find(c=>c.owner&&this.resolveRat(c.owner)?.isPlayer);
-        const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
-        this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer);
+        const localCase=[latest.case,...latest.extraCases??[]].find(c=>c.owner&&this.resolveRat(c.owner)?.isPlayer);
+        const hudCase=localCase??latest.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
+        this.hud.update(hudCase===latest.case?latest:{...latest,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer);
         this.assignmentDestinations.updateCue(s.assignment,camera);
         this.pressureMachine.update(s.pressure,now,camera);
         for(const kiosk of this.kiosks){
@@ -319,8 +359,11 @@ export class ChaosView {
         oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
     }
     renderOutline(renderer:THREE.WebGLRenderer,camera:THREE.Camera):void {this.assignmentDestinations.render(renderer,camera);}
-    getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
+    getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,corpsePool:this.corpsePool.diagnostics(),snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
+        this.localShots.clear();
+        for(const corpse of this.corpses.values())this.corpsePool.release(corpse);this.corpses.clear();
+        if(this.ownsCorpsePool)this.corpsePool.dispose();
         this.sirenAudio.dispose();this.assignmentDestinations.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();

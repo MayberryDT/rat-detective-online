@@ -137,6 +137,11 @@ export class SnapshotBuffer {
         const latest=this.poses[this.poses.length-1].time;
         const time=Math.max(this.poses[0].time,Math.min(proposed,Math.max(this.renderedAt,latest)));
         this.sampledAt=now;this.renderedAt=time;
+        return this.sampleAt(time);
+    }
+    /** Sample an already-mapped room time without adding another clock/delay. */
+    sampleAt(time:number):SnapshotPose|undefined {
+        if(!this.poses.length||!Number.isFinite(time))return undefined;
         while(this.poses.length>2&&this.poses[1].time<=time)this.poses.shift();
         const first=this.poses[0],last=this.poses[this.poses.length-1];
         if(time<=first.time)return this.copy(first);

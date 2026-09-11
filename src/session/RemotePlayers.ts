@@ -3,6 +3,7 @@ import * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
 import type { PlayerData } from '../shared/networkProtocol';
 import { SnapshotBuffer, BotSnapshotBuffer } from '../shared/SnapshotBuffer';
+import {WorldSnapshotBuffer,type WorldPresentationClock} from '../shared/WorldPresentationClock';
 
 interface RemoteRat {
     entity: RatEntity;
@@ -16,9 +17,12 @@ export class RemotePlayers {
     private previousFrameAt: number | undefined;
     private frameDt = 1 / 60;
     private readonly ids = new Map<RatEntity, string>();
+    private sharedClockEnabled=true;
     constructor(private readonly scene: THREE.Scene, private readonly world: CANNON.World,
         private readonly now: () => number = () => performance.now(),
-        private readonly batchRigs = true) {}
+        private readonly batchRigs = true,private readonly worldClock?:WorldPresentationClock) {}
+
+    useSharedClock(enabled:boolean):void{this.sharedClockEnabled=enabled;}
 
     snapshot(players: Record<string, PlayerData>, myId: string): void {
         this.clear();
@@ -30,7 +34,7 @@ export class RemotePlayers {
         const entity = new RatEntity(this.scene, this.world, position, player.name, player, true);
         entity.applySnapshot(player);
         if(this.batchRigs)entity.enableRigidBatching();
-        const snapshots = player.id.startsWith('rd-ai-') ? new BotSnapshotBuffer() : new SnapshotBuffer();
+        const snapshots = this.worldClock&&this.sharedClockEnabled?new WorldSnapshotBuffer(this.worldClock):player.id.startsWith('rd-ai-') ? new BotSnapshotBuffer() : new SnapshotBuffer();
         snapshots.reset({ ...player, qx: player.meshQx, qy: player.meshQy, qz: player.meshQz, qw: player.meshQw }, this.now());
         this.rats.set(player.id, { entity, snapshots, generation: snapshots.generation });
         this.ids.set(entity, player.id);
@@ -41,11 +45,13 @@ export class RemotePlayers {
         remote.snapshots.push({ x: player.x, y: player.y, z: player.z,
             qx: player.meshQx, qy: player.meshQy, qz: player.meshQz, qw: player.meshQw }, this.now(), serverAt);
     }
-    respawn(id: string, data: { x: number; y: number; z: number; hp: number }): void {
+    respawn(id: string, data: { x: number; y: number; z: number; hp: number },sourceAt?:number): void {
         const remote = this.rats.get(id);
         if (!remote) return;
         remote.entity.respawn(data);
-        remote.snapshots.reset({ ...data, qx: 0, qy: 0, qz: 0, qw: 1 }, this.now());
+        const pose={...data,qx:0,qy:0,qz:0,qw:1};
+        if(remote.snapshots instanceof WorldSnapshotBuffer)remote.snapshots.reset(pose,this.now(),sourceAt);
+        else remote.snapshots.reset(pose,this.now());
     }
     get(id: string): RatEntity | undefined { return this.rats.get(id)?.entity; }
     idFor(entity: RatEntity): string | undefined { return this.ids.get(entity); }

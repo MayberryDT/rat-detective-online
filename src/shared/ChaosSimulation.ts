@@ -1,4 +1,7 @@
+import {pickupReason,type PickupStatus} from './pickupEligibility';
+import type {ShotOutcome} from './shotOutcome';
 import * as C from 'cannon-es';
+import {resolveShotPattern} from './shotPattern';
 import type {WorldFoleyCue} from './foleyEvents';
 import { SpatialRayQuery } from './SpatialRayQuery';
 import { StaticCityBroadphase } from './StaticCityBroadphase';
@@ -42,6 +45,13 @@ export class ChaosSimulation {
     private rats=new Map<string,C.Body>();
     private corpses=new Map<string,{body:C.Body;state:CorpseState;hitAfter:Map<string,number>}>();
     private shots:ChaosShot[]=[];
+    private outcomeSerial=0;
+    private readonly outcomeEpoch=crypto.randomUUID();
+    private outcomeSink?: (outcome:ShotOutcome)=>void;
+    onShotOutcome(sink:(outcome:ShotOutcome)=>void):void {this.outcomeSink=sink;}
+    private endShot(shot:ChaosShot,reason:ShotOutcome['reason'],extra:Partial<ShotOutcome>={}):void {
+        this.outcomeSink?.({id:`${this.outcomeEpoch}:${++this.outcomeSerial}`,shotId:shot.id,at:this.now,reason,p:{...shot.p},...extra});
+    }
     private readonly burstShots=new WeakSet<ChaosShot>();
     private impacts:ChaosState['impacts']=[];
     private audioImpacts:ChaosState['impacts']=[];
@@ -190,7 +200,7 @@ export class ChaosSimulation {
     private reserveShots(count:number){
         while(this.shots.length>T.maxShots-count){
             const burst=this.shots.findIndex(s=>this.burstShots.has(s));
-            this.shots.splice(burst<0?0:burst,1);
+            const removed=this.shots.splice(burst<0?0:burst,1)[0];this.endShot(removed,'capacity');
         }
     }
     private roomForShot(){
@@ -212,42 +222,17 @@ export class ChaosSimulation {
         const aimed=direction.scale(Math.cos(yaw)*Math.cos(pitch)).vadd(side.scale(Math.sin(yaw))).vadd(up.scale(Math.sin(pitch)));
         aimed.normalize();return aimed;
     }
-    private crookedAim(direction:C.Vec3){
-        const axis=Math.abs(direction.y)<.95?new C.Vec3(0,1,0):new C.Vec3(1,0,0);
-        const side=direction.cross(axis);side.normalize();
-        const up=side.cross(direction);up.normalize();
-        // Keep the crooked path in view: 7–14 degrees off aim, diagonally
-        // within each quadrant rather than directly above/below or sideways.
-        const angle=.12+Math.random()*.12,quadrant=Math.random()*4;
-        const azimuth=Math.floor(quadrant)*Math.PI/2+Math.PI/6+(quadrant%1)*Math.PI/6;
-        return direction.scale(Math.cos(angle)).vadd(side.scale(Math.sin(angle)*Math.cos(azimuth)))
-            .vadd(up.scale(Math.sin(angle)*Math.sin(azimuth)));
-    }
     shoot(owner:string,shot:ShotDescriptor):ChaosShot[]{
-        const fired:ChaosShot[]=[];
-        if(!this.players.get(owner) || this.players.get(owner)!.hp<=0)return fired;
-        const emit=(velocity:C.Vec3,id:string)=>{
-            const ball=this.emitShot(owner,shot.origin,velocity,id,this.originalShot());
-            if(ball)fired.push(ball);
-        };
-        const direction=vec(shot.direction);direction.normalize();
-        if(this.incidentActive('scattershot')){
-            this.reserveShots(5);
-            const v=direction.scale(BALL_SPEED);
-            emit(v,shot.shotId);
-            for(const angle of [-.22,-.11,.11,.22]){
-                const rotation=new C.Quaternion();rotation.setFromAxisAngle(new C.Vec3(0,1,0),angle);
-                emit(rotation.vmult(v),crypto.randomUUID());
-            }
-            return fired;
+        if(!this.players.get(owner)||this.players.get(owner)!.hp<=0)return [];
+        // The client draws the same UUID-seeded pattern before confirmation, so
+        // incident membership and direction must be resolved identically here.
+        const incident=this.dispatch.phase==='active'?incidentInfo(this.dispatch.incident).id:undefined;
+        const pattern=resolveShotPattern(shot,incident),fired:ChaosShot[]=[];
+        this.reserveShots(pattern.length);
+        for(const ball of pattern){
+            const emitted=this.emitShot(owner,shot.origin,vec(ball.velocity),ball.id,this.originalShot());
+            if(emitted)fired.push(emitted);
         }
-        if(this.incidentActive('bad-ammunition')){
-            const roll=Math.random(),count=roll<.7?1:roll<.9?2:3;
-            this.reserveShots(count);
-            for(let i=0;i<count;i++)emit(this.crookedAim(direction).scale(BALL_SPEED),i===0?shot.shotId:crypto.randomUUID());
-            return fired;
-        }
-        emit(direction.scale(BALL_SPEED),shot.shotId);
         return fired;
     }
 
@@ -515,8 +500,8 @@ export class ChaosSimulation {
         body.updateAABB();
     }
     private removeCorpse(id:string){const c=this.corpses.get(id);if(c){this.world.removeBody(c.body);this.targets.delete(c.body);this.corpses.delete(id);}}
-    private ray(from:C.Vec3,to:C.Vec3,mask:number){
-        return this.rayQuery.closest(from,to,mask);
+    private ray(from:C.Vec3,to:C.Vec3,mask:number,accept?:(body:C.Body)=>boolean){
+        return this.rayQuery.closest(from,to,mask,accept);
     }
     private nextCheeseRadius(current:number){
         for(const radius of I.cheeseRadii)if(radius>current+.001)return radius;
@@ -544,7 +529,7 @@ export class ChaosSimulation {
         const spawn=Math.min(children,T.maxShots-(live-1));
         if(spawn<2){shot.popAt=this.now+180;return;}
         const index=this.shots.indexOf(shot);
-        if(index>=0)this.shots.splice(index,1);
+        if(index>=0){this.shots.splice(index,1);this.endShot(shot,'split');}
         const forward=vec(shot.v);const speed=Math.max(BALL_SPEED*.8,forward.length()||BALL_SPEED);
         const dir=forward.lengthSquared()<.01?new C.Vec3(0,1,0):forward.unit();
         this.impacts.push({p:{...shot.p},n:{x:0,y:1,z:0},surface:true,scale:2.4,cue:'pop'});
@@ -655,7 +640,7 @@ export class ChaosSimulation {
         for(const b of this.world.bodies)if(b.type!==C.Body.STATIC)b.updateAABB();
         for(let i=this.shots.length-1;i>=0;i--){
             const shot=this.shots[i];shot.age+=dt;
-            if(shot.age>BALL_LIFETIME){this.shots.splice(i,1);continue;}
+            if(shot.age>BALL_LIFETIME){this.shots.splice(i,1);this.endShot(shot,'expired');continue;}
             if(shot.stuckUntil){
                 if(now<shot.stuckUntil)continue;
                 shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);
@@ -665,7 +650,8 @@ export class ChaosSimulation {
             const from=vec(shot.p),motion=vec(shot.v).scale(dt),to=from.vadd(motion);
             const travel=motion.length()||1;
             const large=radius>BALL_RADIUS+.02;
-            const hit=large?this.rayQuery.sphere(from,to,radius,1|2|4|8,body=>this.targets.get(body)?.player?.id!==shot.owner):this.ray(from,to,1|2|4|8);
+            const eligible=(body:C.Body)=>this.targets.get(body)?.player?.id!==shot.owner;
+            const hit=large?this.rayQuery.sphere(from,to,radius,1|2|4|8,eligible):this.ray(from,to,1|2|4|8,eligible);
             const target=hit.body?this.targets.get(hit.body):undefined;
             const stop=large?radius+.01:.05;
             const contact=hit.hasHit?Math.max(0,hit.distance-(large?0:stop)):travel;
@@ -678,7 +664,7 @@ export class ChaosSimulation {
                 const damage=hit.shape===target.head||(this.incidentActive('crossfire')&&shot.wallBounced)?3:1;
                 if(playing)this.hit({owner:shot.owner,victim:target.player.id,damage,incoming});
                 this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:false});
-                this.shots.splice(i,1);continue;
+                this.shots.splice(i,1);this.endShot(shot,'contact',{victimId:target.player.id,part:hit.shape===target.head?'head':'body'});continue;
             }
             if(target?.kind==='case'){
                 const c=this.cases.get(target.caseId??'primary')!;
@@ -740,6 +726,15 @@ export class ChaosSimulation {
         for(const c of this.cases.values())this.stepLooseCase(c,now,playing);
         if(this.impacts.length>64)this.impacts.splice(0,this.impacts.length-64);
     }
+    pickupEligibility(playerId:string,playing=true,caseId='primary'):PickupStatus|undefined {
+        const player=this.players.get(playerId),c=this.cases.get(caseId);if(!player||!c)return undefined;
+        const reach=new C.Vec3(player.x,player.y+.8,player.z),distance=reach.distanceTo(c.body.position),speed=c.body.velocity.length();
+        const waitMs=playerId===c.previousOwner?Math.max(0,c.pickupAfter-this.now):0;
+        const reason=pickupReason({owner:c.owner,playerId,hp:player.hp,playing:playing&&!this.assignment?.closed,
+            returning:!!c.returningUntil,weaponized:this.casesWeaponized||this.caseDangerous(c),alreadyHolding:this.isCaseHolder(playerId),
+            speed,distance,waitMs},()=>this.ray(reach,c.body.position,1).hasHit);
+        return {at:this.now,reason,distance,speed,waitMs};
+    }
     private stepLooseCase(c:CaseRuntime,now:number,playing:boolean){
         if(!c.owner){
             const p=c.body.position;
@@ -764,10 +759,7 @@ export class ChaosSimulation {
             }
             if(!c.returningUntil && playing && !this.assignment?.closed && !this.casesWeaponized && !this.caseDangerous(c) && c.body.velocity.length()<=T.casePickupMaxSpeed){
                 for(const player of this.players.values()){
-                    if(player.hp<=0 || this.isCaseHolder(player.id) || (player.id===c.previousOwner&&now<c.pickupAfter))continue;
-                    const reach=new C.Vec3(player.x,player.y+.8,player.z);
-                    if(reach.distanceTo(p)>T.pickupRadius)continue;
-                    if(this.ray(reach,p,1).hasHit)continue;
+                    if(this.pickupEligibility(player.id,playing,c.id)?.reason!=='eligible')continue;
                     c.owner=player.id;this.carry(player,c);this.checkAssignmentLocation(c);
                     if(c.owner===player.id)this.tell('This rat is on the case · '+player.name);break;
                 }
@@ -820,7 +812,8 @@ export class ChaosSimulation {
             shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts.slice(-64),...(this.impacts.length<64?this.audioImpacts.slice(-(64-this.impacts.length)):[])].slice(0,64),notice:{...this.notice}};
         if(drain){this.impacts=[];this.audioImpacts=[];}return state;
     }
-    reset(){this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
+    reset(){
+        for(const shot of this.shots)this.endShot(shot,'reset');this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
         this.assignment=undefined;
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();

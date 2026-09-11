@@ -8,6 +8,7 @@ import { worldSpawnPoints } from '../../src/shared/playerSpawns';
 import { parseServerMessage } from '../../src/shared/messageValidation';
 import { WORLD_LAYOUT_VERSION } from '../../src/shared/worldSpec';
 import { CHECKPOINT_MS, GameRoom, STALE_PLAYER_MS } from '../../src/worker/GameRoom';
+import { SHOT_OUTCOME_BATCH } from '../../src/shared/shotOutcome';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ClientMessage, RoundState } from '../../src/shared/networkProtocol';
 
@@ -314,6 +315,8 @@ describe('GameRoom websockets', () => {
     const client = await openClient(room);
     client.ws.send(joinPayload('Shooter'));
     const welcome = await client.inbox.waitFor('welcome');
+    const observer=await openClient(room);observer.ws.send(joinPayload('Observer'));
+    await observer.inbox.waitFor('welcome');
     const shot = { type: 'shoot' as const, shotId: 'visible-shot',
       origin: { x: welcome.player.x, y: welcome.player.y + 1.5, z: welcome.player.z },
       direction: { x: 0, y: 1, z: 0 } };
@@ -322,6 +325,9 @@ describe('GameRoom websockets', () => {
     expect(born.origin).toEqual(shot.origin);
     expect(born.launch).toEqual({at:expect.any(Number),balls:[{id:shot.shotId,velocity:{x:0,y:175,z:0}}]});
     expect(parseServerMessage(born)).toEqual(born);
+    const observed=await observer.inbox.waitFor('playerShot',message=>message.shotId===shot.shotId);
+    expect(observed).toMatchObject({shooterId:welcome.id,origin:shot.origin,direction:shot.direction});
+    expect(observed.launch).toBeUndefined();
     const snapshot = await client.inbox.waitFor('chaos', message => message.state.shots.some(ball => ball.id === shot.shotId));
     expect(parseServerMessage(JSON.stringify(snapshot))).not.toBeNull();
     expect(snapshot.state.shots.find(ball => ball.id === shot.shotId)?.owner).toBe(welcome.id);
@@ -913,4 +919,116 @@ it('negotiates delta motion while retaining the previous compact mode',async()=>
    expect(attachment.compactChaos).toBe(true);expect(!!attachment.compactChaosDelta).toBe(mode==='compact-v2');
   });
  }
+});
+
+describe('protocol 9 shot outcomes and pickup diagnostics', () => {
+  it('splits a critical outcome backlog into bounded batches without losing or reordering an outcome', async () => {
+    const room = `outcome-batch-${crypto.randomUUID()}`;
+    const client = await openClient(room);
+    client.ws.send(joinPayload('Reporter'));
+    await client.inbox.waitFor('welcome');
+    const total = SHOT_OUTCOME_BATCH * 2 + 6;
+    await runInDurableObject(env.GAME_ROOM.getByName(room), (instance: GameRoom) => {
+      const game = instance as unknown as { shotOutcomes: unknown[]; flushShotOutcomes: () => void };
+      for (let i = 0; i < total; i++) {
+        game.shotOutcomes.push({ id:`epoch:${i}`,shotId:`shot-${i}`,at:1000+i,reason:'expired',p:{x:0,y:0,z:0} });
+      }
+      game.flushShotOutcomes();
+    });
+    const received: string[] = [];
+    let batches = 0;
+    while (received.length < total) {
+      const message = await client.inbox.waitFor('shotOutcomes');
+      batches++;
+      expect(message.outcomes.length).toBeLessThanOrEqual(SHOT_OUTCOME_BATCH);
+      for (const outcome of message.outcomes) received.push(outcome.id);
+    }
+    expect(received).toEqual(Array.from({ length: total }, (_, i) => `epoch:${i}`));
+    expect(batches).toBeGreaterThanOrEqual(3);
+  });
+
+  it('correlates each rejected shot with its own ID and reason instead of a bare counter', async () => {
+    const room = `shot-reject-${crypto.randomUUID()}`;
+    const client = await openClient(room);
+    client.ws.send(joinPayload('Shooter'));
+    const welcome = await client.inbox.waitFor('welcome');
+    const fire = (shotId: string, origin?: { x: number; y: number; z: number }) => client.ws.send(JSON.stringify({
+      type: 'shoot', shotId,
+      origin: origin ?? { x: welcome.player.x, y: welcome.player.y + 1.5, z: welcome.player.z },
+      direction: { x: 0, y: 1, z: 0 },
+    }));
+    await runInDurableObject(env.GAME_ROOM.getByName(room), (instance: GameRoom) => {
+      (instance as unknown as { round: { phase: string } }).round.phase = 'won';
+    });
+    fire('rejected-round-over');
+    expect(await client.inbox.waitFor('shotRejected', m => m.shotId === 'rejected-round-over')).toMatchObject({ reason: 'roundOver' });
+
+    await runInDurableObject(env.GAME_ROOM.getByName(room), (instance: GameRoom) => {
+      const game = instance as unknown as { round: { phase: string }; players: Map<string, { hp: number }> };
+      game.round.phase = 'playing'; game.players.get(welcome.id)!.hp = 0;
+    });
+    fire('rejected-dead');
+    expect(await client.inbox.waitFor('shotRejected', m => m.shotId === 'rejected-dead')).toMatchObject({ reason: 'dead' });
+
+    await runInDurableObject(env.GAME_ROOM.getByName(room), (instance: GameRoom) => {
+      (instance as unknown as { players: Map<string, { hp: number }> }).players.get(welcome.id)!.hp = 3;
+    });
+    fire('rejected-implausible', { x: 900, y: 3, z: 900 });
+    expect(await client.inbox.waitFor('shotRejected', m => m.shotId === 'rejected-implausible')).toMatchObject({ reason: 'implausible' });
+  });
+
+  it('accepts one shot per ID and answers a replay with a duplicate rejection', async () => {
+    const room = `graybox-shot-duplicate-${crypto.randomUUID()}`;
+    const client = await openClient(room);
+    client.ws.send(joinPayload('Shooter'));
+    const welcome = await client.inbox.waitFor('welcome');
+    const shotId = 'fired-once';
+    const origin = { x: welcome.player.x, y: welcome.player.y + 1.5, z: welcome.player.z };
+    client.ws.send(JSON.stringify({ type: 'shoot', shotId, origin, direction: { x: 0, y: 1, z: 0 } }));
+    expect((await client.inbox.waitFor('playerShot', m => m.shotId === shotId)).launch).toBeDefined();
+    client.ws.send(JSON.stringify({ type: 'shoot', shotId, origin, direction: { x: 0, y: 1, z: 0 } }));
+    expect(await client.inbox.waitFor('shotRejected', m => m.shotId === shotId)).toMatchObject({ reason: 'duplicate' });
+  });
+
+  it('reports an explicit terminal outcome for a real shot even when it never appears in a later snapshot', async () => {
+    const room = `graybox-shot-terminal-${crypto.randomUUID()}`;
+    const client = await openClient(room);
+    client.ws.send(joinPayload('Shooter'));
+    const welcome = await client.inbox.waitFor('welcome');
+    const shotId = 'terminal-shot';
+    client.ws.send(JSON.stringify({
+      type: 'shoot', shotId,
+      origin: { x: welcome.player.x, y: welcome.player.y + 1.5, z: welcome.player.z },
+      direction: { x: 0, y: 1, z: 0 },
+    }));
+    expect(await client.inbox.waitFor('playerShot', m => m.shotId === shotId)).toBeTruthy();
+    // The ball lives 2.5 seconds; authority must account for it by outcome, not silence.
+    const terminal = await client.inbox.waitFor('shotOutcomes', m => m.outcomes.some(o => o.shotId === shotId), 8_000);
+    const outcome = terminal.outcomes.find(o => o.shotId === shotId)!;
+    expect(outcome.reason).toBe('expired');
+    expect(outcome.id).toEqual(expect.any(String));
+    expect(parseServerMessage(JSON.stringify(terminal))).toEqual(terminal);
+  });
+
+  it('reports a bounded pickup diagnostic with an explicit reason and throttles an unchanged status', async () => {
+    const room = `graybox-pickup-report-${crypto.randomUUID()}`;
+    const client = await openClient(room);
+    client.ws.send(joinPayload('Waiter'));
+    const welcome = await client.inbox.waitFor('welcome');
+    // Chaos must exist before the case body can be repositioned.
+    await client.inbox.waitFor('chaos');
+    await runInDurableObject(env.GAME_ROOM.getByName(room), (instance: GameRoom) => {
+      const game = instance as unknown as { chaos: { cases: Map<string, { owner: string | null; returningUntil: number }> } };
+      const primary = game.chaos!.cases.get('primary')!;
+      // A held case is a stable condition, so the reason cannot drift between ticks.
+      primary.owner = welcome.id; primary.returningUntil = 0;
+    });
+    const first = await client.inbox.waitFor('pickupStatus');
+    expect(first.status.reason).toBe('heldByYou');
+    expect(Number.isFinite(first.status.distance)).toBe(true);
+    expect(Number.isFinite(first.status.speed)).toBe(true);
+    // An unchanged status is throttled rather than streamed every tick.
+    await new Promise(resolve => setTimeout(resolve, 400));
+    expect(client.inbox.messages.some(message => message.type === 'pickupStatus')).toBe(false);
+  });
 });

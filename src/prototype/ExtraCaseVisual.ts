@@ -8,19 +8,21 @@ import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {addLeatherBriefcase} from './CaseModel';
 import {CaseBeacon} from './CaseBeacon';
 import {createCaseGrip} from './CaseGrip';
+import type {WorldPresentationClock} from '../shared/WorldPresentationClock';
 const rotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
 /** Seven bounded incident props, using the same model, outline, grip and smoothing. */
 export class ExtraCaseVisual {
     readonly root=new THREE.Group();
     private readonly beacon:CaseBeacon;
-    private readonly presentation=new ChaosPresentation();
+    private readonly presentation:ChaosPresentation;
     private readonly pose:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
     private readonly offset=new THREE.Vector3();
     private state?:ChaosState['case'];
     private incident?:ChaosState['dispatch'];
     private carrier:RatEntity|null=null;
     private arm:THREE.Group|null=null;
-    constructor(scene:THREE.Scene,id:string,private readonly resolve:(id:string)=>RatEntity|undefined,private readonly extrapolate=true){
+    constructor(scene:THREE.Scene,id:string,private readonly resolve:(id:string)=>RatEntity|undefined,private readonly extrapolate=true,worldClock?:WorldPresentationClock){
+        this.presentation=new ChaosPresentation(75,worldClock);
         this.root.name='hot-case-'+id;this.root.userData.aimTarget=true;
         addLeatherBriefcase(this.root);scene.add(this.root);this.beacon=new CaseBeacon(scene);
     }

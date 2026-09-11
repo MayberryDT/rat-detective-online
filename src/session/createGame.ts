@@ -10,6 +10,8 @@ import { yieldToPage } from './yieldToPage';
 import type { NetworkManager } from '../network/NetworkManager';
 import type { TitleScreen } from '../ui/TitleScreen';
 import type { TitleMusic } from '../ui/TitleMusic';
+import {CorpseRigPool} from '../prototype/CorpseRigPool';
+import {prepareCorpseRigs} from '../prototype/prepareCorpseRigs';
 
 export async function createGame(title:TitleScreen,music:TitleMusic,transport:NetworkManager,world:WorldSpec|undefined,signal:AbortSignal):Promise<GameSession> {
     const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
@@ -18,6 +20,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
     if(!world&&new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-'))spec.version=GRAYBOX_VERSION;
     let city:CityGenerator|Neighborhood|undefined;
     let model:RatEntity|undefined;
+    const corpsePool=new CorpseRigPool();
     try {
         await yieldToPage(signal);
         performance.mark('city-prepare-start');
@@ -33,14 +36,16 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         const scenery=new Set(stage.scene.children);
         model=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',
             {hatType:'fedora',hatColor:0xdc4a3c,furColor:0xe8b84d,coatColor:0xbe4545});
+        model.enableRigidBatching();
         await renderer.compileAsync(stage.scene,stage.camera);
         // Keep compiled character programs alive until the actual rats have
         // rendered once, without a dummy participant or collider in the city.
         stage.scene.remove(...stage.scene.children.filter(object=>!scenery.has(object)));
         stage.world.removeBody(model.body);
+        await prepareCorpseRigs(corpsePool,renderer,stage.scene,signal);
         await yieldToPage(signal);
         renderer.render(stage.scene,stage.camera);
         performance.mark('city-render-ready');
-        return new GameSession(renderer,spec,{title,music,transport,stage,city,releasePreparedModels:()=>model?.dispose()});
-    } catch(error) {model?.dispose();city?.dispose();stage.dispose();throw error;}
+        return new GameSession(renderer,spec,{title,music,transport,stage,city,corpsePool,releasePreparedModels:()=>model?.dispose()});
+    } catch(error) {corpsePool.dispose();model?.dispose();city?.dispose();stage.dispose();throw error;}
 }

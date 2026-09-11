@@ -23,15 +23,15 @@ function fixture(){
  state.loads.slice(-1).forEach(load=>load({} as AudioBuffer));
  return {audio,ear,context};
 }
-it('raises distance-faded shots by 50% with the nearby ceiling and cross-city fade intact',()=>{
+it('restores the stronger pistol and gentler world fade while keeping distant fire faint',()=>{
  expect(gunshotGain(0)).toBe(1);expect(gunshotGain(8)).toBe(1);
  expect(gunshotGain(20)).toBe(1);expect(gunshotGain(25)).toBeGreaterThan(.99);
- expect(gunshotGain(50)).toBeCloseTo(.3714923,5);
- expect(gunshotGain(100)).toBeLessThan(.105);expect(gunshotGain(100)).toBeGreaterThan(.095);
- expect(gunshotGain(250)).toBeLessThan(.018);expect(gunshotGain(250)).toBeGreaterThan(.017);
- expect(gunshotGain(500)).toBeLessThan(.0075);expect(gunshotGain(500)).toBeGreaterThan(.006);
+ expect(gunshotGain(50)).toBeGreaterThan(.55);expect(gunshotGain(50)).toBeLessThan(.56);
+ expect(gunshotGain(100)).toBeLessThan(.165);expect(gunshotGain(100)).toBeGreaterThan(.164);
+ expect(gunshotGain(250)).toBeLessThan(.029);expect(gunshotGain(250)).toBeGreaterThan(.028);
+ expect(gunshotGain(500)).toBeLessThan(.01);expect(gunshotGain(500)).toBeGreaterThan(.009);
  for(let d=9;d<550;d++)expect(gunshotGain(d)).toBeLessThanOrEqual(gunshotGain(d-1));
- expect(gunshotGain(NaN)).toBe(0);expect(GUNSHOT_VOLUME).toBe(.3);
+ expect(gunshotGain(NaN)).toBe(0);expect(GUNSHOT_VOLUME).toBe(.4);
 });
 it('uses the listener and shot origin for remote normal and malfunction volume, preserving local volume',()=>{
  const {audio,ear}=fixture();ear.set(100,2,0);

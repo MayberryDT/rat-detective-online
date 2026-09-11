@@ -5,7 +5,7 @@ import { worldSoundGain as gunshotGain } from './worldSoundGain';
 export { worldSoundGain as gunshotGain } from './worldSoundGain';
 
 const MAX_VOICES = 12;
-export const GUNSHOT_VOLUME = .3;
+export const GUNSHOT_VOLUME = .4;
 
 type Voice = { sound: THREE.Audio; priority: number };
 /** Independent, bounded voices keep distant AI from cutting off your own pistol. */

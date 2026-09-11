@@ -1,3 +1,5 @@
+import {PresentationEvents} from '../shared/PresentationEvents';
+import {ActionJournal} from '../shared/shotOutcome';
 import {FoleyAudio} from '../audio/FoleyAudio';
 import {FoleyWorld} from '../audio/FoleyWorld';
 import * as THREE from 'three';
@@ -29,6 +31,8 @@ import { FeedbackAudio } from '../audio/FeedbackAudio';
 import { MatchScoreboard } from '../ui/MatchScoreboard';
 import { bindScoreboardHold } from './ScoreboardHold';
 import {TouchControls, touchControlsAvailable} from '../ui/TouchControls';
+import {CorpseRigPool} from '../prototype/CorpseRigPool';
+import {WorldPresentationClock} from '../shared/WorldPresentationClock';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
@@ -47,6 +51,8 @@ export class GameSession {
     private readonly foley:FoleyAudio;
     private foleyWorld!:FoleyWorld;
     private readonly stats: PerformanceStats | null;
+    private readonly remoteEvents=new PresentationEvents<ServerMessage>();
+    private readonly actions=new ActionJournal();
     private diagnosticChaos={receivedAt:0,serverTime:0,shots:0};
     private shotsAttempted=0;
     private shotsSent=0;
@@ -67,12 +73,16 @@ export class GameSession {
     private touch?: TouchControls;
     private roundWon = false;
     private releasePreparedModels?:()=>void;
+    private readonly corpsePool:CorpseRigPool;
+    private readonly worldPresentation=new WorldPresentationClock();
 
     constructor(renderer: THREE.WebGLRenderer, initialWorld?: WorldSpec, prepared: {
         title?: TitleScreen; transport?: NetworkManager; music?: Pick<SessionMusic, 'start' | 'unlock' | 'dispose'>;
         stage?: ReturnType<typeof createStage>; city?: CityGenerator | Neighborhood;
         releasePreparedModels?:()=>void;
+        corpsePool?:CorpseRigPool;
     } = {}) {
+        this.corpsePool=prepared.corpsePool??new CorpseRigPool();
         this.transport = prepared.transport ?? new NetworkManager();
         this.title = prepared.title ?? new TitleScreen();
         this.stage = prepared.stage ?? createStage(renderer);
@@ -90,7 +100,7 @@ export class GameSession {
         this.foley=new FoleyAudio(listener);
         this.foley.setEnabled(false);
         this.gun = new CheeseGun(scene, world, listener);
-        this.remotes = new RemotePlayers(scene, world);
+        this.remotes = new RemotePlayers(scene, world,()=>performance.now(),true,this.worldPresentation);
         this.worldSpec = initialWorld ? { ...initialWorld } : createWorldSpec(1);
         if(!initialWorld && new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
         this.city = prepared.city ?? (this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(scene,world,this.worldSpec) : new CityGenerator(scene, world, DEFAULT_CITY_OPTIONS, this.worldSpec));
@@ -176,13 +186,15 @@ export class GameSession {
         this.shotsAttempted++;
         const shot = this.gun.shoot(this.rat.entity, target);
         if (shot && this.transport.send({type:'shoot', ...shot})) {
-            this.shotsSent++;
+            this.shotsSent++;this.chaos?.fire(shot);
         }
     }
     private requestPointerLock(): void { if (!this.touch?.active) this.pointerLock.request(); }
 
     private welcome(message: Extract<ServerMessage, { type: 'welcome' }>): void {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
+        this.worldPresentation.clear();this.actions.clear();this.remoteEvents.clear();this.worldPresentation.observe(message.serverTime,performance.now());
+        this.remotes.useSharedClock(message.world.version===GRAYBOX_VERSION);
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
         this.bots?.dispose();this.bots=null;
@@ -208,7 +220,7 @@ export class GameSession {
         this.gun.setPlayer(this.stage.camera, this.rat.entity);
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
-        if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld);
+        if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation,this.corpsePool,this.worldPresentation);
         this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.hud.hideRespawn();
         this.hud.hideVictory();
@@ -225,7 +237,17 @@ export class GameSession {
         }
     }
 
-    private receive(message: ServerMessage): void {
+    private receive(message: ServerMessage, presented=false): void {
+        if(!presented&&this.gun.authoritative&&('at' in message)&&typeof message.at==='number'&&
+            ((message.type==='playerDamaged'&&message.id!==this.myId)||(message.type==='playerDied'&&message.victimId!==this.myId)||(message.type==='playerRespawn'&&message.id!==this.myId))){
+            if(message.type==='playerDamaged'&&message.attackerId===this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
+            if(message.type==='playerDied')this.hud.addKillFeed(message.cause==='evidence-tampering'?this.deathQuips.caseDeath(message.victimName):`${message.killerName} eliminated ${message.victimName}`);
+            this.worldPresentation.observe(message.at,performance.now());
+            // A pathological backlog is a presentation discontinuity, not an
+            // unbounded queue or a reason to discard authoritative health.
+            if(this.remoteEvents.size>=128)this.remoteEvents.drain(Infinity,event=>this.receive(event,true));
+            this.remoteEvents.push(message.at,message);return;
+        }
         this.scoreboard.receive(message);
         if(message.type==='chaos'){this.diagnosticChaos={receivedAt:Date.now(),serverTime:message.state.time,shots:message.state.shots.length};}
 
@@ -252,14 +274,22 @@ export class GameSession {
                 } else this.remotes.move(pose, message.at);
                 break;
             }
-            case 'playerShot': {
-                this.chaos?.launch(message);
+            case 'pickupStatus':this.actions.record('pickup',performance.now(),{...message.status});break;
+            case 'shotRejected':
+                this.actions.record('rejected',performance.now(),{...message});this.stats?.event('shotRejected',{...message});break;
+            case 'shotOutcomes':
+                for(const outcome of message.outcomes)if(this.actions.record('terminal',performance.now(),{...outcome},outcome.id))this.chaos?.outcome(outcome);break;
+            case 'playerShot':
+                this.actions.record('accepted',performance.now(),{shotId:message.shotId,at:message.launch?.at,balls:message.launch?.balls.map(b=>b.id)}); {
+                // Real birth payloads go only to the firing player, so an owner
+                // echo must never replay the local gun animation or audio.
+                if(message.shooterId===this.myId){this.chaos?.launch(message);break;}
                 const owner = this.remotes.get(message.shooterId);
                 if (owner) this.gun.replayShot(owner, message);
                 break;
             }
             case 'playerDamaged': {
-                if(message.attackerId===this.myId && message.id!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
+                if(!presented&&message.attackerId===this.myId && message.id!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 if (entity && !entity.dead) {
                     if (message.hp === 0) {
@@ -289,19 +319,22 @@ export class GameSession {
                     this.stats?.event('death',{respawnAt:message.respawnAt-this.serverOffset,incident:message.incident});
                     this.hud.showRespawn(message.respawnAt - this.serverOffset);
                 }
-                this.hud.addKillFeed(message.cause==='evidence-tampering'
+                if(!presented)this.hud.addKillFeed(message.cause==='evidence-tampering'
                     ? this.deathQuips.caseDeath(message.victimName)
                     : `${message.killerName} eliminated ${message.victimName}`);
                 break;
             }
             case 'playerRespawn':
                 if (message.id === this.myId) { this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.clearInput(); this.hud.hideRespawn(); }
-                else this.remotes.respawn(message.id, message);
+                else this.remotes.respawn(message.id, message, message.at);
                 break;
-            case 'playerLeft': this.remotes.remove(message.id); break;
+            case 'playerLeft':
+                this.remoteEvents.discard(event=>event.type==='playerDied'?event.victimId===message.id:
+                    (event.type==='playerDamaged'||event.type==='playerRespawn')&&event.id===message.id);
+                this.remotes.remove(message.id);break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
-            case 'gameReset': this.roundWon=false;this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+            case 'gameReset': this.remoteEvents.clear();this.actions.clear();this.worldPresentation.clear();this.chaos?.clearPresentation();this.roundWon=false;this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -332,7 +365,8 @@ export class GameSession {
         const { scene, camera, renderer, world, flashlight } = this.stage;
         const measure=!!this.stats,start=measure?performance.now():0;let botsMs=0;
         if (this.transport.state === 'playing') {
-            this.remotes.prepareFrame();
+            this.remoteEvents.drain(this.worldPresentation.sample(now),event=>this.receive(event,true));
+            this.remotes.prepareFrame(now);
             this.simulation.advance(dt, step => {
                 this.remotes.updateDeaths(step);
                 this.rat?.prepareMovement(step, this.input.keys, this.touch?.active ? this.touch.input.movement : undefined);
@@ -361,7 +395,7 @@ export class GameSession {
             if(this.rat&&!this.rat.entity.dead)this.foleyWorld.motion.update(this.rat.entity.mesh.position,dt,this.rat.grounded);
             else this.foleyWorld.motion.clear();
         }
-        this.chaos?.update(dt,camera);
+        this.chaos?.update(dt,camera,now);
         this.city.update(dt, camera, this.rat?.entity.body.position);
         const presentationEnd=measure?performance.now():0;
         renderer.render(scene, camera);
@@ -370,7 +404,10 @@ export class GameSession {
             performance.mark('city-first-play-frame');
         }
         this.chaos?.renderOutline(renderer,camera);
-        this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
+        // Reported lazily: this payload is only needed once per five-second
+        // publish, and the journal summary stays far below the client message
+        // budget so the server never classifies a report as invalid input.
+        this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},()=>({network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics(),actions:this.actions.summary(),presentation:this.worldPresentation.diagnostics(now)}));
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 
@@ -388,6 +425,7 @@ export class GameSession {
         this.hud.dispose();
         this.scoreboard.dispose();
         this.chaos?.dispose();
+        this.corpsePool.dispose();
         this.gun.dispose();
         this.rat?.dispose();
         this.rat = null;

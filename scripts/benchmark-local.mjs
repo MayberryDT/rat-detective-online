@@ -107,8 +107,12 @@ async function main() {
           const reports=pool.map(w=>receive(w,'report'));pool.forEach(w=>w.postMessage({type:'report'}));const samples=(await Promise.all(reports)).map(m=>m.report);
           const metrics={};for(const key of ['gaps','serverGaps','ages','rtts','moveAges','loop'])metrics[key]=summarize(samples.map(s=>s[key]));
           for(const key of ['bytes','messages','invalid','errors','disconnects','sentMoves','sentShots','shotEvents','deaths','respawns','skipped','shotSamples','oldShots','wireSamples','sampledWireBytes','sampledLegacyBytes','tamperingSnapshots','missingCaseSnapshots'])metrics[key]=samples.reduce((a,s)=>a+s[key],0);
-          for(const key of ['peakBalls','maxBuffered','maxSilence'])metrics[key]=Math.max(...samples.map(s=>s[key]));
+          for(const key of ['peakBalls','maxBuffered','maxSilence','maxInFlight','coalescedSnapshots'])metrics[key]=Math.max(...samples.map(s=>s[key]));
           metrics.incidentsSeen=[...new Set(samples.flatMap(s=>Object.keys(s.incidentsSeen)))];
+          // Attribute the aggregate payload by message type so the largest
+          // contributor is identifiable without another run.
+          metrics.wireBytesByType={};
+          for(const sample of samples)for(const [type,bytes] of Object.entries(sample.wireBytesByType??{}))metrics.wireBytesByType[type]=(metrics.wireBytesByType[type]??0)+bytes;
           metrics.worstGaps=samples.flatMap(s=>s.worstGaps).sort((a,b)=>b.clientGap-a.clientGap).slice(0,20);
           const durationMs=Date.now()-started;const server=diagnostics.slice(firstDiagnostic);
           const arrivalPassed=phaseHealthy(metrics);

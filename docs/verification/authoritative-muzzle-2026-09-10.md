@@ -30,3 +30,7 @@ The prior relay was stopped before the private deployment, then recreated with t
 Deployment receipt: `output/hosted-capacity-deployment-2026-09-11T05-01-46-303Z/deployment.json`. Verification and preview metadata: `output/authoritative-muzzle-2026-09-10/`. Entry asset `index-CwK6_1SQ.js`; deferred game asset `createGame-LsC3BGtP.js`. Production remains protocol 7, Worker `8cacdb60-2ee0-4f63-b8bb-9f02de321719`, at `https://ratdetective.online/`.
 
 Prior GBrain context: `brain:sessions/2026/09/rat-detective-launcher-projectile-cleanup-2026-09-10` records the incomplete first pass; `brain:sessions/2026/09/rat-detective-parked-vehicles-tailor-frontage-leather-case-2026-09-07` records why the old stationary muzzle rewind was rejected. This implementation retains only the actual birth until the first draw, then advances the same shot.
+
+## Subsequent audio/performance feedback
+
+Tyler reported soft audio and whole-game stutter after further testing. The [audio/performance follow-up](audio-performance-2026-09-10.md) narrows birth delivery to the firing player, restores ordinary observer packets/playback, reuses pending-shot lists and removes synchronous history writes during quiet diagnostics. It also restores the earlier stronger gun gain and eases world attenuation. That receipt supersedes the preview above and records what remains unproven about the stutter.

@@ -33,7 +33,7 @@ describe('nearby Dispatch readiness siren',()=>{
  it('smoothly fades the playing siren when moving away without rescheduling identical gains',()=>{
   const {audio,nodes,gains}=fixture();audio.update(true,0);audio.update(true,60);
   const volume=.38*worldSoundGain(60,1-48/73);
-  expect(volume).toBeLessThan(.035);
+  expect(volume).toBeGreaterThan(.05);expect(volume).toBeLessThan(.06);
   expect(gains[0].gain.setTargetAtTime).toHaveBeenCalledWith(volume,0,.04);
   for(let i=0;i<600;i++)audio.update(true,60);
   expect(nodes).toHaveLength(1);expect(gains[0].gain.setTargetAtTime).toHaveBeenCalledTimes(1);audio.dispose();

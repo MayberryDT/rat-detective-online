@@ -59,6 +59,19 @@ describe('network session transport', () => {
         network=makeNetwork();network.prepare();network.destroy();
         expect(sockets[2].readyState).toBe(FakeSocket.CLOSED);expect(vi.getTimerCount()).toBe(0);
     });
+    it('drops an outbound message that would exceed the client message budget',()=>{
+        // A fully-populated diagnostics report once exceeded MAX_MESSAGE_BYTES,
+        // so the server classified it as invalid input and kept replying with an
+        // error notice. Oversized client messages must never reach the socket.
+        network.prepare();network.connect('Rat',appearance);sockets[0].open();
+        const before=sockets[0].sent.length;
+        expect(network.send({type:'diagnostics',report:{blob:'x'.repeat(9_000)}})).toBe(false);
+        expect(sockets[0].sent).toHaveLength(before);
+        const diagnostics=network.getDiagnostics();
+        expect(diagnostics.oversizeCount).toBe(1);expect(diagnostics.sendFailures).toBe(1);
+        expect(network.send({type:'ping',sentAt:Date.now()})).toBe(true);
+        expect(sockets[0].sent).toHaveLength(before+1);
+    });
 
     it('advertises delta snapshots by default and preserves explicit v1 fallback',()=>{
         const urls:string[]=[];

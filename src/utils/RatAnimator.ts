@@ -5,6 +5,8 @@ const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
 
 export const RAT_CARRY_SHOULDER = new THREE.Vector3(.43, 1.23, .02);
 
+const tailProbe = new THREE.Vector3();
+
 /** One shared shoulder pivot keeps the sleeve, gripping paw and case together. */
 export function getRatCarryAnchor(root: THREE.Group): THREE.Object3D {
     let anchor = root.getObjectByName('rat-carry-anchor');
@@ -48,6 +50,8 @@ export class RatAnimator {
     private deathAnimation = false;
     private readonly tailCenter = new THREE.Vector3();
     private readonly inverseTail = new THREE.Matrix4();
+    private readonly waves = new Map<number, { x: number; y: number; serial: number }>();
+    private waveSerial = 0;
     private turn = 0;
     private aimHold = 0;
     private aim = 0;
@@ -89,8 +93,19 @@ export class RatAnimator {
             const tail = model.getObjectByName('rat-tail') as THREE.Mesh<THREE.TubeGeometry>;
             const positions = tail.geometry.getAttribute('position') as THREE.BufferAttribute;
             positions.setUsage(THREE.DynamicDrawUsage);
+            // The tube path and its UV arc mapping never change, so the death
+            // contact projection is evaluated once per vertex instead of on
+            // every display frame.
+            const uv = tail.geometry.getAttribute('uv');
+            // Float64 keeps the cached samples bit-identical to the per-frame
+            // curve evaluation this replaces.
+            const curve = new Float64Array(positions.count * 3);
+            for (let i = 0; i < positions.count; i++) {
+                tail.geometry.parameters.path.getPointAt(uv.getX(i), tailProbe);
+                curve[i * 3] = tailProbe.x; curve[i * 3 + 1] = tailProbe.y; curve[i * 3 + 2] = tailProbe.z;
+            }
             return { tail, rest: positions.array.slice(), tip: tail.children[0],
-                tipRest: tail.children[0].position.clone() };
+                tipRest: tail.children[0].position.clone(), curve };
         });
         this.rigs = models.map(model => PARTS.map(name => {
             const part = model.getObjectByName(name)!;
@@ -335,8 +350,9 @@ export class RatAnimator {
     private deformTails(reset = false): void {
         // The longitudinal wave is identical around each ring and across rigs.
         // Death contact projection remains per rig in world space below.
-        const waves = new Map<number, {x:number;y:number}>();
-        for (const { tail, rest, tip, tipRest } of this.tails) {
+        const waves = this.waves;
+        const serial = ++this.waveSerial;
+        for (const { tail, rest, tip, tipRest, curve } of this.tails) {
             const positions = tail.geometry.getAttribute('position') as THREE.BufferAttribute;
             const uv = tail.geometry.getAttribute('uv');
             let tipX = 0, tipY = 0, tipZ = 0;
@@ -351,17 +367,20 @@ export class RatAnimator {
                 const weight = u * u;
                 let wave = waves.get(u);
                 if (!wave) {
-                    let x = reset ? 0 : weight * (
+                    wave = {x:0,y:0,serial:0}; waves.set(u, wave);
+                }
+                if (wave.serial !== serial) {
+                    wave.serial = serial;
+                    wave.x = reset ? 0 : weight * (
                         Math.sin(this.time * 1.5 - u * 2.4) * 0.07 * (this.deathAnimation ? this.tailMotion : 1) +
                         Math.sin(this.stride - u * 2.8) * this.tailMotion * 0.38 +
                         this.tailTurn * 1.1);
                     // Ground contact stays steady through the middle. Only the last
                     // quarter lifts slightly as the tip flicks across the floor.
                     const tipWeight = Math.max(0, (u - 0.75) / 0.25);
-                    let y = reset ? 0 : tipWeight * tipWeight *
+                    wave.y = reset ? 0 : tipWeight * tipWeight *
                         (1 + Math.sin(this.stride - u * 2.8 - 0.8)) * this.tailMotion * 0.025;
-                    if (!this.deathAnimation && !reset) y += weight * Math.max(0,this.airPose) * .12;
-                    wave={x,y};waves.set(u,wave);
+                    if (!this.deathAnimation && !reset) wave.y += weight * Math.max(0,this.airPose) * .12;
                 }
                 let {x,y}=wave;
                 let z = 0;
@@ -369,7 +388,7 @@ export class RatAnimator {
                     x += weight * this.tailFall.x * 0.85;
                     y += weight * this.tailFall.y * 0.85;
                     z += weight * this.tailFall.z * 0.85;
-                    tail.geometry.parameters.path.getPointAt(u, this.tailCenter);
+                    this.tailCenter.set(curve[i * 3], curve[i * 3 + 1], curve[i * 3 + 2]);
                     this.tailCenter.x += x; this.tailCenter.y += y; this.tailCenter.z += z;
                     this.tailCenter.applyMatrix4(tail.matrixWorld);
                     const lift = Math.max(0, 0.068 - this.tailCenter.y);

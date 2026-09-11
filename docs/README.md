@@ -6,9 +6,14 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 
 | Document | Purpose |
 | --- | --- |
+| [Optimization qualification](verification/optimization-qualification-2026-09-11.md) | Qualified unpublished protocol-9 work: reconciled responsive shooting, playback and audio, reproducible before/after benchmarks, gates and remaining limits |
+| [Optimization continuation](optimization-handoff-2026-09-10.md) | Unpublished worktree, measured baselines, implementation status and remaining qualification |
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Responsive shooting](verification/responsive-shooting-2026-09-10.md) | Current private preview: immediate single-ID shots, matching incident volleys, authoritative reconciliation and bounded spatial sweeps |
+| [Shared physics playback](verification/physics-playback-2026-09-10.md) | Preceding private correction: bounded adaptive playback for balls/bodies/cases, continuous ricochets and delayed muzzle alignment; captured-timing regression evidence |
+| [Audio and performance follow-up](verification/audio-performance-2026-09-10.md) | Preceding private preview: accepted stronger gun/world audio, owner-only births, removal of per-frame lists and synchronous quiet-diagnostic writes; investigation limits |
 | [Authoritative muzzle delivery](verification/authoritative-muzzle-2026-09-10.md) | Private protocol-8 preview: actual server births start one continuous ball at the animated muzzle |
 | [Launcher and projectile follow-up](verification/launcher-projectile-cleanup-2026-09-10.md) | Private preview: launcher fade/volume, half ball lifetime, removal of guessed projectiles and narrower diagonal Bad Ammunition |
 | [Steady lighting production release](verification/steady-lighting-production-2026-09-10.md) | Accepted build, live version, source commit and exact-asset checks |
