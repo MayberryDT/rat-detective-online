@@ -84,6 +84,7 @@ export const INCIDENT_QUIPS:Record<IncidentId,string>={
     'big-cheese':'THE CHEDDAR BUDGET WAS APPROVED.',
     'ricochet-racket':'THE WITNESS STATEMENT HAS MULTIPLIED.',
     'popcorn-panic':'THE EVIDENCE IS GETTING SALTY.',
+    'planted-evidence':'SOMEBODY HAS BEEN VERY THOROUGH.',
 };
 /** Local flavor only. Every phrase appears before reuse, with no boundary repeat. */
 export class MunicipalQuips {

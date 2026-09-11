@@ -9,6 +9,8 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Pickups and Planted Evidence](verification/pickups-planted-evidence-2026-09-11.md) | September 11 pickups/Planted Evidence release: tuning, finite trap batches, classic toggle, muted testing and verification |
+| [Handoff — Pickups and Planted Evidence](handoff-pickups-planted-evidence-2026-09-11.md) | Continuation guide: tree state, file map, how to run the practice preview, verification status, gotchas and next steps |
 | [Responsive shooting](verification/responsive-shooting-2026-09-10.md) | Current private preview: immediate single-ID shots, matching incident volleys, authoritative reconciliation and bounded spatial sweeps |
 | [Shared physics playback](verification/physics-playback-2026-09-10.md) | Preceding private correction: bounded adaptive playback for balls/bodies/cases, continuous ricochets and delayed muzzle alignment; captured-timing regression evidence |
 | [Audio and performance follow-up](verification/audio-performance-2026-09-10.md) | Preceding private preview: accepted stronger gun/world audio, owner-only births, removal of per-frame lists and synchronous quiet-diagnostic writes; investigation limits |

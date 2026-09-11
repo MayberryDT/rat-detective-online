@@ -1,6 +1,7 @@
 import { DEFAULT_ROOM_NAME } from '../shared/networkProtocol';
 import { log } from './logging';
 import { isAssignmentId } from '../shared/assignments';
+import { isEvidenceMode, isIncidentId } from '../shared/incidentCatalog';
 import { allowsLocalDiagnostics } from './clientDiagnostics';
 
 export { GameRoom } from './GameRoom';
@@ -74,6 +75,18 @@ export default {
           if(!roomName.startsWith('graybox-practice-')||!allowsLocalDiagnostics(request)||
               selection!=='auto'&&!isAssignmentId(selection))return json({error:'Assignment selection requires a local private practice room'},{status:400});
           if(!await room.configureAssignment(selection==='auto'?null:selection as import('../shared/assignments').AssignmentId))return json({error:'Choose a new private room to select another assignment'},{status:409});
+        }
+        const incidents=url.searchParams.get('incidents');
+        if(incidents!==null){
+          if(!roomName.startsWith('graybox-practice-')||!allowsLocalDiagnostics(request)||!isEvidenceMode(incidents))
+            return json({error:'Incident mode requires a local private practice room'},{status:400});
+          if(!await room.configureIncidents(incidents))return json({error:'Choose a new private room to change incident mode'},{status:409});
+        }
+        const incident=url.searchParams.get('incident');
+        if(incident!==null){
+          if(!roomName.startsWith('graybox-practice-')||!allowsLocalDiagnostics(request)||
+              incident!=='auto'&&!isIncidentId(incident))return json({error:'Incident pin requires a local private practice room'},{status:400});
+          if(!await room.configureIncident(incident==='auto'?null:incident))return json({error:'Choose a new private room to pin another incident'},{status:409});
         }
         return room.fetch(request);
       }

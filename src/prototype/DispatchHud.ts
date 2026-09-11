@@ -63,6 +63,9 @@ export class DispatchHud {
     private counter:HTMLElement;
     private destinationLabel:HTMLElement;
     private rankingSignature='';
+    /** Room roster; the retired evidence incident is absent from the strip. */
+    private roster:readonly {id:string;title:string}[]=INCIDENTS;
+    setRoster(incidents:readonly {id:string;title:string}[]|undefined):void {if(incidents?.length)this.roster=incidents;}
     setScores(scores:readonly ScoreEntry[], myId:string):void {this.scores=scores;this.myId=myId;}
     constructor(private sound:(frequency:number)=>void,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
         this.root.className='dispatch-hud';
@@ -97,12 +100,18 @@ export class DispatchHud {
         const holder=ownerName||'A detective';
         let caseTitle=state.case.owner?`${ownerIsLocal?'YOU':holder} · ON THE CASE`:'LOOSE CASE';
         let caseDetail=state.case.returningUntil?'CASE RETURNING':'';
-        if(info.id==='evidence-tampering'&&d.phase==='active'){
+        const counterfeits=(state.extraCases??[]).filter(c=>c.fake).length;
+        if(info.id==='planted-evidence'&&d.phase==='active'){
+            // The real case keeps its normal identity; only the fakes change the ledger.
+            caseTitle='FAKE CASES · SHOOT, DO NOT COLLECT';
+            caseDetail=counterfeits?`${counterfeits} COUNTERFEITS PLANTED`:'';
+        }else if(info.id==='evidence-tampering'&&d.phase==='active'){
             caseTitle=`${(state.extraCases?.length??0)+1} CASES ARE MISSILES`;
             caseDetail='PICKUP SUSPENDED';
         }else if(state.extraCases?.length){
-            if(!ownerIsLocal)caseTitle=`${state.extraCases.length+1} HOT CASES IN PLAY`;
-            caseDetail=`${state.extraCases.length+1} CASES IN PLAY`;
+            const missiles=state.extraCases.filter(c=>!c.fake).length;
+            if(missiles&&!ownerIsLocal)caseTitle=`${missiles+1} HOT CASES IN PLAY`;
+            caseDetail=missiles?`${missiles+1} CASES IN PLAY`:'';
         }
         setText(this.caseLine,caseTitle);setText(this.caseDetail,caseDetail);
         this.caseDetail.hidden=!this.caseDetail.textContent;
@@ -126,13 +135,14 @@ export class DispatchHud {
         this.announcement.hidden=now>=this.announceUntil;
         if(d.serial!==this.serial){
             this.serial=d.serial;this.tick=-1;
-            const winner=Math.max(0,INCIDENTS.findIndex(i=>i.id===info.id));
-            this.finalIndex=INCIDENTS.length*8+winner;
+            const roster=this.roster;
+            const winner=Math.max(0,roster.findIndex(i=>i.id===info.id));
+            this.finalIndex=roster.length*8+winner;
             this.strip.replaceChildren();
             for(let i=0;i<=this.finalIndex+1;i++){
                 const row=document.createElement('div');row.className='incident-card';
-                const number=document.createElement('small');number.textContent=`ORDER ${String(i%INCIDENTS.length+1).padStart(2,'0')}`;
-                const label=document.createElement('strong');label.textContent=INCIDENTS[i%INCIDENTS.length].title;
+                const number=document.createElement('small');number.textContent=`ORDER ${String(i%roster.length+1).padStart(2,'0')}`;
+                const label=document.createElement('strong');label.textContent=roster[i%roster.length].title;
                 row.appendChild(number);row.appendChild(label);this.strip.appendChild(row);
             }
         }

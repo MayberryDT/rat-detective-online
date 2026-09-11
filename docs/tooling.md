@@ -28,6 +28,12 @@ Local practice with eleven browser bots is explicitly gated to localhost and a U
 
 ## Checks
 
+Agent browser playtests must stay muted (Tyler, September 11). Append `&mute=1`
+to localhost practice URLs before opening them. This mutes title music and keeps
+the shared gameplay AudioContext suspended even after input gestures. It applies
+only on loopback hosts; the accepted public audio mix is unchanged. Reload without
+the flag only for an explicitly requested audible test.
+
 ```sh
 npm run typecheck
 npm test

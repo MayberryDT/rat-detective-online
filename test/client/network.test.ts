@@ -1,7 +1,7 @@
 import { ChaosEncoder } from '../../src/shared/chaosWire';
 import type { ChaosState } from '../../src/shared/chaosState';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NetworkManager, type TransportOptions } from '../../src/network/NetworkManager';
+import { NetworkManager, resolveWebSocketUrl, type TransportOptions } from '../../src/network/NetworkManager';
 import { PROTOCOL_VERSION } from '../../src/shared/networkProtocol';
 
 class FakeSocket extends EventTarget {
@@ -36,6 +36,21 @@ describe('network session transport', () => {
         network = makeNetwork();
     });
     afterEach(() => { network.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+    it('forwards practice incident controls from the browser URL without overriding explicit transport settings', () => {
+        vi.stubGlobal('window', { location: {
+            href: 'http://localhost:5190/?room=graybox-practice-review&incidents=classic&incident=evidence-tampering',
+            search: '?room=graybox-practice-review&incidents=classic&incident=evidence-tampering',
+        } });
+        const url = new URL(resolveWebSocketUrl());
+        expect(url.protocol).toBe('ws:');
+        expect(url.searchParams.get('room')).toBe('graybox-practice-review');
+        expect(url.searchParams.get('incidents')).toBe('classic');
+        expect(url.searchParams.get('incident')).toBe('evidence-tampering');
+        const explicit = new URL(resolveWebSocketUrl('ws://localhost/ws?incidents=planted&incident=auto'));
+        expect(explicit.searchParams.get('incidents')).toBe('planted');
+        expect(explicit.searchParams.get('incident')).toBe('auto');
+    });
 
     it('prepares one silent title connection and joins over it only after entry',()=>{
         network.prepare();network.prepare();expect(sockets).toHaveLength(1);

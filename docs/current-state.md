@@ -2,6 +2,20 @@
 
 Verified from source and production on **2026-09-10**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
+## Pickups and Planted Evidence (release candidate, 2026-09-11)
+
+Three timed pickups and a replacement incident are verified for the authorized release. **10 counterfeit briefcases** plus the genuine case, seeded once per incident; consumed traps do not return on the next tick or room restoration. See [implementation, tuning and checks](verification/pickups-planted-evidence-2026-09-11.md). Human pickup-feel acceptance remains unverified.
+
+- **Ironclad Alibi** (12 s) reflects cheese balls off the rat. It is a reflective surface, not a shield: no durability, no weak spots, and the carried Hot Case stays independently shootable and dislodgeable. Red-hot Crossfire balls reflect rather than landing their one-hit kill.
+- **Hot Pursuit** (1.45×, 10 s) is a movement burst only, including while carrying. No trail, no extra attack, no camera change. Human movement reads the authoritative buff snapshot; the shared bot brain applies the same multiplier. Ordinary steering, aiming and firing are untouched.
+- **Quick Fix** heals a living rat to full normal HP immediately. It leaves the site available at full health, and never overheals, regenerates, resurrects or adds immunity.
+- Six pickup sites (two per kind) snap to verified-clear street pavement; a claimed site returns after 20 s. Claims are atomic — a contested site goes to exactly one rat. Effects refresh rather than stack, clear on death and match reset, and never persist across a room restart.
+- **Planted Evidence** replaces the missile-case incident by default. Counterfeits resemble the real case but carry a depth-tested occluded outline (never through walls) and no HOT CASE label. Shooting one detonates a finite, attributed cheese burst; walking into one is a lethal neutral trap. The genuine case, its holder and all three assignments stay live — the old objective suspension, forced drop and pickup lockout are gone.
+- The contact trap kills through Ironclad Alibi (the coat reflects balls, not everything), while emitted balls still reflect off protected rats. Bots exclude counterfeits from their objectives and steer around visible traps.
+- **Classic toggle:** `?incidents=classic` on a private `graybox-practice-*` room restores the retired Evidence Tampering behavior, including objective suspension. The default roster ships Planted Evidence.
+- Burst tuning: nine balls at speed 96, spread .7 and base upward component .2 (formerly 1), keeping nearby rats in the fan. Ordinary projectile tuning is unchanged.
+- Validation: **881 tests** (726 client, 130 Worker, 25 script), typecheck, build and zero-vulnerability audit. Bounded browser review checked both incident modes; a separate two-client local Worker probe exercised real pickup claims/healing, buff deadlines and trap outcomes. Local reconnects were observed; no human feel, multi-human match, real-phone or FPS acceptance is claimed. Agent browser tests must use `&mute=1` on localhost; the public mix is unchanged.
+
 ## Accepted launcher, projectile and shooting follow-up
 
 [Play the full-game preview](http://127.0.0.1:5190/?room=graybox-benchmark-ai-launcher-projectiles-v28&lighting=pools&revision=responsive-shooting-v32). **16 total rats**, with bots yielding to humans. Expires **September 11 at 3:27 AM Pacific**. Private Worker `6fe9fa40-3f32-4329-914f-1b3aa79a4a27`, protocol **8**. This link runs without diagnostics, matching normal production playback. See [responsive shooting and checks](verification/responsive-shooting-2026-09-10.md).

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { StaticCityBroadphase } from '../shared/StaticCityBroadphase';
 import {readLightingMode,type LightingMode} from './lightingMode';
+import { previewMuted } from '../audio/previewMuted';
 
 export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
     appRenderer.setSize(window.innerWidth, window.innerHeight);
@@ -31,6 +32,7 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     camera.lookAt(0, 9, 0);
 
     const listener = new THREE.AudioListener();
+    if (previewMuted()) void listener.context.suspend();
     camera.add(listener);
     // ─── LIGHTING ─────────────────────────────────────────────────────
     const ambient = new THREE.AmbientLight(0x664488, lighting==='classic'?.38:.2);

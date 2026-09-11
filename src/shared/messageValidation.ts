@@ -3,7 +3,7 @@ import {BALL_SPEED} from './ballTuning';
 import {isWorldFoleyCue} from './foleyEvents';
 import { sanitizeDiagnosticReport } from './diagnosticReport';
 import { parseAssignment } from './assignments';
-import { INCIDENTS, incidentInfo } from './incidentCatalog';
+import { INCIDENTS, incidentInfo, type IncidentId } from './incidentCatalog';
 import {
   MAX_HP,
   MAX_SCORE_ENTRIES,
@@ -22,7 +22,8 @@ import {
   type Vec3Data,
   type WorldSpec,
 } from './networkProtocol';
-import { CHAOS_TUNING, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, type ChaosState } from './chaosState';
+import { CHAOS_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, type ChaosState } from './chaosState';
+import { PICKUP_ANCHORS, isPickupKind } from './pickups';
 import { isSupportedWorldVersion } from './worldSpec';
 
 const HAT_TYPES = new Set<HatTypeName>(['fedora', 'trilby', 'porkpie']);
@@ -360,14 +361,30 @@ function parseChaos(value:unknown):ChaosState|null{
   const c=value.case,d=value.dispatch;
   const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
     (c.previousOwner===null||nonEmptyString(c.previousOwner,64))&&(c.missileOwner===undefined||nonEmptyString(c.missileOwner,64))&&
-    finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null;
+    finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null&&(c.fake===undefined||typeof c.fake==='boolean');
   if(!validCase(c))return null;
   if(value.extraCases!==undefined){
-    if(!Array.isArray(value.extraCases)||value.extraCases.length>EXTRA_CASE_IDS.length||
-      !value.extraCases.every(c=>isRecord(c)&&EXTRA_CASE_IDS.some(id=>id===c.id)&&validCase(c)))return null;
+    const known=Math.max(EXTRA_CASE_IDS.length,COUNTERFEIT_IDS.length);
+    if(!Array.isArray(value.extraCases)||value.extraCases.length>known||
+      !value.extraCases.every(c=>isRecord(c)&&(EXTRA_CASE_IDS.some(id=>id===c.id)||COUNTERFEIT_IDS.some(id=>id===c.id))&&validCase(c)))return null;
     if(new Set(value.extraCases.map(c=>c.id)).size!==value.extraCases.length)return null;
     const owners=[c,...value.extraCases].map(c=>c.owner).filter(owner=>owner!==null);
     if(new Set(owners).size!==owners.length)return null;
+  }
+  if(value.pickups!==undefined){
+    if(!Array.isArray(value.pickups)||value.pickups.length>PICKUP_ANCHORS.length||
+      !value.pickups.every(p=>isRecord(p)&&PICKUP_ANCHORS.some(a=>a.id===p.id)&&isPickupKind(p.kind)&&
+        finiteNumber(p.x)!==null&&finiteNumber(p.y)!==null&&finiteNumber(p.z)!==null))return null;
+    if(new Set(value.pickups.map(p=>p.id)).size!==value.pickups.length)return null;
+  }
+  if(value.buffs!==undefined){
+    if(!isRecord(value.buffs)||Object.keys(value.buffs).length>100)return null;
+    for(const entry of Object.values(value.buffs)){
+      if(!isRecord(entry))return null;
+      if(entry.ironcladUntil!==undefined&&finiteNumber(entry.ironcladUntil)===null)return null;
+      if(entry.hustleUntil!==undefined&&finiteNumber(entry.hustleUntil)===null)return null;
+      if(Object.keys(entry).some(key=>key!=='ironcladUntil'&&key!=='hustleUntil'))return null;
+    }
   }
   if(!['ready','rolling','active','cooldown'].includes(String(d.phase))||finiteNumber(d.started)===null||finiteNumber(d.until)===null||integer(d.serial)===null)return null;
   if(d.incident!==undefined&&d.incident!=='after-hours-collection'&&d.incident!=='kickback'&&d.incident!=='return-to-sender'&&d.incident!=='cheesequake'&&!INCIDENTS.some(incident=>incident.id===d.incident))return null;
@@ -412,7 +429,15 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       if (player.id !== id || !players[id]) return null;
       const matchRoom = parsed.matchRoom === undefined ? undefined : nonEmptyString(parsed.matchRoom, 160);
       if (matchRoom === null || (matchRoom !== undefined && !/^[a-z0-9-]+$/.test(matchRoom))) return null;
-      return { type: 'welcome', id, player, players, round, world, protocolVersion, serverTime, ...(matchRoom ? {matchRoom} : {}) };
+      let incidents: IncidentId[] | undefined;
+      if (parsed.incidents !== undefined) {
+        if (!Array.isArray(parsed.incidents) || parsed.incidents.length < 1 || parsed.incidents.length > INCIDENTS.length ||
+            !parsed.incidents.every(id => INCIDENTS.some(incident => incident.id === id)) ||
+            new Set(parsed.incidents).size !== parsed.incidents.length) return null;
+        incidents = parsed.incidents as IncidentId[];
+      }
+      return { type: 'welcome', id, player, players, round, world, protocolVersion, serverTime,
+        ...(matchRoom ? {matchRoom} : {}), ...(incidents ? {incidents} : {}) };
     }
     case 'currentPlayers': {
       const players = parsePlayersRecord(parsed.players);
@@ -481,6 +506,12 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       if (!id || hp === null || (!environmental&&!attackerId) ||
           (parsed.cause!==undefined&&!environmental)) return null;
       return { type: 'playerDamaged', id, hp, attackerId, ...(environmental?{cause:'evidence-tampering' as const}:{}) };
+    }
+    case 'playerHealed': {
+      const id = nonEmptyString(parsed.id, 64);
+      const hp = boundedInteger(parsed.hp, 1, MAX_HP);
+      if (!id || hp === null || (parsed.cause !== undefined && parsed.cause !== 'pickup')) return null;
+      return { type: 'playerHealed', id, hp, ...(parsed.cause === 'pickup' ? {cause:'pickup' as const} : {}) };
     }
     case 'playerDied': {
       const victimId = nonEmptyString(parsed.victimId, 64);

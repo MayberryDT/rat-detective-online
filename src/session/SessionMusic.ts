@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { previewMuted } from '../audio/previewMuted';
 
 export class SessionMusic {
     private readonly sound: THREE.Audio;
@@ -14,7 +15,7 @@ export class SessionMusic {
     }
     async unlock(): Promise<void> {
         try {
-            if (this.listener.context.state === 'suspended') await this.listener.context.resume();
+            if (!previewMuted() && this.listener.context.state === 'suspended') await this.listener.context.resume();
             await this.play();
         } catch { /* A later user gesture can retry audio permission. */ }
     }

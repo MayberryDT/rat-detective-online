@@ -10,9 +10,21 @@ export const INCIDENTS = [
     {id:'big-cheese',title:'Big Cheese',description:'Rebounds turn ordinary shots into enormous cheese balls.'},
     {id:'ricochet-racket',title:'Ricochet Racket',description:'The first wall bounce splits a shot three ways.'},
     {id:'popcorn-panic',title:'Popcorn Panic',description:'Your shots burst into a shower of bouncing cheese.'},
+    // Appended after the established roster so legacy index mappings never shift.
+    {id:'planted-evidence',title:'Planted Evidence',description:'Fake cases explode. The real case still counts.'},
 ] as const;
 export type IncidentId = typeof INCIDENTS[number]['id'];
+export const isIncidentId = (value: unknown): value is IncidentId => INCIDENTS.some(incident => incident.id === value);
 export type LegacyIncidentId = 'after-hours-collection'|'kickback'|'return-to-sender'|'cheesequake';
+/** Which evidence incident the room runs. The retired missile behavior stays
+ * available behind the classic mode toggle rather than being deleted outright. */
+export type EvidenceMode = 'planted' | 'classic';
+export const isEvidenceMode = (value: unknown): value is EvidenceMode => value === 'planted' || value === 'classic';
+/** Dispatch choices for a room, excluding whichever evidence incident is retired. */
+export function incidentRoster(mode: EvidenceMode = 'planted'): typeof INCIDENTS[number][] {
+    const retired: IncidentId = mode === 'classic' ? 'planted-evidence' : 'evidence-tampering';
+    return INCIDENTS.filter(incident => incident.id !== retired);
+}
 export function incidentInfo(id?:IncidentId|LegacyIncidentId){
     if(id==='kickback')return INCIDENTS[5];
     if(id==='after-hours-collection')return INCIDENTS[4];

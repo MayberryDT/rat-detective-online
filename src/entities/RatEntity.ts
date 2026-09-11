@@ -362,6 +362,14 @@ export class RatEntity {
         playEntitySound('ratDeath',.6, this.isPlayer ? undefined : this.body.position);
     }
 
+    /** Quick Fix: restore authoritative health without any death or respawn path. */
+    public heal(hp: number): void {
+        if (this.dead || hp <= this.hp) return;
+        this.hp = hp;
+        this.billboard.setHealth(this.hp);
+        this.flashColor(0x8fffb0);
+    }
+
     public takeDamage(amount: number, impactVel: THREE.Vector3) {
         if (this.dead) return;
 

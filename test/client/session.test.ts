@@ -48,6 +48,7 @@ const harness = vi.hoisted(() => {
         onHitEntity: ((victim: unknown, damage: number) => void) | null = null;
         setPlayer = vi.fn();
         setIncident = vi.fn();
+        setProtectedRats = vi.fn();
         shoot = vi.fn(() => ({ shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 } }));
         replayShot = vi.fn();
         clearProjectiles = vi.fn();
@@ -93,9 +94,11 @@ const harness = vi.hoisted(() => {
             applySnapshot: ReturnType<typeof vi.fn>;
             respawn: ReturnType<typeof vi.fn>;
             takeDamage: ReturnType<typeof vi.fn>;
+            heal: ReturnType<typeof vi.fn>;
             useSharedCorpse: ReturnType<typeof vi.fn>;
         };
         onMouseMove = vi.fn();
+        setSpeedScale = vi.fn();
         update = vi.fn();
         prepareMovement = vi.fn();
         syncAfterPhysics = vi.fn();
@@ -121,6 +124,7 @@ const harness = vi.hoisted(() => {
                 applySnapshot: vi.fn(),
                 respawn: vi.fn(),
                 takeDamage: vi.fn(),
+                heal: vi.fn(),
                 useSharedCorpse: vi.fn(),
             };
             harness.rats.push(this);
@@ -181,7 +185,7 @@ vi.mock('../../src/prototype/Neighborhood', () => ({ Neighborhood: class extends
     constructor(scene: unknown, world: unknown, spec: {seed:number;version:number}) { super(scene,world,undefined,spec); }
 } }));
 vi.mock('../../src/prototype/ChaosView', () => ({ ChaosView: class {
-    setScores() {} dispose() {} apply() {} launch() {} fire() {} resetProjectiles() {} update() {} renderOutline() {}
+    setScores() {} setIncidentRoster() {} toast() {} dispose() {} apply() {} launch() {} fire() {} resetProjectiles() {} update() {} renderOutline() {}
 } }));
 vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));
 vi.mock('../../src/session/InputState', () => ({

@@ -1,8 +1,9 @@
 import type { ChaosState } from './chaosState';
 import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
+import type { IncidentId } from './incidentCatalog';
 
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
@@ -128,6 +129,8 @@ export type ServerMessage =
       world: WorldSpec;
       protocolVersion: number;
       serverTime: number;
+      /** Dispatch roster for this room; the retired evidence incident is absent. */
+      incidents?: IncidentId[];
     }
   | { type: 'currentPlayers'; players: Record<string, PlayerData> }
   | { type: 'playerJoined'; player: PlayerData }
@@ -152,6 +155,7 @@ export type ServerMessage =
   | { type: 'playerShot'; shooterId: string; shotId: string; origin: Vec3Data; direction: Vec3Data; movement?:MovementSample;
       launch?: {at:number; balls:Array<{id:string; velocity:Vec3Data}>} }
   | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: 'evidence-tampering' }
+  | { type: 'playerHealed'; id: string; hp: number; cause?: 'pickup' }
   | {
       type: 'playerDied';
       victimId: string;

@@ -5,6 +5,7 @@ import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
 import { DISPATCH_STATIONS, type ChaosState } from '../../src/shared/chaosState';
 import { createAssignment, destinationPoint, CHAIN_ROUTE } from '../../src/shared/assignments';
+import { PICKUP_TUNING } from '../../src/shared/pickups';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 function state(owner:string|null=null):ChaosState {
@@ -23,6 +24,18 @@ function aimedNear(shot:Vec3Data|undefined,self:Vec3Data,target:Vec3Data){
     expect(cosine).toBeLessThan(.9999);
 }
 describe('case-first normal match bots',()=>{
+    it('applies Hot Pursuit to bot movement only until the authoritative expiry',()=>{
+        const {brain,self}=fixture(),s=state();
+        const ordinary=brain.step(1000,self,[],s,()=>true,false,true);
+        s.buffs={[self.id]:{hustleUntil:2000}};
+        const boosted=brain.step(1010,self,[],s,()=>true,false,true);
+        expect(Math.hypot(boosted.x,boosted.z)).toBeCloseTo(Math.hypot(ordinary.x,ordinary.z)*PICKUP_TUNING.hustleMultiplier);
+        s.time=2000;
+        const expired=brain.step(1020,self,[],s,()=>true,false,true);
+        expect(Math.hypot(expired.x,expired.z)).toBeCloseTo(Math.hypot(ordinary.x,ordinary.z));
+        expect(boosted.jump).toBe(ordinary.jump);
+        expect(boosted.shoot).toBeUndefined();
+    });
     it('carries through the active verification approach while retaining combat',()=>{
         const {brain,self,near,navigation}=fixture(),s=state('me');
         s.assignment=createAssignment('chain-of-custody',0);s.assignment.destinations=[...CHAIN_ROUTE];s.assignment.phase='active';

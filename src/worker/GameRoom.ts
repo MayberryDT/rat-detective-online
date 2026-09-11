@@ -9,6 +9,7 @@ import { serializeServerMessage } from './serializeServerMessage';
 import type { ChaosState } from '../shared/chaosState';
 import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import { createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation } from '../shared/assignments';
+import { incidentRoster, isEvidenceMode, isIncidentId, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
 import { DurableObject } from 'cloudflare:workers';
 import {
   MAX_CONNECTIONS,
@@ -88,6 +89,8 @@ const ASSIGNMENT_ROTATION_KEY = 'assignment-rotation-v1';
 const PERSISTENT_BOTS_KEY = 'persistent-bots-v1';
 const BOT_ROSTER_KEY = 'persistent-bot-roster-v1';
 const MATCH_ROOM_KEY = 'match-room-v1';
+const EVIDENCE_MODE_KEY = 'evidence-mode-v1';
+const FORCED_INCIDENT_KEY = 'incident-forced-v1';
 export const BOT_REFILL_MS = 10_000;
 const JOIN_LEASE_MS = 10_000;
 export const BOT_HEARTBEAT_MS = 15_000;
@@ -132,6 +135,10 @@ export class GameRoom extends DurableObject<Env> {
   private players = new Map<string, PlayerData>();
   private round: RoundState = playingRound();
   private assignmentRotation: AssignmentRotation = { remaining: [] };
+  /** Shipped default is Planted Evidence; the missile incident is an opt-in mode. */
+  private evidenceMode: EvidenceMode = 'planted';
+  /** Practice-only: force every Dispatch roll to one incident. Null = normal shuffle. */
+  private forcedIncident: IncidentId | null = null;
   private world: WorldSpec = createWorldSpec();
   private lastCheckpointAt = new Map<string, number>();
   private lastActiveAt = new Map<string, number>();
@@ -215,6 +222,35 @@ export class GameRoom extends DurableObject<Env> {
     this.chaos?.reset();
     this.round = playingRound(this.now());
     if(this.chaos)this.beginAssignment();
+    this.checkpointGame();
+    return true;
+  }
+
+  /** Private-room opt-in for the retired missile incident. The default ships as
+   * Planted Evidence; a live room must be empty so every client agrees on the mode. */
+  configureIncidents(mode: EvidenceMode): boolean {
+    if (!isEvidenceMode(mode)) return false;
+    if (this.evidenceMode === mode) return true;
+    if (this.players.size || this.ctx.getWebSockets().length) return false;
+    this.evidenceMode = mode;
+    this.writeRoomState(EVIDENCE_MODE_KEY, mode);
+    this.chaos?.reset();
+    this.round = playingRound(this.now());
+    this.checkpointGame();
+    return true;
+  }
+
+  /** Practice-only pin so a reviewer can evaluate one incident without waiting
+   * for the shuffle. Never available on a public room (see index.ts gating). */
+  configureIncident(id: IncidentId | null): boolean {
+    if (id !== null && !isIncidentId(id)) return false;
+    if (this.forcedIncident === id) return true;
+    if (this.players.size || this.ctx.getWebSockets().length) return false;
+    this.forcedIncident = id;
+    if (id) this.writeRoomState(FORCED_INCIDENT_KEY, id);
+    else this.ctx.storage.sql.exec('DELETE FROM room_state WHERE key = ?', FORCED_INCIDENT_KEY);
+    this.chaos?.reset();
+    this.round = playingRound(this.now());
     this.checkpointGame();
     return true;
   }
@@ -561,6 +597,10 @@ export class GameRoom extends DurableObject<Env> {
       }
     }catch{/* A missing legacy bag starts a fresh cycle; never replace a valid active assignment. */}
     this.matchRoom = this.readRoomState(MATCH_ROOM_KEY) ?? null;
+    const evidenceMode = this.readRoomState(EVIDENCE_MODE_KEY);
+    if (isEvidenceMode(evidenceMode)) this.evidenceMode = evidenceMode;
+    const forcedIncident = this.readRoomState(FORCED_INCIDENT_KEY);
+    if (isIncidentId(forcedIncident)) this.forcedIncident = forcedIncident;
     this.matchPool = this.readRoomState('match-pool-v1') ?? this.matchRoom;
     this.refillAt = Number(this.readRoomState('bot-refill-at')) || 0;
     this.persistentBots = this.readRoomState(PERSISTENT_BOTS_KEY) === 'true';
@@ -692,6 +732,7 @@ export class GameRoom extends DurableObject<Env> {
       world: this.world,
       protocolVersion: PROTOCOL_VERSION,
       serverTime: this.lastSnapshotAt,
+      incidents: incidentRoster(this.evidenceMode).map(incident => incident.id),
     };
   }
 
@@ -775,6 +816,19 @@ export class GameRoom extends DurableObject<Env> {
       }
     }
     this.broadcast(event,playerId);
+  }
+
+  /** Pickup claims are resolved authoritatively in the simulation; the room owns
+   * the durable health write and the wire event. Cosmetic claim feedback is local. */
+  private applyPickupEvents(): void {
+    if (!this.chaos) return;
+    for (const event of this.chaos.drainPickupEvents()) {
+      if (event.kind !== 'healed') continue;
+      const player = this.players.get(event.playerId);
+      if (!player) continue;
+      this.persistPlayer(player, true);
+      this.broadcast({ type: 'playerHealed', id: player.id, hp: player.hp, cause: 'pickup' });
+    }
   }
 
   private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming']): Promise<void> {
@@ -958,6 +1012,9 @@ export class GameRoom extends DurableObject<Env> {
         void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming)
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
       },saved,this.world);
+      this.chaos.evidenceMode=this.evidenceMode;
+      this.chaos.enforceIncidentRoster();
+      this.chaos.forcedIncident=this.forcedIncident;
       // Contact history is sparse: clearing N*(N-1)/2 entries for the city's
       // static scenery each substep dwarfs the few real contacts. Cannon's
       // built-in sparse implementation preserves collision/event semantics.
@@ -993,6 +1050,7 @@ export class GameRoom extends DurableObject<Env> {
         const stepAt = now-this.chaosAccumulator*1000;
         this.serverBots?.step(1/60, stepAt, this.players, this.botState, this.round.phase==='playing');
         this.chaos.step(1/60,stepAt,this.round.phase==='playing');
+        this.applyPickupEvents();
         this.finishAssignment();
       }
       this.flushMovement('tick');

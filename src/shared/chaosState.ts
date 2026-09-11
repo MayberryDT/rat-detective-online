@@ -2,6 +2,7 @@ import type { PlayerData, QuatData, RatAppearance, Vec3Data } from './networkPro
 import type { IncidentId } from './incidentCatalog';
 import type { AssignmentState } from './assignments';
 import type { WorldFoleyCue } from './foleyEvents';
+import type { BuffMap, PickupState } from './pickups';
 
 export const CHAOS_TUNING = {
     pickupRadius: 1.6, formerCarrierDelay: 900,
@@ -17,7 +18,11 @@ export const INCIDENT_TUNING = {
     cheeseRadii: [0.15, 0.5, 1.35, 2.4] as const,
     caseMissileSpeed: 145, caseShotSpeed: 160, caseMissileLift: 6, caseEjectSpeed: 22,
     caseRicochetMinSpeed: 140, caseBounceLift: 7, caseMaxLift: 10,
+    /** Planted Evidence: counterfeit cases are additional hazards, never objectives. */
+    fakeBurstBalls: 9, fakeBurstSpeed: 96, fakeBurstSpread: .7, fakeBurstLift: .2,
 } as const;
+export const COUNTERFEIT_IDS = ['fake-01','fake-02','fake-03','fake-04','fake-05',
+    'fake-06','fake-07','fake-08','fake-09','fake-10'] as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
 export const CASE_LOOSE_SCALE = 2;
 // Street-level frontages distributed around the city; the simulation verifies
@@ -84,6 +89,8 @@ export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: V
 export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
+    /** Planted Evidence counterfeits share the briefcase shape but are hazards, not objectives. */
+    fake?: boolean;
 }
 export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
 export interface ChaosState {
@@ -93,6 +100,10 @@ export interface ChaosState {
     extraCases?: Array<CaseState & {id:string}>;
     dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId };
     pressure?: { serial:number; until:number; cooldowns?:Record<string,number>; launches:PressureLaunchEvent[] };
+    /** Pickup sites currently available to claim; absent entries are active elsewhere or claimed. */
+    pickups?: PickupState[];
+    /** Living timed effects by player id. */
+    buffs?: BuffMap;
     possession: Record<string, number>;
     corpses: CorpseState[];
     shots: ChaosShot[];

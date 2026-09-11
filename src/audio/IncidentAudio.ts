@@ -1,4 +1,5 @@
 import type {Vec3Data} from '../shared/networkProtocol';
+import { previewMuted } from './previewMuted';
 import {worldSoundGain} from './worldSoundGain';
 
 /** Recorded and pre-rendered foley through the game's existing Web Audio context. */
@@ -102,7 +103,7 @@ export function bindIncidentAudio(next?: AudioContext, position?: Vec3Data): voi
         disposeIncidentAudio(); context = next; void preload(next);
     }
     if (position) { listener.x=position.x;listener.y=position.y;listener.z=position.z; }
-    if (context?.state === 'suspended') void context.resume().catch(() => {});
+    if (context?.state === 'suspended' && !previewMuted()) void context.resume().catch(() => {});
 }
 
 export function disposeIncidentAudio(): void {

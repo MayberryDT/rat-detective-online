@@ -4,7 +4,7 @@ import {resolveShotPattern} from './shotPattern';
 import type {IncidentId} from './incidentCatalog';
 import type {ServerMessage,ShotDescriptor,Vec3Data} from './networkProtocol';
 
-export type ShotTrace=(from:Vec3Data,to:Vec3Data)=>{p:Vec3Data;n:Vec3Data;rat:boolean}|undefined;
+export type ShotTrace=(from:Vec3Data,to:Vec3Data)=>{p:Vec3Data;n:Vec3Data;rat:boolean;reflect?:boolean}|undefined;
 interface LocalShot {
     shot:ChaosShot; trigger:string; fired:number; updated:number; first:boolean;
     confirmed?:number; hidden:boolean; incident?:IncidentId;
@@ -106,9 +106,11 @@ export class LocalShotPresentation {
             const hit=this.trace?.(shot.p,next);
             if(!hit){shot.p=next;continue;}
             shot.p={x:hit.p.x+hit.n.x*.05,y:hit.p.y+hit.n.y*.05,z:hit.p.z+hit.n.z*.05};
-            if(hit.rat)return true;
-            shot.wallBounced=true;
-            if(incident==='delayed-reaction'&&!shot.delayed){shot.delayed=true;shot.stuckUntil=Number.MAX_SAFE_INTEGER;shot.age+=Math.max(0,remaining-dt);return false;}
+            // A reflective coat bounces the ball instead of consuming it, and it
+            // stays a rat contact: it never counts as a wall bounce for incidents.
+            if(hit.rat&&!hit.reflect)return true;
+            if(!hit.rat)shot.wallBounced=true;
+            if(!hit.rat&&incident==='delayed-reaction'&&!shot.delayed){shot.delayed=true;shot.stuckUntil=Number.MAX_SAFE_INTEGER;shot.age+=Math.max(0,remaining-dt);return false;}
             const dot=shot.v.x*hit.n.x+shot.v.y*hit.n.y+shot.v.z*hit.n.z;
             shot.v={x:(shot.v.x-2*dot*hit.n.x)*BALL_RESTITUTION,y:(shot.v.y-2*dot*hit.n.y)*BALL_RESTITUTION,z:(shot.v.z-2*dot*hit.n.z)*BALL_RESTITUTION};
         }

@@ -20,9 +20,9 @@ export class ExtraCaseVisual {
     private incident?:ChaosState['dispatch'];
     private carrier:RatEntity|null=null;
     private arm:THREE.Group|null=null;
-    constructor(scene:THREE.Scene,id:string,private readonly resolve:(id:string)=>RatEntity|undefined,private readonly extrapolate=true){
+    constructor(scene:THREE.Scene,id:string,private readonly resolve:(id:string)=>RatEntity|undefined,private readonly extrapolate=true,fake=false){
         this.root.name='hot-case-'+id;this.root.userData.aimTarget=true;
-        addLeatherBriefcase(this.root);scene.add(this.root);this.beacon=new CaseBeacon(scene);
+        addLeatherBriefcase(this.root);scene.add(this.root);this.beacon=new CaseBeacon(scene,fake);
     }
     apply(state:ChaosState,extra:ChaosState['case'],arrival:number):void {
         this.state=extra;this.incident=state.dispatch;
@@ -39,12 +39,15 @@ export class ExtraCaseVisual {
         this.root.scale.setScalar(state.owner?1:CASE_LOOSE_SCALE);
         this.root.visible=!state.returningUntil||Math.floor(now/100)%2===0;
         const evidence=!!this.incident&&this.incident.phase==='active'&&incidentInfo(this.incident.incident).id==='evidence-tampering';
-        const hot=!state.owner&&(!!state.missileOwner||evidence);
+        // A counterfeit carries no objective glow. It keeps a faint unstable sheen
+        // so an attentive player can read it in time without a label.
+        const fake=state.fake===true;
+        const hot=!fake&&!state.owner&&(!!state.missileOwner||evidence);
         this.root.traverse(object=>{
             const material=(object as THREE.Mesh).material;
             if(!(material instanceof THREE.MeshStandardMaterial)||object.name!=='leather-case-shell')return;
-            material.emissive.setHex(hot?0xff2208:0x633d29);
-            material.emissiveIntensity=hot?1.4:.28;
+            material.emissive.setHex(hot?0xff2208:fake?0x7a3a10:0x633d29);
+            material.emissiveIntensity=hot?1.4:fake?.5:.28;
         });
         if(carrier&&this.arm?.parent){
             const anchor=this.arm.parent;

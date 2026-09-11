@@ -30,6 +30,8 @@ export class RatController {
     private groundGrace = 0;
     get grounded():boolean {return this.groundGrace>0;}
     private launchTime = 0;
+    /** Hot Pursuit only: scales the owner's normal walking speed while active. */
+    private speedScale = 1;
     private launcherFlight = false;
     private normalJump = false;
     private readonly appliedLaunches = new Set<string>();
@@ -61,6 +63,9 @@ export class RatController {
 
     }
 
+    /** 1 restores the ratified ordinary movement exactly; never a new base speed. */
+    setSpeedScale(scale:number):void { this.speedScale = Number.isFinite(scale) && scale > 0 ? scale : 1; }
+    get moveSpeedScale():number { return this.speedScale; }
     onMouseMove(dx: number, dy: number): void {
         this.spherical.theta -= dx * MOUSE_SENS;
         this.spherical.phi -= dy * MOUSE_SENS;
@@ -168,6 +173,8 @@ export class RatController {
         if (len > 0) {
             desiredX = (desiredX / Math.max(1, len)) * MOVE_SPEED;
             desiredZ = (desiredZ / Math.max(1, len)) * MOVE_SPEED;
+            desiredX *= this.speedScale;
+            desiredZ *= this.speedScale;
         }
 
         const v = this.entity.body.velocity;

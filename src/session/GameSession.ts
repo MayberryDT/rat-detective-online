@@ -1,4 +1,5 @@
 import {FoleyAudio} from '../audio/FoleyAudio';
+import { previewMuted } from '../audio/previewMuted';
 import {FoleyWorld} from '../audio/FoleyWorld';
 import * as THREE from 'three';
 import { ChaosView } from '../prototype/ChaosView';
@@ -24,6 +25,9 @@ import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo } from '../shared/incidentCatalog';
+import type { ChaosState } from '../shared/chaosState';
+import { PICKUP_COPY, PICKUP_TUNING } from '../shared/pickups';
+import type { RatEntity } from '../entities/RatEntity';
 import { bindGamePointerLock } from './GamePointerLock';
 import { FeedbackAudio } from '../audio/FeedbackAudio';
 import { MatchScoreboard } from '../ui/MatchScoreboard';
@@ -132,7 +136,7 @@ export class GameSession {
         this.title.onGesture = () => {
             this.transport.prepare();
             void this.music.unlock();
-            if (this.stage.listener.context.state === 'suspended') void this.stage.listener.context.resume().catch(() => {});
+            if (!previewMuted() && this.stage.listener.context.state === 'suspended') void this.stage.listener.context.resume().catch(() => {});
         };
         this.title.onCue = cue => { this.foley.setEnabled(!document.hidden); this.foley.play(cue); };
         if (touchControlsAvailable()) this.touch = new TouchControls({canvas:this.stage.renderer.domElement,
@@ -200,6 +204,7 @@ export class GameSession {
             this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         }
         this.myId = message.id;
+        this.gun.setProtectedRats(new Set());
         const player = message.player;
         this.rat = new RatController(this.stage.scene, this.stage.world, this.stage.camera, player.name, player,
             new THREE.Vector3(player.x, player.y, player.z),this.worldSpec.version===GRAYBOX_VERSION?CITY_BOUNDS:undefined);
@@ -210,6 +215,7 @@ export class GameSession {
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
         this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
+        this.chaos?.setIncidentRoster(message.incidents);
         this.hud.hideRespawn();
         this.hud.hideVictory();
         if (player.hp <= 0 && player.respawnAt) this.hud.showRespawn(player.respawnAt - this.serverOffset);
@@ -233,6 +239,7 @@ export class GameSession {
         switch (message.type) {
             case 'chaos':
                 this.gun.setIncident(message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined);
+                this.applyPickupState(message.state);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);break;
             case 'welcome': this.welcome(message); break;
             case 'currentPlayers': break; // Atomic welcome already applied the complete state.
@@ -273,6 +280,12 @@ export class GameSession {
                 }
                 break;
             }
+            case 'playerHealed': {
+                const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
+                entity?.heal(message.hp);
+                if (message.id === this.myId) this.chaos?.toast(PICKUP_COPY['quick-fix'].title, PICKUP_COPY['quick-fix'].effect);
+                break;
+            }
             case 'playerDied': {
                 const entity = message.victimId === this.myId ? this.rat?.entity : this.remotes.get(message.victimId);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
@@ -295,16 +308,31 @@ export class GameSession {
                 break;
             }
             case 'playerRespawn':
-                if (message.id === this.myId) { this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.clearInput(); this.hud.hideRespawn(); }
-                else this.remotes.respawn(message.id, message);
+                if (message.id === this.myId && this.rat) this.rat.setSpeedScale(1);
+                if (message.id === this.myId) {
+                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.clearInput(); this.hud.hideRespawn();
+                } else this.remotes.respawn(message.id, message);
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
-            case 'gameReset': this.roundWon=false;this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+            case 'gameReset': this.roundWon=false;this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
+    }
+
+    /** Mirror the authoritative buff snapshot onto local prediction and movement.
+     * The server remains the sole source of truth for both. */
+    private applyPickupState(state: ChaosState): void {
+        const protectedRats = new Set<RatEntity>();
+        for (const id of Object.keys(state.buffs ?? {})) {
+            const entity = id === this.myId ? this.rat?.entity : this.remotes.get(id);
+            if (entity) protectedRats.add(entity);
+        }
+        this.gun.setProtectedRats(protectedRats);
+        const hustle = (state.buffs?.[this.myId]?.hustleUntil ?? 0) > state.time;
+        this.rat?.setSpeedScale(hustle ? PICKUP_TUNING.hustleMultiplier : 1);
     }
 
     private sendMovement(now: number): void {

@@ -13,6 +13,7 @@ const drawings: Record<IncidentId | 'dispatch', string> = {
     'big-cheese': '<path d="M8 49Q3 22 28 12q20-7 28 13L8 49l44 3 4-27M19 34l3-4M28 23l4-2M41 24l4-1M24 46l5 1M41 42l4-1M10 12 6 7m16 0-1-5"/>',
     'ricochet-racket': '<path d="M51 8v48M8 43l32-15-13-9m13 9-8 14M39 29l-8 17M39 29H19"/><circle cx="18" cy="13" r="5"/><circle cx="10" cy="29" r="5"/><circle cx="27" cy="53" r="5"/>',
     'popcorn-panic': '<path d="m19 36-7-8 10-2-2-10 10 5 6-12 5 11 11-4-3 12 9 3-10 8M18 36l6 19h21l5-19M26 39l3 12m7-12v12m8-12-3 12"/><circle cx="9" cy="11" r="4"/><circle cx="56" cy="10" r="3"/><path d="M5 41l6-2M55 48l5 3"/>',
+    'planted-evidence': '<path d="m14 30 30-4 3 22-30 4zM23 27l-1-7 12-2 1 7M16 36l30-4M27 37l1 6 9-1-1-6"/><path class="incident-ink" d="M52 14l2-8m4 12 7-3m-8 8 7 4m-11-1 3 8m-9-3 1 9"/><circle cx="52" cy="30" r="4"/>',
 };
 
 export function incidentArtwork(id: IncidentId | 'dispatch'): string {

@@ -36,6 +36,9 @@ export class CheeseGun {
         (body as CANNON.Body&{userData?:{entity?:RatEntity}}).userData?.entity!==this.playerEntity;
     private camera: THREE.PerspectiveCamera | null = null;
     private playerEntity: RatEntity | null = null;
+    /** Rats currently protected by Ironclad Alibi; local prediction reflects off them. */
+    private protectedRats: ReadonlySet<RatEntity> = new Set();
+    setProtectedRats(rats: ReadonlySet<RatEntity>): void { this.protectedRats = rats; }
 
     private balls: CheeseBall[] = [];
     // Ball meshes own their transforms; the gun owns the shared GPU resources.
@@ -158,7 +161,8 @@ export class CheeseGun {
         if(!hit.hasHit)return undefined;
         const entity=(hit.body as CANNON.Body&{userData?:{entity?:RatEntity}}|null)?.userData?.entity;
         return{p:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},
-            n:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z},rat:!!entity&&!entity.dead};
+            n:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z},rat:!!entity&&!entity.dead,
+            ...(entity&&this.protectedRats.has(entity)?{reflect:true}:{})};
     };
 
     clearProjectiles(): void {

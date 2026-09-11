@@ -60,10 +60,11 @@ export function resolveWebSocketUrl(serverUrl?: string): string {
     if (url.protocol === 'http:') url.protocol = 'ws:';
     if (url.protocol === 'https:') url.protocol = 'wss:';
     if (url.pathname === '/') url.pathname = '/ws';
-    const room = new URLSearchParams(window.location.search).get('room');
-    if (room && !url.searchParams.has('room')) url.searchParams.set('room', room);
-    const assignment = new URLSearchParams(window.location.search).get('assignment');
-    if (assignment && !url.searchParams.has('assignment')) url.searchParams.set('assignment', assignment);
+    const params = new URLSearchParams(window.location.search);
+    for (const key of ['room', 'assignment', 'incidents', 'incident']) {
+        const value = params.get(key);
+        if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
+    }
     return url.toString();
 }
 

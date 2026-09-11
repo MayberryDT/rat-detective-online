@@ -3,6 +3,7 @@ import { BotCombat, combatRandom } from './BotCombat';
 import { DISPATCH_STATIONS, type ChaosState } from './chaosState';
 import { incidentInfo } from './incidentCatalog';
 import { activeDestination, destinationPoint } from './assignments';
+import { hasHustle, PICKUP_TUNING } from './pickups';
 import type { PlayerData, Vec3Data } from './networkProtocol';
 
 export interface ObjectiveNavigation {
@@ -14,7 +15,7 @@ export interface ObjectiveNavigation {
     update?(budgetMs?: number): void;
 }
 export interface ObjectiveBotIntent { x: number; z: number; jump: boolean; shoot?: Vec3Data; facing: number }
-export type BotObjective = 'case' | 'carrier' | 'combat' | 'explore' | 'delivery' | 'evade' | 'intercept';
+export type BotObjective = 'case' | 'carrier' | 'combat' | 'explore' | 'delivery' | 'evade' | 'intercept' | 'pickup';
 const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
 const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
 
@@ -23,6 +24,8 @@ const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
  * follow local routes without reading hidden opponents. */
 export class ObjectiveBotBrain {
     objective: BotObjective = 'explore';
+    /** Read-only view of the current goal key, for tests and diagnostics. */
+    get goalKey(): string { return this.key; }
     private key = '';
     private target?: PlayerData;
     private dispatchTarget?: Vec3Data;
@@ -103,11 +106,28 @@ export class ObjectiveBotBrain {
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
         this.plannedDestination=undefined;this.destination=undefined;this.decisionAt=0;this.planAt=0;this.recoverUntil=0;
     }
+    /** Nearest available upgrade the bot does not already hold. Quick Fix only
+     * matters when hurt, so an uninjured bot walks past it and leaves it for others. */
+    private wantedPickup(state: ChaosState | undefined, self: PlayerData) {
+        const pickups = state?.pickups;
+        if (!pickups?.length) return undefined;
+        const mine = state!.buffs?.[self.id];
+        const now = state!.time;
+        return pickups
+            .filter(p => p.kind === 'quick-fix' ? self.hp < 3
+                : p.kind === 'ironclad' ? (mine?.ironcladUntil ?? 0) <= now
+                    : (mine?.hustleUntil ?? 0) <= now)
+            .filter(p => { const d = distance(self, p); return d > 1 && d < 22; })
+            .sort((a, b) => distance(self, a) - distance(self, b))[0];
+    }
+
     step(now: number, self: PlayerData, others: Iterable<PlayerData>, state: ChaosState | undefined,
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
         clearControl: (target: Vec3Data) => boolean = clear): ObjectiveBotIntent {
         if(self.hp<=0){this.combat.reset();this.opportunisticFire.reset();this.stalled=false;return{x:0,z:0,jump:false,facing:this.heading};}
-        const cases=state?[{key:'case',value:state.case},...(state.extraCases??[]).map(value=>({key:`case:${value.id}`,value}))]:[];
+        // Counterfeits are lethal hazards, never objectives: a bot that routed to one
+        // would simply kill itself on loop. Only genuine cases are collectible goals.
+        const cases=state?[{key:'case',value:state.case},...(state.extraCases??[]).filter(value=>!value.fake).map(value=>({key:`case:${value.id}`,value}))]:[];
         // Keep each case's failed position independent. Picking up one extra
         // must not erase the evidence that the primary case is unreachable.
         let ownershipChanged=false;
@@ -156,6 +176,9 @@ export class ObjectiveBotBrain {
                 (value.previousOwner!==self.id||value.pickupAfter<=(state?.time??now))&&!this.suppressed(key,value.p,now))
                 .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
             const combat=visible.find(p=>!this.suppressed(`combat:${p.id}`,p,now));
+            // Opportunistic only: a bot grabs a nearby upgrade it lacks, but never
+            // detours across town or while carrying the genuine case.
+            const pickup=carrying?undefined:this.wantedPickup(state,self);
             // Do not interrupt your own scoring, or keep shooting a nearby
             // loose case away while attempting to collect it.
             if(carrying||this.target||available&&distance(self,available.value.p)<24)this.dispatchTarget=undefined;
@@ -194,6 +217,7 @@ export class ObjectiveBotBrain {
             else if(delivery)this.setObjective('delivery',deliveryKey,delivery);
             else if(escape)this.setObjective('evade',escapeKey,escape);
             else if(combat)this.setObjective('combat',`combat:${combat.id}`,combat);
+            else if(pickup)this.setObjective('pickup',`pickup:${pickup.id}`,{x:pickup.x,y:pickup.y,z:pickup.z});
             else {
                 if(this.objective!=='explore'||!this.destination||this.suppressed(this.key,this.destination,now)||distance(self,this.destination)<3||now>this.explorationAt+20000){
                     this.destination=undefined;
@@ -309,6 +333,30 @@ export class ObjectiveBotBrain {
         } else if(speculative){
             shoot=speculative;this.shotAt=now+200;
             facing=Math.atan2(shoot.x-self.x,shoot.z-self.z);
+        }
+        if(hasHustle(state?.buffs,self.id,state?.time??now)){
+            x*=PICKUP_TUNING.hustleMultiplier;z*=PICKUP_TUNING.hustleMultiplier;
+        }
+        // Steer around any planted counterfeit the current step would enter.
+        // Local, bounded and visible-only: the bot never reads hidden traps, it
+        // simply refuses to walk into one it can see ahead of it.
+        const fakes = state?.extraCases;
+        if (fakes?.length && (x || z)) {
+            const stepLength = Math.hypot(x, z) || 1, nx = x / stepLength, nz = z / stepLength;
+            for (const fake of fakes) {
+                if (!fake.fake) continue;
+                const dx = fake.p.x - self.x, dz = fake.p.z - self.z;
+                const ahead = dx * nx + dz * nz;
+                if (ahead <= 0 || ahead > 8 || Math.abs(fake.p.y - self.y) > 2.5) continue;
+                // Right-hand perpendicular; steer to the side the trap is not on.
+                const perpX = nz, perpZ = -nx;
+                const side = dx * perpX + dz * perpZ;
+                if (Math.abs(side) > 3) continue;
+                if (!clear(fake.p)) continue;
+                const away = side >= 0 ? -1 : 1;
+                x = nx * stepLength * .5 + perpX * away * stepLength * 1.2;
+                z = nz * stepLength * .5 + perpZ * away * stepLength * 1.2;
+            }
         }
         return{x,z,jump,shoot,facing};
     }

@@ -2,7 +2,7 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,DISPATCH_TARGET,LAUNCH_MACHINES} from '../../src/shared/chaosState';
-import {INCIDENTS,incidentInfo,type IncidentId} from '../../src/shared/incidentCatalog';
+import {INCIDENTS,incidentInfo,incidentRoster,type IncidentId} from '../../src/shared/incidentCatalog';
 import {resolveShotPattern} from '../../src/shared/shotPattern';
 import {BALL_SPEED} from '../../src/shared/ballTuning';
 import {parseServerMessage} from '../../src/shared/messageValidation';
@@ -35,12 +35,40 @@ function bodyKick(sim:ChaosSimulation,victim:ReturnType<typeof createPlayer>,tim
  return body;
 }
 describe('authoritative Dispatch incidents',()=>{
- it('can select every catalog result from a fresh authoritative roll',()=>{
+ it('can select every roster result and retires only the incident the mode leaves out',()=>{
   const random=vi.spyOn(Math,'random');
-  INCIDENTS.forEach((incident,index)=>{
-   random.mockReturnValue((index+.1)/INCIDENTS.length);const {sim}=fixture();fireDispatch(sim);
+  const roster=incidentRoster('planted');
+  roster.forEach((incident,index)=>{
+   random.mockReturnValue((index+.1)/roster.length);const {sim}=fixture();fireDispatch(sim);
    expect(sim.snapshot(false).dispatch.incident).toBe(incident.id);
   });
+  // Planted Evidence is the shipped default; the missile case is behind the toggle.
+  expect(roster.some(i=>i.id==='evidence-tampering')).toBe(false);
+  expect(roster.some(i=>i.id==='planted-evidence')).toBe(true);
+  const classic=incidentRoster('classic');
+  expect(classic.some(i=>i.id==='evidence-tampering')).toBe(true);
+  expect(classic.some(i=>i.id==='planted-evidence')).toBe(false);
+  const index=classic.findIndex(i=>i.id==='evidence-tampering');
+  random.mockReturnValue((index+.1)/classic.length);
+  const {sim}=fixture();sim.evidenceMode='classic';fireDispatch(sim);
+  expect(sim.snapshot(false).dispatch.incident).toBe('evidence-tampering');
+ });
+ it('pins one incident for private practice, repeats it, and ignores a pin outside the mode',()=>{
+  const random=vi.spyOn(Math,'random').mockReturnValue(0);
+  const {sim}=fixture();sim.forcedIncident='planted-evidence';
+  fireDispatch(sim);
+  expect(sim.snapshot(false).dispatch.incident).toBe('planted-evidence');
+  // A pin is meant for review: it survives the no-immediate-repeat rule.
+  let at=now+T.rollMs+T.activeMs+T.cooldownMs;
+  sim.step(0,at);sim.step(0,at+10);
+  expect(sim.snapshot(false).dispatch.phase).toBe('ready');
+  fireDispatch(sim,at+20);
+  expect(sim.snapshot(false).dispatch.incident).toBe('planted-evidence');
+  // A pin the current mode does not run is ignored rather than leaking the incident back.
+  const planted=fixture();planted.sim.evidenceMode='classic';planted.sim.forcedIncident='planted-evidence';
+  random.mockReturnValue(0);
+  fireDispatch(planted.sim,now);
+  expect(planted.sim.snapshot(false).dispatch.incident).not.toBe('planted-evidence');
  });
  it('selects once, persists through restore and busy hits, and avoids immediately repeating',()=>{
   vi.spyOn(Math,'random').mockReturnValue(0);const {sim,players}=fixture();fireDispatch(sim);

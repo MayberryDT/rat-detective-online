@@ -28,6 +28,8 @@ import { reactToLandmarkImpact } from './LandmarkReactions';
 import { addLeatherBriefcase } from './CaseModel';
 import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentation';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
+import { PickupVisual } from './PickupVisual';
+import { PICKUP_COPY, activeBuffs, type BuffMap } from '../shared/pickups';
 
 const caseCarryRotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
 
@@ -35,6 +37,12 @@ export class ChaosView {
     private readonly root=new THREE.Group();
     private readonly caseRoot=new THREE.Group();
     private readonly extraCases=new Map<string,ExtraCaseVisual>();
+    private readonly pickups=new Map<string,PickupVisual>();
+    private readonly buffBar=document.createElement('div');
+    private readonly pickupToast=document.createElement('div');
+    private buffSignature='';
+    private toastUntil=0;
+    private localBuffs={ironcladUntil:0,hustleUntil:0};
     private readonly caseBeacon:CaseBeacon;
     private readonly dispatch=new THREE.Group();
     private readonly kiosks:Array<ReturnType<typeof buildDispatchModel>>=[];
@@ -83,6 +91,9 @@ export class ChaosView {
     private readonly impactNormal=new THREE.Vector3();
     private readonly audioPosition=new THREE.Vector3();
     setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
+    setIncidentRoster(incidents: readonly import('../shared/incidentCatalog').IncidentId[]|undefined):void {
+        this.hud.setRoster(incidents?.length?incidents.map(id=>incidentInfo(id)):undefined);
+    }
     constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace){
         this.localShots=new LocalShotPresentation(traceShot);
         this.sirenAudio=new DispatchSirenAudio(this.audio);
@@ -133,7 +144,26 @@ export class ChaosView {
         Object.assign(this.caseMarkerDetail.style,{marginTop:'2px',fontSize:'9px',color:'#d3c8b3'});
         for(const child of [title,this.caseMarkerDetail])this.caseMarker.appendChild(child);
         document.body.appendChild(this.caseMarker);
+        Object.assign(this.buffBar.style,{position:'fixed',left:'50%',bottom:'84px',transform:'translateX(-50%)',
+            display:'none',gap:'8px',pointerEvents:'none',zIndex:'6',font:'bold 11px monospace',letterSpacing:'.5px'});
+        document.body.appendChild(this.buffBar);
+        Object.assign(this.pickupToast.style,{position:'fixed',left:'50%',top:'22%',transform:'translateX(-50%)',
+            display:'none',pointerEvents:'none',zIndex:'7',textAlign:'center',font:'bold 13px monospace',letterSpacing:'.6px',
+            color:'#fff2cf',textShadow:'0 2px 4px #000',padding:'6px 11px',background:'#120c12d0',
+            border:'1px solid #ffffff22',borderRadius:'4px'});
+        document.body.appendChild(this.pickupToast);
         this.impacts=new CheeseImpactEffects(scene);
+    }
+    /** Show a brief owner-facing claim confirmation without a new wire message. */
+    toast(title:string,detail:string):void{
+        this.toastUntil=performance.now()+2300;
+        const node=this.pickupToast as unknown as {replaceChildren?:()=>void};
+        if(typeof node.replaceChildren!=='function')return;
+        node.replaceChildren();
+        const heading=document.createElement('strong');heading.textContent=title;
+        const line=document.createElement('small');line.textContent=detail;
+        Object.assign(line.style,{display:'block',marginTop:'2px',fontSize:'10px',color:'#d8cdb4',fontWeight:'400'});
+        this.pickupToast.appendChild(heading);this.pickupToast.appendChild(line);
     }
     resetProjectiles():void{this.localShots.clear();this.presentation.clear();}
     fire(shot:ShotDescriptor):void {
@@ -155,9 +185,11 @@ export class ChaosView {
         for(const [id,visual] of this.extraCases)if(!extraIds.has(id)){visual.dispose();this.extraCases.delete(id);}
         for(const extra of state.extraCases??[]){
             let visual=this.extraCases.get(extra.id);
-            if(!visual){visual=new ExtraCaseVisual(this.scene,extra.id,this.resolveRat,this.extrapolate);this.extraCases.set(extra.id,visual);}
+            if(!visual){visual=new ExtraCaseVisual(this.scene,extra.id,this.resolveRat,this.extrapolate,extra.fake===true);this.extraCases.set(extra.id,visual);}
             visual.apply(state,extra,this.receivedAt);
         }
+        this.syncPickups(state);
+        this.noteLocalBuffs(state);
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
             if(hit.cue==='pop')playPopcornPop(hit.p);
@@ -175,6 +207,49 @@ export class ChaosView {
                 model={mesh,animator:new RatAnimator(mesh),state:c};this.corpses.set(c.id,model);this.root.add(mesh);
             }
             model.state=c;
+        }
+    }
+    /** Pickups are static world props: build and place on the snapshot, animate each frame. */
+    private syncPickups(state:ChaosState):void{
+        const live=new Set((state.pickups??[]).map(p=>p.id));
+        for(const [id,visual] of this.pickups)if(!live.has(id)){visual.dispose();this.pickups.delete(id);}
+        for(const pickup of state.pickups??[]){
+            let visual=this.pickups.get(pickup.id);
+            if(!visual){visual=new PickupVisual(this.scene,pickup.kind);this.pickups.set(pickup.id,visual);}
+            visual.setPosition(pickup.x,pickup.y,pickup.z);
+        }
+    }
+    /** Announce a claim locally when the authoritative buff first appears. */
+    private noteLocalBuffs(state:ChaosState):void{
+        if(!this.myId)return;
+        const mine=state.buffs?.[this.myId];
+        const next={ironcladUntil:mine?.ironcladUntil??0,hustleUntil:mine?.hustleUntil??0};
+        if(next.ironcladUntil!==this.localBuffs.ironcladUntil&&next.ironcladUntil>state.time)
+            this.toast(PICKUP_COPY.ironclad.title,PICKUP_COPY.ironclad.effect);
+        else if(next.hustleUntil!==this.localBuffs.hustleUntil&&next.hustleUntil>state.time)
+            this.toast(PICKUP_COPY.hustle.title,PICKUP_COPY.hustle.effect);
+        this.localBuffs=next;
+    }
+    private updateBuffs(buffs:BuffMap|undefined,now:number):void{
+        const mine=activeBuffs(buffs,this.myId,now);
+        const ironclad=mine.ironcladUntil?Math.max(0,Math.ceil((mine.ironcladUntil-now)/1000)):0;
+        const hustle=mine.hustleUntil?Math.max(0,Math.ceil((mine.hustleUntil-now)/1000)):0;
+        const signature=`${ironclad}|${hustle}`;
+        if(signature!==this.buffSignature){
+            this.buffSignature=signature;
+            const bar=this.buffBar as unknown as {replaceChildren?:()=>void};
+            if(typeof bar.replaceChildren!=='function')return;
+            bar.replaceChildren();
+            const chips:Array<[string,number]>=[];
+            if(ironclad)chips.push(['IRONCLAD',ironclad]);
+            if(hustle)chips.push(['HOT PURSUIT',hustle]);
+            for(const [label,seconds] of chips){
+                const chip=document.createElement('span');
+                chip.textContent=`${label} ${seconds}s`;
+                Object.assign(chip.style,{padding:'3px 8px',borderRadius:'3px',background:'#0d0a10cc',border:'1px solid #ffffff33',color:'#ffe9b8'});
+                this.buffBar.appendChild(chip);
+            }
+            this.buffBar.style.display=chips.length?'flex':'none';
         }
     }
     private setCarrier(entity:RatEntity|null){
@@ -220,6 +295,9 @@ export class ChaosView {
         }
         this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer);
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
+        for(const visual of this.pickups.values())visual.update(now);
+        this.updateBuffs(s.buffs,now);
+        this.pickupToast.style.display=performance.now()<this.toastUntil?'block':'none';
         this.updateCaseMarker(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const crossfire=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='crossfire';

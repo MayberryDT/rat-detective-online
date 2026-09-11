@@ -4,15 +4,19 @@ import type {WorldFoleyCue} from './foleyEvents';
 import { SpatialRayQuery } from './SpatialRayQuery';
 import { StaticCityBroadphase } from './StaticCityBroadphase';
 import { launcherVelocity } from './launcherVelocity';
-import { INCIDENTS, incidentInfo, type IncidentId } from './incidentCatalog';
+import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
 import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_LIFETIME, BALL_RADIUS } from './ballTuning';
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
+    COUNTERFEIT_IDS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose } from './chaosState';
-import type { PlayerData, ShotDescriptor, Vec3Data } from './networkProtocol';
+import { hasIronclad, mergePickup, activeBuffs, buffExpired, PICKUP_TUNING, resolvePickupPoints,
+    type BuffMap, type PickupKind, type PickupPoint } from './pickups';
 import type { WorldSpec } from './worldSpec';
+import { worldSpawnPoints } from './playerSpawns';
+import { MAX_HP, type PlayerData, type ShotDescriptor, type Vec3Data } from './networkProtocol';
 import { AssignmentRules } from './AssignmentRules';
 import { activeDestination, ASSIGNMENT_DESTINATIONS, destinationPoint, restoreAssignment, type AssignmentState, type DestinationId } from './assignments';
 
@@ -29,9 +33,16 @@ interface CaseRuntime {
     id:string;body:C.Body;owner:string|null;previousOwner:string|null;missileOwner?:string;
     hitAfter:Map<string,number>;pickupAfter:number;returningUntil:number;looseSince:number;
     scale:number;lastSpawn:Vec3Data;armed:boolean;
+    /** Planted Evidence counterfeit: a hazard that never equips or grants objective status. */
+    fake:boolean;
 }
 /** null ownership is an environmental Tampering hit, including neutral chains. */
 export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data }
+/** A pickup claim the room must announce. Healing is drained so the room can
+ * persist and broadcast the restored health without the sim owning networking. */
+export type PickupEvent =
+    | { kind:'collected'; pickupId:string; pickup:PickupKind; playerId:string }
+    | { kind:'healed'; playerId:string; hp:number };
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
 export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
@@ -47,11 +58,21 @@ export class ChaosSimulation {
     private impacts:ChaosState['impacts']=[];
     private audioImpacts:ChaosState['impacts']=[];
     private readonly contactSoundAt=new WeakMap<C.Body,number>();
+    /** Pickup sites by id. A claim hides the site until its respawn deadline. */
+    private readonly pickups=new Map<string,{kind:PickupKind;p:Vec3Data;availableAt:number}>();
+    private buffs:BuffMap={};
+    private readonly pickupEvents:PickupEvent[]=[];
+    private pickupPoints?:PickupPoint[];
     private possession:Record<string,number>={};
     private dispatch:ChaosState['dispatch']={phase:'ready',started:0,until:0,serial:0};
     private lastSurgePulse=0;
     private casesWeaponized=false;
+    private plantedSerial:number|undefined;
     private dispatchActivator:string|null=null;
+    /** Room-selected evidence incident. Defaults to the shipped Planted Evidence. */
+    evidenceMode:EvidenceMode='planted';
+    /** Practice-only override: force every roll to one incident id. */
+    forcedIncident:IncidentId|null=null;
     private pressure:NonNullable<ChaosState['pressure']>={serial:0,until:0,cooldowns:{},launches:[]};
     private notice={serial:0,text:'Find the Hot Case. Shoot Dispatch.'};
     private now=Date.now();
@@ -85,27 +106,155 @@ export class ChaosSimulation {
         for(const machine of LAUNCH_MACHINES){
             this.addControl(machine.box,'world');this.addControl(machine.target,'pressure',machine.id);
         }
+        this.seedPickups(spec);
         this.primaryCase=this.createCase('primary');
         if(saved)this.restore(saved);else this.placeCaseAtSpawn();
     }
-    private createCase(id:string):CaseRuntime{
+    /** Resolve the authored anchors against the current world's verified-clear street
+     * points and arm every site. A world without a spec falls back to the case spawns. */
+    private seedPickups(spec?:WorldSpec):void{
+        let clear:readonly Vec3Data[];
+        try{clear=spec?worldSpawnPoints(spec):CASE_SPAWNS;}catch{clear=CASE_SPAWNS;}
+        this.pickupPoints=resolvePickupPoints(clear);
+        for(const point of this.pickupPoints)this.pickups.set(point.id,{kind:point.kind,p:{...point.p},availableAt:0});
+    }
+    private createCase(id:string,fake=false):CaseRuntime{
         const body=new C.Body({mass:1.5,shape:new C.Box(new C.Vec3(CASE_SIZE.x/2,CASE_SIZE.y/2,CASE_SIZE.z/2)),
             position:vec(CASE_HOME),collisionFilterGroup:4,collisionFilterMask:1|8|16,linearDamping:.2,angularDamping:.25});
         body.addShape(new C.Box(new C.Vec3(.15,.035,.04)),new C.Vec3(0,.43,0));
         for(const x of [-.12,.12])body.addShape(new C.Box(new C.Vec3(.0275,.065,.04)),new C.Vec3(x,.36,0));
         const c:CaseRuntime={id,body,owner:null,previousOwner:null,hitAfter:new Map(),pickupAfter:0,
-            returningUntil:0,looseSince:this.now,scale:1,lastSpawn:CASE_HOME,armed:false};
+            returningUntil:0,looseSince:this.now,scale:1,lastSpawn:CASE_HOME,armed:false,fake};
+        // A counterfeit is planted, not thrown: park it exactly where it was placed
+        // so a validated spawn can never drift into geometry or a passing rat.
+        if(fake){body.type=C.Body.STATIC;body.mass=0;body.collisionFilterMask=16;body.updateMassProperties();}
         this.world.addBody(body);this.targets.set(body,{kind:'case',caseId:id});this.cases.set(id,c);
         this.listenForContacts(body,'case-bounce');
         this.scaleCase(CASE_LOOSE_SCALE,c);return c;
     }
     private syncExtraCases(){
         if(this.incidentActive('evidence-tampering')){
+            this.dropFakes();
             for(const id of EXTRA_CASE_IDS)if(!this.cases.has(id))this.placeCaseAtSpawn(this.createCase(id));
-        }else for(const [id,c] of this.cases){
-            if(id==='primary')continue;
-            this.world.removeBody(c.body);this.targets.delete(c.body);this.cases.delete(id);
+        }else if(this.incidentActive('planted-evidence')){
+            // Leave no weaponized missiles behind if the mode changed mid-room.
+            for(const [id,c] of [...this.cases])if(id!=='primary'&&!c.fake)this.removeCaseBody(id,c);
+            if(this.plantedSerial!==this.dispatch.serial){
+                this.plantedSerial=this.dispatch.serial;
+                for(const id of COUNTERFEIT_IDS)if(!this.cases.has(id))this.placeFake(this.createCase(id,true));
+            }
+        }else {this.plantedSerial=undefined;this.dropExtras();}
+    }
+    private removeCaseBody(id:string,c:CaseRuntime):void{
+        this.world.removeBody(c.body);this.targets.delete(c.body);this.cases.delete(id);
+    }
+    /** Quietly retire every extra case or counterfeit without an unannounced detonation. */
+    private dropExtras():void{for(const [id,c] of [...this.cases])if(id!=='primary')this.removeCaseBody(id,c);}
+    private dropFakes():void{for(const [id,c] of [...this.cases])if(id!=='primary'&&c.fake)this.removeCaseBody(id,c);}
+    private placeFake(c:CaseRuntime):void{
+        this.rayQuery.refresh();
+        const walls=[...this.targets].filter(([,target])=>target.kind==='world');
+        for(const [body] of walls)body.updateAABB();
+        const clear=CASE_SPAWNS.filter(p=>{
+            const y=p.y??1.3;
+            for(const x of [-.95,0,.95])for(const z of [-.5,0,.5]){
+                const floor=this.ray(new C.Vec3(p.x+x,y+.2,p.z+z),new C.Vec3(p.x+x,y-1.8,p.z+z),1);
+                if(!floor.hasHit)return false;
+            }
+            return !walls.some(([body])=>{
+                const {lowerBound:a,upperBound:b}=body.aabb;
+                return b.y>y-.35&&a.y<y+.65&&b.x>p.x-.95&&a.x<p.x+.95&&b.z>p.z-.5&&a.z<p.z+.5;
+            });
+        });
+        const apart=clear.filter(p=>![...this.cases.values()].some(other=>other!==c&&Math.hypot(other.body.position.x-p.x,other.body.position.z-p.z)<10));
+        let available=apart.length?apart:clear;
+        // Never arm a trap inside a living rat's contact range: every player needs
+        // a chance to see it and choose to shoot it, walk around, or risk it.
+        const unoccupied=available.filter(p=>![...this.players.values()].some(r=>r.hp>0&&Math.hypot(r.x-p.x,r.y-p.y,r.z-p.z)<12));
+        if(unoccupied.length)available=unoccupied;
+        const candidates=available.filter(p=>p.x!==c.lastSpawn.x||p.z!==c.lastSpawn.z);
+        const pool=candidates.length?candidates:available;
+        const spawn=pool.length?pool[Math.floor(Math.random()*pool.length)]:CASE_HOME;
+        c.lastSpawn=spawn;c.body.position.copy(vec(spawn));c.body.velocity.setZero();c.body.angularVelocity.setZero();c.body.updateAABB();
+    }
+    /** One counterfeit detonates once. Emitted balls keep the initiating shot's
+     * ownership; a contact trap uses neutral attribution and kills its collector. */
+    private detonateFake(c:CaseRuntime,owner:string|null,killerId?:string):void{
+        if(!this.cases.has(c.id))return;
+        const origin=c.body.position.clone();
+        this.removeCaseBody(c.id,c);
+        const balls=I.fakeBurstBalls;
+        for(let i=0;i<balls;i++){
+            if(this.shots.length>=T.maxShots)break;
+            const yaw=(i/balls)*Math.PI*2+Math.random()*.35;
+            // A low radial fan crosses nearby rat height before gravity brings it down.
+            const lift=I.fakeBurstLift+(Math.random()-.35)*I.fakeBurstSpread;
+            const direction=new C.Vec3(Math.cos(yaw),Math.max(.18,lift),Math.sin(yaw)).unit();
+            direction.scale(I.fakeBurstSpeed,direction);
+            const shot:ChaosShot={id:crypto.randomUUID(),owner,p:{...data(origin)},v:data(direction),age:0};
+            this.burstShots.add(shot);this.shots.push(shot);
         }
+        this.impacts.push({p:data(origin),n:{x:0,y:1,z:0},surface:false,scale:2.6,cue:'case-hit'});
+        this.sound('burst',origin,new C.Vec3(0,1,0),120);
+        if(killerId){
+            // The trap is a world hazard, not a player kill: no self-kill credit and
+            // no invented credit to whoever happened to be carrying the real case.
+            this.hit({owner:null,victim:killerId,damage:MAX_HP,incoming:{x:0,y:1,z:0}});
+        }
+    }
+    /** Living rats that step into a counterfeit's close range trigger the lethal trap. */
+    private stepFakes(playing:boolean):void{
+        if(!playing||!this.incidentActive('planted-evidence'))return;
+        for(const c of [...this.cases.values()]){
+            if(!c.fake||c.owner)continue;
+            const p=c.body.position;
+            for(const player of this.players.values()){
+                if(player.hp<=0)continue;
+                const reach=new C.Vec3(player.x,player.y+.8,player.z);
+                if(reach.distanceTo(p)>PICKUP_TUNING.claimRadius)continue;
+                this.detonateFake(c,null,player.id);break;
+            }
+        }
+    }
+    /** Claim one available pickup at a time. The claim is atomic inside the single
+     * authoritative loop, so two rats reaching together can never both receive it. */
+    private stepPickups(now:number,playing:boolean):void{
+        for(const [id,entry] of Object.entries(this.buffs)){
+            const player=this.players.get(id);
+            if(!player||player.hp<=0||buffExpired(entry,now))delete this.buffs[id];
+        }
+        if(!playing)return;
+        for(const [id,site] of this.pickups){
+            if(now<site.availableAt)continue;
+            for(const player of this.players.values()){
+                if(player.hp<=0)continue;
+                if(site.kind==='quick-fix'&&player.hp>=MAX_HP)continue;
+                const reach=new C.Vec3(player.x,player.y+.8,player.z);
+                if(reach.distanceTo(vec(site.p))>PICKUP_TUNING.claimRadius)continue;
+                if(site.kind==='quick-fix'){
+                    player.hp=MAX_HP;
+                    this.pickupEvents.push({kind:'healed',playerId:player.id,hp:player.hp});
+                }else this.buffs[player.id]=mergePickup(this.buffs[player.id],site.kind,now);
+                site.availableAt=now+PICKUP_TUNING.respawnMs;
+                this.pickupEvents.push({kind:'collected',pickupId:id,pickup:site.kind,playerId:player.id});
+                // Feedback travels with the claim; the room may announce it and the
+                // client's local audio reads the existing impact channel.
+                this.impacts.push({p:{...site.p},n:{x:0,y:1,z:0},surface:false,scale:1.4,audioOnly:true});
+                break;
+            }
+        }
+    }
+    /** Drained once per authoritative step so the room can persist and broadcast. */
+    drainPickupEvents():PickupEvent[]{
+        if(!this.pickupEvents.length)return [];
+        return this.pickupEvents.splice(0,this.pickupEvents.length);
+    }
+    /** Drop a restored incident this room's roster no longer runs, without
+     * disturbing an in-flight incident that the current mode still owns. */
+    enforceIncidentRoster():void{
+        const roster=incidentRoster(this.evidenceMode);
+        if(this.dispatch.incident&&!roster.some(incident=>incident.id===this.dispatch.incident))
+            this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};
     }
     private scaleCase(scale:number,c=this.primaryCase){
         if(scale===c.scale)return;
@@ -182,8 +331,11 @@ export class ChaosSimulation {
     private activate(owner?:string|null){
         if(this.dispatch.phase!=='ready')return;
         const previous=this.dispatch.incident??(this.dispatch.serial>0?incidentInfo().id:undefined);
-        const choices=INCIDENTS.filter(incident=>incident.id!==previous);
-        const incident=choices[Math.floor(Math.random()*choices.length)].id;
+        const roster=incidentRoster(this.evidenceMode);
+        // A forced practice roll may repeat; a normal roll keeps the no-repeat rule.
+        const forced=this.forcedIncident&&roster.some(incident=>incident.id===this.forcedIncident)?this.forcedIncident:undefined;
+        const choices=roster.filter(incident=>incident.id!==previous);
+        const incident=forced??choices[Math.floor(Math.random()*choices.length)].id;
         this.dispatch={phase:'rolling',started:this.now,until:this.now+T.rollMs,serial:this.dispatch.serial+1,incident};
         this.lastSurgePulse=0;
         this.dispatchActivator=owner&&this.players.has(owner)?owner:null;
@@ -624,6 +776,8 @@ export class ChaosSimulation {
         }
         this.syncExtraCases();
         for(const c of this.cases.values())this.updateCase(c,dt,playing);
+        this.stepPickups(now,playing);
+        this.stepFakes(playing);
         // Small physical steps keep the theatrical bodies within their collision surfaces.
         this.stepBodies(dt,playing);
         for(const b of this.world.bodies)if(b.type!==C.Body.STATIC)b.updateAABB();
@@ -650,12 +804,27 @@ export class ChaosSimulation {
             const incoming={...shot.v};
             if(target?.kind==='rat' && target.player && target.player.hp>0){
                 const damage=hit.shape===target.head||(this.incidentActive('crossfire')&&shot.wallBounced)?3:1;
+                if(hasIronclad(this.buffs,target.player.id,now)){
+                    // A reflective coat, not a hit shield: keep the original shooter
+                    // and finite budget, and never treat a rat contact as a wall bounce.
+                    this.reflect(shot,normal);
+                    this.impacts.push({p:data(point),n:data(normal),surface:false,scale:1.1,cue:'case-hit'});
+                    this.sound('case-bounce',point,normal,30);
+                    continue;
+                }
                 if(playing)this.hit({owner:shot.owner,victim:target.player.id,damage,incoming});
                 this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:false});
                 this.shots.splice(i,1);continue;
             }
             if(target?.kind==='case'){
                 const c=this.cases.get(target.caseId??'primary')!;
+                if(c.fake){
+                    // The triggering ball is consumed by the blast, matching the
+                    // established shot-prop convention; no fake missile state.
+                    this.detonateFake(c,shot.owner??null);
+                    this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:false,scale:1.6,cue:'case-hit'});
+                    this.shots.splice(i,1);continue;
+                }
                 if(this.incidentActive('evidence-tampering')){
                     if(c.owner)this.releaseCase(c);
                     this.launchCaseMissile(c,vec(incoming));
@@ -715,6 +884,9 @@ export class ChaosSimulation {
         if(this.impacts.length>64)this.impacts.splice(0,this.impacts.length-64);
     }
     private stepLooseCase(c:CaseRuntime,now:number,playing:boolean){
+        // Counterfeits never equip, never recover and never return: they only
+        // wait to be shot or to detonate on the first rat that reaches them.
+        if(c.fake)return;
         if(!c.owner){
             const p=c.body.position;
             const invalid=!Number.isFinite(p.x+p.y+p.z)||outsideCity(p.x,p.z)||p.y< -9 ||
@@ -775,7 +947,15 @@ export class ChaosSimulation {
     }
     private caseSnapshot(c:CaseRuntime):CaseState{
         return {...pose(c.body),owner:c.owner,previousOwner:c.previousOwner,pickupAfter:c.pickupAfter,
-            returningUntil:c.returningUntil,...(c.missileOwner?{missileOwner:c.missileOwner}:{})};
+            returningUntil:c.returningUntil,...(c.missileOwner?{missileOwner:c.missileOwner}:{}),...(c.fake?{fake:true}:{})};
+    }
+    private buffSnapshot():BuffMap{
+        const active:BuffMap={};
+        for(const id of Object.keys(this.buffs)){
+            const entry=activeBuffs(this.buffs,id,this.now);
+            if(entry.ironcladUntil||entry.hustleUntil)active[id]=entry;
+        }
+        return active;
     }
     private shotSnapshot(s:ChaosShot):ChaosShot{
         return {...s,p:{...s.p},v:{...s.v},
@@ -790,12 +970,16 @@ export class ChaosSimulation {
         const state:ChaosState={time:this.now,case:this.caseSnapshot(this.primaryCase),
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
             extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,cooldowns:{...this.pressure.cooldowns},launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
+            pickups:[...this.pickups].filter(([,site])=>site.availableAt<=this.now).map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z})),
+            buffs:this.buffSnapshot(),
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
             shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts.slice(-64),...(this.impacts.length<64?this.audioImpacts.slice(-(64-this.impacts.length)):[])].slice(0,64),notice:{...this.notice}};
         if(drain){this.impacts=[];this.audioImpacts=[];}return state;
     }
     reset(){this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
         this.assignment=undefined;
+        this.buffs={};this.pickupEvents.length=0;
+        for(const site of this.pickups.values())site.availableAt=0;
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.lastSurgePulse=0;this.dispatchActivator=null;
@@ -808,9 +992,12 @@ export class ChaosSimulation {
         c.returningUntil=saved.returningUntil;c.looseSince=time;this.scaleCase(c.owner?1:CASE_LOOSE_SCALE,c);
         c.body.position.copy(vec(saved.p));c.body.velocity.copy(vec(saved.v));c.body.angularVelocity.copy(vec(saved.spin));
         Object.assign(c.body.quaternion,saved.q);
-        c.body.type=c.owner?C.Body.KINEMATIC:C.Body.DYNAMIC;c.body.collisionFilterMask=c.owner?16:1|8|16;
+        // Counterfeits stay parked where they were planted, exactly like a fresh one.
+        const parked=c.fake;
+        c.body.type=parked?C.Body.STATIC:c.owner?C.Body.KINEMATIC:C.Body.DYNAMIC;
+        c.body.collisionFilterMask=(c.owner||parked)?16:1|8|16;
         c.body.updateMassProperties();c.body.updateAABB();
-        c.armed=this.incidentActive('evidence-tampering')&&!c.owner;
+        c.armed=!parked&&this.incidentActive('evidence-tampering')&&!c.owner;
     }
     private restore(s:ChaosState){
         const assignment=restoreAssignment(s.assignment,Date.now());if(assignment)this.setAssignment(assignment);
@@ -830,6 +1017,16 @@ export class ChaosSimulation {
                 c.armed=true;
                 if(c.body.velocity.length()<12)this.launchCaseMissile(c);
                 else {c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;c.body.wakeUp();}
+            }
+        }
+        // Restore only surviving traps; a missing ID has already detonated.
+        if(this.incidentActive('planted-evidence')&&s.dispatch.until>Date.now()){
+            this.plantedSerial=this.dispatch.serial;
+            for(const id of COUNTERFEIT_IDS){
+                const saved=s.extraCases?.find(x=>x.id===id);
+                if(s.extraCases&&!saved)continue;
+                const c=this.createCase(id,true);
+                if(saved)this.restoreCase(c,saved,s.time);else this.placeFake(c);
             }
         }
         const elapsed=Math.max(0,(Date.now()-s.time)/1000);
