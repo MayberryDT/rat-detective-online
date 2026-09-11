@@ -1,6 +1,6 @@
 # Rat Detective: agent entry point
 
-Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md](docs/README.md) for the documentation map. These describe the shipped game as verified on **2026-09-10**, not a new implementation request.
+Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md](docs/README.md) for the documentation map. These describe the shipped game as verified on **2026-09-11**, not a new implementation request.
 
 ## Preserve the game
 

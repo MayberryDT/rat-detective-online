@@ -4,8 +4,8 @@
 **Scope:** Three timed pickups (Ironclad Alibi, Hot Pursuit, Quick Fix) and replacing
 the shipped Evidence Tampering incident with Planted Evidence, with the retired
 missile incident kept behind an opt-in room mode.
-**Status:** Release candidate verified September 11. Commit and production release
-are authorized; deployment details will be recorded below. No human acceptance
+**Status:** Committed and deployed September 11. Application commit `aaa8750`,
+Worker `d6d1b1e3-9406-4df6-a3f5-04132652e3c1`, protocol **10**. No human acceptance
 of pickup feel is claimed.
 
 > Counterfeit count: **10**, confirmed by Tyler. Fake cases are additional to the
@@ -183,3 +183,31 @@ clients. The complete two-client local scenario was rerun successfully with
 
 The coordinated final client/Worker release uses **protocol 10**, preventing a
 cached intermediate protocol-9 decoder from silently rejecting the added fields.
+
+
+## Final production release
+
+- Application commit **`aaa8750`**, including feature commit `5f0128c` and the
+  previously accepted responsive-shooting/audio/playback work at `ae2fdb3`.
+- Production Worker **`d6d1b1e3-9406-4df6-a3f5-04132652e3c1`**, environment
+  `production`, protocol **10**, canonical https://ratdetective.online/.
+- **51 published files** match the final local build byte for byte. Health passes;
+  both old-host root and asset/query redirects return 301 to the canonical host.
+- A bounded passive production observer received **50 valid compact snapshots**,
+  zero invalid messages, eight total rats and six pickup sites. Welcome lists
+  Planted Evidence and excludes Evidence Tampering. The observer sent no shots
+  or movement; after departure, the empty room returned to zero players/bots.
+- `public-live-v2`, world version 2 and seed **341283204** are preserved. No room
+  reset, namespace recreation, public stress test or audible browser test occurred.
+- Final validation: **883 tests** (132 Worker, 726 client, 25 script), typecheck
+  and build pass; dependency audit reports zero vulnerabilities.
+- Final local browser welcome also carried protocol 10 and all six sites in its
+  compact keyframe. Local-runtime reconnects remain a playtest limitation; no
+  performance or multi-human acceptance claim is made.
+- Port 5190 is restored and serves the final source. Continue agent review with
+  `?room=graybox-practice-pickups-review-next&bots=11&incident=planted-evidence&mute=1`.
+
+The immediate predecessor was the intermediate protocol-9 candidate
+`024dc635-2fbe-4b51-aaf8-2d43cdef789b`; the preceding accepted production version
+was `8cacdb60-2ee0-4f63-b8bb-9f02de321719`. Do not roll back to the intermediate
+candidate: it omits pickups/buffs from compact delivery.

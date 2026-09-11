@@ -13,7 +13,8 @@ typecheck, build, audit and a two-client compact-v2 local Worker probe pass.
 The final protocol is **10**: compact snapshots now carry pickups and buffs,
 correcting the intermediate protocol-9 candidate. Bounded browser
 review checked default/classic behavior; human feel remains unverified.
-Use `&mute=1` for all local agent browser tests. Commit/release are authorized;
+Use `&mute=1` for all local agent browser tests. Released as application `aaa8750`,
+Worker `d6d1b1e3-9406-4df6-a3f5-04132652e3c1`;
 consult the [receipt](verification/pickups-planted-evidence-2026-09-11.md) for final
 release details. The remainder preserves the original implementation handoff.
 

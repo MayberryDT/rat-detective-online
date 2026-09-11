@@ -1,17 +1,21 @@
 # Live service runbook
 
-Last release receipt: **2026-09-10**. Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
+Last release receipt: **2026-09-11**. [Pickups and Planted Evidence release](verification/pickups-planted-evidence-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
 
 | Item | Value |
 | --- | --- |
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `8cacdb60-2ee0-4f63-b8bb-9f02de321719` — application commit `420bee2`, protocol 7, steady scenery lights and pane-aligned downward shafts |
-| Previous version | `d5fc60bf-78a8-44e2-821b-f7c794233e68` — September 10 grounded exterior lighting |
+| Last deployed version | `d6d1b1e3-9406-4df6-a3f5-04132652e3c1` — application commit `aaa8750`, protocol 10, pickups/Planted Evidence and accepted shooting/playback |
+| Previous version | `024dc635-2fbe-4b51-aaf8-2d43cdef789b` — intermediate protocol-9 candidate, missing compact pickup/buff fields; do not use for rollback |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 16 total rats per room; occupied rooms fill to eight with AI, yielding to humans; automatic overflow rooms |
+
+The preceding accepted release was `8cacdb60-2ee0-4f63-b8bb-9f02de321719`.
+Protocol 10 requires matching client and Worker: protocol-9 compact clients do
+not understand the final pickup/buff metadata.
 
 ## Continuous operation
 
@@ -58,6 +62,7 @@ The private `rat-detective-network-test` Worker is separate. Its last recorded r
 
 | Release | Evidence |
 | --- | --- |
+| Pickups/Planted Evidence, `d6d1b1e3-9406-4df6-a3f5-04132652e3c1` | 883 tests, typecheck/build, clean audit; 51 exact assets, 50 valid compact snapshots, eight rats, six sites, original world and redirects; human pickup feel remains unverified |
 | Initial persistent launch, `9d4c98e5-5225-49eb-825b-1c8777a0879b` | 352 tests; bounded no-human operation and live transport check |
 | Recovery / incidents, `b112bdc2-28e1-467b-8d63-d7ad5468968d` | 388 tests covered; extra cases and incident migration |
 | Navigation fix, `db9890c3-2e7d-4606-b590-71993812f4c4` | 401 tests; captured 40-second replay improved from 106 to 348 shots and 6 to 0 unnecessary rescues |

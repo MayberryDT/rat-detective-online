@@ -1,6 +1,6 @@
 # Documentation map
 
-Reviewed against repository source and the latest release receipt on **2026-09-10**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+Reviewed against repository source and the latest release receipt on **2026-09-11**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
 
 ## Current references
 
