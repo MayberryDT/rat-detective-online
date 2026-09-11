@@ -2,7 +2,7 @@ import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOT_REFILL_MS, type GameRoom } from '../../src/worker/GameRoom';
-import { DEFAULT_ROOM_NAME, MAX_PLAYERS, type ServerMessage } from '../../src/shared/networkProtocol';
+import { DEFAULT_ROOM_NAME, MAX_PLAYERS, PROTOCOL_VERSION, type ServerMessage } from '../../src/shared/networkProtocol';
 
 const sockets: WebSocket[] = [];
 const rooms = new Set<string>();
@@ -29,7 +29,7 @@ async function open(group:string, preferred?:string, join=true) {
   const messages:ServerMessage[]=[];
   ws.addEventListener('message',event=>{const message=readSocketMessage(ws,event.data);if(message)messages.push(message);});
   if(!join)return {ws,messages,welcome:undefined};
-  ws.send(JSON.stringify({type:'join',protocolVersion:7,name:'Human Rat',appearance}));
+  ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Human Rat',appearance}));
   await until(()=>messages.some(m=>m.type==='welcome'));
   const welcome=messages.find(m=>m.type==='welcome') as Extract<ServerMessage,{type:'welcome'}>;
   rooms.add(welcome.matchRoom!);
@@ -66,7 +66,7 @@ describe('automatic public room population',()=>{
     await runInDurableObject(matcher,(_instance,ctx)=>expect(ctx.storage.sql.exec('SELECT name FROM rooms').toArray()).toHaveLength(0));
     const messages:ServerMessage[]=[];
     titles[0].addEventListener('message',e=>{const m=readSocketMessage(titles[0],e.data);if(m)messages.push(m);});
-    titles[0].send(JSON.stringify({type:'join',protocolVersion:7,name:'Captain Crawley',appearance}));
+    titles[0].send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Captain Crawley',appearance}));
     await until(()=>messages.some(m=>m.type==='welcome'));
     expect(await stub.occupiedSlots()).toBe(1);expect(await stub.status()).toMatchObject({players:8,bots:7});
     await runInDurableObject(stub,async(instance:GameRoom)=>{
@@ -82,7 +82,7 @@ describe('automatic public room population',()=>{
     const title=prepared.webSocket!;title.accept();sockets.push(title);
     await Promise.all(Array.from({length:MAX_PLAYERS},()=>open(group,undefined,false)));
     const messages:ServerMessage[]=[];title.addEventListener('message',e=>{const m=readSocketMessage(title,e.data);if(m)messages.push(m);});
-    title.send(JSON.stringify({type:'join',protocolVersion:7,name:'Late Title',appearance}));
+    title.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Late Title',appearance}));
     await until(()=>messages.some(m=>m.type==='error'));
     expect(await stub.occupiedSlots()).toBe(MAX_PLAYERS);expect(await stub.status()).toMatchObject({players:0,bots:0});
   });

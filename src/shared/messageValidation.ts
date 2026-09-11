@@ -1,4 +1,5 @@
 import {expandMovement} from './movementWire';
+import {BALL_SPEED} from './ballTuning';
 import {isWorldFoleyCue} from './foleyEvents';
 import { sanitizeDiagnosticReport } from './diagnosticReport';
 import { parseAssignment } from './assignments';
@@ -448,6 +449,21 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const shooterId = nonEmptyString(parsed.shooterId, 64);
       const shot = parseShotFields(parsed);
       if (!shooterId || !shot) return null;
+      let launch:Extract<ServerMessage,{type:'playerShot'}>['launch'];
+      if(parsed.launch!==undefined){
+        if(!isRecord(parsed.launch))return null;
+        const at=finiteNumber(parsed.launch.at),balls=parsed.launch.balls;
+        if(at===null||at<0||!Array.isArray(balls)||balls.length<1||balls.length>5)return null;
+        const resolved:NonNullable<typeof launch>['balls']=[],ids=new Set<string>();
+        for(const ball of balls){
+          if(!isRecord(ball))return null;
+          const id=nonEmptyString(ball.id,64),velocity=parseVec3(ball.velocity);
+          if(!id||!velocity||ids.has(id)||Math.abs(Math.hypot(velocity.x,velocity.y,velocity.z)-BALL_SPEED)>.01)return null;
+          ids.add(id);resolved.push({id,velocity});
+        }
+        if(resolved[0].id!==shot.shotId)return null;
+        launch={at,balls:resolved};
+      }
       let movement: Extract<ServerMessage,{type:'playerShot'}>['movement'];
       if(parsed.move!==undefined||parsed.movement!==undefined){
         const expanded=parsed.move!==undefined?expandMovement({players:[parsed.move]}):{type:'playersMoved',players:[parsed.movement]};
@@ -455,7 +471,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         if(moves?.type!=='playersMoved'||moves.players[0].player.id!==shooterId)return null;
         movement=moves.players[0];
       }
-      return { type: 'playerShot', shooterId, ...shot, ...(movement?{movement}:{}) };
+      return { type: 'playerShot', shooterId, ...shot, ...(movement?{movement}:{}), ...(launch?{launch}:{}) };
     }
     case 'playerDamaged': {
       const id = nonEmptyString(parsed.id, 64);

@@ -2,16 +2,20 @@
 
 Reviewed **2026-09-10**, including the live [Dispatch Assignments](dispatch-assignments.md) update and [full production release](verification/production-release-2026-09-10.md). The [08e8005 reference](verification/gameplay-baseline-08e8005.md) and dated shipped loop in current-state.md are historical. Do not restore their older muzzle, camera, models or map wholesale.
 
+The launcher, ball lifetime, local projectile presentation and Bad Ammunition changes below are the subsequent [September 10 local follow-up](verification/launcher-projectile-cleanup-2026-09-10.md), including the [authoritative muzzle delivery correction](verification/authoritative-muzzle-2026-09-10.md), [audio/performance follow-up](verification/audio-performance-2026-09-10.md), [shared physics playback fix](verification/physics-playback-2026-09-10.md), and [responsive shooting](verification/responsive-shooting-2026-09-10.md), available in the private preview; not deployed to production.
+
 | Behavior | Current source / value |
 | --- | --- |
 | Stage capacity | 16 total rats; automatic public rooms fill occupied lobbies to eight with server-owned AI, yield to humans and sleep when empty. Private full-lobby mode fills all 16 slots and replaces bots on human joins |
-| World sound | Shared 3D distance gain raised 50% after all range fades, capped at near volume: about 37% at 50 units, 9.8% at 100, 1.8% at 250. Gun base gain .30; close foley/sirens retain their range limits. Personal UI cues remain local |
+| World sound | Shared 3D fade uses scale 32 with a 1.5 gain after range fades, capped at near volume: about 55.3% at 50 units, 16.5% at 100, 2.87% at 250. Gun base gain .40. Close foley/sirens/launchers retain their range limits; personal UI cues remain local |
 | Human movement | 18; acceleration/braking 0.28 / 0.12 at fixed 60 Hz (`RatController.ts`) |
 | AI movement | 12 on flat active-objective routes; 6.5 near goals/stairs, 8 for supported combat strafes (`ObjectiveBotBrain.ts`), independent of human speed |
 | Mobile firing | One tap fires once; holding never repeats. The fire finger can still drag to aim, with the existing 85 ms rapid-tap bound and cancellation cleanup |
 | Keyboard jump | Base 16 × sqrt(1.28), extra jump-only gravity factor 1.28; world/ball gravity unchanged |
 | Camera | Radius 6, pivot 3.5, shoulder 1.25, mouse sensitivity 0.002, obstruction checks |
-| Ordinary ball | Speed 175, gravity −25, restitution 0.9, lifetime 5 seconds (`ballTuning.ts`) |
+| Launcher sound | Existing impact/air sound at .595 maximum gain (30% below .85), shared 3D world fade plus range fade to silence at 120 units. Both layers follow listener movement; bounded to 12 voices with teardown cleanup |
+| Ordinary ball | Speed 175, gravity −25, restitution 0.9, lifetime 2.5 seconds (`ballTuning.ts`) |
+| Bad Ammunition | 70% one ball, 20% two, 10% three; 0.12–0.24 rad deviation from aim, diagonally within each quadrant (30–60°), no delayed extras. Normal speed and pitched original gunshot remain |
 | Damage / round | 3 HP; body 1, head 3; assignment completion wins in version 2; 3-second respawn, 6-second victory |
 | Case objective | 120-second shared held countdown, ten personal case kills at attributed kill time, or three personal paperwork deliveries. Whole landmarks rotate in shuffled cycles; carry the case at every delivery. Non-winning deliveries respawn the case at a random clear pickup site. Actual kills, no carrier multiplier. Legacy version 1 retains its existing deathmatch scoring |
 | Evidence Tampering | Eight uncollectible ricocheting cases: lateral launch 145, shot redirect 160, lateral floor 140; floor hop 7, upward cap 10. Objective progress pauses; original progress resumes after expiry; cleanup/overlap cannot award progress. Case-caused deaths and neutral corpse chains increment only victim deaths, with no player kill credit |
@@ -21,11 +25,11 @@ Reviewed **2026-09-10**, including the live [Dispatch Assignments](dispatch-assi
 | Full scoreboard | Hold Tab for all lobby rows: mode score, kills, deaths, K/D, server case time, possession share and live status; names and local YOU marker, no AI/PLAYER badges or bot totals. Translucent dark table; release/focus loss closes, wheel scrolls, held view updates through reset. Closing stats never determine its winner |
 | Rat readability | Local outline hidden through death/respawn; opponents retain .025 thickness / .22 opacity. All rats retain 16% material color lift and .28 emissive fill; city ambient remains dark |
 | Bot combat | 200–316.7 ms shot intervals, 2.8–5.6° held aim error; delayed reaction/observations/tracking retained |
-| Ball readability | Yellow ordinary cheese with shaded pores; stronger red-orange enemy rims/trails. Crossfire bank shots turn red for every owner: yours stay shaded without an enemy glow/trail, enemy ricochets have brighter cores and glowing red rims/trails. Local prediction uses the same ordinary cheese material |
+| Ball readability | Yellow ordinary cheese with shaded pores; stronger red-orange enemy rims/trails. Crossfire bank shots turn red for every owner: yours stay shaded without an enemy glow/trail, enemy ricochets have brighter cores and glowing red rims/trails. One real-ID local shot is predicted immediately in the shared instanced pool and reconciled with authority; no separate helper mesh or confirmation rewind |
 | Case/incident copy | Essential objective and suspension statuses remain. Sixty-four case jokes rotate by pickup/loss/taken/loose event; no repeated score-retention tutorials. 24 additional named case-death jokes rotate without repetition until the bag is exhausted. Incident subtext is brief noir flavor |
 | Big Cheese | Actual-radius sphere sweep against world and rat shapes; ordinary balls unchanged |
 | Player collision | Spheres 0.6 at y0.6, 0.45 at y1.3, 0.28 at y1.9 |
-| Shot origin | Animated barrel/muzzle pose via `muzzlePose.ts`; send resolved descriptor |
+| Shot origin | Animated barrel/muzzle pose via `muzzlePose.ts`; send resolved descriptor. Protocol 8 delivers real server birth IDs/velocities only to the firing player. The same ball starts at that muzzle immediately after successful send; shared UUID-seeded volley resolution includes Bad Ammunition and Scattershot. Local swept motion remains render-only; confirmed collision/removal takes precedence. Observers retain production shot packets and snapshot playback |
 | Case | Opaque leather/document model, red outline, loose scale 2, normal scale carried at side |
 | Main map | Version 2 shared city geometry, landmarks/interiors/sewers; Maintenance wall bench and supply cabinet share collision geometry. Old 12×12 source counts are not current scene counts |
 | Dispatch readiness | Alternating red/blue roof beacons; nearest ready machine emits a 1.6-second whoop at most every four seconds within 85 units. Stops when busy |

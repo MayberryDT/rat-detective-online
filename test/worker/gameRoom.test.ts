@@ -314,10 +314,19 @@ describe('GameRoom websockets', () => {
     const client = await openClient(room);
     client.ws.send(joinPayload('Shooter'));
     const welcome = await client.inbox.waitFor('welcome');
+    const observer=await openClient(room);observer.ws.send(joinPayload('Observer'));
+    await observer.inbox.waitFor('welcome');
     const shot = { type: 'shoot' as const, shotId: 'visible-shot',
       origin: { x: welcome.player.x, y: welcome.player.y + 1.5, z: welcome.player.z },
       direction: { x: 0, y: 1, z: 0 } };
     client.ws.send(JSON.stringify(shot));
+    const born=await client.inbox.waitFor('playerShot',message=>message.shotId===shot.shotId);
+    expect(born.origin).toEqual(shot.origin);
+    expect(born.launch).toEqual({at:expect.any(Number),balls:[{id:shot.shotId,velocity:{x:0,y:175,z:0}}]});
+    expect(parseServerMessage(born)).toEqual(born);
+    const observed=await observer.inbox.waitFor('playerShot',message=>message.shotId===shot.shotId);
+    expect(observed).toMatchObject({shooterId:welcome.id,origin:shot.origin,direction:shot.direction});
+    expect(observed.launch).toBeUndefined();
     const snapshot = await client.inbox.waitFor('chaos', message => message.state.shots.some(ball => ball.id === shot.shotId));
     expect(parseServerMessage(JSON.stringify(snapshot))).not.toBeNull();
     expect(snapshot.state.shots.find(ball => ball.id === shot.shotId)?.owner).toBe(welcome.id);

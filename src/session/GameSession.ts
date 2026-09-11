@@ -176,8 +176,7 @@ export class GameSession {
         this.shotsAttempted++;
         const shot = this.gun.shoot(this.rat.entity, target);
         if (shot && this.transport.send({type:'shoot', ...shot})) {
-            this.shotsSent++;
-            if (this.gun.authoritative) this.gun.predictShot(this.rat.entity, shot);
+            this.shotsSent++;this.chaos?.fire(shot);
         }
     }
     private requestPointerLock(): void { if (!this.touch?.active) this.pointerLock.request(); }
@@ -209,7 +208,7 @@ export class GameSession {
         this.gun.setPlayer(this.stage.camera, this.rat.entity);
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
-        if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld);
+        if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
         this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.hud.hideRespawn();
         this.hud.hideVictory();
@@ -234,7 +233,6 @@ export class GameSession {
         switch (message.type) {
             case 'chaos':
                 this.gun.setIncident(message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined);
-                this.gun.reconcilePredictedShots(message.state.shots);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);break;
             case 'welcome': this.welcome(message); break;
             case 'currentPlayers': break; // Atomic welcome already applied the complete state.
@@ -255,6 +253,7 @@ export class GameSession {
                 break;
             }
             case 'playerShot': {
+                if(message.shooterId===this.myId){this.chaos?.launch(message);break;}
                 const owner = this.remotes.get(message.shooterId);
                 if (owner) this.gun.replayShot(owner, message);
                 break;
@@ -302,7 +301,7 @@ export class GameSession {
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
-            case 'gameReset': this.roundWon=false;this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+            case 'gameReset': this.roundWon=false;this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -371,7 +370,7 @@ export class GameSession {
             performance.mark('city-first-play-frame');
         }
         this.chaos?.renderOutline(renderer,camera);
-        this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:{...this.chaos?.getDiagnostics(),predictedBalls:this.gun.predictedBallCount}});
+        this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 

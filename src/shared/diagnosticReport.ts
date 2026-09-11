@@ -18,7 +18,7 @@ export function sanitizeDiagnosticReport(value: unknown): Record<string, unknown
     details: {
       ...numbers(details, ['shotsAttempted', 'shotsSent', 'snapshotAgeMs']),
       network: numbers(details.network, ['receivedCount', 'receivedChars', 'parseMs', 'parseMaxMs', 'invalidCount', 'ignoredCount', 'lastReceivedAt', 'sentCount', 'sendFailures', 'bufferedAmount','receivedBytes','applyMs','applyMaxMs','joinMs','reconnectCount','lastCloseCode']),
-      projectiles: numbers(details.projectiles, ['receivedShots', 'renderedBalls', 'predictedBalls', 'corpses', 'snapshotAgeMs']),
+      projectiles: numbers(details.projectiles, ['receivedShots', 'renderedBalls', 'corpses', 'snapshotAgeMs']),
     },
   };
 }

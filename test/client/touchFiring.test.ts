@@ -29,7 +29,7 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
     const render = vi.fn(), shots: ShotDescriptor[] = [];
     const input = new TouchInput((dx, dy) => rat.onMouseMove(dx, dy));
-    // Exercise the production frame -> touch tap -> shoot -> prediction path.
+    // Exercise the production frame -> touch tap -> shoot -> transport path.
     // GPU, city and transport are replaced; no browser input automation.
     const session = Object.assign(Object.create(GameSession.prototype), {
         disposed: false, previousTime: 0, stats: null, bots: null, chaos: null, rat, gun, remotes,
@@ -62,6 +62,6 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
         expect(shots).toHaveLength(2);
         expect(new Set(shots.map(shot => shot.shotId)).size).toBe(shots.length);
         for (const shot of shots) expect(shot.shotId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-        expect(gun.predictedBallCount).toBe(0);
+        expect(scene.children.filter(child=>child instanceof THREE.Mesh)).toHaveLength(0);
     } finally { gun.dispose(); rat.dispose(); remotes.dispose(); }
 });

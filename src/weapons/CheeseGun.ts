@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import {SpatialRayQuery} from '../shared/SpatialRayQuery';
+import type {ShotTrace} from '../shared/LocalShotPresentation';
 import type { ShotDescriptor } from '../shared/networkProtocol';
 import type { IncidentId } from '../shared/incidentCatalog';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
@@ -22,15 +24,16 @@ interface CheeseBall {
     age: number;
     squash: number;
     owner: RatEntity;
-    predictionId?: string;
 }
 
 export class CheeseGun {
     public authoritative = false;
     public fireCue: 'normal' | 'malfunction' = 'normal';
-    private predictTrajectory = true;
     private scene: THREE.Scene;
     private world: CANNON.World;
+    private presentationRay?:SpatialRayQuery;
+    private readonly acceptPresentationBody=(body:CANNON.Body)=>
+        (body as CANNON.Body&{userData?:{entity?:RatEntity}}).userData?.entity!==this.playerEntity;
     private camera: THREE.PerspectiveCamera | null = null;
     private playerEntity: RatEntity | null = null;
 
@@ -144,36 +147,19 @@ export class CheeseGun {
 
     setIncident(incident?: IncidentId): void {
         this.fireCue = incident === 'bad-ammunition' ? 'malfunction' : 'normal';
-        // Bad Ammunition's random direction is chosen by the server. A guessed
-        // straight ball falsely shows a second trajectory before that result.
-        this.predictTrajectory = incident !== 'bad-ammunition';
-        if (!this.predictTrajectory) {
-            for (let i = this.balls.length - 1; i >= 0; i--) {
-                if (this.balls[i].predictionId) this.removeBall(i);
-            }
-        }
     }
 
-    /** Immediate visual prediction when the launch direction is already known. */
-    predictShot(owner: RatEntity, shot: ShotDescriptor): void {
-        if (this.disposed || !this.authoritative || !this.predictTrajectory || this.balls.some(ball => ball.predictionId === shot.shotId)) return;
-        // Pending shots are short lived and bounded, including on a stalled connection.
-        if (this.balls.length >= 32) this.removeBall(0);
-        const ball = this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
-            new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
-        ball.predictionId = shot.shotId;
-    }
-
-    get predictedBallCount(): number { return this.authoritative ? this.balls.length : 0; }
-
-    reconcilePredictedShots(shots: readonly { id: string }[]): void {
-        if (!this.balls.length) return;
-        const confirmed = new Set(shots.map(shot => shot.id));
-        for (let i = this.balls.length - 1; i >= 0; i--) {
-            const id = this.balls[i].predictionId;
-            if (id && confirmed.has(id)) this.removeBall(i);
-        }
-    }
+    /** Presentation sweeps never damage entities or emit hit feedback. Exclude
+     * the owner before selecting the closest hit, so it cannot mask a wall. */
+    readonly tracePresentation:ShotTrace=(from,to)=>{
+        this.rayFrom.set(from.x,from.y,from.z);this.rayTo.set(to.x,to.y,to.z);
+        this.presentationRay??=new SpatialRayQuery(this.world);
+        const hit=this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptPresentationBody,GROUP_PROJECTILE);
+        if(!hit.hasHit)return undefined;
+        const entity=(hit.body as CANNON.Body&{userData?:{entity?:RatEntity}}|null)?.userData?.entity;
+        return{p:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},
+            n:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z},rat:!!entity&&!entity.dead};
+    };
 
     clearProjectiles(): void {
         while (this.balls.length) this.removeBall(this.balls.length - 1);
@@ -192,7 +178,7 @@ export class CheeseGun {
             ball.mesh.rotation.y += dt * 9;
             ball.mesh.scale.setScalar(1 - ball.squash * 0.1);
 
-            if (ball.age > (ball.predictionId ? .5 : BALL_LIFETIME)) {
+            if (ball.age > BALL_LIFETIME) {
                 this.removeBall(i);
                 continue;
             }
@@ -235,11 +221,6 @@ export class CheeseGun {
                     if (hitBody && (hitBody as any).userData && (hitBody as any).userData.entity instanceof RatEntity) {
                         const victim = (hitBody as any).userData.entity as RatEntity;
 
-                        if (ball.predictionId) {
-                            this.removeBall(i);
-                            continue;
-                        }
-
                         if (ball.owner.isRemote) {
                             ball.position.copy(nextPos);
                             ball.mesh.position.copy(ball.position);
@@ -272,7 +253,7 @@ export class CheeseGun {
                         }
                     }
 
-                    if (!ball.predictionId) this.impacts.emit(hitPoint, hitNormal, true);
+                    this.impacts.emit(hitPoint, hitNormal, true);
                     ball.squash = 1;
                     ball.mesh.scale.setScalar(0.9);
                     // HIT WALL / GROUND → BOUNCE
@@ -298,7 +279,7 @@ export class CheeseGun {
         this.impacts.dispose();
         this.ballGeometry.dispose();
         this.ballMaterial.dispose();
-        this.fireAudio.dispose();
+        this.fireAudio.dispose();this.presentationRay?.dispose();this.presentationRay=undefined;
         this.onHitEntity = null;
         this.playerEntity = null;
         this.camera = null;

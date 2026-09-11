@@ -1,4 +1,5 @@
 import * as C from 'cannon-es';
+import {resolveShotPattern} from './shotPattern';
 import type {WorldFoleyCue} from './foleyEvents';
 import { SpatialRayQuery } from './SpatialRayQuery';
 import { StaticCityBroadphase } from './StaticCityBroadphase';
@@ -54,6 +55,7 @@ export class ChaosSimulation {
     private pressure:NonNullable<ChaosState['pressure']>={serial:0,until:0,cooldowns:{},launches:[]};
     private notice={serial:0,text:'Find the Hot Case. Shoot Dispatch.'};
     private now=Date.now();
+    get time():number{return this.now;}
     private assignment?:AssignmentRules;
     get assignmentState():AssignmentState|undefined{return this.assignment?.state;}
     setAssignment(state:AssignmentState):void{this.assignment=new AssignmentRules(structuredClone(state),this.players);}
@@ -211,36 +213,16 @@ export class ChaosSimulation {
         const aimed=direction.scale(Math.cos(yaw)*Math.cos(pitch)).vadd(side.scale(Math.sin(yaw))).vadd(up.scale(Math.sin(pitch)));
         aimed.normalize();return aimed;
     }
-    private crookedAim(direction:C.Vec3){
-        const axis=Math.abs(direction.y)<.95?new C.Vec3(0,1,0):new C.Vec3(1,0,0);
-        const side=direction.cross(axis);side.normalize();
-        const up=side.cross(direction);up.normalize();
-        // An annulus excludes accurate shots, including RNG midpoint values.
-        const angle=.12+Math.random()*.38,azimuth=Math.random()*Math.PI*2;
-        return direction.scale(Math.cos(angle)).vadd(side.scale(Math.sin(angle)*Math.cos(azimuth)))
-            .vadd(up.scale(Math.sin(angle)*Math.sin(azimuth)));
-    }
-    shoot(owner:string,shot:ShotDescriptor){
-        if(!this.players.get(owner) || this.players.get(owner)!.hp<=0)return;
-        const direction=vec(shot.direction);direction.normalize();
-        if(this.incidentActive('scattershot')){
-            this.reserveShots(5);
-            const v=direction.scale(BALL_SPEED);
-            this.emitShot(owner,shot.origin,v,shot.shotId,this.originalShot());
-            for(const angle of [-.22,-.11,.11,.22]){
-                const rotation=new C.Quaternion();rotation.setFromAxisAngle(new C.Vec3(0,1,0),angle);
-                this.emitShot(owner,shot.origin,rotation.vmult(v),crypto.randomUUID(),this.originalShot());
-            }
-            return;
+    shoot(owner:string,shot:ShotDescriptor):ChaosShot[]{
+        if(!this.players.get(owner)||this.players.get(owner)!.hp<=0)return [];
+        const incident=this.dispatch.phase==='active'?incidentInfo(this.dispatch.incident).id:undefined;
+        const pattern=resolveShotPattern(shot,incident),fired:ChaosShot[]=[];
+        this.reserveShots(pattern.length);
+        for(const ball of pattern){
+            const emitted=this.emitShot(owner,shot.origin,vec(ball.velocity),ball.id,this.originalShot());
+            if(emitted)fired.push(emitted);
         }
-        if(this.incidentActive('bad-ammunition')){
-            const roll=Math.random(),count=roll<.7?1:roll<.9?2:3;
-            this.reserveShots(count);
-            for(let i=0;i<count;i++)this.emitShot(owner,shot.origin,this.crookedAim(direction).scale(BALL_SPEED),
-                i===0?shot.shotId:crypto.randomUUID(),this.originalShot());
-            return;
-        }
-        this.emitShot(owner,shot.origin,direction.scale(BALL_SPEED),shot.shotId,this.originalShot());
+        return fired;
     }
 
     private syncRats(){

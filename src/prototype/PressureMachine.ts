@@ -1,18 +1,20 @@
 import * as THREE from 'three';
 import {LAUNCH_MACHINES,type LaunchMachine,type ChaosState} from '../shared/chaosState';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
+import {LauncherAudio} from '../audio/LauncherAudio';
 
 /** Six municipal contraptions. Low launch surfaces stay traversable; control housings are shared cover. */
 export class PressureMachine {
     private root=new THREE.Group();
-    private noiseBuffer?:AudioBuffer;
+    private readonly launchAudio:LauncherAudio;
     private geometry={box:new THREE.BoxGeometry(1,1,1),round:new THREE.CylinderGeometry(.5,.5,1,20)};
     private material={metal:new THREE.MeshStandardMaterial({color:0x61736b,emissive:0x26372f,emissiveIntensity:.18,roughness:.4,metalness:.25}),dark:new THREE.MeshStandardMaterial({color:0x182727,roughness:.8}),brass:new THREE.MeshStandardMaterial({color:0xc6a55b,emissive:0x62441c,emissiveIntensity:.15,roughness:.4,metalness:.25}),wood:new THREE.MeshStandardMaterial({color:0x886346,emissive:0x302010,emissiveIntensity:.1,roughness:.8}),red:new THREE.MeshBasicMaterial({color:0xff1005,toneMapped:false}),white:new THREE.MeshBasicMaterial({color:0xffe8ad,toneMapped:false})};
     private batches=new Map<string,{shape:keyof PressureMachine['geometry'];material:THREE.Material;matrices:THREE.Matrix4[]}>();
     private instanced:THREE.InstancedMesh[]=[];
     private dummy=new THREE.Object3D();
     private moving:Array<{machine:LaunchMachine;rotor:THREE.Group;indicator:THREE.Mesh;lastUntil:number;ring:THREE.Mesh;burst:THREE.Group;shaft?:THREE.Mesh}>=[];
-    constructor(scene:THREE.Scene,private audio?:AudioContext){
+    constructor(scene:THREE.Scene,audio?:AudioContext){
+        this.launchAudio=new LauncherAudio(audio);
         this.root.name='municipal-launch-contraptions';
         for(const machine of LAUNCH_MACHINES)this.build(machine);
         for(const batch of this.batches.values()){
@@ -119,6 +121,7 @@ export class PressureMachine {
         const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),material);mesh.position.set(x,y,z);mesh.rotation.x=rx;this.root.add(mesh);
     }
     update(state:ChaosState['pressure'],now:number,camera?:THREE.Camera){
+        this.launchAudio.update(camera);
         for(const model of this.moving){
             const until=state?.cooldowns?.[model.machine.id]??(model.machine.id==='pressure'?state?.until??0:0);
             const elapsed=now-(until-model.machine.cooldownMs);
@@ -155,32 +158,8 @@ export class PressureMachine {
             model.lastUntil=until;
         }
     }
-    private launchSound(kind:LaunchMachine['kind'],pad?:LaunchMachine['pad'],camera?:THREE.Camera){
-        const ctx=this.audio;if(!ctx||ctx.state!=='running')return;
-        const now=ctx.currentTime;
-        const pitch={pressure:95,dumpster:65,freight:125,geyser:180,mousetrap:240,fan:75}[kind];
-        // Layered impact, mechanical pitch-drop and rushing air; bounded to one event per cooldown.
-        const output=ctx.createGain(),pan=ctx.createStereoPanner();
-        let distance=0;
-        if(pad&&camera){
-            const dx=pad.x-camera.position.x,dz=pad.z-camera.position.z;distance=Math.hypot(dx,dz);
-            const e=camera.matrixWorld.elements;
-            pan.pan.value=Math.max(-.85,Math.min(.85,(dx*e[0]+dz*e[2])/Math.max(1,distance)));
-        }
-        output.gain.value=.85/(1+distance/260);output.connect(pan);pan.connect(ctx.destination);
-        const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=kind==='mousetrap'?'triangle':'sawtooth';
-        osc.frequency.setValueAtTime(pitch*2,now);osc.frequency.exponentialRampToValueAtTime(35,now+.6);
-        gain.gain.setValueAtTime(.001,now);gain.gain.linearRampToValueAtTime(.65,now+.006);gain.gain.exponentialRampToValueAtTime(.001,now+.85);
-        osc.connect(gain);gain.connect(output);osc.start();osc.stop(now+.9);
-        const noise=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),air=ctx.createGain();
-        if(!this.noiseBuffer){
-            this.noiseBuffer=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*1.75),ctx.sampleRate);
-            const data=this.noiseBuffer.getChannelData(0);for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;
-        }
-        noise.buffer=this.noiseBuffer;filter.type='lowpass';filter.frequency.setValueAtTime(kind==='geyser'?4200:2200,now);filter.frequency.exponentialRampToValueAtTime(180,now+1.65);
-        air.gain.setValueAtTime(.001,now);air.gain.linearRampToValueAtTime(.8,now+.0125);air.gain.linearRampToValueAtTime(.5,now+1.15);air.gain.exponentialRampToValueAtTime(.001,now+1.7);
-        noise.connect(filter);filter.connect(air);air.connect(output);noise.start();noise.stop(now+1.75);
-        noise.onended=()=>{noise.disconnect();filter.disconnect();air.disconnect();osc.disconnect();gain.disconnect();output.disconnect();pan.disconnect();};
+    private launchSound(kind:LaunchMachine['kind'],pad:LaunchMachine['pad'],camera?:THREE.Camera){
+        this.launchAudio.play(kind,pad,camera);
     }
-    dispose(){this.root.removeFromParent();for(const mesh of this.instanced)mesh.dispose();disposeMeshResources(this.root);for(const geometry of Object.values(this.geometry))geometry.dispose();for(const material of Object.values(this.material))material.dispose();}
+    dispose(){this.launchAudio.dispose();this.root.removeFromParent();for(const mesh of this.instanced)mesh.dispose();disposeMeshResources(this.root);for(const geometry of Object.values(this.geometry))geometry.dispose();for(const material of Object.values(this.material))material.dispose();}
 }

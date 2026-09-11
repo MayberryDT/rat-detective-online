@@ -1,3 +1,4 @@
+import { PROTOCOL_VERSION } from '../../src/shared/networkProtocol';
 import { SELF } from 'cloudflare:test';
 import { expect, it } from 'vitest';
 import { DeliveryDecoder } from '../../src/shared/deliveryWire';
@@ -16,7 +17,7 @@ it('negotiates mixed clients and bounds snapshots while still delivering control
     if(decoded?.message?.type==='chaos'&&decoded.ack)frames.push(decoded.ack);
     if(!compact&&decoded?.ack)ws.send(JSON.stringify(decoded.ack));
   });
-  ws.send(JSON.stringify({type:'join',protocolVersion:7,name:compact?'Compact':'Legacy',appearance}));
+  ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:compact?'Compact':'Legacy',appearance}));
   await wait(()=>types.includes('welcome'));
   return {ws,types,frames};
  };

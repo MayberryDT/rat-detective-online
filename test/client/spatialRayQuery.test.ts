@@ -75,6 +75,15 @@ describe('exact spatial ray broadphase',()=>{
   target.collisionResponse=false;duplicate.shapes[0].collisionResponse=false;
   same(world,index,new C.Vec3(-4,2,0),new C.Vec3(8,2,0));
  });
+ it.each([false,true])('filters the owner before closest-hit selection with client projectile groups (SAP=%s)',sap=>{
+  const world=new C.World();if(sap)world.broadphase=new C.SAPBroadphase(world);
+  const owner=new C.Body({mass:1,shape:new C.Sphere(.6),collisionFilterMask:4});
+  const wall=new C.Body({mass:0,shape:new C.Box(new C.Vec3(.05,2,2)),position:new C.Vec3(2,0,0),collisionFilterMask:4});
+  world.addBody(owner);world.addBody(wall);const query=new SpatialRayQuery(world),from=new C.Vec3(-2,0,0),to=new C.Vec3(4,0,0);
+  const hit=query.closest(from,to,1,body=>body!==owner,4);expect(hit.body).toBe(wall);expect(hit.hitPointWorld.x).toBeCloseTo(1.95);
+  expect(query.closest(from,to,1,body=>body!==owner,16).hasHit).toBe(false);
+  const remove=vi.spyOn(world,'removeEventListener');query.dispose();expect(remove).toHaveBeenCalledTimes(2);
+ });
  it('handles added/removed fixtures, moved statics, body type changes and moving bodies',()=>{
   const {world,index}=fixture();index.refresh();
   const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(1,1,1))});world.addBody(body);

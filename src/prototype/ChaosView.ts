@@ -19,13 +19,14 @@ import { incidentInfo } from '../shared/incidentCatalog';
 import { DispatchHud } from './DispatchHud';
 import { AssignmentDestinations } from './AssignmentDestinations';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
-import type { Vec3Data } from '../shared/networkProtocol';
+import type { Vec3Data, ServerMessage, ShotDescriptor } from '../shared/networkProtocol';
 import { locateCase } from './caseLocator';
 import { PressureMachine } from './PressureMachine';
 import { CaseBeacon } from './CaseBeacon';
 import { buildDispatchModel, updateDispatchSiren } from './DispatchModel';
 import { reactToLandmarkImpact } from './LandmarkReactions';
 import { addLeatherBriefcase } from './CaseModel';
+import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentation';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 
 const caseCarryRotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
@@ -74,6 +75,7 @@ export class ChaosView {
     private state:ChaosState|null=null;
     private receivedAt=0;
     private readonly presentation=new ChaosPresentation();
+    private readonly localShots:LocalShotPresentation;
     private readonly presented:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
     private lastDispatch='';
     private readonly p=new THREE.Vector3();
@@ -81,7 +83,8 @@ export class ChaosView {
     private readonly impactNormal=new THREE.Vector3();
     private readonly audioPosition=new THREE.Vector3();
     setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
-    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld){
+    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace){
+        this.localShots=new LocalShotPresentation(traceShot);
         this.sirenAudio=new DispatchSirenAudio(this.audio);
         this.bullets.count=0;this.bullets.frustumCulled=false;this.root.add(this.bullets);
         this.chargedBullets.count=0;this.chargedBullets.frustumCulled=false;this.chargedBullets.name='crossfire-balls';this.root.add(this.chargedBullets);
@@ -132,11 +135,22 @@ export class ChaosView {
         document.body.appendChild(this.caseMarker);
         this.impacts=new CheeseImpactEffects(scene);
     }
+    resetProjectiles():void{this.localShots.clear();this.presentation.clear();}
+    fire(shot:ShotDescriptor):void {
+        if(!this.extrapolate)return;
+        const dispatch=this.state?.dispatch;
+        const incident=dispatch?.phase==='active'?incidentInfo(dispatch.incident).id:undefined;
+        this.localShots.fire(this.myId,shot,incident,performance.now());
+    }
+    private readonly localMuzzle=()=>this.resolveRat(this.myId)?.getMuzzlePosition()??this.presented.p;
+    launch(message:Extract<ServerMessage,{type:'playerShot'}>):void {
+        if(this.extrapolate&&!this.localShots.confirm(message,performance.now()))this.presentation.launch(message,performance.now());
+    }
     apply(state:ChaosState){
         this.foley?.apply(state);
         this.state=state;this.receivedAt=performance.now();
         this.assignmentDestinations.update(state.assignment);
-        if(this.extrapolate)this.presentation.apply(state,this.receivedAt);
+        if(this.extrapolate){this.presentation.apply(state,this.receivedAt);this.localShots.apply(state,this.receivedAt);}
         const extraIds=new Set((state.extraCases??[]).map(c=>c.id));
         for(const [id,visual] of this.extraCases)if(!extraIds.has(id)){visual.dispose();this.extraCases.delete(id);}
         for(const extra of state.extraCases??[]){
@@ -209,9 +223,10 @@ export class ChaosView {
         this.updateCaseMarker(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const crossfire=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='crossfire';
-        for(let i=0;i<Math.min(s.shots.length,CHAOS_TUNING.maxShots);i++){
-            const shot=s.shots[i];
-            const p=shot.stuckUntil||!(this.extrapolate&&this.presentation.shot(shot.id,renderTime,this.presented))?shot.p:this.presented.p;
+        const shots=this.extrapolate?this.localShots.render(this.presentation.renderShots(s.shots,renderTime),renderTime):s.shots;
+        for(let i=0;i<Math.min(shots.length,CHAOS_TUNING.maxShots);i++){
+            const shot=shots[i];
+            const p=this.localShots.owns(shot.id)||shot.stuckUntil||!(this.extrapolate&&this.presentation.shot(shot.id,renderTime,this.presented,shot.owner===this.myId?this.localMuzzle:undefined))?shot.p:this.presented.p;
             const scale=(shot.radius??BALL_RADIUS)/BALL_RADIUS;
             this.ballPose.position.set(p.x,p.y,p.z);
             this.ballPose.rotation.set(now*.015+i,now*.009,0);
@@ -317,6 +332,7 @@ export class ChaosView {
     renderOutline(renderer:THREE.WebGLRenderer,camera:THREE.Camera):void {this.assignmentDestinations.render(renderer,camera);}
     getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
+        this.localShots.clear();
         this.sirenAudio.dispose();this.assignmentDestinations.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();

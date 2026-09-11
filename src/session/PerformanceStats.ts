@@ -62,7 +62,11 @@ export class PerformanceStats {
         const sorted=[...this.frames].sort((a,b)=>a-b),{render,memory}=this.renderer.info;
         const report={at:Date.now(),world,input:{...this.input},hidden:document.hidden,samples:sorted.length,frameMedianMs:sorted[Math.floor(sorted.length*.5)]??0,frameP95Ms:sorted[Math.floor(sorted.length*.95)]??0,longestFrameMs:this.longest,stallsOver100Ms:this.stalls,phaseMaxMs:{...this.phases},calls:render.calls,triangles:render.triangles,geometries:memory.geometries,textures:memory.textures,details};
         this.reports.push(report);if(this.reports.length>120)this.reports.shift();
-        this.persist();console.info('[rat-diagnostics]',report);
+        // The quiet playtest keeps bounded in-memory reports and the small
+        // relay summary. Rewriting the entire history to synchronous storage
+        // and retaining console objects every five seconds can hitch gameplay.
+        // Save on pagehide/disposal or when pointer lock is released instead.
+        if(this.panel){this.persist();console.info('[rat-diagnostics]',report);}
         this.publish?.(report);
         if(this.panel)this.panel.textContent=`F8: save diagnostic report\n${JSON.stringify(report,null,2)}`;
         this.longest=0;this.stalls=0;for(const key of Object.keys(this.phases) as (keyof FramePhases)[])this.phases[key]=0;

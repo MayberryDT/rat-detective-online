@@ -762,19 +762,19 @@ export class GameRoom extends DurableObject<Env> {
     if (!isPlausibleShot(message.origin, message.direction, player)) { this.diagnostics.shot('implausible'); return; }
     if (!this.rememberShot(playerId, message.shotId)) { this.diagnostics.shot('duplicate'); return; }
     this.startChaos();
-    this.chaos?.shoot(playerId,message);
+    const fired=this.chaos?.shoot(playerId,message);
     this.diagnostics.shot('accepted');
-
-    this.broadcast(
-      {
-        type: 'playerShot',
-        shooterId: playerId,
-        shotId: message.shotId,
-        origin: message.origin,
-        direction: message.direction,
-      },
-      playerId,
-    );
+    const event:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:playerId,
+      shotId:message.shotId,origin:message.origin,direction:message.direction};
+    // Only the firing human needs the immediate muzzle sample. Observers keep
+    // the production pose/shot packet and snapshot playback; bot volleys never
+    // add birth payloads or presentation tracks to every connected client.
+    if(this.world.version===GRAYBOX_VERSION&&fired?.length){
+      for(const ws of this.recipients())if(this.getAttachment(ws).playerId===playerId){
+        this.send(ws,{...event,launch:{at:this.chaos!.time,balls:fired.map(ball=>({id:ball.id,velocity:{...ball.v}}))}});
+      }
+    }
+    this.broadcast(event,playerId);
   }
 
   private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming']): Promise<void> {

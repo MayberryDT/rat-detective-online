@@ -14,9 +14,13 @@ export class SpatialRayQuery {
     private readonly ray=new C.Ray();
     private readonly bounds=new C.AABB();
     private readonly candidates:C.Body[]=[];
+    private readonly onChange=()=>{this.changed=true;};
     constructor(private readonly world:C.World){
-        world.addEventListener('addBody',()=>{this.changed=true;});
-        world.addEventListener('removeBody',()=>{this.changed=true;});
+        world.addEventListener('addBody',this.onChange);world.addEventListener('removeBody',this.onChange);
+    }
+    dispose():void {
+        this.world.removeEventListener('addBody',this.onChange);this.world.removeEventListener('removeBody',this.onChange);
+        this.root=undefined;this.statics.clear();this.moving.length=0;this.candidates.length=0;this.ranks.clear();this.present.clear();
     }
     /** Call once per simulation step, not once per ball. Also notices edited
      * static fixtures and changed body types, even after updateAABB() was called. */
@@ -59,21 +63,22 @@ export class SpatialRayQuery {
         if(node.bodies){for(const body of node.bodies)if(body.aabb.overlaps(this.bounds))this.candidates.push(body);}
         else{this.collect(node.left);this.collect(node.right);}
     }
-    closest(from:C.Vec3,to:C.Vec3,mask:number):C.RaycastResult{
+    closest(from:C.Vec3,to:C.Vec3,mask:number,accept?:(body:C.Body)=>boolean,group=16):C.RaycastResult{
         const result=new C.RaycastResult(),broadphase=this.world.broadphase;
-        if(!(broadphase instanceof C.SAPBroadphase)){
-            this.world.raycastClosest(from,to,{collisionFilterGroup:16,collisionFilterMask:mask,skipBackfaces:true},result);return result;
+        if(!(broadphase instanceof C.SAPBroadphase)&&!accept){
+            this.world.raycastClosest(from,to,{collisionFilterGroup:group,collisionFilterMask:mask,skipBackfaces:true},result);return result;
         }
         if(this.changed)this.refresh();else if(broadphase.dirty)this.updateRanks();
         this.bounds.lowerBound.set(Math.min(from.x,to.x),Math.min(from.y,to.y),Math.min(from.z,to.z));
         this.bounds.upperBound.set(Math.max(from.x,to.x),Math.max(from.y,to.y),Math.max(from.z,to.z));
         this.candidates.length=0;this.collect(this.root);
         for(const body of this.moving){if(body.aabbNeedsUpdate)body.updateAABB();if(body.aabb.overlaps(this.bounds))this.candidates.push(body);}
+        if(accept){let count=0;for(const body of this.candidates)if(accept(body))this.candidates[count++]=body;this.candidates.length=count;}
         // Equal-distance hits keep precisely SAP's original traversal order.
-        this.candidates.sort((a,b)=>this.ranks.get(a)!-this.ranks.get(b)!);
+        if(broadphase instanceof C.SAPBroadphase)this.candidates.sort((a,b)=>this.ranks.get(a)!-this.ranks.get(b)!);
         const ray=this.ray;ray.from.copy(from);ray.to.copy(to);ray.mode=C.Ray.CLOSEST;
         ray.hasHit=false;ray.skipBackfaces=true;ray.checkCollisionResponse=true;
-        ray.collisionFilterGroup=16;ray.collisionFilterMask=mask;
+        ray.collisionFilterGroup=group;ray.collisionFilterMask=mask;
         ray.intersectBodies(this.candidates,result);return result;
     }
     /** Reuse the static BVH for the larger Big Cheese collision volume. */

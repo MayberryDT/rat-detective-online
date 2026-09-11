@@ -35,6 +35,19 @@ describe('shared physical death chaos',()=>{
  });
  beforeEach(()=>{vi.spyOn(Math,'random').mockReturnValue(0);});
  afterEach(()=>vi.restoreAllMocks());
+ it('expires authoritative balls after 2.5 seconds, including saved older shots',()=>{
+  const {sim,players}=fixture();
+  const origin={x:0,y:100,z:0};
+  sim.shoot('shooter',{shotId:'lifetime',origin,direction:{x:1,y:0,z:0}});
+  expect(sim.snapshot(false).shots[0].p).toEqual(origin);
+  sim.step(2.49,3490);expect(sim.snapshot(false).shots).toHaveLength(1);
+  const saved=sim.snapshot(false);saved.shots.push({...saved.shots[0],id:'old-five-second-ball',age:3});
+  vi.spyOn(Date,'now').mockReturnValue(saved.time);
+  const restored=new ChaosSimulation(players,()=>{},saved);
+  expect(restored.snapshot(false).shots.map(shot=>shot.id)).toEqual(['lifetime']);
+  restored.step(.02,3510);expect(restored.snapshot(false).shots).toHaveLength(0);
+  sim.step(.02,3510);expect(sim.snapshot(false).shots).toHaveLength(0);
+ });
  it('keeps firing immediately when an incident chain fills the projectile pool',()=>{
   const {sim,victim,shooter}=fixture();activate(sim);victim.hp=0;
   for(let i=0;i<3;i++)sim.death(victim,{x:1,y:0,z:0},shooter.id);
@@ -69,7 +82,7 @@ describe('shared physical death chaos',()=>{
   for(const shot of state.shots.filter(s=>s.id!=='dispatch'))expect(Math.hypot(shot.v.x,shot.v.y,shot.v.z)).toBeCloseTo(BALL_SPEED);
   for(let i=0;i<40;i++)sim.death(victim,{x:1,y:0,z:0},'shooter');
   state=sim.snapshot(false);expect(state.corpses).toHaveLength(T.maxCorpses);expect(state.shots).toHaveLength(T.maxShots);
-  expect([BALL_SPEED,BALL_GRAVITY,BALL_RESTITUTION,BALL_LIFETIME]).toEqual([175,-25,.9,5]);
+  expect([BALL_SPEED,BALL_GRAVITY,BALL_RESTITUTION,BALL_LIFETIME]).toEqual([175,-25,.9,2.5]);
   sim.step(0,1010+T.rollMs+T.corpseMs+1);expect(sim.snapshot().corpses).toHaveLength(0);
  });
  it('only activates Dispatch from the small front target and boosts active launches to 95',()=>{
