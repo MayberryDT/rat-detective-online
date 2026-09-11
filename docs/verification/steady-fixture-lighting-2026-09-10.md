@@ -1,6 +1,6 @@
 # Steady streetlamps and aligned facade light — September 10, 2026
 
-Local correction following Tyler's two gameplay screenshots. **Not committed or deployed to production.** A subsequently requested private full-game preview is recorded below. Production remains Worker `d5fc60bf-78a8-44e2-821b-f7c794233e68`, application `cd7af57`, protocol 7, `public-live-v2`.
+Initial local correction following Tyler's two gameplay screenshots; the implementation and private-preview observations below predate publication. A subsequently requested private full-game preview is recorded below. Production at that time was Worker `d5fc60bf-78a8-44e2-821b-f7c794233e68`, application `cd7af57`, protocol 7, `public-live-v2`.
 
 ## Confirmed problems and changes
 
@@ -37,3 +37,7 @@ The existing dedicated private capacity Worker was renewed for four hours with 1
 All **51 served files** match the frozen build. One six-second passive connection saw 16 rats (15 bots plus probe) and **162 valid snapshots, zero invalid packets or errors**; it disconnected afterward. This confirms full-game asset/protocol readiness, not human input or appearance acceptance. Earlier application test/build results apply to this unchanged source.
 
 Deployment receipt: `output/hosted-capacity-deployment-2026-09-11T00-27-06-277Z/deployment.json`. Preview and readiness records: `output/steady-fixture-lighting-2026-09-10/preview.json` and `readiness.json`. Entry asset `index-ClzQcK4D.js`; deferred game asset `createGame-Ci5pt2sL.js`.
+
+## Subsequent acceptance and publication
+
+Tyler accepted the full-game lighting preview and stationary target practice, then explicitly requested publication without further gameplay changes. Application commit `420bee2` deployed September 10 at 5:57 PM Pacific as production Worker `8cacdb60-2ee0-4f63-b8bb-9f02de321719`. All 51 published files match the approved preview. The target-practice fixture is committed but remains a separate local test page. [Release verification](steady-lighting-production-2026-09-10.md) records current checks and preserves the original measurements above.

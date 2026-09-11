@@ -1,14 +1,14 @@
 # Live service runbook
 
-Last release receipt: **2026-09-10**. Confirm live state before future operations; version IDs below are dated records. [Grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
+Last release receipt: **2026-09-10**. Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
 
 | Item | Value |
 | --- | --- |
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `d5fc60bf-78a8-44e2-821b-f7c794233e68` — application commit `cd7af57`, protocol 7, grounded streetlight fix and facade light on rats |
-| Previous version | `ae032bb2-01f2-4baa-b09f-e9033b41141e` — September 10 fast title/input/lighting |
+| Last deployed version | `8cacdb60-2ee0-4f63-b8bb-9f02de321719` — application commit `420bee2`, protocol 7, steady scenery lights and pane-aligned downward shafts |
+| Previous version | `d5fc60bf-78a8-44e2-821b-f7c794233e68` — September 10 grounded exterior lighting |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 16 total rats per room; occupied rooms fill to eight with AI, yielding to humans; automatic overflow rooms |
@@ -66,6 +66,7 @@ The private `rat-detective-network-test` Worker is separate. Its last recorded r
 | Entry/sewer follow-up, `ebe0f20e-3f68-46a9-b175-1929faf2c436` | 769 tests, typecheck, both builds, clean audit; eight fixed phone-size renders, 45 exact live assets, matching preparation/welcome world, 228 valid snapshots, combat smoke and redirects |
 | Fast title/input/lighting, `ae032bb2-01f2-4baa-b09f-e9033b41141e` | 781 tests, typecheck, both builds, clean production audit; five static views, 51 exact assets, prepared welcome 142 ms, 240 valid snapshots, combat smoke and redirects |
 | Grounded exterior lights, `d5fc60bf-78a8-44e2-821b-f7c794233e68` | 784 tests, typecheck, both builds; seven final static views, 51 exact assets, health/original world and redirects. No new phone or network timing claim |
+| Steady fixture lights, `8cacdb60-2ee0-4f63-b8bb-9f02de321719` | 797 tests, typecheck/build and clean audit; 51 exact live/approved-preview assets, health/original world and redirects. Human acceptance; target practice stays separate |
 
 The navigation release's 20-second public observation showed ten bots traveling 84–143 units and one traveling 24; occasional local obstruction remained. The cast release tested reset/name/count/persistence in Durable Object integration tests; it did not force a live round reset or run browser input. None of these checks certifies 50–100 players, a 24-hour soak, or perfect subjective play feel. Historical reports remain under [verification](verification/).
 

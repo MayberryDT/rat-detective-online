@@ -1,6 +1,6 @@
 # Stationary hitbox practice
 
-Created September 10, 2026 for the user's manual hitbox playtest.
+Created September 10, 2026 for the user's manual hitbox playtest; subsequently accepted with no requested changes. Committed in `420bee2`.
 
 **[Open the practice range](http://127.0.0.1:5193/hitbox-practice.html)** and click **Enter target practice**. Four stationary rats face front, side and back, at roughly 10, 20, 35 and 50 units from the start. Walk around them freely. They never walk, turn, fire, flinch or ragdoll. Each has the normal three health; a kill refills health immediately without changing its pose or position.
 
@@ -14,7 +14,7 @@ Created September 10, 2026 for the user's manual hitbox playtest.
 
 The HUD reports shots, confirmed hits, head hits, kills and the most recent target/damage. The real `CheeseGun` determines camera convergence and muzzle origin. The real `ChaosSimulation` determines ball travel, gravity, wall bounces, collision shapes and head/body damage; normal `applyHit` resolves health. Wireframes are built directly from the simulation's actual bodies and shape offsets. They are diagnostic overlays and are excluded from aim picking. Rats remain kinematic and their animation is frozen. Only local fixture health resets and objective suppression differ from the live match.
 
-This is a local simulation for testing geometry and aim. It does not reproduce hosted latency, interpolation or multiplayer hit registration. Neither production code nor the existing full-game private preview was changed by this fixture.
+This is a local simulation for testing geometry and aim. It does not reproduce hosted latency, interpolation or multiplayer hit registration. This fixture did not change production gameplay or the existing full-game private preview. The separately accepted lighting changes are now [live](verification/steady-lighting-production-2026-09-10.md).
 
 ## Preview lifecycle
 
@@ -30,7 +30,7 @@ python3 -m http.server 5193 --bind 127.0.0.1 --directory dist-visual
 
 - Five focused tests pass: actual body/head hits, just-inside/outside head boundaries, stationary silent targets, disabled objectives, supported ground/clear sightlines, reset cleanup and self-damage protection.
 - Typecheck and the visual build pass. The full test suite passes **797 tests**: 129 Worker, 643 client and 25 scripts.
-- The static menu and initial range render without browser errors. No gameplay input or pointer-lock automation was run; human playtesting is left to the user.
+- The static menu and initial range render without browser errors. No gameplay input or pointer-lock automation was run; Tyler subsequently accepted the manual playtest.
 - No production hitbox dimensions or projectile tuning changed.
 
 Source: [simulation harness](../test/visual/HitboxPractice.ts), [page](../test/visual/hitbox-practice.ts), [tests](../test/client/hitboxPractice.test.ts).
