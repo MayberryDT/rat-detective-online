@@ -10,20 +10,22 @@ it('negotiates mixed clients and bounds snapshots while still delivering control
  const open=async(compact:boolean)=>{
   const response=await SELF.fetch(`https://example.test/ws?room=${room}${compact?'&chaos=compact-v1':''}`,{headers:{Upgrade:'websocket'}});
   expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
-  const types:string[]=[],frames:Array<{stream:string;seq:number}>=[];const decoder=new DeliveryDecoder();
+  const types:string[]=[],frames:Array<{stream:string;seq:number}>=[];const decoder=new DeliveryDecoder();let pickupCount=0;
   ws.addEventListener('message',e=>{
     const packet=JSON.parse(String(e.data));types.push(packet.message?.type??packet.type);
     const decoded=decoder.read(String(e.data));expect(decoded).not.toBeNull();
     if(decoded?.message?.type==='chaos'&&decoded.ack)frames.push(decoded.ack);
+    if(decoded?.message?.type==='chaos')pickupCount=Math.max(pickupCount,decoded.message.state.pickups?.length??0);
     if(!compact&&decoded?.ack)ws.send(JSON.stringify(decoded.ack));
   });
   ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:compact?'Compact':'Legacy',appearance}));
   await wait(()=>types.includes('welcome'));
-  return {ws,types,frames};
+  return {ws,types,frames,get pickupCount(){return pickupCount;}};
  };
  try{
   const compact=await open(true),legacy=await open(false);
   await wait(()=>compact.frames.length===MAX_CHAOS_IN_FLIGHT&&legacy.types.filter(t=>t==='chaos').length>MAX_CHAOS_IN_FLIGHT);
+  expect(compact.pickupCount).toBe(6);expect(legacy.pickupCount).toBe(6);
   await new Promise(r=>setTimeout(r,120));expect(compact.frames).toHaveLength(MAX_CHAOS_IN_FLIGHT);
   compact.ws.send(JSON.stringify({type:'ping',sentAt:Date.now()}));await wait(()=>compact.types.includes('pong'));
   expect(compact.frames).toHaveLength(MAX_CHAOS_IN_FLIGHT);

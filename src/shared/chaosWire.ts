@@ -7,7 +7,9 @@ import { expandMovement } from './movementWire';
 export { parseServerMessage } from './messageValidation';
 
 export const CHAOS_WIRE_MODE = 'compact-v2';
-const REST_KEYS = ['case','extraCases','dispatch','pressure','possession','corpses','notice','assignment'] as const;
+const REST_KEYS = ['case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs'] as const;
+const restValue=(state:ChaosState,key:typeof REST_KEYS[number]):unknown=>
+  state[key]??(key==='extraCases'?[]:key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'?null:undefined);
 type Definition = [number, string, string | null];
 export interface ChaosAck { type:'chaosAck'; stream:string; seq:number }
 const rounded = (value: unknown): string => JSON.stringify(value, (_key,v)=>typeof v==='number'?Math.round(v*1000)/1000:v);
@@ -35,7 +37,7 @@ export function prepareChaos(state:ChaosState):PreparedChaos {
     return {id:s.id,owner:s.owner,values,motion:values.join(','),deltas:new WeakMap<number[],string>()};
   }),
     impacts:state.impacts,impactText:rounded(state.impacts),pressure:state.pressure,pressureText:rounded(state.pressure??null),
-    rest:new Map(REST_KEYS.filter(k=>k!=='pressure').map(key=>[key,rounded(state[key]??(key==='extraCases'?[]:key==='assignment'?null:undefined))]))};
+    rest:new Map(REST_KEYS.filter(k=>k!=='pressure').map(key=>[key,rounded(restValue(state,key))]))};
 }
 
 /** Ordered WebSocket frames use the previous SENT baseline. Acks bound flow,
@@ -73,7 +75,7 @@ export class ChaosEncoder {
     const rest:string[]=[];
     for(const key of REST_KEYS){
       // Optional fields use their canonical empty representation so deletions travel.
-      const value=state[key]??(key==='extraCases'?[]:key==='pressure'||key==='assignment'?null:undefined);
+      const value=restValue(state,key);
       const encoded=key==='pressure'?(state.pressure===prepared.pressure?prepared.pressureText:rounded(value)):prepared.rest.get(key)!;
       if(full||this.rest.get(key)!==encoded){rest.push(JSON.stringify(key)+':'+encoded);this.rest.set(key,encoded);}
     }
@@ -140,6 +142,8 @@ export class ChaosDecoder {
     const rest={...(full?{}:this.rest),...f.rest};
     if(rest.pressure===null)delete rest.pressure;
     if(rest.assignment===null)delete rest.assignment;
+    if(rest.pickups===null)delete rest.pickups;
+    if(rest.buffs===null)delete rest.buffs;
     const message=parseServerMessage({type:'chaos',state:{...rest,time:f.time,shots,impacts:f.impacts}});
     if(!message||message.type!=='chaos')return null;
     this.stream=f.stream;this.seq=f.seq;this.definitions=definitions;this.rest=structuredClone(rest);this.motions=motions;

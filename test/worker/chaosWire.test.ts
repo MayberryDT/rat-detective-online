@@ -48,6 +48,20 @@ it('resets optional fields and refreshes complete keyframes',()=>{
  expect(JSON.parse(wire).base).toBe(0);
  expect(new ChaosDecoder().read(wire)?.message.type).toBe('chaos');
 });
+it.each([false,true])('carries pickup claims and buff expiry through compact snapshots (delta=%s)',delta=>{
+ const s=state(),e=new ChaosEncoder('pickups',delta),d=new ChaosDecoder();
+ s.pickups=[{id:'alibi-civic',kind:'ironclad',x:-16,y:.7,z:-18}];s.buffs={};
+ const decode=()=>{const wire=e.encode(s).payload;const decoded=d.read(wire);expect(decoded?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));return JSON.parse(wire);};
+ decode();
+ s.time+=40;s.pickups=[];s.buffs={rat:{ironcladUntil:13040,hustleUntil:11040}};
+ expect(decode().rest.buffs).toEqual(s.buffs);
+ expect(decode().rest).not.toHaveProperty('buffs');
+ s.time=14000;s.buffs={};expect(decode().rest.buffs).toEqual({});
+ delete s.pickups;delete s.buffs;const cleared=decode();
+ expect(cleared.rest.pickups).toBeNull();expect(cleared.rest.buffs).toBeNull();
+ const fresh=new ChaosEncoder('fresh',delta).encode(s);
+ expect(new ChaosDecoder().read(fresh.payload)?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));
+});
 it('does not expose mutable decoder baselines to the game',()=>{
  const s=state(),e=new ChaosEncoder(),d=new ChaosDecoder();
  const first=d.read(e.encode(s).payload)!;

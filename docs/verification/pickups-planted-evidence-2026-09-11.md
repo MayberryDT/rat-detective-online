@@ -83,7 +83,7 @@ in the welcome message so the roulette strip matches.
   reflection and case independence, the 10-counterfeit batch, shot detonation
   attribution, lethal contact through Ironclad, cleanup, the classic toggle and
   bot non-targeting.
-- Final full suite: **881 tests pass** (726 client, 130 Worker, 25 script),
+- Final full suite: **883 tests pass** (726 client, 132 Worker, 25 script),
   `npm run typecheck`, `npm run build`, and `npm run audit` pass with zero
   vulnerabilities. The existing large-chunk build warning remains.
 - Two existing tests were updated rather than deleted: the Dispatch roster test is
@@ -163,3 +163,23 @@ Worker**, with the current decoder and delivery acknowledgements. It verified:
 
 Probe result: `output/pickups-release-2026-09-11/live-probe.json` (local supporting
 artifact, not required setup). All probe sockets closed afterward.
+
+
+## Compact delivery correction before release acceptance
+
+The initial deployment (`024dc635-2fbe-4b51-aaf8-2d43cdef789b`, source `5f0128c`,
+protocol 9) exposed a missing integration: `ChaosEncoder` omitted `pickups` and
+`buffs` from its metadata fields. Legacy probes passed, but normal compact clients
+could not display pickups or apply effects. This intermediate deployment is not
+an accepted release. A first passive verifier also had a harness-only roster-shape
+assertion error (incident IDs are strings); that assertion was corrected.
+
+Both compact modes now carry pickup/buff keyframes, changed values and explicit
+clearing. Canonical optional-field removal is preserved. New encoder tests cover
+claim, unchanged state, expiry, removal and fresh keyframes in compact-v1 and
+compact-v2; the Worker integration asserts six sites reach both legacy and compact
+clients. The complete two-client local scenario was rerun successfully with
+**compact-v2** and delivery acknowledgements.
+
+The coordinated final client/Worker release uses **protocol 10**, preventing a
+cached intermediate protocol-9 decoder from silently rejecting the added fields.

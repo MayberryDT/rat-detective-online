@@ -8,8 +8,10 @@ and the receipt [pickups-planted-evidence-2026-09-11.md](verification/pickups-pl
 
 The September 11 continuation fixed ignored browser incident flags, immediately
 replenished traps (including on restore), and missing bot speed effects. Burst
-lift is now .2; other durations/count/speed values are retained. **881 tests**,
-typecheck, build, audit and a two-client local Worker probe pass. Bounded browser
+lift is now .2; other durations/count/speed values are retained. **883 tests**,
+typecheck, build, audit and a two-client compact-v2 local Worker probe pass.
+The final protocol is **10**: compact snapshots now carry pickups and buffs,
+correcting the intermediate protocol-9 candidate. Bounded browser
 review checked default/classic behavior; human feel remains unverified.
 Use `&mute=1` for all local agent browser tests. Commit/release are authorized;
 consult the [receipt](verification/pickups-planted-evidence-2026-09-11.md) for final
