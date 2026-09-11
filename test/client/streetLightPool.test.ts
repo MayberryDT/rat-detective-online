@@ -6,6 +6,26 @@ import {readLightingMode} from '../../src/session/lightingMode';
 import {addLeatherBriefcase} from '../../src/prototype/CaseModel';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
 
+it('excludes reassigned exterior spots from scenery while preserving other lights and room lighting',()=>{
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();camera.position.set(0,3,6);
+ const room={id:'room',xmin:95,xmax:105,zmin:-5,zmax:5,ymin:-.5,ymax:8};
+ const pool=new StreetLightPool(scene,[{x:0,y:9,z:0,color:0xffffff},{x:100,y:5,z:0,color:0xffffff,room,floor:0}],[room]);
+ const scenery=new THREE.MeshStandardMaterial(),rat=new THREE.MeshStandardMaterial();
+ pool.applyToScenery(scenery);
+ const shader={uniforms:{},vertexShader:'',fragmentShader:'#include <common>\n#include <lights_fragment_begin>'} as unknown as THREE.WebGLProgramParametersWithUniforms;
+ scenery.onBeforeCompile(shader,{} as THREE.WebGLRenderer);
+ const positions=shader.uniforms.exteriorActorLights.value as THREE.Vector4[];
+ pool.update(camera,{x:0,y:0,z:0});expect(positions.filter(p=>p.w===1)).toHaveLength(1);
+ const spot=scene.children.find((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight&&o.intensity>0)!;
+ expect(positions[0].toArray().slice(0,3)).toEqual(spot.position.clone().applyMatrix4(camera.matrixWorldInverse).toArray());
+ expect(shader.fragmentShader).toContain('directLight.color *= scenerySpot(spotLight.position)');
+ expect(shader.fragmentShader).toContain('getPointLightInfo');
+ expect(rat.onBeforeCompile).toBe(THREE.Material.prototype.onBeforeCompile);
+ pool.update(camera,{x:100,y:0,z:0});expect(positions.every(p=>p.w===0)).toBe(true);
+ expect(scene.children.some(o=>o instanceof THREE.SpotLight&&o.intensity>0)).toBe(true);
+ pool.dispose();scenery.dispose();rat.dispose();
+});
+
 it('bounds overhead lighting, aligns it with actual fixtures, fades distant lights and disables it underground',()=>{
  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
  const pool=new StreetLightPool(scene,Array.from({length:100},(_,i)=>({x:i*8,y:6.2,z:0,color:0xffcf96})));

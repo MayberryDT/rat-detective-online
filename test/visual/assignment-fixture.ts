@@ -148,7 +148,9 @@ stage.renderer.setAnimationLoop(()=>{
     player.syncAfterPhysics(0);player.updateView();
     stage.flashlight.position.copy(position).add(new THREE.Vector3(0,2,0));stage.camera.getWorldDirection(direction);
     stage.flashlight.target.position.copy(stage.flashlight.position).addScaledVector(direction,15);
-    city.update(0,stage.camera,position);chaosView.update(0,stage.camera);stage.renderer.render(stage.scene,stage.camera);
+    // Isolate fixture selection from viewpoint/geometry for a steady-scenery
+    // comparison. This never drives movement or gameplay input.
+    city.update(0,stage.camera,query.has('farLights')?{x:160,y:0,z:160}:position);chaosView.update(0,stage.camera);stage.renderer.render(stage.scene,stage.camera);
     (window as unknown as {lightingReview:object}).lightingReview={
         calls:stage.renderer.info.render.calls,triangles:stage.renderer.info.render.triangles,
         textures:stage.renderer.info.memory.textures,bodies:stage.world.bodies.length,
@@ -156,8 +158,10 @@ stage.renderer.setAnimationLoop(()=>{
         shadows:stage.scene.children.filter(o=>o instanceof THREE.Light&&o.castShadow).length,
         overhead:stage.scene.children.filter((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight&&o.name==='noir-overhead-light')
             .map(light=>({position:light.position.toArray(),target:light.target.position.toArray(),intensity:light.intensity})),
+        activeSewerLights:stage.scene.children.filter(o=>o instanceof THREE.PointLight&&o.name==='sewer-pooled-light'&&o.intensity>0).length,
     };
     chaosView.renderOutline(stage.renderer,stage.camera);
+    if(query.has('still'))stage.renderer.setAnimationLoop(null);
     if(sirenAudition){stage.camera.getWorldPosition(audioPosition);const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.box.x-audioPosition.x,s.box.y+2.1-audioPosition.y,s.box.z-audioPosition.z)),Infinity);sirenAudition.update(state.dispatch.phase==='ready',nearest);}
 });
 window.addEventListener('resize',()=>{stage.camera.aspect=innerWidth/innerHeight;stage.camera.updateProjectionMatrix();stage.renderer.setSize(innerWidth,innerHeight);});

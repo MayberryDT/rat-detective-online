@@ -4,10 +4,16 @@ import type {BuildingFootprint} from '../shared/worldSpec';
 import type {GrayboxBox} from '../shared/grayboxLayout';
 import {isCentralBuilding} from '../shared/skyline';
 import type {OverheadLight} from './StreetLightPool';
+import {FacadeBeams,windowBrightness} from './FacadeBeams';
+import {skylineMasses} from '../shared/skyline';
+import {STREET_LAMPS} from '../shared/grayboxLayout';
+import {generatedStreetLamps} from '../shared/streetLampLayout';
+import type {FacadeMass} from '../world/WindowApertures';
 
 export interface SpillSource {
     x:number; z:number; y:number; nx:number; nz:number;
     kind:'window'|'door'|'sign'; color:number; reach:number;
+    width?:number;height?:number;powerShare?:number;occupancy?:{value:number};
 }
 export interface SpillBlocker {x:number;z:number;w:number;d:number}
 const SIZE=512, MIN=-200, SPAN=376, MAX_LIGHT=.35;
@@ -24,7 +30,7 @@ export function streetSpillSources(layout:readonly BuildingFootprint[]):SpillSou
         for(const side of [-1,1]){
             // Steady transoms and workshop windows have their own visible panes;
             // upstairs apartment occupancy never leaves an invisible light source.
-            sources.push({x:b.cx,z:b.cz+side*(b.bd/2+(central?1.1:.65)),y:central?4.45:2.82,nx:0,nz:side,
+            sources.push({x:b.cx,z:b.cz+side*(b.bd/2+(central?.36:.12)),y:central?4.35:2.46,nx:0,nz:side,
                 kind:'door',color:0xe0bd82,reach:10});
             // Long alley walls need spaced workshop panes, not one small pool
             // at the middle of an otherwise dark frontage. Keep the two batches.
@@ -46,7 +52,7 @@ export function streetSpillSources(layout:readonly BuildingFootprint[]):SpillSou
 }
 
 /** Segment/AABB clipping in the street plane. Used only during the one-time bake. */
-function blocked(ax:number,az:number,bx:number,bz:number,boxes:readonly SpillBlocker[]):boolean {
+export function blocked(ax:number,az:number,bx:number,bz:number,boxes:readonly SpillBlocker[]):boolean {
     for(const b of boxes){
         let lo=0,hi=1;
         for(const [a,delta,min,max] of [[ax,bx-ax,b.x-b.w/2,b.x+b.w/2],[az,bz-az,b.z-b.d/2,b.z+b.d/2]]){
@@ -62,10 +68,13 @@ function blocked(ax:number,az:number,bx:number,bz:number,boxes:readonly SpillBlo
 export function sampleStreetSpill(s:SpillSource,x:number,z:number,blockers:readonly SpillBlocker[]):number {
     const dx=x-s.x,dz=z-s.z,depth=dx*s.nx+dz*s.nz;
     if(depth<0||depth>=s.reach)return 0;
-    const across=Math.abs(dx*s.nz-dz*s.nx),width=(s.kind==='door'?1.1:1.5)+depth*.3;
+    const across=Math.abs(dx*s.nz-dz*s.nx),width=(s.width??(s.kind==='door'?1.7:1.35))/2+depth*.22;
     if(across>=width||blocked(s.x,s.z,x,z,blockers))return 0;
     const edge=1-across/width;
-    return .14*edge*edge*(1-depth/s.reach)**2;
+    // The pool is where the downward beam meets the ground, not a stripe
+    // projected from the building's footprint onto every vertical surface.
+    const landing=s.y/.85,along=Math.max(0,1-Math.abs(depth-landing)/(2+(s.height??.85)/.85));
+    return .14*edge*edge*along*along*(1-depth/(s.reach+4));
 }
 
 /** Fixed, occluded street spill in one 1 MiB atlas. The same visible fixtures
@@ -78,16 +87,17 @@ export class StreetReadability {
     private readonly fixtureMaterials=[new THREE.MeshStandardMaterial({color:0x29252d,roughness:.85}),new THREE.MeshBasicMaterial({color:0xffffff})];
     private readonly fixtures:THREE.InstancedMesh[]=[];
     private readonly applied=new Set<THREE.MeshStandardMaterial>();
-    constructor(scene:THREE.Scene,layout:readonly BuildingFootprint[],boxes:readonly GrayboxBox[]){
+    private readonly beams:FacadeBeams;
+    constructor(scene:THREE.Scene,layout:readonly BuildingFootprint[],boxes:readonly GrayboxBox[],windows:readonly SpillSource[]=[],details:readonly FacadeMass[]=[]){
         this.sources=streetSpillSources(layout);
         const blockers:SpillBlocker[]=[...layout.map(b=>({x:b.cx,z:b.cz,w:b.bw,d:b.bd})),
             ...boxes.filter(b=>!b.original&&!b.debris&&!b.rx&&!b.rz&&b.y-b.h/2<2&&b.y+b.h/2>2)
                 .map(b=>({x:b.x,z:b.z,w:b.w,d:b.d}))];
-        this.lights=this.sources.map(s=>{
+        this.lights=[...this.sources,...windows.filter(s=>s.y<12)].map(s=>{
             const nearby=blockers.filter(b=>Math.abs(b.x-s.x)<s.reach+b.w/2&&Math.abs(b.z-s.z)<s.reach+b.d/2);
-            return {x:s.x,y:s.y,z:s.z,color:s.color,intensity:s.kind==='door'?65:85,distance:18,angle:.9,penumbra:.5,
-                target:{x:s.x+s.nx*5,y:.4,z:s.z+s.nz*5},
-                illuminates:(p)=>p.y<5.5&&sampleStreetSpill(s,p.x,p.z,nearby)>0};
+            return {x:s.x,y:s.y,z:s.z,color:s.color,intensity:(s.kind==='door'?65:85)*(s.powerShare??1),distance:18,angle:.9,penumbra:.5,
+                target:{x:s.x+s.nx*5,y:s.y-5*.85,z:s.z+s.nz*5},brightness:()=>windowBrightness(s),
+                illuminates:(p)=>p.y<5.5&&!blocked(s.x,s.z,p.x,p.z,nearby)&&(p.x-s.x)*s.nx+(p.z-s.z)*s.nz>0};
         });
         const field=new Float32Array(SIZE*SIZE*3),color=new THREE.Color();
         for(const s of this.sources){
@@ -104,12 +114,30 @@ export class StreetReadability {
             }
         }
         const data=new Uint8Array(SIZE*SIZE*4);
+        // Every authored pole contributes permanently, including supplemental
+        // poles. This texture is built once, independently of the nearby rat.
+        for(const [x,z] of [...STREET_LAMPS,...generatedStreetLamps([...layout],STREET_LAMPS)]){
+            for(let iz=Math.max(0,Math.floor((z-11-MIN)/SPAN*SIZE));iz<=Math.min(SIZE-1,Math.ceil((z+11-MIN)/SPAN*SIZE));iz++)
+                for(let ix=Math.max(0,Math.floor((x-11-MIN)/SPAN*SIZE));ix<=Math.min(SIZE-1,Math.ceil((x+11-MIN)/SPAN*SIZE));ix++){
+                    const px=MIN+(ix+.5)/SIZE*SPAN,pz=MIN+(iz+.5)/SIZE*SPAN;
+                    const radius=Math.hypot(px-x,pz-z),amount=.08*Math.max(0,1-radius/11)**2;
+                    if(!amount||blocked(x,z,px,pz,blockers))continue;
+                    color.setHex(0xffcf96);const i=(iz*SIZE+ix)*3;
+                    field[i]+=amount*color.r;field[i+1]+=amount*color.g;field[i+2]+=amount*color.b;
+                }
+        }
         for(let i=0;i<SIZE*SIZE;i++)for(let c=0;c<3;c++)data[i*4+c]=Math.round(Math.min(MAX_LIGHT,Math.min(.18,field[i*3+c])*AUTHORED_LIGHT_GAIN)/MAX_LIGHT*255);
         this.texture=new THREE.DataTexture(data,SIZE,SIZE,THREE.RGBAFormat);
         this.texture.minFilter=this.texture.magFilter=THREE.LinearFilter;
         this.texture.generateMipmaps=false;this.texture.needsUpdate=true;
         this.addFixtures(scene);
+        this.beams=new FacadeBeams(scene,[...this.sources,...windows],[
+            ...layout.flatMap(skylineMasses),
+            ...boxes.filter(b=>!b.original&&!b.hidden&&!b.debris&&!b.rx&&!b.rz),
+            ...details,
+        ],blockers);
     }
+    update():void {this.beams.update();}
     private addFixtures(scene:THREE.Scene):void {
         const dummy=new THREE.Object3D(),color=new THREE.Color();
         // One frame batch and one pane batch. Mullions make windows read as windows.
@@ -156,16 +184,21 @@ export class StreetReadability {
                 if(streetHeight>0.0){
                     vec2 streetUv=(vStreetPosition.xz-vec2(${MIN}.0))/${SPAN}.0;
                     vec3 spill=texture2D(streetSpill,streetUv).rgb*${MAX_LIGHT};
-                    totalEmissiveRadiance+=spill*streetHeight;
+                    // A street-plane atlas only belongs on pavement tops.
+                    // Never smear it up facades, doors, props or upper floors.
+                    float pavement=smoothstep(.8,.98,(inverseTransformDirection(normal,viewMatrix)).y)
+                        *(1.0-smoothstep(.25,.65,vStreetPosition.y));
+                    totalEmissiveRadiance+=spill*streetHeight*pavement;
                     // A restrained material-only floor, tinted by its own surface.
                     totalEmissiveRadiance+=streetSurfaceLift*streetHeight*vec3(.0036,.0044,.0064);
                     diffuseColor.rgb+=streetSurfaceLift*streetHeight*vec3(.014,.017,.022);
                 }`);
         };
-        material.customProgramCacheKey=()=>cacheKey+'-street-spill-v2-'+lift;
+        material.customProgramCacheKey=()=>cacheKey+'-street-spill-v3-'+lift;
         material.needsUpdate=true;
     }
     dispose():void {
+        this.beams.dispose();
         for(const mesh of this.fixtures){mesh.removeFromParent();mesh.dispose();}
         for(const material of this.fixtureMaterials)material.dispose();
         this.geometry.dispose();this.texture.dispose();this.applied.clear();

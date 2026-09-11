@@ -19,7 +19,9 @@ export const SEWER_PORTAL_LIGHTS = SEWER_PIPE_ENTRANCES.flatMap(entry => [
 })));
 
 export function sewerLightingActive(p: { x: number; y: number; z: number }): boolean {
-    if (p.y < 0) return true;
+    // Ground contact can settle a few millimetres below zero. That is still
+    // pavement, not permission to shine sewer lights through the whole street.
+    if (p.y < -.5) return true;
     // A shoulder camera can remain above the street while the rat descends.
     // Include the street approach, but exclude upper floors above the entrance.
     return p.y < 4 && (sewerEntranceFootprint(p.x, p.z, 10) ||

@@ -30,7 +30,8 @@ it('casts window light onto a grounded rat, aims out from the pane, and rejects 
 });
 it('uses a fixed atlas and instanced fixtures, preserves existing shaders and disposes its resources',()=>{
     const scene=new THREE.Scene(),spill=new StreetReadability(scene,[],[]);
-    expect(scene.children.every(o=>o instanceof THREE.InstancedMesh)).toBe(true);
+    expect(scene.children.filter(o=>o.name.startsWith('street-spill-fixture-'))).toHaveLength(2);
+    expect(scene.children.some(o=>o instanceof THREE.Light)).toBe(false);
     const material=new THREE.MeshStandardMaterial();material.userData.streetSurface='ground';
     material.onBeforeCompile=shader=>{shader.fragmentShader+='\n// existing baked illumination';};
     material.customProgramCacheKey=()=> 'existing-shader';
@@ -40,11 +41,18 @@ it('uses a fixed atlas and instanced fixtures, preserves existing shaders and di
     compile(shader,{} as THREE.WebGLRenderer);
     expect(shader.fragmentShader).toContain('// existing baked illumination');
     expect(shader.vertexShader).toContain('instanceMatrix*streetPosition');
+    expect(shader.fragmentShader).toContain('inverseTransformDirection(normal,viewMatrix)');
+    expect(shader.fragmentShader).toContain('spill*streetHeight*pavement');
     expect(material.customProgramCacheKey()).toContain('existing-shader');
     const texture=shader.uniforms.streetSpill.value as THREE.DataTexture;
     expect(texture.image.width).toBe(512);expect(texture.image.data!.byteLength).toBe(1024*1024);
     const released=vi.fn();texture.addEventListener('dispose',released);
     spill.dispose();expect(released).toHaveBeenCalledOnce();expect(scene.children).toHaveLength(0);material.dispose();
+});
+it('lands spill down and away from a pane instead of at the building footprint',()=>{
+    const pane={...source,y:5};
+    expect(sampleStreetSpill(pane,0,0,[])).toBe(0);
+    expect(sampleStreetSpill(pane,0,5/.85,[])).toBeGreaterThan(sampleStreetSpill(pane,0,3,[]));
 });
 it('allows a local before/after comparison without changing the accepted lamp mode',()=>{
     expect(streetReadabilityEnabled('')).toBe(true);

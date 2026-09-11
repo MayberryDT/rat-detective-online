@@ -5,7 +5,7 @@ import { Neighborhood } from '../../src/prototype/Neighborhood';
 import { LANDMARK_INTERIORS } from '../../src/shared/landmarkLayout';
 import { STREET_LAMPS } from '../../src/shared/grayboxLayout';
 import { SEWER_MANHOLE, SEWER_PIPE_ENTRANCES, sewerPipePoint } from '../../src/shared/sewerLayout';
-import { SEWER_PORTAL_LIGHTS } from '../../src/prototype/SewerLighting';
+import { SEWER_PORTAL_LIGHTS, sewerLightingActive } from '../../src/prototype/SewerLighting';
 
 // Isolate the prototype's real hall geometry and lighting from unrelated city decoration.
 vi.mock('../../src/world/CityGenerator', () => ({
@@ -24,6 +24,15 @@ it('lights the authored street poles as well as supplemental lamps in the trial'
   expect(lights).toHaveLength(4);
   expect(lights.some(l=>l.position.x===x&&l.position.z===z&&l.position.y===9&&l.intensity>0)).toBe(true);
   neighborhood.dispose();expect(scene.children.some(o=>o instanceof THREE.SpotLight)).toBe(false);
+});
+
+it('does not treat settled street feet as underground while keeping entrance approaches lit',()=>{
+  for(const y of [0,-.003,-.1]){
+    expect(sewerLightingActive({x:-54,y,z:15})).toBe(false);
+    expect(sewerLightingActive({x:-4,y,z:-24.6})).toBe(false);
+    expect(sewerLightingActive({x:SEWER_MANHOLE.x,y,z:SEWER_MANHOLE.z})).toBe(true);
+  }
+  expect(sewerLightingActive({x:-54,y:-6.7,z:15})).toBe(true);
 });
 
 it('releases partially prepared city resources when the page closes',async()=>{

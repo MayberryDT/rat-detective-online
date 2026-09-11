@@ -118,7 +118,12 @@ describe('city generator', () => {
     const poses = world.bodies.map(body => body.position.toArray());
     const count = scene.children.length;
     const camera = new THREE.PerspectiveCamera();
-    for (let frame = 0; frame < 350; frame++) city.update(0.1, camera);
+    const lanterns=scene.children.filter((o):o is THREE.InstancedMesh=>o instanceof THREE.InstancedMesh
+      &&o.material instanceof THREE.MeshStandardMaterial&&o.material.emissiveIntensity>2.9);
+    expect(lanterns.length).toBeGreaterThan(0);
+    const emission=()=>lanterns.map(o=>({power:(o.material as THREE.MeshStandardMaterial).emissiveIntensity,colors:o.instanceColor?.array.slice()}));
+    const steady=emission();
+    for (let frame = 0; frame < 350; frame++) {city.update(0.1, camera);expect(emission()).toEqual(steady);}
     expect(world.bodies.map(body => body.position.toArray())).toEqual(poses);
     expect(scene.children).toHaveLength(count);
     city.dispose(); city.update(1, camera);

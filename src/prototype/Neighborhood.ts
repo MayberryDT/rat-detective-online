@@ -172,7 +172,7 @@ export class Neighborhood {
         yield;
         this.initLampPool();
         if(lighting==='pools'&&streetReadabilityEnabled()){
-            this.readability=new StreetReadability(scene,layout,boxes);
+            this.readability=new StreetReadability(scene,layout,boxes,this.city.windowLights,this.city.facadeOccluders);
             // Only this city's owned scenery: never mutate an existing rat,
             // projectile, stage light or a previous scene during replacement.
             for(const object of scene.children)if(!existingObjects.has(object))object.traverse(child=>{
@@ -187,12 +187,18 @@ export class Neighborhood {
                 .map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:260,distance:24,angle:.88,penumbra:.5})),
             ...(this.readability?.lights??[]),...fixtures,
         ],LIGHT_ROOMS);
+        if(this.overhead)for(const object of scene.children)if(!existingObjects.has(object))object.traverse(child=>{
+            if(!(child instanceof THREE.Mesh))return;
+            for(const material of Array.isArray(child.material)?child.material:[child.material])
+                if(material instanceof THREE.MeshStandardMaterial)this.overhead!.applyToScenery(material);
+        });
     }
     private readonly groundBodies:CANNON.Body[]=[];
     private readonly groundMeshes:THREE.Object3D[]=[];
     generate() {}
     update(_dt:number,camera?:THREE.Camera,anchor?:{x:number;y:number;z:number}) {
         this.city.update(_dt,camera);
+        this.readability?.update();
         this.architecture.update(_dt);
         this.grime.update(_dt);
         // Outdoor bounce light supplies a visibility floor; existing sewer lighting stays intact.

@@ -1,6 +1,8 @@
 import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import {isCentralBuilding,skylineMasses} from '../shared/skyline';
 import { WindowLightCycle } from './WindowLightCycle';
+import {windowApertures,uncoveredWindowApertures,type WindowPane,type FacadeMass} from './WindowApertures';
+import type {SpillSource} from '../prototype/StreetReadability';
 import {CITY_STREETS} from '../shared/cityPlan';
 import { STREET_LAMPS, originalCityBuildingAllowed, isRampOpening } from '../shared/grayboxLayout';
 import { generatedStreetLamps,STREET_LAMP_HEIGHT } from '../shared/streetLampLayout';
@@ -56,10 +58,10 @@ export class CityGenerator {
     private generated = false;
     private details = new Map<THREE.Material, THREE.Matrix4[]>();
     private animationTime = 0;
-    private flickerHeads: THREE.InstancedMesh[] = [];
+    readonly windowLights:SpillSource[]=[];
+    readonly facadeOccluders:FacadeMass[]=[];
     private steam: {mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>; x: number; z: number; phase: number}[] = [];
     private windowStates: {cycle: WindowLightCycle; uniform: {value: number}}[] = [];
-    private readonly lightColor = new THREE.Color();
     private counts: CityCounts = emptyCounts();
 
     constructor(scene: THREE.Scene, world: CANNON.World, opts: CityOptions = DEFAULT_CITY_OPTIONS, spec?: WorldSpec) {
@@ -97,12 +99,6 @@ export class CityGenerator {
     update(dt: number, camera?: THREE.Camera): void {
         if (!this.generated || !Number.isFinite(dt) || dt < 0) return;
         this.animationTime += Math.min(dt, 0.1);
-        this.flickerHeads.forEach((heads, i) => {
-            const phase = (this.animationTime + i * 3.7) % 19;
-            const brightness = phase > 8 && phase < 8.35 ? 0.2 + 0.8 * Math.abs(Math.sin(phase * 75)) : 1;
-            heads.setColorAt(0, this.lightColor.setRGB(brightness, brightness, brightness));
-            heads.instanceColor!.needsUpdate = true;
-        });
         for (const window of this.windowStates) window.uniform.value = window.cycle.update(this.animationTime);
         for (const puff of this.steam) {
             const phase = (this.animationTime * 0.2 + puff.phase) % 1;
@@ -136,7 +132,7 @@ export class CityGenerator {
         for (const geometry of this.geometries) geometry.dispose();
         for (const material of this.materials) material.dispose();
         for (const texture of this.textures) texture.dispose();
-        this.details.clear(); this.flickerHeads = []; this.steam = []; this.windowStates = [];
+        this.details.clear(); this.windowLights.length=0; this.facadeOccluders.length=0; this.steam = []; this.windowStates = [];
         this.animationTime = 0;
         this.objects = [];
         this.bodies = [];
@@ -176,10 +172,16 @@ export class CityGenerator {
         const canvas = this.trackMaterial(new THREE.MeshStandardMaterial({color:0x443239,roughness:1}));
         for (const building of layout) {
             yield;
+            const windowStart=this.windowLights.length,detailStart=this.facadeOccluders.length;
+            const finishWindows=()=>{
+                const visible=uncoveredWindowApertures(this.windowLights.slice(windowStart),this.facadeOccluders.slice(detailStart));
+                this.windowLights.splice(windowStart,this.windowLights.length-windowStart,...visible);
+            };
             this.addBuilding(building, rooftopMat, random);
             const { cx, cz, bw, bd, bh } = building;
             if(isCentralBuilding(building)){
                 this.downtownDetails(building,trim,dark,brass);
+                finishWindows();
                 continue;
             }
             // Cornices and stone plinths give the original box silhouettes depth.
@@ -304,12 +306,13 @@ export class CityGenerator {
                 this.boxDetail(brass, cx, 1.2, cz + side * (bd / 2 + 0.055), 0.055, 2.4, 0.035);
                 this.boxDetail(dark, cx, 2.65, cz + side * (bd / 2 + 0.25), 2.3, 0.14, 0.65);
             }
+            finishWindows();
         }
     }
 
     private addBuilding(building: BuildingFootprint, rooftopMat: THREE.Material, random: () => number): void {
         const { cx, cz, bw, bd, bh } = building;
-        const { facade, glow, rooms } = this.createWindowTexture(Math.ceil(bw), Math.ceil(bh), random);
+        const { facade, glow, rooms, panes } = this.createWindowTexture(Math.ceil(bw), Math.ceil(bh), random);
         this.textures.add(facade); this.textures.add(glow);
 
         const mat = this.trackMaterial(new THREE.MeshStandardMaterial({
@@ -351,6 +354,7 @@ export class CityGenerator {
         mat.customProgramCacheKey = () => `city-room-occupancy-v2-${roomUniforms.length}`;
 
         for(const mass of skylineMasses(building)){
+            if(this.extension)this.windowLights.push(...windowApertures(panes,roomUniforms,mass,bh));
             const geo = this.trackGeometry(new THREE.BoxGeometry(mass.w, mass.h, mass.d));
             const uv = geo.getAttribute('uv');
             const base = mass.y - mass.h / 2;
@@ -442,6 +446,7 @@ export class CityGenerator {
     }
 
     private boxDetail(material: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number, slope=0): void {
+        if(this.extension&&!slope)this.facadeOccluders.push({x,y,z,w:sx,h:sy,d:sz});
         dummy.position.set(x, y, z); dummy.rotation.set(slope, 0, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix();
         const list = this.details.get(material) ?? [];
         list.push(dummy.matrix.clone()); this.details.set(material, list);
@@ -461,6 +466,7 @@ export class CityGenerator {
     }
 
     private createWindowTexture(widthUnits: number, heightUnits: number, random: () => number) {
+        const panes:WindowPane[]=[];
         const canvas = document.createElement('canvas'), emission = document.createElement('canvas');
         canvas.width = emission.width = Math.max(64, Math.ceil(widthUnits / 2.4) * 24);
         canvas.height = emission.height = Math.max(64, Math.ceil(heightUnits / 3) * 28);
@@ -492,9 +498,12 @@ export class CityGenerator {
                 light.fillStyle = '#000000'; ctx.fillStyle = '#484651';
                 ctx.fillRect(x + 5, y, 2, 16); light.fillRect(x + 5, y, 2, 16);
                 ctx.fillRect(x, y + 8, 12, 1); light.fillRect(x, y + 8, 12, 1);
-                if (random() < 0.3) {
+                const blind=random()<.3;
+                if (blind) {
                     ctx.fillRect(x, y, 12, 5); light.fillRect(x, y, 12, 5);
                 }
+                panes.push({u0:x/canvas.width,u1:(x+12)/canvas.width,
+                    v0:1-(y+16)/canvas.height,v1:1-(y+(blind?5:0))/canvas.height,color:Number.parseInt(color.slice(1),16)});
             }
         }
         const facade = new THREE.CanvasTexture(canvas), glow = new THREE.CanvasTexture(emission);
@@ -504,7 +513,7 @@ export class CityGenerator {
         for(let row=0;row<3;row++)for(let column=0;column<2;column++){
             rooms.push(new THREE.Vector4(column/2,row/3,(column+1)/2,(row+1)/3));
         }
-        return { facade, glow, rooms };
+        return { facade, glow, rooms, panes };
     }
 
     private generateLampProps(random: () => number): void {
@@ -537,11 +546,6 @@ export class CityGenerator {
             emissiveIntensity: 2.2*AUTHORED_LIGHT_GAIN,
             roughness: 0.2,
         }));
-        headMat.onBeforeCompile = shader => {
-            shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>',
-                '#include <emissivemap_fragment>\n#ifdef USE_INSTANCING_COLOR\n totalEmissiveRadiance *= vColor;\n#endif');
-        };
-        headMat.customProgramCacheKey = () => 'lantern-instance-flicker-v1';
         const coneGeo = this.trackGeometry(new THREE.ConeGeometry(5.7, STREET_LAMP_HEIGHT, 20, 1, true));
         const coneMat = this.trackMaterial(new THREE.MeshBasicMaterial({
             color: 0xffcc89,
@@ -612,8 +616,6 @@ export class CityGenerator {
         const poles = new THREE.InstancedMesh(poleGeo, poleMat, lamps.length);
         const heads = new THREE.InstancedMesh(headGeo, headMat, lamps.length);
         const cones = new THREE.InstancedMesh(coneGeo, coneMat, lamps.length);
-        for (let i = 0; i < lamps.length; i++) heads.setColorAt(i, new THREE.Color(1,1,1));
-        this.flickerHeads.push(heads);
         poles.castShadow = true;
         heads.castShadow = false;
         poles.frustumCulled = true;

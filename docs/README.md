@@ -7,7 +7,9 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | Document | Purpose |
 | --- | --- |
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
+| [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Steady fixture lighting](verification/steady-fixture-lighting-2026-09-10.md) | Private full-game preview of steady streetlamps, corrected sewer illumination and pane-aligned downward beams; production unchanged |
 | [Mobile controls](mobile-controls.md) | Landscape touch input, compact phone HUD and private phone previews |
 | [Chaos foley](chaos-foley.md) | Integrated audio: 13 accepted physical/personal accents and restrained noir countdown/result |
 | [Gameplay baseline](gameplay-baseline.md) | Current tuning and preservation rules |

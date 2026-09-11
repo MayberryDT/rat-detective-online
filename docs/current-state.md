@@ -2,6 +2,16 @@
 
 Verified from source and production on **2026-09-10**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
+## Lighting correction available in private preview
+
+The subsequent screenshot review found visible fixture switching and misplaced facade spill. The local correction keeps streetlamp emission and pavement pools steady, excludes reassigned exterior actor spots from scenery, and prevents slightly negative grounded feet from activating sewer lights across ordinary streets. Window shafts now use the actual emissive pane UVs, occupancy, blinds and facade trim; transoms sit beneath entrance canopies. Ground spill is restricted to pavement tops. See [steady fixture lighting](verification/steady-fixture-lighting-2026-09-10.md) for checks and limits. This work is uncommitted and **not deployed to production**; the production receipt below still identifies the live release.
+
+[Play the full-game lighting preview](http://127.0.0.1:5190/?room=graybox-benchmark-ai-steady-lighting-v27&diagnostics=quiet&lighting=pools). The private lobby fills to 16 rats and yields bots to humans. Expires **September 10 at 9:27 PM Pacific**. Private Worker `93c21ddf-9ff5-4e07-8e5b-ef32ccabe1b2`, protocol 7; all 51 client files and a 162-snapshot passive connection verified. See the receipt linked above.
+
+## Stationary hitbox practice
+
+[Open target practice](http://127.0.0.1:5193/hitbox-practice.html). This separate local fixture uses four immobile rats, the actual shoulder camera/muzzle and shared hit simulation, immediate health refill after kills, and optional authoritative hitbox wires. H toggles shapes, R resets targets/counters, T returns to the firing line. No bots shoot, incidents run, or multiplayer room is joined. It includes the accepted local lighting correction above. See [practice setup and checks](hitbox-practice.md). The existing full-game relay and production remain unchanged.
+
 ## Current production release
 
 All accepted work is committed and live at **https://ratdetective.online/**: application commit `cd7af57`, Worker `d5fc60bf-78a8-44e2-821b-f7c794233e68`, protocol **7**. The canonical `public-live-v2` world remains version 2 / seed **341283204**. See the [grounded exterior lighting fix](verification/exterior-lighting-2026-09-10.md), [fast-title/input/lighting receipt](verification/title-fast-tap-lighting-2026-09-10.md), [preceding sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md) and [current gameplay baseline](gameplay-baseline.md).

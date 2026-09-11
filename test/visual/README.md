@@ -12,6 +12,10 @@ Serve `dist-visual` locally to inspect `/visual-fixture.html?seed=20260905&state
 
 `/performance-fixture.html` compares the same seeded city, camera, lighting and three rats with instanced scenery and equivalent separate meshes. Each mode has 60 warm-up and 300 measured frames. It reports draw calls, triangles, frame intervals and CPU render-submission time. These timings are not GPU timings; batching can increase submitted triangles because culling works per batch.
 
+## Stationary target practice
+
+The separate `/hitbox-practice.html` page is a manual stationary-target range using the real city, gun, camera and shared hit simulation. H toggles authoritative collision wires, R resets targets/counters, T returns to the start. Targets never move or shoot and refill after each kill. [Setup, current link and checks](../../docs/hitbox-practice.md). This fixture does not connect to multiplayer.
+
 ## Static cartoon HUD review
 
 Run `npx vite --config vite.visual.config.ts --host 127.0.0.1 --port 5192` and open `/hud-preview.html`. It draws the actual city once behind the real HUD without network, simulation or gameplay input. Query parameters select `phase=ready|rolling|active|reveal|cooldown` and any current `incident` ID; defaults are active Popcorn Panic. Resizing redraws the static scene. This page is a development fixture, not a normal game or performance benchmark.
