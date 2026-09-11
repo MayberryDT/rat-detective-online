@@ -177,7 +177,6 @@ export class GameSession {
         const shot = this.gun.shoot(this.rat.entity, target);
         if (shot && this.transport.send({type:'shoot', ...shot})) {
             this.shotsSent++;
-            if (this.gun.authoritative) this.gun.predictShot(this.rat.entity, shot);
         }
     }
     private requestPointerLock(): void { if (!this.touch?.active) this.pointerLock.request(); }
@@ -234,7 +233,6 @@ export class GameSession {
         switch (message.type) {
             case 'chaos':
                 this.gun.setIncident(message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined);
-                this.gun.reconcilePredictedShots(message.state.shots);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);break;
             case 'welcome': this.welcome(message); break;
             case 'currentPlayers': break; // Atomic welcome already applied the complete state.
@@ -255,6 +253,7 @@ export class GameSession {
                 break;
             }
             case 'playerShot': {
+                this.chaos?.launch(message);
                 const owner = this.remotes.get(message.shooterId);
                 if (owner) this.gun.replayShot(owner, message);
                 break;
@@ -371,7 +370,7 @@ export class GameSession {
             performance.mark('city-first-play-frame');
         }
         this.chaos?.renderOutline(renderer,camera);
-        this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:{...this.chaos?.getDiagnostics(),predictedBalls:this.gun.predictedBallCount}});
+        this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 

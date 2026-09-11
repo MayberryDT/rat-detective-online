@@ -22,13 +22,11 @@ interface CheeseBall {
     age: number;
     squash: number;
     owner: RatEntity;
-    predictionId?: string;
 }
 
 export class CheeseGun {
     public authoritative = false;
     public fireCue: 'normal' | 'malfunction' = 'normal';
-    private predictTrajectory = true;
     private scene: THREE.Scene;
     private world: CANNON.World;
     private camera: THREE.PerspectiveCamera | null = null;
@@ -144,35 +142,6 @@ export class CheeseGun {
 
     setIncident(incident?: IncidentId): void {
         this.fireCue = incident === 'bad-ammunition' ? 'malfunction' : 'normal';
-        // Bad Ammunition's random direction is chosen by the server. A guessed
-        // straight ball falsely shows a second trajectory before that result.
-        this.predictTrajectory = incident !== 'bad-ammunition';
-        if (!this.predictTrajectory) {
-            for (let i = this.balls.length - 1; i >= 0; i--) {
-                if (this.balls[i].predictionId) this.removeBall(i);
-            }
-        }
-    }
-
-    /** Immediate visual prediction when the launch direction is already known. */
-    predictShot(owner: RatEntity, shot: ShotDescriptor): void {
-        if (this.disposed || !this.authoritative || !this.predictTrajectory || this.balls.some(ball => ball.predictionId === shot.shotId)) return;
-        // Pending shots are short lived and bounded, including on a stalled connection.
-        if (this.balls.length >= 32) this.removeBall(0);
-        const ball = this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
-            new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
-        ball.predictionId = shot.shotId;
-    }
-
-    get predictedBallCount(): number { return this.authoritative ? this.balls.length : 0; }
-
-    reconcilePredictedShots(shots: readonly { id: string }[]): void {
-        if (!this.balls.length) return;
-        const confirmed = new Set(shots.map(shot => shot.id));
-        for (let i = this.balls.length - 1; i >= 0; i--) {
-            const id = this.balls[i].predictionId;
-            if (id && confirmed.has(id)) this.removeBall(i);
-        }
     }
 
     clearProjectiles(): void {
@@ -192,7 +161,7 @@ export class CheeseGun {
             ball.mesh.rotation.y += dt * 9;
             ball.mesh.scale.setScalar(1 - ball.squash * 0.1);
 
-            if (ball.age > (ball.predictionId ? .5 : BALL_LIFETIME)) {
+            if (ball.age > BALL_LIFETIME) {
                 this.removeBall(i);
                 continue;
             }
@@ -235,11 +204,6 @@ export class CheeseGun {
                     if (hitBody && (hitBody as any).userData && (hitBody as any).userData.entity instanceof RatEntity) {
                         const victim = (hitBody as any).userData.entity as RatEntity;
 
-                        if (ball.predictionId) {
-                            this.removeBall(i);
-                            continue;
-                        }
-
                         if (ball.owner.isRemote) {
                             ball.position.copy(nextPos);
                             ball.mesh.position.copy(ball.position);
@@ -272,7 +236,7 @@ export class CheeseGun {
                         }
                     }
 
-                    if (!ball.predictionId) this.impacts.emit(hitPoint, hitNormal, true);
+                    this.impacts.emit(hitPoint, hitNormal, true);
                     ball.squash = 1;
                     ball.mesh.scale.setScalar(0.9);
                     // HIT WALL / GROUND → BOUNCE

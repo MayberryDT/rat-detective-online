@@ -4,6 +4,7 @@ import * as CANNON from 'cannon-es';
 import { CheeseGun } from '../../src/weapons/CheeseGun';
 import { RatEntity } from '../../src/entities/RatEntity';
 import { RatController } from '../../src/player/RatController';
+import { INCIDENTS } from '../../src/shared/incidentCatalog';
 
 function setup() {
   const scene = new THREE.Scene();
@@ -15,60 +16,23 @@ function setup() {
 }
 
 describe('projectile behavior', () => {
-  it('keeps immediate gun feedback but never draws a guessed straight ball during Bad Ammunition', () => {
-    const {gun,owner,projectiles}=setup();gun.authoritative=true;
-    gun.setIncident('bad-ammunition');
-    const animate=vi.spyOn(owner,'playShootAnimation');
-    const shot=gun.shoot(owner,new THREE.Vector3(100,1.45,0))!;
-    expect(animate).toHaveBeenCalledOnce();expect(gun.fireCue).toBe('malfunction');
-    expect(owner.mesh.getObjectByName('rat-muzzle-flash')!.visible).toBe(true);
-    gun.predictShot(owner,shot);gun.update(1/60);
-    expect(projectiles()).toHaveLength(0);expect(gun.predictedBallCount).toBe(0);
-    // Ordinary/centered shots become immediate again at incident expiry.
-    gun.setIncident();expect(gun.fireCue).toBe('normal');
-    gun.predictShot(owner,{...shot,shotId:'after-expiry'});expect(projectiles()).toHaveLength(1);
-    gun.dispose();owner.dispose();
-  });
-
-  it('clears pending straight previews when Bad Ammunition starts, preserving other incident predictions', () => {
-    const {gun,owner,projectiles}=setup();gun.authoritative=true;
-    const shot={shotId:'pending',origin:{x:0,y:2,z:0},direction:{x:1,y:0,z:0}};
-    gun.setIncident('scattershot');gun.predictShot(owner,shot);expect(projectiles()).toHaveLength(1);
-    gun.setIncident('bad-ammunition');expect(projectiles()).toHaveLength(0);
-    gun.setIncident('popcorn-panic');gun.predictShot(owner,shot);expect(projectiles()).toHaveLength(1);
-    gun.dispose();owner.dispose();
-  });
-
-  it('shows an authoritative local shot at the muzzle immediately and hands off by shot ID', () => {
-    const {gun,owner,projectiles}=setup();gun.authoritative=true;
-    const shot=gun.shoot(owner,new THREE.Vector3(100,1.45,0))!;
-    expect(projectiles()).toHaveLength(0);
-    gun.predictShot(owner,shot);gun.predictShot(owner,shot);
-    expect(projectiles()).toHaveLength(1);
-    expect(projectiles()[0].position.toArray()).toEqual([shot.origin.x,shot.origin.y,shot.origin.z]);
-    gun.update(1/60);
-    expect(projectiles()[0].position.x).toBeCloseTo(shot.origin.x+shot.direction.x*175/60);
-    gun.reconcilePredictedShots([{id:'other-shot'}]);expect(projectiles()).toHaveLength(1);
-    gun.reconcilePredictedShots([{id:shot.shotId}]);expect(projectiles()).toHaveLength(0);
-    gun.dispose();owner.dispose();
-  });
-
-  it('never applies damage or sends a hit for a visual prediction', () => {
+  it.each([undefined, ...INCIDENTS.map(incident => incident.id)])('uses the animated muzzle with no guessed ball or local damage: %s', incident => {
     const {gun,owner,world,scene,projectiles}=setup();gun.authoritative=true;
     const victim=new RatEntity(scene,world,new THREE.Vector3(3,0,0),'Target',{});
-    const hit=vi.fn();gun.onHitEntity=hit;
-    gun.predictShot(owner,{shotId:'prediction',origin:{x:1,y:1.45,z:0},direction:{x:1,y:0,z:0}});
+    gun.setIncident(incident);
+    const animate=vi.spyOn(owner,'playShootAnimation'),hit=vi.fn();gun.onHitEntity=hit;
+    const shot=gun.shoot(owner,new THREE.Vector3(100,1.45,0))!;
+    expect(animate).toHaveBeenCalledOnce();
+    expect(gun.fireCue).toBe(incident==='bad-ammunition'?'malfunction':'normal');
+    expect(owner.mesh.getObjectByName('rat-muzzle-flash')!.visible).toBe(true);
+    expect(shot.origin).toEqual(owner.getMuzzlePosition());
     gun.update(.02);
-    expect(victim.hp).toBe(3);expect(hit).not.toHaveBeenCalled();expect(projectiles()).toHaveLength(0);
+    expect(projectiles()).toHaveLength(0);expect(victim.hp).toBe(3);expect(hit).not.toHaveBeenCalled();
+    gun.replayShot(owner,shot);gun.update(.02);
+    expect(projectiles()).toHaveLength(0);
+    gun.setIncident();gun.shoot(owner,new THREE.Vector3(100,1.45,0));
+    expect(gun.fireCue).toBe('normal');expect(projectiles()).toHaveLength(0);
     gun.dispose();owner.dispose();victim.dispose();
-  });
-
-  it('bounds pending prediction memory and removes unconfirmed shots after half a second', () => {
-    const {gun,owner,projectiles}=setup();gun.authoritative=true;
-    for(let i=0;i<100;i++)gun.predictShot(owner,{shotId:`pending-${i}`,origin:{x:10,y:10,z:10},direction:{x:1,y:0,z:0}});
-    expect(projectiles()).toHaveLength(32);
-    gun.update(.51);expect(projectiles()).toHaveLength(0);
-    gun.dispose();owner.dispose();
   });
 
   it('shares GPU resources across shots and retains them until gun disposal', () => {
@@ -77,7 +41,7 @@ describe('projectile behavior', () => {
     const first = projectiles()[0];
     const geometryDispose = vi.spyOn(first.geometry, 'dispose');
     const materialDispose = vi.spyOn(first.material as THREE.Material, 'dispose');
-    gun.update(4.99);
+    gun.update(2.49);
     for (let i = 0; i < 100; i++) gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
     gun.update(0.02);
     expect(projectiles()).toHaveLength(100);
@@ -155,7 +119,7 @@ describe('projectile behavior', () => {
     material.dispose();
   });
 
-  it('launches from the pistol and preserves speed, gravity, and five-second lifetime', () => {
+  it('launches from the pistol and preserves speed, gravity, and 2.5-second lifetime', () => {
     const { gun, owner, projectiles } = setup();
     const shot = gun.shoot(owner, new THREE.Vector3(100, 1.45, 0))!;
     const ball = projectiles()[0];
@@ -166,7 +130,7 @@ describe('projectile behavior', () => {
     expect(ball.position.distanceTo(origin.clone().addScaledVector(direction, 3.5).add(new THREE.Vector3(0, -0.01, 0)))).toBeLessThan(1e-10);
     gun.update(0.02);
     expect(ball.position.distanceTo(origin.clone().addScaledVector(direction, 7).add(new THREE.Vector3(0, -0.03, 0)))).toBeLessThan(1e-10);
-    gun.update(4.96);
+    gun.update(2.46);
     expect(projectiles()).toHaveLength(1);
     gun.update(0.001);
     expect(projectiles()).toHaveLength(0);

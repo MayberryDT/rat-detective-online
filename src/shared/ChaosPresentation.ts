@@ -1,9 +1,9 @@
-import { CHAOS_TUNING, type ChaosState, type PhysicalPose } from './chaosState';
-import type { QuatData, Vec3Data } from './networkProtocol';
+import { CHAOS_TUNING, type ChaosShot, type ChaosState, type PhysicalPose } from './chaosState';
+import type { QuatData, Vec3Data, ServerMessage } from './networkProtocol';
 
 export interface PresentationPose { p: Vec3Data; q: QuatData }
 interface Sample { time:number; p:Vec3Data; v:Vec3Data; q:QuatData; charged:boolean; corner?:{time:number;p:Vec3Data} }
-interface Track { samples:Sample[]; arrived:number; seen:number; blockExtrapolation:boolean; lastTime:number; clockCorrection:number }
+interface Track { samples:Sample[]; arrived:number; seen:number; blockExtrapolation:boolean; lastTime:number; clockCorrection:number; birth?:Sample }
 const identity:QuatData={x:0,y:0,z:0,w:1};
 const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const speed=(v:Vec3Data)=>Math.hypot(v.x,v.y,v.z);
@@ -14,6 +14,8 @@ const HISTORY=6;
  * gradually rather than disappearing behind the interpolation buffer. */
 export class ChaosPresentation {
     private shots=new Map<string,Track>();
+    private launches=new Map<string,{shot:ChaosShot;at:number;arrival:number}>();
+    private seenLaunches=new Set<string>();
     private corpses=new Map<string,Track>();
     private caseTrack?:Track;
     private caseLifecycle='';
@@ -25,7 +27,33 @@ export class ChaosPresentation {
     constructor(private readonly delayMs=75){}
     clear():void {
         this.shots.clear();this.corpses.clear();this.caseTrack=undefined;this.caseLifecycle='';
+        this.launches.clear();this.seenLaunches.clear();
         this.latestTime=-Infinity;this.latestArrival=-Infinity;this.lastClock=-Infinity;this.serial=0;
+    }
+    /** The server's real birth event joins the same ID/history used by snapshots.
+     * Never manufacture a second local ball or guess an incident's direction. */
+    launch(message:Extract<ServerMessage,{type:'playerShot'}>,arrival:number):void {
+        const launch=message.launch;
+        if(!launch||!Number.isFinite(arrival)||launch.at<this.latestTime-500)return;
+        for(const ball of launch.balls){
+            if(this.seenLaunches.has(ball.id))continue;
+            this.seenLaunches.add(ball.id);
+            if(this.seenLaunches.size>CHAOS_TUNING.maxShots*2)this.seenLaunches.delete(this.seenLaunches.values().next().value!);
+            if(this.shots.has(ball.id))continue;
+            if(this.shots.size>=CHAOS_TUNING.maxShots){
+                const oldest=this.shots.keys().next().value!;this.shots.delete(oldest);this.launches.delete(oldest);
+            }
+            const shot:ChaosShot={id:ball.id,owner:message.shooterId,p:{...message.origin},v:{...ball.velocity},age:0};
+            const track=this.push(undefined,launch.at,arrival,shot.p,shot.v,identity,false);
+            track.birth=track.samples[0];this.shots.set(ball.id,track);
+            this.launches.set(ball.id,{shot,at:launch.at,arrival});
+        }
+    }
+    renderShots(state:readonly ChaosShot[],now:number):readonly ChaosShot[] {
+        for(const [id,launch] of this.launches)if(now-launch.arrival>500){this.launches.delete(id);this.shots.delete(id);}
+        if(!this.launches.size)return state;
+        // Fresh real shots get a slot even when the preceding snapshot was full.
+        return [...Array.from(this.launches.values(),launch=>launch.shot),...state.filter(shot=>!this.launches.has(shot.id))].slice(0,CHAOS_TUNING.maxShots);
     }
     apply(state:ChaosState,arrival:number):void {
         if(!Number.isFinite(state.time)||!Number.isFinite(arrival))return;
@@ -43,7 +71,8 @@ export class ChaosPresentation {
             const shot=state.shots[i];
             this.shots.set(shot.id,this.push(this.shots.get(shot.id),state.time,arrival,shot.p,shot.v,identity,!!shot.wallBounced));
         }
-        for(const [id,track] of this.shots)if(track.seen!==this.serial)this.shots.delete(id);
+        for(const [id,track] of this.shots)if(track.seen!==this.serial&&(this.launches.get(id)?.at??-Infinity)<=state.time)this.shots.delete(id);
+        for(const [id,launch] of this.launches)if(this.shots.get(id)?.seen===this.serial||state.time>=launch.at)this.launches.delete(id);
         for(let i=0;i<Math.min(state.corpses.length,CHAOS_TUNING.maxCorpses);i++){
             const corpse=state.corpses[i];
             this.corpses.set(corpse.id,this.push(this.corpses.get(corpse.id),state.time,arrival,corpse.p,corpse.v,corpse.q,false));
@@ -76,10 +105,11 @@ export class ChaosPresentation {
         }
         if((bounce&&!continuousRicochet)||teleport){
             track.samples.length=0;track.arrived=arrival;track.blockExtrapolation=true;track.lastTime=-Infinity;
+            track.birth=undefined;
             track.clockCorrection=time-(arrival+this.offset);
         } else if(time>previous.time)track.blockExtrapolation=bounce;
         if(track.samples.length&&time===previous.time)track.samples[track.samples.length-1]=sample;
-        else {track.samples.push(sample);if(track.samples.length>HISTORY)track.samples.shift();}
+        else {track.samples.push(sample);if(track.samples.length>HISTORY)track.samples.splice(track.birth?1:0,1);}
         track.seen=this.serial;return track;
     }
     private clock(now:number):number {
@@ -88,6 +118,13 @@ export class ChaosPresentation {
     }
     private sample(track:Track|undefined,now:number,out:PresentationPose):boolean {
         if(!track)return false;
+        if(track.birth){
+            // Anchor the first rendered sample, not its receipt callback. A
+            // physics snapshot may arrive between that callback and the frame.
+            const birth=track.birth;track.birth=undefined;track.arrived=now;
+            track.lastTime=birth.time;track.clockCorrection=birth.time-(now+this.offset);
+            Object.assign(out.p,birth.p);Object.assign(out.q,birth.q);return true;
+        }
         const warm=Math.min(1,Math.max(0,now-track.arrived)/300);
         const time=Math.max(track.lastTime,this.clock(now)+track.clockCorrection*(1-warm)-
             Math.min(90,Math.max(60,this.delayMs))*warm);

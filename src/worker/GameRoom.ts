@@ -762,7 +762,9 @@ export class GameRoom extends DurableObject<Env> {
     if (!isPlausibleShot(message.origin, message.direction, player)) { this.diagnostics.shot('implausible'); return; }
     if (!this.rememberShot(playerId, message.shotId)) { this.diagnostics.shot('duplicate'); return; }
     this.startChaos();
-    this.chaos?.shoot(playerId,message);
+    const fired=this.chaos?.shoot(playerId,message);
+    const launch=this.world.version===GRAYBOX_VERSION&&fired?.length
+      ? {at:this.chaos!.time,balls:fired.map(ball=>({id:ball.id,velocity:{...ball.v}}))}:undefined;
     this.diagnostics.shot('accepted');
 
     this.broadcast(
@@ -772,8 +774,11 @@ export class GameRoom extends DurableObject<Env> {
         shotId: message.shotId,
         origin: message.origin,
         direction: message.direction,
+        ...(launch?{launch}:{}),
       },
-      playerId,
+      // The shooter also needs the real age-zero balls, before a later physics
+      // snapshot has already advanced them several units away from the barrel.
+      launch?undefined:playerId,
     );
   }
 

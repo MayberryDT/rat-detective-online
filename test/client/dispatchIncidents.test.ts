@@ -1,4 +1,5 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
+import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,DISPATCH_TARGET,LAUNCH_MACHINES} from '../../src/shared/chaosState';
 import {INCIDENTS,incidentInfo,type IncidentId} from '../../src/shared/incidentCatalog';
@@ -87,6 +88,26 @@ describe('authoritative Dispatch incidents',()=>{
    expect(Math.hypot(shot.v.x,shot.v.y,shot.v.z)).toBeCloseTo(BALL_SPEED);
   }
   sim.step(0,now+500);shots=sim.snapshot(false).shots;expect(shots).toHaveLength(count);
+ });
+ it.each([{x:1,y:0,z:0},{x:0,y:0,z:-1},{x:.3,y:.4,z:.5},{x:0,y:1,z:0},{x:0,y:-1,z:0}])('keeps Bad Ammunition in a narrow diagonal cone around aim %j',aim=>{
+  const {sim}=fixture('bad-ammunition'),direction=new C.Vec3(aim.x,aim.y,aim.z);direction.normalize();
+  const axis=Math.abs(direction.y)<.95?new C.Vec3(0,1,0):new C.Vec3(1,0,0);
+  const side=direction.cross(axis);side.normalize();const up=side.cross(direction);up.normalize();
+  const random=vi.spyOn(Math,'random'),quadrants=new Set<string>();
+  for(const radial of [0,.5,.999999])for(const azimuth of [0,.125,.249999,.25,.375,.499999,.5,.625,.749999,.75,.875,.999999]){
+   random.mockReturnValue(.5).mockReturnValueOnce(0).mockReturnValueOnce(radial).mockReturnValueOnce(azimuth);
+   sim.shoot('shooter',{shotId:`diagonal-${radial}-${azimuth}`,origin:{x:0,y:30,z:0},direction:aim});
+   const shot=sim.snapshot(false).shots.at(-1)!,velocity=new C.Vec3(shot.v.x,shot.v.y,shot.v.z);
+   expect(velocity.length()).toBeCloseTo(BALL_SPEED);
+   const angle=Math.acos(velocity.dot(direction)/BALL_SPEED);
+   expect(angle).toBeGreaterThanOrEqual(.12-1e-8);expect(angle).toBeLessThanOrEqual(.24+1e-8);
+   const horizontal=velocity.dot(side),vertical=velocity.dot(up),ratio=Math.abs(horizontal/vertical);
+   expect(ratio).toBeGreaterThanOrEqual(1/Math.sqrt(3)-1e-8);expect(ratio).toBeLessThanOrEqual(Math.sqrt(3)+1e-8);
+   quadrants.add(`${Math.sign(horizontal)},${Math.sign(vertical)}`);
+  }
+  expect(quadrants.size).toBe(4);
+  sim.step(0,now+T.activeMs);sim.shoot('shooter',{shotId:'normal-again',origin:{x:0,y:30,z:0},direction:aim});
+  const v=sim.snapshot(false).shots.at(-1)!.v;expect(new C.Vec3(v.x,v.y,v.z).dot(direction)).toBeCloseTo(BALL_SPEED);
  });
  it('fires all launchers every three seconds through cooldowns, without replaying restored pulses',()=>{
   const {sim,players}=fixture('pressure-surge');sim.step(0,now+2999);expect(sim.snapshot(false).pressure!.serial).toBe(0);

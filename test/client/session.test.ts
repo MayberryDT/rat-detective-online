@@ -49,8 +49,6 @@ const harness = vi.hoisted(() => {
         setIncident = vi.fn();
         shoot = vi.fn(() => ({ shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 } }));
         replayShot = vi.fn();
-        predictShot = vi.fn();
-        reconcilePredictedShots = vi.fn();
         clearProjectiles = vi.fn();
         update = vi.fn();
         dispose = vi.fn();
@@ -182,7 +180,7 @@ vi.mock('../../src/prototype/Neighborhood', () => ({ Neighborhood: class extends
     constructor(scene: unknown, world: unknown, spec: {seed:number;version:number}) { super(scene,world,undefined,spec); }
 } }));
 vi.mock('../../src/prototype/ChaosView', () => ({ ChaosView: class {
-    setScores() {} dispose() {} apply() {} update() {} renderOutline() {}
+    setScores() {} dispose() {} apply() {} launch() {} update() {} renderOutline() {}
 } }));
 vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));
 vi.mock('../../src/session/InputState', () => ({
@@ -582,14 +580,12 @@ describe('GameSession', () => {
         expect(transport.send).toHaveBeenCalledWith({
             type: 'shoot', shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 },
         });
-        expect(gun.predictShot).not.toHaveBeenCalled();
         gun.authoritative=true;
         doc.dispatch('mousedown', Object.assign(new Event('mousedown'), { button: 0 }));
-        expect(gun.predictShot).toHaveBeenCalledTimes(1);
-        expect(gun.predictShot).toHaveBeenCalledWith(harness.rats[0].entity,gun.shoot.mock.results[1].value);
+        expect(transport.send.mock.calls.filter(([message])=>(message as {type:string}).type==='shoot')).toHaveLength(2);
         transport.send.mockReturnValueOnce(false);
         doc.dispatch('mousedown', Object.assign(new Event('mousedown'), { button: 0 }));
-        expect(gun.predictShot).toHaveBeenCalledTimes(1);
+        expect(transport.send.mock.calls.filter(([message])=>(message as {type:string}).type==='shoot')).toHaveLength(3);
         remotes.idFor.mockReturnValue('other');
         gun.onHitEntity?.({} as never, 3);
         expect(transport.send).toHaveBeenCalledWith({ type: 'hit', victimId: 'other', damage: 3 });

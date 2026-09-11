@@ -20,6 +20,8 @@ The current human-player presentation uses timestamped SnapshotBuffer history wi
 
 Balls, cases and corpses use ChaosPresentation: approximately 75 ms interpolation, bounded sample history and limited extrapolation. New balls appear immediately and acquire delay gradually; removals and ownership/HUD changes remain immediate. Bounces/charged-state transitions must not interpolate through incompatible paths. These are rendering policies, not projectile-physics changes.
 
+The September 10 private protocol-8 follow-up sends each accepted shot's actual birth IDs, resolved velocities and simulation time to the shooter as well as observers. Previously the shooter first received an already-travelled snapshot. The first rendered sample now uses the transmitted animated muzzle, even if a later snapshot arrived before that display frame, then the same track advances continuously. Duplicate events cannot rewind a displayed ball; known removal or ricochet supersedes the birth sample. Pending births expire after 500 ms and share the 256-ball presentation cap. This still requires server confirmation and does not remove network round-trip delay. [Implementation and tests](verification/authoritative-muzzle-2026-09-10.md); production remains protocol 7.
+
 Server simulation is 60 Hz with roughly 30 Hz snapshots. Accepted stationary poses are suppressed after the initial stop update except for a half-second heartbeat; activity/checkpoints continue. Snapshots are encoded once for observers, with no wire encoding when nobody is watching.
 
 ## Two different regressions

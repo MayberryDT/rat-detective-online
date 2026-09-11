@@ -1,3 +1,4 @@
+import { PROTOCOL_VERSION } from '../../src/shared/networkProtocol';
 import { readSocketMessage } from './socketMessages';
 import {SELF} from 'cloudflare:test';
 import {expect,it} from 'vitest';
@@ -10,7 +11,7 @@ it('negotiates movement batches while preserving legacy delivery and movement-be
   const response=await SELF.fetch(`https://example.test/ws?room=${room}${batch?'&movement=batch-v1':''}`,{headers:{Upgrade:'websocket'}});
   expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
   const messages:any[]=[];ws.addEventListener('message',e=>{const m=readSocketMessage(ws,e.data);expect(m).not.toBeNull();messages.push(m);});
-  ws.send(JSON.stringify({type:'join',protocolVersion:7,name:'Rat',appearance}));await wait(()=>messages.some(m=>m.type==='welcome'));
+  ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Rat',appearance}));await wait(()=>messages.some(m=>m.type==='welcome'));
   return{ws,messages,id:messages.find(m=>m.type==='welcome').id};
  };
  try{

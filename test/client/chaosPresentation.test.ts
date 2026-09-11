@@ -2,12 +2,55 @@ import {describe,it,expect} from 'vitest';
 import {ChaosPresentation,type PresentationPose} from '../../src/shared/ChaosPresentation';
 import {CHAOS_TUNING,type ChaosState} from '../../src/shared/chaosState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
+import type {ServerMessage} from '../../src/shared/networkProtocol';
+
+const launch=(id='fired',at=1010):Extract<ServerMessage,{type:'playerShot'}>=>({type:'playerShot',shooterId:'rat',shotId:id,
+    origin:{x:0,y:2,z:0},direction:{x:1,y:0,z:0},launch:{at,balls:[{id,velocity:{x:175,y:0,z:0}}]}});
 
 const output=():PresentationPose=>({p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}});
 function snapshot(time=1000,x=0):ChaosState {
     return {time,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x,y:1,z:0},v:{x:100,y:0,z:0},q:{x:0,y:0,z:0,w:1},spin:{x:0,y:0,z:0}},dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},corpses:[],shots:[{id:'ball',owner:'rat',p:{x,y:0,z:0},v:{x:100,y:0,z:0},age:time-1000}],impacts:[],notice:{serial:0,text:''}};
 }
 describe('bounded chaos presentation buffer',()=>{
+    it('renders the real birth before the first travelled snapshot, then keeps one advancing ID',()=>{
+        const view=new ChaosPresentation(),out=output(),state=snapshot();state.shots=[];view.apply(state,0);
+        const born=launch();view.launch(born,40);
+        const ids=()=>view.renderShots(state.shots,40).map(shot=>shot.id);
+        expect(ids()).toEqual(['fired']);view.launch(born,45);expect(ids()).toEqual(['fired']);
+        // The snapshot can land before the browser draws anything. It already
+        // contains several units of flight; the first rendered sample must not.
+        state.time=1060;state.shots=[{id:'fired',owner:'rat',p:{x:8.75,y:1.958,z:0},v:{x:175,y:-1.25,z:0},age:.05}];
+        view.apply(state,70);expect(view.renderShots(state.shots,80)).toHaveLength(1);
+        expect(view.shot('fired',80,out)).toBe(true);expect(out.p).toEqual(born.origin);
+        let previous=out.p.x;
+        for(let now=96;now<=160;now+=16){view.shot('fired',now,out);expect(out.p.x).toBeGreaterThan(previous);previous=out.p.x;}
+        state.time=1200;state.shots=[];view.apply(state,200);view.launch(born,205);
+        expect(view.renderShots([],205)).toHaveLength(0);expect(view.shot('fired',205,out)).toBe(false);
+    });
+    it('keeps actual crooked volley velocities, without inventing the requested straight shot',()=>{
+        const view=new ChaosPresentation(),state=snapshot();state.shots=[];view.apply(state,0);
+        const born=launch();born.launch!.balls=[{id:'fired',velocity:{x:170,y:28,z:30}},{id:'extra',velocity:{x:170,y:-28,z:-30}}];
+        view.launch(born,10);const balls=view.renderShots([],10);
+        expect(balls.map(ball=>ball.v)).toEqual(born.launch!.balls.map(ball=>ball.velocity));
+        expect(balls.map(ball=>ball.p)).toEqual([born.origin,born.origin]);
+    });
+    it('honors a hit/removal or ricochet received before the first rendered frame',()=>{
+        const view=new ChaosPresentation(),state=snapshot(),out=output();state.shots=[];view.apply(state,0);
+        view.launch(launch(),10);state.time=1030;view.apply(state,30);
+        expect(view.renderShots([],30)).toHaveLength(0);expect(view.shot('fired',30,out)).toBe(false);
+        view.launch(launch('bounce',1040),40);state.time=1060;
+        state.shots=[{id:'bounce',owner:'rat',p:{x:1,y:2,z:0},v:{x:-157.5,y:0,z:0},age:.02,wallBounced:true}];
+        view.apply(state,60);view.shot('bounce',60,out);expect(out.p.x).toBe(1);
+        view.shot('bounce',80,out);expect(out.p.x).toBe(1);
+    });
+    it('bounds unresolved birth events and clears them on stalled delivery or reconnect',()=>{
+        const view=new ChaosPresentation(),state=snapshot(),out=output();state.shots=[];view.apply(state,0);
+        for(let i=0;i<600;i++)view.launch(launch(`born-${i}`,1010+i),10);
+        expect(view.renderShots([],10)).toHaveLength(CHAOS_TUNING.maxShots);
+        expect(view.diagnostics().shots).toBe(CHAOS_TUNING.maxShots);
+        expect(view.renderShots([],511)).toHaveLength(0);expect(view.shot('born-599',511,out)).toBe(false);
+        view.launch(launch('before-reconnect',2000),600);view.clear();expect(view.renderShots([],601)).toHaveLength(0);
+    });
     it('keeps the case interpolation clock continuous through frequent observed ricochets',()=>{
         const view=new ChaosPresentation(),out=output();let packet=0,previous=0,maxStep=0;
         for(let now=0;now<=3000;now+=1000/60){

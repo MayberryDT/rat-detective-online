@@ -10,6 +10,8 @@ All world sounds now use [worldSoundGain](../src/audio/worldSoundGain.ts): guns,
 
 ## Retained moments
 
+The subsequent [local launcher correction](verification/launcher-projectile-cleanup-2026-09-10.md) routes the existing synthesized machinery impact and air tail through `worldSoundGain`, adds a 120-unit cutoff, and lowers the nearby ceiling from .85 to .595. Both layers follow the listener in 3D throughout playback. This is available in the private preview, with production unchanged, and does not restore any of the rejected extra launcher accents below.
+
 | Visible action or personal feedback | Accent and trigger |
 |---|---|
 | Your jump | Short classic platformer hop after successful grounded input in RatController |

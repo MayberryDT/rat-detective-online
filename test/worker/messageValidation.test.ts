@@ -151,6 +151,18 @@ describe('parseServerMessage', () => {
     expect(isSupportedWorldVersion(parsed.world.version)).toBe(false);
   });
 
+  it('validates bounded real projectile births, including tuple-combined movement',()=>{
+    const shot={type:'playerShot',shooterId:'a',shotId:'one',origin:{x:1,y:2,z:3},direction:{x:1,y:0,z:0},
+      launch:{at:1000,balls:[{id:'one',velocity:{x:175,y:0,z:0}}]}};
+    expect(parseServerMessage(shot)).toEqual(shot);
+    const combined={...shot,move:['a',1000,1,2,3,0,0,0,1,0,0,0,1]};
+    expect(parseServerMessage(combined)).toMatchObject({launch:shot.launch,movement:{at:1000,player:{id:'a'}}});
+    for(const launch of [null,{}, {...shot.launch,at:NaN},{...shot.launch,at:-1},{...shot.launch,balls:[]},
+      {...shot.launch,balls:Array(6).fill(shot.launch.balls[0])},{...shot.launch,balls:[...shot.launch.balls,...shot.launch.balls]},
+      {...shot.launch,balls:[{id:'wrong',velocity:{x:175,y:0,z:0}}]},
+      {...shot.launch,balls:[{id:'one',velocity:{x:Infinity,y:0,z:0}}]},
+      {...shot.launch,balls:[{id:'one',velocity:{x:0,y:0,z:0}}]}])expect(parseServerMessage({...shot,launch})).toBeNull();
+  });
   it('requires shot direction and death deadlines', () => {
     expect(
       parseServerMessage({

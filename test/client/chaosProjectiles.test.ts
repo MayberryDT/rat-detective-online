@@ -1,9 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
+import * as C from 'cannon-es';
+import {CheeseGun} from '../../src/weapons/CheeseGun';
+import {RatController} from '../../src/player/RatController';
+import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
+import {createPlayer} from '../../src/worker/gameState';
 import { ChaosView } from '../../src/prototype/ChaosView';
 import { CASE_HOME, CHAOS_TUNING, type ChaosState } from '../../src/shared/chaosState';
 
 vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
+vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SEWER_FLOOR:-7,grayboxBoxes:()=>[]}));
 
 const originalDocument = globalThis.document;
 const originalWindow = globalThis.window;
@@ -12,7 +18,7 @@ beforeAll(() => {
  vi.stubGlobal('window', { innerWidth: 1280, innerHeight: 720 });
  vi.stubGlobal('document', {
   createElement: () => ({ width: 0, height: 0, style: {}, remove() {}, appendChild() {}, setAttribute() {},
-    getContext: () => ({ fillRect() {}, fillText() {} }) }),
+    getContext: () => ({ fillRect() {}, fillText() {}, clearRect() {}, strokeText() {} }) }),
   body: { appendChild() {} },
  });
 });
@@ -28,6 +34,34 @@ function snapshot(): ChaosState {
 const shot = { shotId: 'local-shot', origin: { x: 0, y: 2, z: 0 }, direction: { x: 1, y: 0, z: 0 } };
 
 describe('authoritative ball presentation', () => {
+  it.each([undefined,'bad-ammunition','scattershot'] as const)('draws the actual server balls from the shoulder-camera muzzle with one instance per ID: %s',incident=>{
+    const clock=vi.spyOn(performance,'now').mockReturnValue(0),scene=new THREE.Scene(),world=new C.World();
+    const player=new RatController(scene,world,camera,'Shooter',{},new THREE.Vector3(0,100,0));player.updateView();
+    const gun=new CheeseGun(scene,world,{} as THREE.AudioListener);gun.authoritative=true;gun.setPlayer(camera,player.entity);
+    const rat=createPlayer('shooter','Shooter',{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},{x:0,y:100,z:0});
+    const players=new Map([[rat.id,rat]]),at=Date.now();let sim=new ChaosSimulation(players,()=>{});sim.step(0,at);
+    const initial=sim.snapshot(false);
+    if(incident){initial.dispatch={phase:'active',incident,started:at,until:at+25000,serial:1};sim=new ChaosSimulation(players,()=>{},initial);}
+    const view=new ChaosView(scene,id=>id===rat.id?player.entity:undefined,undefined,true);view.setScores([],rat.id);view.apply(initial);
+    try{
+      const descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
+      const muzzle=player.entity.getMuzzlePosition();expect(descriptor.origin).toEqual(muzzle);
+      const fired=sim.shoot(rat.id,descriptor);
+      const birth={type:'playerShot' as const,shooterId:rat.id,...descriptor,launch:{at:sim.time,balls:fired.map(ball=>({id:ball.id,velocity:{...ball.v}}))}};
+      clock.mockReturnValue(40);view.launch(birth);
+      sim.step(.05,at+60);const travelled=sim.snapshot(false);
+      expect(travelled.shots.every(ball=>new THREE.Vector3(ball.p.x,ball.p.y,ball.p.z).distanceTo(muzzle)>8)).toBe(true);
+      clock.mockReturnValue(70);view.apply(travelled);
+      clock.mockReturnValue(80);view.update(1/60,camera);
+      const balls=scene.getObjectByName('records-chaos')!.children[0] as THREE.InstancedMesh,matrix=new THREE.Matrix4(),point=new THREE.Vector3();
+      expect(balls.count).toBe(fired.length);
+      for(let i=0;i<balls.count;i++){balls.getMatrixAt(i,matrix);expect(point.setFromMatrixPosition(matrix).distanceTo(muzzle)).toBeLessThan(1e-5);}
+      // Repeated delivery cannot create a second draw entry or replay the birth.
+      view.launch(birth);clock.mockReturnValue(96);view.update(1/60,camera);expect(balls.count).toBe(fired.length);
+      for(let i=0;i<balls.count;i++){balls.getMatrixAt(i,matrix);expect(point.setFromMatrixPosition(matrix).distanceTo(muzzle)).toBeGreaterThan(1);}
+      view.apply({...travelled,time:at+100,shots:[]});view.update(1/60,camera);expect(balls.count).toBe(0);
+    }finally{view.dispose();gun.dispose();player.dispose();clock.mockRestore();}
+  });
   it('keeps the full ball pool visible through every Dispatch phase', () => {
     const scene=new THREE.Scene();
     const view=new ChaosView(scene,()=>undefined,undefined,false);

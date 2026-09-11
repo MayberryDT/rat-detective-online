@@ -318,6 +318,10 @@ describe('GameRoom websockets', () => {
       origin: { x: welcome.player.x, y: welcome.player.y + 1.5, z: welcome.player.z },
       direction: { x: 0, y: 1, z: 0 } };
     client.ws.send(JSON.stringify(shot));
+    const born=await client.inbox.waitFor('playerShot',message=>message.shotId===shot.shotId);
+    expect(born.origin).toEqual(shot.origin);
+    expect(born.launch).toEqual({at:expect.any(Number),balls:[{id:shot.shotId,velocity:{x:0,y:175,z:0}}]});
+    expect(parseServerMessage(born)).toEqual(born);
     const snapshot = await client.inbox.waitFor('chaos', message => message.state.shots.some(ball => ball.id === shot.shotId));
     expect(parseServerMessage(JSON.stringify(snapshot))).not.toBeNull();
     expect(snapshot.state.shots.find(ball => ball.id === shot.shotId)?.owner).toBe(welcome.id);

@@ -54,6 +54,7 @@ export class ChaosSimulation {
     private pressure:NonNullable<ChaosState['pressure']>={serial:0,until:0,cooldowns:{},launches:[]};
     private notice={serial:0,text:'Find the Hot Case. Shoot Dispatch.'};
     private now=Date.now();
+    get time():number{return this.now;}
     private assignment?:AssignmentRules;
     get assignmentState():AssignmentState|undefined{return this.assignment?.state;}
     setAssignment(state:AssignmentState):void{this.assignment=new AssignmentRules(structuredClone(state),this.players);}
@@ -215,32 +216,39 @@ export class ChaosSimulation {
         const axis=Math.abs(direction.y)<.95?new C.Vec3(0,1,0):new C.Vec3(1,0,0);
         const side=direction.cross(axis);side.normalize();
         const up=side.cross(direction);up.normalize();
-        // An annulus excludes accurate shots, including RNG midpoint values.
-        const angle=.12+Math.random()*.38,azimuth=Math.random()*Math.PI*2;
+        // Keep the crooked path in view: 7–14 degrees off aim, diagonally
+        // within each quadrant rather than directly above/below or sideways.
+        const angle=.12+Math.random()*.12,quadrant=Math.random()*4;
+        const azimuth=Math.floor(quadrant)*Math.PI/2+Math.PI/6+(quadrant%1)*Math.PI/6;
         return direction.scale(Math.cos(angle)).vadd(side.scale(Math.sin(angle)*Math.cos(azimuth)))
             .vadd(up.scale(Math.sin(angle)*Math.sin(azimuth)));
     }
-    shoot(owner:string,shot:ShotDescriptor){
-        if(!this.players.get(owner) || this.players.get(owner)!.hp<=0)return;
+    shoot(owner:string,shot:ShotDescriptor):ChaosShot[]{
+        const fired:ChaosShot[]=[];
+        if(!this.players.get(owner) || this.players.get(owner)!.hp<=0)return fired;
+        const emit=(velocity:C.Vec3,id:string)=>{
+            const ball=this.emitShot(owner,shot.origin,velocity,id,this.originalShot());
+            if(ball)fired.push(ball);
+        };
         const direction=vec(shot.direction);direction.normalize();
         if(this.incidentActive('scattershot')){
             this.reserveShots(5);
             const v=direction.scale(BALL_SPEED);
-            this.emitShot(owner,shot.origin,v,shot.shotId,this.originalShot());
+            emit(v,shot.shotId);
             for(const angle of [-.22,-.11,.11,.22]){
                 const rotation=new C.Quaternion();rotation.setFromAxisAngle(new C.Vec3(0,1,0),angle);
-                this.emitShot(owner,shot.origin,rotation.vmult(v),crypto.randomUUID(),this.originalShot());
+                emit(rotation.vmult(v),crypto.randomUUID());
             }
-            return;
+            return fired;
         }
         if(this.incidentActive('bad-ammunition')){
             const roll=Math.random(),count=roll<.7?1:roll<.9?2:3;
             this.reserveShots(count);
-            for(let i=0;i<count;i++)this.emitShot(owner,shot.origin,this.crookedAim(direction).scale(BALL_SPEED),
-                i===0?shot.shotId:crypto.randomUUID(),this.originalShot());
-            return;
+            for(let i=0;i<count;i++)emit(this.crookedAim(direction).scale(BALL_SPEED),i===0?shot.shotId:crypto.randomUUID());
+            return fired;
         }
-        this.emitShot(owner,shot.origin,direction.scale(BALL_SPEED),shot.shotId,this.originalShot());
+        emit(direction.scale(BALL_SPEED),shot.shotId);
+        return fired;
     }
 
     private syncRats(){

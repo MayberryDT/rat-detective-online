@@ -19,7 +19,7 @@ import { incidentInfo } from '../shared/incidentCatalog';
 import { DispatchHud } from './DispatchHud';
 import { AssignmentDestinations } from './AssignmentDestinations';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
-import type { Vec3Data } from '../shared/networkProtocol';
+import type { Vec3Data, ServerMessage } from '../shared/networkProtocol';
 import { locateCase } from './caseLocator';
 import { PressureMachine } from './PressureMachine';
 import { CaseBeacon } from './CaseBeacon';
@@ -132,6 +132,9 @@ export class ChaosView {
         document.body.appendChild(this.caseMarker);
         this.impacts=new CheeseImpactEffects(scene);
     }
+    launch(message:Extract<ServerMessage,{type:'playerShot'}>):void {
+        if(this.extrapolate)this.presentation.launch(message,performance.now());
+    }
     apply(state:ChaosState){
         this.foley?.apply(state);
         this.state=state;this.receivedAt=performance.now();
@@ -209,8 +212,9 @@ export class ChaosView {
         this.updateCaseMarker(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const crossfire=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='crossfire';
-        for(let i=0;i<Math.min(s.shots.length,CHAOS_TUNING.maxShots);i++){
-            const shot=s.shots[i];
+        const shots=this.extrapolate?this.presentation.renderShots(s.shots,renderTime):s.shots;
+        for(let i=0;i<Math.min(shots.length,CHAOS_TUNING.maxShots);i++){
+            const shot=shots[i];
             const p=shot.stuckUntil||!(this.extrapolate&&this.presentation.shot(shot.id,renderTime,this.presented))?shot.p:this.presented.p;
             const scale=(shot.radius??BALL_RADIUS)/BALL_RADIUS;
             this.ballPose.position.set(p.x,p.y,p.z);
