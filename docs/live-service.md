@@ -1,29 +1,38 @@
 # Live service runbook
 
-Last release receipt: **2026-09-11**. [Pickups and Planted Evidence release](verification/pickups-planted-evidence-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
+Last release receipt: **2026-09-11**. [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
 
 | Item | Value |
 | --- | --- |
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `d6d1b1e3-9406-4df6-a3f5-04132652e3c1` — application commit `aaa8750`, protocol 10, pickups/Planted Evidence and accepted shooting/playback |
-| Previous version | `024dc635-2fbe-4b51-aaf8-2d43cdef789b` — intermediate protocol-9 candidate, missing compact pickup/buff fields; do not use for rollback |
+| Last deployed version | `3398a69c-146b-4d99-aa47-e3734664c086` — application commit `8cd0ec2`, protocol 14, accepted pickup/bot/launcher/reconnect refinements |
+| Previous version | `d6d1b1e3-9406-4df6-a3f5-04132652e3c1` — previous protocol-10 release; rollback requires its matching client |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 16 total rats per room; occupied rooms fill to eight with AI, yielding to humans; automatic overflow rooms |
 
-The preceding accepted release was `8cacdb60-2ee0-4f63-b8bb-9f02de321719`.
-Protocol 10 requires matching client and Worker: protocol-9 compact clients do
-not understand the final pickup/buff metadata.
+Protocol 14 requires matching client and Worker. Existing older game tabs should
+reload to get the new version. The intermediate protocol-9 version
+`024dc635-2fbe-4b51-aaf8-2d43cdef789b` omitted compact pickup fields and is not a
+rollback candidate.
 
 ## Continuous operation
 
-`GET /status` enables the canonical room's matchmaking policy and includes its persisted world seed/version so titles can prepare matching geometry without joining or reserving a slot; default `/ws` uses the persistent Matchmaker admission directory. Public `prepare=1` sockets bypass reservation/overflow allocation and remain silent until joining. They are bounded to sixteen per canonical room and a 30-second server lease (25 seconds on the client); a full-room join retries through normal matchmaking and cannot steal existing reservations. They do not start bots or simulation. Live sockets and simulation remain in individual GameRooms. Occupied rooms fill to eight total participants with server-owned AI (`max(0, 8 - humans)`), with a ten-second refill grace after departures. Humans can fill all sixteen slots. Arbitrary named rooms do not automatically acquire hosted AI. Hosting needs no local service or Codex task.
+`GET /status` enables the canonical room's matchmaking policy and includes its persisted world seed/version so titles can prepare matching geometry without joining or reserving a slot; default `/ws` uses the persistent Matchmaker admission directory. Public `prepare=1` sockets bypass reservation/overflow allocation and remain silent until joining. They are bounded to sixteen per canonical room and a 30-second server lease (25 seconds on the client); a full-room join retries through normal matchmaking and cannot steal existing reservations. They do not start bots or simulation. Live sockets and simulation remain in individual GameRooms. Occupied rooms fill to eight total participants with server-owned AI (`max(0, 8 - humans)`), with a ten-second refill grace after departures; disconnected rats now retain
+their existing slots for 30 seconds before removal. Humans can fill all sixteen slots. Arbitrary named rooms do not automatically acquire hosted AI. Hosting needs no local service or Codex task.
 
 The `persistent-bots-v1` enabled flag, `persistent-bot-roster-v1` active roster, matchmaking identity, player records, world, round, chaos snapshot and deadlines persist in SQLite. Names refresh with each round; unchanged setup preserves surviving bots. Reset cleans old bot records/events and emits leave/join events so client nameplates update. The former production policy of reserving eleven AI slots is historical.
 
-When the last human leaves, bots are removed and the simulation sleeps. Empty overflow rooms retire from the admission directory; the canonical room/world identity remains. Consequently **zero players and zero bots on `/status` is healthy when nobody is playing**. `/status` describes the canonical room, not a total across overflow rooms.
+Disconnected humans retain their identity, stats, objective state and slot for
+30 seconds. Their rats remain vulnerable and the match continues. Private reconnect
+credentials/deadlines persist separately in `reconnect_sessions`; same-tab reloads
+can resume through sessionStorage, and a bounded unreserved socket can recover an
+existing slot even in a full room. Tokens never appear in public player data or URLs.
+After the last reservation expires, bots are removed and the simulation sleeps. Empty overflow rooms retire from the admission directory; the canonical room/world identity remains. Consequently **zero players and zero bots on `/status` is healthy when nobody is playing**. `/status` describes the canonical room, not a total across overflow rooms. It counts
+attached humans; temporarily disconnected reserved rats remain on the authoritative
+scoreboard even though they are omitted from that status population count.
 
 A 15-second Durable Object alarm restores occupied-room simulation after eviction and shares its schedule with earlier respawn/reset deadlines. This provides recovery, not a guarantee against platform outages. See [server operations](server-operations.md) for timing and storage details.
 
@@ -62,6 +71,7 @@ The private `rat-detective-network-test` Worker is separate. Its last recorded r
 
 | Release | Evidence |
 | --- | --- |
+| Accepted pickup/reconnect refinements, `3398a69c-146b-4d99-aa47-e3734664c086` | 935 tests, clean typecheck/build/audit, human r8 acceptance; exact live assets and passive production reconnect checks in the current receipt |
 | Pickups/Planted Evidence, `d6d1b1e3-9406-4df6-a3f5-04132652e3c1` | 883 tests, typecheck/build, clean audit; 51 exact assets, 50 valid compact snapshots, eight rats, six sites, original world and redirects; human pickup feel remains unverified |
 | Initial persistent launch, `9d4c98e5-5225-49eb-825b-1c8777a0879b` | 352 tests; bounded no-human operation and live transport check |
 | Recovery / incidents, `b112bdc2-28e1-467b-8d63-d7ad5468968d` | 388 tests covered; extra cases and incident migration |

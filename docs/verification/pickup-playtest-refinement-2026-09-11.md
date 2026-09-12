@@ -1,5 +1,10 @@
 # Pickup playtest refinement — September 11, 2026
 
+**Later release status:** Tyler accepted r8 and authorized production release.
+Application `8cd0ec2`, Worker `3398a69c-146b-4d99-aa47-e3734664c086`, protocol 14.
+See the [production receipt](pickup-reconnect-production-2026-09-11.md).
+The private/review-pending statements below describe the original verification pass.
+
 The subsequent [rewards and feedback pass](pickup-rewards-feedback-2026-09-11.md)
 records Tyler’s acceptance of Hot Pursuit and better case collection, plus the
 requested changes that supersede this six-site layout and protocol-10 preview.

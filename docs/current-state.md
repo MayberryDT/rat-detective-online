@@ -2,6 +2,27 @@
 
 Verified from source and production on **2026-09-11**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
+## Accepted production release — September 11
+
+Tyler accepted the complete r8 preview and authorized release. **Everything is now
+live at https://ratdetective.online/**: application **`8cd0ec2`**, production Worker
+**`3398a69c-146b-4d99-aa47-e3734664c086`**, protocol **14**. Source was committed and
+pushed to the existing `origin/master` upstream. `public-live-v2`, seed 341283204,
+normal eight-participant backfill and the 16-rat cap are preserved.
+
+This includes the pickup art/placement/sound and large duration cards, 45-second
+restock symbols, stronger vertical launchers with air control, nine-bounce Big
+Cheese, improved bot activity, snappier case collection, matching 120-ball trap
+bursts, prepared entry, 30-second reconnect recovery and protection from shooting
+your own carried case. **935 tests**, typecheck/build and a zero-vulnerability audit
+support the release. All 56 live files match the approved preview; 104 production
+snapshots decoded without errors, same-ID reconnect completed in 685 ms, and the
+public room returned to sleep after the observer reservation expired. See the [production receipt](verification/pickup-reconnect-production-2026-09-11.md).
+
+The private-preview sections below are dated development history; their pending
+acceptance, uncommitted and production-unchanged statements describe those earlier
+iterations and are superseded by this release. Human playtests stay audible.
+
 ## Quick reconnect and carried-case protection (latest private changes, September 11)
 
 Quick reconnects now retain the same rat for **30 seconds**, including stats,

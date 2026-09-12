@@ -4,6 +4,14 @@
 **Read with:** [current-state.md](current-state.md), [AGENTS.md](../AGENTS.md),
 and the receipt [pickups-planted-evidence-2026-09-11.md](verification/pickups-planted-evidence-2026-09-11.md).
 
+## Accepted and released
+
+Tyler accepted r8 and authorized pushing everything live. Application `8cd0ec2`
+is committed and pushed; production Worker `3398a69c-146b-4d99-aa47-e3734664c086`
+runs protocol 14. Read the [production receipt](verification/pickup-reconnect-production-2026-09-11.md)
+for final validation. The private/uncommitted/review-pending notes below preserve
+historical iterations and are superseded. Keep human gameplay audible.
+
 ## Latest reconnect and own-case protection pass
 
 [The r8 receipt](verification/reconnect-case-protection-2026-09-11.md) supersedes r7:

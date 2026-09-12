@@ -1,5 +1,10 @@
 # Pickup rewards and feedback — September 11, 2026
 
+**Later release status:** Tyler accepted r8 and authorized production release.
+Application `8cd0ec2`, Worker `3398a69c-146b-4d99-aa47-e3734664c086`, protocol 14.
+See the [production receipt](pickup-reconnect-production-2026-09-11.md).
+The private/review-pending statements below describe the original verification pass.
+
 ## Scope and status
 
 Tyler accepted Hot Pursuit's visual/movement feel and improved genuine-case
