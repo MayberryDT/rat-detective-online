@@ -9,6 +9,7 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Netplay crispness implementation](verification/netplay-crispness-2026-09-12.md) | Undeployed protocol-15 branch: bounded projectile history, swept pickup intents, direct outcomes and causal diagnostics |
 | [Accepted pickup/reconnect production release](verification/pickup-reconnect-production-2026-09-11.md) | Current live protocol 14: approved pickup, bot, launcher, case and reconnect refinements; commit/version and verification |
 | [Reconnect and own-case protection](verification/reconnect-case-protection-2026-09-11.md) | Pre-release protocol-14 verification: 30-second identity/stats/case recovery, expiry and enemy-only carried-case disarms |
 | [Desktop sound-effects handoff](handoff-desktop-sound-effects-2026-09-11.md) | Separate desktop investigation: Brave music works, effects silent; mobile effects work; cause unconfirmed |
@@ -61,6 +62,9 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 
 ## Historical evidence and proposals
 
+Current September 12 art work: [rat outfit prototype](verification/rat-outfit-prototype-2026-09-12.md)
+— shared fedora, three-button coat, linked highlight, 1,024 appearances, outfit studio and private playtest.
+
 - [Architecture audit](architecture-audit.md), [implementation plan](implementation-plan.md), [completion checklist](implementation-checklist.md): the early `08e8005` cleanup, subsequently completed and expanded substantially.
 - [Implementation evidence](verification/implementation-evidence.md), [September 6 staging](verification/staging.md), [September 6 production](verification/production.md): dated verification receipts, not the current release or current feature inventory.
 - [Staging API notes](staging-api-notes.md): historical upload/auth workaround, not the standard release procedure.
@@ -98,3 +102,5 @@ Latest capacity iteration: [AI playback and rigid batching](verification/ai-deli
 - [Mild global audio and cartoon foley](verification/cartoon-foley-and-global-mix-2026-09-09.md) — current private sound iteration, superseding the steep shot fade and musical feedback cues.
 - [Performance cleanup and case bounce](verification/performance-and-case-bounce-2026-09-09.md) — audio voice reuse, stable HUD text, pitched Bad Ammunition and stronger physical case shots.
 - [Cartoon HUD and incident distance](verification/cartoon-hud-and-incident-distance-2026-09-09.md) — current private preview, muted comic emergency graphics and positional Popcorn/thud/case buzz.
+
+- [September 12 workshop rebuild and model refinement](verification/rat-outfit-refinement-2026-09-12.md): corrected studio case pose, integrated city views, refined tailoring and refreshed private preview.

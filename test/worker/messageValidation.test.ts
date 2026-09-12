@@ -80,6 +80,16 @@ describe('parseClientMessage', () => {
     ).toMatchObject({ type: 'shoot', shotId: 'shot-1' });
   });
 
+  it('validates sequenced action poses, view time and pickup intents',()=>{
+    const movement={seq:7,position:{x:1,y:2,z:3},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}};
+    const shot={type:'shoot',shotId:'s',origin:{x:1,y:2,z:3},direction:{x:1,y:0,z:0},viewAt:1234,movement};
+    expect(parseClientMessage(shot)).toEqual(shot);
+    const pickup={type:'pickupIntent',interactionId:'i',target:'pickup',targetId:'fix-east',generation:0,movement};
+    expect(parseClientMessage(pickup)).toEqual(pickup);
+    expect(parseClientMessage({...pickup,movement:{...movement,seq:0}})).toBeNull();
+    expect(parseClientMessage({...shot,viewAt:-1})).toBeNull();
+  });
+
   it('rejects non-finite vectors instead of coercing them', () => {
     expect(
       parseClientMessage(
@@ -95,6 +105,12 @@ describe('parseClientMessage', () => {
 });
 
 describe('parseServerMessage', () => {
+  it('validates direct shot and pickup outcomes with epoch/tick identity',()=>{
+    const shot={type:'shotResult',shotId:'s',ballId:'s',outcome:'rat-body',at:1200,tick:12,epoch:'round-a',victimId:'v',damage:1,compensated:true};
+    const pickup={type:'pickupResult',interactionId:'i',target:'pickup',targetId:'fix-east',accepted:false,at:1200,tick:12,epoch:'round-a',playerId:'p',reason:'too-far'};
+    expect(parseServerMessage(shot)).toEqual(shot);expect(parseServerMessage(pickup)).toEqual(pickup);
+    expect(parseServerMessage({...shot,tick:-1})).toBeNull();expect(parseServerMessage({...pickup,reason:'maybe'})).toBeNull();
+  });
   it('parses a full-room welcome snapshot larger than the inbound client cap', () => {
     const players: Record<string, PlayerData> = {};
     for (let i = 0; i < 24; i++) {

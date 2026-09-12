@@ -72,6 +72,15 @@ describe('shared physical death chaos',()=>{
   const state=sim.snapshot(false);expect(state.shots).toHaveLength(T.maxShots);
   expect(state.shots[0].id).toBe('shot-1');expect(state.shots.at(-1)!.id).toBe('newest');
  });
+ it('resolves a visual hit against bounded pose history and reports the causal outcome',()=>{
+  const {sim,shooter,victim,hits}=fixture();
+  victim.x=0;victim.z=0;sim.step(0,1050);
+  victim.z=3;sim.step(0,1100);
+  sim.shoot(shooter.id,{shotId:'rewound',origin:{x:-10,y:21.3,z:0},direction:{x:1,y:0,z:0},viewAt:950});
+  sim.step(.06,1160);
+  expect(hits).toContainEqual(expect.objectContaining({victim:victim.id,shotId:'rewound',compensated:true}));
+  expect(sim.drainShotEvents()).toContainEqual(expect.objectContaining({shotId:'rewound',ballId:'rewound',outcome:'rat-body',victimId:victim.id,compensated:true}));
+ });
  it('creates ordinary missile corpses and bounds the incident cheese burst without changing ball tuning',()=>{
   const {sim,victim}=fixture();victim.hp=0;sim.death(victim,{x:1,y:0,z:0},'shooter');
   let state=sim.snapshot(false);expect(state.corpses).toHaveLength(1);

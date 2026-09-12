@@ -11,7 +11,7 @@ import { RatController } from '../player/RatController';
 import { CheeseGun } from '../weapons/CheeseGun';
 import { initEntitySounds, disposeEntitySounds } from '../entities/RatEntity';
 import { generateRandomAppearance } from '../shared/ratAppearance';
-import type { ClientMessage, ServerMessage } from '../shared/networkProtocol';
+import type { ClientMessage, MovementInput, ServerMessage } from '../shared/networkProtocol';
 import { NetworkManager } from '../network/NetworkManager';
 import { GameHud } from '../ui/GameHud';
 import { TitleScreen } from '../ui/TitleScreen';
@@ -33,6 +33,8 @@ import { FeedbackAudio } from '../audio/FeedbackAudio';
 import { MatchScoreboard } from '../ui/MatchScoreboard';
 import { bindScoreboardHold } from './ScoreboardHold';
 import {TouchControls, touchControlsAvailable} from '../ui/TouchControls';
+import {NetplayAuditLog} from '../shared/netplay';
+import {createShotId} from '../weapons/shotId';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
@@ -51,7 +53,7 @@ export class GameSession {
     private readonly foley:FoleyAudio;
     private foleyWorld!:FoleyWorld;
     private readonly stats: PerformanceStats | null;
-    private diagnosticChaos={receivedAt:0,serverTime:0,shots:0};
+    private diagnosticChaos:{receivedAt:number;serverTime:number;shots:number;tick:number;epoch:string}={receivedAt:0,serverTime:0,shots:0,tick:0,epoch:''};
     private shotsAttempted=0;
     private shotsSent=0;
     private chaos:ChaosView|null=null;
@@ -66,6 +68,10 @@ export class GameSession {
     private serverOffset = 0;
     private lastMovementAt = 0;
     private lastMovement: number[] = [];
+    private movementSequence=0;
+    private readonly lastInteractionPosition=new THREE.Vector3();
+    private readonly pendingInteractions=new Map<string,number>();
+    private readonly netplay=new NetplayAuditLog();
     private readonly simulation = new SimulationClock();
     private readonly direction = new THREE.Vector3();
     private touch?: TouchControls;
@@ -103,6 +109,7 @@ export class GameSession {
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
             this.clearInput();
+            if(state!=='playing'){for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
             this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
@@ -179,7 +186,11 @@ export class GameSession {
         const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
         this.shotsAttempted++;
         const shot = this.gun.shoot(this.rat.entity, target);
-        if (shot && this.transport.send({type:'shoot', ...shot})) {
+        if(!shot)return;
+        const movement=this.movementInput(),viewAt=this.remotes.viewAt?.(shot.origin,shot.direction);
+        if (movement && this.transport.send({type:'shoot', ...shot, movement, ...(viewAt===undefined?{}:{viewAt})})) {
+            this.rememberMovement(movement,performance.now());
+            this.netplay?.begin(shot.shotId,'shot');
             this.shotsSent++;this.chaos?.fire(shot);
         }
     }
@@ -204,6 +215,7 @@ export class GameSession {
             this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         }
         this.myId = message.id;
+        this.movementSequence=Math.max(this.movementSequence,message.movementSeq??0);
         this.gun.setProtectedRats(new Set());
         const player = message.player;
         this.rat = new RatController(this.stage.scene, this.stage.world, this.stage.camera, player.name, player,
@@ -222,6 +234,8 @@ export class GameSession {
         if (message.round.phase === 'won') {this.hud.hideRespawn();this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0,message.round.assignment);}
         this.lastMovement = [];
         this.lastMovementAt = 0;
+        this.lastInteractionPosition.set(player.x,player.y+.8,player.z);
+        this.pendingInteractions.clear();this.netplay.clear();
         if(normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
             this.bots=new NormalGameBots(this.worldSpec,message.players,{muzzle:(id,position,facing)=>{
                 const entity=this.remotes.get(id);
@@ -233,7 +247,7 @@ export class GameSession {
 
     private receive(message: ServerMessage): void {
         this.scoreboard.receive(message);
-        if(message.type==='chaos'){this.diagnosticChaos={receivedAt:Date.now(),serverTime:message.state.time,shots:message.state.shots.length};}
+        if(message.type==='chaos'){this.diagnosticChaos={receivedAt:Date.now(),serverTime:message.state.time,shots:message.state.shots.length,tick:message.state.tick??0,epoch:message.state.epoch??'legacy'};}
 
         this.bots?.receive(message);
         switch (message.type) {
@@ -256,15 +270,29 @@ export class GameSession {
                     this.rat.syncAfterPhysics(0);
                     this.rat.resetGrounding();
                     this.lastMovement = [];
+                    this.lastInteractionPosition.set(pose.x,pose.y+.8,pose.z);
                 } else this.remotes.move(pose, message.at);
                 break;
             }
             case 'playerShot': {
-                if(message.shooterId===this.myId){this.chaos?.launch(message);break;}
+                if(message.shooterId===this.myId){this.netplay?.lap(message.shotId,'confirmed');this.chaos?.launch(message);break;}
                 const owner = this.remotes.get(message.shooterId);
                 if (owner) this.gun.replayShot(owner, message);
                 break;
             }
+            case 'shotResult':
+                if(['first-step','ironclad-reflect','case-contact','world-bounce','dispatch-contact','pressure-contact'].includes(message.outcome))
+                    this.netplay?.lap(message.shotId,message.outcome,message.compensated?`rewind:${Math.round(message.rewindMs??0)}ms`:message.fallback);
+                else if(message.ballId===message.shotId)this.netplay?.end(message.shotId,message.outcome,message.compensated?`rewind:${Math.round(message.rewindMs??0)}ms/delta:${(message.targetDelta??0).toFixed(2)}`:message.fallback);
+                else this.netplay?.count('shot-ball',message.outcome,message.compensated?'compensated':message.fallback);
+                this.chaos?.shotResult(message);
+                break;
+            case 'pickupResult':
+                this.pendingInteractions.delete(message.interactionId);
+                this.netplay.end(message.interactionId,message.accepted?'accepted':'rejected',message.reason);
+                this.chaos?.resolveInteraction(message);
+                if(message.accepted&&message.pickup==='hustle')this.rat?.setSpeedScale(PICKUP_TUNING.hustleMultiplier);
+                break;
             case 'playerDamaged': {
                 if(message.attackerId===this.myId && message.id!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
@@ -310,7 +338,8 @@ export class GameSession {
             case 'playerRespawn':
                 if (message.id === this.myId && this.rat) this.rat.setSpeedScale(1);
                 if (message.id === this.myId) {
-                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.clearInput(); this.hud.hideRespawn();
+                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding();
+                    this.lastInteractionPosition.set(message.x,message.y+.8,message.z);this.clearInput(); this.hud.hideRespawn();
                 } else this.remotes.respawn(message.id, message);
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
@@ -346,9 +375,36 @@ export class GameSession {
         const mq = this.rat.entity.mesh.quaternion;
         const pose=[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w];
         if (pose.every((value,i)=>value===this.lastMovement[i]) && now-this.lastMovementAt<1_000) return;
-        const message: ClientMessage = { type: 'updateMovement', position: { x: p.x, y: p.y, z: p.z },
-            rotation: { x: q.x, y: q.y, z: q.z, w: q.w }, meshRotation: { x: mq.x, y: mq.y, z: mq.z, w: mq.w } };
-        if (this.transport.send(message)) { this.lastMovement = pose; this.lastMovementAt = now; }
+        const movement=this.movementInput();if(!movement)return;
+        const message: ClientMessage = { type: 'updateMovement', ...movement };
+        if (this.transport.send(message)) this.rememberMovement(movement,now,pose);
+    }
+
+    private movementInput():MovementInput|undefined {
+        if(!this.rat)return;
+        const {position:p,quaternion:q}=this.rat.entity.body,mq=this.rat.entity.mesh.quaternion??q;
+        this.movementSequence=(this.movementSequence??0)+1;
+        return{seq:this.movementSequence,position:{x:p.x,y:p.y,z:p.z},rotation:{x:q.x,y:q.y,z:q.z,w:q.w},
+            meshRotation:{x:mq.x,y:mq.y,z:mq.z,w:mq.w}};
+    }
+    private rememberMovement(movement:MovementInput,now:number,pose?:number[]):void {
+        const p=movement.position,q=movement.rotation,mq=movement.meshRotation;
+        this.lastMovement=pose??[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w];this.lastMovementAt=now;
+    }
+    private checkInteractions(now:number):void {
+        if(!this.rat||!this.chaos||this.rat.entity.dead||this.rat.entity.hp<=0)return;
+        for(const [id,started] of this.pendingInteractions)if(now-started>1500){
+            this.pendingInteractions.delete(id);this.chaos.cancelInteraction(id);this.netplay.end(id,'timeout');
+        }
+        const p=this.rat.entity.body.position,current={x:p.x,y:p.y+.8,z:p.z};
+        const candidate=this.chaos.interaction?.(this.lastInteractionPosition,current,this.rat.entity.hp>=3);
+        this.lastInteractionPosition.set(current.x,current.y,current.z);
+        if(!candidate)return;
+        const movement=this.movementInput();if(!movement)return;
+        const interactionId=createShotId();
+        if(!this.transport.send({type:'pickupIntent',interactionId,target:candidate.target,targetId:candidate.targetId,generation:candidate.generation,movement}))return;
+        this.rememberMovement(movement,now);this.pendingInteractions.set(interactionId,now);
+        this.netplay.begin(interactionId,'pickup');this.chaos.anticipateInteraction(interactionId,candidate);
     }
 
     private animate(now: number): void {
@@ -380,6 +436,7 @@ export class GameSession {
             this.remotes.presentFrame();
             this.rat?.updateView();
             this.touch?.update(now, !!this.rat && !this.rat.entity.dead && this.rat.entity.hp > 0 && !this.roundWon);
+            this.checkInteractions(now);
             this.sendMovement(now);
             if (this.rat) {
                 const position = this.rat.entity.mesh.position;
@@ -403,7 +460,7 @@ export class GameSession {
             performance.mark('city-first-play-frame');
         }
         this.chaos?.renderOutline(renderer,camera);
-        this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
+        this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 

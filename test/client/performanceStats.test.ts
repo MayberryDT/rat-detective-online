@@ -39,6 +39,12 @@ describe('bounded playtest diagnostics',()=>{
   expect(clean.input).toMatchObject({lockLosses:1,focusedLosses:1});
   expect(clean.input).not.toHaveProperty('extra');expect(clean.input).not.toHaveProperty('windowBlurs');stats.dispose();
  });
+ it('allowlists bounded netplay latency, RTT and presentation-delay aggregates',()=>{
+  const clean=sanitizeDiagnosticReport({details:{network:{rttMs:82,rttJitterMs:7,secret:'no'},remoteTiming:{rats:7,maximumDelayMs:250},
+   netplay:{pending:1,counts:{'shot:confirmed':12,'bad key':99},latency:{shot:{samples:12,p50:80,p95:140,p99:160,max:170},secret:{text:'no'}}}}})!;
+  expect(clean.details).toMatchObject({network:{rttMs:82,rttJitterMs:7},remoteTiming:{rats:7,maximumDelayMs:250},
+   netplay:{pending:1,counts:{'shot:confirmed':12},latency:{shot:{samples:12,p50:80,p95:140,p99:160,max:170}}}});
+ });
  it('bounds report/event history and persists a report without DOM controls',()=>{
   const {stats,save,window}=fixture();for(let i=1;i<=130;i++){stats.event('test');stats.record(16,i*5000,{seed:1,version:2});}
   expect(save).not.toHaveBeenCalled();expect(console.info).not.toHaveBeenCalled();

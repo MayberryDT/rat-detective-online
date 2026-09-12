@@ -41,7 +41,7 @@ it.each([false,true])('shares coat and skin with the carry arm through armor, ex
         rat.setPowerups(12,0);rat.presentAlive(.3);
         const arm=createCaseGrip(rat),materials=new Set<THREE.MeshStandardMaterial>();
         arm.traverse(o=>{if(o instanceof THREE.Mesh)materials.add(o.material);});
-        expect([...materials].map(m=>m.name).sort()).toEqual(['rat-coat','rat-skin']);
+        expect([...materials].map(m=>m.name).sort()).toEqual(['rat-coat','rat-highlight','rat-skin']);
         expect([...materials].every(m=>m.color.getHex()===0xdce4ed&&m.metalness===.88)).toBe(true);
         rat.setPowerups(0,0);
         expect([...materials].every(m=>m.color.getHex()!==0xdce4ed&&m.metalness!==.88)).toBe(true);

@@ -59,6 +59,14 @@ describe('immediate single-ID local ball presentation',()=>{
         expect(view.render([],751)).toHaveLength(0);view.confirm(birth(),800);expect(view.render([authoritative(.1)],816)).toHaveLength(0);
         view.clear();view.fire('owner',descriptor,undefined,900);expect(view.render([],900)).toHaveLength(1);
     });
+    it('keeps a ball alive for contact telemetry and retires it on a terminal result',()=>{
+        const view=new LocalShotPresentation();view.fire('owner',descriptor,undefined,0);view.render([],0);
+        const base={type:'shotResult' as const,shotId:'trigger',ballId:'trigger',at:1010,tick:2,epoch:'round'};
+        view.result({...base,outcome:'world-bounce',point:{x:2,y:20,z:0},normal:{x:-1,y:0,z:0}});
+        expect(view.render([],16)).toHaveLength(1);
+        view.result({...base,outcome:'rat-body',victimId:'victim',damage:1});
+        expect(view.render([authoritative(.1)],32)).toHaveLength(0);
+    });
     it('keeps delayed-reaction shots stopped until an authoritative unstuck sample arrives',()=>{
         const trace:ShotTrace=(from,to)=>from.x<5&&to.x>=5?{p:{x:5,y:20,z:0},n:{x:-1,y:0,z:0},rat:false}:undefined;
         const view=new LocalShotPresentation(trace);view.fire('owner',descriptor,'delayed-reaction',0);view.render([],0);

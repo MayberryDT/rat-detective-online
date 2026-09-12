@@ -40,6 +40,10 @@ export interface NetworkDiagnostics {
     joinMs: number;
     reconnectCount: number;
     lastCloseCode: number;
+    rttMs: number;
+    rttMinMs: number;
+    rttMaxMs: number;
+    rttJitterMs: number;
 }
 
 const SHARED_UPDATES = new Set<string>([
@@ -97,6 +101,7 @@ export class NetworkManager {
         receivedCount: 0, receivedChars: 0, parseMs: 0, parseMaxMs: 0,
         invalidCount: 0, ignoredCount: 0, sentCount: 0, sendFailures: 0,
         receivedBytes: 0, applyMs: 0, applyMaxMs: 0, joinMs: 0, reconnectCount: 0, lastCloseCode: 0,
+        rttMs:0,rttMinMs:0,rttMaxMs:0,rttJitterMs:0,
     };
 
     constructor(options: TransportOptions = {}) {
@@ -212,6 +217,15 @@ export class NetworkManager {
                 return;
             }
             this.lastReceived = Date.now();
+            if(message.type==='pong'){
+                const sample=Math.max(0,Date.now()-message.sentAt),previous=this.diagnostics.rttMs;
+                if(sample<=120_000){
+                    this.diagnostics.rttMs=previous?previous*.8+sample*.2:sample;
+                    this.diagnostics.rttMinMs=this.diagnostics.rttMinMs?Math.min(this.diagnostics.rttMinMs,sample):sample;
+                    this.diagnostics.rttMaxMs=Math.max(this.diagnostics.rttMaxMs,sample);
+                    this.diagnostics.rttJitterMs=previous?this.diagnostics.rttJitterMs*.8+Math.abs(sample-previous)*.2:0;
+                }
+            }
             if (message.type === 'welcome') {
                 if (message.protocolVersion !== PROTOCOL_VERSION || !isSupportedWorldVersion(message.world.version)) {
                     this.cancelConnection();

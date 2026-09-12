@@ -12,6 +12,16 @@ Serve `dist-visual` locally to inspect `/visual-fixture.html?seed=20260905&state
 
 `/performance-fixture.html` compares the same seeded city, camera, lighting and three rats with instanced scenery and equivalent separate meshes. Each mode has 60 warm-up and 300 measured frames. It reports draw calls, triangles, frame intervals and CPU render-submission time. These timings are not GPU timings; batching can increase submitted triangles because culling works per batch.
 
+## Current character workshop (September 12)
+
+`/model-preview.html` is now the rebuilt character workshop: four color swatch
+pools, orbit/view presets, coat detail, existing walk/fire poses, carry, opponent
+rendering and Ironclad. Street and Records are integrated static city-lighting
+views using the actual shoulder camera. All three views use the real entity and
+shared live case transform. This art tool stays muted and does not run gameplay
+inputs. The older model-tool controls described below are historical.
+See [the refinement receipt](../../docs/verification/rat-outfit-refinement-2026-09-12.md).
+
 ## Stationary target practice
 
 The separate `/hitbox-practice.html` page is a manual stationary-target range using the real city, gun, camera and shared hit simulation. H toggles authoritative collision wires, R resets targets/counters, T returns to the start. Targets never move or shoot and refill after each kill. [Setup, current link and checks](../../docs/hitbox-practice.md). This fixture does not connect to multiplayer.

@@ -3,7 +3,7 @@ import {RatPowerupEffects} from './RatPowerupEffects';
 import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { createRatMesh, RatOptions, HatType } from '../utils/RatModel';
+import { createRatMesh, RatOptions } from '../utils/RatModel';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import { RatAnimator } from '../utils/RatAnimator';
 import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
@@ -30,11 +30,11 @@ const GLOW_COLOR = 0xffffff;      // Base glow tint (will blend with coat color)
 const EMISSIVE_INTENSITY = 0.28;  // Rat-only lift; lamps still model the hat and coat
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
-// 3 hats × 5 hat colors × 5 furs × 5 coats = 375 unique combos
+// Local fixture allocation; network appearances are assigned when joining.
 const usedCombinations = new Set<string>();
 
-function makeComboKey(hat: HatType, hatCol: number, fur: number, coat: number): string {
-    return `${hat}-${hatCol}-${fur}-${coat}`;
+function makeComboKey(options: RatOptions): string {
+    return `${options.hatColor}-${options.coatColor}-${options.highlightColor}-${options.furColor}`;
 }
 
 // ─── ENTITY CLASS ────────────────────────────────────────────────
@@ -190,18 +190,18 @@ export class RatEntity {
     private generateRandomOptions(): RatOptions {
         let attempts = 0;
         while (attempts < 500) {
-            const { hatType, hatColor, furColor, coatColor } = generateRandomAppearance();
+            const options = generateRandomAppearance();
 
-            const key = makeComboKey(hatType, hatColor, furColor, coatColor);
+            const key = makeComboKey(options);
             if (!usedCombinations.has(key)) {
                 usedCombinations.add(key);
                 this.comboKeyStr = key;
-                return { hatType, hatColor, furColor, coatColor };
+                return options;
             }
             attempts++;
         }
 
-        // Fallback (shouldn't happen — 375 combos available, max ~7 entities)
+        // Bounded fallback for unusually crowded standalone fixtures.
         return { ...DEFAULT_APPEARANCE };
     }
 

@@ -4,6 +4,22 @@ Verified from source and production on **2026-09-11**. This is the handoff for n
 
 ## Accepted production release — September 11
 
+**Undeployed netplay worktree (September 12):** protocol 15 implements bounded
+historical projectile adjudication, radius-aware shot sweeps, continuous case and
+power-up claims, direct action outcomes, reversible client anticipation and
+privacy-bounded causal diagnostics. Production remains protocol 14. See the
+[netplay implementation receipt](verification/netplay-crispness-2026-09-12.md).
+
+**New local/private art prototype (September 12):** the accepted shared-fedora,
+three-button coat and four-variable outfit palette are implemented for review.
+Hatband/collar/lapels/cuffs share one highlight; 8 hats × 8 coats × 4 highlights ×
+4 furs provide 1,024 appearances. Source is uncommitted and production remains the
+September 11 release below. The subsequent workshop rebuild fixes its case pose,
+adds integrated city views and refines the tailoring with fewer triangles.
+**940 tests**, typecheck and both builds pass. See the
+[refinement receipt](verification/rat-outfit-refinement-2026-09-12.md) for the
+current studio, frozen private playtest and remaining human review.
+
 Tyler accepted the complete r8 preview and authorized release. **Everything is now
 live at https://ratdetective.online/**: application **`8cd0ec2`**, production Worker
 **`3398a69c-146b-4d99-aa47-e3734664c086`**, protocol **14**. Source was committed and

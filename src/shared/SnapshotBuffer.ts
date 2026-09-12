@@ -28,6 +28,9 @@ export class SnapshotBuffer {
     private clockScale=1;
     private clockWindow?:{server:number;received:number;started:number};
     private clockAnchors:Array<{server:number;received:number}>=[];
+    private presentedSource:number|undefined;
+    /** Server time represented by the pose returned from the most recent sample. */
+    get presentedSourceTime():number|undefined{return this.presentedSource;}
 
     /** Fit long-window clock rate separately from short packet jitter. Some
      * server runtimes advance their exposed clock more slowly under CPU load.
@@ -60,12 +63,12 @@ export class SnapshotBuffer {
 
     clear():void {
         this.generation++;this.poses.length=0;this.interval=80;this.jitter=0;this.transitJitter=0;this.renderedAt=-Infinity;this.sampledAt=undefined;
-        this.lastReceivedAt=undefined;this.lastServerAt=undefined;this.serverOffset=undefined;
+        this.lastReceivedAt=undefined;this.lastServerAt=undefined;this.serverOffset=undefined;this.presentedSource=undefined;
         this.resetServerBarrier=undefined;this.serverMode=false;this.clockScale=1;this.clockWindow=undefined;this.clockAnchors.length=0;
     }
     /** Respawn keeps the established clock and rejects already seen old-life samples. */
     reset(pose:SnapshotPose,receivedAt:number):void {
-        this.generation++;this.poses=[{...pose,time:receivedAt}];this.renderedAt=-Infinity;this.sampledAt=undefined;
+        this.generation++;this.poses=[{...pose,time:receivedAt}];this.renderedAt=-Infinity;this.sampledAt=undefined;this.presentedSource=undefined;
         this.lastReceivedAt=receivedAt;this.resetServerBarrier=this.lastServerAt;
     }
     push(pose:SnapshotPose,receivedAt:number,serverAt?:number):boolean {
@@ -117,7 +120,7 @@ export class SnapshotBuffer {
             this.interval+=(Math.min(250,sourceGap)-this.interval)*.15;
             this.jitter+=(Math.min(150,deviation)-this.jitter)*.12;
         }
-        this.poses.push({...pose,time});
+        this.poses.push({...pose,time,...(stamped?{sourceTime:serverAt}:{})});
         if(this.poses.length>MAX_SAMPLES)this.poses.shift();
         return true;
     }
@@ -139,11 +142,12 @@ export class SnapshotBuffer {
         this.sampledAt=now;this.renderedAt=time;
         while(this.poses.length>2&&this.poses[1].time<=time)this.poses.shift();
         const first=this.poses[0],last=this.poses[this.poses.length-1];
-        if(time<=first.time)return this.copy(first);
-        if(time>=last.time)return this.copy(last);
+        if(time<=first.time){this.presentedSource=first.sourceTime;return this.copy(first);}
+        if(time>=last.time){this.presentedSource=last.sourceTime;return this.copy(last);}
         let right=1;while(this.poses[right].time<time)right++;
         const a=this.poses[right-1],b=this.poses[right];
         const t=(time-a.time)/(b.time-a.time);
+        this.presentedSource=a.sourceTime!==undefined&&b.sourceTime!==undefined?a.sourceTime+(b.sourceTime-a.sourceTime)*t:undefined;
         let bx=b.qx,by=b.qy,bz=b.qz,bw=b.qw;
         let dot=a.qx*bx+a.qy*by+a.qz*bz+a.qw*bw;
         if(dot<0){dot=-dot;bx=-bx;by=-by;bz=-bz;bw=-bw;}

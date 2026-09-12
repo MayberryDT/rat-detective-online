@@ -3,7 +3,7 @@ import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 15;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
@@ -38,6 +38,8 @@ export interface RatAppearance {
   hatColor: number;
   furColor: number;
   coatColor: number;
+  /** Optional for existing room checkpoints/clients; new appearances always supply it. */
+  highlightColor?: number;
 }
 
 export interface PlayerData extends RatAppearance {
@@ -97,19 +99,37 @@ export interface PublicRoomStatus {
 export const MAX_MOVEMENT_BATCH = 100;
 export interface MovementSample {
   at: number;
+  seq?: number;
   player: Pick<PlayerData, 'id' | 'x' | 'y' | 'z' | 'qx' | 'qy' | 'qz' | 'qw' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'>;
+}
+
+/** Latest local pose bundled with latency-sensitive actions. Sequence numbers are
+ * monotonic per player life and let authority reject stale/replayed positions. */
+export interface MovementInput {
+  /** Required from protocol-15 gameplay clients; optional for internal legacy fixtures. */
+  seq?: number;
+  position: Vec3Data;
+  rotation: QuatData;
+  meshRotation: QuatData;
 }
 
 export interface ShotDescriptor {
   shotId: string;
   origin: Vec3Data;
   direction: Vec3Data;
+  /** Server source time actually displayed for the aimed remote rat. */
+  viewAt?: number;
 }
+
+export type PickupTarget = 'case' | 'pickup';
+export type PickupRejectReason = 'stale'|'unavailable'|'blocked'|'ineligible'|'too-far'|'invalid-target'|'rate-limited';
+export type ShotResultOutcome = 'first-step'|'rat-body'|'rat-head'|'ironclad-reflect'|'case-contact'|'world-bounce'|'dispatch-contact'|'pressure-contact'|'fake-case'|'lifetime'|'capacity'|'reset'|'rejected';
 
 export type ClientMessage = (
   | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance; resumeToken?: string }
-  | { type: 'updateMovement'; position: Vec3Data; rotation: QuatData; meshRotation: QuatData }
-  | { type: 'shoot'; shotId: string; origin: Vec3Data; direction: Vec3Data }
+  | ({ type: 'updateMovement' } & MovementInput)
+  | ({ type: 'shoot'; movement?: MovementInput } & ShotDescriptor)
+  | { type:'pickupIntent'; interactionId:string; target:PickupTarget; targetId:string; generation:number; movement:MovementInput }
   | { type: 'hit'; victimId: string; damage: number }
   | { type: 'chaosAck'; stream: string; seq: number }
   | { type: 'deliveryAck'; stream: string; seq: number }
@@ -131,6 +151,8 @@ export type ServerMessage =
       world: WorldSpec;
       protocolVersion: number;
       serverTime: number;
+      /** Last authority-accepted input sequence, including reload resume. */
+      movementSeq?: number;
       /** Dispatch roster for this room; the retired evidence incident is absent. */
       incidents?: IncidentId[];
     }
@@ -156,6 +178,11 @@ export type ServerMessage =
     }
   | { type: 'playerShot'; shooterId: string; shotId: string; origin: Vec3Data; direction: Vec3Data; movement?:MovementSample;
       launch?: {at:number; balls:Array<{id:string; velocity:Vec3Data}>} }
+  | { type:'shotResult'; shotId:string; ballId:string; outcome:ShotResultOutcome; at:number; tick:number; epoch:string;
+      victimId?:string; damage?:number; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; fallback?:string;
+      rewindMs?:number; targetDelta?:number }
+  | { type:'pickupResult'; interactionId:string; target:PickupTarget; targetId:string; accepted:boolean; at:number; tick:number;
+      epoch:string; playerId:string; pickup?:import('./pickups').PickupKind; effectUntil?:number; reason?:PickupRejectReason }
   | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: 'evidence-tampering' }
   | { type: 'playerHealed'; id: string; hp: number; cause?: 'pickup' }
   | {

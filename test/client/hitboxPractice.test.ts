@@ -29,8 +29,10 @@ describe('stationary hitbox practice',()=>{
         const practice=new HitboxPractice();
         fireAt(practice,1.9,.27);
         expect(practice.lastHit?.region).toBe('HEAD');
+        // The visible cheese sphere now owns its radius on authority too; a
+        // centerline just outside the head still clips with the ball's edge.
         fireAt(practice,1.9,.29);
-        expect(practice.hits).toBe(1);expect(practice.shots).toBe(2);
+        expect(practice.hits).toBe(2);expect(practice.shots).toBe(2);
     });
 
     it('never moves or fires dummies, and keeps objectives inactive',()=>{

@@ -1,5 +1,14 @@
 # Model and map follow-ups
 
+## September 12 outfit direction and prototype
+
+Tyler approved one shared fedora, the three-button coat, eight hat/coat colors,
+four linked highlights and four furs (1,024 appearances). The first actual model
+is implemented in the uncommitted source and matching private preview. Review
+[the latest refinement receipt](verification/rat-outfit-refinement-2026-09-12.md) for links,
+checks and remaining proportion/readability decisions. Further micro-animation
+waits until the model is approved. The dated September 8 notes below remain history.
+
 Reviewed **2026-09-08**. These are remaining directions and preservation notes, not a new request to rebuild the map. See [current state](current-state.md).
 
 ## Approved baseline

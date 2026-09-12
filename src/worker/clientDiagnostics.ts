@@ -12,6 +12,6 @@ export function logClientDiagnostics(report: Record<string, unknown>): void {
   const clean = sanitizeDiagnosticReport(report);
   if (!clean) return;
   const { details, ...summary } = clean;
-  const { network, projectiles, ...shots } = details as Record<string, unknown>;
-  log('info', 'client diagnostics', { ...summary, network, shots, projectiles });
+  const { network, projectiles, netplay, remoteTiming, ...shots } = details as Record<string, unknown>;
+  log('info', 'client diagnostics', { ...summary, network, netplay, remoteTiming, shots, projectiles });
 }

@@ -5,6 +5,7 @@ import { Neighborhood } from '../prototype/Neighborhood';
 import { CityGenerator } from '../world/CityGenerator';
 import { createWorldSpec, type WorldSpec } from '../shared/worldSpec';
 import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
+import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
 import { RatEntity } from '../entities/RatEntity';
 import { yieldToPage } from './yieldToPage';
 import type { NetworkManager } from '../network/NetworkManager';
@@ -32,7 +33,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         city.update(0,stage.camera);
         const scenery=new Set(stage.scene.children);
         model=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',
-            {hatType:'fedora',hatColor:0xdc4a3c,furColor:0xe8b84d,coatColor:0xbe4545});
+            DEFAULT_APPEARANCE);
         await renderer.compileAsync(stage.scene,stage.camera);
         // Keep compiled character programs alive until the actual rats have
         // rendered once, without a dummy participant or collider in the city.

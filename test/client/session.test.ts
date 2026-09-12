@@ -624,14 +624,15 @@ describe('GameSession', () => {
     it('sends the resolved shot and remote hit, then can start a fresh session after dispose', () => {
         const first = start();
         const { doc, renderer, session, transport, gun, remotes } = first;
-        transport.onMessage?.(welcome());
+        transport.onMessage?.(welcome({movementSeq:40}));
         transport.state = 'playing';
         doc.pointerLockElement = renderer.domElement as unknown as Element;
         doc.dispatch('mousedown', Object.assign(new Event('mousedown'), { button: 0 }));
         expect(gun.shoot).toHaveBeenCalled();
-        expect(transport.send).toHaveBeenCalledWith({
+        expect(transport.send).toHaveBeenCalledWith(expect.objectContaining({
             type: 'shoot', shotId: 'shot-1', origin: { x: 1, y: 1.45, z: 0 }, direction: { x: 0, y: 0, z: -1 },
-        });
+            movement: expect.objectContaining({seq:41,position:{x:15,y:2,z:15}}),
+        }));
         gun.authoritative=true;
         doc.dispatch('mousedown', Object.assign(new Event('mousedown'), { button: 0 }));
         expect(transport.send.mock.calls.filter(([message])=>(message as {type:string}).type==='shoot')).toHaveLength(2);

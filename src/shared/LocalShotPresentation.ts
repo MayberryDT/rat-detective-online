@@ -62,6 +62,16 @@ export class LocalShotPresentation {
         }
         return true;
     }
+    /** A direct authority outcome closes the exact ball immediately instead of
+     * waiting for absence inference from a later world snapshot. */
+    result(message:Extract<ServerMessage,{type:'shotResult'}>):void {
+        if(['first-step','ironclad-reflect','case-contact','world-bounce','dispatch-contact','pressure-contact'].includes(message.outcome))return;
+        if(message.outcome==='rejected'){
+            for(const [id,local] of this.shots)if(local.trigger===message.shotId)this.retire(id);
+            this.retired.add(message.shotId);return;
+        }
+        this.retire(message.ballId);
+    }
     apply(state:ChaosState,now:number):void {
         const incoming=new Map(state.shots.map(s=>[s.id,s]));
         for(const [id,local] of this.shots){
