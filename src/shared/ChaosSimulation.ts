@@ -460,7 +460,8 @@ export class ChaosSimulation {
         body.quaternion.set(victim.meshQx,victim.meshQy,victim.meshQz,victim.meshQw);body.quaternion.normalize();
         direction.scale(incident?T.corpseSpeed:T.normalCorpseSpeed,body.velocity);body.angularVelocity.set(direction.z*15,5,-direction.x*15);
         const state:CorpseState={id:crypto.randomUUID(),victimId:victim.id,owner,appearance:{
-            hatType:victim.hatType,hatColor:victim.hatColor,furColor:victim.furColor,coatColor:victim.coatColor
+            hatType:victim.hatType,hatColor:victim.hatColor,furColor:victim.furColor,coatColor:victim.coatColor,
+            ...(victim.highlightColor===undefined?{}:{highlightColor:victim.highlightColor})
         },born:this.now,expires:this.now+T.corpseMs,...pose(body)};
         this.addCorpse(body,state);
         if(incident)this.deathBurst(state);return true;

@@ -1,21 +1,19 @@
 import * as THREE from 'three';
 import type {RatEntity} from '../entities/RatEntity';
-import {CASE_HAND,CASE_CARRY_ROTATION,CASE_LOOSE_SCALE,type ChaosState} from '../shared/chaosState';
+import {CASE_LOOSE_SCALE,type ChaosState} from '../shared/chaosState';
 import {incidentInfo} from '../shared/incidentCatalog';
 import {ChaosPresentation,copyPresentationPose,type PresentationPose} from '../shared/ChaosPresentation';
-import {RAT_CARRY_SHOULDER} from '../utils/RatAnimator';
+import {updateCaseCarryPose} from './CaseCarryPose';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {addLeatherBriefcase} from './CaseModel';
 import {CaseBeacon} from './CaseBeacon';
 import {createCaseGrip,disposeCaseGrip} from './CaseGrip';
-const rotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
 /** Seven bounded incident props, using the same model, outline, grip and smoothing. */
 export class ExtraCaseVisual {
     readonly root=new THREE.Group();
     private readonly beacon:CaseBeacon;
     private readonly presentation=new ChaosPresentation();
     private readonly pose:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
-    private readonly offset=new THREE.Vector3();
     private state?:ChaosState['case'];
     private incident?:ChaosState['dispatch'];
     private carrier:RatEntity|null=null;
@@ -50,11 +48,7 @@ export class ExtraCaseVisual {
             material.emissiveIntensity=hot?1.4:fake?.5:.28;
         });
         if(carrier&&this.arm?.parent){
-            const anchor=this.arm.parent;
-            this.root.position.set(CASE_HAND.x,CASE_HAND.y+.43,CASE_HAND.z).sub(RAT_CARRY_SHOULDER);
-            anchor.localToWorld(this.root.position);
-            anchor.getWorldQuaternion(this.root.quaternion).normalize().multiply(rotation);
-            this.root.position.sub(this.offset.set(0,.43,0).applyQuaternion(this.root.quaternion));
+            updateCaseCarryPose(this.root,this.arm.parent);
         }else{
             if(!this.extrapolate||!this.presentation.looseCase(renderTime,this.pose))copyPresentationPose(state,this.pose);
             const {p,q}=this.pose;this.root.position.set(p.x,p.y,p.z);this.root.quaternion.set(q.x,q.y,q.z,q.w);

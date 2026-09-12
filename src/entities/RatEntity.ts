@@ -3,7 +3,7 @@ import {RatPowerupEffects} from './RatPowerupEffects';
 import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { createRatMesh, RatOptions, HatType } from '../utils/RatModel';
+import { createRatMesh, RatOptions } from '../utils/RatModel';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import { RatAnimator } from '../utils/RatAnimator';
 import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
@@ -30,11 +30,11 @@ const GLOW_COLOR = 0xffffff;      // Base glow tint (will blend with coat color)
 const EMISSIVE_INTENSITY = 0.28;  // Rat-only lift; lamps still model the hat and coat
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
-// 3 hats × 5 hat colors × 5 furs × 5 coats = 375 unique combos
+// Local fixture allocation; network appearances are assigned when joining.
 const usedCombinations = new Set<string>();
 
-function makeComboKey(hat: HatType, hatCol: number, fur: number, coat: number): string {
-    return `${hat}-${hatCol}-${fur}-${coat}`;
+function makeComboKey(options: RatOptions): string {
+    return `${options.hatColor}-${options.coatColor}-${options.highlightColor}-${options.furColor}`;
 }
 
 // ─── ENTITY CLASS ────────────────────────────────────────────────
@@ -117,7 +117,8 @@ export class RatEntity {
         position: THREE.Vector3,
         name: string,
         options?: RatOptions,
-        isRemote: boolean = false
+        isRemote: boolean = false,
+        private readonly modelFactory: typeof createRatMesh = createRatMesh
     ) {
         this.scene = scene;
         this.world = world;
@@ -128,7 +129,7 @@ export class RatEntity {
         const opts = options || this.generateRandomOptions();
 
         // 2. VISUALS
-        this.mesh = createRatMesh(opts);
+        this.mesh = this.modelFactory(opts);
         this.mesh.position.copy(position);
         this.mesh.userData.aimTarget = true;
         this.scene.add(this.mesh);
@@ -190,18 +191,18 @@ export class RatEntity {
     private generateRandomOptions(): RatOptions {
         let attempts = 0;
         while (attempts < 500) {
-            const { hatType, hatColor, furColor, coatColor } = generateRandomAppearance();
+            const options = generateRandomAppearance();
 
-            const key = makeComboKey(hatType, hatColor, furColor, coatColor);
+            const key = makeComboKey(options);
             if (!usedCombinations.has(key)) {
                 usedCombinations.add(key);
                 this.comboKeyStr = key;
-                return { hatType, hatColor, furColor, coatColor };
+                return options;
             }
             attempts++;
         }
 
-        // Fallback (shouldn't happen — 375 combos available, max ~7 entities)
+        // Bounded fallback for unusually crowded standalone fixtures.
         return { ...DEFAULT_APPEARANCE };
     }
 
@@ -210,7 +211,7 @@ export class RatEntity {
      * with BackSide + Additive blending to create a visible aura.
      */
     private createGlowOutline(opts: RatOptions): THREE.Group {
-        const glowGroup = createRatMesh(opts);
+        const glowGroup = this.modelFactory(opts);
 
         // Determine glow tint from coat color
         const coatColor = new THREE.Color(opts.coatColor ?? 0x5c4a3a);
@@ -316,12 +317,12 @@ export class RatEntity {
     private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.updatePowerupOutline();this.resetColor();}
 
     /** Animate the current render root; remote presentation need not read physics. */
-    public presentAlive(dt: number): void {
+    public presentAlive(dt: number, previewSpeed?:number): void {
         if (this.dead) return;
         const p = this.mesh.position;
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
         this.syncGlowTransform();
-        this.animator.update(dt);
+        this.animator.update(dt,previewSpeed);
 
         const silver=this.ironcladRemaining>0,pursuit=this.hustleRemaining>0;
         this.ironcladRemaining=Math.max(0,this.ironcladRemaining-dt);

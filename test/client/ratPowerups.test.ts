@@ -34,14 +34,14 @@ it('bounds the red ribbon and healing wave and clears them on teleport or expiry
     fx.dispose();expect(scene.children).toHaveLength(0);
 });
 
-it.each([false,true])('shares coat and skin with the carry arm through armor, expiry and cleanup (batched=%s)',batched=>{
+it.each([false,true])('shares coat and highlight with the matching carry sleeve through armor, expiry and cleanup (batched=%s)',batched=>{
     const rat=new RatEntity(new THREE.Scene(),new C.World(),new THREE.Vector3(),'Rat',{});
     try{
         if(batched)rat.enableRigidBatching();
         rat.setPowerups(12,0);rat.presentAlive(.3);
         const arm=createCaseGrip(rat),materials=new Set<THREE.MeshStandardMaterial>();
         arm.traverse(o=>{if(o instanceof THREE.Mesh)materials.add(o.material);});
-        expect([...materials].map(m=>m.name).sort()).toEqual(['rat-coat','rat-skin']);
+        expect([...materials].map(m=>m.name).sort()).toEqual(['rat-coat','rat-highlight']);
         expect([...materials].every(m=>m.color.getHex()===0xdce4ed&&m.metalness===.88)).toBe(true);
         rat.setPowerups(0,0);
         expect([...materials].every(m=>m.color.getHex()!==0xdce4ed&&m.metalness!==.88)).toBe(true);

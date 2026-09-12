@@ -38,6 +38,8 @@ export interface RatAppearance {
   hatColor: number;
   furColor: number;
   coatColor: number;
+  /** Optional for existing room checkpoints/clients; new appearances always supply it. */
+  highlightColor?: number;
 }
 
 export interface PlayerData extends RatAppearance {

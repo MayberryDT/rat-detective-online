@@ -67,12 +67,12 @@ describe('natural briefcase carry',()=>{
             expect(visual.position.distanceTo(new THREE.Vector3(...simulation.caseBody.position.toArray()))).toBeLessThan(1e-6);
             const physical=simulation.caseBody.quaternion;
             expect(visual.quaternion.angleTo(new THREE.Quaternion(physical.x,physical.y,physical.z,physical.w))).toBeLessThan(1e-6);
-            // Broad face follows the side, and fingers meet the physical handle.
+            // Broad face follows the side, and the sleeve grip meets the physical handle.
             const broadAxis=new THREE.Vector3(1,0,0).applyQuaternion(visual.quaternion);
             const forward=new THREE.Vector3(0,0,1).applyQuaternion(mesh.quaternion);
             expect(Math.abs(broadAxis.dot(forward))).toBeCloseTo(1);
             const handle=visual.getObjectByName('case-handle-grip')!.getWorldPosition(new THREE.Vector3());
-            const hand=mesh.getObjectByName('case-gripping-paw')!.getWorldPosition(new THREE.Vector3());
+            const hand=mesh.getObjectByName('case-sleeve-grip')!.getWorldPosition(new THREE.Vector3());
             expect(handle.distanceTo(hand)).toBeLessThan(1e-6);
             expect(visual.position.y-CASE_SIZE.y/2).toBeGreaterThan(.15);
             view.dispose();
@@ -97,7 +97,7 @@ describe('natural briefcase carry',()=>{
             mesh.position.z+=.1;
             animator.update(1/60);view.update(1/60,camera);
             const handle=visual.getObjectByName('case-handle-grip')!.getWorldPosition(new THREE.Vector3());
-            const hand=mesh.getObjectByName('case-gripping-paw')!.getWorldPosition(new THREE.Vector3());
+            const hand=mesh.getObjectByName('case-sleeve-grip')!.getWorldPosition(new THREE.Vector3());
             expect(handle.distanceTo(hand)).toBeLessThan(1e-6);
             const offset=visual.position.z-mesh.position.z;
             min=Math.min(min,offset);max=Math.max(max,offset);

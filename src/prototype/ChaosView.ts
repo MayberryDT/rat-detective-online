@@ -6,10 +6,10 @@ import {clearAimLabel} from '../ui/aimClearance';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { ChaosState, CorpseState } from '../shared/chaosState';
-import { CHAOS_TUNING, CASE_LOOSE_SCALE, CASE_HAND, CASE_CARRY_ROTATION, DISPATCH_STATIONS } from '../shared/chaosState';
+import { CHAOS_TUNING, CASE_LOOSE_SCALE, DISPATCH_STATIONS } from '../shared/chaosState';
 import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh } from '../utils/RatModel';
-import { RatAnimator, RAT_CARRY_SHOULDER } from '../utils/RatAnimator';
+import { RatAnimator } from '../utils/RatAnimator';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from '../weapons/CheeseProjectileModel';
 import { CheeseImpactEffects } from '../weapons/CheeseImpactEffects';
@@ -32,7 +32,7 @@ import { PickupVisual } from './PickupVisual';
 import {powerupCard} from './pickupArtwork';
 import { PICKUP_COPY, PICKUP_TUNING, activeBuffs, type BuffMap } from '../shared/pickups';
 
-const caseCarryRotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
+import { updateCaseCarryPose } from './CaseCarryPose';
 
 export class ChaosView {
     private readonly root=new THREE.Group();
@@ -282,12 +282,7 @@ export class ChaosView {
         });
         if(owner&&!owner.dead){
             const anchor=this.arm!.parent!;
-            // Anchor the rigid case at the gripping paw, even while the coat
-            // subtly stretches on a step or landing. Its handle never slides.
-            this.caseRoot.position.set(CASE_HAND.x,CASE_HAND.y+.43,CASE_HAND.z).sub(RAT_CARRY_SHOULDER);
-            anchor.localToWorld(this.caseRoot.position);
-            anchor.getWorldQuaternion(this.caseRoot.quaternion).normalize().multiply(caseCarryRotation);
-            this.caseRoot.position.sub(this.p.set(0,.43,0).applyQuaternion(this.caseRoot.quaternion));
+            updateCaseCarryPose(this.caseRoot, anchor);
         }else{
             if(!this.extrapolate||!this.presentation.looseCase(renderTime,this.presented))copyPresentationPose(s.case,this.presented);
             const {p,q}=this.presented;

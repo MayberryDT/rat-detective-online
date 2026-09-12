@@ -51,7 +51,8 @@ export class RatController {
         name: string = 'Player',
         options?: RatOptions,
         spawnPos?: THREE.Vector3,
-        private readonly launcherBounds?: {min:number;max:number}
+        private readonly launcherBounds?: {min:number;max:number},
+        modelFactory?: (options?:RatOptions)=>THREE.Group
     ) {
         this.camera = camera;
         scene.updateMatrixWorld(true);
@@ -59,7 +60,7 @@ export class RatController {
 
         // Create the Player Entity with the player's chosen name and appearance
         const pos = spawnPos ?? new THREE.Vector3(15, 2, 15);
-        this.entity = new RatEntity(scene, world, pos, name, options);
+        this.entity = new RatEntity(scene, world, pos, name, options, false, modelFactory);
 
     }
 

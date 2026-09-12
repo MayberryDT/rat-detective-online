@@ -1,8 +1,6 @@
+// Reference geometry from accepted release 8cd0ec2. Only import paths changed.
 import * as THREE from 'three';
-import type { HatTypeName, RatAppearance } from '../shared/networkProtocol';
-import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
-import { COAT_PROFILE, addCoatTailoring } from './RatCoatGeometry';
-import { createRatArm, RAT_GUN_SHOULDER, updateGunSleeve } from './RatArmModel';
+import type { HatTypeName, RatAppearance } from '../../../src/shared/networkProtocol';
 
 export type HatType = HatTypeName;
 export type RatOptions = Partial<RatAppearance>;
@@ -50,7 +48,7 @@ function muzzleGeometry() {
 function collarGeometry() {
     const positions: number[] = [], indices: number[] = [];
     const segments = 24;
-    const profiles = [[0.355, 1.255], [0.405, 1.465], [0.382, 1.455], [0.33, 1.27]];
+    const profiles = [[0.355, 1.235], [0.43, 1.51], [0.404, 1.50], [0.33, 1.25]];
     for (const [radius, y] of profiles) for (let i = 0; i <= segments; i++) {
         const angle = 0.56 + i / segments * (Math.PI * 2 - 1.12);
         positions.push(Math.sin(angle) * radius, y, Math.cos(angle) * radius * 0.92);
@@ -71,13 +69,13 @@ function collarGeometry() {
     geometry.setIndex(indices); geometry.computeVertexNormals(); return geometry;
 }
 
-function cheesePistol(parent: THREE.Group, coat: THREE.Material, highlight: THREE.Material) {
+function cheesePistol(parent: THREE.Group, coat: THREE.Material, skin: THREE.Material) {
     const arm = pivot(parent, 'rat-arm', -0.49, 0.91, 0.09);
     arm.rotation.x = 1.28;
-    const limb=createRatArm(coat,highlight);
-    const shoulder=pivot(parent,'rat-gun-shoulder',RAT_GUN_SHOULDER.x,RAT_GUN_SHOULDER.y,RAT_GUN_SHOULDER.z);
-    shoulder.add(limb);
-    limb.getObjectByName('rat-arm-cuff')!.name='rat-pistol-cuff';
+    const cuff = mesh(arm, new THREE.CylinderGeometry(0.105, 0.095, 0.18, 16), coat, 0, -0.035, -0.16);
+    cuff.rotation.x = Math.PI / 2;
+    const paw = mesh(arm, new THREE.SphereGeometry(0.085, 16, 10), skin, 0, -0.065, -0.055);
+    paw.scale.set(0.9, 1.1, 0.85);
     const pistol = pivot(arm, 'rat-pistol');
     const cheese = material(0xefb62e, 0.62), dark = material(0x29282a, 0.65);
     const shape = new THREE.Shape();
@@ -102,29 +100,42 @@ function cheesePistol(parent: THREE.Group, coat: THREE.Material, highlight: THRE
     const rim = mesh(pistol, new THREE.TorusGeometry(0.047, 0.012, 6, 16), material(0x9c771f), 0, 0.106, 0.259);
     rim.name = 'pistol-barrel';
     mesh(pistol, new THREE.CircleGeometry(0.039, 16), dark, 0, 0.106, 0.259);
+    for (let i = 0; i < 3; i++) {
+        const finger = mesh(arm, new THREE.SphereGeometry(0.031, 12, 8), skin, -0.052, -0.02 - i * 0.043, -0.055);
+        finger.scale.set(0.68, 0.66, 1.45);
+    }
     pivot(pistol, 'rat-muzzle', 0, 0.106, 0.28);
-    updateGunSleeve({shoulder,sleeve:limb,arm,pistol});
 }
 
 /** Approved cheese-pistol concept, built as lightweight editable geometry. */
 export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const root = new THREE.Group();
-    const coatColor = options.coatColor ?? DEFAULT_APPEARANCE.coatColor;
-    const coat = material(coatColor), fur = material(options.furColor ?? DEFAULT_APPEARANCE.furColor);
+    const coatColor = options.coatColor ?? 0xbe4545;
+    const coat = material(coatColor), fur = material(options.furColor ?? 0xe8b84d);
     const skin = material(0xc99089, 0.68);
     coat.name="rat-coat";skin.name="rat-skin";
-    const felt = material(options.hatColor ?? DEFAULT_APPEARANCE.hatColor);
-    const highlight = material(options.highlightColor ?? DEFAULT_APPEARANCE.highlightColor!);
-    highlight.name = 'rat-highlight';
-    const shirt = material(highlight.color.clone().lerp(new THREE.Color(0xffffff), 0.22));
-    const darkCoat = material(coat.color.clone().multiplyScalar(0.32));
-    shirt.name = 'rat-shirt'; darkCoat.name = 'rat-fasteners';
+    const hatColor = options.hatColor ?? new THREE.Color(coatColor).multiplyScalar(0.8);
+    const felt = material(hatColor), band = material(0xddc79b);
     const body = pivot(root, 'rat-body');
     // One clean tapered coat with a rounded shoulder and a subtle finished hem.
-    const coatBody = mesh(body, new THREE.LatheGeometry(COAT_PROFILE.map(([r, y]) => new THREE.Vector2(r, y)), 32), coat);
-    coatBody.name = 'rat-coat-body';
-    mesh(body, collarGeometry(), highlight).name = 'rat-collar';
-    addCoatTailoring(body, coat, highlight, shirt, darkCoat);
+    const profile = [[0, 0], [0.485, 0], [0.505, 0.025], [0.503, 0.07],
+        [0.477, 0.65], [0.434, 1.15], [0.403, 1.285], [0.35, 1.34], [0, 1.34]];
+    mesh(body, new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 24), coat);
+    mesh(body, collarGeometry(), coat);
+    for (const side of [-1, 1]) {
+        const lapelShape = new THREE.Shape();
+        lapelShape.moveTo(0, 0); lapelShape.lineTo(side * 0.34, 0.155);
+        lapelShape.lineTo(side * 0.25, -0.17); lapelShape.closePath();
+        const geometry = new THREE.ExtrudeGeometry(lapelShape, { depth: 0.014,
+            bevelEnabled: true, bevelSize: 0.004, bevelThickness: 0.004, bevelSegments: 1, steps: 1 });
+        const points = geometry.getAttribute('position');
+        for (let i = 0; i < points.count; i++) {
+            // Keep each collar tip on top of the curved coat instead of intersecting it.
+            points.setZ(i, points.getZ(i) + 0.445 - side * points.getX(i) * 0.32 - points.getY(i) * 0.18);
+        }
+        geometry.computeVertexNormals();
+        mesh(body, geometry, coat, 0, 1.375, 0).userData.noOutline = true;
+    }
     const head = pivot(body, 'rat-head', 0, 1.60, 0.015);
     mesh(head, muzzleGeometry(), fur);
     mesh(head, new THREE.SphereGeometry(0.068, 16, 10), material(0x382227, 0.42), 0, -0.08, 0.545);
@@ -138,14 +149,16 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     }
     const hat = pivot(head, 'rat-hat', 0, 0.19, 0);
     hat.rotation.x = 0.06;
-    // Old checkpoint hat names remain readable, but all new silhouettes share this fedora.
-    const brimRadius = 0.64;
-    const brim = mesh(hat, new THREE.LatheGeometry([[0,-.0175],[brimRadius-.012,-.0175],[brimRadius,-.008],[brimRadius,.008],[brimRadius-.012,.0175],[0,.0175]].map(([r,y])=>new THREE.Vector2(r,y)),40), felt);
+    const type = options.hatType ?? 'fedora';
+    const brimRadius = type === 'fedora' ? 0.64 : type === 'trilby' ? 0.53 : 0.51;
+    const brim = mesh(hat, new THREE.CylinderGeometry(brimRadius, brimRadius, 0.035, 40), felt);
     brim.name = 'hat-brim';
     brim.scale.z = 0.8;
-    const crownHeight = 0.38, crownBottom = 0.35, crownTop = 0.315;
+    const crownHeight = type === 'porkpie' ? 0.23 : type === 'trilby' ? 0.41 : 0.38;
+    const crownBottom = type === 'porkpie' ? 0.34 : 0.35;
+    const crownTop = type === 'porkpie' ? 0.335 : type === 'trilby' ? 0.27 : 0.315;
     const crown = new THREE.CylinderGeometry(crownTop, crownBottom, crownHeight, 24, 3);
-    {
+    if (type !== 'porkpie') {
         const points = crown.getAttribute('position');
         for (let i = 0; i < points.count; i++) {
             const top = Math.max(0, points.getY(i) / crownHeight * 2);
@@ -158,8 +171,7 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     crownMesh.name = 'hat-crown';
     crownMesh.scale.z = 0.86;
     const radiusAt = (height: number) => crownBottom + (crownTop - crownBottom) * ((height - 0.012) / crownHeight) + 0.008;
-    const hatBand = mesh(hat, new THREE.CylinderGeometry(radiusAt(0.1025), radiusAt(0.0275), 0.075, 24), highlight, 0, 0.065, 0);
-    hatBand.name = 'rat-hatband';
+    const hatBand = mesh(hat, new THREE.CylinderGeometry(radiusAt(0.1025), radiusAt(0.0275), 0.075, 24), band, 0, 0.065, 0);
     hatBand.scale.z = 0.86;
     // The visible ear bases sit on the side brim, outside the crown. Sharing the
     // hat pivot keeps that clearance during its secondary walking/recoil motion.
@@ -179,6 +191,6 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const tail = mesh(root, new THREE.TubeGeometry(tailCurve, 24, 0.052, 10, false), skin, 0, 0.25, -0.44);
     tail.name = 'rat-tail';
     mesh(tail, new THREE.SphereGeometry(0.052, 12, 8), skin, 0.2, -0.17, -1.17);
-    cheesePistol(body, coat, highlight);
+    cheesePistol(body, coat, skin);
     return root;
 }

@@ -100,12 +100,15 @@ function parseAppearance(value: unknown): RatAppearance | null {
   const hatColor = parseColor(value.hatColor);
   const furColor = parseColor(value.furColor);
   const coatColor = parseColor(value.coatColor);
+  const highlightColor = value.highlightColor === undefined ? undefined : parseColor(value.highlightColor);
+  if (highlightColor === null) return null;
   if (hatColor === null || furColor === null || coatColor === null) return null;
   return {
     hatType: value.hatType as HatTypeName,
     hatColor,
     furColor,
     coatColor,
+    ...(highlightColor === undefined ? {} : { highlightColor }),
   };
 }
 

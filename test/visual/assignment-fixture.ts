@@ -13,6 +13,7 @@ import { DISPATCH_STATIONS } from '../../src/shared/chaosState';
 import { DispatchSirenAudio } from '../../src/audio/DispatchSirenAudio';
 import {RatEntity} from '../../src/entities/RatEntity';
 import {MatchScoreboard} from '../../src/ui/MatchScoreboard';
+import {DEFAULT_APPEARANCE,CLOTHING_PALETTE,HIGHLIGHT_PALETTE,FUR_PALETTE,appearanceAt} from '../../src/shared/ratAppearance';
 import {PROTOCOL_VERSION} from '../../src/shared/networkProtocol';
 import {TouchControls} from '../../src/ui/TouchControls';
 import {INCIDENTS} from '../../src/shared/incidentCatalog';
@@ -47,13 +48,17 @@ const heading=interior?interior.heading:view==='city'?-Math.atan2(45,96):view===
 const spec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION};
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 const city=new Neighborhood(stage.scene,stage.world,spec);
-const appearance={hatType:'fedora' as const,coatColor:0xbe4545,hatColor:0xdc4a3c,furColor:0xe8b84d};
+const appearance={...DEFAULT_APPEARANCE};
+if(query.has('outfit'))for(const [key,field,palette] of [['coat','coatColor',CLOTHING_PALETTE],['hat','hatColor',CLOTHING_PALETTE],['highlight','highlightColor',HIGHLIGHT_PALETTE],['fur','furColor',FUR_PALETTE]] as const){
+    const selected=palette.find(entry=>entry.name.toLowerCase()===query.get(key)?.toLowerCase());
+    if(selected)appearance[field]=selected.color;
+}
 const player=new RatController(stage.scene,stage.world,stage.camera,'Inspector Brie',appearance,position,CITY_BOUNDS);
 player.entity.isPlayer=true;player.entity.billboard.sprite.visible=false;
 player.onMouseMove((Math.PI-heading)/.002,view==='city'?-400:-180);player.entity.mesh.rotation.y=heading+Math.PI;
 const distantRats=query.has('rats')?[12,26,42].map((distance,index)=>{
     const p=position.clone().add(new THREE.Vector3(distance,0,index===1?3:0));
-    const rat=new RatEntity(stage.scene,stage.world,p,`Camera rat ${index+1}`,{...appearance,coatColor:[0x302639,0x25412d,0x403025][index]},true);
+    const rat=new RatEntity(stage.scene,stage.world,p,`Camera rat ${index+1}`,query.has('outfit')?appearanceAt([281,599,835][index]):{...appearance,coatColor:[0x302639,0x25412d,0x403025][index]},true);
     rat.billboard.sprite.visible=false;rat.mesh.rotation.y=-Math.PI/2;rat.update(0);return rat;
 }):[];
 const actor=createPlayer('local','Inspector Brie',appearance,position),players=new Map([[actor.id,actor]]);

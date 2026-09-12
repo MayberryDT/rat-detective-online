@@ -4,6 +4,28 @@ Verified from source and production on **2026-09-11**. This is the handoff for n
 
 ## Accepted production release — September 11
 
+**Final model playtest (September 12):** Tyler accepted the matching sleeves in
+the workshop and requested gameplay review before his final release decision.
+The shared model is implemented for players and bots: shorter shoulder-pivot gun
+sleeve, longer matching case sleeve, and no case-side sleeve when not carrying.
+[Audible gameplay preview](http://127.0.0.1:5193/?room=graybox-benchmark-match-model-final-r1)
+expires September 12 at **6:43 PM Pacific**. It serves the tested frozen build
+through `rat-detective-model-playtest.service`; production remains unchanged.
+See the [case-sleeve receipt](verification/rat-case-sleeve-2026-09-12.md).
+
+**New local/private art prototype (September 12):** the accepted shared-fedora,
+three-button coat and four-variable outfit palette are implemented for review.
+Hatband/collar/lapels/cuffs share one highlight; 8 hats × 8 coats × 4 highlights ×
+4 furs provide 1,024 appearances. Source is uncommitted and production remains the
+September 11 release below. The subsequent workshop rebuild fixes its case pose,
+adds integrated city views and refines the tailoring with fewer triangles.
+The preceding studies used matching **floating straight sleeves and cuffs**, with
+no connected/bent arms or anatomical hands. Study 05 restores the original case
+sleeve reach and taper after study 04 was too short. Those comparison studies are
+historical; the selected no-case behavior is recorded above. See the
+[floating-sleeve receipt](verification/rat-floating-sleeves-2026-09-12.md) for the
+preceding studio and private playtest evidence.
+
 Tyler accepted the complete r8 preview and authorized release. **Everything is now
 live at https://ratdetective.online/**: application **`8cd0ec2`**, production Worker
 **`3398a69c-146b-4d99-aa47-e3734664c086`**, protocol **14**. Source was committed and

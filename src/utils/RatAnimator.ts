@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {updateGunSleeve,type GunSleeveRig} from './RatArmModel';
 
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;
@@ -20,6 +21,7 @@ export function getRatCarryAnchor(root: THREE.Group): THREE.Object3D {
 /** Small procedural poses shared by the visible character and its outline shell. */
 export class RatAnimator {
     private readonly rigs;
+    private readonly gunSleeves:GunSleeveRig[];
     private readonly carryAnchor: THREE.Object3D;
     private verticalSpeed = 0;
     private airPose = 0;
@@ -63,6 +65,11 @@ export class RatAnimator {
 
     constructor(private readonly root: THREE.Group, outline?: THREE.Group) {
         const models = outline ? [root, outline] : [root];
+        this.gunSleeves=models.flatMap(model=>{
+            const shoulder=model.getObjectByName('rat-gun-shoulder');
+            return shoulder?[{shoulder,sleeve:shoulder.getObjectByName('rat-floating-sleeve')!,
+                arm:model.getObjectByName('rat-arm')!,pistol:model.getObjectByName('rat-pistol')!}]:[];
+        });
         this.carryAnchor = getRatCarryAnchor(root);
         // The firing cue follows the actual animated barrel. A ball frozen at a
         // prior world-space muzzle appears behind the gun as the rat moves.
@@ -147,6 +154,7 @@ export class RatAnimator {
         this.stride = time * 7;
         this.tailMotion = resting ? 0 : Math.min(this.localSpin.length() / 12, 1);
         this.tailTurn = this.flop.y * 0.6;
+        this.gunSleeves.forEach(updateGunSleeve);
         this.deformTails();
     }
 
@@ -182,6 +190,7 @@ export class RatAnimator {
         this.deathAnimation = false;
         this.tailMotion = this.tailTurn = 0;
         this.restore();
+        this.gunSleeves.forEach(updateGunSleeve);
         this.deformTails(true);
     }
 
@@ -202,7 +211,7 @@ export class RatAnimator {
         this.movement = this.acceleration = this.turn = this.coatTurn = 0;
     }
 
-    update(dt: number): void {
+    update(dt: number, previewSpeed?: number): void {
         if (!(dt > 0) || !Number.isFinite(dt)) return;
         const motionDt = dt;
         dt = Math.min(dt, 0.1);
@@ -223,6 +232,8 @@ export class RatAnimator {
         } else this.lastPosition = new THREE.Vector3();
         this.lastPosition.copy(position);
         this.lastYaw = yaw;
+        // Optional stationary art-preview input; gameplay continues to derive speed from motion.
+        if(previewSpeed!==undefined&&Number.isFinite(previewSpeed))speed=Math.max(0,Math.min(18,previewSpeed));
         const blend = 1 - Math.exp(-10 * dt);
         // Read render-space vertical motion for local and interpolated remote rats.
         // These small secondary poses never feed back into the controller/body.
@@ -329,6 +340,7 @@ export class RatAnimator {
             leftEar.rotation.z = twitch;
             rightEar.rotation.z = -twitch * 0.65;
         }
+        this.gunSleeves.forEach(updateGunSleeve);
         this.deformTails();
     }
 

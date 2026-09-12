@@ -61,6 +61,9 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 
 ## Historical evidence and proposals
 
+Current September 12 art work: [rat outfit prototype](verification/rat-outfit-prototype-2026-09-12.md)
+— shared fedora, three-button coat, linked highlight, 1,024 appearances, outfit studio and private playtest.
+
 - [Architecture audit](architecture-audit.md), [implementation plan](implementation-plan.md), [completion checklist](implementation-checklist.md): the early `08e8005` cleanup, subsequently completed and expanded substantially.
 - [Implementation evidence](verification/implementation-evidence.md), [September 6 staging](verification/staging.md), [September 6 production](verification/production.md): dated verification receipts, not the current release or current feature inventory.
 - [Staging API notes](staging-api-notes.md): historical upload/auth workaround, not the standard release procedure.
@@ -98,3 +101,15 @@ Latest capacity iteration: [AI playback and rigid batching](verification/ai-deli
 - [Mild global audio and cartoon foley](verification/cartoon-foley-and-global-mix-2026-09-09.md) — current private sound iteration, superseding the steep shot fade and musical feedback cues.
 - [Performance cleanup and case bounce](verification/performance-and-case-bounce-2026-09-09.md) — audio voice reuse, stable HUD text, pitched Bad Ammunition and stronger physical case shots.
 - [Cartoon HUD and incident distance](verification/cartoon-hud-and-incident-distance-2026-09-09.md) — current private preview, muted comic emergency graphics and positional Popcorn/thud/case buzz.
+
+- [September 12 workshop rebuild and model refinement](verification/rat-outfit-refinement-2026-09-12.md): corrected studio case pose, integrated city views, refined tailoring and refreshed private preview.
+
+- [September 12 matching-arm study](verification/rat-arm-study-2026-09-12.md): shared arm/paw geometry, case/empty/no-arm comparison and city walking animation.
+
+- [September 12 floating sleeve correction](verification/rat-floating-sleeves-2026-09-12.md): replaces connected bent arms and anatomical hands with identical floating straight sleeves/cuffs.
+
+- [September 12 original model comparison](verification/rat-original-reference-2026-09-12.md): exact release geometry, original arms on new outfit, and latest sleeves in the workshop.
+
+[September 12 shoulder-sleeve follow-up](verification/rat-shoulder-sleeve-2026-09-12.md): shorter shoulder-pivot gun sleeve with the original case arm.
+
+[September 12 case-sleeve finish](verification/rat-case-sleeve-2026-09-12.md): matching longer sleeve and linked cuff; no sleeve without a case.

@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RemotePlayers } from '../../src/session/RemotePlayers';
 import { GameSession } from '../../src/session/GameSession';
+import { CASE_HAND } from '../../src/shared/chaosState';
+import { RAT_CARRY_SHOULDER } from '../../src/utils/RatAnimator';
 import { createCaseGrip } from '../../src/prototype/CaseGrip';
 import { SimulationClock } from '../../src/session/SimulationClock';
 import { MotionFoley } from '../../src/audio/MotionFoley';
@@ -84,8 +86,9 @@ it('keeps moving remote glow, muzzle, tail and case grip attached across a pause
         expect(shell.getObjectByName('rat-muzzle')!.getWorldPosition(new THREE.Vector3()).distanceTo(entity.getMuzzlePosition())).toBeLessThan(1e-9);
     }
     expect(Array.from(tail.geometry.getAttribute('position').array)).not.toEqual(restTail);
-    const paw = grip.getObjectByName('case-gripping-paw')!;
-    const pawLocal = paw.position.clone();
+    const paw = grip.getObjectByName('case-sleeve-grip')!;
+    // Check the public grip anchor independently of the new shared-arm hierarchy.
+    const pawLocal = new THREE.Vector3(CASE_HAND.x,CASE_HAND.y+.43,CASE_HAND.z).sub(RAT_CARRY_SHOULDER);
     const expectedPaw = grip.localToWorld(pawLocal);
     expect(paw.getWorldPosition(new THREE.Vector3()).distanceTo(expectedPaw)).toBeLessThan(1e-9);
     now += 1500;

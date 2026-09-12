@@ -12,6 +12,16 @@ Serve `dist-visual` locally to inspect `/visual-fixture.html?seed=20260905&state
 
 `/performance-fixture.html` compares the same seeded city, camera, lighting and three rats with instanced scenery and equivalent separate meshes. Each mode has 60 warm-up and 300 measured frames. It reports draw calls, triangles, frame intervals and CPU render-submission time. These timings are not GPU timings; batching can increase submitted triangles because culling works per batch.
 
+## Current character workshop (September 12)
+
+`/model-preview.html` is now the rebuilt character workshop: four color swatch
+pools, orbit/view presets, coat detail, existing walk/fire poses, case/empty-sleeve/no-sleeve, opponent
+rendering and Ironclad. Street and Records support the walking cycle in place in city-lighting
+views using the actual shoulder camera. All three views use the real entity and
+shared live case transform. This art tool stays muted and does not run gameplay
+inputs. The older model-tool controls described below are historical.
+See [the floating sleeve receipt](../../docs/verification/rat-floating-sleeves-2026-09-12.md).
+
 ## Stationary target practice
 
 The separate `/hitbox-practice.html` page is a manual stationary-target range using the real city, gun, camera and shared hit simulation. H toggles authoritative collision wires, R resets targets/counters, T returns to the start. Targets never move or shoot and refill after each kill. [Setup, current link and checks](../../docs/hitbox-practice.md). This fixture does not connect to multiplayer.
@@ -251,3 +261,19 @@ Latest camera follow-up: `view=streetlight&rats` places three additional dark-co
 ### September 10 full scoreboard and local outline
 
 Add `scoreboard` to an assignment fixture for a static full table over the actual camera. `roster=12` is the default; `roster=24` reviews a larger lobby and the compact rows. Use any of the three assignment IDs to check its mode column. Example: `assignment-fixture.html?assignment=chain-of-custody&view=recordsinside&held&scoreboard`. The fixture supplies posed sample stats; it does not simulate Tab or gameplay. Without `scoreboard`, `view=streetlight&rats&held` shows the local rat without an outline and three opponents with their existing outlines. See [the receipt](../../docs/verification/tab-scoreboard-local-outline-2026-09-10.md).
+
+## September 12 shoulder-sleeve review
+
+The workshop on port5196 defaults to `model=latest`: **New gun sleeve · original
+case arm**. `model=original-arms` keeps the new outfit with both original arms;
+`model=original` is the frozen release reference. The latest gun sleeve pivots at
+its shoulder, with the original weapon aim/muzzle. Case, empty sleeve and no
+sleeve remain separate options. See the [receipt](../../docs/verification/rat-shoulder-sleeve-2026-09-12.md).
+
+## September 12 case-sleeve finish
+
+The latest workshop mode is now **Matching sleeves**: accepted shoulder-pivot
+pistol sleeve and a longer case sleeve with the same taper and linked cuff.
+Use **Case / No case**. The empty sleeve option is removed; old `hand=empty`
+links normalize to `hand=none`. The original comparison models remain.
+See the [case-sleeve receipt](../../docs/verification/rat-case-sleeve-2026-09-12.md).
