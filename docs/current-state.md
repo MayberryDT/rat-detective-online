@@ -1,13 +1,17 @@
 # Current Rat Detective state
 
-Verified from source and production on **2026-09-11**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production on **2026-09-12**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
-## Accepted model and netplay integration — September 12
+## Current production release — September 12
 
 Tyler accepted the final gameplay model and requested all current changes committed,
 with the parallel netplay branch merged. The accepted shared-fedora, three-button
 coat and 1,024-appearance palette retain the short shoulder-pivot pistol sleeve,
 longer matching case sleeve and no sleeve without a case.
+
+**Live:** application `3a6a1d2`, Worker `21f6b8c1-4770-4691-92fa-71b5096f8a7b`,
+https://ratdetective.online/. Local main is pushed to origin/master; topic branches
+are removed, with older unique work preserved in archive tags.
 
 Protocol **15** adds sequenced firing poses, bounded historical projectile
 collision, radius-aware sweeps, direct shot/pickup outcomes, reversible pickup

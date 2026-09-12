@@ -1,8 +1,10 @@
 # Rat Detective: agent entry point
 
-Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md](docs/README.md) for the documentation map. These describe the shipped game as verified on **2026-09-11**, not a new implementation request.
+Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md](docs/README.md) for the documentation map. These describe the shipped game as verified on **2026-09-12**, not a new implementation request.
 
 ## Preserve the game
+
+- September12 accepted model/protocol15 release: preserve the shared fedora, three-button coat, 8×8×4×4 palette, short shoulder-pivot gun sleeve, longer matching case sleeve and no sleeve without a case. Shared highlights include both cuffs. Netplay preserves sequenced movement/firing, bounded250ms historical projectile collision, sphere sweeps, swept pickups, direct action outcomes and reversible anticipation; authority owns damage, scoring and pickup eligibility. See [integration receipt](docs/verification/model-netplay-integration-2026-09-12.md). Protocol15 requires matching client and Worker.
 
 - Current source caps a stage at **16 total rats**, including humans and server-owned bots. Private full-lobby previews replace one bot per human join and refill vacancies after ten seconds.
 - Released September 11 reconnect follow-up (protocol 14): preserve a disconnected human for **30 seconds**, with the same ID/stats/objective progress/pose and case unless lost during ongoing play. The rat stays vulnerable. Private server-issued resume credentials are separate from public player data; only join/welcome frames and tab-local sessionStorage may carry them. Keep full-room slot recovery, expiry cleanup, same-tab reload, pending respawn deadlines and old-socket replacement guards. Expiry ends the reservation and empty rooms sleep. Never log tokens. See [reconnect verification](docs/verification/reconnect-case-protection-2026-09-11.md).

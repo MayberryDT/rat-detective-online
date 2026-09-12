@@ -57,3 +57,11 @@ Press **F8** to download the report or run `window.ratDiagnostics.snapshot()` in
 ## Remaining acceptance boundary
 
 No browser input automation, hosted Worker, deployment or production mutation was performed. Project policy leaves gameplay feel to a human two-client test. A frozen matching hosted preview with normal server-owned backfill is still required before enabling this protocol in production. The key human check is victim-side cover fairness at 150–250 ms alongside the shooter-side reduction in visually clean misses.
+
+## September12 merge and release follow-up
+
+The worktree was subsequently previewed, then Tyler requested it merged with the
+accepted final model. The combined protocol15 release is documented in the
+[integration receipt](model-netplay-integration-2026-09-12.md); the initial
+not-deployed and isolated-branch status above is historical. That topic branch
+has been merged and deleted.

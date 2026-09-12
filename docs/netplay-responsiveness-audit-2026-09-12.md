@@ -2,7 +2,7 @@
 
 **Date:** September 12, 2026  
 **Scope:** Current protocol-14 client/Worker path, with emphasis on shots that visually cross a rat without damage and case/power-up contacts that confirm late or are missed.  
-**Status:** Audit complete. Its protocol-15 implementation has been merged with the accepted model; see the [implementation receipt](verification/netplay-crispness-2026-09-12.md). It is not deployed and production remains unchanged.
+**Status:** Audit complete. Its protocol-15 implementation has been merged with the accepted model; see the [implementation receipt](verification/netplay-crispness-2026-09-12.md). The combined production release is recorded in the [integration receipt](verification/model-netplay-integration-2026-09-12.md).
 
 ## Executive conclusion
 
