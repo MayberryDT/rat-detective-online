@@ -75,6 +75,17 @@ describe('network session transport', () => {
         expect(sockets[2].readyState).toBe(FakeSocket.CLOSED);expect(vi.getTimerCount()).toBe(0);
     });
 
+    it('prepares and reuses the hosted private matchmaking connection',()=>{
+        network.destroy();const urls:string[]=[];
+        network=makeNetwork({url:'ws://localhost:5193/ws?room=graybox-benchmark-match-review',createSocket:url=>{
+            urls.push(url);const socket=new FakeSocket();sockets.push(socket);return socket as unknown as WebSocket;
+        }});
+        network.prepare();sockets[0].open();
+        expect(new URL(urls[0]).searchParams.get('prepare')).toBe('1');
+        expect(sockets[0].sent).toHaveLength(0);
+        network.connect('Rat',appearance);expect(sockets).toHaveLength(1);expect(sockets[0].sent).toHaveLength(1);
+    });
+
     it('advertises delta snapshots by default and preserves explicit v1 fallback',()=>{
         const urls:string[]=[];
         for(const chaosTransport of [undefined,'compact-v1'] as const){
@@ -97,6 +108,41 @@ describe('network session transport', () => {
         const url=new URL(urls[1]);
         expect(url.searchParams.get('room')).toBe('graybox-benchmark-match-preview');
         expect(url.searchParams.get('preferred')).toBe('graybox-benchmark-match-preview-overflow');
+    });
+
+    it('keeps private resume credentials across transport loss and a same-tab reload, never in the URL',()=>{
+        const token='12345678-1234-4123-8123-123456789abc', urls:string[]=[],data=new Map<string,string>();
+        const resumeStorage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);},removeItem:(key:string)=>{data.delete(key);}};
+        const options={resumeStorage,createSocket:(url:string)=>{urls.push(url);const socket=new FakeSocket();sockets.push(socket);return socket as unknown as WebSocket;}};
+        network.destroy();network=makeNetwork(options);network.connect('Rat',appearance);sockets[0].open();
+        sockets[0].receive({...welcome(),resumeToken:token,matchRoom:'public-live-v2-overflow'});
+        sockets[0].close();vi.advanceTimersByTime(500);sockets[1].open();
+        expect(JSON.parse(sockets[1].sent[0]).resumeToken).toBe(token);
+        expect(urls[1]).toContain('resume=1');expect(urls[1]).toContain('preferred=public-live-v2-overflow');
+        expect(urls[1]).not.toContain(token);
+        network.destroy();network=makeNetwork(options);network.prepare();expect(sockets).toHaveLength(2);
+        network.connect('Rat',appearance);sockets[2].open();expect(JSON.parse(sockets[2].sent[0]).resumeToken).toBe(token);
+        sockets[2].receive({type:'error',code:'resume-unavailable',message:'Expired'});vi.advanceTimersByTime(500);sockets[3].open();
+        expect(JSON.parse(sockets[3].sent[0]).resumeToken).toBeUndefined();expect(urls[3]).not.toContain('preferred=');
+        expect(urls[3]).not.toContain('resume=');expect(data.size).toBe(0);
+    });
+
+    it('does not fight another tab for the same resumed rat',()=>{
+        network.connect('Rat',appearance);sockets[0].open();sockets[0].receive(welcome());
+        const close=new Event('close');Object.defineProperty(close,'code',{value:4001});
+        sockets[0].dispatchEvent(close);vi.advanceTimersByTime(60_000);
+        expect(network.state).toBe('disconnected');expect(sockets).toHaveLength(1);
+    });
+
+    it('isolates reload credentials by server and room and tolerates blocked storage',()=>{
+        const token='12345678-1234-4123-8123-123456789abc';
+        const saved=JSON.stringify({scope:'ws://elsewhere/ws?room=public-live-v2',token});
+        for(const resumeStorage of [{getItem:()=>saved,setItem:()=>{},removeItem:()=>{}},
+            {getItem:()=>{throw Error('blocked');},setItem:()=>{throw Error('blocked');},removeItem:()=>{throw Error('blocked');}}]){
+            network.destroy();network=makeNetwork({resumeStorage});network.connect('Rat',appearance);
+            const socket=sockets.at(-1)!;socket.open();expect(JSON.parse(socket.sent[0]).resumeToken).toBeUndefined();
+            socket.receive({...welcome(),resumeToken:token});expect(network.state).toBe('playing');
+        }
     });
 
     it('expands negotiated movement batches with each source timestamp intact',()=>{

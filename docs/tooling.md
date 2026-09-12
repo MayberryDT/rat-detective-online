@@ -1,12 +1,12 @@
 # Tooling and preview modes
 
-Reviewed **2026-09-08**. Inspect running services before starting another process. The production game is Cloudflare-hosted; local previews are not its uptime dependency.
+Reviewed **2026-09-11**. Inspect running services before starting another process. The production game is Cloudflare-hosted; local previews are not its uptime dependency.
 
 ## Choose the right environment
 
 | Surface | Purpose / current behavior |
 | --- | --- |
-| https://ratdetective.online/ | Production, public-live-v2, server-owned 8–11 AI per round |
+| https://ratdetective.online/ | Production, public-live-v2, server-owned bots fill occupied rooms to eight total rats; 16-rat cap |
 | http://127.0.0.1:5174/ | Main local client preview through authenticated hosted relay; `rat-detective-game-preview.service` |
 | http://127.0.0.1:5175/ | Secondary relay; `rat-detective-hosted-preview.service` |
 | Static `dist-visual` on 5180 | Model and solo stage pages; not multiplayer verification |
@@ -24,15 +24,14 @@ npm run build
 
 The relay serves current `dist`; it does not rebuild source. `npm run preview:hosted` starts the relay (default 5175), requiring `RAT_NETWORK_ORIGIN` and `RAT_NETWORK_TOKEN_FILE`; the latter points to a private JSON file containing `NETWORK_TEST_TOKEN`. `PORT` can override the listen port. Use the existing configured service where available. Do not print tokens or invent replacement credentials. The relay's `/health` proves relay health, not upstream simulation availability.
 
-Local practice with eleven browser bots is explicitly gated to localhost and a URL such as `?room=graybox-practice-review&bots=11`. This is a separate harness from public hosted bots. Never combine it with the public room or assume private backend code is automatically the same as production. The test backend has its own namespace and release lifecycle.
+**Legacy harness, not a gameplay preview:** local practice with eleven browser bots is explicitly gated to localhost and a URL such as `?room=graybox-practice-review&bots=11`. This is a separate harness from public hosted bots. Never combine it with the public room or assume private backend code is automatically the same as production. The test backend has its own namespace and release lifecycle.
 
 ## Checks
 
 Agent browser playtests must stay muted (Tyler, September 11). Append `&mute=1`
 to localhost practice URLs before opening them. This mutes title music and keeps
 the shared gameplay AudioContext suspended even after input gestures. It applies
-only on loopback hosts; the accepted public audio mix is unchanged. Reload without
-the flag only for an explicitly requested audible test.
+only on loopback hosts; the accepted public audio mix is unchanged. **Human playtests omit this flag and stay audible.** Do not mute the user’s site, browser or system audio.
 
 ```sh
 npm run typecheck
@@ -67,6 +66,36 @@ Check the port is free first. `/model-preview.html` is the rat model tool, `/sta
 Use `npm run deploy:production` or `npm run deploy:staging` only within release authorization. The default deploy script refuses unspecified environments. The historical API-upload workaround is not the standard current workflow. See [live service](live-service.md) for current release receipts and rollback compatibility.
 
 Local dev state directories remain `.wrangler/state/dev` and `.wrangler/state/preview`; CI uses a temporary directory. Do not delete any durable state or service configuration as incidental setup.
+
+## Required gameplay preview (September 11 correction)
+
+Use production matchmaking and server-owned bots in the hosted Cloudflare runtime
+for **every** gameplay playtest. No `bots=11`, no browser bots, no local workerd.
+The accepted full-lobby setup below is a separate stress fixture, not the default
+population policy. Never enable checkpoint-control or altered capacities for feel testing.
+
+After building and checking the app, deploy a frozen private copy:
+
+```sh
+node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=11 --cap=16
+node scripts/preview-capacity.mjs --deployment=/absolute/path/to/deployment.json --port=5193 --room=graybox-benchmark-match-pickups-r8
+```
+
+`--bots=11` here is the fixture generator’s legacy roster setting, **not** a browser
+URL flag. A `graybox-benchmark-match-*` pool uses the actual production backfill:
+one human plus seven server bots, bots yield as humans join, empty rooms sleep.
+The copied fixture has isolated credentials/namespace, seed 341283204, diagnostic
+incident controls and expiry; ordinary player delivery, simulation, timings and
+navigation remain the application’s production paths. The client is served from
+the receipt’s frozen `stage/dist`, never a separately changing `dist` directory.
+
+The relay now forwards narrowly validated, authenticated `/status?room=...`
+metadata. The title prepares that exact room’s city and unreserved connection,
+using the same path as public title preparation. Credentials never reach browser URLs.
+[Current preview, expiry and verification](verification/reconnect-case-protection-2026-09-11.md).
+Disconnected rats now reserve their slot for 30 seconds before empty-room sleep.
+Human reload tests should re-enter within that window; the same tab retains its
+private reconnect credential. Do not expose the credential in diagnostic artifacts.
 
 ## Current 16-rat full-game preview
 

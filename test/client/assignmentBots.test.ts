@@ -7,7 +7,7 @@ import { createAssignment, destinationPoint, CHAIN_ROUTE } from '../../src/share
 
 afterEach(()=>vi.restoreAllMocks());
 describe('assignment navigation in the actual city',()=>{
-    it.each(CHAIN_ROUTE)('a server bot enters the whole %s landmark using existing geometry',id=>{
+    it.each(CHAIN_ROUTE)('a server bot enters the whole %s landmark using existing geometry when supplies are unavailable',id=>{
         vi.spyOn(Math,'random').mockReturnValue(.12);
         const now=1_000_000,spec={seed:1,version:2};vi.spyOn(Date,'now').mockReturnValue(now);
         const start=destinationPoint(id);
@@ -25,7 +25,8 @@ describe('assignment navigation in the actual city',()=>{
         try{
             for(let frame=1;frame<=1200&&sim.assignmentState!.deliverySerial===completed;frame++){
                 const at=now+frame*1000/60;
-                controller.step(1/60,at,players,sim.snapshot(false),true);sim.step(1/60,at);
+                // Isolate assignment navigation from the now-higher-priority supply routes.
+                controller.step(1/60,at,players,{...sim.snapshot(false),pickups:[]},true);sim.step(1/60,at);
             }
             expect({deliverySerial:sim.assignmentState!.deliverySerial,position:{x:bot.x,y:bot.y,z:bot.z}}).toMatchObject({deliverySerial:completed+1});
             expect(sim.assignmentState!.deliveries[bot.id]).toBe(1);expect(sim.assignmentState!.result).toBeUndefined();

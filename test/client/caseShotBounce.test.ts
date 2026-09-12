@@ -55,3 +55,36 @@ it('bounds ordinary repeated-shot speed while keeping a useful lift',()=>{
     expect(sim.caseBody.velocity.length()).toBeLessThanOrEqual(T.caseShotMaxSpeed+.01);
     expect(sim.caseBody.velocity.y).toBeGreaterThan(5);
 });
+
+it('collects a clear run-by at the visible case edge without pixel hunting',()=>{
+    const {sim,players}=fixture();
+    const rat=players.get('shooter')!;rat.x=2;rat.y=0;rat.z=0;
+    sim.step(0,1050);expect(sim.caseHolderId).toBe(rat.id);
+});
+it('catches a short between-packet crossing but rejects teleports and walls',()=>{
+    const {sim,players}=fixture();const rat=players.get('shooter')!;
+    rat.x=-3;rat.y=0;rat.z=0;sim.step(0,1050);expect(sim.caseHolderId).toBeNull();
+    rat.x=3;sim.step(0,1100);expect(sim.caseHolderId).toBe(rat.id);
+    const second=fixture();const r=second.players.get('shooter')!;
+    r.x=-10;r.y=0;r.z=0;second.sim.step(0,1050);
+    r.x=10;second.sim.step(0,1100);expect(second.sim.caseHolderId).toBeNull();
+    // The player's center is close enough, but a wall separates the actual reach.
+    second.sim.caseBody.position.set(11,.7,0);r.x=13;
+    second.sim.step(0,1300);expect(second.sim.caseHolderId).toBeNull();
+});
+
+for(const radius of [.15,.72])it(`keeps the owner's case through direct and banked ${radius}-radius shots without hiding walls`,()=>{
+    const {sim,players}=fixture(),rat=players.get('shooter')!;
+    rat.x=0;rat.y=0;rat.z=0;sim.step(0,1001);expect(sim.caseHolderId).toBe(rat.id);
+    sim.shoot(rat.id,{shotId:'own-case',origin:{x:-3,y:1,z:.02},direction:{x:1,y:0,z:0}});
+    if(radius>.15)(sim as any).dispatch={phase:'active',incident:'big-cheese',started:1000,until:9000,serial:1};
+    const shot=(sim as any).shots[0];shot.radius=radius;
+    let banked=false;
+    for(let i=1;i<=30;i++){
+        sim.step(1/120,1001+i*1000/120);
+        banked ||= shot.v.x<0;
+        expect(sim.caseHolderId).toBe(rat.id);
+    }
+    expect(banked).toBe(true);
+    expect(sim.snapshot(false).impacts.some(hit=>hit.cue==='case-hit')).toBe(false);
+});

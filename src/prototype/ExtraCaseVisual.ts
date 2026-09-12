@@ -7,7 +7,7 @@ import {RAT_CARRY_SHOULDER} from '../utils/RatAnimator';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {addLeatherBriefcase} from './CaseModel';
 import {CaseBeacon} from './CaseBeacon';
-import {createCaseGrip} from './CaseGrip';
+import {createCaseGrip,disposeCaseGrip} from './CaseGrip';
 const rotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
 /** Seven bounded incident props, using the same model, outline, grip and smoothing. */
 export class ExtraCaseVisual {
@@ -33,7 +33,7 @@ export class ExtraCaseVisual {
         const owner=state.owner?this.resolve(state.owner):undefined;
         const carrier=owner&&!owner.dead?owner:null;
         if(carrier!==this.carrier){
-            if(this.arm){this.arm.removeFromParent();disposeMeshResources(this.arm);this.arm=null;}
+            if(this.arm){disposeCaseGrip(this.arm);this.arm=null;}
             this.carrier=carrier;if(carrier)this.arm=createCaseGrip(carrier);
         }
         this.root.scale.setScalar(state.owner?1:CASE_LOOSE_SCALE);
@@ -62,7 +62,7 @@ export class ExtraCaseVisual {
         this.beacon.update(this.root,camera,!!carrier?.isPlayer);
     }
     dispose():void {
-        if(this.arm){this.arm.removeFromParent();disposeMeshResources(this.arm);this.arm=null;}
+        if(this.arm){disposeCaseGrip(this.arm);this.arm=null;}
         this.carrier=null;this.presentation.clear();this.beacon.dispose();this.root.removeFromParent();disposeMeshResources(this.root);
     }
 }

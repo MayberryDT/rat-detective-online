@@ -21,6 +21,19 @@ function fire(sim:ChaosSimulation,target:{x:number;y:number;z:number},now=1010,i
  sim.step(.01,now);
 }
 describe('distributed controls and physical pressure launch',()=>{
+ it.each([.1,.01])('keeps launch height identical with walking damping %s and restores it on landing',damping=>{
+  const {sim}=fixture();fire(sim,PRESSURE_LAUNCH.target);const state=sim.snapshot();
+  const world=new C.World({gravity:new C.Vec3(0,-25,0)}),rat=new RatController(new THREE.Scene(),world,new THREE.PerspectiveCamera(),'',{},new THREE.Vector3(0,0,0));
+  rat.entity.body.linearDamping=damping;rat.applyPressureLaunches(state,'local');let peak=0;
+  try{
+   for(let i=0;i<300;i++){rat.prepareMovement(1/60,{});world.step(1/60);rat.syncAfterPhysics(1/60);peak=Math.max(peak,rat.entity.body.position.y);}
+   expect(peak).toBeGreaterThan(120);expect(peak).toBeLessThan(135);expect(rat.entity.body.linearDamping).toBe(.1);
+   const floor=new C.Body({mass:0}),contact=new C.ContactEquation(floor,rat.entity.body);contact.ni.set(0,1,0);
+   rat.entity.body.velocity.y=0;world.contacts.push(contact);rat.syncAfterPhysics(1/60);
+   expect(rat.entity.body.linearDamping).toBe(damping);
+  }finally{rat.dispose();}
+ });
+
  it('puts an independent trigger at all five landmarks with one shared Dispatch cooldown',()=>{
   expect(DISPATCH_STATIONS.map(s=>s.id)).toEqual(['records','icebox','needleworks','pump','gate']);
   for(const station of DISPATCH_STATIONS){
@@ -62,16 +75,23 @@ describe('distributed controls and physical pressure launch',()=>{
  });
  it('applies each snapshot event once to a real controller and retains launch momentum through physics',()=>{
   const {sim}=fixture();
-  // Test retained momentum with an inward launch. Random outward headings can
-  // legitimately be shortened by city containment (covered by launcherVelocity).
-  const random=vi.spyOn(Math,'random').mockReturnValue(.625);
-  try{fire(sim,PRESSURE_LAUNCH.target);}finally{random.mockRestore();}
+  fire(sim,PRESSURE_LAUNCH.target);
   const state=sim.snapshot(),world=new C.World({gravity:new C.Vec3(0,-25,0)});
   const rat=new RatController(new THREE.Scene(),world,new THREE.PerspectiveCamera(),'',{},new THREE.Vector3(150,0,147));
   rat.applyPressureLaunches(state,'local');expect(rat.entity.body.velocity.toArray()).toEqual(Object.values(state.pressure!.launches[0].velocity));
   for(let i=0;i<12;i++){rat.prepareMovement(1/60,{});world.step(1/60);rat.syncAfterPhysics(1/60);}
   expect(rat.entity.body.position.y).toBeGreaterThan(5);
-  expect(Math.hypot(rat.entity.body.position.x-150,rat.entity.body.position.z-147)).toBeGreaterThan(1);
+  expect(Math.hypot(rat.entity.body.position.x-150,rat.entity.body.position.z-147)).toBe(0);
+  // Input responds during takeoff and can reverse during descent without replacing vertical velocity.
+  for(const vy of [40,-20]){
+   rat.entity.body.velocity.set(0,vy,0);
+   rat.prepareMovement(1/60,{KeyD:true});
+   expect(Math.hypot(rat.entity.body.velocity.x,rat.entity.body.velocity.z)).toBeGreaterThan(1);
+   expect(rat.entity.body.velocity.y).toBe(vy);
+   const initial=rat.entity.body.velocity.clone();
+   for(let i=0;i<12;i++)rat.prepareMovement(1/60,{KeyA:true});
+   expect(initial.x*rat.entity.body.velocity.x+initial.z*rat.entity.body.velocity.z).toBeLessThan(-1);
+  }
   const velocity=rat.entity.body.velocity.toArray();rat.applyPressureLaunches(state,'local');
   expect(rat.entity.body.velocity.toArray()).toEqual(velocity);rat.dispose();
  });

@@ -1,3 +1,5 @@
+import {metalReflection} from '../utils/metalReflection';
+import {RatPowerupEffects} from './RatPowerupEffects';
 import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
@@ -53,7 +55,14 @@ export class RatEntity {
     private glowMesh: THREE.Group | null = null;
     private disposed = false;
     private allMaterials: THREE.MeshStandardMaterial[] = [];
-    private originalColors: { color: THREE.Color; emissive: THREE.Color; emissiveIntensity: number }[] = [];
+    private originalColors: { color: THREE.Color; emissive: THREE.Color; emissiveIntensity: number; metalness:number; roughness:number; envMap:THREE.Texture|null; envMapIntensity:number }[] = [];
+    private readonly powerupEffects:RatPowerupEffects;
+    private ironcladRemaining=0;
+    private metalApplication=0;
+    private hustleRemaining=0;
+    private glowMaterial!:THREE.MeshBasicMaterial;
+    private glowTint!:THREE.Color;
+    private readonly shellOffset={value:0};
 
     // State
     public hp: number = MAX_HP;
@@ -63,7 +72,7 @@ export class RatEntity {
     public get isPlayer(): boolean { return this.localPlayer; }
     public set isPlayer(value: boolean) {
         this.localPlayer = value;
-        if (this.glowMesh) this.glowMesh.visible = !value && !this.sharedDeath;
+        if (this.glowMesh) this.glowMesh.visible = (!value || this.hustleRemaining>0) && !this.sharedDeath;
     }
 
     // Combo tracking
@@ -136,7 +145,7 @@ export class RatEntity {
                 this.originalColors.push({
                     color: c.material.color.clone(),
                     emissive: c.material.emissive.clone(),
-                    emissiveIntensity: c.material.emissiveIntensity
+                    emissiveIntensity: c.material.emissiveIntensity, metalness:c.material.metalness, roughness:c.material.roughness, envMap:c.material.envMap, envMapIntensity:c.material.envMapIntensity
                 });
             }
         });
@@ -144,6 +153,7 @@ export class RatEntity {
         // ── OUTLINE GLOW MESH ──
         // Create a slightly larger, additive, backface-only clone for the glow halo
         this.glowMesh = this.createGlowOutline(opts);
+        this.powerupEffects=new RatPowerupEffects(scene);
         this.animator = new RatAnimator(this.mesh, this.glowMesh);
         this.syncGlowTransform();
 
@@ -214,6 +224,13 @@ export class RatEntity {
             color: tint, transparent: true, opacity: GLOW_OPACITY,
             side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
         });
+        this.glowMaterial=glowMaterial;this.glowTint=tint.clone();
+        glowMaterial.onBeforeCompile=shader=>{
+            shader.uniforms.pursuitShell=this.shellOffset;
+            shader.vertexShader='uniform float pursuitShell;\n'+shader.vertexShader;
+            shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed+=normal*pursuitShell;');
+        };
+        glowMaterial.customProgramCacheKey=()=> 'rat-pursuit-shell-v1';
         const expandedGeometries = new Set<THREE.BufferGeometry>();
         const replacedMaterials = new Set<THREE.Material>();
         glowGroup.traverse((c) => {
@@ -278,7 +295,25 @@ export class RatEntity {
         if(this.glowMesh)batchRigidMeshes(this.glowMesh);
     }
 
-    public resetMotionHistory(): void { this.animator.resetMotionHistory(); }
+    public resetMotionHistory(): void { this.animator.resetMotionHistory();this.powerupEffects.clear(); }
+
+    /** Durations are relative to the latest authoritative snapshot, then expire locally. */
+    public setPowerups(ironcladSeconds:number,hustleSeconds:number):void {
+        const silver=this.ironcladRemaining>0;
+        if(!this.dead&&ironcladSeconds>this.ironcladRemaining+.5){this.metalApplication=.28;this.powerupEffects.apply('ironclad');}
+        if(!this.dead&&hustleSeconds>this.hustleRemaining+.5)this.powerupEffects.apply('hustle');
+        this.ironcladRemaining=this.dead?0:Math.max(0,ironcladSeconds);
+        this.hustleRemaining=this.dead?0:Math.max(0,hustleSeconds);
+        if(silver!==(this.ironcladRemaining>0)){this.resetColor();if(this.flashTimer>0)this.applyHitColor();}
+        this.updatePowerupOutline();
+    }
+    private updatePowerupOutline():void {
+        const pursuit=this.hustleRemaining>0&&!this.dead;
+        if(pursuit)this.glowMaterial.color.setHex(0xff1605);else this.glowMaterial.color.copy(this.glowTint);
+        this.glowMaterial.opacity=pursuit?.95:GLOW_OPACITY;this.shellOffset.value=pursuit?.055:0;
+        if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(!this.isPlayer||pursuit);
+    }
+    private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.updatePowerupOutline();this.resetColor();}
 
     /** Animate the current render root; remote presentation need not read physics. */
     public presentAlive(dt: number): void {
@@ -287,6 +322,14 @@ export class RatEntity {
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
         this.syncGlowTransform();
         this.animator.update(dt);
+
+        const silver=this.ironcladRemaining>0,pursuit=this.hustleRemaining>0;
+        this.ironcladRemaining=Math.max(0,this.ironcladRemaining-dt);
+        this.hustleRemaining=Math.max(0,this.hustleRemaining-dt);
+        if(this.metalApplication>0){this.metalApplication=Math.max(0,this.metalApplication-dt);this.resetColor();}
+        if(silver&&this.ironcladRemaining===0)this.resetColor();
+        if(pursuit&&this.hustleRemaining===0)this.updatePowerupOutline();
+        this.powerupEffects.update(dt,p,this.hustleRemaining>0);
 
         // Flash Logic
         if (this.flashTimer > 0) {
@@ -354,7 +397,7 @@ export class RatEntity {
     /** The incident corpse is a separate shared object; this player waits for respawn. */
     public useSharedCorpse():void {
         if(this.sharedDeath)return;
-        this.sharedDeath=true;this.dead=true;this.hp=0;
+        this.sharedDeath=true;this.dead=true;this.hp=0;this.clearPowerups();
         this.mesh.visible=false;if(this.glowMesh)this.glowMesh.visible=false;
         this.billboard.sprite.removeFromParent();
         this.body.velocity.setZero();this.body.angularVelocity.setZero();
@@ -367,7 +410,7 @@ export class RatEntity {
         if (this.dead || hp <= this.hp) return;
         this.hp = hp;
         this.billboard.setHealth(this.hp);
-        this.flashColor(0x8fffb0);
+        this.flashColor(0x8fffb0);this.powerupEffects.heal();
     }
 
     public takeDamage(amount: number, impactVel: THREE.Vector3) {
@@ -401,6 +444,7 @@ export class RatEntity {
     }
 
     private applyHitColor(): void {
+        this.resetColor();
         const age = FLASH_DURATION - this.flashTimer;
         const fade = Math.pow(Math.max(0, this.flashTimer / FLASH_DURATION), 1.5);
         const highlight = Math.exp(-age * 65) * 0.45;
@@ -409,25 +453,33 @@ export class RatEntity {
             // Keep dark facial details readable instead of turning the rat into neon.
             const dark = Math.max(original.color.r, original.color.g, original.color.b) < 0.08;
             const strength = dark ? 0.08 : 1;
-            material.color.copy(original.color).lerp(this.hitColor, fade * 0.38 * strength)
+            material.color.lerp(this.hitColor, fade * 0.38 * strength)
                 .lerp(this.hitHighlight, highlight * strength);
-            material.emissive.copy(original.emissive).lerp(this.hitColor, fade * 0.25 * strength);
-            material.emissiveIntensity = original.emissiveIntensity + fade * 0.22 * strength;
+            material.emissive.lerp(this.hitColor, fade * 0.25 * strength);
+            material.emissiveIntensity += fade * 0.22 * strength;
         });
     }
 
     private resetColor() {
         this.allMaterials.forEach((m, i) => {
             const orig = this.originalColors[i];
-            m.color.copy(orig.color);
-            m.emissive.copy(orig.emissive);
-            m.emissiveIntensity = orig.emissiveIntensity;
+            const envMap=this.ironcladRemaining>0?metalReflection():orig.envMap;
+            if(m.envMap!==envMap){m.envMap=envMap;m.needsUpdate=true;}
+            m.envMapIntensity=this.ironcladRemaining>0?1.6:orig.envMapIntensity;
+            if(this.ironcladRemaining>0){
+                m.color.setHex(0xdce4ed).lerp(orig.color,this.metalApplication/.28);m.emissive.setHex(0x9facbb);m.emissiveIntensity=.22;
+                m.metalness=.88;m.roughness=.16;
+            }else{
+                m.color.copy(orig.color);m.emissive.copy(orig.emissive);m.emissiveIntensity=orig.emissiveIntensity;
+                m.metalness=orig.metalness;m.roughness=orig.roughness;
+            }
         });
     }
 
     private die(impactVel: THREE.Vector3) {
         if (this.dead) return;
         this.dead = true;
+        this.clearPowerups();
         this.animator.reset();
         this.deathTimer = 0;
         this.deathContactTime = -10;
@@ -509,6 +561,7 @@ export class RatEntity {
     }
 
     private resetAlivePresentation(): void {
+        this.clearPowerups();
         this.restoreBodyOrigin();
         this.animator.reset();
         this.flashTimer = 0;
@@ -605,6 +658,7 @@ export class RatEntity {
         if (this.comboKeyStr) {
             usedCombinations.delete(this.comboKeyStr);
         }
+        this.powerupEffects.dispose();
         this.scene.remove(this.mesh);
         disposeMeshResources(this.mesh);
         this.billboard.dispose();

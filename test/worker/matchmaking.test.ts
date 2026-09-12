@@ -1,3 +1,5 @@
+import { createAssignment } from '../../src/shared/assignments';
+import { RECONNECT_GRACE_MS } from '../../src/shared/reconnect';
 import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,9 +14,9 @@ async function until(test:()=>boolean) {
   const end=Date.now()+8000;
   while(!test()){if(Date.now()>end)throw Error('Timed out');await new Promise(resolve=>setTimeout(resolve,10));}
 }
-async function open(group:string, preferred?:string, join=true) {
+async function open(group:string, preferred?:string, join=true, resumeToken?:string) {
   rooms.add(group);
-  const request=()=>new Request(`https://game.test/ws?room=${group}${preferred?`&preferred=${preferred}`:''}`,{headers:{Upgrade:'websocket'}});
+  const request=()=>new Request(`https://game.test/ws?room=${group}${preferred?`&preferred=${preferred}`:''}${resumeToken?'&resume=1':''}`,{headers:{Upgrade:'websocket'}});
   let response=await env.MATCHMAKER.getByName(group).fetch(request());
   // Placement is independent of runner speed. A concurrent burst may exhaust
   // the intentional five-second admission deadline; clients retry that 503.
@@ -29,7 +31,7 @@ async function open(group:string, preferred?:string, join=true) {
   const messages:ServerMessage[]=[];
   ws.addEventListener('message',event=>{const message=readSocketMessage(ws,event.data);if(message)messages.push(message);});
   if(!join)return {ws,messages,welcome:undefined};
-  ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Human Rat',appearance}));
+  ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Human Rat',appearance,...(resumeToken?{resumeToken}:{})}));
   await until(()=>messages.some(m=>m.type==='welcome'));
   const welcome=messages.find(m=>m.type==='welcome') as Extract<ServerMessage,{type:'welcome'}>;
   rooms.add(welcome.matchRoom!);
@@ -41,7 +43,7 @@ afterEach(async()=>{
     await runInDurableObject(env.GAME_ROOM.getByName(name),(instance:GameRoom,ctx)=>{
       const game=instance as any;
       if(game.chaosTimer)clearInterval(game.chaosTimer);
-      game.chaosTimer=null;game.serverBots?.dispose();game.serverBots=null;game.persistentBots=false;game.matchRoom=null;game.refillAt=0;
+      game.chaosTimer=null;game.preparedBots?.dispose();game.preparedBots=null;game.preparedUntil=0;game.serverBots?.dispose();game.serverBots=null;game.persistentBots=false;game.matchRoom=null;game.refillAt=0;
       ctx.storage.sql.exec("DELETE FROM room_state WHERE key IN ('match-room-v1','persistent-bots-v1')");
       return ctx.storage.deleteAlarm();
     });
@@ -74,6 +76,35 @@ describe('automatic public room population',()=>{
     });
     await until(()=>titles.slice(1).every(ws=>ws.readyState===WebSocket.CLOSED));
     expect(titles[0].readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('prepares the hosted private pool with the same sleeping and join policy as production',async()=>{
+    const group=pool(),matcher=env.MATCHMAKER.getByName(group),stub=env.GAME_ROOM.getByName(group);rooms.add(group);
+    const response=await matcher.fetch(new Request(`https://game.test/ws?room=${group}&prepare=1`,{headers:{Upgrade:'websocket'}}));
+    expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
+    expect(await stub.status()).toMatchObject({players:0,bots:0});expect(await stub.occupiedSlots()).toBe(0);
+    await runInDurableObject(stub,(instance:GameRoom)=>{
+      const game=instance as any;
+      expect(game.preparedBots).not.toBeNull();expect(game.serverBots).toBeNull();expect(game.chaosTimer).toBeNull();
+      expect(game.chaos.assignmentState).toBeUndefined();
+    });
+    const messages:ServerMessage[]=[];ws.addEventListener('message',e=>{const m=readSocketMessage(ws,e.data);if(m)messages.push(m);});
+    ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Prepared Rat',appearance}));
+    await until(()=>messages.some(m=>m.type==='welcome'));
+    expect(await stub.status()).toMatchObject({players:8,bots:7});
+    expect(messages.find(m=>m.type==='welcome')).toMatchObject({matchRoom:group});
+    await runInDurableObject(stub,(instance:GameRoom)=>{
+      const game=instance as any;expect(game.preparedBots).toBeNull();expect(game.serverBots).not.toBeNull();
+    });
+  });
+
+  it('releases unused prepared bot geometry after the title deadline',async()=>{
+    const group=pool(),stub=env.GAME_ROOM.getByName(group);rooms.add(group);
+    await stub.enableMatchmaking(group);await stub.prepareEntry();
+    await runInDurableObject(stub,async(instance:GameRoom)=>{
+      const game=instance as any,now=Date.now();game.clock=()=>now+31_000;
+      await instance.alarm();expect(game.preparedBots).toBeNull();expect(game.serverBots).toBeNull();expect(game.chaosTimer).toBeNull();
+    });
   });
 
   it('does not let an unreserved title connection steal a promised admission slot',async()=>{
@@ -138,15 +169,19 @@ describe('automatic public room population',()=>{
     await evictDurableObject(stub);
     expect((await stub.status()).bots).toBe(6);
     await close(second.ws);
-    await until(()=>first.messages.some(m=>m.type==='playerLeft'&&m.id===second.welcome!.id));
-    expect((await stub.status()).bots).toBe(6);
+    expect(first.messages.some(m=>m.type==='playerLeft'&&m.id===second.welcome!.id)).toBe(false);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
-      const game=instance as any; const now=Date.now();game.clock=()=>now+BOT_REFILL_MS+1;await instance.alarm();
+      const game=instance as any;const now=Date.now();game.clock=()=>now+RECONNECT_GRACE_MS+1;await instance.alarm();
+    });
+    await until(()=>first.messages.some(m=>m.type==='playerLeft'&&m.id===second.welcome!.id));
+    expect((await stub.status()).bots).toBe(7);
+    await runInDurableObject(stub,async(instance:GameRoom)=>{
+      const game=instance as any; const now=Date.now();game.clock=()=>now+RECONNECT_GRACE_MS+BOT_REFILL_MS+1;await instance.alarm();
     });
     expect((await stub.status()).bots).toBe(7);
     await close(first.ws);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
-      const game=instance as any;
+      const game=instance as any;const now=game.now();game.clock=()=>now+RECONNECT_GRACE_MS+1;await instance.alarm();
       expect(game.botRoster).toHaveLength(0);expect(game.chaosTimer).toBeNull();expect(game.serverBots).toBeNull();
     });
     expect((await stub.status()).players).toBe(0);
@@ -159,6 +194,12 @@ describe('automatic public room population',()=>{
     for(const c of joined)counts.set(c.welcome!.matchRoom!,(counts.get(c.welcome!.matchRoom!)??0)+1);
     expect([...counts.values()].sort((a,b)=>b-a)).toEqual([16,16,12]);
     for(const name of counts.keys()){const status=await env.GAME_ROOM.getByName(name).status();expect(status.bots).toBe(0);expect(status.players).toBeLessThanOrEqual(MAX_PLAYERS);}
+    const full=joined[0],fullRoom=full.welcome!.matchRoom!;
+    await close(full.ws);
+    const recovered=await open(group,fullRoom,true,full.welcome!.resumeToken);
+    expect(recovered.welcome!.id).toBe(full.welcome!.id);
+    expect(recovered.welcome!.matchRoom).toBe(fullRoom);
+    expect(await env.GAME_ROOM.getByName(fullRoom).occupiedSlots()).toBe(16);
     const last=joined.at(-1)!;const preferred=last.welcome!.matchRoom!;
     await close(last.ws);
     const resumed=await open(group,preferred);
@@ -167,6 +208,72 @@ describe('automatic public room population',()=>{
     const next=await open(group);
     expect(next.welcome!.matchRoom).toBe(preferred);
   },30000);
+
+
+  it('restores the same stats, case, assignment progress and pose after a close and room eviction',async()=>{
+    const group=pool(),first=await open(group),id=first.welcome!.id,token=first.welcome!.resumeToken;
+    expect(token).toMatch(/^[a-f0-9-]{36}$/);
+    const stub=env.GAME_ROOM.getByName(group);
+    await runInDurableObject(stub,(instance:GameRoom)=>{
+      const game=instance as any;clearInterval(game.chaosTimer);game.chaosTimer=null;
+      const player=game.players.get(id);player.kills=7;player.deaths=2;player.x=0;player.y=80;player.z=0;
+      game.chaos.primaryCase.owner=id;game.chaos.carry(player,game.chaos.primaryCase);
+      game.chaos.possession[id]=41;
+      const assignment=createAssignment('chain-of-custody',Date.now());assignment.deliverySerial=2;assignment.deliveries[id]=2;
+      game.chaos.setAssignment(assignment);
+    });
+    await close(first.ws);
+    await evictDurableObject(stub);
+    const second=await open(group,group,true,token);
+    expect(second.welcome!.id).toBe(id);
+    expect(second.welcome!.player).toMatchObject({kills:7,deaths:2,x:0,y:80,z:0});
+    await until(()=>second.messages.some(m=>m.type==='chaos'));
+    const state=(second.messages.find(m=>m.type==='chaos') as Extract<ServerMessage,{type:'chaos'}>).state;
+    expect(state.case.owner).toBe(id);expect(state.possession[id]).toBeGreaterThanOrEqual(41);
+    expect(state.assignment!.deliveries[id]).toBe(2);
+    expect(Object.keys(second.welcome!.players)).toHaveLength(8);
+    expect(JSON.stringify(second.welcome!.players)).not.toContain(token);
+    expect(JSON.stringify(await stub.status())).not.toContain(token);
+  });
+
+  it('replaces an open transport safely and retains an enemy kill/respawn during the outage',async()=>{
+    const group=pool(),first=await open(group),id=first.welcome!.id,token=first.welcome!.resumeToken;
+    const second=await open(group,group,true,token);
+    expect(second.welcome!.id).toBe(id);await until(()=>first.ws.readyState===WebSocket.CLOSED);
+    const stub=env.GAME_ROOM.getByName(group);
+    expect(await stub.occupiedSlots()).toBe(1);
+    await close(second.ws);
+    await runInDurableObject(stub,async(instance:GameRoom)=>{
+      const game=instance as any;clearInterval(game.chaosTimer);game.chaosTimer=null;
+      game.chaos.primaryCase.owner=id;game.chaos.carry(game.players.get(id),game.chaos.primaryCase);
+      await game.handleHit('rd-ai-00',{type:'hit',victimId:id,damage:3},{x:10,y:0,z:0});
+    });
+    const third=await open(group,group,true,token);
+    expect(third.welcome!.id).toBe(id);expect(third.welcome!.player).toMatchObject({hp:0,deaths:1,respawnAt:expect.any(Number)});
+    await runInDurableObject(stub,(instance:GameRoom,ctx)=>{
+      const game=instance as any;
+      expect(game.chaos.caseHolderId).not.toBe(id);
+      expect(game.players.get('rd-ai-00').kills).toBe(1);
+      expect(ctx.storage.sql.exec("SELECT * FROM pending_events WHERE type='respawn' AND player_id=?",id).toArray()).toHaveLength(1);
+    });
+  });
+
+  it('expires abandoned sessions and rejects stale or unknown credentials without creating a player',async()=>{
+    const group=pool(),first=await open(group),id=first.welcome!.id,token=first.welcome!.resumeToken;
+    const stub=env.GAME_ROOM.getByName(group);await close(first.ws);
+    await runInDurableObject(stub,async(instance:GameRoom,ctx)=>{
+      const game=instance as any,now=Date.now();game.clock=()=>now+RECONNECT_GRACE_MS+1;await instance.alarm();
+      expect(game.players.has(id)).toBe(false);expect(game.chaosTimer).toBeNull();
+      expect(ctx.storage.sql.exec('SELECT * FROM reconnect_sessions').toArray()).toHaveLength(0);
+    });
+    const pending=await open(group,group,false,token);
+    for(const resumeToken of [token,crypto.randomUUID()]){
+      pending.ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Imposter',appearance,resumeToken}));
+    }
+    await until(()=>pending.messages.filter(m=>m.type==='error').length===2);
+    expect(pending.messages.every(m=>m.type==='error'&&m.code==='resume-unavailable')).toBe(true);
+    expect(await stub.occupiedSlots()).toBe(0);expect((await stub.status()).players).toBe(0);
+  });
 
   it('reserves pending joins, expires them, and rejects an expired join',async()=>{
     const group=pool();

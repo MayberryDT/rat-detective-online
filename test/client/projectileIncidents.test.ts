@@ -43,6 +43,20 @@ describe('projectile-only replacement incidents',()=>{
   const restored=new ChaosSimulation(players,()=>{},sim.snapshot(false));
   expect(restored.snapshot(false).shots[0].delayed).toBe(true);
  });
+ it('requires nine actual wall bounces before maximum Big Cheese size',()=>{
+  const {sim,now}=fixture('big-cheese');
+  for(const z of [-5,5]){
+   const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(8,100,.05)),position:new C.Vec3(0,200,z)});
+   sim.world.addBody(body);sim.targets.set(body,{kind:'world'});
+  }
+  shoot(sim);const sizes=[BALL_RADIUS];
+  for(let i=1;i<=600;i++){
+   sim.step(1/240,now+i*1000/240);const shot=sim.snapshot(false).shots[0];if(!shot)break;
+   const size=shot.radius??BALL_RADIUS;if(size!==sizes.at(-1))sizes.push(size);
+   if(size===2.4)break;
+  }
+  expect(sizes).toEqual([...I.cheeseRadii]);expect(sizes).toHaveLength(10);
+ });
  it('grows collision and render size together before the ball expires',()=>{
   const {sim,now}=fixture('big-cheese');wall(sim,2);shoot(sim);
   expect(sim.snapshot(false).shots[0].radius).toBeUndefined();

@@ -112,6 +112,7 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const coatColor = options.coatColor ?? 0xbe4545;
     const coat = material(coatColor), fur = material(options.furColor ?? 0xe8b84d);
     const skin = material(0xc99089, 0.68);
+    coat.name="rat-coat";skin.name="rat-skin";
     const hatColor = options.hatColor ?? new THREE.Color(coatColor).multiplyScalar(0.8);
     const felt = material(hatColor), band = material(0xddc79b);
     const body = pivot(root, 'rat-body');

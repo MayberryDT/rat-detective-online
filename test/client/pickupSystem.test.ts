@@ -2,6 +2,8 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
 import {PICKUP_ANCHORS,PICKUP_TUNING} from '../../src/shared/pickups';
+import {LANDMARK_FURNISHINGS} from '../../src/shared/landmarkLayout';
+import {SEWER_PIPE_ENTRANCES,sewerPipePoint} from '../../src/shared/sewerLayout';
 import {MAX_HP} from '../../src/shared/networkProtocol';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../../src/shared/grayboxLayout';
@@ -23,11 +25,42 @@ function fixture(){
     return {sim,players,a,b,hits,now};
 }
 const stand=(player:PlayerData,p:Vec3Data)=>{player.x=p.x;player.y=p.y;player.z=p.z;};
-const sites=(sim:ChaosSimulation)=>sim.snapshot(false).pickups!;
+const sites=(sim:ChaosSimulation)=>{const s=sim.snapshot(false);return s.pickups!.filter(p=>(p.availableAt??0)<=s.time);};
 const site=(sim:ChaosSimulation,kind:string)=>sites(sim).find(p=>p.kind===kind);
 
 describe('pickup system',()=>{
-    it('resolves every authored site onto supported, distinct street pavement',()=>{
+    it('places Icebox armor outside its racks and speed packs six units in front of every portal',()=>{
+        const {sim}=fixture(),all=sites(sim),armor=all.find(p=>p.id==='alibi-icebox-upper')!;
+        expect(armor).toMatchObject({x:116,y:8.7,z:-84});
+        for(const f of LANDMARK_FURNISHINGS){
+            const foot=armor.y-.7;
+            if(foot+2<f.y-f.h/2||foot>f.y+f.h/2)continue;
+            expect(Math.hypot(Math.max(0,Math.abs(armor.x-f.x)-f.w/2),Math.max(0,Math.abs(armor.z-f.z)-f.d/2))).toBeGreaterThan(1);
+        }
+        for(const entry of SEWER_PIPE_ENTRANCES){
+            const front=sewerPipePoint(entry,-6);
+            expect(all.some(p=>p.kind==='hustle'&&Math.hypot(p.x-front.x,p.z-front.z)<.01)).toBe(true);
+        }
+    });
+
+    it('publishes an authoritative empty-site deadline for late join and room restoration',()=>{
+        const {sim,a,players,now}=fixture();const target=site(sim,'hustle')!;
+        stand(a,target);sim.step(1/60,now);stand(a,{x:0,y:0,z:0});
+        const saved=sim.snapshot(false),empty=saved.pickups!.find(p=>p.id===target.id)!;
+        expect(empty.availableAt).toBe(now+45_000);
+        expect(saved.pickups).toHaveLength(PICKUP_ANCHORS.length);
+        expect(parseServerMessage({type:'chaos',state:saved})).not.toBeNull();
+        const restored=new ChaosSimulation(players,()=>{},saved,spec);
+        expect(restored.snapshot(false).pickups!.find(p=>p.id===target.id)?.availableAt).toBe(empty.availableAt);
+        restored.step(0,now+44_999);expect(sites(restored).some(p=>p.id===target.id)).toBe(false);
+        restored.step(0,now+45_000);expect(sites(restored).some(p=>p.id===target.id)).toBe(true);
+        for(const bad of [-1,Infinity,NaN,'soon']){
+            const invalid=structuredClone(saved);(invalid.pickups![0] as any).availableAt=bad;
+            expect(parseServerMessage({type:'chaos',state:invalid})).toBeNull();
+        }
+    });
+
+    it('resolves every authored reward onto its supported floor',()=>{
         const {sim}=fixture();
         const pickups=sites(sim);
         expect(pickups.length).toBe(PICKUP_ANCHORS.length);
@@ -35,7 +68,8 @@ describe('pickup system',()=>{
         expect(new Set(pickups.map(p=>p.kind)).size).toBe(3);
         for(const pickup of pickups){
             expect(PICKUP_ANCHORS.some(a=>a.id===pickup.id)).toBe(true);
-            expect(pickup.y).toBeGreaterThan(0);
+            const anchor=PICKUP_ANCHORS.find(a=>a.id===pickup.id)!;
+            expect(pickup.y).toBeCloseTo(anchor.y??.7);
             expect(sim.world.raycastClosest(new C.Vec3(pickup.x,pickup.y+.2,pickup.z),new C.Vec3(pickup.x,pickup.y-1.8,pickup.z),{collisionFilterMask:1})).toBe(true);
         }
     });
@@ -123,6 +157,10 @@ describe('Ironclad Alibi',()=>{
         // Reflection, not absorption, and not a wall bounce for incident purposes.
         expect(shots.some(s=>s.v.x<0)).toBe(true);
         expect(shots.some(s=>s.wallBounced)).toBe(false);
+        const impacts=sim.snapshot(false).impacts;
+        expect(impacts.some(i=>i.cue==='armor-clang')).toBe(true);
+        expect(impacts.some(i=>i.cue==='case-hit'||i.foley==='case-bounce')).toBe(false);
+        expect(parseServerMessage({type:'chaos',state:sim.snapshot(false)})).not.toBeNull();
     });
     it('leaves the genuine case independently shootable while the coat is active',()=>{
         const {sim,a,b,now}=fixture();
@@ -136,4 +174,20 @@ describe('Ironclad Alibi',()=>{
         sim.step(.05,now+50);
         expect(Math.hypot(sim.caseBody.velocity.x,sim.caseBody.velocity.y,sim.caseBody.velocity.z)).toBeGreaterThan(1);
     });
+});
+
+it('keeps upper-floor rewards unavailable to a rat directly below them',()=>{
+    const {sim,a,now}=fixture();const upper=sites(sim).find(p=>p.id==='alibi-records-upper')!;
+    stand(a,{...upper,y:0});sim.step(1/60,now+20);
+    expect(sites(sim).some(p=>p.id===upper.id)).toBe(true);
+    expect(sim.snapshot(false).buffs?.[a.id]?.ironcladUntil).toBeUndefined();
+    stand(a,{...upper,y:8});sim.step(1/60,now+40);
+    expect(sites(sim).some(p=>p.id===upper.id)).toBe(false);
+});
+it('has four contested street medkits, four tunnel speed sites and no street armor',()=>{
+    const {sim}=fixture(),all=sites(sim);
+    expect(all.filter(p=>p.kind==='quick-fix')).toHaveLength(4);
+    expect(all.filter(p=>p.kind==='hustle')).toHaveLength(4);
+    expect(all.filter(p=>p.kind==='ironclad')).toHaveLength(10);
+    expect(all.filter(p=>p.kind==='ironclad').every(p=>p.y>8||p.y<0)).toBe(true);
 });

@@ -19,10 +19,23 @@ export class Matchmaker extends DurableObject<Env> {
       // Title visitors may warm the canonical transport, never create overflow
       // rooms or compete for player reservations before pressing Enter City.
       const pool=url.searchParams.get('room')||DEFAULT_ROOM_NAME;
-      if(pool!==DEFAULT_ROOM_NAME)return new Response('Unknown pool',{status:404});
+      if(pool!==DEFAULT_ROOM_NAME&&!/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(pool))return new Response('Unknown pool',{status:404});
       const room=this.env.GAME_ROOM.getByName(pool);
       await room.enableMatchmaking(pool);
+      await room.prepareEntry();
       return room.fetch(request);
+    }
+    if (url.searchParams.get('resume') === '1') {
+      const pool=url.searchParams.get('room')||DEFAULT_ROOM_NAME;
+      if(pool!==DEFAULT_ROOM_NAME&&!/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(pool))return new Response('Unknown pool',{status:404});
+      const preferred=url.searchParams.get('preferred');
+      const known=preferred && this.ctx.storage.sql.exec<{name:string}>('SELECT name FROM rooms WHERE name = ?',preferred).toArray()[0];
+      // A canonical title join need not have registered the directory yet.
+      const name=known ? known.name : pool;
+      const room=this.env.GAME_ROOM.getByName(name);
+      await room.enableMatchmaking(name,pool);
+      const routed=new URL(request.url);routed.searchParams.set('room',name);
+      return room.fetch(new Request(routed,{method:request.method,headers:request.headers}));
     }
     if (this.queued >= 64) return new Response('Admission busy; retry shortly', {status:503});
     this.queued++;

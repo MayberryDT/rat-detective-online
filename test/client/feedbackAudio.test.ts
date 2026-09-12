@@ -37,3 +37,12 @@ it('drops suspended events and ignores delayed loads after disposal',()=>{
  ctx.state='running';audio.play('respawn');expect(state.sounds).toHaveLength(1);
  audio.dispose();state.loads.forEach(load=>load({} as AudioBuffer));audio.play('death');expect(state.sounds).toHaveLength(1);
 });
+
+it('plays distinct claim cues and debounces deep armor clangs with world attenuation',()=>{
+ const ctx=fixture();
+ for(const cue of ['pickup-slap','pickup-ironclad','pickup-hustle','pickup-quick-fix'] as const)audio.play(cue);
+ expect(state.sounds).toHaveLength(4);
+ audio.play('armor-clang',{x:50,y:0,z:0});audio.play('armor-clang',{x:50,y:0,z:0});
+ expect(state.sounds).toHaveLength(5);expect(state.sounds[4].volume).toBeCloseTo(.8*worldSoundGain(50));
+ ctx.currentTime=.1;audio.play('armor-clang');expect(state.sounds).toHaveLength(6);
+});

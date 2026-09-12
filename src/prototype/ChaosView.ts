@@ -1,6 +1,6 @@
 import type {FoleyWorld} from '../audio/FoleyWorld';
 import {DispatchSirenAudio} from '../audio/DispatchSirenAudio';
-import { createCaseGrip } from './CaseGrip';
+import { createCaseGrip, disposeCaseGrip } from './CaseGrip';
 import {setText} from '../ui/setText';
 import {clearAimLabel} from '../ui/aimClearance';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
@@ -29,7 +29,8 @@ import { addLeatherBriefcase } from './CaseModel';
 import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentation';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
-import { PICKUP_COPY, activeBuffs, type BuffMap } from '../shared/pickups';
+import {powerupCard} from './pickupArtwork';
+import { PICKUP_COPY, PICKUP_TUNING, activeBuffs, type BuffMap } from '../shared/pickups';
 
 const caseCarryRotation=new THREE.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
 
@@ -40,7 +41,7 @@ export class ChaosView {
     private readonly pickups=new Map<string,PickupVisual>();
     private readonly buffBar=document.createElement('div');
     private readonly pickupToast=document.createElement('div');
-    private buffSignature='';
+    private readonly buffCards=new Map<'ironclad'|'hustle',HTMLElement>();
     private toastUntil=0;
     private localBuffs={ironcladUntil:0,hustleUntil:0};
     private readonly caseBeacon:CaseBeacon;
@@ -144,25 +145,28 @@ export class ChaosView {
         Object.assign(this.caseMarkerDetail.style,{marginTop:'2px',fontSize:'9px',color:'#d3c8b3'});
         for(const child of [title,this.caseMarkerDetail])this.caseMarker.appendChild(child);
         document.body.appendChild(this.caseMarker);
-        Object.assign(this.buffBar.style,{position:'fixed',left:'50%',bottom:'84px',transform:'translateX(-50%)',
-            display:'none',gap:'8px',pointerEvents:'none',zIndex:'6',font:'bold 11px monospace',letterSpacing:'.5px'});
+        this.buffBar.className='pickup-buffs';this.buffBar.style.display='none';
         document.body.appendChild(this.buffBar);
-        Object.assign(this.pickupToast.style,{position:'fixed',left:'50%',top:'22%',transform:'translateX(-50%)',
-            display:'none',pointerEvents:'none',zIndex:'7',textAlign:'center',font:'bold 13px monospace',letterSpacing:'.6px',
-            color:'#fff2cf',textShadow:'0 2px 4px #000',padding:'6px 11px',background:'#120c12d0',
-            border:'1px solid #ffffff22',borderRadius:'4px'});
+        this.pickupToast.className='pickup-broadcast';this.pickupToast.style.display='none';
+        this.pickupToast.setAttribute('role','status');this.pickupToast.setAttribute('aria-live','polite');
         document.body.appendChild(this.pickupToast);
         this.impacts=new CheeseImpactEffects(scene);
     }
     /** Show a brief owner-facing claim confirmation without a new wire message. */
     toast(title:string,detail:string):void{
-        this.toastUntil=performance.now()+2300;
+        this.toastUntil=performance.now()+3200;
+        this.pickupToast.classList.remove('pickup-slap');
+        this.pickupToast.style.display='block';
+        void this.pickupToast.offsetWidth;
+        this.pickupToast.classList.add('pickup-slap');
+        this.feedback?.('pickup-slap');
+        const kind=Object.entries(PICKUP_COPY).find(([,copy])=>copy.title===title)?.[0];
+        if(kind==='ironclad'||kind==='hustle'||kind==='quick-fix')this.feedback?.(`pickup-${kind}`);
         const node=this.pickupToast as unknown as {replaceChildren?:()=>void};
         if(typeof node.replaceChildren!=='function')return;
         node.replaceChildren();
         const heading=document.createElement('strong');heading.textContent=title;
         const line=document.createElement('small');line.textContent=detail;
-        Object.assign(line.style,{display:'block',marginTop:'2px',fontSize:'10px',color:'#d8cdb4',fontWeight:'400'});
         this.pickupToast.appendChild(heading);this.pickupToast.appendChild(line);
     }
     resetProjectiles():void{this.localShots.clear();this.presentation.clear();}
@@ -194,7 +198,7 @@ export class ChaosView {
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
             if(hit.cue==='pop')playPopcornPop(hit.p);
             if(hit.cue==='thud')playDelayedThud(hit.p);
-            if(hit.cue==='case-hit')this.feedback?.('case-hit',hit.p);
+            if(hit.cue==='case-hit'||hit.cue==='armor-clang')this.feedback?.(hit.cue,hit.p);
             if(!hit.audioOnly)reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
@@ -217,6 +221,7 @@ export class ChaosView {
             let visual=this.pickups.get(pickup.id);
             if(!visual){visual=new PickupVisual(this.scene,pickup.kind);this.pickups.set(pickup.id,visual);}
             visual.setPosition(pickup.x,pickup.y,pickup.z);
+            visual.setAvailableAt(pickup.availableAt??0);
         }
     }
     /** Announce a claim locally when the authoritative buff first appears. */
@@ -232,29 +237,24 @@ export class ChaosView {
     }
     private updateBuffs(buffs:BuffMap|undefined,now:number):void{
         const mine=activeBuffs(buffs,this.myId,now);
-        const ironclad=mine.ironcladUntil?Math.max(0,Math.ceil((mine.ironcladUntil-now)/1000)):0;
-        const hustle=mine.hustleUntil?Math.max(0,Math.ceil((mine.hustleUntil-now)/1000)):0;
-        const signature=`${ironclad}|${hustle}`;
-        if(signature!==this.buffSignature){
-            this.buffSignature=signature;
-            const bar=this.buffBar as unknown as {replaceChildren?:()=>void};
-            if(typeof bar.replaceChildren!=='function')return;
-            bar.replaceChildren();
-            const chips:Array<[string,number]>=[];
-            if(ironclad)chips.push(['IRONCLAD',ironclad]);
-            if(hustle)chips.push(['HOT PURSUIT',hustle]);
-            for(const [label,seconds] of chips){
-                const chip=document.createElement('span');
-                chip.textContent=`${label} ${seconds}s`;
-                Object.assign(chip.style,{padding:'3px 8px',borderRadius:'3px',background:'#0d0a10cc',border:'1px solid #ffffff33',color:'#ffe9b8'});
-                this.buffBar.appendChild(chip);
-            }
-            this.buffBar.style.display=chips.length?'flex':'none';
+        if(typeof this.buffBar.replaceChildren!=='function')return;
+        for(const kind of ['ironclad','hustle'] as const){
+            const until=kind==='ironclad'?mine.ironcladUntil:mine.hustleUntil;
+            let card=this.buffCards.get(kind);
+            if(!until){card?.remove();this.buffCards.delete(kind);continue;}
+            if(!card){card=powerupCard(kind);this.buffCards.set(kind,card);this.buffBar.appendChild(card);}
+            const remaining=Math.max(0,until-now),duration=kind==='ironclad'?PICKUP_TUNING.ironcladMs:PICKUP_TUNING.hustleMs;
+            const seconds=String(Math.ceil(remaining/1000)),clock=card.querySelector('b')!;
+            if(clock.textContent!==seconds)clock.textContent=seconds;
+            card.style.setProperty('--remaining',String(Math.min(1,remaining/duration)));
+            card.classList.toggle('powerup-expiring',remaining<=3000);
         }
+        this.buffBar.style.display=this.buffCards.size?'flex':'none';
     }
+
     private setCarrier(entity:RatEntity|null){
         if(this.carrier===entity)return;
-        if(this.arm){this.arm.removeFromParent();disposeMeshResources(this.arm);this.arm=null;}
+        if(this.arm){disposeCaseGrip(this.arm);this.arm=null;}
         this.carrier=entity;
         if(!entity)return;
         this.arm=createCaseGrip(entity);
@@ -295,7 +295,7 @@ export class ChaosView {
         }
         this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer);
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
-        for(const visual of this.pickups.values())visual.update(now);
+        for(const visual of this.pickups.values())visual.update(now,camera);
         this.updateBuffs(s.buffs,now);
         this.pickupToast.style.display=performance.now()<this.toastUntil?'block':'none';
         this.updateCaseMarker(camera,now);

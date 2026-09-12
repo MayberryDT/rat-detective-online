@@ -160,7 +160,7 @@ export class ServerBotController {
             if(!bot?.alive||launch.at<bot.lastLaunchAt||now-launch.at>1500||launch.at>now+100)continue;
             bot.lastLaunchAt=launch.at;bot.body.velocity.set(launch.velocity.x,launch.velocity.y,launch.velocity.z);
             bot.strandedSince=0;bot.progressAt=now;
-            bot.launchedUntil=now+1600;bot.normalJump=false;bot.body.wakeUp();
+            bot.launchedUntil=now+150;bot.normalJump=false;bot.body.wakeUp();
         }
         if(now-this.lastNavigationAt>=15){
             // The second bound is required in Workers, where performance.now()
@@ -196,10 +196,9 @@ export class ServerBotController {
                     if(intent.x||intent.z)intent.facing=Math.atan2(intent.x,intent.z);
                 }
             }
-            if(now>=bot.launchedUntil){
-                body.velocity.x+=(intent.x-body.velocity.x)*.14;body.velocity.z+=(intent.z-body.velocity.z)*.14;
-                if(intent.jump){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;}
-            }
+            body.velocity.x+=(intent.x-body.velocity.x)*.14;body.velocity.z+=(intent.z-body.velocity.z)*.14;
+            // Ignore stale takeoff contacts briefly, without ever locking air steering.
+            if(intent.jump&&grounded&&now>=bot.launchedUntil){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;}
             if(bot.normalJump)body.force.y+=body.mass*this.world.gravity.y*.28;
             for(const axis of ['x','z'] as const){
                 if(body.position[axis]<CITY_BOUNDS.min+4&&body.velocity[axis]<0)body.velocity[axis]=Math.max(8,-body.velocity[axis]*.45);

@@ -13,7 +13,7 @@ describe('human-like combat rhythm and perception',()=>{
   const combat=new BotCombat(combatRandom(4)),rat=target(),shots:number[]=[];
   for(let now=0;now<60000;now+=1000/60)if(combat.step(now,self,rat,true).shoot)shots.push(now);
   expect(shots[0]).toBeGreaterThanOrEqual(200);expect(shots[0]).toBeLessThan(470);
-  expect(shots.length).toBeGreaterThan(120);expect(shots.length).toBeLessThan(190);
+  expect(shots.length).toBeGreaterThan(190);expect(shots.length).toBeLessThan(260);
   const groups:number[]=[];let group=1;
   for(let i=1;i<shots.length;i++){if(shots[i]-shots[i-1]>450){groups.push(group);group=1;}else group++;}
   expect(groups).toContain(1);expect(groups.some(size=>size>=3)).toBe(true);

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import {DISPATCH_STATIONS,LAUNCH_MACHINES} from '../../src/shared/chaosState';
 import { BotNavigation } from '../../src/shared/BotNavigation';
 import { CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
@@ -119,4 +120,11 @@ it('bounds cached destinations and stops spending expansion work on abandoned fi
         expect(neighbors.mock.calls.length).toBeLessThanOrEqual(96);
         expect(fields.size).toBeLessThanOrEqual(6);
     } finally {clock.mockRestore();neighbors.mockRestore();}
+});
+
+it('includes physical control cabinets when checking a rat route',()=>{
+    const nav=new BotNavigation(spec) as unknown as {clear(x:number,y:number,z:number):boolean};
+    for(const station of [...DISPATCH_STATIONS,...LAUNCH_MACHINES]){
+        const box=station.box;expect(nav.clear(box.x,box.y-box.h/2,box.z),station.id).toBe(false);
+    }
 });

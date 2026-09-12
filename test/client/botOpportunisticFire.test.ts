@@ -9,10 +9,10 @@ const self={x:0,y:0,z:0};
 it('fires sporadic groups with no opponents, with bounded cadence and no catch-up volleys',()=>{
  const fire=new BotOpportunisticFire(combatRandom(30)),shots:number[]=[];
  for(let now=0;now<60000;now+=17)if(fire.step(now,self,0,undefined,true,true))shots.push(now);
- expect(shots.length).toBeGreaterThan(40);expect(shots.length).toBeLessThan(95);
+ expect(shots.length).toBeGreaterThan(110);expect(shots.length).toBeLessThan(170);
  expect(shots[0]).toBeGreaterThanOrEqual(800);
- for(let i=1;i<shots.length;i++)expect(shots[i]-shots[i-1]).toBeGreaterThanOrEqual(280/1.2);
- expect(shots.some((t,i)=>i>0&&t-shots[i-1]>=3000)).toBe(true);
+ for(let i=1;i<shots.length;i++)expect(shots[i]-shots[i-1]).toBeGreaterThanOrEqual(220);
+ expect(shots.some((t,i)=>i>0&&t-shots[i-1]>=1200)).toBe(true);
  // A suspended frame expires the active window rather than replaying it.
  const stalled=new BotOpportunisticFire(()=>.5);stalled.step(0,self,0,undefined,true,true);
  expect(stalled.step(1800,self,0,undefined,true,true)).toBeDefined();
@@ -40,7 +40,7 @@ it('shoots while following the case with nobody in sight without changing naviga
  const state:ChaosState={time:0,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:0,y:0,z:400},q:{x:0,y:0,z:0,w:1},v:self,spin:self},dispatch:{phase:'cooldown',started:0,until:60000,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
  let shots=0;
  for(let now=0;now<10000;now+=17){const intent=brain.step(now,bot,[bot],state,()=>false,false,true);
-  expect(brain.objective).toBe('case');expect(intent.x).toBe(0);expect(intent.z).toBe(6.5);if(intent.shoot)shots++;bot.z+=intent.z*.017;
+  expect(brain.objective).toBe('case');expect(intent.x).toBe(0);expect(intent.z).toBe(12);if(intent.shoot)shots++;bot.z+=intent.z*.017;
  }
  expect(shots).toBeGreaterThan(5);expect(nav.route).toHaveBeenCalledTimes(1);
  bot.hp=0;expect(brain.step(20000,bot,[bot],state,()=>false,false,true).shoot).toBeUndefined();

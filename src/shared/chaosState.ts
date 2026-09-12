@@ -5,7 +5,7 @@ import type { WorldFoleyCue } from './foleyEvents';
 import type { BuffMap, PickupState } from './pickups';
 
 export const CHAOS_TUNING = {
-    pickupRadius: 1.6, formerCarrierDelay: 900,
+    pickupRadius: 2.25, formerCarrierDelay: 900,
     caseShotKick: 30, caseShotLift: 10, caseShotMaxSpeed: 48, casePickupMaxSpeed: 18,
     rollMs: 2400, activeMs: 25000, cooldownMs: 16000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
@@ -14,13 +14,12 @@ export const CHAOS_TUNING = {
 } as const;
 export const INCIDENT_TUNING = {
     popcornPulseMs: 400, popcornChildren: 5,
-    delayedMin: .7, delayedMax: 1.15,
-    cheeseRadii: [0.15, 0.5, 1.35, 2.4] as const,
+    delayedMin: .35, delayedMax: .575,
+    cheeseRadii: [0.15, 0.24, 0.36, 0.52, 0.72, 0.96, 1.24, 1.55, 1.9, 2.4] as const,
     caseMissileSpeed: 145, caseShotSpeed: 160, caseMissileLift: 6, caseEjectSpeed: 22,
     caseRicochetMinSpeed: 140, caseBounceLift: 7, caseMaxLift: 10,
-    /** Planted Evidence: counterfeit cases are additional hazards, never objectives. */
-    fakeBurstBalls: 9, fakeBurstSpeed: 96, fakeBurstSpread: .7, fakeBurstLift: .2,
 } as const;
+/** Planted Evidence: additional hazards, never objectives. Bursts share deathBurstBalls. */
 export const COUNTERFEIT_IDS = ['fake-01','fake-02','fake-03','fake-04','fake-05',
     'fake-06','fake-07','fake-08','fake-09','fake-10'] as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
@@ -62,12 +61,12 @@ export interface LaunchMachine {
 // Each public street trigger is the nearest trigger to its own launcher, while
 // remaining separated from the pad and other controls. The red crown is exposed on every side.
 export const LAUNCH_MACHINES: readonly LaunchMachine[] = [
-    { id:'pressure', kind:'pressure', x:146, z:149, tx:90, tz:145, velocity:{x:-35,y:52,z:-28} },
-    { id:'dumpster', kind:'dumpster', x:-57, z:-29, tx:-60, tz:-70, velocity:{x:48,y:35,z:28} },
-    { id:'freight', kind:'freight', x:130, z:-20, tx:155, tz:10, velocity:{x:-72,y:24,z:4} },
-    { id:'geyser', kind:'geyser', x:-153, z:15, tx:-155, tz:-25, velocity:{x:9,y:68,z:5} },
-    { id:'mousetrap', kind:'mousetrap', x:-106, z:128, tx:-60, tz:140, velocity:{x:38,y:56,z:-34} },
-    { id:'fan', kind:'fan', x:75, z:39, tx:35, tz:25, velocity:{x:-68,y:32,z:-24} },
+    { id:'pressure', kind:'pressure', x:146, z:149, tx:90, tz:145, velocity:{x:0,y:90,z:0} },
+    { id:'dumpster', kind:'dumpster', x:-57, z:-29, tx:-60, tz:-70, velocity:{x:0,y:90,z:0} },
+    { id:'freight', kind:'freight', x:130, z:-20, tx:155, tz:10, velocity:{x:0,y:90,z:0} },
+    { id:'geyser', kind:'geyser', x:-153, z:15, tx:-155, tz:-25, velocity:{x:0,y:90,z:0} },
+    { id:'mousetrap', kind:'mousetrap', x:-106, z:128, tx:-60, tz:140, velocity:{x:0,y:90,z:0} },
+    { id:'fan', kind:'fan', x:75, z:39, tx:35, tz:25, velocity:{x:0,y:90,z:0} },
 ].map(m=>({id:m.id,kind:m.kind as LaunchMachineKind,
     label:({pressure:'PRESSURE WORKS',dumpster:'TRASH COMPACTOR',freight:'FREIGHT RAM',geyser:'SEWER GEYSER',mousetrap:'RAT TRAP',fan:'WIND TUNNEL'} as Record<string,string>)[m.id],
     pad:{x:m.x,y:0,z:m.z,radius:5},
@@ -78,7 +77,7 @@ export const LAUNCH_MACHINES: readonly LaunchMachine[] = [
 // Preserve the existing preview bookmark and legacy snapshot field.
 export const PRESSURE_LAUNCH = LAUNCH_MACHINES[0];
 export const MAX_LAUNCH_EVENTS = 24;
-export const MAX_LAUNCH_SPEED = 80;
+export const MAX_LAUNCH_SPEED = 100;
 export interface PressureLaunchEvent { id:string; playerId:string; at:number; velocity:Vec3Data; machineId?:string }
 export type DispatchPhase = 'ready' | 'rolling' | 'active' | 'cooldown';
 export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec3Data }
@@ -86,7 +85,7 @@ export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
 export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number }
-export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
+export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit'|'armor-clang'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
     /** Planted Evidence counterfeits share the briefcase shape but are hazards, not objectives. */

@@ -3,7 +3,7 @@ import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 14;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
@@ -107,7 +107,7 @@ export interface ShotDescriptor {
 }
 
 export type ClientMessage = (
-  | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance }
+  | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance; resumeToken?: string }
   | { type: 'updateMovement'; position: Vec3Data; rotation: QuatData; meshRotation: QuatData }
   | { type: 'shoot'; shotId: string; origin: Vec3Data; direction: Vec3Data }
   | { type: 'hit'; victimId: string; damage: number }
@@ -122,6 +122,8 @@ export type ServerMessage =
   | {
       type: 'welcome';
       matchRoom?: string;
+      /** Private bearer credential; never included in public player/score data. */
+      resumeToken?: string;
       id: string;
       player: PlayerData;
       players: Record<string, PlayerData>;
@@ -173,6 +175,6 @@ export type ServerMessage =
   | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState }
   | { type: 'gameReset'; round: RoundState }
   | { type: 'pong'; sentAt: number; receivedAt: number }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string; code?: 'resume-unavailable' };
 
 export type { WorldSpec };

@@ -6,11 +6,16 @@ import { getRatCarryAnchor, RAT_CARRY_SHOULDER } from '../utils/RatAnimator';
 /** Shared grip for every carryable case; attaches to the animated unused hand. */
 export function createCaseGrip(entity:RatEntity):THREE.Group {
         const arm=new THREE.Group();arm.name='hot-case-off-hand';
-        const coat=entity.mesh.getObjectByName('rat-body');
-        const coatShell=coat?.children.find(o=>o instanceof THREE.Mesh && o.material instanceof THREE.MeshStandardMaterial) as THREE.Mesh<THREE.BufferGeometry,THREE.MeshStandardMaterial>|undefined;
-        const color=coatShell?.material.color.getHex()??0x554657;
-        const skin=new THREE.MeshStandardMaterial({color:0xc39a7b,roughness:.8});
-        const coatMaterial=new THREE.MeshStandardMaterial({color,roughness:.8});
+        // Borrow the actual rig materials so lighting, hit flashes and Ironclad
+        // remain identical even when this arm appears after the buff was applied.
+        let coatMaterial:THREE.MeshStandardMaterial|undefined,skin:THREE.MeshStandardMaterial|undefined;
+        entity.mesh.traverse(o=>{
+            if(!(o instanceof THREE.Mesh))return;
+            for(const m of Array.isArray(o.material)?o.material:[o.material])if(m instanceof THREE.MeshStandardMaterial){
+                if(m.name==='rat-coat')coatMaterial=m;if(m.name==='rat-skin')skin=m;
+            }
+        });
+        if(!coatMaterial||!skin)throw new Error('Rat carry materials missing');
         const segment=(from:THREE.Vector3,to:THREE.Vector3,radius:number,material:THREE.Material)=>{
             const direction=to.clone().sub(from);
             const mesh=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius*.9,direction.length(),10),material);
@@ -28,4 +33,12 @@ export function createCaseGrip(entity:RatEntity):THREE.Group {
             finger.position.copy(hand).add(new THREE.Vector3(.045,-.025,z));finger.scale.set(.8,1.5,.8);arm.add(finger);
         }
         getRatCarryAnchor(entity.mesh).add(arm);return arm;
+}
+
+/** Grip owns its geometry; the rat owns the borrowed coat/skin materials. */
+export function disposeCaseGrip(arm:THREE.Group):void {
+    arm.removeFromParent();
+    const geometries=new Set<THREE.BufferGeometry>();
+    arm.traverse(o=>{if(o instanceof THREE.Mesh)geometries.add(o.geometry);});
+    for(const geometry of geometries)geometry.dispose();
 }

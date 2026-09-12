@@ -4,6 +4,46 @@
 **Read with:** [current-state.md](current-state.md), [AGENTS.md](../AGENTS.md),
 and the receipt [pickups-planted-evidence-2026-09-11.md](verification/pickups-planted-evidence-2026-09-11.md).
 
+## Latest reconnect and own-case protection pass
+
+[The r8 receipt](verification/reconnect-case-protection-2026-09-11.md) supersedes r7:
+protocol 14, 30-second identity/stats/case recovery, same-tab reload support, and
+own shots excluded from carried-case collisions. 935 tests, typecheck and build
+pass. Keep the dirty tree and private review scope; human playtests stay audible.
+
+## Latest comic pickup and high-launch pass
+
+[The r7 receipt](verification/comic-pickups-high-launch-2026-09-11.md) supersedes
+r6: protocol 13, accessible Icebox armor, exterior sewer speed pickups, filling
+cheese restock symbols, large illustrated active timers and uniform 90-unit launches.
+924 tests pass. Private and uncommitted, with human feel acceptance pending.
+
+## Latest restock, bots and launchers pass
+
+[The current receipt](verification/restock-bots-launchers-2026-09-11.md) supersedes
+the r5 preview below: protocol 12, 45-second restock dials, nine-bounce Big Cheese,
+visible-pickup AI priorities and vertical launches with immediate steering.
+919 tests pass. Private and uncommitted; human acceptance remains pending.
+
+## Latest rewards and feedback pass
+
+[Pickup rewards and feedback](verification/pickup-rewards-feedback-2026-09-11.md)
+supersedes the six-site layout and protocol-10 preview below. Tyler accepted the
+speed effect and case collection, then requested medical white/green styling,
+larger slapping pickup cards, new audio, route-based placement and pickup-first AI.
+Human acceptance of the new pass is pending; keep the dirty tree and private scope.
+
+## Latest human-feedback continuation
+
+Read [the refinement receipt](verification/pickup-playtest-refinement-2026-09-11.md)
+before using any commands below. Tyler rejected the local workerd/browser-bot
+preview as unrepresentative and requires hosted production-style testing every
+time. Approved visual, entry, burst, placement and collection improvements are
+in the dirty working tree and a frozen hosted private preview, awaiting his feel
+feedback. **Do not reset or release over that review.** Agent tests stay muted;
+human playtests stay audible. The local `5190` / `bots=11` instructions below are
+historical and must not be reused for normal playtesting.
+
 ## Continuation status
 
 The September 11 continuation fixed ignored browser incident flags, immediately

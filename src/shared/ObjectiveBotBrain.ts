@@ -106,19 +106,14 @@ export class ObjectiveBotBrain {
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
         this.plannedDestination=undefined;this.destination=undefined;this.decisionAt=0;this.planAt=0;this.recoverUntil=0;
     }
-    /** Nearest available upgrade the bot does not already hold. Quick Fix only
-     * matters when hurt, so an uninjured bot walks past it and leaves it for others. */
-    private wantedPickup(state: ChaosState | undefined, self: PlayerData) {
-        const pickups = state?.pickups;
-        if (!pickups?.length) return undefined;
-        const mine = state!.buffs?.[self.id];
-        const now = state!.time;
-        return pickups
-            .filter(p => p.kind === 'quick-fix' ? self.hp < 3
-                : p.kind === 'ironclad' ? (mine?.ironcladUntil ?? 0) <= now
-                    : (mine?.hustleUntil ?? 0) <= now)
-            .filter(p => { const d = distance(self, p); return d > 1 && d < 22; })
-            .sort((a, b) => distance(self, a) - distance(self, b))[0];
+    /** Visible nearby supplies are worth a detour, not an omniscient trip to a hidden roof.
+     * Stay on the current floor and leave full-health medkits and empty sites alone. */
+    private wantedPickup(state: ChaosState | undefined, self: PlayerData, now:number, clear:(p:Vec3Data)=>boolean) {
+        return state?.pickups?.filter(p=>(p.availableAt??0)<=(state?.time??now))
+            .filter(p=>p.kind!=='quick-fix'||self.hp<3)
+            .filter(p=>Math.abs(p.y-.7-self.y)<2.5&&distance(self,p)<24&&clear(p))
+            .filter(p=>!this.suppressed(`pickup:${p.id}`,p,now))
+            .sort((a,b)=>distance(self,a)-distance(self,b))[0];
     }
 
     step(now: number, self: PlayerData, others: Iterable<PlayerData>, state: ChaosState | undefined,
@@ -167,7 +162,9 @@ export class ObjectiveBotBrain {
             const carriers=living.filter(p=>cases.some(c=>c.value.owner===p.id)).sort((a,b)=>distance(self,a)-distance(self,b));
             const carrier=carriers.find(p=>!this.suppressed(`carrier:${p.id}`,p,now));
             const visible=living.filter(p=>distance(self,p)<80&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
-            this.target=carriers.find(p=>visible.includes(p))??visible[0];
+            // Keep a visible opponent through a burst instead of resetting reaction
+            // every time two similarly close rats trade places. Visible carriers still win.
+            this.target=carriers.find(p=>visible.includes(p))??visible.find(p=>p.id===this.target?.id)??visible[0];
             this.dispatchTarget=state?.dispatch.phase==='ready' ? DISPATCH_STATIONS.map(station=>station.target)
                 .filter(target=>distance(self,target)<26&&clearControl(target))
                 .sort((a,b)=>distance(self,a)-distance(self,b))[0] : undefined;
@@ -176,9 +173,7 @@ export class ObjectiveBotBrain {
                 (value.previousOwner!==self.id||value.pickupAfter<=(state?.time??now))&&!this.suppressed(key,value.p,now))
                 .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
             const combat=visible.find(p=>!this.suppressed(`combat:${p.id}`,p,now));
-            // Opportunistic only: a bot grabs a nearby upgrade it lacks, but never
-            // detours across town or while carrying the genuine case.
-            const pickup=carrying?undefined:this.wantedPickup(state,self);
+            const pickup=this.wantedPickup(state,self,now,clear);
             // Do not interrupt your own scoring, or keep shooting a nearby
             // loose case away while attempting to collect it.
             if(carrying||this.target||available&&distance(self,available.value.p)<24)this.dispatchTarget=undefined;
@@ -211,13 +206,13 @@ export class ObjectiveBotBrain {
                     if(options[0]){escape=options[0].point;escapeKey=`evade:${options[0].index}`;this.evadeAt=now+2200;}
                 }
             }
-            if(available)this.setObjective('case',available.key,available.value.p);
+            if(pickup)this.setObjective('pickup',`pickup:${pickup.id}`,pickup);
+            else if(available)this.setObjective('case',available.key,available.value.p);
             else if(intercept)this.setObjective('intercept',`intercept:${next}`,intercept);
             else if(!carrying&&carrier)this.setObjective('carrier',`carrier:${carrier.id}`,carrier);
             else if(delivery)this.setObjective('delivery',deliveryKey,delivery);
             else if(escape)this.setObjective('evade',escapeKey,escape);
             else if(combat)this.setObjective('combat',`combat:${combat.id}`,combat);
-            else if(pickup)this.setObjective('pickup',`pickup:${pickup.id}`,{x:pickup.x,y:pickup.y,z:pickup.z});
             else {
                 if(this.objective!=='explore'||!this.destination||this.suppressed(this.key,this.destination,now)||distance(self,this.destination)<3||now>this.explorationAt+20000){
                     this.destination=undefined;
@@ -283,10 +278,14 @@ export class ObjectiveBotBrain {
         }
         while(this.routeIndex<this.route.length&&distance(self,this.route[this.routeIndex])<1.8)this.routeIndex++;
         let waypoint=this.route[this.routeIndex];
-        if(!waypoint&&this.destination){
+        const patrolling=this.objective==='intercept'&&this.destination&&distance(self,this.destination)<6&&grounded;
+        if((!waypoint||patrolling)&&this.destination){
             if(now>=this.localStepAt){
                 this.localStepAt=now+150;
-                this.localWaypoint=this.navigation.localStep?.(self,this.destination);
+                // Defend an interception area by moving among supported nearby posts.
+                const angle=Math.floor(now/1800)*Math.PI/2+this.wanderIndex;
+                const goal=patrolling?{x:this.destination.x+Math.cos(angle)*4,y:this.destination.y,z:this.destination.z+Math.sin(angle)*4}:this.destination;
+                this.localWaypoint=this.navigation.localStep?.(self,goal);
             }
             if(this.localWaypoint&&distance(self,this.localWaypoint)>.3)waypoint=this.localWaypoint;
         }
@@ -296,8 +295,8 @@ export class ObjectiveBotBrain {
         if(waypoint){
             const dx=waypoint.x-self.x,dz=waypoint.z-self.z,d=Math.hypot(dx,dz);
             // Sprint on traversable flat routes; retain measured movement on
-            // stairs, final pickup approaches and legacy/practice matches.
-            const speed=pursuingAssignment&&Math.abs(waypoint.y-self.y)<.7&&this.destination&&distance(self,this.destination)>5?12:6.5;
+            // stairs and final pickup approaches.
+            const speed=Math.abs(waypoint.y-self.y)<.7&&this.destination&&distance(self,this.destination)>5?12:6.5;
             if(d>.25){x=dx/d*speed;z=dz/d*speed;this.heading=Math.atan2(dx,dz);}
         }
         if(!this.pendingPlan&&now<this.recoverUntil){const turn=this.wanderIndex%2?1:-1;x=Math.sin(this.heading+turn*1.05)*5;z=Math.cos(this.heading+turn*1.05)*5;}
@@ -307,7 +306,7 @@ export class ObjectiveBotBrain {
         const jump=grounded&&now>=this.jumpAt&&(!this.pendingPlan&&now<this.recoverUntil||blocked&&!!waypoint||!!waypoint&&waypoint.y-self.y>1.1);
         if(jump)this.jumpAt=now+1800+this.random()*1400;
         const visibleTarget=!!this.target?.hp&&distance(self,this.target)<85&&clear(this.target);
-        if(pursuingAssignment&&this.objective==='combat'&&visibleTarget&&this.target&&distance(self,this.target)<22&&grounded){
+        if(pursuingAssignment&&(this.objective==='combat'||this.objective==='carrier'&&this.target&&distance(self,this.target)<10||this.objective==='intercept')&&visibleTarget&&this.target&&distance(self,this.target)<22&&grounded){
             const dx=self.x-this.target.x,dz=self.z-this.target.z,length=Math.hypot(dx,dz)||1;
             const side=(this.wanderIndex+Math.floor(now/2600))%2?1:-1,back=length<9?1:.1;
             const point={x:self.x+(dx*back+dz*side)/length*5,y:self.y,z:self.z+(dz*back-dx*side)/length*5};

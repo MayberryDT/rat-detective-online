@@ -11,6 +11,16 @@ of pickup feel is claimed.
 > Counterfeit count: **10**, confirmed by Tyler. Fake cases are additional to the
 > genuine Hot Case and never counted as objective cases.
 
+## Human playtest follow-up
+
+The first human review found slow entry, poor pickup art/feedback, inconsistent
+HUD text, too-small trap bursts, stationary browser-preview bots and difficult
+case collection. Tyler explicitly requested brainstorming first, then approved
+implementation of the correction pass. [The separate refinement receipt](pickup-playtest-refinement-2026-09-11.md)
+records the new private preview and its checks. Production remains the version
+above; the dated release values below are historical, not the refinement tuning.
+Human playtests must remain audible; mute applies only to agent testing.
+
 ## What shipped in source
 
 ### Pickups (new system)

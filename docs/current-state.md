@@ -2,7 +2,135 @@
 
 Verified from source and production on **2026-09-11**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
-## Pickups and Planted Evidence (live, 2026-09-11)
+## Quick reconnect and carried-case protection (latest private changes, September 11)
+
+Quick reconnects now retain the same rat for **30 seconds**, including stats,
+assignment progress, pose, death/respawn state and the case if it has not been lost
+during the outage. The disconnected rat stays vulnerable and the match continues.
+Same-tab reloads can recover through private tab-local credentials; full rooms
+reserve the existing slot. Expired credentials fall back to normal matchmaking.
+A carrier's own direct or banked balls cannot disarm their case; enemy shots still can.
+
+Protocol **14**, **935 passing tests**, typecheck/build clean.
+[Audible r8 preview](http://127.0.0.1:5193/?room=graybox-benchmark-match-pickups-r8)
+expires September 12 at **3:31 AM Pacific**, private Worker
+`33ed3c6e-ad57-4b35-b677-abd857f3f538`.
+[Current receipt](verification/reconnect-case-protection-2026-09-11.md) explains
+recovery limits and validation. A hosted forced-disconnect check retained identity,
+one earned kill, exact position and the carried case in 953 ms; all 56 client files
+matched, with zero invalid messages. Existing pickup/launcher refinements remain.
+The tree stays dirty/uncommitted; production is unchanged. Preview links below
+are historical after replacement by r8. Human playtests remain audible.
+
+## Comic pickup indicators and high launches (latest private changes, September 11)
+
+Icebox second-floor armor is now on its open rear catwalk at **(116, 8.7, -84)**,
+with volume-based placement checks that catch shelves enclosing the old ray probes.
+Hot Pursuit sits **six units outside** each sewer mouth. The 45 s restock marker is
+now an animated, filling fedora/cheese symbol **without numbers**. Active effects
+have large illustrated comic cards, prominent duration tabs and draining gauges.
+
+All six launchers fire **straight up at 90 units/s**, with equal .1 flight damping
+before/after respawn and continuous air control. Unobstructed apex is about **129
+units**, reached in 3.03 s. Normal walking damping returns on landing. Protocol **13**
+coordinates the larger launch envelope. Personal effect durations and bot aim remain.
+
+[Audible r7 preview](http://127.0.0.1:5193/?room=graybox-benchmark-match-pickups-r7),
+expires **September 12 at 2:28 AM Pacific**; private Worker
+`002f4a3c-f0b6-4ab2-9c78-22d2ad0b3755`. **924 tests**, typecheck and build pass.
+[Current receipt](verification/comic-pickups-high-launch-2026-09-11.md) contains
+placement, art, flight and hosted verification. A 45-second hosted check confirmed
+all 18 coordinates, 1,336 valid snapshots, zero decode errors and 56 matching files.
+Human acceptance is pending;
+the tree stays dirty/uncommitted and production unchanged. Earlier preview links
+below are historical after replacement by r7.
+
+## Restock, bot activity and launch steering (latest private changes, September 11)
+
+The latest human feedback adds a noir circular restock dial at empty supply sites
+and raises respawn from 20 to **45 seconds**. Big Cheese reaches maximum size after
+**nine bounces** instead of three. All launchers launch vertically with immediate
+steering through ascent and descent. Protocol **12** carries authoritative site
+deadlines, including late joins and room restoration.
+
+Bot priority now applies to **visible nearby usable pickups on the current floor**;
+the previous global policy starved case/delivery routes. Navigation includes control
+cabinets and supported roofs. Bots sprint on flat routes, retain visible combat
+targets, fire more often with unchanged aim settings, strafe near carriers and patrol
+interception points. Shared planner budgets and progress-based recovery remain.
+
+[Audible r6 preview](http://127.0.0.1:5193/?room=graybox-benchmark-match-pickups-r6)
+expires September 12 at **2:07 AM Pacific**, private Worker
+`f64194f3-4abe-4b16-bd1b-cdfbbf21674c`. **919 tests**, typecheck and build pass.
+The controlled 120-second comparison improved moving samples from 58.1% to 89.3%,
+with three deliveries versus none; occasional 7.5–8 s stalls still occurred.
+A separate 90-second hosted check saw 2,713 valid snapshots, 1,304 bot shots,
+11 case-owner changes, real pickup/respawn events and 56 matching client files;
+individual movement activity ranged 53–93%, with some 4–8.5 s idle stretches.
+See [the current receipt](verification/restock-bots-launchers-2026-09-11.md)
+for evidence and limits. Human difficulty/feel acceptance is pending. The dirty
+tree remains uncommitted, production unchanged. Earlier private previews below
+are historical and their links no longer select a matching frozen deployment.
+
+## Pickup rewards and feedback (latest private changes, September 11)
+
+Tyler accepted Hot Pursuit’s look/feel and the improved genuine-case collection.
+The next requested pass is implemented in the dirty tree: white green-plus medkits,
+large slapping bottom-center cards with distinct claim sounds, fast application
+waves, deeper armor reflection clangs, route-based sites and pickup-first server AI.
+The carry arm now borrows the rat’s real coat/skin materials, including Ironclad.
+See [the current follow-up receipt](verification/pickup-rewards-feedback-2026-09-11.md)
+for the matching protocol-11 preview and verification.
+[Current audible preview](http://127.0.0.1:5193/?room=graybox-benchmark-match-pickups-r5)
+expires September 12 at 1:10 AM Pacific. Private Worker
+`fa2709c3-dbb1-40c2-aad7-9b5db5475246`; **911 tests**, typecheck and build pass.
+Hosted verification observed seven moving server bots, real Hot Pursuit claims,
+18 sites, 1,012 valid snapshots and all 56 matching client files. Nothing in this pass is
+committed or released to production. The preceding protocol-10 preview below is
+historical once its replacement is deployed.
+
+## Pickup playtest refinements (private preview, September 11)
+
+Tyler reviewed the first release and requested the following correction pass.
+These changes are **implemented in the working tree and private hosted preview;
+not committed or released to production**. Human feel acceptance is pending.
+See [the refinement receipt](verification/pickup-playtest-refinement-2026-09-11.md).
+[Audible preview](http://127.0.0.1:5193/?room=graybox-benchmark-match-pickups-r4),
+expires September 11 at 9:44 PM Pacific. Private Worker
+`cb78bab9-f9d2-4c8e-8373-0c874277db81`; **895 tests**, typecheck and build pass.
+A 25-second hosted check saw seven continuously moving server bots, 711 valid
+compact snapshots, a 190 ms prepared join and 51 matching client files.
+
+Tyler subsequently reported silent effects with working music in desktop Brave,
+on both preview and production, but confirmed effects work on mobile. Desktop
+audio diagnosis was handed off separately. Tyler subsequently confirmed sound is
+working again; the cause and external fix were not reported to this task. The
+original frozen hosted preview was restarted on port 5193, retaining its matching
+client/Worker and normal production population policy. See the
+[desktop audio handoff](handoff-desktop-sound-effects-2026-09-11.md).
+
+- Every gameplay preview uses the hosted Worker, frozen matching client, server-owned
+  bots and production matchmaking/backfill. The earlier local workerd + browser-bot
+  link was not a valid live-game comparison. Human audio stays enabled; only agent
+  browser tests use `mute=1`.
+- Private title preparation now fetches the correct room world and warms an
+  unreserved socket, avoiding the placeholder-city rebuild after Enter City.
+- Ironclad makes the **whole rat shiny metallic silver**, including batched remote
+  models; expiry/death/reset restore original materials. Hot Pursuit adds a brighter
+  depth-tested red outline and an exaggerated red trail, never through walls.
+  Quick Fix has a brief green flash and an upward luminous healing wave.
+- World pickups are an armored coat, red detective shoes and a medical tin, on
+  pavement supply trays. HUD notices and timers reuse the existing comic lettering
+  and charcoal-paper treatment. Six sites are repositioned for approach routes and
+  side-lane healing; placement awaits human feedback.
+- Planted Evidence now uses Improper Disposal’s **same 120-ball burst routine**,
+  still bounded by the 256-ball pool. Delayed Reaction holds balls **0.35–0.575 s**.
+- Genuine-case pickup reach is **2.25 units**, with bounded swept run-by collection
+  between updates; wall checks, fast disarm behavior and former-owner delay remain.
+- Local shot prediction now treats **only Ironclad** as reflective, correcting a
+  previous client bug that treated any buff, including Hot Pursuit alone, as armor.
+
+## Pickups and Planted Evidence (production baseline, 2026-09-11)
 
 Three timed pickups and a replacement incident are committed and live in application `aaa8750`, Worker `d6d1b1e3-9406-4df6-a3f5-04132652e3c1`. **10 counterfeit briefcases** plus the genuine case, seeded once per incident; consumed traps do not return on the next tick or room restoration. See [implementation, tuning and checks](verification/pickups-planted-evidence-2026-09-11.md). Human pickup-feel acceptance remains unverified.
 

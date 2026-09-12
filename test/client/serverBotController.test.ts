@@ -34,7 +34,7 @@ describe('hosted server bot controller',()=>{
     it('publishes normal-speed movement at twenty Hz plus pre-shot poses with source timestamps',()=>{
         const {controller,players,bot,move}=fixture();players.delete('human');
         for(let i=0;i<=120;i++)controller.step(1/60,1000+i*1000/60,players,state(1000+i*1000/60),true);
-        expect(bot.x).toBeGreaterThan(11);expect(bot.x).toBeLessThan(14);
+        expect(bot.x).toBeGreaterThan(21);expect(bot.x).toBeLessThan(24);
         expect(move.mock.calls.length).toBeGreaterThanOrEqual(39);
         expect(move.mock.calls.length).toBeLessThanOrEqual(50);
         const times=(move.mock.calls as unknown as [string,Vec3Data,number,number][]).map(c=>c[3]);
@@ -112,11 +112,11 @@ describe('hosted server bot controller',()=>{
         const {controller,players,bot}=fixture();controller.step(1/60,1000,players,state(),true);
         const launch=state(1017);launch.pressure={serial:1,until:3000,launches:[
             {id:'launch-old',playerId:'bot',at:1016,velocity:{x:12,y:20,z:0}},
-            {id:'launch-new',playerId:'bot',at:1017,velocity:{x:30,y:40,z:0}},
+            {id:'launch-new',playerId:'bot',at:1017,velocity:{x:0,y:40,z:0}},
         ]};
         controller.step(1/60,1017,players,launch,true);
         const body=controller.world.bodies.find(body=>body.mass>0)!;
-        expect(body.velocity.x).toBeGreaterThan(29);expect(body.velocity.y).toBeGreaterThan(39);
+        expect(body.velocity.x).toBeGreaterThan(1);expect(body.velocity.x).toBeLessThan(3);expect(body.velocity.y).toBeGreaterThan(39);
         controller.step(1/60,1034,players,launch,true);expect(body.velocity.y).toBeLessThan(39.5);
         controller.reset('bot',bot);controller.step(1/60,1051,players,launch,true);expect(body.velocity.y).toBeLessThan(5);
         controller.dispose();

@@ -101,3 +101,27 @@ test('LAN preview requires explicit matching private interfaces and refuses publ
  assert.equal(preview.server.address().address,'127.0.0.2');
  assert.match(await(await fetch(address,{headers:{Host:'127.0.0.2:5191'}})).text(),/Local rat build/);
 });
+
+test('prepares only the selected private world, stripping upstream secrets and headers',async t=>{
+  const dist=await files(t);let calls=0;
+  const room='graybox-benchmark-match-pickups';
+  const preview=createHostedPreview({distDir:dist,upstreamOrigin:'https://private-worker.invalid',token:'private-test-token',fetchStatus:async(url,options)=>{
+    calls++;assert.equal(url.searchParams.get('room'),room);assert.equal(options.headers.Authorization,'Bearer private-test-token');
+    return Response.json({room,world:{seed:341283204,version:2},secret:'must-not-leak'},{headers:{'x-private-secret':'must-not-leak'}});
+  }});
+  t.after(()=>preview.close());const origin=await preview.listen(0);
+  const result=await fetch(`${origin}/status?room=${room}`);
+  assert.deepEqual(await result.json(),{room,world:{seed:341283204,version:2}});assert.equal(result.headers.get('x-private-secret'),null);
+  assert.equal((await fetch(`${origin}/status?room=public-live-v2`)).status,404);assert.equal(calls,1);
+});
+
+
+test('preserves the session replacement close code so old tabs do not reconnect in a loop',{timeout:5000},async t=>{
+  const dist=await files(t),upstream=new WebSocketServer({host:'127.0.0.1',port:0});await once(upstream,'listening');
+  t.after(()=>new Promise(resolve=>upstream.close(resolve)));
+  upstream.on('connection',socket=>socket.on('message',()=>socket.close(4001,'Connected on a new transport')));
+  const preview=createHostedPreview({distDir:dist,upstreamOrigin:'https://private-worker.invalid',token:'test-private-token',
+    createUpstream:(url,options)=>{const local=new URL(url);local.protocol='ws:';local.hostname='127.0.0.1';local.port=String(upstream.address().port);return new WebSocket(local,options);}});
+  t.after(()=>preview.close());const address=await preview.listen(0),client=await open(address);
+  const closed=once(client,'close');client.send('{}');assert.equal((await closed)[0],4001);
+});

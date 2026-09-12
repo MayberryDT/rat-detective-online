@@ -2,8 +2,8 @@ import type { PlayerData, Vec3Data } from './networkProtocol';
 
 export const BOT_COMBAT = {
     reactionMinMs: 200, reactionMaxMs: 450,
-    shotMinMs: 200, shotMaxMs: 380/1.2,
-    pauseMinMs: 250, pauseMaxMs: 650/1.2,
+    shotMinMs: 200, shotMaxMs: 240,
+    pauseMinMs: 120, pauseMaxMs: 300,
     observationMinMs: 160, observationMaxMs: 260,
     trackingMs: 200, correctionMinMs: 250, correctionMaxMs: 500,
     errorMinRadians: 2.8 * Math.PI / 180, errorMaxRadians: 5.6 * Math.PI / 180,
@@ -81,7 +81,7 @@ export class BotCombat {
             this.burstUntil=0;this.pauseUntil=now+this.between(BOT_COMBAT.pauseMinMs,BOT_COMBAT.pauseMaxMs);return {aim};
         }
         if(!this.burstUntil){
-            this.remaining=this.random()<.35?1:2+Math.floor(this.random()*5);
+            this.remaining=this.random()<.15?1:3+Math.floor(this.random()*4);
             this.burstUntil=now+3000;
             this.canFollow=this.random()<BOT_COMBAT.followThroughChance;
         }

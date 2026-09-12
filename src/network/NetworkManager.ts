@@ -1,3 +1,4 @@
+import { isResumeToken, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
 import { DEFAULT_ROOM_NAME, PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
 import { isSupportedWorldVersion } from '../shared/worldSpec';
 import { CHAOS_WIRE_MODE } from '../shared/chaosWire';
@@ -6,6 +7,8 @@ import { DeliveryDecoder, type DeliveryAck } from '../shared/deliveryWire';
 export type ConnectionState = 'idle' | 'connecting' | 'playing' | 'reconnecting' | 'disconnected' | 'stopped';
 export interface TransportOptions {
     url?: string;
+    /** Null disables tab-local reload recovery (for synthetic clients). */
+    resumeStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null;
     createSocket?: (url: string) => WebSocket;
     joinTimeoutMs?: number;
     heartbeatMs?: number;
@@ -85,6 +88,9 @@ export class NetworkManager {
     private generation = 0;
     private lastReceived = 0;
     private url: string;
+    private resumeToken?: string;
+    private readonly resumeScope: string;
+    private resumeStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
     private prepared: {socket:WebSocket; cleanup:()=>void} | null = null;
     private readonly options: TransportOptions;
     private readonly diagnostics = {
@@ -99,6 +105,29 @@ export class NetworkManager {
         if(options.receiveMode!=='welcome-only' && options.chaosTransport!=='legacy'){url.searchParams.set('chaos',options.chaosTransport??CHAOS_WIRE_MODE);url.searchParams.set('movement','tuple-v1');}
         if(options.receiveMode==='welcome-only')url.searchParams.set('receive','welcome-only');
         this.url = url.toString();
+        this.resumeScope = `${url.origin}${url.pathname}?room=${url.searchParams.get('room') ?? DEFAULT_ROOM_NAME}`;
+        if (options.receiveMode !== 'welcome-only') try {
+            this.resumeStorage = options.resumeStorage === null ? undefined : options.resumeStorage ?? window.sessionStorage;
+            const saved = JSON.parse(this.resumeStorage?.getItem('rat-detective-resume') ?? 'null');
+            if (saved?.scope === this.resumeScope && isResumeToken(saved.token) &&
+                (saved.room === undefined || typeof saved.room === 'string' && /^[a-z0-9-]{1,160}$/.test(saved.room))) {
+                this.resumeToken = saved.token;
+                if (saved.room) url.searchParams.set('preferred', saved.room);
+                url.searchParams.set('resume', '1'); this.url = url.toString();
+            }
+        } catch { /* Storage can be disabled; transport retries still recover in memory. */ }
+    }
+
+    private rememberResume(token?: string, room?: string): void {
+        this.resumeToken = token;
+        const url = new URL(this.url);
+        if (token) url.searchParams.set('resume', '1');
+        else { url.searchParams.delete('resume'); url.searchParams.delete('preferred'); }
+        this.url = url.toString();
+        try {
+            if (token) this.resumeStorage?.setItem('rat-detective-resume', JSON.stringify({scope:this.resumeScope,token,room}));
+            else this.resumeStorage?.removeItem('rat-detective-resume');
+        } catch { /* Best effort reload recovery. Never log the credential. */ }
     }
 
     connect(name: string, appearance: RatAppearance): void {
@@ -110,9 +139,9 @@ export class NetworkManager {
 
     /** Complete transport setup on the title without joining or reserving a rat slot. */
     prepare(): void {
-        if (this.state !== 'idle' || this.prepared) return;
+        if (this.state !== 'idle' || this.prepared || this.resumeToken) return;
         const url=new URL(this.url),room=url.searchParams.get('room');
-        if(room && room!==DEFAULT_ROOM_NAME)return;
+        if(room && room!==DEFAULT_ROOM_NAME&&!/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(room))return;
         url.searchParams.set('prepare','1');
         let socket:WebSocket;
         try {socket=(this.options.createSocket??(url=>new WebSocket(url)))(url.toString());} catch{return;}
@@ -156,7 +185,7 @@ export class NetworkManager {
         this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
         const join = () => {
             if (!current() || !this.credentials) return;
-            this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials });
+            this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, ...(this.resumeToken ? {resumeToken:this.resumeToken} : {}) });
         };
         socket.addEventListener('open', join, {once:true});
         socket.addEventListener('message', event => {
@@ -190,6 +219,7 @@ export class NetworkManager {
                     return;
                 }
                 if (message.matchRoom) { const url = new URL(this.url); url.searchParams.set('preferred',message.matchRoom); this.url = url.toString(); }
+                if (message.resumeToken) this.rememberResume(message.resumeToken, message.matchRoom);
                 this.clearJoinTimer();
                 this.diagnostics.joinMs=performance.now()-openedAt;
                 // Apply the complete snapshot before enabling input.
@@ -206,6 +236,7 @@ export class NetworkManager {
                 return;
             }
             if (message.type === 'error' && this.state !== 'playing') {
+                if (message.code === 'resume-unavailable') this.rememberResume();
                 this.failed(generation, message.message);
                 return;
             }
@@ -221,7 +252,14 @@ export class NetworkManager {
             }
             if(decoded?.ack)this.acknowledge(decoded.ack);
         });
-        socket.addEventListener('close', event => { if (current()) { this.diagnostics.lastCloseCode=event.code;this.failed(generation, 'Connection lost.'); } });
+        socket.addEventListener('close', event => {
+            if (!current()) return;
+            this.diagnostics.lastCloseCode=event.code;
+            if (event.code===SESSION_REPLACED_CLOSE_CODE) {
+                this.cancelConnection();this.rememberResume();
+                this.setState('disconnected','Your rat resumed in another connection.');
+            } else this.failed(generation, 'Connection lost.');
+        });
         socket.addEventListener('error', () => { if (current()) this.failed(generation, 'Connection failed.'); });
         if(socket.readyState===WebSocket.OPEN)join();
     }

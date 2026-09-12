@@ -24,6 +24,7 @@ const id=isAssignmentId(selection)?selection:'excessive-force';
 const view=query.get('view'),phase=query.get('phase'),now=Date.now();
 const interiors:Record<string,{p:[number,number,number];heading:number}>={
     recordsinside:{p:[-36,.3,-43],heading:0},recordsupstairs:{p:[-36,8.3,-43],heading:0},
+    iceupperpickup:{p:[112,8.3,-81],heading:-Math.PI/4},
     iceinside:{p:[130,.3,-40],heading:0},needleinside:{p:[-94,.3,63],heading:Math.PI},
     pumpinside:{p:[125,.3,132],heading:0},sluiceinside:{p:[-137,.3,0],heading:Math.PI/2},
     alleywindow:{p:[-54,.3,15],heading:0},alleydoor:{p:[-40,.3,24],heading:0},
@@ -32,6 +33,7 @@ const interiors:Record<string,{p:[number,number,number];heading:number}>={
     sewerwestmouth:{p:[-149,.3,0],heading:-Math.PI/2},
     sewerwestthroat:{p:[-130,-1.45,0],heading:-Math.PI/2},
     sewereastthroat:{p:[130,-1.45,0],heading:Math.PI/2},
+    seweroutsidereward:{p:[5,.3,154],heading:.7},
     sewersouthmouth:{p:[0,.3,148],heading:0},
     sewersouthdeep:{p:[0,-4.95,118],heading:0},
     sewerneedlemouth:{p:[-54,.3,76],heading:0},

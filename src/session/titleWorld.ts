@@ -7,9 +7,11 @@ import { isSupportedWorldVersion, type WorldSpec } from '../shared/worldSpec';
  * a player. A later welcome remains authoritative, including overflow rooms. */
 export async function loadTitleWorld(signal?: AbortSignal, socketUrl = resolveWebSocketUrl()): Promise<WorldSpec | undefined> {
     const url = new URL(socketUrl);
-    if (url.searchParams.get('room') && url.searchParams.get('room') !== DEFAULT_ROOM_NAME) return;
+    const room=url.searchParams.get('room')||DEFAULT_ROOM_NAME;
+    if(room!==DEFAULT_ROOM_NAME&&!/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(room))return;
     url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
     url.pathname = '/status'; url.search = ''; url.hash = '';
+    if(room!==DEFAULT_ROOM_NAME)url.searchParams.set('room',room);
     const request = new AbortController();
     const abort = () => request.abort();
     if (signal?.aborted) return;
@@ -19,7 +21,7 @@ export async function loadTitleWorld(signal?: AbortSignal, socketUrl = resolveWe
         const response = await fetch(url, { signal: request.signal, cache: 'no-store' });
         if (!response.ok) return;
         const data = await response.json();
-        if (!data || typeof data !== 'object' || !('room' in data) || data.room !== DEFAULT_ROOM_NAME || !('world' in data)) return;
+        if (!data || typeof data !== 'object' || !('room' in data) || data.room !== room || !('world' in data)) return;
         const world = data.world;
         if (!world || typeof world !== 'object' || !('seed' in world) || !('version' in world)) return;
         const { seed, version } = world;

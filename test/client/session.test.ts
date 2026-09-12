@@ -58,6 +58,7 @@ const harness = vi.hoisted(() => {
     }
 
     class FakeRemotes {
+        rats = new Map();
         prepareFrame = vi.fn();
         updateDeaths = vi.fn();
         presentFrame = vi.fn();
@@ -95,10 +96,12 @@ const harness = vi.hoisted(() => {
             respawn: ReturnType<typeof vi.fn>;
             takeDamage: ReturnType<typeof vi.fn>;
             heal: ReturnType<typeof vi.fn>;
+            setPowerups: ReturnType<typeof vi.fn>;
             useSharedCorpse: ReturnType<typeof vi.fn>;
         };
         onMouseMove = vi.fn();
         setSpeedScale = vi.fn();
+        applyPressureLaunches = vi.fn();
         update = vi.fn();
         prepareMovement = vi.fn();
         syncAfterPhysics = vi.fn();
@@ -125,6 +128,7 @@ const harness = vi.hoisted(() => {
                 respawn: vi.fn(),
                 takeDamage: vi.fn(),
                 heal: vi.fn(),
+                setPowerups: vi.fn(),
                 useSharedCorpse: vi.fn(),
             };
             harness.rats.push(this);
@@ -149,6 +153,7 @@ const harness = vi.hoisted(() => {
         rats: [] as FakeRat[],
         inputs: [] as { clear: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn>; keys: Record<string, boolean> }[],
         music: [] as { start: ReturnType<typeof vi.fn>; unlock: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }[],
+        unlockEffects: vi.fn(),
         stages: [] as { dispose: ReturnType<typeof vi.fn>; world: { step: ReturnType<typeof vi.fn> } }[],
         stats: [] as unknown[],
         initSounds: vi.fn(),
@@ -170,6 +175,7 @@ const harness = vi.hoisted(() => {
             this.nameIndex = 0;
             this.initSounds.mockClear();
             this.disposeSounds.mockClear();
+            this.unlockEffects.mockClear();
         },
     };
     return harness;
@@ -203,6 +209,9 @@ vi.mock('../../src/session/SessionMusic', () => ({
         dispose = vi.fn();
         constructor() { harness.music.push(this); }
     },
+}));
+vi.mock('../../src/audio/effectsAudio', () => ({
+    unlockEffectsAudio: () => harness.unlockEffects(),
 }));
 vi.mock('../../src/session/createStage', () => ({
     createStage: (renderer: { setSize?: unknown }) => {
@@ -406,6 +415,8 @@ describe('GameSession', () => {
             music.unlock.mockClear();
             doc.dispatch(type, Object.assign(new Event(type), {button:0,key:'Tab',code:'Tab'}));
             expect(music.unlock).toHaveBeenCalled();
+            expect(harness.unlockEffects).toHaveBeenCalled();
+            harness.unlockEffects.mockClear();
         }
         expect(transport.connect).not.toHaveBeenCalled();
         session.dispose();
@@ -572,6 +583,20 @@ describe('GameSession', () => {
         expect(hud.addKillFeed.mock.calls.at(-1)![0]).not.toContain('eliminated');
         expect(remotes.get).not.toHaveBeenCalledWith(null);
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now()+3000);
+    });
+
+    it('shows both buffs but reflects predicted shots only for Ironclad, clearing stale effects',()=>{
+        const {transport,gun,session}=start();transport.onMessage?.(welcome());
+        const rat=harness.rats.at(-1)!.entity;
+        const state={time:1000,shots:[],dispatch:{phase:'ready',started:0,until:0,serial:0},buffs:{me:{hustleUntil:11000}}} as unknown as ChaosState;
+        transport.onMessage?.({type:'chaos',state});
+        expect(rat.setPowerups).toHaveBeenLastCalledWith(0,10);
+        expect(gun.setProtectedRats.mock.calls.at(-1)?.[0]).toEqual(new Set());
+        state.buffs!.me.ironcladUntil=13000;transport.onMessage?.({type:'chaos',state});
+        expect(gun.setProtectedRats.mock.calls.at(-1)?.[0]).toEqual(new Set([rat]));
+        state.buffs={};transport.onMessage?.({type:'chaos',state});
+        expect(rat.setPowerups).toHaveBeenLastCalledWith(0,0);
+        expect(gun.setProtectedRats.mock.calls.at(-1)?.[0]).toEqual(new Set());session.dispose();
     });
 
     it('uses births only for the firing player and never replays their gun animation or sound',()=>{

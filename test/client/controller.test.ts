@@ -122,13 +122,13 @@ it('clears normal jump gravity for machine launches, landing, death and respawn'
     };
     jump();
     const state:ChaosState={time:1000,pressure:{serial:1,until:2000,launches:[
-        {id:'machine',playerId:'local',at:1000,velocity:{x:40,y:55,z:20}}]},
+        {id:'machine',playerId:'local',at:1000,velocity:{x:0,y:55,z:0}}]},
         case:{p:{...CASE_HOME},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0},
         owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},dispatch:{phase:'ready',started:0,until:0,serial:0},
         possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
     rat.applyPressureLaunches(state,'local');rat.prepareMovement(1/60,{});
     expect(rat.entity.body.force.y).toBe(0);
-    expect(rat.entity.body.velocity.toArray()).toEqual([40,55,20]);
+    expect(rat.entity.body.velocity.toArray()).toEqual([0,55,0]);
     world.step(1/60);
     expect(rat.entity.body.velocity.y).toBeCloseTo(55*Math.pow(1-rat.entity.body.linearDamping,1/60)-25/60,5);
     for(const clear of ['landing','death','respawn']){

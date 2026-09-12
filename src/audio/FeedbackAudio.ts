@@ -2,8 +2,13 @@ import * as THREE from 'three';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {worldSoundGain} from './worldSoundGain';
 import {AudioVoicePool} from './AudioVoicePool';
-export type FeedbackCue='case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
+export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-slap'|'armor-clang'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
 const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
+    'pickup-ironclad':{file:'pickup-ironclad',volume:.7,cooldown:150},
+    'pickup-hustle':{file:'pickup-hustle',volume:.65,cooldown:150},
+    'pickup-quick-fix':{file:'pickup-quick-fix',volume:.65,cooldown:150},
+    'pickup-slap':{file:'pickup-slap',volume:.58,cooldown:100},
+    'armor-clang':{file:'armor-clang',volume:.8,cooldown:75},
     'case-pickup':{file:'case-pickup',volume:.6,cooldown:150},
     'case-lost':{file:'case-lost',volume:.6,cooldown:150},
     'case-taken':{file:'case-taken',volume:.24,cooldown:300},

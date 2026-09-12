@@ -29,10 +29,10 @@ export class RatController {
     private readonly cameraRay = new THREE.Raycaster();
     private groundGrace = 0;
     get grounded():boolean {return this.groundGrace>0;}
-    private launchTime = 0;
     /** Hot Pursuit only: scales the owner's normal walking speed while active. */
     private speedScale = 1;
     private launcherFlight = false;
+    private beforeLaunchDamping:number|undefined;
     private normalJump = false;
     private readonly appliedLaunches = new Set<string>();
     private disposed = false;
@@ -82,9 +82,8 @@ export class RatController {
     prepareMovement(dt: number, keys: Record<string, boolean>, touch?: TouchMovement): void {
         if (this.disposed) return;
         this.groundGrace = Math.max(0, this.groundGrace - dt);
-        this.launchTime = Math.max(0, this.launchTime - dt);
         if (!this.entity.dead && this.entity.hp > 0) this.applyMovement(dt, keys, touch);
-        else this.normalJump=false;
+        else {this.normalJump=false;this.beforeLaunchDamping=undefined;}
     }
 
     syncAfterPhysics(dt: number): void {
@@ -96,7 +95,7 @@ export class RatController {
             for (const contact of this.entity.world.contacts) {
                 const normalY = contact.bi === body ? -contact.ni.y : contact.bj === body ? contact.ni.y : 0;
                 // Explicit80ms grace permits forgiving edge jumps, never unlimited air jumps.
-                if (normalY > 0.5) { this.groundGrace = 0.08; this.launchTime=0; this.launcherFlight=false; this.normalJump=false; break; }
+                if (normalY > 0.5) { if(this.beforeLaunchDamping!==undefined){body.linearDamping=this.beforeLaunchDamping;this.beforeLaunchDamping=undefined;} this.groundGrace = 0.08; this.launcherFlight=false; this.normalJump=false; break; }
             }
         }
         this.updateView();
@@ -116,16 +115,15 @@ export class RatController {
             this.appliedLaunches.add(event.id);
             if(this.appliedLaunches.size>32)this.appliedLaunches.delete(this.appliedLaunches.values().next().value!);
             if(state.time-event.at<0 || state.time-event.at>PRESSURE_LAUNCH.eventMs || this.entity.dead || this.entity.hp<=0)continue;
+            this.beforeLaunchDamping??=this.entity.body.linearDamping;
+            this.entity.body.linearDamping=.1; // Match server flight, including after a low-damping respawn.
             this.entity.body.velocity.set(event.velocity.x,event.velocity.y,event.velocity.z);
             this.entity.body.wakeUp();this.groundGrace=0;this.normalJump=false;
             this.launcherFlight=!!this.launcherBounds;
-            // Let these deliberate machine impulses travel before normal walking
-            // braking resumes; landing restores ordinary controls immediately.
-            this.launchTime=Math.min(2.6,Math.max(1.4,event.velocity.y/25));
         }
     }
 
-    /** Keep launcher flights in the prototype city even after air steering resumes.
+    /** Keep launcher flights in the prototype city throughout unrestricted air steering.
      * A gentle inward deflection precedes the hard body inset, which also catches
      * collision kicks that cross the boundary within a single physics step.
      */
@@ -142,7 +140,7 @@ export class RatController {
         }
     }
 
-    resetGrounding(): void { this.groundGrace = 0; this.launchTime=0; this.launcherFlight=false; this.normalJump=false; }
+    resetGrounding(): void { this.beforeLaunchDamping=undefined; this.groundGrace = 0; this.launcherFlight=false; this.normalJump=false; }
 
     dispose(): void {
         if (this.disposed) return;
@@ -182,11 +180,8 @@ export class RatController {
         const acceleration = 1 - Math.pow(1 - ACCEL, dt * 60);
         const braking = Math.pow(1 - DECEL, dt * 60);
         // Apply
-        if(this.launchTime>0){
-            // Retain the machine's actual physical impulse while allowing modest air steering.
-            // Ordinary acceleration/braking resumes after this short explicit launch window.
-            v.x+=desiredX*dt*.35;v.z+=desiredZ*dt*.35;
-        } else if (len > 0) {
+        // Full steering throughout a launch; only the vertical impulse is retained.
+        if (len > 0) {
             this.entity.body.wakeUp();
             v.x += (desiredX - v.x) * acceleration;
             v.z += (desiredZ - v.z) * acceleration;

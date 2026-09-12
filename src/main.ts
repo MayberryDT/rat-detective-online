@@ -1,5 +1,6 @@
 import { TitleScreen } from './ui/TitleScreen';
 import { TitleMusic } from './ui/TitleMusic';
+import { unlockEffectsAudio } from './audio/effectsAudio';
 
 function showWebGLError(error: unknown): void {
   const titleScreen = document.getElementById('title-screen');
@@ -35,7 +36,7 @@ const music = new TitleMusic();
 performance.mark('title-controls-ready');
 let requested = false;
 title.available = () => !requested;
-title.onGesture = () => { void music.unlock(); };
+title.onGesture = () => { void music.unlock(); unlockEffectsAudio(); };
 title.onEnter = () => {
   requested = true;
   document.getElementById('enter-city-label')!.textContent = 'ENTERING…';

@@ -1,3 +1,4 @@
+import {DISPATCH_STATIONS,LAUNCH_MACHINES} from './chaosState';
 import { CITY_BOUNDS, GRAYBOX_SPAWNS, grayboxBoxes, type GrayboxBox } from './grayboxLayout';
 import { LANDMARK_INTERIORS } from './landmarkLayout';
 import { SEWER_LIGHTS } from './sewerLayout';
@@ -35,7 +36,11 @@ export class BotNavigation {
     private targets:Vec3Data[];
 
     constructor(spec:WorldSpec) {
-        for(const box of grayboxBoxes(spec)) {
+        // These controls are physical obstacles in both human and server bot worlds.
+        // Omitting them from navigation sends routes through machines near objectives.
+        const controls=[...DISPATCH_STATIONS,...LAUNCH_MACHINES].flatMap(c=>[c.box,c.target])
+            .map(box=>({...box,rx:0,rz:0,color:0}));
+        for(const box of [...grayboxBoxes(spec),...controls]) {
             const cx=Math.cos(box.rx),sx=Math.sin(box.rx),cz=Math.cos(box.rz),sz=Math.sin(box.rz);
             const dx=Math.abs(cz)*box.w/2+Math.abs(sz*cx)*box.h/2+Math.abs(sz*sx)*box.d/2;
             const dz=Math.abs(sx)*box.h/2+Math.abs(cx)*box.d/2;
@@ -72,9 +77,11 @@ export class BotNavigation {
         if(x<CITY_BOUNDS.min+1||x>CITY_BOUNDS.max-1||z<CITY_BOUNDS.min+1||z>CITY_BOUNDS.max-1)return [];
         const heights:number[]=[];
         for(const s of this.nearby(x,z)) {
-            const b=s.box;if(b.h>1.1||s.ny<.85||x<s.minX||x>s.maxX||z<s.minZ||z>s.maxZ)continue;
+            const b=s.box;if(s.ny<.85||x<s.minX||x>s.maxX||z<s.minZ||z>s.maxZ)continue;
             const y=b.y+(b.h/2-s.nx*(x-b.x)-s.nz*(z-b.z))/s.ny;
-            if(y < -7.2||y>16.3||heights.some(h=>Math.abs(h-y)<.08))continue;
+            // Solid upper masses have walkable roofs even though they are not thin floor slabs.
+            if(b.h>1.1&&y<24)continue;
+            if(y < -7.2||y>36.3||heights.some(h=>Math.abs(h-y)<.08))continue;
             const p=this.local(s,x,y,z);
             if(Math.abs(p.x)>b.w/2+.001||Math.abs(p.z)>b.d/2+.001)continue;
             if(this.clear(x,y,z))heights.push(y);

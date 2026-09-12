@@ -40,3 +40,10 @@ it('bounds preparation and cancels it when the page leaves',async()=>{
     expect(await leaving).toBeUndefined();expect(vi.getTimerCount()).toBe(0);
     expect(await loadTitleWorld(page.signal,url)).toBeUndefined();expect(fetcher).toHaveBeenCalledTimes(2);
 });
+
+it('warms the exact hosted private pool instead of building the public or placeholder city',async()=>{
+    const room='graybox-benchmark-match-pickups';
+    const fetcher=vi.fn(async(_url:URL)=>Response.json({room,world:{seed:341283204,version:2}}));vi.stubGlobal('fetch',fetcher);
+    expect(await loadTitleWorld(undefined,`ws://127.0.0.1:5193/ws?room=${room}`)).toEqual({seed:341283204,version:2});
+    expect(String(fetcher.mock.calls[0][0])).toBe(`http://127.0.0.1:5193/status?room=${room}`);
+});

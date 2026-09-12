@@ -20,6 +20,14 @@ export default {
     const url = new URL(request.url);
     if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
     if (url.pathname === '/health') return Response.json({ ok: true, service: 'rat-detective-capacity-test', maxPlayers: MAX_PLAYERS, maxScoreEntries: MAX_SCORE_ENTRIES, fixtureId: env.CAPACITY_FIXTURE_ID, expiresAt }, { headers: { 'cache-control': 'no-store' } });
+    // Authenticated metadata for the exact private matchmaking pool. Like public
+    // /status this creates no participant and uses the normal sleeping-room policy.
+    if(url.pathname==='/status'){
+      const name=url.searchParams.get('room')??'';
+      if(!/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(name))return new Response('Not found',{status:404});
+      const room=env.GAME_ROOM.getByName(name);await room.enableMatchmaking(name);
+      return Response.json({room:name,...await room.status()},{headers:{'cache-control':'no-store'}});
+    }
     if (url.pathname !== '/ws' || !/^graybox-(?:practice-probe|benchmark)-[a-z0-9-]{1,80}$/.test(url.searchParams.get('room') ?? '')) {
       return new Response('Not found', { status: 404 });
     }

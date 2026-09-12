@@ -77,12 +77,27 @@ describe('Planted Evidence',()=>{
         restored.step(0,now+67);
         expect(restored.snapshot(false).extraCases).toHaveLength(9);
     });
+    it('uses the full Improper Disposal eruption, with the same count, speed and directions',()=>{
+        const {sim,shooter,now}=fixture();const [body]=fakeBodies(sim)[0];park(body);
+        sim.shoot(shooter.id,{shotId:'full-burst',origin:{x:-4,y:60,z:0},direction:{x:1,y:0,z:0}});
+        sim.step(.05,now+50);
+        const planted=sim.snapshot(false).shots;
+        const corpseState=sim.snapshot(false);corpseState.shots=[];corpseState.extraCases=[];
+        corpseState.dispatch={phase:'active',started:now,until:now+25000,serial:5,incident:'improper-disposal'};
+        const disposal=new ChaosSimulation(new Map(),()=>{},corpseState,spec);
+        disposal.death({...shooter,x:0,y:59.05,z:0},{x:1,y:0,z:0},shooter.id);
+        const exploded=disposal.snapshot(false).shots;
+        expect(planted).toHaveLength(120);expect(exploded).toHaveLength(120);
+        // The explosion created during shot stepping receives the remaining step;
+        // compare horizontal directions and finite ownership, without gravity drift.
+        expect(planted.map(s=>[s.v.x,s.v.z,s.owner,s.original])).toEqual(exploded.map(s=>[s.v.x,s.v.z,s.owner,s.original]));
+    });
     it('kills the rat that walks onto a counterfeit once, even behind Ironclad',()=>{
         const {sim,shooter,hits,now}=fixture();
         // Claim the coat first, then step onto a counterfeit at full protection.
         shooter.x=sim.snapshot(false).pickups!.find(p=>p.kind==='ironclad')!.x;
         shooter.z=sim.snapshot(false).pickups!.find(p=>p.kind==='ironclad')!.z;
-        shooter.y=.7;sim.step(1/60,now+16);
+        shooter.y=sim.snapshot(false).pickups!.find(p=>p.kind==='ironclad')!.y-.7;sim.step(1/60,now+16);
         expect(sim.snapshot(false).buffs?.[shooter.id]?.ironcladUntil).toBeGreaterThan(now);
         const [body]=fakeBodies(sim)[0];
         body.position.set(120,60,120);body.updateAABB();

@@ -46,7 +46,13 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
         const colors=Array.from({length:16},(_,i)=>originals[i]?.color??new THREE.Color());
         const emissives=Array.from({length:16},(_,i)=>originals[i]?.emissive??new THREE.Color());
         const intensity=new Float32Array(16),roughness=new Float32Array(16),metalness=new Float32Array(16);
-        syncPalette=()=>originals.forEach((m,i)=>{intensity[i]=m.emissiveIntensity;roughness[i]=m.roughness;metalness[i]=m.metalness;});
+        syncPalette=()=>{
+            originals.forEach((m,i)=>{intensity[i]=m.emissiveIntensity;roughness[i]=m.roughness;metalness[i]=m.metalness;});
+            // Whole-rat silver changes the source materials for local and batched
+            // remote rigs alike. Reuse the same static reflection texture.
+            if(palette.envMap!==originals[0].envMap){palette.envMap=originals[0].envMap;palette.needsUpdate=true;}
+            palette.envMapIntensity=originals[0].envMapIntensity;
+        };
         syncPalette();
         palette.onBeforeCompile=shader=>{
             Object.assign(shader.uniforms,{ratColors:{value:colors},ratEmissives:{value:emissives},ratIntensity:{value:intensity},ratRoughness:{value:roughness},ratMetalness:{value:metalness}});

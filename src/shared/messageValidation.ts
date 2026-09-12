@@ -1,3 +1,4 @@
+import { isResumeToken } from './reconnect';
 import {expandMovement} from './movementWire';
 import {BALL_SPEED} from './ballTuning';
 import {isWorldFoleyCue} from './foleyEvents';
@@ -309,11 +310,13 @@ function parseClientBody(parsed:Record<string,unknown>):ClientMessage|null {
     const protocolVersion = integer(parsed.protocolVersion);
     const appearance = parseAppearance(parsed.appearance);
     if (protocolVersion === null || !appearance) return null;
+    if (parsed.resumeToken !== undefined && !isResumeToken(parsed.resumeToken)) return null;
     if (typeof parsed.name !== 'string' || parsed.name.length > 32) return null;
     return {
       type: 'join',
       protocolVersion,
       name: parsed.name,
+      ...(isResumeToken(parsed.resumeToken) ? {resumeToken:parsed.resumeToken} : {}),
       appearance,
     };
   }
@@ -374,7 +377,8 @@ function parseChaos(value:unknown):ChaosState|null{
   if(value.pickups!==undefined){
     if(!Array.isArray(value.pickups)||value.pickups.length>PICKUP_ANCHORS.length||
       !value.pickups.every(p=>isRecord(p)&&PICKUP_ANCHORS.some(a=>a.id===p.id)&&isPickupKind(p.kind)&&
-        finiteNumber(p.x)!==null&&finiteNumber(p.y)!==null&&finiteNumber(p.z)!==null))return null;
+        finiteNumber(p.x)!==null&&finiteNumber(p.y)!==null&&finiteNumber(p.z)!==null&&
+        (p.availableAt===undefined||typeof p.availableAt==='number'&&Number.isFinite(p.availableAt)&&p.availableAt>=0&&p.availableAt<=Number.MAX_SAFE_INTEGER)))return null;
     if(new Set(value.pickups.map(p=>p.id)).size!==value.pickups.length)return null;
   }
   if(value.buffs!==undefined){
@@ -392,7 +396,7 @@ function parseChaos(value:unknown):ChaosState|null{
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
   if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||c.owner===null||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
   if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&parseVec3(s.p)&&parseVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.delayed===undefined||typeof s.delayed==='boolean')&&(s.original===undefined||typeof s.original==='boolean')&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.stuckUntil===undefined||finiteNumber(s.stuckUntil)!==null)&&(s.popAt===undefined||finiteNumber(s.popAt)!==null)))return null;
-  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&parseVec3(i.p)&&parseVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='pop'||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
+  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&parseVec3(i.p)&&parseVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='pop'||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit'||i.cue==='armor-clang')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
   if(value.pressure!==undefined){
     const p=value.pressure;
     if(!isRecord(p)||integer(p.serial)===null||finiteNumber(p.until)===null||!Array.isArray(p.launches)||p.launches.length>MAX_LAUNCH_EVENTS)return null;
@@ -427,6 +431,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         return null;
       }
       if (player.id !== id || !players[id]) return null;
+      if (parsed.resumeToken !== undefined && !isResumeToken(parsed.resumeToken)) return null;
       const matchRoom = parsed.matchRoom === undefined ? undefined : nonEmptyString(parsed.matchRoom, 160);
       if (matchRoom === null || (matchRoom !== undefined && !/^[a-z0-9-]+$/.test(matchRoom))) return null;
       let incidents: IncidentId[] | undefined;
@@ -437,6 +442,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         incidents = parsed.incidents as IncidentId[];
       }
       return { type: 'welcome', id, player, players, round, world, protocolVersion, serverTime,
+        ...(isResumeToken(parsed.resumeToken) ? {resumeToken:parsed.resumeToken} : {}),
         ...(matchRoom ? {matchRoom} : {}), ...(incidents ? {incidents} : {}) };
     }
     case 'currentPlayers': {
@@ -568,7 +574,8 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const message = typeof parsed.message === 'string' && parsed.message.length > 0 && parsed.message.length <= 256
         ? parsed.message
         : null;
-      return message ? { type: 'error', message } : null;
+      if (parsed.code !== undefined && parsed.code !== 'resume-unavailable') return null;
+      return message ? { type: 'error', message, ...(parsed.code === 'resume-unavailable' ? {code:parsed.code} : {}) } : null;
     }
     default:
       return null;

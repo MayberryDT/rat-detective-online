@@ -1,3 +1,4 @@
+import { PICKUP_ANCHORS } from '../../src/shared/pickups';
 import { PROTOCOL_VERSION } from '../../src/shared/networkProtocol';
 import { SELF } from 'cloudflare:test';
 import { expect, it } from 'vitest';
@@ -25,7 +26,7 @@ it('negotiates mixed clients and bounds snapshots while still delivering control
  try{
   const compact=await open(true),legacy=await open(false);
   await wait(()=>compact.frames.length===MAX_CHAOS_IN_FLIGHT&&legacy.types.filter(t=>t==='chaos').length>MAX_CHAOS_IN_FLIGHT);
-  expect(compact.pickupCount).toBe(6);expect(legacy.pickupCount).toBe(6);
+  expect(compact.pickupCount).toBe(PICKUP_ANCHORS.length);expect(legacy.pickupCount).toBe(PICKUP_ANCHORS.length);
   await new Promise(r=>setTimeout(r,120));expect(compact.frames).toHaveLength(MAX_CHAOS_IN_FLIGHT);
   compact.ws.send(JSON.stringify({type:'ping',sentAt:Date.now()}));await wait(()=>compact.types.includes('pong'));
   expect(compact.frames).toHaveLength(MAX_CHAOS_IN_FLIGHT);

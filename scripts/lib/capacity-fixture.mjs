@@ -28,7 +28,7 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   }
   await hashTree('src');
   const controlHash=createHash('sha256').update(await readFile(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'))).digest('hex');
-  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 10, maxPlayers, fullLobby, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
+  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 11, maxPlayers, fullLobby, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
   async function patch(name, before, after) { const path=join(stage,name); await writeFile(path,replaceOnce(await readFile(path,'utf8'),before,after)); }
   if(checkpointControl){
     if(!hosted)throw Error('Checkpoint control is hosted-private only');
@@ -41,6 +41,10 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   await patch('src/shared/networkProtocol.ts', 'export const MAX_PLAYERS = 16;', `export const MAX_PLAYERS = ${maxPlayers};`);
   await patch('src/shared/ChaosSimulation.ts', '    private activate(owner?:string|null){', "    benchmarkIncident(incident:import('./incidentCatalog').IncidentId):void { this.dispatch={phase:'active',started:this.now,until:this.now+25000,serial:this.dispatch.serial+1,incident};this.lastSurgePulse=0;this.dispatchActivator=null; }\n    private activate(owner?:string|null){");
   await patch('src/worker/GameRoom.ts', 'this.world = { ...createWorldSpec(), version: GRAYBOX_VERSION };', 'this.world = { ...createWorldSpec(341283204), version: GRAYBOX_VERSION };');
+  // Matchmaking enables version 2 before fetch(), so fixing only fetch's seed
+  // left new automatic pools with random cities. Fix initialization in the copy.
+  const roomSourcePath=join(stage,'src/worker/GameRoom.ts');
+  await writeFile(roomSourcePath,(await readFile(roomSourcePath,'utf8')).replaceAll('createWorldSpec()','createWorldSpec(341283204)'));
   await patch('src/worker/GameRoom.ts', '  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {', '  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {\n    if(typeof raw===\'string\'&&raw.length<128&&raw.startsWith(\'{"type":"benchmarkIncident",\')&&this.getPlayerId(ws)){try{const m=JSON.parse(raw);if(INCIDENTS.some(i=>i.id===m.incident))this.chaos?.benchmarkIncident(m.incident);}catch{}return;}');
   await patch('src/worker/GameRoom.ts', "import { ChaosDelivery } from './ChaosDelivery';", "import { ChaosDelivery } from './ChaosDelivery';\nimport { INCIDENTS } from '../shared/incidentCatalog';");
   // Private AI workload uses the production controller with a deterministic
@@ -56,7 +60,7 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
     await patch('src/worker/GameRoom.ts', 'roster.splice(humans ? Math.max(0, 8 - humans) : 0);', 'roster.splice(Math.max(0, MAX_PLAYERS - humans));');
     await patch('src/worker/GameRoom.ts', 'if (humans) { if (rosterChanged || !this.serverBots)', 'if (humans || desired) { if (rosterChanged || !this.serverBots)');
     await patch('src/worker/GameRoom.ts', '    if (this.matchRoom && !this.humanSlots()) return;', '    // Full-lobby private fixture remains active until its hosted expiry.');
-    await patch('src/worker/GameRoom.ts', "      if(this.matchRoom && ![...attached].some(id=>this.players.has(id))){this.rebalanceBots();return;}", '      // Full-lobby private fixture also simulates with no human observers.');
+    await patch('src/worker/GameRoom.ts', "      if(this.matchRoom && !retainedHuman){this.rebalanceBots();return;}", '      // Full-lobby private fixture also simulates with no human observers.');
     await patch('src/worker/GameRoom.ts', '      if (!this.humanSlots() && this.matchPool) this.ctx.waitUntil(this.env.MATCHMAKER.getByName(this.matchPool).retire(this.matchRoom, this.matchPool));', '      // Full-lobby private fixture retires at expiry rather than on last human exit.');
     await patch('src/worker/capacityTest.ts', "    if (url.pathname === '/health')", `    if(url.pathname==='/lobby-status'){
       const name=url.searchParams.get('room')??'';

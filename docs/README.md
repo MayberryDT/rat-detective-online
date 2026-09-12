@@ -9,6 +9,12 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Reconnect and own-case protection](verification/reconnect-case-protection-2026-09-11.md) | Latest private protocol-14 preview: 30-second identity/stats/case recovery, expiry and enemy-only carried-case disarms |
+| [Desktop sound-effects handoff](handoff-desktop-sound-effects-2026-09-11.md) | Separate desktop investigation: Brave music works, effects silent; mobile effects work; cause unconfirmed |
+| [Comic pickups and high launches](verification/comic-pickups-high-launch-2026-09-11.md) | Current private preview: accessible Icebox armor, exterior sewer pickups, illustrated timers and uniform high launches |
+| [Restock, bots and launchers](verification/restock-bots-launchers-2026-09-11.md) | Current private preview: 45 s restock dials, slower Big Cheese, bot audit and unrestricted vertical-launch steering |
+| [Pickup rewards and feedback](verification/pickup-rewards-feedback-2026-09-11.md) | Follow-up: medkit, card slap/audio, landmark and sewer rewards, pickup-first bots and matching carry arm |
+| [Pickup playtest refinements](verification/pickup-playtest-refinement-2026-09-11.md) | Current private preview: hosted parity, fast title preparation, silver/red/green effects, matching HUD, larger bursts and easier case collection |
 | [Pickups and Planted Evidence](verification/pickups-planted-evidence-2026-09-11.md) | September 11 pickups/Planted Evidence release: tuning, finite trap batches, classic toggle, muted testing and verification |
 | [Handoff — Pickups and Planted Evidence](handoff-pickups-planted-evidence-2026-09-11.md) | Continuation guide: tree state, file map, how to run the practice preview, verification status, gotchas and next steps |
 | [Responsive shooting](verification/responsive-shooting-2026-09-10.md) | Current private preview: immediate single-ID shots, matching incident volleys, authoritative reconciliation and bounded spatial sweeps |

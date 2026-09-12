@@ -1,5 +1,5 @@
 import {FoleyAudio} from '../audio/FoleyAudio';
-import { previewMuted } from '../audio/previewMuted';
+import { unlockEffectsAudio } from '../audio/effectsAudio';
 import {FoleyWorld} from '../audio/FoleyWorld';
 import * as THREE from 'three';
 import { ChaosView } from '../prototype/ChaosView';
@@ -136,7 +136,7 @@ export class GameSession {
         this.title.onGesture = () => {
             this.transport.prepare();
             void this.music.unlock();
-            if (!previewMuted() && this.stage.listener.context.state === 'suspended') void this.stage.listener.context.resume().catch(() => {});
+            unlockEffectsAudio();
         };
         this.title.onCue = cue => { this.foley.setEnabled(!document.hidden); this.foley.play(cue); };
         if (touchControlsAvailable()) this.touch = new TouchControls({canvas:this.stage.renderer.domElement,
@@ -316,7 +316,7 @@ export class GameSession {
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
-            case 'gameReset': this.roundWon=false;this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+            case 'gameReset': this.roundWon=false;this.rat?.entity.setPowerups(0,0);for(const {entity} of this.remotes.rats.values())entity.setPowerups(0,0);this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -326,10 +326,15 @@ export class GameSession {
      * The server remains the sole source of truth for both. */
     private applyPickupState(state: ChaosState): void {
         const protectedRats = new Set<RatEntity>();
-        for (const id of Object.keys(state.buffs ?? {})) {
-            const entity = id === this.myId ? this.rat?.entity : this.remotes.get(id);
-            if (entity) protectedRats.add(entity);
-        }
+        const apply=(id:string,entity:RatEntity)=>{
+            const buff=state.buffs?.[id];
+            const ironclad=Math.max(0,((buff?.ironcladUntil??0)-state.time)/1000);
+            const hustle=Math.max(0,((buff?.hustleUntil??0)-state.time)/1000);
+            entity.setPowerups(ironclad,hustle);
+            if(ironclad>0&&!entity.dead)protectedRats.add(entity);
+        };
+        if(this.rat)apply(this.myId,this.rat.entity);
+        for(const [id,{entity}] of this.remotes.rats)apply(id,entity);
         this.gun.setProtectedRats(protectedRats);
         const hustle = (state.buffs?.[this.myId]?.hustleUntil ?? 0) > state.time;
         this.rat?.setSpeedScale(hustle ? PICKUP_TUNING.hustleMultiplier : 1);

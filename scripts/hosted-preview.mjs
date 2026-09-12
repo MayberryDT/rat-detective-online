@@ -22,6 +22,7 @@ function privateIPv4(host){
 export function createHostedPreview({distDir,upstreamOrigin,token,
   browserOrigin,listenAddress='127.0.0.1',
   createUpstream=(url,options)=>new WebSocket(url,options),
+  fetchStatus=(url,options)=>fetch(url,options),
   onDiagnostic=report=>console.log(JSON.stringify({event:'client diagnostics',report})),
 }) {
   const origin=new URL(upstreamOrigin);
@@ -50,6 +51,20 @@ export function createHostedPreview({distDir,upstreamOrigin,token,
       if(url.pathname==='/health'){
         response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
         response.end(request.method==='HEAD'?undefined:JSON.stringify({ok:!closing,mode:'private-hosted-relay',connections:pairs.size}));return;
+      }
+      if(url.pathname==='/status'){
+        const room=url.searchParams.get('room')??'';
+        if(!/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(room)){response.writeHead(404);response.end();return;}
+        const upstreamUrl=new URL('/status',origin);upstreamUrl.searchParams.set('room',room);
+        const upstream=await fetchStatus(upstreamUrl,{headers:{Authorization:`Bearer ${token}`},redirect:'error',signal:AbortSignal.timeout(5000)});
+        if(!upstream.ok){response.writeHead(502);response.end();return;}
+        const data=await upstream.json();
+        // Never relay upstream headers or arbitrary content (including credentials).
+        if(data.room!==room||!Number.isInteger(data.world?.seed)||data.world.seed<0||data.world.seed>0xffffffff||![1,2].includes(data.world.version)){
+          response.writeHead(502);response.end();return;
+        }
+        response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+        response.end(request.method==='HEAD'?undefined:JSON.stringify({room,world:{seed:data.world.seed,version:data.world.version}}));return;
       }
       const pathname=decodeURIComponent(url.pathname),candidate=resolve(root,`.${pathname==='/'?'/index.html':pathname}`);
       const rel=relative(root,candidate);
@@ -117,7 +132,7 @@ export function createHostedPreview({distDir,upstreamOrigin,token,
       });
       upstream.on('open',()=>{for(const {data,isBinary} of pending){if(stopped)break;send(upstream,data,isBinary);}pending.length=0;bytes=0;});
       upstream.on('message',(data,isBinary)=>{if(!stopped)send(client,data,isBinary);});
-      for(const ws of [client,upstream]){ws.on('error',()=>stop());ws.on('close',()=>stop(1000,'Peer disconnected'));}
+      for(const ws of [client,upstream]){ws.on('error',()=>stop());ws.on('close',code=>stop(code===4001?4001:1000,code===4001?'Connected on a new transport':'Peer disconnected')); }
     });
   });
   return {
