@@ -21,6 +21,7 @@ import {
   type ScoreEntry,
   type ServerMessage,
   type Vec3Data,
+  type MovementInput,
   type WorldSpec,
 } from './networkProtocol';
 import { CHAOS_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, type ChaosState } from './chaosState';
@@ -253,6 +254,13 @@ function parseShotFields(value: Record<string, unknown>): { shotId: string; orig
   return { shotId, origin, direction };
 }
 
+function parseMovementInput(value:unknown):MovementInput|null {
+  if(!isRecord(value))return null;
+  const seq=value.seq===undefined?undefined:integer(value.seq),position=parseVec3(value.position),rotation=parseQuat(value.rotation),meshRotation=parseQuat(value.meshRotation);
+  if(seq===null||seq!==undefined&&(seq<1||!Number.isSafeInteger(seq))||!position||!rotation||!meshRotation)return null;
+  return{...(seq===undefined?{}:{seq}),position,rotation,meshRotation};
+}
+
 function parsePosePlayer(value: unknown): Extract<ServerMessage, { type: 'playerMoved' }>['player'] | null {
   if (!isRecord(value)) return null;
   const id = nonEmptyString(value.id, 64);
@@ -325,17 +333,24 @@ function parseClientBody(parsed:Record<string,unknown>):ClientMessage|null {
   }
 
   if (parsed.type === 'updateMovement') {
-    const position = parseVec3(parsed.position);
-    const rotation = parseQuat(parsed.rotation);
-    const meshRotation = parseQuat(parsed.meshRotation);
-    if (!position || !rotation || !meshRotation) return null;
-    return { type: 'updateMovement', position, rotation, meshRotation };
+    const movement=parseMovementInput(parsed);
+    return movement?{type:'updateMovement',...movement}:null;
   }
 
   if (parsed.type === 'shoot') {
     const shot = parseShotFields(parsed);
     if (!shot) return null;
-    return { type: 'shoot', ...shot };
+    const viewAt=parsed.viewAt===undefined?undefined:finiteNumber(parsed.viewAt);
+    const movement=parsed.movement===undefined?undefined:parseMovementInput(parsed.movement);
+    if(viewAt===null||movement===null||viewAt!==undefined&&viewAt<0)return null;
+    return { type: 'shoot', ...shot, ...(viewAt===undefined?{}:{viewAt}), ...(movement?{movement}:{}) };
+  }
+
+  if(parsed.type==='pickupIntent'){
+    const interactionId=nonEmptyString(parsed.interactionId,64),targetId=nonEmptyString(parsed.targetId,96);
+    const generation=finiteNumber(parsed.generation),movement=parseMovementInput(parsed.movement);
+    if(!interactionId||!targetId||generation===null||generation<0||!movement||(parsed.target!=='case'&&parsed.target!=='pickup'))return null;
+    return{type:'pickupIntent',interactionId,target:parsed.target,targetId,generation,movement};
   }
 
   if (parsed.type === 'hit') {
@@ -363,6 +378,8 @@ function parseChaos(value:unknown):ChaosState|null{
   if(!isRecord(value)||finiteNumber(value.time)===null||!isRecord(value.case)||!isRecord(value.dispatch)||!isRecord(value.possession)||!isRecord(value.notice))return null;
   const assignment=value.assignment===undefined?undefined:parseAssignment(value.assignment);
   if(assignment===null)return null;
+  if(value.epoch!==undefined&&!nonEmptyString(value.epoch,64))return null;
+  if(value.tick!==undefined&&(integer(value.tick)===null||Number(value.tick)<0))return null;
   const pose=(v:unknown)=>isRecord(v)&&!!parseVec3(v.p)&&!!parseQuat(v.q)&&!!parseVec3(v.v)&&!!parseVec3(v.spin);
   const c=value.case,d=value.dispatch;
   const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
@@ -430,7 +447,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const world = parseWorld(parsed.world);
       const protocolVersion = integer(parsed.protocolVersion);
       const serverTime = integer(parsed.serverTime);
-      if (!id || !player || !players || !round || !world || protocolVersion === null || serverTime === null) {
+      const movementSeq=parsed.movementSeq===undefined?undefined:integer(parsed.movementSeq);
+      if (!id || !player || !players || !round || !world || protocolVersion === null || serverTime === null ||
+          movementSeq===null || movementSeq!==undefined&&movementSeq<0) {
         return null;
       }
       if (player.id !== id || !players[id]) return null;
@@ -445,6 +464,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         incidents = parsed.incidents as IncidentId[];
       }
       return { type: 'welcome', id, player, players, round, world, protocolVersion, serverTime,
+        ...(movementSeq===undefined?{}:{movementSeq}),
         ...(isResumeToken(parsed.resumeToken) ? {resumeToken:parsed.resumeToken} : {}),
         ...(matchRoom ? {matchRoom} : {}), ...(incidents ? {incidents} : {}) };
     }
@@ -506,6 +526,32 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         movement=moves.players[0];
       }
       return { type: 'playerShot', shooterId, ...shot, ...(movement?{movement}:{}), ...(launch?{launch}:{}) };
+    }
+    case 'shotResult': {
+      const shotId=nonEmptyString(parsed.shotId,64),ballId=nonEmptyString(parsed.ballId,64),epoch=nonEmptyString(parsed.epoch,64);
+      const at=finiteNumber(parsed.at),tick=integer(parsed.tick),victimId=parsed.victimId===undefined?undefined:optionalString(parsed.victimId,64);
+      const outcomes=new Set(['first-step','rat-body','rat-head','ironclad-reflect','case-contact','world-bounce','dispatch-contact','pressure-contact','fake-case','lifetime','capacity','reset','rejected']);
+      const damage=parsed.damage===undefined?undefined:boundedInteger(parsed.damage,0,MAX_HP);
+      const point=parsed.point===undefined?undefined:parseVec3(parsed.point),normal=parsed.normal===undefined?undefined:parseVec3(parsed.normal);
+      const fallback=parsed.fallback===undefined?undefined:optionalString(parsed.fallback,80);
+      const rewindMs=parsed.rewindMs===undefined?undefined:finiteNumber(parsed.rewindMs),targetDelta=parsed.targetDelta===undefined?undefined:finiteNumber(parsed.targetDelta);
+      if(!shotId||!ballId||!epoch||at===null||at<0||tick===null||tick<0||!outcomes.has(String(parsed.outcome))||victimId===null||damage===null||point===null||normal===null||fallback===null||
+        rewindMs===null||targetDelta===null||(rewindMs!==undefined&&rewindMs<0)||(targetDelta!==undefined&&targetDelta<0)||
+        (parsed.compensated!==undefined&&typeof parsed.compensated!=='boolean'))return null;
+      return{type:'shotResult',shotId,ballId,outcome:parsed.outcome as Extract<ServerMessage,{type:'shotResult'}>['outcome'],at,tick,epoch,
+        ...(victimId?{victimId}:{}),...(damage===undefined?{}:{damage}),...(point?{point}:{}),...(normal?{normal}:{}),
+        ...(parsed.compensated===true?{compensated:true}:{}),...(fallback?{fallback}:{}),...(rewindMs===undefined?{}:{rewindMs}),...(targetDelta===undefined?{}:{targetDelta})};
+    }
+    case 'pickupResult': {
+      const interactionId=nonEmptyString(parsed.interactionId,64),targetId=nonEmptyString(parsed.targetId,96),epoch=nonEmptyString(parsed.epoch,64),playerId=nonEmptyString(parsed.playerId,64);
+      const at=finiteNumber(parsed.at),tick=integer(parsed.tick),effectUntil=parsed.effectUntil===undefined?undefined:finiteNumber(parsed.effectUntil);
+      const reasons=new Set(['stale','unavailable','blocked','ineligible','too-far','invalid-target','rate-limited']);
+      if(!interactionId||!targetId||!epoch||!playerId||at===null||at<0||tick===null||tick<0||typeof parsed.accepted!=='boolean'||
+        (parsed.target!=='case'&&parsed.target!=='pickup')||(parsed.pickup!==undefined&&!isPickupKind(parsed.pickup))||effectUntil===null||
+        (parsed.reason!==undefined&&!reasons.has(String(parsed.reason))))return null;
+      return{type:'pickupResult',interactionId,target:parsed.target,targetId,accepted:parsed.accepted,at,tick,epoch,playerId,
+        ...(parsed.pickup===undefined?{}:{pickup:parsed.pickup}),...(effectUntil===undefined?{}:{effectUntil}),
+        ...(parsed.reason===undefined?{}:{reason:parsed.reason as Extract<ServerMessage,{type:'pickupResult'}>['reason']})};
     }
     case 'playerDamaged': {
       const id = nonEmptyString(parsed.id, 64);

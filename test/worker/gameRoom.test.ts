@@ -324,6 +324,7 @@ describe('GameRoom websockets', () => {
     expect(born.origin).toEqual(shot.origin);
     expect(born.launch).toEqual({at:expect.any(Number),balls:[{id:shot.shotId,velocity:{x:0,y:175,z:0}}]});
     expect(parseServerMessage(born)).toEqual(born);
+    expect(await client.inbox.waitFor('shotResult',message=>message.shotId===shot.shotId&&message.outcome==='first-step')).toMatchObject({ballId:shot.shotId,epoch:expect.any(String),tick:expect.any(Number)});
     const observed=await observer.inbox.waitFor('playerShot',message=>message.shotId===shot.shotId);
     expect(observed).toMatchObject({shooterId:welcome.id,origin:shot.origin,direction:shot.direction});
     expect(observed.launch).toBeUndefined();
@@ -336,6 +337,21 @@ describe('GameRoom websockets', () => {
       game.handleShoot(welcome.id, {...shot,shotId:'after-victory'});
       expect(game.chaos.snapshot(false).shots.some(ball=>ball.id==='after-victory')).toBe(false);
     });
+  });
+
+  it('resolves a crossed power-up immediately through a sequenced pickup intent',async()=>{
+    const room=`graybox-pickup-intent-${crypto.randomUUID()}`,client=await openClient(room);
+    client.ws.send(joinPayload('Collector'));const welcome=await client.inbox.waitFor('welcome');
+    let target:{id:string;x:number;y:number;z:number;availableAt?:number}|undefined;
+    await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
+      const game=instance as any;game.startChaos();target=game.chaos.snapshot(false).pickups.find((p:any)=>p.kind==='quick-fix');
+      const player=game.players.get(welcome.id);player.hp=1;player.x=target!.x-2;player.y=target!.y-.8;player.z=target!.z;
+    });
+    const movement={seq:(welcome.movementSeq??0)+1,position:{x:target!.x+2,y:target!.y-.8,z:target!.z},
+      rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}};
+    client.ws.send(JSON.stringify({type:'pickupIntent',interactionId:'crossing',target:'pickup',targetId:target!.id,generation:target!.availableAt??0,movement}));
+    expect(await client.inbox.waitFor('pickupResult',message=>message.interactionId==='crossing')).toMatchObject({accepted:true,pickup:'quick-fix',playerId:welcome.id});
+    expect(await client.inbox.waitFor('playerHealed',message=>message.id===welcome.id)).toMatchObject({hp:3,cause:'pickup'});
   });
 
   it('relays shot descriptors and restores a dead player through the alarm', async () => {

@@ -58,6 +58,7 @@ describe('server timeline mapped onto the local render clock',()=>{
         expect(b.size).toBe(4);
         const renderAt=b.delayMs+150;
         expect(b.sample(renderAt)?.x).toBeCloseTo(15);
+        expect(b.presentedSourceTime).toBeCloseTo(epoch+150);
     });
     it('improves initial clock mapping as a delayed first batch drains without discarding its spacing',()=>{
         const b=new SnapshotBuffer();

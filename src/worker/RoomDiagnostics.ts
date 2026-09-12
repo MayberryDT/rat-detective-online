@@ -26,6 +26,17 @@ export class RoomDiagnostics {
   }
   private started = 0;
   private shots = outcomes();
+  private netplayCounts: Record<string,number> = {};
+  private netplayLatency: Record<string,{samples:number;total:number;max:number}> = {};
+  private rewind={samples:0,totalMs:0,maxMs:0,totalDelta:0,maxDelta:0};
+  netplay(kind:'shot'|'pickup'|'movement',result:string,elapsedMs:number,detail?:string,measure?:{rewindMs?:number;targetDelta?:number}):void {
+    const key=`${kind}:${result}${detail?`:${detail}`:''}`;
+    this.netplayCounts[key]=(this.netplayCounts[key]??0)+1;
+    const sample=this.netplayLatency[`${kind}:${result}`]??={samples:0,total:0,max:0};
+    sample.samples++;sample.total+=Math.max(0,elapsedMs);sample.max=Math.max(sample.max,elapsedMs);
+    if(measure?.rewindMs!==undefined){const r=this.rewind;r.samples++;r.totalMs+=measure.rewindMs;r.maxMs=Math.max(r.maxMs,measure.rewindMs);
+      r.totalDelta+=measure.targetDelta??0;r.maxDelta=Math.max(r.maxDelta,measure.targetDelta??0);}
+  }
   private ticks = 0;
   private steps = 0;
   private elapsed = 0;
@@ -84,6 +95,10 @@ export class RoomDiagnostics {
       droppedSimulationMs: round(this.dropped), balls: sample.balls, peakBalls: this.peakBalls,
       snapshotAvgBytes: Math.round(this.snapshotBytes / this.ticks), snapshotMaxBytes: this.maxSnapshotBytes,
       snapshotSentBytes: this.sentBytes, snapshotsOverBudget: this.overBudget, shots: this.shots,
+      netplay: {counts:this.netplayCounts,latency:Object.fromEntries(Object.entries(this.netplayLatency).map(([kind,sample])=>[kind,
+        {samples:sample.samples,avgMs:round(sample.total/sample.samples),maxMs:round(sample.max)}])),rewind:{samples:this.rewind.samples,
+          avgMs:this.rewind.samples?round(this.rewind.totalMs/this.rewind.samples):0,maxMs:round(this.rewind.maxMs),
+          targetDeltaAvg:this.rewind.samples?round(this.rewind.totalDelta/this.rewind.samples):0,targetDeltaMax:round(this.rewind.maxDelta)}},
       eventSilenceMaxMs: round(this.maxEventSilence), socketEvents: this.receivedEvents,
       checkpointSettlements: this.checkpointSettlements,
       checkpointSettlementMaxMs: round(this.maxCheckpointSettlement), checkpointFailures: this.checkpointFailures,
@@ -92,6 +107,8 @@ export class RoomDiagnostics {
     this.operations={};this.batches={tick:0,event:0,poses:0,maxPoses:0};
     this.traffic={};this.closes={};this.flow={inFlight:0,inFlightBytes:0,queued:0,queuedBytes:0,coalesced:0,ackLagMaxMs:0};
     this.started = now; this.shots = outcomes(); this.ticks = this.steps = this.elapsed = this.maxGap = this.cost = this.maxCost = this.dropped = this.peakBalls = this.snapshotBytes = this.maxSnapshotBytes = this.sentBytes = this.overBudget = 0;
+    this.netplayCounts={};this.netplayLatency={};
+    this.rewind={samples:0,totalMs:0,maxMs:0,totalDelta:0,maxDelta:0};
     this.maxEventSilence = this.receivedEvents = this.checkpointSettlements = this.maxCheckpointSettlement = this.checkpointFailures = 0;
     this.suppressedMovementCount = 0;
     return result;

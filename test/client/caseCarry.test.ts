@@ -8,7 +8,7 @@ import type { RatEntity } from '../../src/entities/RatEntity';
 import { createRatMesh } from '../../src/utils/RatModel';
 import { RatAnimator } from '../../src/utils/RatAnimator';
 
-vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} dispose(){}}}));
+vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
 
 // This is a held-case transform/deflection check, not a city geometry test.
 vi.mock('../../src/shared/grayboxLayout', () => ({
@@ -35,6 +35,31 @@ function player(id:string,yaw=0):PlayerData{
         hatType:'fedora',hatColor:0x343434,coatColor:0x555555,furColor:0xbe9767,hp:3,kills:0,deaths:0};
 }
 describe('natural briefcase carry',()=>{
+    it('keeps the accepted sleeve attached during anticipated pickup and removes it on rejection or timeout',()=>{
+        const state=new ChaosSimulation(new Map(),()=>{}).snapshot(false);
+        const carrier=player('local'),mesh=createRatMesh();mesh.position.set(carrier.x,0,carrier.z);
+        const entity={mesh,isPlayer:true,dead:false,name:'You'} as RatEntity;
+        const scene=new THREE.Scene(),view=new ChaosView(scene,id=>id===carrier.id?entity:undefined,undefined,false);
+        const camera=new THREE.PerspectiveCamera();
+        try{
+            view.setScores([],carrier.id);view.apply(state);view.update(1/60,camera);
+            expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
+            for(const outcome of ['rejected','timeout'] as const){
+                view.anticipateInteraction(outcome,{target:'case',targetId:'primary',generation:state.case.pickupAfter});
+                view.update(1/60,camera);
+                expect(mesh.getObjectByName('rat-case-cuff')).toBeDefined();
+                const handle=scene.getObjectByName('case-handle-grip')!.getWorldPosition(new THREE.Vector3());
+                const grip=mesh.getObjectByName('case-sleeve-grip')!.getWorldPosition(new THREE.Vector3());
+                expect(handle.distanceTo(grip)).toBeLessThan(1e-6);
+                expect(state.case.owner).toBeNull();
+                if(outcome==='timeout')view.cancelInteraction(outcome);
+                else view.resolveInteraction({type:'pickupResult',interactionId:outcome,target:'case',targetId:'primary',
+                    accepted:false,at:state.time,tick:state.tick??0,epoch:state.epoch??'test',playerId:carrier.id});
+                view.update(1/60,camera);
+                expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
+            }
+        }finally{view.dispose();}
+    });
     it('renders three temporary cases, anchors an extra to its carrier, and removes all extra visuals on expiry',()=>{
         const simulation=new ChaosSimulation(new Map(),()=>{}),state=simulation.snapshot(false);
         const carrier=player('extra-carrier'),mesh=createRatMesh();mesh.position.set(carrier.x,0,carrier.z);

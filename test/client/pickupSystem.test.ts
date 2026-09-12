@@ -83,6 +83,25 @@ describe('pickup system',()=>{
         expect(buffs[a.id]?.ironcladUntil).toBeGreaterThan(now);
         expect(buffs[b.id]).toBeUndefined();
     });
+    it('correlates an intent that arrives just after the same player won the automatic claim',()=>{
+        const {sim,a,now}=fixture(),target=site(sim,'hustle')!,generation=target.availableAt??0;
+        stand(a,target);sim.step(1/60,now+16);
+        expect(sim.claimInteraction(a.id,'pickup',target.id,generation,now+20)).toMatchObject({accepted:true,pickup:'hustle'});
+    });
+    it('claims a crossed pickup from a fresh bounded movement segment but rejects a teleport',()=>{
+        const {sim,a,now}=fixture();a.hp=1;
+        const target=site(sim,'quick-fix')!;
+        const from={x:target.x-2,y:target.y-.8,z:target.z},to={x:target.x+2,y:target.y-.8,z:target.z};
+        stand(a,from);sim.step(0,now);
+        sim.recordMovement(a.id,from,to,now+20,1);
+        const claimed=sim.claimInteraction(a.id,'pickup',target.id,target.availableAt??0,now+20);
+        expect(claimed).toMatchObject({accepted:true,pickup:'quick-fix'});expect(a.hp).toBe(MAX_HP);
+
+        const other=sites(sim).find(p=>p.kind==='hustle')!;
+        const farFrom={x:other.x-4,y:other.y-.8,z:other.z},farTo={x:other.x+4,y:other.y-.8,z:other.z};
+        stand(a,farFrom);sim.recordMovement(a.id,farFrom,farTo,now+40,2);
+        expect(sim.claimInteraction(a.id,'pickup',other.id,other.availableAt??0,now+40)).toMatchObject({accepted:false,reason:'too-far'});
+    });
     it('quick fix fills a living rat to normal HP and waits at full health',()=>{
         const {sim,a,b,now}=fixture();
         const target=site(sim,'quick-fix')!;stand(a,target);

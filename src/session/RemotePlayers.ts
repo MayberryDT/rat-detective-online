@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
-import type { PlayerData } from '../shared/networkProtocol';
+import type { PlayerData, Vec3Data } from '../shared/networkProtocol';
 import { SnapshotBuffer, BotSnapshotBuffer } from '../shared/SnapshotBuffer';
 
 interface RemoteRat {
@@ -49,6 +49,25 @@ export class RemotePlayers {
     }
     get(id: string): RatEntity | undefined { return this.rats.get(id)?.entity; }
     idFor(entity: RatEntity): string | undefined { return this.ids.get(entity); }
+    /** Server time represented by the rat under the crosshair. This is evidence
+     * for bounded authority rewind, never a client-selected hit target. */
+    viewAt(origin:Vec3Data,direction:Vec3Data):number|undefined {
+        const magnitude=Math.hypot(direction.x,direction.y,direction.z)||1;
+        const dx=direction.x/magnitude,dy=direction.y/magnitude,dz=direction.z/magnitude;
+        let best=Infinity,viewAt:number|undefined;
+        for(const {entity,snapshots} of this.rats.values()){
+            if(entity.dead||snapshots.presentedSourceTime===undefined)continue;
+            const p=entity.body.position,x=p.x-origin.x,y=p.y+.95-origin.y,z=p.z-origin.z;
+            const along=x*dx+y*dy+z*dz;if(along<=0||along>=best)continue;
+            const lateral=Math.hypot(x-dx*along,y-dy*along,z-dz*along);
+            if(lateral<=1.25){best=along;viewAt=snapshots.presentedSourceTime;}
+        }
+        return viewAt;
+    }
+    timingDiagnostics():unknown {
+        const delays=[...this.rats.values()].map(({snapshots})=>({delayMs:snapshots.delayMs,viewAt:snapshots.presentedSourceTime??null}));
+        return{rats:delays.length,minimumDelayMs:delays.length?Math.min(...delays.map(d=>d.delayMs)):0,maximumDelayMs:delays.length?Math.max(...delays.map(d=>d.delayMs)):0};
+    }
 
     /** Sample once per display frame, before fixed-step collision queries. */
     prepareFrame(now = this.now()): void {

@@ -147,6 +147,8 @@ export class GameRoom extends DurableObject<Env> {
   private lastCheckpointAt = new Map<string, number>();
   private lastActiveAt = new Map<string, number>();
   private recentShots = new Map<string, string[]>();
+  private lastMovementSequence = new Map<string, number>();
+  private readonly shotAcceptedAt = new Map<string, number>();
   private lastMovementBroadcast = new Map<string, { pose: MovementPose; at: number; stationary: boolean }>();
   private readonly rateLimiter = new RateLimiter();
   private messagesIn = 0;
@@ -524,11 +526,23 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
 
+    if(message.type==='pickupIntent'){
+      this.touchActivity(playerId);
+      if(!this.rateLimiter.allow(`${playerId}:pickup`,20,1000,this.now())){
+        const state=this.chaos?.snapshot(false),at=this.now();
+        this.sendToPlayer(playerId,{type:'pickupResult',interactionId:message.interactionId,target:message.target,targetId:message.targetId,
+          accepted:false,at,tick:state?.tick??0,epoch:state?.epoch??'room',playerId,reason:'rate-limited'});
+        this.diagnostics.netplay('pickup','rate-limited',0);return;
+      }
+      this.handlePickupIntent(playerId,message);return;
+    }
+
     this.touchActivity(playerId);
 
     if (message.type === 'shoot') {
       if (!this.rateLimiter.allow(`${playerId}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) {
         this.diagnostics.shot('rateLimited');
+        this.sendShotRejection(playerId,message.shotId,'rate-limited');
         return;
       }
       this.handleShoot(playerId, message);
@@ -789,6 +803,7 @@ export class GameRoom extends DurableObject<Env> {
       world: this.world,
       protocolVersion: PROTOCOL_VERSION,
       serverTime: this.lastSnapshotAt,
+      movementSeq:this.lastMovementSequence.get(id)??0,
       incidents: incidentRoster(this.evidenceMode).map(incident => incident.id),
     };
   }
@@ -806,9 +821,13 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private handleMovement(playerId: string, message: Extract<ClientMessage, { type: 'updateMovement' }>, at = this.now()): void {
+  private handleMovement(playerId: string, message: Extract<ClientMessage, { type: 'updateMovement' }>, at = this.now()): boolean {
     const player = this.players.get(playerId);
-    if (!player || player.hp <= 0) return;
+    if (!player || player.hp <= 0) return false;
+    const previousSeq=this.lastMovementSequence.get(playerId)??0,seq=message.seq??previousSeq+1;
+    if(seq<=previousSeq){this.diagnostics.netplay('movement','stale-sequence',0);return false;}
+    this.lastMovementSequence.set(playerId,seq);
+    const from={x:player.x,y:player.y,z:player.z};
     const { position, corrected } = clampPosition(message.position);
     player.x = position.x;
     player.y = position.y;
@@ -821,6 +840,7 @@ export class GameRoom extends DurableObject<Env> {
     player.meshQy = message.meshRotation.y;
     player.meshQz = message.meshRotation.z;
     player.meshQw = message.meshRotation.w;
+    this.chaos?.recordMovement(playerId,from,position,at,seq);
     this.persistPlayer(player, corrected);
 
     const pose = {
@@ -844,23 +864,31 @@ export class GameRoom extends DurableObject<Env> {
     // persistence above still process every input; corrections are never hidden.
     if (!corrected && unchanged && previous.stationary && at - previous.at < 500) {
       this.diagnostics.suppressedMovement();
-      return;
+      return true;
     }
     this.lastMovementBroadcast.set(playerId, { pose, at, stationary: !!unchanged });
     if (corrected) {
+      this.diagnostics.netplay('movement','corrected',0);
       this.broadcast({ type: 'playerCorrected', player: pose, at });
-      return;
+      return true;
     }
     this.broadcast({ type: 'playerMoved', player: pose, at }, playerId);
+    return true;
   }
 
   private handleShoot(playerId: string, message: Extract<ClientMessage, { type: 'shoot' }>): void {
     const player = this.players.get(playerId);
-    if (!player || player.hp <= 0) { this.diagnostics.shot('dead'); return; }
-    if (this.round.phase !== 'playing') { this.diagnostics.shot('roundOver'); return; }
-    if (!isPlausibleShot(message.origin, message.direction, player)) { this.diagnostics.shot('implausible'); return; }
-    if (!this.rememberShot(playerId, message.shotId)) { this.diagnostics.shot('duplicate'); return; }
+    const reject=(reason:'dead'|'roundOver'|'implausible'|'duplicate')=>{
+      this.diagnostics.shot(reason);this.sendShotRejection(playerId,message.shotId,reason);
+    };
+    if (!player || player.hp <= 0) { reject('dead'); return; }
+    if (this.round.phase !== 'playing') { reject('roundOver'); return; }
     this.startChaos();
+    if(message.movement)this.handleMovement(playerId,{type:'updateMovement',...message.movement},this.now());
+    if (!isPlausibleShot(message.origin, message.direction, player)) { reject('implausible'); return; }
+    if (!this.rememberShot(playerId, message.shotId)) { reject('duplicate'); return; }
+    this.shotAcceptedAt.set(message.shotId,performance.now());
+    if(this.shotAcceptedAt.size>128)this.shotAcceptedAt.delete(this.shotAcceptedAt.keys().next().value!);
     const fired=this.chaos?.shoot(playerId,message);
     this.diagnostics.shot('accepted');
     const event:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:playerId,
@@ -874,6 +902,36 @@ export class GameRoom extends DurableObject<Env> {
       }
     }
     this.broadcast(event,playerId);
+  }
+
+  private sendToPlayer(playerId:string,message:ServerMessage):void {
+    for(const ws of this.recipients())if(this.getAttachment(ws).playerId===playerId)this.send(ws,message);
+  }
+  private sendShotRejection(playerId:string,shotId:string,reason:string):void {
+    const state=this.chaos?.snapshot(false),at=this.now();
+    this.sendToPlayer(playerId,{type:'shotResult',shotId,ballId:shotId,outcome:'rejected',at,tick:state?.tick??0,epoch:state?.epoch??'room',fallback:reason});
+    this.diagnostics.netplay('shot','rejected',0,reason);
+  }
+  private applyShotEvents():void {
+    for(const event of this.chaos?.drainShotEvents()??[]){
+      if(event.owner)this.sendToPlayer(event.owner,{type:'shotResult',shotId:event.shotId,ballId:event.ballId,outcome:event.outcome,at:event.at,tick:event.tick,epoch:event.epoch,
+        ...(event.victimId?{victimId:event.victimId}:{}),...(event.damage===undefined?{}:{damage:event.damage}),...(event.point?{point:event.point}:{}),
+        ...(event.normal?{normal:event.normal}:{}),...(event.compensated?{compensated:true}:{}),...(event.fallback?{fallback:event.fallback}:{}),
+        ...(event.rewindMs===undefined?{}:{rewindMs:event.rewindMs}),...(event.targetDelta===undefined?{}:{targetDelta:event.targetDelta})});
+      const started=this.shotAcceptedAt.get(event.shotId);
+      this.diagnostics.netplay('shot',event.outcome,started===undefined?0:performance.now()-started,event.compensated?'compensated':event.fallback,
+        {rewindMs:event.rewindMs,targetDelta:event.targetDelta});
+    }
+  }
+  private handlePickupIntent(playerId:string,message:Extract<ClientMessage,{type:'pickupIntent'}>):void {
+    const started=performance.now();this.startChaos();const at=this.now();
+    this.handleMovement(playerId,{type:'updateMovement',...message.movement},at);
+    const result=this.chaos!.claimInteraction(playerId,message.target,message.targetId,message.generation,at),state=this.chaos!.snapshot(false);
+    this.applyPickupEvents();
+    this.sendToPlayer(playerId,{type:'pickupResult',interactionId:message.interactionId,target:message.target,targetId:message.targetId,
+      accepted:result.accepted,at,tick:state.tick??0,epoch:state.epoch??'room',playerId,...(result.pickup?{pickup:result.pickup}:{}),
+      ...(result.effectUntil===undefined?{}:{effectUntil:result.effectUntil}),...(result.reason?{reason:result.reason}:{})});
+    this.diagnostics.netplay('pickup',result.accepted?'accepted':'rejected',performance.now()-started,result.reason);
   }
 
   /** Pickup claims are resolved authoritatively in the simulation; the room owns
@@ -971,6 +1029,7 @@ export class GameRoom extends DurableObject<Env> {
         if(this.chaos?.assignmentState&&(this.round.phase!=='won'||this.round.resetAt!==event.due_at))continue;
         this.lastMovementBroadcast.clear();
         this.chaos?.reset();
+        this.applyShotEvents();
         this.round = playingRound(this.now());
         this.beginAssignment();
 
@@ -1055,6 +1114,7 @@ export class GameRoom extends DurableObject<Env> {
     this.lastActiveAt.delete(playerId);
     this.recentShots.delete(playerId);
     this.lastMovementBroadcast.delete(playerId);
+    this.lastMovementSequence.delete(playerId);
     this.rateLimiter.clear(playerId);
     this.broadcast({ type: 'playerLeft', id: playerId });
     this.broadcastScoreboard();
@@ -1123,6 +1183,7 @@ export class GameRoom extends DurableObject<Env> {
         this.serverBots?.step(1/60, stepAt, this.players, this.botState, this.round.phase==='playing');
         this.chaos.step(1/60,stepAt,this.round.phase==='playing');
         this.applyPickupEvents();
+        this.applyShotEvents();
         this.finishAssignment();
       }
       this.flushMovement('tick');

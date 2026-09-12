@@ -94,6 +94,10 @@ export interface CaseState extends PhysicalPose {
 export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
 export interface ChaosState {
     time: number;
+    /** Monotonic simulation identity for time-aligned interactions. Optional only
+     * while restoring pre-protocol-15 checkpoints and older test fixtures. */
+    epoch?: string;
+    tick?: number;
     assignment?: AssignmentState;
     case: CaseState;
     extraCases?: Array<CaseState & {id:string}>;

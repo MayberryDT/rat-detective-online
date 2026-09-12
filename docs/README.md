@@ -9,6 +9,7 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Model and netplay integration](verification/model-netplay-integration-2026-09-12.md) | Accepted model and protocol-15 branch merge, validation and branch cleanup |
 | [Accepted pickup/reconnect production release](verification/pickup-reconnect-production-2026-09-11.md) | Current live protocol 14: approved pickup, bot, launcher, case and reconnect refinements; commit/version and verification |
 | [Reconnect and own-case protection](verification/reconnect-case-protection-2026-09-11.md) | Pre-release protocol-14 verification: 30-second identity/stats/case recovery, expiry and enemy-only carried-case disarms |
 | [Desktop sound-effects handoff](handoff-desktop-sound-effects-2026-09-11.md) | Separate desktop investigation: Brave music works, effects silent; mobile effects work; cause unconfirmed |

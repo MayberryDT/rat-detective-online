@@ -3,11 +3,9 @@
 ## September 12 outfit direction and prototype
 
 Tyler approved one shared fedora, the three-button coat, eight hat/coat colors,
-four linked highlights and four furs (1,024 appearances). The first actual model
-is implemented in the uncommitted source and matching private preview. Review
+four linked highlights and four furs (1,024 appearances). The final model was accepted in gameplay on September 12 and committed. Review
 [the case-sleeve follow-up](verification/rat-case-sleeve-2026-09-12.md) for links,
-checks and remaining proportion/readability decisions. Further micro-animation
-waits until the model is approved. The dated September 8 notes below remain history.
+checks and design provenance. Further micro-animation is separate future work. The dated September 8 notes below remain history.
 
 Reviewed **2026-09-08**. These are remaining directions and preservation notes, not a new request to rebuild the map. See [current state](current-state.md).
 

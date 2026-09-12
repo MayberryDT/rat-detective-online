@@ -79,7 +79,8 @@ export class ChaosEncoder {
       const encoded=key==='pressure'?(state.pressure===prepared.pressure?prepared.pressureText:rounded(value)):prepared.rest.get(key)!;
       if(full||this.rest.get(key)!==encoded){rest.push(JSON.stringify(key)+':'+encoded);this.rest.set(key,encoded);}
     }
-    const payload='{"type":"chaosFrame",'+(this.deltaMotion?'"motionEncoding":"delta-v1",':'')+'"stream":'+JSON.stringify(this.stream)+',"seq":'+seq+',"base":'+(full?0:seq-1)+',"time":'+rounded(state.time)+',"definitions":'+JSON.stringify(definitions)+',"motion":['+motion.join(',')+'],"rest":{'+rest.join(',')+'},"impacts":'+(state.impacts===prepared.impacts?prepared.impactText:rounded(state.impacts))+'}';
+    const identity=state.epoch===undefined&&state.tick===undefined?'':',"epoch":'+JSON.stringify(state.epoch??'legacy')+',"tick":'+Math.max(0,Math.floor(state.tick??0));
+    const payload='{"type":"chaosFrame",'+(this.deltaMotion?'"motionEncoding":"delta-v1",':'')+'"stream":'+JSON.stringify(this.stream)+',"seq":'+seq+',"base":'+(full?0:seq-1)+',"time":'+rounded(state.time)+identity+',"definitions":'+JSON.stringify(definitions)+',"motion":['+motion.join(',')+'],"rest":{'+rest.join(',')+'},"impacts":'+(state.impacts===prepared.impacts?prepared.impactText:rounded(state.impacts))+'}';
     const bytes=textEncoder.encode(payload).byteLength;
     if(bytes>MAX_SERVER_MESSAGE_BYTES)throw new Error('Compact snapshot budget exceeded');
     return {payload,seq,bytes,ack:{type:'chaosAck',stream:this.stream,seq}};
@@ -107,7 +108,7 @@ export class ChaosDecoder {
     if(value.type!=='chaosFrame'){const message=parseServerMessage(value);return message?{message}:null;}
     const f=value;
     if(f.motionEncoding!==undefined&&f.motionEncoding!=='delta-v1')return null;
-    if(!id(f.stream)||!integer(f.seq)||f.seq<1||!integer(f.base)||f.base<0||!record(f.rest)||
+    if(!id(f.stream)||(f.epoch!==undefined&&!id(f.epoch))||(f.tick!==undefined&&(!integer(f.tick)||f.tick<0))||!integer(f.seq)||f.seq<1||!integer(f.base)||f.base<0||!record(f.rest)||
       !Array.isArray(f.definitions)||f.definitions.length>CHAOS_TUNING.maxShots||!Array.isArray(f.motion)||f.motion.length>CHAOS_TUNING.maxShots)return null;
     const full=f.base===0;
     if(!full&&(f.stream!==this.stream||f.base!==this.seq||f.seq!==this.seq+1))return null;
@@ -144,7 +145,7 @@ export class ChaosDecoder {
     if(rest.assignment===null)delete rest.assignment;
     if(rest.pickups===null)delete rest.pickups;
     if(rest.buffs===null)delete rest.buffs;
-    const message=parseServerMessage({type:'chaos',state:{...rest,time:f.time,shots,impacts:f.impacts}});
+    const message=parseServerMessage({type:'chaos',state:{...rest,time:f.time,...(f.epoch===undefined?{}:{epoch:f.epoch}),...(f.tick===undefined?{}:{tick:f.tick}),shots,impacts:f.impacts}});
     if(!message||message.type!=='chaos')return null;
     this.stream=f.stream;this.seq=f.seq;this.definitions=definitions;this.rest=structuredClone(rest);this.motions=motions;
     return {message,ack:{type:'chaosAck',stream:f.stream,seq:f.seq}};

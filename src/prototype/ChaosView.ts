@@ -19,7 +19,7 @@ import { incidentInfo } from '../shared/incidentCatalog';
 import { DispatchHud } from './DispatchHud';
 import { AssignmentDestinations } from './AssignmentDestinations';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
-import type { Vec3Data, ServerMessage, ShotDescriptor } from '../shared/networkProtocol';
+import type { Vec3Data, ServerMessage, ShotDescriptor, PickupTarget } from '../shared/networkProtocol';
 import { locateCase } from './caseLocator';
 import { PressureMachine } from './PressureMachine';
 import { CaseBeacon } from './CaseBeacon';
@@ -31,8 +31,13 @@ import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '
 import { PickupVisual } from './PickupVisual';
 import {powerupCard} from './pickupArtwork';
 import { PICKUP_COPY, PICKUP_TUNING, activeBuffs, type BuffMap } from '../shared/pickups';
+import {closestPointOnSegment} from '../shared/netplay';
 
 import { updateCaseCarryPose } from './CaseCarryPose';
+
+export interface InteractionCandidate {
+    target:PickupTarget;targetId:string;generation:number;pickup?:import('../shared/pickups').PickupKind;
+}
 
 export class ChaosView {
     private readonly root=new THREE.Group();
@@ -44,6 +49,9 @@ export class ChaosView {
     private readonly buffCards=new Map<'ironclad'|'hustle',HTMLElement>();
     private toastUntil=0;
     private localBuffs={ironcladUntil:0,hustleUntil:0};
+    private readonly pendingInteractions=new Map<string,InteractionCandidate>();
+    private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
+    private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
     private readonly caseBeacon:CaseBeacon;
     private readonly dispatch=new THREE.Group();
     private readonly kiosks:Array<ReturnType<typeof buildDispatchModel>>=[];
@@ -180,9 +188,60 @@ export class ChaosView {
     launch(message:Extract<ServerMessage,{type:'playerShot'}>):void {
         if(this.extrapolate&&!this.localShots.confirm(message,performance.now()))this.presentation.launch(message,performance.now());
     }
+    shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {this.localShots.result(message);}
+    /** Use the exact segment crossed this display frame so high-speed movement
+     * cannot step over a small pickup between render samples. */
+    interaction(from:Vec3Data,to:Vec3Data,fullHealth:boolean):InteractionCandidate|undefined {
+        const state=this.state;if(!state)return;
+        const now=state.time+Math.min(80,Math.max(0,performance.now()-this.receivedAt));
+        let best:InteractionCandidate|undefined,bestDistance=Infinity;
+        const consider=(candidate:InteractionCandidate,p:Vec3Data,radius:number)=>{
+            const closest=closestPointOnSegment(from,to,p),distance=Math.hypot(closest.x-p.x,closest.y-p.y,closest.z-p.z);
+            if(distance<=radius&&distance<bestDistance){best=candidate;bestDistance=distance;}
+        };
+        const c=state.case;
+        const classicWeaponized=state.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='evidence-tampering';
+        if(!this.anticipatedCase&&!c.owner&&!c.returningUntil&&!c.missileOwner&&!classicWeaponized&&state.assignment?.phase!=='closed'&&
+            Math.hypot(c.v.x,c.v.y,c.v.z)<=CHAOS_TUNING.casePickupMaxSpeed&&now>=c.pickupAfter)
+            consider({target:'case',targetId:'primary',generation:c.pickupAfter},this.caseRoot.position,CHAOS_TUNING.pickupRadius);
+        for(const pickup of state.pickups??[]){
+            if((pickup.availableAt??0)>now||this.pendingTarget('pickup',pickup.id)||fullHealth&&pickup.kind==='quick-fix')continue;
+            consider({target:'pickup',targetId:pickup.id,generation:pickup.availableAt??0,pickup:pickup.kind},pickup,PICKUP_TUNING.claimRadius);
+        }
+        return best;
+    }
+    private pendingTarget(target:PickupTarget,targetId:string):boolean {
+        return [...this.pendingInteractions.values()].some(candidate=>candidate.target===target&&candidate.targetId===targetId);
+    }
+    anticipateInteraction(interactionId:string,candidate:InteractionCandidate):void {
+        this.pendingInteractions.set(interactionId,candidate);
+        if(candidate.target==='pickup')this.pickups.get(candidate.targetId)?.setPending(true);
+        else this.anticipatedCase={};
+    }
+    resolveInteraction(message:Extract<ServerMessage,{type:'pickupResult'}>):void {
+        const candidate=this.pendingInteractions.get(message.interactionId);this.pendingInteractions.delete(message.interactionId);
+        if(message.target==='pickup'){
+            if(message.accepted)this.acceptedPickups.set(message.targetId,{generation:candidate?.generation??0,tick:message.tick,epoch:message.epoch});
+            else this.pickups.get(message.targetId)?.setPending(false);
+            if(message.accepted&&message.pickup){const copy=PICKUP_COPY[message.pickup];this.toast(copy.title,copy.effect);}
+        }else if(!message.accepted)this.anticipatedCase=null;
+        else this.anticipatedCase={acceptedTick:message.tick,epoch:message.epoch};
+        if(!candidate&&message.accepted&&message.pickup){const copy=PICKUP_COPY[message.pickup];this.toast(copy.title,copy.effect);}
+    }
+    clearInteractions():void {
+        this.pendingInteractions.clear();this.acceptedPickups.clear();this.anticipatedCase=null;
+        for(const visual of this.pickups.values())visual.setPending(false);
+    }
+    cancelInteraction(interactionId:string):void {
+        const candidate=this.pendingInteractions.get(interactionId);this.pendingInteractions.delete(interactionId);
+        if(candidate?.target==='pickup')this.pickups.get(candidate.targetId)?.setPending(false);
+        else if(candidate)this.anticipatedCase=null;
+    }
     apply(state:ChaosState){
         this.foley?.apply(state);
         this.state=state;this.receivedAt=performance.now();
+        if(this.anticipatedCase?.acceptedTick!==undefined&&state.epoch===this.anticipatedCase.epoch&&(state.tick??0)>=this.anticipatedCase.acceptedTick)
+            this.anticipatedCase=null;
         this.assignmentDestinations.update(state.assignment);
         if(this.extrapolate){this.presentation.apply(state,this.receivedAt);this.localShots.apply(state,this.receivedAt);}
         const extraIds=new Set((state.extraCases??[]).map(c=>c.id));
@@ -222,6 +281,10 @@ export class ChaosView {
             if(!visual){visual=new PickupVisual(this.scene,pickup.kind);this.pickups.set(pickup.id,visual);}
             visual.setPosition(pickup.x,pickup.y,pickup.z);
             visual.setAvailableAt(pickup.availableAt??0);
+            const accepted=this.acceptedPickups.get(pickup.id);
+            if(accepted&&state.epoch===accepted.epoch&&(state.tick??0)>=accepted.tick&&(pickup.availableAt??0)!==accepted.generation)
+                this.acceptedPickups.delete(pickup.id);
+            visual.setPending(this.pendingTarget('pickup',pickup.id)||this.acceptedPickups.has(pickup.id));
         }
     }
     /** Announce a claim locally when the authoritative buff first appears. */
@@ -268,9 +331,10 @@ export class ChaosView {
         // again counted CPU/render preparation time as extra ball travel.
         const renderTime=performance.now();
         const elapsed=this.extrapolate?Math.min((renderTime-this.receivedAt)/1000,.08):0,now=s.time+elapsed*1000;
-        const owner=s.case.owner?this.resolveRat(s.case.owner):undefined;
+        const predictedOwner=this.anticipatedCase&&!s.case.owner?this.resolveRat(this.myId):undefined;
+        const owner=s.case.owner?this.resolveRat(s.case.owner):predictedOwner;
         this.setCarrier(owner&&!owner.dead?owner:null);
-        this.caseRoot.scale.setScalar(s.case.owner?1:CASE_LOOSE_SCALE);
+        this.caseRoot.scale.setScalar(owner?1:CASE_LOOSE_SCALE);
         this.caseRoot.visible=!s.case.returningUntil || Math.floor(now/100)%2===0;
         const evidence=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='evidence-tampering';
         const hot=!s.case.owner&&(!!s.case.missileOwner||evidence);
@@ -405,6 +469,7 @@ export class ChaosView {
     renderOutline(renderer:THREE.WebGLRenderer,camera:THREE.Camera):void {this.assignmentDestinations.render(renderer,camera);}
     getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
+        this.clearInteractions();
         this.localShots.clear();
         this.sirenAudio.dispose();this.assignmentDestinations.dispose();
         this.presentation.clear();

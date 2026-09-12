@@ -12,6 +12,7 @@ export class PickupVisual {
     readonly root=new THREE.Group();
     private readonly item=new THREE.Group();
     private availableAt=0;
+    private pending=false;
     private restock?:PickupRespawnVisual;
     constructor(scene:THREE.Scene,kind:PickupKind){
         const steel=new THREE.MeshStandardMaterial({color:0xd8e2ed,metalness:.8,roughness:.22,emissive:0x8b9aad,emissiveIntensity:.24});
@@ -70,14 +71,15 @@ export class PickupVisual {
     }
     setPosition(x:number,y:number,z:number):void {this.root.position.set(x,y-.7,z);}
     setAvailableAt(at:number):void {this.availableAt=at;}
+    setPending(pending:boolean):void {this.pending=pending;}
     update(now:number,camera?:THREE.Camera):void {
-        const empty=now<this.availableAt;
+        const unavailable=now<this.availableAt,empty=unavailable||this.pending;
         this.item.visible=!empty;
-        if(empty&&camera){
+        if(unavailable&&camera){
             if(!this.restock){this.restock=new PickupRespawnVisual();this.root.add(this.restock.root);}
             this.restock.update(now,this.availableAt,camera);
         }
-        if(this.restock)this.restock.root.visible=empty;
+        if(this.restock)this.restock.root.visible=unavailable;
         this.item.rotation.y=now*.00065;this.item.position.y=.22+Math.sin(now*.0025)*.08;
     }
     dispose():void {this.restock?.dispose();this.root.removeFromParent();disposeMeshResources(this.root);}
