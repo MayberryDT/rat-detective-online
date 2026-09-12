@@ -4,6 +4,35 @@ import * as CANNON from 'cannon-es';
 import { RatEntity } from '../../src/entities/RatEntity';
 import type { HatType } from '../../src/utils/RatModel';
 
+it('keeps the whole rear seam centered and outside the coat through walking, turning and firing',()=>{
+    const rat=new RatEntity(new THREE.Scene(),new CANNON.World(),new THREE.Vector3(),'Seam');
+    const body=rat.mesh.getObjectByName('rat-coat-body') as THREE.Mesh;
+    const tailoring=rat.mesh.getObjectByName('rat-coat-tailoring') as THREE.Mesh;
+    const positions=tailoring.geometry.getAttribute('position'),rows=new Map<number,number[]>();
+    for(let i=0;i<positions.count;i++){
+        const x=positions.getX(i),y=positions.getY(i),z=positions.getZ(i);
+        if(y<.057||y>1.29||z>-.35||Math.abs(x)>.05)continue;
+        const xs=rows.get(y)??[];xs.push(x);rows.set(y,xs);
+    }
+    expect(rows.size).toBeGreaterThan(2);
+    for(const xs of rows.values())expect((Math.min(...xs)+Math.max(...xs))/2).toBeCloseTo(0,6);
+    const ray=new THREE.Raycaster(),origin=new THREE.Vector3(),direction=new THREE.Vector3();
+    for(let frame=0;frame<90;frame++){
+        rat.body.position.z+=.1;rat.mesh.rotation.y=frame*.01;
+        if(frame===30)rat.playShootAnimation(new THREE.Vector3(0,2,20));
+        rat.update(1/60);rat.mesh.updateWorldMatrix(true,true);
+        if(frame%15)continue;
+        for(const y of [.06,.15,.279,.4,.65,.95,1.15,1.25]){
+            origin.set(0,y,-1).applyMatrix4(body.matrixWorld);
+            direction.set(0,0,1).transformDirection(body.matrixWorld);ray.set(origin,direction);
+            const coatHit=ray.intersectObject(body,false)[0],seamHit=ray.intersectObject(tailoring,false)[0];
+            expect(coatHit).toBeDefined();expect(seamHit).toBeDefined();
+            expect(coatHit.distance-seamHit.distance).toBeGreaterThan(.003);
+        }
+    }
+    rat.dispose();
+});
+
 it.each<HatType>(['fedora', 'trilby', 'porkpie'])('keeps %s ears above the brim and outside the crown during motion', hatType => {
     const rat = new RatEntity(new THREE.Scene(), new CANNON.World(), new THREE.Vector3(), 'Fit', { hatType });
     const hat = rat.mesh.getObjectByName('rat-hat')!;

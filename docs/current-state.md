@@ -2,6 +2,21 @@
 
 Verified from source and production on **2026-09-12**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
+## Private-preview follow-up — September 12 (production unchanged)
+
+The rear coat seam is now one centered strip following the coat profile. Pickup
+feedback uses only the illustrated bottom cards; Quick Fix has a matching green
+medical card with a brief “FULL HP” confirmation. The authoritative kill event now
+owns the lethal X/hit sound, while nonlethal damage retains existing feedback.
+Tyler then approved replacing all four medkits with open junction sites at
+X/Z (-60,-102), (70,-102), (-60,130) and (90,95), all at Y .7. Explicit positions
+replace spawn-point snapping; retired IDs cannot return from saved rooms. Other
+upgrades, instant full healing and 45-second restock remain unchanged.
+**965 tests**, typecheck and build pass; hosted coordinates/client parity verified,
+Tyler accepted this combined gameplay preview and requested it committed. [Audible hosted playtest](http://127.0.0.1:5195/?room=graybox-benchmark-match-quick-fix-junctions-r2), expires September 12 at 7:29 PM Pacific.
+See [junction placement and verification](verification/quick-fix-junctions-2026-09-12.md)
+and [preceding seam/card/hit changes](verification/seam-pickup-hit-feedback-2026-09-12.md).
+
 ## Current production release — September 12
 
 Tyler accepted the final gameplay model and requested all current changes committed,

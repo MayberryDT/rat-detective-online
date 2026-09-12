@@ -29,6 +29,40 @@ const sites=(sim:ChaosSimulation)=>{const s=sim.snapshot(false);return s.pickups
 const site=(sim:ChaosSimulation,kind:string)=>sites(sim).find(p=>p.kind===kind);
 
 describe('pickup system',()=>{
+    it.each([341283204,CITY_PREVIEW_SEED])('puts four new medkits at exposed junction centers, away from other upgrades (seed %i)',seed=>{
+        const sim=new ChaosSimulation(new Map(),()=>{},undefined,{seed,version:GRAYBOX_VERSION});
+        const all=sim.snapshot(false).pickups!,medkits=all.filter(p=>p.kind==='quick-fix');
+        expect(medkits.map(({x,y,z})=>[x,y,z])).toEqual([[-60,.7,-102],[70,.7,-102],[-60,.7,130],[90,.7,95]]);
+        expect(all).toHaveLength(18);
+        for(const kit of medkits){
+            expect(kit.id).toMatch(/^fix-(northwest|northeast|southwest|southeast)-junction$/);
+            for(const other of all.filter(p=>p.id!==kit.id))
+                expect(Math.hypot(kit.x-other.x,kit.z-other.z),`${kit.id} / ${other.id}`).toBeGreaterThan(other.kind==='quick-fix'?125:48);
+            // An open collection area plus long views along at least three
+            // approaches makes these contested street supplies, not alley finds.
+            const start=new C.Vec3(kit.x,1,kit.z);
+            for(let i=0;i<8;i++)expect(sim.world.raycastClosest(start,
+                new C.Vec3(kit.x+Math.cos(i*Math.PI/4)*8,1,kit.z+Math.sin(i*Math.PI/4)*8),{collisionFilterMask:1})).toBe(false);
+            let approaches=0;
+            for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])
+                if(!sim.world.raycastClosest(start,new C.Vec3(kit.x+dx*24,1,kit.z+dz*24),{collisionFilterMask:1}))approaches++;
+            expect(approaches,kit.id).toBeGreaterThanOrEqual(3);
+        }
+    });
+
+    it('retires old medkit sites when restoring a room while retaining other supply deadlines',()=>{
+        const {sim,players,now}=fixture(),saved=sim.snapshot(false);
+        saved.pickups=saved.pickups!.filter(p=>p.kind!=='quick-fix');
+        saved.pickups[0].availableAt=now+30_000;
+        for(const [id,x,z] of [['fix-sluice',-52,-68],['fix-midtown',-60,100],['fix-east',82,60],['fix-gate',-108,-28]] as const)
+            saved.pickups.push({id,x,y:.7,z,kind:'quick-fix',availableAt:now+30_000});
+        const restored=new ChaosSimulation(players,()=>{},saved,spec).snapshot(false).pickups!;
+        expect(restored).toHaveLength(18);
+        expect(restored.filter(p=>p.kind==='quick-fix')).toHaveLength(4);
+        expect(restored.filter(p=>p.kind==='quick-fix').every(p=>p.id.endsWith('-junction')&&p.availableAt===0)).toBe(true);
+        expect(restored.find(p=>p.id===saved.pickups![0].id)?.availableAt).toBe(now+30_000);
+    });
+
     it('places Icebox armor outside its racks and speed packs six units in front of every portal',()=>{
         const {sim}=fixture(),all=sites(sim),armor=all.find(p=>p.id==='alibi-icebox-upper')!;
         expect(armor).toMatchObject({x:116,y:8.7,z:-84});

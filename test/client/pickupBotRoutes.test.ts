@@ -5,7 +5,9 @@ import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 afterEach(()=>vi.restoreAllMocks());
 it.each([
-    ['alibi-icebox-upper',-5,0],['alibi-records-upper',0,5],['alibi-records-roof',0,5],['pursuit-gate-mouth',-5,0],['fix-sluice',0,5],
+    ['alibi-icebox-upper',-5,0],['alibi-records-upper',0,5],['alibi-records-roof',0,5],['pursuit-gate-mouth',-5,0],
+    ['fix-northwest-junction',0,5],['fix-northeast-junction',-5,0],
+    ['fix-southwest-junction',0,-5],['fix-southeast-junction',5,0],
 ] as const)('server bot physically reaches and claims %s in the real city', (id,dx,dz)=>{
     const now=1_000_000,spec={seed:341283204,version:2};vi.spyOn(Date,'now').mockReturnValue(now);
     const bot=createPlayer('rd-ai-test','Supply Inspector',DEFAULT_APPEARANCE,{x:0,y:0,z:0});bot.hp=2;

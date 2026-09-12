@@ -9,6 +9,8 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Quick Fix junction relocation](verification/quick-fix-junctions-2026-09-12.md) | Four exposed replacement medkits, spacing, bot collection and private preview |
+| [Seam, pickup cards and hit feedback](verification/seam-pickup-hit-feedback-2026-09-12.md) | September 12 private preview, fixes, tests and art review |
 | [Model and netplay integration](verification/model-netplay-integration-2026-09-12.md) | Current production model and protocol15: merge, validation and branch cleanup |
 | [Accepted pickup/reconnect production release](verification/pickup-reconnect-production-2026-09-11.md) | Preceding protocol14 release: approved pickup, bot, launcher, case and reconnect refinements; commit/version and verification |
 | [Reconnect and own-case protection](verification/reconnect-case-protection-2026-09-11.md) | Pre-release protocol-14 verification: 30-second identity/stats/case recovery, expiry and enemy-only carried-case disarms |

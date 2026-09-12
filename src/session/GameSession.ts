@@ -26,7 +26,7 @@ import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo } from '../shared/incidentCatalog';
 import type { ChaosState } from '../shared/chaosState';
-import { PICKUP_COPY, PICKUP_TUNING } from '../shared/pickups';
+import { PICKUP_TUNING } from '../shared/pickups';
 import type { RatEntity } from '../entities/RatEntity';
 import { bindGamePointerLock } from './GamePointerLock';
 import { FeedbackAudio } from '../audio/FeedbackAudio';
@@ -294,7 +294,7 @@ export class GameSession {
                 if(message.accepted&&message.pickup==='hustle')this.rat?.setSpeedScale(PICKUP_TUNING.hustleMultiplier);
                 break;
             case 'playerDamaged': {
-                if(message.attackerId===this.myId && message.id!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
+                if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 if (entity && !entity.dead) {
                     if (message.hp === 0) {
@@ -311,10 +311,13 @@ export class GameSession {
             case 'playerHealed': {
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 entity?.heal(message.hp);
-                if (message.id === this.myId) this.chaos?.toast(PICKUP_COPY['quick-fix'].title, PICKUP_COPY['quick-fix'].effect);
+                if (message.id === this.myId) this.chaos?.showHealing();
                 break;
             }
             case 'playerDied': {
+                // The kill event owns lethal confirmation, independently of the
+                // damage packet or whether world playback already hid the rat.
+                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
                 const entity = message.victimId === this.myId ? this.rat?.entity : this.remotes.get(message.victimId);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
                 if (entity && !entity.dead) {

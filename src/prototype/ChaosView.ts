@@ -30,7 +30,7 @@ import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentat
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
 import {powerupCard} from './pickupArtwork';
-import { PICKUP_COPY, PICKUP_TUNING, activeBuffs, type BuffMap } from '../shared/pickups';
+import { PICKUP_TUNING, activeBuffs, type BuffMap, type PickupKind } from '../shared/pickups';
 import {closestPointOnSegment} from '../shared/netplay';
 
 import { updateCaseCarryPose } from './CaseCarryPose';
@@ -45,9 +45,8 @@ export class ChaosView {
     private readonly extraCases=new Map<string,ExtraCaseVisual>();
     private readonly pickups=new Map<string,PickupVisual>();
     private readonly buffBar=document.createElement('div');
-    private readonly pickupToast=document.createElement('div');
-    private readonly buffCards=new Map<'ironclad'|'hustle',HTMLElement>();
-    private toastUntil=0;
+    private readonly buffCards=new Map<PickupKind,HTMLElement>();
+    private healingUntil=0;
     private localBuffs={ironcladUntil:0,hustleUntil:0};
     private readonly pendingInteractions=new Map<string,InteractionCandidate>();
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
@@ -155,29 +154,23 @@ export class ChaosView {
         document.body.appendChild(this.caseMarker);
         this.buffBar.className='pickup-buffs';this.buffBar.style.display='none';
         document.body.appendChild(this.buffBar);
-        this.pickupToast.className='pickup-broadcast';this.pickupToast.style.display='none';
-        this.pickupToast.setAttribute('role','status');this.pickupToast.setAttribute('aria-live','polite');
-        document.body.appendChild(this.pickupToast);
         this.impacts=new CheeseImpactEffects(scene);
     }
-    /** Show a brief owner-facing claim confirmation without a new wire message. */
-    toast(title:string,detail:string):void{
-        this.toastUntil=performance.now()+3200;
-        this.pickupToast.classList.remove('pickup-slap');
-        this.pickupToast.style.display='block';
-        void this.pickupToast.offsetWidth;
-        this.pickupToast.classList.add('pickup-slap');
-        this.feedback?.('pickup-slap');
-        const kind=Object.entries(PICKUP_COPY).find(([,copy])=>copy.title===title)?.[0];
-        if(kind==='ironclad'||kind==='hustle'||kind==='quick-fix')this.feedback?.(`pickup-${kind}`);
-        const node=this.pickupToast as unknown as {replaceChildren?:()=>void};
-        if(typeof node.replaceChildren!=='function')return;
-        node.replaceChildren();
-        const heading=document.createElement('strong');heading.textContent=title;
-        const line=document.createElement('small');line.textContent=detail;
-        this.pickupToast.appendChild(heading);this.pickupToast.appendChild(line);
+    /** Only the authoritative heal event confirms this instant pickup. */
+    showHealing():void {
+        this.healingUntil=performance.now()+3200;
+        this.buffCards.get('quick-fix')?.remove();this.buffCards.delete('quick-fix');
+        this.pickupFeedback('quick-fix');
     }
-    resetProjectiles():void{this.localShots.clear();this.presentation.clear();}
+    private pickupFeedback(kind:PickupKind):void {
+        this.feedback?.('pickup-slap');this.feedback?.(`pickup-${kind}`);
+    }
+    private clearPickupCards():void {
+        this.healingUntil=0;this.localBuffs={ironcladUntil:0,hustleUntil:0};
+        for(const card of this.buffCards.values())card.remove();
+        this.buffCards.clear();this.buffBar.style.display='none';
+    }
+    resetProjectiles():void{this.localShots.clear();this.presentation.clear();this.clearPickupCards();}
     fire(shot:ShotDescriptor):void {
         if(!this.extrapolate)return;
         const dispatch=this.state?.dispatch;
@@ -223,10 +216,8 @@ export class ChaosView {
         if(message.target==='pickup'){
             if(message.accepted)this.acceptedPickups.set(message.targetId,{generation:candidate?.generation??0,tick:message.tick,epoch:message.epoch});
             else this.pickups.get(message.targetId)?.setPending(false);
-            if(message.accepted&&message.pickup){const copy=PICKUP_COPY[message.pickup];this.toast(copy.title,copy.effect);}
         }else if(!message.accepted)this.anticipatedCase=null;
         else this.anticipatedCase={acceptedTick:message.tick,epoch:message.epoch};
-        if(!candidate&&message.accepted&&message.pickup){const copy=PICKUP_COPY[message.pickup];this.toast(copy.title,copy.effect);}
     }
     clearInteractions():void {
         this.pendingInteractions.clear();this.acceptedPickups.clear();this.anticipatedCase=null;
@@ -293,12 +284,13 @@ export class ChaosView {
         const mine=state.buffs?.[this.myId];
         const next={ironcladUntil:mine?.ironcladUntil??0,hustleUntil:mine?.hustleUntil??0};
         if(next.ironcladUntil!==this.localBuffs.ironcladUntil&&next.ironcladUntil>state.time)
-            this.toast(PICKUP_COPY.ironclad.title,PICKUP_COPY.ironclad.effect);
-        else if(next.hustleUntil!==this.localBuffs.hustleUntil&&next.hustleUntil>state.time)
-            this.toast(PICKUP_COPY.hustle.title,PICKUP_COPY.hustle.effect);
+            this.pickupFeedback('ironclad');
+        if(next.hustleUntil!==this.localBuffs.hustleUntil&&next.hustleUntil>state.time)
+            this.pickupFeedback('hustle');
         this.localBuffs=next;
     }
     private updateBuffs(buffs:BuffMap|undefined,now:number):void{
+        if(this.resolveRat(this.myId)?.dead){this.clearPickupCards();return;}
         const mine=activeBuffs(buffs,this.myId,now);
         if(typeof this.buffBar.replaceChildren!=='function')return;
         for(const kind of ['ironclad','hustle'] as const){
@@ -312,6 +304,11 @@ export class ChaosView {
             card.style.setProperty('--remaining',String(Math.min(1,remaining/duration)));
             card.classList.toggle('powerup-expiring',remaining<=3000);
         }
+        const healing=this.buffCards.get('quick-fix');
+        if(performance.now()<this.healingUntil){
+            if(!healing){const card=powerupCard('quick-fix');card.setAttribute('role','status');
+                this.buffCards.set('quick-fix',card);this.buffBar.appendChild(card);}
+        }else {healing?.remove();this.buffCards.delete('quick-fix');}
         this.buffBar.style.display=this.buffCards.size?'flex':'none';
     }
 
@@ -356,7 +353,6 @@ export class ChaosView {
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
         this.updateBuffs(s.buffs,now);
-        this.pickupToast.style.display=performance.now()<this.toastUntil?'block':'none';
         this.updateCaseMarker(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const crossfire=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='crossfire';
@@ -469,6 +465,7 @@ export class ChaosView {
     renderOutline(renderer:THREE.WebGLRenderer,camera:THREE.Camera):void {this.assignmentDestinations.render(renderer,camera);}
     getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
+        this.clearPickupCards();this.buffBar.remove();
         this.clearInteractions();
         this.localShots.clear();
         this.sirenAudio.dispose();this.assignmentDestinations.dispose();

@@ -62,27 +62,8 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
  .assignment-ledger[data-mode=closing-time] .assignment-progress{font-size:clamp(44px,11vw,70px)}
 }
 
-/* Pickups share Evidence Scraps lettering, charcoal paper and parchment ink. */
-.pickup-buffs{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);display:flex;gap:8px;pointer-events:none;z-index:55;max-width:90vw}
-.pickup-slip{padding:7px 11px;color:#cbbfcc;background:repeating-linear-gradient(0deg,#1a1022 0 3px,#1b1123 3px 4px);border-left:3px solid #8a5d60;clip-path:polygon(1% 0,99% 3%,100% 94%,94% 100%,74% 95%,53% 100%,25% 95%,0 100%);font:19px/1 'Bangers',Impact,sans-serif;letter-spacing:.6px;white-space:nowrap;rotate:-1deg}
-.pickup-slip:nth-child(2){rotate:1deg}
-.pickup-broadcast{position:fixed;left:50%;bottom:calc(50% + 110px);transform:translateX(-50%) rotate(-2deg);pointer-events:none;z-index:56;text-align:center;max-width:70vw;color:#cbbfcc;text-shadow:2px 2px #130e20}
-.pickup-broadcast strong{display:block;font:32px/1 'Bangers',Impact,sans-serif;letter-spacing:1px}
-.pickup-broadcast small{display:block;margin-top:5px;font:14px/1.2 'Outfit',Arial,sans-serif;color:#c6b8c7}
-body:has(.pickup-broadcast[style*="display: block"]) .case-broadcast{visibility:hidden}
-@media(max-width:700px),(max-height:500px){.pickup-buffs{bottom:65px;gap:5px}.pickup-slip{font-size:15px;padding:5px 7px}.pickup-broadcast strong{font-size:25px}.pickup-broadcast small{font-size:12px}}
-
-/* A physical comic card lands below the crosshair, above the persistent timers. */
-.pickup-broadcast{bottom:124px;width:440px;max-width:78vw;padding:18px 24px 21px;background:repeating-linear-gradient(0deg,#21162c 0 3px,#23182e 3px 4px);border:3px solid #ad9296;border-left:8px solid #b5a3b8;box-shadow:7px 8px 0 #100c17;color:#f0e3d4;clip-path:polygon(1% 0,99% 2%,100% 96%,92% 100%,65% 97%,30% 100%,0 96%)}
-.pickup-broadcast strong{font-size:clamp(34px,4.3vw,56px);line-height:1.02;letter-spacing:1.2px}
-.pickup-broadcast small{font-size:19px;color:#e0cfdb;margin-top:8px}
-.pickup-broadcast.pickup-slap{animation:pickup-card-slap .38s cubic-bezier(.2,.8,.2,1) both}
-@keyframes pickup-card-slap{0%{transform:translate(-50%,28px) rotate(11deg) scale(1.45);opacity:0}42%{transform:translate(-50%,0) rotate(-5deg) scale(.94);opacity:1}68%{transform:translate(-50%,-5px) rotate(1deg) scale(1.04)}100%{transform:translate(-50%,0) rotate(-2deg) scale(1)}}
-@media(max-height:500px),(max-width:700px){.pickup-broadcast{bottom:99px;width:320px;padding:10px 15px 13px}.pickup-broadcast strong{font-size:32px}.pickup-broadcast small{font-size:14px}}
-@media(prefers-reduced-motion:reduce){.pickup-broadcast.pickup-slap{animation:none}}
-
-/* Loud, illustrated power-up dossiers. Persistent gauges stay below the slap card. */
-.pickup-buffs{bottom:26px;gap:18px;align-items:center;max-width:94vw;filter:drop-shadow(5px 6px 0 #08050cbf)}
+/* One illustrated card per pickup, in a single bottom-center row. */
+.pickup-buffs{position:fixed;left:50%;transform:translateX(-50%);display:flex;pointer-events:none;z-index:55;bottom:26px;gap:18px;align-items:center;max-width:94vw;filter:drop-shadow(5px 6px 0 #08050cbf)}
 .powerup-card{--powerup:#c9e2ef;--remaining:1;position:relative;display:flex;align-items:center;gap:6px;width:306px;height:120px;padding:7px 12px 7px 4px;box-sizing:border-box;rotate:-2deg;background:radial-gradient(#c9e2ef12 1px,transparent 1px) 0 0/5px 5px,#251b2e;border:3px solid var(--powerup);border-bottom-width:6px;clip-path:polygon(2% 1%,98% 4%,100% 87%,94% 99%,64% 96%,28% 100%,0 93%);animation:powerup-arrive .3s cubic-bezier(.2,.8,.3,1.3);color:#f7ecd4}
 .powerup-hustle{--powerup:#ff7152;rotate:2deg;background-color:#361b28}
 .powerup-art{width:83px;flex-shrink:0;transform:rotate(-12deg);filter:drop-shadow(3px 4px 0 #08050c)}
@@ -97,9 +78,15 @@ body:has(.pickup-broadcast[style*="display: block"]) .case-broadcast{visibility:
 .powerup-gauge{height:14px;background:#100a17;border:2px solid #08050c;box-shadow:0 0 0 1px #a994a2;margin-top:8px;transform:skewX(-12deg);width:calc(100% + 35px);overflow:hidden}
 .powerup-gauge i{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(var(--remaining));background:repeating-linear-gradient(110deg,transparent 0 10px,#fff4ce5c 11px 14px),var(--powerup)}
 .powerup-expiring{animation:powerup-last-call .4s steps(2,end) infinite}
-.pickup-broadcast{bottom:166px}
 @keyframes powerup-arrive{from{translate:0 35px;scale:1.25;opacity:0}to{translate:0 0;scale:1;opacity:1}}
 @keyframes powerup-last-call{50%{filter:brightness(1.4);translate:0 -3px}}
-@media(max-width:900px),(max-height:600px){.pickup-buffs{bottom:15px;gap:10px}.powerup-card{width:260px;height:102px}.powerup-art{width:64px}.powerup-copy strong{font-size:27px}.powerup-clock{width:43px}.powerup-clock b{font-size:38px}.powerup-copy{padding-right:31px}.powerup-copy>small{font-size:9px}.powerup-gauge{height:12px}.pickup-broadcast{bottom:132px}}
+@media(max-width:900px),(max-height:600px){.pickup-buffs{bottom:15px;gap:10px}.powerup-card{width:260px;height:102px}.powerup-art{width:64px}.powerup-copy strong{font-size:27px}.powerup-clock{width:43px}.powerup-clock b{font-size:38px}.powerup-copy{padding-right:31px}.powerup-copy>small{font-size:9px}.powerup-gauge{height:12px}}
 @media(max-width:600px){.pickup-buffs{gap:6px;bottom:10px}.powerup-card{width:calc(47vw - 3px);height:96px;padding-left:2px;padding-right:6px}.powerup-art{width:42px}.powerup-copy strong{font-size:23px;letter-spacing:.4px}.powerup-copy>small{display:none}.powerup-clock{width:33px;top:7px}.powerup-clock b{font-size:30px}.powerup-clock small{font-size:9px}.powerup-copy{padding-right:23px}.powerup-gauge{width:calc(100% + 19px)}}
 @media(prefers-reduced-motion:reduce){.powerup-card,.powerup-expiring{animation:none}}
+
+.powerup-quick-fix{--powerup:#8be3a0;rotate:-1deg;background-color:#18352d}
+.powerup-quick-fix .powerup-clock small{font-size:10px;letter-spacing:0;white-space:nowrap}
+.powerup-healed{margin-top:10px;padding:3px 0;border-top:2px solid var(--powerup);color:var(--powerup);font:15px/1 'Bangers',Impact,sans-serif;letter-spacing:.6px}
+/* All three rewards can be visible together, including landscape phones. */
+@media(max-width:1050px){.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle){gap:6px}.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-card{width:29vw}}
+@media(max-width:700px){.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-art{width:30px}.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-copy strong{font-size:18px}.powerup-healed{font-size:11px}}

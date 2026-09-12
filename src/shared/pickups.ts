@@ -44,10 +44,12 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
     {id:'pursuit-icebox-mouth',kind:'hustle',x:148,z:0,y:.7,near:'Icebox sewer entrance'},
     {id:'pursuit-alley-mouth',kind:'hustle',x:0,z:148,y:.7,near:'Alley sewer entrance'},
     {id:'pursuit-needleworks-mouth',kind:'hustle',x:-54,z:76,y:.7,near:'Needleworks sewer entrance'},
-    {id:'fix-sluice',kind:'quick-fix',x:-52,z:-68,near:'Records west street'},
-    {id:'fix-midtown',kind:'quick-fix',x:-60,z:100,near:'Needleworks east street'},
-    {id:'fix-east',kind:'quick-fix',x:82,z:60,near:'East cross street'},
-    {id:'fix-gate',kind:'quick-fix',x:-108,z:-28,near:'Gate approach street'},
+    // Exposed junction centers, independently authored rather than snapped to
+    // nearby rat spawn points. New site IDs retire the former medkit locations.
+    {id:'fix-northwest-junction',kind:'quick-fix',x:-60,z:-102,y:.7,near:'Junction northwest of Records Hall'},
+    {id:'fix-northeast-junction',kind:'quick-fix',x:70,z:-102,y:.7,near:'Northern avenue junction west of Icebox'},
+    {id:'fix-southwest-junction',kind:'quick-fix',x:-60,z:130,y:.7,near:'Junction southeast of Needleworks'},
+    {id:'fix-southeast-junction',kind:'quick-fix',x:90,z:95,y:.7,near:'Junction northwest of Pump Station'},
 ];
 
 /** Active timed effects on one rat. Absent keys mean no effect. */

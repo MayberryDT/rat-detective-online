@@ -191,7 +191,7 @@ vi.mock('../../src/prototype/Neighborhood', () => ({ Neighborhood: class extends
     constructor(scene: unknown, world: unknown, spec: {seed:number;version:number}) { super(scene,world,undefined,spec); }
 } }));
 vi.mock('../../src/prototype/ChaosView', () => ({ ChaosView: class {
-    setScores() {} setIncidentRoster() {} toast() {} dispose() {} apply() {} launch() {} fire() {} resetProjectiles() {} update() {} renderOutline() {}
+    setScores() {} setIncidentRoster() {} showHealing() {} dispose() {} apply() {} launch() {} fire() {} resetProjectiles() {} update() {} renderOutline() {}
 } }));
 vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));
 vi.mock('../../src/session/InputState', () => ({
@@ -406,6 +406,19 @@ describe('GameSession', () => {
         transport.onMessage?.({type:'playerDamaged',id:snapshot.id,hp:2,attackerId:'other'});
         transport.onMessage?.({type:'playerDamaged',id:'other',hp:1,attackerId:'third'});
         expect(hud.showHitMarker).toHaveBeenCalledTimes(1);session.dispose();
+    });
+
+    it('confirms a lethal hit once from the kill event even after the victim left world playback',()=>{
+        const {transport,hud,session}=start(),snapshot=welcome();transport.onMessage?.(snapshot);
+        transport.onMessage?.({type:'playerDamaged',id:'other',hp:0,attackerId:snapshot.id});
+        transport.onMessage?.({type:'playerDied',victimId:'other',killerId:snapshot.id,killerName:'Me',victimName:'Other',respawnAt:5000});
+        expect(hud.showHitMarker).toHaveBeenCalledTimes(1);
+        // No dependency on a preceding damage packet or an extant remote mesh.
+        transport.onMessage?.({type:'playerDied',victimId:'another',killerId:snapshot.id,killerName:'Me',victimName:'Another',respawnAt:5000});
+        expect(hud.showHitMarker).toHaveBeenCalledTimes(2);
+        transport.onMessage?.({type:'playerDied',victimId:'other',killerId:'third',killerName:'Third',victimName:'Other',respawnAt:5000});
+        transport.onMessage?.({type:'playerDied',victimId:'other',killerId:null,killerName:null,victimName:'Other',respawnAt:5000,cause:'evidence-tampering'});
+        expect(hud.showHitMarker).toHaveBeenCalledTimes(2);session.dispose();
     });
 
     it('starts title music before joining and retries permission on mouse, touch and keyboard gestures', () => {

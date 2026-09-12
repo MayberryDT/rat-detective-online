@@ -63,10 +63,10 @@ export function addCoatTailoring(body:THREE.Group, coat:THREE.Material, highligh
     strip(Array.from({length:12},(_,i)=>{
         const y=.065+i*.098;return new THREE.Vector3(.014,y,frontZ(.014,y)+.002);
     }),.022,.008);
-    strip(Array.from({length:12},(_,i)=>{
-        const y=.275+i*.092;return new THREE.Vector3(0,y,-radiusAt(y)-.002);
-    }),.018,.006);
-    strip([new THREE.Vector3(.021,.058,-.505),new THREE.Vector3(.021,.28,-radiusAt(.28)-.003)],.032,.008);
+    // One centered seam from hem to collar. Include every profile bend so no
+    // segment cuts through the coat and flickers in/out as the body rocks.
+    strip([.058,.07,.65,1.15,1.285].map(y=>
+        new THREE.Vector3(0,y,-radiusAt(y)-.004)),.022,.007);
     // A restrained hem roll is integrated in a single coat-detail draw.
     const hem=new THREE.LatheGeometry([new THREE.Vector2(.497,.023),new THREE.Vector2(.507,.033),
         new THREE.Vector2(.507,.044),new THREE.Vector2(.502,.055)],32);
