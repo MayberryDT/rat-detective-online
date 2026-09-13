@@ -1,4 +1,5 @@
 import worker from './index';
+import { verifyBearerToken } from './auth';
 
 export { GameRoom } from './GameRoom';
 export { Matchmaker } from './Matchmaker';
@@ -6,7 +7,7 @@ export { Matchmaker } from './Matchmaker';
 /** Isolated hosted probe entry point; never used by the game deployments. */
 export default {
   async fetch(request: Request, env: Env & { NETWORK_TEST_TOKEN?: string }): Promise<Response> {
-    if (!env.NETWORK_TEST_TOKEN || request.headers.get('authorization') !== `Bearer ${env.NETWORK_TEST_TOKEN}`) {
+    if (!await verifyBearerToken(request.headers.get('authorization'), env.NETWORK_TEST_TOKEN)) {
       return new Response('Unauthorized', { status: 401, headers: { 'cache-control': 'no-store' } });
     }
     const path = new URL(request.url).pathname;

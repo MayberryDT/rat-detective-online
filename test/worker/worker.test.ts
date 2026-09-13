@@ -12,6 +12,29 @@ describe('worker', () => {
       service: 'rat-detective',
       runtime: 'cloudflare-workers',
     });
+    expect(response.headers.get('content-security-policy')).toContain("script-src 'self'");
+    expect(response.headers.get('strict-transport-security')).toBe('max-age=31536000');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(response.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    expect(response.headers.get('permissions-policy')).toContain('camera=()');
+  });
+
+  it('rejects cross-site sockets, public custom rooms and exhausted admission budgets',async()=>{
+    const cross=await SELF.fetch('https://ratdetective.online/ws',{headers:{Upgrade:'websocket',Origin:'https://evil.example'}});
+    expect(cross.status).toBe(403);
+    const custom=await SELF.fetch('https://ratdetective.online/ws?room=graybox-attack',{headers:{Upgrade:'websocket',Origin:'https://ratdetective.online'}});
+    expect(custom.status).toBe(404);
+
+    const worker=(await import('../../src/worker/index')).default;
+    const privateEnv={NETWORK_TEST_TOKEN:'private-token',GAME_ROOM:{getByName:()=>({fetch:async()=>new Response('private')})}} as unknown as Env;
+    const unauthenticated=await worker.fetch(new Request('https://private.example/ws?room=graybox-private',{headers:{Upgrade:'websocket'}}),privateEnv);
+    expect(unauthenticated.status).toBe(404);
+    const authenticated=await worker.fetch(new Request('https://private.example/ws?room=graybox-private',{headers:{Upgrade:'websocket',Authorization:'Bearer private-token'}}),privateEnv);
+    expect(authenticated.status).toBe(200);expect(await authenticated.text()).toBe('private');
+
+    const limited=await worker.fetch(new Request('https://ratdetective.online/ws',{headers:{Upgrade:'websocket',Origin:'https://ratdetective.online','cf-connecting-ip':'203.0.113.5'}}),
+      {ADMISSION_RATE_LIMITER:{limit:async()=>({success:false})}} as unknown as Env);
+    expect(limited.status).toBe(429);expect(limited.headers.get('retry-after')).toBe('60');
   });
 
   it('rejects non-websocket /ws requests', async () => {

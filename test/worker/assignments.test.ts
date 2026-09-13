@@ -15,7 +15,7 @@ const appearance={hatType:'fedora',hatColor:1,furColor:2,coatColor:3};
 function room(){const name=`graybox-assignment-${crypto.randomUUID()}`,stub=env.GAME_ROOM.getByName(name);rooms.push(stub);return{name,stub};}
 function pause(game:Internals){if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;}
 async function open(name:string,compact=false){
-    const response=await SELF.fetch(`https://rat.test/ws?room=${name}${compact?'&chaos=compact-v2':''}`,{headers:{Upgrade:'websocket'}});
+    const response=await SELF.fetch(`http://localhost/ws?room=${name}${compact?'&chaos=compact-v2':''}`,{headers:{Upgrade:'websocket',Origin:'http://localhost'}});
     expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
     const messages:ServerMessage[]=[],invalid:string[]=[],decoder=new DeliveryDecoder();
     ws.addEventListener('message',event=>{
@@ -65,10 +65,11 @@ describe('shared assignment room lifecycle',()=>{
         expect(first.invalid).toEqual([]);expect(second.invalid).toEqual([]);
     });
     it('restricts direct selection to local private rooms and keeps repeated requests stable',async()=>{
-        for(const url of ['https://rat.test/ws?assignment=closing-time','https://rat.test/ws?room=graybox-practice-external&assignment=closing-time',
-            'http://localhost/ws?room=graybox-practice-invalid&assignment=unknown','http://localhost/ws?room=graybox-practice-retired&assignment=misfiled-evidence']){
-            expect((await SELF.fetch(url,{headers:{Upgrade:'websocket'}})).status).toBe(400);
-        }
+        expect((await SELF.fetch('https://rat.test/ws?assignment=closing-time',{headers:{Upgrade:'websocket'}})).status).toBe(400);
+        expect((await SELF.fetch('https://rat.test/ws?room=graybox-practice-external&assignment=closing-time',{headers:{Upgrade:'websocket'}})).status).toBe(404);
+        for(const url of ['http://localhost/ws?room=graybox-practice-invalid&assignment=unknown',
+            'http://localhost/ws?room=graybox-practice-retired&assignment=misfiled-evidence'])
+            expect((await SELF.fetch(url,{headers:{Upgrade:'websocket',Origin:'http://localhost'}})).status).toBe(400);
         const name=`graybox-practice-assignment-${crypto.randomUUID()}`,stub=env.GAME_ROOM.getByName(name);rooms.push(stub);
         const response=await SELF.fetch(`http://localhost/ws?room=${name}&assignment=chain-of-custody`,{headers:{Upgrade:'websocket',Origin:'http://localhost'}});
         expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);

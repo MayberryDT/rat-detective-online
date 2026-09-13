@@ -239,7 +239,14 @@ describe('automatic public room population',()=>{
   it('replaces an open transport safely and retains an enemy kill/respawn during the outage',async()=>{
     const group=pool(),first=await open(group),id=first.welcome!.id,token=first.welcome!.resumeToken;
     const second=await open(group,group,true,token);
-    expect(second.welcome!.id).toBe(id);await until(()=>first.ws.readyState===WebSocket.CLOSED);
+    const rotated=second.welcome!.resumeToken;
+    expect(second.welcome!.id).toBe(id);expect(rotated).toMatch(/^[a-f0-9-]{36}$/);expect(rotated).not.toBe(token);
+    await until(()=>first.ws.readyState===WebSocket.CLOSED);
+    const replay=await open(group,group,false,token);
+    replay.ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Replay Rat',appearance,resumeToken:token}));
+    await until(()=>replay.messages.some(m=>m.type==='error'));
+    expect(replay.messages).toContainEqual(expect.objectContaining({type:'error',code:'resume-unavailable'}));
+    expect(second.ws.readyState).toBe(WebSocket.OPEN);await close(replay.ws);
     const stub=env.GAME_ROOM.getByName(group);
     expect(await stub.occupiedSlots()).toBe(1);
     await close(second.ws);
@@ -248,7 +255,7 @@ describe('automatic public room population',()=>{
       game.chaos.primaryCase.owner=id;game.chaos.carry(game.players.get(id),game.chaos.primaryCase);
       await game.handleHit('rd-ai-00',{type:'hit',victimId:id,damage:3},{x:10,y:0,z:0});
     });
-    const third=await open(group,group,true,token);
+    const third=await open(group,group,true,rotated);
     expect(third.welcome!.id).toBe(id);expect(third.welcome!.player).toMatchObject({hp:0,deaths:1,respawnAt:expect.any(Number)});
     await runInDurableObject(stub,(instance:GameRoom,ctx)=>{
       const game=instance as any;

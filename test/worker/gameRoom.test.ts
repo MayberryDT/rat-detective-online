@@ -59,8 +59,9 @@ afterEach(async () => {
 });
 
 async function openClient(room: string, sharedFeed = false, query = '') {
-  const response = await SELF.fetch(`https://rat-detective.test/ws?room=${room}${sharedFeed ? '&receive=welcome-only' : ''}${query}`, {
-    headers: { Upgrade: 'websocket' },
+  const local=room!==DEFAULT_ROOM_NAME,origin=local?'http://localhost':'https://rat-detective.test';
+  const response = await SELF.fetch(`${origin}/ws?room=${room}${sharedFeed ? '&receive=welcome-only' : ''}${query}`, {
+    headers: { Upgrade: 'websocket', ...(local?{Origin:origin}:{}) },
   });
   expect(response.status).toBe(101);
   const ws = response.webSocket;
@@ -79,19 +80,21 @@ describe('GameRoom websockets', () => {
     const room=`graybox-combined-${crypto.randomUUID()}`,observer=await openClient(room,false,'&chaos=compact-v2&movement=tuple-v1'),shooter=await openClient(room);
     observer.ws.send(joinPayload('Observer'));const ow=await observer.inbox.waitFor('welcome');
     shooter.ws.send(joinPayload('Shooter'));const sw=await shooter.inbox.waitFor('welcome');
+    let movedX=0;
     await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom,ctx)=>{
       const socket=ctx.getWebSockets().find(ws=>(ws.deserializeAttachment() as {playerId:string}).playerId===ow.id)!;
       const send=vi.spyOn(socket,'send');
       try {
         const game=instance as any;
-        game.handleMovement(sw.id,{type:'updateMovement',position:{x:20,y:2,z:-18},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}});
-        game.handleShoot(sw.id,{type:'shoot',shotId:'combined',origin:{x:20,y:3.4,z:-18},direction:{x:1,y:0,z:0}});
+        const player=game.players.get(sw.id);movedX=player.x+.25;
+        game.handleMovement(sw.id,{type:'updateMovement',position:{x:movedX,y:player.y,z:player.z},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}});
+        game.handleShoot(sw.id,{type:'shoot',shotId:'combined',origin:{x:movedX,y:player.y+1.4,z:player.z},direction:{x:1,y:0,z:0}});
         const messages=send.mock.calls.map(call=>JSON.parse(String(call[0])).message);
         expect(messages).toHaveLength(1);expect(messages[0]).toMatchObject({type:'playerShot',shooterId:sw.id});
-        expect(messages[0].move[0]).toBe(sw.id);expect(messages[0].move[2]).toBe(20);
+        expect(messages[0].move[0]).toBe(sw.id);expect(messages[0].move[2]).toBe(movedX);
       } finally {send.mockRestore();}
     });
-    expect((await observer.inbox.waitFor('playerShot')).movement?.player.x).toBe(20);
+    expect((await observer.inbox.waitFor('playerShot')).movement?.player.x).toBe(movedX);
   });
   it('isolates a throwing socket and persists a death before delivering it to healthy peers',async()=>{
     const room=`failure-${crypto.randomUUID()}`,bad=await openClient(room),a=await openClient(room),b=await openClient(room);
@@ -193,13 +196,14 @@ describe('GameRoom websockets', () => {
     bot.ws.send(joinPayload('Bot'));
     const welcome = await bot.inbox.waitFor('welcome');
     await human.inbox.waitFor('playerJoined');
-    bot.ws.send(JSON.stringify({ type: 'updateMovement', position: { x: 20, y: 2, z: 15 },
+    const movedX=welcome.player.x+.25;
+    bot.ws.send(JSON.stringify({ type: 'updateMovement', position: { x:movedX, y:welcome.player.y, z:welcome.player.z },
       rotation: { x: 0, y: 0, z: 0, w: 1 }, meshRotation: { x: 0, y: 0, z: 0, w: 1 } }));
     const moved = await human.inbox.waitFor('playerMoved');
     expect(moved.at).toBeGreaterThan(0);
     expect(moved.player.id).toBe(welcome.id);
-    expect(moved.player.x).toBe(20);
-    bot.ws.send(JSON.stringify({ type: 'shoot', shotId: 'shared-feed-shot', origin: { x: 20, y: 3, z: 15 }, direction: { x: 0, y: 0, z: 1 } }));
+    expect(moved.player.x).toBe(movedX);
+    bot.ws.send(JSON.stringify({ type: 'shoot', shotId: 'shared-feed-shot', origin: { x:movedX, y:welcome.player.y+1.4, z:welcome.player.z }, direction: { x: 0, y: 0, z: 1 } }));
     expect((await human.inbox.waitFor('playerShot')).shooterId).toBe(welcome.id);
     bot.ws.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }));
     await bot.inbox.waitFor('pong');
@@ -346,6 +350,7 @@ describe('GameRoom websockets', () => {
     await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
       const game=instance as any;game.startChaos();target=game.chaos.snapshot(false).pickups.find((p:any)=>p.kind==='quick-fix');
       const player=game.players.get(welcome.id);player.hp=1;player.x=target!.x-2;player.y=target!.y-.8;player.z=target!.z;
+      game.lastAcceptedMovementAt.set(welcome.id,game.now()-1000);
     });
     const movement={seq:(welcome.movementSeq??0)+1,position:{x:target!.x+2,y:target!.y-.8,z:target!.z},
       rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}};
@@ -539,6 +544,7 @@ describe('GameRoom websockets', () => {
     const first = await openClient(room);
     first.ws.send(joinPayload('Walker'));
     const welcome = await first.inbox.waitFor('welcome');
+    const target={x:welcome.player.x+.25,y:welcome.player.y,z:welcome.player.z};
     const stub = env.GAME_ROOM.getByName(room);
     await runInDurableObject(stub, (instance: GameRoom) => {
       const roomInstance = instance as unknown as {
@@ -548,7 +554,7 @@ describe('GameRoom websockets', () => {
       roomInstance.lastCheckpointAt.set(welcome.id, Date.now() - CHECKPOINT_MS - 10);
       roomInstance.handleMovement(welcome.id, {
         type: 'updateMovement',
-        position: { x: 12, y: 2, z: -8 },
+        position: target,
         rotation: { x: 0, y: 0, z: 0, w: 1 },
         meshRotation: { x: 0, y: 0, z: 0, w: 1 },
       });
@@ -558,8 +564,8 @@ describe('GameRoom websockets', () => {
       const stored = JSON.parse(
         state.storage.sql.exec<{ data: string }>('SELECT data FROM players WHERE id = ?', welcome.id).one().data,
       ) as PlayerData;
-      expect(stored.x).toBe(12);
-      expect(stored.z).toBe(-8);
+      expect(stored.x).toBe(target.x);
+      expect(stored.z).toBe(target.z);
     });
 
     await evictDurableObject(stub, { webSockets: 'hibernate' });
@@ -567,8 +573,8 @@ describe('GameRoom websockets', () => {
     late.ws.send(joinPayload('Late'));
     const lateWelcome = await late.inbox.waitFor('welcome');
     expect(lateWelcome.world.seed).toBe(welcome.world.seed);
-    expect(lateWelcome.players[welcome.id]?.x).toBe(12);
-    expect(lateWelcome.players[welcome.id]?.z).toBe(-8);
+    expect(lateWelcome.players[welcome.id]?.x).toBe(target.x);
+    expect(lateWelcome.players[welcome.id]?.z).toBe(target.z);
   });
 
   it('keeps an attached player whose last_active_at is older than two minutes', async () => {
@@ -576,6 +582,7 @@ describe('GameRoom websockets', () => {
     const first = await openClient(room);
     first.ws.send(joinPayload('Sleeper'));
     const welcome = await first.inbox.waitFor('welcome');
+    const target={x:welcome.player.x+.25,y:welcome.player.y,z:welcome.player.z};
     const stub = env.GAME_ROOM.getByName(room);
     await runInDurableObject(stub, (instance: GameRoom) => {
       const roomInstance = instance as unknown as {
@@ -585,7 +592,7 @@ describe('GameRoom websockets', () => {
       roomInstance.lastCheckpointAt.set(welcome.id, Date.now() - CHECKPOINT_MS - 10);
       roomInstance.handleMovement(welcome.id, {
         type: 'updateMovement',
-        position: { x: 12, y: 2, z: -8 },
+        position: target,
         rotation: { x: 0, y: 0, z: 0, w: 1 },
         meshRotation: { x: 0, y: 0, z: 0, w: 1 },
       });
@@ -601,10 +608,10 @@ describe('GameRoom websockets', () => {
     late.ws.send(joinPayload('Late'));
     const lateWelcome = await late.inbox.waitFor('welcome');
     expect(lateWelcome.players[welcome.id]?.name).toBe('Sleeper');
-    expect(lateWelcome.players[welcome.id]?.x).toBe(12);
+    expect(lateWelcome.players[welcome.id]?.x).toBe(target.x);
   });
 
-  it('clamps envelope motion and tells every client including the mover', async () => {
+  it('rejects impossible motion and tells every client including the mover', async () => {
     const room = `edge-${crypto.randomUUID()}`;
     const first = await openClient(room);
     first.ws.send(joinPayload('Runner'));
@@ -624,8 +631,22 @@ describe('GameRoom websockets', () => {
     );
     const selfCorrection = await first.inbox.waitFor('playerCorrected');
     const peerCorrection = await second.inbox.waitFor('playerCorrected');
-    expect(selfCorrection.player).toMatchObject({ id: welcome.id, x: 2000, z: 0 });
-    expect(peerCorrection.player.x).toBe(2000);
+    expect(selfCorrection.player).toMatchObject({ id: welcome.id, x: welcome.player.x, z: welcome.player.z });
+    expect(peerCorrection.player.x).toBe(welcome.player.x);
+  });
+
+  it('rejects server-time speed hacks and paths through static city fixtures',async()=>{
+    const room=`graybox-movement-security-${crypto.randomUUID()}`,client=await openClient(room);
+    client.ws.send(joinPayload('Bounded Rat'));const welcome=await client.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
+      const game=instance as any,player=game.players.get(welcome.id),start=Date.now();
+      Object.assign(player,{x:0,y:0,z:0});game.lastActiveAt.set(welcome.id,start);game.lastAcceptedMovementAt.set(welcome.id,start);
+      game.handleMovement(welcome.id,{type:'updateMovement',seq:1,position:{x:40,y:0,z:0},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}},start+40);
+      expect(player).toMatchObject({x:0,y:0,z:0});
+      Object.assign(player,{x:87,y:0,z:145});game.lastAcceptedMovementAt.set(welcome.id,start);
+      game.handleMovement(welcome.id,{type:'updateMovement',seq:2,position:{x:93,y:0,z:145},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}},start+1000);
+      expect(player).toMatchObject({x:87,y:0,z:145});
+    });
   });
 
   it('rejects a 33rd websocket before accept and a 25th joined player after join', async () => {
@@ -673,8 +694,8 @@ describe('GameRoom websockets', () => {
       const client = await openClient(crowded);
       sockets.push(client.ws);
     }
-    const blocked = await SELF.fetch(`https://rat-detective.test/ws?room=${crowded}`, {
-      headers: { Upgrade: 'websocket' },
+    const blocked = await SELF.fetch(`http://localhost/ws?room=${crowded}`, {
+      headers: { Upgrade: 'websocket', Origin:'http://localhost' },
     });
     expect(blocked.status).toBe(503);
     for (const socket of sockets) socket.close(1000, 'done');
@@ -739,14 +760,14 @@ describe('GameRoom websockets', () => {
     await Promise.all(observers.map(watcher => watcher.inbox.waitFor('welcome')));
     const stub = env.GAME_ROOM.getByName(room);
     await runInDurableObject(stub, async (instance: GameRoom, state) => {
-      const internal = instance as unknown as {
-        clock: () => number; broadcasts: number; lastCheckpointAt: Map<string, number>;
-      };
+      const internal = instance as any;
       const originalClock = internal.clock;
       const origin = Date.now();
       let now = origin;
       internal.clock = () => now;
       internal.lastCheckpointAt.set(welcome.id, origin);
+      Object.assign(internal.players.get(welcome.id),{x:0,y:2,z:15});
+      internal.lastAcceptedMovementAt.set(welcome.id,origin);
       const socket = state.getWebSockets().find(ws =>
         (ws.deserializeAttachment() as { playerId?: string }).playerId === welcome.id)!;
       const before = internal.broadcasts;
@@ -797,10 +818,11 @@ describe('GameRoom websockets', () => {
     client.ws.send(joinPayload('Still Rat'));
     const welcome = await client.inbox.waitFor('welcome');
     await runInDurableObject(env.GAME_ROOM.getByName(room), async (instance: GameRoom, state) => {
-      const internal = instance as unknown as { clock: () => number; broadcasts: number; lastCheckpointAt: Map<string, number> };
+      const internal = instance as any;
       const originalClock = internal.clock, start = Date.now();
       let now = start;
       internal.clock = () => now; internal.lastCheckpointAt.set(welcome.id, start);
+      Object.assign(internal.players.get(welcome.id),{x:15,y:2,z:15});internal.lastAcceptedMovementAt.set(welcome.id,start);
       const socket = state.getWebSockets().find(ws =>
         (ws.deserializeAttachment() as { playerId?: string }).playerId === welcome.id)!;
       const move = (x: number) => JSON.stringify({ type: 'updateMovement', position: { x, y: 2, z: 15 },
@@ -927,7 +949,7 @@ describe('capacity persistence work', () => {
 it('negotiates delta motion while retaining the previous compact mode',async()=>{
  for(const mode of ['compact-v1','compact-v2']){
   const room=`wire-mode-${crypto.randomUUID()}`;
-  const response=await SELF.fetch(`https://rat-detective.test/ws?room=${room}&chaos=${mode}`,{headers:{Upgrade:'websocket'}});
+  const response=await SELF.fetch(`http://localhost/ws?room=${room}&chaos=${mode}`,{headers:{Upgrade:'websocket',Origin:'http://localhost'}});
   const ws=response.webSocket!;ws.accept();openSockets.add(ws);
   await runInDurableObject(env.GAME_ROOM.getByName(room),(_instance,ctx)=>{
    const attachment=ctx.getWebSockets()[0].deserializeAttachment() as {compactChaos?:boolean;compactChaosDelta?:boolean};

@@ -102,6 +102,13 @@ describe('parseClientMessage', () => {
       ),
     ).toBeNull();
   });
+
+  it('normalizes bounded quaternions and rejects degenerate or extreme transforms',()=>{
+    const base={type:'updateMovement',position:{x:1,y:2,z:3},meshRotation:{x:0,y:0,z:0,w:1}};
+    expect(parseClientMessage({...base,rotation:{x:0,y:0,z:0,w:2}})).toMatchObject({rotation:{x:0,y:0,z:0,w:1}});
+    for(const rotation of [{x:0,y:0,z:0,w:0},{x:1e308,y:1e308,z:1e308,w:1e308},{x:0,y:0,z:0,w:.1}])
+      expect(parseClientMessage({...base,rotation})).toBeNull();
+  });
 });
 
 describe('parseServerMessage', () => {

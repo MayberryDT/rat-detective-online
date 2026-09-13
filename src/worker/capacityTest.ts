@@ -1,4 +1,5 @@
 import worker from './index';
+import { verifyBearerToken } from './auth';
 import { MAX_PLAYERS, MAX_SCORE_ENTRIES } from '../shared/networkProtocol';
 import { isAssignmentId } from '../shared/assignments';
 export { GameRoom } from './GameRoom';
@@ -7,12 +8,7 @@ export { Matchmaker } from './Matchmaker';
 /** Separate namespace for hosted baseline measurements; no public room or assets. */
 export default {
   async fetch(request: Request, env: Env & { CAPACITY_TEST_TOKEN?: string; CAPACITY_FIXTURE_ID?: string; CAPACITY_EXPIRES_AT?: string }): Promise<Response> {
-    // The app tsconfig uses DOM crypto types; Workers adds this runtime method.
-    const subtle = crypto.subtle as SubtleCrypto & { timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean };
-    const encoder = new TextEncoder();
-    const actual = encoder.encode(request.headers.get('authorization') ?? '');
-    const expected = encoder.encode(`Bearer ${env.CAPACITY_TEST_TOKEN ?? ''}`);
-    if (!env.CAPACITY_TEST_TOKEN || actual.length !== expected.length || !subtle.timingSafeEqual(actual, expected)) {
+    if (!await verifyBearerToken(request.headers.get('authorization'), env.CAPACITY_TEST_TOKEN)) {
       return new Response('Unauthorized', { status: 401 });
     }
     const expiresAt = Number(env.CAPACITY_EXPIRES_AT);

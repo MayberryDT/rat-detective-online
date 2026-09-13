@@ -9,6 +9,7 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Security hardening](verification/security-hardening-2026-09-12.md) | Unreleased admission, movement, credential, header and remote-command fixes with verification boundaries |
 | [Animation and gameplay follow-up production release](verification/animation-production-2026-09-12.md) | Accepted animations, explosion self damage, carried-case correction and junction refinements; commit and live verification |
 | [Explosion damage and carried-case correction](verification/explosion-delivery-2026-09-12.md) | Private follow-up: explosion self damage, stale pickup prediction cleanup, delivery checks and remaining playtest uncertainty |
 | [Accepted character reactions and gameplay preview](verification/character-reactions-studio-2026-09-12.md) | All 15 exaggerated reactions accepted in studio; frozen hosted playtest, verification and limits |

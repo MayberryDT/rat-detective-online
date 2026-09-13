@@ -19,6 +19,17 @@ export const PLAY_BOUNDS = {
   yMax: 250,
 } as const;
 
+/** Generous authority envelope around the shipped 18 u/s movement, 1.45x Hot
+ * Pursuit and 90 u/s vertical launch. Server time, not client timestamps, owns
+ * the allowance; a long-suspended tab cannot spend an unlimited backlog. */
+export const MOVEMENT_ENVELOPE = {
+  maxElapsedMs: 2_000,
+  horizontalSpeed: 35,
+  verticalSpeed: 110,
+  horizontalSlack: 0.5,
+  verticalSlack: 0.75,
+} as const;
+
 const SHOT_ORIGIN_MAX_DISTANCE = 12;
 const SHOT_DIRECTION_MIN = 0.05;
 const SHOT_DIRECTION_MAX = 8;
@@ -66,6 +77,14 @@ export function clampPosition(position: Vec3Data): { position: Vec3Data; correct
     position: { x, y, z },
     corrected: x !== position.x || y !== position.y || z !== position.z,
   };
+}
+
+export function isPlausibleMovement(from: Vec3Data, to: Vec3Data, elapsedMs: number): boolean {
+  const seconds = Math.max(0, Math.min(MOVEMENT_ENVELOPE.maxElapsedMs, elapsedMs)) / 1_000;
+  const horizontal = Math.hypot(to.x - from.x, to.z - from.z);
+  const vertical = Math.abs(to.y - from.y);
+  return horizontal <= MOVEMENT_ENVELOPE.horizontalSlack + MOVEMENT_ENVELOPE.horizontalSpeed * seconds &&
+    vertical <= MOVEMENT_ENVELOPE.verticalSlack + MOVEMENT_ENVELOPE.verticalSpeed * seconds;
 }
 
 export function isPlausibleShot(origin: Vec3Data, direction: Vec3Data, player: Vec3Data): boolean {

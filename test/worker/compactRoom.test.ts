@@ -9,7 +9,7 @@ const wait=async(test:()=>boolean)=>{const end=Date.now()+4000;while(!test()){if
 it('negotiates mixed clients and bounds snapshots while still delivering control messages',async()=>{
  const room=`graybox-compact-${crypto.randomUUID()}`,sockets:WebSocket[]=[];
  const open=async(compact:boolean)=>{
-  const response=await SELF.fetch(`https://example.test/ws?room=${room}${compact?'&chaos=compact-v1':''}`,{headers:{Upgrade:'websocket'}});
+  const response=await SELF.fetch(`http://localhost/ws?room=${room}${compact?'&chaos=compact-v1':''}`,{headers:{Upgrade:'websocket',Origin:'http://localhost'}});
   expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
   const types:string[]=[],frames:Array<{stream:string;seq:number}>=[];const decoder=new DeliveryDecoder();let pickupCount=0;
   ws.addEventListener('message',e=>{

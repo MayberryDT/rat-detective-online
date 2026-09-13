@@ -2,6 +2,19 @@
 
 Verified from source and production on **2026-09-12**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
+## Unreleased security hardening — September 12
+
+The working tree now restricts public admission to canonical matchmaking, checks
+browser WebSocket Origin, applies a Cloudflare admission rate limiter, and returns
+defense-in-depth browser headers. Human poses receive server-time displacement and
+static collision-path checks; malformed quaternions are rejected. Resume tokens
+rotate before replacement, private bearer verification is constant-time, and the
+remote capacity receipt path is fail-closed against shell metacharacters.
+
+The complete local suite has **1,024 passing tests**; typecheck, production build
+and the high-severity dependency audit pass with zero known vulnerabilities.
+These changes are **not deployed**. See the [security hardening receipt](verification/security-hardening-2026-09-12.md).
+
 ## Current production release — September 12
 
 Tyler accepted the full exaggerated animation set and the corrected gameplay

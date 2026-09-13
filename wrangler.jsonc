@@ -17,6 +17,16 @@
       "/status"
     ]
   },
+  "ratelimits": [
+    {
+      "name": "ADMISSION_RATE_LIMITER",
+      "namespace_id": "731942613",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {
@@ -55,6 +65,16 @@
       "workers_dev": true,
       "preview_urls": false,
       "routes": [],
+      "ratelimits": [
+        {
+          "name": "ADMISSION_RATE_LIMITER",
+          "namespace_id": "731942612",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
+        }
+      ],
       "assets": {
         "directory": "./dist",
         "binding": "ASSETS",
@@ -89,6 +109,16 @@
         {
           "pattern": "ratdetective.online",
           "custom_domain": true
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "ADMISSION_RATE_LIMITER",
+          "namespace_id": "731942611",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
         }
       ],
       "assets": {

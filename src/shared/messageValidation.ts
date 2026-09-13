@@ -86,7 +86,14 @@ function parseQuat(value: unknown): QuatData | null {
   const z = finiteNumber(value.z);
   const w = finiteNumber(value.w);
   if (x === null || y === null || z === null || w === null) return null;
-  return { x, y, z, w };
+  const magnitude = Math.hypot(x, y, z, w);
+  // Quaternions are untrusted matrix/physics inputs. Reject degenerate and
+  // extreme values before normalization can overflow or create NaNs.
+  if (!Number.isFinite(magnitude) || magnitude < 0.5 || magnitude > 2) return null;
+  // Preserve exact wire values that are already unit length. This keeps the
+  // parser's round-trip contract without weakening the magnitude bound.
+  if (Math.abs(magnitude - 1) <= 1e-6) return { x, y, z, w };
+  return { x: x / magnitude, y: y / magnitude, z: z / magnitude, w: w / magnitude };
 }
 
 function parseColor(value: unknown): number | null {

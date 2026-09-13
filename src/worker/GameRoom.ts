@@ -50,6 +50,7 @@ import {
   PING_RATE,
   RateLimiter,
   SHOOT_RATE,
+  isPlausibleMovement,
   isPlausibleShot,
   parseClientMessage,
 } from './validation';
@@ -148,6 +149,7 @@ export class GameRoom extends DurableObject<Env> {
   private lastActiveAt = new Map<string, number>();
   private recentShots = new Map<string, string[]>();
   private lastMovementSequence = new Map<string, number>();
+  private lastAcceptedMovementAt = new Map<string, number>();
   private readonly shotAcceptedAt = new Map<string, number>();
   private lastMovementBroadcast = new Map<string, { pose: MovementPose; at: number; stationary: boolean }>();
   private readonly rateLimiter = new RateLimiter();
@@ -443,7 +445,7 @@ export class GameRoom extends DurableObject<Env> {
     // Rescue is not a death, heal or score reset. Use ordinary clear spawn selection.
     Object.assign(player,spawnForWorld(this.world,Math.random,this.players.values(),id));
     this.serverBots?.reset(id,player);
-    this.lastMovementBroadcast.delete(id);this.persistPlayer(player,true);
+    this.lastMovementBroadcast.delete(id);this.lastAcceptedMovementAt.set(id,this.now());this.persistPlayer(player,true);
     this.broadcast({type:'playerRespawn',id,x:player.x,y:player.y,z:player.z,hp:player.hp});
     log('info','stranded bot recovered',{playerId:id});
   }
@@ -733,6 +735,10 @@ export class GameRoom extends DurableObject<Env> {
     const resumedId = existingPlayerId ?? (message.resumeToken ? [...this.sessions].find(([,session]) =>
       session.token===message.resumeToken && (session.until===null || session.until>this.now()))?.[0] : undefined);
     if(resumedId && this.players.has(resumedId)){
+      const session=this.sessions.get(resumedId);
+      // A resume credential is single-use. Rotate it before disconnecting the
+      // previous controller so replay cannot seize the newly active transport.
+      if(session){session.token=crypto.randomUUID();session.until=null;this.persistSession(resumedId,session);}
       // Replace the controller before closing the old transport. Its delayed
       // messages/close callback must never move or delete the resumed rat.
       for(const old of this.ctx.getWebSockets())if(old!==ws && this.getPlayerId(old)===resumedId){
@@ -740,8 +746,6 @@ export class GameRoom extends DurableObject<Env> {
         this.failedSockets.add(old);this.connectionDelivery.delete(old);this.chaosDelivery.delete(old);
         old.close(SESSION_REPLACED_CLOSE_CODE,'Connected on a new transport');
       }
-      const session=this.sessions.get(resumedId);
-      if(session){session.until=null;this.persistSession(resumedId,session);}
       const player=this.players.get(resumedId)!;
       this.persistPlayer(player,true);
       this.finishJoin(ws,player,false);
@@ -828,7 +832,12 @@ export class GameRoom extends DurableObject<Env> {
     if(seq<=previousSeq){this.diagnostics.netplay('movement','stale-sequence',0);return false;}
     this.lastMovementSequence.set(playerId,seq);
     const from={x:player.x,y:player.y,z:player.z};
-    const { position, corrected } = clampPosition(message.position);
+    const bounded = clampPosition(message.position);
+    const previousAt=this.lastAcceptedMovementAt.get(playerId)??this.lastActiveAt.get(playerId)??at;
+    const accepted=!bounded.corrected&&isPlausibleMovement(from,bounded.position,at-previousAt)&&
+      (this.chaos?.movementPathClear(from,bounded.position)??true);
+    const position=accepted?bounded.position:from,corrected=!accepted;
+    if(accepted)this.lastAcceptedMovementAt.set(playerId,at);
     player.x = position.x;
     player.y = position.y;
     player.z = position.z;
@@ -1017,7 +1026,7 @@ export class GameRoom extends DurableObject<Env> {
         if (!player) continue;
 
         respawnPlayer(player, spawnForWorld(this.world, Math.random, this.players.values(), player.id));
-        this.lastMovementBroadcast.delete(player.id);
+        this.lastMovementBroadcast.delete(player.id);this.lastAcceptedMovementAt.set(player.id,now);
         if (this.isManagedBot(player.id)) this.serverBots?.reset(player.id, { x: player.x, y: player.y, z: player.z });
         this.persistPlayer(player, true);
         this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
@@ -1028,6 +1037,7 @@ export class GameRoom extends DurableObject<Env> {
         // deadline cannot consume held time, change mode or choose a winner.
         if(this.chaos?.assignmentState&&(this.round.phase!=='won'||this.round.resetAt!==event.due_at))continue;
         this.lastMovementBroadcast.clear();
+        this.lastAcceptedMovementAt.clear();
         this.chaos?.reset();
         this.applyShotEvents();
         this.round = playingRound(this.now());
@@ -1115,6 +1125,7 @@ export class GameRoom extends DurableObject<Env> {
     this.recentShots.delete(playerId);
     this.lastMovementBroadcast.delete(playerId);
     this.lastMovementSequence.delete(playerId);
+    this.lastAcceptedMovementAt.delete(playerId);
     this.rateLimiter.clear(playerId);
     this.broadcast({ type: 'playerLeft', id: playerId });
     this.broadcastScoreboard();

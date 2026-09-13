@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAY_BOUNDS, RateLimiter, clampPosition, isPlausiblePosition, isPlausibleShot } from '../../src/worker/validation';
+import { PLAY_BOUNDS, RateLimiter, clampPosition, isPlausibleMovement, isPlausiblePosition, isPlausibleShot } from '../../src/worker/validation';
 
 describe('rate windows', () => {
   it('reclaims thousands of connection namespaces without touching a live player',()=>{
@@ -47,5 +47,13 @@ describe('play bounds', () => {
     const player = { x: 0, y: 2, z: 0 };
     expect(isPlausibleShot({ x: 0, y: 3.45, z: 0 }, { x: 0, y: 0, z: 1 }, player)).toBe(true);
     expect(isPlausibleShot({ x: 0, y: 3.45, z: 0 }, { x: 0, y: 0, z: 0 }, player)).toBe(false);
+  });
+
+  it('uses bounded server elapsed time for walking and launcher displacement',()=>{
+    const from={x:0,y:0,z:0};
+    expect(isPlausibleMovement(from,{x:1.5,y:4,z:0},40)).toBe(true);
+    expect(isPlausibleMovement(from,{x:20,y:0,z:0},40)).toBe(false);
+    expect(isPlausibleMovement(from,{x:0,y:90,z:0},1000)).toBe(true);
+    expect(isPlausibleMovement(from,{x:0,y:240,z:0},60_000)).toBe(false);
   });
 });

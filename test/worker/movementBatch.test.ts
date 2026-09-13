@@ -8,23 +8,25 @@ const wait=async(test:()=>boolean)=>{const end=Date.now()+4000;while(!test()){if
 it('negotiates movement batches while preserving legacy delivery and movement-before-shot order',async()=>{
  const room=`graybox-batch-${crypto.randomUUID()}`,sockets:WebSocket[]=[];
  const open=async(batch:boolean)=>{
-  const response=await SELF.fetch(`https://example.test/ws?room=${room}${batch?'&movement=batch-v1':''}`,{headers:{Upgrade:'websocket'}});
+  const response=await SELF.fetch(`http://localhost/ws?room=${room}${batch?'&movement=batch-v1':''}`,{headers:{Upgrade:'websocket',Origin:'http://localhost'}});
   expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
   const messages:any[]=[];ws.addEventListener('message',e=>{const m=readSocketMessage(ws,e.data);expect(m).not.toBeNull();messages.push(m);});
   ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Rat',appearance}));await wait(()=>messages.some(m=>m.type==='welcome'));
-  return{ws,messages,id:messages.find(m=>m.type==='welcome').id};
+  const welcome=messages.find(m=>m.type==='welcome');
+  return{ws,messages,id:welcome.id,player:welcome.player};
  };
  try{
   const batched=await open(true),legacy=await open(false),mover=await open(false);
-  for(const x of [20,21])mover.ws.send(JSON.stringify({type:'updateMovement',position:{x,y:2,z:-18},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}}));
-  mover.ws.send(JSON.stringify({type:'shoot',shotId:crypto.randomUUID(),origin:{x:21,y:3.4,z:-18},direction:{x:1,y:0,z:0}}));
+  const xs=[mover.player.x+.5,mover.player.x+1];
+  for(const x of xs)mover.ws.send(JSON.stringify({type:'updateMovement',position:{x,y:mover.player.y,z:mover.player.z},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}}));
+  mover.ws.send(JSON.stringify({type:'shoot',shotId:crypto.randomUUID(),origin:{x:xs[1],y:mover.player.y+1.4,z:mover.player.z},direction:{x:1,y:0,z:0}}));
   await wait(()=>batched.messages.some(m=>m.type==='playerShot')&&legacy.messages.some(m=>m.type==='playerShot'));
   expect(batched.messages.some(m=>m.type==='playerMoved'&&m.player.id===mover.id)).toBe(false);
   const shot=batched.messages.findIndex(m=>m.type==='playerShot');
   const poses=batched.messages.slice(0,shot).filter(m=>m.type==='playersMoved').flatMap(m=>m.players).filter(p=>p.player.id===mover.id);
-  expect(poses.at(-1).player.x).toBe(21);expect(poses.every(p=>Number.isFinite(p.at))).toBe(true);
+  expect(poses.at(-1).player.x).toBe(xs[1]);expect(poses.every(p=>Number.isFinite(p.at))).toBe(true);
   expect(legacy.messages.some(m=>m.type==='playersMoved')).toBe(false);
-  expect(legacy.messages.filter(m=>m.type==='playerMoved'&&m.player.id===mover.id).map(m=>m.player.x)).toEqual([20,21]);
+  expect(legacy.messages.filter(m=>m.type==='playerMoved'&&m.player.id===mover.id).map(m=>m.player.x)).toEqual(xs);
  }finally{await Promise.all(sockets.map(ws=>new Promise<void>(resolve=>{if(ws.readyState===WebSocket.CLOSED)return resolve();ws.addEventListener('close',()=>resolve(),{once:true});ws.close(1000,'test complete');})));}
 });
 

@@ -16,9 +16,9 @@ Current code contract, reviewed **2026-09-10**. Source constants take precedence
 | Active chaos shots | 256 globally; fresh trigger pulls preferentially evict burst balls when necessary |
 | Corpses | 16, bounded lifetime; each Improper Disposal death requests up to 120 burst balls within shared capacity |
 
-Rate limits from `src/worker/validation.ts`: movement 30/sec, shoot and legacy hit 12/sec, ping 4/sec, join 3 per 10 seconds per connection. A valid finite direction must have magnitude 0.05–8 and the shot origin must be within 12 units of the stored player pose. These are plausibility/resource checks, not anti-cheat proof.
+Admission uses a Cloudflare Rate Limiting binding at a generous 120 upgrade attempts per minute per available connecting address. Connection-local limits from `src/worker/validation.ts`: movement 30/sec, shoot and legacy hit 12/sec, ping 4/sec, join 3 per 10 seconds per connection. A valid finite direction must have magnitude 0.05–8 and the shot origin must be within 12 units of the stored player pose. These are plausibility/resource checks, not anti-cheat proof.
 
-The transport envelope is x/z ±2000 and y −8 to 250. Out-of-envelope finite movement is clamped and `playerCorrected` is echoed to the mover as well as observers. The version-2 map separately has physical boundaries (`CITY_BOUNDS` −196 to 166), launch containment and bot recovery. Do not confuse the network envelope with playable map dimensions or claim the map has no walls.
+The transport envelope is x/z ±2000 and y −8 to 250. Movement is also checked against elapsed server time and the static city collision world. A rejected input keeps the last authoritative position, consumes its sequence number and emits `playerCorrected`; out-of-envelope finite inputs are bounded before that decision. The version-2 map separately has physical boundaries (`CITY_BOUNDS` −196 to 166), launch containment and bot recovery. Do not confuse the network envelope with playable map dimensions or claim the map has no walls.
 
 ## Cadence and cost
 
