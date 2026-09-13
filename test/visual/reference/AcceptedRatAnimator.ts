@@ -1,7 +1,7 @@
+// Frozen September 12 accepted animation, before movement polish.
+// Same current geometry; deliberately independent of the candidate animator.
 import * as THREE from 'three';
-import {updateGunSleeve,type GunSleeveRig} from './RatArmModel';
-import { RatLocomotionFollowThrough } from './RatLocomotionFollowThrough';
-import {RatActing,type RatReaction} from './RatActing';
+import {updateGunSleeve,type GunSleeveRig} from '../../../src/utils/RatArmModel';
 
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;
@@ -21,12 +21,7 @@ export function getRatCarryAnchor(root: THREE.Group): THREE.Object3D {
 }
 
 /** Small procedural poses shared by the visible character and its outline shell. */
-export class RatAnimator {
-    private readonly locomotion = new RatLocomotionFollowThrough();
-    private locomotionPolish = true;
-    private readonly acting:RatActing;
-    private actingEnabled = true;
-    private hustle = false;
+export class AcceptedRatAnimator {
     private readonly rigs;
     private readonly gunSleeves:GunSleeveRig[];
     private readonly carryAnchor: THREE.Object3D;
@@ -71,7 +66,6 @@ export class RatAnimator {
     private readonly orientation = new THREE.Euler(0, 0, 0, 'YXZ');
 
     constructor(private readonly root: THREE.Group, outline?: THREE.Group) {
-        this.acting=new RatActing(root.uuid);
         const models = outline ? [root, outline] : [root];
         this.gunSleeves=models.flatMap(model=>{
             const shoulder=model.getObjectByName('rat-gun-shoulder');
@@ -113,31 +107,14 @@ export class RatAnimator {
         }));
     }
 
-    takeHit(direction?:THREE.Vector3): void {
+    takeHit(): void {
         this.hit = 1;
         this.hitAge = 0;
-        if(direction){
-            this.parentRotation.copy(this.root.quaternion).invert();
-            this.aimDirection.copy(direction).normalize().applyQuaternion(this.parentRotation);
-        }
-        if(this.actingEnabled)this.acting.trigger('hit',1,direction?this.aimDirection.x:0);
         this.applyPose();
-    }
-
-    playReaction(event:RatReaction,strength=1):void {
-        if(!this.actingEnabled||this.deathAnimation)return;
-        this.acting.trigger(event,strength);this.applyPose();
-    }
-    setHustle(active:boolean):void {this.hustle=active;}
-    resetReactions():void {this.acting.reset();this.hustle=false;this.applyPose();}
-    setActingEnabled(enabled:boolean):void {
-        this.actingEnabled=enabled;this.acting.reset();this.applyPose();
     }
 
     /** Damped secondary motion reacts to actual tumble and contact impulses. */
     poseDeath(time: number, dt: number, spin: { x: number; y: number; z: number }, impact: number, resting: boolean): void {
-        this.locomotion.reset();
-        this.acting.reset();
         this.restore();
         this.deathAnimation = true;
         this.muzzleFlash.visible = false;
@@ -184,7 +161,6 @@ export class RatAnimator {
     }
 
     shoot(target?: THREE.Vector3): void {
-        if(this.actingEnabled)this.acting.trigger('shot');
         this.aimTarget = target?.clone() ?? null;
         this.recoil = 1;
         this.flashAge = 0;
@@ -200,8 +176,6 @@ export class RatAnimator {
     }
 
     reset(): void {
-        this.locomotion.reset();
-        this.acting.reset();this.hustle=false;
         this.time = this.stride = this.movement = this.recoil = this.turn = this.hit = 0;
         this.acceleration = this.coatTurn = 0;
         this.verticalSpeed = this.airPose = this.jumpLift = this.jumpLanding = 0;
@@ -234,20 +208,9 @@ export class RatAnimator {
 
     /** Rebase locomotion after a stream discontinuity without erasing action cues. */
     resetMotionHistory(): void {
-        this.locomotion.reset();
-        this.acting.resetMotion();
-        if (this.locomotionPolish) this.tailMotion = this.tailTurn = 0;
         this.lastPosition = null;
         this.verticalSpeed = this.airPose = this.jumpLift = this.jumpLanding = 0;
         this.movement = this.acceleration = this.turn = this.coatTurn = 0;
-    }
-
-    /** Workshop comparison on the accepted model; never changes control state. */
-    setLocomotionPolish(enabled: boolean): void {
-        this.locomotionPolish = enabled;
-        if(!enabled){this.actingEnabled=false;this.acting.reset();}
-        this.locomotion.reset();
-        this.applyPose();
     }
 
     update(dt: number, previewSpeed?: number): void {
@@ -260,17 +223,10 @@ export class RatAnimator {
         let turnRate = 0;
         let verticalSpeed = 0;
         let correction = false;
-        let actingVertical = 0;
-        let actingCorrection = false;
         if (this.lastPosition) {
             const distance = Math.hypot(position.x - this.lastPosition.x, position.z - this.lastPosition.z);
             const height = position.y - this.lastPosition.y;
             correction = distance >= 2 || Math.abs(height) >= 2;
-            // Confirmed launch events allow the known high vertical speed even
-            // when a 30Hz sample crosses the old two-unit visual cutoff.
-            actingCorrection=distance>=Math.max(2,30*motionDt)||
-                (Math.abs(height)>=2&&!(this.acting.launchFlight&&Math.abs(height)<=105*motionDt));
-            if(!actingCorrection)actingVertical=height/motionDt;
             if (!correction) verticalSpeed = height / motionDt;
             // Teleports/corrections do not trigger a sprint pose.
             if (distance < 2) speed = distance / motionDt;
@@ -280,10 +236,6 @@ export class RatAnimator {
         this.lastYaw = yaw;
         // Optional stationary art-preview input; gameplay continues to derive speed from motion.
         if(previewSpeed!==undefined&&Number.isFinite(previewSpeed))speed=Math.max(0,Math.min(18,previewSpeed));
-        if(this.actingEnabled){
-            if(actingCorrection)this.acting.resetMotion();
-            this.acting.update(dt,speed,actingVertical,this.hustle);
-        }
         const blend = 1 - Math.exp(-10 * dt);
         // Read render-space vertical motion for local and interpolated remote rats.
         // These small secondary poses never feed back into the controller/body.
@@ -310,12 +262,6 @@ export class RatAnimator {
         // A slower response lets the flexible end trail starts, stops and turns.
         this.tailMotion = THREE.MathUtils.lerp(this.tailMotion, this.movement, 1 - Math.exp(-4 * dt));
         this.tailTurn = THREE.MathUtils.lerp(this.tailTurn, this.turn, 1 - Math.exp(-3 * dt));
-        if (correction) this.locomotion.reset();
-        else this.locomotion.update(dt, speed, turnRate);
-        if (this.locomotionPolish) {
-            this.tailMotion = this.locomotion.tailMovement;
-            this.tailTurn = this.locomotion.tailTurn;
-        }
         this.time += dt;
         // Slower, distinct alternating steps read better than a fast vibration.
         this.stride += dt * (4 + this.movement * 5);
@@ -338,18 +284,12 @@ export class RatAnimator {
         const stepLift = Math.abs(Math.sin(this.stride));
         const compression = Math.cos(this.stride * 2) * this.movement;
         const followThrough = Math.sin(this.stride - 0.65) * this.movement;
-        const blinkPhase = (this.time+(this.actingEnabled?this.acting.blinkOffset:0)) % 4.7;
+        const blinkPhase = this.time % 4.7;
         const blink = blinkPhase > 4.48 ? Math.sin((blinkPhase - 4.48) / 0.22 * Math.PI) : 0;
         const twitchPhase = this.time % 6.1;
-        const twitch = !this.actingEnabled&&twitchPhase > 5.7 ? Math.sin((twitchPhase - 5.7) * Math.PI / 0.4) * 0.12 : 0;
+        const twitch = twitchPhase > 5.7 ? Math.sin((twitchPhase - 5.7) * Math.PI / 0.4) * 0.12 : 0;
         this.carryAnchor.rotation.x = followThrough * .48 - this.airPose * .12 + this.jumpLanding * .08;
         this.carryAnchor.rotation.z = sway * .035;
-        if(this.actingEnabled&&this.carryAnchor.children.length){
-            // The whole straight sleeve and rigid case follow the same pivot.
-            // Exaggerate transient weight without increasing the periodic swing.
-            this.carryAnchor.rotation.x-=this.locomotion.startStop*.65;
-            this.carryAnchor.rotation.z-=this.locomotion.turn*.32;
-        }
         for (const rig of this.rigs) {
             const [{ part: body }, { part: head }, { part: hat }, { part: tail },
                 { part: leftEye }, { part: rightEye }, { part: leftEar }, { part: rightEar },
@@ -401,50 +341,6 @@ export class RatAnimator {
             leftEye.scale.y = rightEye.scale.y = 1 - blink * 0.94;
             leftEar.rotation.z = twitch;
             rightEar.rotation.z = -twitch * 0.65;
-            if (this.locomotionPolish) {
-                // Preserve the accepted lean/stride in the weapon-bearing body.
-                // Stabilize the head above it; only secondary parts catch up.
-                head.rotation.x -= this.acceleration * .75;
-                head.rotation.z -= sway * .025;
-                head.rotation.y += this.coatTurn * .55 - this.turn * .9 + this.locomotion.turn * .025;
-                // Quieter periodic motion leaves room for a single movement accent.
-                hat.rotation.x += -followThrough * .029 - this.locomotion.startStop * .18;
-                hat.rotation.z += -followThrough * .023 - (this.turn - this.coatTurn) * .2
-                    - this.locomotion.turn * .07;
-                hat.rotation.y -= this.locomotion.hatTurn * .065;
-                leftEar.rotation.x -= this.locomotion.startStop * .20;
-                rightEar.rotation.x -= this.locomotion.startStop * .13;
-                leftEar.rotation.z += this.locomotion.turn * .16;
-                rightEar.rotation.z += this.locomotion.turn * .10;
-                tail.rotation.y = -this.locomotion.tailTurn * .2;
-            }
-            if(this.actingEnabled){
-                const a=this.acting;
-                // Full acting also makes the accepted movement accents legible
-                // from behind. The movement-only comparison keeps its old gain.
-                if(this.locomotionPolish){
-                    head.rotation.x-=this.locomotion.startStop*.25;
-                    head.rotation.y+=this.locomotion.turn*.25;
-                    hat.rotation.x-=this.locomotion.startStop*.54;
-                    hat.rotation.z-=this.locomotion.turn*.21;
-                    hat.rotation.y-=this.locomotion.hatTurn*.15;
-                    leftEar.rotation.x-=this.locomotion.startStop*.60;
-                    rightEar.rotation.x-=this.locomotion.startStop*.39;
-                    leftEar.rotation.z+=this.locomotion.turn*.48;
-                    rightEar.rotation.z+=this.locomotion.turn*.30;
-                    tail.rotation.y-=this.locomotion.tailTurn*.5;
-                }
-                // Quiet decorative motion while firing; accepted recoil/body and
-                // the actual aimed weapon hierarchy remain completely untouched.
-                head.rotation.x+=(-breath*.009+compression*.02)*a.focus+a.headX;
-                head.rotation.z+=sway*(this.locomotionPolish?.085:.06)*a.focus+a.headZ;
-                head.rotation.y+=a.headY;
-                hat.rotation.x+=a.hatX;hat.rotation.z+=a.hatZ;hat.position.y+=a.hatY;
-                leftEar.rotation.x+=a.earLeftX;rightEar.rotation.x+=a.earRightX;
-                leftEar.rotation.z+=a.earLeftZ;rightEar.rotation.z+=a.earRightZ;
-                leftEye.scale.y*=a.eyes;rightEye.scale.y*=a.eyes;
-                leftEye.rotation.z-=a.eyeSlant;rightEye.rotation.z+=a.eyeSlant;
-            }
         }
         this.gunSleeves.forEach(updateGunSleeve);
         this.deformTails();
@@ -471,8 +367,7 @@ export class RatAnimator {
                 if (!wave) {
                     let x = reset ? 0 : weight * (
                         Math.sin(this.time * 1.5 - u * 2.4) * 0.07 * (this.deathAnimation ? this.tailMotion : 1) +
-                        Math.sin(this.stride - u * 2.8) * this.tailMotion * 0.38 *
-                            (this.actingEnabled&&!this.deathAnimation?1-this.acting.tailStream:1) +
+                        Math.sin(this.stride - u * 2.8) * this.tailMotion * 0.38 +
                         this.tailTurn * 1.1);
                     // Ground contact stays steady through the middle. Only the last
                     // quarter lifts slightly as the tip flicks across the floor.
@@ -480,10 +375,6 @@ export class RatAnimator {
                     let y = reset ? 0 : tipWeight * tipWeight *
                         (1 + Math.sin(this.stride - u * 2.8 - 0.8)) * this.tailMotion * 0.025;
                     if (!this.deathAnimation && !reset) y += weight * Math.max(0,this.airPose) * .12;
-                    if(this.actingEnabled&&!this.deathAnimation&&!reset){
-                        y+=weight*this.acting.tailLift;
-                        x+=weight*this.acting.tailSide;
-                    }
                     wave={x,y};waves.set(u,wave);
                 }
                 let {x,y}=wave;

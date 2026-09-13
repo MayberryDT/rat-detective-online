@@ -97,6 +97,8 @@ const harness = vi.hoisted(() => {
             takeDamage: ReturnType<typeof vi.fn>;
             heal: ReturnType<typeof vi.fn>;
             setPowerups: ReturnType<typeof vi.fn>;
+            resetReactions: ReturnType<typeof vi.fn>;
+            resetMotionHistory: ReturnType<typeof vi.fn>;
             useSharedCorpse: ReturnType<typeof vi.fn>;
         };
         onMouseMove = vi.fn();
@@ -129,6 +131,8 @@ const harness = vi.hoisted(() => {
                 takeDamage: vi.fn(),
                 heal: vi.fn(),
                 setPowerups: vi.fn(),
+                resetReactions: vi.fn(),
+                resetMotionHistory: vi.fn(),
                 useSharedCorpse: vi.fn(),
             };
             harness.rats.push(this);
@@ -579,6 +583,7 @@ describe('GameSession', () => {
         transport.onMessage?.({ type: 'gameWon', winnerId: 'me', winnerName: '<Rat & Co>', kills: 20, resetAt: Date.now() + 6_000 });
         expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, undefined);
         transport.onMessage?.({ type: 'gameReset', round: { phase: 'playing' } });
+        expect(rat.entity.resetReactions).toHaveBeenCalledOnce();
         expect(hud.hideVictory).toHaveBeenCalled();
         expect(hud.hideRespawn).toHaveBeenCalled();
         expect(harness.guns.at(-1)!.clearProjectiles).toHaveBeenCalled();

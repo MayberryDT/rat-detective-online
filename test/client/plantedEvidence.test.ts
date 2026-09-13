@@ -69,7 +69,7 @@ describe('Planted Evidence',()=>{
         expect(state.shots.length).toBeGreaterThan(before);
         expect(state.shots.every(s=>s.owner===shooter.id)).toBe(true);
         expect(state.shots.length-before).toBeLessThanOrEqual(T.maxShots);
-        // The blast is attributed to the shooter, never a self-kill or a random holder.
+        // This shooter is far from the blast; ownership still records the initiator.
         expect(hits.some(h=>h.victim===shooter.id)).toBe(false);
         sim.step(1/60,now+67);
         expect(sim.snapshot(false).extraCases).toHaveLength(9);

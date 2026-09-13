@@ -268,6 +268,7 @@ export class GameSession {
                     body.aabbNeedsUpdate = true;
                     this.clearInput();
                     this.rat.syncAfterPhysics(0);
+                    this.rat.entity.resetMotionHistory();
                     this.rat.resetGrounding();
                     this.lastMovement = [];
                     this.lastInteractionPosition.set(pose.x,pose.y+.8,pose.z);
@@ -303,7 +304,13 @@ export class GameSession {
                         entity.hp = 0;
                         entity.billboard.setHealth(0);
                     } else if (message.hp < entity.hp) {
-                        entity.takeDamage(entity.hp - message.hp, new THREE.Vector3());
+                        const attacker=message.attackerId===this.myId?this.rat?.entity:
+                            message.attackerId?this.remotes.get(message.attackerId):undefined;
+                        // Nonlethal impact is used only by the cosmetic flinch;
+                        // no impulse, camera rotation or authoritative change.
+                        const direction=new THREE.Vector3();
+                        if(attacker)direction.copy(entity.mesh.position).sub(attacker.mesh.position).setY(0);
+                        entity.takeDamage(entity.hp - message.hp, direction);
                     }
                 }
                 break;
@@ -348,7 +355,10 @@ export class GameSession {
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
-            case 'gameReset': this.roundWon=false;this.rat?.entity.setPowerups(0,0);for(const {entity} of this.remotes.rats.values())entity.setPowerups(0,0);this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+            case 'gameReset':
+                this.roundWon=false;this.rat?.entity.setPowerups(0,0);this.rat?.entity.resetReactions();
+                for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0);entity.resetReactions();}
+                this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }

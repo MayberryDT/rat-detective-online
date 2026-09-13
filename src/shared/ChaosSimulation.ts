@@ -39,7 +39,7 @@ interface CaseRuntime {
     fake:boolean;
 }
 /** null ownership is an environmental Tampering hit, including neutral chains. */
-export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean }
+export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true }
 export interface ShotResultEvent {owner:string|null;shotId:string;ballId:string;outcome:ShotResultOutcome;at:number;tick:number;epoch:string;victimId?:string;damage?:number;point?:Vec3Data;normal?:Vec3Data;compensated?:boolean;fallback?:string;rewindMs?:number;targetDelta?:number}
 export interface PickupClaimResult {accepted:boolean;target:PickupTarget;targetId:string;playerId:string;pickup?:PickupKind;effectUntil?:number;reason?:PickupRejectReason}
 /** A pickup claim the room must announce. Healing is drained so the room can
@@ -562,7 +562,7 @@ export class ChaosSimulation {
             const direction=new C.Vec3(Math.cos(angle),.12+(i%3)*.12,Math.sin(angle));direction.normalize();
             direction.scale(BALL_SPEED,direction);
             const shot:ChaosShot={id:crypto.randomUUID(),owner,
-                p:{...origin},v:data(direction),age:0,original:false,radius:BALL_RADIUS};
+                p:{...origin},v:data(direction),age:0,original:false,radius:BALL_RADIUS,explosive:true};
             this.burstShots.add(shot);this.shots.push(shot);
         }
     }
@@ -786,7 +786,7 @@ export class ChaosSimulation {
             const spread=this.aimJitter(rotation.vmult(dir),.22);
             spread.y=Math.max(.42,spread.y+.55+(i%2)*.12);spread.normalize();spread.scale(speed,spread);
             const child:ChaosShot={id:crypto.randomUUID(),owner:shot.owner,p:{...shot.p},v:data(spread),age:shot.age,
-                original:false,radius:BALL_RADIUS*.72,wallBounced:shot.wallBounced,delayed:shot.delayed};
+                original:false,radius:BALL_RADIUS*.72,wallBounced:shot.wallBounced,delayed:shot.delayed,...(shot.explosive?{explosive:true}:{})};
             this.burstShots.add(child);this.shots.push(child);this.shotTriggers.set(child.id,trigger);
             if(view)this.shotViews.set(child.id,{...view});
         }
@@ -966,14 +966,13 @@ export class ChaosSimulation {
             const radius=shotRadius(shot);
             const from=vec(shot.p),motion=vec(shot.v).scale(dt),to=from.vadd(motion);
             const travel=motion.length()||1;
-            // Skip the shooter's body AND their carried case before choosing a
-            // contact, including banked and enlarged rounds. Walls behind them
-            // must still be hit; ownership changes apply on the very next sweep.
+            // Ordinary rounds skip their shooter; explosive debris can hit them.
+            // Preserve the owner's carried-case exclusion before closest contact.
             const historicalCase=this.caseSweep(from,to,radius,shot);
             const compensatedRats=this.shotViews.has(shot.id)&&shot.age<=this.shotViews.get(shot.id)!.untilAge;
             const acceptsShot=(body:C.Body)=>{
                 const target=this.targets.get(body);
-                return !(target?.kind==='rat'&&(compensatedRats||target.player?.id===shot.owner))&&!(historicalCase?.available&&body===this.primaryCase.body)&&!(shot.owner && (target?.player?.id===shot.owner ||
+                return !(target?.kind==='rat'&&(compensatedRats||!shot.explosive&&target.player?.id===shot.owner))&&!(historicalCase?.available&&body===this.primaryCase.body)&&!(shot.owner && (!shot.explosive&&target?.player?.id===shot.owner ||
                     target?.kind==='case' && this.cases.get(target.caseId??'primary')?.owner===shot.owner));
             };
             const solidHit=this.rayQuery.sphere(from,to,radius,1|2|4|8,acceptsShot),ratHit=this.ratSweep(from,to,radius,shot);
@@ -982,7 +981,7 @@ export class ChaosSimulation {
             if(ratHit&&(!hit.hasHit||ratHit.hit.distance<hit.distance)){hit=ratHit.hit;target=ratHit.target;useRat=true;}
             const stop=radius+.01;
             const contact=hit.hasHit?Math.max(0,hit.distance):travel;
-            const worldHit=hit.hasHit&&contact<=travel+.0001&&target?.player?.id!==shot.owner;
+            const worldHit=hit.hasHit&&contact<=travel+.0001&&(shot.explosive||target?.player?.id!==shot.owner);
             if(!worldHit){shot.p=data(to);continue;}
             const normal=hit.hitNormalWorld,point=hit.hitPointWorld.vadd(normal.scale(stop));
             shot.p=data(point);
@@ -1000,7 +999,7 @@ export class ChaosSimulation {
                 }
                 const compensated=useRat&&ratHit!.compensated,viewAttempted=!!this.shotViews.get(shot.id)&&shot.age<=this.shotViews.get(shot.id)!.untilAge;
                 if(playing)this.hit({owner:shot.owner,victim:target.player.id,damage,incoming,shotId:this.shotTriggers.get(shot.id)??shot.id,ballId:shot.id,
-                    point:data(hit.hitPointWorld),normal:data(normal),compensated});
+                    point:data(hit.hitPointWorld),normal:data(normal),compensated,...(shot.explosive?{explosive:true}:{})});
                 this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:false});
                 this.finishShot(shot,hit.shape===target.head?'rat-head':'rat-body',{victimId:target.player.id,damage,point:data(hit.hitPointWorld),normal:data(normal),compensated,
                     ...(useRat?{rewindMs:ratHit!.rewindMs,targetDelta:ratHit!.targetDelta}:{}),
@@ -1069,7 +1068,7 @@ export class ChaosSimulation {
                     if(this.shots.length>=T.maxShots)break;
                     const spread=v.vadd(side.scale(sign*v.length()*.22));spread.normalize();spread.scale(v.length(),spread);
                     const extra:ChaosShot={id:crypto.randomUUID(),owner:shot.owner,p:{...shot.p},v:data(spread),age:shot.age,
-                        wallBounced:true,original:false,radius:shot.radius};
+                        wallBounced:true,original:false,radius:shot.radius,...(shot.explosive?{explosive:true}:{})};
                     this.burstShots.add(extra);this.shots.push(extra);
                 }
             }

@@ -7,6 +7,8 @@ import type { PlayerData } from '../../src/shared/networkProtocol';
 import type { RatEntity } from '../../src/entities/RatEntity';
 import { createRatMesh } from '../../src/utils/RatModel';
 import { RatAnimator } from '../../src/utils/RatAnimator';
+import { createAssignment, destinationPoint, activeDestination } from '../../src/shared/assignments';
+import { ChaosEncoder, ChaosDecoder } from '../../src/shared/chaosWire';
 
 vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
 
@@ -20,7 +22,7 @@ beforeAll(()=>{
     vi.stubGlobal('window',{innerWidth:1280,innerHeight:720});
     vi.stubGlobal('document',{
         createElement:()=>{
-            const element={style:{},width:0,height:0,label:'',remove(){},appendChild(){},
+            const element={style:{},dataset:{},width:0,height:0,label:'',remove(){},appendChild(){},
                 setAttribute(_name:string,value:string){this.label=value;},
                 getContext:()=>({fillRect(){},fillText(){}})};
             elements.push(element);return element;
@@ -35,6 +37,70 @@ function player(id:string,yaw=0):PlayerData{
         hatType:'fedora',hatColor:0x343434,coatColor:0x555555,furColor:0xbe9767,hp:3,kills:0,deaths:0};
 }
 describe('natural briefcase carry',()=>{
+    it('shows both non-winning relocations immediately through compact snapshots with the accepted delivery animation, and wins only at three',()=>{
+        const carrier=player('carrier'),simulation=new ChaosSimulation(new Map([[carrier.id,carrier]]),()=>{});
+        let now=Date.now();const assignment=createAssignment('chain-of-custody',now-3000);assignment.phase='active';simulation.setAssignment(assignment);
+        const mesh=createRatMesh(),animator=new RatAnimator(mesh),playReaction=vi.fn(animator.playReaction.bind(animator));
+        const entity={mesh,hp:3,isPlayer:true,dead:false,name:'You',playReaction} as unknown as RatEntity;
+        const scene=new THREE.Scene(),view=new ChaosView(scene,()=>entity),camera=new THREE.PerspectiveCamera();
+        const encoder=new ChaosEncoder('deliveries',true),decoder=new ChaosDecoder();
+        const deliverSnapshot=()=>{
+            const snapshot=simulation.snapshot(false),message=decoder.read(encoder.encode(snapshot).payload)?.message;
+            expect(message?.type).toBe('chaos');if(message?.type!=='chaos')throw new Error('Undecodable case state');
+            view.apply(message.state);animator.update(1/60);view.update(1/60,camera);
+            return snapshot;
+        };
+        try{
+            view.setScores([],carrier.id);deliverSnapshot();
+            for(let points=1;points<=3;points++){
+                const p=simulation.caseBody.position;Object.assign(carrier,{x:p.x,y:p.y-.8,z:p.z});
+                mesh.position.set(carrier.x,carrier.y,carrier.z);simulation.step(0,++now);deliverSnapshot();
+                expect(simulation.caseHolderId).toBe(carrier.id);expect(mesh.getObjectByName('hot-case-off-hand')).toBeDefined();
+                Object.assign(carrier,destinationPoint(activeDestination(simulation.assignmentState!)!,false));
+                mesh.position.set(carrier.x,carrier.y,carrier.z);simulation.step(0,++now);
+                const snapshot=deliverSnapshot();
+                expect(snapshot.assignment!.deliveries).toEqual({carrier:points});
+                if(points<3){
+                    expect(snapshot.assignment!.result).toBeUndefined();expect(snapshot.case.owner).toBeNull();
+                    expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
+                    expect(scene.getObjectByName('hot-case')!.position.distanceTo(new THREE.Vector3(snapshot.case.p.x,snapshot.case.p.y,snapshot.case.p.z))).toBeLessThan(.002);
+                }else expect(snapshot.assignment!.result?.winnerId).toBe(carrier.id);
+                simulation.step(0,++now);deliverSnapshot();expect(simulation.assignmentState!.deliveries.carrier).toBe(points);
+            }
+            expect(playReaction.mock.calls.filter(([event])=>event==='delivery')).toHaveLength(3);
+        }finally{view.dispose();}
+    });
+    it.each(['delivery','round','epoch','reset'] as const)('clears an outstanding carried-case prediction on %s and ignores its late acknowledgement',transition=>{
+        const state=new ChaosSimulation(new Map(),()=>{}).snapshot(false);
+        state.epoch='before';state.tick=10;
+        state.assignment=createAssignment('chain-of-custody',state.time-5000,'round-before');
+        state.assignment.phase='active';
+        const mesh=createRatMesh(),entity={mesh,isPlayer:true,dead:false,name:'You'} as RatEntity;
+        const scene=new THREE.Scene(),view=new ChaosView(scene,()=>entity,undefined,false),camera=new THREE.PerspectiveCamera();
+        try{
+            view.setScores([],'local');view.apply(state);
+            view.anticipateInteraction('old',{target:'case',targetId:'primary',generation:0});
+            if(transition==='epoch'||transition==='reset')view.resolveInteraction({type:'pickupResult',interactionId:'old',
+                target:'case',targetId:'primary',accepted:true,at:state.time,tick:12,epoch:'before',playerId:'local'});
+            view.update(1/60,camera);expect(mesh.getObjectByName('hot-case-off-hand')).toBeDefined();
+            const next=structuredClone(state);next.time++;next.tick=11;next.case.p={x:50,y:1,z:50};
+            if(transition==='epoch')next.epoch='after';
+            else if(transition==='reset')view.resetProjectiles();
+            else {
+                if(transition==='round')next.assignment!.roundId='round-after';
+                else {next.assignment!.deliverySerial=1;next.assignment!.deliveries.local=1;next.assignment!.lastDelivery={playerId:'local',playerName:'You',at:next.time};}
+            }
+            view.apply(next);view.update(1/60,camera);
+            expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
+            expect(scene.getObjectByName('hot-case')!.position.toArray()).toEqual([50,1,50]);
+            // A result that belonged to the discarded prediction must not attach
+            // a phantom case for the rest of this round.
+            view.resolveInteraction({type:'pickupResult',interactionId:'old',target:'case',targetId:'primary',accepted:true,
+                at:state.time,tick:12,epoch:'before',playerId:'local'});
+            view.update(1/60,camera);
+            expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
+        }finally{view.dispose();}
+    });
     it('keeps the accepted sleeve attached during anticipated pickup and removes it on rejection or timeout',()=>{
         const state=new ChaosSimulation(new Map(),()=>{}).snapshot(false);
         const carrier=player('local'),mesh=createRatMesh();mesh.position.set(carrier.x,0,carrier.z);

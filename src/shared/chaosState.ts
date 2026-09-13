@@ -84,7 +84,11 @@ export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec
 export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
-export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number }
+export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number;
+    /** Authoritative explosion provenance, retained in storage. Network visual
+     * snapshots omit it: clients never decide projectile damage eligibility. */
+    explosive?: true;
+}
 export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit'|'armor-clang'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;

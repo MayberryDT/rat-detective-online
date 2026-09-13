@@ -7,6 +7,7 @@ import {RatController} from '../../src/player/RatController';
 import {createPlayer} from '../../src/worker/gameState';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {MAX_SERVER_MESSAGE_BYTES} from '../../src/shared/networkProtocol';
+import {serializeServerMessage} from '../../src/worker/serializeServerMessage';
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SEWER_FLOOR:-7,grayboxBoxes:()=>[]}));
 const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
 function fixture(){
@@ -136,8 +137,10 @@ describe('distributed controls and physical pressure launch',()=>{
   for(const shot of state.shots)shot.owner=owner;
   for(const corpse of state.corpses){corpse.owner=owner;corpse.victimId=owner;}
   state.pressure!.launches=Array.from({length:24},(_,i)=>({id:`pressure-100-${owner}-${i}`,playerId:owner,at:state.time,velocity:{...PRESSURE_LAUNCH.velocity}}));
-  const message={type:'chaos',state};
-  const raw=JSON.stringify(message,(_key,value)=>typeof value==='number'?Math.round(value*1000)/1000:value);
+  const message={type:'chaos' as const,state};
+  const raw=serializeServerMessage(message);
+  expect(state.shots.some(s=>s.explosive)).toBe(true);
+  expect(raw).not.toContain('explosive');
   expect(new TextEncoder().encode(raw).length).toBeLessThan(MAX_SERVER_MESSAGE_BYTES);
   expect(parseServerMessage(raw)).not.toBeNull();
   state.pressure!.launches=[{id:'bad',playerId:'local',at:1000,velocity:{x:Infinity,y:1,z:1}}];

@@ -43,7 +43,7 @@ const seenLaunches=new Set<string>();
 const applyPracticeHit=(hit:ChaosHit)=>{
  const entity=entities.get(hit.victim),data=players.get(hit.victim);
  if(!entity||!data)return;
- const result=life.hit(hit.owner,hit.victim,hit.damage,Date.now(),chaos.caseHolderId);
+ const result=life.hit(hit.owner,hit.victim,hit.damage,Date.now(),chaos.caseHolderId,hit.explosive===true);
  if(!result.applied)return;
  if(result.killed && chaos.death(data,hit.incoming,hit.owner))entity.useSharedCorpse();
  else entity.takeDamage(result.damage,new THREE.Vector3(hit.incoming.x,hit.incoming.y,hit.incoming.z));

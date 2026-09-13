@@ -9,6 +9,9 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Explosion damage and carried-case correction](verification/explosion-delivery-2026-09-12.md) | Private follow-up: explosion self damage, stale pickup prediction cleanup, delivery checks and remaining playtest uncertainty |
+| [Accepted character reactions and gameplay preview](verification/character-reactions-studio-2026-09-12.md) | All 15 exaggerated reactions accepted in studio; frozen hosted playtest, verification and limits |
+| [Movement animation studio candidate](verification/animation-polish-studio-2026-09-12.md) | Starts/stops, turns and ears; accepted comparison, validation and studio-only review |
 | [Quick Fix junction relocation](verification/quick-fix-junctions-2026-09-12.md) | Four exposed replacement medkits, spacing, bot collection and private preview |
 | [Seam, pickup cards and hit feedback](verification/seam-pickup-hit-feedback-2026-09-12.md) | September 12 private preview, fixes, tests and art review |
 | [Model and netplay integration](verification/model-netplay-integration-2026-09-12.md) | Current production model and protocol15: merge, validation and branch cleanup |

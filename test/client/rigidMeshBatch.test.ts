@@ -2,6 +2,7 @@ import {it,expect,vi} from 'vitest';
 import * as THREE from 'three';
 import {createRatMesh} from '../../src/utils/RatModel';
 import {RatAnimator} from '../../src/utils/RatAnimator';
+import {RAT_REACTIONS} from '../../src/utils/RatActing';
 import {batchRigidMeshes} from '../../src/utils/RigidMeshBatch';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
 it('preserves every rigid vertex through walking, aiming, blinking and death poses',()=>{
@@ -12,6 +13,7 @@ it('preserves every rigid vertex through walking, aiming, blinking and death pos
  for(let frame=0;frame<330;frame++){
   root.position.set(frame*.01,frame>100&&frame<130?1:0,-4);root.rotation.y=frame*.01;
   if(frame===60)animator.shoot(new THREE.Vector3(5,3,9));
+  if(frame<300&&frame%30===0)animator.playReaction(RAT_REACTIONS[frame/30]);
   if(frame>300)animator.poseDeath((frame-300)/60,1/60,{x:1,y:2,z:3},.4,true);else animator.update(1/60);
   root.updateMatrixWorld(true);batch.skeleton.update();
   if(frame%15)continue;

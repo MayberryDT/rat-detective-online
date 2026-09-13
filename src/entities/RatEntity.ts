@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions } from '../utils/RatModel';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
+import type {RatReaction} from '../utils/RatActing';
 import { RatAnimator } from '../utils/RatAnimator';
 import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
 import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppearance';
@@ -298,6 +299,14 @@ export class RatEntity {
 
     public resetMotionHistory(): void { this.animator.resetMotionHistory();this.powerupEffects.clear(); }
 
+    /** Isolated workshop A/B; gameplay uses the candidate by default. */
+    public setLocomotionPolish(enabled:boolean):void { this.animator.setLocomotionPolish(enabled); }
+    public setActingEnabled(enabled:boolean):void {this.animator.setActingEnabled(enabled);}
+    public resetReactions():void {this.animator.resetReactions();}
+    public playReaction(event:RatReaction,strength=1):void {
+        if(!this.dead&&this.hp>0)this.animator.playReaction(event,strength);
+    }
+
     /** Durations are relative to the latest authoritative snapshot, then expire locally. */
     public setPowerups(ironcladSeconds:number,hustleSeconds:number):void {
         const silver=this.ironcladRemaining>0;
@@ -322,6 +331,7 @@ export class RatEntity {
         const p = this.mesh.position;
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
         this.syncGlowTransform();
+        this.animator.setHustle(this.hustleRemaining>0);
         this.animator.update(dt,previewSpeed);
 
         const silver=this.ironcladRemaining>0,pursuit=this.hustleRemaining>0;
@@ -399,6 +409,7 @@ export class RatEntity {
     public useSharedCorpse():void {
         if(this.sharedDeath)return;
         this.sharedDeath=true;this.dead=true;this.hp=0;this.clearPowerups();
+        this.animator.resetReactions();
         this.mesh.visible=false;if(this.glowMesh)this.glowMesh.visible=false;
         this.billboard.sprite.removeFromParent();
         this.body.velocity.setZero();this.body.angularVelocity.setZero();
@@ -412,6 +423,7 @@ export class RatEntity {
         this.hp = hp;
         this.billboard.setHealth(this.hp);
         this.flashColor(0x8fffb0);this.powerupEffects.heal();
+        this.playReaction('heal');
     }
 
     public takeDamage(amount: number, impactVel: THREE.Vector3) {
@@ -425,7 +437,7 @@ export class RatEntity {
 
         // ── SOUND EFFECTS ──
         if (this.hp > 0) {
-            this.animator.takeHit();
+            this.animator.takeHit(impactVel);
             if (this.isPlayer) {
                 playEntitySound('playerHit', 0.6);
             } else {

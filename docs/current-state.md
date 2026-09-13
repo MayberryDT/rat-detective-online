@@ -4,6 +4,43 @@ Verified from source and production on **2026-09-12**. This is the handoff for n
 
 ## Private-preview follow-up — September 12 (production unchanged)
 
+**Exaggerated character reactions accepted in gameplay:** Tyler approved the full
+animation set, then requested explosion self damage and investigation of a delayed
+Chain of Custody delivery before release. Planted Evidence and Improper Disposal
+cheese now hurt their initiator without awarding self-kill points. Ordinary shots
+remain self-safe; Ironclad still reflects explosion balls. Carried-case prediction
+now clears on delivery, confirmed ownership, round/epoch changes and reset, and
+late cancelled acknowledgements cannot resurrect it.
+
+The stale case prediction is reproduced and fixed. The exact reported playthrough
+was not captured: tests confirm immediate authoritative relocation on deliveries
+one and two, and a win only on three, including compact snapshots and the accepted
+animation renderer. A one-point server win has not been reproduced and the link
+between the stale prediction and Tyler's specific incident remains unconfirmed.
+**1,019 tests**, typecheck and both builds pass. Accepted model, animation, entity
+and session files match the preceding approved preview.
+
+[Audible updated playtest](http://127.0.0.1:5197/?room=graybox-benchmark-match-explosion-delivery-r2)
+uses frozen matching client/Worker `af403974-92c4-4faf-a276-622407c5da49`, protocol 15,
+normal eight-rat backfill and the 16-rat cap. Expires **September 12 at 9:49 PM Pacific**.
+All 56 served assets and 158 source hashes match; a separate protocol probe verified
+seven bots with one human and six with two. Production remains unchanged. This
+replaces the preceding animation preview on the same port. Chain of Custody needs
+Tyler's follow-up playtest before release.
+[Fixes, verification and remaining uncertainty](verification/explosion-delivery-2026-09-12.md).
+[Accepted animations and preceding studio studies](verification/character-reactions-studio-2026-09-12.md).
+
+**Animation pass accepted in the studio:** Tyler approved the starts/stops,
+head counter-motion, hat lag, asymmetric reactive ears and tail settling.
+The accepted body/weapon/carry transforms remain intact. An Animation selector
+compares accepted/candidate motion on the same model, with a repeatable movement
+sequence. **972 tests**, typecheck and both builds passed for this preceding pass.
+It forms the basis of the later full reactions; gameplay review remains separate.
+This preceding movement pass is included in the accepted full animation preview
+above. Tyler's later request authorizes that private preview; production stays unchanged.
+[Studio and verification](verification/animation-polish-studio-2026-09-12.md).
+The accepted junction changes below are included in the new animation preview.
+
 The rear coat seam is now one centered strip following the coat profile. Pickup
 feedback uses only the illustrated bottom cards; Quick Fix has a matching green
 medical card with a brief “FULL HP” confirmation. The authoritative kill event now
@@ -13,7 +50,8 @@ X/Z (-60,-102), (70,-102), (-60,130) and (90,95), all at Y .7. Explicit position
 replace spawn-point snapping; retired IDs cannot return from saved rooms. Other
 upgrades, instant full healing and 45-second restock remain unchanged.
 **965 tests**, typecheck and build pass; hosted coordinates/client parity verified,
-Tyler accepted this combined gameplay preview and requested it committed. [Audible hosted playtest](http://127.0.0.1:5195/?room=graybox-benchmark-match-quick-fix-junctions-r2), expires September 12 at 7:29 PM Pacific.
+Tyler accepted this combined gameplay preview and requested it committed.
+Its former port-5195 relay has been replaced by the animation preview above.
 See [junction placement and verification](verification/quick-fix-junctions-2026-09-12.md)
 and [preceding seam/card/hit changes](verification/seam-pickup-hit-feedback-2026-09-12.md).
 

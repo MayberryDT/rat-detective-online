@@ -22,6 +22,14 @@ const appearance: RatAppearance = {
 };
 
 describe('game state', () => {
+  it('allows only explicitly authoritative explosive self damage and never awards a self kill or win',()=>{
+    const p=createPlayer('self','Self',appearance,{x:0,y:2,z:0}),players=new Map([[p.id,p]]);p.kills=20;
+    expect(applyHit(players,p.id,p.id,3,false,p.id,false,true).applied).toBe(false);
+    expect(applyHit(players,p.id,p.id,1,true,p.id,false,true)).toMatchObject({applied:true,killed:false});
+    expect(applyHit(players,p.id,p.id,3,true,p.id,false,true)).toMatchObject({applied:true,killed:true,roundWon:false});
+    expect(p.kills).toBe(20);expect(p.deaths).toBe(1);
+    expect(applyHit(players,p.id,p.id,3,true,p.id,false,true).applied).toBe(false);
+  });
   it('records environmental damage and death without any kill credit or win',()=>{
     const victim=createPlayer('victim','Victim',appearance,{x:0,y:2,z:0});
     const other=createPlayer('other','Other',appearance,{x:5,y:2,z:0});other.kills=19;

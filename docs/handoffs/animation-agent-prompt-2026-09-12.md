@@ -1,0 +1,5 @@
+Work on Rat Detective's animation polish. Start by reading `docs/handoffs/animation-polish-2026-09-12.md`, then follow its reading order through both complete research reports, current project instructions and the accepted model/netplay receipts. The handoff includes the settled design decisions, existing rig, code map and validation requirements.
+
+Implement the first focused pass: smoother starts/stops/turns and subtle hat-and-ear reactions, building on the current animation. Preserve the accepted model, immediate movement/aiming/firing, actual muzzle and case grip, straight sleeves and no case-side sleeve without a case. Keep every flourish brief and interruptible. Preserve the newer uncommitted seam/pickup/hit-feedback and Quick Fix junction changes; inspect the actual checkout before editing.
+
+Finish with a clear baseline comparison, appropriate tests and a frozen matching hosted gameplay preview with normal server bots for my review. Leave production unchanged until I approve the animation. Don't expand to all six proposed animation areas at once.

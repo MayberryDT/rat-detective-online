@@ -1,0 +1,629 @@
+      Rat Detective: Character Recognition and Appeal
+1. The central recommendation
+Preserve the recognizable core of the existing rat, give him a distinctive way of behaving, and test
+recognition separately from affection and play preference. Do not begin with a wholesale redesign,
+more accessories, or a long biography.
+
+A productive character proposition for this game is: a dead-serious little detective who refuses to lose
+his dignity in a ridiculous cheese-ball world. This is a proposed creative direction, not an established
+audience finding. It connects the noir costume to the comedy without requiring dialogue, cinematics, or new
+investigative mechanics.
+
+The desired response—“That’s Rat Detective; I love him; I want to play”—contains several different design
+problems. Treating them as one “appeal” score can conceal the reason a design fails.
+    Goal                         What success would mean                             What to examine
+
+    Recognition                  A child identifies the same character across        Silhouette, feature relationships, color placement,
+                                 views, outfits, sizes, and contexts.                characteristic movement.
+
+    Recall and attribution       A child later remembers him and connects            Distinctive cues, consistent name pairing,
+                                 him to the name Rat Detective.                      competing associations, delayed recall.
+
+    Affection                    A child understands something endearing             Intent, reactions, humor, vulnerability, repeatable
+                                 or admirable about him.                             personality.
+
+    Desire to play               A child wants to inhabit this character, not        Responsiveness, competence, expressive actions,
+                                 merely look at him.                                 personal choice, enjoyable situations.
+
+
+This four-part framework is a production and testing recommendation. It is not a validated psychological
+scale.
+
+Ehrenberg-Bass’s distinctive-assets framework provides a useful narrower distinction: an asset needs both
+recognition and an association that points to the intended brand rather than competitors. A new character
+must build those associations; an attractive design does not arrive with them automatically. 1
+
+The practical objective is not “as famous as Mario on first exposure.” It is “easier to recognize,
+remember, understand, and enjoy than the current baseline after comparable exposure.”
+
+Scope and confidence
+The visual assessment uses the earlier seven-page Rat-Detective-Visuals.pdf, especially the character
+sheet on page 7 and city views on pages 2–3. It does not establish what the current executable, animations,
+camera, or customization system now contain. No Rat Detective child playtest data were supplied.
+Recommendations below are therefore candidates to validate, not findings that the present character is
+failing.2
+
+The evidence combines original developer accounts, a published child-avatar study, broader game-
+motivation research, and explicit design judgments. None of the reviewed sources establishes a universal
+combination of shapes, colors, or facial proportions that produces a successful children’s franchise.
+
+
+
+
+1
+    Ehrenberg-Bass Institute / Romaniuk, “Brands of Distinction”. A branding framework, not a Rat Detective audience experiment.
+2
+    Rat-Detective-Visuals.pdf, seven-page earlier project reference; pp. 2–3 and 7. These are still images, not an inspected current game build.
+2. What the useful comparisons actually teach
+Mario: visual identity can solve a gameplay problem
+Miyamoto’s account of Mario’s original design ties the cap, moustache, and clothing to severe pixel
+constraints. Contrasting sleeves and overalls made arm movement easier to distinguish; the face and head
+treatment reduced difficult details. These are functional design decisions that became identity cues, not
+evidence that children universally prefer caps or moustaches. 3
+
+Application: judge the rat while running, aiming, turning, and being viewed at actual play size. A beautiful
+promotional pose cannot establish whether the character works in motion.
+
+Sonic: the appearance should agree with the temperament
+SEGA’s official characterization combines speed with independence, impatience, loyalty to promises, and
+helping others. The useful lesson is coherence: the character’s behavior supports the energetic impression
+of the design.4
+
+Application: decide what the rat consistently notices and how he responds. “Cool, funny, brave” is not
+enough to direct animation. “Suspicious glance, decisive action, exaggerated effort to look composed
+afterward” is actionable.
+
+Splatoon: start from the activity, not a detachable mascot
+Nintendo’s developers describe trying different character concepts and arriving at squids because the
+identity made sense with ink-based actions. The character concept and the game’s central material became
+mutually reinforcing.5
+
+Application: make the cheese-ball interaction part of the rat’s performance and visual vocabulary. A
+cheese-shaped weapon already does some of that work. His aiming, recoil, reactions, and recovery can do
+more without adding extra equipment. The right question is what makes this rat doing this activity different
+from an arbitrary cartoon animal holding a gun.
+
+Kirby: simplicity does not guarantee gameplay clarity
+The Kirby and the Forgotten Land developers explain that Kirby’s rounded form created a particular 3D
+problem: from behind, it could be difficult to tell which direction he was facing. A famous, simple character
+still needed gameplay-readability work.6
+
+Application: the coat’s broad shape may identify the rat while failing to show aim direction. Test those
+separately. Passing a black-silhouette exercise is useful evidence, not a complete character-design
+certificate.
+
+Astro Bot: a face and a performance can carry identity without dialogue
+Team Asobi describes Astro’s shape-changing LED eyes as central to expression and to the visual family
+shared by other bots. The developer also describes his speech-like sounds as deliberately designed, rather
+than treating the absence of conventional dialogue as the absence of vocal identity. 7
+
+
+
+
+3
+  Nintendo, “The Reason Mario Wears Overalls”, Iwata Asks: New Super Mario Bros. Wii (2009).
+4
+  SEGA, Sonic Channel character profile (Japanese; undated).
+5
+  Nintendo, “Got to be Squids”, Iwata Asks: Splatoon (2015).
+6
+  Nintendo, Ask the Developer Vol. 4: Kirby and the Forgotten Land, Part 1 (2022).
+7
+  PlayStation Blog, “The evolution of Astro Bot’s adorable character design” (August 26, 2024).
+Application: the rat does not need a talking mouth. His eyes, head angle, ears, posture, coat, tail, and
+optional nonverbal sounds can supply a consistent emotional vocabulary. Any added sound should fit his
+noir personality rather than defaulting to a babyish squeak.
+
+Minecraft and Roblox represent a different relationship
+Mojang’s introduction of additional default skins explicitly expanded the ways players could represent
+themselves while retaining Steve and Alex. That is not the same design goal as building affection for one
+tightly authored protagonist.8
+
+For Rat Detective, separate “I like that particular hero” from “I like being my own rat in that world.” Both are
+possible. The brand can have one stable representative while playable rats retain controlled variation. A
+multiplayer avatar system should not accidentally erase the character identity the marketing is trying to build.
+
+
+3. Why Disney characters are more than recognizable outfits
+Disney Animation describes visual development as grounded in story, emotion, composition, and the
+director’s vision. Its modeling process also considers characters from different angles and treats clothing
+and accessories as part of communicating personality and story. 9
+
+That is the transferable practice: visual decisions support a recognizable person, not just a category. A
+costume can establish “princess,” just as a fedora establishes “detective.” The character becomes specific
+through the way that costume, body, behavior, and story work together.
+
+Ariel as an example
+Disney’s official Ariel description emphasizes curiosity and independence. In a retrospective interview, co-
+director John Musker connects her red hair both to differentiation from earlier princesses and to her fiery
+personality and the underwater color environment. 10
+
+The important distinction is between remembering the red hair and having reasons to care about the
+curious, determined character who has it. A color cue does the former job more directly than the latter. For
+the rat, a red coat can help recognition; it cannot, by itself, communicate resourcefulness, dignity, or comic
+persistence.
+
+What not to infer from famous franchises
+Recognizing a famous character is not an experiment that isolates the quality of its design. Prior familiarity,
+repeated media appearances, and attachment to the experiences featuring that character are mixed
+together. The existence of successful princesses therefore does not show that a particular face shape would
+make a new rat equally successful.
+
+This is a methodological caution rather than a claim that design does not matter. Use established characters
+to study coherent choices. Use controlled tests of Rat Detective to decide whether a proposed change
+improves this character.
+
+Translate story into a repeatable reaction
+A multiplayer character does not need a film-length character arc to have personality. The production
+challenge can be much smaller: define how he responds to situations that already recur in the game.
+
+For example, a composed detective notices a threat, acts decisively, is briefly disheveled by the result, then
+corrects his hat as if nothing unusual happened. The repeated contrast is between his serious self-image
+
+8
+  Mojang, “Introducing New Default Minecraft Skins” (2022).
+9
+  Walt Disney Animation Studios, “Visual Development” and “Modeling” (undated).
+10
+   Disney, Ariel; John Musker, direct interview in Indie Cinema Magazine (September 2024).
+and the absurdity around him. This is an original performance proposal; it should be compared with the
+current animation, not assumed to be better because it reads well on paper.
+
+Avoid making him perpetually helpless. The player should feel capable through him. Place the joke in his
+dignity, reactions, and surroundings—not in compulsory misses, unresponsive controls, or repeated
+humiliation.
+
+
+4. Assessment of the existing visual reference
+
+
+
+
+Existing Rat Detective carry and fire poses, cropped from page 7 of the earlier visual reference. No redesign has been applied.
+
+The reference shows a red broad-brimmed hat with a cream band, visible rounded ears, a golden-brown
+snout, narrowed eyes, a tall red coat and collar, a pink tail, and a yellow cheese-block pistol. 11
+
+These are observations. The risks and experiments below are design judgments based on the still image,
+not measured defects in the current game.
+ Existing feature              What it can contribute                               What should be tested
+
+ Hat, ears, and band           A compact head signature combining                   Whether the ears remain distinct at small sizes and
+                               detective and animal cues.                           from the rear; whether the brim hides too much
+                                                                                    expression.
+
+ Narrowed eyes and             Suspicion, attitude, and readable rat                Whether children read “watchful and confident” or
+ projecting snout              anatomy.                                             “bored, unfriendly, or sleepy”; whether emotional
+                                                                                    changes are visible.
+
+ Long coat and raised          A simple main mass and a clear noir                  Whether turning and aiming remain legible; whether
+ collar                        costume.                                             the rear becomes an undifferentiated column.
+
+ Pink tail                     A strong rat cue and a potential motion              Whether it survives distance, occlusion, dark
+                               signature.                                           surfaces, and animation without visual clutter.
+
+ Cheese-block pistol           Immediate absurdity and a connection to              Whether the cheese reads at play size; whether the
+                               the game’s material.                                 character remains identifiable without it.
+
+ Red, cream, gold, and         A candidate color signature already                  Recognition under different lighting and permissible
+ pink arrangement              present.                                             costume variation, without relying on color alone.
+
+
+11
+  Rat-Detective-Visuals.pdf, p. 7. The image and listed features are from the earlier reference; risk assessments are this report’s
+interpretations.
+The distinction problem is specific, not a reason to start over
+A red coat and broad-brimmed red hat are not unique to Rat Detective; Carmen Sandiego is a visible
+example of similar costume codes.12 This does not establish copying, legal infringement, or actual confusion
+among the intended players.
+
+It does mean that “red detective outfit” is an insufficient distinctiveness claim. The rat anatomy, ear–hat
+relationship, face, tail, proportions, cheese equipment, and performance should carry the specific identity
+together. Test plausible near-neighbors rather than assuming the costume alone is ownable.
+
+Preserve the setting while testing the character
+The earlier city reference is intentionally very dark, with sparse illuminated windows and small pools of light.
+Its local character/background contrast should be examined in moving gameplay rather than “fixed” by
+replacing the noir palette. A targeted face, hat-band, or silhouette adjustment is a more discriminating first
+experiment than brightening the entire world.
+
+
+5. A visual system that survives real use
+Choose a small set of primary cues
+As a production heuristic, begin with three cue groups: the hat-and-ear arrangement; the suspicious face
+emerging above the collar; and the coat-and-tail body shape. Keep the cheese pistol as a strong
+supporting cue rather than the only reason the character can be identified.
+
+The number three is not a scientific threshold. It is a constraint against adding detail before deciding what
+matters. A candidate extra feature earns its place only when it improves a tested problem or supports
+personality. A scar, badge, monocle, magnifying glass, necklace, and elaborate belt do not become
+distinctive merely by accumulating.
+
+Document the actual proportions and color values from the approved asset. Do not invent new
+measurements from a single perspective image. The art team should decide which ratios need to remain
+stable across future models and promotional illustrations.
+
+Test more than the front view
+For the intended third-person experience, treat the rear and rear-three-quarter views as primary assets.
+Examine hat tilt, ear visibility, tail arc, torso lean, and the relationship between the firing arm and coat. If the
+front face is rarely visible during action, give it appropriate visibility in character selection, a lobby, or an end-
+of-round moment—without interrupting play simply to show it.
+
+Valve’s Team Fortress 2 rendering paper is a useful technical precedent: its characters were designed for
+rapid identification using proportion and silhouette, with rendering supporting those distinctions. It is a
+readability reference, not an age-appropriateness or tone reference for this game. 13
+
+Use a deliberately demanding review set
+Review the approved candidate as a small full-body image, a cropped head, an unarmed pose, a rear view,
+a flat silhouette, and a grayscale render. Then review it in the actual street and sewer lighting, with effects
+and other rats present. The stylized coat must remain compatible with collision and aiming expectations;
+decorative changes should not suggest a radically different vulnerable body.
+
+These checks answer different questions. Grayscale probes dependence on hue. Silhouette probes external
+form. The head crop probes the promotional icon. Busy gameplay probes recognition under competition for
+
+12
+     Carmen Sandiego official game site. Cited only to establish an existing similar costume motif.
+13
+     Mitchell, Francke, and Eng, Illustrative Rendering in Team Fortress 2 (2007), section 4.1.
+attention. Failure on one test should suggest a targeted change, not automatically reject the whole
+character.
+
+Keep brand color separate from match information
+A canonical red promotional rat does not require every player to remain red. Nor should red simultaneously
+carry the entire burden of mascot identity, team membership, and immediate danger information. Decide
+how those systems coexist before expanding cosmetics. Preserve redundant non-color cues so a skin,
+lighting change, or team indicator cannot make the character unrecognizable.
+
+Make reproduction straightforward
+Try a small sticker, a monochrome emblem, a simple child’s description, and a rough drawing from memory.
+Use these as diagnostic translations, not proof of merchandise demand. The goal is to discover which
+relationships survive simplification. Do not grade the child’s drawing skill; describing or arranging shapes is a
+valid alternative.
+
+
+6. Nonverbal personality and the character people control
+Proposed personality brief
+Role fantasy: an observant, capable rat detective caught in ludicrous combat.
+
+Internal rule: maintain professional composure, even when the situation is visibly ridiculous.
+
+Admired quality: decisive resourcefulness. Comic vulnerability: his dignity is easier to disturb than his
+determination.
+
+Behavioral contrast: restrained suspicion before an event; exaggerated but brief reaction to the result; an
+economical return to composure.
+
+Avoid: sadism, constant panic, empty swagger, compulsory incompetence, or a permanent grin that
+discards the existing suspicious expression.
+
+This brief is intentionally narrow enough to guide animation and open enough for the implementing artist to
+discover better performances. It is not a mandate to change the approved animation feel or add a scripted
+narrative.
+
+Prototype a small performance vocabulary
+ Existing game
+ situation              Candidate performance                            Essential boundary
+
+ Brief inactivity       Eyes scan; a slight head or ear response         Do not sway the aiming view, generate constant
+                        suggests investigation.                          noise, or make repeated idles distracting.
+
+ Preparing to aim       Head and torso become intent; the                Presentation follows input; it must not impose a
+                        silhouette shows purpose.                        new aiming delay.
+
+ Firing                 A crisp response in hand, shoulders, coat,       Never create a misleading second shot, false aim
+                        or hat reinforces the shot.                      direction, or obscured target.
+
+ Moving or turning      A characteristic lean and controlled tail/coat   Preserve responsive movement, the approved feel,
+                        follow-through.                                  and understandable direction.
+
+ Surviving or           A restrained hat or collar adjustment            Use a safe moment or interruptible additive motion,
+ succeeding             implies “entirely under control.”                not an animation lock.
+ Existing game
+ situation                    Candidate performance                              Essential boundary
+
+ Losing a round or            A small dignity-restoring gesture supplies         Do not extend loss of control, shame the player, or
+ recovering after a           the comic payoff.                                  mask the next actionable state.
+ mishap
+
+
+Use the current animations as the baseline. Try one or two candidate performances first. If the player cannot
+reliably read the intended attitude, simplify the acting before adding more poses.
+
+Intention matters more than animation quantity
+A useful micro-sequence is: notice something, commit to an action, respond to its consequence. The viewer
+should infer what the rat was trying to do. A random assortment of dances and facial movements is not
+automatically a personality.
+
+Avoid making every action equally exaggerated. If the neutral state is already frantic, an exceptional event
+has little room to register. For this proposed direction, contrast economical detective behavior with
+occasional elastic reactions. The exact timing and amplitude belong to animation iteration, not an arbitrary
+universal rule.
+
+Sound can reinforce identity without words
+Explore a small, consistent set of material sounds: the cheese projectile’s character, a subtle cloth response,
+and perhaps a restrained nonverbal reaction. Test the same clip with and without sound. The performance
+should remain intelligible when muted, and decorative audio must not conceal combat information.
+
+Do not copy another mascot’s vocal cadence, catchphrase, or signature sound. The sound brief should
+express the same competent-but-comically-dignified character as the animation, not introduce a second
+personality.
+
+Never purchase charm with worse controls
+Broader game-motivation research links perceived competence and autonomy with enjoyment. It is not a
+child-specific character-design formula, but it supports keeping the player’s ability to act central to the
+experience.14
+
+For this game, a mascot improvement that adds input latency, forces a pose during danger, or makes firing
+less readable should be rejected even when it looks charming in a standalone clip. Personality should
+decorate player agency, not compete with it.
+
+
+7. One mascot, many playable rats
+Choose the identity architecture explicitly
+A plausible fit for this multiplayer game is one canonical brand representative plus a family of
+customizable detective rats. This is a recommendation, not a claim about the currently implemented
+roster.
+
+Use the canonical rat consistently in the app icon, key art, major promotional illustrations, and introductory
+materials. Let the game’s rats vary inside a recognizable design family. The same child can then recognize
+“Rat Detective” and feel “this is my rat.” A separate personal name for the mascot is optional; it should solve
+a real ambiguity, not add an unnecessary second name to learn.
+
+
+14
+   Ryan, Rigby, and Przybylski, The Motivational Pull of Video Games (2006). General game-motivation research, not a character-design trial
+in children.
+A CHI 2025 study analyzed interviews and gameplay observations with 48 children aged 8–13. It identified
+self-representation, alternate identities, social connection, and perceived gameplay advantages among
+avatar motivations. This is relevant to the audience, but it is qualitative evidence from existing social-game
+players, not a test of which Rat Detective skin would sell or increase retention. 15
+
+Define fixed and variable layers
+ Layer                                       Recommended treatment
+
+ Species and body language                   Preserve rat anatomy and the detective family’s recognizable attitude.
+
+ Primary shape relationships                 Preserve agreed hat/ear, face/collar, and coat/tail relationships unless testing
+                                             justifies an exception.
+
+ Canonical promotional appearance            Maintain the approved hero’s stable color arrangement and recurring portrayal.
+
+ Playable variation                          Explore colorways and restrained costume or expression changes within the family.
+
+ Gameplay information                        Keep identity, team status, aim direction, and collision expectations clear across
+                                             every option.
+
+ Exceptional costumes                        Require deliberate review rather than allowing an accessory to hide all rat and
+                                             detective cues.
+
+
+Give the default character a complete, appealing identity. Do not deliberately make the unpaid default
+embarrassing or visually inferior as a lever for children’s spending. Personalization can be expressive
+without being the repair kit for an intentionally unsatisfying base design.
+
+Build continuity across touchpoints
+Keep a short reference sheet connecting the model, icon, promotional pose, expression range, and
+characteristic gesture. Repeated use should reinforce the same character rather than presenting unrelated
+interpretations. The logo can accompany the character while name association is being learned; an
+unfamiliar mascot should not be expected to identify an unfamiliar game unaided.
+
+Do not change the core whenever a new piece of art looks attractive in isolation. Record what changed, why
+it changed, and whether testing improved. That gives future artists a rationale rather than a brittle list of
+arbitrary prohibitions.
+
+
+8. The audience hypothesis and the limits of the evidence
+“Boys aged 8–12” is a starting hypothesis. The supplied description and comparison franchises do not
+establish the eventual market. Test it rather than letting it become a permanent design restriction.
+
+For early work, include children in both the 8–10 and 11–12 ranges, with different levels of shooter
+experience. Include girls and some players outside the assumed core as comparison participants. The
+purpose is not to prove that everyone likes the game; it is to notice whether the proposed audience was
+unnecessarily narrow or whether different players interpret the same performance differently.
+
+Avoid treating “for children” as “for preschoolers.” Do not assume giant eyes, baby proportions, nonstop
+smiles, neon color, or gross-out humor are obligatory. Likewise, do not assume all boys want the same
+aggressive fantasy. The proposed combination of competence, mischief, and recoverable embarrassment
+needs testing with actual players.
+
+
+
+
+15
+  Fu et al., Understanding Children’s Avatar Making in Social Online Games, CHI 2025. The authors’ observational design does not establish
+causal effects of customization on this game.
+Evidence that should not be overextended
+Research on familiar entertainment and brand characters often uses products rather than games and much
+younger children. For example, a 2024 experiment involved 66 four- and five-year-olds making object-
+preference and value judgments. It cannot establish the ideal anatomy or personality for an eight-to-twelve-
+year-old shooter avatar.16
+
+Developer interviews explain design intent and production experience, not controlled causal estimates. A
+successful developer choosing large eyes does not show that larger eyes improve every character. A study
+of current avatar users does not show that more cosmetic options will make a new game successful.
+
+For this project, confidence is highest in the need to test actual gameplay readability and keep a coherent
+character system. Confidence is lower in any specific proposed hat angle, eye shape, gesture, palette
+variation, or target demographic before testing it with Rat Detective players.
+
+Parent and child responses are separate inputs
+A child may enjoy the character while a parent dislikes the apparent violence or social environment. Test the
+game’s presentation with parents as well as children; do not assume cheese weapons alone settle
+suitability. This report does not determine an age rating or provide privacy or intellectual-property legal
+clearance.
+
+For testing, obtain parental permission and the child’s assent, make stopping easy, avoid unnecessary
+identifying recordings, and collect only information needed for the study. Aim for voluntary enjoyment and
+understandable choices, not anxiety about missing rewards or emotional pressure to keep playing.
+
+
+9. A practical validation plan
+The following is a proposed studio protocol. The participant counts, exposure times, and asset sizes are
+practical starting points, not published universal thresholds.
+
+Phase A: establish the current baseline
+Capture the current model in front, side, rear, and three-quarter views. Record short clips of ordinary
+movement, aiming, firing, and the existing success and defeat reactions. Use actual gameplay lighting and
+representative visual clutter, not only studio lighting.
+
+Record the build and asset versions. Write down the intended personality in plain language before testing so
+the interpretation is not changed afterward to match whatever children say.
+
+Start with approximately 12–18 children for qualitative problem discovery. This is not enough to declare a
+statistically reliable market winner. Use a separate validation sample and a power-informed design if a later
+commercial decision requires a quantified comparison.
+
+Phase B: separate visual comprehension from learned recognition
+First, briefly show the character without a label and ask what they see. Questions such as “What kind of
+character is this?” and “What do you think this character does?” examine rat and detective comprehension.
+Not knowing the invented name before exposure is not a failure.
+
+Then provide the same limited, clearly named exposure to each candidate. Use the name Rat Detective
+consistently. After an unrelated task, ask for an unaided description and name before showing any answer
+options. Follow with a recognition lineup containing plausible alternatives: other rats, other detective outfits,
+and variations of the tested character.
+
+16
+  Williams-Gant, Harden, and Corriveau, The influence of entertainment and brand characters on children’s object preferences and monetary
+judgments (2024).
+A lineup consisting of one rat, a princess, a car, and a dinosaur mostly tests broad categories. Near-
+neighbors test whether the specific character was learned. Keep image size, polish, pose, background, and
+exposure comparable; randomize presentation order.
+
+Phase C: test personality without prompting the answer
+Show short silent clips. Ask, “What was he trying to do?”, “How did he feel?”, and “What do you think he’ll do
+next?” Avoid questions such as “Was that funny?” or “Did he look clever?” before hearing the child’s own
+interpretation.
+
+Compare the existing performance with one revised performance on the same model. Do not simultaneously
+change the eyes, hat, lighting, music, and gesture, then attribute the result to animation. Test sound as a
+separate addition when practical.
+
+Phase D: test embodiment during actual play
+Use a manageable play session, initially around 10–15 minutes. Observe whether the rat’s aiming and
+movement are understandable, whether personality moments interrupt control, and whether the child
+voluntarily chooses that character when alternatives are available.
+
+Ask what they would tell a friend about him. Record spontaneous descriptions and meaningful points of
+confusion. A laugh at one gag, or a stated intention to replay, is promising feedback—not evidence of long-
+term retention.
+
+Phase E: test delayed memory and transfer
+At a follow-up roughly 24–72 hours later, ask for the character’s name and description before supplying
+images. Then test recognition from another angle or an allowed costume variation. A description, sketch, or
+simple shape arrangement can reveal remembered features without making artistic skill the scoring criterion.
+
+Earlier recognition lineups can teach features. Keep procedures consistent, and use separate groups when
+a clean delayed-memory estimate matters. Treat each child as a participant; repeated trials from the same
+child are not independent children.
+
+Interpret the pattern rather than inventing one appeal score
+ Observed pattern                           Best next investigation
+
+ “A rat detective,” but not this specific   Strengthen the distinctive feature relationships and consistent name linkage.
+ character
+
+ Recognized, but described as bored         Revisit eye behavior, intention, and the difference between suspicious and
+ or mean                                    unfriendly.
+
+ Liked in a portrait, confusing in action   Improve camera-facing readability, pose, lighting, or motion before adding detail.
+
+ Enjoyed in a clip, not enjoyed as an       Investigate responsiveness, capability, control interruption, and play fantasy.
+ avatar
+
+ Good immediate recognition, weak           Examine competing associations and whether the same cues and name were
+ later recall                               reinforced.
+
+ Strong baseline, no clear gain from        Keep the existing design; spend effort on more consequential game work.
+ redesign
+
+
+Predefine the decision that each comparison will inform. Keep interpretation proportional to the sample, look
+for recurring problems, and resist declaring every positive comment validation of the entire brand strategy.
+10. Production priorities and handoff
+First: establish what must remain recognizable
+Create a compact character sheet with approved front, side, rear, and three-quarter views; actual palette
+values; critical proportions; the eye-expression range; the unarmed silhouette; and the characteristic hat–ear
+and coat–tail relationships. Add a brief explanation of why each protected feature matters.
+
+Perform a readability pass in the current game before committing to new anatomy. The first experiment
+should be the smallest change that could resolve the observed issue: a pose adjustment, a visible patch of
+face, ear separation, or local value contrast may be enough.
+
+Second: prototype one signature reaction
+Test a single dignity-restoring gesture and a single readable shift from suspicion to intent. Keep them
+interruptible where appropriate. Compare them against the approved baseline with the same movement and
+firing behavior. Expand the performance vocabulary only when the first examples communicate the intended
+character.
+
+Third: carry the result into brand and avatar rules
+Choose the canonical promotional rat, define what playable variants may change, and update the icon and
+key art from the approved system. Verify the result without the weapon and outside the full-body hero pose.
+Do not begin with a large skin catalog, elaborate backstory, or voice script.
+
+Brief for the implementing team
+Objective: make Rat Detective easier to recognize, remember, and enjoy as a character while preserving
+the established noir style and approved game feel.
+
+Proposed creative center: a serious, observant little detective trying to remain composed in an absurd
+cheese-ball fight. Favor competence with comic vulnerability over helplessness or cruelty.
+
+Protected starting material: the existing rat anatomy, red-hat/coat identity, visible ears, suspicious face,
+tail, cheese equipment, and the dark city’s visual language. These are a baseline to assess, not a ban on
+evidence-led changes.
+
+Freedom: propose alternate visual and performance solutions when they better express the same intent. Do
+not treat this report’s suggested gestures, three cue groups, test timings, or avatar architecture as
+mandatory implementation details.
+
+Acceptance evidence: comparisons at actual play size and camera angles; comprehensible aim and
+motion; personality understood without dialogue; no added control delay; consistent identity across
+approved variants; and child feedback that distinguishes recognition from affection and willingness to play.
+
+Decision boundary: no wholesale redesign without evidence that smaller changes cannot solve the
+problem. No expansion of mechanics, lore, or monetization is required by this character brief.
+
+Bottom line: children should be able to recognize this rat without his pistol, understand his attitude without
+dialogue, and enjoy controlling him without his personality getting in the way.
+Sources
+The following sources support the factual findings. Project-specific recommendations and test protocols are analytical
+proposals. Sources were reviewed for this report in September 2026; historical publication dates are retained below.
+   1.    Ehrenberg-Bass Institute / Jenni Romaniuk. Brands of Distinction. Institute article. Distinctive assets, recognition,
+         and exclusive brand association.
+   2.    Nintendo. Iwata Asks: New Super Mario Bros. Wii, Volume 1, section 2, “The Reason Mario Wears Overalls” (2009).
+         Developer interview.
+   3.    SEGA, Sonic Channel. Sonic the Hedgehog: Character Profile (undated; Japanese). Official character profile.
+
+   4.    Nintendo. Iwata Asks: Splatoon, section 3, “Got to be Squids” (2015). Developer interview.
+
+   5.    Nintendo. Ask the Developer Vol. 4: Kirby and the Forgotten Land, Part 1 (2022). Developer interview.
+
+   6.    Corey Brotherson / PlayStation Blog. The evolution of Astro Bot’s adorable character design (August 26, 2024),
+         interview with Nicolas Doucet. Original interview.
+
+   7.    Mojang. Introducing New Default Minecraft Skins (2022). Official article.
+
+   8.    Walt Disney Animation Studios. Visual Development and Modeling (undated). Visual development and modeling.
+
+   9.    Disney. Ariel (undated). Official character page.
+
+   10. Indie Cinema Magazine. Interview with film director and animation legend John Musker (September 2024). Direct
+       interview.
+   11. Rat-Detective-Visuals.pdf. Earlier project reference, seven pages; character sheet p. 7 and city views pp. 2–3. Private
+         project source retrieved from the saved file. The reproduced image is a crop of the original, not a proposed redesign.
+   12. Gameloft / HarperCollins Productions. Carmen Sandiego official game site (undated). Official site. Visual
+         comparison only; no confusion study or legal conclusion.
+   13. Jason Mitchell, Moby Francke, and Dhabih Eng / Valve. Illustrative Rendering in Team Fortress 2 (2007), especially
+       section 4.1 and the silhouette figure. Original paper.
+
+   14. Richard M. Ryan, C. Scott Rigby, and Andrew Przybylski. The Motivational Pull of Video Games: A Self-
+       Determination Theory Approach (2006), Motivation and Emotion. Publisher page.
+
+   15. Yue Fu and colleagues. Understanding Children’s Avatar Making in Social Online Games (CHI 2025), DOI
+       10.1145/3706598.3713262. Author manuscript. Qualitative interviews and gameplay observations, 48 children
+         aged 8–13.
+   16. Allison J. Williams-Gant, Isabelle Harden, and Kathleen H. Corriveau. The influence of entertainment and brand
+         characters on children’s object preferences and monetary judgments (2024), Frontiers in Developmental Psychology.
+         Original study. Preschool product-judgment tasks; not a direct test of tween game-character design.
+

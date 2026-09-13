@@ -34,12 +34,14 @@ import { PICKUP_TUNING, activeBuffs, type BuffMap, type PickupKind } from '../sh
 import {closestPointOnSegment} from '../shared/netplay';
 
 import { updateCaseCarryPose } from './CaseCarryPose';
+import {RatReactionEvents} from './RatReactionEvents';
 
 export interface InteractionCandidate {
     target:PickupTarget;targetId:string;generation:number;pickup?:import('../shared/pickups').PickupKind;
 }
 
 export class ChaosView {
+    private readonly reactions:RatReactionEvents;
     private readonly root=new THREE.Group();
     private readonly caseRoot=new THREE.Group();
     private readonly extraCases=new Map<string,ExtraCaseVisual>();
@@ -103,6 +105,7 @@ export class ChaosView {
         this.hud.setRoster(incidents?.length?incidents.map(id=>incidentInfo(id)):undefined);
     }
     constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace){
+        this.reactions=new RatReactionEvents(resolveRat);
         this.localShots=new LocalShotPresentation(traceShot);
         this.sirenAudio=new DispatchSirenAudio(this.audio);
         this.bullets.count=0;this.bullets.frustumCulled=false;this.root.add(this.bullets);
@@ -170,7 +173,7 @@ export class ChaosView {
         for(const card of this.buffCards.values())card.remove();
         this.buffCards.clear();this.buffBar.style.display='none';
     }
-    resetProjectiles():void{this.localShots.clear();this.presentation.clear();this.clearPickupCards();}
+    resetProjectiles():void{this.localShots.clear();this.presentation.clear();this.clearPickupCards();this.clearInteractions();this.reactions.reset();}
     fire(shot:ShotDescriptor):void {
         if(!this.extrapolate)return;
         const dispatch=this.state?.dispatch;
@@ -181,7 +184,7 @@ export class ChaosView {
     launch(message:Extract<ServerMessage,{type:'playerShot'}>):void {
         if(this.extrapolate&&!this.localShots.confirm(message,performance.now()))this.presentation.launch(message,performance.now());
     }
-    shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {this.localShots.result(message);}
+    shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {this.localShots.result(message);this.reactions.shotResult(message);}
     /** Use the exact segment crossed this display frame so high-speed movement
      * cannot step over a small pickup between render samples. */
     interaction(from:Vec3Data,to:Vec3Data,fullHealth:boolean):InteractionCandidate|undefined {
@@ -216,8 +219,12 @@ export class ChaosView {
         if(message.target==='pickup'){
             if(message.accepted)this.acceptedPickups.set(message.targetId,{generation:candidate?.generation??0,tick:message.tick,epoch:message.epoch});
             else this.pickups.get(message.targetId)?.setPending(false);
-        }else if(!message.accepted)this.anticipatedCase=null;
-        else this.anticipatedCase={acceptedTick:message.tick,epoch:message.epoch};
+        }else if(candidate){
+            // A cancelled/previous-round claim cannot resurrect a carried case.
+            const superseded=this.state?.epoch!==message.epoch||
+                this.state.tick!==undefined&&this.state.tick>message.tick;
+            this.anticipatedCase=message.accepted&&!superseded?{acceptedTick:message.tick,epoch:message.epoch}:null;
+        }
     }
     clearInteractions():void {
         this.pendingInteractions.clear();this.acceptedPickups.clear();this.anticipatedCase=null;
@@ -229,6 +236,15 @@ export class ChaosView {
         else if(candidate)this.anticipatedCase=null;
     }
     apply(state:ChaosState){
+        const previous=this.state;
+        if(previous&&(previous.epoch!==state.epoch||previous.assignment?.roundId!==state.assignment?.roundId))this.clearInteractions();
+        else if(state.case.owner||previous&&((state.assignment?.deliverySerial??0)>(previous.assignment?.deliverySerial??0))){
+            // Ownership and a delivery are authoritative even if a claim result
+            // is still pending. Never keep an old grip across case relocation.
+            this.anticipatedCase=null;
+            for(const [id,candidate] of this.pendingInteractions)if(candidate.target==='case')this.pendingInteractions.delete(id);
+        }
+        this.reactions.apply(state);
         this.foley?.apply(state);
         this.state=state;this.receivedAt=performance.now();
         if(this.anticipatedCase?.acceptedTick!==undefined&&state.epoch===this.anticipatedCase.epoch&&(state.tick??0)>=this.anticipatedCase.acceptedTick)

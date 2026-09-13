@@ -8,6 +8,8 @@ import type { Neighborhood } from '../../src/prototype/Neighborhood';
 import { CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import { disposeMeshResources } from '../../src/utils/disposeMeshResources';
 import { OutfitStudioSubject, type OffHandMode, type ModelStudy } from './OutfitStudioSubject';
+import { locomotionStudy } from './locomotionStudy';
+import {CharacterReactionStudy,CHARACTER_STUDIES,type CharacterStudyId} from './CharacterReactionStudy';
 
 const query=new URLSearchParams(location.search);
 // This surface never plays game audio. Human gameplay links remain independently audible.
@@ -58,6 +60,14 @@ let study:ModelStudy=query.get('model')==='original'?'original':query.get('model
 let offHand:OffHandMode=query.get('hand')==='empty'||query.get('hand')==='none'||query.get('held')==='0'?'none':'case';
 let remote=query.get('presentation')==='remote'||query.has('batch');
 let walking=false,paused=false,detail=false,ironclad=false,turntable=false,disposed=false,preparing=false;
+let polished=query.get('animation')!=='accepted',fullActing=query.get('animation')==='full',sequence=query.get('motion')==='sequence',sequenceTime=0,baseYaw=0;
+const reviewRequested=query.get('motion')==='reactions';
+let reactionReview:CharacterReactionStudy|undefined,reviewAll=false,reviewIndex=0,playbackRate=1;
+let selectedReaction:CharacterStudyId=CHARACTER_STUDIES.find(row=>row[0]===query.get('reaction'))?.[0]??'burst';
+const reviewOrigin=new THREE.Vector3();
+for(const [id,label] of CHARACTER_STUDIES){
+    const option=document.createElement('option');option.value=id;option.textContent=label;el('reaction-study').appendChild(option);
+}
 let city:Neighborhood|undefined,cityObjects:THREE.Object3D[]=[],cityPromise:Promise<void>|undefined;
 const abort=new AbortController();
 let subject:OutfitStudioSubject;
@@ -68,6 +78,13 @@ const viewVectors:Record<string,THREE.Vector3>={
 };
 function pressed(id:string,value:boolean){el(id).setAttribute('aria-pressed',String(value));}
 function syncUi(){
+    const animation=fullActing?'full':polished?'candidate':'accepted';
+    query.set('animation',animation);query.set('motion',reactionReview?'reactions':sequence?'sequence':'manual');
+    query.set('reaction',selectedReaction);
+    (el('animation-study') as unknown as HTMLSelectElement).value=animation;
+    (el('reaction-study') as unknown as HTMLSelectElement).value=selectedReaction;
+    pressed('review-all',reviewAll);
+    pressed('sequence',sequence);
     for(const [id,field,,palette] of palettes){
         const value=palette.find(p=>p.color===options[field])!;el(`${id}-name`).textContent=value.name;query.set(id,value.name.toLowerCase());
         for(const button of document.querySelectorAll<HTMLButtonElement>(`[data-field="${field}"]`))button.setAttribute('aria-pressed',String(Number(button.dataset.color)===options[field]));
@@ -81,11 +98,11 @@ function syncUi(){
     el('study-note').textContent=study==='original'?'Original release geometry · selected hat, coat and fur colors':study==='original-arms'?'New tailoring · exact original pistol and case arms':'Matching straight sleeves · longer case sleeve · no sleeve without a case';
     for(const button of document.querySelectorAll<HTMLButtonElement>('[data-field="highlightColor"]'))button.disabled=study==='original';
     el('outfit-label').textContent=`${el('coat-name').textContent} coat / ${el('hat-name').textContent?.toLowerCase()} hat`;
-    el('case-status').textContent=offHand==='case'?'Carrying the case':'No case · no sleeve';el('render-status').textContent=remote?'Opponent':'Local rat';
+    syncCaseUi();el('render-status').textContent=remote?'Opponent':'Local rat';
     el('environment-note').textContent=environment==='studio'?'Neutral light · game materials':'Real city · game shoulder camera';
     el('view-label').textContent=environment==='studio'?(detail?'COAT DETAIL':`${view.replace('-',' ')} VIEW`):environment==='street'?'STREET / SHOULDER CAMERA':'RECORDS / SHOULDER CAMERA';
     el('orbit-hint').textContent=environment==='studio'?'Drag to orbit · scroll to zoom':'Walk in place · game animation and lighting';
-    for(const button of document.querySelectorAll<HTMLButtonElement>('[data-hand]'))button.setAttribute('aria-pressed',String(button.dataset.hand===offHand));pressed('idle',!walking);pressed('walk',walking);pressed('pause',paused);pressed('detail',detail);pressed('turntable',turntable);
+    pressed('idle',!walking&&!sequence&&!reactionReview);pressed('walk',walking&&!sequence&&!reactionReview);pressed('pause',paused);pressed('detail',detail);pressed('turntable',turntable);
     el('pause').textContent=paused?'Resume':'Pause';
     for(const button of document.querySelectorAll<HTMLButtonElement>('[data-environment]'))button.setAttribute('aria-pressed',String(button.dataset.environment===environment));
     for(const button of document.querySelectorAll<HTMLButtonElement>('[data-view]')){
@@ -102,15 +119,32 @@ function rebuild(){
     subject?.dispose();
     const p=environment==='studio'?currentPosition:spawn();
     subject=new OutfitStudioSubject(scene,world,camera,options,p,remote,offHand,study);
+    subject.rat.setLocomotionPolish(polished);
+    subject.rat.setActingEnabled(fullActing);
     if(environment!=='studio'){
         const heading=environment==='street'?-Math.PI/2:0;
         subject.controller.onMouseMove((Math.PI-heading)/.002,-180);subject.rat.mesh.rotation.y=heading+Math.PI;
     }
     if(ironclad)subject.rat.setPowerups(3600,0);
     subject.rat.update(0);subject.updateCarry();
+    baseYaw=subject.rat.mesh.rotation.y;sequenceTime=0;
+    // Establish the presented position/yaw before the first art-sequence step.
+    subject.rat.presentAlive(1/120,0);
     previousPosition.copy(subject.rat.mesh.position);
 }
-function refreshOutfit(){if(!preparing)rebuild();syncUi();}
+function syncCaseUi(){
+    const hand=reactionReview?(subject.caseRoot.visible?'case':'none'):offHand;
+    const label=hand==='case'?'Carrying the case':'No case · no sleeve';
+    if(el('case-status').textContent!==label)el('case-status').textContent=label;
+    for(const button of document.querySelectorAll<HTMLButtonElement>('[data-hand]')){
+        const value=String(button.dataset.hand===hand);
+        if(button.getAttribute('aria-pressed')!==value)button.setAttribute('aria-pressed',value);
+    }
+}
+function refreshOutfit(){
+    if(reactionReview){startReview(selectedReaction,reviewAll);return;}
+    if(!preparing)rebuild();syncUi();
+}
 function frame(){
     if(environment!=='studio'){subject.controller.updateView();return;}
     const p=subject.rat.mesh.position;
@@ -127,6 +161,7 @@ function resize(){
 }
 const observer=new ResizeObserver(resize);observer.observe(viewport);
 async function setEnvironment(next:string){
+    reactionReview=undefined;reviewAll=false;
     environment=next;detail=false;turntable=false;controls.autoRotate=false;currentPosition.set(0,0,0);syncUi();
     if(next!=='studio'&&!city){
         preparing=true;el('loading').hidden=false;
@@ -150,9 +185,38 @@ for(const button of document.querySelectorAll<HTMLButtonElement>('[data-view]'))
 el('model-study').onchange=()=>{study=(el('model-study') as unknown as HTMLSelectElement).value as ModelStudy;refreshOutfit();};
 el('shuffle').onclick=()=>{Object.assign(options,generateRandomAppearance());refreshOutfit();};
 el('reset-outfit').onclick=()=>{Object.assign(options,DEFAULT_APPEARANCE);refreshOutfit();};
-el('idle').onclick=()=>{walking=false;syncUi();};el('walk').onclick=()=>{walking=true;paused=false;syncUi();};
+el('idle').onclick=()=>{if(reactionReview)stopReview();walking=false;sequence=false;syncUi();};el('walk').onclick=()=>{if(reactionReview)stopReview();walking=true;sequence=false;paused=false;syncUi();};
+el('sequence').onclick=()=>{reactionReview=undefined;reviewAll=false;sequence=!sequence;walking=false;paused=false;if(!preparing){rebuild();frame();}syncUi();};
+el('animation-study').onchange=()=>{
+    const mode=(el('animation-study') as unknown as HTMLSelectElement).value;
+    polished=mode!=='accepted';fullActing=mode==='full';
+    if(reactionReview)startReview(selectedReaction,reviewAll);
+    else{paused=false;if(!preparing){rebuild();frame();}syncUi();}
+};
+function startReview(id:CharacterStudyId,all=false){
+    if(preparing)return;
+    selectedReaction=id;reviewIndex=CHARACTER_STUDIES.findIndex(row=>row[0]===id);reviewAll=all;
+    sequence=false;walking=false;paused=false;rebuild();reviewOrigin.copy(subject.rat.mesh.position);
+    reactionReview=new CharacterReactionStudy(id,subject);
+    if(id==='land'){
+        subject.rat.mesh.position.y+=3;subject.rat.resetMotionHistory();subject.rat.presentAlive(1/120,0);
+    }
+    previousPosition.copy(subject.rat.mesh.position);frame();syncUi();
+}
+function stopReview(){reactionReview=undefined;reviewAll=false;if(!preparing){rebuild();frame();}syncUi();}
+el('reaction-study').onchange=()=>{
+    selectedReaction=(el('reaction-study') as unknown as HTMLSelectElement).value as CharacterStudyId;
+    if(reactionReview)startReview(selectedReaction);else syncUi();
+};
+el('play-reaction').onclick=()=>startReview(selectedReaction);
+el('review-all').onclick=()=>startReview(CHARACTER_STUDIES[0][0],true);
+el('stop-review').onclick=stopReview;
+el('playback-rate').onchange=()=>{playbackRate=Number((el('playback-rate') as unknown as HTMLSelectElement).value);};
 el('pause').onclick=()=>{paused=!paused;syncUi();};
-for(const button of document.querySelectorAll<HTMLButtonElement>('[data-hand]'))button.onclick=()=>{offHand=button.dataset.hand as OffHandMode;if(!preparing)subject.setOffHand(offHand);syncUi();};
+for(const button of document.querySelectorAll<HTMLButtonElement>('[data-hand]'))button.onclick=()=>{
+    if(reactionReview)stopReview();
+    offHand=button.dataset.hand as OffHandMode;if(!preparing)subject.setOffHand(offHand);syncUi();
+};
 el('detail').onclick=()=>{detail=!detail;syncUi();frame();};
 el('turntable').onclick=()=>{turntable=!turntable;controls.autoRotate=turntable;syncUi();};
 el('frame').onclick=()=>{detail=false;frame();syncUi();};
@@ -165,12 +229,31 @@ el('finish').onchange=()=>{
     ironclad=(el('finish') as unknown as HTMLSelectElement).value==='ironclad';
     if(!preparing)subject.rat.setPowerups(ironclad?3600:0,0);
 };
-void setEnvironment(environment);
+void setEnvironment(environment).then(()=>{if(reviewRequested&&!disposed)startReview(selectedReaction);});
 let last=performance.now(),lastStats=0;
 renderer.setAnimationLoop(now=>{
-    const dt=paused?0:Math.min((now-last)/1000,.05);last=now;
+    const dt=paused?0:Math.min((now-last)/1000,.05)*playbackRate;last=now;
     if(!subject||preparing||disposed)return;
-    if(environment==='studio'){
+    if(reactionReview){
+        reactionReview.update(dt);
+        subject.rat.mesh.position.copy(reviewOrigin);subject.rat.mesh.position.y+=reactionReview.height;
+        subject.rat.mesh.rotation.y=baseYaw+reactionReview.yaw;
+        subject.rat.presentAlive(dt,reactionReview.speed);
+        const label=`${reactionReview.label}${reactionReview.done?' · complete':''}`;
+        if(el('motion-status').textContent!==label)el('motion-status').textContent=label;
+        if(environment==='studio'){
+            delta.copy(subject.rat.mesh.position).sub(previousPosition);camera.position.add(delta);controls.target.add(delta);controls.update();
+        }else {subject.controller.updateView();city?.update(dt,camera,subject.rat.mesh.position);}
+        if(reactionReview.done&&reviewAll)startReview(CHARACTER_STUDIES[(reviewIndex+1)%CHARACTER_STUDIES.length][0],true);
+    }else if(sequence){
+        sequenceTime+=dt;
+        const pose=locomotionStudy(sequenceTime);
+        subject.rat.mesh.rotation.y=baseYaw+pose.yaw;
+        subject.rat.presentAlive(dt,pose.speed);
+        if(el('motion-status').textContent!==pose.label)el('motion-status').textContent=pose.label;
+        if(environment==='studio')controls.update();
+        else{subject.controller.updateView();city?.update(dt,camera,subject.rat.mesh.position);}
+    }else if(environment==='studio'){
         if(walking)currentPosition.z+=18*dt;
         subject.rat.body.position.set(currentPosition.x,currentPosition.y,currentPosition.z);
         subject.rat.update(dt);
@@ -179,7 +262,9 @@ renderer.setAnimationLoop(now=>{
     }else{
         subject.rat.presentAlive(dt,walking?18:0);subject.controller.updateView();city?.update(dt,camera,subject.rat.mesh.position);
     }
+    if(!sequence&&!reactionReview){const label=walking?'Walking':'Idle';if(el('motion-status').textContent!==label)el('motion-status').textContent=label;}
     subject.updateCarry();previousPosition.copy(subject.rat.mesh.position);
+    if(reactionReview)syncCaseUi();
     renderer.render(scene,camera);
     if(now-lastStats>500){
         el('stats').textContent=`${renderer.info.render.calls} scene draws · ${renderer.info.render.triangles.toLocaleString()} triangles. Studio poses are illustrative; game physics are unchanged.`;lastStats=now;

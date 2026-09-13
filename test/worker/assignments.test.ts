@@ -4,6 +4,7 @@ import { GameRoom } from '../../src/worker/GameRoom';
 import { ASSIGNMENT_IDS, destinationPoint, type AssignmentId, type AssignmentState } from '../../src/shared/assignments';
 import { DeliveryDecoder } from '../../src/shared/deliveryWire';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
+import type { ChaosState } from '../../src/shared/chaosState';
 import { PROTOCOL_VERSION, WIN_DISPLAY_MS, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
 
 type Internals={handleHit:(id:string,hit:{type:'hit';victimId:string;damage:number},incoming?:{x:number;y:number;z:number})=>Promise<void>;players:Map<string,PlayerData>;chaos:ChaosSimulation;chaosTimer:ReturnType<typeof setInterval>|null;
@@ -43,6 +44,26 @@ afterEach(async()=>{
 });
 
 describe('shared assignment room lifecycle',()=>{
+    it('routes an Improper Disposal self hit through durable damage, death and respawn without awarding points',async()=>{
+        const {name,stub}=room();await stub.configureAssignment('excessive-force');
+        const first=await open(name),second=await open(name,true);
+        await runInDurableObject(stub,async(instance,ctx)=>{
+            const game=instance as unknown as Internals;pause(game);
+            const sim=game.chaos,a=game.players.get(first.welcome.id)!,b=game.players.get(second.welcome.id)!;
+            const now=sim.assignmentState!.liveAt+1;game.clock=()=>now;
+            Object.assign(a,{x:-3,y:59,z:0,hp:1,kills:19});Object.assign(b,{x:0,y:59.05,z:0,hp:0});
+            (sim as unknown as {dispatch:ChaosState['dispatch']}).dispatch={phase:'active',started:now,until:now+25_000,serial:1,incident:'improper-disposal'};
+            sim.step(0,now);sim.death(b,{x:1,y:0,z:0},a.id);
+            for(let i=1;i<=20;i++)sim.step(1/120,now+i*1000/120);
+            expect(a.hp).toBe(0);expect(a.kills).toBe(19);expect(a.deaths).toBe(1);
+            expect(sim.assignmentState!.caseKills).toEqual({});expect(game.round.phase).toBe('playing');
+            expect(ctx.storage.sql.exec("SELECT * FROM pending_events WHERE type='respawn' AND player_id=?",a.id).toArray()).toHaveLength(1);
+            expect(ctx.storage.sql.exec("SELECT * FROM pending_events WHERE type='reset'").toArray()).toHaveLength(0);
+        });
+        const died=await first.wait('playerDied');
+        expect(died).toMatchObject({victimId:first.welcome.id,killerId:first.welcome.id});
+        expect(first.invalid).toEqual([]);expect(second.invalid).toEqual([]);
+    });
     it('restricts direct selection to local private rooms and keeps repeated requests stable',async()=>{
         for(const url of ['https://rat.test/ws?assignment=closing-time','https://rat.test/ws?room=graybox-practice-external&assignment=closing-time',
             'http://localhost/ws?room=graybox-practice-invalid&assignment=unknown','http://localhost/ws?room=graybox-practice-retired&assignment=misfiled-evidence']){

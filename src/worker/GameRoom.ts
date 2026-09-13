@@ -947,12 +947,12 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming']): Promise<void> {
+  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false): Promise<void> {
     if (this.round.phase !== 'playing') return;
 
     const victim = this.players.get(message.victimId);
     const shooter = playerId === null ? undefined : this.players.get(playerId);
-    const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, playerId && this.chaos?.isCaseHolder(playerId) ? playerId : null, !!this.chaos?.assignmentState);
+    const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, playerId && this.chaos?.isCaseHolder(playerId) ? playerId : null, !!this.chaos?.assignmentState, explosive);
     if (!result.applied || !victim) return;
     const cause = playerId === null ? {cause:'evidence-tampering' as const} : {};
 
@@ -963,9 +963,9 @@ export class GameRoom extends DurableObject<Env> {
     const respawnAt = result.roundWon ? now + WIN_DISPLAY_MS : now + RESPAWN_DELAY_MS;
     if (result.killed) victim.respawnAt = respawnAt;
     this.persistPlayer(victim, true);
-    if (result.killed && shooter) this.persistPlayer(shooter, true);
+    if (result.killed && shooter && shooter !== victim) this.persistPlayer(shooter, true);
 
-    const casePoint=result.killed && (this.chaos?.creditCaseKill(playerId)??false);
+    const casePoint=result.killed && playerId !== victim.id && (this.chaos?.creditCaseKill(playerId)??false);
     if(casePoint)this.checkpointGame();
     const incident=result.killed && incoming?this.chaos?.death(victim,incoming,playerId):false;
     const assignmentWon=casePoint && !!this.chaos?.assignmentState?.result;
@@ -1140,7 +1140,7 @@ export class GameRoom extends DurableObject<Env> {
       const retiredAssignment=previous?.id==='misfiled-evidence'||(previous?.id==='chain-of-custody'&&previous.destinations?.includes('icebox-check'));
       if(retiredAssignment){this.round=playingRound(this.now());this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");}
       this.chaos=new ChaosSimulation(this.players,hit=>{
-        void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming)
+        void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true)
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
       },saved,this.world);
       this.chaos.evidenceMode=this.evidenceMode;

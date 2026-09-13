@@ -85,8 +85,8 @@ export function addPracticePlayers(players: Map<string, PlayerData>, count: numb
 export class PracticeLifeCycle {
     readonly respawns = new Map<string, number>();
     constructor(readonly players: Map<string, PlayerData>) {}
-    hit(owner: string | null, victim: string, damage: number, now: number, caseHolderId: string | null = null) {
-        const result = applyHit(this.players, owner, victim, damage, true, caseHolderId);
+    hit(owner: string | null, victim: string, damage: number, now: number, caseHolderId: string | null = null, explosive = false) {
+        const result = applyHit(this.players, owner, victim, damage, true, caseHolderId, false, explosive);
         if (result.killed) this.respawns.set(victim, now + PRACTICE_RESPAWN_MS);
         return result;
     }
