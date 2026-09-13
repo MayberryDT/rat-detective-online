@@ -1,6 +1,6 @@
 # Documentation map
 
-Reviewed against repository source and the latest release receipt on **2026-09-12**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+Reviewed against repository source and the latest release receipt on **2026-09-13**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
 
 ## Current references
 
@@ -8,7 +8,11 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | --- | --- |
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
+| [Destination and restock visuals](verification/destination-restock-2026-09-13.md) | September 13 building outline removal and item-specific pickup respawn dials |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
+| [Movement and Hot Pursuit lag fix](verification/movement-hot-pursuit-lag-2026-09-13.md) | Production removal of the redundant per-pose city ray, retained movement bounds and live evidence |
+| [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md) | Released launcher pursuit, rooftop armor/return routes and street-to-upper-floor navigation correction |
+| [Case lifecycle and kill confirmation](verification/case-kill-feedback-2026-09-12.md) | Released delivery re-pickup and reset fixes, emphasized lethal X and 24 rotating kill quips |
 | [Security hardening production release](verification/security-hardening-2026-09-12.md) | Live admission, movement, credential, header and remote-command fixes with release verification |
 | [Animation and gameplay follow-up production release](verification/animation-production-2026-09-12.md) | Accepted animations, explosion self damage, carried-case correction and junction refinements; commit and live verification |
 | [Explosion damage and carried-case correction](verification/explosion-delivery-2026-09-12.md) | Private follow-up: explosion self damage, stale pickup prediction cleanup, delivery checks and remaining playtest uncertainty |

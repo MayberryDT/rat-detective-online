@@ -10,12 +10,12 @@ Updated **2026-09-10** for private authoritative muzzle delivery. The old propos
 | Assignment selection, progress, case-kill credit and final result | GameRoom rotation plus ChaosSimulation / AssignmentRules |
 | Version-2 projectiles, collision hits, cases, corpse missiles, incidents and launch events | Server ChaosSimulation |
 | Public AI movement and firing decisions | ServerBotController plus shared brain/navigation |
-| Human movement | Local physics, sent to server; server-time speed and static collision-path checks, not full server movement simulation |
+| Human movement | Local Cannon physics, sent to server; server-time displacement and world bounds, not full server movement simulation |
 | Immediate local shot/animation feedback | Client; resolved origin/direction sent to server |
 | Remote poses and chaos rendering | Client interpolation of authoritative snapshots |
 | Legacy version-1 hits | Client reports still accepted through bounded rules |
 
-GameRoom rejects external `hit` reports in version 2. Its simulation's `onHit` callback invokes the authoritative scoring path. Human poses must remain inside a server-time displacement envelope and follow a clear path through the static city collision world; invalid poses retain the previous authoritative position and receive `playerCorrected`. These checks close direct teleport and wall-crossing inputs without claiming full server-side character simulation. Shot origin/direction plausibility, duplicate shot IDs, capacity and rate checks remain important, but do not prove every client movement was legitimate. There is no full competitive anti-cheat guarantee or implemented historical rewind/lag-compensation system.
+GameRoom rejects external `hit` reports in version 2. Its simulation's `onHit` callback invokes the authoritative scoring path. Human poses must remain inside finite world bounds and a server-time displacement envelope; invalid poses retain the previous authoritative position and receive `playerCorrected`. Authored city collision remains in the human and hosted-bot Cannon controllers. A September 13 production correction removed the network layer's redundant static path ray after it caused valid motion snap-backs and movement-linked room cost, especially at Hot Pursuit speed. The remaining checks close direct teleports without claiming wall-crossing prevention or full server-side character simulation. Shot origin/direction plausibility, duplicate shot IDs, capacity and rate checks remain important, but do not prove every client movement was legitimate. There is no full competitive anti-cheat guarantee or implemented historical rewind/lag-compensation system.
 
 ## Shared truth and attribution
 

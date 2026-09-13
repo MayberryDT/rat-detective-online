@@ -128,3 +128,12 @@ it('includes physical control cabinets when checking a rat route',()=>{
         const box=station.box;expect(nav.clear(box.x,box.y-box.h/2,box.z),station.id).toBe(false);
     }
 });
+
+it.each([
+ ['icebox',{x:130,y:0,z:-25},{x:116,y:8,z:-84}],
+ ['needleworks',{x:-105,y:0,z:116},{x:-105,y:8,z:96}],
+ ['pump',{x:144,y:0,z:145},{x:144,y:8,z:118}],
+] as const)('connects the street to the %s second-floor supply',(_id,from,to)=>{
+ const nav=new BotNavigation({seed:341283204,version:2});
+ const path=solve(nav,from,to);expect(path.length).toBeGreaterThan(0);
+});

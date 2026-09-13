@@ -47,7 +47,14 @@ describe('natural briefcase carry',()=>{
         const deliverSnapshot=()=>{
             const snapshot=simulation.snapshot(false),message=decoder.read(encoder.encode(snapshot).payload)?.message;
             expect(message?.type).toBe('chaos');if(message?.type!=='chaos')throw new Error('Undecodable case state');
-            view.apply(message.state);animator.update(1/60);view.update(1/60,camera);
+            view.apply(message.state);
+            // GameSession checks pickups before rendering the new case pose.
+            // The old rendered case can still be sitting in the delivery paw.
+            if(snapshot.assignment?.deliverySerial&&snapshot.case.owner===null){
+                const feet={x:carrier.x,y:carrier.y+.8,z:carrier.z};
+                expect(view.interaction(feet,feet,true)?.target).not.toBe('case');
+            }
+            animator.update(1/60);view.update(1/60,camera);
             return snapshot;
         };
         try{
@@ -57,7 +64,9 @@ describe('natural briefcase carry',()=>{
                 mesh.position.set(carrier.x,carrier.y,carrier.z);simulation.step(0,++now);deliverSnapshot();
                 expect(simulation.caseHolderId).toBe(carrier.id);expect(mesh.getObjectByName('hot-case-off-hand')).toBeDefined();
                 Object.assign(carrier,destinationPoint(activeDestination(simulation.assignmentState!)!,false));
-                mesh.position.set(carrier.x,carrier.y,carrier.z);simulation.step(0,++now);
+                mesh.position.set(carrier.x,carrier.y,carrier.z);
+                animator.update(1/60);view.update(1/60,camera);
+                simulation.step(0,++now);
                 const snapshot=deliverSnapshot();
                 expect(snapshot.assignment!.deliveries).toEqual({carrier:points});
                 if(points<3){
@@ -68,6 +77,26 @@ describe('natural briefcase carry',()=>{
                 simulation.step(0,++now);deliverSnapshot();expect(simulation.assignmentState!.deliveries.carrier).toBe(points);
             }
             expect(playReaction.mock.calls.filter(([event])=>event==='delivery')).toHaveLength(3);
+        }finally{view.dispose();}
+    });
+    it('detaches a confirmed carrier at reset even before the next snapshot arrives',()=>{
+        const state=new ChaosSimulation(new Map(),()=>{}).snapshot(false);state.case.owner='local';
+        const mesh=createRatMesh(),entity={mesh,isPlayer:true,dead:false,name:'You'} as RatEntity;
+        const scene=new THREE.Scene(),view=new ChaosView(scene,()=>entity),camera=new THREE.PerspectiveCamera();
+        try{
+            view.setScores([],'local');view.apply(state);view.update(1/60,camera);
+            expect(mesh.getObjectByName('hot-case-off-hand')).toBeDefined();
+            view.resetProjectiles();
+            expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
+            for(let i=0;i<10;i++)view.update(1/60,camera);
+            expect(scene.getObjectByName('hot-case')!.visible).toBe(false);
+            expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
+            const next=structuredClone(state);next.case.owner=null;next.case.p={x:50,y:1,z:50};
+            view.apply(next);
+            expect(view.interaction({x:0,y:.8,z:0},{x:0,y:.8,z:0},true)?.target).not.toBe('case');
+            view.update(1/60,camera);
+            expect(scene.getObjectByName('hot-case')!.visible).toBe(true);
+            expect(scene.getObjectByName('hot-case')!.position.toArray()).toEqual([50,1,50]);
         }finally{view.dispose();}
     });
     it.each(['delivery','round','epoch','reset'] as const)('clears an outstanding carried-case prediction on %s and ignores its late acknowledgement',transition=>{

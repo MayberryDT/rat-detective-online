@@ -167,7 +167,7 @@ stage.renderer.setAnimationLoop(()=>{
             .map(light=>({position:light.position.toArray(),target:light.target.position.toArray(),intensity:light.intensity})),
         activeSewerLights:stage.scene.children.filter(o=>o instanceof THREE.PointLight&&o.name==='sewer-pooled-light'&&o.intensity>0).length,
     };
-    chaosView.renderOutline(stage.renderer,stage.camera);
+
     if(query.has('still'))stage.renderer.setAnimationLoop(null);
     if(sirenAudition){stage.camera.getWorldPosition(audioPosition);const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.box.x-audioPosition.x,s.box.y+2.1-audioPosition.y,s.box.z-audioPosition.z)),Infinity);sirenAudition.update(state.dispatch.phase==='ready',nearest);}
 });

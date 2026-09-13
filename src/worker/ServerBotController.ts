@@ -94,7 +94,10 @@ export class ServerBotController {
         this.from.set(bot.body.position.x,bot.body.position.y+1.5,bot.body.position.z);
         this.to.set(target.x,target.y+(control?0:1),target.z);
         const hit=this.ray.closest(this.from,this.to,1);
-        return !hit.hasHit||control&&hit.hitPointWorld.distanceTo(this.to)<.22;
+        // Launcher crowns are thick boxes, unlike Dispatch's thin red face.
+        // Hitting the actual requested control body is visibility, not occlusion.
+        return !hit.hasHit||control&&(hit.hitPointWorld.distanceTo(this.to)<.22||
+            !!hit.body&&Math.hypot(hit.body.position.x-target.x,hit.body.position.y-target.y,hit.body.position.z-target.z)<.01);
     }
     private stop(bot:Bot):void {
         bot.body.velocity.setZero();bot.body.force.setZero();bot.body.sleep();

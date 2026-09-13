@@ -1,14 +1,14 @@
 # Live service runbook
 
-Last release receipt: **2026-09-12**. [Accepted animations, explosion and case fixes](verification/animation-production-2026-09-12.md). [Accepted model and protocol15 integration](verification/model-netplay-integration-2026-09-12.md). [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
+Last release receipt: **2026-09-13**. [Movement and Hot Pursuit lag correction](verification/movement-hot-pursuit-lag-2026-09-13.md). [Destination and restock visuals](verification/destination-restock-2026-09-13.md). [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md). [Case lifecycle and kill confirmation](verification/case-kill-feedback-2026-09-12.md). [Accepted animations, explosion and case fixes](verification/animation-production-2026-09-12.md). [Accepted model and protocol15 integration](verification/model-netplay-integration-2026-09-12.md). [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
 
 | Item | Value |
 | --- | --- |
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `2a470c22-424d-4bbf-823f-2dbb19c7c4cc` — application commit `32bcf72`, protocol 15, accepted animations, explosion/case fixes and junction refinements |
-| Previous version | `21f6b8c1-4770-4691-92fa-71b5096f8a7b` — previous protocol-15 model/netplay release; rollback requires its matching client and loses the accepted follow-ups |
+| Last deployed version | `e1ecb3ed-1853-480d-89f0-81817d0c238b` — protocol 15, movement-lag correction with bot launcher and upper/roof routes preserved |
+| Previous version | `b601b744-da80-431e-a9c0-1522029f5448` — bot vertical traversal release; rollback restores the redundant per-pose city ray and reported movement lag |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 16 total rats per room; occupied rooms fill to eight with AI, yielding to humans; automatic overflow rooms |

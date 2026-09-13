@@ -1,13 +1,80 @@
 # Current Rat Detective state
 
-Verified from source and production on **2026-09-12**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production on **2026-09-13**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
+
+## Production movement lag correction — September 13
+
+After the security movement guard caused repeated snap-backs and continued
+movement-linked lag, the redundant static-city ray was removed from the 20 Hz pose
+acceptance path. Humans and hosted bots still use their existing Cannon collision
+controllers. The Worker still enforces sequence ordering, finite world bounds,
+server-time horizontal/vertical displacement limits and movement rate limits.
+This deliberately returns within-envelope wall collision to the client physics;
+it is not a competitive anti-cheat guarantee.
+
+Hot Pursuit remains a 1.45× ten-second movement boost, including its red outline
+and trail. The corrected envelope explicitly covers a full-speed boosted pose.
+All **1,053 tests**, typecheck and the production build pass. Worker
+**`e1ecb3ed-1853-480d-89f0-81817d0c238b`** is live with the bot traversal release
+preserved. A bounded post-deploy observer decoded 1,877 movement updates and 289
+snapshots with Hot Pursuit active without a correction broadcast. Human feel remains
+for the requested playtest. See the [release receipt](verification/movement-hot-pursuit-lag-2026-09-13.md).
+
+## September 13 destination and pickup restock visuals
+
+Chain of Custody no longer outlines the destination building. Destination name,
+distance, off-screen arrow and street/sewer guidance remain. Empty pickup sites
+now display a subdued silver coat, red shoes or green medical cross inside a
+clockwise progress ring. The 45-second authoritative deadline is unchanged; the
+actual pickup returns at availability. Dials are depth-tested, with no numbers,
+crumb particles or flashing. Active-effect HUD cards are unchanged.
+
+This supersedes the older yellow-silhouette and filling fedora/cheese presentation
+below. It shipped with the movement correction on Worker
+`e1ecb3ed-1853-480d-89f0-81817d0c238b`. See the
+[September 13 receipt](verification/destination-restock-2026-09-13.md).
+
+## Production bot vertical traversal follow-up — September 12
+
+Implemented after Tyler reported unchallenged rooftop Closing Time wins and unused
+upper-floor armor. Bots now plan real launcher routes to all five main landmark
+roofs, fire the trigger from the pad, steer after the authoritative launch, and
+use explicit descent routes to return to street objectives. Stair support probes
+bridge the physical quarter-unit landing seams that disconnected three upper
+floors. All four landmark second-floor Ironclad sites are reachable from the street.
+
+Visible usable supplies within 24 units on the current floor retain immediate
+priority. Longer trips to known available Ironclad sites are limited to 65 horizontal
+units and 25–35-second intervals; they yield to carrying, another carrier and a
+nearby loose case. Existing launcher physics and bounded shared planning remain.
+All **1,052 tests**, typecheck and production build pass. Deployed at Tyler’s
+request on Worker **`b601b744-da80-431e-a9c0-1522029f5448`**, protocol 15,
+from the tested uncommitted tree. See [verification and limits](verification/bot-vertical-traversal-2026-09-12.md).
+
+## Production case lifecycle and kill confirmation follow-up — September 12
+
+Deployed at Tyler's request to https://ratdetective.online/ on Worker
+**`1b524e23-5b91-4da5-a6f1-128df88924ac`**, protocol 15, from the tested working
+tree (not yet committed). Reproduced a second carried-case
+defect: GameSession checks pickups before ChaosView renders, allowing a fresh
+delivery snapshot to trigger a false pickup at the preceding carried mesh pose.
+Pickup anticipation now uses the current authoritative case position. Round reset
+also immediately detaches the confirmed carry sleeve and hides the old case until
+the next snapshot; it cannot reattach from retained pre-reset state.
+
+Confirmed local kills now show a larger red X for 500 ms and a 2.4-second
+“RAT DOWN · [victim]” notice below the reticle, with 24 shuffled municipal/noir
+quips. Existing Bangers/Outfit typography and ordinary hit feedback remain.
+All **1,031 tests**, typecheck and build pass; desktop/compact static layout reviewed.
+Human gameplay timing remains unverified. See the
+[case and kill feedback receipt](verification/case-kill-feedback-2026-09-12.md).
 
 ## Current production security hardening — September 12
 
-The working tree now restricts public admission to canonical matchmaking, checks
+The working tree restricts public admission to canonical matchmaking, checks
 browser WebSocket Origin, applies a Cloudflare admission rate limiter, and returns
-defense-in-depth browser headers. Human poses receive server-time displacement and
-static collision-path checks; malformed quaternions are rejected. Resume tokens
+defense-in-depth browser headers. Human poses receive server-time displacement
+checks; malformed quaternions are rejected. Resume tokens
 rotate before replacement, private bearer verification is constant-time, and the
 remote capacity receipt path is fail-closed against shell metacharacters.
 
@@ -16,8 +83,9 @@ and the high-severity dependency audit pass with zero known vulnerabilities.
 Security commit **`3b19a1f`** plus movement/HUD hotfix **`bd3ed20`** are live at
 https://ratdetective.online/ on Worker **`fea69807-c936-47cf-98a1-22171a59143a`**.
 The first security deployment was rolled back after its volume movement sweep
-corrected normal client motion; the replacement uses a center-path guard with
-delivery slack and keeps the Excessive Force card visible during incident roulette.
+corrected normal client motion. Its replacement center-path ray was also removed
+on September 13 after continued movement lag; delivery slack, displacement bounds
+and the Excessive Force roulette-card fix remain.
 See the
 [security hardening production receipt](verification/security-hardening-2026-09-12.md).
 
@@ -219,7 +287,7 @@ client/Worker and normal production population policy. See the
 Three timed pickups and a replacement incident are committed and live in application `aaa8750`, Worker `d6d1b1e3-9406-4df6-a3f5-04132652e3c1`. **10 counterfeit briefcases** plus the genuine case, seeded once per incident; consumed traps do not return on the next tick or room restoration. See [implementation, tuning and checks](verification/pickups-planted-evidence-2026-09-11.md). Human pickup-feel acceptance remains unverified.
 
 - **Ironclad Alibi** (12 s) reflects cheese balls off the rat. It is a reflective surface, not a shield: no durability, no weak spots, and the carried Hot Case stays independently shootable and dislodgeable. Red-hot Crossfire balls reflect rather than landing their one-hit kill.
-- **Hot Pursuit** (1.45×, 10 s) is a movement burst only, including while carrying. No trail, no extra attack, no camera change. Human movement reads the authoritative buff snapshot; the shared bot brain applies the same multiplier. Ordinary steering, aiming and firing are untouched.
+- **Hot Pursuit** (1.45×, 10 s) is a movement burst only, including while carrying. It has an exaggerated depth-tested red outline and bounded red trail, but no extra attack or camera change. Human movement reads the authoritative buff snapshot; the shared bot brain applies the same multiplier. Ordinary steering, aiming and firing are untouched.
 - **Quick Fix** heals a living rat to full normal HP immediately. It leaves the site available at full health, and never overheals, regenerates, resurrects or adds immunity.
 - Six pickup sites (two per kind) snap to verified-clear street pavement; a claimed site returns after 20 s. Claims are atomic — a contested site goes to exactly one rat. Effects refresh rather than stack, clear on death and match reset, and never persist across a room restart.
 - **Planted Evidence** replaces the missile-case incident by default. Counterfeits resemble the real case but carry a depth-tested occluded outline (never through walls) and no HOT CASE label. Shooting one detonates a finite, attributed cheese burst; walking into one is a lethal neutral trap. The genuine case, its holder and all three assignments stay live — the old objective suspension, forced drop and pickup lockout are gone.

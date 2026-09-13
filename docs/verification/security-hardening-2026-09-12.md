@@ -4,6 +4,11 @@ Status: corrected release deployed to https://ratdetective.online/ from security
 commit **`3b19a1f`** and hotfix **`bd3ed20`**.
 Production Worker: **`fea69807-c936-47cf-98a1-22171a59143a`**.
 
+> Superseded movement note, September 13: the static path ray described below was
+> removed in Worker `e1ecb3ed-1853-480d-89f0-81817d0c238b` after continued lag and
+> snap-back reports. World bounds, server-time displacement, sequences and rate
+> limits remain. See [the correction receipt](movement-hot-pursuit-lag-2026-09-13.md).
+
 ## Closed findings
 
 - Public clients can no longer choose arbitrary Durable Object room names. The canonical room continues through matchmaking; exact localhost diagnostics and authenticated network/capacity fixtures retain scoped custom rooms.

@@ -204,6 +204,6 @@ if(overview){
 stage.flashlight.position.copy(p).add(new THREE.Vector3(0,2,0));stage.camera.getWorldDirection(direction);stage.flashlight.target.position.copy(stage.flashlight.position).addScaledVector(direction,15);
 neighborhood.update(dt,stage.camera);
 if(practiceScores && now>=scoreAt){scoreAt=now+500;practiceScores.textContent=buildScoreboard(players.values()).map(p=>`${p.name.padEnd(20)} ${p.kills} / ${p.deaths}`).join('\n');}
-status.textContent=player.entity.dead?`Respawning in ${Math.max(1,Math.ceil(((life.respawns.get('local')??Date.now())-Date.now())/1000))}…`:overview?'Full city overview':p.y < -3?'Sewers · follow the lit passages':'Street level · M overview · Esc menu';chaosView.update(dt,stage.camera);stage.renderer.render(stage.scene,stage.camera);chaosView.renderOutline(stage.renderer,stage.camera);
+status.textContent=player.entity.dead?`Respawning in ${Math.max(1,Math.ceil(((life.respawns.get('local')??Date.now())-Date.now())/1000))}…`:overview?'Full city overview':p.y < -3?'Sewers · follow the lit passages':'Street level · M overview · Esc menu';chaosView.update(dt,stage.camera);stage.renderer.render(stage.scene,stage.camera);
 });
 window.addEventListener('pagehide',()=>{stage.renderer.setAnimationLoop(null);abort.abort();pointerMenu.dispose();input.dispose();chaosView.dispose();gun.dispose();for(const [id,entity] of entities)if(id!=='local')entity.dispose();player.dispose();neighborhood.dispose();disposeEntitySounds();stage.dispose();},{once:true});

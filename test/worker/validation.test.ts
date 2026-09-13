@@ -53,6 +53,7 @@ describe('play bounds', () => {
     const from={x:0,y:0,z:0};
     expect(isPlausibleMovement(from,{x:1.8,y:6,z:0},0)).toBe(true);
     expect(isPlausibleMovement(from,{x:1.5,y:4,z:0},40)).toBe(true);
+    expect(isPlausibleMovement(from,{x:18*1.45*.05,y:0,z:0},50)).toBe(true);
     expect(isPlausibleMovement(from,{x:20,y:0,z:0},40)).toBe(false);
     expect(isPlausibleMovement(from,{x:0,y:90,z:0},1000)).toBe(true);
     expect(isPlausibleMovement(from,{x:0,y:240,z:0},60_000)).toBe(false);

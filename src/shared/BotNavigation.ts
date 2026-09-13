@@ -4,6 +4,7 @@ import { LANDMARK_INTERIORS } from './landmarkLayout';
 import { SEWER_LIGHTS } from './sewerLayout';
 import type { Vec3Data } from './networkProtocol';
 import type { WorldSpec } from './worldSpec';
+import {BOT_LAUNCH_LINKS,type BotLaunchLink,type BotWaypoint} from './BotLaunchRoutes';
 
 // Share ONE navigator across the bots. route() queues/caches a route; call update()
 // once per frame to give all pending searches a shared, bounded CPU budget.
@@ -34,6 +35,7 @@ export class BotNavigation {
     private tick=0;
     private cursor=0;
     private targets:Vec3Data[];
+    private readonly launchEdges=new Map<string,{from:Node;to:Node;link:BotLaunchLink}>();
 
     constructor(spec:WorldSpec) {
         // These controls are physical obstacles in both human and server bot worlds.
@@ -54,6 +56,11 @@ export class BotNavigation {
                 {x:h.cx-h.w/2+4,y,z:h.cz+h.d/2-4},
                 {x:h.cx+h.w/2-4,y,z:h.cz-h.d/2+5},
             ]))];
+        for(const link of BOT_LAUNCH_LINKS){
+            const from=this.nearest(link.machine.pad),to=this.nearest(link.landing);
+            if(from&&to&&Math.abs(from.y-link.machine.pad.y)<1&&Math.abs(to.y-link.landing.y)<1)
+                this.launchEdges.set(`${from.id}>${to.id}`,{from,to,link});
+        }
     }
     explorationTargets():Vec3Data[] {return this.targets.map(p=>({...p}));}
     private local(s:Solid,x:number,y:number,z:number) {
@@ -113,7 +120,14 @@ export class BotNavigation {
         const steps=Math.ceil(Math.hypot(a.x-b.x,a.z-b.z)/.5);
         for(let i=1;i<steps;i++) {
             const t=i/steps,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t,y=a.y+(b.y-a.y)*t;
-            if(!this.surfaces(x,z).some(h=>Math.abs(h-y)<.32))return false;
+            if(!this.surfaces(x,z).some(h=>Math.abs(h-y)<.32)){
+                // Stair cutouts extend a quarter unit past the ramp. The rat's
+                // feet bridge that seam physically; a center-only support test
+                // incorrectly disconnects the entire upper floor. Probe only
+                // within the foot radius, retaining body and height clearance.
+                const length=Math.hypot(b.x-a.x,b.z-a.z)||1,dx=(b.x-a.x)/length*.3,dz=(b.z-a.z)/length*.3;
+                if(!this.clear(x,y+.32,z)||![...this.surfaces(x+dx,z+dz),...this.surfaces(x-dx,z-dz)].some(h=>Math.abs(h-y)<.32))return false;
+            }
         }return true;
     }
     private neighbors(node:Node):Node[] {
@@ -148,7 +162,7 @@ export class BotNavigation {
         }
         return undefined;
     }
-    route(from:Vec3Data,to:Vec3Data):Vec3Data[] {
+    route(from:Vec3Data,to:Vec3Data):BotWaypoint[] {
         const start=this.nearest(from),goal=this.nearest(to);if(!start||!goal)return [];
         let field=this.fields.get(goal.id);
         if(!field) {
@@ -164,14 +178,17 @@ export class BotNavigation {
         }
         field.requestedAt=this.tick;
         if(!field.next.has(start.id))return [];
-        const path:Vec3Data[]=[];
+        const path:BotWaypoint[]=[];
         let node=start;
         // Every next pointer leads to an earlier discovered cell, so the field
         // cannot cycle. The cap additionally bounds malformed/future-map output.
         for(let i=0;i<2048;i++) {
-            path.push({x:node.x,y:node.y,z:node.z});
+            const next=field.next.get(node.id);
+            const launch=next?this.launchEdges.get(`${node.id}>${next.id}`)?.link:undefined;
+            const descent=next?this.launchEdges.get(`${next.id}>${node.id}`):undefined;
+            path.push({x:node.x,y:node.y,z:node.z,...(launch?{launch}:{}),...(descent?{drop:descent.link.machine.pad}:{})});
             if(node.id===goal.id)return path;
-            const next=field.next.get(node.id);if(!next)return [];
+            if(!next)return [];
             node=next;
         }
         return [];
@@ -191,6 +208,14 @@ export class BotNavigation {
             for(const neighbor of this.neighbors(node)) {
                 if(field.next.has(neighbor.id))continue;
                 field.next.set(neighbor.id,node);field.frontier.push(neighbor);
+            }
+            // Explicit traversal links retain their launch/drop actions in the
+            // returned path. Ordinary walking edges still require support.
+            for(const edge of this.launchEdges.values())if(edge.to.id===node.id&&!field.next.has(edge.from.id)){
+                field.next.set(edge.from.id,node);field.frontier.push(edge.from);
+            }
+            for(const edge of this.launchEdges.values())if(edge.from.id===node.id&&!field.next.has(edge.to.id)){
+                field.next.set(edge.to.id,node);field.frontier.push(edge.to);
             }
             if(field.head===field.frontier.length)active.splice(this.cursor,1);
             else this.cursor++;

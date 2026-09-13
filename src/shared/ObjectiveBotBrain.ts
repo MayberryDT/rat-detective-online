@@ -5,10 +5,12 @@ import { incidentInfo } from './incidentCatalog';
 import { activeDestination, destinationPoint } from './assignments';
 import { hasHustle, PICKUP_TUNING } from './pickups';
 import type { PlayerData, Vec3Data } from './networkProtocol';
+import type {BotWaypoint} from './BotLaunchRoutes';
+import {BALL_GRAVITY,BALL_SPEED} from './ballTuning';
 
 export interface ObjectiveNavigation {
     /** Undefined means the shared planner's frame budget was already used. */
-    route(from: Vec3Data, to: Vec3Data): Vec3Data[] | undefined;
+    route(from: Vec3Data, to: Vec3Data): BotWaypoint[] | undefined;
     /** A short waypoint verified against both solid geometry and floor support. */
     localStep?(from:Vec3Data,to:Vec3Data):Vec3Data|undefined;
     explorationTargets(): Vec3Data[];
@@ -30,7 +32,10 @@ export class ObjectiveBotBrain {
     private target?: PlayerData;
     private dispatchTarget?: Vec3Data;
     private destination?: Vec3Data;
-    private route: Vec3Data[] = [];
+    private route: BotWaypoint[] = [];
+    private flight?:{landing:Vec3Data;started:number};
+    private launchWaitAt?:number;
+    private supplyTripAt=0;
     private routeIndex = 0;
     private plannedDestination?: Vec3Data;
     private pendingPlan?: { from: Vec3Data; to: Vec3Data; started: number };
@@ -76,10 +81,11 @@ export class ObjectiveBotBrain {
         this.routeWaitStarted=undefined;this.failedGoals.clear();this.failedCase=undefined;this.stalled=false;
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
         this.caseLifecycles.clear();
+        this.flight=undefined;this.launchWaitAt=undefined;this.supplyTripAt=0;
         this.deliveryKey='';this.deliveryEntering=false;this.assignmentSignature='';this.evadeAt=0;
     }
     private setObjective(objective: BotObjective, key: string, destination: Vec3Data | undefined): void {
-        if(this.key!==key){this.route=[];this.routeIndex=0;this.plannedDestination=undefined;this.pendingPlan=undefined;this.routeWaitStarted=undefined;this.recoverUntil=0;this.planAt=0;this.key=key;
+        if(this.key!==key){this.launchWaitAt=undefined;this.route=[];this.routeIndex=0;this.plannedDestination=undefined;this.pendingPlan=undefined;this.routeWaitStarted=undefined;this.recoverUntil=0;this.planAt=0;this.key=key;
             this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;}
         this.objective=objective;this.destination=destination;
     }
@@ -106,8 +112,8 @@ export class ObjectiveBotBrain {
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
         this.plannedDestination=undefined;this.destination=undefined;this.decisionAt=0;this.planAt=0;this.recoverUntil=0;
     }
-    /** Visible nearby supplies are worth a detour, not an omniscient trip to a hidden roof.
-     * Stay on the current floor and leave full-health medkits and empty sites alone. */
+    /** Immediate detours stay visible and on the current floor. Longer armor
+     * trips use the separate, throttled map-site policy below. */
     private wantedPickup(state: ChaosState | undefined, self: PlayerData, now:number, clear:(p:Vec3Data)=>boolean) {
         return state?.pickups?.filter(p=>(p.availableAt??0)<=(state?.time??now))
             .filter(p=>p.kind!=='quick-fix'||self.hp<3)
@@ -116,10 +122,46 @@ export class ObjectiveBotBrain {
             .sort((a,b)=>distance(self,a)-distance(self,b))[0];
     }
 
+    /** Fixed supply sites are map knowledge. A bounded occasional trip can use
+     * stairs or a launcher; it never replaces pursuit of an advertised carrier. */
+    private armorTrip(state:ChaosState|undefined,self:PlayerData,now:number){
+        const candidates=state?.pickups?.filter(p=>p.kind==='ironclad'&&(p.availableAt??0)<=(state.time??now)&&
+            Math.hypot(p.x-self.x,p.z-self.z)<65&&!this.suppressed(`pickup:${p.id}`,p,now))??[];
+        const current=candidates.find(p=>this.key===`pickup:${p.id}`);
+        if(current)return current;
+        if(now<this.supplyTripAt||(state?.buffs?.[self.id]?.ironcladUntil??0)>(state?.time??now)+4000)return;
+        candidates.sort((a,b)=>distance(self,a)-distance(self,b));
+        return candidates[0];
+    }
+
+    private fly(now:number,self:Vec3Data,grounded:boolean):ObjectiveBotIntent|undefined {
+        const flight=this.flight;if(!flight)return;
+        if(now-flight.started>1000&&grounded&&Math.abs(self.y-flight.landing.y)<2){
+            this.flight=undefined;this.route=[];this.routeIndex=0;this.pendingPlan=undefined;
+            this.plannedDestination=undefined;this.planAt=0;this.decisionAt=0;return;
+        }
+        if(now-flight.started>10000){this.flight=undefined;this.failPendingGoal(now);return;}
+        this.stalled=false;
+        // Rise clear of the facade before crossing it. Once over the roof,
+        // proportional steering brakes above the landing rather than orbiting it.
+        const dx=flight.landing.x-self.x,dz=flight.landing.z-self.z,d=Math.hypot(dx,dz);
+        const speed=self.y>flight.landing.y+3?Math.min(12,d*3):0;
+        if(d>.1&&speed)this.heading=Math.atan2(dx,dz);
+        return {x:d>.1&&speed>0?dx/d*speed:0,z:d>.1&&speed>0?dz/d*speed:0,jump:false,facing:this.heading};
+    }
+
     step(now: number, self: PlayerData, others: Iterable<PlayerData>, state: ChaosState | undefined,
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
         clearControl: (target: Vec3Data) => boolean = clear): ObjectiveBotIntent {
-        if(self.hp<=0){this.combat.reset();this.opportunisticFire.reset();this.stalled=false;return{x:0,z:0,jump:false,facing:this.heading};}
+        if(self.hp<=0){this.flight=undefined;this.launchWaitAt=undefined;this.combat.reset();this.opportunisticFire.reset();this.stalled=false;return{x:0,z:0,jump:false,facing:this.heading};}
+        const airborne=this.fly(now,self,grounded);if(airborne)return airborne;
+        const launchStep=this.route[this.routeIndex]?.launch;
+        const launch=launchStep&&state?.pressure?.launches.find(e=>e.playerId===self.id&&e.machineId===launchStep.machine.id&&
+            e.at>=(this.launchWaitAt??now)&&now-e.at<1500);
+        if(launch&&launchStep){
+            this.flight={landing:launchStep.landing,started:now};this.launchWaitAt=undefined;
+            return this.fly(now,self,false)!;
+        }
         // Counterfeits are lethal hazards, never objectives: a bot that routed to one
         // would simply kill itself on loop. Only genuine cases are collectible goals.
         const cases=state?[{key:'case',value:state.case},...(state.extraCases??[]).filter(value=>!value.fake).map(value=>({key:`case:${value.id}`,value}))]:[];
@@ -174,6 +216,7 @@ export class ObjectiveBotBrain {
                 .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
             const combat=visible.find(p=>!this.suppressed(`combat:${p.id}`,p,now));
             const pickup=this.wantedPickup(state,self,now,clear);
+            const armor=!carrying&&!carrier&&!(available&&distance(self,available.value.p)<24)?this.armorTrip(state,self,now):undefined;
             // Do not interrupt your own scoring, or keep shooting a nearby
             // loose case away while attempting to collect it.
             if(carrying||this.target||available&&distance(self,available.value.p)<24)this.dispatchTarget=undefined;
@@ -207,6 +250,10 @@ export class ObjectiveBotBrain {
                 }
             }
             if(pickup)this.setObjective('pickup',`pickup:${pickup.id}`,pickup);
+            else if(armor){
+                if(this.key!==`pickup:${armor.id}`)this.supplyTripAt=now+25000+this.random()*10000;
+                this.setObjective('pickup',`pickup:${armor.id}`,armor);
+            }
             else if(available)this.setObjective('case',available.key,available.value.p);
             else if(intercept)this.setObjective('intercept',`intercept:${next}`,intercept);
             else if(!carrying&&carrier)this.setObjective('carrier',`carrier:${carrier.id}`,carrier);
@@ -239,7 +286,7 @@ export class ObjectiveBotBrain {
         if(this.target?.hp===0){this.combat.reset();this.target=undefined;}
         if(!this.progressPosition){this.progressPosition={...self};this.progressAt=now;}
         if(now-this.progressAt>1500){
-            if(!this.pendingPlan&&this.routeIndex<this.route.length&&this.destination&&distance(self,this.destination)>3&&distance(self,this.progressPosition)<1.1&&grounded){
+            if(this.launchWaitAt===undefined&&!this.pendingPlan&&this.routeIndex<this.route.length&&this.destination&&distance(self,this.destination)>3&&distance(self,this.progressPosition)<1.1&&grounded){
                 this.recoverUntil=now+550;this.planAt=this.recoverUntil;this.route=[];
             }
             this.progressPosition={...self};this.progressAt=now;
@@ -276,8 +323,29 @@ export class ObjectiveBotBrain {
                 this.planAt=now+(now-pending.started>5000?1000:140+this.random()*160);
             }
         }
-        while(this.routeIndex<this.route.length&&distance(self,this.route[this.routeIndex])<1.8)this.routeIndex++;
-        let waypoint=this.route[this.routeIndex];
+        while(this.routeIndex<this.route.length&&!this.route[this.routeIndex].launch&&!this.route[this.routeIndex].drop&&distance(self,this.route[this.routeIndex])<1.8)this.routeIndex++;
+        let waypoint:BotWaypoint|undefined=this.route[this.routeIndex];
+        if(waypoint?.drop&&distance(self,waypoint)<2.5){
+            this.flight={landing:waypoint.drop,started:now};return this.fly(now,self,false)!;
+        }
+        if(waypoint?.launch&&Math.hypot(self.x-waypoint.launch.machine.pad.x,self.z-waypoint.launch.machine.pad.z)<2.5&&Math.abs(self.y-waypoint.y)<1){
+            this.launchWaitAt??=now;
+            if(now-this.launchWaitAt>8500){this.launchWaitAt=undefined;this.failPendingGoal(now);waypoint=undefined;}
+            else{
+                const machine=waypoint.launch.machine,target=machine.target;
+                const dx=machine.pad.x-self.x,dz=machine.pad.z-self.z,d=Math.hypot(dx,dz);
+                let shoot:Vec3Data|undefined;
+                if(d<.6&&grounded&&now>=this.shotAt&&(state?.pressure?.cooldowns?.[machine.id]??0)<=(state?.time??now)&&clearControl(target)){
+                    const travel=Math.hypot(target.x-self.x,target.z-self.z)/BALL_SPEED;
+                    shoot={x:target.x,y:target.y-BALL_GRAVITY*travel*travel/2,z:target.z};
+                    this.shotAt=now+650;this.heading=Math.atan2(target.x-self.x,target.z-self.z);
+                }
+                // Stand on the real pad and fire real cheese at its trigger.
+                // Only the authoritative launch event starts flight steering.
+                const speed=d>.25?Math.min(6,d*4):0;
+                this.stalled=false;return{x:d?dx/d*speed:0,z:d?dz/d*speed:0,jump:false,facing:this.heading,shoot};
+            }
+        }
         const patrolling=this.objective==='intercept'&&this.destination&&distance(self,this.destination)<6&&grounded;
         if((!waypoint||patrolling)&&this.destination){
             if(now>=this.localStepAt){

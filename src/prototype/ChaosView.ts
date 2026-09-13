@@ -129,7 +129,7 @@ export class ChaosView {
             this.kiosks.push(buildDispatchModel(cabinet,this.textTexture));
         }
         this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
-        this.assignmentDestinations=new AssignmentDestinations(scene);
+        this.assignmentDestinations=new AssignmentDestinations();
         // DOM projection stays crisp at city scale and visible through all architecture.
         // It adds no dynamic lights, raycasts, or physics to the physical case.
         Object.assign(this.caseMarker.style,{position:'fixed',left:'0',top:'0',display:'none',width:'174px',
@@ -173,7 +173,15 @@ export class ChaosView {
         for(const card of this.buffCards.values())card.remove();
         this.buffCards.clear();this.buffBar.style.display='none';
     }
-    resetProjectiles():void{this.localShots.clear();this.presentation.clear();this.clearPickupCards();this.clearInteractions();this.reactions.reset();}
+    resetProjectiles():void{
+        this.localShots.clear();this.presentation.clear();this.clearPickupCards();this.clearInteractions();this.reactions.reset();
+        // gameReset precedes the new chaos snapshot. Do not render or interact
+        // with the previous round's confirmed carrier during that gap.
+        this.state=null;this.setCarrier(null);this.root.visible=false;
+        this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.caseMarker.style.display='none';
+        for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
+        this.assignmentDestinations.clear();
+    }
     fire(shot:ShotDescriptor):void {
         if(!this.extrapolate)return;
         const dispatch=this.state?.dispatch;
@@ -199,7 +207,10 @@ export class ChaosView {
         const classicWeaponized=state.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='evidence-tampering';
         if(!this.anticipatedCase&&!c.owner&&!c.returningUntil&&!c.missileOwner&&!classicWeaponized&&state.assignment?.phase!=='closed'&&
             Math.hypot(c.v.x,c.v.y,c.v.z)<=CHAOS_TUNING.casePickupMaxSpeed&&now>=c.pickupAfter)
-            consider({target:'case',targetId:'primary',generation:c.pickupAfter},this.caseRoot.position,CHAOS_TUNING.pickupRadius);
+            // Interaction runs before update(): the rendered prop may still be
+            // in yesterday's paw after a delivery/drop/reset snapshot. Use the
+            // current authoritative pickup position, never that stale mesh.
+            consider({target:'case',targetId:'primary',generation:c.pickupAfter},c.p,CHAOS_TUNING.pickupRadius);
         for(const pickup of state.pickups??[]){
             if((pickup.availableAt??0)>now||this.pendingTarget('pickup',pickup.id)||fullHealth&&pickup.kind==='quick-fix')continue;
             consider({target:'pickup',targetId:pickup.id,generation:pickup.availableAt??0,pickup:pickup.kind},pickup,PICKUP_TUNING.claimRadius);
@@ -246,10 +257,9 @@ export class ChaosView {
         }
         this.reactions.apply(state);
         this.foley?.apply(state);
-        this.state=state;this.receivedAt=performance.now();
+        this.state=state;this.root.visible=true;this.receivedAt=performance.now();
         if(this.anticipatedCase?.acceptedTick!==undefined&&state.epoch===this.anticipatedCase.epoch&&(state.tick??0)>=this.anticipatedCase.acceptedTick)
             this.anticipatedCase=null;
-        this.assignmentDestinations.update(state.assignment);
         if(this.extrapolate){this.presentation.apply(state,this.receivedAt);this.localShots.apply(state,this.receivedAt);}
         const extraIds=new Set((state.extraCases??[]).map(c=>c.id));
         for(const [id,visual] of this.extraCases)if(!extraIds.has(id)){visual.dispose();this.extraCases.delete(id);}
@@ -478,7 +488,6 @@ export class ChaosView {
         oscillator.connect(gain);gain.connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+duration);
         oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
     }
-    renderOutline(renderer:THREE.WebGLRenderer,camera:THREE.Camera):void {this.assignmentDestinations.render(renderer,camera);}
     getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
         this.clearPickupCards();this.buffBar.remove();

@@ -37,6 +37,38 @@
     35%,75% { transform:translate(-50%,-50%) rotate(45deg) scale(1.25); }
     100% { transform:translate(-50%,-50%) rotate(45deg) scale(1); }
 }
+/* Authoritative kills hold a larger red X; the aim point stays at its center. */
+#crosshair.kill-confirmed { animation:kill-confirmation 500ms ease-out both;filter:drop-shadow(0 0 2px #180707) drop-shadow(0 0 5px #ed493a99); }
+#crosshair.kill-confirmed::before,
+#crosshair.kill-confirmed::after { background:#ff594b; }
+@keyframes kill-confirmation {
+    0% { transform:translate(-50%,-50%) rotate(45deg) scale(3); }
+    25%,70% { transform:translate(-50%,-50%) rotate(45deg) scale(2.15); }
+    100% { transform:translate(-50%,-50%) rotate(45deg) scale(1.7); }
+}
+#kill-confirmation {
+    position:fixed;left:50%;top:calc(50% + 38px);transform:translateX(-50%);
+    width:min(380px,70vw);z-index:45;pointer-events:none;text-align:center;
+    color:#efdfbe;text-shadow:0 2px 2px #100b0b,0 0 5px #100b0b;
+    animation:kill-notice 2400ms ease-out both;
+}
+.kill-confirmation-title {
+    color:#ff7665;font:400 27px/1.1 'Bangers',Impact,sans-serif;letter-spacing:.8px;
+    text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.kill-confirmation-quip { margin-top:5px;font:600 11px/1.35 'Outfit',Arial,sans-serif;letter-spacing:1px; }
+@keyframes kill-notice {
+    0% { opacity:0;transform:translateX(-50%) translateY(6px) scale(1.12); }
+    8%,78% { opacity:1;transform:translateX(-50%) translateY(0) scale(1); }
+    100% { opacity:0;transform:translateX(-50%) translateY(-4px); }
+}
+@media(max-height:500px) {
+    #kill-confirmation { top:calc(50% + 28px);width:min(340px,60vw); }
+    .kill-confirmation-title { font-size:23px; }
+    .kill-confirmation-quip { font-size:10px;margin-top:3px; }
+}
 @media(prefers-reduced-motion:reduce) {
     #crosshair.hit-confirmed { animation:none;transform:translate(-50%,-50%) rotate(45deg); }
+    #crosshair.kill-confirmed { animation:none;transform:translate(-50%,-50%) rotate(45deg) scale(2); }
+    #kill-confirmation { animation:none; }
 }

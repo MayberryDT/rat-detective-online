@@ -324,7 +324,7 @@ export class GameSession {
             case 'playerDied': {
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
-                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');}
+                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName);this.foley.play('hit-confirm');}
                 const entity = message.victimId === this.myId ? this.rat?.entity : this.remotes.get(message.victimId);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
                 if (entity && !entity.dead) {
@@ -472,7 +472,6 @@ export class GameSession {
             this.releasePreparedModels();this.releasePreparedModels=undefined;
             performance.mark('city-first-play-frame');
         }
-        this.chaos?.renderOutline(renderer,camera);
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));
     }

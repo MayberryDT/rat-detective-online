@@ -277,3 +277,11 @@ pistol sleeve and a longer case sleeve with the same taper and linked cuff.
 Use **Case / No case**. The empty sleeve option is removed; old `hand=empty`
 links normalize to `hand=none`. The original comparison models remain.
 See the [case-sleeve receipt](../../docs/verification/rat-case-sleeve-2026-09-12.md).
+
+### Pickup restock art review
+
+`/restock-fixture.html?mute=1` on the Vite visual development server renders the
+production respawn dials at zero, half and 94% progress. Buttons switch between
+flat street/interior palette backdrops and demonstrate opaque-wall occlusion.
+This is a static art sheet, not a city or multiplayer gameplay fixture.
+`/pickup-fixture.html?restock=1&mute=1` shows the dials at pickup scale beside rats.

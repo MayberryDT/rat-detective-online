@@ -635,7 +635,7 @@ describe('GameRoom websockets', () => {
     expect(peerCorrection.player.x).toBe(welcome.player.x);
   });
 
-  it('rejects server-time speed hacks and paths through static city fixtures',async()=>{
+  it('rejects server-time speed hacks without applying a second collision controller',async()=>{
     const room=`graybox-movement-security-${crypto.randomUUID()}`,client=await openClient(room);
     client.ws.send(joinPayload('Bounded Rat'));const welcome=await client.inbox.waitFor('welcome');
     await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
@@ -645,7 +645,7 @@ describe('GameRoom websockets', () => {
       expect(player).toMatchObject({x:0,y:0,z:0});
       Object.assign(player,{x:87,y:0,z:145});game.lastAcceptedMovementAt.set(welcome.id,start);
       game.handleMovement(welcome.id,{type:'updateMovement',seq:2,position:{x:93,y:0,z:145},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}},start+1000);
-      expect(player).toMatchObject({x:87,y:0,z:145});
+      expect(player).toMatchObject({x:93,y:0,z:145});
     });
   });
 

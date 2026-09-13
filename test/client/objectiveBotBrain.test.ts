@@ -368,8 +368,8 @@ it('leaves full-health medkits alone but seeks them when injured, even while car
     self.hp=2;brain.step(1400,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
 });
 
-it.each(['hidden','distant','other-floor','empty'] as const)('does not abandon the case for a %s pickup',reason=>{
-    const {brain,self,navigation}=fixture(),s=state();
+it.each(['hidden','distant','other-floor','empty'] as const)('does not abandon a nearby case for a %s supply trip',reason=>{
+    const {brain,self,navigation}=fixture(),s=state();s.case.p.x=10;
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:reason==='distant'?40:5,y:reason==='other-floor'?8.7:.7,z:0,availableAt:reason==='empty'?46_000:0}];
     brain.step(1000,self,[],s,()=>reason!=='hidden',false,true);
     expect(brain.objective).toBe('case');
@@ -393,4 +393,24 @@ it('patrols a defended landmark on supported steps while waiting for its carrier
     expect(brain.objective).toBe('intercept');expect(Math.hypot(first.x,first.z)).toBeGreaterThan(0);
     const second=brain.step(3000,self,[holder],s,()=>false,false,true);
     expect([second.x,second.z]).not.toEqual([first.x,first.z]);
+});
+
+it('plans a bounded trip to mapped upstairs armor, then resumes work when claimed',()=>{
+    const {brain,self,navigation}=fixture(),s=state();s.case.p.x=100;
+    s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:15,y:8.7,z:0}];
+    brain.step(1000,self,[],s,()=>false,false,true);
+    expect(brain.goalKey).toBe('pickup:alibi-records-upper');
+    expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),s.pickups[0]);
+    s.pickups[0].availableAt=46000;s.time=1400;
+    brain.step(1400,self,[],s,()=>false,false,true);expect(brain.objective).toBe('case');
+    s.pickups.push({id:'another-roof',kind:'ironclad',x:15,y:36.7,z:0});
+    brain.step(1800,self,[],s,()=>false,false,true);expect(brain.objective).toBe('case');
+});
+
+it('pursues a rooftop carrier instead of taking a long armor detour',()=>{
+    const {brain,self,holder}=fixture(),s=state('holder');holder.y=36;
+    s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';
+    s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:15,y:8.7,z:0}];
+    brain.step(1000,self,[holder],s,()=>false,false,true);
+    expect(brain.objective).toBe('carrier');
 });

@@ -210,6 +210,37 @@ describe('GameHud', () => {
         hud.showHitMarker();hud.dispose();expect(crosshair.classList.contains('hit-confirmed')).toBe(false);
     });
 
+    it('emphasizes lethal hits, rotates quips, and replaces rapid kills without stale expiry',()=>{
+        const {doc,byId}=createHudDocument(),crosshair=doc.createElement('div');crosshair.id='crosshair';doc.body.appendChild(crosshair);
+        const hud=new GameHud(doc),notice=byId.get('kill-confirmation')!;
+        hud.showHitMarker();hud.showKillConfirmation('<Rat & Co>');
+        expect(crosshair.classList.contains('hit-confirmed')).toBe(false);
+        expect(crosshair.classList.contains('kill-confirmed')).toBe(true);
+        expect(notice.children[0].textContent).toBe('RAT DOWN · <Rat & Co>');
+        const first=notice.children[1].textContent;expect(MUNICIPAL_QUIPS.kill).toContain(first);
+        vi.advanceTimersByTime(200);hud.showHitMarker();
+        expect(crosshair.classList.contains('kill-confirmed')).toBe(true);
+        vi.advanceTimersByTime(301);expect(crosshair.classList.contains('kill-confirmed')).toBe(false);
+        expect(notice.style.display).toBe('block');
+        vi.advanceTimersByTime(1499);hud.showKillConfirmation('Another Rat');
+        expect(notice.children[1].textContent).not.toBe(first);
+        vi.advanceTimersByTime(401);expect(notice.style.display).toBe('block');
+        vi.advanceTimersByTime(2000);expect(notice.style.display).toBe('none');
+        hud.dispose();expect(byId.has('kill-confirmation')).toBe(false);
+        hud.showKillConfirmation('Too late');expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each(['death','reset','dispose'] as const)('clears lethal feedback on %s',transition=>{
+        const {doc,byId}=createHudDocument(),crosshair=doc.createElement('div');crosshair.id='crosshair';doc.body.appendChild(crosshair);
+        const hud=new GameHud(doc),notice=byId.get('kill-confirmation')!;hud.showKillConfirmation('Rat');
+        if(transition==='death')hud.showRespawn(Date.now()+3000);
+        else if(transition==='reset')hud.hideVictory();
+        else hud.dispose();
+        expect(crosshair.classList.contains('kill-confirmed')).toBe(false);
+        expect(notice.style.display).toBe('none');
+        hud.dispose();expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('plays death/respawn cues once and prevents an old exit animation hiding a new death',()=>{
         const {doc,byId}=createHudDocument(),feedback=vi.fn(),hud=new GameHud(doc,undefined,feedback);
         const overlay=byId.get('respawn-overlay')!,animations:Array<{cancel:ReturnType<typeof vi.fn>;onfinish?:()=>void}>=[];

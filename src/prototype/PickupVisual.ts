@@ -14,7 +14,7 @@ export class PickupVisual {
     private availableAt=0;
     private pending=false;
     private restock?:PickupRespawnVisual;
-    constructor(scene:THREE.Scene,kind:PickupKind){
+    constructor(scene:THREE.Scene,private readonly kind:PickupKind){
         const steel=new THREE.MeshStandardMaterial({color:0xd8e2ed,metalness:.8,roughness:.22,emissive:0x8b9aad,emissiveIntensity:.24});
         const dark=new THREE.MeshStandardMaterial({color:0x29252a,metalness:.45,roughness:.55});
         const accent=new THREE.MeshStandardMaterial({color:kind==='hustle'?0xda2417:kind==='quick-fix'?0x66e79a:0xe6edf6,
@@ -76,7 +76,7 @@ export class PickupVisual {
         const unavailable=now<this.availableAt,empty=unavailable||this.pending;
         this.item.visible=!empty;
         if(unavailable&&camera){
-            if(!this.restock){this.restock=new PickupRespawnVisual();this.root.add(this.restock.root);}
+            if(!this.restock){this.restock=new PickupRespawnVisual(this.kind);this.root.add(this.restock.root);}
             this.restock.update(now,this.availableAt,camera);
         }
         if(this.restock)this.restock.root.visible=unavailable;

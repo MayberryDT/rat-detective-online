@@ -834,8 +834,12 @@ export class GameRoom extends DurableObject<Env> {
     const from={x:player.x,y:player.y,z:player.z};
     const bounded = clampPosition(message.position);
     const previousAt=this.lastAcceptedMovementAt.get(playerId)??this.lastActiveAt.get(playerId)??at;
-    const accepted=!bounded.corrected&&isPlausibleMovement(from,bounded.position,at-previousAt)&&
-      (this.chaos?.movementPathClear(from,bounded.position)??true);
+    // Character physics already resolves the authored city for humans and hosted
+    // bots. Repeating that work as a synchronous ray for every 20 Hz pose both
+    // stalls the room and rejects valid corner/landing motion, most visibly at
+    // Hot Pursuit speed. Keep the finite authority envelope without a second,
+    // geometrically different collision controller.
+    const accepted=!bounded.corrected&&isPlausibleMovement(from,bounded.position,at-previousAt);
     const position=accepted?bounded.position:from,corrected=!accepted;
     if(accepted)this.lastAcceptedMovementAt.set(playerId,at);
     player.x = position.x;
