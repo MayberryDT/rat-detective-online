@@ -2,7 +2,7 @@
 
 Verified from source and production on **2026-09-12**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
-## Unreleased security hardening — September 12
+## Current production security hardening — September 12
 
 The working tree now restricts public admission to canonical matchmaking, checks
 browser WebSocket Origin, applies a Cloudflare admission rate limiter, and returns
@@ -13,9 +13,11 @@ remote capacity receipt path is fail-closed against shell metacharacters.
 
 The complete local suite has **1,024 passing tests**; typecheck, production build
 and the high-severity dependency audit pass with zero known vulnerabilities.
-These changes are **not deployed**. See the [security hardening receipt](verification/security-hardening-2026-09-12.md).
+Release commit **`3b19a1f`** is live at https://ratdetective.online/ on Worker
+**`02bddcbd-cf04-485f-9d06-b74afee55f96`**. See the
+[security hardening production receipt](verification/security-hardening-2026-09-12.md).
 
-## Current production release — September 12
+## Preceding production release — September 12 animations
 
 Tyler accepted the full exaggerated animation set and the corrected gameplay
 preview, then explicitly authorized committing everything and publishing it live.
