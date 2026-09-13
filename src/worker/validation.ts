@@ -26,8 +26,11 @@ export const MOVEMENT_ENVELOPE = {
   maxElapsedMs: 2_000,
   horizontalSpeed: 35,
   verticalSpeed: 110,
-  horizontalSlack: 0.5,
-  verticalSlack: 0.75,
+  // One full client pose must survive edge delivery that compresses two 50 ms
+  // updates into the same server clock tick. Gross displacement is still bounded
+  // by the speed component and the two-second accumulation cap.
+  horizontalSlack: 2,
+  verticalSlack: 6,
 } as const;
 
 const SHOT_ORIGIN_MAX_DISTANCE = 12;

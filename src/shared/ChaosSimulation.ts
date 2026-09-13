@@ -253,18 +253,14 @@ export class ChaosSimulation {
         this.pickupApproaches.set(playerId,{seq,at,p:{x:from.x,y:from.y+.8,z:from.z}});
         const player=this.players.get(playerId);if(player){player.x=to.x;player.y=to.y;player.z=to.z;}
     }
-    /** Reject a client segment that passes a rat-sized torso through authored
-     * scenery or control cabinets. Dynamic rats/cases stay physical comedy, not
-     * anti-cheat walls; only the static authoritative city blocks movement. */
+    /** Reject a client segment whose torso center crosses authored scenery or
+     * control cabinets. A volume sweep can begin in valid floor/wall contact and
+     * trap ordinary client physics in a correction loop, so the live guard stays
+     * deliberately narrower than the local character controller. */
     movementPathClear(from:Vec3Data,to:Vec3Data):boolean {
         if(Math.hypot(to.x-from.x,to.y-from.y,to.z-from.z)<1e-6)return true;
         const start=new C.Vec3(from.x,from.y+.9,from.z),end=new C.Vec3(to.x,to.y+.9,to.z);
-        if(this.ray(start,end,1).hasHit)return false;
-        const hit=this.rayQuery.sphere(start,end,.42,1,body=>{
-            const kind=this.targets.get(body)?.kind;
-            return kind==='world'||kind==='dispatch'||kind==='pressure';
-        });
-        return !hit.hasHit;
+        return !this.ray(start,end,1).hasHit;
     }
     private interactionPoint(player:PlayerData,target:Vec3Data,now:number):C.Vec3 {
         const reach={x:player.x,y:player.y+.8,z:player.z},previous=this.pickupApproaches.get(player.id);
