@@ -1,5 +1,10 @@
 # Character reactions — September 12, 2026
 
+**Subsequently released:** Tyler accepted the corrected gameplay preview and
+requested everything committed and published. See the
+[production receipt](animation-production-2026-09-12.md). The preview-stage
+measurements and scope below are historical.
+
 **Later gameplay acceptance:** Tyler approved the animations in gameplay and
 requested explosion self damage plus investigation of a delayed Chain of Custody
 delivery before release. The animation preview below is superseded by the

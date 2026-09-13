@@ -2,74 +2,47 @@
 
 Verified from source and production on **2026-09-12**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
-## Private-preview follow-up — September 12 (production unchanged)
-
-**Exaggerated character reactions accepted in gameplay:** Tyler approved the full
-animation set, then requested explosion self damage and investigation of a delayed
-Chain of Custody delivery before release. Planted Evidence and Improper Disposal
-cheese now hurt their initiator without awarding self-kill points. Ordinary shots
-remain self-safe; Ironclad still reflects explosion balls. Carried-case prediction
-now clears on delivery, confirmed ownership, round/epoch changes and reset, and
-late cancelled acknowledgements cannot resurrect it.
-
-The stale case prediction is reproduced and fixed. The exact reported playthrough
-was not captured: tests confirm immediate authoritative relocation on deliveries
-one and two, and a win only on three, including compact snapshots and the accepted
-animation renderer. A one-point server win has not been reproduced and the link
-between the stale prediction and Tyler's specific incident remains unconfirmed.
-**1,019 tests**, typecheck and both builds pass. Accepted model, animation, entity
-and session files match the preceding approved preview.
-
-[Audible updated playtest](http://127.0.0.1:5197/?room=graybox-benchmark-match-explosion-delivery-r2)
-uses frozen matching client/Worker `af403974-92c4-4faf-a276-622407c5da49`, protocol 15,
-normal eight-rat backfill and the 16-rat cap. Expires **September 12 at 9:49 PM Pacific**.
-All 56 served assets and 158 source hashes match; a separate protocol probe verified
-seven bots with one human and six with two. Production remains unchanged. This
-replaces the preceding animation preview on the same port. Chain of Custody needs
-Tyler's follow-up playtest before release.
-[Fixes, verification and remaining uncertainty](verification/explosion-delivery-2026-09-12.md).
-[Accepted animations and preceding studio studies](verification/character-reactions-studio-2026-09-12.md).
-
-**Animation pass accepted in the studio:** Tyler approved the starts/stops,
-head counter-motion, hat lag, asymmetric reactive ears and tail settling.
-The accepted body/weapon/carry transforms remain intact. An Animation selector
-compares accepted/candidate motion on the same model, with a repeatable movement
-sequence. **972 tests**, typecheck and both builds passed for this preceding pass.
-It forms the basis of the later full reactions; gameplay review remains separate.
-This preceding movement pass is included in the accepted full animation preview
-above. Tyler's later request authorizes that private preview; production stays unchanged.
-[Studio and verification](verification/animation-polish-studio-2026-09-12.md).
-The accepted junction changes below are included in the new animation preview.
-
-The rear coat seam is now one centered strip following the coat profile. Pickup
-feedback uses only the illustrated bottom cards; Quick Fix has a matching green
-medical card with a brief “FULL HP” confirmation. The authoritative kill event now
-owns the lethal X/hit sound, while nonlethal damage retains existing feedback.
-Tyler then approved replacing all four medkits with open junction sites at
-X/Z (-60,-102), (70,-102), (-60,130) and (90,95), all at Y .7. Explicit positions
-replace spawn-point snapping; retired IDs cannot return from saved rooms. Other
-upgrades, instant full healing and 45-second restock remain unchanged.
-**965 tests**, typecheck and build pass; hosted coordinates/client parity verified,
-Tyler accepted this combined gameplay preview and requested it committed.
-Its former port-5195 relay has been replaced by the animation preview above.
-See [junction placement and verification](verification/quick-fix-junctions-2026-09-12.md)
-and [preceding seam/card/hit changes](verification/seam-pickup-hit-feedback-2026-09-12.md).
-
 ## Current production release — September 12
 
-Tyler accepted the final gameplay model and requested all current changes committed,
-with the parallel netplay branch merged. The accepted shared-fedora, three-button
-coat and 1,024-appearance palette retain the short shoulder-pivot pistol sleeve,
-longer matching case sleeve and no sleeve without a case.
+Tyler accepted the full exaggerated animation set and the corrected gameplay
+preview, then explicitly authorized committing everything and publishing it live.
+**Live application `32bcf72`, Worker `2a470c22-424d-4bbf-823f-2dbb19c7c4cc`** at
+https://ratdetective.online/, protocol **15**. Local main is pushed to the existing
+origin/master upstream. Client and Worker were deployed together; existing tabs
+should reload. Public room `public-live-v2`, world seed341283204, namespace,
+normal eight-rat backfill and the 16-rat cap remain intact.
 
-**Live:** application `3a6a1d2`, Worker `21f6b8c1-4770-4691-92fa-71b5096f8a7b`,
-https://ratdetective.online/. Local main is pushed to origin/master; topic branches
-are removed, with older unique work preserved in archive tags.
+The release includes accepted starts/stops/turns, head/hat/ear/tail follow-through,
+firing focus, jump/launcher/air/landing, case weight/pickup/loss, hit/reflection,
+Hot Pursuit, Quick Fix, observant idle and delivery reactions. The model, palette,
+shoulder camera, immediate controls and weapon trajectory are preserved.
+It also publishes the preceding coat seam, illustrated pickup cards, authoritative
+kill feedback and four open-junction Quick Fix sites from commit `69f3e70`.
 
-Protocol **15** adds sequenced firing poses, bounded historical projectile
-collision, radius-aware sweeps, direct shot/pickup outcomes, reversible pickup
-anticipation and bounded diagnostics. The merge preserves the latest model over
-the older art snapshot captured by the netplay worktree. See the
+Planted Evidence and Improper Disposal explosion balls can now hurt their
+initiator, without awarding self-kill points or objective credit. Ordinary shots
+remain self-safe; Ironclad still reflects explosive cheese. Carried-case prediction
+clears on delivery, confirmed ownership, round/epoch changes and reset; cancelled
+late acknowledgements cannot reattach it. Tests verify first/second delivery
+relocation and a third-delivery win through compact snapshots and the accepted
+animation renderer. The original reported one-delivery win was not reproduced;
+Tyler accepted the corrected preview and authorized release after that limitation
+was reported.
+
+**1,019 tests**, typecheck and both builds pass; dependency audit is clean.
+[Production receipt and live verification](verification/animation-production-2026-09-12.md).
+[Explosion and delivery investigation](verification/explosion-delivery-2026-09-12.md).
+[Accepted character reactions](verification/character-reactions-studio-2026-09-12.md).
+[Movement comparison](verification/animation-polish-studio-2026-09-12.md).
+[Junction placement](verification/quick-fix-junctions-2026-09-12.md).
+
+## Preceding production release — September 12 model/netplay integration
+
+Application `3a6a1d2`, Worker `21f6b8c1-4770-4691-92fa-71b5096f8a7b` introduced
+the accepted fedora, three-button coat, 1,024-appearance palette, shoulder-pivot
+pistol sleeve and matching case sleeve together with protocol15 netplay.
+Sequenced firing poses, bounded historical collision, sphere sweeps, direct action
+outcomes and reversible anticipation remain in the new release. See the
 [integration receipt](verification/model-netplay-integration-2026-09-12.md) and
 [netplay implementation](verification/netplay-crispness-2026-09-12.md).
 

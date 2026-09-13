@@ -1,5 +1,10 @@
 # Explosion damage and carried-case correction — September 12, 2026
 
+**Subsequently released:** Tyler accepted the corrected gameplay preview and
+requested everything committed and published. See the
+[production receipt](animation-production-2026-09-12.md). The preview-stage
+measurements and scope below are historical.
+
 Tyler accepted the exaggerated animations in gameplay, then requested two fixes
 before release: Planted Evidence and Improper Disposal explosions should also
 hurt their initiator; investigate a Chain of Custody case apparently staying in
