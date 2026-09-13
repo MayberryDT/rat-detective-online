@@ -11,10 +11,14 @@ static collision-path checks; malformed quaternions are rejected. Resume tokens
 rotate before replacement, private bearer verification is constant-time, and the
 remote capacity receipt path is fail-closed against shell metacharacters.
 
-The complete local suite has **1,024 passing tests**; typecheck, production build
+The corrected suite has **1,026 passing tests**; typecheck, production build
 and the high-severity dependency audit pass with zero known vulnerabilities.
-Release commit **`3b19a1f`** is live at https://ratdetective.online/ on Worker
-**`02bddcbd-cf04-485f-9d06-b74afee55f96`**. See the
+Security commit **`3b19a1f`** plus movement/HUD hotfix **`bd3ed20`** are live at
+https://ratdetective.online/ on Worker **`fea69807-c936-47cf-98a1-22171a59143a`**.
+The first security deployment was rolled back after its volume movement sweep
+corrected normal client motion; the replacement uses a center-path guard with
+delivery slack and keeps the Excessive Force card visible during incident roulette.
+See the
 [security hardening production receipt](verification/security-hardening-2026-09-12.md).
 
 ## Preceding production release — September 12 animations
