@@ -4,7 +4,9 @@ import { createPlayer } from '../../src/worker/gameState';
 import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
 import { DISPATCH_STATIONS, type ChaosState } from '../../src/shared/chaosState';
-import { createAssignment, destinationPoint, CHAIN_ROUTE } from '../../src/shared/assignments';
+import { createAssignment, destinationPoint, CHAIN_ROUTE, ASSIGNMENT_IDS } from '../../src/shared/assignments';
+import { activeZone } from '../../src/shared/jurisdiction';
+import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { PICKUP_TUNING } from '../../src/shared/pickups';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
@@ -351,13 +353,13 @@ it('intercepts a distant Chain carrier at the next landmark when already closer 
  expect(vi.mocked(navigation.route).mock.calls.at(-1)?.[1]).not.toEqual(destinationPoint('icebox'));
 });
 
-it.each([null,'me','holder'])('prioritizes a reachable power-up over loose case, delivery and carriers (owner=%s)',owner=>{
+it.each([null,'me','holder'])('keeps objective priority over an unnecessary buff refresh (owner=%s)',owner=>{
     const {brain,self,holder}=fixture(),s=state(owner);
     s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:5,y:.7,z:0}];
-    s.buffs={[self.id]:{ironcladUntil:9000}}; // Refreshes are useful too.
+    s.buffs={[self.id]:{ironcladUntil:9000}}; // Still eight seconds left; do the assignment.
     brain.step(1000,self,[holder],s,()=>true,false,true);
-    expect(brain.objective).toBe('pickup');expect(brain.goalKey).toBe('pickup:alibi-records-upper');
+    expect(brain.objective).not.toBe('pickup');
     s.pickups=[];brain.step(1400,self,[holder],s,()=>true,false,true);
     expect(brain.objective).not.toBe('pickup');
 });
@@ -413,4 +415,52 @@ it('pursues a rooftop carrier instead of taking a long armor detour',()=>{
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:15,y:8.7,z:0}];
     brain.step(1000,self,[holder],s,()=>false,false,true);
     expect(brain.objective).toBe('carrier');
+});
+
+
+describe('assignment commitment',()=>{
+ it.each(ASSIGNMENT_IDS)('%s pursues the case instead of an off-route supply while still firing',id=>{
+  const {brain,self,near}=fixture(),s=state();s.assignment=createAssignment(id,0);s.assignment.phase='active';
+  s.pickups=[{id:'side-trip',kind:'hustle',x:0,y:.7,z:18}];
+  brain.step(1000,self,[near],s,()=>true,false,true);expect(brain.objective).toBe('case');
+  const intent=brain.step(1500,self,[near],s,()=>true,false,true);expect(intent.x).toBeGreaterThan(0);aimedNear(intent.shoot,self,near);
+ });
+ it.each(ASSIGNMENT_IDS)('%s keeps helpful on-route pickups brief and returns to work',id=>{
+  const {brain,self}=fixture(),s=state();s.assignment=createAssignment(id,0);s.assignment.phase='active';
+  s.pickups=[{id:'on-route',kind:'hustle',x:6,y:.7,z:1}];
+  brain.step(1000,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
+  brain.step(3400,self,[],s,()=>true,false,true);expect(brain.objective).toBe('case');
+  brain.step(4000,self,[],s,()=>true,false,true);expect(brain.objective).toBe('case');
+  brain.reset();brain.step(4100,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
+ });
+ it('grabs a close case before supplies, except for an immediately reachable emergency heal',()=>{
+  const {brain,self}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';s.case.p.x=5;
+  s.pickups=[{id:'heal',kind:'quick-fix',x:2,y:.7,z:0}];self.hp=2;
+  brain.step(1000,self,[],s,()=>true,false,true);expect(brain.objective).toBe('case');
+  self.hp=1;brain.step(1400,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
+ });
+ it('does not start a mapped roof excursion while a live assignment case is available',()=>{
+  const {brain,self}=fixture(),s=state();s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';s.case.p.x=100;
+  s.pickups=[{id:'upper-armor',kind:'ironclad',x:15,y:8.7,z:0}];
+  brain.step(1000,self,[],s,()=>false,false,true);expect(brain.objective).toBe('case');
+  s.case.returningUntil=10000;brain.step(1400,self,[],s,()=>false,false,true);expect(brain.objective).toBe('pickup');
+ });
+ it.each([0,1,2])('Jurisdiction carrier lane %s keeps scoring through the warning instead of leaving early',seed=>{
+  const {brain,self}=fixture(seed),s=state('me');s.assignment=createAssignment('jurisdiction',0);s.assignment.phase='active';
+  const j=s.assignment.jurisdiction!,zone=JURISDICTION_ZONES[activeZone(j)];j.remainingMs=1000;Object.assign(self,zone.posts[seed]);
+  s.pickups=[{id:'outside',kind:'quick-fix',x:self.x,y:self.y+.7,z:self.z+18}];self.hp=1;
+  for(const t of [1000,4500,7000]){
+   const intent=brain.step(t,self,[],s,()=>true,false,true);expect(brain.objective).toBe('zone-hold');expect(Math.hypot(intent.x,intent.z)).toBe(0);
+  }
+ });
+ it('pursues the currently scoring carrier rather than camping the announced next zone',()=>{
+  const {brain,self,holder}=fixture(0),s=state('holder');s.assignment=createAssignment('jurisdiction',0);s.assignment.phase='active';
+  const j=s.assignment.jurisdiction!;j.remainingMs=5000;Object.assign(holder,JURISDICTION_ZONES[activeZone(j)].posts[0]);self.x=holder.x+70;self.z=holder.z;self.y=holder.y;
+  brain.step(1000,self,[holder],s,()=>false,false,true);expect(brain.objective).toBe('carrier');
+ });
+ it('uses a supported escape with Closing Time instead of chasing an attacker when no patrol target is nearby',()=>{
+  const {brain,self,near,navigation}=fixture(),s=state('me');s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';navigation.localStep=vi.fn((_from,to)=>to);
+  brain.step(1000,self,[near],s,()=>true,false,true);expect(brain.objective).toBe('evade');
+  aimedNear(brain.step(1500,self,[near],s,()=>true,false,true).shoot,self,near);
+ });
 });

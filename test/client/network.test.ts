@@ -20,6 +20,7 @@ const player = { id: 'one', name: 'Rat', ...appearance, x: 15, y: 2, z: 15,
     qx: 0, qy: 0, qz: 0, qw: 1, meshQx: 0, meshQy: 0, meshQz: 0, meshQw: 1, hp: 3, kills: 0, deaths: 0 };
 const welcome = () => ({ type: 'welcome', protocolVersion: PROTOCOL_VERSION, id: player.id,
     player, players: { one: player }, world: { seed: 1, version: 1 }, round: { phase: 'playing' }, serverTime: Date.now() });
+const publicOverflow='public-live-v2-87654321-4321-4123-8123-cba987654321';
 
 describe('network session transport', () => {
     let sockets: FakeSocket[];
@@ -50,6 +51,13 @@ describe('network session transport', () => {
         const explicit = new URL(resolveWebSocketUrl('ws://localhost/ws?incidents=planted&incident=auto'));
         expect(explicit.searchParams.get('incidents')).toBe('planted');
         expect(explicit.searchParams.get('incident')).toBe('auto');
+    });
+
+    it('forwards only validated public invitation preferences from the page URL',()=>{
+        vi.stubGlobal('window',{location:{href:`https://ratdetective.online/?preferred=${publicOverflow}`,search:`?preferred=${publicOverflow}`}});
+        expect(new URL(resolveWebSocketUrl()).searchParams.get('preferred')).toBe(publicOverflow);
+        vi.stubGlobal('window',{location:{href:'https://ratdetective.online/?preferred=graybox-practice-secret',search:'?preferred=graybox-practice-secret'}});
+        expect(new URL(resolveWebSocketUrl()).searchParams.has('preferred')).toBe(false);
     });
 
     it('prepares one silent title connection and joins over it only after entry',()=>{
@@ -86,6 +94,22 @@ describe('network session transport', () => {
         network.connect('Rat',appearance);expect(sockets).toHaveLength(1);expect(sockets[0].sent).toHaveLength(1);
     });
 
+    it('does not prepare the canonical socket for an overflow invitation and reports the actual landing room',()=>{
+        const states:Array<[string,string|undefined]>=[],urls:string[]=[];
+        network.destroy();network=makeNetwork({url:`ws://localhost/ws?preferred=${publicOverflow}`,createSocket:url=>{
+            urls.push(url);const socket=new FakeSocket();sockets.push(socket);return socket as unknown as WebSocket;
+        }});network.onState=(state,message)=>states.push([state,message]);
+        network.prepare();expect(sockets).toHaveLength(0);
+        network.connect('Rat',appearance);expect(new URL(urls[0]).searchParams.get('preferred')).toBe(publicOverflow);
+        sockets[0].open();sockets[0].receive({...welcome(),matchRoom:publicOverflow});
+        expect(states.at(-1)).toEqual(['playing','Joined invited City 87654321.']);
+
+        network.destroy();states.length=0;
+        network=makeNetwork({url:`ws://localhost/ws?preferred=${publicOverflow}`});network.onState=(state,message)=>states.push([state,message]);
+        network.connect('Rat',appearance);sockets.at(-1)!.open();sockets.at(-1)!.receive({...welcome(),matchRoom:'public-live-v2'});
+        expect(states.at(-1)).toEqual(['playing','Invited City 87654321 was unavailable. Joined Public city.']);
+    });
+
     it('advertises delta snapshots by default and preserves explicit v1 fallback',()=>{
         const urls:string[]=[];
         for(const chaosTransport of [undefined,'compact-v1'] as const){
@@ -115,16 +139,63 @@ describe('network session transport', () => {
         const resumeStorage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);},removeItem:(key:string)=>{data.delete(key);}};
         const options={resumeStorage,createSocket:(url:string)=>{urls.push(url);const socket=new FakeSocket();sockets.push(socket);return socket as unknown as WebSocket;}};
         network.destroy();network=makeNetwork(options);network.connect('Rat',appearance);sockets[0].open();
-        sockets[0].receive({...welcome(),resumeToken:token,matchRoom:'public-live-v2-overflow'});
+        sockets[0].receive({...welcome(),resumeToken:token,matchRoom:publicOverflow});
         sockets[0].close();vi.advanceTimersByTime(500);sockets[1].open();
         expect(JSON.parse(sockets[1].sent[0]).resumeToken).toBe(token);
-        expect(urls[1]).toContain('resume=1');expect(urls[1]).toContain('preferred=public-live-v2-overflow');
+        expect(urls[1]).toContain('resume=1');expect(urls[1]).toContain(`preferred=${publicOverflow}`);
         expect(urls[1]).not.toContain(token);
         network.destroy();network=makeNetwork(options);network.prepare();expect(sockets).toHaveLength(2);
         network.connect('Rat',appearance);sockets[2].open();expect(JSON.parse(sockets[2].sent[0]).resumeToken).toBe(token);
         sockets[2].receive({type:'error',code:'resume-unavailable',message:'Expired'});vi.advanceTimersByTime(500);sockets[3].open();
         expect(JSON.parse(sockets[3].sent[0]).resumeToken).toBeUndefined();expect(urls[3]).not.toContain('preferred=');
         expect(urls[3]).not.toContain('resume=');expect(data.size).toBe(0);
+    });
+
+    it('uses explicit invitation intent instead of a saved ordinary-return credential',()=>{
+        const token='12345678-1234-4123-8123-123456789abc',data=new Map<string,string>([['rat-detective-resume',JSON.stringify({
+            scope:'ws://localhost/ws?room=public-live-v2',token,room:'public-live-v2',
+        })]]);
+        const resumeStorage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);},removeItem:(key:string)=>{data.delete(key);}};
+        network.destroy();network=makeNetwork({url:`ws://localhost/ws?preferred=${publicOverflow}`,resumeStorage});
+        network.connect('Rat',appearance);sockets.at(-1)!.open();
+        expect(JSON.parse(sockets.at(-1)!.sent[0]).resumeToken).toBeUndefined();
+        expect(data.has('rat-detective-resume')).toBe(true);
+    });
+
+    it('rejects a private-room invitation and enters ordinary public matchmaking without resuming',()=>{
+        const token='12345678-1234-4123-8123-123456789abc',data=new Map<string,string>([['rat-detective-resume',JSON.stringify({
+            scope:'ws://localhost/ws?room=public-live-v2',token,room:'public-live-v2',
+        })]]),urls:string[]=[];
+        const resumeStorage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);},removeItem:(key:string)=>{data.delete(key);}};
+        network.destroy();network=makeNetwork({url:'ws://localhost/ws?preferred=graybox-practice-secret',resumeStorage,createSocket:url=>{
+            urls.push(url);const socket=new FakeSocket();sockets.push(socket);return socket as unknown as WebSocket;
+        }});network.connect('Rat',appearance);sockets.at(-1)!.open();
+        expect(new URL(urls[0]).searchParams.has('preferred')).toBe(false);
+        expect(JSON.parse(sockets.at(-1)!.sent[0]).resumeToken).toBeUndefined();
+    });
+
+    it('consumes a successful page invitation so same-tab reload resumes the invited rat',()=>{
+        const token='12345678-1234-4123-8123-123456789abc',data=new Map<string,string>(),urls:string[]=[];
+        let page=new URL(`https://ratdetective.online/?mute=1&preferred=${publicOverflow}#dispatch`);
+        const location={get href(){return page.href;},get search(){return page.search;}};
+        const history={state:{kept:true},replaceState:vi.fn((_state:unknown,_unused:string,next:string|URL|null)=>{page=new URL(String(next),page);})};
+        const resumeStorage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);},removeItem:(key:string)=>{data.delete(key);}};
+        vi.stubGlobal('window',{location,history,sessionStorage:resumeStorage});
+        const options={random:()=>1,joinTimeoutMs:100,heartbeatMs:1_000,maxRetries:2,resumeStorage,
+            createSocket:(url:string)=>{urls.push(url);const socket=new FakeSocket();sockets.push(socket);return socket as unknown as WebSocket;}};
+        network.destroy();network=new NetworkManager(options);
+        network.connect('Rat',appearance);sockets.at(-1)!.open();
+        sockets.at(-1)!.receive({...welcome(),resumeToken:token,matchRoom:publicOverflow});
+        expect(history.replaceState).toHaveBeenCalledOnce();
+        expect(page.href).toBe('https://ratdetective.online/?mute=1#dispatch');
+        expect(JSON.parse(data.get('rat-detective-resume')!)).toMatchObject({token,room:publicOverflow});
+
+        network.destroy();network=new NetworkManager(options);network.prepare();
+        expect(sockets).toHaveLength(1);
+        network.connect('Rat',appearance);sockets.at(-1)!.open();
+        expect(JSON.parse(sockets.at(-1)!.sent[0]).resumeToken).toBe(token);
+        expect(new URL(urls.at(-1)!).searchParams.get('preferred')).toBe(publicOverflow);
+        expect(new URL(urls.at(-1)!).searchParams.get('resume')).toBe('1');
     });
 
     it('does not fight another tab for the same resumed rat',()=>{

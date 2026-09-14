@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAY_BOUNDS, RateLimiter, clampPosition, isPlausibleMovement, isPlausiblePosition, isPlausibleShot } from '../../src/worker/validation';
+import { PLAY_BOUNDS, RateLimiter, clampPosition, createMovementAllowance, consumeMovementAllowance, isPlausiblePosition, isPlausibleShot } from '../../src/worker/validation';
 
 describe('rate windows', () => {
   it('reclaims thousands of connection namespaces without touching a live player',()=>{
@@ -49,13 +49,33 @@ describe('play bounds', () => {
     expect(isPlausibleShot({ x: 0, y: 3.45, z: 0 }, { x: 0, y: 0, z: 0 }, player)).toBe(false);
   });
 
-  it('uses bounded server elapsed time for walking and launcher displacement',()=>{
-    const from={x:0,y:0,z:0};
-    expect(isPlausibleMovement(from,{x:1.8,y:6,z:0},0)).toBe(true);
-    expect(isPlausibleMovement(from,{x:1.5,y:4,z:0},40)).toBe(true);
-    expect(isPlausibleMovement(from,{x:18*1.45*.05,y:0,z:0},50)).toBe(true);
-    expect(isPlausibleMovement(from,{x:20,y:0,z:0},40)).toBe(false);
-    expect(isPlausibleMovement(from,{x:0,y:90,z:0},1000)).toBe(true);
-    expect(isPlausibleMovement(from,{x:0,y:240,z:0},60_000)).toBe(false);
+  it('bounds server-time accumulation without spending the budget on rejected poses',()=>{
+    const from={x:0,y:0,z:0},budget=createMovementAllowance(0);
+    expect(consumeMovementAllowance(budget,from,{x:20,y:0,z:0},40)).toBe(false);
+    expect(consumeMovementAllowance(budget,from,{x:1.5,y:4,z:0},40)).toBe(true);
+    expect(consumeMovementAllowance(budget,from,{x:0,y:240,z:0},60000)).toBe(false);
+    expect(budget.horizontal).toBe(72);expect(budget.vertical).toBe(226);
+    expect(consumeMovementAllowance(budget,from,{x:0,y:90,z:0},60000)).toBe(true);
+  });
+
+  it('accepts delayed boosted walking and launch batches but rejects sustained excess speed',()=>{
+    for(const [horizontal,vertical] of [[18,0],[18*1.45,0],[18*1.45,90]]){
+      const budget=createMovementAllowance(0);let from={x:0,y:0,z:0};
+      for(let frame=1;frame<=80;frame++){
+        const to={x:horizontal*frame*.125,y:vertical*frame*.125,z:0};
+        // Four 8-fps poses arrive together every half second; shots/pickups
+        // can deliver additional same-pose updates inside the same batch.
+        const at=Math.ceil(frame/4)*500;
+        expect(consumeMovementAllowance(budget,from,to,at)).toBe(true);
+        expect(consumeMovementAllowance(budget,to,to,at)).toBe(true);from=to;
+      }
+    }
+    const fast=createMovementAllowance(0);
+    expect(consumeMovementAllowance(fast,{x:0,y:0,z:0},{x:2,y:0,z:0},0)).toBe(true);
+    expect(consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:4,y:0,z:0},0)).toBe(false);
+    expect(consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:6,y:0,z:0},100)).toBe(false);
+    // Backward clock readings do not mint a new allowance.
+    const remaining=fast.horizontal;consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:2,y:0,z:0},50);
+    expect(fast.horizontal).toBe(remaining);expect(fast.at).toBe(100);
   });
 });

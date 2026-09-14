@@ -1,3 +1,5 @@
+import { activeZone } from '../../src/shared/jurisdiction';
+import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { env, evictDurableObject, runInDurableObject, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GameRoom } from '../../src/worker/GameRoom';
@@ -14,7 +16,7 @@ const rooms:DurableObjectStub<GameRoom>[]=[];
 const appearance={hatType:'fedora',hatColor:1,furColor:2,coatColor:3};
 function room(){const name=`graybox-assignment-${crypto.randomUUID()}`,stub=env.GAME_ROOM.getByName(name);rooms.push(stub);return{name,stub};}
 function pause(game:Internals){if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;}
-async function open(name:string,compact=false){
+async function open(name:string,compact=false,resumeToken?:string){
     const response=await SELF.fetch(`http://localhost/ws?room=${name}${compact?'&chaos=compact-v2':''}`,{headers:{Upgrade:'websocket',Origin:'http://localhost'}});
     expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
     const messages:ServerMessage[]=[],invalid:string[]=[],decoder=new DeliveryDecoder();
@@ -32,7 +34,7 @@ async function open(name:string,compact=false){
         }
         throw new Error(`No ${type}; invalid packets: ${invalid.join('\n')}`);
     };
-    ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:compact?'Compact Rat':'Inspector Brie',appearance}));
+    ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:compact?'Compact Rat':'Inspector Brie',appearance,...(resumeToken?{resumeToken}:{})}));
     const welcome=await wait('welcome');
     return {ws,messages,invalid,wait,welcome};
 }
@@ -78,11 +80,11 @@ describe('shared assignment room lifecycle',()=>{
         expect(await stub.configureAssignment('closing-time')).toBe(false);
         await runInDurableObject(stub,instance=>pause(instance as unknown as Internals));
     });
-    it('delivers the same three physical finishes and two shuffle cycles to ordinary and compact clients',async()=>{
+    it('delivers the same four physical finishes and two shuffle cycles to ordinary and compact clients',async()=>{
         const {name,stub}=room(),first=await open(name),second=await open(name,true);
         expect(first.welcome.round.assignment?.roundId).toBe(second.welcome.round.assignment?.roundId);
         const sequence:AssignmentId[]=[];
-        for(let round=0;round<6;round++){
+        for(let round=0;round<ASSIGNMENT_IDS.length*2;round++){
             const completed=await runInDurableObject(stub,async(instance,ctx)=>{
                 const game=instance as unknown as Internals;pause(game);
                 const sim=game.chaos,a=game.players.get(first.welcome.id)!,b=game.players.get(second.welcome.id)!;
@@ -94,6 +96,8 @@ describe('shared assignment room lifecycle',()=>{
                         for(let i=0;i<10;i++){b.hp=3;await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:3},{x:0,y:0,z:-1});}
                     }else if(assignment.id==='closing-time'){
                         assignment.remainingMs=1;now+=1;sim.step(.001,now);
+                    }else if(assignment.jurisdiction){
+                        const j=assignment.jurisdiction;Object.assign(a,JURISDICTION_ZONES[activeZone(j)].posts[0]);j.heldMs[a.id]=59999;now++;sim.step(.001,now);
                     }else for(const id of assignment.destinations){
                         if(sim.assignmentState!.result)break;
                         if(!sim.caseHolderId){const p=sim.caseBody.position;Object.assign(a,{x:p.x,y:p.y-.8,z:p.z});sim.step(0,++now);expect(sim.caseHolderId).toBe(a.id);}
@@ -118,8 +122,8 @@ describe('shared assignment room lifecycle',()=>{
             const resetA=await first.wait('gameReset'),resetB=await second.wait('gameReset');
             expect(resetA.round.assignment).toEqual(resetB.round.assignment);
         }
-        for(let i=0;i<6;i+=3)expect(new Set(sequence.slice(i,i+3))).toEqual(new Set(ASSIGNMENT_IDS));
-        expect(sequence[2]).not.toBe(sequence[3]);expect(first.invalid).toEqual([]);expect(second.invalid).toEqual([]);
+        for(let i=0;i<sequence.length;i+=ASSIGNMENT_IDS.length)expect(new Set(sequence.slice(i,i+ASSIGNMENT_IDS.length))).toEqual(new Set(ASSIGNMENT_IDS));
+        expect(sequence[ASSIGNMENT_IDS.length-1]).not.toBe(sequence[ASSIGNMENT_IDS.length]);expect(first.invalid).toEqual([]);expect(second.invalid).toEqual([]);
         expect(first.messages.filter(m=>m.type==='gameWon')).toEqual([]);
     },20_000);
     it('restores personal deliveries, next destination and case identity for a late join after eviction',async()=>{
@@ -182,4 +186,24 @@ describe('shared assignment room lifecycle',()=>{
         await runInDurableObject(stub,(instance)=>{const game=instance as unknown as Internals;pause(game);game.finishAssignment();});
         expect(late.messages.filter(m=>m.type==='gameWon')).toEqual([]);expect(late.invalid).toEqual([]);
     });
+});
+
+it('retains Jurisdiction warning, personal progress and case across reconnect and eviction',async()=>{
+ const {name,stub}=room();await stub.configureAssignment('jurisdiction');const first=await open(name);
+ const saved=await runInDurableObject(stub,instance=>{
+  const game=instance as unknown as Internals;pause(game);const sim=game.chaos,a=game.players.get(first.welcome.id)!;
+  const now=sim.assignmentState!.liveAt+1;game.clock=()=>now;
+  const j=sim.assignmentState!.jurisdiction!,p=JURISDICTION_ZONES[activeZone(j)].posts[0];Object.assign(a,p);
+  sim.caseBody.position.set(p.x,p.y+.8,p.z);sim.caseBody.velocity.setZero();sim.step(0,now);expect(sim.caseHolderId).toBe(a.id);
+  j.heldMs[a.id]=12345;j.remainingMs=9000;game.persistPlayer(a,true);game.checkpointGame();return structuredClone(j);
+ });
+ await new Promise<void>(resolve=>{first.ws.addEventListener('close',()=>resolve(),{once:true});first.ws.close(1000,'reload');});
+ const resumed=await open(name,true,first.welcome.resumeToken);expect(resumed.welcome.id).toBe(first.welcome.id);
+ expect(resumed.welcome.round.assignment?.jurisdiction).toEqual(saved);
+ await runInDurableObject(stub,instance=>{const game=instance as unknown as Internals;pause(game);game.checkpointGame();});
+ await evictDurableObject(stub,{webSockets:'hibernate'});
+ const late=await open(name,true);const restored=late.welcome.round.assignment!.jurisdiction!;
+ expect(restored.order).toEqual(saved.order);expect(restored.nextOrder).toEqual(saved.nextOrder);
+ expect(restored.heldMs[first.welcome.id]).toBeGreaterThanOrEqual(12345);expect(restored.remainingMs).toBeLessThanOrEqual(9000);
+ expect(late.invalid).toEqual([]);await runInDurableObject(stub,instance=>pause(instance as unknown as Internals));
 });

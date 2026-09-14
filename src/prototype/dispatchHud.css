@@ -13,8 +13,8 @@
 .dispatch-hud[data-phase=active] .dispatch-alert-label{background:#28172f;color:#b7a3be}.dispatch-hud[data-phase=active] .dispatch-ledger{animation:incident-slam .38s ease-out both}.dispatch-hud[data-phase=active] .dispatch-time-track div{background:repeating-linear-gradient(115deg,#c391a8 0 8px,#7e4786 8px 13px)}
 .dispatch-hud[data-phase=ready] .dispatch-brief,.dispatch-hud[data-phase=cooldown] .dispatch-brief{display:none}
 
-/* Each assignment has its own silhouette and hierarchy. */
-.assignment-ledger{position:absolute;left:20px;top:24px;width:308px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;color:#cbbfcc;background:repeating-linear-gradient(0deg,#1a1022 0 3px,#1b1123 3px 4px);border:3px solid var(--ink);box-shadow:5px 6px 0 #160d25;rotate:-2deg}
+/* The score card stays visible in every mode, including roulette and briefing. */
+.assignment-ledger{z-index:2;position:absolute;left:20px;top:24px;width:308px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;color:#cbbfcc;background:repeating-linear-gradient(0deg,#1a1022 0 3px,#1b1123 3px 4px);border:3px solid var(--ink);box-shadow:5px 6px 0 #160d25;rotate:-2deg}
 .assignment-title{font:34px/.95 'Bangers',Impact,sans-serif;letter-spacing:1px;color:#d1c6cf}.assignment-counter{font:18px/1 'Bangers',Impact,sans-serif;letter-spacing:1px;color:#a897b0}.assignment-rule{display:none;margin:0}.assignment-progress{font:32px/1 'Bangers',Impact,sans-serif;letter-spacing:1px;color:#d4cbd0}.assignment-detail{padding:7px 8px;background:#110b18;color:#c9b784;font:20px/1.05 'Bangers',Impact,sans-serif;letter-spacing:.4px;rotate:1deg;text-align:center;overflow-wrap:anywhere}
 .assignment-track{height:6px;background:#0f0a14}.assignment-track i{display:block;height:100%;background:#665171;transform-origin:left}
 .assignment-rankings{padding:0;margin:0;list-style:none;display:grid;gap:5px}.assignment-rankings li{display:flex;align-items:center;gap:7px;border-bottom:1px dashed #3e2b48;padding:5px 0;font:23px/1 'Bangers',Impact,sans-serif;letter-spacing:.3px}.assignment-rankings li i{color:#a491b0;font:20px/1 'Bangers',Impact,sans-serif;width:16px}.assignment-rankings li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.assignment-rankings li b{font-weight:400;color:#baa6c6;font-variant-numeric:tabular-nums}.assignment-rankings li[data-local=true]{background:#2b1c35;box-shadow:-7px 0 #745885;padding-right:5px}
@@ -32,8 +32,6 @@
 .dispatch-roulette,.assignment-reveal{position:absolute;left:50%;top:28px;transform:translateX(-50%) rotate(-2deg);width:min(610px,90vw);color:#cbbfcc;background:repeating-linear-gradient(0deg,#1a1022 0 3px,#1b1123 3px 4px);border:4px solid #170e24;box-shadow:7px 7px #130b20;padding:16px 20px;animation:dispatch-arrival .3s ease-out}
 .roulette-heading{display:flex;justify-content:space-between;gap:10px;font:18px/1 'Bangers',Impact,sans-serif;letter-spacing:1px;color:#efb1cd}.roulette-window{position:relative;height:94px;overflow:hidden;border:3px solid #170e24;margin:12px 0;background:#140c1c}.roulette-strip{height:100%;will-change:transform}.incident-card{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:8px 28px}.incident-card small{font:14px/1 'Bangers',Impact,sans-serif;color:#c39ad1}.incident-card strong{font:clamp(27px,3.2vw,44px)/1 'Bangers',Impact,sans-serif;letter-spacing:1px;text-align:center}.roulette-pointer{position:absolute;left:6px;top:37%;color:#dbc58d;font-size:23px;font-style:normal}.roulette-description{font:17px/1.25 'Outfit',Arial,sans-serif;text-align:center;margin:8px 0;text-transform:none}.roulette-stamp{position:absolute;right:10px;top:-13px;rotate:5deg;font:23px/1 'Bangers',Impact,sans-serif;letter-spacing:1px;border:3px solid #170e24;padding:8px;background:#28172f;color:#b7a3be;box-shadow:3px 3px #170e24;animation:incident-slam .3s ease-out}.roulette-footer{display:flex;justify-content:space-between;gap:8px;padding-top:8px;font:14px/1 'Bangers',Impact,sans-serif;color:#ceabd8}.dispatch-roulette.is-settled .roulette-heading{visibility:hidden}.dispatch-roulette.roulette-leaving{animation:dispatch-departure .18s ease-in both}
 .assignment-reveal{display:grid;gap:10px;text-align:center;padding:24px}.assignment-reveal small{font:24px/1 'Bangers',Impact,sans-serif;color:#cda6bf;letter-spacing:1px}.assignment-reveal strong{font:clamp(40px,5vw,66px)/1 'Bangers',Impact,sans-serif;color:#dbc58d;letter-spacing:1.5px;text-shadow:4px 4px #190e25}.assignment-reveal p{font:24px/1.15 'Bangers',Impact,sans-serif;letter-spacing:1px;margin:0}.assignment-reveal span{display:none}.assignment-arrival{animation:dispatch-arrival .3s ease-out}
-.dispatch-hud:has(.assignment-reveal:not([hidden])) .assignment-ledger{visibility:hidden}
-.dispatch-hud:has(.dispatch-roulette:not([hidden])) .assignment-ledger:not([data-mode=excessive-force]){visibility:hidden}
 body:has(.dispatch-hud) #kill-feed{top:280px}
 @keyframes incident-slam{0%{opacity:0;transform:scale(1.35) rotate(-9deg)}55%{opacity:1;transform:scale(.94) rotate(3deg)}100%{transform:none}}
 @keyframes stamp-hit{0%{opacity:0;transform:translateX(-50%) rotate(3deg) scale(1.15)}60%{opacity:1;transform:translateX(-50%) rotate(-3deg) scale(.96)}100%{transform:translateX(-50%) rotate(-4deg) scale(1)}}
@@ -91,3 +89,43 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 /* All three rewards can be visible together, including landscape phones. */
 @media(max-width:1050px){.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle){gap:6px}.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-card{width:29vw}}
 @media(max-width:700px){.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-art{width:30px}.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-copy strong{font-size:18px}.powerup-healed{font-size:11px}}
+
+/* Give broadcasts their own lane when the permanent score card fills the left.
+ * Touch layouts retain their existing scaled positions. */
+@media(min-width:1051px) and (max-width:1279px){
+ body:not(.touch-mode) :is(.dispatch-roulette,.assignment-reveal){left:calc(50% + 45px);width:calc(100vw - 700px)}
+}
+@media(min-width:601px) and (max-width:1050px){
+ body:not(.touch-mode) :is(.dispatch-roulette,.assignment-reveal){left:calc(50% + 164px);width:min(610px,calc(100vw - 388px))}
+}
+
+/* Jurisdiction keeps location beside the permanent score. */
+.assignment-ledger[data-mode=jurisdiction]{width:min(310px,calc(100vw - 24px));gap:6px}
+.assignment-ledger[data-mode=jurisdiction] .assignment-title{font-size:30px}
+.assignment-ledger[data-mode=jurisdiction] .assignment-progress{font-size:30px}
+.assignment-ledger[data-mode=jurisdiction] .assignment-target{font-size:23px;line-height:1.1}
+.assignment-zone-next{font:700 14px Outfit,sans-serif;color:#b9a6ca;line-height:1.2}
+@media(max-height:620px),(max-width:700px){
+ .assignment-ledger[data-mode=jurisdiction]{width:250px;max-width:calc(50vw - 24px);padding:10px;gap:4px}
+ .assignment-ledger[data-mode=jurisdiction] .assignment-title{font-size:23px}
+ .assignment-ledger[data-mode=jurisdiction] .assignment-target{font-size:18px}
+ .assignment-ledger[data-mode=jurisdiction] .assignment-rankings li{font-size:16px;padding:1px 0}
+ .assignment-ledger[data-mode=jurisdiction] .assignment-detail{font-size:16px;padding:4px}
+ .assignment-zone-next{font-size:12px}
+}
+/* Keep destination guidance visible; its layout avoids broadcast rectangles. */
+.dispatch-hud[data-mode=jurisdiction]:has(.dispatch-roulette:not([hidden])) .case-broadcast{visibility:hidden}
+
+/* A standalone relocation clock, always above roulette and clear of the aim. */
+.jurisdiction-timer{position:absolute;z-index:3;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:220px;display:grid;justify-items:center;gap:3px;padding:4px 12px 8px;color:#f1e6c9;background:radial-gradient(ellipse,#130e20cc,transparent 72%);text-shadow:2px 3px 0 #130e20,0 0 8px #130e20}
+.jurisdiction-timer-label{font:700 13px/1.1 Outfit,sans-serif;letter-spacing:2px;white-space:nowrap}
+.assignment-zone-clock{font:64px/.95 Bangers,Impact,sans-serif;letter-spacing:2px;font-variant-numeric:tabular-nums}
+.jurisdiction-timer[data-urgent=true]{color:#ffc075}
+.dispatch-hud:has(.jurisdiction-timer:not([hidden])) :is(.dispatch-roulette,.assignment-reveal){top:calc(120px + env(safe-area-inset-top,0px))}
+@media(max-height:620px),(max-width:700px){
+ .jurisdiction-timer{top:calc(8px + env(safe-area-inset-top,0px));width:180px;gap:2px;padding:3px 8px 5px}
+ .jurisdiction-timer-label{font-size:11px;letter-spacing:1.4px}
+ .assignment-zone-clock{font-size:44px}
+ .dispatch-hud:has(.jurisdiction-timer:not([hidden])) :is(.dispatch-roulette,.assignment-reveal){top:calc(88px + env(safe-area-inset-top,0px))}
+}
+.touch-mode .dispatch-hud:has(.jurisdiction-timer:not([hidden])) .case-broadcast{top:calc(82px + env(safe-area-inset-top,0px))}

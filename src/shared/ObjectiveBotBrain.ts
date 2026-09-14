@@ -1,9 +1,12 @@
+import { activeZone, nextZone, JURISDICTION_TUNING } from './jurisdiction';
+import { JURISDICTION_ZONES, jurisdictionTravelPoint, zoneContains } from './jurisdictionZones';
 import { BotOpportunisticFire } from './BotOpportunisticFire';
 import { BotCombat, combatRandom } from './BotCombat';
+import {exposedCarrierCase,shotHitsIronclad} from './BotTargeting';
 import { DISPATCH_STATIONS, type ChaosState } from './chaosState';
 import { incidentInfo } from './incidentCatalog';
 import { activeDestination, destinationPoint } from './assignments';
-import { hasHustle, PICKUP_TUNING } from './pickups';
+import { hasHustle, hasIronclad, PICKUP_TUNING, type PickupState } from './pickups';
 import type { PlayerData, Vec3Data } from './networkProtocol';
 import type {BotWaypoint} from './BotLaunchRoutes';
 import {BALL_GRAVITY,BALL_SPEED} from './ballTuning';
@@ -17,7 +20,7 @@ export interface ObjectiveNavigation {
     update?(budgetMs?: number): void;
 }
 export interface ObjectiveBotIntent { x: number; z: number; jump: boolean; shoot?: Vec3Data; facing: number }
-export type BotObjective = 'case' | 'carrier' | 'combat' | 'explore' | 'delivery' | 'evade' | 'intercept' | 'pickup';
+export type BotObjective = 'case' | 'carrier' | 'combat' | 'explore' | 'delivery' | 'evade' | 'intercept' | 'pickup' | 'zone-hold';
 const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
 const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
 
@@ -30,12 +33,17 @@ export class ObjectiveBotBrain {
     get goalKey(): string { return this.key; }
     private key = '';
     private target?: PlayerData;
+    private protectedVisible:PlayerData[]=[];
+    private visibleRats:PlayerData[]=[];
+    private caseAim=false;
     private dispatchTarget?: Vec3Data;
     private destination?: Vec3Data;
     private route: BotWaypoint[] = [];
     private flight?:{landing:Vec3Data;started:number};
     private launchWaitAt?:number;
     private supplyTripAt=0;
+    private pickupUntil=0;
+    private nextPickupAt=0;
     private routeIndex = 0;
     private plannedDestination?: Vec3Data;
     private pendingPlan?: { from: Vec3Data; to: Vec3Data; started: number };
@@ -63,9 +71,14 @@ export class ObjectiveBotBrain {
     private deliveryKey = '';
     private deliveryEntering = false;
     private assignmentSignature = '';
+    private assignmentActive=false;
     private evadeAt=0;
+    private zonePostAt=0;
+    private zonePost=0;
+    private readonly zoneLane:number;
     private readonly places: Vec3Data[];
     constructor(private readonly navigation: ObjectiveNavigation, seed = 0, private readonly random: () => number = Math.random) {
+        this.zoneLane=Math.abs(seed)%3;
         this.combat = new BotCombat(combatRandom(seed));
         this.opportunisticFire = new BotOpportunisticFire(combatRandom(seed+10000));
         this.places = navigation.explorationTargets();
@@ -75,6 +88,9 @@ export class ObjectiveBotBrain {
     get navigationStalled():boolean{return this.stalled;}
     get failedCasePosition():Readonly<Vec3Data>|undefined{return this.failedCase;}
     reset(): void {
+        this.protectedVisible=[];this.visibleRats=[];this.caseAim=false;
+        this.pickupUntil=0;this.nextPickupAt=0;
+        this.assignmentActive=false;
         this.combat.reset();this.opportunisticFire.reset();this.shotAt=0;
         this.key='';this.target=undefined;this.dispatchTarget=undefined;this.destination=undefined;this.route=[];this.routeIndex=0;
         this.plannedDestination=undefined;this.pendingPlan=undefined;this.decisionAt=0;this.planAt=0;this.progressPosition=undefined;this.recoverUntil=0;
@@ -82,7 +98,7 @@ export class ObjectiveBotBrain {
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
         this.caseLifecycles.clear();
         this.flight=undefined;this.launchWaitAt=undefined;this.supplyTripAt=0;
-        this.deliveryKey='';this.deliveryEntering=false;this.assignmentSignature='';this.evadeAt=0;
+        this.deliveryKey='';this.deliveryEntering=false;this.assignmentSignature='';this.evadeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
     private setObjective(objective: BotObjective, key: string, destination: Vec3Data | undefined): void {
         if(this.key!==key){this.launchWaitAt=undefined;this.route=[];this.routeIndex=0;this.plannedDestination=undefined;this.pendingPlan=undefined;this.routeWaitStarted=undefined;this.recoverUntil=0;this.planAt=0;this.key=key;
@@ -104,7 +120,8 @@ export class ObjectiveBotBrain {
         const position=this.destination??this.pendingPlan?.to;
         if(position){
             const copy={x:position.x,y:position.y,z:position.z};
-            this.failedGoals.set(this.failureKey(this.key),{position:copy,until:now+FAILED_GOAL_RETRY_MS});
+            const retry=this.assignmentActive&&['case','carrier','delivery','zone-hold'].includes(this.objective)?4000:FAILED_GOAL_RETRY_MS;
+            this.failedGoals.set(this.failureKey(this.key),{position:copy,until:now+retry});
             if(this.key==='case')this.failedCase=copy;
             if(this.failedGoals.size>32)this.failedGoals.delete(this.failedGoals.keys().next().value!);
         }
@@ -114,11 +131,12 @@ export class ObjectiveBotBrain {
     }
     /** Immediate detours stay visible and on the current floor. Longer armor
      * trips use the separate, throttled map-site policy below. */
-    private wantedPickup(state: ChaosState | undefined, self: PlayerData, now:number, clear:(p:Vec3Data)=>boolean) {
+    private wantedPickup(state: ChaosState | undefined, self: PlayerData, now:number, clear:(p:Vec3Data)=>boolean, allowed:(p:PickupState)=>boolean=()=>true) {
         return state?.pickups?.filter(p=>(p.availableAt??0)<=(state?.time??now))
             .filter(p=>p.kind!=='quick-fix'||self.hp<3)
             .filter(p=>Math.abs(p.y-.7-self.y)<2.5&&distance(self,p)<24&&clear(p))
             .filter(p=>!this.suppressed(`pickup:${p.id}`,p,now))
+            .filter(allowed)
             .sort((a,b)=>distance(self,a)-distance(self,b))[0];
     }
 
@@ -169,8 +187,14 @@ export class ObjectiveBotBrain {
         // must not erase the evidence that the primary case is unreachable.
         let ownershipChanged=false;
         const assignment=state?.assignment;
-        const signature=assignment?`${assignment.roundId}:${assignment.phase}:${assignment.deliverySerial}`:'';
-        if(signature!==this.assignmentSignature){this.assignmentSignature=signature;this.decisionAt=0;}
+        this.assignmentActive=assignment?.phase==='active';
+        // Cancel body-shot follow-through immediately when the silver coat
+        // appears, including during the interval between navigation decisions.
+        if(this.target&&hasIronclad(state?.buffs,this.target.id,state?.time??now)&&!this.caseAim){
+            this.combat.reset();this.target=undefined;this.decisionAt=0;
+        }
+        const signature=assignment?`${assignment.roundId}:${assignment.phase}:${assignment.deliverySerial}:${assignment.jurisdiction?.serial??0}`:'';
+        if(signature!==this.assignmentSignature){this.assignmentSignature=signature;this.decisionAt=0;this.zonePostAt=0;for(const key of this.failedGoals.keys())if(key.startsWith("zone:"))this.failedGoals.delete(key);}
         for(const {key,value} of cases){
             const before=this.caseLifecycles.get(key),returning=value.returningUntil>(state?.time??now);
             if(!before||before.owner!==value.owner||before.returning!==returning){
@@ -204,9 +228,12 @@ export class ObjectiveBotBrain {
             const carriers=living.filter(p=>cases.some(c=>c.value.owner===p.id)).sort((a,b)=>distance(self,a)-distance(self,b));
             const carrier=carriers.find(p=>!this.suppressed(`carrier:${p.id}`,p,now));
             const visible=living.filter(p=>distance(self,p)<80&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
+            this.visibleRats=visible;
+            this.protectedVisible=visible.filter(p=>hasIronclad(state?.buffs,p.id,state?.time??now));
+            const vulnerable=visible.filter(p=>!hasIronclad(state?.buffs,p.id,state?.time??now));
             // Keep a visible opponent through a burst instead of resetting reaction
             // every time two similarly close rats trade places. Visible carriers still win.
-            this.target=carriers.find(p=>visible.includes(p))??visible.find(p=>p.id===this.target?.id)??visible[0];
+            this.target=carriers.find(p=>visible.includes(p)&&(vulnerable.includes(p)||exposedCarrierCase(self,p,state,clearControl)))??vulnerable.find(p=>p.id===this.target?.id)??vulnerable[0];
             this.dispatchTarget=state?.dispatch.phase==='ready' ? DISPATCH_STATIONS.map(station=>station.target)
                 .filter(target=>distance(self,target)<26&&clearControl(target))
                 .sort((a,b)=>distance(self,a)-distance(self,b))[0] : undefined;
@@ -214,9 +241,11 @@ export class ObjectiveBotBrain {
             const available=carrying||evidence?undefined:cases.filter(({key,value})=>!value.owner&&value.returningUntil<=(state?.time??now)&&
                 (value.previousOwner!==self.id||value.pickupAfter<=(state?.time??now))&&!this.suppressed(key,value.p,now))
                 .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
-            const combat=visible.find(p=>!this.suppressed(`combat:${p.id}`,p,now));
-            const pickup=this.wantedPickup(state,self,now,clear);
-            const armor=!carrying&&!carrier&&!(available&&distance(self,available.value.p)<24)?this.armorTrip(state,self,now):undefined;
+            const combat=vulnerable.find(p=>!this.suppressed(`combat:${p.id}`,p,now));
+            const active=assignment?.phase==='active';
+            // A mapped roof trip is still possible between objectives, but a
+            // live case takes priority even when it is on the other side of town.
+            const armor=!carrying&&!carrier&&!(available&&(active||distance(self,available.value.p)<24))?this.armorTrip(state,self,now):undefined;
             // Do not interrupt your own scoring, or keep shooting a nearby
             // loose case away while attempting to collect it.
             if(carrying||this.target||available&&distance(self,available.value.p)<24)this.dispatchTarget=undefined;
@@ -238,6 +267,30 @@ export class ObjectiveBotBrain {
                 const approach=destinationPoint(next);
                 if(distance(self,approach)+12<distance(carrier,approach)&&!this.suppressed(`intercept:${next}`,approach,now))intercept=approach;
             }
+            const jurisdiction=assignment?.phase==='active'?assignment.jurisdiction:undefined;
+            let zoneGoal:Vec3Data|undefined,zoneKey='',zoneEarly=false;
+            if(jurisdiction&&carrying){
+                const current=activeZone(jurisdiction),upcoming=nextZone(jurisdiction);
+                const travelMs=distance(self,JURISDICTION_ZONES[upcoming].posts[0])/12*1000;
+                // A small travel estimate makes leaving early a real choice; ownership remains physical.
+                zoneEarly=!zoneContains(current,self)&&jurisdiction.remainingMs<=JURISDICTION_TUNING.warningMs&&jurisdiction.remainingMs<travelMs+1000&&this.zoneLane===0;
+                const id=zoneEarly?upcoming:current,zone=JURISDICTION_ZONES[id];
+                if(!this.zonePostAt){this.zonePost=0;this.zonePostAt=now+3500;}
+                else if(now>=this.zonePostAt&&visible.some(p=>distance(self,p)<22)&&distance(self,zone.posts[(this.zonePost+this.zoneLane)%zone.posts.length])<2){this.zonePost=(this.zonePost+1)%zone.posts.length;this.zonePostAt=now+6000;}
+                zoneGoal=zone.posts[(this.zonePost+this.zoneLane)%zone.posts.length];
+                zoneKey=`zone:${assignment!.roundId}:${jurisdiction.serial}:${id}:${(this.zonePost+this.zoneLane)%zone.posts.length}`;
+                zoneGoal=jurisdictionTravelPoint(self,zoneGoal);
+                zoneKey+=`:${zoneGoal.x},${zoneGoal.y},${zoneGoal.z}`;
+                if(this.suppressed(zoneKey,zoneGoal,now)){this.zonePost++;this.zonePostAt=now+6000;zoneGoal=undefined;}
+            }
+            if(jurisdiction&&!carrying&&carrier&&this.zoneLane===0&&!zoneContains(activeZone(jurisdiction),carrier)&&jurisdiction.remainingMs<=JURISDICTION_TUNING.warningMs&&distance(self,carrier)>35){
+                const id=nextZone(jurisdiction),post=JURISDICTION_ZONES[id].approaches[0];
+                if(distance(self,post)<distance(carrier,post))intercept=post;
+            }
+            if(jurisdiction&&!carrying&&carrier&&!intercept&&this.zoneLane!==0&&zoneContains(activeZone(jurisdiction),carrier)&&distance(self,carrier)>45){
+                const zone=JURISDICTION_ZONES[activeZone(jurisdiction)],post=zone.approaches[this.zoneLane%zone.approaches.length];
+                if(distance(self,post)>5&&distance(self,post)+distance(post,carrier)<distance(self,carrier)+8&&!this.suppressed(`intercept:${post.x},${post.z}`,post,now))intercept=jurisdictionTravelPoint(self,post);
+            }
             let escape:Vec3Data|undefined,escapeKey='';
             if(carrying&&assignment?.id==='closing-time'&&assignment.phase==='active'){
                 if(this.objective==='evade'&&this.destination&&distance(self,this.destination)>3&&now<this.evadeAt){escape=this.destination;escapeKey=this.key;}
@@ -247,16 +300,42 @@ export class ObjectiveBotBrain {
                     const safety=(point:Vec3Data)=>visible.length?Math.min(...visible.map(p=>distance(point,p))):10;
                     options.sort((a,b)=>(safety(b.point)-b.d*.35)-(safety(a.point)-a.d*.35));
                     if(options[0]){escape=options[0].point;escapeKey=`evade:${options[0].index}`;this.evadeAt=now+2200;}
+                    else if(visible[0]){
+                        const threat=visible[0],dx=self.x-threat.x,dz=self.z-threat.z,d=Math.hypot(dx,dz)||1;
+                        escape=this.navigation.localStep?.(self,{x:self.x+dx/d*8,y:self.y,z:self.z+dz/d*8});
+                        if(escape){escapeKey='evade:local';this.evadeAt=now+1000;}
+                    }
                 }
             }
-            if(pickup)this.setObjective('pickup',`pickup:${pickup.id}`,pickup);
+            const goal=available?.value.p??(!carrying?carrier:undefined)??zoneGoal??delivery??escape??(carrying&&active?combat:undefined);
+            const scoring=!!jurisdiction&&carrying&&zoneContains(activeZone(jurisdiction),self);
+            const pickup=this.wantedPickup(state,self,now,clear,p=>{
+                if(!active||!goal)return true;
+                const d=distance(self,p),emergency=p.kind==='quick-fix'&&self.hp===1&&d<=6;
+                if(scoring&&!zoneContains(activeZone(jurisdiction!),{x:p.x,y:p.y-.7,z:p.z}))return false;
+                if(!emergency){
+                    if(available&&distance(self,available.value.p)<8)return false;
+                    if((this.key===`pickup:${p.id}`?now>=this.pickupUntil:now<this.nextPickupAt))return false;
+                    // Collect useful supplies along the route without walking
+                    // back for a refresh or making a 24-unit side excursion.
+                    if(d>12||d+distance(p,goal)-distance(self,goal)>5)return false;
+                    const buff=state?.buffs?.[self.id],until=p.kind==='ironclad'?buff?.ironcladUntil:p.kind==='hustle'?buff?.hustleUntil:0;
+                    if((until??0)>(state?.time??now)+2000)return false;
+                }
+                return true;
+            });
+            if(pickup){
+                if(this.key!==`pickup:${pickup.id}`){this.pickupUntil=now+2200;this.nextPickupAt=now+8000;}
+                this.setObjective('pickup',`pickup:${pickup.id}`,pickup);
+            }
             else if(armor){
                 if(this.key!==`pickup:${armor.id}`)this.supplyTripAt=now+25000+this.random()*10000;
                 this.setObjective('pickup',`pickup:${armor.id}`,armor);
             }
             else if(available)this.setObjective('case',available.key,available.value.p);
-            else if(intercept)this.setObjective('intercept',`intercept:${next}`,intercept);
+            else if(intercept)this.setObjective('intercept',`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,intercept);
             else if(!carrying&&carrier)this.setObjective('carrier',`carrier:${carrier.id}`,carrier);
+            else if(zoneGoal)this.setObjective(zoneEarly?'delivery':'zone-hold',zoneKey,zoneGoal);
             else if(delivery)this.setObjective('delivery',deliveryKey,delivery);
             else if(escape)this.setObjective('evade',escapeKey,escape);
             else if(combat)this.setObjective('combat',`combat:${combat.id}`,combat);
@@ -292,7 +371,7 @@ export class ObjectiveBotBrain {
             this.progressPosition={...self};this.progressAt=now;
         }
         const movedGoal=this.destination&&this.plannedDestination&&distance(this.destination,this.plannedDestination)>7;
-        if(this.destination&&now>=this.planAt&&(this.pendingPlan||this.routeIndex>=this.route.length||movedGoal)){
+        if(this.destination&&!(this.objective==='zone-hold'&&distance(self,this.destination)<1)&&now>=this.planAt&&(this.pendingPlan||this.routeIndex>=this.route.length||movedGoal)){
             // Queue/cache keys include the start. Keep BOTH endpoints stable
             // while an incremental search runs, even if momentum moves the rat.
             // A moving case/carrier may replace a stale goal, at most once/sec.
@@ -368,12 +447,18 @@ export class ObjectiveBotBrain {
             if(d>.25){x=dx/d*speed;z=dz/d*speed;this.heading=Math.atan2(dx,dz);}
         }
         if(!this.pendingPlan&&now<this.recoverUntil){const turn=this.wanderIndex%2?1:-1;x=Math.sin(this.heading+turn*1.05)*5;z=Math.cos(this.heading+turn*1.05)*5;}
+        if(this.objective==='zone-hold'&&this.destination&&distance(self,this.destination)<.8){x=0;z=0;this.stalled=false;}
         // Stop at the objective rather than repeatedly running across the case.
         if(this.objective==='case'&&this.destination&&distance(self,this.destination)<1.15){x=0;z=0;}
         let facing=this.heading;
         const jump=grounded&&now>=this.jumpAt&&(!this.pendingPlan&&now<this.recoverUntil||blocked&&!!waypoint||!!waypoint&&waypoint.y-self.y>1.1);
         if(jump)this.jumpAt=now+1800+this.random()*1400;
-        const visibleTarget=!!this.target?.hp&&distance(self,this.target)<85&&clear(this.target);
+        this.protectedVisible=this.visibleRats.filter(p=>p.hp>0&&hasIronclad(state?.buffs,p.id,state?.time??now));
+        const protectedTarget=!!this.target&&hasIronclad(state?.buffs,this.target.id,state?.time??now);
+        const casePoint=protectedTarget?exposedCarrierCase(self,this.target!,state,clearControl):undefined;
+        if(protectedTarget&&!casePoint||this.caseAim&&!casePoint)this.combat.reset();
+        this.caseAim=!!casePoint;
+        const visibleTarget=!!this.target?.hp&&distance(self,this.target)<85&&clear(this.target)&&(!protectedTarget||!!casePoint);
         if(pursuingAssignment&&(this.objective==='combat'||this.objective==='carrier'&&this.target&&distance(self,this.target)<10||this.objective==='intercept')&&visibleTarget&&this.target&&distance(self,this.target)<22&&grounded){
             const dx=self.x-this.target.x,dz=self.z-this.target.z,length=Math.hypot(dx,dz)||1;
             const side=(this.wanderIndex+Math.floor(now/2600))%2?1:-1,back=length<9?1:.1;
@@ -382,10 +467,20 @@ export class ObjectiveBotBrain {
             if(safe){const sx=safe.x-self.x,sz=safe.z-self.z,d=Math.hypot(sx,sz);if(d>.3){x=sx/d*8;z=sz/d*8;}}
         }
         const dispatchReady=this.dispatchTarget&&state?.dispatch.phase==='ready'&&now>=this.shotAt&&clearControl(this.dispatchTarget);
-        const combat=this.combat.step(now,self,this.target,visibleTarget,now>=this.shotAt&&!dispatchReady);
+        // Follow an armored carrier without running into their gun at point-blank range.
+        if(this.objective==='carrier'&&this.destination&&grounded){
+            const carrier=this.protectedVisible.find(p=>`carrier:${p.id}`===this.key&&hasIronclad(state?.buffs,p.id,state?.time??now));
+            if(carrier&&distance(self,carrier)<10){
+                const dx=self.x-carrier.x,dz=self.z-carrier.z,d=Math.hypot(dx,dz)||1;
+                const safe=this.navigation.localStep?.(self,{x:self.x+dx/d*4,y:self.y,z:self.z+dz/d*4});
+                const sx=safe?safe.x-self.x:0,sz=safe?safe.z-self.z:0,len=Math.hypot(sx,sz);
+                x=len?sx/len*6:0;z=len?sz/len*6:0;
+            }
+        }
+        const combat=this.combat.step(now,self,this.target,visibleTarget,now>=this.shotAt&&!dispatchReady,casePoint);
         if(combat.aim)facing=Math.atan2(combat.aim.x-self.x,combat.aim.z-self.z);
         const speculative=this.opportunisticFire.step(now,self,this.heading,waypoint,
-            !visibleTarget&&!dispatchReady&&!(this.objective==='case'&&this.destination&&distance(self,this.destination)<24),now>=this.shotAt&&!combat.aim);
+            !visibleTarget&&!dispatchReady&&!this.protectedVisible.some(p=>hasIronclad(state?.buffs,p.id,state?.time??now))&&!(this.objective==='case'&&this.destination&&distance(self,this.destination)<24),now>=this.shotAt&&!combat.aim);
         const speculativeFacing=this.opportunisticFire.facing(now);
         if(!combat.aim&&speculativeFacing!==undefined)facing=speculativeFacing;
         let shoot:Vec3Data|undefined;
@@ -401,8 +496,13 @@ export class ObjectiveBotBrain {
             shoot=speculative;this.shotAt=now+200;
             facing=Math.atan2(shoot.x-self.x,shoot.z-self.z);
         }
+        if(shoot&&shotHitsIronclad(self,facing,shoot,this.protectedVisible,state))shoot=undefined;
         if(hasHustle(state?.buffs,self.id,state?.time??now)){
             x*=PICKUP_TUNING.hustleMultiplier;z*=PICKUP_TUNING.hustleMultiplier;
+        }
+        if(this.objective==='zone-hold'&&assignment?.jurisdiction&&zoneContains(activeZone(assignment.jurisdiction),self)){
+            const id=activeZone(assignment.jurisdiction);
+            if(!zoneContains(id,{x:self.x+x*.15,y:self.y,z:self.z+z*.15})){x=0;z=0;this.zonePostAt=0;}
         }
         // Steer around any planted counterfeit the current step would enter.
         // Local, bounded and visible-only: the bot never reads hidden traps, it

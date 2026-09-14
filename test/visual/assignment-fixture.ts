@@ -1,3 +1,4 @@
+import { JURISDICTION_ZONES, isJurisdictionZoneId } from '../../src/shared/jurisdictionZones';
 import * as THREE from 'three';
 import '../../src/style.css';
 import { createStage } from '../../src/session/createStage';
@@ -23,6 +24,7 @@ import {INCIDENTS} from '../../src/shared/incidentCatalog';
 const query=new URLSearchParams(location.search),selection=query.get('assignment');
 const id=isAssignmentId(selection)?selection:'excessive-force';
 const view=query.get('view'),phase=query.get('phase'),now=Date.now();
+const zoneParam=query.get('zone'),zoneId=isJurisdictionZoneId(zoneParam)?zoneParam:undefined;
 const interiors:Record<string,{p:[number,number,number];heading:number}>={
     recordsinside:{p:[-36,.3,-43],heading:0},recordsupstairs:{p:[-36,8.3,-43],heading:0},
     iceupperpickup:{p:[112,8.3,-81],heading:-Math.PI/4},
@@ -42,6 +44,7 @@ const interiors:Record<string,{p:[number,number,number];heading:number}>={
 };
 const interior=view?interiors[view]:undefined;
 const position=interior?new THREE.Vector3(...interior.p):view==='streetlight'?new THREE.Vector3(-4,.3,-24.6):view==='dispatch'?new THREE.Vector3(-11,.3,-26):view==='city'?new THREE.Vector3(85,.3,35):view==='maintenance'?new THREE.Vector3(63,-6.7,-35.7):view==='sewer'?new THREE.Vector3(55,-6.7,-36):view==='icebox'?new THREE.Vector3(130,.3,-15):view==='archive'?new THREE.Vector3(-64,.3,-59):new THREE.Vector3(-16,.3,-21);
+if(zoneId){const zone=JURISDICTION_ZONES[zoneId];position.set(zone.posts[0].x,zone.posts[0].y,zone.posts[0].z+4);}
 // Static contact-height review: physics can settle feet just below zero.
 if(query.has('grounded')&&position.y===.3)position.y=-.003;
 const heading=interior?interior.heading:view==='city'?-Math.atan2(45,96):view==='sewer'||view==='maintenance'||view==='streetlight'?-Math.PI/2:view==='offscreen'?Math.PI:view==='archive'?-Math.PI/2:0;
@@ -69,6 +72,7 @@ if(id==='closing-time')assignment.remainingMs=Number(query.get('remaining'))||73
 if(id==='chain-of-custody'){assignment.destinations=[...CHAIN_ROUTE];assignment.deliverySerial=Math.min(CHAIN_ROUTE.length-1,Math.max(0,Number(query.get('stop')??query.get('stamps'))||0));}
 if(id==='chain-of-custody'){assignment.deliveries={local:1,'other-0':2,'other-2':1};assignment.deliverySerial+=6;}
 if(id==='excessive-force')assignment.caseKills={local:6,'other-0':8,'other-2':4,'other-3':2};
+if(assignment.jurisdiction){const j=assignment.jurisdiction;if(zoneId){j.index=j.order.indexOf(zoneId);j.serial=j.index;}j.heldMs={local:23000,'other-0':31000};j.remainingMs=Number(query.get('zoneMs'))||38000;j.scorerId=query.has('held')?'local':null;}
 sim.setAssignment(assignment);
 const state=sim.snapshot(false);state.time=now;
 if(query.get('dispatch')==='busy')state.dispatch={phase:'cooldown',started:now,until:now+16000,serial:1};
@@ -101,8 +105,8 @@ if(phase==='suspended'){
 }
 if(phase==='closed'){
     const a=state.assignment!;a.phase='closed';a.remainingMs=0;if(id==='chain-of-custody'){a.deliverySerial++;a.deliveries.local=3;}
-    if(id==='excessive-force')a.caseKills.local=10;
-    a.result={winnerId:actor.id,winnerName:actor.name,at:now,method:id==='closing-time'?'held':id==='chain-of-custody'?'carried':'kills',posthumous:false};
+    if(id==='excessive-force')a.caseKills.local=10;if(a.jurisdiction){a.jurisdiction.heldMs.local=60000;a.jurisdiction.scorerId=null;}
+    a.result={winnerId:actor.id,winnerName:actor.name,at:now,method:id==='jurisdiction'?'zone-held':id==='closing-time'?'held':id==='chain-of-custody'?'carried':'kills',posthumous:false};
 }
 const chaosView=new ChaosView(stage.scene,playerId=>playerId===actor.id?player.entity:undefined,undefined,false);
 chaosView.apply(state);

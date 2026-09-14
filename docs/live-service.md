@@ -1,24 +1,31 @@
 # Live service runbook
 
-Last release receipt: **2026-09-13**. [Movement and Hot Pursuit lag correction](verification/movement-hot-pursuit-lag-2026-09-13.md). [Destination and restock visuals](verification/destination-restock-2026-09-13.md). [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md). [Case lifecycle and kill confirmation](verification/case-kill-feedback-2026-09-12.md). [Accepted animations, explosion and case fixes](verification/animation-production-2026-09-12.md). [Accepted model and protocol15 integration](verification/model-netplay-integration-2026-09-12.md). [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
+Last release receipt: **2026-09-14**. [Omarchy Dispatch companion](verification/omarchy-dispatch-2026-09-14.md). [Paper Chase sewer-guidance fix](verification/paper-chase-sewer-guidance-2026-09-13.md). [Jurisdiction, Paper Chase, bot and HUD release](verification/jurisdiction-production-2026-09-13.md). [Batched movement and permanent score card](verification/movement-batching-score-card-2026-09-13.md). [Movement and Hot Pursuit lag correction](verification/movement-hot-pursuit-lag-2026-09-13.md). [Destination and restock visuals](verification/destination-restock-2026-09-13.md). [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md). [Case lifecycle and kill confirmation](verification/case-kill-feedback-2026-09-12.md). [Accepted animations, explosion and case fixes](verification/animation-production-2026-09-12.md). [Accepted model and protocol15 integration](verification/model-netplay-integration-2026-09-12.md). [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
 
 | Item | Value |
 | --- | --- |
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `e1ecb3ed-1853-480d-89f0-81817d0c238b` — protocol 15, movement-lag correction with bot launcher and upper/roof routes preserved |
-| Previous version | `b601b744-da80-431e-a9c0-1522029f5448` — bot vertical traversal release; rollback restores the redundant per-pose city ray and reported movement lag |
+| Last deployed version | `55a9e2fe-e219-451d-aa55-de48ba72928e` — protocol 18, additive Omarchy companion feed and public invitation handling; preceding gameplay retained |
+| Previous version | `b0518f94-4dc1-433f-af5f-7141a70d2d4b` — protocol 18, Paper Chase sewer-guidance fix; rollback removes the versioned companion endpoint and new invitation behavior |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 16 total rats per room; occupied rooms fill to eight with AI, yielding to humans; automatic overflow rooms |
 
-Protocol 15 requires matching client and Worker. Existing older game tabs should
+Protocol 18 requires matching client and Worker. Before any rollback to protocol 15,
+review stored Jurisdiction rounds: the old validator does not understand that mode. Existing older game tabs should
 reload to get the new version. The intermediate protocol-9 version
 `024dc635-2fbe-4b51-aaf8-2d43cdef789b` omitted compact pickup fields and is not a
 rollback candidate.
 
 ## Continuous operation
+
+`GET /api/companion/v1/status` reads cached authoritative summaries across active
+public rooms, with bounded cursor pagination. It does not fan out to GameRooms or
+wake gameplay. Summary generations, revisions, expiry and retirement tombstones
+prevent older publications from reviving a retired room. The companion API has its
+own schema version, separate from the gameplay protocol.
 
 `GET /status` enables the canonical room's matchmaking policy and includes its persisted world seed/version so titles can prepare matching geometry without joining or reserving a slot; default `/ws` uses the persistent Matchmaker admission directory. Public `prepare=1` sockets bypass reservation/overflow allocation and remain silent until joining. They are bounded to sixteen per canonical room and a 30-second server lease (25 seconds on the client); a full-room join retries through normal matchmaking and cannot steal existing reservations. They do not start bots or simulation. Live sockets and simulation remain in individual GameRooms. Occupied rooms fill to eight total participants with server-owned AI (`max(0, 8 - humans)`), with a ten-second refill grace after departures; disconnected rats now retain
 their existing slots for 30 seconds before removal. Humans can fill all sixteen slots. Arbitrary named rooms do not automatically acquire hosted AI. Hosting needs no local service or Codex task.

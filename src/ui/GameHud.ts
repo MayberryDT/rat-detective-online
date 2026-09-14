@@ -157,7 +157,7 @@ export class GameHud {
             ['victory-kicker', assignment ? ASSIGNMENTS[assignment.id].title : 'OUTSTANDING MISCONDUCT'],
             ['victory-headline', 'CASE CLOSED!'],
             ['victory-winner', winnerName],
-            ['victory-verdict', assignment?.id==='closing-time'?'STOLE THE LAST SECOND!':assignment?.id==='chain-of-custody'?'3 DELIVERIES. CASE CLOSED.':assignment?'10 CASE KILLS. ZERO RESTRAINT.':`${kills} KILLS. ZERO RESTRAINT.`],
+            ['victory-verdict', assignment?.id==='jurisdiction'?'60 POINTS. JURISDICTION SECURED.':assignment?.id==='closing-time'?'STOLE THE LAST SECOND!':assignment?.id==='chain-of-custody'?'3 DELIVERIES. CASE CLOSED.':assignment?'10 CASE KILLS. ZERO RESTRAINT.':`${kills} KILLS. ZERO RESTRAINT.`],
             ['victory-stamp', this.victoryQuip],
         ];
         for(const [className,text] of lines){

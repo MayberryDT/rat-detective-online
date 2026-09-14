@@ -20,9 +20,9 @@ const elements:Array<{style:Record<string,string>;label?:string}>=[];
 const originalDocument=globalThis.document,originalWindow=globalThis.window;
 beforeAll(()=>{
     vi.stubGlobal('window',{innerWidth:1280,innerHeight:720});
-    vi.stubGlobal('document',{
+    vi.stubGlobal('document',{querySelectorAll:()=>[],
         createElement:()=>{
-            const element={style:{},dataset:{},width:0,height:0,label:'',remove(){},appendChild(){},
+            const element={getBoundingClientRect:()=>({width:220,height:100}),style:{},dataset:{},width:0,height:0,label:'',remove(){},appendChild(){},
                 setAttribute(_name:string,value:string){this.label=value;},
                 getContext:()=>({fillRect(){},fillText(){}})};
             elements.push(element);return element;

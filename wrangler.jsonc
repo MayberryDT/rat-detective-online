@@ -14,7 +14,8 @@
     "run_worker_first": [
       "/ws",
       "/health",
-      "/status"
+      "/status",
+      "/api/companion/v1/status"
     ]
   },
   "ratelimits": [
@@ -82,7 +83,8 @@
         "run_worker_first": [
           "/ws",
           "/health",
-          "/status"
+          "/status",
+          "/api/companion/v1/status"
         ]
       },
       "durable_objects": {

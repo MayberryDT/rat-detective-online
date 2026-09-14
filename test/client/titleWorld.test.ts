@@ -16,6 +16,12 @@ it('does not prepare an unrelated public map for explicit private rooms',async()
     expect(await loadTitleWorld(undefined,url+'&room=graybox-practice-test')).toBeUndefined();
     expect(fetcher).not.toHaveBeenCalled();
 });
+it('does not warm the canonical room for an overflow invitation',async()=>{
+    const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
+    const room='public-live-v2-12345678-1234-4123-8123-123456789abc';
+    expect(await loadTitleWorld(undefined,`${url}&preferred=${room}`)).toBeUndefined();
+    expect(fetcher).not.toHaveBeenCalled();
+});
 it('falls back safely for legacy, malformed, mismatched or unavailable metadata',async()=>{
     const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
     for(const data of [{}, {room:'other',world:{seed:1,version:2}}, {room:'public-live-v2',world:{seed:-1,version:2}}, {room:'public-live-v2',world:{seed:1,version:9}}]){

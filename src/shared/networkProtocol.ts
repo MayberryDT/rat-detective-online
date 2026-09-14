@@ -3,7 +3,7 @@ import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 18;
 export const MAX_HP = 3;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;

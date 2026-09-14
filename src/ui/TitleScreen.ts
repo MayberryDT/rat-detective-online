@@ -1,5 +1,6 @@
 import { generateRandomName } from '../shared/ratNames';
 import { bindGameCredits } from './GameCredits';
+import { readPublicInvitation } from '../network/publicInvitation';
 
 /** The title is usable without the renderer, physics, room metadata or audio. */
 export class TitleScreen {
@@ -17,6 +18,14 @@ export class TitleScreen {
         const options = { signal: this.events.signal };
         const enter = doc.getElementById('enter-city-btn') as HTMLButtonElement;
         const reroll = doc.getElementById('reroll-name-btn') as HTMLButtonElement;
+        const invitation = doc.getElementById('invitation-status');
+        const route = readPublicInvitation(this.target.location?.search ?? '');
+        if (invitation) {
+            invitation.textContent = route.requestedRoom
+                ? 'INVITED DISPATCH — ENTER TO JOIN'
+                : route.invalid ? 'INVITATION UNAVAILABLE — OPEN MATCHMAKING' : '';
+            invitation.toggleAttribute('hidden', !route.requestedRoom && !route.invalid);
+        }
         enter.disabled = false;
         enter.addEventListener('click', event => { event.stopPropagation(); this.enter(); }, options);
         reroll.addEventListener('click', event => {

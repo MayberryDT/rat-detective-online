@@ -1,3 +1,4 @@
+import {createMovementAllowance} from '../../src/worker/validation';
 import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
 import { createAssignment } from '../../src/shared/assignments';
@@ -350,7 +351,7 @@ describe('GameRoom websockets', () => {
     await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
       const game=instance as any;game.startChaos();target=game.chaos.snapshot(false).pickups.find((p:any)=>p.kind==='quick-fix');
       const player=game.players.get(welcome.id);player.hp=1;player.x=target!.x-2;player.y=target!.y-.8;player.z=target!.z;
-      game.lastAcceptedMovementAt.set(welcome.id,game.now()-1000);
+      game.movementAllowances.set(welcome.id,createMovementAllowance(game.now()-1000));
     });
     const movement={seq:(welcome.movementSeq??0)+1,position:{x:target!.x+2,y:target!.y-.8,z:target!.z},
       rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}};
@@ -640,12 +641,31 @@ describe('GameRoom websockets', () => {
     client.ws.send(joinPayload('Bounded Rat'));const welcome=await client.inbox.waitFor('welcome');
     await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
       const game=instance as any,player=game.players.get(welcome.id),start=Date.now();
-      Object.assign(player,{x:0,y:0,z:0});game.lastActiveAt.set(welcome.id,start);game.lastAcceptedMovementAt.set(welcome.id,start);
+      Object.assign(player,{x:0,y:0,z:0});game.lastActiveAt.set(welcome.id,start);game.movementAllowances.set(welcome.id,createMovementAllowance(start));
       game.handleMovement(welcome.id,{type:'updateMovement',seq:1,position:{x:40,y:0,z:0},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}},start+40);
       expect(player).toMatchObject({x:0,y:0,z:0});
-      Object.assign(player,{x:87,y:0,z:145});game.lastAcceptedMovementAt.set(welcome.id,start);
+      Object.assign(player,{x:87,y:0,z:145});game.movementAllowances.set(welcome.id,createMovementAllowance(start));
       game.handleMovement(welcome.id,{type:'updateMovement',seq:2,position:{x:93,y:0,z:145},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}},start+1000);
       expect(player).toMatchObject({x:93,y:0,z:145});
+    });
+  });
+
+  it('accepts ordinary and boosted low-frame-rate poses delivered together after jitter',async()=>{
+    const room=`graybox-movement-jitter-${crypto.randomUUID()}`,client=await openClient(room);
+    client.ws.send(joinPayload('Jitter Rat'));const welcome=await client.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
+      const game=instance as any,player=game.players.get(welcome.id),start=Date.now();
+      for(const speed of [18,18*1.45]){
+        Object.assign(player,{x:0,y:0,z:0});game.lastMovementSequence.delete(welcome.id);
+        game.movementAllowances.set(welcome.id,createMovementAllowance(start));game.lastActiveAt.set(welcome.id,start);
+        // Two 125 ms client frames arrive in one edge event after 300 ms delay.
+        for(let seq=1;seq<=2;seq++){
+          const x=speed*.125*seq;
+          game.handleMovement(welcome.id,{type:'updateMovement',seq,position:{x,y:0,z:0},
+            rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}},start+300);
+          expect(player.x).toBeCloseTo(x);
+        }
+      }
     });
   });
 
@@ -767,7 +787,7 @@ describe('GameRoom websockets', () => {
       internal.clock = () => now;
       internal.lastCheckpointAt.set(welcome.id, origin);
       Object.assign(internal.players.get(welcome.id),{x:0,y:2,z:15});
-      internal.lastAcceptedMovementAt.set(welcome.id,origin);
+      internal.movementAllowances.set(welcome.id,createMovementAllowance(origin));
       const socket = state.getWebSockets().find(ws =>
         (ws.deserializeAttachment() as { playerId?: string }).playerId === welcome.id)!;
       const before = internal.broadcasts;
@@ -822,7 +842,7 @@ describe('GameRoom websockets', () => {
       const originalClock = internal.clock, start = Date.now();
       let now = start;
       internal.clock = () => now; internal.lastCheckpointAt.set(welcome.id, start);
-      Object.assign(internal.players.get(welcome.id),{x:15,y:2,z:15});internal.lastAcceptedMovementAt.set(welcome.id,start);
+      Object.assign(internal.players.get(welcome.id),{x:15,y:2,z:15});internal.movementAllowances.set(welcome.id,createMovementAllowance(start));
       const socket = state.getWebSockets().find(ws =>
         (ws.deserializeAttachment() as { playerId?: string }).playerId === welcome.id)!;
       const move = (x: number) => JSON.stringify({ type: 'updateMovement', position: { x, y: 2, z: 15 },

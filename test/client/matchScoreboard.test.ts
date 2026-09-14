@@ -44,16 +44,17 @@ describe('full lobby scoreboard', () => {
         expect(f.row('rd-ai-2')).toBe(other);expect(f.row('me')).not.toBe(mine);expect(f.cells('me')).toContain('1 / 3 HP');
         f.board.dispose();
     });
-    it.each(['closing-time', 'excessive-force', 'chain-of-custody'] as const)('uses authoritative mode scores and all players in %s', mode => {
+    it.each(['closing-time', 'excessive-force', 'chain-of-custody', 'jurisdiction'] as const)('uses authoritative mode scores and all players in %s', mode => {
         const f = fixture(mode);
         if (mode === 'excessive-force') f.assignment.caseKills = {'rd-ai-1': 7, me: 4};
+        if (mode === 'jurisdiction') f.assignment.jurisdiction!.heldMs={'rd-ai-1':7000,me:4000};
         if (mode === 'chain-of-custody') f.assignment.deliveries = {'rd-ai-1': 2, me: 1};
         f.board.setVisible(true);
         expect(f.rows()).toHaveLength(8); expect(f.rows()[0].dataset.player).toBe('rd-ai-1');
         expect(f.row('me').dataset.local).toBe('true'); expect(f.row('rd-ai-1').dataset.carrier).toBe('true');
         const mine = f.cells('me'); expect(mine).toContain('19'); expect(mine).toContain('2'); expect(mine).toContain('9.50');
         expect(mine).toContain('0:30'); expect(mine).toContain('25%');
-        if (mode !== 'closing-time') expect(mine).toContain(mode === 'excessive-force' ? '4 / 10' : '1 / 3');
+        if (mode !== 'closing-time') expect(mine).toContain(mode === 'jurisdiction' ? '4 / 60' : mode === 'excessive-force' ? '4 / 10' : '1 / 3');
         expect(f.cells('rd-ai-1')).toContain('∞'); expect(f.cells('rd-ai-1')).toContain('1:30');
         const name = f.row('me').children[1]; expect(name.children[0].textContent).toBe('<img onerror="bad">'); expect(name.children[0].innerHTML).toBe('');
         f.board.dispose();

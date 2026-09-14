@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd -- "$(dirname -- "$0")/.."
+runner="${QMLTESTRUNNER:-}"
+if [[ -z "$runner" ]]; then
+  runner="$(command -v qmltestrunner || true)"
+  if [[ -z "$runner" && -x /usr/lib/qt6/bin/qmltestrunner ]]; then runner=/usr/lib/qt6/bin/qmltestrunner; fi
+fi
+if [[ -z "$runner" ]]; then echo 'Qt 6 qmltestrunner is required for appearance tests.' >&2; exit 1; fi
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software "$runner" -input tests/qml -import tests/qml/stubs -o -,txt

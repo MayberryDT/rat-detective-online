@@ -3,6 +3,7 @@ import { DEFAULT_ROOM_NAME, PROTOCOL_VERSION, type ClientMessage, type RatAppear
 import { isSupportedWorldVersion } from '../shared/worldSpec';
 import { CHAOS_WIRE_MODE } from '../shared/chaosWire';
 import { DeliveryDecoder, type DeliveryAck } from '../shared/deliveryWire';
+import { consumePublicInvitation, isPublicRoomName, isRoomInPool, publicRoomLabel, readPublicInvitation } from './publicInvitation';
 
 export type ConnectionState = 'idle' | 'connecting' | 'playing' | 'reconnecting' | 'disconnected' | 'stopped';
 export interface TransportOptions {
@@ -72,6 +73,11 @@ export function resolveWebSocketUrl(serverUrl?: string): string {
         const value = params.get(key);
         if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
     }
+    const preferred = params.get('preferred');
+    const pool = url.searchParams.get('room') ?? params.get('room') ?? DEFAULT_ROOM_NAME;
+    if (!url.searchParams.has('preferred') && pool === DEFAULT_ROOM_NAME && isPublicRoomName(preferred)) {
+        url.searchParams.set('preferred', preferred);
+    }
     return url.toString();
 }
 
@@ -94,6 +100,11 @@ export class NetworkManager {
     private url: string;
     private resumeToken?: string;
     private readonly resumeScope: string;
+    private readonly pool: string;
+    private readonly requestedRoom?: string;
+    private readonly invitationIntent: boolean;
+    private readonly pageInvitation: boolean;
+    private invitationReported = false;
     private resumeStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
     private prepared: {socket:WebSocket; cleanup:()=>void} | null = null;
     private readonly options: TransportOptions;
@@ -106,19 +117,33 @@ export class NetworkManager {
 
     constructor(options: TransportOptions = {}) {
         this.options = options;
+        const pageTransport=options.url===undefined;
         const url = new URL(options.url ?? resolveWebSocketUrl());
         if(options.receiveMode!=='welcome-only' && options.chaosTransport!=='legacy'){url.searchParams.set('chaos',options.chaosTransport??CHAOS_WIRE_MODE);url.searchParams.set('movement','tuple-v1');}
         if(options.receiveMode==='welcome-only')url.searchParams.set('receive','welcome-only');
+        this.pool = url.searchParams.get('room') ?? DEFAULT_ROOM_NAME;
+        const initialPreferred = url.searchParams.get('preferred');
+        this.requestedRoom = this.pool === DEFAULT_ROOM_NAME && url.searchParams.get('resume') !== '1' && isPublicRoomName(initialPreferred)
+            ? initialPreferred : undefined;
+        const pageInvitation = options.url === undefined ? readPublicInvitation(window.location.search) : undefined;
+        this.invitationIntent = !!this.requestedRoom || !!pageInvitation?.invalid ||
+            (initialPreferred !== null && this.pool === DEFAULT_ROOM_NAME && url.searchParams.get('resume') !== '1');
+        this.pageInvitation = pageTransport && !!this.requestedRoom;
+        if (this.pool === DEFAULT_ROOM_NAME && initialPreferred && !isPublicRoomName(initialPreferred)) url.searchParams.delete('preferred');
         this.url = url.toString();
-        this.resumeScope = `${url.origin}${url.pathname}?room=${url.searchParams.get('room') ?? DEFAULT_ROOM_NAME}`;
+        this.resumeScope = `${url.origin}${url.pathname}?room=${this.pool}`;
+        // A deliberate invitation starts a new public join. Ordinary page
+        // returns still restore the tab-local rat and its exact assigned room.
         if (options.receiveMode !== 'welcome-only') try {
             this.resumeStorage = options.resumeStorage === null ? undefined : options.resumeStorage ?? window.sessionStorage;
-            const saved = JSON.parse(this.resumeStorage?.getItem('rat-detective-resume') ?? 'null');
-            if (saved?.scope === this.resumeScope && isResumeToken(saved.token) &&
-                (saved.room === undefined || typeof saved.room === 'string' && /^[a-z0-9-]{1,160}$/.test(saved.room))) {
-                this.resumeToken = saved.token;
-                if (saved.room) url.searchParams.set('preferred', saved.room);
-                url.searchParams.set('resume', '1'); this.url = url.toString();
+            if (!this.invitationIntent) {
+                const saved = JSON.parse(this.resumeStorage?.getItem('rat-detective-resume') ?? 'null');
+                if (saved?.scope === this.resumeScope && isResumeToken(saved.token) &&
+                    (saved.room === undefined || isRoomInPool(saved.room, this.pool))) {
+                    this.resumeToken = saved.token;
+                    if (saved.room) url.searchParams.set('preferred', saved.room);
+                    url.searchParams.set('resume', '1'); this.url = url.toString();
+                }
             }
         } catch { /* Storage can be disabled; transport retries still recover in memory. */ }
     }
@@ -145,6 +170,7 @@ export class NetworkManager {
     /** Complete transport setup on the title without joining or reserving a rat slot. */
     prepare(): void {
         if (this.state !== 'idle' || this.prepared || this.resumeToken) return;
+        if (this.requestedRoom && this.requestedRoom !== DEFAULT_ROOM_NAME) return;
         const url=new URL(this.url),room=url.searchParams.get('room');
         if(room && room!==DEFAULT_ROOM_NAME&&!/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(room))return;
         url.searchParams.set('prepare','1');
@@ -232,8 +258,10 @@ export class NetworkManager {
                     this.setState('disconnected', 'The game has updated. Reload to continue.');
                     return;
                 }
-                if (message.matchRoom) { const url = new URL(this.url); url.searchParams.set('preferred',message.matchRoom); this.url = url.toString(); }
-                if (message.resumeToken) this.rememberResume(message.resumeToken, message.matchRoom);
+                const assignedRoom=isRoomInPool(message.matchRoom,this.pool)?message.matchRoom:undefined;
+                if (assignedRoom) { const url = new URL(this.url); url.searchParams.set('preferred',assignedRoom); this.url = url.toString(); }
+                if (message.resumeToken) this.rememberResume(message.resumeToken, assignedRoom);
+                if(this.pageInvitation)consumePublicInvitation(window);
                 this.clearJoinTimer();
                 this.diagnostics.joinMs=performance.now()-openedAt;
                 // Apply the complete snapshot before enabling input.
@@ -242,7 +270,14 @@ export class NetworkManager {
                     this.failed(generation, 'Could not restore the game.');
                     return;
                 }
-                this.setState('playing');
+                const actualRoom=assignedRoom??this.pool;
+                const routeMessage=!this.invitationReported&&this.requestedRoom
+                    ? actualRoom===this.requestedRoom
+                        ? `Joined invited ${publicRoomLabel(actualRoom)}.`
+                        : `Invited ${publicRoomLabel(this.requestedRoom)} was unavailable. Joined ${publicRoomLabel(actualRoom)}.`
+                    : undefined;
+                if(this.invitationIntent)this.invitationReported=true;
+                this.setState('playing',routeMessage);
                 this.startHeartbeat(generation);
                 if (this.stableTimer) clearTimeout(this.stableTimer);
                 this.stableTimer=setTimeout(()=>{if(current()&&this.state==='playing')this.retries=0;this.stableTimer=null;},this.options.stablePlayingMs??30_000);

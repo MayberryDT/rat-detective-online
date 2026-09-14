@@ -1,6 +1,7 @@
 import { resolveWebSocketUrl } from '../network/NetworkManager';
 import { DEFAULT_ROOM_NAME } from '../shared/networkProtocol';
 import { isSupportedWorldVersion, type WorldSpec } from '../shared/worldSpec';
+import { isPublicRoomName } from '../network/publicInvitation';
 
 /** Prepare the canonical city's real geometry before Enter City. This HTTP
  * request warms the room without opening a socket, reserving a slot or adding
@@ -8,6 +9,10 @@ import { isSupportedWorldVersion, type WorldSpec } from '../shared/worldSpec';
 export async function loadTitleWorld(signal?: AbortSignal, socketUrl = resolveWebSocketUrl()): Promise<WorldSpec | undefined> {
     const url = new URL(socketUrl);
     const room=url.searchParams.get('room')||DEFAULT_ROOM_NAME;
+    const preferred=url.searchParams.get('preferred');
+    // The prepare endpoint always warms the canonical pool. An overflow
+    // invitation must wait for admission instead of waking the wrong room.
+    if(room===DEFAULT_ROOM_NAME&&isPublicRoomName(preferred)&&preferred!==DEFAULT_ROOM_NAME)return;
     if(room!==DEFAULT_ROOM_NAME&&!/^graybox-benchmark-match-[a-z0-9-]{1,40}$/.test(room))return;
     url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
     url.pathname = '/status'; url.search = ''; url.hash = '';

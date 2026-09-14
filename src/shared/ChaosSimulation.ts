@@ -93,6 +93,7 @@ export class ChaosSimulation {
     private tick=0;
     get time():number{return this.now;}
     private assignment?:AssignmentRules;
+    private primaryAcquiredAt=0;
     get assignmentState():AssignmentState|undefined{return this.assignment?.state;}
     setAssignment(state:AssignmentState):void{this.assignment=new AssignmentRules(structuredClone(state),this.players);}
     private hit(hit:ChaosHit):void{if(!this.assignment?.closed)this.onHit(hit);}
@@ -288,7 +289,7 @@ export class ChaosSimulation {
         const closest=this.interactionPoint(player,data(p),now),reach=new C.Vec3(player.x,player.y+.8,player.z);
         if(closest.distanceTo(p)>T.pickupRadius)return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'too-far'};
         if(this.ray(closest,p,1).hasHit||this.ray(reach,p,1).hasHit)return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'blocked'};
-        c.owner=player.id;this.carry(player,c);this.checkAssignmentLocation(c);
+        c.owner=player.id;this.primaryAcquiredAt=now;this.carry(player,c);this.checkAssignmentLocation(c);
         if(c.owner===player.id){this.tell('This rat is on the case · '+player.name);return{accepted:true,target:'case',targetId:'primary',playerId:player.id};}
         return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'ineligible'};
     }
@@ -506,7 +507,8 @@ export class ChaosSimulation {
     }
     private releaseCase(c:CaseRuntime,incoming?:Vec3Data){
         if(!c.owner)return;
-        const id=c.owner;c.owner=null;this.scaleCase(CASE_LOOSE_SCALE,c);
+        const id=c.owner;c.owner=null;
+        if(c===this.primaryCase&&this.assignment?.state.jurisdiction){this.assignment.state.jurisdiction.scorerId=null;this.assignment.state.revision++;}this.scaleCase(CASE_LOOSE_SCALE,c);
         c.body.position.y+=CASE_SIZE.y*(CASE_LOOSE_SCALE-1)/2;
         c.previousOwner=id;c.pickupAfter=this.now+T.formerCarrierDelay;c.looseSince=this.now;
         c.body.type=C.Body.DYNAMIC;c.body.collisionFilterMask=1|8|16;
@@ -868,11 +870,11 @@ export class ChaosSimulation {
             else if(d.phase==='active'){start=d.started;end=d.until;}
             else if(d.phase==='cooldown'){end=d.started;start=end-T.activeMs;}
         }
-        const cuts=[from,...[start,end,rules.state.liveAt].filter(t=>t>from&&t<now),now].sort((a,b)=>a-b);
+        const cuts=[from,...[start,end,rules.state.liveAt,...(rules.state.jurisdiction?[this.primaryAcquiredAt]:[])].filter(t=>t>from&&t<now),now].sort((a,b)=>a-b);
         for(let i=0;i<cuts.length-1;i++){
             const a=cuts[i],b=cuts[i+1];
             rules.setPhase(a,a>=start&&a<end);
-            if(playing)rules.advance(a,b,this.primaryCase.returningUntil?null:this.primaryCase.owner);
+            if(playing)rules.advance(a,b,this.primaryCase.returningUntil||(rules.state.jurisdiction&&a<this.primaryAcquiredAt)?null:this.primaryCase.owner);
         }
         rules.setPhase(now,now>=start&&now<end);
     }

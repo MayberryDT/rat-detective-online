@@ -25,8 +25,8 @@ describe('assignment navigation in the actual city',()=>{
         try{
             for(let frame=1;frame<=1200&&sim.assignmentState!.deliverySerial===completed;frame++){
                 const at=now+frame*1000/60;
-                // Isolate assignment navigation from the now-higher-priority supply routes.
-                controller.step(1/60,at,players,{...sim.snapshot(false),pickups:[]},true);sim.step(1/60,at);
+                // Supplies remain live: delivery should stay the main objective.
+                controller.step(1/60,at,players,sim.snapshot(false),true);sim.step(1/60,at);
             }
             expect({deliverySerial:sim.assignmentState!.deliverySerial,position:{x:bot.x,y:bot.y,z:bot.z}}).toMatchObject({deliverySerial:completed+1});
             expect(sim.assignmentState!.deliveries[bot.id]).toBe(1);expect(sim.assignmentState!.result).toBeUndefined();

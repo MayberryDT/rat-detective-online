@@ -9,7 +9,8 @@ export function replaceOnce(text, before, after) {
   if (text.split(before).length !== 2) throw new Error(`Capacity fixture anchor changed: ${before.slice(0, 90)}`);
   return text.replace(before, after);
 }
-export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 8, serverBots = 11, maxPlayers = 100, fullLobby = false, checkpointControl = false } = {}) {
+export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 8, serverBots = 11, maxPlayers = 100, fullLobby = false, checkpointControl = false, assignment } = {}) {
+  if(assignment!==undefined&&(!hosted||!['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(assignment)))throw Error('Assignment override requires a known mode in a hosted private fixture');
   if(!Number.isInteger(serverBots)||serverBots<11||serverBots>99)throw Error('Fixture serverBots must be 11–99');
   if(!Number.isInteger(maxPlayers)||maxPlayers<16||maxPlayers>100||serverBots>maxPlayers||serverBots===maxPlayers&&!fullLobby)throw Error('Fixture cap must be 16–100; a full bot roster requires fullLobby');
   if(fullLobby&&(!hosted||serverBots!==maxPlayers))throw Error('Full lobby requires hosted expiry and bots equal to cap');
@@ -28,8 +29,9 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   }
   await hashTree('src');
   const controlHash=createHash('sha256').update(await readFile(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'))).digest('hex');
-  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 11, maxPlayers, fullLobby, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
+  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 12, assignment, maxPlayers, fullLobby, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
   async function patch(name, before, after) { const path=join(stage,name); await writeFile(path,replaceOnce(await readFile(path,'utf8'),before,after)); }
+  if(assignment)await patch('src/worker/GameRoom.ts','    const id=nextAssignment(this.assignmentRotation);',`    this.assignmentRotation.forced=${JSON.stringify(assignment)};\n    const id=nextAssignment(this.assignmentRotation);`);
   if(checkpointControl){
     if(!hosted)throw Error('Checkpoint control is hosted-private only');
     await patch('src/worker/GameRoom.ts','CHECKPOINT_MS = 2_500;','CHECKPOINT_MS = 10_000;');
@@ -61,7 +63,7 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
     await patch('src/worker/GameRoom.ts', 'if (humans) { if (rosterChanged || !this.serverBots)', 'if (humans || desired) { if (rosterChanged || !this.serverBots)');
     await patch('src/worker/GameRoom.ts', '    if (this.matchRoom && !this.humanSlots()) return;', '    // Full-lobby private fixture remains active until its hosted expiry.');
     await patch('src/worker/GameRoom.ts', "      if(this.matchRoom && !retainedHuman){this.rebalanceBots();return;}", '      // Full-lobby private fixture also simulates with no human observers.');
-    await patch('src/worker/GameRoom.ts', '      if (!this.humanSlots() && this.matchPool) this.ctx.waitUntil(this.env.MATCHMAKER.getByName(this.matchPool).retire(this.matchRoom, this.matchPool));', '      // Full-lobby private fixture retires at expiry rather than on last human exit.');
+    await patch('src/worker/GameRoom.ts', '      if (!this.humanSlots() && this.matchPool) this.retireFromMatchmaker();', '      // Full-lobby private fixture retires at expiry rather than on last human exit.');
     await patch('src/worker/capacityTest.ts', "    if (url.pathname === '/health')", `    if(url.pathname==='/lobby-status'){
       const name=url.searchParams.get('room')??'';
       if(!/^graybox-benchmark-ai-[a-z0-9-]{1,80}$/.test(name))return new Response('Not found',{status:404});
@@ -106,8 +108,8 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   const validator = join(stage, 'validator.mjs');
   await cp(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'),join(stage,'approved-buffer.ts'));
   await build({ stdin:{contents:"export * from './src/shared/chaosWire.ts'; export {DeliveryDecoder} from './src/shared/deliveryWire.ts'; export {PROTOCOL_VERSION} from './src/shared/networkProtocol.ts'; export {TOUCH_SHOT_INTERVAL_MS} from './src/shared/shotTiming.ts'; export {INCIDENTS} from './src/shared/incidentCatalog.ts'; export {SnapshotBuffer,BotSnapshotBuffer} from './src/shared/SnapshotBuffer.ts'; export {SnapshotBuffer as ApprovedSnapshotBuffer} from './approved-buffer.ts';",resolveDir:stage}, outfile:validator, bundle:true, platform:'node', format:'esm' });
-  const manifest = { createdAt:new Date().toISOString(), fixtureId, sourceHashes, controlHash, hosted, expiresAt, window, serverBots, maxPlayers, fullLobby, checkpointControl,
-    overrides:[...(checkpointControl?['DIAGNOSTIC ONLY: copied periodic player and chaos checkpoint intervals 10 seconds; forced writes unchanged']:[]),...(fullLobby?['private full lobby stays active until expiry; bots fill cap and yield to human joins']:[]),`copied MAX_PLAYERS=${maxPlayers}, MAX_CONNECTIONS=${maxPlayers+8}`, 'fixed city seed 341283204', 'copied 25-second controls for all ten incidents', `private AI rooms use ${serverBots} production-controller bots, with hosted expiry`], stage, validator, configPath };
+  const manifest = { createdAt:new Date().toISOString(), fixtureId, sourceHashes, controlHash, hosted, expiresAt, window, serverBots, maxPlayers, fullLobby, checkpointControl, assignment,
+    overrides:[...(assignment?[`private assignment pinned to ${assignment}`]:[]),...(checkpointControl?['DIAGNOSTIC ONLY: copied periodic player and chaos checkpoint intervals 10 seconds; forced writes unchanged']:[]),...(fullLobby?['private full lobby stays active until expiry; bots fill cap and yield to human joins']:[]),`copied MAX_PLAYERS=${maxPlayers}, MAX_CONNECTIONS=${maxPlayers+8}`, 'fixed city seed 341283204', 'copied 25-second controls for all ten incidents', `private AI rooms use ${serverBots} production-controller bots, with hosted expiry`], stage, validator, configPath };
   await writeFile(join(out,'fixture.json'), JSON.stringify(manifest,null,2));
   return manifest;
 }

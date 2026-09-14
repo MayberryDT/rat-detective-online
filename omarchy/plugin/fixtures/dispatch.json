@@ -1,0 +1,33 @@
+{
+  "fixtures": {
+    "paper": {
+      "schemaVersion": 1,
+      "observedAt": 1,
+      "nextCursor": null,
+      "rooms": [{
+        "room": "public-live-v2", "observedAt": 1, "expiresAt": 75001, "generation": 4, "revision": 31,
+        "players": 8, "humans": 3, "roundId": "fixture-paper",
+        "assignment": {"id":"chain-of-custody","title":"PAPER CHASE","phase":"active","remainingMs":null,"clockRunning":false,"objectiveTarget":3,"objectiveUnit":"deliveries","destination":{"id":"records","label":"RECORDS BUREAU"},"zone":null,"nextZone":null,"zoneRemainingMs":null},
+        "scores": [{"id":"1","name":"Ada","kills":4,"deaths":2,"objectiveScore":2},{"id":"2","name":"Marlowe","kills":7,"deaths":5,"objectiveScore":1},{"id":"3","name":"Basil","kills":2,"deaths":3,"objectiveScore":0},{"id":"4","name":"Vera","kills":5,"deaths":4,"objectiveScore":0},{"id":"5","name":"Knuckles","kills":3,"deaths":6,"objectiveScore":0},{"id":"6","name":"Velvet","kills":1,"deaths":2,"objectiveScore":0},{"id":"7","name":"Ledger","kills":4,"deaths":5,"objectiveScore":0},{"id":"8","name":"Squeaks","kills":2,"deaths":4,"objectiveScore":0}],
+        "holderName":"Ada","result":null
+      }]
+    },
+    "jurisdiction": {
+      "schemaVersion": 1, "observedAt": 1, "nextCursor": null,
+      "rooms": [{"room":"public-live-v2","observedAt":1,"expiresAt":75001,"generation":5,"revision":52,"players":8,"humans":2,"roundId":"fixture-zone","assignment":{"id":"jurisdiction","title":"JURISDICTION","phase":"active","remainingMs":null,"clockRunning":false,"objectiveTarget":60,"objectiveUnit":"seconds","destination":null,"zone":{"id":"icebox","label":"THE ICEBOX"},"nextZone":{"id":"sluice","label":"WEST SLUICE"},"zoneRemainingMs":8400},"scores":[{"id":"1","name":"Ada","kills":4,"deaths":2,"objectiveScore":42},{"id":"2","name":"Marlowe","kills":7,"deaths":5,"objectiveScore":31},{"id":"3","name":"Basil","kills":2,"deaths":3,"objectiveScore":18},{"id":"4","name":"Vera","kills":5,"deaths":4,"objectiveScore":12},{"id":"5","name":"Knuckles","kills":3,"deaths":6,"objectiveScore":0},{"id":"6","name":"Velvet","kills":1,"deaths":2,"objectiveScore":0},{"id":"7","name":"Ledger","kills":4,"deaths":5,"objectiveScore":0},{"id":"8","name":"Squeaks","kills":2,"deaths":4,"objectiveScore":0}],"holderName":"Ada","result":null}]
+    },
+    "excessive": {
+      "schemaVersion": 1, "observedAt": 1, "nextCursor": null,
+      "rooms": [{"room":"public-live-v2","observedAt":1,"expiresAt":75001,"generation":6,"revision":17,"players":8,"humans":4,"roundId":"fixture-force","assignment":{"id":"excessive-force","title":"EXCESSIVE FORCE","phase":"active","remainingMs":null,"clockRunning":false,"objectiveTarget":10,"objectiveUnit":"case-kills","destination":null,"zone":null,"nextZone":null,"zoneRemainingMs":null},"scores":[{"id":"1","name":"Ada","kills":9,"deaths":2,"objectiveScore":7},{"id":"2","name":"Marlowe","kills":7,"deaths":5,"objectiveScore":4},{"id":"3","name":"Basil","kills":2,"deaths":3,"objectiveScore":1},{"id":"4","name":"Vera","kills":5,"deaths":4,"objectiveScore":0},{"id":"5","name":"Knuckles","kills":3,"deaths":6,"objectiveScore":0},{"id":"6","name":"Velvet","kills":1,"deaths":2,"objectiveScore":0},{"id":"7","name":"Ledger","kills":4,"deaths":5,"objectiveScore":0},{"id":"8","name":"Squeaks","kills":2,"deaths":4,"objectiveScore":0}],"holderName":"Ada","result":null}]
+    },
+    "closing": {
+      "schemaVersion": 1, "observedAt": 1, "nextCursor": null,
+      "rooms": [{"room":"public-live-v2","observedAt":1,"expiresAt":75001,"generation":7,"revision":19,"players":8,"humans":1,"roundId":"fixture-closing","assignment":{"id":"closing-time","title":"CLOSING TIME","phase":"active","remainingMs":67100,"clockRunning":true,"objectiveTarget":null,"objectiveUnit":"last-holder","destination":null,"zone":null,"nextZone":null,"zoneRemainingMs":null},"scores":[{"id":"1","name":"Ada","kills":4,"deaths":2,"objectiveScore":null},{"id":"2","name":"Marlowe","kills":7,"deaths":5,"objectiveScore":null},{"id":"3","name":"Basil","kills":2,"deaths":3,"objectiveScore":null},{"id":"4","name":"Vera","kills":5,"deaths":4,"objectiveScore":null},{"id":"5","name":"Knuckles","kills":3,"deaths":6,"objectiveScore":null},{"id":"6","name":"Velvet","kills":1,"deaths":2,"objectiveScore":null},{"id":"7","name":"Ledger","kills":4,"deaths":5,"objectiveScore":null},{"id":"8","name":"Squeaks","kills":2,"deaths":4,"objectiveScore":null}],"holderName":"Marlowe","result":null}]
+    },
+    "empty": {"schemaVersion":1,"observedAt":1,"nextCursor":null,"rooms":[]},
+    "stale": {
+      "schemaVersion": 1, "observedAt": 1, "nextCursor": null,
+      "rooms": [{"room":"public-live-v2","observedAt":1,"expiresAt":2,"generation":8,"revision":4,"players":8,"humans":2,"roundId":"fixture-stale","assignment":{"id":"chain-of-custody","title":"PAPER CHASE","phase":"active","remainingMs":null,"clockRunning":false,"objectiveTarget":3,"objectiveUnit":"deliveries","destination":{"id":"pump","label":"PUMP STATION"},"zone":null,"nextZone":null,"zoneRemainingMs":null},"scores":[{"id":"1","name":"Ada","kills":4,"deaths":2,"objectiveScore":2},{"id":"2","name":"Marlowe","kills":7,"deaths":5,"objectiveScore":1},{"id":"3","name":"Basil","kills":2,"deaths":3,"objectiveScore":0},{"id":"4","name":"Vera","kills":5,"deaths":4,"objectiveScore":0},{"id":"5","name":"Knuckles","kills":3,"deaths":6,"objectiveScore":0},{"id":"6","name":"Velvet","kills":1,"deaths":2,"objectiveScore":0},{"id":"7","name":"Ledger","kills":4,"deaths":5,"objectiveScore":0},{"id":"8","name":"Squeaks","kills":2,"deaths":4,"objectiveScore":0}],"holderName":"Ada","result":null}]
+    }
+  }
+}

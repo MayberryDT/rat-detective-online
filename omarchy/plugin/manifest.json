@@ -2,20 +2,53 @@
   "schemaVersion": 1,
   "id": "co.animasai.rat-detective",
   "name": "Rat Detective",
-  "version": "0.3.0",
+  "version": "1.1.1",
   "author": "Tyler Mayberry",
   "license": "MIT",
   "homepage": "https://ratdetective.online",
-  "description": "See who’s in the city, then play from the bar.",
-  "kinds": ["bar-widget"],
+  "description": "A live Dispatch desk for Rat Detective assignments, rooms, alerts, launching and captures.",
+  "kinds": ["service", "bar-widget"],
   "entryPoints": {
+    "service": "Service.qml",
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Rat Detective",
-    "description": "See who’s in the city, then play from the bar.",
+    "description": "See the live assignment, objective leaders and city activity, then play or return.",
     "category": "Fun",
     "allowMultiple": false,
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "defaults": {
+      "appearance": "Omarchy",
+      "openRefreshSec": 2,
+      "closedRefreshSec": 30,
+      "staleAfterSec": 90,
+      "alertsEnabled": false,
+      "alertHumanThreshold": 2,
+      "alertAssignmentChanges": false,
+      "alertCooldownMin": 15,
+      "quietStartHour": 22,
+      "quietEndHour": 8,
+      "workspaceEnabled": false,
+      "workspaceNumber": 4,
+      "fullscreen": false,
+      "desktopAudio": false
+    },
+    "schema": [
+      {"key":"appearance","type":"enum","label":"Appearance","options":["Omarchy","Rat Detective"],"defaultValue":"Omarchy","description":"Follow the current Omarchy theme or use Rat Detective's noir palette and type."},
+      {"key":"openRefreshSec","type":"integer","label":"Open refresh interval (seconds)","min":2,"max":60,"step":1,"defaultValue":2},
+      {"key":"closedRefreshSec","type":"integer","label":"Closed refresh interval (seconds)","min":10,"max":600,"step":5,"defaultValue":30},
+      {"key":"staleAfterSec","type":"integer","label":"Mark reports stale after (seconds)","min":30,"max":600,"step":15,"defaultValue":90},
+      {"key":"alertsEnabled","type":"boolean","label":"Dispatch alerts","defaultValue":false},
+      {"key":"alertHumanThreshold","type":"integer","label":"Gathering alert threshold","min":1,"max":16,"step":1,"defaultValue":2},
+      {"key":"alertAssignmentChanges","type":"boolean","label":"New assignment alerts","defaultValue":false},
+      {"key":"alertCooldownMin","type":"integer","label":"Alert cooldown (minutes)","min":1,"max":1440,"step":1,"defaultValue":15},
+      {"key":"quietStartHour","type":"integer","label":"Quiet hours start","min":0,"max":23,"step":1,"defaultValue":22},
+      {"key":"quietEndHour","type":"integer","label":"Quiet hours end","min":0,"max":23,"step":1,"defaultValue":8},
+      {"key":"workspaceEnabled","type":"boolean","label":"Use a dedicated workspace","defaultValue":false},
+      {"key":"workspaceNumber","type":"integer","label":"Game workspace","min":1,"max":10,"step":1,"defaultValue":4},
+      {"key":"fullscreen","type":"boolean","label":"Fullscreen new game windows","defaultValue":false},
+      {"key":"desktopAudio","type":"boolean","label":"Record desktop audio","defaultValue":false}
+    ]
   }
 }

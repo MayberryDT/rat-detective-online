@@ -21,6 +21,19 @@ function fixture(){
  return {hud,root,state,sound,feedback};
 }
 describe('Dispatch broadcast lifecycle',()=>{
+ it.each(['closing-time','chain-of-custody','excessive-force','jurisdiction'] as const)('keeps the %s score card present throughout briefing and every roulette phase',id=>{
+  const {hud,root,state}=fixture();state.assignment=createAssignment(id,0);
+  for(const now of [1000,5000]){
+   for(const [phase,started,offset] of [['ready',now,0],['rolling',now,0],['active',now,1000],['active',now,2850],['cooldown',now,0]] as const){
+    state.dispatch={phase,started,until:now+25000,serial:1,incident:'popcorn-panic'};
+    hud.update(state,now+offset);
+    expect(root.querySelector('.assignment-ledger').hidden).toBe(false);
+    expect(root.querySelector('.assignment-ledger').dataset.mode).toBe(id);
+    expect(root.querySelector('.assignment-title').textContent.length).toBeGreaterThan(0);
+   }
+  }
+  hud.dispose();
+ });
  it('shows shared progress, next destination and filing credit without double-kill instructions',()=>{
   const {hud,root,state}=fixture();state.assignment=createAssignment('closing-time',0);state.assignment.phase='active';state.assignment.remainingMs=9000;
   hud.update(state,4000);expect(root.querySelector('.assignment-progress').textContent).toBe('0:09');
@@ -182,3 +195,25 @@ it('keeps a case quip stable between events and rotates it on a later pickup whi
  state.case.owner=null;hud.update(state,4200);state.case.owner='me';hud.update(state,4300,'Me',true);
  expect(root.querySelector('.case-broadcast span').textContent).not.toBe(first);hud.dispose();
 });
+
+ it('shows Jurisdiction scores and deduplicates relocation cues without case-kill announcements',()=>{
+  const {hud,root,state,feedback}=fixture();hud.setScores([{id:'me',name:'Me',kills:3,deaths:1}],'me');
+  state.assignment=createAssignment('jurisdiction',0);state.assignment.phase='active';const j=state.assignment.jurisdiction!;
+  j.heldMs.me=12000;j.scorerId='me';state.case.owner='me';hud.update(state,5000,'Me',true);
+  expect(root.querySelector('.assignment-progress').textContent).toBe('YOU: 12 / 60');
+  expect(root.querySelector('.assignment-detail').textContent).toBe('SCORING');
+  expect(root.querySelector('.jurisdiction-timer').hidden).toBe(false);
+  expect(root.querySelector('.assignment-zone-clock').textContent).toBe('75s');
+  j.heldMs.me=13000;hud.update(state,6000,'Me',true);expect(feedback).not.toHaveBeenCalledWith('case-point');
+  j.remainingMs=9999;hud.update(state,7000,'Me',true);hud.update(state,7100,'Me',true);
+  expect(feedback.mock.calls.filter(([cue])=>cue==='countdown')).toHaveLength(1);
+  expect(root.querySelector('.assignment-zone-next').hidden).toBe(false);
+  expect(root.querySelector('.assignment-zone-clock').textContent).toBe('10s');
+  expect(root.querySelector('.jurisdiction-timer').dataset.urgent).toBe('true');
+  j.scorerId=null;hud.update(state,7200,'Me',true);expect(root.querySelector('.assignment-detail').textContent).toBe('TAKE THE CASE TO THE ZONE');
+  j.scorerId='other';hud.update(state,7300,'Other',false);expect(root.querySelector('.assignment-detail').textContent).toBe('DISARM THE CARRIER');
+  state.assignment.phase='suspended';hud.update(state,7400);expect(root.querySelector('.assignment-detail').textContent).toContain('PROGRESS PAUSED');
+  expect(root.querySelector('.jurisdiction-timer-label').textContent).toBe('ZONE TIMER PAUSED');
+  state.assignment=createAssignment('closing-time',8000);hud.update(state,8000);expect(root.querySelector('.jurisdiction-timer').hidden).toBe(true);
+  state.assignment=undefined;hud.update(state,8100);expect(root.querySelector('.jurisdiction-timer').hidden).toBe(true);hud.dispose();
+ });

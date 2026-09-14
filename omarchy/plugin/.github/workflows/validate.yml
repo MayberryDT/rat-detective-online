@@ -1,0 +1,44 @@
+name: Validate plugin release
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check release contents
+        shell: python
+        run: |
+          import hashlib, json, pathlib
+          root = pathlib.Path('.')
+          manifest = json.loads((root / 'manifest.json').read_text())
+          receipt = json.loads((root / 'release.json').read_text())
+          assert manifest['schemaVersion'] == 1
+          assert manifest['id'] == 'co.animasai.rat-detective'
+          assert receipt['version'] == manifest['version']
+          encoded = json.dumps(receipt['files'], separators=(',', ':'), ensure_ascii=False).encode()
+          assert hashlib.sha256(encoded).hexdigest() == receipt['contentHash']
+          for value in manifest['entryPoints'].values():
+              path = pathlib.PurePosixPath(value)
+              assert not path.is_absolute() and '..' not in path.parts
+              assert (root / path).is_file()
+          for path, info in receipt['files'].items():
+              target = pathlib.PurePosixPath(path)
+              assert not target.is_absolute() and '..' not in target.parts
+              assert hashlib.sha256((root / target).read_bytes()).hexdigest() == info['sha256']
+              assert bool((root / target).stat().st_mode & 0o111) == info['executable']
+          assert not any(p.is_symlink() for p in root.rglob('*') if '.git' not in p.parts)
+      - name: Check helper syntax
+        run: |
+          bash -n scripts/install-webapp.sh scripts/uninstall-webapp.sh scripts/rollback-webapp.sh
+          python3 -m py_compile scripts/rat-detective-desktop.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run portable tests
+        run: tests/run
+      - name: Install Qt test runtime
+        run: sudo apt-get update && sudo apt-get install -y qt6-declarative-dev-tools qml6-module-qtquick qml6-module-qtquick-window qml6-module-qttest qml6-module-qtqml-workerscript qml6-module-qtqml-models
+      - name: Run appearance binding tests
+        run: tests/run-qml

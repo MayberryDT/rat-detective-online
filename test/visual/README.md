@@ -285,3 +285,22 @@ production respawn dials at zero, half and 94% progress. Buttons switch between
 flat street/interior palette backdrops and demonstrate opaque-wall occlusion.
 This is a static art sheet, not a city or multiplayer gameplay fixture.
 `/pickup-fixture.html?restock=1&mute=1` shows the dials at pickup scale beside rats.
+
+### Permanent score card regression
+
+`/score-card-fixture.html?assignment=chain-of-custody&mute=1` checks the production
+HUD's computed visibility across all three assignments and five broadcast states.
+Use `phase=briefing` for the new-case reveal, or `touch=1` for the touch stylesheet.
+It reports PASS in the page and has no gameplay, networking or audio.
+
+
+## Jurisdiction placement fixture — September 13
+
+The static `assignment-fixture.html` accepts `assignment=jurisdiction` and a shared
+zone ID in `zone`, for example `zone=pump-floor` or `zone=sewer-junction`.
+`zoneMs=9000` shows the next-zone warning; `controls=touch&dispatch=rolling` checks
+the compact permanent score card with a roulette card. `held` shows the carrier
+pose. These are fixed camera/layout states, not gameplay or performance evidence.
+Use `mute=1` for agent inspections. The geometry, renderer, guidance and HUD are
+the implementation used by the matching private game. See the
+[Jurisdiction receipt](../../docs/verification/jurisdiction-2026-09-13.md).

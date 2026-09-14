@@ -1,3 +1,5 @@
+import { activeZone, nextZone, JURISDICTION_TUNING } from '../shared/jurisdiction';
+import { JURISDICTION_ZONES } from '../shared/jurisdictionZones';
 import type {ScoreEntry,Vec3Data} from '../shared/networkProtocol';
 import type {ChaosState} from '../shared/chaosState';
 import {CHAOS_TUNING} from '../shared/chaosState';
@@ -50,6 +52,12 @@ export class DispatchHud {
     private assignmentRevealRule:HTMLElement;
     private assignmentFlavor:HTMLElement;
     private previousAssignment='';
+    private zoneSerial=-1;
+    private zoneWarning=-1;
+    private zoneTimer:HTMLElement;
+    private zoneTimerLabel:HTMLElement;
+    private zoneClock:HTMLElement;
+    private zoneNext:HTMLElement;
     private previousDeliverySerial=0;
     private myId='';
     private scores:readonly ScoreEntry[]=[];
@@ -70,9 +78,9 @@ export class DispatchHud {
     constructor(private sound:(frequency:number)=>void,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
         this.root.className='dispatch-hud';
         this.root.innerHTML=`<div class="dispatch-ledger"><div class="dispatch-alert-label"></div><div class="dispatch-status-row"><div class="dispatch-artwork" aria-hidden="true"></div><strong class="dispatch-status"></strong></div><p class="dispatch-brief"></p><div class="dispatch-clock"><small class="dispatch-next"></small><span class="dispatch-timer"></span></div><div class="dispatch-time-track"><div></div></div><div class="case-ledger"><strong></strong><small></small></div></div><div class="case-broadcast" hidden aria-live="polite"><small>HOT CASE</small><strong></strong><span></span></div><div class="dispatch-roulette" hidden><div class="roulette-heading"><span>! DISPATCH !</span><b>SELECTING INCIDENT</b></div><div class="roulette-window"><div class="roulette-strip"></div><i class="roulette-pointer">▶</i></div><div class="roulette-stamp">CITYWIDE EMERGENCY!</div><p class="roulette-description"></p><div class="roulette-footer">DEPARTMENT OF BAD IDEAS <span>● LIVE</span></div></div>`;
-        this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><strong></strong><p></p><span></span></div>`;
+        this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><span class="assignment-zone-next" hidden></span><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="jurisdiction-timer" hidden role="timer" aria-label="Zone relocation countdown"><small class="jurisdiction-timer-label">ZONE MOVES IN</small><strong class="assignment-zone-clock"></strong></div><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><strong></strong><p></p><span></span></div>`;
         const get=(q:string)=>this.root.querySelector<HTMLElement>(q)!;
-        this.rankings=get('.assignment-rankings');this.counter=get('.assignment-counter');this.destinationLabel=get('.assignment-target');
+        this.rankings=get('.assignment-rankings');this.counter=get('.assignment-counter');this.destinationLabel=get('.assignment-target');this.zoneTimer=get('.jurisdiction-timer');this.zoneTimerLabel=get('.jurisdiction-timer-label');this.zoneClock=get('.assignment-zone-clock');this.zoneNext=get('.assignment-zone-next');
         this.confirmation=get('.assignment-confirmation');this.stats=get('.assignment-stats');this.leader=get('.assignment-leader');
         this.assignmentPanel=get('.assignment-ledger');this.assignmentTitle=get('.assignment-title');this.assignmentRule=get('.assignment-rule');
         this.assignmentProgress=get('.assignment-progress');this.assignmentDetail=get('.assignment-detail');this.assignmentBar=get('.assignment-track i');
@@ -150,14 +158,16 @@ export class DispatchHud {
         const leaving=reveal&&now-d.started>=2800;
         const showRoulette=rolling||(reveal&&!leaving);
         const a=state.assignment;
+        this.zoneTimer.hidden=!a?.jurisdiction||a.phase==='closed';
         this.assignmentPanel.hidden=!a;this.assignmentReveal.hidden=!a||now>=a.liveAt||a.phase==='closed'||showRoulette;
         if(a){
             const info=ASSIGNMENTS[a.id],destination=activeDestination(a);
             const newAssignment=a.roundId!==this.previousAssignment;
-            const chain=a.id==='chain-of-custody',race=a.id==='excessive-force'||chain;
-            const target=chain?ASSIGNMENT_TUNING.deliveryTarget:ASSIGNMENT_TUNING.caseKillTarget;
-            const table=chain?a.deliveries:a.caseKills,points=table[this.myId]??0;
+            const j=a.jurisdiction,chain=a.id==='chain-of-custody',race=a.id==='excessive-force'||chain||!!j;
+            const target=j?JURISDICTION_TUNING.targetMs/1000:chain?ASSIGNMENT_TUNING.deliveryTarget:ASSIGNMENT_TUNING.caseKillTarget;
+            const table=j?Object.fromEntries(Object.entries(j.heldMs).map(([id,ms])=>[id,ms/1000])):chain?a.deliveries:a.caseKills,rawPoints=table[this.myId]??0,points=Math.floor(rawPoints);
             if(newAssignment){
+                this.zoneSerial=j?.serial??-1;this.zoneWarning=j&&j.remainingMs<=JURISDICTION_TUNING.warningMs?j.serial:-1;
                 this.previousAssignment=a.roundId;this.previousDeliverySerial=a.deliverySerial;this.previousPoints=points;this.previousCountdown=-1;this.confirmationUntil=0;
                 if(now<a.liveAt)this.feedback?.('dispatch');
                 this.assignmentReveal.classList.remove('assignment-arrival');void this.assignmentReveal.offsetWidth;this.assignmentReveal.classList.add('assignment-arrival');
@@ -169,26 +179,35 @@ export class DispatchHud {
                 this.confirmation.classList.remove('stamp-pop');void this.confirmation.offsetWidth;this.confirmation.classList.add('stamp-pop');
                 this.confirmationUntil=now+2800;
             }
-            if(!newAssignment&&!chain&&points>this.previousPoints){
+            if(!newAssignment&&a.id==='excessive-force'&&points>this.previousPoints){
                 this.confirmation.classList.remove('stamp-pop');void this.confirmation.offsetWidth;this.confirmation.classList.add('stamp-pop');
                 this.feedback?.('case-point');setText(this.confirmation,`CASE KILL +${points-this.previousPoints} · ${points}/${target}`);this.confirmationUntil=now+2400;
             }
             this.previousPoints=points;
             const score=this.scores.find(s=>s.id===this.myId);
             setText(this.stats,score?`TOTAL KILLS ${score.kills} · DEATHS ${score.deaths}`:'');
-            this.rankings.hidden=!race;this.destinationLabel.hidden=!chain;
-            setText(this.destinationLabel,destination?`DELIVER TO: ${ASSIGNMENT_DESTINATIONS[destination].label}`:'');
+            this.rankings.hidden=!race;this.destinationLabel.hidden=!chain&&!j;
+            setText(this.destinationLabel,j?`${JURISDICTION_ZONES[activeZone(j)].label} · ${JURISDICTION_ZONES[activeZone(j)].floor}`:destination?`DELIVER TO: ${ASSIGNMENT_DESTINATIONS[destination].label}`:'');
+            this.zoneNext.hidden=!j||j.remainingMs>JURISDICTION_TUNING.warningMs;
+            if(j){
+                setText(this.zoneClock,`${Math.ceil(j.remainingMs/1000)}s`);
+                setText(this.zoneTimerLabel,a.phase==='active'?'ZONE MOVES IN':a.phase==='suspended'?'ZONE TIMER PAUSED':'ZONE DURATION');
+                this.zoneTimer.dataset.urgent=String(a.phase==='active'&&j.remainingMs<=JURISDICTION_TUNING.warningMs);
+                setText(this.zoneNext,`NEXT: ${JURISDICTION_ZONES[nextZone(j)].label} · ${JURISDICTION_ZONES[nextZone(j)].floor}`);
+                if(!newAssignment&&this.zoneSerial!==j.serial){this.feedback?.('dispatch');this.zoneSerial=j.serial;}
+                if(!newAssignment&&a.phase==='active'&&j.remainingMs<=JURISDICTION_TUNING.warningMs&&this.zoneWarning!==j.serial){this.feedback?.('countdown');this.zoneWarning=j.serial;}
+            }
             this.stats.hidden=chain||!race||!score;
             const leaders=this.scores.map(s=>({...s,points:table[s.id]??0})).sort((x,y)=>y.points-x.points||x.name.localeCompare(y.name)||x.id.localeCompare(y.id));
             const rank=leaders.findIndex(s=>s.id===this.myId)+1;
             setText(this.leader,race&&rank>5?`YOU’RE #${rank} · ${points}/${target}`:'');
             this.leader.hidden=!this.leader.textContent;
-            const rankingSignature=JSON.stringify([a.id,this.myId,leaders.slice(0,5).map(s=>[s.id,s.name,s.points])]);
+            const rankingSignature=JSON.stringify([a.id,this.myId,leaders.slice(0,5).map(s=>[s.id,s.name,Math.floor(s.points)])]);
             if(rankingSignature!==this.rankingSignature){
                 this.rankingSignature=rankingSignature;this.rankings.replaceChildren();
                 for(const [index,s] of leaders.slice(0,5).entries()){
                     const row=document.createElement('li');row.dataset.local=String(s.id===this.myId);
-                    for(const [tag,value] of [['i',String(index+1)],['span',s.name],['b',`${s.points}/${target}`]]){
+                    for(const [tag,value] of [['i',String(index+1)],['span',s.name],['b',`${Math.floor(s.points)}/${target}`]]){
                         const part=document.createElement(tag);part.textContent=value;row.appendChild(part);
                     }
                     this.rankings.appendChild(row);
@@ -198,7 +217,10 @@ export class DispatchHud {
             setText(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);
             setText(this.assignmentRevealTitle,info.title);setText(this.assignmentRevealRule,info.rule);setText(this.assignmentFlavor,info.flavor);
             let progress='',detail='',fraction=0;
-            if(a.id==='closing-time'){
+            if(j){
+                progress=`YOU: ${points} / ${target}`;fraction=rawPoints/target;
+                detail=j.scorerId===this.myId?'SCORING':ownerIsLocal?'TAKE THE CASE TO THE ZONE':j.scorerId?'DISARM THE CARRIER':'GET THE CASE';
+            }else if(a.id==='closing-time'){
                 const seconds=Math.ceil(a.remainingMs/1000);
                 progress=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
                 detail=state.case.owner?`RUNNING · ${ownerIsLocal?'YOU':holder} HOLDING`:'PAUSED · CASE LOOSE';

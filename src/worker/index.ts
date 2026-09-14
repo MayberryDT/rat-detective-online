@@ -4,6 +4,7 @@ import { isAssignmentId } from '../shared/assignments';
 import { isEvidenceMode, isIncidentId } from '../shared/incidentCatalog';
 import { allowsLocalDiagnostics } from './clientDiagnostics';
 import { verifyBearerToken } from './auth';
+import { companionPageSize, isCompanionCursor } from '../shared/companionStatus';
 
 export { GameRoom } from './GameRoom';
 export { Matchmaker } from './Matchmaker';
@@ -110,6 +111,34 @@ export default {
             },
           },
         ));
+      }
+
+      if (url.pathname === '/api/companion/v1/status') {
+        if (request.method === 'OPTIONS') {
+          return respond(new Response(null, {
+            status: 204,
+            headers: {
+              'access-control-allow-origin': '*',
+              'access-control-allow-methods': 'GET',
+              'access-control-max-age': '600',
+            },
+          }));
+        }
+        if (request.method !== 'GET') {
+          return respond(json({ error: 'Method not allowed' }, { status: 405 }));
+        }
+        const cursor = url.searchParams.get('cursor');
+        const limit = companionPageSize(url.searchParams.get('limit'));
+        if (!isCompanionCursor(cursor) || limit === null) {
+          return respond(json({ error: 'Invalid companion page' }, {
+            status: 400,
+            headers: { 'access-control-allow-origin': '*' },
+          }));
+        }
+        const status = await env.MATCHMAKER.getByName(DEFAULT_ROOM_NAME).companionStatus(cursor, limit);
+        return respond(json(status, {
+          headers: { 'access-control-allow-origin': '*' },
+        }));
       }
 
       if (url.pathname === '/ws') {

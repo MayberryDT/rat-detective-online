@@ -26,9 +26,8 @@ export const MOVEMENT_ENVELOPE = {
   maxElapsedMs: 2_000,
   horizontalSpeed: 35,
   verticalSpeed: 110,
-  // One full client pose must survive edge delivery that compresses two 50 ms
-  // updates into the same server clock tick. Gross displacement is still bounded
-  // by the speed component and the two-second accumulation cap.
+  // Starting tolerance, not a fresh grant on every packet. Unused server-time
+  // allowance is retained so batched poses share the time they actually earned.
   horizontalSlack: 2,
   verticalSlack: 6,
 } as const;
@@ -82,12 +81,28 @@ export function clampPosition(position: Vec3Data): { position: Vec3Data; correct
   };
 }
 
-export function isPlausibleMovement(from: Vec3Data, to: Vec3Data, elapsedMs: number): boolean {
-  const seconds = Math.max(0, Math.min(MOVEMENT_ENVELOPE.maxElapsedMs, elapsedMs)) / 1_000;
+export interface MovementAllowance { at:number; horizontal:number; vertical:number }
+
+export function createMovementAllowance(at:number):MovementAllowance {
+  return {at,horizontal:MOVEMENT_ENVELOPE.horizontalSlack,vertical:MOVEMENT_ENVELOPE.verticalSlack};
+}
+
+/** A bounded server-time budget, shared by movement, firing and pickup poses.
+ * Arrival gaps do not describe simulation steps: a delayed group must be able
+ * to spend its accumulated time across every pose, not just its first packet. */
+export function consumeMovementAllowance(budget:MovementAllowance,from:Vec3Data,to:Vec3Data,at:number):boolean {
+  const seconds=Math.max(0,at-budget.at)/1000;
+  const capacity= MOVEMENT_ENVELOPE.maxElapsedMs/1000;
+  budget.at=Math.max(budget.at,at);
+  budget.horizontal=Math.min(MOVEMENT_ENVELOPE.horizontalSlack+MOVEMENT_ENVELOPE.horizontalSpeed*capacity,
+    budget.horizontal+MOVEMENT_ENVELOPE.horizontalSpeed*seconds);
+  budget.vertical=Math.min(MOVEMENT_ENVELOPE.verticalSlack+MOVEMENT_ENVELOPE.verticalSpeed*capacity,
+    budget.vertical+MOVEMENT_ENVELOPE.verticalSpeed*seconds);
   const horizontal = Math.hypot(to.x - from.x, to.z - from.z);
   const vertical = Math.abs(to.y - from.y);
-  return horizontal <= MOVEMENT_ENVELOPE.horizontalSlack + MOVEMENT_ENVELOPE.horizontalSpeed * seconds &&
-    vertical <= MOVEMENT_ENVELOPE.verticalSlack + MOVEMENT_ENVELOPE.verticalSpeed * seconds;
+  if(horizontal>budget.horizontal||vertical>budget.vertical||!Number.isFinite(horizontal+vertical))return false;
+  budget.horizontal-=horizontal;budget.vertical-=vertical;
+  return true;
 }
 
 export function isPlausibleShot(origin: Vec3Data, direction: Vec3Data, player: Vec3Data): boolean {

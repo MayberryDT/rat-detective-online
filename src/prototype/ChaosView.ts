@@ -1,3 +1,4 @@
+import { JurisdictionZones } from './JurisdictionZones';
 import type {FoleyWorld} from '../audio/FoleyWorld';
 import {DispatchSirenAudio} from '../audio/DispatchSirenAudio';
 import { createCaseGrip, disposeCaseGrip } from './CaseGrip';
@@ -61,6 +62,7 @@ export class ChaosView {
     private readonly textCanvas=document.createElement('canvas');
     private readonly textTexture:THREE.CanvasTexture;
     private readonly hud:DispatchHud;
+    private readonly jurisdictionZones:JurisdictionZones;
     private readonly assignmentDestinations:AssignmentDestinations;
     private readonly caseMarker=document.createElement('div');
     private readonly caseMarkerIcon=document.createElement('div');
@@ -129,7 +131,7 @@ export class ChaosView {
             this.kiosks.push(buildDispatchModel(cabinet,this.textTexture));
         }
         this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
-        this.assignmentDestinations=new AssignmentDestinations();
+        this.assignmentDestinations=new AssignmentDestinations();this.jurisdictionZones=new JurisdictionZones(scene);
         // DOM projection stays crisp at city scale and visible through all architecture.
         // It adds no dynamic lights, raycasts, or physics to the physical case.
         Object.assign(this.caseMarker.style,{position:'fixed',left:'0',top:'0',display:'none',width:'174px',
@@ -180,7 +182,7 @@ export class ChaosView {
         this.state=null;this.setCarrier(null);this.root.visible=false;
         this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.caseMarker.style.display='none';
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
-        this.assignmentDestinations.clear();
+        this.assignmentDestinations.clear();this.jurisdictionZones.clear();
     }
     fire(shot:ShotDescriptor):void {
         if(!this.extrapolate)return;
@@ -440,7 +442,7 @@ export class ChaosView {
         const localCase=[s.case,...s.extraCases??[]].find(c=>c.owner&&this.resolveRat(c.owner)?.isPlayer);
         const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
         this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer);
-        this.assignmentDestinations.updateCue(s.assignment,camera);
+        this.assignmentDestinations.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
         this.pressureMachine.update(s.pressure,now,camera);
         for(const kiosk of this.kiosks){
         updateDispatchSiren(kiosk,d.phase==='ready',renderTime/1000);
@@ -493,7 +495,7 @@ export class ChaosView {
         this.clearPickupCards();this.buffBar.remove();
         this.clearInteractions();
         this.localShots.clear();
-        this.sirenAudio.dispose();this.assignmentDestinations.dispose();
+        this.sirenAudio.dispose();this.assignmentDestinations.dispose();this.jurisdictionZones.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         this.pressureMachine.dispose();this.caseBeacon.dispose();this.setCarrier(null);this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();this.dispatch.removeFromParent();

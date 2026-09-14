@@ -2,12 +2,14 @@
 # Remove the Rat Detective Omarchy web-app launcher. Leaves the plugin in place.
 set -euo pipefail
 
-APP_NAME="Rat Detective"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+HELPER="$DATA_HOME/rat-detective/rat-detective-desktop.py"
 
-if ! command -v omarchy-webapp-remove >/dev/null 2>&1; then
-  echo "omarchy-webapp-remove is not on PATH." >&2
+if [[ ! -x $HELPER ]]; then
+  echo "Rat Detective launcher helper is not installed." >&2
   exit 1
 fi
 
-export OMARCHY_REMOVE_NOTIFY="${OMARCHY_REMOVE_NOTIFY:-false}"
-exec omarchy-webapp-remove "$APP_NAME"
+# A launcher shortcut must never be left pointing at the helper removed below.
+"$HELPER" shortcut-remove >/dev/null
+exec "$HELPER" uninstall-launcher

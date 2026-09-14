@@ -1,5 +1,17 @@
 import { DurableObject } from 'cloudflare:workers';
 import { DEFAULT_ROOM_NAME } from '../shared/networkProtocol';
+import {
+  COMPANION_SCHEMA_VERSION,
+  isCompanionRoomPublication,
+  isPublicCompanionRoom,
+  COMPANION_FRESHNESS_MS,
+  COMPANION_MAX_PAGE_SIZE,
+  type CompanionRoom,
+  type CompanionRoomPublication,
+  type CompanionStatusEnvelope,
+} from '../shared/companionStatus';
+
+const COMPANION_TOMBSTONE_RETENTION_MS = 24 * 60 * 60_000;
 
 /** Admission directory only: gameplay sockets and all simulation stay in GameRoom. */
 export class Matchmaker extends DurableObject<Env> {
@@ -10,6 +22,21 @@ export class Matchmaker extends DurableObject<Env> {
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS rooms (name TEXT PRIMARY KEY, checked INTEGER NOT NULL DEFAULT 0, slots INTEGER NOT NULL DEFAULT 0)`);
     ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS rooms_available ON rooms(slots DESC, name) WHERE checked = 0');
     ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS rooms_cooldown ON rooms(checked) WHERE checked > 0');
+    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS companion_summaries (
+      name TEXT PRIMARY KEY,
+      pool TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      revision INTEGER NOT NULL,
+      observed_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      payload TEXT NOT NULL
+    )`);
+    const summaryColumns = ctx.storage.sql.exec<{ name: string }>('PRAGMA table_info(companion_summaries)').toArray();
+    if (!summaryColumns.some(column => column.name === 'active')) {
+      ctx.storage.sql.exec('ALTER TABLE companion_summaries ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+    }
+    ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS companion_fresh ON companion_summaries(pool, active, expires_at, name)');
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -76,14 +103,97 @@ export class Matchmaker extends DurableObject<Env> {
     this.ctx.storage.sql.exec('UPDATE rooms SET checked = 0, slots = ? WHERE name = ?',slots,name);
   }
 
-  async retire(name: string, pool: string): Promise<void> {
+  /** Public GameRooms publish here; companion reads never fan out to gameplay DOs. */
+  async publishCompanion(publication: CompanionRoomPublication): Promise<boolean> {
+    const now = Date.now();
+    if (!isCompanionRoomPublication(publication) || publication.pool !== DEFAULT_ROOM_NAME ||
+        !isPublicCompanionRoom(publication.room, DEFAULT_ROOM_NAME) ||
+        publication.expiresAt !== publication.observedAt + COMPANION_FRESHNESS_MS ||
+        publication.observedAt > now + 5_000 || publication.expiresAt <= now) return false;
+    const payload = JSON.stringify(publication);
+    this.ctx.storage.sql.exec(
+      `INSERT INTO companion_summaries(name,pool,generation,revision,observed_at,expires_at,active,payload)
+       VALUES (?,?,?,?,?,?,1,?)
+       ON CONFLICT(name) DO UPDATE SET
+         pool=excluded.pool,generation=excluded.generation,revision=excluded.revision,
+         observed_at=excluded.observed_at,expires_at=excluded.expires_at,
+         active=1,payload=excluded.payload
+       WHERE excluded.generation > companion_summaries.generation
+          OR (excluded.generation = companion_summaries.generation
+              AND excluded.revision > companion_summaries.revision)`,
+      publication.room, publication.pool, publication.generation, publication.revision,
+      publication.observedAt, publication.expiresAt, payload,
+    );
+    const stored = this.ctx.storage.sql.exec<{ generation: number; revision: number; active: number }>(
+      'SELECT generation,revision,active FROM companion_summaries WHERE name = ?', publication.room,
+    ).one();
+    const accepted = stored.active === 1 && stored.generation === publication.generation &&
+      stored.revision === publication.revision;
+    if (accepted) this.ctx.storage.sql.exec('INSERT OR IGNORE INTO rooms(name) VALUES (?)', publication.room);
+    return accepted;
+  }
+
+  /** Tombstones retain the ordering stamp so a delayed publication cannot resurrect a room. */
+  removeCompanion(name: string, generation: number, revision: number): void {
+    if (!isPublicCompanionRoom(name, DEFAULT_ROOM_NAME) || !Number.isSafeInteger(generation) ||
+        generation < 1 || !Number.isSafeInteger(revision) || revision < 1) return;
+    this.ctx.storage.sql.exec(
+      `INSERT INTO companion_summaries(name,pool,generation,revision,observed_at,expires_at,active,payload)
+       VALUES (?,?,?,?,?,0,0,'{}')
+       ON CONFLICT(name) DO UPDATE SET
+         pool=excluded.pool,generation=excluded.generation,revision=excluded.revision,
+         observed_at=excluded.observed_at,expires_at=0,active=0,payload='{}'
+       WHERE excluded.generation > companion_summaries.generation
+          OR (excluded.generation = companion_summaries.generation
+              AND excluded.revision >= companion_summaries.revision)`,
+      name, DEFAULT_ROOM_NAME, generation, revision, Date.now(),
+    );
+  }
+
+  companionStatus(cursor: string | null, limit: number, observedAt = Date.now()): CompanionStatusEnvelope {
+    const pageLimit = Number.isSafeInteger(limit) ?
+      Math.max(1, Math.min(COMPANION_MAX_PAGE_SIZE, limit)) : 1;
+    this.ctx.storage.sql.exec(
+      `DELETE FROM companion_summaries
+       WHERE (active = 0 AND observed_at < ?) OR (active = 1 AND expires_at <= ?)`,
+      observedAt - COMPANION_TOMBSTONE_RETENTION_MS, observedAt,
+    );
+    const rows = this.ctx.storage.sql.exec<{ name: string; payload: string }>(
+      `SELECT name,payload FROM companion_summaries
+       WHERE pool = ? AND active = 1 AND expires_at > ? AND name > ?
+       ORDER BY name LIMIT ?`,
+      DEFAULT_ROOM_NAME, observedAt, cursor ?? '', pageLimit + 1,
+    ).toArray();
+    const hasMore = rows.length > pageLimit;
+    const page = hasMore ? rows.slice(0, pageLimit) : rows;
+    const rooms: CompanionRoom[] = [];
+    for (const row of page) {
+      try {
+        const publication: unknown = JSON.parse(row.payload);
+        if (!isCompanionRoomPublication(publication) || publication.pool !== DEFAULT_ROOM_NAME) continue;
+        const { pool: _pool, ...room } = publication;
+        rooms.push(room);
+      } catch { /* Ignore damaged rows; a live room republishes authoritatively. */ }
+    }
+    return {
+      schemaVersion: COMPANION_SCHEMA_VERSION,
+      observedAt,
+      rooms,
+      nextCursor: hasMore ? page[page.length - 1]?.name ?? null : null,
+    };
+  }
+
+  async retire(name: string, pool: string, generation?: number, revision?: number): Promise<void> {
     if (name === pool) return; // Keep the canonical room/world identity.
     const previous = this.turn;
     let release!: () => void;
     this.turn = new Promise<void>(resolve => { release = resolve; });
     await previous;
     try {
-      if (await this.env.GAME_ROOM.getByName(name).occupiedSlots() === 0) this.ctx.storage.sql.exec('DELETE FROM rooms WHERE name = ?',name);
+      if (await this.env.GAME_ROOM.getByName(name).occupiedSlots() === 0) {
+        this.ctx.storage.sql.exec('DELETE FROM rooms WHERE name = ?',name);
+        if (generation !== undefined && revision !== undefined) this.removeCompanion(name, generation, revision);
+      }
     } finally { release(); }
   }
 

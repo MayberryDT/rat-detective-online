@@ -9,13 +9,14 @@ import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import { serializeServerMessage } from './serializeServerMessage';
 import type { ChaosState } from '../shared/chaosState';
 import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
-import { createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation } from '../shared/assignments';
+import { ASSIGNMENT_IDS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation } from '../shared/assignments';
 import { incidentRoster, isEvidenceMode, isIncidentId, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
 import { DurableObject } from 'cloudflare:workers';
 import {
   MAX_CONNECTIONS,
   MAX_SERVER_MESSAGE_BYTES,
   MAX_PLAYERS,
+  DEFAULT_ROOM_NAME,
   PROTOCOL_VERSION,
   RESPAWN_DELAY_MS,
   WIN_DISPLAY_MS,
@@ -42,6 +43,7 @@ import { ServerBotController } from './ServerBotController';
 import { createRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { logClientDiagnostics, allowsLocalDiagnostics } from './clientDiagnostics';
+import { companionProjectionDue, companionProjectionSignature, projectCompanionRoom } from './companionStatus';
 import {
   clampPosition,
   HIT_RATE,
@@ -50,7 +52,10 @@ import {
   PING_RATE,
   RateLimiter,
   SHOOT_RATE,
-  isPlausibleMovement,
+  createMovementAllowance,
+  consumeMovementAllowance,
+  MOVEMENT_ENVELOPE,
+  type MovementAllowance,
   isPlausibleShot,
   parseClientMessage,
 } from './validation';
@@ -93,6 +98,10 @@ const BOT_ROSTER_KEY = 'persistent-bot-roster-v1';
 const MATCH_ROOM_KEY = 'match-room-v1';
 const EVIDENCE_MODE_KEY = 'evidence-mode-v1';
 const FORCED_INCIDENT_KEY = 'incident-forced-v1';
+const COMPANION_GENERATION_KEY = 'companion-generation-v1';
+const COMPANION_REVISION_KEY = 'companion-revision-v1';
+const COMPANION_ACTIVE_KEY = 'companion-active-v1';
+const COMPANION_REFRESH_MS = 20_000;
 export const BOT_REFILL_MS = 10_000;
 const JOIN_LEASE_MS = 10_000;
 export const BOT_HEARTBEAT_MS = 15_000;
@@ -149,7 +158,7 @@ export class GameRoom extends DurableObject<Env> {
   private lastActiveAt = new Map<string, number>();
   private recentShots = new Map<string, string[]>();
   private lastMovementSequence = new Map<string, number>();
-  private lastAcceptedMovementAt = new Map<string, number>();
+  private movementAllowances = new Map<string, MovementAllowance>();
   private readonly shotAcceptedAt = new Map<string, number>();
   private lastMovementBroadcast = new Map<string, { pose: MovementPose; at: number; stationary: boolean }>();
   private readonly rateLimiter = new RateLimiter();
@@ -158,6 +167,12 @@ export class GameRoom extends DurableObject<Env> {
   private readonly pendingMovement=new Map<string,Extract<ServerMessage,{type:'playersMoved'}>['players'][number]>();
   private lastSnapshotAt = 0;
   private reconnects = 0;
+  private companionGeneration = 0;
+  private companionRevision = 0;
+  private companionActive = false;
+  private companionLastPublishedAt = 0;
+  private companionLastProjectedAt = 0;
+  private companionSignature = '';
   /** Tests replace this to age checkpoints without waiting real time. */
   private clock: () => number = () => Date.now();
 
@@ -167,6 +182,8 @@ export class GameRoom extends DurableObject<Env> {
       this.migrate();
       this.hydrate();
       if (this.persistentBots) this.activatePersistentBots();
+      if (this.matchPool === DEFAULT_ROOM_NAME &&
+          [...this.players.keys()].some(id => !this.isManagedBot(id))) this.activateCompanion();
       await this.scheduleNextAlarm();
     });
   }
@@ -321,7 +338,7 @@ export class GameRoom extends DurableObject<Env> {
       if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; }
       if (this.chaos && wasRunning) this.checkpointGame();
       this.nextBotHeartbeat = 0;
-      if (wasRunning && this.matchPool && !this.humanSlots()) this.ctx.waitUntil(this.env.MATCHMAKER.getByName(this.matchPool).retire(this.matchRoom, this.matchPool));
+      if (wasRunning && this.matchPool && !this.humanSlots()) this.retireFromMatchmaker();
     }
   }
 
@@ -382,7 +399,7 @@ export class GameRoom extends DurableObject<Env> {
     for (const entry of this.botRoster) {
       if (this.players.has(entry.id)) continue;
       const player = createPlayer(entry.id, entry.name, entry.appearance,
-        spawnForWorld(this.world, Math.random, this.players.values()));
+        spawnForWorld(this.world, Math.random, this.players.values(), undefined, this.chaos?.assignmentState));
       this.players.set(entry.id, player);
       added.push(entry.id);
       this.persistPlayer(player, true);
@@ -443,9 +460,9 @@ export class GameRoom extends DurableObject<Env> {
     if(!this.isManagedBot(id)||!player||player.hp<=0||this.round.phase!=='playing')return;
     this.chaos?.recoverCarrierCase(id);
     // Rescue is not a death, heal or score reset. Use ordinary clear spawn selection.
-    Object.assign(player,spawnForWorld(this.world,Math.random,this.players.values(),id));
+    Object.assign(player,spawnForWorld(this.world,Math.random,this.players.values(),id,this.chaos?.assignmentState));
     this.serverBots?.reset(id,player);
-    this.lastMovementBroadcast.delete(id);this.lastAcceptedMovementAt.set(id,this.now());this.persistPlayer(player,true);
+    this.lastMovementBroadcast.delete(id);this.movementAllowances.set(id,createMovementAllowance(this.now()));this.persistPlayer(player,true);
     this.broadcast({type:'playerRespawn',id,x:player.x,y:player.y,z:player.z,hp:player.hp});
     log('info','stranded bot recovered',{playerId:id});
   }
@@ -464,6 +481,82 @@ export class GameRoom extends DurableObject<Env> {
       ...(this.round.winnerName ? { winnerName: this.round.winnerName } : {}),
       scores: buildScoreboard(live).map(({ name, kills, deaths }) => ({ name, kills, deaths })),
     };
+  }
+
+  private isPublicMatchRoom(): boolean {
+    return this.matchPool === DEFAULT_ROOM_NAME && this.matchRoom !== null;
+  }
+
+  private activateCompanion(): void {
+    if (!this.isPublicMatchRoom()) return;
+    if (!this.companionActive) {
+      this.companionGeneration++;
+      this.companionRevision = 0;
+      this.companionActive = true;
+      this.ctx.storage.transactionSync(() => {
+        this.writeRoomState(COMPANION_GENERATION_KEY, String(this.companionGeneration));
+        this.writeRoomState(COMPANION_REVISION_KEY, '0');
+        this.writeRoomState(COMPANION_ACTIVE_KEY, 'true');
+      });
+      this.companionSignature = '';
+      this.companionLastPublishedAt = 0;
+      this.companionLastProjectedAt = 0;
+    }
+    this.publishCompanion(true);
+  }
+
+  private publishCompanion(force = false): void {
+    if (!this.companionActive || !this.isPublicMatchRoom() || !this.chaos?.assignmentState) return;
+    const room = this.matchRoom!;
+    const pool = this.matchPool!;
+    const now = this.now();
+    if (!companionProjectionDue(now, this.companionLastProjectedAt, force)) return;
+    this.companionLastProjectedAt = now;
+    const retainedHumanIds = new Set([...this.players.keys()].filter(id => !this.isManagedBot(id)));
+    if (!retainedHumanIds.size) return;
+    const humanIds = new Set([...this.attachedPlayerIds()].filter(id => retainedHumanIds.has(id)));
+    const nextRevision = this.companionRevision + 1;
+    const publication = projectCompanionRoom({
+      room,
+      pool,
+      generation: this.companionGeneration,
+      revision: nextRevision,
+      observedAt: now,
+      round: this.currentRound(),
+      assignment: this.chaos.assignmentState,
+      players: this.players.values(),
+      humanIds,
+      holderId: this.chaos.caseHolderId,
+    });
+    const signature = companionProjectionSignature(publication);
+    const changed = signature !== this.companionSignature;
+    if (!force && !changed && now - this.companionLastPublishedAt < COMPANION_REFRESH_MS) return;
+    this.companionRevision = nextRevision;
+    this.companionSignature = signature;
+    this.companionLastPublishedAt = now;
+    this.writeRoomState(COMPANION_REVISION_KEY, String(this.companionRevision));
+    this.ctx.waitUntil(this.env.MATCHMAKER.getByName(pool).publishCompanion(publication));
+  }
+
+  private deactivateCompanion(): void {
+    if (!this.companionActive || !this.isPublicMatchRoom()) return;
+    const room = this.matchRoom!;
+    const pool = this.matchPool!;
+    this.companionActive = false;
+    this.companionRevision++;
+    this.ctx.storage.transactionSync(() => {
+      this.writeRoomState(COMPANION_ACTIVE_KEY, 'false');
+      this.writeRoomState(COMPANION_REVISION_KEY, String(this.companionRevision));
+    });
+    this.ctx.waitUntil(this.env.MATCHMAKER.getByName(pool)
+      .removeCompanion(room, this.companionGeneration, this.companionRevision));
+  }
+
+  private retireFromMatchmaker(): void {
+    if (!this.matchRoom || !this.matchPool) return;
+    this.deactivateCompanion();
+    this.ctx.waitUntil(this.env.MATCHMAKER.getByName(this.matchPool)
+      .retire(this.matchRoom, this.matchPool, this.companionGeneration, this.companionRevision));
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
@@ -574,7 +667,7 @@ export class GameRoom extends DurableObject<Env> {
     this.reconcileLiveness();
     if (this.matchRoom) {
       this.expireAdmissions(); this.rebalanceBots();
-      if (!this.humanSlots() && this.matchPool) this.ctx.waitUntil(this.env.MATCHMAKER.getByName(this.matchPool).retire(this.matchRoom, this.matchPool));
+      if (!this.humanSlots() && this.matchPool) this.retireFromMatchmaker();
     }
     if (this.persistentBots && (!this.matchRoom || this.humanSlots() > 0)) {
       this.activatePersistentBots();
@@ -631,7 +724,7 @@ export class GameRoom extends DurableObject<Env> {
     try {
       const saved:unknown=JSON.parse(this.readRoomState(ASSIGNMENT_ROTATION_KEY)??'null',(_key,value)=>value==='misfiled-evidence'?'excessive-force':value);
       if(saved&&typeof saved==='object'&&'remaining' in saved&&Array.isArray(saved.remaining)&&
-          saved.remaining.length<=3&&saved.remaining.every(isAssignmentId)&&new Set(saved.remaining).size===saved.remaining.length){
+          saved.remaining.length<=ASSIGNMENT_IDS.length&&saved.remaining.every(isAssignmentId)&&new Set(saved.remaining).size===saved.remaining.length){
         this.assignmentRotation={remaining:[...saved.remaining],
           ...('last' in saved&&isAssignmentId(saved.last)?{last:saved.last}:{}),
           ...('forced' in saved&&isAssignmentId(saved.forced)?{forced:saved.forced}:{})};
@@ -643,6 +736,9 @@ export class GameRoom extends DurableObject<Env> {
     const forcedIncident = this.readRoomState(FORCED_INCIDENT_KEY);
     if (isIncidentId(forcedIncident)) this.forcedIncident = forcedIncident;
     this.matchPool = this.readRoomState('match-pool-v1') ?? this.matchRoom;
+    this.companionGeneration = Math.max(0, Number(this.readRoomState(COMPANION_GENERATION_KEY)) || 0);
+    this.companionRevision = Math.max(0, Number(this.readRoomState(COMPANION_REVISION_KEY)) || 0);
+    this.companionActive = this.readRoomState(COMPANION_ACTIVE_KEY) === 'true';
     this.refillAt = Number(this.readRoomState('bot-refill-at')) || 0;
     this.persistentBots = this.readRoomState(PERSISTENT_BOTS_KEY) === 'true';
     if (this.persistentBots) this.restoreBotRoster();
@@ -706,6 +802,9 @@ export class GameRoom extends DurableObject<Env> {
         this.players.set(row.id, player);
         this.lastCheckpointAt.set(row.id, Number(row.updated_at) || now);
         this.lastActiveAt.set(row.id, attached ? now : lastActive);
+        // The saved pose may precede eviction. Restore only the same bounded
+        // backlog a live connection can earn, never unlimited offline movement.
+        this.movementAllowances.set(row.id,createMovementAllowance(now-MOVEMENT_ENVELOPE.maxElapsedMs));
         if (attached) this.reconnects += 1;
       } catch {
         this.ctx.storage.sql.exec('DELETE FROM players WHERE id = ?', row.id);
@@ -768,7 +867,7 @@ export class GameRoom extends DurableObject<Env> {
       this.removePlayerById(bot.id, true); this.botRoster.pop();
     }
     const id = crypto.randomUUID();
-    const player = createPlayer(id, message.name, message.appearance, spawnForWorld(this.world, Math.random, this.players.values()));
+    const player = createPlayer(id, message.name, message.appearance, spawnForWorld(this.world, Math.random, this.players.values(), undefined, this.chaos?.assignmentState));
     this.players.set(id, player);
     this.persistPlayer(player, true);
     const session={token:crypto.randomUUID(),until:null};this.sessions.set(id,session);this.persistSession(id,session);
@@ -777,12 +876,14 @@ export class GameRoom extends DurableObject<Env> {
 
   private finishJoin(ws:WebSocket, player:PlayerData, fresh:boolean):void {
     const id=player.id;
+    this.movementAllowances.set(id,createMovementAllowance(this.now()));
     this.joining.add(ws);this.audience=null;
     this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined, titleUntil:undefined, delivery: true });
     if (this.matchRoom) this.rebalanceBots();
 
     this.chaosDelivery.delete(ws);
     this.startChaos();
+    this.activateCompanion();
     const snapshot = this.welcomeMessage(id, player);
     this.send(ws, snapshot);
     if (this.getAttachment(ws).receiveMode !== 'welcome-only') {
@@ -833,15 +934,15 @@ export class GameRoom extends DurableObject<Env> {
     this.lastMovementSequence.set(playerId,seq);
     const from={x:player.x,y:player.y,z:player.z};
     const bounded = clampPosition(message.position);
-    const previousAt=this.lastAcceptedMovementAt.get(playerId)??this.lastActiveAt.get(playerId)??at;
-    // Character physics already resolves the authored city for humans and hosted
-    // bots. Repeating that work as a synchronous ray for every 20 Hz pose both
-    // stalls the room and rejects valid corner/landing motion, most visibly at
-    // Hot Pursuit speed. Keep the finite authority envelope without a second,
-    // geometrically different collision controller.
-    const accepted=!bounded.corrected&&isPlausibleMovement(from,bounded.position,at-previousAt);
+    let allowance=this.movementAllowances.get(playerId);
+    if(!allowance){
+      allowance=createMovementAllowance(this.lastActiveAt.get(playerId)??at);
+      this.movementAllowances.set(playerId,allowance);
+    }
+    // Spend accumulated server time across the whole delayed batch. Resetting
+    // the clock on each accepted packet rejects normal compressed deliveries.
+    const accepted=!bounded.corrected&&consumeMovementAllowance(allowance,from,bounded.position,at);
     const position=accepted?bounded.position:from,corrected=!accepted;
-    if(accepted)this.lastAcceptedMovementAt.set(playerId,at);
     player.x = position.x;
     player.y = position.y;
     player.z = position.z;
@@ -1029,8 +1130,8 @@ export class GameRoom extends DurableObject<Env> {
         const player = this.players.get(event.player_id);
         if (!player) continue;
 
-        respawnPlayer(player, spawnForWorld(this.world, Math.random, this.players.values(), player.id));
-        this.lastMovementBroadcast.delete(player.id);this.lastAcceptedMovementAt.set(player.id,now);
+        respawnPlayer(player, spawnForWorld(this.world, Math.random, this.players.values(), player.id,this.chaos?.assignmentState));
+        this.lastMovementBroadcast.delete(player.id);this.movementAllowances.set(player.id,createMovementAllowance(now));
         if (this.isManagedBot(player.id)) this.serverBots?.reset(player.id, { x: player.x, y: player.y, z: player.z });
         this.persistPlayer(player, true);
         this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
@@ -1041,15 +1142,16 @@ export class GameRoom extends DurableObject<Env> {
         // deadline cannot consume held time, change mode or choose a winner.
         if(this.chaos?.assignmentState&&(this.round.phase!=='won'||this.round.resetAt!==event.due_at))continue;
         this.lastMovementBroadcast.clear();
-        this.lastAcceptedMovementAt.clear();
+        this.movementAllowances.clear();
         this.chaos?.reset();
         this.applyShotEvents();
         this.round = playingRound(this.now());
         this.beginAssignment();
 
         const resetPlayers = resetRoundForWorld(
-          [...this.players.values()].filter(player => !this.isManagedBot(player.id)), this.world);
+          [...this.players.values()].filter(player => !this.isManagedBot(player.id)), this.world,Math.random,this.chaos?.assignmentState);
         for (const player of resetPlayers) {
+          this.movementAllowances.set(player.id,createMovementAllowance(now));
           this.persistPlayer(player, true);
           this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
         }
@@ -1057,6 +1159,7 @@ export class GameRoom extends DurableObject<Env> {
         this.checkpointGame();
         this.broadcast({ type: 'gameReset', round: this.currentRound() });
         this.broadcastScoreboard();
+        this.publishCompanion(true);
       }
     }
 
@@ -1100,6 +1203,7 @@ export class GameRoom extends DurableObject<Env> {
         if(this.chaos)this.checkpointGame();
       }else this.removePlayerById(playerId);
       this.setAttachment(ws, { ...this.getAttachment(ws), playerId: undefined, admissionUntil: undefined });
+      this.publishCompanion(true);
     }
     this.ctx.waitUntil(this.scheduleNextAlarm());
     if (this.matchRoom) {
@@ -1129,10 +1233,11 @@ export class GameRoom extends DurableObject<Env> {
     this.recentShots.delete(playerId);
     this.lastMovementBroadcast.delete(playerId);
     this.lastMovementSequence.delete(playerId);
-    this.lastAcceptedMovementAt.delete(playerId);
+    this.movementAllowances.delete(playerId);
     this.rateLimiter.clear(playerId);
     this.broadcast({ type: 'playerLeft', id: playerId });
     this.broadcastScoreboard();
+    this.publishCompanion();
     this.logMetrics('leave');
   }
 
@@ -1209,6 +1314,7 @@ export class GameRoom extends DurableObject<Env> {
         this.checkpointGame(state);this.chaosSavedAt=now;this.chaosSignature=signature;
         this.observeCheckpointSettlement();
       }
+      this.publishCompanion();
       // Legacy recipients share one serialization. Compact recipients use their
       // own delivered baseline and bounded acknowledgement window.
       let recipients=0,maxBytes=0,sentBytes=0;
@@ -1316,6 +1422,7 @@ export class GameRoom extends DurableObject<Env> {
       this.checkpointGame();
     });
     this.broadcast({type:'gameWon',winnerId:result.winnerId,winnerName:result.winnerName,kills,resetAt,assignment:structuredClone(assignment)});
+    this.publishCompanion(true);
     this.ctx.waitUntil(this.scheduleNextAlarm());
   }
 

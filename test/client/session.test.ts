@@ -404,6 +404,17 @@ describe('GameSession', () => {
         transport.onMessage?.(welcome());expect(gun.setIncident).toHaveBeenLastCalledWith();session.dispose();
     });
 
+    it('preserves held movement and firing controls after an authoritative correction',()=>{
+        const {transport,session}=start(),snapshot=welcome();transport.onMessage?.(snapshot);
+        const rat=harness.rats[0],body=rat.entity.body as any,input=harness.inputs[0];
+        body.position.set=vi.fn((x:number,y:number,z:number)=>Object.assign(body.position,{x,y,z}));
+        body.velocity={set:vi.fn()};input.keys.KeyW=true;input.keys.Space=true;input.clear.mockClear();
+        transport.onMessage?.({type:'playerCorrected',player:{...snapshot.player,x:14},at:Date.now()});
+        expect(body.position.x).toBe(14);expect(input.clear).not.toHaveBeenCalled();
+        expect(input.keys.KeyW).toBe(true);expect(input.keys.Space).toBe(true);
+        expect(rat.syncAfterPhysics).toHaveBeenCalledWith(0);session.dispose();
+    });
+
     it('shows hit confirmation only for damage credited to this player',()=>{
         const {transport,hud,session}=start(),snapshot=welcome();transport.onMessage?.(snapshot);
         transport.onMessage?.({type:'playerDamaged',id:'other',hp:2,attackerId:snapshot.id});
@@ -471,6 +482,15 @@ describe('GameSession', () => {
         expect(hud.enterPlaying).toHaveBeenCalled();
         expect(harness.music.at(-1)!.start).toHaveBeenCalledTimes(1);
         expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
+    });
+
+    it('shows invitation routing feedback after the title closes',()=>{
+        const {transport,hud,session}=start();
+        transport.onMessage?.(welcome());
+        transport.onState?.('playing','Invited dispatch expired. Joined public-live-v2.');
+        expect(hud.enterPlaying).toHaveBeenCalledOnce();
+        expect(hud.addKillFeed).toHaveBeenCalledWith('Invited dispatch expired. Joined public-live-v2.');
+        session.dispose();
     });
 
     it('reuses the prepared city on entry and still rebuilds for a different assigned room', () => {

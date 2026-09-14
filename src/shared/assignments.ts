@@ -1,12 +1,14 @@
 import type { Vec3Data } from './networkProtocol';
+import { createJurisdiction, parseJurisdiction, JURISDICTION_TUNING, type JurisdictionState } from './jurisdiction';
 import { LANDMARK_INTERIORS } from './landmarkLayout';
 
-export const ASSIGNMENT_IDS = ['closing-time', 'chain-of-custody', 'excessive-force'] as const;
+export const ASSIGNMENT_IDS = ['closing-time', 'chain-of-custody', 'excessive-force', 'jurisdiction'] as const;
 export type AssignmentId = typeof ASSIGNMENT_IDS[number];
 export const ASSIGNMENT_TUNING = { processingMs: 120_000, caseKillTarget: 10, deliveryTarget: 3, briefingMs: 2_400 } as const;
 export const ASSIGNMENTS = {
+    jurisdiction: {title:'JURISDICTION',rule:'HOLD THE CASE IN THE ZONE. FIRST TO 60 WINS.',flavor:'Your jurisdiction. Their problem.'},
     'closing-time': { title: 'CLOSING TIME', rule: 'HOLD THE CASE AT ZERO. STEAL IT TO STEAL THE WIN.', flavor: 'Whoever signs last gets the commendation.' },
-    'chain-of-custody': { title: 'CHAIN OF CUSTODY', rule: 'DELIVER TO THE YELLOW BUILDING. CASE RESPAWNS. FIRST TO 3 WINS.', flavor: 'Previous investigators need not be acknowledged.' },
+    'chain-of-custody': { title: 'PAPER CHASE', rule: 'Deliver the paperwork. First to three wins.', flavor: 'Previous investigators need not be acknowledged.' },
     'excessive-force': { title: 'EXCESSIVE FORCE', rule: 'HOLD THE CASE. GET 10 KILLS.', flavor: 'Disproportionate response. Impeccable paperwork.' },
 } satisfies Record<AssignmentId, { title: string; rule: string; flavor: string }>;
 
@@ -42,7 +44,7 @@ export interface AssignmentResult {
     winnerId: string;
     winnerName: string;
     at: number;
-    method: 'held' | 'carried' | 'kills';
+    method: 'held' | 'carried' | 'kills' | 'zone-held';
     posthumous: boolean;
 }
 export interface AssignmentState {
@@ -59,6 +61,7 @@ export interface AssignmentState {
     caseKills: Record<string, number>;
     revision: number;
     result?: AssignmentResult;
+    jurisdiction?: JurisdictionState;
 }
 export interface AssignmentRotation {
     remaining: AssignmentId[];
@@ -98,7 +101,7 @@ export function createAssignment(id: AssignmentId, now: number, roundId: string 
     return { roundId, id, phase: 'briefing', revealedAt: now, liveAt: now + ASSIGNMENT_TUNING.briefingMs,
         remainingMs: id === 'closing-time' ? ASSIGNMENT_TUNING.processingMs : 0, deliverySerial: 0, deliveries: {},
         destinations: id === 'chain-of-custody' ? shuffledChainRoute(random) : [],
-        caseKills: {}, revision: 0 };
+        caseKills: {}, revision: 0, ...(id==='jurisdiction'?{jurisdiction:createJurisdiction(random)}:{}) };
 }
 export function activeDestination(state: AssignmentState): DestinationId | undefined {
     return state.id==='chain-of-custody'?state.destinations[state.deliverySerial % state.destinations.length]:undefined;
@@ -139,22 +142,27 @@ export function parseAssignment(value: unknown): AssignmentState | null {
         if(!str(d.playerId,64)||!str(d.playerName,32)||!number(d.at)||d.at<a.liveAt)return null;
         lastDelivery={playerId:d.playerId,playerName:d.playerName,at:d.at};
     }
+    const jurisdiction=a.id==='jurisdiction'?parseJurisdiction(a.jurisdiction):undefined;
+    if(a.id==='jurisdiction'?!jurisdiction:a.jurisdiction!==undefined)return null;
+    if(jurisdiction&&a.phase!=='active'&&jurisdiction.scorerId!==null)return null;
     let result: AssignmentResult | undefined;
     if (a.result !== undefined) {
         if (!a.result || typeof a.result !== 'object') return null;
         const r = a.result as Record<string, unknown>;
         if (!str(r.winnerId, 64) || !str(r.winnerName, 32) || !number(r.at) || r.at < a.liveAt ||
-            !['held', 'carried', 'kills'].includes(String(r.method)) || typeof r.posthumous !== 'boolean') return null;
+            !['held', 'carried', 'kills', 'zone-held'].includes(String(r.method)) || typeof r.posthumous !== 'boolean') return null;
         if (a.id === 'closing-time' ? r.method !== 'held' || a.remainingMs !== 0 :
+            a.id === 'jurisdiction' ? r.method!=='zone-held'||jurisdiction?.heldMs[r.winnerId]!==JURISDICTION_TUNING.targetMs :
             a.id === 'chain-of-custody' ? r.method !== 'carried' || deliveries[r.winnerId] !== ASSIGNMENT_TUNING.deliveryTarget : r.method !== 'kills' || caseKills[r.winnerId] !== ASSIGNMENT_TUNING.caseKillTarget) return null;
         if (r.posthumous) return null;
         result = { winnerId: r.winnerId, winnerName: r.winnerName, at: r.at, method: r.method as AssignmentResult['method'], posthumous: r.posthumous };
     }
+    if(jurisdiction&&Object.entries(jurisdiction.heldMs).some(([id,ms])=>ms===JURISDICTION_TUNING.targetMs&&id!==result?.winnerId))return null;
     if(deliveriesEntries.some(([id,points])=>points===ASSIGNMENT_TUNING.deliveryTarget&&id!==result?.winnerId))return null;
     if ((a.phase === 'closed') !== !!result || entries.some(([id, points]) => points === ASSIGNMENT_TUNING.caseKillTarget && id !== result?.winnerId)) return null;
     return { roundId: a.roundId, id: a.id, phase: a.phase as AssignmentState['phase'], revealedAt: a.revealedAt,
         liveAt: a.liveAt, remainingMs: a.remainingMs, deliverySerial: Number(a.deliverySerial), destinations: [...a.destinations],
-        deliveries, ...(lastDelivery?{lastDelivery}:{}), caseKills, revision: Number(a.revision), ...(result ? { result } : {}) };
+        deliveries, ...(jurisdiction?{jurisdiction}:{}), ...(lastDelivery?{lastDelivery}:{}), caseKills, revision: Number(a.revision), ...(result ? { result } : {}) };
 }
 
 /** Storage-only upgrade from the superseded private assignment prototype.

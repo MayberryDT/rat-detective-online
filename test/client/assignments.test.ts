@@ -18,8 +18,8 @@ describe('Dispatch assignment rules',()=>{
     it('plays each assignment once per shuffled cycle, without a boundary repeat',()=>{
         for(const rng of [()=>0,()=>.5,()=>.999999]){
             const bag:AssignmentRotation={remaining:[]};
-            const sequence=Array.from({length:18},()=>nextAssignment(bag,rng));
-            for(let i=0;i<sequence.length;i+=3)expect(new Set(sequence.slice(i,i+3))).toEqual(new Set(ASSIGNMENT_IDS));
+            const sequence=Array.from({length:ASSIGNMENT_IDS.length*6},()=>nextAssignment(bag,rng));
+            for(let i=0;i<sequence.length;i+=ASSIGNMENT_IDS.length)expect(new Set(sequence.slice(i,i+ASSIGNMENT_IDS.length))).toEqual(new Set(ASSIGNMENT_IDS));
             for(let i=1;i<sequence.length;i++)expect(sequence[i]).not.toBe(sequence[i-1]);
         }
     });

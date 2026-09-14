@@ -31,7 +31,6 @@
 .touch-mode .roulette-window{background:#140c1c55;border-color:#170e2480}
 .touch-mode .dispatch-hud .dispatch-alert-label,.touch-mode .roulette-stamp{background:#28172fb3;border-color:#170e2470;box-shadow:none}
 .touch-mode .dispatch-time-track{display:block;height:6px;margin:6px 0 0;background:#0f0a1480}
-.touch-mode .dispatch-hud:has(.dispatch-roulette:not([hidden])) .assignment-ledger{visibility:visible}
 @keyframes touch-dispatch-arrival{from{opacity:0;transform:translateX(-50%) translateY(-18px) rotate(-7deg) scale(.84)}to{opacity:1;transform:translateX(-50%) rotate(-2deg) scale(.7)}}
 @keyframes touch-dispatch-departure{to{opacity:0;transform:translateX(-50%) translateY(-7px) rotate(-2deg) scale(.7)}}
 @keyframes touch-incident-arrival{from{opacity:0;transform:translateY(-4px) scale(.96)}to{opacity:1;transform:none}}

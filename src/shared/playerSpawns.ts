@@ -48,8 +48,11 @@ export function worldSpawnPoints(spec: WorldSpec): readonly Vec3Data[] {
 }
 
 /** Maximize distance to the nearest living rat; randomize ties and empty rooms. */
-export function choosePlayerSpawn(spec: WorldSpec, occupied: Iterable<Vec3Data>, random = Math.random): Vec3Data {
-  const points=worldSpawnPoints(spec), living=[...occupied];
+export function choosePlayerSpawn(spec: WorldSpec, occupied: Iterable<Vec3Data>, random = Math.random, allowed?: (p:Vec3Data)=>boolean): Vec3Data {
+  const pool=worldSpawnPoints(spec), filtered=allowed?pool.filter(allowed):pool;
+  // Every authored hill leaves hundreds of supported street candidates.
+  if(!filtered.length)throw new Error("No supported spawn outside active zone");
+  const points=filtered, living=[...occupied];
   const start=Math.max(0,Math.min(points.length-1,Math.floor(random()*points.length)));
   let best=points[start], bestDistance=-1;
   for (let i=0;i<points.length;i++) {

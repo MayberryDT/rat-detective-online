@@ -2,13 +2,50 @@
 
 Updated September 10, 2026. Tyler’s first-to-three delivery request supersedes the earlier shared six-stamp finish; the latest revision adds a held-Tab full-lobby scoreboard and hides only the local rat’s outline halo. These changes are committed and included in the [September 10 production release](verification/production-release-2026-09-10.md). Private playtest records below retain their dated scope.
 
+## Jurisdiction production release — September 13
+
+The accepted and released playtest follow-up renames Chain of Custody to **PAPER
+CHASE**, with “Deliver the paperwork. First to three wins.” Its stored/network ID
+remains `chain-of-custody`, preserving rounds and progress. Bots now favor active
+objectives over optional supply excursions, and direction cards remain visible
+during roulette. See the [follow-up receipt](verification/objective-focus-paper-chase-2026-09-13.md).
+
+Jurisdiction was added in protocol 16; the latest 75-second timer requires protocol 18. A living genuine-case carrier earns one point per
+second inside the active zone; first to 60 personal points wins. Enemies inside
+do not pause it. Death, theft and leaving retain points. The zone moves every
+75 active seconds with a 10-second warning; the case does not move with it.
+
+The first September 13 pacing follow-up increased duration by 50%; Tyler then
+accepted the gameplay and requested 75 seconds total. A large standalone countdown
+now sits at top center outside the score card, above roulette, with amber in the
+final 10 seconds. See the [timer follow-up](verification/zone-timer-2026-09-13.md). Bots in every
+assignment avoid Ironclad-protected bodies, switch to vulnerable enemies, and
+cancel body-shot bursts when armor activates. Protected carriers remain objective
+targets; bots keep distance nearby and only attempt close, exposed case disarms.
+A direct-shot guard vetoes known silver-coat hits before the case. Existing aim
+error, reflection rules and physical case vulnerability remain. See the
+[follow-up verification](verification/zone-ironclad-2026-09-13.md).
+
+The 6 sites are Records Forecourt, Icebox Loading Yard, Central Crossroads,
+Needleworks Factory Floor, Pump Station Ground Floor and Sewer Junction.
+Outdoor/enclosed categories alternate in shuffled bags. Only the marked floor
+counts, with ordinary jumps allowed. Planted Evidence stays live; private classic
+Tampering freezes progress and relocation time. The retained vulnerable rat keeps
+its points through the existing 30-second reconnect reservation.
+
+See [Jurisdiction verification and preview](verification/jurisdiction-2026-09-13.md).
+The public release now uses protocol 18; see the [release receipt](verification/jurisdiction-production-2026-09-13.md). The sections below include dated
+protocol/preview history; their protocol 7 and new-identity reconnect statements
+are historical.
+
 ## Current rules
 
 | Assignment | Winning action | Progress |
 | --- | --- | --- |
 | Closing Time | Hold the legitimate primary case at zero | 120 seconds of cumulative shared living possession. Loose, briefing and Tampering time pause the clock; theft preserves it |
 | Excessive Force | Reach ten attributed kills while holding the primary case when each kill resolves | Exactly one qualifying point per kill. Personal case kills survive death, disarm and reacquisition independently of total kills |
-| Chain of Custody | Earn three personal paperwork delivery points | Carry the case anywhere inside the currently named whole landmark for one point. Respawn the case at a random clear pickup site and activate the next landmark immediately. Personal scores survive death, disarm, theft and Tampering |
+| Jurisdiction | Earn 60 personal zone points | Hold the genuine case inside the active floor-specific zone; 1 point per second |
+| PAPER CHASE | Earn three personal paperwork delivery points | Carry the case anywhere inside the currently named whole landmark for one point. Respawn the case at a random clear pickup site and activate the next landmark immediately. Personal scores survive death, disarm, theft and Tampering |
 
 Chain landmarks rotate in a server-shuffled six-landmark bag until someone earns three points. Every landmark appears once per bag; if a match needs another bag it reshuffles without repeating the previous destination immediately. There is no fixed first/last building, no six-delivery match requirement and no stamp mechanic. Snapshots, theft, late joining and eviction retain the selected order and personal scores. Random shuffling does not promise that an entire permutation can never recur.
 
@@ -23,7 +60,7 @@ Chain landmarks rotate in a server-shuffled six-landmark bag until someone earns
 
 X/Z must be strictly inside; Y includes the lower bound and excludes the upper. This accepts alternate entrances and interior floors while excluding roofs, outside pavement, and the street directly above Maintenance. Approach coordinates guide the existing bots and recovery only; they do not constrain where entry scores. There are no interaction buttons, stationary waits, north/south building subdivisions or new map geometry. Needleworks is the existing name of the user’s Needle landmark. West Sluice is separate from Pump Station, so including the omitted landmark makes six eligible destinations. Historical geography was checked against GBrain `brain:sessions/2026/09/rat-detective-distinct-interiors-playtest-pass-2026-09-07` and current shared layouts.
 
-The three-assignment playlist itself also uses a shuffle bag with no immediate repeats across boundaries. One assignment completion ends the match. Version-2 assignment rooms have no normal kill-limit, elapsed-match win or highest-kills fallback. Total kills are actual kills; the old 2× carrier multiplier remains only in the separate legacy version-1 path.
+The assignment playlist uses a shuffle bag with no immediate repeats across boundaries. The protocol-18 production release includes Jurisdiction as its fourth entry; valid stored 3-mode bags finish before the next refill. One assignment completion ends the match. Version-2 assignment rooms have no normal kill-limit, elapsed-match win or highest-kills fallback. Total kills are actual kills; the old 2× carrier multiplier remains only in the separate legacy version-1 path.
 
 Excessive Force evaluates possession synchronously at attributed kill resolution: fire then collect before the kill scores; fire while carrying then lose the case before the kill does not. Projectile, ricochet and corpse-missile attribution remains. Misfiled Evidence has no active selection/instructions or loose-delivery win. Departed identities are pruned; reconnecting retains the existing new-player identity contract.
 

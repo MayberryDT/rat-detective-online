@@ -92,7 +92,7 @@ export class MatchScoreboard {
     private render(): void {
         const assignment = this.assignment, mode = assignment?.id;
         const held = (id: string) => Math.max(0, this.state?.possession[id] ?? 0);
-        const points = (id: string) => mode === 'excessive-force' ? assignment?.caseKills[id] ?? 0 : mode === 'chain-of-custody' ? assignment?.deliveries[id] ?? 0 : held(id);
+        const points = (id: string) => mode==='jurisdiction'?(assignment?.jurisdiction?.heldMs[id]??0)/1000:mode === 'excessive-force' ? assignment?.caseKills[id] ?? 0 : mode === 'chain-of-custody' ? assignment?.deliveries[id] ?? 0 : held(id);
         const winner = assignment?.result?.winnerId;
         const rows = [...this.players.values()].sort((a, b) => Number(b.id === winner) - Number(a.id === winner) ||
             (mode ? points(b.id) - points(a.id) : b.kills - a.kills) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -102,8 +102,8 @@ export class MatchScoreboard {
         text(this.summary, `${rows.length} INVESTIGATORS · ${totalKills} KILLS`);
         text(this.mode, mode ? ASSIGNMENTS[mode].title : 'DEATHMATCH');
         text(this.context, assignment?.result ? `${assignment.result.winnerName} WINS` : assignment?.phase === 'suspended' ? 'TAMPERING · OBJECTIVE PAUSED' :
-            mode === 'closing-time' ? `${caseTime(Math.ceil(assignment!.remainingMs / 1000))} REMAINING` : mode === 'chain-of-custody' ? 'FIRST TO 3 DELIVERIES' : mode === 'excessive-force' ? 'FIRST TO 10 CASE KILLS' : 'THIS ROUND');
-        const columns = ['#', 'INVESTIGATOR', ...(mode === 'excessive-force' ? ['CASE KILLS'] : mode === 'chain-of-custody' ? ['DELIVERIES'] : []), 'KILLS', 'DEATHS', 'K/D', 'CASE TIME', 'CASE SHARE', 'STATUS'];
+            mode === 'jurisdiction' ? 'FIRST TO 60 ZONE POINTS' : mode === 'closing-time' ? `${caseTime(Math.ceil(assignment!.remainingMs / 1000))} REMAINING` : mode === 'chain-of-custody' ? 'FIRST TO 3 DELIVERIES' : mode === 'excessive-force' ? 'FIRST TO 10 CASE KILLS' : 'THIS ROUND');
+        const columns = ['#', 'INVESTIGATOR', ...(mode === 'jurisdiction' ? ['ZONE POINTS'] : mode === 'excessive-force' ? ['CASE KILLS'] : mode === 'chain-of-custody' ? ['DELIVERIES'] : []), 'KILLS', 'DEATHS', 'K/D', 'CASE TIME', 'CASE SHARE', 'STATUS'];
         const columnSignature = columns.join('|');
         if (columnSignature !== this.columns) {
             this.columns = columnSignature; this.head.replaceChildren();
@@ -120,7 +120,7 @@ export class MatchScoreboard {
             const holder = p.id === this.state?.case.owner;
             const status = p.id === winner ? 'WINNER' : p.hp === 0 ? 'RAT DOWN' : holder ? 'ON THE CASE' : p.hp === undefined ? 'IN THE CITY' : `${p.hp} / 3 HP`;
             return {id: p.id, local, holder, down: p.hp === 0, name: p.name, tag: local ? 'YOU' : '',
-                cells: [String(i + 1), ...(mode === 'excessive-force' ? [`${points(p.id)} / 10`] : mode === 'chain-of-custody' ? [`${points(p.id)} / 3`] : []),
+                cells: [String(i + 1), ...(mode === 'jurisdiction' ? [`${Math.floor(points(p.id))} / 60`] : mode === 'excessive-force' ? [`${points(p.id)} / 10`] : mode === 'chain-of-custody' ? [`${points(p.id)} / 3`] : []),
                     String(p.kills), String(p.deaths), p.deaths ? (p.kills / p.deaths).toFixed(2) : p.kills ? '∞' : '—',
                     this.state ? caseTime(held(p.id)) : '—', this.state && totalHeld ? `${Math.round(held(p.id) / totalHeld * 100)}%` : '—', status]};
         });
@@ -146,7 +146,7 @@ export class MatchScoreboard {
                     }
                     const cell = this.doc.createElement('td'); cell.textContent = value;
                     if (i === p.cells.length - 1) cell.className = 'investigator-status';
-                    else if ((i === 1 && (mode === 'excessive-force' || mode === 'chain-of-custody')) || (i === 4 && mode === 'closing-time')) cell.className = 'investigator-objective';
+                    else if ((i === 1 && (mode === 'excessive-force' || mode === 'chain-of-custody' || mode === 'jurisdiction')) || (i === 4 && mode === 'closing-time')) cell.className = 'investigator-objective';
                     row.appendChild(cell);
                 });
                 this.renderedRows.set(p.id,{row,signature:rowSignature});return row;

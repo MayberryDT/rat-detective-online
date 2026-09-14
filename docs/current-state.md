@@ -1,6 +1,96 @@
 # Current Rat Detective state
 
-Verified from source and production on **2026-09-13**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production on **2026-09-14**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
+
+## Omarchy Dispatch companion — September 14
+
+Production Worker `55a9e2fe-e219-451d-aa55-de48ba72928e` adds the versioned
+`/api/companion/v1/status` public-room feed and matching invitation handling.
+Active rooms publish bounded summaries to the existing admission directory;
+companion reads do not wake sleeping games. Protocol remains 18. Invitations
+respect capacity and are consumed after successful entry so same-tab reconnect
+continues to work. The preceding gameplay release remains intact.
+
+The published Omarchy companion 1.1.1 has a redesigned Dispatch panel with default live Omarchy
+appearance and optional Rat Detective noir type/colors. See the
+[appearance receipt](verification/omarchy-appearance-2026-09-14.md).
+It includes assignment progress, room selection, launch
+and return, invitations, optional alerts, recording and desktop preferences.
+See the [companion guide](omarchy.md) and
+[release receipt](verification/omarchy-dispatch-2026-09-14.md) for desktop installation,
+published package and the distinction between automated checks and human testing.
+
+## Paper Chase sewer-guidance production fix — September 13
+
+Tyler reported street-level destination arrows stuck on “EXIT SEWER”. The recent
+feet-based guidance change left Paper Chase using `y < 0`, so slightly negative
+grounded feet were misclassified as underground. Both Paper Chase and Jurisdiction
+now share the existing `y < -1` sewer boundary. Actual sewer exit/entry guidance
+remains. Regression tests cover all six destinations and all four pipe exits.
+After the local fix passed 1,131 tests, typecheck and build, Tyler authorized
+release. Live Worker `b0518f94-4dc1-433f-af5f-7141a70d2d4b` includes the fix;
+protocol remains 18. Refresh existing tabs. See the
+[fix and release receipt](verification/paper-chase-sewer-guidance-2026-09-13.md).
+
+## Jurisdiction production release — September 13
+
+Released after accepted playtesting: Chain of Custody is now **PAPER CHASE**
+(“Deliver the paperwork. First to three wins.”), retaining its stored mode ID.
+Bots favor active case/mode objectives over supply excursions. Useful on-route
+pickups remain, with short detour budgets and a cooldown; unnecessary buff
+refreshes and long armor trips yield to a live objective. Jurisdiction carriers
+stay in a scoring zone through its warning, and quiet defenders hold their posts.
+Destination guidance stays visible during roulette and finds space around HUD
+cards. See the [follow-up receipt](verification/objective-focus-paper-chase-2026-09-13.md).
+
+The earlier playtest follow-up extended each zone by 50% (45 → 67.5 seconds).
+Across all modes bots avoid firing at Ironclad-protected bodies, cancel active
+body bursts when armor appears, and favor vulnerable opponents. They still
+pursue a protected case carrier, keeping distance up close and attempting only
+nearby, exposed case disarms. See the [timing and armor-awareness receipt](verification/zone-ironclad-2026-09-13.md).
+
+After accepting that playtest, Tyler requested 75-second zones and a more obvious
+clock. The relocation countdown now stands alone at top center in large type,
+outside the score card. Roulette sits below it, and destination guidance avoids
+its bounds. Amber marks the final 10 seconds; paused/briefing labels follow the
+assignment state. See the [standalone timer receipt](verification/zone-timer-2026-09-13.md).
+
+Production now includes Jurisdiction as the fourth Dispatch Assignment, protocol 18.
+Only the living genuine-case carrier inside the active zone earns personal time:
+one point per second, first to 60. Enemy presence does not contest scoring.
+Zones alternate between 3 outdoor and 3 enclosed sites, move every 75 active
+seconds and announce the next site with 10 seconds remaining. The physical case
+stays in place. Ground-floor and sewer bands exclude upper floors and the street
+above; classic Tampering pauses both scoring and zone duration.
+
+Shared geometry drives the floor boundary, bot defence posts and spawn exclusion.
+Bots carry to zones, defend supported positions and use existing navigation for
+sewer routes; some intercept or rotate early. HUD, scoreboard, compact snapshots,
+reconnect and stored playlist compatibility include the new mode. Continuous
+score ticks do not increment the checkpoint transition revision.
+
+Tyler accepted the final preview and authorized production release. Worker
+`506ae57e-fd98-4a9d-b5e3-b51ce6e44779` serves the matching client on
+`https://ratdetective.online/`. Existing tabs must reload. The normal four-mode
+playlist is live; retained older bags finish before refilling with four modes.
+See the [release receipt](verification/jurisdiction-production-2026-09-13.md).
+Phone performance remains unmeasured. See the [implementation receipt](verification/jurisdiction-2026-09-13.md)
+and [agreed outline](jurisdiction-implementation-outline.md).
+
+## Batched movement and permanent score card — September 13 follow-up
+
+A deterministic GameRoom test reproduced continued snap-backs: two valid 125 ms
+walking poses arriving together caused the second to be rejected. Movement now
+spends a bounded allowance accumulated over server time across the entire batch.
+Starting slack, 35/110-unit rates, two-second capacity, finite world bounds and
+sequences remain. Corrections no longer cancel held movement or touch controls.
+
+The top-left assignment score card now stays visible in all three modes during
+roulette, incident reveal/departure, cooldown and new-assignment briefing. Removed
+the remaining hiding selectors and separated compact desktop broadcasts from it.
+All 1,059 tests, typecheck and build pass. Live Worker
+`57934957-c05b-429d-93da-9b3f384cbed3` serves the matching client. See the
+[verification and release receipt](verification/movement-batching-score-card-2026-09-13.md).
 
 ## Production movement lag correction — September 13
 
@@ -15,7 +105,7 @@ it is not a competitive anti-cheat guarantee.
 Hot Pursuit remains a 1.45× ten-second movement boost, including its red outline
 and trail. The corrected envelope explicitly covers a full-speed boosted pose.
 All **1,053 tests**, typecheck and the production build pass. Worker
-**`e1ecb3ed-1853-480d-89f0-81817d0c238b`** is live with the bot traversal release
+**`e1ecb3ed-1853-480d-89f0-81817d0c238b`** shipped with the bot traversal release
 preserved. A bounded post-deploy observer decoded 1,877 movement updates and 289
 snapshots with Hot Pursuit active without a correction broadcast. Human feel remains
 for the requested playtest. See the [release receipt](verification/movement-hot-pursuit-lag-2026-09-13.md).

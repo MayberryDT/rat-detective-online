@@ -24,6 +24,7 @@ export function combatRandom(seed: number): () => number {
 /** Trigger rhythm and imperfect perception only. Never selects movement goals. */
 export class BotCombat {
     private targetId?: string;
+    private aimingAtCase=false;
     private observed?: Vec3Data;
     private tracked?: Vec3Data;
     private readyAt = 0;
@@ -41,22 +42,23 @@ export class BotCombat {
     constructor(private readonly random: () => number) {}
     private between(min: number, max: number): number { return min + this.random() * (max-min); }
     reset(): void {
-        this.targetId=undefined;this.observed=undefined;this.tracked=undefined;
+        this.targetId=undefined;this.aimingAtCase=false;this.observed=undefined;this.tracked=undefined;
         this.lastStep=undefined;this.lastSeen=-Infinity;
         this.nextShot=0;this.remaining=0;this.burstUntil=0;this.pauseUntil=0;this.canFollow=false;
     }
-    step(now: number, self: Vec3Data, target: PlayerData | undefined, visible: boolean, allowFire=true): {aim?:Vec3Data;shoot?:Vec3Data} {
+    step(now: number, self: Vec3Data, target: PlayerData | undefined, visible: boolean, allowFire=true,casePoint?:Vec3Data): {aim?:Vec3Data;shoot?:Vec3Data} {
         if(target&&target.id===this.targetId&&target.hp<=0){this.reset();return {};}
         if(visible&&target&&target.hp>0){
-            if(target.id!==this.targetId){
+            if(target.id!==this.targetId||!!casePoint!==this.aimingAtCase){
                 this.reset();this.targetId=target.id;
+                this.aimingAtCase=!!casePoint;
                 this.readyAt=now+this.between(BOT_COMBAT.reactionMinMs,BOT_COMBAT.reactionMaxMs);
                 this.observeAt=0;this.correctionAt=0;
-                this.observed={x:target.x,y:target.y+.9,z:target.z};this.tracked={...this.observed};
+                this.observed=casePoint?{...casePoint}:{x:target.x,y:target.y+.9,z:target.z};this.tracked={...this.observed};
             }
             this.lastSeen=now;
             if(now>=this.observeAt){
-                this.observed={x:target.x,y:target.y+.9,z:target.z};
+                this.observed=casePoint?{...casePoint}:{x:target.x,y:target.y+.9,z:target.z};
                 this.observeAt=now+this.between(BOT_COMBAT.observationMinMs,BOT_COMBAT.observationMaxMs);
             }
         }else if(now-this.lastSeen>BOT_COMBAT.followThroughMs){this.reset();return {};}

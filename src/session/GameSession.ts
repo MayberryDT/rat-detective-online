@@ -115,7 +115,10 @@ export class GameSession {
             this.hud.setConnection(state, message);
             this.scoreboard.setAvailable(state === 'playing');
             this.touch?.setPlaying(state === 'playing');
-            if (state === 'playing') this.hud.enterPlaying();
+            if (state === 'playing') {
+                this.hud.enterPlaying();
+                if(message)this.hud.addKillFeed(message);
+            }
         };
         this.gun.onHitEntity = (victim, damage) => {
             const victimId = this.remotes.idFor(victim);
@@ -266,7 +269,8 @@ export class GameSession {
                     body.position.set(pose.x, pose.y, pose.z);
                     body.velocity.set(0, 0, 0);
                     body.aabbNeedsUpdate = true;
-                    this.clearInput();
+                    // A position correction is not a key-up or touch cancel.
+                    // Preserve held controls so the next physics step can move.
                     this.rat.syncAfterPhysics(0);
                     this.rat.entity.resetMotionHistory();
                     this.rat.resetGrounding();

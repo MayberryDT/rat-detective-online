@@ -6,9 +6,15 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 
 | Document | Purpose |
 | --- | --- |
+| [Omarchy appearance](verification/omarchy-appearance-2026-09-14.md) | Native theme choice, Rat Detective design, visual checks and plugin release |
+| [Paper Chase sewer guidance](verification/paper-chase-sewer-guidance-2026-09-13.md) | Released fix: slightly negative street feet no longer produce stuck exit cues |
+| [Jurisdiction production release](verification/jurisdiction-production-2026-09-13.md) | Accepted four-mode playlist, Paper Chase, bot/HUD updates and verified live version |
+| [Standalone zone countdown](verification/zone-timer-2026-09-13.md) | Private 75-second Jurisdiction timer, desktop/touch layout and refreshed preview |
+| [Longer zones and Ironclad-aware bots](verification/zone-ironclad-2026-09-13.md) | Private Jurisdiction pacing, all-mode armor targeting and matching preview |
 | [Agent entry point](../AGENTS.md) | Design constraints, workflow preferences and regression traps |
 | [Stationary hitbox practice](hitbox-practice.md) | Local target dummies, real hit shapes, controls and preview setup |
 | [Destination and restock visuals](verification/destination-restock-2026-09-13.md) | September 13 building outline removal and item-specific pickup respawn dials |
+| [Batched movement and permanent score card](verification/movement-batching-score-card-2026-09-13.md) | Continued snap-back reproduction, accumulated movement allowance and all-mode score visibility |
 | [Current state](current-state.md) | Shipped gameplay, architecture map and open issues |
 | [Movement and Hot Pursuit lag fix](verification/movement-hot-pursuit-lag-2026-09-13.md) | Production removal of the redundant per-pose city ray, retained movement bounds and live evidence |
 | [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md) | Released launcher pursuit, rooftop armor/return routes and street-to-upper-floor navigation correction |
@@ -40,7 +46,7 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Mobile controls](mobile-controls.md) | Landscape touch input, compact phone HUD and private phone previews |
 | [Chaos foley](chaos-foley.md) | Integrated audio: 13 accepted physical/personal accents and restrained noir countdown/result |
 | [Gameplay baseline](gameplay-baseline.md) | Current tuning and preservation rules |
-| [Dispatch Assignments](dispatch-assignments.md) | Live three-mode rules, shuffled landmarks, noir UI and validation |
+| [Dispatch Assignments](dispatch-assignments.md) | Live four-mode rules, shuffled landmarks, Jurisdiction zones and validation |
 | [Tab scoreboard and local outline](verification/tab-scoreboard-local-outline-2026-09-10.md) | Full held-Tab round stats, opponent-only outline halo and current private preview |
 | [Crossfire colors and case banter](verification/crossfire-case-banter-2026-09-10.md) | Four shot treatments, contextual case jokes, concise status copy and prior private preview |
 | [Cheese, interior lights and delivery respawns](verification/cheese-interior-delivery-2026-09-10.md) | Earlier cheese danger cues, scoped interior pools, random delivery respawns and prior private preview |
@@ -67,9 +73,17 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Network and scaling audit, September 10](network-audit-2026-09-10.md) | Prioritized gameplay-preserving fixes, isolated reproductions and human-capacity verification gaps; audit only |
 | [Network fixes, September 10](verification/network-fixes-2026-09-10.md) | Protocol-6 delivery bounds and optimizations, regression checks, 24-client local results and remaining hosted/rendering limits; superseded by live protocol 7 |
 | [Model follow-ups](model-playtest-followups.md) | Remaining art work and accepted visual direction |
-| [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Optional launcher and public-room panel |
+| [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Assignment-aware Dispatch desk, launcher and public rooms |
+| [Omarchy Dispatch desk plan](omarchy-dispatch-plan.md) | Accepted implementation scope; see the linked release receipt for shipped status |
 | [Visual fixtures](../test/visual/README.md) | Isolated visual tools and dated model history |
 | [Contributing](../CONTRIBUTING.md) / [Security](../SECURITY.md) | Project contribution and trust policies |
+
+## Current private work
+
+- [Paper Chase, objective-focused bots and persistent guidance](verification/objective-focus-paper-chase-2026-09-13.md): playtest follow-up across all four modes.
+
+- [Jurisdiction implementation receipt](verification/jurisdiction-2026-09-13.md): fourth assignment, 6 zones, protocol 16, checks and private preview. Not released to production.
+- [Jurisdiction implementation outline](jurisdiction-implementation-outline.md): the agreed design and implementation acceptance criteria.
 
 ## Historical evidence and proposals
 

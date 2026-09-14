@@ -1,3 +1,7 @@
+import type { AssignmentState } from '../shared/assignments';
+import { activeZone } from '../shared/jurisdiction';
+import { zoneSpawnExcluded } from '../shared/jurisdictionZones';
+const spawnFilter=(a?:AssignmentState)=>a?.jurisdiction?(p:Vec3Data)=>!zoneSpawnExcluded(activeZone(a.jurisdiction!),p):undefined;
 import {
   KILLS_TO_WIN,
   MAX_HP,
@@ -11,15 +15,15 @@ import { generateRandomName } from '../shared/ratNames';
 import type { WorldSpec } from '../shared/worldSpec';
 import { choosePlayerSpawn } from '../shared/playerSpawns';
 
-export function spawnForWorld(spec: WorldSpec, random = Math.random, players: Iterable<PlayerData> = [], excludeId?: string): Vec3Data {
-  return choosePlayerSpawn(spec, [...players].filter(p => p.hp > 0 && p.id !== excludeId), random);
+export function spawnForWorld(spec: WorldSpec, random = Math.random, players: Iterable<PlayerData> = [], excludeId?: string, assignment?:AssignmentState): Vec3Data {
+  return choosePlayerSpawn(spec, [...players].filter(p => p.hp > 0 && p.id !== excludeId), random, spawnFilter(assignment));
 }
 
 /** A new round reserves its new positions, never the previous round's corpses. */
-export function resetRoundForWorld(players: Iterable<PlayerData>, spec: WorldSpec, random = Math.random): PlayerData[] {
+export function resetRoundForWorld(players: Iterable<PlayerData>, spec: WorldSpec, random = Math.random, assignment?:AssignmentState): PlayerData[] {
   const assigned: Vec3Data[] = [];
   return resetRound(players, () => {
-    const spawn=choosePlayerSpawn(spec,assigned,random);
+    const spawn=choosePlayerSpawn(spec,assigned,random,spawnFilter(assignment));
     assigned.push(spawn);
     return spawn;
   });
