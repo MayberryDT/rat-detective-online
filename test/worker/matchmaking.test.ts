@@ -187,19 +187,19 @@ describe('automatic public room population',()=>{
     expect((await stub.status()).players).toBe(0);
   });
 
-  it('places 44 concurrent humans into 16, 16 and 12, keeping preferred-room reconnects and reusing freed slots',async()=>{
+  it('places 28 concurrent humans into 10, 10 and 8, keeping preferred-room reconnects and reusing freed slots',async()=>{
     const group=pool();
-    const joined=await Promise.all(Array.from({length:44},()=>open(group)));
+    const joined=await Promise.all(Array.from({length:28},()=>open(group)));
     const counts=new Map<string,number>();
     for(const c of joined)counts.set(c.welcome!.matchRoom!,(counts.get(c.welcome!.matchRoom!)??0)+1);
-    expect([...counts.values()].sort((a,b)=>b-a)).toEqual([16,16,12]);
+    expect([...counts.values()].sort((a,b)=>b-a)).toEqual([10,10,8]);
     for(const name of counts.keys()){const status=await env.GAME_ROOM.getByName(name).status();expect(status.bots).toBe(0);expect(status.players).toBeLessThanOrEqual(MAX_PLAYERS);}
     const full=joined[0],fullRoom=full.welcome!.matchRoom!;
     await close(full.ws);
     const recovered=await open(group,fullRoom,true,full.welcome!.resumeToken);
     expect(recovered.welcome!.id).toBe(full.welcome!.id);
     expect(recovered.welcome!.matchRoom).toBe(fullRoom);
-    expect(await env.GAME_ROOM.getByName(fullRoom).occupiedSlots()).toBe(16);
+    expect(await env.GAME_ROOM.getByName(fullRoom).occupiedSlots()).toBe(MAX_PLAYERS);
     const last=joined.at(-1)!;const preferred=last.welcome!.matchRoom!;
     await close(last.ws);
     const resumed=await open(group,preferred);

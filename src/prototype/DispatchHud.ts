@@ -60,6 +60,7 @@ export class DispatchHud {
     private zoneNext:HTMLElement;
     private previousDeliverySerial=0;
     private myId='';
+    observing=false;
     private scores:readonly ScoreEntry[]=[];
     private previousPoints=0;
     private previousCountdown=-1;
@@ -213,7 +214,7 @@ export class DispatchHud {
                     this.rankings.appendChild(row);
                 }
             }
-            setText(this.counter,race?`TOP FIVE · FIRST TO ${target}`:'HOLD IT AT ZERO!');
+            setText(this.counter,(this.observing?'OBSERVING · ':'')+(race?`TOP FIVE · FIRST TO ${target}`:'HOLD IT AT ZERO!'));
             setText(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);
             setText(this.assignmentRevealTitle,info.title);setText(this.assignmentRevealRule,info.rule);setText(this.assignmentFlavor,info.flavor);
             let progress='',detail='',fraction=0;
@@ -231,6 +232,10 @@ export class DispatchHud {
             }else{
                 progress=`YOU: ${points} / ${ASSIGNMENT_TUNING.caseKillTarget}`;
                 detail=ownerIsLocal?'KILLS COUNT':'GET THE CASE TO SCORE';fraction=points/ASSIGNMENT_TUNING.caseKillTarget;
+            }
+            if(this.observing){
+                if(race){const leader=leaders[0];progress=leader?`LEAD: ${Math.floor(leader.points)} / ${target}`:`FIRST TO ${target}`;fraction=(leader?.points??0)/target;}
+                detail=j?.scorerId?`${this.scores.find(s=>s.id===j.scorerId)?.name??'CARRIER'} SCORING`:state.case.owner?`${holder} HOLDING`:'CASE LOOSE';
             }
             if(a.phase==='suspended')detail='TAMPERING! PROGRESS PAUSED';
             else if(a.phase==='briefing')detail='GET READY!';

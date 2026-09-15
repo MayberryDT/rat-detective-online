@@ -20,7 +20,7 @@ const spec={...createWorldSpec(42),version:2};
 function fixture(){
  const transports:Transport[]=[];
  const human=createPlayer('human','You',DEFAULT_APPEARANCE,{x:0,y:0,z:0});
- const navigation={route:vi.fn((_from:{x:number;y:number;z:number},to:{x:number;y:number;z:number})=>[to]),explorationTargets:()=>[{x:80,y:0,z:80}],update:vi.fn()};
+ const navigation={supported:(from:{y:number})=>Math.abs(from.y)<.65,route:vi.fn((_from:{x:number;y:number;z:number},to:{x:number;y:number;z:number})=>[to]),explorationTargets:()=>[{x:80,y:0,z:80}],update:vi.fn()};
  const coordinator=new NormalGameBots(spec,{human},{createTransport:()=>{const t=new Transport();transports.push(t);return t;},muzzle:()=>({x:8,y:1.4,z:0}),navigation});
  const joined=(i:number)=>{
   const player=createPlayer(`bot${i}`,transports[i].name,DEFAULT_APPEARANCE,{x:8+i*8,y:0,z:0});

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "d2681a280dde275c4efd01e20891fa16fdfdd1c1d151a87dabb23ee5db036b5f",
+  "verified_at": "2026-09-15T04:02:58.894846+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "cameo-game-integration:registry",
+      "url": "https://registry.npmjs.org/three/0.182.0",
+      "status": 200
+    },
+    {
+      "label": "cameo-game-integration:source",
+      "url": "https://github.com/mrdoob/three.js",
+      "status": 200
+    },
+    {
+      "label": "cameo-game-integration:behavior-evidence",
+      "url": "https://github.com/mrdoob/three.js/blob/r182/examples/webgl_loader_gltf.html",
+      "status": 200
+    },
+    {
+      "label": "cameo-game-integration:platform",
+      "url": "https://threejs.org/docs/pages/WebGLRenderer.html",
+      "status": 200
+    }
+  ]
+}

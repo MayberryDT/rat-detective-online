@@ -196,7 +196,7 @@ vi.mock('../../src/prototype/Neighborhood', () => ({ Neighborhood: class extends
     constructor(scene: unknown, world: unknown, spec: {seed:number;version:number}) { super(scene,world,undefined,spec); }
 } }));
 vi.mock('../../src/prototype/ChaosView', () => ({ ChaosView: class {
-    setScores() {} setIncidentRoster() {} showHealing() {} dispose() {} apply() {} launch() {} fire() {} resetProjectiles() {} update() {}
+    setObserving() {} setScores() {} setIncidentRoster() {} showHealing() {} dispose() {} apply() {} launch() {} fire() {} resetProjectiles() {} update() {}
 } }));
 vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));
 vi.mock('../../src/session/InputState', () => ({
@@ -330,7 +330,7 @@ function createDocument() {
         pointerLockElement: null as unknown,
         hidden: false,
         hasFocus: () => true,
-        body: { appendChild() {} },
+        body: { appendChild() {}, classList:{toggle:vi.fn(),remove:vi.fn()} },
         dispatch(type: string, event: Event) {
             for (const fn of listeners.get(type) ?? []) fn(event);
         },

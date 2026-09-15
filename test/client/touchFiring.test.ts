@@ -33,7 +33,7 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
     // GPU, city and transport are replaced; no browser input automation.
     const session = Object.assign(Object.create(GameSession.prototype), {
         disposed: false, previousTime: 0, stats: null, bots: null, chaos: null, rat, gun, remotes,
-        roundWon: false, myId: 'phone', shotsAttempted: 0, shotsSent: 0,
+        title: {},roundWon: false, myId: 'phone', shotsAttempted: 0, shotsSent: 0,
         lastMovementAt: 0, lastMovement: '', direction: new THREE.Vector3(), input: {keys: {}},
         stage: {scene, world, camera, renderer: {render}, flashlight: new THREE.SpotLight()},
         simulation: new SimulationClock(), city: {update() {}},

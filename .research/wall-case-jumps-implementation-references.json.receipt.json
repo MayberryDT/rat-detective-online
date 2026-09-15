@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "679c2722c0cad3d8092ff77e9d02945d41c27b0ff7e639b0bf3f47552f962b60",
+  "verified_at": "2026-09-15T03:44:53.852669+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "bot-short-traversal:registry",
+      "url": "https://registry.npmjs.org/cannon-es/0.20.0",
+      "status": 200
+    },
+    {
+      "label": "bot-short-traversal:source",
+      "url": "https://github.com/pmndrs/cannon-es",
+      "status": 200
+    },
+    {
+      "label": "bot-short-traversal:behavior-repo",
+      "url": "https://github.com/recastnavigation/recastnavigation",
+      "status": 200
+    },
+    {
+      "label": "bot-short-traversal:behavior-evidence",
+      "url": "https://github.com/recastnavigation/recastnavigation/blob/9f4ce64458dfae86e1239c525ddc219c4e9e06f1/DetourCrowd/Source/DetourCrowd.cpp",
+      "status": 200
+    },
+    {
+      "label": "bot-short-traversal:platform",
+      "url": "https://developers.cloudflare.com/durable-objects/platform/limits/",
+      "status": 200
+    }
+  ]
+}

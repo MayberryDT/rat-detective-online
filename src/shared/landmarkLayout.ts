@@ -1,4 +1,5 @@
 import type { GrayboxBox } from './grayboxLayout';
+import type { Vec3Data } from './networkProtocol';
 
 /** Playable civic interiors. Parent owns graybox/neighborhood visuals and imports these. */
 export interface LandmarkInterior {
@@ -106,6 +107,23 @@ const SPECS: LandmarkSpec[] = [
         ],
     },
 ];
+
+/** A short exit leg derived from the same openings that cut the collision walls.
+ * Keep upper-floor traversal on the existing stairs; roofs and in-building goals
+ * retain their normal route. Extend outside the facade so waypoint tolerance
+ * cannot declare the exit reached while the body is still inside. */
+export function landmarkExitPoint(from:Vec3Data,to:Vec3Data):Vec3Data {
+    const index=SPECS.findIndex((h,i)=>from.y>=-.5&&from.y<Math.max(...LANDMARK_INTERIORS[i].levels)+4&&
+        from.x>h.xmin-1&&from.x<h.xmax+1&&from.z>h.zmin-1&&from.z<h.zmax+1);
+    if(index<0)return to;
+    const h=SPECS[index];
+    if(to.x>=h.xmin-1&&to.x<=h.xmax+1&&to.z>=h.zmin-1&&to.z<=h.zmax+1)return to;
+    const exits=h.openings.map(o=>o.wall==='north'?{x:o.center,y:0,z:h.zmin-4}:
+        o.wall==='south'?{x:o.center,y:0,z:h.zmax+4}:
+        o.wall==='west'?{x:h.xmin-4,y:0,z:o.center}:{x:h.xmax+4,y:0,z:o.center});
+    const cost=(p:Vec3Data)=>Math.hypot(from.x-p.x,from.z-p.z)+Math.hypot(to.x-p.x,to.z-p.z);
+    return exits.reduce((best,p)=>cost(p)<cost(best)?p:best);
+}
 
 interface Rect {xmin:number; xmax:number; zmin:number; zmax:number}
 

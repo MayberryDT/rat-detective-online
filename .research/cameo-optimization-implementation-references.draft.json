@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "feature": "cameo-optimization",
+  "researched_at": "2026-09-14",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "not-applicable",
+      "reason": "Existing native viewer controls are retained."
+    },
+    {
+      "class": "state-persistence",
+      "status": "not-applicable",
+      "reason": "No stored preferences or gameplay state change."
+    },
+    {
+      "class": "auth-security",
+      "status": "not-applicable",
+      "reason": "Only local same-origin authored GLB assets are loaded; no auth changes."
+    },
+    {
+      "class": "network-sync",
+      "status": "not-applicable",
+      "reason": "Art viewer never joins a gameplay room."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "Prebuilt geometry and async shader compilation replace startup geometry generation."
+    },
+    {
+      "class": "accessibility",
+      "status": "required",
+      "reason": "Existing reduced-motion and controls must work while assets load."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "Compare original geometry, animation samples and GLB resource sizes."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "Use established Three.js GLTF loading and keyframe optimization."
+    }
+  ],
+  "mappings": [
+    {
+      "id": "cameo-compact-assets",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "platform-device",
+        "accessibility",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": {
+        "name": "three",
+        "ecosystem": "npm",
+        "package": "three",
+        "version": "0.182.0",
+        "registry_url": "https://registry.npmjs.org/three/0.182.0",
+        "source_url": "https://github.com/mrdoob/three.js",
+        "license": "MIT",
+        "compatibility": "Existing locked Three.js 0.182.0 and matching addons. No added dependencies.",
+        "ownership": "Authoring owns geometry and clips; GLTFLoader owns decoding; viewer owns lifecycle, controls and shader preparation.",
+        "locked_by": "../package-lock.json"
+      },
+      "behavior": {
+        "repo_url": "https://github.com/mrdoob/three.js",
+        "revision": "r182",
+        "evidence_url": "https://github.com/mrdoob/three.js/blob/r182/examples/webgl_loader_gltf.html",
+        "behavior": "Load GLB assets with existing GLTFLoader; retain their scene hierarchy and animation. KeyframeTrack.optimize removes redundant constant keys.",
+        "edge_states": [
+          "loading",
+          "failed asset",
+          "disposed during load",
+          "reduced motion",
+          "paused timeline",
+          "shader preparation"
+        ],
+        "do_not_copy": "Do not copy example styling, environment textures or camera. Preserve accepted characters and silent art scope."
+      },
+      "platform": {
+        "url": "https://threejs.org/docs/pages/WebGLRenderer.html",
+        "requirement": "compileAsync prepares materials using parallel shader compilation when supported. Yield before initial upload; no guaranteed device FPS claim."
+      },
+      "proof": [
+        "npx vitest run --config vitest.client.config.ts test/client/cameoAnimations.test.ts",
+        "node test/visual/cameos/export-models.mjs",
+        "node test/visual/cameos/verify-optimization.mjs",
+        "npm run typecheck",
+        "Silent browser art inspection of loaded GLBs at shot and resting poses"
+      ]
+    }
+  ]
+}

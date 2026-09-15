@@ -1,3 +1,4 @@
+import {DEFAULT_BOT_EXPERIMENT,type BotExperiment} from '../shared/BotExperiments';
 import * as C from 'cannon-es';
 import {BotNavigation} from '../shared/BotNavigation';
 import {ObjectiveBotBrain,type ObjectiveNavigation} from '../shared/ObjectiveBotBrain';
@@ -16,7 +17,7 @@ export interface ServerBotCallbacks {
 }
 interface Bot {
     id:string;body:C.Body;brain:ObjectiveBotBrain;actor?:PlayerData;
-    facing:number;initialized:boolean;alive:boolean;normalJump:boolean;
+    facing:number;initialized:boolean;alive:boolean;normalJump:boolean;zoneHop:boolean;
     launchedUntil:number;lastLaunchAt:number;lastMovementAt:number;
     strandedSince:number;escapeCheckAt:number;escapeX:number;escapeZ:number;
     progressAt:number;progressX:number;progressZ:number;
@@ -48,7 +49,7 @@ export class ServerBotController {
     private looseCaseSince=0;
     private looseCasePosition?:Vec3Data;
 
-    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks){
+    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks,experiment:BotExperiment=DEFAULT_BOT_EXPERIMENT){
         this.world.broadphase=new StaticCityBroadphase(this.world);
         this.world.broadphase.useBoundingBoxes=true;
         this.world.collisionMatrix=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
@@ -64,6 +65,10 @@ export class ServerBotController {
         this.navigation=new BotNavigation(spec);
         const sharedNavigation:ObjectiveNavigation={
             explorationTargets:()=>this.navigation.explorationTargets(),
+            travelPoint:(from,to)=>this.navigation.travelPoint(from,to),
+            supported:from=>this.navigation.supported(from),
+            jumpStep:(from,to)=>this.navigation.jumpStep(from,to),
+            approachStep:(from,to)=>this.navigation.approachStep(from,to),
             route:(from,to)=>this.navigation.route(from,to),
             localStep:(from,to)=>this.navigation.localStep(from,to),
         };
@@ -73,8 +78,8 @@ export class ServerBotController {
             body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
             body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
-            this.bots.set(id,{id,body,brain:new ObjectiveBotBrain(sharedNavigation,index++),facing:0,initialized:false,alive:false,
-                normalJump:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,
+            this.bots.set(id,{id,body,brain:new ObjectiveBotBrain(sharedNavigation,index++,Math.random,experiment),facing:0,initialized:false,alive:false,
+                normalJump:false,zoneHop:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,
                 strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0});
         }
     }
@@ -85,7 +90,7 @@ export class ServerBotController {
         body.position.set(position.x,position.y,position.z);body.previousPosition.copy(body.position);body.interpolatedPosition.copy(body.position);
         body.velocity.setZero();body.force.setZero();body.angularVelocity.setZero();body.torque.setZero();body.aabbNeedsUpdate=true;
         if(!body.world)this.world.addBody(body);
-        body.wakeUp();bot.initialized=true;bot.alive=true;bot.normalJump=false;bot.launchedUntil=0;
+        body.wakeUp();bot.initialized=true;bot.alive=true;bot.normalJump=false;bot.zoneHop=false;bot.launchedUntil=0;
         bot.lastLaunchAt=this.now;bot.lastMovementAt=-Infinity;bot.brain.reset();
         bot.strandedSince=0;bot.escapeCheckAt=0;bot.escapeX=0;bot.escapeZ=0;
         bot.progressAt=this.now;bot.progressX=position.x;bot.progressZ=position.z;
@@ -163,7 +168,7 @@ export class ServerBotController {
             if(!bot?.alive||launch.at<bot.lastLaunchAt||now-launch.at>1500||launch.at>now+100)continue;
             bot.lastLaunchAt=launch.at;bot.body.velocity.set(launch.velocity.x,launch.velocity.y,launch.velocity.z);
             bot.strandedSince=0;bot.progressAt=now;
-            bot.launchedUntil=now+150;bot.normalJump=false;bot.body.wakeUp();
+            bot.launchedUntil=now+150;bot.normalJump=false;bot.zoneHop=false;bot.body.wakeUp();
         }
         if(now-this.lastNavigationAt>=15){
             // The second bound is required in Workers, where performance.now()
@@ -181,7 +186,9 @@ export class ServerBotController {
             const self=bot.actor,body=bot.body;
             if(!self||!bot.alive||(players.get(bot.id)?.hp??0)<=0)continue;
             const grounded=groundedBodies.has(body);
-            if(grounded)bot.normalJump=false;
+            // Cannon retains the takeoff contact for a step. Keep jump gravity
+            // through the new zone hop. Preserve the established traversal arc.
+            if(grounded&&(!bot.zoneHop||body.velocity.y<=1)){bot.normalJump=false;bot.zoneHop=false;}
             const intent=bot.brain.step(now,self,this.actors.values(),chaos,target=>this.visible(bot,target),
                 grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visible(bot,target,true));
             if(!bot.progressAt||Math.hypot(body.position.x-bot.progressX,body.position.z-bot.progressZ)>1.5){
@@ -201,7 +208,7 @@ export class ServerBotController {
             }
             body.velocity.x+=(intent.x-body.velocity.x)*.14;body.velocity.z+=(intent.z-body.velocity.z)*.14;
             // Ignore stale takeoff contacts briefly, without ever locking air steering.
-            if(intent.jump&&grounded&&now>=bot.launchedUntil){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;}
+            if(intent.jump&&grounded&&now>=bot.launchedUntil){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
             if(bot.normalJump)body.force.y+=body.mass*this.world.gravity.y*.28;
             for(const axis of ['x','z'] as const){
                 if(body.position[axis]<CITY_BOUNDS.min+4&&body.velocity[axis]<0)body.velocity[axis]=Math.max(8,-body.velocity[axis]*.45);

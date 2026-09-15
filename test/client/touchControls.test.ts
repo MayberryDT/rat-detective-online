@@ -17,12 +17,13 @@ function fixture(){
  const doc=Object.assign(new EventTarget(),{body:new Node(),documentElement:new Node(),hidden:false,pointerLockElement:null,createElement:()=>new Node(),exitPointerLock:vi.fn()});
  const target=Object.assign(new EventTarget(),{location:{search:'?controls=touch'},innerWidth:844,innerHeight:390,matchMedia:()=>({matches:true}),localStorage:{getItem:()=>null,setItem:vi.fn()}});
  const shoot=vi.fn(),look=vi.fn(),scores=vi.fn(),clearKeys=vi.fn(),canvas=new Node();
- const controls=new TouchControls({canvas:canvas as unknown as HTMLElement,doc:doc as unknown as Document,target:target as unknown as Window,shoot,look,scores,clearKeys});
+ const menu={open:false};const openSettings=vi.fn(()=>{menu.open=true;});
+ const controls=new TouchControls({canvas:canvas as unknown as HTMLElement,doc:doc as unknown as Document,target:target as unknown as Window,shoot,look,scores,clearKeys,openSettings,blocked:()=>menu.open});
  controls.setPlaying(true);controls.update(0,true);
  const find=(name:string,node:Node=doc.body):Node=>{if(node.classList.contains(name))return node;for(const child of node.children){const found=find(name,child);if(found)return found;}return undefined!;};
  const event=(type:string,id:number,x=100,y=280)=>Object.assign(new Event(type,{cancelable:true}),{pointerType:'touch',pointerId:id,clientX:x,clientY:y});
  const down=(name:string,id:number,x=100,y=280)=>{const e=event('pointerdown',id,x,y);doc.dispatchEvent(e);find(name).dispatchEvent(e);return e;};
- return {doc,target,shoot,look,scores,clearKeys,controls,find,down,event};
+ return {doc,target,shoot,look,scores,clearKeys,menu,openSettings,controls,find,down,event};
 }
 const owned:TouchControls[]=[];afterEach(()=>{owned.splice(0).forEach(c=>c.dispose());vi.restoreAllMocks();});
 function setup(){const f=fixture();owned.push(f.controls);return f;}
@@ -52,9 +53,9 @@ it('scoreboard and settings cancel input, toggle closed, and cannot fire behind 
  const f=setup();f.down('touch-fire',1);f.find('touch-scores').dispatchEvent(new Event('click'));expect(f.scores).toHaveBeenLastCalledWith(true);
  f.down('touch-fire',2);f.controls.update(1000,true);expect(f.shoot).toHaveBeenCalledOnce();
  f.find('touch-scores').dispatchEvent(new Event('click'));expect(f.scores).toHaveBeenLastCalledWith(false);
- f.find('touch-settings-button').dispatchEvent(new Event('click'));expect(f.find('touch-settings').hidden).toBe(false);
+ f.find('touch-settings-button').dispatchEvent(new Event('click'));expect(f.openSettings).toHaveBeenCalledOnce();expect(f.menu.open).toBe(true);
  f.down('touch-fire',3);f.controls.update(2000,true);expect(f.shoot).toHaveBeenCalledOnce();
- f.find('touch-settings-button').dispatchEvent(new Event('click'));expect(f.find('touch-settings').hidden).toBe(true);
+ f.menu.open=false;f.controls.clear();expect(f.controls.input.fingers.size).toBe(0);
 });
 it('death, respawn and reconnect require fresh fingers',()=>{
  const f=setup();f.down('touch-fire',1);f.controls.update(1000,false);f.controls.update(2000,true);expect(f.shoot).toHaveBeenCalledOnce();

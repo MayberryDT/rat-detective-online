@@ -1,3 +1,4 @@
+import { effectsOutput } from './PlayerAudioMix';
 import * as THREE from 'three';
 import type {LaunchMachine} from '../shared/chaosState';
 import {worldSoundGain} from './worldSoundGain';
@@ -46,7 +47,7 @@ export class LauncherAudio {
         const pitch = {pressure:95,dumpster:65,freight:125,geyser:180,mousetrap:240,fan:75}[kind];
         const output = ctx.createGain(), pan = ctx.createStereoPanner();
         output.gain.value = spatial.volume; pan.pan.value = spatial.pan;
-        output.connect(pan); pan.connect(ctx.destination);
+        output.connect(pan); pan.connect(effectsOutput(ctx));
         const osc = ctx.createOscillator(), gain = ctx.createGain();
         osc.type = kind === 'mousetrap' ? 'triangle' : 'sawtooth';
         osc.frequency.setValueAtTime(pitch * 2, now); osc.frequency.exponentialRampToValueAtTime(35, now + .6);

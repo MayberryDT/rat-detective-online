@@ -1,5 +1,5 @@
 import type { Vec3Data } from './networkProtocol';
-import { SEWER_PIPE_ENTRANCES, sewerPipePoint } from './sewerLayout';
+import { sewerRampTravelPoint,SEWER_PIPE_ENTRANCES, sewerPipePoint } from './sewerLayout';
 
 export interface ZoneRect { xmin:number; xmax:number; zmin:number; zmax:number }
 export interface JurisdictionZone {
@@ -29,6 +29,8 @@ export const isJurisdictionZoneId=(id:unknown):id is JurisdictionZoneId=>typeof 
 /** Keep bounded shared searches local to the next tunnel leg. A goal directly
  * below a street rat otherwise attracts fallback steps into the street above it. */
 export function jurisdictionTravelPoint(from:Vec3Data,goal:Vec3Data):Vec3Data {
+    const ramp=sewerRampTravelPoint(from,goal);
+    if(ramp)return ramp;
     const below=from.y < -1,targetBelow=goal.y < -1;
     if(below!==targetBelow){
         const entries=SEWER_PIPE_ENTRANCES.map(e=>({mouth:sewerPipePoint(e,0),foot:sewerPipePoint(e,30)}));

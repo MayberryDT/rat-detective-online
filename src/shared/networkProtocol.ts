@@ -11,7 +11,7 @@ export const WIN_DISPLAY_MS = 6_000;
 export const DEFAULT_ROOM_NAME = 'public-live-v2';
 /** Wire-format ceiling for private capacity experiments; not an admission limit. */
 export const MAX_SCORE_ENTRIES = 100;
-export const MAX_PLAYERS = 16;
+export const MAX_PLAYERS = 10;
 /** Open sockets allowed, including clients that have not finished joining. */
 export const MAX_CONNECTIONS = MAX_PLAYERS + 8;
 export const MAX_MESSAGE_BYTES = 8_192;
@@ -141,6 +141,8 @@ export type ServerMessage =
   | { type: 'chaos'; state: ChaosState }
   | {
       type: 'welcome';
+      /** Private observation: player is a local camera avatar, absent from players. */
+      observing?: true;
       matchRoom?: string;
       /** Private bearer credential; never included in public player/score data. */
       resumeToken?: string;

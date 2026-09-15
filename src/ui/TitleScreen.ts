@@ -1,3 +1,6 @@
+import { observationRoom } from '../shared/observation';
+import type { PlayerSettings } from './PlayerSettings';
+import { playerPreferences } from '../settings/PlayerPreferences';
 import { generateRandomName } from '../shared/ratNames';
 import { bindGameCredits } from './GameCredits';
 import { readPublicInvitation } from '../network/publicInvitation';
@@ -5,6 +8,7 @@ import { readPublicInvitation } from '../network/publicInvitation';
 /** The title is usable without the renderer, physics, room metadata or audio. */
 export class TitleScreen {
     name = '';
+    settings?:PlayerSettings;
     onEnter: (name: string) => void = () => {};
     onGesture: () => void = () => {};
     onCue: (cue: 'name-tick' | 'name-stamp') => void = () => {};
@@ -26,13 +30,30 @@ export class TitleScreen {
                 : route.invalid ? 'INVITATION UNAVAILABLE — OPEN MATCHMAKING' : '';
             invitation.toggleAttribute('hidden', !route.requestedRoom && !route.invalid);
         }
+        const params=new URLSearchParams(this.target.location?.search??'');
+        if(observationRoom(params.get('room')??'')){
+            const observing=params.get('observe')==='1';
+            if(observing){
+                const label=doc.getElementById('enter-city-label');if(label)label.textContent='OBSERVE BOTS';
+                if(invitation){invitation.hidden=false;invitation.textContent='Normal rat controls. Invisible to the match.';}
+            }
+            const toggle=doc.createElement('button');toggle.type='button';toggle.className='observation-toggle';
+            toggle.textContent=observing?'Play as a rat instead':'Observe bots instead';
+            enter.parentNode?.insertBefore(toggle,enter.nextSibling);
+            toggle.addEventListener('click',()=>{
+                if(!this.available())return;
+                const url=new URL(this.target.location.href);
+                if(observing)url.searchParams.delete('observe');else url.searchParams.set('observe','1');
+                this.target.location.assign(url.toString());
+            },options);
+        }
         enter.disabled = false;
         enter.addEventListener('click', event => { event.stopPropagation(); this.enter(); }, options);
         reroll.addEventListener('click', event => {
             event.stopPropagation(); if (this.available()) this.roll(true);
         }, options);
         doc.addEventListener('keydown', event => {
-            if ((event.key !== 'Enter' && event.code !== 'Enter') || this.credits.isLink(event.target) || !this.available()) return;
+            if (this.settings?.isOpen || (event.target as HTMLElement|null)?.tagName==='BUTTON'&&event.target!==enter || (event.key !== 'Enter' && event.code !== 'Enter') || this.credits.isLink(event.target) || !this.available()) return;
             event.preventDefault(); this.enter();
         }, options);
         for (const type of ['pointerdown', 'pointerup', 'click', 'keydown']) {
@@ -43,7 +64,7 @@ export class TitleScreen {
         this.roll(); this.focus();
     }
     private enter(): void {
-        if (!this.available()) return;
+        if (this.settings?.isOpen || !this.available()) return;
         this.clearRoll(); this.show(this.name); this.onGesture(); this.onEnter(this.name);
     }
     private pick(exclude = ''): string {
@@ -61,7 +82,7 @@ export class TitleScreen {
     }
     private roll(animate = false): void {
         this.clearRoll(); this.name = this.pick(this.name);
-        if (!animate || this.target.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        if (!animate || playerPreferences().current.reducedMotion || this.target.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
             this.show(this.name); if (animate) this.onCue('name-stamp'); return;
         }
         const dice = this.doc.getElementById('reroll-name-btn');
@@ -84,10 +105,10 @@ export class TitleScreen {
         this.doc.getElementById('reroll-name-btn')?.classList.remove('rolling');
     }
     focus(): void {
-        if (this.available()) (this.doc.getElementById('enter-city-btn') as HTMLButtonElement)?.focus({ preventScroll: true });
+        if (!this.settings?.isOpen && this.available()) (this.doc.getElementById('enter-city-btn') as HTMLButtonElement)?.focus({ preventScroll: true });
     }
     dispose(): void {
-        this.disposed = true; this.clearRoll(); this.events.abort();
+        this.disposed = true; this.settings?.dispose(); this.clearRoll(); this.events.abort();
         this.onEnter = this.onGesture = this.onCue = () => {};
     }
 }

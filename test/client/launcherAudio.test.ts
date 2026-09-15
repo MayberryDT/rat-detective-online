@@ -1,3 +1,4 @@
+import {effectsOutput} from '../../src/audio/PlayerAudioMix';
 import {describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {LauncherAudio} from '../../src/audio/LauncherAudio';
@@ -15,6 +16,8 @@ function fixture() {
         createGain:() => {const result=make();gains.push(result);return result;},
         createOscillator:make, createStereoPanner:make, createBiquadFilter:make,
         createBufferSource:() => {const result=make();sources.push(result);return result;}};
+    // The context-wide preferences buses outlive individual cue voices.
+    effectsOutput(ctx as unknown as AudioContext);nodes.length=0;gains.length=0;
     const camera=new THREE.PerspectiveCamera();camera.position.y=.13;
     return {audio:new LauncherAudio(ctx as unknown as AudioContext),ctx,camera,nodes,gains,sources};
 }

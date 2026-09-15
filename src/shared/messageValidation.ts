@@ -459,7 +459,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
           movementSeq===null || movementSeq!==undefined&&movementSeq<0) {
         return null;
       }
-      if (player.id !== id || !players[id]) return null;
+      if(parsed.observing!==undefined && parsed.observing!==true)return null;
+      const observing=parsed.observing===true;
+      if (player.id !== id || (observing ? !!players[id] || parsed.resumeToken!==undefined : !players[id])) return null;
       if (parsed.resumeToken !== undefined && !isResumeToken(parsed.resumeToken)) return null;
       const matchRoom = parsed.matchRoom === undefined ? undefined : nonEmptyString(parsed.matchRoom, 160);
       if (matchRoom === null || (matchRoom !== undefined && !/^[a-z0-9-]+$/.test(matchRoom))) return null;
@@ -471,6 +473,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         incidents = parsed.incidents as IncidentId[];
       }
       return { type: 'welcome', id, player, players, round, world, protocolVersion, serverTime,
+        ...(observing?{observing:true}:{}),
         ...(movementSeq===undefined?{}:{movementSeq}),
         ...(isResumeToken(parsed.resumeToken) ? {resumeToken:parsed.resumeToken} : {}),
         ...(matchRoom ? {matchRoom} : {}), ...(incidents ? {incidents} : {}) };

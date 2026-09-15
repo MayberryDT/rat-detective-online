@@ -3,7 +3,7 @@ import { createRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRo
 import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from '../../src/shared/ratNames';
 
 describe('round bot roster', () => {
-  it.each([[0, 8], [0.25, 9], [0.5, 10], [0.999999, 11]])('samples %s into %s bots', (random, count) => {
+  it.each([[0, 8], [0.25, 8], [0.5, 9], [0.999999, 9]])('samples %s into %s bots', (random, count) => {
     const roster = createRoundBotRoster([], () => random);
     expect(roster).toHaveLength(count);
     expect(roster.map(bot => bot.id)).toEqual(PERSISTENT_BOT_IDS.slice(0, count));

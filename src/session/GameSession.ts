@@ -1,3 +1,4 @@
+import { actionBound, lookDelta } from '../settings/PlayerPreferences';
 import {FoleyAudio} from '../audio/FoleyAudio';
 import { unlockEffectsAudio } from '../audio/effectsAudio';
 import {FoleyWorld} from '../audio/FoleyWorld';
@@ -35,6 +36,8 @@ import { bindScoreboardHold } from './ScoreboardHold';
 import {TouchControls, touchControlsAvailable} from '../ui/TouchControls';
 import {NetplayAuditLog} from '../shared/netplay';
 import {createShotId} from '../weapons/shotId';
+import type {CameoView,CameoVisitor} from '../cameos/CameoView';
+import {loadCameos} from '../cameos/loadCameos';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
@@ -44,7 +47,7 @@ export class GameSession {
     private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue),(...args)=>this.foley?.play(...args));
     private readonly deathQuips = new MunicipalQuips();
     private readonly scoreboard = new MatchScoreboard();
-    private readonly input = new InputState();
+    private readonly input = new InputState(window,document,()=>!this.title?.settings?.isOpen && this.transport?.state==='playing' && (this.touch?.active || document.pointerLockElement===this.stage?.renderer.domElement));
     private readonly events = new AbortController();
     private readonly gun;
     private readonly remotes;
@@ -57,11 +60,14 @@ export class GameSession {
     private shotsAttempted=0;
     private shotsSent=0;
     private chaos:ChaosView|null=null;
+    private cameos?:CameoView;
+    private cameoLoading=false;
     private bots:NormalGameBots|null=null;
     private city: CityGenerator | Neighborhood;
     private worldSpec: WorldSpec;
     private rat: RatController | null = null;
     private myId = '';
+    private observing = false;
     private frame = 0;
     private previousTime = 0;
     private disposed = false;
@@ -81,12 +87,13 @@ export class GameSession {
     constructor(renderer: THREE.WebGLRenderer, initialWorld?: WorldSpec, prepared: {
         title?: TitleScreen; transport?: NetworkManager; music?: Pick<SessionMusic, 'start' | 'unlock' | 'dispose'>;
         stage?: ReturnType<typeof createStage>; city?: CityGenerator | Neighborhood;
-        releasePreparedModels?:()=>void;
+        releasePreparedModels?:()=>void;cameos?:CameoView;
     } = {}) {
         this.transport = prepared.transport ?? new NetworkManager();
         this.title = prepared.title ?? new TitleScreen();
         this.stage = prepared.stage ?? createStage(renderer);
         this.releasePreparedModels=prepared.releasePreparedModels;
+        this.cameos=prepared.cameos;
         const diagnostics=new URLSearchParams(window.location.search).get('diagnostics');
         const showDiagnostics=diagnostics!==null && diagnostics!=='quiet';
         this.stats = diagnostics!==null || normalGameBotCount(window.location) ? new PerformanceStats(renderer,showDiagnostics,report=>{
@@ -109,7 +116,7 @@ export class GameSession {
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
             this.clearInput();
-            if(state!=='playing'){for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
+            if(state!=='playing'){this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
             this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
@@ -151,25 +158,30 @@ export class GameSession {
         this.title.onCue = cue => { this.foley.setEnabled(!document.hidden); this.foley.play(cue); };
         if (touchControlsAvailable()) this.touch = new TouchControls({canvas:this.stage.renderer.domElement,
             look:(dx,dy)=>this.rat?.onMouseMove(dx,dy),shoot:()=>this.shoot(),
+            openSettings:()=>this.title.settings?.open(),blocked:()=>!!this.title.settings?.isOpen,
             scores:visible=>this.scoreboard.setVisible(visible),clearKeys:()=>this.input.clear()});
         this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
             playing:()=>this.transport.state==='playing',enabled:()=>!this.touch?.active,signal:this.events.signal,
-            allowUnlockedClick:credits.allowUnlockedClick,
+            allowUnlockedClick:target=>!!this.title.settings?.contains(target)||credits.allowUnlockedClick(target),
             record:(type,detail)=>this.stats?.event(type,detail)});
-        bindScoreboardHold({available:()=>this.transport.state==='playing',
+        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing',touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock()});
+        bindScoreboardHold({available:()=>this.transport.state==='playing'&&!this.title.settings?.isOpen,
             show:visible=>this.scoreboard.setVisible(visible),scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
         document.addEventListener('visibilitychange', () => {
             this.foleyWorld.setEnabled(!document.hidden&&this.transport.state==='playing');
         }, options);
         document.addEventListener('mousemove', event => {
             if (!this.touch?.active && this.transport.state === 'playing' && document.pointerLockElement === this.stage.renderer.domElement) {
-                this.rat?.onMouseMove(event.movementX, event.movementY);
+                if(!this.title.settings?.isOpen)this.rat?.onMouseMove(...lookDelta(event.movementX,event.movementY,'mouse'));
             }
         }, options);
         document.addEventListener('mousedown', event => {
-            if (this.touch?.active || event.button !== 0 || document.pointerLockElement !== this.stage.renderer.domElement) return;
+            if (this.title.settings?.isOpen || this.touch?.active || !actionBound('fire',`Mouse${event.button}`) || document.pointerLockElement !== this.stage.renderer.domElement) return;
             this.shoot();
         }, options);
+        document.addEventListener('keydown',event=>{
+            if(!event.repeat&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&!this.title.settings?.isOpen&&document.pointerLockElement===this.stage.renderer.domElement&&actionBound('fire',event.code)){event.preventDefault();this.shoot();}
+        },options);
         window.addEventListener('resize', () => {
             const { camera, renderer } = this.stage;
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -183,7 +195,7 @@ export class GameSession {
 
     /** Both input devices use the real camera ray, animated muzzle and transport. */
     private shoot(): void {
-        if (this.transport.state !== 'playing' || this.roundWon || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
+        if (this.observing || this.title.settings?.isOpen || this.transport.state !== 'playing' || this.roundWon || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
         this.rat.updateView();
         this.stage.camera.getWorldDirection(this.direction);
         const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
@@ -197,12 +209,13 @@ export class GameSession {
             this.shotsSent++;this.chaos?.fire(shot);
         }
     }
-    private requestPointerLock(): void { if (!this.touch?.active) this.pointerLock.request(); }
+    private requestPointerLock(): void { if (!this.title.settings?.isOpen && !this.touch?.active) this.pointerLock.request(); }
 
     private welcome(message: Extract<ServerMessage, { type: 'welcome' }>): void {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
+        this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
         this.gun.clearProjectiles();
@@ -217,7 +230,11 @@ export class GameSession {
             this.city.generate();
             this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         }
+        this.ensureCameos();
         this.myId = message.id;
+        this.observing=message.observing===true;
+        document.body.classList.toggle('observing',this.observing);
+        this.title.settings?.refreshHints();
         this.movementSequence=Math.max(this.movementSequence,message.movementSeq??0);
         this.gun.setProtectedRats(new Set());
         const player = message.player;
@@ -226,11 +243,15 @@ export class GameSession {
         this.rat.entity.isPlayer = true;
         this.rat.entity.applySnapshot(player);
         this.gun.setPlayer(this.stage.camera, this.rat.entity);
+        if(this.observing)this.rat.entity.body.collisionFilterMask=1;
+        this.remotes.observing=this.observing;
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
+        if(this.chaos)this.chaos.onPresentedShot=(id,p,radius)=>this.cameos?.observeShot(id,p,radius,this.gun.sceneryClear);
         this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.chaos?.setIncidentRoster(message.incidents);
+        this.chaos?.setObserving(this.observing);
         this.hud.hideRespawn();
         this.hud.hideVictory();
         if (player.hp <= 0 && player.respawnAt) this.hud.showRespawn(player.respawnAt - this.serverOffset);
@@ -239,7 +260,7 @@ export class GameSession {
         this.lastMovementAt = 0;
         this.lastInteractionPosition.set(player.x,player.y+.8,player.z);
         this.pendingInteractions.clear();this.netplay.clear();
-        if(normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
+        if(!this.observing && normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
             this.bots=new NormalGameBots(this.worldSpec,message.players,{muzzle:(id,position,facing)=>{
                 const entity=this.remotes.get(id);
                 return entity?muzzleAtPose(entity.mesh,position,facing):undefined;
@@ -360,6 +381,7 @@ export class GameSession {
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
             case 'gameReset':
+                this.cameos?.reset();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0);this.rat?.entity.resetReactions();
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0);entity.resetReactions();}
                 this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
@@ -387,7 +409,7 @@ export class GameSession {
     }
 
     private sendMovement(now: number): void {
-        if (!this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0 || now - this.lastMovementAt < 50) return;
+        if (this.observing || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0 || now - this.lastMovementAt < 50) return;
         const { position: p, quaternion: q } = this.rat.entity.body;
         const mq = this.rat.entity.mesh.quaternion;
         const pose=[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w];
@@ -409,7 +431,7 @@ export class GameSession {
         this.lastMovement=pose??[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w];this.lastMovementAt=now;
     }
     private checkInteractions(now:number):void {
-        if(!this.rat||!this.chaos||this.rat.entity.dead||this.rat.entity.hp<=0)return;
+        if(this.observing||!this.rat||!this.chaos||this.rat.entity.dead||this.rat.entity.hp<=0)return;
         for(const [id,started] of this.pendingInteractions)if(now-started>1500){
             this.pendingInteractions.delete(id);this.chaos.cancelInteraction(id);this.netplay.end(id,'timeout');
         }
@@ -468,7 +490,9 @@ export class GameSession {
             if(this.rat&&!this.rat.entity.dead)this.foleyWorld.motion.update(this.rat.entity.mesh.position,dt,this.rat.grounded);
             else this.foleyWorld.motion.clear();
         }
+        this.cameos?.beginFrame(dt,camera.position);
         this.chaos?.update(dt,camera);
+        if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
         this.city.update(dt, camera, this.rat?.entity.body.position);
         const presentationEnd=measure?performance.now():0;
         renderer.render(scene, camera);
@@ -480,9 +504,28 @@ export class GameSession {
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 
+    private ensureCameos():void {
+        const enabled=this.worldSpec.version===GRAYBOX_VERSION;
+        this.cameos?.setEnabled(enabled);
+        if(!enabled||this.cameos||this.cameoLoading)return;
+        this.cameoLoading=true;
+        void loadCameos(this.events.signal).then(view=>{
+            this.cameoLoading=false;
+            if(this.disposed){view?.dispose();return;}
+            this.cameos=view;
+            if(view){view.setEnabled(this.worldSpec.version===GRAYBOX_VERSION);this.stage.scene.add(view.root);}
+        });
+    }
+    private readonly cameoVisitors=()=>this.visitors();
+    private *visitors():Iterable<CameoVisitor>{
+        if(this.rat&&!this.observing)yield {id:this.myId,position:this.rat.entity.mesh.position,dead:this.rat.entity.dead};
+        for(const [id,{entity}] of this.remotes.rats)yield {id,position:entity.mesh.position,dead:entity.dead};
+    }
+
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        document.body.classList.remove('observing');
         this.title.dispose();
         this.releasePreparedModels?.();this.releasePreparedModels=undefined;
         cancelAnimationFrame(this.frame);
@@ -498,6 +541,7 @@ export class GameSession {
         this.rat?.dispose();
         this.rat = null;
         this.remotes.dispose();
+        this.cameos?.dispose();
         this.city.dispose();
         this.music.dispose();
         this.feedback.dispose();

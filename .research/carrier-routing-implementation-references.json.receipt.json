@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "a6b6cc15f4d6cd444b66ec5feda0d33d63569f6164d7f1f2fd4e4fd8a73279ac",
+  "verified_at": "2026-09-15T02:32:10.599432+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "carrier-doorway-leg:registry",
+      "url": "https://registry.npmjs.org/cannon-es/0.20.0",
+      "status": 200
+    },
+    {
+      "label": "carrier-doorway-leg:source",
+      "url": "https://github.com/pmndrs/cannon-es",
+      "status": 200
+    },
+    {
+      "label": "carrier-doorway-leg:behavior-repo",
+      "url": "https://github.com/recastnavigation/recastnavigation",
+      "status": 200
+    },
+    {
+      "label": "carrier-doorway-leg:behavior-evidence",
+      "url": "https://github.com/recastnavigation/recastnavigation/blob/9f4ce64458dfae86e1239c525ddc219c4e9e06f1/DetourCrowd/Source/DetourPathCorridor.cpp",
+      "status": 200
+    },
+    {
+      "label": "carrier-doorway-leg:platform",
+      "url": "https://developers.cloudflare.com/durable-objects/platform/limits/",
+      "status": 200
+    }
+  ]
+}

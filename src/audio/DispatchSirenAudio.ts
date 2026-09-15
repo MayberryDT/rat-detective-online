@@ -1,3 +1,4 @@
+import { effectsOutput } from './PlayerAudioMix';
 import {worldSoundGain} from './worldSoundGain';
 
 /** A short mechanical whoop from the nearest ready kiosk. One reusable buffer,
@@ -34,7 +35,7 @@ export class DispatchSirenAudio {
         }
         const source=ctx.createBufferSource(),gain=ctx.createGain();source.buffer=this.buffer;
         gain.gain.value=volume;
-        source.connect(gain);gain.connect(ctx.destination);
+        source.connect(gain);gain.connect(effectsOutput(ctx));
         const voice={source,gain,volume};this.voice=voice;this.nextAt=ctx.currentTime+4;
         source.onended=()=>{source.disconnect();gain.disconnect();if(this.voice===voice)this.voice=undefined;};
         try{source.start();}catch{this.stop();}

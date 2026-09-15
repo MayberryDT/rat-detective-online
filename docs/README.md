@@ -6,6 +6,16 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 
 | Document | Purpose |
 | --- | --- |
+| [Sewer ramp crossings](verification/sewer-exits-2026-09-14.md) | Private tunnel reversal fix, ascent/descent physics and rotating observation playlist |
+| [Wall cases and directional jumps](verification/wall-case-jumps-2026-09-14.md) | Private close-approach and obstacle-jump fixes, physics checks and hosted observation |
+| [Superhero cameos](verification/superhero-cameos-2026-09-14.md) | Accepted rooftop/sewer characters, optimized loading, live cosmetic reactions and private preview |
+| [Private observation](observation-mode.md) | Reusable walking observer outside the player roster; hosted access and lifecycle |
+| [Combined bot playtest](verification/bot-combined-2026-09-14.md) | Private combination of accepted maneuvers, commitment and attention; compared with maneuver-only behavior |
+| [Accepted maneuvers release](verification/maneuvers-production-2026-09-14.md) | Production maneuver bots, player settings, ten-rat cap and verification |
+| [Bot experiments](verification/bot-experiments-2026-09-14.md) | Separate baseline comparisons, ten-rat cap, measurements and hosted playtests |
+| [Player settings](player-settings.md) | Local settings guide, defaults, migration and input behavior |
+| [Active zone holders and settings](verification/jurisdiction-bots-settings-2026-09-14.md) | Pre-release physical bot checks and settings verification; see accepted maneuvers release |
+| [Handoff: Jurisdiction bots and settings](handoffs/jurisdiction-bots-settings-2026-09-14.md) | Accepted direction, source findings, settings candidates and original clarification points; see the linked implementation receipt |
 | [Omarchy appearance](verification/omarchy-appearance-2026-09-14.md) | Native theme choice, Rat Detective design, visual checks and plugin release |
 | [Paper Chase sewer guidance](verification/paper-chase-sewer-guidance-2026-09-13.md) | Released fix: slightly negative street feet no longer produce stuck exit cues |
 | [Jurisdiction production release](verification/jurisdiction-production-2026-09-13.md) | Accepted four-mode playlist, Paper Chase, bot/HUD updates and verified live version |
@@ -139,3 +149,5 @@ Latest capacity iteration: [AI playback and rigid batching](verification/ai-deli
 [September 12 shoulder-sleeve follow-up](verification/rat-shoulder-sleeve-2026-09-12.md): shorter shoulder-pivot gun sleeve with the original case arm.
 
 [September 12 case-sleeve finish](verification/rat-case-sleeve-2026-09-12.md): matching longer sleeve and linked cuff; no sleeve without a case.
+
+- [Building-corner carrier routing](verification/carrier-corners-2026-09-14.md): private navigation fix and real-physics regressions.

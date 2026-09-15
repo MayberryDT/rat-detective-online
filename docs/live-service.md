@@ -1,17 +1,17 @@
 # Live service runbook
 
-Last release receipt: **2026-09-14**. [Omarchy Dispatch companion](verification/omarchy-dispatch-2026-09-14.md). [Paper Chase sewer-guidance fix](verification/paper-chase-sewer-guidance-2026-09-13.md). [Jurisdiction, Paper Chase, bot and HUD release](verification/jurisdiction-production-2026-09-13.md). [Batched movement and permanent score card](verification/movement-batching-score-card-2026-09-13.md). [Movement and Hot Pursuit lag correction](verification/movement-hot-pursuit-lag-2026-09-13.md). [Destination and restock visuals](verification/destination-restock-2026-09-13.md). [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md). [Case lifecycle and kill confirmation](verification/case-kill-feedback-2026-09-12.md). [Accepted animations, explosion and case fixes](verification/animation-production-2026-09-12.md). [Accepted model and protocol15 integration](verification/model-netplay-integration-2026-09-12.md). [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
+Last release receipt: **2026-09-14**. [Accepted maneuvers, settings and ten-rat cap](verification/maneuvers-production-2026-09-14.md). [Omarchy Dispatch companion](verification/omarchy-dispatch-2026-09-14.md). [Paper Chase sewer-guidance fix](verification/paper-chase-sewer-guidance-2026-09-13.md). [Jurisdiction, Paper Chase, bot and HUD release](verification/jurisdiction-production-2026-09-13.md). [Batched movement and permanent score card](verification/movement-batching-score-card-2026-09-13.md). [Movement and Hot Pursuit lag correction](verification/movement-hot-pursuit-lag-2026-09-13.md). [Destination and restock visuals](verification/destination-restock-2026-09-13.md). [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md). [Case lifecycle and kill confirmation](verification/case-kill-feedback-2026-09-12.md). [Accepted animations, explosion and case fixes](verification/animation-production-2026-09-12.md). [Accepted model and protocol15 integration](verification/model-netplay-integration-2026-09-12.md). [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
 
 | Item | Value |
 | --- | --- |
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `55a9e2fe-e219-451d-aa55-de48ba72928e` — protocol 18, additive Omarchy companion feed and public invitation handling; preceding gameplay retained |
-| Previous version | `b0518f94-4dc1-433f-af5f-7141a70d2d4b` — protocol 18, Paper Chase sewer-guidance fix; rollback removes the versioned companion endpoint and new invitation behavior |
+| Last deployed version | `60f63b24-a014-47c9-a3ba-772bea41ef5b` — protocol 18, accepted maneuver bots, player settings and ten-rat cap |
+| Previous version | `55a9e2fe-e219-451d-aa55-de48ba72928e` — protocol 18, companion feed; rollback restores the 16-rat cap and preceding bot behavior and removes player settings |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
-| Admission | 16 total rats per room; occupied rooms fill to eight with AI, yielding to humans; automatic overflow rooms |
+| Admission | 10 total rats per room; occupied rooms fill to eight with AI, yielding to humans; automatic overflow rooms |
 
 Protocol 18 requires matching client and Worker. Before any rollback to protocol 15,
 review stored Jurisdiction rounds: the old validator does not understand that mode. Existing older game tabs should
@@ -28,7 +28,7 @@ prevent older publications from reviving a retired room. The companion API has i
 own schema version, separate from the gameplay protocol.
 
 `GET /status` enables the canonical room's matchmaking policy and includes its persisted world seed/version so titles can prepare matching geometry without joining or reserving a slot; default `/ws` uses the persistent Matchmaker admission directory. Public `prepare=1` sockets bypass reservation/overflow allocation and remain silent until joining. They are bounded to sixteen per canonical room and a 30-second server lease (25 seconds on the client); a full-room join retries through normal matchmaking and cannot steal existing reservations. They do not start bots or simulation. Live sockets and simulation remain in individual GameRooms. Occupied rooms fill to eight total participants with server-owned AI (`max(0, 8 - humans)`), with a ten-second refill grace after departures; disconnected rats now retain
-their existing slots for 30 seconds before removal. Humans can fill all sixteen slots. Arbitrary named rooms do not automatically acquire hosted AI. Hosting needs no local service or Codex task.
+their existing slots for 30 seconds before removal. Humans can fill all ten slots. Arbitrary named rooms do not automatically acquire hosted AI. Hosting needs no local service or Codex task.
 
 The `persistent-bots-v1` enabled flag, `persistent-bot-roster-v1` active roster, matchmaking identity, player records, world, round, chaos snapshot and deadlines persist in SQLite. Names refresh with each round; unchanged setup preserves surviving bots. Reset cleans old bot records/events and emits leave/join events so client nameplates update. The former production policy of reserving eleven AI slots is historical.
 
@@ -60,7 +60,7 @@ A documentation update alone does not require deployment. Never include private 
 
 ## Verify the actual release
 
-- `/health` checks routing/runtime only. `/status` should show `public-live-v2` and plausible round state. An empty room has zero rats; one human normally brings seven bots. Count must stay within sixteen.
+- `/health` checks routing/runtime only. `/status` should show `public-live-v2` and plausible round state. An empty room has zero rats; one human normally brings seven bots. Count must stay within ten.
 - Fetch the root and referenced assets; check the old host redirects both root and a path/query.
 - Confirm the deployed version from the deployment receipt and record its predecessor. Do not infer deployed source from Git alone.
 - For sharing, root HTML must contain static Open Graph / Twitter metadata and an accessible `image/png` asset at `/share-title-v1.png`. The image is an actual 1200×630 title-screen screenshot. Use a new versioned image URL when replacing it; third-party previews may remain cached.

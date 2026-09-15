@@ -32,6 +32,7 @@ interface Bot {
     facing: number;
     launchedUntil: number;
     normalJump: boolean;
+    zoneHop: boolean;
     lastLaunch: string;
     lastMovementAt: number;
 }
@@ -78,6 +79,10 @@ export class NormalGameBots {
         this.navigation=navigation;
         const sharedNavigation: ObjectiveNavigation = {
             explorationTargets: () => navigation.explorationTargets(),
+            travelPoint: (from,to) => navigation.travelPoint?.(from,to)??to,
+            supported: from => navigation.supported?.(from)??false,
+            jumpStep: (from,to) => navigation.jumpStep?.(from,to),
+            approachStep: (from,to) => navigation.approachStep?.(from,to),
             route: (from, to) => {
                 // Eleven brains share one planner budget: never eleven A* calls
                 // in the same frame, and no path work during every physics tick.
@@ -92,7 +97,7 @@ export class NormalGameBots {
             body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
             body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
-            const bot: Bot = {transport,id:'',body,brain:new ObjectiveBotBrain(sharedNavigation,i),facing:0,launchedUntil:0,normalJump:false,lastLaunch:'',lastMovementAt:-Infinity};
+            const bot: Bot = {transport,id:'',body,brain:new ObjectiveBotBrain(sharedNavigation,i),facing:0,launchedUntil:0,normalJump:false,zoneHop:false,lastLaunch:'',lastMovementAt:-Infinity};
             this.bots.push(bot);
             // The human's feed is the common source. Each extra socket only needs
             // its own welcome, including reconnection identity and server spawn.
@@ -111,7 +116,7 @@ export class NormalGameBots {
     get count(): number { return this.bots.length; }
     private place(bot: Bot, p: Vec3Data): void {
         bot.body.position.set(p.x,p.y,p.z);bot.body.velocity.setZero();bot.body.force.setZero();bot.body.aabbNeedsUpdate=true;
-        bot.launchedUntil=0;bot.normalJump=false;bot.lastMovementAt=-Infinity;bot.body.wakeUp();
+        bot.launchedUntil=0;bot.normalJump=false;bot.zoneHop=false;bot.lastMovementAt=-Infinity;bot.body.wakeUp();
         bot.brain.reset();
     }
     updateHuman(id: string, p: Vec3Data, hp: number): void {
@@ -142,7 +147,7 @@ export class NormalGameBots {
                     const bot=this.bots.find(b=>b.id===launch.playerId);
                     if(!bot||bot.lastLaunch===launch.id||message.state.time-launch.at>1500||!this.players.get(bot.id)?.hp)continue;
                     bot.lastLaunch=launch.id;bot.body.velocity.set(launch.velocity.x,launch.velocity.y,launch.velocity.z);
-                    bot.launchedUntil=Date.now()+1600;bot.normalJump=false;bot.body.wakeUp();
+                    bot.launchedUntil=Date.now()+1600;bot.normalJump=false;bot.zoneHop=false;bot.body.wakeUp();
                 }
                 break;
         }
@@ -172,12 +177,12 @@ export class NormalGameBots {
             if(bot.transport.state!=='playing'||!self||self.hp<=0){body.velocity.setZero();body.sleep();continue;}
             let grounded=false;
             for(const contact of this.world.contacts){const normal=contact.bi===body?-contact.ni.y:contact.bj===body?contact.ni.y:0;if(normal>.5){grounded=true;break;}}
-            if(grounded)bot.normalJump=false;
+            if(grounded&&(!bot.zoneHop||body.velocity.y<=1)){bot.normalJump=false;bot.zoneHop=false;}
             Object.assign(self,{x:body.position.x,y:body.position.y,z:body.position.z});
             const intent=bot.brain.step(now,self,this.players.values(),this.chaos,target=>this.visible(bot,target),grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visibleControl(bot,target));
             if(now>=bot.launchedUntil){
                 body.velocity.x+=(intent.x-body.velocity.x)*.14;body.velocity.z+=(intent.z-body.velocity.z)*.14;
-                if(intent.jump){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;}
+                if(intent.jump){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
             }
             if(bot.normalJump)body.force.y+=body.mass*this.world.gravity.y*.28;
             for(const axis of ['x','z'] as const){

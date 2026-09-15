@@ -173,3 +173,50 @@ describe('Jurisdiction incident boundaries',()=>{
   Object.assign(a,{x:90,z:-90});sim.step(.1,NOW+300);expect(sim.assignmentState!.jurisdiction!.heldMs.a).toBe(earned);expect(sim.assignmentState!.jurisdiction!.scorerId).toBeNull();
  });
 });
+
+describe('historical baseline zone holding with the real hosted controller',()=>{
+ it.each(JURISDICTION_ZONE_IDS)('moves, scans and keeps scoring in quiet %s for 25 seconds',id=>{
+  vi.spyOn(Math,'random').mockReturnValue(.3);vi.spyOn(Date,'now').mockReturnValue(NOW);
+  const spec={seed:341283204,version:2},p=JURISDICTION_ZONES[id].posts[0];
+  const bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,p),players=new Map([[bot.id,bot]]);
+  const sim=new ChaosSimulation(players,()=>{},undefined,spec),a=createAssignment('jurisdiction',NOW,'active-hold',()=>.3),j=a.jurisdiction!;
+  a.liveAt=NOW;a.phase='active';j.index=j.order.indexOf(id);j.serial=j.index;sim.setAssignment(a);
+  sim.caseBody.position.set(p.x,p.y+.8,p.z);sim.caseBody.velocity.setZero();sim.step(0,NOW);expect(sim.caseHolderId).toBe(bot.id);
+  const recover=vi.fn();let travelled=0,stillSince=0,longestStill=0,last={...p},facing=0,minFacing=Infinity,maxFacing=-Infinity,maxHeight=0;
+  const controller=new ServerBotController(spec,[bot.id],{move:(id,pos,angle)=>{Object.assign(players.get(id)!,pos);facing=angle;},shoot:()=>{},recover},'baseline');
+  try{
+   for(let frame=1;frame<=1500;frame++){
+    const at=NOW+frame*1000/60;controller.step(1/60,at,players,sim.snapshot(false),true);sim.step(1/60,at);
+    if(frame%6===0){
+     const moved=Math.hypot(bot.x-last.x,bot.z-last.z);travelled+=moved;last={x:bot.x,y:bot.y,z:bot.z};
+     if(moved>.03)stillSince=at;else longestStill=Math.max(longestStill,at-(stillSince||at));
+     minFacing=Math.min(minFacing,facing);maxFacing=Math.max(maxFacing,facing);maxHeight=Math.max(maxHeight,bot.y-JURISDICTION_ZONES[id].floorY);
+     expect(zoneContains(id,bot),`${id}: ${bot.x},${bot.y},${bot.z}`).toBe(true);
+    }
+   }
+   expect(travelled,id).toBeGreaterThan(20);expect(longestStill,id).toBeLessThan(3000);
+   expect(maxFacing-minFacing,id).toBeGreaterThan(1);expect(maxHeight,id).toBeGreaterThan(2);
+   expect(sim.assignmentState!.jurisdiction!.heldMs.bot,id).toBeGreaterThan(24500);expect(recover).not.toHaveBeenCalled();
+  }finally{controller.dispose();}
+ },30000);
+});
+
+it('keeps a carrier active and scoring among eight rats in the sewer zone',()=>{
+ vi.spyOn(Math,'random').mockReturnValue(.3);vi.spyOn(Date,'now').mockReturnValue(NOW);
+ const spec={seed:341283204,version:2},p=JURISDICTION_ZONES['sewer-junction'].posts[0];
+ const players=new Map(Array.from({length:8},(_,i)=>{const id=`crowd-${i}`;return [id,createPlayer(id,id,DEFAULT_APPEARANCE,{x:p.x+Math.sin(i)*2,y:p.y,z:p.z+Math.cos(i)*2})];}));
+ const bot=players.get('crowd-0')!,sim=new ChaosSimulation(players,()=>{},undefined,spec),a=createAssignment('jurisdiction',NOW,'crowd',()=>.3),j=a.jurisdiction!;
+ a.liveAt=NOW;a.phase='active';j.index=j.order.indexOf('sewer-junction');j.serial=j.index;sim.setAssignment(a);
+ sim.caseBody.position.set(bot.x,bot.y+.8,bot.z);sim.caseBody.velocity.setZero();sim.step(0,NOW);expect(sim.caseHolderId).toBe(bot.id);
+ const recover=vi.fn(),shoot=vi.fn();let travelled=0,last={x:bot.x,z:bot.z};
+ const controller=new ServerBotController(spec,[...players.keys()],{move:(id,pos)=>Object.assign(players.get(id)!,pos),shoot,recover});
+ try{
+  for(let frame=1;frame<=720;frame++){
+   const at=NOW+frame*1000/60;controller.step(1/60,at,players,sim.snapshot(false),true);sim.step(1/60,at);
+   if(frame%6===0){travelled+=Math.hypot(bot.x-last.x,bot.z-last.z);last={x:bot.x,z:bot.z};expect(zoneContains('sewer-junction',bot)).toBe(true);}
+  }
+  expect(travelled).toBeGreaterThan(10);expect(sim.assignmentState!.jurisdiction!.heldMs[bot.id]).toBeGreaterThan(11500);
+  expect(shoot).toHaveBeenCalled();expect(recover).not.toHaveBeenCalled();
+  for(const rat of players.values())expect([rat.x,rat.y,rat.z].every(Number.isFinite)).toBe(true);
+ }finally{controller.dispose();}
+},30000);

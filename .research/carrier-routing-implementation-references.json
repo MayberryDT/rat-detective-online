@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "feature": "carrier-doorway-routing",
+  "researched_at": "2026-09-14",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "not-applicable",
+      "reason": "No UI primitives or menus change; this fixes server bot navigation."
+    },
+    {
+      "class": "state-persistence",
+      "status": "not-applicable",
+      "reason": "The route leg is transient brain state, with existing reset cleanup."
+    },
+    {
+      "class": "auth-security",
+      "status": "not-applicable",
+      "reason": "No admission, privileges, credentials or server action validation changes."
+    },
+    {
+      "class": "network-sync",
+      "status": "not-applicable",
+      "reason": "Existing authority movement snapshots remain unchanged."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "ServerBotController must retain the shared 96 expansion and 2 millisecond navigation budget."
+    },
+    {
+      "class": "accessibility",
+      "status": "not-applicable",
+      "reason": "Existing player controls and observer controls remain unchanged."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "Actual city physics reproduces carrier stalls while waiting for a city route."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "Bots should navigate through traversable portals instead of steering at obstructed long-distance goals."
+    }
+  ],
+  "mappings": [
+    {
+      "id": "carrier-doorway-leg",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "platform-device",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": {
+        "name": "cannon-es",
+        "ecosystem": "npm",
+        "package": "cannon-es",
+        "version": "0.20.0",
+        "registry_url": "https://registry.npmjs.org/cannon-es/0.20.0",
+        "source_url": "https://github.com/pmndrs/cannon-es",
+        "license": "MIT",
+        "compatibility": "The existing locked game controller already uses cannon-es 0.20.0.",
+        "ownership": "BotNavigation owns shared bounded flow fields and authored doorway legs; ObjectiveBotBrain attaches grounded routes; ServerBotController owns movement physics.",
+        "locked_by": "../docs/current-state.md"
+      },
+      "behavior": {
+        "repo_url": "https://github.com/recastnavigation/recastnavigation",
+        "revision": "9f4ce64458dfae86e1239c525ddc219c4e9e06f1",
+        "evidence_url": "https://github.com/recastnavigation/recastnavigation/blob/9f4ce64458dfae86e1239c525ddc219c4e9e06f1/DetourCrowd/Source/DetourPathCorridor.cpp",
+        "behavior": "Path corridor steering extracts traversable corners along a route instead of aiming through obstacles at the final target. Rat Detective uses authored building openings for bounded local exit legs.",
+        "edge_states": [
+          "pending global route",
+          "interior exit",
+          "upper floor descent",
+          "goal inside same building",
+          "changed case owner",
+          "airborne route attachment",
+          "grounded reattachment after a jump"
+        ],
+        "do_not_copy": "Do not copy source, replace the navigation stack or alter movement physics."
+      },
+      "platform": {
+        "url": "https://developers.cloudflare.com/durable-objects/platform/limits/",
+        "requirement": "A Durable Object is single-threaded and CPU-limited. Retain the existing shared 2 ms / 96 expansion navigation budget instead of solving every bot route synchronously."
+      },
+      "proof": [
+        "npx vitest run --config vitest.client.config.ts test/client/carrierCorners.test.ts",
+        "npx vitest run --config vitest.client.config.ts test/client/botNavigation.test.ts"
+      ]
+    }
+  ]
+}

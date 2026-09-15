@@ -6,6 +6,7 @@ vi.mock('three', async (importOriginal) => {
   return {
     ...three,
     Audio: class {
+      gain = {connect() {},disconnect() {}};
       buffer = null;
       isPlaying = false;
       setBuffer() {}

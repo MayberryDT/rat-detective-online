@@ -2,6 +2,79 @@
 
 Verified from source and production on **2026-09-14**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
+## Sewer ramp crossings — September 14 private candidate
+
+Tunnel guidance now finishes the ramp before selecting another route leg. This
+fixes the repeated midpoint reversal and suppresses recovery jumps under tunnel
+arches. Both ascent and descent pass real-physics checks at all four entrances
+in Jurisdiction and Paper Chase. The next private observer starts Paper Chase
+and rotates assignments between rounds. See [verification](verification/sewer-exits-2026-09-14.md).
+
+## Wall cases and directional jumps — September 14 private candidate
+
+Tyler's observer feedback exposed lost horizontal movement during local jumps
+and missed case collection in narrow wall gaps. Bots now retain a landing target,
+check short low-obstacle hops and use a body-checked final approach for nearby
+visible cases. Movement physics and authoritative pickup rules are unchanged.
+See [wall-case and jump evidence](verification/wall-case-jumps-2026-09-14.md).
+
+## Superhero cameos — September 14 private candidate
+
+The accepted optimized Spider-rat and Bat-rat models are integrated as cosmetic
+world cameos on the south Gate tower beside the Sewer Geyser and in sewer Maintenance. Nearby rats
+and actual passing cheese balls trigger the accepted reactions. Packed assets
+load beside city preparation, GPU buffers warm before play, and distant cameos
+sleep. Physics, scoring, bot slots and protocol remain unchanged. See
+[placements, checks and frozen hosted preview](verification/superhero-cameos-2026-09-14.md).
+Production has not been deployed for this follow-up.
+
+## Building-corner navigation — September 14 private candidate
+
+After watching the combined bots, Tyler reported successive case carriers getting
+stuck in corners across multiple buildings. Bots now use authored doorway exit
+legs, attach routes only while grounded and measure horizontal stuck progress.
+Real-city regressions cover all four landmarks, including upstairs descent.
+See [carrier routing evidence](verification/carrier-corners-2026-09-14.md).
+
+## Private observation — September 14
+
+Tyler reported that combined bots feel better and requested a reusable way to
+watch them without participating. Private full-bot rooms now accept an optional
+walking observer outside the ten-rat roster. The server excludes it from all game
+actions; ordinary controls, live playback and the scoreboard remain available.
+See [observation mode](observation-mode.md) and its linked hosted receipt.
+Production remains maneuver-only; this request does not authorize a public release.
+
+## Combined bot playtest — September 14 candidate
+
+Tyler accepted the separate commitment and attention playtests and requested a
+combined hosted preview. The explicit `combined` policy composes maneuvers,
+movement-goal commitment and attention with their existing tuning and priority
+order. Production remains on the accepted maneuver-only policy below.
+The combined preview and its maneuver-only comparison use the same frozen client
+and hosted Worker, ten-rat cap and normal eight-participant matchmaking option.
+See [combined preview evidence](verification/bot-combined-2026-09-14.md).
+
+## Accepted maneuvers, settings and ten-rat cap — September 14 production
+
+Tyler accepted the hosted maneuver playtest and authorized release. Production
+Worker **`60f63b24-a014-47c9-a3ba-772bea41ef5b`**, protocol 18, now uses purposeful
+Jurisdiction post positioning and threat-driven movement, with completed local
+combat strafes. The room maximum is **10 total rats**. Normal matchmaking still
+fills occupied rooms to **eight participants**, with bots yielding to humans and
+the existing refill/reconnect behavior. Public room `public-live-v2` and its
+persisted world are unchanged.
+
+The matching client includes the accepted title/Escape/touch player settings,
+styled settings scrollbar, and aligned Resume/Settings actions. See
+[player settings](player-settings.md) and the [release receipt](verification/maneuvers-production-2026-09-14.md).
+
+Commitment and attention remain separate private experiments. They are not public
+defaults. The [experiment report](verification/bot-experiments-2026-09-14.md)
+retains measured comparisons and the independently frozen preview links. Its
+pre-release status is superseded by this release. The older continuous quiet
+movement/hopping policy remains an explicit comparison baseline.
+
 ## Omarchy Dispatch companion — September 14
 
 Production Worker `55a9e2fe-e219-451d-aa55-de48ba72928e` adds the versioned

@@ -32,6 +32,7 @@ export class CheeseGun {
     private scene: THREE.Scene;
     private world: CANNON.World;
     private presentationRay?:SpatialRayQuery;
+    private readonly acceptSceneryBody=(body:CANNON.Body)=>body.type===CANNON.Body.STATIC;
     private readonly acceptPresentationBody=(body:CANNON.Body)=>
         (body as CANNON.Body&{userData?:{entity?:RatEntity}}).userData?.entity!==this.playerEntity;
     private camera: THREE.PerspectiveCamera | null = null;
@@ -163,6 +164,13 @@ export class CheeseGun {
         return{p:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},
             n:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z},rat:!!entity&&!entity.dead,
             ...(entity&&this.protectedRats.has(entity)?{reflect:true}:{})};
+    };
+
+    /** Cosmetic visibility only; shares the existing static BVH with presentation. */
+    readonly sceneryClear=(from:{x:number;y:number;z:number},to:{x:number;y:number;z:number}):boolean=>{
+        this.rayFrom.set(from.x,from.y,from.z);this.rayTo.set(to.x,to.y,to.z);
+        this.presentationRay??=new SpatialRayQuery(this.world);
+        return !this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptSceneryBody,GROUP_PROJECTILE).hasHit;
     };
 
     clearProjectiles(): void {

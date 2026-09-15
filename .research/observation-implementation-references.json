@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "feature": "private-observation",
+  "researched_at": "2026-09-14",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "required",
+      "reason": "Reuses the existing title button, native settings dialog and HUD hint."
+    },
+    {
+      "class": "state-persistence",
+      "status": "required",
+      "reason": "Observer attachment survives socket hibernation; player resume credentials remain separate."
+    },
+    {
+      "class": "auth-security",
+      "status": "required",
+      "reason": "Only authenticated expiring private fixtures authorize an observer connection."
+    },
+    {
+      "class": "network-sync",
+      "status": "required",
+      "reason": "Observer consumes ordinary delivery and chaos acknowledgements without player actions."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "Existing RatController and pointer lock remain the walking camera owner."
+    },
+    {
+      "class": "accessibility",
+      "status": "required",
+      "reason": "Existing keyboard, touch, remapping and settings controls remain available."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "Worker and client tests prove nonparticipation and ordinary-player compatibility."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "An observer has movement and camera controls but cannot affect the match."
+    }
+  ],
+  "mappings": [
+    {
+      "id": "observer-session",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "ui-primitives",
+        "state-persistence",
+        "auth-security",
+        "network-sync",
+        "platform-device",
+        "accessibility",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": {
+        "name": "cannon-es",
+        "ecosystem": "npm",
+        "package": "cannon-es",
+        "version": "0.20.0",
+        "registry_url": "https://registry.npmjs.org/cannon-es/0.20.0",
+        "source_url": "https://github.com/pmndrs/cannon-es",
+        "license": "MIT",
+        "compatibility": "The existing locked game controller already uses cannon-es 0.20.0.",
+        "ownership": "RatController owns ordinary walking and camera; GameRoom owns observer admission and rejects participation.",
+        "locked_by": "../docs/current-state.md"
+      },
+      "behavior": {
+        "repo_url": "https://github.com/ioquake/ioq3",
+        "revision": "588393618dbc82e7207c21c6ddecca229944a03a",
+        "evidence_url": "https://github.com/ioquake/ioq3/blob/588393618dbc82e7207c21c6ddecca229944a03a/code/game/g_active.c",
+        "behavior": "SpectatorThink uses separate spectator movement and unlinks the spectator entity from ordinary world participation.",
+        "edge_states": [
+          "spectator movement",
+          "disconnect",
+          "full participant roster",
+          "snapshot recovery"
+        ],
+        "do_not_copy": "Do not copy GPL source or Quake flight controls, UI styling or collision tuning."
+      },
+      "platform": {
+        "url": "https://developers.cloudflare.com/durable-objects/best-practices/websockets/",
+        "requirement": "Serialize observer role and local spawn in the socket attachment so the durable object can reconstruct delivery after hibernation."
+      },
+      "proof": [
+        "npx vitest run test/worker/observer.test.ts",
+        "npx vitest run --config vitest.client.config.ts test/client/observer.test.ts",
+        "node scripts/verify-observer.mjs DEPLOYMENT_FILE http://127.0.0.1:5198"
+      ]
+    }
+  ]
+}

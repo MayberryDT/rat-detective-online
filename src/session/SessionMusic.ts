@@ -1,3 +1,4 @@
+import { musicOutput } from '../audio/PlayerAudioMix';
 import * as THREE from 'three';
 import { previewMuted } from '../audio/previewMuted';
 
@@ -7,6 +8,7 @@ export class SessionMusic {
     private disposed = false;
     constructor(private readonly listener: THREE.AudioListener) {
         this.sound = new THREE.Audio(listener);
+        this.sound.gain.disconnect();this.sound.gain.connect(musicOutput(listener.context));
         new THREE.AudioLoader().load('/music/main-theme.mp3', buffer => {
             if (this.disposed) return;
             this.sound.setBuffer(buffer).setLoop(true).setVolume(0.4);
@@ -29,6 +31,6 @@ export class SessionMusic {
         this.disposed = true;
         this.active = false;
         if (this.sound.isPlaying) this.sound.stop();
-        this.sound.disconnect();
+        this.sound.disconnect();this.sound.gain.disconnect();
     }
 }

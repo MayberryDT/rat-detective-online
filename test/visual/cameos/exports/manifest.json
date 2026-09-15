@@ -1,0 +1,94 @@
+{
+  "generatedAt": "2026-09-15T03:48:47.799Z",
+  "scope": "Animated art prototypes; no live-game integration",
+  "models": [
+    {
+      "kind": "spider",
+      "filename": "spider-rat.glb",
+      "bytes": 533188,
+      "meshes": 25,
+      "triangles": 22580,
+      "size": [
+        1.8080000190734864,
+        1.9842767656213158,
+        1.8682070636749268
+      ],
+      "bounds": {
+        "min": [
+          -0.7300000190734863,
+          0,
+          -0.9983670711517334
+        ],
+        "max": [
+          1.078,
+          1.9842767656213158,
+          0.8698399925231934
+        ]
+      },
+      "gltfMeshes": 25,
+      "roundtripBoundsVerified": true,
+      "roundtripAnimationPosesVerified": true,
+      "animations": [
+        {
+          "name": "spider-idle",
+          "duration": 8,
+          "tracks": 8
+        },
+        {
+          "name": "spider-passerby",
+          "duration": 4.800000190734863,
+          "tracks": 11
+        },
+        {
+          "name": "spider-shot",
+          "duration": 5.400000095367432,
+          "tracks": 14
+        }
+      ]
+    },
+    {
+      "kind": "bat",
+      "filename": "bat-rat.glb",
+      "bytes": 337020,
+      "meshes": 25,
+      "triangles": 12504,
+      "size": [
+        1.8763232827186584,
+        2.368760709762573,
+        1.6243431448936463
+      ],
+      "bounds": {
+        "min": [
+          -0.8597880005836487,
+          0,
+          -0.9195031523704529
+        ],
+        "max": [
+          1.0165352821350098,
+          2.368760709762573,
+          0.7048399925231934
+        ]
+      },
+      "gltfMeshes": 25,
+      "roundtripBoundsVerified": true,
+      "roundtripAnimationPosesVerified": true,
+      "animations": [
+        {
+          "name": "bat-idle",
+          "duration": 8,
+          "tracks": 8
+        },
+        {
+          "name": "bat-passerby",
+          "duration": 4.800000190734863,
+          "tracks": 7
+        },
+        {
+          "name": "bat-shot",
+          "duration": 5.400000095367432,
+          "tracks": 14
+        }
+      ]
+    }
+  ]
+}

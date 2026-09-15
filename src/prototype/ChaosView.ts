@@ -1,3 +1,4 @@
+import { effectsOutput } from '../audio/PlayerAudioMix';
 import { JurisdictionZones } from './JurisdictionZones';
 import type {FoleyWorld} from '../audio/FoleyWorld';
 import {DispatchSirenAudio} from '../audio/DispatchSirenAudio';
@@ -102,6 +103,8 @@ export class ChaosView {
     private readonly impactPoint=new THREE.Vector3();
     private readonly impactNormal=new THREE.Vector3();
     private readonly audioPosition=new THREE.Vector3();
+    onPresentedShot?: (id:string,p:Vec3Data,radius:number)=>void;
+    setObserving(value:boolean):void {this.hud.observing=value;}
     setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
     setIncidentRoster(incidents: readonly import('../shared/incidentCatalog').IncidentId[]|undefined):void {
         this.hud.setRoster(incidents?.length?incidents.map(id=>incidentInfo(id)):undefined);
@@ -388,6 +391,7 @@ export class ChaosView {
         for(let i=0;i<Math.min(shots.length,CHAOS_TUNING.maxShots);i++){
             const shot=shots[i];
             const p=this.localShots.owns(shot.id)||shot.stuckUntil||!(this.extrapolate&&this.presentation.shot(shot.id,renderTime,this.presented,shot.owner===this.myId?this.localMuzzle:undefined))?shot.p:this.presented.p;
+            this.onPresentedShot?.(shot.id,p,shot.radius??BALL_RADIUS);
             const scale=(shot.radius??BALL_RADIUS)/BALL_RADIUS;
             this.ballPose.position.set(p.x,p.y,p.z);
             this.ballPose.rotation.set(now*.015+i,now*.009,0);
@@ -487,7 +491,7 @@ export class ChaosView {
         oscillator.type='triangle';oscillator.frequency.setValueAtTime(frequency,context.currentTime);
         const duration=frequency<=200?.6:.12;
         gain.gain.setValueAtTime(frequency<=200?.24:.08,context.currentTime);gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+duration);
-        oscillator.connect(gain);gain.connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+duration);
+        oscillator.connect(gain);gain.connect(effectsOutput(context));oscillator.start();oscillator.stop(context.currentTime+duration);
         oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
     }
     getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}

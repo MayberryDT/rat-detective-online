@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "fbc45a9aa9edc8276aae4798d493a0698ad967d99d72b72305657fa9b83ccf76",
+  "verified_at": "2026-09-15T01:58:11.783884+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "observer-session:registry",
+      "url": "https://registry.npmjs.org/cannon-es/0.20.0",
+      "status": 200
+    },
+    {
+      "label": "observer-session:source",
+      "url": "https://github.com/pmndrs/cannon-es",
+      "status": 200
+    },
+    {
+      "label": "observer-session:behavior-repo",
+      "url": "https://github.com/ioquake/ioq3",
+      "status": 200
+    },
+    {
+      "label": "observer-session:behavior-evidence",
+      "url": "https://github.com/ioquake/ioq3/blob/588393618dbc82e7207c21c6ddecca229944a03a/code/game/g_active.c",
+      "status": 200
+    },
+    {
+      "label": "observer-session:platform",
+      "url": "https://developers.cloudflare.com/durable-objects/best-practices/websockets/",
+      "status": 200
+    }
+  ]
+}

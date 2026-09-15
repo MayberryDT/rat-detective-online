@@ -14,6 +14,12 @@ Serve `dist-visual` locally to inspect `/visual-fixture.html?seed=20260905&state
 
 ## Current character workshop (September 12)
 
+September 14 standalone superhero model study: `/cameo-preview.html` shows
+Spider-rat and Bat-rat with idle, passerby and shot-at animations, scrub/replay
+controls, orbit/preset views and animated GLB downloads. This is a silent
+art prototype, separate from live characters and gameplay. See
+[model study and export checks](cameos/README.md).
+
 `/model-preview.html` is now the rebuilt character workshop: four color swatch
 pools, orbit/view presets, coat detail, existing walk/fire poses, case/empty-sleeve/no-sleeve, opponent
 rendering and Ironclad. Street and Records support the walking cycle in place in city-lighting
@@ -304,3 +310,12 @@ pose. These are fixed camera/layout states, not gameplay or performance evidence
 Use `mute=1` for agent inspections. The geometry, renderer, guidance and HUD are
 the implementation used by the matching private game. See the
 [Jurisdiction receipt](../../docs/verification/jurisdiction-2026-09-13.md).
+
+
+### Cameo placement inspection
+
+`cameo-placement.html?mute=1` renders the two approved locations in the actual
+city with production lighting. Rooftop/Maintenance select fixed cameras. This is
+a static art inspection, with no gameplay socket, players or physics stepping.
+See [game integration](../../docs/verification/superhero-cameos-2026-09-14.md) for
+the separately frozen hosted human playtest.

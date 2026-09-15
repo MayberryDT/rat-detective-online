@@ -10,6 +10,10 @@ import type {Vec3Data} from '../../src/shared/networkProtocol';
 const navigation=vi.hoisted(()=>({route:vi.fn((_from:Vec3Data,to:Vec3Data)=>[to]),update:vi.fn()}));
 vi.mock('../../src/shared/BotNavigation',()=>({BotNavigation:class{
     explorationTargets(){return[{x:50,y:0,z:50},{x:-50,y:0,z:-50}];}
+    travelPoint(_from:Vec3Data,to:Vec3Data){return to;}
+    supported(from:Vec3Data){return Math.abs(from.y)<.65;}
+    jumpStep(){return undefined;}
+    approachStep(){return undefined;}
     route=navigation.route;update=navigation.update;localStep(){return undefined;}
 }}));
 vi.mock('../../src/shared/grayboxLayout',async original=>{

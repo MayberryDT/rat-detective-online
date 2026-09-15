@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "194057c41e8304f6fd7884a322e5f3b96c85d5cf16beb766a63e5c50c392b114",
+  "verified_at": "2026-09-15T04:18:37.558025+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "bot-sewer-crossing:registry",
+      "url": "https://registry.npmjs.org/cannon-es/0.20.0",
+      "status": 200
+    },
+    {
+      "label": "bot-sewer-crossing:source",
+      "url": "https://github.com/pmndrs/cannon-es",
+      "status": 200
+    },
+    {
+      "label": "bot-sewer-crossing:behavior-repo",
+      "url": "https://github.com/recastnavigation/recastnavigation",
+      "status": 200
+    },
+    {
+      "label": "bot-sewer-crossing:behavior-evidence",
+      "url": "https://github.com/recastnavigation/recastnavigation/blob/9f4ce64458dfae86e1239c525ddc219c4e9e06f1/DetourCrowd/Source/DetourCrowd.cpp",
+      "status": 200
+    },
+    {
+      "label": "bot-sewer-crossing:platform",
+      "url": "https://developers.cloudflare.com/durable-objects/platform/limits/",
+      "status": 200
+    }
+  ]
+}

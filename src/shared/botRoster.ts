@@ -1,3 +1,4 @@
+import {MAX_PLAYERS} from './networkProtocol';
 import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from './ratNames';
 import { APPEARANCE_COUNT, appearanceAt } from './ratAppearance';
 
@@ -5,8 +6,8 @@ const names = ['Constable Trap', 'Inspector Nibbles', 'Sergeant Stilton', 'Detec
   'Officer Whiskers', 'Captain Cheddar', 'Deputy Squeaks', 'Inspector Gouda',
   'Constable Alley', 'Detective Rind', 'Sergeant Scurry'];
 
-/** Legacy roster retained until the next round; identities reserve eleven slots. */
-export const PERSISTENT_BOT_ROSTER = names.map((name, i) => ({
+/** Legacy roster retained until the next round; identities leave one human slot in non-matchmade legacy rooms. */
+export const PERSISTENT_BOT_ROSTER = names.slice(0,MAX_PLAYERS-1).map((name, i) => ({
   id: `rd-ai-${String(i).padStart(2, '0')}`, name,
   appearance: appearanceAt(i * 149),
 }));

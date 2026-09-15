@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "feature": "bot-wall-case-and-directional-jumps",
+  "researched_at": "2026-09-14",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "not-applicable",
+      "reason": "No UI primitives or menus change; this fixes server bot navigation."
+    },
+    {
+      "class": "state-persistence",
+      "status": "not-applicable",
+      "reason": "Short jump and approach state is transient and clears through existing lifecycle resets."
+    },
+    {
+      "class": "auth-security",
+      "status": "not-applicable",
+      "reason": "No admission, privileges, credentials or server action validation changes."
+    },
+    {
+      "class": "network-sync",
+      "status": "not-applicable",
+      "reason": "Existing authority movement snapshots remain unchanged."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "ServerBotController must retain the shared 96 expansion and 2 millisecond navigation budget."
+    },
+    {
+      "class": "accessibility",
+      "status": "not-applicable",
+      "reason": "Existing player controls and observer controls remain unchanged."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "Real controller and pickup physics reproduce narrow-gap case failure and low-obstacle traversal; a focused brain test reproduces airborne braking."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "Short traversal keeps an explicit landing target separate from grounded route planning."
+    }
+  ],
+  "mappings": [
+    {
+      "id": "bot-short-traversal",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "platform-device",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": {
+        "name": "cannon-es",
+        "ecosystem": "npm",
+        "package": "cannon-es",
+        "version": "0.20.0",
+        "registry_url": "https://registry.npmjs.org/cannon-es/0.20.0",
+        "source_url": "https://github.com/pmndrs/cannon-es",
+        "license": "MIT",
+        "compatibility": "The existing locked game controller already uses cannon-es 0.20.0.",
+        "ownership": "BotNavigation validates close case approaches and bounded jump landing/clearance; ObjectiveBotBrain retains airborne intent; ServerBotController and ChaosSimulation retain movement and pickup authority.",
+        "locked_by": "../docs/current-state.md"
+      },
+      "behavior": {
+        "repo_url": "https://github.com/recastnavigation/recastnavigation",
+        "revision": "9f4ce64458dfae86e1239c525ddc219c4e9e06f1",
+        "evidence_url": "https://github.com/recastnavigation/recastnavigation/blob/9f4ce64458dfae86e1239c525ddc219c4e9e06f1/DetourCrowd/Source/DetourCrowd.cpp",
+        "behavior": "Explicit off-mesh traversal state retains start/end positions until the transition completes instead of treating an airborne agent as ordinary grounded walking. Rat Detective retains a short landing target and uses its existing physics.",
+        "edge_states": [
+          "wall-adjacent collection stance",
+          "no local floor while airborne",
+          "blocked or unsupported landing",
+          "tall obstacle or low ceiling",
+          "death/reset/launcher transition",
+          "visible counterfeit hazard"
+        ],
+        "do_not_copy": "Do not copy source, replace the navigation stack or alter movement physics."
+      },
+      "platform": {
+        "url": "https://developers.cloudflare.com/durable-objects/platform/limits/",
+        "requirement": "A Durable Object is single-threaded and CPU-limited. Retain the existing shared 2 ms / 96 expansion navigation budget instead of solving every bot route synchronously."
+      },
+      "proof": [
+        "npx vitest run --config vitest.client.config.ts test/client/botObstacleApproach.test.ts test/client/botWallCase.test.ts test/client/objectiveBotBrain.test.ts",
+        "npm run typecheck && npm test && npm run build"
+      ]
+    }
+  ]
+}

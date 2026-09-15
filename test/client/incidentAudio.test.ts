@@ -1,3 +1,4 @@
+import {effectsOutput} from '../../src/audio/PlayerAudioMix';
 import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import {afterEach,expect,it,vi} from 'vitest';
 import {bindIncidentAudio,disposeIncidentAudio,playDelayedThud,playPopcornPop,startCaseBuzz} from '../../src/audio/IncidentAudio';
@@ -8,6 +9,7 @@ async function fixture(){
  const ctx:any={state:'running',currentTime:0,sampleRate:24000,createBuffer:vi.fn((_channels:number,frames:number)=>({getChannelData:()=>new Float32Array(frames)})),destination:{},decodeAudioData:vi.fn(async()=>({})),
   createGain:()=>{const gain={gain:param(),connect:vi.fn(),disconnect:vi.fn()};gains.push(gain);return gain;},
   createBufferSource:()=>{const n={context:ctx,playbackRate:param(),connect:vi.fn(),disconnect:vi.fn(),start:vi.fn(),stop:vi.fn(),loop:false,onended:null};nodes.push(n);return n;}};
+ effectsOutput(ctx);gains.length=0;
  vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(8)})));
  bindIncidentAudio(ctx);await vi.waitFor(()=>expect(ctx.decodeAudioData).toHaveBeenCalledTimes(4));
  return {ctx,nodes,gains};

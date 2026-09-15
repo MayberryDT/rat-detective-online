@@ -12,6 +12,8 @@ interface RemoteRat {
 
 /** Scene representation of remote state. It never reads or sends a socket. */
 export class RemotePlayers {
+    /** Dedicated presentation group lets a walking observer pass through rats. */
+    observing = false;
     readonly rats = new Map<string, RemoteRat>();
     private previousFrameAt: number | undefined;
     private frameDt = 1 / 60;
@@ -29,6 +31,7 @@ export class RemotePlayers {
         const position = new THREE.Vector3(player.x, player.y, player.z);
         const entity = new RatEntity(this.scene, this.world, position, player.name, player, true);
         entity.applySnapshot(player);
+        if(this.observing)entity.body.collisionFilterGroup=4;
         if(this.batchRigs)entity.enableRigidBatching();
         const snapshots = player.id.startsWith('rd-ai-') ? new BotSnapshotBuffer() : new SnapshotBuffer();
         snapshots.reset({ ...player, qx: player.meshQx, qy: player.meshQy, qz: player.meshQz, qw: player.meshQw }, this.now());

@@ -1,3 +1,4 @@
+import { actionBound } from '../settings/PlayerPreferences';
 /** Holding Tab never changes pointer lock, focus, movement or match state. */
 export function bindScoreboardHold(options: {
     available: () => boolean;
@@ -9,18 +10,18 @@ export function bindScoreboardHold(options: {
 }): void {
     const doc = options.doc ?? document, target = options.target ?? window;
     const listeners = {signal: options.signal, capture: true};
-    let held = false;
+    let held = false;let heldCode='';
     const hide = () => { held = false; options.show(false); };
     doc.addEventListener('keydown', event => {
         if (event.code === 'Escape') { hide(); return; }
-        if (event.code !== 'Tab' || !options.available() || event.altKey || event.ctrlKey || event.metaKey) return;
+        if (!actionBound('scores',event.code) || !options.available() || event.altKey || event.ctrlKey || event.metaKey) return;
         const el = event.target as HTMLElement | null;
         if (el?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName ?? '')) return;
         event.preventDefault();
-        if (!event.repeat) { held = true; options.show(true); }
+        if (!event.repeat) { held = true;heldCode=event.code; options.show(true); }
     }, listeners);
     doc.addEventListener('keyup', event => {
-        if (event.code !== 'Tab') return;
+        if (event.code!==heldCode&&!actionBound('scores',event.code)) return;
         if (held) event.preventDefault();
         hide();
     }, listeners);

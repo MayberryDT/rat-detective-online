@@ -1,3 +1,4 @@
+import { MAX_OBSERVERS, observationAllowed } from '../shared/observation';
 import { RECONNECT_GRACE_MS, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
 import { ChaosDelivery } from './ChaosDelivery';
 import { ConnectionDelivery } from './ConnectionDelivery';
@@ -62,6 +63,9 @@ import {
 
 interface SocketAttachment {
   connectionId?: string;
+  observer?: boolean;
+  /** Local camera avatar only: never inserted in players, sessions or physics. */
+  observerPlayer?: PlayerData;
   playerId?: string;
   /** Extra local bot connections consume the human socket's shared world feed. */
   receiveMode?: 'welcome-only';
@@ -198,7 +202,12 @@ export class GameRoom extends DurableObject<Env> {
 
     // Opt-in graybox rooms keep the existing public world's identity intact.
     const requestUrl = new URL(request.url);
-    const resuming=requestUrl.searchParams.get('resume')==='1';
+    const observing=requestUrl.searchParams.get('observe')==='1';
+    if(observing && !observationAllowed(requestUrl,this.env as Env & {CAPACITY_FIXTURE_ID?:string;CAPACITY_EXPIRES_AT?:string}))
+      return new Response('Observation requires an active private bot fixture',{status:403});
+    if(observing && this.ctx.getWebSockets().filter(ws=>ws.readyState===WebSocket.OPEN&&this.getAttachment(ws).observer).length>=MAX_OBSERVERS)
+      return new Response('Observer places full',{status:503});
+    const resuming=!observing&&requestUrl.searchParams.get('resume')==='1';
     const preparing=resuming || this.matchRoom && requestUrl.searchParams.get('prepare')==='1';
     if(preparing && this.ctx.getWebSockets().filter(ws=>!this.getPlayerId(ws)&&this.getAttachment(ws).titleUntil!==undefined).length>=16)
       return new Response('Title connections busy',{status:503});
@@ -213,12 +222,12 @@ export class GameRoom extends DurableObject<Env> {
 
     if (this.matchRoom) {
       this.expireAdmissions();
-      if (!preparing && this.humanSlots() >= MAX_PLAYERS) return Response.json({ error: 'This room is full' }, { status: 503 });
+      if (!observing && !preparing && this.humanSlots() >= MAX_PLAYERS) return Response.json({ error: 'This room is full' }, { status: 503 });
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.setAttachment(server, { connectionId: crypto.randomUUID(),
-      ...(preparing ? {titleUntil:this.now()+30_000} : this.matchRoom ? { admissionUntil: this.now() + JOIN_LEASE_MS } : {}),
+      ...(observing ? {observer:true,titleUntil:this.now()+30_000} : preparing ? {titleUntil:this.now()+30_000} : this.matchRoom ? { admissionUntil: this.now() + JOIN_LEASE_MS } : {}),
       localDiagnostics: allowsLocalDiagnostics(request),
       ...([CHAOS_WIRE_MODE,'compact-v1'].includes(requestUrl.searchParams.get('chaos')??'')?{compactChaos:true}:{}),
       ...(requestUrl.searchParams.get('chaos')===CHAOS_WIRE_MODE?{compactChaosDelta:true}:{}),
@@ -228,7 +237,7 @@ export class GameRoom extends DurableObject<Env> {
     });
     this.ctx.acceptWebSocket(server);
     this.audience = null;
-    if (this.matchRoom) await this.scheduleNextAlarm();
+    if (this.matchRoom || observing) await this.scheduleNextAlarm();
     if (this.matchRoom && Date.now() >= admissionDeadline) {
       server.close(1001,'Admission expired');return new Response('Admission expired',{status:503});
     }
@@ -595,6 +604,13 @@ export class GameRoom extends DurableObject<Env> {
 
     if (message.type === 'deliveryAck') {this.ackDelivery(ws,message);return;}
 
+    const observer=this.getAttachment(ws);
+    if(observer.observer){
+      if(message.type==='chaosAck' && observer.observerPlayer)
+        this.chaosDelivery.get(ws)?.acknowledge(message);
+      // Observers can acknowledge playback, but never submit game actions.
+      return;
+    }
     const playerId = this.getPlayerId(ws);
     if (!playerId || !this.players.has(playerId)) {
       this.rejectMessage(ws, connectionId, 'Join before sending game messages');
@@ -826,6 +842,16 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     const attachment=this.getAttachment(ws);
+    if(attachment.observer){
+      if(!attachment.observerPlayer && (attachment.titleUntil??0)<=this.now()){ws.close(1008,'Joining timed out');return;}
+      const player=attachment.observerPlayer??createPlayer(crypto.randomUUID(),message.name,message.appearance,
+        spawnForWorld(this.world,()=>.5));
+      this.setAttachment(ws,{...attachment,observerPlayer:player,titleUntil:undefined,delivery:true});
+      this.send(ws,{...this.welcomeMessage(player.id,player),observing:true});
+      if(this.chaos)this.sendChaos(ws,this.chaos.snapshot(false));
+      this.ctx.waitUntil(this.scheduleNextAlarm());
+      return;
+    }
     if (this.matchRoom && !this.getPlayerId(ws) && (attachment.admissionUntil ?? attachment.titleUntil ?? 0) <= this.now()) {
       ws.close(1008, 'Joining timed out'); return;
     }
@@ -1194,6 +1220,10 @@ export class GameRoom extends DurableObject<Env> {
     this.rateLimiter.clear(this.getAttachment(ws).connectionId ?? 'unknown');
     this.connectionDelivery.delete(ws);
     this.chaosDelivery.delete(ws);
+    if(this.getAttachment(ws).observer){
+      this.setAttachment(ws,{...this.getAttachment(ws),observerPlayer:undefined,titleUntil:undefined});
+      this.ctx.waitUntil(this.scheduleNextAlarm());return;
+    }
     const playerId = this.getPlayerId(ws);
     if (playerId) {
       const session=this.sessions.get(playerId);
@@ -1322,7 +1352,7 @@ export class GameRoom extends DurableObject<Env> {
       let prepared:PreparedChaos|undefined;
       for(const ws of this.recipients()){
         const a=this.getAttachment(ws);
-        if(ws.readyState!==WebSocket.OPEN||!a.playerId||a.receiveMode==='welcome-only')continue;
+        if(ws.readyState!==WebSocket.OPEN||(!a.playerId&&!a.observerPlayer)||a.receiveMode==='welcome-only')continue;
 
         if(a.compactChaos)prepared??=prepareChaos(state);
         else if(!legacyPayload){const payload=serializeServerMessage({type:'chaos',state});legacyPayload={payload,bytes:wireBytes(payload)};}
@@ -1466,7 +1496,7 @@ export class GameRoom extends DurableObject<Env> {
   private recipients(): WebSocket[] {
     return this.audience ??= this.ctx.getWebSockets().filter(ws => {
       const a = this.getAttachment(ws);
-      return a.playerId && a.receiveMode !== 'welcome-only' && !this.failedSockets.has(ws) && !this.joining.has(ws);
+      return (a.playerId || a.observerPlayer) && a.receiveMode !== 'welcome-only' && !this.failedSockets.has(ws) && !this.joining.has(ws);
     });
   }
 
@@ -1478,10 +1508,10 @@ export class GameRoom extends DurableObject<Env> {
         this.diagnostics.sent(payload, bytes);
       });
       this.connectionDelivery.set(ws, delivery);
-      const attachment=this.getAttachment(ws),player=attachment.playerId?this.players.get(attachment.playerId):undefined;
+      const attachment=this.getAttachment(ws),player=attachment.observerPlayer??(attachment.playerId?this.players.get(attachment.playerId):undefined);
       const resumed=attachment.delivered;
       this.setAttachment(ws,{...attachment,delivered:true});
-      if(resumed&&player)delivery.offer(serializeServerMessage(this.welcomeMessage(player.id,player)),Date.now());
+      if(resumed&&player)delivery.offer(serializeServerMessage({...this.welcomeMessage(player.id,player),...(attachment.observer?{observing:true}: {})}),Date.now());
     }
     return delivery;
   }

@@ -7,7 +7,7 @@ describe('isolated hosted capacity baseline', () => {
   it('requires a configured matching credential', async () => {
     expect((await worker.fetch(request('/health'), {} as Env)).status).toBe(401);
     expect((await worker.fetch(request('/health', 'wrong'), env)).status).toBe(401);
-    expect(await (await worker.fetch(request('/health'), env)).json()).toMatchObject({ maxPlayers: 16, maxScoreEntries: 100 });
+    expect(await (await worker.fetch(request('/health'), env)).json()).toMatchObject({ maxPlayers: 10, maxScoreEntries: 100 });
   });
   it('expires the fixture and rejects missing identity', async () => {
     expect((await worker.fetch(request('/health'), { ...env, CAPACITY_EXPIRES_AT: '1' })).status).toBe(503);

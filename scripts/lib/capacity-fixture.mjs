@@ -9,10 +9,12 @@ export function replaceOnce(text, before, after) {
   if (text.split(before).length !== 2) throw new Error(`Capacity fixture anchor changed: ${before.slice(0, 90)}`);
   return text.replace(before, after);
 }
-export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 8, serverBots = 11, maxPlayers = 100, fullLobby = false, checkpointControl = false, assignment } = {}) {
+export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 8, serverBots = 11, maxPlayers = 100, fullLobby = false, checkpointControl = false, botExperiments = false, assignment, firstAssignment } = {}) {
+  if(firstAssignment!==undefined&&(!hosted||assignment!==undefined||!['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(firstAssignment)))throw Error('First assignment requires a known hosted mode and cannot be pinned');
   if(assignment!==undefined&&(!hosted||!['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(assignment)))throw Error('Assignment override requires a known mode in a hosted private fixture');
-  if(!Number.isInteger(serverBots)||serverBots<11||serverBots>99)throw Error('Fixture serverBots must be 11–99');
-  if(!Number.isInteger(maxPlayers)||maxPlayers<16||maxPlayers>100||serverBots>maxPlayers||serverBots===maxPlayers&&!fullLobby)throw Error('Fixture cap must be 16–100; a full bot roster requires fullLobby');
+  if(!Number.isInteger(serverBots)||serverBots<8||serverBots>99)throw Error('Fixture serverBots must be 8–99');
+  const minimumCap=10;
+  if(!Number.isInteger(maxPlayers)||maxPlayers<minimumCap||maxPlayers>100||serverBots>maxPlayers||serverBots===maxPlayers&&!fullLobby)throw Error(`Fixture cap must be ${minimumCap}–100; a full bot roster requires fullLobby`);
   if(fullLobby&&(!hosted||serverBots!==maxPlayers))throw Error('Full lobby requires hosted expiry and bots equal to cap');
   await mkdir(out, { recursive: true });
   const stage = await mkdtemp(join(out, 'runtime-'));
@@ -29,8 +31,20 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   }
   await hashTree('src');
   const controlHash=createHash('sha256').update(await readFile(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'))).digest('hex');
-  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 12, assignment, maxPlayers, fullLobby, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
+  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 15, botExperiments, assignment, firstAssignment, maxPlayers, fullLobby, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
   async function patch(name, before, after) { const path=join(stage,name); await writeFile(path,replaceOnce(await readFile(path,'utf8'),before,after)); }
+  if(botExperiments){
+    if(!hosted)throw Error('Bot experiments require a hosted private fixture');
+    await patch('src/worker/GameRoom.ts', "import { ChaosDelivery } from './ChaosDelivery';", `import { ChaosDelivery } from './ChaosDelivery';
+function privateBotExperiment(pool:string):import('../shared/BotExperiments').BotExperiment {
+  const value=/^graybox-benchmark-(?:ai|match)-bot-(maneuvers|commitment|attention|combined)(?:-|$)/.exec(pool)?.[1];
+  return value==='maneuvers'||value==='commitment'||value==='attention'||value==='combined'?value:'baseline';
+}`);
+    await patch('src/worker/GameRoom.ts','      });\n  }\n\n  private activatePersistentBots()', '      },privateBotExperiment(this.matchPool??""));\n  }\n\n  private activatePersistentBots()');
+  }
+  if(firstAssignment)await patch('src/worker/GameRoom.ts','    const id=nextAssignment(this.assignmentRotation);',`    // Private first cycle; following cycles use the normal shuffled playlist.
+    if(!this.assignmentRotation.last)this.assignmentRotation.remaining=[${JSON.stringify(firstAssignment)},...ASSIGNMENT_IDS.filter(id=>id!==${JSON.stringify(firstAssignment)})];
+    const id=nextAssignment(this.assignmentRotation);`);
   if(assignment)await patch('src/worker/GameRoom.ts','    const id=nextAssignment(this.assignmentRotation);',`    this.assignmentRotation.forced=${JSON.stringify(assignment)};\n    const id=nextAssignment(this.assignmentRotation);`);
   if(checkpointControl){
     if(!hosted)throw Error('Checkpoint control is hosted-private only');
@@ -40,7 +54,7 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   if(![4,8].includes(window))throw Error('Benchmark window must be 4 or 8');
   await patch('src/worker/ChaosDelivery.ts','MAX_CHAOS_IN_FLIGHT=8;',`MAX_CHAOS_IN_FLIGHT=${window};`);
   await patch('src/worker/GameRoom.ts', "this.send(ws, { type: 'pong', sentAt: message.sentAt, receivedAt: this.now() });", "this.safeSend(ws,JSON.stringify({type:'pong',sentAt:message.sentAt,receivedAt:this.now(),capacityDelivery:{coalesced:this.chaosDelivery.get(ws)?.coalesced??0,inFlight:this.chaosDelivery.get(ws)?.inFlight??0}}));");
-  await patch('src/shared/networkProtocol.ts', 'export const MAX_PLAYERS = 16;', `export const MAX_PLAYERS = ${maxPlayers};`);
+  await patch('src/shared/networkProtocol.ts', 'export const MAX_PLAYERS = 10;', `export const MAX_PLAYERS = ${maxPlayers};`);
   await patch('src/shared/ChaosSimulation.ts', '    private activate(owner?:string|null){', "    benchmarkIncident(incident:import('./incidentCatalog').IncidentId):void { this.dispatch={phase:'active',started:this.now,until:this.now+25000,serial:this.dispatch.serial+1,incident};this.lastSurgePulse=0;this.dispatchActivator=null; }\n    private activate(owner?:string|null){");
   await patch('src/worker/GameRoom.ts', 'this.world = { ...createWorldSpec(), version: GRAYBOX_VERSION };', 'this.world = { ...createWorldSpec(341283204), version: GRAYBOX_VERSION };');
   // Matchmaking enables version 2 before fetch(), so fixing only fetch's seed
@@ -51,19 +65,19 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   await patch('src/worker/GameRoom.ts', "import { ChaosDelivery } from './ChaosDelivery';", "import { ChaosDelivery } from './ChaosDelivery';\nimport { INCIDENTS } from '../shared/incidentCatalog';");
   // Private AI workload uses the production controller with a deterministic
   // eleven-rat roster. Only explicit benchmark-ai rooms enable it.
-  await patch('src/shared/botRoster.ts', 'names.map((name, i)', `Array.from({length:${serverBots}},(_,i)=>names[i%names.length]).map((name, i)`);
+  await patch('src/shared/botRoster.ts', 'names.slice(0,MAX_PLAYERS-1).map((name, i)', `Array.from({length:${serverBots}},(_,i)=>names[i%names.length]).map((name, i)`);
   await patch('src/shared/botRoster.ts', 'const count = MIN_PERSISTENT_BOTS + Math.floor(random() * (MAX_PERSISTENT_BOTS - MIN_PERSISTENT_BOTS + 1));', 'const count = MAX_PERSISTENT_BOTS;');
   await patch('src/worker/index.ts', '        return respond(await room.fetch(request));', "        if (roomName.startsWith('graybox-benchmark-ai-')) await room.ensurePersistentBots();\n        return respond(await room.fetch(request));");
   if(fullLobby){
     // Only the copied private Worker runs bots before humans arrive. Existing
     // admission and join code performs the actual bot-to-human replacement.
     await patch('src/worker/index.ts', "if (roomName.startsWith('graybox-benchmark-ai-')) await room.ensurePersistentBots();", "if (roomName.startsWith('graybox-benchmark-ai-')) await room.enableMatchmaking(roomName);");
-    await patch('src/worker/GameRoom.ts', 'const desired = humans ? Math.max(0, 8 - humans) : 0;', 'const desired = Math.max(0, MAX_PLAYERS - humans);');
-    await patch('src/worker/GameRoom.ts', 'roster.splice(humans ? Math.max(0, 8 - humans) : 0);', 'roster.splice(Math.max(0, MAX_PLAYERS - humans));');
+    await patch('src/worker/GameRoom.ts', 'const desired = humans ? Math.max(0, 8 - humans) : 0;', "const desired = this.matchRoom?.startsWith('graybox-benchmark-ai-') ? Math.max(0, MAX_PLAYERS - humans) : humans ? Math.max(0, 8 - humans) : 0;");
+    await patch('src/worker/GameRoom.ts', 'roster.splice(humans ? Math.max(0, 8 - humans) : 0);', "roster.splice(this.matchRoom?.startsWith('graybox-benchmark-ai-') ? Math.max(0, MAX_PLAYERS - humans) : humans ? Math.max(0, 8 - humans) : 0);");
     await patch('src/worker/GameRoom.ts', 'if (humans) { if (rosterChanged || !this.serverBots)', 'if (humans || desired) { if (rosterChanged || !this.serverBots)');
-    await patch('src/worker/GameRoom.ts', '    if (this.matchRoom && !this.humanSlots()) return;', '    // Full-lobby private fixture remains active until its hosted expiry.');
-    await patch('src/worker/GameRoom.ts', "      if(this.matchRoom && !retainedHuman){this.rebalanceBots();return;}", '      // Full-lobby private fixture also simulates with no human observers.');
-    await patch('src/worker/GameRoom.ts', '      if (!this.humanSlots() && this.matchPool) this.retireFromMatchmaker();', '      // Full-lobby private fixture retires at expiry rather than on last human exit.');
+    await patch('src/worker/GameRoom.ts', '    if (this.matchRoom && !this.humanSlots()) return;', "    if (this.matchRoom && !this.matchRoom.startsWith('graybox-benchmark-ai-') && !this.humanSlots()) return;");
+    await patch('src/worker/GameRoom.ts', "      if(this.matchRoom && !retainedHuman){this.rebalanceBots();return;}", "      if(this.matchRoom && !this.matchRoom.startsWith('graybox-benchmark-ai-') && !retainedHuman){this.rebalanceBots();return;}");
+    await patch('src/worker/GameRoom.ts', '      if (!this.humanSlots() && this.matchPool) this.retireFromMatchmaker();', "      if (!this.humanSlots() && this.matchPool && !this.matchRoom?.startsWith('graybox-benchmark-ai-')) this.retireFromMatchmaker();");
     await patch('src/worker/capacityTest.ts', "    if (url.pathname === '/health')", `    if(url.pathname==='/lobby-status'){
       const name=url.searchParams.get('room')??'';
       if(!/^graybox-benchmark-ai-[a-z0-9-]{1,80}$/.test(name))return new Response('Not found',{status:404});
@@ -108,8 +122,8 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   const validator = join(stage, 'validator.mjs');
   await cp(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'),join(stage,'approved-buffer.ts'));
   await build({ stdin:{contents:"export * from './src/shared/chaosWire.ts'; export {DeliveryDecoder} from './src/shared/deliveryWire.ts'; export {PROTOCOL_VERSION} from './src/shared/networkProtocol.ts'; export {TOUCH_SHOT_INTERVAL_MS} from './src/shared/shotTiming.ts'; export {INCIDENTS} from './src/shared/incidentCatalog.ts'; export {SnapshotBuffer,BotSnapshotBuffer} from './src/shared/SnapshotBuffer.ts'; export {SnapshotBuffer as ApprovedSnapshotBuffer} from './approved-buffer.ts';",resolveDir:stage}, outfile:validator, bundle:true, platform:'node', format:'esm' });
-  const manifest = { createdAt:new Date().toISOString(), fixtureId, sourceHashes, controlHash, hosted, expiresAt, window, serverBots, maxPlayers, fullLobby, checkpointControl, assignment,
-    overrides:[...(assignment?[`private assignment pinned to ${assignment}`]:[]),...(checkpointControl?['DIAGNOSTIC ONLY: copied periodic player and chaos checkpoint intervals 10 seconds; forced writes unchanged']:[]),...(fullLobby?['private full lobby stays active until expiry; bots fill cap and yield to human joins']:[]),`copied MAX_PLAYERS=${maxPlayers}, MAX_CONNECTIONS=${maxPlayers+8}`, 'fixed city seed 341283204', 'copied 25-second controls for all ten incidents', `private AI rooms use ${serverBots} production-controller bots, with hosted expiry`], stage, validator, configPath };
+  const manifest = { createdAt:new Date().toISOString(), fixtureId, sourceHashes, controlHash, hosted, expiresAt, window, serverBots, maxPlayers, fullLobby, checkpointControl, botExperiments, assignment, firstAssignment,
+    overrides:[...(firstAssignment?[`private first assignment ${firstAssignment}, then playlist rotation`]:[]),...(botExperiments?['private bot variants selected by explicit bot-baseline/maneuvers/commitment/attention/combined room names; normal match pools retain eight participants']:[]),...(assignment?[`private assignment pinned to ${assignment}`]:[]),...(checkpointControl?['DIAGNOSTIC ONLY: copied periodic player and chaos checkpoint intervals 10 seconds; forced writes unchanged']:[]),...(fullLobby?['private full lobby stays active until expiry; bots fill cap and yield to human joins']:[]),`copied MAX_PLAYERS=${maxPlayers}, MAX_CONNECTIONS=${maxPlayers+8}`, 'fixed city seed 341283204', 'copied 25-second controls for all ten incidents', `private AI rooms use ${serverBots} production-controller bots, with hosted expiry`], stage, validator, configPath };
   await writeFile(join(out,'fixture.json'), JSON.stringify(manifest,null,2));
   return manifest;
 }

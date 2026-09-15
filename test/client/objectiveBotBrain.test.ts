@@ -6,7 +6,7 @@ import type { Vec3Data } from '../../src/shared/networkProtocol';
 import { DISPATCH_STATIONS, type ChaosState } from '../../src/shared/chaosState';
 import { createAssignment, destinationPoint, CHAIN_ROUTE, ASSIGNMENT_IDS } from '../../src/shared/assignments';
 import { activeZone } from '../../src/shared/jurisdiction';
-import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
+import { JURISDICTION_ZONES, zoneContains } from '../../src/shared/jurisdictionZones';
 import { PICKUP_TUNING } from '../../src/shared/pickups';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
@@ -100,6 +100,26 @@ describe('case-first normal match bots',()=>{
         brain.reset();loose.case.p={x:-40,y:0,z:0};brain.step(2010,self,[self,near],loose,()=>true,false,true);
         expect(navigation.route).toHaveBeenLastCalledWith({x:self.x,y:self.y,z:self.z},loose.case.p);
     });
+    it('keeps directional movement during a local traversal jump while walking support is absent',()=>{
+        const {brain,self,navigation}=fixture(),loose=state();
+        vi.mocked(navigation.route).mockReturnValue([]);
+        navigation.localStep=vi.fn(()=>({x:4,y:0,z:0}));
+        const takeoff=brain.step(1000,self,[self],loose,()=>false,true,true);
+        expect(takeoff.jump).toBe(true);expect(takeoff.x).toBeGreaterThan(0);
+        self.y=3;self.x=1;vi.mocked(navigation.localStep).mockReturnValue(undefined);
+        const air=brain.step(1250,self,[self],loose,()=>false,false,false);
+        expect(air.x).toBeGreaterThan(0);expect(air.jump).toBe(false);
+    });
+    it('preserves the checked obstacle takeoff direction during close combat',()=>{
+        const {brain,self,near,navigation}=fixture(),s=state('me');
+        s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
+        navigation.jumpStep=()=>({x:0,y:0,z:4});navigation.localStep=(_from,to)=>to;
+        const intent=brain.step(1000,self,[self,near],s,()=>true,false,true);
+        expect(intent.jump).toBe(true);expect(intent.x).toBeCloseTo(0);expect(intent.z).toBeGreaterThan(0);
+        self.hp=0;brain.step(1100,self,[self,near],s,()=>true,false,false);
+        brain.reset();self.hp=3;self.y=3;vi.mocked(navigation.route).mockReturnValue([]);navigation.localStep=()=>undefined;
+        expect(brain.step(1200,self,[self],state(),()=>false,false,false)).toMatchObject({x:0,z:0,jump:false});
+    });
     it('waits for navigation instead of walking straight through blocked geometry',()=>{
         const {brain,self,navigation}=fixture();vi.mocked(navigation.route).mockReturnValue([]);
         const intent=brain.step(1000,self,[self],state(),()=>false,false,true);
@@ -110,6 +130,26 @@ describe('case-first normal match bots',()=>{
         for(let t=1000;t<1400;t+=16)brain.step(t,self,[self],state(),()=>false,false,true);
         expect(navigation.route).toHaveBeenCalledTimes(1);
         self.hp=0;expect(brain.step(5000,self,[self],state(),()=>true,false,true)).toMatchObject({x:0,z:0,jump:false});
+    });
+    it('keeps the grounded search origin through a jump and adopts the result after landing',()=>{
+        const {brain,self,navigation}=fixture(),loose=state();
+        vi.mocked(navigation.route).mockReturnValue([]);
+        brain.step(1000,self,[self],loose,()=>false,false,true);
+        self.y=5.5;
+        vi.mocked(navigation.route).mockReturnValue([{x:0,y:0,z:0},{x:10,y:0,z:0}]);
+        brain.step(1400,self,[self],loose,()=>false,false,false);
+        expect(navigation.route).toHaveBeenCalledTimes(1);
+        self.y=0;
+        expect(brain.step(1700,self,[self],loose,()=>false,false,true).x).toBeGreaterThan(0);
+        expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},loose.case.p);
+    });
+    it('rejects an upstairs first waypoint even when the search origin is still nearby',()=>{
+        const {brain,self,navigation}=fixture(),loose=state();
+        vi.mocked(navigation.route).mockReturnValue([{x:0,y:8,z:0},{x:10,y:8,z:0}]);
+        expect(brain.step(1000,self,[self],loose,()=>false,false,true)).toMatchObject({x:0,z:0,jump:false});
+        expect(brain.navigationStalled).toBe(true);
+        vi.mocked(navigation.route).mockReturnValue([{x:0,y:0,z:0},{x:10,y:0,z:0}]);
+        expect(brain.step(1300,self,[self],loose,()=>false,false,true).x).toBeGreaterThan(0);
     });
     it('polls stable pending endpoints despite physical drift and never runs stuck recovery while waiting',()=>{
         const {brain,self,navigation}=fixture(),loose=state();vi.mocked(navigation.route).mockReturnValue([]);
@@ -450,7 +490,7 @@ describe('assignment commitment',()=>{
   const j=s.assignment.jurisdiction!,zone=JURISDICTION_ZONES[activeZone(j)];j.remainingMs=1000;Object.assign(self,zone.posts[seed]);
   s.pickups=[{id:'outside',kind:'quick-fix',x:self.x,y:self.y+.7,z:self.z+18}];self.hp=1;
   for(const t of [1000,4500,7000]){
-   const intent=brain.step(t,self,[],s,()=>true,false,true);expect(brain.objective).toBe('zone-hold');expect(Math.hypot(intent.x,intent.z)).toBe(0);
+   const intent=brain.step(t,self,[],s,()=>true,false,true);expect(brain.objective).toBe('zone-hold');expect(zoneContains(activeZone(j),{x:self.x+intent.x*.35,y:self.y,z:self.z+intent.z*.35})).toBe(true);
   }
  });
  it('pursues the currently scoring carrier rather than camping the announced next zone',()=>{

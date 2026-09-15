@@ -38,6 +38,23 @@ describe('network session transport', () => {
     });
     afterEach(() => { network.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+    it('keeps observation separate from saved player credentials and preserves it on retry',()=>{
+        network.destroy();const storage={getItem:vi.fn(()=>JSON.stringify({scope:'ws://localhost/ws?room=graybox-benchmark-ai-watch',token:crypto.randomUUID()})),setItem:vi.fn(),removeItem:vi.fn()};
+        const urls:string[]=[];
+        network=makeNetwork({url:'ws://localhost/ws?room=graybox-benchmark-ai-watch&observe=1',resumeStorage:storage,createSocket:url=>{urls.push(url);const socket=new FakeSocket();sockets.push(socket);return socket as unknown as WebSocket;}});
+        network.connect('Camera',appearance);sockets[0].open();
+        expect(storage.getItem).not.toHaveBeenCalled();expect(JSON.parse(sockets[0].sent[0]).resumeToken).toBeUndefined();
+        sockets[0].receive({...welcome(),observing:true,players:{}});expect(network.state).toBe('playing');
+        expect(storage.setItem).not.toHaveBeenCalled();expect(storage.removeItem).not.toHaveBeenCalled();
+        sockets[0].close();vi.advanceTimersByTime(2000);expect(urls.length).toBeGreaterThan(1);
+        expect(urls.every(url=>new URL(url).searchParams.get('observe')==='1')).toBe(true);
+    });
+    it('refuses a server that silently turns observation into a participant',()=>{
+        network.destroy();network=makeNetwork({url:'ws://localhost/ws?room=graybox-benchmark-ai-watch&observe=1'});
+        network.connect('Camera',appearance);sockets[0].open();sockets[0].receive(welcome());
+        expect(network.state).toBe('disconnected');
+    });
+
     it('forwards practice incident controls from the browser URL without overriding explicit transport settings', () => {
         vi.stubGlobal('window', { location: {
             href: 'http://localhost:5190/?room=graybox-practice-review&incidents=classic&incident=evidence-tampering',

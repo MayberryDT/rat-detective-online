@@ -1,3 +1,4 @@
+import { effectsOutput } from './PlayerAudioMix';
 import type {Vec3Data} from '../shared/networkProtocol';
 import { previewMuted } from './previewMuted';
 import {worldSoundGain} from './worldSoundGain';
@@ -42,7 +43,7 @@ function playBuffer(buffer: AudioBuffer, volume: number, pitch = 1): void {
     if (!ctx || ctx.state !== 'running' || voices.size >= MAX_VOICES) return;
     const source = ctx.createBufferSource(), gain = ctx.createGain();
     source.buffer = buffer; source.playbackRate.value = pitch; gain.gain.value = volume;
-    source.connect(gain); gain.connect(ctx.destination); voices.set(source,gain);
+    source.connect(gain); gain.connect(effectsOutput(ctx)); voices.set(source,gain);
     source.onended = () => { voices.delete(source); source.disconnect(); gain.disconnect(); };
     source.start();
 }
@@ -95,7 +96,7 @@ export function startCaseBuzz(active: boolean, origin?: Vec3Data): void {
     source.buffer = buffer; source.loop = true;
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.linearRampToValueAtTime(buzzVolume, ctx.currentTime + .12);
-    source.connect(gain); gain.connect(ctx.destination); source.start(); saw = {source, gain, volume:buzzVolume};
+    source.connect(gain); gain.connect(effectsOutput(ctx)); source.start(); saw = {source, gain, volume:buzzVolume};
 }
 
 export function bindIncidentAudio(next?: AudioContext, position?: Vec3Data): void {

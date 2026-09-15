@@ -91,7 +91,7 @@ describe('persistent hosted bots', () => {
       expect(ctx.getWebSockets()).toHaveLength(0);
       expect(game.world.version).toBe(GRAYBOX_VERSION);
       expect(game.players.size).toBeGreaterThanOrEqual(8);
-      expect(game.players.size).toBeLessThanOrEqual(11);
+      expect(game.players.size).toBeLessThanOrEqual(9);
       expect([...game.players.keys()]).toEqual(game.botRoster.map(bot => bot.id));
       expect(ctx.storage.sql.exec<{ count: number }>('SELECT count(*) AS count FROM players').one().count).toBe(game.botRoster.length);
       expect(await ctx.storage.getAlarm()).toBeLessThanOrEqual(Date.now() + BOT_HEARTBEAT_MS);
@@ -175,21 +175,21 @@ describe('persistent hosted bots', () => {
     const bots = (await stub.status()).bots;
     const join = JSON.stringify({ type: 'join', protocolVersion: PROTOCOL_VERSION, name: 'Human',
       appearance: { hatType: 'fedora', hatColor: 0xdc4a3c, furColor: 0xe8b84d, coatColor: 0xbe4545 } });
-    for (let i = 0; i <= MAX_PLAYERS - 11; i++) {
+    for (let i = 0; i <= MAX_PLAYERS - 9; i++) {
       const response = await stub.fetch('https://rat-detective.test/ws', { headers: { Upgrade: 'websocket' } });
       const ws = response.webSocket!; ws.accept(); sockets.push(ws);
       const first = new Promise<{ type: string; message?: string; players?: Record<string, PlayerData> }>(resolve => {
         ws.addEventListener('message', event => { const message=readSocketMessage(ws,event.data);if(message?.type==='welcome'||message?.type==='error')resolve(message); });
       });
       ws.send(join); const message = await first;
-      if (i < MAX_PLAYERS - 11) expect(message.type).toBe('welcome');
+      if (i < MAX_PLAYERS - 9) expect(message.type).toBe('welcome');
       else expect(message).toMatchObject({ type: 'error', message: 'This room is full' });
     }
-    expect((await stub.status()).players).toBe(MAX_PLAYERS - 11 + bots);
+    expect((await stub.status()).players).toBe(MAX_PLAYERS - 9 + bots);
     await stub.ensurePersistentBots();
     await runInDurableObject(stub, (instance: GameRoom) => {
       const game = instance as unknown as Internals;
-      expect(game.players.size).toBe(MAX_PLAYERS - 11 + bots);
+      expect(game.players.size).toBe(MAX_PLAYERS - 9 + bots);
       expect([...game.players.keys()].filter(id => id.startsWith('rd-ai-'))).toHaveLength(bots);
     });
   });

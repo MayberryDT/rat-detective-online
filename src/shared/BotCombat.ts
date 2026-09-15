@@ -46,13 +46,13 @@ export class BotCombat {
         this.lastStep=undefined;this.lastSeen=-Infinity;
         this.nextShot=0;this.remaining=0;this.burstUntil=0;this.pauseUntil=0;this.canFollow=false;
     }
-    step(now: number, self: Vec3Data, target: PlayerData | undefined, visible: boolean, allowFire=true,casePoint?:Vec3Data): {aim?:Vec3Data;shoot?:Vec3Data} {
+    step(now: number, self: Vec3Data, target: PlayerData | undefined, visible: boolean, allowFire=true,casePoint?:Vec3Data,acquisitionCostMs=0): {aim?:Vec3Data;shoot?:Vec3Data} {
         if(target&&target.id===this.targetId&&target.hp<=0){this.reset();return {};}
         if(visible&&target&&target.hp>0){
             if(target.id!==this.targetId||!!casePoint!==this.aimingAtCase){
                 this.reset();this.targetId=target.id;
                 this.aimingAtCase=!!casePoint;
-                this.readyAt=now+this.between(BOT_COMBAT.reactionMinMs,BOT_COMBAT.reactionMaxMs);
+                this.readyAt=now+this.between(BOT_COMBAT.reactionMinMs,BOT_COMBAT.reactionMaxMs)+Math.max(0,Math.min(300,acquisitionCostMs));
                 this.observeAt=0;this.correctionAt=0;
                 this.observed=casePoint?{...casePoint}:{x:target.x,y:target.y+.9,z:target.z};this.tracked={...this.observed};
             }

@@ -1,3 +1,4 @@
+import { observationAllowed } from '../shared/observation';
 import { DEFAULT_ROOM_NAME } from '../shared/networkProtocol';
 import { log } from './logging';
 import { isAssignmentId } from '../shared/assignments';
@@ -157,6 +158,7 @@ export default {
         if(!ROOM_NAME.test(roomName))return respond(json({error:'Unknown room'},{status:404}));
         if(roomName!==DEFAULT_ROOM_NAME&&!await privateRoomAuthorized(request,admissionEnv))
           return respond(json({error:'Unknown room'},{status:404}));
+        if(url.searchParams.get('observe')==='1'&&!observationAllowed(url,env as Env & {CAPACITY_FIXTURE_ID?:string;CAPACITY_EXPIRES_AT?:string}))return respond(json({error:'Observation requires an active private bot fixture'},{status:403}));
         const selection=url.searchParams.get('assignment');
         if (roomName === DEFAULT_ROOM_NAME) {
           if(selection!==null)return respond(json({error:'Assignment selection requires a private room'},{status:400}));

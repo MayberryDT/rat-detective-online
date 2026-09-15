@@ -1,3 +1,4 @@
+import { playerPreferences } from '../settings/PlayerPreferences';
 import type {FoleyPlay} from '../audio/foleyCatalog';
 import { ASSIGNMENTS, type AssignmentState } from '../shared/assignments';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
@@ -241,7 +242,7 @@ export class GameHud {
 
     private overlay(element:HTMLElement,visible:boolean):void {
         this.overlayAnimations.get(element)?.cancel();this.overlayAnimations.delete(element);
-        const reduce=this.doc.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        const reduce=playerPreferences().current.reducedMotion||this.doc.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         if(!element.animate||reduce){element.style.display=visible?'flex':'none';return;}
         if(!visible&&element.style.display==='none')return;
         element.style.display='flex';

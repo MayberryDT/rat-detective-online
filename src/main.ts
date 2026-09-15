@@ -1,3 +1,4 @@
+import { PlayerSettings } from './ui/PlayerSettings';
 import { TitleScreen } from './ui/TitleScreen';
 import { TitleMusic } from './ui/TitleMusic';
 import { unlockEffectsAudio } from './audio/effectsAudio';
@@ -32,6 +33,7 @@ function showWebGLError(error: unknown): void {
 
 const startup = new AbortController();
 const title = new TitleScreen();
+title.settings = new PlayerSettings();
 const music = new TitleMusic();
 performance.mark('title-controls-ready');
 let requested = false;

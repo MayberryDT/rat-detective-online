@@ -1,3 +1,4 @@
+import type {Vec3Data} from './networkProtocol';
 import type { GrayboxBox } from './grayboxLayout';
 
 /** Walk surface of the dry sewer; street underside sits at y = -1. */
@@ -68,6 +69,26 @@ export function sewerPipePoint(entry:SewerPipeEntrance,distance:number,across=0)
     return {x:entry.axis==='x'?along:entry.x+across,
         z:entry.axis==='z'?along:entry.z+across,
         floorY:-Math.max(0,Math.min(RUN,distance-6))*RISE/RUN};
+}
+
+/** Identify feet inside an authored ramp, excluding street/roof surfaces above it. */
+export function sewerRampAt(p:Vec3Data):SewerPipeEntrance|undefined {
+    return SEWER_PIPE_ENTRANCES.find(entry=>{
+        const along=(p[entry.axis]-entry[entry.axis])*entry.direction,distance=4-along;
+        const across=entry.axis==='x'?p.z-entry.z:p.x-entry.x;
+        const floor=sewerPipePoint(entry,distance).floorY;
+        return distance>=0&&distance<=30&&Math.abs(across)<4&&p.y>=floor-.65&&p.y<floor+2.5;
+    });
+}
+/** Finish the current ramp before selecting another entrance or a street leg.
+ * Distance from the near endpoint grows while crossing; it cannot decide whether
+ * to return to that endpoint. Preserve objectives physically on this same ramp. */
+export function sewerRampTravelPoint(from:Vec3Data,goal:Vec3Data):Vec3Data|undefined {
+    const entry=sewerRampAt(from);
+    if(!entry)return undefined;
+    if(sewerRampAt(goal)===entry)return goal;
+    const point=sewerPipePoint(entry,goal.y < -1?32:-2);
+    return {x:point.x,y:point.floorY+.3,z:point.z};
 }
 
 /** Includes the approach so poles and street clutter never obstruct the entrance. */

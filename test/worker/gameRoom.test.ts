@@ -240,11 +240,11 @@ describe('GameRoom websockets', () => {
     expect(Math.hypot(other.player.x-welcome.player.x,other.player.z-welcome.player.z)).toBeGreaterThan(60);
   });
 
-  it('allocates twelve separated server joins, respawns, and full-round reset positions',async()=>{
+  it('allocates a full room of separated server joins, respawns, and full-round reset positions',async()=>{
     const room=`graybox-spawn-${crypto.randomUUID()}`;
     const ids:string[]=[];
     let watcher:Awaited<ReturnType<typeof openClient>>|undefined;
-    for (let i=0;i<12;i++) {
+    for (let i=0;i<MAX_PLAYERS;i++) {
       const client=await openClient(room);
       watcher??=client;
       client.ws.send(joinPayload(`Rat ${i}`));
@@ -254,7 +254,7 @@ describe('GameRoom websockets', () => {
     const stub=env.GAME_ROOM.getByName(room);
     type Internals={round:RoundState;players:Map<string,PlayerData>;chaosTimer:ReturnType<typeof setInterval>|null};
     const assertSpread=(players:PlayerData[])=>{
-      expect(players).toHaveLength(12);
+      expect(players).toHaveLength(MAX_PLAYERS);
       for (let i=0;i<players.length;i++) for (let j=0;j<i;j++) {
         expect(Math.hypot(players[i].x-players[j].x,players[i].z-players[j].z)).toBeGreaterThan(60);
       }

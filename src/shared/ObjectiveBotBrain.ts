@@ -1,3 +1,9 @@
+import {sewerRampAt} from './sewerLayout';
+import {DEFAULT_BOT_EXPERIMENT,botBehaviors,type BotExperiment} from './BotExperiments';
+import {BotManeuver} from './BotManeuver';
+import {BotPurposefulHolding} from './BotPurposefulHolding';
+import {BotAttention} from './BotAttention';
+import { BotZoneHolding, zoneStepSafe } from './BotZoneHolding';
 import { activeZone, nextZone, JURISDICTION_TUNING } from './jurisdiction';
 import { JURISDICTION_ZONES, jurisdictionTravelPoint, zoneContains } from './jurisdictionZones';
 import { BotOpportunisticFire } from './BotOpportunisticFire';
@@ -12,6 +18,11 @@ import type {BotWaypoint} from './BotLaunchRoutes';
 import {BALL_GRAVITY,BALL_SPEED} from './ballTuning';
 
 export interface ObjectiveNavigation {
+    /** A supported local route leg, without replacing the actual objective. */
+    travelPoint?(from:Vec3Data,to:Vec3Data):Vec3Data;
+    supported?(from:Vec3Data):boolean;
+    jumpStep?(from:Vec3Data,to:Vec3Data):Vec3Data|undefined;
+    approachStep?(from:Vec3Data,to:Vec3Data):Vec3Data|undefined;
     /** Undefined means the shared planner's frame budget was already used. */
     route(from: Vec3Data, to: Vec3Data): BotWaypoint[] | undefined;
     /** A short waypoint verified against both solid geometry and floor support. */
@@ -19,7 +30,7 @@ export interface ObjectiveNavigation {
     explorationTargets(): Vec3Data[];
     update?(budgetMs?: number): void;
 }
-export interface ObjectiveBotIntent { x: number; z: number; jump: boolean; shoot?: Vec3Data; facing: number }
+export interface ObjectiveBotIntent { x: number; z: number; jump: boolean; zoneHop?: boolean; shoot?: Vec3Data; facing: number }
 export type BotObjective = 'case' | 'carrier' | 'combat' | 'explore' | 'delivery' | 'evade' | 'intercept' | 'pickup' | 'zone-hold';
 const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
 const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
@@ -40,6 +51,10 @@ export class ObjectiveBotBrain {
     private destination?: Vec3Data;
     private route: BotWaypoint[] = [];
     private flight?:{landing:Vec3Data;started:number};
+    private jumpTravel?:{goal:Vec3Data;started:number};
+    private jumpProbeAt=0;
+    private approachAt=0;
+    private approach?:Vec3Data;
     private launchWaitAt?:number;
     private supplyTripAt=0;
     private pickupUntil=0;
@@ -73,12 +88,17 @@ export class ObjectiveBotBrain {
     private assignmentSignature = '';
     private assignmentActive=false;
     private evadeAt=0;
+    private readonly behaviors:ReturnType<typeof botBehaviors>;
+    private readonly zoneHolding:BotZoneHolding|BotPurposefulHolding;
+    private readonly maneuver:BotManeuver;
+    private readonly attention=new BotAttention();
     private zonePostAt=0;
     private zonePost=0;
     private readonly zoneLane:number;
     private readonly places: Vec3Data[];
-    constructor(private readonly navigation: ObjectiveNavigation, seed = 0, private readonly random: () => number = Math.random) {
-        this.zoneLane=Math.abs(seed)%3;
+    constructor(private readonly navigation: ObjectiveNavigation, seed = 0, private readonly random: () => number = Math.random, experiment:BotExperiment=DEFAULT_BOT_EXPERIMENT) {
+        this.behaviors=botBehaviors(experiment);
+        this.zoneLane=Math.abs(seed)%3;this.zoneHolding=this.behaviors.maneuvers?new BotPurposefulHolding(seed):new BotZoneHolding(seed);this.maneuver=new BotManeuver(seed);
         this.combat = new BotCombat(combatRandom(seed));
         this.opportunisticFire = new BotOpportunisticFire(combatRandom(seed+10000));
         this.places = navigation.explorationTargets();
@@ -88,7 +108,7 @@ export class ObjectiveBotBrain {
     get navigationStalled():boolean{return this.stalled;}
     get failedCasePosition():Readonly<Vec3Data>|undefined{return this.failedCase;}
     reset(): void {
-        this.protectedVisible=[];this.visibleRats=[];this.caseAim=false;
+        this.jumpTravel=undefined;this.jumpProbeAt=0;this.approach=undefined;this.approachAt=0;this.maneuver.reset();this.attention.reset();this.protectedVisible=[];this.visibleRats=[];this.caseAim=false;this.zoneHolding.reset();
         this.pickupUntil=0;this.nextPickupAt=0;
         this.assignmentActive=false;
         this.combat.reset();this.opportunisticFire.reset();this.shotAt=0;
@@ -101,7 +121,7 @@ export class ObjectiveBotBrain {
         this.deliveryKey='';this.deliveryEntering=false;this.assignmentSignature='';this.evadeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
     private setObjective(objective: BotObjective, key: string, destination: Vec3Data | undefined): void {
-        if(this.key!==key){this.launchWaitAt=undefined;this.route=[];this.routeIndex=0;this.plannedDestination=undefined;this.pendingPlan=undefined;this.routeWaitStarted=undefined;this.recoverUntil=0;this.planAt=0;this.key=key;
+        if(this.key!==key){this.approach=undefined;this.approachAt=0;this.maneuver.reset();this.launchWaitAt=undefined;this.route=[];this.routeIndex=0;this.plannedDestination=undefined;this.pendingPlan=undefined;this.routeWaitStarted=undefined;this.recoverUntil=0;this.planAt=0;this.key=key;
             this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;}
         this.objective=objective;this.destination=destination;
     }
@@ -171,13 +191,15 @@ export class ObjectiveBotBrain {
     step(now: number, self: PlayerData, others: Iterable<PlayerData>, state: ChaosState | undefined,
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
         clearControl: (target: Vec3Data) => boolean = clear): ObjectiveBotIntent {
-        if(self.hp<=0){this.flight=undefined;this.launchWaitAt=undefined;this.combat.reset();this.opportunisticFire.reset();this.stalled=false;return{x:0,z:0,jump:false,facing:this.heading};}
+        if(self.hp<=0){this.jumpTravel=undefined;this.maneuver.reset();this.attention.reset();this.zoneHolding.reset();this.flight=undefined;this.launchWaitAt=undefined;this.combat.reset();this.opportunisticFire.reset();this.stalled=false;return{x:0,z:0,jump:false,facing:this.heading};}
+        const initialFacing=Math.atan2(2*(self.meshQw*self.meshQy+self.meshQx*self.meshQz),1-2*(self.meshQy*self.meshQy+self.meshQz*self.meshQz));
+        if(this.jumpTravel&&(now-this.jumpTravel.started>2200||grounded&&now-this.jumpTravel.started>250))this.jumpTravel=undefined;
         const airborne=this.fly(now,self,grounded);if(airborne)return airborne;
         const launchStep=this.route[this.routeIndex]?.launch;
         const launch=launchStep&&state?.pressure?.launches.find(e=>e.playerId===self.id&&e.machineId===launchStep.machine.id&&
             e.at>=(this.launchWaitAt??now)&&now-e.at<1500);
         if(launch&&launchStep){
-            this.flight={landing:launchStep.landing,started:now};this.launchWaitAt=undefined;
+            this.jumpTravel=undefined;this.flight={landing:launchStep.landing,started:now};this.launchWaitAt=undefined;
             return this.fly(now,self,false)!;
         }
         // Counterfeits are lethal hazards, never objectives: a bot that routed to one
@@ -241,7 +263,15 @@ export class ObjectiveBotBrain {
             const available=carrying||evidence?undefined:cases.filter(({key,value})=>!value.owner&&value.returningUntil<=(state?.time??now)&&
                 (value.previousOwner!==self.id||value.pickupAfter<=(state?.time??now))&&!this.suppressed(key,value.p,now))
                 .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
-            const combat=vulnerable.find(p=>!this.suppressed(`combat:${p.id}`,p,now));
+            const candidates=vulnerable.filter(p=>!this.suppressed(`combat:${p.id}`,p,now));
+            let combat=candidates[0];
+            if(this.behaviors.commitment&&!ownershipChanged){
+                const retained=candidates.find(p=>this.key===`combat:${p.id}`);
+                // A 20% / four-unit improvement is material; tiny distance
+                // swaps should not discard a valid shared route. Case priorities
+                // below still interrupt immediately, as do death and failed routes.
+                if(retained&&(!combat||distance(self,combat)+Math.max(4,distance(self,retained)*.2)>=distance(self,retained)))combat=retained;
+            }
             const active=assignment?.phase==='active';
             // A mapped roof trip is still possible between objectives, but a
             // live case takes priority even when it is on the other side of town.
@@ -365,19 +395,24 @@ export class ObjectiveBotBrain {
         if(this.target?.hp===0){this.combat.reset();this.target=undefined;}
         if(!this.progressPosition){this.progressPosition={...self};this.progressAt=now;}
         if(now-this.progressAt>1500){
-            if(this.launchWaitAt===undefined&&!this.pendingPlan&&this.routeIndex<this.route.length&&this.destination&&distance(self,this.destination)>3&&distance(self,this.progressPosition)<1.1&&grounded){
+            if(this.launchWaitAt===undefined&&!this.pendingPlan&&this.routeIndex<this.route.length&&this.destination&&distance(self,this.destination)>3&&Math.hypot(self.x-this.progressPosition.x,self.z-this.progressPosition.z)<1.1&&grounded){
                 this.recoverUntil=now+550;this.planAt=this.recoverUntil;this.route=[];
             }
             this.progressPosition={...self};this.progressAt=now;
         }
-        const movedGoal=this.destination&&this.plannedDestination&&distance(this.destination,this.plannedDestination)>7;
-        if(this.destination&&!(this.objective==='zone-hold'&&distance(self,this.destination)<1)&&now>=this.planAt&&(this.pendingPlan||this.routeIndex>=this.route.length||movedGoal)){
+        const holdingZone=this.objective==='zone-hold'&&assignment?.phase==='active'&&assignment.jurisdiction&&state?.case.owner===self.id&&zoneContains(activeZone(assignment.jurisdiction),self) ? activeZone(assignment.jurisdiction) : undefined;
+        if(!holdingZone)this.zoneHolding.reset();
+        else {this.pendingPlan=undefined;this.route=[];this.routeIndex=0;this.routeWaitStarted=undefined;this.recoverUntil=0;}
+        const routeDestination=this.destination&&(this.navigation.travelPoint?.(self,this.destination)??this.destination);
+        const movedGoal=routeDestination&&this.plannedDestination&&distance(routeDestination,this.plannedDestination)>7;
+        if(routeDestination&&!holdingZone&&!this.jumpTravel&&now>=this.planAt&&(this.pendingPlan||this.routeIndex>=this.route.length||movedGoal)&&(grounded||this.navigation.supported?.(self))){
+            // Attach searches while supported, never to an upstairs node mid-jump.
             // Queue/cache keys include the start. Keep BOTH endpoints stable
             // while an incremental search runs, even if momentum moves the rat.
             // A moving case/carrier may replace a stale goal, at most once/sec.
-            if(!this.pendingPlan||(now-this.pendingPlan.started>=1000&&distance(this.destination,this.pendingPlan.to)>7)){
-                this.pendingPlan={from:{x:self.x,y:self.y,z:self.z},to:{...this.destination},started:now};
-                this.routeProgressGoal={...this.destination};this.bestRouteDistance=distance(self,this.destination);
+            if(!this.pendingPlan||(now-this.pendingPlan.started>=1000&&distance(routeDestination,this.pendingPlan.to)>7)){
+                this.pendingPlan={from:{x:self.x,y:self.y,z:self.z},to:{...routeDestination},started:now};
+                this.routeProgressGoal={...routeDestination};this.bestRouteDistance=distance(self,routeDestination);
             }
             const pending=this.pendingPlan;
             const route=this.navigation.route(pending.from,pending.to);
@@ -387,9 +422,10 @@ export class ObjectiveBotBrain {
                     const d=distance(self,route[i]);
                     if(Math.abs(self.y-route[i].y)<1.5&&d<=nearestDistance){nearest=i;nearestDistance=d;}
                 }
-                if(nearest<0&&distance(self,pending.from)>3){
-                    // Local movement left this old search origin behind. Ask
-                    // from the current pose instead of turning back across town.
+                if(nearest<0&&(distance(self,pending.from)>3||Math.abs(self.y-route[0].y)>=1.5)){
+                    // The old origin is no longer a usable attachment, including
+                    // a waypoint upstairs after landing below it. Replan from
+                    // the supported current pose instead of chasing that node.
                     this.pendingPlan=undefined;this.plannedDestination=undefined;this.planAt=now+150;
                 }else{
                     this.route=route;this.routeIndex=Math.max(0,nearest);this.plannedDestination=pending.to;
@@ -426,15 +462,30 @@ export class ObjectiveBotBrain {
             }
         }
         const patrolling=this.objective==='intercept'&&this.destination&&distance(self,this.destination)<6&&grounded;
-        if((!waypoint||patrolling)&&this.destination){
-            if(now>=this.localStepAt){
+        if(!holdingZone&&(!waypoint||patrolling)&&this.destination){
+            if(now>=this.localStepAt&&!this.jumpTravel){
                 this.localStepAt=now+150;
                 // Defend an interception area by moving among supported nearby posts.
                 const angle=Math.floor(now/1800)*Math.PI/2+this.wanderIndex;
-                const goal=patrolling?{x:this.destination.x+Math.cos(angle)*4,y:this.destination.y,z:this.destination.z+Math.sin(angle)*4}:this.destination;
+                const goal=patrolling?{x:this.destination.x+Math.cos(angle)*4,y:this.destination.y,z:this.destination.z+Math.sin(angle)*4}:routeDestination??this.destination;
                 this.localWaypoint=this.navigation.localStep?.(self,goal);
             }
             if(this.localWaypoint&&distance(self,this.localWaypoint)>.3)waypoint=this.localWaypoint;
+        }
+        let approachingCase=false;
+        if(this.objective==='case'&&this.destination&&grounded&&!this.jumpTravel&&distance(self,this.destination)<10&&clearControl(this.destination)){
+            if(now>=this.approachAt){this.approachAt=now+150;this.approach=this.navigation.approachStep?.(self,this.destination);}
+            if(this.approach){waypoint=this.approach;approachingCase=true;}
+        }else{this.approach=undefined;this.approachAt=0;}
+        let obstacleJump=false;
+        if(!holdingZone&&!approachingCase&&!this.jumpTravel&&grounded&&now>=this.jumpAt&&now>=this.jumpProbeAt&&routeDestination&&!waypoint?.launch&&!waypoint?.drop){
+            this.jumpProbeAt=now+900;
+            const landing=this.navigation.jumpStep?.(self,routeDestination);
+            if(landing&&!state?.extraCases?.some(c=>c.fake&&distance(c.p,landing)<3&&clear(c.p))){
+                waypoint=landing;obstacleJump=true;
+                // A hop bypasses the old walking detour. Reattach on landing.
+                this.route=[];this.routeIndex=0;this.pendingPlan=undefined;this.plannedDestination=undefined;this.recoverUntil=0;this.planAt=now;
+            }
         }
         this.stalled=!waypoint&&!(this.destination&&distance(self,this.destination)<3);
         let x=0,z=0;
@@ -451,24 +502,30 @@ export class ObjectiveBotBrain {
         // Stop at the objective rather than repeatedly running across the case.
         if(this.objective==='case'&&this.destination&&distance(self,this.destination)<1.15){x=0;z=0;}
         let facing=this.heading;
-        const jump=grounded&&now>=this.jumpAt&&(!this.pendingPlan&&now<this.recoverUntil||blocked&&!!waypoint||!!waypoint&&waypoint.y-self.y>1.1);
+        // Tunnel ramps are walking links. Recovery hops hit their arched ceiling.
+        let jump=!sewerRampAt(self)&&!approachingCase&&grounded&&now>=this.jumpAt&&(obstacleJump||!this.pendingPlan&&now<this.recoverUntil||blocked&&!!waypoint||!!waypoint&&waypoint.y-self.y>1.1);
         if(jump)this.jumpAt=now+1800+this.random()*1400;
+        if(holdingZone){
+            const threat=this.visibleRats.find(p=>p.hp>0&&distance(self,p)<22);
+            const hold=this.zoneHolding.step(now,holdingZone,`${assignment!.roundId}:${assignment!.jurisdiction!.serial}`,self,threat,grounded,this.navigation,clearControl);
+            x=hold.x;z=hold.z;facing=hold.facing;jump=hold.jump;this.stalled=false;
+        }
         this.protectedVisible=this.visibleRats.filter(p=>p.hp>0&&hasIronclad(state?.buffs,p.id,state?.time??now));
         const protectedTarget=!!this.target&&hasIronclad(state?.buffs,this.target.id,state?.time??now);
         const casePoint=protectedTarget?exposedCarrierCase(self,this.target!,state,clearControl):undefined;
         if(protectedTarget&&!casePoint||this.caseAim&&!casePoint)this.combat.reset();
         this.caseAim=!!casePoint;
         const visibleTarget=!!this.target?.hp&&distance(self,this.target)<85&&clear(this.target)&&(!protectedTarget||!!casePoint);
-        if(pursuingAssignment&&(this.objective==='combat'||this.objective==='carrier'&&this.target&&distance(self,this.target)<10||this.objective==='intercept')&&visibleTarget&&this.target&&distance(self,this.target)<22&&grounded){
+        if(!obstacleJump&&pursuingAssignment&&(this.objective==='combat'||this.objective==='carrier'&&this.target&&distance(self,this.target)<10||this.objective==='intercept')&&visibleTarget&&this.target&&distance(self,this.target)<22&&grounded){
             const dx=self.x-this.target.x,dz=self.z-this.target.z,length=Math.hypot(dx,dz)||1;
             const side=(this.wanderIndex+Math.floor(now/2600))%2?1:-1,back=length<9?1:.1;
             const point={x:self.x+(dx*back+dz*side)/length*5,y:self.y,z:self.z+(dz*back-dx*side)/length*5};
-            const safe=this.navigation.localStep?.(self,point);
+            const safe=this.behaviors.maneuvers?this.maneuver.step(now,this.key,self,this.target,this.navigation):this.navigation.localStep?.(self,point);
             if(safe){const sx=safe.x-self.x,sz=safe.z-self.z,d=Math.hypot(sx,sz);if(d>.3){x=sx/d*8;z=sz/d*8;}}
         }
         const dispatchReady=this.dispatchTarget&&state?.dispatch.phase==='ready'&&now>=this.shotAt&&clearControl(this.dispatchTarget);
         // Follow an armored carrier without running into their gun at point-blank range.
-        if(this.objective==='carrier'&&this.destination&&grounded){
+        if(!obstacleJump&&this.objective==='carrier'&&this.destination&&grounded){
             const carrier=this.protectedVisible.find(p=>`carrier:${p.id}`===this.key&&hasIronclad(state?.buffs,p.id,state?.time??now));
             if(carrier&&distance(self,carrier)<10){
                 const dx=self.x-carrier.x,dz=self.z-carrier.z,d=Math.hypot(dx,dz)||1;
@@ -477,10 +534,10 @@ export class ObjectiveBotBrain {
                 x=len?sx/len*6:0;z=len?sz/len*6:0;
             }
         }
-        const combat=this.combat.step(now,self,this.target,visibleTarget,now>=this.shotAt&&!dispatchReady,casePoint);
+        const combat=this.combat.step(now,self,this.target,visibleTarget,now>=this.shotAt&&!dispatchReady,casePoint,this.behaviors.attention&&this.target?this.attention.acquisitionCost(self,this.target,initialFacing):0);
         if(combat.aim)facing=Math.atan2(combat.aim.x-self.x,combat.aim.z-self.z);
         const speculative=this.opportunisticFire.step(now,self,this.heading,waypoint,
-            !visibleTarget&&!dispatchReady&&!this.protectedVisible.some(p=>hasIronclad(state?.buffs,p.id,state?.time??now))&&!(this.objective==='case'&&this.destination&&distance(self,this.destination)<24),now>=this.shotAt&&!combat.aim);
+            !(holdingZone&&this.behaviors.maneuvers)&&!visibleTarget&&!dispatchReady&&!this.protectedVisible.some(p=>hasIronclad(state?.buffs,p.id,state?.time??now))&&!(this.objective==='case'&&this.destination&&distance(self,this.destination)<24),now>=this.shotAt&&!combat.aim);
         const speculativeFacing=this.opportunisticFire.facing(now);
         if(!combat.aim&&speculativeFacing!==undefined)facing=speculativeFacing;
         let shoot:Vec3Data|undefined;
@@ -496,13 +553,22 @@ export class ObjectiveBotBrain {
             shoot=speculative;this.shotAt=now+200;
             facing=Math.atan2(shoot.x-self.x,shoot.z-self.z);
         }
+        if(this.behaviors.attention){
+            const desired=facing;
+            facing=this.attention.turn(now,desired,initialFacing);
+            // Do not emit a sideways/rear shot while the visible gun is turning.
+            if(shoot&&!this.attention.aligned(Math.atan2(shoot.x-self.x,shoot.z-self.z)))shoot=undefined;
+        }
         if(shoot&&shotHitsIronclad(self,facing,shoot,this.protectedVisible,state))shoot=undefined;
+        if(this.jumpTravel&&!grounded){
+            // A floor probe is expected to fail in the air. Keep steering toward
+            // the takeoff's landing target, then brake there instead of jumping
+            // vertically because a short local walking step disappeared.
+            const dx=this.jumpTravel.goal.x-self.x,dz=this.jumpTravel.goal.z-self.z,d=Math.hypot(dx,dz);
+            const speed=Math.min(6.5,d*5);x=d>.15?dx/d*speed:0;z=d>.15?dz/d*speed:0;
+        }
         if(hasHustle(state?.buffs,self.id,state?.time??now)){
             x*=PICKUP_TUNING.hustleMultiplier;z*=PICKUP_TUNING.hustleMultiplier;
-        }
-        if(this.objective==='zone-hold'&&assignment?.jurisdiction&&zoneContains(activeZone(assignment.jurisdiction),self)){
-            const id=activeZone(assignment.jurisdiction);
-            if(!zoneContains(id,{x:self.x+x*.15,y:self.y,z:self.z+z*.15})){x=0;z=0;this.zonePostAt=0;}
         }
         // Steer around any planted counterfeit the current step would enter.
         // Local, bounded and visible-only: the bot never reads hidden traps, it
@@ -525,6 +591,14 @@ export class ObjectiveBotBrain {
                 z = nz * stepLength * .5 + perpZ * away * stepLength * 1.2;
             }
         }
-        return{x,z,jump,shoot,facing};
+        if(jump&&Math.hypot(x,z)>.5){
+            const speed=Math.hypot(x,z),goal=waypoint&&!holdingZone?waypoint:{x:self.x+x/speed*3,y:self.y,z:self.z+z/speed*3};
+            this.jumpTravel={goal:{...goal},started:now};
+        }
+        // Check the final composed intent, including buffs and trap avoidance.
+        if(holdingZone&&!zoneStepSafe(holdingZone,self,{x:self.x+x*.35,y:self.y,z:self.z+z*.35},.6)){
+            x=0;z=0;jump=false;this.jumpTravel=undefined;this.zoneHolding.invalidate();
+        }
+        return{x,z,jump,...(jump&&holdingZone?{zoneHop:true}:{}),shoot,facing};
     }
 }

@@ -69,7 +69,7 @@ export function resolveWebSocketUrl(serverUrl?: string): string {
     if (url.protocol === 'https:') url.protocol = 'wss:';
     if (url.pathname === '/') url.pathname = '/ws';
     const params = new URLSearchParams(window.location.search);
-    for (const key of ['room', 'assignment', 'incidents', 'incident']) {
+    for (const key of ['room', 'assignment', 'incidents', 'incident', 'observe']) {
         const value = params.get(key);
         if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
     }
@@ -134,7 +134,7 @@ export class NetworkManager {
         this.resumeScope = `${url.origin}${url.pathname}?room=${this.pool}`;
         // A deliberate invitation starts a new public join. Ordinary page
         // returns still restore the tab-local rat and its exact assigned room.
-        if (options.receiveMode !== 'welcome-only') try {
+        if (options.receiveMode !== 'welcome-only' && url.searchParams.get('observe')!=='1') try {
             this.resumeStorage = options.resumeStorage === null ? undefined : options.resumeStorage ?? window.sessionStorage;
             if (!this.invitationIntent) {
                 const saved = JSON.parse(this.resumeStorage?.getItem('rat-detective-resume') ?? 'null');
@@ -257,6 +257,9 @@ export class NetworkManager {
                     this.cancelConnection();
                     this.setState('disconnected', 'The game has updated. Reload to continue.');
                     return;
+                }
+                if((message.observing===true)!==(new URL(this.url).searchParams.get('observe')==='1')){
+                    this.cancelConnection();this.setState('disconnected','Observation is unavailable on this server.');return;
                 }
                 const assignedRoom=isRoomInPool(message.matchRoom,this.pool)?message.matchRoom:undefined;
                 if (assignedRoom) { const url = new URL(this.url); url.searchParams.set('preferred',assignedRoom); this.url = url.toString(); }

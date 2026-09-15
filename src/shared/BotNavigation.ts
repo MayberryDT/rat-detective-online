@@ -1,7 +1,7 @@
 import {DISPATCH_STATIONS,LAUNCH_MACHINES} from './chaosState';
 import { CITY_BOUNDS, GRAYBOX_SPAWNS, grayboxBoxes, type GrayboxBox } from './grayboxLayout';
-import { LANDMARK_INTERIORS } from './landmarkLayout';
-import { SEWER_LIGHTS } from './sewerLayout';
+import { LANDMARK_INTERIORS, landmarkExitPoint } from './landmarkLayout';
+import { SEWER_LIGHTS,sewerRampTravelPoint } from './sewerLayout';
 import type { Vec3Data } from './networkProtocol';
 import type { WorldSpec } from './worldSpec';
 import {BOT_LAUNCH_LINKS,type BotLaunchLink,type BotWaypoint} from './BotLaunchRoutes';
@@ -62,6 +62,9 @@ export class BotNavigation {
                 this.launchEdges.set(`${from.id}>${to.id}`,{from,to,link});
         }
     }
+    travelPoint(from:Vec3Data,to:Vec3Data):Vec3Data {return sewerRampTravelPoint(from,to)??landmarkExitPoint(from,to);}
+    /** Spawn/landing feet can have support before Cannon publishes its next contact. */
+    supported(from:Vec3Data):boolean {return this.surfaces(from.x,from.z).some(y=>Math.abs(y-from.y)<.65);}
     explorationTargets():Vec3Data[] {return this.targets.map(p=>({...p}));}
     private local(s:Solid,x:number,y:number,z:number) {
         const dx=x-s.box.x,dy=y-s.box.y,dz=z-s.box.z;
@@ -159,6 +162,50 @@ export class BotNavigation {
             const heights=this.surfaces(x,z).filter(y=>Math.abs(y-support)<=1.2)
                 .sort((a,b)=>Math.abs(a-support)-Math.abs(b-support));
             for(const y of heights){const end={x,y,z};if(this.connected(start,end))return end;}
+        }
+        return undefined;
+    }
+    /** Precise final approach to a visible case. The case center may hug a
+     * wall or occupy a gap without a grid node; the rat only needs pickup reach.
+     * Shorten a blocked step rather than diverting around to the wrong side. */
+    approachStep(from:Vec3Data,to:Vec3Data):Vec3Data|undefined {
+        const support=this.surfaces(from.x,from.z).find(y=>Math.abs(y-from.y)<.65);
+        if(support===undefined||Math.abs(to.y-support-.8)>1.4)return undefined;
+        const start={x:from.x,y:support,z:from.z},dx=to.x-from.x,dz=to.z-from.z,d=Math.hypot(dx,dz);
+        if(Math.hypot(d,to.y-support-.8)<1.6)return start;
+        for(const limit of [2.5,1,.4]){
+            const length=Math.min(limit,Math.max(0,d-.9));
+            if(length<.1)continue;
+            const end={x:from.x+dx/d*length,y:support,z:from.z+dz/d*length};
+            if(this.surfaces(end.x,end.z).some(y=>Math.abs(y-support)<.32)&&this.connected(start,end))return end;
+        }
+        return undefined;
+    }
+    /** Bounded street-obstacle hop. Require a supported landing, a low solid
+     * obstruction and clearance through the ordinary jump's upper envelope.
+     * This does not add arbitrary gap, wall or rooftop edges to the flow graph. */
+    jumpStep(from:Vec3Data,to:Vec3Data):Vec3Data|undefined {
+        const support=this.surfaces(from.x,from.z).find(y=>Math.abs(y-from.y)<.65);
+        if(support===undefined)return undefined;
+        const dx=to.x-from.x,dz=to.z-from.z,d=Math.hypot(dx,dz);
+        if(d<3)return undefined;
+        for(const length of [4,6]){
+            if(length>d+1)continue;
+            const end={x:from.x+dx/d*length,y:support,z:from.z+dz/d*length};
+            if(!this.surfaces(end.x,end.z).some(y=>Math.abs(y-support)<.32))continue;
+            const steps=Math.ceil(length/.4);let blocked=false,safe=true;
+            for(let i=0;i<=steps&&safe;i++){
+                const t=i/steps,x=from.x+dx/d*length*t,z=from.z+dz/d*length*t;
+                if(!this.clear(x,support,z)){
+                    blocked=true;
+                    // Only low obstacles; a clear endpoint cannot authorize
+                    // passing through a wall whose other side happens to be open.
+                    if(!this.clear(x,support+2.4,z)){safe=false;break;}
+                }
+                const low=3.8*4*t*(1-t);
+                for(let y=low;y<=7+.001;y+=.5)if(!this.clear(x,support+y,z)){safe=false;break;}
+            }
+            if(safe&&blocked)return end;
         }
         return undefined;
     }

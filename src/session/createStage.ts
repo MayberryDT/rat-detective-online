@@ -1,3 +1,4 @@
+import { effectsOutput } from '../audio/PlayerAudioMix';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { StaticCityBroadphase } from '../shared/StaticCityBroadphase';
@@ -35,6 +36,7 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     const existing = effectsAudioContext();
     if (existing) THREE.AudioContext.setContext(existing);
     const listener = new THREE.AudioListener();
+    listener.gain.disconnect();listener.gain.connect(effectsOutput(listener.context));
     if (previewMuted()) void listener.context.suspend();
     camera.add(listener);
     // ─── LIGHTING ─────────────────────────────────────────────────────

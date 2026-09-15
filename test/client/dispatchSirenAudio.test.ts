@@ -1,3 +1,4 @@
+import {effectsOutput} from '../../src/audio/PlayerAudioMix';
 import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import {describe,it,expect,vi} from 'vitest';
 import {DispatchSirenAudio} from '../../src/audio/DispatchSirenAudio';
@@ -7,6 +8,7 @@ function fixture(){
   createBuffer:vi.fn((_channels:number,frames:number)=>({getChannelData:()=>new Float32Array(frames)})),
   createGain:()=>{const gain={gain:{value:0,setTargetAtTime:vi.fn()},connect:vi.fn(),disconnect:vi.fn()};gains.push(gain);return gain;},
   createBufferSource:()=>{const source={buffer:null,connect:vi.fn(),disconnect:vi.fn(),start:vi.fn(),stop:vi.fn(),onended:null};nodes.push(source);return source;}};
+ effectsOutput(ctx);gains.length=0;
  return {audio:new DispatchSirenAudio(ctx),ctx,nodes,gains};
 }
 describe('nearby Dispatch readiness siren',()=>{

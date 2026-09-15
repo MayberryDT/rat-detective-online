@@ -6,7 +6,7 @@ Reviewed **2026-09-11**. Inspect running services before starting another proces
 
 | Surface | Purpose / current behavior |
 | --- | --- |
-| https://ratdetective.online/ | Production, public-live-v2, server-owned bots fill occupied rooms to eight total rats; 16-rat cap |
+| https://ratdetective.online/ | Production, public-live-v2, server-owned bots fill occupied rooms to eight total rats; 10-rat cap |
 | http://127.0.0.1:5174/ | Main local client preview through authenticated hosted relay; `rat-detective-game-preview.service` |
 | http://127.0.0.1:5175/ | Secondary relay; `rat-detective-hosted-preview.service` |
 | Static `dist-visual` on 5180 | Model and solo stage pages; not multiplayer verification |
@@ -25,6 +25,14 @@ npm run build
 The relay serves current `dist`; it does not rebuild source. `npm run preview:hosted` starts the relay (default 5175), requiring `RAT_NETWORK_ORIGIN` and `RAT_NETWORK_TOKEN_FILE`; the latter points to a private JSON file containing `NETWORK_TEST_TOKEN`. `PORT` can override the listen port. Use the existing configured service where available. Do not print tokens or invent replacement credentials. The relay's `/health` proves relay health, not upstream simulation availability.
 
 **Legacy harness, not a gameplay preview:** local practice with eleven browser bots is explicitly gated to localhost and a URL such as `?room=graybox-practice-review&bots=11`. This is a separate harness from public hosted bots. Never combine it with the public room or assume private backend code is automatically the same as production. The test backend has its own namespace and release lifecycle.
+
+## Observation in private full-bot fixtures
+
+Append `&observe=1` to a frozen hosted `graybox-benchmark-ai-*` preview, or use
+its title-screen observation button. The camera does not occupy a rat slot; ten
+bots remain active. Public and normal matchmaking routes reject observation.
+See [observation mode](observation-mode.md) for controls, reconnect behavior and
+the current deployment receipt. Human observation remains audible.
 
 ## Checks
 
@@ -77,7 +85,7 @@ population policy. Never enable checkpoint-control or altered capacities for fee
 After building and checking the app, deploy a frozen private copy:
 
 ```sh
-node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=11 --cap=16
+node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=9 --cap=10
 node scripts/preview-capacity.mjs --deployment=/absolute/path/to/deployment.json --port=5193 --room=graybox-benchmark-match-pickups-r8
 ```
 
@@ -97,7 +105,32 @@ Disconnected rats now reserve their slot for 30 seconds before empty-room sleep.
 Human reload tests should re-enter within that window; the same tab retains its
 private reconnect credential. Do not expose the credential in diagnostic artifacts.
 
-## Current 16-rat full-game preview
+## Current bot experiment preview
+
+Build the client, then prepare the private Worker with
+`node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=10 --cap=10 --full-lobby --bot-experiments --assignment=jurisdiction`.
+Use the returned frozen receipt with `scripts/preview-capacity.mjs`.
+For a rotating playtest, replace `--assignment=jurisdiction` with
+`--first-assignment=chain-of-custody`: Paper Chase starts the first cycle, followed
+by the other three assignments and then normal shuffled cycles. Omit both options
+for the ordinary playlist. First-assignment and pinned-assignment options are
+mutually exclusive.
+Only explicit `graybox-benchmark-ai-bot-{baseline,maneuvers,commitment,attention,combined}-*`
+rooms fill all ten slots (nine bots after a human joins).
+`graybox-benchmark-match-bot-{baseline,maneuvers,commitment,attention,combined}-*` pools
+retain normal eight-participant matchmaking, human replacement and empty-room sleep.
+The private Worker alone resolves these experiment names; public source defaults
+to maneuvers. The ten-rat cap is released; the independently frozen experiment
+rooms retain their explicit baseline and variant selections.
+See [results and current links](verification/bot-experiments-2026-09-14.md).
+
+## Historical 16-rat full-game preview
+
+For an explicitly requested smaller density comparison, the hosted full-lobby
+fixture also accepts `--bots=12 --cap=12 --full-lobby`. It fills 12 slots and
+replaces one bot per human join. This changes only the private copy; keep the
+production cap unchanged. Use a fresh `graybox-benchmark-ai-*` room and the
+matching frozen receipt, as with the 16-rat fixture.
 
 September 10 current setup: `node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=16 --cap=16 --full-lobby`, then start the relay with the resulting receipt and `--room=graybox-benchmark-ai-sixteen-v20`. This explicit private option starts all 16 bots before humans arrive, uses existing bot replacement on human join, refills after ten seconds and stays active until expiry. It changes only the copied Worker. [Current desktop link and verified roster transitions](verification/sixteen-rat-tuning-2026-09-10.md). The fixed-23 and eight-rat automatic-room instructions below are alternative/historical configurations.
 

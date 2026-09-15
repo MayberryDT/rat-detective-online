@@ -1,9 +1,11 @@
+import { lookDelta } from '../settings/PlayerPreferences';
 import {TouchInput, type TouchRole} from '../session/TouchInput';
 import './touchControls.css';
 
 type Options = {
     canvas: HTMLElement; look: (dx: number, dy: number) => void; shoot: () => void;
     scores: (visible: boolean) => void; clearKeys: () => void;
+    openSettings?:()=>void;blocked?:()=>boolean;
     doc?: Document; target?: Window;
 };
 export function touchControlsAvailable(target: Window = window): boolean {
@@ -26,7 +28,6 @@ export class TouchControls {
     private readonly fire: HTMLButtonElement;
     private readonly jump: HTMLButtonElement;
     private readonly scores: HTMLButtonElement;
-    private readonly settings: HTMLElement;
     private readonly settingsButton: HTMLButtonElement;
     private readonly rotate: HTMLElement;
     private playing = false;
@@ -34,11 +35,10 @@ export class TouchControls {
     private board = false;
     private portrait = false;
     private disposed = false;
-    private sensitivity = 1.5;
     active = false;
     constructor(private readonly options: Options) {
         this.doc = options.doc ?? document; this.target = options.target ?? window;
-        this.input = new TouchInput((dx, dy) => options.look(dx * this.lookScale(), dy * this.lookScale()));
+        this.input = new TouchInput((dx, dy) => options.look(...lookDelta(dx*this.lookScale(),dy*this.lookScale(),'touch')));
         const make = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement, text = '') => {
             const node = this.doc.createElement(tag); node.className = className; node.textContent = text; parent.appendChild(node); return node;
         };
@@ -54,13 +54,9 @@ export class TouchControls {
         const toolbar = make('div', 'touch-toolbar', this.root);
         this.scores = make('button', 'touch-scores', toolbar, 'SCORES');
         this.scores.setAttribute('aria-expanded', 'false');
-        this.settingsButton = make('button', 'touch-settings-button', toolbar, 'AIM');
-        this.settingsButton.setAttribute('aria-expanded', 'false');
-        this.settings = make('div', 'touch-settings', this.root); this.settings.hidden = true;
-        const label = make('label', '', this.settings, 'LOOK SENSITIVITY');
-        const slider = make('input', '', label); slider.type = 'range'; slider.min = '.4'; slider.max = '2'; slider.step = '.1';
-        try { const saved = Number(this.target.localStorage.getItem('rat-touch-sensitivity')); if (saved >= .4 && saved <= 2) this.sensitivity = saved; } catch { /* Storage can be unavailable in private browsing. */ }
-        slider.value = String(this.sensitivity);
+        this.settingsButton = make('button', 'touch-settings-button', toolbar, '⚙');
+        this.settingsButton.setAttribute('aria-haspopup', 'dialog');
+        this.settingsButton.setAttribute('aria-label','Settings');
         this.rotate = make('div', 'touch-rotate', this.root, 'TURN YOUR PHONE');
         this.rotate.setAttribute('role', 'status');
         const listeners = {signal: this.events.signal};
@@ -68,16 +64,9 @@ export class TouchControls {
         for (const [surface, role] of [[move, 'move'], [look, 'look'], [this.fire, 'fire'], [this.jump, 'jump']] as const) {
             this.bindSurface(surface, role);
         }
-        slider.addEventListener('input', () => {
-            const value = Number(slider.value); if (!Number.isFinite(value)) return;
-            this.sensitivity = Math.max(.4, Math.min(2, value));
-            try { this.target.localStorage.setItem('rat-touch-sensitivity', String(this.sensitivity)); } catch { /* Optional preference. */ }
-        }, listeners);
         this.scores.addEventListener('click', () => this.showScores(!this.board), listeners);
         this.settingsButton.addEventListener('click', () => {
-            const open = this.settings.hidden;
-            this.clear(); this.showScores(false); this.settings.hidden = !open;
-            this.settingsButton.setAttribute('aria-expanded', String(!this.settings.hidden));
+            this.clear(); this.showScores(false); options.openSettings?.();
         }, listeners);
         if (this.doc.documentElement.requestFullscreen) {
             const full = make('button', 'touch-fullscreen', toolbar, '⛶'); full.setAttribute('aria-label', 'Fullscreen');
@@ -109,8 +98,8 @@ export class TouchControls {
         this.resize();
     }
     private forced(): boolean { return new URLSearchParams(this.target.location.search).get('controls') === 'touch'; }
-    private lookScale(): number { return this.sensitivity * 500 / Math.max(320, Math.min(this.target.innerWidth, this.target.innerHeight)); }
-    private canAct(): boolean { return this.active && this.playing && this.alive && !this.portrait && !this.board && this.settings.hidden && !this.doc.hidden; }
+    private lookScale(): number { return 500 / Math.max(320, Math.min(this.target.innerWidth, this.target.innerHeight)); }
+    private canAct(): boolean { return this.active && this.playing && this.alive && !this.portrait && !this.board && !this.options.blocked?.() && !this.doc.hidden; }
     private bindSurface(surface: HTMLElement, role: TouchRole): void {
         surface.addEventListener('pointerdown', event => {
             if (event.pointerType !== 'touch' || !this.canAct()) return;
@@ -141,7 +130,7 @@ export class TouchControls {
         this.root.hidden = !this.active;
         this.pad.hidden = !this.playing || this.portrait;
         this.pad.classList.toggle('inactive', !this.alive);
-        this.scores.hidden = !this.playing;
+        this.scores.hidden = !this.playing;this.settingsButton.hidden=!this.playing;
         this.rotate.hidden = !this.portrait;
         this.doc.body.classList.toggle('touch-mode', this.active);
     }
@@ -155,7 +144,7 @@ export class TouchControls {
     }
     showScores(visible: boolean): void {
         this.clear(); this.board = visible && this.active && this.playing && !this.portrait;
-        this.settings.hidden = true; this.settingsButton.setAttribute('aria-expanded', 'false');
+        this.settingsButton.setAttribute('aria-haspopup', 'dialog');
         this.scores.textContent = this.board ? 'CLOSE' : 'SCORES'; this.scores.setAttribute('aria-expanded', String(this.board));
         this.options.scores(this.board);
     }
@@ -169,7 +158,7 @@ export class TouchControls {
         for (const [id, surface] of captures) { try { if (surface.hasPointerCapture(id)) surface.releasePointerCapture(id); } catch { /* Detached surfaces are already released. */ } }
         this.drawStick(); this.drawActions();
     }
-    private suspend(): void { this.clear(); this.showScores(false); this.settings.hidden = true; this.settingsButton.setAttribute('aria-expanded', 'false'); }
+    private suspend(): void { this.clear(); this.showScores(false); this.settingsButton.setAttribute('aria-haspopup', 'dialog'); }
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true; this.suspend(); this.events.abort(); this.root.remove(); this.doc.body.classList.remove('touch-mode');

@@ -50,19 +50,73 @@ test('TCP diagnostics retain only aggregate counters for the owning generator',(
  assert.deepEqual(parseTcpStats(sample,123),{available:true,sockets:1,bytesReceived:300,bytesRetransmitted:20,outOfOrderPackets:4,retransmissions:2});
 });
 
-test('full-lobby fixture fills all slots while retaining human replacement and expiry',async()=>{
+for(const capacity of [10,12,16])test(`${capacity}-rat full-lobby fixture fills all slots while retaining human replacement and expiry`,async()=>{
  const out=await mkdtemp(join(tmpdir(),'rat-full-lobby-test-'));
  try{
   await assert.rejects(prepareFixture(out,{hosted:true,serverBots:24,maxPlayers:24}),/fullLobby/);
   await assert.rejects(prepareFixture(out,{fullLobby:true,serverBots:24,maxPlayers:24}),/hosted expiry/);
-  const fixture=await prepareFixture(out,{hosted:true,expiresAt:123456,fullLobby:true,serverBots:16,maxPlayers:16});
+  await assert.rejects(prepareFixture(out,{hosted:true,fullLobby:true,serverBots:9,maxPlayers:9}),/cap must be 10/);
+  await assert.rejects(prepareFixture(out,{hosted:true,serverBots:8,maxPlayers:9}),/cap must be 10/);
+  const fixture=await prepareFixture(out,{hosted:true,expiresAt:123456,fullLobby:true,serverBots:capacity,maxPlayers:capacity});
   assert.equal(fixture.fullLobby,true);
+  assert.match(await readFile(join(fixture.stage,'src/shared/networkProtocol.ts'),'utf8'),new RegExp(`MAX_PLAYERS = ${capacity};`));
   const room=await readFile(join(fixture.stage,'src/worker/GameRoom.ts'),'utf8');
-  assert.match(room,/const desired = Math.max\(0, MAX_PLAYERS - humans\)/);
-  assert.match(room,/roster.splice\(Math.max\(0, MAX_PLAYERS - humans\)\)/);
+  assert.match(room,/const desired = this.matchRoom\?\.startsWith\('graybox-benchmark-ai-'\) \? Math.max\(0, MAX_PLAYERS - humans\)/);
+  assert.match(room,/roster.splice\(this.matchRoom\?\.startsWith\('graybox-benchmark-ai-'\) \? Math.max\(0, MAX_PLAYERS - humans\)/);
   assert.match(room,/if \(this.matchRoom && this.players.size >= MAX_PLAYERS && this.botRoster.length\)/);
   assert.match(room,/Private fixture expired/);
   assert.doesNotMatch(room,/if \(this.matchRoom && !this.humanSlots\(\)\) return/);
   assert.match(await readFile(join(fixture.stage,'src/worker/capacityTest.ts'),'utf8'),/lobby-status/);
+ }finally{await rm(out,{recursive:true,force:true});}
+});
+
+test('bot experiments are isolated to explicit private room names and keep normal eight-participant backfill',async()=>{
+ const out=await mkdtemp(join(tmpdir(),'rat-bot-experiments-'));
+ try{
+  const f=await prepareFixture(out,{hosted:true,expiresAt:Date.now()+60000,serverBots:10,maxPlayers:10,fullLobby:true,botExperiments:true});
+  const room=await readFile(join(f.stage,'src/worker/GameRoom.ts'),'utf8');
+  const resolver=room.slice(room.indexOf('function privateBotExperiment'),room.indexOf('\n}',room.indexOf('function privateBotExperiment'))+2);
+  const js=resolver.replace(/:import\('[^']+'\)\.BotExperiment/,'').replace('pool:string','pool');
+  const resolve=new Function(`${js};return privateBotExperiment;`)();
+  for(const variant of ['maneuvers','commitment','attention','combined']){
+   assert.equal(resolve(`graybox-benchmark-ai-bot-${variant}-r1`),variant);
+   assert.equal(resolve(`graybox-benchmark-match-bot-${variant}-r1`),variant);
+   assert.equal(resolve(`public-live-v2-bot-${variant}`),'baseline');
+  }
+  assert.equal(resolve('graybox-benchmark-match-bot-baseline-r1'),'baseline');
+  assert.match(room,/privateBotExperiment\(this.matchPool/);
+  assert.match(room,/MAX_PLAYERS - humans\) : humans \? Math.max\(0, 8 - humans\) : 0/);
+  assert.doesNotMatch(await readFile(new URL('../../src/worker/GameRoom.ts',import.meta.url),'utf8'),/privateBotExperiment/);
+ }finally{await rm(out,{recursive:true,force:true});}
+});
+
+test('private first assignment starts a playlist without pinning later rounds',async()=>{
+ const out=await mkdtemp(join(tmpdir(),'rat-first-assignment-'));
+ try{
+  await assert.rejects(prepareFixture(out,{firstAssignment:'chain-of-custody'}));
+  await assert.rejects(prepareFixture(out,{hosted:true,firstAssignment:'invalid'}));
+  await assert.rejects(prepareFixture(out,{hosted:true,firstAssignment:'chain-of-custody',assignment:'jurisdiction'}));
+  const fixture=await prepareFixture(out,{hosted:true,firstAssignment:'chain-of-custody'});
+  assert.equal(fixture.firstAssignment,'chain-of-custody');
+  const source=await readFile(join(fixture.stage,'src/worker/GameRoom.ts'),'utf8');
+  const start=source.indexOf('    // Private first cycle;');
+  const end=source.indexOf('    const id=nextAssignment(this.assignmentRotation);',start);
+  assert(start>0&&end>start);
+  // Execute the generated first-cycle initializer repeatedly, using the actual
+  // game's rotation function to consume and refill its playlist.
+  const assignmentSource=await readFile(new URL('../../src/shared/assignments.ts',import.meta.url),'utf8');
+  const {transpile}=await import('typescript');
+  const declaration=assignmentSource.slice(assignmentSource.indexOf('export function nextAssignment'),assignmentSource.indexOf('/** The server shuffles'));
+  const ASSIGNMENT_IDS=['closing-time','chain-of-custody','excessive-force','jurisdiction'];
+  const nextAssignment=new Function('ASSIGNMENT_IDS',transpile(declaration.replace('export ',''))+';return nextAssignment;')(ASSIGNMENT_IDS);
+  const initialize=new Function('ASSIGNMENT_IDS',source.slice(start,end));
+  const room={assignmentRotation:{remaining:[]}};
+  const rounds=[];
+  for(let i=0;i<8;i++){initialize.call(room,ASSIGNMENT_IDS);rounds.push(nextAssignment(room.assignmentRotation,()=>.3));}
+  assert.equal(rounds[0],'chain-of-custody');
+  assert.equal(new Set(rounds.slice(0,4)).size,4);
+  assert.equal(new Set(rounds.slice(4)).size,4);
+  assert(rounds.every((id,i)=>!i||id!==rounds[i-1]));
+  assert.equal(room.assignmentRotation.forced,undefined);
  }finally{await rm(out,{recursive:true,force:true});}
 });
