@@ -61,7 +61,7 @@ it('uses supported quiet posts, responds to threats, and keeps all six zone boun
  }
  report.maneuvers=rows;
 },20000);
-function acquisition(experiment:BotExperiment,behind:boolean){
+function acquisition(experiment:BotExperiment|undefined,behind:boolean){
  const self=player('self'),target=player('enemy',0,behind?-20:20),brain=new ObjectiveBotBrain(nav,0,()=>.5,experiment);
  let first:number|undefined,shots=0,maxTurn=0,previous=0;
  for(let now=0;now<5000;now+=20){
@@ -72,19 +72,19 @@ function acquisition(experiment:BotExperiment,behind:boolean){
  }
  return{first,shots,maxTurnDegrees:maxTurn*180/Math.PI};
 }
-it.each(['attention','combined'] as const)('%s charges for an off-screen flank and preserves established front pressure',experiment=>{
+it.each(['attention','combined',undefined] as const)('%s charges for an off-screen flank and preserves established front pressure',experiment=>{
  const baselineFront=acquisition('baseline',false),baselineRear=acquisition('baseline',true),front=acquisition(experiment,false),rear=acquisition(experiment,true);
  expect(front.first).toBe(baselineFront.first);expect(front.shots).toBe(baselineFront.shots);
  expect(rear.first!).toBeGreaterThan(front.first!+200);expect(rear.shots).toBeGreaterThanOrEqual(baselineRear.shots-3);expect(rear.maxTurnDegrees).toBeLessThan(6.4);
  const attention=new BotAttention();attention.turn(0,Math.PI,0);attention.turn(20,Math.PI,0);attention.reset();expect(attention.turn(1000,0,0)).toBe(0);
- report[experiment]={baselineFront,baselineRear,front,rear};
+ report[experiment??'default']={baselineFront,baselineRear,front,rear};
 });
 
-it.each(ASSIGNMENT_IDS)('combined behavior keeps %s case priorities above combat commitment',mode=>{
+it.each(ASSIGNMENT_IDS)('default combined behavior keeps %s case priorities above combat commitment',mode=>{
  const self=player('self'),target=player('enemy',0,30),sim=new ChaosSimulation(new Map([self,target].map(p=>[p.id,p])),()=>{});
  const state=sim.snapshot(false),a=createAssignment(mode,0,'combined-priority',()=>.3);a.phase='active';state.assignment=a;
  state.time=0;state.case.owner=null;state.case.returningUntil=100000;state.pickups=[];state.dispatch.phase='cooldown';
- const brain=new ObjectiveBotBrain(nav,0,()=>.5,'combined');brain.step(0,self,[target],state,()=>true,false,true);
+ const brain=new ObjectiveBotBrain(nav,0,()=>.5);brain.step(0,self,[target],state,()=>true,false,true);
  expect(brain.goalKey).toBe('combat:enemy');
  state.case.owner=self.id;state.case.returningUntil=0;
  brain.step(20,self,[target],state,()=>true,false,true);
@@ -92,13 +92,13 @@ it.each(ASSIGNMENT_IDS)('combined behavior keeps %s case priorities above combat
  state.case.owner=target.id;brain.step(40,self,[target],state,()=>true,false,true);expect(brain.objective).toBe('carrier');
  target.hp=0;state.case.owner=null;state.case.p={x:8,y:0,z:0};brain.step(60,self,[target],state,()=>true,false,true);expect(brain.objective).toBe('case');
 });
-it('combined carrier repositions while turning, fights, cancels body fire on armor and clears state on death',()=>{
+it('default combined carrier repositions while turning, fights, cancels body fire on armor and clears state on death',()=>{
  const a=createAssignment('jurisdiction',0,'combined-encounter',()=>.3);a.phase='active';
  const zone=a.jurisdiction!.order[a.jurisdiction!.index],post=JURISDICTION_ZONES[zone].posts[0];
  const self=player('self'),target=player('enemy');Object.assign(self,post);Object.assign(target,post,{z:post.z-8});
  const sim=new ChaosSimulation(new Map([self,target].map(p=>[p.id,p])),()=>{}),state=sim.snapshot(false);
  state.assignment=a;state.time=0;state.case.owner=self.id;state.pickups=[];state.dispatch.phase='cooldown';
- const brain=new ObjectiveBotBrain(nav,0,()=>.5,'combined');let shots=0,movingWhileTurning=false;
+ const brain=new ObjectiveBotBrain(nav,0,()=>.5);let shots=0,movingWhileTurning=false;
  for(let now=0;now<1600;now+=20){
   state.time=now;const intent=brain.step(now,self,[target],state,()=>true,false,true);
   if(now<200&&Math.hypot(intent.x,intent.z)>.1&&!intent.shoot)movingWhileTurning=true;

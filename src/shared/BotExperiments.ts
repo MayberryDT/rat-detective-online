@@ -1,7 +1,7 @@
-/** Maneuvers are the accepted public policy. Other variants are explicit
- * comparisons, selected only by the isolated hosted fixture. */
+/** The accepted combined policy is the public default. Individual variants
+ * remain available to the isolated hosted comparison fixture. */
 export type BotExperiment = 'baseline' | 'maneuvers' | 'commitment' | 'attention' | 'combined';
-export const DEFAULT_BOT_EXPERIMENT:BotExperiment='maneuvers';
+export const DEFAULT_BOT_EXPERIMENT:BotExperiment='combined';
 
 /** Resolve once per brain. Combined composes the tested policies without
  * changing assignment priorities, shared planner budgets or individual tuning. */

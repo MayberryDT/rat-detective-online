@@ -542,7 +542,6 @@ export class ObjectiveBotBrain {
         if(!combat.aim&&speculativeFacing!==undefined)facing=speculativeFacing;
         let shoot:Vec3Data|undefined;
         if(this.dispatchTarget&&dispatchReady){
-            this.shotAt=now+350+this.random()*400;
             // Shoot the visible red face while passing; it never replaces the
             // case route with a detour to a control somewhere else in the city.
             shoot={x:this.dispatchTarget.x+(this.random()-.5)*.15,y:this.dispatchTarget.y+(this.random()-.5)*.15,z:this.dispatchTarget.z};
@@ -560,6 +559,9 @@ export class ObjectiveBotBrain {
             if(shoot&&!this.attention.aligned(Math.atan2(shoot.x-self.x,shoot.z-self.z)))shoot=undefined;
         }
         if(shoot&&shotHitsIronclad(self,facing,shoot,this.protectedVisible,state))shoot=undefined;
+        // Turning toward a Dispatch control is not a fired shot. Keep aiming
+        // until aligned; consuming its cooldown early repeatedly turns us away.
+        if(shoot&&dispatchReady)this.shotAt=now+350+this.random()*400;
         if(this.jumpTravel&&!grounded){
             // A floor probe is expected to fail in the air. Keep steering toward
             // the takeoff's landing target, then brake there instead of jumping

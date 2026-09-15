@@ -17,6 +17,17 @@ function fixture(seed=0){
     const navigation:ObjectiveNavigation={route:vi.fn((_from,to)=>[{...to}]),explorationTargets:()=>Array.from({length:24},(_,i)=>({x:i*4+20,y:i%2?-7:0,z:60}))};
     return {brain:new ObjectiveBotBrain(navigation,seed,()=>.5),navigation,self:player('me',0),near:player('near',0,8),holder:player('holder',35)};
 }
+// Attention turns on simulation ticks; a single multi-second clock jump must
+// not stand in for those ticks or authorize an instant sideways shot.
+function firstShot(brain:ObjectiveBotBrain,from:number,until:number,self:ReturnType<typeof player>,rats:ReturnType<typeof player>[],s:ChaosState,clearControl=()=>true){
+    let intent;
+    for(let now=from;now<=until;now+=20){
+        intent=brain.step(now,self,rats,s,()=>true,false,true,clearControl);
+        self.meshQy=Math.sin(intent.facing/2);self.meshQw=Math.cos(intent.facing/2);
+        if(intent.shoot)return intent;
+    }
+    return intent!;
+}
 function aimedNear(shot:Vec3Data|undefined,self:Vec3Data,target:Vec3Data){
     expect(shot).toBeDefined();
     const a={x:shot!.x-self.x,y:shot!.y-self.y-.9,z:shot!.z-self.z};
@@ -73,8 +84,8 @@ describe('case-first normal match bots',()=>{
         brain.step(1000,self,[self,near,holder],state(),()=>true,false,true);
         const intent=brain.step(1010,self,[self,near,holder],state('holder'),()=>true,false,true);
         expect(brain.objective).toBe('carrier');expect(navigation.route).toHaveBeenLastCalledWith({x:self.x,y:self.y,z:self.z},holder);
-        const later=brain.step(4000,self,[self,near,holder],state('holder'),()=>true,false,true);
-        aimedNear(later.shoot,self,holder);expect(Math.abs(intent.facing-Math.PI/2)).toBeLessThan(.15);
+        const later=firstShot(brain,1020,2500,self,[self,near,holder],state('holder'));
+        aimedNear(later.shoot,self,holder);expect(Math.abs(intent.facing)).toBeLessThan(.12);expect(Math.abs(later.facing-Math.PI/2)).toBeLessThan(.15);
     });
     it('pursues an unseen carrier via navigation but never shoots through walls',()=>{
         const {brain,self,holder}=fixture();
@@ -176,12 +187,13 @@ describe('case-first normal match bots',()=>{
         const {brain,self,near}=fixture(),loose=state(),target=DISPATCH_STATIONS[0].target;
         self.x=target.x;self.z=target.z+12;
         const clearControl=vi.fn(()=>true);
-        const intent=brain.step(1000,self,[self],loose,()=>true,false,true,clearControl);
+        expect(brain.step(1000,self,[self],loose,()=>true,false,true,clearControl).shoot).toBeUndefined();
+        const intent=firstShot(brain,1020,4000,self,[self],loose,clearControl);
         expect(brain.objective).toBe('case');expect(intent.shoot).toEqual({x:target.x,y:target.y,z:target.z});
         expect(clearControl).toHaveBeenCalledWith(target);expect(Math.hypot(intent.x,intent.z)).toBeCloseTo(12);
         loose.dispatch.phase='active';
-        expect(brain.step(1600,self,[self,near],loose,()=>true,false,true,clearControl).shoot).toBeUndefined();
-        const next=brain.step(2100,self,[self,near],loose,()=>true,false,true,clearControl);
+        expect(brain.step(5000,self,[self,near],loose,()=>true,false,true,clearControl).shoot).toBeUndefined();
+        const next=firstShot(brain,5020,7000,self,[self,near],loose,clearControl);
         aimedNear(next.shoot,self,near);
     });
     it('does not shoot a blocked Dispatch target and fires visible enemies more frequently',()=>{
@@ -206,9 +218,9 @@ describe('case-first normal match bots',()=>{
         const {brain,self,near,holder,navigation}=fixture();
         vi.mocked(navigation.route).mockImplementation((_from,to)=>to.x===holder.x?[]:[{...to}]);
         brain.step(1000,self,[self,near,holder],state('holder'),()=>true,false,true);
-        const fallback=brain.step(7000,self,[self,near,holder],state('holder'),()=>true,false,true);
+        brain.step(7000,self,[self,near,holder],state('holder'),()=>true,false,true);
         expect(brain.objective).toBe('combat');expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},near);
-        aimedNear(fallback.shoot,self,holder); // Still shoot the visible carrier even when their route failed.
+        aimedNear(firstShot(brain,7020,8500,self,[self,near,holder],state('holder')).shoot,self,holder); // Still shoot the visible carrier even when their route failed.
         expect(brain.navigationStalled).toBe(false);expect(brain.failedCasePosition).toBeUndefined();
     });
     it('retries a moved case early and clears its failure vote once a valid case route exists',()=>{
@@ -298,7 +310,7 @@ describe('case-first normal match bots',()=>{
         const intent=brain.step(1000,self,[self,near,holder,distant],multiple,()=>true,false,true);
         expect(brain.objective).toBe('carrier');expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},holder);
         expect(intent.shoot).toBeUndefined();
-        aimedNear(brain.step(1500,self,[self,near,holder,distant],multiple,()=>true,false,true).shoot,self,holder);
+        aimedNear(firstShot(brain,1020,2400,self,[self,near,holder,distant],multiple).shoot,self,holder);
     });
     it('reacts immediately to an extra being released and respects that case former-carrier delay',()=>{
         const {brain,self,holder,navigation}=fixture(),primary=state(holder.id);
@@ -382,7 +394,7 @@ it('takes the Closing case away from visible danger while still returning fire',
  const nav:ObjectiveNavigation={route:vi.fn((_from,to)=>[to]),explorationTargets:()=>[{x:-25,y:0,z:0},{x:25,y:0,z:0}]};
  const brain=new ObjectiveBotBrain(nav,1,()=>.5);
  expect(brain.step(1000,self,[self,enemy],s,()=>true,false,true).x).toBe(-12);expect(brain.objective).toBe('evade');
- expect(brain.step(1500,self,[self,enemy],s,()=>true,false,true).shoot).toBeDefined();
+ expect(firstShot(brain,1020,2400,self,[self,enemy],s).shoot).toBeDefined();
 });
 it('intercepts a distant Chain carrier at the next landmark when already closer to it',()=>{
  const {brain,self,holder,navigation}=fixture(0),s=state('holder');s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';s.assignment.destinations=[...CHAIN_ROUTE];

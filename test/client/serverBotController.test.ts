@@ -128,7 +128,9 @@ describe('hosted server bot controller',()=>{
     it('shoots a visible Dispatch red face without routing away from the case',()=>{
         const {controller,players,bot,shoot}=fixture(),target=DISPATCH_STATIONS[0].target;
         Object.assign(bot,{x:target.x,y:0,z:target.z+12});const ready=state();ready.dispatch.phase='ready';ready.case.p={x:100,y:0,z:100};players.delete('human');
-        controller.step(1/60,1000,players,ready,true);expect(shoot).toHaveBeenCalledTimes(1);
+        controller.step(1/60,1000,players,ready,true);expect(shoot).not.toHaveBeenCalled();
+        for(let now=1017;now<=3000&&!shoot.mock.calls.length;now+=17)controller.step(1/60,now,players,ready,true);
+        expect(shoot).toHaveBeenCalledTimes(1);
         const [,origin,direction]=shoot.mock.calls[0] as unknown as [string,Vec3Data,Vec3Data];
         const distance=(target.z-origin.z)/direction.z;
         expect(Math.abs(origin.x+direction.x*distance-target.x)).toBeLessThan(.1);

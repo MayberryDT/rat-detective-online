@@ -47,5 +47,9 @@ it('shoots while following the case with nobody in sight without changing naviga
  bot.hp=3;brain.reset();expect(brain.step(20001,bot,[bot],state,()=>false,false,true).shoot).toBeUndefined();
  // A ready visible Dispatch target still takes priority over a speculative group.
  const target=DISPATCH_STATIONS[0].target;bot.x=target.x;bot.z=target.z+12;state.dispatch.phase='ready';
- expect(brain.step(22000,bot,[bot],state,()=>false,false,true,()=>true).shoot).toEqual({x:target.x,y:target.y,z:target.z});
+ let dispatchShot;
+ for(let now=22000;now<24000;now+=17){const intent=brain.step(now,bot,[bot],state,()=>false,false,true,()=>true);
+  if(intent.shoot){dispatchShot=intent.shoot;break;}
+ }
+ expect(dispatchShot).toEqual({x:target.x,y:target.y,z:target.z});
 });
