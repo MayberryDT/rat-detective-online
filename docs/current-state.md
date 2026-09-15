@@ -2,7 +2,17 @@
 
 Verified from source and production on **2026-09-14**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
 
-## Sewer ramp crossings — September 14 private candidate
+## Combined bots and cameos — September 14 production release
+
+Tyler accepted the combined observation playtest and authorized committing all
+project work and releasing it. The default bot policy is now **combined**:
+maneuvers, movement-goal commitment and attention, including the accepted doorway,
+wall-case, directional-jump and sewer-crossing fixes. Reachable Gate Spider-rat
+and Maintenance Bat-rat, settings and UI polish are included. Ten-rat capacity,
+eight-participant backfill and ordinary four-assignment rotation remain. Walking
+observation stays restricted to private fixtures. See [the current release](verification/combined-production-2026-09-14.md).
+
+## Sewer ramp crossings — September 14 released
 
 Tunnel guidance now finishes the ramp before selecting another route leg. This
 fixes the repeated midpoint reversal and suppresses recovery jumps under tunnel
@@ -10,7 +20,7 @@ arches. Both ascent and descent pass real-physics checks at all four entrances
 in Jurisdiction and Paper Chase. The next private observer starts Paper Chase
 and rotates assignments between rounds. See [verification](verification/sewer-exits-2026-09-14.md).
 
-## Wall cases and directional jumps — September 14 private candidate
+## Wall cases and directional jumps — September 14 released
 
 Tyler's observer feedback exposed lost horizontal movement during local jumps
 and missed case collection in narrow wall gaps. Bots now retain a landing target,
@@ -18,7 +28,7 @@ check short low-obstacle hops and use a body-checked final approach for nearby
 visible cases. Movement physics and authoritative pickup rules are unchanged.
 See [wall-case and jump evidence](verification/wall-case-jumps-2026-09-14.md).
 
-## Superhero cameos — September 14 private candidate
+## Superhero cameos — September 14 released
 
 The accepted optimized Spider-rat and Bat-rat models are integrated as cosmetic
 world cameos on the south Gate tower beside the Sewer Geyser and in sewer Maintenance. Nearby rats
@@ -26,9 +36,9 @@ and actual passing cheese balls trigger the accepted reactions. Packed assets
 load beside city preparation, GPU buffers warm before play, and distant cameos
 sleep. Physics, scoring, bot slots and protocol remain unchanged. See
 [placements, checks and frozen hosted preview](verification/superhero-cameos-2026-09-14.md).
-Production has not been deployed for this follow-up.
+Included in the combined production release above.
 
-## Building-corner navigation — September 14 private candidate
+## Building-corner navigation — September 14 released
 
 After watching the combined bots, Tyler reported successive case carriers getting
 stuck in corners across multiple buildings. Bots now use authored doorway exit
@@ -43,14 +53,14 @@ watch them without participating. Private full-bot rooms now accept an optional
 walking observer outside the ten-rat roster. The server excludes it from all game
 actions; ordinary controls, live playback and the scoreboard remain available.
 See [observation mode](observation-mode.md) and its linked hosted receipt.
-Production remains maneuver-only; this request does not authorize a public release.
+The infrastructure is committed and deployed, while access remains private.
 
-## Combined bot playtest — September 14 candidate
+## Combined bot playtest — September 14 accepted
 
 Tyler accepted the separate commitment and attention playtests and requested a
 combined hosted preview. The explicit `combined` policy composes maneuvers,
 movement-goal commitment and attention with their existing tuning and priority
-order. Production remains on the accepted maneuver-only policy below.
+order. This combined policy is now the production default.
 The combined preview and its maneuver-only comparison use the same frozen client
 and hosted Worker, ten-rat cap and normal eight-participant matchmaking option.
 See [combined preview evidence](verification/bot-combined-2026-09-14.md).

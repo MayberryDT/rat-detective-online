@@ -1,11 +1,12 @@
 # Documentation map
 
-Reviewed against repository source and the latest release receipt on **2026-09-13**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+Reviewed against repository source and the latest release receipt on **2026-09-14**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
 
 ## Current references
 
 | Document | Purpose |
 | --- | --- |
+| [Combined production release](verification/combined-production-2026-09-14.md) | Accepted combined bots, navigation fixes, cameos, commits and live verification |
 | [Sewer ramp crossings](verification/sewer-exits-2026-09-14.md) | Private tunnel reversal fix, ascent/descent physics and rotating observation playlist |
 | [Wall cases and directional jumps](verification/wall-case-jumps-2026-09-14.md) | Private close-approach and obstacle-jump fixes, physics checks and hosted observation |
 | [Superhero cameos](verification/superhero-cameos-2026-09-14.md) | Accepted rooftop/sewer characters, optimized loading, live cosmetic reactions and private preview |
