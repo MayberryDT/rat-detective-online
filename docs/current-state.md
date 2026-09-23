@@ -37,9 +37,13 @@ suite pass. This patch bounds the Dispatch response before QML collection.
 
 The existing marketplace submission [issue #6926](https://github.com/omacom/omarchy-plugin-marketplace/issues/6926)
 was updated with the exact commit and evidence. Automation [run #27950](https://github.com/omacom/omarchy-plugin-marketplace/actions/runs/35823008958)
-has completed validation/routing but its serialized report-publication job was
-queued at the last check. Refreshed reports and maintainer approval are still
-pending. The old report is bound to 1.3.1 and does not cover this release.
+produced a validation artifact that passes manifest/Quattro compatibility and
+says “Ready for listing review.” Its automated security baseline has no
+findings but requires maintainer review of the installer capability. The
+serialized issue-publication job remains queued, so issue #6926 still shows its
+older 1.3.1 report and labels. No marketplace acceptance or approval label is
+recorded. See the response-cap receipt for the artifact identity and remaining
+gate.
 Veelox remains installed on 1.3.1; 1.3.2 was not live-shell tested or installed.
 The game Worker and production service were not changed. See
 [the response-cap release receipt](verification/omarchy-plugin-response-cap-2026-09-22.md)
