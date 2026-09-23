@@ -40,10 +40,11 @@ was updated with the exact commit and evidence. Automation [run #27950](https://
 produced a validation artifact that passes manifest/Quattro compatibility and
 says “Ready for listing review.” Its automated security baseline has no
 findings but requires maintainer review of the installer capability. The
-serialized issue-publication job remains queued, so issue #6926 still shows its
-older 1.3.1 report and labels. No marketplace acceptance or approval label is
-recorded. See the response-cap receipt for the artifact identity and remaining
-gate.
+publication job completed and refreshed the issue reports in place. Issue
+#6926 now has `validated` and `security-review-required`; `needs-fixes` was
+removed. It remains open, with no `approved-and-verified` label: a marketplace
+maintainer must review installer scope and decide acceptance. See the
+response-cap receipt for the artifact identity and remaining limits.
 Veelox remains installed on 1.3.1; 1.3.2 was not live-shell tested or installed.
 The game Worker and production service were not changed. See
 [the response-cap release receipt](verification/omarchy-plugin-response-cap-2026-09-22.md)
