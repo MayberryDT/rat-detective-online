@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "mode": "preflight",
+  "feature": "automatic-highlights",
+  "researched_at": "2026-09-19",
+  "status": "planning evidence; not a finalized or validated implementation contract",
+  "plan": "docs/handoffs/automatic-highlights-implementation-plan.md",
+  "user_decisions": [
+    "Build the whole feature, including local clip library and automatic reels.",
+    "Keep GPU Screen Recorder as the main backend; prove and harden isolation first.",
+    "Native Omarchy integration first: the primary game surface is the Omarchy web app already opened by the plugin."
+  ],
+  "coverage": [
+    {"class":"ui-primitives","status":"required","reason":"The existing native QML panel gains capture controls and a separate clip library using the existing appearance tokens."},
+    {"class":"state-persistence","status":"required","reason":"The owned helper persists clips, favorites, trim ranges, reel drafts, jobs, retention and migrations."},
+    {"class":"auth-security","status":"required","reason":"The game document crosses an extension/native-host boundary; automatic capture must exclude unrelated windows and audio."},
+    {"class":"network-sync","status":"required","reason":"The bridge maps browser presentation time to helper monotonic time and handles reconnects, duplicate markers and session expiry."},
+    {"class":"platform-device","status":"required","reason":"GSR replay IPC, Wayland portal source selection, PipeWire audio and Chromium app-mode behavior require real target proof."},
+    {"class":"accessibility","status":"required","reason":"The QML library adds playback, trimming, search and dialogs with keyboard, focus, text-state and scaling requirements."},
+    {"class":"testing","status":"required","reason":"Synthetic media, subprocess failures, real native capture, hosted gameplay and packaged installation need distinct evidence."},
+    {"class":"behavior-precedent","status":"required","reason":"Recorder IPC, native messaging and clip playback must follow supported implementations, not inferred commands."}
+  ],
+  "verified_local_baseline": {
+    "host":"Veelox",
+    "packages": {
+      "gpu-screen-recorder":"6.1.0-1",
+      "ffmpeg":"2:9.0.1-4",
+      "python":"3.14.7-1",
+      "qt6-base":"6.11.2-3",
+      "qt6-declarative":"6.11.2-1",
+      "qt6-multimedia":"6.11.2-1",
+      "quickshell":"0.3.1-1",
+      "chromium":"152.0.7977.82-1",
+      "pipewire":"1:1.6.8-1",
+      "xdg-desktop-portal-hyprland":"1.4.1-2"
+    },
+    "limits":"Package presence and documentation only. No capture, app-mode bridge, Ibara inventory, gameplay overhead or audio-isolation proof was performed during planning.",
+    "evidence_paths":[
+      "omarchy/plugin/scripts/rat-detective-desktop.py",
+      "omarchy/plugin/Panel.qml",
+      "omarchy/plugin/Service.qml",
+      "omarchy/plugin/manifest.json",
+      "src/session/GameSession.ts",
+      "src/prototype/ChaosView.ts",
+      "src/prototype/RatReactionEvents.ts",
+      "src/shared/chaosState.ts",
+      "src/shared/networkProtocol.ts",
+      "/usr/share/omarchy/bin/omarchy-launch-webapp",
+      "/usr/share/omarchy/bin/omarchy-capture-screenrecording",
+      "/usr/share/man/man1/gsr-cli.1.gz",
+      "/usr/share/man/man1/gpu-screen-recorder.1.gz"
+    ]
+  },
+  "verified_candidates": [
+    {
+      "area":"capture",
+      "name":"GPU Screen Recorder replay mode",
+      "verdict":"selected by user",
+      "license":"GPL-3.0-only per published recorder manual",
+      "ownership":"GSR owns capture/encoding/buffer; the helper owns lifecycle, interval selection and saved-file validation.",
+      "reason":"Already used by the desktop helper and explicitly selected by Tyler.",
+      "constraint":"Portal capture does not alone guarantee a game window; prove restriction and selection before automatic saves."
+    },
+    {
+      "area":"capture",
+      "name":"Chromium tabCapture with offscreen document",
+      "verdict":"not selected",
+      "source_url":"https://developer.chrome.com/docs/extensions/how-to/web-platform/screen-capture",
+      "reason":"Tab/audio isolation is attractive, but needs a browser user gesture and a separate recording implementation; toolbar-led capture conflicts with native Omarchy app-first operation."
+    },
+    {
+      "area":"capture",
+      "name":"OBS replay buffer",
+      "verdict":"not selected; comparison remains to verify in final dependency record",
+      "reason":"Would add another recorder/controller despite the user's GSR selection. No OBS capability is claimed as verified in this preflight."
+    },
+    {
+      "area":"bridge",
+      "name":"MV3 connector plus native messaging",
+      "verdict":"planned selection",
+      "source_url":"https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging",
+      "reason":"Immediate messages without a local HTTP listener; explicit extension allowlist and native framing.",
+      "constraint":"Must prove app-mode injection and installation in Omarchy's actual supported browser/profile. Native messaging is unavailable directly in the game page/content script."
+    },
+    {
+      "area":"bridge",
+      "name":"Authenticated loopback HTTP or WebSocket",
+      "verdict":"not selected",
+      "reason":"Requires a browser local-network/mixed-content/permission contract and exposed local server. No assumption that HTTPS can freely control localhost."
+    },
+    {
+      "area":"library",
+      "name":"Existing Qt Quick controls and Qt Multimedia",
+      "verdict":"planned selection",
+      "locked_by":"docs/verification/omarchy-appearance-2026-09-14.md",
+      "source_url":"https://doc.qt.io/qt-6/qml-qtmultimedia-mediaplayer.html",
+      "reason":"Preserves native plugin integration and both existing appearance modes. Installed Qt Multimedia supports the proposed media-player API; real codec playback remains to prove."
+    },
+    {
+      "area":"library",
+      "name":"External player and file manager only",
+      "verdict":"rejected as the main UI",
+      "reason":"Useful Reveal/Open actions, but does not satisfy a complete integrated library, trimming or reel workflow."
+    },
+    {
+      "area":"persistence",
+      "name":"Python sqlite3 with one helper writer",
+      "verdict":"planned selection",
+      "reason":"Standard-library transaction support for bounded metadata and jobs; no new database service.",
+      "constraint":"Read official transaction/migration documentation and test crash boundaries before finalization."
+    },
+    {
+      "area":"persistence",
+      "name":"One mutable JSON catalog",
+      "verdict":"rejected",
+      "reason":"Would complicate transactional job state and concurrent library actions as the catalog grows."
+    },
+    {
+      "area":"export",
+      "name":"FFmpeg and ffprobe subprocesses",
+      "verdict":"planned selection",
+      "source_url":"https://ffmpeg.org/ffmpeg-filters.html#concat",
+      "reason":"Already installed; supported filtering handles selected-clip normalization and synchronized concatenation.",
+      "constraint":"Record exact build/codec licensing and capabilities; use argument arrays, bounded queues and atomic output."
+    }
+  ],
+  "sources": [
+    {
+      "id":"gsr-ipc",
+      "url":"https://man.archlinux.org/man/gsr-cli.1.en",
+      "read":"Published manual and installed man page",
+      "supports":"Owned Unix IPC; save-replay accepts seconds, waits for completion and returns a path; status alone only proves listening."
+    },
+    {
+      "id":"gsr-local-manual",
+      "path":"/usr/share/man/man1/gpu-screen-recorder.1.gz",
+      "read":"Installed 6.1.0 manual",
+      "supports":"X11-only direct window/focused capture; Wayland portal; replay and app-audio options; restoration token path."
+    },
+    {
+      "id":"gsr-portal-source",
+      "url":"https://git.dec05eba.com/gpu-screen-recorder/tree/src/capture/portal.c",
+      "read":"Upstream master source; displayed blob 622cf4aeeaa0446e9864c69cafbbbcc44883496c",
+      "supports":"SelectSources requests GSR_PORTAL_CAPTURE_TYPE_ALL; restoration tokens appear in info logging.",
+      "limit":"This is not proof that installed 6.1.0 has identical source. Pin an exact commit and compare during H00."
+    },
+    {
+      "id":"portal-contract",
+      "url":"https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.ScreenCast.html",
+      "read":"Official ScreenCast interface",
+      "supports":"AvailableSourceTypes, window source selection, optional stream source_type, session closure, best-effort restoration with renewed prompts."
+    },
+    {
+      "id":"native-contract",
+      "url":"https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging",
+      "read":"Official native messaging documentation",
+      "supports":"Extension-only native API, exact allowed_origins, top-level native host path, UTF-8 JSON with native-endian 32-bit length, browser-supplied caller identity and sender validation."
+    },
+    {
+      "id":"native-precedent",
+      "repo_url":"https://github.com/GoogleChrome/chrome-extensions-samples",
+      "revision":"main; pin immutable source in H00",
+      "evidence_url":"https://github.com/GoogleChrome/chrome-extensions-samples/blob/main/api-samples/nativeMessaging/README.md",
+      "read":"Rendered sample directory README and its host/extension structure",
+      "supports":"User-level native host installation, extension/native exchange, uninstall flow.",
+      "do_not_copy":"Demo trust policies or all-user installation defaults; do not copy sample identity."
+    },
+    {
+      "id":"tab-capture-alternative",
+      "url":"https://developer.chrome.com/docs/extensions/how-to/web-platform/screen-capture",
+      "read":"Official capture guide",
+      "supports":"User-gesture tab capture, Chrome 116+ offscreen flow, audio playback routing must be restored; this alternative is not selected."
+    },
+    {
+      "id":"ffmpeg-concat",
+      "url":"https://ffmpeg.org/ffmpeg-filters.html#concat",
+      "read":"Official filter documentation",
+      "supports":"Reset segment timestamps, normalize corresponding streams and resolution, concatenate related video/audio together."
+    },
+    {
+      "id":"qt-player",
+      "url":"https://doc.qt.io/qt-6/qml-qtmultimedia-mediaplayer.html",
+      "read":"Official QML MediaPlayer documentation",
+      "supports":"Audio/video outputs, position, seekable state, media/playback status and explicit error handling."
+    }
+  ],
+  "mapping_preflight": [
+    {"id":"capture","tickets":["H00","H01","H04"],"concerns":["platform-device","auth-security","network-sync","behavior-precedent"],"sources":["gsr-ipc","gsr-local-manual","gsr-portal-source","portal-contract"],"proof":["H00 real game-window isolation across focus/resize/lock with synthetic unrelated content","H04 real replay with timestamp fixture, ffprobe coverage, save delay and buffer-wrap checks"]},
+    {"id":"bridge","tickets":["H02","H03"],"concerns":["auth-security","network-sync","platform-device","behavior-precedent"],"sources":["native-contract","native-precedent"],"proof":["Real Omarchy web-app launch and native handshake without toolbar interaction","test/scripts/highlightsProtocol.test.mjs malformed/origin/framing/replay cases","test/client/highlights.test.ts detector baseline and duplicate cases"]},
+    {"id":"library","tickets":["H05","H06"],"concerns":["ui-primitives","state-persistence","accessibility","testing"],"sources":["qt-player"],"proof":["omarchy/plugin/tests/qml/tst_highlights.qml controls and focus tests","Ibara native two-theme library walkthrough with actual local MP4","Crash/retention/pinned-source/1,000-clip fixtures"]},
+    {"id":"reels","tickets":["H07"],"concerns":["state-persistence","platform-device","testing","behavior-precedent"],"sources":["ffmpeg-concat","qt-player"],"proof":["test/scripts/highlightsMedia.test.mjs synthetic mixed-profile clip export and audio sync","Deterministic reel selection, missing source, cancel/restart and disk-full cases"]},
+    {"id":"delivery","tickets":["H08","H09"],"concerns":["state-persistence","auth-security","platform-device","testing"],"sources":["native-contract","native-precedent"],"proof":["Clean install/update/component mismatch/rollback/uninstall in supported target profile","Full acceptance matrix in docs/handoffs/automatic-highlights-implementation-plan.md"]}
+  ],
+  "unresolved_selections": [
+    "Exact unmodified or minimally patched GSR build exposing window-only source validation and secret-safe diagnostics.",
+    "Verified video/audio binding to the existing Omarchy web app in its actual browser/profile; do not silently substitute a separate profile.",
+    "Exact supported browser/native-host installation matrix and app-mode connector proof.",
+    "Per-game PipeWire routing method that preserves audible gameplay and excludes other tabs/apps.",
+    "Recorder first-frame clock and replay coverage behavior during a slow save.",
+    "Target performance profile selected from actual paired measurements."
+  ],
+  "finalization_requirements": [
+    "Preserve the user's GSR and native Omarchy web-app decisions.",
+    "Pin exact recorder/browser/media versions, source revisions, licenses and compatibility.",
+    "Read current official SQLite, PipeWire, Qt accessibility and service lifecycle contracts for the selected implementation.",
+    "Add immutable mature behavior precedents for library/persistence/export and exact proof commands.",
+    "Write .research/automatic-highlights-implementation-references.json after H00 resolves target mechanics; validate with the installed implementation-references validator and write its hash-bound receipt.",
+    "Do not fabricate a final receipt or describe this preflight as online-validator-passed."
+  ]
+}

@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "mode": "finalize",
+  "feature": "clips-audio-export",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "required",
+      "reason": "Existing Omarchy QML settings/export fields need clear folder and filename controls."
+    },
+    {
+      "class": "state-persistence",
+      "status": "required",
+      "reason": "Helper settings must retain export defaults without erasing capture preferences; catalog must distinguish missing audio."
+    },
+    {
+      "class": "auth-security",
+      "status": "required",
+      "reason": "Audio matching must exclude unrelated browser/app/microphone streams; export paths must preserve originals."
+    },
+    {
+      "class": "network-sync",
+      "status": "not-applicable",
+      "reason": "Scope is the local QML/helper/recorder pipeline; no game network protocol or remote sync changes."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "PipeWire stream lifecycle and GSR input attachment determine whether clips contain game audio."
+    },
+    {
+      "class": "accessibility",
+      "status": "required",
+      "reason": "Settings, filename and destination controls require labels, keyboard access, focus and visible errors."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "Regression proof must cover route recovery, decoded audio, trim/export preservation and native UI."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "Retain the existing native media-player structure while exposing track and export state."
+    }
+  ],
+  "verified_candidates": [
+    {
+      "name": "Existing GPU Screen Recorder / PipeWire Pulse",
+      "versions": {
+        "gpu-screen-recorder": "6.1.0-1",
+        "pipewire-pulse": "1:1.6.8-1"
+      },
+      "status": "Existing baseline; no new dependency selected",
+      "evidence": [
+        "omarchy/plugin/scripts/highlights/capture.py",
+        "omarchy/plugin/scripts/highlights/audio.py",
+        "/usr/share/man/man1/gpu-screen-recorder.1.gz"
+      ],
+      "constraint": "Recorder audio input is selected at start; current adapter omits -a when routing fails. Separate sink readiness from stream discovery and verify the proposed lifecycle before implementation."
+    },
+    {
+      "name": "Existing FFmpeg",
+      "version": "2:9.0.1-4",
+      "status": "Existing baseline",
+      "evidence": [
+        "omarchy/plugin/scripts/highlights/export.py",
+        "omarchy/plugin/scripts/highlights-preview.py"
+      ],
+      "constraint": "Real export and saved-cut functions preserved nonzero AAC in a temporary synthetic fixture. Retain this behavior and test mixed silent/audio reels."
+    },
+    {
+      "name": "Existing Qt Multimedia / Omarchy QML",
+      "version": "6.11.2-1",
+      "status": "Existing baseline",
+      "platform_url": "https://doc.qt.io/qt-6/qml-qtmultimedia-audiooutput.html",
+      "behavior_url": "https://doc.qt.io/qt-6/qtmultimedia-video-mediaplayer-example.html",
+      "exact_source_paths": [
+        "examples/multimedia/video/mediaplayer/Main.qml",
+        "examples/multimedia/video/mediaplayer/PlaybackControl.qml",
+        "examples/multimedia/video/mediaplayer/AudioControl.qml"
+      ],
+      "evidence": "Opened current official Qt documentation in Codex in-app browser on 2026-09-21; example binds AudioOutput mute/volume independently and exposes track information.",
+      "do_not_copy": "Do not replace the accepted native Omarchy styling or add the example's unrelated subtitle/playback-rate UI."
+    }
+  ],
+  "proof_obligations": [
+    "Service regression: routing error cannot silently confirm fully working audio; late/replaced streams recover without unrelated routing.",
+    "Known-signal media through export_clip and preview.prepare retains decoded nonzero audio and saved trim duration; extend to real GSR capture and reels.",
+    "Filename/settings tests cover local date/time, persistence, paths, queue collisions and source byte preservation.",
+    "Ibara isolated native fixture verifies settings and export dialog keyboard behavior; fresh human capture verifies audible sound in Clips and external player."
+  ],
+  "baseline": "Existing GSR 6.1.0-1, PipeWire Pulse 1.6.8-1, FFmpeg 9.0.1-4 and Qt Multimedia 6.11.2-1; no new stack. Implementation authorized 21 September. Original/standard/sound-on/dated defaults selected from handoff.",
+  "mappings": [
+    {
+      "id": "capture-audio",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "platform-device",
+        "auth-security",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": null,
+      "behavior": {
+        "repo_url": "https://github.com/PipeWire/pipewire",
+        "revision": "1.6.8",
+        "evidence_url": "https://github.com/PipeWire/pipewire/blob/1.6.8/src/modules/module-protocol-pulse/modules/module-loopback.c",
+        "behavior": "Explicit monitor source and playback sink connect capture to a separate audible output; module unload destroys the owned loopback.",
+        "edge_states": [
+          "no game stream yet",
+          "replacement game stream",
+          "module creation failure",
+          "cleanup"
+        ],
+        "do_not_copy": "Do not copy upstream styling or unrelated controls. Do not route desktop mix or unrelated browser profiles; do not unload other owners modules."
+      },
+      "platform": {
+        "url": "https://docs.pipewire.org/page_pulse_module_loopback.html",
+        "requirement": "Use source and sink module options, not sink_properties; preserve the original output and attach the monitor before late audio appears."
+      },
+      "proof": [
+        "node --test test/scripts/highlightsAudioExport.test.mjs",
+        "Native isolated GSR monitor capture before and after a late known audio stream; measure samples and exclude an unrelated tone."
+      ]
+    },
+    {
+      "id": "native-export",
+      "profile": "user-facing",
+      "concerns": [
+        "ui-primitives",
+        "state-persistence",
+        "accessibility",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": null,
+      "behavior": {
+        "repo_url": "https://github.com/qt/qtmultimedia",
+        "revision": "v6.11.2",
+        "evidence_url": "https://github.com/qt/qtmultimedia/blob/v6.11.2/examples/multimedia/video/mediaplayer/Main.qml",
+        "behavior": "Separate AudioOutput with mute/volume binding, visible media errors, track information and dialog controls.",
+        "edge_states": [
+          "video without an audio track",
+          "muted playback",
+          "cancel chooser",
+          "failed export",
+          "keyboard focus"
+        ],
+        "do_not_copy": "Do not copy upstream styling or unrelated controls. Keep accepted Omarchy controls and smooth frame-based trim preview. Do not add subtitle or playback-rate controls."
+      },
+      "platform": {
+        "url": "https://doc.qt.io/qt-6/qml-qtquick-dialogs-folderdialog.html",
+        "requirement": "Only accepted commits selectedFolder; cancellation leaves filename and folder unchanged. Qt provides native platform or Quick fallback dialogs."
+      },
+      "proof": [
+        "node --test test/scripts/highlightsAudioExport.test.mjs verifies atomic helper preferences, local dated filenames, collision handling and preserved sources.",
+        "Isolated muted Ibara fixture opens Settings, clip and reel exports; edits names, cancels chooser and verifies readable destination and keyboard focus."
+      ]
+    }
+  ],
+  "researched_at": "2026-09-21"
+}

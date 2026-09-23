@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "mode": "implemented-local",
+  "feature": "automatic-highlights",
+  "researched_at": "2026-09-19",
+  "implemented_at": "2026-09-19",
+  "status": "local implementation complete; portal/Ibara/human capture proofs remain",
+  "plan": "docs/handoffs/automatic-highlights-implementation-plan.md",
+  "receipt": "docs/verification/automatic-highlights-platform.md",
+  "guide": "docs/highlights.md",
+  "user_decisions": [
+    "Build the whole feature, including local clip library and automatic reels.",
+    "Keep GPU Screen Recorder as the main backend; prove and harden isolation first.",
+    "Native Omarchy integration first: the primary game surface is the Omarchy web app already opened by the plugin."
+  ],
+  "locked": {
+    "capture": "GPU Screen Recorder 6.1.0 replay, portal on Wayland, owned IPC, argv0 isolation",
+    "bridge": "MV3 native messaging, unpacked id lbhddkbbmnofokcjnlpfhffcplijjpnh",
+    "library": "Python sqlite3 one-writer catalog",
+    "ui": "Quickshell QML + Qt Multimedia",
+    "export": "FFmpeg argument arrays, H.264/AAC MP4"
+  },
+  "not_selected": ["OBS replay buffer", "Chromium tabCapture", "loopback HTTP"],
+  "remaining_proofs": [
+    "Ibara portal window pick and library playback",
+    "game-only audio vs unrelated Chromium/microphone",
+    "visible timing fixture + ffprobe",
+    "human gameplay session and exported reel",
+    "capture-off/normal/light frame-time comparison"
+  ]
+}

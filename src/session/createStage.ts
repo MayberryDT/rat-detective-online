@@ -7,8 +7,10 @@ import { previewMuted } from '../audio/previewMuted';
 import { effectsAudioContext } from '../audio/effectsAudio';
 
 export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
-    appRenderer.setSize(window.innerWidth, window.innerHeight);
-    appRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    let viewportWidth = window.innerWidth, viewportHeight = window.innerHeight;
+    let pixelRatio = Math.min(window.devicePixelRatio, 2);
+    appRenderer.setPixelRatio(pixelRatio);
+    appRenderer.setSize(viewportWidth, viewportHeight);
     appRenderer.shadowMap.enabled = true;
     appRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
     appRenderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -32,6 +34,21 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     // Frame the real city behind the title screen before the player takes over.
     camera.position.set(23, 7, 24);
     camera.lookAt(0, 9, 0);
+
+    // Preparation yields to the page before GameSession exists. Reconcile at
+    // render time so a fullscreen/resize notification in that gap cannot be lost.
+    function syncViewport(): boolean {
+      const width = window.innerWidth, height = window.innerHeight;
+      const ratio = Math.min(window.devicePixelRatio, 2);
+      if (width <= 0 || height <= 0 ||
+          (width === viewportWidth && height === viewportHeight && ratio === pixelRatio)) return false;
+      if (ratio !== pixelRatio) appRenderer.setPixelRatio(ratio);
+      appRenderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      viewportWidth = width; viewportHeight = height; pixelRatio = ratio;
+      return true;
+    }
 
     const existing = effectsAudioContext();
     if (existing) THREE.AudioContext.setContext(existing);
@@ -102,7 +119,7 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
 
 
     groundMesh.userData.aimTarget = true;
-    return { renderer: appRenderer, scene, camera, listener, world, flashlight, dispose() {
+    return { renderer: appRenderer, scene, camera, listener, world, flashlight, syncViewport, dispose() {
       groundGeo.dispose(); groundMat.dispose(); world.removeBody(groundBody);
       moonLight.shadow.dispose(); flashlight.shadow.dispose();
       scene.clear(); appRenderer.dispose(); appRenderer.domElement.remove();

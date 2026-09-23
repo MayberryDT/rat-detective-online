@@ -1,6 +1,122 @@
 # Current Rat Detective state
 
-Verified from source and production on **2026-09-14**. This is the handoff for new work, not a request to implement everything in old research. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-09-22**. Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+
+## Social sharing image — 22 September production
+
+Tyler approved the cartoon action card. Open Graph and Twitter now use
+`/share-action-v2.png` (1731×909), with matching dimensions and descriptive alt text.
+Worker `c638c9c8-e823-4037-9520-9b06719ef58d` changes only the image and image
+metadata; production Worker code and all 57 other existing assets are unchanged.
+Protocol 18 and client `index-BL9xcsnh.js` / `createGame-BSxvfOuu.js` remain.
+See [release verification](verification/social-share-2026-09-22.md).
+
+## Omarchy plugin 1.3.1 — released 21 September
+
+Rat Detective Dispatch 1.3.1 is public at
+[`MayberryDT/rat-detective-omarchy`](https://github.com/MayberryDT/rat-detective-omarchy)
+and as the annotated
+[`v1.3.1` release](https://github.com/MayberryDT/rat-detective-omarchy/releases/tag/v1.3.1).
+The immutable release commit is
+`36a56b14f9497170b0de49cb3ca9618b6e1864c6`; public CI, native Omarchy
+validation and the clean standalone release preflight pass. Veelox is installed
+at the same 1.3.1 content hash. The marketplace submission validates that exact
+commit and is ready for listing review; installer capability still requires the
+marketplace maintainer's manual approval. No game Worker deploy was needed: the
+production client and companion endpoint already provide the released runtime.
+See [the release receipt](verification/omarchy-plugin-release-2026-09-21.md).
+
+## Clips audio/export — 21 September installed on Veelox
+
+The companion source repairs audio startup/reconciliation and adds persistent export
+settings with editable date/time filenames. The duplicate Automatic highlights
+toggle is removed from Clips Settings; the plugin retains capture enablement.
+Regression, decoded-media and isolated Ibara native checks are complete. The two
+roster QML failures are fixed; all 37 QML checks pass. Existing recordings are unchanged.
+Tyler authorized installation: plugin and durable helper copies now match the
+published 1.3.1 package,
+the helper was restarted and the plugin reloaded. Automatic highlights remains
+enabled, waiting for the game. Fresh actual-game audio and human audible acceptance
+remain. See [live installation](verification/clips-live-2026-09-21.md) and
+[implementation verification](verification/clips-audio-export-2026-09-21.md).
+
+## Window resize corrections — 21 September production
+
+The fullscreen startup gap and automatic recorder's stale rectangle are fixed
+and released. Game rendering reconciles current dimensions before drawing;
+recording follows window movement/resize with a fresh replay buffer after
+in-flight saves finish. Seven recent source clips are already cropped to
+986×1080 and cannot recover missing pixels. See
+[diagnosis, verification and install status](verification/window-resize-capture-2026-09-21.md).
+The recorder fix is installed on Veelox. With Tyler’s approval, Worker
+`7b3c4b2a-1a75-48b4-b36c-bda91bcb3248` now serves `index-BL9xcsnh.js` /
+`createGame-BSxvfOuu.js`, protocol 18. All 58 built files match production;
+health, original world identity and the advancing zero-human city were verified.
+Reopen the game to load the new client. Human fullscreen/capture acceptance remains.
+
+## Highlight pipeline — 21 September production
+
+Worker **`9dc57656-314d-4f86-88d2-86a5af809b7c`**, protocol 18, matching client
+`index-DVgbazfd.js` / `createGame-CvRNTVU1.js`. Live createGame includes the
+repaired highlight bridge (`rat-detective-highlights`, `capture:` round ids,
+stale-session handling). Predecessor
+`c2cebcf0-0d78-491e-83ac-e0ac072caa4c`. Not published to GitHub. Close the
+game window and Enter City again to pick up the new hashed assets.
+
+September 21 local helper follow-up: reset calibration on accepted game-document
+changes, reject foreign timing updates, and expire old samples. This repairs
+eleven detected highlights being marked `missed` as hours old in a later session.
+Installed and restarted the idle helper; next human capture remains the live
+acceptance check. No additional game deployment. See
+[clock repair](verification/highlights-clock-2026-09-21.md).
+
+## Launchable cases — September 17 production
+
+Loose, unowned evidence sitting within a launcher pad radius takes that
+machine's pad impulse and flies, matching the occupant rat's velocity. No
+protocol change; the case snapshot already carries pose and velocity.
+Counterfeits stay planted, a carried case already rides its carrier's hand, and
+launched flight is exempt from the loose-case recovery watchdog until it
+settles. Launched flight mirrors Cannon's damping and uses its own 0.35
+restitution so the case lands instead of ping-ponging. Apex is about 108 units.
+The temporary localhost **G** drop hotkey was removed before this release.
+Production Worker **`a18fbc4a-7a6b-4dde-924e-f0c3e90af5c5`**, protocol 18,
+matching client `index-CtA1HGSO.js`. Predecessor `25c973c4-7dd9-4c52-bc35-9eac87d1979f`.
+See [the production receipt](verification/case-launchers-2026-09-17.md).
+
+## Round rosters — September 17 production
+
+Each game rolls **6–9** server bots. Bots that remain into the next game keep the same name; only the newcomers are renamed. Humans join on top of that roster until the ten-rat cap. Only a full room of ten kicks a bot to let a human in. That is why the public companion board is no longer stuck at eight. Empty overflow rooms still sleep. Dated receipts that measured eight-bot backfill stay historical.
+
+Production Worker **`25c973c4-7dd9-4c52-bc35-9eac87d1979f`**, protocol 18, matching client `index-CtA1HGSO.js`. Predecessor `0965112e-c50d-4075-86f7-decd93738f19`. Live `/status` after deploy kept `public-live-v2`, world version 2, seed 341283204, **0 humans / 8 named bots** in the current round. Companion revision advanced and scores changed. See [the production receipt](verification/roster-cap-kick-production-2026-09-17.md).
+
+Private matching preview remains [http://127.0.0.1:5193/?room=graybox-benchmark-match-roster-r2](http://127.0.0.1:5193/?room=graybox-benchmark-match-roster-r2) until **September 17, 4:00 PM Pacific**.
+
+## Cheese ball lifetime — September 17 production
+
+Ordinary cheese balls now last **1.5 seconds**, down from 2.5. Shared `BALL_LIFETIME` covers authority, local presentation and restored shots. Speed 175, gravity −25 and restitution 0.9 are unchanged. This is live. Dated September 10 receipts keep the 2.5-second measurement.
+
+## Persistent public city — deployed September 14
+
+Tyler confirmed games should always be running and the city is always alive.
+This supersedes empty-room-sleeps for the canonical room only. `public-live-v2`
+keeps **six to nine named server bots with zero humans**. Occupied rooms keep
+that round’s bots and cap at ten; reconnect remains 30 seconds. Overflow rooms
+still sleep and leave the directory; empty overflow 0/0 stays healthy.
+
+The parent accepted **local revision 15** after independent review and
+repairs. Tyler then authorized the production Worker deploy and live
+scoreboard check (`yes just not on github`, then `continue`). No GitHub
+operations, commits, pushes, tags, releases or plugin publishing were
+performed. Production Worker **`0965112e-c50d-4075-86f7-decd93738f19`**,
+predecessor `2869db51-e214-4c90-a620-c204cfaaf034`, protocol 18. Client
+assets were unchanged. One `GET /status` activated the city. Companion
+HTTP over **105 seconds** then showed **0 humans / 8 named rats**,
+assignment **EXCESSIVE FORCE**, revision **3 → 29**, advancing
+`observedAt`, and changing K/D plus objective totals. Directory GET does
+not wake a GameRoom; 15-second alarms recover. Native Omarchy panel
+verification was not part of this deploy. See
+[the production receipt](verification/canonical-city-2026-09-14.md).
 
 ## Combined bots and cameos — September 14 production release
 
@@ -92,16 +208,44 @@ Production Worker `55a9e2fe-e219-451d-aa55-de48ba72928e` adds the versioned
 Active rooms publish bounded summaries to the existing admission directory;
 companion reads do not wake sleeping games. Protocol remains 18. Invitations
 respect capacity and are consumed after successful entry so same-tab reconnect
-continues to work. The preceding gameplay release remains intact.
+continues to work. The preceding gameplay release remains intact. This desktop
+follow-up did not change or redeploy that Worker.
 
-The published Omarchy companion 1.1.1 has a redesigned Dispatch panel with default live Omarchy
-appearance and optional Rat Detective noir type/colors. See the
-[appearance receipt](verification/omarchy-appearance-2026-09-14.md).
-It includes assignment progress, room selection, launch
-and return, invitations, optional alerts, recording and desktop preferences.
-See the [companion guide](omarchy.md) and
-[release receipt](verification/omarchy-dispatch-2026-09-14.md) for desktop installation,
-published package and the distinction between automated checks and human testing.
+Published **1.1.1** is the last accepted appearance release: default live Omarchy
+look, optional Rat Detective type/colors, assignment progress, room selection,
+and launch/return. See the
+[appearance receipt](verification/omarchy-appearance-2026-09-14.md)
+and the earlier [1.0.0 release receipt](verification/omarchy-dispatch-2026-09-14.md).
+GitHub later published **v1.2.0** (commit `a9e1c30d87c911551d1d49435632eb913269306d`)
+with a full live-stats menu **without authorization**. Tyler objected; that tag
+is not an accepted desktop release. No new publishing is authorized.
+
+Local plugin **1.3.0** is installed on Veelox (unpublished). Automatic
+highlights is opt-in. The 20 September helper/client pipeline repair journals
+marker stages separately from catalog publication and no longer treats an
+accepted heartbeat as proof of a clip. Production Worker
+`9dc57656-314d-4f86-88d2-86a5af809b7c` now serves that client
+(`createGame-CvRNTVU1.js`). Close the game window and Enter City again.
+See [highlights](highlights.md), the
+[pipeline repair](verification/automatic-highlights-pipeline-2026-09-20.md),
+[repair receipt](verification/automatic-highlights-repair.md) and the dated
+[audit](verification/automatic-highlights-audit-2026-09-19.md).
+
+The 1.2.0 mini-scoreboard remains: native compact header, mode and objective, up
+to ten public names with objective totals and K/D, Play/Return, and Settings.
+The panel no longer shows a Quiet/Live badge, invite/Join, record/captures,
+desktop or alert settings, or redundant public/playtest/alerts copy. Background Service
+alert preferences were left as stored. Earlier the same day a companion read
+returned `rooms: []` while legacy `/status` reported `players: 0`, `bots: 0`,
+`phase: playing`; that empty result was the previous sleep policy. Production
+Worker **`0965112e-c50d-4075-86f7-decd93738f19`** now keeps the canonical city
+alive. HTTP companion samples after activation listed eight named bots, zero
+humans, an assignment and changing scores. This deploy does not claim the
+installed native Omarchy panel was verified here, and no plugin publish was
+authorized. See the
+[companion guide](omarchy.md), the
+[14 September desktop receipt](verification/omarchy-live-stats-2026-09-14.md)
+and the [canonical-city receipt](verification/canonical-city-2026-09-14.md).
 
 ## Paper Chase sewer-guidance production fix — September 13
 
@@ -474,7 +618,7 @@ Three timed pickups and a replacement incident are committed and live in applica
 
 Historical expired preview: `graybox-benchmark-ai-launcher-projectiles-v28`. **16 total rats**, with bots yielding to humans. Expires **September 11 at 3:27 AM Pacific**. Private Worker `6fe9fa40-3f32-4329-914f-1b3aa79a4a27`, protocol **8**. This link runs without diagnostics, matching normal production playback. See [responsive shooting and checks](verification/responsive-shooting-2026-09-10.md).
 
-Tyler requested these changes after the production release below. **Playtest accepted; now included in the September 11 production release:** all six launcher sounds, including Pressure Surge, now share the 3D world fade with a 120-unit cutoff and a 30% lower nearby ceiling. Existing air tails follow listener movement. Ball lifetime is **2.5 seconds**, down from five, across the client and authority. The separate guessed helper mesh was removed; the subsequent responsiveness fix below predicts the single real-ID ball inside the authoritative instanced pool; actual shot origins still use the animated muzzle, with immediate gun animation/audio. Bad Ammunition retains its one/two/three-ball odds but narrows deviation to **0.12–0.24 radians**, with diagonal offsets in all four quadrants around aim. See [implementation and checks](verification/launcher-projectile-cleanup-2026-09-10.md). Tyler accepted the final preview and requested a commit after the responsiveness correction below.
+Tyler requested these changes after the production release below. **Playtest accepted; now included in the September 11 production release:** all six launcher sounds, including Pressure Surge, now share the 3D world fade with a 120-unit cutoff and a 30% lower nearby ceiling. Existing air tails follow listener movement. Ball lifetime was **2.5 seconds**, down from five, across the client and authority; the later September 17 cut to **1.5 seconds** supersedes that value. The separate guessed helper mesh was removed; the subsequent responsiveness fix below predicts the single real-ID ball inside the authoritative instanced pool; actual shot origins still use the animated muzzle, with immediate gun animation/audio. Bad Ammunition retains its one/two/three-ball odds but narrows deviation to **0.12–0.24 radians**, with diagonal offsets in all four quadrants around aim. See [implementation and checks](verification/launcher-projectile-cleanup-2026-09-10.md). Tyler accepted the final preview and requested a commit after the responsiveness correction below.
 
 Tyler found that helper removal alone left the ball first appearing several units in front of the gun. The follow-up sends the accepted server birth to the firing player immediately, with actual ball IDs and resolved velocities. One presentation track per real ball retains the transmitted birth and aligns its first draw with the current animated muzzle using a bounded, 100 ms render correction, then continues through later snapshots; no guessed helper or replay of an already visible shot. Known hits/removals and ricochets take precedence. See [authoritative muzzle delivery](verification/authoritative-muzzle-2026-09-10.md).
 

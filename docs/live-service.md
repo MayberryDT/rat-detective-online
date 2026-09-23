@@ -1,17 +1,17 @@
 # Live service runbook
 
-Last release receipt: **2026-09-14**. [Combined bots, navigation fixes and cameos](verification/combined-production-2026-09-14.md). [Accepted maneuvers, settings and ten-rat cap](verification/maneuvers-production-2026-09-14.md). [Omarchy Dispatch companion](verification/omarchy-dispatch-2026-09-14.md). [Paper Chase sewer-guidance fix](verification/paper-chase-sewer-guidance-2026-09-13.md). [Jurisdiction, Paper Chase, bot and HUD release](verification/jurisdiction-production-2026-09-13.md). [Batched movement and permanent score card](verification/movement-batching-score-card-2026-09-13.md). [Movement and Hot Pursuit lag correction](verification/movement-hot-pursuit-lag-2026-09-13.md). [Destination and restock visuals](verification/destination-restock-2026-09-13.md). [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md). [Case lifecycle and kill confirmation](verification/case-kill-feedback-2026-09-12.md). [Accepted animations, explosion and case fixes](verification/animation-production-2026-09-12.md). [Accepted model and protocol15 integration](verification/model-netplay-integration-2026-09-12.md). [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
+Last release receipt: **2026-09-22**. [Social sharing image](verification/social-share-2026-09-22.md). [Fullscreen and capture bounds](verification/window-resize-capture-2026-09-21.md). [Launchable cases](verification/case-launchers-2026-09-17.md). [6-9 roster and 1.5s balls](verification/roster-cap-kick-production-2026-09-17.md). [Always-alive canonical city](verification/canonical-city-2026-09-14.md). [Combined bots, navigation fixes and cameos](verification/combined-production-2026-09-14.md). [Accepted maneuvers, settings and ten-rat cap](verification/maneuvers-production-2026-09-14.md). [Omarchy Dispatch companion](verification/omarchy-dispatch-2026-09-14.md). [Paper Chase sewer-guidance fix](verification/paper-chase-sewer-guidance-2026-09-13.md). [Jurisdiction, Paper Chase, bot and HUD release](verification/jurisdiction-production-2026-09-13.md). [Batched movement and permanent score card](verification/movement-batching-score-card-2026-09-13.md). [Movement and Hot Pursuit lag correction](verification/movement-hot-pursuit-lag-2026-09-13.md). [Destination and restock visuals](verification/destination-restock-2026-09-13.md). [Bot vertical traversal](verification/bot-vertical-traversal-2026-09-12.md). [Case lifecycle and kill confirmation](verification/case-kill-feedback-2026-09-12.md). [Accepted animations, explosion and case fixes](verification/animation-production-2026-09-12.md). [Accepted model and protocol15 integration](verification/model-netplay-integration-2026-09-12.md). [Accepted pickup/reconnect refinement release](verification/pickup-reconnect-production-2026-09-11.md). Confirm live state before future operations; version IDs below are dated records. [Steady fixture lighting release](verification/steady-lighting-production-2026-09-10.md); [grounded exterior lighting verification](verification/exterior-lighting-2026-09-10.md); [fast title/input/lighting verification](verification/title-fast-tap-lighting-2026-09-10.md); [entry/sewer follow-up](verification/mobile-entry-sewer-2026-09-10.md); [preceding full release](verification/production-release-2026-09-10.md).
 
 | Item | Value |
 | --- | --- |
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `2869db51-e214-4c90-a620-c204cfaaf034` — protocol 18, combined bots, navigation fixes and cameos |
-| Previous version | `60f63b24-a014-47c9-a3ba-772bea41ef5b` — protocol 18, maneuver-only bots with settings and ten-rat cap; rollback removes combined behavior, later navigation fixes and cameos |
+| Last deployed version | `c638c9c8-e823-4037-9520-9b06719ef58d` — social image/metadata only; protocol 18, unchanged `index-BL9xcsnh.js` / `createGame-BSxvfOuu.js` |
+| Previous version | `7b3c4b2a-1a75-48b4-b36c-bda91bcb3248` — protocol 18, fullscreen resize fix |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
-| Admission | 10 total rats per room; occupied rooms fill to eight with AI, yielding to humans; automatic overflow rooms |
+| Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Canonical `public-live-v2` stays alive with 6–9 bots and zero humans; overflow still sleeps |
 
 Protocol 18 requires matching client and Worker. Before any rollback to protocol 15,
 review stored Jurisdiction rounds: the old validator does not understand that mode. Existing older game tabs should
@@ -27,7 +27,15 @@ wake gameplay. Summary generations, revisions, expiry and retirement tombstones
 prevent older publications from reviving a retired room. The companion API has its
 own schema version, separate from the gameplay protocol.
 
-`GET /status` enables the canonical room's matchmaking policy and includes its persisted world seed/version so titles can prepare matching geometry without joining or reserving a slot; default `/ws` uses the persistent Matchmaker admission directory. Public `prepare=1` sockets bypass reservation/overflow allocation and remain silent until joining. They are bounded to sixteen per canonical room and a 30-second server lease (25 seconds on the client); a full-room join retries through normal matchmaking and cannot steal existing reservations. They do not start bots or simulation. Live sockets and simulation remain in individual GameRooms. Occupied rooms fill to eight total participants with server-owned AI (`max(0, 8 - humans)`), with a ten-second refill grace after departures; disconnected rats now retain
+`GET /status` is the one-time activation: it enables matchmaking on
+`public-live-v2` and starts the 6–9-bot city if that room is still asleep.
+That step was performed after deploying Worker
+`0965112e-c50d-4075-86f7-decd93738f19` and remains in effect on
+`a18fbc4a-7a6b-4dde-924e-f0c3e90af5c5`. Directory GET still does not wake a
+GameRoom. See [the production receipt](verification/canonical-city-2026-09-14.md).
+
+`GET /status` enables the canonical room's matchmaking policy and includes its persisted world seed/version so titles can prepare matching geometry without joining or reserving a slot; default `/ws` uses the persistent Matchmaker admission directory. Public `prepare=1` sockets bypass reservation/overflow allocation and remain silent until joining. They are bounded to sixteen per canonical room and a 30-second server lease (25 seconds on the client); a full-room join retries through normal matchmaking and cannot steal existing reservations. Title prepare does not reserve a participant or create overflow. `enableMatchmaking` from `GET /status` starts the 6–9-bot canonical match;
+prepare still does not. Live sockets and simulation remain in individual GameRooms. Occupied rooms keep that round’s 6–9 bots and add humans on top until ten, kicking a bot only when already full; disconnected rats now retain
 their existing slots for 30 seconds before removal. Humans can fill all ten slots. Arbitrary named rooms do not automatically acquire hosted AI. Hosting needs no local service or Codex task.
 
 The `persistent-bots-v1` enabled flag, `persistent-bot-roster-v1` active roster, matchmaking identity, player records, world, round, chaos snapshot and deadlines persist in SQLite. Names refresh with each round; unchanged setup preserves surviving bots. Reset cleans old bot records/events and emits leave/join events so client nameplates update. The former production policy of reserving eleven AI slots is historical.
@@ -37,11 +45,16 @@ Disconnected humans retain their identity, stats, objective state and slot for
 credentials/deadlines persist separately in `reconnect_sessions`; same-tab reloads
 can resume through sessionStorage, and a bounded unreserved socket can recover an
 existing slot even in a full room. Tokens never appear in public player data or URLs.
-After the last reservation expires, bots are removed and the simulation sleeps. Empty overflow rooms retire from the admission directory; the canonical room/world identity remains. Consequently **zero players and zero bots on `/status` is healthy when nobody is playing**. `/status` describes the canonical room, not a total across overflow rooms. It counts
+After the last reservation expires, empty overflow rooms remove bots, sleep and
+retire from the admission directory. The canonical room/world identity remains.
+The required contract, now live on Worker
+`a18fbc4a-7a6b-4dde-924e-f0c3e90af5c5`, is **zero humans and six to nine named bots**
+on `public-live-v2`. Empty overflow 0/0 remains healthy. `/status` describes the
+canonical room, not a total across overflow rooms. It counts
 attached humans; temporarily disconnected reserved rats remain on the authoritative
 scoreboard even though they are omitted from that status population count.
 
-A 15-second Durable Object alarm restores occupied-room simulation after eviction and shares its schedule with earlier respawn/reset deadlines. This provides recovery, not a guarantee against platform outages. See [server operations](server-operations.md) for timing and storage details.
+A 15-second Durable Object alarm restores occupied-room simulation after eviction and shares its schedule with earlier respawn/reset deadlines. The required contract keeps that alarm on the canonical city with zero humans so the 6–9-bot match recovers. This provides recovery, not a guarantee against platform outages. See [server operations](server-operations.md) for timing and storage details.
 
 ## Build and deploy
 
@@ -60,10 +73,10 @@ A documentation update alone does not require deployment. Never include private 
 
 ## Verify the actual release
 
-- `/health` checks routing/runtime only. `/status` should show `public-live-v2` and plausible round state. An empty room has zero rats; one human normally brings seven bots. Count must stay within ten.
+- `/health` checks routing/runtime only. `/status` should show `public-live-v2` and plausible round state. After activation the empty-human reading is 0 humans / 6–9 named bots with a live assignment. A human joins on top of that roster instead of replacing a bot. Empty overflow 0/0 remains healthy. Count must stay within ten. The 14 September production check listed eight named rats in Excessive Force with advancing companion revision and changing scores over more than 75 seconds, HTTP only.
 - Fetch the root and referenced assets; check the old host redirects both root and a path/query.
 - Confirm the deployed version from the deployment receipt and record its predecessor. Do not infer deployed source from Git alone.
-- For sharing, root HTML must contain static Open Graph / Twitter metadata and an accessible `image/png` asset at `/share-title-v1.png`. The image is an actual 1200×630 title-screen screenshot. Use a new versioned image URL when replacing it; third-party previews may remain cached.
+- For sharing, root HTML must contain static Open Graph / Twitter metadata and an accessible `image/png` asset at `/share-action-v2.png`. The image is the approved 1731×909 generated promotional illustration, not a gameplay screenshot. Use a new versioned image URL when replacing it; third-party previews may remain cached.
 - `scripts/verify-persistent-bots.mjs` retains historical 8–11-bot/continuous-empty-room assertions and must not be used as the current production acceptance check. Use a bounded passive observer with the current delivery decoder/ACKs to inspect default matchmaking, world identity, assignment snapshots and departure cleanup. Use a separate named room for combat protocol smoke; do not force public round resets or stress the public room.
 
 ## Recovery and rollback

@@ -1,0 +1,242 @@
+[
+  {
+    "id": "direction-01",
+    "name": "Machined viewing bench",
+    "purpose": "A precise two-pane workspace. Browse on the left; watch and work on the right.",
+    "world": {
+      "substance": "Anodized metal",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Rigid rails",
+      "formation": "Milled adjoining planes",
+      "topology": "Adjacent browser and viewer",
+      "continuity": "A stable selection holds the viewing plane",
+      "spatial_law": "Horizontal alignment, generous viewing area",
+      "temporal_behavior": "Immediate selection, brief focus feedback",
+      "instrumentality": "Select a row; operate the selected clip"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-02",
+    "name": "Contact-print cabinet",
+    "purpose": "Large visual thumbnails make finding a moment the first thing you do.",
+    "world": {
+      "substance": "Matte photographic paper",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Even illumination",
+      "formation": "Repeated contact exposures",
+      "topology": "Thumbnail field beside preview",
+      "continuity": "Selection remains outlined in the field",
+      "spatial_law": "Equal thumbnail cells, one larger inspection plane",
+      "temporal_behavior": "Instant exposure of the selected image",
+      "instrumentality": "Scan images; inspect a contact"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-03",
+    "name": "Spooled film transport",
+    "purpose": "A large screen and a horizontal strip, for moving through moments in sequence.",
+    "world": {
+      "substance": "Flexible film",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Linear tension",
+      "formation": "Continuous spooling",
+      "topology": "Viewer above a single connected strip",
+      "continuity": "Playback position remains anchored",
+      "spatial_law": "Left-to-right time below a large viewport",
+      "temporal_behavior": "Linear seek, no animated carousel",
+      "instrumentality": "Advance along film; trim its ends"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-04",
+    "name": "Bound session folio",
+    "purpose": "Sessions read like chapters, with a clear index and a quiet viewing page.",
+    "world": {
+      "substance": "Bound paper",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "A fixed spine",
+      "formation": "Folded facing leaves",
+      "topology": "Chapter index and facing content",
+      "continuity": "Chapter context survives selection",
+      "spatial_law": "Unequal facing pages, ruled index",
+      "temporal_behavior": "Direct page replacement, no page-turn animation",
+      "instrumentality": "Choose an entry from its chapter"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-05",
+    "name": "Aperture screening room",
+    "purpose": "Video occupies the room. A compact queue keeps the next moment within reach.",
+    "world": {
+      "substance": "Optical glass and dark baffles",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Focused light",
+      "formation": "Nested rectangular apertures",
+      "topology": "Centered screen over a quiet queue",
+      "continuity": "The screen never moves when selection changes",
+      "spatial_law": "Large void around a centered image",
+      "temporal_behavior": "Quiet controls, immediate frame change",
+      "instrumentality": "Watch first, browse at the perimeter"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-06",
+    "name": "Indexed archive drawers",
+    "purpose": "A compact, information-rich list for finding and managing a growing library.",
+    "world": {
+      "substance": "Folded sheet metal",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Vertical stacking",
+      "formation": "Slotted drawers",
+      "topology": "Tabular records beneath a persistent inspector",
+      "continuity": "Record identity stays visible beside playback",
+      "spatial_law": "Dense ruled rows and a compact upper preview",
+      "temporal_behavior": "Rows highlight without shifting neighbors",
+      "instrumentality": "Sort, filter and select records"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-07",
+    "name": "Registration light table",
+    "purpose": "A broad thumbnail sheet with a dedicated inspection edge and minimal chrome.",
+    "world": {
+      "substance": "Frosted glass",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Transmitted light",
+      "formation": "Registered sheets",
+      "topology": "Broad contact sheet with slim inspection lane",
+      "continuity": "Selected image aligns to a fixed inspection edge",
+      "spatial_law": "Large images, small labels, asymmetric columns",
+      "temporal_behavior": "Selection gains a clear registration line",
+      "instrumentality": "Inspect imagery with precise edge controls"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-08",
+    "name": "Hinged viewing folio",
+    "purpose": "An open viewing surface with a fold-out clip index on the opposite side.",
+    "world": {
+      "substance": "Stiff board and cloth",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Hinge tension",
+      "formation": "Two joined panels",
+      "topology": "Broad viewer with a right-hand nested index",
+      "continuity": "Current clip remains in its chapter",
+      "spatial_law": "A wide left leaf and narrow right leaf",
+      "temporal_behavior": "Index opens in place without moving video",
+      "instrumentality": "Watch on the left; turn to the right for another clip"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-09",
+    "name": "Calibrated edit rail",
+    "purpose": "A tool-like workspace that puts playback and precise trimming on the same axis.",
+    "world": {
+      "substance": "Brushed measuring steel",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Rail constraint",
+      "formation": "Calibrated ticks and stops",
+      "topology": "Navigation rail, viewer, lower instrument tray",
+      "continuity": "All editing shares a single selected time range",
+      "spatial_law": "Aligned transport and labeled time fields",
+      "temporal_behavior": "Only the playhead moves",
+      "instrumentality": "Seek, set in/out, export a copy"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  },
+  {
+    "id": "direction-10",
+    "name": "Deposited session strata",
+    "purpose": "A chronological library grouped into visible sessions with a stable preview.",
+    "world": {
+      "substance": "Layered archive stock",
+      "material_state": "Quiet, stable, matte; active selections use the current theme accent",
+      "force": "Accumulation over time",
+      "formation": "Dated horizontal strata",
+      "topology": "Chronological bands beside a viewer",
+      "continuity": "Dates hold their place while clips change",
+      "spatial_law": "Time gutter, broad rows and stepped groups",
+      "temporal_behavior": "New moments appear in their dated layer",
+      "instrumentality": "Browse a session layer; inspect its moments"
+    },
+    "translation": {
+      "language": "Native monospace; scale, rhythm and metadata placement vary with the composition",
+      "environment": "Existing Omarchy semantic colors; no independent skin",
+      "failure_physics": "Replace the selected viewing plane with a stable, actionable textual state; preserve navigation",
+      "responsive": "Recompose viewer above the library below 600px; preserve each direction\u2019s reading hierarchy at 680px",
+      "media": "Existing gameplay still, actual game colors, thumbnail fallback; native video playback remains an implementation obligation",
+      "acoustics": "Silent interface; playback audio only, controllable separately"
+    }
+  }
+]

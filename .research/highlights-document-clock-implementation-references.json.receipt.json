@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "4a9c01300f10f291d3b825fa52a198e8dcf434200d30acc6f51ac9a46aea77af",
+  "verified_at": "2026-09-21T17:57:32.963843+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "document-clock:behavior-repo",
+      "url": "https://github.com/web-platform-tests/wpt",
+      "status": 200
+    },
+    {
+      "label": "document-clock:behavior-evidence",
+      "url": "https://github.com/web-platform-tests/wpt/blob/e6a00e812093abfcf17eccf99268d456f15948ea/hr-time/timeOrigin.html",
+      "status": 200
+    },
+    {
+      "label": "document-clock:platform",
+      "url": "https://www.w3.org/TR/hr-time-3/",
+      "status": 200
+    }
+  ]
+}

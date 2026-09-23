@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {execFileSync, spawn, spawnSync} from 'node:child_process';
 import {chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -27,11 +27,11 @@ function fixture() {
     chmodSync(target, 0o755);
     return target;
   };
-  stub('hyprctl', `printf 'hyprctl' >>"$RAT_TEST_CALLS"; printf ' <%s>' "$@" >>"$RAT_TEST_CALLS"; printf '\\n' >>"$RAT_TEST_CALLS"
+  stub('hyprctl', `line=hyprctl; for arg in "$@"; do line="$line <$arg>"; done; printf '%s\\n' "$line" >>"$RAT_TEST_CALLS"
 if [[ \${1:-} == clients ]]; then cat "$RAT_TEST_CLIENTS"; fi
 if [[ \${1:-} == binds ]]; then cat "$RAT_TEST_BINDS"; exit "\${RAT_TEST_BINDS_EXIT:-0}"; fi
 if [[ \${1:-} == configerrors && \${RAT_TEST_CONFIG_ERROR:-0} == 1 ]]; then printf 'bad config\\n'; fi`);
-  stub('omarchy', `printf 'omarchy' >>"$RAT_TEST_CALLS"; printf ' <%s>' "$@" >>"$RAT_TEST_CALLS"; printf '\\n' >>"$RAT_TEST_CALLS"
+  stub('omarchy', `line=omarchy; for arg in "$@"; do line="$line <$arg>"; done; printf '%s\\n' "$line" >>"$RAT_TEST_CALLS"
 if [[ -n \${RAT_TEST_CLIENT_ON_LAUNCH:-} && \${1:-} == launch ]]; then printf '%s\\n' "$RAT_TEST_CLIENT_ON_LAUNCH" >"$RAT_TEST_CLIENTS"; fi
 exit "\${RAT_TEST_OMARCHY_EXIT:-0}"`);
   stub('omarchy-shell', `if [[ \${1:-} == lock && \${2:-} == isLocked ]]; then printf '%s\\n' "\${RAT_TEST_LOCK_OUTPUT:-false}"; exit "\${RAT_TEST_LOCK_EXIT:-0}"; fi; exit 1`);
@@ -65,11 +65,17 @@ function calls(fx) {
   try { return readFileSync(fx.calls, 'utf8'); } catch { return ''; }
 }
 
-test('return focuses an exact Rat Detective app identity and ignores a matching title', () => {
+test('return focuses an exact connected Rat Detective app identity and ignores a matching title', async t => {
   const fx = fixture();
+  const game = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', path.join(fx.env.XDG_DATA_HOME, 'rat-detective/webapp-profile')], {stdio: 'ignore'});
+  t.after(() => game.kill('SIGKILL'));
+  await new Promise((resolve, reject) => {
+    game.once('spawn', resolve);
+    game.once('error', reject);
+  });
   writeFileSync(fx.clients, JSON.stringify([
     {address: '0xaaa', class: 'org.editor', title: 'Rat Detective', workspace: {name: '2'}, focusHistoryID: 0},
-    {address: '0xabc', class: 'co.animasai.rat-detective', title: 'Rat Detective', workspace: {name: '7'}, focusHistoryID: 3},
+    {address: '0xabc', class: 'co.animasai.rat-detective', title: 'Rat Detective', pid: game.pid, workspace: {name: '7'}, focusHistoryID: 3},
   ]));
   const {payload} = invoke(fx, ['return']);
   assert.equal(payload.action, 'focused');

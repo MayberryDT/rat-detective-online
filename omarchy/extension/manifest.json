@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Rat Detective Highlights",
+  "version": "1.0.0",
+  "description": "Relays Rat Detective highlight markers to the local Omarchy helper. Not a product UI.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqBXjPJ/wLCs/lKZYsFVLfv6KIenXlAlT+GohT3DC48wGSv4D7lyGBGh24qsti4j8hFX7jXHv+8/8tJN3YxUb7Tv9dxV7G8OxvJ9qn85CBtJxkav+V6/Q2GJ2jvENrxrc5cgAfWF/iuMh0NGH640CZ1YoM29c7M4tg4/PDioarFk5bEjYzeSkZ6EfvqtvJxb5LrgBweY+3fOz7vt6uCeW/mwGvFvqtcXWTvOSP1G0+JUXHCgIvUk2BOWzZpaBU3JWezRlF26RjVGKlM69tNtIX5GmYfmczPoR76V78bX7Uxtc3YiO+MRWlVkAAVPwrI19iZCWlXvLO9uXQBavUNkRHwIDAQAB",
+  "minimum_chrome_version": "120",
+  "incognito": "not_allowed",
+  "permissions": ["nativeMessaging"],
+  "host_permissions": ["https://ratdetective.online/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://ratdetective.online/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

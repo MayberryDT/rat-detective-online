@@ -1,11 +1,32 @@
 # Documentation map
 
-Reviewed against repository source and the latest release receipt on **2026-09-14**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+Reviewed against repository source and the latest release receipts through **2026-09-21**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+
+## Planned work
+
+| Document | Purpose |
+| --- | --- |
+| [Automatic highlights repair handoff](handoffs/automatic-highlights-repair-handoff.md) | Historical completion brief; the repaired implementation is now released in plugin 1.3.1 |
+| [Automatic highlights implementation plan](handoffs/automatic-highlights-implementation-plan.md) | Full H00–H09 product specification; release status is recorded in the 1.3.1 receipt |
 
 ## Current references
 
 | Document | Purpose |
 | --- | --- |
+| [Social sharing image](verification/social-share-2026-09-22.md) | Approved action card deployed; exact image/metadata checks, unchanged gameplay |
+| [Omarchy plugin 1.3.1 release](verification/omarchy-plugin-release-2026-09-21.md) | Public repository, immutable tag/release, CI, Veelox install and marketplace validation status |
+| [Omarchy plugin acceptance](verification/omarchy-plugin-acceptance-2026-09-21.md) | Ibara acceptance, repaired lease/helper teardown, exact export identity, restoration and later release closure |
+| [Automatic highlights audit](verification/automatic-highlights-audit-2026-09-19.md) | Confirmed implementation defects and missing installation; includes runnable evidence |
+| [Automatic highlights](highlights.md) | Veelox 1.3.1 installed and enabled; document-clock correction included in the public release |
+| [Clips audio and export settings](verification/clips-audio-export-2026-09-21.md) | Source-only repair; regression/media/native evidence, preserved originals and explicit live-audio acceptance gap; not installed |
+| [Fullscreen and capture bounds](verification/window-resize-capture-2026-09-21.md) | Production fullscreen fix and installed recorder-region correction |
+| [Highlight document clock](verification/highlights-clock-2026-09-21.md) | Missing clips after reopening the game: local helper fix, regressions and installation |
+| [Automatic highlights pipeline repair](verification/automatic-highlights-pipeline-2026-09-20.md) | 20 Sep 2026 helper/client repair: journal, async save, round-id/bridge contracts; no native clip yet |
+| [Automatic highlights repair](verification/automatic-highlights-repair.md) | 19 Sep 2026 F1/F8 repair and local install; portal confirm stopped |
+| [Automatic highlights platform](verification/automatic-highlights-platform.md) | First-pass inventory; superseded where the repair receipt disagrees |
+| [Launchable cases](verification/case-launchers-2026-09-17.md) | Production: loose cases ride launcher pads; Worker `a18fbc4a-7a6b-4dde-924e-f0c3e90af5c5` |
+| [6-9 roster and 1.5s balls](verification/roster-cap-kick-production-2026-09-17.md) | Production Worker `25c973c4-7dd9-4c52-bc35-9eac87d1979f`: 6–9 round bots, cap-only human kick, 1.5s cheese balls |
+| [Canonical persistent city](verification/canonical-city-2026-09-14.md) | Confirmed always-alive `public-live-v2` contract; accepted revision 15 deployed as Worker `0965112e-c50d-4075-86f7-decd93738f19`, not published to GitHub |
 | [Combined production release](verification/combined-production-2026-09-14.md) | Accepted combined bots, navigation fixes, cameos, commits and live verification |
 | [Sewer ramp crossings](verification/sewer-exits-2026-09-14.md) | Private tunnel reversal fix, ascent/descent physics and rotating observation playlist |
 | [Wall cases and directional jumps](verification/wall-case-jumps-2026-09-14.md) | Private close-approach and obstacle-jump fixes, physics checks and hosted observation |
@@ -18,6 +39,7 @@ Reviewed against repository source and the latest release receipt on **2026-09-1
 | [Active zone holders and settings](verification/jurisdiction-bots-settings-2026-09-14.md) | Pre-release physical bot checks and settings verification; see accepted maneuvers release |
 | [Handoff: Jurisdiction bots and settings](handoffs/jurisdiction-bots-settings-2026-09-14.md) | Accepted direction, source findings, settings candidates and original clarification points; see the linked implementation receipt |
 | [Omarchy appearance](verification/omarchy-appearance-2026-09-14.md) | Native theme choice, Rat Detective design, visual checks and plugin release |
+| [Omarchy live stats 1.2.0](verification/omarchy-live-stats-2026-09-14.md) | Local modified mini-scoreboard on unauthorized public v1.2.0; no new publish; production companion now lists the always-alive city |
 | [Paper Chase sewer guidance](verification/paper-chase-sewer-guidance-2026-09-13.md) | Released fix: slightly negative street feet no longer produce stuck exit cues |
 | [Jurisdiction production release](verification/jurisdiction-production-2026-09-13.md) | Accepted four-mode playlist, Paper Chase, bot/HUD updates and verified live version |
 | [Standalone zone countdown](verification/zone-timer-2026-09-13.md) | Private 75-second Jurisdiction timer, desktop/touch layout and refreshed preview |

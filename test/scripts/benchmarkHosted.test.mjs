@@ -62,11 +62,23 @@ for(const capacity of [10,12,16])test(`${capacity}-rat full-lobby fixture fills 
   assert.match(await readFile(join(fixture.stage,'src/shared/networkProtocol.ts'),'utf8'),new RegExp(`MAX_PLAYERS = ${capacity};`));
   const room=await readFile(join(fixture.stage,'src/worker/GameRoom.ts'),'utf8');
   assert.match(room,/const desired = this.matchRoom\?\.startsWith\('graybox-benchmark-ai-'\) \? Math.max\(0, MAX_PLAYERS - humans\)/);
-  assert.match(room,/roster.splice\(this.matchRoom\?\.startsWith\('graybox-benchmark-ai-'\) \? Math.max\(0, MAX_PLAYERS - humans\)/);
-  assert.match(room,/if \(this.matchRoom && this.players.size >= MAX_PLAYERS && this.botRoster.length\)/);
+  assert.match(room,/if \(this.matchRoom\) roster = roster.slice\(0, this.matchRoom.startsWith\('graybox-benchmark-ai-'\) \? Math.max\(0, MAX_PLAYERS - humans\)/);
+  assert.match(room,/if \(this.players.size >= MAX_PLAYERS && this.botRoster.length\)/);
   assert.match(room,/Private fixture expired/);
   assert.doesNotMatch(room,/if \(this.matchRoom && !this.humanSlots\(\)\) return/);
   assert.match(await readFile(join(fixture.stage,'src/worker/capacityTest.ts'),'utf8'),/lobby-status/);
+ }finally{await rm(out,{recursive:true,force:true});}
+});
+
+test('private fixture allows an explicit zero-bot solo playtest without opening 1–7 bot rosters',async()=>{
+ const out=await mkdtemp(join(tmpdir(),'rat-zero-bots-'));
+ try{
+  await assert.rejects(prepareFixture(out,{hosted:true,expiresAt:123456,serverBots:1,maxPlayers:10}),/0 or 8/);
+  await assert.rejects(prepareFixture(out,{hosted:true,expiresAt:123456,serverBots:7,maxPlayers:10}),/0 or 8/);
+  const fixture=await prepareFixture(out,{hosted:true,expiresAt:123456,serverBots:0,maxPlayers:10});
+  assert.equal(fixture.serverBots,0);
+  assert.match(await readFile(join(fixture.stage,'src/shared/botRoster.ts'),'utf8'),/length:0/);
+  assert.ok(fixture.overrides.includes('private solo playtest: zero server bots'));
  }finally{await rm(out,{recursive:true,force:true});}
 });
 
@@ -85,7 +97,7 @@ test('bot experiments are isolated to explicit private room names and keep norma
   }
   assert.equal(resolve('graybox-benchmark-match-bot-baseline-r1'),'baseline');
   assert.match(room,/privateBotExperiment\(this.matchPool/);
-  assert.match(room,/MAX_PLAYERS - humans\) : humans \? Math.max\(0, 8 - humans\) : 0/);
+  assert.match(room,/MAX_PLAYERS - humans\) : humans \? Math.min\(this.ensureRoundBotRoster\(humans\), MAX_PLAYERS - humans\) : 0/);
   assert.doesNotMatch(await readFile(new URL('../../src/worker/GameRoom.ts',import.meta.url),'utf8'),/privateBotExperiment/);
  }finally{await rm(out,{recursive:true,force:true});}
 });

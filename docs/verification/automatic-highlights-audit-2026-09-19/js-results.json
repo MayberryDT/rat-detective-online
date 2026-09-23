@@ -1,0 +1,25 @@
+{
+  "concurrent_native_responses": [
+    {
+      "request": 1,
+      "reply": "message-1"
+    },
+    {
+      "request": 2,
+      "reply": "message-1"
+    }
+  ],
+  "enable_after_join": {
+    "session_start_attempts_before_enable": 1,
+    "session_start_attempts_after_enable_and_three_heartbeats": 1,
+    "bridge_claims_live": true,
+    "immediate_ping_count": 0
+  },
+  "detector": {
+    "launch_rise_units": 40,
+    "launch_age_ms": 2000,
+    "spectacular_launch_markers": 0,
+    "launcher_escape_markers": 0,
+    "win_markers_after_round_reset_and_snapshot": 0
+  }
+}

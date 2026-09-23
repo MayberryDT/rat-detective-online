@@ -13,7 +13,7 @@ import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_LIFETIME, BALL_RADIUS } from './ballTuning';
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
     COUNTERFEIT_IDS,
-    type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose } from './chaosState';
+    type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine } from './chaosState';
 import { hasIronclad, mergePickup, activeBuffs, buffExpired, PICKUP_TUNING, resolvePickupPoints,
     type BuffMap, type PickupKind, type PickupPoint } from './pickups';
 import type { WorldSpec } from './worldSpec';
@@ -23,6 +23,10 @@ import { AssignmentRules } from './AssignmentRules';
 import { activeDestination, ASSIGNMENT_DESTINATIONS, destinationPoint, restoreAssignment, type AssignmentState, type DestinationId } from './assignments';
 
 const caseCarryRotation=new C.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
+
+/** A launched case lands rather than ping-ponging: balls keep their 0.9 bounce,
+ * but a heavy briefcase sheds most of its speed on each ground contact. */
+const LAUNCHED_CASE_RESTITUTION = .35;
 
 const outsideCity=(x:number,z:number)=>x<CITY_BOUNDS.min||x>CITY_BOUNDS.max||z<CITY_BOUNDS.min||z>CITY_BOUNDS.max;
 
@@ -35,6 +39,9 @@ interface CaseRuntime {
     id:string;body:C.Body;owner:string|null;previousOwner:string|null;missileOwner?:string;
     hitAfter:Map<string,number>;pickupAfter:number;returningUntil:number;looseSince:number;
     scale:number;lastSpawn:Vec3Data;armed:boolean;
+    /** Ridden a municipal launcher pad. Swept flight with its own lift cap, and
+     * exempt from the loose-case recovery watchdog until it settles. */
+    launched:boolean;launchLift:number;
     /** Planted Evidence counterfeit: a hazard that never equips or grants objective status. */
     fake:boolean;
 }
@@ -165,7 +172,8 @@ export class ChaosSimulation {
         body.addShape(new C.Box(new C.Vec3(.15,.035,.04)),new C.Vec3(0,.43,0));
         for(const x of [-.12,.12])body.addShape(new C.Box(new C.Vec3(.0275,.065,.04)),new C.Vec3(x,.36,0));
         const c:CaseRuntime={id,body,owner:null,previousOwner:null,hitAfter:new Map(),pickupAfter:0,
-            returningUntil:0,looseSince:this.now,scale:1,lastSpawn:CASE_HOME,armed:false,fake};
+            returningUntil:0,looseSince:this.now,scale:1,lastSpawn:CASE_HOME,armed:false,
+            launched:false,launchLift:0,fake};
         // A counterfeit is planted, not thrown: park it exactly where it was placed
         // so a validated spawn can never drift into geometry or a passing rat.
         if(fake){body.type=C.Body.STATIC;body.mass=0;body.collisionFilterMask=16;body.updateMassProperties();}
@@ -397,10 +405,16 @@ export class ChaosSimulation {
         const pad=machine.pad;
         const nearby=[...this.players.values()].filter(p=>p.hp>0 && Math.abs(p.y-pad.y)<2 &&
             Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius);
+        // Loose evidence rides the pad too. Counterfeits stay planted: they are
+        // static hazards by construction, never thrown. A carried case needs no
+        // handling here, because carry() pins it to its rat every tick.
+        const caseRiders=[...this.cases.values()].filter(c=>!c.fake&&!c.owner&&!c.returningUntil&&
+            Math.abs(c.body.position.y-pad.y)<2 && Math.hypot(c.body.position.x-pad.x,c.body.position.z-pad.z)<=pad.radius);
         // Fire even when empty: seeing the remote mechanism activate teaches
         // players which launcher this trigger operates. Occupants alone receive impulses.
         this.pressure.serial++;cooldowns[machine.id]=this.now+machine.cooldownMs;
         this.pressure.until=cooldowns[PRESSURE_LAUNCH.id]??0;
+        for(const c of caseRiders)this.launchCase(c,machine);
         // Keep other stations' outstanding events. A rat can only occupy one pad,
         // and its newest impulse replaces an older event if launched again.
         const selected=new Set(nearby.map(p=>p.id));
@@ -495,7 +509,7 @@ export class ChaosSimulation {
     }
     private carry(p:PlayerData,c=this.primaryCase){
         this.scaleCase(1,c);
-        c.missileOwner=undefined;c.hitAfter.clear();c.armed=false;
+        c.missileOwner=undefined;c.hitAfter.clear();c.armed=false;c.launched=false;
         const q=new C.Quaternion(p.meshQx,p.meshQy,p.meshQz,p.meshQw);q.normalize();
         q.vmult(vec(CASE_HAND),c.body.position);
         c.body.position.vadd(new C.Vec3(p.x,p.y,p.z),c.body.position);
@@ -594,11 +608,13 @@ export class ChaosSimulation {
     private stepBodies(dt:number,playing:boolean){
         // Bound ordinary travel to .8 units per substep; swept world checks catch thin walls.
         // Swept rat checks cover the entire path, including between network ticks.
-        const missiles=[...this.cases.values()].filter(c=>this.caseDangerous(c));
+        // Launched evidence rides the same swept integration as weaponized
+        // missiles: at 90 m/s a dynamic body tunnels thin walls between substeps.
+        const missiles=[...this.cases.values()].filter(c=>this.caseDangerous(c)||this.caseLaunched(c));
         const caseMotion=missiles.map(c=>({c,p:c.body.position.clone(),v:c.body.velocity.clone()}));
         // Weaponized cases have their own continuous sweep. They must not force
         // extra Cannon steps or repeat all nine world rays on every substep.
-        const fastest=Math.max(0,...[...this.cases.values()].filter(c=>!c.owner&&!this.caseDangerous(c)).map(c=>c.body.velocity.length()),...[...this.corpses.values()].map(c=>c.body.velocity.length()));
+        const fastest=Math.max(0,...[...this.cases.values()].filter(c=>!c.owner&&!this.caseDangerous(c)&&!this.caseLaunched(c)).map(c=>c.body.velocity.length()),...[...this.corpses.values()].map(c=>c.body.velocity.length()));
         const substeps=Math.max(1,Math.min(4,Math.ceil(fastest*dt/.8)));
         for(const c of missiles){c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;}
         for(let sub=0;sub<substeps;sub++){
@@ -637,6 +653,26 @@ export class ChaosSimulation {
     private caseDangerous(c=this.primaryCase){
         return !c.owner&&c.armed&&this.incidentActive('evidence-tampering');
     }
+    /** A case is a launcher rider only while it is genuinely in flight. */
+    private caseLaunched(c:CaseRuntime):boolean{return c.launched&&!c.owner&&!c.returningUntil;}
+    /** Flight is over once the case is slow and supported again. */
+    private caseSettled(c:CaseRuntime,p:C.Vec3):boolean{
+        if(c.body.velocity.length()>T.casePickupMaxSpeed)return false;
+        if(p.y<=1.5)return true;
+        return isReachableLandmarkPosition(p.x,p.y,p.z)||isReachableVehiclePosition(p.x,p.y,p.z);
+    }
+    /** Pad impulse, matching the rat's own launcher velocity for that machine. */
+    private launchCase(c:CaseRuntime,machine:LaunchMachine=PRESSURE_LAUNCH){
+        const velocity=launcherVelocity(machine);
+        c.launched=true;c.launchLift=velocity.y;
+        // The watchdog treats a slow, high, unsupported case as lost. A case on a
+        // pad has already been loose for seconds, so its apex would be swallowed.
+        c.looseSince=this.now;
+        c.body.type=C.Body.DYNAMIC;c.body.collisionFilterMask=1|8|16;c.body.updateMassProperties();
+        c.body.velocity.set(velocity.x,velocity.y,velocity.z);
+        c.body.angularVelocity.set(0,3.5,0);
+        c.body.wakeUp();
+    }
     private hitCasePath(from:C.Vec3,to:C.Vec3,velocity:C.Vec3,playing:boolean,c=this.primaryCase){
         if(!playing||velocity.length()<8)return;
         const delta=to.vsub(from),length=delta.lengthSquared();
@@ -658,7 +694,7 @@ export class ChaosSimulation {
         }
     }
     private launchCaseMissile(c:CaseRuntime,incoming?:C.Vec3){
-        c.armed=true;c.hitAfter.clear();c.returningUntil=0;
+        c.armed=true;c.hitAfter.clear();c.returningUntil=0;c.launched=false;
         c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;c.body.wakeUp();c.looseSince=this.now;
         if(incoming&&incoming.lengthSquared()>.01){
             const kick=incoming.clone();kick.normalize();
@@ -703,7 +739,14 @@ export class ChaosSimulation {
     private stepCaseMissile(dt:number,playing:boolean,c=this.primaryCase){
         const body=c.body;
         body.velocity.y+=BALL_GRAVITY*dt;
-        body.velocity.y=Math.min(I.caseMaxLift,body.velocity.y);
+        // A launched case keeps its pad impulse; the weaponized missile cap stays
+        // low so redirected evidence never becomes a rising rocket.
+        const lift=c.launched?c.launchLift:I.caseMaxLift;
+        body.velocity.y=Math.min(lift,body.velocity.y);
+        // Swept integration owns translation, so Cannon never gets to apply the
+        // body's damping. Mirror its formula for launched flight or the case
+        // never loses energy and ping-pongs off the ground forever.
+        if(c.launched)body.velocity.scale(Math.pow(1-body.linearDamping,dt),body.velocity);
         // Sweep the center and eight rotated corners. Even at missile speed a
         // thin wall intercepts the case before it can cross between physics ticks.
         const offsets=[new C.Vec3()];
@@ -726,8 +769,8 @@ export class ChaosSimulation {
             body.position.vadd(normal.scale(.025),body.position);
             const dot=body.velocity.dot(normal);
             if(dot<0)body.velocity.vadd(normal.scale(-2*dot),body.velocity);
-            body.velocity.scale(BALL_RESTITUTION,body.velocity);
-            if(normal.y>.65)body.velocity.y=Math.max(I.caseBounceLift,Math.min(I.caseMaxLift,body.velocity.y));
+            body.velocity.scale(c.launched?LAUNCHED_CASE_RESTITUTION:BALL_RESTITUTION,body.velocity);
+            if(normal.y>.65)body.velocity.y=Math.max(I.caseBounceLift,Math.min(lift,body.velocity.y));
             this.impacts.push({p:data(end),n:data(normal),surface:true,foley:'case-bounce',energy:Math.min(300,body.velocity.length())});
             remaining*=1-fraction;
         }
@@ -739,8 +782,9 @@ export class ChaosSimulation {
         }
         // Replenish lateral motion only. Boosting total velocity turned a floor
         // rebound into an ever-rising rocket, especially after a shot claimed it.
+        // A launched case is exempt: it must be allowed to settle and be collected.
         const lateral=Math.hypot(body.velocity.x,body.velocity.z);
-        if(lateral<I.caseRicochetMinSpeed){
+        if(!c.launched&&lateral<I.caseRicochetMinSpeed){
             const yaw=lateral>.01?Math.atan2(body.velocity.z,body.velocity.x):Math.atan2(c.body.angularVelocity.x,-c.body.angularVelocity.z);
             body.velocity.x=Math.cos(yaw)*I.caseRicochetMinSpeed;body.velocity.z=Math.sin(yaw)*I.caseRicochetMinSpeed;
         }
@@ -905,6 +949,7 @@ export class ChaosSimulation {
             c.body.previousPosition.copy(c.body.position);c.body.interpolatedPosition.copy(c.body.position);
             c.body.updateAABB();c.body.wakeUp();c.hitAfter.clear();
             c.previousOwner=null;c.pickupAfter=0;c.returningUntil=0;c.looseSince=this.now;c.armed=false;c.missileOwner=undefined;
+            c.launched=false;
             const next=activeDestination(rules.state);
             this.tell(`PAPERWORK DELIVERED! ${holder.name} · ${rules.state.deliveries[holder.id]}/3 · CASE RELOCATED · NEXT: ${next?ASSIGNMENT_DESTINATIONS[next].label:''}`);
         }
@@ -1094,9 +1139,20 @@ export class ChaosSimulation {
         if(c.fake)return;
         if(!c.owner){
             const p=c.body.position;
+            // A launched case is mid-flight, not lost. Its apex is slow and high,
+            // which is exactly the shape the recovery watchdog hunts for, so the
+            // flight is exempt until the case settles or genuinely escapes.
+            const settled=this.caseSettled(c,p);
+            if(c.launched&&(settled||p.y< -9||outsideCity(p.x,p.z))){
+                // Flight integration leaves the body kinematic; hand it back to
+                // Cannon and give it the ordinary grace before any recovery.
+                c.launched=false;c.looseSince=now;
+                c.body.type=C.Body.DYNAMIC;c.body.collisionFilterMask=1|8|16;c.body.updateMassProperties();
+            }
             const invalid=!Number.isFinite(p.x+p.y+p.z)||outsideCity(p.x,p.z)||p.y< -9 ||
+                (!c.launched &&
                 (c.body.velocity.length()<.4 && p.y>1.5 && !isReachableLandmarkPosition(p.x,p.y,p.z) && !isReachableVehiclePosition(p.x,p.y,p.z) && now-c.looseSince>4000) ||
-                (now-c.looseSince>T.stuckMs && this.embedded(p));
+                (now-c.looseSince>T.stuckMs && this.embedded(p)));
             if(invalid && !c.returningUntil){
                 // Incident missiles never blink out or wait in recovery. A
                 // genuinely escaped case re-enters immediately for the full incident.
@@ -1185,11 +1241,13 @@ export class ChaosSimulation {
         this.lastSurgePulse=0;this.dispatchActivator=null;
         this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
-        this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;}
+        this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){
         c.owner=saved.owner&&!this.isCaseHolder(saved.owner)?saved.owner:null;
         c.previousOwner=saved.previousOwner;c.pickupAfter=saved.pickupAfter;c.missileOwner=saved.missileOwner;
         c.returningUntil=saved.returningUntil;c.looseSince=time;this.scaleCase(c.owner?1:CASE_LOOSE_SCALE,c);
+        // A restored case is never mid-flight; the checkpoint carries its velocity.
+        c.launched=false;
         c.body.position.copy(vec(saved.p));c.body.velocity.copy(vec(saved.v));c.body.angularVelocity.copy(vec(saved.spin));
         Object.assign(c.body.quaternion,saved.q);
         // Counterfeits stay parked where they were planted, exactly like a fresh one.

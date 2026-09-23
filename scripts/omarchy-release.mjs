@@ -9,6 +9,8 @@ import { execFileSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const id = 'co.animasai.rat-detective';
 const receiptName = 'release.json';
+const connectorId = 'co.animasai.rat-detective.highlights-connector';
+const connectorFiles = ['README.md', 'content.js', 'manifest.json', 'native-host.json', 'service-worker.js'];
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const exists = async path => { try { await stat(path); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; } };
 
@@ -47,7 +49,10 @@ export async function exportPlugin(source, destination, { validate = () => {} } 
   await mkdir(dirname(destination), { recursive:true });
   const staging = await mkdtemp(join(dirname(destination), '.rat-export-'));
   try {
-    await cp(source, staging, { recursive:true, filter: path => !['.git','__pycache__',receiptName].includes(path.split('/').at(-1)) });
+    await cp(source, staging, { recursive:true, filter: path => {
+      const name = path.split('/').at(-1);
+      return name !== '.git' && name !== '__pycache__' && path !== join(source, receiptName);
+    } });
     const { manifest, files } = await validatePackage(staging);
     const receipt = { schemaVersion:1, id, version:manifest.version, contentHash:hash(JSON.stringify(files)), files };
     await writeFile(join(staging, receiptName), JSON.stringify(receipt, null, 2) + '\n');
@@ -55,6 +60,46 @@ export async function exportPlugin(source, destination, { validate = () => {} } 
     await rename(staging, destination);
     return receipt;
   } finally { await rm(staging, { recursive:true, force:true }); }
+}
+
+async function stageProductionConnector(source, destination) {
+  await mkdir(destination, { recursive:true });
+  for (const name of connectorFiles) {
+    const sourcePath = join(source, name);
+    const info = await stat(sourcePath);
+    if (!info.isFile()) throw new Error(`Missing production connector file: ${name}`);
+    await cp(sourcePath, join(destination, name));
+  }
+  const manifest = JSON.parse(await readFile(join(destination, 'manifest.json'), 'utf8'));
+  if (manifest.manifest_version !== 3 || typeof manifest.version !== 'string') throw new Error('Invalid production connector manifest');
+  const files = await inventory(destination);
+  const receipt = { schemaVersion:1, id:connectorId, version:manifest.version, contentHash:hash(JSON.stringify(files)), files };
+  await writeFile(join(destination, receiptName), JSON.stringify(receipt, null, 2) + '\n');
+  return receipt;
+}
+
+export async function exportDistribution(pluginSource, connectorSource, destination, { validate = () => {} } = {}) {
+  pluginSource = resolve(pluginSource); connectorSource = resolve(connectorSource); destination = resolve(destination);
+  const connectorDestination = destination.replace(/\/?$/, '') + '.connector';
+  if (await exists(connectorDestination)) throw new Error('Connector export destination already exists; choose a fresh directory');
+  await mkdir(dirname(destination), { recursive:true });
+  const composite = await mkdtemp(join(dirname(destination), '.rat-distribution-'));
+  const connectorStaging = await mkdtemp(join(dirname(destination), '.rat-connector-'));
+  try {
+    await cp(pluginSource, composite, { recursive:true, filter: path => {
+      const name = path.split('/').at(-1);
+      return name !== '.git' && name !== '__pycache__' && path !== join(pluginSource, receiptName) && path !== join(pluginSource, 'connector');
+    } });
+    const packagedConnector = join(composite, 'connector', 'extension');
+    const connectorReceipt = await stageProductionConnector(connectorSource, packagedConnector);
+    const release = await exportPlugin(composite, destination, { validate });
+    await cp(packagedConnector, connectorStaging, { recursive:true });
+    await rename(connectorStaging, connectorDestination);
+    return { ...release, connector:connectorDestination, connectorContentHash:connectorReceipt.contentHash };
+  } finally {
+    await rm(composite, { recursive:true, force:true });
+    await rm(connectorStaging, { recursive:true, force:true });
+  }
 }
 
 async function readReceipt(folder) {
@@ -144,7 +189,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const state = options.state || join(homedir(),'.local/state/rat-detective/plugin-backups');
     const validate = folder => execFileSync('omarchy',['plugin','validate',folder],{stdio:'pipe'});
     let result;
-    if (operation === 'export' && options.out) result = await exportPlugin(options.source || join(root,'omarchy/plugin'),options.out,{validate});
+    if (operation === 'export' && options.out) {
+      result = await exportDistribution(options.source || join(root,'omarchy/plugin'),join(root,'omarchy/extension'),options.out,{validate});
+    }
     else if (operation === 'install' && options.source) result = await installPlugin(options.source,options.target || join(homedir(),'.config/omarchy/plugins',id),state,{validate});
     else if (operation === 'rollback') result = await rollbackPlugin(state,{validate});
     else throw new Error('Usage: node scripts/omarchy-release.mjs export --out=PATH | install --source=EXPORT [--target=PATH] [--state=PATH] | rollback [--state=PATH]');

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
+import { createRoundBotRoster, nextRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
 import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from '../../src/shared/ratNames';
 
 describe('round bot roster', () => {
-  it.each([[0, 8], [0.25, 8], [0.5, 9], [0.999999, 9]])('samples %s into %s bots', (random, count) => {
+  it.each([[0, 6], [0.25, 7], [0.5, 8], [0.75, 9], [0.999999, 9]])('samples %s into %s bots', (random, count) => {
     const roster = createRoundBotRoster([], () => random);
     expect(roster).toHaveLength(count);
     expect(roster.map(bot => bot.id)).toEqual(PERSISTENT_BOT_IDS.slice(0, count));
@@ -18,5 +18,15 @@ describe('round bot roster', () => {
     const first = createRoundBotRoster([], () => 0);
     const next = createRoundBotRoster(first.map(bot => bot.name), () => 0);
     expect(next.every(bot => !first.some(previous => previous.name === bot.name))).toBe(true);
+  });
+  it('keeps overlapping names and only names newcomers', () => {
+    const first = createRoundBotRoster([], () => 0);
+    const grown = nextRoundBotRoster(first, first.map(bot => bot.name), () => 0.999999);
+    expect(grown).toHaveLength(9);
+    expect(grown.slice(0, 6).map(bot => bot.name)).toEqual(first.map(bot => bot.name));
+    expect(grown.slice(6).every(bot => !first.some(previous => previous.name === bot.name))).toBe(true);
+    const shrunk = nextRoundBotRoster(grown, grown.map(bot => bot.name), () => 0);
+    expect(shrunk).toHaveLength(6);
+    expect(shrunk.map(bot => bot.name)).toEqual(grown.slice(0, 6).map(bot => bot.name));
   });
 });

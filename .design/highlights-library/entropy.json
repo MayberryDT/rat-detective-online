@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "artifact_type": "design-direction-entropy",
+  "generated_at": "2026-09-21T05:54:31.783470+00:00",
+  "seed": "fEt3vDprYLrcsEAQNBKgNerJUAXbJyLo8ZoIpmNEvL4k4hqBgFIjUWDLzwyx43B9tK1AeU5aVetOwRnl6xLHaFxjoIALzlKM",
+  "seed_sha256": "227c8ad4e2c38f69ec7ed66d706b0a5e028a1bb33471d9489f261bbe7ef5c35f",
+  "vector": {
+    "topology": 3,
+    "continuity": 80,
+    "material_state": 69,
+    "force": 127,
+    "formation": 48,
+    "temporal": 56,
+    "instrumentality": 87,
+    "typography": 178,
+    "chromatic": 233,
+    "density": 65,
+    "media": 36
+  }
+}

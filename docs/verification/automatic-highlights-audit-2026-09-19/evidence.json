@@ -1,0 +1,141 @@
+{
+  "audited_at": "2026-09-19T22:28:39.390140-07:00",
+  "git_head": "918ed23ce4868426b091b7eeb165f5dd5af17fbf",
+  "baseline_note": "Working tree including untracked feature files; unrelated dirty production work preserved.",
+  "installed": {
+    "plugin_version": "1.2.0",
+    "repository_version": "1.3.0",
+    "installed_highlights_window": false,
+    "durable_highlights_helper": false,
+    "chromium_native_host": false
+  },
+  "checks": {
+    "existing_subprocess_tests": {
+      "passed": 9,
+      "log": "existing-python-tests.txt"
+    },
+    "existing_client_tests": {
+      "passed": 10,
+      "log": "existing-client-tests.txt"
+    },
+    "existing_plugin_model_tests": {
+      "passed": 1,
+      "log": "existing-model-tests.txt"
+    },
+    "python_defect_reproductions": {
+      "playback_contract": {
+        "files_exist": true,
+        "rows_have_path": false,
+        "ui_requires": "selected.path"
+      },
+      "reel": {
+        "events_ms": [
+          100000,
+          200000,
+          300000
+        ],
+        "input_clips": 3,
+        "output_moments": 1,
+        "output_trim_ms": [
+          0,
+          3000
+        ],
+        "actual_event_offset_in_each_clip_ms": 10000
+      },
+      "retention": {
+        "recorded_bytes": 4294967296,
+        "unprotected_clips": 3,
+        "can_save_one_byte_before": false,
+        "clips_pruned": 0,
+        "can_save_one_byte_after": false
+      },
+      "initial_timing": "timing not calibrated",
+      "session_binding": {
+        "unrelated_marker_status": "accepted",
+        "unrelated_end_status": "accepted",
+        "primary_session_stopped": true
+      },
+      "setup": {
+        "source_confirmed_without_portal_evidence": true,
+        "recorder_started_without_joined_session": true
+      },
+      "audio_cleanup_on_disable": {
+        "calls": 0
+      },
+      "invalid_request_uncaught_exception": "ProtocolError"
+    },
+    "js_defect_reproductions": {
+      "concurrent_native_responses": [
+        {
+          "request": 1,
+          "reply": "message-1"
+        },
+        {
+          "request": 2,
+          "reply": "message-1"
+        }
+      ],
+      "enable_after_join": {
+        "session_start_attempts_before_enable": 1,
+        "session_start_attempts_after_enable_and_three_heartbeats": 1,
+        "bridge_claims_live": true,
+        "immediate_ping_count": 0
+      },
+      "detector": {
+        "launch_rise_units": 40,
+        "launch_age_ms": 2000,
+        "spectacular_launch_markers": 0,
+        "launcher_escape_markers": 0,
+        "win_markers_after_round_reset_and_snapshot": 0
+      }
+    }
+  },
+  "limits": [
+    "No real desktop capture or audio routing",
+    "No native rendered UI or Qt playback acceptance",
+    "No production asset fetch or deployment",
+    "No independent Cursor review"
+  ],
+  "source_sha256": {
+    "docs/handoffs/automatic-highlights-implementation-plan.md": "f7f0b34fad50c89d3f44e6f3ad0b8fe4b14ec8a6b1a468724a04ad7feff3e3f0",
+    "docs/verification/automatic-highlights-platform.md": "1f82c8c4e68ba8484043bb96307c14516d639fff6a69706631689df8aae45dcf",
+    "omarchy/extension/content.js": "c32a2d39e40f90ad562324b28862b6e4332e8075c7320f32d135fa541b2a88b3",
+    "omarchy/extension/manifest.dev.json": "ac8f51b625aa0a8bc01f1d24025b4146335c11f4de23d702f427f430042cfb91",
+    "omarchy/extension/manifest.json": "0e2f290eaa09a4ad510497a09f653d74459887cf2df30ca32dc2d3e831fdc34e",
+    "omarchy/extension/native-host.json": "20a1913e19f33eeead5e5c9e2f7f850750118f4153c5d4ff9a2ca31287937a3e",
+    "omarchy/extension/service-worker.js": "ad2f463b840e157cd60f5b4248927d654babca60fa6e7d429e47e6cb135b9fed",
+    "omarchy/plugin/Panel.qml": "905c12f071583f95e3831dd5977a2d2f494414e2da7cb871e7f6dc4d5ccc5d5e",
+    "omarchy/plugin/Service.qml": "90963ae21f813fc301d9f8312a216ce49813d1242f7a7f4b6bc4591aae2a0f36",
+    "omarchy/plugin/components/HighlightsWindow.qml": "c971d277e0c58ea80cb072155cab56f0cbd2930e8f4fb595d21cac9ad1494b99",
+    "omarchy/plugin/manifest.json": "e01e0bd5e5f342cf092f7cd3083043487c573137f4dea98b350d3748bc7a607c",
+    "omarchy/plugin/scripts/highlights/__init__.py": "e6e5bf33f997df5b1e89b1a870c13b44ec1949cad2ddb9508e58e281eebf010e",
+    "omarchy/plugin/scripts/highlights/audio.py": "5ee7f7aa4d958d88847e4d70cb4529725cc4fd5f049971edb02ad040ef7adff5",
+    "omarchy/plugin/scripts/highlights/capture.py": "a5670dbd4c9965c426d1df6e06b8815aa9aeea1afed5b78a6647c249005b1ef1",
+    "omarchy/plugin/scripts/highlights/clock.py": "33f645c2cadbc038bbbd5a00f117bf8d1dcab9771180183eaf1e887336610345",
+    "omarchy/plugin/scripts/highlights/export.py": "bc62fa4d70b9a1e4f833aa7fc7e59d1a34487cb877c9a3483a7c993b12cbc83c",
+    "omarchy/plugin/scripts/highlights/framing.py": "2b43d1368f8ca51d754a7051e2bb12716e621a07ff69dbe3bb707bd32537ee9c",
+    "omarchy/plugin/scripts/highlights/identity.py": "52787d74e1246606d83ab3169b6200be6a8c8cb84285408ab8170990982c28d5",
+    "omarchy/plugin/scripts/highlights/library.py": "4ad3c024a0f2dca55bfe390fcafd3f9eafcbff257a1a94297eb0f8548196e405",
+    "omarchy/plugin/scripts/highlights/paths.py": "0f9130af95e7a1d05cbd8c78f655bf8109e8778f9a7a06828d6c782de14aa5f6",
+    "omarchy/plugin/scripts/highlights/protocol.py": "e713bbb9e5f79c5e7e51beef6ceaed0192c15eae977d41f2a8384a24801ad98c",
+    "omarchy/plugin/scripts/highlights/redact.py": "f9b706196db75c79786ca5869396d574d7e714d6326124cc943b314d153173c1",
+    "omarchy/plugin/scripts/highlights/reel.py": "0fcf1fcc2303f1131b7d2978f23db6382ceb26fab647be29467b6250cdcc4596",
+    "omarchy/plugin/scripts/highlights/scheduler.py": "9a9175320b2d7d053d9dd49ff779a6da8af7a4f7e14864918407d69a092e3606",
+    "omarchy/plugin/scripts/highlights/service.py": "592bae046faad9b7aa6fec4020a712b5bc548ca9bdc036558e21a6393c1041d0",
+    "omarchy/plugin/scripts/highlights/tuning.py": "c00d962ad950847147a6e5c248aee3026e45eaabf96d9ead11d2db6d67f29998",
+    "omarchy/plugin/scripts/install-webapp.sh": "3146c2317b0227a1e3d91e115e3b53fe6da4d5c1bf29ed4945b8da6b1d42c71e",
+    "omarchy/plugin/scripts/rat-detective-desktop.py": "9a55c8ba1541f0a1d4294a2404595e65ad078ef2bba6bc90409b105716f7488b",
+    "omarchy/plugin/scripts/rat-detective-highlights.py": "991a1de6c99359ec84ae432dedd6727a34acf93571aac8bfb46128510bde022e",
+    "omarchy/plugin/scripts/rat-detective-native-host.py": "d91ca27e2018607dab900c932180f0101ad746c5c60f847d4ea14b5d4e0f1a1f",
+    "omarchy/plugin/scripts/uninstall-webapp.sh": "c70e5af300b3cf04de7d9ec61a80ef965ac5cb8193d12dbcd49dce2ebda3c636",
+    "scripts/omarchy-release.mjs": "bac7bf8091e2ebfc6672901d39bb0f0813877b876790b4a7472eddcd65890e98",
+    "src/highlights/HighlightBridge.ts": "1f89d2d1d2b81cb91b201c8dc1e2832d05ae9b303450b2f8120e63141c062716",
+    "src/highlights/HighlightDetector.ts": "d168e10895000027978ff095fcca55067b32236e4f992167a65f5563ba480e44",
+    "src/highlights/protocol.ts": "914b6eaa9b617fef534c399ce1e220d90fdd136ae0c9225f7ee80b38f6683b4b",
+    "src/session/GameSession.ts": "6ee250567cc1a93ff501e1fd82db50df102f089bb83ba3e15e10f7bb5d574cd1"
+  },
+  "fixture_sha256": {
+    "reproduce.py": "8363d8084c9e7439d5f5690bc2a3740139c6f02ec21b997df6b2d261801a6486",
+    "reproduce.cjs": "cc95cd78d13c8e2d7288302c99f0e6d8606ba868cbe7f93609f9dfe97b245e46"
+  }
+}

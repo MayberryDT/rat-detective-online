@@ -38,6 +38,7 @@ import {NetplayAuditLog} from '../shared/netplay';
 import {createShotId} from '../weapons/shotId';
 import type {CameoView,CameoVisitor} from '../cameos/CameoView';
 import {loadCameos} from '../cameos/loadCameos';
+import {HighlightBridge} from '../highlights/HighlightBridge';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
@@ -83,6 +84,16 @@ export class GameSession {
     private touch?: TouchControls;
     private roundWon = false;
     private releasePreparedModels?:()=>void;
+    private readonly highlights = new HighlightBridge();
+    private lastHighlightObserve = 0;
+    private lastChaos: ChaosState | null = null;
+    private localLaunchY = 0;
+    private localLaunchAt = 0;
+    private highlightBaseline = true;
+    private seenHighlightLaunches = new Set<string>();
+    private highlightCorpseSeen = new Map<string, number>();
+    private readonly highlightFrustum = new THREE.Frustum();
+    private readonly highlightMatrix = new THREE.Matrix4();
 
     constructor(renderer: THREE.WebGLRenderer, initialWorld?: WorldSpec, prepared: {
         title?: TitleScreen; transport?: NetworkManager; music?: Pick<SessionMusic, 'start' | 'unlock' | 'dispose'>;
@@ -122,6 +133,7 @@ export class GameSession {
             this.hud.setConnection(state, message);
             this.scoreboard.setAvailable(state === 'playing');
             this.touch?.setPlaying(state === 'playing');
+            if (state !== 'playing') this.highlights.setIdentity(false, this.observing);
             if (state === 'playing') {
                 this.hud.enterPlaying();
                 if(message)this.hud.addKillFeed(message);
@@ -133,6 +145,7 @@ export class GameSession {
         };
         this.bindInput();
         this.title.focus();
+        this.highlights.attach();
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 
@@ -182,12 +195,6 @@ export class GameSession {
         document.addEventListener('keydown',event=>{
             if(!event.repeat&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&!this.title.settings?.isOpen&&document.pointerLockElement===this.stage.renderer.domElement&&actionBound('fire',event.code)){event.preventDefault();this.shoot();}
         },options);
-        window.addEventListener('resize', () => {
-            const { camera, renderer } = this.stage;
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }, options);
         window.addEventListener('pagehide', () => this.dispose(), options);
     }
 
@@ -260,6 +267,19 @@ export class GameSession {
         this.lastMovementAt = 0;
         this.lastInteractionPosition.set(player.x,player.y+.8,player.z);
         this.pendingInteractions.clear();this.netplay.clear();
+        this.highlightBaseline = true;
+        this.lastChaos = null;
+        this.seenHighlightLaunches.clear();
+        this.highlights.detector.welcome({
+            localId: this.myId,
+            epoch: '',
+            roundId: message.round.assignment?.roundId ?? '',
+            deliverySerial: 0,
+            owner: null,
+            remainingMs: message.round.assignment?.remainingMs ?? null,
+            assignmentId: message.round.assignment?.id ?? '',
+        });
+        this.highlights.setIdentity(!this.observing, this.observing);
         if(!this.observing && normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
             this.bots=new NormalGameBots(this.worldSpec,message.players,{muzzle:(id,position,facing)=>{
                 const entity=this.remotes.get(id);
@@ -278,7 +298,9 @@ export class GameSession {
             case 'chaos':
                 this.gun.setIncident(message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined);
                 this.applyPickupState(message.state);
-                this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);break;
+                this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
+                this.noteHighlightSnapshot(message.state);
+                break;
             case 'welcome': this.welcome(message); break;
             case 'currentPlayers': break; // Atomic welcome already applied the complete state.
             case 'playerJoined': if (message.player.id !== this.myId) this.remotes.add(message.player); break;
@@ -350,6 +372,15 @@ export class GameSession {
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
                 if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName);this.foley.play('hit-confirm');}
+                this.highlights.emit(this.highlights.detector.onDeath({
+                    victimId: message.victimId,
+                    killerId: message.killerId,
+                    eventKey: `${this.lastChaos?.epoch ?? ''}:${message.victimId}:${message.respawnAt}`,
+                    presentedAtMs: performance.now(),
+                    incident: message.incident === true,
+                    local: message.victimId === this.myId,
+                    localKill: message.killerId === this.myId && message.victimId !== this.myId,
+                }));
                 const entity = message.victimId === this.myId ? this.rat?.entity : this.remotes.get(message.victimId);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
                 if (entity && !entity.dead) {
@@ -379,9 +410,23 @@ export class GameSession {
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
-            case 'gameWon': this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment); break;
+            case 'gameWon':
+                this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment);
+                this.highlights.emit(this.highlights.detector.onWin(message.winnerId, performance.now()));
+                break;
             case 'gameReset':
                 this.cameos?.reset();
+                this.highlights.detector.beginRound({
+                    epoch: '',
+                    roundId: message.round?.assignment?.roundId ?? '',
+                    deliverySerial: 0,
+                    owner: null,
+                    remainingMs: message.round?.assignment?.remainingMs ?? null,
+                    assignmentId: message.round?.assignment?.id ?? '',
+                });
+                this.highlightBaseline = true;
+                this.seenHighlightLaunches.clear();
+                this.highlightCorpseSeen.clear();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0);this.rat?.entity.resetReactions();
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0);entity.resetReactions();}
                 this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
@@ -448,9 +493,11 @@ export class GameSession {
 
     private animate(now: number): void {
         if (this.disposed) return;
+        const resized = this.stage.syncViewport();
         // The prepared title backdrop is static; do not spend phone frame time
         // drawing the whole city while somebody is choosing a name.
         if(!this.rat && this.transport.state==='idle'){
+            if(resized)this.stage.renderer.render(this.stage.scene,this.stage.camera);
             this.previousTime=now;
             this.frame=requestAnimationFrame(time=>this.animate(time));return;
         }
@@ -477,6 +524,7 @@ export class GameSession {
             this.touch?.update(now, !!this.rat && !this.rat.entity.dead && this.rat.entity.hp > 0 && !this.roundWon);
             this.checkInteractions(now);
             this.sendMovement(now);
+            this.observeHighlights(now);
             if (this.rat) {
                 const position = this.rat.entity.mesh.position;
                 camera.getWorldDirection(this.direction);
@@ -522,9 +570,63 @@ export class GameSession {
         for(const [id,{entity}] of this.remotes.rats)yield {id,position:entity.mesh.position,dead:entity.dead};
     }
 
+    private noteHighlightSnapshot(state: ChaosState): void {
+        if (!this.highlights?.detectorActive) { this.lastChaos = state; return; }
+        this.lastChaos = state;
+        const presentedAtMs = performance.now();
+        for (const launch of state.pressure?.launches ?? []) {
+            if (launch.playerId !== this.myId || this.seenHighlightLaunches.has(launch.id)) continue;
+            this.seenHighlightLaunches.add(launch.id);
+            this.highlights.detector.noteLocalLaunch(presentedAtMs, this.rat?.entity.mesh.position.y ?? 0);
+            this.localLaunchY = this.rat?.entity.mesh.position.y ?? 0;
+            this.localLaunchAt = presentedAtMs;
+        }
+        this.highlights.emit(this.highlights.detector.onSnapshot({
+            epoch: state.epoch ?? '',
+            roundId: state.assignment?.roundId ?? '',
+            deliverySerial: state.assignment?.deliverySerial ?? 0,
+            owner: state.case.owner,
+            remainingMs: state.assignment?.remainingMs ?? null,
+            assignmentId: state.assignment?.id ?? '',
+            lastDeliveryPlayerId: state.assignment?.lastDelivery?.playerId,
+            launches: (state.pressure?.launches ?? []).map(launch => ({id: launch.id, playerId: launch.playerId, at: launch.at})),
+            presentedAtMs,
+            silent: this.highlightBaseline,
+        }));
+        this.highlightBaseline = false;
+    }
+
+    private observeHighlights(now: number): void {
+        if (!this.highlights?.live || !this.lastChaos || now - this.lastHighlightObserve < 100) return;
+        this.lastHighlightObserve = now;
+        const camera = this.stage.camera;
+        this.highlightMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+        this.highlightFrustum.setFromProjectionMatrix(this.highlightMatrix);
+        const local = this.rat?.entity.mesh.position;
+        const live = new Set(this.lastChaos.corpses.map(corpse => corpse.id));
+        for (const id of [...this.highlightCorpseSeen.keys()]) if (!live.has(id)) this.highlightCorpseSeen.delete(id);
+        const corpses = this.lastChaos.corpses.map(corpse => {
+            if (!this.highlightCorpseSeen.has(corpse.id)) this.highlightCorpseSeen.set(corpse.id, now);
+            const point = new THREE.Vector3(corpse.p.x, corpse.p.y, corpse.p.z);
+            const onScreen = this.highlightFrustum.containsPoint(point);
+            const nearby = !local || Math.hypot(point.x - local.x, point.z - local.z) <= 20;
+            const visible = onScreen && nearby && this.gun.sceneryClear(camera.position, point);
+            return {id: corpse.id, presentedAtMs: this.highlightCorpseSeen.get(corpse.id) || now, x: corpse.p.x, y: corpse.p.y, z: corpse.p.z, onScreen, visible};
+        });
+        this.highlights.emit(this.highlights.detector.observePhysical({
+            presentedAtMs: now,
+            localY: this.rat?.entity.mesh.position.y ?? 0,
+            localLaunchedAtMs: this.localLaunchAt || undefined,
+            localLaunchY: this.localLaunchAt ? this.localLaunchY : undefined,
+            nearbyEruption: (this.lastChaos.impacts ?? []).some(hit => hit.cue === 'pop' || hit.cue === 'thud'),
+            corpses,
+        }));
+    }
+
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.highlights.dispose();
         document.body.classList.remove('observing');
         this.title.dispose();
         this.releasePreparedModels?.();this.releasePreparedModels=undefined;

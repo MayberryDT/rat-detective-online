@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "fca966bc6ea9a5f0ced180ea4d12d0abde06fa4832034cb82fa7cadb1e81f596",
+  "verified_at": "2026-09-15T05:52:09.828241+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "canonical-zero-human-eight:registry",
+      "url": "https://registry.npmjs.org/wrangler/4.129.0",
+      "status": 200
+    },
+    {
+      "label": "canonical-zero-human-eight:source",
+      "url": "https://github.com/cloudflare/workers-sdk",
+      "status": 200
+    },
+    {
+      "label": "canonical-zero-human-eight:behavior-repo",
+      "url": "https://github.com/ioquake/ioq3",
+      "status": 200
+    },
+    {
+      "label": "canonical-zero-human-eight:behavior-evidence",
+      "url": "https://github.com/ioquake/ioq3/blob/588393618dbc82e7207c21c6ddecca229944a03a/code/server/sv_main.c",
+      "status": 200
+    },
+    {
+      "label": "canonical-zero-human-eight:platform",
+      "url": "https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/",
+      "status": 200
+    },
+    {
+      "label": "durable-alarm-recovery:behavior-repo",
+      "url": "https://github.com/cloudflare/cloudflare-docs",
+      "status": 200
+    },
+    {
+      "label": "durable-alarm-recovery:behavior-evidence",
+      "url": "https://github.com/cloudflare/cloudflare-docs/blob/976c80e2120fdea5b4e1b1dd0eff2683802da981/src/content/docs/durable-objects/api/alarms.mdx",
+      "status": 200
+    },
+    {
+      "label": "durable-alarm-recovery:platform",
+      "url": "https://developers.cloudflare.com/durable-objects/api/alarms/",
+      "status": 200
+    },
+    {
+      "label": "overflow-sleep-private-exclusion:behavior-repo",
+      "url": "https://github.com/colyseus/colyseus",
+      "status": 200
+    },
+    {
+      "label": "overflow-sleep-private-exclusion:behavior-evidence",
+      "url": "https://github.com/colyseus/colyseus/blob/d84f7881483b5b87c61eb2814b24dc9d5a23fb26/packages/core/src/Room.ts",
+      "status": 200
+    }
+  ]
+}

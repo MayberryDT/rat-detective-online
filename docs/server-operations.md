@@ -1,13 +1,13 @@
 # Server operations
 
-Current code contract, reviewed **2026-09-10**. Source constants take precedence if changed later. Production topology and version receipts are in [live service](live-service.md).
+Current contract, reviewed **2026-09-14**. Source constants take precedence if changed later. Production topology and version receipts are in [live service](live-service.md). The always-alive canonical city is live on Worker `0965112e-c50d-4075-86f7-decd93738f19`; see [the production receipt](verification/canonical-city-2026-09-14.md).
 
 ## Capacity and boundaries
 
 | Limit | Current value |
 | --- | --- |
-| Player ceiling | 16 total per room; up to sixteen humans, with automatic overflow rooms |
-| Public bots | Fill occupied rooms to eight total rats; yield to humans, refill after ten seconds, remove/sleep when empty |
+| Player ceiling | 10 total rats per current production room, with automatic overflow rooms |
+| Public bots | Occupied rooms fill to eight total rats; yield to humans; refill after ten seconds. `public-live-v2` keeps eight named bots with zero humans. Overflow rooms still sleep when empty. |
 | Open connections | 24 per GameRoom including pending joins; excess upgrades receive HTTP 503 |
 | Inbound client message | 8192 bytes |
 | Server message envelope | 65536 bytes; validators and snapshot budgets must agree |
@@ -24,7 +24,7 @@ The transport envelope is x/z ±2000 and y −8 to 250. Movement is also checked
 
 Server simulation advances at 60 Hz, snapshots at roughly 30 Hz, and bot movement at 20 Hz plus before shots. Human movement is immediate subject to input/rate policy. Repeated stationary poses are suppressed after the initial stop update, with a half-second heartbeat. Source simulation timestamps preserve pose spacing when packets arrive in batches.
 
-Outbound events share serialization work; negotiated lossless movement tuples include a shot's pending pose. Delivery ACKs and per-connection budgets bound slow observers, with atomic fragmentation for large logical snapshots. Without humans, automatic public rooms checkpoint and stop bots/physics. The 65536-byte wire envelope still constrains each frame. Preserve bounded physics substeps, ray queries, shared flow-field work and projectile capacity; a larger cap is not automatically safe.
+Outbound events share serialization work; negotiated lossless movement tuples include a shot's pending pose. Delivery ACKs and per-connection budgets bound slow observers, with atomic fragmentation for large logical snapshots. Empty overflow rooms checkpoint and stop bots/physics. The canonical city keeps running with six to nine bots and zero humans. A failed canonical persistent alarm tries a bounded future wake and then rethrows; overflow and private rooms stay unchanged. If storage or `setAlarm` is unavailable, there is no absolute outage guarantee. The 65536-byte wire envelope still constrains each frame. Preserve bounded physics substeps, ray queries, shared flow-field work and projectile capacity; a larger cap is not automatically safe.
 
 Workers clocks may remain frozen during synchronous callbacks. Navigation therefore enforces both 2 ms and 96-expansion bounds. A reported zero-duration tick does not imply zero CPU work. `StaticCityBroadphase` and `SpatialRayQuery` replace the early scene-wide hot paths for the authoritative city; the old small-city Naive/SAP benchmark is historical, not the current architecture.
 
@@ -38,7 +38,7 @@ Workers clocks may remain frozen during synchronous callbacks. Navigation theref
 | AI roster | `persistent-bots-v1` and `persistent-bot-roster-v1` room-state keys |
 | Chaos world | `chaos-v1` snapshots, approximately each second or important signature change |
 | Respawn/reset deadlines | `pending_events` plus the shared Durable Object alarm |
-| Occupied-room AI recovery | 15-second heartbeat integrated with earlier event deadlines; automatic rooms sleep empty |
+| Occupied-room AI recovery | 15-second heartbeat integrated with earlier event deadlines; overflow rooms sleep empty. The canonical city keeps the same 15-second alarm and recovers with six to nine bots when no humans are present. The constructor keeps an existing earlier or due alarm; empty overflow deletes an unneeded one |
 
 Hydration preserves attached players even if their checkpoints are old. Unattached stale humans are pruned after two minutes; active managed bots are exempt. Disabled bot IDs and their pending events are removed when restoring an authoritative active roster. Legacy roster migration keeps the running eleven-bot cast until its next reset.
 
@@ -46,7 +46,7 @@ Version-2 Dispatch Assignments decide the winner; kills remain actual secondary 
 
 ## Diagnostics and incidents
 
-`/health` proves routing; `/status` reports canonical-room humans **and managed bots**, names/K-D, round timing and `bots` count, without positions. Reading status enables public matchmaking policy; it is not a global inventory of every room. Zero players/bots is expected for an empty automatic room.
+`/health` proves routing; `/status` reports canonical-room humans **and managed bots**, names/K-D, round timing and `bots` count, without positions. Reading `/status` enables public matchmaking policy and is the one-time activation of the canonical city; it is not a global inventory of every room. Directory `GET /api/companion/v1/status` does not wake a GameRoom. Empty overflow 0/0 is healthy. For `public-live-v2`, the live contract is eight named bots and zero humans.
 
 Room metrics track membership, pending events and traffic. Room diagnostics track accepted/rejected shots, simulation gaps, callback silence, checkpoint settlement and snapshot traffic. Public Worker logs and local client journals are different sources. Read [playtest diagnostics](playtest-diagnostics.md) before claiming a freeze or invisible-shot cause.
 

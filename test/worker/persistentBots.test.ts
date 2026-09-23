@@ -90,7 +90,7 @@ describe('persistent hosted bots', () => {
       const game = instance as unknown as Internals;
       expect(ctx.getWebSockets()).toHaveLength(0);
       expect(game.world.version).toBe(GRAYBOX_VERSION);
-      expect(game.players.size).toBeGreaterThanOrEqual(8);
+      expect(game.players.size).toBeGreaterThanOrEqual(6);
       expect(game.players.size).toBeLessThanOrEqual(9);
       expect([...game.players.keys()]).toEqual(game.botRoster.map(bot => bot.id));
       expect(ctx.storage.sql.exec<{ count: number }>('SELECT count(*) AS count FROM players').one().count).toBe(game.botRoster.length);
@@ -163,34 +163,35 @@ describe('persistent hosted bots', () => {
         now += WIN_DISPLAY_MS; await instance.alarm();
         expect(game.round.phase).toBe('playing');
         expect([...game.players.values()].every(p => p.hp === 3 && p.kills === 0 && p.deaths === 0)).toBe(true);
-        expect(game.players.get(killer.id)).not.toBe(killer);
-        expect(game.players.get(killer.id)!.name).not.toBe(killer.name);
+        expect(game.players.get(killer.id)).toBe(killer);
+        expect(game.players.get(killer.id)!.name).toBe(killer.name);
         expect(await ctx.storage.getAlarm()).toBe(now + BOT_HEARTBEAT_MS);
       } finally { reset.mockRestore(); game.clock = originalClock; }
     });
   });
 
-  it.each([0, 0.999999])('reserves eleven slots with random %s and accepts thirteen humans', async random => {
+  it.each([0, 0.999999])('lets humans join over rolled bots until the ten-rat cap with random %s', async random => {
     const stub = room(); await bootstrapCount(stub, random);
     const bots = (await stub.status()).bots;
     const join = JSON.stringify({ type: 'join', protocolVersion: PROTOCOL_VERSION, name: 'Human',
       appearance: { hatType: 'fedora', hatColor: 0xdc4a3c, furColor: 0xe8b84d, coatColor: 0xbe4545 } });
-    for (let i = 0; i <= MAX_PLAYERS - 9; i++) {
+    for (let i = 0; i <= MAX_PLAYERS; i++) {
       const response = await stub.fetch('https://rat-detective.test/ws', { headers: { Upgrade: 'websocket' } });
       const ws = response.webSocket!; ws.accept(); sockets.push(ws);
       const first = new Promise<{ type: string; message?: string; players?: Record<string, PlayerData> }>(resolve => {
         ws.addEventListener('message', event => { const message=readSocketMessage(ws,event.data);if(message?.type==='welcome'||message?.type==='error')resolve(message); });
       });
       ws.send(join); const message = await first;
-      if (i < MAX_PLAYERS - 9) expect(message.type).toBe('welcome');
+      if (i < MAX_PLAYERS) expect(message.type).toBe('welcome');
       else expect(message).toMatchObject({ type: 'error', message: 'This room is full' });
     }
-    expect((await stub.status()).players).toBe(MAX_PLAYERS - 9 + bots);
+    expect((await stub.status()).players).toBe(MAX_PLAYERS);
     await stub.ensurePersistentBots();
     await runInDurableObject(stub, (instance: GameRoom) => {
       const game = instance as unknown as Internals;
-      expect(game.players.size).toBe(MAX_PLAYERS - 9 + bots);
-      expect([...game.players.keys()].filter(id => id.startsWith('rd-ai-'))).toHaveLength(bots);
+      expect(game.players.size).toBe(MAX_PLAYERS);
+      expect([...game.players.keys()].filter(id => id.startsWith('rd-ai-'))).toHaveLength(0);
+      expect(bots).toBeGreaterThanOrEqual(6);
     });
   });
 
@@ -215,7 +216,7 @@ describe('persistent hosted bots', () => {
     });
   });
 
-  it('replaces eleven with eight fresh bots, clears their events, and refreshes client identities', async () => {
+  it('shrinks a nine-bot round to six keepers, clears leavers, and keeps overlapping names', async () => {
     const stub = room(); await bootstrapCount(stub, 0.999999);
     const after = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as Internals;
@@ -236,23 +237,23 @@ describe('persistent hosted bots', () => {
       const rng = vi.spyOn(Math, 'random').mockReturnValue(0);
       try {
         await instance.alarm();
-        expect(game.botRoster).toHaveLength(8);
-        expect(game.botRoster.every(bot => !previous.some(old => old.name === bot.name))).toBe(true);
+        expect(game.botRoster).toHaveLength(6);
+        expect(game.botRoster.map(bot => bot.name)).toEqual(previous.slice(0, 6).map(bot => bot.name));
         expect(game.serverBots).not.toBe(controller); expect(dispose).toHaveBeenCalledOnce();
         expect(game.players.get(human.id)).toBe(human);
         expect(human).toMatchObject({ name: 'Human Name', ...appearance, hp: 3, kills: 0, deaths: 0 });
-        expect(game.players.size).toBe(9);
+        expect(game.players.size).toBe(7);
         expect(ctx.storage.sql.exec('SELECT id FROM pending_events WHERE player_id IS NOT NULL').toArray()).toHaveLength(0);
-        for (const id of PERSISTENT_BOT_IDS.slice(8)) {
+        for (const id of PERSISTENT_BOT_IDS.slice(6)) {
           expect(game.players.has(id)).toBe(false);
           expect(ctx.storage.sql.exec('SELECT id FROM players WHERE id = ?', id).toArray()).toHaveLength(0);
         }
         const messages = broadcast.mock.calls.map(([message]) => message);
         const leaves = messages.filter(message => message.type === 'playerLeft');
         const joins = messages.filter(message => message.type === 'playerJoined');
-        expect(leaves.map(message => message.id)).toEqual(PERSISTENT_BOT_IDS);
-        expect(joins.map(message => message.player.name)).toEqual(game.botRoster.map(bot => bot.name));
-        expect(messages.indexOf(leaves[10])).toBeLessThan(messages.indexOf(joins[0]));
+        expect(leaves.map(message => message.id)).toEqual(previous.slice(6).map(bot => bot.id));
+        expect(joins).toEqual([]);
+        expect(game.players.get(previous[0].id)!.name).toBe(previous[0].name);
         expect(messages.find(message => message.type === 'gameReset')).toBeDefined();
         return game.botRoster;
       } finally {

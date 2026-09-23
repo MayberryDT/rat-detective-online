@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "feature": "window-resize-capture",
+  "researched_at": "2026-09-21",
+  "baseline": "Three.js 0.182.0 (MIT), GSR 6.1.0-1 (GPL-3.0-only), existing Python helper and region backend; no new dependency.",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "not-applicable",
+      "reason": "No controls or library layout changes."
+    },
+    {
+      "class": "state-persistence",
+      "status": "required",
+      "reason": "Replay coverage resets when the native recording region changes; existing catalog clips remain."
+    },
+    {
+      "class": "auth-security",
+      "status": "not-applicable",
+      "reason": "Existing app identity, recorder ownership and capture permissions remain unchanged."
+    },
+    {
+      "class": "network-sync",
+      "status": "not-applicable",
+      "reason": "No network protocol or game authority changes."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "Three.js viewport and GSR region must follow window dimensions."
+    },
+    {
+      "class": "accessibility",
+      "status": "not-applicable",
+      "reason": "No input or accessibility semantics change."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "Production frame orchestration and helper timer regressions reproduce stale dimensions."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "Use the existing Three.js dimensions comparison before rendering."
+    }
+  ],
+  "mappings": [
+    {
+      "id": "viewport-and-recording-bounds",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "state-persistence",
+        "platform-device",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": null,
+      "behavior": {
+        "repo_url": "https://github.com/mrdoob/three.js",
+        "revision": "r182",
+        "evidence_url": "https://github.com/mrdoob/three.js/blob/r182/manual/en/responsive.html",
+        "behavior": "Compare current display dimensions with the applied render dimensions and update only when changed. The same comparison detects a stale fixed recorder rectangle.",
+        "edge_states": [
+          "resize during asynchronous startup",
+          "fullscreen without a delivered resize event",
+          "pixel ratio change",
+          "window moves",
+          "save already in progress",
+          "replay coverage reset"
+        ],
+        "do_not_copy": "Keep existing pixel ratio cap and fixed viewport ownership; do not copy demo scene or add dependencies."
+      },
+      "platform": {
+        "url": "https://git.dec05eba.com/gpu-screen-recorder/tree/gsr-cli.1",
+        "requirement": "GSR control supports save and stop but no changing the capture rectangle; drain current saves before restarting replay. Region and output limit semantics also verified in installed 6.1.0 manual."
+      },
+      "proof": [
+        "npx vitest run --config vitest.client.config.ts test/client/sessionResources.test.ts reproduces and verifies preparation resize and first fullscreen frame.",
+        "node --test test/scripts/highlightsService.test.mjs verifies geometry changes, in-flight save isolation and coverage reset."
+      ]
+    }
+  ],
+  "selection": "Synchronize viewport before rendering, including static title frames. Restart owned replay on changed app bounds after current saves finish, with fresh coverage and explicit missed markers for discarded unfinished intervals."
+}

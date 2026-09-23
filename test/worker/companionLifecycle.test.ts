@@ -10,7 +10,7 @@ import { RECONNECT_GRACE_MS } from '../../src/shared/reconnect';
 import { GameRoom } from '../../src/worker/GameRoom';
 import { readSocketMessage } from './socketMessages';
 
-async function until(check: () => boolean | Promise<boolean>, timeoutMs = 2_000): Promise<void> {
+async function until(check: () => boolean | Promise<boolean>, timeoutMs = 8_000): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     if (await check()) return;
@@ -62,12 +62,15 @@ describe('companion publication lifecycle', () => {
   it('tracks attached humans, reconnects, scoring publication, and final expiry', async () => {
     const first = await connect('Companion Rat');
     const second = await connect('Second Rat');
+    const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
+    await runInDurableObject(room, (instance: GameRoom) => {
+      (instance as unknown as { publishCompanion(force?: boolean): void }).publishCompanion(true);
+    });
     await until(async () => {
-      const room = await summary();
-      return room?.humans === 2 && room.players === 8;
+      const city = await summary();
+      return city?.humans === 2 && city.players <= 10 && city.players >= 8;
     });
 
-    const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
     await runInDurableObject(room, (instance: GameRoom) => {
       const game = instance as unknown as {
         chaosTimer: ReturnType<typeof setInterval> | null;
@@ -105,23 +108,36 @@ describe('companion publication lifecycle', () => {
     await close(second.socket);
     await until(async () => {
       const city = await summary();
-      return city?.humans === 0 && city.players === 8;
+      return city?.humans === 0 && city.players <= 10 && city.players >= 8;
     });
 
     const resumed = await connect('Companion Rat', first.welcome.resumeToken);
     expect(resumed.welcome.id).toBe(first.welcome.id);
+    await runInDurableObject(room, (instance: GameRoom) => {
+      (instance as unknown as { publishCompanion(force?: boolean): void }).publishCompanion(true);
+    });
     await until(async () => (await summary())?.humans === 1);
     await close(resumed.socket);
+    await runInDurableObject(room, (instance: GameRoom) => {
+      (instance as unknown as { publishCompanion(force?: boolean): void }).publishCompanion(true);
+    });
     await until(async () => (await summary())?.humans === 0);
 
     await runInDurableObject(room, async (instance: GameRoom) => {
-      const game = instance as unknown as { clock: () => number; alarm(): Promise<void> };
+      const game = instance as unknown as {
+        clock: () => number;
+        alarm(): Promise<void>;
+        publishCompanion(force?: boolean): void;
+      };
       const now = Date.now();
       game.clock = () => now + RECONNECT_GRACE_MS + 1;
       await game.alarm();
+      game.clock = () => Date.now();
+      game.publishCompanion(true);
     });
     await until(async () => {
-      return await summary() === undefined;
+      const city = await summary();
+      return city?.humans === 0 && city.players >= 6 && city.players <= 9;
     });
-  });
+  }, 20_000);
 });

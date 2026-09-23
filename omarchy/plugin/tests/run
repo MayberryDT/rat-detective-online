@@ -3,4 +3,4 @@ set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
 node --test tests/*.test.mjs
 bash -n scripts/install-webapp.sh scripts/uninstall-webapp.sh scripts/rollback-webapp.sh
-python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("scripts/rat-detective-desktop.py").read_text())'
+python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("scripts/rat-detective-desktop.py").read_text()); ast.parse(pathlib.Path("scripts/rat-detective-highlights.py").read_text()); ast.parse(pathlib.Path("scripts/rat-detective-native-host.py").read_text())'

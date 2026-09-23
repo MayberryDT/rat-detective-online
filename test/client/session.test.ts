@@ -222,6 +222,7 @@ vi.mock('../../src/session/createStage', () => ({
     createStage: (renderer: { setSize?: unknown }) => {
         const stage = {
             renderer,
+            syncViewport: () => false,
             scene: { children: [] },
             camera: {
                 aspect: 1,

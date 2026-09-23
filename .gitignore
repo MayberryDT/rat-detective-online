@@ -15,6 +15,7 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+omarchy/extension/dev-key.pem
 .idea
 .DS_Store
 *.suo
@@ -39,3 +40,8 @@ dist-visual-reference/
 
 # Generated capacity captures, private deployment receipts and staging
 /output/
+
+# Python runtime caches and packaged design preview builds
+__pycache__/
+*.py[cod]
+/.design/highlights-library/native-preview.tar.gz

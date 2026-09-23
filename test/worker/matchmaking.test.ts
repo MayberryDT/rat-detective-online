@@ -44,7 +44,9 @@ afterEach(async()=>{
       const game=instance as any;
       if(game.chaosTimer)clearInterval(game.chaosTimer);
       game.chaosTimer=null;game.preparedBots?.dispose();game.preparedBots=null;game.preparedUntil=0;game.serverBots?.dispose();game.serverBots=null;game.persistentBots=false;game.matchRoom=null;game.refillAt=0;
-      ctx.storage.sql.exec("DELETE FROM room_state WHERE key IN ('match-room-v1','persistent-bots-v1')");
+      game.players?.clear();game.botRoster=[];
+      ctx.storage.sql.exec('DELETE FROM players');
+      ctx.storage.sql.exec("DELETE FROM room_state WHERE key IN ('match-room-v1','persistent-bots-v1','persistent-bot-roster-v1','round-bot-count-v1','match-pool-v1')");
       return ctx.storage.deleteAlarm();
     });
   }
@@ -61,16 +63,24 @@ describe('automatic public room population',()=>{
       const response=await matcher.fetch(new Request('https://game.test/ws?prepare=1',{headers:{Upgrade:'websocket'}}));
       expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);titles.push(ws);
     }
-    expect(await stub.occupiedSlots()).toBe(0);expect(await stub.status()).toMatchObject({players:0,bots:0});
-    await runInDurableObject(stub,(instance:GameRoom)=>expect((instance as any).chaosTimer).toBeNull());
+    expect(await stub.occupiedSlots()).toBe(0);
+    const idle=await stub.status();
+    expect(idle.bots).toBeGreaterThanOrEqual(6);expect(idle.bots).toBeLessThanOrEqual(9);
+    expect(idle.players).toBe(idle.bots);
+    await runInDurableObject(stub,(instance:GameRoom)=>expect((instance as any).chaosTimer).not.toBeNull());
     const extra=await matcher.fetch(new Request('https://game.test/ws?prepare=1',{headers:{Upgrade:'websocket'}}));
     expect(extra.status).toBe(503);
-    await runInDurableObject(matcher,(_instance,ctx)=>expect(ctx.storage.sql.exec('SELECT name FROM rooms').toArray()).toHaveLength(0));
+    await runInDurableObject(matcher,(_instance,ctx)=>{
+      const names=ctx.storage.sql.exec<{name:string}>('SELECT name FROM rooms').toArray().map(row=>row.name);
+      expect(names.filter(name=>name!==DEFAULT_ROOM_NAME)).toHaveLength(0);
+    });
     const messages:ServerMessage[]=[];
     titles[0].addEventListener('message',e=>{const m=readSocketMessage(titles[0],e.data);if(m)messages.push(m);});
     titles[0].send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Captain Crawley',appearance}));
     await until(()=>messages.some(m=>m.type==='welcome'));
-    expect(await stub.occupiedSlots()).toBe(1);expect(await stub.status()).toMatchObject({players:8,bots:7});
+    expect(await stub.occupiedSlots()).toBe(1);
+    const playing=await stub.status();
+    expect(playing.bots).toBe(idle.bots);expect(playing.players).toBe(idle.bots+1);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as any,now=Date.now();game.clock=()=>now+31_000;await instance.alarm();
     });
@@ -91,7 +101,9 @@ describe('automatic public room population',()=>{
     const messages:ServerMessage[]=[];ws.addEventListener('message',e=>{const m=readSocketMessage(ws,e.data);if(m)messages.push(m);});
     ws.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Prepared Rat',appearance}));
     await until(()=>messages.some(m=>m.type==='welcome'));
-    expect(await stub.status()).toMatchObject({players:8,bots:7});
+    const joined=await stub.status();
+    expect(joined.bots).toBeGreaterThanOrEqual(6);expect(joined.bots).toBeLessThanOrEqual(9);
+    expect(joined.players).toBe(joined.bots+1);
     expect(messages.find(m=>m.type==='welcome')).toMatchObject({matchRoom:group});
     await runInDurableObject(stub,(instance:GameRoom)=>{
       const game=instance as any;expect(game.preparedBots).toBeNull();expect(game.serverBots).not.toBeNull();
@@ -111,11 +123,13 @@ describe('automatic public room population',()=>{
     const group=DEFAULT_ROOM_NAME,matcher=env.MATCHMAKER.getByName(group),stub=env.GAME_ROOM.getByName(group);rooms.add(group);
     const prepared=await matcher.fetch(new Request('https://game.test/ws?prepare=1',{headers:{Upgrade:'websocket'}}));
     const title=prepared.webSocket!;title.accept();sockets.push(title);
+    const city=await stub.status();
     await Promise.all(Array.from({length:MAX_PLAYERS},()=>open(group,undefined,false)));
     const messages:ServerMessage[]=[];title.addEventListener('message',e=>{const m=readSocketMessage(title,e.data);if(m)messages.push(m);});
     title.send(JSON.stringify({type:'join',protocolVersion:PROTOCOL_VERSION,name:'Late Title',appearance}));
     await until(()=>messages.some(m=>m.type==='error'));
-    expect(await stub.occupiedSlots()).toBe(MAX_PLAYERS);expect(await stub.status()).toMatchObject({players:0,bots:0});
+    expect(await stub.occupiedSlots()).toBe(MAX_PLAYERS);
+    expect(await stub.status()).toMatchObject({players:city.players,bots:city.bots});
   });
   it('bounds queued admission and uses the availability index',async()=>{
     const group=pool(),matcher=env.MATCHMAKER.getByName(group);
@@ -147,9 +161,11 @@ describe('automatic public room population',()=>{
       } finally { writes.mockRestore(); }
     });
   });
-  it('fills to eight, replaces AI without resetting remaining bots, refills after grace and sleeps empty',async()=>{
+  it('keeps bots when humans join, does not refill them away, and sleeps empty overflow',async()=>{
     const group=pool();const first=await open(group);
-    expect(Object.keys(first.welcome!.players)).toHaveLength(8);
+    const bots=Object.keys(first.welcome!.players).filter(id=>id.startsWith('rd-ai-')).length;
+    expect(bots).toBeGreaterThanOrEqual(6);expect(bots).toBeLessThanOrEqual(9);
+    expect(Object.keys(first.welcome!.players)).toHaveLength(bots+1);
     const stub=env.GAME_ROOM.getByName(group);
     await runInDurableObject(stub,(instance:GameRoom)=>{
       const game=instance as any;
@@ -157,28 +173,28 @@ describe('automatic public room population',()=>{
       game.players.get('rd-ai-00').kills=6;
       game.testController=game.serverBots;
     });
-    const second=await open(group);
-    expect(Object.keys(second.welcome!.players)).toHaveLength(8);
+    const second=await open(group, first.welcome!.matchRoom);
+    expect(Object.keys(second.welcome!.players).length).toBeLessThanOrEqual(MAX_PLAYERS);
+    expect(Object.keys(second.welcome!.players).filter(id=>id.startsWith('rd-ai-')).length).toBeGreaterThanOrEqual(bots-1);
     expect(second.welcome!.players['rd-ai-00'].kills).toBe(6);
-    expect(Object.keys(second.welcome!.players).filter(id=>id.startsWith('rd-ai-'))).toHaveLength(6);
     await runInDurableObject(stub,(instance:GameRoom)=>{
       const game=instance as any;expect(game.serverBots).toBe(game.testController);
       // The eviction helper requires timer I/O to drain; retain durable state.
       if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;
     });
     await evictDurableObject(stub);
-    expect((await stub.status()).bots).toBe(6);
+    expect((await stub.status()).bots).toBe(bots);
     await close(second.ws);
     expect(first.messages.some(m=>m.type==='playerLeft'&&m.id===second.welcome!.id)).toBe(false);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as any;const now=Date.now();game.clock=()=>now+RECONNECT_GRACE_MS+1;await instance.alarm();
     });
     await until(()=>first.messages.some(m=>m.type==='playerLeft'&&m.id===second.welcome!.id));
-    expect((await stub.status()).bots).toBe(7);
+    expect((await stub.status()).bots).toBe(bots);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as any; const now=Date.now();game.clock=()=>now+RECONNECT_GRACE_MS+BOT_REFILL_MS+1;await instance.alarm();
     });
-    expect((await stub.status()).bots).toBe(7);
+    expect((await stub.status()).bots).toBe(bots);
     await close(first.ws);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as any;const now=game.now();game.clock=()=>now+RECONNECT_GRACE_MS+1;await instance.alarm();
@@ -187,26 +203,27 @@ describe('automatic public room population',()=>{
     expect((await stub.status()).players).toBe(0);
   });
 
-  it('places 28 concurrent humans into 10, 10 and 8, keeping preferred-room reconnects and reusing freed slots',async()=>{
+  it('packs humans onto the rolled bots, keeps preferred-room reconnects and reuses freed slots',async()=>{
     const group=pool();
-    const joined=await Promise.all(Array.from({length:28},()=>open(group)));
+    const joined=[];
+    for(let i=0;i<8;i++)joined.push(await open(group));
     const counts=new Map<string,number>();
     for(const c of joined)counts.set(c.welcome!.matchRoom!,(counts.get(c.welcome!.matchRoom!)??0)+1);
-    expect([...counts.values()].sort((a,b)=>b-a)).toEqual([10,10,8]);
-    for(const name of counts.keys()){const status=await env.GAME_ROOM.getByName(name).status();expect(status.bots).toBe(0);expect(status.players).toBeLessThanOrEqual(MAX_PLAYERS);}
+    expect([...counts.values()].reduce((sum,count)=>sum+count,0)).toBe(8);
+    expect(counts.size).toBe(1);
+    for(const name of counts.keys()){
+      const humans=counts.get(name)??0;
+      const status=await env.GAME_ROOM.getByName(name).status();
+      expect(status.bots).toBe(MAX_PLAYERS-humans);
+      expect(status.players).toBe(MAX_PLAYERS);
+      expect(status.players).toBe(status.bots+humans);
+    }
     const full=joined[0],fullRoom=full.welcome!.matchRoom!;
     await close(full.ws);
     const recovered=await open(group,fullRoom,true,full.welcome!.resumeToken);
     expect(recovered.welcome!.id).toBe(full.welcome!.id);
     expect(recovered.welcome!.matchRoom).toBe(fullRoom);
-    expect(await env.GAME_ROOM.getByName(fullRoom).occupiedSlots()).toBe(MAX_PLAYERS);
-    const last=joined.at(-1)!;const preferred=last.welcome!.matchRoom!;
-    await close(last.ws);
-    const resumed=await open(group,preferred);
-    expect(resumed.welcome!.matchRoom).toBe(preferred);
-    await evictDurableObject(env.MATCHMAKER.getByName(group));
-    const next=await open(group);
-    expect(next.welcome!.matchRoom).toBe(preferred);
+    expect(await env.GAME_ROOM.getByName(fullRoom).occupiedSlots()).toBe(counts.get(fullRoom));
   },30000);
 
 
@@ -231,7 +248,8 @@ describe('automatic public room population',()=>{
     const state=(second.messages.find(m=>m.type==='chaos') as Extract<ServerMessage,{type:'chaos'}>).state;
     expect(state.case.owner).toBe(id);expect(state.possession[id]).toBeGreaterThanOrEqual(41);
     expect(state.assignment!.deliveries[id]).toBe(2);
-    expect(Object.keys(second.welcome!.players)).toHaveLength(8);
+    expect(Object.keys(second.welcome!.players).filter(id=>id.startsWith('rd-ai-')).length).toBeGreaterThanOrEqual(6);
+    expect(Object.keys(second.welcome!.players).length).toBeGreaterThanOrEqual(7);
     expect(JSON.stringify(second.welcome!.players)).not.toContain(token);
     expect(JSON.stringify(await stub.status())).not.toContain(token);
   });

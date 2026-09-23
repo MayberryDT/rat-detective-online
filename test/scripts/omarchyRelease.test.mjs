@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { exportPlugin, installPlugin, rollbackPlugin } from '../../scripts/omarchy-release.mjs';
+import { exportDistribution, exportPlugin, installPlugin, rollbackPlugin } from '../../scripts/omarchy-release.mjs';
 
 async function fixture(t) {
   const base = await mkdtemp(join(tmpdir(),'rat-release-test-'));
@@ -20,6 +20,32 @@ test('exports deterministic content receipts and refuses destructive overwrite',
   assert.deepEqual(await exportPlugin(source,join(base,'second')),first);
   await assert.rejects(exportPlugin(source,join(base,'first')),/already exists/);
   await assert.rejects(exportPlugin(source,join(source,'nested')),/outside source/);
+});
+
+test('distribution receipts cover the production connector and exclude development material', async t => {
+  const {base, source} = await fixture(t);
+  const connector = join(base, 'connector-source');
+  await mkdir(connector);
+  await writeFile(join(connector, 'manifest.json'), JSON.stringify({manifest_version: 3, version: '1.0.0'}));
+  await writeFile(join(connector, 'content.js'), 'production connector');
+  await writeFile(join(connector, 'service-worker.js'), 'production worker');
+  await writeFile(join(connector, 'native-host.json'), '{}');
+  await writeFile(join(connector, 'README.md'), 'connector docs');
+  await writeFile(join(connector, 'manifest.dev.json'), '{"development":true}');
+  await writeFile(join(connector, 'dev-key.pem'), 'private development key');
+
+  const out = join(base, 'distribution');
+  const result = await exportDistribution(source, connector, out, {validate() {}});
+  const release = JSON.parse(await readFile(join(out, 'release.json'), 'utf8'));
+  assert.ok(release.files['connector/extension/manifest.json']);
+  assert.ok(release.files['connector/extension/release.json']);
+  assert.equal(release.files['connector/extension/manifest.dev.json'], undefined);
+  assert.equal(release.files['connector/extension/dev-key.pem'], undefined);
+  const connectorRelease = JSON.parse(await readFile(join(`${out}.connector`, 'release.json'), 'utf8'));
+  assert.equal(connectorRelease.contentHash, result.connectorContentHash);
+  assert.equal(JSON.parse(await readFile(join(`${out}.connector`, 'manifest.json'), 'utf8')).manifest_version, 3);
+  await assert.rejects(readFile(join(`${out}.connector`, 'manifest.dev.json')), {code: 'ENOENT'});
+  await assert.rejects(readFile(join(`${out}.connector`, 'dev-key.pem')), {code: 'ENOENT'});
 });
 
 test('refuses symlinks and path traversal entry points',async t => {

@@ -26,6 +26,13 @@ from urllib.parse import urlencode
 APP_ID = "co.animasai.rat-detective"
 APP_NAME = "Rat Detective"
 APP_URL = "https://ratdetective.online/"
+PREVIEW_URL = os.environ.get("RAT_DETECTIVE_PREVIEW_URL", "http://127.0.0.1:5174/")
+PREVIEW_CLASS_MARKERS = (
+    "127.0.0.1__",
+    "localhost__5174",
+    "localhost__5175",
+    "localhost__5193",
+)
 ROOM_RE = re.compile(r"^public-live-v2(?:-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?$")
 CHORD_RE = re.compile(r"^[A-Z0-9][A-Z0-9 _+:-]{0,80}$")
 MARKER_START = "-- rat-detective-dispatch: shortcut start"
@@ -223,7 +230,21 @@ def is_game_window(client: dict[str, Any]) -> bool:
         APP_ID in classes
         or any(value.startswith(APP_ID + ".join-") for value in classes)
         or bool(classes & legacy_classes)
+        or any(any(marker in value for marker in PREVIEW_CLASS_MARKERS) for value in classes)
     )
+
+
+def is_preview_window(window: dict[str, Any]) -> bool:
+    klass = str(window.get("class") or "")
+    return any(marker in klass for marker in PREVIEW_CLASS_MARKERS)
+
+
+def production_windows() -> list[dict[str, Any]]:
+    return [window for window in game_windows() if not is_preview_window(window)]
+
+
+def preview_windows() -> list[dict[str, Any]]:
+    return [window for window in game_windows() if is_preview_window(window)]
 
 
 def game_windows() -> list[dict[str, Any]]:
@@ -240,6 +261,7 @@ def game_windows() -> list[dict[str, Any]]:
             "address": str(client.get("address", "")),
             "class": str(client.get("class", "")),
             "title": str(client.get("title", "")),
+            "pid": int(client.get("pid") or 0),
             "workspace": str(workspace.get("name", "")),
             "focused": focus_history == 0,
             "focusHistoryID": focus_history,
@@ -411,14 +433,85 @@ def apply_window_preferences(address: str, prefs: dict[str, Any]) -> None:
         set_true_fullscreen(address)
 
 
-def launch_url(url: str) -> subprocess.Popen[bytes]:
+def connector_dir() -> Path:
+    return data_dir() / "highlights-connector"
+
+
+def webapp_profile_dir() -> Path:
+    path = data_dir() / "webapp-profile"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def install_native_host() -> None:
+    host = data_dir() / "rat-detective-native-host.py"
+    payload = json.dumps({
+        "name": "co.animasai.rat_detective_highlights",
+        "description": "Rat Detective highlights native host",
+        "path": str(host),
+        "type": "stdio",
+        "allowed_origins": ["chrome-extension://lbhddkbbmnofokcjnlpfhffcplijjpnh/"],
+    }, indent=2) + "\n"
+    folders = [
+        Path.home() / ".config/chromium/NativeMessagingHosts",
+        Path.home() / ".config/BraveSoftware/Brave-Browser/NativeMessagingHosts",
+        Path.home() / ".config/BraveSoftware/Brave-Origin/NativeMessagingHosts",
+        Path.home() / ".config/google-chrome/NativeMessagingHosts",
+        webapp_profile_dir() / "NativeMessagingHosts",
+    ]
+    name = "co.animasai.rat_detective_highlights.json"
+    for folder in folders:
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_text(payload, encoding="utf-8")
+
+
+def process_uses_game_profile(pid: int) -> bool:
+    if not pid:
+        return False
+    marker = str(webapp_profile_dir()).encode()
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+    return marker in cmdline
+
+
+def connected_game_windows(windows: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    found = []
+    for window in windows if windows is not None else game_windows():
+        try:
+            pid = int(window.get("pid") or 0)
+        except (TypeError, ValueError):
+            pid = 0
+        if process_uses_game_profile(pid):
+            found.append(window)
+    return found
+
+
+def preview_launch_args() -> list[str]:
+    install_native_host()
+    args = [
+        f"--user-data-dir={webapp_profile_dir()}",
+        "--no-first-run",
+        "--no-default-browser-check",
+    ]
+    path = connector_dir()
+    if path.is_dir() and (path / "manifest.json").is_file():
+        args.append(f"--load-extension={path}")
+    return args
+
+
+def launch_url(url: str, extra: list[str] | None = None) -> subprocess.Popen[bytes]:
     # Chromium-family app windows derive their Wayland identity from the URL
     # origin. Brave ignores --class in app mode, verified on Omarchy 4.
     argv = [command("omarchy"), "launch", "webapp", url]
+    args = extra if extra is not None else preview_launch_args()
+    if args:
+        argv.extend(args)
     return subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
-def wait_for_new_window(previous: set[str], timeout: float = 4.0) -> dict[str, Any] | None:
+def wait_for_new_window(previous: set[str], timeout: float = 8.0) -> dict[str, Any] | None:
     try:
         timeout = float(os.environ.get("RAT_DETECTIVE_WINDOW_WAIT_SECONDS", timeout))
     except ValueError:
@@ -448,7 +541,7 @@ def current_launch_pending() -> dict[str, Any] | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         started = float(payload.get("startedAt", 0))
-        if time.time() - started <= pending_window_seconds() and payload.get("kind") in {"return", "join"}:
+        if time.time() - started <= pending_window_seconds() and payload.get("kind") in {"return", "join", "preview"}:
             return {"kind": payload["kind"], "startedAt": started}
     except (FileNotFoundError, OSError, ValueError, TypeError, AttributeError):
         pass
@@ -470,10 +563,24 @@ def clear_launch_pending() -> None:
         pass
 
 
+def arm_highlights_capture() -> None:
+    helper = highlights_helper()
+    try:
+        subprocess.Popen(
+            ["python3", str(helper), "request", "--json", json.dumps({"version": 1, "type": "arm-capture"})],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            env={**os.environ, "RAT_DETECTIVE_HIGHLIGHTS_BACKEND": os.environ.get("RAT_DETECTIVE_HIGHLIGHTS_BACKEND", "")},
+        )
+    except OSError:
+        pass
+
+
 def launch_outcome(process: subprocess.Popen[bytes], target: dict[str, Any] | None, kind: str) -> dict[str, Any]:
     if target:
         clear_launch_pending()
         apply_window_preferences(target["address"], load_preferences())
+        arm_highlights_capture()
         return {"ok": True, "action": "launched" if kind == "return" else "join-launched", "windowObserved": True}
     exit_code = process.poll()
     if exit_code is not None and exit_code != 0:
@@ -487,12 +594,13 @@ def return_or_launch(_: argparse.Namespace) -> int:
     if lock is None:
         return print_json({"ok": True, "action": "busy"})
     with lock:
-        windows = game_windows()
+        windows = connected_game_windows(production_windows() or game_windows())
         if windows:
             clear_launch_pending()
             # Hyprland's focus history gives the most recently focused candidate.
             target = min(windows, key=lambda item: item["focusHistoryID"] if item["focusHistoryID"] >= 0 else 1_000_000)
             ok = focus_window(target)
+            arm_highlights_capture()
             return print_json({"ok": ok, "action": "focused" if ok else "focus-failed", "address": target["address"]})
         pending = current_launch_pending()
         if pending:
@@ -502,6 +610,31 @@ def return_or_launch(_: argparse.Namespace) -> int:
         process = launch_url(APP_URL)
         target = wait_for_new_window(previous)
         return print_json(launch_outcome(process, target, "return"))
+
+
+def play_preview(_: argparse.Namespace) -> int:
+    lock = acquire_action_lock()
+    if lock is None:
+        return print_json({"ok": True, "action": "busy"})
+    with lock:
+        windows = connected_game_windows(preview_windows())
+        if windows:
+            clear_launch_pending()
+            target = min(windows, key=lambda item: item["focusHistoryID"] if item["focusHistoryID"] >= 0 else 1_000_000)
+            ok = focus_window(target)
+            arm_highlights_capture()
+            return print_json({"ok": ok, "action": "focused-preview" if ok else "focus-failed", "address": target["address"], "url": PREVIEW_URL})
+        pending = current_launch_pending()
+        if pending:
+            return print_json({"ok": True, "action": "pending", "pendingKind": pending["kind"], "windowObserved": False})
+        previous = {window["address"] for window in game_windows()}
+        mark_launch_pending("preview")
+        process = launch_url(PREVIEW_URL, preview_launch_args())
+        target = wait_for_new_window(previous)
+        outcome = launch_outcome(process, target, "return")
+        outcome["url"] = PREVIEW_URL
+        outcome["connector"] = str(connector_dir()) if preview_launch_args() else ""
+        return print_json(outcome)
 
 
 def invitation_url(room: str) -> str:
@@ -835,6 +968,157 @@ def copy_link(args: argparse.Namespace) -> int:
     return print_json({"ok": result.returncode == 0, "link": link, "error": result.stderr.strip()})
 
 
+def highlights_helper() -> Path:
+    override = os.environ.get("RAT_DETECTIVE_HIGHLIGHTS_HELPER")
+    if override:
+        return Path(override)
+    sibling = Path(__file__).with_name("rat-detective-highlights.py")
+    durable = data_dir() / "rat-detective-highlights.py"
+    if sibling.is_file():
+        return sibling
+    return durable
+
+
+def highlights_request(payload: dict[str, Any], timeout: float = 8) -> dict[str, Any]:
+    helper = highlights_helper()
+    try:
+        result = subprocess.run(
+            ["python3", str(helper), "request", "--json", json.dumps(payload)],
+            text=True, capture_output=True, timeout=timeout,
+            env={**os.environ, "RAT_DETECTIVE_HIGHLIGHTS_BACKEND": os.environ.get("RAT_DETECTIVE_HIGHLIGHTS_BACKEND", "")},
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return {"ok": False, "error": str(error)}
+    try:
+        parsed = json.loads(result.stdout or "{}")
+    except ValueError:
+        parsed = {"ok": False, "error": result.stderr.strip() or "unreadable highlights helper"}
+    if result.returncode != 0 and parsed.get("ok", True):
+        parsed["ok"] = False
+        parsed.setdefault("error", result.stderr.strip() or "highlights helper failed")
+    return parsed
+
+
+def highlights_status(_: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "status"}))
+
+
+def highlights_enable(_: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "enable"}))
+
+
+def highlights_disable(_: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "disable"}))
+
+
+def highlights_resume(_: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "resume"}))
+
+
+def highlights_setup(args: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "arm-capture"}, timeout=8))
+
+
+def highlights_save(_: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "save-manual"}))
+
+
+def highlights_lease(_: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "lease-renew"}))
+
+
+def highlights_list(args: argparse.Namespace) -> int:
+    payload: dict[str, Any] = {"version": 1, "type": "list-clips", "limit": 50}
+    if getattr(args, "session_id", None):
+        payload["sessionId"] = args.session_id
+    return print_json(highlights_request(payload))
+
+
+def highlights_rename(args: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "rename-clip", "clipId": args.clip_id, "title": args.title}))
+
+
+def highlights_favorite(args: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "favorite-clip", "clipId": args.clip_id, "favorite": args.on == "true"}))
+
+
+def highlights_delete(args: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "delete-clip", "clipId": args.clip_id}))
+
+
+def highlights_undo(args: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "undo-delete", "clipId": args.clip_id}))
+
+
+def highlights_reveal(args: argparse.Namespace) -> int:
+    payload = highlights_request({"version": 1, "type": "list-clips", "limit": 100})
+    clip = next((item for item in payload.get("clips") or [] if item.get("id") == args.clip_id), None)
+    if not clip:
+        return print_json({"ok": False, "error": "clip not found"})
+    folder = videos_highlights_dir() / str(clip.get("relative_path") or "")
+    target = folder.parent if folder.suffix else folder
+    target.mkdir(parents=True, exist_ok=True)
+    subprocess.Popen([command("xdg-open"), str(target)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return print_json({"ok": True, "path": str(target)})
+
+
+def highlights_trim(args: argparse.Namespace) -> int:
+    return print_json(highlights_request({
+        "version": 1, "type": "trim-clip", "clipId": args.clip_id,
+        "trimInMs": int(float(args.start)), "trimOutMs": int(float(args.end)),
+    }))
+
+
+def highlights_export_clip(args: argparse.Namespace) -> int:
+    return print_json(highlights_request({
+        "version": 1, "type": "export-clip", "clipId": args.clip_id,
+        "destination": getattr(args, "destination", None),
+        "folder": getattr(args, "folder", None), "filename": getattr(args, "filename", None),
+    }))
+
+
+def highlights_export_reel(args: argparse.Namespace) -> int:
+    status = highlights_request({"version": 1, "type": "status"})
+    session_id = getattr(args, "session_id", None) or status.get("sessionId") or status.get("lastSessionId") or ""
+    return print_json(highlights_request({
+        "version": 1, "type": "export-reel", "sessionId": session_id,
+        "destination": getattr(args, "destination", None),
+        "folder": getattr(args, "folder", None), "filename": getattr(args, "filename", None),
+    }))
+
+
+def highlights_export_settings(args: argparse.Namespace) -> int:
+    try:
+        settings = json.loads(args.settings)
+    except ValueError:
+        return print_json({"ok": False, "error": "Invalid export settings."})
+    return print_json(highlights_request({"version": 1, "type": "set-settings", "export": settings}))
+
+
+def highlights_cancel_job(args: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "cancel-job", "jobId": args.job_id}))
+
+
+def highlights_sessions(_: argparse.Namespace) -> int:
+    return print_json(highlights_request({"version": 1, "type": "list-sessions"}))
+
+
+def highlights_get_reel(args: argparse.Namespace) -> int:
+    status = highlights_request({"version": 1, "type": "status"})
+    session_id = getattr(args, "session_id", None) or status.get("sessionId") or status.get("lastSessionId") or ""
+    return print_json(highlights_request({"version": 1, "type": "get-reel", "sessionId": session_id}))
+
+
+def highlights_regenerate(_: argparse.Namespace) -> int:
+    status = highlights_request({"version": 1, "type": "status"})
+    session_id = status.get("sessionId") or status.get("lastSessionId") or ""
+    return print_json(highlights_request({"version": 1, "type": "regenerate-reel", "sessionId": session_id}))
+
+
+def videos_highlights_dir() -> Path:
+    return screenrecord_dir() / "Rat Detective" / "Highlights"
+
+
 def notify(args: argparse.Namespace) -> int:
     if dnd_state() == "on":
         return print_json({"ok": True, "action": "suppressed-dnd"})
@@ -853,6 +1137,7 @@ def parser() -> argparse.ArgumentParser:
     sub = root.add_subparsers(dest="command", required=True)
     sub.add_parser("status").set_defaults(func=status)
     sub.add_parser("return").set_defaults(func=return_or_launch)
+    sub.add_parser("play-preview").set_defaults(func=play_preview)
     join = sub.add_parser("join")
     join.add_argument("room")
     join.set_defaults(func=join_room)
@@ -880,6 +1165,63 @@ def parser() -> argparse.ArgumentParser:
     notice.add_argument("headline")
     notice.add_argument("body", nargs="?")
     notice.set_defaults(func=notify)
+    sub.add_parser("highlights-status").set_defaults(func=highlights_status)
+    sub.add_parser("highlights-enable").set_defaults(func=highlights_enable)
+    sub.add_parser("highlights-disable").set_defaults(func=highlights_disable)
+    sub.add_parser("highlights-resume").set_defaults(func=highlights_resume)
+    setup = sub.add_parser("highlights-setup")
+    setup.add_argument("--prefer-focused", action="store_true")
+    setup.set_defaults(func=highlights_setup)
+    sub.add_parser("highlights-save").set_defaults(func=highlights_save)
+    sub.add_parser("highlights-lease").set_defaults(func=highlights_lease)
+    listed = sub.add_parser("highlights-list")
+    listed.add_argument("session_id", nargs="?")
+    listed.set_defaults(func=highlights_list)
+    renamed = sub.add_parser("highlights-rename")
+    renamed.add_argument("clip_id")
+    renamed.add_argument("title")
+    renamed.set_defaults(func=highlights_rename)
+    favorite = sub.add_parser("highlights-favorite")
+    favorite.add_argument("clip_id")
+    favorite.add_argument("on", choices=["true", "false"])
+    favorite.set_defaults(func=highlights_favorite)
+    deleted = sub.add_parser("highlights-delete")
+    deleted.add_argument("clip_id")
+    deleted.set_defaults(func=highlights_delete)
+    undo = sub.add_parser("highlights-undo")
+    undo.add_argument("clip_id")
+    undo.set_defaults(func=highlights_undo)
+    reveal = sub.add_parser("highlights-reveal")
+    reveal.add_argument("clip_id")
+    reveal.set_defaults(func=highlights_reveal)
+    trim = sub.add_parser("highlights-trim")
+    trim.add_argument("clip_id")
+    trim.add_argument("start")
+    trim.add_argument("end")
+    trim.set_defaults(func=highlights_trim)
+    export_clip = sub.add_parser("highlights-export-clip")
+    export_clip.add_argument("clip_id")
+    export_clip.add_argument("destination", nargs="?")
+    export_clip.add_argument("--folder")
+    export_clip.add_argument("--filename")
+    export_clip.set_defaults(func=highlights_export_clip)
+    export_reel = sub.add_parser("highlights-export-reel")
+    export_reel.add_argument("session_id", nargs="?")
+    export_reel.add_argument("destination", nargs="?")
+    export_reel.add_argument("--folder")
+    export_reel.add_argument("--filename")
+    export_reel.set_defaults(func=highlights_export_reel)
+    export_settings = sub.add_parser("highlights-export-settings")
+    export_settings.add_argument("settings")
+    export_settings.set_defaults(func=highlights_export_settings)
+    cancel_job = sub.add_parser("highlights-cancel-job")
+    cancel_job.add_argument("job_id")
+    cancel_job.set_defaults(func=highlights_cancel_job)
+    sub.add_parser("highlights-sessions").set_defaults(func=highlights_sessions)
+    get_reel = sub.add_parser("highlights-get-reel")
+    get_reel.add_argument("session_id", nargs="?")
+    get_reel.set_defaults(func=highlights_get_reel)
+    sub.add_parser("highlights-regenerate-reel").set_defaults(func=highlights_regenerate)
     return root
 
 

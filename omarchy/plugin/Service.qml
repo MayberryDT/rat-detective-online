@@ -22,6 +22,8 @@ Item {
   property string errorText: ""
   property string actionText: ""
   property string actionError: ""
+  property string shortcutError: ""
+  property string lastDesktopAction: ""
   property bool desktopBusy: desktopAction.running
   property bool windowOpen: false
   property bool gameFocused: false
@@ -37,15 +39,29 @@ Item {
   property bool shortcutInstalled: false
   property string shortcutChord: ""
   property var desktopPreferences: ({ workspace: null, fullscreen: false, desktopAudio: false })
+  property var highlights: ({state: "off", clipCount: 0, enabled: false, reason: "Automatic highlights are off."})
+  property bool highlightsBusy: false
+  property var highlightClips: []
+  property var highlightSessions: []
+  property var highlightReel: ({items: []})
+  property string highlightSessionId: ""
+  property bool highlightsWindowOpen: false
+  property var highlightsWindow: null
+  property string lastHighlightDelete: ""
   property int failureCount: 0
   property string requestKind: "v1"
   property string nextCursor: ""
   property int pageCount: 0
   property var pendingStatus: null
+  property bool refreshPending: false
   property var alertReceipts: ({})
+  property bool receiptsReady: false
+  property bool pendingEnableArm: false
+  property bool settingsHydrated: false
   property bool alertBaselineReady: false
   property var previousFreshStatus: null
   property var pendingNotices: []
+  property var inFlightNotice: null
   property var fixtureOverride: null
   property bool fixtureSwitching: false
 
@@ -63,10 +79,16 @@ Item {
   readonly property int openRefreshMs: intSetting("openRefreshSec", 2, 2, 60) * 1000
   readonly property int closedRefreshMs: intSetting("closedRefreshSec", 30, 10, 600) * 1000
   readonly property int staleAfterMs: intSetting("staleAfterSec", 90, 30, 600) * 1000
-  readonly property int alertCooldownMs: intSetting("alertCooldownMin", 15, 1, 1440) * 60000
-  readonly property var totals: StatusModel.totals(status)
+  readonly property var totals: StatusModel.displayTotals(status, nowMs, connectionState)
   readonly property var selectedRoom: StatusModel.roomById(status, selectedRoomId)
   readonly property bool selectedRoomFresh: StatusModel.roomFresh(selectedRoom, nowMs)
+  readonly property bool deliveryPending: pendingNotices.length > 0
+  readonly property var alertStatusInfo: {
+    var _tick = [nowMs, connectionState, dnd, gameFocused, desktopReady, locked, effectiveFixture, alertReceipts, settings, pendingNotices]
+    return StatusModel.alertWatchStatus(alertOptions(), nowMs, alertContext())
+  }
+  readonly property string alertStatusText: alertStatusInfo.text
+  readonly property string alertStatusDetail: alertStatusInfo.detail
 
   function localPath(url) {
     var value = String(url || "")
@@ -93,9 +115,26 @@ Item {
   function applySettings(value) {
     var previousOpen = openRefreshMs
     var previousClosed = closedRefreshMs
+    var wasEnabled = boolSetting("alertsEnabled", false)
+    var previousThreshold = intSetting("alertHumanThreshold", StatusModel.GATHERING_HUMAN_THRESHOLD, 1, 10)
+    var hadSettings = settingsHydrated
     settings = value || ({})
+    settingsHydrated = true
+    var nowEnabled = boolSetting("alertsEnabled", false)
+    var nowThreshold = intSetting("alertHumanThreshold", StatusModel.GATHERING_HUMAN_THRESHOLD, 1, 10)
+    if ((!wasEnabled && nowEnabled) || (hadSettings && previousThreshold !== nowThreshold)) {
+      if (!receiptsReady) pendingEnableArm = true
+      else armAlertConfiguration()
+    }
     // Appearance and desktop preferences must not reset the network timer.
     if (previousOpen !== openRefreshMs || previousClosed !== closedRefreshMs) schedulePoll(100)
+  }
+
+  function armAlertConfiguration() {
+    alertReceipts = StatusModel.stripGatheringReceipts(alertReceipts)
+    pendingNotices = StatusModel.dropQueuedGathering(pendingNotices, alertReceipts, inFlightNotice)
+    persistReceipts()
+    if (status) evaluateAlerts(previousFreshStatus, status)
   }
 
   function setPanelOpen(value) {
@@ -118,7 +157,8 @@ Item {
     desktopStatus.running = false
     desktopAction.running = false
     notifyProcess.running = false
-    pendingNotices = []
+    abortNoticeEffects()
+    refreshPending = false
     actionText = ""
     actionError = ""
     status = null
@@ -139,14 +179,21 @@ Item {
 
   function requestUrl() {
     if (requestKind === "legacy") return legacyUrl
-    var separator = statusUrl.indexOf("?") === -1 ? "?" : "&"
-    var url = statusUrl + separator + "limit=16"
-    if (nextCursor) url += "&cursor=" + encodeURIComponent(nextCursor)
-    return url
+    return StatusModel.companionStatusUrl(statusUrl, nextCursor, 16)
   }
 
   function refresh() {
-    if ((locked && !effectiveFixture) || statusProcess.running || fixtureProcess.running) return
+    var action = StatusModel.refreshAction({
+      locked: locked,
+      fixture: effectiveFixture,
+      requestRunning: statusProcess.running || fixtureProcess.running
+    })
+    if (action === "skip") return
+    if (action === "defer") {
+      refreshPending = true
+      return
+    }
+    refreshPending = false
     pollTimer.stop()
     if (effectiveFixture) {
       if (effectiveFixture === "unavailable") {
@@ -169,11 +216,17 @@ Item {
 
   function schedulePoll(delay) {
     if (locked || effectiveFixture === "loading") return
-    var base = delay === undefined ? (panelOpen ? openRefreshMs : closedRefreshMs) : delay
-    if (failureCount > 0) base = Math.max(base, Math.min(300000, 5000 * Math.pow(2, Math.min(6, failureCount - 1))))
+    var base = StatusModel.pollDelayMs(panelOpen, openRefreshMs, closedRefreshMs, failureCount, delay)
     var jitter = effectiveFixture ? 0 : Math.floor(base * (Math.random() * 0.16 - 0.08))
     pollTimer.interval = Math.max(250, base + jitter)
     pollTimer.restart()
+  }
+
+  function completeRefreshCycle() {
+    var action = StatusModel.finishRefreshAction(refreshPending)
+    refreshPending = false
+    if (action === "start") refresh()
+    else schedulePoll()
   }
 
   function finishSuccess(nextStatus) {
@@ -189,15 +242,13 @@ Item {
     if (!selectedRoomId || !StatusModel.roomById(status, selectedRoomId))
       selectedRoomId = status.rooms.length ? status.rooms[0].id : ""
     updateConnectionState()
-    var recovered = previousState === "stale" || previousState === "unavailable" || previousState === "loading"
-    if (!alertBaselineReady || recovered || connectionState === "stale") {
+    var mode = StatusModel.alertEvaluateMode(alertBaselineReady, previousState, connectionState)
+    if (mode === "evaluate") evaluateAlerts(oldFresh, status)
+    if (connectionState === "live" || connectionState === "empty") {
       previousFreshStatus = status
-      alertBaselineReady = connectionState === "live" || connectionState === "empty"
-    } else if (connectionState === "live" || connectionState === "empty") {
-      evaluateAlerts(oldFresh, status)
-      previousFreshStatus = status
+      alertBaselineReady = true
     }
-    schedulePoll()
+    completeRefreshCycle()
   }
 
   function finishFailure(message) {
@@ -207,7 +258,7 @@ Item {
     nowMs = Date.now()
     updateConnectionState()
     alertBaselineReady = false
-    schedulePoll()
+    completeRefreshCycle()
   }
 
   function updateConnectionState() {
@@ -228,32 +279,100 @@ Item {
     return StatusModel.normalizeV1(copy, stamp)
   }
 
-  function evaluateAlerts(previous, current) {
-    if (effectiveFixture) return
-    var options = {
+  function alertOptions() {
+    return {
       alertsEnabled: boolSetting("alertsEnabled", false),
-      alertHumanThreshold: intSetting("alertHumanThreshold", 2, 1, 16),
-      alertAssignmentChanges: boolSetting("alertAssignmentChanges", false),
-      quietStartHour: intSetting("quietStartHour", 22, 0, 23),
-      quietEndHour: intSetting("quietEndHour", 8, 0, 23)
+      alertHumanThreshold: intSetting("alertHumanThreshold", StatusModel.GATHERING_HUMAN_THRESHOLD, 1, 10)
     }
-    var events = StatusModel.alertEvents(previous, current, options, nowMs, {
+  }
+
+  function alertContext() {
+    return {
       fresh: connectionState === "live" || connectionState === "empty",
-      gameFocused: !desktopReady || gameFocused,
-      dnd: dnd
-    })
-    var filtered = StatusModel.filterAlertReceipts(events, alertReceipts, nowMs, alertCooldownMs)
+      gameFocused: gameFocused,
+      dnd: dnd,
+      locked: locked && !effectiveFixture,
+      fixture: !!effectiveFixture,
+      baselineReady: alertBaselineReady,
+      desktopReady: desktopReady,
+      connectionState: connectionState,
+      deliveryPending: pendingNotices.length > 0
+    }
+  }
+
+  function persistReceipts() {
+    if (!receiptsReady) return
+    receiptsFile.setText(JSON.stringify({ version: 1, receipts: alertReceipts }, null, 2) + "\n")
+  }
+
+  function finishReceiptsInit(nextReceipts) {
+    if (receiptsReady) return
+    alertReceipts = StatusModel.releaseReservedReceipts(nextReceipts && typeof nextReceipts === "object" ? nextReceipts : ({}))
+    receiptsReady = true
+    if (pendingEnableArm) {
+      pendingEnableArm = false
+      alertReceipts = StatusModel.stripGatheringReceipts(alertReceipts)
+      pendingNotices = StatusModel.dropQueuedGathering(pendingNotices, alertReceipts, inFlightNotice)
+      persistReceipts()
+    }
+    if (status && (connectionState === "live" || connectionState === "empty"))
+      evaluateAlerts(previousFreshStatus, status)
+  }
+
+  function applyNoticeQueue(advanced) {
+    pendingNotices = advanced.queue
+    alertReceipts = advanced.receipts
+    persistReceipts()
+  }
+
+  function evaluateAlerts(previous, current) {
+    if (effectiveFixture || !receiptsReady) return
+    var options = alertOptions()
+    var previousReceipts = alertReceipts
+    alertReceipts = StatusModel.rearmGatheringReceipts(alertReceipts, current && current.rooms, nowMs, options.alertHumanThreshold)
+    pendingNotices = StatusModel.dropQueuedGathering(pendingNotices, alertReceipts, inFlightNotice)
+    var events = StatusModel.alertEvents(previous, current, options, nowMs, alertContext())
+    var queued = {}
+    for (var i = 0; i < pendingNotices.length; i++) if (pendingNotices[i] && pendingNotices[i].key) queued[pendingNotices[i].key] = true
+    var filtered = StatusModel.filterAlertReceipts(events, alertReceipts, nowMs, 0, queued, current && current.rooms, 8, options.alertHumanThreshold)
     alertReceipts = filtered.receipts
+    if (filtered.events.length || JSON.stringify(previousReceipts) !== JSON.stringify(alertReceipts)) persistReceipts()
     if (filtered.events.length) {
-      receiptsFile.setText(JSON.stringify({ version: 1, receipts: alertReceipts }, null, 2) + "\n")
-      pendingNotices = pendingNotices.concat(filtered.events)
+      pendingNotices = StatusModel.boundedNoticeQueue(pendingNotices.concat(filtered.events), 8)
       runNextNotice()
     }
   }
 
+  function abortNoticeEffects() {
+    noticeRetryTimer.stop()
+    inFlightNotice = null
+    var cleared = StatusModel.clearNoticeEffects(pendingNotices, alertReceipts)
+    pendingNotices = cleared.queue
+    alertReceipts = cleared.receipts
+    persistReceipts()
+  }
+
   function runNextNotice() {
     if (notifyProcess.running || pendingNotices.length === 0) return
+    if (effectiveFixture || fixtureSwitching) {
+      abortNoticeEffects()
+      return
+    }
+    var now = Date.now()
+    nowMs = now
     var notice = pendingNotices[0]
+    var attempt = notice && { key: notice.key, episode: notice.episode, attempts: notice.attempts || 0 }
+    if (!StatusModel.noticeDeliverable(alertOptions(), now, alertContext())) {
+      applyNoticeQueue(StatusModel.settleNoticeAttempt(pendingNotices, alertReceipts, "suppressed", now, attempt))
+      Qt.callLater(runNextNotice)
+      return
+    }
+    if (!StatusModel.gatheringNoticeEligible(notice, status, now, alertOptions())) {
+      applyNoticeQueue(StatusModel.settleNoticeAttempt(pendingNotices, alertReceipts, "suppressed", now, attempt))
+      Qt.callLater(runNextNotice)
+      return
+    }
+    inFlightNotice = attempt
     notifyProcess.command = [helperPath, "notify", notice.title, notice.body]
     notifyProcess.running = true
   }
@@ -284,15 +403,17 @@ Item {
   }
 
   function desktopCommand(args, progressText) {
-    if (effectiveFixture) { actionError = "Desktop actions are disabled in static preview."; return }
+    if (effectiveFixture) return
     if (desktopAction.running) return
+    lastDesktopAction = String(args && args[0] || "")
+    actionText = ""
     actionError = ""
-    actionText = progressText || "Working…"
     desktopAction.command = [helperPath].concat(args)
     desktopAction.running = true
   }
 
   function returnToGame() { desktopCommand(["return"], windowOpen ? "Returning to the city…" : "Opening the city…") }
+  function playMatchingPreview() { desktopCommand(["play-preview"], "Opening the matching highlights preview…") }
   function joinRoom(room) { if (room) desktopCommand(["join", room.id], "Opening " + room.label + "…") }
   function installLauncher() { desktopCommand(["install-launcher", "--icon", iconPath], "Repairing the launcher…") }
   function copyLink(room) { desktopCommand(room ? ["copy-link", "--room", room.id] : ["copy-link"], "Copying invitation…") }
@@ -301,8 +422,75 @@ Item {
   function saveDesktopPreferences(workspace, fullscreen, desktopAudio) {
     desktopCommand(["preferences", "--workspace", workspace > 0 ? String(workspace) : "current", "--fullscreen", fullscreen ? "true" : "false", "--desktop-audio", desktopAudio ? "true" : "false"], "Saving desktop preferences…")
   }
-  function installShortcut(chord) { desktopCommand(["shortcut-install", chord], "Adding shortcut…") }
-  function removeShortcut() { desktopCommand(["shortcut-remove"], "Removing shortcut…") }
+  function installShortcut(chord) { desktopCommand(["shortcut-install", chord], "") }
+  function removeShortcut() { desktopCommand(["shortcut-remove"], "") }
+  function refreshHighlights() { if (!highlightsStatus.running) highlightsStatus.running = true }
+  function setHighlightsEnabled(on) {
+    var next = !!on
+    highlights = Object.assign({}, highlights, {enabled: next, state: next ? (highlights.state === "off" ? "ready" : highlights.state) : "off"})
+    highlightsBusy = true
+    if (highlightsToggle.running) return
+    highlightsToggle.command = [helperPath, next ? "highlights-enable" : "highlights-disable"]
+    highlightsToggle.running = true
+  }
+  function resumeHighlights() { desktopCommand(["highlights-resume"], "Resuming highlights…") }
+  function confirmHighlightSetup() { desktopCommand(["highlights-setup"], "Confirming the game window…") }
+  function saveHighlight() { desktopCommand(["highlights-save"], "Saving the recent moment…") }
+  function openHighlightsLibrary() {
+    refreshHighlights()
+    highlightsList.running = true
+    if (!highlightsSessions.running) highlightsSessions.running = true
+    if (!highlightsReel.running) highlightsReel.running = true
+    highlightsWindowOpen = true
+    if (highlightsWindow) { highlightsWindow.show(); highlightsWindow.raise(); return }
+    var component = Qt.createComponent("components/HighlightsWindow.qml")
+    if (component.status !== Component.Ready) { actionError = component.errorString(); return }
+    highlightsWindow = component.createObject(root, {desk: root})
+    if (highlightsWindow) highlightsWindow.show()
+  }
+  function setHighlightSession(sessionId) {
+    highlightSessionId = String(sessionId || "")
+    if (!highlightsList.running) highlightsList.running = true
+    if (!highlightsReel.running) highlightsReel.running = true
+  }
+  function highlightFavorite(id, on) { desktopCommand(["highlights-favorite", id, on ? "true" : "false"], ""); Qt.callLater(function() { highlightsList.running = true }) }
+  function highlightDelete(id) { lastHighlightDelete = id; desktopCommand(["highlights-delete", id], ""); Qt.callLater(function() { highlightsList.running = true }) }
+  function highlightUndo() { if (lastHighlightDelete) desktopCommand(["highlights-undo", lastHighlightDelete], ""); Qt.callLater(function() { highlightsList.running = true }) }
+  function highlightReveal(id) { desktopCommand(["highlights-reveal", id], "") }
+  function highlightRename(id, title) { desktopCommand(["highlights-rename", id, title], "") }
+  function highlightTrim(id, start, end) {
+    if (desktopAction.running || effectiveFixture) return false
+    var clip = null
+    for (var i = 0; i < highlightClips.length; i++) if (highlightClips[i].id === id) clip = highlightClips[i]
+    var duration = clip && clip.duration_ms ? Number(clip.duration_ms) : 0
+    desktopCommand(["highlights-trim", id, String(Math.round(Number(start) * duration)), String(Math.round(Number(end) * duration))], "")
+    pendingTrimId = id
+    return true
+  }
+  property string pendingTrimId: ""
+  signal highlightTrimFinished(string id, bool ok, string message)
+  signal highlightExportFinished(bool ok, string message)
+  function highlightExportClip(id, folder, filename) {
+    if (desktopAction.running || effectiveFixture) return false
+    desktopCommand(["highlights-export-clip", id, "--folder", folder, "--filename", filename], "Exporting clip…")
+    return true
+  }
+  function highlightExportReel(sessionId, folder, filename) {
+    if (desktopAction.running || effectiveFixture) return false
+    desktopCommand(["highlights-export-reel", sessionId, "--folder", folder, "--filename", filename], "Exporting reel…")
+    return true
+  }
+  function highlightExportSettings(options) {
+    if (desktopAction.running || effectiveFixture) return false
+    desktopCommand(["highlights-export-settings", JSON.stringify(options)], "Saving export settings…")
+    return true
+  }
+  function highlightRegenerateReel(sessionId) {
+    desktopCommand(["highlights-regenerate-reel"], "")
+    if (sessionId) highlightSessionId = String(sessionId)
+    Qt.callLater(function() { if (!highlightsReel.running) highlightsReel.running = true })
+  }
+  function highlightCancelJob(jobId) { if (jobId) desktopCommand(["highlights-cancel-job", jobId], "Cancelling export…") }
 
   Process {
     id: statusProcess
@@ -361,6 +549,90 @@ Item {
   }
 
   Process {
+    id: highlightsStatus
+    command: [root.helperPath, "highlights-status"]
+    stdout: StdioCollector { id: highlightsStatusOut; waitForEnd: true }
+    onExited: function(code) {
+      if (code !== 0) return
+      try {
+        var parsed = JSON.parse(String(highlightsStatusOut.text || "{}"))
+        if (parsed && parsed.ok !== false) {
+          if (root.highlightsBusy) parsed.enabled = root.highlights.enabled
+          root.highlights = parsed
+        }
+      } catch (error) {}
+    }
+  }
+
+  Process {
+    id: highlightsToggle
+    stdout: StdioCollector { waitForEnd: true }
+    onExited: function() {
+      root.highlightsBusy = false
+      root.refreshHighlights()
+    }
+  }
+
+  Process {
+    id: highlightsList
+    command: root.highlightSessionId ? [root.helperPath, "highlights-list", root.highlightSessionId] : [root.helperPath, "highlights-list"]
+    stdout: StdioCollector { id: highlightsListOut; waitForEnd: true }
+    onExited: function(code) {
+      if (code !== 0) return
+      try {
+        var parsed = JSON.parse(String(highlightsListOut.text || "{}"))
+        root.highlightClips = parsed && parsed.clips ? parsed.clips : []
+      } catch (error) {}
+    }
+  }
+
+  Process {
+    id: highlightsSessions
+    command: [root.helperPath, "highlights-sessions"]
+    stdout: StdioCollector { id: highlightsSessionsOut; waitForEnd: true }
+    onExited: function(code) {
+      if (code !== 0) return
+      try {
+        var parsed = JSON.parse(String(highlightsSessionsOut.text || "{}"))
+        root.highlightSessions = parsed && parsed.sessions ? parsed.sessions : []
+      } catch (error) {}
+    }
+  }
+
+  Process {
+    id: highlightsReel
+    command: root.highlightSessionId ? [root.helperPath, "highlights-get-reel", root.highlightSessionId] : [root.helperPath, "highlights-get-reel"]
+    stdout: StdioCollector { id: highlightsReelOut; waitForEnd: true }
+    onExited: function(code) {
+      if (code !== 0) return
+      try {
+        var parsed = JSON.parse(String(highlightsReelOut.text || "{}"))
+        root.highlightReel = parsed && parsed.reel ? parsed.reel : ({items: []})
+      } catch (error) {}
+    }
+  }
+
+  Process {
+    id: highlightsLeaseProcess
+    command: [root.helperPath, "highlights-lease"]
+    stdout: StdioCollector { waitForEnd: true }
+  }
+
+  Timer {
+    id: highlightsLease
+    interval: 5000
+    running: true
+    repeat: true
+    onTriggered: {
+      root.refreshHighlights()
+      if (root.highlightsWindowOpen && !highlightsSessions.running) highlightsSessions.running = true
+      if (root.highlightsWindowOpen && !highlightsReel.running) highlightsReel.running = true
+      if (root.highlights && root.highlights.enabled && !highlightsLeaseProcess.running)
+        highlightsLeaseProcess.running = true
+    }
+  }
+
+  Process {
     id: desktopStatus
     command: [root.helperPath, "status"]
     stdout: StdioCollector { id: desktopStatusOut; waitForEnd: true }
@@ -383,30 +655,59 @@ Item {
       if (root.fixtureSwitching) return
       var result = null
       try { result = JSON.parse(String(desktopActionOut.text || "{}")) } catch (error) {}
+      var shortcutAction = root.lastDesktopAction.indexOf("shortcut") === 0
+      var errorText = result && result.error ? String(result.error) : String(desktopActionErr.text || "Desktop action failed.")
+      if (root.lastDesktopAction === "highlights-trim" && root.pendingTrimId) {
+        var trimOk = code === 0 && result && result.ok !== false && !!result.clip
+        if (trimOk) root.highlightClips = root.highlightClips.map(function(clip) {
+          return clip.id === root.pendingTrimId ? Object.assign({}, clip, result.clip) : clip
+        })
+        root.highlightTrimFinished(root.pendingTrimId, !!trimOk, trimOk ? "" : errorText)
+        root.pendingTrimId = ""
+      }
+      if (root.lastDesktopAction.indexOf("highlights-export-") === 0) {
+        var exportOk = code === 0 && result && result.ok !== false
+        if (exportOk && result.exportSettings) root.highlights = result
+        root.highlightExportFinished(!!exportOk, exportOk ? "" : errorText)
+      }
+      root.actionText = ""
       if (code === 0 && result && result.ok !== false) {
-        var action = String(result.action || "")
-        root.actionText = action === "focused" ? "Returned to the city."
-          : action === "launched" || action === "join-launched" ? "City window opened."
-          : action === "pending" ? "Opening the city…"
-          : action === "busy" ? "A desktop action is already running."
-          : action === "started" ? "Recording started."
-          : action === "stopped" ? "Recording saved."
-          : result.link ? "Invitation copied."
-          : result.preferences ? "Desktop preferences saved."
-          : "Done."
-      } else {
-        root.actionText = ""
-        root.actionError = result && result.error ? String(result.error) : String(desktopActionErr.text || "Desktop action failed.")
+        if (shortcutAction) root.shortcutError = ""
+      } else if (shortcutAction) {
+        root.shortcutError = errorText
       }
       root.refreshDesktop()
+      if (root.highlightsWindowOpen && !highlightsList.running) highlightsList.running = true
     }
   }
 
   Process {
     id: notifyProcess
+    stdout: StdioCollector { id: notifyOut; waitForEnd: true }
     onExited: function(code) {
-      root.pendingNotices = root.pendingNotices.slice(1)
-      root.runNextNotice()
+      if (root.fixtureSwitching || root.effectiveFixture) {
+        root.inFlightNotice = null
+        root.abortNoticeEffects()
+        return
+      }
+      var attempt = root.inFlightNotice
+      root.inFlightNotice = null
+      var classified = StatusModel.classifyNotifyResult(code, notifyOut.text)
+      var result = classified
+      if (classified === "failed") {
+        for (var i = 0; i < root.pendingNotices.length; i++) {
+          if (!StatusModel.noticeMatchesAttempt(root.pendingNotices[i], attempt)) continue
+          root.pendingNotices[i].attempts = (root.pendingNotices[i].attempts || 0) + 1
+          result = root.pendingNotices[i].attempts >= 3 ? "suppressed" : "failed"
+          break
+        }
+      }
+      var now = Date.now()
+      root.nowMs = now
+      var advanced = StatusModel.settleNoticeAttempt(root.pendingNotices, root.alertReceipts, result, now, attempt)
+      root.applyNoticeQueue(advanced)
+      if (result === "failed" && advanced.settled) noticeRetryTimer.restart()
+      else root.runNextNotice()
     }
   }
 
@@ -424,13 +725,22 @@ Item {
     onLoaded: {
       try {
         var parsed = JSON.parse(String(text() || "{}"))
-        root.alertReceipts = parsed && parsed.receipts ? parsed.receipts : ({})
-      } catch (error) { root.alertReceipts = ({}) }
+        root.finishReceiptsInit(parsed && parsed.receipts ? parsed.receipts : ({}))
+      } catch (error) { root.finishReceiptsInit({}) }
     }
-    onLoadFailed: root.alertReceipts = ({})
+    onLoadFailed: root.finishReceiptsInit({})
   }
 
   Timer { id: pollTimer; repeat: false; onTriggered: root.refresh() }
+  Timer {
+    id: noticeRetryTimer
+    interval: 4000
+    repeat: false
+    onTriggered: {
+      if (root.fixtureSwitching || root.effectiveFixture) return
+      root.runNextNotice()
+    }
+  }
   Timer {
     interval: 1000
     running: true

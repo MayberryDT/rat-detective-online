@@ -35,7 +35,7 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
         disposed: false, previousTime: 0, stats: null, bots: null, chaos: null, rat, gun, remotes,
         title: {},roundWon: false, myId: 'phone', shotsAttempted: 0, shotsSent: 0,
         lastMovementAt: 0, lastMovement: '', direction: new THREE.Vector3(), input: {keys: {}},
-        stage: {scene, world, camera, renderer: {render}, flashlight: new THREE.SpotLight()},
+        stage: {syncViewport: () => false, scene, world, camera, renderer: {render}, flashlight: new THREE.SpotLight()},
         simulation: new SimulationClock(), city: {update() {}},
         foleyWorld: {listener() {}, motion: new MotionFoley(() => {})},
         transport: {state: 'playing', send(message: ClientMessage) {

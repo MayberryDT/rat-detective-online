@@ -1,0 +1,18 @@
+{
+  "cli_constructed_evidence": {
+    "sourceKind": "window",
+    "matchesGameWindow": true,
+    "windowClass": "co.animasai.rat-detective",
+    "windowTitle": "Rat Detective",
+    "enforced": [
+      "compositor-class",
+      "user-preview"
+    ],
+    "userConfirmed": true
+  },
+  "inspector_source": "monitor",
+  "setup_source_confirmed": true,
+  "session_start_status": "accepted",
+  "capture_ready_after_start": true,
+  "source_inspection_calls_total": 1
+}

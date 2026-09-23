@@ -90,8 +90,9 @@ node scripts/preview-capacity.mjs --deployment=/absolute/path/to/deployment.json
 ```
 
 `--bots=11` here is the fixture generator’s legacy roster setting, **not** a browser
-URL flag. A `graybox-benchmark-match-*` pool uses the actual production backfill:
-one human plus seven server bots, bots yield as humans join, empty rooms sleep.
+URL flag. A `graybox-benchmark-match-*` pool uses the actual production roster:
+each round rolls 6–9 server bots, humans join on top until ten, and a bot is
+kicked only when the room is already full. Empty overflow rooms sleep.
 The copied fixture has isolated credentials/namespace, seed 341283204, diagnostic
 incident controls and expiry; ordinary player delivery, simulation, timings and
 navigation remain the application’s production paths. The client is served from

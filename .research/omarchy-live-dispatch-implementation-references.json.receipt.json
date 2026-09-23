@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "c3646c2fee495608f6f7e559c19dfea12b515b0e04963d323c45125aab18d939",
+  "verified_at": "2026-09-15T05:14:27.797423+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "dispatch-roster-panel:registry",
+      "url": "https://doc.qt.io/qt-6.11/qml-qtquick-repeater.html",
+      "status": 200
+    },
+    {
+      "label": "dispatch-roster-panel:source",
+      "url": "https://github.com/qt/qtdeclarative",
+      "status": 200
+    },
+    {
+      "label": "dispatch-roster-panel:behavior-repo",
+      "url": "https://github.com/MayberryDT/rat-detective-omarchy",
+      "status": 200
+    },
+    {
+      "label": "dispatch-roster-panel:behavior-evidence",
+      "url": "https://github.com/MayberryDT/rat-detective-omarchy/blob/94b16239b7d952f478ab3198b8536ce00b840c26/Panel.qml",
+      "status": 200
+    },
+    {
+      "label": "dispatch-status-alerts:registry",
+      "url": "https://github.com/MayberryDT/rat-detective-omarchy/releases/tag/v1.1.1",
+      "status": 200
+    },
+    {
+      "label": "dispatch-status-alerts:behavior-evidence",
+      "url": "https://github.com/MayberryDT/rat-detective-omarchy/blob/94b16239b7d952f478ab3198b8536ce00b840c26/StatusModel.js",
+      "status": 200
+    },
+    {
+      "label": "dispatch-status-alerts:platform",
+      "url": "https://doc.qt.io/qt-6.11/qml-qtqml-timer.html",
+      "status": 200
+    }
+  ]
+}

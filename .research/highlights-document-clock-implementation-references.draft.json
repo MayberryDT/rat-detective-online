@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "feature": "highlights-document-clock",
+  "researched_at": "2026-09-21",
+  "baseline": "Existing Python helper, protocol 1, and deployed HighlightBridge; no dependency additions.",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "not-applicable",
+      "reason": "No QML or browser controls change."
+    },
+    {
+      "class": "state-persistence",
+      "status": "not-applicable",
+      "reason": "Clock calibration is transient; SQLite schema and saved clips stay unchanged."
+    },
+    {
+      "class": "auth-security",
+      "status": "not-applicable",
+      "reason": "Existing origin allowlist and native host permissions remain; document checks preserve current session ownership."
+    },
+    {
+      "class": "network-sync",
+      "status": "required",
+      "reason": "Browser presentation timestamps must be translated only within the accepted document origin."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "The existing native Python helper has a longer lifetime than game documents."
+    },
+    {
+      "class": "accessibility",
+      "status": "not-applicable",
+      "reason": "No user interface or input behavior changes."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "Consecutive document and late ping regressions must cross the helper message handler."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "WPT demonstrates distinct time origins for contexts created at different times."
+    }
+  ],
+  "mappings": [
+    {
+      "id": "document-clock",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "network-sync",
+        "platform-device",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": null,
+      "behavior": {
+        "repo_url": "https://github.com/web-platform-tests/wpt",
+        "revision": "e6a00e812093abfcf17eccf99268d456f15948ea",
+        "evidence_url": "https://github.com/web-platform-tests/wpt/blob/e6a00e812093abfcf17eccf99268d456f15948ea/hr-time/timeOrigin.html",
+        "behavior": "Contexts created after a delay have different time origins, requiring translation before comparing relative timestamps.",
+        "edge_states": [
+          "new document after closed session",
+          "replacement document during active session",
+          "late prior-document ping",
+          "same-document retry",
+          "old calibration samples"
+        ],
+        "do_not_copy": "Do not copy the browser harness or replace the existing native messaging protocol."
+      },
+      "platform": {
+        "url": "https://www.w3.org/TR/hr-time-3/",
+        "requirement": "performance.now is relative to the relevant global time origin; independently created contexts cannot share an unadjusted offset."
+      },
+      "proof": [
+        "node --test test/scripts/highlightsPipeline.test.mjs exercises two documents separated by twelve simulated hours and verifies automatic clip publication.",
+        "node --test test/scripts/highlightsProtocol.test.mjs test/scripts/highlightsRepair.test.mjs preserves native message validation and lifecycle handling.",
+        "Compare installed helper module hashes with tested source and query status after an idle helper restart."
+      ]
+    }
+  ],
+  "selection": "Reset and seed calibration from accepted session-start before early markers; only the active document can refresh it; discard expired samples. Keep the existing dependency and capture stack."
+}

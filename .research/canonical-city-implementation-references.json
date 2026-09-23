@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "feature": "canonical-city-always-on-eight",
+  "researched_at": "2026-09-14",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "not-applicable",
+      "reason": "No title, HUD, settings or camera surfaces change; this is GameRoom occupancy only."
+    },
+    {
+      "class": "state-persistence",
+      "status": "required",
+      "reason": "Canonical public-live-v2 must keep assignment, names and scores through eviction and alarm restore."
+    },
+    {
+      "class": "auth-security",
+      "status": "required",
+      "reason": "Private graybox rooms and observation stay excluded from the always-on public city."
+    },
+    {
+      "class": "network-sync",
+      "status": "required",
+      "reason": "Companion feed for public-live-v2 stays current while overflow rooms retire from the admission directory."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "Existing Cloudflare Durable Object alarm and lifecycle contract is the only wake mechanism."
+    },
+    {
+      "class": "accessibility",
+      "status": "not-applicable",
+      "reason": "No player, observer or title controls change for this occupancy policy."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "Worker tests must prove initial eight, zero-human progress, restore, alarm persistence, feed freshness, overflow retirement and private exclusion."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "A dedicated public city keeps simulating with zero humans while overflow rooms dispose when empty."
+    }
+  ],
+  "mappings": [
+    {
+      "id": "canonical-zero-human-eight",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "state-persistence",
+        "network-sync",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": {
+        "name": "wrangler",
+        "ecosystem": "npm",
+        "package": "wrangler",
+        "version": "4.129.0",
+        "registry_url": "https://registry.npmjs.org/wrangler/4.129.0",
+        "source_url": "https://github.com/cloudflare/workers-sdk",
+        "license": "MIT OR Apache-2.0",
+        "compatibility": "Locked Cloudflare Worker plus Durable Object stack already used by GameRoom and Matchmaker. No added dependency.",
+        "ownership": "GameRoom owns the canonical eight-bot roster, assignment clock, names and scores; wrangler and workerd own Durable Object isolation.",
+        "locked_by": "../package-lock.json"
+      },
+      "behavior": {
+        "repo_url": "https://github.com/ioquake/ioq3",
+        "revision": "588393618dbc82e7207c21c6ddecca229944a03a",
+        "evidence_url": "https://github.com/ioquake/ioq3/blob/588393618dbc82e7207c21c6ddecca229944a03a/code/server/sv_main.c",
+        "behavior": "SV_Frame keeps calling GAME_RUN_FRAME on a dedicated loaded map even when no human clients are connected; empty dedicated play still advances world time, bots and scores.",
+        "edge_states": [
+          "zero human clients",
+          "map still loaded",
+          "server kill",
+          "time wrap restart"
+        ],
+        "do_not_copy": "Do not copy GPL Quake source, dedicated-server cvars, bot frame timing or snapshot encoding."
+      },
+      "platform": {
+        "url": "https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/",
+        "requirement": "Canonical public-live-v2 must persist assignment, names and scores incrementally and keep an alarm so eviction or hibernation reconstructs the still-running eight-bot match instead of sleeping the city."
+      },
+      "proof": [
+        "npx vitest run test/worker/canonicalCity.test.ts",
+        "Required assertion in test/worker/canonicalCity.test.ts: public-live-v2 starts eight bots with zero humans.",
+        "Required assertion in test/worker/canonicalCity.test.ts: zero-human city retains and advances assignment, names and scores.",
+        "Required assertion in test/worker/canonicalCity.test.ts: eviction restore keeps the eight-bot canonical match.",
+        "npx vitest run test/worker/matchmaking.test.ts",
+        "matchmaking.test.ts covers occupied eight-fill, ten-cap overflow placement and thirty-second reconnect restore; it does not prove canonical zero-human retention."
+      ]
+    },
+    {
+      "id": "durable-alarm-recovery",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "state-persistence",
+        "platform-device",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": {
+        "name": "wrangler",
+        "ecosystem": "npm",
+        "package": "wrangler",
+        "version": "4.129.0",
+        "registry_url": "https://registry.npmjs.org/wrangler/4.129.0",
+        "source_url": "https://github.com/cloudflare/workers-sdk",
+        "license": "MIT OR Apache-2.0",
+        "compatibility": "Locked Cloudflare Worker plus Durable Object stack already used by GameRoom and Matchmaker. No added dependency.",
+        "ownership": "GameRoom.scheduleNextAlarm owns merging one alarm; Cloudflare owns at-least-once delivery, six retries and exhaustion.",
+        "locked_by": "../package-lock.json"
+      },
+      "behavior": {
+        "repo_url": "https://github.com/cloudflare/cloudflare-docs",
+        "revision": "976c80e2120fdea5b4e1b1dd0eff2683802da981",
+        "evidence_url": "https://github.com/cloudflare/cloudflare-docs/blob/976c80e2120fdea5b4e1b1dd0eff2683802da981/src/content/docs/durable-objects/api/alarms.mdx",
+        "behavior": "One setAlarm per object; getAlarm before constructor setAlarm so wake does not clobber the pending alarm; at-least-once alarm() with two-second exponential backoff for six retries, then exhaustion until the next setAlarm.",
+        "edge_states": [
+          "existing alarm on construct",
+          "alarm handler throw",
+          "retry exhaustion",
+          "overlapping due events"
+        ],
+        "do_not_copy": "Do not copy documentation markup, sample AgentServer storage keys or Cloudflare branding."
+      },
+      "platform": {
+        "url": "https://developers.cloudflare.com/durable-objects/api/alarms/",
+        "requirement": "Keep a single Durable Object alarm. Constructor hydration must preserve any existing alarm. Catch alarm failures and reschedule before returning so six-retry exhaustion cannot permanently stop the canonical city."
+      },
+      "proof": [
+        "npx vitest run test/worker/canonicalCity.test.ts",
+        "Obligation for test/worker/canonicalCity.test.ts: constructor hydration must preserve an existing alarm. This is a required assertion, not a claim of current coverage.",
+        "Obligation for test/worker/canonicalCity.test.ts: alarm recovery must keep one alarm, at-least-once delivery, six retries, then exhaustion until the next setAlarm. This is a required assertion, not a claim of current coverage."
+      ]
+    },
+    {
+      "id": "overflow-sleep-private-exclusion",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "auth-security",
+        "network-sync",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": {
+        "name": "wrangler",
+        "ecosystem": "npm",
+        "package": "wrangler",
+        "version": "4.129.0",
+        "registry_url": "https://registry.npmjs.org/wrangler/4.129.0",
+        "source_url": "https://github.com/cloudflare/workers-sdk",
+        "license": "MIT OR Apache-2.0",
+        "compatibility": "Locked Cloudflare Worker plus Durable Object stack already used by GameRoom and Matchmaker. No added dependency.",
+        "ownership": "Matchmaker owns overflow admission and retirement; GameRoom owns the canonical-versus-private occupancy split; public observation stays rejected.",
+        "locked_by": "../package-lock.json"
+      },
+      "behavior": {
+        "repo_url": "https://github.com/colyseus/colyseus",
+        "revision": "d84f7881483b5b87c61eb2814b24dc9d5a23fb26",
+        "evidence_url": "https://github.com/colyseus/colyseus/blob/d84f7881483b5b87c61eb2814b24dc9d5a23fb26/packages/core/src/Room.ts",
+        "behavior": "autoDispose rooms call dispose when no clients, no reserved seats and no in-flight onLeave remain; a room that is not the always-on city is removed from the matchmaker once empty.",
+        "edge_states": [
+          "last client leave",
+          "reserved seat still held",
+          "autoDispose disabled",
+          "dispose during onLeave"
+        ],
+        "do_not_copy": "Do not copy Colyseus seat reservation, auth hooks, schema sync or room lifecycle code."
+      },
+      "platform": {
+        "url": "https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/",
+        "requirement": "Empty overflow GameRooms delete their alarm and may become inactive. Private graybox rooms never receive the canonical always-on eight. Occupied rooms still cap at ten rats and backfill to eight, with a thirty-second reconnect reservation."
+      },
+      "proof": [
+        "npx vitest run test/worker/canonicalCity.test.ts",
+        "Required assertion in test/worker/canonicalCity.test.ts: companion feed stays fresh for public-live-v2 at zero humans.",
+        "Required assertion in test/worker/canonicalCity.test.ts: empty overflow rooms retire and sleep.",
+        "Required assertion in test/worker/canonicalCity.test.ts: private graybox rooms stay excluded from canonical always-on eight.",
+        "npx vitest run test/worker/companionLifecycle.test.ts",
+        "npx vitest run test/worker/companionRoute.test.ts",
+        "npx vitest run test/worker/companionStatus.test.ts",
+        "npx vitest run test/worker/matchmaking.test.ts",
+        "npx vitest run test/worker/observer.test.ts",
+        "companionStatus.test.ts rejects private publications from the public directory.",
+        "observer.test.ts rejects public and ordinary private observation requests.",
+        "matchmaking.test.ts sleeps empty non-canonical match pools after the last human leaves."
+      ]
+    }
+  ]
+}

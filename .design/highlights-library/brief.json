@@ -1,0 +1,95 @@
+{
+  "branch": "project-foundation",
+  "reason": "Tyler requested replacing the whole Highlights window. No design-direction v2/v3 selection lock exists in this repository. The accepted Omarchy theme is preserved.",
+  "affected_surfaces": [
+    "Native HighlightsWindow library, player, session picker, clip actions, trimming, export, reel discovery, empty and error states"
+  ],
+  "fixed_scenario": "Find and watch Paperwork in orbit, favorite it, trim a copy and export it. Six representative clips and one session reel use a still from the actual local recording. Other titles are illustrative fixture data.",
+  "viewports": [
+    {
+      "name": "wide",
+      "width": 1264,
+      "height": 820
+    },
+    {
+      "name": "narrow",
+      "width": 680,
+      "height": 820
+    }
+  ],
+  "states": [
+    {
+      "name": "default",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "loading",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "empty",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "error",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "disabled",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "focus",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "hover",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "selected",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "overflow",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "narrow-viewport",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "wide-viewport",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    },
+    {
+      "name": "reduced-motion",
+      "status": "included",
+      "inspection": "Shared state controls and interactive app controls; narrow toggle at 680px. No native playback claim."
+    }
+  ],
+  "constraints": [
+    "Preserve live Omarchy semantic palette and system font",
+    "Keep capture helper, catalog, native host and installed plugin unchanged during concept selection",
+    "No external services, fonts or new dependencies",
+    "No production or GitHub publishing",
+    "Native implementation remains QML and QtMultimedia"
+  ],
+  "selection_status": "awaiting Tyler concept choice; no binding final selection created",
+  "implementation_limits": [
+    "Prototype uses a still, not playable video",
+    "Fixture interactions are local and simulated",
+    "Native control behavior and installation will be verified only after selection"
+  ]
+}

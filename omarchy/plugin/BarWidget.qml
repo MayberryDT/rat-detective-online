@@ -22,7 +22,7 @@ BarWidget {
     if (stateName === "loading") return "Rat Detective · connecting to Dispatch"
     if (stateName === "unavailable") return "Rat Detective · Dispatch unavailable"
     if (stateName === "stale") return "Rat Detective · last report is stale"
-    if (stateName === "empty") return "Rat Detective · the city is quiet"
+    if (stateName === "empty") return "Rat Detective · waiting for game data"
     var people = humanCount === 1 ? "1 investigator" : humanCount + " investigators"
     var rats = playerCount === 1 ? "1 rat" : playerCount + " rats"
     return "Rat Detective · " + people + " · " + rats

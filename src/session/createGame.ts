@@ -46,6 +46,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         stage.scene.remove(...stage.scene.children.filter(object=>!scenery.has(object)));
         stage.world.removeBody(model.body);
         await yieldToPage(signal);
+        stage.syncViewport();
         renderer.render(stage.scene,stage.camera);
         if(cameos)warmCameoBuffers(cameos,stage.scene,renderer);
         performance.mark('city-render-ready');

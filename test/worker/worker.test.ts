@@ -51,7 +51,8 @@ describe('worker', () => {
     expect(empty.status).toBe(200);
     const board = await empty.json<{room:string;players:number;bots:number;phase:string;startedAt:number;scores:Array<{name:string;kills:number;deaths:number}>}>();
     expect(board).toMatchObject({room:DEFAULT_ROOM_NAME,phase:'playing',startedAt:expect.any(Number)});
-    expect(board.bots).toBe(0); // Empty public rooms sleep until someone joins.
+    expect(board.bots).toBeGreaterThanOrEqual(6);
+    expect(board.bots).toBeLessThanOrEqual(9);
     expect(board.players).toBe(board.bots);expect(board.scores).toHaveLength(board.bots);
     expect(new Set(board.scores.map(p=>p.name)).size).toBe(board.bots);
     expect(board.scores.every(p=>p.kills===0&&p.deaths===0)).toBe(true);
@@ -62,7 +63,7 @@ describe('worker', () => {
     const world=(board as typeof board & {world:{seed:number;version:number}}).world;
     expect(world).toEqual({seed:expect.any(Number),version:2});
     const prepared=await (await SELF.fetch('https://rat-detective.test/status')).json();
-    expect(prepared).toMatchObject({world,players:0,bots:0});
+    expect(prepared).toMatchObject({world,players:board.bots,bots:board.bots});
 
     const options = await SELF.fetch('https://rat-detective.test/status', { method: 'OPTIONS' });
     expect(options.status).toBe(204);

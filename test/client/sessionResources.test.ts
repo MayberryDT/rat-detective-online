@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { AudioContext as ThreeAudioContext } from 'three';
 import { GameSession } from '../../src/session/GameSession';
+import { createStage } from '../../src/session/createStage';
 import { CityGenerator } from '../../src/world/CityGenerator';
 import { CheeseGun } from '../../src/weapons/CheeseGun';
 import { RatController } from '../../src/player/RatController';
@@ -311,7 +312,7 @@ describe('GameSession real resource lifetime', () => {
         vi.restoreAllMocks();
     });
 
-    function start() {
+    function start(preparingResize = false) {
         const canvas = page.doc.createElement('canvas');
         const renderer = {
             domElement: canvas,
@@ -319,12 +320,17 @@ describe('GameSession real resource lifetime', () => {
             toneMapping: 0,
             toneMappingExposure: 1,
             outputColorSpace: '',
-            setSize() {},
-            setPixelRatio() {},
-            render() {},
+            setSize: vi.fn(),
+            setPixelRatio: vi.fn(),
+            render: vi.fn(),
             dispose: vi.fn(),
         };
-        const session = new GameSession(renderer as never);
+        const stage = preparingResize ? createStage(renderer as never) : undefined;
+        if (preparingResize) {
+            Object.assign(window, { innerWidth: 1920, innerHeight: 1080 });
+            window.dispatchEvent(new Event('resize'));
+        }
+        const session = new GameSession(renderer as never, undefined, { stage });
         return { session, page, renderer };
     }
 
@@ -340,6 +346,24 @@ describe('GameSession real resource lifetime', () => {
         const inner = sessionOf(session);
         return (inner.rat ? 1 : 0) + inner.remotes.rats.size;
     }
+
+    it('fills the first fullscreen frame after resizing during preparation', () => {
+        const {session, renderer} = start(true);
+        frames.shift()!(1000);
+        expect(renderer.setSize).toHaveBeenLastCalledWith(1920, 1080);
+        const stage = Reflect.get(session, 'stage');
+        expect(stage.camera.aspect).toBe(1920 / 1080);
+        expect(renderer.render).toHaveBeenCalledTimes(1);
+        frames.shift()!(1016);
+        expect(renderer.render).toHaveBeenCalledTimes(1);
+        Object.assign(window, {innerWidth: 1000, innerHeight: 700, devicePixelRatio: 3});
+        // No resize notification: the next frame still reconciles dimensions.
+        frames.shift()!(1032);
+        expect(renderer.setSize).toHaveBeenLastCalledWith(1000, 700);
+        expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(2);
+        expect(stage.camera.aspect).toBe(1000 / 700);
+        session.dispose();
+    });
 
     it('clears real city, rats, gun, and cannon resources across welcome replacement and two session cycles', () => {
         const first = start();

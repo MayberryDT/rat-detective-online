@@ -1,0 +1,42 @@
+{
+  "playback_contract": {
+    "files_exist": true,
+    "rows_have_path": false,
+    "ui_requires": "selected.path"
+  },
+  "reel": {
+    "events_ms": [
+      100000,
+      200000,
+      300000
+    ],
+    "input_clips": 3,
+    "output_moments": 1,
+    "output_trim_ms": [
+      0,
+      3000
+    ],
+    "actual_event_offset_in_each_clip_ms": 10000
+  },
+  "retention": {
+    "recorded_bytes": 4294967296,
+    "unprotected_clips": 3,
+    "can_save_one_byte_before": false,
+    "clips_pruned": 0,
+    "can_save_one_byte_after": false
+  },
+  "initial_timing": "timing not calibrated",
+  "session_binding": {
+    "unrelated_marker_status": "accepted",
+    "unrelated_end_status": "accepted",
+    "primary_session_stopped": true
+  },
+  "setup": {
+    "source_confirmed_without_portal_evidence": true,
+    "recorder_started_without_joined_session": true
+  },
+  "audio_cleanup_on_disable": {
+    "calls": 0
+  },
+  "invalid_request_uncaught_exception": "ProtocolError"
+}

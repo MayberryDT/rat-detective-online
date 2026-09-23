@@ -41,7 +41,7 @@ import {
 import { log } from './logging';
 import { RoomDiagnostics } from './RoomDiagnostics';
 import { ServerBotController } from './ServerBotController';
-import { createRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
+import { createRoundBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { logClientDiagnostics, allowsLocalDiagnostics } from './clientDiagnostics';
 import { companionProjectionDue, companionProjectionSignature, projectCompanionRoom } from './companionStatus';
@@ -99,6 +99,7 @@ const ROUND_KEY = 'round';
 const ASSIGNMENT_ROTATION_KEY = 'assignment-rotation-v1';
 const PERSISTENT_BOTS_KEY = 'persistent-bots-v1';
 const BOT_ROSTER_KEY = 'persistent-bot-roster-v1';
+const ROUND_BOT_COUNT_KEY = 'round-bot-count-v1';
 const MATCH_ROOM_KEY = 'match-room-v1';
 const EVIDENCE_MODE_KEY = 'evidence-mode-v1';
 const FORCED_INCIDENT_KEY = 'incident-forced-v1';
@@ -144,6 +145,7 @@ export class GameRoom extends DurableObject<Env> {
   private matchPool: string | null = null;
   private refillAt = 0;
   private botRoster: PersistentBot[] = [];
+  private roundBotCount = 0;
   private serverBots: ServerBotController | null = null;
   private preparedBots: ServerBotController | null = null;
   private preparedUntil = 0;
@@ -185,10 +187,14 @@ export class GameRoom extends DurableObject<Env> {
     ctx.blockConcurrencyWhile(async () => {
       this.migrate();
       this.hydrate();
-      if (this.persistentBots) this.activatePersistentBots();
-      if (this.matchPool === DEFAULT_ROOM_NAME &&
-          [...this.players.keys()].some(id => !this.isManagedBot(id))) this.activateCompanion();
-      await this.scheduleNextAlarm();
+      if (this.persistentBots) {
+        if (this.matchRoom) this.rebalanceBots();
+        else this.activatePersistentBots();
+      }
+      if (this.isPublicMatchRoom() && (
+        this.keepsPersistentCity() || [...this.players.keys()].some(id => !this.isManagedBot(id))
+      )) this.activateCompanion();
+      await this.scheduleNextAlarm({ preserveExisting: true });
     });
   }
 
@@ -311,6 +317,29 @@ export class GameRoom extends DurableObject<Env> {
     return humanIds.size + pending;
   }
 
+  /** Only the canonical public city keeps a bot match with zero humans. */
+  private keepsPersistentCity(): boolean {
+    return this.matchRoom === DEFAULT_ROOM_NAME;
+  }
+
+  private cityShouldRun(): boolean {
+    return !this.matchRoom || this.humanSlots() > 0 || this.keepsPersistentCity();
+  }
+
+  private writeRoundBotCount(): void {
+    this.writeRoomState(ROUND_BOT_COUNT_KEY, String(this.roundBotCount));
+  }
+
+  private ensureRoundBotRoster(humans: number): number {
+    if (!this.roundBotCount) {
+      const rolled = createRoundBotRoster([...this.players.values()].map(player => player.name));
+      this.roundBotCount = rolled.length;
+      this.writeRoundBotCount();
+      if (!this.botRoster.length) this.botRoster = rolled.slice(0, Math.max(0, MAX_PLAYERS - humans));
+    }
+    return this.roundBotCount;
+  }
+
   private expireAdmissions(): void {
     for (const ws of this.ctx.getWebSockets()) {
       const a = this.getAttachment(ws);
@@ -325,28 +354,35 @@ export class GameRoom extends DurableObject<Env> {
     if (!this.matchRoom) return;
     const wasRunning = this.chaosTimer !== null || this.botRoster.length > 0;
     const humans = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
-    const desired = humans ? Math.max(0, 8 - humans) : 0;
-    if (desired > this.botRoster.length && this.refillAt > this.now()) return;
+    const previousLength = this.botRoster.length;
+    const desired = humans ? Math.min(this.ensureRoundBotRoster(humans), MAX_PLAYERS - humans) : 0;
+    const target = this.keepsPersistentCity() && !humans ? this.ensureRoundBotRoster(0) : desired;
+    if (target > this.botRoster.length && this.refillAt > this.now()) return;
     if (this.refillAt) { this.refillAt = 0; this.writeRoomState('bot-refill-at', '0'); }
-    const rosterChanged = this.botRoster.length !== desired;
-    if (this.botRoster.length > desired) {
-      const removed = this.botRoster.slice(desired);
+    const rosterChanged = previousLength !== target;
+    if (this.botRoster.length > target) {
+      const removed = this.botRoster.slice(target);
       for (const {id} of removed) this.removePlayerById(id, true);
-      this.botRoster = this.botRoster.slice(0, desired);
-    } else if (this.botRoster.length < desired) {
+      this.botRoster = this.botRoster.slice(0, target);
+    } else if (this.botRoster.length < target) {
       const used = new Set(this.botRoster.map(bot => bot.id));
       const fresh = createRoundBotRoster([...this.players.values()].map(player => player.name));
       for (const bot of fresh) {
-        if (!used.has(bot.id) && this.botRoster.length < desired) this.botRoster.push(bot);
+        if (!used.has(bot.id) && this.botRoster.length < target) this.botRoster.push(bot);
       }
     }
     if (rosterChanged) this.writeRoomState(BOT_ROSTER_KEY, JSON.stringify(this.botRoster));
-    if (humans) { if (rosterChanged || !this.serverBots) this.activatePersistentBots(); }
-    else {
+    if (humans) { if (rosterChanged || !this.serverBots) this.activatePersistentBots();
+      if (this.keepsPersistentCity()) this.activateCompanion();
+    } else if (this.keepsPersistentCity()) {
+      if (rosterChanged || !this.serverBots) this.activatePersistentBots();
+      this.activateCompanion();
+    } else {
       this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined;
       if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; }
       if (this.chaos && wasRunning) this.checkpointGame();
       this.nextBotHeartbeat = 0;
+      if (this.roundBotCount) { this.roundBotCount = 0; this.writeRoundBotCount(); }
       if (wasRunning && this.matchPool && !this.humanSlots()) this.retireFromMatchmaker();
     }
   }
@@ -403,7 +439,9 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private activatePersistentBots(): void {
+    if (!this.keepsPersistentCity()) {
     if (this.matchRoom && !this.humanSlots()) return;
+    }
     const added: string[] = [];
     for (const entry of this.botRoster) {
       if (this.players.has(entry.id)) continue;
@@ -447,20 +485,41 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private replaceRoundBots(): void {
-    const roster = createRoundBotRoster([...this.players.values()].map(player => player.name));
-    if (this.matchRoom) {
-      const humans = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
-      roster.splice(humans ? Math.max(0, 8 - humans) : 0);
+    const humans = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
+    const names = [...this.players.values()].map(player => player.name);
+    let roster = nextRoundBotRoster(this.botRoster, names);
+    if (this.matchRoom && !humans && !this.keepsPersistentCity()) {
+      roster = [];
+      this.roundBotCount = 0;
+    } else {
+      this.roundBotCount = roster.length;
+      if (this.matchRoom) roster = roster.slice(0, Math.max(0, MAX_PLAYERS - humans));
     }
+    this.writeRoundBotCount();
+    const nextIds = new Set(roster.map(bot => bot.id));
+    const removed = this.botRoster.filter(bot => !nextIds.has(bot.id));
+    const keptIds = this.botRoster.filter(bot => nextIds.has(bot.id)).map(bot => bot.id);
     this.serverBots?.dispose();
     this.serverBots = null;
     this.botState = undefined;
     // Stable IDs need leave/join events: respawns do not refresh client nameplates.
     this.batchScoreboards = true;
-    try { for (const { id } of this.botRoster) this.removePlayerById(id, true); }
+    try { for (const { id } of removed) this.removePlayerById(id, true); }
     finally { this.batchScoreboards = false; }
     this.writeRoomState(BOT_ROSTER_KEY, JSON.stringify(roster));
     this.botRoster = roster;
+    for (const id of [...removed.map(bot => bot.id), ...keptIds]) {
+      this.ctx.storage.sql.exec('DELETE FROM pending_events WHERE player_id = ?', id);
+    }
+    for (const id of keptIds) {
+      const player = this.players.get(id);
+      if (!player) continue;
+      player.kills = 0;
+      player.deaths = 0;
+      respawnPlayer(player, spawnForWorld(this.world, Math.random, this.players.values(), id, this.chaos?.assignmentState));
+      this.persistPlayer(player, true);
+      this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
+    }
     this.activatePersistentBots();
   }
 
@@ -522,7 +581,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!companionProjectionDue(now, this.companionLastProjectedAt, force)) return;
     this.companionLastProjectedAt = now;
     const retainedHumanIds = new Set([...this.players.keys()].filter(id => !this.isManagedBot(id)));
-    if (!retainedHumanIds.size) return;
+    if (!retainedHumanIds.size && !this.keepsPersistentCity()) return;
     const humanIds = new Set([...this.attachedPlayerIds()].filter(id => retainedHumanIds.has(id)));
     const nextRevision = this.companionRevision + 1;
     const publication = projectCompanionRoom({
@@ -677,19 +736,32 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    if(this.preparedBots&&this.now()>=this.preparedUntil){
-      this.preparedBots.dispose();this.preparedBots=null;this.preparedUntil=0;
+    try {
+      if(this.preparedBots&&this.now()>=this.preparedUntil){
+        this.preparedBots.dispose();this.preparedBots=null;this.preparedUntil=0;
+      }
+      this.reconcileLiveness();
+      if (this.matchRoom) {
+        this.expireAdmissions(); this.rebalanceBots();
+        if (!this.keepsPersistentCity()) {
+        if (!this.humanSlots() && this.matchPool) this.retireFromMatchmaker();
+        }
+      }
+      if (this.persistentBots && this.cityShouldRun()) {
+        this.activatePersistentBots();
+        this.nextBotHeartbeat = this.now() + BOT_HEARTBEAT_MS;
+      }
+      await this.processDueEvents();
+    } catch (error) {
+      // Success already schedules from processDueEvents. Only a failed
+      // canonical city needs a bounded future wake so six retries cannot
+      // strand it; overflow/private keep the ordinary platform retry.
+      if (this.keepsPersistentCity() && this.persistentBots) {
+        try { await this.scheduleNextAlarm({ ignorePastDue: true }); }
+        catch (reschedule) { log('error', 'alarm reschedule failed', { error: reschedule instanceof Error ? reschedule.message : String(reschedule) }); }
+      }
+      throw error;
     }
-    this.reconcileLiveness();
-    if (this.matchRoom) {
-      this.expireAdmissions(); this.rebalanceBots();
-      if (!this.humanSlots() && this.matchPool) this.retireFromMatchmaker();
-    }
-    if (this.persistentBots && (!this.matchRoom || this.humanSlots() > 0)) {
-      this.activatePersistentBots();
-      this.nextBotHeartbeat = this.now() + BOT_HEARTBEAT_MS;
-    }
-    await this.processDueEvents();
   }
 
   private migrate(): void {
@@ -758,6 +830,7 @@ export class GameRoom extends DurableObject<Env> {
     this.refillAt = Number(this.readRoomState('bot-refill-at')) || 0;
     this.persistentBots = this.readRoomState(PERSISTENT_BOTS_KEY) === 'true';
     if (this.persistentBots) this.restoreBotRoster();
+    this.roundBotCount = Math.max(0, Number(this.readRoomState(ROUND_BOT_COUNT_KEY)) || this.botRoster.length);
     const attachedIds = this.attachedPlayerIds();
     for (const row of this.ctx.storage.sql.exec<{player_id:string;token:string;disconnected_until:number|null}>('SELECT * FROM reconnect_sessions').toArray())
       this.sessions.set(row.player_id,{token:row.token,until:row.disconnected_until});
@@ -883,14 +956,19 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     const humanCount = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
-    if ((attachment.titleUntil!==undefined && this.humanSlots()>=MAX_PLAYERS) || humanCount >= MAX_PLAYERS || (!this.matchRoom && (this.players.size >= MAX_PLAYERS || (this.persistentBots && humanCount >= MAX_PLAYERS - MAX_PERSISTENT_BOTS)))) {
+    const reserved = (attachment.admissionUntil ?? 0) > this.now();
+    if (humanCount >= MAX_PLAYERS || (!reserved && this.humanSlots() >= MAX_PLAYERS)) {
       this.send(ws, { type: 'error', message: 'This room is full' });
       return;
     }
-
-    if (this.matchRoom && this.players.size >= MAX_PLAYERS && this.botRoster.length) {
+    if (this.players.size >= MAX_PLAYERS && this.botRoster.length) {
       const bot = this.botRoster[this.botRoster.length - 1];
       this.removePlayerById(bot.id, true); this.botRoster.pop();
+      this.writeRoomState(BOT_ROSTER_KEY, JSON.stringify(this.botRoster));
+    }
+    if (this.players.size >= MAX_PLAYERS) {
+      this.send(ws, { type: 'error', message: 'This room is full' });
+      return;
     }
     const id = crypto.randomUUID();
     const player = createPlayer(id, message.name, message.appearance, spawnForWorld(this.world, Math.random, this.players.values(), undefined, this.chaos?.assignmentState));
@@ -1192,22 +1270,36 @@ export class GameRoom extends DurableObject<Env> {
     await this.scheduleNextAlarm();
   }
 
-  private async scheduleNextAlarm(): Promise<void> {
+  private async scheduleNextAlarm(opts?: { preserveExisting?: boolean; ignorePastDue?: boolean }): Promise<void> {
     // Compute the desired deadline after the async read so concurrent events
     // cannot make a previously computed minimum overwrite an earlier alarm.
     this.diagnostics.count('alarmRead');
     const scheduled = await this.ctx.storage.getAlarm();
+    const now = this.now();
+    // A past MIN(due_at) must not hide a later still-pending wake, or ignorePastDue
+    // would skip every remaining event and set only the 15s heartbeat.
     const row = this.ctx.storage.sql
-      .exec<{ due_at: number | null }>('SELECT MIN(due_at) AS due_at FROM pending_events')
+      .exec<{ due_at: number | null }>(opts?.ignorePastDue
+        ? 'SELECT MIN(due_at) AS due_at FROM pending_events WHERE due_at > ?'
+        : 'SELECT MIN(due_at) AS due_at FROM pending_events',
+        ...(opts?.ignorePastDue ? [now] : []))
       .one();
+    const future = (value: number) => opts?.ignorePastDue && value <= now ? Infinity : value;
+    const cityWake = this.persistentBots && this.cityShouldRun()
+      ? (opts?.ignorePastDue
+        ? (this.nextBotHeartbeat > now ? this.nextBotHeartbeat : now + BOT_HEARTBEAT_MS)
+        : (this.nextBotHeartbeat || now + BOT_HEARTBEAT_MS))
+      : Infinity;
 
-    const dueAt = Math.min(typeof row?.due_at === 'number' ? row.due_at : Infinity,
-      this.persistentBots && (!this.matchRoom || this.humanSlots() > 0) ? this.nextBotHeartbeat || this.now() + BOT_HEARTBEAT_MS : Infinity,
-      this.refillAt || Infinity, this.preparedUntil || Infinity,
-      ...[...this.sessions.values()].map(session=>session.until??Infinity),
-      ...this.ctx.getWebSockets().map(ws => { const a = this.getAttachment(ws), deadline=a.admissionUntil??a.titleUntil; return !a.playerId && (deadline ?? 0) > this.now() ? deadline! : Infinity; }));
+    const dueAt = Math.min(typeof row?.due_at === 'number' ? row.due_at : Infinity, cityWake,
+      future(this.refillAt || Infinity), future(this.preparedUntil || Infinity),
+      ...[...this.sessions.values()].map(session=>future(session.until??Infinity)),
+      ...this.ctx.getWebSockets().map(ws => { const a = this.getAttachment(ws), deadline=a.admissionUntil??a.titleUntil; return !a.playerId && (deadline ?? 0) > now ? future(deadline!) : Infinity; }));
     if (Number.isFinite(dueAt)) {
       const alarmAt=Math.max(1,dueAt);
+      // Hydrate may see an already-due stored alarm; keep it unless a
+      // genuinely earlier pending event must pull the wake forward.
+      if (opts?.preserveExisting && scheduled !== null && scheduled <= alarmAt) return;
       if (scheduled !== alarmAt) { this.diagnostics.count('alarmSet'); await this.ctx.storage.setAlarm(alarmAt); }
     } else if (scheduled !== null) {
       this.diagnostics.count('alarmDelete');
@@ -1313,7 +1405,9 @@ export class GameRoom extends DurableObject<Env> {
       if(!this.chaos)return;
       this.reconcileLiveness();
       const retainedHuman=[...this.players.keys()].some(id=>!this.isManagedBot(id));
+      if(!this.keepsPersistentCity()){
       if(this.matchRoom && !retainedHuman){this.rebalanceBots();return;}
+      }
       if(!this.persistentBots && !retainedHuman){
         this.checkpointGame();
         clearInterval(this.chaosTimer!);this.chaosTimer=null;return;

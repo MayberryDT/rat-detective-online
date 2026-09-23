@@ -48,7 +48,7 @@ describe('projectile behavior', () => {
     const first = projectiles()[0];
     const geometryDispose = vi.spyOn(first.geometry, 'dispose');
     const materialDispose = vi.spyOn(first.material as THREE.Material, 'dispose');
-    gun.update(2.49);
+    gun.update(1.49);
     for (let i = 0; i < 100; i++) gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
     gun.update(0.02);
     expect(projectiles()).toHaveLength(100);
@@ -126,7 +126,7 @@ describe('projectile behavior', () => {
     material.dispose();
   });
 
-  it('launches from the pistol and preserves speed, gravity, and 2.5-second lifetime', () => {
+  it('launches from the pistol and preserves speed, gravity, and 1.5-second lifetime', () => {
     const { gun, owner, projectiles } = setup();
     const shot = gun.shoot(owner, new THREE.Vector3(100, 1.45, 0))!;
     const ball = projectiles()[0];
@@ -137,7 +137,7 @@ describe('projectile behavior', () => {
     expect(ball.position.distanceTo(origin.clone().addScaledVector(direction, 3.5).add(new THREE.Vector3(0, -0.01, 0)))).toBeLessThan(1e-10);
     gun.update(0.02);
     expect(ball.position.distanceTo(origin.clone().addScaledVector(direction, 7).add(new THREE.Vector3(0, -0.03, 0)))).toBeLessThan(1e-10);
-    gun.update(2.46);
+    gun.update(1.46);
     expect(projectiles()).toHaveLength(1);
     gun.update(0.001);
     expect(projectiles()).toHaveLength(0);

@@ -10,6 +10,7 @@ Row {
   property int minimum: 0
   property int maximum: 100
   property int step: 1
+  property bool enabled: true
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
   signal changed(int value)
@@ -21,6 +22,7 @@ Row {
     anchors.verticalCenter: parent.verticalCenter
     textFormat: Text.PlainText
     text: root.label
+    opacity: root.enabled ? 1 : 0.55
     color: root.foreground
     font.family: root.fontFamily
     font.pixelSize: Style.font.body
@@ -32,7 +34,7 @@ Row {
     focusable: true
     foreground: root.foreground
     fontFamily: root.fontFamily
-    enabled: root.value > root.minimum
+    enabled: root.enabled && root.value > root.minimum
     onClicked: root.changed(Math.max(root.minimum, root.value - root.step))
   }
   Text {
@@ -40,6 +42,7 @@ Row {
     anchors.verticalCenter: parent.verticalCenter
     textFormat: Text.PlainText
     text: root.value + root.suffix
+    opacity: root.enabled ? 1 : 0.55
     color: root.foreground
     font.family: root.fontFamily
     font.pixelSize: Style.font.body
@@ -51,7 +54,7 @@ Row {
     focusable: true
     foreground: root.foreground
     fontFamily: root.fontFamily
-    enabled: root.value < root.maximum
+    enabled: root.enabled && root.value < root.maximum
     onClicked: root.changed(Math.min(root.maximum, root.value + root.step))
   }
 }

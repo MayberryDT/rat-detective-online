@@ -6,7 +6,7 @@ The launcher, ball lifetime, local projectile presentation and Bad Ammunition ch
 
 | Behavior | Current source / value |
 | --- | --- |
-| Stage capacity | 16 total rats; automatic public rooms fill occupied lobbies to eight with server-owned AI, yield to humans and sleep when empty. Private full-lobby mode fills all 16 slots and replaces bots on human joins |
+| Stage capacity | 10 total rats; each round rolls 6–9 server bots that keep names across overlapping slots; humans add on top until the cap, and a bot is kicked only when the room is already at ten. Empty overflow rooms sleep. Private full-lobby mode still fills the cap and replaces bots on human joins |
 | World sound | Shared 3D fade uses scale 32 with a 1.5 gain after range fades, capped at near volume: about 55.3% at 50 units, 16.5% at 100, 2.87% at 250. Gun base gain .40. Close foley/sirens/launchers retain their range limits; personal UI cues remain local |
 | Human movement | 18; acceleration/braking 0.28 / 0.12 at fixed 60 Hz (`RatController.ts`) |
 | AI movement | 12 on flat active-objective routes; 6.5 near goals/stairs, 8 for supported combat strafes (`ObjectiveBotBrain.ts`), independent of human speed |
@@ -14,7 +14,7 @@ The launcher, ball lifetime, local projectile presentation and Bad Ammunition ch
 | Keyboard jump | Base 16 × sqrt(1.28), extra jump-only gravity factor 1.28; world/ball gravity unchanged |
 | Camera | Radius 6, pivot 3.5, shoulder 1.25, mouse sensitivity 0.002, obstruction checks |
 | Launcher sound | Existing impact/air sound at .595 maximum gain (30% below .85), shared 3D world fade plus range fade to silence at 120 units. Both layers follow listener movement; bounded to 12 voices with teardown cleanup |
-| Ordinary ball | Speed 175, gravity −25, restitution 0.9, lifetime 2.5 seconds (`ballTuning.ts`) |
+| Ordinary ball | Speed 175, gravity −25, restitution 0.9, lifetime 1.5 seconds (`ballTuning.ts`) |
 | Bad Ammunition | 70% one ball, 20% two, 10% three; 0.12–0.24 rad deviation from aim, diagonally within each quadrant (30–60°), no delayed extras. Normal speed and pitched original gunshot remain |
 | Damage / round | 3 HP; body 1, head 3; assignment completion wins in version 2; 3-second respawn, 6-second victory |
 | Case objective | 120-second shared held countdown, ten personal case kills at attributed kill time, or three personal paperwork deliveries. Whole landmarks rotate in shuffled cycles; carry the case at every delivery. Non-winning deliveries respawn the case at a random clear pickup site. Actual kills, no carrier multiplier. Legacy version 1 retains its existing deathmatch scoring |

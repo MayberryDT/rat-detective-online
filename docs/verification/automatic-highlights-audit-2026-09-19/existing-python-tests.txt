@@ -1,0 +1,17 @@
+✔ ffmpeg trim and reel concat produce playable h264/aac mp4 (261.794496ms)
+✔ rejects unknown versions, oversized payloads and bad markers (29.250271ms)
+✔ accepts a well-formed marker and clamps intervals (37.00974ms)
+✔ duplicate helper start fails the instance lock (24.928517ms)
+✔ fresh helper stays off until enable, then needs setup (55.877627ms)
+✔ duplicate browser message ids are not saved twice and observers are rejected (69.051106ms)
+✔ scheduler merges overlapping markers and respects the duration cap (35.014809ms)
+✔ library trash, favorites and quota pin sources (37.322845ms)
+✔ reel ranking is deterministic and drops overlapping moments (23.377557ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 309.603192

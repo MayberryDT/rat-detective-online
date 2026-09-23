@@ -26,7 +26,7 @@ function replay(fps: number, speed: number) {
     // replace the GPU, transport and unrelated city work. No constructor UI.
     const session = Object.assign(Object.create(GameSession.prototype), {
         disposed: false, previousTime: 0, stats: null, rat: null, bots: null, chaos: null,
-        stage: { scene: new THREE.Scene(), world, camera: new THREE.PerspectiveCamera(), renderer: { render() {} } },
+        stage: { syncViewport: () => false, scene: new THREE.Scene(), world, camera: new THREE.PerspectiveCamera(), renderer: { render() {} } },
         transport: { state: 'playing' }, simulation: new SimulationClock(), remotes,
         gun: { update() {} }, city: { update() {} },
         foleyWorld:{listener(){},motion:new MotionFoley(()=>{})},

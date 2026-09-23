@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "feature": "highlights-library",
+  "selected_by": "Tyler",
+  "selected_at": "2026-09-21",
+  "user_instruction": "go with 01",
+  "option_id": "direction-01",
+  "option_number": 1,
+  "name": "Machined viewing bench",
+  "entropy": {
+    "path": "entropy.json",
+    "sha256": "687aad01d65f10508835f5b8f46f5d9198b1d2ad5df06096e61c17bee7478f4d"
+  },
+  "concept_prototype": {
+    "path": "concepts.html",
+    "sha256": "41d180ec65122fe7a2bb073442ef01b123b65744f4ef00ff90e8c70b81100723",
+    "option_count": 10
+  },
+  "taste_delta": {
+    "preserve": [],
+    "intensify": [],
+    "reduce": [],
+    "remove": [],
+    "avoid": []
+  },
+  "taste_note": "No additional taste changes supplied. Empty arrays do not invent feedback. Direction 01 is explicitly selected.",
+  "status": "concept-selected; native implementation pending; not a validated final design lock"
+}

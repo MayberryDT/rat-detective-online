@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "mode": "preflight",
+  "feature": "highlights-library",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "required",
+      "reason": "HighlightsWindow uses native Omarchy Button/TextField plus unstyled Qt controls; installed qs.Ui.Dropdown provides themed popup and keyboard behavior."
+    },
+    {
+      "class": "state-persistence",
+      "status": "required",
+      "reason": "Existing clip selection, favorite, trim, rename, trash/undo and export APIs must retain identity and persisted values."
+    },
+    {
+      "class": "auth-security",
+      "status": "not-applicable",
+      "reason": "The presentation-only redesign adds no trust boundary, credential or authorization change."
+    },
+    {
+      "class": "network-sync",
+      "status": "not-applicable",
+      "reason": "The library continues using its existing local helper and polling; no network protocol or remote synchronization changes."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "Window remains Quickshell/QML on Wayland with Qt Multimedia playback."
+    },
+    {
+      "class": "accessibility",
+      "status": "required",
+      "reason": "All controls need meaningful names, visible focus, keyboard traversal and non-color-only states."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "QML behavior and native Ibara screenshots needed for the selected implementation."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "Qt multimedia example separates the video, transport, seek and additional metadata controls."
+    }
+  ],
+  "verified_candidates": [
+    {
+      "name": "Installed Omarchy qs.Ui components",
+      "status": "existing locked baseline",
+      "paths": [
+        "/usr/share/omarchy/shell/Ui/Dropdown.qml",
+        "omarchy/plugin/components/DispatchAppearance.qml",
+        "omarchy/plugin/components/HighlightsWindow.qml"
+      ],
+      "selection": "Use existing Dropdown for themed keyboard-operated filtering, not a raw platform ComboBox."
+    },
+    {
+      "name": "Qt Quick Controls / Qt Multimedia",
+      "status": "existing locked baseline",
+      "platform_url": "https://doc.qt.io/qt-6/qtquickcontrols-customize.html",
+      "behavior_url": "https://doc.qt.io/qt-6/qtmultimedia-video-mediaplayer-example.html",
+      "exact_source_path": "examples/multimedia/video/mediaplayer/PlaybackControl.qml",
+      "evidence": "Opened the current official pages in Codex in-app browser. Qt permits declarative custom content/background; example separates playback controls, enables seeking only for seekable media and handles playback errors."
+    }
+  ],
+  "proof_obligations": [
+    "Ibara browser render of selected concept, narrow and wide, menus and state controls",
+    "Selected QML: plugin JS/QML tests with real selection/filtering updates",
+    "Native Ibara: dropdown focus/navigation, player transport, trim/export dialogs, unavailable media and narrow window",
+    "Human acceptance of native clip playback on the installed plugin"
+  ],
+  "unresolved_selections": [
+    "Tyler concept choice and taste delta",
+    "Final layout and native control composition",
+    "Qt version pinned in final references before implementation"
+  ],
+  "scope": "Preflight only. Not a binding artifact or online validation receipt."
+}

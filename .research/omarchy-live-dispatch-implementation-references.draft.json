@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "mode": "preflight",
+  "feature": "omarchy-live-dispatch",
+  "researched_at": "2026-09-14",
+  "unresolved_selections": [],
+  "lock": {
+    "no_major_dependencies": true,
+    "retained": [
+      "Omarchy Panel and KeyboardPanel chrome",
+      "DispatchAppearance Omarchy and Rat Detective tokens",
+      "bundled Bangers and Outfit fonts",
+      "selected toolbar icon A"
+    ],
+    "locked_by": [
+      "../docs/omarchy.md",
+      "../docs/verification/omarchy-appearance-2026-09-14.md"
+    ]
+  },
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "required",
+      "reason": "The live menu adds DispatchRoster Repeater Column Row rows for every rat name plus objective and K/D inside the existing KeyboardPanel Flickable."
+    },
+    {
+      "class": "state-persistence",
+      "status": "required",
+      "reason": "Alert receipts, silent baseline, failed-to-successful retry baselines, and widget alert settings stay on the existing XDG and inline widget entry."
+    },
+    {
+      "class": "auth-security",
+      "status": "required",
+      "reason": "The companion still reads only the public status feed and must keep reconnect credentials out of alerts and roster state."
+    },
+    {
+      "class": "network-sync",
+      "status": "required",
+      "reason": "Opening the panel refreshes immediately and then every two seconds, with honest empty stale and live connection states."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "Alerts must honor Omarchy DND, quiet hours 22-08, focused game windows, and the Qt 6.11.2 Quickshell host."
+    },
+    {
+      "class": "accessibility",
+      "status": "required",
+      "reason": "KeyboardPanel focus, arrow scrolling, plain-text labels and 4.5:1 theme contrast stay required for the default roster."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "UI worker QtTest uses omarchy/plugin/tests/qml/tst_roster.qml; service proofs use the existing Node model and desktop helper suites."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "Plugin 1.1.1 already hosts Repeater Column Row standings, poll timers, silent baseline and DND or focus suppressions."
+    }
+  ],
+  "verified_candidates": [
+    {
+      "name": "Qt Quick Repeater Column Row inside existing Flickable",
+      "verdict": "selected",
+      "reason": "Repeater is Item-based and is documented to live inside Column or Row positioners; that matches the existing KeyboardPanel Flickable content."
+    },
+    {
+      "name": "Nested Qt Quick TableView",
+      "verdict": "rejected",
+      "reason": "TableView is only a rejected nested-scroller reference because it inherits Flickable; it is not the selected direct widget."
+    }
+  ],
+  "platform_constraints": [
+    "Omarchy 4.0.3 Quickshell on Qt 6.11.2; retain native Panel, KeyboardPanel, theme roles, fonts and icon A.",
+    "Companion schema v1 already publishes scores.length === players with name, objectiveScore, kills and deaths; no Worker API change.",
+    "StatusModel normalize keeps the schema-compatible 16 safety bound. Current production gameplay cap stays 10. Roster UI shows 10 or the current cap, never slash 16.",
+    "setPanelOpen(true) already calls refresh(); keep that immediate fetch plus openRefreshSec default 2.",
+    "alertEvents currently skips rooms with no prior row, so a fresh room that already meets the two-human threshold after silent baseline never fires.",
+    "finishFailure clears alertBaselineReady; a later successful poll must silently rebase and not replay receipts. Notify helper JSON must report suppressed-dnd and suppressed-focused without sending."
+  ],
+  "behavior_precedents": [
+    {
+      "repo_url": "https://github.com/MayberryDT/rat-detective-omarchy",
+      "revision": "94b16239b7d952f478ab3198b8536ce00b840c26",
+      "evidence_url": "https://github.com/MayberryDT/rat-detective-omarchy/blob/94b16239b7d952f478ab3198b8536ce00b840c26/Panel.qml",
+      "notes": "Repeater plus DispatchProgressRow already exist; objectiveRows.slice(0, 3), scoreRows.slice(0, 6), combat totals collapsed, room label /16 RATS."
+    },
+    {
+      "repo_url": "https://github.com/MayberryDT/rat-detective-omarchy",
+      "revision": "94b16239b7d952f478ab3198b8536ce00b840c26",
+      "evidence_url": "https://github.com/MayberryDT/rat-detective-omarchy/blob/94b16239b7d952f478ab3198b8536ce00b840c26/StatusModel.js",
+      "notes": "normalizeRows and room humans keep a 16 safety bound; alertEvents continues when !prior; connectionState distinguishes empty stale and live."
+    },
+    {
+      "repo_url": "https://github.com/MayberryDT/rat-detective-omarchy",
+      "revision": "94b16239b7d952f478ab3198b8536ce00b840c26",
+      "evidence_url": "https://github.com/MayberryDT/rat-detective-omarchy/blob/94b16239b7d952f478ab3198b8536ce00b840c26/scripts/rat-detective-desktop.py",
+      "notes": "notify() prints JSON action suppressed-dnd or suppressed-focused and does not call omarchy notification send."
+    }
+  ],
+  "ticket_split": {
+    "dispatch-roster-panel": "UI worker owns Panel.qml, new components/DispatchRoster.qml and omarchy/plugin/tests/qml/tst_roster.qml",
+    "dispatch-status-alerts": "Service worker owns Service.qml, StatusModel.js, model tests, and desktop helper notify or retry receipt cases"
+  }
+}

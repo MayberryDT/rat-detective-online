@@ -6,7 +6,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Check release contents
         shell: python
         run: |
@@ -33,12 +33,12 @@ jobs:
         run: |
           bash -n scripts/install-webapp.sh scripts/uninstall-webapp.sh scripts/rollback-webapp.sh
           python3 -m py_compile scripts/rat-detective-desktop.py
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
       - name: Run portable tests
         run: tests/run
       - name: Install Qt test runtime
-        run: sudo apt-get update && sudo apt-get install -y qt6-declarative-dev-tools qml6-module-qtquick qml6-module-qtquick-window qml6-module-qttest qml6-module-qtqml-workerscript qml6-module-qtqml-models
+        run: sudo apt-get update && sudo apt-get install -y qt6-declarative-dev-tools qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-templates qml6-module-qtquick-window qml6-module-qttest qml6-module-qtqml-workerscript qml6-module-qtqml-models
       - name: Run appearance binding tests
         run: tests/run-qml
