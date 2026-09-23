@@ -72,6 +72,7 @@ Item {
   readonly property string fixtureName: Quickshell.env("RAT_DETECTIVE_COMPANION_FIXTURE") || ""
   readonly property string effectiveFixture: fixtureOverride !== null ? String(fixtureOverride) : fixtureName
   readonly property string helperPath: localPath(Qt.resolvedUrl("scripts/rat-detective-desktop.py"))
+  readonly property string statusFetchPath: localPath(Qt.resolvedUrl("scripts/bounded-dispatch-fetch.py"))
   readonly property string iconPath: localPath(Qt.resolvedUrl("icon.png"))
   readonly property string fixturePath: localPath(Qt.resolvedUrl("fixtures/dispatch.json"))
   readonly property string stateDir: (Quickshell.env("XDG_STATE_HOME") || ((Quickshell.env("HOME") || "") + "/.local/state")) + "/rat-detective"
@@ -494,7 +495,7 @@ Item {
 
   Process {
     id: statusProcess
-    command: ["curl", "--silent", "--show-error", "--max-time", "5", "--write-out", "\n__RAT_HTTP__%{http_code}:%{content_type}", root.requestUrl()]
+    command: ["python3", root.statusFetchPath, root.requestUrl()]
     stdout: StdioCollector { id: statusOut; waitForEnd: true }
     stderr: StdioCollector { id: statusErr; waitForEnd: true }
     onExited: function(code) {

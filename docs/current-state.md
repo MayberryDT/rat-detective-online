@@ -23,20 +23,27 @@ metadata; production Worker code and all 57 other existing assets are unchanged.
 Protocol 18 and client `index-BL9xcsnh.js` / `createGame-BSxvfOuu.js` remain.
 See [release verification](verification/social-share-2026-09-22.md).
 
-## Omarchy plugin 1.3.1 — released 21 September
+## Omarchy plugin 1.3.2 — released 22 September; marketplace review pending
 
-Rat Detective Dispatch 1.3.1 is public at
+Rat Detective Dispatch 1.3.2 is public at
 [`MayberryDT/rat-detective-omarchy`](https://github.com/MayberryDT/rat-detective-omarchy)
 and as the annotated
-[`v1.3.1` release](https://github.com/MayberryDT/rat-detective-omarchy/releases/tag/v1.3.1).
+[`v1.3.2` release](https://github.com/MayberryDT/rat-detective-omarchy/releases/tag/v1.3.2).
 The immutable release commit is
-`36a56b14f9497170b0de49cb3ca9618b6e1864c6`; public CI, native Omarchy
-validation and the clean standalone release preflight pass. Veelox is installed
-at the same 1.3.1 content hash. The marketplace submission validates that exact
-commit and is ready for listing review; installer capability still requires the
-marketplace maintainer's manual approval. No game Worker deploy was needed: the
-production client and companion endpoint already provide the released runtime.
-See [the release receipt](verification/omarchy-plugin-release-2026-09-21.md).
+`0212362d8810505423622c0af3dafb414c7f128f`, package content hash
+`78111f0f4b41e96ca2613cf7c2b12ea35ba9fa114adf820875a8117aad6ba65b`.
+Public CI run #15, native Omarchy validation, portable/E2E tests and the QML
+suite pass. This patch bounds the Dispatch response before QML collection.
+
+The existing marketplace submission [issue #6926](https://github.com/omacom/omarchy-plugin-marketplace/issues/6926)
+was updated with the exact commit and evidence. Automation [run #27950](https://github.com/omacom/omarchy-plugin-marketplace/actions/runs/35823008958)
+has completed validation/routing but its serialized report-publication job was
+queued at the last check. Refreshed reports and maintainer approval are still
+pending. The old report is bound to 1.3.1 and does not cover this release.
+Veelox remains installed on 1.3.1; 1.3.2 was not live-shell tested or installed.
+The game Worker and production service were not changed. See
+[the response-cap release receipt](verification/omarchy-plugin-response-cap-2026-09-22.md)
+and the [historical 1.3.1 receipt](verification/omarchy-plugin-release-2026-09-21.md).
 
 ## Clips audio/export — 21 September installed on Veelox
 

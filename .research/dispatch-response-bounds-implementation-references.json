@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "feature": "dispatch-response-bounds",
+  "researched_at": "2026-09-22",
+  "baseline": "Standalone Omarchy plugin commit 36a56b14f9497170b0de49cb3ca9618b6e1864c6; Service.qml pipes curl output to StdioCollector. No dependency additions.",
+  "coverage": [
+    {
+      "class": "ui-primitives",
+      "status": "not-applicable",
+      "reason": "The fix changes the Dispatch fetch producer only; no controls or layout change."
+    },
+    {
+      "class": "state-persistence",
+      "status": "not-applicable",
+      "reason": "Dispatch responses remain transient and no stored state or schema changes."
+    },
+    {
+      "class": "auth-security",
+      "status": "required",
+      "reason": "The configured remote Dispatch endpoint is untrusted and its response must be bounded before collection."
+    },
+    {
+      "class": "network-sync",
+      "status": "required",
+      "reason": "The existing HTTP status/content-type trailer, pagination, timeout and legacy fallback must remain compatible."
+    },
+    {
+      "class": "platform-device",
+      "status": "required",
+      "reason": "Quickshell launches the bounded helper and must not leave its curl child alive when the request is cancelled."
+    },
+    {
+      "class": "accessibility",
+      "status": "not-applicable",
+      "reason": "Existing status and error presentation stays in place; no controls or accessibility semantics change."
+    },
+    {
+      "class": "testing",
+      "status": "required",
+      "reason": "The actual production fetch helper must reject oversized length-delimited and chunked responses before forwarding bytes."
+    },
+    {
+      "class": "behavior-precedent",
+      "status": "required",
+      "reason": "Use bounded streaming reads and preserve the repository's existing helper-process boundary."
+    }
+  ],
+  "mappings": [
+    {
+      "id": "dispatch-response-bounds",
+      "profile": "integration-or-mechanism",
+      "concerns": [
+        "auth-security",
+        "network-sync",
+        "platform-device",
+        "testing",
+        "behavior-precedent"
+      ],
+      "direct": null,
+      "behavior": {
+        "repo_url": "https://github.com/pallets/werkzeug",
+        "revision": "3.1.3",
+        "evidence_url": "https://github.com/pallets/werkzeug/blob/3.1.3/src/werkzeug/wsgi.py",
+        "behavior": "Limit streamed input while it is being read instead of buffering an unbounded response and truncating afterward.",
+        "edge_states": [
+          "below limit",
+          "exact limit",
+          "one byte over",
+          "streamed/chunked body",
+          "stalled stream",
+          "cancellation"
+        ],
+        "do_not_copy": "Do not copy Werkzeug's code or add its dependency; use only the bounded-reader principle in the existing Python/curl stack."
+      },
+      "platform": {
+        "url": "https://docs.python.org/3/library/subprocess.html",
+        "requirement": "Read child stdout with a fixed maximum, route child stderr away from an unbounded collector, terminate and reap the child on overflow or cancellation, and preserve the existing curl wall-clock deadline."
+      },
+      "proof": [
+        "python3 tests/dispatch-fetch.e2e.py runs the production fetch helper against local normal, exact-limit, oversized, chunked, legacy-status, and stalled-response fixtures and writes a JSON result artifact.",
+        "tests/run executes the portable regression suite including the new bounded-fetch end-to-end check.",
+        "The exported 1.3.2 release candidate passes native `omarchy plugin validate` and the Omarchy plugin structure validator."
+      ]
+    }
+  ],
+  "selection": "Add a small stdlib Python fetch wrapper that invokes the existing curl argv, retains --max-time 5, caps raw stdout and response body before output, caps/discards child stderr, and emits no partial response on any failure. Keep Service.qml's existing HTTP parsing and fallback behavior."
+}

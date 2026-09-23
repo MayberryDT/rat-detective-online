@@ -1,6 +1,6 @@
 # Documentation map
 
-Reviewed against repository source and the latest release receipts through **2026-09-21**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+Reviewed against repository source and the latest release receipts through **2026-09-22**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
 
 ## Planned work
 
@@ -15,6 +15,7 @@ Reviewed against repository source and the latest release receipts through **202
 | --- | --- |
 | [Committed source release](verification/full-source-release-2026-09-22.md) | All pending changes committed, current build deployed, retired branding absent from live assets |
 | [Social sharing image](verification/social-share-2026-09-22.md) | Approved action card deployed; exact image/metadata checks, unchanged gameplay |
+| [Omarchy plugin 1.3.2 response cap](verification/omarchy-plugin-response-cap-2026-09-22.md) | 64 KiB pre-collector Dispatch response cap, E2E evidence, public release and pending marketplace revalidation |
 | [Omarchy plugin 1.3.1 release](verification/omarchy-plugin-release-2026-09-21.md) | Public repository, immutable tag/release, CI, Veelox install and marketplace validation status |
 | [Omarchy plugin acceptance](verification/omarchy-plugin-acceptance-2026-09-21.md) | Ibara acceptance, repaired lease/helper teardown, exact export identity, restoration and later release closure |
 | [Automatic highlights audit](verification/automatic-highlights-audit-2026-09-19.md) | Confirmed implementation defects and missing installation; includes runnable evidence |

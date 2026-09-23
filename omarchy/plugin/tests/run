@@ -4,3 +4,5 @@ cd -- "$(dirname -- "$0")/.."
 node --test tests/*.test.mjs
 bash -n scripts/install-webapp.sh scripts/uninstall-webapp.sh scripts/rollback-webapp.sh
 python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("scripts/rat-detective-desktop.py").read_text()); ast.parse(pathlib.Path("scripts/rat-detective-highlights.py").read_text()); ast.parse(pathlib.Path("scripts/rat-detective-native-host.py").read_text())'
+python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("scripts/bounded-dispatch-fetch.py").read_text())'
+PYTHONDONTWRITEBYTECODE=1 python3 tests/dispatch-fetch.e2e.py

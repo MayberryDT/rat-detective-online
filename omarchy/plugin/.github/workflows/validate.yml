@@ -32,7 +32,7 @@ jobs:
       - name: Check helper syntax
         run: |
           bash -n scripts/install-webapp.sh scripts/uninstall-webapp.sh scripts/rollback-webapp.sh
-          python3 -m py_compile scripts/rat-detective-desktop.py
+          python3 -m py_compile scripts/rat-detective-desktop.py scripts/bounded-dispatch-fetch.py
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "artifact_sha256": "a1ac182fab7cf7c5a3ba26c2e3979d5ba6f650e1d1a0ba50a60ea9a080480efd",
+  "verified_at": "2026-09-23T05:30:06.212999+00:00",
+  "status": "passed",
+  "sources": [
+    {
+      "label": "dispatch-response-bounds:behavior-repo",
+      "url": "https://github.com/pallets/werkzeug",
+      "status": 200
+    },
+    {
+      "label": "dispatch-response-bounds:behavior-evidence",
+      "url": "https://github.com/pallets/werkzeug/blob/3.1.3/src/werkzeug/wsgi.py",
+      "status": 200
+    },
+    {
+      "label": "dispatch-response-bounds:platform",
+      "url": "https://docs.python.org/3/library/subprocess.html",
+      "status": 200
+    }
+  ]
+}
