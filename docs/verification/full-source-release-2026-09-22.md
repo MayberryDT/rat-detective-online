@@ -43,5 +43,22 @@ Run `python output/full-source-release-2026-09-22/verify-live.py` to repeat it.
 
 No automated gameplay/input test, native desktop install, plugin marketplace
 release or GitHub push is part of this release. Existing open game tabs need a
-reload to load the new hashed client. Deployment identity and final live result
-will be recorded after the source commit is deployed.
+reload to load the new hashed client. Deployment and final live results are recorded below.
+
+
+## Deployed and verified
+
+Source commit: `217fbb883cb1587277e82af68c68399cf2e48a01` (228 files).
+Production Worker: `ed58154d-d1ee-49be-8a49-7bb00729c72f`.
+Predecessor: `c638c9c8-e823-4037-9520-9b06719ef58d`.
+Client: `index-DWOYPCZx.js` / `createGame-mVhFCH8i.js`; protocol remains 18.
+
+Deployed with `npx wrangler deploy --env production` from the committed working
+copy and the checked build. Wrangler uploaded five changed assets. All 59 live
+assets match the recorded build hashes. The retired phrase is absent from every
+built HTML/JavaScript/CSS asset, including the title and Dispatch code. Sharing
+metadata still points to the exact approved PNG. Health, old-domain redirect,
+original world version/seed and active eight-bot canonical city passed.
+
+The source commit is local; no GitHub push was requested or performed. The
+following documentation-only receipt commit does not change the deployed build.

@@ -2,6 +2,18 @@
 
 Verified from source and production through **2026-09-22**. Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Committed full-source release — 22 September production
+
+Worker `ed58154d-d1ee-49be-8a49-7bb00729c72f` deploys source commit
+`217fbb883cb1587277e82af68c68399cf2e48a01`, including removal of the retired
+“Department of Bad Ideas” title kicker, roulette footer and idle Dispatch label.
+The previous image-only release accidentally left that local removal undeployed.
+All 59 live assets match the committed build; the phrase is absent from deployed
+HTML/JavaScript/CSS. Client `index-DWOYPCZx.js` / `createGame-mVhFCH8i.js`, protocol
+18. Approved sharing image unchanged; health and original eight-bot city verified.
+All pending project changes are committed locally, not pushed to GitHub.
+See [release receipt](verification/full-source-release-2026-09-22.md).
+
 ## Social sharing image — 22 September production
 
 Tyler approved the cartoon action card. Open Graph and Twitter now use

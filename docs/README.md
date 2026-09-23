@@ -13,6 +13,7 @@ Reviewed against repository source and the latest release receipts through **202
 
 | Document | Purpose |
 | --- | --- |
+| [Committed source release](verification/full-source-release-2026-09-22.md) | All pending changes committed, current build deployed, retired branding absent from live assets |
 | [Social sharing image](verification/social-share-2026-09-22.md) | Approved action card deployed; exact image/metadata checks, unchanged gameplay |
 | [Omarchy plugin 1.3.1 release](verification/omarchy-plugin-release-2026-09-21.md) | Public repository, immutable tag/release, CI, Veelox install and marketplace validation status |
 | [Omarchy plugin acceptance](verification/omarchy-plugin-acceptance-2026-09-21.md) | Ibara acceptance, repaired lease/helper teardown, exact export identity, restoration and later release closure |
