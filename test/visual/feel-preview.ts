@@ -93,6 +93,9 @@ const actions:Record<string,()=>void>={
     'Noir strength 0.35':()=>{FEEL.noir.params.strength=.35;},
     'Noir strength 0.65 (Bold)':()=>{FEEL.noir.params.strength=.65;},
     'Noir strength 1.0':()=>{FEEL.noir.params.strength=1;},
+    'Lightning strike':()=>feel.lightning(),
+    'Look up (sky)':()=>rat.onMouseMove(0,-420),
+    'Look ahead':()=>rat.onMouseMove(0,420),
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

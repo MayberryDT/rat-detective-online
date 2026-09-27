@@ -51,7 +51,7 @@ export const FEEL={
     /** Movement: landing dip (rad/s impulse), launch/Hot Pursuit view widening (degrees), speed streaks, dust count. */
     movement:{label:'16 Movement',toggle:true,params:{dip:-1.6,dipPush:-5,launchWiden:9,pursuitWiden:3.5,streaks:.8,dust:8}},
     /** Synthesized sound pass (volumes before Effects volume): footsteps, rustle, jostle, squelch, whizz, brass, stings, wind; echo/muffle by space. */
-    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,sting:.1,wind:.07,rain:.06}},
+    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,sting:.1,wind:.07,rain:.06,thunder:.16}},
     /** Reactive city: a flock every N lamps, a trash can every N lamps, scare radius, seconds before props return. */
     city:{label:'18 City reacts',toggle:true,params:{flockEvery:5,canEvery:4,scare:7,respawn:25}},
     /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. */
@@ -64,6 +64,10 @@ export const FEEL={
     noirDrain:{label:'N2 Colour-drained city',toggle:true,params:{}},
     /** N3: rain (fall speed, slant), wet-street lamp reflections (range, length, width, opacity), drop count on desktop/phone. */
     noirRain:{label:'N3 Rain and wet streets',toggle:true,params:{speed:34,slant:.12,reflectRange:70,reflectLength:9,reflectWidth:1.1,reflectOpacity:.6,drops:700,phoneDrops:260}},
+    /** N4: light cones under the nearest streetlamps (opacity, range) and extra cold fog (fraction of base density). */
+    noirHaze:{label:'N4 Haze',toggle:true,params:{opacity:.32,range:70,fog:.45}},
+    /** N8: searchlight beams (opacity, sweep speed) and lightning (gap range s, ambient flash gain). */
+    noirSky:{label:'N8 Searchlights and lightning',toggle:true,params:{beamOpacity:.16,sweepSpeed:.12,minGap:28,maxGap:70,flash:2.5}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

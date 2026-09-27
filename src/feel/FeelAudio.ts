@@ -122,6 +122,15 @@ export class FeelAudio {
         else if(kind==='delivery'){for(const f of [196,246.9,293.7,392])this.tone(filter,at,.9,'sawtooth',f,f,.16);}
         else for(let i=0;i<6;i++){this.tone(filter,at+i*.2,.12,'triangle',110,104,.4);this.tone(filter,at+i*.2+.1,.08,'square',880,860,.08);}
     }
+    /** Distant thunder: a slow low rumble. */
+    thunder(volume:number):void {
+        if(!this.allow('thunder',4))return;
+        const at=this.context.currentTime,out=this.out(volume,0,3.2);
+        const source=this.context.createBufferSource(),filter=this.context.createBiquadFilter(),env=this.context.createGain();
+        source.buffer=this.white();source.loop=true;source.playbackRate.value=.5;filter.type='lowpass';filter.frequency.value=180;filter.Q.value=.6;
+        env.gain.setValueAtTime(0,at);env.gain.linearRampToValueAtTime(1,at+.25);env.gain.setValueAtTime(.8,at+.9);env.gain.exponentialRampToValueAtTime(.001,at+3);
+        source.connect(filter);filter.connect(env);env.connect(out);source.start(at);source.stop(at+3.1);
+    }
     /** Continuous wind while flying, `level` 0…1. */
     setWind(level:number,volume:number):void {this.loop('wind',level,volume,400+level*900,.7);}
     /** Noir rain on the city, `level` 0…1 (muffled indoors by the world mix). */
