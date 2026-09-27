@@ -1,0 +1,65 @@
+import * as THREE from 'three';
+import {COAT_PROFILE} from '../utils/RatCoatGeometry';
+
+const MAX_STAINS=8;
+let sharedGeometry:THREE.ShapeGeometry|undefined;
+let sharedMaterial:THREE.MeshStandardMaterial|undefined;
+let owners=0;
+
+/** Coat radius at a body-local height, from the accepted coat profile. */
+function coatRadius(y:number):number {
+    for(let i=1;i<COAT_PROFILE.length;i++){
+        const [r0,y0]=COAT_PROFILE[i-1]!,[r1,y1]=COAT_PROFILE[i]!;
+        if(y<=y1&&y1>y0)return THREE.MathUtils.lerp(r0,r1,(y-y0)/(y1-y0));
+    }
+    return COAT_PROFILE[COAT_PROFILE.length-2]![0]!;
+}
+
+/** Polish 6: cheese stains that build up on one rat's coat during a life. One
+ * instanced draw per rat, parented to the animated body so they follow the
+ * walk, flinch and ragdoll. Cleared on respawn. */
+export class RatStains {
+    private readonly mesh:THREE.InstancedMesh;
+    private cursor=0;
+    private readonly dummy=new THREE.Object3D();
+    private readonly outward=new THREE.Vector3();
+
+    constructor(parent:THREE.Object3D){
+        if(!sharedGeometry){
+            const shape=new THREE.Shape();
+            for(let i=0;i<24;i++){
+                const angle=i/24*Math.PI*2,radius=(1+.25*Math.sin(angle*5)+.1*Math.cos(angle*7));
+                if(i===0)shape.moveTo(Math.cos(angle)*radius,Math.sin(angle)*radius);else shape.lineTo(Math.cos(angle)*radius,Math.sin(angle)*radius);
+            }
+            sharedGeometry=new THREE.ShapeGeometry(shape);
+            sharedMaterial=new THREE.MeshStandardMaterial({color:0xf2b634,emissive:0x8a5a08,emissiveIntensity:.35,roughness:.45,
+                polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+        }
+        owners++;
+        this.mesh=new THREE.InstancedMesh(sharedGeometry,sharedMaterial!,MAX_STAINS);
+        this.mesh.name='rat-cheese-stains';this.mesh.count=0;this.mesh.frustumCulled=false;
+        parent.add(this.mesh);
+    }
+
+    /** Add a stain facing `angle` (radians around the body, 0 = the rat's front). */
+    add(angle:number,seed:number):void {
+        const y=.35+((seed*.618)%1)*.8,radius=coatRadius(y)+.012;
+        this.outward.set(Math.sin(angle),0,Math.cos(angle));
+        this.dummy.position.set(this.outward.x*radius,y,this.outward.z*radius);
+        this.dummy.lookAt(this.outward.x*radius*2,y,this.outward.z*radius*2);
+        this.dummy.rotateZ(seed*2.4);
+        this.dummy.scale.setScalar(.09+((seed*.371)%1)*.07);
+        this.dummy.updateMatrix();
+        this.mesh.setMatrixAt(this.cursor%MAX_STAINS,this.dummy.matrix);
+        this.cursor++;
+        this.mesh.count=Math.min(MAX_STAINS,this.cursor);
+        this.mesh.instanceMatrix.needsUpdate=true;
+    }
+
+    clear():void {this.cursor=0;this.mesh.count=0;}
+
+    dispose():void {
+        this.mesh.removeFromParent();this.mesh.dispose();
+        if(--owners===0){sharedGeometry?.dispose();sharedMaterial?.dispose();sharedGeometry=undefined;sharedMaterial=undefined;}
+    }
+}

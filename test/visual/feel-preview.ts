@@ -66,6 +66,7 @@ const actions:Record<string,()=>void>={
     'Hit from right suspect':()=>hurt(2,1),
     'Heavy hit (3 damage)':()=>hurt(1,3),
     'Hit suspect 2 (freeze)':()=>{const victim=suspects[1]!;victim.hp=3;feel.impact(victim,false);victim.takeDamage(1,new THREE.Vector3(1,0,0));},
+    'Stain suspects ×3':()=>{for(const [i,s] of suspects.entries())for(let k=0;k<3;k++){s.hp=3;s.takeDamage(1,new THREE.Vector3(1,0,(k-1)*.6+(i-1)*.3));}},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

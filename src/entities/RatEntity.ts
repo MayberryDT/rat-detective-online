@@ -2,6 +2,8 @@ import {metalReflection} from '../utils/metalReflection';
 import {RatPowerupEffects} from './RatPowerupEffects';
 import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
+import {RatStains} from './RatStains';
+import {feelState} from '../feel/feelState';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions } from '../utils/RatModel';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
@@ -94,6 +96,8 @@ export class RatEntity {
     private readonly centerOffset = new THREE.Vector3();
     private readonly hitColor = new THREE.Color(0xffa16b);
     private freezeLeft = 0;
+    private stains?: RatStains;
+    private stainSeed = 0;
     private freezeHold = false;
     private readonly frozenPosition = new THREE.Vector3();
     private readonly frozenQuaternion = new THREE.Quaternion();
@@ -451,6 +455,7 @@ export class RatEntity {
 
         this.hp -= amount;
         this.billboard.setHealth(this.hp);
+        this.stain(impactVel);
 
         // Flash Red
         this.flashColor(0xffa16b);
@@ -468,6 +473,15 @@ export class RatEntity {
         if (this.hp <= 0) {
             this.die(impactVel);
         }
+    }
+
+    /** Polish 6: a cheese stain on the side facing the shooter (opposite the impact). */
+    private stain(impactVel: THREE.Vector3): void {
+        if (this.disposed || !feelState().on('stains')) return;
+        if (!this.stains) { const body = this.mesh.getObjectByName('rat-body'); if (!body) return; this.stains = new RatStains(body); }
+        const x = -impactVel.x, z = -impactVel.z, yaw = this.mesh.rotation.y;
+        const angle = x || z ? Math.atan2(x, z) - yaw : this.stainSeed * 2.1;
+        this.stains.add(angle + Math.sin(this.stainSeed * 12.9) * .5, ++this.stainSeed);
     }
 
     public flashColor(color: number) {
@@ -599,6 +613,7 @@ export class RatEntity {
         this.animator.reset();
         this.flashTimer = 0;
         this.freezeLeft = 0;
+        this.stains?.clear();
         this.deathTimer = 0;
 
         this.deathContactTime = -10;
@@ -693,6 +708,8 @@ export class RatEntity {
             usedCombinations.delete(this.comboKeyStr);
         }
         this.powerupEffects.dispose();
+        // Shared stain resources must leave the rig before its resources are disposed.
+        this.stains?.dispose();
         this.scene.remove(this.mesh);
         disposeMeshResources(this.mesh);
         this.billboard.dispose();

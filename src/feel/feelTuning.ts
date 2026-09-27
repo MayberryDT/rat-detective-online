@@ -22,6 +22,8 @@ export const FEEL={
     impactFreeze:{label:'4 Impact freeze',toggle:true,params:{dealt:.055,taken:.04}},
     /** Wall and floor splats: bigger, last longer; walls grow runs of cheese that slide down. */
     splats:{label:'5 Bigger dripping splats',toggle:true,params:{size:1.35,life:6,drips:2,dripLength:.9}},
+    /** Cheese stains build up on a rat's coat during one life (max 8), cleared on respawn. */
+    stains:{label:'6 Cheese stains',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;
