@@ -2,6 +2,8 @@
 
 Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md](docs/README.md) for the documentation map. These describe the shipped game as verified on **2026-09-12**, not a new implementation request.
 
+**Active work:** the [polish plan](docs/polish-plan.md) (started 2026-09-27) owns current status, order and next action for the feel/polish program: camera, impacts, character model and animation, sound, city reactions and rewards. Read it first for any such task. It supersedes older animation, camera-shake and foley-pruning guidance where they conflict; older plans and handoffs are reference only.
+
 ## Preserve the game
 
 - September 17 launchable-case production: Worker `a18fbc4a-7a6b-4dde-924e-f0c3e90af5c5`, protocol 18, matching client `index-CtA1HGSO.js`. Loose unowned cases on a launcher pad take that machine's impulse. Counterfeits stay planted; carried cases ride the rat. No drop hotkey. See [the production receipt](docs/verification/case-launchers-2026-09-17.md).

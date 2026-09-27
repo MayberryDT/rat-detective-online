@@ -1,5 +1,7 @@
 # Rat Detective animation handoff
 
+> **Reference only (2026-09-27).** The September 12 animation set shipped. New character, animation and camera work follows the [polish plan](../polish-plan.md), which supersedes the "no camera bob" and "no hat loss" rules below. The identity rules (no hands, floating sleeves, rigid case, palette) still apply through that plan. The code map and hazards remain useful.
+
 Prepared September 12, 2026. Repository: `/home/tyler/Projects/rat-detective`.
 
 ## Assignment and reading order

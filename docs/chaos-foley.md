@@ -1,5 +1,7 @@
 # Deliberate cartoon foley
 
+> **2026-09-27:** New sounds follow the [polish plan's sound pass](polish/sound.md), which reopens footsteps, flybys, echo and kill cues that were removed below. This page still describes the shipped bank.
+
 Integrated September 10, 2026 into the current game on **`main`**, from the final accepted audio commit **`29620ba`** on **`codex/chaos-foley`**. The source worktree remains at `/home/tyler/Projects/rat-detective-chaos-foley`. The direction is deliberate cartoon physical accents with dark noir menu/result character. Tyler accepted the final 13-cue revision, including the dry countdown and restrained noir victory. Earlier 75-, 20- and 18-cue passes are historical.
 
 Only the final audio delta was applied. The older game snapshot in the audio branch was not imported. The current scoreboard, assignment rules, case respawns, cheese danger colors, rotating jokes, local outline treatment and lighting remain. The integration retained original gunshots, rat reactions, feedback and music; the new victory phrase replaces the result cue at the HUD call site. No gameplay tuning changes are part of this integration. See [integration checks](verification/audio-integration-main-2026-09-10.md).

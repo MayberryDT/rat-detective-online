@@ -1,5 +1,7 @@
 # Model and map follow-ups
 
+> **2026-09-27:** Character polish now follows the [polish plan's character section](polish/character.md). This page is reference only.
+
 ## September 12 outfit direction and prototype
 
 Tyler approved one shared fedora, the three-button coat, eight hat/coat colors,
