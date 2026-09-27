@@ -20,3 +20,5 @@
   26%,78%{opacity:1;transform:translate(-50%,-50%) rotate(var(--tilt)) scale(1)}
   100%{opacity:0;transform:translate(-50%,-80%) rotate(var(--tilt)) scale(.94)}}
 @media(max-height:500px){.feel-word{font-size:34px}}
+/* 10: noir low health: darkened edges; the canvas colour drain is a CSS filter set from script. */
+.feel-noir{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 38%,#05030acc 100%)}

@@ -28,6 +28,7 @@ const suspects=[-3,0,3].map((dz,i)=>{
     return entity;
 });
 const feel=new FeelDirector();
+feel.attach(stage.renderer.domElement,stage.listener);
 const status=document.getElementById('feel-status')!;
 const aim=new THREE.Vector3();
 function fire():void {
@@ -71,6 +72,9 @@ const actions:Record<string,()=>void>={
     'Kill (bloom + punch-in)':()=>{const c=document.getElementById('crosshair')!;c.classList.remove('kill-confirmed');void c.offsetWidth;c.classList.add('kill-confirmed');feel.killed(suspects[1]!.mesh.position,false,stage.camera);},
     'Double kill (comic word)':()=>{feel.killed(suspects[0]!.mesh.position,false,stage.camera);feel.killed(suspects[2]!.mesh.position,false,stage.camera);},
     'Air kill (comic word)':()=>{feel.reset();feel.killed(suspects[1]!.mesh.position,true,stage.camera,performance.now()+60_000);},
+    'Wounded (2 HP)':()=>feel.health(2),
+    'Last hit point (1 HP)':()=>feel.health(1),
+    'Quick Fix heal':()=>feel.health(3,true),
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

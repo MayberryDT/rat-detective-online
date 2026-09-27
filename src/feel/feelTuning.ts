@@ -30,6 +30,8 @@ export const FEEL={
     killBloom:{label:'8 Kill bloom and punch-in',toggle:true,params:{punch:4}},
     /** Comic words: kill streaks within `streakWindow` s, air kills, Big Cheese hits; `cooldown` s between non-streak words. */
     comicWords:{label:'9 Comic words',toggle:true,params:{streakWindow:4,cooldown:6}},
+    /** Noir low health: colour drain/vignette by danger (hp 2 → `mid`, hp 1 → 1), muffle cutoff (Hz), heartbeat period/volume, heal flood. */
+    lowHealth:{label:'10 Noir low health',toggle:true,params:{mid:.4,drain:.9,vignette:.55,flood:.6,ease:3,closed:900,period:.95,heartbeat:.5}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

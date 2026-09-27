@@ -11,6 +11,10 @@ export class ScreenFeel {
     private root?:HTMLElement;
     private edge?:HTMLElement;
     private bloom?:HTMLElement;
+    private noirEdge?:HTMLElement;
+    private canvas?:HTMLElement;
+    private lastFilter='';
+    private lastNoir=0;
     private readonly words:HTMLElement[]=[];
     private wordCursor=0;
     private readonly projected=new THREE.Vector3();
@@ -29,6 +33,23 @@ export class ScreenFeel {
         if(!from)return;
         const arrow=this.arrows.find(a=>a.from===from)??this.arrows.reduce((a,b)=>a.age/a.life>=b.age/b.life?a:b);
         arrow.from=from;arrow.age=0;arrow.life=p.arrowLife;
+    }
+
+    /** The game canvas, for the low-health colour drain. */
+    attachCanvas(canvas:HTMLElement):void {this.canvas=canvas;}
+
+    /** Low-health noir: `level` 0 (full colour) … 1 (near black and white); `flood` 0…1 is the heal overshoot. */
+    noir(level:number,flood:number,filter:boolean):void {
+        const key=level*1000+flood;
+        if(key===this.lastNoir)return;
+        this.lastNoir=key;
+        if(!(level>0||flood>0)&&!this.root)return;
+        if(!this.build())return;
+        const flash=this.flash(),p=FEEL.lowHealth.params,drain=level*flash;
+        if(this.noirEdge)this.noirEdge.style.opacity=String(drain*p.vignette);
+        if(!this.canvas)return;
+        const value=filter&&(drain>.001||flood>.001)?`saturate(${(1-p.drain*drain+p.flood*flood).toFixed(3)}) contrast(${(1+.12*drain).toFixed(3)})`:'';
+        if(value!==this.lastFilter){this.canvas.style.filter=value;this.lastFilter=value;}
     }
 
     /** Pop a comic word over `at` (world position), clamped inside the screen. */
@@ -79,15 +100,19 @@ export class ScreenFeel {
         for(const arrow of this.arrows){arrow.from=null;arrow.node.style.opacity='0';}
         this.bloom?.classList.remove('on');
         for(const node of this.words)node.classList.remove('on');
+        if(this.noirEdge)this.noirEdge.style.opacity='0';
+        if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
+        this.lastNoir=0;
     }
 
-    dispose():void {this.root?.remove();this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
         // Headless/test documents may lack a full DOM; overlays are then simply skipped.
         if(!this.doc?.body||typeof this.doc.createElement!=='function')return false;
         this.root=this.doc.createElement('div');this.root.className='feel-screen';this.root.setAttribute('aria-hidden','true');
+        this.noirEdge=this.doc.createElement('div');this.noirEdge.className='feel-noir';this.root.appendChild(this.noirEdge);
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
         this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);
         for(let i=0;i<3;i++){const node=this.doc.createElement('div');node.className='feel-word';this.root.appendChild(node);this.words.push(node);}

@@ -3,6 +3,8 @@ import type {IncidentId} from '../shared/incidentCatalog';
 import type {RatEntity} from '../entities/RatEntity';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
+import {NoirAudio} from './NoirAudio';
+import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
 
@@ -15,12 +17,32 @@ export class FeelDirector {
     private incident?:IncidentId;
     private readonly killTimes:number[]=[];
     private lastWordAt=-Infinity;
+    private danger=0;
+    private dangerTarget=0;
+    private flood=0;
+    private noirAudio?:NoirAudio;
+    private colourFilter=true;
     private readonly impulse=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
     constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
         this.camera=new CameraFeel(()=>this.state.shake());
         this.screen=new ScreenFeel(()=>this.state.flash(),doc);
     }
+    /** Connect the game canvas (colour drain) and audio listener (muffle, heartbeat). */
+    attach(canvas:HTMLElement,listener?:THREE.AudioListener,touch=false):void {
+        this.screen.attachCanvas(canvas);
+        if(listener)this.noirAudio=new NoirAudio(listener);
+        // Phones skip the full-canvas colour filter; the vignette and audio remain.
+        this.colourFilter=!touch;
+    }
+
+    /** Authoritative local health changed; `healed` floods colour back. */
+    health(hp:number,healed=false):void {
+        const p=FEEL.lowHealth.params,previous=this.dangerTarget;
+        this.dangerTarget=hp>=MAX_HP?0:hp<=1?1:p.mid;
+        if(healed&&previous>0&&this.dangerTarget<previous)this.flood=1;
+    }
+
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
     setIncident(incident?:IncidentId):void {this.incident=incident;}
 
@@ -83,11 +105,18 @@ export class FeelDirector {
     update(dt:number,view:THREE.Camera,self?:THREE.Vector3):void {
         this.camera.update(dt);
         this.screen.update(dt,view,self);
+        const on=this.state.on('lowHealth'),p=FEEL.lowHealth.params,target=on?this.dangerTarget:0;
+        this.danger+=(target-this.danger)*(1-Math.exp(-p.ease*dt));
+        if(Math.abs(target-this.danger)<.002)this.danger=target;
+        this.flood=Math.max(0,this.flood-dt*1.4);
+        this.screen.noir(this.danger,on?this.flood:0,this.colourFilter);
+        if(on)this.noirAudio?.update(dt,this.danger,p.closed,p.period,p.heartbeat);
+        else this.noirAudio?.reset();
     }
     /** Offset the rendered view; `afterRender` must follow the same frame. */
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;}
-    dispose():void {this.camera.reset();this.screen.dispose();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();}
 }

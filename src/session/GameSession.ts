@@ -120,6 +120,7 @@ export class GameSession {
         this.foley=new FoleyAudio(listener);
         this.foley.setEnabled(false);
         this.gun = new CheeseGun(scene, world, listener);
+        this.feel.attach(this.stage.renderer.domElement, listener, touchControlsAvailable());
         this.remotes = new RemotePlayers(scene, world);
         this.worldSpec = initialWorld ? { ...initialWorld } : createWorldSpec(1);
         if(!initialWorld && new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
@@ -253,6 +254,7 @@ export class GameSession {
             new THREE.Vector3(player.x, player.y, player.z),this.worldSpec.version===GRAYBOX_VERSION?CITY_BOUNDS:undefined);
         this.rat.entity.isPlayer = true;
         this.rat.entity.applySnapshot(player);
+        this.feel.health(player.hp);
         this.gun.setPlayer(this.stage.camera, this.rat.entity);
         if(this.observing)this.rat.entity.body.collisionFilterMask=1;
         this.remotes.observing=this.observing;
@@ -349,6 +351,7 @@ export class GameSession {
             case 'playerDamaged': {
                 if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');const victim=this.remotes.get(message.id);if(victim)this.feel.hitDealt(victim.mesh.position,this.stage.camera);}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
+                if (message.id === this.myId) this.feel.health(message.hp);
                 if (entity && !entity.dead) {
                     if (message.hp === 0) {
                         // Apply health immediately; the ordered playerDied event supplies
@@ -372,7 +375,7 @@ export class GameSession {
             case 'playerHealed': {
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 entity?.heal(message.hp);
-                if (message.id === this.myId) this.chaos?.showHealing();
+                if (message.id === this.myId) {this.chaos?.showHealing();this.feel.health(message.hp,true);}
                 break;
             }
             case 'playerDied': {
@@ -411,7 +414,7 @@ export class GameSession {
             case 'playerRespawn':
                 if (message.id === this.myId && this.rat) this.rat.setSpeedScale(1);
                 if (message.id === this.myId) {
-                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset();
+                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset(); this.feel.health(message.hp);
                     this.lastInteractionPosition.set(message.x,message.y+.8,message.z);this.clearInput(); this.hud.hideRespawn();
                 } else this.remotes.respawn(message.id, message);
                 break;
