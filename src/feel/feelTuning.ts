@@ -40,6 +40,10 @@ export const FEEL={
     deathVariety:{label:'12 Death variety',toggle:true,params:{spinGain:1.5,spinWhirl:.5,flingGain:1.8,flingStretch:.26,flingTime:.42,flopGain:.6,flopLanding:2.2,flopDroop:.6}},
     /** Death camera: turn to your corpse over `turn` s, pull back, follow for `follow` s, then iris closes over `close` s to `irisRadius` vmax. */
     deathCam:{label:'13 Death camera and iris',toggle:true,params:{turn:.3,pullBack:2.5,follow:.8,close:.6,irisRadius:16}},
+    /** Model touch-ups (whiskers, brows, cheeks, nose, brim edge); built into new rats, so reload after switching. */
+    modelTouchUps:{label:'14 Model touch-ups (reload)',toggle:true,params:{}},
+    /** Shoes under the coat hem; Tyler chose on by default. Needs model touch-ups. */
+    shoes:{label:'14b Shoes (reload)',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

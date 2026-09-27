@@ -3,6 +3,7 @@ import type { HatTypeName, RatAppearance } from '../shared/networkProtocol';
 import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
 import { COAT_PROFILE, addCoatTailoring } from './RatCoatGeometry';
 import { createRatArm, RAT_GUN_SHOULDER, updateGunSleeve } from './RatArmModel';
+import { feelState } from '../feel/feelState';
 
 export type HatType = HatTypeName;
 export type RatOptions = Partial<RatAppearance>;
@@ -126,15 +127,38 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     mesh(body, collarGeometry(), highlight).name = 'rat-collar';
     addCoatTailoring(body, coat, highlight, shirt, darkCoat);
     const head = pivot(body, 'rat-head', 0, 1.60, 0.015);
-    mesh(head, muzzleGeometry(), fur);
-    mesh(head, new THREE.SphereGeometry(0.068, 16, 10), material(0x382227, 0.42), 0, -0.08, 0.545);
+    // Polish 14 (feel switch, applies to newly built rats): whiskers, brows, cheeks,
+    // brim edge and shoes. Identity, palette and silhouette are unchanged.
+    const touchUps = feelState().on('modelTouchUps');
+    const muzzle = mesh(head, muzzleGeometry(), fur);
+    if (touchUps) muzzle.scale.set(1.045, 1.03, 1);
+    const nose = mesh(head, new THREE.SphereGeometry(0.068, 16, 10), material(0x382227, 0.3), 0, -0.08, 0.545);
     const white = material(0xeee4cc), pupil = material(0x13121a, 0.5);
     for (const side of [-1, 1]) {
         const eye = pivot(head, side < 0 ? 'rat-eye-left' : 'rat-eye-right', side * 0.175, 0.102, 0.268);
         eye.scale.x = 0.93;
         eye.rotation.y = side * 0.55; eye.rotation.z = side * 0.09;
         mesh(eye, new THREE.CircleGeometry(0.101, 20, Math.PI, Math.PI), white);
-        mesh(eye, new THREE.CircleGeometry(0.063, 20, Math.PI, Math.PI), pupil, -side * 0.017, -0.004, 0.004);
+        mesh(eye, new THREE.CircleGeometry(0.063, 20, Math.PI, Math.PI), pupil, -side * 0.017, -0.004, 0.004).name = 'rat-pupil';
+    }
+    if (touchUps) {
+        nose.scale.setScalar(1.06);
+        const brow = material(new THREE.Color(options.furColor ?? DEFAULT_APPEARANCE.furColor).multiplyScalar(0.42), 0.8);
+        const browGeometry = new THREE.BoxGeometry(0.15, 0.03, 0.03);
+        const whisker = material(0xece2cf, 0.6);
+        const whiskerGeometry = new THREE.CylinderGeometry(0.0045, 0.0022, 0.34, 5).translate(0, 0.17, 0).rotateZ(-Math.PI / 2);
+        for (const side of [-1, 1]) {
+            const browPivot = pivot(head, side < 0 ? 'rat-brow-left' : 'rat-brow-right', side * 0.17, 0.158, 0.29);
+            browPivot.rotation.y = side * 0.55;browPivot.rotation.z = -side * 0.12;
+            mesh(browPivot, browGeometry, brow).userData.noOutline = true;
+            const whiskers = pivot(head, side < 0 ? 'rat-whiskers-left' : 'rat-whiskers-right', side * 0.09, -0.1, 0.46);
+            for (const [i, tilt] of [0.16, 0, -0.14].entries()) {
+                const hair = mesh(whiskers, whiskerGeometry, whisker);
+                hair.rotation.set(0, side < 0 ? Math.PI - 0.35 : 0.35, tilt + (side < 0 ? 0 : 0), 'YXZ');
+                hair.position.y = (1 - i) * 0.018;
+                hair.castShadow = false;hair.userData.noOutline = true;
+            }
+        }
     }
     const hat = pivot(head, 'rat-hat', 0, 0.19, 0);
     hat.rotation.x = 0.06;
@@ -161,6 +185,11 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const hatBand = mesh(hat, new THREE.CylinderGeometry(radiusAt(0.1025), radiusAt(0.0275), 0.075, 24), highlight, 0, 0.065, 0);
     hatBand.name = 'rat-hatband';
     hatBand.scale.z = 0.86;
+    if (touchUps) {
+        // A rolled brim edge, lightened from the hat felt (not a new colour channel).
+        const edge = mesh(hat, new THREE.TorusGeometry(brimRadius - 0.004, 0.014, 6, 48), material((felt.color as THREE.Color).clone().multiplyScalar(1.28), 0.7));
+        edge.rotation.x = Math.PI / 2;edge.scale.set(1, 0.8, 1);edge.userData.noOutline = true;
+    }
     // The visible ear bases sit on the side brim, outside the crown. Sharing the
     // hat pivot keeps that clearance during its secondary walking/recoil motion.
     for (const side of [-1, 1]) {
@@ -179,6 +208,15 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const tail = mesh(root, new THREE.TubeGeometry(tailCurve, 24, 0.052, 10, false), skin, 0, 0.25, -0.44);
     tail.name = 'rat-tail';
     mesh(tail, new THREE.SphereGeometry(0.052, 12, 8), skin, 0.2, -0.17, -1.17);
+    if (touchUps && feelState().on('shoes')) {
+        // Two dark shoes peeking under the hem; no legs. They step with the stride.
+        const leather = material(0x1d1512, 0.45);
+        const shoeGeometry = new THREE.SphereGeometry(0.1, 14, 8);
+        for (const side of [-1, 1]) {
+            const shoe = pivot(root, side < 0 ? 'rat-shoe-left' : 'rat-shoe-right', side * 0.16, 0.035, 0.36);
+            const part = mesh(shoe, shoeGeometry, leather);part.scale.set(1, 0.5, 1.75);part.userData.noOutline = true;
+        }
+    }
     cheesePistol(body, coat, highlight);
     return root;
 }

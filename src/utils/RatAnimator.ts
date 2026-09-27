@@ -8,6 +8,9 @@ import {updateGunSleeve,type GunSleeveRig} from './RatArmModel';
 import { RatLocomotionFollowThrough } from './RatLocomotionFollowThrough';
 import {RatActing,type RatReaction} from './RatActing';
 
+/** Polish 14 parts, present only on rats built with model touch-ups. */
+const EXTRA_PARTS = ['rat-brow-left','rat-brow-right','rat-whiskers-left','rat-whiskers-right','rat-shoe-left','rat-shoe-right'] as const;
+interface ExtraPart {part:THREE.Object3D;kind:'brow'|'whiskers'|'shoe'|'pupil';side:number;position:THREE.Vector3;rotation:THREE.Euler}
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;
 
@@ -81,6 +84,7 @@ export class RatAnimator {
     private lastPosition: THREE.Vector3 | null = null;
     private lastYaw = 0;
     private readonly orientation = new THREE.Euler(0, 0, 0, 'YXZ');
+    private readonly extras: ExtraPart[] = [];
 
     constructor(private readonly root: THREE.Group, outline?: THREE.Group) {
         this.acting=new RatActing(root.uuid);
@@ -91,6 +95,18 @@ export class RatAnimator {
                 arm:model.getObjectByName('rat-arm')!,pistol:model.getObjectByName('rat-pistol')!}]:[];
         });
         this.carryAnchor = getRatCarryAnchor(root);
+        for (const model of models) {
+            for (const name of EXTRA_PARTS) {
+                const part = model.getObjectByName(name);
+                if (part) this.extras.push({part, kind:name.startsWith('rat-brow')?'brow':name.startsWith('rat-whiskers')?'whiskers':'shoe',
+                    side:name.endsWith('-left')?-1:1, position:part.position.clone(), rotation:part.rotation.clone()});
+            }
+            model.traverse(object => {
+                if (object.name !== 'rat-pupil') return;
+                const side = object.parent?.name === 'rat-eye-left' ? -1 : 1;
+                this.extras.push({part:object, kind:'pupil', side, position:object.position.clone(), rotation:object.rotation.clone()});
+            });
+        }
         // The firing cue follows the actual animated barrel. A ball frozen at a
         // prior world-space muzzle appears behind the gun as the rat moves.
         const vertices: number[] = [];
@@ -260,6 +276,31 @@ export class RatAnimator {
             part.position.copy(position);
             part.rotation.copy(rotation);
             part.scale.copy(scale);
+        }
+        for (const extra of this.extras) {extra.part.position.copy(extra.position);extra.part.rotation.copy(extra.rotation);}
+    }
+
+    /** Polish 14 secondary motion: brows, whiskers, shoes and pupils. */
+    private poseExtras(sway:number, stepLift:number):void {
+        if (!this.extras.length) return;
+        const hitEnv = this.hitAge < 1.4 ? Math.exp(-this.hitAge * 4) : 0;
+        const twitch = Math.sin(this.time * 9.3) * Math.max(0, Math.sin(this.time * .7)) * .06;
+        const look = THREE.MathUtils.clamp(-this.turn * .35, -1, 1);
+        for (const {part, kind, side} of this.extras) {
+            if (kind === 'brow') {
+                part.position.y += .035 * hitEnv - .012 * this.aim;
+                part.rotation.z += side * (.2 * this.aim - .25 * hitEnv);
+            } else if (kind === 'whiskers') {
+                part.rotation.z += side * (sway * .22 + twitch) - side * .4 * hitEnv;
+                part.rotation.y += side * stepLift * this.movement * .12;
+            } else if (kind === 'shoe') {
+                const step = Math.sin(this.stride + (side < 0 ? 0 : Math.PI));
+                part.position.z += step * .09 * this.movement;
+                part.position.y += Math.max(0, step) * .05 * this.movement;
+                part.rotation.x -= Math.max(0, step) * .35 * this.movement;
+            } else {
+                part.position.x += (-side * .014 * this.aim + look * .016) * (side < 0 ? -1 : 1);
+            }
         }
     }
 
@@ -436,7 +477,7 @@ export class RatAnimator {
             }
             pistol.rotation.x = -this.recoil * 0.14;
             pistol.position.z = -this.recoil * 0.035;
-            leftEye.scale.y = rightEye.scale.y = 1 - blink * 0.94;
+            leftEye.scale.y = rightEye.scale.y = 1 - Math.max(blink, this.extras.length && this.hitAge < .14 ? Math.sin(this.hitAge / .14 * Math.PI) : 0) * 0.94;
             leftEar.rotation.z = twitch;
             rightEar.rotation.z = -twitch * 0.65;
             if (this.locomotionPolish) {
@@ -484,6 +525,7 @@ export class RatAnimator {
                 leftEye.rotation.z-=a.eyeSlant;rightEye.rotation.z+=a.eyeSlant;
             }
         }
+        this.poseExtras(sway, stepLift);
         this.gunSleeves.forEach(updateGunSleeve);
         this.deformTails();
     }
