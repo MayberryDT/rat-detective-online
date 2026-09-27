@@ -1,4 +1,5 @@
 import { activeZone, nextZone, JURISDICTION_TUNING } from '../shared/jurisdiction';
+import {feelState} from '../feel/feelState';
 import { JURISDICTION_ZONES } from '../shared/jurisdictionZones';
 import type {ScoreEntry,Vec3Data} from '../shared/networkProtocol';
 import type {ChaosState} from '../shared/chaosState';
@@ -184,6 +185,7 @@ export class DispatchHud {
                 this.confirmation.classList.remove('stamp-pop');void this.confirmation.offsetWidth;this.confirmation.classList.add('stamp-pop');
                 this.feedback?.('case-point');setText(this.confirmation,`CASE KILL +${points-this.previousPoints} · ${points}/${target}`);this.confirmationUntil=now+2400;
             }
+            const gained=newAssignment?0:points-this.previousPoints;
             this.previousPoints=points;
             const score=this.scores.find(s=>s.id===this.myId);
             setText(this.stats,score?`TOTAL KILLS ${score.kills} · DEATHS ${score.deaths}`:'');
@@ -213,6 +215,11 @@ export class DispatchHud {
                     }
                     this.rankings.appendChild(row);
                 }
+            }
+            // Polish 19: punch your own ranking row when your points go up.
+            if(gained>0&&feelState().on('rewards')){
+                const row=this.rankings.querySelector<HTMLElement>('[data-local="true"]');
+                if(row){row.classList.remove('feel-pop');void row.offsetWidth;row.classList.add('feel-pop');}
             }
             setText(this.counter,(this.observing?'OBSERVING · ':'')+(race?`TOP FIVE · FIRST TO ${target}`:'HOLD IT AT ZERO!'));
             setText(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);

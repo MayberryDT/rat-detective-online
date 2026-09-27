@@ -87,6 +87,8 @@ const actions:Record<string,()=>void>={
     'Launch view (hold 1.5 s)':()=>{feel.motion(false,60,0,1);setTimeout(()=>feel.motion(true,0,0,1),1500);},
     'Hot Pursuit streaks (2 s)':()=>{const t=setInterval(()=>feel.motion(true,0,16,1.45),16);setTimeout(()=>{clearInterval(t);feel.motion(true,0,0,1);},2000);},
     'City: blast near the rat (props react)':()=>{const p=rat.entity.mesh.position;for(const lamp of city.streetLamps){if(Math.hypot(lamp[0]-p.x,lamp[1]-p.z)<30)cityImpact({x:lamp[0]+2,y:.5,z:lamp[1]+2},4);}},
+    'Callout: ON THE CASE':()=>feel.sting('case'),
+    'Victory slow-motion (1.4 s)':()=>{feel.victory();},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

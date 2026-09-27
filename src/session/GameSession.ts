@@ -91,6 +91,7 @@ export class GameSession {
     private releasePreparedModels?:()=>void;
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
+    private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
     private lastHighlightObserve = 0;
     private lastChaos: ChaosState | null = null;
     private localLaunchY = 0;
@@ -232,7 +233,7 @@ export class GameSession {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
-        this.feel.reset();
+        this.feel.reset();this.feel.resetRound();this.pendingVictory=undefined;
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -389,7 +390,7 @@ export class GameSession {
             case 'playerDied': {
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
-                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName);this.foley.play('hit-confirm');const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera);}
+                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName);this.foley.play('hit-confirm');const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId);}
                 this.highlights.emit(this.highlights.detector.onDeath({
                     victimId: message.victimId,
                     killerId: message.killerId,
@@ -431,11 +432,17 @@ export class GameSession {
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
-            case 'gameWon':
-                this.roundWon=true;this.clearInput();this.hud.hideRespawn();this.hud.showVictory(message.winnerName, message.kills,message.assignment);
+            case 'gameWon': {
+                this.roundWon=true;this.clearInput();this.hud.hideRespawn();
+                // Polish 19: let the winning moment play in slow motion before the card slams in.
+                const hold=this.feel.victory();
+                if(hold>0)this.pendingVictory={message,at:performance.now()+hold*1000};
+                else this.hud.showVictory(message.winnerName, message.kills,message.assignment,...(message.awards?[message.awards]:[]));
                 this.highlights.emit(this.highlights.detector.onWin(message.winnerId, performance.now()));
                 break;
+            }
             case 'gameReset':
+                this.pendingVictory=undefined;
                 this.cameos?.reset();
                 this.highlights.detector.beginRound({
                     epoch: '',
@@ -528,7 +535,7 @@ export class GameSession {
         const { scene, camera, renderer, world, flashlight } = this.stage;
         const measure=!!this.stats,start=measure?performance.now():0;let botsMs=0;
         if (this.transport.state === 'playing') {
-            this.remotes.prepareFrame();
+            this.remotes.prepareFrame(this.feel.presentTime(performance.now()));
             this.simulation.advance(dt, step => {
                 this.remotes.updateDeaths(step);
                 this.rat?.prepareMovement(step, this.input.keys, this.touch?.active ? this.touch.input.movement : undefined);
@@ -565,7 +572,11 @@ export class GameSession {
         }
         if(this.transport.state==='playing'&&!document.hidden&&this.rat)this.feelAudioFrame(dt);
         this.cameos?.beginFrame(dt,camera.position);
-        this.chaos?.update(dt,camera);
+        this.chaos?.update(dt*this.feel.timeScale,camera,this.feel.presentTime(performance.now()));
+        if(this.pendingVictory&&now>=this.pendingVictory.at){
+            const won=this.pendingVictory.message;this.pendingVictory=undefined;
+            if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,won.assignment,...(won.awards?[won.awards]:[]));
+        }
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
         this.city.update(dt, camera, this.rat?.entity.body.position);
         const presentationEnd=measure?performance.now():0;

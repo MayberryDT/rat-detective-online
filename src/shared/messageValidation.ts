@@ -12,6 +12,8 @@ import {
   MAX_MESSAGE_BYTES,
   MAX_SERVER_MESSAGE_BYTES,
   PROTOCOL_VERSION,
+  type Award,
+  type AwardId,
   type ClientMessage,
   type HatTypeName,
   type PlayerData,
@@ -126,6 +128,23 @@ function parseWorld(value: unknown): WorldSpec | null {
   const version = integer(value.version);
   if (seed === null || version === null || seed < 0 || version < 1) return null;
   return { seed, version };
+}
+
+const AWARD_IDS=new Set<AwardId>(['top-gun','most-cheesed','butterfingers','sewer-dweller','high-flier']);
+/** Optional cosmetic Case File entries on gameWon; malformed lists reject the frame. */
+function parseAwards(value: unknown): Award[] | null {
+  if (!Array.isArray(value) || value.length > 8) return null;
+  const awards: Award[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') return null;
+    const raw = entry as Record<string, unknown>;
+    const id = raw.id, title = raw.title, playerName = raw.playerName;
+    const playerId = nonEmptyString(raw.playerId, 64), amount = finiteNumber(raw.value);
+    if (typeof id !== 'string' || !AWARD_IDS.has(id as AwardId) || typeof title !== 'string' || title.length > 24 ||
+      typeof playerName !== 'string' || playerName.length > 32 || !playerId || amount === null) return null;
+    awards.push({ id: id as AwardId, title, playerId, playerName, value: amount });
+  }
+  return awards;
 }
 
 function parseRound(value: unknown): RoundState | null {
@@ -617,7 +636,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       if (!winnerId || winnerName === null || kills === null || resetAt === null) return null;
       const assignment=parsed.assignment===undefined?undefined:parseAssignment(parsed.assignment);
       if(assignment===null || assignment && (assignment.result?.winnerId!==winnerId || assignment.result.winnerName!==winnerName))return null;
-      return { type: 'gameWon', winnerId, winnerName, kills, resetAt, ...(assignment?{assignment}:{}) };
+      const awards=parsed.awards===undefined?undefined:parseAwards(parsed.awards);
+      if(awards===null)return null;
+      return { type: 'gameWon', winnerId, winnerName, kills, resetAt, ...(assignment?{assignment}:{}), ...(awards?.length?{awards}:{}) };
     }
     case 'gameReset': {
       const round = parseRound(parsed.round);

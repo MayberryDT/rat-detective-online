@@ -3,6 +3,7 @@ import { PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src
 import type { ChaosState } from '../../src/shared/chaosState';
 import { createAssignment } from '../../src/shared/assignments';
 import {ChaosView} from '../../src/prototype/ChaosView';
+import {playerPreferences} from '../../src/settings/PlayerPreferences';
 
 const harness = vi.hoisted(() => {
     const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
@@ -587,7 +588,9 @@ describe('GameSession', () => {
         const assignment=createAssignment('excessive-force',0);assignment.phase='closed';
         assignment.result={winnerId:'me',winnerName:'Inspector Brie',at:Date.now(),method:'kills',posthumous:false};
         const result={winnerId:'me',winnerName:'Inspector Brie',kills:0,resetAt:Date.now()+6000,assignment};
-        transport.onMessage?.({type:'gameWon',...result});
+        // Reduced motion skips the victory slow-motion, so the card is immediate.
+        playerPreferences().update({reducedMotion:true});
+        try{transport.onMessage?.({type:'gameWon',...result});}finally{playerPreferences().update({reducedMotion:false});}
         expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,assignment);
         expect(hud.hideRespawn).toHaveBeenCalled();
         transport.onMessage?.(welcome({round:{phase:'won',...result}}));
@@ -612,7 +615,9 @@ describe('GameSession', () => {
         expect(rat.entity.respawn).toHaveBeenCalledWith({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: 3 });
         expect(hud.hideRespawn).toHaveBeenCalled();
         expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
-        transport.onMessage?.({ type: 'gameWon', winnerId: 'me', winnerName: '<Rat & Co>', kills: 20, resetAt: Date.now() + 6_000 });
+        playerPreferences().update({reducedMotion:true});
+        try{transport.onMessage?.({ type: 'gameWon', winnerId: 'me', winnerName: '<Rat & Co>', kills: 20, resetAt: Date.now() + 6_000 });}
+        finally{playerPreferences().update({reducedMotion:false});}
         expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, undefined);
         transport.onMessage?.({ type: 'gameReset', round: { phase: 'playing' } });
         expect(rat.entity.resetReactions).toHaveBeenCalledOnce();

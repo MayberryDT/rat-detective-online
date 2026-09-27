@@ -3,6 +3,8 @@ import type {FoleyPlay} from '../audio/foleyCatalog';
 import { ASSIGNMENTS, type AssignmentState } from '../shared/assignments';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import { MunicipalQuips } from './municipalQuips';
+import type { Award } from '../shared/networkProtocol';
+import { feelState } from '../feel/feelState';
 
 const KILL_FEED_LIMIT = 5;
 const KILL_FEED_FADE_MS = 4000;
@@ -150,7 +152,7 @@ export class GameHud {
         }
     }
 
-    showVictory(winnerName: string, kills: number, assignment?: AssignmentState): void {
+    showVictory(winnerName: string, kills: number, assignment?: AssignmentState, awards?: readonly Award[]): void {
         if (this.disposed) return;
         if(!this.victoryVisible)this.victoryQuip=this.quips.next('victory');
         this.victoryText.replaceChildren();
@@ -163,6 +165,18 @@ export class GameHud {
         ];
         for(const [className,text] of lines){
             const line=this.doc.createElement('div');line.className=className;line.textContent=text;this.victoryText.appendChild(line);
+        }
+        // Polish 19: the round's Case File, from server-counted cosmetic tallies.
+        if(awards?.length&&feelState().on('rewards')){
+            const file=this.doc.createElement('div');file.className='victory-casefile';
+            const heading=this.doc.createElement('h3');heading.textContent='CASE FILE';file.appendChild(heading);
+            const list=this.doc.createElement('ul');file.appendChild(list);
+            for(const award of awards){
+                const row=this.doc.createElement('li'),title=this.doc.createElement('b'),who=this.doc.createElement('span');
+                title.textContent=award.title;who.textContent=`${award.playerName} · ${award.value}`;
+                row.appendChild(title);row.appendChild(who);list.appendChild(row);
+            }
+            this.victoryText.appendChild(file);
         }
         if(!this.victoryVisible){if(this.foley)this.foley('victory');else this.feedback('victory');}
         this.victoryVisible=true;this.overlay(this.victoryOverlay,true);

@@ -70,6 +70,10 @@ export interface ScoreEntry {
   deaths: number;
 }
 
+/** Polish 19 round-end Case File entry (cosmetic; never affects scoring). */
+export type AwardId = 'top-gun' | 'most-cheesed' | 'butterfingers' | 'sewer-dweller' | 'high-flier';
+export interface Award { id: AwardId; title: string; playerId: string; playerName: string; value: number }
+
 export interface RoundState {
   phase: RoundPhase;
   winnerId?: string;
@@ -201,7 +205,7 @@ export type ServerMessage =
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }
   | { type: 'playerLeft'; id: string }
-  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState }
+  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState; awards?: Award[] }
   | { type: 'gameReset'; round: RoundState }
   | { type: 'pong'; sentAt: number; receivedAt: number }
   | { type: 'error'; message: string; code?: 'resume-unavailable' };

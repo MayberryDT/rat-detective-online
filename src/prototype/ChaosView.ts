@@ -372,14 +372,14 @@ export class ChaosView {
         if(!entity)return;
         this.arm=createCaseGrip(entity);
     }
-    update(dt:number,camera:THREE.Camera){
+    /** `renderTime` is the presentation clock (slowed briefly for the victory moment). */
+    update(dt:number,camera:THREE.Camera,renderTime=performance.now()){
         this.impacts.update(dt);
         camera.getWorldPosition(this.audioPosition);
         if(this.audio)bindIncidentAudio(this.audio,this.audioPosition);
         const s=this.state;if(!s)return;
         // The solo preview already stepped physics this frame. Extrapolating it
         // again counted CPU/render preparation time as extra ball travel.
-        const renderTime=performance.now();
         const elapsed=this.extrapolate?Math.min((renderTime-this.receivedAt)/1000,.08):0,now=s.time+elapsed*1000;
         const predictedOwner=this.anticipatedCase&&!s.case.owner?this.resolveRat(this.myId):undefined;
         const owner=s.case.owner?this.resolveRat(s.case.owner):predictedOwner;

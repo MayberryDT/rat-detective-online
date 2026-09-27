@@ -14,6 +14,7 @@ export class ScreenFeel {
     private noirEdge?:HTMLElement;
     private irisNode?:HTMLElement;
     private speedNode?:HTMLElement;
+    private calloutNode?:HTMLElement;
     private lastSpeed=0;
     private canvas?:HTMLElement;
     private lastFilter='';
@@ -53,6 +54,13 @@ export class ScreenFeel {
         if(!this.canvas)return;
         const value=filter&&(drain>.001||flood>.001)?`saturate(${(1-p.drain*drain+p.flood*flood).toFixed(3)}) contrast(${(1+.12*drain).toFixed(3)})`:'';
         if(value!==this.lastFilter){this.canvas.style.filter=value;this.lastFilter=value;}
+    }
+
+    /** A noir streak callout stamped near the top of the screen. */
+    callout(text:string):void {
+        if(!this.build()||!this.calloutNode)return;
+        this.calloutNode.textContent=text;
+        this.calloutNode.classList.remove('on');void this.calloutNode.offsetWidth;this.calloutNode.classList.add('on');
     }
 
     /** Hot Pursuit edge streaks, `level` 0…1. */
@@ -127,12 +135,13 @@ export class ScreenFeel {
         if(this.noirEdge)this.noirEdge.style.opacity='0';
         if(this.irisNode)this.irisNode.style.opacity='0';
         if(this.speedNode){this.speedNode.style.opacity='0';this.speedNode.classList.remove('on');}
+        this.calloutNode?.classList.remove('on');
         this.lastSpeed=0;
         if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -141,6 +150,7 @@ export class ScreenFeel {
         this.root=this.doc.createElement('div');this.root.className='feel-screen';this.root.setAttribute('aria-hidden','true');
         this.noirEdge=this.doc.createElement('div');this.noirEdge.className='feel-noir';this.root.appendChild(this.noirEdge);
         this.speedNode=this.doc.createElement('div');this.speedNode.className='feel-speed';this.root.appendChild(this.speedNode);
+        this.calloutNode=this.doc.createElement('div');this.calloutNode.className='feel-callout';this.root.appendChild(this.calloutNode);
         this.irisNode=this.doc.createElement('div');this.irisNode.className='feel-iris';this.root.appendChild(this.irisNode);
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
         this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);

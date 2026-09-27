@@ -34,6 +34,10 @@ export class FeelDirector {
     private deathAge=0;
     private dust?:Dust;
     private city?:CityReactions;
+    private lifeKills=0;
+    private lastCalloutAt=-Infinity;
+    private slowAge=Infinity;
+    private lag=0;
     private wasGrounded=true;
     private airVy=0;
     private flying=false;
@@ -61,7 +65,7 @@ export class FeelDirector {
         this.city?.dispose();this.city=new CityReactions(scene,lamps);registerCity(this.city);
     }
     /** New round: props back where they started. */
-    resetRound():void {this.city?.reset();}
+    resetRound():void {this.city?.reset();this.slowAge=Infinity;this.lag=0;}
 
     /** Local rat motion each frame: landing dip, launch view, Hot Pursuit streaks. */
     motion(grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number,carrying=false):void {
@@ -93,7 +97,27 @@ export class FeelDirector {
     /** Near-miss whizz for other rats' balls. */
     projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):void {this.sound.projectiles(shots,myId,head,view);}
     /** Case pickup, your delivery, closing seconds. */
-    sting(kind:Sting):void {this.sound.sting(kind);}
+    sting(kind:Sting):void {
+        this.sound.sting(kind);
+        if(kind==='case')this.callout('ON THE CASE');
+    }
+
+    private callout(text:string,now=performance.now()):void {
+        if(!this.state.on('rewards')||now-this.lastCalloutAt<FEEL.rewards.params.calloutCooldown*1000)return;
+        this.lastCalloutAt=now;this.screen.callout(text);
+    }
+
+    /** The round was won: start the presentation slow-motion. Returns how long
+     * (seconds) to hold the victory card so the moment plays first; 0 when off. */
+    victory():number {
+        if(!this.state.on('rewards')||this.state.shake()<=0)return 0;
+        this.slowAge=0;return FEEL.rewards.params.slowmo;
+    }
+    /** Presentation clock for remote rats and chaos playback: runs slow during
+     * the victory moment, then catches up. Authority and local controls are unaffected. */
+    presentTime(realNow:number):number {return realNow-this.lag;}
+    /** Presentation dt scale matching `presentTime`. */
+    get timeScale():number {return this.slowAge<FEEL.rewards.params.slowmo?FEEL.rewards.params.slowRate:this.lag>0?1+FEEL.rewards.params.catchup:1;}
 
     /** Authoritative local health changed; `healed` floods colour back. */
     health(hp:number,healed=false):void {
@@ -141,8 +165,11 @@ export class FeelDirector {
     }
 
     /** You scored a kill on the rat at `victim`; `airborne` when you were in flight. */
-    killed(victim:THREE.Vector3,airborne:boolean,view:THREE.Camera,now=performance.now()):void {
+    killed(victim:THREE.Vector3,airborne:boolean,view:THREE.Camera,now=performance.now(),victimCarried=false):void {
         this.sound.brass();
+        this.lifeKills++;
+        if(victimCarried)this.callout('COLD CASE',now);
+        else if(this.lifeKills===3)this.callout('RAT RACKET',now);
         if(this.state.on('killBloom')){
             this.screen.killBloom();
             this.camera.widen(-FEEL.killBloom.params.punch);
@@ -178,6 +205,9 @@ export class FeelDirector {
 
     /** `self` is the local rat's position, for direction arrows. */
     update(dt:number,view:THREE.Camera,self?:THREE.Vector3):void {
+        const r=FEEL.rewards.params;
+        if(this.slowAge<r.slowmo){this.slowAge+=dt;this.lag+=dt*1000*(1-r.slowRate);}
+        else if(this.lag>0)this.lag=Math.max(0,this.lag-dt*1000*r.catchup);
         this.camera.update(dt);
         this.dust?.update(dt);
         this.city?.update(dt);
@@ -201,6 +231,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();this.lifeKills=0;}
     dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();}
 }

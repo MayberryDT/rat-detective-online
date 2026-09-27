@@ -1,4 +1,6 @@
 import { MAX_OBSERVERS, observationAllowed } from '../shared/observation';
+import {RoundAwards} from './RoundAwards';
+import type {Award} from '../shared/networkProtocol';
 import { RECONNECT_GRACE_MS, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
 import { ChaosDelivery } from './ChaosDelivery';
 import { ConnectionDelivery } from './ConnectionDelivery';
@@ -163,6 +165,8 @@ export class GameRoom extends DurableObject<Env> {
   private lastCheckpointAt = new Map<string, number>();
   /** Routine pose checkpoints waiting for the next chaos checkpoint transaction. */
   private readonly dueCheckpoints = new Set<string>();
+  /** Polish 19: cosmetic per-round Case File tallies (memory only). */
+  private readonly awards = new RoundAwards();
   private lastActiveAt = new Map<string, number>();
   private recentShots = new Map<string, string[]>();
   private lastMovementSequence = new Map<string, number>();
@@ -1198,13 +1202,14 @@ export class GameRoom extends DurableObject<Env> {
       this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',
         crypto.randomUUID(),result.roundWon?'reset':'respawn',result.roundWon?null:victim.id,respawnAt);
     }
+    this.awards.damage(victim.id, message.damage);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
       respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{})});
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
-    if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt});
+    if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt,...this.caseFile()});
     await this.scheduleNextAlarm();
   }
 
@@ -1437,6 +1442,7 @@ export class GameRoom extends DurableObject<Env> {
       this.flushMovement('tick');
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
+      if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0);
       const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
       // Ownership/Dispatch/assignment changes persist before any client sees them.
       // Routine checkpoints hold nothing clients depend on, so write after this
@@ -1538,6 +1544,7 @@ export class GameRoom extends DurableObject<Env> {
     return {...this.round,...(assignment?{assignment:structuredClone(assignment)}:{})};
   }
   private beginAssignment():void {
+    this.awards.reset();
     if(!this.chaos)return;
     const id=nextAssignment(this.assignmentRotation);
     this.chaos.setAssignment(createAssignment(id,this.now()));
@@ -1568,11 +1575,16 @@ export class GameRoom extends DurableObject<Env> {
       this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',crypto.randomUUID(),'reset',null,resetAt);
       this.checkpointGame();
     });
-    this.broadcast({type:'gameWon',winnerId:result.winnerId,winnerName:result.winnerName,kills,resetAt,assignment:structuredClone(assignment)});
+    this.broadcast({type:'gameWon',winnerId:result.winnerId,winnerName:result.winnerName,kills,resetAt,assignment:structuredClone(assignment),...this.caseFile()});
     this.publishCompanion(true);
     this.ctx.waitUntil(this.scheduleNextAlarm());
   }
 
+  /** Optional Case File for a round-end frame; omitted when nothing qualifies. */
+  private caseFile():{awards?:Award[]} {
+    const awards=this.awards.awards(this.players);
+    return awards.length?{awards}:{};
+  }
   private ensureRoundClock(): void {
     if (this.round.phase === 'playing' && !this.round.startedAt) {
       this.round = { ...this.round, startedAt: this.now() };
