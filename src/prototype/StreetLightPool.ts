@@ -47,41 +47,11 @@ export class StreetLightPool {
         };
         material.customProgramCacheKey=()=>key+'-steady-exterior-v1';material.needsUpdate=true;
     }
-    /** `extras` (juice T3 lab): other actors, e.g. nearby enemies, that may also claim
-     * one of the four fixture lights so the real lamps above catch them. */
-    update(camera:THREE.Camera,anchor:{x:number;y:number;z:number}=camera.position,extras:readonly {x:number;y:number;z:number}[]=[],extraWeight=.8):void {
-        let nearest=this.candidates(anchor);
-        if(extras.length){
-            const best=new Map<OverheadLight,{source:OverheadLight;d:number;score:number}>();
-            for(const entry of nearest)best.set(entry.source,entry);
-            for(const extra of extras)for(const entry of this.candidates(extra)){
-                const weighted={...entry,score:entry.score*extraWeight},current=best.get(entry.source);
-                if(!current||weighted.score>current.score)best.set(entry.source,weighted);
-            }
-            nearest=[...best.values()].sort((a,b)=>b.score-a.score).slice(0,4);
-        }
-        camera.updateMatrixWorld();
-        this.lights.forEach((light,i)=>{
-            this.exteriorPositions.value[i].set(0,0,0,0);
-            const entry=nearest[i];if(!entry){light.intensity=0;return;}
-            const {source:s,d}=entry;
-            const target=s.target??{x:s.x,y:s.y-8,z:s.z};
-            light.position.set(s.x,s.y,s.z);light.target.position.set(target.x,target.y,target.z);light.color.setHex(s.color);
-            light.distance=s.distance??15;light.angle=s.angle??.68;
-            light.penumbra=s.penumbra??.65;
-            light.intensity=AUTHORED_LIGHT_GAIN*(s.intensity??45)*(s.brightness?.()??1)*(1-THREE.MathUtils.smoothstep(d,18,32));
-            if(!s.room){
-                const p=light.position.clone().applyMatrix4(camera.matrixWorldInverse);
-                this.exteriorPositions.value[i].set(p.x,p.y,p.z,1);
-            }
-        });
-    }
-    /** Fixtures that would light an actor standing at `p`, best first. */
-    private candidates(p:{x:number;y:number;z:number}):{source:OverheadLight;d:number;score:number}[] {
+    update(camera:THREE.Camera,anchor:{x:number;y:number;z:number}=camera.position):void {
         // The shoulder camera may sit outside a doorway or above a low ceiling.
         // Select the room/floor from the rat, not from that offset camera.
-        const room=this.rooms.find(r=>insideLightRoom(p,r));
-        return this.sources.map(source=>({source,d:Math.hypot(source.x-p.x,source.z-p.z)}))
+        const p=anchor,room=this.rooms.find(r=>insideLightRoom(p,r));
+        const nearest=this.sources.map(source=>({source,d:Math.hypot(source.x-p.x,source.z-p.z)}))
             .filter(({source:s,d})=>{
                 if(d>=32||(s.brightness?.()??1)<=0)return false;
                 if(s.room)return s.room.id===room?.id&&p.y>=(s.floor??0)-.5&&p.y<(s.floor??0)+7.5;
@@ -101,6 +71,21 @@ export class StreetLightPool {
                 const score=(s.intensity??45)*(s.brightness?.()??1)*cone*Math.max(0,1-distance/range)**2/Math.max(1,distance*distance);
                 return {...entry,score};
             }).filter(entry=>entry.score>0).sort((a,b)=>b.score-a.score).slice(0,4);
+        camera.updateMatrixWorld();
+        this.lights.forEach((light,i)=>{
+            this.exteriorPositions.value[i].set(0,0,0,0);
+            const entry=nearest[i];if(!entry){light.intensity=0;return;}
+            const {source:s,d}=entry;
+            const target=s.target??{x:s.x,y:s.y-8,z:s.z};
+            light.position.set(s.x,s.y,s.z);light.target.position.set(target.x,target.y,target.z);light.color.setHex(s.color);
+            light.distance=s.distance??15;light.angle=s.angle??.68;
+            light.penumbra=s.penumbra??.65;
+            light.intensity=AUTHORED_LIGHT_GAIN*(s.intensity??45)*(s.brightness?.()??1)*(1-THREE.MathUtils.smoothstep(d,18,32));
+            if(!s.room){
+                const p=light.position.clone().applyMatrix4(camera.matrixWorldInverse);
+                this.exteriorPositions.value[i].set(p.x,p.y,p.z,1);
+            }
+        });
     }
     dispose():void {for(const light of this.lights){this.scene.remove(light,light.target);light.dispose();}this.lights.length=0;this.scenery.clear();}
 }

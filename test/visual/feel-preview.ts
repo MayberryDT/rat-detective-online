@@ -13,7 +13,6 @@ import {initEntitySounds} from '../../src/audio/EntityAudio';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {FEEL} from '../../src/feel/feelTuning';
 import {PoliceLineup} from '../../src/feel/PoliceLineup';
-import {feelState} from '../../src/feel/feelState';
 import {PickupVisual} from '../../src/prototype/PickupVisual';
 import {kickDust} from '../../src/feel/Dust';
 import {cityImpact} from '../../src/feel/CityReactions';
@@ -108,8 +107,6 @@ const actions:Record<string,()=>void>={
     'Go outside Records Hall (neon)':()=>{rat.entity.body.position.set(-6,.5,-24);rat.entity.body.velocity.set(0,0,0);rat.onMouseMove(-785.4,0);rat.onMouseMove(0,-330);},
     'Go inside Records Hall (blinds)':()=>{rat.entity.body.position.set(-12,.5,-52);rat.entity.body.velocity.set(0,0,0);rat.onMouseMove(-785.4,0);rat.onMouseMove(1570.8,0);rat.onMouseMove(0,120);},
     'Look ahead':()=>rat.onMouseMove(0,420),
-    'Enemy look: lab all on':()=>{for(const item of ['enemyEyeshine','enemySaturation','enemyInk','breathPuffs'] as const)feelState().set(item,true);},
-    'Enemy look: lab all off':()=>{for(const item of ['enemyEyeshine','enemySaturation','enemyInk','breathPuffs'] as const)feelState().set(item,false);},
     'Police lineup (T5)':()=>lineup.start([
         {id:'you',name:'You',appearance,winner:true,award:{id:'headhunter',title:'HEADHUNTER',playerId:'you',playerName:'You',value:4}},
         ...suspects.map((s,i)=>({id:`suspect-${i}`,name:s.name,appearance:s.appearance,winner:false,
@@ -155,9 +152,10 @@ function frame(now:number){
     stage.syncViewport();
     stage.world.step(1/60,dt,3);
     rat.update(dt,{});gun.update(dt);impacts.update(dt);
-    for(const suspect of suspects)suspect.update(dt);
+    const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(stage.camera.fov)/2)/innerHeight;
+    for(const suspect of suspects){suspect.update(dt);suspect.fitOutline(stage.camera.position,unitsPerPixel);}
     kit.update(performance.now(),stage.camera);
-    feel.footsteps(dt,suspects.map((s,i)=>({id:`suspect-${i}`,position:s.mesh.position,facing:s.mesh.quaternion})),rat.entity.mesh.position,stage.camera);
+    feel.footsteps(dt,suspects.map((s,i)=>({id:`suspect-${i}`,position:s.mesh.position})),rat.entity.mesh.position,stage.camera);
     city.update(dt,stage.camera,rat.entity.body.position);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);

@@ -8,8 +8,9 @@ import { feelState } from '../feel/feelState';
 export type HatType = HatTypeName;
 export type RatOptions = Partial<RatAppearance>;
 
+// Rats ignore the noir fog so they keep full contrast at any distance and HP.
 function material(color: THREE.ColorRepresentation, roughness = 0.78) {
-    return new THREE.MeshStandardMaterial({ color, roughness });
+    return new THREE.MeshStandardMaterial({ color, roughness, fog: false });
 }
 function mesh(parent: THREE.Object3D, geometry: THREE.BufferGeometry, mat: THREE.Material,
     x = 0, y = 0, z = 0) {

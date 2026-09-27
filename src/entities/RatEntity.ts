@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import {RatStains} from './RatStains';
 import {FlyingHat} from './FlyingHat';
 import {kickDust} from '../feel/Dust';
-import {addEyeshine,enemyInkOutline,forgetEyeshine,patchEnemyColour} from '../feel/EnemyLook';
 import type {DeathStyle} from '../utils/RatAnimator';
 import {FEEL} from '../feel/feelTuning';
 import {feelState} from '../feel/feelState';
@@ -33,8 +32,11 @@ const DEATH_GLOW_FADE = 2.5;
 
 // ─── OUTLINE GLOW CONFIG ───
 const GLOW_THICKNESS = 0.025;    // Surface offset, without moving body-part centers
-const GLOW_OPACITY = 0.22;        // Readable against the dark city between lamps
-const GLOW_COLOR = 0xffffff;      // Base glow tint (will blend with coat color)
+/** Opponent outline: an opaque cream line that stays about `OUTLINE_PIXELS`
+ * wide on screen at any distance, so far rats keep a readable edge. */
+const GLOW_OPACITY = 0.85;
+const OUTLINE_COLOR = 0xf1e4c2;
+const OUTLINE_PIXELS = 2.5;
 const EMISSIVE_INTENSITY = 0.28;  // Rat-only lift; lamps still model the hat and coat
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
@@ -69,7 +71,8 @@ export class RatEntity {
     private metalApplication=0;
     private hustleRemaining=0;
     private glowMaterial!:THREE.MeshBasicMaterial;
-    private glowTint!:THREE.Color;
+    /** Extra shell offset (world units) that keeps the outline's on-screen width. */
+    private outlineReach=0;
     private readonly shellOffset={value:0};
 
     // State
@@ -155,8 +158,6 @@ export class RatEntity {
         this.mesh = this.modelFactory(opts);
         this.mesh.position.copy(position);
         this.mesh.userData.aimTarget = true;
-        // Juice T3 lab: enemy readability options (switchable in the juice review).
-        if (isRemote) { addEyeshine(this.mesh); patchEnemyColour(this.mesh); }
         this.scene.add(this.mesh);
 
         // Cache materials for hit flash + apply emissive glow
@@ -238,19 +239,15 @@ export class RatEntity {
     private createGlowOutline(opts: RatOptions): THREE.Group {
         const glowGroup = this.modelFactory(opts);
 
-        // Determine glow tint from coat color
-        const coatColor = new THREE.Color(opts.coatColor ?? 0x5c4a3a);
-        const tint = coatColor.clone().lerp(new THREE.Color(GLOW_COLOR), 0.6);
-
         // Expand along each vertex normal instead of scaling from the feet.
         // Eyes/ears can share geometry, so expand each geometry only once.
         // Every shell part has the same tint and lifetime. Share one owned
         // material per rat so a crowd does not switch identical GPU state.
         const glowMaterial = new THREE.MeshBasicMaterial({
-            color: tint, transparent: true, opacity: GLOW_OPACITY,
-            side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+            color: OUTLINE_COLOR, transparent: true, opacity: GLOW_OPACITY,
+            side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false,
         });
-        this.glowMaterial=glowMaterial;this.glowTint=tint.clone();
+        this.glowMaterial=glowMaterial;
         glowMaterial.onBeforeCompile=shader=>{
             shader.uniforms.pursuitShell=this.shellOffset;
             shader.vertexShader='uniform float pursuitShell;\n'+shader.vertexShader;
@@ -327,7 +324,6 @@ export class RatEntity {
         if(this.mesh.getObjectByName('rat-rigid-batch'))return;
         batchRigidMeshes(this.mesh);
         if(this.glowMesh)batchRigidMeshes(this.glowMesh);
-        if(this.isRemote)patchEnemyColour(this.mesh);
     }
 
     public resetMotionHistory(): void { this.animator.resetMotionHistory();this.powerupEffects.clear(); }
@@ -350,14 +346,16 @@ export class RatEntity {
         if(silver!==(this.ironcladRemaining>0)){this.resetColor();if(this.flashTimer>0)this.applyHitColor();}
         this.updatePowerupOutline();
     }
-    private inkApplied=false;
+    /** Per frame: widen the shell so the outline keeps its on-screen width.
+     * `unitsPerPixel` is the world size of one screen pixel at one unit away. */
+    public fitOutline(camera:THREE.Vector3,unitsPerPixel:number):void {
+        this.outlineReach=Math.max(0,OUTLINE_PIXELS*unitsPerPixel*this.mesh.position.distanceTo(camera)-GLOW_THICKNESS);
+        this.shellOffset.value=this.hustleRemaining>0&&!this.dead?Math.max(.055,this.outlineReach):this.outlineReach;
+    }
     private updatePowerupOutline():void {
         const pursuit=this.hustleRemaining>0&&!this.dead;
-        // Juice T3 lab: a crisp cream comic line instead of the soft additive glow (Hot Pursuit keeps its red).
-        const ink=!pursuit&&this.isRemote&&enemyInkOutline();this.inkApplied=ink;
-        if(pursuit)this.glowMaterial.color.setHex(0xff1605);else if(ink)this.glowMaterial.color.setHex(0xf3e6c4);else this.glowMaterial.color.copy(this.glowTint);
-        this.glowMaterial.blending=ink?THREE.NormalBlending:THREE.AdditiveBlending;
-        this.glowMaterial.opacity=pursuit?.95:ink?.9:GLOW_OPACITY;this.shellOffset.value=pursuit?.055:ink?.012:0;
+        this.glowMaterial.color.setHex(pursuit?0xff1605:OUTLINE_COLOR);
+        this.glowMaterial.opacity=pursuit?.95:GLOW_OPACITY;this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
         if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(!this.isPlayer||pursuit);
     }
     private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.updatePowerupOutline();this.resetColor();}
@@ -387,7 +385,6 @@ export class RatEntity {
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
         this.syncGlowTransform();
         this.animator.setHustle(this.hustleRemaining>0);
-        if(this.isRemote&&enemyInkOutline()!==this.inkApplied)this.updatePowerupOutline();
         this.animator.update(dt,previewSpeed);
         // Polish 16: dust from this frame's animation events (consumed once).
         if(this.animator.skidStarted){this.animator.skidStarted=false;kickDust(p,.45);}
@@ -714,8 +711,6 @@ export class RatEntity {
                 child.material.opacity = GLOW_OPACITY;
             }
         });
-        // The shared outline material may carry the ink look (T3 lab).
-        this.updatePowerupOutline();
     }
 
     /** Apply authoritative state without replaying historical hit/death sounds or impulses. */
@@ -804,7 +799,6 @@ export class RatEntity {
         this.headStains?.dispose();
         this.flyingHat?.dispose();
         this.scene.remove(this.mesh);
-        forgetEyeshine(this.mesh);
         disposeMeshResources(this.mesh);
         this.billboard.dispose();
         // Remove glow outline

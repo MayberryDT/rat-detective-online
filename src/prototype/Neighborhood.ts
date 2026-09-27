@@ -200,14 +200,13 @@ export class Neighborhood {
     private readonly groundBodies:CANNON.Body[]=[];
     private readonly groundMeshes:THREE.Object3D[]=[];
     generate() {}
-    /** `extras`: other actors (juice T3 lab) that may claim a fixture light. */
-    update(_dt:number,camera?:THREE.Camera,anchor?:{x:number;y:number;z:number},extras?:readonly {x:number;y:number;z:number}[]) {
+    update(_dt:number,camera?:THREE.Camera,anchor?:{x:number;y:number;z:number}) {
         this.city.update(_dt,camera);
         this.readability?.update();
         this.architecture.update(_dt);
         this.grime.update(_dt);
         // Outdoor bounce light supplies a visibility floor; existing sewer lighting stays intact.
-        if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera,anchor,extras);}
+        if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera,anchor);}
         this.syncLampPool(camera,anchor);
     }
     private addInteriorFixture(f:InteriorFixture):void {

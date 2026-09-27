@@ -5,7 +5,7 @@ import * as THREE from 'three';
 export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
     const sources:THREE.Mesh[]=[];
     root.traverse(object=>{
-        if(!(object instanceof THREE.Mesh)||object instanceof THREE.SkinnedMesh||object instanceof THREE.InstancedMesh||object.userData.noBatch||!object.visible||object.children.length||Array.isArray(object.material))return;
+        if(!(object instanceof THREE.Mesh)||object instanceof THREE.SkinnedMesh||object instanceof THREE.InstancedMesh||!object.visible||object.children.length||Array.isArray(object.material))return;
         for(let parent:THREE.Object3D|null=object;parent&&parent!==root;parent=parent.parent){
             if(parent.name==='rat-tail'||parent.name==='rat-muzzle'||!parent.visible)return;
         }
@@ -42,7 +42,7 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
     let syncPalette=()=>{};
     if(materials.length>1&&materials.length<=16&&materials.every(m=>m instanceof THREE.MeshStandardMaterial&&!m.map&&!m.normalMap&&!m.roughnessMap&&!m.metalnessMap&&!m.transparent)){
         const originals=materials as THREE.MeshStandardMaterial[];
-        const palette=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,roughness:1,metalness:0});
+        const palette=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,roughness:1,metalness:0,fog:originals[0].fog});
         const colors=Array.from({length:16},(_,i)=>originals[i]?.color??new THREE.Color());
         const emissives=Array.from({length:16},(_,i)=>originals[i]?.emissive??new THREE.Color());
         const intensity=new Float32Array(16),roughness=new Float32Array(16),metalness=new Float32Array(16);

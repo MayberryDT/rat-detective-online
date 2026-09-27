@@ -83,13 +83,6 @@ export const FEEL={
     headshot:{label:'T4 Headshot juice',toggle:true,params:{hatSpeed:2.6,hatLift:1.5,hold:.16,burst:2.4}},
     /** T5: the police lineup at round end (top five, winner last). */
     lineup:{label:'T5 Police lineup',toggle:true,params:{}},
-    /** T3 lab, off by default for side-by-side comparison: eyeshine strength and saturation boost. */
-    enemyLook:{label:'T3 Enemy readability values',toggle:false,params:{eyeshine:1.4,saturation:.55}},
-    enemyEyeshine:{label:'T3a Enemy eyeshine',toggle:true,defaultOff:true,params:{}},
-    enemySaturation:{label:'T3b Enemy selective colour',toggle:true,defaultOff:true,params:{}},
-    enemyInk:{label:'T3c Enemy comic ink outline',toggle:true,defaultOff:true,params:{}},
-    enemyFixtures:{label:'T3d Fixture lights follow enemies',toggle:true,defaultOff:true,params:{}},
-    breathPuffs:{label:'T3e Breath puffs',toggle:true,defaultOff:true,params:{interval:2.2}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

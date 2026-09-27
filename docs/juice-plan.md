@@ -56,7 +56,8 @@ rat's identity stay as they are. Done means:
   - **T1 entry:** better. **T4 headshots:** felt better.
   - **T5 round end / lineup:** not tried yet (he didn't reach a round end).
   - He felt a performance hit, possibly from other load on his PC. Not the focus now; see the optimization overhaul below.
-- **Next action:** fix enemy readability (T3 follow-up), then the later overhauls when Tyler picks them.
+- **T3 follow-up, enemy readability (built 2026-09-27):** far enemies were the worst, then enemies in shadow, then everything once hurt. The lab is removed. Opponents now get an opaque cream outline that stays about 2.5 px wide on screen at any distance (the existing shell, widened per frame; no extra pass or draw), hidden behind walls; Hot Pursuit keeps its red. Rats ignore the noir fog, so they keep full contrast at any distance and HP. Awaiting Tyler's playtest.
+- **Next action:** Tyler playtests the readability fix; then the later overhauls when he picks them.
 
 ## Third batch (decided 2026-09-27)
 

@@ -100,11 +100,11 @@ Tyler's third brain dump. T4 and T5 change the rules and the protocol (19), so t
 | --- | --- | --- | --- |
 | T1 | Instant, smooth entry | Load the page, reroll the name a few times, press Enter. Rerolls stay responsive while the city prepares, and Enter no longer freezes on a city-wide shader rebuild. | none (always on) |
 | T2 | Noir scales with health | At full health the noir is a light hint. Each lost hit point thickens the shadows, colour drain, fog, grain and vignette. At 1 HP the case's outline, locator and guidance vanish, and Quick Fix kits glow green through walls. | T2 Noir by health, T2b Last hit point |
-| T3 | Enemy readability lab | All off by default. Turn each on and compare: eyeshine (enemy eyes catch light toward you), selective colour (enemies more saturated), comic ink outline (cream line instead of the soft glow), fixtures follow enemies (the four real lamps may light nearby enemies), breath puffs (lit only where real light falls). | T3a–T3e |
+| T3 | Enemy readability | Opponents have an opaque cream outline that stays about 2.5 px wide on screen however far away they are, hidden behind walls. Rats also ignore the noir fog, so distant and low-HP views keep them in full contrast. (The earlier five-option lab was removed after Tyler found it still too hard to read.) | none (always on) |
 | T4 | Five hit points; headshots kill | Body hits take 1 of 5 HP. Any headshot kills: the hat blasts off, cheese splats the head, the rat hangs for a beat before falling, the killer gets a brass ringed X, a HEADSHOT notice and callout, and the kill feed adds "· HEADSHOT". A knock-whistle-bell plays; other rats' headshots fade with distance. | T4 Headshot juice (presentation only; the rules are fixed) |
 | T5 | Round end and police lineup | Rounds now end with 10 s before the next. As the slow motion ends, the camera cuts to a precinct lineup: the top five in rank order against a height chart, winner last. Flashbulbs pop one rat at a time and stamp each award across the chest; the winner gets a gold CASE CLOSED stamp and a hop. The Case File shrinks to the top-left corner and has seven new awards. | T5 Police lineup |
 
-Workshop: **Headshot suspect 2 (T4)**, **Police lineup (T5)** and **Enemy look: lab all on/off**. Captures: `output/polish/25-enemy/`, `27-headshot/`, `28-lineup/`, and the live lineup in `29-lineup-live/`.
+Workshop: **Headshot suspect 2 (T4)** and **Police lineup (T5)**. Captures: `output/polish/25-enemy/`, `27-headshot/`, `28-lineup/`, and the live lineup in `29-lineup-live/`.
 
 **T1 measurements** (Halla AMD laptop GPU, private fixture through the relay; the relay adds a network hop):
 - Enter to the first play frame: 2.1–2.4 s before, 0.7–1.2 s after.

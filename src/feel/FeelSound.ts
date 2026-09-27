@@ -21,7 +21,7 @@ export function spaceAt(p:Vec3Data):'open'|'sewer'|'interior' {
 }
 
 interface Walker {last:THREE.Vector3;timer:number;seen:number}
-export interface FootstepSource {id:string;position:THREE.Vector3;grounded?:boolean;facing?:THREE.Quaternion}
+export interface FootstepSource {id:string;position:THREE.Vector3;grounded?:boolean}
 
 /** Polish 17: decides when the synthesized feel cues play (footsteps, rustle,
  * jostle, squelch, whizz, brass, stings, wind). Bounded and dropped, never queued. */
