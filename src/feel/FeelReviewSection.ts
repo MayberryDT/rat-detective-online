@@ -1,4 +1,4 @@
-import {FEEL,type FeelItem} from './feelTuning';
+import {FEEL,type FeelItem,type FeelSpec} from './feelTuning';
 import {feelState,type FeelState} from './feelState';
 
 /** `?feel=dev` only: per-item switches and live values inside Settings, so a
@@ -22,10 +22,15 @@ export function mountFeelReview(parent:HTMLElement,doc:Document,signal:AbortSign
             summary.appendChild(box);
         }
         summary.append(spec.label);
+        const sliders:FeelSpec['sliders']=(spec as FeelSpec).sliders;
+        if(sliders)group.open=true;
         for(const param of Object.keys(spec.params)){
             const row=doc.createElement('label');row.className='feel-review-param';group.appendChild(row);
             row.append(param);
-            const input=doc.createElement('input');input.type='number';input.step='any';row.appendChild(input);
+            const input=doc.createElement('input');input.step='any';row.appendChild(input);
+            const range=sliders?.[param];
+            if(range){input.type='range';[input.min,input.max,input.step]=range.map(String);input.addEventListener('input',()=>state.tune(item,param,input.valueAsNumber),{signal});}
+            else input.type='number';
             input.addEventListener('change',()=>{if(Number.isFinite(input.valueAsNumber))state.tune(item,param,input.valueAsNumber);},{signal});
             refreshers.push(()=>{input.value=String((FEEL[item].params as Record<string,number>)[param]);});
         }

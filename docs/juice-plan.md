@@ -48,10 +48,7 @@ rat's identity stay as they are. Done means:
 
 - Base: production `360dbcdd…` / commit `3ffdd8b`. Branch `polish/feel`.
 - **Tyler's first review (2026-09-27):** "This feels way better." One change: the shot kick was too strong. It's now very subtle (peak about 0.4°, was 1.4°).
-- Next action:
-  - Tyler picks the direction for the [noir pass](#next-exaggerated-noir).
-  - Build it on this branch behind its own switches, then give him another review preview.
-  - Merge to `main` and deploy to production only on his explicit OK.
+- Next action: build the noir pass (N0–N9 below), one commit each, then a fresh review preview. Merge to `main` and deploy to production only on Tyler's explicit OK.
 
 ## Remaining outcomes (in order; one commit each)
 
@@ -78,11 +75,29 @@ Each item gets its own switch in the `?feel=dev` panel, so Tyler can cut it at r
 
 ## Next: exaggerated noir
 
-Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning its lighting, colour and atmosphere. The bright rats must still stand out against the dark city, because that contrast is what keeps the game readable. Low-health noir is the reference for the mood he likes. This pass supersedes the accepted "keep ambient, hemisphere, moon, exposure unchanged" lighting rule for the city only; rats keep their current look. The scope and look are waiting on his pick from the proposed options.
+Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning its lighting, colour and atmosphere. The bright rats must still stand out against the dark city, because that contrast is what keeps the game readable. Low-health noir is the reference mood. He chose **all eight pieces at Bold strength**, each with its own switch, plus a **Noir strength** slider in the juice review panel.
+
+**Rules for this pass:**
+- Rats, cheese, cases, pickups and cameos keep full colour and brightness.
+- It's presentation only and switched off under `?feel=off`.
+- No new live lights or shadow maps. Pooled or instanced meshes.
+- Phones get a lighter version.
+- It supersedes the accepted "keep ambient, hemisphere, moon, exposure unchanged" lighting rule for the city only.
+
+- [ ] **N0 Noir strength:** one shared strength (Bold ≈ 0.65), shown as a slider in the juice review panel.
+- [ ] **N1 Deeper shadows:** a contrast curve on city surfaces only. Dark areas go darker; lamp pools stay bright.
+- [ ] **N2 Colour-drained city:** city surfaces go cold grey-blue. Windows, lamps and neon keep their warmth.
+- [ ] **N3 Rain and wet streets:** rain streaks around the view (not indoors or in sewers), splashes, lamp reflections on the wet street, and rain sound.
+- [ ] **N4 Haze:** visible light cones under streetlamps and a little more cold fog.
+- [ ] **N5 Venetian-blind light:** striped window light on landmark interior floors.
+- [ ] **N6 Film grain and vignette:** plus letterbox bars during big moments (death camera, victory slow-motion).
+- [ ] **N7 Neon accents:** red and teal neon signs on landmark facades that buzz and flicker. They're the only saturated colour in the city.
+- [ ] **N8 Searchlights and lightning:** sweeping rooftop beams, and the occasional lightning flash with distant thunder.
+- [ ] **N9 Review package:** performance check, focused checks, a fresh preview, and an update to the review guide.
 
 ## Open decisions
 
-- **Noir pass:** which options, and how strong.
+- **Noir pass:** built to Tyler's pick (all eight, Bold); strength and each piece are dialled at review.
 - **Choices from the first review guide** not yet confirmed: the lamp/neon substitute, hem sway, Case File tallies kept in memory, and the victory card delay ([choices](juice/review.md#choices-to-confirm)).
 - **Git push** of `dd5aabb`/`3ffdd8b` (and this branch) to GitHub: waiting on Tyler.
 

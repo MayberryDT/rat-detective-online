@@ -8,6 +8,8 @@ export interface FeelSpec {
     /** Off by default until review turns it on; only for optional variants. */
     defaultOff?:boolean;
     params:Record<string,number>;
+    /** Params the review panel shows as sliders: [min, max, step]. */
+    sliders?:Record<string,readonly [number,number,number]>;
 }
 
 export const FEEL={
@@ -54,6 +56,8 @@ export const FEEL={
     city:{label:'18 City reacts',toggle:true,params:{flockEvery:5,canEvery:4,scare:7,respawn:25}},
     /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. */
     rewards:{label:'19 Rewards',toggle:true,params:{slowmo:1.4,slowRate:.3,catchup:.8,calloutCooldown:3}},
+    /** Shared noir strength for the city look (Tyler chose Bold ≈ .65). Rats are never affected. */
+    noir:{label:'Noir strength',toggle:false,params:{strength:.65},sliders:{strength:[0,1,.01]}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

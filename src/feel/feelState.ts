@@ -33,6 +33,8 @@ export class FeelState {
         const prefs=this.prefs();
         return this.mode==='off'||prefs.reducedMotion?0:prefs.cameraShake;
     }
+    /** Noir city strength 0…1 (juice review slider); zero under `feel=off`. */
+    noir():number {return this.mode==='off'?0:Math.max(0,Math.min(1,FEEL.noir.params.strength));}
     /** Screen flash multiplier: Settings → Flash strength; zero under `feel=off`. */
     flash():number {return this.mode==='off'?0:this.prefs().flashStrength;}
     set(item:FeelItem,on:boolean):void {this.switches.set(item,on);this.save();}
