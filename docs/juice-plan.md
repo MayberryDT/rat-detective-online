@@ -48,7 +48,24 @@ rat's identity stay as they are. Done means:
 
 - Base: production `360dbcdd…` / commit `3ffdd8b`. Branch `polish/feel`.
 - **Tyler's first review (2026-09-27):** "This feels way better." One change: the shot kick was too strong. It's now very subtle (peak about 0.4°, was 1.4°).
-- **Noir pass built (N0–N9), waiting on Tyler's review** in the same preview, using the [review guide](juice/review.md#noir-pass-second-batch). After that, apply his keep/tweak/cut decisions, then merge to `main` and deploy to production only on his explicit OK.
+- **Noir pass reviewed (2026-09-27):** "It's so good", but a little over the top. Rather than toning it down, it should **scale with health** (see below).
+- **Next action:** Tyler picks the options in the [third batch](#third-batch-proposed-2026-09-27). Build it, then open a fresh review preview. Merge to `main` and deploy to production only on his explicit OK.
+
+## Third batch (proposed, 2026-09-27)
+
+Tyler's brain dump, sorted into now and later. Items marked *(decision)* are waiting on his answer.
+
+**Now:**
+- [ ] **T1 Instant, smooth entry.** Loading the page, editing your name and entering the game should feel instant and clean, with no jerks or multi-second waits. First measure where the time and hitches go (long tasks, shader compiles, city build, first play frame). Then fix the causes: warm shaders and models during the title, spread the heavy work, and make Enter a pure hand-off. Target: no visible hitch while typing, and under 300 ms from Enter to control.
+- [ ] **T2 Noir scales with health.** At max HP the detective sees clearly and the noir stays in the background. Each lost hit point makes the perception effects heavier (shadows, colour drain, fog, grain and vignette), to the point where they get in the way and push you toward a Quick Fix. City dressing (rain, neon, haze, searchlights) stays as the city's constant character. *(decision: which effects scale)*
+- [ ] **T3 Enemies read clearly in the noir.** Replace or rework the weak outline, for example a bright rim light around each enemy's silhouette plus self-lighting that grows as the city darkens. The Hot Pursuit outline stays. *(decision: approach)*
+- [ ] **T4 Five hit points; headshots always kill.** HP goes from 3 to 5, body hits stay at 1 damage, and a headshot is a one-shot kill at any HP. This is a gameplay and protocol change (protocol 19, matching client and Worker). Headshots get lots of juice: a distinct sound, the hat blasting off, a head splat, a crosshair marker, a "headshot" callout and kill-feed mark, and a longer impact freeze. *(decision: confirm now)*
+- [ ] **T5 A longer, richer round end.** About 10 s between rounds (was 6 s). More Case File stats (for example accuracy, headshots, longest kill, case time, flights, pickups, distance). A cinematic while it plays, for example a noir police lineup of the top rats, or the camera orbiting the winner in the city. *(decision: cinematic)*
+
+**Later (not now):**
+- **Pickup system overhaul.** Especially Quick Fix, which becomes more valuable once noir scales with health.
+- **Incident system overhaul.**
+- **Max-HP detective bonuses.** At full health your detective sense is sharp, for example seeing enemy rats through one or two walls. This is a gameplay change and needs fairness rules.
 
 ## Remaining outcomes (in order; one commit each)
 
