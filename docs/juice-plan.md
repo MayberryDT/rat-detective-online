@@ -38,7 +38,7 @@ rat's identity stay as they are. Done means:
   - I build every item myself, one at a time, with no subagents. The one exception is a single independent code reviewer on the finished diff.
   - Work happens on the local branch `polish/feel`, one commit per item, so an item can be reverted alone.
   - `main` and production stay untouched. **No GitHub push or production deploy** without Tyler's explicit OK. Deploying the private capacity-test fixture for the final preview is allowed.
-- **Presentation only**, with one approved exception: Case File awards may add optional per-player stats to snapshots or round results. Protocol stays 18; older clients ignore the fields ([feel spec §8](juice/feel-spec.md#8-rewards-and-round-end)). No other change to authority, damage, hitboxes, ball/launcher/jump tuning or bots.
+- **Presentation only**, with approved exceptions: Case File awards may add optional per-player stats to snapshots or round results ([feel spec §8](juice/feel-spec.md#8-rewards-and-round-end)); and the third batch's T4 (5 HP, lethal headshots) and T5 (10 s round end, lineup) are gameplay changes Tyler approved, which move the protocol to 19. No other change to authority, damage, hitboxes, ball/launcher/jump tuning or bots.
 - **Aim stays exact.** Camera effects never move the aim ray, crosshair target or real muzzle ([invariants](juice/foundation.md#invariants)).
 - **Identity is fixed:** fedora, three-button coat, 1,024-colour palette, floating sleeves without hands, the case sleeve rule, and the rat silhouette. Model changes get [render sheets](juice/character.md#render-sheet-gate), reviewed at the end. **Shoes are on by default**, with a switch.
 - No new live lights or shadow maps. No cloth simulation. Effects reuse object pools.
@@ -49,7 +49,8 @@ rat's identity stay as they are. Done means:
 - Base: production `360dbcdd…` / commit `3ffdd8b`. Branch `polish/feel`.
 - **Tyler's first review (2026-09-27):** "This feels way better." One change: the shot kick was too strong. It's now very subtle (peak about 0.4°, was 1.4°).
 - **Noir pass reviewed (2026-09-27):** "It's so good", but a little over the top. Rather than toning it down, it should **scale with health** (see below).
-- **Next action:** build the third batch in the order T2 → T3 → T1 → T4 → T5, one commit each. Then open a fresh review preview. Merge to `main` and deploy to production only on Tyler's explicit OK.
+- **Third batch built (2026-09-27):** T2, T3, T1, T4, T5 and the review fixes are committed, and a fresh private preview is up ([review guide](juice/review.md#third-batch-t1t5)). T4 and T5 needed protocol 19, as agreed.
+- **Next action:** Tyler reviews the third batch in play and judges the T3 lab. Merge to `main` and deploy to production only on his explicit OK; protocol 19 needs the matching client and Worker.
 
 ## Third batch (decided 2026-09-27)
 
