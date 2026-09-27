@@ -49,8 +49,14 @@ rat's identity stay as they are. Done means:
 - Base: production `360dbcdd…` / commit `3ffdd8b`. Branch `polish/feel`.
 - **Tyler's first review (2026-09-27):** "This feels way better." One change: the shot kick was too strong. It's now very subtle (peak about 0.4°, was 1.4°).
 - **Noir pass reviewed (2026-09-27):** "It's so good", but a little over the top. Rather than toning it down, it should **scale with health** (see below).
-- **Third batch built (2026-09-27):** T2, T3, T1, T4, T5 and the review fixes are committed, and a fresh private preview is up ([review guide](juice/review.md#third-batch-t1t5)). T4 and T5 needed protocol 19, as agreed.
-- **Next action:** Tyler reviews the third batch in play and judges the T3 lab. Merge to `main` and deploy to production only on his explicit OK; protocol 19 needs the matching client and Worker.
+- **Third batch built (2026-09-27):** T2, T3, T1, T4, T5 and the review fixes are committed ([review guide](juice/review.md#third-batch-t1t5)). T4 and T5 needed protocol 19, as agreed.
+- **Third batch reviewed (2026-09-27):** "Wow, this is amazing." Released to production on Tyler's OK as a checkpoint.
+  - **T2 noir by health:** "brilliant, it works incredibly well." Keep.
+  - **T3 enemy readability:** still **way too low**, even with the lab. This is the next thing to solve.
+  - **T1 entry:** better. **T4 headshots:** felt better.
+  - **T5 round end / lineup:** not tried yet (he didn't reach a round end).
+  - He felt a performance hit, possibly from other load on his PC. Not the focus now; see the optimization overhaul below.
+- **Next action:** fix enemy readability (T3 follow-up), then the later overhauls when Tyler picks them.
 
 ## Third batch (decided 2026-09-27)
 
@@ -87,6 +93,8 @@ Tyler's brain dump, sorted into now and later, with his answers.
 - **Pickup system overhaul.** Especially Quick Fix, which becomes more valuable once noir scales with health.
 - **Incident system overhaul.**
 - **Max-HP detective bonuses.** At full health your detective sense is sharp, for example seeing enemy rats through one or two walls. This is a gameplay change and needs fairness rules.
+- **Complete optimization overhaul.** Tyler felt a performance hit after the third batch (his PC was also busy). Measure the client frame budget with the full juice layer on, then cut cost across rendering, feel effects and simulation.
+- **3D model and ragdoll overhaul.**
 
 ## Remaining outcomes (in order; one commit each)
 
