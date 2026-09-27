@@ -11,6 +11,9 @@ export class ScreenFeel {
     private root?:HTMLElement;
     private edge?:HTMLElement;
     private bloom?:HTMLElement;
+    private readonly words:HTMLElement[]=[];
+    private wordCursor=0;
+    private readonly projected=new THREE.Vector3();
     private readonly arrows:Arrow[]=[];
     private edgeLevel=0;
     private readonly local=new THREE.Vector3();
@@ -26,6 +29,20 @@ export class ScreenFeel {
         if(!from)return;
         const arrow=this.arrows.find(a=>a.from===from)??this.arrows.reduce((a,b)=>a.age/a.life>=b.age/b.life?a:b);
         arrow.from=from;arrow.age=0;arrow.life=p.arrowLife;
+    }
+
+    /** Pop a comic word over `at` (world position), clamped inside the screen. */
+    word(text:string,at:THREE.Vector3,camera:THREE.Camera):void {
+        if(!this.build())return;
+        const node=this.words[this.wordCursor++%this.words.length]!;
+        this.projected.copy(at).project(camera);
+        const behind=this.projected.z>1;
+        const x=behind?.5:Math.min(.85,Math.max(.15,(this.projected.x+1)/2));
+        const y=behind?.35:Math.min(.8,Math.max(.18,(1-this.projected.y)/2-.08));
+        node.textContent=text;
+        node.style.left=`${x*100}%`;node.style.top=`${y*100}%`;
+        node.style.setProperty('--tilt',`${(this.wordCursor%2?-1:1)*(4+this.wordCursor%3*2)}deg`);
+        node.classList.remove('on');void node.offsetWidth;node.classList.add('on');
     }
 
     /** Ring burst around the crosshair for a confirmed kill. */
@@ -61,9 +78,10 @@ export class ScreenFeel {
         if(this.edge)this.edge.style.opacity='0';
         for(const arrow of this.arrows){arrow.from=null;arrow.node.style.opacity='0';}
         this.bloom?.classList.remove('on');
+        for(const node of this.words)node.classList.remove('on');
     }
 
-    dispose():void {this.root?.remove();this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;}
+    dispose():void {this.root?.remove();this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -72,6 +90,7 @@ export class ScreenFeel {
         this.root=this.doc.createElement('div');this.root.className='feel-screen';this.root.setAttribute('aria-hidden','true');
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
         this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);
+        for(let i=0;i<3;i++){const node=this.doc.createElement('div');node.className='feel-word';this.root.appendChild(node);this.words.push(node);}
         for(let i=0;i<ARROWS;i++){
             const node=this.doc.createElement('div');node.className='feel-arrow';this.root.appendChild(node);
             this.arrows.push({node,from:null,age:0,life:1});

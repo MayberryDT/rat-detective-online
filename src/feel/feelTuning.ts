@@ -28,6 +28,8 @@ export const FEEL={
     ironcladSparks:{label:'7 Ironclad sparks',toggle:true,params:{count:18,speed:11,life:.36}},
     /** Ring burst around the crosshair plus a brief zoom-in (degrees) on your kills. */
     killBloom:{label:'8 Kill bloom and punch-in',toggle:true,params:{punch:4}},
+    /** Comic words: kill streaks within `streakWindow` s, air kills, Big Cheese hits; `cooldown` s between non-streak words. */
+    comicWords:{label:'9 Comic words',toggle:true,params:{streakWindow:4,cooldown:6}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

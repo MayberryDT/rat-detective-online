@@ -10,3 +10,13 @@
 .feel-kill-bloom::after{content:'';position:absolute;inset:-14px;border-radius:50%;border:2px dashed #ffd2a8}
 .feel-kill-bloom.on{animation:feel-kill-bloom 460ms cubic-bezier(.2,.8,.3,1) both}
 @keyframes feel-kill-bloom{0%{opacity:var(--feel-flash,1);transform:scale(.2) rotate(0)}60%{opacity:calc(var(--feel-flash,1)*.7)}100%{opacity:0;transform:scale(2.1) rotate(40deg)}}
+/* 9: comic words for big moments, anchored near the victim on screen. */
+.feel-word{position:absolute;left:0;top:0;opacity:0;white-space:nowrap;pointer-events:none;
+  font:400 46px/1 'Bangers',Impact,sans-serif;letter-spacing:1.5px;color:#ffd24a;
+  -webkit-text-stroke:2px #3a0d05;text-shadow:3px 3px 0 #7a1a0a,0 0 14px #ff6a1f99;transform-origin:50% 60%}
+.feel-word.on{animation:feel-word 1100ms cubic-bezier(.2,.9,.25,1.2) both}
+@keyframes feel-word{0%{opacity:0;transform:translate(-50%,-50%) rotate(var(--tilt)) scale(.2)}
+  14%{opacity:1;transform:translate(-50%,-50%) rotate(var(--tilt)) scale(1.18)}
+  26%,78%{opacity:1;transform:translate(-50%,-50%) rotate(var(--tilt)) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-80%) rotate(var(--tilt)) scale(.94)}}
+@media(max-height:500px){.feel-word{font-size:34px}}

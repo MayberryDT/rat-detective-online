@@ -68,7 +68,9 @@ const actions:Record<string,()=>void>={
     'Hit suspect 2 (freeze)':()=>{const victim=suspects[1]!;victim.hp=3;feel.impact(victim,false);victim.takeDamage(1,new THREE.Vector3(1,0,0));},
     'Stain suspects ×3':()=>{for(const [i,s] of suspects.entries())for(let k=0;k<3;k++){s.hp=3;s.takeDamage(1,new THREE.Vector3(1,0,(k-1)*.6+(i-1)*.3));}},
     'Ironclad reflection sparks':()=>{const p=suspects[1]!.mesh.position.clone().setY(1.3);impacts.spark(p,new THREE.Vector3(-1,.2,0));},
-    'Kill (bloom + punch-in)':()=>{const c=document.getElementById('crosshair')!;c.classList.remove('kill-confirmed');void c.offsetWidth;c.classList.add('kill-confirmed');feel.killed();},
+    'Kill (bloom + punch-in)':()=>{const c=document.getElementById('crosshair')!;c.classList.remove('kill-confirmed');void c.offsetWidth;c.classList.add('kill-confirmed');feel.killed(suspects[1]!.mesh.position,false,stage.camera);},
+    'Double kill (comic word)':()=>{feel.killed(suspects[0]!.mesh.position,false,stage.camera);feel.killed(suspects[2]!.mesh.position,false,stage.camera);},
+    'Air kill (comic word)':()=>{feel.reset();feel.killed(suspects[1]!.mesh.position,true,stage.camera,performance.now()+60_000);},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

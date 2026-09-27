@@ -13,6 +13,8 @@ export class FeelDirector {
     readonly camera:CameraFeel;
     readonly screen:ScreenFeel;
     private incident?:IncidentId;
+    private readonly killTimes:number[]=[];
+    private lastWordAt=-Infinity;
     private readonly impulse=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
     constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
@@ -43,11 +45,31 @@ export class FeelDirector {
         this.camera.push(this.impulse.multiplyScalar(p.push*scale*.1));
     }
 
-    /** You scored a kill. */
-    killed():void {
-        if(!this.state.on('killBloom'))return;
-        this.screen.killBloom();
-        this.camera.widen(-FEEL.killBloom.params.punch);
+    /** You scored a kill on the rat at `victim`; `airborne` when you were in flight. */
+    killed(victim:THREE.Vector3,airborne:boolean,view:THREE.Camera,now=performance.now()):void {
+        if(this.state.on('killBloom')){
+            this.screen.killBloom();
+            this.camera.widen(-FEEL.killBloom.params.punch);
+        }
+        const p=FEEL.comicWords.params;
+        while(this.killTimes.length&&now-this.killTimes[0]!>p.streakWindow*1000)this.killTimes.shift();
+        this.killTimes.push(now);
+        const streak=this.killTimes.length;
+        // Escalating streaks always show; other words respect the cooldown.
+        if(streak>=2)this.word(streak===2?'DOUBLE CHEESE!':streak===3?'TRIPLE CHEESE!':'CHEESE-A-PALOOZA!',victim,view,now,true);
+        else if(airborne)this.word('AIR MAIL!',victim,view,now,false);
+    }
+
+    /** Your cheese hit someone (nonlethal). */
+    hitDealt(victim:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
+        if(this.incident==='big-cheese')this.word('KER-CHEESE!',victim,view,now,false);
+    }
+
+    private word(text:string,at:THREE.Vector3,view:THREE.Camera,now:number,escalation:boolean):void {
+        if(!this.state.on('comicWords'))return;
+        if(!escalation&&now-this.lastWordAt<FEEL.comicWords.params.cooldown*1000)return;
+        this.lastWordAt=now;
+        this.screen.word(text,at,view);
     }
 
     /** A cheese hit landed on `victim` (a remote rat you hit, or your own rat). */
@@ -66,6 +88,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;}
     dispose():void {this.camera.reset();this.screen.dispose();}
 }
