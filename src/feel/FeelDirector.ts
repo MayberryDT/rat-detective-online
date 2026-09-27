@@ -10,6 +10,7 @@ import {CityReactions,registerCity} from './CityReactions';
 import {NoirCity} from './NoirCity';
 import {NoirRain} from './NoirRain';
 import {NoirAtmosphere} from './NoirAtmosphere';
+import {NoirDressing} from './NoirDressing';
 import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
 import type {Sting} from './FeelAudio';
@@ -40,6 +41,7 @@ export class FeelDirector {
     private noirCity?:NoirCity;
     private noirRain?:NoirRain;
     private noirAtmosphere?:NoirAtmosphere;
+    private noirDressing?:NoirDressing;
     private lifeKills=0;
     private lastCalloutAt=-Infinity;
     private slowAge=Infinity;
@@ -72,6 +74,7 @@ export class FeelDirector {
         // Collect city materials now, before rats, cases and pickups exist.
         this.noirCity?.dispose();this.noirCity=new NoirCity(scene);
         this.noirAtmosphere?.dispose();this.noirAtmosphere=new NoirAtmosphere(scene,lamps);
+        this.noirDressing?.dispose();this.noirDressing=new NoirDressing(scene);
         this.noirRain?.dispose();this.noirRain=new NoirRain(scene,lamps,Math.round(this.colourFilter?FEEL.noirRain.params.drops:FEEL.noirRain.params.phoneDrops));
     }
     /** Force a lightning strike (workshop review). */
@@ -226,6 +229,7 @@ export class FeelDirector {
         this.dust?.update(dt);
         this.city?.update(dt);
         this.noirCity?.update();
+        this.noirDressing?.update(dt);
         if(this.noirRain){
             const where=self?spaceAt(self):'open';
             this.noirRain.update(dt,view,where==='open');
@@ -246,6 +250,8 @@ export class FeelDirector {
         if(Math.abs(target-this.danger)<.002)this.danger=target;
         this.flood=Math.max(0,this.flood-dt*1.4);
         this.screen.noir(this.danger,on?this.flood:0,this.colourFilter);
+        const noir=this.state.noir(),film=this.state.on('noirFilm')?noir/.65:0,f=FEEL.noirFilm.params;
+        this.screen.film(this.colourFilter?film*f.grain:0,film*f.vignette,film>0&&(!!this.deathTarget||this.slowAge<FEEL.rewards.params.slowmo));
         if(this.noirAudio){
             this.noirAudio.space=this.state.on('sound')&&self?spaceAt(self):'open';
             this.noirAudio.update(dt,this.danger,p.closed,p.period,on?p.heartbeat:0);
@@ -256,5 +262,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();this.lifeKills=0;}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();}
 }

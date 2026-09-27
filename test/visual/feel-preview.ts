@@ -95,6 +95,8 @@ const actions:Record<string,()=>void>={
     'Noir strength 1.0':()=>{FEEL.noir.params.strength=1;},
     'Lightning strike':()=>feel.lightning(),
     'Look up (sky)':()=>rat.onMouseMove(0,-420),
+    'Go outside Records Hall (neon)':()=>{rat.entity.body.position.set(-6,.5,-24);rat.entity.body.velocity.set(0,0,0);rat.onMouseMove(-785.4,0);rat.onMouseMove(0,-330);},
+    'Go inside Records Hall (blinds)':()=>{rat.entity.body.position.set(-12,.5,-52);rat.entity.body.velocity.set(0,0,0);rat.onMouseMove(-785.4,0);rat.onMouseMove(1570.8,0);rat.onMouseMove(0,120);},
     'Look ahead':()=>rat.onMouseMove(0,420),
     'Reset feel':()=>feel.reset(),
 };

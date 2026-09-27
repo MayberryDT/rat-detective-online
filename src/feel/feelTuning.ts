@@ -68,6 +68,12 @@ export const FEEL={
     noirHaze:{label:'N4 Haze',toggle:true,params:{opacity:.32,range:70,fog:.45}},
     /** N8: searchlight beams (opacity, sweep speed) and lightning (gap range s, ambient flash gain). */
     noirSky:{label:'N8 Searchlights and lightning',toggle:true,params:{beamOpacity:.16,sweepSpeed:.12,minGap:28,maxGap:70,flash:2.5}},
+    /** N5: warm venetian-blind slats on landmark interior floors. */
+    noirBlinds:{label:'N5 Venetian-blind light',toggle:true,params:{opacity:.9}},
+    /** N7: neon signs on landmark facades (brightness, chance per second of a buzzing stutter). */
+    noirNeon:{label:'N7 Neon accents',toggle:true,params:{brightness:1,flickerRate:.08}},
+    /** N6: film grain (off on phones), vignette, and letterbox bars during the death camera and victory slow-motion. */
+    noirFilm:{label:'N6 Film grain, vignette, letterbox',toggle:true,params:{grain:.09,vignette:.55}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

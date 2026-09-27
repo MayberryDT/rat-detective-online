@@ -3,6 +3,15 @@ import {FEEL} from './feelTuning';
 import './feel.css';
 
 const ARROWS=4;
+
+/** A small tile of monochrome noise for the film-grain overlay, as a data URL. */
+function grainImage(doc:Document):string|undefined {
+    const canvas=doc.createElement('canvas');canvas.width=canvas.height=96;
+    const g=canvas.getContext?.('2d');if(!g)return undefined;
+    const image=g.createImageData(96,96);
+    for(let i=0;i<image.data.length;i+=4){const v=Math.random()*255;image.data[i]=image.data[i+1]=image.data[i+2]=v;image.data[i+3]=255;}
+    g.putImageData(image,0,0);return canvas.toDataURL();
+}
 interface Arrow {node:HTMLElement;from:THREE.Vector3|null;age:number;life:number}
 
 /** DOM overlays for screen feedback: edge flash and damage direction arrows.
@@ -15,6 +24,9 @@ export class ScreenFeel {
     private irisNode?:HTMLElement;
     private speedNode?:HTMLElement;
     private calloutNode?:HTMLElement;
+    private grainNode?:HTMLElement;
+    private vignetteNode?:HTMLElement;
+    private lastFilm='';
     private lastSpeed=0;
     private canvas?:HTMLElement;
     private lastFilter='';
@@ -54,6 +66,18 @@ export class ScreenFeel {
         if(!this.canvas)return;
         const value=filter&&(drain>.001||flood>.001)?`saturate(${(1-p.drain*drain+p.flood*flood).toFixed(3)}) contrast(${(1+.12*drain).toFixed(3)})`:'';
         if(value!==this.lastFilter){this.canvas.style.filter=value;this.lastFilter=value;}
+    }
+
+    /** Noir N6: grain and vignette amount (0…1), and letterbox bars for big moments. */
+    film(grain:number,vignette:number,letterbox:boolean):void {
+        const key=`${grain.toFixed(2)}|${vignette.toFixed(2)}|${letterbox}`;
+        if(key===this.lastFilm)return;
+        this.lastFilm=key;
+        if(!(grain>0||vignette>0||letterbox)&&!this.root)return;
+        if(!this.build())return;
+        if(this.grainNode){this.grainNode.style.opacity=grain.toFixed(3);this.grainNode.style.display=grain>0?'':'none';}
+        if(this.vignetteNode)this.vignetteNode.style.opacity=vignette.toFixed(3);
+        this.root!.classList.toggle('letterboxed',letterbox);
     }
 
     /** A noir streak callout stamped near the top of the screen. */
@@ -137,11 +161,12 @@ export class ScreenFeel {
         if(this.speedNode){this.speedNode.style.opacity='0';this.speedNode.classList.remove('on');}
         this.calloutNode?.classList.remove('on');
         this.lastSpeed=0;
+        this.lastFilm='';this.root?.classList.remove('letterboxed');
         if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -149,6 +174,11 @@ export class ScreenFeel {
         if(!this.doc?.body||typeof this.doc.createElement!=='function')return false;
         this.root=this.doc.createElement('div');this.root.className='feel-screen';this.root.setAttribute('aria-hidden','true');
         this.noirEdge=this.doc.createElement('div');this.noirEdge.className='feel-noir';this.root.appendChild(this.noirEdge);
+        this.vignetteNode=this.doc.createElement('div');this.vignetteNode.className='feel-vignette';this.root.appendChild(this.vignetteNode);
+        this.grainNode=this.doc.createElement('div');this.grainNode.className='feel-grain';this.grainNode.style.display='none';
+        const noise=grainImage(this.doc);if(noise)this.grainNode.style.backgroundImage=`url(${noise})`;
+        this.root.appendChild(this.grainNode);
+        for(const edge of ['top','bottom']){const bar=this.doc.createElement('div');bar.className=`feel-letterbox ${edge}`;this.root.appendChild(bar);}
         this.speedNode=this.doc.createElement('div');this.speedNode.className='feel-speed';this.root.appendChild(this.speedNode);
         this.calloutNode=this.doc.createElement('div');this.calloutNode.className='feel-callout';this.root.appendChild(this.calloutNode);
         this.irisNode=this.doc.createElement('div');this.irisNode.className='feel-iris';this.root.appendChild(this.irisNode);

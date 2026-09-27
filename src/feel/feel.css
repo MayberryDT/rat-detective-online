@@ -43,3 +43,11 @@
 .victory-casefile h3{margin:0 0 4px;font:400 22px/1 'Bangers',Impact,sans-serif;letter-spacing:1.5px;color:#e6bf60}
 .victory-casefile li{list-style:none;display:flex;gap:10px;justify-content:space-between}.victory-casefile ul{margin:0;padding:0}
 .victory-casefile b{color:#f3e2b5}.victory-casefile span{color:#c6b8cf}
+/* N6: film grain, vignette and letterbox bars for big moments. */
+.feel-grain{position:absolute;inset:-50%;opacity:0;background-size:192px 192px;mix-blend-mode:overlay;animation:feel-grain .5s steps(4) infinite}
+@keyframes feel-grain{0%{transform:translate(0,0)}25%{transform:translate(-7%,4%)}50%{transform:translate(5%,-6%)}75%{transform:translate(-3%,-2%)}100%{transform:translate(0,0)}}
+.feel-vignette{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 55%,#000000d9 100%)}
+.feel-letterbox{position:absolute;left:0;right:0;height:9vh;background:#050308;transition:transform .35s cubic-bezier(.2,.8,.3,1);pointer-events:none}
+.feel-letterbox.top{top:0;transform:translateY(-100%)}.feel-letterbox.bottom{bottom:0;transform:translateY(100%)}
+.feel-screen.letterboxed .feel-letterbox{transform:translateY(0)}
+@media(prefers-reduced-motion:reduce){.feel-grain{animation:none}}
