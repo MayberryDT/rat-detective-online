@@ -6,7 +6,7 @@ Reviewed against repository source and the latest release receipts through **202
 
 | Document | Purpose |
 | --- | --- |
-| [Polish plan](polish-plan.md) | **Active, built on branch `polish/feel`, awaiting Tyler's review.** Living plan for the last-10% feel program. Start with the [review guide](polish/review.md). Sections: [feel spec](polish/feel-spec.md), [foundation](polish/foundation.md), [character](polish/character.md), [sound](polish/sound.md) |
+| [Juice plan](juice-plan.md) | **Active.** Juice is presentation-only game feel: shakes, kill effects, small sounds, subtle animation, noir atmosphere. The first batch is on branch `polish/feel`; the noir pass is next. Review guide: [juice/review.md](juice/review.md). Sections: [feel spec](juice/feel-spec.md), [foundation](juice/foundation.md), [character](juice/character.md), [sound](juice/sound.md) |
 | [Automatic highlights repair handoff](handoffs/automatic-highlights-repair-handoff.md) | Historical completion brief; the repaired implementation is now released in plugin 1.3.1 |
 | [Automatic highlights implementation plan](handoffs/automatic-highlights-implementation-plan.md) | Full H00–H09 product specification; release status is recorded in the 1.3.1 receipt |
 

@@ -1,6 +1,6 @@
 # Character: model touch-ups and animation
 
-Part of the [polish plan](../polish-plan.md), which owns status and order. Read
+Part of the [juice plan](../juice-plan.md), which owns status and order. Read
 this before changing `RatModel`, `RatAnimator`, `RatActing` or rat materials.
 
 **Goal:** a more expressive rat without changing who or what he is. He's a

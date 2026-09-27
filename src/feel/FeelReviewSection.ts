@@ -6,7 +6,7 @@ import {feelState,type FeelState} from './feelState';
 export function mountFeelReview(parent:HTMLElement,doc:Document,signal:AbortSignal,state:FeelState=feelState()):void {
     if(state.mode!=='dev')return;
     const field=doc.createElement('fieldset');field.className='feel-review';parent.appendChild(field);
-    const legend=doc.createElement('legend');legend.textContent='FEEL REVIEW';field.appendChild(legend);
+    const legend=doc.createElement('legend');legend.textContent='JUICE REVIEW';field.appendChild(legend);
     const note=doc.createElement('p');
     note.textContent='Review build. Switch items off to compare; changed values save on this browser. Copy values to send them back.';
     field.appendChild(note);

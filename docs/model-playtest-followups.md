@@ -1,6 +1,6 @@
 # Model and map follow-ups
 
-> **2026-09-27:** Character polish now follows the [polish plan's character section](polish/character.md). This page is reference only.
+> **2026-09-27:** Character polish now follows the [juice plan's character section](juice/character.md). This page is reference only.
 
 ## September 12 outfit direction and prototype
 

@@ -2,7 +2,7 @@
 
 Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md](docs/README.md) for the documentation map. These describe the shipped game as verified on **2026-09-12**, not a new implementation request.
 
-**Active work:** the [polish plan](docs/polish-plan.md) (started 2026-09-27) owns current status, order and next action for the feel/polish program: camera, impacts, character model and animation, sound, city reactions and rewards. Read it first for any such task. It supersedes older animation, camera-shake and foley-pruning guidance where they conflict; older plans and handoffs are reference only.
+**Active work:** the [juice plan](docs/juice-plan.md) (started 2026-09-27) owns current status, order and next action for **juice**, Tyler's name for the small layered responses that make the game feel good: screen shake, on-kill effects, tiny sounds, subtle animation and noir atmosphere. Read it first for any such task. It supersedes older animation, camera-shake and foley-pruning guidance where they conflict; older plans and handoffs are reference only.
 
 ## Preserve the game
 

@@ -1,6 +1,6 @@
 # Foundation: the feel layer
 
-Part of the [polish plan](../polish-plan.md), which owns status and order. Read
+Part of the [juice plan](../juice-plan.md), which owns status and order. Read
 this before writing any feel code or reviewing its integration. It covers
 architecture, rules, performance budget and verification for every track.
 

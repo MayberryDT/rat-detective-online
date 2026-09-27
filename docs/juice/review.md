@@ -1,6 +1,6 @@
-# Polish review guide
+# Juice review guide
 
-Part of the [polish plan](../polish-plan.md). This covers everything Tyler needs
+Part of the [juice plan](../juice-plan.md). This covers everything Tyler needs
 for the one end-of-program review: where to play it, how to switch each item,
 what to look for, the artifacts, and the choices I made that he should confirm.
 
@@ -11,7 +11,7 @@ and production are untouched. Nothing is pushed or deployed to production.
 
 1. **Play the hosted private preview.** It uses production matchmaking and server bots, and is audible. The address and refresh command are under [Preview](#preview).
 2. **Compare.** Add `?feel=off` to the address to see and hear the game exactly as it is in production today.
-3. **Switch items one at a time.** Add `?feel=dev`, press Escape, choose Settings, then scroll to **Feel review**.
+3. **Switch items one at a time.** Add `?feel=dev`, press Escape, choose Settings, then scroll to **Juice review**.
    - Each numbered item has an on/off box and its tuning values.
    - Changes save in this browser.
    - **Copy values** puts your tuned numbers on the clipboard, so you can paste them back to me.
@@ -26,8 +26,8 @@ For a quick look without playing, the **feel workshop** fires each effect on dem
 Private hosted fixture (production matchmaking, server bots, 10-rat cap, audible), serving this branch's client and Worker:
 
 - **Play:** http://127.0.0.1:5193/?room=graybox-benchmark-match-polish-r1 on Veelox. Add `&feel=off` to compare, `&feel=dev` for the switches.
-- **Fixture:** Worker `rat-detective-capacity-test`, version `010eb9d7-3d4c-4e42-96aa-8ab030900d55`. It expires **3:23 PM PDT, 27 September**.
-- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-27T18-23-39-472Z/deployment.json`.
+- **Fixture:** Worker `rat-detective-capacity-test`, version `b2f51f35-6003-40d7-b649-ad0b7ac87c2e` (includes the subtler shot kick). It expires **3:45 PM PDT, 27 September**.
+- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-27T18-45-22-740Z/deployment.json`.
 - **Smoke-tested:** a scripted client joined through the relay. The welcome was protocol 18, seed 341283204, 9 server bots plus the client, Excessive Force playing, and chaos frames streamed.
 
 **If the preview has expired**, build and redeploy, then start the relay again:

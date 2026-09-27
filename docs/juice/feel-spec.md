@@ -1,6 +1,6 @@
 # Feel spec: what each action should feel like
 
-Part of the [polish plan](../polish-plan.md), which owns status and order. Read
+Part of the [juice plan](../juice-plan.md), which owns status and order. Read
 this when building or reviewing a feel item. It covers the agreed outcomes from the
 27 September brainstorm, which Tyler approved in full ("I love it all and want to
 do it all").

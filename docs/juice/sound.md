@@ -1,6 +1,6 @@
 # Sound pass
 
-Part of the [polish plan](../polish-plan.md), which owns status and order. Read
+Part of the [juice plan](../juice-plan.md), which owns status and order. Read
 this before adding or changing audio.
 
 ## Scope
