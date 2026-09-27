@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { createCheeseBallGeometry } from '../../src/weapons/CheeseProjectileModel';
 import { CheeseImpactEffects } from '../../src/weapons/CheeseImpactEffects';
+import { FEEL } from '../../src/feel/feelTuning';
 
 it('caps impact debris and splats, expires them, and disposes shared resources once', () => {
     const scene = new THREE.Scene();
@@ -14,7 +15,7 @@ it('caps impact debris and splats, expires them, and disposes shared resources o
     effects.update(0);
     expect(crumbs.count).toBe(160); expect(splats.count).toBe(40);
     effects.update(0.9); expect(crumbs.count).toBe(0); expect(splats.count).toBe(40);
-    effects.update(2.2); expect(splats.count).toBe(0);
+    effects.update(FEEL.splats.params.life); expect(splats.count).toBe(0);
     effects.emit(new THREE.Vector3(),new THREE.Vector3(1,0,0),false);
     effects.update(0);
     expect(crumbs.count).toBe(7); expect(splats.count).toBe(0);
@@ -47,7 +48,7 @@ it('flushes a burst once per frame instead of rebuilding instance buffers per im
     expect(crumbWrites).not.toHaveBeenCalled();expect(splatWrites).not.toHaveBeenCalled();
     effects.update(1/60);
     expect(crumbWrites).toHaveBeenCalledTimes(160);expect(splatWrites).toHaveBeenCalledTimes(40);
-    effects.update(4);expect(crumbs.count+splats.count).toBe(0);
+    effects.update(FEEL.splats.params.life+1);expect(crumbs.count+splats.count).toBe(0);
     crumbWrites.mockClear();splatWrites.mockClear();effects.update(1/60);
     expect(crumbWrites).not.toHaveBeenCalled();expect(splatWrites).not.toHaveBeenCalled();
     effects.dispose();

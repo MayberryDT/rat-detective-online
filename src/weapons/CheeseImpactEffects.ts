@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import {feelState} from '../feel/feelState';
+import {FEEL} from '../feel/feelTuning';
+
+const DRIPS=60;
 
 /** Bounded, cosmetic-only crumbs and surface splashes; no physics bodies or aim targets. */
 export class CheeseImpactEffects {
@@ -11,7 +15,15 @@ export class CheeseImpactEffects {
     private readonly splats;
     private readonly particles = Array.from({length:160},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,lifetime:0,spin:0,size:1}));
     private particleCursor=0;
-    private readonly marks = Array.from({length:40},()=>({position:new THREE.Vector3(),rotation:new THREE.Quaternion(),age:Infinity,size:0}));
+    private readonly marks = Array.from({length:40},()=>({position:new THREE.Vector3(),rotation:new THREE.Quaternion(),age:Infinity,size:0,life:3}));
+    /** Polish 5: runs of cheese sliding down walls under fresh splats. */
+    private readonly dripGeometry = new THREE.PlaneGeometry(1, 1).translate(0, -.5, 0);
+    private readonly drips = new THREE.InstancedMesh(this.dripGeometry, this.splatMaterial, DRIPS);
+    private readonly dripSlots = Array.from({length:DRIPS},()=>({position:new THREE.Vector3(),rotation:new THREE.Quaternion(),age:Infinity,life:0,length:0,width:0}));
+    private dripCursor=0;
+    private readonly basis=new THREE.Matrix4();
+    private readonly up=new THREE.Vector3();
+    private readonly side=new THREE.Vector3();
     private markCursor=0;
     private active=false;
     private readonly axis=new THREE.Vector3(0,0,1);
@@ -34,9 +46,9 @@ export class CheeseImpactEffects {
         shape.closePath(); this.splatGeometry = new THREE.ShapeGeometry(shape);
         this.splats = new THREE.InstancedMesh(this.splatGeometry, this.splatMaterial, 40);
         this.root.name = 'cheese-impact-effects';
-        this.crumbs.count = this.splats.count = 0;
-        this.crumbs.frustumCulled = this.splats.frustumCulled = false;
-        this.root.add(this.crumbs, this.splats); scene.add(this.root);
+        this.crumbs.count = this.splats.count = this.drips.count = 0;
+        this.crumbs.frustumCulled = this.splats.frustumCulled = this.drips.frustumCulled = false;
+        this.root.add(this.crumbs, this.splats, this.drips); scene.add(this.root);
     }
 
     emit(point: THREE.Vector3, normal: THREE.Vector3, surface: boolean, scale=1): void {
@@ -57,11 +69,13 @@ export class CheeseImpactEffects {
             particle.age=0;particle.lifetime=.5+i*.05;particle.spin=angle;particle.size=Math.min(3.2,.7+size*.35);
         }
         if(surface){
+            const polish=feelState().on('splats'),p=FEEL.splats.params;
             const mark=this.marks[this.markCursor++%40];
             mark.rotation.setFromUnitVectors(this.axis,this.normal);
             mark.rotation.multiply(this.twist.setFromAxisAngle(this.axis,phase));
             mark.position.copy(point).addScaledVector(this.normal,.035);
-            mark.age=0;mark.size=(.7+(this.sequence%3)*.15)*size;
+            mark.age=0;mark.size=(.7+(this.sequence%3)*.15)*size*(polish?p.size:1);mark.life=polish?p.life:3;
+            if(polish&&Math.abs(this.normal.y)<.6)this.emitDrips(point,mark.size,p);
         }
         // Emission only fills bounded slots. The frame owner flushes all impacts once.
         this.active=true;
@@ -87,29 +101,57 @@ export class CheeseImpactEffects {
         }
         for(let slot=0;slot<40;slot++){
             const mark=this.marks[(this.markCursor+slot)%40];
-            if((mark.age+=dt)>=3)continue;
+            if((mark.age+=dt)>=mark.life)continue;
             this.dummy.position.copy(mark.position); this.dummy.quaternion.copy(mark.rotation);
             const grow = 0.4 + 0.6 * Math.min(1, mark.age / 0.07);
-            const shrink = Math.min(1, (3 - mark.age) / 0.4);
+            const shrink = Math.min(1, (mark.life - mark.age) / 0.4);
             this.dummy.scale.setScalar(mark.size * grow * shrink);
             this.dummy.updateMatrix(); this.splats.setMatrixAt(markCount++, this.dummy.matrix);
         }
-        this.crumbs.count=particleCount;this.splats.count=markCount;
-        this.active=particleCount+markCount>0;
-        this.crumbs.instanceMatrix.needsUpdate = this.splats.instanceMatrix.needsUpdate = true;
+        let dripCount=0;
+        for(let slot=0;slot<DRIPS;slot++){
+            const drip=this.dripSlots[(this.dripCursor+slot)%DRIPS];
+            if((drip.age+=dt)>=drip.life)continue;
+            // Ease out: a quick first run, then a slow creep, then fade with its splat.
+            const run=1-Math.pow(1-Math.min(1,drip.age/(drip.life*.55)),3);
+            const fade=Math.min(1,(drip.life-drip.age)/.4);
+            this.dummy.position.copy(drip.position);this.dummy.quaternion.copy(drip.rotation);
+            this.dummy.scale.set(drip.width*fade,Math.max(.001,drip.length*run),1);
+            this.dummy.updateMatrix();this.drips.setMatrixAt(dripCount++,this.dummy.matrix);
+        }
+        this.crumbs.count=particleCount;this.splats.count=markCount;this.drips.count=dripCount;
+        this.active=particleCount+markCount+dripCount>0;
+        this.crumbs.instanceMatrix.needsUpdate = this.splats.instanceMatrix.needsUpdate = this.drips.instanceMatrix.needsUpdate = true;
+    }
+
+    /** Hang 1–N runs from the lower half of a wall splat, oriented down the wall. */
+    private emitDrips(point:THREE.Vector3,size:number,p:typeof FEEL.splats.params):void {
+        this.up.set(0,1,0).addScaledVector(this.normal,-this.normal.y).normalize();
+        this.side.crossVectors(this.up,this.normal);
+        this.basis.makeBasis(this.side,this.up,this.normal);
+        const count=1+(this.sequence%Math.max(1,Math.round(p.drips)));
+        for(let i=0;i<count;i++){
+            const drip=this.dripSlots[this.dripCursor++%DRIPS];
+            const offset=(((this.sequence*7+i*13)%10)/10-.5)*.28*size;
+            drip.position.copy(point).addScaledVector(this.normal,.037).addScaledVector(this.side,offset).addScaledVector(this.up,-.06*size);
+            drip.rotation.setFromRotationMatrix(this.basis);
+            drip.age=0;drip.life=p.life;drip.width=(.05+.02*((this.sequence+i)%3))*size;
+            drip.length=p.dripLength*size*(.6+.4*(((this.sequence+i*5)%7)/6));
+        }
     }
 
     clear(): void {
         for(const particle of this.particles)particle.age=Infinity;
         for(const mark of this.marks)mark.age=Infinity;
-        this.active=false;this.particleCursor=this.markCursor=0;this.crumbs.count=this.splats.count=0;
+        for(const drip of this.dripSlots)drip.age=Infinity;
+        this.active=false;this.particleCursor=this.markCursor=this.dripCursor=0;this.crumbs.count=this.splats.count=this.drips.count=0;
     }
 
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true; this.clear(); this.root.removeFromParent();
-        this.crumbs.dispose(); this.splats.dispose();
-        this.crumbGeometry.dispose(); this.splatGeometry.dispose();
+        this.crumbs.dispose(); this.splats.dispose(); this.drips.dispose();
+        this.crumbGeometry.dispose(); this.splatGeometry.dispose(); this.dripGeometry.dispose();
         this.crumbMaterial.dispose(); this.splatMaterial.dispose();
     }
 }

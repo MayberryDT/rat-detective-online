@@ -8,6 +8,7 @@ import {Neighborhood} from '../../src/prototype/Neighborhood';
 import {RatController} from '../../src/player/RatController';
 import {RatEntity} from '../../src/entities/RatEntity';
 import {CheeseGun} from '../../src/weapons/CheeseGun';
+import {CheeseImpactEffects} from '../../src/weapons/CheeseImpactEffects';
 import {initEntitySounds} from '../../src/audio/EntityAudio';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {createPlayer} from '../../src/worker/gameState';
@@ -41,13 +42,30 @@ function hurt(from:number,damage:number):void {
     feel.hurt(damage,rat.entity.mesh.position,attacker.mesh.position,stage.camera);
     rat.entity.takeDamage(Math.min(2,damage),direction);
 }
+const impacts=new CheeseImpactEffects(stage.scene);
+const ray=new THREE.Raycaster(),blockers=stage.scene.children.filter(o=>o.userData.aimTarget===true);
+/** Splat the nearest wall in a view direction `degrees` left (+) or right (-) of ahead. */
+function splatWall(degrees:number,count:number):number {
+    let hits=0;
+    stage.camera.getWorldDirection(aim);aim.setY(0).normalize().applyAxisAngle(new THREE.Vector3(0,1,0),degrees*Math.PI/180);
+    for(let i=0;i<count;i++){
+        const dir=aim.clone().applyAxisAngle(new THREE.Vector3(0,1,0),(i-(count-1)/2)*.04);dir.y=(i%3)*.05;
+        ray.set(rat.entity.mesh.position.clone().setY(1.6),dir.normalize());
+        const hit=ray.intersectObjects(blockers,true)[0];
+        if(hit?.face){const normal=hit.face.normal.clone().transformDirection(hit.object.matrixWorld);impacts.emit(hit.point,normal,true,1);hits++;}
+    }
+    return hits;
+}
 const actions:Record<string,()=>void>={
+    'Splat left wall ×4':()=>{splatWall(40,4);},
+    'Splat right wall ×4':()=>{splatWall(-40,4);},
     'Shot':fire,
     'Rapid fire ×6':()=>{for(let i=0;i<6;i++)setTimeout(fire,i*110);},
     'Scattershot shot':()=>{feel.setIncident('scattershot');fire();feel.setIncident();},
     'Hit from left suspect':()=>hurt(0,1),
     'Hit from right suspect':()=>hurt(2,1),
     'Heavy hit (3 damage)':()=>hurt(1,3),
+    'Hit suspect 2 (freeze)':()=>{const victim=suspects[1]!;victim.hp=3;feel.impact(victim,false);victim.takeDamage(1,new THREE.Vector3(1,0,0));},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;
@@ -55,13 +73,13 @@ for(const [label,run] of Object.entries(actions)){
     const button=document.createElement('button');button.type='button';button.textContent=label;
     button.addEventListener('click',()=>{run();status.textContent=label;});buttons.appendChild(button);
 }
-Object.assign(window,{feelActions:actions});
+Object.assign(window,{feelActions:actions,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
 let previous=0;
 function frame(now:number){
     const dt=previous?Math.min(.05,(now-previous)/1000):1/60;previous=now;
     stage.syncViewport();
     stage.world.step(1/60,dt,3);
-    rat.update(dt,{});gun.update(dt);
+    rat.update(dt,{});gun.update(dt);impacts.update(dt);
     for(const suspect of suspects)suspect.update(dt);
     city.update(dt,stage.camera,rat.entity.body.position);
     feel.update(dt,stage.camera,rat.entity.mesh.position);feel.beforeRender(stage.camera);

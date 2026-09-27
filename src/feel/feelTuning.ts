@@ -20,6 +20,8 @@ export const FEEL={
     damageDirection:{label:'3 Damage direction and edge flash',toggle:true,params:{edge:.55,edgeFade:.7,arrowLife:1.1,radius:.2}},
     /** Hit-stop on the struck rat's model (seconds): hits you deal, and hits you take. */
     impactFreeze:{label:'4 Impact freeze',toggle:true,params:{dealt:.055,taken:.04}},
+    /** Wall and floor splats: bigger, last longer; walls grow runs of cheese that slide down. */
+    splats:{label:'5 Bigger dripping splats',toggle:true,params:{size:1.35,life:6,drips:2,dripLength:.9}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;
