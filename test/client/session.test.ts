@@ -97,6 +97,7 @@ const harness = vi.hoisted(() => {
             respawn: ReturnType<typeof vi.fn>;
             takeDamage: ReturnType<typeof vi.fn>;
             freeze: ReturnType<typeof vi.fn>;
+            setDeathStyle: ReturnType<typeof vi.fn>;
             heal: ReturnType<typeof vi.fn>;
             setPowerups: ReturnType<typeof vi.fn>;
             resetReactions: ReturnType<typeof vi.fn>;
@@ -132,6 +133,7 @@ const harness = vi.hoisted(() => {
                 respawn: vi.fn(),
                 takeDamage: vi.fn(),
                 freeze: vi.fn(),
+                setDeathStyle: vi.fn(),
                 heal: vi.fn(),
                 setPowerups: vi.fn(),
                 resetReactions: vi.fn(),
@@ -595,7 +597,7 @@ describe('GameSession', () => {
         transport.onMessage?.(welcome({ player: local, players: { me: local } }));
         const rat = harness.rats[0];
         remotes.get.mockImplementation((id: string) => id === 'other'
-            ? { mesh: rat.entity.mesh, dead: false, hp: 3, takeDamage: vi.fn() }
+            ? { mesh: rat.entity.mesh, dead: false, hp: 3, takeDamage: vi.fn(), setDeathStyle: vi.fn() }
             : undefined);
         transport.onMessage?.({
             type: 'playerDied', victimId: 'me', killerId: 'other', killerName: 'other',

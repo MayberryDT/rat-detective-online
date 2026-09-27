@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
+
+/** Ordinary shot → spin, explosion → fling, neutral trap/case → flop. */
+export type DeathStyle='default'|'spin'|'fling'|'flop';
 import {updateGunSleeve,type GunSleeveRig} from './RatArmModel';
 import { RatLocomotionFollowThrough } from './RatLocomotionFollowThrough';
 import {RatActing,type RatReaction} from './RatActing';
@@ -55,6 +58,8 @@ export class RatAnimator {
     private hatKnockZ = 0;
     private hatKnockX = 0;
     private hatHidden = false;
+    /** Polish 12: cause-flavoured death secondary motion (presentation only). */
+    private deathStyle:DeathStyle='default';
     private readonly flop = new THREE.Vector2();
     private readonly flopVelocity = new THREE.Vector2();
     private readonly localSpin = new THREE.Vector3();
@@ -155,9 +160,11 @@ export class RatAnimator {
         this.parentRotation.copy(this.root.quaternion).invert();
         this.localSpin.set(spin.x, spin.y, spin.z).applyQuaternion(this.parentRotation);
         this.localGravity.set(0, -1, 0).applyQuaternion(this.parentRotation);
-        this.flopVelocity.x += impact * 3.5;
-        this.flopVelocity.y -= impact * 2.2;
-        this.landingPulse = Math.max(this.landingPulse, impact);
+        const style=this.deathStyle==='default'?undefined:FEEL.deathVariety.params;
+        const gain=!style?1:this.deathStyle==='spin'?style.spinGain:this.deathStyle==='fling'?style.flingGain:style.flopGain;
+        this.flopVelocity.x += impact * 3.5 * gain;
+        this.flopVelocity.y -= impact * 2.2 * gain;
+        this.landingPulse = Math.max(this.landingPulse, impact * (this.deathStyle==='flop'&&style?style.flopLanding:1));
         const targetX = THREE.MathUtils.clamp(-this.localSpin.x * 0.028 + this.localGravity.z * 0.14, -0.32, 0.32);
         const targetZ = THREE.MathUtils.clamp(-this.localSpin.z * 0.028 - this.localGravity.x * 0.14, -0.28, 0.28);
         // Substeps keep the spring stable at low frame rates.
@@ -169,16 +176,22 @@ export class RatAnimator {
             this.flop.addScaledVector(this.flopVelocity, step);
         }
         this.landingPulse *= Math.exp(-12 * dt);
-        const stretch = time >= 0.28 ? 0 : Math.sin(time / 0.28 * Math.PI) * 0.13;
+        const stretchTime = style&&this.deathStyle==='fling'?style.flingTime:.28, stretchSize=style&&this.deathStyle==='fling'?style.flingStretch:.13;
+        const stretch = time >= stretchTime ? 0 : Math.sin(time / stretchTime * Math.PI) * stretchSize;
+        // Spin: a lingering whirl of hat/arm/head; flop: ears and head droop flat.
+        const whirl = style&&this.deathStyle==='spin'?Math.sin(time*18)*Math.exp(-time*2.2)*style.spinWhirl:0;
+        const droop = style&&this.deathStyle==='flop'?Math.min(1,time/.35)*style.flopDroop:0;
         for (const rig of this.rigs) {
             const body = rig[0].part, head = rig[1].part, hat = rig[2].part;
             body.scale.y *= 1 + stretch - this.landingPulse * 0.13;
             body.scale.x *= 1 - stretch * 0.4 + this.landingPulse * 0.08;
             body.scale.z *= 1 - stretch * 0.4 + this.landingPulse * 0.08;
-            head.rotation.x += this.flop.x * 0.6;
-            head.rotation.z += this.flop.y * 0.6;
+            head.rotation.x += this.flop.x * 0.6 + droop * .35;
+            head.rotation.z += this.flop.y * 0.6 + whirl * .5;
             hat.rotation.x += this.flop.x;
-            hat.rotation.z += this.flop.y;
+            hat.rotation.z += this.flop.y + whirl;
+            rig[6].part.rotation.x += droop;rig[7].part.rotation.x += droop;
+            rig[8].part.rotation.y += whirl * 1.4;
             // A brief lift on launch, then a soft wobble when the body lands.
             hat.position.y += stretch * 0.55 + this.landingPulse * 0.035;
             rig[8].part.rotation.x += this.flop.x * 1.4;
@@ -207,6 +220,8 @@ export class RatAnimator {
         this.applyPose();
     }
 
+    setDeathStyle(style:DeathStyle):void {this.deathStyle=feelState().on('deathVariety')?style:'default';}
+
     /** The fedora has flown off as its own object; collapse the rig's copy until reset. */
     setHatHidden(hidden:boolean):void {this.hatHidden=hidden;}
 
@@ -227,7 +242,7 @@ export class RatAnimator {
         this.muzzleFlash.visible = false;
         this.lastPosition = null;
         this.hitAge = 10;
-        this.hatKnockAge = 10;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;
+        this.hatKnockAge = 10;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;this.deathStyle = 'default';
         this.flop.set(0, 0); this.flopVelocity.set(0, 0);
         this.tailFall.set(0, 0, 0);
         this.landingPulse = 0;

@@ -392,6 +392,8 @@ export class GameSession {
                     localKill: message.killerId === this.myId && message.victimId !== this.myId,
                 }));
                 const entity = message.victimId === this.myId ? this.rat?.entity : this.remotes.get(message.victimId);
+                const deathStyle = this.feel.deathStyle(message.killerId, message.cause);
+                entity?.setDeathStyle(deathStyle);this.chaos?.noteDeathStyle(message.victimId, deathStyle);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
                 if (entity && !entity.dead) {
                     if(message.incident){entity.useSharedCorpse();}

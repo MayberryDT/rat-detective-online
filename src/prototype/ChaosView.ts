@@ -38,6 +38,7 @@ import {closestPointOnSegment} from '../shared/netplay';
 import { updateCaseCarryPose } from './CaseCarryPose';
 import {RatReactionEvents} from './RatReactionEvents';
 import {FlyingHat} from '../entities/FlyingHat';
+import type {DeathStyle} from '../utils/RatAnimator';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 
@@ -93,6 +94,8 @@ export class ChaosView {
     private myId='';
     private readonly ballPose=new THREE.Object3D();
     private readonly missileTrail=new THREE.InstancedMesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff2a12,transparent:true,opacity:.42,toneMapped:false,depthWrite:false}),12);
+    /** Polish 12: recent death causes by victim, consumed when the shared corpse appears. */
+    private readonly deathStyles=new Map<string,{style:DeathStyle;at:number}>();
     private corpses=new Map<string,{mesh:THREE.Group;animator:RatAnimator;state:CorpseState;hat?:FlyingHat;hatPending:boolean}>();
     private arm:THREE.Group|null=null;
     private carrier:RatEntity|null=null;
@@ -200,6 +203,10 @@ export class ChaosView {
     launch(message:Extract<ServerMessage,{type:'playerShot'}>):void {
         if(this.extrapolate&&!this.localShots.confirm(message,performance.now()))this.presentation.launch(message,performance.now());
     }
+    noteDeathStyle(victimId:string,style:DeathStyle):void {
+        this.deathStyles.set(victimId,{style,at:performance.now()});
+        if(this.deathStyles.size>32)this.deathStyles.delete(this.deathStyles.keys().next().value!);
+    }
     shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {this.localShots.result(message);this.reactions.shotResult(message);}
     /** Use the exact segment crossed this display frame so high-speed movement
      * cannot step over a small pickup between render samples. */
@@ -296,6 +303,9 @@ export class ChaosView {
                 // Polish 11: a fresh corpse pops its fedora (not one already lying there on join).
                 const hatPending=feelState().on('hatPop')&&state.time-c.born<600;
                 model={mesh,animator:new RatAnimator(mesh),state:c,hatPending};this.corpses.set(c.id,model);this.root.add(mesh);
+                const noted=this.deathStyles.get(c.victimId);
+                if(noted&&performance.now()-noted.at<2000)model.animator.setDeathStyle(noted.style);
+                this.deathStyles.delete(c.victimId);
             }
             model.state=c;
         }

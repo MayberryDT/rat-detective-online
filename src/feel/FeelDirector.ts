@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type {IncidentId} from '../shared/incidentCatalog';
 import type {RatEntity} from '../entities/RatEntity';
+import type {DeathStyle} from '../utils/RatAnimator';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
@@ -65,6 +66,13 @@ export class FeelDirector {
         this.impulse.normalize().applyQuaternion(this.inverse.copy(view.quaternion).invert());
         this.camera.kick(p.dip*scale,-this.impulse.x*p.yaw*scale);
         this.camera.push(this.impulse.multiplyScalar(p.push*scale*.1));
+    }
+
+    /** Cause-flavoured corpse motion: neutral traps and case missiles flop,
+     * explosive incidents fling, ordinary shots spin. */
+    deathStyle(killerId:string|null,cause?:string):DeathStyle {
+        if(killerId===null||cause==='evidence-tampering')return 'flop';
+        return this.incident==='improper-disposal'||this.incident==='planted-evidence'||this.incident==='popcorn-panic'?'fling':'spin';
     }
 
     /** You scored a kill on the rat at `victim`; `airborne` when you were in flight. */

@@ -4,6 +4,7 @@ import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import {RatStains} from './RatStains';
 import {FlyingHat} from './FlyingHat';
+import type {DeathStyle} from '../utils/RatAnimator';
 import {FEEL} from '../feel/feelTuning';
 import {feelState} from '../feel/feelState';
 import * as CANNON from 'cannon-es';
@@ -100,6 +101,7 @@ export class RatEntity {
     private freezeLeft = 0;
     private stains?: RatStains;
     private flyingHat?: FlyingHat;
+    private deathStyle: DeathStyle = 'default';
     private stainSeed = 0;
     private freezeHold = false;
     private readonly frozenPosition = new THREE.Vector3();
@@ -481,6 +483,9 @@ export class RatEntity {
         }
     }
 
+    /** Polish 12: flavour the next death's secondary motion by its cause. */
+    public setDeathStyle(style: DeathStyle): void { this.deathStyle = style; }
+
     /** Polish 11: knock the fedora off as its own tumbling object. */
     private popHat(impactVel: THREE.Vector3): void {
         this.flyingHat?.dispose();this.flyingHat = undefined;
@@ -550,6 +555,7 @@ export class RatEntity {
         this.deathImpact = this.deathContacts = this.restTime = 0;
         this.deathPhase = 'launch';
         this.resetColor();
+        this.animator.setDeathStyle(this.deathStyle);this.deathStyle = 'default';
         this.popHat(impactVel);
 
         // ── DEATH SOUND ──
