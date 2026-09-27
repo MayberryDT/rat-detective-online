@@ -12,6 +12,7 @@ import {CheeseImpactEffects} from '../../src/weapons/CheeseImpactEffects';
 import {initEntitySounds} from '../../src/audio/EntityAudio';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {kickDust} from '../../src/feel/Dust';
+import {FeelAudio} from '../../src/feel/FeelAudio';
 import {createPlayer} from '../../src/worker/gameState';
 
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
@@ -91,7 +92,31 @@ for(const [label,run] of Object.entries(actions)){
     const button=document.createElement('button');button.type='button';button.textContent=label;
     button.addEventListener('click',()=>{run();status.textContent=label;});buttons.appendChild(button);
 }
-Object.assign(window,{feelActions:actions,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
+/** Render every polish-17 cue offline into one WAV (base64) for listening review. */
+async function renderCues():Promise<string> {
+    const rate=24000,gap=.35;
+    const cues:[string,number,(a:FeelAudio)=>void][]=[
+        ['step pavement',.3,a=>a.step('a','pavement',.5,0)],['step water',.35,a=>a.step('b','water',.5,0)],
+        ['step metal',.35,a=>a.step('c','metal',.5,0)],['step wood',.3,a=>a.step('d','wood',.5,0)],
+        ['rustle',.4,a=>a.rustle(.5)],['jostle',.25,a=>a.jostle(.5)],['squelch',.3,a=>a.squelch(.5,0)],
+        ['whizz',.35,a=>a.whizz('w',.5,0)],['brass',.7,a=>a.brass(.5)],['sting case',.6,a=>a.sting('case',.5)],
+        ['sting delivery',1,a=>a.sting('delivery',.5)],['sting closing',1.3,a=>a.sting('closing',.5)]];
+    const parts:Float32Array[]=[];
+    for(const [,length,play] of cues){
+        const context=new OfflineAudioContext(1,Math.ceil(rate*length),rate);
+        play(new FeelAudio(context as unknown as AudioContext));
+        parts.push((await context.startRendering()).getChannelData(0),new Float32Array(Math.ceil(rate*gap)));
+    }
+    const total=parts.reduce((n,p)=>n+p.length,0),pcm=new Int16Array(total);let offset=0;
+    for(const part of parts){for(let i=0;i<part.length;i++)pcm[offset+i]=Math.max(-1,Math.min(1,part[i]!))*32767;offset+=part.length;}
+    const header=new DataView(new ArrayBuffer(44)),write=(o:number,t:string)=>{for(let i=0;i<t.length;i++)header.setUint8(o+i,t.charCodeAt(i));};
+    write(0,'RIFF');header.setUint32(4,36+pcm.byteLength,true);write(8,'WAVEfmt ');header.setUint32(16,16,true);header.setUint16(20,1,true);header.setUint16(22,1,true);
+    header.setUint32(24,rate,true);header.setUint32(28,rate*2,true);header.setUint16(32,2,true);header.setUint16(34,16,true);write(36,'data');header.setUint32(40,pcm.byteLength,true);
+    const bytes=new Uint8Array(44+pcm.byteLength);bytes.set(new Uint8Array(header.buffer),0);bytes.set(new Uint8Array(pcm.buffer),44);
+    let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+    return btoa(binary);
+}
+Object.assign(window,{renderCues,feelActions:actions,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
 let previous=0;
 function frame(now:number){
     const dt=previous?Math.min(.05,(now-previous)/1000):1/60;previous=now;

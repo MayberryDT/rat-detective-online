@@ -6,6 +6,9 @@ import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
 import {Dust,registerDust} from './Dust';
+import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
+import type {Sting} from './FeelAudio';
+import type {ChaosShot} from '../shared/chaosState';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
@@ -16,6 +19,7 @@ import {FEEL} from './feelTuning';
 export class FeelDirector {
     readonly camera:CameraFeel;
     readonly screen:ScreenFeel;
+    readonly sound:FeelSound;
     private incident?:IncidentId;
     private readonly killTimes:number[]=[];
     private lastWordAt=-Infinity;
@@ -36,11 +40,12 @@ export class FeelDirector {
     constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
         this.camera=new CameraFeel(()=>this.state.shake());
         this.screen=new ScreenFeel(()=>this.state.flash(),doc);
+        this.sound=new FeelSound(this.state);
     }
     /** Connect the game canvas (colour drain) and audio listener (muffle, heartbeat). */
     attach(canvas:HTMLElement,listener?:THREE.AudioListener,touch=false):void {
         this.screen.attachCanvas(canvas);
-        if(listener)this.noirAudio=new NoirAudio(listener);
+        if(listener){this.noirAudio=new NoirAudio(listener);this.sound.attach(listener.context);}
         // Phones skip the full-canvas colour filter; the vignette and audio remain.
         this.colourFilter=!touch;
     }
@@ -49,10 +54,12 @@ export class FeelDirector {
     attachScene(scene:THREE.Scene):void {this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);}
 
     /** Local rat motion each frame: landing dip, launch view, Hot Pursuit streaks. */
-    motion(grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number):void {
+    motion(grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number,carrying=false):void {
         const on=this.state.on('movement'),p=FEEL.movement.params;
+        let landed=0;
         if(!grounded){this.airVy=Math.min(this.airVy,verticalSpeed);if(verticalSpeed>30)this.flying=true;}
         if(grounded&&!this.wasGrounded){
+            landed=-this.airVy;
             if(on&&this.airVy<-8){
                 const strength=Math.min(1,(-this.airVy-8)/25);
                 this.camera.kick(p.dip*strength);this.camera.push(this.impulse.set(0,p.dipPush*strength,0));
@@ -65,7 +72,15 @@ export class FeelDirector {
         if(this.pursuit<.01)this.pursuit=0;
         this.camera.hold(!on?0:this.flying?p.launchWiden:this.pursuit*p.pursuitWiden);
         this.screen.speed(this.pursuit*p.streaks);
+        this.sound.localMotion(horizontalSpeed,landed,carrying,this.flying?Math.min(1,Math.hypot(horizontalSpeed,verticalSpeed)/45):0);
     }
+
+    /** Footsteps for your rat (id `self`) and nearby rats. */
+    footsteps(dt:number,sources:Iterable<FootstepSource>,self:THREE.Vector3|undefined,view:THREE.Camera):void {this.sound.footsteps(dt,sources,self,view);}
+    /** Near-miss whizz for other rats' balls. */
+    projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):void {this.sound.projectiles(shots,myId,head,view);}
+    /** Case pickup, your delivery, closing seconds. */
+    sting(kind:Sting):void {this.sound.sting(kind);}
 
     /** Authoritative local health changed; `healed` floods colour back. */
     health(hp:number,healed=false):void {
@@ -89,6 +104,7 @@ export class FeelDirector {
     /** You took nonlethal damage. `from` is the attacker's live position when known. */
     hurt(damage:number,victim:THREE.Vector3,from:THREE.Vector3|undefined,view:THREE.Camera):void {
         if(this.state.on('damageDirection'))this.screen.damage(from,damage);
+        this.sound.squelch(undefined,view);
         if(!this.state.on('hitJolt'))return;
         const p=FEEL.hitJolt.params,scale=1+Math.max(0,Math.min(3,damage)-1)*p.perDamage;
         if(from)this.impulse.copy(victim).sub(from).setY(0);
@@ -113,6 +129,7 @@ export class FeelDirector {
 
     /** You scored a kill on the rat at `victim`; `airborne` when you were in flight. */
     killed(victim:THREE.Vector3,airborne:boolean,view:THREE.Camera,now=performance.now()):void {
+        this.sound.brass();
         if(this.state.on('killBloom')){
             this.screen.killBloom();
             this.camera.widen(-FEEL.killBloom.params.punch);
@@ -128,6 +145,7 @@ export class FeelDirector {
 
     /** Your cheese hit someone (nonlethal). */
     hitDealt(victim:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
+        this.sound.squelch(victim,view);
         if(this.incident==='big-cheese')this.word('KER-CHEESE!',victim,view,now,false);
     }
 
@@ -160,13 +178,15 @@ export class FeelDirector {
         if(Math.abs(target-this.danger)<.002)this.danger=target;
         this.flood=Math.max(0,this.flood-dt*1.4);
         this.screen.noir(this.danger,on?this.flood:0,this.colourFilter);
-        if(on)this.noirAudio?.update(dt,this.danger,p.closed,p.period,p.heartbeat);
-        else this.noirAudio?.reset();
+        if(this.noirAudio){
+            this.noirAudio.space=this.state.on('sound')&&self?spaceAt(self):'open';
+            this.noirAudio.update(dt,this.danger,p.closed,p.period,on?p.heartbeat:0);
+        }
     }
     /** Offset the rendered view; `afterRender` must follow the same frame. */
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();}
 }

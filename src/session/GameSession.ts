@@ -41,6 +41,10 @@ import {loadCameos} from '../cameos/loadCameos';
 import {HighlightBridge} from '../highlights/HighlightBridge';
 import {FeelDirector} from '../feel/FeelDirector';
 
+/** Reused per-frame scratch for polish-17 audio (one live session at a time). */
+const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean}[]=[];
+const HEAD_POSITION=new THREE.Vector3();
+
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
     private readonly stage;
@@ -307,6 +311,7 @@ export class GameSession {
                 this.gun.setIncident(incident);this.feel.setIncident(incident);}
                 this.applyPickupState(message.state);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
+                this.feelStings(this.lastChaos,message.state);
                 this.noteHighlightSnapshot(message.state);
                 break;
             case 'welcome': this.welcome(message); break;
@@ -552,10 +557,11 @@ export class GameSession {
             if(this.rat&&!this.rat.entity.dead){
                 this.foleyWorld.motion.update(this.rat.entity.mesh.position,dt,this.rat.grounded);
                 const v=this.rat.entity.body.velocity;
-                this.feel.motion(this.rat.grounded,v.y,Math.hypot(v.x,v.z),this.rat.moveSpeedScale);
+                this.feel.motion(this.rat.grounded,v.y,Math.hypot(v.x,v.z),this.rat.moveSpeedScale,this.lastChaos?.case?.owner===this.myId);
             }
             else this.foleyWorld.motion.clear();
         }
+        if(this.transport.state==='playing'&&!document.hidden&&this.rat)this.feelAudioFrame(dt);
         this.cameos?.beginFrame(dt,camera.position);
         this.chaos?.update(dt,camera);
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
@@ -571,6 +577,26 @@ export class GameSession {
         }
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));
+    }
+
+    /** Polish 17 music stings from consecutive snapshots. */
+    private feelStings(previous:ChaosState|null,next:ChaosState):void {
+        if(!previous||this.observing)return;
+        if(next.case?.owner===this.myId&&previous.case?.owner!==this.myId)this.feel.sting('case');
+        const before=previous.assignment,after=next.assignment;
+        if(!before||!after||before.roundId!==after.roundId)return;
+        if((after.deliverySerial??0)>(before.deliverySerial??0)&&after.lastDelivery?.playerId===this.myId)this.feel.sting('delivery');
+        if((before.remainingMs??0)>10_000&&(after.remainingMs??0)<=10_000&&(after.remainingMs??0)>0)this.feel.sting('closing');
+    }
+
+    /** Polish 17: footsteps (you and nearby rats) and near-miss whizzes. */
+    private feelAudioFrame(dt:number):void {
+        const rat=this.rat!,sources=FOOTSTEP_SOURCES;sources.length=0;
+        const self=rat.entity.dead||this.observing?undefined:rat.entity.mesh.position;
+        if(self)sources.push({id:'self',position:self,grounded:rat.grounded});
+        for(const [id,{entity}] of this.remotes.rats)if(!entity.dead)sources.push({id,position:entity.mesh.position});
+        this.feel.footsteps(dt,sources,self,this.stage.camera);
+        if(self&&this.lastChaos)this.feel.projectiles(this.lastChaos.shots,this.myId,HEAD_POSITION.copy(self).setY(self.y+1.6),this.stage.camera);
     }
 
     private ensureCameos():void {

@@ -20,7 +20,7 @@ this before adding or changing audio.
 
 - **Keep the accepted mix.** Leave the existing gunshot, world, launcher and music gains as they are; new cues sit under them. Effects and Master volume apply.
 - **Stay within the existing limits.** Reuse `FoleyAudio`'s 8 voices, at most 3 world voices and one world onset per 160 ms; add a separate small pool only if footsteps need one. Use the world distance fade (`worldSoundGain`), camera-frustum and occlusion checks, and per-source cooldowns. Nothing queues for later playback.
-- **Sourcing.** Only CC0 sources or original offline synthesis, the same method as the existing bank ([generator](../../scripts/generate-chaos-foley.py)). Use mono 24 kHz / 16-bit WAV, and record provenance in `public/sounds/*/README.md` and the manifest. The September 10 rejected clips stay rejected; don't re-import them.
+- **Sourcing (as built).** Every new cue is original Web Audio synthesis at runtime (`src/feel/FeelAudio.ts`, `NoirAudio.ts`): filtered noise, oscillators and one damped echo send. No asset files were added, so there is no download cost or third-party provenance. The workshop renders all cues offline into one WAV cue sheet for listening review. The September 10 rejected clips stay rejected.
 - **Local previews.** Agent browser checks stay muted (`&mute=1`). Tyler's review preview is audible.
 - **Verification.** File, gain and bounds checks, plus event tests for trigger correctness (for example, no footsteps from a stationary rat or interpolation noise). Tyler judges the character of the sound.
 
