@@ -11,6 +11,7 @@ import {CheeseGun} from '../../src/weapons/CheeseGun';
 import {CheeseImpactEffects} from '../../src/weapons/CheeseImpactEffects';
 import {initEntitySounds} from '../../src/audio/EntityAudio';
 import {FeelDirector} from '../../src/feel/FeelDirector';
+import {kickDust} from '../../src/feel/Dust';
 import {createPlayer} from '../../src/worker/gameState';
 
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
@@ -28,7 +29,7 @@ const suspects=[-3,0,3].map((dz,i)=>{
     return entity;
 });
 const feel=new FeelDirector();
-feel.attach(stage.renderer.domElement,stage.listener);
+feel.attach(stage.renderer.domElement,stage.listener);feel.attachScene(stage.scene);
 const status=document.getElementById('feel-status')!;
 const aim=new THREE.Vector3();
 function fire():void {
@@ -80,6 +81,9 @@ const actions:Record<string,()=>void>={
     'Respawn suspects':()=>{for(const v of suspects)if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});},
     'Your death (camera + iris)':()=>{rat.entity.hp=1;rat.entity.takeDamage(1,new THREE.Vector3(0,6,-14));feel.died(()=>rat.entity.mesh.position);},
     'Respawn you':()=>{rat.entity.respawn({x:-32,y:.5,z:-18,hp:3});feel.reset();},
+    'Hard landing (dip + dust)':()=>{feel.motion(false,-30,0,1);feel.motion(true,0,0,1);kickDust(rat.entity.mesh.position,.9);},
+    'Launch view (hold 1.5 s)':()=>{feel.motion(false,60,0,1);setTimeout(()=>feel.motion(true,0,0,1),1500);},
+    'Hot Pursuit streaks (2 s)':()=>{const t=setInterval(()=>feel.motion(true,0,16,1.45),16);setTimeout(()=>{clearInterval(t);feel.motion(true,0,0,1);},2000);},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

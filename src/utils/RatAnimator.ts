@@ -95,6 +95,11 @@ export class RatAnimator {
     private readonly lastVelocity = new THREE.Vector3();
     /** Set when a skid starts; the entity consumes it for dust (polish 16). */
     skidStarted = false;
+    /** Fall speed of the latest hard landing, consumed for dust (polish 16). */
+    landedFall = 0;
+    /** Set when a launcher flight begins, consumed for dust (polish 16). */
+    launched = false;
+    private wasLaunched = false;
 
     constructor(private readonly root: THREE.Group, outline?: THREE.Group) {
         this.acting=new RatActing(root.uuid);
@@ -274,7 +279,7 @@ export class RatAnimator {
         this.lastPosition = null;
         this.hitAge = 10;
         this.hatKnockAge = 10;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;this.deathStyle = 'default';
-        this.skidAge = this.nodAge = this.pulseAge = 10;this.flight = 0;this.skidStarted = false;this.lastVelocity.set(0, 0, 0);
+        this.skidAge = this.nodAge = this.pulseAge = 10;this.flight = 0;this.skidStarted = false;this.landedFall = 0;this.launched = this.wasLaunched = false;this.lastVelocity.set(0, 0, 0);
         this.flop.set(0, 0); this.flopVelocity.set(0, 0);
         this.tailFall.set(0, 0, 0);
         this.landingPulse = 0;
@@ -386,7 +391,10 @@ export class RatAnimator {
         if (correction) this.airPose = this.jumpLift = this.jumpLanding = 0;
         else {
             if (verticalSpeed > 5 && this.verticalSpeed <= 5) this.jumpLift = 1;
-            if (this.verticalSpeed < -2 && verticalSpeed > -1) this.jumpLanding = Math.min(1, -this.verticalSpeed / 9);
+            if (this.verticalSpeed < -2 && verticalSpeed > -1) {
+                this.jumpLanding = Math.min(1, -this.verticalSpeed / 9);
+                if (-this.verticalSpeed > 12) this.landedFall = -this.verticalSpeed;
+            }
             // Follow the velocity through the apex instead of holding one
             // airborne pose during both ascent and descent. A quicker release
             // keeps the hat/coat from looking suspended after the rat falls.
@@ -421,7 +429,10 @@ export class RatAnimator {
         this.muzzleFlash.material.opacity = Math.max(0, 1 - this.flashAge / .065);
         this.hitAge += dt;
         this.hatKnockAge += dt;this.skidAge += dt;this.nodAge += dt;this.pulseAge += dt;
-        this.flight = THREE.MathUtils.lerp(this.flight, this.actingEnabled && this.acting.launchFlight ? 1 : 0, 1 - Math.exp(-6 * dt));
+        const launchFlight = this.actingEnabled && this.acting.launchFlight;
+        if (launchFlight && !this.wasLaunched) this.launched = true;
+        this.wasLaunched = launchFlight;
+        this.flight = THREE.MathUtils.lerp(this.flight, launchFlight ? 1 : 0, 1 - Math.exp(-6 * dt));
         this.hit = Math.exp(-this.hitAge * 16) * Math.cos(this.hitAge * 22);
         this.aimHold = Math.max(0, this.aimHold - dt);
         this.aim = THREE.MathUtils.lerp(this.aim, this.aimHold > 0 ? 1 : 0, 1 - Math.exp(-7 * dt));

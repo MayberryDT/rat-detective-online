@@ -121,6 +121,7 @@ export class GameSession {
         this.foley.setEnabled(false);
         this.gun = new CheeseGun(scene, world, listener);
         this.feel.attach(this.stage.renderer.domElement, listener, touchControlsAvailable());
+        this.feel.attachScene(scene);
         this.remotes = new RemotePlayers(scene, world);
         this.worldSpec = initialWorld ? { ...initialWorld } : createWorldSpec(1);
         if(!initialWorld && new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
@@ -548,7 +549,11 @@ export class GameSession {
         const simulationEnd=measure?performance.now():0;
         this.foleyWorld.listener(camera);
         if(this.transport.state==='playing'&&!document.hidden){
-            if(this.rat&&!this.rat.entity.dead)this.foleyWorld.motion.update(this.rat.entity.mesh.position,dt,this.rat.grounded);
+            if(this.rat&&!this.rat.entity.dead){
+                this.foleyWorld.motion.update(this.rat.entity.mesh.position,dt,this.rat.grounded);
+                const v=this.rat.entity.body.velocity;
+                this.feel.motion(this.rat.grounded,v.y,Math.hypot(v.x,v.z),this.rat.moveSpeedScale);
+            }
             else this.foleyWorld.motion.clear();
         }
         this.cameos?.beginFrame(dt,camera.position);

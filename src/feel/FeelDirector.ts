@@ -5,6 +5,7 @@ import type {DeathStyle} from '../utils/RatAnimator';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
+import {Dust,registerDust} from './Dust';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
@@ -25,6 +26,11 @@ export class FeelDirector {
     private colourFilter=true;
     private deathTarget?:()=>THREE.Vector3|undefined;
     private deathAge=0;
+    private dust?:Dust;
+    private wasGrounded=true;
+    private airVy=0;
+    private flying=false;
+    private pursuit=0;
     private readonly impulse=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
     constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
@@ -37,6 +43,28 @@ export class FeelDirector {
         if(listener)this.noirAudio=new NoirAudio(listener);
         // Phones skip the full-canvas colour filter; the vignette and audio remain.
         this.colourFilter=!touch;
+    }
+
+    /** Scene-wide dust for every rat's landings, skids and launches. */
+    attachScene(scene:THREE.Scene):void {this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);}
+
+    /** Local rat motion each frame: landing dip, launch view, Hot Pursuit streaks. */
+    motion(grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number):void {
+        const on=this.state.on('movement'),p=FEEL.movement.params;
+        if(!grounded){this.airVy=Math.min(this.airVy,verticalSpeed);if(verticalSpeed>30)this.flying=true;}
+        if(grounded&&!this.wasGrounded){
+            if(on&&this.airVy<-8){
+                const strength=Math.min(1,(-this.airVy-8)/25);
+                this.camera.kick(p.dip*strength);this.camera.push(this.impulse.set(0,p.dipPush*strength,0));
+            }
+            this.airVy=0;this.flying=false;
+        }
+        this.wasGrounded=grounded;
+        const target=on&&speedScale>1&&horizontalSpeed>10?1:0;
+        this.pursuit+=(target-this.pursuit)*.12;
+        if(this.pursuit<.01)this.pursuit=0;
+        this.camera.hold(!on?0:this.flying?p.launchWiden:this.pursuit*p.pursuitWiden);
+        this.screen.speed(this.pursuit*p.streaks);
     }
 
     /** Authoritative local health changed; `healed` floods colour back. */
@@ -120,6 +148,7 @@ export class FeelDirector {
     /** `self` is the local rat's position, for direction arrows. */
     update(dt:number,view:THREE.Camera,self?:THREE.Vector3):void {
         this.camera.update(dt);
+        this.dust?.update(dt);
         this.screen.update(dt,view,self);
         if(this.deathTarget){
             const d=FEEL.deathCam.params,target=this.deathTarget();this.deathAge+=dt;
@@ -138,6 +167,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();}
 }

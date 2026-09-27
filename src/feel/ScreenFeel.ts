@@ -13,6 +13,8 @@ export class ScreenFeel {
     private bloom?:HTMLElement;
     private noirEdge?:HTMLElement;
     private irisNode?:HTMLElement;
+    private speedNode?:HTMLElement;
+    private lastSpeed=0;
     private canvas?:HTMLElement;
     private lastFilter='';
     private lastNoir=0;
@@ -51,6 +53,16 @@ export class ScreenFeel {
         if(!this.canvas)return;
         const value=filter&&(drain>.001||flood>.001)?`saturate(${(1-p.drain*drain+p.flood*flood).toFixed(3)}) contrast(${(1+.12*drain).toFixed(3)})`:'';
         if(value!==this.lastFilter){this.canvas.style.filter=value;this.lastFilter=value;}
+    }
+
+    /** Hot Pursuit edge streaks, `level` 0…1. */
+    speed(level:number):void {
+        const value=Math.round(level*50)/50;
+        if(value===this.lastSpeed)return;
+        this.lastSpeed=value;
+        if(!this.build()||!this.speedNode)return;
+        this.speedNode.style.opacity=String(value*Math.max(.3,this.flash()));
+        this.speedNode.classList.toggle('on',value>0);
     }
 
     /** Iris-out: `closed` 0 (open) … 1 (fully closed to `minRadius` vmax) around `at`. */
@@ -114,11 +126,13 @@ export class ScreenFeel {
         for(const node of this.words)node.classList.remove('on');
         if(this.noirEdge)this.noirEdge.style.opacity='0';
         if(this.irisNode)this.irisNode.style.opacity='0';
+        if(this.speedNode){this.speedNode.style.opacity='0';this.speedNode.classList.remove('on');}
+        this.lastSpeed=0;
         if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -126,6 +140,7 @@ export class ScreenFeel {
         if(!this.doc?.body||typeof this.doc.createElement!=='function')return false;
         this.root=this.doc.createElement('div');this.root.className='feel-screen';this.root.setAttribute('aria-hidden','true');
         this.noirEdge=this.doc.createElement('div');this.noirEdge.className='feel-noir';this.root.appendChild(this.noirEdge);
+        this.speedNode=this.doc.createElement('div');this.speedNode.className='feel-speed';this.root.appendChild(this.speedNode);
         this.irisNode=this.doc.createElement('div');this.irisNode.className='feel-iris';this.root.appendChild(this.irisNode);
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
         this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);

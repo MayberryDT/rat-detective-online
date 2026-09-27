@@ -25,3 +25,8 @@
 
 /* 13: noir iris closing on your fallen rat. Position/size set from script. */
 .feel-iris{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at var(--iris-x,50%) var(--iris-y,50%),transparent var(--iris-r,150vmax),#05030a calc(var(--iris-r,150vmax) + 2px))}
+/* 16: Hot Pursuit speed streaks at the screen edges. */
+.feel-speed{position:absolute;inset:-20%;opacity:0;background:repeating-conic-gradient(from 0deg,#ff7a5a48 0deg .7deg,transparent .6deg 5deg);
+  -webkit-mask:radial-gradient(circle,transparent 42%,#000 78%);mask:radial-gradient(circle,transparent 42%,#000 78%);animation:feel-speed 1.2s linear infinite;animation-play-state:paused}
+.feel-speed.on{animation-play-state:running}
+@keyframes feel-speed{to{transform:rotate(5deg)}}
