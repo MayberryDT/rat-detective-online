@@ -1,0 +1,6 @@
+/* Presentation-only feel overlays (polish plan). Above the canvas, under HUD cards. */
+.feel-screen{position:fixed;inset:0;z-index:35;pointer-events:none;overflow:hidden;contain:strict}
+.feel-edge{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 52%,#b3160f55 74%,#d11a0ecc 100%);will-change:opacity}
+.feel-arrow{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;will-change:transform,opacity}
+.feel-arrow::before{content:'';position:absolute;left:-19px;top:-16px;border-left:19px solid transparent;border-right:19px solid transparent;border-bottom:26px solid #ff4a1f;filter:drop-shadow(0 0 6px #ff2a0a) drop-shadow(0 2px 0 #3a0703)}
+.feel-arrow::after{content:'';position:absolute;left:-9px;top:-4px;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:12px solid #ffd2a8}

@@ -16,6 +16,8 @@ export const FEEL={
     shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.9,yawJitter:.25,push:.6,scattershot:1.6,popcorn:1.3}},
     /** Shove away from the attacker when you take nonlethal damage, scaled by damage. */
     hitJolt:{label:'2 Hit jolt',toggle:true,params:{push:7,yaw:1.4,dip:-1.1,perDamage:.35}},
+    /** Red edge flash (scaled by Flash strength) and arrows tracking the attacker. */
+    damageDirection:{label:'3 Damage direction and edge flash',toggle:true,params:{edge:.55,edgeFade:.7,arrowLife:1.1,radius:.2}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

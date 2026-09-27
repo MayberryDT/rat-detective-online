@@ -64,7 +64,7 @@ function frame(now:number){
     rat.update(dt,{});gun.update(dt);
     for(const suspect of suspects)suspect.update(dt);
     city.update(dt,stage.camera,rat.entity.body.position);
-    feel.update(dt);feel.beforeRender(stage.camera);
+    feel.update(dt,stage.camera,rat.entity.mesh.position);feel.beforeRender(stage.camera);
     stage.renderer.render(stage.scene,stage.camera);
     feel.afterRender(stage.camera);
     requestAnimationFrame(frame);

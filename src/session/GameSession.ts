@@ -549,7 +549,7 @@ export class GameSession {
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
         this.city.update(dt, camera, this.rat?.entity.body.position);
         const presentationEnd=measure?performance.now():0;
-        this.feel.update(dt);
+        this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         this.feel.beforeRender(camera);
         renderer.render(scene, camera);
         this.feel.afterRender(camera);

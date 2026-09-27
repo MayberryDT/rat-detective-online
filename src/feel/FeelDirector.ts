@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type {IncidentId} from '../shared/incidentCatalog';
 import {CameraFeel} from './CameraFeel';
+import {ScreenFeel} from './ScreenFeel';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
 
@@ -9,11 +10,13 @@ import {FEEL} from './feelTuning';
  * network messages themselves. */
 export class FeelDirector {
     readonly camera:CameraFeel;
+    readonly screen:ScreenFeel;
     private incident?:IncidentId;
     private readonly impulse=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
-    constructor(readonly state:FeelState=feelState()){
+    constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
         this.camera=new CameraFeel(()=>this.state.shake());
+        this.screen=new ScreenFeel(()=>this.state.flash(),doc);
     }
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
     setIncident(incident?:IncidentId):void {this.incident=incident;}
@@ -27,8 +30,9 @@ export class FeelDirector {
         this.camera.push(this.impulse.set(0,0,p.push*scale));
     }
 
-    /** You took nonlethal damage. `from` is the attacker's position when known. */
+    /** You took nonlethal damage. `from` is the attacker's live position when known. */
     hurt(damage:number,victim:THREE.Vector3,from:THREE.Vector3|undefined,view:THREE.Camera):void {
+        if(this.state.on('damageDirection'))this.screen.damage(from,damage);
         if(!this.state.on('hitJolt'))return;
         const p=FEEL.hitJolt.params,scale=1+Math.max(0,Math.min(3,damage)-1)*p.perDamage;
         if(from)this.impulse.copy(victim).sub(from).setY(0);
@@ -38,11 +42,15 @@ export class FeelDirector {
         this.camera.push(this.impulse.multiplyScalar(p.push*scale*.1));
     }
 
-    update(dt:number):void {this.camera.update(dt);}
+    /** `self` is the local rat's position, for direction arrows. */
+    update(dt:number,view:THREE.Camera,self?:THREE.Vector3):void {
+        this.camera.update(dt);
+        this.screen.update(dt,view,self);
+    }
     /** Offset the rendered view; `afterRender` must follow the same frame. */
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();}
-    dispose():void {this.reset();}
+    reset():void {this.camera.reset();this.screen.reset();}
+    dispose():void {this.camera.reset();this.screen.dispose();}
 }
