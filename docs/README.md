@@ -6,7 +6,7 @@ Reviewed against repository source and the latest release receipts through **202
 
 | Document | Purpose |
 | --- | --- |
-| [Polish plan](polish-plan.md) | **Active.** Living plan for the last-10% feel program; owns status, order and next action. Sections: [feel spec](polish/feel-spec.md), [foundation](polish/foundation.md), [character](polish/character.md), [sound](polish/sound.md) |
+| [Polish plan](polish-plan.md) | **Active, built on branch `polish/feel`, awaiting Tyler's review.** Living plan for the last-10% feel program. Start with the [review guide](polish/review.md). Sections: [feel spec](polish/feel-spec.md), [foundation](polish/foundation.md), [character](polish/character.md), [sound](polish/sound.md) |
 | [Automatic highlights repair handoff](handoffs/automatic-highlights-repair-handoff.md) | Historical completion brief; the repaired implementation is now released in plugin 1.3.1 |
 | [Automatic highlights implementation plan](handoffs/automatic-highlights-implementation-plan.md) | Full H00–H09 product specification; release status is recorded in the 1.3.1 receipt |
 

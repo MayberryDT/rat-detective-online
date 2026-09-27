@@ -35,7 +35,10 @@ rat's identity stay as they are. Done means:
 ## Current work
 
 - Base: production `360dbcdd…` / commit `3ffdd8b`. Branch `polish/feel`.
-- Position: see the first unchecked item below. After each item, tick it here and commit.
+- **Position (2026-09-27): all items built, checked and independently reviewed. Waiting on Tyler's end review.** Start at the [review guide](polish/review.md): preview link, per-item switches, artifacts, choices to confirm.
+- Next action (after Tyler's review):
+  - apply his keep/tweak/cut decisions (revert cut item commits, paste tuned values into `src/feel/feelTuning.ts`);
+  - then, only on his explicit OK, merge to `main` and deploy to production.
 
 ## Remaining outcomes (in order; one commit each)
 
@@ -53,16 +56,17 @@ Each item gets its own switch in the `?feel=dev` panel, so Tyler can cut it at r
 - [x] **17 Sound:** footsteps, jostle, squelch, whizz, echo and muffle, kill stab, music stings → [sound](polish/sound.md)
 - [x] **18 City:** pigeons, litter, neon and lamps, steam, trash cans → [spec §7](polish/feel-spec.md#7-city-reacts)
 - [x] **19 Rewards:** score pop, streak callouts, victory slow-motion, Case File with the new server stats → [spec §8](polish/feel-spec.md#8-rewards-and-round-end)
-- [ ] **20 Final package:**
+- [x] **20 Final package:**
   - frame-rate comparison against the budget;
   - full checks;
   - one independent code review, with its findings fixed;
   - a hosted private preview;
-  - `docs/polish/review.md`: how to see and switch each item.
+  - [review guide](polish/review.md).
 
 ## Open decisions
 
-- **Git push** of `dd5aabb`/`3ffdd8b` (and later this branch) to GitHub: waiting on Tyler.
+- **Tyler's review:** keep, tweak or cut each item, and confirm the [choices](polish/review.md#choices-to-confirm) (lamp/neon substitute, hem sway, Case File tallies in memory, victory card delay).
+- **Git push** of `dd5aabb`/`3ffdd8b` (and this branch) to GitHub: waiting on Tyler.
 
 ## Evidence
 

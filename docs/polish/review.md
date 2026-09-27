@@ -21,6 +21,23 @@ and production are untouched. Nothing is pushed or deployed to production.
 
 For a quick look without playing, the **feel workshop** fires each effect on demand, using the real feel layer on the real city: `npx vite --config vite.visual.config.ts --port 5192`, then open `/feel-preview.html` (add `&mute=1` for silence).
 
+## Preview
+
+Private hosted fixture (production matchmaking, server bots, 10-rat cap, audible), serving this branch's client and Worker:
+
+- **Play:** http://127.0.0.1:5193/?room=graybox-benchmark-match-polish-r1 on Veelox. Add `&feel=off` to compare, `&feel=dev` for the switches.
+- **Fixture:** Worker `rat-detective-capacity-test`, version `010eb9d7-3d4c-4e42-96aa-8ab030900d55`. It expires **3:23 PM PDT, 27 September**.
+- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-27T18-23-39-472Z/deployment.json`.
+- **Smoke-tested:** a scripted client joined through the relay. The welcome was protocol 18, seed 341283204, 9 server bots plus the client, Excessive Force playing, and chaos frames streamed.
+
+**If the preview has expired**, build and redeploy, then start the relay again:
+
+```sh
+npm run build
+node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=9 --cap=10
+node scripts/preview-capacity.mjs --deployment=/absolute/path/to/new/deployment.json --port=5193 --room=graybox-benchmark-match-polish-r1
+```
+
 ## What each item does and how to see it
 
 | # | Item | How to see it in play | Switch |
@@ -76,5 +93,12 @@ These are places where I had to make a call. Each can be changed.
   - Render CPU p95: 16.3 → 17.2 ms (+5.5%, inside the 10% budget and ±7% noise).
   - Frame time on Halla varied between 30 and 60 Hz across runs, so it isn't a usable comparison.
   - The fixture doesn't include the screen overlays, dust or city props. Those add about six small instanced draws in the game.
-- **Automated checks:** results of the final run are in the plan's evidence section.
+- **Automated checks** (run on Halla):
+  - Typecheck, build and visual build pass.
+  - Client: 1,188 tests; 1,186 pass. The 2 failures are 5-second timeouts in `neighborhood.test.ts`; both tests pass when that file runs alone.
+  - Scripts: all pass.
+  - Worker: 171–173 of 175 pass. The failures are `persistentBots` "ten-rat cap", `matchmaking` "unreserved title connection" and `gameRoom` "full room". Unmodified `main` failed the same tests in the same full-suite runs on Halla, and all of them pass alone on both branches.
+  - The frozen weapon/case trajectory tests (`locomotionPolish`, `ratActing`, `outfitStudio`, `gunSleeve`, `muzzlePose`, `caseCarry`) pass.
+  - New tests: `cameraFeel` (restore exactness, frame-rate settling, bounds, reset) and `roundAwards` (Case File tallies and wire validation).
+- **Independent review:** one reviewer read the full diff and found 11 material issues, all fixed. A re-review then confirmed the fixes and raised three follow-ups, also fixed: the corpse-follow window, the hat floor and the freeze baseline. The authority, protocol and aim invariants were confirmed intact.
 - **Not verified:** nobody has played it, and sound character, timing and tuning are unjudged. That is the purpose of this review. There's no phone performance measurement.
