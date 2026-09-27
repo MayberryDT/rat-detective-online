@@ -143,9 +143,11 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     }
     if (touchUps) {
         nose.scale.setScalar(1.06);
-        const brow = material(new THREE.Color(options.furColor ?? DEFAULT_APPEARANCE.furColor).multiplyScalar(0.42), 0.8);
+        // Reuse the rig's existing materials: extra materials would push the
+        // batched rat past its 16-entry palette and multiply its draw calls.
+        const brow = pupil;
         const browGeometry = new THREE.BoxGeometry(0.15, 0.03, 0.03);
-        const whisker = material(0xece2cf, 0.6);
+        const whisker = white;
         const whiskerGeometry = new THREE.CylinderGeometry(0.0045, 0.0022, 0.34, 5).translate(0, 0.17, 0).rotateZ(-Math.PI / 2);
         for (const side of [-1, 1]) {
             const browPivot = pivot(head, side < 0 ? 'rat-brow-left' : 'rat-brow-right', side * 0.17, 0.158, 0.29);
@@ -186,8 +188,8 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     hatBand.name = 'rat-hatband';
     hatBand.scale.z = 0.86;
     if (touchUps) {
-        // A rolled brim edge, lightened from the hat felt (not a new colour channel).
-        const edge = mesh(hat, new THREE.TorusGeometry(brimRadius - 0.004, 0.014, 6, 48), material((felt.color as THREE.Color).clone().multiplyScalar(1.28), 0.7));
+        // A rolled brim edge in the same felt: definition comes from its shading, not a new colour.
+        const edge = mesh(hat, new THREE.TorusGeometry(brimRadius - 0.004, 0.014, 6, 48), felt);
         edge.rotation.x = Math.PI / 2;edge.scale.set(1, 0.8, 1);edge.userData.noOutline = true;
     }
     // The visible ear bases sit on the side brim, outside the crown. Sharing the
@@ -210,7 +212,7 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     mesh(tail, new THREE.SphereGeometry(0.052, 12, 8), skin, 0.2, -0.17, -1.17);
     if (touchUps && feelState().on('shoes')) {
         // Two dark shoes peeking under the hem; no legs. They step with the stride.
-        const leather = material(0x1d1512, 0.45);
+        const leather = pupil;
         const shoeGeometry = new THREE.SphereGeometry(0.1, 14, 8);
         for (const side of [-1, 1]) {
             const shoe = pivot(root, side < 0 ? 'rat-shoe-left' : 'rat-shoe-right', side * 0.16, 0.035, 0.36);
