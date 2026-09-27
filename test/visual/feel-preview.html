@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rat Detective · Feel workshop</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;overflow:hidden;background:#100b19;color:#f3e9d5;font:14px/1.5 'Outfit',system-ui,sans-serif}canvas{display:block}
+    #feel-panel{position:fixed;z-index:500;top:12px;left:12px;width:250px;max-height:calc(100vh - 24px);overflow:auto;padding:12px;background:#1a1222ee;border-left:3px solid #cfb477}
+    #feel-panel h1{font-size:15px;margin:0 0 4px;letter-spacing:.08em}#feel-panel p{margin:0 0 8px;color:#c8becb;font-size:12px}
+    #feel-panel button{display:block;width:100%;text-align:left;font:inherit;font-size:13px;cursor:pointer;border:1px solid #796580;background:#302039;color:#f3e9d5;padding:6px 10px;margin:4px 0}
+    #feel-panel button:hover{background:#44304f}#feel-status{color:#f0d795;font-size:12px;min-height:18px}
+  </style>
+</head>
+<body>
+  <div id="crosshair"></div>
+  <aside id="feel-panel">
+    <h1>FEEL WORKSHOP</h1>
+    <p>Static review of polish effects through the real feel layer. No network, bots or input. Add <code>?feel=off</code> to compare.</p>
+    <div id="feel-buttons"></div>
+    <div id="feel-status"></div>
+  </aside>
+  <script type="module" src="./feel-preview.ts"></script>
+</body>
+</html>

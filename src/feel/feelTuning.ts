@@ -12,6 +12,8 @@ export interface FeelSpec {
 
 export const FEEL={
     cameraSpring:{label:'Camera spring',toggle:false,params:{stiffness:260,damping:.78,maxTurn:.08,maxShift:.35,maxWiden:14,fovStiffness:60}},
+    /** Upward view nudge (rad/s impulse) and a small backward shove per local shot. */
+    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.9,yawJitter:.25,push:.6,scattershot:1.6,popcorn:1.3}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

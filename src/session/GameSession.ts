@@ -211,6 +211,7 @@ export class GameSession {
         this.shotsAttempted++;
         const shot = this.gun.shoot(this.rat.entity, target);
         if(!shot)return;
+        this.feel.shot();
         const movement=this.movementInput(),viewAt=this.remotes.viewAt?.(shot.origin,shot.direction);
         if (movement && this.transport.send({type:'shoot', ...shot, movement, ...(viewAt===undefined?{}:{viewAt})})) {
             this.rememberMovement(movement,performance.now());
@@ -299,7 +300,8 @@ export class GameSession {
         this.bots?.receive(message);
         switch (message.type) {
             case 'chaos':
-                this.gun.setIncident(message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined);
+                {const incident=message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined;
+                this.gun.setIncident(incident);this.feel.setIncident(incident);}
                 this.applyPickupState(message.state);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
                 this.noteHighlightSnapshot(message.state);
