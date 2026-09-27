@@ -10,6 +10,8 @@ import {CheeseGun} from '../../src/weapons/CheeseGun';
 import {MotionFoley} from '../../src/audio/MotionFoley';
 import {parseClientMessage} from '../../src/shared/messageValidation';
 import type {ClientMessage, ShotDescriptor} from '../../src/shared/networkProtocol';
+import {FeelDirector} from '../../src/feel/FeelDirector';
+import {FeelState} from '../../src/feel/feelState';
 
 const canvasDocument = document;
 beforeEach(() => vi.stubGlobal('document', canvasDocument));
@@ -38,6 +40,7 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
         stage: {syncViewport: () => false, scene, world, camera, renderer: {render}, flashlight: new THREE.SpotLight()},
         simulation: new SimulationClock(), city: {update() {}},
         foleyWorld: {listener() {}, motion: new MotionFoley(() => {})},
+        feel: new FeelDirector(new FeelState('on'), undefined),
         transport: {state: 'playing', send(message: ClientMessage) {
             expect(parseClientMessage(message)).toEqual(message);
             if (message.type === 'shoot') shots.push(message);

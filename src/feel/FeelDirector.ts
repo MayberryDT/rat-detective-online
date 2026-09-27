@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type {IncidentId} from '../shared/incidentCatalog';
+import type {RatEntity} from '../entities/RatEntity';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {feelState,type FeelState} from './feelState';
@@ -40,6 +41,13 @@ export class FeelDirector {
         this.impulse.normalize().applyQuaternion(this.inverse.copy(view.quaternion).invert());
         this.camera.kick(p.dip*scale,-this.impulse.x*p.yaw*scale);
         this.camera.push(this.impulse.multiplyScalar(p.push*scale*.1));
+    }
+
+    /** A cheese hit landed on `victim` (a remote rat you hit, or your own rat). */
+    impact(victim:RatEntity,local:boolean):void {
+        if(!this.state.on('impactFreeze'))return;
+        const p=FEEL.impactFreeze.params;
+        victim.freeze(local?p.taken:p.dealt,!local);
     }
 
     /** `self` is the local rat's position, for direction arrows. */

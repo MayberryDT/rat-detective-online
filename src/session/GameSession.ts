@@ -363,6 +363,7 @@ export class GameSession {
                         const direction=new THREE.Vector3();
                         if(attacker)direction.copy(entity.mesh.position).sub(attacker.mesh.position).setY(0);
                         if(message.id===this.myId)this.feel.hurt(entity.hp-message.hp,entity.mesh.position,attacker?.mesh.position,this.stage.camera);
+                        if(message.id===this.myId||message.attackerId===this.myId)this.feel.impact(entity,message.id===this.myId);
                         entity.takeDamage(entity.hp - message.hp, direction);
                     }
                 }

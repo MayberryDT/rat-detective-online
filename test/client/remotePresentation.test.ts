@@ -9,6 +9,8 @@ import { createCaseGrip } from '../../src/prototype/CaseGrip';
 import { SimulationClock } from '../../src/session/SimulationClock';
 import { MotionFoley } from '../../src/audio/MotionFoley';
 import type { PlayerData } from '../../src/shared/networkProtocol';
+import {FeelDirector} from '../../src/feel/FeelDirector';
+import {FeelState} from '../../src/feel/feelState';
 
 const player: PlayerData = { id: 'remote', name: 'Remote', hatType: 'fedora', hatColor: 1,
     coatColor: 2, furColor: 3, x: 0, y: 2, z: 0, qx: 0, qy: 0, qz: 0, qw: 1,
@@ -30,6 +32,7 @@ function replay(fps: number, speed: number) {
         transport: { state: 'playing' }, simulation: new SimulationClock(), remotes,
         gun: { update() {} }, city: { update() {} },
         foleyWorld:{listener(){},motion:new MotionFoley(()=>{})},
+        feel:new FeelDirector(new FeelState('on'),undefined),
     });
     vi.stubGlobal('requestAnimationFrame', () => 1);
     vi.spyOn(performance, 'now').mockImplementation(() => now);

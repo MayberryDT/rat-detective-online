@@ -93,6 +93,10 @@ export class RatEntity {
     private ragdollCenter = 0;
     private readonly centerOffset = new THREE.Vector3();
     private readonly hitColor = new THREE.Color(0xffa16b);
+    private freezeLeft = 0;
+    private freezeHold = false;
+    private readonly frozenPosition = new THREE.Vector3();
+    private readonly frozenQuaternion = new THREE.Quaternion();
     private readonly hitHighlight = new THREE.Color(0xffe8b0);
     private readonly onRagdollContact = (event: { contact: CANNON.ContactEquation }) => {
         if(!this.dead){
@@ -325,10 +329,26 @@ export class RatEntity {
     }
     private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.updatePowerupOutline();this.resetColor();}
 
+    /** Hit-stop: hold this rat's animated pose for `seconds`. `holdPosition` also pins the
+     * rendered root (remote rats); the local rat keeps moving so its camera never hitches.
+     * Presentation only: the physics body and collision queries are untouched. */
+    public freeze(seconds:number,holdPosition:boolean):void {
+        if(this.dead||this.disposed||!(seconds>0))return;
+        if(this.freezeLeft<=0){this.frozenPosition.copy(this.mesh.position);this.frozenQuaternion.copy(this.mesh.quaternion);}
+        this.freezeLeft=Math.max(this.freezeLeft,seconds);this.freezeHold=holdPosition;
+    }
+
     /** Animate the current render root; remote presentation need not read physics. */
     public presentAlive(dt: number, previewSpeed?:number): void {
         if (this.dead) return;
         const p = this.mesh.position;
+        if(this.freezeLeft>0){
+            this.freezeLeft=Math.max(0,this.freezeLeft-dt);
+            if(this.freezeHold){p.copy(this.frozenPosition);this.mesh.quaternion.copy(this.frozenQuaternion);}
+            this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
+            this.syncGlowTransform();
+            return;
+        }
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
         this.syncGlowTransform();
         this.animator.setHustle(this.hustleRemaining>0);
@@ -578,6 +598,7 @@ export class RatEntity {
         this.restoreBodyOrigin();
         this.animator.reset();
         this.flashTimer = 0;
+        this.freezeLeft = 0;
         this.deathTimer = 0;
 
         this.deathContactTime = -10;

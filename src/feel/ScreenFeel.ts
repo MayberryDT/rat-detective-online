@@ -58,7 +58,8 @@ export class ScreenFeel {
 
     private build():boolean {
         if(this.root)return true;
-        if(!this.doc?.body)return false;
+        // Headless/test documents may lack a full DOM; overlays are then simply skipped.
+        if(!this.doc?.body||typeof this.doc.createElement!=='function')return false;
         this.root=this.doc.createElement('div');this.root.className='feel-screen';this.root.setAttribute('aria-hidden','true');
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
         for(let i=0;i<ARROWS;i++){

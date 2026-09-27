@@ -18,6 +18,8 @@ export const FEEL={
     hitJolt:{label:'2 Hit jolt',toggle:true,params:{push:7,yaw:1.4,dip:-1.1,perDamage:.35}},
     /** Red edge flash (scaled by Flash strength) and arrows tracking the attacker. */
     damageDirection:{label:'3 Damage direction and edge flash',toggle:true,params:{edge:.55,edgeFade:.7,arrowLife:1.1,radius:.2}},
+    /** Hit-stop on the struck rat's model (seconds): hits you deal, and hits you take. */
+    impactFreeze:{label:'4 Impact freeze',toggle:true,params:{dealt:.055,taken:.04}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;
