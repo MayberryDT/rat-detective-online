@@ -8,7 +8,8 @@ export const PROTOCOL_VERSION = 19;
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
-export const WIN_DISPLAY_MS = 6_000;
+/** Juice T5: long enough for the slow-motion finish, the Case File and the police lineup. */
+export const WIN_DISPLAY_MS = 10_000;
 export const DEFAULT_ROOM_NAME = 'public-live-v2';
 /** Wire-format ceiling for private capacity experiments; not an admission limit. */
 export const MAX_SCORE_ENTRIES = 100;
@@ -72,7 +73,8 @@ export interface ScoreEntry {
 }
 
 /** Polish 19 round-end Case File entry (cosmetic; never affects scoring). */
-export type AwardId = 'top-gun' | 'most-cheesed' | 'butterfingers' | 'sewer-dweller' | 'high-flier';
+export type AwardId = 'top-gun' | 'most-cheesed' | 'butterfingers' | 'sewer-dweller' | 'high-flier'
+  | 'sharpshooter' | 'headhunter' | 'long-shot' | 'case-keeper' | 'frequent-flier' | 'supply-run' | 'legwork';
 export interface Award { id: AwardId; title: string; playerId: string; playerName: string; value: number }
 
 export interface RoundState {
@@ -207,7 +209,7 @@ export type ServerMessage =
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }
   | { type: 'playerLeft'; id: string }
-  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState; awards?: Award[] }
+  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState; awards?: Award[]; lineup?: string[] }
   | { type: 'gameReset'; round: RoundState }
   | { type: 'pong'; sentAt: number; receivedAt: number }
   | { type: 'error'; message: string; code?: 'resume-unavailable' };

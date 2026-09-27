@@ -12,7 +12,7 @@ import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import { serializeServerMessage } from './serializeServerMessage';
 import type { ChaosState } from '../shared/chaosState';
 import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
-import { ASSIGNMENT_IDS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation } from '../shared/assignments';
+import { ASSIGNMENT_IDS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
 import { incidentRoster, isEvidenceMode, isIncidentId, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
 import { DurableObject } from 'cloudflare:workers';
 import {
@@ -1114,6 +1114,7 @@ export class GameRoom extends DurableObject<Env> {
     this.shotAcceptedAt.set(message.shotId,performance.now());
     if(this.shotAcceptedAt.size>128)this.shotAcceptedAt.delete(this.shotAcceptedAt.keys().next().value!);
     const fired=this.chaos?.shoot(playerId,message);
+    this.awards.shot(playerId);
     this.diagnostics.shot('accepted');
     const event:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:playerId,
       shotId:message.shotId,origin:message.origin,direction:message.direction};
@@ -1138,6 +1139,7 @@ export class GameRoom extends DurableObject<Env> {
   }
   private applyShotEvents():void {
     for(const event of this.chaos?.drainShotEvents()??[]){
+      if(event.owner&&(event.outcome==='rat-body'||event.outcome==='rat-head'))this.awards.hit(event.owner,event.shotId);
       if(event.owner)this.sendToPlayer(event.owner,{type:'shotResult',shotId:event.shotId,ballId:event.ballId,outcome:event.outcome,at:event.at,tick:event.tick,epoch:event.epoch,
         ...(event.victimId?{victimId:event.victimId}:{}),...(event.damage===undefined?{}:{damage:event.damage}),...(event.point?{point:event.point}:{}),
         ...(event.normal?{normal:event.normal}:{}),...(event.compensated?{compensated:true}:{}),...(event.fallback?{fallback:event.fallback}:{}),
@@ -1163,6 +1165,7 @@ export class GameRoom extends DurableObject<Env> {
   private applyPickupEvents(): void {
     if (!this.chaos) return;
     for (const event of this.chaos.drainPickupEvents()) {
+      if (event.kind === 'collected') this.awards.pickup(event.playerId);
       if (event.kind !== 'healed') continue;
       const player = this.players.get(event.playerId);
       if (!player) continue;
@@ -1204,13 +1207,14 @@ export class GameRoom extends DurableObject<Env> {
         crypto.randomUUID(),result.roundWon?'reset':'respawn',result.roundWon?null:victim.id,respawnAt);
     }
     this.awards.damage(victim.id, hpBefore - victim.hp);
+    if (result.killed && shooter && shooter !== victim) this.awards.kill(shooter, victim, headshot);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
       respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{})});
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
-    if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt,...this.caseFile()});
+    if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt,...this.caseFile(shooter.id)});
     await this.scheduleNextAlarm();
   }
 
@@ -1443,7 +1447,7 @@ export class GameRoom extends DurableObject<Env> {
       this.flushMovement('tick');
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
-      if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0);
+      if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0,state.pressure?.launches);
       const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
       // Ownership/Dispatch/assignment changes persist before any client sees them.
       // Routine checkpoints hold nothing clients depend on, so write after this
@@ -1576,15 +1580,15 @@ export class GameRoom extends DurableObject<Env> {
       this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',crypto.randomUUID(),'reset',null,resetAt);
       this.checkpointGame();
     });
-    this.broadcast({type:'gameWon',winnerId:result.winnerId,winnerName:result.winnerName,kills,resetAt,assignment:structuredClone(assignment),...this.caseFile()});
+    this.broadcast({type:'gameWon',winnerId:result.winnerId,winnerName:result.winnerName,kills,resetAt,assignment:structuredClone(assignment),...this.caseFile(result.winnerId,assignment)});
     this.publishCompanion(true);
     this.ctx.waitUntil(this.scheduleNextAlarm());
   }
 
   /** Optional Case File for a round-end frame; omitted when nothing qualifies. */
-  private caseFile():{awards?:Award[]} {
+  private caseFile(winnerId:string,assignment?:AssignmentState):{awards?:Award[];lineup:string[]} {
     const awards=this.awards.awards(this.players);
-    return awards.length?{awards}:{};
+    return {...(awards.length?{awards}:{}),lineup:this.awards.lineup(this.players,winnerId,assignment)};
   }
   private ensureRoundClock(): void {
     if (this.round.phase === 'playing' && !this.round.startedAt) {

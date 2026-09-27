@@ -12,6 +12,7 @@ import {CheeseImpactEffects} from '../../src/weapons/CheeseImpactEffects';
 import {initEntitySounds} from '../../src/audio/EntityAudio';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {FEEL} from '../../src/feel/feelTuning';
+import {PoliceLineup} from '../../src/feel/PoliceLineup';
 import {feelState} from '../../src/feel/feelState';
 import {PickupVisual} from '../../src/prototype/PickupVisual';
 import {kickDust} from '../../src/feel/Dust';
@@ -36,6 +37,8 @@ const suspects=[-3,0,3].map((dz,i)=>{
 const feel=new FeelDirector();
 feel.attach(stage.renderer.domElement,stage.listener);feel.attachScene(stage.scene);feel.attachCity(stage.scene,city.streetLamps);
 const status=document.getElementById('feel-status')!;
+// Juice T5: the police lineup, with the three suspects, you and a stand-in.
+const lineup=new PoliceLineup(stage.scene,document,()=>feel.flashbulb());
 // A Quick Fix kit around the corner (behind the right-hand buildings) for the last-hit-point x-ray.
 const kit=new PickupVisual(stage.scene,'quick-fix');kit.setPosition(-14,.5,6);
 const aim=new THREE.Vector3();
@@ -107,6 +110,13 @@ const actions:Record<string,()=>void>={
     'Look ahead':()=>rat.onMouseMove(0,420),
     'Enemy look: lab all on':()=>{for(const item of ['enemyEyeshine','enemySaturation','enemyInk','breathPuffs'] as const)feelState().set(item,true);},
     'Enemy look: lab all off':()=>{for(const item of ['enemyEyeshine','enemySaturation','enemyInk','breathPuffs'] as const)feelState().set(item,false);},
+    'Police lineup (T5)':()=>lineup.start([
+        {id:'you',name:'You',appearance,winner:true,award:{id:'headhunter',title:'HEADHUNTER',playerId:'you',playerName:'You',value:4}},
+        ...suspects.map((s,i)=>({id:`suspect-${i}`,name:s.name,appearance:s.appearance,winner:false,
+            award:[{id:'sharpshooter' as const,title:'SHARPSHOOTER',playerId:'',playerName:'',value:41},{id:'legwork' as const,title:'LEGWORK',playerId:'',playerName:'',value:812},undefined][i]})),
+        {id:'extra',name:'Mugsy Malone',appearance:{...appearance,hatType:'porkpie',coatColor:0x4f5a3d},winner:false,award:{id:'frequent-flier',title:'FREQUENT FLIER',playerId:'extra',playerName:'',value:3}},
+    ]),
+    'End lineup':()=>lineup.end(),
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;
@@ -149,7 +159,9 @@ function frame(now:number){
     kit.update(performance.now(),stage.camera);
     feel.footsteps(dt,suspects.map((s,i)=>({id:`suspect-${i}`,position:s.mesh.position,facing:s.mesh.quaternion})),rat.entity.mesh.position,stage.camera);
     city.update(dt,stage.camera,rat.entity.body.position);
-    feel.update(dt,stage.camera,rat.entity.mesh.position);feel.beforeRender(stage.camera);
+    feel.update(dt,stage.camera,rat.entity.mesh.position);
+    if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
+    feel.beforeRender(stage.camera);
     stage.renderer.render(stage.scene,stage.camera);
     feel.afterRender(stage.camera);
     requestAnimationFrame(frame);

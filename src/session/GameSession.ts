@@ -43,6 +43,7 @@ import {FeelDirector} from '../feel/FeelDirector';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {entryRequested} from './yieldToPage';
+import {PoliceLineup,type LineupEntry} from '../feel/PoliceLineup';
 
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean;facing?:THREE.Quaternion}[]=[];
@@ -103,6 +104,8 @@ export class GameSession {
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
     private compiling?:Promise<unknown>;
+    private readonly lineup:PoliceLineup;
+    private pendingLineup?:{entries:LineupEntry[];at:number};
     private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
     private lastHighlightObserve = 0;
     private lastChaos: ChaosState | null = null;
@@ -139,6 +142,7 @@ export class GameSession {
         this.gun = new CheeseGun(scene, world, listener);
         this.feel.attach(this.stage.renderer.domElement, listener, touchControlsAvailable());
         this.feel.attachScene(scene);
+        this.lineup=new PoliceLineup(scene,typeof document==='undefined'?undefined:document,()=>this.feel.flashbulb());
         this.remotes = new RemotePlayers(scene, world);
         this.worldSpec = initialWorld ? { ...initialWorld } : createWorldSpec(1);
         if(!initialWorld && new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
@@ -149,7 +153,7 @@ export class GameSession {
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
             this.clearInput();
-            if(state!=='playing'){this.feel.reset();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
+            if(state!=='playing'){this.feel.reset();this.pendingLineup=undefined;this.lineup.end();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
             this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
@@ -246,7 +250,7 @@ export class GameSession {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
-        this.feel.reset();this.feel.resetRound();this.pendingVictory=undefined;
+        this.feel.reset();this.feel.resetRound();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup.end();
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -464,12 +468,15 @@ export class GameSession {
                 // Polish 19: let the winning moment play in slow motion before the card slams in.
                 const hold=this.feel.victory();
                 if(hold>0)this.pendingVictory={message,at:performance.now()+hold*1000};
+                // Juice T5: the lineup takes over the camera as the Case File lands.
+                const entries=feelState().on('lineup')?this.lineupEntries(message):[];
+                if(entries.length)this.pendingLineup={entries,at:performance.now()+hold*1000};
                 else this.hud.showVictory(message.winnerName, message.kills,message.assignment,...(message.awards?[message.awards]:[]));
                 this.highlights.emit(this.highlights.detector.onWin(message.winnerId, performance.now()));
                 break;
             }
             case 'gameReset':
-                this.pendingVictory=undefined;
+                this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup.end();
                 this.cameos?.reset();
                 this.highlights.detector.beginRound({
                     epoch: '',
@@ -609,6 +616,8 @@ export class GameSession {
         this.city.update(dt, camera, this.rat?.entity.body.position, this.enemyFixtureAnchors());
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
+        if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup.start(this.pendingLineup.entries);this.pendingLineup=undefined;}
+        if(this.lineup.active)this.lineup.update(dt,camera,flashlight);
         if(!this.compiling){
             this.feel.beforeRender(camera);
             renderer.render(scene, camera);
@@ -620,6 +629,17 @@ export class GameSession {
         }
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));
+    }
+
+    /** Juice T5: the lineup's rats, winner first, rebuilt from the rats this client knows. */
+    private lineupEntries(message:Extract<ServerMessage,{type:'gameWon'}>):LineupEntry[] {
+        const entries:LineupEntry[]=[];
+        for(const id of message.lineup??[]){
+            const entity=id===this.myId?this.rat?.entity:this.remotes.get(id);
+            if(!entity)continue;
+            entries.push({id,name:entity.name,appearance:entity.appearance,award:message.awards?.find(award=>award.playerId===id),winner:id===message.winnerId});
+        }
+        return entries;
     }
 
     /** Juice T3 lab: nearby living enemies that may claim a real fixture light. */
@@ -750,7 +770,7 @@ export class GameSession {
         this.city.dispose();
         this.music.dispose();
         this.feedback.dispose();
-        this.foleyWorld.dispose();this.foley.dispose();this.feel.dispose();
+        this.foleyWorld.dispose();this.foley.dispose();this.feel.dispose();this.lineup.dispose();
         disposeEntitySounds();
         this.stats?.dispose();
         this.stage.dispose();

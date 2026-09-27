@@ -74,10 +74,13 @@ Tyler's brain dump, sorted into now and later, with his answers.
   - Built: `MAX_HP` 5 and protocol 19; the server damage clamp follows `MAX_HP` (it was a hard-coded 3). `playerDied` carries an optional `headshot`, so every client shows the hat blast (2.6× speed, 1.5× lift), four cheese splats on the head, an oversized cheese burst, and a 0.16 s hold before the fall. The killer gets a brass ringed X on the crosshair, a "HEADSHOT · name" notice, and a "HEADSHOT" callout that ignores the callout cooldown; the kill feed adds "· HEADSHOT". The sound is a wooden knock, a falling whistle and a short bell. Review switch: "T4 Headshot juice".
   - My call on the other damage sources, to keep what used to be instant kills instant: a Crossfire bank shot and a fast case missile (28+ speed) now deal `MAX_HP`; the counterfeit trap was already `MAX_HP`. A fast loose-case hit stays 2 and slower contacts stay 1, so they now take a smaller share of health.
   - Bots skip Quick Fix only at full health (5), and still treat 1 HP as an emergency.
-- [ ] **T5 A longer, richer round end.**
+- [x] **T5 A longer, richer round end.**
   - 10 s between rounds (was 6 s).
   - More Case File stats: accuracy, headshots, longest kill, case time, flights, pickups, distance.
   - A **noir police lineup**: the top 5 rats in a dedicated precinct lineup room with a height-chart wall and camera flashbulbs, each stamped with their award and the winner last. The camera leaves the city for about 8 s, then returns for the next round.
+  - Built: `WIN_DISPLAY_MS` 10 s. Seven new awards, one winner each with a floor: Sharpshooter (accuracy, at least 8 trigger pulls; a trigger counts one hit at most), Headhunter, Long Shot (kill distance), Case Keeper (seconds carrying the case), Frequent Flier (launcher rides), Supply Run (pickups) and Legwork (distance on foot; a jump over 12 units in one tick is a teleport and doesn't count).
+  - `gameWon` carries an optional `lineup` (up to five ids, winner first). The server ranks by the assignment's own progress (deliveries, zone time, case kills, or case time for Closing Time), then kills, case time and fewest deaths.
+  - The lineup starts as the slow-motion finish ends (1.4 s) and runs until the reset, about 8.6 s. The room sits 320 units below the city and is lit by the stage's existing spotlight, moved there, so no light is added. Rats stand in rank order with the winner last; a flashbulb (screen flash, spotlight surge and pop) photographs each in turn and stamps their award across the chest; the winner gets a gold "CASE CLOSED" stamp and a hop. The Case File card shrinks to the top-left corner and the play HUD hides. Review switch: "T5 Police lineup".
 
 **Later (not now):**
 - **Pickup system overhaul.** Especially Quick Fix, which becomes more valuable once noir scales with health.

@@ -221,6 +221,9 @@ export class FeelDirector {
         if(this.state.on('headshot'))this.sound.headshot(victim,view);
     }
 
+    /** Juice T5: a lineup flashbulb. */
+    flashbulb():void {this.sound.flashbulb();}
+
     /** Your cheese hit someone (nonlethal). */
     hitDealt(victim:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
         this.sound.squelch(victim,view);

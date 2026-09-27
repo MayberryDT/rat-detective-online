@@ -206,6 +206,7 @@ vi.mock('../../src/prototype/ChaosView', () => ({ ChaosView: class {
     setObserving() {} setScores() {} setIncidentRoster() {} showHealing() {} dispose() {} apply() {} launch() {} fire() {} resetProjectiles() {} update() {}
 } }));
 vi.mock('../../src/player/RatController', () => ({ RatController: harness.FakeRat }));
+vi.mock('../../src/feel/PoliceLineup', () => ({ PoliceLineup: class { active = false; start() {} update() {} end() {} dispose() {} } }));
 vi.mock('../../src/session/InputState', () => ({
     InputState: class {
         keys: Record<string, boolean> = {};

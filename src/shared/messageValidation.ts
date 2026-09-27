@@ -130,10 +130,11 @@ function parseWorld(value: unknown): WorldSpec | null {
   return { seed, version };
 }
 
-const AWARD_IDS=new Set<AwardId>(['top-gun','most-cheesed','butterfingers','sewer-dweller','high-flier']);
+const AWARD_IDS=new Set<AwardId>(['top-gun','most-cheesed','butterfingers','sewer-dweller','high-flier',
+  'sharpshooter','headhunter','long-shot','case-keeper','frequent-flier','supply-run','legwork']);
 /** Optional cosmetic Case File entries on gameWon; malformed lists reject the frame. */
 function parseAwards(value: unknown): Award[] | null {
-  if (!Array.isArray(value) || value.length > 8) return null;
+  if (!Array.isArray(value) || value.length > AWARD_IDS.size) return null;
   const awards: Award[] = [];
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') return null;
@@ -638,7 +639,11 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       if(assignment===null || assignment && (assignment.result?.winnerId!==winnerId || assignment.result.winnerName!==winnerName))return null;
       const awards=parsed.awards===undefined?undefined:parseAwards(parsed.awards);
       if(awards===null)return null;
-      return { type: 'gameWon', winnerId, winnerName, kills, resetAt, ...(assignment?{assignment}:{}), ...(awards?.length?{awards}:{}) };
+      // Juice T5: up to five player ids for the police lineup, winner first.
+      const lineup=parsed.lineup===undefined?undefined:Array.isArray(parsed.lineup)&&parsed.lineup.length<=5?parsed.lineup.map(id=>nonEmptyString(id,64)):null;
+      if(lineup===null||lineup?.some(id=>!id))return null;
+      return { type: 'gameWon', winnerId, winnerName, kills, resetAt, ...(assignment?{assignment}:{}), ...(awards?.length?{awards}:{}),
+        ...(lineup?.length?{lineup:lineup.filter((id):id is string=>!!id)}:{}) };
     }
     case 'gameReset': {
       const round = parseRound(parsed.round);

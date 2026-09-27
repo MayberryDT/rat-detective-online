@@ -1,0 +1,22 @@
+/* Juice T5: the police lineup's placards, stamps and flashbulb. */
+#police-lineup{position:fixed;inset:0;z-index:190;pointer-events:none;overflow:hidden}
+#police-lineup .lineup-flash{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 38%,#fffdf2 0%,#fff8e0cc 30%,#fff3d000 75%);opacity:0}
+#police-lineup .lineup-flash.on{animation:lineup-flash 420ms ease-out both}
+@keyframes lineup-flash{0%{opacity:.95}100%{opacity:0}}
+.lineup-plate{position:absolute;transform:translate(-50%,6px);display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 9px 5px;
+    background:#16131a;border:2px solid #c9c2ad;color:#ece5d2;font:600 11px/1.15 'Outfit',Arial,sans-serif;letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
+.lineup-plate b{font:400 19px/1 'Bangers',Impact,sans-serif;letter-spacing:1.5px;color:#fff}
+.lineup-stamp{position:absolute;transform:translate(-50%,-50%) rotate(-8deg) scale(2.6);opacity:0;display:flex;flex-direction:column;align-items:center;
+    padding:4px 10px 5px;border:3px solid #d8322a;border-radius:4px;color:#e2382e;background:#1a0d0d66;
+    font:400 17px/1 'Bangers',Impact,sans-serif;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap;text-shadow:0 0 1px #3b0c09}
+.lineup-stamp span{font:700 9px/1.3 'Outfit',Arial,sans-serif;letter-spacing:1px}
+.lineup-stamp.on{animation:lineup-stamp 260ms cubic-bezier(.2,.9,.3,1.2) both}
+.lineup-stamp.winner{border-color:#e7b53c;color:#ffd35c;font-size:23px;background:#1c160866}
+.lineup-plate.winner{border-color:#e7b53c}.lineup-plate.winner b{color:#ffd35c}
+@keyframes lineup-stamp{0%{opacity:0;transform:translate(-50%,-50%) rotate(-8deg) scale(2.6)}100%{opacity:1;transform:translate(-50%,-50%) rotate(-8deg) scale(1)}}
+/* During the lineup the Case File card shrinks to the top-left corner and the play HUD steps aside. */
+body.lineup-on #victory-overlay{background:none;backdrop-filter:none;align-items:flex-start;justify-content:flex-start}
+body.lineup-on #victory-overlay::before{display:none}
+body.lineup-on #victory-text{transform:scale(.42);transform-origin:top left;margin:14px 0 0 18px;align-items:flex-start;text-align:left}
+body.lineup-on :is(.dispatch-hud,.assignment-destination,#kill-feed,#crosshair,[aria-label="Hot Case location"],#respawn-overlay,.pickup-buffs){visibility:hidden}
+@media(prefers-reduced-motion:reduce){#police-lineup .lineup-flash.on{animation:none}.lineup-stamp.on{animation:none;opacity:1;transform:translate(-50%,-50%) rotate(-8deg)}}

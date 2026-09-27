@@ -76,6 +76,8 @@ export class RatEntity {
     public hp: number = MAX_HP;
     public dead: boolean = false;
     public name: string;
+    /** The options this rat was built from (juice T5 lineup rebuilds it). */
+    public readonly appearance: RatOptions;
     private localPlayer = false;
     public get isPlayer(): boolean { return this.localPlayer; }
     public set isPlayer(value: boolean) {
@@ -147,6 +149,7 @@ export class RatEntity {
 
         // 1. GENERATE UNIQUE APPEARANCE
         const opts = options || this.generateRandomOptions();
+        this.appearance = opts;
 
         // 2. VISUALS
         this.mesh = this.modelFactory(opts);

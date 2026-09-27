@@ -49,3 +49,39 @@ it('accepts valid awards on gameWon and rejects malformed ones',()=>{
     expect(parseServerMessage(JSON.stringify({...base,awards:[{...award,value:'3'}]}))).toBeNull();
     expect(parseServerMessage(JSON.stringify({...base,awards:{}}))).toBeNull();
 });
+
+// Juice T5 failure modes, written before the checks:
+// 7. A respawn or launcher teleport counts as legwork.
+// 8. One scattershot trigger that hits with several balls counts as several hits (accuracy over 100%).
+// 9. A handful of lucky shots wins Sharpshooter.
+// 10. A launch event still listed on the next tick counts as a second flight.
+// 11. The lineup drops the winner behind better-scoring rats, or grows past five.
+// 12. A lineup with too many or blank ids is accepted on the wire.
+
+it('counts legwork without teleports, one hit per trigger, a minimum of shots and each flight once',()=>{
+    const awards=new RoundAwards(),a=rat('a'),players=new Map([['a',a]]);
+    for(let i=0;i<30;i++){a.x+=10;awards.sample(players.values(),.1,null,0);}
+    a.x+=500;awards.sample(players.values(),.1,null,0);
+    const launch=[{id:'launch-1-a',playerId:'a'}];
+    awards.sample(players.values(),.1,null,0,launch);awards.sample(players.values(),.1,null,0,launch);
+    for(let i=0;i<5;i++)awards.shot('a');
+    awards.hit('a','s1');awards.hit('a','s1');awards.hit('a','s2');
+    let byId=Object.fromEntries(awards.awards(players).map(w=>[w.id,w]));
+    expect(byId.legwork).toMatchObject({value:290});
+    expect(byId['frequent-flier']).toBeUndefined();
+    expect(byId.sharpshooter).toBeUndefined();
+    for(let i=0;i<5;i++)awards.shot('a');
+    awards.sample(players.values(),.1,null,0,[...launch,{id:'launch-2-a',playerId:'a'}]);
+    byId=Object.fromEntries(awards.awards(players).map(w=>[w.id,w]));
+    expect(byId.sharpshooter).toMatchObject({value:20});
+    expect(byId['frequent-flier']).toMatchObject({value:2});
+});
+
+it('puts the winner first in a lineup of at most five and validates it on the wire',()=>{
+    const awards=new RoundAwards(),players=new Map(['a','b','c','d','e','f','g'].map((id,i)=>{const p=rat(id);p.kills=i;return [id,p];}));
+    expect(awards.lineup(players,'a')).toEqual(['a','g','f','e','d']);
+    const base={type:'gameWon',winnerId:'a',winnerName:'A',kills:3,resetAt:1};
+    expect(parseServerMessage(JSON.stringify({...base,lineup:['a','b']}))).toMatchObject({lineup:['a','b']});
+    expect(parseServerMessage(JSON.stringify({...base,lineup:['a','b','c','d','e','f']}))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({...base,lineup:['a','']}))).toBeNull();
+});

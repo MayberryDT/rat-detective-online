@@ -125,6 +125,16 @@ export class FeelAudio {
         this.tone(out,at+.02,.38,'sine',1760,620,.22);
         for(const f of [1318.5,1975.5])this.tone(out,at+.05,.9,'triangle',f,f*.996,.12);
     }
+    /** Juice T5: a flashbulb pop, then the bulb's short whine. */
+    flashbulb(volume:number):void {
+        if(!this.allow('flashbulb',.2))return;
+        const at=this.context.currentTime,out=this.out(volume,0,.6);
+        const pop=this.context.createBufferSource(),high=this.context.createBiquadFilter(),env=this.context.createGain();
+        pop.buffer=this.white();high.type='highpass';high.frequency.value=2500;
+        env.gain.setValueAtTime(1,at);env.gain.exponentialRampToValueAtTime(.001,at+.09);
+        pop.connect(high).connect(env).connect(out);pop.start(at);pop.stop(at+.1);
+        this.tone(out,at+.03,.5,'sine',5200,3900,.08);
+    }
     /** Music stings: case pickup, your delivery, closing seconds. */
     sting(kind:Sting,volume:number):void {
         if(!this.allow(`sting:${kind}`,kind==='closing'?20:1.5))return;

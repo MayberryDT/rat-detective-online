@@ -3,7 +3,7 @@ import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
 import { createAssignment } from '../../src/shared/assignments';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MAX_HP, MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
+import { MAX_HP, WIN_DISPLAY_MS, MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import { worldSpawnPoints } from '../../src/shared/playerSpawns';
 import { parseServerMessage } from '../../src/shared/messageValidation';
@@ -509,21 +509,21 @@ describe('GameRoom websockets', () => {
       const assignment=createAssignment('closing-time',now);assignment.liveAt=now;assignment.remainingMs=1;
       game.chaos.setAssignment(assignment);game.chaos.step(.001,now+1);game.finishAssignment();
       expect(game.players.get(victim.id)!.deaths).toBe(1);
-      expect(game.round).toMatchObject({phase:'won',winnerId:carrier.id,kills:20,resetAt:now+6000});
+      expect(game.round).toMatchObject({phase:'won',winnerId:carrier.id,kills:20,resetAt:now+WIN_DISPLAY_MS});
       await game.handleHit(carrier.id, {type:'hit',victimId:observer.id,damage:MAX_HP}, {x:1,y:0,z:0});
       await game.handleHit(observer.id, {type:'hit',victimId:carrier.id,damage:MAX_HP}, {x:1,y:0,z:0});
       expect(game.players.get(observer.id)!.hp).toBe(MAX_HP);
       expect(champion.hp).toBe(MAX_HP);
       expect(champion.kills).toBe(20);
       expect(state.storage.sql.exec<{type:string;due_at:number}>('SELECT type, due_at FROM pending_events').toArray())
-        .toEqual([{type:'reset',due_at:now+6000}]);
+        .toEqual([{type:'reset',due_at:now+WIN_DISPLAY_MS}]);
     });
     const won = await first.inbox.waitFor('gameWon');
-    expect(won).toMatchObject({winnerId:carrier.id,kills:20,resetAt:now+6000,assignment:{id:'closing-time',phase:'closed'}});
+    expect(won).toMatchObject({winnerId:carrier.id,kills:20,resetAt:now+WIN_DISPLAY_MS,assignment:{id:'closing-time',phase:'closed'}});
     const board = await first.inbox.waitFor('scoreboardUpdate', message => message.scores.some(p => p.id === carrier.id && p.kills === 20));
     expect(board.scores.find(p => p.id === victim.id)!.deaths).toBe(1);
     await runInDurableObject(stub, async (instance:GameRoom) => {
-      (instance as unknown as Internals).now=()=>now+6000;
+      (instance as unknown as Internals).now=()=>now+WIN_DISPLAY_MS;
       await instance.alarm();
     });
     await first.inbox.waitFor('gameReset');
