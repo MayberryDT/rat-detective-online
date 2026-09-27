@@ -1,17 +1,28 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-09-22**. Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-09-27**. Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
-## Server CPU reduction — 27 September, local only
+## Server CPU and delivery gating — 27 September production
 
-Production `public-live-v2` uses about 26–34 s of Durable Object CPU per minute
-with zero humans. A local, uncommitted change shares the static bot walk graph
-across round bot replacements and skips the ray index's full static rescan
-when nothing moved. Both give the same results; the deterministic bench trajectory is unchanged. Room diagnostics
-gain `work` counters because `tickCostAvgMs` always reads 0 on Workers. On a
-private hosted fixture, the same rooms used 23–27% less CPU after switching to the new code.
-Not deployed; protocol 18 and gameplay unchanged. See
-[the receipt](verification/server-cpu-2026-09-27.md).
+Worker `360dbcdd-231f-4d83-aaec-6247022a1a46` deploys commit `dd5aabb`.
+Client `index-paIXtQs8.js` / `createGame-DlDEvPeh.js`, protocol 18.
+Predecessor `ed58154d-d1ee-49be-8a49-7bb00729c72f`. Gameplay, tuning and bot
+decisions are unchanged.
+
+- **CPU:** the static bot walk graph survives round bot replacements, and the
+  ray index skips its full rescan when nothing moved. Both give the same
+  results. The same private hosted rooms used 23–27% less CPU.
+- **Diagnostics:** room diagnostics include `work` counts, because
+  `tickCostAvgMs` always reads 0 on Workers.
+- **Delivery:** every storage write holds outgoing frames. Routine pose
+  checkpoints now go in the 1 Hz chaos checkpoint, and routine checkpoints are
+  written after that tick's frames. On a private fixture, frames from ticks
+  that wrote fell from 13.4% to 2.2%.
+- **Unchanged:** critical and lifecycle writes still happen before any client
+  sees the change.
+
+Health, 59 exact live assets, the original world and redirects were verified
+after deploy. See [the receipt](verification/server-cpu-2026-09-27.md).
 
 ## Committed full-source release — 22 September production
 

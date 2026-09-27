@@ -60,9 +60,19 @@ The raw captures are `analytics*.json` and `tail-*.json` in the same output dire
 
 ## Limits
 
-- Not a production measurement. Production CPU changes only after an authorized release.
-- No human playtest. Bot behaviour is exact in the local deterministic bench, but live rooms are random.
-- Private fixtures expire at 10:04 UTC. Their rooms stop by themselves (the fixture patches `alarm` and the tick).
+- No human playtest. Bot behaviour is exact in the local deterministic bench, but live rooms are random. No per-client frame arrival was measured in production.
+- Checkpoint gating was measured with one full-feed client from Veelox. Round-trip time differed between runs, so only the write-tick share and comparisons within each run are firm.
+- Private fixtures expire by themselves; their rooms stop through the fixture's `alarm` and tick patches.
+
+## Release
+
+Tyler asked for the change to be committed and deployed to production.
+
+- **Commit and version:** commit `dd5aabb`, Worker `360dbcdd-231f-4d83-aaec-6247022a1a46`, deployed with `npm run deploy:production` at about 10:02 UTC. Predecessor `ed58154d-d1ee-49be-8a49-7bb00729c72f`. Client `index-paIXtQs8.js` / `createGame-DlDEvPeh.js`, protocol 18. Not pushed to GitHub.
+- **Pre-deploy checks:** typecheck and build pass, `npm audit` finds 0 vulnerabilities. Client 1,182/1,182, scripts 123/123, Worker 174/175. The one failure is the known flaky title-slot test.
+- **Live service:** `/health` ok. `/status` showed `public-live-v2` playing, 0 humans / 6 named bots, and world version 2 with seed 341283204. The root HTML and all 58 hashed assets matched `dist` byte for byte. (`/index.html` redirects to `/`, which matches `dist/index.html`.) The old host returned 301 to `https://ratdetective.online/x?y=1`, preserving path and query.
+- **Live diagnostics** (tail, 10:03:47–10:03:57): the canonical room reported `tickGapMaxMs` 33, no dropped simulation, checkpoint settlement at most 94 ms, and `work` counters. Edge probes fell from 6,176 to 139 per window as the walk graph warmed.
+- **Production CPU** (`durableObjectsPeriodicGroups.cpuTime`, room `b93877…`): 09:30–10:01 before, mean 28.9 s/min (range 25.8–31.1); 10:04–10:10 after, mean 21.3 s/min (range 19.7–22.6), **−26%**. The minutes containing the deploy are excluded. The roster was 6 bots right after deploy, restored from the persisted roster. The earlier window was flat, but its bot count wasn't observed directly.
 
 ## Delivery gating (step 3)
 
