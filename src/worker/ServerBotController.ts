@@ -231,6 +231,11 @@ export class ServerBotController {
             if(now-bot.lastMovementAt>=49.5)this.move(bot,now);
         }
     }
+    /** Navigation and visibility work since the previous call (Worker diagnostics). */
+    takeWork():{navExpansions:number;navEdgeProbes:number;botRays:number}{
+        const nav=this.navigation.work,work={navExpansions:nav.expansions,navEdgeProbes:nav.edgeProbes,botRays:this.ray.queries};
+        nav.expansions=0;nav.edgeProbes=0;this.ray.queries=0;return work;
+    }
     dispose():void {
         if(this.disposed)return;this.disposed=true;
         for(const body of [...this.world.bodies])this.world.removeBody(body);

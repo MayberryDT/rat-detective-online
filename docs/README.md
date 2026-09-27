@@ -13,6 +13,7 @@ Reviewed against repository source and the latest release receipts through **202
 
 | Document | Purpose |
 | --- | --- |
+| [Server CPU reduction](verification/server-cpu-2026-09-27.md) | Local, unreleased: shared walk graph, same-result ray-index refresh, room `work` counters; hosted A/B −23–27% CPU |
 | [Committed source release](verification/full-source-release-2026-09-22.md) | All pending changes committed, current build deployed, retired branding absent from live assets |
 | [Social sharing image](verification/social-share-2026-09-22.md) | Approved action card deployed; exact image/metadata checks, unchanged gameplay |
 | [Omarchy plugin 1.3.2 response cap](verification/omarchy-plugin-response-cap-2026-09-22.md) | 64 KiB pre-collector Dispatch response cap, public release, passing compatibility report and pending maintainer security review |

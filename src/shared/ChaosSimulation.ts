@@ -61,6 +61,7 @@ export class ChaosSimulation {
     private readonly cases=new Map<string,CaseRuntime>();
     get caseBody():C.Body{return this.primaryCase.body;}
     private readonly rayQuery=new SpatialRayQuery(this.world);
+    private substepCount=0;
     readonly targets=new Map<C.Body,Target>();
     private rats=new Map<string,C.Body>();
     private readonly pickupApproaches=new Map<string,MovementPoint>();
@@ -615,7 +616,7 @@ export class ChaosSimulation {
         // Weaponized cases have their own continuous sweep. They must not force
         // extra Cannon steps or repeat all nine world rays on every substep.
         const fastest=Math.max(0,...[...this.cases.values()].filter(c=>!c.owner&&!this.caseDangerous(c)&&!this.caseLaunched(c)).map(c=>c.body.velocity.length()),...[...this.corpses.values()].map(c=>c.body.velocity.length()));
-        const substeps=Math.max(1,Math.min(4,Math.ceil(fastest*dt/.8)));
+        const substeps=Math.max(1,Math.min(4,Math.ceil(fastest*dt/.8)));this.substepCount+=substeps;
         for(const c of missiles){c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;}
         for(let sub=0;sub<substeps;sub++){
             const previous=[...this.corpses.values()].map(c=>({c,p:c.body.position.clone(),v:c.body.velocity.clone()}));
@@ -1221,6 +1222,11 @@ export class ChaosSimulation {
             ...((s.radius??BALL_RADIUS)!==BALL_RADIUS?{radius:s.radius}:{}),
             ...(s.stuckUntil?{stuckUntil:s.stuckUntil}:{}),
             ...(s.popAt?{popAt:s.popAt}:{})};
+    }
+    /** Physics substeps and ray/sphere queries since the previous call (Worker diagnostics). */
+    takeWork():{rays:number;substeps:number}{
+        const work={rays:this.rayQuery.queries,substeps:this.substepCount};
+        this.rayQuery.queries=0;this.substepCount=0;return work;
     }
     snapshot(drain=true):ChaosState{
         const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,case:this.caseSnapshot(this.primaryCase),

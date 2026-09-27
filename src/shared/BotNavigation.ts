@@ -26,18 +26,34 @@ interface FlowField {
 }
 const MAX_FIELDS=6;
 const ACTIVE_TICKS=120;
+/** Static walk graph: a pure function of the world spec, filled lazily as fields
+ * explore. Round-replacement controllers reuse it instead of re-probing the city. */
+interface WalkGraph {
+    buckets:Map<string,Solid[]>;
+    columns:Map<string,Node[]>;
+    edges:Map<string,Node[]>;
+    targets:Vec3Data[];
+    launchEdges:Map<string,{from:Node;to:Node;link:BotLaunchLink}>;
+}
+const graphs=new WeakMap<WorldSpec,WalkGraph>();
 
 export class BotNavigation {
-    private buckets=new Map<string,Solid[]>();
-    private columns=new Map<string,Node[]>();
-    private edges=new Map<string,Node[]>();
+    private readonly buckets:Map<string,Solid[]>;
+    private readonly columns:Map<string,Node[]>;
+    private readonly edges:Map<string,Node[]>;
     private fields=new Map<string,FlowField>();
     private tick=0;
     private cursor=0;
-    private targets:Vec3Data[];
-    private readonly launchEdges=new Map<string,{from:Node;to:Node;link:BotLaunchLink}>();
+    private readonly targets:Vec3Data[];
+    private readonly launchEdges:Map<string,{from:Node;to:Node;link:BotLaunchLink}>;
+    /** Deterministic work counts for diagnostics; Workers clocks freeze during CPU work. */
+    readonly work={expansions:0,edgeProbes:0};
 
     constructor(spec:WorldSpec) {
+        const shared=graphs.get(spec);
+        this.buckets=shared?.buckets??new Map();this.columns=shared?.columns??new Map();this.edges=shared?.edges??new Map();
+        this.targets=shared?.targets??[];this.launchEdges=shared?.launchEdges??new Map();
+        if(shared)return;
         // These controls are physical obstacles in both human and server bot worlds.
         // Omitting them from navigation sends routes through machines near objectives.
         const controls=[...DISPATCH_STATIONS,...LAUNCH_MACHINES].flatMap(c=>[c.box,c.target])
@@ -51,16 +67,17 @@ export class BotNavigation {
                 const key=`${x},${z}`,bucket=this.buckets.get(key);if(bucket)bucket.push(solid);else this.buckets.set(key,[solid]);
             }
         }
-        this.targets=[...GRAYBOX_SPAWNS.map(p=>({...p,y:0})),...SEWER_LIGHTS.map(p=>({...p,y:-7})),
+        this.targets.push(...GRAYBOX_SPAWNS.map(p=>({...p,y:0})),...SEWER_LIGHTS.map(p=>({...p,y:-7})),
             ...LANDMARK_INTERIORS.flatMap(h=>h.levels.flatMap(y=>[
                 {x:h.cx-h.w/2+4,y,z:h.cz+h.d/2-4},
                 {x:h.cx+h.w/2-4,y,z:h.cz-h.d/2+5},
-            ]))];
+            ])));
         for(const link of BOT_LAUNCH_LINKS){
             const from=this.nearest(link.machine.pad),to=this.nearest(link.landing);
             if(from&&to&&Math.abs(from.y-link.machine.pad.y)<1&&Math.abs(to.y-link.landing.y)<1)
                 this.launchEdges.set(`${from.id}>${to.id}`,{from,to,link});
         }
+        graphs.set(spec,{buckets:this.buckets,columns:this.columns,edges:this.edges,targets:this.targets,launchEdges:this.launchEdges});
     }
     travelPoint(from:Vec3Data,to:Vec3Data):Vec3Data {return sewerRampTravelPoint(from,to)??landmarkExitPoint(from,to);}
     /** Spawn/landing feet can have support before Cannon publishes its next contact. */
@@ -135,7 +152,7 @@ export class BotNavigation {
     }
     private neighbors(node:Node):Node[] {
         let out=this.edges.get(node.id);if(out)return out;
-        out=[];
+        out=[];this.work.edgeProbes++;
         for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)if(dx||dz) {
             for(const other of this.column(node.gx+dx,node.gz+dz)) {
                 // Walking clearance is symmetric. Reuse the reverse edge's
@@ -251,7 +268,7 @@ export class BotNavigation {
             this.cursor%=active.length;
             const field=active[this.cursor];
             const node=field.frontier[field.head++];
-            remaining--;
+            remaining--;this.work.expansions++;
             for(const neighbor of this.neighbors(node)) {
                 if(field.next.has(neighbor.id))continue;
                 field.next.set(neighbor.id,node);field.frontier.push(neighbor);

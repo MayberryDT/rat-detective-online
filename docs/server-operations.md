@@ -26,21 +26,23 @@ Server simulation advances at 60 Hz, snapshots at roughly 30 Hz, and bot movemen
 
 Outbound events share serialization work; negotiated lossless movement tuples include a shot's pending pose. Delivery ACKs and per-connection budgets bound slow observers, with atomic fragmentation for large logical snapshots. Empty overflow rooms checkpoint and stop bots/physics. The canonical city keeps running with six to nine bots and zero humans. A failed canonical persistent alarm tries a bounded future wake and then rethrows; overflow and private rooms stay unchanged. If storage or `setAlarm` is unavailable, there is no absolute outage guarantee. The 65536-byte wire envelope still constrains each frame. Preserve bounded physics substeps, ray queries, shared flow-field work and projectile capacity; a larger cap is not automatically safe.
 
-Workers clocks may remain frozen during synchronous callbacks. Navigation therefore enforces both 2 ms and 96-expansion bounds. A reported zero-duration tick does not imply zero CPU work. `StaticCityBroadphase` and `SpatialRayQuery` replace the early scene-wide hot paths for the authoritative city; the old small-city Naive/SAP benchmark is historical, not the current architecture.
+Workers clocks may remain frozen during synchronous callbacks. Navigation therefore enforces both 2 ms and 96-expansion bounds. A reported zero-duration tick does not imply zero CPU work: production `tickCostAvgMs` reads 0. Room diagnostics therefore also report deterministic `work` counts per window (`navExpansions`, `navEdgeProbes`, `botRays`, `chaosRays`, `physicsSubsteps`); use them, or Cloudflare's per-object `durableObjectsPeriodicGroups.cpuTime`, for CPU comparisons. `StaticCityBroadphase` and `SpatialRayQuery` replace the early scene-wide hot paths for the authoritative city; the old small-city Naive/SAP benchmark is historical, not the current architecture. The static walk graph is shared per world spec across bot-controller replacements, and an unchanged ray index skips its full static rescan; both are exact. See [server CPU receipt](verification/server-cpu-2026-09-27.md).
 
 ## Persistence
 
 | State | Recovery source |
 | --- | --- |
 | World / round / scores / HP / lifecycle transitions | SQLite, critical changes persisted immediately |
-| Human/bot position and rotation | Memory plus 2500 ms player checkpoints; immediate on lifecycle/correction |
+| Human/bot position and rotation | Memory plus 2500 ms routine player checkpoints; immediate on lifecycle/correction/damage/join/reconnect. While the room ticks, due routine poses are written in the next 1 Hz chaos checkpoint transaction (at most about 3.5 s old), not in their own movement event |
 | Human liveness | Attached sockets and last activity, independent of movement |
 | AI roster | `persistent-bots-v1` and `persistent-bot-roster-v1` room-state keys |
-| Chaos world | `chaos-v1` snapshots, approximately each second or important signature change |
+| Chaos world | `chaos-v1` snapshots about once a second, or immediately on an important signature change (case owner/return, Dispatch serial/phase, assignment revision). A signature change is written before that tick's frames are sent; a routine one-second checkpoint is written after them |
 | Respawn/reset deadlines | `pending_events` plus the shared Durable Object alarm |
 | Occupied-room AI recovery | 15-second heartbeat integrated with earlier event deadlines; overflow rooms sleep empty. The canonical city keeps the same 15-second alarm and recovers with six to nine bots when no humans are present. The constructor keeps an existing earlier or due alarm; empty overflow deletes an unneeded one |
 
 Hydration preserves attached players even if their checkpoints are old. Unattached stale humans are pruned after two minutes; active managed bots are exempt. Disabled bot IDs and their pending events are removed when restoring an authoritative active roster. Legacy roster migration keeps the running eleven-bot cast until its next reset.
+
+Every Durable Object storage write holds that object's outgoing messages until it settles (the output gate). A September 27 private measurement found writes in 13.4% of snapshot ticks, which delayed those frames by about 50 ms at the median. After folding routine poses into the chaos checkpoint and sending before routine writes, the figure was 2.2%. Do not add new routine writes to a running room's tick or movement path; fold them into `checkpointGame`. See [the checkpoint receipt](verification/server-cpu-2026-09-27.md#delivery-gating-step-3).
 
 Version-2 Dispatch Assignments decide the winner; kills remain actual secondary statistics. Legacy version 1 retains kill-limit rules. Victory clears queued respawns and pins dead-player deadlines to the six-second victory interval; ordinary respawns take three seconds. Reset replaces bots, sends ordered leave/join events for fresh nameplates, and preserves human identity/appearance while resetting round stats and positions. Avoid a second independent alarm that overwrites these deadlines.
 

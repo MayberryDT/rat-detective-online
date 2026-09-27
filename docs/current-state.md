@@ -2,6 +2,17 @@
 
 Verified from source and production through **2026-09-22**. Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Server CPU reduction — 27 September, local only
+
+Production `public-live-v2` uses about 26–34 s of Durable Object CPU per minute
+with zero humans. A local, uncommitted change shares the static bot walk graph
+across round bot replacements and skips the ray index's full static rescan
+when nothing moved. Both give the same results; the deterministic bench trajectory is unchanged. Room diagnostics
+gain `work` counters because `tickCostAvgMs` always reads 0 on Workers. On a
+private hosted fixture, the same rooms used 23–27% less CPU after switching to the new code.
+Not deployed; protocol 18 and gameplay unchanged. See
+[the receipt](verification/server-cpu-2026-09-27.md).
+
 ## Committed full-source release — 22 September production
 
 Worker `ed58154d-d1ee-49be-8a49-7bb00729c72f` deploys source commit

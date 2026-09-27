@@ -9,22 +9,31 @@ export class SpatialRayQuery {
     private statics=new Map<C.Body,number[]>();
     private moving:C.Body[]=[];
     private ranks=new Map<C.Body,number>();
+    private readonly rankOrder:C.Body[]=[];
+    private ranksDirty=true;
     private changed=true;
     private readonly present=new Set<C.Body>();
+    // Flat copy of `statics` so an unchanged step compares poses without map lookups.
+    private staticList:C.Body[]=[];
+    private staticPose=new Float64Array(0);
     private readonly ray=new C.Ray();
     private readonly bounds=new C.AABB();
     private readonly candidates:C.Body[]=[];
-    private readonly onChange=()=>{this.changed=true;};
+    private readonly onChange=()=>{this.changed=true;this.ranksDirty=true;};
+    /** Ray/sphere query count for diagnostics; callers may reset it. */
+    queries=0;
     constructor(private readonly world:C.World){
         world.addEventListener('addBody',this.onChange);world.addEventListener('removeBody',this.onChange);
     }
     dispose():void {
         this.world.removeEventListener('addBody',this.onChange);this.world.removeEventListener('removeBody',this.onChange);
-        this.root=undefined;this.statics.clear();this.moving.length=0;this.candidates.length=0;this.ranks.clear();this.present.clear();
+        this.root=undefined;this.statics.clear();this.moving.length=0;this.candidates.length=0;this.ranks.clear();this.rankOrder.length=0;this.present.clear();
+        this.staticList=[];this.staticPose=new Float64Array(0);
     }
     /** Call once per simulation step, not once per ball. Also notices edited
      * static fixtures and changed body types, even after updateAABB() was called. */
     refresh(){
+        if(!this.changed&&this.unchanged()){this.updateRanks();return;}
         let rebuild=false;this.moving.length=0;
         const present=this.present;present.clear();
         for(const body of this.world.bodies){
@@ -39,14 +48,36 @@ export class SpatialRayQuery {
         }
         for(const body of this.statics.keys())if(!present.has(body)){this.statics.delete(body);rebuild=true;}
         if(rebuild)this.root=this.build([...this.statics.keys()]);
+        this.staticList=[...this.statics.keys()];this.staticPose=new Float64Array(this.staticList.length*8);
+        let k=0;for(const pose of this.statics.values())for(const value of pose)this.staticPose[k++]=value;
         this.changed=false;
         this.updateRanks();
+    }
+    /** True when no static moved, resized or changed type since the last full scan.
+     * Added/removed bodies are reported separately through `changed`. */
+    private unchanged():boolean{
+        const pose=this.staticPose;let k=0;
+        for(const body of this.staticList){
+            const p=body.position,q=body.quaternion;
+            if(body.type!==C.Body.STATIC||body.aabbNeedsUpdate||p.x!==pose[k]||p.y!==pose[k+1]||p.z!==pose[k+2]||
+                q.x!==pose[k+3]||q.y!==pose[k+4]||q.z!==pose[k+5]||q.w!==pose[k+6]||body.shapes.length!==pose[k+7])return false;
+            k+=8;
+        }
+        for(const body of this.moving)if(body.type===C.Body.STATIC)return false;
+        return true;
     }
     private updateRanks(){
         const broadphase=this.world.broadphase;
         if(!(broadphase instanceof C.SAPBroadphase))return;
         if(broadphase.dirty){broadphase.sortList();broadphase.dirty=false;}
-        this.ranks.clear();broadphase.axisList.forEach((body,i)=>this.ranks.set(body,i));
+        const list=broadphase.axisList,order=this.rankOrder;
+        if(this.ranksDirty||list.length!==order.length){
+            this.ranks.clear();order.length=list.length;
+            for(let i=0;i<list.length;i++){order[i]=list[i];this.ranks.set(list[i],i);}
+            this.ranksDirty=false;return;
+        }
+        // Insertion sort moves only a few bodies per step; rewrite just those ranks.
+        for(let i=0;i<list.length;i++)if(order[i]!==list[i]){order[i]=list[i];this.ranks.set(list[i],i);}
     }
     private build(bodies:C.Body[]):Node|undefined{
         if(!bodies.length)return;
@@ -64,7 +95,7 @@ export class SpatialRayQuery {
         else{this.collect(node.left);this.collect(node.right);}
     }
     closest(from:C.Vec3,to:C.Vec3,mask:number,accept?:(body:C.Body)=>boolean,group=16):C.RaycastResult{
-        const result=new C.RaycastResult(),broadphase=this.world.broadphase;
+        const result=new C.RaycastResult(),broadphase=this.world.broadphase;this.queries++;
         if(!(broadphase instanceof C.SAPBroadphase)&&!accept){
             this.world.raycastClosest(from,to,{collisionFilterGroup:group,collisionFilterMask:mask,skipBackfaces:true},result);return result;
         }
@@ -83,7 +114,7 @@ export class SpatialRayQuery {
     }
     /** Reuse the static BVH for the larger Big Cheese collision volume. */
     sphere(from:C.Vec3,to:C.Vec3,radius:number,mask:number,accept:(body:C.Body)=>boolean):C.RaycastResult {
-        if(this.changed)this.refresh();
+        if(this.changed)this.refresh();this.queries++;
         this.bounds.lowerBound.set(Math.min(from.x,to.x)-radius,Math.min(from.y,to.y)-radius,Math.min(from.z,to.z)-radius);
         this.bounds.upperBound.set(Math.max(from.x,to.x)+radius,Math.max(from.y,to.y)+radius,Math.max(from.z,to.z)+radius);
         this.candidates.length=0;this.collect(this.root);

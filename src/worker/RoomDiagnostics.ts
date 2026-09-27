@@ -57,6 +57,13 @@ export class RoomDiagnostics {
   private checkpointFailures = 0;
   private suppressedMovementCount = 0;
   suppressedMovement(): void { this.suppressedMovementCount++; }
+  private workTotals = { navExpansions: 0, navEdgeProbes: 0, botRays: 0, chaosRays: 0, physicsSubsteps: 0 };
+  /** Deterministic CPU work counts: tickCost reads 0 because Workers freeze clocks during CPU work. */
+  work(sample: { navExpansions?: number; navEdgeProbes?: number; botRays?: number; rays: number; substeps: number }): void {
+    const w = this.workTotals;
+    w.navExpansions += sample.navExpansions ?? 0; w.navEdgeProbes += sample.navEdgeProbes ?? 0; w.botRays += sample.botRays ?? 0;
+    w.chaosRays += sample.rays; w.physicsSubsteps += sample.substeps;
+  }
   /** Source-clock entry gaps only; scheduled timer clamping can conceal lateness. */
   event(now: number, socket = false): void {
     if (this.lastEventAt !== null) this.maxEventSilence = Math.max(this.maxEventSilence, now - this.lastEventAt);
@@ -103,6 +110,7 @@ export class RoomDiagnostics {
       checkpointSettlements: this.checkpointSettlements,
       checkpointSettlementMaxMs: round(this.maxCheckpointSettlement), checkpointFailures: this.checkpointFailures,
       suppressedMovementBroadcasts: this.suppressedMovementCount,
+      work: this.workTotals,
     };
     this.operations={};this.batches={tick:0,event:0,poses:0,maxPoses:0};
     this.traffic={};this.closes={};this.flow={inFlight:0,inFlightBytes:0,queued:0,queuedBytes:0,coalesced:0,ackLagMaxMs:0};
@@ -111,6 +119,7 @@ export class RoomDiagnostics {
     this.rewind={samples:0,totalMs:0,maxMs:0,totalDelta:0,maxDelta:0};
     this.maxEventSilence = this.receivedEvents = this.checkpointSettlements = this.maxCheckpointSettlement = this.checkpointFailures = 0;
     this.suppressedMovementCount = 0;
+    this.workTotals = { navExpansions: 0, navEdgeProbes: 0, botRays: 0, chaosRays: 0, physicsSubsteps: 0 };
     return result;
   }
 }

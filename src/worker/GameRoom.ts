@@ -161,6 +161,8 @@ export class GameRoom extends DurableObject<Env> {
   private forcedIncident: IncidentId | null = null;
   private world: WorldSpec = createWorldSpec();
   private lastCheckpointAt = new Map<string, number>();
+  /** Routine pose checkpoints waiting for the next chaos checkpoint transaction. */
+  private readonly dueCheckpoints = new Set<string>();
   private lastActiveAt = new Map<string, number>();
   private recentShots = new Map<string, string[]>();
   private lastMovementSequence = new Map<string, number>();
@@ -1351,6 +1353,7 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.storage.sql.exec('DELETE FROM players WHERE id = ?', playerId);
     this.ctx.storage.sql.exec('DELETE FROM pending_events WHERE player_id = ?', playerId);
     this.lastCheckpointAt.delete(playerId);
+    this.dueCheckpoints.delete(playerId);
     this.lastActiveAt.delete(playerId);
     this.recentShots.delete(playerId);
     this.lastMovementBroadcast.delete(playerId);
@@ -1430,11 +1433,17 @@ export class GameRoom extends DurableObject<Env> {
         this.applyShotEvents();
         this.finishAssignment();
       }
+      this.diagnostics.work({...this.serverBots?.takeWork(),...this.chaos.takeWork()});
       this.flushMovement('tick');
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
       const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
-      if(now-this.chaosSavedAt>=1000 || signature!==this.chaosSignature){
+      // Ownership/Dispatch/assignment changes persist before any client sees them.
+      // Routine checkpoints hold nothing clients depend on, so write after this
+      // tick's frames are sent instead of holding them behind the output gate.
+      const critical=signature!==this.chaosSignature;
+      const routine=!critical&&now-this.chaosSavedAt>=1000;
+      if(critical){
         this.checkpointGame(state);this.chaosSavedAt=now;this.chaosSignature=signature;
         this.observeCheckpointSettlement();
       }
@@ -1455,6 +1464,7 @@ export class GameRoom extends DurableObject<Env> {
         if(bytes)this.diagnostics.count('snapshotAccepted');
         if(bytes){recipients++;sentBytes+=bytes;maxBytes=Math.max(maxBytes,bytes);}
       }
+      if(routine){this.checkpointGame(state);this.chaosSavedAt=now;this.observeCheckpointSettlement();}
       const metrics=this.diagnostics.tick(now,{gapMs,costMs:performance.now()-tickStart,steps,balls:state.shots.length,
         snapshotBytes:recipients?sentBytes/recipients:0,maxSnapshotBytes:maxBytes,sentBytes,recipients});
       if(metrics)log('info','room diagnostics',{roomId:this.ctx.id.toString(),players:this.players.size,
@@ -1467,7 +1477,14 @@ export class GameRoom extends DurableObject<Env> {
     this.lastActiveAt.set(player.id, now);
     const previous = this.lastCheckpointAt.get(player.id) ?? 0;
     if (!force && now - previous < CHECKPOINT_MS) return;
+    // Every storage write holds this object's outgoing frames until it settles
+    // (output gate). Per-rat checkpoint phases gated ~13% of snapshot ticks by
+    // ~50 ms; routine poses now share the running room's 1 Hz chaos checkpoint.
+    if (!force && this.chaosTimer) { this.dueCheckpoints.add(player.id); return; }
+    this.writePlayer(player, now, now);
+  }
 
+  private writePlayer(player: PlayerData, now: number, activeAt: number): void {
     this.ctx.storage.sql.exec(
       `INSERT INTO players (id, data, updated_at, last_active_at)
        VALUES (?, ?, ?, ?)
@@ -1478,10 +1495,11 @@ export class GameRoom extends DurableObject<Env> {
       player.id,
       JSON.stringify(player),
       now,
-      now,
+      activeAt,
     );
     this.diagnostics.count('playerWrite');
     this.lastCheckpointAt.set(player.id, now);
+    this.dueCheckpoints.delete(player.id);
   }
 
   private observeCheckpointSettlement(): void {
@@ -1525,12 +1543,17 @@ export class GameRoom extends DurableObject<Env> {
     this.chaos.setAssignment(createAssignment(id,this.now()));
     this.botState=this.chaos.snapshot(false);
   }
-  /** Case, progress, bag and result are one synchronous SQLite checkpoint. */
+  /** Case, progress, bag, result and due routine poses are one synchronous SQLite checkpoint. */
   private checkpointGame(state=this.chaos?.snapshot(false)):void {
     this.ctx.storage.transactionSync(()=>{
       this.persistRound();
       if(state)this.writeRoomState('chaos-v1',JSON.stringify(state));
       this.writeRoomState(ASSIGNMENT_ROTATION_KEY,JSON.stringify(this.assignmentRotation));
+      const now=this.now();
+      for(const id of [...this.dueCheckpoints]){
+        const player=this.players.get(id);
+        if(player)this.writePlayer(player,now,this.lastActiveAt.get(id)??now);else this.dueCheckpoints.delete(id);
+      }
     });
   }
   private finishAssignment():void {

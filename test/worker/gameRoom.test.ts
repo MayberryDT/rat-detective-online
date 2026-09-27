@@ -832,6 +832,39 @@ describe('GameRoom websockets', () => {
     client.ws.close(1000, 'done'); late.ws.close(1000, 'done');
   });
 
+  it('defers routine poses to the running room checkpoint without resurrecting removed rats', async () => {
+    const room = `deferred-${crypto.randomUUID()}`;
+    const a = await openClient(room), b = await openClient(room);
+    a.ws.send(joinPayload('Kept')); b.ws.send(joinPayload('Leaver'));
+    const [kept, leaver] = await Promise.all([a.inbox.waitFor('welcome'), b.inbox.waitFor('welcome')]);
+    await runInDurableObject(env.GAME_ROOM.getByName(room), (instance: GameRoom, state) => {
+      type Internals = { clock: () => number; chaosTimer: ReturnType<typeof setInterval> | null; players: Map<string, PlayerData>;
+        lastCheckpointAt: Map<string, number>; persistPlayer(player: PlayerData, force: boolean): void;
+        removePlayerById(id: string): void; checkpointGame(): void };
+      const internal = instance as unknown as Internals, originalClock = internal.clock, start = Date.now();
+      const row = (id: string) => state.storage.sql.exec<{ data: string; last_active_at: number }>('SELECT data, last_active_at FROM players WHERE id = ?', id).toArray()[0];
+      clearInterval(internal.chaosTimer ?? undefined);
+      // Presence-only stand-in for the live 30 Hz loop: the deferred path checks only that it exists.
+      internal.chaosTimer = {} as unknown as ReturnType<typeof setInterval>;
+      let now = start; internal.clock = () => now;
+      try {
+        for (const id of [kept.id, leaver.id]) internal.lastCheckpointAt.set(id, start - CHECKPOINT_MS - 10);
+        const player = internal.players.get(kept.id)!; player.x = 42;
+        internal.persistPlayer(player, false); internal.persistPlayer(internal.players.get(leaver.id)!, false);
+        expect(JSON.parse(row(kept.id).data).x).not.toBe(42); // The movement event wrote nothing.
+        internal.removePlayerById(leaver.id);
+        now = start + 700; player.x = 43;
+        internal.checkpointGame();
+        expect(JSON.parse(row(kept.id).data).x).toBe(43);
+        expect(row(kept.id).last_active_at).toBe(start);
+        expect(row(leaver.id)).toBeUndefined();
+        now = start + 800; player.x = 44; internal.persistPlayer(player, false);
+        internal.checkpointGame();
+        expect(JSON.parse(row(kept.id).data).x).toBe(43); // Still inside the 2.5 s pose interval.
+      } finally { internal.chaosTimer = null; internal.clock = originalClock; }
+    });
+  });
+
   it('suppresses redundant stationary poses while preserving the stop sample, timestamps, and checkpoints', async () => {
     const room = `stationary-${crypto.randomUUID()}`;
     const client = await openClient(room);
