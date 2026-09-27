@@ -26,6 +26,8 @@ export const FEEL={
     stains:{label:'6 Cheese stains',toggle:true,params:{}},
     /** Silver spark burst (with the existing armour clang) when cheese reflects off Ironclad. */
     ironcladSparks:{label:'7 Ironclad sparks',toggle:true,params:{count:18,speed:11,life:.36}},
+    /** Ring burst around the crosshair plus a brief zoom-in (degrees) on your kills. */
+    killBloom:{label:'8 Kill bloom and punch-in',toggle:true,params:{punch:4}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

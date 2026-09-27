@@ -10,6 +10,7 @@ interface Arrow {node:HTMLElement;from:THREE.Vector3|null;age:number;life:number
 export class ScreenFeel {
     private root?:HTMLElement;
     private edge?:HTMLElement;
+    private bloom?:HTMLElement;
     private readonly arrows:Arrow[]=[];
     private edgeLevel=0;
     private readonly local=new THREE.Vector3();
@@ -25,6 +26,13 @@ export class ScreenFeel {
         if(!from)return;
         const arrow=this.arrows.find(a=>a.from===from)??this.arrows.reduce((a,b)=>a.age/a.life>=b.age/b.life?a:b);
         arrow.from=from;arrow.age=0;arrow.life=p.arrowLife;
+    }
+
+    /** Ring burst around the crosshair for a confirmed kill. */
+    killBloom():void {
+        if(!this.build()||!this.bloom)return;
+        this.bloom.style.setProperty('--feel-flash',String(Math.max(.35,this.flash())));
+        this.bloom.classList.remove('on');void this.bloom.offsetWidth;this.bloom.classList.add('on');
     }
 
     update(dt:number,camera:THREE.Camera,self?:THREE.Vector3):void {
@@ -52,9 +60,10 @@ export class ScreenFeel {
         this.edgeLevel=0;
         if(this.edge)this.edge.style.opacity='0';
         for(const arrow of this.arrows){arrow.from=null;arrow.node.style.opacity='0';}
+        this.bloom?.classList.remove('on');
     }
 
-    dispose():void {this.root?.remove();this.root=undefined;this.edge=undefined;this.arrows.length=0;}
+    dispose():void {this.root?.remove();this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -62,6 +71,7 @@ export class ScreenFeel {
         if(!this.doc?.body||typeof this.doc.createElement!=='function')return false;
         this.root=this.doc.createElement('div');this.root.className='feel-screen';this.root.setAttribute('aria-hidden','true');
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
+        this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);
         for(let i=0;i<ARROWS;i++){
             const node=this.doc.createElement('div');node.className='feel-arrow';this.root.appendChild(node);
             this.arrows.push({node,from:null,age:0,life:1});

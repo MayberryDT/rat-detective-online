@@ -4,3 +4,9 @@
 .feel-arrow{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;will-change:transform,opacity}
 .feel-arrow::before{content:'';position:absolute;left:-19px;top:-16px;border-left:19px solid transparent;border-right:19px solid transparent;border-bottom:26px solid #ff4a1f;filter:drop-shadow(0 0 6px #ff2a0a) drop-shadow(0 2px 0 #3a0703)}
 .feel-arrow::after{content:'';position:absolute;left:-9px;top:-4px;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:12px solid #ffd2a8}
+/* 8: kill bloom around the (unchanged) crosshair aim point. */
+.feel-kill-bloom{position:absolute;left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;opacity:0;
+  border:3px solid #ff594b;box-shadow:0 0 18px #ff3b22aa,inset 0 0 12px #ffb08a88}
+.feel-kill-bloom::after{content:'';position:absolute;inset:-14px;border-radius:50%;border:2px dashed #ffd2a8}
+.feel-kill-bloom.on{animation:feel-kill-bloom 460ms cubic-bezier(.2,.8,.3,1) both}
+@keyframes feel-kill-bloom{0%{opacity:var(--feel-flash,1);transform:scale(.2) rotate(0)}60%{opacity:calc(var(--feel-flash,1)*.7)}100%{opacity:0;transform:scale(2.1) rotate(40deg)}}

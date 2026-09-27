@@ -43,6 +43,13 @@ export class FeelDirector {
         this.camera.push(this.impulse.multiplyScalar(p.push*scale*.1));
     }
 
+    /** You scored a kill. */
+    killed():void {
+        if(!this.state.on('killBloom'))return;
+        this.screen.killBloom();
+        this.camera.widen(-FEEL.killBloom.params.punch);
+    }
+
     /** A cheese hit landed on `victim` (a remote rat you hit, or your own rat). */
     impact(victim:RatEntity,local:boolean):void {
         if(!this.state.on('impactFreeze'))return;
