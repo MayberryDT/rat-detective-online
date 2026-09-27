@@ -404,6 +404,7 @@ export class GameSession {
                     }
                 }
                 if (message.victimId === this.myId) {
+                    this.feel.died(()=>this.chaos?.corpseOf(this.myId)??this.rat?.entity.mesh.position);
                     this.clearInput();
                     this.stats?.event('death',{respawnAt:message.respawnAt-this.serverOffset,incident:message.incident});
                     this.hud.showRespawn(message.respawnAt - this.serverOffset);

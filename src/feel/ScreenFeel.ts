@@ -12,6 +12,7 @@ export class ScreenFeel {
     private edge?:HTMLElement;
     private bloom?:HTMLElement;
     private noirEdge?:HTMLElement;
+    private irisNode?:HTMLElement;
     private canvas?:HTMLElement;
     private lastFilter='';
     private lastNoir=0;
@@ -50,6 +51,17 @@ export class ScreenFeel {
         if(!this.canvas)return;
         const value=filter&&(drain>.001||flood>.001)?`saturate(${(1-p.drain*drain+p.flood*flood).toFixed(3)}) contrast(${(1+.12*drain).toFixed(3)})`:'';
         if(value!==this.lastFilter){this.canvas.style.filter=value;this.lastFilter=value;}
+    }
+
+    /** Iris-out: `closed` 0 (open) … 1 (fully closed to `minRadius` vmax) around `at`. */
+    iris(closed:number,at:THREE.Vector3|undefined,camera:THREE.Camera,minRadius:number):void {
+        if(closed<=0){if(this.irisNode)this.irisNode.style.opacity='0';return;}
+        if(!this.build()||!this.irisNode)return;
+        let x=.5,y=.5;
+        if(at){this.projected.copy(at).project(camera);if(this.projected.z<1){x=Math.min(.9,Math.max(.1,(this.projected.x+1)/2));y=Math.min(.9,Math.max(.1,(1-this.projected.y)/2));}}
+        const eased=closed*closed*(3-2*closed),radius=150-(150-minRadius)*eased;
+        const style=this.irisNode.style;
+        style.opacity='1';style.setProperty('--iris-x',`${(x*100).toFixed(1)}%`);style.setProperty('--iris-y',`${(y*100).toFixed(1)}%`);style.setProperty('--iris-r',`${radius.toFixed(2)}vmax`);
     }
 
     /** Pop a comic word over `at` (world position), clamped inside the screen. */
@@ -101,11 +113,12 @@ export class ScreenFeel {
         this.bloom?.classList.remove('on');
         for(const node of this.words)node.classList.remove('on');
         if(this.noirEdge)this.noirEdge.style.opacity='0';
+        if(this.irisNode)this.irisNode.style.opacity='0';
         if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -113,6 +126,7 @@ export class ScreenFeel {
         if(!this.doc?.body||typeof this.doc.createElement!=='function')return false;
         this.root=this.doc.createElement('div');this.root.className='feel-screen';this.root.setAttribute('aria-hidden','true');
         this.noirEdge=this.doc.createElement('div');this.noirEdge.className='feel-noir';this.root.appendChild(this.noirEdge);
+        this.irisNode=this.doc.createElement('div');this.irisNode.className='feel-iris';this.root.appendChild(this.irisNode);
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
         this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);
         for(let i=0;i<3;i++){const node=this.doc.createElement('div');node.className='feel-word';this.root.appendChild(node);this.words.push(node);}

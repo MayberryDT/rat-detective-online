@@ -38,6 +38,8 @@ export const FEEL={
     hatPop:{label:'11b Hat pop-off',toggle:true,params:{speed:4,lift:9}},
     /** Corpse secondary motion by cause: shot spin, explosion fling, trap flop (visual only; server physics unchanged). */
     deathVariety:{label:'12 Death variety',toggle:true,params:{spinGain:1.5,spinWhirl:.5,flingGain:1.8,flingStretch:.26,flingTime:.42,flopGain:.6,flopLanding:2.2,flopDroop:.6}},
+    /** Death camera: turn to your corpse over `turn` s, pull back, follow for `follow` s, then iris closes over `close` s to `irisRadius` vmax. */
+    deathCam:{label:'13 Death camera and iris',toggle:true,params:{turn:.3,pullBack:2.5,follow:.8,close:.6,irisRadius:16}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

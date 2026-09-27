@@ -203,6 +203,11 @@ export class ChaosView {
     launch(message:Extract<ServerMessage,{type:'playerShot'}>):void {
         if(this.extrapolate&&!this.localShots.confirm(message,performance.now()))this.presentation.launch(message,performance.now());
     }
+    /** The live position of `victimId`'s shared corpse model, if one is shown. */
+    corpseOf(victimId:string):THREE.Vector3|undefined {
+        for(const c of this.corpses.values())if(c.state.victimId===victimId)return c.mesh.position;
+        return undefined;
+    }
     noteDeathStyle(victimId:string,style:DeathStyle):void {
         this.deathStyles.set(victimId,{style,at:performance.now()});
         if(this.deathStyles.size>32)this.deathStyles.delete(this.deathStyles.keys().next().value!);

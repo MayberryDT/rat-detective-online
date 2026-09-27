@@ -78,6 +78,8 @@ const actions:Record<string,()=>void>={
     'Kill suspect 2 (hat pop-off)':()=>{const v=suspects[1]!;v.hp=1;v.takeDamage(1,new THREE.Vector3(30,0,6));},
     'Deaths: spin / fling / flop':()=>{(['spin','fling','flop'] as const).forEach((style,i)=>{const v=suspects[i]!;if(v.dead)return;v.hp=1;v.setDeathStyle(style);v.takeDamage(1,new THREE.Vector3(style==='flop'?2:14,style==='fling'?18:0,0));});},
     'Respawn suspects':()=>{for(const v of suspects)if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});},
+    'Your death (camera + iris)':()=>{rat.entity.hp=1;rat.entity.takeDamage(1,new THREE.Vector3(0,6,-14));feel.died(()=>rat.entity.mesh.position);},
+    'Respawn you':()=>{rat.entity.respawn({x:-32,y:.5,z:-18,hp:3});feel.reset();},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

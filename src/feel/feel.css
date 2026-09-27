@@ -22,3 +22,6 @@
 @media(max-height:500px){.feel-word{font-size:34px}}
 /* 10: noir low health: darkened edges; the canvas colour drain is a CSS filter set from script. */
 .feel-noir{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 38%,#05030acc 100%)}
+
+/* 13: noir iris closing on your fallen rat. Position/size set from script. */
+.feel-iris{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at var(--iris-x,50%) var(--iris-y,50%),transparent var(--iris-r,150vmax),#05030a calc(var(--iris-r,150vmax) + 2px))}

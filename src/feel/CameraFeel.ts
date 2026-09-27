@@ -21,6 +21,12 @@ export class CameraFeel {
     private readonly baseQuaternion=new THREE.Quaternion();
     private baseFov=0;
     private applied=false;
+    /** Death camera: turn toward a live target by `lookWeight` (0…1) and pull back. */
+    private lookTarget?:THREE.Vector3;
+    private lookWeight=0;
+    private lookBack=0;
+    private readonly lookQuaternion=new THREE.Quaternion();
+    private readonly lookMatrix=new THREE.Matrix4();
 
     constructor(private readonly scale:()=>number){}
 
@@ -36,8 +42,13 @@ export class CameraFeel {
     /** Sustained field-of-view offset (for example during launcher flight). */
     hold(degrees:number):void {this.fovHold=degrees;}
 
+    /** Turn the rendered view toward `target` (weight 0…1) and back off `back` units. */
+    look(target:THREE.Vector3|undefined,weight:number,back:number):void {
+        this.lookTarget=target;this.lookWeight=target?Math.max(0,Math.min(1,weight)):0;this.lookBack=back;
+    }
+
     get active():boolean {
-        return this.pitch!==0||this.yaw!==0||this.pitchV!==0||this.yawV!==0||this.shift.lengthSq()!==0||
+        return this.lookWeight>0||this.pitch!==0||this.yaw!==0||this.pitchV!==0||this.yawV!==0||this.shift.lengthSq()!==0||
             this.shiftV.lengthSq()!==0||this.fov!==0||this.fovV!==0||this.fovHold!==0;
     }
     offsets():{pitch:number;yaw:number;x:number;y:number;z:number;fov:number} {
@@ -80,6 +91,12 @@ export class CameraFeel {
         const scale=this.scale();
         if(!(scale>0)||!this.active)return;
         this.basePosition.copy(camera.position);this.baseQuaternion.copy(camera.quaternion);this.baseFov=camera.fov;
+        if(this.lookTarget&&this.lookWeight>0){
+            camera.translateZ(this.lookBack*this.lookWeight*scale);
+            this.lookMatrix.lookAt(camera.position,this.lookTarget,camera.up);
+            this.lookQuaternion.setFromRotationMatrix(this.lookMatrix);
+            camera.quaternion.slerp(this.lookQuaternion,this.lookWeight*scale);
+        }
         camera.rotateY(this.yaw*scale);camera.rotateX(this.pitch*scale);
         camera.translateX(this.shift.x*scale);camera.translateY(this.shift.y*scale);camera.translateZ(this.shift.z*scale);
         if(this.fov!==0){camera.fov=this.baseFov+this.fov*scale;camera.updateProjectionMatrix();}
@@ -96,7 +113,7 @@ export class CameraFeel {
     }
 
     /** Drop every offset immediately (respawn, reconnect, round reset, teardown). */
-    reset():void {this.settle();this.fov=0;this.fovV=0;this.fovHold=0;}
+    reset():void {this.settle();this.fov=0;this.fovV=0;this.fovHold=0;this.lookTarget=undefined;this.lookWeight=0;}
 
     private settle():void {
         this.pitch=this.yaw=this.pitchV=this.yawV=0;

@@ -23,6 +23,8 @@ export class FeelDirector {
     private flood=0;
     private noirAudio?:NoirAudio;
     private colourFilter=true;
+    private deathTarget?:()=>THREE.Vector3|undefined;
+    private deathAge=0;
     private readonly impulse=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
     constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
@@ -66,6 +68,12 @@ export class FeelDirector {
         this.impulse.normalize().applyQuaternion(this.inverse.copy(view.quaternion).invert());
         this.camera.kick(p.dip*scale,-this.impulse.x*p.yaw*scale);
         this.camera.push(this.impulse.multiplyScalar(p.push*scale*.1));
+    }
+
+    /** Your rat died: follow `target` (your corpse, looked up each frame), then iris out. */
+    died(target:()=>THREE.Vector3|undefined):void {
+        if(!this.state.on('deathCam'))return;
+        this.deathTarget=target;this.deathAge=0;
     }
 
     /** Cause-flavoured corpse motion: neutral traps and case missiles flop,
@@ -113,6 +121,11 @@ export class FeelDirector {
     update(dt:number,view:THREE.Camera,self?:THREE.Vector3):void {
         this.camera.update(dt);
         this.screen.update(dt,view,self);
+        if(this.deathTarget){
+            const d=FEEL.deathCam.params,target=this.deathTarget();this.deathAge+=dt;
+            this.camera.look(target,Math.min(1,this.deathAge/d.turn),d.pullBack);
+            this.screen.iris(Math.max(0,Math.min(1,(this.deathAge-d.follow)/d.close)),target,view,d.irisRadius);
+        }
         const on=this.state.on('lowHealth'),p=FEEL.lowHealth.params,target=on?this.dangerTarget:0;
         this.danger+=(target-this.danger)*(1-Math.exp(-p.ease*dt));
         if(Math.abs(target-this.danger)<.002)this.danger=target;
@@ -125,6 +138,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;}
     dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();}
 }
