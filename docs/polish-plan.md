@@ -47,12 +47,12 @@ Each item gets its own switch in the `?feel=dev` panel, so Tyler can cut it at r
 - [x] **1 Shot kick** · **2 Hit jolt** · **3 Damage direction and edge flash** → [spec §1–3](polish/feel-spec.md#1-camera)
 - [x] **4 Impact freeze** · **5 Bigger dripping splats** · **6 Cheese stains** · **7 Ironclad sparks** · **8 Kill bloom and punch-in** · **9 Comic words**
 - [x] **10 Noir low health** (colour drain, muffle, heartbeat) · **11 Hat knock and pop-off** · **12 Death variety** · **13 Death camera and iris**
-- [ ] **14 Model:** whiskers, eyebrows, eye tracking, cheeks, brim, hem, shoes, plus render sheets → [character](polish/character.md)
-- [ ] **15 Animation:** squash and stretch, skid, sneaky carry, launch pose, idle fidgets, kill nod, hit and pickup reactions
-- [ ] **16 Movement:** landing dip, launch view and wind, Hot Pursuit speed, dust → [spec §5](polish/feel-spec.md#5-movement-and-flight)
-- [ ] **17 Sound:** footsteps, jostle, squelch, whizz, echo and muffle, kill stab, music stings → [sound](polish/sound.md)
-- [ ] **18 City:** pigeons, litter, neon and lamps, steam, trash cans → [spec §7](polish/feel-spec.md#7-city-reacts)
-- [ ] **19 Rewards:** score pop, streak callouts, victory slow-motion, Case File with the new server stats → [spec §8](polish/feel-spec.md#8-rewards-and-round-end)
+- [x] **14 Model:** whiskers, eyebrows, eye tracking, cheeks, brim, hem, shoes, plus render sheets → [character](polish/character.md)
+- [x] **15 Animation:** squash and stretch, skid, sneaky carry, launch pose, idle fidgets, kill nod, hit and pickup reactions
+- [x] **16 Movement:** landing dip, launch view and wind, Hot Pursuit speed, dust → [spec §5](polish/feel-spec.md#5-movement-and-flight)
+- [x] **17 Sound:** footsteps, jostle, squelch, whizz, echo and muffle, kill stab, music stings → [sound](polish/sound.md)
+- [x] **18 City:** pigeons, litter, neon and lamps, steam, trash cans → [spec §7](polish/feel-spec.md#7-city-reacts)
+- [x] **19 Rewards:** score pop, streak callouts, victory slow-motion, Case File with the new server stats → [spec §8](polish/feel-spec.md#8-rewards-and-round-end)
 - [ ] **20 Final package:**
   - frame-rate comparison against the budget;
   - full checks;
