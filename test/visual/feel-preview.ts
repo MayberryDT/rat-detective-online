@@ -75,6 +75,8 @@ const actions:Record<string,()=>void>={
     'Wounded (2 HP)':()=>feel.health(2),
     'Last hit point (1 HP)':()=>feel.health(1),
     'Quick Fix heal':()=>feel.health(3,true),
+    'Kill suspect 2 (hat pop-off)':()=>{const v=suspects[1]!;v.hp=1;v.takeDamage(1,new THREE.Vector3(30,0,6));},
+    'Respawn suspects':()=>{for(const v of suspects)if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

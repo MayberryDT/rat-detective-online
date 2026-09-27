@@ -32,6 +32,10 @@ export const FEEL={
     comicWords:{label:'9 Comic words',toggle:true,params:{streakWindow:4,cooldown:6}},
     /** Noir low health: colour drain/vignette by danger (hp 2 → `mid`, hp 1 → 1), muffle cutoff (Hz), heartbeat period/volume, heal flood. */
     lowHealth:{label:'10 Noir low health',toggle:true,params:{mid:.4,drain:.9,vignette:.55,flood:.6,ease:3,closed:900,period:.95,heartbeat:.5}},
+    /** Fedora knocked askew by hits (radians), settling over `settle` s. */
+    hatKnock:{label:'11a Hat knock',toggle:true,params:{tilt:.32,lift:.12,settle:.45}},
+    /** On death the fedora pops off and tumbles (horizontal speed, upward speed). */
+    hatPop:{label:'11b Hat pop-off',toggle:true,params:{speed:4,lift:9}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

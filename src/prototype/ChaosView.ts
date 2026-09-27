@@ -37,6 +37,9 @@ import {closestPointOnSegment} from '../shared/netplay';
 
 import { updateCaseCarryPose } from './CaseCarryPose';
 import {RatReactionEvents} from './RatReactionEvents';
+import {FlyingHat} from '../entities/FlyingHat';
+import {feelState} from '../feel/feelState';
+import {FEEL} from '../feel/feelTuning';
 
 export interface InteractionCandidate {
     target:PickupTarget;targetId:string;generation:number;pickup?:import('../shared/pickups').PickupKind;
@@ -90,7 +93,7 @@ export class ChaosView {
     private myId='';
     private readonly ballPose=new THREE.Object3D();
     private readonly missileTrail=new THREE.InstancedMesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff2a12,transparent:true,opacity:.42,toneMapped:false,depthWrite:false}),12);
-    private corpses=new Map<string,{mesh:THREE.Group;animator:RatAnimator;state:CorpseState}>();
+    private corpses=new Map<string,{mesh:THREE.Group;animator:RatAnimator;state:CorpseState;hat?:FlyingHat;hatPending:boolean}>();
     private arm:THREE.Group|null=null;
     private carrier:RatEntity|null=null;
     private state:ChaosState|null=null;
@@ -284,13 +287,15 @@ export class ChaosView {
             if(!hit.audioOnly)reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
-        for(const [id,c] of this.corpses)if(!corpses.has(id)){this.root.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}
+        for(const [id,c] of this.corpses)if(!corpses.has(id)){c.hat?.dispose();this.root.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}
         for(const c of state.corpses){
             const victim=this.resolveRat(c.victimId);if(victim?.dead)victim.useSharedCorpse();
             let model=this.corpses.get(c.id);
             if(!model){
                 const mesh=createRatMesh(c.appearance);
-                model={mesh,animator:new RatAnimator(mesh),state:c};this.corpses.set(c.id,model);this.root.add(mesh);
+                // Polish 11: a fresh corpse pops its fedora (not one already lying there on join).
+                const hatPending=feelState().on('hatPop')&&state.time-c.born<600;
+                model={mesh,animator:new RatAnimator(mesh),state:c,hatPending};this.corpses.set(c.id,model);this.root.add(mesh);
             }
             model.state=c;
         }
@@ -442,6 +447,16 @@ export class ChaosView {
             c.mesh.position.set(p.x,p.y,p.z);
             c.mesh.position.sub(this.p.set(0,.95,0).applyQuaternion(c.mesh.quaternion));
             c.animator.poseDeath((now-b.born)/1000,dt,b.spin,0,false);
+            if(c.hatPending){
+                c.hatPending=false;c.mesh.updateMatrixWorld(true);
+                const hat=c.mesh.getObjectByName('rat-hat');
+                if(hat){
+                    const params=FEEL.hatPop.params;
+                    c.hat=new FlyingHat(this.root.parent as THREE.Scene,hat,this.p.set(b.v.x,0,b.v.z),Math.max(0,b.p.y-1),params.speed,params.lift,b.born%97);
+                    c.animator.setHatHidden(true);c.animator.poseDeath((now-b.born)/1000,0,b.spin,0,false);
+                }
+            }
+            c.hat?.update(dt);
         }
         const d=s.dispatch;
         const localCase=[s.case,...s.extraCases??[]].find(c=>c.owner&&this.resolveRat(c.owner)?.isPlayer);
@@ -497,6 +512,7 @@ export class ChaosView {
     }
     getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
+        for(const c of this.corpses.values())c.hat?.dispose();
         this.clearPickupCards();this.buffBar.remove();
         this.clearInteractions();
         this.localShots.clear();

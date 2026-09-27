@@ -3,6 +3,8 @@ import {RatPowerupEffects} from './RatPowerupEffects';
 import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import {RatStains} from './RatStains';
+import {FlyingHat} from './FlyingHat';
+import {FEEL} from '../feel/feelTuning';
 import {feelState} from '../feel/feelState';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, RatOptions } from '../utils/RatModel';
@@ -97,6 +99,7 @@ export class RatEntity {
     private readonly hitColor = new THREE.Color(0xffa16b);
     private freezeLeft = 0;
     private stains?: RatStains;
+    private flyingHat?: FlyingHat;
     private stainSeed = 0;
     private freezeHold = false;
     private readonly frozenPosition = new THREE.Vector3();
@@ -289,6 +292,7 @@ export class RatEntity {
         if (this.dead) {
             this.deathTimer += dt;
             this.updateDeathRagdoll(dt);
+            this.flyingHat?.update(dt);
             return;
         }
 
@@ -433,6 +437,8 @@ export class RatEntity {
     public useSharedCorpse():void {
         if(this.sharedDeath)return;
         this.sharedDeath=true;this.dead=true;this.hp=0;this.clearPowerups();
+        // The shared corpse model pops its own hat (ChaosView); drop any local one.
+        this.flyingHat?.dispose();this.flyingHat=undefined;
         this.animator.resetReactions();
         this.mesh.visible=false;if(this.glowMesh)this.glowMesh.visible=false;
         this.billboard.sprite.removeFromParent();
@@ -473,6 +479,17 @@ export class RatEntity {
         if (this.hp <= 0) {
             this.die(impactVel);
         }
+    }
+
+    /** Polish 11: knock the fedora off as its own tumbling object. */
+    private popHat(impactVel: THREE.Vector3): void {
+        this.flyingHat?.dispose();this.flyingHat = undefined;
+        if (this.disposed || this.sharedDeath || !feelState().on('hatPop')) return;
+        const hat = this.mesh.getObjectByName('rat-hat');
+        if (!hat) return;
+        const p = FEEL.hatPop.params;
+        this.flyingHat = new FlyingHat(this.scene, hat, impactVel, this.mesh.position.y, p.speed, p.lift, ++this.stainSeed);
+        this.animator.setHatHidden(true);
     }
 
     /** Polish 6: a cheese stain on the side facing the shooter (opposite the impact). */
@@ -533,6 +550,7 @@ export class RatEntity {
         this.deathImpact = this.deathContacts = this.restTime = 0;
         this.deathPhase = 'launch';
         this.resetColor();
+        this.popHat(impactVel);
 
         // ── DEATH SOUND ──
         playEntitySound('ratDeath', 0.6, this.isPlayer ? undefined : this.body.position);
@@ -614,6 +632,7 @@ export class RatEntity {
         this.flashTimer = 0;
         this.freezeLeft = 0;
         this.stains?.clear();
+        this.flyingHat?.dispose();this.flyingHat = undefined;
         this.deathTimer = 0;
 
         this.deathContactTime = -10;
@@ -710,6 +729,7 @@ export class RatEntity {
         this.powerupEffects.dispose();
         // Shared stain resources must leave the rig before its resources are disposed.
         this.stains?.dispose();
+        this.flyingHat?.dispose();
         this.scene.remove(this.mesh);
         disposeMeshResources(this.mesh);
         this.billboard.dispose();

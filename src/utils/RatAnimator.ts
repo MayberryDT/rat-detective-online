@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import {feelState} from '../feel/feelState';
+import {FEEL} from '../feel/feelTuning';
 import {updateGunSleeve,type GunSleeveRig} from './RatArmModel';
 import { RatLocomotionFollowThrough } from './RatLocomotionFollowThrough';
 import {RatActing,type RatReaction} from './RatActing';
@@ -48,6 +50,11 @@ export class RatAnimator {
     private respawnAge = 1;
     private hit = 0;
     private hitAge = 10;
+    /** Polish 11: fedora knocked askew by a hit, then settling; hidden after it pops off. */
+    private hatKnockAge = 10;
+    private hatKnockZ = 0;
+    private hatKnockX = 0;
+    private hatHidden = false;
     private readonly flop = new THREE.Vector2();
     private readonly flopVelocity = new THREE.Vector2();
     private readonly localSpin = new THREE.Vector3();
@@ -120,6 +127,10 @@ export class RatAnimator {
             this.parentRotation.copy(this.root.quaternion).invert();
             this.aimDirection.copy(direction).normalize().applyQuaternion(this.parentRotation);
         }
+        if(feelState().on('hatKnock')){
+            const p=FEEL.hatKnock.params,side=direction&&Math.abs(this.aimDirection.x)>.05?Math.sign(this.aimDirection.x):(this.hatKnockZ>0?-1:1);
+            this.hatKnockAge=0;this.hatKnockZ=-side*p.tilt;this.hatKnockX=p.lift;
+        }
         if(this.actingEnabled)this.acting.trigger('hit',1,direction?this.aimDirection.x:0);
         this.applyPose();
     }
@@ -173,6 +184,7 @@ export class RatAnimator {
             rig[8].part.rotation.x += this.flop.x * 1.4;
             rig[8].part.rotation.z += this.flop.y * 1.6;
             rig[4].part.scale.y = rig[5].part.scale.y = 0.18;
+            if (this.hatHidden) hat.scale.setScalar(1e-4);
         }
         this.tailFall.lerp(this.localGravity, 1 - Math.exp(-5 * dt));
         this.time = time;
@@ -195,6 +207,9 @@ export class RatAnimator {
         this.applyPose();
     }
 
+    /** The fedora has flown off as its own object; collapse the rig's copy until reset. */
+    setHatHidden(hidden:boolean):void {this.hatHidden=hidden;}
+
     playRespawn(): void {
         this.respawnAge = 0;
     }
@@ -212,6 +227,7 @@ export class RatAnimator {
         this.muzzleFlash.visible = false;
         this.lastPosition = null;
         this.hitAge = 10;
+        this.hatKnockAge = 10;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;
         this.flop.set(0, 0); this.flopVelocity.set(0, 0);
         this.tailFall.set(0, 0, 0);
         this.landingPulse = 0;
@@ -324,6 +340,7 @@ export class RatAnimator {
         this.muzzleFlash.visible = this.flashAge < .065;
         this.muzzleFlash.material.opacity = Math.max(0, 1 - this.flashAge / .065);
         this.hitAge += dt;
+        this.hatKnockAge += dt;
         this.hit = Math.exp(-this.hitAge * 16) * Math.cos(this.hitAge * 22);
         this.aimHold = Math.max(0, this.aimHold - dt);
         this.aim = THREE.MathUtils.lerp(this.aim, this.aimHold > 0 ? 1 : 0, 1 - Math.exp(-7 * dt));
@@ -350,6 +367,8 @@ export class RatAnimator {
             this.carryAnchor.rotation.x-=this.locomotion.startStop*.65;
             this.carryAnchor.rotation.z-=this.locomotion.turn*.32;
         }
+        const settle=FEEL.hatKnock.params.settle;
+        const knock=this.hatKnockAge<4*settle?Math.min(1,this.hatKnockAge/.05)*Math.exp(-this.hatKnockAge/settle)*(1+.3*Math.cos(this.hatKnockAge*15)*Math.exp(-this.hatKnockAge*6)):0;
         for (const rig of this.rigs) {
             const [{ part: body }, { part: head }, { part: hat }, { part: tail },
                 { part: leftEye }, { part: rightEye }, { part: leftEar }, { part: rightEar },
@@ -382,6 +401,10 @@ export class RatAnimator {
             hat.position.y += entrance * 0.24 + this.jumpLift * .035 + this.jumpLanding * .02;
             hat.rotation.x += this.airPose * .045 - this.jumpLanding * .06;
             hat.rotation.x += entrance * 0.14;
+            hat.rotation.z += this.hatKnockZ * knock;
+            hat.rotation.x -= this.hatKnockX * knock;
+            hat.position.x += this.hatKnockZ * knock * .06;
+            if (this.hatHidden) hat.scale.setScalar(1e-4);
             // Keep the dragging section planted instead of inheriting the step bounce.
             tail.rotation.y = -this.turn * 0.2;
 
