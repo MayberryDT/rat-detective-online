@@ -13,7 +13,6 @@ export class FeelAudio {
     private noise?:AudioBuffer;
     private voices=0;
     private readonly lastAt=new Map<string,number>();
-    private wind?:{source:AudioBufferSourceNode;filter:BiquadFilterNode;gain:GainNode};
 
     constructor(private readonly context:AudioContext){}
 
@@ -124,19 +123,26 @@ export class FeelAudio {
         else for(let i=0;i<6;i++){this.tone(filter,at+i*.2,.12,'triangle',110,104,.4);this.tone(filter,at+i*.2+.1,.08,'square',880,860,.08);}
     }
     /** Continuous wind while flying, `level` 0…1. */
-    setWind(level:number,volume:number):void {
-        if(!this.ready()){return;}
-        if(level<=.001&&!this.wind)return;
-        if(!this.wind){
+    setWind(level:number,volume:number):void {this.loop('wind',level,volume,400+level*900,.7);}
+    /** Noir rain on the city, `level` 0…1 (muffled indoors by the world mix). */
+    setRain(level:number,volume:number):void {this.loop('rain',level,volume,3200,.4);}
+
+    private readonly loops=new Map<string,{source:AudioBufferSourceNode;filter:BiquadFilterNode;gain:GainNode}>();
+    /** A looped filtered-noise bed that fades in and out; stopped once silent. */
+    private loop(name:string,level:number,volume:number,frequency:number,q:number):void {
+        if(!this.ready())return;
+        let bed=this.loops.get(name);
+        if(level<=.001&&!bed)return;
+        if(!bed){
             const source=this.context.createBufferSource(),filter=this.context.createBiquadFilter(),gain=this.context.createGain();
-            source.buffer=this.white();source.loop=true;filter.type='bandpass';filter.Q.value=.7;filter.frequency.value=500;gain.gain.value=0;
+            source.buffer=this.white();source.loop=true;filter.type='bandpass';filter.Q.value=q;filter.frequency.value=frequency;gain.gain.value=0;
             source.connect(filter);filter.connect(gain);gain.connect(effectsOutput(this.context));source.start();
-            this.wind={source,filter,gain};
+            bed={source,filter,gain};this.loops.set(name,bed);
         }
         const at=this.context.currentTime;
-        this.wind.gain.gain.setTargetAtTime(level*volume,at,.15);
-        this.wind.filter.frequency.setTargetAtTime(400+level*900,at,.2);
-        if(level<=.001){const wind=this.wind;this.wind=undefined;setTimeout(()=>{wind.source.stop();wind.source.disconnect();wind.filter.disconnect();wind.gain.disconnect();},600);}
+        bed.gain.gain.setTargetAtTime(level*volume,at,.15);
+        bed.filter.frequency.setTargetAtTime(frequency,at,.2);
+        if(level<=.001){const done=bed;this.loops.delete(name);setTimeout(()=>{done.source.stop();done.source.disconnect();done.filter.disconnect();done.gain.disconnect();},600);}
     }
-    dispose():void {this.setWind(0,0);this.lastAt.clear();}
+    dispose():void {for(const name of [...this.loops.keys()])this.loop(name,0,0,1,1);this.lastAt.clear();}
 }

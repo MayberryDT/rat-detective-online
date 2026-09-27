@@ -78,6 +78,8 @@ export class FeelSound {
         this.audio!.setWind(flight,p.wind);
     }
 
+    /** Noir rain bed, `level` 0…1. */
+    rain(level:number):void {if(this.audio)this.audio.setRain(this.on?level:0,FEEL.sound.params.rain);}
     squelch(at:Vec3Data|undefined,view:THREE.Camera):void {if(this.on)this.audio!.squelch(FEEL.sound.params.squelch,at?this.pan(at,view):0);}
     brass():void {if(this.on)this.audio!.brass(FEEL.sound.params.brass);}
     sting(kind:Sting):void {if(this.on)this.audio!.sting(kind,FEEL.sound.params.sting);}

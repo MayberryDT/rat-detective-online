@@ -8,6 +8,7 @@ import {NoirAudio} from './NoirAudio';
 import {Dust,registerDust} from './Dust';
 import {CityReactions,registerCity} from './CityReactions';
 import {NoirCity} from './NoirCity';
+import {NoirRain} from './NoirRain';
 import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
 import type {Sting} from './FeelAudio';
@@ -36,6 +37,7 @@ export class FeelDirector {
     private dust?:Dust;
     private city?:CityReactions;
     private noirCity?:NoirCity;
+    private noirRain?:NoirRain;
     private lifeKills=0;
     private lastCalloutAt=-Infinity;
     private slowAge=Infinity;
@@ -67,6 +69,7 @@ export class FeelDirector {
         this.city?.dispose();this.city=new CityReactions(scene,lamps);registerCity(this.city);
         // Collect city materials now, before rats, cases and pickups exist.
         this.noirCity?.dispose();this.noirCity=new NoirCity(scene);
+        this.noirRain?.dispose();this.noirRain=new NoirRain(scene,lamps,Math.round(this.colourFilter?FEEL.noirRain.params.drops:FEEL.noirRain.params.phoneDrops));
     }
     /** New round: props back where they started. */
     resetRound():void {this.city?.reset();this.slowAge=Infinity;this.lag=0;}
@@ -218,6 +221,11 @@ export class FeelDirector {
         this.dust?.update(dt);
         this.city?.update(dt);
         this.noirCity?.update();
+        if(this.noirRain){
+            const where=self?spaceAt(self):'open';
+            this.noirRain.update(dt,view,where==='open');
+            this.sound.rain(this.noirRain.level);
+        }
         this.screen.update(dt,view,self);
         if(this.deathTarget){
             const d=FEEL.deathCam.params,target=this.deathTarget();this.deathAge+=dt;
@@ -239,5 +247,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();this.lifeKills=0;}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();}
 }
