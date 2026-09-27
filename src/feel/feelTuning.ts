@@ -58,6 +58,10 @@ export const FEEL={
     rewards:{label:'19 Rewards',toggle:true,params:{slowmo:1.4,slowRate:.3,catchup:.8,calloutCooldown:3}},
     /** Shared noir strength for the city look (Tyler chose Bold ≈ .65). Rats are never affected. */
     noir:{label:'Noir strength',toggle:false,params:{strength:.65},sliders:{strength:[0,1,.01]}},
+    /** N1: contrast curve on city surfaces (dark areas sink, lamp pools stay bright). */
+    noirShadows:{label:'N1 Deeper shadows',toggle:true,params:{}},
+    /** N2: city albedo toward cold grey-blue; windows and lamps keep warmth. */
+    noirDrain:{label:'N2 Colour-drained city',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

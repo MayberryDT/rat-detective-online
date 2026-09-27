@@ -53,7 +53,7 @@ export class CheeseImpactEffects {
         }
         shape.closePath(); this.splatGeometry = new THREE.ShapeGeometry(shape);
         this.splats = new THREE.InstancedMesh(this.splatGeometry, this.splatMaterial, 40);
-        this.root.name = 'cheese-impact-effects';
+        this.root.name = 'cheese-impact-effects';this.root.userData.noNoir = true;
         this.crumbs.count = this.splats.count = this.drips.count = this.sparks.count = 0;
         this.crumbs.frustumCulled = this.splats.frustumCulled = this.drips.frustumCulled = this.sparks.frustumCulled = false;
         this.root.add(this.crumbs, this.splats, this.drips, this.sparks); scene.add(this.root);

@@ -110,6 +110,8 @@ function cheesePistol(parent: THREE.Group, coat: THREE.Material, highlight: THRE
 /** Approved cheese-pistol concept, built as lightweight editable geometry. */
 export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const root = new THREE.Group();
+    // Rats keep full colour under the noir city pass.
+    root.userData.noNoir = true;
     const coatColor = options.coatColor ?? DEFAULT_APPEARANCE.coatColor;
     const coat = material(coatColor), fur = material(options.furColor ?? DEFAULT_APPEARANCE.furColor);
     const skin = material(0xc99089, 0.68);

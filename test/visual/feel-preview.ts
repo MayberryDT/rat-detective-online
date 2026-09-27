@@ -11,6 +11,7 @@ import {CheeseGun} from '../../src/weapons/CheeseGun';
 import {CheeseImpactEffects} from '../../src/weapons/CheeseImpactEffects';
 import {initEntitySounds} from '../../src/audio/EntityAudio';
 import {FeelDirector} from '../../src/feel/FeelDirector';
+import {FEEL} from '../../src/feel/feelTuning';
 import {kickDust} from '../../src/feel/Dust';
 import {cityImpact} from '../../src/feel/CityReactions';
 import {FeelAudio} from '../../src/feel/FeelAudio';
@@ -89,6 +90,9 @@ const actions:Record<string,()=>void>={
     'City: blast near the rat (props react)':()=>{const p=rat.entity.mesh.position;for(const lamp of city.streetLamps){if(Math.hypot(lamp[0]-p.x,lamp[1]-p.z)<30)cityImpact({x:lamp[0]+2,y:.5,z:lamp[1]+2},4);}},
     'Callout: ON THE CASE':()=>feel.sting('case'),
     'Victory slow-motion (1.4 s)':()=>{feel.victory();},
+    'Noir strength 0.35':()=>{FEEL.noir.params.strength=.35;},
+    'Noir strength 0.65 (Bold)':()=>{FEEL.noir.params.strength=.65;},
+    'Noir strength 1.0':()=>{FEEL.noir.params.strength=1;},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;
