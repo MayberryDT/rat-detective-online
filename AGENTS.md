@@ -6,6 +6,8 @@ Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md]
 
 ## Preserve the game
 
+- September 27 juice release: Worker `527eb4bd-30c9-4fef-a85e-de0944bf392d`, **protocol 19**, matching client `index-BnDXq6cB.js`. **5 HP**, body hits 1, a headshot always kills (Crossfire bank shots and fast case missiles deal the full 5). Rounds end with **10 seconds** and a server-ranked police lineup. The juice feel layer and noir scale with health; `?feel=off` compares. Enemy readability is still too low (next work). See [the receipt](docs/verification/juice-release-2026-09-27.md) and [the juice plan](docs/juice-plan.md). Older notes below that say protocol 18, 3 HP or 6-second victory describe their own dates.
+
 - September 17 launchable-case production: Worker `a18fbc4a-7a6b-4dde-924e-f0c3e90af5c5`, protocol 18, matching client `index-CtA1HGSO.js`. Loose unowned cases on a launcher pad take that machine's impulse. Counterfeits stay planted; carried cases ride the rat. No drop hotkey. See [the production receipt](docs/verification/case-launchers-2026-09-17.md).
 
 - September 17 production roster/lifetime release: Worker `25c973c4-7dd9-4c52-bc35-9eac87d1979f`, protocol 18, matching client `index-CtA1HGSO.js`. Each round rolls **6–9** named bots; keepers keep names; humans join on top until ten; a bot is kicked only at the cap. Ordinary cheese balls last **1.5 seconds**. `public-live-v2` stays alive with 6–9 bots and zero humans. Do not restore eight-participant yield, the eight-rat freeze, or 2.5-second balls. See [the production receipt](docs/verification/roster-cap-kick-production-2026-09-17.md).

@@ -1,6 +1,24 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-09-27**. Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+
+## Juice release — 27 September production (protocol 19)
+
+Worker `527eb4bd-30c9-4fef-a85e-de0944bf392d` deploys commit `efcce3e`, pushed to
+GitHub. Client `index-BnDXq6cB.js` / `createGame-C0yvREbG.js`. Predecessor
+`360dbcdd-231f-4d83-aaec-6247022a1a46`.
+
+- **Rules:** 5 HP; body hits deal 1; a headshot always kills. A Crossfire bank
+  shot and a fast case missile deal the full 5. Rounds end with 10 seconds
+  before the next.
+- **Round end:** seven new Case File awards and a police lineup of the top five,
+  ranked on the server by assignment progress, winner last.
+- **Feel:** the juice layer, noir pass (scaling with health) and the enemy
+  readability lab, all switchable with `?feel=dev`; `?feel=off` restores the
+  earlier look. See the [juice plan](juice-plan.md) and [review guide](juice/review.md).
+
+Health, `/status`, 58 exact assets, the redirect and a protocol-19 welcome were
+verified after deploy. See [the receipt](verification/juice-release-2026-09-27.md).
 
 ## Server CPU and delivery gating — 27 September production
 
