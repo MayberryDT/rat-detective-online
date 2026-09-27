@@ -12,8 +12,8 @@ export interface FeelSpec {
 
 export const FEEL={
     cameraSpring:{label:'Camera spring',toggle:false,params:{stiffness:260,damping:.78,maxTurn:.08,maxShift:.35,maxWiden:14,fovStiffness:60}},
-    /** Upward view nudge (rad/s impulse) and a small backward shove per local shot. */
-    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.9,yawJitter:.25,push:.6,scattershot:1.6,popcorn:1.3}},
+    /** Very subtle upward view nudge (rad/s impulse; peak ≈ 0.4°) and a tiny backward shove per local shot. Toned down 2026-09-27 at Tyler's request. */
+    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.28,yawJitter:.15,push:.15,scattershot:1.3,popcorn:1.15}},
     /** Shove away from the attacker when you take nonlethal damage, scaled by damage. */
     hitJolt:{label:'2 Hit jolt',toggle:true,params:{push:7,yaw:1.4,dip:-1.1,perDamage:.35}},
     /** Red edge flash (scaled by Flash strength) and arrows tracking the attacker. */
