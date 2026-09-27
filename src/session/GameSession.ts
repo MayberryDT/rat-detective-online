@@ -39,6 +39,7 @@ import {createShotId} from '../weapons/shotId';
 import type {CameoView,CameoVisitor} from '../cameos/CameoView';
 import {loadCameos} from '../cameos/loadCameos';
 import {HighlightBridge} from '../highlights/HighlightBridge';
+import {FeelDirector} from '../feel/FeelDirector';
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
@@ -85,6 +86,7 @@ export class GameSession {
     private roundWon = false;
     private releasePreparedModels?:()=>void;
     private readonly highlights = new HighlightBridge();
+    private readonly feel = new FeelDirector();
     private lastHighlightObserve = 0;
     private lastChaos: ChaosState | null = null;
     private localLaunchY = 0;
@@ -127,7 +129,7 @@ export class GameSession {
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
             this.clearInput();
-            if(state!=='playing'){this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
+            if(state!=='playing'){this.feel.reset();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
             this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
@@ -222,6 +224,7 @@ export class GameSession {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
+        this.feel.reset();
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -404,7 +407,7 @@ export class GameSession {
             case 'playerRespawn':
                 if (message.id === this.myId && this.rat) this.rat.setSpeedScale(1);
                 if (message.id === this.myId) {
-                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding();
+                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset();
                     this.lastInteractionPosition.set(message.x,message.y+.8,message.z);this.clearInput(); this.hud.hideRespawn();
                 } else this.remotes.respawn(message.id, message);
                 break;
@@ -429,7 +432,7 @@ export class GameSession {
                 this.highlightCorpseSeen.clear();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0);this.rat?.entity.resetReactions();
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0);entity.resetReactions();}
-                this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+                this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -543,7 +546,10 @@ export class GameSession {
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
         this.city.update(dt, camera, this.rat?.entity.body.position);
         const presentationEnd=measure?performance.now():0;
+        this.feel.update(dt);
+        this.feel.beforeRender(camera);
         renderer.render(scene, camera);
+        this.feel.afterRender(camera);
         if(this.rat && this.transport.state==='playing' && this.releasePreparedModels){
             this.releasePreparedModels();this.releasePreparedModels=undefined;
             performance.mark('city-first-play-frame');
@@ -647,7 +653,7 @@ export class GameSession {
         this.city.dispose();
         this.music.dispose();
         this.feedback.dispose();
-        this.foleyWorld.dispose();this.foley.dispose();
+        this.foleyWorld.dispose();this.foley.dispose();this.feel.dispose();
         disposeEntitySounds();
         this.stats?.dispose();
         this.stage.dispose();

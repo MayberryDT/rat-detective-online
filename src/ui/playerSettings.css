@@ -32,3 +32,10 @@ body.reduced-motion :is(#title-screen,.dispatch-hud,#respawn-overlay,#victory-ov
 .observation-toggle:focus-visible{outline:3px solid #eac45c;outline-offset:3px}
 body.observing #crosshair,body.observing .touch-fire{display:none!important}
 body.observing #hud{color:#f0dfaa}
+
+/* ?feel=dev review controls. */
+.feel-review-item{border-top:1px solid #3b2d42;padding:6px 0}.feel-review-item summary{cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:600}
+.feel-review-item summary input{width:18px;height:18px;accent-color:#e6bf60}
+.feel-review-param{display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:center;margin:6px 0 6px 28px;color:#c6b8cf;font-size:14px}
+.feel-review-param input{background:#211529;color:#f5e8bc;border:1px solid #615067;padding:4px 6px}
+.feel-review-actions{display:flex;gap:10px;align-items:center;margin-top:12px}
