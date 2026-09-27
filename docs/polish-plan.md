@@ -41,9 +41,9 @@ rat's identity stay as they are. Done means:
 
 Each item gets its own switch in the `?feel=dev` panel, so Tyler can cut it at review.
 
-- [ ] **F1 Feel layer:** director, tuning file, `?feel=off`, `?feel=dev` panel with per-item switches. → [foundation](polish/foundation.md)
-- [ ] **F2 Settings:** Camera shake and Flash strength; Reduced interface motion also zeroes shake.
-- [ ] **F3 Perf baseline:** fixture numbers with feel off, before any effect.
+- [x] **F1 Feel layer:** director, tuning file, `?feel=off`, `?feel=dev` panel with per-item switches. → [foundation](polish/foundation.md)
+- [x] **F2 Settings:** Camera shake and Flash strength; Reduced interface motion also zeroes shake.
+- [x] **F3 Perf baseline:** fixture numbers with feel off, before any effect ([budget](polish/foundation.md#performance-budget)).
 - [ ] **1 Shot kick** · **2 Hit jolt** · **3 Damage direction and edge flash** → [spec §1–3](polish/feel-spec.md#1-camera)
 - [ ] **4 Impact freeze** · **5 Bigger dripping splats** · **6 Cheese stains** · **7 Ironclad sparks** · **8 Kill bloom and punch-in** · **9 Comic words**
 - [ ] **10 Noir low health** (colour drain, muffle, heartbeat) · **11 Hat knock and pop-off** · **12 Death variety** · **13 Death camera and iris**

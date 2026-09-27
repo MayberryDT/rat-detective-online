@@ -49,9 +49,19 @@ defaults. Old saved settings must keep loading. Update
 
 ## Performance budget
 
-Measure a baseline first with the existing [performance fixture](../../test/visual/performance-fixture.ts) and full-lobby render fixture (`capacity-render`), feel off and on. Initial targets, to be confirmed after the baseline:
+**How it's measured.** The full-lobby render fixture (`capacity-render.html?rats=12&balls=256&batch=1`) runs the real city, remote rat presentation and chaos view. It's served by the visual dev server (`npx vite --config vite.visual.config.ts --port 5192`) and driven by headless Chromium on the Veelox integrated GPU (`--use-angle=gl`, Intel Arc MTL), once with `feel=off` and once on. Throwaway runner: `output/polish/perf/run.mjs <label>`. Default headless Chromium falls back to SwiftShader, which is unusable for timing (2 s frames).
 
-- Frame time: p95 at most 5% higher than with `feel=off` in the full-lobby render fixture.
+**Baseline** (F3, 2026-09-27, before any effect; `output/polish/perf/baseline-F3.json`):
+
+- Frames: 60 Hz vsync-locked, p50 16.7 ms and p95 16.8 ms.
+- Scene: 972 draw calls and 1,880,513 triangles, identical with feel off and on.
+- Render-submission CPU p95: 12.4 ms (off) against 13.2 ms (on) for identical scenes, so run-to-run noise is about ±7%.
+
+**Budget:**
+
+- Frame p95 stays at vsync (≤ 16.9 ms) with feel on.
+- At most 40 extra draw calls in total.
+- Render CPU p95 no more than 10% above `feel=off` (beyond noise).
 - No new live lights or shadow maps. New visuals use instanced or pooled meshes with fixed caps.
 - Phone tier (touch devices): half the particle and prop counts, no colour-drain filter if it measures expensive, and the same gameplay.
 
