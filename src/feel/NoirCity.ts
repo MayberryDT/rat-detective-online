@@ -48,8 +48,8 @@ export class NoirCity {
     }
 
     /** Called every frame: follow the strength slider and the N1/N2 switches. */
-    update():void {
-        const state=feelState(),strength=state.noir();
+    update(perception=1):void {
+        const state=feelState(),strength=state.noir()*perception;
         const drain=state.on('noirDrain')?strength*.9:0,gamma=state.on('noirShadows')?1+strength*.45:1;
         this.lit.noirDrain.value=drain;this.lit.noirGamma.value=gamma;
         this.unlit.noirDrain.value=drain*.35;this.unlit.noirGamma.value=1+(gamma-1)*.4;

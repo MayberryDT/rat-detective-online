@@ -136,9 +136,18 @@ export class FeelDirector {
 
     /** Authoritative local health changed; `healed` floods colour back. */
     health(hp:number,healed=false):void {
-        const p=FEEL.lowHealth.params,previous=this.dangerTarget;
-        this.dangerTarget=hp>=MAX_HP?0:hp<=1?1:p.mid;
+        const previous=this.dangerTarget;
+        // Linear from max HP (clear) to the last hit point (full danger).
+        this.dangerTarget=hp>=MAX_HP?0:hp<=1?1:(MAX_HP-hp)/(MAX_HP-1);
         if(healed&&previous>0&&this.dangerTarget<previous)this.flood=1;
+    }
+
+    /** Your last hit point (or dead): case markers hide and Quick Fix shows through walls. */
+    get lastHitPoint():boolean {return this.state.on('lastHitPoint')&&this.dangerTarget>=1;}
+    /** Noir perception scale: a background hint at max HP, full strength at the last hit point. */
+    private perception():number {
+        if(!this.state.on('noirByHealth'))return 1;
+        const clear=FEEL.noir.params.clear;return clear+(1-clear)*this.danger;
     }
 
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
@@ -228,7 +237,7 @@ export class FeelDirector {
         this.camera.update(dt);
         this.dust?.update(dt);
         this.city?.update(dt);
-        this.noirCity?.update();
+        this.noirCity?.update(this.perception());
         this.noirDressing?.update(dt);
         if(this.noirRain){
             const where=self?spaceAt(self):'open';
@@ -236,7 +245,7 @@ export class FeelDirector {
             this.sound.rain(this.noirRain.level);
         }
         if(this.noirAtmosphere){
-            this.noirAtmosphere.update(dt,view,!self||spaceAt(self)==='open');
+            this.noirAtmosphere.update(dt,view,!self||spaceAt(self)==='open',this.perception());
             if(this.noirAtmosphere.thunderIn>=0&&(this.noirAtmosphere.thunderIn-=dt)<0)this.sound.thunder();
         }
         this.screen.update(dt,view,self);
@@ -250,7 +259,7 @@ export class FeelDirector {
         if(Math.abs(target-this.danger)<.002)this.danger=target;
         this.flood=Math.max(0,this.flood-dt*1.4);
         this.screen.noir(this.danger,on?this.flood:0,this.colourFilter);
-        const noir=this.state.noir(),film=this.state.on('noirFilm')?noir/.65:0,f=FEEL.noirFilm.params;
+        const noir=this.state.noir()*this.perception(),film=this.state.on('noirFilm')?noir/.65:0,f=FEEL.noirFilm.params;
         this.screen.film(this.colourFilter?film*f.grain:0,film*f.vignette,film>0&&(!!this.deathTarget||this.slowAge<FEEL.rewards.params.slowmo));
         if(this.noirAudio){
             this.noirAudio.space=this.state.on('sound')&&self?spaceAt(self):'open';

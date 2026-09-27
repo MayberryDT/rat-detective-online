@@ -205,6 +205,20 @@ export class ChaosView {
         if(this.extrapolate&&!this.localShots.confirm(message,performance.now()))this.presentation.launch(message,performance.now());
     }
     /** The live position of `victimId`'s shared corpse model, if one is shown. */
+    /** Juice T2: at your last hit point the case loses its outline, badge and
+     * guidance (the case itself stays visible) and Quick Fix kits glow green
+     * through walls. */
+    private lastHitPoint=false;
+    /** Screen beacons for Quick Fix kits at the last hit point. DOM, so the
+     * low-health colour drain on the canvas never turns them grey. */
+    private readonly fixBeacons:HTMLElement[]=[];
+    setLastHitPoint(on:boolean):void {
+        if(on===this.lastHitPoint)return;
+        this.lastHitPoint=on;
+        for(const visual of this.pickups.values())visual.setXray(on);
+        if(on){this.caseBeacon.root.visible=false;this.caseMarker.style.display='none';this.assignmentDestinations.clear();}
+        else for(const beacon of this.fixBeacons)beacon.style.display='none';
+    }
     corpseOf(victimId:string):THREE.Vector3|undefined {
         // Newest matching corpse only; an older body of the same rat may still be lying elsewhere.
         let best:{mesh:THREE.Group;state:CorpseState}|undefined;
@@ -324,7 +338,7 @@ export class ChaosView {
         for(const [id,visual] of this.pickups)if(!live.has(id)){visual.dispose();this.pickups.delete(id);}
         for(const pickup of state.pickups??[]){
             let visual=this.pickups.get(pickup.id);
-            if(!visual){visual=new PickupVisual(this.scene,pickup.kind);this.pickups.set(pickup.id,visual);}
+            if(!visual){visual=new PickupVisual(this.scene,pickup.kind);visual.setXray(this.lastHitPoint);this.pickups.set(pickup.id,visual);}
             visual.setPosition(pickup.x,pickup.y,pickup.z);
             visual.setAvailableAt(pickup.availableAt??0);
             const accepted=this.acceptedPickups.get(pickup.id);
@@ -404,11 +418,12 @@ export class ChaosView {
             const {p,q}=this.presented;
             this.caseRoot.position.set(p.x,p.y,p.z);this.caseRoot.quaternion.set(q.x,q.y,q.z,q.w);
         }
-        this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer);
+        this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer||this.lastHitPoint);
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
         this.updateBuffs(s.buffs,now);
         this.updateCaseMarker(camera,now);
+        if(this.lastHitPoint)this.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const crossfire=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='crossfire';
         const shots=this.extrapolate?this.localShots.render(this.presentation.renderShots(s.shots,renderTime),renderTime):s.shots;
@@ -486,7 +501,7 @@ export class ChaosView {
         const localCase=[s.case,...s.extraCases??[]].find(c=>c.owner&&this.resolveRat(c.owner)?.isPlayer);
         const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
         this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer);
-        this.assignmentDestinations.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
+        if(this.lastHitPoint)this.assignmentDestinations.clear();else this.assignmentDestinations.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
         this.pressureMachine.update(s.pressure,now,camera);
         for(const kiosk of this.kiosks){
         updateDispatchSiren(kiosk,d.phase==='ready',renderTime/1000);
@@ -507,9 +522,31 @@ export class ChaosView {
             this.textTexture.needsUpdate=true;
         }
     }
+    private updateFixBeacons(camera:THREE.Camera,now:number){
+        const ready:PickupVisual[]=[];
+        for(const visual of this.pickups.values())if(visual.readyQuickFix(now))ready.push(visual);
+        ready.sort((a,b)=>a.root.position.distanceToSquared(camera.position)-b.root.position.distanceToSquared(camera.position));
+        for(let i=0;i<3;i++){
+            let beacon=this.fixBeacons[i];
+            const visual=ready[i];
+            if(!visual){if(beacon)beacon.style.display='none';continue;}
+            if(!beacon){
+                beacon=document.createElement('div');beacon.className='quick-fix-beacon';beacon.setAttribute('aria-hidden','true');
+                Object.assign(beacon.style,{position:'fixed',left:'0',top:'0',zIndex:'36',pointerEvents:'none',width:'40px',height:'40px',borderRadius:'50%',
+                    background:'radial-gradient(circle,#0b2a15f2 55%,#0b2a1500 72%)',boxShadow:'0 0 18px 6px #36ff7a99',font:"700 30px/40px 'Outfit',Arial,sans-serif",
+                    color:'#6dff9e',textAlign:'center',textShadow:'0 0 8px #36ff7a'});
+                beacon.textContent='+';document.body.appendChild(beacon);this.fixBeacons[i]=beacon;
+            }
+            this.p.copy(visual.root.position);this.p.y+=1.3;
+            const location=locateCase(this.p,camera,window.innerWidth,window.innerHeight);
+            beacon.style.display='block';
+            beacon.style.transform=`translate(${location.x-20}px,${location.y-20}px) scale(${(1+Math.sin(now*.006)*.08)*(i===0?1:.8)})`;
+            beacon.style.opacity=i===0?'1':'.7';
+        }
+    }
     private updateCaseMarker(camera:THREE.Camera,now:number){
         const s=this.state!;
-        if(this.carrier?.isPlayer){this.caseMarker.style.display='none';return;}
+        if(this.carrier?.isPlayer||this.lastHitPoint){this.caseMarker.style.display='none';return;}
         // Float the badge above the case so it does not cover the physical pickup
         // or a carrier's gun at close range. The bright shell outline marks its body.
         this.p.copy(this.caseRoot.position);this.p.y+=2.1;
@@ -536,6 +573,7 @@ export class ChaosView {
     }
     getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
+        for(const beacon of this.fixBeacons)beacon.remove();
         for(const c of this.corpses.values())c.hat?.dispose();
         this.clearPickupCards();this.buffBar.remove();
         this.clearInteractions();

@@ -32,8 +32,8 @@ export const FEEL={
     killBloom:{label:'8 Kill bloom and punch-in',toggle:true,params:{punch:4}},
     /** Comic words: kill streaks within `streakWindow` s, air kills, Big Cheese hits; `cooldown` s between non-streak words. */
     comicWords:{label:'9 Comic words',toggle:true,params:{streakWindow:4,cooldown:6}},
-    /** Noir low health: colour drain/vignette by danger (hp 2 → `mid`, hp 1 → 1), muffle cutoff (Hz), heartbeat period/volume, heal flood. */
-    lowHealth:{label:'10 Noir low health',toggle:true,params:{mid:.4,drain:.9,vignette:.55,flood:.6,ease:3,closed:900,period:.95,heartbeat:.5}},
+    /** Noir low health: colour drain/vignette by danger (linear from max HP to the last hit point), muffle cutoff (Hz), heartbeat period/volume, heal flood. */
+    lowHealth:{label:'10 Noir low health',toggle:true,params:{drain:.9,vignette:.55,flood:.6,ease:3,closed:900,period:.95,heartbeat:.5}},
     /** Fedora knocked askew by hits (radians), settling over `settle` s. */
     hatKnock:{label:'11a Hat knock',toggle:true,params:{tilt:.32,lift:.12,settle:.45}},
     /** On death the fedora pops off and tumbles (horizontal speed, upward speed). */
@@ -57,7 +57,7 @@ export const FEEL={
     /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. */
     rewards:{label:'19 Rewards',toggle:true,params:{slowmo:1.4,slowRate:.3,catchup:.8,calloutCooldown:3}},
     /** Shared noir strength for the city look (Tyler chose Bold ≈ .65). Rats are never affected. */
-    noir:{label:'Noir strength',toggle:false,params:{strength:.65},sliders:{strength:[0,1,.01]}},
+    noir:{label:'Noir strength',toggle:false,params:{strength:.65,clear:.2},sliders:{strength:[0,1,.01],clear:[0,1,.01]}},
     /** N1: contrast curve on city surfaces (dark areas sink, lamp pools stay bright). */
     noirShadows:{label:'N1 Deeper shadows',toggle:true,params:{}},
     /** N2: city albedo toward cold grey-blue; windows and lamps keep warmth. */
@@ -74,6 +74,10 @@ export const FEEL={
     noirNeon:{label:'N7 Neon accents',toggle:true,params:{brightness:1,flickerRate:.08}},
     /** N6: film grain (off on phones), vignette, and letterbox bars during the death camera and victory slow-motion. */
     noirFilm:{label:'N6 Film grain, vignette, letterbox',toggle:true,params:{grain:.09,vignette:.55}},
+    /** T2: noir perception effects (shadows, drain, fog, grain, vignette) scale from `Noir strength · clear` at max HP to full at the last hit point. */
+    noirByHealth:{label:'T2 Noir scales with health',toggle:true,params:{}},
+    /** T2: at the last hit point the case loses its markers and Quick Fix kits glow green through walls. */
+    lastHitPoint:{label:'T2b Last hit point: case hidden, Quick Fix x-ray',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

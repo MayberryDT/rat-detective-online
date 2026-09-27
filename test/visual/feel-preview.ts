@@ -12,6 +12,7 @@ import {CheeseImpactEffects} from '../../src/weapons/CheeseImpactEffects';
 import {initEntitySounds} from '../../src/audio/EntityAudio';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {FEEL} from '../../src/feel/feelTuning';
+import {PickupVisual} from '../../src/prototype/PickupVisual';
 import {kickDust} from '../../src/feel/Dust';
 import {cityImpact} from '../../src/feel/CityReactions';
 import {FeelAudio} from '../../src/feel/FeelAudio';
@@ -34,6 +35,8 @@ const suspects=[-3,0,3].map((dz,i)=>{
 const feel=new FeelDirector();
 feel.attach(stage.renderer.domElement,stage.listener);feel.attachScene(stage.scene);feel.attachCity(stage.scene,city.streetLamps);
 const status=document.getElementById('feel-status')!;
+// A Quick Fix kit around the corner (behind the right-hand buildings) for the last-hit-point x-ray.
+const kit=new PickupVisual(stage.scene,'quick-fix');kit.setPosition(-14,.5,6);
 const aim=new THREE.Vector3();
 function fire():void {
     rat.updateView();stage.camera.getWorldDirection(aim);
@@ -77,8 +80,8 @@ const actions:Record<string,()=>void>={
     'Double kill (comic word)':()=>{feel.killed(suspects[0]!.mesh.position,false,stage.camera);feel.killed(suspects[2]!.mesh.position,false,stage.camera);},
     'Air kill (comic word)':()=>{feel.reset();feel.killed(suspects[1]!.mesh.position,true,stage.camera,performance.now()+60_000);},
     'Wounded (2 HP)':()=>feel.health(2),
-    'Last hit point (1 HP)':()=>feel.health(1),
-    'Quick Fix heal':()=>feel.health(3,true),
+    'Last hit point (1 HP)':()=>{feel.health(1);kit.setXray(true);},
+    'Quick Fix heal':()=>{feel.health(3,true);kit.setXray(false);},
     'Kill suspect 2 (hat pop-off)':()=>{const v=suspects[1]!;v.hp=1;v.takeDamage(1,new THREE.Vector3(30,0,6));},
     'Deaths: spin / fling / flop':()=>{(['spin','fling','flop'] as const).forEach((style,i)=>{const v=suspects[i]!;if(v.dead)return;v.hp=1;v.setDeathStyle(style);v.takeDamage(1,new THREE.Vector3(style==='flop'?2:14,style==='fling'?18:0,0));});},
     'Respawn suspects':()=>{for(const v of suspects)if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});},
@@ -137,6 +140,7 @@ function frame(now:number){
     stage.world.step(1/60,dt,3);
     rat.update(dt,{});gun.update(dt);impacts.update(dt);
     for(const suspect of suspects)suspect.update(dt);
+    kit.update(performance.now(),stage.camera);
     city.update(dt,stage.camera,rat.entity.body.position);
     feel.update(dt,stage.camera,rat.entity.mesh.position);feel.beforeRender(stage.camera);
     stage.renderer.render(stage.scene,stage.camera);

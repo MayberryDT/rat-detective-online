@@ -71,10 +71,28 @@ export class PickupVisual {
     }
     setPosition(x:number,y:number,z:number):void {this.root.position.set(x,y-.7,z);}
     setAvailableAt(at:number):void {this.availableAt=at;}
+    /** A Quick Fix kit that can be claimed right now (for the last-hit-point beacons). */
+    readyQuickFix(now:number):boolean {return this.kind==='quick-fix'&&now>=this.availableAt&&!this.pending;}
     setPending(pending:boolean):void {this.pending=pending;}
+    /** Juice T2: at your last hit point, Quick Fix kits show a green outline through walls. */
+    private xray?:THREE.Mesh;
+    private xrayOn=false;
+    setXray(on:boolean):void {
+        if(this.kind!=='quick-fix')return;
+        this.xrayOn=on;
+        if(on&&!this.xray){
+            const material=new THREE.ShaderMaterial({transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,
+                vertexShader:`varying vec3 n;varying vec3 eye;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);eye=-p.xyz;gl_Position=projectionMatrix*p;}`,
+                fragmentShader:`varying vec3 n;varying vec3 eye;void main(){float rim=1.-abs(dot(normalize(n),normalize(eye)));gl_FragColor=vec4(.2,1.,.45,smoothstep(.3,.85,rim)*1.2);}`});
+            this.xray=new THREE.Mesh(new RoundedBoxGeometry(1.35,1.15,.9,2,.12),material);
+            this.xray.position.y=.8;this.xray.renderOrder=2000;this.xray.raycast=()=>{};this.root.add(this.xray);
+        }
+    }
+
     update(now:number,camera?:THREE.Camera):void {
         const unavailable=now<this.availableAt,empty=unavailable||this.pending;
         this.item.visible=!empty;
+        if(this.xray){this.xray.visible=this.xrayOn&&!empty;this.xray.rotation.y=now*.00065;}
         if(unavailable&&camera){
             if(!this.restock){this.restock=new PickupRespawnVisual(this.kind);this.root.add(this.restock.root);}
             this.restock.update(now,this.availableAt,camera);

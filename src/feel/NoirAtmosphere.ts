@@ -77,7 +77,8 @@ export class NoirAtmosphere {
 
     private random():number {this.seed=(this.seed*1103515245+12345)&0x7fffffff;return this.seed/0x7fffffff;}
 
-    update(dt:number,camera:THREE.Camera,outdoors:boolean):void {
+    /** `perception` scales only the fog (the part that hides things); haze cones and the sky stay constant. */
+    update(dt:number,camera:THREE.Camera,outdoors:boolean,perception=1):void {
         dt=Math.min(Math.max(dt,0),.1);this.time+=dt;
         const state=feelState(),strength=state.noir(),hazeOn=state.on('noirHaze')&&strength>0,skyOn=state.on('noirSky')&&strength>0;
         const p=FEEL.noirHaze.params,s=FEEL.noirSky.params;
@@ -92,7 +93,7 @@ export class NoirAtmosphere {
         }
         if(!hazeOn)this.haze.count=0;
         if(this.fog){
-            this.fog.density=this.baseFog*(1+(hazeOn?p.fog*strength:0));
+            this.fog.density=this.baseFog*(1+(hazeOn?p.fog*strength*perception*1.6:0));
             this.fog.color.copy(this.baseFogColor).lerp(this.coldFog,hazeOn?strength*.7:0);
         }
         // Searchlights: slow sweeping beams over the landmark roofs.
