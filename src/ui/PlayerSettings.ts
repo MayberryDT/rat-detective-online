@@ -91,6 +91,7 @@ export class PlayerSettings {
         this.toggle(look,'Invert mouse vertical look','invertMouseY');this.toggle(look,'Invert touch vertical look','invertTouchY');
         const audio=section('SOUND');this.range(audio,'Master volume','masterVolume','%',100);this.range(audio,'Effects volume','effectsVolume','%',100);
         const display=section('READABILITY');this.range(display,'UI scale','uiScale','%',100);this.toggle(display,'Reduced interface motion','reducedMotion');
+        const effects=section('SCREEN EFFECTS');this.range(effects,'Camera shake','cameraShake','%',100);this.range(effects,'Flash strength','flashStrength','%',100);
         mountFeelReview(this.content,this.doc,this.events.signal);
         const keys=section('KEY BINDINGS');this.make('p',keys,'Choose a binding, then press a key. Delete clears an alternate; Escape cancels. Left mouse always remains available for Fire.');
         for(const action of Object.keys(ACTIONS) as Action[]){

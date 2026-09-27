@@ -28,13 +28,13 @@ export class FeelState {
         const spec:FeelSpec=FEEL[item];
         return this.switches.get(item)??!spec.defaultOff;
     }
-    /** Camera motion multiplier: zero under `feel=off` and Reduced interface motion. */
+    /** Camera motion multiplier: Settings → Camera shake; zero under `feel=off` or Reduced interface motion. */
     shake():number {
         const prefs=this.prefs();
-        return this.mode==='off'||prefs.reducedMotion?0:1;
+        return this.mode==='off'||prefs.reducedMotion?0:prefs.cameraShake;
     }
-    /** Screen flash multiplier: zero under `feel=off`. */
-    flash():number {return this.mode==='off'?0:1;}
+    /** Screen flash multiplier: Settings → Flash strength; zero under `feel=off`. */
+    flash():number {return this.mode==='off'?0:this.prefs().flashStrength;}
     set(item:FeelItem,on:boolean):void {this.switches.set(item,on);this.save();}
     tune(item:FeelItem,param:string,value:number):void {
         const params:Record<string,number>=FEEL[item].params;

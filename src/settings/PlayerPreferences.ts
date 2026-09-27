@@ -5,11 +5,13 @@ export type Bindings=Record<Action,[string,string]>;
 export interface PlayerPreferences {
     version:1; mouseSensitivity:number; touchSensitivity:number; invertMouseY:boolean; invertTouchY:boolean;
     masterVolume:number; effectsVolume:number; uiScale:number; reducedMotion:boolean; bindings:Bindings;
+    /** Presentation-only feel multipliers; Reduced interface motion also zeroes shake. */
+    cameraShake:number; flashStrength:number;
 }
 export const DEFAULT_PREFERENCES:PlayerPreferences={version:1,mouseSensitivity:1,touchSensitivity:1.5,
-    invertMouseY:false,invertTouchY:false,masterVolume:1,effectsVolume:1,uiScale:1,reducedMotion:false,
+    invertMouseY:false,invertTouchY:false,masterVolume:1,effectsVolume:1,uiScale:1,reducedMotion:false,cameraShake:1,flashStrength:1,
     bindings:{forward:['KeyW','ArrowUp'],back:['KeyS','ArrowDown'],left:['KeyA','ArrowLeft'],right:['KeyD','ArrowRight'],jump:['Space',''],fire:['Mouse0',''],scores:['Tab','']}};
-export const RANGES={mouseSensitivity:[.1,3,.05],touchSensitivity:[.2,3,.05],masterVolume:[0,1,.01],effectsVolume:[0,1,.01],uiScale:[.8,1.3,.05]} as const;
+export const RANGES={mouseSensitivity:[.1,3,.05],touchSensitivity:[.2,3,.05],masterVolume:[0,1,.01],effectsVolume:[0,1,.01],uiScale:[.8,1.3,.05],cameraShake:[0,1,.01],flashStrength:[0,1,.01]} as const;
 export type NumericPreference=keyof typeof RANGES;
 export function validBinding(action:Action,code:string):boolean {
     return code===''||code==='Mouse0'&&action==='fire'||code==='Tab'&&action==='scores'||
