@@ -16,6 +16,8 @@ it.each(hats)('restores the %s outline and colors after complete death/respawn',
         glow.traverse(child => { if (child instanceof THREE.Mesh) values.push((child.material as THREE.Material).opacity); });
         return values;
     };
+    const full = opacity()[0]!;
+    expect(full).toBeGreaterThan(0);
     const originalColors: number[] = [];
     entity.mesh.traverse(child => { if (child instanceof THREE.Mesh) originalColors.push((child.material as THREE.MeshStandardMaterial).color.getHex()); });
     for (let cycle = 0; cycle < 2; cycle++) {
@@ -23,7 +25,7 @@ it.each(hats)('restores the %s outline and colors after complete death/respawn',
         for (let frame = 0; frame < 180; frame++) entity.update(1 / 60);
         expect(opacity().every(value => value === 0)).toBe(true);
         entity.respawn({ x: 15, y: 2, z: 15, hp: MAX_HP });
-        expect(opacity().every(value => value === .22)).toBe(true);
+        expect(opacity().every(value => value === full)).toBe(true);
         expect(entity.billboard.sprite.position.toArray()).toEqual([15, 4.2, 15]);
         const colors: number[] = [];
         entity.mesh.traverse(child => { if (child instanceof THREE.Mesh) colors.push((child.material as THREE.MeshStandardMaterial).color.getHex()); });

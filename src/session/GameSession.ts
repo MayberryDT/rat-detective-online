@@ -621,7 +621,7 @@ export class GameSession {
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
         this.city.update(dt, camera, this.rat?.entity.body.position);
         // Opponent outlines keep their on-screen width at any distance.
-        const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)/Math.max(1,renderer.domElement.clientHeight||window.innerHeight);
+        const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)/(globalThis.innerHeight||720);
         for(const {entity} of this.remotes.rats.values())entity.fitOutline(camera.position,unitsPerPixel);
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
