@@ -3,6 +3,7 @@ import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 
 const DRIPS=60;
+const SPARKS=48;
 
 /** Bounded, cosmetic-only crumbs and surface splashes; no physics bodies or aim targets. */
 export class CheeseImpactEffects {
@@ -21,6 +22,13 @@ export class CheeseImpactEffects {
     private readonly drips = new THREE.InstancedMesh(this.dripGeometry, this.splatMaterial, DRIPS);
     private readonly dripSlots = Array.from({length:DRIPS},()=>({position:new THREE.Vector3(),rotation:new THREE.Quaternion(),age:Infinity,life:0,length:0,width:0}));
     private dripCursor=0;
+    /** Polish 7: silver sparks when cheese glances off an Ironclad coat. */
+    private readonly sparkGeometry = new THREE.BoxGeometry(.04, .04, 1);
+    private readonly sparkMaterial = new THREE.MeshBasicMaterial({color: 0xf2f6ff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false});
+    private readonly sparks = new THREE.InstancedMesh(this.sparkGeometry, this.sparkMaterial, SPARKS);
+    private readonly sparkSlots = Array.from({length:SPARKS},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,life:0}));
+    private sparkCursor=0;
+    private readonly look=new THREE.Vector3();
     private readonly basis=new THREE.Matrix4();
     private readonly up=new THREE.Vector3();
     private readonly side=new THREE.Vector3();
@@ -46,9 +54,9 @@ export class CheeseImpactEffects {
         shape.closePath(); this.splatGeometry = new THREE.ShapeGeometry(shape);
         this.splats = new THREE.InstancedMesh(this.splatGeometry, this.splatMaterial, 40);
         this.root.name = 'cheese-impact-effects';
-        this.crumbs.count = this.splats.count = this.drips.count = 0;
-        this.crumbs.frustumCulled = this.splats.frustumCulled = this.drips.frustumCulled = false;
-        this.root.add(this.crumbs, this.splats, this.drips); scene.add(this.root);
+        this.crumbs.count = this.splats.count = this.drips.count = this.sparks.count = 0;
+        this.crumbs.frustumCulled = this.splats.frustumCulled = this.drips.frustumCulled = this.sparks.frustumCulled = false;
+        this.root.add(this.crumbs, this.splats, this.drips, this.sparks); scene.add(this.root);
     }
 
     emit(point: THREE.Vector3, normal: THREE.Vector3, surface: boolean, scale=1): void {
@@ -119,9 +127,39 @@ export class CheeseImpactEffects {
             this.dummy.scale.set(drip.width*fade,Math.max(.001,drip.length*run),1);
             this.dummy.updateMatrix();this.drips.setMatrixAt(dripCount++,this.dummy.matrix);
         }
-        this.crumbs.count=particleCount;this.splats.count=markCount;this.drips.count=dripCount;
-        this.active=particleCount+markCount+dripCount>0;
-        this.crumbs.instanceMatrix.needsUpdate = this.splats.instanceMatrix.needsUpdate = this.drips.instanceMatrix.needsUpdate = true;
+        let sparkCount=0;
+        for(let slot=0;slot<SPARKS;slot++){
+            const spark=this.sparkSlots[(this.sparkCursor+slot)%SPARKS];
+            if((spark.age+=dt)>=spark.life)continue;
+            spark.velocity.y-=dt*6;spark.velocity.multiplyScalar(Math.exp(-3*dt));
+            spark.position.addScaledVector(spark.velocity,dt);
+            // Stretch along travel so each spark reads as a streak.
+            this.dummy.position.copy(spark.position);
+            this.dummy.lookAt(this.look.copy(spark.position).add(spark.velocity));
+            const fade=1-spark.age/spark.life;
+            this.dummy.scale.set(fade,fade,Math.max(.02,spark.velocity.length()*.055*fade));
+            this.dummy.updateMatrix();this.sparks.setMatrixAt(sparkCount++,this.dummy.matrix);
+        }
+        this.crumbs.count=particleCount;this.splats.count=markCount;this.drips.count=dripCount;this.sparks.count=sparkCount;
+        this.active=particleCount+markCount+dripCount+sparkCount>0;
+        this.crumbs.instanceMatrix.needsUpdate = this.splats.instanceMatrix.needsUpdate = this.drips.instanceMatrix.needsUpdate = this.sparks.instanceMatrix.needsUpdate = true;
+    }
+
+    /** A bright burst off an Ironclad coat at `point`, sprayed around `normal`. */
+    spark(point: THREE.Vector3, normal: THREE.Vector3): void {
+        if (this.disposed || !feelState().on('ironcladSparks')) return;
+        const p=FEEL.ironcladSparks.params;
+        this.normal.copy(normal).normalize();
+        this.tangent.set(Math.abs(this.normal.y) < 0.9 ? 0 : 1, Math.abs(this.normal.y) < 0.9 ? 1 : 0, 0).cross(this.normal).normalize();
+        this.bitangent.crossVectors(this.normal, this.tangent);
+        const count=Math.max(1,Math.min(SPARKS/2,Math.round(p.count))),phase=++this.sequence*2.39996;
+        for(let i=0;i<count;i++){
+            const spark=this.sparkSlots[this.sparkCursor++%SPARKS],angle=phase+i*2.39996,speed=p.speed*(.6+.4*((i*7)%5)/4);
+            spark.velocity.copy(this.normal).multiplyScalar(speed*.8)
+                .addScaledVector(this.tangent,Math.cos(angle)*speed*.7).addScaledVector(this.bitangent,Math.sin(angle)*speed*.7);
+            spark.position.copy(point);spark.age=0;spark.life=p.life*(.7+.3*((i*3)%4)/3);
+        }
+        this.active=true;
     }
 
     /** Hang 1–N runs from the lower half of a wall splat, oriented down the wall. */
@@ -144,14 +182,15 @@ export class CheeseImpactEffects {
         for(const particle of this.particles)particle.age=Infinity;
         for(const mark of this.marks)mark.age=Infinity;
         for(const drip of this.dripSlots)drip.age=Infinity;
-        this.active=false;this.particleCursor=this.markCursor=this.dripCursor=0;this.crumbs.count=this.splats.count=this.drips.count=0;
+        for(const spark of this.sparkSlots)spark.age=Infinity;
+        this.active=false;this.particleCursor=this.markCursor=this.dripCursor=this.sparkCursor=0;this.crumbs.count=this.splats.count=this.drips.count=this.sparks.count=0;
     }
 
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true; this.clear(); this.root.removeFromParent();
-        this.crumbs.dispose(); this.splats.dispose(); this.drips.dispose();
-        this.crumbGeometry.dispose(); this.splatGeometry.dispose(); this.dripGeometry.dispose();
-        this.crumbMaterial.dispose(); this.splatMaterial.dispose();
+        this.crumbs.dispose(); this.splats.dispose(); this.drips.dispose(); this.sparks.dispose();
+        this.crumbGeometry.dispose(); this.splatGeometry.dispose(); this.dripGeometry.dispose(); this.sparkGeometry.dispose();
+        this.crumbMaterial.dispose(); this.splatMaterial.dispose(); this.sparkMaterial.dispose();
     }
 }

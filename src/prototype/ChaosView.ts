@@ -280,6 +280,7 @@ export class ChaosView {
             if(hit.cue==='pop')playPopcornPop(hit.p);
             if(hit.cue==='thud')playDelayedThud(hit.p);
             if(hit.cue==='case-hit'||hit.cue==='armor-clang')this.feedback?.(hit.cue,hit.p);
+            if(hit.cue==='armor-clang')this.impacts.spark(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z));
             if(!hit.audioOnly)reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);
         }
         const corpses=new Set(state.corpses.map(c=>c.id));

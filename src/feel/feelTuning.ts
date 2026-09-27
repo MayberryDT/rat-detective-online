@@ -24,6 +24,8 @@ export const FEEL={
     splats:{label:'5 Bigger dripping splats',toggle:true,params:{size:1.35,life:6,drips:2,dripLength:.9}},
     /** Cheese stains build up on a rat's coat during one life (max 8), cleared on respawn. */
     stains:{label:'6 Cheese stains',toggle:true,params:{}},
+    /** Silver spark burst (with the existing armour clang) when cheese reflects off Ironclad. */
+    ironcladSparks:{label:'7 Ironclad sparks',toggle:true,params:{count:18,speed:11,life:.36}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;
