@@ -15,8 +15,9 @@
 .lineup-plate.winner{border-color:#e7b53c}.lineup-plate.winner b{color:#ffd35c}
 @keyframes lineup-stamp{0%{opacity:0;transform:translate(-50%,-50%) rotate(-8deg) scale(2.6)}100%{opacity:1;transform:translate(-50%,-50%) rotate(-8deg) scale(1)}}
 /* During the lineup the Case File card shrinks to the top-left corner and the play HUD steps aside. */
-body.lineup-on #victory-overlay{background:none;backdrop-filter:none;align-items:flex-start;justify-content:flex-start}
+/* The card's own slam animation owns #victory-text's transform, so scale the overlay. */
+body.lineup-on #victory-overlay{background:none;backdrop-filter:none;align-items:flex-start;justify-content:flex-start;transform:scale(.42);transform-origin:0 0}
 body.lineup-on #victory-overlay::before{display:none}
-body.lineup-on #victory-text{transform:scale(.42);transform-origin:top left;margin:14px 0 0 18px;align-items:flex-start;text-align:left}
+body.lineup-on #victory-text{margin:34px 0 0 42px;align-items:flex-start;text-align:left}
 body.lineup-on :is(.dispatch-hud,.assignment-destination,#kill-feed,#crosshair,[aria-label="Hot Case location"],#respawn-overlay,.pickup-buffs,.quick-fix-beacon){visibility:hidden}
 @media(prefers-reduced-motion:reduce){#police-lineup .lineup-flash.on{animation:none}.lineup-stamp.on{animation:none;opacity:1;transform:translate(-50%,-50%) rotate(-8deg)}}

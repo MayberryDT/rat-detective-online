@@ -26,9 +26,9 @@ For a quick look without playing, the **feel workshop** fires each effect on dem
 Private hosted fixture (production matchmaking, server bots, 10-rat cap, audible), serving this branch's client and Worker:
 
 - **Play:** http://127.0.0.1:5193/?room=graybox-benchmark-match-polish-r1 on Veelox. Add `&feel=off` to compare, `&feel=dev` for the switches.
-- **Fixture:** Worker `rat-detective-capacity-test`, version `fbc56383-71fe-4002-aabd-a6d9c6a7c448` (subtler shot kick and the noir pass). It expires **4:15 PM PDT, 27 September**.
-- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-27T19-15-26-081Z/deployment.json`.
-- **Smoke-tested:** a scripted client joined through the relay. The welcome was protocol 18, seed 341283204, 9 server bots plus the client, Excessive Force playing, and chaos frames streamed.
+- **Fixture:** Worker `rat-detective-capacity-test`, version `fca0a23a-3fbd-4cdd-acbc-a4106844e563` (third batch, protocol 19, including the review fixes). It expires **6:37 PM PDT, 27 September**.
+- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-27T21-37-46-887Z/deployment.json`.
+- **Smoke-tested:** a scripted client joined through the relay: protocol 19, seed 341283204, 9 server bots plus the client, PAPER CHASE playing. In 15 s it saw 2 bot deaths, both headshots (`playerDied.headshot`), and respawns at 5 HP. A headless browser stayed connected for 20 s with no socket close.
 
 **If the preview has expired**, build and redeploy, then start the relay again:
 
@@ -92,6 +92,33 @@ Workshop captures: `output/polish/20-noir/` (off / Bold / full), `21-rain/`, `22
 - **Lightning (N8)** briefly brightens the whole scene, including rats, through the existing hemisphere light.
 - Neon signs and venetian blinds are on the four landmark buildings only.
 
+## Third batch (T1–T5)
+
+Tyler's third brain dump. T4 and T5 change the rules and the protocol (19), so the client and Worker must match.
+
+| # | Item | How to see it in play | Switch |
+| --- | --- | --- | --- |
+| T1 | Instant, smooth entry | Load the page, reroll the name a few times, press Enter. Rerolls stay responsive while the city prepares, and Enter no longer freezes on a city-wide shader rebuild. | none (always on) |
+| T2 | Noir scales with health | At full health the noir is a light hint. Each lost hit point thickens the shadows, colour drain, fog, grain and vignette. At 1 HP the case's outline, locator and guidance vanish, and Quick Fix kits glow green through walls. | T2 Noir by health, T2b Last hit point |
+| T3 | Enemy readability lab | All off by default. Turn each on and compare: eyeshine (enemy eyes catch light toward you), selective colour (enemies more saturated), comic ink outline (cream line instead of the soft glow), fixtures follow enemies (the four real lamps may light nearby enemies), breath puffs (lit only where real light falls). | T3a–T3e |
+| T4 | Five hit points; headshots kill | Body hits take 1 of 5 HP. Any headshot kills: the hat blasts off, cheese splats the head, the rat hangs for a beat before falling, the killer gets a brass ringed X, a HEADSHOT notice and callout, and the kill feed adds "· HEADSHOT". A knock-whistle-bell plays; other rats' headshots fade with distance. | T4 Headshot juice (presentation only; the rules are fixed) |
+| T5 | Round end and police lineup | Rounds now end with 10 s before the next. As the slow motion ends, the camera cuts to a precinct lineup: the top five in rank order against a height chart, winner last. Flashbulbs pop one rat at a time and stamp each award across the chest; the winner gets a gold CASE CLOSED stamp and a hop. The Case File shrinks to the top-left corner and has seven new awards. | T5 Police lineup |
+
+Workshop: **Headshot suspect 2 (T4)**, **Police lineup (T5)** and **Enemy look: lab all on/off**. Captures: `output/polish/25-enemy/`, `27-headshot/`, `28-lineup/`, and the live lineup in `29-lineup-live/`.
+
+**T1 measurements** (Halla AMD laptop GPU, private fixture through the relay; the relay adds a network hop):
+- Enter to the first play frame: 2.1–2.4 s before, 0.7–1.2 s after.
+- The worst freeze after Enter: about 1.4 s before, about 0.35 s after.
+- The 300 ms target is **not** met on Halla. About 250–300 ms of what remains is the network round trip through the relay, and about 250 ms is building the other rats on the welcome. Unmeasured on Tyler's desktop.
+
+**Third batch choices to confirm:**
+- **Other damage (T4).** To keep instant kills instant, a Crossfire bank shot and a fast case missile now deal the full 5. A fast loose-case hit stays 2 and slower contacts 1, so those now take a smaller share of health.
+- **Headshot hold (T4).** The rat hangs 0.16 s before the ragdoll launches; its hat flies off at once.
+- **Warm-up (T1).** Rerolling or clicking on the title pauses the city preparation for 350 ms, so it never stutters under your input. Pressing Enter ends the pauses. An Enter during the final warm-up waits for it to finish (under a second on Halla).
+- **Lineup rank (T5).** The server ranks by the assignment's own progress (deliveries, zone time, case kills, or case time in Closing Time), then kills, case time and fewest deaths. Rats without an award get "PERSON OF INTEREST".
+- **Lineup light (T5).** The room is lit only by the stage's existing spotlight, moved there for the lineup, so no new light is added and nothing recompiles.
+- **New awards (T5).** Sharpshooter needs 8 trigger pulls and counts one hit per pull; eruption and burst balls don't count. Legwork ignores respawn and launcher jumps.
+
 ## Choices to confirm
 
 These are places where I had to make a call. Each can be changed.
@@ -130,5 +157,7 @@ These are places where I had to make a call. Each can be changed.
   - Worker: 171–173 of 175 pass. The failures are `persistentBots` "ten-rat cap", `matchmaking` "unreserved title connection" and `gameRoom` "full room". Unmodified `main` failed the same tests in the same full-suite runs on Halla, and all of them pass alone on both branches.
   - The frozen weapon/case trajectory tests (`locomotionPolish`, `ratActing`, `outfitStudio`, `gunSleeve`, `muzzlePose`, `caseCarry`) pass.
   - New tests: `cameraFeel` (restore exactness, frame-rate settling, bounds, reset) and `roundAwards` (Case File tallies and wire validation).
+- **Third batch checks** (Halla, after the review fixes): typecheck and build pass. Client 1,192 of 1,193 pass; the one failure is the known `neighborhood.test.ts` full-suite timeout. Worker 173 of 175; the two failures are the known `persistentBots` "ten-rat cap" flakes, which pass alone. Scripts 123 of 123. New failure-mode tests in `roundAwards` (teleports, one hit per trigger, minimum shots, flights counted once, lineup order and wire validation).
+- **Third batch review:** one independent reviewer found 9 issues: the Case File lost or doubled around the lineup, an Enter mid-warm-up stripping real rats, a welcome compile gate that could hang rendering, shared eyeshine resources freed by any enemy's disposal, the death camera fighting the lineup, full-volume distant headshots, burst balls inflating accuracy, a headshot hold overriding a shared corpse, and the ink outline fading after respawn. All fixed in `c7ef025`; a re-review confirmed each fix and found nothing new.
 - **Independent review:** one reviewer read the full diff and found 11 material issues, all fixed. A re-review then confirmed the fixes and raised three follow-ups, also fixed: the corpse-follow window, the hat floor and the freeze baseline. The authority, protocol and aim invariants were confirmed intact.
 - **Not verified:** nobody has played it, and sound character, timing and tuning are unjudged. That is the purpose of this review. There's no phone performance measurement.
