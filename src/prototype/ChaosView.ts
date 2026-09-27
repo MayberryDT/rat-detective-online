@@ -206,8 +206,10 @@ export class ChaosView {
     }
     /** The live position of `victimId`'s shared corpse model, if one is shown. */
     corpseOf(victimId:string):THREE.Vector3|undefined {
-        for(const c of this.corpses.values())if(c.state.victimId===victimId)return c.mesh.position;
-        return undefined;
+        // Newest matching corpse only; an older body of the same rat may still be lying elsewhere.
+        let best:{mesh:THREE.Group;state:CorpseState}|undefined;
+        for(const c of this.corpses.values())if(c.state.victimId===victimId&&(!best||c.state.born>best.state.born))best=c;
+        return best&&this.state&&this.state.time-best.state.born<2000?best.mesh.position:undefined;
     }
     noteDeathStyle(victimId:string,style:DeathStyle):void {
         this.deathStyles.set(victimId,{style,at:performance.now()});
@@ -468,7 +470,8 @@ export class ChaosView {
                 const hat=c.mesh.getObjectByName('rat-hat');
                 if(hat){
                     const params=FEEL.hatPop.params;
-                    c.hat=new FlyingHat(this.root.parent as THREE.Scene,hat,this.p.set(b.v.x,0,b.v.z),Math.max(0,b.p.y-1),params.speed,params.lift,b.born%97);
+                    const body=c.mesh.position;
+                    c.hat=new FlyingHat(this.root.parent as THREE.Scene,hat,this.p.set(b.v.x,0,b.v.z),()=>body.y,params.speed,params.lift,b.born%97);
                     c.animator.setHatHidden(true);c.animator.poseDeath((now-b.born)/1000,0,b.spin,0,false);
                 }
             }

@@ -356,6 +356,8 @@ export class RatEntity {
         if(this.freezeLeft>0){
             this.freezeLeft=Math.max(0,this.freezeLeft-dt);
             if(this.freezeHold){p.copy(this.frozenPosition);this.mesh.quaternion.copy(this.frozenQuaternion);}
+            // Keep the animator's motion baseline current so the resume isn't read as a skid.
+            this.animator.holdMotion();
             this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
             this.syncGlowTransform();
             return;
@@ -501,7 +503,8 @@ export class RatEntity {
         const hat = this.mesh.getObjectByName('rat-hat');
         if (!hat) return;
         const p = FEEL.hatPop.params;
-        this.flyingHat = new FlyingHat(this.scene, hat, impactVel, this.mesh.position.y, p.speed, p.lift, ++this.stainSeed);
+        const body = this.mesh.position;
+        this.flyingHat = new FlyingHat(this.scene, hat, impactVel, () => body.y, p.speed, p.lift, ++this.stainSeed);
         this.animator.setHatHidden(true);
     }
 

@@ -83,9 +83,9 @@ const actions:Record<string,()=>void>={
     'Respawn suspects':()=>{for(const v of suspects)if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});},
     'Your death (camera + iris)':()=>{rat.entity.hp=1;rat.entity.takeDamage(1,new THREE.Vector3(0,6,-14));feel.died(()=>rat.entity.mesh.position);},
     'Respawn you':()=>{rat.entity.respawn({x:-32,y:.5,z:-18,hp:3});feel.reset();},
-    'Hard landing (dip + dust)':()=>{feel.motion(false,-30,0,1);feel.motion(true,0,0,1);kickDust(rat.entity.mesh.position,.9);},
-    'Launch view (hold 1.5 s)':()=>{feel.motion(false,60,0,1);setTimeout(()=>feel.motion(true,0,0,1),1500);},
-    'Hot Pursuit streaks (2 s)':()=>{const t=setInterval(()=>feel.motion(true,0,16,1.45),16);setTimeout(()=>{clearInterval(t);feel.motion(true,0,0,1);},2000);},
+    'Hard landing (dip + dust)':()=>{feel.motion(1/60,false,-30,0,1);feel.motion(1/60,true,0,0,1);kickDust(rat.entity.mesh.position,.9);},
+    'Launch view (hold 1.5 s)':()=>{feel.motion(1/60,false,60,0,1);setTimeout(()=>feel.motion(1/60,true,0,0,1),1500);},
+    'Hot Pursuit streaks (2 s)':()=>{const t=setInterval(()=>feel.motion(1/60,true,0,16,1.45),16);setTimeout(()=>{clearInterval(t);feel.motion(1/60,true,0,0,1);},2000);},
     'City: blast near the rat (props react)':()=>{const p=rat.entity.mesh.position;for(const lamp of city.streetLamps){if(Math.hypot(lamp[0]-p.x,lamp[1]-p.z)<30)cityImpact({x:lamp[0]+2,y:.5,z:lamp[1]+2},4);}},
     'Callout: ON THE CASE':()=>feel.sting('case'),
     'Victory slow-motion (1.4 s)':()=>{feel.victory();},
@@ -103,7 +103,7 @@ async function renderCues():Promise<string> {
         ['step pavement',.3,a=>a.step('a','pavement',.5,0)],['step water',.35,a=>a.step('b','water',.5,0)],
         ['step metal',.35,a=>a.step('c','metal',.5,0)],['step wood',.3,a=>a.step('d','wood',.5,0)],
         ['rustle',.4,a=>a.rustle(.5)],['jostle',.25,a=>a.jostle(.5)],['squelch',.3,a=>a.squelch(.5,0)],
-        ['whizz',.35,a=>a.whizz('w',.5,0)],['brass',.7,a=>a.brass(.5)],['sting case',.6,a=>a.sting('case',.5)],
+        ['whizz',.35,a=>a.whizz(.5,0)],['brass',.7,a=>a.brass(.5)],['sting case',.6,a=>a.sting('case',.5)],
         ['sting delivery',1,a=>a.sting('delivery',.5)],['sting closing',1.3,a=>a.sting('closing',.5)]];
     const parts:Float32Array[]=[];
     for(const [,length,play] of cues){

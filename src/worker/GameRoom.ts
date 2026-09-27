@@ -1176,6 +1176,7 @@ export class GameRoom extends DurableObject<Env> {
 
     const victim = this.players.get(message.victimId);
     const shooter = playerId === null ? undefined : this.players.get(playerId);
+    const hpBefore = victim?.hp ?? 0;
     const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, playerId && this.chaos?.isCaseHolder(playerId) ? playerId : null, !!this.chaos?.assignmentState, explosive);
     if (!result.applied || !victim) return;
     const cause = playerId === null ? {cause:'evidence-tampering' as const} : {};
@@ -1202,7 +1203,7 @@ export class GameRoom extends DurableObject<Env> {
       this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',
         crypto.randomUUID(),result.roundWon?'reset':'respawn',result.roundWon?null:victim.id,respawnAt);
     }
-    this.awards.damage(victim.id, message.damage);
+    this.awards.damage(victim.id, hpBefore - victim.hp);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,

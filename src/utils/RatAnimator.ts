@@ -257,6 +257,9 @@ export class RatAnimator {
 
     setDeathStyle(style:DeathStyle):void {this.deathStyle=feelState().on('deathVariety')?style:'default';}
 
+    /** Hit-stop: treat this frame as stationary so resuming doesn't register as a speed spike. */
+    holdMotion():void {this.lastPosition?.copy(this.root.position);this.lastVelocity.set(0,0,0);}
+
     /** Composed nod that tips the brim (your kill). */
     nod():void {this.nodAge=0;}
     /** Pickup body reaction: Ironclad chest puff, Hot Pursuit bounce, Quick Fix relieved breath. */

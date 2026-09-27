@@ -12,7 +12,8 @@ export class FlyingHat {
     private readonly axis=new THREE.Vector3();
     private resting=false;
 
-    constructor(scene:THREE.Scene,source:THREE.Object3D,push:THREE.Vector3,private readonly floor:number,speed:number,lift:number,seed:number){
+    /** `floor` is read live (the body's current feet height), so the hat lands where the body does. */
+    constructor(scene:THREE.Scene,source:THREE.Object3D,push:THREE.Vector3,private readonly floor:()=>number,speed:number,lift:number,seed:number){
         source.updateWorldMatrix(true,false);
         this.root=source.clone(true);
         // Batched rigs hide their source leaves; the copy must draw on its own.
@@ -33,8 +34,9 @@ export class FlyingHat {
         this.root.position.addScaledVector(this.velocity,dt);
         const angle=this.spin.length()*dt;
         if(angle>0){this.turn.setFromAxisAngle(this.axis.copy(this.spin).normalize(),angle);this.root.quaternion.premultiply(this.turn);}
-        if(this.root.position.y<=this.floor+.05&&this.velocity.y<0){
-            this.root.position.y=this.floor+.05;
+        const floor=this.floor();
+        if(this.root.position.y<=floor+.05&&this.velocity.y<0){
+            this.root.position.y=floor+.05;
             this.velocity.y*=-.32;this.velocity.x*=.6;this.velocity.z*=.6;this.spin.multiplyScalar(.5);
             if(Math.abs(this.velocity.y)<1.2){
                 // Settle brim-down, keeping its heading.

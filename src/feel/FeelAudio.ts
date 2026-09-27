@@ -97,8 +97,8 @@ export class FeelAudio {
         this.tone(out,at,.12,'sine',340,90,.35);
     }
     /** A ball passing close to your head. */
-    whizz(key:string,volume:number,pan:number):void {
-        if(!this.allow(`whizz:${key}`,1)||!this.allow('whizz',.09))return;
+    whizz(volume:number,pan:number):void {
+        if(!this.allow('whizz',.09))return;
         const at=this.context.currentTime,out=this.out(volume,pan,.3);
         const source=this.context.createBufferSource(),filter=this.context.createBiquadFilter(),env=this.context.createGain();
         source.buffer=this.white();filter.type='bandpass';filter.Q.value=8;

@@ -132,14 +132,15 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const touchUps = feelState().on('modelTouchUps');
     const muzzle = mesh(head, muzzleGeometry(), fur);
     if (touchUps) muzzle.scale.set(1.045, 1.03, 1);
-    const nose = mesh(head, new THREE.SphereGeometry(0.068, 16, 10), material(0x382227, 0.3), 0, -0.08, 0.545);
+    const nose = mesh(head, new THREE.SphereGeometry(0.068, 16, 10), material(0x382227, touchUps ? 0.3 : 0.42), 0, -0.08, 0.545);
     const white = material(0xeee4cc), pupil = material(0x13121a, 0.5);
     for (const side of [-1, 1]) {
         const eye = pivot(head, side < 0 ? 'rat-eye-left' : 'rat-eye-right', side * 0.175, 0.102, 0.268);
         eye.scale.x = 0.93;
         eye.rotation.y = side * 0.55; eye.rotation.z = side * 0.09;
         mesh(eye, new THREE.CircleGeometry(0.101, 20, Math.PI, Math.PI), white);
-        mesh(eye, new THREE.CircleGeometry(0.063, 20, Math.PI, Math.PI), pupil, -side * 0.017, -0.004, 0.004).name = 'rat-pupil';
+        const iris = mesh(eye, new THREE.CircleGeometry(0.063, 20, Math.PI, Math.PI), pupil, -side * 0.017, -0.004, 0.004);
+        if (touchUps) iris.name = 'rat-pupil';
     }
     if (touchUps) {
         nose.scale.setScalar(1.06);

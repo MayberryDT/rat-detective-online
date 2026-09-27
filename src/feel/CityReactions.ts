@@ -129,13 +129,14 @@ export class CityReactions {
         // Birds: peck in place, or flee up and away, then return later.
         this.birds.forEach((bird,i)=>{
             if(bird.flying){
-                bird.away+=dt;bird.velocity.y-=dt*1.5;bird.position.addScaledVector(bird.velocity,dt);
+                bird.away+=dt;bird.velocity.y=Math.max(1.5,bird.velocity.y-dt*1.5);bird.position.addScaledVector(bird.velocity,dt);
                 if(bird.away>respawn){bird.flying=false;bird.position.copy(bird.home);}
             }
             const flap=bird.flying?Math.sin(this.time*28+bird.phase):0,peck=bird.flying?0:Math.max(0,Math.sin(this.time*3+bird.phase))*.25;
             this.dummy.position.copy(bird.position).setY(bird.position.y+.14);
             this.dummy.rotation.set(peck,bird.yaw,flap*.6);
-            this.dummy.scale.set(bird.flying?1:.45+.1*Math.sin(bird.phase),1,1);
+            // Out of sight once well away; they reappear at home after `respawn` seconds.
+            if(bird.flying&&bird.away>4)this.dummy.scale.setScalar(0);else this.dummy.scale.set(bird.flying?1:.45+.1*Math.sin(bird.phase),1,1);
             this.dummy.updateMatrix();this.birdMesh.setMatrixAt(i,this.dummy.matrix);
         });
         this.papers.forEach((paper,i)=>{

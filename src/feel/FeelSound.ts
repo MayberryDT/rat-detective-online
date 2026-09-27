@@ -94,7 +94,7 @@ export class FeelSound {
             const d=Math.hypot(ox-vx*t,oy-vy*t,oz-vz*t);
             if(d>reach||d<.45)continue;
             this.whizzed.add(shot.id);
-            this.audio!.whizz(shot.id,FEEL.sound.params.whizz,this.pan(shot.p,view));
+            this.audio!.whizz(FEEL.sound.params.whizz,this.pan(shot.p,view));
         }
         if(this.whizzed.size>256)this.whizzed.clear();
     }

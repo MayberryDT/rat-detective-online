@@ -68,7 +68,7 @@ export class FeelDirector {
     resetRound():void {this.city?.reset();this.slowAge=Infinity;this.lag=0;}
 
     /** Local rat motion each frame: landing dip, launch view, Hot Pursuit streaks. */
-    motion(grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number,carrying=false):void {
+    motion(dt:number,grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number,carrying=false):void {
         const on=this.state.on('movement'),p=FEEL.movement.params;
         let landed=0;
         if(!grounded){this.airVy=Math.min(this.airVy,verticalSpeed);if(verticalSpeed>30)this.flying=true;}
@@ -82,7 +82,7 @@ export class FeelDirector {
         }
         this.wasGrounded=grounded;
         const target=on&&speedScale>1&&horizontalSpeed>10?1:0;
-        this.pursuit+=(target-this.pursuit)*.12;
+        this.pursuit+=(target-this.pursuit)*(1-Math.exp(-7.7*Math.max(0,dt)));
         if(this.pursuit<.01)this.pursuit=0;
         this.camera.hold(!on?0:this.flying?p.launchWiden:this.pursuit*p.pursuitWiden);
         this.screen.speed(this.pursuit*p.streaks);
@@ -153,6 +153,8 @@ export class FeelDirector {
 
     /** Your rat died: follow `target` (your corpse, looked up each frame), then iris out. */
     died(target:()=>THREE.Vector3|undefined):void {
+        // Flight wind, launch view and speed streaks end with the rat.
+        this.flying=false;this.airVy=0;this.pursuit=0;this.camera.hold(0);this.screen.speed(0);this.sound.localMotion(0,0,false,0);
         if(!this.state.on('deathCam'))return;
         this.deathTarget=target;this.deathAge=0;
     }
@@ -170,7 +172,7 @@ export class FeelDirector {
         this.lifeKills++;
         if(victimCarried)this.callout('COLD CASE',now);
         else if(this.lifeKills===3)this.callout('RAT RACKET',now);
-        if(this.state.on('killBloom')){
+        if(this.state.on('killBloom')&&!this.deathTarget){
             this.screen.killBloom();
             this.camera.widen(-FEEL.killBloom.params.punch);
         }

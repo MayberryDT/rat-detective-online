@@ -44,6 +44,12 @@ import {FeelDirector} from '../feel/FeelDirector';
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean}[]=[];
 const HEAD_POSITION=new THREE.Vector3();
+/** Fill slot `n` of the reused footstep list in place; returns the next slot. */
+function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolean):number {
+    const source=FOOTSTEP_SOURCES[n]??={id,position,grounded};
+    source.id=id;source.position=position;source.grounded=grounded;
+    return n+1;
+}
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
 export class GameSession {
@@ -566,7 +572,7 @@ export class GameSession {
             if(this.rat&&!this.rat.entity.dead){
                 this.foleyWorld.motion.update(this.rat.entity.mesh.position,dt,this.rat.grounded);
                 const v=this.rat.entity.body.velocity;
-                this.feel.motion(this.rat.grounded,v.y,Math.hypot(v.x,v.z),this.rat.moveSpeedScale,this.lastChaos?.case?.owner===this.myId);
+                this.feel.motion(dt,this.rat.grounded,v.y,Math.hypot(v.x,v.z),this.rat.moveSpeedScale,this.lastChaos?.case?.owner===this.myId);
             }
             else this.foleyWorld.motion.clear();
         }
@@ -604,10 +610,11 @@ export class GameSession {
 
     /** Polish 17: footsteps (you and nearby rats) and near-miss whizzes. */
     private feelAudioFrame(dt:number):void {
-        const rat=this.rat!,sources=FOOTSTEP_SOURCES;sources.length=0;
+        const rat=this.rat!,sources=FOOTSTEP_SOURCES;let n=0;
         const self=rat.entity.dead||this.observing?undefined:rat.entity.mesh.position;
-        if(self)sources.push({id:'self',position:self,grounded:rat.grounded});
-        for(const [id,{entity}] of this.remotes.rats)if(!entity.dead)sources.push({id,position:entity.mesh.position});
+        if(self)n=pooledSource(n,'self',self,rat.grounded);
+        for(const [id,{entity}] of this.remotes.rats)if(!entity.dead)n=pooledSource(n,id,entity.mesh.position);
+        sources.length=n;
         this.feel.footsteps(dt,sources,self,this.stage.camera);
         if(self&&this.lastChaos)this.feel.projectiles(this.lastChaos.shots,this.myId,HEAD_POSITION.copy(self).setY(self.y+1.6),this.stage.camera);
     }
