@@ -12,6 +12,7 @@ import {CheeseImpactEffects} from '../../src/weapons/CheeseImpactEffects';
 import {initEntitySounds} from '../../src/audio/EntityAudio';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {kickDust} from '../../src/feel/Dust';
+import {cityImpact} from '../../src/feel/CityReactions';
 import {FeelAudio} from '../../src/feel/FeelAudio';
 import {createPlayer} from '../../src/worker/gameState';
 
@@ -30,7 +31,7 @@ const suspects=[-3,0,3].map((dz,i)=>{
     return entity;
 });
 const feel=new FeelDirector();
-feel.attach(stage.renderer.domElement,stage.listener);feel.attachScene(stage.scene);
+feel.attach(stage.renderer.domElement,stage.listener);feel.attachScene(stage.scene);feel.attachCity(stage.scene,city.streetLamps);
 const status=document.getElementById('feel-status')!;
 const aim=new THREE.Vector3();
 function fire():void {
@@ -85,6 +86,7 @@ const actions:Record<string,()=>void>={
     'Hard landing (dip + dust)':()=>{feel.motion(false,-30,0,1);feel.motion(true,0,0,1);kickDust(rat.entity.mesh.position,.9);},
     'Launch view (hold 1.5 s)':()=>{feel.motion(false,60,0,1);setTimeout(()=>feel.motion(true,0,0,1),1500);},
     'Hot Pursuit streaks (2 s)':()=>{const t=setInterval(()=>feel.motion(true,0,16,1.45),16);setTimeout(()=>{clearInterval(t);feel.motion(true,0,0,1);},2000);},
+    'City: blast near the rat (props react)':()=>{const p=rat.entity.mesh.position;for(const lamp of city.streetLamps){if(Math.hypot(lamp[0]-p.x,lamp[1]-p.z)<30)cityImpact({x:lamp[0]+2,y:.5,z:lamp[1]+2},4);}},
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

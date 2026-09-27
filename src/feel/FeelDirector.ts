@@ -6,6 +6,8 @@ import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
 import {Dust,registerDust} from './Dust';
+import {CityReactions,registerCity} from './CityReactions';
+import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
 import type {Sting} from './FeelAudio';
 import type {ChaosShot} from '../shared/chaosState';
@@ -31,6 +33,7 @@ export class FeelDirector {
     private deathTarget?:()=>THREE.Vector3|undefined;
     private deathAge=0;
     private dust?:Dust;
+    private city?:CityReactions;
     private wasGrounded=true;
     private airVy=0;
     private flying=false;
@@ -52,6 +55,13 @@ export class FeelDirector {
 
     /** Scene-wide dust for every rat's landings, skids and launches. */
     attachScene(scene:THREE.Scene):void {this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);}
+
+    /** Cosmetic reactive props for the current city (replaced on a new world). */
+    attachCity(scene:THREE.Scene,lamps:readonly StreetLampPosition[]):void {
+        this.city?.dispose();this.city=new CityReactions(scene,lamps);registerCity(this.city);
+    }
+    /** New round: props back where they started. */
+    resetRound():void {this.city?.reset();}
 
     /** Local rat motion each frame: landing dip, launch view, Hot Pursuit streaks. */
     motion(grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number,carrying=false):void {
@@ -76,7 +86,10 @@ export class FeelDirector {
     }
 
     /** Footsteps for your rat (id `self`) and nearby rats. */
-    footsteps(dt:number,sources:Iterable<FootstepSource>,self:THREE.Vector3|undefined,view:THREE.Camera):void {this.sound.footsteps(dt,sources,self,view);}
+    footsteps(dt:number,sources:readonly FootstepSource[],self:THREE.Vector3|undefined,view:THREE.Camera):void {
+        this.sound.footsteps(dt,sources,self,view);
+        this.city?.proximity(sources);
+    }
     /** Near-miss whizz for other rats' balls. */
     projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):void {this.sound.projectiles(shots,myId,head,view);}
     /** Case pickup, your delivery, closing seconds. */
@@ -167,6 +180,7 @@ export class FeelDirector {
     update(dt:number,view:THREE.Camera,self?:THREE.Vector3):void {
         this.camera.update(dt);
         this.dust?.update(dt);
+        this.city?.update(dt);
         this.screen.update(dt,view,self);
         if(this.deathTarget){
             const d=FEEL.deathCam.params,target=this.deathTarget();this.deathAge+=dt;
@@ -188,5 +202,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();}
 }

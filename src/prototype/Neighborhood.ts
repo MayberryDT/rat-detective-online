@@ -13,7 +13,7 @@ import { disposeMeshResources } from '../utils/disposeMeshResources';
 import {StreetLightPool,insideLightRoom} from './StreetLightPool';
 import {interiorFixtures,LIGHT_ROOMS,type InteriorFixture} from './InteriorLighting';
 import {readLightingMode,type LightingMode} from '../session/lightingMode';
-import {generatedStreetLamps,STREET_LAMP_HEIGHT} from '../shared/streetLampLayout';
+import {generatedStreetLamps,STREET_LAMP_HEIGHT,type StreetLampPosition} from '../shared/streetLampLayout';
 import {StreetReadability,streetReadabilityEnabled} from './StreetReadability';
 
 import { STREET_LAMPS, grayboxBoxes, CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../shared/grayboxLayout';
@@ -182,8 +182,9 @@ export class Neighborhood {
                 }
             });
         }
+        this.streetLamps=[...STREET_LAMPS,...generatedStreetLamps(layout,STREET_LAMPS)];
         if(lighting==='pools')this.overhead=new StreetLightPool(scene,[
-            ...[...STREET_LAMPS,...generatedStreetLamps(layout,STREET_LAMPS)]
+            ...this.streetLamps
                 .map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:260,distance:24,angle:.88,penumbra:.5})),
             ...(this.readability?.lights??[]),...fixtures,
         ],LIGHT_ROOMS);
@@ -193,6 +194,8 @@ export class Neighborhood {
                 if(material instanceof THREE.MeshStandardMaterial)this.overhead!.applyToScenery(material);
         });
     }
+    /** Street lamp sites (for cosmetic city reactions). */
+    streetLamps:StreetLampPosition[]=[];
     private readonly groundBodies:CANNON.Body[]=[];
     private readonly groundMeshes:THREE.Object3D[]=[];
     generate() {}

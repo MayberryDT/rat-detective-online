@@ -38,6 +38,7 @@ import {closestPointOnSegment} from '../shared/netplay';
 import { updateCaseCarryPose } from './CaseCarryPose';
 import {RatReactionEvents} from './RatReactionEvents';
 import {FlyingHat} from '../entities/FlyingHat';
+import {cityImpact} from '../feel/CityReactions';
 import type {DeathStyle} from '../utils/RatAnimator';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
@@ -296,7 +297,7 @@ export class ChaosView {
             if(hit.cue==='thud')playDelayedThud(hit.p);
             if(hit.cue==='case-hit'||hit.cue==='armor-clang')this.feedback?.(hit.cue,hit.p);
             if(hit.cue==='armor-clang')this.impacts.spark(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z));
-            if(!hit.audioOnly)reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);
+            if(!hit.audioOnly){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='pop'||hit.cue==='thud'?3:hit.scale??1);}
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
         for(const [id,c] of this.corpses)if(!corpses.has(id)){c.hat?.dispose();this.root.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}

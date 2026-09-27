@@ -131,6 +131,7 @@ export class GameSession {
         if(!initialWorld && new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
         this.city = prepared.city ?? (this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(scene,world,this.worldSpec) : new CityGenerator(scene, world, DEFAULT_CITY_OPTIONS, this.worldSpec));
         if (!prepared.city) this.city.generate();
+        if (this.city instanceof Neighborhood && this.city.streetLamps) this.feel.attachCity(scene, this.city.streetLamps);
         this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
@@ -246,6 +247,7 @@ export class GameSession {
             this.city = this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(this.stage.scene,this.stage.world,this.worldSpec) : new CityGenerator(this.stage.scene, this.stage.world, DEFAULT_CITY_OPTIONS, this.worldSpec);
             this.city.generate();
             this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
+            if (this.city instanceof Neighborhood && this.city.streetLamps) this.feel.attachCity(this.stage.scene, this.city.streetLamps);
         }
         this.ensureCameos();
         this.myId = message.id;
@@ -448,7 +450,7 @@ export class GameSession {
                 this.highlightCorpseSeen.clear();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0);this.rat?.entity.resetReactions();
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0);entity.resetReactions();}
-                this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+                this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
