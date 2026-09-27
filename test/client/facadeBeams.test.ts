@@ -46,6 +46,7 @@ it('clips downward shafts before the far wall but allows them below a high overh
 it('keeps fixed geometry while lit-window beams and footprints follow occupancy and release resources',()=>{
     const scene=new THREE.Scene(),occupancy={value:.025};
     const beams=new FacadeBeams(scene,[{...source,occupancy}],[],[]);
+    for(const _step of beams.build());
     expect(scene.children).toHaveLength(1);
     const mesh=scene.children[0] as THREE.Mesh<THREE.BufferGeometry,THREE.ShaderMaterial>;
     const texture=mesh.material.uniforms.occupancy.value as THREE.DataTexture;

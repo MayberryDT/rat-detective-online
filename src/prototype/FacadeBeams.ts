@@ -43,8 +43,10 @@ export class FacadeBeams {
     private readonly states:(SpillSource['occupancy'])[]=[undefined];
     private readonly texture:THREE.DataTexture;
     private readonly material:THREE.ShaderMaterial;
-    constructor(scene:THREE.Scene,sources:readonly SpillSource[],boxes:readonly Box[],blockers:readonly SpillBlocker[]){
-        const stateIds=new Map<SpillSource['occupancy'],number>([[undefined,0]]);
+    private readonly stateIds=new Map<SpillSource['occupancy'],number>([[undefined,0]]);
+    /** Material setup only; `build()` is a generator so the geometry bake can be spread across frames. */
+    constructor(private readonly scene:THREE.Scene,private readonly sources:readonly SpillSource[],private readonly boxes:readonly Box[],private readonly blockers:readonly SpillBlocker[]){
+        const stateIds=this.stateIds;
         for(const s of sources)if(!stateIds.has(s.occupancy)){stateIds.set(s.occupancy,this.states.length);this.states.push(s.occupancy);}
         const size=THREE.MathUtils.ceilPowerOfTwo(this.states.length),data=new Uint8Array(size*4);
         this.texture=new THREE.DataTexture(data,size,1,THREE.RGBAFormat);
@@ -67,9 +69,14 @@ export class FacadeBeams {
                     #include <colorspace_fragment>
                 }`,
         });
+    }
+    *build():Generator<void> {
+        const {scene,sources,boxes,blockers,stateIds}=this,size=this.texture.image.width;
         type Batch={positions:number[];colors:number[];uvs:number[];rooms:number[];strengths:number[]};
         const cells=new Map<string,Batch>(),boxCells=new Map<string,Box[]>(),color=new THREE.Color();
+        let work=0;
         for(const s of sources){
+            if(++work%24===0)yield;
             const cx=Math.floor(s.x/60),cz=Math.floor(s.z/60),key=`${cx},${cz}`;
             let nearbyBoxes=boxCells.get(key);
             if(!nearbyBoxes){nearbyBoxes=boxes.filter(b=>b.x+b.w/2>=cx*60-20&&b.x-b.w/2<=(cx+1)*60+20

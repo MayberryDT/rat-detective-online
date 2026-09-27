@@ -41,6 +41,7 @@ import {loadCameos} from '../cameos/loadCameos';
 import {HighlightBridge} from '../highlights/HighlightBridge';
 import {FeelDirector} from '../feel/FeelDirector';
 import {feelState} from '../feel/feelState';
+import {entryRequested} from './yieldToPage';
 
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean;facing?:THREE.Quaternion}[]=[];
@@ -99,6 +100,7 @@ export class GameSession {
     private releasePreparedModels?:()=>void;
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
+    private compiling?:Promise<unknown>;
     private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
     private lastHighlightObserve = 0;
     private lastChaos: ChaosState | null = null;
@@ -169,6 +171,7 @@ export class GameSession {
 
     enterCity(): void {
         if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
+        entryRequested();
         this.transport.connect(this.title.name, generateRandomAppearance());
         this.title.onGesture();
         this.requestPointerLock();
@@ -309,6 +312,11 @@ export class GameSession {
             }});
             if(message.round.phase==='won')this.bots.receive({type:'gameWon',winnerId:message.round.winnerId??'',winnerName:message.round.winnerName??'',kills:message.round.kills??0,resetAt:message.round.resetAt??0});
         }
+        // Link whatever the welcome added (other rats, the round's objects)
+        // off-thread; frames skip drawing until then instead of stalling.
+        const compiling=this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera).catch(()=>undefined)
+            .finally(()=>{if(this.compiling===compiling)this.compiling=undefined;});
+        this.compiling=compiling;
     }
 
     private receive(message: ServerMessage): void {
@@ -590,10 +598,12 @@ export class GameSession {
         this.city.update(dt, camera, this.rat?.entity.body.position, this.enemyFixtureAnchors());
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
-        this.feel.beforeRender(camera);
-        renderer.render(scene, camera);
-        this.feel.afterRender(camera);
-        if(this.rat && this.transport.state==='playing' && this.releasePreparedModels){
+        if(!this.compiling){
+            this.feel.beforeRender(camera);
+            renderer.render(scene, camera);
+            this.feel.afterRender(camera);
+        }
+        if(this.rat && this.transport.state==='playing' && this.releasePreparedModels && !this.compiling){
             this.releasePreparedModels();this.releasePreparedModels=undefined;
             performance.mark('city-first-play-frame');
         }

@@ -2,6 +2,7 @@ import { PlayerSettings } from './ui/PlayerSettings';
 import { TitleScreen } from './ui/TitleScreen';
 import { TitleMusic } from './ui/TitleMusic';
 import { unlockEffectsAudio } from './audio/effectsAudio';
+import { entryRequested, trackTitleInput } from './session/yieldToPage';
 
 function showWebGLError(error: unknown): void {
   const titleScreen = document.getElementById('title-screen');
@@ -35,12 +36,14 @@ const startup = new AbortController();
 const title = new TitleScreen();
 title.settings = new PlayerSettings();
 const music = new TitleMusic();
+trackTitleInput(startup.signal);
 performance.mark('title-controls-ready');
 let requested = false;
 title.available = () => !requested;
 title.onGesture = () => { void music.unlock(); unlockEffectsAudio(); };
 title.onEnter = () => {
   requested = true;
+  entryRequested();
   document.getElementById('enter-city-label')!.textContent = 'ENTERING…';
   performance.mark('city-entry-request');
 };

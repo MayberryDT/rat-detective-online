@@ -391,6 +391,7 @@ describe('GameSession', () => {
             domElement: { requestPointerLock: vi.fn(() => Promise.resolve()), tabIndex: 0 },
             setSize: vi.fn(),
             render: vi.fn(),
+            compileAsync: vi.fn(() => Promise.resolve()),
         };
         const session = new GameSession(renderer as never,initialWorld);
         return {

@@ -88,7 +88,10 @@ export class StreetReadability {
     private readonly fixtures:THREE.InstancedMesh[]=[];
     private readonly applied=new Set<THREE.MeshStandardMaterial>();
     private readonly beams:FacadeBeams;
-    constructor(scene:THREE.Scene,layout:readonly BuildingFootprint[],boxes:readonly GrayboxBox[],windows:readonly SpillSource[]=[],details:readonly FacadeMass[]=[]){
+    private readonly blockers:readonly SpillBlocker[];
+    /** Light setup only; the atlas, fixtures and beams fill in `build()`, a
+     * generator so city preparation can spread the bake across frames. */
+    constructor(private readonly scene:THREE.Scene,private readonly layout:readonly BuildingFootprint[],boxes:readonly GrayboxBox[],windows:readonly SpillSource[]=[],details:readonly FacadeMass[]=[]){
         this.sources=streetSpillSources(layout);
         const blockers:SpillBlocker[]=[...layout.map(b=>({x:b.cx,z:b.cz,w:b.bw,d:b.bd})),
             ...boxes.filter(b=>!b.original&&!b.debris&&!b.rx&&!b.rz&&b.y-b.h/2<2&&b.y+b.h/2>2)
@@ -99,8 +102,22 @@ export class StreetReadability {
                 target:{x:s.x+s.nx*5,y:s.y-5*.85,z:s.z+s.nz*5},brightness:()=>windowBrightness(s),
                 illuminates:(p)=>p.y<5.5&&!blocked(s.x,s.z,p.x,p.z,nearby)&&(p.x-s.x)*s.nx+(p.z-s.z)*s.nz>0};
         });
+        this.blockers=blockers;
+        this.texture=new THREE.DataTexture(new Uint8Array(SIZE*SIZE*4),SIZE,SIZE,THREE.RGBAFormat);
+        this.texture.minFilter=this.texture.magFilter=THREE.LinearFilter;
+        this.texture.generateMipmaps=false;
+        this.beams=new FacadeBeams(scene,[...this.sources,...windows],[
+            ...layout.flatMap(skylineMasses),
+            ...boxes.filter(b=>!b.original&&!b.hidden&&!b.debris&&!b.rx&&!b.rz),
+            ...details,
+        ],blockers);
+    }
+    *build():Generator<void> {
+        const {blockers,layout}=this;
         const field=new Float32Array(SIZE*SIZE*3),color=new THREE.Color();
+        let work=0;
         for(const s of this.sources){
+            if(++work%12===0)yield;
             color.setHex(s.color);
             const nearby=blockers.filter(b=>Math.abs(b.x-s.x)<s.reach+b.w/2&&Math.abs(b.z-s.z)<s.reach+b.d/2);
             const startX=Math.max(0,Math.floor((s.x-s.reach-MIN)/SPAN*SIZE));
@@ -113,10 +130,11 @@ export class StreetReadability {
                 field[i]+=amount*color.r;field[i+1]+=amount*color.g;field[i+2]+=amount*color.b;
             }
         }
-        const data=new Uint8Array(SIZE*SIZE*4);
+        const data=this.texture.image.data as Uint8Array;
         // Every authored pole contributes permanently, including supplemental
         // poles. This texture is built once, independently of the nearby rat.
         for(const [x,z] of [...STREET_LAMPS,...generatedStreetLamps([...layout],STREET_LAMPS)]){
+            if(++work%12===0)yield;
             for(let iz=Math.max(0,Math.floor((z-11-MIN)/SPAN*SIZE));iz<=Math.min(SIZE-1,Math.ceil((z+11-MIN)/SPAN*SIZE));iz++)
                 for(let ix=Math.max(0,Math.floor((x-11-MIN)/SPAN*SIZE));ix<=Math.min(SIZE-1,Math.ceil((x+11-MIN)/SPAN*SIZE));ix++){
                     const px=MIN+(ix+.5)/SIZE*SPAN,pz=MIN+(iz+.5)/SIZE*SPAN;
@@ -127,15 +145,9 @@ export class StreetReadability {
                 }
         }
         for(let i=0;i<SIZE*SIZE;i++)for(let c=0;c<3;c++)data[i*4+c]=Math.round(Math.min(MAX_LIGHT,Math.min(.18,field[i*3+c])*AUTHORED_LIGHT_GAIN)/MAX_LIGHT*255);
-        this.texture=new THREE.DataTexture(data,SIZE,SIZE,THREE.RGBAFormat);
-        this.texture.minFilter=this.texture.magFilter=THREE.LinearFilter;
-        this.texture.generateMipmaps=false;this.texture.needsUpdate=true;
-        this.addFixtures(scene);
-        this.beams=new FacadeBeams(scene,[...this.sources,...windows],[
-            ...layout.flatMap(skylineMasses),
-            ...boxes.filter(b=>!b.original&&!b.hidden&&!b.debris&&!b.rx&&!b.rz),
-            ...details,
-        ],blockers);
+        this.texture.needsUpdate=true;
+        this.addFixtures(this.scene);
+        yield* this.beams.build();
     }
     update():void {this.beams.update();}
     private addFixtures(scene:THREE.Scene):void {

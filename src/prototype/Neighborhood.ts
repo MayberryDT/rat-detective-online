@@ -173,6 +173,7 @@ export class Neighborhood {
         this.initLampPool();
         if(lighting==='pools'&&streetReadabilityEnabled()){
             this.readability=new StreetReadability(scene,layout,boxes,this.city.windowLights,this.city.facadeOccluders);
+            yield* this.readability.build();
             // Only this city's owned scenery: never mutate an existing rat,
             // projectile, stage light or a previous scene during replacement.
             for(const object of scene.children)if(!existingObjects.has(object))object.traverse(child=>{

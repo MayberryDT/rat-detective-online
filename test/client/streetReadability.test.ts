@@ -18,6 +18,7 @@ it('casts window light onto a grounded rat, aims out from the pane, and rejects 
     const scene=new THREE.Scene();
     const wall={x:5,y:2,z:-32,w:12,h:4,d:1,color:0,rx:0,rz:0};
     const spill=new StreetReadability(scene,[],[wall]);
+    for(const _step of spill.build());
     const source=spill.lights.find(s=>s.x===5&&s.z===-36.45)!;
     const pool=new StreetLightPool(scene,[source]),camera=new THREE.PerspectiveCamera();
     const active=()=>scene.children.filter((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight&&o.intensity>0);
@@ -30,6 +31,7 @@ it('casts window light onto a grounded rat, aims out from the pane, and rejects 
 });
 it('uses a fixed atlas and instanced fixtures, preserves existing shaders and disposes its resources',()=>{
     const scene=new THREE.Scene(),spill=new StreetReadability(scene,[],[]);
+    for(const _step of spill.build());
     expect(scene.children.filter(o=>o.name.startsWith('street-spill-fixture-'))).toHaveLength(2);
     expect(scene.children.some(o=>o instanceof THREE.Light)).toBe(false);
     const material=new THREE.MeshStandardMaterial();material.userData.streetSurface='ground';

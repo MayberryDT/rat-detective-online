@@ -10,6 +10,11 @@ import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
 import { RatEntity } from '../entities/RatEntity';
 import { yieldToPage } from './yieldToPage';
+import { warmPrograms } from './warmPrograms';
+import { PickupVisual } from '../prototype/PickupVisual';
+import { addLeatherBriefcase } from '../prototype/CaseModel';
+import { PICKUP_KINDS } from '../shared/pickups';
+import { disposeMeshResources } from '../utils/disposeMeshResources';
 import type { NetworkManager } from '../network/NetworkManager';
 import type { TitleScreen } from '../ui/TitleScreen';
 import type { TitleMusic } from '../ui/TitleMusic';
@@ -20,7 +25,8 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
     const spec=world??createWorldSpec(1);
     if(!world&&new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-'))spec.version=GRAYBOX_VERSION;
     let city:CityGenerator|Neighborhood|undefined;
-    let model:RatEntity|undefined;
+    const models:RatEntity[]=[],pickups:PickupVisual[]=[],briefcase=new THREE.Group();
+    let built:GameSession|undefined;
     let cameos:CameoView|undefined,failed=false;
     const cameoLoad=spec.version===GRAYBOX_VERSION?loadCameos(signal).then(view=>{if(failed)view?.dispose();else cameos=view;}):Promise.resolve();
     try {
@@ -37,19 +43,28 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         performance.mark('city-prepare-end');
         await yieldToPage(signal);
         city.update(0,stage.camera);
+        // The session adds the feel layer's shader patches and presentation
+        // objects; warm after it exists so Enter never recompiles the city.
+        const session=new GameSession(renderer,spec,{title,music,transport,stage,city,cameos,releasePreparedModels:()=>{
+            for(const model of models)model.dispose();for(const pickup of pickups)pickup.dispose();disposeMeshResources(briefcase);
+        }});
+        built=session;
         const scenery=new Set(stage.scene.children);
-        model=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',
-            DEFAULT_APPEARANCE);
-        await renderer.compileAsync(stage.scene,stage.camera);
-        // Keep compiled character programs alive until the actual rats have
-        // rendered once, without a dummy participant or collider in the city.
-        stage.scene.remove(...stage.scene.children.filter(object=>!scenery.has(object)));
-        stage.world.removeBody(model.body);
-        await yieldToPage(signal);
+        // Representative rats, supplies and case keep their programs alive
+        // until the real ones render once; no participant or collider remains.
+        models.push(new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE));
+        const enemy=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE,true);
+        enemy.enableRigidBatching();models.push(enemy);
+        for(const kind of PICKUP_KINDS)pickups.push(new PickupVisual(stage.scene,kind));
+        addLeatherBriefcase(briefcase);stage.scene.add(briefcase);
         stage.syncViewport();
+        await warmPrograms(renderer,stage.scene,stage.camera,signal,stage.scene.children.filter(object=>!scenery.has(object)));
+        stage.scene.remove(...stage.scene.children.filter(object=>!scenery.has(object)));
+        for(const model of models)stage.world.removeBody(model.body);
+        await yieldToPage(signal);
         renderer.render(stage.scene,stage.camera);
         if(cameos)warmCameoBuffers(cameos,stage.scene,renderer);
         performance.mark('city-render-ready');
-        return new GameSession(renderer,spec,{title,music,transport,stage,city,cameos,releasePreparedModels:()=>model?.dispose()});
-    } catch(error) {failed=true;cameos?.dispose();model?.dispose();city?.dispose();stage.dispose();throw error;}
+        return session;
+    } catch(error) {failed=true;if(built)built.dispose();else{cameos?.dispose();for(const model of models)model.dispose();for(const pickup of pickups)pickup.dispose();city?.dispose();stage.dispose();}throw error;}
 }
