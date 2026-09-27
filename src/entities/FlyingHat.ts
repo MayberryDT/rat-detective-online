@@ -28,7 +28,9 @@ export class FlyingHat {
     }
 
     update(dt:number):void {
-        if(this.resting||!(dt>0))return;
+        if(!(dt>0))return;
+        // The body can still slide or fall away below a resting hat.
+        if(this.resting){if(this.floor()<this.root.position.y-.2)this.resting=false;else return;}
         dt=Math.min(dt,.05);
         this.velocity.y-=25*dt;
         this.root.position.addScaledVector(this.velocity,dt);

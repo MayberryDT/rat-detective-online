@@ -209,7 +209,7 @@ export class ChaosView {
         // Newest matching corpse only; an older body of the same rat may still be lying elsewhere.
         let best:{mesh:THREE.Group;state:CorpseState}|undefined;
         for(const c of this.corpses.values())if(c.state.victimId===victimId&&(!best||c.state.born>best.state.born))best=c;
-        return best&&this.state&&this.state.time-best.state.born<2000?best.mesh.position:undefined;
+        return best&&this.state&&this.state.time-best.state.born<5000?best.mesh.position:undefined;
     }
     noteDeathStyle(victimId:string,style:DeathStyle):void {
         this.deathStyles.set(victimId,{style,at:performance.now()});
@@ -470,8 +470,13 @@ export class ChaosView {
                 const hat=c.mesh.getObjectByName('rat-hat');
                 if(hat){
                     const params=FEEL.hatPop.params;
-                    const body=c.mesh.position;
-                    c.hat=new FlyingHat(this.root.parent as THREE.Scene,hat,this.p.set(b.v.x,0,b.v.z),()=>body.y,params.speed,params.lift,b.born%97);
+                    // Ground under the body: the lowest point the corpse box has reached (never rises).
+                    let floor=Infinity;const mesh=c.mesh,e=new THREE.Matrix4();
+                    c.hat=new FlyingHat(this.root.parent as THREE.Scene,hat,this.p.set(b.v.x,0,b.v.z),()=>{
+                        e.makeRotationFromQuaternion(mesh.quaternion);const m=e.elements;
+                        const centre=mesh.position.y+m[5]*.95,extent=Math.abs(m[1])*.48+Math.abs(m[5])*.92+Math.abs(m[9])*.38;
+                        return floor=Math.min(floor,centre-extent);
+                    },params.speed,params.lift,b.born%97);
                     c.animator.setHatHidden(true);c.animator.poseDeath((now-b.born)/1000,0,b.spin,0,false);
                 }
             }

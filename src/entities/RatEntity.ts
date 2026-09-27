@@ -355,9 +355,9 @@ export class RatEntity {
         const p = this.mesh.position;
         if(this.freezeLeft>0){
             this.freezeLeft=Math.max(0,this.freezeLeft-dt);
-            if(this.freezeHold){p.copy(this.frozenPosition);this.mesh.quaternion.copy(this.frozenQuaternion);}
-            // Keep the animator's motion baseline current so the resume isn't read as a skid.
+            // Keep the animator's motion baseline at the live pose (before pinning) so resuming isn't read as a skid.
             this.animator.holdMotion();
+            if(this.freezeHold){p.copy(this.frozenPosition);this.mesh.quaternion.copy(this.frozenQuaternion);}
             this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
             this.syncGlowTransform();
             return;
@@ -503,8 +503,9 @@ export class RatEntity {
         const hat = this.mesh.getObjectByName('rat-hat');
         if (!hat) return;
         const p = FEEL.hatPop.params;
-        const body = this.mesh.position;
-        this.flyingHat = new FlyingHat(this.scene, hat, impactVel, () => body.y, p.speed, p.lift, ++this.stainSeed);
+        // Legacy ragdoll: its lowest reached height stands in for the ground (never rises).
+        const body = this.body.position;let floor = Infinity;
+        this.flyingHat = new FlyingHat(this.scene, hat, impactVel, () => floor = Math.min(floor, body.y - .5), p.speed, p.lift, ++this.stainSeed);
         this.animator.setHatHidden(true);
     }
 
