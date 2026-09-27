@@ -51,15 +51,17 @@ pickups, observant idle and deliveries (`RatAnimator` and `RatActing`). This pas
 
 | Item | Change |
 | --- | --- |
-| Squash and stretch | Stronger anticipation stretch on jump and a squash on landing scaled by fall, on the same frame as the input |
-| Skid | Brief lean-back and dust on sharp reversals |
-| Sneaky carry | Hunched shoulders, over-the-shoulder glances and a quicker, sneakier gait while carrying. The case pose is unchanged. |
-| Launcher flight | Coat flare, tail streaming, ears flattened and hat lag. The gun arm keeps its real aim. |
+| Squash and stretch | Head lifts on the jump and drops on a hard landing, with the ears following, on the same frame as the input |
+| Skid | Head and hat lean back, with dust, on hard braking |
+| Sneaky carry | Head ducked with over-the-shoulder glances while carrying. The case pose is unchanged. |
+| Launcher flight | Tail streaming, ears flattened and the hat lagging. The gun arm keeps its real aim. |
 | Idle fidgets | Sniff with a whisker twitch, ear flick, tail flick, head tilt and glances, on varied, per-rat seeded timing. Nothing needs hands. |
 | Kill nod | A brief composed nod that tips the brim; no hand, no swagger |
 | Hit reactions | Brows, hat knock ([spec §3](feel-spec.md#3-danger-and-death)) and a whisker droop layered on the existing hit reaction |
 | Pickup reactions | Ironclad chest puff, Hot Pursuit bounce and Quick Fix relieved breath, on top of the existing reactions |
 | Death variety | Cause-based ragdoll flavour with the hat pop-off |
+
+**As built:** this pass moves only secondary parts (head, hat, ears, tail, whiskers, brows, shoes, pupils). The body carries the pistol and case, so their accepted trajectories stay exact; the frozen-trajectory tests (`locomotionPolish`, `ratActing`, `outfitStudio`) prove it. The accepted (non-polish) workshop mode is unchanged.
 
 ## Rules
 

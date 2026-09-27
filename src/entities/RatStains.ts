@@ -56,8 +56,6 @@ export class RatStains {
         this.mesh.instanceMatrix.needsUpdate=true;
     }
 
-    clear():void {this.cursor=0;this.mesh.count=0;}
-
     dispose():void {
         this.mesh.removeFromParent();this.mesh.dispose();
         if(--owners===0){sharedGeometry?.dispose();sharedMaterial?.dispose();sharedGeometry=undefined;sharedMaterial=undefined;}

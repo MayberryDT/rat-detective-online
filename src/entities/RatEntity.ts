@@ -645,7 +645,7 @@ export class RatEntity {
         this.animator.reset();
         this.flashTimer = 0;
         this.freezeLeft = 0;
-        this.stains?.clear();
+        this.stains?.dispose();this.stains = undefined;
         this.flyingHat?.dispose();this.flyingHat = undefined;
         this.deathTimer = 0;
 

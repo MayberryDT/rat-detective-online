@@ -45,7 +45,7 @@ export const FEEL={
     /** Shoes under the coat hem; Tyler chose on by default. Needs model touch-ups. */
     shoes:{label:'14b Shoes (reload)',toggle:true,params:{}},
     /** Animation pass: squash/stretch, skid (braking decel u/s²), sneaky carry, flight flare, kill nod. */
-    animationPass:{label:'15 Animation pass',toggle:true,params:{jumpStretch:.07,landSquash:.1,skidDecel:70,skidLean:.22,hunch:.07,glance:.45,flare:.1,nod:.22}},
+    animationPass:{label:'15 Animation pass',toggle:true,params:{jumpStretch:.07,landSquash:.1,skidDecel:70,skidLean:.22,hunch:.12,glance:.45,flare:.1,nod:.22}},
     /** Movement: landing dip (rad/s impulse), launch/Hot Pursuit view widening (degrees), speed streaks, dust count. */
     movement:{label:'16 Movement',toggle:true,params:{dip:-1.6,dipPush:-5,launchWiden:9,pursuitWiden:3.5,streaks:.8,dust:8}},
     /** Synthesized sound pass (volumes before Effects volume): footsteps, rustle, jostle, squelch, whizz, brass, stings, wind; echo/muffle by space. */

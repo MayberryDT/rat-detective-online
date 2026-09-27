@@ -163,7 +163,7 @@ export class RatAnimator {
             this.parentRotation.copy(this.root.quaternion).invert();
             this.aimDirection.copy(direction).normalize().applyQuaternion(this.parentRotation);
         }
-        if(feelState().on('hatKnock')){
+        if(this.locomotionPolish&&feelState().on('hatKnock')){
             const p=FEEL.hatKnock.params,side=direction&&Math.abs(this.aimDirection.x)>.05?Math.sign(this.aimDirection.x):(this.hatKnockZ>0?-1:1);
             this.hatKnockAge=0;this.hatKnockZ=-side*p.tilt;this.hatKnockX=p.lift;
         }
@@ -176,7 +176,11 @@ export class RatAnimator {
         this.acting.trigger(event,strength);this.applyPose();
     }
     setHustle(active:boolean):void {this.hustle=active;}
-    resetReactions():void {this.acting.reset();this.hustle=false;this.applyPose();}
+    resetReactions():void {
+        this.acting.reset();this.hustle=false;
+        this.flight=0;this.wasLaunched=false;this.skidAge=this.nodAge=this.pulseAge=this.hatKnockAge=10;
+        this.applyPose();
+    }
     setActingEnabled(enabled:boolean):void {
         this.actingEnabled=enabled;this.acting.reset();this.applyPose();
     }
@@ -382,7 +386,7 @@ export class RatAnimator {
         // Optional stationary art-preview input; gameplay continues to derive speed from motion.
         if(previewSpeed!==undefined&&Number.isFinite(previewSpeed))speed=Math.max(0,Math.min(18,previewSpeed));
         if(this.actingEnabled){
-            if(actingCorrection)this.acting.resetMotion();
+            if(actingCorrection){this.acting.resetMotion();this.flight=0;this.wasLaunched=false;}
             this.acting.update(dt,speed,actingVertical,this.hustle);
         }
         const blend = 1 - Math.exp(-10 * dt);
@@ -459,7 +463,8 @@ export class RatAnimator {
             this.carryAnchor.rotation.x-=this.locomotion.startStop*.65;
             this.carryAnchor.rotation.z-=this.locomotion.turn*.32;
         }
-        const anim=feelState().on('animationPass')?FEEL.animationPass.params:undefined;
+        // The accepted (non-polish) workshop mode stays the frozen reference.
+        const anim=this.locomotionPolish&&feelState().on('animationPass')?FEEL.animationPass.params:undefined;
         const skid=anim&&this.skidAge<.45?Math.sin(this.skidAge/.45*Math.PI):0;
         const nod=anim&&this.nodAge<.4?Math.sin(this.nodAge/.4*Math.PI):0;
         const pulse=anim&&this.pulseAge<.6?Math.sin(this.pulseAge/.6*Math.PI):0;
@@ -505,19 +510,20 @@ export class RatAnimator {
             hat.rotation.x -= this.hatKnockX * knock;
             hat.position.x += this.hatKnockZ * knock * .06;
             if (anim) {
-                // Squash and stretch on the same frame as the jump/landing input.
+                // Only secondary parts (head, hat, ears, tail) take this pass: the
+                // body carries the pistol and case, whose accepted trajectories stay exact.
                 const squash = this.jumpLift * anim.jumpStretch - this.jumpLanding * anim.landSquash;
-                body.scale.y += squash;body.scale.x -= squash * .5;body.scale.z -= squash * .5;
-                body.rotation.x -= skid * anim.skidLean;
-                if (carrying) {body.rotation.x += anim.hunch;head.position.y -= .035;head.rotation.y += glance * anim.glance;}
-                // Launcher flight: coat flare, flattened ears, lagging hat, streaming tail.
-                body.scale.x += flight * anim.flare;body.scale.z += flight * anim.flare;
+                head.position.y += squash * 1.2;
+                leftEar.rotation.x -= squash * 2;rightEar.rotation.x -= squash * 2;
+                head.rotation.x -= skid * anim.skidLean;hat.rotation.x -= skid * anim.skidLean * 1.5;
+                if (carrying) {head.position.y -= anim.hunch * .5;head.rotation.x += anim.hunch;head.rotation.y += glance * anim.glance;}
+                // Launcher flight: flattened ears, lagging hat, streaming tail.
                 leftEar.rotation.x -= flight * .55;rightEar.rotation.x -= flight * .55;
-                hat.rotation.x += flight * .16;tail.rotation.x += flight * .45;
+                hat.rotation.x += flight * (.16 + anim.flare);tail.rotation.x += flight * .45;
                 head.rotation.x += nod * anim.nod;hat.rotation.x += nod * anim.nod * 1.4;
-                if (this.pulseKind === 'ironclad') {body.scale.x += pulse * .07;body.scale.z += pulse * .07;}
-                else if (this.pulseKind === 'hustle') body.position.y += pulse * .14;
-                else {body.scale.y += pulse * .05;head.rotation.x -= pulse * .12;}
+                if (this.pulseKind === 'ironclad') {head.position.y += pulse * .05;head.rotation.x -= pulse * .1;}
+                else if (this.pulseKind === 'hustle') {hat.position.y += pulse * .12;leftEar.rotation.z += pulse * .3;rightEar.rotation.z -= pulse * .3;}
+                else {head.rotation.x -= pulse * .12;hat.position.y += pulse * .04;}
             }
             if (this.hatHidden) hat.scale.setScalar(1e-4);
             // Keep the dragging section planted instead of inheriting the step bounce.
