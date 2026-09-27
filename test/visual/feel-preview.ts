@@ -34,10 +34,20 @@ function fire():void {
     const target=stage.camera.position.clone().addScaledVector(aim,200);
     if(gun.shoot(rat.entity,target))feel.shot();
 }
+/** Nonlethal hit on the local rat from a suspect, as GameSession applies it. */
+function hurt(from:number,damage:number):void {
+    const attacker=suspects[from]!,direction=rat.entity.mesh.position.clone().sub(attacker.mesh.position).setY(0);
+    rat.entity.hp=3;rat.entity.billboard.setHealth(3);
+    feel.hurt(damage,rat.entity.mesh.position,attacker.mesh.position,stage.camera);
+    rat.entity.takeDamage(Math.min(2,damage),direction);
+}
 const actions:Record<string,()=>void>={
     'Shot':fire,
     'Rapid fire ×6':()=>{for(let i=0;i<6;i++)setTimeout(fire,i*110);},
     'Scattershot shot':()=>{feel.setIncident('scattershot');fire();feel.setIncident();},
+    'Hit from left suspect':()=>hurt(0,1),
+    'Hit from right suspect':()=>hurt(2,1),
+    'Heavy hit (3 damage)':()=>hurt(1,3),
     'Reset feel':()=>feel.reset(),
 };
 const buttons=document.getElementById('feel-buttons')!;

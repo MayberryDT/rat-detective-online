@@ -11,6 +11,7 @@ export class FeelDirector {
     readonly camera:CameraFeel;
     private incident?:IncidentId;
     private readonly impulse=new THREE.Vector3();
+    private readonly inverse=new THREE.Quaternion();
     constructor(readonly state:FeelState=feelState()){
         this.camera=new CameraFeel(()=>this.state.shake());
     }
@@ -24,6 +25,17 @@ export class FeelDirector {
         const scale=this.incident==='scattershot'?p.scattershot:this.incident==='popcorn-panic'?p.popcorn:1;
         this.camera.kick(p.pitch*scale,(Math.random()*2-1)*p.yawJitter*p.pitch*scale);
         this.camera.push(this.impulse.set(0,0,p.push*scale));
+    }
+
+    /** You took nonlethal damage. `from` is the attacker's position when known. */
+    hurt(damage:number,victim:THREE.Vector3,from:THREE.Vector3|undefined,view:THREE.Camera):void {
+        if(!this.state.on('hitJolt'))return;
+        const p=FEEL.hitJolt.params,scale=1+Math.max(0,Math.min(3,damage)-1)*p.perDamage;
+        if(from)this.impulse.copy(victim).sub(from).setY(0);
+        if(!from||this.impulse.lengthSq()<1e-6)this.impulse.set(Math.random()-.5,0,Math.random()-.5);
+        this.impulse.normalize().applyQuaternion(this.inverse.copy(view.quaternion).invert());
+        this.camera.kick(p.dip*scale,-this.impulse.x*p.yaw*scale);
+        this.camera.push(this.impulse.multiplyScalar(p.push*scale*.1));
     }
 
     update(dt:number):void {this.camera.update(dt);}

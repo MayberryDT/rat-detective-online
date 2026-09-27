@@ -358,10 +358,11 @@ export class GameSession {
                     } else if (message.hp < entity.hp) {
                         const attacker=message.attackerId===this.myId?this.rat?.entity:
                             message.attackerId?this.remotes.get(message.attackerId):undefined;
-                        // Nonlethal impact is used only by the cosmetic flinch;
-                        // no impulse, camera rotation or authoritative change.
+                        // Nonlethal impact drives the cosmetic flinch and, for the local
+                        // rat, the view-only jolt; no impulse or authoritative change.
                         const direction=new THREE.Vector3();
                         if(attacker)direction.copy(entity.mesh.position).sub(attacker.mesh.position).setY(0);
+                        if(message.id===this.myId)this.feel.hurt(entity.hp-message.hp,entity.mesh.position,attacker?.mesh.position,this.stage.camera);
                         entity.takeDamage(entity.hp - message.hp, direction);
                     }
                 }
