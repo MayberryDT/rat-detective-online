@@ -26,8 +26,8 @@ For a quick look without playing, the **feel workshop** fires each effect on dem
 Private hosted fixture (production matchmaking, server bots, 10-rat cap, audible), serving this branch's client and Worker:
 
 - **Play:** http://127.0.0.1:5193/?room=graybox-benchmark-match-polish-r1 on Veelox. Add `&feel=off` to compare, `&feel=dev` for the switches.
-- **Fixture:** Worker `rat-detective-capacity-test`, version `b2f51f35-6003-40d7-b649-ad0b7ac87c2e` (includes the subtler shot kick). It expires **3:45 PM PDT, 27 September**.
-- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-27T18-45-22-740Z/deployment.json`.
+- **Fixture:** Worker `rat-detective-capacity-test`, version `fbc56383-71fe-4002-aabd-a6d9c6a7c448` (subtler shot kick and the noir pass). It expires **4:15 PM PDT, 27 September**.
+- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-27T19-15-26-081Z/deployment.json`.
 - **Smoke-tested:** a scripted client joined through the relay. The welcome was protocol 18, seed 341283204, 9 server bots plus the client, Excessive Force playing, and chaos frames streamed.
 
 **If the preview has expired**, build and redeploy, then start the relay again:

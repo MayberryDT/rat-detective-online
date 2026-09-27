@@ -48,7 +48,7 @@ rat's identity stay as they are. Done means:
 
 - Base: production `360dbcdd…` / commit `3ffdd8b`. Branch `polish/feel`.
 - **Tyler's first review (2026-09-27):** "This feels way better." One change: the shot kick was too strong. It's now very subtle (peak about 0.4°, was 1.4°).
-- Next action: build the noir pass (N0–N9 below), one commit each, then a fresh review preview. Merge to `main` and deploy to production only on Tyler's explicit OK.
+- **Noir pass built (N0–N9), waiting on Tyler's review** in the same preview, using the [review guide](juice/review.md#noir-pass-second-batch). After that, apply his keep/tweak/cut decisions, then merge to `main` and deploy to production only on his explicit OK.
 
 ## Remaining outcomes (in order; one commit each)
 
@@ -93,7 +93,7 @@ Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning 
 - [x] **N6 Film grain and vignette:** plus letterbox bars during big moments (death camera, victory slow-motion).
 - [x] **N7 Neon accents:** red and teal neon signs on landmark facades that buzz and flicker. They're the only saturated colour in the city.
 - [x] **N8 Searchlights and lightning:** sweeping rooftop beams, and the occasional lightning flash with distant thunder.
-- [ ] **N9 Review package:** performance check, focused checks, a fresh preview, and an update to the review guide.
+- [x] **N9 Review package:** performance check, focused checks, a fresh preview, and an update to the review guide.
 
 ## Open decisions
 
