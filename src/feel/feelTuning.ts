@@ -44,6 +44,8 @@ export const FEEL={
     modelTouchUps:{label:'14 Model touch-ups (reload)',toggle:true,params:{}},
     /** Shoes under the coat hem; Tyler chose on by default. Needs model touch-ups. */
     shoes:{label:'14b Shoes (reload)',toggle:true,params:{}},
+    /** Animation pass: squash/stretch, skid (braking decel u/s²), sneaky carry, flight flare, kill nod. */
+    animationPass:{label:'15 Animation pass',toggle:true,params:{jumpStretch:.07,landSquash:.1,skidDecel:70,skidLean:.22,hunch:.07,glance:.45,flare:.1,nod:.22}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

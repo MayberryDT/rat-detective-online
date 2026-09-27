@@ -381,7 +381,7 @@ export class GameSession {
             case 'playerDied': {
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
-                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName);this.foley.play('hit-confirm');const victim=this.remotes.get(message.victimId);if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera);}
+                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName);this.foley.play('hit-confirm');const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera);}
                 this.highlights.emit(this.highlights.detector.onDeath({
                     victimId: message.victimId,
                     killerId: message.killerId,

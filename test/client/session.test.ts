@@ -98,6 +98,7 @@ const harness = vi.hoisted(() => {
             takeDamage: ReturnType<typeof vi.fn>;
             freeze: ReturnType<typeof vi.fn>;
             setDeathStyle: ReturnType<typeof vi.fn>;
+            nod: ReturnType<typeof vi.fn>;
             heal: ReturnType<typeof vi.fn>;
             setPowerups: ReturnType<typeof vi.fn>;
             resetReactions: ReturnType<typeof vi.fn>;
@@ -134,6 +135,7 @@ const harness = vi.hoisted(() => {
                 takeDamage: vi.fn(),
                 freeze: vi.fn(),
                 setDeathStyle: vi.fn(),
+                nod: vi.fn(),
                 heal: vi.fn(),
                 setPowerups: vi.fn(),
                 resetReactions: vi.fn(),

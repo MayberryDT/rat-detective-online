@@ -85,6 +85,16 @@ export class RatAnimator {
     private lastYaw = 0;
     private readonly orientation = new THREE.Euler(0, 0, 0, 'YXZ');
     private readonly extras: ExtraPart[] = [];
+    /** Polish 15 animation-pass state. */
+    private skidAge = 10;
+    private nodAge = 10;
+    private pulseAge = 10;
+    private pulseKind: 'ironclad'|'hustle'|'heal' = 'heal';
+    private flight = 0;
+    private readonly velocity = new THREE.Vector3();
+    private readonly lastVelocity = new THREE.Vector3();
+    /** Set when a skid starts; the entity consumes it for dust (polish 16). */
+    skidStarted = false;
 
     constructor(private readonly root: THREE.Group, outline?: THREE.Group) {
         this.acting=new RatActing(root.uuid);
@@ -238,6 +248,11 @@ export class RatAnimator {
 
     setDeathStyle(style:DeathStyle):void {this.deathStyle=feelState().on('deathVariety')?style:'default';}
 
+    /** Composed nod that tips the brim (your kill). */
+    nod():void {this.nodAge=0;}
+    /** Pickup body reaction: Ironclad chest puff, Hot Pursuit bounce, Quick Fix relieved breath. */
+    pulse(kind:'ironclad'|'hustle'|'heal'):void {this.pulseKind=kind;this.pulseAge=0;}
+
     /** The fedora has flown off as its own object; collapse the rig's copy until reset. */
     setHatHidden(hidden:boolean):void {this.hatHidden=hidden;}
 
@@ -259,6 +274,7 @@ export class RatAnimator {
         this.lastPosition = null;
         this.hitAge = 10;
         this.hatKnockAge = 10;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;this.deathStyle = 'default';
+        this.skidAge = this.nodAge = this.pulseAge = 10;this.flight = 0;this.skidStarted = false;this.lastVelocity.set(0, 0, 0);
         this.flop.set(0, 0); this.flopVelocity.set(0, 0);
         this.tailFall.set(0, 0, 0);
         this.landingPulse = 0;
@@ -348,6 +364,14 @@ export class RatAnimator {
             if (distance < 2) speed = distance / motionDt;
             turnRate = Math.atan2(Math.sin(yaw - this.lastYaw), Math.cos(yaw - this.lastYaw)) / motionDt;
         } else this.lastPosition = new THREE.Vector3();
+        if (!correction && motionDt > 0 && this.lastPosition.lengthSq() > 0) {
+            this.velocity.set(position.x - this.lastPosition.x, 0, position.z - this.lastPosition.z).divideScalar(motionDt);
+            const last = this.lastVelocity, lastSpeed = last.length();
+            const along = lastSpeed > 1 ? ((this.velocity.x - last.x) * last.x + (this.velocity.z - last.z) * last.z) / lastSpeed / motionDt : 0;
+            // Hard braking against fast travel reads as a skid (reversal or stop).
+            if (this.skidAge > .5 && lastSpeed > 9 && along < -FEEL.animationPass.params.skidDecel && feelState().on('animationPass')) {this.skidAge = 0;this.skidStarted = true;}
+            this.lastVelocity.copy(this.velocity);
+        }
         this.lastPosition.copy(position);
         this.lastYaw = yaw;
         // Optional stationary art-preview input; gameplay continues to derive speed from motion.
@@ -396,7 +420,8 @@ export class RatAnimator {
         this.muzzleFlash.visible = this.flashAge < .065;
         this.muzzleFlash.material.opacity = Math.max(0, 1 - this.flashAge / .065);
         this.hitAge += dt;
-        this.hatKnockAge += dt;
+        this.hatKnockAge += dt;this.skidAge += dt;this.nodAge += dt;this.pulseAge += dt;
+        this.flight = THREE.MathUtils.lerp(this.flight, this.actingEnabled && this.acting.launchFlight ? 1 : 0, 1 - Math.exp(-6 * dt));
         this.hit = Math.exp(-this.hitAge * 16) * Math.cos(this.hitAge * 22);
         this.aimHold = Math.max(0, this.aimHold - dt);
         this.aim = THREE.MathUtils.lerp(this.aim, this.aimHold > 0 ? 1 : 0, 1 - Math.exp(-7 * dt));
@@ -423,6 +448,14 @@ export class RatAnimator {
             this.carryAnchor.rotation.x-=this.locomotion.startStop*.65;
             this.carryAnchor.rotation.z-=this.locomotion.turn*.32;
         }
+        const anim=feelState().on('animationPass')?FEEL.animationPass.params:undefined;
+        const skid=anim&&this.skidAge<.45?Math.sin(this.skidAge/.45*Math.PI):0;
+        const nod=anim&&this.nodAge<.4?Math.sin(this.nodAge/.4*Math.PI):0;
+        const pulse=anim&&this.pulseAge<.6?Math.sin(this.pulseAge/.6*Math.PI):0;
+        const carrying=!!anim&&this.carryAnchor.children.length>0;
+        const glancePhase=(this.time+(this.actingEnabled?this.acting.blinkOffset:0))%4.2;
+        const glance=carrying&&glancePhase<1.1?Math.sin(glancePhase/1.1*Math.PI)*(Math.floor(this.time/4.2)%2?1:-1):0;
+        const flight=anim?this.flight:0;
         const settle=FEEL.hatKnock.params.settle;
         const knock=this.hatKnockAge<4*settle?Math.min(1,this.hatKnockAge/.05)*Math.exp(-this.hatKnockAge/settle)*(1+.3*Math.cos(this.hatKnockAge*15)*Math.exp(-this.hatKnockAge*6)):0;
         for (const rig of this.rigs) {
@@ -460,6 +493,21 @@ export class RatAnimator {
             hat.rotation.z += this.hatKnockZ * knock;
             hat.rotation.x -= this.hatKnockX * knock;
             hat.position.x += this.hatKnockZ * knock * .06;
+            if (anim) {
+                // Squash and stretch on the same frame as the jump/landing input.
+                const squash = this.jumpLift * anim.jumpStretch - this.jumpLanding * anim.landSquash;
+                body.scale.y += squash;body.scale.x -= squash * .5;body.scale.z -= squash * .5;
+                body.rotation.x -= skid * anim.skidLean;
+                if (carrying) {body.rotation.x += anim.hunch;head.position.y -= .035;head.rotation.y += glance * anim.glance;}
+                // Launcher flight: coat flare, flattened ears, lagging hat, streaming tail.
+                body.scale.x += flight * anim.flare;body.scale.z += flight * anim.flare;
+                leftEar.rotation.x -= flight * .55;rightEar.rotation.x -= flight * .55;
+                hat.rotation.x += flight * .16;tail.rotation.x += flight * .45;
+                head.rotation.x += nod * anim.nod;hat.rotation.x += nod * anim.nod * 1.4;
+                if (this.pulseKind === 'ironclad') {body.scale.x += pulse * .07;body.scale.z += pulse * .07;}
+                else if (this.pulseKind === 'hustle') body.position.y += pulse * .14;
+                else {body.scale.y += pulse * .05;head.rotation.x -= pulse * .12;}
+            }
             if (this.hatHidden) hat.scale.setScalar(1e-4);
             // Keep the dragging section planted instead of inheriting the step bounce.
             tail.rotation.y = -this.turn * 0.2;

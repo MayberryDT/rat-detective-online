@@ -324,8 +324,8 @@ export class RatEntity {
     /** Durations are relative to the latest authoritative snapshot, then expire locally. */
     public setPowerups(ironcladSeconds:number,hustleSeconds:number):void {
         const silver=this.ironcladRemaining>0;
-        if(!this.dead&&ironcladSeconds>this.ironcladRemaining+.5){this.metalApplication=.28;this.powerupEffects.apply('ironclad');}
-        if(!this.dead&&hustleSeconds>this.hustleRemaining+.5)this.powerupEffects.apply('hustle');
+        if(!this.dead&&ironcladSeconds>this.ironcladRemaining+.5){this.metalApplication=.28;this.powerupEffects.apply('ironclad');this.animator.pulse('ironclad');}
+        if(!this.dead&&hustleSeconds>this.hustleRemaining+.5){this.powerupEffects.apply('hustle');this.animator.pulse('hustle');}
         this.ironcladRemaining=this.dead?0:Math.max(0,ironcladSeconds);
         this.hustleRemaining=this.dead?0:Math.max(0,hustleSeconds);
         if(silver!==(this.ironcladRemaining>0)){this.resetColor();if(this.flashTimer>0)this.applyHitColor();}
@@ -455,7 +455,7 @@ export class RatEntity {
         this.hp = hp;
         this.billboard.setHealth(this.hp);
         this.flashColor(0x8fffb0);this.powerupEffects.heal();
-        this.playReaction('heal');
+        this.playReaction('heal');this.animator.pulse('heal');
     }
 
     public takeDamage(amount: number, impactVel: THREE.Vector3) {
@@ -482,6 +482,9 @@ export class RatEntity {
             this.die(impactVel);
         }
     }
+
+    /** Polish 15: composed kill nod. */
+    public nod(): void { if (!this.dead) this.animator.nod(); }
 
     /** Polish 12: flavour the next death's secondary motion by its cause. */
     public setDeathStyle(style: DeathStyle): void { this.deathStyle = style; }
