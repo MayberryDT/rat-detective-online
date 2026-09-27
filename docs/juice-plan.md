@@ -84,15 +84,15 @@ Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning 
 - Phones get a lighter version.
 - It supersedes the accepted "keep ambient, hemisphere, moon, exposure unchanged" lighting rule for the city only.
 
-- [ ] **N0 Noir strength:** one shared strength (Bold ≈ 0.65), shown as a slider in the juice review panel.
-- [ ] **N1 Deeper shadows:** a contrast curve on city surfaces only. Dark areas go darker; lamp pools stay bright.
-- [ ] **N2 Colour-drained city:** city surfaces go cold grey-blue. Windows, lamps and neon keep their warmth.
-- [ ] **N3 Rain and wet streets:** rain streaks around the view (not indoors or in sewers), splashes, lamp reflections on the wet street, and rain sound.
-- [ ] **N4 Haze:** visible light cones under streetlamps and a little more cold fog.
-- [ ] **N5 Venetian-blind light:** striped window light on landmark interior floors.
-- [ ] **N6 Film grain and vignette:** plus letterbox bars during big moments (death camera, victory slow-motion).
-- [ ] **N7 Neon accents:** red and teal neon signs on landmark facades that buzz and flicker. They're the only saturated colour in the city.
-- [ ] **N8 Searchlights and lightning:** sweeping rooftop beams, and the occasional lightning flash with distant thunder.
+- [x] **N0 Noir strength:** one shared strength (Bold ≈ 0.65), shown as a slider in the juice review panel.
+- [x] **N1 Deeper shadows:** a contrast curve on city surfaces only. Dark areas go darker; lamp pools stay bright.
+- [x] **N2 Colour-drained city:** city surfaces go cold grey-blue. Windows, lamps and neon keep their warmth.
+- [x] **N3 Rain and wet streets:** rain streaks around the view (not indoors or in sewers), splashes, lamp reflections on the wet street, and rain sound.
+- [x] **N4 Haze:** visible light cones under streetlamps and a little more cold fog.
+- [x] **N5 Venetian-blind light:** striped window light on landmark interior floors.
+- [x] **N6 Film grain and vignette:** plus letterbox bars during big moments (death camera, victory slow-motion).
+- [x] **N7 Neon accents:** red and teal neon signs on landmark facades that buzz and flicker. They're the only saturated colour in the city.
+- [x] **N8 Searchlights and lightning:** sweeping rooftop beams, and the occasional lightning flash with distant thunder.
 - [ ] **N9 Review package:** performance check, focused checks, a fresh preview, and an update to the review guide.
 
 ## Open decisions

@@ -6,11 +6,14 @@ const ARROWS=4;
 
 /** A small tile of monochrome noise for the film-grain overlay, as a data URL. */
 function grainImage(doc:Document):string|undefined {
-    const canvas=doc.createElement('canvas');canvas.width=canvas.height=96;
-    const g=canvas.getContext?.('2d');if(!g)return undefined;
-    const image=g.createImageData(96,96);
-    for(let i=0;i<image.data.length;i+=4){const v=Math.random()*255;image.data[i]=image.data[i+1]=image.data[i+2]=v;image.data[i+3]=255;}
-    g.putImageData(image,0,0);return canvas.toDataURL();
+    // Minimal/headless canvases may lack pixel access; grain is then simply skipped.
+    try{
+        const canvas=doc.createElement('canvas');canvas.width=canvas.height=96;
+        const g=canvas.getContext?.('2d');if(!g)return undefined;
+        const image=g.createImageData(96,96);
+        for(let i=0;i<image.data.length;i+=4){const v=Math.random()*255;image.data[i]=image.data[i+1]=image.data[i+2]=v;image.data[i+3]=255;}
+        g.putImageData(image,0,0);return canvas.toDataURL();
+    }catch{return undefined;}
 }
 interface Arrow {node:HTMLElement;from:THREE.Vector3|null;age:number;life:number}
 

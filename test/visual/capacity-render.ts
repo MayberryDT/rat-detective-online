@@ -6,6 +6,7 @@ import {RemotePlayers} from '../../src/session/RemotePlayers';
 import {createPlayer} from '../../src/worker/gameState';
 import {ChaosView} from '../../src/prototype/ChaosView';
 import type {ChaosState} from '../../src/shared/chaosState';
+import {FeelDirector} from '../../src/feel/FeelDirector';
 const params=new URLSearchParams(location.search),count=Number(params.get('rats')??50);
 if(![0,12,24,32,50,75,100].includes(count))throw Error('Unsupported renderer count');
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
@@ -14,6 +15,9 @@ stage.renderer.info.autoReset=false;
 const gpu=gpuTimer(stage.renderer.getContext() as WebGL2RenderingContext);let gpuWarm=false;
 const spec={seed:341283204,version:2};
 const city=new Neighborhood(stage.scene,stage.world,spec);city.generate();
+// `?noir=1`: include the juice city layer (noir pass, props) in the measurement.
+const feel=params.get('noir')==='1'?new FeelDirector():undefined;
+if(feel){feel.attach(stage.renderer.domElement,stage.listener);feel.attachCity(stage.scene,city.streetLamps);}
 stage.camera.position.set(-43,7,-18);stage.camera.lookAt(-6,1,-18);
 stage.flashlight.position.copy(stage.camera.position);stage.flashlight.target.position.set(-6,1,-18);
 const remotes=new RemotePlayers(stage.scene,stage.world,()=>performance.now(),params.get('batch')==='1');
@@ -30,7 +34,7 @@ function frame(now:number){
  if(!first){first=now;packetAt=now;}const dt=previous?Math.min(.05,(now-previous)/1000):1/60;const start=performance.now();
  while(now-packetAt>=50){packetAt+=50;for(const [i,p] of players.entries()){const a=packetAt*.00325+i;remotes.move({...p,x:p.x+Math.sin(a)*2,z:p.z+Math.cos(a)*2,meshQy:Math.sin(a/2),meshQw:Math.cos(a/2)},packetAt);}
  state.time=packetAt;state.shots=Array.from({length:balls},(_,i)=>({id:`ball-${i}`,owner:'rat-0',p:{x:-24+Math.floor(i/16)*1.8,y:1+Math.sin(packetAt*.002+i),z:-23+(i%16)*.65},v:{x:0,y:0,z:0},age:1}));chaos.apply(state);}
- remotes.prepareFrame(now);remotes.presentFrame();chaos.update(dt,stage.camera);city.update(dt,stage.camera);const beforeRender=performance.now();stage.renderer.info.reset();if(now-first>5000&&!gpuWarm){gpu.reset();gpuWarm=true;}gpu.begin();stage.renderer.render(stage.scene,stage.camera);gpu.end();
+ remotes.prepareFrame(now);remotes.presentFrame();chaos.update(dt,stage.camera);city.update(dt,stage.camera);feel?.update(dt,stage.camera,stage.camera.position);const beforeRender=performance.now();stage.renderer.info.reset();if(now-first>5000&&!gpuWarm){gpu.reset();gpuWarm=true;}gpu.begin();stage.renderer.render(stage.scene,stage.camera);gpu.end();
  if(now-first>5000){frames.push(now-previous);cpu.push(performance.now()-beforeRender);present.push(beforeRender-start);samples++;}
  previous=now;
  if(now-first<20000){requestAnimationFrame(frame);return;}

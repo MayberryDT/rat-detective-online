@@ -62,6 +62,36 @@ node scripts/preview-capacity.mjs --deployment=/absolute/path/to/new/deployment.
 | 18 | City reacts | Pigeons scatter from shots and passing rats, newspapers kick up, trash cans tip, the manhole steams, hit lamp bulbs stutter. Props return after 25 s. | 18 City reacts |
 | 19 | Rewards | Your ranking row punches when you score. Callouts: ON THE CASE, COLD CASE (killing the carrier), RAT RACKET (3 kills in one life). The winning moment plays in slow motion for 1.4 s before the victory card, which now carries a **Case File**. | 19 Rewards |
 
+## Noir pass (second batch)
+
+All eight pieces Tyler picked, at Bold strength. **Noir strength** is the slider at the top of the Juice review panel: 0 is today's city and 1 is extreme. Each piece has its own switch. Rats, cheese, cases, pickups and cameos are never changed.
+
+| # | Piece | What to look for | Switch |
+| --- | --- | --- | --- |
+| N1 | Deeper shadows | The dark areas between lamp pools sink; pools and lit windows stay bright. | N1 Deeper shadows |
+| N2 | Colour-drained city | Buildings, streets and props go cold grey-blue. Windows and lamps keep some warmth; rats pop. | N2 Colour-drained city |
+| N3 | Rain and wet streets | Rain around you outdoors (none indoors or in the sewers), splashes, warm lamp reflections streaking across the street toward you, and a rain bed. | N3 Rain and wet streets |
+| N4 | Haze | Light cones under the nearest streetlamps and a little more cold fog. | N4 Haze |
+| N5 | Venetian-blind light | Warm striped window light on the landmark interior floors. | N5 Venetian-blind light |
+| N6 | Film grain, vignette, letterbox | Grain (desktop only), darker corners, and letterbox bars during your death camera and the victory slow-motion. | N6 Film grain… |
+| N7 | Neon accents | Red and teal neon (HOTEL, JAZZ, BAR, DINER…) on the landmark facades, buzzing now and then. The only saturated colour in the city. | N7 Neon accents |
+| N8 | Searchlights and lightning | Beams sweeping over the landmark roofs, and every 30–70 s a double lightning flash that lights the sky, followed by distant thunder. | N8 Searchlights and lightning |
+
+Workshop captures: `output/polish/20-noir/` (off / Bold / full), `21-rain/`, `22-atmos/` (haze, skyline, lightning), `23-dressing/` (neon, blinds).
+
+**Noir performance** (full-lobby render fixture on the Halla AMD GPU with the whole juice city layer, `?noir=1`, feel off then on):
+- Draw calls: 972 → 995 (+23).
+- Triangles: +3.2%.
+- Render CPU p95: 15.7 → 17.4 ms (+10.8%). That's at the edge of the 10% budget, with ±7% run-to-run noise.
+- Frame p95: 33.4 ms in both runs. Halla's headless run is capped at 30 Hz, so the frame budget (≤16.9 ms) couldn't be checked here.
+- Extra GPU fill (rain, haze and neon, which are additive) isn't captured by this CPU figure.
+- Phones get fewer drops and no grain or colour filter.
+
+**Noir choices to confirm:**
+- **Fog (N4)** also thins distant rats slightly, because fog is scene-wide.
+- **Lightning (N8)** briefly brightens the whole scene, including rats, through the existing hemisphere light.
+- Neon signs and venetian blinds are on the four landmark buildings only.
+
 ## Choices to confirm
 
 These are places where I had to make a call. Each can be changed.
