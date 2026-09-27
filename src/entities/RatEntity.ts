@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import {RatStains} from './RatStains';
 import {FlyingHat} from './FlyingHat';
 import {kickDust} from '../feel/Dust';
+import {addEyeshine,enemyInkOutline,patchEnemyColour} from '../feel/EnemyLook';
 import type {DeathStyle} from '../utils/RatAnimator';
 import {FEEL} from '../feel/feelTuning';
 import {feelState} from '../feel/feelState';
@@ -147,6 +148,8 @@ export class RatEntity {
         this.mesh = this.modelFactory(opts);
         this.mesh.position.copy(position);
         this.mesh.userData.aimTarget = true;
+        // Juice T3 lab: enemy readability options (switchable in the juice review).
+        if (isRemote) { addEyeshine(this.mesh); patchEnemyColour(this.mesh); }
         this.scene.add(this.mesh);
 
         // Cache materials for hit flash + apply emissive glow
@@ -310,6 +313,7 @@ export class RatEntity {
         if(this.mesh.getObjectByName('rat-rigid-batch'))return;
         batchRigidMeshes(this.mesh);
         if(this.glowMesh)batchRigidMeshes(this.glowMesh);
+        if(this.isRemote)patchEnemyColour(this.mesh);
     }
 
     public resetMotionHistory(): void { this.animator.resetMotionHistory();this.powerupEffects.clear(); }
@@ -332,10 +336,14 @@ export class RatEntity {
         if(silver!==(this.ironcladRemaining>0)){this.resetColor();if(this.flashTimer>0)this.applyHitColor();}
         this.updatePowerupOutline();
     }
+    private inkApplied=false;
     private updatePowerupOutline():void {
         const pursuit=this.hustleRemaining>0&&!this.dead;
-        if(pursuit)this.glowMaterial.color.setHex(0xff1605);else this.glowMaterial.color.copy(this.glowTint);
-        this.glowMaterial.opacity=pursuit?.95:GLOW_OPACITY;this.shellOffset.value=pursuit?.055:0;
+        // Juice T3 lab: a crisp cream comic line instead of the soft additive glow (Hot Pursuit keeps its red).
+        const ink=!pursuit&&this.isRemote&&enemyInkOutline();this.inkApplied=ink;
+        if(pursuit)this.glowMaterial.color.setHex(0xff1605);else if(ink)this.glowMaterial.color.setHex(0xf3e6c4);else this.glowMaterial.color.copy(this.glowTint);
+        this.glowMaterial.blending=ink?THREE.NormalBlending:THREE.AdditiveBlending;
+        this.glowMaterial.opacity=pursuit?.95:ink?.9:GLOW_OPACITY;this.shellOffset.value=pursuit?.055:ink?.012:0;
         if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(!this.isPlayer||pursuit);
     }
     private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.updatePowerupOutline();this.resetColor();}
@@ -365,6 +373,7 @@ export class RatEntity {
         this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
         this.syncGlowTransform();
         this.animator.setHustle(this.hustleRemaining>0);
+        if(this.isRemote&&enemyInkOutline()!==this.inkApplied)this.updatePowerupOutline();
         this.animator.update(dt,previewSpeed);
         // Polish 16: dust from this frame's animation events (consumed once).
         if(this.animator.skidStarted){this.animator.skidStarted=false;kickDust(p,.45);}

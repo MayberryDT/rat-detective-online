@@ -5,7 +5,7 @@ import * as THREE from 'three';
 export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
     const sources:THREE.Mesh[]=[];
     root.traverse(object=>{
-        if(!(object instanceof THREE.Mesh)||object instanceof THREE.SkinnedMesh||object instanceof THREE.InstancedMesh||!object.visible||object.children.length||Array.isArray(object.material))return;
+        if(!(object instanceof THREE.Mesh)||object instanceof THREE.SkinnedMesh||object instanceof THREE.InstancedMesh||object.userData.noBatch||!object.visible||object.children.length||Array.isArray(object.material))return;
         for(let parent:THREE.Object3D|null=object;parent&&parent!==root;parent=parent.parent){
             if(parent.name==='rat-tail'||parent.name==='rat-muzzle'||!parent.visible)return;
         }

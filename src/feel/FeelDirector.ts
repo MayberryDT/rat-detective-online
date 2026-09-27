@@ -11,6 +11,8 @@ import {NoirCity} from './NoirCity';
 import {NoirRain} from './NoirRain';
 import {NoirAtmosphere} from './NoirAtmosphere';
 import {NoirDressing} from './NoirDressing';
+import {updateEnemyLook} from './EnemyLook';
+import {BreathPuffs} from './BreathPuffs';
 import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
 import type {Sting} from './FeelAudio';
@@ -42,6 +44,7 @@ export class FeelDirector {
     private noirRain?:NoirRain;
     private noirAtmosphere?:NoirAtmosphere;
     private noirDressing?:NoirDressing;
+    private breath?:BreathPuffs;
     private lifeKills=0;
     private lastCalloutAt=-Infinity;
     private slowAge=Infinity;
@@ -75,6 +78,7 @@ export class FeelDirector {
         this.noirCity?.dispose();this.noirCity=new NoirCity(scene);
         this.noirAtmosphere?.dispose();this.noirAtmosphere=new NoirAtmosphere(scene,lamps);
         this.noirDressing?.dispose();this.noirDressing=new NoirDressing(scene);
+        this.breath?.dispose();this.breath=new BreathPuffs(scene);
         this.noirRain?.dispose();this.noirRain=new NoirRain(scene,lamps,Math.round(this.colourFilter?FEEL.noirRain.params.drops:FEEL.noirRain.params.phoneDrops));
     }
     /** Force a lightning strike (workshop review). */
@@ -108,6 +112,7 @@ export class FeelDirector {
     footsteps(dt:number,sources:readonly FootstepSource[],self:THREE.Vector3|undefined,view:THREE.Camera):void {
         this.sound.footsteps(dt,sources,self,view);
         this.city?.proximity(sources);
+        this.breath?.update(dt,sources);
     }
     /** Near-miss whizz for other rats' balls. */
     projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):void {this.sound.projectiles(shots,myId,head,view);}
@@ -238,6 +243,7 @@ export class FeelDirector {
         this.dust?.update(dt);
         this.city?.update(dt);
         this.noirCity?.update(this.perception());
+        updateEnemyLook();
         this.noirDressing?.update(dt);
         if(this.noirRain){
             const where=self?spaceAt(self):'open';
@@ -271,5 +277,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();this.lifeKills=0;}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.breath?.dispose();}
 }

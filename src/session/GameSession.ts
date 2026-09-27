@@ -40,14 +40,16 @@ import type {CameoView,CameoVisitor} from '../cameos/CameoView';
 import {loadCameos} from '../cameos/loadCameos';
 import {HighlightBridge} from '../highlights/HighlightBridge';
 import {FeelDirector} from '../feel/FeelDirector';
+import {feelState} from '../feel/feelState';
 
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
-const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean}[]=[];
+const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean;facing?:THREE.Quaternion}[]=[];
 const HEAD_POSITION=new THREE.Vector3();
+const ENEMY_ANCHORS:THREE.Vector3[]=[];
 /** Fill slot `n` of the reused footstep list in place; returns the next slot. */
-function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolean):number {
-    const source=FOOTSTEP_SOURCES[n]??={id,position,grounded};
-    source.id=id;source.position=position;source.grounded=grounded;
+function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolean,facing?:THREE.Quaternion):number {
+    const source=FOOTSTEP_SOURCES[n]??={id,position,grounded,facing};
+    source.id=id;source.position=position;source.grounded=grounded;source.facing=facing;
     return n+1;
 }
 
@@ -585,7 +587,7 @@ export class GameSession {
             if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,won.assignment,...(won.awards?[won.awards]:[]));
         }
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
-        this.city.update(dt, camera, this.rat?.entity.body.position);
+        this.city.update(dt, camera, this.rat?.entity.body.position, this.enemyFixtureAnchors());
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         this.feel.beforeRender(camera);
@@ -597,6 +599,18 @@ export class GameSession {
         }
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));
+    }
+
+    /** Juice T3 lab: nearby living enemies that may claim a real fixture light. */
+    private enemyFixtureAnchors():readonly THREE.Vector3[] {
+        ENEMY_ANCHORS.length=0;
+        if(!this.rat||!feelState().on('enemyFixtures'))return ENEMY_ANCHORS;
+        const self=this.rat.entity.body.position;
+        for(const {entity} of this.remotes.rats.values()){
+            const p=entity.mesh.position;
+            if(!entity.dead&&Math.abs(p.x-self.x)<30&&Math.abs(p.z-self.z)<30)ENEMY_ANCHORS.push(p);
+        }
+        return ENEMY_ANCHORS;
     }
 
     /** Polish 17 music stings from consecutive snapshots. */
@@ -613,8 +627,8 @@ export class GameSession {
     private feelAudioFrame(dt:number):void {
         const rat=this.rat!,sources=FOOTSTEP_SOURCES;let n=0;
         const self=rat.entity.dead||this.observing?undefined:rat.entity.mesh.position;
-        if(self)n=pooledSource(n,'self',self,rat.grounded);
-        for(const [id,{entity}] of this.remotes.rats)if(!entity.dead)n=pooledSource(n,id,entity.mesh.position);
+        if(self)n=pooledSource(n,'self',self,rat.grounded,rat.entity.mesh.quaternion);
+        for(const [id,{entity}] of this.remotes.rats)if(!entity.dead)n=pooledSource(n,id,entity.mesh.position,undefined,entity.mesh.quaternion);
         sources.length=n;
         this.feel.footsteps(dt,sources,self,this.stage.camera);
         if(self&&this.lastChaos)this.feel.projectiles(this.lastChaos.shots,this.myId,HEAD_POSITION.copy(self).setY(self.y+1.6),this.stage.camera);

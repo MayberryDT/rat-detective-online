@@ -78,6 +78,13 @@ export const FEEL={
     noirByHealth:{label:'T2 Noir scales with health',toggle:true,params:{}},
     /** T2: at the last hit point the case loses its markers and Quick Fix kits glow green through walls. */
     lastHitPoint:{label:'T2b Last hit point: case hidden, Quick Fix x-ray',toggle:true,params:{}},
+    /** T3 lab, off by default for side-by-side comparison: eyeshine strength and saturation boost. */
+    enemyLook:{label:'T3 Enemy readability values',toggle:false,params:{eyeshine:1.4,saturation:.55}},
+    enemyEyeshine:{label:'T3a Enemy eyeshine',toggle:true,defaultOff:true,params:{}},
+    enemySaturation:{label:'T3b Enemy selective colour',toggle:true,defaultOff:true,params:{}},
+    enemyInk:{label:'T3c Enemy comic ink outline',toggle:true,defaultOff:true,params:{}},
+    enemyFixtures:{label:'T3d Fixture lights follow enemies',toggle:true,defaultOff:true,params:{}},
+    breathPuffs:{label:'T3e Breath puffs',toggle:true,defaultOff:true,params:{interval:2.2}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;
