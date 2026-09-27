@@ -113,6 +113,18 @@ export class FeelAudio {
         filter.frequency.setValueAtTime(2400,at);filter.frequency.exponentialRampToValueAtTime(500,at+.45);filter.connect(out);
         for(const [f,d] of [[146.8,-6],[174.6,5],[220,-3],[293.7,4]])this.tone(filter,at,.5,'sawtooth',f*Math.pow(2,d/1200),f*Math.pow(2,d/1200)*.985,.28);
     }
+    /** Juice T4: a headshot. A hard wooden knock, a falling whistle and a short bell ring. */
+    headshot(volume:number,pan=0):void {
+        if(!this.allow('headshot',.12))return;
+        const at=this.context.currentTime,out=this.out(volume,pan,1.1);
+        const knock=this.context.createBufferSource(),band=this.context.createBiquadFilter(),env=this.context.createGain();
+        knock.buffer=this.white();band.type='bandpass';band.frequency.value=900;band.Q.value=3;
+        env.gain.setValueAtTime(1,at);env.gain.exponentialRampToValueAtTime(.001,at+.07);
+        knock.connect(band).connect(env).connect(out);knock.start(at);knock.stop(at+.08);
+        this.tone(out,at,.09,'square',220,70,.5);
+        this.tone(out,at+.02,.38,'sine',1760,620,.22);
+        for(const f of [1318.5,1975.5])this.tone(out,at+.05,.9,'triangle',f,f*.996,.12);
+    }
     /** Music stings: case pickup, your delivery, closing seconds. */
     sting(kind:Sting,volume:number):void {
         if(!this.allow(`sting:${kind}`,kind==='closing'?20:1.5))return;

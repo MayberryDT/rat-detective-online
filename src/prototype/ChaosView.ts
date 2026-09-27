@@ -225,6 +225,8 @@ export class ChaosView {
         for(const c of this.corpses.values())if(c.state.victimId===victimId&&(!best||c.state.born>best.state.born))best=c;
         return best&&this.state&&this.state.time-best.state.born<5000?best.mesh.position:undefined;
     }
+    /** Juice T4: an oversized cheese burst (a headshot splat). */
+    burst(point:THREE.Vector3,normal:THREE.Vector3,scale:number):void {this.impacts.emit(point,normal,false,scale);}
     noteDeathStyle(victimId:string,style:DeathStyle):void {
         this.deathStyles.set(victimId,{style,at:performance.now()});
         if(this.deathStyles.size>32)this.deathStyles.delete(this.deathStyles.keys().next().value!);

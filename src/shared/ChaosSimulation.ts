@@ -46,7 +46,7 @@ interface CaseRuntime {
     fake:boolean;
 }
 /** null ownership is an environmental Tampering hit, including neutral chains. */
-export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true }
+export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true }
 export interface ShotResultEvent {owner:string|null;shotId:string;ballId:string;outcome:ShotResultOutcome;at:number;tick:number;epoch:string;victimId?:string;damage?:number;point?:Vec3Data;normal?:Vec3Data;compensated?:boolean;fallback?:string;rewindMs?:number;targetDelta?:number}
 export interface PickupClaimResult {accepted:boolean;target:PickupTarget;targetId:string;playerId:string;pickup?:PickupKind;effectUntil?:number;reason?:PickupRejectReason}
 /** A pickup claim the room must announce. Healing is drained so the room can
@@ -690,7 +690,7 @@ export class ChaosSimulation {
             c.hitAfter.set(player.id,this.now+700);
             // Redirect ownership still protects the shooter from self-damage,
             // but the weaponized evidence never awards a player a kill.
-            this.hit({owner:null,victim:player.id,damage:velocity.length()>=28?3:1,incoming:data(velocity)});
+            this.hit({owner:null,victim:player.id,damage:velocity.length()>=28?MAX_HP:1,incoming:data(velocity)});
             this.impacts.push({p:data(center),n:data(velocity.unit()),surface:false,cue:'thud'});
         }
     }
@@ -1035,7 +1035,9 @@ export class ChaosSimulation {
             shot.p=data(point);
             const incoming={...shot.v};
             if(target?.kind==='rat' && target.player && target.player.hp>0){
-                const damage=hit.shape===target.head||(this.incidentActive('crossfire')&&shot.wallBounced)?3:1;
+                // Body hits take one hit point; a headshot or a Crossfire bank shot is lethal.
+                const headshot=hit.shape===target.head;
+                const damage=headshot||(this.incidentActive('crossfire')&&shot.wallBounced)?MAX_HP:1;
                 if((useRat?ratHit!.ironclad:hasIronclad(this.buffs,target.player.id,now))){
                     // A reflective coat, not a hit shield: keep the original shooter
                     // and finite budget, and never treat a rat contact as a wall bounce.
@@ -1047,9 +1049,9 @@ export class ChaosSimulation {
                 }
                 const compensated=useRat&&ratHit!.compensated,viewAttempted=!!this.shotViews.get(shot.id)&&shot.age<=this.shotViews.get(shot.id)!.untilAge;
                 if(playing)this.hit({owner:shot.owner,victim:target.player.id,damage,incoming,shotId:this.shotTriggers.get(shot.id)??shot.id,ballId:shot.id,
-                    point:data(hit.hitPointWorld),normal:data(normal),compensated,...(shot.explosive?{explosive:true}:{})});
+                    point:data(hit.hitPointWorld),normal:data(normal),compensated,...(shot.explosive?{explosive:true}:{}),...(headshot?{headshot:true}:{})});
                 this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:false});
-                this.finishShot(shot,hit.shape===target.head?'rat-head':'rat-body',{victimId:target.player.id,damage,point:data(hit.hitPointWorld),normal:data(normal),compensated,
+                this.finishShot(shot,headshot?'rat-head':'rat-body',{victimId:target.player.id,damage,point:data(hit.hitPointWorld),normal:data(normal),compensated,
                     ...(useRat?{rewindMs:ratHit!.rewindMs,targetDelta:ratHit!.targetDelta}:{}),
                     ...(viewAttempted&&!compensated?{fallback:'history-unavailable'}:{})});
                 this.shots.splice(i,1);continue;

@@ -1,4 +1,5 @@
 import {expect,it,vi,afterEach} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {ServerBotController} from '../../src/worker/ServerBotController';
 import {createPlayer} from '../../src/worker/gameState';
@@ -23,7 +24,7 @@ it.each([
             claimed=sim.drainPickupEvents().some(e=>e.kind==='collected'&&e.playerId===bot.id&&e.pickupId===id);
         }
         expect(claimed,JSON.stringify({id,position:{x:bot.x,y:bot.y,z:bot.z}})).toBe(true);
-        if(pickup.kind==='quick-fix')expect(bot.hp).toBe(3);
+        if(pickup.kind==='quick-fix')expect(bot.hp).toBe(MAX_HP);
         else expect(sim.snapshot(false).buffs?.[bot.id]).toBeDefined();
     }finally{controller.dispose();}
 },15_000);

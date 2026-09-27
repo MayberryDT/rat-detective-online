@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { RatAppearance } from '../../src/shared/networkProtocol';
+import { MAX_HP, type RatAppearance } from '../../src/shared/networkProtocol';
 import { createWorldSpec } from '../../src/shared/worldSpec';
 import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import { worldSpawnPoints } from '../../src/shared/playerSpawns';
@@ -24,20 +24,20 @@ const appearance: RatAppearance = {
 describe('game state', () => {
   it('allows only explicitly authoritative explosive self damage and never awards a self kill or win',()=>{
     const p=createPlayer('self','Self',appearance,{x:0,y:2,z:0}),players=new Map([[p.id,p]]);p.kills=20;
-    expect(applyHit(players,p.id,p.id,3,false,p.id,false,true).applied).toBe(false);
+    expect(applyHit(players,p.id,p.id,MAX_HP,false,p.id,false,true).applied).toBe(false);
     expect(applyHit(players,p.id,p.id,1,true,p.id,false,true)).toMatchObject({applied:true,killed:false});
-    expect(applyHit(players,p.id,p.id,3,true,p.id,false,true)).toMatchObject({applied:true,killed:true,roundWon:false});
+    expect(applyHit(players,p.id,p.id,MAX_HP,true,p.id,false,true)).toMatchObject({applied:true,killed:true,roundWon:false});
     expect(p.kills).toBe(20);expect(p.deaths).toBe(1);
-    expect(applyHit(players,p.id,p.id,3,true,p.id,false,true).applied).toBe(false);
+    expect(applyHit(players,p.id,p.id,MAX_HP,true,p.id,false,true).applied).toBe(false);
   });
   it('records environmental damage and death without any kill credit or win',()=>{
     const victim=createPlayer('victim','Victim',appearance,{x:0,y:2,z:0});
     const other=createPlayer('other','Other',appearance,{x:5,y:2,z:0});other.kills=19;
     const players=new Map([victim,other].map(p=>[p.id,p]));
     expect(applyHit(players,null,victim.id,1,true)).toMatchObject({applied:true,killed:false});
-    expect(applyHit(players,null,victim.id,3,true)).toMatchObject({applied:true,killed:true,roundWon:false});
+    expect(applyHit(players,null,victim.id,MAX_HP,true)).toMatchObject({applied:true,killed:true,roundWon:false});
     expect(victim.deaths).toBe(1);expect(victim.kills).toBe(0);expect(other.kills).toBe(19);
-    expect(applyHit(players,null,victim.id,3,true).applied).toBe(false);expect(victim.deaths).toBe(1);
+    expect(applyHit(players,null,victim.id,MAX_HP,true).applied).toBe(false);expect(victim.deaths).toBe(1);
   });
   it.each([7, 20260907, 918273])('spreads twelve live players and round resets throughout world %s', seed => {
     const spec={seed,version:GRAYBOX_VERSION};
@@ -57,7 +57,7 @@ describe('game state', () => {
     resetRoundForWorld(players,spec,()=>.4);
     assertSpread();
     expect(players.map(p=>({x:p.x,y:p.y,z:p.z}))).toEqual(expected);
-    expect(players.every(p=>p.hp===3&&p.kills===0)).toBe(true);
+    expect(players.every(p=>p.hp===MAX_HP&&p.kills===0)).toBe(true);
   });
 
   it('respawns away from living rats, ignoring the dead rat and its previous position',()=>{
@@ -104,7 +104,7 @@ describe('game state', () => {
 
     const result = applyHit(players, 'shooter', 'victim', 99);
 
-    expect(result).toEqual({ applied: true, killed: true, roundWon: false, damage: 3 });
+    expect(result).toEqual({ applied: true, killed: true, roundWon: false, damage: MAX_HP });
     expect(players.get('shooter')?.kills).toBe(1);
     expect(players.get('victim')?.deaths).toBe(1);
     expect(players.get('victim')?.hp).toBe(0);
@@ -122,7 +122,7 @@ describe('game state', () => {
 
     shooter.hp = 0;
     expect(applyHit(players, 'shooter', 'victim', 1).applied).toBe(false);
-    expect(victim.hp).toBe(3);
+    expect(victim.hp).toBe(MAX_HP);
   });
 
   it.each(['human', 'bot-1'])('awards %s two scoreboard kills while holding the case, but only one death', (id) => {
@@ -131,10 +131,10 @@ describe('game state', () => {
     const players = new Map([[id, shooter], [victim.id, victim]]);
     expect(applyHit(players, id, victim.id, 1, true, id).killed).toBe(false);
     expect(shooter.kills).toBe(0);
-    expect(applyHit(players, id, victim.id, 2, true, id).killed).toBe(true);
+    expect(applyHit(players, id, victim.id, MAX_HP - 1, true, id).killed).toBe(true);
     expect(buildScoreboard(players.values())[0].kills).toBe(2);
     expect(victim.deaths).toBe(1);
-    expect(applyHit(players, id, victim.id, 3, true, id).applied).toBe(false);
+    expect(applyHit(players, id, victim.id, MAX_HP, true, id).applied).toBe(false);
     expect(shooter.kills).toBe(2);
   });
 
@@ -143,10 +143,10 @@ describe('game state', () => {
     const victim = createPlayer('victim', 'Victim', appearance, { x: 0, y: 2, z: 0 });
     const players = new Map([[shooter.id, shooter], [victim.id, victim]]);
     applyHit(players, shooter.id, victim.id, 1, true, shooter.id);
-    applyHit(players, shooter.id, victim.id, 2, true, victim.id);
+    applyHit(players, shooter.id, victim.id, MAX_HP - 1, true, victim.id);
     expect(shooter.kills).toBe(1);
-    victim.hp = 3; shooter.kills = 19;
-    expect(applyHit(players, shooter.id, victim.id, 3, true, shooter.id).roundWon).toBe(true);
+    victim.hp = MAX_HP; shooter.kills = 19;
+    expect(applyHit(players, shooter.id, victim.id, MAX_HP, true, shooter.id).roundWon).toBe(true);
     expect(shooter.kills).toBe(21);
     expect(victim.deaths).toBe(2);
   });
@@ -171,6 +171,6 @@ describe('game state', () => {
 
     const resetPlayers = resetRound([first], () => ({ x: 9, y: 2, z: -9 }));
 
-    expect(resetPlayers[0]).toMatchObject({ kills: 0, deaths: 0, hp: 3, x: 9, y: 2, z: -9 });
+    expect(resetPlayers[0]).toMatchObject({ kills: 0, deaths: 0, hp: MAX_HP, x: 9, y: 2, z: -9 });
   });
 });

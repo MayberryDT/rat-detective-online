@@ -8,6 +8,7 @@ import {
   type CompanionRoomPublication,
 } from '../../src/shared/companionStatus';
 import { JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import type { PlayerData, RoundState } from '../../src/shared/networkProtocol';
 import { DEFAULT_ROOM_NAME } from '../../src/shared/networkProtocol';
 import { Matchmaker } from '../../src/worker/Matchmaker';
@@ -20,7 +21,7 @@ import {
 const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
 function player(id: string, name: string, kills = 0, deaths = 0): PlayerData {
   return {
-    id, name, kills, deaths, hp: 3, x: 0, y: 0, z: 0,
+    id, name, kills, deaths, hp: MAX_HP, x: 0, y: 0, z: 0,
     qx: 0, qy: 0, qz: 0, qw: 1, meshQx: 0, meshQy: 0, meshQz: 0, meshQw: 1,
     ...appearance,
   };
@@ -82,7 +83,7 @@ describe('companion projection', () => {
     expect(projectCompanionRoom({
       ...base, round: round(closing), assignment: closing,
     }).assignment.clockRunning).toBe(false);
-    b.hp = 3;
+    b.hp = MAX_HP;
     closing.phase = 'suspended';
     expect(projectCompanionRoom({
       ...base, round: round(closing), assignment: closing,

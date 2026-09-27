@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../../src/entities/RatEntity';
@@ -13,7 +14,7 @@ describe('respawn after ragdoll', () => {
     const offsets = entity.body.shapeOffsets.map(offset => offset.clone());
     // Run two lifecycles to catch stale death timers/phase state.
     for (let cycle = 0; cycle < 2; cycle++) {
-      entity.takeDamage(3, new THREE.Vector3(30, 0, 0));
+      entity.takeDamage(MAX_HP, new THREE.Vector3(30, 0, 0));
       expect(entity.dead).toBe(true);
       expect(entity.body.type).toBe(CANNON.Body.DYNAMIC);
       expect(entity.body.mass).toBe(2);
@@ -21,10 +22,10 @@ describe('respawn after ragdoll', () => {
       for (let frame = 0; frame < 900; frame++) { world.step(1 / 60); entity.update(1 / 60); }
       expect(entity.body.sleepState).toBe(CANNON.Body.SLEEPING);
 
-      entity.respawn({ x: 15, y: 2, z: -15, hp: 3 });
+      entity.respawn({ x: 15, y: 2, z: -15, hp: MAX_HP });
       expect(entity.dead).toBe(false);
       entity.body.shapeOffsets.forEach((offset, i) => expect(offset.y).toBeCloseTo(offsets[i].y, 12));
-      expect(entity.hp).toBe(3);
+      expect(entity.hp).toBe(MAX_HP);
       expect(entity.body.mass).toBe(isRemote ? 0 : 5);
       expect(entity.body.type).toBe(isRemote ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC);
       expect(entity.body.fixedRotation).toBe(true);

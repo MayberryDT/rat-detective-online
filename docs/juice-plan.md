@@ -67,10 +67,13 @@ Tyler's brain dump, sorted into now and later, with his answers.
   - Fixes: the session (with its shader patches) now exists before the warm-up; stand-in rats (local and enemy), supplies and a case are warmed and then removed; program links are waited on one at a time between turns; the street light bake is spread across frames; after the welcome, new programs link off-thread while frames skip drawing instead of stalling.
   - Rerolling the name stays responsive: heavy preparation pauses for 350 ms after any title input, unless Enter has been pressed.
   - Not met on Halla: 300 ms. About 250–300 ms of what remains is the network round trip through the relay, then about 250 ms of building the other rats on the welcome. Unmeasured on Tyler's desktop.
-- [ ] **T4 Five hit points; headshots always kill.**
+- [x] **T4 Five hit points; headshots always kill.**
   - HP 3 → 5, body hits 1 damage (5 to kill), a headshot kills at any HP.
   - Gameplay and protocol change: protocol 19, with matching client and Worker.
   - Headshot juice: a distinct sound, the hat blasting off, a head splat, a crosshair marker, a "headshot" callout and kill-feed mark, and a longer impact freeze.
+  - Built: `MAX_HP` 5 and protocol 19; the server damage clamp follows `MAX_HP` (it was a hard-coded 3). `playerDied` carries an optional `headshot`, so every client shows the hat blast (2.6× speed, 1.5× lift), four cheese splats on the head, an oversized cheese burst, and a 0.16 s hold before the fall. The killer gets a brass ringed X on the crosshair, a "HEADSHOT · name" notice, and a "HEADSHOT" callout that ignores the callout cooldown; the kill feed adds "· HEADSHOT". The sound is a wooden knock, a falling whistle and a short bell. Review switch: "T4 Headshot juice".
+  - My call on the other damage sources, to keep what used to be instant kills instant: a Crossfire bank shot and a fast case missile (28+ speed) now deal `MAX_HP`; the counterfeit trap was already `MAX_HP`. A fast loose-case hit stays 2 and slower contacts stay 1, so they now take a smaller share of health.
+  - Bots skip Quick Fix only at full health (5), and still treat 1 HP as an emergency.
 - [ ] **T5 A longer, richer round end.**
   - 10 s between rounds (was 6 s).
   - More Case File stats: accuracy, headshots, longest kill, case time, flights, pickups, distance.

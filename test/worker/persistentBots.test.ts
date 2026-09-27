@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOT_HEARTBEAT_MS, GameRoom, STALE_PLAYER_MS } from '../../src/worker/GameRoom';
 import { PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../../src/shared/botRoster';
 import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
-import { MAX_PLAYERS, PROTOCOL_VERSION, RESPAWN_DELAY_MS, WIN_DISPLAY_MS, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
+import { MAX_HP, MAX_PLAYERS, PROTOCOL_VERSION, RESPAWN_DELAY_MS, WIN_DISPLAY_MS, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
 import { createAssignment } from '../../src/shared/assignments';
@@ -56,12 +56,12 @@ describe('persistent hosted bots', () => {
       Object.assign(killer,{x:extra.p.x,y:extra.p.y-.8,z:extra.p.z,kills:0});
       game.chaos.step(0,now+1);expect(game.chaos.isCaseHolder(killer.id)).toBe(false);
       expect(game.chaos.snapshot(false).extraCases).toHaveLength(7);
-      await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:3});expect(killer.kills).toBe(1);
+      await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:MAX_HP});expect(killer.kills).toBe(1);
       game.chaos.step(0,now+25000);expect(game.chaos.snapshot(false).extraCases).toEqual([]);
       Object.assign(killer,{x:game.chaos.caseBody.position.x,y:game.chaos.caseBody.position.y-.8,z:game.chaos.caseBody.position.z});
       game.chaos.caseBody.velocity.setZero();
       game.chaos.step(0,now+25001);expect(game.chaos.isCaseHolder(killer.id)).toBe(true);
-      victim.hp=3;await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:3});expect(killer.kills).toBe(2);
+      victim.hp=MAX_HP;await game.handleHit(killer.id,{type:'hit',victimId:victim.id,damage:MAX_HP});expect(killer.kills).toBe(2);
     });
   });
   it('rescues only the stranded bot, keeps scores/health, and returns its case without resetting the match',async()=>{
@@ -145,13 +145,13 @@ describe('persistent hosted bots', () => {
       const reset = vi.spyOn(game.serverBots!, 'reset');
       try {
         const killer = game.players.get(PERSISTENT_BOT_IDS[0])!, victim = game.players.get(PERSISTENT_BOT_IDS[1])!;
-        await game.handleHit(killer.id, { type: 'hit', victimId: victim.id, damage: 3 });
+        await game.handleHit(killer.id, { type: 'hit', victimId: victim.id, damage: MAX_HP });
         expect(victim.hp).toBe(0); expect(victim.deaths).toBe(1); expect(killer.kills).toBe(1);
         expect(await ctx.storage.getAlarm()).toBe(now + RESPAWN_DELAY_MS);
         now += RESPAWN_DELAY_MS; await instance.alarm();
-        expect(victim.hp).toBe(3); expect(reset).toHaveBeenCalledWith(victim.id, expect.any(Object));
+        expect(victim.hp).toBe(MAX_HP); expect(reset).toHaveBeenCalledWith(victim.id, expect.any(Object));
         killer.kills = 19;
-        await game.handleHit(killer.id, { type: 'hit', victimId: victim.id, damage: 3 });
+        await game.handleHit(killer.id, { type: 'hit', victimId: victim.id, damage: MAX_HP });
         expect(game.round.phase).toBe('playing');
         const assignment=createAssignment('closing-time',now);assignment.liveAt=now;assignment.remainingMs=1;
         game.chaos.setAssignment(assignment);
@@ -162,7 +162,7 @@ describe('persistent hosted bots', () => {
         expect(await ctx.storage.getAlarm()).toBe(now + WIN_DISPLAY_MS);
         now += WIN_DISPLAY_MS; await instance.alarm();
         expect(game.round.phase).toBe('playing');
-        expect([...game.players.values()].every(p => p.hp === 3 && p.kills === 0 && p.deaths === 0)).toBe(true);
+        expect([...game.players.values()].every(p => p.hp === MAX_HP && p.kills === 0 && p.deaths === 0)).toBe(true);
         expect(game.players.get(killer.id)).toBe(killer);
         expect(game.players.get(killer.id)!.name).toBe(killer.name);
         expect(await ctx.storage.getAlarm()).toBe(now + BOT_HEARTBEAT_MS);
@@ -202,7 +202,7 @@ describe('persistent hosted bots', () => {
       const game = instance as unknown as Internals;
       for (const entry of PERSISTENT_BOT_ROSTER) {
         game.persistPlayer({ ...entry.appearance, id: entry.id, name: entry.name, x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1,
-          meshQx: 0, meshQy: 0, meshQz: 0, meshQw: 1, hp: 3, kills: 7, deaths: 2 }, true);
+          meshQx: 0, meshQy: 0, meshQz: 0, meshQw: 1, hp: MAX_HP, kills: 7, deaths: 2 }, true);
       }
     });
     await evictDurableObject(stub);
@@ -241,7 +241,7 @@ describe('persistent hosted bots', () => {
         expect(game.botRoster.map(bot => bot.name)).toEqual(previous.slice(0, 6).map(bot => bot.name));
         expect(game.serverBots).not.toBe(controller); expect(dispose).toHaveBeenCalledOnce();
         expect(game.players.get(human.id)).toBe(human);
-        expect(human).toMatchObject({ name: 'Human Name', ...appearance, hp: 3, kills: 0, deaths: 0 });
+        expect(human).toMatchObject({ name: 'Human Name', ...appearance, hp: MAX_HP, kills: 0, deaths: 0 });
         expect(game.players.size).toBe(7);
         expect(ctx.storage.sql.exec('SELECT id FROM pending_events WHERE player_id IS NOT NULL').toArray()).toHaveLength(0);
         for (const id of PERSISTENT_BOT_IDS.slice(6)) {

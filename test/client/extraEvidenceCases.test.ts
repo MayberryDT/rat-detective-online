@@ -1,4 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,EXTRA_CASE_IDS,CASE_SIZE,CASE_LOOSE_SCALE,type ChaosState} from '../../src/shared/chaosState';
@@ -34,7 +35,7 @@ describe('weaponized Evidence Tampering cases',()=>{
   const extra=sim.snapshot(false).extraCases!.find(c=>c.id==='evidence-1')!;
   expect(extra).toMatchObject({owner:null,missileOwner:'0'});
   expect(target.velocity.x).toBeLessThan(-50);expect(sim.isCaseHolder('1')).toBe(false);
-  rats[1].x=-3;rats[1].y=20;sim.step(.03,now+42);expect(hits.some(hit=>hit.owner===null&&hit.victim==='1'&&hit.damage===3)).toBe(true);
+  rats[1].x=-3;rats[1].y=20;sim.step(.03,now+42);expect(hits.some(hit=>hit.owner===null&&hit.victim==='1'&&hit.damage===MAX_HP)).toBe(true);
   // Remove the original bullet before measuring the case's own rebound.
   const saved=sim.snapshot(false);saved.shots=[];sim=new ChaosSimulation(players,hit=>hits.push(hit),saved);target=body(sim,'evidence-1');
   const wall=new C.Body({mass:0,shape:new C.Box(new C.Vec3(.03,8,8)),position:new C.Vec3(target.position.x-3,21,10)});sim.world.addBody(wall);sim.targets.set(wall,{kind:'world'});

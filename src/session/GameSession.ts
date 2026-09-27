@@ -12,7 +12,7 @@ import { RatController } from '../player/RatController';
 import { CheeseGun } from '../weapons/CheeseGun';
 import { initEntitySounds, disposeEntitySounds } from '../entities/RatEntity';
 import { generateRandomAppearance } from '../shared/ratAppearance';
-import type { ClientMessage, MovementInput, ServerMessage } from '../shared/networkProtocol';
+import { MAX_HP, type ClientMessage, type MovementInput, type ServerMessage } from '../shared/networkProtocol';
 import { NetworkManager } from '../network/NetworkManager';
 import { GameHud } from '../ui/GameHud';
 import { TitleScreen } from '../ui/TitleScreen';
@@ -41,12 +41,14 @@ import {loadCameos} from '../cameos/loadCameos';
 import {HighlightBridge} from '../highlights/HighlightBridge';
 import {FeelDirector} from '../feel/FeelDirector';
 import {feelState} from '../feel/feelState';
+import {FEEL} from '../feel/feelTuning';
 import {entryRequested} from './yieldToPage';
 
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean;facing?:THREE.Quaternion}[]=[];
 const HEAD_POSITION=new THREE.Vector3();
 const ENEMY_ANCHORS:THREE.Vector3[]=[];
+const HEADSHOT_NORMAL=new THREE.Vector3();
 /** Fill slot `n` of the reused footstep list in place; returns the next slot. */
 function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolean,facing?:THREE.Quaternion):number {
     const source=FOOTSTEP_SOURCES[n]??={id,position,grounded,facing};
@@ -406,7 +408,8 @@ export class GameSession {
             case 'playerDied': {
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
-                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName);this.foley.play('hit-confirm');const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId);}
+                const headshot=message.headshot===true;
+                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName,headshot);this.foley.play('hit-confirm');const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId,headshot);}
                 this.highlights.emit(this.highlights.detector.onDeath({
                     victimId: message.victimId,
                     killerId: message.killerId,
@@ -425,7 +428,15 @@ export class GameSession {
                     else {
                     const impact = message.incoming?new THREE.Vector3(message.incoming.x,message.incoming.y,message.incoming.z):killer ? entity.mesh.position.clone().sub(killer.mesh.position) : new THREE.Vector3(0, 0, 1);
                     if(!message.incoming)impact.y = 0;
-                    entity.takeDamage(entity.hp, impact.normalize().multiplyScalar(50));
+                    impact.normalize();
+                    if(headshot){
+                        // Juice T4: hat blast, head splat and a held beat before the fall, for everyone.
+                        entity.markHeadshot();
+                        const head=entity.mesh.getObjectByName('rat-head')?.getWorldPosition(HEAD_POSITION)??HEAD_POSITION.copy(entity.mesh.position).setY(entity.mesh.position.y+1.6);
+                        if(feelState().on('headshot'))this.chaos?.burst(head,HEADSHOT_NORMAL.copy(impact).negate(),FEEL.headshot.params.burst);
+                        this.feel.headshot(head,this.stage.camera);
+                    }
+                    entity.takeDamage(entity.hp, impact.multiplyScalar(50));
                     }
                 }
                 if (message.victimId === this.myId) {
@@ -436,7 +447,7 @@ export class GameSession {
                 }
                 this.hud.addKillFeed(message.cause==='evidence-tampering'
                     ? this.deathQuips.caseDeath(message.victimName)
-                    : `${message.killerName} eliminated ${message.victimName}`);
+                    : `${message.killerName} eliminated ${message.victimName}${headshot?' · HEADSHOT':''}`);
                 break;
             }
             case 'playerRespawn':
@@ -525,7 +536,7 @@ export class GameSession {
             this.pendingInteractions.delete(id);this.chaos.cancelInteraction(id);this.netplay.end(id,'timeout');
         }
         const p=this.rat.entity.body.position,current={x:p.x,y:p.y+.8,z:p.z};
-        const candidate=this.chaos.interaction?.(this.lastInteractionPosition,current,this.rat.entity.hp>=3);
+        const candidate=this.chaos.interaction?.(this.lastInteractionPosition,current,this.rat.entity.hp>=MAX_HP);
         this.lastInteractionPosition.set(current.x,current.y,current.z);
         if(!candidate)return;
         const movement=this.movementInput();if(!movement)return;

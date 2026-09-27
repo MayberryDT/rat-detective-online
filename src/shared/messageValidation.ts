@@ -607,9 +607,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       if (!victimId || (!environmental&&(!killerId||killerName===null)) || victimName === null || respawnAt === null ||
           (parsed.cause!==undefined&&!environmental)) return null;
       const incoming=parsed.incoming===undefined?undefined:parseVec3(parsed.incoming);
-      if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean'))return null;
+      if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean') || (parsed.headshot!==undefined&&parsed.headshot!==true))return null;
       return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
-        ...(environmental?{cause:'evidence-tampering' as const}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}) };
+        ...(environmental?{cause:'evidence-tampering' as const}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}) };
     }
     case 'scoreboardUpdate': {
       const scores = parseScores(parsed.scores);

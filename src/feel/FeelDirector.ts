@@ -196,10 +196,12 @@ export class FeelDirector {
     }
 
     /** You scored a kill on the rat at `victim`; `airborne` when you were in flight. */
-    killed(victim:THREE.Vector3,airborne:boolean,view:THREE.Camera,now=performance.now(),victimCarried=false):void {
+    killed(victim:THREE.Vector3,airborne:boolean,view:THREE.Camera,now=performance.now(),victimCarried=false,headshot=false):void {
         this.sound.brass();
         this.lifeKills++;
-        if(victimCarried)this.callout('COLD CASE',now);
+        // A headshot always gets its callout, regardless of the ordinary cooldown.
+        if(headshot&&this.state.on('headshot')){this.lastCalloutAt=now;this.screen.callout('HEADSHOT');}
+        else if(victimCarried)this.callout('COLD CASE',now);
         else if(this.lifeKills===3)this.callout('RAT RACKET',now);
         if(this.state.on('killBloom')&&!this.deathTarget){
             this.screen.killBloom();
@@ -212,6 +214,11 @@ export class FeelDirector {
         // Escalating streaks always show; other words respect the cooldown.
         if(streak>=2)this.word(streak===2?'DOUBLE CHEESE!':streak===3?'TRIPLE CHEESE!':'CHEESE-A-PALOOZA!',victim,view,now,true);
         else if(airborne)this.word('AIR MAIL!',victim,view,now,false);
+    }
+
+    /** Juice T4: a lethal headshot you dealt, took or saw; the sound plays from the victim. */
+    headshot(victim:THREE.Vector3,view:THREE.Camera):void {
+        if(this.state.on('headshot'))this.sound.headshot(victim,view);
     }
 
     /** Your cheese hit someone (nonlethal). */

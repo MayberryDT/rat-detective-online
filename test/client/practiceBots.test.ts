@@ -1,4 +1,5 @@
 import {describe,it,expect} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import {PracticeBotBrain,PracticeLifeCycle,addPracticePlayers,practiceBotCount,practiceSpawnPoints,cityPracticeSpawnPoints,practiceRespawnPoint,PRACTICE_RESPAWN_MS} from '../../src/prototype/PracticeBots';
 import * as C from 'cannon-es';
 import {grayboxBoxes,isRampOpening} from '../../src/shared/grayboxLayout';
@@ -49,12 +50,12 @@ describe('local practice bots',()=>{
  });
  it('scores real hits and independently respawns the human and AI without a match ending',()=>{
   const players=new Map([['local',player('local')],['bot-1',player('bot-1',10)]]),life=new PracticeLifeCycle(players);
-  expect(life.hit('bot-1','local',3,100).killed).toBe(true);
+  expect(life.hit('bot-1','local',MAX_HP,100).killed).toBe(true);
   expect(players.get('local')!.hp).toBe(0);expect(players.get('bot-1')!.kills).toBe(1);
   // Posthumous projectiles are still dangerous, with kill credit retained.
-  expect(life.hit('local','bot-1',3,500).killed).toBe(true);
+  expect(life.hit('local','bot-1',MAX_HP,500).killed).toBe(true);
   expect(life.due(100+PRACTICE_RESPAWN_MS)).toEqual(['local']);
-  life.respawn('local',{x:10,y:2,z:20});expect(players.get('local')!.hp).toBe(3);
+  life.respawn('local',{x:10,y:2,z:20});expect(players.get('local')!.hp).toBe(MAX_HP);
   expect(players.get('local')!.deaths).toBe(1);expect(players.get('local')!.kills).toBe(1);
   expect(life.due(500+PRACTICE_RESPAWN_MS)).toEqual(['bot-1']);
   life.respawn('bot-1',{x:20,y:2,z:20});expect(life.respawns.size).toBe(0);

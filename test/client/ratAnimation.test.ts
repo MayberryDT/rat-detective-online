@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../../src/entities/RatEntity';
@@ -32,7 +33,7 @@ it('animates motion and recoil with a matching outline without moving physics, a
     }
     for (let frame = 0; frame < 120; frame++) rat.update(1 / 60);
     expect(Math.abs(body.position.z)).toBeLessThan(0.0001);
-    rat.respawn({ x: 100, y: 0, z: 0, hp: 3 });
+    rat.respawn({ x: 100, y: 0, z: 0, hp: MAX_HP });
     expect(body.position.toArray()).toEqual([0, 0, 0]);
     rat.update(1 / 60);
     expect(body.position.y).toBe(0);
@@ -77,7 +78,7 @@ it('keeps the aimed pistol and outline together while moving, and lowers the paw
     }
     for (let frame = 0; frame < 180; frame++) rat.update(1 / 60);
     expect(arm.position.y).toBeCloseTo(carryY, 5);
-    rat.respawn({ x: 8, y: 0, z: 3, hp: 3 });
+    rat.respawn({ x: 8, y: 0, z: 3, hp: MAX_HP });
     expect(arm.position.y).toBe(carryY);
     expect(arm.rotation.x).toBeCloseTo(1.28);
     rat.dispose();
@@ -118,7 +119,7 @@ it('flexes the tail without detaching its root or tip, matches the outline and r
     }
     expect(maxBend).toBeGreaterThan(0.03);
     expect(tail.geometry).toBe(geometry);
-    rat.respawn({ x: 0, y: 0, z: 0, hp: 3 });
+    rat.respawn({ x: 0, y: 0, z: 0, hp: MAX_HP });
     expect(Array.from(positions.array)).toEqual(rest);
     expect(tail.children[0].position).toEqual(tipRest);
     rat.dispose();
@@ -153,7 +154,7 @@ it('tumbles, rebounds on real contact and rests without a timed teleport, then r
     const hat = rat.mesh.getObjectByName('rat-hat')!;
     const hatRest = hat.rotation.x;
     let peak = 0, bounce = false, lastVelocity = 0;
-    rat.takeDamage(3, new THREE.Vector3(0, 0, -10));
+    rat.takeDamage(MAX_HP, new THREE.Vector3(0, 0, -10));
     expect(rat.body.velocity.y).toBeGreaterThan(30);
     for (let i = 0; i < 900; i++) {
         world.step(1 / 60); rat.update(1 / 60);
@@ -171,7 +172,7 @@ it('tumbles, rebounds on real contact and rests without a timed teleport, then r
     expect(rat.body.angularVelocity.length()).toBeLessThan(0.5);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(rat.mesh.quaternion);
     expect(Math.abs(up.y)).toBeLessThan(0.6);
-    rat.respawn({ x: 0, y: 0, z: 0, hp: 3 });
+    rat.respawn({ x: 0, y: 0, z: 0, hp: MAX_HP });
     expect(hat.rotation.x).toBe(hatRest);
     expect(rat.mesh.getObjectByName('rat-body')!.scale.y).toBe(1);
     expect(rat.dead).toBe(false);
@@ -184,7 +185,7 @@ it('settles respawn and turn follow-through without altering the body or ground-
     const coat = rat.mesh.getObjectByName('rat-body')!;
     const hat = rat.mesh.getObjectByName('rat-hat')!;
     const hatY = hat.position.y;
-    rat.respawn({ x: 0, y: 0, z: 0, hp: 3 });
+    rat.respawn({ x: 0, y: 0, z: 0, hp: MAX_HP });
     for (let i = 0; i < 8; i++) rat.update(1 / 60);
     expect(coat.scale.y).toBeLessThan(0.95);
     expect(hat.position.y).toBeGreaterThan(hatY);
@@ -220,7 +221,7 @@ it('keeps the brief firing flash attached to the moving barrel instead of parkin
     expect(flash.visible).toBe(false);
     gun.replayShot(rat, shot);
     expect(flash.visible).toBe(true);
-    rat.respawn({ x: 0, y: 0, z: 0, hp: 3 });
+    rat.respawn({ x: 0, y: 0, z: 0, hp: MAX_HP });
     expect(flash.visible).toBe(false);
     gun.dispose(); rat.dispose();
 });
@@ -250,7 +251,7 @@ it('adds small airborne follow-through and a landing settle without moving physi
     for (let frame = 0; frame < 120; frame++) rat.update(1 / 60);
     expect(Math.abs(body.rotation.x)).toBeLessThan(.00001);
     expect(hat.position.y).toBeCloseTo(hatRest, 6);
-    rat.respawn({x:0,y:20,z:0,hp:3});
+    rat.respawn({x:0,y:20,z:0,hp:MAX_HP});
     rat.update(1 / 60);
     expect(body.rotation.x).toBeCloseTo(0, 10);
     rat.dispose();

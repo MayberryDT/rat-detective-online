@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { CheeseGun } from '../../src/weapons/CheeseGun';
@@ -27,7 +28,7 @@ describe('projectile behavior', () => {
     expect(owner.mesh.getObjectByName('rat-muzzle-flash')!.visible).toBe(true);
     expect(shot.origin).toEqual(owner.getMuzzlePosition());
     gun.update(.02);
-    expect(projectiles()).toHaveLength(0);expect(victim.hp).toBe(3);expect(hit).not.toHaveBeenCalled();
+    expect(projectiles()).toHaveLength(0);expect(victim.hp).toBe(MAX_HP);expect(hit).not.toHaveBeenCalled();
     gun.replayShot(owner,shot);gun.update(.02);
     expect(projectiles()).toHaveLength(0);
     gun.setIncident();gun.shoot(owner,new THREE.Vector3(100,1.45,0));
@@ -39,7 +40,7 @@ describe('projectile behavior', () => {
     const {gun,owner,world}=setup();gun.setPlayer(new THREE.PerspectiveCamera(),owner);
     const wall=new CANNON.Body({mass:0,shape:new CANNON.Box(new CANNON.Vec3(.05,2,2)),position:new CANNON.Vec3(2,1,0)});world.addBody(wall);
     const hit=gun.tracePresentation({x:-1,y:1,z:0},{x:4,y:1,z:0});
-    expect(hit?.rat).toBe(false);expect(hit?.p.x).toBeCloseTo(1.95);expect(owner.hp).toBe(3);
+    expect(hit?.rat).toBe(false);expect(hit?.p.x).toBeCloseTo(1.95);expect(owner.hp).toBe(MAX_HP);
     gun.dispose();owner.dispose();
   });
   it('shares GPU resources across shots and retains them until gun disposal', () => {
@@ -165,7 +166,7 @@ describe('projectile behavior', () => {
     expect(other.position.x).toBeCloseTo(-2.35, 12);
   });
 
-  it.each([{ height: 1.3, damage: 1 }, { height: 1.9, damage: 3 }])(
+  it.each([{ height: 1.3, damage: 1 }, { height: 1.9, damage: MAX_HP }])(
     'preserves damage for hits at height $height', ({ height, damage }) => {
       const { gun, owner, world, scene, projectiles } = setup();
       const victim = new RatEntity(scene, world, new THREE.Vector3(3, 0, 0), 'Target', {});
@@ -174,7 +175,7 @@ describe('projectile behavior', () => {
       gun.onHitEntity = hit;
       gun.shoot(owner, new THREE.Vector3(100, height, 0));
       gun.update(0.02);
-      expect(victim.hp).toBe(3 - damage);
+      expect(victim.hp).toBe(MAX_HP - damage);
       expect(hit).toHaveBeenCalledWith(victim, damage);
       expect(projectiles()).toHaveLength(0);
     },
@@ -188,7 +189,7 @@ describe('projectile behavior', () => {
     gun.onHitEntity = hit;
     const shot = gun.shoot(owner, new THREE.Vector3(100, 1.45, 0))!;
     gun.update(0.02);
-    expect(victim.hp).toBe(3);
+    expect(victim.hp).toBe(MAX_HP);
     expect(hit).not.toHaveBeenCalled();
     expect(projectiles()).toHaveLength(1);
     expect(projectiles()[0].position.x).toBeCloseTo(shot.origin.x + shot.direction.x * 3.5);
@@ -201,7 +202,7 @@ describe('projectile behavior', () => {
     gun.onHitEntity = hit;
     gun.shoot(owner, new THREE.Vector3(100, 1.45, 0));
     gun.update(0.02);
-    expect(victim.hp).toBe(3);
+    expect(victim.hp).toBe(MAX_HP);
     expect(hit).toHaveBeenCalledWith(victim, 1);
   });
   it('replays the resolved origin/direction despite a different interpolated owner position', () => {

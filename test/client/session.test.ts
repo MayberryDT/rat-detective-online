@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
+import { MAX_HP, PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosState } from '../../src/shared/chaosState';
 import { createAssignment } from '../../src/shared/assignments';
 import {ChaosView} from '../../src/prototype/ChaosView';
@@ -439,7 +439,7 @@ describe('GameSession', () => {
         transport.onMessage?.({type:'playerDamaged',id:'other',hp:0,attackerId:snapshot.id});
         transport.onMessage?.({type:'playerDied',victimId:'other',killerId:snapshot.id,killerName:'Me',victimName:'Other',respawnAt:5000});
         expect(hud.showKillConfirmation).toHaveBeenCalledTimes(1);
-        expect(hud.showKillConfirmation).toHaveBeenLastCalledWith('Other');
+        expect(hud.showKillConfirmation).toHaveBeenLastCalledWith('Other',false);
         expect(hud.showHitMarker).not.toHaveBeenCalled();
         // No dependency on a preceding damage packet or an extant remote mesh.
         transport.onMessage?.({type:'playerDied',victimId:'another',killerId:snapshot.id,killerName:'Me',victimName:'Another',respawnAt:5000});
@@ -603,7 +603,7 @@ describe('GameSession', () => {
         transport.onMessage?.(welcome({ player: local, players: { me: local } }));
         const rat = harness.rats[0];
         remotes.get.mockImplementation((id: string) => id === 'other'
-            ? { mesh: rat.entity.mesh, dead: false, hp: 3, takeDamage: vi.fn(), setDeathStyle: vi.fn() }
+            ? { mesh: rat.entity.mesh, dead: false, hp: MAX_HP, takeDamage: vi.fn(), setDeathStyle: vi.fn() }
             : undefined);
         transport.onMessage?.({
             type: 'playerDied', victimId: 'me', killerId: 'other', killerName: 'other',
@@ -612,8 +612,8 @@ describe('GameSession', () => {
         expect(rat.entity.takeDamage).toHaveBeenCalled();
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 5_000);
         expect(hud.addKillFeed).toHaveBeenCalledWith('other eliminated <Rat & Co>');
-        transport.onMessage?.({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: 3 });
-        expect(rat.entity.respawn).toHaveBeenCalledWith({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: 3 });
+        transport.onMessage?.({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: MAX_HP });
+        expect(rat.entity.respawn).toHaveBeenCalledWith({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: MAX_HP });
         expect(hud.hideRespawn).toHaveBeenCalled();
         expect(harness.inputs.at(-1)!.clear).toHaveBeenCalled();
         playerPreferences().update({reducedMotion:true});
@@ -696,8 +696,8 @@ describe('GameSession', () => {
         doc.dispatch('mousedown', Object.assign(new Event('mousedown'), { button: 0 }));
         expect(transport.send.mock.calls.filter(([message])=>(message as {type:string}).type==='shoot')).toHaveLength(3);
         remotes.idFor.mockReturnValue('other');
-        gun.onHitEntity?.({} as never, 3);
-        expect(transport.send).toHaveBeenCalledWith({ type: 'hit', victimId: 'other', damage: 3 });
+        gun.onHitEntity?.({} as never, MAX_HP);
+        expect(transport.send).toHaveBeenCalledWith({ type: 'hit', victimId: 'other', damage: MAX_HP });
         const remote = { mesh: { position: { clone() { return this; }, sub() { return this; } } } };
         remotes.get.mockReturnValue(remote);
         transport.onMessage?.({

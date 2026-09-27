@@ -1,4 +1,5 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING,type ChaosState} from '../../src/shared/chaosState';
 import {createAssignment} from '../../src/shared/assignments';
@@ -61,7 +62,7 @@ describe('explosive debris self damage',()=>{
     it.each(['planted-evidence','improper-disposal'] as const)('%s still reflects from the initiating rat’s Ironclad coat',incident=>{
         const f=fixture(incident,true);f.burst();
         for(let i=1;i<=20;i++)f.sim.step(1/120,NOW+20+i*1000/120);
-        expect(f.owner.hp).toBe(3);expect(f.hits.filter(h=>h.victim===f.owner.id)).toEqual([]);
+        expect(f.owner.hp).toBe(MAX_HP);expect(f.hits.filter(h=>h.victim===f.owner.id)).toEqual([]);
         expect(f.sim.snapshot(false).impacts.some(i=>i.cue==='armor-clang')).toBe(true);
     });
     it('retains explosion eligibility and attribution through a durable restore, with valid visual frames',()=>{
@@ -84,6 +85,6 @@ describe('explosive debris self damage',()=>{
         const f=fixture('improper-disposal');f.victim.hp=0;
         f.sim.shoot(f.owner.id,{shotId:'ordinary',origin:{x:-6,y:60,z:0},direction:{x:1,y:0,z:0}});
         for(let i=1;i<=20;i++)f.sim.step(1/120,NOW+i*1000/120);
-        expect(f.hits).toEqual([]);expect(f.owner.hp).toBe(3);
+        expect(f.hits).toEqual([]);expect(f.owner.hp).toBe(MAX_HP);
     });
 });

@@ -1,4 +1,5 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,COUNTERFEIT_IDS,EXTRA_CASE_IDS} from '../../src/shared/chaosState';
@@ -106,7 +107,7 @@ describe('Planted Evidence',()=>{
         const deaths=hits.filter(h=>h.victim===shooter.id);
         expect(deaths).toHaveLength(1);
         expect(deaths[0].owner).toBeNull();
-        expect(deaths[0].damage).toBe(3);
+        expect(deaths[0].damage).toBe(MAX_HP);
         // One trap, one detonation: the fake is gone and cannot re-trigger.
         sim.step(1/60,now+48);
         expect(hits.filter(h=>h.victim===shooter.id)).toHaveLength(1);

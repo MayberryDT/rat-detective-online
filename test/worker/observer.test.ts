@@ -2,7 +2,7 @@ import {env,runInDurableObject,SELF} from 'cloudflare:test';
 import {afterEach,expect,it} from 'vitest';
 import {GameRoom} from '../../src/worker/GameRoom';
 import {createPlayer} from '../../src/worker/gameState';
-import {MAX_PLAYERS,PROTOCOL_VERSION,type ServerMessage} from '../../src/shared/networkProtocol';
+import { MAX_HP,MAX_PLAYERS,PROTOCOL_VERSION,type ServerMessage} from '../../src/shared/networkProtocol';
 import {readSocketMessage} from './socketMessages';
 import {observationAllowed} from '../../src/shared/observation';
 const appearance={hatType:'fedora' as const,hatColor:1,furColor:2,coatColor:3};
@@ -49,7 +49,7 @@ it('joins a full room outside its roster and rejects every gameplay action',asyn
   for(const message of [
    {type:'updateMovement',...pose},
    {type:'shoot',shotId:'observer-shot',origin:pose.position,direction:{x:1,y:0,z:0}},
-   {type:'hit',victimId:'rat-0',damage:3},
+   {type:'hit',victimId:'rat-0',damage:MAX_HP},
    {type:'pickupIntent',interactionId:'observer-pickup',target:'case',targetId:'case',generation:0,movement:pose},
   ])await instance.webSocketMessage(socket,JSON.stringify(message));
   expect(JSON.stringify([...game.players])).toBe(before);expect(game.sessions.size).toBe(0);expect(game.movementAllowances.size).toBe(0);expect(game.chaos).toBeNull();

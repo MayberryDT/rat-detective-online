@@ -4,7 +4,7 @@ import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOT_REFILL_MS, type GameRoom } from '../../src/worker/GameRoom';
-import { DEFAULT_ROOM_NAME, MAX_PLAYERS, PROTOCOL_VERSION, type ServerMessage } from '../../src/shared/networkProtocol';
+import { MAX_HP, DEFAULT_ROOM_NAME, MAX_PLAYERS, PROTOCOL_VERSION, type ServerMessage } from '../../src/shared/networkProtocol';
 
 const sockets: WebSocket[] = [];
 const rooms = new Set<string>();
@@ -271,7 +271,7 @@ describe('automatic public room population',()=>{
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as any;clearInterval(game.chaosTimer);game.chaosTimer=null;
       game.chaos.primaryCase.owner=id;game.chaos.carry(game.players.get(id),game.chaos.primaryCase);
-      await game.handleHit('rd-ai-00',{type:'hit',victimId:id,damage:3},{x:10,y:0,z:0});
+      await game.handleHit('rd-ai-00',{type:'hit',victimId:id,damage:MAX_HP},{x:10,y:0,z:0});
     });
     const third=await open(group,group,true,rotated);
     expect(third.welcome!.id).toBe(id);expect(third.welcome!.player).toMatchObject({hp:0,deaths:1,respawnAt:expect.any(Number)});

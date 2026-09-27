@@ -1,6 +1,6 @@
 import {ASSIGNMENTS, type AssignmentState} from '../shared/assignments';
 import type {ChaosState} from '../shared/chaosState';
-import type {PlayerData, ScoreEntry, ServerMessage} from '../shared/networkProtocol';
+import {MAX_HP, type PlayerData, type ScoreEntry, type ServerMessage} from '../shared/networkProtocol';
 import './matchScoreboard.css';
 
 type Investigator = ScoreEntry & {hp?: number};
@@ -118,7 +118,7 @@ export class MatchScoreboard {
         const view = rows.map((p, i) => {
             const local = p.id === this.myId;
             const holder = p.id === this.state?.case.owner;
-            const status = p.id === winner ? 'WINNER' : p.hp === 0 ? 'RAT DOWN' : holder ? 'ON THE CASE' : p.hp === undefined ? 'IN THE CITY' : `${p.hp} / 3 HP`;
+            const status = p.id === winner ? 'WINNER' : p.hp === 0 ? 'RAT DOWN' : holder ? 'ON THE CASE' : p.hp === undefined ? 'IN THE CITY' : `${p.hp} / ${MAX_HP} HP`;
             return {id: p.id, local, holder, down: p.hp === 0, name: p.name, tag: local ? 'YOU' : '',
                 cells: [String(i + 1), ...(mode === 'jurisdiction' ? [`${Math.floor(points(p.id))} / 60`] : mode === 'excessive-force' ? [`${points(p.id)} / 10`] : mode === 'chain-of-custody' ? [`${points(p.id)} / 3`] : []),
                     String(p.kills), String(p.deaths), p.deaths ? (p.kills / p.deaths).toFixed(2) : p.kills ? '∞' : '—',

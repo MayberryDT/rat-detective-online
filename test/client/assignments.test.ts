@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import { AssignmentRules } from '../../src/shared/AssignmentRules';
 import { ASSIGNMENT_IDS, ASSIGNMENT_TUNING, CHAIN_ROUTE, destinationPoint, destinationContains, ASSIGNMENT_DESTINATIONS, createAssignment, nextAssignment, parseAssignment, restoreAssignment, type AssignmentId, type AssignmentRotation } from '../../src/shared/assignments';
 import { applyHit, createPlayer } from '../../src/worker/gameState';
@@ -118,7 +119,7 @@ describe('Dispatch assignment rules',()=>{
     });
     it('records actual kills and never ends an assignment at the legacy kill limit',()=>{
         const {first,second,players}=fixture('closing-time');first.kills=19;
-        const result=applyHit(players,first.id,second.id,3,false,first.id,true);
+        const result=applyHit(players,first.id,second.id,MAX_HP,false,first.id,true);
         expect(result).toMatchObject({killed:true,roundWon:false});expect(first.kills).toBe(20);
     });
     it('counts the whole interior at any entrance or floor, but excludes roofs, exterior and wrong layers',()=>{

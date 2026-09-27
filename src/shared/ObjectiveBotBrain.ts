@@ -13,7 +13,7 @@ import { DISPATCH_STATIONS, type ChaosState } from './chaosState';
 import { incidentInfo } from './incidentCatalog';
 import { activeDestination, destinationPoint } from './assignments';
 import { hasHustle, hasIronclad, PICKUP_TUNING, type PickupState } from './pickups';
-import type { PlayerData, Vec3Data } from './networkProtocol';
+import { MAX_HP, type PlayerData, type Vec3Data } from './networkProtocol';
 import type {BotWaypoint} from './BotLaunchRoutes';
 import {BALL_GRAVITY,BALL_SPEED} from './ballTuning';
 
@@ -153,7 +153,7 @@ export class ObjectiveBotBrain {
      * trips use the separate, throttled map-site policy below. */
     private wantedPickup(state: ChaosState | undefined, self: PlayerData, now:number, clear:(p:Vec3Data)=>boolean, allowed:(p:PickupState)=>boolean=()=>true) {
         return state?.pickups?.filter(p=>(p.availableAt??0)<=(state?.time??now))
-            .filter(p=>p.kind!=='quick-fix'||self.hp<3)
+            .filter(p=>p.kind!=='quick-fix'||self.hp<MAX_HP)
             .filter(p=>Math.abs(p.y-.7-self.y)<2.5&&distance(self,p)<24&&clear(p))
             .filter(p=>!this.suppressed(`pickup:${p.id}`,p,now))
             .filter(allowed)

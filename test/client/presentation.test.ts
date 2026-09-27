@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../../src/entities/RatEntity';
@@ -18,10 +19,10 @@ it.each(hats)('restores the %s outline and colors after complete death/respawn',
     const originalColors: number[] = [];
     entity.mesh.traverse(child => { if (child instanceof THREE.Mesh) originalColors.push((child.material as THREE.MeshStandardMaterial).color.getHex()); });
     for (let cycle = 0; cycle < 2; cycle++) {
-        entity.takeDamage(3, new THREE.Vector3(0, 0, 50));
+        entity.takeDamage(MAX_HP, new THREE.Vector3(0, 0, 50));
         for (let frame = 0; frame < 180; frame++) entity.update(1 / 60);
         expect(opacity().every(value => value === 0)).toBe(true);
-        entity.respawn({ x: 15, y: 2, z: 15, hp: 3 });
+        entity.respawn({ x: 15, y: 2, z: 15, hp: MAX_HP });
         expect(opacity().every(value => value === .22)).toBe(true);
         expect(entity.billboard.sprite.position.toArray()).toEqual([15, 4.2, 15]);
         const colors: number[] = [];

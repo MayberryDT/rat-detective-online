@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RemotePlayers } from '../../src/session/RemotePlayers';
@@ -115,7 +116,7 @@ it('advances legacy death only on fixed steps and keeps shared corpses hidden', 
     const remotes = new RemotePlayers(new THREE.Scene(), new CANNON.World(), () => 100);
     remotes.add(player);
     const entity = remotes.get(player.id)!;
-    entity.takeDamage(3, new THREE.Vector3(0, 0, -1));
+    entity.takeDamage(MAX_HP, new THREE.Vector3(0, 0, -1));
     const update = vi.spyOn(entity, 'update');
     remotes.prepareFrame(); remotes.presentFrame();
     expect(update).not.toHaveBeenCalled();

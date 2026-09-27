@@ -1,4 +1,5 @@
 import {describe,expect,it} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as C from 'cannon-es';
 import {HitboxPractice,PRACTICE_START,PRACTICE_TARGETS} from '../visual/HitboxPractice';
 
@@ -14,14 +15,14 @@ describe('stationary hitbox practice',()=>{
         const target=practice.players.get(PRACTICE_TARGETS[0].id)!;
         const pose={x:target.x,y:target.y,z:target.z,meshQy:target.meshQy,meshQw:target.meshQw};
         fireAt(practice,.6);
-        expect(practice.lastHit).toMatchObject({region:'BODY',damage:1,remaining:2,killed:false});
-        expect(target.hp).toBe(2);
-        fireAt(practice,.6);fireAt(practice,.6);
-        expect(practice.kills).toBe(1);expect(target.hp).toBe(3);
+        expect(practice.lastHit).toMatchObject({region:'BODY',damage:1,remaining:MAX_HP-1,killed:false});
+        expect(target.hp).toBe(MAX_HP-1);
+        for(let hit=1;hit<MAX_HP;hit++)fireAt(practice,.6);
+        expect(practice.kills).toBe(1);expect(target.hp).toBe(MAX_HP);
         fireAt(practice,1.9);
-        expect(practice.lastHit).toMatchObject({region:'HEAD',damage:3,remaining:0,killed:true});
-        expect(practice.hits).toBe(4);expect(practice.headshots).toBe(1);expect(practice.kills).toBe(2);
-        expect(target).toMatchObject({...pose,hp:3});
+        expect(practice.lastHit).toMatchObject({region:'HEAD',damage:MAX_HP,remaining:0,killed:true});
+        expect(practice.hits).toBe(MAX_HP+1);expect(practice.headshots).toBe(1);expect(practice.kills).toBe(2);
+        expect(target).toMatchObject({...pose,hp:MAX_HP});
         expect(practice.simulation.snapshot(false).corpses).toHaveLength(0);
     });
 
@@ -68,9 +69,9 @@ describe('stationary hitbox practice',()=>{
         practice.reset();
         expect([practice.shots,practice.hits,practice.headshots,practice.kills]).toEqual([0,0,0,0]);
         expect(practice.lastHit).toBeUndefined();expect(practice.simulation.snapshot(false).shots).toHaveLength(0);
-        for(const target of PRACTICE_TARGETS)expect(practice.players.get(target.id)).toMatchObject({x:target.x,y:target.y,z:target.z,hp:3});
+        for(const target of PRACTICE_TARGETS)expect(practice.players.get(target.id)).toMatchObject({x:target.x,y:target.y,z:target.z,hp:MAX_HP});
         practice.shoot({shotId:'self',origin:{x:PRACTICE_START.x-2,y:.6,z:PRACTICE_START.z},direction:{x:1,y:0,z:0}});
         practice.step(1/60,Date.now());
-        expect(practice.players.get('local')?.hp).toBe(3);expect(practice.hits).toBe(0);
+        expect(practice.players.get('local')?.hp).toBe(MAX_HP);expect(practice.hits).toBe(0);
     });
 });

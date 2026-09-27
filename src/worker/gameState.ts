@@ -69,7 +69,7 @@ export function buildScoreboard(players: Iterable<PlayerData>): ScoreEntry[] {
 
 export function clampDamage(damage: number): number {
   if (!Number.isFinite(damage)) return 0;
-  return Math.max(0, Math.min(3, Math.trunc(damage)));
+  return Math.max(0, Math.min(MAX_HP, Math.trunc(damage)));
 }
 
 export interface HitResult {

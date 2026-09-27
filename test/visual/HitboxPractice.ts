@@ -59,8 +59,8 @@ export class HitboxPractice {
         const result=applyHit(this.players,hit.owner,hit.victim,hit.damage,false,null,true);
         if(!result.applied)return;
         const victim=this.players.get(hit.victim)!;
-        this.hits++;this.headshots+=Number(hit.damage===3);this.kills+=Number(result.killed);
-        this.lastHit={target:hit.victim,region:hit.damage===3?'HEAD':'BODY',damage:result.damage,remaining:victim.hp,killed:result.killed};
+        this.hits++;this.headshots+=Number(hit.headshot===true);this.kills+=Number(result.killed);
+        this.lastHit={target:hit.victim,region:hit.headshot?'HEAD':'BODY',damage:result.damage,remaining:victim.hp,killed:result.killed};
         // Only health resets. Positions, orientation and visible pose never move.
         // Restoring immediately also keeps the dummy hittable for the next shot.
         if(result.killed)victim.hp=MAX_HP;

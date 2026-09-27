@@ -7,7 +7,7 @@ import { ASSIGNMENT_IDS, destinationPoint, type AssignmentId, type AssignmentSta
 import { DeliveryDecoder } from '../../src/shared/deliveryWire';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ChaosState } from '../../src/shared/chaosState';
-import { PROTOCOL_VERSION, WIN_DISPLAY_MS, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
+import { MAX_HP, PROTOCOL_VERSION, WIN_DISPLAY_MS, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
 
 type Internals={handleHit:(id:string,hit:{type:'hit';victimId:string;damage:number},incoming?:{x:number;y:number;z:number})=>Promise<void>;players:Map<string,PlayerData>;chaos:ChaosSimulation;chaosTimer:ReturnType<typeof setInterval>|null;
     clock:()=>number;round:RoundState;finishAssignment:()=>void;checkpointGame:()=>void;persistPlayer:(p:PlayerData,force:boolean)=>void};
@@ -93,7 +93,7 @@ describe('shared assignment room lifecycle',()=>{
                     Object.assign(a,{x:-16.74,y:.3,z:-30.02});sim.caseBody.position.set(-16,1.1,-30);sim.caseBody.velocity.setZero();sim.step(0,now);
                     expect(sim.caseHolderId).toBe(a.id);
                     if(assignment.id==='excessive-force'){
-                        for(let i=0;i<10;i++){b.hp=3;await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:3},{x:0,y:0,z:-1});}
+                        for(let i=0;i<10;i++){b.hp=MAX_HP;await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:MAX_HP},{x:0,y:0,z:-1});}
                     }else if(assignment.id==='closing-time'){
                         assignment.remainingMs=1;now+=1;sim.step(.001,now);
                     }else if(assignment.jurisdiction){
@@ -151,9 +151,9 @@ describe('shared assignment room lifecycle',()=>{
             Object.assign(a,{x:-16.74,y:.3,z:-30.02});Object.assign(b,{x:50,z:50});
             sim.caseBody.position.set(-16,1.1,-30);sim.caseBody.velocity.setZero();sim.step(0,now);
             a.kills=19;
-            await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:3},{x:0,y:0,z:1});
+            await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:MAX_HP},{x:0,y:0,z:1});
             expect(a.kills).toBe(20);expect(sim.assignmentState!.caseKills[a.id]).toBe(1);expect(game.round.phase).toBe('playing');
-            sim.release(a.id);b.hp=3;await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:3},{x:0,y:0,z:1});
+            sim.release(a.id);b.hp=MAX_HP;await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:MAX_HP},{x:0,y:0,z:1});
             expect(sim.assignmentState!.caseKills[a.id]).toBe(1);game.checkpointGame();return structuredClone(sim.assignmentState!);
         });
         await evictDurableObject(stub,{webSockets:'hibernate'});const late=await open(name,true);

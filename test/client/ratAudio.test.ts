@@ -1,4 +1,5 @@
 import {afterEach, expect, it, vi} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import * as entityAudio from '../../src/audio/EntityAudio';
@@ -15,14 +16,14 @@ it.each([false,true])('supplies the source for remote hit/death/corpse audio, le
         if(local)expect(play).toHaveBeenLastCalledWith('playerHit',.6);
         else expect(play).toHaveBeenLastCalledWith('ratHit',.5,rat.body.position);
         play.mockClear();
-        rat.takeDamage(2,new THREE.Vector3());
+        rat.takeDamage(MAX_HP-1,new THREE.Vector3());
         expect(play).toHaveBeenCalledWith('ratDeath',.6,local?undefined:rat.body.position);
         if(local)expect(play).toHaveBeenLastCalledWith('playerHit',.6);
         else expect(play).toHaveBeenLastCalledWith('ratHit',.4,rat.body.position);
         rat.update(.2);
         rat.body.dispatchEvent({type:'collide',contact:{getImpactVelocityAlongNormal:()=>8}});
         expect(play).toHaveBeenLastCalledWith('ratHit',.45,rat.body.position);
-        rat.respawn({x:150,y:0,z:20,hp:3});
+        rat.respawn({x:150,y:0,z:20,hp:MAX_HP});
         play.mockClear();
         rat.useSharedCorpse();rat.useSharedCorpse();
         expect(play).toHaveBeenCalledExactlyOnceWith('ratDeath',.6,local?undefined:rat.body.position);

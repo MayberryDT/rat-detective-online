@@ -1,4 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
 import {CASE_SIZE,CASE_LOOSE_SCALE,CHAOS_TUNING as T,INCIDENT_TUNING as I} from '../../src/shared/chaosState';
@@ -36,7 +37,7 @@ describe('expanded physical Dispatch incidents',()=>{
  it('pops each original 0.4 seconds after it is fired, lofting children that cannot pop',()=>{
   const {sim,b}=fixture('popcorn-panic',true);expect(I.popcornPulseMs).toBe(400);
   sim.shoot('a',{shotId:'air',origin:{x:-4,y:40,z:0},direction:{x:0,y:0,z:1}});
-  sim.step(.003,now+3);expect(b.hp).toBe(3);expect(sim.snapshot(false).pressure!.launches).toHaveLength(0);
+  sim.step(.003,now+3);expect(b.hp).toBe(MAX_HP);expect(sim.snapshot(false).pressure!.launches).toHaveLength(0);
   expect(sim.snapshot(false).shots[0]).toMatchObject({original:true});
   expect(sim.snapshot(false).shots[0].popAt).toBeGreaterThan(now);
   sim.step(0,now+I.popcornPulseMs-1);expect(sim.snapshot(false).shots).toHaveLength(1);

@@ -1,4 +1,5 @@
 import {describe, expect, it} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import {MatchScoreboard} from '../../src/ui/MatchScoreboard';
 import {createAssignment, type AssignmentId} from '../../src/shared/assignments';
 import {createPlayer} from '../../src/worker/gameState';
@@ -41,7 +42,7 @@ describe('full lobby scoreboard', () => {
         const f=fixture();f.board.setVisible(true);
         const other=f.row('rd-ai-2'),mine=f.row('me');
         f.board.receive({type:'playerDamaged',id:'me',hp:1,attackerId:'rd-ai-1'});
-        expect(f.row('rd-ai-2')).toBe(other);expect(f.row('me')).not.toBe(mine);expect(f.cells('me')).toContain('1 / 3 HP');
+        expect(f.row('rd-ai-2')).toBe(other);expect(f.row('me')).not.toBe(mine);expect(f.cells('me')).toContain(`1 / ${MAX_HP} HP`);
         f.board.dispose();
     });
     it.each(['closing-time', 'excessive-force', 'chain-of-custody', 'jurisdiction'] as const)('uses authoritative mode scores and all players in %s', mode => {
@@ -73,7 +74,7 @@ describe('full lobby scoreboard', () => {
     it('retains late-join/paused time, updates life status, and honors the actual Closing winner instead of most-held time', () => {
         const f = fixture('closing-time'); f.board.setVisible(true);
         f.board.receive({type: 'playerDamaged', id: 'me', hp: 0} as ServerMessage); expect(f.cells('me')).toContain('RAT DOWN');
-        f.board.receive({type: 'playerRespawn', id: 'me', hp: 3, x: 0, y: 0, z: 0}); expect(f.cells('me')).toContain('3 / 3 HP');
+        f.board.receive({type: 'playerRespawn', id: 'me', hp: MAX_HP, x: 0, y: 0, z: 0}); expect(f.cells('me')).toContain(`${MAX_HP} / ${MAX_HP} HP`);
         f.assignment.phase = 'suspended'; f.board.receive({type: 'chaos', state: f.state});
         expect(f.cells('me')).toContain('0:30'); expect(f.root.querySelector('.match-scoreboard-mode span').textContent).toContain('PAUSED');
         f.assignment.phase = 'closed'; f.assignment.result = {winnerId: 'me', winnerName: 'You', at: 10_000, method: 'held', posthumous: false};

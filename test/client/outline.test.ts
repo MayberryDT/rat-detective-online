@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatController } from '../../src/player/RatController';
@@ -12,7 +13,7 @@ it('hides only the local outline through normal death, shared death and respawn'
   const remoteGlow = scene.children.find(child => child instanceof THREE.Group && child !== local.mesh && child !== localGlow && child !== remote.mesh)!;
   local.isPlayer = true;
   expect(localGlow.visible).toBe(false); expect(remoteGlow.visible).toBe(true);
-  local.takeDamage(3, new THREE.Vector3(10, 0, 0)); local.update(1 / 60);
+  local.takeDamage(MAX_HP, new THREE.Vector3(10, 0, 0)); local.update(1 / 60);
   expect(localGlow.visible).toBe(false);
   local.respawn({x: 0, y: 0, z: 0, hp: 3});
   expect(localGlow.visible).toBe(false);
@@ -78,7 +79,7 @@ it('aligns the glow on spawn, in the same frame as turning, and on respawn', () 
     controller.update(1 / 60, {});
     expectAligned();
   }
-  entity.takeDamage(3, new THREE.Vector3(10, 0, 0));
+  entity.takeDamage(MAX_HP, new THREE.Vector3(10, 0, 0));
   controller.update(1 / 60, {});
   expectAligned();
   entity.respawn({ x: -15, y: 2, z: 20, hp: 3 });

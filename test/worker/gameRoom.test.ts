@@ -3,7 +3,7 @@ import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
 import { createAssignment } from '../../src/shared/assignments';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
+import { MAX_HP, MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import { worldSpawnPoints } from '../../src/shared/playerSpawns';
 import { parseServerMessage } from '../../src/shared/messageValidation';
@@ -106,7 +106,7 @@ describe('GameRoom websockets', () => {
       const socket=ctx.getWebSockets().find(ws=>(ws.deserializeAttachment() as {playerId:string}).playerId===badWelcome.id)!;
       const fail=vi.spyOn(socket,'send').mockImplementation(()=>{throw Error('Injected send failure');});
       try {
-        await (instance as any).handleHit(aw.id,{type:'hit',victimId:bw.id,damage:3});
+        await (instance as any).handleHit(aw.id,{type:'hit',victimId:bw.id,damage:MAX_HP});
         expect(ctx.storage.sql.exec<{count:number}>("SELECT COUNT(*) AS count FROM pending_events WHERE player_id = ? AND type = 'respawn'",bw.id).one().count).toBe(1);
       } finally { fail.mockRestore(); }
     });
@@ -133,7 +133,7 @@ describe('GameRoom websockets', () => {
     victim.ws.send(joinPayload('Captain Crawley'));const vw=await victim.inbox.waitFor('welcome');
     await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom,ctx)=>{
       const game=instance as any;
-      await game.handleHit(null,{type:'hit',victimId:vw.id,damage:3},{x:145,y:0,z:0});
+      await game.handleHit(null,{type:'hit',victimId:vw.id,damage:MAX_HP},{x:145,y:0,z:0});
       expect(game.players.get(ow.id).kills).toBe(0);
       expect(game.players.get(vw.id)).toMatchObject({hp:0,deaths:1,kills:0});
       expect(game.chaos.snapshot(false).corpses.find((c:any)=>c.victimId===vw.id).owner).toBeNull();
@@ -297,7 +297,7 @@ describe('GameRoom websockets', () => {
     expect(welcome.world.version).toBe(WORLD_LAYOUT_VERSION);
     expect(welcome.round.phase).toBe('playing');
     expect(welcome.players[welcome.id]?.name).toBe('Alpha');
-    expect(welcome.player.hp).toBe(3);
+    expect(welcome.player.hp).toBe(MAX_HP);
     expect(typeof welcome.serverTime).toBe('number');
 
     const second = await openClient(room);
@@ -357,7 +357,7 @@ describe('GameRoom websockets', () => {
       rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}};
     client.ws.send(JSON.stringify({type:'pickupIntent',interactionId:'crossing',target:'pickup',targetId:target!.id,generation:target!.availableAt??0,movement}));
     expect(await client.inbox.waitFor('pickupResult',message=>message.interactionId==='crossing')).toMatchObject({accepted:true,pickup:'quick-fix',playerId:welcome.id});
-    expect(await client.inbox.waitFor('playerHealed',message=>message.id===welcome.id)).toMatchObject({hp:3,cause:'pickup'});
+    expect(await client.inbox.waitFor('playerHealed',message=>message.id===welcome.id)).toMatchObject({hp:MAX_HP,cause:'pickup'});
   });
 
   it('relays shot descriptors and restores a dead player through the alarm', async () => {
@@ -388,7 +388,7 @@ describe('GameRoom websockets', () => {
     await runInDurableObject(stub, instance => {
       (instance as unknown as {clock: () => number}).clock = () => killedAt;
     });
-    first.ws.send(JSON.stringify({ type: 'hit', victimId: victim.id, damage: 3 }));
+    first.ws.send(JSON.stringify({ type: 'hit', victimId: victim.id, damage: MAX_HP }));
     const died = await second.inbox.waitFor('playerDied');
     expect(died.victimId).toBe(victim.id);
     expect(died.respawnAt).toBe(killedAt + 3_000);
@@ -398,7 +398,7 @@ describe('GameRoom websockets', () => {
     });
     expect(await runDurableObjectAlarm(stub)).toBe(true);
     const respawn = await second.inbox.waitFor('playerRespawn');
-    expect(respawn).toMatchObject({ id: victim.id, hp: 3 });
+    expect(respawn).toMatchObject({ id: victim.id, hp: MAX_HP });
     expect(Number.isFinite(respawn.x)).toBe(true);
   });
 
@@ -408,7 +408,7 @@ describe('GameRoom websockets', () => {
     await first.inbox.waitFor('welcome');
     const second = await openClient(room);second.ws.send(joinPayload('Victim'));
     const victim = await second.inbox.waitFor('welcome');
-    first.ws.send(JSON.stringify({type:'hit',victimId:victim.id,damage:3}));
+    first.ws.send(JSON.stringify({type:'hit',victimId:victim.id,damage:MAX_HP}));
     await second.inbox.waitFor('playerDied');
     const stub=env.GAME_ROOM.getByName(room);
     await runInDurableObject(stub, (instance, state) => {
@@ -417,10 +417,10 @@ describe('GameRoom websockets', () => {
       state.storage.sql.exec('UPDATE pending_events SET due_at = 0');
       live.processLiveDeadlines(Date.now());
       live.processLiveDeadlines(Date.now());
-      expect(live.players.get(victim.id)!.hp).toBe(3);
+      expect(live.players.get(victim.id)!.hp).toBe(MAX_HP);
       expect(state.storage.sql.exec('SELECT * FROM pending_events').toArray()).toHaveLength(0);
     });
-    expect(await second.inbox.waitFor('playerRespawn')).toMatchObject({id:victim.id,hp:3});
+    expect(await second.inbox.waitFor('playerRespawn')).toMatchObject({id:victim.id,hp:MAX_HP});
     expect(second.inbox.messages.filter(m=>m.type==='playerRespawn')).toHaveLength(0);
   });
 
@@ -438,7 +438,7 @@ describe('GameRoom websockets', () => {
     const lost = await lostClient.inbox.waitFor('welcome');
     await first.inbox.waitFor('playerJoined');
 
-    first.ws.send(JSON.stringify({ type: 'hit', victimId: early.id, damage: 3 }));
+    first.ws.send(JSON.stringify({ type: 'hit', victimId: early.id, damage: MAX_HP }));
     const earlyDeath = await earlyClient.inbox.waitFor('playerDied');
     expect(earlyDeath.respawnAt).toBeGreaterThan(Date.now());
 
@@ -449,7 +449,7 @@ describe('GameRoom websockets', () => {
       if (shooter) shooter.kills = 19;
     });
 
-    first.ws.send(JSON.stringify({ type: 'hit', victimId: lost.id, damage: 3 }));
+    first.ws.send(JSON.stringify({ type: 'hit', victimId: lost.id, damage: MAX_HP }));
     const died = await lostClient.inbox.waitFor('playerDied', (message) => message.victimId === lost.id);
     const won = await lostClient.inbox.waitFor('gameWon');
     expect(died.respawnAt).toBe(won.resetAt);
@@ -503,17 +503,17 @@ describe('GameRoom websockets', () => {
       game.chaos.step(0, now);
       expect(game.chaos.caseHolderId).toBe(carrier.id);
       champion.kills = 19;
-      await game.handleHit(carrier.id, {type:'hit',victimId:victim.id,damage:3}, {x:1,y:0,z:0});
+      await game.handleHit(carrier.id, {type:'hit',victimId:victim.id,damage:MAX_HP}, {x:1,y:0,z:0});
       expect(champion.kills).toBe(20);
       expect(game.round.phase).toBe('playing');
       const assignment=createAssignment('closing-time',now);assignment.liveAt=now;assignment.remainingMs=1;
       game.chaos.setAssignment(assignment);game.chaos.step(.001,now+1);game.finishAssignment();
       expect(game.players.get(victim.id)!.deaths).toBe(1);
       expect(game.round).toMatchObject({phase:'won',winnerId:carrier.id,kills:20,resetAt:now+6000});
-      await game.handleHit(carrier.id, {type:'hit',victimId:observer.id,damage:3}, {x:1,y:0,z:0});
-      await game.handleHit(observer.id, {type:'hit',victimId:carrier.id,damage:3}, {x:1,y:0,z:0});
-      expect(game.players.get(observer.id)!.hp).toBe(3);
-      expect(champion.hp).toBe(3);
+      await game.handleHit(carrier.id, {type:'hit',victimId:observer.id,damage:MAX_HP}, {x:1,y:0,z:0});
+      await game.handleHit(observer.id, {type:'hit',victimId:carrier.id,damage:MAX_HP}, {x:1,y:0,z:0});
+      expect(game.players.get(observer.id)!.hp).toBe(MAX_HP);
+      expect(champion.hp).toBe(MAX_HP);
       expect(champion.kills).toBe(20);
       expect(state.storage.sql.exec<{type:string;due_at:number}>('SELECT type, due_at FROM pending_events').toArray())
         .toEqual([{type:'reset',due_at:now+6000}]);
@@ -532,7 +532,7 @@ describe('GameRoom websockets', () => {
       expect(game.round.phase).toBe('playing');
       expect(game.chaos.caseHolderId).toBeNull();
       for (const player of game.players.values()) {
-        expect(player).toMatchObject({hp:3,kills:0,deaths:0});
+        expect(player).toMatchObject({hp:MAX_HP,kills:0,deaths:0});
         expect(player.respawnAt).toBeUndefined();
       }
       expect(state.storage.sql.exec('SELECT * FROM pending_events').toArray()).toEqual([]);
@@ -693,7 +693,7 @@ describe('GameRoom websockets', () => {
           meshQy: 0,
           meshQz: 0,
           meshQw: 1,
-          hp: 3,
+          hp: MAX_HP,
           kills: 0,
           deaths: 0,
           hatType: 'fedora',
@@ -751,7 +751,7 @@ describe('GameRoom websockets', () => {
           meshQy: 0,
           meshQz: 0,
           meshQw: 1,
-          hp: 3,
+          hp: MAX_HP,
           kills: 0,
           deaths: 0,
           hatType: 'fedora',

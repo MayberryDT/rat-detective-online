@@ -47,8 +47,20 @@ export class RatStains {
         this.outward.set(Math.sin(angle),0,Math.cos(angle));
         this.dummy.position.set(this.outward.x*radius,y,this.outward.z*radius);
         this.dummy.lookAt(this.outward.x*radius*2,y,this.outward.z*radius*2);
+        this.place(seed,1);
+    }
+
+    /** Juice T4: a stain on a sphere around the parent's origin (the head), `height` above its centre. */
+    addOnSphere(angle:number,height:number,radius:number,seed:number,scale:number):void {
+        const ring=Math.sqrt(Math.max(0,radius*radius-height*height));
+        this.dummy.position.set(Math.sin(angle)*ring,height,Math.cos(angle)*ring);
+        this.dummy.lookAt(this.dummy.position.x*2,this.dummy.position.y*2,this.dummy.position.z*2);
+        this.place(seed,scale);
+    }
+
+    private place(seed:number,scale:number):void {
         this.dummy.rotateZ(seed*2.4);
-        this.dummy.scale.setScalar(.09+((seed*.371)%1)*.07);
+        this.dummy.scale.setScalar((.09+((seed*.371)%1)*.07)*scale);
         this.dummy.updateMatrix();
         this.mesh.setMatrixAt(this.cursor%MAX_STAINS,this.dummy.matrix);
         this.cursor++;

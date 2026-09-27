@@ -3,8 +3,9 @@ import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 
-export const PROTOCOL_VERSION = 18;
-export const MAX_HP = 3;
+export const PROTOCOL_VERSION = 19;
+/** Body hits deal 1; a headshot is always lethal. */
+export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
 export const WIN_DISPLAY_MS = 6_000;
@@ -201,6 +202,7 @@ export type ServerMessage =
       respawnAt: number;
       incoming?: Vec3Data;
       incident?: boolean;
+      headshot?: true;
     }
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }

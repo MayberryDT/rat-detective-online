@@ -225,16 +225,16 @@ export class GameHud {
         this.hitTimer=setTimeout(()=>{this.hitTimer=null;reticle.classList.remove('hit-confirmed');},180);
     }
 
-    showKillConfirmation(victimName:string):void {
+    showKillConfirmation(victimName:string,headshot=false):void {
         if(this.disposed)return;
         this.clearHitMarker();
         const reticle=this.doc.getElementById('crosshair');
         if(reticle){
-            void reticle.offsetWidth;reticle.classList.add('kill-confirmed');
-            this.hitTimer=setTimeout(()=>{this.hitTimer=null;reticle.classList.remove('kill-confirmed');},500);
+            void reticle.offsetWidth;reticle.classList.add('kill-confirmed');if(headshot)reticle.classList.add('headshot');
+            this.hitTimer=setTimeout(()=>{this.hitTimer=null;reticle.classList.remove('kill-confirmed');reticle.classList.remove('headshot');},headshot?700:500);
         }
         if(this.killTimer!==null)clearTimeout(this.killTimer);
-        this.killTitle.textContent=`RAT DOWN · ${victimName}`;
+        this.killTitle.textContent=`${headshot?'HEADSHOT':'RAT DOWN'} · ${victimName}`;
         this.killQuip.textContent=this.quips.next('kill');
         // Replace rapid kills in one bounded notice, restarting its full lifetime.
         this.killConfirmation.style.display='none';void this.killConfirmation.offsetWidth;
@@ -252,6 +252,7 @@ export class GameHud {
         if(this.hitTimer!==null)clearTimeout(this.hitTimer);this.hitTimer=null;
         this.doc.getElementById('crosshair')?.classList.remove('hit-confirmed');
         this.doc.getElementById('crosshair')?.classList.remove('kill-confirmed');
+        this.doc.getElementById('crosshair')?.classList.remove('headshot');
     }
 
     private overlay(element:HTMLElement,visible:boolean):void {

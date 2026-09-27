@@ -101,6 +101,10 @@ export class RatEntity {
     private readonly centerOffset = new THREE.Vector3();
     private readonly hitColor = new THREE.Color(0xffa16b);
     private freezeLeft = 0;
+    /** Juice T4: the next death is a headshot (bigger hat blast, head splat, a held beat before the fall). */
+    private headshot = false;
+    private deathHold = 0;
+    private headStains?: RatStains;
     private stains?: RatStains;
     private flyingHat?: FlyingHat;
     private deathStyle: DeathStyle = 'default';
@@ -296,6 +300,12 @@ export class RatEntity {
 
     public update(dt: number) {
         if (this.dead) {
+            if (this.deathHold > 0) {
+                this.deathHold -= dt;
+                this.flyingHat?.update(dt);
+                if (this.deathHold > 0) return;
+                this.launchRagdoll();
+            }
             this.deathTimer += dt;
             this.updateDeathRagdoll(dt);
             this.flyingHat?.update(dt);
@@ -502,6 +512,9 @@ export class RatEntity {
     /** Polish 15: composed kill nod. */
     public nod(): void { if (!this.dead) this.animator.nod(); }
 
+    /** Juice T4: present the next death as a headshot. */
+    public markHeadshot(): void { this.headshot = true; }
+
     /** Polish 12: flavour the next death's secondary motion by its cause. */
     public setDeathStyle(style: DeathStyle): void { this.deathStyle = style; }
 
@@ -511,10 +524,11 @@ export class RatEntity {
         if (this.disposed || this.sharedDeath || !feelState().on('hatPop')) return;
         const hat = this.mesh.getObjectByName('rat-hat');
         if (!hat) return;
-        const p = FEEL.hatPop.params;
+        const p = FEEL.hatPop.params,blast = this.headshot ? FEEL.headshot.params : undefined;
         // Legacy ragdoll: its lowest reached height stands in for the ground (never rises).
         const body = this.body.position;let floor = Infinity;
-        this.flyingHat = new FlyingHat(this.scene, hat, impactVel, () => floor = Math.min(floor, body.y - .5), p.speed, p.lift, ++this.stainSeed);
+        this.flyingHat = new FlyingHat(this.scene, hat, impactVel, () => floor = Math.min(floor, body.y - .5),
+            p.speed * (blast?.hatSpeed ?? 1), p.lift * (blast?.hatLift ?? 1), ++this.stainSeed);
         this.animator.setHatHidden(true);
     }
 
@@ -577,7 +591,10 @@ export class RatEntity {
         this.deathPhase = 'launch';
         this.resetColor();
         this.animator.setDeathStyle(this.deathStyle);this.deathStyle = 'default';
+        const headshot = this.headshot && feelState().on('headshot');
         this.popHat(impactVel);
+        this.headshot = false;
+        if (headshot) this.splatHead(impactVel);
 
         // ── DEATH SOUND ──
         playEntitySound('ratDeath', 0.6, this.isPlayer ? undefined : this.body.position);
@@ -613,10 +630,23 @@ export class RatEntity {
         this.body.updateBoundingRadius();
         this.body.aabbNeedsUpdate = true;
 
+        // Remove UI billboard
+        this.scene.remove(this.billboard.sprite);
+        this.launchDirection.copy(impDir);this.launchAxis.copy(fallAxis);
+        // A headshot holds the rat in place for a beat before the fall.
+        this.deathHold = headshot ? FEEL.headshot.params.hold : 0;
+        if (this.deathHold > 0) {
+            this.body.type = CANNON.Body.KINEMATIC;
+            this.body.velocity.setZero();this.body.angularVelocity.setZero();
+        } else this.launchRagdoll();
+    }
+
+    private readonly launchDirection = new THREE.Vector3();
+    private readonly launchAxis = new THREE.Vector3();
+    private launchRagdoll(): void {
+        const impDir = this.launchDirection, fallAxis = this.launchAxis;
         // ── RAGDOLL PHYSICS — DRAMATIC LAUNCH ──
-        if (this.isRemote) {
-            this.body.type = CANNON.Body.DYNAMIC;
-        }
+        this.body.type = CANNON.Body.DYNAMIC;
         this.body.fixedRotation = false;
         this.body.mass = 2;              // Lighter during ragdoll = more dramatic flight
         this.body.updateMassProperties();
@@ -638,9 +668,17 @@ export class RatEntity {
             (Math.random() - 0.5) * 5,     // Off-axis twist keeps each tumble different
             fallAxis.z * 16 + (Math.random() - 0.5) * 5
         );
+    }
 
-        // Remove UI billboard
-        this.scene.remove(this.billboard.sprite);
+    /** Juice T4: cheese splattered over the head, facing the shooter. */
+    private splatHead(impactVel: THREE.Vector3): void {
+        if (this.disposed) return;
+        const head = this.mesh.getObjectByName('rat-head');
+        if (!head) return;
+        this.headStains ??= new RatStains(head);
+        const yaw = this.mesh.rotation.y, x = -impactVel.x, z = -impactVel.z;
+        const facing = x || z ? Math.atan2(x, z) - yaw : 0;
+        for (let i = 0; i < 4; i++) this.headStains.addOnSphere(facing + (i - 1.5) * .55, .05 + (i % 2) * .16, .3, ++this.stainSeed, 1.25);
     }
 
     private restoreBodyOrigin(): void {
@@ -659,6 +697,7 @@ export class RatEntity {
         this.flashTimer = 0;
         this.freezeLeft = 0;
         this.stains?.dispose();this.stains = undefined;
+        this.headStains?.dispose();this.headStains = undefined;this.headshot = false;this.deathHold = 0;
         this.flyingHat?.dispose();this.flyingHat = undefined;
         this.deathTimer = 0;
 
@@ -756,6 +795,7 @@ export class RatEntity {
         this.powerupEffects.dispose();
         // Shared stain resources must leave the rig before its resources are disposed.
         this.stains?.dispose();
+        this.headStains?.dispose();
         this.flyingHat?.dispose();
         this.scene.remove(this.mesh);
         disposeMeshResources(this.mesh);

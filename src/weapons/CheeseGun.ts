@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
 import type {ShotTrace} from '../shared/LocalShotPresentation';
-import type { ShotDescriptor } from '../shared/networkProtocol';
+import { MAX_HP, type ShotDescriptor } from '../shared/networkProtocol';
 import type { IncidentId } from '../shared/incidentCatalog';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
 import { GunshotAudio } from '../audio/GunshotAudio';
@@ -242,7 +242,7 @@ export class CheeseGun {
                         if (!victim.dead) {
                             // ── PRECISE HEADSHOT CHECK ──
                             const isHead = (result.shape === victim.headShape);
-                            const dmg = isHead ? 3 : 1;
+                            const dmg = isHead ? MAX_HP : 1;
 
                             // Only apply local damage for LOCAL entities
                             // Remote entity damage is handled by the server

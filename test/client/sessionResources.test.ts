@@ -323,6 +323,7 @@ describe('GameSession real resource lifetime', () => {
             setSize: vi.fn(),
             setPixelRatio: vi.fn(),
             render: vi.fn(),
+            compileAsync: vi.fn(() => Promise.resolve()),
             dispose: vi.fn(),
         };
         const stage = preparingResize ? createStage(renderer as never) : undefined;

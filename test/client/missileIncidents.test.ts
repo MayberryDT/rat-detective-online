@@ -1,4 +1,5 @@
 import {describe,expect,it,vi} from 'vitest';
+import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
 import {INCIDENT_TUNING as I,CHAOS_TUNING as T} from '../../src/shared/chaosState';
@@ -65,7 +66,7 @@ describe('Evidence Tampering missile case',()=>{
   const f=fixture('evidence-tampering');arm(f);
   f.victim.x=2;f.shooter.x=1;
   f.sim.step(.04,f.now+50);
-  expect(f.hits.filter(h=>h.victim===f.victim.id)).toEqual([expect.objectContaining({owner:null,damage:3})]);
+  expect(f.hits.filter(h=>h.victim===f.victim.id)).toEqual([expect.objectContaining({owner:null,damage:MAX_HP})]);
   expect(f.hits.some(h=>h.victim===f.shooter.id)).toBe(false);
   expect(f.sim.snapshot(false).case.owner).toBeNull();
   f.sim.caseBody.position.set(1,21,0);f.sim.caseBody.velocity.set(110,0,0);f.sim.step(.02,f.now+70);
@@ -120,7 +121,7 @@ describe('Evidence Tampering missile case',()=>{
   const f=fixture('evidence-tampering');f.players.delete(f.shooter.id);
   f.sim.caseBody.position.set(0,21,0);f.sim.caseBody.velocity.set(40,0,0);f.victim.x=1;
   f.sim.step(.04,f.now+50);
-  expect(f.hits).toContainEqual(expect.objectContaining({victim:f.victim.id,owner:null,damage:3}));
+  expect(f.hits).toContainEqual(expect.objectContaining({victim:f.victim.id,owner:null,damage:MAX_HP}));
  });
  it('keeps slow cases armed and uncollectible for the whole incident',()=>{
   const f=fixture('evidence-tampering');arm(f);
@@ -144,7 +145,7 @@ describe('Evidence Tampering missile case',()=>{
   expect(parseServerMessage({type:'chaos',state})).not.toBeNull();
   expect(parseServerMessage({type:'chaos',state:{...state,case:{...state.case,missileOwner:123}}})).toBeNull();
   const restored=new ChaosSimulation(f.players,h=>f.hits.push(h),state);f.victim.x=2;
-  restored.step(.04,f.now+50);expect(f.hits[0]).toMatchObject({owner:null,damage:3});
+  restored.step(.04,f.now+50);expect(f.hits[0]).toMatchObject({owner:null,damage:MAX_HP});
  });
 });
 describe('Crossfire bank shots',()=>{
@@ -156,7 +157,7 @@ describe('Crossfire bank shots',()=>{
   expect(direct.hits[0].damage).toBe(1);
   const bank=fixture('crossfire');bank.victim.x=-1;wall(bank.sim,2);fire(bank);
   bank.sim.step(.02,bank.now+20);expect(bank.sim.snapshot(false).shots[0].wallBounced).toBe(true);
-  bank.sim.step(.03,bank.now+50);expect(bank.hits[0].damage).toBe(3);
+  bank.sim.step(.03,bank.now+50);expect(bank.hits[0].damage).toBe(MAX_HP);
  });
  it('does not treat a launcher target reflection as a world bank shot',()=>{
   const f=fixture('crossfire');f.victim.x=-1;wall(f.sim,2,'pressure');fire(f);
