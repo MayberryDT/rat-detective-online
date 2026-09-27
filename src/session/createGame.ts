@@ -45,10 +45,15 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         city.update(0,stage.camera);
         // The session adds the feel layer's shader patches and presentation
         // objects; warm after it exists so Enter never recompiles the city.
+        // An Enter during the warm-up stays queued (main.ts) until the session is
+        // returned, so no welcome can populate the scene mid-warm.
+        const queued={onEnter:title.onEnter,available:title.available};
         const session=new GameSession(renderer,spec,{title,music,transport,stage,city,cameos,releasePreparedModels:()=>{
             for(const model of models)model.dispose();for(const pickup of pickups)pickup.dispose();disposeMeshResources(briefcase);
         }});
         built=session;
+        const bound={onEnter:title.onEnter,available:title.available};
+        Object.assign(title,queued);
         const scenery=new Set(stage.scene.children);
         // Representative rats, supplies and case keep their programs alive
         // until the real ones render once; no participant or collider remains.
@@ -57,14 +62,16 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         enemy.enableRigidBatching();models.push(enemy);
         for(const kind of PICKUP_KINDS)pickups.push(new PickupVisual(stage.scene,kind));
         addLeatherBriefcase(briefcase);stage.scene.add(briefcase);
+        const standIns=stage.scene.children.filter(object=>!scenery.has(object));
         stage.syncViewport();
-        await warmPrograms(renderer,stage.scene,stage.camera,signal,stage.scene.children.filter(object=>!scenery.has(object)));
-        stage.scene.remove(...stage.scene.children.filter(object=>!scenery.has(object)));
+        await warmPrograms(renderer,stage.scene,stage.camera,signal,standIns);
+        stage.scene.remove(...standIns);
         for(const model of models)stage.world.removeBody(model.body);
         await yieldToPage(signal);
         renderer.render(stage.scene,stage.camera);
         if(cameos)warmCameoBuffers(cameos,stage.scene,renderer);
         performance.mark('city-render-ready');
+        Object.assign(title,bound);
         return session;
     } catch(error) {failed=true;if(built)built.dispose();else{cameos?.dispose();for(const model of models)model.dispose();for(const pickup of pickups)pickup.dispose();city?.dispose();stage.dispose();}throw error;}
 }

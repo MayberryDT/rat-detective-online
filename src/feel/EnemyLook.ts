@@ -10,20 +10,24 @@ import {FEEL} from './feelTuning';
  * Shared uniforms follow the review switches every frame. */
 const uniforms={enemyEyeshine:{value:0},enemySaturation:{value:0}};
 const patched=new WeakSet<THREE.Material>();
-let eyeMaterial:THREE.ShaderMaterial|undefined;
-let eyeGeometry:THREE.CircleGeometry|undefined;
+/** Live eyeshine discs, hidden (no draw) while their switch is off. */
+const discs=new Set<THREE.Mesh>();
+let discsVisible=false;
 
 export function updateEnemyLook():void {
-    const state=feelState(),p=FEEL.enemyLook.params;
-    uniforms.enemyEyeshine.value=state.on('enemyEyeshine')?p.eyeshine:0;
+    const state=feelState(),p=FEEL.enemyLook.params,eyeshine=state.on('enemyEyeshine');
+    uniforms.enemyEyeshine.value=eyeshine?p.eyeshine:0;
     uniforms.enemySaturation.value=state.on('enemySaturation')?p.saturation:0;
+    if(eyeshine!==discsVisible){discsVisible=eyeshine;for(const disc of discs)disc.visible=eyeshine;}
 }
 export function enemyInkOutline():boolean {return feelState().on('enemyInk');}
 
-/** Retroreflective discs on both eyes; excluded from rigid batching. */
+/** Retroreflective discs on both eyes; excluded from rigid batching. Each rat
+ * owns its disc geometry and material (the rat's disposal frees them); the
+ * uniforms, and so the shader program, are shared. */
 export function addEyeshine(root:THREE.Object3D):void {
-    eyeGeometry??=new THREE.CircleGeometry(.055,14);
-    eyeMaterial??=new THREE.ShaderMaterial({
+    const eyeGeometry=new THREE.CircleGeometry(.055,14);
+    const eyeMaterial=new THREE.ShaderMaterial({
         uniforms,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,
         vertexShader:`varying vec3 vN;varying vec3 vV;void main(){vec4 p=modelViewMatrix*vec4(position,1.);vN=normalize(normalMatrix*normal);vV=normalize(-p.xyz);gl_Position=projectionMatrix*p;}`,
         fragmentShader:`uniform float enemyEyeshine;varying vec3 vN;varying vec3 vV;void main(){
@@ -34,8 +38,11 @@ export function addEyeshine(root:THREE.Object3D):void {
         const eye=root.getObjectByName(name);if(!eye)continue;
         const disc=new THREE.Mesh(eyeGeometry,eyeMaterial);
         disc.name='rat-eyeshine';disc.position.set(0,-.03,.012);disc.userData.noBatch=true;disc.userData.noOutline=true;
-        disc.castShadow=false;disc.raycast=()=>{};eye.add(disc);
+        disc.castShadow=false;disc.raycast=()=>{};disc.visible=discsVisible;eye.add(disc);discs.add(disc);
     }
+}
+export function forgetEyeshine(root:THREE.Object3D):void {
+    root.traverse(object=>{if(object instanceof THREE.Mesh)discs.delete(object);});
 }
 
 /** Saturation boost on an enemy rat's (possibly batched) materials. */

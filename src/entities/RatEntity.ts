@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import {RatStains} from './RatStains';
 import {FlyingHat} from './FlyingHat';
 import {kickDust} from '../feel/Dust';
-import {addEyeshine,enemyInkOutline,patchEnemyColour} from '../feel/EnemyLook';
+import {addEyeshine,enemyInkOutline,forgetEyeshine,patchEnemyColour} from '../feel/EnemyLook';
 import type {DeathStyle} from '../utils/RatAnimator';
 import {FEEL} from '../feel/feelTuning';
 import {feelState} from '../feel/feelState';
@@ -307,7 +307,8 @@ export class RatEntity {
                 this.deathHold -= dt;
                 this.flyingHat?.update(dt);
                 if (this.deathHold > 0) return;
-                this.launchRagdoll();
+                // An incident corpse may have taken over during the hold.
+                if (!this.sharedDeath) this.launchRagdoll();
             }
             this.deathTimer += dt;
             this.updateDeathRagdoll(dt);
@@ -713,6 +714,8 @@ export class RatEntity {
                 child.material.opacity = GLOW_OPACITY;
             }
         });
+        // The shared outline material may carry the ink look (T3 lab).
+        this.updatePowerupOutline();
     }
 
     /** Apply authoritative state without replaying historical hit/death sounds or impulses. */
@@ -801,6 +804,7 @@ export class RatEntity {
         this.headStains?.dispose();
         this.flyingHat?.dispose();
         this.scene.remove(this.mesh);
+        forgetEyeshine(this.mesh);
         disposeMeshResources(this.mesh);
         this.billboard.dispose();
         // Remove glow outline

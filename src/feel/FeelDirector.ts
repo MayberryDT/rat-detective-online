@@ -216,9 +216,15 @@ export class FeelDirector {
         else if(airborne)this.word('AIR MAIL!',victim,view,now,false);
     }
 
-    /** Juice T4: a lethal headshot you dealt, took or saw; the sound plays from the victim. */
-    headshot(victim:THREE.Vector3,view:THREE.Camera):void {
-        if(this.state.on('headshot'))this.sound.headshot(victim,view);
+    /** Juice T4: a lethal headshot; full volume when you dealt or took it, else it fades with distance. */
+    headshot(victim:THREE.Vector3,view:THREE.Camera,involved:boolean):void {
+        if(this.state.on('headshot'))this.sound.headshot(victim,view,involved);
+    }
+
+    /** Juice T5: the lineup takes the camera; drop any death camera and its iris. */
+    endDeathCamera(view:THREE.Camera):void {
+        this.deathTarget=undefined;this.deathAge=0;
+        this.camera.look(undefined,0,0);this.screen.iris(0,undefined,view,0);
     }
 
     /** Juice T5: a lineup flashbulb. */

@@ -50,6 +50,8 @@ const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean;facin
 const HEAD_POSITION=new THREE.Vector3();
 const ENEMY_ANCHORS:THREE.Vector3[]=[];
 const HEADSHOT_NORMAL=new THREE.Vector3();
+/** Longest a welcome waits for off-thread shader links before drawing anyway. */
+const WELCOME_COMPILE_MS=1500;
 /** Fill slot `n` of the reused footstep list in place; returns the next slot. */
 function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolean,facing?:THREE.Quaternion):number {
     const source=FOOTSTEP_SOURCES[n]??={id,position,grounded,facing};
@@ -104,7 +106,8 @@ export class GameSession {
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
     private compiling?:Promise<unknown>;
-    private readonly lineup:PoliceLineup;
+    private compileTimer?:ReturnType<typeof setTimeout>;
+    private readonly lineup?:PoliceLineup;
     private pendingLineup?:{entries:LineupEntry[];at:number};
     private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
     private lastHighlightObserve = 0;
@@ -153,7 +156,7 @@ export class GameSession {
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
             this.clearInput();
-            if(state!=='playing'){this.feel.reset();this.pendingLineup=undefined;this.lineup.end();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
+            if(state!=='playing'){this.feel.reset();this.pendingLineup=undefined;this.lineup?.end();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
             this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
@@ -250,7 +253,7 @@ export class GameSession {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
-        this.feel.reset();this.feel.resetRound();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup.end();
+        this.feel.reset();this.feel.resetRound();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -320,8 +323,12 @@ export class GameSession {
         }
         // Link whatever the welcome added (other rats, the round's objects)
         // off-thread; frames skip drawing until then instead of stalling.
-        const compiling=this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera).catch(()=>undefined)
-            .finally(()=>{if(this.compiling===compiling)this.compiling=undefined;});
+        // Bounded: three's readiness poll can throw inside its timer (a material
+        // disposed mid-link, context loss) and never settle.
+        clearTimeout(this.compileTimer);
+        const compiling=Promise.race([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera),
+            new Promise(resolve=>{this.compileTimer=setTimeout(resolve,WELCOME_COMPILE_MS);})]).catch(()=>undefined)
+            .finally(()=>{if(this.compiling===compiling){clearTimeout(this.compileTimer);this.compiling=undefined;}});
         this.compiling=compiling;
     }
 
@@ -438,7 +445,7 @@ export class GameSession {
                         entity.markHeadshot();
                         const head=entity.mesh.getObjectByName('rat-head')?.getWorldPosition(HEAD_POSITION)??HEAD_POSITION.copy(entity.mesh.position).setY(entity.mesh.position.y+1.6);
                         if(feelState().on('headshot'))this.chaos?.burst(head,HEADSHOT_NORMAL.copy(impact).negate(),FEEL.headshot.params.burst);
-                        this.feel.headshot(head,this.stage.camera);
+                        this.feel.headshot(head,this.stage.camera,message.killerId===this.myId||message.victimId===this.myId);
                     }
                     entity.takeDamage(entity.hp, impact.multiplyScalar(50));
                     }
@@ -468,15 +475,15 @@ export class GameSession {
                 // Polish 19: let the winning moment play in slow motion before the card slams in.
                 const hold=this.feel.victory();
                 if(hold>0)this.pendingVictory={message,at:performance.now()+hold*1000};
+                else this.hud.showVictory(message.winnerName, message.kills,message.assignment,...(message.awards?[message.awards]:[]));
                 // Juice T5: the lineup takes over the camera as the Case File lands.
                 const entries=feelState().on('lineup')?this.lineupEntries(message):[];
                 if(entries.length)this.pendingLineup={entries,at:performance.now()+hold*1000};
-                else this.hud.showVictory(message.winnerName, message.kills,message.assignment,...(message.awards?[message.awards]:[]));
                 this.highlights.emit(this.highlights.detector.onWin(message.winnerId, performance.now()));
                 break;
             }
             case 'gameReset':
-                this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup.end();
+                this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();
                 this.cameos?.reset();
                 this.highlights.detector.beginRound({
                     epoch: '',
@@ -616,8 +623,8 @@ export class GameSession {
         this.city.update(dt, camera, this.rat?.entity.body.position, this.enemyFixtureAnchors());
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
-        if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup.start(this.pendingLineup.entries);this.pendingLineup=undefined;}
-        if(this.lineup.active)this.lineup.update(dt,camera,flashlight);
+        if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
+        if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
         if(!this.compiling){
             this.feel.beforeRender(camera);
             renderer.render(scene, camera);
@@ -770,7 +777,7 @@ export class GameSession {
         this.city.dispose();
         this.music.dispose();
         this.feedback.dispose();
-        this.foleyWorld.dispose();this.foley.dispose();this.feel.dispose();this.lineup.dispose();
+        this.foleyWorld.dispose();this.foley.dispose();this.feel.dispose();this.lineup?.dispose();clearTimeout(this.compileTimer);
         disposeEntitySounds();
         this.stats?.dispose();
         this.stage.dispose();

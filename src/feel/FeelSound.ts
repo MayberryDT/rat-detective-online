@@ -84,7 +84,12 @@ export class FeelSound {
     squelch(at:Vec3Data|undefined,view:THREE.Camera):void {if(this.on)this.audio!.squelch(FEEL.sound.params.squelch,at?this.pan(at,view):0);}
     brass():void {if(this.on)this.audio!.brass(FEEL.sound.params.brass);}
     flashbulb():void {if(this.on)this.audio!.flashbulb(FEEL.sound.params.flashbulb);}
-    headshot(at:Vec3Data|undefined,view:THREE.Camera):void {if(this.on)this.audio!.headshot(FEEL.sound.params.headshot,at?this.pan(at,view):0);}
+    headshot(at:Vec3Data,view:THREE.Camera,involved:boolean):void {
+        if(!this.on)return;
+        // Other rats' headshots fade out across the city like any world sound.
+        const fade=involved?1:Math.max(0,1-Math.hypot(at.x-view.position.x,at.y-view.position.y,at.z-view.position.z)/FEEL.sound.params.headshotRange)**2;
+        if(fade>.02)this.audio!.headshot(FEEL.sound.params.headshot*fade,this.pan(at,view));
+    }
     sting(kind:Sting):void {if(this.on)this.audio!.sting(kind,FEEL.sound.params.sting);}
 
     /** Balls from other rats passing within `whizz` units of your head. */

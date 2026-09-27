@@ -1114,7 +1114,7 @@ export class GameRoom extends DurableObject<Env> {
     this.shotAcceptedAt.set(message.shotId,performance.now());
     if(this.shotAcceptedAt.size>128)this.shotAcceptedAt.delete(this.shotAcceptedAt.keys().next().value!);
     const fired=this.chaos?.shoot(playerId,message);
-    this.awards.shot(playerId);
+    this.awards.shot(playerId, message.shotId);
     this.diagnostics.shot('accepted');
     const event:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:playerId,
       shotId:message.shotId,origin:message.origin,direction:message.direction};

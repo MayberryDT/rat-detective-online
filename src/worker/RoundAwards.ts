@@ -26,6 +26,8 @@ export const LINEUP_SIZE=5;
  * used for scoring); a Durable Object restart mid-round starts the tallies again. */
 export class RoundAwards {
     private readonly stats=new Map<string,Stats>();
+    /** Accepted trigger pulls by shot id; only their balls count toward accuracy. */
+    private readonly triggers=new Map<string,string>();
     private readonly hitShots=new Set<string>();
     private readonly seenLaunches=new Set<string>();
     private caseOwner:string|null=null;
@@ -38,10 +40,14 @@ export class RoundAwards {
     }
     damage(victimId:string,amount:number):void {if(amount>0)this.of(victimId).cheesed+=amount;}
     /** An accepted trigger pull. */
-    shot(playerId:string):void {this.of(playerId).shots++;}
-    /** A ball of `shotId` struck a rat; a trigger pull counts as one hit at most. */
+    shot(playerId:string,shotId:string):void {
+        this.of(playerId).shots++;
+        this.triggers.set(shotId,playerId);if(this.triggers.size>4096)this.triggers.delete(this.triggers.keys().next().value!);
+    }
+    /** A ball of `shotId` struck a rat. A trigger pull counts as one hit at most, and
+     * balls not fired by a trigger (eruptions, bursts, splits) never count. */
     hit(playerId:string,shotId:string):void {
-        if(this.hitShots.has(shotId))return;
+        if(this.triggers.get(shotId)!==playerId||this.hitShots.has(shotId))return;
         this.hitShots.add(shotId);if(this.hitShots.size>4096)this.hitShots.delete(this.hitShots.values().next().value!);
         this.of(playerId).hits++;
     }
@@ -66,7 +72,7 @@ export class RoundAwards {
             stats.last={x:player.x,z:player.z};
         }
     }
-    reset():void {this.stats.clear();this.hitShots.clear();this.seenLaunches.clear();this.caseOwner=null;this.deliveries=0;}
+    reset():void {this.stats.clear();this.triggers.clear();this.hitShots.clear();this.seenLaunches.clear();this.caseOwner=null;this.deliveries=0;}
 
     private value(id:AwardId,player:PlayerData):number {
         const stats=this.stats.get(player.id);

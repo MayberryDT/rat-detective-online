@@ -52,7 +52,7 @@ it('accepts valid awards on gameWon and rejects malformed ones',()=>{
 
 // Juice T5 failure modes, written before the checks:
 // 7. A respawn or launcher teleport counts as legwork.
-// 8. One scattershot trigger that hits with several balls counts as several hits (accuracy over 100%).
+// 8. One scattershot trigger that hits with several balls, or an eruption ball it set off, counts as extra hits (accuracy over 100%).
 // 9. A handful of lucky shots wins Sharpshooter.
 // 10. A launch event still listed on the next tick counts as a second flight.
 // 11. The lineup drops the winner behind better-scoring rats, or grows past five.
@@ -64,13 +64,13 @@ it('counts legwork without teleports, one hit per trigger, a minimum of shots an
     a.x+=500;awards.sample(players.values(),.1,null,0);
     const launch=[{id:'launch-1-a',playerId:'a'}];
     awards.sample(players.values(),.1,null,0,launch);awards.sample(players.values(),.1,null,0,launch);
-    for(let i=0;i<5;i++)awards.shot('a');
-    awards.hit('a','s1');awards.hit('a','s1');awards.hit('a','s2');
+    for(let i=0;i<5;i++)awards.shot('a',`s${i}`);
+    awards.hit('a','s1');awards.hit('a','s1');awards.hit('a','s2');awards.hit('a','burst-ball');
     let byId=Object.fromEntries(awards.awards(players).map(w=>[w.id,w]));
     expect(byId.legwork).toMatchObject({value:290});
     expect(byId['frequent-flier']).toBeUndefined();
     expect(byId.sharpshooter).toBeUndefined();
-    for(let i=0;i<5;i++)awards.shot('a');
+    for(let i=5;i<10;i++)awards.shot('a',`s${i}`);
     awards.sample(players.values(),.1,null,0,[...launch,{id:'launch-2-a',playerId:'a'}]);
     byId=Object.fromEntries(awards.awards(players).map(w=>[w.id,w]));
     expect(byId.sharpshooter).toMatchObject({value:20});
