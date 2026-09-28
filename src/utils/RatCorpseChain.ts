@@ -16,8 +16,9 @@ type ChainPoint = typeof POINTS[number];
 const POINT: Record<ChainPoint, {rest: [number, number, number]; radius: number; w: number; drag: number}> = {
     belly: {rest: [0, RAT_SPINE_JOINTS[1], 0], radius: .46, w: 0, drag: 0},
     hips: {rest: [0, RAT_SPINE_JOINTS[0], 0], radius: .45, w: 1, drag: .6},
-    chest: {rest: [0, 1.32, 0], radius: .38, w: 1, drag: .6},
-    head: {rest: [0, 1.75, .18], radius: .36, w: 1.4, drag: .8},
+    // The chest point sits at the neck, where the head turns, so the drawn head lands on the chain's.
+    chest: {rest: [0, 1.55, 0], radius: .38, w: 1, drag: .6},
+    head: {rest: [0, 1.64, .2], radius: .42, w: 1.4, drag: .8},
     footLeft: {rest: [-.16, .035, .36], radius: .07, w: 2.5, drag: 1},
     footRight: {rest: [.16, .035, .36], radius: .07, w: 2.5, drag: 1},
     hand: {rest: [-.49, .91, .09], radius: .1, w: 2.5, drag: 1},
@@ -27,17 +28,17 @@ const BELLY = 0, HIPS = 1, CHEST = 2, HEAD = 3, FOOT_LEFT = 4, FOOT_RIGHT = 5, H
 const REST = POINTS.map(name => new THREE.Vector3(...POINT[name].rest));
 const RADIUS = POINTS.map(name => POINT[name].radius), W = POINTS.map(name => POINT[name].w), DRAG = POINTS.map(name => POINT[name].drag);
 /** [a, b, min, max]: the spine is nearly rigid in length; the joints fold within limits
- * (knees buckle to 0.24, the waist folds to 0.4, the neck bends about 100°). */
+ * (knees buckle to 0.24, the waist folds about 100°, the neck about 100°). */
 const LIMITS: readonly (readonly [number, number, number, number])[] = [
-    [BELLY, HIPS, .47, .52], [BELLY, CHEST, .35, .39], [CHEST, HEAD, .42, .46],
+    [BELLY, HIPS, .47, .52], [BELLY, CHEST, .57, .62], [CHEST, HEAD, .2, .24],
     [HIPS, FOOT_LEFT, .24, .56], [HIPS, FOOT_RIGHT, .24, .56], [FOOT_LEFT, FOOT_RIGHT, .22, .95],
-    [BELLY, FOOT_LEFT, .42, 1.02], [BELLY, FOOT_RIGHT, .42, 1.02], [CHEST, FOOT_LEFT, .45, 9], [CHEST, FOOT_RIGHT, .45, 9],
-    [HIPS, CHEST, .4, .9], [BELLY, HEAD, .5, .82], [HIPS, HEAD, .75, 1.36], [HEAD, FOOT_LEFT, .6, 9], [HEAD, FOOT_RIGHT, .6, 9],
-    [CHEST, HAND, .3, .7], [BELLY, HAND, .3, .85], [HIPS, TAIL, .8, 1.7], [BELLY, TAIL, .9, 1.9],
+    [BELLY, FOOT_LEFT, .42, 1.02], [BELLY, FOOT_RIGHT, .42, 1.02], [CHEST, FOOT_LEFT, .6, 9], [CHEST, FOOT_RIGHT, .6, 9],
+    [HIPS, CHEST, .7, 1.12], [BELLY, HEAD, .55, .74], [HIPS, HEAD, .9, 1.24], [HEAD, FOOT_LEFT, .6, 9], [HEAD, FOOT_RIGHT, .6, 9],
+    [CHEST, HAND, .45, .85], [BELLY, HAND, .3, .85], [HIPS, TAIL, .8, 1.7], [BELLY, TAIL, .9, 1.9],
 ];
 /** [a, b, rest, stiffness]: a weak pull back toward a straight body, so a body at rest
  * lies out long (a sack) unless something folds it. */
-const SOFT: readonly (readonly [number, number, number, number])[] = [[HIPS, CHEST, .87, .06], [BELLY, HEAD, .81, .06], [HIPS, HEAD, 1.3, .04]];
+const SOFT: readonly (readonly [number, number, number, number])[] = [[HIPS, CHEST, 1.1, .06], [BELLY, HEAD, .72, .06], [HIPS, HEAD, 1.21, .04]];
 /** Cause-shaped first beat, in rest model space (u/s): knees buckle and the waist folds
  * before the body flies; a headshot snaps the head back; an explosion spreads it. */
 const START: Record<RagdollCause, readonly (readonly [number, number, number, number])[]> = {
@@ -214,6 +215,9 @@ export class RatCorpseChain {
         const flail = cause === 'flail' && !resting;
         // Laid out: the feet, arm and tail drift apart (the sprawl), for a second or so.
         const sprawl = resting && this.restTime < 1.4 ? 6 : 0, knees = Math.min(1, this.restTime / .5) * .04;
+        // Straightening is gentle in the air (it folds and trails) and, once laid down, only
+        // across the ground: it sprawls a body out long but never lifts one draped over a rail.
+        const straighten = resting ? 2 * Math.min(1, this.restTime / .6) : .25;
         for (let s = 0; s < steps; s++) {
             for (let i = 1; i < REST.length; i++) {
                 const p = this.p[i], prev = this.prev[i], v = this.delta.subVectors(p, prev).multiplyScalar(Math.exp(-DRAG[i] * drag * h));
@@ -239,14 +243,14 @@ export class RatCorpseChain {
                     const soft = SOFT[c], a = soft[0], b = soft[1], pa = this.p[a], pb = this.p[b];
                     const d = this.delta.subVectors(pb, pa), length = d.length();
                     if (length < 1e-6) continue;
-                    const wa = W[a], wb = W[b], share = (length - soft[2]) / length / (wa + wb) * soft[3];
+                    const wa = W[a], wb = W[b], share = (length - soft[2]) / length / (wa + wb) * soft[3] * straighten;
+                    if (resting) d.y = 0;
                     pa.addScaledVector(d, share * wa);pb.addScaledVector(d, -share * wb);
                 }
-                // Laid out, the legs (inside the coat) straighten on along the body: the feet end
-                // up at the hem, not folded under it, and the coat does not stand up on them.
+                // Laid out, the legs (inside the coat) straighten back to their standing pose
+                // against the lower torso: the coat lies long instead of standing up on its feet.
                 if (knees) for (let foot = FOOT_LEFT; foot <= FOOT_RIGHT; foot++) {
-                    const target = this.delta.subVectors(this.p[HIPS], this.p[BELLY]).setLength(.5).add(this.p[HIPS])
-                        .addScaledVector(this.lateral[0], foot === FOOT_LEFT ? -.16 : .16);
+                    const target = this.delta.subVectors(REST[foot], REST[HIPS]).applyQuaternion(this.segment[1]).add(this.p[HIPS]);
                     this.p[foot].lerp(target, knees);
                 }
                 // The belly too: the physics box is thinner than the coat, so the drawn body rides a little higher.

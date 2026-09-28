@@ -24,6 +24,13 @@ it('lays a thrown corpse against a wall and on the ground without sinking throug
     const root=createRatMesh(),animator=new RatAnimator(root),batch=batchRigidMeshes(root)!;
     // As on a fresh corpse, the fedora (and the ears on it) has popped off as its own object.
     animator.setHatHidden(true);
+    // The coat and the head itself (not whiskers, tongue or the gun) are what read as sinking into the street.
+    const solid:number[]=[];let first=0;
+    for(const source of batch.userData.rigidSources as THREE.Mesh[]){
+        const count=source.geometry.getAttribute('position').count,part=source.parent?.name;
+        if(part==='rat-body'||part==='rat-head')for(let i=0;i<count;i+=3)solid.push(first+i);
+        first+=count;
+    }
     const offset=new THREE.Vector3(),vertex=new THREE.Vector3();
     let speed=0,lowest=Infinity,lowestAtRest=Infinity,furthest=-Infinity,reach=0;
     try{
@@ -36,7 +43,7 @@ it('lays a thrown corpse against a wall and on the ground without sinking throug
             if(frame===240)animator.joltDeath(1,{x:box.position.x,y:box.position.y+.3,z:box.position.z},{x:-1,y:.2,z:0});
             if(frame%6)continue;
             root.updateMatrixWorld(true);batch.skeleton.update();
-            for(let i=0;i<batch.geometry.getAttribute('position').count;i+=5){
+            for(const i of solid){
                 batch.getVertexPosition(i,vertex).applyMatrix4(batch.matrixWorld);
                 expect(Number.isFinite(vertex.x+vertex.y+vertex.z)).toBe(true);
                 lowest=Math.min(lowest,vertex.y);furthest=Math.max(furthest,vertex.x);
