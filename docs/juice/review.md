@@ -156,6 +156,24 @@ What changed is in the [juice plan](../juice-plan.md#fifth-batch-launchers-ragdo
 - Squash damage is 1, the same as a body hit; it can finish off a rat and counts as your kill.
 - The movement check now allows 80 u/s sideways (was 35) so drift, steering and shoves are never rejected as cheating.
 
+## Sixth batch: launcher machines, pressure triggers and Pressure Surge (protocol 21)
+
+What changed is in the [juice plan](../juice-plan.md#sixth-batch-launcher-machines-pressure-triggers-and-pressure-surge-design-agreed-2026-09-28-not-started). Workshop buttons in `feel-preview.html` prefixed `P` set every machine's pressure, fire them, view each machine, open street launchers and turn the surge look on.
+
+| Item | What to look for | Switch |
+|---|---|---|
+| P1 Pressure triggers | The remote red caps are gone: each machine stands on its pad's rim with a big red trigger on top. Standing on the pad fills it in 10 s (two rats in 5 s); every cheese ball on the trigger adds a second's worth. Pressure never drains. Full, it hangs half a second; shoot it then for an overpressure. It can't refill for a second after firing. | none (gameplay) |
+| P2 Machines | Pressure Works boiler with gauge and valve wheel; Sanitation Dept dumpster with a CRUSH plunger; Freight Ram with an emergency stop; Sewer Geyser standpipe with a hydrant cap; Rat Trap spring box with a red-waxed cheese; Wind Tunnel turbine with a red motor cap. Building: needle climbs, trigger pulses, wisps. Straining: swelling, shudder, more steam, creaks. Danger: violent rattle, red pool on the ground, siren, a popped bolt, and your view shakes on the pad. Each fires its own way (piston, catapult floor and slamming lid, ram punch and ramp, cover blasting off, trap bar snapping over, turbine whirl). | L5 Launch moment (rumble on the pad) |
+| P3 Surge chaos | During Pressure Surge the machines fill themselves (faster as it goes), street launchers open beside rats (a rattling manhole with a glow and steam, then an eruption a second later), pads suck nearby rats in with little hops, and in the last 1.5 s every machine and a launcher under every street rat blow as overpressure. | none (gameplay) |
+| P4 Surge look | Steam from the streets, a deep rising rumble, a restless view, and the city lights stuttering with each eruption. No HUD. | P4 Surge look |
+
+**Calls I made:**
+- A ball counts once per machine even if it ricochets back onto the trigger.
+- Coming down on another machine's pad fills it to bursting (it fires after its half-second hang).
+- Bots on a launcher route stand on the pad and shoot the trigger about three times a second.
+- The Icebox Loading Yard's bot hold spots moved off the Freight Ram's pad, so holders aren't thrown every ten seconds.
+- Street launchers only open on open street under the sky, never indoors or in the sewers.
+
 ## Choices to confirm
 
 These are places where I had to make a call. Each can be changed.

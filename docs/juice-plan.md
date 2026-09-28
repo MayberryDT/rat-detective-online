@@ -172,10 +172,10 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
 - **Pressure Surge:** the whole city becomes launchers (manholes, hydrants, grates and vents erupt after a steam warning), suction pulls rats and objects toward pads between pulses, the surge look (street steam, lights flickering with pulses, rising rumble and shake), and a finale blowout where everything fires at once. No pressure HUD; the rolling wave is dropped.
 - **Settled:** riders stack (two rats fill it in 5 s); every cheese ball that hits a trigger counts; when full, a machine hangs 0.5 s "about to blow" and any hit then makes an overpressure (the random one-in-seven roll goes); after firing, a 1 s cooldown before it can fill again; every full machine throws with its usual personality; during Pressure Surge machines fill themselves (5 s from empty, speeding up), street launchers erupt after a 1 s steam warning, and the finale sets everything off as overpressure.
 
-- [ ] **P1 Pressure triggers:** the pressure model on the server, the trigger moved onto each machine, bots stand and shoot.
-- [ ] **P2 Machines:** six rebuilt models with their red triggers and outlines, the four build-up stages and each machine's launch animation and sound.
-- [ ] **P3 Surge chaos:** street launchers across the city, suction toward pads, machines filling themselves, the finale blowout.
-- [ ] **P4 Surge look:** street steam, lights flickering with the pulses, rising rumble and shake; street-launcher warning and eruption.
+- [x] **P1 Pressure triggers:** the pressure model on the server, the trigger moved onto each machine, bots stand and shoot.
+- [x] **P2 Machines:** six rebuilt models with their red triggers and outlines, the four build-up stages and each machine's launch animation and sound.
+- [x] **P3 Surge chaos:** street launchers across the city, suction toward pads, machines filling themselves, the finale blowout.
+- [x] **P4 Surge look:** street steam, lights flickering with the pulses, rising rumble and shake; street-launcher warning and eruption.
 - [ ] **P5 Review package:** checks, one independent review, private preview.
 
 **Later (not now):**
