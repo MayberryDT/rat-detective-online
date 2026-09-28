@@ -42,6 +42,7 @@ export class RatController {
     private readonly pivot = new THREE.Vector3();
     private readonly viewDirection = new THREE.Vector3();
     private readonly shoulder = new THREE.Vector3();
+    private readonly shoulderDirection = new THREE.Vector3();
     private readonly offset = new THREE.Vector3();
 
     constructor(
@@ -77,6 +78,7 @@ export class RatController {
     update(dt: number, keys: Record<string, boolean>): void {
         this.prepareMovement(dt, keys);
         this.syncAfterPhysics(dt);
+        this.updateView();
     }
 
     /** Apply controls before the fixed physics step. Factors match the original at60Hz. */
@@ -99,7 +101,8 @@ export class RatController {
                 if (normalY > 0.5) { if(this.beforeLaunchDamping!==undefined){body.linearDamping=this.beforeLaunchDamping;this.beforeLaunchDamping=undefined;} this.groundGrace = 0.08; this.launcherFlight=false; this.normalJump=false; break; }
             }
         }
-        this.updateView();
+        // The camera is placed once per rendered frame (updateView), not per
+        // physics step: its two blocker raycasts were 8-12% of the frame.
     }
 
     updateView(): void {
@@ -226,7 +229,7 @@ export class RatController {
         this.shoulder.set(1,0,0).applyAxisAngle(this.up,this.spherical.theta).multiplyScalar(CAM_SHOULDER);
         // Resolve the shoulder first, then the boom: backing into a wall must
         // shorten distance without collapsing the view back onto the rat.
-        this.cameraRay.set(pivot,this.shoulder.clone().normalize());
+        this.cameraRay.set(pivot,this.shoulderDirection.copy(this.shoulder).normalize());
         this.cameraRay.far=CAM_SHOULDER;
         const shoulderHit=this.cameraRay.intersectObjects(this.cameraBlockers,true)[0];
         if(shoulderHit)this.shoulder.setLength(Math.max(0,shoulderHit.distance-.3));
