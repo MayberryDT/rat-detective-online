@@ -99,6 +99,9 @@ export const FEEL={
     launchFlight:{label:'L6 Flight',toggle:true,params:{scream:.2,screamRange:60,trailEvery:.035,streaks:1,hang:.45,hangLift:.75}},
     /** L7: landing: crater and cracked pavement, dust, THUD, shake within `shakeRange`; the thrown case whistles and spills paperwork. */
     launchLanding:{label:'L7 Landing',toggle:true,params:{thud:.35,shake:2.2,shakeRange:35,decalLife:9,whistle:.14,paper:14}},
+    /** P4: Pressure Surge look: the city rumble (`rumble` volume) and view shake (`shake`) rise over the incident;
+     * each eruption or firing flickers the city lights by `flicker`. Street steam comes from the launchers. */
+    surgeLook:{label:'P4 Surge look',toggle:true,params:{rumble:.16,shake:.5,flicker:.45}},
     /** R1–R3: floppy corpse limbs, cause-shaped deaths, splay and dead face, rolling hat; shots jolt limbs with a `squeak` heard within `squeakRange`. */
     ragdoll:{label:'R Ragdoll limbs',toggle:true,params:{squeak:.16,squeakRange:40,jolt:1}},
     /** M1: living face: ears and whiskers bounce on jolts; wide eyes and an open-mouth scream on launches, a gasp on near misses. */

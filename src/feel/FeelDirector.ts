@@ -67,6 +67,9 @@ export class FeelDirector {
     /** Blackout: eased power-off level, and the brief lift from nearby muzzle flashes. */
     private blackout=0;
     private muzzleFlash=0;
+    /** P4: seconds into the current Pressure Surge, and the lights' flicker from its latest pulse. */
+    private surgeAge=0;
+    private surgeFlicker=0;
     private dark=0;
     /** The last rendered view, for placing world cues raised outside the frame loop. */
     private view?:THREE.Camera;
@@ -313,6 +316,13 @@ export class FeelDirector {
             this.camera.kick(p.shake*s,(Math.random()*2-1)*p.shake*s*.5);
         }
     }
+    /** P4: a surge pulse (a street launcher erupting or a machine firing during Pressure Surge) flickers the city. */
+    surgePulse(at:Vec3Data,view:THREE.Camera):void {
+        if(this.incident!=='pressure-surge'||!this.state.on('surgeLook'))return;
+        const d=Math.hypot(at.x-view.position.x,at.z-view.position.z);
+        this.surgeFlicker=Math.max(this.surgeFlicker,Math.max(.35,1-d/80));
+        if(d<30)this.camera.kick(-FEEL.launchMoment.params.shake*(1-d/30),(Math.random()*2-1)*.4);
+    }
     /** P2, each frame: standing on a pad whose pressure is `level` (0…1) shakes your view harder as it builds. */
     padRumble(level:number,dt:number):void {
         if(!this.state.on('launchMoment')||level<=.3||!(dt>0))return;
@@ -395,6 +405,7 @@ export class FeelDirector {
         if(this.slowAge<r.slowmo){this.slowAge+=dt;this.lag+=dt*1000*(1-r.slowRate);}
         else if(this.lag>0)this.lag=Math.max(0,this.lag-dt*1000*r.catchup);
         this.camera.update(dt);
+        this.updateSurge(dt);
         this.updateBlackout(dt);
         this.dust?.update(dt);
         this.launchJuice?.update(dt);
@@ -428,6 +439,15 @@ export class FeelDirector {
             this.noirAudio.update(dt,this.danger,p.closed,p.period,on?p.heartbeat:0);
         }
     }
+    /** P4: the rumble and a restless view build over the surge. */
+    private updateSurge(dt:number):void {
+        const on=this.incident==='pressure-surge'&&this.state.on('surgeLook');
+        this.surgeAge=on?this.surgeAge+dt:0;
+        const level=on?Math.min(1,.3+this.surgeAge/25*.7):0;
+        this.sound.rumble(level);
+        if(on&&dt>0){const s=level*level*FEEL.surgeLook.params.shake*dt*6;this.camera.kick((Math.random()*2-1)*s,(Math.random()*2-1)*s);}
+        this.surgeFlicker*=Math.exp(-dt/.18);if(!on)this.surgeFlicker=0;
+    }
     /** Blackout eases in with the lights stuttering out, and back on the same way.
      * Lightning and muzzle flashes lift the dark for a beat. */
     private updateBlackout(dt:number):void {
@@ -436,7 +456,9 @@ export class FeelDirector {
         const transition=this.blackout>0&&this.blackout<1,stutter=transition&&Math.sin(this.blackout*47)>.2?.45:1;
         this.muzzleFlash*=Math.exp(-dt/.07);
         const flash=Math.min(1,Math.max(this.noirAtmosphere?.flash??0,this.muzzleFlash)*1.5);
-        this.dark=this.blackout*stutter*(1-flash);
+        // A surge pulse makes the lights stutter for a beat.
+        const flicker=this.surgeFlicker>.02&&Math.sin(performance.now()*.09)>0?this.surgeFlicker*FEEL.surgeLook.params.flicker:0;
+        this.dark=Math.max(this.blackout*stutter,flicker)*(1-flash);
         this.noirCity?.setDark(this.dark*p.city);
         NAMEPLATE_LIGHT.value=1-this.dark*p.nameplates;
     }
@@ -444,6 +466,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
     dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);NAMEPLATE_LIGHT.value=1;}
 }

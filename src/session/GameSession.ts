@@ -1,3 +1,4 @@
+import { SURGE } from '../shared/launcherVelocity';
 import { actionBound, lookDelta } from '../settings/PlayerPreferences';
 import {FoleyAudio} from '../audio/FoleyAudio';
 import { unlockEffectsAudio } from '../audio/effectsAudio';
@@ -305,6 +306,10 @@ export class GameSession {
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
+            this.chaos.onVentErupted=vent=>{
+                const pad={x:vent.x,y:vent.y,z:vent.z,radius:SURGE.radius};
+                this.feel.launcherFired('geyser',pad,!!vent.boost,this.stage.camera);this.feel.surgePulse(vent,this.stage.camera);
+            };
         }
         this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.chaos?.setIncidentRoster(message.incidents);
@@ -709,7 +714,7 @@ export class GameSession {
 
     /** L5: a machine fired in the presented timeline: its debris and rumble, and hats blown off rats near the pad. */
     private launcherFired(machine:LaunchMachine,boost:boolean):void {
-        this.feel.launcherFired(machine.kind,machine.pad,boost,this.stage.camera);
+        this.feel.launcherFired(machine.kind,machine.pad,boost,this.stage.camera);this.feel.surgePulse(machine.pad,this.stage.camera);
         const range=FEEL.launchMoment.params.hatRange;
         const blow=(entity:RatEntity)=>{
             const d=Math.hypot(entity.mesh.position.x-machine.pad.x,entity.mesh.position.z-machine.pad.z);

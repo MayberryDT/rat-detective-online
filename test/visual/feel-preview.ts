@@ -181,6 +181,9 @@ const actions:Record<string,()=>void>={
     'R Corpse 4 ahead: headshot':()=>studioCorpse('spin',true),
     'R Corpse 4 ahead: jolt':()=>corpse?.animator.joltDeath(1),
     'M1 Suspects gasp':()=>{for(const s of suspects)s.startle();},
+    'P Street launchers ahead':()=>{const at=performance.now()+1000;pressure.vents=[0,1,2].map(i=>{const p=ahead(6+i*4);return {id:`vent-${at}-${i}`,x:p.x+(i-1)*3,y:0,z:p.z,at};});},
+    'P Surge look on':()=>{surging=true;feel.setIncident('pressure-surge');},
+    'P Surge look off':()=>{surging=false;feel.setIncident();},
     'P Machines empty':()=>setPressure(0),
     'P Machines 30% (building)':()=>setPressure(.3),
     'P Machines 60% (straining)':()=>setPressure(.6),
@@ -217,6 +220,8 @@ function poseStudioCorpse(dt:number):void {
 /** P2: the six launchers with a scripted pressure state the buttons set. */
 const machines=new PressureMachine(stage.scene,stage.listener.context as AudioContext);
 const pressure:PressureState={serial:0,levels:{},launches:[]};
+let surging=false;
+machines.onVent=vent=>{feel.launcherFired('geyser',{x:vent.x,y:vent.y,z:vent.z,radius:3.2},false,stage.camera);feel.surgePulse(vent,stage.camera);};
 function setPressure(fraction:number):void {
     pressure.levels=Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,fraction*PRESSURE_TUNING.full]));delete pressure.blowing;
 }
@@ -281,7 +286,7 @@ function frame(now:number){
     feel.hunch(dt,now,stage.camera,rat.entity.dead?undefined:rat.entity,hunchRats,wantedSuspect);
     feel.wanted(dt,wantedSuspect?suspects[1]!.mesh.position:undefined,false);
     poseStudioCorpse(dt);
-    machines.update(pressure,performance.now(),stage.camera);
+    machines.update(pressure,performance.now(),stage.camera,surging);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
     stage.renderer.toneMappingExposure=1.1*feel.exposure;

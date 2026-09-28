@@ -7,7 +7,7 @@ import {setText} from '../ui/setText';
 import {clearAimLabel} from '../ui/aimClearance';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
-import type { ChaosState, CorpseState, LaunchMachine } from '../shared/chaosState';
+import type { ChaosState, CorpseState, LaunchMachine, SurgeVent } from '../shared/chaosState';
 import { CHAOS_TUNING, CASE_LOOSE_SCALE, DISPATCH_STATIONS } from '../shared/chaosState';
 import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh, ratAccessory } from '../utils/RatModel';
@@ -119,6 +119,8 @@ export class ChaosView {
     onCorpseJolt?: (p:Vec3Data)=>void;
     /** A launcher firing in the presented timeline. */
     set onLauncherFired(listener:((machine:LaunchMachine,boost:boolean)=>void)|undefined){this.pressureMachine.onFire=listener;}
+    /** A Pressure Surge street launcher erupting in the presented timeline. */
+    set onVentErupted(listener:((vent:SurgeVent)=>void)|undefined){this.pressureMachine.onVent=listener;}
     private readonly landings:{at:number;p:Vec3Data;speed:number}[]=[];
     setObserving(value:boolean):void {this.hud.observing=value;}
     setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
@@ -548,7 +550,7 @@ export class ChaosView {
         const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
         this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer);
         if(this.lastHitPoint)this.assignmentDestinations.clear();else this.assignmentDestinations.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
-        this.pressureMachine.update(s.pressure,now,camera);
+        this.pressureMachine.update(s.pressure,now,camera,s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='pressure-surge');
         for(const kiosk of this.kiosks){
         updateDispatchSiren(kiosk,d.phase==='ready',renderTime/1000);
         kiosk.switchHandle.position.z=d.phase==='ready'?.58:.55;

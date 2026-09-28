@@ -119,6 +119,8 @@ export class FeelSound {
     private fade(at:Vec3Data,view:THREE.Camera,range:number):number {
         return Math.max(0,1-Math.hypot(at.x-view.position.x,at.y-view.position.y,at.z-view.position.z)/range)**2;
     }
+    /** Pressure Surge rumble, `level` 0…1. */
+    rumble(level:number):void {if(this.audio)this.audio.setRumble(this.on?level:0,FEEL.surgeLook.params.rumble);}
     /** A body's limbs jolted by a shot. */
     squeak(at:Vec3Data,view:THREE.Camera):void {
         if(!this.on)return;
@@ -163,6 +165,6 @@ export class FeelSound {
         return whizzed;
     }
 
-    reset():void {this.walkers.clear();this.whizzed.clear();this.wasFast=false;this.audio?.setWind(0,0);}
+    reset():void {this.walkers.clear();this.whizzed.clear();this.wasFast=false;this.audio?.setWind(0,0);this.audio?.setRumble(0,0);}
     dispose():void {this.reset();this.audio?.dispose();}
 }

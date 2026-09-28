@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import {LAUNCH_MACHINES,PRESSURE_TUNING,type LaunchMachine,type ChaosState} from '../shared/chaosState';
+import {LAUNCH_MACHINES,PRESSURE_TUNING,type LaunchMachine,type ChaosState,type SurgeVent} from '../shared/chaosState';
+import {SURGE} from '../shared/launcherVelocity';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {LauncherAudio} from '../audio/LauncherAudio';
 import {buildMachine,createMachineMaterials,type MachineMaterials,type MachineModel} from './LaunchMachineModels';
 
-const STEAM=120;
+const STEAM=180;
 const smooth=(edge0:number,edge1:number,x:number)=>{const t=Math.min(1,Math.max(0,(x-edge0)/(edge1-edge0)));return t*t*(3-2*t);};
 
 interface MachineView {
@@ -28,6 +29,12 @@ export class PressureMachine {
     private readonly views:MachineView[]=[];
     /** Called once when a machine fires in the presented timeline, with whether it misfired high. */
     onFire?:(machine:LaunchMachine,boost:boolean)=>void;
+    /** Called once when a Pressure Surge street launcher erupts. */
+    onVent?:(vent:SurgeVent)=>void;
+    /** Pooled street-launcher visuals: a rattling manhole cover over a glowing hole. */
+    private readonly ventViews:{root:THREE.Group;cover:THREE.Group;glow:THREE.Mesh;id:string|null;erupted:boolean;warned:boolean;debt:number}[]=[];
+    private readonly ventGeometry={cover:new THREE.CylinderGeometry(.75,.75,.1,20),hole:new THREE.CircleGeometry(1,24),ring:new THREE.RingGeometry(1,1.35,32)};
+    private streetSteamDebt=0;
     private readonly steamMesh:THREE.InstancedMesh;
     private readonly steam=Array.from({length:STEAM},()=>({p:new THREE.Vector3(),v:new THREE.Vector3(),age:Infinity,life:1,size:.3}));
     private steamCursor=0;
@@ -63,10 +70,22 @@ export class PressureMachine {
         s.age=0;s.life=life*(.8+Math.random()*.4);s.size=size;
     }
 
-    update(state:ChaosState['pressure'],now:number,camera?:THREE.Camera){
+    /** `surging` while Pressure Surge is active: steam then rises from the streets around the camera. */
+    update(state:ChaosState['pressure'],now:number,camera?:THREE.Camera,surging=false){
         const dt=Number.isFinite(this.lastNow)?Math.min(.1,Math.max(0,(now-this.lastNow)/1000)):0;this.lastNow=now;
         const t=now/1000;
         this.launchAudio.update(camera);
+        this.updateVents(state?.vents,now,camera,dt,t);
+        if(surging&&camera&&dt>0){
+            // P4: every street breathes steam during the surge.
+            this.streetSteamDebt+=dt*14;
+            while(this.streetSteamDebt>=1){
+                this.streetSteamDebt--;
+                const a=Math.random()*Math.PI*2,r=8+Math.random()*34;
+                this.world.set(camera.position.x+Math.sin(a)*r,.1,camera.position.z+Math.cos(a)*r);
+                this.puff(this.world,2+Math.random()*3,1.6+Math.random()*1.4,.18+Math.random()*.16);
+            }
+        }
         for(const view of this.views){
             const {model}=view,machine=model.machine,id=machine.id,kind=machine.kind;
             const fired=state?.fired?.[id]??0,blowAt=state?.blowing?.[id];
@@ -158,6 +177,53 @@ export class PressureMachine {
         }
     }
 
+    /** Street launchers: warning (cover rattles harder, hole glows, steam jets, a whine
+     * half a second out), then the eruption (cover blasts off, a steam column). */
+    private updateVents(vents:readonly SurgeVent[]|undefined,now:number,camera:THREE.Camera|undefined,dt:number,t:number){
+        const live=new Set(vents?.map(v=>v.id));
+        for(const view of this.ventViews)if(view.id&&!live.has(view.id)){view.id=null;view.root.visible=false;}
+        for(const vent of vents??[]){
+            let view=this.ventViews.find(v=>v.id===vent.id);
+            if(!view){
+                view=this.ventViews.find(v=>v.id===null)??this.ventView();
+                if(!view)continue;
+                // A vent seen first after it erupted (a late join) does not replay the blast.
+                Object.assign(view,{id:vent.id,erupted:now>=vent.at,warned:now>=vent.at-500,debt:0});view.root.visible=true;
+            }
+            view.root.position.set(vent.x,vent.y+.02,vent.z);
+            const lead=(vent.at-now)/SURGE.warnMs,age=(now-vent.at)/1000;
+            const pad={x:vent.x,y:vent.y,z:vent.z,radius:SURGE.radius};
+            if(lead>0){
+                const build=1-Math.min(1,lead);
+                view.cover.position.y=.06+Math.abs(Math.sin(t*(20+build*30)))*build*.25;
+                view.cover.rotation.set(Math.sin(t*37)*.12*build,0,Math.cos(t*31)*.12*build);
+                (view.glow.material as THREE.MeshBasicMaterial).opacity=.25+.6*build*(.7+.3*Math.sin(t*20));
+                view.debt+=dt*(6+build*30);
+                while(view.debt>=1){view.debt--;this.world.set(vent.x+(Math.random()-.5)*1.4,vent.y+.2,vent.z+(Math.random()-.5)*1.4);this.puff(this.world,3+build*6,.8+build,.2+build*.2);}
+                if(!view.warned&&lead<=.5){view.warned=true;this.launchAudio.play('geyser',pad,camera,'tell');}
+            }else{
+                if(!view.erupted){
+                    view.erupted=true;
+                    this.launchAudio.play('geyser',pad,camera,'fire',!!vent.boost);this.onVent?.(vent);
+                    for(let i=0;i<30;i++){this.world.set(vent.x+(Math.random()-.5),vent.y+.3,vent.z+(Math.random()-.5));this.puff(this.world,12+Math.random()*20,1.1+Math.random(),.22+Math.random()*.2);}
+                }
+                view.cover.position.y=Math.max(.06,.06+30*age-12.5*age*age);view.cover.rotation.set(age*11,0,age*6);
+                (view.glow.material as THREE.MeshBasicMaterial).opacity=Math.max(0,.9-age*.6);
+            }
+        }
+    }
+    private ventView():PressureMachine['ventViews'][number]|undefined {
+        if(this.ventViews.length>=SURGE.maxVents)return undefined;
+        const root=new THREE.Group();root.name='surge-street-launcher';root.visible=false;
+        const hole=new THREE.Mesh(this.ventGeometry.hole,new THREE.MeshBasicMaterial({color:0x0c0f0e}));hole.rotation.x=-Math.PI/2;hole.position.y=.01;
+        const glow=new THREE.Mesh(this.ventGeometry.ring,new THREE.MeshBasicMaterial({color:0xff5a20,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,fog:false}));
+        glow.rotation.x=-Math.PI/2;glow.position.y=.03;
+        const cover=new THREE.Group(),lid=new THREE.Mesh(this.ventGeometry.cover,this.materials.iron);lid.castShadow=true;cover.add(lid);
+        root.add(hole,glow,cover);this.root.add(root);
+        const view={root,cover,glow,id:null,erupted:false,warned:false,debt:0};this.ventViews.push(view);
+        return view;
+    }
+
     private updateSteam(dt:number){
         let count=0;
         for(let i=0;i<STEAM;i++){
@@ -173,6 +239,7 @@ export class PressureMachine {
 
     dispose(){
         this.launchAudio.dispose();this.root.removeFromParent();this.steamMesh.dispose();
+        for(const geometry of Object.values(this.ventGeometry))geometry.dispose();
         disposeMeshResources(this.root);
         for(const material of Object.values(this.materials))material.dispose();
     }

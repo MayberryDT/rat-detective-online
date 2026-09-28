@@ -265,6 +265,8 @@ export class FeelAudio {
     }
     /** Continuous wind while flying, `level` 0…1. */
     setWind(level:number,volume:number):void {this.loop('wind',level,volume,400+level*900,.7);}
+    /** Pressure Surge: a deep city-wide rumble that rises with `level` 0…1. */
+    setRumble(level:number,volume:number):void {this.loop('rumble',level,volume,45+level*50,.9);}
     /** Noir rain on the city, `level` 0…1 (muffled indoors by the world mix). */
     setRain(level:number,volume:number):void {this.loop('rain',level,volume,3200,.4);}
 
