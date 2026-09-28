@@ -114,7 +114,7 @@ describe('hosted server bot controller',()=>{
     });
     it('applies pressure launches once, preserves their force, and ignores stale launch history after reset',()=>{
         const {controller,players,bot}=fixture();controller.step(1/60,1000,players,state(),true);
-        const launch=state(1017);launch.pressure={serial:1,until:3000,launches:[
+        const launch=state(1017);launch.pressure={serial:1,levels:{},launches:[
             {id:'launch-old',playerId:'bot',at:1016,velocity:{x:12,y:20,z:0}},
             {id:'launch-new',playerId:'bot',at:1017,velocity:{x:0,y:40,z:0}},
         ]};

@@ -2,9 +2,10 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import * as THREE from 'three';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
-import {LAUNCH_MACHINES,PRESSURE_LAUNCH} from '../../src/shared/chaosState';
+import {LAUNCH_MACHINES,PRESSURE_LAUNCH,PRESSURE_TUNING} from '../../src/shared/chaosState';
 import type {PlayerData} from '../../src/shared/networkProtocol';
-import {LANDING_SHOCKWAVE,PRESSURE_TELL_MS} from '../../src/shared/launcherVelocity';
+import {LANDING_SHOCKWAVE} from '../../src/shared/launcherVelocity';
+import {pump} from './pressureTestKit';
 import {createPlayer} from '../../src/worker/gameState';
 import {RatController} from '../../src/player/RatController';
 
@@ -25,9 +26,7 @@ function fixture(){
  return {sim,lander,under,near,far,hits};
 }
 function launch(sim:ChaosSimulation){
- const t=PRESSURE_LAUNCH.target;
- sim.shoot('far',{shotId:'trigger',origin:{x:t.x,y:t.y,z:t.z+1},direction:{x:0,y:0,z:-1}});
- sim.step(.01,1010);sim.step(.01,1010+PRESSURE_TELL_MS);
+ pump(sim,'far',PRESSURE_LAUNCH,1010);
  expect(sim.snapshot(false).pressure!.launches.map(e=>e.playerId)).toEqual(['lander']);
 }
 /** Fly the lander along a real-looking arc: up, then down onto (x,y,z). */
@@ -66,19 +65,20 @@ describe('launcher landings',()=>{
   const fan=LAUNCH_MACHINES.find(m=>m.id==='fan')!;
   const {sim,lander}=fixture();launch(sim);
   const t=arc(sim,lander,{x:fan.pad.x,y:0,z:fan.pad.z});
-  sim.step(.01,t+PRESSURE_TELL_MS);
-  expect(sim.snapshot(false).pressure!.cooldowns!.fan).toBeGreaterThan(t);
+  // Coming down on it fills it to bursting; it fires after its hang.
+  sim.step(.01,t+PRESSURE_TUNING.blowMs+20);
+  expect(sim.snapshot(false).pressure!.fired!.fan).toBeGreaterThan(t);
   const home=fixture();launch(home.sim);
   // A long flight: the thrower's own cooldown has run out by the landing.
   const back=arc(home.sim,home.lander,{x:pad.x,y:0,z:pad.z},6300);
-  home.sim.step(.01,back+PRESSURE_TELL_MS);
+  home.sim.step(.01,back+PRESSURE_TUNING.blowMs+20);
   expect(home.sim.snapshot(false).pressure!.serial).toBe(1);
  });
  it('applies a shove to the local rat once, as a hop away from the landing',()=>{
   const world=new C.World({gravity:new C.Vec3(0,-25,0)});
   const rat=new RatController(new THREE.Scene(),world,new THREE.PerspectiveCamera(),'',{},new THREE.Vector3(0,0,0));
   try{
-   const state={time:1000,pressure:{serial:1,until:0,launches:[],shoves:[{id:'shove-1',playerId:'local',at:1000,velocity:{x:12,y:9,z:0}}]}};
+   const state={time:1000,pressure:{serial:1,levels:{},launches:[],shoves:[{id:'shove-1',playerId:'local',at:1000,velocity:{x:12,y:9,z:0}}]}};
    rat.applyPressureLaunches(state,'local');
    expect(rat.entity.body.velocity.x).toBe(12);expect(rat.entity.body.velocity.y).toBe(9);
    rat.applyPressureLaunches(state,'local');

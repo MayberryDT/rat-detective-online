@@ -59,7 +59,7 @@ it('keeps every launcher silent both when it activates and when its cooldown exp
     const {audio,foley,state,camera,advance}=fixture();
     for(const machine of LAUNCH_MACHINES){
         camera.position.set(machine.pad.x,machine.pad.y+3,machine.pad.z+8);camera.lookAt(machine.pad.x,machine.pad.y,machine.pad.z);foley.listener(camera);
-        state.pressure!.cooldowns={[machine.id]:state.time+200+machine.cooldownMs};advance();
+        state.pressure!.fired={[machine.id]:state.time+200};advance();
         for(let i=0;i<100;i++)advance(100);
     }
     expect(audio.play).not.toHaveBeenCalled();foley.dispose();

@@ -1,4 +1,5 @@
-import {LAUNCH_PROFILES,OVERPRESSURE,PRESSURE_TELL_MS} from '../../src/shared/launcherVelocity';
+import {LAUNCH_PROFILES,OVERPRESSURE} from '../../src/shared/launcherVelocity';
+import {pump} from './pressureTestKit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as C from 'cannon-es';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
@@ -14,10 +15,7 @@ function addGround(sim:ChaosSimulation){
   sim.world.addBody(ground);sim.targets.set(ground,{kind:'world'});
 }
 /** Trigger the machine that owns the pad by shooting its red control cap. */
-function trigger(sim:ChaosSimulation,machine=PRESSURE_LAUNCH){
-  sim.shoot('shooter',{shotId:'trigger',origin:{x:machine.target.x,y:machine.target.y,z:machine.target.z+1},direction:{x:0,y:0,z:-1}});
-  sim.step(.01,1010);sim.step(.01,1010+PRESSURE_TELL_MS);
-}
+function trigger(sim:ChaosSimulation,machine=PRESSURE_LAUNCH){pump(sim,'shooter',machine,1010);}
 function fixture(){
   const shooter=createPlayer('shooter','Shooter',appearance,{x:-50,y:20,z:0});
   const players=new Map([[shooter.id,shooter]]);
@@ -38,7 +36,8 @@ describe('launchable cases',()=>{
   it('throws a loose case on the pad with the machine impulse',()=>{
     const {sim}=fixture();parkCaseOnPad(sim);
     trigger(sim);
-    expect(sim.caseBody.velocity.y).toBeGreaterThanOrEqual(LAUNCH_PROFILES.pressure.lift[0]);
+    // One physics step of gravity may already have run in the firing tick.
+    expect(sim.caseBody.velocity.y).toBeGreaterThanOrEqual(LAUNCH_PROFILES.pressure.lift[0]-1);
     // The impulse lands during the same tick's shot resolution, so the first
     // visible rise is one step later.
     const before=sim.caseBody.position.y;

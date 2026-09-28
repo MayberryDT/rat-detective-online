@@ -9,7 +9,7 @@ import { JURISDICTION_ZONES, jurisdictionTravelPoint, zoneContains } from './jur
 import { BotOpportunisticFire } from './BotOpportunisticFire';
 import { BotCombat, combatRandom } from './BotCombat';
 import {exposedCarrierCase,shotHitsIronclad} from './BotTargeting';
-import { DISPATCH_STATIONS, type ChaosState } from './chaosState';
+import { DISPATCH_STATIONS, PRESSURE_TUNING, type ChaosState } from './chaosState';
 import { incidentInfo } from './incidentCatalog';
 import { activeDestination, destinationPoint } from './assignments';
 import { hasHustle, hasIronclad, PICKUP_TUNING, type PickupState } from './pickups';
@@ -451,15 +451,18 @@ export class ObjectiveBotBrain {
         }
         if(waypoint?.launch&&Math.hypot(self.x-waypoint.launch.machine.pad.x,self.z-waypoint.launch.machine.pad.z)<2.5&&Math.abs(self.y-waypoint.y)<1){
             this.launchWaitAt??=now;
-            if(now-this.launchWaitAt>8500){this.launchWaitAt=undefined;this.failPendingGoal(now);waypoint=undefined;}
+            // Standing alone fills a machine in 10 s; give up only well past that.
+            if(now-this.launchWaitAt>12500){this.launchWaitAt=undefined;this.failPendingGoal(now);waypoint=undefined;}
             else{
                 const machine=waypoint.launch.machine,target=machine.target;
                 const dx=machine.pad.x-self.x,dz=machine.pad.z-self.z,d=Math.hypot(dx,dz);
                 let shoot:Vec3Data|undefined;
-                if(d<.6&&grounded&&now>=this.shotAt&&(state?.pressure?.cooldowns?.[machine.id]??0)<=(state?.time??now)&&clearControl(target)){
+                // Standing builds pressure; every hit on the trigger adds more. Keep pumping it.
+                const cooling=(state?.time??now)<(state?.pressure?.fired?.[machine.id]??-Infinity)+PRESSURE_TUNING.cooldownMs;
+                if(d<.6&&grounded&&now>=this.shotAt&&!cooling&&clearControl(target)){
                     const travel=Math.hypot(target.x-self.x,target.z-self.z)/BALL_SPEED;
                     shoot={x:target.x,y:target.y-BALL_GRAVITY*travel*travel/2,z:target.z};
-                    this.shotAt=now+650;this.heading=Math.atan2(target.x-self.x,target.z-self.z);
+                    this.shotAt=now+350;this.heading=Math.atan2(target.x-self.x,target.z-self.z);
                 }
                 // Stand on the real pad and fire real cheese at its trigger.
                 // Only the authoritative launch event starts flight steering.

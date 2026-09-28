@@ -6,38 +6,24 @@ import type {LauncherAudio} from '../../src/audio/LauncherAudio';
 
 const spy=(view:PressureMachine)=>vi.spyOn((view as unknown as {launchAudio:LauncherAudio}).launchAudio,'play').mockImplementation(()=>{});
 describe('launcher feedback',()=>{
- it('plays every station\'s tell then firing once per activation, including an empty launch, without replaying snapshots',()=>{
+ it('plays every station\'s hang then firing once per activation, including an empty launch, without replaying snapshots',()=>{
   const scene=new THREE.Scene(),view=new PressureMachine(scene);
   const sound=spy(view);
-  view.update({serial:0,until:0,cooldowns:{},launches:[]},900);
-  const cooldowns=Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,1100+m.cooldownMs]));
-  const state={serial:6,until:cooldowns.pressure,cooldowns,boosts:{fan:1100},launches:[]};
-  view.update(state,1000);view.update(state,1050);
+  view.update({serial:0,levels:{},launches:[]},900);
+  const all=(value:number)=>Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,value]));
+  const hanging={serial:0,levels:all(10),blowing:all(1100),boosts:{fan:1100},launches:[]};
+  view.update(hanging,1000);view.update(hanging,1050);
   expect(sound.mock.calls.map(c=>[c[0],c[3]])).toEqual(LAUNCH_MACHINES.map(m=>[m.kind,'tell']));
+  const state={serial:6,levels:{},fired:all(1100),boosts:{fan:1100},launches:[]};
   view.update(state,1200);view.update(state,1250);
   expect(sound.mock.calls.slice(6).map(c=>[c[0],c[3],c[4]])).toEqual(LAUNCH_MACHINES.map(m=>[m.kind,'fire',m.kind==='fan']));
   view.update(state,7000);expect(sound).toHaveBeenCalledTimes(12);
   view.dispose();expect(scene.children).toHaveLength(0);
  });
- it('keeps mechanical launch and airflow visible for the accelerated 1.8-second cycle, then resets',()=>{
-  const view=new PressureMachine(new THREE.Scene());
-  const state={serial:6,until:6000,cooldowns:Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,6000])),launches:[]};
-  const models=(view as unknown as {moving:Array<{machine:{kind:string};rotor:THREE.Group;burst:THREE.Group;shaft?:THREE.Mesh}>}).moving;
-  view.update(state,2250);
-  expect(models.every(m=>m.burst.visible)).toBe(true);
-  const pump=models.find(m=>m.machine.kind==='pressure')!;
-  expect(pump.rotor.position.y).toBeGreaterThan(4);
-  expect(pump.shaft!.scale.y).toBeGreaterThan(4);
-  const fan=models.find(m=>m.machine.kind==='fan')!;
-  expect(fan.burst.children.some(p=>p.position.y>15)).toBe(true);
-  view.update(state,2850);
-  expect(models.every(m=>!m.burst.visible)).toBe(true);
-  expect(pump.rotor.position.y).toBe(.13);view.dispose();
- });
  it('does not play historical activations when joining during a cooldown',()=>{
   const view=new PressureMachine(new THREE.Scene());
   const sound=spy(view);
-  view.update({serial:1,until:6000,cooldowns:{pressure:6000},launches:[]},1100);
+  view.update({serial:1,levels:{},fired:{pressure:1000},launches:[]},1100);
   expect(sound).not.toHaveBeenCalled();view.dispose();
  });
 });

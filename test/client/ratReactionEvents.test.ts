@@ -27,7 +27,7 @@ it('reacts only to confirmed ownership transitions and prefers delivery over a l
 });
 it('does not replay historical reactions after reconnect, epoch/round change, death or a duplicate launch',()=>{
     const {one,state,next,events}=setup();
-    state.pressure={serial:1,until:5000,launches:[{id:'launch',playerId:'one',at:1000,velocity:{x:0,y:90,z:0}}]};
+    state.pressure={serial:1,levels:{},launches:[{id:'launch',playerId:'one',at:1000,velocity:{x:0,y:90,z:0}}]};
     next();next();expect(one.playReaction).toHaveBeenCalledExactlyOnceWith('launch');
     state.time+=2000;state.case.owner='one';next();expect(one.playReaction).toHaveBeenCalledTimes(1);
     events.reset();next();expect(one.playReaction).toHaveBeenCalledTimes(1);

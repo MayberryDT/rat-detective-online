@@ -75,9 +75,8 @@ describe('launcher spatial audio', () => {
         const {ctx,camera,sources,gains}=fixture();
         const view=new PressureMachine(new THREE.Scene(),ctx as unknown as AudioContext);
         const nearest=LAUNCH_MACHINES[0];camera.position.set(nearest.pad.x,.13,nearest.pad.z);
-        view.update({serial:0,until:0,cooldowns:{},launches:[]},1000,camera);
-        const cooldowns=Object.fromEntries(LAUNCH_MACHINES.map(machine=>[machine.id,1100+machine.cooldownMs]));
-        const state={serial:6,until:cooldowns.pressure,cooldowns,launches:[]};
+        view.update({serial:0,levels:{},launches:[]},1000,camera);
+        const state={serial:6,levels:{},fired:Object.fromEntries(LAUNCH_MACHINES.map(machine=>[machine.id,1100])),launches:[]};
         view.update(state,1200,camera);view.update(state,1250,camera);
         const audible=LAUNCH_MACHINES.filter(machine=>Math.hypot(machine.pad.x-camera.position.x,machine.pad.z-camera.position.z)<120);
         expect(audible.length).toBeLessThan(LAUNCH_MACHINES.length);

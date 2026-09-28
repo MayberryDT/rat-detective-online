@@ -1,8 +1,7 @@
-import {PRESSURE_TELL_MS} from '../../src/shared/launcherVelocity';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
-import {CHAOS_TUNING as T,DISPATCH_TARGET,LAUNCH_MACHINES} from '../../src/shared/chaosState';
+import {CHAOS_TUNING as T,DISPATCH_TARGET} from '../../src/shared/chaosState';
 import {INCIDENTS,incidentInfo,incidentRoster,type IncidentId} from '../../src/shared/incidentCatalog';
 import {badRound,resolveShotPattern} from '../../src/shared/shotPattern';
 import {BALL_SPEED} from '../../src/shared/ballTuning';
@@ -157,15 +156,16 @@ describe('authoritative Dispatch incidents',()=>{
   sim.step(0,now+T.activeMs);sim.shoot('shooter',{shotId:'normal-again',origin:{x:0,y:30,z:0},direction:aim});
   const v=sim.snapshot(false).shots.at(-1)!.v;expect(new C.Vec3(v.x,v.y,v.z).dot(direction)).toBeCloseTo(BALL_SPEED);
  });
- it('fires all launchers every three seconds through cooldowns, without replaying restored pulses',()=>{
-  const {sim,players}=fixture('pressure-surge');sim.step(0,now+2999);expect(sim.snapshot(false).pressure!.serial).toBe(0);
-  // Each pulse arms every machine; they fire after the tell.
-  sim.step(0,now+3000);sim.step(0,now+3000+PRESSURE_TELL_MS);let s=sim.snapshot(false);expect(s.pressure!.serial).toBe(6);for(const m of LAUNCH_MACHINES)expect(s.pressure!.cooldowns![m.id]).toBe(now+8000+PRESSURE_TELL_MS);
-  const restored=new ChaosSimulation(players,()=>{},s);restored.step(0,now+3001);expect(restored.snapshot(false).pressure!.serial).toBe(6);
-  restored.step(0,now+6000);restored.step(0,now+6000+PRESSURE_TELL_MS);s=restored.snapshot(false);expect(s.pressure!.serial).toBe(12);for(const m of LAUNCH_MACHINES)expect(s.pressure!.cooldowns![m.id]).toBe(now+11000+PRESSURE_TELL_MS);
-  restored.step(0,now+T.activeMs);const before=restored.snapshot(false).pressure!.serial;restored.step(0,now+T.activeMs+3000);expect(restored.snapshot(false).pressure!.serial).toBe(before);
-  const cooling=fixture('pressure-surge');const saved=cooling.sim.snapshot(false);saved.pressure!.cooldowns={[LAUNCH_MACHINES[0].id]:now+9000};
-  const blocked=new ChaosSimulation(cooling.players,()=>{},saved);blocked.step(0,now+3000);blocked.step(0,now+3000+PRESSURE_TELL_MS);expect(blocked.snapshot(false).pressure!.serial).toBe(6);
+ it('fills every machine by itself during Pressure Surge, faster as it goes, and stops afterwards',()=>{
+  const {sim}=fixture('pressure-surge');
+  const run=(from:number,seconds:number)=>{let t=from;for(let i=0;i<seconds*30;i++){t+=1000/30;sim.step(1/30,t);}return t;};
+  let t=run(now,4);expect(sim.snapshot(false).pressure!.serial).toBe(0);
+  t=run(t,2);expect(sim.snapshot(false).pressure!.serial).toBe(6);
+  // Later pulses come quicker than the first five seconds.
+  const early=sim.snapshot(false).pressure!.serial;t=run(t,T.activeMs/1000-6);
+  expect(sim.snapshot(false).pressure!.serial-early).toBeGreaterThan(6*((T.activeMs/1000-6)/5));
+  const after=sim.snapshot(false).pressure!.serial;run(t+100,12);
+  expect(sim.snapshot(false).pressure!.serial).toBe(after);
  });
  it('restores the ordinary bouncy case kick after Evidence Tampering missile speed expires',()=>{
   const {sim}=fixture('evidence-tampering');expect(caseKick(sim)).toBeCloseTo(160,2);expect(Math.abs(sim.caseBody.angularVelocity.z)).toBeGreaterThan(5);

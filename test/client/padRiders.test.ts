@@ -2,7 +2,7 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,PRESSURE_LAUNCH} from '../../src/shared/chaosState';
-import {PRESSURE_TELL_MS} from '../../src/shared/launcherVelocity';
+import {pump} from './pressureTestKit';
 import {createPlayer} from '../../src/worker/gameState';
 
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SEWER_FLOOR:-7,grayboxBoxes:()=>[]}));
@@ -23,11 +23,7 @@ function fixture(incident?:'planted-evidence'){
  sim.world.addBody(ground);sim.targets.set(ground,{kind:'world'});
  return {sim,victim};
 }
-function trigger(sim:ChaosSimulation,at:number){
- const t=PRESSURE_LAUNCH.target;
- sim.shoot('shooter',{shotId:'trigger',origin:{x:t.x,y:t.y,z:t.z+1},direction:{x:0,y:0,z:-1}});
- sim.step(.01,at);sim.step(.01,at+PRESSURE_TELL_MS);
-}
+function trigger(sim:ChaosSimulation,at:number):number {return pump(sim,'shooter',PRESSURE_LAUNCH,at);}
 
 describe('everything on the pad flies',()=>{
  afterEach(()=>vi.restoreAllMocks());
@@ -47,8 +43,7 @@ describe('everything on the pad flies',()=>{
   expect(fakes.length).toBeGreaterThan(0);
   const id=fakes[0].id,body=[...sim.targets].find(([,t])=>t.kind==='case'&&t.caseId===id)![0];
   body.position.set(pad.x,.5,pad.z);body.updateAABB();
-  trigger(sim,now+10);
-  let peak=0,t=now+10+PRESSURE_TELL_MS;
+  let peak=0,t=trigger(sim,now+10);
   const find=()=>sim.snapshot(false).extraCases!.find(c=>c.id===id)!;
   for(let i=0;i<60*12;i++){t+=1000/60;sim.step(1/60,t);peak=Math.max(peak,find().p.y);}
   expect(peak).toBeGreaterThan(20);

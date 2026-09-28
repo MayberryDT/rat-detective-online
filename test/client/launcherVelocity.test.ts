@@ -1,6 +1,6 @@
 import * as C from 'cannon-es';
 import {describe,it,expect} from 'vitest';
-import {launcherVelocity,LAUNCH_DRIFT_DECAY,OVERPRESSURE} from '../../src/shared/launcherVelocity';
+import {launcherVelocity,LAUNCH_DRIFT_DECAY} from '../../src/shared/launcherVelocity';
 import {LAUNCH_MACHINES,MAX_LAUNCH_SPEED} from '../../src/shared/chaosState';
 import {CITY_BOUNDS} from '../../src/shared/grayboxLayout';
 import {MOVEMENT_ENVELOPE} from '../../src/worker/validation';
@@ -51,7 +51,6 @@ describe('launcher throws',()=>{
    const ordinary=Math.max(...DRAWS.map(r=>launcherVelocity(machine,false,()=>r).y));
    expect(launcherVelocity(machine,true,()=>0).y).toBeGreaterThan(ordinary);
   }
-  expect(OVERPRESSURE.chance).toBeGreaterThan(0);expect(OVERPRESSURE.chance).toBeLessThan(.5);
  });
  it('varies the throw between riders instead of repeating one straight-up arc',()=>{
   for(const machine of LAUNCH_MACHINES){

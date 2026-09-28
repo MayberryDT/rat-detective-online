@@ -4,7 +4,7 @@ import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {DISPATCH_STATIONS,PRESSURE_LAUNCH,LAUNCH_MACHINES,CHAOS_TUNING} from '../../src/shared/chaosState';
 import {RatController} from '../../src/player/RatController';
-import {PRESSURE_TELL_MS} from '../../src/shared/launcherVelocity';
+import {pump} from './pressureTestKit';
 import {createPlayer} from '../../src/worker/gameState';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {MAX_SERVER_MESSAGE_BYTES} from '../../src/shared/networkProtocol';
@@ -20,14 +20,13 @@ function fixture(){
 }
 function fire(sim:ChaosSimulation,target:{x:number;y:number;z:number},now=1010,id='target'){
  sim.shoot('local',{shotId:id,origin:{x:target.x,y:target.y,z:target.z+1},direction:{x:0,y:0,z:-1}});
- // The hit arms a launcher; its tell ends before it fires.
- sim.step(.01,now);sim.step(.01,now+PRESSURE_TELL_MS);
+ sim.step(.01,now);
 }
 describe('distributed controls and physical pressure launch',()=>{
  it.each([.1,.01])('keeps launch height identical with walking damping %s and restores it on landing',damping=>{
   // A mid roll: an ordinary (not overpressure) pressure-works throw.
   const random=vi.spyOn(Math,'random').mockReturnValue(.5);
-  const {sim}=fixture();fire(sim,PRESSURE_LAUNCH.target);const state=sim.snapshot();random.mockRestore();
+  const {sim}=fixture();pump(sim,'far',PRESSURE_LAUNCH,1010);const state=sim.snapshot();random.mockRestore();
   const world=new C.World({gravity:new C.Vec3(0,-25,0)}),rat=new RatController(new THREE.Scene(),world,new THREE.PerspectiveCamera(),'',{},new THREE.Vector3(0,0,0));
   rat.entity.body.linearDamping=damping;rat.applyPressureLaunches(state,'local');let peak=0;
   try{
@@ -48,39 +47,14 @@ describe('distributed controls and physical pressure launch',()=>{
    expect(sim.snapshot().dispatch.serial).toBe(1);
   }
  });
- it('launches only living rats on the pad, from an actual hit, and enforces cooldown',()=>{
+ it('does not build pressure from hits in a stopped round',()=>{
   const {sim}=fixture();const t=PRESSURE_LAUNCH.target;
-  fire(sim,{...t,x:t.x+t.w/2+.25});expect(sim.snapshot(false).pressure!.launches).toHaveLength(0);
-  fire(sim,t,1020,'hit');let state=sim.snapshot(false);
-  expect(state.pressure!.launches.map(e=>e.playerId)).toEqual(['local']);
-  expect(state.pressure!.launches[0].velocity.y).toBeGreaterThan(40);
-  fire(sim,t,1030,'cooldown');expect(sim.snapshot(false).pressure!.serial).toBe(1);
-  fire(sim,t,1020+PRESSURE_TELL_MS+PRESSURE_LAUNCH.cooldownMs,'ready');state=sim.snapshot();
-  expect(state.pressure!.serial).toBe(2);
- });
- it('fires empty launchers for discovery without creating player impulses',()=>{
-  const {sim,local}=fixture();local.x=0;
-  fire(sim,PRESSURE_LAUNCH.target);
-  let state=sim.snapshot(false);
-  expect(state.pressure!.serial).toBe(1);
-  expect(state.pressure!.launches).toEqual([]);
-  expect(state.pressure!.cooldowns![PRESSURE_LAUNCH.id]).toBe(1010+PRESSURE_TELL_MS+PRESSURE_LAUNCH.cooldownMs);
-  local.x=PRESSURE_LAUNCH.pad.x;
-  fire(sim,PRESSURE_LAUNCH.target,1020,'occupied-during-cooldown');
-  expect(sim.snapshot(false).pressure!.launches).toEqual([]);
-  fire(sim,PRESSURE_LAUNCH.target,1020+PRESSURE_TELL_MS+PRESSURE_LAUNCH.cooldownMs,'occupied-ready');
-  state=sim.snapshot(false);
-  expect(state.pressure!.serial).toBe(2);
-  expect(state.pressure!.launches.map(e=>e.playerId)).toEqual(['local']);
- });
- it('does not activate in a stopped round',()=>{
-  const {sim}=fixture();const t=PRESSURE_LAUNCH.target;
-  sim.shoot('local',{shotId:'stopped',origin:{x:t.x,y:t.y,z:t.z+1},direction:{x:0,y:0,z:-1}});
-  sim.step(.01,1020,false);expect(sim.snapshot(false).pressure!.serial).toBe(0);
+  sim.shoot('local',{shotId:'stopped',origin:{x:t.x,y:t.y+2.5,z:t.z},direction:{x:0,y:-1,z:0}});
+  sim.step(.01,1020,false);sim.step(.01,1040,false);expect(sim.snapshot(false).pressure!.levels).toEqual({});
  });
  it('applies each snapshot event once to a real controller and retains launch momentum through physics',()=>{
   const {sim}=fixture();
-  fire(sim,PRESSURE_LAUNCH.target);
+  pump(sim,'far',PRESSURE_LAUNCH,1010);
   const state=sim.snapshot(),world=new C.World({gravity:new C.Vec3(0,-25,0)});
   const rat=new RatController(new THREE.Scene(),world,new THREE.PerspectiveCamera(),'',{},new THREE.Vector3(150,0,147));
   rat.applyPressureLaunches(state,'local');expect(rat.entity.body.velocity.toArray()).toEqual(Object.values(state.pressure!.launches[0].velocity));
@@ -102,34 +76,28 @@ describe('distributed controls and physical pressure launch',()=>{
   const velocity=rat.entity.body.velocity.toArray();rat.applyPressureLaunches(state,'local');
   expect(rat.entity.body.velocity.toArray()).toEqual(velocity);rat.dispose();
  });
- it('launches all living pad occupants and preserves simultaneous stations and independent cooldowns',()=>{
+ it('launches all living pad occupants and keeps every machine independent',()=>{
   const players=LAUNCH_MACHINES.map(m=>createPlayer(m.id,m.id,appearance,{...m.pad}));
   const second=createPlayer('passenger','Passenger',appearance,{...PRESSURE_LAUNCH.pad,x:PRESSURE_LAUNCH.pad.x+4.7});
   const sim=new ChaosSimulation(new Map([...players,second].map(p=>[p.id,p])),()=>{});sim.step(0,1000);
-  LAUNCH_MACHINES.forEach((m,i)=>{
-   sim.shoot(m.id,{shotId:`machine-${i}`,origin:{x:m.target.x,y:m.target.y,z:m.target.z+1},direction:{x:0,y:0,z:-1}});
-   sim.step(.01,1010+i*10);
-  });
-  sim.step(.01,1060+PRESSURE_TELL_MS);
+  LAUNCH_MACHINES.forEach((m,i)=>pump(sim,m.id,m,1010+i*5));
   const state=sim.snapshot(false);
   expect(state.pressure!.serial).toBe(6);
   expect(state.pressure!.launches).toHaveLength(7);
   for(const machine of LAUNCH_MACHINES){
    expect(state.pressure!.launches.find(e=>e.playerId===machine.id)).toMatchObject({machineId:machine.id});
-   expect(state.pressure!.cooldowns![machine.id]).toBeGreaterThan(1000);
+   expect(state.pressure!.fired![machine.id]).toBeGreaterThan(1000);
   }
   expect(state.pressure!.launches.find(e=>e.playerId==='passenger')).toMatchObject({machineId:'pressure',velocity:{y:expect.any(Number)}});
   expect(parseServerMessage({type:'chaos',state})).not.toBeNull();
-  sim.shoot('pressure',{shotId:'blocked',origin:{x:PRESSURE_LAUNCH.target.x,y:PRESSURE_LAUNCH.target.y,z:PRESSURE_LAUNCH.target.z+1},direction:{x:0,y:0,z:-1}});
-  sim.step(.01,1200);expect(sim.snapshot(false).pressure!.serial).toBe(6);
-  sim.step(0,3000);expect(sim.snapshot(false).pressure!.launches).toHaveLength(0);
+  sim.step(0,4000);expect(sim.snapshot(false).pressure!.launches).toHaveLength(0);
  });
- it('restores individual cooldowns without replaying old launch events',()=>{
-  const {sim}=fixture();fire(sim,PRESSURE_LAUNCH.target);
+ it('restores without replaying old launch events, and a reset empties every machine',()=>{
+  const {sim}=fixture();pump(sim,'far',PRESSURE_LAUNCH,1010);pump(sim,'far',LAUNCH_MACHINES[1]!,3000,5);
   const saved=sim.snapshot(false), restored=new ChaosSimulation(new Map(),()=>{},saved);
-  expect(restored.snapshot(false).pressure!.cooldowns).toEqual(saved.pressure!.cooldowns);
+  expect(restored.snapshot(false).pressure!.fired).toEqual(saved.pressure!.fired);
   expect(restored.snapshot(false).pressure!.launches).toEqual([]);
-  restored.reset();expect(restored.snapshot(false).pressure!.cooldowns).toEqual({});
+  restored.reset();expect(restored.snapshot(false).pressure!.levels).toEqual({});
  });
  it('validates launch envelopes and fits the capped 120-ball burst snapshots into the existing protocol',()=>{
   const {sim,local}=fixture();

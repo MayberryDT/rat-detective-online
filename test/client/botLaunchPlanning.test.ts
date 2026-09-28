@@ -1,3 +1,4 @@
+import {PRESSURE_TUNING} from '../../src/shared/chaosState';
 import {expect,it,vi} from 'vitest';
 import {ObjectiveBotBrain} from '../../src/shared/ObjectiveBotBrain';
 import {BOT_LAUNCH_LINKS} from '../../src/shared/BotLaunchRoutes';
@@ -15,14 +16,15 @@ function fixture(){
 it('holds the pad, respects cooldown/occlusion and waits for the real launch before steering',()=>{
  const {brain,link,self,human,state}=fixture();
  const step=(at:number,grounded=true,clear=true)=>{state.time=at;return brain.step(at,self,[human],state,()=>false,true,grounded,()=>clear);};
- state.pressure={serial:0,until:3000,launches:[],cooldowns:{[link.machine.id]:3000}};
+ // Fired at 2000: cooling until 3000.
+ state.pressure={serial:0,levels:{},launches:[],fired:{[link.machine.id]:3000-PRESSURE_TUNING.cooldownMs}};
  expect(step(1000)).toMatchObject({x:0,z:0,jump:false,shoot:undefined});
  expect(step(3100,true,false).shoot).toBeUndefined();
  expect(step(3200).shoot).toBeDefined();
  // More than the ordinary stuck-route interval: deliberate waiting must not
  // trigger its recovery jump, abandon the route or pretend launch succeeded.
  expect(step(3600)).toMatchObject({x:0,z:0,jump:false});
- state.pressure.launches=[{id:'real',playerId:self.id,machineId:link.machine.id,at:3610,velocity:{x:0,y:90,z:0}}];
+ state.pressure!.launches=[{id:'real',playerId:self.id,machineId:link.machine.id,at:3610,velocity:{x:0,y:90,z:0}}];
  self.y=10;expect(step(3620,false)).toMatchObject({x:0,z:0,jump:false});
  self.y=60;const flight=step(4100,false);
  expect(flight.x).toBeGreaterThan(0);expect(flight.z).toBeLessThan(0);expect(flight.shoot).toBeUndefined();
@@ -31,10 +33,10 @@ it('holds the pad, respects cooldown/occlusion and waits for the real launch bef
 });
 it('abandons a blocked launcher within a bounded wait and reset discards stale flight/events',()=>{
  const {brain,link,self,human,state}=fixture();
- for(let now=1000;now<=10000;now+=250){state.time=now;brain.step(now,self,[human],state,()=>false,false,true,()=>false);}
+ for(let now=1000;now<=14000;now+=250){state.time=now;brain.step(now,self,[human],state,()=>false,false,true,()=>false);}
  expect(brain.goalKey).not.toBe('carrier:human');
- brain.reset();state.pressure={serial:1,until:12000,launches:[{id:'old',playerId:self.id,machineId:link.machine.id,at:1000,velocity:{x:0,y:90,z:0}}]};
- state.time=11000;const after=brain.step(11000,self,[human],state,()=>false,false,true,()=>false);
+ brain.reset();state.pressure={serial:1,levels:{},launches:[{id:'old',playerId:self.id,machineId:link.machine.id,at:1000,velocity:{x:0,y:90,z:0}}]};
+ state.time=15000;const after=brain.step(15000,self,[human],state,()=>false,false,true,()=>false);
  expect(after).toMatchObject({x:0,z:0,jump:false});
- self.hp=0;expect(brain.step(11010,self,[human],state,()=>true,true,true)).toMatchObject({x:0,z:0,jump:false});
+ self.hp=0;expect(brain.step(15010,self,[human],state,()=>true,true,true)).toMatchObject({x:0,z:0,jump:false});
 });

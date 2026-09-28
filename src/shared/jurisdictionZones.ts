@@ -12,7 +12,7 @@ export const JURISDICTION_ZONES = {
     'records-forecourt':{label:'RECORDS FORECOURT',category:'outdoor',floor:'STREET',floorY:0,
         areas:[rect(-28,-4,-33,-21)],exclusions:[],approaches:posts(.3,[[-38,-18],[6,-18],[-16,-39]]),posts:posts(.3,[[-16,-27],[-22,-27],[-8,-26]])},
     'icebox-yard':{label:'ICEBOX LOADING YARD',category:'outdoor',floor:'STREET',floorY:0,
-        areas:[rect(113,135,-26,-12)],exclusions:[],approaches:posts(.3,[[100,-18],[157,-18],[130,-36]]),posts:posts(.3,[[124,-19],[117,-18],[131,-18]])},
+        areas:[rect(113,135,-26,-12)],exclusions:[],approaches:posts(.3,[[100,-18],[157,-18],[130,-36]]),posts:posts(.3,[[119,-19],[117,-14],[116,-24]])},
     'central-crossroads':{label:'CENTRAL CROSSROADS',category:'outdoor',floor:'STREET',floorY:0,
         areas:[rect(57,83,-24,-12),rect(64,76,-31,-5)],exclusions:[],approaches:posts(.3,[[46,-18],[94,-18],[70,-44],[70,8]]),posts:posts(.3,[[70,-18],[60,-18],[80,-18],[70,-8]])},
     'needleworks-floor':{label:'NEEDLEWORKS FACTORY FLOOR',category:'enclosed',floor:'GROUND FLOOR',floorY:0,

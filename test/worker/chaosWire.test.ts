@@ -42,7 +42,7 @@ it('rejects missing baselines and invalid frames without poisoning a valid basel
 });
 it('resets optional fields and refreshes complete keyframes',()=>{
  const s=state(),e=new ChaosEncoder(),d=new ChaosDecoder();
- s.pressure={serial:1,until:50,launches:[]};d.read(e.encode(s).payload);delete s.pressure;
+ s.pressure={serial:1,levels:{},launches:[]};d.read(e.encode(s).payload);delete s.pressure;
  const next=d.read(e.encode(s).payload);expect(next?.message.type==='chaos'&&next.message.state.pressure).toBeUndefined();
  let wire='';for(let i=3;i<=300;i++)wire=e.encode(s).payload;
  expect(JSON.parse(wire).base).toBe(0);
@@ -88,8 +88,8 @@ it('preserves a launcher event that disappears from current state while blocked'
  const s=state(),delivery=new ChaosDelivery(),decoder=new ChaosDecoder();let ack;
  for(let i=0;i<MAX_CHAOS_IN_FLIGHT;i++)ack=decoder.read(delivery.offer(s,i)!)!.ack!;
  const launch={id:'launch-1',playerId:'rat',at:10,velocity:{x:1,y:2,z:3}};
- s.pressure={serial:1,until:50,launches:[launch]};expect(delivery.offer(s,10)).toBeNull();
- s.pressure.launches=[];delivery.acknowledge(ack!);
+ s.pressure={serial:1,levels:{},launches:[launch]};expect(delivery.offer(s,10)).toBeNull();
+ s.pressure!.launches=[];delivery.acknowledge(ack!);
  const recovered=decoder.read(delivery.offer(s,20)!)!;
  expect(recovered.message.type==='chaos'&&recovered.message.state.pressure?.launches).toEqual([launch]);
 });
@@ -105,7 +105,7 @@ it('bounds cosmetic impact backlog while retaining timeout and launch overflow p
  const recovered=decoder.read(congested.offer(s,30)!)!;
  expect(recovered.message.type==='chaos'&&recovered.message.state.impacts).toHaveLength(64);
  expect(recovered.message.type==='chaos'&&recovered.message.state.impacts.every(i=>i.p.x===99)).toBe(true);
- s.pressure={serial:1,until:100,launches:Array.from({length:49},(_,i)=>({id:`launch-${i}`,playerId:'rat',at:30,velocity:{x:1,y:2,z:3}}))};
+ s.pressure={serial:1,levels:{},launches:Array.from({length:49},(_,i)=>({id:`launch-${i}`,playerId:'rat',at:30,velocity:{x:1,y:2,z:3}}))};
  expect(()=>congested.offer(s,31)).toThrow(/budget/);
  expect(parseClientMessage({type:'chaosAck',stream:'s',seq:1})).toEqual({type:'chaosAck',stream:'s',seq:1});
  expect(parseClientMessage({type:'chaosAck',stream:'s',seq:-1})).toBeNull();

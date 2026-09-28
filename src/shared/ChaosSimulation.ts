@@ -5,15 +5,15 @@ import { SpatialRayQuery } from './SpatialRayQuery';
 import { sweepSphereBody } from './sweepSphere';
 import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS, NETPLAY_COMPENSATION_MS, NETPLAY_HISTORY_MS, type MovementPoint } from './netplay';
 import { StaticCityBroadphase, addCityBody } from './StaticCityBroadphase';
-import { launcherVelocity, LANDING_SHOCKWAVE, OVERPRESSURE, PRESSURE_TELL_MS } from './launcherVelocity';
+import { launcherVelocity, LANDING_SHOCKWAVE } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
 import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_LIFETIME, BALL_RADIUS } from './ballTuning';
-import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
+import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
     COUNTERFEIT_IDS,
-    type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine } from './chaosState';
+    type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState } from './chaosState';
 import { hasIronclad, mergePickup, activeBuffs, buffExpired, PICKUP_TUNING, resolvePickupPoints,
     type BuffMap, type PickupKind, type PickupPoint } from './pickups';
 import type { WorldSpec } from './worldSpec';
@@ -74,6 +74,8 @@ export class ChaosSimulation {
     private readonly shotTriggers=new Map<string,string>();
     private readonly shotEvents:ShotResultEvent[]=[];
     private readonly shotStepped=new WeakSet<ChaosShot>();
+    /** Machines each ball has already pumped: one ball is one hit, however it ricochets. */
+    private readonly pumpedBy=new WeakMap<ChaosShot,string[]>();
     private corpses=new Map<string,{body:C.Body;state:CorpseState;hitAfter:Map<string,number>}>();
     private shots:ChaosShot[]=[];
     private readonly burstShots=new WeakSet<ChaosShot>();
@@ -88,7 +90,6 @@ export class ChaosSimulation {
     private pickupPoints?:PickupPoint[];
     private possession:Record<string,number>={};
     private dispatch:ChaosState['dispatch']={phase:'ready',started:0,until:0,serial:0};
-    private lastSurgePulse=0;
     /** Clean Bill heals once per incident serial. */
     private cleanBillSerial=-1;
     /** Malpractice: each Quick Fix site's authored home and next allowed hop. */
@@ -101,9 +102,7 @@ export class ChaosSimulation {
     evidenceMode:EvidenceMode='planted';
     /** Practice-only override: force every roll to one incident id. */
     forcedIncident:IncidentId|null=null;
-    private pressure:NonNullable<ChaosState['pressure']>={serial:0,until:0,cooldowns:{},launches:[]};
-    /** Machine id → firing time of a triggered machine still in its tell. */
-    private readonly armedPressure=new Map<string,number>();
+    private pressure:PressureState={serial:0,levels:{},launches:[]};
     /** Launched rats in the air, by id: the machine, launch time and highest point so far. */
     private readonly flights=new Map<string,{machineId:string;at:number;peak:number}>();
     /** Rat id → time until which a launcher throw or landing shove may carry it faster than walking. */
@@ -441,18 +440,40 @@ export class ChaosSimulation {
         const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(d.w/2,d.h/2,d.d/2)),position:new C.Vec3(d.x,d.y,d.z)});
         addCityBody(this.world,body);this.targets.set(body,{kind,machineId});
     }
-    /** A trigger arms its machine: the shudder and whine play for PRESSURE_TELL_MS,
-     * then it fires whoever is on the pad at that moment. The cooldown runs from the firing. */
-    private activatePressure(machineId:string,surge=false){
-        const machine=LAUNCH_MACHINES.find(m=>m.id===machineId);
-        if(!machine||this.armedPressure.has(machine.id))return;
-        const cooldowns=this.pressure.cooldowns??(this.pressure.cooldowns={});
-        if(!surge&&this.now<(cooldowns[machine.id]??0))return;
-        cooldowns[machine.id]=this.now+PRESSURE_TELL_MS+machine.cooldownMs;
-        this.pressure.until=cooldowns[PRESSURE_LAUNCH.id]??0;
-        this.armedPressure.set(machine.id,this.now+PRESSURE_TELL_MS);
+    /** True for the second after a machine fires, while it cannot fill again. */
+    private pressureCooling(machineId:string):boolean {
+        return this.now<(this.pressure.fired?.[machineId]??-Infinity)+PRESSURE_TUNING.cooldownMs;
     }
-    /** `at` is the scheduled firing time (clients key the misfire look to it), not the step time. */
+    /** Add pressure (seconds of standing) to a machine. Full, it hangs for
+     * `blowMs` before firing; a trigger hit during that hang makes it an overpressure. */
+    private addPressure(machineId:string,amount:number,hit=false){
+        const blowing=this.pressure.blowing?.[machineId];
+        if(blowing!==undefined){if(hit)(this.pressure.boosts??={})[machineId]=blowing;return;}
+        if(this.pressureCooling(machineId)||!(amount>0))return;
+        const level=Math.min(PRESSURE_TUNING.full,(this.pressure.levels[machineId]??0)+amount);
+        this.pressure.levels[machineId]=level;
+        if(level>=PRESSURE_TUNING.full)(this.pressure.blowing??={})[machineId]=this.now+PRESSURE_TUNING.blowMs;
+    }
+    /** Each step: full machines blow when their hang ends, and every living rat on a pad adds pressure. */
+    private stepPressure(dt:number,now:number,playing:boolean){
+        for(const machine of LAUNCH_MACHINES){
+            const at=this.pressure.blowing?.[machine.id];
+            if(at!==undefined){
+                if(now>=at){delete this.pressure.blowing![machine.id];this.firePressure(machine,at);}
+                continue;
+            }
+            if(!playing)continue;
+            const pad=machine.pad;
+            let riders=0;
+            for(const player of this.players.values())if(player.hp>0&&Math.abs(player.y-pad.y)<2&&Math.hypot(player.x-pad.x,player.z-pad.z)<=pad.radius)riders++;
+            let fill=riders;
+            // Pressure Surge: every machine fills itself, faster as the incident goes on.
+            if(this.incidentActive('pressure-surge'))fill+=2*(1+Math.min(1,Math.max(0,now-this.dispatch.started)/T.activeMs));
+            if(fill)this.addPressure(machine.id,fill*dt);
+        }
+        if(this.pressure.blowing&&!Object.keys(this.pressure.blowing).length)delete this.pressure.blowing;
+    }
+    /** `at` is the scheduled firing time (clients key the firing and misfire look to it), not the step time. */
     private firePressure(machine:LaunchMachine,at:number){
         const pad=machine.pad;
         const onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;
@@ -461,13 +482,14 @@ export class ChaosSimulation {
         // re-plant where they land), bodies and cheese. A carried case needs no
         // handling here, because carry() pins it to its rat every tick.
         const caseRiders=[...this.cases.values()].filter(c=>!c.owner&&!c.returningUntil&&!c.armed&&onPad(c.body.position));
-        // Fire even when empty: seeing the remote mechanism activate teaches
-        // players which launcher this trigger operates. Occupants alone receive impulses.
+        // Fire even when empty: occupants alone receive impulses. Pressure resets,
+        // and the cooldown runs from the firing.
         this.pressure.serial++;
-        // One misfire roll per firing: every rider of an overpressure goes high.
-        const boost=Math.random()<OVERPRESSURE.chance;
-        const boosts=this.pressure.boosts??(this.pressure.boosts={});
-        if(boost)boosts[machine.id]=at;else delete boosts[machine.id];
+        delete this.pressure.levels[machine.id];
+        (this.pressure.fired??={})[machine.id]=at;
+        // An overpressure was earned by a hit during the hang; every rider of it goes high.
+        const boost=this.pressure.boosts?.[machine.id]===at;
+        if(!boost&&this.pressure.boosts){delete this.pressure.boosts[machine.id];if(!Object.keys(this.pressure.boosts).length)delete this.pressure.boosts;}
         for(const c of caseRiders)this.launchCase(c,machine,boost);
         for(const corpse of this.corpses.values()){
             const body=corpse.body;
@@ -545,7 +567,8 @@ export class ChaosSimulation {
             shot.v={x:shot.v.x+push.x,y:shot.v.y+push.y,z:shot.v.z+push.z};
         }
         const pad=LAUNCH_MACHINES.find(m=>m.id!==machineId&&Math.hypot(p.x-m.pad.x,p.z-m.pad.z)<=m.pad.radius&&Math.abs(p.y-m.pad.y)<2);
-        if(pad&&playing)this.activatePressure(pad.id);
+        // Coming down on another machine's pad fills it to bursting.
+        if(pad&&playing)this.addPressure(pad.id,PRESSURE_TUNING.full);
     }
     private tell(text:string){this.notice={serial:this.notice.serial+1,text};}
     /** Clean Bill, Rat Race, Most Wanted and Malpractice act on rats and supplies each step. */
@@ -628,7 +651,6 @@ export class ChaosSimulation {
         const choices=roster.filter(incident=>incident.id!==previous);
         const incident=forced??choices[Math.floor(Math.random()*choices.length)].id;
         this.dispatch={phase:'rolling',started:this.now,until:this.now+T.rollMs,serial:this.dispatch.serial+1,incident};
-        this.lastSurgePulse=0;
         this.dispatchActivator=owner&&this.players.has(owner)?owner:null;
     }
     private reserveShots(count:number){
@@ -1145,18 +1167,7 @@ export class ChaosSimulation {
         const weaponized=this.incidentActive('evidence-tampering');
         if(weaponized&&!this.casesWeaponized)this.beginEvidenceTampering();
         else if(!weaponized&&this.casesWeaponized)this.endEvidenceTampering();
-        if(playing&&this.incidentActive('pressure-surge')){
-            const pulse=Math.floor(Math.max(0,now-this.dispatch.started)/3000);
-            if(pulse>this.lastSurgePulse){
-                // One synchronized citywide pulse; never replay missed pulses after a pause.
-                this.lastSurgePulse=pulse;
-                for(const machine of LAUNCH_MACHINES)this.activatePressure(machine.id,true);
-            }
-        }
-        for(const machine of LAUNCH_MACHINES){
-            const at=this.armedPressure.get(machine.id);
-            if(at!==undefined&&now>=at){this.armedPressure.delete(machine.id);this.firePressure(machine,at);}
-        }
+        this.stepPressure(dt,now,playing);
         this.stepFlights(now,playing);
         if(!this.incidentActive('delayed-reaction')){
             for(const shot of this.shots)if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);}
@@ -1273,7 +1284,11 @@ export class ChaosSimulation {
             if(target?.kind==='dispatch')this.noteShot(shot,'dispatch-contact',{point:data(hit.hitPointWorld),normal:data(normal)});
             if(target?.kind==='pressure')this.noteShot(shot,'pressure-contact',{point:data(hit.hitPointWorld),normal:data(normal)});
             if(target?.kind==='dispatch'&&playing){this.sound(this.dispatch.phase==='ready'?'trigger':'trigger-busy',hit.hitPointWorld,normal);this.activate(shot.owner);}
-            if(target?.kind==='pressure'&&playing){this.sound(now<(this.pressure.cooldowns?.[target.machineId!]??0)?'trigger-busy':'trigger',hit.hitPointWorld,normal);this.activatePressure(target.machineId!);}
+            if(target?.kind==='pressure'&&playing){
+                this.sound(this.pressureCooling(target.machineId!)?'trigger-busy':'trigger',hit.hitPointWorld,normal);
+                const pumped=this.pumpedBy.get(shot)??[];
+                if(!pumped.includes(target.machineId!)){pumped.push(target.machineId!);this.pumpedBy.set(shot,pumped);this.addPressure(target.machineId!,PRESSURE_TUNING.hit,true);}
+            }
             const v=this.reflect(shot,normal);
             const radiusBefore=shotRadius(shot);
             if(target?.kind==='world')this.growShot(shot);
@@ -1404,7 +1419,7 @@ export class ChaosSimulation {
     snapshot(drain=true):ChaosState{
         const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,case:this.caseSnapshot(this.primaryCase),
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
-            extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,cooldowns:{...this.pressure.cooldowns},...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
+            extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,levels:{...this.pressure.levels},...(this.pressure.blowing?{blowing:{...this.pressure.blowing}}:{}),...(this.pressure.fired?{fired:{...this.pressure.fired}}:{}),...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
             buffs:this.buffSnapshot(),
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
@@ -1417,8 +1432,8 @@ export class ChaosSimulation {
         for(const site of this.pickups.values())site.availableAt=0;
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
-        this.lastSurgePulse=0;this.dispatchActivator=null;
-        this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};this.armedPressure.clear();this.flights.clear();this.thrownUntil.clear();
+        this.dispatchActivator=null;
+        this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
         this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){
@@ -1446,16 +1461,13 @@ export class ChaosSimulation {
             if(site&&saved.kind===site.kind&&Number.isFinite(saved.availableAt))site.availableAt=Math.max(0,saved.availableAt!);
         }
         const assignment=restoreAssignment(s.assignment,Date.now());if(assignment)this.setAssignment(assignment);
-        this.pressure={serial:s.pressure?.serial||0,until:s.pressure?.until||0,
-            cooldowns:{...s.pressure?.cooldowns,[PRESSURE_LAUNCH.id]:s.pressure?.cooldowns?.[PRESSURE_LAUNCH.id]??s.pressure?.until??0},launches:[]};
-        // A checkpoint taken inside a tell still owes that firing.
-        for(const machine of LAUNCH_MACHINES){
-            const fireAt=(this.pressure.cooldowns?.[machine.id]??0)-machine.cooldownMs;
-            if(fireAt>s.time&&fireAt-s.time<=PRESSURE_TELL_MS)this.armedPressure.set(machine.id,fireAt);
-        }
+        // Pressure is kept through a restore (it never leaks), including a machine
+        // hanging full. Checkpoints from before the pressure model have none.
+        const saved=s.pressure;
+        this.pressure={serial:saved?.serial||0,levels:{...saved?.levels},launches:[],
+            ...(saved?.blowing?{blowing:{...saved.blowing}}:{}),...(saved?.fired?{fired:{...saved.fired}}:{}),...(saved?.boosts?{boosts:{...saved.boosts}}:{})};
         this.now=s.time;this.dispatch={...s.dispatch,...(s.dispatch.incident?{incident:incidentInfo(s.dispatch.incident).id}:{})};
         this.possession={...s.possession};this.notice={...s.notice};this.restoreCase(this.primaryCase,s.case,s.time);
-        this.lastSurgePulse=this.incidentActive('pressure-surge')?Math.floor(Math.max(0,s.time-s.dispatch.started)/3000):0;
         this.casesWeaponized=this.incidentActive('evidence-tampering')&&s.dispatch.until>Date.now();
         if(this.casesWeaponized){
             for(const id of EXTRA_CASE_IDS){

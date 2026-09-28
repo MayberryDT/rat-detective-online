@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import {LAUNCH_MACHINES,type LaunchMachine,type ChaosState} from '../shared/chaosState';
+import {LAUNCH_MACHINES,PRESSURE_TUNING,type LaunchMachine,type ChaosState} from '../shared/chaosState';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {LauncherAudio} from '../audio/LauncherAudio';
-import {PRESSURE_TELL_MS} from '../shared/launcherVelocity';
+
 
 /** Six municipal contraptions. Low launch surfaces stay traversable; control housings are shared cover. */
 export class PressureMachine {
@@ -132,23 +132,23 @@ export class PressureMachine {
     update(state:ChaosState['pressure'],now:number,camera?:THREE.Camera){
         this.launchAudio.update(camera);
         for(const model of this.moving){
-            const until=state?.cooldowns?.[model.machine.id]??(model.machine.id==='pressure'?state?.until??0:0);
-            const elapsed=now-(until-model.machine.cooldownMs);
-            const age=elapsed*2; // Presentation runs at double speed; cooldown and launch physics stay unchanged.
-            // A join mid-cooldown hears nothing; each later deadline gets one tell and one firing.
-            if(Number.isNaN(model.heardFire))model.heardTell=model.heardFire=until;
-            const tell=until>0&&elapsed<0&&elapsed>=-PRESSURE_TELL_MS;
-            if(tell&&model.heardTell!==until){model.heardTell=until;this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'tell');}
-            if(until>0&&elapsed>=0&&elapsed<1000&&model.heardFire!==until){
-                model.heardFire=model.heardTell=until;
-                const boost=(state?.boosts?.[model.machine.id]??-Infinity)>=until-model.machine.cooldownMs;
+            const id=model.machine.id,fired=state?.fired?.[id]??0,blowAt=state?.blowing?.[id];
+            const elapsed=now-fired;
+            const age=elapsed*2; // Presentation runs at double speed; launch physics stay unchanged.
+            // A join mid-cooldown hears nothing; each later firing gets one tell and one firing sound.
+            if(Number.isNaN(model.heardFire)){model.heardFire=fired;model.heardTell=blowAt??NaN;}
+            const tell=blowAt!==undefined&&now<blowAt;
+            if(tell&&model.heardTell!==blowAt){model.heardTell=blowAt;this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'tell');}
+            if(fired>0&&elapsed>=0&&elapsed<1000&&model.heardFire!==fired){
+                model.heardFire=fired;
+                const boost=state?.boosts?.[id]===fired;
                 this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'fire',boost);
                 this.onFire?.(model.machine,boost);
             }
-            const active=until>0&&age>=0&&age<3600;
+            const active=fired>0&&age>=0&&age<3600;
             const attack=Math.min(1,Math.max(0,age)/110);
             const kick=active?attack*(age<2000?1:Math.max(0,(3600-age)/1600)):0;
-            model.indicator.visible=until<=now||Math.floor(now/(tell?45:350))%2===0;
+            model.indicator.visible=!tell||Math.floor(now/45)%2===0;
             model.rotor.position.set(model.machine.pad.x,.13,model.machine.pad.z);model.rotor.rotation.set(0,0,0);model.rotor.scale.setScalar(1);
             const kind=model.machine.kind;
             if(kind==='fan'){model.rotor.rotation.y=now*.002+Math.max(0,Math.min(age,3600))*.035;model.rotor.position.y+=kick*.8;}
@@ -158,12 +158,12 @@ export class PressureMachine {
             else model.rotor.position.y+=kick*7;
             // Anticipation and release: the mechanism squashes down through the tell,
             // then springs past its rest height and wobbles back.
-            const squash=tell?.35*(1+elapsed/PRESSURE_TELL_MS):0;
+            const squash=tell?.35*(1-(blowAt-now)/PRESSURE_TUNING.blowMs):0;
             const spring=active&&age<900?Math.sin(age/900*Math.PI*3)*Math.exp(-age/350)*.35:0;
             model.rotor.scale.y*=1-squash+spring;model.rotor.scale.x*=1+squash*.3;model.rotor.scale.z*=1+squash*.3;
             if(tell){
                 // The shudder: building pressure rattles the whole mechanism.
-                const shake=.03+.09*(1+elapsed/PRESSURE_TELL_MS);
+                const shake=.03+.09*squash/.35;
                 model.rotor.position.x+=Math.sin(now*.31)*shake;model.rotor.position.z+=Math.cos(now*.37)*shake;
                 model.rotor.position.y+=Math.abs(Math.sin(now*.53))*shake;
             }

@@ -17,10 +17,8 @@ export const LAUNCH_PROFILES:Record<LaunchMachineKind,{lift:readonly [number,num
     freight:{lift:[62,72],drift:[17,23],spread:.5},
     mousetrap:{lift:[58,68],drift:[19,25],spread:.9},
 };
-/** Rare misfire: the tallest, widest throw. Stays inside MAX_LAUNCH_SPEED. */
-export const OVERPRESSURE={chance:1/7,lift:106,drift:1.3} as const;
-/** Trigger to firing: the machine shudders, flashes and whines, and rats get a split second. */
-export const PRESSURE_TELL_MS=200;
+/** Overpressure (a full machine shot while it hangs): the tallest, widest throw. Stays inside MAX_LAUNCH_SPEED. */
+export const OVERPRESSURE={lift:106,drift:1.3} as const;
 /** A launched rat's landing: everything within `radius` is shoved away (up to
  * `shove` u/s sideways plus `lift` up), and a rat within `squash` is landed on
  * for 1 damage. `minDrop` of fall from the flight's peak counts as a landing. */

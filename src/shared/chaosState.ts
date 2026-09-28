@@ -58,30 +58,43 @@ export type LaunchMachineKind = 'pressure' | 'dumpster' | 'freight' | 'geyser' |
 export interface LaunchMachine {
     id: string; kind: LaunchMachineKind; label:string;
     pad: { x:number; y:number; z:number; radius:number };
+    /** The machine body beside the pad (solid cover), and its big red trigger on top. */
     box: { x:number; y:number; z:number; w:number; h:number; d:number };
     target: { x:number; y:number; z:number; w:number; h:number; d:number };
-    cooldownMs:number; eventMs:number;
+    /** How long launch events stay in snapshots. */
+    eventMs:number;
 }
-// Each public street trigger is the nearest trigger to its own launcher, while
-// remaining separated from the pad and other controls. The red crown is exposed on every side.
+// Each machine stands on its own pad's rim, facing the pad, with open street
+// behind it; its red trigger crowns the machine and is exposed on every side.
 export const LAUNCH_MACHINES: readonly LaunchMachine[] = [
-    { id:'pressure', kind:'pressure', x:146, z:149, tx:90, tz:145 },
-    { id:'dumpster', kind:'dumpster', x:-57, z:-29, tx:-60, tz:-70 },
-    { id:'freight', kind:'freight', x:130, z:-20, tx:155, tz:10 },
-    { id:'geyser', kind:'geyser', x:-153, z:15, tx:-155, tz:-25 },
-    { id:'mousetrap', kind:'mousetrap', x:-106, z:128, tx:-60, tz:140 },
-    { id:'fan', kind:'fan', x:75, z:39, tx:35, tz:25 },
+    { id:'pressure', kind:'pressure', x:146, z:149, mx:139.1, mz:149 },
+    { id:'dumpster', kind:'dumpster', x:-57, z:-29, mx:-57, mz:-35.9 },
+    { id:'freight', kind:'freight', x:130, z:-20, mx:134.44, mz:-14.71 },
+    { id:'geyser', kind:'geyser', x:-153, z:15, mx:-147.71, mz:19.44 },
+    { id:'mousetrap', kind:'mousetrap', x:-106, z:128, mx:-99.34, mz:129.79 },
+    { id:'fan', kind:'fan', x:75, z:39, mx:68.52, mz:36.64 },
 ].map(m=>({id:m.id,kind:m.kind as LaunchMachineKind,
     label:({pressure:'PRESSURE WORKS',dumpster:'TRASH COMPACTOR',freight:'FREIGHT RAM',geyser:'SEWER GEYSER',mousetrap:'RAT TRAP',fan:'WIND TUNNEL'} as Record<string,string>)[m.id],
     pad:{x:m.x,y:0,z:m.z,radius:5},
-    box:{x:m.tx,y:1.6,z:m.tz,w:1.7,h:3.2,d:1.7},
-    target:{x:m.tx,y:3.75,z:m.tz,w:1.4,h:1.1,d:1.4},
-    cooldownMs:5000,eventMs:1500,
+    box:{x:m.mx,y:1.5,z:m.mz,w:2.4,h:3,d:2.4},
+    target:{x:m.mx,y:3.8,z:m.mz,w:1.8,h:1.6,d:1.8},
+    eventMs:1500,
 }));
-// Preserve the existing preview bookmark and legacy snapshot field.
 export const PRESSURE_LAUNCH = LAUNCH_MACHINES[0];
+/** Pressure, in seconds of one rat standing on the pad: `full` fires it, each
+ * cheese ball on the trigger adds `hit`. A full machine hangs `blowMs` (a hit
+ * then makes it an overpressure), and after firing waits `cooldownMs` before
+ * it can fill again. Pressure never leaks. */
+export const PRESSURE_TUNING = { full:10, hit:1, blowMs:500, cooldownMs:1000 } as const;
 export const MAX_LAUNCH_EVENTS = 24;
 export const MAX_LAUNCH_SPEED = 110;
+/** Per machine id: `levels` pressure (seconds, absent is empty); `blowing` the
+ * firing time while it hangs full; `fired` its latest firing; `boosts` the
+ * firing time of an overpressure (set while blowing, kept after it fires). */
+export interface PressureState {
+    serial:number; levels:Record<string,number>; blowing?:Record<string,number>; fired?:Record<string,number>;
+    boosts?:Record<string,number>; launches:PressureLaunchEvent[]; shoves?:PressureLaunchEvent[];
+}
 export interface PressureLaunchEvent { id:string; playerId:string; at:number; velocity:Vec3Data; machineId?:string; boost?:true }
 export type DispatchPhase = 'ready' | 'rolling' | 'active' | 'cooldown';
 export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec3Data }
@@ -113,9 +126,8 @@ export interface ChaosState {
     extraCases?: Array<CaseState & {id:string}>;
     /** `wanted`: Most Wanted's current target, the leader in the searchlight. */
     dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId; wanted?:string };
-    /** `boosts`: machine id → time of its latest firing when that firing was an overpressure misfire.
-     * `shoves`: landing-shockwave knockbacks, added once to the rat's velocity like a launch. */
-    pressure?: { serial:number; until:number; cooldowns?:Record<string,number>; boosts?:Record<string,number>; launches:PressureLaunchEvent[]; shoves?:PressureLaunchEvent[] };
+    /** Launchers; `shoves` are landing-shockwave knockbacks, added once to a rat's velocity like a launch. */
+    pressure?: PressureState;
     /** Pickup sites currently available to claim; absent entries are active elsewhere or claimed. */
     pickups?: PickupState[];
     /** Living timed effects by player id. */

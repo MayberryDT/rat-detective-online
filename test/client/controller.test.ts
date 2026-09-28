@@ -121,7 +121,7 @@ it('clears normal jump gravity for machine launches, landing, death and respawn'
         world.step(1/60);
     };
     jump();
-    const state:ChaosState={time:1000,pressure:{serial:1,until:2000,launches:[
+    const state:ChaosState={time:1000,pressure:{serial:1,levels:{},launches:[
         {id:'machine',playerId:'local',at:1000,velocity:{x:0,y:55,z:0}}]},
         case:{p:{...CASE_HOME},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0},
         owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},dispatch:{phase:'ready',started:0,until:0,serial:0},
