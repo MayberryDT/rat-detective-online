@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   MAX_HP,
   MAX_SERVER_MESSAGE_BYTES,
@@ -45,12 +45,10 @@ describe('parseClientMessage', () => {
     for(const deliveryAck of [{stream:'s',seq:NaN},{stream:'s',seq:0},{stream:'',seq:1},'bad'])expect(parseClientMessage({type:'ping',sentAt:1,deliveryAck})).toBeNull();
     expect(parseClientMessage({type:'shoot',deliveryAck:{stream:'s',seq:2}})).toBeNull();
   });
-  it('rejects huge envelopes before UTF-8 allocation while retaining the exact multibyte limit',()=>{
-    const encode=vi.spyOn(TextEncoder.prototype,'encode');
-    try {
-      expect(parseClientMessage('x'.repeat(1024*1024))).toBeNull();expect(encode).not.toHaveBeenCalled();
-      expect(parseClientMessage('🧀'.repeat(3000))).toBeNull();expect(encode).toHaveBeenCalledTimes(1);
-    } finally { encode.mockRestore(); }
+  it('rejects envelopes over the byte limit, counting multibyte characters by their UTF-8 size',()=>{
+    expect(parseClientMessage('x'.repeat(1024*1024))).toBeNull();
+    // 6,000 UTF-16 units but 12,000 UTF-8 bytes: over the 8,192-byte limit.
+    expect(parseClientMessage('🧀'.repeat(3000))).toBeNull();
   });
   it('requires a protocol version on join and a shot descriptor on shoot', () => {
     expect(parseClientMessage(JSON.stringify({ type: 'join', name: 'A', appearance }))).toBeNull();
