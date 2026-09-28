@@ -12,6 +12,10 @@ import {BOT_LAUNCH_LINKS,type BotLaunchLink,type BotWaypoint} from './BotLaunchR
 // permission to walk directly through an obstruction.
 const GRID = 2;
 const BUCKET = 8;
+/** Numeric bucket key; the city spans far fewer than 1024 buckets per axis. */
+const bucketKey=(x:number,z:number)=>(x+1024)*2048+(z+1024);
+/** The player body's three spheres: foot offset and radius. */
+const BODY_OFFSETS=[.6,1.3,1.9],BODY_RADII=[.58,.43,.26];
 interface Solid { box: GrayboxBox; cx:number; sx:number; cz:number; sz:number; nx:number; ny:number; nz:number; minX:number; maxX:number; minZ:number; maxZ:number }
 interface Node extends Vec3Data { id:string; gx:number; gz:number }
 /** A reverse breadth-first flow field visits each cell once. Grid edges differ
@@ -29,7 +33,7 @@ const ACTIVE_TICKS=120;
 /** Static walk graph: a pure function of the world spec, filled lazily as fields
  * explore. Round-replacement controllers reuse it instead of re-probing the city. */
 interface WalkGraph {
-    buckets:Map<string,Solid[]>;
+    buckets:Map<number,Solid[]>;
     columns:Map<string,Node[]>;
     edges:Map<string,Node[]>;
     targets:Vec3Data[];
@@ -38,7 +42,7 @@ interface WalkGraph {
 const graphs=new WeakMap<WorldSpec,WalkGraph>();
 
 export class BotNavigation {
-    private readonly buckets:Map<string,Solid[]>;
+    private readonly buckets:Map<number,Solid[]>;
     private readonly columns:Map<string,Node[]>;
     private readonly edges:Map<string,Node[]>;
     private fields=new Map<string,FlowField>();
@@ -64,7 +68,7 @@ export class BotNavigation {
             const dz=Math.abs(sx)*box.h/2+Math.abs(cx)*box.d/2;
             const solid:Solid={box,cx,sx,cz,sz,nx:-sz*cx,ny:cz*cx,nz:sx,minX:box.x-dx,maxX:box.x+dx,minZ:box.z-dz,maxZ:box.z+dz};
             for(let x=Math.floor((solid.minX-1)/BUCKET);x<=Math.floor((solid.maxX+1)/BUCKET);x++)for(let z=Math.floor((solid.minZ-1)/BUCKET);z<=Math.floor((solid.maxZ+1)/BUCKET);z++) {
-                const key=`${x},${z}`,bucket=this.buckets.get(key);if(bucket)bucket.push(solid);else this.buckets.set(key,[solid]);
+                const key=bucketKey(x,z),bucket=this.buckets.get(key);if(bucket)bucket.push(solid);else this.buckets.set(key,[solid]);
             }
         }
         this.targets.push(...GRAYBOX_SPAWNS.map(p=>({...p,y:0})),...SEWER_LIGHTS.map(p=>({...p,y:-7})),
@@ -83,20 +87,19 @@ export class BotNavigation {
     /** Spawn/landing feet can have support before Cannon publishes its next contact. */
     supported(from:Vec3Data):boolean {return this.surfaces(from.x,from.z).some(y=>Math.abs(y-from.y)<.65);}
     explorationTargets():Vec3Data[] {return this.targets.map(p=>({...p}));}
-    private local(s:Solid,x:number,y:number,z:number) {
-        const dx=x-s.box.x,dy=y-s.box.y,dz=z-s.box.z;
-        const a=s.cz*dx+s.sz*dy,b=-s.sz*dx+s.cz*dy;
-        return {x:a,y:s.cx*b+s.sx*dz,z:-s.sx*b+s.cx*dz};
-    }
-    private nearby(x:number,z:number):Solid[] {return this.buckets.get(`${Math.floor(x/BUCKET)},${Math.floor(z/BUCKET)}`)??[];}
-    /** Same three-sphere silhouette as the normal player body, with a small floor tolerance. */
+    private nearby(x:number,z:number):Solid[] {return this.buckets.get(bucketKey(Math.floor(x/BUCKET),Math.floor(z/BUCKET)))??[];}
+    /** Same three-sphere silhouette as the normal player body, with a small floor tolerance.
+     * Probed thousands of times while fields explore: scalar math, no allocation. */
     private clear(x:number,y:number,z:number):boolean {
         for(const s of this.nearby(x,z)) {
             if(x<s.minX-.65||x>s.maxX+.65||z<s.minZ-.65||z>s.maxZ+.65)continue;
-            for(const [offset,radius] of [[.6,.58],[1.3,.43],[1.9,.26]]) {
-                const p=this.local(s,x,y+offset+.035,z),b=s.box;
-                const dx=Math.max(0,Math.abs(p.x)-b.w/2),dy=Math.max(0,Math.abs(p.y)-b.h/2),dz=Math.max(0,Math.abs(p.z)-b.d/2);
-                if(dx*dx+dy*dy+dz*dz<radius*radius)return false;
+            const b=s.box,dx=x-b.x,dz=z-b.z;
+            for(let k=0;k<3;k++) {
+                // The solid's local frame (rotation about x, then z), as in surfaces().
+                const dy=y+BODY_OFFSETS[k]+.035-b.y;
+                const a=s.cz*dx+s.sz*dy,r=-s.sz*dx+s.cz*dy;
+                const ox=Math.max(0,Math.abs(a)-b.w/2),oy=Math.max(0,Math.abs(s.cx*r+s.sx*dz)-b.h/2),oz=Math.max(0,Math.abs(-s.sx*r+s.cx*dz)-b.d/2);
+                if(ox*ox+oy*oy+oz*oz<BODY_RADII[k]*BODY_RADII[k])return false;
             }
         }return true;
     }
@@ -108,9 +111,11 @@ export class BotNavigation {
             const y=b.y+(b.h/2-s.nx*(x-b.x)-s.nz*(z-b.z))/s.ny;
             // Solid upper masses have walkable roofs even though they are not thin floor slabs.
             if(b.h>1.1&&y<24)continue;
-            if(y < -7.2||y>36.3||heights.some(h=>Math.abs(h-y)<.08))continue;
-            const p=this.local(s,x,y,z);
-            if(Math.abs(p.x)>b.w/2+.001||Math.abs(p.z)>b.d/2+.001)continue;
+            if(y < -7.2||y>36.3)continue;
+            let duplicate=false;for(const h of heights)if(Math.abs(h-y)<.08){duplicate=true;break;}
+            if(duplicate)continue;
+            const dx=x-b.x,dy=y-b.y,dz=z-b.z,r=-s.sz*dx+s.cz*dy;
+            if(Math.abs(s.cz*dx+s.sz*dy)>b.w/2+.001||Math.abs(-s.sx*r+s.cx*dz)>b.d/2+.001)continue;
             if(this.clear(x,y,z))heights.push(y);
         }
         return heights;
