@@ -7,8 +7,8 @@ Last release receipt: **2026-09-27**. [Juice release, protocol 19](verification/
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `80901b67-6900-4148-9aa3-2ed964052acd` — commit `8313046`: softer distance-only opponent outline, rats out of the fog, rebuilt noir nameplate; protocol 19, `index-B0F-AKSY.js` / `createGame-BgdwD_Em.js` |
-| Previous version | `527eb4bd-30c9-4fef-a85e-de0944bf392d` — commit `efcce3e`: juice feel layer, noir, 5 HP with lethal headshots, police lineup; protocol 19, `index-BnDXq6cB.js` / `createGame-C0yvREbG.js`; compatible rollback target (same protocol and storage) |
+| Last deployed version | `be7ac8ba-2529-42ba-865a-27aafe11131e` — commit `f28053a`: fourth juice batch (the Hunch, supply rework, incident rework, 15 s round end); protocol 20, `index-CM2YRmg7.js` / `createGame-ycSWg_UI.js` |
+| Previous version | `80901b67-6900-4148-9aa3-2ed964052acd` — commit `8313046`: readability and nameplate; protocol 19; rollback needs a stored-state review (protocol-20 incidents and `dispatch.wanted` fail its validator) |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Canonical `public-live-v2` stays alive with 6–9 bots and zero humans; overflow still sleeps |

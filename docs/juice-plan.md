@@ -92,7 +92,7 @@ Tyler's brain dump, sorted into now and later, with his answers.
   - `gameWon` carries an optional `lineup` (up to five ids, winner first). The server ranks by the assignment's own progress (deliveries, zone time, case kills, or case time for Closing Time), then kills, case time and fewest deaths.
   - The lineup starts as the slow-motion finish ends (1.4 s) and runs until the reset, about 8.6 s. The room sits 320 units below the city and is lit by the stage's existing spotlight, moved there, so no light is added. Rats stand in rank order with the winner last; a flashbulb (screen flash, spotlight surge and pop) photographs each in turn and stamps their award across the chest; the winner gets a gold "CASE CLOSED" stamp and a hop. The Case File card shrinks to the top-left corner and the play HUD hides. Review switch: "T5 Police lineup".
 
-## Fourth batch: the Hunch, pickups and incidents (agreed 2026-09-27; built, on the private preview)
+## Fourth batch: the Hunch, pickups and incidents (agreed 2026-09-27; released 2026-09-28)
 
 **Guiding rules (Tyler):**
 - Maximize fun through chaos, not balance: think Mario Kart, not Forza.
@@ -138,7 +138,8 @@ Tyler's brain dump, sorted into now and later, with his answers.
   - **Supplies were hard to find** ("a huge clarity issue"). Props now ignore the fog; each site throws a brighter, breathing lamp cone and pool; from 10 to 40 units a soft beam in the supply's colour rises from it (silver, red, green); and the prop gets an outline in that colour, like the far-rat edge. Hot Pursuit looked like the old shoes, so it is now winged red wingtips on a shoeshine box.
   - **Supply juice** (Tyler: "add juice to the pickups as well"): props turn slowly on the plinth; a claim pops the prop up and away in a coloured flash and dust with a whoosh-and-click, the lamp stutters out; a restock clicks the lamp on with a warm thump and drops the prop back with a bounce. Everyone nearby hears claims and restocks.
   - **Round end, 15 s and readable.** It felt like five seconds and the stats were tiny in a corner. Now: the full CASE CLOSED card for 2.6 s, then the police lineup with a readable winner banner across the top, then a results board: the full standings (the Tab scoreboard) beside a large Case File with each award, winner and value. Photos run one per second.
-- **Next action:** Tyler playtests the touch-ups; production only on his OK.
+- **Released to production (2026-09-28)** on Tyler's OK ("looks good, push it live"): Worker `be7ac8ba-2529-42ba-865a-27aafe11131e`, protocol 20. See [the receipt](verification/juice-batch4-release-2026-09-28.md).
+- **Next action:** the later overhauls (launchers, bots, optimization, 3D model and ragdoll), when Tyler picks them.
 
 **Later (not now):**
 - **Launcher overhaul.** Make the launchers far more chaotic and much juicier, including how the case interacts with them.

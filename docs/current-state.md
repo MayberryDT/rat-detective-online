@@ -2,6 +2,16 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Fourth juice batch — 28 September production (protocol 20)
+
+Worker `be7ac8ba-2529-42ba-865a-27aafe11131e` (commit `f28053a`, client
+`index-CM2YRmg7.js`, protocol 20): the Hunch (full-health rats see rats through
+walls as a pencil sketch, with "made" moments and a small eye on your own
+nameplate), 14 supply sites with noir props, far beams and outlines, 13
+incidents (Blackout, Clean Bill, Malpractice, Most Wanted, Rat Race and All
+Units added; Ricochet Racket and Popcorn Panic retired; Bad Ammunition jams and
+duds), and a 15-second round end with a results board. See [the receipt](verification/juice-batch4-release-2026-09-28.md).
+
 ## Readability and nameplate — 27 September production
 
 Worker `80901b67-6900-4148-9aa3-2ed964052acd` (commit `8313046`, client

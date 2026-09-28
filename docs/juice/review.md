@@ -121,7 +121,7 @@ Workshop: **Headshot suspect 2 (T4)** and **Police lineup (T5)**. Captures: `out
 
 ## Fourth batch (protocol 20)
 
-What changed and how to see it is in the [juice plan](../juice-plan.md#fourth-batch-the-hunch-pickups-and-incidents-agreed-2026-09-27-built-on-the-private-preview). Incidents still come from shooting a Dispatch box: 13 are in rotation (never the same twice in a row), each active for 25 s with a 16 s cooldown. Pinning one incident only works on a local development server, not on the hosted preview.
+What changed and how to see it is in the [juice plan](../juice-plan.md#fourth-batch-the-hunch-pickups-and-incidents-agreed-2026-09-27-released-2026-09-28). Incidents still come from shooting a Dispatch box: 13 are in rotation (never the same twice in a row), each active for 25 s with a 16 s cooldown. Pinning one incident only works on a local development server, not on the hosted preview.
 
 | Item | What to look for | Switch |
 |---|---|---|
