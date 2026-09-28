@@ -19,6 +19,8 @@ import {cityImpact} from '../../src/feel/CityReactions';
 import {FeelAudio} from '../../src/feel/FeelAudio';
 import {createPlayer} from '../../src/worker/gameState';
 import {MAX_HP} from '../../src/shared/networkProtocol';
+import {createRatMesh} from '../../src/utils/RatModel';
+import {RatAnimator,type DeathStyle} from '../../src/utils/RatAnimator';
 
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 initEntitySounds(stage.listener);
@@ -173,9 +175,34 @@ const actions:Record<string,()=>void>={
     'L5 Hats blown off suspects':()=>{for(const s of suspects)s.blowHat(1.2);},
     'L5 Your launch (kick, scream, view)':()=>{feel.launched(rat.entity.mesh.position,true,false,stage.camera);const t=setInterval(()=>feel.motion(1/60,false,50,8,1),16);setTimeout(()=>{clearInterval(t);feel.motion(1/60,true,0,0,1);},1500);},
     'L6 Suspects launched (flail, contrails)':()=>{for(const s of suspects){s.body.velocity.set(4,38,0);s.body.wakeUp();s.playReaction('launch');feel.launched(s.mesh.position,false,false,stage.camera);}},
+    'R Corpse 4 ahead: fling, splay, dead face':()=>studioCorpse('fling',false),
+    'R Corpse 4 ahead: headshot':()=>studioCorpse('spin',true),
+    'R Corpse 4 ahead: jolt':()=>corpse?.animator.joltDeath(1),
+    'R Walk up to suspect 2 body':()=>{const body=suspects[1]!.mesh.position;stage.camera.getWorldDirection(aim);aim.setY(0).normalize();
+        rat.entity.body.position.set(body.x-aim.x*3.4,Math.max(.5,body.y),body.z-aim.z*3.4);rat.entity.body.velocity.set(0,0,0);rat.onMouseMove(0,160);},
+    'R Gentle death suspect 2':()=>{const v=suspects[1]!;if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});v.hp=1;v.takeDamage(1,new THREE.Vector3(.2,0,0));},
     'L7 Landing 8 ahead':()=>feel.landed(ahead(8),55,stage.camera),
     'L7 Case whistle then paperwork 8 ahead':()=>{const p=ahead(8);feel.cases([{p:{x:p.x,y:30,z:p.z},v:{x:0,y:-12,z:0},owner:null}],stage.camera);setTimeout(()=>feel.cases([{p:{x:p.x,y:.5,z:p.z},v:{x:0,y:0,z:0},owner:null}],stage.camera),900);},
 };
+/** A scripted corpse 4 ahead: it drops from 2.5 units, rolls onto its back, bounces and
+ * rests, so the ragdoll limbs, splay and dead face read at close range. */
+let corpse:{mesh:THREE.Group;animator:RatAnimator;age:number;at:THREE.Vector3}|undefined;
+function studioCorpse(style:DeathStyle,headshot:boolean):void {
+    if(corpse){corpse.mesh.removeFromParent();}
+    const mesh=createRatMesh(appearance),animator=new RatAnimator(mesh);
+    animator.setDeathStyle(style,headshot);stage.scene.add(mesh);
+    const side=stage.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize().cross(new THREE.Vector3(0,1,0));
+    corpse={mesh,animator,age:0,at:ahead(6).addScaledVector(side,1.6)};
+}
+const lying=new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI/2,.6,0));
+function poseStudioCorpse(dt:number):void {
+    if(!corpse)return;
+    const c=corpse,t=c.age+=dt,fall=Math.min(1,t/.55),bounce=t>.55&&t<.95?Math.sin((t-.55)/.4*Math.PI)*.45:0;
+    c.mesh.position.set(c.at.x,.3+(1-fall*fall)*2.5+bounce,c.at.z);
+    c.mesh.quaternion.slerpQuaternions(new THREE.Quaternion(),lying,Math.min(1,t/.6));
+    const impact=t-dt<.55&&t>=.55?1:t-dt<.95&&t>=.95?.5:0;
+    c.animator.poseDeath(t,dt,{x:t<.6?-5:0,y:0,z:t<.6?2:0},impact,t>1.1);
+}
 /** A ground point `distance` ahead of the camera. */
 function ahead(distance:number):THREE.Vector3 {
     const forward=stage.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
@@ -210,7 +237,7 @@ async function renderCues():Promise<string> {
     let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
     return btoa(binary);
 }
-Object.assign(window,{renderCues,feelActions:actions,faceWall,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
+Object.assign(window,{stage,rat,studioCorpseAt:()=>corpse?.at,renderCues,feelActions:actions,faceWall,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
 let previous=0;
 function frame(now:number){
     const dt=previous?Math.min(.05,(now-previous)/1000):1/60;previous=now;
@@ -224,6 +251,7 @@ function frame(now:number){
     city.update(dt,stage.camera,rat.entity.body.position);
     feel.hunch(dt,now,stage.camera,rat.entity.dead?undefined:rat.entity,hunchRats,wantedSuspect);
     feel.wanted(dt,wantedSuspect?suspects[1]!.mesh.position:undefined,false);
+    poseStudioCorpse(dt);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
     stage.renderer.toneMappingExposure=1.1*feel.exposure;

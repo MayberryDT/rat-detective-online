@@ -119,6 +119,12 @@ export class FeelSound {
     private fade(at:Vec3Data,view:THREE.Camera,range:number):number {
         return Math.max(0,1-Math.hypot(at.x-view.position.x,at.y-view.position.y,at.z-view.position.z)/range)**2;
     }
+    /** A body's limbs jolted by a shot. */
+    squeak(at:Vec3Data,view:THREE.Camera):void {
+        if(!this.on)return;
+        const p=FEEL.ragdoll.params,fade=this.fade(at,view,p.squeakRange);
+        if(fade>.02)this.audio!.squeak(p.squeak*fade,this.pan(at,view));
+    }
     /** A launched rat screams; your own at full volume. */
     scream(at:Vec3Data|undefined,view:THREE.Camera):void {
         if(!this.on)return;

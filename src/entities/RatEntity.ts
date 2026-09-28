@@ -668,8 +668,8 @@ export class RatEntity {
         this.deathImpact = this.deathContacts = this.restTime = 0;
         this.deathPhase = 'launch';
         this.resetColor();
-        this.animator.setDeathStyle(this.deathStyle);this.deathStyle = 'default';
         const headshot = this.headshot && feelState().on('headshot');
+        this.animator.setDeathStyle(this.deathStyle,headshot);this.deathStyle = 'default';
         this.popHat(impactVel);
         this.headshot = false;
         if (headshot) this.splatHead(impactVel);

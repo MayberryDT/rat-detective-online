@@ -99,6 +99,8 @@ export const FEEL={
     launchFlight:{label:'L6 Flight',toggle:true,params:{scream:.2,screamRange:60,trailEvery:.035,streaks:1,hang:.45,hangLift:.75}},
     /** L7: landing: crater and cracked pavement, dust, THUD, shake within `shakeRange`; the thrown case whistles and spills paperwork. */
     launchLanding:{label:'L7 Landing',toggle:true,params:{thud:.35,shake:2.2,shakeRange:35,decalLife:9,whistle:.14,paper:14}},
+    /** R1–R3: floppy corpse limbs, cause-shaped deaths, splay and dead face, rolling hat; shots jolt limbs with a `squeak` heard within `squeakRange`. */
+    ragdoll:{label:'R Ragdoll limbs',toggle:true,params:{squeak:.16,squeakRange:40,jolt:1}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

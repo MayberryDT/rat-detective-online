@@ -304,6 +304,7 @@ export class GameSession {
             this.chaos.onPresentedShot=(id,p,radius)=>this.cameos?.observeShot(id,p,radius,this.gun.sceneryClear);
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
+            this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
         }
         this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.chaos?.setIncidentRoster(message.incidents);
@@ -451,8 +452,9 @@ export class GameSession {
                     localKill: message.killerId === this.myId && message.victimId !== this.myId,
                 }));
                 const entity = message.victimId === this.myId ? this.rat?.entity : this.remotes.get(message.victimId);
-                const deathStyle = this.feel.deathStyle(message.killerId, message.cause);
-                entity?.setDeathStyle(deathStyle);this.chaos?.noteDeathStyle(message.victimId, deathStyle);
+                // R2: killed mid-launch flails all the way down.
+                const deathStyle = entity?.launchFlight && feelState().on('launchFlight') ? 'flail' : this.feel.deathStyle(message.killerId, message.cause);
+                entity?.setDeathStyle(deathStyle);this.chaos?.noteDeathStyle(message.victimId, deathStyle, headshot);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
                 if (entity && !entity.dead) {
                     if(message.incident){entity.useSharedCorpse();}
@@ -724,7 +726,7 @@ export class GameSession {
             const local=launch.playerId===this.myId,entity=local?this.rat?.entity:this.remotes.get(launch.playerId);
             if(entity&&!entity.dead)this.feel.launched(entity.mesh.position,local,!!launch.boost,this.stage.camera);
         }
-        this.feel.cases([state.case,...state.extraCases??[]],this.stage.camera);
+        if(state.case)this.feel.cases([state.case,...state.extraCases??[]],this.stage.camera);
     }
 
     /** Polish 17: footsteps (you and nearby rats) and near-miss whizzes. */

@@ -26,15 +26,15 @@ const pad={x:0,y:0,z:0,radius:4};
 describe('launcher spatial audio', () => {
     it('lowers every launcher ceiling by 30% and applies the shared fade to both sound layers', () => {
         const {audio,camera,gains,nodes}=fixture();
-        for (const machine of LAUNCH_MACHINES) audio.play(machine.kind,pad,camera);
-        for (let i=0;i<gains.length;i+=3) {
-            expect(gains[i].gain.value).toBeCloseTo(.85*.7);
-            expect(gains[i+1].connect).toHaveBeenCalledWith(gains[i]);
-            expect(gains[i+2].connect).toHaveBeenCalledWith(gains[i]);
+        // Each voice's first gain is its spatial output; every other layer feeds it.
+        for (const machine of LAUNCH_MACHINES) for (const cue of ['tell','fire'] as const) {
+            const first=gains.length;audio.play(machine.kind,pad,camera,cue);
+            expect(gains[first].gain.value).toBeCloseTo(.85*.7);
+            for (const layer of gains.slice(first+1)) expect(layer.connect).toHaveBeenCalledWith(gains[first]);
         }
-        camera.position.x=100;audio.play('pressure',pad,camera);
-        expect(gains.at(-3)!.gain.value).toBeCloseTo(.85*.7*worldSoundGain(100,20/112));
-        expect(gains.at(-3)!.gain.value/(.85*.7)).toBeLessThan(.03);
+        camera.position.x=100;const far=gains.length;audio.play('pressure',pad,camera);
+        expect(gains[far].gain.value).toBeCloseTo(.85*.7*worldSoundGain(100,20/112));
+        expect(gains[far].gain.value/(.85*.7)).toBeLessThan(.03);
         audio.dispose();expect(nodes.every(node=>node.disconnect.mock.calls.length===1)).toBe(true);
     });
 

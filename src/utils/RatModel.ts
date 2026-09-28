@@ -165,6 +165,23 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
                 hair.castShadow = false;hair.userData.noOutline = true;
             }
         }
+        // M1/R3: a mouth that opens to scream, and the dead face (X eyes, tongue).
+        // All start collapsed by scale; the animator opens them. Existing materials only.
+        const mouth = pivot(head, 'rat-mouth', 0, -0.165, 0.43);
+        mouth.rotation.x = 1.1;mouth.scale.y = 1e-4;
+        mesh(mouth, new THREE.CircleGeometry(0.075, 16), pupil).userData.noOutline = true;
+        const tongue = pivot(head, 'rat-tongue', 0, -0.19, 0.44);
+        tongue.scale.z = 1e-4;
+        const lick = mesh(tongue, new THREE.BoxGeometry(0.075, 0.02, 0.15).translate(0, 0, 0.075), skin);
+        lick.userData.noOutline = true;lick.castShadow = false;
+        const crossGeometry = new THREE.BoxGeometry(0.16, 0.028, 0.012);
+        for (const side of [-1, 1]) {
+            const cross = pivot(head, side < 0 ? 'rat-x-left' : 'rat-x-right', side * 0.175, 0.102, 0.275);
+            cross.rotation.y = side * 0.55;cross.scale.setScalar(1e-4);
+            for (const angle of [Math.PI / 4, -Math.PI / 4]) {
+                const bar = mesh(cross, crossGeometry, pupil);bar.rotation.z = angle;bar.userData.noOutline = true;bar.castShadow = false;
+            }
+        }
     }
     const hat = pivot(head, 'rat-hat', 0, 0.19, 0);
     hat.rotation.x = 0.06;

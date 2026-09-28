@@ -1,3 +1,4 @@
+import {feelState} from '../../src/feel/feelState';
 import {expect,it} from 'vitest';
 import * as THREE from 'three';
 import {RatAnimator} from '../../src/utils/RatAnimator';
@@ -113,8 +114,11 @@ it('clears follow-through on correction, motion rebase, death and respawn withou
         expect(ear.rotation.x).toBe(0);
         run();animator.shoot();animator.resetMotionHistory();animator.update(1/60);
         expect(ear.rotation.x).toBe(0);expect(root.getObjectByName('rat-muzzle-flash')!.visible).toBe(true);
+        // With the ragdoll off, death poses no follow-through at all on the ear.
+        feelState().set('ragdoll',false);
         run();animator.poseDeath(.2,1/60,{x:1,y:2,z:0},.4,false);
         expect(ear.rotation.x).toBe(0);
+        feelState().set('ragdoll',true);
         animator.reset();animator.update(1/60);expect(ear.rotation.x).toBe(0);
         expect(root.getObjectByName('rat-muzzle-flash')!.visible).toBe(false);
     }finally{disposeMeshResources(root);}

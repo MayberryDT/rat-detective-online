@@ -737,7 +737,7 @@ export class ChaosSimulation {
         if(this.corpses.size>=T.maxCorpses){const first=this.corpses.keys().next().value;if(first)this.removeCorpse(first);}
         const direction=vec(incoming);if(direction.lengthSquared()<.01)direction.set(0,0,1);direction.normalize();
         const body=new C.Body({mass:2,shape:new C.Box(new C.Vec3(.48,.92,.38)),
-            position:new C.Vec3(victim.x,victim.y+.95,victim.z),collisionFilterGroup:8,collisionFilterMask:1|4|16,
+            position:new C.Vec3(victim.x,victim.y+.95,victim.z),collisionFilterGroup:8,collisionFilterMask:1|4|8|16,
             linearDamping:.015,angularDamping:.04});
         body.quaternion.set(victim.meshQx,victim.meshQy,victim.meshQz,victim.meshQw);body.quaternion.normalize();
         direction.scale(incident?T.corpseSpeed:T.normalCorpseSpeed,body.velocity);body.angularVelocity.set(direction.z*15,5,-direction.x*15);
@@ -1465,7 +1465,7 @@ export class ChaosSimulation {
         for(const c of s.corpses){
             if(c.expires<=Date.now())continue;
             const body=new C.Body({mass:2,shape:new C.Box(new C.Vec3(.48,.92,.38)),
-                position:vec(c.p),collisionFilterGroup:8,collisionFilterMask:1|4|16,linearDamping:.015,angularDamping:.04});
+                position:vec(c.p),collisionFilterGroup:8,collisionFilterMask:1|4|8|16,linearDamping:.015,angularDamping:.04});
             Object.assign(body.quaternion,c.q);body.velocity.copy(vec(c.v));body.angularVelocity.copy(vec(c.spin));this.addCorpse(body,c);
         }
         if(elapsed>2&&!this.assignment)for(const c of this.cases.values())if(!c.owner)c.returningUntil=Date.now()+T.recoverMs;

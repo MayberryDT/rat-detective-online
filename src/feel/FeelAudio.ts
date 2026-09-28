@@ -226,6 +226,13 @@ export class FeelAudio {
         env.gain.setValueAtTime(0,at);env.gain.linearRampToValueAtTime(1,at+.25);env.gain.setValueAtTime(.8,at+.9);env.gain.exponentialRampToValueAtTime(.001,at+3);
         source.connect(filter);filter.connect(env);env.connect(out);source.start(at);source.stop(at+3.1);
     }
+    /** A shot body's limbs jolt: a rubbery squeak. */
+    squeak(volume:number,pan:number):void {
+        if(!this.allow('squeak',.06))return;
+        const at=this.context.currentTime,out=this.out(volume,pan,.3),pitch=1300+Math.random()*500;
+        this.tone(out,at,.09,'sine',pitch,pitch*1.7,.8);
+        this.tone(out,at+.07,.12,'triangle',pitch*1.6,pitch*.9,.5);
+    }
     /** A launched rat's scream: a squeaky vibrato wail that climbs then trails off. */
     scream(volume:number,pan:number):void {
         if(!this.allow('scream',.25))return;

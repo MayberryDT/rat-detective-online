@@ -97,8 +97,9 @@ export class ChaosView {
     private readonly ballPose=new THREE.Object3D();
     private readonly missileTrail=new THREE.InstancedMesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff2a12,transparent:true,opacity:.42,toneMapped:false,depthWrite:false}),12);
     /** Polish 12: recent death causes by victim, consumed when the shared corpse appears. */
-    private readonly deathStyles=new Map<string,{style:DeathStyle;at:number}>();
-    private corpses=new Map<string,{mesh:THREE.Group;animator:RatAnimator;state:CorpseState;hat?:FlyingHat;hatPending:boolean}>();
+    private readonly deathStyles=new Map<string,{style:DeathStyle;headshot:boolean;at:number}>();
+    /** `speed`: last presented speed, so a sudden stop reads as an impact for the limbs. */
+    private corpses=new Map<string,{mesh:THREE.Group;animator:RatAnimator;state:CorpseState;hat?:FlyingHat;hatPending:boolean;speed:number}>();
     private arm:THREE.Group|null=null;
     private carrier:RatEntity|null=null;
     private state:ChaosState|null=null;
@@ -114,6 +115,8 @@ export class ChaosView {
     onPresentedShot?: (id:string,p:Vec3Data,radius:number)=>void;
     /** A launched rat's landing, raised when the playback shows it (your own at once); `speed` is its fall speed. */
     onLanding?: (p:Vec3Data,speed:number)=>void;
+    /** R3: a shot jolted a body at `p` (for its squeak). */
+    onCorpseJolt?: (p:Vec3Data)=>void;
     /** A launcher firing in the presented timeline. */
     set onLauncherFired(listener:((machine:LaunchMachine,boost:boolean)=>void)|undefined){this.pressureMachine.onFire=listener;}
     private readonly landings:{at:number;p:Vec3Data;speed:number}[]=[];
@@ -233,8 +236,8 @@ export class ChaosView {
     }
     /** Juice T4: an oversized cheese burst (a headshot splat). */
     burst(point:THREE.Vector3,normal:THREE.Vector3,scale:number):void {this.impacts.emit(point,normal,false,scale);}
-    noteDeathStyle(victimId:string,style:DeathStyle):void {
-        this.deathStyles.set(victimId,{style,at:performance.now()});
+    noteDeathStyle(victimId:string,style:DeathStyle,headshot=false):void {
+        this.deathStyles.set(victimId,{style,headshot,at:performance.now()});
         if(this.deathStyles.size>32)this.deathStyles.delete(this.deathStyles.keys().next().value!);
     }
     shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {this.localShots.result(message);this.reactions.shotResult(message);}
@@ -318,6 +321,16 @@ export class ChaosView {
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
             if(hit.cue==='thud')playDelayedThud(hit.p);
+            if(hit.foley==='corpse-kick'||hit.foley==='corpse-bounce'&&(hit.energy??0)>16){
+                // The nearest body within reach takes the jolt.
+                let nearest:{animator:RatAnimator}|undefined,best=2.5*2.5;
+                for(const corpse of this.corpses.values()){
+                    const q=corpse.mesh.position,d=(q.x-hit.p.x)**2+(q.y+.9-hit.p.y)**2+(q.z-hit.p.z)**2;
+                    if(d<best){best=d;nearest=corpse;}
+                }
+                nearest?.animator.joltDeath(hit.foley==='corpse-kick'?1:.5);
+                if(nearest&&hit.foley==='corpse-kick')this.onCorpseJolt?.(hit.p);
+            }
             if(hit.foley==='launch-landing'){
                 // Other rats are shown a playback delay behind; your own landing already happened.
                 const self=this.resolveRat(this.myId)?.mesh.position,mine=!!self&&Math.hypot(self.x-hit.p.x,self.z-hit.p.z)<3;
@@ -336,11 +349,11 @@ export class ChaosView {
                 const mesh=createRatMesh(c.appearance);
                 // Polish 11: a fresh corpse pops its fedora (not one already lying there on join).
                 const hatPending=feelState().on('hatPop')&&state.time-c.born<600;
-                model={mesh,animator:new RatAnimator(mesh),state:c,hatPending};this.corpses.set(c.id,model);this.root.add(mesh);
+                model={mesh,animator:new RatAnimator(mesh),state:c,hatPending,speed:0};this.corpses.set(c.id,model);this.root.add(mesh);
                 // Up to 16 corpses: one skinned draw each instead of ~40 per pass.
                 batchRigidMeshes(mesh);
                 const noted=this.deathStyles.get(c.victimId);
-                if(noted&&performance.now()-noted.at<2000)model.animator.setDeathStyle(noted.style);
+                if(noted&&performance.now()-noted.at<2000)model.animator.setDeathStyle(noted.style,noted.headshot);
                 this.deathStyles.delete(c.victimId);
             }
             model.state=c;
@@ -509,7 +522,9 @@ export class ChaosView {
             const {p,q}=this.presented;c.mesh.quaternion.set(q.x,q.y,q.z,q.w);
             c.mesh.position.set(p.x,p.y,p.z);
             c.mesh.position.sub(this.p.set(0,.95,0).applyQuaternion(c.mesh.quaternion));
-            c.animator.poseDeath((now-b.born)/1000,dt,b.spin,0,false);
+            // The server box has no contact events here: a sharp drop in speed is the landing.
+            const speed=Math.hypot(b.v.x,b.v.y,b.v.z),impact=Math.max(0,Math.min(1,(c.speed-speed-4)/20));c.speed=speed;
+            c.animator.poseDeath((now-b.born)/1000,dt,b.spin,impact,speed<.6);
             if(c.hatPending){
                 c.hatPending=false;c.mesh.updateMatrixWorld(true);
                 const hat=c.mesh.getObjectByName('rat-hat');

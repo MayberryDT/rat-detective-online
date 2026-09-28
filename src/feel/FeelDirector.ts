@@ -359,6 +359,9 @@ export class FeelDirector {
         for(const id of this.fallingCases.keys())if(!seen.has(id))this.fallingCases.delete(id);
     }
 
+    /** R3: a shot jolted a body's limbs. */
+    corpseJolt(at:Vec3Data,view:THREE.Camera):void {if(this.state.on('ragdoll'))this.sound.squeak(at,view);}
+
     /** Your cheese hit someone (nonlethal). */
     hitDealt(victim:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
         this.sound.squelch(victim,view);

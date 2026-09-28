@@ -68,7 +68,6 @@ export class LauncherAudio {
             gain.gain.linearRampToValueAtTime(peak, now + start + attack); gain.gain.exponentialRampToValueAtTime(.001, now + start + end);
             osc.connect(gain); gain.connect(output); nodes.push(osc, gain); sources.push(osc);
             osc.start(now); osc.stop(now + start + end + .05);
-            return osc;
         };
         const hiss = (type: BiquadFilterType, from: number, to: number, peak: number, attack: number, hold: number, end: number, start = 0) => {
             const noise = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), air = ctx.createGain();
@@ -85,8 +84,7 @@ export class LauncherAudio {
         if (cue === 'tell') {
             // Rising whine over a pressure rattle: the split second to scream and scramble.
             tone('sine', pitch * 3, pitch * 14, .22, .03, .26);
-            const rattle = tone('square', pitch * .5, pitch * .6, .12, .01, .24);
-            rattle.detune.value = 30;
+            tone('square', pitch * .5, pitch * .62, .12, .01, .24);
             last = hiss('bandpass', 900, 2600, .18, .05, .15, .25);
         } else {
             tone(kind === 'mousetrap' ? 'triangle' : 'sawtooth', pitch * 2, 35, .65, .006, .85);
