@@ -151,6 +151,7 @@ Tyler's brain dump, sorted into now and later, with his answers.
   - **Phase 3, client rendering:** draw calls (corpse and own-rat batching, empty meshes, instance uploads), then per-frame CPU (static matrices, rain, street lights, tails, HUD writes). Proof: identical fixture pixels; Tyler playtests.
   - **Phase 4:** measured yes/no on sewer lights, shadow redraws, grain/filter, the two physics worlds, navigation, cameo compression. Look changes go to Tyler as choices.
   - **Phase 5:** preview playtest, production on Tyler's OK, before/after receipt.
+  - **Status (2026-09-28):** Tyler said to do all of it on a branch, including the physics restructure ("we can fine tune the physics later"). Done on `perf/overhaul`, on the private preview for his playtest: server warm tick −80%, client 30→43 fps hosted on Halla. See [the overhaul receipt](verification/perf-overhaul-2026-09-28.md). Shadow freezing/removal were measured and left for Tyler to choose.
 - **3D model and ragdoll overhaul.**
 
 ## Remaining outcomes (in order; one commit each)
