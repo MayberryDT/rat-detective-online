@@ -52,7 +52,7 @@ export class FacadeBeams {
         this.texture=new THREE.DataTexture(data,size,1,THREE.RGBAFormat);
         this.texture.minFilter=this.texture.magFilter=THREE.NearestFilter;this.texture.generateMipmaps=false;
         this.material=new THREE.ShaderMaterial({
-            uniforms:{occupancy:{value:this.texture}},transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,
+            uniforms:{occupancy:{value:this.texture}},transparent:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,blending:THREE.AdditiveBlending,
             vertexShader:`attribute vec3 tint; attribute vec2 beamUv; attribute float roomUv; attribute float strength;
                 varying vec3 vTint; varying vec2 vBeamUv; varying float vRoomUv; varying float vStrength; varying vec3 vWorld;
                 void main(){vTint=tint;vBeamUv=beamUv;vRoomUv=roomUv;vStrength=strength;vWorld=position;

@@ -62,7 +62,7 @@ export class NoirDressing {
             for(const [face,index] of [['south',h*2],['east',h*2+1]] as const){
                 const [text,color]=NEON[index%NEON.length]!;
                 const material=new THREE.MeshBasicMaterial({map:neonTexture(text,color),transparent:true,opacity:0,
-                    blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false,side:THREE.DoubleSide});
+                    blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false,side:THREE.DoubleSide,forceSinglePass:true});
                 const mesh=new THREE.Mesh(plane,material);mesh.name='noir-neon';
                 const width=Math.min(9,1.4+text.length*1.05);mesh.scale.set(width,width*.31,1);
                 if(face==='south'){mesh.position.set(hall.cx+hall.w*.18,9.5,hall.cz+hall.d/2+.35);}

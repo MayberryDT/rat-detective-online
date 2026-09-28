@@ -11,7 +11,7 @@ export class CheeseImpactEffects {
     private readonly crumbGeometry = new THREE.SphereGeometry(0.03, 6, 4);
     private readonly crumbMaterial = new THREE.MeshStandardMaterial({color: 0xffc24d, emissive: 0xe79b20, emissiveIntensity: 0.4, roughness: 0.7});
     private readonly splatGeometry;
-    private readonly splatMaterial = new THREE.MeshBasicMaterial({color: 0xdba32f, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide});
+    private readonly splatMaterial = new THREE.MeshBasicMaterial({color: 0xdba32f, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true});
     private readonly crumbs = new THREE.InstancedMesh(this.crumbGeometry, this.crumbMaterial, 160);
     private readonly splats;
     private readonly particles = Array.from({length:160},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,lifetime:0,spin:0,size:1}));

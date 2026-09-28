@@ -17,8 +17,13 @@ export class PressureMachine {
         this.launchAudio=new LauncherAudio(audio);
         this.root.name='municipal-launch-contraptions';
         for(const machine of LAUNCH_MACHINES)this.build(machine);
+        // Instanced batches get their own copies of the materials the moving
+        // parts also use: a material shared by instanced and ordinary meshes
+        // switches shader programs on every draw.
+        const instancedMaterial=new Map<THREE.Material,THREE.Material>();
         for(const batch of this.batches.values()){
-            const mesh=new THREE.InstancedMesh(this.geometry[batch.shape],batch.material,batch.matrices.length);
+            if(!instancedMaterial.has(batch.material))instancedMaterial.set(batch.material,batch.material.clone());
+            const mesh=new THREE.InstancedMesh(this.geometry[batch.shape],instancedMaterial.get(batch.material)!,batch.matrices.length);
             batch.matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));mesh.computeBoundingSphere();mesh.receiveShadow=true;
             this.root.add(mesh);this.instanced.push(mesh);
         }
@@ -96,7 +101,7 @@ export class PressureMachine {
             }
             this.part('round','dark',p.x,.22,p.z,1,.12,1);
         }
-        const ring=new THREE.Mesh(new THREE.RingGeometry(1,1.14,40),new THREE.MeshBasicMaterial({color:0xffee66,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false,toneMapped:false}));
+        const ring=new THREE.Mesh(new THREE.RingGeometry(1,1.14,40),new THREE.MeshBasicMaterial({color:0xffee66,transparent:true,opacity:0,side:THREE.DoubleSide,forceSinglePass:true,depthWrite:false,toneMapped:false}));
         ring.rotation.x=-Math.PI/2;ring.position.set(p.x,.28,p.z);this.root.add(ring);
         const burst=new THREE.Group();burst.position.set(p.x,.25,p.z);this.root.add(burst);
         const burstMaterial=new THREE.MeshBasicMaterial({color:kind==='geyser'?0x9ab6a0:kind==='fan'?0xd9e5e3:0xd8c49a,transparent:true,opacity:0,depthWrite:false,toneMapped:false});

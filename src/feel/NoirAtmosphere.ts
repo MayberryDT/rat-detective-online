@@ -19,7 +19,7 @@ function shaftMaterial(color:number):{material:THREE.ShaderMaterial;opacity:{val
         fragmentShader:`uniform vec3 shaftColor;uniform float shaftOpacity;varying float vAlong;varying vec3 vNormal;varying vec3 vView;
             void main(){float edge=pow(abs(dot(normalize(vNormal),normalize(vView))),1.6);
                 float fall=pow(1.-vAlong,1.4);gl_FragColor=vec4(shaftColor*shaftOpacity*edge*fall,1.);}`,
-        transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,toneMapped:false,
+        transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,forceSinglePass:true,toneMapped:false,
     });
     return {material,opacity};
 }

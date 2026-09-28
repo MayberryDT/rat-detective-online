@@ -143,7 +143,7 @@ export class RatAnimator {
         this.muzzleFlash = new THREE.Mesh(flashGeometry, new THREE.MeshStandardMaterial({
             color: 0xffe9b0, emissive: 0xffe9b0, emissiveIntensity: .3, toneMapped: false,
             transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
-            side: THREE.DoubleSide, fog: false,
+            side: THREE.DoubleSide, forceSinglePass: true, fog: false,
         }));
         this.muzzleFlash.name = 'rat-muzzle-flash';
         this.muzzleFlash.visible = false;

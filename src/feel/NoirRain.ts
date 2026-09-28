@@ -43,7 +43,7 @@ export class NoirRain {
             new THREE.MeshBasicMaterial({color:0xc9d2e2,transparent:true,opacity:.45,depthWrite:false}),64);
         const map=streakTexture();
         this.glints=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1).translate(0,-.5,0).rotateX(-Math.PI/2),
-            new THREE.MeshBasicMaterial({color:0xffcf96,map,transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false,side:THREE.DoubleSide}),Math.max(1,this.lamps.length));
+            new THREE.MeshBasicMaterial({color:0xffcf96,map,transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false,side:THREE.DoubleSide,forceSinglePass:true}),Math.max(1,this.lamps.length));
         for(const mesh of [this.drops,this.splashes,this.glints]){mesh.frustumCulled=false;mesh.castShadow=false;this.root.add(mesh);}
         this.positions=new Float32Array(count*3);
         for(let i=0;i<count;i++){this.place(i);this.positions[i*3+1]=this.random()*25;}

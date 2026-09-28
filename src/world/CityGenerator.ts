@@ -559,6 +559,7 @@ export class CityGenerator {
             transparent: true,
             opacity: 0.009,
             side: THREE.DoubleSide,
+            forceSinglePass: true,
             depthWrite: false,
             blending: THREE.AdditiveBlending,
         }));
@@ -575,7 +576,7 @@ export class CityGenerator {
         this.textures.add(glowTexture);
         const steamGeo = this.trackGeometry(new THREE.PlaneGeometry(2, 2)) as THREE.PlaneGeometry;
         for (const [x,z] of [[8.7,7],[-21.3,7],[8.7,-23]]) for (let i = 0; i < 2; i++) {
-            const material = this.trackMaterial(new THREE.MeshBasicMaterial({color:0x898799, map:glowTexture, transparent:true, opacity:0, depthWrite:false, side:THREE.DoubleSide}));
+            const material = this.trackMaterial(new THREE.MeshBasicMaterial({color:0x898799, map:glowTexture, transparent:true, opacity:0, depthWrite:false, side:THREE.DoubleSide, forceSinglePass:true}));
             const mesh = new THREE.Mesh(steamGeo, material); mesh.position.set(x,0.2,z);
             this.steam.push({mesh,x,z,phase:i * 0.5}); this.addObject(mesh);
         }

@@ -12,7 +12,7 @@ export class RatPowerupEffects {
     private time=0;
     private lastSample=-Infinity;
     private readonly trailMaterial=new THREE.ShaderMaterial({
-        transparent:true,depthTest:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,toneMapped:false,
+        transparent:true,depthTest:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,blending:THREE.AdditiveBlending,toneMapped:false,
         vertexShader:`attribute float strength;varying float glow;void main(){glow=strength;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
         fragmentShader:`varying float glow;void main(){gl_FragColor=vec4(1.,.018,.004,glow*.65);}`,
     });

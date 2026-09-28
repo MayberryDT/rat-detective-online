@@ -177,7 +177,7 @@ export class PickupVisual {
         pool.rotation.x=-Math.PI/2;pool.position.y=.13;pool.name='supply-lamp-pool';pool.raycast=()=>{};this.root.add(pool);
         // The far beacon: a soft coloured shaft rising from the site, faded in with distance.
         this.beam=new THREE.MeshBasicMaterial({color:KIND_COLOR[kind],transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,
-            side:THREE.DoubleSide,fog:false,toneMapped:false});
+            side:THREE.DoubleSide,forceSinglePass:true,fog:false,toneMapped:false});
         this.beam.onBeforeCompile=shader=>{
             shader.vertexShader='varying float vBeamV;\n'+shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nvBeamV=uv.y;');
             shader.fragmentShader='varying float vBeamV;\n'+shader.fragmentShader.replace('#include <opaque_fragment>','#include <opaque_fragment>\ngl_FragColor.a*=pow(1.-vBeamV,1.4)*smoothstep(0.,.04,vBeamV);');
@@ -206,7 +206,7 @@ export class PickupVisual {
     /** Additive warm light: a soft-edged cone, or a floor pool fading from the center. */
     private glowMaterial(opacity:number,pool:boolean):THREE.MeshBasicMaterial {
         const material=new THREE.MeshBasicMaterial({color:LAMP_COLOR,transparent:true,opacity,depthWrite:false,blending:THREE.AdditiveBlending,
-            side:pool?THREE.FrontSide:THREE.DoubleSide,toneMapped:false});
+            side:pool?THREE.FrontSide:THREE.DoubleSide,forceSinglePass:true,toneMapped:false});
         material.onBeforeCompile=shader=>{
             shader.vertexShader='varying vec2 vLampUv;\n'+shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nvLampUv=uv;');
             shader.fragmentShader='varying vec2 vLampUv;\n'+shader.fragmentShader.replace('#include <opaque_fragment>',pool

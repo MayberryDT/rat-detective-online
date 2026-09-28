@@ -13,7 +13,7 @@ export class WantedSearchlight {
     private sway=0;
     constructor(private readonly scene:THREE.Scene){
         const glow=(opacity:number,side:THREE.Side)=>new THREE.MeshBasicMaterial({color:0xdfe8ff,transparent:true,opacity,depthWrite:false,
-            blending:THREE.AdditiveBlending,side,fog:false,toneMapped:false});
+            blending:THREE.AdditiveBlending,side,forceSinglePass:true,fog:false,toneMapped:false});
         this.beam=glow(.14,THREE.DoubleSide);this.pool=glow(.42,THREE.FrontSide);
         const cone=new THREE.Mesh(new THREE.CylinderGeometry(TOP,BOTTOM,HEIGHT,24,1,true),this.beam);cone.position.y=HEIGHT/2;cone.raycast=()=>{};
         const pool=new THREE.Mesh(new THREE.CircleGeometry(BOTTOM*1.1,28),this.pool);pool.rotation.x=-Math.PI/2;pool.position.y=.08;pool.raycast=()=>{};

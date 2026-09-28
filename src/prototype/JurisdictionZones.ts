@@ -20,7 +20,7 @@ export class JurisdictionZones {
             vertices.push(a,y,c,a,y,d,b,y,d,a,y,c,b,y,d,b,y,c);
             edge(a,c,a,d);edge(a,d,b,d);edge(b,d,b,c);edge(b,c,a,c);
         }
-        const fill=new THREE.MeshBasicMaterial({color:0xd6bc73,transparent:true,opacity:.09,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1});
+        const fill=new THREE.MeshBasicMaterial({color:0xd6bc73,transparent:true,opacity:.09,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,polygonOffset:true,polygonOffsetFactor:-1});
         const line=new THREE.LineBasicMaterial({color:0xf4d590,transparent:true,opacity:.85,depthWrite:false});
         const group=new THREE.Group();
         group.add(new THREE.Mesh(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(vertices,3)),fill));
