@@ -57,7 +57,7 @@ const CONNECTION_STYLE = `
 /** Owns title, kill feed, overlays, and connection status. */
 /** One kill-feed line. `note` is free text (case-death jokes, connection notices). */
 export type FeedEntry =
-    | { kind: 'kill'; killer: string; victim: string; headshot?: boolean; local?: 'killer' | 'victim' }
+    | { kind: 'kill'; killer: string | null; victim: string; headshot?: boolean; local?: 'killer' | 'victim' }
     | { kind: 'dispatch'; caller: string; local?: boolean }
     | { kind: 'note'; text: string };
 
@@ -149,7 +149,7 @@ export class GameHud {
         this.feedback('notice');
         const entry = this.doc.createElement('div');
         entry.className = 'kill-entry';
-        entry.textContent = line.kind === 'kill' ? `${line.killer} eliminated ${line.victim}${line.headshot ? ' · HEADSHOT' : ''}`
+        entry.textContent = line.kind === 'kill' ? `${line.killer ?? 'The city'} eliminated ${line.victim}${line.headshot ? ' · HEADSHOT' : ''}`
             : line.kind === 'dispatch' ? `${line.caller} called Dispatch` : line.text;
         this.killFeed.appendChild(entry);
         this.schedule(() => {
