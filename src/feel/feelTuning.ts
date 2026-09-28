@@ -110,6 +110,10 @@ export const FEEL={
     dispatchShot:{label:'D2 Dispatch shot',toggle:true,params:{kick:1.6,kickRange:30,sweep:260,squawk:.22}},
     /** R1–R3: floppy corpse limbs, cause-shaped deaths, splay and dead face, rolling hat; shots jolt limbs with a `squeak` heard within `squeakRange`. */
     ragdoll:{label:'R Ragdoll limbs',toggle:true,params:{squeak:.16,squeakRange:40,jolt:1}},
+    /** Seventh batch R1–R5: the corpse body bends (soft spine) and is posed by a client point chain dragged by the corpse's position:
+     * goes limp first (`limp` s before a local corpse flies), limbs trail on air `drag`, lands like a sack (`squash`), one last `twitch`,
+     * and shots fold it where hit (`jolt` u/s). `spin` is the local corpse's tumble (rad/s; the old rigid tumble was 16). */
+    ragdollBody:{label:'R7 Ragdoll body (bend, chain, sack)',toggle:true,params:{limp:.1,drag:1.6,squash:.3,twitch:1.6,jolt:5.5,spin:4}},
     /** M1: living face: ears and whiskers bounce on jolts; wide eyes and an open-mouth scream on launches, a gasp on near misses. */
     face:{label:'M1 Face',toggle:true,params:{}},
     /** M2: springy tail behind turns, hat rocking with each step, a flinch of the head away from hits. */

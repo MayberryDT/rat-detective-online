@@ -13,7 +13,8 @@ it('pivots the shorter sleeve at a fixed shoulder while preserving the original 
     const sleeve=shoulder.getObjectByName('rat-floating-sleeve')!;
     expect(.390*sleeve.scale.z).toBeGreaterThan(.25);
     expect(.390*sleeve.scale.z).toBeLessThan(.34);
-    const verify=()=>{
+    // A corpse's arm follows its ragdoll; while alive the muzzle stays exactly the original.
+    const verify=(alive=true)=>{
         for(const model of [root,outline]){
             const pivot=model.getObjectByName('rat-gun-shoulder')!;
             expect(pivot.position.distanceTo(RAT_GUN_SHOULDER)).toBeLessThan(1e-9);
@@ -23,7 +24,7 @@ it('pivots the shorter sleeve at a fixed shoulder while preserving the original 
             const target=model.getObjectByName('rat-pistol')!.localToWorld(new THREE.Vector3(-.035,-.065,-.055));
             expect(grip.distanceTo(target)).toBeLessThan(1e-6);
             const muzzle=model.getObjectByName('rat-muzzle')!.getWorldPosition(new THREE.Vector3());
-            expect(muzzle.distanceTo(original.getObjectByName('rat-muzzle')!.getWorldPosition(new THREE.Vector3()))).toBeLessThan(1e-6);
+            if(alive)expect(muzzle.distanceTo(original.getObjectByName('rat-muzzle')!.getWorldPosition(new THREE.Vector3()))).toBeLessThan(1e-6);
         }
     };
     verify();
@@ -36,7 +37,8 @@ it('pivots the shorter sleeve at a fixed shoulder while preserving the original 
         }
     }
     animator.poseDeath(.5,1/60,{x:2,y:4,z:1},2,false);
-    reference.poseDeath(.5,1/60,{x:2,y:4,z:1},2,false);verify();
-    animator.reset();reference.reset();verify();
+    reference.poseDeath(.5,1/60,{x:2,y:4,z:1},2,false);verify(false);
+    // The corpse's ragdoll placed the model; a respawn places it again.
+    animator.reset();reference.reset();root.position.copy(original.position);root.quaternion.copy(original.quaternion);verify();
     expect(shoulder.quaternion.angleTo(rest)).toBeLessThan(1e-6);
 });

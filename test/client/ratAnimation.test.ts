@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../../src/entities/RatEntity';
 import { CheeseGun } from '../../src/weapons/CheeseGun';
+import { feelState } from '../../src/feel/feelState';
 
 it('animates motion and recoil with a matching outline without moving physics, and resets on respawn', () => {
     const scene = new THREE.Scene();
@@ -143,39 +144,55 @@ it('keeps the hit readable and recovers the original colors and pose', () => {
     rat.dispose();
 });
 
-it('tumbles, rebounds on real contact and rests without a timed teleport, then resets', () => {
+it.each([false, true])('tumbles, rebounds on real contact and rests without a timed teleport, then resets (chain body %s)', chainBody => {
     vi.spyOn(Math, 'random').mockReturnValue(0.6);
+    feelState().set('ragdollBody', chainBody);
     const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -25, 0) });
     world.defaultContactMaterial.friction = 0;
     world.defaultContactMaterial.restitution = 0.05;
-    const ground = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+    // Shape added after construction (as createStage does) so rays see the rotated plane.
+    const ground = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });ground.addShape(new CANNON.Plane());
     ground.quaternion.setFromEuler(-Math.PI / 2, 0, 0); world.addBody(ground);
     const rat = new RatEntity(new THREE.Scene(), world, new THREE.Vector3(), 'Rat', {});
-    const hat = rat.mesh.getObjectByName('rat-hat')!;
+    const hat = rat.mesh.getObjectByName('rat-hat')!, chest = rat.mesh.getObjectByName('rat-spine-chest')!;
     const hatRest = hat.rotation.x;
     let peak = 0, bounce = false, lastVelocity = 0;
     rat.takeDamage(MAX_HP, new THREE.Vector3(0, 0, -10));
+    if (chainBody) {
+        // It goes limp for a beat (the knees buckle) before it flies.
+        expect(rat.body.velocity.length()).toBe(0);
+        for (let i = 0; i < 7; i++) { world.step(1 / 60); rat.update(1 / 60); }
+    }
     expect(rat.body.velocity.y).toBeGreaterThan(30);
+    const waist = new THREE.Vector3();
     for (let i = 0; i < 900; i++) {
         world.step(1 / 60); rat.update(1 / 60);
-        peak = Math.max(peak, rat.mesh.position.y);
+        peak = Math.max(peak, rat.body.position.y);
         if (lastVelocity < -2 && rat.body.velocity.y > 1) bounce = true;
         lastVelocity = rat.body.velocity.y;
-        const center = new THREE.Vector3(0, 0.95, 0).applyQuaternion(rat.mesh.quaternion).add(rat.mesh.position);
-        expect(center.distanceTo(new THREE.Vector3().copy(rat.body.position))).toBeLessThan(1e-10);
-        expect(rat.mesh.quaternion.toArray()).toEqual(rat.body.quaternion.toArray());
+        rat.mesh.updateMatrixWorld(true);
+        if (chainBody) {
+            // The drawn body bends however it likes, but its waist rides the physics body.
+            expect(chest.localToWorld(waist.set(0, 0.95, 0)).distanceTo(new THREE.Vector3().copy(rat.body.position))).toBeLessThan(0.15);
+        } else {
+            const center = new THREE.Vector3(0, 0.95, 0).applyQuaternion(rat.mesh.quaternion).add(rat.mesh.position);
+            expect(center.distanceTo(new THREE.Vector3().copy(rat.body.position))).toBeLessThan(1e-10);
+            expect(rat.mesh.quaternion.toArray()).toEqual(rat.body.quaternion.toArray());
+        }
     }
     expect(peak).toBeGreaterThan(12);
-    expect(peak).toBeLessThan(25);
+    expect(peak).toBeLessThan(26);
     expect(bounce).toBe(true);
     expect(rat.body.velocity.length()).toBeLessThan(0.5);
     expect(rat.body.angularVelocity.length()).toBeLessThan(0.5);
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(rat.mesh.quaternion);
-    expect(Math.abs(up.y)).toBeLessThan(0.6);
+    // At rest it lies down: the drawn chest is near the ground.
+    expect(chest.localToWorld(waist.set(0, 1.3, 0)).y).toBeLessThan(0.8);
     rat.respawn({ x: 0, y: 0, z: 0, hp: MAX_HP });
     expect(hat.rotation.x).toBe(hatRest);
     expect(rat.mesh.getObjectByName('rat-body')!.scale.y).toBe(1);
+    expect(chest.quaternion.toArray()).toEqual([0, 0, 0, 1]);
     expect(rat.dead).toBe(false);
+    feelState().set('ragdollBody', true);
     rat.dispose(); vi.restoreAllMocks();
 });
 

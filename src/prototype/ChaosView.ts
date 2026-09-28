@@ -308,7 +308,7 @@ export class ChaosView {
                     const q=corpse.mesh.position,d=(q.x-hit.p.x)**2+(q.y+.9-hit.p.y)**2+(q.z-hit.p.z)**2;
                     if(d<best){best=d;nearest=corpse;}
                 }
-                nearest?.animator.joltDeath(hit.foley==='corpse-kick'?1:.5);
+                nearest?.animator.joltDeath(hit.foley==='corpse-kick'?1:.5,hit.p,hit.foley==='corpse-kick'?hit.n:undefined);
                 if(nearest&&hit.foley==='corpse-kick')this.onCorpseJolt?.(hit.p);
             }
             // A ball the authority counted on a launcher's trigger or, failing that, a Dispatch bell.

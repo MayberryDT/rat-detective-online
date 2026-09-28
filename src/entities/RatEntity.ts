@@ -13,6 +13,7 @@ import { createRatMesh, ratAccessory, RatOptions } from '../utils/RatModel';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import type {RatReaction} from '../utils/RatActing';
 import { RatAnimator } from '../utils/RatAnimator';
+import { setRagdollWorld } from '../utils/RatCorpseChain';
 import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
 import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppearance';
 import { RatBillboard } from '../ui/RatBillboard';
@@ -252,6 +253,8 @@ export class RatEntity {
         (this.body as any).userData = { entity: this };
         this.body.addEventListener('collide', this.onRagdollContact);
         this.world.addBody(this.body);
+        // R2: corpse limbs rest on this world's city and bodies (never on this rat's own body).
+        setRagdollWorld(this.world);this.animator.chain.ignore = this.body;
     }
 
     private generateRandomOptions(): RatOptions {
@@ -353,6 +356,8 @@ export class RatEntity {
             if (this.deathHold > 0) {
                 this.deathHold -= dt;
                 this.flyingHat?.update(dt);
+                // R3: the body goes limp (knees buckle, waist folds) before it flies.
+                if (feelState().on('ragdollBody') && !this.sharedDeath) {this.deathTimer += dt;this.updateDeathRagdoll(dt);}
                 if (this.deathHold > 0) return;
                 // An incident corpse may have taken over during the hold.
                 if (!this.sharedDeath) this.launchRagdoll();
@@ -715,7 +720,7 @@ export class RatEntity {
         this.scene.remove(this.billboard.sprite);
         this.launchDirection.copy(impDir);this.launchAxis.copy(fallAxis);
         // A headshot holds the rat in place for a beat before the fall.
-        this.deathHold = headshot ? FEEL.headshot.params.hold : 0;
+        this.deathHold = Math.max(headshot ? FEEL.headshot.params.hold : 0, feelState().on('ragdollBody') ? FEEL.ragdollBody.params.limp : 0);
         if (this.deathHold > 0) {
             this.body.type = CANNON.Body.KINEMATIC;
             this.body.velocity.setZero();this.body.angularVelocity.setZero();
@@ -743,11 +748,13 @@ export class RatEntity {
         );
         this.body.applyImpulse(impulse, new CANNON.Vec3(0, 1.0, 0));
 
-        // Aggressive spin — multiple rotations in the air
+        // Aggressive spin — multiple rotations in the air. The R7 chain body shows no
+        // spin, so its box tumbles only gently (a sack, not a thrown bottle).
+        const spin = feelState().on('ragdollBody') ? FEEL.ragdollBody.params.spin : 16, wobble = spin / 16;
         this.body.angularVelocity.set(
-            fallAxis.x * 16 + (Math.random() - 0.5) * 5,
-            (Math.random() - 0.5) * 5,     // Off-axis twist keeps each tumble different
-            fallAxis.z * 16 + (Math.random() - 0.5) * 5
+            fallAxis.x * spin + (Math.random() - 0.5) * 5 * wobble,
+            (Math.random() - 0.5) * 5 * wobble,     // Off-axis twist keeps each tumble different
+            fallAxis.z * spin + (Math.random() - 0.5) * 5 * wobble
         );
     }
 

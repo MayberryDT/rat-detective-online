@@ -8,6 +8,8 @@ import {updateGunSleeve,type GunSleeveRig} from './RatArmModel';
 import { RatLocomotionFollowThrough } from './RatLocomotionFollowThrough';
 import {RatActing,type RatReaction} from './RatActing';
 import {RatRagdoll} from './RatRagdoll';
+import {RatCorpseChain} from './RatCorpseChain';
+import {RAT_SPINE_JOINTS} from './RatModel';
 
 /** Polish 14 parts, present only on rats built with model touch-ups. */
 const EXTRA_PARTS = ['rat-brow-left','rat-brow-right','rat-whiskers-left','rat-whiskers-right','rat-shoe-left','rat-shoe-right',
@@ -20,6 +22,8 @@ const EXTRA_KIND:Record<typeof EXTRA_PARTS[number],ExtraKind>={
 interface ExtraPart {part:THREE.Object3D;kind:ExtraKind;side:number;position:THREE.Vector3;rotation:THREE.Euler;scale:THREE.Vector3}
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;
+/** R1: the soft-spine joints (absent on the frozen reference models). */
+const HIP_JOINT = RAT_SPINE_JOINTS[0], WAIST = RAT_SPINE_JOINTS[1];
 
 /** L5 hat blow-off, seconds from lift to landing back on the head. */
 const HAT_BLOW = 1.1;
@@ -33,7 +37,7 @@ export function getRatCarryAnchor(root: THREE.Group): THREE.Object3D {
         anchor = new THREE.Object3D();
         anchor.name = 'rat-carry-anchor';
         anchor.position.copy(RAT_CARRY_SHOULDER);
-        root.getObjectByName('rat-body')!.add(anchor);
+        (root.getObjectByName('rat-spine-chest') ?? root.getObjectByName('rat-body'))!.add(anchor);
     }
     return anchor;
 }
@@ -46,6 +50,7 @@ export class RatAnimator {
     private actingEnabled = true;
     private hustle = false;
     private readonly rigs;
+    private readonly spines;
     private readonly gunSleeves:GunSleeveRig[];
     private readonly carryAnchor: THREE.Object3D;
     private verticalSpeed = 0;
@@ -95,6 +100,12 @@ export class RatAnimator {
     private readonly ragdoll = new RatRagdoll();
     private ragdollStarted = false;
     private deathHeadshot = false;
+    /** Seventh batch R2: the corpse's point chain; `chain.ignore` is its own local physics body. */
+    readonly chain = new RatCorpseChain();
+    private readonly anchor = new THREE.Vector3();
+    private readonly joltPush = new THREE.Vector3();
+    /** Tail tip offset from the chain (tail space); zero otherwise. */
+    private readonly tailTip = new THREE.Vector3();
     private readonly localSpin = new THREE.Vector3();
     private readonly localGravity = new THREE.Vector3();
     private readonly tailFall = new THREE.Vector3();
@@ -191,6 +202,10 @@ export class RatAnimator {
             const part = model.getObjectByName(name)!;
             return { part, position: part.position.clone(), rotation: part.rotation.clone(), scale: part.scale.clone() };
         }));
+        this.spines = models.map(model => {
+            const belly = model.getObjectByName('rat-spine-belly'), chest = model.getObjectByName('rat-spine-chest');
+            return belly && chest ? {belly, chest} : undefined;
+        });
     }
 
     takeHit(direction?:THREE.Vector3): void {
@@ -232,19 +247,30 @@ export class RatAnimator {
         this.actingEnabled=enabled;this.acting.reset();this.applyPose();
     }
 
-    /** Damped secondary motion reacts to actual tumble and contact impulses. */
+    /** Damped secondary motion reacts to actual tumble and contact impulses. With the
+     * seventh-batch body (R7) the corpse physics pose only drags a point chain, which
+     * then poses the whole rat: its orientation, spine bend, head, gun hand, shoes and tail. */
     poseDeath(time: number, dt: number, spin: { x: number; y: number; z: number }, impact: number, resting: boolean): void {
         this.locomotion.reset();
         this.acting.reset();
         this.restore();
         this.deathAnimation = true;
         this.muzzleFlash.visible = false;
-        this.parentRotation.copy(this.root.quaternion).invert();
-        this.localSpin.set(spin.x, spin.y, spin.z).applyQuaternion(this.parentRotation);
-        this.localGravity.set(0, -1, 0).applyQuaternion(this.parentRotation);
         const style=this.deathStyle==='default'||this.deathStyle==='flail'?undefined:FEEL.deathVariety.params;
         const gain=!style?1:this.deathStyle==='spin'?style.spinGain:this.deathStyle==='fling'?style.flingGain:style.flopGain;
         const cause=this.deathHeadshot?'headshot':this.deathStyle;
+        const chain=feelState().on('ragdollBody')&&this.spines[0]?this.chain:undefined,bodyParams=FEEL.ragdollBody.params;
+        if(chain){
+            // The physics body's centre drags the chain; its spin is never shown.
+            this.anchor.set(0,WAIST,0).applyQuaternion(this.root.quaternion).add(this.root.position);
+            if(!chain.active)chain.begin(this.root,this.anchor,cause,Math.floor(Math.random()*997));
+            if(impact>0)chain.land(Math.min(1.5,impact*gain));
+            chain.step(dt,this.anchor,resting,cause,time,bodyParams.drag,bodyParams.twitch);
+            this.root.position.copy(chain.rootPosition);this.root.quaternion.copy(chain.rootQuaternion);
+        }
+        this.parentRotation.copy(this.root.quaternion).invert();
+        if(chain)this.localSpin.set(0,0,0);else this.localSpin.set(spin.x, spin.y, spin.z).applyQuaternion(this.parentRotation);
+        this.localGravity.set(0, -1, 0).applyQuaternion(this.parentRotation);
         if(feelState().on('ragdoll')){
             if(!this.ragdollStarted){this.ragdoll.reset();this.ragdoll.start(cause);this.ragdollStarted=true;}
             // Each hard contact crumples the limbs a little more.
@@ -255,44 +281,64 @@ export class RatAnimator {
         this.landingPulse = Math.max(this.landingPulse, impact * (this.deathStyle==='flop'&&style?style.flopLanding:1));
         this.landingPulse *= Math.exp(-12 * dt);
         const stretchTime = style&&this.deathStyle==='fling'?style.flingTime:.28, stretchSize=style&&this.deathStyle==='fling'?style.flingStretch:.13;
-        const stretch = time >= stretchTime ? 0 : Math.sin(time / stretchTime * Math.PI) * stretchSize;
+        const stretch = chain||time >= stretchTime ? 0 : Math.sin(time / stretchTime * Math.PI) * stretchSize;
         // Spin: a lingering whirl of hat/arm/head; flop: ears and head droop flat.
         const whirl = style&&this.deathStyle==='spin'?Math.sin(time*18)*Math.exp(-time*2.2)*style.spinWhirl:0;
         const droop = style&&this.deathStyle==='flop'?Math.min(1,time/.35)*style.flopDroop:0;
-        for (const rig of this.rigs) {
-            const body = rig[0].part, head = rig[1].part, hat = rig[2].part;
-            body.scale.y *= 1 + stretch - this.landingPulse * 0.13;
-            body.scale.x *= 1 - stretch * 0.4 + this.landingPulse * 0.08;
-            body.scale.z *= 1 - stretch * 0.4 + this.landingPulse * 0.08;
-            head.rotation.x += limbs.head.x + droop * .35;
-            head.rotation.z += limbs.head.z + whirl * .5;
+        // R4: the belly flattens against whatever it landed on; R5: a shot ripples the coat.
+        const squash=this.landingPulse*bodyParams.squash,up=this.chain.bellyUp;
+        const ripple=chain&&chain.rippleAge<.6?Math.sin(chain.rippleAge*26)*Math.exp(-chain.rippleAge*6)*.14:0;
+        for (let i = 0; i < this.rigs.length; i++) {
+            const rig = this.rigs[i], body = rig[0].part, head = rig[1].part, hat = rig[2].part, arm = rig[8].part, spine = this.spines[i];
+            if (chain && spine) {
+                const {belly, chest} = spine;
+                belly.quaternion.copy(chain.bellyTurn);
+                belly.scale.set(1+squash*(.5-1.5*up.x*up.x)+ripple,1+squash*(.5-1.5*up.y*up.y)-ripple*.5,1+squash*(.5-1.5*up.z*up.z)+ripple);
+                // Bend about the hip joint: keep it fixed under the scale too.
+                belly.position.set(0,HIP_JOINT*belly.scale.y,0).applyQuaternion(belly.quaternion).negate();belly.position.y+=HIP_JOINT;
+                chest.quaternion.copy(chain.chestTurn);chest.scale.set(1-ripple*.7,1,1-ripple*.7);
+                chest.position.set(0,WAIST,0).applyQuaternion(chest.quaternion).negate();chest.position.y+=WAIST;
+                head.quaternion.premultiply(chain.headTurn);
+                arm.position.copy(chain.arm.position);arm.quaternion.copy(chain.arm.quaternion);
+            } else {
+                body.scale.y *= 1 + stretch - this.landingPulse * 0.13;
+                body.scale.x *= 1 - stretch * 0.4 + this.landingPulse * 0.08;
+                body.scale.z *= 1 - stretch * 0.4 + this.landingPulse * 0.08;
+                head.rotation.x += limbs.head.x + droop * .35;
+                head.rotation.z += limbs.head.z + whirl * .5;
+                arm.rotation.y += whirl * 1.4;
+                arm.rotation.x += limbs.arm.x * 1.2;
+                arm.rotation.z += limbs.arm.z;
+            }
             hat.rotation.x += limbs.hat.x;
             hat.rotation.z += limbs.hat.z + whirl;
             rig[6].part.rotation.x += limbs.earLeft.x + droop;rig[6].part.rotation.z += limbs.earLeft.z;
             rig[7].part.rotation.x += limbs.earRight.x + droop;rig[7].part.rotation.z += limbs.earRight.z;
-            rig[8].part.rotation.y += whirl * 1.4;
             // A brief lift on launch, then a soft wobble when the body lands.
             hat.position.y += stretch * 0.55 + this.landingPulse * 0.035;
-            rig[8].part.rotation.x += limbs.arm.x * 1.2;
-            rig[8].part.rotation.z += limbs.arm.z;
             // X eyes replace the closed lids on rats that have them (R3).
             rig[4].part.scale.y = rig[5].part.scale.y = this.hasDeadFace ? 1e-4 : 0.18;
             if (this.hatHidden) hat.scale.setScalar(1e-4);
         }
-        this.tailFall.lerp(this.localGravity, 1 - Math.exp(-5 * dt));
+        if (chain) {this.tailFall.set(0, 0, 0);this.tailTip.copy(chain.tailTip);}
+        else this.tailFall.lerp(this.localGravity, 1 - Math.exp(-5 * dt));
         this.time = time;
         this.stride = time * 7;
         this.tailMotion = resting ? 0 : Math.min(this.localSpin.length() / 12, 1);
         this.tailTurn = limbs.head.z * 0.6;
-        this.poseDeadExtras(time);
+        this.poseDeadExtras(time, !!chain);
         this.gunSleeves.forEach(updateGunSleeve);
         this.deformTails();
     }
-    /** R1/R3 on the extras: kicking then splayed shoes, limp whiskers, X eyes, a lolling tongue. */
-    private poseDeadExtras(time:number):void {
+    /** R1/R3 on the extras: kicking then splayed shoes, limp whiskers, X eyes, a lolling tongue.
+     * With the chain body the shoes sit on the chain's feet. */
+    private poseDeadExtras(time:number, chain:boolean):void {
         const limbs=this.ragdoll.angles;
         for (const {part, kind, side} of this.extras) {
-            if (kind === 'shoe') {const a = side < 0 ? limbs.shoeLeft : limbs.shoeRight; part.rotation.x += a.x; part.rotation.z += a.z; part.position.x += a.z * side * .05;}
+            if (kind === 'shoe') {
+                const a = side < 0 ? limbs.shoeLeft : limbs.shoeRight; part.rotation.x += a.x; part.rotation.z += a.z;
+                if (chain) part.position.copy(this.chain.shoes[side < 0 ? 0 : 1]);else part.position.x += a.z * side * .05;
+            }
             else if (kind === 'whiskers') {const a = side < 0 ? limbs.whiskersLeft : limbs.whiskersRight; part.rotation.z += a.z - side * .35; part.rotation.x += a.x;}
             else if (kind === 'x') part.scale.setScalar(1);
             else if (kind === 'tongue') {const out = Math.min(1, Math.max(0, (time - .2) / .3)); part.scale.set(1, 1, Math.max(1e-4, out)); part.rotation.x += .5 + limbs.head.x * .4;}
@@ -312,8 +358,13 @@ export class RatAnimator {
         this.applyPose();
     }
 
-    /** R3: a shot or bounce jolts a corpse's limbs. */
-    joltDeath(strength=1):void {if(this.deathAnimation&&feelState().on('ragdoll'))this.ragdoll.impulse('all',6*strength*FEEL.ragdoll.params.jolt,8*strength*FEEL.ragdoll.params.jolt);}
+    /** R3: a shot or bounce jolts a corpse's limbs. R5: with the chain body it folds the
+     * body where it was hit (`at`), pushed into the surface (`normal` faces the shooter). */
+    joltDeath(strength=1,at?:{x:number;y:number;z:number},normal?:{x:number;y:number;z:number}):void {
+        if(!this.deathAnimation)return;
+        if(feelState().on('ragdoll'))this.ragdoll.impulse('all',6*strength*FEEL.ragdoll.params.jolt,8*strength*FEEL.ragdoll.params.jolt);
+        if(feelState().on('ragdollBody'))this.chain.jolt(FEEL.ragdollBody.params.jolt*strength,at,normal&&this.joltPush.set(-normal.x,-normal.y,-normal.z));
+    }
     /** `headshot` snaps the head back as the ragdoll starts. */
     setDeathStyle(style:DeathStyle,headshot=false):void {
         this.deathStyle=feelState().on('deathVariety')||style==='flail'?style:'default';
@@ -350,8 +401,8 @@ export class RatAnimator {
         this.hitAge = 10;
         this.hatKnockAge = this.hatBlowAge = this.screamAge = 10;this.flail = this.mouthOpen = this.earFlop = this.earFlopRate = this.tailSwing = this.tailSwingRate = 0;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;this.deathStyle = 'default';
         this.skidAge = this.nodAge = this.pulseAge = 10;this.flight = 0;this.skidStarted = false;this.landedFall = 0;this.launched = this.wasLaunched = false;this.lastVelocity.set(0, 0, 0);
-        this.ragdoll.reset();this.ragdollStarted=false;this.deathHeadshot=false;
-        this.tailFall.set(0, 0, 0);
+        this.ragdoll.reset();this.ragdollStarted=false;this.deathHeadshot=false;this.chain.reset();
+        this.tailFall.set(0, 0, 0);this.tailTip.set(0, 0, 0);
         this.landingPulse = 0;
         this.deathAnimation = false;
         this.tailMotion = this.tailTurn = 0;
@@ -363,6 +414,11 @@ export class RatAnimator {
     private restore(): void {
         this.carryAnchor.position.copy(RAT_CARRY_SHOULDER);
         this.carryAnchor.rotation.set(0, 0, 0);
+        // A living rat's spine is exactly identity.
+        for (const spine of this.spines) if (spine) {
+            spine.belly.position.set(0, 0, 0);spine.belly.quaternion.identity();spine.belly.scale.set(1, 1, 1);
+            spine.chest.position.set(0, 0, 0);spine.chest.quaternion.identity();spine.chest.scale.set(1, 1, 1);
+        }
         for (const rig of this.rigs) for (const { part, position, rotation, scale } of rig) {
             part.position.copy(position);
             part.rotation.copy(rotation);
@@ -762,9 +818,9 @@ export class RatAnimator {
                 let x = waves[ring * 2], y = waves[ring * 2 + 1];
                 let z = 0;
                 if (this.deathAnimation && !reset) {
-                    x += weight * this.tailFall.x * 0.85;
-                    y += weight * this.tailFall.y * 0.85;
-                    z += weight * this.tailFall.z * 0.85;
+                    x += weight * (this.tailFall.x * 0.85 + this.tailTip.x);
+                    y += weight * (this.tailFall.y * 0.85 + this.tailTip.y);
+                    z += weight * (this.tailFall.z * 0.85 + this.tailTip.z);
                     tail.geometry.parameters.path.getPointAt(u, this.tailCenter);
                     this.tailCenter.x += x; this.tailCenter.y += y; this.tailCenter.z += z;
                     this.tailCenter.applyMatrix4(tail.matrixWorld);
