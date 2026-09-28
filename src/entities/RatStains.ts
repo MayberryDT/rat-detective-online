@@ -38,6 +38,7 @@ export class RatStains {
         owners++;
         this.mesh=new THREE.InstancedMesh(sharedGeometry,sharedMaterial!,MAX_STAINS);
         this.mesh.name='rat-cheese-stains';this.mesh.count=0;this.mesh.frustumCulled=false;
+        this.mesh.visible=false; // an empty instanced mesh still costs a draw call
         parent.add(this.mesh);
     }
 
@@ -64,7 +65,7 @@ export class RatStains {
         this.dummy.updateMatrix();
         this.mesh.setMatrixAt(this.cursor%MAX_STAINS,this.dummy.matrix);
         this.cursor++;
-        this.mesh.count=Math.min(MAX_STAINS,this.cursor);
+        this.mesh.count=Math.min(MAX_STAINS,this.cursor);this.mesh.visible=true;
         this.mesh.instanceMatrix.needsUpdate=true;
     }
 
