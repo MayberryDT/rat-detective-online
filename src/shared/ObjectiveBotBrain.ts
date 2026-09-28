@@ -33,7 +33,7 @@ export interface ObjectiveNavigation {
 export interface ObjectiveBotIntent { x: number; z: number; jump: boolean; zoneHop?: boolean; shoot?: Vec3Data; facing: number }
 export type BotObjective = 'case' | 'carrier' | 'combat' | 'dispatch' | 'explore' | 'delivery' | 'evade' | 'intercept' | 'pickup' | 'zone-hold';
 const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
-const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
+const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000,DISPATCH_DETOUR_MS=12000;
 
 /** Objective selection knows the same globally advertised case position as a
  * human. Combat uses visible observations and imperfect aim; speculative shots
@@ -48,6 +48,8 @@ export class ObjectiveBotBrain {
     private visibleRats:PlayerData[]=[];
     private caseAim=false;
     private dispatchTarget?: Vec3Data;
+    /** When the current alarm-pillar detour is abandoned if its bell still has not rung. */
+    private dispatchGiveUpAt=0;
     private destination?: Vec3Data;
     private route: BotWaypoint[] = [];
     private flight?:{landing:Vec3Data;started:number};
@@ -114,7 +116,7 @@ export class ObjectiveBotBrain {
         this.pickupUntil=0;this.nextPickupAt=0;
         this.assignmentActive=false;
         this.combat.reset();this.opportunisticFire.reset();this.shotAt=0;
-        this.key='';this.target=undefined;this.dispatchTarget=undefined;this.destination=undefined;this.route=[];this.routeIndex=0;
+        this.key='';this.target=undefined;this.dispatchTarget=undefined;this.dispatchGiveUpAt=0;this.destination=undefined;this.route=[];this.routeIndex=0;
         this.plannedDestination=undefined;this.pendingPlan=undefined;this.decisionAt=0;this.planAt=0;this.progressPosition=undefined;this.recoverUntil=0;
         this.routeWaitStarted=undefined;this.failedGoals.clear();this.failedCase=undefined;this.stalled=false;
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
@@ -287,7 +289,9 @@ export class ObjectiveBotBrain {
             if(carrying||this.target||available&&distance(self,available.value.p)<24)this.dispatchTarget=undefined;
             // A short detour to a nearby ready alarm pillar whose bell is not yet in reach, to ring it from
             // its open side: never with the case, in a fight, with a loose case close by, or when the case
-            // or its carrier is less than twice as far as the pillar.
+            // or its carrier is less than twice as far as the pillar. A bell still unrung after
+            // DISPATCH_DETOUR_MS is given up for a while, so a bad angle never parks the bot there.
+            if(this.objective==='dispatch'&&now>=this.dispatchGiveUpAt)this.failPendingGoal(now);
             const chase=Math.min(available?distance(self,available.value.p):Infinity,carrier?distance(self,carrier):Infinity);
             const pillar=state?.dispatch.phase==='ready'&&!this.dispatchTarget&&!carrying&&!this.target&&chase>=24?DISPATCH_STATIONS
                 .map(station=>({key:`dispatch:${station.id}`,d:distance(self,station),point:{x:station.x+Math.sin(station.face)*5,y:station.y,z:station.z+Math.cos(station.face)*5}}))
@@ -371,10 +375,13 @@ export class ObjectiveBotBrain {
                 if(this.key!==`pickup:${pickup.id}`){this.pickupUntil=now+2200;this.nextPickupAt=now+8000;}
                 this.setObjective('pickup',`pickup:${pickup.id}`,pickup);
             }
-            else if(pillar)this.setObjective('dispatch',pillar.key,pillar.point);
             else if(armor){
                 if(this.key!==`pickup:${armor.id}`)this.supplyTripAt=now+25000+this.random()*10000;
                 this.setObjective('pickup',`pickup:${armor.id}`,armor);
+            }
+            else if(pillar){
+                if(this.key!==pillar.key)this.dispatchGiveUpAt=now+DISPATCH_DETOUR_MS;
+                this.setObjective('dispatch',pillar.key,pillar.point);
             }
             else if(available)this.setObjective('case',available.key,available.value.p);
             else if(intercept)this.setObjective('intercept',`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,intercept);

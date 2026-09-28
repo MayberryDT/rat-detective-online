@@ -53,6 +53,10 @@ describe('case-first normal match bots',()=>{
         expect(decide(ready(),30,'me').brain.objective).not.toBe('dispatch');
         const busy=ready();busy.dispatch.phase='cooldown';expect(decide(busy,30).brain.objective).not.toBe('dispatch');
         const nearCase=ready();nearCase.case.p={x:station.x+50,y:0,z:station.z};expect(decide(nearCase,30).brain.objective).toBe('case');
+        // A bell it never manages to ring does not park the bot at the pillar for good.
+        const stuck=ready(),{brain:parked,self}=fixture();self.x=station.x+30;self.z=station.z;
+        for(let now=1000;now<=14000;now+=250)parked.step(now,self,[self],stuck,()=>false,false,true,()=>false);
+        expect(parked.objective).not.toBe('dispatch');
     });
     it('applies Hot Pursuit to bot movement only until the authoritative expiry',()=>{
         const {brain,self}=fixture(),s=state();
