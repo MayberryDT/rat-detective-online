@@ -149,6 +149,7 @@ export class RatEntity {
     private deathHold = 0;
     private headStains?: RatStains;
     private stains?: RatStains;
+    private stainJoints?: {belly: THREE.Object3D; chest: THREE.Object3D};
     private flyingHat?: FlyingHat;
     private deathStyle: DeathStyle = 'default';
     private stainSeed = 0;
@@ -356,9 +357,12 @@ export class RatEntity {
             if (this.deathHold > 0) {
                 this.deathHold -= dt;
                 this.flyingHat?.update(dt);
-                // R3: the body goes limp (knees buckle, waist folds) before it flies.
-                if (feelState().on('ragdollBody') && !this.sharedDeath) {this.deathTimer += dt;this.updateDeathRagdoll(dt);}
-                if (this.deathHold > 0) return;
+                if (this.deathHold > 0) {
+                    // R3: the body goes limp (knees buckle, waist folds) before it flies. The
+                    // death clock starts at the launch, so launch contacts are never impacts.
+                    if (feelState().on('ragdollBody') && !this.sharedDeath) this.updateDeathRagdoll(dt);
+                    return;
+                }
                 // An incident corpse may have taken over during the hold.
                 if (!this.sharedDeath) this.launchRagdoll();
             }
@@ -525,6 +529,11 @@ export class RatEntity {
         this.animator.poseDeath(t, dt, this.body.angularVelocity, this.deathImpact,
             this.deathPhase === 'done');
         this.deathImpact = 0;
+        // R1: stains ride the bent coat, not the unbent body they hang on.
+        if (this.stains) {
+            this.stainJoints ??= {belly: this.mesh.getObjectByName('rat-spine-belly')!, chest: this.mesh.getObjectByName('rat-spine-chest')!};
+            this.stains.bend(this.stainJoints.belly, this.stainJoints.chest);
+        }
 
         // Sync glow outline to ragdoll position (fade out during death)
         if (this.glowMesh) {

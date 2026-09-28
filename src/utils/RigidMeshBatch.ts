@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {RAT_SPINE_JOINTS} from './RatModel';
+import {ratSpineWeights} from './RatModel';
 
 /** Draw static rig leaves together while retaining the original animated/pickable
  * hierarchy. Deforming tails and transient effects remain ordinary meshes. A rat's
@@ -23,7 +23,7 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
     const spine=body&&belly&&chest?[body,belly,chest]:[];
     // Spine bones follow the leaf bones; at rest each spine joint is identity in body space.
     const spineBone=sources.length,bones=[...sources,...spine].map(()=>new THREE.Bone());
-    const point=new THREE.Vector3(),normal=new THREE.Vector3(),normalMatrix=new THREE.Matrix3(),[hips,waist]=RAT_SPINE_JOINTS;
+    const point=new THREE.Vector3(),normal=new THREE.Vector3(),normalMatrix=new THREE.Matrix3();
     sources.forEach((source,bone)=>{
         const g=source.geometry,p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv');
         const start=indices.length,skinned=spine.length>0&&source.parent===body;
@@ -33,8 +33,8 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
             point.fromBufferAttribute(p,i);normal.set(n?.getX(i)??0,n?.getY(i)??0,n?.getZ(i)??1);
             if(skinned){
                 point.applyMatrix4(source.matrix);normal.applyMatrix3(normalMatrix).normalize();
-                const lower=THREE.MathUtils.smoothstep(point.y,hips-.2,hips+.2),upper=THREE.MathUtils.smoothstep(point.y,waist-.2,waist+.2);
-                skinIndices.push(spineBone,spineBone+1,spineBone+2,0);weights.push(1-lower,lower*(1-upper),lower*upper,0);
+                const w=ratSpineWeights(point.y);
+                skinIndices.push(spineBone,spineBone+1,spineBone+2,0);weights.push(1-w.belly-w.chest,w.belly,w.chest,0);
             }else{skinIndices.push(bone,0,0,0);weights.push(1,0,0,0);}
             positions.push(point.x,point.y,point.z);normals.push(normal.x,normal.y,normal.z);
             uvs.push(uv?.getX(i)??0,uv?.getY(i)??0);materialIndices.push(materials.indexOf(source.material as THREE.Material));

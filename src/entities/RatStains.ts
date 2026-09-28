@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {COAT_PROFILE} from '../utils/RatCoatGeometry';
+import {ratSpineWeights} from '../utils/RatModel';
 
 const MAX_STAINS=8;
 let sharedGeometry:THREE.ShapeGeometry|undefined;
@@ -23,6 +24,12 @@ export class RatStains {
     private cursor=0;
     private readonly dummy=new THREE.Object3D();
     private readonly outward=new THREE.Vector3();
+    /** Each stain's placement on the unbent coat and how much it follows the belly and chest (R1). */
+    private readonly rest=Array.from({length:MAX_STAINS},()=>new THREE.Matrix4());
+    private readonly follow=Array.from({length:MAX_STAINS},()=>({belly:0,chest:0}));
+    private readonly blend=new THREE.Matrix4();
+    private readonly chestInBody=new THREE.Matrix4();
+    private readonly placed=new THREE.Matrix4();
 
     constructor(parent:THREE.Object3D){
         if(!sharedGeometry){
@@ -48,7 +55,24 @@ export class RatStains {
         this.outward.set(Math.sin(angle),0,Math.cos(angle));
         this.dummy.position.set(this.outward.x*radius,y,this.outward.z*radius);
         this.dummy.lookAt(this.outward.x*radius*2,y,this.outward.z*radius*2);
+        Object.assign(this.follow[this.cursor%MAX_STAINS]!,ratSpineWeights(y));
         this.place(seed,1);
+    }
+
+    /** R1: keep the stains on a bent corpse coat. `belly` and `chest` are the spine joints
+     * (children of the body this mesh hangs on); each stain takes the same blend of their
+     * transforms as the coat under it, so it stays on the skinned surface. */
+    bend(belly:THREE.Object3D,chest:THREE.Object3D):void {
+        if(!this.mesh.count)return;
+        belly.updateMatrix();chest.updateMatrix();
+        this.chestInBody.multiplyMatrices(belly.matrix,chest.matrix);
+        const b=belly.matrix.elements,c=this.chestInBody.elements,m=this.blend.elements;
+        for(let i=0;i<this.mesh.count;i++){
+            const w=this.follow[i]!,rest=1-w.belly-w.chest;
+            for(let k=0;k<16;k++)m[k]=(k%5===0?rest:0)+b[k]!*w.belly+c[k]!*w.chest;
+            this.mesh.setMatrixAt(i,this.placed.multiplyMatrices(this.blend,this.rest[i]!));
+        }
+        this.mesh.instanceMatrix.needsUpdate=true;
     }
 
     /** Juice T4: a stain on a sphere around the parent's origin (the head), `height` above its centre. */
@@ -56,6 +80,7 @@ export class RatStains {
         const ring=Math.sqrt(Math.max(0,radius*radius-height*height));
         this.dummy.position.set(Math.sin(angle)*ring,height,Math.cos(angle)*ring);
         this.dummy.lookAt(this.dummy.position.x*2,this.dummy.position.y*2,this.dummy.position.z*2);
+        const follow=this.follow[this.cursor%MAX_STAINS]!;follow.belly=follow.chest=0;
         this.place(seed,scale);
     }
 
@@ -63,6 +88,7 @@ export class RatStains {
         this.dummy.rotateZ(seed*2.4);
         this.dummy.scale.setScalar((.09+((seed*.371)%1)*.07)*scale);
         this.dummy.updateMatrix();
+        this.rest[this.cursor%MAX_STAINS]!.copy(this.dummy.matrix);
         this.mesh.setMatrixAt(this.cursor%MAX_STAINS,this.dummy.matrix);
         this.cursor++;
         this.mesh.count=Math.min(MAX_STAINS,this.cursor);this.mesh.visible=true;

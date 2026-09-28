@@ -59,6 +59,13 @@ function muzzleGeometry() {
 
 /** R1: spine joint heights in coat space: the hips (lower coat to belly) and the waist (belly to chest). */
 export const RAT_SPINE_JOINTS = [0.45, 0.95] as const;
+/** How much a coat point at body height `y` follows the belly and the chest joints (the
+ * rest follows the body); the rigid batch skins the coat with exactly these weights. */
+export function ratSpineWeights(y: number): {belly: number; chest: number} {
+    const lower = THREE.MathUtils.smoothstep(y, RAT_SPINE_JOINTS[0] - .2, RAT_SPINE_JOINTS[0] + .2);
+    const upper = THREE.MathUtils.smoothstep(y, RAT_SPINE_JOINTS[1] - .2, RAT_SPINE_JOINTS[1] + .2);
+    return {belly: lower * (1 - upper), chest: lower * upper};
+}
 
 /** The accepted coat lathe, with extra rows on its long straight runs so a bent spine
  * curves it smoothly. Added rows lie on the original surface and every normal is the

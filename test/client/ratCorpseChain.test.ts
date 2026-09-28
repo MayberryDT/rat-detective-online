@@ -6,6 +6,8 @@ import {RatAnimator} from '../../src/utils/RatAnimator';
 import {batchRigidMeshes} from '../../src/utils/RigidMeshBatch';
 import {setRagdollWorld} from '../../src/utils/RatCorpseChain';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
+import {RatEntity} from '../../src/entities/RatEntity';
+import {MAX_HP} from '../../src/shared/networkProtocol';
 
 afterEach(()=>{setRagdollWorld(undefined);vi.restoreAllMocks();});
 
@@ -56,4 +58,35 @@ it('lays a thrown corpse against a wall and on the ground without sinking throug
         expect(lowestAtRest).toBeGreaterThan(-.15);
         expect(furthest).toBeLessThan(4.8+.15);
     }finally{disposeMeshResources(root);}
+});
+
+it('keeps cheese stains on the bent coat of a local corpse',()=>{
+    let now=0;vi.spyOn(performance,'now').mockImplementation(()=>now);
+    const world=new C.World({gravity:new C.Vec3(0,-25,0)});
+    const ground=new C.Body({mass:0,type:C.Body.STATIC});ground.addShape(new C.Plane());
+    ground.quaternion.setFromEuler(-Math.PI/2,0,0);world.addBody(ground);
+    const rat=new RatEntity(new THREE.Scene(),world,new THREE.Vector3(),'Stained',{});rat.enableRigidBatching();
+    for(let i=0;i<4;i++)rat.takeDamage(1,new THREE.Vector3(Math.sin(i*1.7),0,Math.cos(i*1.7)));
+    rat.takeDamage(MAX_HP,new THREE.Vector3(0,0,-10));
+    const batch=rat.mesh.getObjectByName('rat-rigid-batch') as THREE.SkinnedMesh,stains=rat.mesh.getObjectByName('rat-cheese-stains') as THREE.InstancedMesh;
+    const coat:number[]=[];let first=0;
+    for(const source of batch.userData.rigidSources as THREE.Mesh[]){
+        const count=source.geometry.getAttribute('position').count;
+        if(source.name==='rat-coat-body')for(let i=0;i<count;i++)coat.push(first+i);
+        first+=count;
+    }
+    const vertex=new THREE.Vector3(),stain=new THREE.Vector3(),matrix=new THREE.Matrix4();
+    try{
+        for(let frame=0;frame<90;frame++){now+=1000/60;world.step(1/60);rat.update(1/60);}
+        rat.mesh.updateMatrixWorld(true);batch.skeleton.update();
+        const chest=rat.mesh.getObjectByName('rat-spine-chest')!;
+        expect(chest.quaternion.angleTo(new THREE.Quaternion())).toBeGreaterThan(.2);
+        expect(stains.count).toBeGreaterThan(0);
+        for(let s=0;s<stains.count;s++){
+            stains.getMatrixAt(s,matrix);stain.setFromMatrixPosition(matrix).applyMatrix4(stains.matrixWorld);
+            let nearest=Infinity;
+            for(const i of coat)nearest=Math.min(nearest,batch.getVertexPosition(i,vertex).applyMatrix4(batch.matrixWorld).distanceTo(stain));
+            expect(nearest).toBeLessThan(.12);
+        }
+    }finally{rat.dispose();}
 });
