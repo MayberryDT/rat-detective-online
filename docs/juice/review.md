@@ -131,6 +131,31 @@ What changed and how to see it is in the [juice plan](../juice-plan.md#fourth-ba
 | Blackout | The city goes dark; lightning and nearby shots light it for a beat. | I3 Blackout (tuning only) |
 | Clean Bill / Malpractice / Most Wanted / Rat Race / All Units | Heal-all plus city-wide Hunch; hopping, sometimes exploding kits; searchlight and bounty on the leader; everyone hustles with faster cheese; respawns beside the case or zone. | none |
 
+## Fifth batch: launchers, ragdolls and the living model (protocol 21)
+
+What changed is in the [juice plan](../juice-plan.md#fifth-batch-launchers-ragdolls-and-the-living-model-agreed-2026-09-28). Workshop buttons in `feel-preview.html` (prefixed L5–L7, R, M1) show each piece without a match.
+
+| Item | What to look for | Switch |
+|---|---|---|
+| L1 Launch profiles | No two throws alike: the wind tunnel goes tallest and straightest, the rat trap and freight ram throw far and flat, the geyser and dumpster go wild. You drift unless you steer against it. About one in seven is an OVERPRESSURE misfire: higher, sparks, smoke, a shriek. | none (gameplay) |
+| L2 The tell | 0.2 s between the trigger hit and the throw: the machine shudders, squashes down, the cap flashes fast and a whine rises. | none (gameplay) |
+| L3 Everything flies | Bodies, cheese and counterfeit cases on a pad get thrown too. A counterfeit re-plants itself wherever it lands and is still a trap. | none (gameplay) |
+| L4 Landings | Coming down from a throw shoves everyone within 7 units away; landing right on a rat does 1 damage (your credit). Landing on another machine's pad fires it. | none (gameplay) |
+| L5 Launch moment | Each machine spits its own debris and has its own voice; a dust ring; hats blow off rats near the pad; your own launch kicks the view. | L5 Launch moment |
+| L6 Flight | Screams, flailing legs and ears, a whipping tail, contrails behind every launched rat, speed streaks, a floaty beat at the top. | L6 Flight |
+| L7 Landing | Cracked-pavement crater, dust, THUD or KA-THUD, shake nearby. A thrown case whistles like a falling bomb and bursts paperwork where it lands. | L7 Landing |
+| R Ragdoll | Dead rats flop: head, ears, arm, shoes and whiskers swing on springs from the body's motion, then splay out at rest with X eyes and a tongue. Headshots snap the head back; explosions fling limbs wide; a rat killed mid-launch flails all the way down. The popped hat rolls away on its brim. Shooting a body jolts its limbs with a squeak. Bodies now pile on each other. | R Ragdoll limbs |
+| M1 Face | Ears and whiskers bounce on jumps and landings; wide eyes and an open-mouth scream on a launch; a gasp when a ball whizzes past your head. | M1 Face |
+| M2 Body springs | The tail swings out behind turns, the hat rocks with each step, and the head flinches away from a hit. | M2 Body springs |
+| M3 Extras | Every rat wears one extra picked from its name: a cigarette, a detective's star or a scarf in its hat colour. | M3 Personality extras (reload) |
+
+**Calls I made (tell me if any is wrong):**
+- The tell delays every throw by 0.2 s, including Pressure Surge pulses.
+- Drift fades by about a quarter per second and stops when you land; bots drift too but keep steering to their roof routes.
+- Landing on your own machine's pad does not fire it again (the wind tunnel would bounce you forever).
+- Squash damage is 1, the same as a body hit; it can finish off a rat and counts as your kill.
+- The movement check now allows 80 u/s sideways (was 35) so drift, steering and shoves are never rejected as cheating.
+
 ## Choices to confirm
 
 These are places where I had to make a call. Each can be changed.

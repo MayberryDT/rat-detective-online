@@ -145,19 +145,19 @@ Tyler's brain dump, sorted into now and later, with his answers.
 
 Tyler: "I love all of this… do all of it." Straight-up launches every time are boring, so the launch itself changes too. Ragdolls are client-only limbs on the server's corpse box (they were "stiff, lifeless blocks"). The current model evolves; no new rig. Branch `juice/launch-ragdoll`, one commit per item, then a private preview. Protocol bump for the launcher changes.
 
-- [ ] **L1 Launch profiles.** Each machine throws its own way (the fan straight and tall, the rat trap and freight ram far and flat, the geyser and dumpster wild); a random drift, biased toward the city, carries the rat unless steered against. About one in seven launches is an **overpressure** misfire: higher, with smoke and sparks. Bots drift too.
-- [ ] **L2 The tell.** A 0.2 s shudder, cap flash and rising whine between the trigger and the launch.
-- [ ] **L3 Everything on the pad flies:** balls, bodies and counterfeit cases as well as rats and the loose case.
-- [ ] **L4 Landing shockwave and chains.** A launched rat's landing shoves nearby rats, balls, cases and bodies; landing on someone does 1 damage (the lander's credit); landing on another pad fires it.
-- [ ] **L5 The launch moment:** each machine's own firing (trap snap, lid slam and trash, steam column, freight clank, fan roar), pad squash and spring, ground ring and dust, a hard camera kick, and hats blown off nearby rats.
-- [ ] **L6 Flight:** flailing pose, scream, speed lines, a contrail everyone sees, building wind and coat snap; a short hang at the apex with the city below.
-- [ ] **L7 Landing:** dust crater, cracked pavement, squash, shake by fall and a THUD. The launched case whistles like a falling bomb and spills paperwork.
-- [ ] **R1 Floppy ragdoll limbs** on every corpse: head, arms, legs and tail on springs driven by the body's motion, resting on the ground.
-- [ ] **R2 Deaths by cause:** headshot snaps the head back, explosions spin the body spread-eagle, a launcher death flails all the way down.
-- [ ] **R3 Bodies at rest:** crumple and splay, X eyes and a hanging tongue, the hat lands and rolls away; shots jolt limbs with a squeak; bodies pile on each other.
-- [ ] **M1 Face:** floppy ears and whiskers, blinking, wide eyes and an open-mouth scream on launches and near misses.
-- [ ] **M2 Body:** springy tail chain, hat wobble per step, flinch away from hits.
-- [ ] **M3 Personality extras:** a cigarette, badge or scarf picked from each rat's identity, in the existing materials.
+- [x] **L1 Launch profiles.** Each machine throws its own way (the fan straight and tall, the rat trap and freight ram far and flat, the geyser and dumpster wild); a random drift, biased toward the city, carries the rat unless steered against. About one in seven launches is an **overpressure** misfire: higher, with smoke and sparks. Bots drift too.
+- [x] **L2 The tell.** A 0.2 s shudder, cap flash and rising whine between the trigger and the launch.
+- [x] **L3 Everything on the pad flies:** balls, bodies and counterfeit cases as well as rats and the loose case.
+- [x] **L4 Landing shockwave and chains.** A launched rat's landing shoves nearby rats, balls, cases and bodies; landing on someone does 1 damage (the lander's credit); landing on another pad fires it.
+- [x] **L5 The launch moment:** each machine's own firing (trap snap, lid slam and trash, steam column, freight clank, fan roar), pad squash and spring, ground ring and dust, a hard camera kick, and hats blown off nearby rats.
+- [x] **L6 Flight:** flailing pose, scream, speed lines, a contrail everyone sees, building wind and coat snap; a short hang at the apex with the city below.
+- [x] **L7 Landing:** dust crater, cracked pavement, squash, shake by fall and a THUD. The launched case whistles like a falling bomb and spills paperwork.
+- [x] **R1 Floppy ragdoll limbs** on every corpse: head, arms, legs and tail on springs driven by the body's motion, resting on the ground.
+- [x] **R2 Deaths by cause:** headshot snaps the head back, explosions spin the body spread-eagle, a launcher death flails all the way down.
+- [x] **R3 Bodies at rest:** crumple and splay, X eyes and a hanging tongue, the hat lands and rolls away; shots jolt limbs with a squeak; bodies pile on each other.
+- [x] **M1 Face:** floppy ears and whiskers, blinking, wide eyes and an open-mouth scream on launches and near misses.
+- [x] **M2 Body:** springy tail chain, hat wobble per step, flinch away from hits.
+- [x] **M3 Personality extras:** a cigarette, badge or scarf picked from each rat's identity, in the existing materials.
 - [ ] **B5 Review package:** checks, one independent review, private preview.
 
 **Later (not now):**

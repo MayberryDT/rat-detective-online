@@ -277,7 +277,8 @@ export class RatEntity {
      * with BackSide + Additive blending to create a visible aura.
      */
     private createGlowOutline(opts: RatOptions): THREE.Group {
-        const glowGroup = this.modelFactory(opts);
+        // The shell mirrors the model part for part, extras included.
+        const glowGroup = this.modelFactory({...opts, accessory: ratAccessory(this.name)});
 
         // Expand along each vertex normal instead of scaling from the feet.
         // Eyes/ears can share geometry, so expand each geometry only once.
