@@ -126,16 +126,23 @@ export class ChaosDecoder {
       const handle=Math.abs(encoded[0]);if(active.has(handle))return null;
       const previous=this.motions.get(handle);
       if(encoded[0]<0&&(f.motionEncoding!=='delta-v1'||full||changed.has(handle)||!previous||previous.length!==encoded.length-1))return null;
-      const row=encoded[0]<0?[handle,...encoded.slice(1).map((n,i)=>n+previous![i])]:encoded;
-      if(!row.every(integer))return null;
+      let row:number[]=encoded;
+      if(encoded[0]<0){
+        // Delta row: previous motion plus this frame's integer deltas.
+        row=new Array<number>(encoded.length);row[0]=handle;
+        for(let i=1;i<encoded.length;i++){row[i]=encoded[i]+previous![i-1];if(!integer(row[i]))return null;}
+      }
       const d=definitions.get(handle),flags=row[8];
       if(!d||ids.has(d[0])||flags<0||flags>10||(flags&3)===3||((flags>>2)&3)===3)return null;
       active.add(handle);ids.add(d[0]);motions.set(handle,row.slice(1));
       const radius=row[9],stuck=row[10];
       const bounced=flags&3,delayed=(flags>>2)&3;
-      shots.push({id:d[0],owner:d[1],p:{x:row[1]/1000,y:row[2]/1000,z:row[3]/1000},v:{x:row[4]/1000,y:row[5]/1000,z:row[6]/1000},age:row[7]/1000,
-        ...(bounced?{wallBounced:bounced===2}:{}),...(delayed?{delayed:delayed===2}:{}),
-        ...(radius&&radius!==Math.round(BALL_RADIUS*1000)?{radius:radius/1000}:{}),...(stuck?{stuckUntil:stuck}:{})});
+      const shot:ChaosShot={id:d[0],owner:d[1],p:{x:row[1]/1000,y:row[2]/1000,z:row[3]/1000},v:{x:row[4]/1000,y:row[5]/1000,z:row[6]/1000},age:row[7]/1000};
+      if(bounced)shot.wallBounced=bounced===2;
+      if(delayed)shot.delayed=delayed===2;
+      if(radius&&radius!==Math.round(BALL_RADIUS*1000))shot.radius=radius/1000;
+      if(stuck)shot.stuckUntil=stuck;
+      shots.push(shot);
     }
     // Membership is complete on every frame, so omitted projectiles cannot linger.
     for(const handle of definitions.keys())if(!active.has(handle))definitions.delete(handle);
