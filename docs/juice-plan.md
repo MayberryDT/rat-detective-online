@@ -59,7 +59,7 @@ rat's identity stay as they are. Done means:
 - **T3 follow-up, enemy readability (built 2026-09-27):** far enemies were the worst, then enemies in shadow, then everything once hurt. The lab is removed. Opponents now get an opaque cream outline that stays about 2.5 px wide on screen at any distance (the existing shell, widened per frame; no extra pass or draw), hidden behind walls; Hot Pursuit keeps its red. Rats ignore the noir fog, so they keep full contrast at any distance and HP. First playtest: "way more clear" but too much; the thick cream line broke the noir, and he wants to rely on an outline as little as possible. Now a faint cool moonlit edge (slate blue, half opacity, at most 1.5 px) that only fades in between 16 and 45 units; close rats have none. Rats stay out of the fog.
 - **Nameplate and health bar, rebuilt (2026-09-27):** the four-year-old Courier name with a green segmented bar is replaced by a noir plate: the name in spaced cream small caps over five slanted pips like case-file tabs. Lost pips flash, jolt and drain to an empty outline; the last pip burns red; regained pips fill in; a dead rat's name dims and is struck through in red. It only redraws while something changes.
 - **Softer outline and nameplate reviewed (2026-09-27):** "That is great. Push it live." Released as Worker `80901b67…`.
-- **Next action:** the later overhauls, when Tyler picks them.
+- **Next action:** see [Open decisions](#open-decisions).
 
 ## Third batch (decided 2026-09-27)
 
@@ -139,7 +139,6 @@ Tyler's brain dump, sorted into now and later, with his answers.
   - **Supply juice** (Tyler: "add juice to the pickups as well"): props turn slowly on the plinth; a claim pops the prop up and away in a coloured flash and dust with a whoosh-and-click, the lamp stutters out; a restock clicks the lamp on with a warm thump and drops the prop back with a bounce. Everyone nearby hears claims and restocks.
   - **Round end, 15 s and readable.** It felt like five seconds and the stats were tiny in a corner. Now: the full CASE CLOSED card for 2.6 s, then the police lineup with a readable winner banner across the top, then a results board: the full standings (the Tab scoreboard) beside a large Case File with each award, winner and value. Photos run one per second.
 - **Released to production (2026-09-28)** on Tyler's OK ("looks good, push it live"): Worker `be7ac8ba-2529-42ba-865a-27aafe11131e`, protocol 20. See [the receipt](verification/juice-batch4-release-2026-09-28.md).
-- **Next action:** the launcher and model/ragdoll overhaul below (branch `juice/launch-ragdoll`); the bot overhaul waits.
 
 ## Fifth batch: launchers, ragdolls and the living model (agreed 2026-09-28)
 
@@ -185,7 +184,8 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
 - **UI overhaul (Tyler, 2026-09-28).** Overhaul the UI and add a lot of juice to it. Scope open; this lifts the standing "no HUD changes" rule only for this item.
 - **Dispatch overhaul (Tyler, 2026-09-28).** Overhaul the Dispatch system: the alarm you shoot to start an incident, and how incidents begin.
 - **Ragdolls revisited (Tyler, 2026-09-28).** After the fifth batch Tyler is "not really seeing a difference" in ragdolls (R1–R3). Find why they read as unchanged in real play (distance, lighting, corpse lifetime, motion size) and make deaths visibly different.
-- **Launcher overhaul.** Make the launchers far more chaotic and much juicier, including how the case interacts with them.
+- **Launcher overhaul.** Done as the fifth and sixth batches (released 2026-09-28). Unagreed extras from the launcher brainstorm: machine idle life, callouts, a launch camera, per-machine neon signs, per-machine trails, ambient hum.
+- **Launcher machine models.** Rebuilt in code (P2); Tyler still to decide whether to go further (for example, authored models).
 - **Bot overhaul.** How bots act, their decision-making and how they work.
 - **Complete optimization overhaul (started 2026-09-28).** Tyler felt a performance hit after the third batch (his PC was also busy). The 37-item assumption audit (numbered in the chat on 2026-09-28) is worked in phases, one item per commit, each with before/after numbers, no change to how the game looks or plays:
   - **Phase 0, baseline:** `?diagnostics` phase means and GPU time, the synthetic render fixture (`capacity-render.html`) with corpses, a CDP CPU/allocation profile of a hosted observation room, and the server bench with `--cpu-prof` (idle and 120-ball burst). Output: `docs/verification/perf-baseline-2026-09-28.md` with the audit re-ranked by measured cost. Tyler reviews before fixes.
@@ -195,7 +195,7 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
   - **Phase 4:** measured yes/no on sewer lights, shadow redraws, grain/filter, the two physics worlds, navigation, cameo compression. Look changes go to Tyler as choices.
   - **Phase 5:** preview playtest, production on Tyler's OK, before/after receipt.
   - **Status (2026-09-28):** Tyler said to do all of it on a branch, including the physics restructure ("we can fine tune the physics later"). Done on `perf/overhaul`, merged and **released to production** on his OK ("this feels a million times better"), Worker `48fb6913-82c5-443c-8794-6c03c91a7800`: server warm tick −80%, client 30→43 fps hosted on Halla. See [the overhaul receipt](verification/perf-overhaul-2026-09-28.md). Shadow freezing/removal were measured and left for Tyler to choose.
-- **3D model and ragdoll overhaul.**
+- **3D model and ragdoll overhaul.** Done as the fifth batch (M1–M3, R1–R3); ragdolls reopened above.
 
 ## Remaining outcomes (in order; one commit each)
 
@@ -246,7 +246,7 @@ Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning 
 
 - **Noir pass and first-review choices:** settled 2026-09-28. Tyler delegated these calls ("make choices on that stuff… if something's wrong, I'll tell you"); every choice in [the review guide](juice/review.md#choices-to-confirm) stays as built.
 - **Dropped by Tyler (2026-09-28):** production CPU measurement and further speed work. Shadow freezing/removal is not pursued.
-- **Next:** launcher overhaul and 3D model/ragdoll overhaul, juice-first; the bot overhaul waits.
+- **Open (2026-09-28):** UI overhaul, Dispatch overhaul, ragdolls revisited, bot overhaul; launcher extras and machine models await Tyler's call. Order not yet chosen.
 
 ## Evidence
 
