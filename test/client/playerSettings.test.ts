@@ -30,6 +30,15 @@ it('opens settings from title, applies numeric settings and restores focus on cl
  const number=all(f.root).find(n=>n.attributes.get('aria-label')==='Mouse sensitivity value')!;number.value='.25';number.dispatchEvent(new Event('change'));
  expect(f.store.current.mouseSensitivity).toBe(.25);f.click('Back');expect(f.menu.isOpen).toBe(false);expect(f.title.focus).toHaveBeenCalled();
 });
+it('stamped −/+ step on the grid, clamp at the ends and apply like typing',()=>{
+ const f=setup();f.menu.open();const by=(label:string)=>all(f.root).find(n=>n.attributes.get('aria-label')===label)!;
+ const press=(label:string)=>by(label).dispatchEvent(new Event('click'));
+ press('Raise mouse sensitivity');expect(f.store.current.mouseSensitivity).toBe(1.05);
+ by('Mouse sensitivity value').value='1.03';press('Lower mouse sensitivity');expect(f.store.current.mouseSensitivity).toBe(1);
+ f.store.update({mouseSensitivity:2.98});press('Raise mouse sensitivity');press('Raise mouse sensitivity');expect(f.store.current.mouseSensitivity).toBe(3);
+ f.store.update({mouseSensitivity:.1});press('Lower mouse sensitivity');expect(f.store.current.mouseSensitivity).toBe(.1);
+ press('Raise master volume');expect(f.store.current.masterVolume).toBe(1);press('Lower master volume');expect(f.store.current.masterVolume).toBe(.99);
+});
 it('clears input on Escape/unlock, keeps the match vulnerable and requires the Resume button',()=>{
  const f=setup(),clear=vi.fn(),resume=vi.fn();f.menu.attach({playing:()=>true,touch:()=>false,clear,resume});
  f.doc.dispatchEvent(new Event('pointerlockchange'));expect(f.menu.isOpen).toBe(true);expect(clear).toHaveBeenCalled();

@@ -125,9 +125,18 @@ export class PlayerSettings {
     private range(parent:HTMLElement,label:string,key:NumericPreference,unit:string,factor=1):void {
         const row=this.make('div',parent);row.className='settings-range';const id=`setting-${key}`;
         const title=this.make('label',row,label);title.htmlFor=id;
-        const [min,max,step]=RANGES[key],slider=this.make('input',row),number=this.make('input',row);
+        const [min,max,step]=RANGES[key],slider=this.make('input',row),stepper=this.make('span',row);stepper.className='settings-step';
+        const less=this.button(stepper,'−',()=>nudge(-1)),number=this.make('input',stepper),more=this.button(stepper,'+',()=>nudge(1));
         slider.type='range';slider.id=id;number.type='number';number.setAttribute('aria-label',`${label} value`);
         for(const input of [slider,number]){input.min=String(min*factor);input.max=String(max*factor);input.step=String(step*factor);}
+        // The stamped −/+ step like the native spinners (snap to the step grid, clamp) and fire the same events as typing.
+        for(const [button,name] of [[less,'Lower'],[more,'Raise']] as const){button.tabIndex=-1;button.setAttribute('aria-label',`${name} ${label.toLowerCase()}`);}
+        const nudge=(dir:1|-1)=>{
+            const lo=min*factor,size=step*factor,steps=((Number.isFinite(number.valueAsNumber)?number.valueAsNumber:this.store.current[key]*factor)-lo)/size;
+            const next=lo+(dir>0?Math.floor(steps+1e-6)+1:Math.ceil(steps-1e-6)-1)*size;
+            number.value=String(Math.round(Math.min(max*factor,Math.max(lo,next))*100)/100);
+            for(const type of ['input','change'])number.dispatchEvent(new Event(type,{bubbles:true}));
+        };
         this.make('span',row,unit);
         const apply=(input:HTMLInputElement)=>{
             if(input.value.trim()===''||!Number.isFinite(input.valueAsNumber))return;
@@ -137,7 +146,10 @@ export class PlayerSettings {
         number.addEventListener('input',()=>{if(number.valueAsNumber>=min*factor&&number.valueAsNumber<=max*factor)apply(number);},{signal:this.events.signal});
         number.addEventListener('change',()=>{apply(number);number.value=String(Math.round(this.store.current[key]*factor*100)/100);},{signal:this.events.signal});
         this.button(row,'Reset',()=>this.store.update({[key]:key==='touchSensitivity'?1.5:1})).setAttribute('aria-label',`Reset ${label.toLowerCase()}`);
-        this.refreshers.push(()=>{const value=String(Math.round(this.store.current[key]*factor*100)/100);slider.value=value;if(this.doc.activeElement!==number)number.value=value;});
+        this.refreshers.push(()=>{
+            const value=String(Math.round(this.store.current[key]*factor*100)/100);slider.value=value;if(this.doc.activeElement!==number)number.value=value;
+            slider.style.setProperty('--fill',String((this.store.current[key]-min)/(max-min)));
+        });
     }
     private toggle(parent:HTMLElement,text:string,key:'invertMouseY'|'invertTouchY'|'reducedMotion'):void {
         const label=this.make('label',parent);label.className='settings-toggle';const box=this.make('input',label);box.type='checkbox';this.make('span',label,text);

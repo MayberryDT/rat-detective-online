@@ -29,10 +29,11 @@ export function mountFeelReview(parent:HTMLElement,doc:Document,signal:AbortSign
             row.append(param);
             const input=doc.createElement('input');input.step='any';row.appendChild(input);
             const range=sliders?.[param];
-            if(range){input.type='range';[input.min,input.max,input.step]=range.map(String);input.addEventListener('input',()=>state.tune(item,param,input.valueAsNumber),{signal});}
+            const fill=()=>{if(range)input.style.setProperty('--fill',String((input.valueAsNumber-range[0])/(range[1]-range[0])));};
+            if(range){input.type='range';[input.min,input.max,input.step]=range.map(String);input.addEventListener('input',()=>{state.tune(item,param,input.valueAsNumber);fill();},{signal});}
             else input.type='number';
             input.addEventListener('change',()=>{if(Number.isFinite(input.valueAsNumber))state.tune(item,param,input.valueAsNumber);},{signal});
-            refreshers.push(()=>{input.value=String((FEEL[item].params as Record<string,number>)[param]);});
+            refreshers.push(()=>{input.value=String((FEEL[item].params as Record<string,number>)[param]);fill();});
         }
     }
     const actions=doc.createElement('div');actions.className='feel-review-actions';field.appendChild(actions);

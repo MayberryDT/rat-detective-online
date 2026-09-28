@@ -1,6 +1,6 @@
 /* U3: the settings and pause surfaces are a carbon case folder: tabbed sections, a rubber stamp,
- * stamp buttons. Every setting, the scrollbar and Resume behave as before. */
-.player-settings{box-sizing:border-box;position:fixed;width:min(780px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:22px 24px 18px;background:radial-gradient(ellipse 30% 20% at 90% 94%,#4a68a82e,#0000 70%),linear-gradient(#0c1224f0,#0c1224f0);color:var(--carbon-ink);border:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),0 30px 80px #000c,var(--carbon-smudge);font:15px/1.45 var(--font-type);overflow:auto;color-scheme:dark;scrollbar-width:thin;scrollbar-color:#a5b9e166 #0c1224}
+ * stamp buttons. One fixed sheet for every tab and the pause page; long tabs scroll inside it. */
+.player-settings{box-sizing:border-box;position:fixed;width:min(780px,calc(100vw - 24px));height:min(640px,calc(100dvh - 24px));padding:22px 24px 18px;background:radial-gradient(ellipse 30% 20% at 90% 94%,#4a68a82e,#0000 70%),linear-gradient(#0c1224f0,#0c1224f0);color:var(--carbon-ink);border:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),0 30px 80px #000c,var(--carbon-smudge);font:15px/1.45 var(--font-type);overflow:auto;color-scheme:dark}
 .player-settings::before{content:'CONFIDENTIAL';position:absolute;right:26px;top:20px;padding:3px 9px;border:3px double var(--stamp);color:var(--stamp-ink);font:13px/1 var(--font-type);letter-spacing:3px;rotate:8deg;opacity:.85;pointer-events:none}
 .player-settings[data-page=pause]::before{content:'MATCH LIVE'}
 .player-settings::backdrop{background:#05070dbb;backdrop-filter:blur(3px)}
@@ -14,8 +14,35 @@
 .player-settings .settings-tab{min-height:36px;padding:8px 13px 7px;background:#0c1224b8;border:1px dashed var(--carbon-line);border-bottom:0;border-radius:0;color:var(--carbon-dim);font:400 17px/1 var(--font-display);letter-spacing:.04em;transform-origin:50% 100%;transition:transform .18s var(--ui-spring),background .15s,color .15s}
 .player-settings .settings-tab:hover:not(.active){background:#1b2848;color:var(--carbon-bright);transform:translateY(-2px)}
 .player-settings .settings-tab.active{background:#070b17;border-style:solid;color:var(--carbon-bright);transform:translateY(-4px);padding-bottom:10px;margin-bottom:-3px}
-.settings-range{display:grid;grid-template-columns:minmax(125px,1fr) minmax(80px,1.3fr) 72px 20px 64px;gap:10px;align-items:center;margin:12px 0}.settings-range input{min-width:0;width:100%;box-sizing:border-box;accent-color:#8fa6d6}.settings-range input[type=number]{color:var(--carbon-bright);background:var(--carbon-deep);border:1px solid var(--carbon-line);font:inherit;padding:6px}
-.settings-toggle{display:flex;align-items:center;gap:10px;margin:12px 0}.settings-toggle input{width:20px;height:20px;accent-color:#8fa6d6}.settings-binding{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:10px;margin:8px 0}.settings-status{min-height:1.4em}
+.settings-range{display:grid;grid-template-columns:minmax(125px,1fr) minmax(80px,1.3fr) auto 20px 64px;gap:10px;align-items:center;margin:12px 0}.settings-range>input{min-width:0;width:100%}
+.settings-toggle{display:flex;align-items:center;gap:12px;margin:12px 0;cursor:pointer}.settings-binding{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:10px;margin:8px 0}.settings-status{min-height:1.4em}
+/* Tick boxes: an empty typed box with its carbon ghost; ticking thumps a red check across it. */
+.player-settings input[type=checkbox]{appearance:none;-webkit-appearance:none;position:relative;flex:none;box-sizing:border-box;width:22px;height:22px;margin:0 2px;border:2px solid var(--carbon-ink);border-radius:1px;background:var(--carbon-deep);box-shadow:2px 2px 0 #0009;rotate:-2deg;cursor:pointer;transition:border-color .15s,background .15s}
+.player-settings input[type=checkbox]::before{content:'';position:absolute;inset:-3px;border:1px solid var(--carbon-line);translate:2px 1px;opacity:.6;pointer-events:none}
+.player-settings input[type=checkbox]:hover{border-color:var(--carbon-bright)}
+.player-settings input[type=checkbox]:checked{background:#c8322a1f}
+.player-settings input[type=checkbox]:checked::after{content:'';position:absolute;left:-4px;top:-12px;width:32px;height:32px;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 18c3 2 5 5 7 9 4-9 10-17 17-24' stroke='%23d8392e' stroke-width='4.4'/%3E%3Cpath d='M7 19c2 2 4 4 5 6m1-1c4-8 9-15 15-20' stroke='%23ff7a6b' stroke-width='1.3' opacity='.75'/%3E%3C/svg%3E") center/contain no-repeat;filter:drop-shadow(1px 1px 0 #0009);animation:check-thump .32s var(--ui-snap)}
+@keyframes check-thump{0%{opacity:0;transform:scale(2.4) rotate(-18deg)}55%{opacity:1;transform:scale(.84) rotate(5deg)}78%{transform:scale(1.07) rotate(-1deg)}100%{opacity:1;transform:none}}
+/* Sliders: a ruler printed on the carbon, blue ink up to the value (--fill, 0–1, set from script), a red pushpin to drag. */
+.player-settings input[type=range]{--thumb:22px;appearance:none;-webkit-appearance:none;box-sizing:border-box;height:18px;margin:0;padding:0;border:1px solid var(--carbon-line);border-radius:0;cursor:pointer;rotate:-.5deg;background:
+  repeating-linear-gradient(90deg,var(--carbon-bright) 0 2px,#0000 2px calc((100% - 2px) / 4)) calc(var(--thumb) / 2 - 1px) 100%/calc(100% - var(--thumb) + 2px) 9px no-repeat,
+  repeating-linear-gradient(90deg,var(--carbon-dim) 0 1px,#0000 1px calc((100% - 1px) / 20)) calc(var(--thumb) / 2) 100%/calc(100% - var(--thumb) + 1px) 5px no-repeat,
+  linear-gradient(90deg,#2d52b0b3,#5f86e0cc) 0 0/calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--fill,0)) 100% no-repeat,
+  var(--carbon-deep)}
+.player-settings input[type=range]::-webkit-slider-runnable-track{height:100%;background:none;border:0}
+.player-settings input[type=range]::-moz-range-track{height:100%;background:none;border:0}
+.player-settings input[type=range]::-moz-range-progress{background:none}
+.player-settings input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;box-sizing:border-box;width:var(--thumb);height:var(--thumb);margin-top:calc((16px - var(--thumb)) / 2);border:1px solid #4a0c08;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffc2b8 0 10%,#ef5b4d 28%,#b8231c 62%,#5e0f0b);box-shadow:2px 3px 0 #000a,inset -2px -2px 3px #0006;transition:scale .15s var(--ui-spring)}
+.player-settings input[type=range]::-moz-range-thumb{box-sizing:border-box;width:var(--thumb);height:var(--thumb);border:1px solid #4a0c08;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffc2b8 0 10%,#ef5b4d 28%,#b8231c 62%,#5e0f0b);box-shadow:2px 3px 0 #000a,inset -2px -2px 3px #0006;transition:scale .15s var(--ui-spring)}
+.player-settings input[type=range]:hover::-webkit-slider-thumb{scale:1.15}.player-settings input[type=range]:active::-webkit-slider-thumb{scale:.9}
+.player-settings input[type=range]:hover::-moz-range-thumb{scale:1.15}.player-settings input[type=range]:active::-moz-range-thumb{scale:.9}
+/* Number boxes: typed figures between stamped − and + (no browser spinners). */
+.player-settings input[type=number]{appearance:textfield;-moz-appearance:textfield;box-sizing:border-box;min-width:0;color:var(--carbon-bright);background:var(--carbon-deep);border:1px solid var(--carbon-line);border-radius:0;font:inherit;padding:6px}
+.player-settings input[type=number]::-webkit-inner-spin-button,.player-settings input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0}
+.settings-step{display:flex;align-items:center;gap:5px}.settings-step input[type=number]{width:62px;text-align:center}
+.player-settings .settings-step button{--glyph:linear-gradient(var(--stamp-ink),var(--stamp-ink)) 50%/12px 3px no-repeat;flex:none;width:30px;height:30px;min-height:0;padding:0;background:var(--glyph),#c8322a14;border:3px double var(--stamp);color:#0000;font-size:0;rotate:-4deg;transition:transform .14s var(--ui-spring),background-color .15s}
+.player-settings .settings-step button:last-child{--glyph:linear-gradient(var(--stamp-ink),var(--stamp-ink)) 50%/12px 3px no-repeat,linear-gradient(var(--stamp-ink),var(--stamp-ink)) 50%/3px 12px no-repeat;rotate:3deg}
+.player-settings .settings-step button:hover:not(:disabled){background:var(--glyph),#c8322a33;transform:scale(1.1)}.player-settings .settings-step button:active:not(:disabled){transform:scale(.82) rotate(-6deg)}
 /* Stamp buttons: Reset is a red stamp, Back/Resume a carbon one, Settings a plain carbon slip. */
 .settings-footer{display:flex;gap:12px;justify-content:space-between;padding-top:14px;border-top:1px dashed var(--carbon-line)}
 .player-settings .settings-footer button{min-height:44px;padding:8px 20px;background:#c8322a14;border:3px double var(--stamp);border-radius:0;color:var(--stamp-ink);font:400 21px/1 var(--font-display);letter-spacing:1.5px;text-transform:uppercase;rotate:-2deg;transition:transform .18s var(--ui-spring),background .15s}
@@ -25,7 +52,9 @@
 .player-settings .settings-footer .settings-back:hover:not(:disabled){background:#becdf038}
 .player-settings .settings-footer .pause-settings{background:var(--carbon-raised);border:1px dashed var(--carbon-line);color:var(--carbon-ink);rotate:-1deg}
 .player-settings .settings-footer .pause-settings:hover:not(:disabled){background:#25355c}
-.player-settings[data-page=pause]{width:min(460px,calc(100vw - 24px))}.player-settings[data-page=pause] .settings-footer button:first-child,.player-settings[data-page=settings] .pause-settings,.player-settings[data-page=pause] .settings-tabs{display:none}.player-settings[data-page=pause] .settings-footer{display:grid;grid-template-columns:1.25fr 1fr;margin-top:6px;padding-top:20px}.player-settings[data-page=pause] .settings-back{font-size:26px}
+/* The pause page keeps the same sheet: a scribbled rat fills the middle and the stamps sit at the foot. */
+.player-settings[data-page=pause] .settings-footer button:first-child,.player-settings[data-page=settings] .pause-settings,.player-settings[data-page=pause] .settings-tabs{display:none}.player-settings[data-page=pause] .settings-footer{display:grid;grid-template-columns:1.25fr 1fr;margin-top:auto;padding-top:20px}.player-settings[data-page=pause] .settings-back{font-size:26px}
+.player-settings[data-page=pause]::after{content:'';position:absolute;inset:60px 0 90px;margin:auto;width:min(340px,46%);height:min(200px,40%);rotate:-6deg;background:var(--carbon-line);-webkit-mask:var(--doodle-rat) center/contain no-repeat;mask:var(--doodle-rat) center/contain no-repeat;pointer-events:none;animation:carbon-bob 3.2s ease-in-out infinite}
 .player-settings button:hover:not(:disabled){background:#25355c}
 /* Open, turn a page, and (from script) a carbon ghost for closing. */
 .player-settings.folder-open{animation:folder-open .3s var(--ui-snap)}
@@ -36,25 +65,19 @@
 body.settings-open .touch-play,body.settings-open .touch-toolbar{visibility:hidden}
 /* Scale anchored cards, not the viewport or projected guidance coordinates. */
 :is(.assignment-ledger,.dispatch-ledger,.pickup-buffs,#kill-feed,#hud,.jurisdiction-timer){zoom:var(--player-ui-scale,1)}
-@media(max-width:600px){.player-settings{padding:16px}.settings-range{grid-template-columns:1fr 70px 18px 58px;gap:8px}.settings-range label{grid-column:1/-1}.settings-binding{grid-template-columns:1fr 1fr}.settings-binding span{grid-column:1/-1}.player-settings h2{font-size:30px}.player-settings .settings-tab{font-size:15px;padding:7px 9px 6px}}
+@media(max-width:600px){.player-settings{padding:16px}.settings-range{grid-template-columns:1fr auto 18px 58px;gap:8px}.settings-range label{grid-column:1/-1}.settings-binding{grid-template-columns:1fr 1fr}.settings-binding span{grid-column:1/-1}.player-settings h2{font-size:30px}.player-settings .settings-tab{font-size:15px;padding:7px 9px 6px}}
 .player-settings{margin:auto}
 .player-settings[open]{display:flex;flex-direction:column}
-.player-settings>.settings-content{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:12px 14px 8px 14px;margin:0 0 12px;background:#070b17b3;border:1px dashed var(--carbon-line);scrollbar-width:thin;scrollbar-color:#a5b9e166 #0c1224}
-/* Older WebKit keeps the same palette without replacing native scrolling. */
-.player-settings::-webkit-scrollbar,.settings-content::-webkit-scrollbar{width:8px}
-.player-settings::-webkit-scrollbar-track,.settings-content::-webkit-scrollbar-track{background:#0c1224}
-.player-settings::-webkit-scrollbar-thumb,.settings-content::-webkit-scrollbar-thumb{background:#a5b9e166;border:2px solid #0c1224;border-radius:8px}
-.player-settings::-webkit-scrollbar-button,.settings-content::-webkit-scrollbar-button{display:none}
-@media(forced-colors:active){.player-settings,.player-settings>.settings-content{scrollbar-color:auto}.player-settings[data-page=pause] .settings-back{background:ButtonFace;color:ButtonText;border-color:ButtonText}}
+.player-settings>.settings-content{flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:12px 14px 8px 14px;margin:0 0 12px;background:#070b17b3;border:1px dashed var(--carbon-line)}
+@media(forced-colors:active){.player-settings[data-page=pause] .settings-back{background:ButtonFace;color:ButtonText;border-color:ButtonText}.player-settings input[type=checkbox]{appearance:auto;-webkit-appearance:auto}.player-settings input[type=range]{appearance:auto;-webkit-appearance:auto}.player-settings .settings-step button{color:ButtonText;font-size:18px}}
 .player-settings>:is(h2,p,.settings-footer,.pause-settings){flex-shrink:0}
 .settings-status:empty{display:none}
-@media(max-height:500px){.player-settings{padding:12px 14px}.player-settings::before{top:12px;font-size:11px}.player-settings h2{font-size:28px;margin-bottom:4px}.player-settings p{font-size:12px;margin:2px 0 6px}.player-settings .settings-tab{min-height:30px;font-size:14px;padding:6px 9px 5px}.player-settings fieldset{padding:2px}.settings-range{margin:6px 0}.settings-footer{padding-top:8px}.player-settings .settings-footer button{min-height:40px;font-size:18px}}
+@media(max-height:500px){.player-settings{padding:12px 14px}.player-settings::before{top:12px;font-size:11px}.player-settings h2{font-size:28px;margin-bottom:4px}.player-settings p{font-size:12px;margin:2px 0 6px}.player-settings .settings-tab{min-height:30px;font-size:14px;padding:6px 9px 5px}.player-settings fieldset{padding:2px}.settings-range{margin:6px 0}.settings-toggle{margin:8px 0}.settings-footer{padding-top:8px}.player-settings .settings-footer button{min-height:40px;font-size:18px}.player-settings .settings-step button{width:28px;height:28px}.settings-step input[type=number]{padding:4px}}
 body.observing #crosshair,body.observing .touch-fire{display:none!important}
 body.observing #hud{color:var(--carbon-bright)}
 
 /* ?feel=dev review controls. */
 .feel-review-item{border-top:1px dashed var(--carbon-faint);padding:6px 0}.feel-review-item summary{cursor:pointer;display:flex;align-items:center;gap:10px;}
-.feel-review-item summary input{width:18px;height:18px;accent-color:#8fa6d6}
 .feel-review-param{display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:center;margin:6px 0 6px 28px;color:var(--carbon-ink);font-size:14px}
-.feel-review-param input{background:var(--carbon-deep);color:var(--carbon-bright);border:1px solid var(--carbon-line);padding:4px 6px}
+.feel-review-param input[type=number]{padding:4px 6px}
 .feel-review-actions{display:flex;gap:10px;align-items:center;margin-top:12px}
