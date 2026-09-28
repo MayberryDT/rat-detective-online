@@ -137,7 +137,7 @@ export class ChaosSimulation {
         for(const b of grayboxBoxes(spec)){
             const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2))});
             body.position.set(b.x,b.y,b.z);body.quaternion.setFromEuler(b.rx,0,b.rz);body.updateAABB();
-            this.world.addBody(body);this.targets.set(body,{kind:'world'});
+            this.world.addBody(body);this.rayQuery.fixed.add(body);this.targets.set(body,{kind:'world'});
         }
         for(const station of DISPATCH_STATIONS){
             this.addControl(station.box,'world');this.addControl(station.target,'dispatch');
@@ -419,7 +419,7 @@ export class ChaosSimulation {
     }
     private addControl(d:{x:number;y:number;z:number;w:number;h:number;d:number},kind:Target['kind'],machineId?:string){
         const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(d.w/2,d.h/2,d.d/2)),position:new C.Vec3(d.x,d.y,d.z)});
-        this.world.addBody(body);this.targets.set(body,{kind,machineId});
+        this.world.addBody(body);this.rayQuery.fixed.add(body);this.targets.set(body,{kind,machineId});
     }
     private activatePressure(machineId:string,surge=false){
         const machine=LAUNCH_MACHINES.find(m=>m.id===machineId);

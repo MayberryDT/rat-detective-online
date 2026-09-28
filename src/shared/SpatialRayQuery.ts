@@ -20,6 +20,9 @@ export class SpatialRayQuery {
     private readonly bounds=new C.AABB();
     private readonly candidates:C.Body[]=[];
     private readonly onChange=()=>{this.changed=true;this.ranksDirty=true;};
+    /** Static city bodies the owner never moves, resizes or retypes. They join the
+     * BVH once and skip the per-step pose check (1,433 per world in the city). */
+    readonly fixed=new WeakSet<C.Body>();
     /** Ray/sphere query count for diagnostics; callers may reset it. */
     queries=0;
     constructor(private readonly world:C.World){
@@ -41,6 +44,7 @@ export class SpatialRayQuery {
             present.add(body);
             const p=body.position,q=body.quaternion;
             const previous=this.statics.get(body);
+            if(previous&&this.fixed.has(body))continue;
             if(body.aabbNeedsUpdate||!previous||p.x!==previous[0]||p.y!==previous[1]||p.z!==previous[2]||
                 q.x!==previous[3]||q.y!==previous[4]||q.z!==previous[5]||q.w!==previous[6]||body.shapes.length!==previous[7]){
                 body.updateAABB();this.statics.set(body,[p.x,p.y,p.z,q.x,q.y,q.z,q.w,body.shapes.length]);rebuild=true;
@@ -48,8 +52,8 @@ export class SpatialRayQuery {
         }
         for(const body of this.statics.keys())if(!present.has(body)){this.statics.delete(body);rebuild=true;}
         if(rebuild)this.root=this.build([...this.statics.keys()]);
-        this.staticList=[...this.statics.keys()];this.staticPose=new Float64Array(this.staticList.length*8);
-        let k=0;for(const pose of this.statics.values())for(const value of pose)this.staticPose[k++]=value;
+        this.staticList=[...this.statics.keys()].filter(body=>!this.fixed.has(body));this.staticPose=new Float64Array(this.staticList.length*8);
+        let k=0;for(const body of this.staticList)for(const value of this.statics.get(body)!)this.staticPose[k++]=value;
         this.changed=false;
         this.updateRanks();
     }

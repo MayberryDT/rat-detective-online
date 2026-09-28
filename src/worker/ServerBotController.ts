@@ -57,10 +57,11 @@ export class ServerBotController {
         this.world.defaultContactMaterial.friction=0;this.world.defaultContactMaterial.restitution=.05;
         for(const box of grayboxBoxes(spec)){
             const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(box.w/2,box.h/2,box.d/2)),position:new C.Vec3(box.x,box.y,box.z)});
-            body.quaternion.setFromEuler(box.rx,0,box.rz);this.world.addBody(body);
+            body.quaternion.setFromEuler(box.rx,0,box.rz);this.world.addBody(body);this.ray.fixed.add(body);
         }
         for(const control of [...DISPATCH_STATIONS,...LAUNCH_MACHINES])for(const box of [control.box,control.target]){
-            this.world.addBody(new C.Body({mass:0,shape:new C.Box(new C.Vec3(box.w/2,box.h/2,box.d/2)),position:new C.Vec3(box.x,box.y,box.z)}));
+            const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(box.w/2,box.h/2,box.d/2)),position:new C.Vec3(box.x,box.y,box.z)});
+            this.world.addBody(body);this.ray.fixed.add(body);
         }
         this.navigation=new BotNavigation(spec);
         const sharedNavigation:ObjectiveNavigation={
