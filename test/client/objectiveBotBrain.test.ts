@@ -217,7 +217,7 @@ describe('case-first normal match bots',()=>{
     it('does not shoot a blocked Dispatch target and fires visible enemies more frequently',()=>{
         const {brain,self,near}=fixture(),loose=state(),target=DISPATCH_STATIONS[0].target;
         loose.dispatch={phase:'ready',started:0,until:0,serial:0};
-        self.x=target.x;self.z=target.z+12;
+        self.x=target.x;self.z=target.z+12;near.x=self.x+10;near.z=self.z+20;
         const first=brain.step(1000,self,[self,near],loose,()=>true,false,true,()=>false);
         expect(first.shoot).toBeUndefined();
         expect(brain.step(1550,self,[self,near],loose,()=>true,false,true,()=>false).shoot).toBeDefined();
