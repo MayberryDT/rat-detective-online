@@ -313,6 +313,12 @@ export class FeelDirector {
             this.camera.kick(p.shake*s,(Math.random()*2-1)*p.shake*s*.5);
         }
     }
+    /** P2, each frame: standing on a pad whose pressure is `level` (0…1) shakes your view harder as it builds. */
+    padRumble(level:number,dt:number):void {
+        if(!this.state.on('launchMoment')||level<=.3||!(dt>0))return;
+        const s=((level-.3)/.7)**2*FEEL.launchMoment.params.shake*dt*9;
+        this.camera.kick((Math.random()*2-1)*s,(Math.random()*2-1)*s);
+    }
     /** L5/L6: a rat was thrown (`local` for yours): it screams; yours also kicks the view. */
     launched(at:Vec3Data,local:boolean,boost:boolean,view:THREE.Camera):void {
         if(this.state.on('launchFlight'))this.sound.scream(local?undefined:at,view);

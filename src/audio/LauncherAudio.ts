@@ -7,10 +7,13 @@ const VOLUME = .85 * .7;
 const RANGE = 120;
 const MAX_VOICES = 12;
 type Voice = {pad: LaunchMachine['pad']; output: GainNode; pan: StereoPannerNode; volume: number; release: () => void};
-export type LauncherCue = 'tell' | 'fire';
+/** `tell`: the half-second hang when full; `creak`/`pop`: strain accents while pressure builds. */
+export type LauncherCue = 'tell' | 'fire' | 'creak' | 'pop';
+type PressureLoop = {pad: LaunchMachine['pad']; output: GainNode; pan: StereoPannerNode; hum: OscillatorNode; filter: BiquadFilterNode; siren: OscillatorNode; sirenGain: GainNode; wobble: OscillatorNode; depth: GainNode};
 
-/** Launcher cues, all attached to the machine in 3D: the tell's rising whine and
- * rattle, and the firing's mechanical impact with its air tail. */
+/** Launcher cues, all attached to the machine in 3D: the pressure hum and danger
+ * siren while a machine fills, strain creaks, the hang's rising whine and the
+ * firing's mechanical impact with its air tail. */
 export class LauncherAudio {
     private noiseBuffer?: AudioBuffer;
     private voices = new Set<Voice>();
@@ -82,10 +85,18 @@ export class LauncherAudio {
         };
         let last: AudioScheduledSourceNode;
         if (cue === 'tell') {
-            // Rising whine over a pressure rattle: the split second to scream and scramble.
-            tone('sine', pitch * 3, pitch * 14, .22, .03, .26);
-            tone('square', pitch * .5, pitch * .62, .12, .01, .24);
-            last = hiss('bandpass', 900, 2600, .18, .05, .15, .25);
+            // Rising whine over a pressure rattle: the half second to scream and scramble.
+            tone('sine', pitch * 3, pitch * 16, .26, .03, .55);
+            tone('square', pitch * .5, pitch * .7, .14, .01, .5);
+            last = hiss('bandpass', 900, 3200, .22, .05, .4, .55);
+        } else if (cue === 'creak') {
+            // Stressed metal: a slow groaning glide under a gritty rasp.
+            tone('sawtooth', pitch * 1.4, pitch * .9, .2, .04, .45);
+            last = hiss('bandpass', 500, 300, .12, .05, .2, .4);
+        } else if (cue === 'pop') {
+            // A rivet or bolt pinging loose.
+            tone('triangle', 2600, 1700, .28, .001, .18);
+            last = hiss('highpass', 4000, 3000, .15, .001, .01, .06);
         } else {
             tone(kind === 'mousetrap' ? 'triangle' : 'sawtooth', pitch * 2, 35, .65, .006, .85);
             last = hiss('lowpass', kind === 'geyser' ? 4200 : 2200, 180, .8, .0125, 1.15, 1.7);
@@ -110,9 +121,41 @@ export class LauncherAudio {
         this.voices.add(voice); last.onended = voice.release;
     }
 
+    private readonly loops = new Map<string, PressureLoop>();
+    /** The building-pressure bed for one machine: a hum that climbs with `level`
+     * (0…1) and a siren that swells with `danger`. Silent (and released) at zero. */
+    setPressure(id: string, pad: LaunchMachine['pad'], level: number, danger: number, camera?: THREE.Camera): void {
+        const ctx = this.audio;
+        let loop = this.loops.get(id);
+        const spatial = camera && !this.disposed && ctx?.state === 'running' ? this.spatial(pad, camera) : {volume: 0, pan: 0};
+        const audible = level > .02 && spatial.volume > 0;
+        if (!audible) {
+            if (loop) {this.loops.delete(id); for (const node of [loop.hum, loop.siren, loop.wobble]) { try { node.stop(); } catch { /* Stopped. */ } }
+                for (const node of [loop.hum, loop.filter, loop.siren, loop.sirenGain, loop.wobble, loop.depth, loop.output, loop.pan]) node.disconnect();}
+            return;
+        }
+        if (!loop) {
+            const output = ctx!.createGain(), pan = ctx!.createStereoPanner(), hum = ctx!.createOscillator(), filter = ctx!.createBiquadFilter();
+            const siren = ctx!.createOscillator(), sirenGain = ctx!.createGain(), wobble = ctx!.createOscillator(), depth = ctx!.createGain();
+            hum.type = 'sawtooth'; filter.type = 'lowpass'; filter.Q.value = 4; siren.type = 'sine'; wobble.frequency.value = 3.2; depth.gain.value = 140;
+            hum.connect(filter); filter.connect(output); siren.connect(sirenGain); sirenGain.connect(output); wobble.connect(depth); depth.connect(siren.frequency);
+            output.gain.value = 0; sirenGain.gain.value = 0; output.connect(pan); pan.connect(effectsOutput(ctx!));
+            hum.start(); siren.start(); wobble.start();
+            loop = {pad, output, pan, hum, filter, siren, sirenGain, wobble, depth}; this.loops.set(id, loop);
+        }
+        const at = ctx!.currentTime;
+        loop.hum.frequency.setTargetAtTime(38 + level * 110, at, .08);
+        loop.filter.frequency.setTargetAtTime(180 + level * 1400, at, .08);
+        loop.siren.frequency.setTargetAtTime(620 + danger * 260, at, .1);
+        loop.sirenGain.gain.setTargetAtTime(danger * .22, at, .08);
+        loop.output.gain.setTargetAtTime(spatial.volume * (.12 + level * .35), at, .05);
+        loop.pan.pan.value = spatial.pan;
+    }
+
     dispose(): void {
         this.disposed = true;
         for (const voice of this.voices) voice.release();
+        for (const id of [...this.loops.keys()]) this.setPressure(id, this.loops.get(id)!.pad, 0, 0);
         this.noiseBuffer = undefined;
     }
 }

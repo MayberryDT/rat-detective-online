@@ -21,6 +21,8 @@ import {createPlayer} from '../../src/worker/gameState';
 import {MAX_HP} from '../../src/shared/networkProtocol';
 import {createRatMesh} from '../../src/utils/RatModel';
 import {RatAnimator,type DeathStyle} from '../../src/utils/RatAnimator';
+import {PressureMachine} from '../../src/prototype/PressureMachine';
+import {LAUNCH_MACHINES,PRESSURE_TUNING,type PressureState} from '../../src/shared/chaosState';
 
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 initEntitySounds(stage.listener);
@@ -179,6 +181,14 @@ const actions:Record<string,()=>void>={
     'R Corpse 4 ahead: headshot':()=>studioCorpse('spin',true),
     'R Corpse 4 ahead: jolt':()=>corpse?.animator.joltDeath(1),
     'M1 Suspects gasp':()=>{for(const s of suspects)s.startle();},
+    'P Machines empty':()=>setPressure(0),
+    'P Machines 30% (building)':()=>setPressure(.3),
+    'P Machines 60% (straining)':()=>setPressure(.6),
+    'P Machines 88% (danger)':()=>setPressure(.88),
+    'P Machines full (hang)':()=>{setPressure(1);pressure.blowing=Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,performance.now()+60_000]));},
+    'P Machines fire':()=>firePressure(false),
+    'P Machines fire (overpressure)':()=>firePressure(true),
+    ...Object.fromEntries(LAUNCH_MACHINES.map(m=>[`P View ${m.label}`,()=>viewMachine(m.id)])),
     'R Walk up to suspect 2 body':()=>{const body=suspects[1]!.mesh.position;stage.camera.getWorldDirection(aim);aim.setY(0).normalize();
         rat.entity.body.position.set(body.x-aim.x*3.4,Math.max(.5,body.y),body.z-aim.z*3.4);rat.entity.body.velocity.set(0,0,0);rat.onMouseMove(0,160);},
     'R Gentle death suspect 2':()=>{const v=suspects[1]!;if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});v.hp=1;v.takeDamage(1,new THREE.Vector3(.2,0,0));},
@@ -203,6 +213,24 @@ function poseStudioCorpse(dt:number):void {
     c.mesh.quaternion.slerpQuaternions(new THREE.Quaternion(),lying,Math.min(1,t/.6));
     const impact=t-dt<.55&&t>=.55?1:t-dt<.95&&t>=.95?.5:0;
     c.animator.poseDeath(t,dt,{x:t<.6?-5:0,y:0,z:t<.6?2:0},impact,t>1.1);
+}
+/** P2: the six launchers with a scripted pressure state the buttons set. */
+const machines=new PressureMachine(stage.scene,stage.listener.context as AudioContext);
+const pressure:PressureState={serial:0,levels:{},launches:[]};
+function setPressure(fraction:number):void {
+    pressure.levels=Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,fraction*PRESSURE_TUNING.full]));delete pressure.blowing;
+}
+function firePressure(boost:boolean):void {
+    const at=performance.now();pressure.levels={};delete pressure.blowing;
+    pressure.fired=Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,at]));pressure.boosts=boost?{...pressure.fired}:{};
+}
+/** Park the camera three-quarters on to a machine and its pad (stops following your rat). */
+function viewMachine(id:string):void {
+    const m=LAUNCH_MACHINES.find(machine=>machine.id===id)!,dx=m.pad.x-m.box.x,dz=m.pad.z-m.box.z,d=Math.hypot(dx,dz);
+    rat.updateView=()=>{};rat.entity.mesh.visible=false;
+    // The Gate geyser has a wall on its left; look from the street side.
+    const flip=m.id==='geyser'?-1:1,side={x:-dz/d*flip,z:dx/d*flip},mid={x:(m.box.x+m.pad.x)/2,z:(m.box.z+m.pad.z)/2};
+    stage.camera.position.set(mid.x+side.x*11-dx/d*4,6.5,mid.z+side.z*11-dz/d*4);stage.camera.lookAt(mid.x,1.6,mid.z);
 }
 /** A ground point `distance` ahead of the camera. */
 function ahead(distance:number):THREE.Vector3 {
@@ -253,6 +281,7 @@ function frame(now:number){
     feel.hunch(dt,now,stage.camera,rat.entity.dead?undefined:rat.entity,hunchRats,wantedSuspect);
     feel.wanted(dt,wantedSuspect?suspects[1]!.mesh.position:undefined,false);
     poseStudioCorpse(dt);
+    machines.update(pressure,performance.now(),stage.camera);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
     stage.renderer.toneMappingExposure=1.1*feel.exposure;

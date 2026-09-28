@@ -26,7 +26,7 @@ import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo } from '../shared/incidentCatalog';
-import type { ChaosState, LaunchMachine } from '../shared/chaosState';
+import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
 import { PICKUP_TUNING } from '../shared/pickups';
 import type { RatEntity } from '../entities/RatEntity';
 import { bindGamePointerLock } from './GamePointerLock';
@@ -632,6 +632,9 @@ export class GameSession {
                 this.foleyWorld.motion.update(this.rat.entity.mesh.position,dt,this.rat.grounded);
                 const v=this.rat.entity.body.velocity;
                 this.feel.motion(dt,this.rat.grounded,v.y,Math.hypot(v.x,v.z),this.rat.moveSpeedScale,this.lastChaos?.case?.owner===this.myId);
+                const p=this.rat.entity.mesh.position,levels=this.lastChaos?.pressure?.levels;
+                const under=levels&&LAUNCH_MACHINES.find(m=>Math.abs(p.y-m.pad.y)<2&&Math.hypot(p.x-m.pad.x,p.z-m.pad.z)<=m.pad.radius);
+                if(under)this.feel.padRumble((levels[under.id]??0)/PRESSURE_TUNING.full,dt);
             }
             else this.foleyWorld.motion.clear();
         }
