@@ -21,10 +21,11 @@ export function sanitizeDiagnosticReport(value: unknown): Record<string, unknown
     if(/^[a-z-]{1,24}(?::[a-z-]{1,32})?$/.test(key))latency[key]=numbers(value,['samples','p50','p95','p99','max']);
   }
   return {
-    ...numbers(body, ['at', 'samples', 'frameMedianMs', 'frameP95Ms', 'longestFrameMs', 'stallsOver100Ms', 'calls', 'triangles', 'geometries', 'textures']),
+    ...numbers(body, ['at', 'samples', 'frameMedianMs', 'frameP95Ms', 'longestFrameMs', 'stallsOver100Ms', 'calls', 'triangles', 'geometries', 'textures', 'gpuSamples', 'gpuMedianMs', 'gpuP95Ms']),
     world: numbers(body.world, ['seed', 'version']), hidden: body.hidden === true,
     input: numbers(body.input, ['lockLosses', 'escapeLosses', 'focusedLosses', 'windowBlurs', 'requestFailures', 'ignoredClicks', 'lastLossAt']),
     phaseMaxMs: numbers(body.phaseMaxMs, ['simulationMs', 'botsMs', 'presentationMs', 'renderMs']),
+    phaseMeanMs: numbers(body.phaseMeanMs, ['simulationMs', 'botsMs', 'presentationMs', 'renderMs']),
     details: {
       ...numbers(details, ['shotsAttempted', 'shotsSent', 'snapshotAgeMs']),
       network: numbers(details.network, ['receivedCount', 'receivedChars', 'parseMs', 'parseMaxMs', 'invalidCount', 'ignoredCount', 'lastReceivedAt', 'sentCount', 'sendFailures', 'bufferedAmount','receivedBytes','applyMs','applyMaxMs','joinMs','reconnectCount','lastCloseCode','rttMs','rttMinMs','rttMaxMs','rttJitterMs']),

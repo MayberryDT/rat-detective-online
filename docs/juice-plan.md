@@ -144,7 +144,13 @@ Tyler's brain dump, sorted into now and later, with his answers.
 **Later (not now):**
 - **Launcher overhaul.** Make the launchers far more chaotic and much juicier, including how the case interacts with them.
 - **Bot overhaul.** How bots act, their decision-making and how they work.
-- **Complete optimization overhaul.** Tyler felt a performance hit after the third batch (his PC was also busy). Measure the client frame budget with the full juice layer on, then cut cost across rendering, feel effects and simulation.
+- **Complete optimization overhaul (started 2026-09-28).** Tyler felt a performance hit after the third batch (his PC was also busy). The 37-item assumption audit (numbered in the chat on 2026-09-28) is worked in phases, one item per commit, each with before/after numbers, no change to how the game looks or plays:
+  - **Phase 0, baseline:** `?diagnostics` phase means and GPU time, the synthetic render fixture (`capacity-render.html`) with corpses, a CDP CPU/allocation profile of a hosted observation room, and the server bench with `--cpu-prof` (idle and 120-ball burst). Output: `docs/verification/perf-baseline-2026-09-28.md` with the audit re-ranked by measured cost. Tyler reviews before fixes.
+  - **Phase 1, server CPU:** sweep and ball-loop allocations, no-socket snapshot, pickup checks, byte counting, checkpoint size. Proof: identical bench trajectory hash, Cloudflare `cpuTime`.
+  - **Phase 2, client simulation/network/audio:** camera rays, decode/validation churn, audio listener, small churn.
+  - **Phase 3, client rendering:** draw calls (corpse and own-rat batching, empty meshes, instance uploads), then per-frame CPU (static matrices, rain, street lights, tails, HUD writes). Proof: identical fixture pixels; Tyler playtests.
+  - **Phase 4:** measured yes/no on sewer lights, shadow redraws, grain/filter, the two physics worlds, navigation, cameo compression. Look changes go to Tyler as choices.
+  - **Phase 5:** preview playtest, production on Tyler's OK, before/after receipt.
 - **3D model and ragdoll overhaul.**
 
 ## Remaining outcomes (in order; one commit each)

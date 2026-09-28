@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import {gpuTimer} from './gpuTimer';
 
 export interface FramePhases { simulationMs:number; botsMs:number; presentationMs:number; renderMs:number }
 /** Bounded local diagnostics. No per-frame console output or network telemetry. */
@@ -12,10 +13,15 @@ export class PerformanceStats {
     private stalls=0;
     private longest=0;
     private phases:FramePhases={simulationMs:0,botsMs:0,presentationMs:0,renderMs:0};
+    private phaseTotals:FramePhases={simulationMs:0,botsMs:0,presentationMs:0,renderMs:0};
+    private phaseFrames=0;
+    /** GPU time of the main scene render; asynchronous timer queries, never a stall. */
+    readonly gpu:ReturnType<typeof gpuTimer>;
     private readonly startedAt=new Date().toISOString();
     private readonly abort=new AbortController();
     private readonly api={snapshot:()=>this.snapshot(),download:()=>this.download()};
     constructor(private readonly renderer:THREE.WebGLRenderer, showPanel=true,private readonly publish?:(report:Record<string,unknown>)=>void) {
+        this.gpu=gpuTimer(renderer.getContext() as WebGL2RenderingContext);
         this.panel=showPanel?document.createElement('pre'):null;
         if(this.panel){
             this.panel.id='performance-stats';this.panel.setAttribute('aria-label','Performance measurements');
@@ -57,10 +63,13 @@ export class PerformanceStats {
     record(frameMs:number,now:number,world:{seed:number;version:number},phases?:FramePhases,details?:unknown):void {
         // Keep genuine long stalls; the old panel discarded every freeze >=1s.
         if(Number.isFinite(frameMs)&&frameMs>0){this.frames.push(frameMs);if(this.frames.length>600)this.frames.shift();this.longest=Math.max(this.longest,frameMs);if(frameMs>100)this.stalls++;}
-        if(phases)for(const key of Object.keys(this.phases) as (keyof FramePhases)[])this.phases[key]=Math.max(this.phases[key],phases[key]);
+        if(phases){
+            for(const key of Object.keys(this.phases) as (keyof FramePhases)[]){this.phases[key]=Math.max(this.phases[key],phases[key]);this.phaseTotals[key]+=phases[key];}
+            this.phaseFrames++;
+        }
         if(now-this.lastPublish<5000)return;this.lastPublish=now;
         const sorted=[...this.frames].sort((a,b)=>a-b),{render,memory}=this.renderer.info;
-        const report={at:Date.now(),world,input:{...this.input},hidden:document.hidden,samples:sorted.length,frameMedianMs:sorted[Math.floor(sorted.length*.5)]??0,frameP95Ms:sorted[Math.floor(sorted.length*.95)]??0,longestFrameMs:this.longest,stallsOver100Ms:this.stalls,phaseMaxMs:{...this.phases},calls:render.calls,triangles:render.triangles,geometries:memory.geometries,textures:memory.textures,details};
+        const report={at:Date.now(),world,input:{...this.input},hidden:document.hidden,samples:sorted.length,frameMedianMs:sorted[Math.floor(sorted.length*.5)]??0,frameP95Ms:sorted[Math.floor(sorted.length*.95)]??0,longestFrameMs:this.longest,stallsOver100Ms:this.stalls,phaseMaxMs:{...this.phases},phaseMeanMs:phaseMeans(this.phaseTotals,this.phaseFrames),...gpuSummary(this.gpu.supported,this.gpu.take()),calls:render.calls,triangles:render.triangles,geometries:memory.geometries,textures:memory.textures,details};
         this.reports.push(report);if(this.reports.length>120)this.reports.shift();
         // The quiet playtest keeps bounded in-memory reports and the small
         // relay summary. Rewriting the entire history to synchronous storage
@@ -69,7 +78,16 @@ export class PerformanceStats {
         if(this.panel){this.persist();console.info('[rat-diagnostics]',report);}
         this.publish?.(report);
         if(this.panel)this.panel.textContent=`F8: save diagnostic report\n${JSON.stringify(report,null,2)}`;
-        this.longest=0;this.stalls=0;for(const key of Object.keys(this.phases) as (keyof FramePhases)[])this.phases[key]=0;
+        this.longest=0;this.stalls=0;this.phaseFrames=0;for(const key of Object.keys(this.phases) as (keyof FramePhases)[])this.phases[key]=this.phaseTotals[key]=0;
     }
     dispose():void{this.persist();this.abort.abort();this.panel?.remove();if((window as any).ratDiagnostics===this.api)delete (window as any).ratDiagnostics;}
+}
+function phaseMeans(totals:FramePhases,frames:number):FramePhases{
+    const mean=(value:number)=>frames?+(value/frames).toFixed(3):0;
+    return {simulationMs:mean(totals.simulationMs),botsMs:mean(totals.botsMs),presentationMs:mean(totals.presentationMs),renderMs:mean(totals.renderMs)};
+}
+function gpuSummary(supported:boolean,samples:number[]){
+    if(!supported)return {gpuSamples:0};
+    const sorted=samples.sort((a,b)=>a-b);
+    return {gpuSamples:sorted.length,gpuMedianMs:sorted[Math.floor(sorted.length*.5)]??0,gpuP95Ms:sorted[Math.floor(sorted.length*.95)]??0};
 }

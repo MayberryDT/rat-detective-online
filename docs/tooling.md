@@ -62,6 +62,14 @@ python3 -m http.server 5180 --bind 127.0.0.1 --directory dist-visual
 
 Check the port is free first. `/model-preview.html` is the rat model tool, `/stage-prototype.html` the solo stage tool, and `/visual-fixture.html` the fixed regression fixture. See [visual documentation](../test/visual/README.md). Baseline replacement requires visual review; missing baselines are not a pass.
 
+### Performance measurement
+
+- `scripts/benchmark-server-tick.mjs`: deterministic room-tick benchmark. An optimization must keep its trajectory hash; `--ref=<commit>` builds another revision for back-to-back comparison.
+- `scripts/profile-client.mjs`: headless, muted Chrome CPU and allocation profile of a game page, with source-map attribution for `vite build --sourcemap` builds.
+- `?diagnostics=quiet` reports frame, per-phase mean/max and GPU render time; `window.ratDiagnostics.snapshot()` reads them.
+
+Usage and the current numbers: [performance baseline](verification/perf-baseline-2026-09-28.md).
+
 ## Environments and deployment
 
 | Config | Worker |

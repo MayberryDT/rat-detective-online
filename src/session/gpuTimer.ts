@@ -15,6 +15,8 @@ export function gpuTimer(gl: WebGL2RenderingContext) {
       current=gl.createQuery();if(current)gl.beginQuery(ext.TIME_ELAPSED_EXT,current);
     },
     end(){if(ext&&current){gl.endQuery(ext.TIME_ELAPSED_EXT);pending.push(current);current=null;}},
+    /** Completed samples since the last take; in-flight queries keep running. */
+    take(){return samples.splice(0);},
     reset(){samples.length=0;clear();},
     finish(){clear();return samples.slice();},
   };

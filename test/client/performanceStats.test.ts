@@ -7,7 +7,7 @@ afterEach(()=>{vi.unstubAllGlobals();vi.stubGlobal('document',originalDocument);
 function fixture(publish?:(report:Record<string,unknown>)=>void){
  const window=new EventTarget();vi.stubGlobal('window',window);
  vi.stubGlobal('document',Object.assign(new EventTarget(),{hidden:false}));const save=vi.fn();vi.stubGlobal('localStorage',{setItem:save});vi.spyOn(console,'info').mockImplementation(()=>{});
- const renderer={domElement:new EventTarget(),info:{render:{calls:4,triangles:50},memory:{geometries:2,textures:3}}} as unknown as WebGLRenderer;
+ const renderer={domElement:new EventTarget(),getContext:()=>({getExtension:()=>null}),info:{render:{calls:4,triangles:50},memory:{geometries:2,textures:3}}} as unknown as WebGLRenderer;
  return {stats:new PerformanceStats(renderer,false,publish),save,window};
 }
 describe('bounded playtest diagnostics',()=>{

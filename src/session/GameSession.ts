@@ -654,7 +654,9 @@ export class GameSession {
         if(!this.compiling){
             renderer.toneMappingExposure=this.baseExposure*this.feel.exposure;
             this.feel.beforeRender(camera);
+            this.stats?.gpu.begin();
             renderer.render(scene, camera);
+            this.stats?.gpu.end();
             this.feel.afterRender(camera);
         }
         if(this.rat && this.transport.state==='playing' && this.releasePreparedModels && !this.compiling){

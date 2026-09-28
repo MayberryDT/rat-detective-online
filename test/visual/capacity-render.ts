@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {gpuTimer} from './capacity-gpu';
+import {gpuTimer} from '../../src/session/gpuTimer';
 import {createStage} from '../../src/session/createStage';
 import {Neighborhood} from '../../src/prototype/Neighborhood';
 import {RemotePlayers} from '../../src/session/RemotePlayers';
@@ -8,7 +8,7 @@ import {ChaosView} from '../../src/prototype/ChaosView';
 import type {ChaosState} from '../../src/shared/chaosState';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 const params=new URLSearchParams(location.search),count=Number(params.get('rats')??50);
-if(![0,12,24,32,50,75,100].includes(count))throw Error('Unsupported renderer count');
+if(![0,9,12,24,32,50,75,100].includes(count))throw Error('Unsupported renderer count');
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 stage.renderer.setPixelRatio(1);
 stage.renderer.info.autoReset=false;
@@ -26,6 +26,10 @@ const players=Array.from({length:count},(_,i)=>createPlayer(`rat-${i}`,`Rat ${i}
 for(const p of players)remotes.add(p);
 const chaos=new ChaosView(stage.scene,id=>remotes.get(id));
 const state:ChaosState={time:0,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:-10,y:1,z:-20},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},extraCases:[],dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},notice:{serial:0,text:''},corpses:[],impacts:[],shots:[]};
+// `?corpses=16`: the chaosState corpse cap, lying in view (unbatched rats today).
+const corpses=Number(params.get('corpses')??0);if(![0,16].includes(corpses))throw Error('Unsupported corpse count');
+state.corpses=Array.from({length:corpses},(_,i)=>({id:`corpse-${i}`,victimId:`gone-${i}`,owner:null,appearance,born:-60000,expires:1e12,
+    p:{x:-26+(i%8)*2.4,y:.5,z:-15-Math.floor(i/8)*2.6},q:{x:0,y:0,z:.7071,w:.7071},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}}));
 const balls=Number(params.get('balls')??256);if(![0,256].includes(balls))throw Error('Unsupported ball count');
 const frames:number[]=[],cpu:number[]=[],present:number[]=[];let first=0,previous=0,packetAt=0,samples=0;
 const output=document.getElementById('result')!;
@@ -39,7 +43,7 @@ function frame(now:number){
  previous=now;
  if(now-first<20000){requestAnimationFrame(frame);return;}
  const gpuSamples=gpu.finish();
- const result={gpuSupported:gpu.supported,gpuSamples:gpuSamples.length,gpuP95:gpuSamples.length?quantile(gpuSamples,.95):null,batched:params.get('batch')==='1',kind:'synthetic-renderer-only',rats:count,balls,samples,hidden:document.hidden,viewport:[innerWidth,innerHeight],dpr:stage.renderer.getPixelRatio(),frameP50:quantile(frames,.5),frameP95:quantile(frames,.95),frameP99:quantile(frames,.99),renderCpuP95:quantile(cpu,.95),presentationCpuP95:quantile(present,.95),counterScope:'whole-frame-including-shadows',drawCalls:stage.renderer.info.render.calls,triangles:stage.renderer.info.render.triangles,notes:'Actual city, remote rat presentation and chaos views. Synthetic positions; no server or input. CPU submission is not GPU time.'};
+ const result={gpuSupported:gpu.supported,gpuSamples:gpuSamples.length,gpuMedian:gpuSamples.length?quantile(gpuSamples,.5):null,gpuP95:gpuSamples.length?quantile(gpuSamples,.95):null,corpses,batched:params.get('batch')==='1',kind:'synthetic-renderer-only',rats:count,balls,samples,hidden:document.hidden,viewport:[innerWidth,innerHeight],dpr:stage.renderer.getPixelRatio(),frameP50:quantile(frames,.5),frameP95:quantile(frames,.95),frameP99:quantile(frames,.99),renderCpuP95:quantile(cpu,.95),presentationCpuP95:quantile(present,.95),counterScope:'whole-frame-including-shadows',drawCalls:stage.renderer.info.render.calls,triangles:stage.renderer.info.render.triangles,notes:'Actual city, remote rat presentation and chaos views. Synthetic positions; no server or input. CPU submission is not GPU time.'};
  if(params.get('compare')==='1'){
   const batches:THREE.Mesh[]=[];stage.scene.traverse(o=>{if(o instanceof THREE.Mesh&&o.userData.rigidSources)batches.push(o);});
   const target=new THREE.WebGLRenderTarget(1280,720,{samples:4}),a=new Uint8Array(1280*720*4),b=new Uint8Array(a.length);
