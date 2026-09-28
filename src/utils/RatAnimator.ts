@@ -71,6 +71,12 @@ export class RatAnimator {
     private landingPulse = 0;
     private deathAnimation = false;
     private readonly tailCenter = new THREE.Vector3();
+    /** Per-ring tail offsets: every vertex of a TubeGeometry ring shares its u,
+     * so the wave and death projection are computed once per ring, not per vertex. */
+    private ringWave = new Float64Array(0);
+    private ringOffset = new Float64Array(0);
+    private ringWaveReady = new Uint8Array(0);
+    private ringReady = new Uint8Array(0);
     private readonly inverseTail = new THREE.Matrix4();
     private turn = 0;
     private aimHold = 0;
@@ -601,9 +607,20 @@ export class RatAnimator {
     private deformTails(reset = false): void {
         // The longitudinal wave is identical around each ring and across rigs.
         // Death contact projection remains per rig in world space below.
-        const waves = new Map<number, {x:number;y:number}>();
+        let rings = 0;
+        for (const { tail } of this.tails) rings = Math.max(rings, tail.geometry.parameters.tubularSegments + 1);
+        if (this.ringReady.length < rings) {
+            this.ringWave = new Float64Array(rings * 2); this.ringOffset = new Float64Array(rings * 3);
+            this.ringWaveReady = new Uint8Array(rings); this.ringReady = new Uint8Array(rings);
+        }
+        const waves = this.ringWave, waveReady = this.ringWaveReady, offsets = this.ringOffset, ready = this.ringReady;
+        let waveSegments = -1;
         for (const { tail, rest, tip, tipRest } of this.tails) {
             const positions = tail.geometry.getAttribute('position') as THREE.BufferAttribute;
+            const segments = tail.geometry.parameters.tubularSegments;
+            // Rigs share the wave per u; ring indices only match at equal segment counts.
+            if (segments !== waveSegments) { waveReady.fill(0); waveSegments = segments; }
+            ready.fill(0);
             const uv = tail.geometry.getAttribute('uv');
             let tipX = 0, tipY = 0, tipZ = 0;
             if (this.deathAnimation) {
@@ -611,12 +628,15 @@ export class RatAnimator {
                 this.inverseTail.copy(tail.matrixWorld).invert();
             }
             for (let i = 0; i < positions.count; i++) {
-                const u = uv.getX(i);
+                const u = uv.getX(i), ring = Math.round(u * segments);
+                if (ready[ring]) {
+                    positions.setXYZ(i, rest[i * 3] + offsets[ring * 3], rest[i * 3 + 1] + offsets[ring * 3 + 1], rest[i * 3 + 2] + offsets[ring * 3 + 2]);
+                    continue;
+                }
                 // The root stays attached; a delayed wave bends the middle before
                 // reaching the tip, instead of swinging the whole tail rigidly.
                 const weight = u * u;
-                let wave = waves.get(u);
-                if (!wave) {
+                if (!waveReady[ring]) {
                     let x = reset ? 0 : weight * (
                         Math.sin(this.time * 1.5 - u * 2.4) * 0.07 * (this.deathAnimation ? this.tailMotion : 1) +
                         Math.sin(this.stride - u * 2.8) * this.tailMotion * 0.38 *
@@ -632,9 +652,9 @@ export class RatAnimator {
                         y+=weight*this.acting.tailLift;
                         x+=weight*this.acting.tailSide;
                     }
-                    wave={x,y};waves.set(u,wave);
+                    waves[ring * 2] = x; waves[ring * 2 + 1] = y; waveReady[ring] = 1;
                 }
-                let {x,y}=wave;
+                let x = waves[ring * 2], y = waves[ring * 2 + 1];
                 let z = 0;
                 if (this.deathAnimation && !reset) {
                     x += weight * this.tailFall.x * 0.85;
@@ -649,6 +669,7 @@ export class RatAnimator {
                     y += this.inverseTail.elements[5] * lift;
                     z += this.inverseTail.elements[6] * lift;
                 }
+                offsets[ring * 3] = x; offsets[ring * 3 + 1] = y; offsets[ring * 3 + 2] = z; ready[ring] = 1;
                 positions.setXYZ(i, rest[i * 3] + x, rest[i * 3 + 1] + y, rest[i * 3 + 2] + z);
                 if (u === 1) { tipX = x; tipY = y; tipZ = z; }
             }
