@@ -18,7 +18,8 @@ export class AssignmentDestinations {
     private width=250;
     private height=150;
     constructor() {
-        this.cue.className='assignment-destination';this.cue.hidden=true;this.arrow.textContent='➤';
+        // U1: the pointer is drawn in CSS (.assignment-destination i) in the paperwork style.
+        this.cue.className='assignment-destination';this.cue.hidden=true;
         for(const child of [this.arrow,this.label,this.detail])this.cue.appendChild(child);
         document.body.appendChild(this.cue);
     }

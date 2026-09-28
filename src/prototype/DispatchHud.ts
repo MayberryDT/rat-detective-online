@@ -7,6 +7,7 @@ import {CHAOS_TUNING} from '../shared/chaosState';
 import {INCIDENTS,incidentInfo} from '../shared/incidentCatalog';
 import './dispatchHud.css';
 import {setText} from '../ui/setText';
+import {fly, measure, replay, slide, uiMotion} from '../ui/motion';
 import {MunicipalQuips,INCIDENT_QUIPS} from '../ui/municipalQuips';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {incidentArtwork} from './incidentArtwork';
@@ -74,6 +75,9 @@ export class DispatchHud {
     private counter:HTMLElement;
     private destinationLabel:HTMLElement;
     private rankingSignature='';
+    /** U4: one ranking row per rat, reused so rank changes slide instead of snapping. */
+    private readonly rankRows=new Map<string,HTMLElement>();
+    private zoneSecond=-1;
     /** Room roster; the retired evidence incident is absent from the strip. */
     private roster:readonly {id:string;title:string}[]=INCIDENTS;
     setRoster(incidents:readonly {id:string;title:string}[]|undefined):void {if(incidents?.length)this.roster=incidents;}
@@ -175,16 +179,17 @@ export class DispatchHud {
                 this.previousAssignment=a.roundId;this.previousDeliverySerial=a.deliverySerial;this.previousPoints=points;this.previousCountdown=-1;this.confirmationUntil=0;
                 if(now<a.liveAt)this.feedback?.('dispatch');
                 this.assignmentReveal.classList.remove('assignment-arrival');void this.assignmentReveal.offsetWidth;this.assignmentReveal.classList.add('assignment-arrival');
+                this.assignmentPanel.classList.toggle('ui-ease',uiMotion('scoreMotion'));
             }else if(chain&&a.deliverySerial>this.previousDeliverySerial){
                 this.previousDeliverySerial=a.deliverySerial;this.feedback?.('verified');
                 const delivery=a.lastDelivery,local=delivery?.playerId===this.myId;
                 setText(this.confirmation,local?`PAPERWORK DELIVERED! +1 · ${points}/3`:`${delivery?.playerName??'A DETECTIVE'} DELIVERED · ${delivery?a.deliveries[delivery.playerId]??0:0}/3`);
                 if(!a.result)setText(this.confirmation,`${this.confirmation.textContent} · CASE RELOCATED`);
-                this.confirmation.classList.remove('stamp-pop');void this.confirmation.offsetWidth;this.confirmation.classList.add('stamp-pop');
+                replay(this.confirmation,'stamp-pop');
                 this.confirmationUntil=now+2800;
             }
             if(!newAssignment&&a.id==='excessive-force'&&points>this.previousPoints){
-                this.confirmation.classList.remove('stamp-pop');void this.confirmation.offsetWidth;this.confirmation.classList.add('stamp-pop');
+                replay(this.confirmation,'stamp-pop');
                 this.feedback?.('case-point');setText(this.confirmation,`CASE KILL +${points-this.previousPoints} · ${points}/${target}`);this.confirmationUntil=now+2400;
             }
             const gained=newAssignment?0:points-this.previousPoints;
@@ -197,7 +202,13 @@ export class DispatchHud {
             if(j){
                 setText(this.zoneClock,`${Math.ceil(j.remainingMs/1000)}s`);
                 setText(this.zoneTimerLabel,a.phase==='active'?'ZONE MOVES IN':a.phase==='suspended'?'ZONE TIMER PAUSED':'ZONE DURATION');
-                this.zoneTimer.dataset.urgent=String(a.phase==='active'&&j.remainingMs<=JURISDICTION_TUNING.warningMs);
+                const urgent=a.phase==='active'&&j.remainingMs<=JURISDICTION_TUNING.warningMs,second=Math.ceil(j.remainingMs/1000);
+                this.zoneTimer.dataset.urgent=String(urgent);this.zoneTimer.dataset.final=String(urgent&&j.remainingMs<=3000);
+                // U4: the last seconds tick, louder for the final three, while the clock shakes (CSS).
+                if(urgent&&!newAssignment&&second!==this.zoneSecond&&second<Math.ceil(JURISDICTION_TUNING.warningMs/1000)){
+                    this.feedback?.(second<=3?'countdown-final':'tick');
+                }
+                this.zoneSecond=second;
                 setText(this.zoneNext,`NEXT: ${JURISDICTION_ZONES[nextZone(j)].label} · ${JURISDICTION_ZONES[nextZone(j)].floor}`);
                 if(!newAssignment&&this.zoneSerial!==j.serial){this.feedback?.('dispatch');this.zoneSerial=j.serial;}
                 if(!newAssignment&&a.phase==='active'&&j.remainingMs<=JURISDICTION_TUNING.warningMs&&this.zoneWarning!==j.serial){this.feedback?.('countdown');this.zoneWarning=j.serial;}
@@ -209,19 +220,19 @@ export class DispatchHud {
             this.leader.hidden=!this.leader.textContent;
             const rankingSignature=JSON.stringify([a.id,this.myId,leaders.slice(0,5).map(s=>[s.id,s.name,Math.floor(s.points)])]);
             if(rankingSignature!==this.rankingSignature){
-                this.rankingSignature=rankingSignature;this.rankings.replaceChildren();
-                for(const [index,s] of leaders.slice(0,5).entries()){
-                    const row=document.createElement('li');row.dataset.local=String(s.id===this.myId);
-                    for(const [tag,value] of [['i',String(index+1)],['span',s.name],['b',`${Math.floor(s.points)}/${target}`]]){
-                        const part=document.createElement(tag);part.textContent=value;row.appendChild(part);
-                    }
+                this.rankingSignature=rankingSignature;
+                const top=leaders.slice(0,5),before=measure(this.rankings);
+                this.rankings.replaceChildren();
+                for(const [index,s] of top.entries()){
+                    let row=this.rankRows.get(s.id);
+                    if(!row){row=document.createElement('li');for(const tag of ['i','span','b'])row.appendChild(document.createElement(tag));this.rankRows.set(s.id,row);}
+                    row.dataset.local=String(s.id===this.myId);
+                    const [place,name,score]=Array.from(row.children) as HTMLElement[];
+                    setText(place!,String(index+1));setText(name!,s.name);setText(score!,`${Math.floor(s.points)}/${target}`);
                     this.rankings.appendChild(row);
                 }
-            }
-            // Polish 19: punch your own ranking row when your points go up.
-            if(gained>0&&feelState().on('rewards')){
-                const row=this.rankings.querySelector<HTMLElement>('[data-local="true"]');
-                if(row){row.classList.remove('feel-pop');void row.offsetWidth;row.classList.add('feel-pop');}
+                for(const id of this.rankRows.keys())if(!top.some(s=>s.id===id))this.rankRows.delete(id);
+                slide(this.rankings,before,'scoreMotion');
             }
             setText(this.counter,(this.observing?'OBSERVING · ':'')+(race?`TOP FIVE · FIRST TO ${target}`:'HOLD IT AT ZERO!'));
             setText(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);
@@ -258,7 +269,15 @@ export class DispatchHud {
             setText(this.assignmentProgress,progress);setText(this.assignmentDetail,detail);
             this.assignmentPanel.dataset.phase=a.phase;
             this.assignmentPanel.dataset.urgent=String(a.id==='closing-time'&&a.remainingMs<=20_000&&running);
+            this.assignmentPanel.dataset.final=String(running&&a.remainingMs<=5000);
             this.assignmentBar.style.transform=`scaleX(${fraction})`;
+            // Polish 19 and U4: your row punches, the score rolls, and the points fly in from the scoring moment.
+            if(gained>0){
+                const row=this.rankRows.get(this.myId),view=document.defaultView;
+                if(row&&feelState().on('rewards'))replay(row,'feel-pop');
+                if(uiMotion('scoreMotion'))replay(this.assignmentProgress,'ui-roll');
+                if(view&&!j)fly(document,`+${gained}`,{x:view.innerWidth/2,y:view.innerHeight/2-110},row&&!this.rankings.hidden?row:this.assignmentProgress,'scoreMotion');
+            }
         }
         this.confirmation.hidden=now>=this.confirmationUntil||!a||a.phase==='suspended';
         if(!this.confirmation.hidden)this.announcement.hidden=true;
