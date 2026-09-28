@@ -94,7 +94,7 @@ export const FEEL={
     made:{label:'H2 Made moments',toggle:true,params:{}},
     /** L5: a machine firing: debris by machine, dust ring, overpressure sparks and smoke; hats blown off within `hatRange`;
      * `shake` (degrees) and `shakeRange` for the rumble nearby; your own launch kicks the view by `kick`. */
-    launchMoment:{label:'L5 Launch moment',toggle:true,params:{hatRange:9,shake:1.2,shakeRange:30,kick:2.4,push:-9,debris:26}},
+    launchMoment:{label:'L5 Launch moment',toggle:true,params:{hatRange:9,shake:1.2,shakeRange:30,kick:2.4,push:-9,debris:40}},
     /** L6: flight: scream, flail, contrails behind every launched rat, speed lines; `hang` seconds of floaty apex. */
     launchFlight:{label:'L6 Flight',toggle:true,params:{scream:.2,screamRange:60,trailEvery:.035,streaks:1,hang:.45,hangLift:.75}},
     /** L7: landing: crater and cracked pavement, dust, THUD, shake within `shakeRange`; the thrown case whistles and spills paperwork. */

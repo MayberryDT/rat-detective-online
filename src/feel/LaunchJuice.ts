@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type {LaunchMachineKind} from '../shared/chaosState';
+import {LaunchBlast} from './LaunchBlast';
 
 const BITS=220;
 const SPARKS=64;
@@ -8,12 +9,18 @@ const DECALS=10;
 
 /** What a machine spits when it fires: colours, size (x,y,z) and how the bits fly. */
 const SPIT:Record<LaunchMachineKind,{colors:readonly number[];size:readonly [number,number,number];speed:number;lift:number;flutter:number}>={
-    pressure:{colors:[0xb09050,0x5a5050,0x807060],size:[.22,.07,.22],speed:6,lift:14,flutter:0},
-    dumpster:{colors:[0x4a5a3a,0x8a7a5a,0x9aa0a8,0xd8ccb0,0x3a3a34],size:[.42,.16,.34],speed:7,lift:16,flutter:.4},
-    freight:{colors:[0x707880,0x505860,0x9a8a60],size:[.12,.12,.2],speed:9,lift:9,flutter:0},
-    geyser:{colors:[0x5a6a50,0x6f7f66,0x44503c],size:[.24,.24,.24],speed:4,lift:22,flutter:0},
-    mousetrap:{colors:[0x8a6040,0x6a4a30,0xc8a060],size:[.07,.07,.5],speed:10,lift:10,flutter:0},
-    fan:{colors:[0xc8bea0,0x6a5a3a,0x8a7a4a],size:[.26,.02,.2],speed:5,lift:20,flutter:1},
+    // Brass washers, grit and rivets.
+    pressure:{colors:[0xc9a557,0x5a5050,0x807060,0xe0c070],size:[.26,.07,.26],speed:9,lift:24,flutter:0},
+    // Trash: bags, cans, peel and newspaper.
+    dumpster:{colors:[0x4a5a3a,0x8a7a5a,0x9aa0a8,0xd8ccb0,0x3a3a34,0xc85a2a],size:[.46,.18,.36],speed:10,lift:22,flutter:.4},
+    // Bolts, chain links and splinters of pallet.
+    freight:{colors:[0x707880,0x505860,0x9a8a60,0x8a6444],size:[.14,.14,.26],speed:13,lift:16,flutter:0},
+    // Sewer water and muck.
+    geyser:{colors:[0x6fd6a8,0x4a9a78,0x5a6a50,0xbff5d2],size:[.2,.2,.2],speed:5,lift:34,flutter:0},
+    // Wood splinters and cheese crumbs.
+    mousetrap:{colors:[0x8a6040,0x6a4a30,0xc8a060,0xe9b53a],size:[.08,.08,.6],speed:13,lift:18,flutter:0},
+    // Paper, leaves and litter riding the air.
+    fan:{colors:[0xe8dcc0,0x6a5a3a,0x8a7a4a,0xb8a060],size:[.3,.02,.24],speed:6,lift:30,flutter:1},
 };
 const SPARK_COLORS=[0xffa040,0xffd070,0xff6a20] as const;
 const PAPER=[0xe8dcc0,0xd8ccb0,0xf0e6d0] as const;
@@ -44,8 +51,9 @@ export class LaunchJuice {
     private active=false;
     private readonly dummy=new THREE.Object3D();
     private readonly color=new THREE.Color();
+    private readonly blast:LaunchBlast;
 
-    constructor(private readonly scene:THREE.Scene){}
+    constructor(private readonly scene:THREE.Scene){this.blast=new LaunchBlast(scene);}
 
     private instanced(name:string,geometry:THREE.BufferGeometry,material:THREE.Material,count:number):THREE.InstancedMesh {
         const mesh=new THREE.InstancedMesh(geometry,material,count);
@@ -84,8 +92,9 @@ export class LaunchJuice {
         for(let i=0;i<count;i++)this.sparkCursor=this.emit(this.sparks,mesh,this.sparkCursor,at,SPARK_COLORS,[.06,.06,.22],12,14,0,.55,-Infinity);
     }
 
-    /** A machine fires: its own debris from the pad; overpressure adds a fountain of sparks. */
+    /** A machine fires: the layered blast, its own debris from the pad; overpressure adds a fountain of sparks. */
     fired(kind:LaunchMachineKind,pad:{x:number;y:number;z:number;radius:number},boost:boolean,count:number):void {
+        this.blast.fire(kind,pad,boost);this.active=true;
         const spit=SPIT[kind],at=new THREE.Vector3();
         for(let i=0;i<count;i++){
             const angle=Math.random()*Math.PI*2,r=Math.random()*pad.radius*.8;
@@ -158,6 +167,7 @@ export class LaunchJuice {
     }
 
     update(dt:number):void {
+        this.blast.update(dt);
         if(!this.active)return;
         let live=this.step(this.bits,this.bitMesh,dt);
         live=this.step(this.sparks,this.sparkMesh,dt)||live;
@@ -187,6 +197,7 @@ export class LaunchJuice {
         for(const b of [...this.bits,...this.sparks])b.age=Infinity;
         for(const puff of this.puffs)puff.age=Infinity;
         for(const decal of this.decals)decal.mesh.visible=false;
+        this.blast.clear();
         for(const mesh of [this.bitMesh,this.sparkMesh,this.puffMesh])if(mesh)mesh.count=0;
         this.trails.clear();this.active=false;
     }
@@ -194,7 +205,7 @@ export class LaunchJuice {
         for(const mesh of [this.bitMesh,this.sparkMesh,this.puffMesh]){mesh?.removeFromParent();mesh?.dispose();}
         for(const decal of this.decals)decal.mesh.removeFromParent();
         for(const resource of this.owned)resource.dispose();
-        this.owned.length=0;this.decals.length=0;this.trails.clear();
+        this.owned.length=0;this.decals.length=0;this.trails.clear();this.blast.dispose();
     }
 }
 

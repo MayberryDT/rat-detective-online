@@ -65,19 +65,20 @@ export interface LaunchMachine {
     eventMs:number;
 }
 // Each machine stands on its own pad's rim, facing the pad, with open street
-// behind it; its red trigger crowns the machine and is exposed on every side.
+// behind it; its big red trigger crowns the machine and is exposed on every side.
 export const LAUNCH_MACHINES: readonly LaunchMachine[] = [
     { id:'pressure', kind:'pressure', x:146, z:149, mx:139.1, mz:149 },
     { id:'dumpster', kind:'dumpster', x:-57, z:-29, mx:-57, mz:-35.9 },
     { id:'freight', kind:'freight', x:130, z:-20, mx:134.44, mz:-14.71 },
-    { id:'geyser', kind:'geyser', x:-153, z:15, mx:-147.71, mz:19.44 },
+    { id:'geyser', kind:'geyser', x:-153, z:15, mx:-148.5, mz:19.6 },
     { id:'mousetrap', kind:'mousetrap', x:-106, z:128, mx:-99.34, mz:129.79 },
     { id:'fan', kind:'fan', x:75, z:39, mx:68.52, mz:36.64 },
 ].map(m=>({id:m.id,kind:m.kind as LaunchMachineKind,
     label:({pressure:'PRESSURE WORKS',dumpster:'TRASH COMPACTOR',freight:'FREIGHT RAM',geyser:'SEWER GEYSER',mousetrap:'RAT TRAP',fan:'WIND TUNNEL'} as Record<string,string>)[m.id],
     pad:{x:m.x,y:0,z:m.z,radius:5},
     box:{x:m.mx,y:1.5,z:m.mz,w:2.4,h:3,d:2.4},
-    target:{x:m.mx,y:3.8,z:m.mz,w:1.8,h:1.6,d:1.8},
+    // A big plain red target: stray cheese from any fight nearby slowly fills it.
+    target:{x:m.mx,y:4.8,z:m.mz,w:4,h:3.6,d:4},
     eventMs:1500,
 }));
 export const PRESSURE_LAUNCH = LAUNCH_MACHINES[0];

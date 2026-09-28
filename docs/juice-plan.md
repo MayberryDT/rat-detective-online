@@ -177,6 +177,7 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
 - [x] **P3 Surge chaos:** street launchers across the city, suction toward pads, machines filling themselves, the finale blowout.
 - [x] **P4 Surge look:** street steam, lights flickering with the pulses, rising rumble and shake; street-launcher warning and eruption.
 - [x] **P5 Review package:** checks, one independent review, private preview.
+- **Tyler's first look (2026-09-28):** the glowing, outlined trigger was too much ("I don't wanna see it from across the map"). Now plain lit red with no glow or outline, and much larger (2.2× across, about 5× the face) so stray fire fills it. The launch effect was redone as a layered blast (flash, core, air column, shock ring, streaks, dust burst, haze, doubled debris).
 - **Status (2026-09-28):** built on `juice/launch-machines` and on the private preview (fixture `d7af3558-5e9d-43f5-8463-fb8c206077dc`, client `index-Bbe9u7e0.js`, protocol 21) for Tyler to judge the machines. One independent review found 4 issues (finale skipped hanging machines, repeated vent launch ids, surge bookkeeping lost on restore, per-frame vent allocations); all fixed in `3953c02`. What to look for: [review guide](juice/review.md#sixth-batch-launcher-machines-pressure-triggers-and-pressure-surge-protocol-21).
 
 **Later (not now):**

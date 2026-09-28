@@ -221,6 +221,7 @@ function poseStudioCorpse(dt:number):void {
 const machines=new PressureMachine(stage.scene,stage.listener.context as AudioContext);
 const pressure:PressureState={serial:0,levels:{},launches:[]};
 let surging=false;
+machines.onFire=(machine,boost)=>feel.launcherFired(machine.kind,machine.pad,boost,stage.camera);
 machines.onVent=vent=>{feel.launcherFired('geyser',{x:vent.x,y:vent.y,z:vent.z,radius:3.2},false,stage.camera);feel.surgePulse(vent,stage.camera);};
 function setPressure(fraction:number):void {
     pressure.levels=Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,fraction*PRESSURE_TUNING.full]));delete pressure.blowing;

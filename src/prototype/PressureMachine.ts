@@ -3,7 +3,7 @@ import {LAUNCH_MACHINES,PRESSURE_TUNING,type LaunchMachine,type ChaosState,type 
 import {SURGE} from '../shared/launcherVelocity';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {LauncherAudio} from '../audio/LauncherAudio';
-import {buildMachine,createMachineMaterials,type MachineMaterials,type MachineModel} from './LaunchMachineModels';
+import {buildMachine,createMachineMaterials,TRIGGER_SCALE as TRIGGER_BASE,type MachineMaterials,type MachineModel} from './LaunchMachineModels';
 
 const STEAM=180;
 const smooth=(edge0:number,edge1:number,x:number)=>{const t=Math.min(1,Math.max(0,(x-edge0)/(edge1-edge0)));return t*t*(3-2*t);};
@@ -15,7 +15,6 @@ interface MachineView {
     steamDebt:number;creakAt:number;popped:boolean;
     /** Wind-tunnel blade angle, integrated so its speed can follow pressure. */
     spin:number;
-    column?:THREE.Group;
 }
 
 /** Six municipal launchers, each beside its pad with its big red trigger on top.
@@ -49,15 +48,7 @@ export class PressureMachine {
         for(const machine of LAUNCH_MACHINES){
             const model=buildMachine(machine,this.materials);
             this.root.add(model.base,model.pad,model.glow);
-            let column:THREE.Group|undefined;
-            if(machine.kind==='fan'||machine.kind==='geyser'){
-                // A rising column of air or steam rings for the launch.
-                column=new THREE.Group();column.position.set(machine.pad.x,.3,machine.pad.z);column.visible=false;
-                const ring=new THREE.TorusGeometry(1,.12,5,24),material=new THREE.MeshBasicMaterial({color:machine.kind==='geyser'?0xa8d8b4:0xdde8e6,transparent:true,opacity:0,depthWrite:false,toneMapped:false});
-                for(let i=0;i<10;i++){const mesh=new THREE.Mesh(ring,material);mesh.rotation.x=Math.PI/2;column.add(mesh);}
-                this.root.add(column);
-            }
-            this.views.push({model,heardFire:NaN,heardTell:NaN,steamDebt:0,creakAt:0,popped:false,spin:0,column});
+            this.views.push({model,heardFire:NaN,heardTell:NaN,steamDebt:0,creakAt:0,popped:false,spin:0});
         }
         this.steamMesh=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),new THREE.MeshBasicMaterial({color:0xd9dcd6,transparent:true,opacity:.3,depthWrite:false}),STEAM);
         this.steamMesh.name='launcher-steam';this.steamMesh.count=0;this.steamMesh.frustumCulled=false;this.root.add(this.steamMesh);
@@ -107,10 +98,9 @@ export class PressureMachine {
             if(strain>.2&&now>=view.creakAt){view.creakAt=now+1400-strain*900+Math.random()*900;this.launchAudio.play(kind,machine.pad,camera,'creak');}
             if(danger>.5&&!view.popped){view.popped=true;this.launchAudio.play(kind,machine.pad,camera,'pop');}
             if(intensity<.3)view.popped=false;
-            // The trigger pulses faster and brighter as pressure builds; strobes in the hang.
-            const rate=hang?18:1+intensity*9,pulse=.5+.5*Math.sin(t*Math.PI*2*rate);
-            model.triggerMaterial.emissiveIntensity=.55+(1+3.5*intensity)*pulse;
-            model.trigger.scale.setScalar(1+.07*pulse*intensity+(hang?.08:0));
+            // The trigger throbs (never glows) as pressure builds, quicker in the hang.
+            const rate=hang?12:1+intensity*6,pulse=.5+.5*Math.sin(t*Math.PI*2*rate);
+            model.trigger.scale.setScalar(TRIGGER_BASE*(1+.04*pulse*intensity+(hang?.05:0)));
             // The body swells and shudders; the whole machine bulges in the danger stage.
             const shake=strain*.025+danger*.07+(hang?.06:0);
             model.body.position.set(Math.sin(t*61)*shake,Math.abs(Math.sin(t*47))*shake*.6,Math.cos(t*53)*shake);
@@ -165,17 +155,6 @@ export class PressureMachine {
             parts.blades!.rotation.y=view.spin;
             const ribbons=parts.streamers!.children;
             for(let i=0;i<ribbons.length;i++)ribbons[i]!.rotation.x=-(.15+.9*level+kick*1.2)*(.7+.3*Math.sin(t*9+i));
-        }
-        if(view.column){
-            view.column.visible=a<1.6;
-            if(view.column.visible){
-                const rings=view.column.children;
-                for(let i=0;i<rings.length;i++){
-                    const rise=(a/1.4+i/10)%1,width=2+rise*(kind==='fan'?5:2.5);
-                    rings[i]!.position.set(Math.sin(i+a*2)*rise,1+rise*26,Math.cos(i+a*2)*rise);rings[i]!.scale.setScalar(width);
-                }
-                ((view.column.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity=Math.max(0,.6*(1-a/1.6));
-            }
         }
     }
 

@@ -7,7 +7,7 @@ export interface MachineMaterials {
     iron:THREE.MeshStandardMaterial; steel:THREE.MeshStandardMaterial; brass:THREE.MeshStandardMaterial;
     dark:THREE.MeshStandardMaterial; wood:THREE.MeshStandardMaterial; green:THREE.MeshStandardMaterial;
     yellow:THREE.MeshStandardMaterial; hazard:THREE.MeshStandardMaterial; face:THREE.MeshStandardMaterial;
-    glow:THREE.MeshBasicMaterial; outline:THREE.MeshBasicMaterial; cheese:THREE.MeshStandardMaterial;
+    glow:THREE.MeshBasicMaterial; cheese:THREE.MeshStandardMaterial;
 }
 
 /** One rebuilt launcher. `body` (machine beside the pad) shakes and swells with
@@ -19,7 +19,6 @@ export interface MachineModel {
     base:THREE.Group;
     body:THREE.Group;
     trigger:THREE.Group;
-    triggerMaterial:THREE.MeshStandardMaterial;
     /** At the pad centre, turned like `base`. */
     pad:THREE.Group;
     parts:Record<string,THREE.Object3D>;
@@ -46,7 +45,6 @@ export function createMachineMaterials():MachineMaterials {
         green:standard(0x2e5c3c,.7,.2,0x0c2012,.25),yellow:standard(0xe0a81c,.55,.1,0x3a2600,.3),hazard,
         face:standard(0xf2e8cf,.6,0,0x3a3428,.35),cheese:standard(0xe9b53a,.55,0,0x3a2400,.25),
         glow:new THREE.MeshBasicMaterial({color:0xff2a10,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,fog:false}),
-        outline:new THREE.MeshBasicMaterial({color:0xff2010,side:THREE.BackSide,toneMapped:false,fog:false}),
     };
 }
 
@@ -107,16 +105,15 @@ function sign(text:string,background:string,ink:string,w:number,h:number):THREE.
     return new THREE.Mesh(new THREE.PlaneGeometry(w,h),material);
 }
 
-/** The big red trigger group: its parts in the pulsing red, each with a bright red back-face outline. */
-function trigger(parts:(b:Builder,red:THREE.Material)=>void,red:THREE.MeshStandardMaterial,outline:THREE.Material):THREE.Group {
+/** How much bigger the trigger is than its sketch (the parts below are drawn about 1.8 wide, from y 3). */
+export const TRIGGER_SCALE=2.2;
+/** The big red trigger: plain lit red (no glow, no outline), so it reads up close and fades
+ * into the fog like the rest of the machine. It keeps its colour under the noir pass. */
+function trigger(parts:(b:Builder,red:THREE.Material)=>void,red:THREE.MeshStandardMaterial):THREE.Group {
     const group=new THREE.Group();group.name='launcher-trigger';group.userData.noNoir=true;
-    const b=new Builder();parts(b,red);
-    for(const mesh of b.build(group)){
-        // The outline: the same shape pushed out along its normals, drawn back-faces only.
-        const shell=mesh.geometry.clone(),positions=shell.getAttribute('position'),normals=shell.getAttribute('normal');
-        for(let i=0;i<positions.count;i++)positions.setXYZ(i,positions.getX(i)+normals.getX(i)*.07,positions.getY(i)+normals.getY(i)*.07,positions.getZ(i)+normals.getZ(i)*.07);
-        const edge=new THREE.Mesh(shell,outline);edge.castShadow=false;edge.name='launcher-trigger-outline';group.add(edge);
-    }
+    group.position.y=3;group.scale.setScalar(TRIGGER_SCALE);
+    const inner=new THREE.Group();inner.position.y=-3;group.add(inner);
+    const b=new Builder();parts(b,red);b.build(inner);
     return group;
 }
 
@@ -127,7 +124,7 @@ export function buildMachine(machine:LaunchMachine,m:MachineMaterials):MachineMo
     const base=new THREE.Group();base.name=`launcher-${machine.id}`;base.position.set(box.x,0,box.z);base.rotation.y=yaw;
     const body=new THREE.Group();base.add(body);
     const padRoot=new THREE.Group();padRoot.name=`launcher-pad-${machine.id}`;padRoot.position.set(p.x,0,p.z);padRoot.rotation.y=yaw;
-    const red=new THREE.MeshStandardMaterial({color:0xff1a0a,roughness:.35,emissive:0xff1a0a,emissiveIntensity:.6});
+    const red=new THREE.MeshStandardMaterial({color:0xd8160c,roughness:.6});
     const parts:Record<string,THREE.Object3D>={};
     const b=new Builder(),pb=new Builder();
     const seams:THREE.Vector3[]=[];
@@ -159,7 +156,7 @@ export function buildMachine(machine:LaunchMachine,m:MachineMaterials):MachineMo
             const wheel=new THREE.TorusGeometry(.72,.11,10,32);t.add(wheel,r,0,3.55,0,Math.PI/2,0,0);wheel.dispose();
             for(let i=0;i<4;i++)t.box(r,0,3.55,0,1.4,.09,.12,0,i*Math.PI/4,0);
             t.cylinder(r,0,3.6,0,.2,.2);
-        },red,m.outline);
+        },red);
         // Pad: a round steel piston plate on a chrome ram.
         const plate=new THREE.Group();padRoot.add(plate);parts.plate=plate;
         const pl=new Builder();pl.cylinder(m.steel,0,.14,0,4.4,.22);pl.cylinder(m.iron,0,.27,0,3.4,.06);
@@ -177,7 +174,7 @@ export function buildMachine(machine:LaunchMachine,m:MachineMaterials):MachineMo
         triggerGroup=trigger((t,r)=>{
             // A big mushroom plunger marked CRUSH.
             t.cylinder(r,0,2.9,0,.22,.5);t.add(SPHERE,r,0,3.35,0,0,0,0,.78,.36,.78);t.cylinder(r,0,3.22,0,.8,.14);
-        },red,m.outline);
+        },red);
         const crush=sign('CRUSH','#ff1a0a','#fff2d0',1.2,.36);crush.position.set(0,2.62,.9);crush.rotation.x=-.25;body.add(crush);
         // Pad: a dumpster bed with walls, a spring floor that catapults and a lid that slams.
         pb.box(m.green,0,.35,-3.6,8,.7,.3);for(const side of [-1,1])pb.box(m.green,side*3.95,.2,0,.3,.4,7.3);
@@ -196,7 +193,7 @@ export function buildMachine(machine:LaunchMachine,m:MachineMaterials):MachineMo
         triggerGroup=trigger((t,r)=>{
             // An emergency-stop mushroom button on a yellow post.
             t.add(SPHERE,r,0,3.3,0,0,0,0,.85,.42,.85);t.cylinder(r,0,3.1,0,.55,.24);
-        },red,m.outline);
+        },red);
         b.cylinder(m.yellow,0,2.72,0,.3,.55);
         const piston=new THREE.Group();piston.position.set(0,1.2,.95);body.add(piston);parts.piston=piston;
         const ps=new Builder();ps.cylinder(m.steel,0,0,.9,.32,1.8,Math.PI/2);ps.cylinder(m.iron,0,0,1.85,.55,.18,Math.PI/2);ps.build(piston);
@@ -216,7 +213,7 @@ export function buildMachine(machine:LaunchMachine,m:MachineMaterials):MachineMo
             t.cylinder(r,0,3.05,0,.62,.5);t.add(SPHERE,r,0,3.35,0,0,0,0,.62,.3,.62);
             t.add(new THREE.CylinderGeometry(.22,.22,.3,5),r,0,3.72,0);
             for(const side of [-1,1])t.cylinder(r,side*.72,3.05,0,.18,.3,0,0,Math.PI/2);
-        },red,m.outline);
+        },red);
         // Pad: cracked paving around a manhole cover, glowing green from below.
         pb.cylinder(m.dark,0,.06,0,4.4,.12);
         for(let i=0;i<10;i++){const a=i/10*Math.PI*2;pb.box(m.iron,Math.sin(a)*3,.13,Math.cos(a)*3,.12,.02,2.2,0,a,0);}
@@ -236,7 +233,7 @@ export function buildMachine(machine:LaunchMachine,m:MachineMaterials):MachineMo
         triggerGroup=trigger((t,r)=>{
             // The bait: a giant red-waxed cheese wheel with one wedge cut out.
             t.add(new THREE.CylinderGeometry(.85,.85,.6,28,1,false,.5,Math.PI*2-1),r,0,3.3,0);
-        },red,m.outline);
+        },red);
         const wedge=new THREE.Mesh(new THREE.CylinderGeometry(.8,.8,.56,6,1,false,-.5,1),m.cheese);wedge.position.y=3.3;body.add(wedge);
         // Pad: the wooden board, staples and the snap bar that flips over.
         pb.box(m.wood,0,.07,0,8.4,.14,7.2);
@@ -256,7 +253,7 @@ export function buildMachine(machine:LaunchMachine,m:MachineMaterials):MachineMo
             // A big red motor cap on the housing.
             t.cylinder(r,0,3.1,0,.8,.45);t.add(SPHERE,r,0,3.35,0,0,0,0,.8,.35,.8);
             for(let i=0;i<8;i++){const a=i/8*Math.PI*2;t.box(r,Math.sin(a)*.82,3.08,Math.cos(a)*.82,.08,.4,.2,0,a,0);}
-        },red,m.outline);
+        },red);
         b.cylinder(m.iron,0,2.35,-.1,.3,.5);
         // Pad: a grate over caged turbine blades, with streamers around the rim.
         pb.cylinder(m.dark,0,.05,0,4.5,.1);
@@ -278,5 +275,5 @@ export function buildMachine(machine:LaunchMachine,m:MachineMaterials):MachineMo
     const glow=new THREE.Mesh(new THREE.CircleGeometry(1,40),m.glow.clone());glow.rotation.x=-Math.PI/2;
     glow.position.set((box.x+p.x)/2,.09,(box.z+p.z)/2);glow.scale.setScalar(Math.hypot(p.x-box.x,p.z-box.z)/2+p.radius);
     glow.renderOrder=1;
-    return {machine,base,body,trigger:triggerGroup,triggerMaterial:red,pad:padRoot,parts,needle,seams,glow};
+    return {machine,base,body,trigger:triggerGroup,pad:padRoot,parts,needle,seams,glow};
 }
