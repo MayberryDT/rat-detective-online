@@ -448,13 +448,12 @@ export class ChaosSimulation {
     }
     private firePressure(machine:LaunchMachine){
         const pad=machine.pad;
-        const nearby=[...this.players.values()].filter(p=>p.hp>0 && Math.abs(p.y-pad.y)<2 &&
-            Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius);
-        // Loose evidence rides the pad too. Counterfeits stay planted: they are
-        // static hazards by construction, never thrown. A carried case needs no
+        const onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;
+        const nearby=[...this.players.values()].filter(p=>p.hp>0&&onPad(p));
+        // Everything loose on the pad flies: evidence (counterfeits included; they
+        // re-plant where they land), bodies and cheese. A carried case needs no
         // handling here, because carry() pins it to its rat every tick.
-        const caseRiders=[...this.cases.values()].filter(c=>!c.fake&&!c.owner&&!c.returningUntil&&
-            Math.abs(c.body.position.y-pad.y)<2 && Math.hypot(c.body.position.x-pad.x,c.body.position.z-pad.z)<=pad.radius);
+        const caseRiders=[...this.cases.values()].filter(c=>!c.owner&&!c.returningUntil&&!c.armed&&onPad(c.body.position));
         // Fire even when empty: seeing the remote mechanism activate teaches
         // players which launcher this trigger operates. Occupants alone receive impulses.
         this.pressure.serial++;
@@ -463,6 +462,21 @@ export class ChaosSimulation {
         const boosts=this.pressure.boosts??(this.pressure.boosts={});
         if(boost)boosts[machine.id]=this.now;else delete boosts[machine.id];
         for(const c of caseRiders)this.launchCase(c,machine,boost);
+        for(const corpse of this.corpses.values()){
+            const body=corpse.body;
+            if(!onPad(body.position))continue;
+            // Bodies barely damp, so they get a shorter lift for a similar arc, and a wild tumble.
+            const v=launcherVelocity(machine,boost);
+            body.velocity.set(v.x,v.y*.8,v.z);
+            body.angularVelocity.set((Math.random()*2-1)*14,(Math.random()*2-1)*9,(Math.random()*2-1)*14);
+            body.wakeUp();
+        }
+        for(const shot of this.shots){
+            if(!onPad(shot.p))continue;
+            if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);}
+            const v=launcherVelocity(machine,boost);
+            shot.v={x:v.x*.8,y:v.y*.6,z:v.z*.8};
+        }
         // Keep other stations' outstanding events. A rat can only occupy one pad,
         // and its newest impulse replaces an older event if launched again.
         const selected=new Set(nearby.map(p=>p.id));
@@ -1218,7 +1232,17 @@ export class ChaosSimulation {
     private stepLooseCase(c:CaseRuntime,now:number,playing:boolean){
         // Counterfeits never equip, never recover and never return: they only
         // wait to be shot or to detonate on the first rat that reaches them.
-        if(c.fake)return;
+        // A thrown one re-plants where it lands, or somewhere valid if it escaped.
+        if(c.fake){
+            const p=c.body.position;
+            if(c.launched&&(this.caseSettled(c,p)||p.y< -9||outsideCity(p.x,p.z))){
+                c.launched=false;
+                c.body.type=C.Body.STATIC;c.body.mass=0;c.body.collisionFilterMask=16;
+                c.body.velocity.setZero();c.body.angularVelocity.setZero();c.body.updateMassProperties();
+                if(p.y< -9||outsideCity(p.x,p.z))this.placeFake(c);else c.body.updateAABB();
+            }
+            return;
+        }
         if(!c.owner){
             const p=c.body.position;
             // A launched case is mid-flight, not lost. Its apex is slow and high,
