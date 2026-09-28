@@ -9,7 +9,7 @@ import type {DeathStyle} from '../utils/RatAnimator';
 import {FEEL} from '../feel/feelTuning';
 import {feelState} from '../feel/feelState';
 import * as CANNON from 'cannon-es';
-import { createRatMesh, RatOptions } from '../utils/RatModel';
+import { createRatMesh, ratAccessory, RatOptions } from '../utils/RatModel';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import type {RatReaction} from '../utils/RatActing';
 import { RatAnimator } from '../utils/RatAnimator';
@@ -192,7 +192,7 @@ export class RatEntity {
         this.appearance = opts;
 
         // 2. VISUALS
-        this.mesh = this.modelFactory(opts);
+        this.mesh = this.modelFactory({...opts, accessory: ratAccessory(name)});
         this.mesh.position.copy(position);
         this.mesh.userData.aimTarget = true;
         this.scene.add(this.mesh);

@@ -105,6 +105,8 @@ export const FEEL={
     face:{label:'M1 Face',toggle:true,params:{}},
     /** M2: springy tail behind turns, hat rocking with each step, a flinch of the head away from hits. */
     bodySprings:{label:'M2 Body springs',toggle:true,params:{}},
+    /** M3: each rat wears one extra from its name: cigarette, detective's badge or scarf (applies to newly built rats). */
+    extras:{label:'M3 Personality extras (reload)',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import type { ChaosState, CorpseState, LaunchMachine } from '../shared/chaosState';
 import { CHAOS_TUNING, CASE_LOOSE_SCALE, DISPATCH_STATIONS } from '../shared/chaosState';
 import { BALL_RADIUS } from '../shared/ballTuning';
-import { createRatMesh } from '../utils/RatModel';
+import { createRatMesh, ratAccessory } from '../utils/RatModel';
 import { RatAnimator } from '../utils/RatAnimator';
 import { batchRigidMeshes } from '../utils/RigidMeshBatch';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
@@ -346,7 +346,8 @@ export class ChaosView {
             const victim=this.resolveRat(c.victimId);if(victim?.dead)victim.useSharedCorpse();
             let model=this.corpses.get(c.id);
             if(!model){
-                const mesh=createRatMesh(c.appearance);
+                const name=this.resolveRat(c.victimId)?.name;
+                const mesh=createRatMesh(name===undefined?c.appearance:{...c.appearance,accessory:ratAccessory(name)});
                 // Polish 11: a fresh corpse pops its fedora (not one already lying there on join).
                 const hatPending=feelState().on('hatPop')&&state.time-c.born<600;
                 model={mesh,animator:new RatAnimator(mesh),state:c,hatPending,speed:0};this.corpses.set(c.id,model);this.root.add(mesh);

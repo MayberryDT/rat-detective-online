@@ -6,7 +6,16 @@ import { createRatArm, RAT_GUN_SHOULDER, updateGunSleeve } from './RatArmModel';
 import { feelState } from '../feel/feelState';
 
 export type HatType = HatTypeName;
-export type RatOptions = Partial<RatAppearance>;
+/** M3: one small extra per rat, picked from its name so every client agrees. */
+export const RAT_ACCESSORIES = ['cigarette', 'badge', 'scarf'] as const;
+export type RatAccessory = typeof RAT_ACCESSORIES[number];
+export type RatOptions = Partial<RatAppearance> & {accessory?: RatAccessory};
+/** The accessory a rat named `name` wears (stable across clients and respawns). */
+export function ratAccessory(name: string): RatAccessory {
+    let hash = 2166136261;
+    for (let i = 0; i < name.length; i++) hash = Math.imul(hash ^ name.charCodeAt(i), 16777619);
+    return RAT_ACCESSORIES[(hash >>> 0) % RAT_ACCESSORIES.length]!;
+}
 
 // Rats ignore the noir fog so they keep full contrast at any distance and HP.
 function material(color: THREE.ColorRepresentation, roughness = 0.78) {
@@ -73,7 +82,7 @@ function collarGeometry() {
     geometry.setIndex(indices); geometry.computeVertexNormals(); return geometry;
 }
 
-function cheesePistol(parent: THREE.Group, coat: THREE.Material, highlight: THREE.Material) {
+function cheesePistol(parent: THREE.Group, coat: THREE.Material, highlight: THREE.Material, cheese: THREE.Material) {
     const arm = pivot(parent, 'rat-arm', -0.49, 0.91, 0.09);
     arm.rotation.x = 1.28;
     const limb=createRatArm(coat,highlight);
@@ -81,7 +90,7 @@ function cheesePistol(parent: THREE.Group, coat: THREE.Material, highlight: THRE
     shoulder.add(limb);
     limb.getObjectByName('rat-arm-cuff')!.name='rat-pistol-cuff';
     const pistol = pivot(arm, 'rat-pistol');
-    const cheese = material(0xefb62e, 0.62), dark = material(0x29282a, 0.65);
+    const dark = material(0x29282a, 0.65);
     const shape = new THREE.Shape();
     shape.moveTo(-0.17, 0.02); shape.lineTo(0.23, 0.02); shape.lineTo(0.25, 0.05);
     shape.lineTo(0.25, 0.17); shape.lineTo(0.20, 0.20); shape.lineTo(-0.17, 0.17);
@@ -106,6 +115,35 @@ function cheesePistol(parent: THREE.Group, coat: THREE.Material, highlight: THRE
     mesh(pistol, new THREE.CircleGeometry(0.039, 16), dark, 0, 0.106, 0.259);
     pivot(pistol, 'rat-muzzle', 0, 0.106, 0.28);
     updateGunSleeve({shoulder,sleeve:limb,arm,pistol});
+}
+
+/** M3: the rat's one extra, in the rig's existing materials (no new batch palette entries). */
+function accessory(kind: RatAccessory, head: THREE.Object3D, body: THREE.Object3D, m: {white: THREE.Material; pupil: THREE.Material; cheese: THREE.Material; felt: THREE.Material}) {
+    const root = pivot(kind === 'cigarette' ? head : body, 'rat-accessory');
+    const part = (geometry: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+        const piece = mesh(root, geometry, mat, x, y, z);piece.userData.noOutline = true;piece.castShadow = false;return piece;
+    };
+    if (kind === 'cigarette') {
+        // Hanging from the corner of the mouth, angled out and down, with a glowing tip.
+        root.position.set(0.1, -0.2, 0.44);root.rotation.set(0.35, -0.55, 0);
+        part(new THREE.CylinderGeometry(0.016, 0.016, 0.2, 8).rotateX(Math.PI / 2).translate(0, 0, 0.1), m.white, 0, 0, 0);
+        part(new THREE.CylinderGeometry(0.017, 0.017, 0.03, 8).rotateX(Math.PI / 2), m.cheese, 0, 0, 0.205);
+    } else if (kind === 'badge') {
+        // A detective's star pinned high on the coat, opposite the gun arm.
+        const star = new THREE.Shape();
+        for (let i = 0; i < 10; i++) {
+            const r = i % 2 ? 0.035 : 0.08, a = i / 10 * Math.PI * 2 + Math.PI / 2;
+            if (i) star.lineTo(Math.cos(a) * r, Math.sin(a) * r); else star.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        root.position.set(0.19, 1.02, 0.4);root.rotation.set(-0.09, 0.45, 0);
+        part(new THREE.ExtrudeGeometry(star, {depth: 0.018, bevelEnabled: false}), m.cheese, 0, 0, 0);
+    } else {
+        // A scarf in the hat's felt, wound at the collar with one end hanging.
+        root.position.set(0, 1.47, 0.01);
+        const wrap = part(new THREE.TorusGeometry(0.36, 0.062, 8, 28), m.felt, 0, 0, 0);
+        wrap.rotation.x = Math.PI / 2;wrap.scale.set(1, 0.92, 1);
+        const end = part(new THREE.BoxGeometry(0.13, 0.36, 0.05), m.felt, 0.16, -0.17, 0.33);end.rotation.set(0.2, 0, 0.18);
+    }
 }
 
 /** Approved cheese-pistol concept, built as lightweight editable geometry. */
@@ -240,6 +278,8 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
             const part = mesh(shoe, shoeGeometry, leather);part.scale.set(1, 0.5, 1.75);part.userData.noOutline = true;
         }
     }
-    cheesePistol(body, coat, highlight);
+    const cheese = material(0xefb62e, 0.62);
+    cheesePistol(body, coat, highlight, cheese);
+    if (touchUps && options.accessory && feelState().on('extras')) accessory(options.accessory, head, body, {white, pupil, cheese, felt});
     return root;
 }

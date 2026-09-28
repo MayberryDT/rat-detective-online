@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {createRatMesh,type RatOptions} from '../utils/RatModel';
+import {createRatMesh,ratAccessory,type RatOptions} from '../utils/RatModel';
 import type {Award} from '../shared/networkProtocol';
 import {awardValue} from '../shared/awardUnits';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
@@ -48,7 +48,7 @@ export class PoliceLineup {
         // Winner last: the list arrives winner first.
         this.entries=[...entries].reverse();
         this.entries.forEach((entry,i)=>{
-            const rat=createRatMesh(entry.appearance);
+            const rat=createRatMesh({...entry.appearance,accessory:ratAccessory(entry.name)});
             rat.position.set((i-(this.entries.length-1)/2)*SPACING,0,0);
             rat.traverse(object=>{object.castShadow=true;});
             this.room.add(rat);this.rats.push(rat);
