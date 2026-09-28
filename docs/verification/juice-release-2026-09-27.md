@@ -30,3 +30,11 @@ Everything on `polish/feel`, fast-forwarded into `main` at commit `efcce3e`:
 - Tyler's playtest: T2 accepted; T1 and T4 felt better; T3 enemy readability is still too low; the T5 lineup was not reached. He felt a performance hit, possibly from other load on his PC; an optimization overhaul is planned.
 - The lineup was verified live on the private fixture, not in production.
 - Open game tabs on protocol 18 must reload.
+
+## Follow-up release: readability and nameplate (same evening)
+
+Tyler playtested the constant-width cream outline ("way more clear" but too much for the noir) and asked for it softer and for the health bar to be rebuilt. On his OK ("push it live"):
+
+- **Worker** `80901b67-6900-4148-9aa3-2ed964052acd` (predecessor `527eb4bd-30c9-4fef-a85e-de0944bf392d`), protocol 19, client `index-B0F-AKSY.js` / `createGame-BgdwD_Em.js`, commit `8313046`. Client-only: no Worker or shared source changed since `527eb4bd`.
+- **What changed:** the five-option readability lab is removed. Close rats have no outline; a faint cool moonlit edge (at most 1.5 px, half opacity) fades in from 16 to 45 units. Rats ignore the noir fog. The nameplate is rebuilt: spaced cream small caps over five slanted HP pips that flash, jolt and drain when lost, with the last pip red and a struck-through name on death.
+- **Checks:** typecheck and build pass; `npm audit --omit=dev` 0 vulnerabilities. Client suite passes except the known `neighborhood.test.ts` timeouts; scripts 123/123; Worker failures only the known flaky `matchmaking` title-slot test (and full-suite-only flakes that pass alone). `/health` ok; `/status` `public-live-v2` playing with 8 bots; root HTML and all 58 other files match `dist`; the old host redirects. An 8 s default-matchmaking join got a protocol-19 welcome (8 bots plus the client, no bot kicked), headshot deaths and 5 HP respawns; the room returned to 8 bots.

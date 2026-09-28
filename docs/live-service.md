@@ -7,8 +7,8 @@ Last release receipt: **2026-09-27**. [Juice release, protocol 19](verification/
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `527eb4bd-30c9-4fef-a85e-de0944bf392d` — commit `efcce3e`: juice feel layer, noir, 5 HP with lethal headshots, 10-second round end with the police lineup; protocol 19, `index-BnDXq6cB.js` / `createGame-C0yvREbG.js` |
-| Previous version | `360dbcdd-231f-4d83-aaec-6247022a1a46` — commit `dd5aabb`: server CPU reduction; protocol 18, `index-paIXtQs8.js` / `createGame-DlDEvPeh.js`; rollback needs a stored-state review (rats stored with 4–5 HP exceed its 3 HP limit) |
+| Last deployed version | `80901b67-6900-4148-9aa3-2ed964052acd` — commit `8313046`: softer distance-only opponent outline, rats out of the fog, rebuilt noir nameplate; protocol 19, `index-B0F-AKSY.js` / `createGame-BgdwD_Em.js` |
+| Previous version | `527eb4bd-30c9-4fef-a85e-de0944bf392d` — commit `efcce3e`: juice feel layer, noir, 5 HP with lethal headshots, police lineup; protocol 19, `index-BnDXq6cB.js` / `createGame-C0yvREbG.js`; compatible rollback target (same protocol and storage) |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Canonical `public-live-v2` stays alive with 6–9 bots and zero humans; overflow still sleeps |

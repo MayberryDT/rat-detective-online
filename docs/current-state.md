@@ -2,6 +2,15 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Readability and nameplate — 27 September production
+
+Worker `80901b67-6900-4148-9aa3-2ed964052acd` (commit `8313046`, client
+`index-B0F-AKSY.js` / `createGame-BgdwD_Em.js`, protocol 19) replaces the
+enemy readability lab. Close rats have no outline; a faint cool moonlit edge
+(at most 1.5 px) fades in from 16 to 45 units. Rats ignore the noir fog. The
+nameplate is a noir plate: spaced small-caps name over five slanted HP pips
+that flash and drain when lost. See [the receipt](verification/juice-release-2026-09-27.md#follow-up-release-readability-and-nameplate-same-evening).
+
 ## Juice release — 27 September production (protocol 19)
 
 Worker `527eb4bd-30c9-4fef-a85e-de0944bf392d` deploys commit `efcce3e`, pushed to
