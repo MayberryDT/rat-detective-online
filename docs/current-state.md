@@ -2,6 +2,16 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Launchers, ragdolls and pressure machines — 28 September production (protocol 21)
+
+Worker `a9947e28-19c3-441f-8acf-dd1695ab25b4` (client `index-BaXSTxLx.js`): each launcher machine throws its own
+way with drift and overpressure misfires; everything on a pad flies; landings
+shove and chain. Six rebuilt machines carry large plain red triggers that fill
+pressure (10 s standing, 1 s per counted ball, never leaks, 0.5 s hang, 1 s
+cooldown); Pressure Surge turns the streets into launchers. Corpses have floppy
+limbs and deaths by cause; the living rat model has face, tail and hat life. See
+[the receipt](verification/juice-launchers-release-2026-09-28.md).
+
 ## Optimization overhaul — 28 September production (protocol 20)
 
 Worker `48fb6913-82c5-443c-8794-6c03c91a7800` (client `index-BHHY40Qv.js`): the

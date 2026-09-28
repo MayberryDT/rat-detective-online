@@ -7,8 +7,8 @@ Last release receipt: **2026-09-27**. [Juice release, protocol 19](verification/
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `48fb6913-82c5-443c-8794-6c03c91a7800` — optimization overhaul (city boxes outside Cannon's body loops, sewer lamps hidden above ground, camera and render savings); protocol 20, `index-BHHY40Qv.js` / `createGame-DQOwwGLf.js` |
-| Previous version | `be7ac8ba-2529-42ba-865a-27aafe11131e` — fourth juice batch; protocol 20; rollback needs no state review |
+| Last deployed version | `a9947e28-19c3-441f-8acf-dd1695ab25b4` — fifth and sixth juice batches (launchers, ragdolls, living model, launcher machines, pressure triggers, Pressure Surge); protocol 21, `index-BaXSTxLx.js` / `createGame-DgyKh_2W.js`; [receipt](verification/juice-launchers-release-2026-09-28.md) |
+| Previous version | `48fb6913-82c5-443c-8794-6c03c91a7800` — optimization overhaul; protocol 20; rollback needs care (see receipt) |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Canonical `public-live-v2` stays alive with 6–9 bots and zero humans; overflow still sleeps |
