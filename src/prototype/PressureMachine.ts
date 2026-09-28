@@ -141,7 +141,7 @@ export class PressureMachine {
             if(tell&&model.heardTell!==until){model.heardTell=until;this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'tell');}
             if(until>0&&elapsed>=0&&elapsed<1000&&model.heardFire!==until){
                 model.heardFire=model.heardTell=until;
-                const boost=state?.boosts?.[model.machine.id]===until-model.machine.cooldownMs;
+                const boost=(state?.boosts?.[model.machine.id]??-Infinity)>=until-model.machine.cooldownMs;
                 this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'fire',boost);
                 this.onFire?.(model.machine,boost);
             }

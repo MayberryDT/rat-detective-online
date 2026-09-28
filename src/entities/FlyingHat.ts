@@ -68,7 +68,7 @@ export class FlyingHat {
         this.root.position.addScaledVector(this.rollDirection,this.rollSpeed*dt);
         this.rollAngle+=this.rollSpeed/.5*dt;
         // On edge while it has speed; then it wobbles down flat like a dropped coin.
-        const settle=Math.min(1,Math.max(0,(.9-this.rollSpeed)/.9));
+        const settle=Math.min(1,Math.max(0,(.9-this.rollSpeed)/.8));
         const tilt=(1.25*(1-settle))+Math.sin(this.rollAge*14)*.25*settle*(1-settle);
         const heading=Math.atan2(this.rollDirection.x,this.rollDirection.z);
         this.root.quaternion.setFromEuler(this.euler.set(0,heading+Math.PI/2,0));

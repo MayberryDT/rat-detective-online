@@ -616,7 +616,7 @@ export class RatAnimator {
                 // Launcher flight: flattened ears, lagging hat, streaming tail.
                 leftEar.rotation.x -= flight * .55;rightEar.rotation.x -= flight * .55;
                 // L6 flailing: head wobble and flapping ears, never the weapon-bearing body or arm.
-                head.rotation.z += flap * .22;leftEar.rotation.z += flap * .7;rightEar.rotation.z -= flap * .7;hat.rotation.z += flap * .12;
+                head.rotation.z += flap * .22;hat.rotation.z += flap * .12;
                 hat.rotation.x += flight * (.16 + anim.flare);tail.rotation.x += flight * .45;
                 head.rotation.x += nod * anim.nod;hat.rotation.x += nod * anim.nod * 1.4;
                 if (this.pulseKind === 'ironclad') {head.position.y += pulse * .05;head.rotation.x -= pulse * .1;}
@@ -650,6 +650,8 @@ export class RatAnimator {
             leftEye.scale.y = rightEye.scale.y = 1 - Math.max(blink, this.extras.length && this.hitAge < .14 ? Math.sin(this.hitAge / .14 * Math.PI) : 0) * 0.94;
             leftEar.rotation.z = twitch;
             rightEar.rotation.z = -twitch * 0.65;
+            // L6: ears flap in flight (after the twitch, which assigns them).
+            leftEar.rotation.z += flap * .7;rightEar.rotation.z -= flap * .7;
             if (this.locomotionPolish) {
                 // Preserve the accepted lean/stride in the weapon-bearing body.
                 // Stabilize the head above it; only secondary parts catch up.

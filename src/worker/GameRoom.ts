@@ -1050,7 +1050,7 @@ export class GameRoom extends DurableObject<Env> {
     }
     // Spend accumulated server time across the whole delayed batch. Resetting
     // the clock on each accepted packet rejects normal compressed deliveries.
-    const accepted=!bounded.corrected&&consumeMovementAllowance(allowance,from,bounded.position,at);
+    const accepted=!bounded.corrected&&consumeMovementAllowance(allowance,from,bounded.position,at,!!this.chaos?.thrown(playerId,at));
     const position=accepted?bounded.position:from,corrected=!accepted;
     player.x = position.x;
     player.y = position.y;

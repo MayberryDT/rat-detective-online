@@ -51,6 +51,8 @@ export class ObjectiveBotBrain {
     private destination?: Vec3Data;
     private route: BotWaypoint[] = [];
     private flight?:{landing:Vec3Data;started:number};
+    /** True while steering a planned launcher or drop flight onto a known landing. */
+    get flyingRoute():boolean {return !!this.flight;}
     private jumpTravel?:{goal:Vec3Data;started:number};
     private jumpProbeAt=0;
     private approachAt=0;

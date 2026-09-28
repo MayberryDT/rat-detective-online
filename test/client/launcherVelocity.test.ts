@@ -32,7 +32,7 @@ describe('launcher throws',()=>{
   for(const {v} of throws()){
    for(const c of [v.x,v.y,v.z])expect(Math.abs(c)).toBeLessThanOrEqual(MAX_LAUNCH_SPEED);
    expect(v.y).toBeLessThanOrEqual(MOVEMENT_ENVELOPE.verticalSpeed);
-   expect(Math.hypot(v.x,v.z)+18*1.45).toBeLessThanOrEqual(MOVEMENT_ENVELOPE.horizontalSpeed);
+   expect(Math.hypot(v.x,v.z)+18*1.45).toBeLessThanOrEqual(MOVEMENT_ENVELOPE.thrownHorizontalSpeed);
   }
  });
  it('land an unsteered rat inside the city from every pad',()=>{

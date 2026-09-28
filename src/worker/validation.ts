@@ -20,12 +20,14 @@ export const PLAY_BOUNDS = {
 } as const;
 
 /** Generous authority envelope around the shipped 18 u/s movement, 1.45x Hot
- * Pursuit, launcher throws (up to 106 u/s up, 33 u/s sideways drift under full
- * steering) and landing shoves. Server time, not client timestamps, owns
- * the allowance; a long-suspended tab cannot spend an unlimited backlog. */
+ * Pursuit and a 106 u/s vertical launch. A rat the server recently threw or
+ * shoved gets `thrownHorizontalSpeed` instead (33 u/s drift under full steering,
+ * plus shoves). Server time, not client timestamps, owns the allowance; a
+ * long-suspended tab cannot spend an unlimited backlog. */
 export const MOVEMENT_ENVELOPE = {
   maxElapsedMs: 2_000,
-  horizontalSpeed: 80,
+  horizontalSpeed: 35,
+  thrownHorizontalSpeed: 80,
   verticalSpeed: 110,
   // Starting tolerance, not a fresh grant on every packet. Unused server-time
   // allowance is retained so batched poses share the time they actually earned.
@@ -91,12 +93,13 @@ export function createMovementAllowance(at:number):MovementAllowance {
 /** A bounded server-time budget, shared by movement, firing and pickup poses.
  * Arrival gaps do not describe simulation steps: a delayed group must be able
  * to spend its accumulated time across every pose, not just its first packet. */
-export function consumeMovementAllowance(budget:MovementAllowance,from:Vec3Data,to:Vec3Data,at:number):boolean {
+export function consumeMovementAllowance(budget:MovementAllowance,from:Vec3Data,to:Vec3Data,at:number,thrown=false):boolean {
   const seconds=Math.max(0,at-budget.at)/1000;
   const capacity= MOVEMENT_ENVELOPE.maxElapsedMs/1000;
+  const speed=thrown?MOVEMENT_ENVELOPE.thrownHorizontalSpeed:MOVEMENT_ENVELOPE.horizontalSpeed;
   budget.at=Math.max(budget.at,at);
-  budget.horizontal=Math.min(MOVEMENT_ENVELOPE.horizontalSlack+MOVEMENT_ENVELOPE.horizontalSpeed*capacity,
-    budget.horizontal+MOVEMENT_ENVELOPE.horizontalSpeed*seconds);
+  budget.horizontal=Math.min(MOVEMENT_ENVELOPE.horizontalSlack+speed*capacity,
+    budget.horizontal+speed*seconds);
   budget.vertical=Math.min(MOVEMENT_ENVELOPE.verticalSlack+MOVEMENT_ENVELOPE.verticalSpeed*capacity,
     budget.vertical+MOVEMENT_ENVELOPE.verticalSpeed*seconds);
   const horizontal = Math.hypot(to.x - from.x, to.z - from.z);

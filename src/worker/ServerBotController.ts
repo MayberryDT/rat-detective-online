@@ -223,7 +223,9 @@ export class ServerBotController {
             }
             if(grounded&&now>=bot.launchedUntil)bot.driftX=bot.driftZ=0;
             else if(bot.driftX||bot.driftZ){const fade=Math.exp(-LAUNCH_DRIFT_DECAY*Math.min(dt,1/30));bot.driftX*=fade;bot.driftZ*=fade;}
-            body.velocity.x+=(intent.x+bot.driftX-body.velocity.x)*.14;body.velocity.z+=(intent.z+bot.driftZ-body.velocity.z)*.14;
+            // A bot steering a planned roof route cancels the drift to reach its landing.
+            const drift=bot.brain.flyingRoute?0:1;
+            body.velocity.x+=(intent.x+bot.driftX*drift-body.velocity.x)*.14;body.velocity.z+=(intent.z+bot.driftZ*drift-body.velocity.z)*.14;
             // Ignore stale takeoff contacts briefly, without ever locking air steering.
             if(intent.jump&&grounded&&now>=bot.launchedUntil){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
             if(bot.normalJump)body.force.y+=body.mass*this.world.gravity.y*.28;

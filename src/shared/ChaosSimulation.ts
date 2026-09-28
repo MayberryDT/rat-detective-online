@@ -106,6 +106,10 @@ export class ChaosSimulation {
     private readonly armedPressure=new Map<string,number>();
     /** Launched rats in the air, by id: the machine, launch time and highest point so far. */
     private readonly flights=new Map<string,{machineId:string;at:number;peak:number}>();
+    /** Rat id → time until which a launcher throw or landing shove may carry it faster than walking. */
+    private readonly thrownUntil=new Map<string,number>();
+    /** True while `playerId` may still be riding a throw or shove (movement validation widens for it). */
+    thrown(playerId:string,at:number):boolean {return (this.thrownUntil.get(playerId)??-Infinity)>=at;}
     private notice={serial:0,text:'Find the Hot Case. Shoot Dispatch.'};
     private now=Date.now();
     private epoch:string=crypto.randomUUID();
@@ -448,7 +452,8 @@ export class ChaosSimulation {
         this.pressure.until=cooldowns[PRESSURE_LAUNCH.id]??0;
         this.armedPressure.set(machine.id,this.now+PRESSURE_TELL_MS);
     }
-    private firePressure(machine:LaunchMachine){
+    /** `at` is the scheduled firing time (clients key the misfire look to it), not the step time. */
+    private firePressure(machine:LaunchMachine,at:number){
         const pad=machine.pad;
         const onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;
         const nearby=[...this.players.values()].filter(p=>p.hp>0&&onPad(p));
@@ -462,7 +467,7 @@ export class ChaosSimulation {
         // One misfire roll per firing: every rider of an overpressure goes high.
         const boost=Math.random()<OVERPRESSURE.chance;
         const boosts=this.pressure.boosts??(this.pressure.boosts={});
-        if(boost)boosts[machine.id]=this.now;else delete boosts[machine.id];
+        if(boost)boosts[machine.id]=at;else delete boosts[machine.id];
         for(const c of caseRiders)this.launchCase(c,machine,boost);
         for(const corpse of this.corpses.values()){
             const body=corpse.body;
@@ -482,22 +487,26 @@ export class ChaosSimulation {
         // Keep other stations' outstanding events. A rat can only occupy one pad,
         // and its newest impulse replaces an older event if launched again.
         const selected=new Set(nearby.map(p=>p.id));
-        for(const player of nearby)this.flights.set(player.id,{machineId:machine.id,at:this.now,peak:player.y});
+        for(const player of nearby){
+            this.flights.set(player.id,{machineId:machine.id,at:this.now,peak:player.y});
+            this.thrownUntil.set(player.id,this.now+20000);
+        }
         this.pressure.launches=[...this.pressure.launches.filter(e=>!selected.has(e.playerId)),
             ...nearby.map(player=>({id:`launch-${this.pressure.serial}-${player.id}`,machineId:machine.id,
                 playerId:player.id,at:this.now,velocity:launcherVelocity(machine,boost),...(boost?{boost:true as const}:{})}))].slice(-MAX_LAUNCH_EVENTS);
     }
     /** A launched rat lands once it has come down from its peak onto something solid. */
     private stepFlights(now:number,playing:boolean){
+        for(const [id,until] of this.thrownUntil)if(until<now)this.thrownUntil.delete(id);
         for(const [id,flight] of this.flights){
             const player=this.players.get(id);
-            if(!player||player.hp<=0||now-flight.at>20000){this.flights.delete(id);continue;}
+            if(!player||player.hp<=0||now-flight.at>20000){this.flights.delete(id);this.thrownUntil.delete(id);continue;}
             flight.peak=Math.max(flight.peak,player.y);
             const drop=flight.peak-player.y;
             if(now-flight.at<600||drop<LANDING_SHOCKWAVE.minDrop)continue;
             const feet=new C.Vec3(player.x,player.y+.5,player.z);
             if(!this.ray(feet,new C.Vec3(player.x,player.y-.7,player.z),1).hasHit)continue;
-            this.flights.delete(id);
+            this.flights.delete(id);this.thrownUntil.set(id,now+1500);
             this.landingShockwave(player,flight.machineId,drop,playing);
         }
     }
@@ -519,6 +528,7 @@ export class ChaosSimulation {
             const push=away(player);if(!push)continue;
             if(playing&&push.d<W.squash)this.hit({owner:lander.id,victim:player.id,damage:1,incoming:{x:0,y:-speed,z:0}});
             shoves.push({id:`shove-${this.pressure.serial}-${this.tick}-${player.id}`,playerId:player.id,at:this.now,velocity:{x:push.x,y:push.y,z:push.z}});
+            this.thrownUntil.set(player.id,Math.max(this.thrownUntil.get(player.id)??0,this.now+3000));
         }
         if(shoves.length)this.pressure.shoves=shoves.slice(-MAX_LAUNCH_EVENTS);
         for(const c of this.cases.values()){
@@ -1145,7 +1155,7 @@ export class ChaosSimulation {
         }
         for(const machine of LAUNCH_MACHINES){
             const at=this.armedPressure.get(machine.id);
-            if(at!==undefined&&now>=at){this.armedPressure.delete(machine.id);this.firePressure(machine);}
+            if(at!==undefined&&now>=at){this.armedPressure.delete(machine.id);this.firePressure(machine,at);}
         }
         this.stepFlights(now,playing);
         if(!this.incidentActive('delayed-reaction')){
@@ -1293,7 +1303,9 @@ export class ChaosSimulation {
         // A thrown one re-plants where it lands, or somewhere valid if it escaped.
         if(c.fake){
             const p=c.body.position;
-            if(c.launched&&(this.caseSettled(c,p)||p.y< -9||outsideCity(p.x,p.z))){
+            // Parked for good, so it must be slow and actually resting on something.
+            const landed=c.body.velocity.length()<=T.casePickupMaxSpeed&&this.ray(p,new C.Vec3(p.x,p.y-.8,p.z),1).hasHit;
+            if(c.launched&&(landed||p.y< -9||outsideCity(p.x,p.z))){
                 c.launched=false;
                 c.body.type=C.Body.STATIC;c.body.mass=0;c.body.collisionFilterMask=16;
                 c.body.velocity.setZero();c.body.angularVelocity.setZero();c.body.updateMassProperties();
@@ -1406,7 +1418,7 @@ export class ChaosSimulation {
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.lastSurgePulse=0;this.dispatchActivator=null;
-        this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};this.armedPressure.clear();this.flights.clear();
+        this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};this.armedPressure.clear();this.flights.clear();this.thrownUntil.clear();
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
         this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){
@@ -1423,6 +1435,9 @@ export class ChaosSimulation {
         c.body.collisionFilterMask=(c.owner||parked)?16:1|8|16;
         c.body.updateMassProperties();c.body.updateAABB();
         c.armed=!parked&&this.incidentActive('evidence-tampering')&&!c.owner;
+        // A counterfeit checkpointed mid-throw would otherwise hang in the air as a trap.
+        const p=saved.p;
+        if(parked&&(vec(saved.v).length()>T.casePickupMaxSpeed||p.y>1.5&&!isReachableLandmarkPosition(p.x,p.y,p.z)&&!isReachableVehiclePosition(p.x,p.y,p.z)))this.placeFake(c);
     }
     private restore(s:ChaosState){
         // Room hibernation/reconnection must not restock consumed supplies early.
@@ -1433,6 +1448,11 @@ export class ChaosSimulation {
         const assignment=restoreAssignment(s.assignment,Date.now());if(assignment)this.setAssignment(assignment);
         this.pressure={serial:s.pressure?.serial||0,until:s.pressure?.until||0,
             cooldowns:{...s.pressure?.cooldowns,[PRESSURE_LAUNCH.id]:s.pressure?.cooldowns?.[PRESSURE_LAUNCH.id]??s.pressure?.until??0},launches:[]};
+        // A checkpoint taken inside a tell still owes that firing.
+        for(const machine of LAUNCH_MACHINES){
+            const fireAt=(this.pressure.cooldowns?.[machine.id]??0)-machine.cooldownMs;
+            if(fireAt>s.time&&fireAt-s.time<=PRESSURE_TELL_MS)this.armedPressure.set(machine.id,fireAt);
+        }
         this.now=s.time;this.dispatch={...s.dispatch,...(s.dispatch.incident?{incident:incidentInfo(s.dispatch.incident).id}:{})};
         this.possession={...s.possession};this.notice={...s.notice};this.restoreCase(this.primaryCase,s.case,s.time);
         this.lastSurgePulse=this.incidentActive('pressure-surge')?Math.floor(Math.max(0,s.time-s.dispatch.started)/3000):0;

@@ -191,7 +191,7 @@ export class LaunchJuice {
         this.trails.clear();this.active=false;
     }
     dispose():void {
-        for(const mesh of [this.bitMesh,this.sparkMesh,this.puffMesh])mesh?.removeFromParent();
+        for(const mesh of [this.bitMesh,this.sparkMesh,this.puffMesh]){mesh?.removeFromParent();mesh?.dispose();}
         for(const decal of this.decals)decal.mesh.removeFromParent();
         for(const resource of this.owned)resource.dispose();
         this.owned.length=0;this.decals.length=0;this.trails.clear();

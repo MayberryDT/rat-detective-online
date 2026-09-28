@@ -54,26 +54,34 @@ describe('play bounds', () => {
     expect(consumeMovementAllowance(budget,from,{x:20,y:0,z:0},40)).toBe(false);
     expect(consumeMovementAllowance(budget,from,{x:1.5,y:4,z:0},40)).toBe(true);
     expect(consumeMovementAllowance(budget,from,{x:0,y:240,z:0},60000)).toBe(false);
-    expect(budget.horizontal).toBe(162);expect(budget.vertical).toBe(226);
+    expect(budget.horizontal).toBe(72);expect(budget.vertical).toBe(226);
     expect(consumeMovementAllowance(budget,from,{x:0,y:90,z:0},60000)).toBe(true);
   });
 
   it('accepts delayed boosted walking and launch batches but rejects sustained excess speed',()=>{
-    for(const [horizontal,vertical] of [[18,0],[18*1.45,0],[18*1.45,90],[18*1.45+33,106]]){
+    // A thrown rat: full Hot Pursuit steering on top of an overpressure throw's drift.
+    for(const [horizontal,vertical,thrown] of [[18,0,false],[18*1.45,0,false],[18*1.45,90,false],[18*1.45+33,106,true]] as const){
       const budget=createMovementAllowance(0);let from={x:0,y:0,z:0};
       for(let frame=1;frame<=80;frame++){
         const to={x:horizontal*frame*.125,y:vertical*frame*.125,z:0};
         // Four 8-fps poses arrive together every half second; shots/pickups
         // can deliver additional same-pose updates inside the same batch.
         const at=Math.ceil(frame/4)*500;
-        expect(consumeMovementAllowance(budget,from,to,at)).toBe(true);
-        expect(consumeMovementAllowance(budget,to,to,at)).toBe(true);from=to;
+        expect(consumeMovementAllowance(budget,from,to,at,thrown)).toBe(true);
+        expect(consumeMovementAllowance(budget,to,to,at,thrown)).toBe(true);from=to;
       }
     }
+    // The same drift is rejected for a rat the server never threw.
+    const walker=createMovementAllowance(0);let rejected=false,from={x:0,y:0,z:0};
+    for(let frame=1;frame<=80&&!rejected;frame++){
+      const to={x:(18*1.45+33)*frame*.125,y:0,z:0};
+      rejected=!consumeMovementAllowance(walker,from,to,Math.ceil(frame/4)*500);from=to;
+    }
+    expect(rejected).toBe(true);
     const fast=createMovementAllowance(0);
     expect(consumeMovementAllowance(fast,{x:0,y:0,z:0},{x:2,y:0,z:0},0)).toBe(true);
     expect(consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:4,y:0,z:0},0)).toBe(false);
-    expect(consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:12,y:0,z:0},100)).toBe(false);
+    expect(consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:6,y:0,z:0},100)).toBe(false);
     // Backward clock readings do not mint a new allowance.
     const remaining=fast.horizontal;consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:2,y:0,z:0},50);
     expect(fast.horizontal).toBe(remaining);expect(fast.at).toBe(100);
