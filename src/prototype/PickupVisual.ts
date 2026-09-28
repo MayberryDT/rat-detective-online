@@ -5,6 +5,8 @@ import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import {PickupRespawnVisual} from './PickupRespawnVisual';
 import type {PickupKind} from '../shared/pickups';
+import {kickDust} from '../feel/Dust';
+import {supplyCue} from '../feel/supplyCues';
 
 /** Warm tungsten from each supply's own lamp. */
 const LAMP_COLOR=0xffd9a0;
@@ -12,11 +14,15 @@ const LAMP_COLOR=0xffd9a0;
 const LAMP_HEAD=new THREE.Vector3(0,2.75,0);
 /** Malpractice hop duration (ms) and height. */
 const HOP_MS=380, HOP_HEIGHT=1.5;
+/** Each supply's own colour for the far beam and the outline that finds it from across the street. */
+const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95};
+/** Claim pop and restock drop (seconds); beacon fades in with distance (units). */
+const POP=.32, DROP=.5, BEAM_HEIGHT=34;
 
 /** The display is lit by its own lamp, not by self-glow: surfaces facing up toward
  * the shade catch warm light and the sides fall off into the dark. Chained after
  * the batch's own palette so the per-part colors stay exact. */
-function lightFromLamp(root:THREE.Group,strength:number):void {
+function lightFromLamp(root:THREE.Group,strength:number):THREE.SkinnedMesh|undefined {
     const batch=batchRigidMeshes(root);
     const materials=batch?[batch.material].flat():[];
     for(const material of materials){
@@ -31,11 +37,15 @@ function lightFromLamp(root:THREE.Group,strength:number):void {
         material.customProgramCacheKey=()=>`${key.call(material)}:supply-lamp-${strength.toFixed(2)}`;
         material.needsUpdate=true;
     }
+    return batch;
 }
 
 /** Supplies as noir evidence displays: an iron-plated trench coat on a tailor's
- * dummy, a doctor's bag and a pair of red wingtips, each under a work lamp that
- * throws a cone and a pool of light. The lamp goes dark while the site restocks. */
+ * dummy, a doctor's bag and winged red wingtips on a shoeshine box, each under a
+ * work lamp that throws a cone and a pool of light. Never lost in the dark: the
+ * props ignore fog, and from a distance a coloured beam rises from the site and an
+ * outline picks out the prop, like the far-rat edge. They turn slowly on the
+ * plinth, pop when claimed, and drop back in when the lamp clicks on again. */
 export class PickupVisual {
     readonly root=new THREE.Group();
     private readonly item=new THREE.Group();
@@ -55,6 +65,16 @@ export class PickupVisual {
     private hopAt=-Infinity;
     private placed=false;
     private nervous=false;
+    private readonly beam:THREE.MeshBasicMaterial;
+    private rim?:THREE.MeshBasicMaterial;
+    private readonly rimReach={value:0};
+    private readonly burst:THREE.MeshBasicMaterial;
+    private readonly burstMesh:THREE.Mesh;
+    /** Seconds since the claim pop / restock drop began (Infinity when idle). */
+    private popAge=Infinity;
+    private dropAge=Infinity;
+    private spin=Math.random()*Math.PI*2;
+    private readonly phase=Math.random()*10;
     private restock?:PickupRespawnVisual;
     constructor(scene:THREE.Scene,private readonly kind:PickupKind){
         const iron=new THREE.MeshStandardMaterial({color:0x5d656f,metalness:.9,roughness:.36});
@@ -94,16 +114,24 @@ export class PickupVisual {
             box(this.item,.16,.12,.05,0,.94,.23,brass,.02);
         }else if(kind==='hustle'){
             this.item.name='red-wingtips';
-            const red=new THREE.MeshStandardMaterial({color:0xb3160f,metalness:.25,roughness:.28});
+            const red=new THREE.MeshStandardMaterial({color:0xc01a10,metalness:.3,roughness:.26});
+            const cream=new THREE.MeshStandardMaterial({color:0xefe6cf,metalness:.05,roughness:.5});
             red.envMap=metalReflection();red.envMapIntensity=.9;
+            // A shoeshine box with a brass footrest, and a pair of winged red wingtips on top.
+            box(this.item,1.05,.42,.8,0,.21,0,wood,.05);
+            box(this.item,.9,.05,.6,0,.44,0,brass,.02);
             for(const sign of [-1,1]){
-                const shoe=new THREE.Group();shoe.position.set(sign*.26,.12,sign*.06);shoe.rotation.y=sign*-.2;this.item.add(shoe);
-                box(shoe,.36,.1,.82,0,.05,0,dark,.03);
-                box(shoe,.34,.22,.78,0,.19,.02,red,.08);
-                box(shoe,.32,.34,.36,0,.3,-.2,red,.07);
-                box(shoe,.3,.05,.2,0,.49,-.2,dark,.02);
-                box(shoe,.3,.03,.14,0,.31,.3,dark,.01);
-                for(const z of [-.06,.04,.14]){const lace=box(shoe,.22,.02,.03,0,.34,z,brass,.01);lace.rotation.y=z*1.2;}
+                const shoe=new THREE.Group();shoe.position.set(sign*.25,.47,0);shoe.rotation.y=sign*-.12;shoe.scale.setScalar(1.25);this.item.add(shoe);
+                box(shoe,.3,.08,.7,0,.04,0,dark,.03);
+                box(shoe,.28,.18,.66,0,.16,.02,red,.07);
+                box(shoe,.27,.28,.3,0,.25,-.17,red,.06);
+                box(shoe,.25,.04,.17,0,.41,-.17,dark,.02);
+                box(shoe,.25,.025,.12,0,.26,.26,dark,.01);
+                for(const z of [-.05,.03,.11]){const lace=box(shoe,.18,.02,.025,0,.29,z,brass,.01);lace.rotation.y=z*1.2;}
+                // Mercury's wings on the heel: speed, at a glance.
+                for(const [i,length] of [[0,.34],[1,.27],[2,.2]] as const){
+                    const feather=box(shoe,.03,.07,length,sign*.17,.33-i*.07,-.3,cream,.02);feather.rotation.set(.5+i*.12,sign*.35,0);
+                }
             }
         }else{
             this.item.name='doctors-bag';
@@ -136,15 +164,44 @@ export class PickupVisual {
         arm.rotation.y=Math.atan2(standZ,-standX);
         const shade=cylinder(this.lamp,.1,.34,.3,LAMP_HEAD.x,LAMP_HEAD.y+.12,LAMP_HEAD.z,dark,14);shade.name='supply-lamp-shade';
         this.root.add(this.lamp);
-        lightFromLamp(this.item,.6);batchRigidMeshes(this.lamp);
+        // Readable through the noir fog at any distance.
+        this.root.traverse(object=>{if(object instanceof THREE.Mesh)for(const m of [object.material].flat())m.fog=false;});
+        const batch=lightFromLamp(this.item,.6);batchRigidMeshes(this.lamp);
+        if(batch)this.addRim(batch);
         // The bulb, its cone of light and the pool it throws: the only glowing parts.
         this.bulb=new THREE.MeshBasicMaterial({color:LAMP_COLOR,toneMapped:false});
         const bulb=new THREE.Mesh(new THREE.SphereGeometry(.09,10,8),this.bulb);bulb.position.copy(LAMP_HEAD);this.root.add(bulb);
-        const cone=new THREE.Mesh(new THREE.CylinderGeometry(.3,1.05,LAMP_HEAD.y,20,1,true),this.glowMaterial(.075,false));
+        const cone=new THREE.Mesh(new THREE.CylinderGeometry(.3,1.15,LAMP_HEAD.y,20,1,true),this.glowMaterial(.15,false));
         cone.position.set(0,LAMP_HEAD.y/2,0);cone.name='supply-lamp-cone';cone.raycast=()=>{};this.root.add(cone);
-        const pool=new THREE.Mesh(new THREE.CircleGeometry(1.35,28),this.glowMaterial(.3,true));
+        const pool=new THREE.Mesh(new THREE.CircleGeometry(1.5,28),this.glowMaterial(.5,true));
         pool.rotation.x=-Math.PI/2;pool.position.y=.13;pool.name='supply-lamp-pool';pool.raycast=()=>{};this.root.add(pool);
+        // The far beacon: a soft coloured shaft rising from the site, faded in with distance.
+        this.beam=new THREE.MeshBasicMaterial({color:KIND_COLOR[kind],transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,
+            side:THREE.DoubleSide,fog:false,toneMapped:false});
+        this.beam.onBeforeCompile=shader=>{
+            shader.vertexShader='varying float vBeamV;\n'+shader.vertexShader.replace('#include <uv_vertex>','#include <uv_vertex>\nvBeamV=uv.y;');
+            shader.fragmentShader='varying float vBeamV;\n'+shader.fragmentShader.replace('#include <opaque_fragment>','#include <opaque_fragment>\ngl_FragColor.a*=pow(1.-vBeamV,1.4)*smoothstep(0.,.04,vBeamV);');
+        };
+        this.beam.customProgramCacheKey=()=>'supply-beacon-beam';
+        const beam=new THREE.Mesh(new THREE.CylinderGeometry(.45,.7,BEAM_HEIGHT,16,1,true),this.beam);
+        beam.position.y=BEAM_HEIGHT/2+.1;beam.name='supply-beacon';beam.raycast=()=>{};this.root.add(beam);
+        // Claim and restock flash: a burst of the supply's colour.
+        this.burst=new THREE.MeshBasicMaterial({color:KIND_COLOR[kind],transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false,toneMapped:false});
+        this.burstMesh=new THREE.Mesh(new THREE.SphereGeometry(.6,16,12),this.burst);this.burstMesh.position.y=.9;this.burstMesh.raycast=()=>{};
+        // Left visible until the first update, so the title warm-up compiles its program.
+        this.root.add(this.burstMesh);
         this.root.name='pickup-'+kind;scene.add(this.root);
+    }
+    /** A kind-coloured outline shell on the prop, sharing the batch's geometry and bones. */
+    private addRim(batch:THREE.SkinnedMesh):void {
+        this.rim=new THREE.MeshBasicMaterial({color:KIND_COLOR[this.kind],transparent:true,opacity:0,side:THREE.BackSide,depthWrite:false,fog:false,toneMapped:false});
+        this.rim.onBeforeCompile=shader=>{
+            shader.uniforms.rimReach=this.rimReach;
+            shader.vertexShader='uniform float rimReach;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed+=normal*rimReach;');
+        };
+        this.rim.customProgramCacheKey=()=>'supply-rim';
+        const shell=new THREE.SkinnedMesh(batch.geometry,this.rim);shell.bind(batch.skeleton,batch.bindMatrix);
+        shell.frustumCulled=false;shell.raycast=()=>{};shell.name='supply-rim';this.item.add(shell);
     }
     /** Additive warm light: a soft-edged cone, or a floor pool fading from the center. */
     private glowMaterial(opacity:number,pool:boolean):THREE.MeshBasicMaterial {
@@ -190,13 +247,18 @@ export class PickupVisual {
 
     update(now:number,camera?:THREE.Camera):void {
         const unavailable=now<this.availableAt,empty=unavailable||this.pending;
-        this.item.visible=!empty;
-        if(this.xray)this.xray.visible=this.xrayOn&&!empty;
-        // The lamp is out while the site restocks; on a claim it stutters out, and it snaps back on with the supply.
         const dt=this.lastUpdate?Math.min(.1,(now-this.lastUpdate)/1000):0;this.lastUpdate=now;
-        // Only a claim (not a site first seen already restocking) stutters.
-        if(empty&&!this.wasEmpty&&this.lit===1)this.flicker=.42;
+        const world=this.root.position;
+        // Claim: the lamp stutters out, the prop pops up and vanishes in a flash. Restock: the
+        // lamp clicks on and the prop drops back onto the plinth. A site first seen empty does neither.
+        if(this.lastUpdate&&dt>0){
+            if(empty&&!this.wasEmpty&&this.lit===1){this.flicker=.42;this.popAge=0;this.flashBurst();supplyCue('claim',{x:world.x,y:world.y+1,z:world.z});}
+            if(!empty&&this.wasEmpty&&this.lit===0){this.dropAge=0;this.flashBurst();supplyCue('restock',{x:world.x,y:world.y+1,z:world.z});}
+        }
         this.wasEmpty=empty;
+        this.popAge+=dt;this.dropAge+=dt;
+        this.item.visible=!empty||this.popAge<POP;
+        if(this.xray)this.xray.visible=this.xrayOn&&!empty;
         this.flicker=Math.max(0,this.flicker-dt);
         const lit=empty?(this.flicker>0&&Math.floor(this.flicker*16)%2===0?1:0):1;
         if(lit!==this.lit){
@@ -204,17 +266,43 @@ export class PickupVisual {
             this.bulb.color.setHex(lit?LAMP_COLOR:0x2a2320);
             for(const material of this.glow)material.visible=!!lit;
         }
+        // A slow breath in the lamp light keeps a site alive from across the street.
+        const breath=1+Math.sin(now*.0021+this.phase)*.12+Math.max(0,Math.sin(now*.0009+this.phase*3))**24*.5;
+        this.glow[0]!.opacity=.15*breath;this.glow[1]!.opacity=.5*breath;
+        if(camera){
+            const distance=camera.position.distanceTo(world);
+            const far=THREE.MathUtils.smoothstep(distance,10,40),edge=THREE.MathUtils.smoothstep(distance,6,22);
+            this.beam.opacity=empty?0:.3*far*breath;
+            if(this.rim){this.rim.opacity=empty?0:.85*edge;this.rimReach.value=.025+Math.min(.22,distance*.0035);}
+        }
         if(unavailable&&camera){
             if(!this.restock){this.restock=new PickupRespawnVisual(this.kind);this.root.add(this.restock.root);}
             this.restock.update(now,this.availableAt,camera);
         }
         if(this.restock)this.restock.root.visible=unavailable;
+        const burst=this.popAge<this.dropAge?this.popAge:this.dropAge;
+        this.burstMesh.visible=burst<.35;
+        if(this.burstMesh.visible){this.burstMesh.scale.setScalar(.4+burst*6);this.burst.opacity=.7*(1-burst/.35);}
         const hop=(performance.now()-this.hopAt)/HOP_MS;
         if(hop>=0&&hop<1){
             this.root.position.lerpVectors(this.from,this.to,hop);this.root.position.y+=Math.sin(hop*Math.PI)*HOP_HEIGHT;
-            this.item.scale.set(1+Math.sin(hop*Math.PI)*.12,1-Math.sin(hop*Math.PI)*.1,1+Math.sin(hop*Math.PI)*.12);
-        }else if(hop>=1&&this.hopAt>-Infinity){this.root.position.copy(this.to);this.item.scale.setScalar(1);this.hopAt=-Infinity;}
-        this.item.rotation.set(this.nervous&&!empty?Math.sin(now*.05)*.06:0,this.nervous&&!empty?Math.sin(now*.031)*.12:0,this.nervous&&!empty?Math.cos(now*.043)*.05:0);
+        }else if(hop>=1&&this.hopAt>-Infinity){this.root.position.copy(this.to);this.hopAt=-Infinity;}
+        // Scale and height: claim pop, restock drop with a bounce, Malpractice hop squash, or rest.
+        let lift=0,scale=1,squash=0;
+        if(this.popAge<POP){const t=this.popAge/POP;lift=Math.sin(t*Math.PI*.5)*.8;scale=t<.35?1+t*.9:Math.max(0,1.3*(1-(t-.35)/.65));}
+        else if(this.dropAge<DROP){const t=this.dropAge/DROP;lift=t<.6?(1-t/.6)**2*2.4:Math.abs(Math.sin((t-.6)/.4*Math.PI))*.18*(1-t);squash=t>.58&&t<.72?.18:0;}
+        if(hop>=0&&hop<1)squash=-Math.sin(hop*Math.PI)*.1;
+        this.item.position.y=lift;
+        this.item.scale.set(scale*(1+squash*.6),scale*(1-squash),scale*(1+squash*.6));
+        // A slow turn on the plinth; Malpractice kits fidget instead.
+        this.spin+=dt*.45;
+        const fidget=this.nervous&&!empty;
+        this.item.rotation.set(fidget?Math.sin(now*.05)*.06:0,fidget?Math.sin(now*.031)*.12:this.spin,fidget?Math.cos(now*.043)*.05:0);
+    }
+    /** A burst of the supply's colour and a puff of dust at the plinth. */
+    private flashBurst():void {
+        this.burst.opacity=.7;
+        kickDust(this.root.position,.5);
     }
     dispose():void {this.restock?.dispose();this.root.removeFromParent();disposeMeshResources(this.root);}
 }

@@ -59,6 +59,9 @@ function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolea
 }
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
+/** Round end (seconds after the slow-motion finish): the CASE CLOSED card, then the lineup's photos. */
+const ROUND_END={card:2.6,lineup:6.6};
+
 export class GameSession {
     private readonly stage;
     private readonly transport: NetworkManager;
@@ -110,6 +113,9 @@ export class GameSession {
     private compileTimer?:ReturnType<typeof setTimeout>;
     private readonly lineup?:PoliceLineup;
     private pendingLineup?:{entries:LineupEntry[];at:number};
+    /** Round end, last beat: when the Case File and final standings take over. */
+    private pendingResults?:number;
+    private resultsShown=false;
     private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
     private lastHighlightObserve = 0;
     private lastChaos: ChaosState | null = null;
@@ -158,7 +164,7 @@ export class GameSession {
         this.transport.onMessage = message => this.receive(message);
         this.transport.onState = (state, message) => {
             this.clearInput();
-            if(state!=='playing'){this.feel.reset();this.pendingLineup=undefined;this.lineup?.end();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
+            if(state!=='playing'){this.feel.reset();this.pendingLineup=undefined;this.lineup?.end();this.endResults();this.cameos?.reset();for(const id of this.pendingInteractions.keys())this.chaos?.cancelInteraction(id);this.pendingInteractions.clear();this.netplay.clear();}
             this.foleyWorld.setEnabled(state==='playing'&&!document.hidden);
             this.simulation.reset();
             this.hud.setConnection(state, message);
@@ -255,7 +261,7 @@ export class GameSession {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
-        this.feel.reset();this.feel.resetRound();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();
+        this.feel.reset();this.feel.resetRound();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults();
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -482,14 +488,16 @@ export class GameSession {
                 const hold=this.feel.victory();
                 if(hold>0)this.pendingVictory={message,at:performance.now()+hold*1000};
                 else this.hud.showVictory(message.winnerName, message.kills,message.assignment,...(message.awards?[message.awards]:[]));
-                // Juice T5: the lineup takes over the camera as the Case File lands.
-                const entries=feelState().on('lineup')?this.lineupEntries(message):[];
-                if(entries.length)this.pendingLineup={entries,at:performance.now()+hold*1000};
+                // Round end: the CASE CLOSED card holds the screen, then the police lineup,
+                // then the Case File and final standings for the rest of the 15 seconds.
+                const entries=feelState().on('lineup')?this.lineupEntries(message):[],cardAt=performance.now()+hold*1000;
+                if(entries.length)this.pendingLineup={entries,at:cardAt+ROUND_END.card*1000};
+                this.pendingResults=cardAt+(ROUND_END.card+(entries.length?ROUND_END.lineup:0))*1000;
                 this.highlights.emit(this.highlights.detector.onWin(message.winnerId, performance.now()));
                 break;
             }
             case 'gameReset':
-                this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();
+                this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults();
                 this.cameos?.reset();
                 this.highlights.detector.beginRound({
                     epoch: '',
@@ -638,6 +646,9 @@ export class GameSession {
         this.feel.wanted(dt,wantedRat&&!wantedRat.dead?wantedRat.mesh.position:undefined,!!wanted&&wanted===this.myId);
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
+        if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon){
+            this.pendingResults=undefined;this.resultsShown=true;this.hud.showResults(true);this.scoreboard.setVisible(true);
+        }
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
         if(!this.compiling){
@@ -652,6 +663,12 @@ export class GameSession {
         }
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));
+    }
+
+    /** Leave the round-end results board (reset, reconnect, leaving play). */
+    private endResults():void {
+        const shown=this.resultsShown;this.pendingResults=undefined;this.resultsShown=false;
+        if(shown){this.hud.showResults(false);this.scoreboard.setVisible(false);}
     }
 
     /** Juice T5: the lineup's rats, winner first, rebuilt from the rats this client knows. */

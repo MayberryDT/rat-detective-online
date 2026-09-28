@@ -5,6 +5,7 @@ import type {FeelState} from './feelState';
 import type {FeelSound} from './FeelSound';
 import {FEEL} from './feelTuning';
 import './hunch.css';
+import {HunchPlate} from './HunchPlate';
 
 export interface HunchRat {readonly entity:RatEntity}
 const PHOTOS=4, TRAIL_POINTS=16, TRAIL_EVERY=.11;
@@ -39,6 +40,8 @@ export class Hunch {
     private readonly trails=new Map<string,Trail>();
     private readonly photos:Photo[]=[];
     private wasWatched=false;
+    private readonly plate:HunchPlate;
+    private holding=false;
     private lastCardAt=-Infinity;
     private supercharged=false;
     private root?:HTMLElement;
@@ -52,7 +55,7 @@ export class Hunch {
         blending:THREE.AdditiveBlending,fog:false,toneMapped:false});
 
     constructor(private readonly scene:THREE.Scene,private readonly state:FeelState,private readonly sound:FeelSound,
-        private readonly doc:Document|undefined=globalThis.document){}
+        private readonly doc:Document|undefined=globalThis.document){this.plate=new HunchPlate(doc);}
 
     /** Clean Bill: everyone at full health with a city-wide, stronger Hunch. */
     setSupercharged(on:boolean):void {this.supercharged=on;}
@@ -67,6 +70,13 @@ export class Hunch {
         hunchReads(self?{position:self.mesh.position,hp:self.hp,dead:self.dead}:undefined,rats,this.range,this.sensed,this.watchers,this.supercharged);
         const strength=this.supercharged?p.superStrength:p.strength;
         const juice=this.state.on('made');
+        // The Hunch as a power-up: it slams on at full health and cracks on the first hit.
+        const holding=!!self&&!self.dead&&(self.hp>=MAX_HP||this.supercharged);
+        if(holding!==this.holding){
+            if(holding)this.sound.hunchGained();else if(self&&!self.dead)this.sound.hunchLost();
+            this.holding=holding;
+        }
+        this.plate.update(self&&!self.dead?self.hp:undefined,holding,this.supercharged);
         let shutter=false;
         for(const [id,{entity}] of rats){
             const on=this.sensed.has(id);
@@ -172,13 +182,13 @@ export class Hunch {
     }
 
     reset():void {
-        this.sensed.clear();this.previous.clear();this.watchers.length=0;this.wasWatched=false;this.eyeLevel=0;
+        this.sensed.clear();this.previous.clear();this.watchers.length=0;this.wasWatched=false;this.eyeLevel=0;this.holding=false;this.plate.reset();
         for(const photo of this.photos){photo.target=undefined;photo.node.classList.remove('on');}
         this.card?.classList.remove('on');this.eye?.classList.remove('open');if(this.eye)this.eye.style.opacity='0';
         for(const trail of this.trails.values()){trail.line.visible=false;trail.count=0;}
     }
     dispose():void {
-        this.reset();for(const id of [...this.trails.keys()])this.dropTrail(id);this.material.dispose();
+        this.reset();this.plate.dispose();for(const id of [...this.trails.keys()])this.dropTrail(id);this.material.dispose();
         this.root?.remove();this.root=this.eye=this.card=undefined;this.photos.length=0;this.lastMade.clear();
     }
 

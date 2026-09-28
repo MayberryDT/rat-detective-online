@@ -160,6 +160,38 @@ export class FeelAudio {
         this.tone(filter,at,.32,'sawtooth',233.1,220,.3);
         this.tone(filter,at+.34,.6,'sawtooth',207.7,174.6,.3);
     }
+    /** A supply snatched: a quick whoosh up and a bright double click, like a flashbulb latch. */
+    supplyClaim(volume:number,pan:number):void {
+        if(!this.allow('supply-claim',.08))return;
+        const at=this.context.currentTime,out=this.out(volume,pan,.5);
+        this.burst(out,at,.18,'bandpass',1800,1.2,.03);
+        this.tone(out,at,.2,'sine',520,1560,.25);
+        this.burst(out,at+.16,.02,'highpass',4200,.8,.001);this.burst(out,at+.21,.02,'highpass',3600,.8,.001);
+    }
+    /** A supply lamp clicks back on: a switch, a warm thump and a short filament hum. */
+    lampOn(volume:number,pan:number):void {
+        if(!this.allow('lamp-on',.1))return;
+        const at=this.context.currentTime,out=this.out(volume,pan,.6);
+        this.burst(out,at,.02,'highpass',3000,.9,.001);
+        this.tone(out,at+.02,.18,'sine',120,70,.35);
+        this.tone(out,at+.04,.4,'sawtooth',60,60,.06);this.tone(out,at+.06,.35,'triangle',659.25,659.25,.08);
+    }
+    /** The Hunch comes on: a low muted-trumpet "aha", then a bright rising sparkle. */
+    hunchGained(volume:number):void {
+        if(!this.allow('hunch-on',.6))return;
+        const at=this.context.currentTime,out=this.out(volume,0,1.3);
+        const filter=this.context.createBiquadFilter();filter.type='lowpass';filter.frequency.value=2600;filter.Q.value=1.5;filter.connect(out);
+        this.tone(filter,at,.28,'sawtooth',196,196,.22);this.tone(filter,at,.28,'sawtooth',246.9,246.9,.16);
+        for(const [i,f] of [[0,783.99],[1,987.77],[2,1174.66],[3,1567.98]] as const)this.tone(out,at+.12+i*.06,.7,'triangle',f,f*1.002,.13);
+        this.burst(out,at+.1,.35,'highpass',6000,.7,.02);
+    }
+    /** The Hunch breaks: a cracking snap and a sour falling slide. */
+    hunchLost(volume:number):void {
+        if(!this.allow('hunch-off',.4))return;
+        const at=this.context.currentTime,out=this.out(volume,0,.9);
+        this.burst(out,at,.05,'highpass',2400,.8,.001);this.burst(out,at+.03,.12,'bandpass',900,2,.005);
+        this.tone(out,at+.02,.6,'triangle',880,392,.2);this.tone(out,at+.02,.6,'triangle',830.6,370,.12);
+    }
     /** The Hunch: a camera shutter. Two dry clicks around a short film-advance whirr. */
     shutter(volume:number):void {
         if(!this.allow('shutter',.35))return;

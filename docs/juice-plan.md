@@ -133,9 +133,16 @@ Tyler's brain dump, sorted into now and later, with his answers.
 - [x] **Rat Race.** Every living rat has Hot Pursuit until the incident ends, and shots fly 1.35× faster (shared pattern, so prediction matches).
 - [x] **All Units.** Respawns land among the 12 supported spawns nearest the real case (or its carrier, or the active Jurisdiction zone), at least 10 units away, on the one farthest from living rats.
 - **Review fixes:** the independent review caught that clients rejected the new heal causes and the Rat Race/dud launch speeds (which would have disconnected players); fixed with a wire regression test.
-- **Next action:** Tyler playtests the preview; production only on his OK.
+- **Tyler's first playtest (2026-09-28):** "amazing, I love this." Touch-ups, done the same day:
+  - **The Hunch as a power-up.** There was no local health display at all. Now a vitals plate sits bottom left: five slanted pips like the nameplates, and a gold eye badge reading THE HUNCH. At full health the badge slams on with an "aha" sting, turns and shimmers, the pips burn gold and faint pencil hatching boils at the screen edges; the first hit cracks it (shards, a snap and a sour slide, HUNCH LOST struck out).
+  - **Supplies were hard to find** ("a huge clarity issue"). Props now ignore the fog; each site throws a brighter, breathing lamp cone and pool; from 10 to 40 units a soft beam in the supply's colour rises from it (silver, red, green); and the prop gets an outline in that colour, like the far-rat edge. Hot Pursuit looked like the old shoes, so it is now winged red wingtips on a shoeshine box.
+  - **Supply juice** (Tyler: "add juice to the pickups as well"): props turn slowly on the plinth; a claim pops the prop up and away in a coloured flash and dust with a whoosh-and-click, the lamp stutters out; a restock clicks the lamp on with a warm thump and drops the prop back with a bounce. Everyone nearby hears claims and restocks.
+  - **Round end, 15 s and readable.** It felt like five seconds and the stats were tiny in a corner. Now: the full CASE CLOSED card for 2.6 s, then the police lineup with a readable winner banner across the top, then a results board: the full standings (the Tab scoreboard) beside a large Case File with each award, winner and value. Photos run one per second.
+- **Next action:** Tyler playtests the touch-ups; production only on his OK.
 
 **Later (not now):**
+- **Launcher overhaul.** Make the launchers far more chaotic and much juicier, including how the case interacts with them.
+- **Bot overhaul.** How bots act, their decision-making and how they work.
 - **Complete optimization overhaul.** Tyler felt a performance hit after the third batch (his PC was also busy). Measure the client frame budget with the full juice layer on, then cut cost across rendering, feel effects and simulation.
 - **3D model and ragdoll overhaul.**
 

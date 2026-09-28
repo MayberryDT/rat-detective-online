@@ -1,0 +1,53 @@
+/* Your vitals and the Hunch power-up, bottom left above the controls hint. */
+.hunch-plate{position:fixed;left:18px;bottom:62px;z-index:41;display:flex;align-items:center;gap:10px;pointer-events:none;opacity:0;transform:translateY(8px);
+  transition:opacity .25s,transform .25s;font-family:'Bangers',Impact,sans-serif}
+.hunch-plate.on{opacity:1;transform:none}
+.hunch-badge{position:relative;width:54px;height:54px;flex:none;filter:grayscale(1) brightness(.55);opacity:.45;transition:filter .3s,opacity .3s}
+.hunch-badge svg{width:100%;height:100%;overflow:visible}
+.hunch-badge .ring{fill:#140d19;stroke:#8a7b62;stroke-width:3;stroke-dasharray:6 4}
+.hunch-badge .brim{fill:#0b0810;stroke:#c7a45a;stroke-width:1.5}
+.hunch-badge .lid{fill:#f1e7cc;stroke:#15101a;stroke-width:2}
+.hunch-badge .iris{fill:#b8862c}.hunch-badge .pupil{fill:#050308}
+.hunch-badge .shard{position:absolute;left:50%;top:50%;width:14px;height:10px;background:#e7c46a;clip-path:polygon(0 0,100% 40%,30% 100%);opacity:0}
+.hunch-vitals{display:grid;gap:5px}
+.hunch-pips{display:flex;gap:6px}
+.hunch-pips i{width:30px;height:11px;transform:skewX(-24deg);border:2px solid #e9e1cc59;background:transparent;box-sizing:border-box;transition:background .2s,border-color .2s,box-shadow .3s}
+.hunch-pips i.full{background:#e9e1cc;border-color:#e9e1cc}
+.hunch-pips i.last{background:#e2382e;border-color:#e2382e;animation:hunch-last 1s ease-in-out infinite}
+.hunch-pips i.lost{animation:hunch-pip-lost .5s ease-out}
+.hunch-label{position:relative;height:20px;font-size:19px;letter-spacing:2px;line-height:20px}
+.hunch-label b,.hunch-label span{position:absolute;left:0;top:0;white-space:nowrap;opacity:0;font-weight:400}
+.hunch-label b{color:#f3cf6f;text-shadow:0 0 8px #f0b53c99,1px 1px 0 #2a1706;background:linear-gradient(100deg,#f3cf6f 40%,#fff6d8 50%,#f3cf6f 60%) 0 0/300% 100%;-webkit-background-clip:text;background-clip:text}
+.hunch-label span{color:#c8605a;text-decoration:line-through;text-decoration-thickness:2px}
+/* Holding the Hunch: the badge lights gold and turns, the pips burn, the label shimmers. */
+.hunch-plate.hunch .hunch-badge{filter:drop-shadow(0 0 10px #f0b53caa) drop-shadow(0 0 2px #000);opacity:1}
+.hunch-plate.hunch .hunch-badge .ring{stroke:#f3cf6f;animation:hunch-ring 6s linear infinite;transform-origin:32px 32px}
+.hunch-plate.hunch .hunch-pips i.full{background:#f6dc8e;border-color:#fff1c2;box-shadow:0 0 8px #f0b53c99}
+.hunch-plate.hunch .hunch-label b{opacity:1;-webkit-text-fill-color:transparent;animation:hunch-shimmer 2.4s linear infinite}
+.hunch-plate.super .hunch-badge{filter:drop-shadow(0 0 16px #ffe08a) drop-shadow(0 0 4px #f0b53c)}
+.hunch-plate.gained .hunch-badge{animation:hunch-slam .55s cubic-bezier(.2,.9,.3,1.3)}
+.hunch-plate.gained .hunch-vitals{animation:hunch-flash-in .6s ease-out}
+/* Losing it: the badge cracks and drops, shards fly, HUNCH LOST strikes out and fades. */
+.hunch-plate.broken .hunch-badge{animation:hunch-crack .6s ease-out}
+.hunch-plate.broken .shard{animation:hunch-shard .6s ease-out both}
+.hunch-plate.broken .shard.a{--dx:-34px;--dy:-26px;--r:-140deg}.hunch-plate.broken .shard.b{--dx:30px;--dy:-18px;--r:160deg}.hunch-plate.broken .shard.c{--dx:6px;--dy:34px;--r:80deg}
+.hunch-plate.broken .hunch-label span{animation:hunch-lost 1.4s ease-out both}
+@keyframes hunch-ring{to{transform:rotate(360deg)}}
+@keyframes hunch-shimmer{from{background-position:100% 0}to{background-position:-200% 0}}
+@keyframes hunch-slam{0%{transform:scale(2.4) rotate(-25deg);opacity:0}55%{transform:scale(.9) rotate(4deg);opacity:1}100%{transform:none}}
+@keyframes hunch-flash-in{0%{filter:brightness(2.6)}100%{filter:none}}
+@keyframes hunch-crack{0%{transform:none}20%{transform:translateX(-4px) rotate(-8deg) scale(1.1)}40%{transform:translateX(4px) rotate(6deg)}100%{transform:translateY(3px) scale(.92)}}
+@keyframes hunch-shard{0%{opacity:1;transform:translate(-50%,-50%)}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(var(--r))}}
+@keyframes hunch-lost{0%{opacity:0;transform:translateX(-6px)}12%{opacity:1;transform:none}70%{opacity:1}100%{opacity:0}}
+@keyframes hunch-last{50%{box-shadow:0 0 10px #ff3b2e}}
+@keyframes hunch-pip-lost{0%{background:#fff;border-color:#fff;transform:skewX(-24deg) translateY(-3px)}40%{background:#e2382e;border-color:#e2382e}100%{background:transparent;transform:skewX(-24deg)}}
+/* The world edge picks up pencil hatching while the Hunch holds. */
+.hunch-edges{position:fixed;inset:0;opacity:0;transition:opacity .5s;pointer-events:none;
+  background:repeating-linear-gradient(45deg,#efe2bf 0 1px,transparent 1px 7px);
+  -webkit-mask:radial-gradient(ellipse at center,transparent 62%,#000 100%);mask:radial-gradient(ellipse at center,transparent 62%,#000 100%)}
+body.hunch-active .hunch-edges{opacity:.09;animation:hunch-boil .5s steps(4) infinite}
+.hunch-plate.super ~ .hunch-edges,body.hunch-active .hunch-plate.super .hunch-edges{opacity:.16}
+@keyframes hunch-boil{0%{background-position:0 0}25%{background-position:2px 1px}50%{background-position:-1px 3px}75%{background-position:3px -2px}}
+body.lineup-on .hunch-plate,body.round-results .hunch-plate{display:none}
+@media(max-width:900px),(max-height:500px){.hunch-plate{left:50%;bottom:112px;translate:-50% 0;gap:7px}.hunch-badge{width:40px;height:40px}.hunch-pips i{width:22px;height:9px}.hunch-label{font-size:15px}}
+@media(prefers-reduced-motion:reduce){body.hunch-active .hunch-edges{animation:none}}

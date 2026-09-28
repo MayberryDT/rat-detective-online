@@ -1,3 +1,4 @@
+import type {SupplyCue} from './supplyCues';
 import * as THREE from 'three';
 import {LANDMARK_INTERIORS} from '../shared/landmarkLayout';
 import type {Vec3Data} from '../shared/networkProtocol';
@@ -92,6 +93,17 @@ export class FeelSound {
         const fade=!at?1:Math.max(0,1-Math.hypot(at.x-view.position.x,at.y-view.position.y,at.z-view.position.z)/FEEL.sound.params.headshotRange)**2;
         if(fade>.02)this.audio!.cough(FEEL.sound.params.cough*fade,at?this.pan(at,view):0);
     }
+    /** A supply claimed (any rat) or restocked; fades and pans like a world sound. */
+    supply(cue:SupplyCue,at:Vec3Data,view:THREE.Camera):void {
+        if(!this.on)return;
+        const fade=Math.max(0,1-Math.hypot(at.x-view.position.x,at.y-view.position.y,at.z-view.position.z)/FEEL.sound.params.supplyRange)**2;
+        if(fade<.02)return;
+        if(cue==='claim')this.audio!.supplyClaim(FEEL.sound.params.supply*fade,this.pan(at,view));
+        else this.audio!.lampOn(FEEL.sound.params.supply*fade,this.pan(at,view));
+    }
+    /** The Hunch power-up comes on (full health) and breaks (first hit). */
+    hunchGained():void {if(this.on)this.audio!.hunchGained(FEEL.sound.params.hunch);}
+    hunchLost():void {if(this.on)this.audio!.hunchLost(FEEL.sound.params.hunch);}
     /** The Hunch: your detective made someone (camera shutter). */
     shutter():void {if(this.on)this.audio!.shutter(FEEL.sound.params.shutter);}
     /** The Hunch: someone made you (violin sting). */

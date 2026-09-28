@@ -23,6 +23,7 @@ import {FEEL} from './feelTuning';
 import {NAMEPLATE_LIGHT} from '../ui/RatBillboard';
 import {Hunch,type HunchRat} from './Hunch';
 import {WantedSearchlight} from './WantedSearchlight';
+import {registerSupplyCues} from './supplyCues';
 
 /** One entry point from game events to presentation-only feel effects.
  * GameSession calls it at existing event sources; channels never parse
@@ -62,6 +63,8 @@ export class FeelDirector {
     private blackout=0;
     private muzzleFlash=0;
     private dark=0;
+    /** The last rendered view, for placing world cues raised outside the frame loop. */
+    private view?:THREE.Camera;
     private readonly impulse=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
     constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
@@ -81,7 +84,8 @@ export class FeelDirector {
     attachScene(scene:THREE.Scene):void {
         this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);
         this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);
-        this.searchlight?.dispose();this.searchlight=new WantedSearchlight(scene);this.hunchView.setSupercharged(this.incident==='clean-bill');
+        this.searchlight?.dispose();this.searchlight=new WantedSearchlight(scene);
+        registerSupplyCues((cue,at)=>{if(this.view)this.sound.supply(cue,at,this.view);});this.hunchView.setSupercharged(this.incident==='clean-bill');
     }
     /** Most Wanted each frame: the searchlight follows `target` (the leader's feet);
      * `me` when the leader is you, which gets its own callout. */
@@ -305,7 +309,7 @@ export class FeelDirector {
 
     /** `self` is the local rat's position, for direction arrows. */
     update(dt:number,view:THREE.Camera,self?:THREE.Vector3):void {
-        const r=FEEL.rewards.params;
+        const r=FEEL.rewards.params;this.view=view;
         if(this.slowAge<r.slowmo){this.slowAge+=dt;this.lag+=dt*1000*(1-r.slowRate);}
         else if(this.lag>0)this.lag=Math.max(0,this.lag-dt*1000*r.catchup);
         this.camera.update(dt);
@@ -358,5 +362,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();NAMEPLATE_LIGHT.value=1;}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);NAMEPLATE_LIGHT.value=1;}
 }

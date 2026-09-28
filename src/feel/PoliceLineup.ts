@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {createRatMesh,type RatOptions} from '../utils/RatModel';
-import type {Award,AwardId} from '../shared/networkProtocol';
+import type {Award} from '../shared/networkProtocol';
+import {awardValue} from '../shared/awardUnits';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import './policeLineup.css';
 
@@ -10,10 +11,7 @@ export interface LineupEntry {id:string;name:string;appearance:RatOptions;award?
 const ORIGIN=new THREE.Vector3(0,-320,0);
 const SPACING=1.75,WALL_Z=-1.3,ROOM_HALF_WIDTH=6.8,ROOM_HEIGHT=4.6;
 /** Seconds: first flash, then one per rat; the winner (last) gets a double flash. */
-const FIRST_FLASH=.8,FLASH_STEP=1.2,WINNER_PAUSE=.5;
-const UNITS:Record<AwardId,string>={'top-gun':'KILLS','most-cheesed':'HITS TAKEN','butterfingers':'DROPS','sewer-dweller':'S IN THE SEWER',
-    'high-flier':'M UP','sharpshooter':'% ACCURACY','headhunter':'HEADSHOTS','long-shot':'M KILL','case-keeper':'S ON THE CASE',
-    'frequent-flier':'FLIGHTS','supply-run':'PICKUPS','legwork':'M ON FOOT'};
+const FIRST_FLASH=.8,FLASH_STEP=1,WINNER_PAUSE=.5;
 
 /** Juice T5: a noir police lineup at round end. The top rats stand against a
  * height chart in a precinct room, lit by the stage's own spotlight (moved here,
@@ -158,7 +156,7 @@ export class PoliceLineup {
             const stamp=this.doc!.createElement('div');stamp.className='lineup-stamp'+(entry.winner?' winner':'');
             const title=this.doc!.createElement('b');title.textContent=entry.winner?'CASE CLOSED':entry.award?.title??'PERSON OF INTEREST';
             const detail=this.doc!.createElement('span');
-            detail.textContent=entry.award?`${entry.winner?`${entry.award.title} · `:''}${entry.award.value} ${UNITS[entry.award.id]}`:entry.winner?'THE WINNER':'NO COMMENT';
+            detail.textContent=entry.award?`${entry.winner?`${entry.award.title} · `:''}${awardValue(entry.award)}`:entry.winner?'THE WINNER':'NO COMMENT';
             stamp.appendChild(title);stamp.appendChild(detail);overlay.appendChild(stamp);this.stamps.push(stamp);
         });
         this.doc.body?.appendChild(overlay);this.overlay=overlay;this.flashNode=flash;

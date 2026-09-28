@@ -1,3 +1,5 @@
+import './roundEnd.css';
+import { awardValue } from '../shared/awardUnits';
 import { playerPreferences } from '../settings/PlayerPreferences';
 import type {FoleyPlay} from '../audio/foleyCatalog';
 import { ASSIGNMENTS, type AssignmentState } from '../shared/assignments';
@@ -173,7 +175,7 @@ export class GameHud {
             const list=this.doc.createElement('ul');file.appendChild(list);
             for(const award of awards){
                 const row=this.doc.createElement('li'),title=this.doc.createElement('b'),who=this.doc.createElement('span');
-                title.textContent=award.title;who.textContent=`${award.playerName} · ${award.value}`;
+                title.textContent=award.title;who.textContent=`${award.playerName} · ${awardValue(award)}`;
                 row.appendChild(title);row.appendChild(who);list.appendChild(row);
             }
             this.victoryText.appendChild(file);
@@ -182,8 +184,12 @@ export class GameHud {
         this.victoryVisible=true;this.overlay(this.victoryOverlay,true);
     }
 
+    /** Round end, last beat: the Case File and final standings take the screen. */
+    showResults(on: boolean): void {if(on)this.doc.body?.classList.add('round-results');else this.doc.body?.classList.remove('round-results');}
+
     hideVictory(): void {
         if (this.disposed) return;
+        this.showResults(false);
         this.clearCombatFeedback();
         const wasVisible=this.victoryVisible;this.victoryVisible=false;
         if(wasVisible)this.feedback('menu-close');this.overlay(this.victoryOverlay,false);

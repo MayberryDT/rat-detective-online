@@ -9,7 +9,7 @@ export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
 export const RESPAWN_DELAY_MS = 3_000;
 /** Juice T5: long enough for the slow-motion finish, the Case File and the police lineup. */
-export const WIN_DISPLAY_MS = 10_000;
+export const WIN_DISPLAY_MS = 15_000;
 export const DEFAULT_ROOM_NAME = 'public-live-v2';
 /** Wire-format ceiling for private capacity experiments; not an admission limit. */
 export const MAX_SCORE_ENTRIES = 100;
