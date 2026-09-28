@@ -7,14 +7,14 @@ import { MunicipalQuips } from './municipalQuips';
 import type { Award } from '../shared/networkProtocol';
 import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
-import { countUp, leave, measure, reducedMotion, replay, slide, uiMotion } from './motion';
+import { countUp, leave, measure, reducedMotion, replay, scrawl, slide, uiMotion } from './motion';
 
 const KILL_FEED_LIMIT = 5;
 const KILL_FEED_FADE_MS = 4000;
 const RESPAWN_TICK_MS = 250;
 const CONNECTION_PANEL_ID = 'connection-status';
-/** Telegram inks for names on the tape, picked by name so a rat keeps its colour. */
-const NAME_INKS = ['#7a1f2b', '#1f4e6b', '#4b2a6b', '#2f5a36', '#6b4a14', '#5a1f55', '#1d5a5a'];
+/** Faded carbon inks for names in the feed, picked by name so a rat keeps its colour. Stamp red is kept for you. */
+const NAME_INKS = ['#b9c9ecd9', '#9fcfd6d9', '#b5cfa6d9', '#cdbfaed9', '#c3c9d9d9', '#a3bdf0d9', '#c9c2b4d9'];
 const TEAR: Keyframe[] = [{opacity: 1, transform: 'none'}, {opacity: 0, transform: 'translateX(70px) rotate(7deg)'}];
 
 /** One kill-feed line. `note` is free text (case-death jokes, connection notices). */
@@ -53,6 +53,7 @@ export class GameHud {
     private readonly overlayAnimations = new Map<HTMLElement, Animation>();
     private swoop?: HTMLElement;
     private caseFile: {list: HTMLElement; rows: {row: HTMLElement; value: HTMLElement; award: Award}[]; stamped: boolean} | undefined;
+    private feedLines = 0;
 
     constructor(doc: Document = document, onRetry?: () => void, private readonly feedback:(cue:FeedbackCue)=>void=()=>{},private readonly foley?:FoleyPlay) {
         this.doc = doc;
@@ -63,6 +64,8 @@ export class GameHud {
         this.victoryText = this.require('victory-text');
         this.respawnOverlay = this.require('respawn-overlay');
         this.respawnTimer = this.require('respawn-timer');
+        const label = this.respawnOverlay.querySelector?.<HTMLElement>('.respawn-label');
+        if (label) scrawl(label, label.textContent ?? '');
         this.killConfirmation=this.doc.createElement('div');this.killConfirmation.id='kill-confirmation';
         this.killConfirmation.setAttribute('role','status');this.killConfirmation.setAttribute('aria-live','polite');
         this.killTitle=this.doc.createElement('div');this.killTitle.className='kill-confirmation-title';
@@ -100,7 +103,8 @@ export class GameHud {
         this.retryButton.style.display = state === 'disconnected' && this.onRetry ? 'inline-flex' : 'none';
     }
 
-    /** The title is gone and inert in this call; U2's swoop is a non-interactive copy of the desk. */
+    /** The title is gone and inert in this call; the swoop is a non-interactive copy of the evidence wall
+     * whose scraps tear away while an iris opens from the magnifying glass onto the city. */
     enterPlaying(): void {
         if (this.disposed) return;
         const entering=!this.titleScreen.classList.contains('fade-out');
@@ -109,6 +113,8 @@ export class GameHud {
         if(entering&&this.titleScreen.style.display!=='none'&&typeof this.titleScreen.cloneNode==='function'&&uiMotion('titleSwoop')){
             const swoop=this.titleScreen.cloneNode(true) as HTMLElement;
             swoop.classList.add('title-swoop');swoop.inert=true;swoop.setAttribute('aria-hidden','true');swoop.style.display='';
+            const lens=this.titleScreen.querySelector('.logo-lens')?.getBoundingClientRect();
+            if(lens?.width){swoop.style.setProperty('--iris-x',`${lens.x+lens.width/2}px`);swoop.style.setProperty('--iris-y',`${lens.y+lens.height/2}px`);}
             for(const link of Array.from(swoop.querySelectorAll('a')))link.removeAttribute('href');
             swoop.addEventListener('animationend',event=>{if(event.target===swoop)swoop.remove();});
             this.doc.body.appendChild(swoop);this.swoop=swoop;
@@ -118,29 +124,30 @@ export class GameHud {
         this.titleScreen.style.display = 'none';
     }
 
-    /** U5: a line of telegraph tape. Names keep their ink; you are highlighted. */
+    /** U5: a crooked carbon line. Names keep their ink and jitter; you are stamped red. */
     addKillFeed(line: FeedEntry): void {
         if (this.disposed) return;
         this.feedback('notice');
         const entry = this.doc.createElement('div');
-        entry.className = 'kill-entry';
+        entry.className = this.feedLines++ % 2 ? 'kill-entry crooked' : 'kill-entry';
         entry.setAttribute('data-kind', line.kind);
         const part = (className: string, text: string, tag: 'b' | 'span' = 'span') => {
             const node = this.doc.createElement(tag); node.className = className; node.textContent = text; entry.appendChild(node); return node;
         };
-        const name = (text: string) => {
-            let hash = 0; for (let i = 0; i < text.length; i++) hash = hash * 31 + text.charCodeAt(i) | 0;
-            part('feed-name', text, 'b').style.color = NAME_INKS[Math.abs(hash) % NAME_INKS.length]!;
+        const name = (text: string, you = false) => {
+            const node = part(you ? 'feed-name you' : 'feed-name', '', 'b');
+            if (!you) { let hash = 0; for (let i = 0; i < text.length; i++) hash = hash * 31 + text.charCodeAt(i) | 0; node.style.color = NAME_INKS[Math.abs(hash) % NAME_INKS.length]!; }
+            scrawl(node, text);
         };
         if (line.kind === 'note') entry.textContent = line.text;
         else if (line.kind === 'kill') {
             if (line.killer === null) { entry.setAttribute('data-killer', 'city'); part('feed-name city', 'The city', 'b'); }
-            else name(line.killer);
-            part('feed-verb', 'nabbed'); name(line.victim);
+            else name(line.killer, line.local === 'killer');
+            part('feed-verb', 'nabbed'); name(line.victim, line.local === 'victim');
             if (line.headshot) { entry.setAttribute('data-headshot', 'true'); part('feed-tag', 'HEADSHOT'); }
             if (line.local) entry.setAttribute('data-local', line.local);
         } else {
-            name(line.caller); part('feed-verb', 'called'); part('feed-tag', 'DISPATCH');
+            name(line.caller, !!line.local); part('feed-verb', 'called'); part('feed-tag', 'DISPATCH');
             if (line.local) entry.setAttribute('data-local', 'caller');
         }
         if (uiMotion('telegramFeed')) entry.classList.add('typed');

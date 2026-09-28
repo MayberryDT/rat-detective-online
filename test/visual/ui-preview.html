@@ -12,21 +12,54 @@
   </style>
 </head>
 <body>
+  <!-- Title Screen: the evidence wall at night -->
   <div id="title-screen">
-    <button type="button" id="title-settings-btn">⚙ Settings</button>
-    <div class="title-folder">
-      <div class="logo-container">
-        <img src="/logo-title.webp" alt="Rat Detective Logo" id="main-logo" width="600" height="600">
-        <div class="title-group"><h1><span>Rat</span> Detective</h1></div>
+      <svg id="title-strings" class="wall-strings" aria-hidden="true">
+          <line data-a="pin-clip" data-b="pin-logo"/><line data-a="pin-logo" data-b="pin-photo"/><line data-a="pin-clip" data-b="pin-note"/>
+          <line data-a="pin-note" data-b="pin-card"/><line data-a="pin-photo" data-b="pin-enter"/>
+      </svg>
+      <div class="wall-clip pinned scrap" aria-hidden="true"><i class="pin" id="pin-clip"></i><b>CHEESE HEIST ROCKS CITY</b><span>Police baffled. Case still hot. Rats everywhere.</span></div>
+      <div class="wall-photo pinned scrap" aria-hidden="true"><i class="pin" id="pin-photo"></i><div class="shot"><i class="cheese"></i></div><span>exhibit A: the cheese</span></div>
+      <p class="wall-note pinned scrap" aria-hidden="true"><i class="pin" id="pin-note"></i>grab the <b>HOT CASE</b>.<br>trust no rat.</p>
+      <div class="wall-car" aria-hidden="true"></div>
+      <div class="wall-blinds" aria-hidden="true"></div>
+      <div class="wall-logo pinned scrap">
+          <i class="pin" id="pin-logo"></i>
+          <div class="logo-badge" aria-hidden="true">
+              <svg class="badge-star" viewBox="-110 -110 220 220">
+                  <defs><radialGradient id="badge-brass" cx="35%" cy="28%" r="80%"><stop offset="0" stop-color="#fff0b8"/><stop offset=".38" stop-color="#e6b94f"/><stop offset=".8" stop-color="#a8761f"/><stop offset="1" stop-color="#7a5212"/></radialGradient></defs>
+                  <g fill="url(#badge-brass)" stroke="#5a3d0c" stroke-width="3" stroke-linejoin="round">
+                      <path d="M0.0 -92.0 L23.4 -48.7 L71.9 -57.4 L52.6 -12.0 L89.7 20.5 L42.2 33.7 L39.9 82.9 L0.0 54.0 L-39.9 82.9 L-42.2 33.7 L-89.7 20.5 L-52.6 -12.0 L-71.9 -57.4 L-23.4 -48.7Z"/>
+                      <circle cx="0.0" cy="-96.0" r="9"/><circle cx="75.1" cy="-59.9" r="9"/><circle cx="93.6" cy="21.4" r="9"/><circle cx="41.7" cy="86.5" r="9"/><circle cx="-41.7" cy="86.5" r="9"/><circle cx="-93.6" cy="21.4" r="9"/><circle cx="-75.1" cy="-59.9" r="9"/>
+                  </g>
+                  <circle r="62" fill="none" stroke="#7a5212" stroke-width="2.5" stroke-dasharray="1 5" stroke-linecap="round"/>
+              </svg>
+              <i class="lens-handle"></i>
+              <div class="logo-lens"><img src="/logo-title.webp" alt="" width="600" height="600" fetchpriority="high" decoding="async"></div>
+          </div>
+          <h1 class="logo-stamp" aria-label="Rat Detective"><span class="tail-r">R<svg class="rat-tail" viewBox="-70 -4 72 40" aria-hidden="true"><path d="M-2 0C0 14 -10 24 -26 25" stroke-width="8"/><path d="M-26 25C-44 26 -58 16 -54 5" stroke-width="5.5"/><path d="M-54 5C-51 -4 -38 -2 -40 7C-41 12 -47 11 -46 8" stroke-width="3.5"/></svg></span>AT DETECTIVE<small aria-hidden="true">CITY POLICE · EVIDENCE · CASE OPEN</small></h1>
       </div>
-      <p class="title-typed" aria-hidden="true">DETECTIVE ON RECORD:</p>
-      <div class="name-input-group">
-        <div id="player-name">Inspector Brie</div>
-        <button type="button" id="reroll-name-btn" aria-label="Roll another name"><svg viewBox="0 0 28 24" aria-hidden="true"><rect x="10.5" y="1.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/><rect x="1.5" y="6.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/></svg></button>
+      <div class="wall-card pinned scrap">
+          <i class="pin" id="pin-card"></i>
+          <p class="card-label" aria-hidden="true">DETECTIVE ON RECORD</p>
+          <div class="card-row">
+              <div id="player-name"></div>
+              <button type="button" id="reroll-name-btn" aria-label="Roll another name">
+                  <svg viewBox="0 0 28 24" aria-hidden="true">
+                      <rect x="10.5" y="1.5" width="16" height="16" rx="3"/>
+                      <circle cx="15.5" cy="6.5" r="1.3"/><circle cx="21.5" cy="6.5" r="1.3"/><circle cx="18.5" cy="9.5" r="1.3"/><circle cx="15.5" cy="12.5" r="1.3"/><circle cx="21.5" cy="12.5" r="1.3"/>
+                      <rect x="1.5" y="6.5" width="16" height="16" rx="3"/>
+                      <circle class="pip-red" cx="5.5" cy="11.5" r="1.3"/><circle class="pip-red" cx="13.5" cy="11.5" r="1.3"/><circle class="pip-red" cx="9.5" cy="14.5" r="1.3"/><circle class="pip-red" cx="5.5" cy="17.5" r="1.3"/><circle class="pip-red" cx="13.5" cy="17.5" r="1.3"/>
+                  </svg>
+              </button>
+          </div>
       </div>
-      <button id="enter-city-btn"><div class="pulse-dot"></div><span id="enter-city-label">ENTER CITY!</span></button>
-    </div>
-    <p class="music-credit game-credit">Music: <a id="music-credit-link" href="https://www.youtube.com/watch?v=k4hjX6ZsplU" target="_blank" rel="noopener noreferrer">Rat Detective Boogie</a> by Stellar Cruise</p>
+      <div class="wall-enter pinned">
+          <button id="enter-city-btn" class="scrap" disabled autofocus><i class="pin" id="pin-enter"></i><span id="enter-city-label">ENTER CITY!</span></button>
+          <p id="invitation-status" role="status" hidden></p>
+      </div>
+      <button type="button" id="title-settings-btn" class="scrap"><i class="pin"></i>⚙ Settings</button>
+      <p class="music-credit game-credit">Music: <a id="music-credit-link" href="https://www.youtube.com/watch?v=k4hjX6ZsplU" target="_blank" rel="noopener noreferrer">Rat Detective Boogie</a> by Stellar Cruise</p>
   </div>
   <div id="kill-feed"></div>
   <div id="victory-overlay"><div id="victory-text"></div></div>

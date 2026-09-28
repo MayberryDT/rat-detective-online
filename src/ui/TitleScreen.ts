@@ -60,9 +60,25 @@ export class TitleScreen {
             doc.addEventListener(type, () => this.onGesture(), { ...options, capture: true });
         }
         target.addEventListener('focus', () => this.focus(), options);
+        target.addEventListener('resize', this.strings, options);
         doc.addEventListener('visibilitychange', () => { if (!doc.hidden) this.focus(); }, options);
-        this.roll(); this.focus();
+        void doc.fonts?.ready.then(this.strings);
+        this.roll(); this.focus(); this.strings();
     }
+    /** Red string runs pin to pin; pins hang at layout positions, so this runs on layout changes only. */
+    private readonly strings = (): void => {
+        const svg = this.doc.getElementById('title-strings');
+        if (this.disposed || !svg?.getBoundingClientRect) return;
+        const box = svg.getBoundingClientRect();
+        for (const line of Array.from(svg.children)) {
+            const a = this.doc.getElementById(line.getAttribute('data-a') ?? '')?.getBoundingClientRect();
+            const b = this.doc.getElementById(line.getAttribute('data-b') ?? '')?.getBoundingClientRect();
+            (line as SVGElement).style.display = a?.width && b?.width ? '' : 'none';
+            if (!a?.width || !b?.width) continue;
+            line.setAttribute('x1', String(a.x + a.width / 2 - box.x)); line.setAttribute('y1', String(a.y + a.height / 2 - box.y));
+            line.setAttribute('x2', String(b.x + b.width / 2 - box.x)); line.setAttribute('y2', String(b.y + b.height / 2 - box.y));
+        }
+    };
     private enter(): void {
         if (this.settings?.isOpen || !this.available()) return;
         this.clearRoll(); this.show(this.name); this.onGesture(); this.onEnter(this.name);

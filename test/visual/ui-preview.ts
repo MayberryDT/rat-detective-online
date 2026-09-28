@@ -6,6 +6,7 @@ import {GameHud} from '../../src/ui/GameHud';
 import {MatchScoreboard} from '../../src/ui/MatchScoreboard';
 import {PlayerSettings} from '../../src/ui/PlayerSettings';
 import {TouchControls} from '../../src/ui/TouchControls';
+import {TitleScreen} from '../../src/ui/TitleScreen';
 import {DispatchHud} from '../../src/prototype/DispatchHud';
 import {AssignmentDestinations} from '../../src/prototype/AssignmentDestinations';
 import {powerupCard} from '../../src/prototype/pickupArtwork';
@@ -40,6 +41,7 @@ const hud=new GameHud();
 const screen=new ScreenFeel(()=>1);
 let playing=false;
 function enter():void {playing=true;touch?.setPlaying(true);touch?.update(0,true);}
+const title=new TitleScreen();title.settings=settings;title.onEnter=()=>{hud.enterPlaying();enter();};
 
 const names=['Inspector Brie','Detective Rind','Gumshoe Squeak','Sergeant Stilton','Officer Crumb','Inspector Fontina','Deputy Muenster','Lieutenant Curd'];
 const people=names.map((name,i)=>({...createPlayer(i?`rat-${i}`:'me',name,{hatType:'fedora',hatColor:1,coatColor:2,furColor:3},{x:0,y:0,z:0}),kills:9-i,deaths:i%3}));
@@ -89,8 +91,13 @@ function score(id:string,delta:number):void {
     board.receive({type:'chaos',state});
 }
 const actions:Record<string,()=>void>={
-    'Title: back to the desk':()=>location.reload(),
-    'Title: enter the city (swoop)':()=>{hud.enterPlaying();enter();},
+    'Title: back to the wall':()=>location.reload(),
+    'Title: roll a name (dice)':()=>document.getElementById('reroll-name-btn')!.click(),
+    'Title: pinned Settings':()=>document.getElementById('title-settings-btn')!.click(),
+    'Title: ENTER CITY (swoop)':()=>document.getElementById('enter-city-btn')!.click(),
+    'Title: swoop held mid-way':()=>{document.getElementById('enter-city-btn')!.click();
+        const swoop=document.querySelector('.title-swoop');if(swoop)Object.defineProperty(swoop,'remove',{value:()=>{}});
+        for(const a of document.getAnimations())if((a.effect as KeyframeEffect|null)?.target?.closest('.title-swoop')){a.currentTime=300;a.pause();}},
     'Enter instantly (no swoop)':()=>{hud.enterPlaying();enter();document.querySelector('.title-swoop')?.remove();},
     'Feed: you nabbed a rat':()=>hud.addKillFeed({kind:'kill',killer:'Inspector Brie',victim:'Detective Rind',local:'killer'}),
     'Feed: headshot':()=>hud.addKillFeed({kind:'kill',killer:'Gumshoe Squeak',victim:'Officer Crumb',headshot:true}),
@@ -133,6 +140,20 @@ const actions:Record<string,()=>void>={
     'Connection: reconnecting':()=>hud.setConnection('reconnecting'),
     'Connection: disconnected':()=>hud.setConnection('disconnected','Connection lost. The city keeps turning.'),
     'Connection: hide':()=>hud.setConnection('playing'),
+    'Callout: COLD CASE':()=>screen.callout('COLD CASE'),
+    'Case: you take the case':()=>{state.case.owner='me';},
+    'Case: loose again':()=>{state.case.owner=null;},
+    'Hot case marker (over the suspect)':()=>{
+        const tag=document.querySelector<HTMLElement>('.hot-case-tag')??document.body.appendChild(document.createElement('div'));
+        tag.className='hot-case-tag';tag.setAttribute('aria-label','Hot Case location');tag.innerHTML='<div class="hot-case-title">HOT CASE</div><div class="hot-case-detail">LOOSE · 24 m</div>';
+        const p=suspect.position.clone();p.y+=2.1;p.project(stage.camera);
+        tag.style.display='block';tag.style.transform=`translate(${(p.x+1)/2*innerWidth-87}px,${(1-p.y)/2*innerHeight-32}px)`;
+    },
+    'Dispatch: roulette, then incident':()=>{
+        const now=performance.now(),d=state.dispatch;
+        Object.assign(d,{phase:'rolling',started:now,until:now+2600,serial:d.serial+1,incident:'pressure-surge'});
+        setTimeout(()=>Object.assign(d,{phase:'active',started:performance.now(),until:performance.now()+30000}),2600);
+    },
     'Reduced motion on':()=>playerPreferences().update({reducedMotion:true}),
     'Reduced motion off':()=>playerPreferences().update({reducedMotion:false}),
 };
