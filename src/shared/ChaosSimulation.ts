@@ -352,9 +352,16 @@ export class ChaosSimulation {
             if(!player||player.hp<=0||buffExpired(entry,now))delete this.buffs[id];
         }
         if(!playing)return;
+        // Most rats are nowhere near a site. The claim point lies on the recent
+        // approach segment ending at the rat, so anything farther than the claim
+        // radius plus the longest segment is rejected as too far without building
+        // the claim; acceptance and Malpractice's roll are unchanged.
+        const farSquared=(PICKUP_TUNING.claimRadius+INTERACTION_SWEEP_DISTANCE+1)**2;
         for(const [id,site] of this.pickups){
             if(now<site.availableAt)continue;
             for(const player of this.players.values()){
+                const dx=player.x-site.p.x,dy=player.y+.8-site.p.y,dz=player.z-site.p.z;
+                if(dx*dx+dy*dy+dz*dz>farSquared)continue;
                 if(this.collectPickup(id,site,player,now).accepted)break;
             }
         }
