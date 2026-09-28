@@ -11,7 +11,7 @@ import { PICKUP_TUNING } from '../../src/shared/pickups';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 function state(owner:string|null=null):ChaosState {
-    return {time:1000,case:{owner,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:40,y:0,z:0},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
+    return {time:1000,case:{owner,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:40,y:0,z:0},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'cooldown',started:0,until:1e9,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
 }
 function fixture(seed=0){
     const navigation:ObjectiveNavigation={route:vi.fn((_from,to)=>[{...to}]),explorationTargets:()=>Array.from({length:24},(_,i)=>({x:i*4+20,y:i%2?-7:0,z:60}))};
@@ -37,6 +37,23 @@ function aimedNear(shot:Vec3Data|undefined,self:Vec3Data,target:Vec3Data){
     expect(cosine).toBeLessThan(.9999);
 }
 describe('case-first normal match bots',()=>{
+    // Dispatch pillars failure modes: a bot abandons the case, its carry or a nearer chase for a bell,
+    // walks to a busy pillar, or never goes to ring one that is out of sight.
+    it('detours to ring a nearby ready pillar only when nothing more urgent is closer',()=>{
+        const station=DISPATCH_STATIONS[0]!,decide=(s:ChaosState,dx:number,owner:string|null=null)=>{
+            const {brain,self,navigation}=fixture();self.x=station.x+dx;self.z=station.z;s.case.owner=owner;
+            brain.step(1000,self,[self],s,()=>false,false,true,()=>false);return {brain,navigation};
+        };
+        const ready=()=>{const s=state();s.dispatch={phase:'ready',started:0,until:0,serial:3};s.case.p={x:station.x+150,y:0,z:station.z};return s;};
+        const {brain,navigation}=decide(ready(),30);
+        expect(brain.objective).toBe('dispatch');
+        const goal=vi.mocked(navigation.route).mock.calls.at(-1)![1];
+        expect(Math.hypot(goal.x-station.x,goal.z-station.z)).toBeCloseTo(5);
+        expect(decide(ready(),60).brain.objective).not.toBe('dispatch');
+        expect(decide(ready(),30,'me').brain.objective).not.toBe('dispatch');
+        const busy=ready();busy.dispatch.phase='cooldown';expect(decide(busy,30).brain.objective).not.toBe('dispatch');
+        const nearCase=ready();nearCase.case.p={x:station.x+50,y:0,z:station.z};expect(decide(nearCase,30).brain.objective).toBe('case');
+    });
     it('applies Hot Pursuit to bot movement only until the authoritative expiry',()=>{
         const {brain,self}=fixture(),s=state();
         const ordinary=brain.step(1000,self,[],s,()=>true,false,true);
@@ -185,6 +202,7 @@ describe('case-first normal match bots',()=>{
     });
     it('shoots a visible ready Dispatch button in a quiet stretch, then prioritizes an enemy',()=>{
         const {brain,self,near}=fixture(),loose=state(),target=DISPATCH_STATIONS[0].target;
+        loose.dispatch={phase:'ready',started:0,until:0,serial:0};
         self.x=target.x;self.z=target.z+12;
         const clearControl=vi.fn(()=>true);
         expect(brain.step(1000,self,[self],loose,()=>true,false,true,clearControl).shoot).toBeUndefined();
@@ -198,6 +216,7 @@ describe('case-first normal match bots',()=>{
     });
     it('does not shoot a blocked Dispatch target and fires visible enemies more frequently',()=>{
         const {brain,self,near}=fixture(),loose=state(),target=DISPATCH_STATIONS[0].target;
+        loose.dispatch={phase:'ready',started:0,until:0,serial:0};
         self.x=target.x;self.z=target.z+12;
         const first=brain.step(1000,self,[self,near],loose,()=>true,false,true,()=>false);
         expect(first.shoot).toBeUndefined();

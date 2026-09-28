@@ -31,7 +31,7 @@ export interface ObjectiveNavigation {
     update?(budgetMs?: number): void;
 }
 export interface ObjectiveBotIntent { x: number; z: number; jump: boolean; zoneHop?: boolean; shoot?: Vec3Data; facing: number }
-export type BotObjective = 'case' | 'carrier' | 'combat' | 'explore' | 'delivery' | 'evade' | 'intercept' | 'pickup' | 'zone-hold';
+export type BotObjective = 'case' | 'carrier' | 'combat' | 'dispatch' | 'explore' | 'delivery' | 'evade' | 'intercept' | 'pickup' | 'zone-hold';
 const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
 const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
 
@@ -285,6 +285,13 @@ export class ObjectiveBotBrain {
             // Do not interrupt your own scoring, or keep shooting a nearby
             // loose case away while attempting to collect it.
             if(carrying||this.target||available&&distance(self,available.value.p)<24)this.dispatchTarget=undefined;
+            // A short detour to a nearby ready alarm pillar whose bell is not yet in reach, to ring it from
+            // its open side: never with the case, in a fight, with a loose case close by, or when the case
+            // or its carrier is less than twice as far as the pillar.
+            const chase=Math.min(available?distance(self,available.value.p):Infinity,carrier?distance(self,carrier):Infinity);
+            const pillar=state?.dispatch.phase==='ready'&&!this.dispatchTarget&&!carrying&&!this.target&&chase>=24?DISPATCH_STATIONS
+                .map(station=>({key:`dispatch:${station.id}`,d:distance(self,station),point:{x:station.x+Math.sin(station.face)*5,y:station.y,z:station.z+Math.cos(station.face)*5}}))
+                .filter(({key,d,point})=>d<45&&d*2<chase&&Math.abs(point.y-self.y)<3&&!this.suppressed(key,point,now)).sort((a,b)=>a.d-b.d)[0]:undefined;
             const destination=assignment?.phase==='active'&&state?.case.owner===self.id?activeDestination(assignment):undefined;
             let delivery:Vec3Data|undefined,deliveryKey='';
             if(destination&&assignment){
@@ -364,6 +371,7 @@ export class ObjectiveBotBrain {
                 if(this.key!==`pickup:${pickup.id}`){this.pickupUntil=now+2200;this.nextPickupAt=now+8000;}
                 this.setObjective('pickup',`pickup:${pickup.id}`,pickup);
             }
+            else if(pillar)this.setObjective('dispatch',pillar.key,pillar.point);
             else if(armor){
                 if(this.key!==`pickup:${armor.id}`)this.supplyTripAt=now+25000+this.random()*10000;
                 this.setObjective('pickup',`pickup:${armor.id}`,armor);
@@ -509,7 +517,7 @@ export class ObjectiveBotBrain {
         if(!this.pendingPlan&&now<this.recoverUntil){const turn=this.wanderIndex%2?1:-1;x=Math.sin(this.heading+turn*1.05)*5;z=Math.cos(this.heading+turn*1.05)*5;}
         if(this.objective==='zone-hold'&&this.destination&&distance(self,this.destination)<.8){x=0;z=0;this.stalled=false;}
         // Stop at the objective rather than repeatedly running across the case.
-        if(this.objective==='case'&&this.destination&&distance(self,this.destination)<1.15){x=0;z=0;}
+        if(this.destination&&(this.objective==='case'&&distance(self,this.destination)<1.15||this.objective==='dispatch'&&distance(self,this.destination)<1.5)){x=0;z=0;}
         let facing=this.heading;
         // Tunnel ramps are walking links. Recovery hops hit their arched ceiling.
         let jump=!sewerRampAt(self)&&!approachingCase&&grounded&&now>=this.jumpAt&&(obstacleJump||!this.pendingPlan&&now<this.recoverUntil||blocked&&!!waypoint||!!waypoint&&waypoint.y-self.y>1.1);
@@ -551,9 +559,8 @@ export class ObjectiveBotBrain {
         if(!combat.aim&&speculativeFacing!==undefined)facing=speculativeFacing;
         let shoot:Vec3Data|undefined;
         if(this.dispatchTarget&&dispatchReady){
-            // Shoot the visible red face while passing; it never replaces the
-            // case route with a detour to a control somewhere else in the city.
-            shoot={x:this.dispatchTarget.x+(this.random()-.5)*.15,y:this.dispatchTarget.y+(this.random()-.5)*.15,z:this.dispatchTarget.z};
+            // The bell is a big box shootable from any side; aim somewhere on it, imperfectly.
+            shoot={x:this.dispatchTarget.x+(this.random()-.5)*3,y:this.dispatchTarget.y+(this.random()-.5)*2.4,z:this.dispatchTarget.z+(this.random()-.5)*3};
             facing=Math.atan2(this.dispatchTarget.x-self.x,this.dispatchTarget.z-self.z);
         } else if(combat.shoot){
             shoot=combat.shoot;this.shotAt=now+200;
