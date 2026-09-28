@@ -68,13 +68,16 @@ export class NoirRain {
         const yaw=Math.atan2(camera.matrixWorld.elements[8],camera.matrixWorld.elements[10]);
         // Rain: a box of drops that follows the camera and wraps.
         const fall=p.speed*dt,visible=Math.round(this.count*this.level);
+        // Every drop shares one rotation: compose it once, then write only each
+        // drop's translation (identical to composing per drop at unit scale).
+        this.dummy.position.set(0,0,0);this.dummy.rotation.set(0,yaw,p.slant);this.dummy.scale.set(1,1,1);this.dummy.updateMatrix();
+        const shared=this.dummy.matrix.elements,drops=this.drops.instanceMatrix.array;
         for(let i=0;i<visible;i++){
             let x=this.positions[i*3]!,y=this.positions[i*3+1]!-fall,z=this.positions[i*3+2]!;
             if(y<0){y+=25;this.place(i);x=this.positions[i*3]!;z=this.positions[i*3+2]!;
                 if(i%9===0&&cy<20){const s=this.splashCursor++%64;this.splashAges[s]=0;this.splashPoints[s*2]=cx+x;this.splashPoints[s*2+1]=cz+z;}}
             this.positions[i*3+1]=y;
-            this.dummy.position.set(cx+x,cy-6+y,cz+z);this.dummy.rotation.set(0,yaw,p.slant);this.dummy.scale.set(1,1,1);
-            this.dummy.updateMatrix();this.drops.setMatrixAt(i,this.dummy.matrix);
+            drops.set(shared,i*16);drops[i*16+12]=cx+x;drops[i*16+13]=cy-6+y;drops[i*16+14]=cz+z;
         }
         this.drops.count=visible;
         (this.drops.material as THREE.MeshBasicMaterial).opacity=.32*this.level;
@@ -100,7 +103,7 @@ export class NoirRain {
         }
         this.glints.count=glints;
         (this.glints.material as THREE.MeshBasicMaterial).opacity=p.reflectOpacity*this.level*Math.min(1,strength/.65);
-        for(const mesh of [this.drops,this.splashes,this.glints])mesh.instanceMatrix.needsUpdate=true;
+        this.drops.instanceMatrix.needsUpdate=true;this.splashes.instanceMatrix.needsUpdate=true;this.glints.instanceMatrix.needsUpdate=true;
     }
 
     dispose():void {
