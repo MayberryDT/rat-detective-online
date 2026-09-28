@@ -1,0 +1,1 @@
+Special Elite by Astigmatic. Unmodified Latin subset (WOFF2) from Google Fonts, retrieved 2026-09-28. Distributed under the Apache License 2.0; see LICENSE.txt. Used locally for the carbon-copy typewriter text of the in-game HUD.

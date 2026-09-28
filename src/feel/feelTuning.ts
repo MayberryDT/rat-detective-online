@@ -136,6 +136,8 @@ export const FEEL={
     caseFileStamps:{label:'U8 Case File stamping',toggle:true,params:{gap:.42}},
     /** U9: scoreboard paper slide and live reordering, pickup-card exits, springy touch controls. */
     paperSlide:{label:'U9 Scoreboard, card exits, touch springs',toggle:true,params:{}},
+    /** Carbon scrawl: headings and names on the in-game carbon copies jitter a hair, letter by letter. */
+    scrawl:{label:'U10 Carbon scrawl letter jitter',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

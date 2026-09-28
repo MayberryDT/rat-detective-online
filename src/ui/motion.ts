@@ -22,6 +22,24 @@ export function replay(el:HTMLElement,className:string,once=false):void {
     el.addEventListener('animationend',end);
 }
 
+const scrawled=new WeakMap<HTMLElement,string>();
+/** Carbon scrawl: write `text` as crooked letters (`rd-l` in `rd-w` words; motion.css jitters them) with
+ * plain spaces, so words still wrap and `textContent` reads as `text`. Rebuilds only when the text changes;
+ * safe to call every frame. */
+export function scrawl(el:HTMLElement,text:string):void {
+    if(scrawled.get(el)===text)return;
+    scrawled.set(el,text);
+    const doc=el.ownerDocument;
+    if(!feelState().on('scrawl')||typeof doc?.createTextNode!=='function'){el.textContent=text;return;}
+    el.textContent='';
+    let word:HTMLElement|undefined;
+    for(const char of text){
+        if(char===' '){word=undefined;el.appendChild(doc.createTextNode(' '));continue;}
+        if(!word){word=doc.createElement('rd-w');el.appendChild(word);}
+        const letter=doc.createElement('rd-l');letter.textContent=char;word.appendChild(letter);
+    }
+}
+
 /** FLIP, first half: each child's current top. */
 export function measure(parent:HTMLElement):Map<Element,number>|undefined {
     if(typeof parent.getBoundingClientRect!=='function')return undefined;
