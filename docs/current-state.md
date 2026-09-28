@@ -2,6 +2,15 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Optimization overhaul — 28 September production (protocol 20)
+
+Worker `48fb6913-82c5-443c-8794-6c03c91a7800` (client `index-BHHY40Qv.js`): the
+city's fixed boxes live in `StaticCityBroadphase` outside Cannon's per-body loops
+(server room tick about −80% in the benchmark; contact order changed slightly),
+the sewer lamps are hidden above ground (about −30% GPU on the street), and the
+camera, corpse and local-rat batching, static matrices, tails, lights and rain
+do less per-frame work (Halla: 30→43 fps hosted). See [the receipt](verification/perf-overhaul-2026-09-28.md).
+
 ## Fourth juice batch — 28 September production (protocol 20)
 
 Worker `be7ac8ba-2529-42ba-865a-27aafe11131e` (commit `f28053a`, client

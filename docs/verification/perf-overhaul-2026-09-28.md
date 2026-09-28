@@ -1,6 +1,6 @@
 # Optimization overhaul — 28 September 2026
 
-Branch `perf/overhaul` (from `main` at the [baseline](perf-baseline-2026-09-28.md)), one commit per item. Private preview only; not pushed or deployed to production. Measured on Halla with the same tools, scenes and machine as the baseline, so compare against that receipt.
+Branch `perf/overhaul` (from `main` at the [baseline](perf-baseline-2026-09-28.md)), one commit per item, merged into `main`. Released to production; see [Release](#release). Measured on Halla with the same tools, scenes and machine as the baseline, so compare against that receipt.
 
 ## Results
 
@@ -60,3 +60,14 @@ Client:
 ## Remaining
 
 Render submission (three.js traversal and draw calls, ≈15 ms CPU on Halla) is now the largest cost. Rats still pose about 1,400 nodes per frame. Production CPU (`cpuTime`) and a real-phone check have not been measured.
+
+## Release
+
+Tyler playtested the preview ("this feels a million times better") and asked for it to be merged and released.
+
+- **Worker** `48fb6913-82c5-443c-8794-6c03c91a7800`, predecessor `be7ac8ba-2529-42ba-865a-27aafe11131e`. Protocol 20 is unchanged, so open tabs keep working.
+- **Client** `index-BHHY40Qv.js` / `createGame-DQOwwGLf.js`, built without source maps.
+- **After deploy:** `/health` ok; `/status` `public-live-v2` playing with 9 bots; root HTML and all 58 other files match `dist`; the old host redirects (301). A 6 s default-matchmaking join got a protocol-20 welcome and ordinary play (it was shot, died and respawned).
+- **Rollback** to `be7ac8ba…` is safe for stored state: no wire or storage format changed.
+- **Production CPU** (`cpuTime`) was not measured at release.
+
