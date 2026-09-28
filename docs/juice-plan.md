@@ -183,9 +183,8 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
 **Later (not now):**
 - **UI overhaul (Tyler, 2026-09-28).** Overhaul the UI and add a lot of juice to it. Scope open; this lifts the standing "no HUD changes" rule only for this item.
 - **Dispatch overhaul (Tyler, 2026-09-28).** Overhaul the Dispatch system: the alarm you shoot to start an incident, and how incidents begin.
-- **Ragdolls revisited (Tyler, 2026-09-28).** After the fifth batch Tyler is "not really seeing a difference" in ragdolls (R1–R3). Find why they read as unchanged in real play (distance, lighting, corpse lifetime, motion size) and make deaths visibly different.
-- **Launcher overhaul.** Done as the fifth and sixth batches (released 2026-09-28). Unagreed extras from the launcher brainstorm: machine idle life, callouts, a launch camera, per-machine neon signs, per-machine trails, ambient hum.
-- **Launcher machine models.** Rebuilt in code (P2); Tyler still to decide whether to go further (for example, authored models).
+- **Ragdolls revisited (Tyler, 2026-09-28).** After the fifth batch Tyler is "not really seeing a difference" in ragdolls (R1–R3). Tyler's exact complaint: a dead rat "becomes like a cylinder block", completely stiff, toppling like a salt shaker flicked across a table; it doesn't look like a living thing. The body itself must bend and go limp, not just the limbs.
+- **Launcher overhaul.** Done as the fifth and sixth batches (released 2026-09-28). Tyler (2026-09-28) closed the leftover extras and accepted the code-built machine models as done.
 - **Bot overhaul.** How bots act, their decision-making and how they work.
 - **Complete optimization overhaul (started 2026-09-28).** Tyler felt a performance hit after the third batch (his PC was also busy). The 37-item assumption audit (numbered in the chat on 2026-09-28) is worked in phases, one item per commit, each with before/after numbers, no change to how the game looks or plays:
   - **Phase 0, baseline:** `?diagnostics` phase means and GPU time, the synthetic render fixture (`capacity-render.html`) with corpses, a CDP CPU/allocation profile of a hosted observation room, and the server bench with `--cpu-prof` (idle and 120-ball burst). Output: `docs/verification/perf-baseline-2026-09-28.md` with the audit re-ranked by measured cost. Tyler reviews before fixes.
@@ -246,7 +245,7 @@ Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning 
 
 - **Noir pass and first-review choices:** settled 2026-09-28. Tyler delegated these calls ("make choices on that stuff… if something's wrong, I'll tell you"); every choice in [the review guide](juice/review.md#choices-to-confirm) stays as built.
 - **Dropped by Tyler (2026-09-28):** production CPU measurement and further speed work. Shadow freezing/removal is not pursued.
-- **Open (2026-09-28):** UI overhaul, Dispatch overhaul, ragdolls revisited, bot overhaul; launcher extras and machine models await Tyler's call. Order not yet chosen.
+- **Open (2026-09-28):** UI overhaul, Dispatch overhaul and ragdolls revisited, worked together as the seventh batch (brainstorming now); the bot overhaul after.
 
 ## Evidence
 
