@@ -65,6 +65,13 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         const standIns=stage.scene.children.filter(object=>!scenery.has(object));
         stage.syncViewport();
         await warmPrograms(renderer,stage.scene,stage.camera,signal,standIns);
+        // Sewer lamps are hidden above ground; compile their lit variant as well
+        // so the first trip underground does not recompile the city.
+        if(city instanceof Neighborhood){
+            for(const light of city.sewerLights)light.visible=true;
+            try{await warmPrograms(renderer,stage.scene,stage.camera,signal,standIns);}
+            finally{for(const light of city.sewerLights)light.visible=false;}
+        }
         stage.scene.remove(...standIns);
         for(const model of models)stage.world.removeBody(model.body);
         await yieldToPage(signal);

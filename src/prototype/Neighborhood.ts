@@ -40,6 +40,9 @@ export class Neighborhood {
     private readonly lampSources:THREE.PointLight[]=[];
     private readonly fixedLights:THREE.PointLight[]=[];
     private readonly lampPool:THREE.PointLight[]=[];
+    /** The eight pooled sewer lamps. Hidden, not merely dark, away from the
+     * sewers: every lit pixel loops over each visible light (-30% GPU time). */
+    get sewerLights():readonly THREE.PointLight[] {return this.lampPool;}
     private overhead?:StreetLightPool;
     private readability?:StreetReadability;
     private readonly interiorSources=new Map<THREE.PointLight,InteriorFixture>();
@@ -310,7 +313,7 @@ export class Neighborhood {
     private initLampPool() {
         for(let i=0;i<8;i++){
             const light=new THREE.PointLight(0xffffff,0,1,1.5);
-            light.name='sewer-pooled-light';
+            light.name='sewer-pooled-light';light.visible=false;
             this.scene.add(light);this.lampPool.push(light);
         }
     }
@@ -351,7 +354,9 @@ export class Neighborhood {
         if(!camera)return;
         // Only sewer lamps follow the player. Street and interior light is baked once.
         const p=anchor??camera.position;
-        if(!sewerLightingActive(p)){for(const light of this.lampPool)light.intensity=0;return;}
+        // All eight show or hide together: two shader variants, both compiled before entry.
+        if(!sewerLightingActive(p)){for(const light of this.lampPool){light.intensity=0;light.visible=false;}return;}
+        for(const light of this.lampPool)light.visible=true;
         const px=p.x,py=p.y,pz=p.z;
         const ranked=this.lampSources.map(source=>{
             const dx=source.position.x-px,dy=source.position.y-py,dz=source.position.z-pz;
