@@ -1,0 +1,54 @@
+/* U1: one noir look and one motion kit. Midnight paperwork: ink, paper, gold and stamp red. */
+:root{
+  --ink:#130e20;--ink-deep:#0b0710;--ink-panel:#1a1022;--ink-raised:#28172f;--ink-line:#4b3457;
+  --paper:#cbbfcc;--paper-bright:#eadfeb;--paper-dim:#a897b0;--paper-tape:#d6cbc6;--manila:#d8c69a;
+  --gold:#d4bd78;--gold-hot:#e6bf60;--stamp:#d8352a;--stamp-hot:#ff594b;--violet:#78647e;
+  --font-display:'Bangers',Impact,sans-serif;--font-body:'Outfit',Arial,sans-serif;--font-type:'Courier New',Courier,monospace;
+  --paper-lines:repeating-linear-gradient(0deg,#1a1022 0 3px,#1b1123 3px 4px);
+  --ui-snap:cubic-bezier(.2,.9,.3,1.25);--ui-out:cubic-bezier(.2,.8,.3,1);--ui-spring:cubic-bezier(.3,1.7,.5,1);
+  --ui-fast:.16s;--ui-med:.32s;--ui-slow:.6s;
+  /* Older names, still used by the WebGL error panel. */
+  --bg-dark:#100919;--accent-purple:#9775aa;--accent-glow:#9775aa44;--text-main:#decfd9;--text-muted:#bba4c5;
+}
+/* Shared beats: slam in, stamp down, type out, roll a number, bump on arrival, shake when urgent. */
+.ui-slam{animation:ui-slam .5s var(--ui-snap) both}
+.ui-stamp{animation:ui-stamp .34s var(--ui-snap) both}
+.ui-roll{animation:ui-roll .3s var(--ui-out)}
+.ui-bump{animation:ui-bump .42s var(--ui-snap)}
+.ui-leaving{pointer-events:none}
+@keyframes ui-slam{0%{opacity:0;transform:scale(2.2,.4) rotate(10deg)}45%{opacity:1;transform:scale(.9,1.15) rotate(-2deg)}70%{transform:scale(1.05,.95)}100%{opacity:1;transform:none}}
+@keyframes ui-stamp{0%{opacity:0;transform:scale(2.4) rotate(-12deg)}60%{opacity:1;transform:scale(.92) rotate(-7deg)}100%{opacity:1;transform:rotate(-7deg)}}
+@keyframes ui-type{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes ui-roll{from{opacity:.2;transform:translateY(55%)}to{opacity:1;transform:none}}
+@keyframes ui-bump{0%{transform:scale(1)}35%{transform:scale(1.14);filter:brightness(1.5)}100%{transform:scale(1)}}
+@keyframes ui-shake{0%,100%{translate:0 0}20%{translate:-2px 1px}40%{translate:2px -1px}60%{translate:-1px -1px}80%{translate:1px 1px}}
+@keyframes ui-fade-hold{0%{opacity:0}12%,80%{opacity:1}100%{opacity:0}}
+/* Points flying to the score card (positioned from script). */
+.ui-fly{position:fixed;z-index:260;pointer-events:none;font:400 38px/1 var(--font-display);letter-spacing:1px;color:var(--gold-hot);
+  -webkit-text-stroke:1.5px var(--ink);text-shadow:3px 3px 0 var(--ink),0 0 12px #e6bf6088;white-space:nowrap}
+/* A paper ghost of a closing panel. */
+.ui-ghost{position:fixed;z-index:400;pointer-events:none;background:var(--paper-lines);border:2px solid #a087ad;box-shadow:8px 8px 0 #08040ce0}
+/* Photo corners for anything that is a mugshot or an exhibit. */
+.photo-corners{position:relative}
+.photo-corners::before,.photo-corners::after{content:'';position:absolute;width:18px;height:18px;pointer-events:none;border:0 solid var(--manila);opacity:.85}
+.photo-corners::before{left:-5px;top:-5px;border-width:3px 0 0 3px}
+.photo-corners::after{right:-5px;bottom:-5px;border-width:0 3px 3px 0}
+
+/* Reduced interface motion (Settings) and the OS preference: every interface surface
+ * holds still. Script-driven motion checks the same two switches (see motion.ts). */
+body.reduced-motion :is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost),
+body.reduced-motion :is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost) *,
+body.reduced-motion :is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost)::before,
+body.reduced-motion :is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost)::after,
+body.reduced-motion :is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost) *::before,
+body.reduced-motion :is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost) *::after,
+body.reduced-motion .player-settings::backdrop{animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){
+:is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost),
+:is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost) *,
+:is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost)::before,
+:is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost)::after,
+:is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost) *::before,
+:is(#title-screen,#kill-feed,#crosshair,#kill-confirmation,#respawn-overlay,#victory-overlay,#connection-status,.match-scoreboard,.player-settings,.dispatch-hud,.assignment-destination,.pickup-buffs,.touch-controls,.hot-case-tag,.quick-fix-beacon,#police-lineup,.ui-fly,.ui-ghost) *::after,
+.player-settings::backdrop{animation:none!important;transition:none!important}
+}

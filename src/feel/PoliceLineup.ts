@@ -4,6 +4,7 @@ import type {Award} from '../shared/networkProtocol';
 import {awardValue} from '../shared/awardUnits';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import './policeLineup.css';
+import {replay} from '../ui/motion';
 
 export interface LineupEntry {id:string;name:string;appearance:RatOptions;award?:Award;winner:boolean}
 
@@ -66,7 +67,7 @@ export class PoliceLineup {
         const due=this.flashTime(this.fired);
         if(this.fired<this.entries.length+1&&this.age>=due){
             this.fired++;this.flash=1;this.onFlash();
-            this.flashNode?.classList.remove('on');void this.flashNode?.offsetWidth;this.flashNode?.classList.add('on');
+            if(this.flashNode)replay(this.flashNode,'on');
             const index=Math.min(this.fired,this.entries.length)-1;
             this.stamps[index]?.classList.add('on');
         }

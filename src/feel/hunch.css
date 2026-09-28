@@ -32,3 +32,14 @@
 .hunch-card.on .hunch-card-stamp{animation:hunch-stamp 2.3s ease-out both}
 @keyframes hunch-stamp{0%,14%{opacity:0;transform:scale(2.4)}20%{opacity:.95;transform:scale(1)}80%{opacity:.95}100%{opacity:0}}
 @media(max-height:500px){.hunch-card{top:26%;padding:6px 16px 8px}.hunch-card-title{font-size:26px}.hunch-eye{width:48px;height:30px;margin:-15px 0 0 -24px}}
+/* Reduced interface motion: the photo, eye and card appear and fade without moving. */
+body.reduced-motion .hunch-photo.on{animation:ui-fade-hold var(--hunch-life,1500ms) linear both}
+body.reduced-motion .hunch-photo.on :is(.hunch-flash,.hunch-caption){animation:none}body.reduced-motion .hunch-photo.on .hunch-caption{width:auto;padding-inline:6px}
+body.reduced-motion .hunch-card.on{animation:ui-fade-hold 2.3s linear both}body.reduced-motion .hunch-card.on .hunch-card-stamp{animation:none}
+body.reduced-motion .hunch-eye :is(.lid,.iris,.pupil){transition:none}
+@media(prefers-reduced-motion:reduce){
+  .hunch-photo.on{animation:ui-fade-hold var(--hunch-life,1500ms) linear both}
+  .hunch-photo.on :is(.hunch-flash,.hunch-caption){animation:none}.hunch-photo.on .hunch-caption{width:auto;padding-inline:6px}
+  .hunch-card.on{animation:ui-fade-hold 2.3s linear both}.hunch-card.on .hunch-card-stamp{animation:none}
+  .hunch-eye :is(.lid,.iris,.pupil){transition:none}
+}

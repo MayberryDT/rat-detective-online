@@ -14,4 +14,7 @@
 .lineup-stamp.winner{border-color:#e7b53c;color:#ffd35c;font-size:23px;background:#1c160866}
 .lineup-plate.winner{border-color:#e7b53c}.lineup-plate.winner b{color:#ffd35c}
 @keyframes lineup-stamp{0%{opacity:0;transform:translate(-50%,-50%) rotate(-8deg) scale(2.6)}100%{opacity:1;transform:translate(-50%,-50%) rotate(-8deg) scale(1)}}
-@media(prefers-reduced-motion:reduce){#police-lineup .lineup-flash.on{animation:none}.lineup-stamp.on{animation:none;opacity:1;transform:translate(-50%,-50%) rotate(-8deg)}}
+/* Reduced interface motion: no flashbulb, and each stamp is simply there. */
+body.reduced-motion #police-lineup .lineup-flash.on{animation:none!important}
+body.reduced-motion #police-lineup .lineup-stamp.on{animation:none!important;opacity:1;transform:translate(-50%,-50%) rotate(-8deg)}
+@media(prefers-reduced-motion:reduce){#police-lineup .lineup-flash.on{animation:none!important}#police-lineup .lineup-stamp.on{animation:none!important;opacity:1;transform:translate(-50%,-50%) rotate(-8deg)}}

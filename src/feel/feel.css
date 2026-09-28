@@ -39,10 +39,20 @@
 @keyframes feel-callout{0%{opacity:0;transform:translateX(-50%) scale(1.8) rotate(-3deg)}12%{opacity:1;transform:translateX(-50%) scale(1) rotate(-3deg)}
   80%{opacity:1;transform:translateX(-50%) scale(1) rotate(-3deg)}100%{opacity:0;transform:translateX(-50%) translateY(-10px) rotate(-3deg)}}
 @media(max-height:500px){.feel-callout{font-size:28px;top:30%}}
-.victory-casefile{margin-top:14px;padding:10px 16px;border:2px solid #d8c69a55;background:#150b1bcc;font:600 14px/1.5 'Outfit',Arial,sans-serif;letter-spacing:.6px;rotate:3deg;text-transform:none}
+/* U8: the Case File is a folder of rubber-stamped awards; the rows stamp in one at a time at results. */
+.victory-casefile{margin-top:14px;padding:10px 16px;border:2px solid #d8c69a55;background:var(--paper-lines,#1a1022);box-shadow:5px 5px 0 #0a060e;font:600 14px/1.5 'Outfit',Arial,sans-serif;letter-spacing:.6px;rotate:3deg;text-transform:none}
 .victory-casefile h3{margin:0 0 4px;font:400 22px/1 'Bangers',Impact,sans-serif;letter-spacing:1.5px;color:#e6bf60}
-.victory-casefile li{list-style:none;display:flex;gap:10px;justify-content:space-between}.victory-casefile ul{margin:0;padding:0}
-.victory-casefile b{color:#f3e2b5}.victory-casefile span{color:#c6b8cf}
+.victory-casefile li{list-style:none;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px 10px}.victory-casefile ul{margin:0;padding:0}
+.victory-casefile b{justify-self:start;padding:1px 6px;border:2px solid #d8352a;color:#ff6a5c;font:400 16px/1.1 'Bangers',Impact,sans-serif;letter-spacing:1px;rotate:-3deg;text-transform:uppercase}
+.victory-casefile li:nth-child(even) b{border-color:#e6bf60;color:#f0cf74;rotate:2deg}
+.victory-casefile span{color:#eadfeb;font:700 13px/1.2 'Courier New',Courier,monospace;text-transform:uppercase;overflow-wrap:anywhere}
+.victory-casefile strong{color:#f3e2b5;font:400 18px/1 'Bangers',Impact,sans-serif;letter-spacing:.8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media(max-height:500px){body:not(.round-results) .victory-casefile{display:none}}
+.victory-casefile ul.stamping li:not(.stamped){opacity:0}
+.victory-casefile ul.stamping li.stamped{animation:casefile-row .3s ease-out both}
+.victory-casefile ul.stamping li.stamped b{animation:casefile-stamp .34s cubic-bezier(.2,.9,.3,1.25) both}
+@keyframes casefile-row{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+@keyframes casefile-stamp{0%{opacity:0;transform:scale(2.4) rotate(-9deg)}60%{opacity:1;transform:scale(.9)}100%{opacity:1;transform:none}}
 /* N6: film grain, vignette and letterbox bars for big moments. */
 .feel-grain{position:absolute;inset:-50%;opacity:0;background-size:192px 192px;mix-blend-mode:overlay;animation:feel-grain .5s steps(4) infinite}
 @keyframes feel-grain{0%{transform:translate(0,0)}25%{transform:translate(-7%,4%)}50%{transform:translate(5%,-6%)}75%{transform:translate(-3%,-2%)}100%{transform:translate(0,0)}}
@@ -57,3 +67,15 @@
     radial-gradient(ellipse 9% 7% at calc(var(--soot-x,55%) - 11%) 66%,#0d0a08cc,#0d0a0800 70%),radial-gradient(ellipse 30% 24% at var(--soot-x,55%) 60%,#1a130c66,#1a130c00 75%)}
 .feel-soot.on{animation:feel-soot 1.9s ease-out both}
 @keyframes feel-soot{0%{opacity:0;transform:scale(.7)}8%{opacity:var(--soot,1);transform:scale(1)}40%{opacity:calc(var(--soot,1)*.85)}100%{opacity:0;transform:scale(1.04) translateY(2%)}}
+/* Reduced interface motion: informative words and cards fade in place; decoration holds still. */
+body.reduced-motion :is(.feel-grain,.feel-speed){animation:none!important}
+body.reduced-motion .feel-letterbox{transition:none}
+body.reduced-motion .feel-word.on{animation:ui-fade-hold 1100ms linear both;transform:translate(-50%,-50%) rotate(var(--tilt))}
+body.reduced-motion .feel-callout.on{animation:ui-fade-hold 1500ms linear both}
+body.reduced-motion :is(.feel-kill-bloom,.feel-soot).on{animation:none}
+@media(prefers-reduced-motion:reduce){
+  .feel-speed{animation:none}.feel-letterbox{transition:none}
+  .feel-word.on{animation:ui-fade-hold 1100ms linear both;transform:translate(-50%,-50%) rotate(var(--tilt))}
+  .feel-callout.on{animation:ui-fade-hold 1500ms linear both}
+  :is(.feel-kill-bloom,.feel-soot).on{animation:none}
+}
