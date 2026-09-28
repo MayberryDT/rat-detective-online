@@ -1170,7 +1170,7 @@ export class GameRoom extends DurableObject<Env> {
       const player = this.players.get(event.playerId);
       if (!player) continue;
       this.persistPlayer(player, true);
-      this.broadcast({ type: 'playerHealed', id: player.id, hp: player.hp, cause: 'pickup' });
+      this.broadcast({ type: 'playerHealed', id: player.id, hp: player.hp, cause: event.cause });
     }
   }
 
@@ -1246,7 +1246,7 @@ export class GameRoom extends DurableObject<Env> {
         const player = this.players.get(event.player_id);
         if (!player) continue;
 
-        respawnPlayer(player, spawnForWorld(this.world, Math.random, this.players.values(), player.id,this.chaos?.assignmentState));
+        respawnPlayer(player, spawnForWorld(this.world, Math.random, this.players.values(), player.id,this.chaos?.assignmentState,this.chaos?.allUnitsTarget));
         this.lastMovementBroadcast.delete(player.id);this.movementAllowances.set(player.id,createMovementAllowance(now));
         if (this.isManagedBot(player.id)) this.serverBots?.reset(player.id, { x: player.x, y: player.y, z: player.z });
         this.persistPlayer(player, true);

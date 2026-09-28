@@ -140,7 +140,7 @@ describe('pickup system',()=>{
         a.hp=1;sim.step(1/60,now+32);
         expect(a.hp).toBe(MAX_HP);
         expect(sites(sim).some(p=>p.id===target.id)).toBe(false);
-        expect(sim.drainPickupEvents()).toContainEqual({kind:'healed',playerId:a.id,hp:MAX_HP});
+        expect(sim.drainPickupEvents()).toContainEqual({kind:'healed',playerId:a.id,hp:MAX_HP,cause:'pickup'});
         // No overheal and no resurrection path; the other rat is untouched.
         expect(b.hp).toBe(MAX_HP);
     });

@@ -18,8 +18,10 @@ import { hasIronclad, mergePickup, activeBuffs, buffExpired, PICKUP_TUNING, reso
     type BuffMap, type PickupKind, type PickupPoint } from './pickups';
 import type { WorldSpec } from './worldSpec';
 import { worldSpawnPoints } from './playerSpawns';
-import { MAX_HP, type PickupRejectReason, type PickupTarget, type PlayerData, type ShotDescriptor, type ShotResultOutcome, type Vec3Data } from './networkProtocol';
+import { MAX_HP, type HealCause, type PickupRejectReason, type PickupTarget, type PlayerData, type ShotDescriptor, type ShotResultOutcome, type Vec3Data } from './networkProtocol';
 import { AssignmentRules } from './AssignmentRules';
+import { activeZone } from './jurisdiction';
+import { JURISDICTION_ZONES } from './jurisdictionZones';
 import { activeDestination, ASSIGNMENT_DESTINATIONS, destinationPoint, restoreAssignment, type AssignmentState, type DestinationId } from './assignments';
 
 const caseCarryRotation=new C.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
@@ -53,7 +55,7 @@ export interface PickupClaimResult {accepted:boolean;target:PickupTarget;targetI
  * persist and broadcast the restored health without the sim owning networking. */
 export type PickupEvent =
     | { kind:'collected'; pickupId:string; pickup:PickupKind; playerId:string }
-    | { kind:'healed'; playerId:string; hp:number };
+    | { kind:'healed'; playerId:string; hp:number; cause:HealCause };
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
 export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
@@ -87,6 +89,11 @@ export class ChaosSimulation {
     private possession:Record<string,number>={};
     private dispatch:ChaosState['dispatch']={phase:'ready',started:0,until:0,serial:0};
     private lastSurgePulse=0;
+    /** Clean Bill heals once per incident serial. */
+    private cleanBillSerial=-1;
+    /** Malpractice: each Quick Fix site's authored home and next allowed hop. */
+    private readonly kitHomes=new Map<string,Vec3Data>();
+    private readonly kitHopAt=new Map<string,number>();
     private casesWeaponized=false;
     private plantedSerial:number|undefined;
     private dispatchActivator:string|null=null;
@@ -103,6 +110,14 @@ export class ChaosSimulation {
     private assignment?:AssignmentRules;
     private primaryAcquiredAt=0;
     get assignmentState():AssignmentState|undefined{return this.assignment?.state;}
+    /** All Units: where the fallen respawn beside the action, the active zone or the real case. */
+    get allUnitsTarget():Vec3Data|undefined{
+        if(!this.incidentActive('all-units'))return undefined;
+        const j=this.assignment?.state.jurisdiction;
+        if(j)return {...JURISDICTION_ZONES[activeZone(j)].posts[0]!};
+        const owner=this.primaryCase.owner?this.players.get(this.primaryCase.owner):undefined;
+        return owner?{x:owner.x,y:owner.y,z:owner.z}:data(this.primaryCase.body.position);
+    }
     setAssignment(state:AssignmentState):void{this.assignment=new AssignmentRules(structuredClone(state),this.players);}
     private hit(hit:ChaosHit):void{if(!this.assignment?.closed)this.onHit(hit);}
     get caseHolderId():string|null{return this.primaryCase.owner;}
@@ -139,33 +154,36 @@ export class ChaosSimulation {
     private seedPickups(spec?:WorldSpec):void{
         let clear:readonly Vec3Data[];
         try{clear=spec?worldSpawnPoints(spec):CASE_SPAWNS;}catch{clear=CASE_SPAWNS;}
-        this.pickupPoints=resolvePickupPoints(clear,14,p=>{
-            const ray=(from:C.Vec3,to:C.Vec3)=>{const hit=new C.RaycastResult();this.world.raycastClosest(from,to,{collisionFilterMask:1},hit);return hit;};
-            const foot=p.y-.7;
-            // Rays starting inside a shelf can miss every face. Check the whole
-            // rat/prop volume against static boxes before testing floor support.
-            const local=new C.Vec3(),point=new C.Vec3();
-            for(const body of this.world.bodies){
-                if(body.mass!==0)continue;
-                for(const shape of body.shapes){
-                    if(!(shape instanceof C.Box))continue;
-                    for(const [height,radius] of [[.6,.6],[1.3,.85],[1.9,.35]]){
-                        point.set(p.x,foot+height+.04,p.z);body.pointToLocalFrame(point,local);
-                        const h=shape.halfExtents;
-                        const dx=Math.max(0,Math.abs(local.x)-h.x),dy=Math.max(0,Math.abs(local.y)-h.y),dz=Math.max(0,Math.abs(local.z)-h.z);
-                        if(dx*dx+dy*dy+dz*dz<radius*radius)return false;
-                    }
+        this.pickupPoints=resolvePickupPoints(clear,14,p=>this.supportedSpot(p));
+        for(const point of this.pickupPoints){this.pickups.set(point.id,{kind:point.kind,p:{...point.p},availableAt:0});if(point.kind==='quick-fix')this.kitHomes.set(point.id,{...point.p});}
+    }
+    /** A supply-sized volume at `p` (prop height .7 above the foot) is clear of
+     * static boxes, stands on flat floor with headroom, and has no wall hugging it. */
+    private supportedSpot(p:Vec3Data):boolean{
+        const ray=(from:C.Vec3,to:C.Vec3)=>{const hit=new C.RaycastResult();this.world.raycastClosest(from,to,{collisionFilterMask:1},hit);return hit;};
+        const foot=p.y-.7;
+        // Rays starting inside a shelf can miss every face. Check the whole
+        // rat/prop volume against static boxes before testing floor support.
+        const local=new C.Vec3(),point=new C.Vec3();
+        for(const body of this.world.bodies){
+            if(body.mass!==0)continue;
+            for(const shape of body.shapes){
+                if(!(shape instanceof C.Box))continue;
+                for(const [height,radius] of [[.6,.6],[1.3,.85],[1.9,.35]]){
+                    point.set(p.x,foot+height+.04,p.z);body.pointToLocalFrame(point,local);
+                    const h=shape.halfExtents;
+                    const dx=Math.max(0,Math.abs(local.x)-h.x),dy=Math.max(0,Math.abs(local.y)-h.y),dz=Math.max(0,Math.abs(local.z)-h.z);
+                    if(dx*dx+dy*dy+dz*dz<radius*radius)return false;
                 }
             }
-            for(const [dx,dz] of [[0,0],[.7,0],[-.7,0],[0,.7],[0,-.7]]){
-                const hit=ray(new C.Vec3(p.x+dx,foot+.15,p.z+dz),new C.Vec3(p.x+dx,foot-.2,p.z+dz));
-                if(!hit.hasHit||hit.hitNormalWorld.y<.9)return false;
-                if(ray(new C.Vec3(p.x+dx,foot+.2,p.z+dz),new C.Vec3(p.x+dx,foot+2.8,p.z+dz)).hasHit)return false;
-            }
-            for(let i=0;i<8;i++)if(ray(new C.Vec3(p.x,foot+1.3,p.z),new C.Vec3(p.x+Math.cos(i*Math.PI/4),foot+1.3,p.z+Math.sin(i*Math.PI/4))).hasHit)return false;
-            return true;
-        });
-        for(const point of this.pickupPoints)this.pickups.set(point.id,{kind:point.kind,p:{...point.p},availableAt:0});
+        }
+        for(const [dx,dz] of [[0,0],[.7,0],[-.7,0],[0,.7],[0,-.7]]){
+            const hit=ray(new C.Vec3(p.x+dx,foot+.15,p.z+dz),new C.Vec3(p.x+dx,foot-.2,p.z+dz));
+            if(!hit.hasHit||hit.hitNormalWorld.y<.9)return false;
+            if(ray(new C.Vec3(p.x+dx,foot+.2,p.z+dz),new C.Vec3(p.x+dx,foot+2.8,p.z+dz)).hasHit)return false;
+        }
+        for(let i=0;i<8;i++)if(ray(new C.Vec3(p.x,foot+1.3,p.z),new C.Vec3(p.x+Math.cos(i*Math.PI/4),foot+1.3,p.z+Math.sin(i*Math.PI/4))).hasHit)return false;
+        return true;
     }
     private createCase(id:string,fake=false):CaseRuntime{
         const body=new C.Body({mass:1.5,shape:new C.Box(new C.Vec3(CASE_SIZE.x/2,CASE_SIZE.y/2,CASE_SIZE.z/2)),
@@ -277,8 +295,13 @@ export class ChaosSimulation {
         if(closest.distanceTo(vec(site.p))>PICKUP_TUNING.claimRadius)return{accepted:false,target:'pickup',targetId:id,playerId:player.id,reason:'too-far'};
         if(this.ray(closest,vec(site.p),1).hasHit||this.ray(reach,vec(site.p),1).hasHit)return{accepted:false,target:'pickup',targetId:id,playerId:player.id,reason:'blocked'};
         const generation=site.availableAt;
-        if(site.kind==='quick-fix'){
-            player.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:player.id,hp:player.hp});
+        if(site.kind==='quick-fix'&&this.incidentActive('malpractice')&&Math.random()<I.malpracticeExplodeChance){
+            // Malpractice: the kit was a bomb. Neutral cheese, no heal, the site restocks as usual.
+            this.cheeseBurst({...site.p},null);
+            this.impacts.push({p:{...site.p},n:{x:0,y:1,z:0},surface:false,scale:2.6,cue:'case-hit'});
+            this.tell(`MALPRACTICE! THE KIT EXPLODED ON ${player.name.toUpperCase()}`);
+        }else if(site.kind==='quick-fix'){
+            player.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:player.id,hp:player.hp,cause:'pickup'});
         }else this.buffs[player.id]=mergePickup(this.buffs[player.id],site.kind,now);
         site.availableAt=now+PICKUP_TUNING.respawnMs;
         this.pickupEvents.push({kind:'collected',pickupId:id,pickup:site.kind,playerId:player.id});
@@ -425,6 +448,74 @@ export class ChaosSimulation {
                 playerId:player.id,at:this.now,velocity:{...velocity}}))].slice(-MAX_LAUNCH_EVENTS);
     }
     private tell(text:string){this.notice={serial:this.notice.serial+1,text};}
+    /** Clean Bill, Rat Race, Most Wanted and Malpractice act on rats and supplies each step. */
+    private stepIncidentEffects(now:number,playing:boolean):void{
+        const d=this.dispatch;
+        if(this.incidentActive('clean-bill')&&this.cleanBillSerial!==d.serial){
+            this.cleanBillSerial=d.serial;
+            for(const player of this.players.values())if(player.hp>0&&player.hp<MAX_HP){
+                player.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:player.id,hp:MAX_HP,cause:'incident'});
+            }
+        }
+        // Rat Race: every living rat hustles until the incident ends, including the freshly respawned.
+        if(this.incidentActive('rat-race'))for(const player of this.players.values()){
+            if(player.hp>0&&(this.buffs[player.id]?.hustleUntil??0)<d.until)this.buffs[player.id]={...this.buffs[player.id],hustleUntil:d.until};
+        }
+        if(this.incidentActive('most-wanted')){
+            const wanted=d.wanted?this.players.get(d.wanted):undefined;
+            if(!wanted||wanted.hp<=0){
+                const next=this.leader();
+                if(next!==d.wanted){
+                    this.dispatch={...d,...(next?{wanted:next}:{})};if(!next)delete this.dispatch.wanted;
+                    const target=next?this.players.get(next):undefined;
+                    if(target)this.tell(`MOST WANTED: ${target.name.toUpperCase()} · BOUNTY: A FULL HEAL AND HOT PURSUIT`);
+                }
+            }
+        }else if(d.wanted!==undefined){this.dispatch={...d};delete this.dispatch.wanted;}
+        this.stepMalpractice(now,playing);
+    }
+    /** The assignment leader (then kills) among living rats; Most Wanted's target. */
+    private leader():string|undefined{
+        const a=this.assignment?.state;
+        const progress=(id:string)=>{
+            if(!a)return 0;
+            switch(a.id){
+                case 'chain-of-custody':return a.deliveries[id]??0;
+                case 'jurisdiction':return a.jurisdiction?.heldMs[id]??0;
+                case 'closing-time':return this.possession[id]??0;
+                case 'excessive-force':return a.caseKills[id]??0;
+            }
+        };
+        let best:PlayerData|undefined,bestScore=-1;
+        for(const player of this.players.values()){
+            if(player.hp<=0)continue;
+            const score=progress(player.id)*1000+player.kills;
+            if(score>bestScore||(score===bestScore&&best&&player.id<best.id)){best=player;bestScore=score;}
+        }
+        return best?.id;
+    }
+    /** Malpractice: Quick Fix kits hop away from rats that come close, on their
+     * own supported floor near home; they walk back home when it ends. */
+    private stepMalpractice(now:number,playing:boolean):void{
+        const active=playing&&this.incidentActive('malpractice');
+        for(const [id,home] of this.kitHomes){
+            const site=this.pickups.get(id);if(!site)continue;
+            if(!active){if(site.p.x!==home.x||site.p.z!==home.z)site.p={...home};continue;}
+            if(now<site.availableAt||now<(this.kitHopAt.get(id)??0))continue;
+            let nearest:PlayerData|undefined,distance:number=I.malpracticeScare;
+            for(const player of this.players.values()){
+                if(player.hp<=0||Math.abs(player.y+.7-site.p.y)>2.5)continue;
+                const d=Math.hypot(player.x-site.p.x,player.z-site.p.z);if(d<distance){distance=d;nearest=player;}
+            }
+            if(!nearest)continue;
+            const away=Math.atan2(site.p.z-nearest.z,site.p.x-nearest.x);
+            for(const turn of [0,.6,-.6,1.2,-1.2,1.9,-1.9]){
+                const angle=away+turn,next={x:site.p.x+Math.cos(angle)*I.malpracticeHop,y:site.p.y,z:site.p.z+Math.sin(angle)*I.malpracticeHop};
+                if(Math.hypot(next.x-home.x,next.z-home.z)>I.malpracticeLeash||!this.supportedSpot(next))continue;
+                site.p=next;this.kitHopAt.set(id,now+I.malpracticeHopMs);break;
+            }
+        }
+    }
     private incidentActive(id:IncidentId){return this.dispatch.phase==='active'&&incidentInfo(this.dispatch.incident).id===id;}
     private activate(owner?:string|null){
         if(this.dispatch.phase!=='ready')return;
@@ -540,6 +631,16 @@ export class ChaosSimulation {
     }
     death(victim:PlayerData,incoming:Vec3Data,owner:string|null=victim.id):boolean{
         this.release(victim.id,incoming);
+        if(this.incidentActive('most-wanted')&&this.dispatch.wanted===victim.id){
+            // Bounty: whoever takes down the leader is patched up and sent running.
+            const hunter=owner&&owner!==victim.id?this.players.get(owner):undefined;
+            if(hunter&&hunter.hp>0){
+                if(hunter.hp<MAX_HP){hunter.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:hunter.id,hp:MAX_HP,cause:'bounty'});}
+                this.buffs[hunter.id]=mergePickup(this.buffs[hunter.id],'hustle',this.now);
+                this.tell(`BOUNTY COLLECTED · ${hunter.name.toUpperCase()} TOOK DOWN ${victim.name.toUpperCase()}`);
+            }
+            this.dispatch={...this.dispatch};delete this.dispatch.wanted;
+        }
         const incident=this.incidentActive('improper-disposal');
         if(this.corpses.size>=T.maxCorpses){const first=this.corpses.keys().next().value;if(first)this.removeCorpse(first);}
         const direction=vec(incoming);if(direction.lengthSquared()<.01)direction.set(0,0,1);direction.normalize();
@@ -952,6 +1053,7 @@ export class ChaosSimulation {
         if(!this.incidentActive('big-cheese')){
             for(const shot of this.shots)if((shot.radius??BALL_RADIUS)>BALL_RADIUS+.001){shot.radius=BALL_RADIUS;this.unstickShot(shot);}
         }
+        this.stepIncidentEffects(now,playing);
         this.syncExtraCases();
         for(const c of this.cases.values())this.updateCase(c,dt,playing);
         this.recordCaseHistory(now);

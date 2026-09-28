@@ -439,6 +439,7 @@ function parseChaos(value:unknown):ChaosState|null{
   }
   if(!['ready','rolling','active','cooldown'].includes(String(d.phase))||finiteNumber(d.started)===null||finiteNumber(d.until)===null||integer(d.serial)===null)return null;
   if(d.incident!==undefined&&!isLegacyIncidentId(d.incident)&&!INCIDENTS.some(incident=>incident.id===d.incident))return null;
+  if(d.wanted!==undefined&&!nonEmptyString(d.wanted,64))return null;
   if(Object.keys(value.possession).length>64||Object.values(value.possession).some(v=>finiteNumber(v)===null))return null;
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
   if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||c.owner===null||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
@@ -596,7 +597,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const id = nonEmptyString(parsed.id, 64);
       const hp = boundedInteger(parsed.hp, 1, MAX_HP);
       if (!id || hp === null || (parsed.cause !== undefined && parsed.cause !== 'pickup')) return null;
-      return { type: 'playerHealed', id, hp, ...(parsed.cause === 'pickup' ? {cause:'pickup' as const} : {}) };
+      return { type: 'playerHealed', id, hp, ...(parsed.cause === 'pickup' || parsed.cause === 'incident' || parsed.cause === 'bounty' ? {cause:parsed.cause} : {}) };
     }
     case 'playerDied': {
       const victimId = nonEmptyString(parsed.victimId, 64);

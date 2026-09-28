@@ -17,6 +17,11 @@ export const INCIDENT_TUNING = {
     cheeseRadii: [0.15, 0.24, 0.36, 0.52, 0.72, 0.96, 1.24, 1.55, 1.9, 2.4] as const,
     caseMissileSpeed: 145, caseShotSpeed: 160, caseMissileLift: 6, caseEjectSpeed: 22,
     caseRicochetMinSpeed: 140, caseBounceLift: 7, caseMaxLift: 10,
+    /** Malpractice: a Quick Fix kit hops `hop` units away from a rat within `scare`, at most every
+     * `hopMs`, staying within `leash` of home; `explodeChance` of claims blow up instead of healing. */
+    malpracticeScare: 7, malpracticeHop: 5, malpracticeHopMs: 650, malpracticeLeash: 12, malpracticeExplodeChance: .35,
+    /** Rat Race: cheese flies this much faster. */
+    ratRaceShotSpeed: 1.35,
 } as const;
 /** Planted Evidence: additional hazards, never objectives. Bursts share deathBurstBalls. */
 export const COUNTERFEIT_IDS = ['fake-01','fake-02','fake-03','fake-04','fake-05',
@@ -106,7 +111,8 @@ export interface ChaosState {
     assignment?: AssignmentState;
     case: CaseState;
     extraCases?: Array<CaseState & {id:string}>;
-    dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId };
+    /** `wanted`: Most Wanted's current target, the leader in the searchlight. */
+    dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId; wanted?:string };
     pressure?: { serial:number; until:number; cooldowns?:Record<string,number>; launches:PressureLaunchEvent[] };
     /** Pickup sites currently available to claim; absent entries are active elsewhere or claimed. */
     pickups?: PickupState[];

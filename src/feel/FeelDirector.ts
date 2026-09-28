@@ -22,6 +22,7 @@ import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
 import {NAMEPLATE_LIGHT} from '../ui/RatBillboard';
 import {Hunch,type HunchRat} from './Hunch';
+import {WantedSearchlight} from './WantedSearchlight';
 
 /** One entry point from game events to presentation-only feel effects.
  * GameSession calls it at existing event sources; channels never parse
@@ -42,6 +43,8 @@ export class FeelDirector {
     private deathAge=0;
     private dust?:Dust;
     private hunchView?:Hunch;
+    private searchlight?:WantedSearchlight;
+    private wasWanted=false;
     private city?:CityReactions;
     private noirCity?:NoirCity;
     private noirRain?:NoirRain;
@@ -77,10 +80,20 @@ export class FeelDirector {
     /** Scene-wide dust for every rat's landings, skids and launches. */
     attachScene(scene:THREE.Scene):void {
         this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);
-        this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);this.hunchView.setSupercharged(this.incident==='clean-bill');
+        this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);
+        this.searchlight?.dispose();this.searchlight=new WantedSearchlight(scene);this.hunchView.setSupercharged(this.incident==='clean-bill');
     }
+    /** Most Wanted each frame: the searchlight follows `target` (the leader's feet);
+     * `me` when the leader is you, which gets its own callout. */
+    wanted(dt:number,target:THREE.Vector3|undefined,me:boolean):void {
+        this.searchlight?.update(dt,target);
+        if(me&&!this.wasWanted){this.lastCalloutAt=-Infinity;this.callout('YOU ARE MOST WANTED');this.sound.sting('case');}
+        this.wasWanted=me;
+    }
+    /** You collected the Most Wanted bounty. */
+    bounty():void {this.lastCalloutAt=-Infinity;this.callout('BOUNTY COLLECTED');this.sound.brass();}
     /** The Hunch each frame; `self` only while your rat is alive and in play. */
-    hunch(dt:number,now:number,view:THREE.Camera,self:RatEntity|undefined,rats:ReadonlyMap<string,HunchRat>):void {this.hunchView?.update(dt,now,view,self,rats);}
+    hunch(dt:number,now:number,view:THREE.Camera,self:RatEntity|undefined,rats:ReadonlyMap<string,HunchRat>,wanted?:string):void {this.hunchView?.update(dt,now,view,self,rats,wanted);}
 
     /** Cosmetic reactive props for the current city (replaced on a new world). */
     attachCity(scene:THREE.Scene,lamps:readonly StreetLampPosition[]):void {
@@ -345,5 +358,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();NAMEPLATE_LIGHT.value=1;}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();NAMEPLATE_LIGHT.value=1;}
 }

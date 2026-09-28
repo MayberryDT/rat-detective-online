@@ -255,7 +255,10 @@ export class ObjectiveBotBrain {
             const vulnerable=visible.filter(p=>!hasIronclad(state?.buffs,p.id,state?.time??now));
             // Keep a visible opponent through a burst instead of resetting reaction
             // every time two similarly close rats trade places. Visible carriers still win.
-            this.target=carriers.find(p=>visible.includes(p)&&(vulnerable.includes(p)||exposedCarrierCase(self,p,state,clearControl)))??vulnerable.find(p=>p.id===this.target?.id)??vulnerable[0];
+            // Most Wanted: the leader is in a searchlight everyone can see; hunt them for the bounty.
+            const wantedId=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='most-wanted'?state.dispatch.wanted:undefined;
+            const wanted=wantedId&&wantedId!==self.id?living.find(p=>p.id===wantedId&&distance(self,p)<90&&!hasIronclad(state?.buffs,p.id,state?.time??now)):undefined;
+            this.target=carriers.find(p=>visible.includes(p)&&(vulnerable.includes(p)||exposedCarrierCase(self,p,state,clearControl)))??vulnerable.find(p=>p.id===wantedId)??vulnerable.find(p=>p.id===this.target?.id)??vulnerable[0];
             this.dispatchTarget=state?.dispatch.phase==='ready' ? DISPATCH_STATIONS.map(station=>station.target)
                 .filter(target=>distance(self,target)<26&&clearControl(target))
                 .sort((a,b)=>distance(self,a)-distance(self,b))[0] : undefined;
@@ -272,6 +275,7 @@ export class ObjectiveBotBrain {
                 // below still interrupt immediately, as do death and failed routes.
                 if(retained&&(!combat||distance(self,combat)+Math.max(4,distance(self,retained)*.2)>=distance(self,retained)))combat=retained;
             }
+            if(wanted&&!this.suppressed(`combat:${wanted.id}`,wanted,now))combat=wanted;
             const active=assignment?.phase==='active';
             // A mapped roof trip is still possible between objectives, but a
             // live case takes priority even when it is on the other side of town.

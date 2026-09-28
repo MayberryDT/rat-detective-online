@@ -12,17 +12,18 @@ const PHOTOS=4, TRAIL_POINTS=16, TRAIL_EVERY=.11;
 interface Photo {node:HTMLElement;caption:HTMLElement;target?:RatEntity;age:number}
 interface Trail {line:THREE.Line;points:Float32Array;colors:Float32Array;count:number;timer:number}
 
-/** Rats this client's detective has on the Hunch, and the rats that have it on you. */
+/** Rats this client's detective has on the Hunch, and the rats that have it on you.
+ * `everyone`: Clean Bill gives every rat the Hunch whatever its health. */
 export function hunchReads(self:{position:THREE.Vector3;hp:number;dead:boolean}|undefined,rats:Iterable<[string,HunchRat]>,range:number,
-    sensed:Set<string>,watchers:RatEntity[]):void {
+    sensed:Set<string>,watchers:RatEntity[],everyone=false):void {
     sensed.clear();watchers.length=0;
     if(!self||self.dead)return;
-    const sharp=self.hp>=MAX_HP,rangeSq=range*range;
+    const sharp=everyone||self.hp>=MAX_HP,rangeSq=range*range;
     for(const [id,{entity}] of rats){
         if(entity.dead||entity.hp<=0)continue;
         if(entity.mesh.position.distanceToSquared(self.position)>rangeSq)continue;
         if(sharp)sensed.add(id);
-        if(entity.hp>=MAX_HP)watchers.push(entity);
+        if(everyone||entity.hp>=MAX_HP)watchers.push(entity);
     }
 }
 
@@ -57,18 +58,19 @@ export class Hunch {
     setSupercharged(on:boolean):void {this.supercharged=on;}
     get range():number {const p=FEEL.hunch.params;return this.supercharged?p.superRange:p.range;}
 
-    /** `self` is undefined when there is no live local rat (title, observer, lineup). */
-    update(dt:number,now:number,view:THREE.Camera,self:RatEntity|undefined,rats:ReadonlyMap<string,HunchRat>):void {
+    /** `self` is undefined when there is no live local rat (title, observer, lineup).
+     * `wanted`: Most Wanted's target, sketched through walls for everyone. */
+    update(dt:number,now:number,view:THREE.Camera,self:RatEntity|undefined,rats:ReadonlyMap<string,HunchRat>,wanted?:string):void {
         advanceHunchSketch(dt);
         const p=FEEL.hunch.params;
         this.previous.clear();for(const id of this.sensed)this.previous.add(id);
-        hunchReads(self?{position:self.mesh.position,hp:self.hp,dead:self.dead}:undefined,rats,this.range,this.sensed,this.watchers);
+        hunchReads(self?{position:self.mesh.position,hp:self.hp,dead:self.dead}:undefined,rats,this.range,this.sensed,this.watchers,this.supercharged);
         const strength=this.supercharged?p.superStrength:p.strength;
         const juice=this.state.on('made');
         let shutter=false;
         for(const [id,{entity}] of rats){
             const on=this.sensed.has(id);
-            entity.sense(on?strength:0);
+            entity.sense(id===wanted&&self?p.superStrength:on?strength:0);
             if(on&&!this.previous.has(id)&&now-(this.lastMade.get(id)??-Infinity)>p.remake*1000){
                 this.lastMade.set(id,now);
                 if(juice){shutter=true;this.photo(entity);}

@@ -53,6 +53,7 @@ const impacts=new CheeseImpactEffects(stage.scene);
 const ray=new THREE.Raycaster(),blockers=stage.scene.children.filter(o=>o.userData.aimTarget===true);
 // The Hunch: the workshop re-makes on every lost/regained read so each capture shows the moment.
 FEEL.hunch.params.remake=0;FEEL.hunch.params.cardGap=0;
+let wantedSuspect:string|undefined;
 const hunchRats=new Map(suspects.map((entity,i)=>[`suspect-${i}`,{entity}]));
 /** Put the suspects `beyond` units behind the first wall straight ahead of the camera. */
 function behindWall(beyond:number):string {
@@ -160,6 +161,9 @@ const actions:Record<string,()=>void>={
     'Blackout on':()=>feel.setIncident('blackout'),
     'Blackout off':()=>feel.setIncident(),
     'Blackout: suspect fires':()=>{const s=suspects[1]!.mesh.position;feel.fired(`bo-${Math.random()}`,{x:s.x,y:s.y+1.2,z:s.z},{x:-1,y:0,z:0},false,stage.camera);},
+    'Most Wanted: suspect 2':()=>{wantedSuspect='suspect-1';},
+    'Most Wanted: nobody':()=>{wantedSuspect=undefined;},
+    'Malpractice: kit fidgets and hops':()=>{kit.setNervous(true);const p=kit.root.position;kit.setPosition(p.x+4,p.y+.7,p.z+1.5);},
     'Hunch: turn around':()=>rat.onMouseMove(1570.8,0),
 };
 const buttons=document.getElementById('feel-buttons')!;
@@ -203,7 +207,8 @@ function frame(now:number){
     for(const prop of [kit,coat,shoes])prop.update(performance.now(),stage.camera);
     feel.footsteps(dt,suspects.map((s,i)=>({id:`suspect-${i}`,position:s.mesh.position})),rat.entity.mesh.position,stage.camera);
     city.update(dt,stage.camera,rat.entity.body.position);
-    feel.hunch(dt,now,stage.camera,rat.entity.dead?undefined:rat.entity,hunchRats);
+    feel.hunch(dt,now,stage.camera,rat.entity.dead?undefined:rat.entity,hunchRats,wantedSuspect);
+    feel.wanted(dt,wantedSuspect?suspects[1]!.mesh.position:undefined,false);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
     stage.renderer.toneMappingExposure=1.1*feel.exposure;

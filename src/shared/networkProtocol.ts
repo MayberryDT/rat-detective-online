@@ -3,7 +3,7 @@ import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 20;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
@@ -144,6 +144,8 @@ export type ClientMessage = (
   | { type: 'diagnostics'; report: Record<string, unknown> }
 ) & { deliveryAck?: {stream:string;seq:number} };
 
+/** Why a rat was healed: a Quick Fix, Clean Bill, or a Most Wanted bounty. */
+export type HealCause = 'pickup' | 'incident' | 'bounty';
 export type ServerMessage =
   | { type: 'chaos'; state: ChaosState }
   | {
@@ -193,7 +195,7 @@ export type ServerMessage =
   | { type:'pickupResult'; interactionId:string; target:PickupTarget; targetId:string; accepted:boolean; at:number; tick:number;
       epoch:string; playerId:string; pickup?:import('./pickups').PickupKind; effectUntil?:number; reason?:PickupRejectReason }
   | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: 'evidence-tampering' }
-  | { type: 'playerHealed'; id: string; hp: number; cause?: 'pickup' }
+  | { type: 'playerHealed'; id: string; hp: number; cause?: HealCause }
   | {
       type: 'playerDied';
       victimId: string;

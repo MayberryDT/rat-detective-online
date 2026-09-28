@@ -10,6 +10,8 @@ import type {PickupKind} from '../shared/pickups';
 const LAMP_COLOR=0xffd9a0;
 /** Lamp head over the display, relative to the site floor. */
 const LAMP_HEAD=new THREE.Vector3(0,2.75,0);
+/** Malpractice hop duration (ms) and height. */
+const HOP_MS=380, HOP_HEIGHT=1.5;
 
 /** The display is lit by its own lamp, not by self-glow: surfaces facing up toward
  * the shade catch warm light and the sides fall off into the dark. Chained after
@@ -47,6 +49,12 @@ export class PickupVisual {
     private flicker=0;
     private lastUpdate=0;
     private wasEmpty=true;
+    /** Malpractice: the kit's hop from `from` to the root's position, started at `hopAt` (ms). */
+    private readonly from=new THREE.Vector3();
+    private readonly to=new THREE.Vector3();
+    private hopAt=-Infinity;
+    private placed=false;
+    private nervous=false;
     private restock?:PickupRespawnVisual;
     constructor(scene:THREE.Scene,private readonly kind:PickupKind){
         const iron=new THREE.MeshStandardMaterial({color:0x5d656f,metalness:.9,roughness:.36});
@@ -152,7 +160,15 @@ export class PickupVisual {
         this.glow.push(material);
         return material;
     }
-    setPosition(x:number,y:number,z:number):void {this.root.position.set(x,y-.7,z);}
+    /** A kit that moves (Malpractice) hops there instead of teleporting. */
+    setPosition(x:number,y:number,z:number):void {
+        this.to.set(x,y-.7,z);
+        if(!this.placed){this.placed=true;this.root.position.copy(this.to);return;}
+        if(this.root.position.distanceToSquared(this.to)>.25&&!(performance.now()-this.hopAt<HOP_MS)){this.from.copy(this.root.position);this.hopAt=performance.now();}
+        else if(!(performance.now()-this.hopAt<HOP_MS))this.root.position.copy(this.to);
+    }
+    /** Malpractice: kits fidget, ready to bolt. */
+    setNervous(on:boolean):void {this.nervous=on;}
     setAvailableAt(at:number):void {this.availableAt=at;}
     /** A Quick Fix kit that can be claimed right now (for the last-hit-point beacons). */
     readyQuickFix(now:number):boolean {return this.kind==='quick-fix'&&now>=this.availableAt&&!this.pending;}
@@ -193,6 +209,12 @@ export class PickupVisual {
             this.restock.update(now,this.availableAt,camera);
         }
         if(this.restock)this.restock.root.visible=unavailable;
+        const hop=(performance.now()-this.hopAt)/HOP_MS;
+        if(hop>=0&&hop<1){
+            this.root.position.lerpVectors(this.from,this.to,hop);this.root.position.y+=Math.sin(hop*Math.PI)*HOP_HEIGHT;
+            this.item.scale.set(1+Math.sin(hop*Math.PI)*.12,1-Math.sin(hop*Math.PI)*.1,1+Math.sin(hop*Math.PI)*.12);
+        }else if(hop>=1&&this.hopAt>-Infinity){this.root.position.copy(this.to);this.item.scale.setScalar(1);this.hopAt=-Infinity;}
+        this.item.rotation.set(this.nervous&&!empty?Math.sin(now*.05)*.06:0,this.nervous&&!empty?Math.sin(now*.031)*.12:0,this.nervous&&!empty?Math.cos(now*.043)*.05:0);
     }
     dispose():void {this.restock?.dispose();this.root.removeFromParent();disposeMeshResources(this.root);}
 }

@@ -13,10 +13,20 @@ import {
 } from '../shared/networkProtocol';
 import { generateRandomName } from '../shared/ratNames';
 import type { WorldSpec } from '../shared/worldSpec';
-import { choosePlayerSpawn } from '../shared/playerSpawns';
+import { choosePlayerSpawn, worldSpawnPoints } from '../shared/playerSpawns';
 
-export function spawnForWorld(spec: WorldSpec, random = Math.random, players: Iterable<PlayerData> = [], excludeId?: string, assignment?:AssignmentState): Vec3Data {
-  return choosePlayerSpawn(spec, [...players].filter(p => p.hp > 0 && p.id !== excludeId), random, spawnFilter(assignment));
+/** All Units respawns land between these distances from the action, on its floor. */
+const ALL_UNITS_RING = { min: 10, max: 30, floor: 6 };
+
+/** `near`: during All Units, respawn right beside the action instead of far from everyone. */
+export function spawnForWorld(spec: WorldSpec, random = Math.random, players: Iterable<PlayerData> = [], excludeId?: string, assignment?:AssignmentState, near?:Vec3Data): Vec3Data {
+  const allowed = spawnFilter(assignment);
+  if (near) {
+    const ring = worldSpawnPoints(spec).filter(p => (!allowed || allowed(p)) && Math.abs(p.y - near.y) < ALL_UNITS_RING.floor &&
+      Math.hypot(p.x - near.x, p.z - near.z) >= ALL_UNITS_RING.min && Math.hypot(p.x - near.x, p.z - near.z) <= ALL_UNITS_RING.max);
+    if (ring.length) return { ...ring[Math.min(ring.length - 1, Math.floor(random() * ring.length))]! };
+  }
+  return choosePlayerSpawn(spec, [...players].filter(p => p.hp > 0 && p.id !== excludeId), random, allowed);
 }
 
 /** A new round reserves its new positions, never the previous round's corpses. */

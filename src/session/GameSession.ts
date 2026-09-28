@@ -415,7 +415,11 @@ export class GameSession {
             case 'playerHealed': {
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 entity?.heal(message.hp);
-                if (message.id === this.myId) {this.chaos?.showHealing();this.feel.health(message.hp,true);}
+                if (message.id === this.myId) {
+                    // Clean Bill heals everyone without a Quick Fix card; a bounty gets its own callout.
+                    if(message.cause==='bounty')this.feel.bounty();else if(message.cause!=='incident')this.chaos?.showHealing();
+                    this.feel.health(message.hp,true);
+                }
                 break;
             }
             case 'playerDied': {
@@ -628,7 +632,10 @@ export class GameSession {
         for(const {entity} of this.remotes.rats.values())entity.fitOutline(camera.position,unitsPerPixel);
         // The Hunch reads only while your rat is alive in live play.
         const detective=this.transport.state==='playing'&&!this.observing&&!this.roundWon&&this.rat&&!this.rat.entity.dead?this.rat.entity:undefined;
-        this.feel.hunch(dt,now,camera,detective,this.remotes.rats);
+        const dispatch=this.lastChaos?.dispatch,wanted=dispatch?.phase==='active'&&incidentInfo(dispatch.incident).id==='most-wanted'&&!this.roundWon?dispatch.wanted:undefined;
+        this.feel.hunch(dt,now,camera,detective,this.remotes.rats,wanted);
+        const wantedRat=wanted===undefined?undefined:wanted===this.myId?this.rat?.entity:this.remotes.get(wanted);
+        this.feel.wanted(dt,wantedRat&&!wantedRat.dead?wantedRat.mesh.position:undefined,!!wanted&&wanted===this.myId);
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}

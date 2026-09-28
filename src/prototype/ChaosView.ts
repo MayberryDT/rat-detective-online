@@ -341,6 +341,7 @@ export class ChaosView {
             let visual=this.pickups.get(pickup.id);
             if(!visual){visual=new PickupVisual(this.scene,pickup.kind);visual.setXray(this.lastHitPoint);this.pickups.set(pickup.id,visual);}
             visual.setPosition(pickup.x,pickup.y,pickup.z);
+            visual.setNervous(pickup.kind==='quick-fix'&&state.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='malpractice');
             visual.setAvailableAt(pickup.availableAt??0);
             const accepted=this.acceptedPickups.get(pickup.id);
             if(accepted&&state.epoch===accepted.epoch&&(state.tick??0)>=accepted.tick&&(pickup.availableAt??0)!==accepted.generation)
