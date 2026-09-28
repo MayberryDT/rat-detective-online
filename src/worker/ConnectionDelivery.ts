@@ -1,4 +1,5 @@
-import { fragmentMessage, wireBytes, type DeliveryAck } from '../shared/deliveryWire';
+import { fragmentMessage, type DeliveryAck } from '../shared/deliveryWire';
+import { wireBytes } from '../shared/networkProtocol';
 import type { ChaosAck } from '../shared/chaosWire';
 import { MAX_SERVER_MESSAGE_BYTES } from '../shared/networkProtocol';
 

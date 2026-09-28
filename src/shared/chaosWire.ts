@@ -1,7 +1,7 @@
 import type { ChaosState, ChaosShot } from './chaosState';
 import { CHAOS_TUNING } from './chaosState';
 import { BALL_RADIUS } from './ballTuning';
-import { MAX_SERVER_MESSAGE_BYTES, type ServerMessage } from './networkProtocol';
+import { MAX_SERVER_MESSAGE_BYTES, wireBytes, type ServerMessage } from './networkProtocol';
 import { parseServerMessage } from './messageValidation';
 import { expandMovement } from './movementWire';
 export { parseServerMessage } from './messageValidation';
@@ -16,7 +16,6 @@ const rounded = (value: unknown): string => JSON.stringify(value, (_key,v)=>type
 const integer = (n: unknown): n is number => typeof n==='number' && Number.isSafeInteger(n);
 const record = (v: unknown): v is Record<string,unknown> => !!v && typeof v==='object' && !Array.isArray(v);
 const id = (v: unknown): v is string => typeof v==='string' && v.length>0 && v.length<=64;
-const textEncoder = new TextEncoder();
 
 /** Prepared once for one broadcast; never cached across mutable simulation states. */
 export interface PreparedChaos {
@@ -81,7 +80,7 @@ export class ChaosEncoder {
     }
     const identity=state.epoch===undefined&&state.tick===undefined?'':',"epoch":'+JSON.stringify(state.epoch??'legacy')+',"tick":'+Math.max(0,Math.floor(state.tick??0));
     const payload='{"type":"chaosFrame",'+(this.deltaMotion?'"motionEncoding":"delta-v1",':'')+'"stream":'+JSON.stringify(this.stream)+',"seq":'+seq+',"base":'+(full?0:seq-1)+',"time":'+rounded(state.time)+identity+',"definitions":'+JSON.stringify(definitions)+',"motion":['+motion.join(',')+'],"rest":{'+rest.join(',')+'},"impacts":'+(state.impacts===prepared.impacts?prepared.impactText:rounded(state.impacts))+'}';
-    const bytes=textEncoder.encode(payload).byteLength;
+    const bytes=wireBytes(payload);
     if(bytes>MAX_SERVER_MESSAGE_BYTES)throw new Error('Compact snapshot budget exceeded');
     return {payload,seq,bytes,ack:{type:'chaosAck',stream:this.stream,seq}};
   }
@@ -97,7 +96,7 @@ export class ChaosDecoder {
   private motions=new Map<number,number[]>();
   read(raw: unknown): {message:ServerMessage;ack?:ChaosAck}|null {
     if(typeof raw!=='string')return null;
-    if(raw.length>MAX_SERVER_MESSAGE_BYTES||textEncoder.encode(raw).byteLength>MAX_SERVER_MESSAGE_BYTES)return null;
+    if(raw.length>MAX_SERVER_MESSAGE_BYTES||wireBytes(raw)>MAX_SERVER_MESSAGE_BYTES)return null;
     let value:unknown;try{value=JSON.parse(raw);}catch{return null;}
     return this.readValue(value);
   }

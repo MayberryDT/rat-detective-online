@@ -10,6 +10,7 @@ import {
   MAX_SCORE_ENTRIES,
   MAX_MOVEMENT_BATCH,
   MAX_MESSAGE_BYTES,
+  wireBytes,
   MAX_SERVER_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   type Award,
@@ -323,7 +324,7 @@ function parsePosePlayer(value: unknown): Extract<ServerMessage, { type: 'player
 
 export function parseClientMessage(raw: unknown): ClientMessage | null {
   if (raw instanceof ArrayBuffer) return null;
-  if (typeof raw === 'string' && (raw.length > MAX_MESSAGE_BYTES || new TextEncoder().encode(raw).byteLength > MAX_MESSAGE_BYTES)) return null;
+  if (typeof raw === 'string' && (raw.length > MAX_MESSAGE_BYTES || wireBytes(raw) > MAX_MESSAGE_BYTES)) return null;
 
   const parsed = parseRaw(raw, MAX_MESSAGE_BYTES);
   if (!isRecord(parsed) || typeof parsed.type !== 'string') return null;
@@ -460,7 +461,7 @@ function parseChaos(value:unknown):ChaosState|null{
 
 export function parseServerMessage(raw: unknown): ServerMessage | null {
   if (raw instanceof ArrayBuffer) return null;
-  if (typeof raw === 'string' && (raw.length > MAX_SERVER_MESSAGE_BYTES || new TextEncoder().encode(raw).byteLength > MAX_SERVER_MESSAGE_BYTES)) return null;
+  if (typeof raw === 'string' && (raw.length > MAX_SERVER_MESSAGE_BYTES || wireBytes(raw) > MAX_SERVER_MESSAGE_BYTES)) return null;
 
   const parsed = parseRaw(raw, MAX_SERVER_MESSAGE_BYTES);
   if (!isRecord(parsed) || typeof parsed.type !== 'string') return null;

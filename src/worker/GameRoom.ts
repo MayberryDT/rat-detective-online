@@ -4,7 +4,7 @@ import type {Award} from '../shared/networkProtocol';
 import { RECONNECT_GRACE_MS, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
 import { ChaosDelivery } from './ChaosDelivery';
 import { ConnectionDelivery } from './ConnectionDelivery';
-import { wireBytes } from '../shared/deliveryWire';
+import { wireBytes } from '../shared/networkProtocol';
 import { serializeMovement } from '../shared/movementWire';
 import { CHAOS_WIRE_MODE, prepareChaos, type PreparedChaos } from '../shared/chaosWire';
 import { ObjectCollisionMatrix, type ArrayCollisionMatrix } from 'cannon-es';

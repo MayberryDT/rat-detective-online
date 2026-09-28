@@ -1,7 +1,7 @@
 import type { ChaosState, ChaosImpact, PressureLaunchEvent } from '../shared/chaosState';
 import { ChaosEncoder, type PreparedChaos, type ChaosAck } from '../shared/chaosWire';
 import { serializeServerMessage } from './serializeServerMessage';
-import { wireBytes } from '../shared/deliveryWire';
+import { wireBytes } from '../shared/networkProtocol';
 export const MAX_CHAOS_IN_FLIGHT=8;
 export const CHAOS_ACK_TIMEOUT_MS=5000;
 

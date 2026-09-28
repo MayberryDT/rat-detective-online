@@ -1,9 +1,7 @@
-import { MAX_SERVER_MESSAGE_BYTES, type ServerMessage } from './networkProtocol';
+import { MAX_SERVER_MESSAGE_BYTES, wireBytes, type ServerMessage } from './networkProtocol';
 import { ChaosDecoder, type ChaosAck } from './chaosWire';
 
 export const MAX_REASSEMBLED_BYTES = 262_144;
-export const wireEncoder = new TextEncoder();
-export const wireBytes = (text: string): number => wireEncoder.encode(text).byteLength;
 export interface DeliveryAck { type: 'deliveryAck'; stream: string; seq: number }
 export type DecodedDelivery = { message?: ServerMessage; ack?: ChaosAck | DeliveryAck };
 

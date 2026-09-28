@@ -1,6 +1,7 @@
 import {expect,it} from 'vitest';
 import {ConnectionDelivery,MAX_DELIVERY_BYTES,MAX_DELIVERY_FRAMES,MAX_PENDING_BYTES} from '../../src/worker/ConnectionDelivery';
-import {DeliveryDecoder,wireBytes,type DeliveryAck} from '../../src/shared/deliveryWire';
+import {DeliveryDecoder,type DeliveryAck} from '../../src/shared/deliveryWire';
+import {wireBytes} from '../../src/shared/networkProtocol';
 import {ChaosDelivery,MAX_CHAOS_IN_FLIGHT} from '../../src/worker/ChaosDelivery';
 import {serializeMovement} from '../../src/shared/movementWire';
 import {serializeServerMessage} from '../../src/worker/serializeServerMessage';
@@ -88,4 +89,9 @@ it('rejects duplicate, out-of-order and corrupted delivery without committing a 
  expect(decoder.read(frames[0])).toBeNull();
  const corrupt=JSON.parse(frames[1]);corrupt.message.players[0][2]=null;
  expect(decoder.read(JSON.stringify(corrupt))).toBeNull();expect(decoder.read(frames[1])).not.toBeNull();
+});
+it('counts wire bytes exactly as UTF-8 encoding would, including broken surrogates',()=>{
+ const encoder=new TextEncoder();
+ for(const text of ['','plain ascii','café ∆','rat 🐀 detective','\ud83d','\ude00x','x\ud83d','\ud83d\ud83d\ude00','\u07ff\u0800\uffff'])
+  expect(wireBytes(text)).toBe(encoder.encode(text).byteLength);
 });

@@ -18,6 +18,21 @@ export const MAX_PLAYERS = 10;
 export const MAX_CONNECTIONS = MAX_PLAYERS + 8;
 export const MAX_MESSAGE_BYTES = 8_192;
 export const MAX_SERVER_MESSAGE_BYTES = 65_536;
+/** Exact UTF-8 size of a wire string, as TextEncoder would produce (a lone
+ * surrogate becomes a 3-byte replacement), without allocating the encoding. */
+export function wireBytes(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c < 0x80) bytes++;
+    else if (c < 0x800) bytes += 2;
+    else if (c >= 0xd800 && c < 0xdc00 && i + 1 < text.length) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next < 0xe000) { bytes += 4; i++; } else bytes += 3;
+    } else bytes += 3;
+  }
+  return bytes;
+}
 
 export type HatTypeName = 'fedora' | 'trilby' | 'porkpie';
 export type RoundPhase = 'playing' | 'won';
