@@ -5,6 +5,8 @@ import { RatEntity } from '../entities/RatEntity';
 import { RatOptions } from '../utils/RatModel';
 import { PRESSURE_LAUNCH, type ChaosState } from '../shared/chaosState';
 import { LAUNCH_DRIFT_DECAY } from '../shared/launcherVelocity';
+import { feelState } from '../feel/feelState';
+import { FEEL } from '../feel/feelTuning';
 import type {TouchMovement} from '../session/TouchInput';
 
 // ─── TUNING CONSTANTS ─────────────────────────────────────────────
@@ -37,6 +39,8 @@ export class RatController {
     /** A machine's sideways throw, kept (and slowly fading) under steering until landing. */
     private driftX = 0;
     private driftZ = 0;
+    /** L6: seconds of floaty hang left for this throw's apex. */
+    private hangLeft = 0;
     private normalJump = false;
     private readonly appliedLaunches = new Set<string>();
     private disposed = false;
@@ -93,7 +97,7 @@ export class RatController {
         if (this.disposed) return;
         this.groundGrace = Math.max(0, this.groundGrace - dt);
         if (!this.entity.dead && this.entity.hp > 0) this.applyMovement(dt, keys, touch);
-        else {this.normalJump=false;this.beforeLaunchDamping=undefined;this.driftX=this.driftZ=0;}
+        else {this.normalJump=false;this.beforeLaunchDamping=undefined;this.driftX=this.driftZ=0;this.hangLeft=0;}
     }
 
     syncAfterPhysics(dt: number): void {
@@ -105,7 +109,7 @@ export class RatController {
             for (const contact of this.entity.world.contacts) {
                 const normalY = contact.bi === body ? -contact.ni.y : contact.bj === body ? contact.ni.y : 0;
                 // Explicit80ms grace permits forgiving edge jumps, never unlimited air jumps.
-                if (normalY > 0.5) { if(this.beforeLaunchDamping!==undefined){body.linearDamping=this.beforeLaunchDamping;this.beforeLaunchDamping=undefined;} this.groundGrace = 0.08; this.launcherFlight=false; this.normalJump=false; this.driftX=this.driftZ=0; break; }
+                if (normalY > 0.5) { if(this.beforeLaunchDamping!==undefined){body.linearDamping=this.beforeLaunchDamping;this.beforeLaunchDamping=undefined;} this.groundGrace = 0.08; this.launcherFlight=false; this.normalJump=false; this.driftX=this.driftZ=0; this.hangLeft=0; break; }
             }
         }
         // The camera is placed once per rendered frame (updateView), not per
@@ -131,6 +135,7 @@ export class RatController {
             this.entity.body.velocity.set(event.velocity.x,event.velocity.y,event.velocity.z);
             this.entity.body.wakeUp();this.groundGrace=0;this.normalJump=false;
             this.driftX=event.velocity.x;this.driftZ=event.velocity.z;
+            this.hangLeft=feelState().on('launchFlight')?FEEL.launchFlight.params.hang:0;
             this.launcherFlight=!!this.launcherBounds;
         }
         // A nearby landing's shockwave: a knockback hop that carries until the rat lands.
@@ -163,7 +168,7 @@ export class RatController {
         }
     }
 
-    resetGrounding(): void { this.beforeLaunchDamping=undefined; this.groundGrace = 0; this.launcherFlight=false; this.normalJump=false; this.driftX=this.driftZ=0; }
+    resetGrounding(): void { this.beforeLaunchDamping=undefined; this.groundGrace = 0; this.launcherFlight=false; this.normalJump=false; this.driftX=this.driftZ=0; this.hangLeft=0; }
 
     dispose(): void {
         if (this.disposed) return;
@@ -229,6 +234,11 @@ export class RatController {
         // ragdolls, and any of the machine throws retain their original arc.
         if(this.normalJump)this.entity.body.force.y +=
             this.entity.body.mass*this.entity.world.gravity.y*(JUMP_GRAVITY_SCALE-1);
+        // L6: a floaty beat at the top of a launcher throw, with the city spread out below.
+        if(this.hangLeft>0&&Math.abs(v.y)<8){
+            this.hangLeft-=dt;
+            this.entity.body.force.y-=this.entity.body.mass*this.entity.world.gravity.y*FEEL.launchFlight.params.hangLift;
+        }
 
         // Rotate Character to face camera (Always Strafe mode for shooting)
         const targetAngle = this.spherical.theta + Math.PI;

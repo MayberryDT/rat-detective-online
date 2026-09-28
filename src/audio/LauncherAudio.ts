@@ -91,6 +91,12 @@ export class LauncherAudio {
         } else {
             tone(kind === 'mousetrap' ? 'triangle' : 'sawtooth', pitch * 2, 35, .65, .006, .85);
             last = hiss('lowpass', kind === 'geyser' ? 4200 : 2200, 180, .8, .0125, 1.15, 1.7);
+            // Each machine's own voice on top of the shared impact and air tail.
+            if (kind === 'mousetrap') { hiss('highpass', 3600, 1800, 1, .001, .02, .09); tone('triangle', 1900, 600, .5, .001, .07); }
+            else if (kind === 'dumpster') { tone('sine', 72, 38, .9, .004, .5); tone('square', 420, 405, .14, .004, .55, .01); tone('square', 633, 610, .1, .004, .45, .01); }
+            else if (kind === 'geyser') hiss('highpass', 5200, 2600, .7, .05, 1.3, 1.7);
+            else if (kind === 'freight') { tone('square', 180, 172, .24, .003, .35); tone('square', 272, 262, .18, .003, .3, .07); tone('square', 181, 176, .16, .003, .25, .16); }
+            else if (kind === 'fan') { hiss('lowpass', 700, 260, .9, .18, 1.3, 1.7); tone('sawtooth', 45, 62, .2, .2, 1.5); }
             if (boost) {
                 // Overpressure: a blown gasket shriek and a second, lower bang.
                 tone('sawtooth', pitch * 6, pitch * 1.5, .3, .01, .7, .05);

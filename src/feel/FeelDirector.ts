@@ -24,6 +24,8 @@ import {NAMEPLATE_LIGHT} from '../ui/RatBillboard';
 import {Hunch,type HunchRat} from './Hunch';
 import {WantedSearchlight} from './WantedSearchlight';
 import {registerSupplyCues} from './supplyCues';
+import {LaunchJuice} from './LaunchJuice';
+import type {LaunchMachineKind} from '../shared/chaosState';
 
 /** One entry point from game events to presentation-only feel effects.
  * GameSession calls it at existing event sources; channels never parse
@@ -43,6 +45,9 @@ export class FeelDirector {
     private deathTarget?:()=>THREE.Vector3|undefined;
     private deathAge=0;
     private dust?:Dust;
+    private launchJuice?:LaunchJuice;
+    /** Thrown cases being watched for the whistle (true once it played) until they land. */
+    private readonly fallingCases=new Map<string,boolean>();
     private hunchView?:Hunch;
     private searchlight?:WantedSearchlight;
     private wasWanted=false;
@@ -66,6 +71,7 @@ export class FeelDirector {
     /** The last rendered view, for placing world cues raised outside the frame loop. */
     private view?:THREE.Camera;
     private readonly impulse=new THREE.Vector3();
+    private readonly up=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
     constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
         this.camera=new CameraFeel(()=>this.state.shake());
@@ -83,6 +89,7 @@ export class FeelDirector {
     /** Scene-wide dust for every rat's landings, skids and launches. */
     attachScene(scene:THREE.Scene):void {
         this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);
+        this.launchJuice?.dispose();this.launchJuice=new LaunchJuice(scene);
         this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);
         this.searchlight?.dispose();this.searchlight=new WantedSearchlight(scene);
         registerSupplyCues((cue,at)=>{if(this.view)this.sound.supply(cue,at,this.view);});this.hunchView.setSupercharged(this.incident==='clean-bill');
@@ -133,7 +140,9 @@ export class FeelDirector {
         this.pursuit+=(target-this.pursuit)*(1-Math.exp(-7.7*Math.max(0,dt)));
         if(this.pursuit<.01)this.pursuit=0;
         this.camera.hold(!on?0:this.flying?p.launchWiden:this.pursuit*p.pursuitWiden);
-        this.screen.speed(this.pursuit*p.streaks);
+        // Launcher flight streaks the screen by airspeed, like a Hot Pursuit sprint.
+        const flightStreaks=this.flying&&this.state.on('launchFlight')?Math.min(1,Math.hypot(horizontalSpeed,verticalSpeed)/55)*FEEL.launchFlight.params.streaks:0;
+        this.screen.speed(Math.max(this.pursuit*p.streaks,flightStreaks));
         this.sound.localMotion(horizontalSpeed,landed,carrying,this.flying?Math.min(1,Math.hypot(horizontalSpeed,verticalSpeed)/45):0);
     }
 
@@ -287,6 +296,69 @@ export class FeelDirector {
     /** Juice T5: a lineup flashbulb. */
     flashbulb():void {this.sound.flashbulb();}
 
+    /** L5: a machine fired, seen or not: its debris, a dust ring and a rumble for anyone near. */
+    launcherFired(kind:LaunchMachineKind,pad:{x:number;y:number;z:number;radius:number},boost:boolean,view:THREE.Camera):void {
+        if(!this.state.on('launchMoment'))return;
+        const p=FEEL.launchMoment.params;
+        this.launchJuice?.fired(kind,pad,boost,Math.round(p.debris*(boost?1.6:1)));
+        for(let i=0;i<6;i++){
+            const angle=i*Math.PI/3;
+            this.dust?.puff(this.impulse.set(pad.x+Math.cos(angle)*pad.radius*.7,pad.y,pad.z+Math.sin(angle)*pad.radius*.7),1);
+        }
+        if(boost)for(let i=0;i<3;i++)this.dust?.smoke(this.impulse.set(pad.x,pad.y+.5,pad.z),this.up.set(0,1,0),1);
+        const d=Math.hypot(pad.x-view.position.x,pad.y-view.position.y,pad.z-view.position.z);
+        if(d<p.shakeRange){
+            const s=(1-d/p.shakeRange)*(boost?1.6:1);
+            this.camera.kick(p.shake*s,(Math.random()*2-1)*p.shake*s*.5);
+        }
+    }
+    /** L5/L6: a rat was thrown (`local` for yours): it screams; yours also kicks the view. */
+    launched(at:Vec3Data,local:boolean,boost:boolean,view:THREE.Camera):void {
+        if(this.state.on('launchFlight'))this.sound.scream(local?undefined:at,view);
+        if(!local||!this.state.on('launchMoment'))return;
+        const p=FEEL.launchMoment.params,s=boost?1.4:1;
+        this.camera.kick(p.kick*s,(Math.random()*2-1)*.6);this.camera.push(this.impulse.set(0,p.push*s,0));this.camera.widen(6*s);
+        if(boost){this.lastCalloutAt=-Infinity;this.callout('OVERPRESSURE!');}
+    }
+    /** L6: every frame for each rat; contrails behind the ones in launcher flight. */
+    flightTrail(id:string,at:THREE.Vector3,flying:boolean,dt:number):void {
+        if(!flying||!this.state.on('launchFlight')){this.launchJuice?.endTrail(id);return;}
+        this.launchJuice?.trail(id,at,dt,FEEL.launchFlight.params.trailEvery);
+    }
+    /** L7: a launched rat came down at `at` falling at `speed`: crater, dust, thud, shake and a word. */
+    landed(at:THREE.Vector3,speed:number,view:THREE.Camera,now=performance.now()):void {
+        if(!this.state.on('launchLanding'))return;
+        const p=FEEL.launchLanding.params,heavy=Math.min(1,speed/60);
+        this.launchJuice?.landed(at,heavy,p.decalLife);
+        this.dust?.puff(at,1);this.dust?.puff(this.impulse.copy(at).setY(at.y+.2),heavy);
+        this.sound.landing(at,view,heavy);
+        const d=at.distanceTo(view.position);
+        if(d<p.shakeRange){
+            const s=(1-d/p.shakeRange)*(.5+heavy);
+            this.camera.kick(-p.shake*s,(Math.random()*2-1)*p.shake*s*.4);this.camera.push(this.impulse.set(0,-4*s,0));
+        }
+        this.word(heavy>.6?'KA-THUD!':'THUD!',at,view,now,heavy>.6);
+    }
+    /** L7, per snapshot: a thrown case whistles as it falls and bursts paperwork where it lands. */
+    cases(list:readonly {id?:string;p:Vec3Data;v:Vec3Data;owner:string|null}[],view:THREE.Camera):void {
+        if(!this.state.on('launchLanding')){this.fallingCases.clear();return;}
+        const seen=new Set<string>();
+        for(const c of list){
+            const id=c.id??'primary';seen.add(id);
+            if(c.owner){this.fallingCases.delete(id);continue;}
+            const whistled=this.fallingCases.get(id);
+            if(!whistled&&c.p.y>14&&c.v.y<-6){
+                // Time to the street from here: y + vy·t − ½·25·t² = 0.
+                const seconds=(c.v.y+Math.sqrt(c.v.y*c.v.y+50*c.p.y))/25;
+                this.sound.whistle(c.p,view,seconds);this.fallingCases.set(id,true);
+            }else if(whistled&&c.p.y<2.5){
+                this.launchJuice?.spill(this.impulse.set(c.p.x,c.p.y,c.p.z),FEEL.launchLanding.params.paper);
+                this.fallingCases.delete(id);
+            }
+        }
+        for(const id of this.fallingCases.keys())if(!seen.has(id))this.fallingCases.delete(id);
+    }
+
     /** Your cheese hit someone (nonlethal). */
     hitDealt(victim:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
         this.sound.squelch(victim,view);
@@ -315,6 +387,7 @@ export class FeelDirector {
         this.camera.update(dt);
         this.updateBlackout(dt);
         this.dust?.update(dt);
+        this.launchJuice?.update(dt);
         this.city?.update(dt);
         this.noirCity?.update(this.perception());
         this.noirDressing?.update(dt);
@@ -361,6 +434,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);NAMEPLATE_LIGHT.value=1;}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);NAMEPLATE_LIGHT.value=1;}
 }

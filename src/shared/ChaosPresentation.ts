@@ -30,7 +30,8 @@ export class ChaosPresentation {
     private clockAt=-Infinity;
     private clockValue=-Infinity;
     constructor(private readonly minimumDelay=100){}
-    private get delayMs():number{return Math.min(350,Math.max(this.minimumDelay,this.interval*2+this.jitter));}
+    /** Current remote playback delay (ms). */
+    get delayMs():number{return Math.min(350,Math.max(this.minimumDelay,this.interval*2+this.jitter));}
     clear():void {
         this.shots.clear();this.corpses.clear();this.caseTrack=undefined;this.caseLifecycle='';
         this.launches.clear();this.seenLaunches.clear();

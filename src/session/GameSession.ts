@@ -26,7 +26,7 @@ import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo } from '../shared/incidentCatalog';
-import type { ChaosState } from '../shared/chaosState';
+import type { ChaosState, LaunchMachine } from '../shared/chaosState';
 import { PICKUP_TUNING } from '../shared/pickups';
 import type { RatEntity } from '../entities/RatEntity';
 import { bindGamePointerLock } from './GamePointerLock';
@@ -48,6 +48,7 @@ import {PoliceLineup,type LineupEntry} from '../feel/PoliceLineup';
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean}[]=[];
 const HEAD_POSITION=new THREE.Vector3();
+const LANDING_POSITION=new THREE.Vector3();
 const HEADSHOT_NORMAL=new THREE.Vector3();
 /** Longest a welcome waits for off-thread shader links before drawing anyway. */
 const WELCOME_COMPILE_MS=1500;
@@ -123,6 +124,8 @@ export class GameSession {
     private localLaunchAt = 0;
     private highlightBaseline = true;
     private seenHighlightLaunches = new Set<string>();
+    /** Launch events already given their scream and view kick (L5/L6). */
+    private readonly feltLaunches = new Set<string>();
     private highlightCorpseSeen = new Map<string, number>();
     private readonly highlightFrustum = new THREE.Frustum();
     private readonly highlightMatrix = new THREE.Matrix4();
@@ -297,7 +300,11 @@ export class GameSession {
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
-        if(this.chaos)this.chaos.onPresentedShot=(id,p,radius)=>this.cameos?.observeShot(id,p,radius,this.gun.sceneryClear);
+        if(this.chaos){
+            this.chaos.onPresentedShot=(id,p,radius)=>this.cameos?.observeShot(id,p,radius,this.gun.sceneryClear);
+            this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
+            this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
+        }
         this.chaos?.setScores(Object.values(message.players).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name)), this.myId);
         this.chaos?.setIncidentRoster(message.incidents);
         this.chaos?.setObserving(this.observing);
@@ -352,6 +359,7 @@ export class GameSession {
                 this.applyPickupState(message.state);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
                 this.feelStings(this.lastChaos,message.state);
+                this.feelLaunches(message.state);
                 this.noteHighlightSnapshot(message.state);
                 break;
             case 'welcome': this.welcome(message); break;
@@ -694,6 +702,31 @@ export class GameSession {
         if((before.remainingMs??0)>10_000&&(after.remainingMs??0)<=10_000&&(after.remainingMs??0)>0)this.feel.sting('closing');
     }
 
+    /** L5: a machine fired in the presented timeline: its debris and rumble, and hats blown off rats near the pad. */
+    private launcherFired(machine:LaunchMachine,boost:boolean):void {
+        this.feel.launcherFired(machine.kind,machine.pad,boost,this.stage.camera);
+        const range=FEEL.launchMoment.params.hatRange;
+        const blow=(entity:RatEntity)=>{
+            const d=Math.hypot(entity.mesh.position.x-machine.pad.x,entity.mesh.position.z-machine.pad.z);
+            if(d<range&&Math.abs(entity.mesh.position.y-machine.pad.y)<3)entity.blowHat(1.5-d/range);
+        };
+        if(this.rat)blow(this.rat.entity);
+        for(const {entity} of this.remotes.rats.values())blow(entity);
+    }
+
+    /** L5/L6 per snapshot: every new launch screams (yours kicks the view); thrown cases whistle and spill. */
+    private feelLaunches(state:ChaosState):void {
+        if(this.observing)return;
+        for(const launch of state.pressure?.launches??[]){
+            if(this.feltLaunches.has(launch.id))continue;
+            this.feltLaunches.add(launch.id);
+            if(this.feltLaunches.size>64)this.feltLaunches.delete(this.feltLaunches.values().next().value!);
+            const local=launch.playerId===this.myId,entity=local?this.rat?.entity:this.remotes.get(launch.playerId);
+            if(entity&&!entity.dead)this.feel.launched(entity.mesh.position,local,!!launch.boost,this.stage.camera);
+        }
+        this.feel.cases([state.case,...state.extraCases??[]],this.stage.camera);
+    }
+
     /** Polish 17: footsteps (you and nearby rats) and near-miss whizzes. */
     private feelAudioFrame(dt:number):void {
         const rat=this.rat!,sources=FOOTSTEP_SOURCES;let n=0;
@@ -703,6 +736,9 @@ export class GameSession {
         sources.length=n;
         this.feel.footsteps(dt,sources,self,this.stage.camera);
         if(self&&this.lastChaos)this.feel.projectiles(this.lastChaos.shots,this.myId,HEAD_POSITION.copy(self).setY(self.y+1.6),this.stage.camera);
+        // L6: contrails behind every rat riding a launcher throw.
+        if(!this.observing)this.feel.flightTrail(this.myId,rat.entity.mesh.position,rat.entity.launchFlight,dt);
+        for(const [id,{entity}] of this.remotes.rats)this.feel.flightTrail(id,entity.mesh.position,entity.launchFlight,dt);
     }
 
     private ensureCameos():void {

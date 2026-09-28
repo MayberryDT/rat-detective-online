@@ -226,6 +226,36 @@ export class FeelAudio {
         env.gain.setValueAtTime(0,at);env.gain.linearRampToValueAtTime(1,at+.25);env.gain.setValueAtTime(.8,at+.9);env.gain.exponentialRampToValueAtTime(.001,at+3);
         source.connect(filter);filter.connect(env);env.connect(out);source.start(at);source.stop(at+3.1);
     }
+    /** A launched rat's scream: a squeaky vibrato wail that climbs then trails off. */
+    scream(volume:number,pan:number):void {
+        if(!this.allow('scream',.25))return;
+        const at=this.context.currentTime,out=this.out(volume,pan,1.3);
+        const osc=this.context.createOscillator(),env=this.context.createGain(),vibrato=this.context.createOscillator(),depth=this.context.createGain();
+        const pitch=900+Math.random()*500;
+        osc.type='sawtooth';osc.frequency.setValueAtTime(pitch,at);osc.frequency.linearRampToValueAtTime(pitch*1.6,at+.25);osc.frequency.exponentialRampToValueAtTime(pitch*.7,at+1.1);
+        vibrato.frequency.value=11;depth.gain.value=pitch*.06;vibrato.connect(depth);depth.connect(osc.frequency);
+        const filter=this.context.createBiquadFilter();filter.type='bandpass';filter.frequency.value=pitch*1.4;filter.Q.value=2.5;
+        env.gain.setValueAtTime(0,at);env.gain.linearRampToValueAtTime(1,at+.04);env.gain.setValueAtTime(.8,at+.6);env.gain.exponentialRampToValueAtTime(.001,at+1.15);
+        osc.connect(filter);filter.connect(env);env.connect(out);osc.start(at);vibrato.start(at);osc.stop(at+1.2);vibrato.stop(at+1.2);
+    }
+    /** A launched rat hitting the street: body thump, crunch of pavement and a short rumble. */
+    landingThud(volume:number,pan:number,heavy:number):void {
+        if(!this.allow('landing-thud',.08))return;
+        const at=this.context.currentTime,out=this.out(volume,pan,.9);
+        this.tone(out,at,.35+heavy*.2,'sine',120,38,1);
+        this.tone(out,at,.12,'triangle',260,90,.5);
+        this.burst(out,at,.25+heavy*.3,'lowpass',900+heavy*600,1.2,.002);
+        this.burst(out,at+.02,.18,'bandpass',2400,2,.002);
+    }
+    /** The falling-bomb whistle of a thrown case, `seconds` long, sliding down. */
+    whistle(volume:number,pan:number,seconds:number):void {
+        if(!this.allow('whistle',.5))return;
+        const at=this.context.currentTime,d=Math.max(.6,Math.min(4,seconds)),out=this.out(volume,pan,d+.1);
+        const osc=this.context.createOscillator(),env=this.context.createGain();
+        osc.type='sine';osc.frequency.setValueAtTime(2100,at);osc.frequency.exponentialRampToValueAtTime(420,at+d);
+        env.gain.setValueAtTime(0,at);env.gain.linearRampToValueAtTime(1,at+.2);env.gain.setValueAtTime(1,at+d-.08);env.gain.linearRampToValueAtTime(0,at+d);
+        osc.connect(env);env.connect(out);osc.start(at);osc.stop(at+d+.02);
+    }
     /** Continuous wind while flying, `level` 0…1. */
     setWind(level:number,volume:number):void {this.loop('wind',level,volume,400+level*900,.7);}
     /** Noir rain on the city, `level` 0…1 (muffled indoors by the world mix). */

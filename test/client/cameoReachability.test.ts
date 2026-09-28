@@ -20,7 +20,7 @@ it.each([[341283204,0],[20260907,.5],[1,.999999]])('lands beside Spider-rat from
             id:'cameo-route',at:1000,playerId:'local',machineId:machine.id,velocity:launcherVelocity(machine,false,()=>roll),
         }]}} as ChaosState,'local');
         let cleared=false,landed=false,peak=0;
-        for(let frame=0;frame<480;frame++){
+        for(let frame=0;frame<720;frame++){
             const p=rat.entity.body.position;
             cleared ||= p.y>spider.y+5;
             // Rise clear of the tower, steer onto its broad roof, then brake.

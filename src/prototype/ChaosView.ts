@@ -7,7 +7,7 @@ import {setText} from '../ui/setText';
 import {clearAimLabel} from '../ui/aimClearance';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
-import type { ChaosState, CorpseState } from '../shared/chaosState';
+import type { ChaosState, CorpseState, LaunchMachine } from '../shared/chaosState';
 import { CHAOS_TUNING, CASE_LOOSE_SCALE, DISPATCH_STATIONS } from '../shared/chaosState';
 import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh } from '../utils/RatModel';
@@ -112,6 +112,11 @@ export class ChaosView {
     private readonly impactNormal=new THREE.Vector3();
     private readonly audioPosition=new THREE.Vector3();
     onPresentedShot?: (id:string,p:Vec3Data,radius:number)=>void;
+    /** A launched rat's landing, raised when the playback shows it (your own at once); `speed` is its fall speed. */
+    onLanding?: (p:Vec3Data,speed:number)=>void;
+    /** A launcher firing in the presented timeline. */
+    set onLauncherFired(listener:((machine:LaunchMachine,boost:boolean)=>void)|undefined){this.pressureMachine.onFire=listener;}
+    private readonly landings:{at:number;p:Vec3Data;speed:number}[]=[];
     setObserving(value:boolean):void {this.hud.observing=value;}
     setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
     setIncidentRoster(incidents: readonly import('../shared/incidentCatalog').IncidentId[]|undefined):void {
@@ -187,7 +192,7 @@ export class ChaosView {
         this.buffCards.clear();this.buffBar.style.display='none';
     }
     resetProjectiles():void{
-        this.localShots.clear();this.presentation.clear();this.clearPickupCards();this.clearInteractions();this.reactions.reset();
+        this.localShots.clear();this.presentation.clear();this.landings.length=0;this.clearPickupCards();this.clearInteractions();this.reactions.reset();
         // gameReset precedes the new chaos snapshot. Do not render or interact
         // with the previous round's confirmed carrier during that gap.
         this.state=null;this.setCarrier(null);this.root.visible=false;
@@ -313,6 +318,11 @@ export class ChaosView {
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
             if(hit.cue==='thud')playDelayedThud(hit.p);
+            if(hit.foley==='launch-landing'){
+                // Other rats are shown a playback delay behind; your own landing already happened.
+                const self=this.resolveRat(this.myId)?.mesh.position,mine=!!self&&Math.hypot(self.x-hit.p.x,self.z-hit.p.z)<3;
+                this.landings.push({at:performance.now()+(mine?0:this.presentation.delayMs),p:hit.p,speed:hit.energy??0});
+            }
             if(hit.cue==='case-hit'||hit.cue==='armor-clang')this.feedback?.(hit.cue,hit.p);
             if(hit.cue==='armor-clang')this.impacts.spark(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z));
             if(!hit.audioOnly){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='thud'?3:hit.scale??1);}
@@ -396,6 +406,12 @@ export class ChaosView {
     /** `renderTime` is the presentation clock (slowed briefly for the victory moment). */
     update(dt:number,camera:THREE.Camera,renderTime=performance.now()){
         this.impacts.update(dt);
+        const wall=performance.now();
+        for(let i=0;i<this.landings.length;){
+            const landing=this.landings[i]!;
+            if(landing.at>wall){i++;continue;}
+            this.landings.splice(i,1);this.onLanding?.(landing.p,landing.speed);
+        }
         camera.getWorldPosition(this.audioPosition);
         if(this.audio)bindIncidentAudio(this.audio,this.audioPosition);
         const s=this.state;if(!s)return;

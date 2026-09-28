@@ -8,6 +8,8 @@ import {PRESSURE_TELL_MS} from '../shared/launcherVelocity';
 export class PressureMachine {
     private root=new THREE.Group();
     private readonly launchAudio:LauncherAudio;
+    /** Called once when a machine fires in the presented timeline, with whether it misfired high. */
+    onFire?:(machine:LaunchMachine,boost:boolean)=>void;
     private geometry={box:new THREE.BoxGeometry(1,1,1),round:new THREE.CylinderGeometry(.5,.5,1,20)};
     private material={metal:new THREE.MeshStandardMaterial({color:0x61736b,emissive:0x26372f,emissiveIntensity:.18,roughness:.4,metalness:.25}),dark:new THREE.MeshStandardMaterial({color:0x182727,roughness:.8}),brass:new THREE.MeshStandardMaterial({color:0xc6a55b,emissive:0x62441c,emissiveIntensity:.15,roughness:.4,metalness:.25}),wood:new THREE.MeshStandardMaterial({color:0x886346,emissive:0x302010,emissiveIntensity:.1,roughness:.8}),red:new THREE.MeshBasicMaterial({color:0xff1005,toneMapped:false}),white:new THREE.MeshBasicMaterial({color:0xffe8ad,toneMapped:false})};
     private batches=new Map<string,{shape:keyof PressureMachine['geometry'];material:THREE.Material;matrices:THREE.Matrix4[]}>();
@@ -139,7 +141,9 @@ export class PressureMachine {
             if(tell&&model.heardTell!==until){model.heardTell=until;this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'tell');}
             if(until>0&&elapsed>=0&&elapsed<1000&&model.heardFire!==until){
                 model.heardFire=model.heardTell=until;
-                this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'fire',state?.boosts?.[model.machine.id]===until-model.machine.cooldownMs);
+                const boost=state?.boosts?.[model.machine.id]===until-model.machine.cooldownMs;
+                this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'fire',boost);
+                this.onFire?.(model.machine,boost);
             }
             const active=until>0&&age>=0&&age<3600;
             const attack=Math.min(1,Math.max(0,age)/110);
@@ -152,6 +156,11 @@ export class PressureMachine {
             else if(kind==='freight')model.rotor.position.x-=kick*7;
             else if(kind==='dumpster'||kind==='mousetrap'){model.rotor.rotation.x=-kick*1.9;model.rotor.position.y+=kick*2.5;}
             else model.rotor.position.y+=kick*7;
+            // Anticipation and release: the mechanism squashes down through the tell,
+            // then springs past its rest height and wobbles back.
+            const squash=tell?.35*(1+elapsed/PRESSURE_TELL_MS):0;
+            const spring=active&&age<900?Math.sin(age/900*Math.PI*3)*Math.exp(-age/350)*.35:0;
+            model.rotor.scale.y*=1-squash+spring;model.rotor.scale.x*=1+squash*.3;model.rotor.scale.z*=1+squash*.3;
             if(tell){
                 // The shudder: building pressure rattles the whole mechanism.
                 const shake=.03+.09*(1+elapsed/PRESSURE_TELL_MS);

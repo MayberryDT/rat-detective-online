@@ -401,6 +401,10 @@ export class RatEntity {
     public setLocomotionPolish(enabled:boolean):void { this.animator.setLocomotionPolish(enabled); }
     public setActingEnabled(enabled:boolean):void {this.animator.setActingEnabled(enabled);}
     public resetReactions():void {this.animator.resetReactions();}
+    /** L5: a nearby launcher blew this rat's hat off (it lands back on). */
+    public blowHat(strength=1):void {if(!this.dead&&this.hp>0)this.animator.blowHat(strength);}
+    /** True while riding a launcher throw, until the landing. */
+    public get launchFlight():boolean {return !this.dead&&this.animator.launchFlight;}
     public playReaction(event:RatReaction,strength=1):void {
         if(!this.dead&&this.hp>0)this.animator.playReaction(event,strength);
     }

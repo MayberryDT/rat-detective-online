@@ -115,6 +115,28 @@ export class FeelSound {
         if(fade>.02)this.audio!.headshot(FEEL.sound.params.headshot*fade,this.pan(at,view));
     }
     sting(kind:Sting):void {if(this.on)this.audio!.sting(kind,FEEL.sound.params.sting);}
+    /** Distance fade for a world cue, 1 at the camera to 0 at `range`. */
+    private fade(at:Vec3Data,view:THREE.Camera,range:number):number {
+        return Math.max(0,1-Math.hypot(at.x-view.position.x,at.y-view.position.y,at.z-view.position.z)/range)**2;
+    }
+    /** A launched rat screams; your own at full volume. */
+    scream(at:Vec3Data|undefined,view:THREE.Camera):void {
+        if(!this.on)return;
+        const p=FEEL.launchFlight.params,fade=at?this.fade(at,view,p.screamRange):1;
+        if(fade>.02)this.audio!.scream(p.scream*fade,at?this.pan(at,view):0);
+    }
+    /** A launched rat lands; `heavy` 0…1 from the fall. */
+    landing(at:Vec3Data,view:THREE.Camera,heavy:number):void {
+        if(!this.on)return;
+        const p=FEEL.launchLanding.params,fade=this.fade(at,view,p.shakeRange*2.5);
+        if(fade>.02)this.audio!.landingThud(p.thud*fade*(.5+heavy*.5),this.pan(at,view),heavy);
+    }
+    /** A thrown case starts falling: the bomb whistle for about `seconds`. */
+    whistle(at:Vec3Data,view:THREE.Camera,seconds:number):void {
+        if(!this.on)return;
+        const p=FEEL.launchLanding.params,fade=this.fade(at,view,90);
+        if(fade>.02)this.audio!.whistle(p.whistle*fade,this.pan(at,view),seconds);
+    }
 
     /** Balls from other rats passing within `whizz` units of your head. */
     projectiles(shots:readonly {id:string;owner:string|null;p:Vec3Data;v:Vec3Data}[],myId:string,head:THREE.Vector3,view:THREE.Camera):void {

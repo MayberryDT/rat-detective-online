@@ -506,7 +506,7 @@ export class ChaosSimulation {
     private landingShockwave(lander:PlayerData,machineId:string,drop:number,playing:boolean){
         const W=LANDING_SHOCKWAVE,p={x:lander.x,y:lander.y,z:lander.z};
         const speed=Math.sqrt(2*25*drop);
-        this.impacts.push({p:{...p},n:{x:0,y:1,z:0},surface:true,foley:'launch-landing',energy:Math.min(300,speed)});
+        this.impacts.push({p:{...p},n:{x:0,y:1,z:0},surface:false,audioOnly:true,foley:'launch-landing',energy:Math.min(300,speed)});
         const away=(q:Vec3Data)=>{
             const dx=q.x-p.x,dz=q.z-p.z,d=Math.hypot(dx,dz);
             if(d>W.radius||Math.abs(q.y-p.y)>3)return null;

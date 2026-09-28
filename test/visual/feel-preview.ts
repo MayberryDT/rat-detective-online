@@ -166,7 +166,21 @@ const actions:Record<string,()=>void>={
     'Malpractice: kit fidgets and hops':()=>{kit.setNervous(true);const p=kit.root.position;kit.setPosition(p.x+4,p.y+.7,p.z+1.5);},
     'Show your nameplate':()=>{rat.entity.billboard.sprite.visible=true;},
     'Hunch: turn around':()=>rat.onMouseMove(1570.8,0),
+    'L5 Dumpster fires 12 ahead':()=>{const p=ahead(12);feel.launcherFired('dumpster',{x:p.x,y:0,z:p.z,radius:5},false,stage.camera);},
+    'L5 Rat trap fires 12 ahead':()=>{const p=ahead(12);feel.launcherFired('mousetrap',{x:p.x,y:0,z:p.z,radius:5},false,stage.camera);},
+    'L5 Wind tunnel fires 12 ahead':()=>{const p=ahead(12);feel.launcherFired('fan',{x:p.x,y:0,z:p.z,radius:5},false,stage.camera);},
+    'L5 Overpressure misfire 12 ahead':()=>{const p=ahead(12);feel.launcherFired('pressure',{x:p.x,y:0,z:p.z,radius:5},true,stage.camera);},
+    'L5 Hats blown off suspects':()=>{for(const s of suspects)s.blowHat(1.2);},
+    'L5 Your launch (kick, scream, view)':()=>{feel.launched(rat.entity.mesh.position,true,false,stage.camera);const t=setInterval(()=>feel.motion(1/60,false,50,8,1),16);setTimeout(()=>{clearInterval(t);feel.motion(1/60,true,0,0,1);},1500);},
+    'L6 Suspects launched (flail, contrails)':()=>{for(const s of suspects){s.body.velocity.set(4,38,0);s.body.wakeUp();s.playReaction('launch');feel.launched(s.mesh.position,false,false,stage.camera);}},
+    'L7 Landing 8 ahead':()=>feel.landed(ahead(8),55,stage.camera),
+    'L7 Case whistle then paperwork 8 ahead':()=>{const p=ahead(8);feel.cases([{p:{x:p.x,y:30,z:p.z},v:{x:0,y:-12,z:0},owner:null}],stage.camera);setTimeout(()=>feel.cases([{p:{x:p.x,y:.5,z:p.z},v:{x:0,y:0,z:0},owner:null}],stage.camera),900);},
 };
+/** A ground point `distance` ahead of the camera. */
+function ahead(distance:number):THREE.Vector3 {
+    const forward=stage.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+    return rat.entity.mesh.position.clone().addScaledVector(forward,distance).setY(0);
+}
 const buttons=document.getElementById('feel-buttons')!;
 for(const [label,run] of Object.entries(actions)){
     const button=document.createElement('button');button.type='button';button.textContent=label;
@@ -204,7 +218,7 @@ function frame(now:number){
     stage.world.step(1/60,dt,3);
     rat.update(dt,{});gun.update(dt);impacts.update(dt);
     const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(stage.camera.fov)/2)/innerHeight;
-    for(const suspect of suspects){suspect.update(dt);suspect.fitOutline(stage.camera.position,unitsPerPixel);}
+    for(const [i,suspect] of suspects.entries()){suspect.update(dt);suspect.fitOutline(stage.camera.position,unitsPerPixel);feel.flightTrail(`suspect-${i}`,suspect.mesh.position,suspect.launchFlight,dt);}
     for(const prop of [kit,coat,shoes])prop.update(performance.now(),stage.camera);
     feel.footsteps(dt,suspects.map((s,i)=>({id:`suspect-${i}`,position:s.mesh.position})),rat.entity.mesh.position,stage.camera);
     city.update(dt,stage.camera,rat.entity.body.position);
