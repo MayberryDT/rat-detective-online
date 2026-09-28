@@ -73,6 +73,7 @@ export class LocalShotPresentation {
         this.retire(message.ballId);
     }
     apply(state:ChaosState,now:number):void {
+        if(!this.shots.size)return; // every chaos frame; usually no local shot in flight
         const incoming=new Map(state.shots.map(s=>[s.id,s]));
         for(const [id,local] of this.shots){
             const authoritative=incoming.get(id);
