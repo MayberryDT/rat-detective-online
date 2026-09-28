@@ -22,7 +22,8 @@ import {MAX_HP} from '../../src/shared/networkProtocol';
 import {createRatMesh} from '../../src/utils/RatModel';
 import {RatAnimator,type DeathStyle} from '../../src/utils/RatAnimator';
 import {PressureMachine} from '../../src/prototype/PressureMachine';
-import {LAUNCH_MACHINES,PRESSURE_TUNING,type PressureState} from '../../src/shared/chaosState';
+import {DispatchPillars} from '../../src/prototype/DispatchPillars';
+import {LAUNCH_MACHINES,PRESSURE_TUNING,DISPATCH_STATIONS,CHAOS_TUNING,type PressureState,type ChaosState} from '../../src/shared/chaosState';
 
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 initEntitySounds(stage.listener);
@@ -198,6 +199,17 @@ const actions:Record<string,()=>void>={
     'R Gentle death suspect 2':()=>{const v=suspects[1]!;if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});v.hp=1;v.takeDamage(1,new THREE.Vector3(.2,0,0));},
     'L7 Landing 8 ahead':()=>feel.landed(ahead(8),55,stage.camera),
     'L7 Case whistle then paperwork 8 ahead':()=>{const p=ahead(8);feel.cases([{p:{x:p.x,y:30,z:p.z},v:{x:0,y:-12,z:0},owner:null}],stage.camera);setTimeout(()=>feel.cases([{p:{x:p.x,y:.5,z:p.z},v:{x:0,y:0,z:0},owner:null}],stage.camera),900);},
+    'D View pillar close':()=>viewPillar(pillar,9),
+    'D View pillar from the street':()=>viewPillar(pillar,24),
+    'D Next pillar':()=>viewPillar((pillar+1)%DISPATCH_STATIONS.length,9),
+    'D View sewer pillar':()=>viewPillar(Math.max(0,DISPATCH_STATIONS.findIndex(s=>s.y<0)),9),
+    'D Ready':()=>setDispatch('ready',0),
+    'D Shoot the bell (the moment)':()=>{setDispatch('rolling',CHAOS_TUNING.rollMs);bellHit(false);},
+    'D Rolling':()=>setDispatch('rolling',CHAOS_TUNING.rollMs),
+    'D Active countdown':()=>setDispatch('active',CHAOS_TUNING.activeMs),
+    'D Active last 3 s':()=>setDispatch('active',3600),
+    'D Cooldown':()=>setDispatch('cooldown',CHAOS_TUNING.cooldownMs),
+    'D Busy hit':()=>bellHit(true),
 };
 /** A scripted corpse 4 ahead: it drops from 2.5 units, rolls onto its back, bounces and
  * rests, so the ragdoll limbs, splay and dead face read at close range. */
@@ -247,6 +259,35 @@ function ahead(distance:number):THREE.Vector3 {
     const forward=stage.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
     return rat.entity.mesh.position.clone().addScaledVector(forward,distance).setY(0);
 }
+/** D: the Dispatch alarm pillars with a scripted dispatch state that moves on like the authority's. */
+const pillars=new DispatchPillars(stage.scene,stage.listener.context as AudioContext);
+pillars.onShot=(_station,at)=>feel.dispatchShot(at,stage.camera);
+const dispatch:ChaosState['dispatch']={phase:'ready',started:0,until:0,serial:0};
+let pillar=0;
+function setDispatch(phase:ChaosState['dispatch']['phase'],ms:number):void {
+    const now=performance.now();
+    Object.assign(dispatch,{phase,started:now,until:phase==='ready'?0:now+ms,serial:dispatch.serial+1,incident:'evidence-tampering'});
+}
+function advanceDispatch(now:number):void {
+    if(dispatch.phase==='ready'||now<dispatch.until)return;
+    const from=dispatch.until;
+    if(dispatch.phase==='rolling')Object.assign(dispatch,{phase:'active',started:from,until:from+CHAOS_TUNING.activeMs});
+    else if(dispatch.phase==='active')Object.assign(dispatch,{phase:'cooldown',started:from,until:from+CHAOS_TUNING.cooldownMs});
+    else Object.assign(dispatch,{phase:'ready',started:now,until:0});
+}
+/** Park the camera `distance` in front of a pillar's call box, a little to one side (stops following your rat). */
+function viewPillar(index:number,distance:number):void {
+    pillar=index;
+    const s=DISPATCH_STATIONS[index]!,fx=Math.sin(s.face),fz=Math.cos(s.face),close=distance<10;
+    rat.updateView=()=>{};rat.entity.mesh.visible=false;
+    stage.camera.position.set(s.x+fx*distance+fz*distance*.3,s.y+(close?3:2.2),s.z+fz*distance-fx*distance*.3);
+    stage.camera.lookAt(s.x,s.y+(close?3.5:3),s.z);
+}
+/** A ball on the viewed pillar's bell, from the call box side. */
+function bellHit(busy:boolean):void {
+    const s=DISPATCH_STATIONS[pillar]!,t=s.target;
+    pillars.hit({x:t.x+Math.sin(s.face)*1.2,y:t.y,z:t.z+Math.cos(s.face)*1.2},busy,stage.camera);
+}
 const buttons=document.getElementById('feel-buttons')!;
 for(const [label,run] of Object.entries(actions)){
     const button=document.createElement('button');button.type='button';button.textContent=label;
@@ -292,6 +333,7 @@ function frame(now:number){
     feel.wanted(dt,wantedSuspect?suspects[1]!.mesh.position:undefined,false);
     poseStudioCorpse(dt);
     machines.update(pressure,performance.now(),stage.camera,surging);
+    advanceDispatch(performance.now());pillars.update(dispatch,performance.now(),stage.camera);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
     stage.renderer.toneMappingExposure=1.1*feel.exposure;

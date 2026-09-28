@@ -11,7 +11,7 @@ import { createPlayer } from '../../src/worker/gameState';
 import { CITY_BOUNDS, CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import { createAssignment, isAssignmentId, CHAIN_ROUTE } from '../../src/shared/assignments';
 import { DISPATCH_STATIONS } from '../../src/shared/chaosState';
-import { DispatchSirenAudio } from '../../src/audio/DispatchSirenAudio';
+import { DispatchAudio, sirenVolume } from '../../src/audio/DispatchAudio';
 import {RatEntity} from '../../src/entities/RatEntity';
 import {MatchScoreboard} from '../../src/ui/MatchScoreboard';
 import {DEFAULT_APPEARANCE,CLOTHING_PALETTE,HIGHLIGHT_PALETTE,FUR_PALETTE,appearanceAt} from '../../src/shared/ratAppearance';
@@ -150,13 +150,13 @@ if(phase==='closed'){
 const direction=new THREE.Vector3();
 // Explicit opt-in to audition the real readiness sound from this fixed camera.
 // The fixture stays silent until the reviewer presses LISTEN.
-let sirenAudition:DispatchSirenAudio|undefined;
+let sirenAudition:DispatchAudio|undefined;
 const listenButton=document.getElementById('fixture-listen') as HTMLButtonElement;
 listenButton.hidden=view!=='dispatch';
 listenButton.addEventListener('click',async()=>{
     if(sirenAudition){sirenAudition.dispose();sirenAudition=undefined;listenButton.textContent='LISTEN';return;}
     listenButton.disabled=true;
-    try{await stage.listener.context.resume();sirenAudition=new DispatchSirenAudio(stage.listener.context);listenButton.textContent='MUTE';}
+    try{await stage.listener.context.resume();sirenAudition=new DispatchAudio(stage.listener.context);listenButton.textContent='MUTE';}
     catch{listenButton.textContent='RETRY AUDIO';}
     finally{listenButton.disabled=false;}
 });
@@ -179,7 +179,7 @@ stage.renderer.setAnimationLoop(()=>{
     };
 
     if(query.has('still'))stage.renderer.setAnimationLoop(null);
-    if(sirenAudition){stage.camera.getWorldPosition(audioPosition);const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.box.x-audioPosition.x,s.box.y+2.1-audioPosition.y,s.box.z-audioPosition.z)),Infinity);sirenAudition.update(state.dispatch.phase==='ready',nearest);}
+    if(sirenAudition){stage.camera.getWorldPosition(audioPosition);const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.target.x-audioPosition.x,s.target.y-audioPosition.y,s.target.z-audioPosition.z)),Infinity);sirenAudition.siren(0,state.dispatch.phase==='ready'?sirenVolume(nearest):0,0);}
 });
 window.addEventListener('resize',()=>{stage.camera.aspect=innerWidth/innerHeight;stage.camera.updateProjectionMatrix();stage.renderer.setSize(innerWidth,innerHeight);});
 window.addEventListener('pagehide',()=>{stage.renderer.setAnimationLoop(null);sirenAudition?.dispose();if(deathReplay)clearInterval(deathReplay);for(const rat of distantRats)rat.dispose();touch?.dispose();fullScoreboard?.dispose();hud.dispose();chaosView.dispose();player.dispose();city.dispose();stage.dispose();},{once:true});

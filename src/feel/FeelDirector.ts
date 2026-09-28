@@ -25,6 +25,7 @@ import {Hunch,type HunchRat} from './Hunch';
 import {WantedSearchlight} from './WantedSearchlight';
 import {registerSupplyCues} from './supplyCues';
 import {LaunchJuice} from './LaunchJuice';
+import {LampAlarm} from './LampAlarm';
 import type {LaunchMachineKind} from '../shared/chaosState';
 
 /** One entry point from game events to presentation-only feel effects.
@@ -56,6 +57,7 @@ export class FeelDirector {
     private noirRain?:NoirRain;
     private noirAtmosphere?:NoirAtmosphere;
     private noirDressing?:NoirDressing;
+    private lampAlarm?:LampAlarm;
     private lifeKills=0;
     private lastCalloutAt=-Infinity;
     private slowAge=Infinity;
@@ -116,6 +118,7 @@ export class FeelDirector {
         this.noirCity?.dispose();this.noirCity=new NoirCity(scene);
         this.noirAtmosphere?.dispose();this.noirAtmosphere=new NoirAtmosphere(scene,lamps);
         this.noirDressing?.dispose();this.noirDressing=new NoirDressing(scene);
+        this.lampAlarm?.dispose();this.lampAlarm=new LampAlarm(scene,lamps);
         this.noirRain?.dispose();this.noirRain=new NoirRain(scene,lamps,Math.round(this.colourFilter?FEEL.noirRain.params.drops:FEEL.noirRain.params.phoneDrops));
         // Blackout also kills the neon, haze, searchlights and wet-street reflections.
         for(const root of [this.noirAtmosphere.root,this.noirDressing.root,this.noirRain.root])this.noirCity.adopt(root);
@@ -331,6 +334,14 @@ export class FeelDirector {
         const d=at.distanceTo(view.position);
         if(d<12&&!busy)this.camera.kick(-(.25+.6*level)*(1-d/12),(Math.random()*2-1)*.2);
     }
+    /** D2: the ball that started an incident hit a pillar's bell at `at`: every streetlamp flashes red,
+     * sweeping out from the pillar, and close by the view kicks, harder the nearer you are. */
+    dispatchShot(at:Vec3Data,view:THREE.Camera):void {
+        if(!this.state.on('dispatchShot'))return;
+        const p=FEEL.dispatchShot.params,d=Math.hypot(at.x-view.position.x,at.y-view.position.y,at.z-view.position.z);
+        this.lampAlarm?.flash(at);
+        if(d<p.kickRange){const s=1-d/p.kickRange;this.camera.kick(-p.kick*s,(Math.random()*2-1)*p.kick*s*.5);}
+    }
     /** P2, each frame: standing on a pad whose pressure is `level` (0…1) shakes your view harder as it builds. */
     padRumble(level:number,dt:number):void {
         if(!this.state.on('launchMoment')||level<=.3||!(dt>0))return;
@@ -420,6 +431,7 @@ export class FeelDirector {
         this.city?.update(dt);
         this.noirCity?.update(this.perception());
         this.noirDressing?.update(dt);
+        this.lampAlarm?.update(dt);
         if(this.noirRain){
             const where=self?spaceAt(self):'open';
             this.noirRain.update(dt,view,where==='open');
@@ -475,5 +487,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);NAMEPLATE_LIGHT.value=1;}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);NAMEPLATE_LIGHT.value=1;}
 }

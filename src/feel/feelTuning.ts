@@ -102,6 +102,12 @@ export const FEEL={
     /** P4: Pressure Surge look: the city rumble (`rumble` volume) and view shake (`shake`) rise over the incident;
      * each eruption or firing flickers the city lights by `flicker`. Street steam comes from the launchers. */
     surgeLook:{label:'P4 Surge look',toggle:true,params:{rumble:.16,shake:.5,flicker:.45}},
+    /** D1: Dispatch alarm pillars: ringing bursts with a blurred hammer and a trembling post, the beacon's turning red wash on the pavement,
+     * hits jolting the pillar with a clank, the last-three ticks, finale and all clear; `bell` volume within `bellRange`. The siren and face text always stay. */
+    dispatchPillar:{label:'D1 Dispatch pillars',toggle:true,params:{bell:.3,bellRange:70,finale:.2,whistle:.16}},
+    /** D2: the shot that starts an incident: berserk bell, sparks, shattered call-box glass, a citywide radio `squawk`, a view `kick`
+     * within `kickRange`, and every streetlamp flashing red, sweeping out from the pillar at `sweep` units/s. */
+    dispatchShot:{label:'D2 Dispatch shot',toggle:true,params:{kick:1.6,kickRange:30,sweep:260,squawk:.22}},
     /** R1–R3: floppy corpse limbs, cause-shaped deaths, splay and dead face, rolling hat; shots jolt limbs with a `squeak` heard within `squeakRange`. */
     ragdoll:{label:'R Ragdoll limbs',toggle:true,params:{squeak:.16,squeakRange:40,jolt:1}},
     /** M1: living face: ears and whiskers bounce on jolts; wide eyes and an open-mouth scream on launches, a gasp on near misses. */

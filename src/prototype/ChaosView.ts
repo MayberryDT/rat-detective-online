@@ -1,14 +1,13 @@
 import { effectsOutput } from '../audio/PlayerAudioMix';
 import { JurisdictionZones } from './JurisdictionZones';
 import type {FoleyWorld} from '../audio/FoleyWorld';
-import {DispatchSirenAudio} from '../audio/DispatchSirenAudio';
 import { createCaseGrip, disposeCaseGrip } from './CaseGrip';
 import {setText} from '../ui/setText';
 import {clearAimLabel} from '../ui/aimClearance';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { ChaosState, CorpseState, LaunchMachine, SurgeVent } from '../shared/chaosState';
-import { CHAOS_TUNING, CASE_LOOSE_SCALE, DISPATCH_STATIONS } from '../shared/chaosState';
+import { CHAOS_TUNING, CASE_LOOSE_SCALE } from '../shared/chaosState';
 import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh, ratAccessory } from '../utils/RatModel';
 import { RatAnimator } from '../utils/RatAnimator';
@@ -26,7 +25,7 @@ import type { Vec3Data, ServerMessage, ShotDescriptor, PickupTarget } from '../s
 import { locateCase } from './caseLocator';
 import { PressureMachine } from './PressureMachine';
 import { CaseBeacon } from './CaseBeacon';
-import { buildDispatchModel, updateDispatchSiren } from './DispatchModel';
+import { DispatchPillars, type DispatchStation } from './DispatchPillars';
 import { reactToLandmarkImpact } from './LandmarkReactions';
 import { addLeatherBriefcase } from './CaseModel';
 import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentation';
@@ -62,12 +61,8 @@ export class ChaosView {
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
     private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
     private readonly caseBeacon:CaseBeacon;
-    private readonly dispatch=new THREE.Group();
-    private readonly kiosks:Array<ReturnType<typeof buildDispatchModel>>=[];
-    private readonly sirenAudio:DispatchSirenAudio;
+    private readonly pillars:DispatchPillars;
     private readonly pressureMachine:PressureMachine;
-    private readonly textCanvas=document.createElement('canvas');
-    private readonly textTexture:THREE.CanvasTexture;
     private readonly hud:DispatchHud;
     private readonly jurisdictionZones:JurisdictionZones;
     private readonly assignmentDestinations:AssignmentDestinations;
@@ -107,7 +102,6 @@ export class ChaosView {
     private readonly presentation=new ChaosPresentation();
     private readonly localShots:LocalShotPresentation;
     private readonly presented:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
-    private lastDispatch='';
     private readonly p=new THREE.Vector3();
     private readonly impactPoint=new THREE.Vector3();
     private readonly impactNormal=new THREE.Vector3();
@@ -125,6 +119,8 @@ export class ChaosView {
     set onTriggerHit(listener:((machine:LaunchMachine,at:THREE.Vector3,busy:boolean,level:number)=>void)|undefined){this.pressureMachine.onTriggerHit=listener;}
     /** A Pressure Surge street launcher erupting in the presented timeline. */
     set onVentErupted(listener:((vent:SurgeVent)=>void)|undefined){this.pressureMachine.onVent=listener;}
+    /** The ball that started an incident struck a Dispatch pillar's bell. */
+    set onDispatchShot(listener:((station:DispatchStation,at:THREE.Vector3)=>void)|undefined){this.pillars.onShot=listener;}
     private readonly landings:{at:number;p:Vec3Data;speed:number}[]=[];
     setObserving(value:boolean):void {this.hud.observing=value;}
     setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
@@ -134,27 +130,19 @@ export class ChaosView {
     constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace){
         this.reactions=new RatReactionEvents(resolveRat);
         this.localShots=new LocalShotPresentation(traceShot);
-        this.sirenAudio=new DispatchSirenAudio(this.audio);
         this.bullets.count=0;this.bullets.frustumCulled=false;this.root.add(this.bullets);
         this.chargedBullets.count=0;this.chargedBullets.frustumCulled=false;this.chargedBullets.name='crossfire-balls';this.root.add(this.chargedBullets);
         this.chargedGlow.count=0;this.chargedGlow.frustumCulled=false;this.chargedGlow.name='crossfire-glow';this.root.add(this.chargedGlow);
         for(const [mesh,name] of [[this.dangerGlow,'danger-cheese-rims'],[this.dangerTrails,'danger-cheese-trails']] as const){mesh.count=0;mesh.frustumCulled=false;mesh.name=name;this.root.add(mesh);}
         this.missileTrail.count=0;this.missileTrail.frustumCulled=false;this.missileTrail.name='case-missile-trail';this.root.add(this.missileTrail);
         bindIncidentAudio(this.audio);
-        this.root.name='records-chaos';scene.add(this.root);scene.add(this.caseRoot,this.dispatch);
+        this.root.name='records-chaos';scene.add(this.root);scene.add(this.caseRoot);
         this.caseRoot.name='hot-case';
         this.caseBeacon=new CaseBeacon(scene);
         addLeatherBriefcase(this.caseRoot);
         this.caseRoot.userData.aimTarget=true;
         this.pressureMachine=new PressureMachine(scene,this.audio);
-        this.dispatch.userData.aimTarget=true;
-        this.textCanvas.width=256;this.textCanvas.height=128;
-        this.textTexture=new THREE.CanvasTexture(this.textCanvas);
-        for(const station of DISPATCH_STATIONS){
-            const cabinet=new THREE.Group();cabinet.position.set(station.box.x,station.box.y,station.box.z);
-            cabinet.name='dispatch-'+station.id;this.dispatch.add(cabinet);
-            this.kiosks.push(buildDispatchModel(cabinet,this.textTexture));
-        }
+        this.pillars=new DispatchPillars(scene,this.audio);
         this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
         this.assignmentDestinations=new AssignmentDestinations();this.jurisdictionZones=new JurisdictionZones(scene);
         // DOM projection stays crisp at city scale and visible through all architecture.
@@ -337,8 +325,9 @@ export class ChaosView {
                 nearest?.animator.joltDeath(hit.foley==='corpse-kick'?1:.5);
                 if(nearest&&hit.foley==='corpse-kick')this.onCorpseJolt?.(hit.p);
             }
-            // A ball the authority counted on a launcher's trigger.
-            if((hit.foley==='trigger'||hit.foley==='trigger-busy')&&this.cameraForTriggers)this.pressureMachine.triggerHit(hit.p,hit.foley==='trigger-busy',this.cameraForTriggers);
+            // A ball the authority counted on a launcher's trigger or, failing that, a Dispatch bell.
+            if((hit.foley==='trigger'||hit.foley==='trigger-busy')&&this.cameraForTriggers&&!this.pressureMachine.triggerHit(hit.p,hit.foley==='trigger-busy',this.cameraForTriggers))
+                this.pillars.hit(hit.p,hit.foley==='trigger-busy',this.cameraForTriggers);
             if(hit.foley==='launch-landing'){
                 // Other rats are shown a playback delay behind; your own landing already happened.
                 const self=this.resolveRat(this.myId)?.mesh.position,mine=!!self&&Math.hypot(self.x-hit.p.x,self.z-hit.p.z)<3;
@@ -559,24 +548,7 @@ export class ChaosView {
         if(this.lastHitPoint)this.assignmentDestinations.clear();else this.assignmentDestinations.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
         this.cameraForTriggers=camera;
         this.pressureMachine.update(s.pressure,now,camera,s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='pressure-surge');
-        for(const kiosk of this.kiosks){
-        updateDispatchSiren(kiosk,d.phase==='ready',renderTime/1000);
-        kiosk.switchHandle.position.z=d.phase==='ready'?.58:.55;
-        const material=kiosk.lamp.material as THREE.MeshStandardMaterial;
-        material.emissive.setHex(d.phase==='ready'?0xffdc8c:d.phase==='active'?0xee793a:0x352d38);
-        material.emissiveIntensity=d.phase==='rolling'?(Math.floor(now/120)%2)*1.5:d.phase==='ready'?1.2:.3;
-        }
-        const nearest=DISPATCH_STATIONS.reduce((distance,s)=>Math.min(distance,Math.hypot(s.box.x-this.audioPosition.x,s.box.y+2.1-this.audioPosition.y,s.box.z-this.audioPosition.z)),Infinity);
-        this.sirenAudio.update(d.phase==='ready',nearest);
-        if(this.lastDispatch!==d.phase){
-            this.lastDispatch=d.phase;
-
-            const ctx=this.textCanvas.getContext('2d')!;
-            ctx.fillStyle='#17121d';ctx.fillRect(0,0,256,128);ctx.fillStyle='#f3d7a1';ctx.textAlign='center';
-            ctx.font='bold 30px monospace';ctx.fillText('DISPATCH',128,43);
-            ctx.font='bold 26px monospace';ctx.fillText(d.phase==='ready'?'READY':d.phase==='cooldown'?'LINE BUSY':d.phase.toUpperCase(),128,93);
-            this.textTexture.needsUpdate=true;
-        }
+        this.pillars.update(d,now,camera);
     }
     private updateFixBeacons(camera:THREE.Camera,now:number){
         const ready:PickupVisual[]=[];
@@ -634,12 +606,12 @@ export class ChaosView {
         this.clearPickupCards();this.buffBar.remove();
         this.clearInteractions();
         this.localShots.clear();
-        this.sirenAudio.dispose();this.assignmentDestinations.dispose();this.jurisdictionZones.dispose();
+        this.pillars.dispose();this.assignmentDestinations.dispose();this.jurisdictionZones.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
-        this.pressureMachine.dispose();this.caseBeacon.dispose();this.setCarrier(null);this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();this.dispatch.removeFromParent();
-        disposeMeshResources(this.caseRoot);disposeMeshResources(this.dispatch);
-        startCaseBuzz(false);disposeIncidentAudio();this.impacts.dispose();this.textTexture.dispose();
+        this.pressureMachine.dispose();this.caseBeacon.dispose();this.setCarrier(null);this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();
+        disposeMeshResources(this.caseRoot);
+        startCaseBuzz(false);disposeIncidentAudio();this.impacts.dispose();
         disposeMeshResources(this.root);this.bullets.dispose();this.chargedBullets.dispose();this.chargedGlow.dispose();this.dangerGlow.dispose();this.dangerTrails.dispose();this.missileTrail.dispose();this.ballGeometry.dispose();this.glowGeometry.dispose();this.ballMaterial.dispose();this.chargedMaterial.dispose();this.glowMaterial.dispose();
     }
 }
