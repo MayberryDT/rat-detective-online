@@ -161,7 +161,7 @@ Tyler: "I love all of this… do all of it." Straight-up launches every time are
 - [x] **B5 Review package:** checks, one independent review, private preview.
 - **Status (2026-09-28):** built on `juice/launch-ragdoll` and on the private preview (fixture `a6694db9-8cf9-4006-8bc8-141dbe794e24`, client `index-DaBhjsfX.js`, protocol 21) for Tyler's playtest. One independent review found 8 issues (misfire time key, bot roof routes vs drift, movement envelope widened for everyone, restore inside a tell, counterfeit restored mid-air, rolling hat never resting, ear flap overwritten, instanced buffers not freed); all fixed in `2072d92`. What to look for: [review guide](juice/review.md#fifth-batch-launchers-ragdolls-and-the-living-model-protocol-21).
 
-## Sixth batch: launcher machines, pressure triggers and Pressure Surge (design agreed 2026-09-28, not started)
+## Sixth batch: launcher machines, pressure triggers and Pressure Surge (agreed 2026-09-28)
 
 Tyler playtested the fifth batch ("this is looking amazing") and asked for better launcher models, launch animations, a new trigger and a more chaotic Pressure Surge. Tyler said go on 2026-09-28. Branch `juice/launch-machines` (from `juice/launch-ragdoll`), one commit per item.
 
@@ -176,7 +176,8 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
 - [x] **P2 Machines:** six rebuilt models with their red triggers and outlines, the four build-up stages and each machine's launch animation and sound.
 - [x] **P3 Surge chaos:** street launchers across the city, suction toward pads, machines filling themselves, the finale blowout.
 - [x] **P4 Surge look:** street steam, lights flickering with the pulses, rising rumble and shake; street-launcher warning and eruption.
-- [ ] **P5 Review package:** checks, one independent review, private preview.
+- [x] **P5 Review package:** checks, one independent review, private preview.
+- **Status (2026-09-28):** built on `juice/launch-machines` and on the private preview (fixture `d7af3558-5e9d-43f5-8463-fb8c206077dc`, client `index-Bbe9u7e0.js`, protocol 21) for Tyler to judge the machines. One independent review found 4 issues (finale skipped hanging machines, repeated vent launch ids, surge bookkeeping lost on restore, per-frame vent allocations); all fixed in `3953c02`. What to look for: [review guide](juice/review.md#sixth-batch-launcher-machines-pressure-triggers-and-pressure-surge-protocol-21).
 
 **Later (not now):**
 - **Launcher overhaul.** Make the launchers far more chaotic and much juicier, including how the case interacts with them.

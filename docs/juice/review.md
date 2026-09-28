@@ -158,7 +158,7 @@ What changed is in the [juice plan](../juice-plan.md#fifth-batch-launchers-ragdo
 
 ## Sixth batch: launcher machines, pressure triggers and Pressure Surge (protocol 21)
 
-What changed is in the [juice plan](../juice-plan.md#sixth-batch-launcher-machines-pressure-triggers-and-pressure-surge-design-agreed-2026-09-28-not-started). Workshop buttons in `feel-preview.html` prefixed `P` set every machine's pressure, fire them, view each machine, open street launchers and turn the surge look on.
+What changed is in the [juice plan](../juice-plan.md#sixth-batch-launcher-machines-pressure-triggers-and-pressure-surge-agreed-2026-09-28). Workshop buttons in `feel-preview.html` prefixed `P` set every machine's pressure, fire them, view each machine, open street launchers and turn the surge look on.
 
 | Item | What to look for | Switch |
 |---|---|---|
