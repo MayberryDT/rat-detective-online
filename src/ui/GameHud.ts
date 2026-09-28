@@ -55,6 +55,12 @@ const CONNECTION_STYLE = `
 `;
 
 /** Owns title, kill feed, overlays, and connection status. */
+/** One kill-feed line. `note` is free text (case-death jokes, connection notices). */
+export type FeedEntry =
+    | { kind: 'kill'; killer: string; victim: string; headshot?: boolean; local?: 'killer' | 'victim' }
+    | { kind: 'dispatch'; caller: string; local?: boolean }
+    | { kind: 'note'; text: string };
+
 export class GameHud {
     private readonly doc: Document;
     private readonly onRetry?: () => void;
@@ -138,12 +144,13 @@ export class GameHud {
         this.titleScreen.style.display = 'none';
     }
 
-    addKillFeed(msg: string): void {
+    addKillFeed(line: FeedEntry): void {
         if (this.disposed) return;
         this.feedback('notice');
         const entry = this.doc.createElement('div');
         entry.className = 'kill-entry';
-        entry.textContent = msg;
+        entry.textContent = line.kind === 'kill' ? `${line.killer} eliminated ${line.victim}${line.headshot ? ' · HEADSHOT' : ''}`
+            : line.kind === 'dispatch' ? `${line.caller} called Dispatch` : line.text;
         this.killFeed.appendChild(entry);
         this.schedule(() => {
             entry.classList.add('fade-out');

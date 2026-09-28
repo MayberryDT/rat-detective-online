@@ -500,7 +500,7 @@ describe('GameSession', () => {
         transport.onMessage?.(welcome());
         transport.onState?.('playing','Invited dispatch expired. Joined public-live-v2.');
         expect(hud.enterPlaying).toHaveBeenCalledOnce();
-        expect(hud.addKillFeed).toHaveBeenCalledWith('Invited dispatch expired. Joined public-live-v2.');
+        expect(hud.addKillFeed).toHaveBeenCalledWith({kind:'note',text:'Invited dispatch expired. Joined public-live-v2.'});
         session.dispose();
     });
 
@@ -612,7 +612,7 @@ describe('GameSession', () => {
         });
         expect(rat.entity.takeDamage).toHaveBeenCalled();
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 5_000);
-        expect(hud.addKillFeed).toHaveBeenCalledWith('other eliminated <Rat & Co>');
+        expect(hud.addKillFeed).toHaveBeenCalledWith(expect.objectContaining({kind:'kill',killer:'other',victim:'<Rat & Co>'}));
         transport.onMessage?.({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: MAX_HP });
         expect(rat.entity.respawn).toHaveBeenCalledWith({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: MAX_HP });
         expect(hud.hideRespawn).toHaveBeenCalled();
@@ -636,8 +636,8 @@ describe('GameSession', () => {
         transport.onMessage?.({type:'playerDied',victimId:'me',killerId:null,killerName:null,
             cause:'evidence-tampering',victimName:'Captain Crawley',respawnAt:Date.now()+3000,
             incoming:{x:145,y:0,z:0},incident:true});
-        expect(hud.addKillFeed).toHaveBeenCalledWith(expect.stringContaining('Captain Crawley'));
-        expect(hud.addKillFeed.mock.calls.at(-1)![0]).not.toContain('eliminated');
+        expect(hud.addKillFeed).toHaveBeenCalledWith({kind:'note',text:expect.stringContaining('Captain Crawley')});
+        expect(hud.addKillFeed.mock.calls.at(-1)![0].kind).toBe('note');
         expect(remotes.get).not.toHaveBeenCalledWith(null);
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now()+3000);
     });

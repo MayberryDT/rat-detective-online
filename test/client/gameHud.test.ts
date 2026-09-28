@@ -190,7 +190,7 @@ describe('GameHud', () => {
     it('caps the kill feed and cancels fade timers on dispose', () => {
         const { doc, byId } = createHudDocument();
         const hud = new GameHud(doc);
-        for (let i = 1; i <= 6; i++) hud.addKillFeed(`kill ${i}`);
+        for (let i = 1; i <= 6; i++) hud.addKillFeed({kind:'note',text:`kill ${i}`});
         const feed = byId.get('kill-feed')!;
         expect(feed.children.map(child => child.textContent)).toEqual([
             'kill 2', 'kill 3', 'kill 4', 'kill 5', 'kill 6',
@@ -298,7 +298,7 @@ describe('GameHud', () => {
         const { doc, byId } = createHudDocument();
         const first = new GameHud(doc);
         first.enterPlaying();
-        first.addKillFeed('A eliminated B');
+        first.addKillFeed({kind:'kill',killer:'A',victim:'B'});
         first.showVictory('<Rat & Co>', 20);
         first.showRespawn(Date.now() + 4000);
         first.setConnection('disconnected', 'Connection lost.');

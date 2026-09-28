@@ -177,7 +177,7 @@ export class GameSession {
             if (state !== 'playing') this.highlights.setIdentity(false, this.observing);
             if (state === 'playing') {
                 this.hud.enterPlaying();
-                if(message)this.hud.addKillFeed(message);
+                if(message)this.hud.addKillFeed({kind:'note',text:message});
             }
         };
         this.gun.onHitEntity = (victim, damage) => {
@@ -485,8 +485,9 @@ export class GameSession {
                     this.hud.showRespawn(message.respawnAt - this.serverOffset);
                 }
                 this.hud.addKillFeed(message.cause==='evidence-tampering'
-                    ? this.deathQuips.caseDeath(message.victimName)
-                    : `${message.killerName} eliminated ${message.victimName}${headshot?' · HEADSHOT':''}`);
+                    ? {kind:'note',text:this.deathQuips.caseDeath(message.victimName)}
+                    : {kind:'kill',killer:message.killerName,victim:message.victimName,headshot,
+                        ...(message.killerId===this.myId?{local:'killer' as const}:message.victimId===this.myId?{local:'victim' as const}:{})});
                 break;
             }
             case 'playerRespawn':
