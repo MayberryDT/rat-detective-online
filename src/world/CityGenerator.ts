@@ -87,6 +87,13 @@ export class CityGenerator {
         this.generateLampProps(decorate);
         this.generateRoadMarkings();
         this.flushDetails();
+        // Buildings, details and props never move: compute their matrices once
+        // instead of every frame (thousands of objects). Steam puffs animate.
+        const moving = new Set<THREE.Object3D>(this.steam.map(puff => puff.mesh));
+        for (const object of this.objects) {
+            if (moving.has(object)) continue;
+            object.updateMatrixWorld(true); object.matrixAutoUpdate = false; object.matrixWorldAutoUpdate = false;
+        }
         this.generated = true;
         this.counts.sceneObjects = this.objects.length;
         this.counts.geometries = this.geometries.size;

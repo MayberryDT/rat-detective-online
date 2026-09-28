@@ -169,6 +169,12 @@ export class Neighborhood {
         yield* this.bakeFixedLighting();
         yield;
         this.batchStaticMeshes();
+        // The graybox city (boxes, pipes, batches and the hidden aim/camera
+        // originals) never moves: compute matrices once, not every frame.
+        for(const obj of this.objects){
+            if(obj instanceof THREE.Light)continue;
+            obj.updateMatrixWorld(true);obj.matrixAutoUpdate=false;obj.matrixWorldAutoUpdate=false;
+        }
         yield;
         this.initLampPool();
         if(lighting==='pools'&&streetReadabilityEnabled()){
