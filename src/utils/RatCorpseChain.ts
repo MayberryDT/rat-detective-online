@@ -90,6 +90,8 @@ export class RatCorpseChain {
     /** This corpse's own local physics body, skipped by its rays. */
     ignore?: C.Body;
     active = false;
+    /** True once the chain has advanced; until then the corpse keeps the pose it was given. */
+    stepped = false;
     private readonly p = REST.map(() => new THREE.Vector3());
     private readonly prev = REST.map(() => new THREE.Vector3());
     /** Velocity kicks (u/s) waiting for the next step. */
@@ -141,7 +143,7 @@ export class RatCorpseChain {
         this.delta.subVectors(anchor, this.p[BELLY]);
         for (let i = 0; i < REST.length; i++) {this.p[i].add(this.delta);this.prev[i].add(this.delta);}
         this.anchor.copy(anchor);root.getWorldQuaternion(this.start);
-        this.active = true;this.asleep = this.twitched = false;this.restTime = 0;this.floor = Infinity;this.rippleAge = 10;this.seed = seed;
+        this.active = true;this.stepped = this.asleep = this.twitched = false;this.restTime = 0;this.floor = Infinity;this.rippleAge = 10;this.seed = seed;
         for (const x of this.lateral) x.set(1, 0, 0).applyQuaternion(this.start);
         for (const [i, x, y, z] of START[cause]) this.kick(i, this.delta.set(x, y, z).applyQuaternion(this.start));
         this.solve();
@@ -191,7 +193,7 @@ export class RatCorpseChain {
     /** Advance by `dt` with the physics body's centre at `anchor`. `resting`: the body has settled. */
     step(dt: number, anchor: THREE.Vector3, resting: boolean, cause: RagdollCause, time: number, drag: number, twitch: number): void {
         if (!this.active || !(dt > 0)) return;
-        dt = Math.min(dt, .1);this.rippleAge += dt;
+        dt = Math.min(dt, .1);this.stepped = true;this.rippleAge += dt;
         // Snapshot corrections move the whole body, not just the belly.
         if (anchor.distanceToSquared(this.anchor) > 64) {
             this.delta.subVectors(anchor, this.anchor);

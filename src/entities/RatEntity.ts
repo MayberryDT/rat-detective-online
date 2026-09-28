@@ -719,17 +719,19 @@ export class RatEntity {
         // Remove UI billboard
         this.scene.remove(this.billboard.sprite);
         this.launchDirection.copy(impDir);this.launchAxis.copy(fallAxis);
-        // A headshot holds the rat in place for a beat before the fall.
+        // A headshot holds the rat in place for a beat before the fall; the R7 limp beat
+        // lets it sag as a slack ragdoll body (no blow yet) before it flies.
         this.deathHold = Math.max(headshot ? FEEL.headshot.params.hold : 0, feelState().on('ragdollBody') ? FEEL.ragdollBody.params.limp : 0);
         if (this.deathHold > 0) {
-            this.body.type = CANNON.Body.KINEMATIC;
+            if (headshot) this.body.type = CANNON.Body.KINEMATIC;else this.launchRagdoll(false);
             this.body.velocity.setZero();this.body.angularVelocity.setZero();
         } else this.launchRagdoll();
     }
 
     private readonly launchDirection = new THREE.Vector3();
     private readonly launchAxis = new THREE.Vector3();
-    private launchRagdoll(): void {
+    /** Make the body a light tumbling ragdoll and, with `blow`, give it the death launch. */
+    private launchRagdoll(blow = true): void {
         const impDir = this.launchDirection, fallAxis = this.launchAxis;
         // ── RAGDOLL PHYSICS — DRAMATIC LAUNCH ──
         this.body.type = CANNON.Body.DYNAMIC;
@@ -739,6 +741,7 @@ export class RatEntity {
         this.body.linearDamping = 0.02;  // Near-zero — let them FLY
         this.body.angularDamping = 0.02;
         this.body.wakeUp();
+        if (!blow) return;
 
         // MASSIVE death blow: launch UP + backward for dramatic hang time
         const impulse = new CANNON.Vec3(

@@ -266,7 +266,8 @@ export class RatAnimator {
             if(!chain.active)chain.begin(this.root,this.anchor,cause,Math.floor(Math.random()*997));
             if(impact>0)chain.land(Math.min(1.5,impact*gain));
             chain.step(dt,this.anchor,resting,cause,time,bodyParams.drag,bodyParams.twitch);
-            this.root.position.copy(chain.rootPosition);this.root.quaternion.copy(chain.rootQuaternion);
+            // A corpse shown from a snapshot (posed, not yet stepped) keeps the pose it was given.
+            if(chain.stepped){this.root.position.copy(chain.rootPosition);this.root.quaternion.copy(chain.rootQuaternion);}
         }
         this.parentRotation.copy(this.root.quaternion).invert();
         if(chain)this.localSpin.set(0,0,0);else this.localSpin.set(spin.x, spin.y, spin.z).applyQuaternion(this.parentRotation);
