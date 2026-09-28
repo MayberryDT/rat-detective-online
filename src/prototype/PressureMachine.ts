@@ -163,15 +163,17 @@ export class PressureMachine {
         }else{
             view.spin+=dt*(.6+level*22+(hang?30:0)+kick*70);
             parts.blades!.rotation.y=view.spin;
-            parts.streamers!.children.forEach((ribbon,i)=>{ribbon.rotation.x=-(.15+.9*level+kick*1.2)*(.7+.3*Math.sin(t*9+i));});
+            const ribbons=parts.streamers!.children;
+            for(let i=0;i<ribbons.length;i++)ribbons[i]!.rotation.x=-(.15+.9*level+kick*1.2)*(.7+.3*Math.sin(t*9+i));
         }
         if(view.column){
             view.column.visible=a<1.6;
             if(view.column.visible){
-                view.column.children.forEach((ring,i)=>{
+                const rings=view.column.children;
+                for(let i=0;i<rings.length;i++){
                     const rise=(a/1.4+i/10)%1,width=2+rise*(kind==='fan'?5:2.5);
-                    ring.position.set(Math.sin(i+a*2)*rise,1+rise*26,Math.cos(i+a*2)*rise);ring.scale.setScalar(width);
-                });
+                    rings[i]!.position.set(Math.sin(i+a*2)*rise,1+rise*26,Math.cos(i+a*2)*rise);rings[i]!.scale.setScalar(width);
+                }
                 ((view.column.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity=Math.max(0,.6*(1-a/1.6));
             }
         }
@@ -180,9 +182,14 @@ export class PressureMachine {
     /** Street launchers: warning (cover rattles harder, hole glows, steam jets, a whine
      * half a second out), then the eruption (cover blasts off, a steam column). */
     private updateVents(vents:readonly SurgeVent[]|undefined,now:number,camera:THREE.Camera|undefined,dt:number,t:number){
-        const live=new Set(vents?.map(v=>v.id));
-        for(const view of this.ventViews)if(view.id&&!live.has(view.id)){view.id=null;view.root.visible=false;}
-        for(const vent of vents??[]){
+        for(const view of this.ventViews){
+            if(!view.id)continue;
+            let live=false;
+            if(vents)for(const vent of vents)if(vent.id===view.id){live=true;break;}
+            if(!live){view.id=null;view.root.visible=false;}
+        }
+        if(!vents)return;
+        for(const vent of vents){
             let view=this.ventViews.find(v=>v.id===vent.id);
             if(!view){
                 view=this.ventViews.find(v=>v.id===null)??this.ventView();
@@ -192,7 +199,8 @@ export class PressureMachine {
             }
             view.root.position.set(vent.x,vent.y+.02,vent.z);
             const lead=(vent.at-now)/SURGE.warnMs,age=(now-vent.at)/1000;
-            const pad={x:vent.x,y:vent.y,z:vent.z,radius:SURGE.radius};
+            // Sounds keep their source position, so each cue gets its own pad (only on the rare cue frames).
+            const pad=()=>({x:vent.x,y:vent.y,z:vent.z,radius:SURGE.radius});
             if(lead>0){
                 const build=1-Math.min(1,lead);
                 view.cover.position.y=.06+Math.abs(Math.sin(t*(20+build*30)))*build*.25;
@@ -200,11 +208,11 @@ export class PressureMachine {
                 (view.glow.material as THREE.MeshBasicMaterial).opacity=.25+.6*build*(.7+.3*Math.sin(t*20));
                 view.debt+=dt*(6+build*30);
                 while(view.debt>=1){view.debt--;this.world.set(vent.x+(Math.random()-.5)*1.4,vent.y+.2,vent.z+(Math.random()-.5)*1.4);this.puff(this.world,3+build*6,.8+build,.2+build*.2);}
-                if(!view.warned&&lead<=.5){view.warned=true;this.launchAudio.play('geyser',pad,camera,'tell');}
+                if(!view.warned&&lead<=.5){view.warned=true;this.launchAudio.play('geyser',pad(),camera,'tell');}
             }else{
                 if(!view.erupted){
                     view.erupted=true;
-                    this.launchAudio.play('geyser',pad,camera,'fire',!!vent.boost);this.onVent?.(vent);
+                    this.launchAudio.play('geyser',pad(),camera,'fire',!!vent.boost);this.onVent?.(vent);
                     for(let i=0;i<30;i++){this.world.set(vent.x+(Math.random()-.5),vent.y+.3,vent.z+(Math.random()-.5));this.puff(this.world,12+Math.random()*20,1.1+Math.random(),.22+Math.random()*.2);}
                 }
                 view.cover.position.y=Math.max(.06,.06+30*age-12.5*age*age);view.cover.rotation.set(age*11,0,age*6);

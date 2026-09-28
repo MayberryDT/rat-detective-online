@@ -487,7 +487,7 @@ export class ChaosSimulation {
             for(const vent of this.pressure.vents){
                 if(!this.pendingVents.has(vent.id)||now<vent.at)continue;
                 this.pendingVents.delete(vent.id);
-                this.throwFrom({kind:'geyser',pad:{x:vent.x,y:vent.y,z:vent.z,radius:SURGE.radius}},!!vent.boost);
+                this.throwFrom({kind:'geyser',pad:{x:vent.x,y:vent.y,z:vent.z,radius:SURGE.radius}},!!vent.boost,undefined,vent.id);
             }
             this.pressure.vents=this.pressure.vents.filter(vent=>now<vent.at+SURGE.keepMs);
             if(!this.pressure.vents.length)delete this.pressure.vents;
@@ -499,7 +499,9 @@ export class ChaosSimulation {
         if(now>=d.until-SURGE.finaleMs&&s.finale!==d.serial){
             s.finale=d.serial;
             for(const machine of LAUNCH_MACHINES){
-                if(this.pressure.blowing?.[machine.id]!==undefined)continue;
+                // A machine already hanging keeps its firing time, now as an overpressure.
+                const hanging=this.pressure.blowing?.[machine.id];
+                if(hanging!==undefined){(this.pressure.boosts??={})[machine.id]=hanging;continue;}
                 const at=now+PRESSURE_TUNING.blowMs;
                 this.pressure.levels[machine.id]=PRESSURE_TUNING.full;
                 (this.pressure.blowing??={})[machine.id]=at;(this.pressure.boosts??={})[machine.id]=at;
@@ -564,8 +566,8 @@ export class ChaosSimulation {
      * (counterfeits too; they re-plant where they land), bodies and cheese. A carried
      * case needs no handling, because carry() pins it to its rat every tick.
      * `machineId` names the machine in launch events; street launchers have none. */
-    private throwFrom(source:ThrowSource,boost:boolean,machineId?:string){
-        const pad=source.pad,flightId=machineId??`vent-${this.pressure.serial}`;
+    private throwFrom(source:ThrowSource,boost:boolean,machineId?:string,ventId?:string){
+        const pad=source.pad,flightId=machineId??ventId??`vent-${this.pressure.serial}`;
         const onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;
         const nearby=[...this.players.values()].filter(p=>p.hp>0&&onPad(p));
         const caseRiders=[...this.cases.values()].filter(c=>!c.owner&&!c.returningUntil&&!c.armed&&onPad(c.body.position));
@@ -1548,6 +1550,10 @@ export class ChaosSimulation {
             ...(saved?.blowing?{blowing:{...saved.blowing}}:{}),...(saved?.fired?{fired:{...saved.fired}}:{}),...(saved?.boosts?{boosts:{...saved.boosts}}:{}),
             ...(saved?.vents?.length?{vents:saved.vents.map(v=>({...v}))}:{})};
         for(const vent of this.pressure.vents??[])if(vent.at>s.time)this.pendingVents.add(vent.id);
+        // Carry on the same surge: fresh vent ids after the restored ones, and no second finale.
+        const surging=s.dispatch.phase==='active'&&s.dispatch.incident==='pressure-surge';
+        this.surge={serial:s.dispatch.serial,finale:surging&&s.time>=s.dispatch.until-SURGE.finaleMs?s.dispatch.serial:-1,nextWave:0,nextSuction:0,
+            vents:1+Math.max(-1,...(this.pressure.vents??[]).map(v=>Number(v.id.split('-').pop())).filter(Number.isFinite))};
         this.now=s.time;this.dispatch={...s.dispatch,...(s.dispatch.incident?{incident:incidentInfo(s.dispatch.incident).id}:{})};
         this.possession={...s.possession};this.notice={...s.notice};this.restoreCase(this.primaryCase,s.case,s.time);
         this.casesWeaponized=this.incidentActive('evidence-tampering')&&s.dispatch.until>Date.now();
