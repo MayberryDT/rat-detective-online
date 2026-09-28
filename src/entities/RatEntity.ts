@@ -102,7 +102,7 @@ export class RatEntity {
     private ironcladRemaining=0;
     private metalApplication=0;
     private hustleRemaining=0;
-    private glowMaterial!:THREE.MeshBasicMaterial;
+    private glowMaterials:THREE.MeshBasicMaterial[]=[];
     /** Extra shell offset (world units) that keeps the outline's on-screen width. */
     private outlineReach=0;
     /** 0 (close: no outline) … 1 (far: full edge). Local and preview rats stay at 1. */
@@ -217,6 +217,9 @@ export class RatEntity {
         // ── OUTLINE GLOW MESH ──
         // Create a slightly larger, additive, backface-only clone for the glow halo
         this.glowMesh = this.createGlowOutline(opts);
+        // Close rats and the local rat usually hide the outline. Its ~65 nodes
+        // skip matrix updates while hidden and catch up on the frame it shows.
+        this.glowMesh.updateMatrixWorld = function (force?: boolean) { if (this.visible) THREE.Group.prototype.updateMatrixWorld.call(this, force); };
         this.powerupEffects=new RatPowerupEffects(scene);
         this.animator = new RatAnimator(this.mesh, this.glowMesh);
         this.syncGlowTransform();
@@ -280,17 +283,24 @@ export class RatEntity {
         // Eyes/ears can share geometry, so expand each geometry only once.
         // Every shell part has the same tint and lifetime. Share one owned
         // material per rat so a crowd does not switch identical GPU state.
-        const glowMaterial = new THREE.MeshBasicMaterial({
-            color: OUTLINE_COLOR, transparent: true, opacity: GLOW_OPACITY,
-            side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false,
-        });
-        this.glowMaterial=glowMaterial;
-        glowMaterial.onBeforeCompile=shader=>{
-            shader.uniforms.pursuitShell=this.shellOffset;
-            shader.vertexShader='uniform float pursuitShell;\n'+shader.vertexShader;
-            shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed+=normal*pursuitShell;');
+        // The deforming tail and muzzle stay ordinary meshes while the rest is
+        // skin-batched; one material shared by both kinds would switch shader
+        // programs twice per rat per frame, so they get an identical twin.
+        const shell = () => {
+            const material = new THREE.MeshBasicMaterial({
+                color: OUTLINE_COLOR, transparent: true, opacity: GLOW_OPACITY,
+                side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false,
+            });
+            material.onBeforeCompile=shader=>{
+                shader.uniforms.pursuitShell=this.shellOffset;
+                shader.vertexShader='uniform float pursuitShell;\n'+shader.vertexShader;
+                shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed+=normal*pursuitShell;');
+            };
+            material.customProgramCacheKey=()=> 'rat-pursuit-shell-v1';
+            return material;
         };
-        glowMaterial.customProgramCacheKey=()=> 'rat-pursuit-shell-v1';
+        const glowMaterial = shell(), glowTailMaterial = shell();
+        this.glowMaterials=[glowMaterial,glowTailMaterial];
         const expandedGeometries = new Set<THREE.BufferGeometry>();
         const replacedMaterials = new Set<THREE.Material>();
         glowGroup.traverse((c) => {
@@ -311,7 +321,9 @@ export class RatEntity {
                 for (const material of Array.isArray(c.material) ? c.material : [c.material]) {
                     replacedMaterials.add(material);
                 }
-                c.material = glowMaterial;
+                let deforming=false;
+                for(let parent:THREE.Object3D|null=c;parent&&parent!==glowGroup;parent=parent.parent)if(parent.name==='rat-tail'||parent.name==='rat-muzzle')deforming=true;
+                c.material = deforming ? glowTailMaterial : glowMaterial;
                 c.castShadow = false;
                 c.receiveShadow = false;
                 if (c.userData.noOutline) c.visible = false;
@@ -414,8 +426,8 @@ export class RatEntity {
     }
     private updatePowerupOutline():void {
         const pursuit=this.hustleRemaining>0&&!this.dead;
-        this.glowMaterial.color.setHex(pursuit?0xff1605:OUTLINE_COLOR);
-        this.glowMaterial.opacity=pursuit?.95:GLOW_OPACITY*this.outlineFade;this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
+        for(const material of this.glowMaterials){material.color.setHex(pursuit?0xff1605:OUTLINE_COLOR);material.opacity=pursuit?.95:GLOW_OPACITY*this.outlineFade;}
+        this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
         if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||!this.isPlayer&&this.outlineFade>.01);
     }
     private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.updatePowerupOutline();this.resetColor();}

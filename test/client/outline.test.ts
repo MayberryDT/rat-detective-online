@@ -45,10 +45,13 @@ it('aligns the glow on spawn, in the same frame as turning, and on respawn', () 
   expect(glow.getObjectByName('rat-muzzle-flash')).toBeUndefined();
   // The animator adds its transient firing flash after the permanent model's
   // outline is constructed. That additive effect intentionally has no shell.
-  entity.mesh.traverse(child => { if (child instanceof THREE.Mesh && child !== flash) modelParts.push(child); });
-  glow.traverse(child => { if (child instanceof THREE.Mesh) glowParts.push(child); });
+  // The rigid-part draw batches are derived geometry, not model parts.
+  entity.mesh.traverse(child => { if (child instanceof THREE.Mesh && child !== flash && !(child instanceof THREE.SkinnedMesh)) modelParts.push(child); });
+  glow.traverse(child => { if (child instanceof THREE.Mesh && !(child instanceof THREE.SkinnedMesh)) glowParts.push(child); });
   expect(glowParts).toHaveLength(modelParts.length);
-  expect(new Set(glowParts.map(part => part.material)).size).toBe(1);
+  // Every shell part shows the same tint and fade.
+  const looks = new Set(glowParts.map(part => { const m = part.material as THREE.MeshBasicMaterial; return `${m.color.getHex()}:${m.opacity}`; }));
+  expect(looks.size).toBe(1);
   const partPath = (part: THREE.Object3D, root: THREE.Object3D): string => {
     const path: string[] = [];
     while (part !== root) {
