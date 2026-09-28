@@ -1,6 +1,7 @@
 import { lookDelta } from '../settings/PlayerPreferences';
 import {TouchInput, type TouchRole} from '../session/TouchInput';
 import './touchControls.css';
+import {uiMotion} from './motion';
 
 type Options = {
     canvas: HTMLElement; look: (dx: number, dy: number) => void; shoot: () => void;
@@ -133,6 +134,8 @@ export class TouchControls {
         this.scores.hidden = !this.playing;this.settingsButton.hidden=!this.playing;
         this.rotate.hidden = !this.portrait;
         this.doc.body.classList.toggle('touch-mode', this.active);
+        // U9: buttons squash and the stick knob springs home unless motion is reduced.
+        this.root.classList.toggle('springy', uiMotion('paperSlide'));
     }
     setActive(active: boolean): void {
         if (active !== this.active) { this.suspend(); this.options.clearKeys(); }

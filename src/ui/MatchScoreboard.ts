@@ -2,6 +2,8 @@ import {ASSIGNMENTS, type AssignmentState} from '../shared/assignments';
 import type {ChaosState} from '../shared/chaosState';
 import {MAX_HP, type PlayerData, type ScoreEntry, type ServerMessage} from '../shared/networkProtocol';
 import './matchScoreboard.css';
+import type {FeedbackCue} from '../audio/FeedbackAudio';
+import {measure, slide, uiMotion} from './motion';
 
 type Investigator = ScoreEntry & {hp?: number};
 const text = (node: HTMLElement, value: string) => { if (node.textContent !== value) node.textContent = value; };
@@ -30,8 +32,12 @@ export class MatchScoreboard {
     private readonly renderedRows = new Map<string,{row:HTMLElement;signature:string}>();
     private columns = '';
     private disposed = false;
+    private exit?: Animation;
+    /** U8: at round end the rows first line up by kills, then slide into the final order. */
+    private byKills = false;
+    private cancelSettle?: () => void;
 
-    constructor(private readonly doc: Document = document) {
+    constructor(private readonly doc: Document = document, private readonly cue: (cue: FeedbackCue) => void = () => {}) {
         this.root = doc.createElement('section');
         this.root.className = 'match-scoreboard';
         this.root.hidden = true;
@@ -49,13 +55,28 @@ export class MatchScoreboard {
         this.available = value;
         if (!value) this.setVisible(false);
     }
+    /** U9: the board slides in like a sheet of paper and whips away on release; the HUD returns at once. */
     setVisible(value: boolean): void {
         if (this.disposed) return;
-        const visible = value && this.available;
-        if (visible && this.root.hidden) this.scroller.scrollTop = 0;
-        this.root.hidden = !visible;
+        const visible = value && this.available, shown = !this.root.hidden && !this.exit;
         this.doc.body.classList.toggle('scoreboard-open', visible);
-        if (visible) this.render();
+        if (visible === shown) { if (visible) this.render(); return; }
+        this.exit?.cancel(); this.exit = undefined;
+        this.cue(visible ? 'menu-open' : 'menu-close');
+        if (visible) {
+            if (this.root.hidden) this.scroller.scrollTop = 0;
+            this.root.hidden = false;
+            this.root.classList.toggle('sliding', uiMotion('paperSlide'));
+            const results = !!this.assignment?.result && uiMotion('caseFileStamps');
+            this.byKills = results; this.render();
+            if (results) { const id = setTimeout(() => { this.cancelSettle = undefined; this.byKills = false; if (!this.root.hidden) this.render(); }, 650); this.cancelSettle = () => clearTimeout(id); }
+            return;
+        }
+        this.cancelSettle?.(); this.cancelSettle = undefined; this.byKills = false;
+        if (!uiMotion('paperSlide') || typeof this.root.animate !== 'function') { this.root.hidden = true; return; }
+        const exit = this.root.animate([{opacity: 1, translate: '0 0'}, {opacity: 0, translate: '0 -18px'}], {duration: 110, easing: 'ease-in'});
+        this.exit = exit;
+        exit.onfinish = () => { if (this.exit !== exit) return; this.exit = undefined; this.root.hidden = true; };
     }
     scroll(deltaY: number, deltaX = 0): void {
         if (!this.root.hidden && Number.isFinite(deltaY) && Number.isFinite(deltaX)) {
@@ -94,7 +115,7 @@ export class MatchScoreboard {
         const held = (id: string) => Math.max(0, this.state?.possession[id] ?? 0);
         const points = (id: string) => mode==='jurisdiction'?(assignment?.jurisdiction?.heldMs[id]??0)/1000:mode === 'excessive-force' ? assignment?.caseKills[id] ?? 0 : mode === 'chain-of-custody' ? assignment?.deliveries[id] ?? 0 : held(id);
         const winner = assignment?.result?.winnerId;
-        const rows = [...this.players.values()].sort((a, b) => Number(b.id === winner) - Number(a.id === winner) ||
+        const rows = [...this.players.values()].sort((a, b) => this.byKills ? b.kills - a.kills || a.name.localeCompare(b.name) || a.id.localeCompare(b.id) : Number(b.id === winner) - Number(a.id === winner) ||
             (mode ? points(b.id) - points(a.id) : b.kills - a.kills) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
         const totalHeld = rows.reduce((sum, p) => sum + held(p.id), 0);
         const totalKills = rows.reduce((sum, p) => sum + p.kills, 0);
@@ -134,7 +155,8 @@ export class MatchScoreboard {
                 const rowSignature=JSON.stringify([mode,p]);
                 const cached=this.renderedRows.get(p.id);
                 if(cached?.signature===rowSignature)return cached.row;
-                const row = this.doc.createElement('tr'); row.dataset.player = p.id;
+                // Rows keep their element per rat so a rank change slides (U9) rather than swapping nodes.
+                const row = cached?.row ?? this.doc.createElement('tr'), parts: HTMLElement[] = []; row.dataset.player = p.id;
                 row.dataset.local = String(p.local); row.dataset.carrier = String(p.holder); row.dataset.down = String(p.down);
                 p.cells.forEach((value, i) => {
                     if (i === 1) {
@@ -142,16 +164,19 @@ export class MatchScoreboard {
                         const label = this.doc.createElement('span'); label.textContent = p.name;
                         name.appendChild(label);
                         if(p.tag){const tag=this.doc.createElement('small');tag.textContent=p.tag;name.appendChild(tag);}
-                        row.appendChild(name);
+                        parts.push(name);
                     }
                     const cell = this.doc.createElement('td'); cell.textContent = value;
                     if (i === p.cells.length - 1) cell.className = 'investigator-status';
                     else if ((i === 1 && (mode === 'excessive-force' || mode === 'chain-of-custody' || mode === 'jurisdiction')) || (i === 4 && mode === 'closing-time')) cell.className = 'investigator-objective';
-                    row.appendChild(cell);
+                    parts.push(cell);
                 });
+                row.replaceChildren(...parts);
                 this.renderedRows.set(p.id,{row,signature:rowSignature});return row;
             });
+            const before = this.root.hidden ? undefined : measure(this.body);
             this.body.replaceChildren(...ordered);
+            slide(this.body, before, 'paperSlide');
         }
         const rank = rows.findIndex(p => p.id === this.myId) + 1;
         text(this.footer, `${rank ? `YOU #${rank} · ` : ''}${caseTime(totalHeld)} TOTAL CASE TIME`);
@@ -159,6 +184,6 @@ export class MatchScoreboard {
     }
     dispose(): void {
         if (this.disposed) return;
-        this.setVisible(false); this.disposed = true; this.players.clear(); this.renderedRows.clear(); this.root.remove();
+        this.setVisible(false); this.exit?.cancel(); this.cancelSettle?.(); this.root.hidden = true; this.disposed = true; this.players.clear(); this.renderedRows.clear(); this.root.remove();
     }
 }

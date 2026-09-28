@@ -40,9 +40,9 @@ describe('full lobby scoreboard', () => {
     });
     it('retains unrelated row elements when one rat takes damage',()=>{
         const f=fixture();f.board.setVisible(true);
-        const other=f.row('rd-ai-2'),mine=f.row('me');
+        const other=f.row('rd-ai-2');
         f.board.receive({type:'playerDamaged',id:'me',hp:1,attackerId:'rd-ai-1'});
-        expect(f.row('rd-ai-2')).toBe(other);expect(f.row('me')).not.toBe(mine);expect(f.cells('me')).toContain(`1 / ${MAX_HP} HP`);
+        expect(f.row('rd-ai-2')).toBe(other);expect(f.cells('me')).toContain(`1 / ${MAX_HP} HP`);
         f.board.dispose();
     });
     it.each(['closing-time', 'excessive-force', 'chain-of-custody', 'jurisdiction'] as const)('uses authoritative mode scores and all players in %s', mode => {
