@@ -9,6 +9,8 @@ const RED = '#e2382e';
 const PIP_W = 30, PIP_H = 9, PIP_GAP = 7, PIP_SLANT = 6, PIP_Y = 70;
 /** Seconds a lost pip flashes before draining, and a regained pip takes to fill. */
 const LOSS_SECONDS = 0.45, GAIN_SECONDS = 0.3;
+/** Nameplate brightness shared by every rat; Blackout dims it with the city. */
+export const NAMEPLATE_LIGHT = { value: 1 };
 
 /** Noir nameplate: the rat's name in spaced small caps over a row of slanted
  * pips, one per hit point, like tabs on a case file. Lost pips flash, shake and
@@ -75,6 +77,7 @@ export class RatBillboard {
 
     /** Advance pip animations; redraws only while one is running. */
     public update(dt: number): void {
+        if (this.sprite.material.opacity !== NAMEPLATE_LIGHT.value) this.sprite.material.opacity = NAMEPLATE_LIGHT.value;
         if (!this.animating || this.disposed) return;
         let running = false;
         const advance = (times: number[], i: number, limit: number) => {

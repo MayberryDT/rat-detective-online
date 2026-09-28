@@ -20,7 +20,7 @@ function streakTexture():THREE.CanvasTexture|undefined {
  * across the wet street toward the camera. Outdoors only (not indoors or in the
  * sewers). Three instanced draws; the rain sound is driven by `level`. */
 export class NoirRain {
-    private readonly root=new THREE.Group();
+    readonly root=new THREE.Group();
     private readonly drops:THREE.InstancedMesh;
     private readonly splashes:THREE.InstancedMesh;
     private readonly glints:THREE.InstancedMesh;

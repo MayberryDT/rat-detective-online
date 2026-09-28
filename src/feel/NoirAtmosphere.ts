@@ -30,7 +30,7 @@ function shaftMaterial(color:number):{material:THREE.ShaderMaterial;opacity:{val
  * that briefly lifts the sky and ambient light, followed by distant thunder.
  * No new lights; the flash scales the existing hemisphere light. */
 export class NoirAtmosphere {
-    private readonly root=new THREE.Group();
+    readonly root=new THREE.Group();
     private readonly haze:THREE.InstancedMesh;
     private readonly hazeOpacity:{value:number};
     private readonly beams:THREE.InstancedMesh;
@@ -111,19 +111,25 @@ export class NoirAtmosphere {
         // Lightning: a double flash that lifts the sky and ambient light, then thunder.
         let flash=0;
         if(skyOn){
-            if((this.nextStrike-=dt)<=0){this.strikeAge=0;this.nextStrike=s.minGap+this.random()*(s.maxGap-s.minGap);this.thunderIn=.8+this.random()*1.6;}
+            if((this.nextStrike-=dt)<=0){this.strikeAge=0;this.nextStrike=this.stormy?2.5+this.random()*4.5:s.minGap+this.random()*(s.maxGap-s.minGap);this.thunderIn=.8+this.random()*1.6;}
             if(this.strikeAge<.5){
                 this.strikeAge+=dt;const t=this.strikeAge;
                 flash=Math.max(0,1-Math.abs(t-.04)/.05)+.7*Math.max(0,1-Math.abs(t-.2)/.07);
                 flash*=strength*(outdoors?1:.35);
             }
         }
+        this.flash=flash;
         if(this.hemisphere)this.hemisphere.intensity=this.baseHemisphere*(1+flash*s.flash);
         if(this.background)this.background.copy(this.baseBackground).lerp(this.flashSky,Math.min(1,flash*.8));
     }
 
     /** Strike on the next frame (workshop review). */
     strike():void {this.nextStrike=0;}
+    /** Blackout storm: lightning every few seconds instead of every half minute. */
+    set storm(on:boolean){if(on&&!this.stormy)this.nextStrike=Math.min(this.nextStrike,1.5);this.stormy=on;}
+    private stormy=false;
+    /** The current lightning flash, 0…1+, for effects that should light up with it. */
+    flash=0;
 
     /** Restore the stage's own fog, sky and hemisphere light. */
     dispose():void {

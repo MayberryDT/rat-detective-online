@@ -20,6 +20,7 @@ import type {ChaosShot} from '../shared/chaosState';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
+import {NAMEPLATE_LIGHT} from '../ui/RatBillboard';
 import {Hunch,type HunchRat} from './Hunch';
 
 /** One entry point from game events to presentation-only feel effects.
@@ -54,6 +55,10 @@ export class FeelDirector {
     private airVy=0;
     private flying=false;
     private pursuit=0;
+    /** Blackout: eased power-off level, and the brief lift from nearby muzzle flashes. */
+    private blackout=0;
+    private muzzleFlash=0;
+    private dark=0;
     private readonly impulse=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
     constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
@@ -85,6 +90,8 @@ export class FeelDirector {
         this.noirAtmosphere?.dispose();this.noirAtmosphere=new NoirAtmosphere(scene,lamps);
         this.noirDressing?.dispose();this.noirDressing=new NoirDressing(scene);
         this.noirRain?.dispose();this.noirRain=new NoirRain(scene,lamps,Math.round(this.colourFilter?FEEL.noirRain.params.drops:FEEL.noirRain.params.phoneDrops));
+        // Blackout also kills the neon, haze, searchlights and wet-street reflections.
+        for(const root of [this.noirAtmosphere.root,this.noirDressing.root,this.noirRain.root])this.noirCity.adopt(root);
     }
     /** Force a lightning strike (workshop review). */
     lightning():void {this.noirAtmosphere?.strike();}
@@ -160,7 +167,12 @@ export class FeelDirector {
     }
 
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
-    setIncident(incident?:IncidentId):void {this.incident=incident;this.hunchView?.setSupercharged(incident==='clean-bill');}
+    setIncident(incident?:IncidentId):void {
+        this.incident=incident;this.hunchView?.setSupercharged(incident==='clean-bill');
+        if(this.noirAtmosphere)this.noirAtmosphere.storm=incident==='blackout';
+    }
+    /** Renderer exposure multiplier: Blackout sinks everything but the lamps' own glow. */
+    get exposure():number {return 1-this.dark*FEEL.blackout.params.exposure;}
 
     /** A local shot left the muzzle (a Bad Ammunition jam fires nothing, so no kick). */
     shot(shotId?:string):void {
@@ -174,7 +186,12 @@ export class FeelDirector {
 
     /** Bad Ammunition, per trigger: smoke and a cough for everyone nearby; for your
      * own shot a jam clicks, a dud goes wah-wah and a backfire smears soot on the lens. */
-    badAmmo(shotId:string,origin:Vec3Data,direction:Vec3Data,local:boolean,view:THREE.Camera,now=performance.now()):void {
+    fired(shotId:string,origin:Vec3Data,direction:Vec3Data,local:boolean,view:THREE.Camera,now=performance.now()):void {
+        // Blackout: a shot nearby lights the street for a blink.
+        if(this.incident==='blackout'){
+            const d=Math.hypot(origin.x-view.position.x,origin.y-view.position.y,origin.z-view.position.z),reach=FEEL.blackout.params.muzzleRange;
+            if(d<reach)this.muzzleFlash=Math.max(this.muzzleFlash,FEEL.blackout.params.muzzle*(1-d/reach));
+        }
         if(this.incident!=='bad-ammunition'||!this.state.on('badAmmo'))return;
         const {round,backfire}=badRound(shotId),muzzle=new THREE.Vector3(origin.x,origin.y,origin.z);
         if(round!=='jam')muzzleSmoke(muzzle,new THREE.Vector3(direction.x,direction.y,direction.z),round==='dud'?.4:1);
@@ -279,6 +296,7 @@ export class FeelDirector {
         if(this.slowAge<r.slowmo){this.slowAge+=dt;this.lag+=dt*1000*(1-r.slowRate);}
         else if(this.lag>0)this.lag=Math.max(0,this.lag-dt*1000*r.catchup);
         this.camera.update(dt);
+        this.updateBlackout(dt);
         this.dust?.update(dt);
         this.city?.update(dt);
         this.noirCity?.update(this.perception());
@@ -310,10 +328,22 @@ export class FeelDirector {
             this.noirAudio.update(dt,this.danger,p.closed,p.period,on?p.heartbeat:0);
         }
     }
+    /** Blackout eases in with the lights stuttering out, and back on the same way.
+     * Lightning and muzzle flashes lift the dark for a beat. */
+    private updateBlackout(dt:number):void {
+        const p=FEEL.blackout.params,target=this.incident==='blackout'?1:0;
+        this.blackout+=Math.sign(target-this.blackout)*Math.min(Math.abs(target-this.blackout),dt/p.fade);
+        const transition=this.blackout>0&&this.blackout<1,stutter=transition&&Math.sin(this.blackout*47)>.2?.45:1;
+        this.muzzleFlash*=Math.exp(-dt/.07);
+        const flash=Math.min(1,Math.max(this.noirAtmosphere?.flash??0,this.muzzleFlash)*1.5);
+        this.dark=this.blackout*stutter*(1-flash);
+        this.noirCity?.setDark(this.dark*p.city);
+        NAMEPLATE_LIGHT.value=1-this.dark*p.nameplates;
+    }
     /** Offset the rendered view; `afterRender` must follow the same frame. */
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();NAMEPLATE_LIGHT.value=1;}
 }

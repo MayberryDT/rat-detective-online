@@ -157,6 +157,9 @@ const actions:Record<string,()=>void>={
     'Supplies: three props 7 ahead':()=>supplies(7),
     'Supplies: three props 22 ahead':()=>supplies(22),
     'Supplies: restocking':()=>{for(const prop of [coat,shoes,kit])prop.setAvailableAt(performance.now()+20_000);},
+    'Blackout on':()=>feel.setIncident('blackout'),
+    'Blackout off':()=>feel.setIncident(),
+    'Blackout: suspect fires':()=>{const s=suspects[1]!.mesh.position;feel.fired(`bo-${Math.random()}`,{x:s.x,y:s.y+1.2,z:s.z},{x:-1,y:0,z:0},false,stage.camera);},
     'Hunch: turn around':()=>rat.onMouseMove(1570.8,0),
 };
 const buttons=document.getElementById('feel-buttons')!;
@@ -203,6 +206,7 @@ function frame(now:number){
     feel.hunch(dt,now,stage.camera,rat.entity.dead?undefined:rat.entity,hunchRats);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
+    stage.renderer.toneMappingExposure=1.1*feel.exposure;
     feel.beforeRender(stage.camera);
     stage.renderer.render(stage.scene,stage.camera);
     feel.afterRender(stage.camera);

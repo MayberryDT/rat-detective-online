@@ -104,6 +104,8 @@ export class GameSession {
     private releasePreparedModels?:()=>void;
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
+    /** The stage's own exposure; Blackout scales it. */
+    private baseExposure = 1;
     private compiling?:Promise<unknown>;
     private compileTimer?:ReturnType<typeof setTimeout>;
     private readonly lineup?:PoliceLineup;
@@ -143,6 +145,7 @@ export class GameSession {
         this.foley.setEnabled(false);
         this.gun = new CheeseGun(scene, world, listener);
         this.feel.attach(this.stage.renderer.domElement, listener, touchControlsAvailable());
+        this.baseExposure=this.stage.renderer.toneMappingExposure;
         this.feel.attachScene(scene);
         this.lineup=new PoliceLineup(scene,typeof document==='undefined'?undefined:document,()=>this.feel.flashbulb());
         this.remotes = new RemotePlayers(scene, world);
@@ -238,7 +241,7 @@ export class GameSession {
         this.shotsAttempted++;
         const shot = this.gun.shoot(this.rat.entity, target);
         if(!shot)return;
-        this.feel.shot(shot.shotId);this.feel.badAmmo(shot.shotId,shot.origin,shot.direction,true,this.stage.camera);
+        this.feel.shot(shot.shotId);this.feel.fired(shot.shotId,shot.origin,shot.direction,true,this.stage.camera);
         const movement=this.movementInput(),viewAt=this.remotes.viewAt?.(shot.origin,shot.direction);
         if (movement && this.transport.send({type:'shoot', ...shot, movement, ...(viewAt===undefined?{}:{viewAt})})) {
             this.rememberMovement(movement,performance.now());
@@ -369,7 +372,7 @@ export class GameSession {
             case 'playerShot': {
                 if(message.shooterId===this.myId){this.netplay?.lap(message.shotId,'confirmed');this.chaos?.launch(message);break;}
                 const owner = this.remotes.get(message.shooterId);
-                if (owner) {this.gun.replayShot(owner, message);this.feel.badAmmo(message.shotId,message.origin,message.direction,false,this.stage.camera);}
+                if (owner) {this.gun.replayShot(owner, message);this.feel.fired(message.shotId,message.origin,message.direction,false,this.stage.camera);}
                 break;
             }
             case 'shotResult':
@@ -631,6 +634,7 @@ export class GameSession {
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
         if(!this.compiling){
+            renderer.toneMappingExposure=this.baseExposure*this.feel.exposure;
             this.feel.beforeRender(camera);
             renderer.render(scene, camera);
             this.feel.afterRender(camera);

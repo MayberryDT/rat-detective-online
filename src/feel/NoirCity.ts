@@ -10,40 +10,48 @@ import {feelState} from './feelState';
  * Rats, cheese, cases, pickups and cameos are never patched: anything created
  * after the city, or under an object tagged `userData.noNoir`, is left alone. */
 export class NoirCity {
-    private readonly lit={noirDrain:{value:0},noirGamma:{value:1}};
-    private readonly unlit={noirDrain:{value:0},noirGamma:{value:1}};
+    /** Blackout darkness 0…1, shared by every patched material. */
+    private readonly dark={value:0};
+    private readonly lit={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark};
+    private readonly unlit={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark};
+    /** Additive glows (lamp haze, light shafts) only go dark with the power. */
+    private readonly glow={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark};
     private readonly patched=new Set<THREE.Material>();
 
     constructor(scene:THREE.Scene){this.collect(scene);}
 
-    private collect(object:THREE.Object3D):void {
-        if(object.userData.noNoir)return;
+    private collect(object:THREE.Object3D,lightOnly=false):void {
+        if(object.userData.noNoir&&!lightOnly)return;
         if(object instanceof THREE.Mesh||object instanceof THREE.Points||object instanceof THREE.Line)
-            for(const material of Array.isArray(object.material)?object.material:[object.material])this.patch(material);
-        for(const child of object.children)this.collect(child);
+            for(const material of Array.isArray(object.material)?object.material:[object.material])this.patch(material,lightOnly);
+        for(const child of object.children)this.collect(child,lightOnly);
     }
 
-    private patch(material:THREE.Material):void {
+    /** City dressing built after the city (neon, haze, rain) only follows the Blackout. */
+    adopt(root:THREE.Object3D):void {this.collect(root,true);}
+
+    private patch(material:THREE.Material,lightOnly=false):void {
         if(this.patched.has(material))return;
+        if(material instanceof THREE.ShaderMaterial){this.patchShader(material);return;}
         const unlit=material instanceof THREE.MeshBasicMaterial;
         if(!unlit&&!(material instanceof THREE.MeshStandardMaterial)&&!(material instanceof THREE.MeshLambertMaterial)&&!(material instanceof THREE.MeshPhongMaterial))return;
-        // Additive glows (lamp haze, light shafts) are light, not surfaces.
-        if(material.blending===THREE.AdditiveBlending)return;
+        // Additive glows (lamp haze, light shafts) are light, not surfaces: no drain or contrast.
+        const additive=material.blending===THREE.AdditiveBlending;
         this.patched.add(material);
-        const uniforms=unlit?this.unlit:this.lit;
+        const uniforms=additive||lightOnly?this.glow:unlit?this.unlit:this.lit;
         const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
         material.onBeforeCompile=(shader,renderer)=>{
             compile.call(material,shader,renderer);
             Object.assign(shader.uniforms,uniforms);
             shader.fragmentShader=shader.fragmentShader
-                .replace('#include <common>','#include <common>\nuniform float noirDrain;\nuniform float noirGamma;')
+                .replace('#include <common>','#include <common>\nuniform float noirDrain;\nuniform float noirGamma;\nuniform float noirDark;')
                 .replace('#include <color_fragment>',`#include <color_fragment>
                     float noirLuma=dot(diffuseColor.rgb,vec3(.299,.587,.114));
                     diffuseColor.rgb=mix(diffuseColor.rgb,noirLuma*vec3(.84,.91,1.08),noirDrain);`)
-                .replace('#include <dithering_fragment>',`gl_FragColor.rgb=pow(max(gl_FragColor.rgb,vec3(0.)),vec3(noirGamma));
+                .replace('#include <dithering_fragment>',`gl_FragColor.rgb=pow(max(gl_FragColor.rgb,vec3(0.)),vec3(noirGamma))*(1.-noirDark);
                     #include <dithering_fragment>`);
         };
-        material.customProgramCacheKey=()=>key+'-noir-city-v1';
+        material.customProgramCacheKey=()=>key+'-noir-city-v2';
         material.needsUpdate=true;
     }
 
@@ -55,9 +63,27 @@ export class NoirCity {
         this.unlit.noirDrain.value=drain*.35;this.unlit.noirGamma.value=1+(gamma-1)*.4;
     }
 
+    /** Custom shaders (light beams, haze) have no shared chunks: they only dim with the Blackout. */
+    private patchShader(material:THREE.ShaderMaterial):void {
+        this.patched.add(material);
+        const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
+        material.onBeforeCompile=(shader,renderer)=>{
+            compile.call(material,shader,renderer);
+            shader.uniforms.noirDark=this.dark;
+            const end=shader.fragmentShader.lastIndexOf('}');
+            shader.fragmentShader='uniform float noirDark;\n'+shader.fragmentShader.slice(0,end)+'gl_FragColor*=1.-noirDark;\n}'+shader.fragmentShader.slice(end+1);
+        };
+        material.customProgramCacheKey=()=>key+'-noir-dark-v1';
+        material.needsUpdate=true;
+    }
+
+    /** Blackout: 0 (power on) … 1 (every city light and surface dark). */
+    setDark(level:number):void {this.dark.value=level;}
+
     /** Leave patched materials visually neutral (they are disposed with the city). */
     dispose():void {
         for(const uniforms of [this.lit,this.unlit]){uniforms.noirDrain.value=0;uniforms.noirGamma.value=1;}
+        this.dark.value=0;
         this.patched.clear();
     }
 }

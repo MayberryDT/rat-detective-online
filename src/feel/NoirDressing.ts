@@ -41,7 +41,7 @@ interface Sign {mesh:THREE.Mesh;material:THREE.MeshBasicMaterial;flicker:number;
  * on landmark facades, the city's only saturated colour; they buzz and flicker).
  * Decals and emissive planes only: no new lights, no collision. */
 export class NoirDressing {
-    private readonly root=new THREE.Group();
+    readonly root=new THREE.Group();
     private readonly blinds:THREE.InstancedMesh;
     private readonly signs:Sign[]=[];
     private time=0;private seed=4242;
