@@ -74,7 +74,7 @@ export class Hunch {
             if(holding)this.sound.hunchGained();else if(self&&!self.dead)this.sound.hunchLost();
             this.holding=holding;
         }
-        self?.billboard.setHunch(holding,this.supercharged);
+        self?.billboard.setHunch(holding);
         let shutter=false;
         for(const [id,{entity}] of rats){
             const on=this.sensed.has(id);
