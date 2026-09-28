@@ -161,6 +161,23 @@ Tyler: "I love all of this… do all of it." Straight-up launches every time are
 - [x] **B5 Review package:** checks, one independent review, private preview.
 - **Status (2026-09-28):** built on `juice/launch-ragdoll` and on the private preview (fixture `a6694db9-8cf9-4006-8bc8-141dbe794e24`, client `index-DaBhjsfX.js`, protocol 21) for Tyler's playtest. One independent review found 8 issues (misfire time key, bot roof routes vs drift, movement envelope widened for everyone, restore inside a tell, counterfeit restored mid-air, rolling hat never resting, ear flap overwritten, instanced buffers not freed); all fixed in `2072d92`. What to look for: [review guide](juice/review.md#fifth-batch-launchers-ragdolls-and-the-living-model-protocol-21).
 
+## Sixth batch: launcher machines, pressure triggers and Pressure Surge (design agreed 2026-09-28, not started)
+
+Tyler playtested the fifth batch ("this is looking amazing") and asked for better launcher models, launch animations, a new trigger and a more chaotic Pressure Surge. Tyler said go on 2026-09-28. Branch `juice/launch-machines` (from `juice/launch-ragdoll`), one commit per item.
+
+- **Models:** all six machines rebuilt in code first (richer procedural geometry); Tyler judges, then decide whether to go further.
+- **Triggers:** the remote red caps go. Each machine has its own big, bright red trigger on the machine itself, with a bright red outline (fine for triggers, unlike rats): Pressure Works valve wheel, Trash Compactor CRUSH plunger, Freight Ram emergency-stop button, Sewer Geyser hydrant valve cap, Rat Trap red-waxed cheese bait, Wind Tunnel motor housing with knife switch.
+- **Pressure (Tyler's measure):** full = 10 seconds of one rat standing on the pad. Each trigger hit adds 1 second's worth. Pressure never leaks; it only resets to zero when the machine fires. So a machine left half-full is a loaded trap.
+- **Build-up juice:** four readable stages (building, straining, danger, blow): needle, pulsing trigger, swelling and rattling machine, steam from more seams, groans, red glow, siren, knees wobbling on the pad, plus each machine's own strain (bulging boiler, leaking lid, ram drawing back, hopping manhole cover, creaking trap bar, spinning blades). Steam plume height and loudness show pressure from across the city. No HUD changes.
+- **Pressure Surge:** the whole city becomes launchers (manholes, hydrants, grates and vents erupt after a steam warning), suction pulls rats and objects toward pads between pulses, the surge look (street steam, lights flickering with pulses, rising rumble and shake), and a finale blowout where everything fires at once. No pressure HUD; the rolling wave is dropped.
+- **Settled:** riders stack (two rats fill it in 5 s); every cheese ball that hits a trigger counts; when full, a machine hangs 0.5 s "about to blow" and any hit then makes an overpressure (the random one-in-seven roll goes); after firing, a 1 s cooldown before it can fill again; every full machine throws with its usual personality; during Pressure Surge machines fill themselves (5 s from empty, speeding up), street launchers erupt after a 1 s steam warning, and the finale sets everything off as overpressure.
+
+- [ ] **P1 Pressure triggers:** the pressure model on the server, the trigger moved onto each machine, bots stand and shoot.
+- [ ] **P2 Machines:** six rebuilt models with their red triggers and outlines, the four build-up stages and each machine's launch animation and sound.
+- [ ] **P3 Surge chaos:** street launchers across the city, suction toward pads, machines filling themselves, the finale blowout.
+- [ ] **P4 Surge look:** street steam, lights flickering with the pulses, rising rumble and shake; street-launcher warning and eruption.
+- [ ] **P5 Review package:** checks, one independent review, private preview.
+
 **Later (not now):**
 - **Launcher overhaul.** Make the launchers far more chaotic and much juicier, including how the case interacts with them.
 - **Bot overhaul.** How bots act, their decision-making and how they work.
