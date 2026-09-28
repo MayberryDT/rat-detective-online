@@ -6,6 +6,8 @@ import {CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../../src/shared/grayboxLayout'
 import {MAX_HP,type PlayerData} from '../../src/shared/networkProtocol';
 import {createPlayer,spawnForWorld} from '../../src/worker/gameState';
 import type {IncidentId} from '../../src/shared/incidentCatalog';
+import {parseServerMessage} from '../../src/shared/messageValidation';
+import {badRound,resolveShotPattern} from '../../src/shared/shotPattern';
 
 afterEach(()=>vi.restoreAllMocks());
 const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
@@ -97,12 +99,27 @@ describe('fourth-batch incidents',()=>{
         const {sim,players}=active('all-units');
         sim.step(1/60,now+16);
         const target=sim.allUnitsTarget!;expect(target).toBeDefined();
+        // Wherever the case is (street or sewer), the respawn is among the closest supported spots.
+        const ordinary=spawnForWorld(spec,()=>.5,players.values(),'a');
         for(let i=0;i<20;i++){
             const spawn=spawnForWorld(spec,Math.random,players.values(),'a',undefined,target);
             const d=Math.hypot(spawn.x-target.x,spawn.z-target.z);
-            expect(d).toBeGreaterThanOrEqual(10);expect(d).toBeLessThanOrEqual(30);
+            expect(d).toBeGreaterThanOrEqual(10);expect(d).toBeLessThan(45);
+            expect(d).toBeLessThan(Math.max(45,Math.hypot(ordinary.x-target.x,ordinary.z-target.z)));
         }
         const quiet=active('scattershot');quiet.sim.step(1/60,now+16);
         expect(quiet.sim.allUnitsTarget).toBeUndefined();
+    });
+
+    it('clients accept the new heal causes and the launch samples of Rat Race and dud shots',()=>{
+        for(const cause of ['pickup','incident','bounty'] as const)
+            expect(parseServerMessage({type:'playerHealed',id:'a',hp:MAX_HP,cause})).toMatchObject({cause});
+        expect(parseServerMessage({type:'playerHealed',id:'a',hp:MAX_HP,cause:'magic'})).toBeNull();
+        let dud='';for(let i=0;!dud;i++)if(badRound(`d-${i}`).round==='dud')dud=`d-${i}`;
+        for(const [shotId,incident] of [['race','rat-race'],[dud,'bad-ammunition']] as const){
+            const shot={shotId,origin:{x:0,y:2,z:0},direction:{x:.6,y:.1,z:.8}};
+            const balls=resolveShotPattern(shot,incident).map(({id,velocity})=>({id,velocity}));
+            expect(parseServerMessage({type:'playerShot',shooterId:'a',...shot,launch:{at:1,balls}}),incident).not.toBeNull();
+        }
     });
 });

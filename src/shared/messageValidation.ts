@@ -26,7 +26,7 @@ import {
   type MovementInput,
   type WorldSpec,
 } from './networkProtocol';
-import { CHAOS_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, type ChaosState } from './chaosState';
+import { CHAOS_TUNING, INCIDENT_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, type ChaosState } from './chaosState';
 import { PICKUP_ANCHORS, isPickupKind } from './pickups';
 import { isSupportedWorldVersion } from './worldSpec';
 
@@ -543,7 +543,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         for(const ball of balls){
           if(!isRecord(ball))return null;
           const id=nonEmptyString(ball.id,64),velocity=parseVec3(ball.velocity);
-          if(!id||!velocity||ids.has(id)||Math.abs(Math.hypot(velocity.x,velocity.y,velocity.z)-BALL_SPEED)>.01)return null;
+          // Presentation-only sample: any speed a pattern can fire (a Bad Ammunition dud up to Rat Race).
+          const speed=velocity?Math.hypot(velocity.x,velocity.y,velocity.z):0;
+          if(!id||!velocity||ids.has(id)||!(speed>0)||speed>BALL_SPEED*INCIDENT_TUNING.ratRaceShotSpeed+.01)return null;
           ids.add(id);resolved.push({id,velocity});
         }
         if(resolved[0].id!==shot.shotId)return null;
@@ -596,7 +598,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     case 'playerHealed': {
       const id = nonEmptyString(parsed.id, 64);
       const hp = boundedInteger(parsed.hp, 1, MAX_HP);
-      if (!id || hp === null || (parsed.cause !== undefined && parsed.cause !== 'pickup')) return null;
+      if (!id || hp === null || (parsed.cause !== undefined && parsed.cause !== 'pickup' && parsed.cause !== 'incident' && parsed.cause !== 'bounty')) return null;
       return { type: 'playerHealed', id, hp, ...(parsed.cause === 'pickup' || parsed.cause === 'incident' || parsed.cause === 'bounty' ? {cause:parsed.cause} : {}) };
     }
     case 'playerDied': {

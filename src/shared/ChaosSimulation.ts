@@ -508,11 +508,13 @@ export class ChaosSimulation {
                 const d=Math.hypot(player.x-site.p.x,player.z-site.p.z);if(d<distance){distance=d;nearest=player;}
             }
             if(!nearest)continue;
+            // Throttle the search whether or not a spot is found; the support check is not cheap.
+            this.kitHopAt.set(id,now+I.malpracticeHopMs);
             const away=Math.atan2(site.p.z-nearest.z,site.p.x-nearest.x);
             for(const turn of [0,.6,-.6,1.2,-1.2,1.9,-1.9]){
                 const angle=away+turn,next={x:site.p.x+Math.cos(angle)*I.malpracticeHop,y:site.p.y,z:site.p.z+Math.sin(angle)*I.malpracticeHop};
                 if(Math.hypot(next.x-home.x,next.z-home.z)>I.malpracticeLeash||!this.supportedSpot(next))continue;
-                site.p=next;this.kitHopAt.set(id,now+I.malpracticeHopMs);break;
+                site.p=next;break;
             }
         }
     }

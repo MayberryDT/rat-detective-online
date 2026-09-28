@@ -27,7 +27,7 @@ export class LocalShotPresentation {
         for(const ball of resolveShotPattern(shot,incident)){
             if(this.shots.has(ball.id)||this.retired.has(ball.id))continue;
             while(this.shots.size>=CHAOS_TUNING.maxShots)this.retire(this.shots.keys().next().value!);
-            this.shots.set(ball.id,{shot:{id:ball.id,owner,p:{...shot.origin},v:{...ball.velocity},age:0},
+            this.shots.set(ball.id,{shot:{id:ball.id,owner,p:{...shot.origin},v:{...ball.velocity},age:0,...(ball.dud?{dud:true as const}:{})},
                 trigger:shot.shotId,fired:now,updated:now,first:true,hidden:false,incident});
         }
     }
@@ -118,7 +118,7 @@ export class LocalShotPresentation {
             shot.p={x:hit.p.x+hit.n.x*.05,y:hit.p.y+hit.n.y*.05,z:hit.p.z+hit.n.z*.05};
             // A reflective coat bounces the ball instead of consuming it, and it
             // stays a rat contact: it never counts as a wall bounce for incidents.
-            if(hit.rat&&!hit.reflect)return true;
+            if(hit.rat&&!hit.reflect&&!shot.dud)return true;
             if(!hit.rat)shot.wallBounced=true;
             if(!hit.rat&&incident==='delayed-reaction'&&!shot.delayed){shot.delayed=true;shot.stuckUntil=Number.MAX_SAFE_INTEGER;shot.age+=Math.max(0,remaining-dt);return false;}
             const dot=shot.v.x*hit.n.x+shot.v.y*hit.n.y+shot.v.z*hit.n.z;

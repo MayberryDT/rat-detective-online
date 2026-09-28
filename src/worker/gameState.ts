@@ -15,16 +15,29 @@ import { generateRandomName } from '../shared/ratNames';
 import type { WorldSpec } from '../shared/worldSpec';
 import { choosePlayerSpawn, worldSpawnPoints } from '../shared/playerSpawns';
 
-/** All Units respawns land between these distances from the action, on its floor. */
-const ALL_UNITS_RING = { min: 10, max: 30, floor: 6 };
+/** All Units: respawn among the `choices` supported spawn points nearest the action (never closer than `min`). */
+const ALL_UNITS = { min: 10, choices: 12 };
 
 /** `near`: during All Units, respawn right beside the action instead of far from everyone. */
 export function spawnForWorld(spec: WorldSpec, random = Math.random, players: Iterable<PlayerData> = [], excludeId?: string, assignment?:AssignmentState, near?:Vec3Data): Vec3Data {
   const allowed = spawnFilter(assignment);
   if (near) {
-    const ring = worldSpawnPoints(spec).filter(p => (!allowed || allowed(p)) && Math.abs(p.y - near.y) < ALL_UNITS_RING.floor &&
-      Math.hypot(p.x - near.x, p.z - near.z) >= ALL_UNITS_RING.min && Math.hypot(p.x - near.x, p.z - near.z) <= ALL_UNITS_RING.max);
-    if (ring.length) return { ...ring[Math.min(ring.length - 1, Math.floor(random() * ring.length))]! };
+    // Nearest by true distance, so a case down in the sewer pulls respawns to the nearest street above it.
+    const away = (p: Vec3Data) => Math.hypot(p.x - near.x, (p.y - near.y) * 2, p.z - near.z);
+    const ring = worldSpawnPoints(spec).filter(p => (!allowed || allowed(p)) && Math.hypot(p.x - near.x, p.z - near.z) >= ALL_UNITS.min)
+      .sort((a, b) => away(a) - away(b)).slice(0, ALL_UNITS.choices);
+    if (ring.length) {
+      // Beside the action, but on the ring point farthest from any living rat.
+      const living = [...players].filter(p => p.hp > 0 && p.id !== excludeId), start = Math.min(ring.length - 1, Math.floor(random() * ring.length));
+      let best = ring[start]!, bestDistance = -1;
+      for (let i = 0; i < ring.length; i++) {
+        const point = ring[(start + i) % ring.length]!;
+        let nearest = Infinity;
+        for (const player of living) nearest = Math.min(nearest, (player.x - point.x) ** 2 + (player.z - point.z) ** 2);
+        if (nearest > bestDistance) { best = point; bestDistance = nearest; }
+      }
+      return { ...best };
+    }
   }
   return choosePlayerSpawn(spec, [...players].filter(p => p.hp > 0 && p.id !== excludeId), random, allowed);
 }
