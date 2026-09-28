@@ -101,7 +101,7 @@ export class DispatchHud {
         const artwork=d.phase==='active'?info.id:'dispatch';
         if(this.artwork.dataset.incident!==artwork){this.artwork.dataset.incident=artwork;this.artwork.innerHTML=incidentArtwork(artwork);}
         setText(this.alertLabel,d.phase==='active'?'CITYWIDE EMERGENCY':d.phase==='rolling'?'BRACE YOURSELF!':d.phase==='cooldown'?'PLEASE STAND BY':'DISPATCH READY');
-        setText(this.brief,d.phase==='active'?INCIDENT_QUIPS[info.id]:d.phase==='rolling'?'Something extremely unwise is on its way.':d.phase==='cooldown'?'Cleaning up the paperwork.':'One little button. Citywide consequences.');
+        setText(this.brief,d.phase==='active'?INCIDENT_QUIPS[info.id]:d.phase==='rolling'?'Something extremely unwise is on its way.':d.phase==='cooldown'?'Cleaning up the paperwork.':'One little bell. Citywide consequences.');
         setText(this.status,d.phase==='ready'?'DISPATCH READY':d.phase==='rolling'?'DISPATCH INCOMING':d.phase==='active'?info.title:'LINE BUSY');
         setText(this.timer,d.phase==='ready'?'READY':`${remaining}s`);
         const total=d.phase==='rolling'?CHAOS_TUNING.rollMs:d.phase==='active'?CHAOS_TUNING.activeMs:CHAOS_TUNING.cooldownMs;

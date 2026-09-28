@@ -114,7 +114,7 @@ export class ChaosSimulation {
     private readonly thrownUntil=new Map<string,number>();
     /** True while `playerId` may still be riding a throw or shove (movement validation widens for it). */
     thrown(playerId:string,at:number):boolean {return (this.thrownUntil.get(playerId)??-Infinity)>=at;}
-    private notice={serial:0,text:'Find the Hot Case. Shoot Dispatch.'};
+    private notice={serial:0,text:'Find the Hot Case. Ring the alarm bell.'};
     private now=Date.now();
     private epoch:string=crypto.randomUUID();
     private tick=0;
