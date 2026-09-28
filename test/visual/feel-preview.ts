@@ -164,6 +164,7 @@ const actions:Record<string,()=>void>={
     'Most Wanted: suspect 2':()=>{wantedSuspect='suspect-1';},
     'Most Wanted: nobody':()=>{wantedSuspect=undefined;},
     'Malpractice: kit fidgets and hops':()=>{kit.setNervous(true);const p=kit.root.position;kit.setPosition(p.x+4,p.y+.7,p.z+1.5);},
+    'Show your nameplate':()=>{rat.entity.billboard.sprite.visible=true;},
     'Hunch: turn around':()=>rat.onMouseMove(1570.8,0),
 };
 const buttons=document.getElementById('feel-buttons')!;
