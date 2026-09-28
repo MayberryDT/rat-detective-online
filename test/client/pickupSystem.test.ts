@@ -29,41 +29,36 @@ const sites=(sim:ChaosSimulation)=>{const s=sim.snapshot(false);return s.pickups
 const site=(sim:ChaosSimulation,kind:string)=>sites(sim).find(p=>p.kind===kind);
 
 describe('pickup system',()=>{
-    it.each([341283204,CITY_PREVIEW_SEED])('puts four new medkits at exposed junction centers, away from other upgrades (seed %i)',seed=>{
+    it.each([341283204,CITY_PREVIEW_SEED])('gives every supply site a reason: lone armor, sprint starts, alley medkits (seed %i)',seed=>{
         const sim=new ChaosSimulation(new Map(),()=>{},undefined,{seed,version:GRAYBOX_VERSION});
-        const all=sim.snapshot(false).pickups!,medkits=all.filter(p=>p.kind==='quick-fix');
-        expect(medkits.map(({x,y,z})=>[x,y,z])).toEqual([[-60,.7,-102],[70,.7,-102],[-60,.7,130],[90,.7,95]]);
-        expect(all).toHaveLength(18);
-        for(const kit of medkits){
-            expect(kit.id).toMatch(/^fix-(northwest|northeast|southwest|southeast)-junction$/);
-            for(const other of all.filter(p=>p.id!==kit.id))
-                expect(Math.hypot(kit.x-other.x,kit.z-other.z),`${kit.id} / ${other.id}`).toBeGreaterThan(other.kind==='quick-fix'?125:48);
-            // An open collection area plus long views along at least three
-            // approaches makes these contested street supplies, not alley finds.
-            const start=new C.Vec3(kit.x,1,kit.z);
-            for(let i=0;i<8;i++)expect(sim.world.raycastClosest(start,
-                new C.Vec3(kit.x+Math.cos(i*Math.PI/4)*8,1,kit.z+Math.sin(i*Math.PI/4)*8),{collisionFilterMask:1})).toBe(false);
-            let approaches=0;
-            for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])
-                if(!sim.world.raycastClosest(start,new C.Vec3(kit.x+dx*24,1,kit.z+dz*24),{collisionFilterMask:1}))approaches++;
-            expect(approaches,kit.id).toBeGreaterThanOrEqual(3);
+        const all=sim.snapshot(false).pickups!;
+        expect(all).toHaveLength(PICKUP_ANCHORS.length);
+        const armor=all.filter(p=>p.kind==='ironclad'),kits=all.filter(p=>p.kind==='quick-fix');
+        // Ironclad is rare and never stacked floor-over-roof on one landmark.
+        expect(armor.length).toBeLessThanOrEqual(5);
+        for(const a of armor)for(const b of armor)if(a!==b)expect(Math.hypot(a.x-b.x,a.z-b.z),`${a.id} / ${b.id}`).toBeGreaterThan(40);
+        const blocked=(p:{x:number;y:number;z:number},dx:number,dz:number,reach:number)=>
+            sim.world.raycastClosest(new C.Vec3(p.x,p.y+.3,p.z),new C.Vec3(p.x+dx*reach,p.y+.3,p.z+dz*reach),{collisionFilterMask:1});
+        for(const kit of kits){
+            // An alley: walls close on both sides of one axis, the other axis open to walk through.
+            const eastWest=blocked(kit,1,0,10)&&blocked(kit,-1,0,10),northSouth=blocked(kit,0,1,10)&&blocked(kit,0,-1,10);
+            expect(eastWest!==northSouth,kit.id).toBe(true);
+            const open=eastWest?[[0,1],[0,-1]]:[[1,0],[-1,0]];
+            expect(open.some(([dx,dz])=>!blocked(kit,dx!,dz!,10)),kit.id).toBe(true);
         }
     });
 
-    it('retires old medkit sites when restoring a room while retaining other supply deadlines',()=>{
+    it('retires sites that are no longer authored when restoring a room while retaining other supply deadlines',()=>{
         const {sim,players,now}=fixture(),saved=sim.snapshot(false);
-        saved.pickups=saved.pickups!.filter(p=>p.kind!=='quick-fix');
-        saved.pickups[0].availableAt=now+30_000;
-        for(const [id,x,z] of [['fix-sluice',-52,-68],['fix-midtown',-60,100],['fix-east',82,60],['fix-gate',-108,-28]] as const)
-            saved.pickups.push({id,x,y:.7,z,kind:'quick-fix',availableAt:now+30_000});
+        saved.pickups![0]!.availableAt=now+30_000;
+        for(const [id,x,z] of [['fix-northwest-junction',-60,-102],['alibi-records-roof',-16,-43]] as const)
+            saved.pickups!.push({id,x,y:.7,z,kind:id.startsWith('fix')?'quick-fix':'ironclad',availableAt:now+30_000});
         const restored=new ChaosSimulation(players,()=>{},saved,spec).snapshot(false).pickups!;
-        expect(restored).toHaveLength(18);
-        expect(restored.filter(p=>p.kind==='quick-fix')).toHaveLength(4);
-        expect(restored.filter(p=>p.kind==='quick-fix').every(p=>p.id.endsWith('-junction')&&p.availableAt===0)).toBe(true);
-        expect(restored.find(p=>p.id===saved.pickups![0].id)?.availableAt).toBe(now+30_000);
+        expect(restored.map(p=>p.id).sort()).toEqual(PICKUP_ANCHORS.map(a=>a.id).sort());
+        expect(restored.find(p=>p.id===saved.pickups![0]!.id)?.availableAt).toBe(now+30_000);
     });
 
-    it('places Icebox armor outside its racks and speed packs six units in front of every portal',()=>{
+    it('places Icebox armor outside its racks and speed packs six units in front of the long-tunnel portals',()=>{
         const {sim}=fixture(),all=sites(sim),armor=all.find(p=>p.id==='alibi-icebox-upper')!;
         expect(armor).toMatchObject({x:116,y:8.7,z:-84});
         for(const f of LANDMARK_FURNISHINGS){
@@ -71,7 +66,7 @@ describe('pickup system',()=>{
             if(foot+2<f.y-f.h/2||foot>f.y+f.h/2)continue;
             expect(Math.hypot(Math.max(0,Math.abs(armor.x-f.x)-f.w/2),Math.max(0,Math.abs(armor.z-f.z)-f.d/2))).toBeGreaterThan(1);
         }
-        for(const entry of SEWER_PIPE_ENTRANCES){
+        for(const entry of SEWER_PIPE_ENTRANCES.filter(e=>e.axis==='x')){
             const front=sewerPipePoint(entry,-6);
             expect(all.some(p=>p.kind==='hustle'&&Math.hypot(p.x-front.x,p.z-front.z)<.01)).toBe(true);
         }
@@ -237,10 +232,7 @@ it('keeps upper-floor rewards unavailable to a rat directly below them',()=>{
     stand(a,{...upper,y:8});sim.step(1/60,now+40);
     expect(sites(sim).some(p=>p.id===upper.id)).toBe(false);
 });
-it('has four contested street medkits, four tunnel speed sites and no street armor',()=>{
-    const {sim}=fixture(),all=sites(sim);
-    expect(all.filter(p=>p.kind==='quick-fix')).toHaveLength(4);
-    expect(all.filter(p=>p.kind==='hustle')).toHaveLength(4);
-    expect(all.filter(p=>p.kind==='ironclad')).toHaveLength(10);
-    expect(all.filter(p=>p.kind==='ironclad').every(p=>p.y>8||p.y<0)).toBe(true);
+it('never puts armor on the street',()=>{
+    const {sim}=fixture();
+    expect(sites(sim).filter(p=>p.kind==='ironclad').every(p=>p.y>8||p.y<0)).toBe(true);
 });

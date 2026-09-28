@@ -41,6 +41,13 @@ const status=document.getElementById('feel-status')!;
 const lineup=new PoliceLineup(stage.scene,document,()=>feel.flashbulb());
 // A Quick Fix kit around the corner (behind the right-hand buildings) for the last-hit-point x-ray.
 const kit=new PickupVisual(stage.scene,'quick-fix');kit.setPosition(-14,.5,6);
+const coat=new PickupVisual(stage.scene,'ironclad'),shoes=new PickupVisual(stage.scene,'hustle');coat.setPosition(0,-50,0);shoes.setPosition(0,-50,0);
+/** Line the three supplies up `ahead` units in front of the camera for inspection. */
+function supplies(ahead:number):void {
+    rat.updateView();stage.camera.getWorldDirection(aim);aim.setY(0).normalize();
+    const side=new THREE.Vector3(-aim.z,0,aim.x),base=rat.entity.mesh.position.clone().addScaledVector(aim,ahead);
+    [coat,shoes,kit].forEach((prop,i)=>{const p=base.clone().addScaledVector(side,(i-1)*3.2);prop.setPosition(p.x,.7,p.z);});
+}
 const aim=new THREE.Vector3();
 const impacts=new CheeseImpactEffects(stage.scene);
 const ray=new THREE.Raycaster(),blockers=stage.scene.children.filter(o=>o.userData.aimTarget===true);
@@ -147,6 +154,9 @@ const actions:Record<string,()=>void>={
     'Hunch: you make them (photo)':()=>blink('you'),
     'Hunch: they make you (card)':()=>blink('them'),
     'Hunch: Clean Bill supercharge':()=>feel.setIncident('clean-bill'),
+    'Supplies: three props 7 ahead':()=>supplies(7),
+    'Supplies: three props 22 ahead':()=>supplies(22),
+    'Supplies: restocking':()=>{for(const prop of [coat,shoes,kit])prop.setAvailableAt(performance.now()+20_000);},
     'Hunch: turn around':()=>rat.onMouseMove(1570.8,0),
 };
 const buttons=document.getElementById('feel-buttons')!;
@@ -187,7 +197,7 @@ function frame(now:number){
     rat.update(dt,{});gun.update(dt);impacts.update(dt);
     const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(stage.camera.fov)/2)/innerHeight;
     for(const suspect of suspects){suspect.update(dt);suspect.fitOutline(stage.camera.position,unitsPerPixel);}
-    kit.update(performance.now(),stage.camera);
+    for(const prop of [kit,coat,shoes])prop.update(performance.now(),stage.camera);
     feel.footsteps(dt,suspects.map((s,i)=>({id:`suspect-${i}`,position:s.mesh.position})),rat.entity.mesh.position,stage.camera);
     city.update(dt,stage.camera,rat.entity.body.position);
     feel.hunch(dt,now,stage.camera,rat.entity.dead?undefined:rat.entity,hunchRats);

@@ -1,3 +1,4 @@
+import {PICKUP_ANCHORS} from '../../src/shared/pickups';
 import {afterEach,expect,it,vi} from 'vitest';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {ServerBotController} from '../../src/worker/ServerBotController';
@@ -35,7 +36,6 @@ it.each(BOT_LAUNCH_LINKS)('uses the real $machine.id trigger and flight to conte
 
 it.each([
     ['alibi-records-upper',-16,-30],['alibi-icebox-upper',130,-25],
-    ['alibi-needleworks-upper',-105,116],['alibi-pump-upper',144,145],
 ] as const)('plans from street level and climbs to %s', (id,x,z)=>{
     const now=1_000_000,spec={seed:341283204,version:2};vi.spyOn(Date,'now').mockReturnValue(now);vi.spyOn(Math,'random').mockReturnValue(.5);
     const bot=createPlayer('bot','Stair Inspector',DEFAULT_APPEARANCE,{x,y:0,z}),players=new Map([[bot.id,bot]]);
@@ -51,7 +51,7 @@ it.each([
     }finally{controller.dispose();}
 },30_000);
 
-it.each(BOT_LAUNCH_LINKS)('seeks $machine.id roof armor from the street and returns to street objectives',link=>{
+it.each(BOT_LAUNCH_LINKS.filter(link=>PICKUP_ANCHORS.some(a=>a.kind==='ironclad'&&a.x===link.landing.x&&a.z===link.landing.z)))('seeks $machine.id roof armor from the street and returns to street objectives',link=>{
     const now=1_000_000,spec={seed:341283204,version:2};vi.spyOn(Date,'now').mockReturnValue(now);vi.spyOn(Math,'random').mockReturnValue(.5);
     const bot=createPlayer('bot','Supply Inspector',DEFAULT_APPEARANCE,{x:link.machine.pad.x,y:0,z:link.machine.pad.z+6});
     const players=new Map([[bot.id,bot]]),sim=new ChaosSimulation(players,()=>{},undefined,spec);

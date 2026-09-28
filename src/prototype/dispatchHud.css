@@ -129,3 +129,12 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
  .dispatch-hud:has(.jurisdiction-timer:not([hidden])) :is(.dispatch-roulette,.assignment-reveal){top:calc(88px + env(safe-area-inset-top,0px))}
 }
 .touch-mode .dispatch-hud:has(.jurisdiction-timer:not([hidden])) .case-broadcast{top:calc(82px + env(safe-area-inset-top,0px))}
+/* Claim moment: the kicker types itself out and a rubber stamp slams onto the card. */
+.powerup-copy>small{overflow:hidden;white-space:nowrap;animation:powerup-type .5s steps(18,end) .08s both}
+@keyframes powerup-type{from{max-width:0}to{max-width:100%}}
+.powerup-stamp{position:absolute;left:50%;top:50%;padding:3px 10px;border:3px double #d8352a;color:#e0402f;font:700 17px/1 'Courier New',Courier,monospace;letter-spacing:2px;
+  white-space:nowrap;pointer-events:none;mix-blend-mode:screen;opacity:0;animation:powerup-stamp 1.7s cubic-bezier(.2,.9,.3,1.2) .28s both}
+@keyframes powerup-stamp{0%{opacity:0;transform:translate(-50%,-50%) rotate(-14deg) scale(2.6)}14%{opacity:.95;transform:translate(-50%,-50%) rotate(-9deg) scale(1)}
+  70%{opacity:.9;transform:translate(-50%,-50%) rotate(-9deg) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) rotate(-9deg) scale(1)}}
+@media(max-width:600px){.powerup-stamp{font-size:12px;letter-spacing:1px}}
+@media(prefers-reduced-motion:reduce){.powerup-copy>small{animation:none}}

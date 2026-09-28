@@ -6,16 +6,14 @@ import {createAssignment} from '../../src/shared/assignments';
 import {LANDMARK_INTERIORS} from '../../src/shared/landmarkLayout';
 import type {ChaosState} from '../../src/shared/chaosState';
 import {combatRandom} from '../../src/shared/BotCombat';
-import {PICKUP_ANCHORS} from '../../src/shared/pickups';
 
 afterEach(()=>vi.restoreAllMocks());
 const corners=LANDMARK_INTERIORS.flatMap(h=>[[-1,-1],[-1,1],[1,-1],[1,1]].map(([x,z])=>({
     ...h,start:{x:h.cx+x*(h.w/2-4),y:.3,z:h.cz+z*(h.d/2-4)},maxPause:2,
 })));
-const upstairs=LANDMARK_INTERIORS.map(h=>{
-    const p=PICKUP_ANCHORS.find(p=>p.id===`alibi-${h.id}-upper`)!;
-    return {...h,start:{x:p.x,y:p.y!-.7,z:p.z},maxPause:6};
-});
+// One open second-floor spot per landmark (feet height).
+const UPSTAIRS:Record<string,{x:number;z:number}>={records:{x:-16,z:-47},icebox:{x:116,z:-84},needleworks:{x:-105,z:96},pump:{x:144,z:118}};
+const upstairs=LANDMARK_INTERIORS.map(h=>({...h,start:{...UPSTAIRS[h.id]!,y:8},maxPause:6}));
 
 // Cold shared flow fields, actual city colliders and ordinary server movement.
 // A carrier must leave through a doorway without requiring a recovery teleport.

@@ -15,7 +15,7 @@ export function powerupCard(kind:PickupKind):HTMLElement {
     const card=document.createElement('div');card.className=`powerup-card powerup-${kind}`;
     const healing=kind==='quick-fix';
     const title=healing?'QUICK<br>FIX':kind==='ironclad'?'IRONCLAD<br>ALIBI':'HOT<br>PURSUIT';
-    card.innerHTML=`<div class="powerup-art">${pickupArtwork(kind)}</div><div class="powerup-copy"><small>${healing?'FIT FOR DUTY!':kind==='ironclad'?'NOTHING STICKS!':'MOVE IT, DETECTIVE!'}</small><strong>${title}</strong>${healing?'<div class="powerup-healed">HEALTH RESTORED</div>':'<div class="powerup-gauge"><i></i></div>'}</div><div class="powerup-clock"><b>${healing?'+':''}</b><small>${healing?'FULL HP':'SEC'}</small></div>`;
+    card.innerHTML=`<div class="powerup-art">${pickupArtwork(kind)}</div><div class="powerup-copy"><small>${healing?'FIT FOR DUTY!':kind==='ironclad'?'NOTHING STICKS!':'MOVE IT, DETECTIVE!'}</small><strong>${title}</strong>${healing?'<div class="powerup-healed">HEALTH RESTORED</div>':'<div class="powerup-gauge"><i></i></div>'}</div><div class="powerup-clock"><b>${healing?'+':''}</b><small>${healing?'FULL HP':'SEC'}</small></div><div class="powerup-stamp">${healing?'CLEARED FOR DUTY':kind==='ironclad'?'ALIBI ON FILE':'IN PURSUIT'}</div>`;
     card.setAttribute('aria-label',healing?'Quick Fix · health restored':kind==='ironclad'?'Ironclad Alibi':'Hot Pursuit');
     return card;
 }

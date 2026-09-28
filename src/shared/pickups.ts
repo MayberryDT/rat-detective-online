@@ -27,29 +27,25 @@ export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
     'quick-fix': { title: 'QUICK FIX', effect: 'Full health', flavor: 'Fit for duty. Allegedly.' },
 };
 
-/** Authored floor heights keep rewards on their intended routes. */
+/** Authored floor heights keep rewards on their intended routes. Every site has
+ * a reason: Ironclad is one hard trip per landmark, never stacked; Hot Pursuit
+ * waits where long runs start; Quick Fix hides in alleys just off the fights. */
 export interface PickupAnchor { id: string; kind: PickupKind; x: number; z: number; y?:number; near: string }
 export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
-    {id:'alibi-records-upper',kind:'ironclad',x:-16,z:-47,y:8.7,near:'Records Hall second floor'},
+    {id:'alibi-records-upper',kind:'ironclad',x:-16,z:-47,y:8.7,near:'Records Hall archive, second floor'},
     {id:'alibi-icebox-upper',kind:'ironclad',x:116,z:-84,y:8.7,near:'Icebox open rear catwalk'},
-    {id:'alibi-needleworks-upper',kind:'ironclad',x:-105,z:96,y:8.7,near:'Needleworks second floor'},
-    {id:'alibi-pump-upper',kind:'ironclad',x:144,z:118,y:8.7,near:'Pumping Station second floor'},
-    {id:'alibi-records-roof',kind:'ironclad',x:-16,z:-43,y:36.7,near:'Records Hall roof'},
-    {id:'alibi-icebox-roof',kind:'ironclad',x:130,z:-42,y:36.7,near:'Icebox roof'},
-    {id:'alibi-needleworks-roof',kind:'ironclad',x:-105,z:98,y:36.7,near:'Needleworks roof'},
-    {id:'alibi-pump-roof',kind:'ironclad',x:125,z:130,y:36.7,near:'Pumping Station roof'},
+    {id:'alibi-pump-roof',kind:'ironclad',x:125,z:130,y:36.7,near:'Pumping Station roof, by launcher only'},
     {id:'alibi-gate-roof',kind:'ironclad',x:-137,z:0,y:29.7,near:'Gate bridge roof'},
-    {id:'alibi-maintenance',kind:'ironclad',x:64,z:-37,y:-6.3,near:'Sewer maintenance'},
-    {id:'pursuit-gate-mouth',kind:'hustle',x:-148,z:0,y:.7,near:'Gate sewer entrance'},
-    {id:'pursuit-icebox-mouth',kind:'hustle',x:148,z:0,y:.7,near:'Icebox sewer entrance'},
-    {id:'pursuit-alley-mouth',kind:'hustle',x:0,z:148,y:.7,near:'Alley sewer entrance'},
-    {id:'pursuit-needleworks-mouth',kind:'hustle',x:-54,z:76,y:.7,near:'Needleworks sewer entrance'},
-    // Exposed junction centers, independently authored rather than snapped to
-    // nearby rat spawn points. New site IDs retire the former medkit locations.
-    {id:'fix-northwest-junction',kind:'quick-fix',x:-60,z:-102,y:.7,near:'Junction northwest of Records Hall'},
-    {id:'fix-northeast-junction',kind:'quick-fix',x:70,z:-102,y:.7,near:'Northern avenue junction west of Icebox'},
-    {id:'fix-southwest-junction',kind:'quick-fix',x:-60,z:130,y:.7,near:'Junction southeast of Needleworks'},
-    {id:'fix-southeast-junction',kind:'quick-fix',x:90,z:95,y:.7,near:'Junction northwest of Pump Station'},
+    {id:'alibi-maintenance',kind:'ironclad',x:64,z:-37,y:-6.3,near:'Sewer maintenance, deep and dark'},
+    {id:'pursuit-gate-mouth',kind:'hustle',x:-148,z:0,y:.7,near:'Gate sewer entrance, before the long tunnel east'},
+    {id:'pursuit-icebox-mouth',kind:'hustle',x:148,z:0,y:.7,near:'Icebox sewer entrance, before the long tunnel west'},
+    {id:'pursuit-north-avenue',kind:'hustle',x:70,z:-150,y:.7,near:'North end of Seventy Avenue, a straight sprint south'},
+    {id:'pursuit-south-avenue',kind:'hustle',x:-150,z:130,y:.7,near:'West end of the south avenue, a straight sprint east'},
+    {id:'fix-crossroads-west',kind:'quick-fix',x:-25.5,z:10,y:.7,near:'Alley between the central blocks, west of the crossroads'},
+    {id:'fix-crossroads-east',kind:'quick-fix',x:11.5,z:10,y:.7,near:'Alley between the central blocks, east of the crossroads'},
+    {id:'fix-south-central',kind:'quick-fix',x:-17,z:58,y:.7,near:'Alley between the south-central blocks'},
+    {id:'fix-icebox-alley',kind:'quick-fix',x:124,z:22,y:.7,near:'Alley between the shops south of the Icebox forecourt'},
+    {id:'fix-gate-lane',kind:'quick-fix',x:-100,z:-45,y:.7,near:'Service lane between Records Hall and the Gate'},
 ];
 
 /** Active timed effects on one rat. Absent keys mean no effect. */
