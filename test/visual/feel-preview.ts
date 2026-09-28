@@ -21,6 +21,9 @@ import {createPlayer} from '../../src/worker/gameState';
 import {MAX_HP} from '../../src/shared/networkProtocol';
 import {createRatMesh} from '../../src/utils/RatModel';
 import {RatAnimator,type DeathStyle} from '../../src/utils/RatAnimator';
+import {batchRigidMeshes} from '../../src/utils/RigidMeshBatch';
+import {feelState} from '../../src/feel/feelState';
+import * as CANNON from 'cannon-es';
 import {PressureMachine} from '../../src/prototype/PressureMachine';
 import {DispatchPillars} from '../../src/prototype/DispatchPillars';
 import {LAUNCH_MACHINES,PRESSURE_TUNING,DISPATCH_STATIONS,CHAOS_TUNING,type PressureState,type ChaosState} from '../../src/shared/chaosState';
@@ -178,9 +181,25 @@ const actions:Record<string,()=>void>={
     'L5 Hats blown off suspects':()=>{for(const s of suspects)s.blowHat(1.2);},
     'L5 Your launch (kick, scream, view)':()=>{feel.launched(rat.entity.mesh.position,true,false,stage.camera);const t=setInterval(()=>feel.motion(1/60,false,50,8,1),16);setTimeout(()=>{clearInterval(t);feel.motion(1/60,true,0,0,1);},1500);},
     'L6 Suspects launched (flail, contrails)':()=>{for(const s of suspects){s.body.velocity.set(4,38,0);s.body.wakeUp();s.playReaction('launch');feel.launched(s.mesh.position,false,false,stage.camera);}},
-    'R Corpse 4 ahead: fling, splay, dead face':()=>studioCorpse('fling',false),
-    'R Corpse 4 ahead: headshot':()=>studioCorpse('spin',true),
+    'R Corpse 4 ahead: fling, splay, dead face':()=>studioCorpse('fling',false,7,8),
+    'R Corpse 4 ahead: headshot':()=>studioCorpse('spin',true,4),
     'R Corpse 4 ahead: jolt':()=>corpse?.animator.joltDeath(1),
+    'R7 Body ahead: plain shot':()=>studioCorpse('default',false,4),
+    'R7 Body ahead: thrown like the server (32 u/s)':()=>studioCorpse('default',false,32),
+    'R7 Body ahead: explosion (fling)':()=>studioCorpse('fling',false,7,12),
+    'R7 Body ahead: launcher (flail)':()=>studioCorpse('flail',false,2,22),
+    'R7 Shoot the body: chest':()=>shootCorpse('rat-collar'),
+    'R7 Shoot the body: legs':()=>shootCorpse('rat-shoe-left'),
+    'R7 Suspect 2 dies: plain':()=>killSuspect('default',false),
+    'R7 Suspect 2 dies: headshot':()=>killSuspect('default',true),
+    'R7 Suspect 2 dies: explosion (fling)':()=>killSuspect('fling',false),
+    'R7 Suspect 2 dies: launcher (flail)':()=>{const v=suspects[1]!;if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});
+        v.body.velocity.set(0,30,0);v.body.wakeUp();v.playReaction('launch');setTimeout(()=>killSuspect('flail',false,false),450);},
+    'R7 Chain body off (old rigid corpse)':()=>feelState().set('ragdollBody',false),
+    'R7 Chain body on':()=>feelState().set('ragdollBody',true),
+    'R7 Watch the body from above':()=>{watchCorpse=1;rat.updateView=()=>{};rat.entity.mesh.visible=false;},
+    'R7 Watch the body from the side':()=>{watchCorpse=2;rat.updateView=()=>{};rat.entity.mesh.visible=false;},
+    'R7 Watch suspect 2 (local ragdoll)':()=>{watchCorpse=3;rat.updateView=()=>{};rat.entity.mesh.visible=false;},
     'M1 Suspects gasp':()=>{for(const s of suspects)s.startle();},
     'P Street launchers ahead':()=>{const at=performance.now()+1000;pressure.vents=[0,1,2].map(i=>{const p=ahead(6+i*4);return {id:`vent-${at}-${i}`,x:p.x+(i-1)*3,y:0,z:p.z,at};});},
     'P Surge look on':()=>{surging=true;feel.setIncident('pressure-surge');},
@@ -211,24 +230,52 @@ const actions:Record<string,()=>void>={
     'D Cooldown':()=>setDispatch('cooldown',CHAOS_TUNING.cooldownMs),
     'D Busy hit':()=>bellHit(true),
 };
-/** A scripted corpse 4 ahead: it drops from 2.5 units, rolls onto its back, bounces and
- * rests, so the ragdoll limbs, splay and dead face read at close range. */
-let corpse:{mesh:THREE.Group;animator:RatAnimator;age:number;at:THREE.Vector3}|undefined;
-function studioCorpse(style:DeathStyle,headshot:boolean):void {
-    if(corpse){corpse.mesh.removeFromParent();}
-    const mesh=createRatMesh(appearance),animator=new RatAnimator(mesh);
+/** A server-style corpse ahead: a box in the workshop world thrown the way the authority
+ * throws a body (ChaosSimulation.death: box, mass, damping, spin), drawn the way ChaosView
+ * draws corpses (batched, pose from the box, poseDeath). `speed` is along the view's side. */
+let corpse:{mesh:THREE.Group;animator:RatAnimator;box:CANNON.Body;age:number;speed:number;at:THREE.Vector3;view:THREE.Vector3}|undefined,watchCorpse=0;
+function studioCorpse(style:DeathStyle,headshot:boolean,speed:number,lift=4):void {
+    if(corpse){corpse.mesh.removeFromParent();stage.world.removeBody(corpse.box);}
+    const mesh=createRatMesh({...appearance,accessory:'scarf'}),animator=new RatAnimator(mesh);batchRigidMeshes(mesh);
     animator.setDeathStyle(style,headshot);stage.scene.add(mesh);
-    const side=stage.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize().cross(new THREE.Vector3(0,1,0));
-    corpse={mesh,animator,age:0,at:ahead(6).addScaledVector(side,1.6)};
+    const forward=stage.camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize(),side=forward.clone().cross(new THREE.Vector3(0,1,0));
+    const at=ahead(speed>20?9:4.5).addScaledVector(side,speed>20?-6:-1.6);
+    const box=new CANNON.Body({mass:2,shape:new CANNON.Box(new CANNON.Vec3(.48,.92,.38)),position:new CANNON.Vec3(at.x,.95,at.z),
+        collisionFilterGroup:8,collisionFilterMask:1,linearDamping:.015,angularDamping:.04});
+    box.quaternion.setFromEuler(0,Math.atan2(-forward.x,-forward.z),0);
+    box.velocity.set(side.x*speed,lift,side.z*speed);box.angularVelocity.set(side.z*15,5,-side.x*15);
+    stage.world.addBody(box);
+    corpse={mesh,animator,box,age:0,speed:0,at,view:forward.clone().negate().applyAxisAngle(new THREE.Vector3(0,1,0),.6)};
 }
-const lying=new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI/2,.6,0));
+const corpseOffset=new THREE.Vector3();
+Object.assign(window,{studioBody:()=>corpse});
 function poseStudioCorpse(dt:number):void {
+    if(watchCorpse===3){const p=suspects[1]!.mesh.position;stage.camera.position.set(p.x-1.5,Math.max(1.6,p.y+1.2),p.z+6);stage.camera.lookAt(p.x,p.y+.4,p.z);}
     if(!corpse)return;
-    const c=corpse,t=c.age+=dt,fall=Math.min(1,t/.55),bounce=t>.55&&t<.95?Math.sin((t-.55)/.4*Math.PI)*.45:0;
-    c.mesh.position.set(c.at.x,.3+(1-fall*fall)*2.5+bounce,c.at.z);
-    c.mesh.quaternion.slerpQuaternions(new THREE.Quaternion(),lying,Math.min(1,t/.6));
-    const impact=t-dt<.55&&t>=.55?1:t-dt<.95&&t>=.95?.5:0;
-    c.animator.poseDeath(t,dt,{x:t<.6?-5:0,y:0,z:t<.6?2:0},impact,t>1.1);
+    const c=corpse,b=c.box;c.age+=dt;
+    // The workshop world has frictionless ground; the authority's is 0.15 (about 3.75 u/s² of sliding drag).
+    const slide=Math.hypot(b.velocity.x,b.velocity.z);
+    if(b.position.y<1.05&&slide>0){const keep=Math.max(0,slide-3.75*dt)/slide;b.velocity.x*=keep;b.velocity.z*=keep;}
+    c.mesh.quaternion.set(b.quaternion.x,b.quaternion.y,b.quaternion.z,b.quaternion.w);
+    c.mesh.position.set(b.position.x,b.position.y,b.position.z).sub(corpseOffset.set(0,.95,0).applyQuaternion(c.mesh.quaternion));
+    const speed=b.velocity.length(),impact=Math.max(0,Math.min(1,(c.speed-speed-4)/20));c.speed=speed;
+    c.animator.poseDeath(c.age,dt,b.angularVelocity,impact,speed<.6);
+    // Follow the body from a fixed bearing: from above, or level from the side.
+    if(watchCorpse===1||watchCorpse===2){const d=watchCorpse===1?3:5;stage.camera.position.set(b.position.x+c.view.x*d,watchCorpse===1?4.6:Math.max(1.3,b.position.y+.6),b.position.z+c.view.z*d);stage.camera.lookAt(b.position.x,b.position.y-.3,b.position.z);}
+}
+/** A shot on the studio body at one part, as the authority applies it (kick + lift) and ChaosView reports it (point, normal). */
+function shootCorpse(part:string):void {
+    if(!corpse)return;
+    const at=corpse.mesh.getObjectByName(part)!.getWorldPosition(new THREE.Vector3()),normal=stage.camera.position.clone().sub(at).normalize();
+    const kick=normal.clone().multiplyScalar(-19);corpse.box.velocity.x+=kick.x;corpse.box.velocity.z+=kick.z;corpse.box.velocity.y+=3;corpse.box.wakeUp();
+    corpse.animator.joltDeath(1,at,normal);
+}
+/** Kill suspect 2 through the local ragdoll path, as GameSession applies a kill. */
+function killSuspect(style:DeathStyle,headshot:boolean,respawn=true):void {
+    const v=suspects[1]!;
+    if(v.dead&&respawn)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});
+    v.hp=1;v.setDeathStyle(style);if(headshot)v.markHeadshot();
+    v.takeDamage(1,new THREE.Vector3(style==='fling'?14:30,style==='fling'?18:0,6));
 }
 /** P2: the six launchers with a scripted pressure state the buttons set. */
 const machines=new PressureMachine(stage.scene,stage.listener.context as AudioContext);
