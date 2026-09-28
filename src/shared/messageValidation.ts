@@ -82,6 +82,11 @@ function parseVec3(value: unknown): Vec3Data | null {
   return { x, y, z };
 }
 
+/** parseVec3(value)!==null without building the vector (per-ball chaos validation). */
+function isVec3(value: unknown): boolean {
+  return isRecord(value) && finiteNumber(value.x) !== null && finiteNumber(value.y) !== null && finiteNumber(value.z) !== null;
+}
+
 function parseQuat(value: unknown): QuatData | null {
   if (!isRecord(value)) return null;
   const x = finiteNumber(value.x);
@@ -408,7 +413,7 @@ function parseChaos(value:unknown):ChaosState|null{
   if(assignment===null)return null;
   if(value.epoch!==undefined&&!nonEmptyString(value.epoch,64))return null;
   if(value.tick!==undefined&&(integer(value.tick)===null||Number(value.tick)<0))return null;
-  const pose=(v:unknown)=>isRecord(v)&&!!parseVec3(v.p)&&!!parseQuat(v.q)&&!!parseVec3(v.v)&&!!parseVec3(v.spin);
+  const pose=(v:unknown)=>isRecord(v)&&isVec3(v.p)&&!!parseQuat(v.q)&&isVec3(v.v)&&isVec3(v.spin);
   const c=value.case,d=value.dispatch;
   const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
     (c.previousOwner===null||nonEmptyString(c.previousOwner,64))&&(c.missileOwner===undefined||nonEmptyString(c.missileOwner,64))&&
@@ -444,15 +449,15 @@ function parseChaos(value:unknown):ChaosState|null{
   if(Object.keys(value.possession).length>64||Object.values(value.possession).some(v=>finiteNumber(v)===null))return null;
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
   if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||c.owner===null||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
-  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&parseVec3(s.p)&&parseVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.delayed===undefined||typeof s.delayed==='boolean')&&(s.explosive===undefined||s.explosive===true)&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.stuckUntil===undefined||finiteNumber(s.stuckUntil)!==null)))return null;
-  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&parseVec3(i.p)&&parseVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit'||i.cue==='armor-clang')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
+  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&isVec3(s.p)&&isVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.delayed===undefined||typeof s.delayed==='boolean')&&(s.explosive===undefined||s.explosive===true)&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.stuckUntil===undefined||finiteNumber(s.stuckUntil)!==null)))return null;
+  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&isVec3(i.p)&&isVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit'||i.cue==='armor-clang')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
   if(value.pressure!==undefined){
     const p=value.pressure;
     if(!isRecord(p)||integer(p.serial)===null||finiteNumber(p.until)===null||!Array.isArray(p.launches)||p.launches.length>MAX_LAUNCH_EVENTS)return null;
     if(p.cooldowns!==undefined&&(!isRecord(p.cooldowns)||Object.keys(p.cooldowns).length>LAUNCH_MACHINES.length||
       Object.entries(p.cooldowns).some(([id,until])=>!LAUNCH_MACHINES.some(m=>m.id===id)||finiteNumber(until)===null)))return null;
     if(!p.launches.every(e=>isRecord(e)&&nonEmptyString(e.id,128)&&nonEmptyString(e.playerId,64)&&
-      finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&parseVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)))return null;
+      finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&isVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)))return null;
   }
   const validated={...value,...(assignment?{assignment}:{})};
   if(isLegacyIncidentId(d.incident))return {...validated,dispatch:{...d,incident:incidentInfo(d.incident).id}} as unknown as ChaosState;
