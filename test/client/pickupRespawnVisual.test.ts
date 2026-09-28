@@ -16,7 +16,7 @@ describe('pickup restock presentation',()=>{
         const prop=new PickupVisual(scene,kind);prop.setAvailableAt(46000);prop.update(1000,camera);
         const dial=prop.root.getObjectByName('supply-restock-'+kind)!;
         const mesh=dial.children[0] as THREE.Mesh<THREE.PlaneGeometry,THREE.ShaderMaterial>;
-        const item=prop.root.children[3];
+        const item=prop.root.getObjectByName(({ironclad:'iron-trenchcoat-dummy',hustle:'red-wingtips','quick-fix':'doctors-bag'} as const)[kind])!;
         expect(item.visible).toBe(false);expect(mesh.material.uniforms.progress.value).toBe(0);
         expect(mesh.material.depthTest).toBe(true);expect(mesh.material.depthWrite).toBe(false);
         prop.update(23500,camera);expect(mesh.material.uniforms.progress.value).toBe(.5);

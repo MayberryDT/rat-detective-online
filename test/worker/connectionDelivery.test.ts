@@ -13,7 +13,7 @@ function state():ChaosState {
  const physical={p:{x:123.456789,y:12.456789,z:-123.456789},q:{x:.123,y:.234,z:.345,w:.901},v:{x:123.456,y:123.456,z:123.456},spin:{x:12.345,y:23.456,z:34.567}};
  const id=(n:number)=>`12345678-1234-1234-1234-${String(n).padStart(12,'0')}`;
  return {time:1000,extraCases:[],case:{...physical,owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},notice:{serial:0,text:'Test'},
- shots:Array.from({length:256},(_,i)=>({id:id(i),owner:id(1000+i%24),p:{...physical.p},v:{...physical.v},age:1.234567,original:true,wallBounced:i%2===0})),
+ shots:Array.from({length:256},(_,i)=>({id:id(i),owner:id(1000+i%24),p:{...physical.p},v:{...physical.v},age:1.234567,wallBounced:i%2===0})),
  corpses:Array.from({length:16},(_,i)=>({...structuredClone(physical),id:id(3000+i),victimId:id(4000+i),owner:id(5000+i),appearance:{hatType:'fedora',hatColor:1,coatColor:2,furColor:3},born:0,expires:20000})),
  impacts:Array.from({length:64},()=>({p:{...physical.p},n:{x:.57735,y:.57735,z:.57735},surface:true,scale:1,foley:'bounce',energy:40}))};
 }
