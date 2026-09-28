@@ -1,20 +1,47 @@
-#title-settings-btn{position:absolute;right:24px;top:24px;background:#170d21e8;color:#eee1b5;border:1px solid #ab91b6;padding:10px 18px;font:600 15px 'Outfit',sans-serif;cursor:pointer}
-.player-settings{box-sizing:border-box;width:min(780px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:24px;background:#170d21;color:#eee1b5;border:2px solid #a087ad;box-shadow:8px 8px 0 #08040ce0;font:16px/1.4 'Outfit',sans-serif;overflow:auto;color-scheme:dark;scrollbar-width:thin;scrollbar-color:#a087ad #211529}
+#title-settings-btn{position:absolute;right:24px;top:24px;z-index:2;background:var(--ink-raised);color:var(--manila);border:3px solid var(--ink);padding:9px 16px 8px;font:400 19px/1 var(--font-display);letter-spacing:1.5px;rotate:2deg;box-shadow:3px 4px 0 #08040c;cursor:pointer;transition:transform .16s var(--ui-spring)}
+#title-settings-btn:hover{transform:translateY(-2px) rotate(-1deg);color:var(--gold-hot)}#title-settings-btn:active{transform:scale(.94)}
+/* U3: the settings and pause surfaces are a case folder: tabbed sections, a rubber stamp,
+ * stamp buttons. Every setting, the scrollbar and Resume behave as before. */
+.player-settings{box-sizing:border-box;position:fixed;width:min(780px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:22px 24px 18px;background:var(--paper-lines);color:#eee1b5;border:3px solid var(--ink);outline:2px solid #a087ad66;outline-offset:-7px;box-shadow:10px 12px 0 #08040ce0,0 30px 80px #000c;font:16px/1.4 var(--font-body);overflow:auto;color-scheme:dark;scrollbar-width:thin;scrollbar-color:#a087ad #211529}
+.player-settings::before{content:'CONFIDENTIAL';position:absolute;right:26px;top:20px;padding:3px 9px;border:3px double var(--stamp);color:var(--stamp-hot);font:700 13px/1 var(--font-type);letter-spacing:3px;rotate:8deg;opacity:.85;pointer-events:none}
+.player-settings[data-page=pause]::before{content:'MATCH LIVE'}
 .player-settings::backdrop{background:#08040bbb;backdrop-filter:blur(3px)}
-.player-settings h2{font:38px/1 'Bangers',Impact,sans-serif;letter-spacing:1.5px;margin:0 0 12px}
-.player-settings p{margin:8px 0 16px;color:#c6b8cf}.player-settings fieldset{border:1px solid #615067;padding:14px;margin:0 0 18px;min-width:0}.player-settings legend{font-weight:700;letter-spacing:1px;padding:0 8px}
-.player-settings button{font:600 14px 'Outfit',sans-serif;background:#302039;color:#f5e8bc;border:1px solid #ad96b6;padding:8px 12px;cursor:pointer;border-radius:3px;min-height:38px}.player-settings button:disabled{opacity:.55;cursor:default}
+.player-settings[open]::backdrop{animation:folder-backdrop .25s ease-out}
+.player-settings h2{font:38px/1 var(--font-display);letter-spacing:1.5px;margin:0 0 8px;color:var(--paper-bright);padding-right:150px}
+.player-settings p{margin:6px 0 14px;color:#c6b8cf;font-family:var(--font-type);font-size:14px;font-weight:700;letter-spacing:.3px}.player-settings fieldset{border:0;padding:4px 2px;margin:0 0 12px;min-width:0}.player-settings legend{font:700 13px/1 var(--font-type);letter-spacing:2px;color:var(--manila);padding:0 0 8px}.player-settings legend::before{content:'FILE · '}
+.player-settings button{font:600 14px var(--font-body);background:#302039;color:#f5e8bc;border:1px solid #ad96b6;padding:8px 12px;cursor:pointer;border-radius:3px;min-height:38px}.player-settings button:disabled{opacity:.55;cursor:default}
 .player-settings :focus-visible,#title-settings-btn:focus-visible{outline:3px solid #e7c76f;outline-offset:3px}
+/* Folder tabs, one per section; the active tab stands up and joins its page. */
+.settings-tabs{display:flex;flex-wrap:wrap;gap:3px;padding-left:6px;margin-bottom:-3px;position:relative;z-index:1;flex-shrink:0}
+.player-settings .settings-tab{min-height:36px;padding:8px 13px 7px;background:#211529;border:2px solid #4b3457;border-bottom:0;border-radius:6px 6px 0 0;color:var(--paper-dim);font:400 17px/1 var(--font-display);letter-spacing:1px;transform-origin:50% 100%;transition:transform .18s var(--ui-spring),background .15s,color .15s}
+.player-settings .settings-tab:hover:not(.active){background:#2e1f3a;color:var(--paper-bright);transform:translateY(-2px)}
+.player-settings .settings-tab.active{background:#170d21;border-color:#a087ad;color:var(--gold-hot);transform:translateY(-4px);padding-bottom:10px;margin-bottom:-3px}
 .settings-range{display:grid;grid-template-columns:minmax(125px,1fr) minmax(80px,1.3fr) 72px 20px 64px;gap:10px;align-items:center;margin:12px 0}.settings-range input{min-width:0;width:100%;box-sizing:border-box;accent-color:#e6bf60}.settings-range input[type=number]{color:#f5e8bc;background:#0c0712;border:1px solid #a087ad;font:inherit;padding:6px}
-.settings-toggle{display:flex;align-items:center;gap:10px;margin:12px 0}.settings-toggle input{width:20px;height:20px;accent-color:#e6bf60}.settings-binding{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:10px;margin:8px 0}.settings-footer{display:flex;gap:12px;justify-content:space-between;padding-top:16px;border-top:1px solid #615067}.settings-footer button{min-height:44px}.settings-status{min-height:1.4em}.player-settings[data-page=pause]{width:min(460px,calc(100vw - 24px))}.player-settings[data-page=pause] .settings-footer button:first-child,.player-settings[data-page=settings] .pause-settings{display:none}.player-settings[data-page=pause] .settings-footer{display:grid;grid-template-columns:1.25fr 1fr;margin-top:6px;padding-top:20px}.player-settings[data-page=pause] .settings-back{background:#e6bf60;border-color:#e6bf60;color:#211529}.player-settings button:hover:not(:disabled){background:#45304f}.player-settings[data-page=pause] .settings-back:hover{background:#f2d788;border-color:#f2d788}
+.settings-toggle{display:flex;align-items:center;gap:10px;margin:12px 0}.settings-toggle input{width:20px;height:20px;accent-color:#e6bf60}.settings-binding{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:10px;margin:8px 0}.settings-status{min-height:1.4em}
+/* Stamp buttons: Reset is a red stamp, Back/Resume a gold one, Settings an ink one. */
+.settings-footer{display:flex;gap:12px;justify-content:space-between;padding-top:14px;border-top:2px dashed #61506799}
+.player-settings .settings-footer button{min-height:44px;padding:8px 20px;background:#d8352a14;border:3px double var(--stamp);border-radius:0;color:var(--stamp-hot);font:400 21px/1 var(--font-display);letter-spacing:1.5px;text-transform:uppercase;rotate:-2deg;transition:transform .18s var(--ui-spring),background .15s}
+.player-settings .settings-footer button:hover:not(:disabled){background:#d8352a2e;transform:scale(1.04) rotate(1deg)}
+.player-settings .settings-footer button:active:not(:disabled){transform:scale(.92) rotate(-3deg)}
+.player-settings .settings-footer .settings-back{background:var(--gold-hot);border:3px solid var(--ink);color:var(--ink);box-shadow:3px 3px 0 var(--ink);rotate:1.5deg}
+.player-settings .settings-footer .settings-back:hover:not(:disabled){background:#f2d788}
+.player-settings .settings-footer .pause-settings{background:var(--ink-raised);border:3px solid #a087ad;color:var(--paper-bright);rotate:-1deg}
+.player-settings .settings-footer .pause-settings:hover:not(:disabled){background:#3a2748}
+.player-settings[data-page=pause]{width:min(460px,calc(100vw - 24px))}.player-settings[data-page=pause] .settings-footer button:first-child,.player-settings[data-page=settings] .pause-settings,.player-settings[data-page=pause] .settings-tabs{display:none}.player-settings[data-page=pause] .settings-footer{display:grid;grid-template-columns:1.25fr 1fr;margin-top:6px;padding-top:20px}.player-settings[data-page=pause] .settings-back{font-size:26px}
+.player-settings button:hover:not(:disabled){background:#45304f}
+/* Open, turn a page, and (from script) a paper ghost for closing. */
+.player-settings.folder-open{animation:folder-open .3s var(--ui-snap)}
+.player-settings.paper-in,.settings-content>.paper-in{animation:paper-in .24s var(--ui-out)}
+@keyframes folder-open{from{opacity:0;transform:translateY(40px) rotate(-3deg) scale(.95)}to{opacity:1;transform:none}}
+@keyframes paper-in{from{opacity:0;transform:translateX(24px) rotate(.8deg)}to{opacity:1;transform:none}}
+@keyframes folder-backdrop{from{opacity:0}to{opacity:1}}
 body.settings-open .touch-play,body.settings-open .touch-toolbar{visibility:hidden}
 /* Scale anchored cards, not the viewport or projected guidance coordinates. */
 :is(.assignment-ledger,.dispatch-ledger,.pickup-buffs,#kill-feed,#hud,.jurisdiction-timer){zoom:var(--player-ui-scale,1)}
-body.reduced-motion :is(#title-screen,.dispatch-hud,#respawn-overlay,#victory-overlay,#kill-confirmation,.pickup-buffs) *,body.reduced-motion :is(#title-screen,.dispatch-hud,#respawn-overlay,#victory-overlay,#kill-confirmation,.pickup-buffs){animation:none!important;transition:none!important}
-@media(max-width:600px){.player-settings{padding:16px}.settings-range{grid-template-columns:1fr 70px 18px 58px;gap:8px}.settings-range label{grid-column:1/-1}.settings-binding{grid-template-columns:1fr 1fr}.settings-binding span{grid-column:1/-1}.player-settings h2{font-size:30px}}
+@media(max-width:600px){.player-settings{padding:16px}.settings-range{grid-template-columns:1fr 70px 18px 58px;gap:8px}.settings-range label{grid-column:1/-1}.settings-binding{grid-template-columns:1fr 1fr}.settings-binding span{grid-column:1/-1}.player-settings h2{font-size:30px}.player-settings .settings-tab{font-size:15px;padding:7px 9px 6px}}
 .player-settings{margin:auto}
 .player-settings[open]{display:flex;flex-direction:column}
-.player-settings>.settings-content{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:4px 14px 8px 4px;margin:0 -4px 12px;scrollbar-width:thin;scrollbar-color:#a087ad #211529}
+.player-settings>.settings-content{min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:12px 14px 8px 14px;margin:0 0 12px;background:#170d21;border:2px solid #a087ad;scrollbar-width:thin;scrollbar-color:#a087ad #211529}
 /* Older WebKit keeps the same palette without replacing native scrolling. */
 .player-settings::-webkit-scrollbar,.settings-content::-webkit-scrollbar{width:8px}
 .player-settings::-webkit-scrollbar-track,.settings-content::-webkit-scrollbar-track{background:#211529}
@@ -23,7 +50,7 @@ body.reduced-motion :is(#title-screen,.dispatch-hud,#respawn-overlay,#victory-ov
 @media(forced-colors:active){.player-settings,.player-settings>.settings-content{scrollbar-color:auto}.player-settings[data-page=pause] .settings-back{background:ButtonFace;color:ButtonText;border-color:ButtonText}}
 .player-settings>:is(h2,p,.settings-footer,.pause-settings){flex-shrink:0}
 .settings-status:empty{display:none}
-@media(max-height:500px){.player-settings{padding:14px}.player-settings h2{font-size:30px;margin-bottom:6px}.player-settings p{font-size:13px;margin:4px 0 8px}.player-settings fieldset{padding:10px}.settings-range{margin:8px 0}.settings-footer{padding-top:8px}}
+@media(max-height:500px){.player-settings{padding:12px 14px}.player-settings::before{top:12px;font-size:11px}.player-settings h2{font-size:28px;margin-bottom:4px}.player-settings p{font-size:12px;margin:2px 0 6px}.player-settings .settings-tab{min-height:30px;font-size:14px;padding:6px 9px 5px}.player-settings fieldset{padding:2px}.settings-range{margin:6px 0}.settings-footer{padding-top:8px}.player-settings .settings-footer button{min-height:40px;font-size:18px}}
 
 .touch-mode #title-settings-btn{right:76px;top:12px}
 

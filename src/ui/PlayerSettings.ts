@@ -1,13 +1,18 @@
 import { ACTIONS, RANGES, bindingLabel, playerPreferences, type Action, type NumericPreference, type PreferenceStore } from '../settings/PlayerPreferences';
 import { mountFeelReview } from '../feel/FeelReviewSection';
 import './playerSettings.css';
+import type { FeedbackCue } from '../audio/FeedbackAudio';
+import { ghost, replay, uiMotion } from './motion';
 
-type Session={observing?:()=>boolean;playing:()=>boolean;touch:()=>boolean;clear:()=>void;resume:()=>void};
-/** One device settings surface, shared by the lightweight title and the match. */
+type Session={observing?:()=>boolean;playing:()=>boolean;touch:()=>boolean;clear:()=>void;resume:()=>void;cue?:(cue:FeedbackCue)=>void};
+/** One device settings surface, shared by the lightweight title and the match.
+ * U3: a case folder with a tab per section; it opens, slides between pages and puts itself away. */
 export class PlayerSettings {
     readonly root:HTMLDialogElement;
     private readonly events=new AbortController();
     private readonly content:HTMLElement;
+    private readonly tabs:HTMLElement;
+    private readonly pages:{page:HTMLElement;tab:HTMLButtonElement}[]=[];
     private readonly heading:HTMLElement;
     private readonly note:HTMLElement;
     private readonly status:HTMLElement;
@@ -24,6 +29,7 @@ export class PlayerSettings {
         this.root=doc.createElement('dialog');this.root.className='player-settings';this.root.setAttribute('aria-labelledby','settings-heading');
         this.heading=this.make('h2',this.root,'PLAYER SETTINGS');this.heading.id='settings-heading';
         this.note=this.make('p',this.root,'Saved on this browser. Changes apply immediately.');
+        this.tabs=this.make('div',this.root);this.tabs.className='settings-tabs';this.tabs.setAttribute('role','tablist');
         this.content=this.make('div',this.root);this.content.className='settings-content';
         this.status=this.make('p',this.root);this.status.className='settings-status';this.status.setAttribute('role','status');
         const footer=this.make('div',this.root);footer.className='settings-footer';
@@ -33,6 +39,13 @@ export class PlayerSettings {
         this.button(footer,'Settings',()=>this.open()).className='pause-settings';
         this.doc.body.appendChild(this.root);
         this.build();
+        Array.from(this.content.children).forEach((node,index)=>{
+            const page=node as HTMLElement,tab=this.button(this.tabs,node.children[0]?.textContent??'',()=>this.tab(index));
+            page.id=`settings-page-${index}`;page.setAttribute('role','tabpanel');
+            tab.className='settings-tab';tab.setAttribute('role','tab');tab.setAttribute('aria-controls',page.id);
+            this.pages.push({page,tab});
+        });
+        this.tab(0,false);
         this.unsubscribe=store.subscribe(p=>{
             doc.documentElement.style.setProperty('--player-ui-scale',String(p.uiScale));
             doc.body.classList.toggle('reduced-motion',p.reducedMotion);
@@ -47,6 +60,11 @@ export class PlayerSettings {
             // Stop title Enter, gameplay bindings and held-scoreboard listeners.
             event.stopPropagation();
             if(!event.repeat)this.freshDown=true;
+            const current=this.pages.findIndex(p=>p.tab===event.target);
+            if(!this.capture&&current>=0&&(event.code==='ArrowRight'||event.code==='ArrowLeft')){
+                event.preventDefault();const next=(current+(event.code==='ArrowRight'?1:this.pages.length-1))%this.pages.length;
+                this.tab(next);this.pages[next]!.tab.focus();return;
+            }
             if(!this.capture)return;
             event.preventDefault();
             if(event.repeat)return;
@@ -126,6 +144,17 @@ export class PlayerSettings {
         box.addEventListener('change',()=>this.store.update({[key]:box.checked}),{signal:this.events.signal});this.refreshers.push(()=>{box.checked=this.store.current[key];});
     }
     private refresh():void {for(const refresh of this.refreshers)refresh();}
+    /** Show one section of the folder; the page slides in like a fresh sheet. */
+    private tab(index:number,animate=true):void {
+        this.pages.forEach(({page,tab},i)=>{
+            page.hidden=i!==index;tab.setAttribute('aria-selected',String(i===index));tab.tabIndex=i===index?0:-1;
+            if(i===index)tab.classList.add('active');else tab.classList.remove('active');
+        });
+        this.content.scrollTop=0;
+        if(!animate)return;
+        this.session?.cue?.('tick');
+        if(uiMotion('caseFolder'))replay(this.pages[index]!.page,'paper-in');
+    }
     refreshHints():void {
         const p=this.store.current,hint=this.doc.getElementById('hud');
         if(hint)hint.textContent=`${this.session?.observing?.()?'OBSERVING · ':''}${(['forward','back','left','right'] as Action[]).map(a=>bindingLabel(p.bindings[a][0])).join('/')} — Move | Mouse — Look | ${bindingLabel(p.bindings.jump[0])} — Jump | ${this.session?.observing?.()?'':p.bindings.fire.filter(Boolean).map(bindingLabel).join('/')+' — Shoot | '}Hold ${p.bindings.scores.filter(Boolean).map(bindingLabel).join('/')} — Scoreboard | Esc — Settings`;
@@ -138,7 +167,8 @@ export class PlayerSettings {
     private show():void {
         this.updateNote();
         this.session?.clear();
-        if(!this.isOpen){this.opener=this.doc.activeElement as HTMLElement;this.root.showModal();}
+        if(!this.isOpen){this.opener=this.doc.activeElement as HTMLElement;this.root.showModal();this.session?.cue?.('menu-open');if(uiMotion('caseFolder'))replay(this.root,'folder-open');}
+        else if(uiMotion('caseFolder'))replay(this.root,'paper-in');
         this.doc.body.classList.add('settings-open');
         if(this.doc.pointerLockElement)this.doc.exitPointerLock();
         this.status.textContent='';this.back.focus({preventScroll:true});this.root.scrollTop=0;
@@ -160,6 +190,6 @@ export class PlayerSettings {
             this.session.clear();this.close();this.session.resume();
         }else this.close();
     }
-    private close():void {this.capture=undefined;this.root.close();this.doc.body.classList.remove('settings-open');this.opener?.focus();}
+    private close():void {this.capture=undefined;if(this.isOpen){ghost(this.doc,this.root,'caseFolder');this.session?.cue?.('menu-close');}this.root.close();this.doc.body.classList.remove('settings-open');this.opener?.focus();}
     dispose():void {this.unsubscribe();this.events.abort();this.root.remove();this.doc.body.classList.remove('settings-open');}
 }
