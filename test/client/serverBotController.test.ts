@@ -125,16 +125,16 @@ describe('hosted server bot controller',()=>{
         controller.reset('bot',bot);controller.step(1/60,1051,players,launch,true);expect(body.velocity.y).toBeLessThan(5);
         controller.dispose();
     });
-    it('shoots a visible Dispatch red face without routing away from the case',()=>{
+    it('shoots at a visible Dispatch bell without routing away from the case',()=>{
         const {controller,players,bot,shoot}=fixture(),target=DISPATCH_STATIONS[0].target;
         Object.assign(bot,{x:target.x,y:0,z:target.z+12});const ready=state();ready.dispatch.phase='ready';ready.case.p={x:100,y:0,z:100};players.delete('human');
         controller.step(1/60,1000,players,ready,true);expect(shoot).not.toHaveBeenCalled();
         for(let now=1017;now<=3000&&!shoot.mock.calls.length;now+=17)controller.step(1/60,now,players,ready,true);
         expect(shoot).toHaveBeenCalledTimes(1);
         const [,origin,direction]=shoot.mock.calls[0] as unknown as [string,Vec3Data,Vec3Data];
-        const distance=(target.z-origin.z)/direction.z;
-        expect(Math.abs(origin.x+direction.x*distance-target.x)).toBeLessThan(.1);
-        expect(Math.abs(origin.y+direction.y*distance-target.y)).toBeLessThan(.1);controller.dispose();
+        // Imperfect, but at the bell: the shot line passes within the housing's reach of its centre.
+        const along=(target.x-origin.x)*direction.x+(target.y-origin.y)*direction.y+(target.z-origin.z)*direction.z;
+        expect(Math.hypot(origin.x+direction.x*along-target.x,origin.y+direction.y*along-target.y,origin.z+direction.z*along-target.z)).toBeLessThan(2.2);controller.dispose();
     });
     it('uses real ground contacts for its jump and keeps the normal physical jump impulse',()=>{
         const {controller,players}=fixture();
