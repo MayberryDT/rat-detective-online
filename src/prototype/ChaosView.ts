@@ -12,6 +12,7 @@ import { CHAOS_TUNING, CASE_LOOSE_SCALE, DISPATCH_STATIONS } from '../shared/cha
 import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh } from '../utils/RatModel';
 import { RatAnimator } from '../utils/RatAnimator';
+import { batchRigidMeshes } from '../utils/RigidMeshBatch';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from '../weapons/CheeseProjectileModel';
 import { CheeseImpactEffects } from '../weapons/CheeseImpactEffects';
@@ -326,6 +327,8 @@ export class ChaosView {
                 // Polish 11: a fresh corpse pops its fedora (not one already lying there on join).
                 const hatPending=feelState().on('hatPop')&&state.time-c.born<600;
                 model={mesh,animator:new RatAnimator(mesh),state:c,hatPending};this.corpses.set(c.id,model);this.root.add(mesh);
+                // Up to 16 corpses: one skinned draw each instead of ~40 per pass.
+                batchRigidMeshes(mesh);
                 const noted=this.deathStyles.get(c.victimId);
                 if(noted&&performance.now()-noted.at<2000)model.animator.setDeathStyle(noted.style);
                 this.deathStyles.delete(c.victimId);

@@ -62,6 +62,9 @@ export class RatController {
         // Create the Player Entity with the player's chosen name and appearance
         const pos = spawnPos ?? new THREE.Vector3(15, 2, 15);
         this.entity = new RatEntity(scene, world, pos, name, options, false, modelFactory);
+        // One skinned draw for the rigid parts, as remote rats already do
+        // (about 40 fewer draws in each of the main and two shadow passes).
+        this.entity.enableRigidBatching();
 
     }
 
