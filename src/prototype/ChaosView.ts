@@ -149,7 +149,7 @@ export class ChaosView {
         this.assignmentDestinations=new AssignmentDestinations();this.jurisdictionZones=new JurisdictionZones(scene);
         // DOM projection stays crisp at city scale and visible through all architecture.
         // It adds no dynamic lights, raycasts, or physics to the physical case.
-        // U1: an evidence tag styled in dispatchHud.css (.hot-case-tag); its position is set each frame.
+        // U1, Carbon scrawl: a small, dim carbon marker styled in dispatchHud.css (.hot-case-tag); its position is set each frame.
         this.caseMarker.className='hot-case-tag';this.caseMarker.style.display='none';
         this.caseMarker.setAttribute('aria-label','Hot Case location');
         const title=document.createElement('div');title.className='hot-case-title';title.textContent='HOT CASE';

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {FEEL} from './feelTuning';
 import './feel.css';
-import {reducedMotion,replay,uiMotion} from '../ui/motion';
+import {reducedMotion,replay,scrawl,uiMotion} from '../ui/motion';
 
 const ARROWS=4;
 
@@ -89,10 +89,10 @@ export class ScreenFeel {
         this.root!.classList.toggle('letterboxed',letterbox);
     }
 
-    /** A noir streak callout stamped near the top of the screen. */
+    /** A noir streak callout scrawled near the top of the screen. */
     callout(text:string):void {
         if(!this.build()||!this.calloutNode)return;
-        this.calloutNode.textContent=text;
+        scrawl(this.calloutNode,text);
         replay(this.calloutNode,'on');
     }
 

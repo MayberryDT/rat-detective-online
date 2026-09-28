@@ -2,7 +2,7 @@ import type {PickupKind} from '../shared/pickups';
 
 /** Hand-inked silhouettes shared by the active-effect cards. No external assets. */
 export function pickupArtwork(kind:PickupKind):string {
-    const ink='stroke="#15101b" stroke-width="5" stroke-linejoin="round"';
+    const ink='stroke="#0a0e1a" stroke-width="5" stroke-linejoin="round"';
     const body=kind==='quick-fix'
         ? `<path d="m18 29 64-5 5 60-66 6Z" fill="#eff5df" ${ink}/><path d="m36 27-1-13 28-2 2 14" fill="none" ${ink}/><path d="m42 38 17-1 1 14 14-1 1 17-15 1 1 14-17 1-1-14-14 1-1-17 15-1Z" fill="#65cf8b" ${ink}/><path d="m14 9 2-9 3 9 9 3-9 3-3 9-2-9-9-3ZM84 7l2 8 8 2-8 3-2 8-2-8-8-3 8-2Z" fill="#b7f4bb"/>`
         : kind==='ironclad'

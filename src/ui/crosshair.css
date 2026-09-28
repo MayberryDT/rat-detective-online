@@ -14,7 +14,7 @@
     transform: translate(-50%, -50%);
     z-index: 45;
     pointer-events: none;
-    filter: drop-shadow(0 0 2px #100b19);
+    filter: drop-shadow(0 0 2px var(--carbon-deep));
 }
 
 #crosshair::before,
@@ -65,14 +65,14 @@
 #kill-confirmation {
     position:fixed;left:50%;top:calc(50% + 38px);transform:translateX(-50%);
     width:min(380px,70vw);z-index:45;pointer-events:none;text-align:center;
-    color:#efdfbe;text-shadow:0 2px 2px #100b0b,0 0 5px #100b0b;
+    color:var(--carbon-bright);text-shadow:0 2px 2px var(--carbon-deep),0 0 5px var(--carbon-deep);
     animation:kill-notice 2400ms ease-out both;
 }
 .kill-confirmation-title {
-    color:#ff7665;font:400 27px/1.1 'Bangers',Impact,sans-serif;letter-spacing:.8px;
+    color:var(--stamp-ink);font:400 27px/1.1 var(--font-display);letter-spacing:.8px;rotate:-2deg;
     text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.kill-confirmation-quip { margin-top:5px;font:600 11px/1.35 'Outfit',Arial,sans-serif;letter-spacing:1px; }
+.kill-confirmation-quip { margin-top:5px;font:12px/1.35 var(--font-type);color:var(--carbon-ink); }
 @keyframes kill-notice {
     0% { opacity:0;transform:translateX(-50%) translateY(6px) scale(1.12); }
     8%,78% { opacity:1;transform:translateX(-50%) translateY(0) scale(1); }

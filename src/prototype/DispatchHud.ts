@@ -7,7 +7,7 @@ import {CHAOS_TUNING} from '../shared/chaosState';
 import {INCIDENTS,incidentInfo} from '../shared/incidentCatalog';
 import './dispatchHud.css';
 import {setText} from '../ui/setText';
-import {arrange, fly, replay, uiMotion} from '../ui/motion';
+import {arrange, fly, replay, scrawl, uiMotion} from '../ui/motion';
 import {MunicipalQuips,INCIDENT_QUIPS} from '../ui/municipalQuips';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {incidentArtwork} from './incidentArtwork';
@@ -106,7 +106,7 @@ export class DispatchHud {
         if(this.artwork.dataset.incident!==artwork){this.artwork.dataset.incident=artwork;this.artwork.innerHTML=incidentArtwork(artwork);}
         setText(this.alertLabel,d.phase==='active'?'CITYWIDE EMERGENCY':d.phase==='rolling'?'BRACE YOURSELF!':d.phase==='cooldown'?'PLEASE STAND BY':'DISPATCH READY');
         setText(this.brief,d.phase==='active'?INCIDENT_QUIPS[info.id]:d.phase==='rolling'?'Something extremely unwise is on its way.':d.phase==='cooldown'?'Cleaning up the paperwork.':'One little bell. Citywide consequences.');
-        setText(this.status,d.phase==='ready'?'DISPATCH READY':d.phase==='rolling'?'DISPATCH INCOMING':d.phase==='active'?info.title:'LINE BUSY');
+        scrawl(this.status,d.phase==='ready'?'DISPATCH READY':d.phase==='rolling'?'DISPATCH INCOMING':d.phase==='active'?info.title:'LINE BUSY');
         setText(this.timer,d.phase==='ready'?'READY':`${remaining}s`);
         const total=d.phase==='rolling'?CHAOS_TUNING.rollMs:d.phase==='active'?CHAOS_TUNING.activeMs:CHAOS_TUNING.cooldownMs;
         const fraction=d.phase==='ready'?1:Math.max(0,Math.min(1,(d.until-now)/total));
@@ -141,11 +141,11 @@ export class DispatchHud {
             }
             this.previousLocal=ownerIsLocal;
             this.previousOwner=state.case.owner;this.announceUntil=now+2800;
-            setText(this.announcementTitle,wasLocal&&!ownerIsLocal?'YOU LOST THE CASE':state.case.owner?(ownerIsLocal?"YOU’RE ON THE CASE":`${holder} is on the case`):'LOOSE CASE');
+            scrawl(this.announcementTitle,wasLocal&&!ownerIsLocal?'YOU LOST THE CASE':state.case.owner?(ownerIsLocal?"YOU’RE ON THE CASE":`${holder} is on the case`):'LOOSE CASE');
             const kind=wasLocal&&!ownerIsLocal?'caseLost':ownerIsLocal?'casePickup':state.case.owner?'caseTaken':'caseLoose';
             setText(this.announcementDetail,this.quips.next(kind));
             this.announcement.dataset.tone=wasLocal&&!ownerIsLocal?'lost':ownerIsLocal?'gained':'neutral';
-            if(deliveryRespawn){setText(this.announcementTitle,'CASE RELOCATED');setText(this.announcementDetail,'FORWARDED TO THE WRONG DEPARTMENT.');this.announcement.dataset.tone='neutral';}
+            if(deliveryRespawn){scrawl(this.announcementTitle,'CASE RELOCATED');setText(this.announcementDetail,'FORWARDED TO THE WRONG DEPARTMENT.');this.announcement.dataset.tone='neutral';}
             this.announcement.classList.remove('broadcast-enter');void this.announcement.offsetWidth;this.announcement.classList.add('broadcast-enter');
         }
         this.announcement.hidden=now>=this.announceUntil;
@@ -227,15 +227,15 @@ export class DispatchHud {
                     if(!row){row=document.createElement('li');for(const tag of ['i','span','b'])row.appendChild(document.createElement(tag));this.rankRows.set(s.id,row);}
                     row.dataset.local=String(s.id===this.myId);
                     const [place,name,score]=Array.from(row.children) as HTMLElement[];
-                    setText(place!,String(index+1));setText(name!,s.name);setText(score!,`${Math.floor(s.points)}/${target}`);
+                    setText(place!,String(index+1));scrawl(name!,s.name);setText(score!,`${Math.floor(s.points)}/${target}`);
                     return row;
                 });
                 for(const id of this.rankRows.keys())if(!top.some(s=>s.id===id))this.rankRows.delete(id);
                 arrange(this.rankings,rows,'scoreMotion');
             }
             setText(this.counter,(this.observing?'OBSERVING · ':'')+(race?`TOP FIVE · FIRST TO ${target}`:'HOLD IT AT ZERO!'));
-            setText(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);
-            setText(this.assignmentRevealTitle,info.title);setText(this.assignmentRevealRule,info.rule);setText(this.assignmentFlavor,info.flavor);
+            scrawl(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);
+            scrawl(this.assignmentRevealTitle,info.title);setText(this.assignmentRevealRule,info.rule);setText(this.assignmentFlavor,info.flavor);
             let progress='',detail='',fraction=0;
             if(j){
                 progress=`YOU: ${points} / ${target}`;fraction=rawPoints/target;

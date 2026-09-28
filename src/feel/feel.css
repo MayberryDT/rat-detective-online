@@ -12,8 +12,8 @@
 @keyframes feel-kill-bloom{0%{opacity:var(--feel-flash,1);transform:scale(.2) rotate(0)}60%{opacity:calc(var(--feel-flash,1)*.7)}100%{opacity:0;transform:scale(2.1) rotate(40deg)}}
 /* 9: comic words for big moments, anchored near the victim on screen. */
 .feel-word{position:absolute;left:0;top:0;opacity:0;white-space:nowrap;pointer-events:none;
-  font:400 46px/1 'Bangers',Impact,sans-serif;letter-spacing:1.5px;color:#ffd24a;
-  -webkit-text-stroke:2px #3a0d05;text-shadow:3px 3px 0 #7a1a0a,0 0 14px #ff6a1f99;transform-origin:50% 60%}
+  font:400 46px/1 var(--font-display);letter-spacing:1.5px;color:var(--carbon-bright);
+  -webkit-text-stroke:2px var(--carbon-deep);text-shadow:3px 3px 0 #7a1c18;transform-origin:50% 60%}
 .feel-word.on{animation:feel-word 1100ms cubic-bezier(.2,.9,.25,1.2) both}
 @keyframes feel-word{0%{opacity:0;transform:translate(-50%,-50%) rotate(var(--tilt)) scale(.2)}
   14%{opacity:1;transform:translate(-50%,-50%) rotate(var(--tilt)) scale(1.18)}
@@ -32,21 +32,21 @@
 @keyframes feel-speed{to{transform:rotate(5deg)}}
 /* 19: rewards. Score punch on your ranking row, streak callouts, Case File. */
 .feel-pop{animation:feel-pop 480ms cubic-bezier(.2,.9,.3,1.3)}
-@keyframes feel-pop{0%{transform:scale(1.28);background:#e6bf6066}100%{transform:scale(1)}}
-.feel-callout{position:absolute;left:50%;top:24%;opacity:0;white-space:nowrap;font:400 40px/1 'Bangers',Impact,sans-serif;letter-spacing:2px;
-  color:#f3e2b5;-webkit-text-stroke:1.5px #2a0d06;text-shadow:3px 3px 0 #6d1d0f;transform:translateX(-50%)}
+@keyframes feel-pop{0%{transform:scale(1.28);background:#c8323266}100%{transform:scale(1)}}
+.feel-callout{position:absolute;left:50%;top:24%;opacity:0;white-space:nowrap;font:400 40px/1 var(--font-display);letter-spacing:.06em;
+  color:var(--carbon-bright);-webkit-text-stroke:1.5px var(--carbon-deep);text-shadow:3px 3px 0 var(--carbon-shade),5px 5px 0 #506ebe59;transform:translateX(-50%)}
 .feel-callout.on{animation:feel-callout 1500ms cubic-bezier(.2,.9,.25,1.1) both}
 @keyframes feel-callout{0%{opacity:0;transform:translateX(-50%) scale(1.8) rotate(-3deg)}12%{opacity:1;transform:translateX(-50%) scale(1) rotate(-3deg)}
   80%{opacity:1;transform:translateX(-50%) scale(1) rotate(-3deg)}100%{opacity:0;transform:translateX(-50%) translateY(-10px) rotate(-3deg)}}
 @media(max-height:500px){.feel-callout{font-size:28px;top:30%}}
-/* U8: the Case File is a folder of rubber-stamped awards; the rows stamp in one at a time at results. */
-.victory-casefile{margin-top:14px;padding:10px 16px;border:2px solid #d8c69a55;background:var(--paper-lines,#1a1022);box-shadow:5px 5px 0 #0a060e;font:600 14px/1.5 'Outfit',Arial,sans-serif;letter-spacing:.6px;rotate:3deg;text-transform:none}
-.victory-casefile h3{margin:0 0 4px;font:400 22px/1 'Bangers',Impact,sans-serif;letter-spacing:1.5px;color:#e6bf60}
+/* U8: the Case File is a carbon folder of rubber-stamped awards; the rows stamp in one at a time at results. */
+.victory-casefile{margin-top:14px;padding:10px 16px;border:1px dashed var(--carbon-line);background:var(--carbon-sheet);box-shadow:var(--carbon-drop),var(--carbon-smudge);font:600 14px/1.5 'Outfit',Arial,sans-serif;letter-spacing:.6px;rotate:3deg;text-transform:none}
+.victory-casefile h3{margin:0 0 4px;font:400 22px/1 var(--font-display);letter-spacing:1.5px;color:var(--cheese)}
 .victory-casefile li{list-style:none;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px 10px}.victory-casefile ul{margin:0;padding:0}
-.victory-casefile b{justify-self:start;padding:1px 6px;border:2px solid #d8352a;color:#ff6a5c;font:400 16px/1.1 'Bangers',Impact,sans-serif;letter-spacing:1px;rotate:-3deg;text-transform:uppercase}
-.victory-casefile li:nth-child(even) b{border-color:#e6bf60;color:#f0cf74;rotate:2deg}
-.victory-casefile span{color:#eadfeb;font:700 13px/1.2 'Courier New',Courier,monospace;text-transform:uppercase;overflow-wrap:anywhere}
-.victory-casefile strong{color:#f3e2b5;font:400 18px/1 'Bangers',Impact,sans-serif;letter-spacing:.8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.victory-casefile b{justify-self:start;padding:1px 6px;border:2px solid #e65a5099;color:var(--stamp-ink);font:400 16px/1.1 var(--font-display);letter-spacing:1px;rotate:-3deg;text-transform:uppercase}
+.victory-casefile li:nth-child(even) b{border-color:var(--carbon-line);color:var(--carbon-bright);rotate:2deg}
+.victory-casefile span{color:var(--carbon-ink);font:13px/1.2 var(--font-type);text-transform:uppercase;overflow-wrap:anywhere}
+.victory-casefile strong{color:var(--carbon-bright);font:400 18px/1 var(--font-display);letter-spacing:.8px;font-variant-numeric:tabular-nums;white-space:nowrap}
 @media(max-height:500px){body:not(.round-results) .victory-casefile{display:none}}
 .victory-casefile ul.stamping li:not(.stamped){opacity:0}
 .victory-casefile ul.stamping li.stamped{animation:casefile-row .3s ease-out both}
