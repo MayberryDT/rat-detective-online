@@ -158,7 +158,8 @@ Tyler: "I love all of this… do all of it." Straight-up launches every time are
 - [x] **M1 Face:** floppy ears and whiskers, blinking, wide eyes and an open-mouth scream on launches and near misses.
 - [x] **M2 Body:** springy tail chain, hat wobble per step, flinch away from hits.
 - [x] **M3 Personality extras:** a cigarette, badge or scarf picked from each rat's identity, in the existing materials.
-- [ ] **B5 Review package:** checks, one independent review, private preview.
+- [x] **B5 Review package:** checks, one independent review, private preview.
+- **Status (2026-09-28):** built on `juice/launch-ragdoll` and on the private preview (fixture `a6694db9-8cf9-4006-8bc8-141dbe794e24`, client `index-DaBhjsfX.js`, protocol 21) for Tyler's playtest. One independent review found 8 issues (misfire time key, bot roof routes vs drift, movement envelope widened for everyone, restore inside a tell, counterfeit restored mid-air, rolling hat never resting, ear flap overwritten, instanced buffers not freed); all fixed in `2072d92`. What to look for: [review guide](juice/review.md#fifth-batch-launchers-ragdolls-and-the-living-model-protocol-21).
 
 **Later (not now):**
 - **Launcher overhaul.** Make the launchers far more chaotic and much juicier, including how the case interacts with them.
