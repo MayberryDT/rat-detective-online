@@ -50,42 +50,57 @@ export class StreetLightPool {
     update(camera:THREE.Camera,anchor:{x:number;y:number;z:number}=camera.position):void {
         // The shoulder camera may sit outside a doorway or above a low ceiling.
         // Select the room/floor from the rat, not from that offset camera.
-        const p=anchor,room=this.rooms.find(r=>insideLightRoom(p,r));
-        const nearest=this.sources.map(source=>({source,d:Math.hypot(source.x-p.x,source.z-p.z)}))
-            .filter(({source:s,d})=>{
-                if(d>=32||(s.brightness?.()??1)<=0)return false;
-                if(s.room)return s.room.id===room?.id&&p.y>=(s.floor??0)-.5&&p.y<(s.floor??0)+7.5;
+        const p=anchor;let room:LightRoom|undefined;
+        for(const r of this.rooms)if(insideLightRoom(p,r)){room=r;break;}
+        // Best four by score, highest first; equal scores keep source order
+        // (the former stable sort). Runs every frame over ~230 sources: no allocation.
+        const top=this.top,topD=this.topD,topScore=this.topScore;let count=0;
+        for(const s of this.sources){
+            const d=Math.hypot(s.x-p.x,s.z-p.z);
+            if(d>=32||(s.brightness?.()??1)<=0)continue;
+            let score:number;
+            if(s.room){
+                if(!(s.room.id===room?.id&&p.y>=(s.floor??0)-.5&&p.y<(s.floor??0)+7.5))continue;
+                // Keep the accepted room/floor selection inside landmarks.
+                score=1/(1+d);
+            }else{
                 // Contact resolution puts grounded feet a fraction below zero.
                 // Do not switch the whole street off at that boundary, or at
                 // exactly the nine-unit pole height above the pavement.
-                return !room&&p.y>=-.5&&s.y>p.y-1&&s.y<=p.y+12&&(!s.illuminates||s.illuminates(p));
-            }).map(entry=>{
-                // Keep the accepted room/floor selection inside landmarks.
-                if(entry.source.room)return {...entry,score:1/(1+entry.d)};
-                const s=entry.source,target=s.target??{x:s.x,y:s.y-8,z:s.z};
+                if(!(!room&&p.y>=-.5&&s.y>p.y-1&&s.y<=p.y+12&&(!s.illuminates||s.illuminates(p))))continue;
+                const tx=s.target?.x??s.x,ty=s.target?.y??s.y-8,tz=s.target?.z??s.z;
                 const dx=p.x-s.x,dy=p.y+1.2-s.y,dz=p.z-s.z;
-                const ax=target.x-s.x,ay=target.y-s.y,az=target.z-s.z;
+                const ax=tx-s.x,ay=ty-s.y,az=tz-s.z;
                 const distance=Math.hypot(dx,dy,dz),range=s.distance??15,angle=s.angle??.68;
                 const cosine=(dx*ax+dy*ay+dz*az)/Math.max(.001,distance*Math.hypot(ax,ay,az));
                 const cone=THREE.MathUtils.smoothstep(cosine,Math.cos(angle),Math.cos(angle*(1-(s.penumbra??.65))));
-                const score=(s.intensity??45)*(s.brightness?.()??1)*cone*Math.max(0,1-distance/range)**2/Math.max(1,distance*distance);
-                return {...entry,score};
-            }).filter(entry=>entry.score>0).sort((a,b)=>b.score-a.score).slice(0,4);
+                score=(s.intensity??45)*(s.brightness?.()??1)*cone*Math.max(0,1-distance/range)**2/Math.max(1,distance*distance);
+            }
+            if(!(score>0))continue;
+            let at=count;while(at>0&&topScore[at-1]<score)at--;
+            if(at>=4)continue;
+            for(let k=Math.min(count,3);k>at;k--){top[k]=top[k-1];topD[k]=topD[k-1];topScore[k]=topScore[k-1];}
+            top[at]=s;topD[at]=d;topScore[at]=score;count=Math.min(4,count+1);
+        }
         camera.updateMatrixWorld();
-        this.lights.forEach((light,i)=>{
+        for(let i=0;i<this.lights.length;i++){
+            const light=this.lights[i];
             this.exteriorPositions.value[i].set(0,0,0,0);
-            const entry=nearest[i];if(!entry){light.intensity=0;return;}
-            const {source:s,d}=entry;
-            const target=s.target??{x:s.x,y:s.y-8,z:s.z};
-            light.position.set(s.x,s.y,s.z);light.target.position.set(target.x,target.y,target.z);light.color.setHex(s.color);
+            if(i>=count){light.intensity=0;continue;}
+            const s=top[i]!,d=topD[i];
+            light.position.set(s.x,s.y,s.z);light.target.position.set(s.target?.x??s.x,s.target?.y??s.y-8,s.target?.z??s.z);light.color.setHex(s.color);
             light.distance=s.distance??15;light.angle=s.angle??.68;
             light.penumbra=s.penumbra??.65;
             light.intensity=AUTHORED_LIGHT_GAIN*(s.intensity??45)*(s.brightness?.()??1)*(1-THREE.MathUtils.smoothstep(d,18,32));
             if(!s.room){
-                const p=light.position.clone().applyMatrix4(camera.matrixWorldInverse);
-                this.exteriorPositions.value[i].set(p.x,p.y,p.z,1);
+                const view=this.view.copy(light.position).applyMatrix4(camera.matrixWorldInverse);
+                this.exteriorPositions.value[i].set(view.x,view.y,view.z,1);
             }
-        });
+        }
     }
+    private readonly top:(OverheadLight|undefined)[]=[undefined,undefined,undefined,undefined];
+    private readonly topD=new Float64Array(4);
+    private readonly topScore=new Float64Array(4);
+    private readonly view=new THREE.Vector3();
     dispose():void {for(const light of this.lights){this.scene.remove(light,light.target);light.dispose();}this.lights.length=0;this.scenery.clear();}
 }
