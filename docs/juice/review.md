@@ -26,8 +26,8 @@ For a quick look without playing, the **feel workshop** fires each effect on dem
 Private hosted fixture (production matchmaking, server bots, 10-rat cap, audible), serving this branch's client and Worker:
 
 - **Play:** http://127.0.0.1:5193/?room=graybox-benchmark-match-polish-r1 on Veelox. Add `&feel=off` to compare, `&feel=dev` for the switches.
-- **Fixture:** Worker `rat-detective-capacity-test`, version `6e8e8bb3-14e4-485b-839d-13b052ec850d` (fourth batch, protocol 20: the Hunch, the pickup rework and the incident rework, including the review fixes). It expires **1:56 AM PDT, 28 September**.
-- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-28T04-56-47-734Z/deployment.json`.
+- **Fixture:** Worker `rat-detective-capacity-test`, version `331525ca-a90c-4def-9a2c-a9a1c37e76d7` (fourth batch, protocol 20, with Tyler's touch-ups: the Hunch badge, findable supplies with juice, the 15-second round end). It expires **2:45 AM PDT, 28 September**.
+- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-28T05-45-16-488Z/deployment.json`.
 - **Smoke-tested:** a scripted client joined through the relay: protocol 20, seed 341283204, 9 server bots plus the client, PAPER CHASE playing; in 12 s it saw 3 deaths (2 headshots) and 5 HP respawns. The scripted client acknowledges every frame and can trip the room's inbound message budget on a busy cold join (`connection reset: Inbound message budget exceeded`); that is the throwaway client, not the game client.
 
 **If the preview has expired**, build and redeploy, then start the relay again:
