@@ -5,8 +5,9 @@ import {ServerBotController} from '../../src/worker/ServerBotController';
 import {CITY_BOUNDS} from '../../src/shared/grayboxLayout';
 import {LAUNCH_MACHINES,type ChaosState} from '../../src/shared/chaosState';
 import {CAMEO_LAYOUT} from '../../src/cameos/cameoLayout';
+import {launcherVelocity} from '../../src/shared/launcherVelocity';
 
-it.each([341283204,20260907,1])('lands beside Spider-rat from the geyser with normal player steering (seed %s)',seed=>{
+it.each([[341283204,0],[20260907,.5],[1,.999999]])('lands beside Spider-rat from the geyser with normal player steering (seed %s, throw roll %s)',(seed,roll)=>{
     // Actual city/control colliders and player physics; inject only the ordinary
     // authority launch event. Trigger shooting itself is covered by launcher tests.
     const city=new ServerBotController({seed,version:2},[],{move:()=>{},shoot:()=>{}});
@@ -16,7 +17,7 @@ it.each([341283204,20260907,1])('lands beside Spider-rat from the geyser with no
         new THREE.Vector3(machine.pad.x,0,machine.pad.z),CITY_BOUNDS);
     try{
         rat.applyPressureLaunches({time:1000,pressure:{launches:[{
-            id:'cameo-route',at:1000,playerId:'local',machineId:machine.id,velocity:machine.velocity,
+            id:'cameo-route',at:1000,playerId:'local',machineId:machine.id,velocity:launcherVelocity(machine,false,()=>roll),
         }]}} as ChaosState,'local');
         let cleared=false,landed=false,peak=0;
         for(let frame=0;frame<480;frame++){
@@ -33,6 +34,6 @@ it.each([341283204,20260907,1])('lands beside Spider-rat from the geyser with no
         const p=rat.entity.body.position;
         expect({landed,y:p.y},JSON.stringify({peak,position:p})).toEqual({landed:true,y:expect.closeTo(spider.y,0)});
         expect(Math.hypot(p.x-spider.x,p.z-spider.z)).toBeLessThan(5);
-        expect(peak).toBeGreaterThan(120);
+        expect(peak).toBeGreaterThan(spider.y+10);
     }finally{rat.dispose();city.dispose();}
 },15_000);

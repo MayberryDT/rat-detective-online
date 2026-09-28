@@ -54,12 +54,12 @@ describe('play bounds', () => {
     expect(consumeMovementAllowance(budget,from,{x:20,y:0,z:0},40)).toBe(false);
     expect(consumeMovementAllowance(budget,from,{x:1.5,y:4,z:0},40)).toBe(true);
     expect(consumeMovementAllowance(budget,from,{x:0,y:240,z:0},60000)).toBe(false);
-    expect(budget.horizontal).toBe(72);expect(budget.vertical).toBe(226);
+    expect(budget.horizontal).toBe(162);expect(budget.vertical).toBe(226);
     expect(consumeMovementAllowance(budget,from,{x:0,y:90,z:0},60000)).toBe(true);
   });
 
   it('accepts delayed boosted walking and launch batches but rejects sustained excess speed',()=>{
-    for(const [horizontal,vertical] of [[18,0],[18*1.45,0],[18*1.45,90]]){
+    for(const [horizontal,vertical] of [[18,0],[18*1.45,0],[18*1.45,90],[18*1.45+33,106]]){
       const budget=createMovementAllowance(0);let from={x:0,y:0,z:0};
       for(let frame=1;frame<=80;frame++){
         const to={x:horizontal*frame*.125,y:vertical*frame*.125,z:0};
@@ -73,7 +73,7 @@ describe('play bounds', () => {
     const fast=createMovementAllowance(0);
     expect(consumeMovementAllowance(fast,{x:0,y:0,z:0},{x:2,y:0,z:0},0)).toBe(true);
     expect(consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:4,y:0,z:0},0)).toBe(false);
-    expect(consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:6,y:0,z:0},100)).toBe(false);
+    expect(consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:12,y:0,z:0},100)).toBe(false);
     // Backward clock readings do not mint a new allowance.
     const remaining=fast.horizontal;consumeMovementAllowance(fast,{x:2,y:0,z:0},{x:2,y:0,z:0},50);
     expect(fast.horizontal).toBe(remaining);expect(fast.at).toBe(100);

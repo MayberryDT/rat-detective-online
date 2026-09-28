@@ -5,7 +5,7 @@ import { SpatialRayQuery } from './SpatialRayQuery';
 import { sweepSphereBody } from './sweepSphere';
 import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS, NETPLAY_COMPENSATION_MS, NETPLAY_HISTORY_MS, type MovementPoint } from './netplay';
 import { StaticCityBroadphase, addCityBody } from './StaticCityBroadphase';
-import { launcherVelocity } from './launcherVelocity';
+import { launcherVelocity, OVERPRESSURE } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
@@ -450,14 +450,17 @@ export class ChaosSimulation {
         // players which launcher this trigger operates. Occupants alone receive impulses.
         this.pressure.serial++;cooldowns[machine.id]=this.now+machine.cooldownMs;
         this.pressure.until=cooldowns[PRESSURE_LAUNCH.id]??0;
-        for(const c of caseRiders)this.launchCase(c,machine);
+        // One misfire roll per firing: every rider of an overpressure goes high.
+        const boost=Math.random()<OVERPRESSURE.chance;
+        const boosts=this.pressure.boosts??(this.pressure.boosts={});
+        if(boost)boosts[machine.id]=this.now;else delete boosts[machine.id];
+        for(const c of caseRiders)this.launchCase(c,machine,boost);
         // Keep other stations' outstanding events. A rat can only occupy one pad,
         // and its newest impulse replaces an older event if launched again.
         const selected=new Set(nearby.map(p=>p.id));
-        const velocity=launcherVelocity(machine);
         this.pressure.launches=[...this.pressure.launches.filter(e=>!selected.has(e.playerId)),
             ...nearby.map(player=>({id:`launch-${this.pressure.serial}-${player.id}`,machineId:machine.id,
-                playerId:player.id,at:this.now,velocity:{...velocity}}))].slice(-MAX_LAUNCH_EVENTS);
+                playerId:player.id,at:this.now,velocity:launcherVelocity(machine,boost),...(boost?{boost:true as const}:{})}))].slice(-MAX_LAUNCH_EVENTS);
     }
     private tell(text:string){this.notice={serial:this.notice.serial+1,text};}
     /** Clean Bill, Rat Race, Most Wanted and Malpractice act on rats and supplies each step. */
@@ -766,16 +769,16 @@ export class ChaosSimulation {
         if(p.y<=1.5)return true;
         return isReachableLandmarkPosition(p.x,p.y,p.z)||isReachableVehiclePosition(p.x,p.y,p.z);
     }
-    /** Pad impulse, matching the rat's own launcher velocity for that machine. */
-    private launchCase(c:CaseRuntime,machine:LaunchMachine=PRESSURE_LAUNCH){
-        const velocity=launcherVelocity(machine);
+    /** Pad impulse from the same machine profile as its rat riders, tumbling. */
+    private launchCase(c:CaseRuntime,machine:LaunchMachine,boost:boolean){
+        const velocity=launcherVelocity(machine,boost);
         c.launched=true;c.launchLift=velocity.y;
         // The watchdog treats a slow, high, unsupported case as lost. A case on a
         // pad has already been loose for seconds, so its apex would be swallowed.
         c.looseSince=this.now;
         c.body.type=C.Body.DYNAMIC;c.body.collisionFilterMask=1|8|16;c.body.updateMassProperties();
         c.body.velocity.set(velocity.x,velocity.y,velocity.z);
-        c.body.angularVelocity.set(0,3.5,0);
+        c.body.angularVelocity.set(velocity.z*.25,3.5,-velocity.x*.25);
         c.body.wakeUp();
     }
     private hitCasePath(from:C.Vec3,to:C.Vec3,velocity:C.Vec3,playing:boolean,c=this.primaryCase){
@@ -1295,7 +1298,7 @@ export class ChaosSimulation {
     snapshot(drain=true):ChaosState{
         const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,case:this.caseSnapshot(this.primaryCase),
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
-            extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,cooldowns:{...this.pressure.cooldowns},launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
+            extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,cooldowns:{...this.pressure.cooldowns},...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
             buffs:this.buffSnapshot(),
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),

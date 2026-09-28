@@ -20,11 +20,12 @@ export const PLAY_BOUNDS = {
 } as const;
 
 /** Generous authority envelope around the shipped 18 u/s movement, 1.45x Hot
- * Pursuit and 90 u/s vertical launch. Server time, not client timestamps, owns
+ * Pursuit, launcher throws (up to 106 u/s up, 33 u/s sideways drift under full
+ * steering) and landing shoves. Server time, not client timestamps, owns
  * the allowance; a long-suspended tab cannot spend an unlimited backlog. */
 export const MOVEMENT_ENVELOPE = {
   maxElapsedMs: 2_000,
-  horizontalSpeed: 35,
+  horizontalSpeed: 80,
   verticalSpeed: 110,
   // Starting tolerance, not a fresh grant on every packet. Unused server-time
   // allowance is retained so batched poses share the time they actually earned.

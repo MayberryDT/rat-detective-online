@@ -4,6 +4,7 @@ import type * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
 import { RatOptions } from '../utils/RatModel';
 import { PRESSURE_LAUNCH, type ChaosState } from '../shared/chaosState';
+import { LAUNCH_DRIFT_DECAY } from '../shared/launcherVelocity';
 import type {TouchMovement} from '../session/TouchInput';
 
 // ─── TUNING CONSTANTS ─────────────────────────────────────────────
@@ -33,6 +34,9 @@ export class RatController {
     private speedScale = 1;
     private launcherFlight = false;
     private beforeLaunchDamping:number|undefined;
+    /** A machine's sideways throw, kept (and slowly fading) under steering until landing. */
+    private driftX = 0;
+    private driftZ = 0;
     private normalJump = false;
     private readonly appliedLaunches = new Set<string>();
     private disposed = false;
@@ -89,7 +93,7 @@ export class RatController {
         if (this.disposed) return;
         this.groundGrace = Math.max(0, this.groundGrace - dt);
         if (!this.entity.dead && this.entity.hp > 0) this.applyMovement(dt, keys, touch);
-        else {this.normalJump=false;this.beforeLaunchDamping=undefined;}
+        else {this.normalJump=false;this.beforeLaunchDamping=undefined;this.driftX=this.driftZ=0;}
     }
 
     syncAfterPhysics(dt: number): void {
@@ -101,7 +105,7 @@ export class RatController {
             for (const contact of this.entity.world.contacts) {
                 const normalY = contact.bi === body ? -contact.ni.y : contact.bj === body ? contact.ni.y : 0;
                 // Explicit80ms grace permits forgiving edge jumps, never unlimited air jumps.
-                if (normalY > 0.5) { if(this.beforeLaunchDamping!==undefined){body.linearDamping=this.beforeLaunchDamping;this.beforeLaunchDamping=undefined;} this.groundGrace = 0.08; this.launcherFlight=false; this.normalJump=false; break; }
+                if (normalY > 0.5) { if(this.beforeLaunchDamping!==undefined){body.linearDamping=this.beforeLaunchDamping;this.beforeLaunchDamping=undefined;} this.groundGrace = 0.08; this.launcherFlight=false; this.normalJump=false; this.driftX=this.driftZ=0; break; }
             }
         }
         // The camera is placed once per rendered frame (updateView), not per
@@ -126,6 +130,7 @@ export class RatController {
             this.entity.body.linearDamping=.1; // Match server flight, including after a low-damping respawn.
             this.entity.body.velocity.set(event.velocity.x,event.velocity.y,event.velocity.z);
             this.entity.body.wakeUp();this.groundGrace=0;this.normalJump=false;
+            this.driftX=event.velocity.x;this.driftZ=event.velocity.z;
             this.launcherFlight=!!this.launcherBounds;
         }
     }
@@ -147,7 +152,7 @@ export class RatController {
         }
     }
 
-    resetGrounding(): void { this.beforeLaunchDamping=undefined; this.groundGrace = 0; this.launcherFlight=false; this.normalJump=false; }
+    resetGrounding(): void { this.beforeLaunchDamping=undefined; this.groundGrace = 0; this.launcherFlight=false; this.normalJump=false; this.driftX=this.driftZ=0; }
 
     dispose(): void {
         if (this.disposed) return;
@@ -187,11 +192,16 @@ export class RatController {
         const acceleration = 1 - Math.pow(1 - ACCEL, dt * 60);
         const braking = Math.pow(1 - DECEL, dt * 60);
         // Apply
-        // Full steering throughout a launch; only the vertical impulse is retained.
-        if (len > 0) {
+        // Full steering throughout a launch, on top of the machine's fading drift.
+        const drifting = this.driftX !== 0 || this.driftZ !== 0;
+        if (drifting) {
+            const fade = Math.exp(-LAUNCH_DRIFT_DECAY * dt);
+            this.driftX *= fade; this.driftZ *= fade;
+        }
+        if (len > 0 || drifting) {
             this.entity.body.wakeUp();
-            v.x += (desiredX - v.x) * acceleration;
-            v.z += (desiredZ - v.z) * acceleration;
+            v.x += (desiredX + this.driftX - v.x) * acceleration;
+            v.z += (desiredZ + this.driftZ - v.z) * acceleration;
         } else {
             v.x *= braking;
             v.z *= braking;

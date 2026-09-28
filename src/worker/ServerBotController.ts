@@ -6,6 +6,7 @@ import {StaticCityBroadphase,addCityBody} from '../shared/StaticCityBroadphase';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
 import {CITY_BOUNDS,grayboxBoxes} from '../shared/grayboxLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
+import {LAUNCH_DRIFT_DECAY} from '../shared/launcherVelocity';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
 import type {WorldSpec} from '../shared/worldSpec';
 
@@ -19,6 +20,8 @@ interface Bot {
     id:string;body:C.Body;brain:ObjectiveBotBrain;actor?:PlayerData;
     facing:number;initialized:boolean;alive:boolean;normalJump:boolean;zoneHop:boolean;
     launchedUntil:number;lastLaunchAt:number;lastMovementAt:number;
+    /** The launcher's sideways throw, fading until landing, under the brain's steering. */
+    driftX:number;driftZ:number;
     strandedSince:number;escapeCheckAt:number;escapeX:number;escapeZ:number;
     progressAt:number;progressX:number;progressZ:number;
 }
@@ -80,7 +83,7 @@ export class ServerBotController {
             body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
             this.bots.set(id,{id,body,brain:new ObjectiveBotBrain(sharedNavigation,index++,Math.random,experiment),facing:0,initialized:false,alive:false,
-                normalJump:false,zoneHop:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,
+                normalJump:false,zoneHop:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,driftX:0,driftZ:0,
                 strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0});
         }
     }
@@ -91,7 +94,7 @@ export class ServerBotController {
         body.position.set(position.x,position.y,position.z);body.previousPosition.copy(body.position);body.interpolatedPosition.copy(body.position);
         body.velocity.setZero();body.force.setZero();body.angularVelocity.setZero();body.torque.setZero();body.aabbNeedsUpdate=true;
         if(!body.world)this.world.addBody(body);
-        body.wakeUp();bot.initialized=true;bot.alive=true;bot.normalJump=false;bot.zoneHop=false;bot.launchedUntil=0;
+        body.wakeUp();bot.initialized=true;bot.alive=true;bot.normalJump=false;bot.zoneHop=false;bot.launchedUntil=0;bot.driftX=bot.driftZ=0;
         bot.lastLaunchAt=this.now;bot.lastMovementAt=-Infinity;bot.brain.reset();
         bot.strandedSince=0;bot.escapeCheckAt=0;bot.escapeX=0;bot.escapeZ=0;
         bot.progressAt=this.now;bot.progressX=position.x;bot.progressZ=position.z;
@@ -170,6 +173,7 @@ export class ServerBotController {
             bot.lastLaunchAt=launch.at;bot.body.velocity.set(launch.velocity.x,launch.velocity.y,launch.velocity.z);
             bot.strandedSince=0;bot.progressAt=now;
             bot.launchedUntil=now+150;bot.normalJump=false;bot.zoneHop=false;bot.body.wakeUp();
+            bot.driftX=launch.velocity.x;bot.driftZ=launch.velocity.z;
         }
         if(now-this.lastNavigationAt>=15){
             // The second bound is required in Workers, where performance.now()
@@ -207,7 +211,9 @@ export class ServerBotController {
                     if(intent.x||intent.z)intent.facing=Math.atan2(intent.x,intent.z);
                 }
             }
-            body.velocity.x+=(intent.x-body.velocity.x)*.14;body.velocity.z+=(intent.z-body.velocity.z)*.14;
+            if(grounded&&now>=bot.launchedUntil)bot.driftX=bot.driftZ=0;
+            else if(bot.driftX||bot.driftZ){const fade=Math.exp(-LAUNCH_DRIFT_DECAY*Math.min(dt,1/30));bot.driftX*=fade;bot.driftZ*=fade;}
+            body.velocity.x+=(intent.x+bot.driftX-body.velocity.x)*.14;body.velocity.z+=(intent.z+bot.driftZ-body.velocity.z)*.14;
             // Ignore stale takeoff contacts briefly, without ever locking air steering.
             if(intent.jump&&grounded&&now>=bot.launchedUntil){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
             if(bot.normalJump)body.force.y+=body.mass*this.world.gravity.y*.28;

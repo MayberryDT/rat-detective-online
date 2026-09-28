@@ -23,7 +23,9 @@ function fire(sim:ChaosSimulation,target:{x:number;y:number;z:number},now=1010,i
 }
 describe('distributed controls and physical pressure launch',()=>{
  it.each([.1,.01])('keeps launch height identical with walking damping %s and restores it on landing',damping=>{
-  const {sim}=fixture();fire(sim,PRESSURE_LAUNCH.target);const state=sim.snapshot();
+  // A mid roll: an ordinary (not overpressure) pressure-works throw.
+  const random=vi.spyOn(Math,'random').mockReturnValue(.5);
+  const {sim}=fixture();fire(sim,PRESSURE_LAUNCH.target);const state=sim.snapshot();random.mockRestore();
   const world=new C.World({gravity:new C.Vec3(0,-25,0)}),rat=new RatController(new THREE.Scene(),world,new THREE.PerspectiveCamera(),'',{},new THREE.Vector3(0,0,0));
   rat.entity.body.linearDamping=damping;rat.applyPressureLaunches(state,'local');let peak=0;
   try{
@@ -82,7 +84,9 @@ describe('distributed controls and physical pressure launch',()=>{
   rat.applyPressureLaunches(state,'local');expect(rat.entity.body.velocity.toArray()).toEqual(Object.values(state.pressure!.launches[0].velocity));
   for(let i=0;i<12;i++){rat.prepareMovement(1/60,{});world.step(1/60);rat.syncAfterPhysics(1/60);}
   expect(rat.entity.body.position.y).toBeGreaterThan(5);
-  expect(Math.hypot(rat.entity.body.position.x-150,rat.entity.body.position.z-147)).toBe(0);
+  // Unsteered, the rat rides the machine's sideways drift.
+  const drift=state.pressure!.launches[0].velocity;
+  expect((rat.entity.body.position.x-150)*drift.x+(rat.entity.body.position.z-147)*drift.z).toBeGreaterThan(0);
   // Input responds during takeoff and can reverse during descent without replacing vertical velocity.
   for(const vy of [40,-20]){
    rat.entity.body.velocity.set(0,vy,0);
@@ -111,7 +115,7 @@ describe('distributed controls and physical pressure launch',()=>{
    expect(state.pressure!.launches.find(e=>e.playerId===machine.id)).toMatchObject({machineId:machine.id});
    expect(state.pressure!.cooldowns![machine.id]).toBeGreaterThan(1000);
   }
-  expect(state.pressure!.launches.find(e=>e.playerId==='passenger')!.velocity).toEqual(state.pressure!.launches.find(e=>e.playerId==='pressure')!.velocity);
+  expect(state.pressure!.launches.find(e=>e.playerId==='passenger')).toMatchObject({machineId:'pressure',velocity:{y:expect.any(Number)}});
   expect(parseServerMessage({type:'chaos',state})).not.toBeNull();
   sim.shoot('pressure',{shotId:'blocked',origin:{x:PRESSURE_LAUNCH.target.x,y:PRESSURE_LAUNCH.target.y,z:PRESSURE_LAUNCH.target.z+1},direction:{x:0,y:0,z:-1}});
   sim.step(.01,1200);expect(sim.snapshot(false).pressure!.serial).toBe(6);
@@ -136,7 +140,7 @@ describe('distributed controls and physical pressure launch',()=>{
   const owner='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   for(const shot of state.shots)shot.owner=owner;
   for(const corpse of state.corpses){corpse.owner=owner;corpse.victimId=owner;}
-  state.pressure!.launches=Array.from({length:24},(_,i)=>({id:`pressure-100-${owner}-${i}`,playerId:owner,at:state.time,velocity:{...PRESSURE_LAUNCH.velocity}}));
+  state.pressure!.launches=Array.from({length:24},(_,i)=>({id:`pressure-100-${owner}-${i}`,playerId:owner,at:state.time,velocity:{x:33,y:106,z:-33}}));
   const message={type:'chaos' as const,state};
   const raw=serializeServerMessage(message);
   expect(state.shots.some(s=>s.explosive)).toBe(true);

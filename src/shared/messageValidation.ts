@@ -456,8 +456,10 @@ function parseChaos(value:unknown):ChaosState|null{
     if(!isRecord(p)||integer(p.serial)===null||finiteNumber(p.until)===null||!Array.isArray(p.launches)||p.launches.length>MAX_LAUNCH_EVENTS)return null;
     if(p.cooldowns!==undefined&&(!isRecord(p.cooldowns)||Object.keys(p.cooldowns).length>LAUNCH_MACHINES.length||
       Object.entries(p.cooldowns).some(([id,until])=>!LAUNCH_MACHINES.some(m=>m.id===id)||finiteNumber(until)===null)))return null;
+    if(p.boosts!==undefined&&(!isRecord(p.boosts)||Object.keys(p.boosts).length>LAUNCH_MACHINES.length||
+      Object.entries(p.boosts).some(([id,at])=>!LAUNCH_MACHINES.some(m=>m.id===id)||finiteNumber(at)===null)))return null;
     if(!p.launches.every(e=>isRecord(e)&&nonEmptyString(e.id,128)&&nonEmptyString(e.playerId,64)&&
-      finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&isVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)))return null;
+      finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&isVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)&&(e.boost===undefined||e.boost===true)))return null;
   }
   const validated={...value,...(assignment?{assignment}:{})};
   if(isLegacyIncidentId(d.incident))return {...validated,dispatch:{...d,incident:incidentInfo(d.incident).id}} as unknown as ChaosState;

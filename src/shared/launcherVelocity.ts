@@ -1,14 +1,36 @@
 import { CITY_BOUNDS, SEWER_FLOOR } from './grayboxLayout';
-import type { LaunchMachine } from './chaosState';
+import type { LaunchMachine, LaunchMachineKind } from './chaosState';
 import type { Vec3Data } from './networkProtocol';
 
 // Directed incidents retain full-flight containment independently of vertical pads.
 export const LAUNCH_BOUNDARY_MARGIN = 12;
 const GRAVITY = 25;
 
-/** Every pad launches straight up. Horizontal travel belongs to the rat's steering. */
-export function launcherVelocity(machine:LaunchMachine):Vec3Data {
-    return {x:0,y:machine.velocity.y,z:0};
+/** Each machine throws its own way. Lift is vertical speed; drift is the
+ * horizontal speed the rat keeps unless it steers against it, aimed toward the
+ * city centre within ±spread radians so a flight stays over the city. */
+export const LAUNCH_PROFILES:Record<LaunchMachineKind,{lift:readonly [number,number];drift:readonly [number,number];spread:number}>={
+    pressure:{lift:[86,94],drift:[4,12],spread:.6},
+    fan:{lift:[96,104],drift:[0,5],spread:Math.PI},
+    geyser:{lift:[78,100],drift:[6,15],spread:1.8},
+    dumpster:{lift:[74,96],drift:[9,19],spread:2.2},
+    freight:{lift:[62,72],drift:[17,23],spread:.5},
+    mousetrap:{lift:[58,68],drift:[19,25],spread:.9},
+};
+/** Rare misfire: the tallest, widest throw. Stays inside MAX_LAUNCH_SPEED. */
+export const OVERPRESSURE={chance:1/7,lift:106,drift:1.3} as const;
+/** Drift fades by this rate (1/s) while airborne, for rats and cases alike. */
+export const LAUNCH_DRIFT_DECAY=.25;
+/** One rider's throw from a machine's profile; `boost` is decided once per
+ * firing so every rider of an overpressure misfire goes high. `random` is [0,1). */
+export function launcherVelocity(machine:LaunchMachine,boost:boolean,random:()=>number=Math.random):Vec3Data {
+    const profile=LAUNCH_PROFILES[machine.kind];
+    const between=([low,high]:readonly [number,number])=>low+(high-low)*random();
+    const lift=boost?OVERPRESSURE.lift:between(profile.lift);
+    const drift=between(profile.drift)*(boost?OVERPRESSURE.drift:1);
+    const centre=(CITY_BOUNDS.min+CITY_BOUNDS.max)/2;
+    const heading=Math.atan2(centre-machine.pad.x,centre-machine.pad.z)+(random()*2-1)*profile.spread;
+    return {x:Math.sin(heading)*drift,y:lift,z:Math.cos(heading)*drift};
 }
 
 /** Directed incident impulses use the same full-flight city containment as pads. */

@@ -1,3 +1,4 @@
+import {LAUNCH_PROFILES,OVERPRESSURE} from '../../src/shared/launcherVelocity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as C from 'cannon-es';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
@@ -37,7 +38,7 @@ describe('launchable cases',()=>{
   it('throws a loose case on the pad with the machine impulse',()=>{
     const {sim}=fixture();parkCaseOnPad(sim);
     trigger(sim);
-    expect(sim.caseBody.velocity.y).toBeCloseTo(PRESSURE_LAUNCH.velocity.y,2);
+    expect(sim.caseBody.velocity.y).toBeGreaterThanOrEqual(LAUNCH_PROFILES.pressure.lift[0]);
     // The impulse lands during the same tick's shot resolution, so the first
     // visible rise is one step later.
     const before=sim.caseBody.position.y;
@@ -101,7 +102,8 @@ describe('launchable cases',()=>{
     for(const machine of LAUNCH_MACHINES){
       const {sim}=fixture();parkCaseOnPad(sim,machine);
       trigger(sim,machine);
-      expect(sim.caseBody.velocity.y,`${machine.id} should launch`).toBeCloseTo(machine.velocity.y,2);
+      const [low,high]=LAUNCH_PROFILES[machine.kind].lift,lift=sim.caseBody.velocity.y;
+      expect(lift>=low-1e-6&&lift<=high+1e-6||Math.abs(lift-OVERPRESSURE.lift)<1e-6,`${machine.id} should launch (${lift})`).toBe(true);
     }
   });
 });
