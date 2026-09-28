@@ -11,8 +11,9 @@ export interface LineupEntry {id:string;name:string;appearance:RatOptions;award?
 /** Far below the city and its sewers; nothing else is ever this deep. */
 const ORIGIN=new THREE.Vector3(0,-320,0);
 const SPACING=1.75,WALL_Z=-1.3,ROOM_HALF_WIDTH=6.8,ROOM_HEIGHT=4.6;
-/** Seconds: first flash, then one per rat; the winner (last) gets a double flash. */
-const FIRST_FLASH=.8,FLASH_STEP=1,WINNER_PAUSE=.5;
+/** Seconds: first flash, then one per rat; the winner (last) gets a double flash. Five rats
+ * finish in about 2.4 s, inside the 2.6 s the round end leaves the lineup. */
+const FIRST_FLASH=.3,FLASH_STEP=.38,WINNER_PAUSE=.25;
 
 /** Juice T5: a noir police lineup at round end. The top rats stand against a
  * height chart in a precinct room, lit by the stage's own spotlight (moved here,
@@ -74,7 +75,7 @@ export class PoliceLineup {
         this.flash=Math.max(0,this.flash-dt*7);
         // A slow push-in, drifting toward the rat being photographed.
         const focus=Math.min(this.fired,this.entries.length)-1,target=focus>=0?this.rats[focus]!.position.x*.2:0;
-        const push=Math.min(1,this.age/8);
+        const push=Math.min(1,this.age/2.6);
         camera.position.set(ORIGIN.x+target,ORIGIN.y+1.45,ORIGIN.z+7.4-push*1.1);
         camera.lookAt(ORIGIN.x+target*.8,ORIGIN.y+1.05,ORIGIN.z);
         camera.updateMatrixWorld();

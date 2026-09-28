@@ -61,8 +61,9 @@ function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolea
 }
 
 /** One owner for the complete local game lifetime, including reconnect reconciliation. */
-/** Round end (seconds after the slow-motion finish): the CASE CLOSED card, then the lineup's photos. */
-const ROUND_END={card:2.6,lineup:6.6};
+/** Round end (Tyler, 2026-09-28): the slow-motion finish, the CASE CLOSED card and the
+ * lineup's photos share the first `results` seconds; the results board holds the other ten. */
+const ROUND_END={card:1,results:5};
 
 export class GameSession {
     private readonly stage;
@@ -511,9 +512,9 @@ export class GameSession {
                 else this.hud.showVictory(message.winnerName, message.kills,message.assignment,...(message.awards?[message.awards]:[]));
                 // Round end: the CASE CLOSED card holds the screen, then the police lineup,
                 // then the Case File and final standings for the rest of the 15 seconds.
-                const entries=feelState().on('lineup')?this.lineupEntries(message):[],cardAt=performance.now()+hold*1000;
-                if(entries.length)this.pendingLineup={entries,at:cardAt+ROUND_END.card*1000};
-                this.pendingResults=cardAt+(ROUND_END.card+(entries.length?ROUND_END.lineup:0))*1000;
+                const won=performance.now(),entries=feelState().on('lineup')?this.lineupEntries(message):[];
+                if(entries.length)this.pendingLineup={entries,at:won+(hold+ROUND_END.card)*1000};
+                this.pendingResults=won+ROUND_END.results*1000;
                 this.highlights.emit(this.highlights.detector.onWin(message.winnerId, performance.now()));
                 break;
             }
