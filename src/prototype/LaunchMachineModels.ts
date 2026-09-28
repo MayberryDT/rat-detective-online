@@ -34,8 +34,10 @@ export function createMachineMaterials():MachineMaterials {
         new THREE.MeshStandardMaterial({color,roughness,metalness,emissive,emissiveIntensity});
     const stripes=document.createElement('canvas');stripes.width=stripes.height=64;
     const ctx=stripes.getContext('2d')!;ctx.fillStyle='#e0a81c';ctx.fillRect(0,0,64,64);ctx.fillStyle='#15171a';
-    for(let i=-2;i<4;i++){ctx.beginPath();ctx.moveTo(i*32,64);ctx.lineTo(i*32+16,64);ctx.lineTo(i*32+80,0);ctx.lineTo(i*32+64,0);ctx.fill();}
-    const hazardMap=new THREE.CanvasTexture(stripes);hazardMap.colorSpace=THREE.SRGBColorSpace;hazardMap.wrapS=hazardMap.wrapT=THREE.RepeatWrapping;hazardMap.repeat.set(3,1);
+    // Straight bands, turned 45° by the texture transform into chevron-style hazard stripes.
+    for(let x=0;x<64;x+=32)ctx.fillRect(x,0,16,64);
+    const hazardMap=new THREE.CanvasTexture(stripes);hazardMap.colorSpace=THREE.SRGBColorSpace;hazardMap.wrapS=hazardMap.wrapT=THREE.RepeatWrapping;
+    hazardMap.repeat.set(3,1);hazardMap.center.set(.5,.5);hazardMap.rotation=Math.PI/4;
     const hazard=new THREE.MeshStandardMaterial({map:hazardMap,roughness:.6,emissive:0x2a1a00,emissiveIntensity:.25});
     hazard.addEventListener('dispose',()=>hazardMap.dispose());
     return {
