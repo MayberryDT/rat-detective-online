@@ -323,6 +323,14 @@ export class FeelDirector {
         this.surgeFlicker=Math.max(this.surgeFlicker,Math.max(.35,1-d/80));
         if(d<30)this.camera.kick(-FEEL.launchMoment.params.shake*(1-d/30),(Math.random()*2-1)*.4);
     }
+    /** A ball struck a launcher's trigger at `at`: chips fly and, close by, the hit thumps the view
+     * harder the fuller the machine (`level` 0…1). `busy` hits (cooldown) are a dull tap. */
+    triggerHit(at:THREE.Vector3,busy:boolean,level:number,view:THREE.Camera):void {
+        if(!this.state.on('launchMoment'))return;
+        this.launchJuice?.chips(at,busy?2:8+Math.round(level*8));
+        const d=at.distanceTo(view.position);
+        if(d<12&&!busy)this.camera.kick(-(.25+.6*level)*(1-d/12),(Math.random()*2-1)*.2);
+    }
     /** P2, each frame: standing on a pad whose pressure is `level` (0…1) shakes your view harder as it builds. */
     padRumble(level:number,dt:number):void {
         if(!this.state.on('launchMoment')||level<=.3||!(dt>0))return;

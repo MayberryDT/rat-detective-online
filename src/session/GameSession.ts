@@ -306,6 +306,7 @@ export class GameSession {
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
+            this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onVentErupted=vent=>{
                 const pad={x:vent.x,y:vent.y,z:vent.z,radius:SURGE.radius};
                 this.feel.launcherFired('geyser',pad,!!vent.boost,this.stage.camera);this.feel.surgePulse(vent,this.stage.camera);

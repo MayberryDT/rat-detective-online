@@ -15,6 +15,10 @@ interface MachineView {
     steamDebt:number;creakAt:number;popped:boolean;
     /** Wind-tunnel blade angle, integrated so its speed can follow pressure. */
     spin:number;
+    /** Latest trigger hit: seconds since it (Infinity for none), the push direction in the machine's frame, and whether it was wasted on the cooldown. */
+    hitAge:number;hitX:number;hitZ:number;hitBusy:boolean;
+    /** Needle overshoot from the latest hit. */
+    needleKick:number;
 }
 
 /** Six municipal launchers, each beside its pad with its big red trigger on top.
@@ -28,6 +32,8 @@ export class PressureMachine {
     private readonly views:MachineView[]=[];
     /** Called once when a machine fires in the presented timeline, with whether it misfired high. */
     onFire?:(machine:LaunchMachine,boost:boolean)=>void;
+    /** Called for each cheese ball the authority counted on a machine's trigger (`busy`: wasted on the cooldown). */
+    onTriggerHit?:(machine:LaunchMachine,at:THREE.Vector3,busy:boolean,level:number)=>void;
     /** Called once when a Pressure Surge street launcher erupts. */
     onVent?:(vent:SurgeVent)=>void;
     /** Pooled street-launcher visuals: a rattling manhole cover over a glowing hole. */
@@ -40,6 +46,9 @@ export class PressureMachine {
     private readonly dummy=new THREE.Object3D();
     private readonly world=new THREE.Vector3();
     private lastNow=NaN;
+    /** Latest pressure per machine (0…1), for pitching the next trigger hit. */
+    private readonly levels=new Map<string,number>();
+    private readonly hitAt=new THREE.Vector3();
 
     constructor(scene:THREE.Scene,audio?:AudioContext){
         this.launchAudio=new LauncherAudio(audio);
@@ -48,11 +57,31 @@ export class PressureMachine {
         for(const machine of LAUNCH_MACHINES){
             const model=buildMachine(machine,this.materials);
             this.root.add(model.base,model.pad,model.glow);
-            this.views.push({model,heardFire:NaN,heardTell:NaN,steamDebt:0,creakAt:0,popped:false,spin:0});
+            this.views.push({model,heardFire:NaN,heardTell:NaN,steamDebt:0,creakAt:0,popped:false,spin:0,hitAge:Infinity,hitX:0,hitZ:0,hitBusy:false,needleKick:0});
         }
         this.steamMesh=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),new THREE.MeshBasicMaterial({color:0xd9dcd6,transparent:true,opacity:.3,depthWrite:false}),STEAM);
         this.steamMesh.name='launcher-steam';this.steamMesh.count=0;this.steamMesh.frustumCulled=false;this.root.add(this.steamMesh);
         scene.add(this.root);
+    }
+
+    /** A trigger hit reported at `p` (world) by the snapshot: the trigger punches in and
+     * springs back, the machine rocks away from it, the needle jumps, steam and paint
+     * chips spit out, and a clank pitched to how full it is rings out. Returns false
+     * when `p` is on no machine's trigger (for example a Dispatch box). */
+    triggerHit(p:{x:number;y:number;z:number},busy:boolean,camera?:THREE.Camera):boolean {
+        const view=this.views.find(v=>{const t=v.model.machine.target;return Math.abs(p.x-t.x)<t.w/2+.8&&Math.abs(p.y-t.y)<t.h/2+.8&&Math.abs(p.z-t.z)<t.d/2+.8;});
+        if(!view)return false;
+        const machine=view.model.machine,level=this.levels.get(machine.id)??0;
+        this.hitAt.set(p.x,p.y,p.z);
+        // The push, in the machine's own frame: away from where the ball struck.
+        view.model.base.worldToLocal(this.world.copy(this.hitAt));
+        const d=Math.hypot(this.world.x,this.world.z)||1;
+        view.hitX=-this.world.x/d;view.hitZ=-this.world.z/d;view.hitAge=0;view.hitBusy=busy;
+        if(!busy)view.needleKick=.35;
+        for(let i=0;i<(busy?2:10);i++)this.puff(this.hitAt,2+Math.random()*4,.5+Math.random()*.5,.12+Math.random()*.1);
+        this.launchAudio.play(machine.kind,machine.pad,camera,busy?'clunk':'pump',false,level);
+        this.onTriggerHit?.(machine,this.hitAt,busy,level);
+        return true;
     }
 
     private puff(at:THREE.Vector3,up:number,life:number,size:number){
@@ -92,6 +121,7 @@ export class PressureMachine {
                 this.launchAudio.play(kind,machine.pad,camera,'fire',boost);
                 this.onFire?.(machine,boost);
             }
+            this.levels.set(id,level);
             const intensity=hang?1:level,strain=smooth(.4,.75,intensity),danger=hang?1:smooth(.75,.95,intensity);
             this.launchAudio.setPressure(id,machine.pad,intensity,danger,camera);
             // Strain accents: creaks while straining, a popped bolt on entering danger.
@@ -100,13 +130,18 @@ export class PressureMachine {
             if(intensity<.3)view.popped=false;
             // The trigger throbs (never glows) as pressure builds, quicker in the hang.
             const rate=hang?12:1+intensity*6,pulse=.5+.5*Math.sin(t*Math.PI*2*rate);
-            model.trigger.scale.setScalar(TRIGGER_BASE*(1+.04*pulse*intensity+(hang?.05:0)));
+            // A hit punches the trigger flat and it springs back with a wobble.
+            view.hitAge+=dt;view.needleKick*=Math.exp(-dt*9);
+            const punch=view.hitAge<.6?Math.exp(-view.hitAge*9)*Math.cos(view.hitAge*34)*(view.hitBusy?.5:1):0;
+            const size=TRIGGER_BASE*(1+.04*pulse*intensity+(hang?.05:0));
+            model.trigger.scale.set(size*(1+.16*punch),size*(1-.24*punch),size*(1+.16*punch));
             // The body swells and shudders; the whole machine bulges in the danger stage.
             const shake=strain*.025+danger*.07+(hang?.06:0);
-            model.body.position.set(Math.sin(t*61)*shake,Math.abs(Math.sin(t*47))*shake*.6,Math.cos(t*53)*shake);
+            model.body.position.set(Math.sin(t*61)*shake+view.hitX*.18*punch,Math.abs(Math.sin(t*47))*shake*.6,Math.cos(t*53)*shake+view.hitZ*.18*punch);
+            model.body.rotation.set(view.hitZ*.08*punch,0,-view.hitX*.08*punch);
             const swell=1+.035*intensity*intensity+.05*danger*Math.abs(Math.sin(t*28));
             model.body.scale.set(swell,1+.02*intensity+.03*danger*Math.abs(Math.sin(t*33)),swell);
-            if(model.needle)model.needle.rotation.z=2.36-intensity*4.71+Math.sin(t*40)*.06*danger;
+            if(model.needle)model.needle.rotation.z=2.36-(intensity+view.needleKick*(1-intensity))*4.71+Math.sin(t*40)*.06*danger;
             (model.glow.material as THREE.MeshBasicMaterial).opacity=danger*.28*(.7+.3*Math.sin(t*14))+(hang?.3:0);
             // Steam: wisps when building, more seams and a taller plume as it rises.
             if(intensity>.03&&dt>0){

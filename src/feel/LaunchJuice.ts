@@ -25,6 +25,7 @@ const SPIT:Record<LaunchMachineKind,{colors:readonly number[];size:readonly [num
 const SPARK_COLORS=[0xffa040,0xffd070,0xff6a20] as const;
 const PAPER=[0xe8dcc0,0xd8ccb0,0xf0e6d0] as const;
 const CHUNKS=[0x2a2a30,0x3a3838,0x4a4640] as const;
+const TRIGGER_CHIPS=[0xd8160c,0xa81008,0xe9b53a,0xf2d06a] as const;
 
 interface Bit {p:THREE.Vector3;v:THREE.Vector3;spin:THREE.Vector3;rot:THREE.Euler;size:THREE.Vector3;age:number;life:number;floor:number;flutter:number}
 const bit=():Bit=>({p:new THREE.Vector3(),v:new THREE.Vector3(),spin:new THREE.Vector3(),rot:new THREE.Euler(),size:new THREE.Vector3(1,1,1),age:Infinity,life:1,floor:0,flutter:0});
@@ -124,6 +125,8 @@ export class LaunchJuice {
         this.debris(at,Math.round(6+e*14),CHUNKS,[.18,.1,.16],5+e*7,6+e*8,0,1.6);
         this.decal(at,2.6+e*3.4,life);
     }
+    /** A ball hits a trigger: cheese crumbs and chips of red paint spit off it. */
+    chips(at:THREE.Vector3,count:number):void {this.debris(at,count,TRIGGER_CHIPS,[.18,.06,.14],6,8,0,1);}
     /** The thrown case bursts open: paperwork flutters down around it. */
     spill(at:THREE.Vector3,count:number):void {this.debris(at,count,PAPER,[.34,.012,.26],3.5,9,1,4.5);}
 

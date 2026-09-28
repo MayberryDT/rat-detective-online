@@ -7,8 +7,9 @@ const VOLUME = .85 * .7;
 const RANGE = 120;
 const MAX_VOICES = 12;
 type Voice = {pad: LaunchMachine['pad']; output: GainNode; pan: StereoPannerNode; volume: number; release: () => void};
-/** `tell`: the half-second hang when full; `creak`/`pop`: strain accents while pressure builds. */
-export type LauncherCue = 'tell' | 'fire' | 'creak' | 'pop';
+/** `tell`: the half-second hang when full; `creak`/`pop`: strain accents while pressure builds;
+ * `pump`: a ball on the trigger (pitched up with pressure); `clunk`: a hit wasted on the cooldown. */
+export type LauncherCue = 'tell' | 'fire' | 'creak' | 'pop' | 'pump' | 'clunk';
 type PressureLoop = {pad: LaunchMachine['pad']; output: GainNode; pan: StereoPannerNode; hum: OscillatorNode; filter: BiquadFilterNode; siren: OscillatorNode; sirenGain: GainNode; wobble: OscillatorNode; depth: GainNode};
 
 /** Launcher cues, all attached to the machine in 3D: the pressure hum and danger
@@ -51,7 +52,7 @@ export class LauncherAudio {
         return this.noiseBuffer;
     }
 
-    play(kind: LaunchMachine['kind'], pad: LaunchMachine['pad'], camera?: THREE.Camera, cue: LauncherCue = 'fire', boost = false): void {
+    play(kind: LaunchMachine['kind'], pad: LaunchMachine['pad'], camera?: THREE.Camera, cue: LauncherCue = 'fire', boost = false, level = 0): void {
         const ctx = this.audio;
         if (this.disposed || !ctx || ctx.state !== 'running' || !camera) return;
         const spatial = this.spatial(pad, camera);
@@ -93,6 +94,15 @@ export class LauncherAudio {
             // Stressed metal: a slow groaning glide under a gritty rasp.
             tone('sawtooth', pitch * 1.4, pitch * .9, .2, .04, .45);
             last = hiss('bandpass', 500, 300, .12, .05, .2, .4);
+        } else if (cue === 'pump') {
+            // A heavy metal clank, a pneumatic chuff, and a ping that climbs as the machine fills.
+            tone('square', 150, 70, .5, .002, .16);
+            tone('triangle', 520 + level * 900, 480 + level * 820, .32, .002, .22);
+            last = hiss('bandpass', 2400, 900, .35, .004, .04, .2);
+        } else if (cue === 'clunk') {
+            // Nothing to give: a dull dead thud.
+            tone('sine', 110, 60, .45, .002, .14);
+            last = hiss('lowpass', 700, 200, .2, .003, .02, .1);
         } else if (cue === 'pop') {
             // A rivet or bolt pinging loose.
             tone('triangle', 2600, 1700, .28, .001, .18);

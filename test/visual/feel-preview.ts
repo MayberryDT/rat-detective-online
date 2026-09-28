@@ -184,6 +184,7 @@ const actions:Record<string,()=>void>={
     'P Street launchers ahead':()=>{const at=performance.now()+1000;pressure.vents=[0,1,2].map(i=>{const p=ahead(6+i*4);return {id:`vent-${at}-${i}`,x:p.x+(i-1)*3,y:0,z:p.z,at};});},
     'P Surge look on':()=>{surging=true;feel.setIncident('pressure-surge');},
     'P Surge look off':()=>{surging=false;feel.setIncident();},
+    'P Shoot the trigger':()=>{const t=LAUNCH_MACHINES.find(m=>m.id===viewing)!.target;machines.triggerHit({x:t.x+1.9,y:t.y,z:t.z},false,stage.camera);},
     'P Machines empty':()=>setPressure(0),
     'P Machines 30% (building)':()=>setPressure(.3),
     'P Machines 60% (straining)':()=>setPressure(.6),
@@ -221,6 +222,7 @@ function poseStudioCorpse(dt:number):void {
 const machines=new PressureMachine(stage.scene,stage.listener.context as AudioContext);
 const pressure:PressureState={serial:0,levels:{},launches:[]};
 let surging=false;
+machines.onTriggerHit=(_machine,at,busy,level)=>feel.triggerHit(at,busy,level,stage.camera);
 machines.onFire=(machine,boost)=>feel.launcherFired(machine.kind,machine.pad,boost,stage.camera);
 machines.onVent=vent=>{feel.launcherFired('geyser',{x:vent.x,y:vent.y,z:vent.z,radius:3.2},false,stage.camera);feel.surgePulse(vent,stage.camera);};
 function setPressure(fraction:number):void {
@@ -231,7 +233,9 @@ function firePressure(boost:boolean):void {
     pressure.fired=Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,at]));pressure.boosts=boost?{...pressure.fired}:{};
 }
 /** Park the camera three-quarters on to a machine and its pad (stops following your rat). */
+let viewing='pressure';
 function viewMachine(id:string):void {
+    viewing=id;
     const m=LAUNCH_MACHINES.find(machine=>machine.id===id)!,dx=m.pad.x-m.box.x,dz=m.pad.z-m.box.z,d=Math.hypot(dx,dz);
     rat.updateView=()=>{};rat.entity.mesh.visible=false;
     // The Gate geyser has a wall on its left; look from the street side.

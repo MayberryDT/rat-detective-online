@@ -119,6 +119,10 @@ export class ChaosView {
     onCorpseJolt?: (p:Vec3Data)=>void;
     /** A launcher firing in the presented timeline. */
     set onLauncherFired(listener:((machine:LaunchMachine,boost:boolean)=>void)|undefined){this.pressureMachine.onFire=listener;}
+    /** Latest render camera, for placing trigger-hit sounds raised from snapshots. */
+    private cameraForTriggers?:THREE.Camera;
+    /** A ball counted on a launcher trigger (for the shooter's-side juice). */
+    set onTriggerHit(listener:((machine:LaunchMachine,at:THREE.Vector3,busy:boolean,level:number)=>void)|undefined){this.pressureMachine.onTriggerHit=listener;}
     /** A Pressure Surge street launcher erupting in the presented timeline. */
     set onVentErupted(listener:((vent:SurgeVent)=>void)|undefined){this.pressureMachine.onVent=listener;}
     private readonly landings:{at:number;p:Vec3Data;speed:number}[]=[];
@@ -333,6 +337,8 @@ export class ChaosView {
                 nearest?.animator.joltDeath(hit.foley==='corpse-kick'?1:.5);
                 if(nearest&&hit.foley==='corpse-kick')this.onCorpseJolt?.(hit.p);
             }
+            // A ball the authority counted on a launcher's trigger.
+            if((hit.foley==='trigger'||hit.foley==='trigger-busy')&&this.cameraForTriggers)this.pressureMachine.triggerHit(hit.p,hit.foley==='trigger-busy',this.cameraForTriggers);
             if(hit.foley==='launch-landing'){
                 // Other rats are shown a playback delay behind; your own landing already happened.
                 const self=this.resolveRat(this.myId)?.mesh.position,mine=!!self&&Math.hypot(self.x-hit.p.x,self.z-hit.p.z)<3;
@@ -550,6 +556,7 @@ export class ChaosView {
         const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
         this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer);
         if(this.lastHitPoint)this.assignmentDestinations.clear();else this.assignmentDestinations.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
+        this.cameraForTriggers=camera;
         this.pressureMachine.update(s.pressure,now,camera,s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='pressure-surge');
         for(const kiosk of this.kiosks){
         updateDispatchSiren(kiosk,d.phase==='ready',renderTime/1000);
