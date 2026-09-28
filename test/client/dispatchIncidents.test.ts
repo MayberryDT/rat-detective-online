@@ -1,3 +1,4 @@
+import {PRESSURE_TELL_MS} from '../../src/shared/launcherVelocity';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
@@ -158,12 +159,13 @@ describe('authoritative Dispatch incidents',()=>{
  });
  it('fires all launchers every three seconds through cooldowns, without replaying restored pulses',()=>{
   const {sim,players}=fixture('pressure-surge');sim.step(0,now+2999);expect(sim.snapshot(false).pressure!.serial).toBe(0);
-  sim.step(0,now+3000);let s=sim.snapshot(false);expect(s.pressure!.serial).toBe(6);for(const m of LAUNCH_MACHINES)expect(s.pressure!.cooldowns![m.id]).toBe(now+8000);
+  // Each pulse arms every machine; they fire after the tell.
+  sim.step(0,now+3000);sim.step(0,now+3000+PRESSURE_TELL_MS);let s=sim.snapshot(false);expect(s.pressure!.serial).toBe(6);for(const m of LAUNCH_MACHINES)expect(s.pressure!.cooldowns![m.id]).toBe(now+8000+PRESSURE_TELL_MS);
   const restored=new ChaosSimulation(players,()=>{},s);restored.step(0,now+3001);expect(restored.snapshot(false).pressure!.serial).toBe(6);
-  restored.step(0,now+6000);s=restored.snapshot(false);expect(s.pressure!.serial).toBe(12);for(const m of LAUNCH_MACHINES)expect(s.pressure!.cooldowns![m.id]).toBe(now+11000);
+  restored.step(0,now+6000);restored.step(0,now+6000+PRESSURE_TELL_MS);s=restored.snapshot(false);expect(s.pressure!.serial).toBe(12);for(const m of LAUNCH_MACHINES)expect(s.pressure!.cooldowns![m.id]).toBe(now+11000+PRESSURE_TELL_MS);
   restored.step(0,now+T.activeMs);const before=restored.snapshot(false).pressure!.serial;restored.step(0,now+T.activeMs+3000);expect(restored.snapshot(false).pressure!.serial).toBe(before);
   const cooling=fixture('pressure-surge');const saved=cooling.sim.snapshot(false);saved.pressure!.cooldowns={[LAUNCH_MACHINES[0].id]:now+9000};
-  const blocked=new ChaosSimulation(cooling.players,()=>{},saved);blocked.step(0,now+3000);expect(blocked.snapshot(false).pressure!.serial).toBe(6);
+  const blocked=new ChaosSimulation(cooling.players,()=>{},saved);blocked.step(0,now+3000);blocked.step(0,now+3000+PRESSURE_TELL_MS);expect(blocked.snapshot(false).pressure!.serial).toBe(6);
  });
  it('restores the ordinary bouncy case kick after Evidence Tampering missile speed expires',()=>{
   const {sim}=fixture('evidence-tampering');expect(caseKick(sim)).toBeCloseTo(160,2);expect(Math.abs(sim.caseBody.angularVelocity.z)).toBeGreaterThan(5);

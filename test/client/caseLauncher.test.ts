@@ -1,4 +1,4 @@
-import {LAUNCH_PROFILES,OVERPRESSURE} from '../../src/shared/launcherVelocity';
+import {LAUNCH_PROFILES,OVERPRESSURE,PRESSURE_TELL_MS} from '../../src/shared/launcherVelocity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as C from 'cannon-es';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
@@ -16,7 +16,7 @@ function addGround(sim:ChaosSimulation){
 /** Trigger the machine that owns the pad by shooting its red control cap. */
 function trigger(sim:ChaosSimulation,machine=PRESSURE_LAUNCH){
   sim.shoot('shooter',{shotId:'trigger',origin:{x:machine.target.x,y:machine.target.y,z:machine.target.z+1},direction:{x:0,y:0,z:-1}});
-  sim.step(.01,1010);
+  sim.step(.01,1010);sim.step(.01,1010+PRESSURE_TELL_MS);
 }
 function fixture(){
   const shooter=createPlayer('shooter','Shooter',appearance,{x:-50,y:20,z:0});
@@ -103,7 +103,8 @@ describe('launchable cases',()=>{
       const {sim}=fixture();parkCaseOnPad(sim,machine);
       trigger(sim,machine);
       const [low,high]=LAUNCH_PROFILES[machine.kind].lift,lift=sim.caseBody.velocity.y;
-      expect(lift>=low-1e-6&&lift<=high+1e-6||Math.abs(lift-OVERPRESSURE.lift)<1e-6,`${machine.id} should launch (${lift})`).toBe(true);
+      // One physics step of gravity may already have run in the firing tick.
+      expect(lift>=low-1&&lift<=high||lift>=OVERPRESSURE.lift-1&&lift<=OVERPRESSURE.lift,`${machine.id} should launch (${lift})`).toBe(true);
     }
   });
 });

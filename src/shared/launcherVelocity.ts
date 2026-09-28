@@ -19,6 +19,8 @@ export const LAUNCH_PROFILES:Record<LaunchMachineKind,{lift:readonly [number,num
 };
 /** Rare misfire: the tallest, widest throw. Stays inside MAX_LAUNCH_SPEED. */
 export const OVERPRESSURE={chance:1/7,lift:106,drift:1.3} as const;
+/** Trigger to firing: the machine shudders, flashes and whines, and rats get a split second. */
+export const PRESSURE_TELL_MS=200;
 /** Drift fades by this rate (1/s) while airborne, for rats and cases alike. */
 export const LAUNCH_DRIFT_DECAY=.25;
 /** One rider's throw from a machine's profile; `boost` is decided once per

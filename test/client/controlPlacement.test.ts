@@ -1,3 +1,4 @@
+import {PRESSURE_TELL_MS} from '../../src/shared/launcherVelocity';
 import {it,expect} from 'vitest';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {createPlayer} from '../../src/worker/gameState';
@@ -65,6 +66,7 @@ it('activates every red crown from all four sides in the actual city collision w
    sim.shoot(m.id,{shotId:`remote-${m.id}-${dx}-${dz}`,
     origin:{x:m.target.x+dx*4,y:m.target.y,z:m.target.z+dz*4},direction:{x:-dx,y:0,z:-dz}});
    for(let step=0;step<3;step++)sim.step(.01,now+step*10);
+   sim.step(.01,now+20+PRESSURE_TELL_MS);
    expect(sim.snapshot(false).pressure!.launches.find(e=>e.playerId===m.id&&e.at>=now),`${m.id} red crown ${dx},${dz}`).toBeDefined();
   }
  }

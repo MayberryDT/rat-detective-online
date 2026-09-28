@@ -5,7 +5,7 @@ import { SpatialRayQuery } from './SpatialRayQuery';
 import { sweepSphereBody } from './sweepSphere';
 import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS, NETPLAY_COMPENSATION_MS, NETPLAY_HISTORY_MS, type MovementPoint } from './netplay';
 import { StaticCityBroadphase, addCityBody } from './StaticCityBroadphase';
-import { launcherVelocity, OVERPRESSURE } from './launcherVelocity';
+import { launcherVelocity, OVERPRESSURE, PRESSURE_TELL_MS } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
@@ -102,6 +102,8 @@ export class ChaosSimulation {
     /** Practice-only override: force every roll to one incident id. */
     forcedIncident:IncidentId|null=null;
     private pressure:NonNullable<ChaosState['pressure']>={serial:0,until:0,cooldowns:{},launches:[]};
+    /** Machine id → firing time of a triggered machine still in its tell. */
+    private readonly armedPressure=new Map<string,number>();
     private notice={serial:0,text:'Find the Hot Case. Shoot Dispatch.'};
     private now=Date.now();
     private epoch:string=crypto.randomUUID();
@@ -433,11 +435,18 @@ export class ChaosSimulation {
         const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(d.w/2,d.h/2,d.d/2)),position:new C.Vec3(d.x,d.y,d.z)});
         addCityBody(this.world,body);this.targets.set(body,{kind,machineId});
     }
+    /** A trigger arms its machine: the shudder and whine play for PRESSURE_TELL_MS,
+     * then it fires whoever is on the pad at that moment. The cooldown runs from the firing. */
     private activatePressure(machineId:string,surge=false){
         const machine=LAUNCH_MACHINES.find(m=>m.id===machineId);
-        if(!machine)return;
+        if(!machine||this.armedPressure.has(machine.id))return;
         const cooldowns=this.pressure.cooldowns??(this.pressure.cooldowns={});
         if(!surge&&this.now<(cooldowns[machine.id]??0))return;
+        cooldowns[machine.id]=this.now+PRESSURE_TELL_MS+machine.cooldownMs;
+        this.pressure.until=cooldowns[PRESSURE_LAUNCH.id]??0;
+        this.armedPressure.set(machine.id,this.now+PRESSURE_TELL_MS);
+    }
+    private firePressure(machine:LaunchMachine){
         const pad=machine.pad;
         const nearby=[...this.players.values()].filter(p=>p.hp>0 && Math.abs(p.y-pad.y)<2 &&
             Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius);
@@ -448,8 +457,7 @@ export class ChaosSimulation {
             Math.abs(c.body.position.y-pad.y)<2 && Math.hypot(c.body.position.x-pad.x,c.body.position.z-pad.z)<=pad.radius);
         // Fire even when empty: seeing the remote mechanism activate teaches
         // players which launcher this trigger operates. Occupants alone receive impulses.
-        this.pressure.serial++;cooldowns[machine.id]=this.now+machine.cooldownMs;
-        this.pressure.until=cooldowns[PRESSURE_LAUNCH.id]??0;
+        this.pressure.serial++;
         // One misfire roll per firing: every rider of an overpressure goes high.
         const boost=Math.random()<OVERPRESSURE.chance;
         const boosts=this.pressure.boosts??(this.pressure.boosts={});
@@ -1064,6 +1072,10 @@ export class ChaosSimulation {
                 for(const machine of LAUNCH_MACHINES)this.activatePressure(machine.id,true);
             }
         }
+        for(const machine of LAUNCH_MACHINES){
+            const at=this.armedPressure.get(machine.id);
+            if(at!==undefined&&now>=at){this.armedPressure.delete(machine.id);this.firePressure(machine);}
+        }
         if(!this.incidentActive('delayed-reaction')){
             for(const shot of this.shots)if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);}
         }
@@ -1312,7 +1324,7 @@ export class ChaosSimulation {
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.lastSurgePulse=0;this.dispatchActivator=null;
-        this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};
+        this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};this.armedPressure.clear();
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
         this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){

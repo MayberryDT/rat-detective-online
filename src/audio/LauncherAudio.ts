@@ -7,8 +7,10 @@ const VOLUME = .85 * .7;
 const RANGE = 120;
 const MAX_VOICES = 12;
 type Voice = {pad: LaunchMachine['pad']; output: GainNode; pan: StereoPannerNode; volume: number; release: () => void};
+export type LauncherCue = 'tell' | 'fire';
 
-/** Mechanical impact and air tail, both attached to the launcher in 3D. */
+/** Launcher cues, all attached to the machine in 3D: the tell's rising whine and
+ * rattle, and the firing's mechanical impact with its air tail. */
 export class LauncherAudio {
     private noiseBuffer?: AudioBuffer;
     private voices = new Set<Voice>();
@@ -37,7 +39,16 @@ export class LauncherAudio {
         }
     }
 
-    play(kind: LaunchMachine['kind'], pad: LaunchMachine['pad'], camera?: THREE.Camera): void {
+    private noise(ctx: AudioContext): AudioBuffer {
+        if (!this.noiseBuffer) {
+            this.noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 1.75), ctx.sampleRate);
+            const data = this.noiseBuffer.getChannelData(0);
+            for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        }
+        return this.noiseBuffer;
+    }
+
+    play(kind: LaunchMachine['kind'], pad: LaunchMachine['pad'], camera?: THREE.Camera, cue: LauncherCue = 'fire', boost = false): void {
         const ctx = this.audio;
         if (this.disposed || !ctx || ctx.state !== 'running' || !camera) return;
         const spatial = this.spatial(pad, camera);
@@ -48,29 +59,51 @@ export class LauncherAudio {
         const output = ctx.createGain(), pan = ctx.createStereoPanner();
         output.gain.value = spatial.volume; pan.pan.value = spatial.pan;
         output.connect(pan); pan.connect(effectsOutput(ctx));
-        const osc = ctx.createOscillator(), gain = ctx.createGain();
-        osc.type = kind === 'mousetrap' ? 'triangle' : 'sawtooth';
-        osc.frequency.setValueAtTime(pitch * 2, now); osc.frequency.exponentialRampToValueAtTime(35, now + .6);
-        gain.gain.setValueAtTime(.001, now); gain.gain.linearRampToValueAtTime(.65, now + .006); gain.gain.exponentialRampToValueAtTime(.001, now + .85);
-        osc.connect(gain); gain.connect(output);
-        const noise = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), air = ctx.createGain();
-        if (!this.noiseBuffer) {
-            this.noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 1.75), ctx.sampleRate);
-            const data = this.noiseBuffer.getChannelData(0);
-            for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        const nodes: AudioNode[] = [output, pan];
+        const sources: AudioScheduledSourceNode[] = [];
+        const tone = (type: OscillatorType, from: number, to: number, peak: number, attack: number, end: number, start = 0) => {
+            const osc = ctx.createOscillator(), gain = ctx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(from, now + start); osc.frequency.exponentialRampToValueAtTime(to, now + start + end * .7);
+            gain.gain.setValueAtTime(.001, now); gain.gain.setValueAtTime(.001, now + start);
+            gain.gain.linearRampToValueAtTime(peak, now + start + attack); gain.gain.exponentialRampToValueAtTime(.001, now + start + end);
+            osc.connect(gain); gain.connect(output); nodes.push(osc, gain); sources.push(osc);
+            osc.start(now); osc.stop(now + start + end + .05);
+            return osc;
+        };
+        const hiss = (type: BiquadFilterType, from: number, to: number, peak: number, attack: number, hold: number, end: number, start = 0) => {
+            const noise = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), air = ctx.createGain();
+            noise.buffer = this.noise(ctx); filter.type = type;
+            filter.frequency.setValueAtTime(from, now + start); filter.frequency.exponentialRampToValueAtTime(to, now + start + end);
+            air.gain.setValueAtTime(.001, now); air.gain.setValueAtTime(.001, now + start);
+            air.gain.linearRampToValueAtTime(peak, now + start + attack); air.gain.linearRampToValueAtTime(peak * .6, now + start + hold);
+            air.gain.exponentialRampToValueAtTime(.001, now + start + end);
+            noise.connect(filter); filter.connect(air); air.connect(output); nodes.push(noise, filter, air); sources.push(noise);
+            noise.start(now); noise.stop(now + start + Math.min(1.74, end + .05));
+            return noise;
+        };
+        let last: AudioScheduledSourceNode;
+        if (cue === 'tell') {
+            // Rising whine over a pressure rattle: the split second to scream and scramble.
+            tone('sine', pitch * 3, pitch * 14, .22, .03, .26);
+            const rattle = tone('square', pitch * .5, pitch * .6, .12, .01, .24);
+            rattle.detune.value = 30;
+            last = hiss('bandpass', 900, 2600, .18, .05, .15, .25);
+        } else {
+            tone(kind === 'mousetrap' ? 'triangle' : 'sawtooth', pitch * 2, 35, .65, .006, .85);
+            last = hiss('lowpass', kind === 'geyser' ? 4200 : 2200, 180, .8, .0125, 1.15, 1.7);
+            if (boost) {
+                // Overpressure: a blown gasket shriek and a second, lower bang.
+                tone('sawtooth', pitch * 6, pitch * 1.5, .3, .01, .7, .05);
+                tone('square', 70, 28, .5, .004, .5, .12);
+            }
         }
-        noise.buffer = this.noiseBuffer; filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(kind === 'geyser' ? 4200 : 2200, now); filter.frequency.exponentialRampToValueAtTime(180, now + 1.65);
-        air.gain.setValueAtTime(.001, now); air.gain.linearRampToValueAtTime(.8, now + .0125); air.gain.linearRampToValueAtTime(.5, now + 1.15); air.gain.exponentialRampToValueAtTime(.001, now + 1.7);
-        noise.connect(filter); filter.connect(air); air.connect(output);
         const voice: Voice = {pad, output, pan, volume: spatial.volume, release: () => {
             if (!this.voices.delete(voice)) return;
-            noise.onended = null;
-            for (const source of [noise, osc]) { try { source.stop(); } catch { /* Already ended. */ } }
-            for (const node of [noise, filter, air, osc, gain, output, pan]) node.disconnect();
+            last.onended = null;
+            for (const source of sources) { try { source.stop(); } catch { /* Already ended. */ } }
+            for (const node of nodes) node.disconnect();
         }};
-        this.voices.add(voice); noise.onended = voice.release;
-        osc.start(); osc.stop(now + .9); noise.start(); noise.stop(now + 1.75);
+        this.voices.add(voice); last.onended = voice.release;
     }
 
     dispose(): void {

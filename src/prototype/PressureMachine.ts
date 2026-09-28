@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {LAUNCH_MACHINES,type LaunchMachine,type ChaosState} from '../shared/chaosState';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {LauncherAudio} from '../audio/LauncherAudio';
+import {PRESSURE_TELL_MS} from '../shared/launcherVelocity';
 
 /** Six municipal contraptions. Low launch surfaces stay traversable; control housings are shared cover. */
 export class PressureMachine {
@@ -12,7 +13,8 @@ export class PressureMachine {
     private batches=new Map<string,{shape:keyof PressureMachine['geometry'];material:THREE.Material;matrices:THREE.Matrix4[]}>();
     private instanced:THREE.InstancedMesh[]=[];
     private dummy=new THREE.Object3D();
-    private moving:Array<{machine:LaunchMachine;rotor:THREE.Group;indicator:THREE.Mesh;lastUntil:number;ring:THREE.Mesh;burst:THREE.Group;shaft?:THREE.Mesh}>=[];
+    /** `heard`: the cooldown deadline whose tell/firing sounds already played (NaN before the first snapshot). */
+    private moving:Array<{machine:LaunchMachine;rotor:THREE.Group;indicator:THREE.Mesh;heardTell:number;heardFire:number;ring:THREE.Mesh;burst:THREE.Group;shaft?:THREE.Mesh}>=[];
     constructor(scene:THREE.Scene,audio?:AudioContext){
         this.launchAudio=new LauncherAudio(audio);
         this.root.name='municipal-launch-contraptions';
@@ -110,7 +112,7 @@ export class PressureMachine {
             if(kind==='fan'||kind==='geyser')ray.rotation.x=Math.PI/2;
             const angle=i*Math.PI/5;ray.position.set(Math.sin(angle)*2,0,Math.cos(angle)*2);burst.add(ray);
         }
-        this.moving.push({machine,rotor,indicator,ring,burst,shaft,lastUntil:-1});
+        this.moving.push({machine,rotor,indicator,ring,burst,shaft,heardTell:NaN,heardFire:NaN});
     }
     private spring(x:number,y:number,z:number,radius:number,height:number){
         for(let ring=0;ring<6;ring++){
@@ -131,11 +133,18 @@ export class PressureMachine {
             const until=state?.cooldowns?.[model.machine.id]??(model.machine.id==='pressure'?state?.until??0:0);
             const elapsed=now-(until-model.machine.cooldownMs);
             const age=elapsed*2; // Presentation runs at double speed; cooldown and launch physics stay unchanged.
-            if(model.lastUntil>=0&&until>model.lastUntil&&elapsed>=0&&elapsed<1000)this.launchSound(model.machine.kind,model.machine.pad,camera);
+            // A join mid-cooldown hears nothing; each later deadline gets one tell and one firing.
+            if(Number.isNaN(model.heardFire))model.heardTell=model.heardFire=until;
+            const tell=until>0&&elapsed<0&&elapsed>=-PRESSURE_TELL_MS;
+            if(tell&&model.heardTell!==until){model.heardTell=until;this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'tell');}
+            if(until>0&&elapsed>=0&&elapsed<1000&&model.heardFire!==until){
+                model.heardFire=model.heardTell=until;
+                this.launchAudio.play(model.machine.kind,model.machine.pad,camera,'fire',state?.boosts?.[model.machine.id]===until-model.machine.cooldownMs);
+            }
             const active=until>0&&age>=0&&age<3600;
             const attack=Math.min(1,Math.max(0,age)/110);
             const kick=active?attack*(age<2000?1:Math.max(0,(3600-age)/1600)):0;
-            model.indicator.visible=until<=now||Math.floor(now/350)%2===0;
+            model.indicator.visible=until<=now||Math.floor(now/(tell?45:350))%2===0;
             model.rotor.position.set(model.machine.pad.x,.13,model.machine.pad.z);model.rotor.rotation.set(0,0,0);model.rotor.scale.setScalar(1);
             const kind=model.machine.kind;
             if(kind==='fan'){model.rotor.rotation.y=now*.002+Math.max(0,Math.min(age,3600))*.035;model.rotor.position.y+=kick*.8;}
@@ -143,6 +152,12 @@ export class PressureMachine {
             else if(kind==='freight')model.rotor.position.x-=kick*7;
             else if(kind==='dumpster'||kind==='mousetrap'){model.rotor.rotation.x=-kick*1.9;model.rotor.position.y+=kick*2.5;}
             else model.rotor.position.y+=kick*7;
+            if(tell){
+                // The shudder: building pressure rattles the whole mechanism.
+                const shake=.03+.09*(1+elapsed/PRESSURE_TELL_MS);
+                model.rotor.position.x+=Math.sin(now*.31)*shake;model.rotor.position.z+=Math.cos(now*.37)*shake;
+                model.rotor.position.y+=Math.abs(Math.sin(now*.53))*shake;
+            }
             if(model.shaft){model.shaft.scale.y=Math.max(.1,kick*7);model.shaft.position.y=.13+kick*3.5;}
             model.ring.visible=active;model.ring.scale.setScalar(5+Math.min(1200,Math.max(0,age))*.008);
             (model.ring.material as THREE.MeshBasicMaterial).opacity=active?Math.max(0,1-age/3600)*.85:0;
@@ -160,11 +175,7 @@ export class PressureMachine {
                 }
                 (ray.material as THREE.MeshBasicMaterial).opacity=kick*.65;
             }
-            model.lastUntil=until;
         }
-    }
-    private launchSound(kind:LaunchMachine['kind'],pad:LaunchMachine['pad'],camera?:THREE.Camera){
-        this.launchAudio.play(kind,pad,camera);
     }
     dispose(){this.launchAudio.dispose();this.root.removeFromParent();for(const mesh of this.instanced)mesh.dispose();disposeMeshResources(this.root);for(const geometry of Object.values(this.geometry))geometry.dispose();for(const material of Object.values(this.material))material.dispose();}
 }
