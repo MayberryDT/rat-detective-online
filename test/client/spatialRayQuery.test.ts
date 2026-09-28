@@ -4,8 +4,10 @@ import { SpatialRayQuery } from '../../src/shared/SpatialRayQuery';
 import { StaticCityBroadphase, addCityBody } from '../../src/shared/StaticCityBroadphase';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import { createPlayer } from '../../src/worker/gameState';
-import { DISPATCH_TARGET, CHAOS_TUNING } from '../../src/shared/chaosState';
+import { DISPATCH_STATIONS, CHAOS_TUNING } from '../../src/shared/chaosState';
 import { grayboxBoxes, GRAYBOX_SPAWNS } from '../../src/shared/grayboxLayout';
+// Straight into the first pillar's bell from its open side.
+const DISPATCH_STATION=DISPATCH_STATIONS[0]!,DISPATCH_SHOT={origin:{x:DISPATCH_STATION.target.x+Math.sin(DISPATCH_STATION.face)*2.5,y:DISPATCH_STATION.target.y,z:DISPATCH_STATION.target.z+Math.cos(DISPATCH_STATION.face)*2.5},direction:{x:-Math.sin(DISPATCH_STATION.face),y:0,z:-Math.cos(DISPATCH_STATION.face)}};
 
 function same(world:C.World,index:SpatialRayQuery,from:C.Vec3,to:C.Vec3,mask=15){
  const expected=new C.RaycastResult();world.raycastClosest(from,to,{collisionFilterGroup:16,collisionFilterMask:mask,skipBackfaces:true},expected);
@@ -129,7 +131,7 @@ describe('exact spatial ray broadphase',()=>{
    })();
    // Legacy: identical physics, but Cannon's own world raycast instead of the index.
    if(legacy)(sim as unknown as {ray:Function}).ray=(from:C.Vec3,to:C.Vec3,mask:number)=>{const result=new C.RaycastResult();sim.world.raycastClosest(from,to,{collisionFilterGroup:16,collisionFilterMask:mask,skipBackfaces:true},result);return result;};
-   sim.shoot('p',{shotId:'dispatch',origin:{x:DISPATCH_TARGET.x,y:DISPATCH_TARGET.y,z:DISPATCH_TARGET.z+1},direction:{x:0,y:0,z:-1}});
+   sim.shoot('p',{shotId:'dispatch',...DISPATCH_SHOT});
    const selection=vi.spyOn(Math,'random').mockReturnValue(0);
    sim.step(.01,1000);selection.mockRestore();sim.step(0,1000+CHAOS_TUNING.rollMs);p.hp=0;sim.death(p,{x:1,y:.15,z:.3});return sim;
   };

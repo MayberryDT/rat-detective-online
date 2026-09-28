@@ -7,7 +7,7 @@ import type { BuffMap, PickupState } from './pickups';
 export const CHAOS_TUNING = {
     pickupRadius: 2.25, formerCarrierDelay: 900,
     caseShotKick: 30, caseShotLift: 10, caseShotMaxSpeed: 48, casePickupMaxSpeed: 18,
-    rollMs: 2400, activeMs: 25000, cooldownMs: 16000,
+    rollMs: 2400, activeMs: 25000, cooldownMs: 21000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
     corpseHitMinSpeed: 12, corpseHitCooldownMs: 700, corpseShotKick: 19, deathBurstBalls: 120,
     maxShots: 256, recoverMs: 900, stuckMs: 18000,
@@ -43,17 +43,21 @@ export const CASE_SIZE = { x: .82, y: .62, z: .34 };
 // Hang from the unused hand, with the broad face running along the rat's side.
 export const CASE_HAND = { x: .74, y: .52, z: .02 };
 export const CASE_CARRY_ROTATION = { x: 0, y: Math.SQRT1_2, z: 0, w: Math.SQRT1_2 };
-// Every landmark shares one incident lifecycle; each has its own physical target.
+/** Street alarm pillars. Every pillar shares the one incident lifecycle. `y` is
+ * the ground under it, `bell` the bell's centre height above that ground, `face`
+ * the call box's yaw (radians, 0 faces +z). `box` is the iron post and call box;
+ * `target` is the bell and its housing, a cube shootable from any side. */
 export const DISPATCH_STATIONS = [
-    { id:'records', x:-9.8, z:-34.5 }, { id:'icebox', x:115, z:-29 },
-    { id:'needleworks', x:-110, z:112.5 }, { id:'pump', x:145, z:140 },
-    { id:'gate', x:-150, z:8 },
-].map(({id,x,z})=>({id,
-    box:{x,y:1.8,z,w:1.8,h:3.6,d:1.05},
-    target:{x,y:2.3,z:z+.64,w:.84,h:.84,d:.10},
+    // Street corners at each landmark, the central crossroads and the north avenue, one in the sewer.
+    { id:'records', x:-45, z:-28, face:-.98 }, { id:'icebox', x:99, z:-28, face:-.73 },
+    { id:'needleworks', x:-121, z:122, face:0 }, { id:'pump', x:97, z:139, face:-.86 },
+    { id:'gate', x:-155, z:-7, face:-2.4 }, { id:'crossroads', x:60, z:-27.5, face:.81 },
+    { id:'avenue-east', x:79, z:-93, face:-2.36 }, { id:'avenue-west', x:-68, z:-93, face:2.42 },
+    { id:'sewer', x:0, y:-7, z:40, bell:4.6, face:-1.57 },
+].map(({id,x,y=0,z,bell=5.4,face=0}:{id:string;x:number;y?:number;z:number;bell?:number;face?:number})=>({id,x,y,z,bell,face,
+    box:{x,y:y+(bell-1.3)/2,z,w:1.1,h:bell-1.3,d:1.1},
+    target:{x,y:y+bell,z,w:2.6,h:2.6,d:2.6},
 }));
-export const DISPATCH_BOX = DISPATCH_STATIONS[0].box;
-export const DISPATCH_TARGET = DISPATCH_STATIONS[0].target;
 export type LaunchMachineKind = 'pressure' | 'dumpster' | 'freight' | 'geyser' | 'mousetrap' | 'fan';
 export interface LaunchMachine {
     id: string; kind: LaunchMachineKind; label:string;
@@ -128,8 +132,9 @@ export interface ChaosState {
     assignment?: AssignmentState;
     case: CaseState;
     extraCases?: Array<CaseState & {id:string}>;
-    /** `wanted`: Most Wanted's current target, the leader in the searchlight. */
-    dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId; wanted?:string };
+    /** `wanted`: Most Wanted's current target, the leader in the searchlight. `caller`: the rat whose
+     * shot started the current roll; kept through rolling, active and cooldown, cleared at ready. */
+    dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId; wanted?:string; caller?:string };
     /** Launchers; `shoves` are landing-shockwave knockbacks, added once to a rat's velocity like a launch. */
     pressure?: PressureState;
     /** Pickup sites currently available to claim; absent entries are active elsewhere or claimed. */

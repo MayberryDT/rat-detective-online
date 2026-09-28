@@ -85,3 +85,20 @@ it('puts the winner first in a lineup of at most five and validates it on the wi
     expect(parseServerMessage(JSON.stringify({...base,lineup:['a','b','c','d','e','f']}))).toBeNull();
     expect(parseServerMessage(JSON.stringify({...base,lineup:['a','']}))).toBeNull();
 });
+
+// Dispatch pillars failure modes, written before the checks:
+// 13. One call, still showing its caller on later ticks (rolling, active, LINE BUSY), counts again every tick.
+// 14. A round with no calls still names a Dispatcher, or the rat with fewer calls wins.
+it('counts each Dispatch call once and names the rat with the most calls',()=>{
+    const awards=new RoundAwards(),a=rat('a'),b=rat('b'),players=new Map([['a',a],['b',b]]);
+    const dispatch=(serial:number,caller?:string)=>({phase:caller?'rolling' as const:'ready' as const,started:0,until:0,serial,...(caller?{caller}:{})});
+    awards.sample(players.values(),1,null,0,[],dispatch(0));
+    expect(awards.awards(players).find(w=>w.id==='dispatcher')).toBeUndefined();
+    for(let tick=0;tick<30;tick++)awards.sample(players.values(),1,null,0,[],dispatch(1,'a'));
+    awards.sample(players.values(),1,null,0,[],dispatch(2));
+    for(const serial of [3,4])for(let tick=0;tick<5;tick++)awards.sample(players.values(),1,null,0,[],dispatch(serial,'b'));
+    expect(awards.awards(players).find(w=>w.id==='dispatcher')).toMatchObject({title:'DISPATCHER',playerId:'b',value:2});
+    expect(parseServerMessage(JSON.stringify({type:'gameWon',winnerId:'b',winnerName:'B',kills:3,resetAt:1,awards:awards.awards(players)}))).not.toBeNull();
+    awards.reset();
+    expect(awards.awards(players).find(w=>w.id==='dispatcher')).toBeUndefined();
+});

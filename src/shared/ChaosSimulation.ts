@@ -97,7 +97,6 @@ export class ChaosSimulation {
     private readonly kitHopAt=new Map<string,number>();
     private casesWeaponized=false;
     private plantedSerial:number|undefined;
-    private dispatchActivator:string|null=null;
     /** Room-selected evidence incident. Defaults to the shipped Planted Evidence. */
     evidenceMode:EvidenceMode='planted';
     /** Practice-only override: force every roll to one incident id. */
@@ -731,8 +730,14 @@ export class ChaosSimulation {
         const forced=this.forcedIncident&&roster.some(incident=>incident.id===this.forcedIncident)?this.forcedIncident:undefined;
         const choices=roster.filter(incident=>incident.id!==previous);
         const incident=forced??choices[Math.floor(Math.random()*choices.length)].id;
-        this.dispatch={phase:'rolling',started:this.now,until:this.now+T.rollMs,serial:this.dispatch.serial+1,incident};
-        this.dispatchActivator=owner&&this.players.has(owner)?owner:null;
+        const caller=owner?this.players.get(owner):undefined;
+        this.dispatch={phase:'rolling',started:this.now,until:this.now+T.rollMs,serial:this.dispatch.serial+1,incident,...(caller?{caller:caller.id}:{})};
+        if(!caller||caller.hp<=0)return;
+        // The caller's reward: a random supply on the spot, through the ordinary claim effects.
+        const supplies:PickupKind[]=caller.hp<MAX_HP?['ironclad','hustle','quick-fix']:['ironclad','hustle'];
+        const supply=supplies[Math.floor(Math.random()*supplies.length)]!;
+        if(supply==='quick-fix'){caller.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:caller.id,hp:MAX_HP,cause:'pickup'});}
+        else this.buffs[caller.id]=mergePickup(this.buffs[caller.id],supply,this.now);
     }
     private reserveShots(count:number){
         while(this.shots.length>T.maxShots-count){
@@ -820,7 +825,7 @@ export class ChaosSimulation {
         this.pickupApproaches.delete(id);
         this.assignment?.disconnect(id);
         this.release(id);delete this.possession[id];
-        if(this.dispatchActivator===id)this.dispatchActivator=null;
+        if(this.dispatch.caller===id){this.dispatch={...this.dispatch};delete this.dispatch.caller;}
     }
     /** Watchdog recovery is only allowed for loose evidence, never a human carrier. */
     recoverLooseCase(caseId='primary'):boolean {
@@ -1243,7 +1248,7 @@ export class ChaosSimulation {
             if(d.phase==='ready'||now<d.until)break;
             if(d.phase==='rolling')this.dispatch={...d,phase:'active',started:d.until,until:d.until+T.activeMs};
             else if(d.phase==='active')this.dispatch={...d,phase:'cooldown',started:d.until,until:d.until+T.cooldownMs};
-            else this.dispatch={...d,phase:'ready',started:now,until:0};
+            else {this.dispatch={...d,phase:'ready',started:now,until:0};delete this.dispatch.caller;}
         }
         const weaponized=this.incidentActive('evidence-tampering');
         if(weaponized&&!this.casesWeaponized)this.beginEvidenceTampering();
@@ -1514,7 +1519,6 @@ export class ChaosSimulation {
         for(const site of this.pickups.values())site.availableAt=0;
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
-        this.dispatchActivator=null;
         this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();this.pendingVents.clear();
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
         this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}

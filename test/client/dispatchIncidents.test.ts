@@ -1,13 +1,15 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
-import {CHAOS_TUNING as T,DISPATCH_TARGET} from '../../src/shared/chaosState';
+import {CHAOS_TUNING as T,DISPATCH_STATIONS} from '../../src/shared/chaosState';
 import {INCIDENTS,incidentInfo,incidentRoster,type IncidentId} from '../../src/shared/incidentCatalog';
 import {badRound,resolveShotPattern} from '../../src/shared/shotPattern';
 import {BALL_SPEED} from '../../src/shared/ballTuning';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {createPlayer} from '../../src/worker/gameState';
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SEWER_FLOOR:-7,grayboxBoxes:()=>[]}));
+// Straight into the first pillar's bell from its open side.
+const DISPATCH_STATION=DISPATCH_STATIONS[0]!,DISPATCH_SHOT={origin:{x:DISPATCH_STATION.target.x+Math.sin(DISPATCH_STATION.face)*2.5,y:DISPATCH_STATION.target.y,z:DISPATCH_STATION.target.z+Math.cos(DISPATCH_STATION.face)*2.5},direction:{x:-Math.sin(DISPATCH_STATION.face),y:0,z:-Math.cos(DISPATCH_STATION.face)}};
 const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
 const now=Date.now();
 afterEach(()=>vi.restoreAllMocks());
@@ -21,7 +23,7 @@ function fixture(incident?:IncidentId,legacy=false){
 }
 const shoot=(sim:ChaosSimulation,id='shot')=>sim.shoot('shooter',{shotId:id,origin:{x:0,y:30,z:0},direction:{x:1,y:0,z:0}});
 function fireDispatch(sim:ChaosSimulation,time=now){
- sim.shoot('shooter',{shotId:crypto.randomUUID(),origin:{x:DISPATCH_TARGET.x,y:DISPATCH_TARGET.y,z:DISPATCH_TARGET.z+1},direction:{x:0,y:0,z:-1}});sim.step(.01,time);
+ sim.shoot('shooter',{shotId:crypto.randomUUID(),...DISPATCH_SHOT});sim.step(.01,time);
 }
 function caseKick(sim:ChaosSimulation,time=now+10){
  sim.caseBody.position.set(0,21,10);sim.caseBody.velocity.setZero();sim.caseBody.angularVelocity.setZero();

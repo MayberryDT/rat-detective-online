@@ -19,7 +19,7 @@ function fixture(){
  return {sim,local};
 }
 function fire(sim:ChaosSimulation,target:{x:number;y:number;z:number},now=1010,id='target'){
- sim.shoot('local',{shotId:id,origin:{x:target.x,y:target.y,z:target.z+1},direction:{x:0,y:0,z:-1}});
+ sim.shoot('local',{shotId:id,origin:{x:target.x,y:target.y,z:target.z+2.5},direction:{x:0,y:0,z:-1}});
  sim.step(.01,now);
 }
 describe('distributed controls and physical pressure launch',()=>{
@@ -38,8 +38,7 @@ describe('distributed controls and physical pressure launch',()=>{
   }finally{rat.dispose();}
  });
 
- it('puts an independent trigger at all five landmarks with one shared Dispatch cooldown',()=>{
-  expect(DISPATCH_STATIONS.map(s=>s.id)).toEqual(['records','icebox','needleworks','pump','gate']);
+ it('gives every alarm pillar its own bell on one shared Dispatch lifecycle',()=>{
   for(const station of DISPATCH_STATIONS){
    const {sim}=fixture();fire(sim,station.target);
    expect(sim.snapshot(false).dispatch.phase).toBe('rolling');

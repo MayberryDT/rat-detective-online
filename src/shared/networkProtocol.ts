@@ -3,7 +3,7 @@ import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
@@ -89,7 +89,7 @@ export interface ScoreEntry {
 
 /** Polish 19 round-end Case File entry (cosmetic; never affects scoring). */
 export type AwardId = 'top-gun' | 'most-cheesed' | 'butterfingers' | 'sewer-dweller' | 'high-flier'
-  | 'sharpshooter' | 'headhunter' | 'long-shot' | 'case-keeper' | 'frequent-flier' | 'supply-run' | 'legwork';
+  | 'sharpshooter' | 'headhunter' | 'long-shot' | 'case-keeper' | 'frequent-flier' | 'supply-run' | 'legwork' | 'dispatcher';
 export interface Award { id: AwardId; title: string; playerId: string; playerName: string; value: number }
 
 export interface RoundState {

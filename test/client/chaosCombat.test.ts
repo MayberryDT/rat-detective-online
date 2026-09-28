@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as C from 'cannon-es';
 import { ChaosSimulation, type ChaosHit } from '../../src/shared/ChaosSimulation';
-import { CHAOS_TUNING as T, DISPATCH_BOX, DISPATCH_TARGET } from '../../src/shared/chaosState';
+import { CHAOS_TUNING as T, DISPATCH_STATIONS } from '../../src/shared/chaosState';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_LIFETIME } from '../../src/shared/ballTuning';
 import { ChaosEncoder, ChaosDecoder } from '../../src/shared/chaosWire';
 import { createPlayer, applyHit } from '../../src/worker/gameState';
 
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},grayboxBoxes:()=>[]}));
+// Straight into the first pillar's bell from its open side.
+const DISPATCH_STATION=DISPATCH_STATIONS[0]!,DISPATCH_SHOT={origin:{x:DISPATCH_STATION.target.x+Math.sin(DISPATCH_STATION.face)*2.5,y:DISPATCH_STATION.target.y,z:DISPATCH_STATION.target.z+Math.cos(DISPATCH_STATION.face)*2.5},direction:{x:-Math.sin(DISPATCH_STATION.face),y:0,z:-Math.cos(DISPATCH_STATION.face)}};
 const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
 function fixture(){
  const shooter=createPlayer('shooter','Shooter',appearance,{x:-50,y:20,z:0});
@@ -17,7 +19,7 @@ function fixture(){
  return {sim,players,shooter,victim,other,hits};
 }
 function activate(sim:ChaosSimulation){
- sim.shoot('shooter',{shotId:'dispatch',origin:{x:DISPATCH_TARGET.x,y:DISPATCH_TARGET.y,z:DISPATCH_TARGET.z+1},direction:{x:0,y:0,z:-1}});
+ sim.shoot('shooter',{shotId:'dispatch',...DISPATCH_SHOT});
  sim.step(.01,1010);sim.step(0,1010+T.rollMs);
 }
 function corpseBody(sim:ChaosSimulation){return [...sim.targets].find(([,t])=>t.kind==='corpse')![0];}
@@ -94,15 +96,9 @@ describe('shared physical death chaos',()=>{
   expect([BALL_SPEED,BALL_GRAVITY,BALL_RESTITUTION,BALL_LIFETIME]).toEqual([175,-25,.9,1.5]);
   sim.step(0,1010+T.rollMs+T.corpseMs+1);expect(sim.snapshot().corpses).toHaveLength(0);
  });
- it('only activates Dispatch from the small front target and boosts active launches to 95',()=>{
+ it('boosts corpse launches to 95 once an incident is active',()=>{
   const {sim,shooter,victim}=fixture();
-  const shoot=(x:number,y:number,id:string)=>{
-   sim.shoot(shooter.id,{shotId:id,origin:{x,y,z:DISPATCH_BOX.z+2},direction:{x:0,y:0,z:-1}});
-   sim.step(.01,1020);
-  };
-  shoot(DISPATCH_BOX.x+.65,DISPATCH_TARGET.y,'cabinet');expect(sim.snapshot(false).dispatch.phase).toBe('ready');
-  shoot(DISPATCH_TARGET.x,DISPATCH_TARGET.y,'button');expect(sim.snapshot(false).dispatch.phase).toBe('rolling');
-  sim.step(0,1020+T.rollMs);victim.hp=0;sim.death(victim,{x:1,y:0,z:0},shooter.id);
+  activate(sim);victim.hp=0;sim.death(victim,{x:1,y:0,z:0},shooter.id);
   expect(sim.snapshot().corpses[0].v.x).toBe(95);
  });
  it('shoots a body back into motion and reflects the ball',()=>{

@@ -137,7 +137,7 @@ function parseWorld(value: unknown): WorldSpec | null {
 }
 
 const AWARD_IDS=new Set<AwardId>(['top-gun','most-cheesed','butterfingers','sewer-dweller','high-flier',
-  'sharpshooter','headhunter','long-shot','case-keeper','frequent-flier','supply-run','legwork']);
+  'sharpshooter','headhunter','long-shot','case-keeper','frequent-flier','supply-run','legwork','dispatcher']);
 /** Optional cosmetic Case File entries on gameWon; malformed lists reject the frame. */
 function parseAwards(value: unknown): Award[] | null {
   if (!Array.isArray(value) || value.length > AWARD_IDS.size) return null;
@@ -445,7 +445,7 @@ function parseChaos(value:unknown):ChaosState|null{
   }
   if(!['ready','rolling','active','cooldown'].includes(String(d.phase))||finiteNumber(d.started)===null||finiteNumber(d.until)===null||integer(d.serial)===null)return null;
   if(d.incident!==undefined&&!isLegacyIncidentId(d.incident)&&!INCIDENTS.some(incident=>incident.id===d.incident))return null;
-  if(d.wanted!==undefined&&!nonEmptyString(d.wanted,64))return null;
+  if(d.wanted!==undefined&&!nonEmptyString(d.wanted,64)||d.caller!==undefined&&!nonEmptyString(d.caller,64))return null;
   if(Object.keys(value.possession).length>64||Object.values(value.possession).some(v=>finiteNumber(v)===null))return null;
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
   if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||c.owner===null||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;

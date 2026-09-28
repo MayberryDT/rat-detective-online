@@ -1,9 +1,10 @@
 import type {Award, AwardId, PlayerData} from '../shared/networkProtocol';
 import type {AssignmentState} from '../shared/assignments';
+import type {ChaosState} from '../shared/chaosState';
 
 interface Stats {
     cheesed:number;drops:number;sewer:number;peak:number;
-    shots:number;hits:number;headshots:number;longest:number;caseSeconds:number;flights:number;pickups:number;distance:number;
+    shots:number;hits:number;headshots:number;longest:number;caseSeconds:number;flights:number;pickups:number;distance:number;calls:number;
     last?:{x:number;z:number};
 }
 
@@ -11,11 +12,11 @@ const TITLES:Record<AwardId,string>={
     'top-gun':'TOP GUN','most-cheesed':'MOST CHEESED','butterfingers':'BUTTERFINGERS',
     'sewer-dweller':'SEWER DWELLER','high-flier':'HIGH FLIER',
     'sharpshooter':'SHARPSHOOTER','headhunter':'HEADHUNTER','long-shot':'LONG SHOT','case-keeper':'CASE KEEPER',
-    'frequent-flier':'FREQUENT FLIER','supply-run':'SUPPLY RUN','legwork':'LEGWORK',
+    'frequent-flier':'FREQUENT FLIER','supply-run':'SUPPLY RUN','legwork':'LEGWORK','dispatcher':'DISPATCHER',
 };
 /** Minimum values before an award is worth mentioning. Sharpshooter also needs `MIN_SHOTS`. */
 const FLOORS:Record<AwardId,number>={'top-gun':1,'most-cheesed':3,'butterfingers':1,'sewer-dweller':5,'high-flier':14,
-    'sharpshooter':1,'headhunter':1,'long-shot':20,'case-keeper':15,'frequent-flier':2,'supply-run':2,'legwork':250};
+    'sharpshooter':1,'headhunter':1,'long-shot':20,'case-keeper':15,'frequent-flier':2,'supply-run':2,'legwork':250,'dispatcher':1};
 const MIN_SHOTS=8;
 /** A larger jump in one tick is a respawn or teleport, not legwork. */
 const MAX_STRIDE=12;
@@ -32,10 +33,12 @@ export class RoundAwards {
     private readonly seenLaunches=new Set<string>();
     private caseOwner:string|null=null;
     private deliveries=0;
+    /** The Dispatch serial whose caller was last counted: one call per roll. */
+    private calledSerial=-1;
 
     private of(id:string):Stats {
         let stats=this.stats.get(id);
-        if(!stats){stats={cheesed:0,drops:0,sewer:0,peak:0,shots:0,hits:0,headshots:0,longest:0,caseSeconds:0,flights:0,pickups:0,distance:0};this.stats.set(id,stats);}
+        if(!stats){stats={cheesed:0,drops:0,sewer:0,peak:0,shots:0,hits:0,headshots:0,longest:0,caseSeconds:0,flights:0,pickups:0,distance:0,calls:0};this.stats.set(id,stats);}
         return stats;
     }
     damage(victimId:string,amount:number):void {if(amount>0)this.of(victimId).cheesed+=amount;}
@@ -57,8 +60,9 @@ export class RoundAwards {
         stats.longest=Math.max(stats.longest,Math.hypot(killer.x-victim.x,killer.y-victim.y,killer.z-victim.z));
     }
     pickup(playerId:string):void {this.of(playerId).pickups++;}
-    /** Per tick: case losses (not deliveries), case time, sewer seconds, highest altitude, distance and launcher rides. */
-    sample(players:Iterable<PlayerData>,dt:number,caseOwner:string|null,deliveries:number,launches:readonly {id:string;playerId:string}[]=[]):void {
+    /** Per tick: case losses (not deliveries), case time, sewer seconds, highest altitude, distance, launcher rides and Dispatch calls. */
+    sample(players:Iterable<PlayerData>,dt:number,caseOwner:string|null,deliveries:number,launches:readonly {id:string;playerId:string}[]=[],dispatch?:ChaosState['dispatch']):void {
+        if(dispatch?.caller&&dispatch.serial!==this.calledSerial){this.calledSerial=dispatch.serial;this.of(dispatch.caller).calls++;}
         if(this.caseOwner&&caseOwner!==this.caseOwner&&deliveries===this.deliveries)this.of(this.caseOwner).drops++;
         this.caseOwner=caseOwner;this.deliveries=deliveries;
         if(caseOwner)this.of(caseOwner).caseSeconds+=dt;
@@ -72,7 +76,7 @@ export class RoundAwards {
             stats.last={x:player.x,z:player.z};
         }
     }
-    reset():void {this.stats.clear();this.triggers.clear();this.hitShots.clear();this.seenLaunches.clear();this.caseOwner=null;this.deliveries=0;}
+    reset():void {this.stats.clear();this.triggers.clear();this.hitShots.clear();this.seenLaunches.clear();this.caseOwner=null;this.deliveries=0;this.calledSerial=-1;}
 
     private value(id:AwardId,player:PlayerData):number {
         const stats=this.stats.get(player.id);
@@ -90,6 +94,7 @@ export class RoundAwards {
             case 'frequent-flier':return stats.flights;
             case 'supply-run':return stats.pickups;
             case 'legwork':return Math.round(stats.distance);
+            case 'dispatcher':return stats.calls;
         }
     }
 
