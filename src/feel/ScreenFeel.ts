@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {FEEL} from './feelTuning';
 import './feel.css';
+import {reducedMotion,replay,uiMotion} from '../ui/motion';
 
 const ARROWS=4;
 
@@ -42,6 +43,10 @@ export class ScreenFeel {
     private edgeLevel=0;
     private readonly local=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
+    private reticle?:HTMLElement|null;
+    private spread=0;
+    private spreadTarget=0;
+    private lastSpread=-1;
 
     constructor(private readonly flash:()=>number,private readonly doc:Document|undefined=globalThis.document){}
 
@@ -88,7 +93,7 @@ export class ScreenFeel {
     callout(text:string):void {
         if(!this.build()||!this.calloutNode)return;
         this.calloutNode.textContent=text;
-        this.calloutNode.classList.remove('on');void this.calloutNode.offsetWidth;this.calloutNode.classList.add('on');
+        replay(this.calloutNode,'on');
     }
 
     /** Bad Ammunition backfire: a smear of soot across the lens that fades. */
@@ -96,7 +101,7 @@ export class ScreenFeel {
         if(!this.build()||!this.sootNode)return;
         this.sootNode.style.setProperty('--soot',String(Math.max(.5,this.flash())));
         this.sootNode.style.setProperty('--soot-x',`${(40+Math.random()*30).toFixed(0)}%`);
-        this.sootNode.classList.remove('on');void this.sootNode.offsetWidth;this.sootNode.classList.add('on');
+        replay(this.sootNode,'on');
     }
 
     /** Hot Pursuit edge streaks, `level` 0…1. */
@@ -115,9 +120,10 @@ export class ScreenFeel {
         if(!this.build()||!this.irisNode)return;
         let x=.5,y=.5;
         if(at){this.projected.copy(at).project(camera);if(this.projected.z<1){x=Math.min(.9,Math.max(.1,(this.projected.x+1)/2));y=Math.min(.9,Math.max(.1,(1-this.projected.y)/2));}}
-        const eased=closed*closed*(3-2*closed),radius=150-(150-minRadius)*eased;
+        // Reduced motion: the iris fades in at its final size instead of closing.
+        const eased=closed*closed*(3-2*closed),still=reducedMotion(),radius=still?minRadius:150-(150-minRadius)*eased;
         const style=this.irisNode.style;
-        style.opacity='1';style.setProperty('--iris-x',`${(x*100).toFixed(1)}%`);style.setProperty('--iris-y',`${(y*100).toFixed(1)}%`);style.setProperty('--iris-r',`${radius.toFixed(2)}vmax`);
+        style.opacity=still?eased.toFixed(3):'1';style.setProperty('--iris-x',`${(x*100).toFixed(1)}%`);style.setProperty('--iris-y',`${(y*100).toFixed(1)}%`);style.setProperty('--iris-r',`${radius.toFixed(2)}vmax`);
     }
 
     /** Pop a comic word over `at` (world position), clamped inside the screen. */
@@ -131,17 +137,30 @@ export class ScreenFeel {
         node.textContent=text;
         node.style.left=`${x*100}%`;node.style.top=`${y*100}%`;
         node.style.setProperty('--tilt',`${(this.wordCursor%2?-1:1)*(4+this.wordCursor%3*2)}deg`);
-        node.classList.remove('on');void node.offsetWidth;node.classList.add('on');
+        replay(node,'on');
     }
 
     /** Ring burst around the crosshair for a confirmed kill. */
     killBloom():void {
         if(!this.build()||!this.bloom)return;
         this.bloom.style.setProperty('--feel-flash',String(Math.max(.35,this.flash())));
-        this.bloom.classList.remove('on');void this.bloom.offsetWidth;this.bloom.classList.add('on');
+        replay(this.bloom,'on');
     }
 
+    /** U6: the crosshair opens with movement speed (units/s) … */
+    crosshairMotion(speed:number):void {const p=FEEL.reactiveCrosshair.params;this.spreadTarget=Math.min(1,speed/p.speed)*p.move;}
+    /** … and kicks open on each local shot, easing back as you settle. */
+    crosshairKick():void {const p=FEEL.reactiveCrosshair.params;this.spread=Math.min(p.max,this.spread+p.kick);}
+
     update(dt:number,camera:THREE.Camera,self?:THREE.Vector3):void {
+        const cross=FEEL.reactiveCrosshair.params,open=uiMotion('reactiveCrosshair');
+        const target=open?this.spreadTarget:0;
+        this.spread=open?target+(this.spread-target)*Math.exp(-cross.recover*dt):0;
+        const spread=Math.round(this.spread*4)/4;
+        if(spread!==this.lastSpread){
+            if(this.reticle===undefined)this.reticle=this.doc?.getElementById?.('crosshair')??null;
+            this.reticle?.style.setProperty('--spread',`${spread}px`);this.lastSpread=spread;
+        }
         if(!this.root)return;
         const p=FEEL.damageDirection.params;
         if(this.edge){
@@ -163,7 +182,7 @@ export class ScreenFeel {
     }
 
     reset():void {
-        this.edgeLevel=0;
+        this.edgeLevel=0;this.spread=0;
         if(this.edge)this.edge.style.opacity='0';
         for(const arrow of this.arrows){arrow.from=null;arrow.node.style.opacity='0';}
         this.bloom?.classList.remove('on');

@@ -70,7 +70,7 @@ export class GameSession {
     private readonly title: TitleScreen;
     private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue),(...args)=>this.foley?.play(...args));
     private readonly deathQuips = new MunicipalQuips();
-    private readonly scoreboard = new MatchScoreboard();
+    private readonly scoreboard = new MatchScoreboard(document, cue => this.feedback?.play(cue));
     private readonly input = new InputState(window,document,()=>!this.title?.settings?.isOpen && this.transport?.state==='playing' && (this.touch?.active || document.pointerLockElement===this.stage?.renderer.domElement));
     private readonly events = new AbortController();
     private readonly gun;
@@ -219,7 +219,7 @@ export class GameSession {
             playing:()=>this.transport.state==='playing',enabled:()=>!this.touch?.active,signal:this.events.signal,
             allowUnlockedClick:target=>!!this.title.settings?.contains(target)||credits.allowUnlockedClick(target),
             record:(type,detail)=>this.stats?.event(type,detail)});
-        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing',touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock()});
+        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing',touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock(),cue:cue=>this.feedback?.play(cue)});
         bindScoreboardHold({available:()=>this.transport.state==='playing'&&!this.title.settings?.isOpen,
             show:visible=>this.scoreboard.setVisible(visible),scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
         document.addEventListener('visibilitychange', () => {
@@ -414,7 +414,7 @@ export class GameSession {
                 if(message.accepted&&message.pickup==='hustle')this.rat?.setSpeedScale(PICKUP_TUNING.hustleMultiplier);
                 break;
             case 'playerDamaged': {
-                if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){this.hud.showHitMarker();this.foley.play('hit-confirm');const victim=this.remotes.get(message.id);if(victim)this.feel.hitDealt(victim.mesh.position,this.stage.camera);}
+                if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){const victim=this.remotes.get(message.id);this.hud.showHitMarker(victim?victim.hp-message.hp:1);this.foley.play('hit-confirm');if(victim)this.feel.hitDealt(victim.mesh.position,this.stage.camera);}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 if (message.id === this.myId) this.feel.health(message.hp);
                 if (entity && !entity.dead) {

@@ -1,7 +1,11 @@
 /* Both views use the same geometric center as the camera's (0, 0) aim ray.
-   Draw bars rather than a font glyph, whose ink can sit below its line box. */
+   Draw bars rather than a font glyph, whose ink can sit below its line box.
+   U6: `--spread` (set from script while moving and firing) opens the bars into four
+   ticks around the unchanged centre; `--hit` grows the confirmation X with damage. */
 #crosshair,
 #cross {
+    --spread: 0px;
+    --hit: 1;
     position: fixed;
     top: 50%;
     left: 50%;
@@ -22,25 +26,28 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #fff1ce;
+    --tick: #fff1ce;
 }
 
 #crosshair::before,
-#cross::before { width: 12px; height: 2px; }
+#cross::before { width: calc(12px + var(--spread) * 2); height: 2px; background: linear-gradient(90deg, var(--tick) 0 6px, transparent 6px calc(100% - 6px), var(--tick) calc(100% - 6px)); }
 #crosshair::after,
-#cross::after { width: 2px; height: 12px; }
+#cross::after { width: 2px; height: calc(12px + var(--spread) * 2); background: linear-gradient(180deg, var(--tick) 0 6px, transparent 6px calc(100% - 6px), var(--tick) calc(100% - 6px)); }
 
 /* Confirmed damage turns the existing centered bars into a brief X. */
+#crosshair.hit-2 { --hit: 1.3; }
+#crosshair.hit-3 { --hit: 1.6; }
+#crosshair.hit-3::before,#crosshair.hit-3::after { --tick: #ffc9a0; }
 #crosshair.hit-confirmed { animation: hit-confirmation 180ms ease-out both; }
 @keyframes hit-confirmation {
-    0% { transform:translate(-50%,-50%) rotate(45deg) scale(1.7); }
-    35%,75% { transform:translate(-50%,-50%) rotate(45deg) scale(1.25); }
-    100% { transform:translate(-50%,-50%) rotate(45deg) scale(1); }
+    0% { transform:translate(-50%,-50%) rotate(45deg) scale(calc(1.7 * var(--hit))); }
+    35%,75% { transform:translate(-50%,-50%) rotate(45deg) scale(calc(1.25 * var(--hit))); }
+    100% { transform:translate(-50%,-50%) rotate(45deg) scale(var(--hit)); }
 }
 /* Authoritative kills hold a larger red X; the aim point stays at its center. */
 #crosshair.kill-confirmed { animation:kill-confirmation 500ms ease-out both;filter:drop-shadow(0 0 2px #180707) drop-shadow(0 0 5px #ed493a99); }
 #crosshair.kill-confirmed::before,
-#crosshair.kill-confirmed::after { background:#ff594b; }
+#crosshair.kill-confirmed::after { --tick:#ff594b; }
 @keyframes kill-confirmation {
     0% { transform:translate(-50%,-50%) rotate(45deg) scale(3); }
     25%,70% { transform:translate(-50%,-50%) rotate(45deg) scale(2.15); }
@@ -49,7 +56,7 @@
 /* Juice T4: a headshot holds a bigger brass X with a ring. */
 #crosshair.kill-confirmed.headshot { animation:headshot-confirmation 700ms ease-out both;filter:drop-shadow(0 0 2px #180707) drop-shadow(0 0 7px #ffc84acc); }
 #crosshair.kill-confirmed.headshot::before,
-#crosshair.kill-confirmed.headshot::after { background:#ffd76a; }
+#crosshair.kill-confirmed.headshot::after { --tick:#ffd76a; }
 @keyframes headshot-confirmation {
     0% { transform:translate(-50%,-50%) rotate(45deg) scale(4.2); }
     20%,72% { transform:translate(-50%,-50%) rotate(45deg) scale(2.7); }
@@ -76,8 +83,12 @@
     .kill-confirmation-title { font-size:23px; }
     .kill-confirmation-quip { font-size:10px;margin-top:3px; }
 }
+/* Reduced motion keeps each confirmation as a still X of the same meaning. */
+body.reduced-motion #crosshair.hit-confirmed { transform:translate(-50%,-50%) rotate(45deg) scale(var(--hit)); }
+body.reduced-motion #crosshair.kill-confirmed { transform:translate(-50%,-50%) rotate(45deg) scale(2); }
+body.reduced-motion #crosshair.kill-confirmed.headshot { transform:translate(-50%,-50%) rotate(45deg) scale(2.5); }
 @media(prefers-reduced-motion:reduce) {
-    #crosshair.hit-confirmed { animation:none;transform:translate(-50%,-50%) rotate(45deg); }
+    #crosshair.hit-confirmed { animation:none;transform:translate(-50%,-50%) rotate(45deg) scale(var(--hit)); }
     #crosshair.kill-confirmed { animation:none;transform:translate(-50%,-50%) rotate(45deg) scale(2); }
     #crosshair.kill-confirmed.headshot { animation:none;transform:translate(-50%,-50%) rotate(45deg) scale(2.5); }
     #kill-confirmation { animation:none; }

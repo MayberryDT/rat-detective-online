@@ -130,7 +130,7 @@ export class FeelDirector {
 
     /** Local rat motion each frame: landing dip, launch view, Hot Pursuit streaks. */
     motion(dt:number,grounded:boolean,verticalSpeed:number,horizontalSpeed:number,speedScale:number,carrying=false):void {
-        const on=this.state.on('movement'),p=FEEL.movement.params;
+        const on=this.state.on('movement'),p=FEEL.movement.params;this.screen.crosshairMotion(horizontalSpeed);
         let landed=0;
         if(!grounded){this.airVy=Math.min(this.airVy,verticalSpeed);if(verticalSpeed>30)this.flying=true;}
         if(grounded&&!this.wasGrounded){
@@ -209,8 +209,9 @@ export class FeelDirector {
 
     /** A local shot left the muzzle (a Bad Ammunition jam fires nothing, so no kick). */
     shot(shotId?:string):void {
-        if(!this.state.on('shotKick'))return;
         if(shotId&&this.incident==='bad-ammunition'&&badRound(shotId).round==='jam')return;
+        this.screen.crosshairKick();
+        if(!this.state.on('shotKick'))return;
         const p=FEEL.shotKick.params;
         const scale=this.incident==='scattershot'?p.scattershot:1;
         this.camera.kick(p.pitch*scale,(Math.random()*2-1)*p.yawJitter*p.pitch*scale);
