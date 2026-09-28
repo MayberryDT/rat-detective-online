@@ -1,6 +1,6 @@
 import { observationRoom } from '../shared/observation';
 import type { PlayerSettings } from './PlayerSettings';
-import { playerPreferences } from '../settings/PlayerPreferences';
+import { reducedMotion, replay } from './motion';
 import { generateRandomName } from '../shared/ratNames';
 import { bindGameCredits } from './GameCredits';
 import { readPublicInvitation } from '../network/publicInvitation';
@@ -72,21 +72,17 @@ export class TitleScreen {
         for (let tries = 0; tries < 8 && next === exclude; tries++) next = generateRandomName();
         return next;
     }
-    private restart(el: HTMLElement | null, className: string): void {
-        if (!el) return;
-        el.classList.remove(className); void el.offsetWidth; el.classList.add(className);
-    }
     private show(name: string, animate = false): void {
         const plate = this.doc.getElementById('player-name');
-        if (plate) { plate.textContent = name; if (animate) this.restart(plate, 'shuffling'); }
+        if (plate) { plate.textContent = name; if (animate) replay(plate, 'shuffling'); }
     }
     private roll(animate = false): void {
         this.clearRoll(); this.name = this.pick(this.name);
-        if (!animate || playerPreferences().current.reducedMotion || this.target.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        if (!animate || reducedMotion()) {
             this.show(this.name); if (animate) this.onCue('name-stamp'); return;
         }
         const dice = this.doc.getElementById('reroll-name-btn');
-        this.restart(dice, 'rolling');
+        if (dice) replay(dice, 'rolling');
         const tick = (step: number) => {
             if (this.disposed) return;
             if (step >= 4) {

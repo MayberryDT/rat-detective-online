@@ -28,7 +28,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="/src/style.css" />
 </head>
@@ -37,36 +37,39 @@
     <!-- Title Screen -->
     <div id="title-screen">
         <button type="button" id="title-settings-btn">⚙ Settings</button>
-        <div class="logo-container">
-            <img src="/logo-title.webp" alt="Rat Detective Logo" id="main-logo" width="600" height="600" fetchpriority="high" decoding="async">
-            <div class="title-group">
-                <h1><span>Rat</span> Detective</h1>
+        <div class="title-folder">
+            <div class="logo-container">
+                <img src="/logo-title.webp" alt="Rat Detective Logo" id="main-logo" width="600" height="600" fetchpriority="high" decoding="async">
+                <div class="title-group">
+                    <h1><span>Rat</span> Detective</h1>
+                </div>
             </div>
-        </div>
-        <div class="name-input-group">
-            <div id="player-name"></div>
-            <button type="button" id="reroll-name-btn" aria-label="Roll another name">
-                <svg viewBox="0 0 28 24" aria-hidden="true">
-                    <rect x="10.5" y="1.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/>
-                    <circle cx="15.5" cy="6.5" r="1.15" fill="currentColor"/>
-                    <circle cx="21.5" cy="6.5" r="1.15" fill="currentColor"/>
-                    <circle cx="18.5" cy="9.5" r="1.15" fill="currentColor"/>
-                    <circle cx="15.5" cy="12.5" r="1.15" fill="currentColor"/>
-                    <circle cx="21.5" cy="12.5" r="1.15" fill="currentColor"/>
-                    <rect x="1.5" y="6.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/>
-                    <circle cx="5.5" cy="11.5" r="1.15" fill="currentColor"/>
-                    <circle cx="13.5" cy="11.5" r="1.15" fill="currentColor"/>
-                    <circle cx="9.5" cy="14.5" r="1.15" fill="currentColor"/>
-                    <circle cx="5.5" cy="17.5" r="1.15" fill="currentColor"/>
-                    <circle cx="13.5" cy="17.5" r="1.15" fill="currentColor"/>
-                </svg>
+            <p class="title-typed" aria-hidden="true">DETECTIVE ON RECORD:</p>
+            <div class="name-input-group">
+                <div id="player-name"></div>
+                <button type="button" id="reroll-name-btn" aria-label="Roll another name">
+                    <svg viewBox="0 0 28 24" aria-hidden="true">
+                        <rect x="10.5" y="1.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="15.5" cy="6.5" r="1.15" fill="currentColor"/>
+                        <circle cx="21.5" cy="6.5" r="1.15" fill="currentColor"/>
+                        <circle cx="18.5" cy="9.5" r="1.15" fill="currentColor"/>
+                        <circle cx="15.5" cy="12.5" r="1.15" fill="currentColor"/>
+                        <circle cx="21.5" cy="12.5" r="1.15" fill="currentColor"/>
+                        <rect x="1.5" y="6.5" width="16" height="16" rx="3" fill="#07040a" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="5.5" cy="11.5" r="1.15" fill="currentColor"/>
+                        <circle cx="13.5" cy="11.5" r="1.15" fill="currentColor"/>
+                        <circle cx="9.5" cy="14.5" r="1.15" fill="currentColor"/>
+                        <circle cx="5.5" cy="17.5" r="1.15" fill="currentColor"/>
+                        <circle cx="13.5" cy="17.5" r="1.15" fill="currentColor"/>
+                    </svg>
+                </button>
+            </div>
+
+            <button id="enter-city-btn" disabled autofocus>
+                <div class="pulse-dot"></div>
+                <span id="enter-city-label">ENTER CITY!</span>
             </button>
         </div>
-
-        <button id="enter-city-btn" disabled autofocus>
-            <div class="pulse-dot"></div>
-            <span id="enter-city-label">ENTER CITY!</span>
-        </button>
         <p id="invitation-status" role="status" hidden></p>
         <p class="music-credit game-credit">Music: <a id="music-credit-link" href="https://www.youtube.com/watch?v=k4hjX6ZsplU" target="_blank" rel="noopener noreferrer">Rat Detective Boogie</a> by Stellar Cruise</p>
     </div>
@@ -84,7 +87,7 @@
         <div class="death-burst" aria-hidden="true">POW!</div>
         <div class="respawn-label">RAT DOWN!</div>
         <div id="respawn-note" class="respawn-note">A MINOR CAREER SETBACK.</div>
-        <div class="respawn-count">BACK IN <span id="respawn-timer">3</span></div>
+        <div class="respawn-count"><span id="respawn-clock" class="respawn-clock" aria-hidden="true"><i></i></span>BACK IN <span id="respawn-timer">3</span></div>
     </div>
 
     <!-- Crosshair -->

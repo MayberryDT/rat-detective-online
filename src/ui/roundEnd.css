@@ -17,18 +17,29 @@ body.round-results.scoreboard-open #victory-overlay{visibility:visible}
 body.round-results #police-lineup{opacity:0;transition:opacity .5s}
 body.round-results .match-scoreboard{left:3vw;top:calc(3vh + 150px);transform:none;width:min(840px,62vw);max-height:calc(100dvh - 3vh - 172px);animation:round-panel .45s .1s cubic-bezier(.2,.8,.3,1.1) both}
 body.round-results .victory-casefile{position:fixed;right:3vw;top:calc(3vh + 150px);width:min(420px,31vw);max-height:calc(100dvh - 3vh - 172px);overflow:hidden;margin:0;padding:18px 22px;rotate:0deg;
-    text-align:left;background:linear-gradient(160deg,#211329f2,#110b18f2);border:2px solid #d8c69a66;box-shadow:8px 8px 0 #0a060e;animation:round-panel .45s .25s cubic-bezier(.2,.8,.3,1.1) both}
-body.round-results .victory-casefile h3{margin:0 0 10px;font:400 34px/1 'Bangers',Impact,sans-serif;letter-spacing:1.5px;color:#e6bf60}
-body.round-results .victory-casefile ul{display:grid;gap:7px;margin:0;padding:0}
-body.round-results .victory-casefile li{list-style:none;display:grid;gap:2px;padding-bottom:6px;border-bottom:1px solid #d8c69a2e}
-body.round-results .victory-casefile b{font:400 21px/1 'Bangers',Impact,sans-serif;letter-spacing:1.2px;color:#e6bf60}
-body.round-results .victory-casefile span{font:600 16px/1.25 'Outfit',Arial,sans-serif;letter-spacing:.4px;color:#eadfeb;text-transform:none}
+    text-align:left;background:var(--paper-lines);border:3px solid var(--ink);box-shadow:8px 8px 0 #0a060e;animation:round-panel .45s .25s cubic-bezier(.2,.8,.3,1.1) both}
+body.round-results .match-scoreboard::after{display:none}
+body.round-results .victory-casefile.photo-corners::before{left:5px;top:5px}body.round-results .victory-casefile.photo-corners::after{right:5px;bottom:5px}
+body.round-results .victory-casefile h3{display:inline-block;margin:0 0 12px;padding:5px 14px 4px;background:var(--ink-raised);border:2px solid var(--ink);rotate:-2deg;font:400 28px/1 var(--font-display);letter-spacing:1.5px;color:var(--gold-hot)}
+body.round-results .victory-casefile ul{display:grid;gap:8px;margin:0;padding:0}
+body.round-results .victory-casefile li{list-style:none;grid-template-columns:1fr auto;grid-template-areas:'title value' 'who value';gap:3px 12px;padding-bottom:7px;border-bottom:1px dashed #d8c69a3a}
+body.round-results .victory-casefile b{grid-area:title;font-size:20px;letter-spacing:1.2px}
+body.round-results .victory-casefile span{grid-area:who;font-size:14px}
+body.round-results .victory-casefile strong{grid-area:value;align-self:center;font-size:26px;color:var(--paper-bright)}
 @keyframes round-panel{from{opacity:0;translate:0 26px}to{opacity:1;translate:0 0}}
 @media(max-width:1100px),(max-height:640px){
     body.round-results .match-scoreboard{left:50%;transform:translateX(-50%);width:calc(100vw - 24px);top:calc(2vh + 118px);max-height:calc(62dvh - 118px)}
     body.round-results .victory-casefile{left:12px;right:12px;width:auto;top:auto;bottom:12px;max-height:34dvh;padding:10px 14px}
     body.round-results .victory-casefile ul{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}
-    body.round-results .victory-casefile h3{font-size:24px;margin-bottom:6px}
-    body.round-results .victory-casefile b{font-size:18px}body.round-results .victory-casefile span{font-size:14px}
+    body.round-results .victory-casefile h3{font-size:20px;margin-bottom:6px;padding:3px 10px}
+    body.round-results .victory-casefile{max-height:30dvh}body.round-results .victory-casefile li{grid-template-areas:'title value' 'who who';padding-bottom:4px;gap:1px 8px}body.round-results .victory-verdict{display:none}
+    body.round-results .victory-casefile b{font-size:16px}body.round-results .victory-casefile span{font-size:12px}body.round-results .victory-casefile strong{font-size:17px}
+}
+/* Landscape phones: standings and Case File side by side, so both stay readable. */
+@media(max-height:640px) and (min-width:700px){
+    body.round-results .match-scoreboard{left:2vw;transform:none;width:61vw;top:calc(2vh + 104px);max-height:calc(100dvh - 2vh - 112px)}
+    body.round-results .match-scoreboard-heading{display:none}
+    body.round-results .victory-casefile{left:auto;right:2vw;width:35vw;top:calc(2vh + 104px);bottom:auto;max-height:calc(100dvh - 2vh - 112px)}
+    body.round-results .victory-casefile ul{grid-template-columns:1fr}
 }
 :is(body.lineup-on,body.round-results) :is(.dispatch-hud,.assignment-destination,#kill-feed,#crosshair,[aria-label="Hot Case location"],#respawn-overlay,.pickup-buffs,.quick-fix-beacon){visibility:hidden}
