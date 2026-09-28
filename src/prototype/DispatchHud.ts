@@ -7,7 +7,7 @@ import {CHAOS_TUNING} from '../shared/chaosState';
 import {INCIDENTS,incidentInfo} from '../shared/incidentCatalog';
 import './dispatchHud.css';
 import {setText} from '../ui/setText';
-import {fly, measure, replay, slide, uiMotion} from '../ui/motion';
+import {arrange, fly, replay, uiMotion} from '../ui/motion';
 import {MunicipalQuips,INCIDENT_QUIPS} from '../ui/municipalQuips';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {incidentArtwork} from './incidentArtwork';
@@ -221,18 +221,17 @@ export class DispatchHud {
             const rankingSignature=JSON.stringify([a.id,this.myId,leaders.slice(0,5).map(s=>[s.id,s.name,Math.floor(s.points)])]);
             if(rankingSignature!==this.rankingSignature){
                 this.rankingSignature=rankingSignature;
-                const top=leaders.slice(0,5),before=measure(this.rankings);
-                this.rankings.replaceChildren();
-                for(const [index,s] of top.entries()){
+                const top=leaders.slice(0,5);
+                const rows=top.map((s,index)=>{
                     let row=this.rankRows.get(s.id);
                     if(!row){row=document.createElement('li');for(const tag of ['i','span','b'])row.appendChild(document.createElement(tag));this.rankRows.set(s.id,row);}
                     row.dataset.local=String(s.id===this.myId);
                     const [place,name,score]=Array.from(row.children) as HTMLElement[];
                     setText(place!,String(index+1));setText(name!,s.name);setText(score!,`${Math.floor(s.points)}/${target}`);
-                    this.rankings.appendChild(row);
-                }
+                    return row;
+                });
                 for(const id of this.rankRows.keys())if(!top.some(s=>s.id===id))this.rankRows.delete(id);
-                slide(this.rankings,before,'scoreMotion');
+                arrange(this.rankings,rows,'scoreMotion');
             }
             setText(this.counter,(this.observing?'OBSERVING · ':'')+(race?`TOP FIVE · FIRST TO ${target}`:'HOLD IT AT ZERO!'));
             setText(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);
@@ -274,8 +273,8 @@ export class DispatchHud {
             // Polish 19 and U4: your row punches, the score rolls, and the points fly in from the scoring moment.
             if(gained>0){
                 const row=this.rankRows.get(this.myId),view=document.defaultView;
-                if(row&&feelState().on('rewards'))replay(row,'feel-pop');
-                if(uiMotion('scoreMotion'))replay(this.assignmentProgress,'ui-roll');
+                if(row&&feelState().on('rewards'))replay(row,'feel-pop',true);
+                if(uiMotion('scoreMotion'))replay(this.assignmentProgress,'ui-roll',true);
                 if(view&&!j)fly(document,`+${gained}`,{x:view.innerWidth/2,y:view.innerHeight/2-110},row&&!this.rankings.hidden?row:this.assignmentProgress,'scoreMotion');
             }
         }

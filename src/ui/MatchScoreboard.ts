@@ -3,7 +3,7 @@ import type {ChaosState} from '../shared/chaosState';
 import {MAX_HP, type PlayerData, type ScoreEntry, type ServerMessage} from '../shared/networkProtocol';
 import './matchScoreboard.css';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
-import {measure, slide, uiMotion} from './motion';
+import {arrange, uiMotion} from './motion';
 
 type Investigator = ScoreEntry & {hp?: number};
 const text = (node: HTMLElement, value: string) => { if (node.textContent !== value) node.textContent = value; };
@@ -66,9 +66,13 @@ export class MatchScoreboard {
         if (visible) {
             if (this.root.hidden) this.scroller.scrollTop = 0;
             this.root.hidden = false;
-            this.root.classList.toggle('sliding', uiMotion('paperSlide'));
             const results = !!this.assignment?.result && uiMotion('caseFileStamps');
             this.byKills = results; this.render();
+            // The entrance runs once per opening (Web Animations survive later row moves; a CSS class would replay).
+            if (uiMotion('paperSlide') && typeof this.root.animate === 'function') {
+                this.root.animate([{opacity: 0, translate: '0 -46px', rotate: '-1.5deg'}, {opacity: 1, translate: '0 0', rotate: '0deg'}], {duration: 260, easing: 'cubic-bezier(.2,.9,.3,1.25)'});
+                Array.from(this.body.children).slice(0, 12).forEach((row, i) => row.animate([{opacity: 0, transform: 'translateX(-18px)'}, {opacity: 1, transform: 'none'}], {duration: 280, delay: i * 25, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'backwards'}));
+            }
             if (results) { const id = setTimeout(() => { this.cancelSettle = undefined; this.byKills = false; if (!this.root.hidden) this.render(); }, 650); this.cancelSettle = () => clearTimeout(id); }
             return;
         }
@@ -174,9 +178,7 @@ export class MatchScoreboard {
                 row.replaceChildren(...parts);
                 this.renderedRows.set(p.id,{row,signature:rowSignature});return row;
             });
-            const before = this.root.hidden ? undefined : measure(this.body);
-            this.body.replaceChildren(...ordered);
-            slide(this.body, before, 'paperSlide');
+            arrange(this.body, ordered, 'paperSlide', 340, false);
         }
         const rank = rows.findIndex(p => p.id === this.myId) + 1;
         text(this.footer, `${rank ? `YOU #${rank} · ` : ''}${caseTime(totalHeld)} TOTAL CASE TIME`);

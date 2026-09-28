@@ -13,8 +13,14 @@ export function reducedMotion():boolean {
 }
 export function uiMotion(item:FeelItem):boolean {return feelState().on(item)&&!reducedMotion();}
 
-/** Restart a CSS animation class. */
-export function replay(el:HTMLElement,className:string):void {el.classList.remove(className);void el.offsetWidth;el.classList.add(className);}
+/** Restart a CSS animation class. With `once` the class drops off when its animation ends, so moving or
+ * re-inserting the element later does not replay it. */
+export function replay(el:HTMLElement,className:string,once=false):void {
+    el.classList.remove(className);void el.offsetWidth;el.classList.add(className);
+    if(!once||typeof el.addEventListener!=='function')return;
+    const end=(event:AnimationEvent)=>{if(event.target!==el||event.pseudoElement)return;el.classList.remove(className);el.removeEventListener('animationend',end);};
+    el.addEventListener('animationend',end);
+}
 
 /** FLIP, first half: each child's current top. */
 export function measure(parent:HTMLElement):Map<Element,number>|undefined {
@@ -33,6 +39,18 @@ export function slide(parent:HTMLElement,before:Map<Element,number>|undefined,it
         const dy=top-child.getBoundingClientRect().top;
         if(Math.abs(dy)>.5)child.animate([{transform:`translateY(${dy}px)`},{transform:'none'}],{duration:ms,easing:'cubic-bezier(.2,.9,.3,1.12)'});
     }
+}
+/** Put `nodes` into `parent` in this order, moving only the ones out of place (re-inserting an element
+ * restarts its CSS animations); moved children FLIP-slide. An unchanged order touches nothing. */
+export function arrange(parent:HTMLElement,nodes:readonly Element[],item:FeelItem,ms=340,enter=true):void {
+    const current=parent.children;
+    if(current.length===nodes.length&&nodes.every((node,i)=>current[i]===node))return;
+    const before=measure(parent);
+    if(typeof parent.insertBefore==='function'){
+        nodes.forEach((node,i)=>{if(current[i]!==node)parent.insertBefore(node,current[i]??null);});
+        while(current.length>nodes.length)current[nodes.length]!.remove();
+    }else{parent.replaceChildren();for(const node of nodes)parent.appendChild(node);}
+    slide(parent,before,item,ms,enter);
 }
 
 const EXIT:Keyframe[]=[{opacity:1,transform:'none'},{opacity:0,transform:'translateX(28px) rotate(3deg) scale(.96)'}];
@@ -73,7 +91,7 @@ export function fly(doc:Document,text:string,from:{x:number;y:number},target:HTM
         {transform:'translate(-50%,-50%) scale(1.5) rotate(-6deg)',opacity:1,offset:.16},
         {transform:`translate(calc(-50% + ${dx*.4}px),calc(-50% + ${dy*.4-70}px)) scale(1.1) rotate(4deg)`,opacity:1,offset:.5},
         {transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.5)`,opacity:.8},
-    ],{duration:780,easing:'cubic-bezier(.45,0,.55,1)'}).onfinish=()=>{chip.remove();replay(target,'ui-bump');};
+    ],{duration:780,easing:'cubic-bezier(.45,0,.55,1)'}).onfinish=()=>{chip.remove();replay(target,'ui-bump',true);};
 }
 
 /** A paper ghost of `panel` slides away, so the real panel can close at once. */
