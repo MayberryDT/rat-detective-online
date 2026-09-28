@@ -30,6 +30,7 @@ export class DispatchHud {
     private announcementDetail:HTMLElement;
     private roulette:HTMLElement;
     private rouletteHeading:HTMLElement;
+    private rouletteCaller:HTMLElement;
     private strip:HTMLElement;
     private stamp:HTMLElement;
     private description:HTMLElement;
@@ -79,7 +80,7 @@ export class DispatchHud {
     setScores(scores:readonly ScoreEntry[], myId:string):void {this.scores=scores;this.myId=myId;}
     constructor(private sound:(frequency:number)=>void,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
         this.root.className='dispatch-hud';
-        this.root.innerHTML=`<div class="dispatch-ledger"><div class="dispatch-alert-label"></div><div class="dispatch-status-row"><div class="dispatch-artwork" aria-hidden="true"></div><strong class="dispatch-status"></strong></div><p class="dispatch-brief"></p><div class="dispatch-clock"><small class="dispatch-next"></small><span class="dispatch-timer"></span></div><div class="dispatch-time-track"><div></div></div><div class="case-ledger"><strong></strong><small></small></div></div><div class="case-broadcast" hidden aria-live="polite"><small>HOT CASE</small><strong></strong><span></span></div><div class="dispatch-roulette" hidden><div class="roulette-heading"><span>! DISPATCH !</span><b>SELECTING INCIDENT</b></div><div class="roulette-window"><div class="roulette-strip"></div><i class="roulette-pointer">▶</i></div><div class="roulette-stamp">CITYWIDE EMERGENCY!</div><p class="roulette-description"></p><div class="roulette-footer"><span>● LIVE</span></div></div>`;
+        this.root.innerHTML=`<div class="dispatch-ledger"><div class="dispatch-alert-label"></div><div class="dispatch-status-row"><div class="dispatch-artwork" aria-hidden="true"></div><strong class="dispatch-status"></strong></div><p class="dispatch-brief"></p><div class="dispatch-clock"><small class="dispatch-next"></small><span class="dispatch-timer"></span></div><div class="dispatch-time-track"><div></div></div><div class="case-ledger"><strong></strong><small></small></div></div><div class="case-broadcast" hidden aria-live="polite"><small>HOT CASE</small><strong></strong><span></span></div><div class="dispatch-roulette" hidden><div class="roulette-heading"><span>! DISPATCH !</span><b>SELECTING INCIDENT</b></div><div class="roulette-caller" hidden></div><div class="roulette-window"><div class="roulette-strip"></div><i class="roulette-pointer">▶</i></div><div class="roulette-stamp">CITYWIDE EMERGENCY!</div><p class="roulette-description"></p><div class="roulette-footer"><span>● LIVE</span></div></div>`;
         this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><span class="assignment-zone-next" hidden></span><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="jurisdiction-timer" hidden role="timer" aria-label="Zone relocation countdown"><small class="jurisdiction-timer-label">ZONE MOVES IN</small><strong class="assignment-zone-clock"></strong></div><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><strong></strong><p></p><span></span></div>`;
         const get=(q:string)=>this.root.querySelector<HTMLElement>(q)!;
         this.rankings=get('.assignment-rankings');this.counter=get('.assignment-counter');this.destinationLabel=get('.assignment-target');this.zoneTimer=get('.jurisdiction-timer');this.zoneTimerLabel=get('.jurisdiction-timer-label');this.zoneClock=get('.assignment-zone-clock');this.zoneNext=get('.assignment-zone-next');
@@ -90,10 +91,11 @@ export class DispatchHud {
         this.status=get('.dispatch-status');this.timer=get('.dispatch-timer');this.timeBar=get('.dispatch-time-track div');this.nextPhase=get('.dispatch-next');this.caseLine=get('.case-ledger strong');this.caseDetail=get('.case-ledger small');
         this.alertLabel=get('.dispatch-alert-label');this.artwork=get('.dispatch-artwork');this.brief=get('.dispatch-brief');
         this.announcement=get('.case-broadcast');this.announcementTitle=get('.case-broadcast strong');this.announcementDetail=get('.case-broadcast span');
-        this.roulette=get('.dispatch-roulette');this.rouletteHeading=get('.roulette-heading b');this.strip=get('.roulette-strip');this.stamp=get('.roulette-stamp');this.description=get('.roulette-description');
+        this.roulette=get('.dispatch-roulette');this.rouletteHeading=get('.roulette-heading b');this.rouletteCaller=get('.roulette-caller');this.strip=get('.roulette-strip');this.stamp=get('.roulette-stamp');this.description=get('.roulette-description');
         document.body.appendChild(this.root);
     }
-    update(state:ChaosState,now:number,ownerName?:string,ownerIsLocal=false){
+    /** `callerName`: the rat whose shot started this roll (`YOU` for yours), when known. */
+    update(state:ChaosState,now:number,ownerName?:string,ownerIsLocal=false,callerName?:string){
         const d=state.dispatch,info=incidentInfo(d.incident),remaining=Math.max(0,Math.ceil((d.until-now)/1000));
         if(this.root.dataset.phase!==d.phase)this.root.dataset.phase=d.phase;
         const artwork=d.phase==='active'?info.id:'dispatch';
@@ -267,6 +269,7 @@ export class DispatchHud {
         this.roulette.classList.toggle('roulette-leaving',leaving);
         this.roulette.classList.toggle('is-settled',reveal);
         this.stamp.hidden=!reveal;setText(this.rouletteHeading,reveal?'INCIDENT ACTIVE':'SELECTING INCIDENT');
+        this.rouletteCaller.hidden=!callerName;if(callerName)setText(this.rouletteCaller,`DISPATCHED BY ${callerName.toUpperCase()}`);
         setText(this.description,rolling?'SELECTING INCIDENT…':INCIDENT_QUIPS[info.id]);
         if(rolling){
             const progress=Math.max(0,Math.min(1,(now-d.started)/Math.max(1,d.until-d.started)));

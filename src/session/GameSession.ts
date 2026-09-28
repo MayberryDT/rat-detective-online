@@ -362,7 +362,10 @@ export class GameSession {
         switch (message.type) {
             case 'chaos':
                 {const incident=message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined;
-                this.gun.setIncident(incident);this.feel.setIncident(incident);}
+                this.gun.setIncident(incident);this.feel.setIncident(incident);
+                // A new call: everyone reads who rang Dispatch.
+                const d=message.state.dispatch,caller=d.caller&&this.lastChaos&&d.serial!==this.lastChaos.dispatch.serial?d.caller===this.myId?this.rat?.entity:this.remotes.get(d.caller):undefined;
+                if(caller)this.hud.addKillFeed({kind:'dispatch',caller:caller.name,...(d.caller===this.myId?{local:true}:{})});}
                 this.applyPickupState(message.state);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
                 this.feelStings(this.lastChaos,message.state);

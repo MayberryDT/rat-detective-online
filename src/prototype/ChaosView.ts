@@ -554,7 +554,8 @@ export class ChaosView {
         const d=s.dispatch;
         const localCase=[s.case,...s.extraCases??[]].find(c=>c.owner&&this.resolveRat(c.owner)?.isPlayer);
         const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
-        this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer);
+        const caller=d.caller?this.resolveRat(d.caller):undefined;
+        this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer,caller?.isPlayer?'you':caller?.name);
         if(this.lastHitPoint)this.assignmentDestinations.clear();else this.assignmentDestinations.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
         this.cameraForTriggers=camera;
         this.pressureMachine.update(s.pressure,now,camera,s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='pressure-surge');
