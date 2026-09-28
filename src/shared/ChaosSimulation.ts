@@ -4,7 +4,7 @@ import type {WorldFoleyCue} from './foleyEvents';
 import { SpatialRayQuery } from './SpatialRayQuery';
 import { sweepSphereBody } from './sweepSphere';
 import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS, NETPLAY_COMPENSATION_MS, NETPLAY_HISTORY_MS, type MovementPoint } from './netplay';
-import { StaticCityBroadphase } from './StaticCityBroadphase';
+import { StaticCityBroadphase, addCityBody } from './StaticCityBroadphase';
 import { launcherVelocity } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
@@ -132,12 +132,16 @@ export class ChaosSimulation {
         // static pair whenever a case or corpse moves.
         this.world.broadphase=new StaticCityBroadphase(this.world);
         this.world.broadphase.useBoundingBoxes=true;
+        // Contact history is sparse; fixed city bodies are outside world.bodies
+        // (index -1), which only the id-keyed matrix handles.
+        this.world.collisionMatrix=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
+        this.world.collisionMatrixPrevious=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
         this.world.defaultContactMaterial.friction=.15;
         this.world.defaultContactMaterial.restitution=.72;
         for(const b of grayboxBoxes(spec)){
             const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2))});
             body.position.set(b.x,b.y,b.z);body.quaternion.setFromEuler(b.rx,0,b.rz);body.updateAABB();
-            this.world.addBody(body);this.rayQuery.fixed.add(body);this.targets.set(body,{kind:'world'});
+            addCityBody(this.world,body);this.targets.set(body,{kind:'world'});
         }
         for(const station of DISPATCH_STATIONS){
             this.addControl(station.box,'world');this.addControl(station.target,'dispatch');
@@ -165,7 +169,8 @@ export class ChaosSimulation {
         // Rays starting inside a shelf can miss every face. Check the whole
         // rat/prop volume against static boxes before testing floor support.
         const local=new C.Vec3(),point=new C.Vec3();
-        for(const body of this.world.bodies){
+        const broadphase=this.world.broadphase,city=broadphase instanceof StaticCityBroadphase?broadphase.fixed:[];
+        for(const body of [...this.world.bodies,...city]){
             if(body.mass!==0)continue;
             for(const shape of body.shapes){
                 if(!(shape instanceof C.Box))continue;
@@ -426,7 +431,7 @@ export class ChaosSimulation {
     }
     private addControl(d:{x:number;y:number;z:number;w:number;h:number;d:number},kind:Target['kind'],machineId?:string){
         const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(d.w/2,d.h/2,d.d/2)),position:new C.Vec3(d.x,d.y,d.z)});
-        this.world.addBody(body);this.rayQuery.fixed.add(body);this.targets.set(body,{kind,machineId});
+        addCityBody(this.world,body);this.targets.set(body,{kind,machineId});
     }
     private activatePressure(machineId:string,surge=false){
         const machine=LAUNCH_MACHINES.find(m=>m.id===machineId);

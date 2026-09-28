@@ -7,7 +7,6 @@ import { ConnectionDelivery } from './ConnectionDelivery';
 import { wireBytes } from '../shared/networkProtocol';
 import { serializeMovement } from '../shared/movementWire';
 import { CHAOS_WIRE_MODE, prepareChaos, type PreparedChaos } from '../shared/chaosWire';
-import { ObjectCollisionMatrix, type ArrayCollisionMatrix } from 'cannon-es';
 import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import { serializeServerMessage } from './serializeServerMessage';
 import type { ChaosState } from '../shared/chaosState';
@@ -1401,11 +1400,6 @@ export class GameRoom extends DurableObject<Env> {
       this.chaos.evidenceMode=this.evidenceMode;
       this.chaos.enforceIncidentRoster();
       this.chaos.forcedIncident=this.forcedIncident;
-      // Contact history is sparse: clearing N*(N-1)/2 entries for the city's
-      // static scenery each substep dwarfs the few real contacts. Cannon's
-      // built-in sparse implementation preserves collision/event semantics.
-      this.chaos.world.collisionMatrix = new ObjectCollisionMatrix() as unknown as ArrayCollisionMatrix;
-      this.chaos.world.collisionMatrixPrevious = new ObjectCollisionMatrix() as unknown as ArrayCollisionMatrix;
       if(retiredAssignment)this.checkpointGame();
     }
     if(preparing)return;

@@ -2,7 +2,7 @@ import {DEFAULT_BOT_EXPERIMENT,type BotExperiment} from '../shared/BotExperiment
 import * as C from 'cannon-es';
 import {BotNavigation} from '../shared/BotNavigation';
 import {ObjectiveBotBrain,type ObjectiveNavigation} from '../shared/ObjectiveBotBrain';
-import {StaticCityBroadphase} from '../shared/StaticCityBroadphase';
+import {StaticCityBroadphase,addCityBody} from '../shared/StaticCityBroadphase';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
 import {CITY_BOUNDS,grayboxBoxes} from '../shared/grayboxLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
@@ -57,11 +57,11 @@ export class ServerBotController {
         this.world.defaultContactMaterial.friction=0;this.world.defaultContactMaterial.restitution=.05;
         for(const box of grayboxBoxes(spec)){
             const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(box.w/2,box.h/2,box.d/2)),position:new C.Vec3(box.x,box.y,box.z)});
-            body.quaternion.setFromEuler(box.rx,0,box.rz);this.world.addBody(body);this.ray.fixed.add(body);
+            body.quaternion.setFromEuler(box.rx,0,box.rz);addCityBody(this.world,body);
         }
         for(const control of [...DISPATCH_STATIONS,...LAUNCH_MACHINES])for(const box of [control.box,control.target]){
             const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(box.w/2,box.h/2,box.d/2)),position:new C.Vec3(box.x,box.y,box.z)});
-            this.world.addBody(body);this.ray.fixed.add(body);
+            addCityBody(this.world,body);
         }
         this.navigation=new BotNavigation(spec);
         const sharedNavigation:ObjectiveNavigation={

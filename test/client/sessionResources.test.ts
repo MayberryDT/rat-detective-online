@@ -10,6 +10,9 @@ import { RatController } from '../../src/player/RatController';
 import { RemotePlayers } from '../../src/session/RemotePlayers';
 import { PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import { WORLD_LAYOUT_VERSION } from '../../src/shared/worldSpec';
+import { StaticCityBroadphase } from '../../src/shared/StaticCityBroadphase';
+/** World bodies plus the fixed city bodies kept in the broadphase. */
+const physical = (world: CANNON.World) => [...world.bodies, ...(world.broadphase instanceof StaticCityBroadphase ? world.broadphase.fixed : [])];
 
 type SessionPrivate = {
     stage: { scene: THREE.Scene; world: CANNON.World; renderer: { dispose: () => void; render: () => void; domElement: FakeNode } };
@@ -377,14 +380,14 @@ describe('GameSession real resource lifetime', () => {
         const first = start();
         const inner = sessionOf(first.session);
         expect(inner.city.getCounts().buildings).toBe(144);
-        expect(inner.stage.world.bodies).toHaveLength(145);
+        expect(physical(inner.stage.world)).toHaveLength(145);
         expect(inner.rat).toBeNull();
         expect(frames).toHaveLength(1);
 
         join(welcome({ world: { seed: 1, version: WORLD_LAYOUT_VERSION } }));
         expect(liveEntities(first.session)).toBe(2);
-        expect(inner.stage.world.bodies.filter(body => body.mass > 0)).toHaveLength(1);
-        expect(inner.stage.world.bodies).toHaveLength(147);
+        expect(physical(inner.stage.world).filter(body => body.mass > 0)).toHaveLength(1);
+        expect(physical(inner.stage.world)).toHaveLength(147);
         expect(inner.rat?.entity.body.world).toBe(inner.stage.world);
 
         inner.gun.shoot(inner.rat!.entity, new THREE.Vector3(100, 1.45, 0));
@@ -400,7 +403,7 @@ describe('GameSession real resource lifetime', () => {
         expect(inner.rat!.entity).toBe(owned);
         expect(owned.hp).toBe(1);
         expect(owned.dead).toBe(false);
-        expect(inner.stage.world.bodies.includes(ownedBody)).toBe(true);
+        expect(physical(inner.stage.world).includes(ownedBody)).toBe(true);
         socket.receive({ type: 'playerDamaged', id: 'me', hp: 0, attackerId: 'other' });
         expect(owned.hp).toBe(0);
         expect(owned.dead).toBe(false);
@@ -412,8 +415,8 @@ describe('GameSession real resource lifetime', () => {
         expect(owned.hp).toBe(0);
         expect(owned.dead).toBe(true);
         expect(liveEntities(first.session)).toBe(2);
-        expect(inner.stage.world.bodies.includes(ownedBody)).toBe(true);
-        expect(inner.stage.world.bodies).toHaveLength(147);
+        expect(physical(inner.stage.world).includes(ownedBody)).toBe(true);
+        expect(physical(inner.stage.world)).toHaveLength(147);
         expect(owned.mesh.parent).toBe(inner.stage.scene);
         expect(first.page.registry.get('respawn-overlay')!.style.display).toBe('flex');
         socket.receive({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: 3 });
@@ -424,7 +427,7 @@ describe('GameSession real resource lifetime', () => {
         expect(owned.body.position.x).toBe(20);
         expect(owned.mesh.parent).toBe(inner.stage.scene);
         expect(liveEntities(first.session)).toBe(2);
-        expect(inner.stage.world.bodies).toHaveLength(147);
+        expect(physical(inner.stage.world)).toHaveLength(147);
         expect(first.page.registry.get('respawn-overlay')!.style.display).toBe('none');
 
         const firstCity = inner.city;
@@ -450,12 +453,12 @@ describe('GameSession real resource lifetime', () => {
         expect(inner.city.getCounts().buildings).toBe(144);
         expect(inner.rat).not.toBe(firstRat);
         expect(liveEntities(first.session)).toBe(2);
-        expect(inner.stage.world.bodies.includes(firstRatBody)).toBe(false);
-        expect(inner.stage.world.bodies.includes(firstRemoteBody)).toBe(false);
-        for (const body of firstBuildings) expect(inner.stage.world.bodies.includes(body)).toBe(false);
+        expect(physical(inner.stage.world).includes(firstRatBody)).toBe(false);
+        expect(physical(inner.stage.world).includes(firstRemoteBody)).toBe(false);
+        for (const body of firstBuildings) expect(physical(inner.stage.world).includes(body)).toBe(false);
         expect(gunOf(inner.gun).balls).toHaveLength(0);
         expect(gunGeometryDispose).not.toHaveBeenCalled();
-        expect(inner.stage.world.bodies).toHaveLength(147);
+        expect(physical(inner.stage.world)).toHaveLength(147);
         expect(inner.rat!.entity.mesh.parent).toBe(inner.stage.scene);
 
         inner.gun.shoot(inner.rat!.entity, new THREE.Vector3(40, 1.45, 0));
@@ -472,7 +475,7 @@ describe('GameSession real resource lifetime', () => {
         expect(inner.city.getCounts().buildings).toBe(0);
         expect(inner.rat).toBeNull();
         expect(inner.remotes.rats.size).toBe(0);
-        expect(inner.stage.world.bodies).toHaveLength(0);
+        expect(physical(inner.stage.world)).toHaveLength(0);
         expect(inner.stage.scene.children).toHaveLength(0);
         expect(gunOf(inner.gun).balls).toHaveLength(0);
         expect(gunOf(inner.gun).disposed).toBe(true);
@@ -491,19 +494,19 @@ describe('GameSession real resource lifetime', () => {
         const second = start();
         const secondInner = sessionOf(second.session);
         expect(secondInner.city.getCounts().buildings).toBe(144);
-        expect(secondInner.stage.world.bodies).toHaveLength(145);
+        expect(physical(secondInner.stage.world)).toHaveLength(145);
         join(welcome({ world: { seed: 7, version: WORLD_LAYOUT_VERSION } }));
         expect(liveEntities(second.session)).toBe(2);
-        expect(secondInner.stage.world.bodies).toHaveLength(147);
+        expect(physical(secondInner.stage.world)).toHaveLength(147);
         secondInner.gun.shoot(secondInner.rat!.entity, new THREE.Vector3(-80, 1.45, 0));
         expect(gunOf(secondInner.gun).balls).toHaveLength(1);
         sockets.at(-1)!.receive(welcome({ world: { seed: 8, version: WORLD_LAYOUT_VERSION } }));
         expect(secondInner.city.getCounts().buildings).toBe(144);
-        expect(secondInner.stage.world.bodies).toHaveLength(147);
+        expect(physical(secondInner.stage.world)).toHaveLength(147);
         expect(gunOf(secondInner.gun).balls).toHaveLength(0);
 
         second.session.dispose();
-        expect(secondInner.stage.world.bodies).toHaveLength(0);
+        expect(physical(secondInner.stage.world)).toHaveLength(0);
         expect(secondInner.stage.scene.children).toHaveLength(0);
         expect(secondInner.city.getCounts().buildings).toBe(0);
         expect(liveEntities(second.session)).toBe(0);

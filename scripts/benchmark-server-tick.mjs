@@ -41,7 +41,7 @@ const spec={seed:341283204,version:2};
 const ids=Array.from({length:bots},(_,i)=>`rd-ai-${i}`);
 const players=new Map(ids.map((id,i)=>[id,createPlayer(id,`Rat ${i}`,{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},{x:-100+i*4,y:2,z:-18})]));
 const sim=new ChaosSimulation(players,()=>{},undefined,spec);
-// GameRoom's sparse contact history override.
+// Sparse contact history, as GameRoom set it before ChaosSimulation did (keeps --ref A/B fair).
 sim.world.collisionMatrix=new ObjectCollisionMatrix();sim.world.collisionMatrixPrevious=new ObjectCollisionMatrix();
 let shot=0;
 const controller=()=>new ServerBotController(spec,ids,{

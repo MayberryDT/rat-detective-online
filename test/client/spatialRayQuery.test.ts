@@ -1,7 +1,7 @@
 import { describe,expect,it,vi } from 'vitest';
 import * as C from 'cannon-es';
-import { StaticCityBroadphase } from '../../src/shared/StaticCityBroadphase';
 import { SpatialRayQuery } from '../../src/shared/SpatialRayQuery';
+import { StaticCityBroadphase, addCityBody } from '../../src/shared/StaticCityBroadphase';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import { createPlayer } from '../../src/worker/gameState';
 import { DISPATCH_TARGET, CHAOS_TUNING } from '../../src/shared/chaosState';
@@ -42,6 +42,30 @@ describe('exact spatial ray broadphase',()=>{
   expect(after.pairs).toEqual(before.pairs);
   expect(after.checks).toBeLessThan(before.checks*.05);
   console.info('City broadphase pair checks', {bodies:world.bodies.length,naive:before.checks,indexed:after.checks,contacts:after.pairs.length});
+ });
+ it('keeps every city contact and Cannon raycast hit when the city lives outside world.bodies',()=>{
+  const reference=new C.World(),fixedWorld=new C.World();
+  fixedWorld.broadphase=new StaticCityBroadphase(fixedWorld);
+  reference.broadphase.useBoundingBoxes=fixedWorld.broadphase.useBoundingBoxes=true;
+  for(const b of grayboxBoxes())for(const world of [reference,fixedWorld]){
+   const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2)),position:new C.Vec3(b.x,b.y,b.z)});
+   body.quaternion.setFromEuler(b.rx,0,b.rz);addCityBody(world,body);
+  }
+  expect(fixedWorld.bodies).toHaveLength(0);
+  const key=(body:C.Body)=>`${body.position.x.toFixed(3)},${body.position.y.toFixed(3)},${body.position.z.toFixed(3)}`;
+  // Resting, falling and kinematic rats, plus one asleep, across the whole map.
+  for(const [i,p] of GRAYBOX_SPAWNS.entries())for(const world of [reference,fixedWorld]){
+   const body=new C.Body({mass:i%4===0?0:5,type:i%4===0?C.Body.KINEMATIC:C.Body.DYNAMIC,position:new C.Vec3(p.x,i%3===0?-.2:0,p.z)});
+   body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));if(i===5)body.sleep();world.addBody(body);
+  }
+  const pairs=(world:C.World)=>{const a:C.Body[]=[],b:C.Body[]=[];world.broadphase.collisionPairs(world,a,b);
+   return a.map((body,i)=>[key(body),key(b[i])].sort().join('|')).sort();};
+  expect(pairs(fixedWorld)).toEqual(pairs(reference));
+  for(const [from,to] of [[new C.Vec3(-16,-4,0),new C.Vec3(-16,-4,-8)],[new C.Vec3(0,-4,0),new C.Vec3(0,2,0)],[new C.Vec3(102,3,-60),new C.Vec3(108,3,-60)],[new C.Vec3(-60,20,-60),new C.Vec3(60,-10,60)]]){
+   const expected=new C.RaycastResult(),actual=new C.RaycastResult();
+   reference.raycastClosest(from,to,{},expected);fixedWorld.raycastClosest(from,to,{},actual);
+   expect(actual.hasHit).toBe(expected.hasHit);expect(actual.distance).toBe(expected.distance);
+  }
  });
  it('keeps the exact original SAP contact pair sequence across axes, filters and sleeping bodies',()=>{
   const world=new C.World();const original=new C.SAPBroadphase(world),optimized=new StaticCityBroadphase(world);
@@ -103,7 +127,7 @@ describe('exact spatial ray broadphase',()=>{
     try{return new ChaosSimulation(new Map([[p.id,p]]),()=>{},undefined,{version:2,seed:42});}
     finally{spawnSelection.mockRestore();}
    })();
-   if(legacy){sim.world.broadphase=new C.SAPBroadphase(sim.world);sim.world.broadphase.useBoundingBoxes=true;}
+   // Legacy: identical physics, but Cannon's own world raycast instead of the index.
    if(legacy)(sim as unknown as {ray:Function}).ray=(from:C.Vec3,to:C.Vec3,mask:number)=>{const result=new C.RaycastResult();sim.world.raycastClosest(from,to,{collisionFilterGroup:16,collisionFilterMask:mask,skipBackfaces:true},result);return result;};
    sim.shoot('p',{shotId:'dispatch',origin:{x:DISPATCH_TARGET.x,y:DISPATCH_TARGET.y,z:DISPATCH_TARGET.z+1},direction:{x:0,y:0,z:-1}});
    const selection=vi.spyOn(Math,'random').mockReturnValue(0);

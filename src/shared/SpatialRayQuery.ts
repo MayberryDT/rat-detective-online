@@ -1,5 +1,6 @@
 import * as C from 'cannon-es';
 import {sweepSphereBody} from './sweepSphere';
+import {StaticCityBroadphase} from './StaticCityBroadphase';
 
 type Node = { bounds:C.AABB; bodies?:C.Body[]; left?:Node; right?:Node };
 /** A static-body BVH for ray broadphase only. Cannon still performs every exact
@@ -20,9 +21,10 @@ export class SpatialRayQuery {
     private readonly bounds=new C.AABB();
     private readonly candidates:C.Body[]=[];
     private readonly onChange=()=>{this.changed=true;this.ranksDirty=true;};
-    /** Static city bodies the owner never moves, resizes or retypes. They join the
-     * BVH once and skip the per-step pose check (1,433 per world in the city). */
-    readonly fixed=new WeakSet<C.Body>();
+    /** Fixed city bodies (StaticCityBroadphase, outside world.bodies): they join
+     * the BVH and never take the per-step pose check. Ranked after moving bodies. */
+    private city=new Map<C.Body,number>();
+    private cityVersion=-1;
     /** Ray/sphere query count for diagnostics; callers may reset it. */
     queries=0;
     constructor(private readonly world:C.World){
@@ -36,7 +38,9 @@ export class SpatialRayQuery {
     /** Call once per simulation step, not once per ball. Also notices edited
      * static fixtures and changed body types, even after updateAABB() was called. */
     refresh(){
-        if(!this.changed&&this.unchanged()){this.updateRanks();return;}
+        const broadphase=this.world.broadphase,fixed=broadphase instanceof StaticCityBroadphase?broadphase.fixed:[];
+        const version=broadphase instanceof StaticCityBroadphase?broadphase.fixedVersion:0;
+        if(!this.changed&&version===this.cityVersion&&this.unchanged()){this.updateRanks();return;}
         let rebuild=false;this.moving.length=0;
         const present=this.present;present.clear();
         for(const body of this.world.bodies){
@@ -44,15 +48,19 @@ export class SpatialRayQuery {
             present.add(body);
             const p=body.position,q=body.quaternion;
             const previous=this.statics.get(body);
-            if(previous&&this.fixed.has(body))continue;
             if(body.aabbNeedsUpdate||!previous||p.x!==previous[0]||p.y!==previous[1]||p.z!==previous[2]||
                 q.x!==previous[3]||q.y!==previous[4]||q.z!==previous[5]||q.w!==previous[6]||body.shapes.length!==previous[7]){
                 body.updateAABB();this.statics.set(body,[p.x,p.y,p.z,q.x,q.y,q.z,q.w,body.shapes.length]);rebuild=true;
             }
         }
+        if(version!==this.cityVersion){this.city=new Map(fixed.map((body,i)=>[body,1e9+i]));this.cityVersion=version;}
+        for(const body of fixed){
+            present.add(body);
+            if(!this.statics.has(body)){this.statics.set(body,[]);rebuild=true;}
+        }
         for(const body of this.statics.keys())if(!present.has(body)){this.statics.delete(body);rebuild=true;}
         if(rebuild)this.root=this.build([...this.statics.keys()]);
-        this.staticList=[...this.statics.keys()].filter(body=>!this.fixed.has(body));this.staticPose=new Float64Array(this.staticList.length*8);
+        this.staticList=[...this.statics.keys()].filter(body=>!this.city.has(body));this.staticPose=new Float64Array(this.staticList.length*8);
         let k=0;for(const body of this.staticList)for(const value of this.statics.get(body)!)this.staticPose[k++]=value;
         this.changed=false;
         this.updateRanks();
@@ -98,19 +106,20 @@ export class SpatialRayQuery {
         if(node.bodies){for(const body of node.bodies)if(body.aabb.overlaps(this.bounds))this.candidates.push(body);}
         else{this.collect(node.left);this.collect(node.right);}
     }
+    private readonly byRank=(a:C.Body,b:C.Body)=>(this.ranks.get(a)??this.city.get(a)!)-(this.ranks.get(b)??this.city.get(b)!);
     closest(from:C.Vec3,to:C.Vec3,mask:number,accept?:(body:C.Body)=>boolean,group=16):C.RaycastResult{
         const result=new C.RaycastResult(),broadphase=this.world.broadphase;this.queries++;
         if(!(broadphase instanceof C.SAPBroadphase)&&!accept){
             this.world.raycastClosest(from,to,{collisionFilterGroup:group,collisionFilterMask:mask,skipBackfaces:true},result);return result;
         }
-        if(this.changed)this.refresh();else if(broadphase.dirty)this.updateRanks();
+        if(this.changed||broadphase instanceof StaticCityBroadphase&&broadphase.fixedVersion!==this.cityVersion)this.refresh();else if(broadphase.dirty)this.updateRanks();
         this.bounds.lowerBound.set(Math.min(from.x,to.x),Math.min(from.y,to.y),Math.min(from.z,to.z));
         this.bounds.upperBound.set(Math.max(from.x,to.x),Math.max(from.y,to.y),Math.max(from.z,to.z));
         this.candidates.length=0;this.collect(this.root);
         for(const body of this.moving){if(body.aabbNeedsUpdate)body.updateAABB();if(body.aabb.overlaps(this.bounds))this.candidates.push(body);}
         if(accept){let count=0;for(const body of this.candidates)if(accept(body))this.candidates[count++]=body;this.candidates.length=count;}
         // Equal-distance hits keep precisely SAP's original traversal order.
-        if(broadphase instanceof C.SAPBroadphase)this.candidates.sort((a,b)=>this.ranks.get(a)!-this.ranks.get(b)!);
+        if(broadphase instanceof C.SAPBroadphase)this.candidates.sort(this.byRank);
         const ray=this.ray;ray.from.copy(from);ray.to.copy(to);ray.mode=C.Ray.CLOSEST;
         ray.hasHit=false;ray.skipBackfaces=true;ray.checkCollisionResponse=true;
         ray.collisionFilterGroup=group;ray.collisionFilterMask=mask;
@@ -118,7 +127,8 @@ export class SpatialRayQuery {
     }
     /** Reuse the static BVH for the larger Big Cheese collision volume. */
     sphere(from:C.Vec3,to:C.Vec3,radius:number,mask:number,accept:(body:C.Body)=>boolean):C.RaycastResult {
-        if(this.changed)this.refresh();this.queries++;
+        const broadphase=this.world.broadphase;
+        if(this.changed||broadphase instanceof StaticCityBroadphase&&broadphase.fixedVersion!==this.cityVersion)this.refresh();this.queries++;
         this.bounds.lowerBound.set(Math.min(from.x,to.x)-radius,Math.min(from.y,to.y)-radius,Math.min(from.z,to.z)-radius);
         this.bounds.upperBound.set(Math.max(from.x,to.x)+radius,Math.max(from.y,to.y)+radius,Math.max(from.z,to.z)+radius);
         this.candidates.length=0;this.collect(this.root);

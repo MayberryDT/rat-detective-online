@@ -8,6 +8,7 @@ import { STREET_LAMPS, originalCityBuildingAllowed, isRampOpening } from '../sha
 import { generatedStreetLamps,STREET_LAMP_HEIGHT } from '../shared/streetLampLayout';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { addCityBody, removeCityBody } from '../shared/StaticCityBroadphase';
 import {
     createDecorationRandom,
     createWorldSpec,
@@ -134,7 +135,7 @@ export class CityGenerator {
             if (object instanceof THREE.InstancedMesh) object.dispose();
         }
         for (const body of this.bodies) {
-            this.world.removeBody(body);
+            removeCityBody(this.world, body);
         }
         for (const geometry of this.geometries) geometry.dispose();
         for (const material of this.materials) material.dispose();
@@ -379,7 +380,7 @@ export class CityGenerator {
             const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
             body.addShape(new CANNON.Box(new CANNON.Vec3(mass.w/2,mass.h/2,mass.d/2)));
             body.position.set(mass.x,mass.y,mass.z);
-            body.updateAABB(); this.world.addBody(body); this.bodies.push(body);
+            addCityBody(this.world, body); this.bodies.push(body);
         }
         if (!isCentralBuilding(building) && random() < 0.4) {
             this.addRooftopDetail(cx, cz, bw, bd, bh, rooftopMat, random);

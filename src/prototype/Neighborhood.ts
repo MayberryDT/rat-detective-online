@@ -23,6 +23,7 @@ import {SEWER_LIGHTS} from '../shared/sewerLayout';
 import { SEWER_PORTAL_LIGHTS, sewerLightingActive } from './SewerLighting';
 import {CityGenerator} from '../world/CityGenerator';
 import {generateBuildingLayout, type WorldSpec} from '../shared/worldSpec';
+import {addCityBody,removeCityBody} from '../shared/StaticCityBroadphase';
 export { BLOCKS, ENTRIES, isRampOpening } from '../shared/grayboxLayout';
 
 export class Neighborhood {
@@ -377,7 +378,7 @@ export class Neighborhood {
         mesh.position.set(x,y,z);mesh.rotation.set(rx,0,rz);mesh.receiveShadow=true;mesh.castShadow=true;mesh.userData.aimTarget=true;
         this.solids.push(mesh);
         const body=new CANNON.Body({mass:0,shape:new CANNON.Box(new CANNON.Vec3(w/2,h/2,d/2))});
-        body.position.set(x,y,z);body.quaternion.setFromEuler(rx,0,rz);body.updateAABB();this.world.addBody(body);this.bodies.push(body);
+        body.position.set(x,y,z);body.quaternion.setFromEuler(rx,0,rz);addCityBody(this.world,body);this.bodies.push(body);
         return mesh;
     }
     private glow(x:number,y:number,z:number,w:number,h:number,d:number,color:number) {
@@ -401,7 +402,7 @@ export class Neighborhood {
         for(const light of [...this.lampSources,...this.fixedLights])light.dispose();
         this.fixedLights.length=0;this.interiorSources.clear();
         this.lampSources.length=0;
-        for(const body of this.bodies)this.world.removeBody(body);
+        for(const body of this.bodies)removeCityBody(this.world,body);
         const sharedMaterials=new Set<THREE.Material>([...this.materials.values(),...this.glowMaterials.values()]);
         for(const obj of this.objects){this.scene.remove(obj);if(obj instanceof THREE.Group)disposeMeshResources(obj);if(obj instanceof THREE.Mesh)obj.geometry.dispose();if(obj instanceof THREE.Sprite)obj.material.map?.dispose();if(obj instanceof THREE.Mesh||obj instanceof THREE.Sprite){const m=obj.material as THREE.Material;if(!sharedMaterials.has(m))m.dispose();}}
         for(const mat of this.materials.values())mat.dispose();
