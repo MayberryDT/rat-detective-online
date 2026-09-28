@@ -92,7 +92,7 @@ Tyler's brain dump, sorted into now and later, with his answers.
   - `gameWon` carries an optional `lineup` (up to five ids, winner first). The server ranks by the assignment's own progress (deliveries, zone time, case kills, or case time for Closing Time), then kills, case time and fewest deaths.
   - The lineup starts as the slow-motion finish ends (1.4 s) and runs until the reset, about 8.6 s. The room sits 320 units below the city and is lit by the stage's existing spotlight, moved there, so no light is added. Rats stand in rank order with the winner last; a flashbulb (screen flash, spotlight surge and pop) photographs each in turn and stamps their award across the chest; the winner gets a gold "CASE CLOSED" stamp and a hop. The Case File card shrinks to the top-left corner and the play HUD hides. Review switch: "T5 Police lineup".
 
-## Fourth batch: the Hunch, pickups and incidents (agreed 2026-09-27, in design)
+## Fourth batch: the Hunch, pickups and incidents (agreed 2026-09-27; built, on the private preview)
 
 **Guiding rules (Tyler):**
 - Maximize fun through chaos, not balance: think Mario Kart, not Forza.
@@ -119,6 +119,21 @@ Tyler's brain dump, sorted into now and later, with his answers.
 - **All Units is in:** during it, dead rats respawn near the objective (the case or its carrier, or the active zone).
 - **Bad Ammunition:** add duds that dribble out, sputtering smoke, a coughing gunshot and wobbling balls, plus extra juice. It keeps its calm, focus-on-the-objective role.
 - **Build order:** Hunch, then pickups, then incidents. Everything ships together as protocol 20 to a private preview; production only on Tyler's OK.
+
+**Built (2026-09-28, commits `0061f77`..`01ea96b` on `main`, protocol 20, not in production):**
+- [x] **The Hunch.** At 5 HP, rats within 40 units show through walls as a boiling pencil sketch (hatching plus a contour; only the hidden parts) with a faint pencil tail. You lose it on the first hit. Spotter: shutter click, photo corners that snap onto the rat, typed `MADE: NAME`. Spotted: YOU'VE BEEN MADE card with a MADE stamp, violin sting, and a hat-brim eye on the screen edge toward the nearest watcher while anyone has a read on you. Tuning: `hunch` (always on) and `made` (switchable) in `feelTuning.ts`.
+- [x] **Pickup placement.** 14 sites. Ironclad (5): Records archive second floor, Icebox rear catwalk, Pumping Station roof (launcher), Gate bridge roof, sewer maintenance. Hot Pursuit (4): the Gate and Icebox tunnel mouths, the north end of Seventy Avenue, the west end of the south avenue. Quick Fix (5): alleys west and east of the central crossroads, the south-central blocks, beside the Icebox forecourt, and the Records–Gate service lane. Bot roof launches keep their own landing table.
+- [x] **Noir supplies.** An iron-plated riveted trench coat on a tailor's dummy, a doctor's bag with a green-cross roundel, red wingtips; each on a plinth under a work lamp with a cone and a pool of warm light. The prop is lit from its lamp, not self-lit. The lamp stutters out on a claim and stays dark while restocking. Claim cards type their kicker and get a rubber stamp (ALIBI ON FILE, IN PURSUIT, CLEARED FOR DUTY).
+- [x] **Bad Ammunition.** Per trigger, 12% jam (no ball, CLICK., dry click), 20% dud (one harmless slow ball that bounces off rats, PFFT., wah-wah), otherwise the existing 1–3 crooked balls (70/20/10, .12–.24 rad) with a coughing shot and muzzle smoke; 18% of those backfire (soot on the lens). Crooked balls wobble in flight (presentation only).
+- [x] **Retired:** Ricochet Racket and Popcorn Panic map to Scattershot for stored rooms; their code and wire fields are gone.
+- [x] **Blackout.** City surfaces, lamps, windows, neon, haze, searchlights and wet reflections go dark (NoirCity darkness plus exposure); nameplates dim. A lightning storm (every 2.5–7 s) and muzzle flashes within 40 units light the street for a beat. Supply lamps, the case and guidance stay visible.
+- [x] **Clean Bill.** Everyone alive heals to full as it starts (no Quick Fix card), and every rat has a city-wide, stronger Hunch whatever its health.
+- [x] **Malpractice.** Quick Fix kits fidget, hop 5 units away from any rat within 7 (at most every 0.65 s, within 12 units of home, on supported floor) and walk home after. 35% of claims explode into neutral cheese instead of healing.
+- [x] **Most Wanted.** The assignment leader (then kills) is wanted: a police searchlight follows them and everyone sees their sketch through walls. The killer gets a full heal and Hot Pursuit (BOUNTY COLLECTED); the next leader becomes wanted. Bots hunt the wanted rat.
+- [x] **Rat Race.** Every living rat has Hot Pursuit until the incident ends, and shots fly 1.35× faster (shared pattern, so prediction matches).
+- [x] **All Units.** Respawns land among the 12 supported spawns nearest the real case (or its carrier, or the active Jurisdiction zone), at least 10 units away, on the one farthest from living rats.
+- **Review fixes:** the independent review caught that clients rejected the new heal causes and the Rat Race/dud launch speeds (which would have disconnected players); fixed with a wire regression test.
+- **Next action:** Tyler playtests the preview; production only on his OK.
 
 **Later (not now):**
 - **Complete optimization overhaul.** Tyler felt a performance hit after the third batch (his PC was also busy). Measure the client frame budget with the full juice layer on, then cut cost across rendering, feel effects and simulation.

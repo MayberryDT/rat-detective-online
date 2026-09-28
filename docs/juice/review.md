@@ -26,9 +26,9 @@ For a quick look without playing, the **feel workshop** fires each effect on dem
 Private hosted fixture (production matchmaking, server bots, 10-rat cap, audible), serving this branch's client and Worker:
 
 - **Play:** http://127.0.0.1:5193/?room=graybox-benchmark-match-polish-r1 on Veelox. Add `&feel=off` to compare, `&feel=dev` for the switches.
-- **Fixture:** Worker `rat-detective-capacity-test`, version `fca0a23a-3fbd-4cdd-acbc-a4106844e563` (third batch, protocol 19, including the review fixes). It expires **6:37 PM PDT, 27 September**.
-- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-27T21-37-46-887Z/deployment.json`.
-- **Smoke-tested:** a scripted client joined through the relay: protocol 19, seed 341283204, 9 server bots plus the client, PAPER CHASE playing. In 15 s it saw 2 bot deaths, both headshots (`playerDied.headshot`), and respawns at 5 HP. A headless browser stayed connected for 20 s with no socket close.
+- **Fixture:** Worker `rat-detective-capacity-test`, version `6e8e8bb3-14e4-485b-839d-13b052ec850d` (fourth batch, protocol 20: the Hunch, the pickup rework and the incident rework, including the review fixes). It expires **1:56 AM PDT, 28 September**.
+- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-28T04-56-47-734Z/deployment.json`.
+- **Smoke-tested:** a scripted client joined through the relay: protocol 20, seed 341283204, 9 server bots plus the client, PAPER CHASE playing; in 12 s it saw 3 deaths (2 headshots) and 5 HP respawns. The scripted client acknowledges every frame and can trip the room's inbound message budget on a busy cold join (`connection reset: Inbound message budget exceeded`); that is the throwaway client, not the game client.
 
 **If the preview has expired**, build and redeploy, then start the relay again:
 
@@ -118,6 +118,18 @@ Workshop: **Headshot suspect 2 (T4)** and **Police lineup (T5)**. Captures: `out
 - **Lineup rank (T5).** The server ranks by the assignment's own progress (deliveries, zone time, case kills, or case time in Closing Time), then kills, case time and fewest deaths. Rats without an award get "PERSON OF INTEREST".
 - **Lineup light (T5).** The room is lit only by the stage's existing spotlight, moved there for the lineup, so no new light is added and nothing recompiles.
 - **New awards (T5).** Sharpshooter needs 8 trigger pulls and counts one hit per pull; eruption and burst balls don't count. Legwork ignores respawn and launcher jumps.
+
+## Fourth batch (protocol 20)
+
+What changed and how to see it is in the [juice plan](../juice-plan.md#fourth-batch-the-hunch-pickups-and-incidents-agreed-2026-09-27-built-on-the-private-preview). Incidents still come from shooting a Dispatch box: 13 are in rotation (never the same twice in a row), each active for 25 s with a 16 s cooldown. Pinning one incident only works on a local development server, not on the hosted preview.
+
+| Item | What to look for | Switch |
+|---|---|---|
+| The Hunch | At full health, rats behind walls within 40 units appear as a boiling pencil sketch with a faint tail. Making someone: shutter, photo corners, `MADE: NAME`. Being made: YOU'VE BEEN MADE, violin sting, an eye on the screen edge. | H The Hunch (always on); H2 Made moments |
+| Supplies | 14 sites, each with a reason (see the plan). Iron trench coat on a dummy, doctor's bag, red wingtips, each under a work lamp; the lamp stutters out on a claim; claim cards get a stamp. | none |
+| Bad Ammunition | Jams (CLICK.), harmless duds (PFFT.), coughing shots with smoke, backfire soot, wobbling balls. | I2 Bad Ammunition juice |
+| Blackout | The city goes dark; lightning and nearby shots light it for a beat. | I3 Blackout (tuning only) |
+| Clean Bill / Malpractice / Most Wanted / Rat Race / All Units | Heal-all plus city-wide Hunch; hopping, sometimes exploding kits; searchlight and bounty on the leader; everyone hustles with faster cheese; respawns beside the case or zone. | none |
 
 ## Choices to confirm
 
