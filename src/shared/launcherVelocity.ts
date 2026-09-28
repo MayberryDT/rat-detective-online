@@ -21,6 +21,10 @@ export const LAUNCH_PROFILES:Record<LaunchMachineKind,{lift:readonly [number,num
 export const OVERPRESSURE={chance:1/7,lift:106,drift:1.3} as const;
 /** Trigger to firing: the machine shudders, flashes and whines, and rats get a split second. */
 export const PRESSURE_TELL_MS=200;
+/** A launched rat's landing: everything within `radius` is shoved away (up to
+ * `shove` u/s sideways plus `lift` up), and a rat within `squash` is landed on
+ * for 1 damage. `minDrop` of fall from the flight's peak counts as a landing. */
+export const LANDING_SHOCKWAVE={radius:7,shove:[6,20] as const,lift:9,squash:2.2,minDrop:6} as const;
 /** Drift fades by this rate (1/s) while airborne, for rats and cases alike. */
 export const LAUNCH_DRIFT_DECAY=.25;
 /** One rider's throw from a machine's profile; `boost` is decided once per

@@ -5,7 +5,7 @@ import { SpatialRayQuery } from './SpatialRayQuery';
 import { sweepSphereBody } from './sweepSphere';
 import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS, NETPLAY_COMPENSATION_MS, NETPLAY_HISTORY_MS, type MovementPoint } from './netplay';
 import { StaticCityBroadphase, addCityBody } from './StaticCityBroadphase';
-import { launcherVelocity, OVERPRESSURE, PRESSURE_TELL_MS } from './launcherVelocity';
+import { launcherVelocity, LANDING_SHOCKWAVE, OVERPRESSURE, PRESSURE_TELL_MS } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
@@ -104,6 +104,8 @@ export class ChaosSimulation {
     private pressure:NonNullable<ChaosState['pressure']>={serial:0,until:0,cooldowns:{},launches:[]};
     /** Machine id → firing time of a triggered machine still in its tell. */
     private readonly armedPressure=new Map<string,number>();
+    /** Launched rats in the air, by id: the machine, launch time and highest point so far. */
+    private readonly flights=new Map<string,{machineId:string;at:number;peak:number}>();
     private notice={serial:0,text:'Find the Hot Case. Shoot Dispatch.'};
     private now=Date.now();
     private epoch:string=crypto.randomUUID();
@@ -480,9 +482,60 @@ export class ChaosSimulation {
         // Keep other stations' outstanding events. A rat can only occupy one pad,
         // and its newest impulse replaces an older event if launched again.
         const selected=new Set(nearby.map(p=>p.id));
+        for(const player of nearby)this.flights.set(player.id,{machineId:machine.id,at:this.now,peak:player.y});
         this.pressure.launches=[...this.pressure.launches.filter(e=>!selected.has(e.playerId)),
             ...nearby.map(player=>({id:`launch-${this.pressure.serial}-${player.id}`,machineId:machine.id,
                 playerId:player.id,at:this.now,velocity:launcherVelocity(machine,boost),...(boost?{boost:true as const}:{})}))].slice(-MAX_LAUNCH_EVENTS);
+    }
+    /** A launched rat lands once it has come down from its peak onto something solid. */
+    private stepFlights(now:number,playing:boolean){
+        for(const [id,flight] of this.flights){
+            const player=this.players.get(id);
+            if(!player||player.hp<=0||now-flight.at>20000){this.flights.delete(id);continue;}
+            flight.peak=Math.max(flight.peak,player.y);
+            const drop=flight.peak-player.y;
+            if(now-flight.at<600||drop<LANDING_SHOCKWAVE.minDrop)continue;
+            const feet=new C.Vec3(player.x,player.y+.5,player.z);
+            if(!this.ray(feet,new C.Vec3(player.x,player.y-.7,player.z),1).hasHit)continue;
+            this.flights.delete(id);
+            this.landingShockwave(player,flight.machineId,drop,playing);
+        }
+    }
+    /** Shove everything nearby away from the landing, squash anyone underneath, and
+     * fire another machine whose pad the rat came down on. */
+    private landingShockwave(lander:PlayerData,machineId:string,drop:number,playing:boolean){
+        const W=LANDING_SHOCKWAVE,p={x:lander.x,y:lander.y,z:lander.z};
+        const speed=Math.sqrt(2*25*drop);
+        this.impacts.push({p:{...p},n:{x:0,y:1,z:0},surface:true,foley:'launch-landing',energy:Math.min(300,speed)});
+        const away=(q:Vec3Data)=>{
+            const dx=q.x-p.x,dz=q.z-p.z,d=Math.hypot(dx,dz);
+            if(d>W.radius||Math.abs(q.y-p.y)>3)return null;
+            const angle=d>.05?Math.atan2(dx,dz):Math.random()*Math.PI*2,strength=W.shove[0]+(W.shove[1]-W.shove[0])*(1-d/W.radius);
+            return {d,x:Math.sin(angle)*strength,y:W.lift,z:Math.cos(angle)*strength};
+        };
+        const shoves=this.pressure.shoves??[];
+        for(const player of this.players.values()){
+            if(player.id===lander.id||player.hp<=0)continue;
+            const push=away(player);if(!push)continue;
+            if(playing&&push.d<W.squash)this.hit({owner:lander.id,victim:player.id,damage:1,incoming:{x:0,y:-speed,z:0}});
+            shoves.push({id:`shove-${this.pressure.serial}-${this.tick}-${player.id}`,playerId:player.id,at:this.now,velocity:{x:push.x,y:push.y,z:push.z}});
+        }
+        if(shoves.length)this.pressure.shoves=shoves.slice(-MAX_LAUNCH_EVENTS);
+        for(const c of this.cases.values()){
+            if(c.owner||c.fake||c.armed||c.body.type!==C.Body.DYNAMIC)continue;
+            const push=away(c.body.position);if(!push)continue;
+            c.body.velocity.vadd(new C.Vec3(push.x,push.y,push.z),c.body.velocity);c.body.wakeUp();
+        }
+        for(const corpse of this.corpses.values()){
+            const push=away(corpse.body.position);if(!push)continue;
+            corpse.body.velocity.vadd(new C.Vec3(push.x,push.y,push.z),corpse.body.velocity);corpse.body.wakeUp();
+        }
+        for(const shot of this.shots){
+            const push=away(shot.p);if(!push||shot.stuckUntil)continue;
+            shot.v={x:shot.v.x+push.x,y:shot.v.y+push.y,z:shot.v.z+push.z};
+        }
+        const pad=LAUNCH_MACHINES.find(m=>m.id!==machineId&&Math.hypot(p.x-m.pad.x,p.z-m.pad.z)<=m.pad.radius&&Math.abs(p.y-m.pad.y)<2);
+        if(pad&&playing)this.activatePressure(pad.id);
     }
     private tell(text:string){this.notice={serial:this.notice.serial+1,text};}
     /** Clean Bill, Rat Race, Most Wanted and Malpractice act on rats and supplies each step. */
@@ -1066,6 +1119,10 @@ export class ChaosSimulation {
         this.advanceAssignment(dt,now,playing);
         playing=playing&&!this.assignment?.closed;
         this.pressure.launches=this.pressure.launches.filter(event=>now-event.at<=PRESSURE_LAUNCH.eventMs);
+        if(this.pressure.shoves){
+            this.pressure.shoves=this.pressure.shoves.filter(event=>now-event.at<=PRESSURE_LAUNCH.eventMs);
+            if(!this.pressure.shoves.length)delete this.pressure.shoves;
+        }
         // A restored room can cross multiple deadlines while asleep. Advance
         // without briefly applying an incident whose active window already ended.
         for(let transition=0;transition<3;transition++){
@@ -1090,6 +1147,7 @@ export class ChaosSimulation {
             const at=this.armedPressure.get(machine.id);
             if(at!==undefined&&now>=at){this.armedPressure.delete(machine.id);this.firePressure(machine);}
         }
+        this.stepFlights(now,playing);
         if(!this.incidentActive('delayed-reaction')){
             for(const shot of this.shots)if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);}
         }
@@ -1334,7 +1392,7 @@ export class ChaosSimulation {
     snapshot(drain=true):ChaosState{
         const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,case:this.caseSnapshot(this.primaryCase),
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
-            extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,cooldowns:{...this.pressure.cooldowns},...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
+            extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,cooldowns:{...this.pressure.cooldowns},...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
             buffs:this.buffSnapshot(),
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
@@ -1348,7 +1406,7 @@ export class ChaosSimulation {
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.lastSurgePulse=0;this.dispatchActivator=null;
-        this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};this.armedPressure.clear();
+        this.pressure={serial:this.pressure.serial+1,until:0,cooldowns:{},launches:[]};this.armedPressure.clear();this.flights.clear();
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
         this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){

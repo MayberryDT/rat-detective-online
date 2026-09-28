@@ -175,6 +175,16 @@ export class ServerBotController {
             bot.launchedUntil=now+150;bot.normalJump=false;bot.zoneHop=false;bot.body.wakeUp();
             bot.driftX=launch.velocity.x;bot.driftZ=launch.velocity.z;
         }
+        for(const shove of chaos?.pressure?.shoves??[]){
+            if(this.launchesSeen.has(shove.id))continue;
+            this.launchesSeen.add(shove.id);
+            if(this.launchesSeen.size>MAX_LAUNCH_EVENTS*2)this.launchesSeen.delete(this.launchesSeen.values().next().value!);
+            const bot=this.bots.get(shove.playerId);
+            if(!bot?.alive||now-shove.at>1500||shove.at>now+100)continue;
+            const v=bot.body.velocity;v.x+=shove.velocity.x;v.z+=shove.velocity.z;v.y=Math.max(v.y,shove.velocity.y);
+            bot.driftX+=shove.velocity.x;bot.driftZ+=shove.velocity.z;
+            bot.launchedUntil=now+150;bot.normalJump=false;bot.zoneHop=false;bot.body.wakeUp();
+        }
         if(now-this.lastNavigationAt>=15){
             // The second bound is required in Workers, where performance.now()
             // may stay frozen throughout a synchronous event's CPU work.

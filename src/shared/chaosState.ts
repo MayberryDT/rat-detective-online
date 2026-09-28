@@ -113,8 +113,9 @@ export interface ChaosState {
     extraCases?: Array<CaseState & {id:string}>;
     /** `wanted`: Most Wanted's current target, the leader in the searchlight. */
     dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId; wanted?:string };
-    /** `boosts`: machine id → time of its latest firing when that firing was an overpressure misfire. */
-    pressure?: { serial:number; until:number; cooldowns?:Record<string,number>; boosts?:Record<string,number>; launches:PressureLaunchEvent[] };
+    /** `boosts`: machine id → time of its latest firing when that firing was an overpressure misfire.
+     * `shoves`: landing-shockwave knockbacks, added once to the rat's velocity like a launch. */
+    pressure?: { serial:number; until:number; cooldowns?:Record<string,number>; boosts?:Record<string,number>; launches:PressureLaunchEvent[]; shoves?:PressureLaunchEvent[] };
     /** Pickup sites currently available to claim; absent entries are active elsewhere or claimed. */
     pickups?: PickupState[];
     /** Living timed effects by player id. */

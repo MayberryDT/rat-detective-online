@@ -120,7 +120,7 @@ export class RatController {
     }
 
     /** Server-selected launch events are retained briefly in snapshots and applied once. */
-    applyPressureLaunches(state:ChaosState,playerId:string):void {
+    applyPressureLaunches(state:Pick<ChaosState,'time'|'pressure'>,playerId:string):void {
         for(const event of state.pressure?.launches||[]){
             if(event.playerId!==playerId || this.appliedLaunches.has(event.id))continue;
             this.appliedLaunches.add(event.id);
@@ -132,6 +132,17 @@ export class RatController {
             this.entity.body.wakeUp();this.groundGrace=0;this.normalJump=false;
             this.driftX=event.velocity.x;this.driftZ=event.velocity.z;
             this.launcherFlight=!!this.launcherBounds;
+        }
+        // A nearby landing's shockwave: a knockback hop that carries until the rat lands.
+        for(const event of state.pressure?.shoves||[]){
+            if(event.playerId!==playerId || this.appliedLaunches.has(event.id))continue;
+            this.appliedLaunches.add(event.id);
+            if(this.appliedLaunches.size>32)this.appliedLaunches.delete(this.appliedLaunches.values().next().value!);
+            if(state.time-event.at<0 || state.time-event.at>PRESSURE_LAUNCH.eventMs || this.entity.dead || this.entity.hp<=0)continue;
+            const v=this.entity.body.velocity;
+            v.x+=event.velocity.x;v.z+=event.velocity.z;v.y=Math.max(v.y,event.velocity.y);
+            this.driftX+=event.velocity.x;this.driftZ+=event.velocity.z;
+            this.entity.body.wakeUp();this.groundGrace=0;this.normalJump=false;
         }
     }
 

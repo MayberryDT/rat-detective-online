@@ -453,13 +453,14 @@ function parseChaos(value:unknown):ChaosState|null{
   if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&isVec3(i.p)&&isVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit'||i.cue==='armor-clang')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
   if(value.pressure!==undefined){
     const p=value.pressure;
-    if(!isRecord(p)||integer(p.serial)===null||finiteNumber(p.until)===null||!Array.isArray(p.launches)||p.launches.length>MAX_LAUNCH_EVENTS)return null;
+    if(!isRecord(p)||integer(p.serial)===null||finiteNumber(p.until)===null)return null;
     if(p.cooldowns!==undefined&&(!isRecord(p.cooldowns)||Object.keys(p.cooldowns).length>LAUNCH_MACHINES.length||
       Object.entries(p.cooldowns).some(([id,until])=>!LAUNCH_MACHINES.some(m=>m.id===id)||finiteNumber(until)===null)))return null;
     if(p.boosts!==undefined&&(!isRecord(p.boosts)||Object.keys(p.boosts).length>LAUNCH_MACHINES.length||
       Object.entries(p.boosts).some(([id,at])=>!LAUNCH_MACHINES.some(m=>m.id===id)||finiteNumber(at)===null)))return null;
-    if(!p.launches.every(e=>isRecord(e)&&nonEmptyString(e.id,128)&&nonEmptyString(e.playerId,64)&&
-      finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&isVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)&&(e.boost===undefined||e.boost===true)))return null;
+    const events=(list:unknown)=>Array.isArray(list)&&list.length<=MAX_LAUNCH_EVENTS&&list.every(e=>isRecord(e)&&nonEmptyString(e.id,128)&&nonEmptyString(e.playerId,64)&&
+      finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&isVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)&&(e.boost===undefined||e.boost===true));
+    if(!events(p.launches)||p.shoves!==undefined&&!events(p.shoves))return null;
   }
   const validated={...value,...(assignment?{assignment}:{})};
   if(isLegacyIncidentId(d.incident))return {...validated,dispatch:{...d,incident:incidentInfo(d.incident).id}} as unknown as ChaosState;
