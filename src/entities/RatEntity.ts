@@ -32,11 +32,13 @@ const DEATH_GLOW_FADE = 2.5;
 
 // ─── OUTLINE GLOW CONFIG ───
 const GLOW_THICKNESS = 0.025;    // Surface offset, without moving body-part centers
-/** Opponent outline: an opaque cream line that stays about `OUTLINE_PIXELS`
- * wide on screen at any distance, so far rats keep a readable edge. */
-const GLOW_OPACITY = 0.85;
-const OUTLINE_COLOR = 0xf1e4c2;
-const OUTLINE_PIXELS = 2.5;
+/** Opponent outline: a faint moonlit edge that only appears with distance.
+ * Close rats have none; from `OUTLINE_NEAR` it fades in, reaching
+ * `OUTLINE_PIXELS` wide on screen and full opacity at `OUTLINE_FAR`. */
+const GLOW_OPACITY = 0.5;
+const OUTLINE_COLOR = 0xaebfd6;
+const OUTLINE_PIXELS = 1.5;
+const OUTLINE_NEAR = 16, OUTLINE_FAR = 45;
 const EMISSIVE_INTENSITY = 0.28;  // Rat-only lift; lamps still model the hat and coat
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
@@ -73,6 +75,8 @@ export class RatEntity {
     private glowMaterial!:THREE.MeshBasicMaterial;
     /** Extra shell offset (world units) that keeps the outline's on-screen width. */
     private outlineReach=0;
+    /** 0 (close: no outline) … 1 (far: full edge). Local and preview rats stay at 1. */
+    private outlineFade=1;
     private readonly shellOffset={value:0};
 
     // State
@@ -349,14 +353,17 @@ export class RatEntity {
     /** Per frame: widen the shell so the outline keeps its on-screen width.
      * `unitsPerPixel` is the world size of one screen pixel at one unit away. */
     public fitOutline(camera:THREE.Vector3,unitsPerPixel:number):void {
-        this.outlineReach=Math.max(0,OUTLINE_PIXELS*unitsPerPixel*this.mesh.position.distanceTo(camera)-GLOW_THICKNESS);
-        this.shellOffset.value=this.hustleRemaining>0&&!this.dead?Math.max(.055,this.outlineReach):this.outlineReach;
+        if(this.dead)return;
+        const distance=this.mesh.position.distanceTo(camera);
+        this.outlineFade=THREE.MathUtils.smoothstep(distance,OUTLINE_NEAR,OUTLINE_FAR);
+        this.outlineReach=Math.max(0,OUTLINE_PIXELS*this.outlineFade*unitsPerPixel*distance-GLOW_THICKNESS);
+        this.updatePowerupOutline();
     }
     private updatePowerupOutline():void {
         const pursuit=this.hustleRemaining>0&&!this.dead;
         this.glowMaterial.color.setHex(pursuit?0xff1605:OUTLINE_COLOR);
-        this.glowMaterial.opacity=pursuit?.95:GLOW_OPACITY;this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
-        if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(!this.isPlayer||pursuit);
+        this.glowMaterial.opacity=pursuit?.95:GLOW_OPACITY*this.outlineFade;this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
+        if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||!this.isPlayer&&this.outlineFade>.01);
     }
     private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.updatePowerupOutline();this.resetColor();}
 
@@ -372,6 +379,7 @@ export class RatEntity {
     /** Animate the current render root; remote presentation need not read physics. */
     public presentAlive(dt: number, previewSpeed?:number): void {
         if (this.dead) return;
+        this.billboard.update(dt);
         const p = this.mesh.position;
         if(this.freezeLeft>0){
             this.freezeLeft=Math.max(0,this.freezeLeft-dt);
@@ -449,7 +457,7 @@ export class RatEntity {
             const fadeOut = Math.max(0, 1 - t / DEATH_GLOW_FADE);
             this.glowMesh.traverse((c) => {
                 if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshBasicMaterial) {
-                    c.material.opacity = GLOW_OPACITY * fadeOut;
+                    c.material.opacity = GLOW_OPACITY * this.outlineFade * fadeOut;
                 }
             });
         }
@@ -708,7 +716,7 @@ export class RatEntity {
         this.resetColor();
         this.glowMesh?.traverse(child => {
             if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
-                child.material.opacity = GLOW_OPACITY;
+                child.material.opacity = GLOW_OPACITY * this.outlineFade;
             }
         });
     }

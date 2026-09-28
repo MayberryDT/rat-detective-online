@@ -159,6 +159,8 @@ class FakeNode extends EventTarget {
             moveTo() {},
             lineTo() {},
             stroke() {},
+            closePath() {},
+            fill() {},
             strokeStyle: '',
             font: '',
             fillStyle: '',

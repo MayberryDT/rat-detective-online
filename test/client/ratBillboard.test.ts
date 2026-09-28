@@ -1,16 +1,22 @@
 import {it,expect,vi} from 'vitest';
 import {RatBillboard} from '../../src/ui/RatBillboard';
-it('fits long names without changing text or health-bar world scale',()=>{
+
+// Failure mode: a long name spills past the plate or squashes the world size of the health pips.
+it('widens the plate for long names while keeping its world height and the text inside it',()=>{
  const original=globalThis.document;
- const fill=vi.fn(),stroke=vi.fn();
- const canvas={width:0,height:0,getContext:()=>({measureText:()=>({width:600}),clearRect(){},fillRect(){},fillText:fill,strokeText:stroke})};
+ const fill=vi.fn();
+ const noop=()=>{};
+ const canvas={width:0,height:0,getContext:()=>({measureText:()=>({width:600}),clearRect:noop,fillRect:noop,fillText:fill,
+  beginPath:noop,moveTo:noop,lineTo:noop,closePath:noop,fill:noop,stroke:noop})};
  vi.stubGlobal('document',{createElement:()=>canvas});
  try{
-  const name='Constable Extremely Long Name',billboard=new RatBillboard(name);
-  expect(canvas.width).toBe(632);
-  expect(fill).toHaveBeenCalledWith(name,316,40,600);
-  expect(stroke).toHaveBeenCalledWith(name,316,40,600);
-  expect(billboard.sprite.scale.x/canvas.width).toBeCloseTo(.75/128);
-  billboard.setHealth(1);expect(fill).toHaveBeenLastCalledWith(name,316,40,600);billboard.dispose();
+  const billboard=new RatBillboard('Constable Extremely Long Name');
+  expect(canvas.width).toBeGreaterThan(600);expect(canvas.width).toBeLessThanOrEqual(1024);
+  const [,,,maxWidth]=fill.mock.lastCall!;
+  expect(maxWidth).toBeLessThanOrEqual(canvas.width);
+  const height=billboard.sprite.scale.y;
+  billboard.setHealth(1);billboard.update(.1);
+  expect(billboard.sprite.scale.y).toBe(height);
+  billboard.dispose();
  }finally{vi.stubGlobal('document',original);}
 });

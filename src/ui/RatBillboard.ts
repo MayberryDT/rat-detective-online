@@ -1,6 +1,19 @@
 import * as THREE from 'three';
 import { MAX_HP } from '../shared/networkProtocol';
 
+const HEIGHT = 128;
+const WORLD_HEIGHT = 0.6;
+const FONT = '600 30px Outfit, Arial, sans-serif';
+const CREAM = '#e9e1cc';
+const RED = '#e2382e';
+const PIP_W = 30, PIP_H = 9, PIP_GAP = 7, PIP_SLANT = 6, PIP_Y = 70;
+/** Seconds a lost pip flashes before draining, and a regained pip takes to fill. */
+const LOSS_SECONDS = 0.45, GAIN_SECONDS = 0.3;
+
+/** Noir nameplate: the rat's name in spaced small caps over a row of slanted
+ * pips, one per hit point, like tabs on a case file. Lost pips flash, shake and
+ * drain to an empty outline; the last one burns red. Dead rats' names dim and
+ * are struck through. The canvas only redraws while something changes. */
 export class RatBillboard {
     public sprite: THREE.Sprite;
     private canvas: HTMLCanvasElement;
@@ -8,93 +21,122 @@ export class RatBillboard {
     private texture: THREE.CanvasTexture;
 
     private name: string;
+    private readonly nameWidth: number;
     private health: number;
+    /** Per pip: seconds since it was lost (negative: not animating) and since it was regained. */
+    private readonly lost = new Array<number>(MAX_HP).fill(-1);
+    private readonly gained = new Array<number>(MAX_HP).fill(-1);
+    private animating = false;
     private disposed = false;
 
     constructor(name: string, initialHealth: number = MAX_HP) {
-        this.name = name;
+        this.name = name.toUpperCase();
         this.health = initialHealth;
 
         this.canvas = document.createElement('canvas');
-        this.canvas.width = 256;
-        this.canvas.height = 128; // 2:1 aspect ratio
+        this.canvas.height = HEIGHT;
         this.ctx = this.canvas.getContext('2d')!;
-
-        this.ctx.font = 'bold 32px "Courier New", monospace';
-        const nameWidth=typeof this.ctx.measureText==='function'?this.ctx.measureText(name).width:name.length*19.2;
-        this.canvas.width=Math.max(256,Math.min(1024,Math.ceil(nameWidth+32)));
+        this.ctx.font = FONT;
+        this.nameWidth = typeof this.ctx.measureText === 'function' ? this.ctx.measureText(this.name).width + this.name.length * 3 : this.name.length * 21;
+        this.canvas.width = Math.max(256, Math.min(1024, Math.ceil(this.nameWidth + 48)));
         this.texture = new THREE.CanvasTexture(this.canvas);
         this.texture.minFilter = THREE.LinearFilter;
+        this.texture.generateMipmaps = false;
+        this.texture.colorSpace = THREE.SRGBColorSpace;
 
         const material = new THREE.SpriteMaterial({
             map: this.texture,
             transparent: true,
-            depthTest: true, // Visible depth, so walls hide it
-            depthWrite: false
+            depthTest: true, // Walls hide it
+            depthWrite: false,
+            toneMapped: false,
         });
-
         this.sprite = new THREE.Sprite(material);
-        this.sprite.scale.set(this.canvas.width / 128 * .75, 0.75, 1); // World size
-        this.sprite.center.set(0.5, 0); // Pivot at bottom center so it sits on head
+        this.sprite.scale.set(this.canvas.width / HEIGHT * WORLD_HEIGHT, WORLD_HEIGHT, 1);
+        this.sprite.center.set(0.5, 0); // Sits on the head
 
         this.draw();
+        // The web font may arrive after the first draw.
+        void document.fonts?.load?.(FONT).then(() => { if (!this.disposed) this.draw(); }, () => {});
     }
 
     public setHealth(hp: number) {
-        if (this.health !== hp) {
-            this.health = hp;
-            this.draw();
+        if (this.health === hp) return;
+        for (let i = 0; i < MAX_HP; i++) {
+            const was = i < this.health, now = i < hp;
+            if (was && !now) { this.lost[i] = 0; this.gained[i] = -1; }
+            else if (!was && now) { this.gained[i] = 0; this.lost[i] = -1; }
         }
+        this.health = hp;
+        this.animating = hp > 0;
+        if (!this.animating) { this.lost.fill(-1); this.gained.fill(-1); }
+        this.draw();
+    }
+
+    /** Advance pip animations; redraws only while one is running. */
+    public update(dt: number): void {
+        if (!this.animating || this.disposed) return;
+        let running = false;
+        const advance = (times: number[], i: number, limit: number) => {
+            const t = times[i]!;
+            if (t < 0) return;
+            times[i] = t + dt >= limit ? -1 : t + dt;
+            running ||= times[i]! >= 0;
+        };
+        for (let i = 0; i < MAX_HP; i++) { advance(this.lost, i, LOSS_SECONDS); advance(this.gained, i, GAIN_SECONDS); }
+        this.animating = running;
+        this.draw();
     }
 
     private draw() {
-        const w = this.canvas.width;
-        const h = this.canvas.height;
-        const ctx = this.ctx;
-
-        // Clear
-        ctx.clearRect(0, 0, w, h);
-
-        const isDead = this.health <= 0;
-
-        // Text (Name or DEAD)
-        ctx.font = 'bold 32px "Courier New", monospace';
-        ctx.fillStyle = isDead ? '#ff0000' : '#ffffff';
+        const w = this.canvas.width, ctx = this.ctx, dead = this.health <= 0, last = this.health === 1;
+        ctx.clearRect(0, 0, w, HEIGHT);
+        ctx.globalAlpha = 1;
+        ctx.font = FONT;
         ctx.textAlign = 'center';
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 4;
-        ctx.lineWidth = 3;
-
-        let displayText = this.name;
-        if (isDead) displayText = "DEAD";
-
-        ctx.strokeText(displayText, w / 2, 40, w-32);
-        ctx.fillText(displayText, w / 2, 40, w-32);
-
-        // Health Bar Background
-        const barW = 160;
-        const barH = 20;
-        const barX = (w - barW) / 2;
-        const barY = 60;
-
-        ctx.fillStyle = '#333333';
-        ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
-
-        // Segments
-        const segW = (barW - 4) / MAX_HP; // 3 segments with small gaps
-
-        for (let i = 0; i < MAX_HP; i++) {
-            let color = '#550000'; // Empty
-
-            if (i < this.health) {
-                color = '#00ff00';
-                if (this.health <= 1) color = '#ff0000';
-            }
-
-            ctx.fillStyle = color;
-            ctx.fillRect(barX + (i * (segW + 2)) + 2, barY + 2, segW - 2, barH - 4);
+        ctx.letterSpacing = '3px';
+        ctx.shadowColor = 'rgba(8,6,10,.9)';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = dead ? 'rgba(233,225,204,.4)' : CREAM;
+        ctx.fillText(this.name, w / 2, 46, w - 32);
+        ctx.shadowBlur = 0;
+        if (dead) {
+            ctx.fillStyle = RED;
+            const strike = Math.min(w - 40, this.nameWidth + 12);
+            ctx.fillRect((w - strike) / 2, 35, strike, 3);
+            this.texture.needsUpdate = true;
+            return;
         }
-
+        const total = MAX_HP * PIP_W + (MAX_HP - 1) * PIP_GAP, left = (w - total) / 2;
+        for (let i = 0; i < MAX_HP; i++) {
+            const lost = this.lost[i]!, gained = this.gained[i]!;
+            // A just-lost pip jolts sideways as it flashes out.
+            const shake = lost >= 0 ? Math.sin(lost * 90) * 3 * (1 - lost / LOSS_SECONDS) : 0;
+            const x = left + i * (PIP_W + PIP_GAP) + shake;
+            ctx.beginPath();
+            ctx.moveTo(x + PIP_SLANT, PIP_Y);
+            ctx.lineTo(x + PIP_W + PIP_SLANT, PIP_Y);
+            ctx.lineTo(x + PIP_W, PIP_Y + PIP_H);
+            ctx.lineTo(x, PIP_Y + PIP_H);
+            ctx.closePath();
+            if (i < this.health) {
+                // Filling left to right when regained.
+                ctx.globalAlpha = gained >= 0 ? 0.35 + 0.65 * gained / GAIN_SECONDS : 1;
+                ctx.fillStyle = last ? RED : CREAM;
+                ctx.fill();
+            } else {
+                ctx.globalAlpha = 0.35;
+                ctx.strokeStyle = CREAM;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                if (lost >= 0) {
+                    ctx.globalAlpha = 1 - lost / LOSS_SECONDS;
+                    ctx.fillStyle = lost < 0.08 ? '#ffffff' : RED;
+                    ctx.fill();
+                }
+            }
+        }
+        ctx.globalAlpha = 1;
         this.texture.needsUpdate = true;
     }
 

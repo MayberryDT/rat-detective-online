@@ -18,7 +18,7 @@ beforeAll(() => {
  vi.stubGlobal('window', { innerWidth: 1280, innerHeight: 720 });
  vi.stubGlobal('document', {
   createElement: () => ({ width: 0, height: 0, style: {}, remove() {}, appendChild() {}, setAttribute() {},
-    getContext: () => ({ fillRect() {}, fillText() {}, clearRect() {}, strokeText() {} }) }),
+    getContext: () => ({ fillRect() {}, fillText() {}, clearRect() {}, strokeText() {}, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, fill() {}, stroke() {} }) }),
   body: { appendChild() {} },
  });
 });
