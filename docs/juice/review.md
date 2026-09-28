@@ -177,7 +177,38 @@ What changed is in the [juice plan](../juice-plan.md#sixth-batch-launcher-machin
 - The Icebox Loading Yard's bot hold spots moved off the Freight Ram's pad, so holders aren't thrown every ten seconds.
 - Street launchers only open on open street under the sky, never indoors or in the sewers.
 
-## Choices to confirm
+## Seventh batch: UI, Dispatch and ragdolls (protocol 22)
+
+What was agreed is in the [juice plan](../juice-plan.md#seventh-batch-ui-dispatch-and-ragdolls-brainstorming-2026-09-28). Workshops: `feel-preview.html` (buttons prefixed `R7` for ragdolls and `D` for Dispatch) and `ui-preview.html` (every UI surface with scripted data).
+
+| Item | What to look for | Switch |
+|---|---|---|
+| R1 A body that bends | The coat has a soft spine (hips, belly, chest), so a corpse curves and folds; the living rat is unchanged. | R7 Ragdoll body |
+| R2 Real ragdoll | Each corpse is an 8-point chain (belly, hips, chest, head, two feet, gun hand, tail) pinned to the physics body's position; the rigid spin is never shown. Bodies fold, flop over ledges, drape and end sprawled. | R7 Ragdoll body |
+| R3 Go limp first | A 0.1 s buckle and waist fold before the body flies; the whole-body tumble dropped from 16 to 4 rad/s (the launch itself is unchanged). | R7 Ragdoll body |
+| R4 Land like a sack | Belly squash, head bounce, limbs flung out, then a sprawl and one last twitch. | R7 Ragdoll body |
+| R5 Shooting a body | The point nearest the hit kicks and the spine folds the other way, with a ripple through the coat. Cheese stains stay on the bent coat. | R7 Ragdoll body |
+| D Pillars | Nine black iron alarm pillars with a big red bell on top replace the five yellow kiosks: one at each landmark corner, the central crossroads, two avenue intersections and one in the sewers. The bell (a 2.6-unit box, 5.4 up) counts from any side. | D1 Dispatch pillar |
+| D Ready | Bursts of ringing, a blurred hammer, a trembling post and a turning red beacon throwing red on the pavement. Only the nearest one or two play the siren; every ready bell rings. | D1 Dispatch pillar |
+| D The shot | The bell goes berserk, sparks, the call-box glass shatters, your view kicks nearby, streetlamps across the city flash red, a police radio squawks, every pillar rings while the incident is picked; the pick spins on each pillar face and the name is stamped there. | D2 Dispatch shot |
+| D Running and ending | Pillars show the incident and a countdown; a big last-3-seconds count, a finale beat and an all-clear whistle. LINE BUSY now lasts **21 s** (was 16). Hits while busy clank and chip but never start anything. | D1 Dispatch pillar |
+| D Rewards | Everyone sees DISPATCHED BY NAME on the roll and a kill-feed line; the caller instantly gets a random supply with its usual card (never Quick Fix at full health); the Case File has a DISPATCHER award (most calls). Bots detour to ring a nearby ready bell. | none (gameplay) |
+| U1 Look and motion | One shared motion kit (slam, stamp, type-in, count-up, sliding rows, exits) that honours Reduced interface motion everywhere; the hot-case badge is a manila evidence tag, destination guidance a drawn gold pointer, the connection box a telegram slip. Same midnight-paperwork palette. | several `U` switches |
+| U2 Title to city | The title is a detective's desk with a case folder and an ENTER CITY stamp; entering opens like an iris onto the city (about 0.66 s) without delaying control. | Title swoop |
+| U3 Settings and pause | A tabbed case folder with a paper slide between tabs, stamps and sounds. | Case folder |
+| U4 Score and assignment | Numbers roll, ranks slide, +N flies to your row, bars ease; the Jurisdiction clock shakes and ticks in its last 10 s. | Score motion |
+| U5 Kill feed | Ticker tape: each name in its own ink, you in gold (or a red edge when you die), icons for gun, headshot, the city and Dispatch; lines tear away after 4 s. | Telegram feed |
+| U6 Crosshair | Opens into four ticks as you move and fire; the hit X grows with damage. | Reactive crosshair |
+| U7 Death | The death camera plays first; RAT DOWN arrives 1.1 s later with a pocket-watch respawn clock. | Death beat |
+| U8 Round end | Case File awards count up and stamp in one at a time; results rows slide into their final order. | Case File stamps |
+| U9 Scoreboard and touch | The Tab scoreboard slides in like paper with a sound and rows slide as ranks change; pickup cards drop away when they expire; touch buttons squash and the stick springs home. | Paper slide |
+
+**Calls I made:**
+- Tyler didn't pick a new UI palette, so the kit keeps today's midnight-paperwork colours and fonts.
+- Bots only detour to a bell on the same level within 45 units when not carrying the case, not fighting and with no loose case near; an unrung bell is given up after 12 s.
+- Dispatch rewards come through the existing supply paths, so the caller sees the usual claim card.
+- The ragdoll chain uses a shared ray budget (4800 per second) for ground and wall contact.
+
 
 These are places where I had to make a call. Each can be changed.
 

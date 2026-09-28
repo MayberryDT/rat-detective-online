@@ -63,7 +63,10 @@ describe('Pressure Surge chaos',()=>{
   const pressure=sim.snapshot(false).pressure!;
   for(const m of LAUNCH_MACHINES)expect(pressure.boosts?.[m.id],m.id).toBe(pressure.blowing?.[m.id]);
   expect(pressure.vents?.some(v=>v.boost&&Math.hypot(v.x-rat.x,v.z-rat.z)<.5)).toBe(true);
-  run(sim,finale+100,1);
-  expect(sim.snapshot(false).pressure!.launches.find(e=>e.playerId==='rat')?.boost).toBe(true);
+  // The test rat never leaves the ground, so a later ordinary vent may throw it again
+  // and replace its event: look for the overpressure throw at any step.
+  let boosted=false;
+  run(sim,finale+100,1,()=>{boosted||=sim.snapshot(false).pressure!.launches.some(e=>e.playerId==='rat'&&e.boost);});
+  expect(boosted).toBe(true);
  });
 });
