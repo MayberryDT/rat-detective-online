@@ -13,7 +13,6 @@ export const CHAOS_TUNING = {
     maxShots: 256, recoverMs: 900, stuckMs: 18000,
 } as const;
 export const INCIDENT_TUNING = {
-    popcornPulseMs: 400, popcornChildren: 5,
     delayedMin: .35, delayedMax: .575,
     cheeseRadii: [0.15, 0.24, 0.36, 0.52, 0.72, 0.96, 1.24, 1.55, 1.9, 2.4] as const,
     caseMissileSpeed: 145, caseShotSpeed: 160, caseMissileLift: 6, caseEjectSpeed: 22,
@@ -84,12 +83,12 @@ export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec
 export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
-export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; original?: boolean; radius?: number; stuckUntil?: number; popAt?: number;
+export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; radius?: number; stuckUntil?: number;
     /** Authoritative explosion provenance, retained in storage. Network visual
      * snapshots omit it: clients never decide projectile damage eligibility. */
     explosive?: true;
 }
-export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'pop'|'thud'|'buzz'|'case-hit'|'armor-clang'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
+export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'thud'|'buzz'|'case-hit'|'armor-clang'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
     /** Planted Evidence counterfeits share the briefcase shape but are hazards, not objectives. */

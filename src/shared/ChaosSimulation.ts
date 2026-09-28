@@ -453,24 +453,13 @@ export class ChaosSimulation {
         const shot:ChaosShot={id,owner,p:{...origin},v:data(velocity),age:0,...extra};
         this.shots.push(shot);return shot;
     }
-    private originalShot():Partial<ChaosShot>{
-        return {original:true,...(this.incidentActive('popcorn-panic')?{popAt:this.now+I.popcornPulseMs}:{})};
-    }
-    private aimJitter(direction:C.Vec3,spread:number){
-        const axis=Math.abs(direction.y)<.95?new C.Vec3(0,1,0):new C.Vec3(1,0,0);
-        const side=direction.cross(axis);side.normalize();
-        const up=side.cross(direction);up.normalize();
-        const yaw=(Math.random()*2-1)*spread,pitch=(Math.random()*2-1)*spread*.35;
-        const aimed=direction.scale(Math.cos(yaw)*Math.cos(pitch)).vadd(side.scale(Math.sin(yaw))).vadd(up.scale(Math.sin(pitch)));
-        aimed.normalize();return aimed;
-    }
     shoot(owner:string,shot:ShotDescriptor):ChaosShot[]{
         if(!this.players.get(owner)||this.players.get(owner)!.hp<=0)return [];
         const incident=this.dispatch.phase==='active'?incidentInfo(this.dispatch.incident).id:undefined;
         const pattern=resolveShotPattern(shot,incident),fired:ChaosShot[]=[];
         this.reserveShots(pattern.length);
         for(const ball of pattern){
-            const emitted=this.emitShot(owner,shot.origin,vec(ball.velocity),ball.id,this.originalShot());
+            const emitted=this.emitShot(owner,shot.origin,vec(ball.velocity),ball.id);
             if(emitted){
                 fired.push(emitted);this.shotTriggers.set(emitted.id,shot.shotId);
                 if(shot.viewAt!==undefined&&Number.isFinite(shot.viewAt))this.shotViews.set(emitted.id,{trigger:shot.shotId,
@@ -579,7 +568,7 @@ export class ChaosSimulation {
             const direction=new C.Vec3(Math.cos(angle),.12+(i%3)*.12,Math.sin(angle));direction.normalize();
             direction.scale(BALL_SPEED,direction);
             const shot:ChaosShot={id:crypto.randomUUID(),owner,
-                p:{...origin},v:data(direction),age:0,original:false,radius:BALL_RADIUS,explosive:true};
+                p:{...origin},v:data(direction),age:0,radius:BALL_RADIUS,explosive:true};
             this.burstShots.add(shot);this.shots.push(shot);
         }
     }
@@ -815,29 +804,6 @@ export class ChaosSimulation {
         if(next<=shotRadius(shot)+.001)return;
         shot.radius=next;this.unstickShot(shot);
     }
-    private popShot(shot:ChaosShot){
-        const children=I.popcornChildren;
-        const live=this.shots.length;
-        const spawn=Math.min(children,T.maxShots-(live-1));
-        if(spawn<2){shot.popAt=this.now+180;return;}
-        const index=this.shots.indexOf(shot);
-        if(index>=0)this.shots.splice(index,1);
-        const trigger=this.shotTriggers.get(shot.id)??shot.id,view=this.shotViews.get(shot.id);
-        this.shotTriggers.delete(shot.id);this.shotViews.delete(shot.id);
-        const forward=vec(shot.v);const speed=Math.max(BALL_SPEED*.8,forward.length()||BALL_SPEED);
-        const dir=forward.lengthSquared()<.01?new C.Vec3(0,1,0):forward.unit();
-        this.impacts.push({p:{...shot.p},n:{x:0,y:1,z:0},surface:true,scale:2.4,cue:'pop'});
-        for(let i=0;i<spawn;i++){
-            const yaw=(i-(spawn-1)/2)*.34;
-            const rotation=new C.Quaternion();rotation.setFromAxisAngle(new C.Vec3(0,1,0),yaw);
-            const spread=this.aimJitter(rotation.vmult(dir),.22);
-            spread.y=Math.max(.42,spread.y+.55+(i%2)*.12);spread.normalize();spread.scale(speed,spread);
-            const child:ChaosShot={id:crypto.randomUUID(),owner:shot.owner,p:{...shot.p},v:data(spread),age:shot.age,
-                original:false,radius:BALL_RADIUS*.72,wallBounced:shot.wallBounced,delayed:shot.delayed,...(shot.explosive?{explosive:true}:{})};
-            this.burstShots.add(child);this.shots.push(child);this.shotTriggers.set(child.id,trigger);
-            if(view)this.shotViews.set(child.id,{...view});
-        }
-    }
     private reflect(shot:ChaosShot,normal:C.Vec3){
         const v=vec(shot.v);v.vadd(normal.scale(-2*v.dot(normal)),v);v.scale(BALL_RESTITUTION,v);shot.v=data(v);return v;
     }
@@ -980,14 +946,6 @@ export class ChaosSimulation {
                 for(const machine of LAUNCH_MACHINES)this.activatePressure(machine.id,true);
             }
         }
-        if(playing&&this.incidentActive('popcorn-panic')){
-            for(const shot of this.shots){
-                if(!shot.original||shot.stuckUntil)continue;
-                if(!shot.popAt)shot.popAt=now+I.popcornPulseMs;
-            }
-            const due=this.shots.filter(shot=>shot.original&&shot.popAt&&shot.popAt<=now&&!shot.stuckUntil);
-            for(const shot of due)this.popShot(shot);
-        }else for(const shot of this.shots)shot.popAt=undefined;
         if(!this.incidentActive('delayed-reaction')){
             for(const shot of this.shots)if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);}
         }
@@ -1094,7 +1052,6 @@ export class ChaosSimulation {
                 }
             }
             const firstWorld=target?.kind==='world'&&!shot.wallBounced;
-            const split=firstWorld&&this.incidentActive('ricochet-racket');
             const delay=firstWorld&&this.incidentActive('delayed-reaction')&&!shot.delayed;
             if(target?.kind==='world')shot.wallBounced=true;
             if(target?.kind==='world')this.noteShot(shot,'world-bounce',{point:data(hit.hitPointWorld),normal:data(normal)});
@@ -1111,18 +1068,7 @@ export class ChaosSimulation {
                 this.impacts.push({p:data(point),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,cue:'thud'});
                 continue;
             }
-            if(split){
-                const axis=Math.abs(normal.y)<.95?new C.Vec3(0,1,0):new C.Vec3(1,0,0);
-                const side=normal.cross(axis);side.normalize();
-                for(const sign of [-1,1]){
-                    if(this.shots.length>=T.maxShots)break;
-                    const spread=v.vadd(side.scale(sign*v.length()*.22));spread.normalize();spread.scale(v.length(),spread);
-                    const extra:ChaosShot={id:crypto.randomUUID(),owner:shot.owner,p:{...shot.p},v:data(spread),age:shot.age,
-                        wallBounced:true,original:false,radius:shot.radius,...(shot.explosive?{explosive:true}:{})};
-                    this.burstShots.add(extra);this.shots.push(extra);
-                }
-            }
-            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:shotRadius(shot)>radiusBefore?'grow' as const:split?'split' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,v.length())}:{})});
+            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:shotRadius(shot)>radiusBefore?'grow' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,v.length())}:{})});
         }
         for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -20||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
         for(const c of this.cases.values())this.stepLooseCase(c,now,playing);
@@ -1220,10 +1166,8 @@ export class ChaosSimulation {
         return {...s,p:{...s.p},v:{...s.v},
             ...(s.wallBounced?{wallBounced:true}:{}),
             ...(s.delayed?{delayed:true}:{}),
-            ...(s.original?{original:true}:{}),
             ...((s.radius??BALL_RADIUS)!==BALL_RADIUS?{radius:s.radius}:{}),
-            ...(s.stuckUntil?{stuckUntil:s.stuckUntil}:{}),
-            ...(s.popAt?{popAt:s.popAt}:{})};
+            ...(s.stuckUntil?{stuckUntil:s.stuckUntil}:{})};
     }
     /** Physics substeps and ray/sphere queries since the previous call (Worker diagnostics). */
     takeWork():{rays:number;substeps:number}{
@@ -1302,8 +1246,7 @@ export class ChaosSimulation {
         }
         const elapsed=Math.max(0,(Date.now()-s.time)/1000);
         this.shots=s.shots.filter(shot=>shot.age+elapsed<BALL_LIFETIME).map(shot=>({...shot,p:{...shot.p},v:{...shot.v},age:shot.age+elapsed,
-            radius:shot.radius??BALL_RADIUS,original:shot.original===true,delayed:shot.delayed===true,
-            ...(shot.popAt?{popAt:shot.popAt}:{})}));
+            radius:shot.radius??BALL_RADIUS,delayed:shot.delayed===true}));
         for(const c of s.corpses){
             if(c.expires<=Date.now())continue;
             const body=new C.Body({mass:2,shape:new C.Box(new C.Vec3(.48,.92,.38)),

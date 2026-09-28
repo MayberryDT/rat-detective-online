@@ -15,7 +15,7 @@ const hud=new GameHud();hud.enterPlaying();
 const scores=Array.from({length:8},(_,i)=>({id:String(i),name:['Inspector Nightwhisker','Detective Trap','Sergeant Stilton','Constable Squeak','Marshal Breadcrumb','Inspector Cheese','Deputy Nibbles','Chief Scurry'][i],kills:12-i,deaths:i+1}));
 
 const requested=params.get('incident');
-const incident=INCIDENTS.some(i=>i.id===requested)?requested as IncidentId:'popcorn-panic';
+const incident=INCIDENTS.some(i=>i.id===requested)?requested as IncidentId:'blackout';
 const phase=params.get('phase')||'active';
 const dispatch=new DispatchHud(()=>{});dispatch.setScores(scores,'6');
 const state={dispatch:{phase:'active',started:0,until:25000,serial:1,incident},case:{owner:null},possession:{}} as unknown as ChaosState;

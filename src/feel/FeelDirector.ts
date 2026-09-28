@@ -18,6 +18,7 @@ import type {ChaosShot} from '../shared/chaosState';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
+import {Hunch,type HunchRat} from './Hunch';
 
 /** One entry point from game events to presentation-only feel effects.
  * GameSession calls it at existing event sources; channels never parse
@@ -37,6 +38,7 @@ export class FeelDirector {
     private deathTarget?:()=>THREE.Vector3|undefined;
     private deathAge=0;
     private dust?:Dust;
+    private hunchView?:Hunch;
     private city?:CityReactions;
     private noirCity?:NoirCity;
     private noirRain?:NoirRain;
@@ -66,7 +68,12 @@ export class FeelDirector {
     }
 
     /** Scene-wide dust for every rat's landings, skids and launches. */
-    attachScene(scene:THREE.Scene):void {this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);}
+    attachScene(scene:THREE.Scene):void {
+        this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);
+        this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);this.hunchView.setSupercharged(this.incident==='clean-bill');
+    }
+    /** The Hunch each frame; `self` only while your rat is alive and in play. */
+    hunch(dt:number,now:number,view:THREE.Camera,self:RatEntity|undefined,rats:ReadonlyMap<string,HunchRat>):void {this.hunchView?.update(dt,now,view,self,rats);}
 
     /** Cosmetic reactive props for the current city (replaced on a new world). */
     attachCity(scene:THREE.Scene,lamps:readonly StreetLampPosition[]):void {
@@ -151,13 +158,13 @@ export class FeelDirector {
     }
 
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
-    setIncident(incident?:IncidentId):void {this.incident=incident;}
+    setIncident(incident?:IncidentId):void {this.incident=incident;this.hunchView?.setSupercharged(incident==='clean-bill');}
 
     /** A local shot left the muzzle. */
     shot():void {
         if(!this.state.on('shotKick'))return;
         const p=FEEL.shotKick.params;
-        const scale=this.incident==='scattershot'?p.scattershot:this.incident==='popcorn-panic'?p.popcorn:1;
+        const scale=this.incident==='scattershot'?p.scattershot:1;
         this.camera.kick(p.pitch*scale,(Math.random()*2-1)*p.yawJitter*p.pitch*scale);
         this.camera.push(this.impulse.set(0,0,p.push*scale));
     }
@@ -187,7 +194,7 @@ export class FeelDirector {
      * explosive incidents fling, ordinary shots spin. */
     deathStyle(killerId:string|null,cause?:string):DeathStyle {
         if(killerId===null||cause==='evidence-tampering')return 'flop';
-        return this.incident==='improper-disposal'||this.incident==='planted-evidence'||this.incident==='popcorn-panic'?'fling':'spin';
+        return this.incident==='improper-disposal'||this.incident==='planted-evidence'?'fling':'spin';
     }
 
     /** You scored a kill on the rat at `victim`; `airborne` when you were in flight. */
@@ -286,6 +293,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();this.lifeKills=0;}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.hunchView?.dispose();}
 }

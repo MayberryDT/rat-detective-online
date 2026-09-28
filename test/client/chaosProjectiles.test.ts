@@ -174,7 +174,7 @@ it('changes danger cues with the viewer, including owned Crossfire ricochets and
  const lethal=root.getObjectByName('crossfire-glow') as THREE.InstancedMesh;
  const trails=root.getObjectByName('danger-cheese-trails') as THREE.InstancedMesh;
  const matrix=new THREE.Matrix4(),point=new THREE.Vector3();
- for(const incident of ['crossfire','popcorn-panic'] as const){
+ for(const incident of ['crossfire','scattershot'] as const){
   state.dispatch={phase:'active',incident,started:1000,until:26000,serial:1};
   for(const [viewer,enemyX] of [['alice',1],['bob',0]] as const){
    view.setScores([],viewer);view.apply(state);view.update(1/60,camera);

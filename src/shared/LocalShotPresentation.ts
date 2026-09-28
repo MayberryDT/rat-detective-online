@@ -27,7 +27,7 @@ export class LocalShotPresentation {
         for(const ball of resolveShotPattern(shot,incident)){
             if(this.shots.has(ball.id)||this.retired.has(ball.id))continue;
             while(this.shots.size>=CHAOS_TUNING.maxShots)this.retire(this.shots.keys().next().value!);
-            this.shots.set(ball.id,{shot:{id:ball.id,owner,p:{...shot.origin},v:{...ball.velocity},age:0,original:true},
+            this.shots.set(ball.id,{shot:{id:ball.id,owner,p:{...shot.origin},v:{...ball.velocity},age:0},
                 trigger:shot.shotId,fired:now,updated:now,first:true,hidden:false,incident});
         }
     }

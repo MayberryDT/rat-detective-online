@@ -84,6 +84,10 @@ export class FeelSound {
     squelch(at:Vec3Data|undefined,view:THREE.Camera):void {if(this.on)this.audio!.squelch(FEEL.sound.params.squelch,at?this.pan(at,view):0);}
     brass():void {if(this.on)this.audio!.brass(FEEL.sound.params.brass);}
     flashbulb():void {if(this.on)this.audio!.flashbulb(FEEL.sound.params.flashbulb);}
+    /** The Hunch: your detective made someone (camera shutter). */
+    shutter():void {if(this.on)this.audio!.shutter(FEEL.sound.params.shutter);}
+    /** The Hunch: someone made you (violin sting). */
+    made():void {if(this.on)this.audio!.made(FEEL.sound.params.made);}
     headshot(at:Vec3Data,view:THREE.Camera,involved:boolean):void {
         if(!this.on)return;
         // Other rats' headshots fade out across the city like any world sound.

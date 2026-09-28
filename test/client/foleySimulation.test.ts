@@ -34,7 +34,7 @@ it('emits shared corpse contacts and shot kicks, retains shooter attribution and
     sim.shoot('a',{shotId:'kick',origin:{x:-2,y:4,z:0},direction:{x:1,y:0,z:0}});sim.step(.01,now+600);
     expect(sim.snapshot().impacts.some(e=>e.foley==='corpse-kick')).toBe(true);
 });
-it.each(['big-cheese','crossfire','ricochet-racket','delayed-reaction'] as const)('marks %s events while retaining normal speed and incident physics',incident=>{
+it.each(['big-cheese','crossfire','delayed-reaction'] as const)('marks %s events while retaining normal speed and incident physics',incident=>{
     const {sim:initial,players,now}=fixture(),saved=initial.snapshot();saved.dispatch={phase:'active',incident,serial:1,started:now,until:now+25000};
     const sim=new ChaosSimulation(players,()=>{},saved);
     sim.shoot('a',{shotId:'event',origin:{x:8,y:4,z:0},direction:{x:1,y:0,z:0}});
@@ -42,7 +42,7 @@ it.each(['big-cheese','crossfire','ricochet-racket','delayed-reaction'] as const
     const state=sim.snapshot();
     if(incident==='delayed-reaction'){
         expect(state.impacts.some(i=>i.cue==='thud')).toBe(true);sim.step(.001,now+1500);expect(sim.snapshot().impacts.some(i=>i.foley==='unstick')).toBe(true);
-    }else expect(state.impacts.some(i=>i.foley===({'big-cheese':'grow',crossfire:'charge','ricochet-racket':'split'} as const)[incident])).toBe(true);
+    }else expect(state.impacts.some(i=>i.foley===({'big-cheese':'grow',crossfire:'charge'} as const)[incident])).toBe(true);
 });
 it('validates every additive sound annotation through full and compact frames and rejects malformed data',()=>{
     const {sim}=fixture(),state=sim.snapshot();
@@ -56,10 +56,10 @@ it('validates every additive sound annotation through full and compact frames an
 });
 it('reserves the existing 64-impact budget for visual cues and drains cosmetic events',()=>{
     const {sim}=fixture();const internals=sim as any;
-    internals.impacts=Array.from({length:64},()=>({p:{x:0,y:0,z:0},n:{x:0,y:1,z:0},surface:true,cue:'pop'}));
+    internals.impacts=Array.from({length:64},()=>({p:{x:0,y:0,z:0},n:{x:0,y:1,z:0},surface:true,cue:'thud'}));
     for(let i=0;i<100;i++)internals.sound('burst',new C.Vec3(i,0,0));
     expect(internals.audioImpacts).toHaveLength(16);const state=sim.snapshot();
-    expect(state.impacts).toHaveLength(64);expect(state.impacts.every(e=>e.cue==='pop')).toBe(true);expect(sim.snapshot().impacts).toHaveLength(0);
+    expect(state.impacts).toHaveLength(64);expect(state.impacts.every(e=>e.cue==='thud')).toBe(true);expect(sim.snapshot().impacts).toHaveLength(0);
     state.shots=Array.from({length:256},(_,i)=>({id:'shot-'+i,owner:'a',p:{x:100,y:20,z:100},v:{x:175,y:-25,z:0},age:2}));
     const payload=new ChaosEncoder().encode(state).payload;expect(new TextEncoder().encode(payload).byteLength).toBeLessThan(MAX_SERVER_MESSAGE_BYTES);expect(new ChaosDecoder().read(payload)).not.toBeNull();
 });

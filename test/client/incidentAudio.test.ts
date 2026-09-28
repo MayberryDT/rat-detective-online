@@ -1,7 +1,7 @@
 import {effectsOutput} from '../../src/audio/PlayerAudioMix';
 import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import {afterEach,expect,it,vi} from 'vitest';
-import {bindIncidentAudio,disposeIncidentAudio,playDelayedThud,playPopcornPop,startCaseBuzz} from '../../src/audio/IncidentAudio';
+import {bindIncidentAudio,disposeIncidentAudio,playDelayedThud,playDudPop,startCaseBuzz} from '../../src/audio/IncidentAudio';
 afterEach(()=>{disposeIncidentAudio();vi.unstubAllGlobals();});
 async function fixture(){
  const nodes:any[]=[],gains:any[]=[];
@@ -16,9 +16,9 @@ async function fixture(){
 }
 it('preloads once, bounds overlapping cues, and frees ended voices',async()=>{
  const {ctx,nodes}=await fixture();bindIncidentAudio(ctx);
- for(let i=0;i<20;i++)playPopcornPop();
+ for(let i=0;i<20;i++)playDudPop();
  expect(fetch).toHaveBeenCalledTimes(4);expect(nodes).toHaveLength(10);
- nodes[0].onended();playPopcornPop();expect(nodes).toHaveLength(11);
+ nodes[0].onended();playDudPop();expect(nodes).toHaveLength(11);
  disposeIncidentAudio();expect(nodes[10].stop).toHaveBeenCalled();
 });
 it('keeps exactly one saw loop and stops it when the incident ends',async()=>{
@@ -28,7 +28,7 @@ it('keeps exactly one saw loop and stops it when the incident ends',async()=>{
 });
 it('does not start cues while the shared context is suspended',async()=>{
  const {ctx,nodes}=await fixture();ctx.state='suspended';
- playPopcornPop();startCaseBuzz(true);expect(nodes).toHaveLength(0);
+ playDudPop();startCaseBuzz(true);expect(nodes).toHaveLength(0);
  ctx.state='running';startCaseBuzz(true);expect(nodes).toHaveLength(1);
 });
 
@@ -41,7 +41,7 @@ it('renders the delayed thud once per context, then reuses the identical PCM buf
 
 it('keeps nearby popcorn full and applies the shared strong world fade, including height',async()=>{
  const {ctx,nodes,gains}=await fixture();bindIncidentAudio(ctx,{x:10,y:20,z:30});
- playPopcornPop({x:10,y:25,z:30});playPopcornPop({x:110,y:20,z:30});playPopcornPop({x:10,y:270,z:30});
+ playDudPop({x:10,y:25,z:30});playDudPop({x:110,y:20,z:30});playDudPop({x:10,y:270,z:30});
  expect(gains.map(g=>g.gain.value)).toEqual([.82,.82*worldSoundGain(100),.82*worldSoundGain(250)]);
  expect(nodes.every(n=>n.playbackRate.value>=.97&&n.playbackRate.value<=1.03)).toBe(true);
 });

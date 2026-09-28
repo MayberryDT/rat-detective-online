@@ -135,6 +135,22 @@ export class FeelAudio {
         pop.connect(high).connect(env).connect(out);pop.start(at);pop.stop(at+.1);
         this.tone(out,at+.03,.5,'sine',5200,3900,.08);
     }
+    /** The Hunch: a camera shutter. Two dry clicks around a short film-advance whirr. */
+    shutter(volume:number):void {
+        if(!this.allow('shutter',.35))return;
+        const at=this.context.currentTime,out=this.out(volume,0,.3);
+        this.burst(out,at,.018,'highpass',3800,.8,.001);
+        this.burst(out,at+.02,.09,'bandpass',1400,6,.01);
+        this.burst(out,at+.085,.022,'highpass',3000,.8,.001);
+    }
+    /** The Hunch: you've been made. A high, tense violin pair sliding up a hair, with a low pizzicato. */
+    made(volume:number):void {
+        if(!this.allow('made',1))return;
+        const at=this.context.currentTime,out=this.out(volume,0,1.2);
+        const filter=this.context.createBiquadFilter();filter.type='bandpass';filter.frequency.value=2200;filter.Q.value=.9;filter.connect(out);
+        for(const [f,d] of [[1318.5,0],[1396.9,.03]])this.tone(filter,at+d,.9,'sawtooth',f,f*1.035,.22);
+        this.tone(out,at,.25,'triangle',98,92,.5);
+    }
     /** Music stings: case pickup, your delivery, closing seconds. */
     sting(kind:Sting,volume:number):void {
         if(!this.allow(`sting:${kind}`,kind==='closing'?20:1.5))return;

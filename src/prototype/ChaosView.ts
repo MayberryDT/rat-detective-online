@@ -15,7 +15,7 @@ import { RatAnimator } from '../utils/RatAnimator';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from '../weapons/CheeseProjectileModel';
 import { CheeseImpactEffects } from '../weapons/CheeseImpactEffects';
-import { bindIncidentAudio, disposeIncidentAudio, playDelayedThud, playPopcornPop, startCaseBuzz } from '../audio/IncidentAudio';
+import { bindIncidentAudio, disposeIncidentAudio, playDelayedThud, startCaseBuzz } from '../audio/IncidentAudio';
 import type { RatEntity } from '../entities/RatEntity';
 import { incidentInfo } from '../shared/incidentCatalog';
 import { DispatchHud } from './DispatchHud';
@@ -311,11 +311,10 @@ export class ChaosView {
         this.noteLocalBuffs(state);
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
-            if(hit.cue==='pop')playPopcornPop(hit.p);
             if(hit.cue==='thud')playDelayedThud(hit.p);
             if(hit.cue==='case-hit'||hit.cue==='armor-clang')this.feedback?.(hit.cue,hit.p);
             if(hit.cue==='armor-clang')this.impacts.spark(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z));
-            if(!hit.audioOnly){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='pop'||hit.cue==='thud'?3:hit.scale??1);}
+            if(!hit.audioOnly){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='thud'?3:hit.scale??1);}
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
         for(const [id,c] of this.corpses)if(!corpses.has(id)){c.hat?.dispose();this.root.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}

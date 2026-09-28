@@ -18,6 +18,7 @@ import {kickDust} from '../../src/feel/Dust';
 import {cityImpact} from '../../src/feel/CityReactions';
 import {FeelAudio} from '../../src/feel/FeelAudio';
 import {createPlayer} from '../../src/worker/gameState';
+import {MAX_HP} from '../../src/shared/networkProtocol';
 
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 initEntitySounds(stage.listener);
@@ -30,7 +31,7 @@ const gun=new CheeseGun(stage.scene,stage.world,stage.listener);gun.setPlayer(st
 const suspects=[-3,0,3].map((dz,i)=>{
     const data=createPlayer(`suspect-${i}`,`Suspect ${i+1}`,{hatType:'fedora',hatColor:[0x43825e,0xc5a044,0x7c899c][i],coatColor:[0xcd873f,0x398d92,0x97765f][i],furColor:0xb79d83,highlightColor:0xcbb596},{x:-22,y:.5,z:-18+dz*1.4});
     const entity=new RatEntity(stage.scene,stage.world,new THREE.Vector3(data.x,data.y,data.z),data.name,data,true);
-    entity.mesh.rotation.y=-Math.PI/2;entity.syncGlowTransform();
+    entity.mesh.rotation.y=-Math.PI/2;entity.syncGlowTransform();entity.enableRigidBatching();
     return entity;
 });
 const feel=new FeelDirector();
@@ -41,6 +42,33 @@ const lineup=new PoliceLineup(stage.scene,document,()=>feel.flashbulb());
 // A Quick Fix kit around the corner (behind the right-hand buildings) for the last-hit-point x-ray.
 const kit=new PickupVisual(stage.scene,'quick-fix');kit.setPosition(-14,.5,6);
 const aim=new THREE.Vector3();
+const impacts=new CheeseImpactEffects(stage.scene);
+const ray=new THREE.Raycaster(),blockers=stage.scene.children.filter(o=>o.userData.aimTarget===true);
+// The Hunch: the workshop re-makes on every lost/regained read so each capture shows the moment.
+FEEL.hunch.params.remake=0;FEEL.hunch.params.cardGap=0;
+const hunchRats=new Map(suspects.map((entity,i)=>[`suspect-${i}`,{entity}]));
+/** Put the suspects `beyond` units behind the first wall straight ahead of the camera. */
+function behindWall(beyond:number):string {
+    stage.camera.getWorldDirection(aim);aim.setY(0).normalize();
+    ray.set(rat.entity.mesh.position.clone().setY(1.2),aim);
+    const hit=ray.intersectObjects(blockers,true)[0];if(!hit)return 'no wall ahead';
+    const side=new THREE.Vector3(-aim.z,0,aim.x);
+    suspects.forEach((s,i)=>{const p=rat.entity.mesh.position.clone().addScaledVector(aim,hit.distance+beyond).addScaledVector(side,(i-1)*1.6);
+        s.body.position.set(p.x,.5,p.z);s.mesh.position.set(p.x,.5,p.z);s.syncGlowTransform();});
+    return `wall at ${hit.distance.toFixed(1)}`;
+}
+/** Turn the camera to world angle `degrees` (the probeWalls convention) and hide the suspects there. */
+function faceWall(degrees:number,beyond:number):string {
+    const want=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),degrees*Math.PI/180);
+    const error=()=>{rat.updateView();stage.camera.getWorldDirection(aim);aim.setY(0).normalize();return Math.atan2(aim.x*want.z-aim.z*want.x,aim.dot(want));};
+    for(let i=0;i<6;i++){const e=error();if(Math.abs(e)<.01)break;rat.onMouseMove(e/.002,0);if(Math.abs(error())>Math.abs(e))rat.onMouseMove(-2*e/.002,0);}
+    return behindWall(beyond);
+}
+/** Drop a read for a moment and regain it, so the made moment plays. */
+function blink(who:'you'|'them'):void {
+    const set=(hp:number)=>{if(who==='you'){rat.entity.hp=hp;rat.entity.billboard.setHealth(hp);}else for(const s of suspects)s.hp=hp;};
+    set(MAX_HP-1);setTimeout(()=>set(MAX_HP),150);
+}
 function fire():void {
     rat.updateView();stage.camera.getWorldDirection(aim);
     const target=stage.camera.position.clone().addScaledVector(aim,200);
@@ -53,8 +81,6 @@ function hurt(from:number,damage:number):void {
     feel.hurt(damage,rat.entity.mesh.position,attacker.mesh.position,stage.camera);
     rat.entity.takeDamage(Math.min(2,damage),direction);
 }
-const impacts=new CheeseImpactEffects(stage.scene);
-const ray=new THREE.Raycaster(),blockers=stage.scene.children.filter(o=>o.userData.aimTarget===true);
 /** Splat the nearest wall in a view direction `degrees` left (+) or right (-) of ahead. */
 function splatWall(degrees:number,count:number):number {
     let hits=0;
@@ -115,6 +141,13 @@ const actions:Record<string,()=>void>={
     ]),
     'End lineup':()=>lineup.end(),
     'Reset feel':()=>feel.reset(),
+    'Hunch: suspects 3 behind the wall ahead':()=>{status.textContent=behindWall(3);},
+    'Hunch: suspects 12 behind the wall ahead':()=>{status.textContent=behindWall(12);},
+    'Hunch: suspects back in the open':()=>suspects.forEach((s,i)=>{s.body.position.set(-22,.5,-18+(i-1)*4.2);s.mesh.position.set(-22,.5,-18+(i-1)*4.2);s.syncGlowTransform();}),
+    'Hunch: you make them (photo)':()=>blink('you'),
+    'Hunch: they make you (card)':()=>blink('them'),
+    'Hunch: Clean Bill supercharge':()=>feel.setIncident('clean-bill'),
+    'Hunch: turn around':()=>rat.onMouseMove(1570.8,0),
 };
 const buttons=document.getElementById('feel-buttons')!;
 for(const [label,run] of Object.entries(actions)){
@@ -145,7 +178,7 @@ async function renderCues():Promise<string> {
     let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
     return btoa(binary);
 }
-Object.assign(window,{renderCues,feelActions:actions,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
+Object.assign(window,{renderCues,feelActions:actions,faceWall,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
 let previous=0;
 function frame(now:number){
     const dt=previous?Math.min(.05,(now-previous)/1000):1/60;previous=now;
@@ -157,6 +190,7 @@ function frame(now:number){
     kit.update(performance.now(),stage.camera);
     feel.footsteps(dt,suspects.map((s,i)=>({id:`suspect-${i}`,position:s.mesh.position})),rat.entity.mesh.position,stage.camera);
     city.update(dt,stage.camera,rat.entity.body.position);
+    feel.hunch(dt,now,stage.camera,rat.entity.dead?undefined:rat.entity,hunchRats);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
     feel.beforeRender(stage.camera);

@@ -59,7 +59,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         // until the real ones render once; no participant or collider remains.
         models.push(new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE));
         const enemy=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE,true);
-        enemy.enableRigidBatching();models.push(enemy);
+        enemy.enableRigidBatching();enemy.sense(.001);models.push(enemy);
         for(const kind of PICKUP_KINDS)pickups.push(new PickupVisual(stage.scene,kind));
         addLeatherBriefcase(briefcase);stage.scene.add(briefcase);
         const standIns=stage.scene.children.filter(object=>!scenery.has(object));

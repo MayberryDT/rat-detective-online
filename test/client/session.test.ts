@@ -410,8 +410,8 @@ describe('GameSession', () => {
         transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith('bad-ammunition');
         state.dispatch.phase='cooldown';
         transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith(undefined);
-        state.dispatch.phase='active';state.dispatch.incident='popcorn-panic';
-        transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith('popcorn-panic');
+        state.dispatch.phase='active';state.dispatch.incident='blackout';
+        transport.onMessage?.({type:'chaos',state});expect(gun.setIncident).toHaveBeenLastCalledWith('blackout');
         transport.onMessage?.(welcome());expect(gun.setIncident).toHaveBeenLastCalledWith();session.dispose();
     });
 

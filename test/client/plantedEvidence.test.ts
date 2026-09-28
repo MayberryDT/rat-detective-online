@@ -91,7 +91,7 @@ describe('Planted Evidence',()=>{
         expect(planted).toHaveLength(120);expect(exploded).toHaveLength(120);
         // The explosion created during shot stepping receives the remaining step;
         // compare horizontal directions and finite ownership, without gravity drift.
-        expect(planted.map(s=>[s.v.x,s.v.z,s.owner,s.original])).toEqual(exploded.map(s=>[s.v.x,s.v.z,s.owner,s.original]));
+        expect(planted.map(s=>[s.v.x,s.v.z,s.owner])).toEqual(exploded.map(s=>[s.v.x,s.v.z,s.owner]));
     });
     it('kills the rat that walks onto a counterfeit once, even behind Ironclad',()=>{
         const {sim,shooter,hits,now}=fixture();

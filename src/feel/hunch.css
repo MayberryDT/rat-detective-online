@@ -1,0 +1,34 @@
+/* The Hunch: evidence photos for rats you make, the watching eye and YOU'VE BEEN MADE. */
+.hunch-screen{position:fixed;inset:0;z-index:36;pointer-events:none;overflow:hidden;contain:strict}
+.hunch-photo{position:absolute;left:0;top:0;opacity:0;will-change:transform}
+.hunch-photo.on{animation:hunch-photo var(--hunch-life,1500ms) ease-out both}
+@keyframes hunch-photo{0%{opacity:0;scale:1.7}10%{opacity:1;scale:1}75%{opacity:1;scale:1}100%{opacity:0;scale:1.04}}
+.hunch-corner{position:absolute;width:26%;height:18%;border:0 solid #efe6cf;filter:drop-shadow(0 0 2px #000)}
+.hunch-corner.tl{left:0;top:0;border-width:3px 0 0 3px}.hunch-corner.tr{right:0;top:0;border-width:3px 3px 0 0}
+.hunch-corner.bl{left:0;bottom:0;border-width:0 0 3px 3px}.hunch-corner.br{right:0;bottom:0;border-width:0 3px 3px 0}
+.hunch-flash{position:absolute;inset:0;background:#fff8e6;opacity:0}
+.hunch-photo.on .hunch-flash{animation:hunch-flash .28s ease-out both}
+@keyframes hunch-flash{0%{opacity:.55}100%{opacity:0}}
+.hunch-caption{position:absolute;left:50%;top:calc(100% + 6px);translate:-50% 0;overflow:hidden;white-space:nowrap;width:0;
+  font:700 13px/1.25 'Courier New',Courier,monospace;letter-spacing:1.5px;color:#f1e7cc;background:#0d0a10d9;padding:2px 0;border-left:2px solid #c23a2a;
+  text-shadow:0 1px 0 #000}
+.hunch-photo.on .hunch-caption{animation:hunch-type .45s steps(var(--chars,12)) .12s both}
+@keyframes hunch-type{from{width:0;padding-inline:0}to{width:calc(var(--chars,12) * (1ch + 1.5px) + 12px);padding-inline:6px}}
+.hunch-eye{position:absolute;left:50%;top:50%;width:64px;height:40px;margin:-20px 0 0 -32px;opacity:0;will-change:transform,opacity}
+.hunch-eye svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 6px #000) drop-shadow(0 0 2px #000)}
+.hunch-eye .brim{fill:#0b0810;stroke:#8d7f9a;stroke-width:1.2}
+.hunch-eye .lid{fill:#e9e1cc;stroke:#15101a;stroke-width:2;transform-origin:32px 24px;transform:scaleY(.08);transition:transform .22s cubic-bezier(.3,1.6,.5,1)}
+.hunch-eye .iris{fill:#7a1d16;transform-origin:32px 24px;transform:scaleY(.08);transition:transform .22s cubic-bezier(.3,1.6,.5,1)}
+.hunch-eye .pupil{fill:#050308;transform-origin:32px 24px;transform:scaleY(.08);transition:transform .22s cubic-bezier(.3,1.6,.5,1)}
+.hunch-eye.open :is(.lid,.iris,.pupil){transform:scaleY(1)}
+.hunch-card{position:absolute;left:50%;top:31%;display:grid;justify-items:center;gap:4px;padding:10px 26px 12px;opacity:0;translate:-50% 0;
+  background:linear-gradient(#1a1319f2,#0c080df2);border:1px solid #e9e1cc40;box-shadow:0 10px 30px #000a;rotate:-2deg}
+.hunch-card.on{animation:hunch-card 2.3s cubic-bezier(.2,.9,.25,1.1) both}
+@keyframes hunch-card{0%{opacity:0;transform:scale(1.9)}9%{opacity:1;transform:scale(1)}12%{transform:scale(1.04)}16%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+.hunch-card-kicker{font:600 11px/1 'Outfit',Arial,sans-serif;letter-spacing:3px;color:#a89cae}
+.hunch-card-title{font:400 36px/1 'Bangers',Impact,sans-serif;letter-spacing:2.5px;color:#f1e7cc;text-shadow:2px 2px 0 #3a0d08}
+.hunch-card-stamp{position:absolute;right:-18px;top:-12px;padding:2px 8px;font:700 15px/1 'Courier New',Courier,monospace;letter-spacing:3px;color:#d8352a;
+  border:2px solid #d8352a;rotate:12deg;opacity:.9;mix-blend-mode:screen}
+.hunch-card.on .hunch-card-stamp{animation:hunch-stamp 2.3s ease-out both}
+@keyframes hunch-stamp{0%,14%{opacity:0;transform:scale(2.4)}20%{opacity:.95;transform:scale(1)}80%{opacity:.95}100%{opacity:0}}
+@media(max-height:500px){.hunch-card{top:26%;padding:6px 16px 8px}.hunch-card-title{font-size:26px}.hunch-eye{width:48px;height:30px;margin:-15px 0 0 -24px}}

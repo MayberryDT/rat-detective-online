@@ -15,7 +15,7 @@ export interface FeelSpec {
 export const FEEL={
     cameraSpring:{label:'Camera spring',toggle:false,params:{stiffness:260,damping:.78,maxTurn:.08,maxShift:.35,maxWiden:14,fovStiffness:60}},
     /** Very subtle upward view nudge (rad/s impulse; peak ≈ 0.4°) and a tiny backward shove per local shot. Toned down 2026-09-27 at Tyler's request. */
-    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.28,yawJitter:.15,push:.15,scattershot:1.3,popcorn:1.15}},
+    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.28,yawJitter:.15,push:.15,scattershot:1.3}},
     /** Shove away from the attacker when you take nonlethal damage, scaled by damage. */
     hitJolt:{label:'2 Hit jolt',toggle:true,params:{push:7,yaw:1.4,dip:-1.1,perDamage:.35}},
     /** Red edge flash (scaled by Flash strength) and arrows tracking the attacker. */
@@ -51,7 +51,7 @@ export const FEEL={
     /** Movement: landing dip (rad/s impulse), launch/Hot Pursuit view widening (degrees), speed streaks, dust count. */
     movement:{label:'16 Movement',toggle:true,params:{dip:-1.6,dipPush:-5,launchWiden:9,pursuitWiden:3.5,streaks:.8,dust:8}},
     /** Synthesized sound pass (volumes before Effects volume): footsteps, rustle, jostle, squelch, whizz, brass, stings, wind; echo/muffle by space. */
-    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,sting:.1,wind:.07,rain:.06,thunder:.16}},
+    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,sting:.1,wind:.07,rain:.06,thunder:.16}},
     /** Reactive city: a flock every N lamps, a trash can every N lamps, scare radius, seconds before props return. */
     city:{label:'18 City reacts',toggle:true,params:{flockEvery:5,canEvery:4,scare:7,respawn:25}},
     /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. */
@@ -83,6 +83,11 @@ export const FEEL={
     headshot:{label:'T4 Headshot juice',toggle:true,params:{hatSpeed:2.6,hatLift:1.5,hold:.16,burst:2.4}},
     /** T5: the police lineup at round end (top five, winner last). */
     lineup:{label:'T5 Police lineup',toggle:true,params:{}},
+    /** The Hunch (gameplay, always on): at full health you see rats within `range` through walls as a pencil sketch
+     * (`strength` opacity); Clean Bill uses `superRange`/`superStrength`. `trail` is the pencil tail brightness. */
+    hunch:{label:'H The Hunch',toggle:false,params:{range:40,strength:.6,superRange:400,superStrength:.9,trail:.8,photo:1.5,remake:10,cardGap:8}},
+    /** H2: being made. Spotter: evidence photo corners, typed MADE line and shutter. Spotted: YOU'VE BEEN MADE card, violin sting and a watching eye. */
+    made:{label:'H2 Made moments',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

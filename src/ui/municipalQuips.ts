@@ -96,9 +96,13 @@ export const INCIDENT_QUIPS:Record<IncidentId,string>={
     scattershot:'ONE COMPLAINT. FIVE COPIES.',
     'delayed-reaction':'THE WALL WOULD LIKE A WORD.',
     'big-cheese':'THE CHEDDAR BUDGET WAS APPROVED.',
-    'ricochet-racket':'THE WITNESS STATEMENT HAS MULTIPLIED.',
-    'popcorn-panic':'THE EVIDENCE IS GETTING SALTY.',
     'planted-evidence':'SOMEBODY HAS BEEN VERY THOROUGH.',
+    blackout:'THE POWER COMPANY IS INVESTIGATING ITSELF.',
+    'clean-bill':'THE DOCTOR SIGNED EVERYTHING. EVERYONE IS WATCHING.',
+    malpractice:'THE MEDICINE HAS LEGAL REPRESENTATION.',
+    'most-wanted':'THE CITY WOULD LIKE A WORD WITH THE LEADER.',
+    'rat-race':'ALL DETECTIVES ARE LATE FOR SOMETHING.',
+    'all-units':'DEATH IS NO EXCUSE FOR MISSING THE ACTION.',
 };
 /** Local flavor only. Every phrase appears before reuse, with no boundary repeat. */
 export class MunicipalQuips {

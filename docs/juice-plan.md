@@ -92,10 +92,35 @@ Tyler's brain dump, sorted into now and later, with his answers.
   - `gameWon` carries an optional `lineup` (up to five ids, winner first). The server ranks by the assignment's own progress (deliveries, zone time, case kills, or case time for Closing Time), then kills, case time and fewest deaths.
   - The lineup starts as the slow-motion finish ends (1.4 s) and runs until the reset, about 8.6 s. The room sits 320 units below the city and is lit by the stage's existing spotlight, moved there, so no light is added. Rats stand in rank order with the winner last; a flashbulb (screen flash, spotlight surge and pop) photographs each in turn and stamps their award across the chest; the winner gets a gold "CASE CLOSED" stamp and a hop. The Case File card shrinks to the top-left corner and the play HUD hides. Review switch: "T5 Police lineup".
 
+## Fourth batch: the Hunch, pickups and incidents (agreed 2026-09-27, in design)
+
+**Guiding rules (Tyler):**
+- Maximize fun through chaos, not balance: think Mario Kart, not Forza.
+- **The game must always move forward.** Nothing may make chasing the case or the assignment goal pointless or stall it. This is why Hot Potato and Line Shuffle were rejected. A teleport is welcome only if it speeds progress.
+
+**Agreed:**
+- **The Hunch (full-HP bonus):** at max HP you see enemies through walls as a charcoal sketch, with generous range. You lose it on the first hit. The noir word is **"made"**.
+  - **Spotter:** shutter click, evidence-photo corners, `MADE: <name>`.
+  - **Spotted rat:** violin sting, an eye on the screen edge toward the watcher, **YOU'VE BEEN MADE**.
+- **Pickups:** the same three; no new kinds for now, because Tyler has rejected many ideas. Quick Fix stays a full heal.
+  - **Noir presentation:** each site sits in a pool of real fixture light and gets a proper claim moment. **Ironclad Alibi must clearly read as iron**; papers or a typewriter don't.
+  - **Placement:** every site needs a reason.
+    - Ironclad: one hard site per landmark, never stacked. Today there are 10, and Records and Needleworks have a floor and a roof site 2–4 units apart.
+    - Hot Pursuit: where chases start.
+    - Quick Fix: back alleys just off the fights.
+- **Incidents:**
+  - **Add:** Blackout; Clean Bill (everyone full HP plus a supercharged Hunch); Malpractice (Quick Fix kits misbehave); Most Wanted (the leader gets a searchlight and a bounty); Rat Race (everyone gets Hot Pursuit, faster cheese).
+  - **Remove:** Ricochet Racket and Popcorn Panic.
+  - **Keep and improve Bad Ammunition.** It is the calm assignment-focus incident: shots are unreliable, but the game still moves forward.
+  - **Rejected:** Hot Potato, Line Shuffle, Mistaken Identity, Tommy Gun, Sewer Flood, Floaters and Frame Job.
+
+**Final calls (2026-09-27):**
+- **Ironclad prop:** an iron-plated, riveted trench coat on a tailor's dummy.
+- **All Units is in:** during it, dead rats respawn near the objective (the case or its carrier, or the active zone).
+- **Bad Ammunition:** add duds that dribble out, sputtering smoke, a coughing gunshot and wobbling balls, plus extra juice. It keeps its calm, focus-on-the-objective role.
+- **Build order:** Hunch, then pickups, then incidents. Everything ships together as protocol 20 to a private preview; production only on Tyler's OK.
+
 **Later (not now):**
-- **Pickup system overhaul.** Especially Quick Fix, which becomes more valuable once noir scales with health.
-- **Incident system overhaul.**
-- **Max-HP detective bonuses.** At full health your detective sense is sharp, for example seeing enemy rats through one or two walls. This is a gameplay change and needs fairness rules.
 - **Complete optimization overhaul.** Tyler felt a performance hit after the third batch (his PC was also busy). Measure the client frame budget with the full juice layer on, then cut cost across rendering, feel effects and simulation.
 - **3D model and ragdoll overhaul.**
 

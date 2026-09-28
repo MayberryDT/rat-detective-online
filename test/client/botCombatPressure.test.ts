@@ -5,7 +5,7 @@ import {CHAOS_TUNING} from '../../src/shared/chaosState';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},grayboxBoxes:()=>[]}));
-it.each(['scattershot','popcorn-panic','bad-ammunition'] as const)('keeps fresh human fire admitted during seven-bot %s bursts',incident=>{
+it.each(['scattershot','bad-ammunition'] as const)('keeps fresh human fire admitted during seven-bot %s bursts',incident=>{
  const now=Date.now(),human=createPlayer('human','Human',DEFAULT_APPEARANCE,{x:0,y:200,z:30});
  const bots=Array.from({length:7},(_,i)=>createPlayer(`bot-${i}`,'Bot',DEFAULT_APPEARANCE,{x:i,y:200,z:0}));
  const players=new Map([...bots,human].map(p=>[p.id,p]));

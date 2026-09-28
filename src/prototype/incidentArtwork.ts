@@ -11,9 +11,13 @@ const drawings: Record<IncidentId | 'dispatch', string> = {
     scattershot: '<path d="m9 49 12-5m-8-2 7 2-2 7M26 38l6-8M25 44h11M21 34l1-10"/><circle cx="22" cy="12" r="5"/><circle cx="42" cy="18" r="6"/><circle cx="49" cy="37" r="5"/><circle cx="43" cy="53" r="4"/><circle cx="8" cy="24" r="4"/>',
     'delayed-reaction': '<path d="M48 9v45M6 33h11m-9 7h7M44 10l-6-5M48 6l5-3"/><circle cx="33" cy="34" r="14"/><path d="M33 25v10l-7 3M28 15h9M23 48l-5 5M42 47l3 5"/>',
     'big-cheese': '<path d="M8 49Q3 22 28 12q20-7 28 13L8 49l44 3 4-27M19 34l3-4M28 23l4-2M41 24l4-1M24 46l5 1M41 42l4-1M10 12 6 7m16 0-1-5"/>',
-    'ricochet-racket': '<path d="M51 8v48M8 43l32-15-13-9m13 9-8 14M39 29l-8 17M39 29H19"/><circle cx="18" cy="13" r="5"/><circle cx="10" cy="29" r="5"/><circle cx="27" cy="53" r="5"/>',
-    'popcorn-panic': '<path d="m19 36-7-8 10-2-2-10 10 5 6-12 5 11 11-4-3 12 9 3-10 8M18 36l6 19h21l5-19M26 39l3 12m7-12v12m8-12-3 12"/><circle cx="9" cy="11" r="4"/><circle cx="56" cy="10" r="3"/><path d="M5 41l6-2M55 48l5 3"/>',
     'planted-evidence': '<path d="m14 30 30-4 3 22-30 4zM23 27l-1-7 12-2 1 7M16 36l30-4M27 37l1 6 9-1-1-6"/><path class="incident-ink" d="M52 14l2-8m4 12 7-3m-8 8 7 4m-11-1 3 8m-9-3 1 9"/><circle cx="52" cy="30" r="4"/>',
+    blackout: '<path d="M32 6v7M20 13h24l-4 14H24zM24 27l-6 12h28l-6-12M9 55 55 9"/><path class="incident-ink" d="M30 42h4v9h-4z"/><circle cx="15" cy="17" r="2"/><circle cx="50" cy="43" r="2"/>',
+    'clean-bill': '<path d="M14 8h28l8 8v40H14zM42 8v8h8M21 25h22M21 33h22M21 41h12"/><path class="incident-ink" d="m35 45 5 5 10-12"/><path d="M4 30h5m-3-6 4 3m-4 9 4-3"/>',
+    malpractice: '<path d="M12 28h40v22H12zM24 28v-6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v6M32 33v12m-6-6h12"/><path class="incident-ink" d="M8 14l5 5m43-5-5 5M5 55l6-4m48 4-6-4"/><path d="M20 58l-3 3m27-3 3 3"/>',
+    'most-wanted': '<path d="M10 6h44v52H10z"/><path class="incident-ink" d="M17 14h30"/><circle cx="32" cy="31" r="8"/><path d="M20 49q12-13 24 0M17 14h30M24 22l-3-4m19 4 3-4"/>',
+    'rat-race': '<path d="M6 45h10M3 36h13M8 27h8M24 44l7-12 9 5 7-10M28 50l-4-6 6-3M47 27l6-5M40 50l5-6-5-7"/><circle class="incident-ink" cx="37" cy="16" r="5"/><path d="M50 12l6-6m-3 9 6-2"/>',
+    'all-units': '<path d="M26 44V24a6 6 0 0 1 12 0v20M20 44h24l3 10H17zM32 18V10M20 22l-6-5M44 22l6-5M12 32H5m54 0h-7"/><path class="incident-ink" d="M29 30h6v10h-6z"/>',
 };
 
 export function incidentArtwork(id: IncidentId | 'dispatch'): string {

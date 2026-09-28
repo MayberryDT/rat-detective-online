@@ -8,14 +8,23 @@ export const INCIDENTS = [
     {id:'scattershot',title:'Scattershot',description:'Every shot becomes a five-ball fan.'},
     {id:'delayed-reaction',title:'Delayed Reaction',description:'Cheese sticks to walls, then springs back at you.'},
     {id:'big-cheese',title:'Big Cheese',description:'Rebounds turn ordinary shots into enormous cheese balls.'},
-    {id:'ricochet-racket',title:'Ricochet Racket',description:'The first wall bounce splits a shot three ways.'},
-    {id:'popcorn-panic',title:'Popcorn Panic',description:'Your shots burst into a shower of bouncing cheese.'},
-    // Appended after the established roster so legacy index mappings never shift.
     {id:'planted-evidence',title:'Planted Evidence',description:'Fake cases explode. The real case still counts.'},
+    {id:'blackout',title:'Blackout',description:'The city lights die. Muzzle flashes and lightning show the way.'},
+    {id:'clean-bill',title:'Clean Bill',description:'Everyone is fit for duty. Everyone is made.'},
+    {id:'malpractice',title:'Malpractice',description:'Quick Fix kits run for it. Some of them explode.'},
+    {id:'most-wanted',title:'Most Wanted',description:'The leader is in the searchlight. Take them down for a reward.'},
+    {id:'rat-race',title:'Rat Race',description:'Everybody hustles. The cheese flies faster.'},
+    {id:'all-units',title:'All Units',description:'The fallen respawn right beside the action.'},
 ] as const;
 export type IncidentId = typeof INCIDENTS[number]['id'];
 export const isIncidentId = (value: unknown): value is IncidentId => INCIDENTS.some(incident => incident.id === value);
-export type LegacyIncidentId = 'after-hours-collection'|'kickback'|'return-to-sender'|'cheesequake';
+/** Retired IDs that stored rooms may still hold; each maps to a live incident. */
+export const LEGACY_INCIDENTS = {
+    'kickback':'scattershot','after-hours-collection':'crossfire','return-to-sender':'delayed-reaction',
+    'cheesequake':'big-cheese','ricochet-racket':'scattershot','popcorn-panic':'scattershot',
+} as const satisfies Record<string,IncidentId>;
+export type LegacyIncidentId = keyof typeof LEGACY_INCIDENTS;
+export const isLegacyIncidentId = (value: unknown): value is LegacyIncidentId => typeof value === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_INCIDENTS, value);
 /** Which evidence incident the room runs. The retired missile behavior stays
  * available behind the classic mode toggle rather than being deleted outright. */
 export type EvidenceMode = 'planted' | 'classic';
@@ -26,10 +35,7 @@ export function incidentRoster(mode: EvidenceMode = 'planted'): typeof INCIDENTS
     return INCIDENTS.filter(incident => incident.id !== retired);
 }
 export function incidentInfo(id?:IncidentId|LegacyIncidentId){
-    if(id==='kickback')return INCIDENTS[5];
-    if(id==='after-hours-collection')return INCIDENTS[4];
-    if(id==='return-to-sender')return INCIDENTS[6];
-    if(id==='cheesequake')return INCIDENTS[7];
+    const live=isLegacyIncidentId(id)?LEGACY_INCIDENTS[id]:id;
     // Old active snapshots only contained Improper Disposal.
-    return INCIDENTS.find(incident=>incident.id===id)??INCIDENTS[0];
+    return INCIDENTS.find(incident=>incident.id===live)??INCIDENTS[0];
 }

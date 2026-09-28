@@ -62,7 +62,8 @@ export function playDelayedThud(origin?: Vec3Data): void {
     playBuffer(thudBuffer, distanceGain(origin));
 }
 
-export function playPopcornPop(origin?: Vec3Data): void {
+/** Bad Ammunition: a dud cartridge's feeble pop as the ball dribbles out. */
+export function playDudPop(origin?: Vec3Data): void {
     const buffer = buffers.get(`pop-${popVariant++ % 3}` as Cue);
     if (buffer) playBuffer(buffer, .82 * distanceGain(origin), .97 + Math.random() * .06);
 }

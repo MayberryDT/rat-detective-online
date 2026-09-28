@@ -40,6 +40,36 @@ const OUTLINE_COLOR = 0xaebfd6;
 const OUTLINE_PIXELS = 1.5;
 const OUTLINE_NEAR = 16, OUTLINE_FAR = 45;
 const EMISSIVE_INTENSITY = 0.28;  // Rat-only lift; lamps still model the hat and coat
+/** The Hunch: occluded parts of a rat drawn as a pale boiling pencil sketch.
+ * One time uniform shared by every rat; materials stay per rat for disposal. */
+const HUNCH_TIME={value:0};
+/** World units a hidden part must sit behind scenery before it sketches, so a
+ * rat's own far arm never hatches across its visible body. */
+const HUNCH_DEPTH_BIAS=1.2;
+export const advanceHunchSketch=(dt:number):void=>{HUNCH_TIME.value=(HUNCH_TIME.value+dt)%1000;};
+function hunchSketchMaterial():{material:THREE.MeshBasicMaterial;strength:{value:number}} {
+    const strength={value:.6};
+    const material=new THREE.MeshBasicMaterial({transparent:true,depthWrite:false,depthFunc:THREE.GreaterDepth,fog:false,toneMapped:false});
+    material.onBeforeCompile=shader=>{
+        shader.uniforms.hunchTime=HUNCH_TIME;shader.uniforms.hunchStrength=strength;
+        shader.vertexShader='varying vec3 vHunchView;\n'+shader.vertexShader.replace('#include <project_vertex>',`#include <project_vertex>
+            vHunchView=mvPosition.xyz;
+            vec4 hunchBiased=projectionMatrix*vec4(mvPosition.xy,mvPosition.z+${HUNCH_DEPTH_BIAS.toFixed(2)},1.);
+            gl_Position.z=hunchBiased.z/hunchBiased.w*gl_Position.w;`);
+        shader.fragmentShader='uniform float hunchTime;\nuniform float hunchStrength;\nvarying vec3 vHunchView;\n'+shader.fragmentShader.replace('#include <opaque_fragment>',`
+            // Two hatch directions, re-drawn eight times a second like a boiling pencil line.
+            float hunchStep=floor(hunchTime*8.);
+            vec2 hunchP=gl_FragCoord.xy+vec2(fract(sin(hunchStep*12.9898)*43758.5)*9.,fract(sin(hunchStep*78.233)*43758.5)*9.);
+            float hunchA=abs(fract((hunchP.x+hunchP.y)/5.)-.5),hunchB=abs(fract((hunchP.x-hunchP.y*1.3)/8.)-.5);
+            float hunchLine=max(smoothstep(.2,.04,hunchA),smoothstep(.12,.0,hunchB)*.6);
+            // A heavier contour where the surface turns away, so the hatching reads as a rat.
+            vec3 hunchN=normalize(cross(dFdx(vHunchView),dFdy(vHunchView)));
+            hunchLine=max(hunchLine,smoothstep(.6,.9,1.-abs(dot(hunchN,normalize(-vHunchView)))));
+            gl_FragColor=vec4(vec3(.84,.8,.72),hunchLine*hunchStrength);`);
+    };
+    material.customProgramCacheKey=()=> 'rat-hunch-sketch-v1';
+    return {material,strength};
+}
 
 // ─── UNIQUE COMBINATION TRACKER ──────────────────────────────────
 // Local fixture allocation; network appearances are assigned when joining.
@@ -77,6 +107,9 @@ export class RatEntity {
     private outlineReach=0;
     /** 0 (close: no outline) … 1 (far: full edge). Local and preview rats stay at 1. */
     private outlineFade=1;
+    /** The Hunch sketch, sharing the rigid batch's geometry and skeleton. */
+    private sketch?:THREE.SkinnedMesh;
+    private sketchUniform?:{value:number};
     private readonly shellOffset={value:0};
 
     // State
@@ -328,6 +361,26 @@ export class RatEntity {
         if(this.mesh.getObjectByName('rat-rigid-batch'))return;
         batchRigidMeshes(this.mesh);
         if(this.glowMesh)batchRigidMeshes(this.glowMesh);
+    }
+
+    /** The Hunch: `strength` 0 hides; otherwise the parts of this rat hidden
+     * behind scenery show as a pencil sketch. Needs rigid batching. */
+    public sense(strength:number):void {
+        const on=strength>0&&!this.dead&&!this.sharedDeath;
+        if(!on){if(this.sketch)this.sketch.visible=false;return;}
+        if(!this.sketch){
+            const batch=this.mesh.getObjectByName('rat-rigid-batch');
+            if(!(batch instanceof THREE.SkinnedMesh))return;
+            // Bones carry world matrices, so the sketch lives at the scene root.
+            const {material,strength}=hunchSketchMaterial();
+            this.sketch=new THREE.SkinnedMesh(batch.geometry,material);this.sketchUniform=strength;
+            this.sketch.bind(batch.skeleton,batch.bindMatrix);
+            this.sketch.name='rat-hunch-sketch';this.sketch.frustumCulled=false;this.sketch.raycast=()=>{};
+            this.sketch.castShadow=this.sketch.receiveShadow=false;this.sketch.matrixAutoUpdate=false;
+            this.scene.add(this.sketch);
+        }
+        this.sketch.visible=true;
+        if(this.sketchUniform)this.sketchUniform.value=strength;
     }
 
     public resetMotionHistory(): void { this.animator.resetMotionHistory();this.powerupEffects.clear(); }
@@ -809,6 +862,7 @@ export class RatEntity {
         this.scene.remove(this.mesh);
         disposeMeshResources(this.mesh);
         this.billboard.dispose();
+        if(this.sketch){this.scene.remove(this.sketch);(Array.isArray(this.sketch.material)?this.sketch.material:[this.sketch.material]).forEach(m=>m.dispose());this.sketch=undefined;}
         // Remove glow outline
         if (this.glowMesh) {
             disposeMeshResources(this.glowMesh);

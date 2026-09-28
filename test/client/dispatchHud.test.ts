@@ -25,7 +25,7 @@ describe('Dispatch broadcast lifecycle',()=>{
   const {hud,root,state}=fixture();state.assignment=createAssignment(id,0);
   for(const now of [1000,5000]){
    for(const [phase,started,offset] of [['ready',now,0],['rolling',now,0],['active',now,1000],['active',now,2850],['cooldown',now,0]] as const){
-    state.dispatch={phase,started,until:now+25000,serial:1,incident:'popcorn-panic'};
+    state.dispatch={phase,started,until:now+25000,serial:1,incident:'blackout'};
     hud.update(state,now+offset);
     expect(root.querySelector('.assignment-ledger').hidden).toBe(false);
     expect(root.querySelector('.assignment-ledger').dataset.mode).toBe(id);
@@ -106,15 +106,15 @@ describe('Dispatch broadcast lifecycle',()=>{
  });
  it('shows the active incident drawing and explanation, then restores the dispatch sign',()=>{
   const {hud,root,state}=fixture();
-  state.dispatch={phase:'active',started:1000,until:26000,serial:1,incident:'popcorn-panic'};
+  state.dispatch={phase:'active',started:1000,until:26000,serial:1,incident:'blackout'};
   hud.update(state,5000);
-  expect(root.querySelector('.dispatch-artwork').dataset.incident).toBe('popcorn-panic');
+  expect(root.querySelector('.dispatch-artwork').dataset.incident).toBe('blackout');
   expect(root.querySelector('.dispatch-artwork').innerHTML).toContain('<svg');
   expect(root.querySelector('.dispatch-alert-label').textContent).toBe('CITYWIDE EMERGENCY');
-  expect(root.querySelector('.dispatch-brief').textContent).toBe(INCIDENT_QUIPS['popcorn-panic']);
+  expect(root.querySelector('.dispatch-brief').textContent).toBe(INCIDENT_QUIPS['blackout']);
   state.dispatch={phase:'cooldown',started:26000,until:42000,serial:1};hud.update(state,27000);
   expect(root.querySelector('.dispatch-artwork').dataset.incident).toBe('dispatch');
-  expect(root.querySelector('.dispatch-brief').textContent).not.toBe(INCIDENT_QUIPS['popcorn-panic']);hud.dispose();
+  expect(root.querySelector('.dispatch-brief').textContent).not.toBe(INCIDENT_QUIPS['blackout']);hud.dispose();
  });
  it('explains that Evidence Tampering weaponizes every case and restores ordinary copy afterward',()=>{
   const {hud,root,state}=fixture();

@@ -623,6 +623,9 @@ export class GameSession {
         // Opponent outlines keep their on-screen width at any distance.
         const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)/(globalThis.innerHeight||720);
         for(const {entity} of this.remotes.rats.values())entity.fitOutline(camera.position,unitsPerPixel);
+        // The Hunch reads only while your rat is alive in live play.
+        const detective=this.transport.state==='playing'&&!this.observing&&!this.roundWon&&this.rat&&!this.rat.entity.dead?this.rat.entity:undefined;
+        this.feel.hunch(dt,now,camera,detective,this.remotes.rats);
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
@@ -738,7 +741,7 @@ export class GameSession {
             localY: this.rat?.entity.mesh.position.y ?? 0,
             localLaunchedAtMs: this.localLaunchAt || undefined,
             localLaunchY: this.localLaunchAt ? this.localLaunchY : undefined,
-            nearbyEruption: (this.lastChaos.impacts ?? []).some(hit => hit.cue === 'pop' || hit.cue === 'thud'),
+            nearbyEruption: (this.lastChaos.impacts ?? []).some(hit => hit.cue === 'thud'),
             corpses,
         }));
     }

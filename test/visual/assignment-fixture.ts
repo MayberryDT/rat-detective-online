@@ -77,7 +77,7 @@ sim.setAssignment(assignment);
 const state=sim.snapshot(false);state.time=now;
 if(query.get('dispatch')==='busy')state.dispatch={phase:'cooldown',started:now,until:now+16000,serial:1};
 // Static incident states for reviewing simultaneous objective/mobile cards.
-const fixtureIncident=INCIDENTS.find(incident=>incident.id===query.get('incident'))?.id??'popcorn-panic';
+const fixtureIncident=INCIDENTS.find(incident=>incident.id===query.get('incident'))?.id??'blackout';
 if(query.get('dispatch')==='rolling')state.dispatch={phase:'rolling',incident:fixtureIncident,started:now-800,until:now+1600,serial:1};
 if(query.get('dispatch')==='reveal')state.dispatch={phase:'active',incident:fixtureIncident,started:now-1000,until:now+24000,serial:1};
 if(query.get('dispatch')==='active')state.dispatch={phase:'active',incident:fixtureIncident,started:now-5000,until:now+20000,serial:1};
