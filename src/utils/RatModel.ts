@@ -57,6 +57,31 @@ function muzzleGeometry() {
     geometry.setIndex(indices); geometry.computeVertexNormals(); return geometry;
 }
 
+/** R1: spine joint heights in coat space: the hips (lower coat to belly) and the waist (belly to chest). */
+export const RAT_SPINE_JOINTS = [0.45, 0.95] as const;
+
+/** The accepted coat lathe, with extra rows on its long straight runs so a bent spine
+ * curves it smoothly. Added rows lie on the original surface and every normal is the
+ * original one (blended along its run), so the living coat shades exactly as before. */
+function coatLathe() {
+    const original = COAT_PROFILE.map(([r, y]) => new THREE.Vector2(r, y));
+    const rows: {a: number; t: number}[] = [];
+    for (let a = 0; a < original.length; a++) {
+        const pieces = a + 1 < original.length ? Math.max(1, Math.ceil((original[a + 1].y - original[a].y) / 0.08)) : 1;
+        for (let k = 0; k < pieces; k++) rows.push({a, t: k / pieces});
+    }
+    const geometry = new THREE.LatheGeometry(rows.map(({a, t}) => t ? original[a].clone().lerp(original[a + 1], t) : original[a].clone()), 32);
+    const reference = new THREE.LatheGeometry(original, 32);
+    const normals = geometry.getAttribute('normal'), before = reference.getAttribute('normal'), n = new THREE.Vector3(), m = new THREE.Vector3();
+    for (let ring = 0; ring <= 32; ring++) rows.forEach(({a, t}, row) => {
+        n.fromBufferAttribute(before, ring * original.length + a);
+        if (t) n.lerp(m.fromBufferAttribute(before, ring * original.length + a + 1), t).normalize();
+        normals.setXYZ(ring * rows.length + row, n.x, n.y, n.z);
+    });
+    reference.dispose();
+    return geometry;
+}
+
 /** Solid open collar with a finished inner rim, rather than overlapping shoulder spheres. */
 function collarGeometry() {
     const positions: number[] = [], indices: number[] = [];
@@ -162,12 +187,17 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
     const darkCoat = material(coat.color.clone().multiplyScalar(0.32));
     shirt.name = 'rat-shirt'; darkCoat.name = 'rat-fasteners';
     const body = pivot(root, 'rat-body');
+    // Seventh batch R1: a soft spine inside the coat. Both joints stay at identity on a
+    // living rat (so its body, arm and muzzle never move); a corpse bends them. The rigid
+    // batch skins the coat and tailoring (direct `rat-body` meshes) across body, belly and
+    // chest by height; everything above the waist hangs off the chest.
+    const chest = pivot(pivot(body, 'rat-spine-belly'), 'rat-spine-chest');
     // One clean tapered coat with a rounded shoulder and a subtle finished hem.
-    const coatBody = mesh(body, new THREE.LatheGeometry(COAT_PROFILE.map(([r, y]) => new THREE.Vector2(r, y)), 32), coat);
+    const coatBody = mesh(body, coatLathe(), coat);
     coatBody.name = 'rat-coat-body';
-    mesh(body, collarGeometry(), highlight).name = 'rat-collar';
+    mesh(chest, collarGeometry(), highlight).name = 'rat-collar';
     addCoatTailoring(body, coat, highlight, shirt, darkCoat);
-    const head = pivot(body, 'rat-head', 0, 1.60, 0.015);
+    const head = pivot(chest, 'rat-head', 0, 1.60, 0.015);
     // Polish 14 (feel switch, applies to newly built rats): whiskers, brows, cheeks,
     // brim edge and shoes. Identity, palette and silhouette are unchanged.
     const touchUps = feelState().on('modelTouchUps');
@@ -279,7 +309,7 @@ export function createRatMesh(options: RatOptions = {}): THREE.Group {
         }
     }
     const cheese = material(0xefb62e, 0.62);
-    cheesePistol(body, coat, highlight, cheese);
-    if (touchUps && options.accessory && feelState().on('extras')) accessory(options.accessory, head, body, {white, pupil, cheese, felt});
+    cheesePistol(chest, coat, highlight, cheese);
+    if (touchUps && options.accessory && feelState().on('extras')) accessory(options.accessory, head, chest, {white, pupil, cheese, felt});
     return root;
 }

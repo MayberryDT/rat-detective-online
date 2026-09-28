@@ -1,7 +1,10 @@
 import * as THREE from 'three';
+import {RAT_SPINE_JOINTS} from './RatModel';
 
 /** Draw static rig leaves together while retaining the original animated/pickable
- * hierarchy. Deforming tails and transient effects remain ordinary meshes. */
+ * hierarchy. Deforming tails and transient effects remain ordinary meshes. A rat's
+ * coat and tailoring (direct `rat-body` meshes) are skinned across its soft spine
+ * (body, belly, chest) so a corpse bends smoothly; every other leaf is rigid. */
 export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
     const sources:THREE.Mesh[]=[];
     root.traverse(object=>{
@@ -16,13 +19,25 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
     sources.sort((a,b)=>materials.indexOf(a.material as THREE.Material)-materials.indexOf(b.material as THREE.Material));
     const positions:number[]=[],normals:number[]=[],uvs:number[]=[],indices:number[]=[],skinIndices:number[]=[],weights:number[]=[],materialIndices:number[]=[];
     const geometry=new THREE.BufferGeometry();let vertexOffset=0;
-    const bones=sources.map(()=>new THREE.Bone());
+    const body=root.getObjectByName('rat-body'),belly=body?.getObjectByName('rat-spine-belly'),chest=body?.getObjectByName('rat-spine-chest');
+    const spine=body&&belly&&chest?[body,belly,chest]:[];
+    // Spine bones follow the leaf bones; at rest each spine joint is identity in body space.
+    const spineBone=sources.length,bones=[...sources,...spine].map(()=>new THREE.Bone());
+    const point=new THREE.Vector3(),normal=new THREE.Vector3(),normalMatrix=new THREE.Matrix3(),[hips,waist]=RAT_SPINE_JOINTS;
     sources.forEach((source,bone)=>{
         const g=source.geometry,p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv');
-        const start=indices.length;
+        const start=indices.length,skinned=spine.length>0&&source.parent===body;
+        // Skinned leaves are baked into body space and blended by height.
+        if(skinned){source.updateMatrix();normalMatrix.getNormalMatrix(source.matrix);}
         for(let i=0;i<p.count;i++){
-            positions.push(p.getX(i),p.getY(i),p.getZ(i));normals.push(n?.getX(i)??0,n?.getY(i)??0,n?.getZ(i)??1);
-            uvs.push(uv?.getX(i)??0,uv?.getY(i)??0);skinIndices.push(bone,0,0,0);weights.push(1,0,0,0);materialIndices.push(materials.indexOf(source.material as THREE.Material));
+            point.fromBufferAttribute(p,i);normal.set(n?.getX(i)??0,n?.getY(i)??0,n?.getZ(i)??1);
+            if(skinned){
+                point.applyMatrix4(source.matrix);normal.applyMatrix3(normalMatrix).normalize();
+                const lower=THREE.MathUtils.smoothstep(point.y,hips-.2,hips+.2),upper=THREE.MathUtils.smoothstep(point.y,waist-.2,waist+.2);
+                skinIndices.push(spineBone,spineBone+1,spineBone+2,0);weights.push(1-lower,lower*(1-upper),lower*upper,0);
+            }else{skinIndices.push(bone,0,0,0);weights.push(1,0,0,0);}
+            positions.push(point.x,point.y,point.z);normals.push(normal.x,normal.y,normal.z);
+            uvs.push(uv?.getX(i)??0,uv?.getY(i)??0);materialIndices.push(materials.indexOf(source.material as THREE.Material));
         }
         const count=g.index?.count??p.count;
         for(let i=0;i<count;i++)indices.push(vertexOffset+(g.index?.getX(i)??i));
@@ -73,7 +88,8 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
             compile.call(this,shader,renderer);
             shader.vertexShader=shader.vertexShader.replace('#include <skinnormal_vertex>',`
                 #ifdef USE_SKINNING
-                mat4 skinMatrix=bindMatrixInverse*boneMatX*bindMatrix;
+                // Rigid leaves weigh (1,0,0,0), so this is exactly their own bone.
+                mat4 skinMatrix=bindMatrixInverse*(skinWeight.x*boneMatX+skinWeight.y*boneMatY+skinWeight.z*boneMatZ+skinWeight.w*boneMatW)*bindMatrix;
                 mat3 rigidMatrix=mat3(skinMatrix);
                 vec3 c0=cross(rigidMatrix[1],rigidMatrix[2]);
                 vec3 c1=cross(rigidMatrix[2],rigidMatrix[0]);
@@ -85,7 +101,7 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
                 #endif
             `);
         };
-        material.customProgramCacheKey=()=>key.call(material)+':rigid-normal-v1';
+        material.customProgramCacheKey=()=>key.call(material)+':rigid-normal-v2';
         material.needsUpdate=true;
     }
     const skeleton=new THREE.Skeleton(bones,bones.map(()=>new THREE.Matrix4()));
@@ -94,6 +110,7 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
             super.updateMatrixWorld(force);
             // Original leaves precede this appended batch in root traversal.
             sources.forEach((source,i)=>bones[i].matrixWorld.copy(source.matrixWorld));
+            for(let i=0;i<spine.length;i++)bones[spineBone+i].matrixWorld.copy(spine[i].matrixWorld);
         }
     }
     const batch=new RigidBatch(geometry,drawMaterial);

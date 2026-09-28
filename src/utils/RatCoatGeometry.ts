@@ -65,7 +65,8 @@ export function addCoatTailoring(body:THREE.Group, coat:THREE.Material, highligh
     }),.022,.008);
     // One centered seam from hem to collar. Include every profile bend so no
     // segment cuts through the coat and flickers in/out as the body rocks.
-    strip([.058,.07,.65,1.15,1.285].map(y=>
+    // Extra rows on the long runs let it curve with a bent corpse spine (R1).
+    strip([.058,.07,.143,.215,.288,.36,.433,.505,.578,.65,.721,.793,.864,.936,1.007,1.079,1.15,1.218,1.285].map(y=>
         new THREE.Vector3(0,y,-radiusAt(y)-.004)),.022,.007);
     // A restrained hem roll is integrated in a single coat-detail draw.
     const hem=new THREE.LatheGeometry([new THREE.Vector2(.497,.023),new THREE.Vector2(.507,.033),
