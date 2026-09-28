@@ -238,7 +238,7 @@ export class GameSession {
         this.shotsAttempted++;
         const shot = this.gun.shoot(this.rat.entity, target);
         if(!shot)return;
-        this.feel.shot();
+        this.feel.shot(shot.shotId);this.feel.badAmmo(shot.shotId,shot.origin,shot.direction,true,this.stage.camera);
         const movement=this.movementInput(),viewAt=this.remotes.viewAt?.(shot.origin,shot.direction);
         if (movement && this.transport.send({type:'shoot', ...shot, movement, ...(viewAt===undefined?{}:{viewAt})})) {
             this.rememberMovement(movement,performance.now());
@@ -369,7 +369,7 @@ export class GameSession {
             case 'playerShot': {
                 if(message.shooterId===this.myId){this.netplay?.lap(message.shotId,'confirmed');this.chaos?.launch(message);break;}
                 const owner = this.remotes.get(message.shooterId);
-                if (owner) this.gun.replayShot(owner, message);
+                if (owner) {this.gun.replayShot(owner, message);this.feel.badAmmo(message.shotId,message.origin,message.direction,false,this.stage.camera);}
                 break;
             }
             case 'shotResult':

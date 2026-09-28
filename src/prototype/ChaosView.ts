@@ -426,7 +426,9 @@ export class ChaosView {
         this.updateCaseMarker(camera,now);
         if(this.lastHitPoint)this.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
-        const crossfire=s.dispatch.phase==='active'&&incidentInfo(s.dispatch.incident).id==='crossfire';
+        const active=s.dispatch.phase==='active'?incidentInfo(s.dispatch.incident).id:undefined,crossfire=active==='crossfire';
+        // Bad Ammunition: crooked balls visibly wobble in flight (presentation only; hits stay authoritative).
+        const wobble=active==='bad-ammunition'&&feelState().on('badAmmo')?FEEL.badAmmo.params.wobble:0;
         const shots=this.extrapolate?this.localShots.render(this.presentation.renderShots(s.shots,renderTime),renderTime):s.shots;
         for(let i=0;i<Math.min(shots.length,CHAOS_TUNING.maxShots);i++){
             const shot=shots[i];
@@ -434,6 +436,13 @@ export class ChaosView {
             this.onPresentedShot?.(shot.id,p,shot.radius??BALL_RADIUS);
             const scale=(shot.radius??BALL_RADIUS)/BALL_RADIUS;
             this.ballPose.position.set(p.x,p.y,p.z);
+            if(wobble&&!shot.stuckUntil){
+                let phase=0;for(let c=0;c<shot.id.length;c++)phase=(phase*31+shot.id.charCodeAt(c))%6283;
+                const speed=Math.hypot(shot.v.x,shot.v.z)||1,t=now*.022+phase/1000,grow=Math.max(0,Math.min(1,(shot.age-.08)*6));
+                this.ballPose.position.x+=-shot.v.z/speed*Math.sin(t)*wobble*grow;
+                this.ballPose.position.z+=shot.v.x/speed*Math.sin(t)*wobble*grow;
+                this.ballPose.position.y+=Math.cos(t*1.3)*wobble*.7*grow;
+            }
             this.ballPose.rotation.set(now*.015+i,now*.009,0);
             const pulse=shot.stuckUntil?1+Math.sin(now*.03)*.16:1;
             this.ballPose.scale.setScalar(scale*pulse);this.ballPose.updateMatrix();

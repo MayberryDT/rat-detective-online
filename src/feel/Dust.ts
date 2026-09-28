@@ -43,6 +43,19 @@ export class Dust {
         this.active=true;
     }
 
+    /** A muzzle cough of smoke drifting forward along `direction`. */
+    smoke(at:THREE.Vector3,direction:THREE.Vector3,strength:number):void {
+        this.build();
+        const count=Math.round(3+strength*5);
+        for(let i=0;i<count;i++){
+            const puff=this.puffs[this.cursor++%PUFFS]!,spread=.6+Math.random()*.8;
+            puff.position.copy(at);
+            puff.velocity.copy(direction).multiplyScalar(2+Math.random()*3*strength).add({x:(Math.random()-.5)*spread,y:.6+Math.random()*.8,z:(Math.random()-.5)*spread});
+            puff.age=0;puff.life=.6+Math.random()*.5;puff.size=.1+strength*.14;
+        }
+        this.active=true;
+    }
+
     update(dt:number):void {
         if(!this.active||!this.mesh)return;
         let count=0;
@@ -69,3 +82,5 @@ let registered:Dust|undefined;
 /** Scene-wide dust used by every rat's animation events. */
 export function registerDust(dust:Dust|undefined):void {registered=dust;}
 export function kickDust(at:THREE.Vector3,strength:number):void {registered?.puff(at,strength);}
+/** Bad Ammunition muzzle smoke. */
+export function muzzleSmoke(at:THREE.Vector3,direction:THREE.Vector3,strength:number):void {registered?.smoke(at,direction,strength);}

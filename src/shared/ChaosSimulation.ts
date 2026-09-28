@@ -459,7 +459,7 @@ export class ChaosSimulation {
         const pattern=resolveShotPattern(shot,incident),fired:ChaosShot[]=[];
         this.reserveShots(pattern.length);
         for(const ball of pattern){
-            const emitted=this.emitShot(owner,shot.origin,vec(ball.velocity),ball.id);
+            const emitted=this.emitShot(owner,shot.origin,vec(ball.velocity),ball.id,ball.dud?{dud:true}:{});
             if(emitted){
                 fired.push(emitted);this.shotTriggers.set(emitted.id,shot.shotId);
                 if(shot.viewAt!==undefined&&Number.isFinite(shot.viewAt))this.shotViews.set(emitted.id,{trigger:shot.shotId,
@@ -996,6 +996,8 @@ export class ChaosSimulation {
                 // Body hits take one hit point; a headshot or a Crossfire bank shot is lethal.
                 const headshot=hit.shape===target.head;
                 const damage=headshot||(this.incidentActive('crossfire')&&shot.wallBounced)?MAX_HP:1;
+                // A dud just bonks off whoever it reaches.
+                if(shot.dud){this.reflect(shot,normal);this.impacts.push({p:data(point),n:data(normal),surface:false,scale:.6});continue;}
                 if((useRat?ratHit!.ironclad:hasIronclad(this.buffs,target.player.id,now))){
                     // A reflective coat, not a hit shield: keep the original shooter
                     // and finite budget, and never treat a rat contact as a wall bounce.

@@ -6,11 +6,11 @@ import type {ChaosState,ChaosShot} from '../../src/shared/chaosState';
 import type {ServerMessage,ShotDescriptor} from '../../src/shared/networkProtocol';
 import type {IncidentId} from '../../src/shared/incidentCatalog';
 
-const descriptor:ShotDescriptor={shotId:'trigger',origin:{x:0,y:20,z:0},direction:{x:1,y:0,z:0}};
+const descriptor:ShotDescriptor={shotId:'trigger-2',origin:{x:0,y:20,z:0},direction:{x:1,y:0,z:0}};
 const state=(time:number,shots:ChaosShot[]=[])=>({time,shots,dispatch:{phase:'ready'}} as ChaosState);
 const birth=(incident?:IncidentId):Extract<ServerMessage,{type:'playerShot'}>=>({type:'playerShot',shooterId:'owner',...descriptor,
     launch:{at:1000,balls:resolveShotPattern(descriptor,incident)}});
-const authoritative=(age:number):ChaosShot=>({id:'trigger',owner:'owner',p:{x:BALL_SPEED*age,y:20-25*age*(age+1/60)/2,z:0},v:{x:175,y:-25*age,z:0},age});
+const authoritative=(age:number):ChaosShot=>({id:'trigger-2',owner:'owner',p:{x:BALL_SPEED*age,y:20-25*age*(age+1/60)/2,z:0},v:{x:175,y:-25*age,z:0},age});
 
 describe('immediate single-ID local ball presentation',()=>{
     it.each([50,150,400])('responds before a %s ms confirmation and never rewinds or duplicates the shot',latency=>{
@@ -23,7 +23,7 @@ describe('immediate single-ID local ball presentation',()=>{
         }
         expect(view.confirm(birth(),latency)).toBe(true);
         const snapshot=authoritative((latency/2)/1000);view.apply(state(1000+latency/2,[snapshot]),latency);
-        balls=view.render([snapshot],latency+16);expect(balls).toHaveLength(1);expect(balls[0].id).toBe('trigger');
+        balls=view.render([snapshot],latency+16);expect(balls).toHaveLength(1);expect(balls[0].id).toBe('trigger-2');
         expect(balls[0].p.x).toBeGreaterThan(previous);expect(balls[0].p.x-previous).toBeLessThan(6);
         view.apply(state(1000+latency),latency+32);expect(view.render([],latency+32)).toHaveLength(0);
         expect(view.confirm(birth(),latency+40)).toBe(true);expect(view.render([snapshot],latency+40)).toHaveLength(0);
@@ -61,7 +61,7 @@ describe('immediate single-ID local ball presentation',()=>{
     });
     it('keeps a ball alive for contact telemetry and retires it on a terminal result',()=>{
         const view=new LocalShotPresentation();view.fire('owner',descriptor,undefined,0);view.render([],0);
-        const base={type:'shotResult' as const,shotId:'trigger',ballId:'trigger',at:1010,tick:2,epoch:'round'};
+        const base={type:'shotResult' as const,shotId:'trigger-2',ballId:'trigger-2',at:1010,tick:2,epoch:'round'};
         view.result({...base,outcome:'world-bounce',point:{x:2,y:20,z:0},normal:{x:-1,y:0,z:0}});
         expect(view.render([],16)).toHaveLength(1);
         view.result({...base,outcome:'rat-body',victimId:'victim',damage:1});
@@ -88,7 +88,7 @@ describe('shared shot pattern',()=>{
             for(const incident of ['scattershot','bad-ammunition'] as const){
                 const a=resolveShotPattern(shot,incident),b=resolveShotPattern(shot,incident);expect(a).toEqual(b);
                 expect(new Set(a.map(x=>x.id)).size).toBe(a.length);
-                for(const ball of a){expect(ball.id.length).toBeLessThanOrEqual(64);expect(Math.hypot(ball.velocity.x,ball.velocity.y,ball.velocity.z)).toBeCloseTo(175);}
+                for(const ball of a){expect(ball.id.length).toBeLessThanOrEqual(64);if(!ball.dud)expect(Math.hypot(ball.velocity.x,ball.velocity.y,ball.velocity.z)).toBeCloseTo(175);}
             }
         }
     });

@@ -84,6 +84,8 @@ export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
 export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; radius?: number; stuckUntil?: number;
+    /** Bad Ammunition dud: bounces off rats harmlessly. Authority-only; not on the wire. */
+    dud?: true;
     /** Authoritative explosion provenance, retained in storage. Network visual
      * snapshots omit it: clients never decide projectile damage eligibility. */
     explosive?: true;

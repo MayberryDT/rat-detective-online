@@ -51,7 +51,7 @@ export const FEEL={
     /** Movement: landing dip (rad/s impulse), launch/Hot Pursuit view widening (degrees), speed streaks, dust count. */
     movement:{label:'16 Movement',toggle:true,params:{dip:-1.6,dipPush:-5,launchWiden:9,pursuitWiden:3.5,streaks:.8,dust:8}},
     /** Synthesized sound pass (volumes before Effects volume): footsteps, rustle, jostle, squelch, whizz, brass, stings, wind; echo/muffle by space. */
-    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,sting:.1,wind:.07,rain:.06,thunder:.16}},
+    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,jam:.22,cough:.2,womp:.14,sting:.1,wind:.07,rain:.06,thunder:.16}},
     /** Reactive city: a flock every N lamps, a trash can every N lamps, scare radius, seconds before props return. */
     city:{label:'18 City reacts',toggle:true,params:{flockEvery:5,canEvery:4,scare:7,respawn:25}},
     /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. */
@@ -83,6 +83,8 @@ export const FEEL={
     headshot:{label:'T4 Headshot juice',toggle:true,params:{hatSpeed:2.6,hatLift:1.5,hold:.16,burst:2.4}},
     /** T5: the police lineup at round end (top five, winner last). */
     lineup:{label:'T5 Police lineup',toggle:true,params:{}},
+    /** Bad Ammunition juice: jams click, duds wah-wah, backfires soot the lens, muzzle smoke and coughs; `wobble` is the balls' visual wobble (units). */
+    badAmmo:{label:'I2 Bad Ammunition juice',toggle:true,params:{wobble:.12}},
     /** The Hunch (gameplay, always on): at full health you see rats within `range` through walls as a pencil sketch
      * (`strength` opacity); Clean Bill uses `superRange`/`superStrength`. `trail` is the pencil tail brightness. */
     hunch:{label:'H The Hunch',toggle:false,params:{range:40,strength:.6,superRange:400,superStrength:.9,trail:.8,photo:1.5,remake:10,cardGap:8}},

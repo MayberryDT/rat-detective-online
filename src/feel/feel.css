@@ -51,3 +51,9 @@
 .feel-letterbox.top{top:0;transform:translateY(-100%)}.feel-letterbox.bottom{bottom:0;transform:translateY(100%)}
 .feel-screen.letterboxed .feel-letterbox{transform:translateY(0)}
 @media(prefers-reduced-motion:reduce){.feel-grain{animation:none}}
+/* Bad Ammunition backfire: soot smeared across the lens, then wiped away by time. */
+.feel-soot{position:absolute;inset:0;opacity:0;pointer-events:none;
+  background:radial-gradient(ellipse 22% 16% at var(--soot-x,55%) 58%,#0a0806f2,#0a080600 70%),radial-gradient(ellipse 12% 9% at calc(var(--soot-x,55%) + 9%) 49%,#140f0bd9,#140f0b00 70%),
+    radial-gradient(ellipse 9% 7% at calc(var(--soot-x,55%) - 11%) 66%,#0d0a08cc,#0d0a0800 70%),radial-gradient(ellipse 30% 24% at var(--soot-x,55%) 60%,#1a130c66,#1a130c00 75%)}
+.feel-soot.on{animation:feel-soot 1.9s ease-out both}
+@keyframes feel-soot{0%{opacity:0;transform:scale(.7)}8%{opacity:var(--soot,1);transform:scale(1)}40%{opacity:calc(var(--soot,1)*.85)}100%{opacity:0;transform:scale(1.04) translateY(2%)}}

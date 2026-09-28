@@ -3,7 +3,7 @@ import * as C from 'cannon-es';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,DISPATCH_TARGET,LAUNCH_MACHINES} from '../../src/shared/chaosState';
 import {INCIDENTS,incidentInfo,incidentRoster,type IncidentId} from '../../src/shared/incidentCatalog';
-import {resolveShotPattern} from '../../src/shared/shotPattern';
+import {badRound,resolveShotPattern} from '../../src/shared/shotPattern';
 import {BALL_SPEED} from '../../src/shared/ballTuning';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {createPlayer} from '../../src/worker/gameState';
@@ -103,14 +103,30 @@ describe('authoritative Dispatch incidents',()=>{
   expect(shots.length).toBeGreaterThan(first);
   expect(new Set(shots.map(s=>`${s.v.x.toFixed(1)},${s.v.z.toFixed(1)}`)).size).toBeGreaterThan(1);
   for(const s of shots)expect(Math.hypot(s.v.x,s.v.y,s.v.z)).toBeCloseTo(BALL_SPEED,1);
-  for(let i=0;i<200;i++)shoot(sim,`fill-${i}`);expect(sim.snapshot(false).shots).toHaveLength(T.maxShots);
+  for(let i=0;i<300;i++)shoot(sim,`fill-${i}`);expect(sim.snapshot(false).shots).toHaveLength(T.maxShots);
   expect(sim.snapshot(false).shots.some(s=>s.id.startsWith('fill-'))).toBe(true);
   sim.step(0,now+T.activeMs);shoot(sim,'expired');expect(sim.snapshot(false).shots.at(-1)!.id).toBe('expired');
+ });
+ it('jams fire nothing and a dud bonks off a rat without hurting it, the same on every client',()=>{
+  const {players,victim}=fixture(),hits:unknown[]=[];
+  let sim=new ChaosSimulation(players,hit=>hits.push(hit));sim.step(0,now);
+  const saved=sim.snapshot(false);saved.dispatch={phase:'active',incident:'bad-ammunition',started:now,until:now+T.activeMs,serial:1};
+  sim=new ChaosSimulation(players,hit=>hits.push(hit),saved);
+  const find=(round:string)=>{for(let i=0;;i++)if(badRound(`round-${i}`).round===round)return `round-${i}`;};
+  const aim={origin:{x:victim.x-1.2,y:victim.y+1,z:0},direction:{x:1,y:0,z:0}};
+  expect(sim.shoot('shooter',{shotId:find('jam'),...aim})).toHaveLength(0);
+  const dud=find('dud'),fired=sim.shoot('shooter',{shotId:dud,...aim});
+  expect(fired).toHaveLength(1);expect(resolveShotPattern({shotId:dud,...aim},'bad-ammunition')[0]!.dud).toBe(true);
+  expect(Math.hypot(fired[0]!.v.x,fired[0]!.v.y,fired[0]!.v.z)).toBeLessThan(BALL_SPEED*.2);
+  for(let i=1;i<=30;i++)sim.step(1/60,now+i*1000/60);
+  // It reached the rat and bounced back, but did no damage.
+  expect(sim.snapshot(false).shots.find(s=>s.id===dud)!.v.x).toBeLessThan(0);
+  expect(hits).toHaveLength(0);expect(victim.hp).toBe(5);
  });
  it.each([1,2,3])('keeps a %s-ball seeded volley with no straight shots or delayed extras', count=>{
   const {sim}=fixture('bad-ammunition');
   const descriptor={shotId:'',origin:{x:0,y:30,z:0},direction:{x:1,y:0,z:0}};
-  for(let seed=0;seed<1000;seed++){descriptor.shotId=`count-${seed}`;if(resolveShotPattern(descriptor,'bad-ammunition').length===count)break;}
+  for(let seed=0;seed<1000;seed++){descriptor.shotId=`count-${seed}`;if(badRound(descriptor.shotId).round==='crooked'&&resolveShotPattern(descriptor,'bad-ammunition').length===count)break;}
   sim.shoot('shooter',descriptor);
   let shots=sim.snapshot(false).shots;expect(shots).toHaveLength(count);
   for(const shot of shots){
@@ -126,6 +142,7 @@ describe('authoritative Dispatch incidents',()=>{
   const random=vi.spyOn(Math,'random'),quadrants=new Set<string>();
   for(const radial of [0,.5,.999999])for(const azimuth of [0,.125,.249999,.25,.375,.499999,.5,.625,.749999,.75,.875,.999999]){
    random.mockReturnValue(.5).mockReturnValueOnce(0).mockReturnValueOnce(radial).mockReturnValueOnce(azimuth);
+   if(badRound(`diagonal-${radial}-${azimuth}`).round!=='crooked')continue;
    sim.shoot('shooter',{shotId:`diagonal-${radial}-${azimuth}`,origin:{x:0,y:30,z:0},direction:aim});
    const shot=sim.snapshot(false).shots.at(-1)!,velocity=new C.Vec3(shot.v.x,shot.v.y,shot.v.z);
    expect(velocity.length()).toBeCloseTo(BALL_SPEED);

@@ -1,3 +1,4 @@
+import {badRound} from '../../src/shared/shotPattern';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import * as C from 'cannon-es';
@@ -44,7 +45,9 @@ describe('authoritative ball presentation', () => {
     if(incident){initial.dispatch={phase:'active',incident,started:at,until:at+25000,serial:1};sim=new ChaosSimulation(players,()=>{},initial);}
     const view=new ChaosView(scene,id=>id===rat.id?player.entity:undefined,undefined,true);view.setScores([],rat.id);view.apply(initial);
     try{
-      const descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
+      // Bad Ammunition: use a trigger that actually fires crooked balls (not a jam or dud).
+      let descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
+      while(incident==='bad-ammunition'&&badRound(descriptor.shotId).round!=='crooked')descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
       const muzzle=player.entity.getMuzzlePosition();expect(descriptor.origin).toEqual(muzzle);
       const fired=sim.shoot(rat.id,descriptor);
       const birth={type:'playerShot' as const,shooterId:rat.id,...descriptor,launch:{at:sim.time,balls:fired.map(ball=>({id:ball.id,velocity:{...ball.v}}))}};
@@ -79,7 +82,9 @@ describe('authoritative ball presentation', () => {
     const view=new ChaosView(scene,id=>id===rat.id?player.entity:undefined,undefined,true,undefined,undefined,gun.tracePresentation);
     view.setScores([],rat.id);view.apply(initial);
     try{
-      const shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!,muzzle=player.entity.getMuzzlePosition();view.fire(shot);
+      let shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
+      while(incident==='bad-ammunition'&&badRound(shot.shotId).round!=='crooked')shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
+      const muzzle=player.entity.getMuzzlePosition();view.fire(shot);
       const fired=sim.shoot(rat.id,shot);
       const balls=scene.getObjectByName('records-chaos')!.children[0] as THREE.InstancedMesh,matrix=new THREE.Matrix4(),point=new THREE.Vector3();
       clock.mockReturnValue(8);view.update(1/60,camera);expect(balls.count).toBe(fired.length);

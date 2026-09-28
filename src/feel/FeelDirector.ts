@@ -5,7 +5,9 @@ import type {DeathStyle} from '../utils/RatAnimator';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
-import {Dust,registerDust} from './Dust';
+import {Dust,registerDust,muzzleSmoke} from './Dust';
+import {badRound} from '../shared/shotPattern';
+import type {Vec3Data} from '../shared/networkProtocol';
 import {CityReactions,registerCity} from './CityReactions';
 import {NoirCity} from './NoirCity';
 import {NoirRain} from './NoirRain';
@@ -160,13 +162,32 @@ export class FeelDirector {
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
     setIncident(incident?:IncidentId):void {this.incident=incident;this.hunchView?.setSupercharged(incident==='clean-bill');}
 
-    /** A local shot left the muzzle. */
-    shot():void {
+    /** A local shot left the muzzle (a Bad Ammunition jam fires nothing, so no kick). */
+    shot(shotId?:string):void {
         if(!this.state.on('shotKick'))return;
+        if(shotId&&this.incident==='bad-ammunition'&&badRound(shotId).round==='jam')return;
         const p=FEEL.shotKick.params;
         const scale=this.incident==='scattershot'?p.scattershot:1;
         this.camera.kick(p.pitch*scale,(Math.random()*2-1)*p.yawJitter*p.pitch*scale);
         this.camera.push(this.impulse.set(0,0,p.push*scale));
+    }
+
+    /** Bad Ammunition, per trigger: smoke and a cough for everyone nearby; for your
+     * own shot a jam clicks, a dud goes wah-wah and a backfire smears soot on the lens. */
+    badAmmo(shotId:string,origin:Vec3Data,direction:Vec3Data,local:boolean,view:THREE.Camera,now=performance.now()):void {
+        if(this.incident!=='bad-ammunition'||!this.state.on('badAmmo'))return;
+        const {round,backfire}=badRound(shotId),muzzle=new THREE.Vector3(origin.x,origin.y,origin.z);
+        if(round!=='jam')muzzleSmoke(muzzle,new THREE.Vector3(direction.x,direction.y,direction.z),round==='dud'?.4:1);
+        if(round==='crooked')this.sound.cough(local?undefined:origin,view);
+        if(!local)return;
+        if(round==='jam'){
+            this.sound.jam();this.word('CLICK.',muzzle,view,now,true);
+            this.camera.kick(.25,(Math.random()*2-1)*.8);
+        }else if(round==='dud'){this.sound.womp();this.word('PFFT.',muzzle,view,now,true);}
+        else if(backfire){
+            this.screen.soot();this.word('BACKFIRE!',muzzle,view,now,true);
+            this.camera.kick(FEEL.shotKick.params.pitch*3,(Math.random()*2-1)*.6);
+        }
     }
 
     /** You took nonlethal damage. `from` is the attacker's live position when known. */

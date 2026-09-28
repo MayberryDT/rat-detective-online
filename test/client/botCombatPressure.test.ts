@@ -1,3 +1,4 @@
+import {badRound} from '../../src/shared/shotPattern';
 import {it,expect,vi} from 'vitest';
 import {BotCombat,combatRandom} from '../../src/shared/BotCombat';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
@@ -20,7 +21,8 @@ it.each(['scattershot','bad-ammunition'] as const)('keeps fresh human fire admit
   });
   sim.step(1/60,t);
   if(frame%60===0){
-   const id=`human-${frame}`;sim.shoot(human.id,{shotId:id,origin:{x:0,y:210,z:30},direction:{x:0,y:0,z:-1}});
+   let id=`human-${frame}`;for(let n=0;badRound(id).round!=='crooked';n++)id=`human-${frame}-${n}`;
+   sim.shoot(human.id,{shotId:id,origin:{x:0,y:210,z:30},direction:{x:0,y:0,z:-1}});
    const shots=sim.snapshot(false).shots;expect(shots.length).toBeLessThanOrEqual(CHAOS_TUNING.maxShots);
    expect(shots.some(s=>s.id===id&&s.owner===human.id)).toBe(true);
   }

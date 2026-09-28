@@ -9,6 +9,8 @@ import { GunshotAudio } from '../audio/GunshotAudio';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from './CheeseProjectileModel';
 import { RatEntity } from '../entities/RatEntity';
 import { createShotId } from './shotId';
+import { badRound } from '../shared/shotPattern';
+import { playDudPop } from '../audio/IncidentAudio';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
 import { BALL_SPEED, BALL_RESTITUTION, BALL_GRAVITY, BALL_LIFETIME } from '../shared/ballTuning';
@@ -129,24 +131,32 @@ export class CheeseGun {
         // ── Spawn Origin ──
         owner.playShootAnimation(finalTarget);
         const origin = owner.getMuzzlePosition();
-        this.fireAudio.play(origin, owner === this.playerEntity, this.fireCue);
+        const shotId = createShotId();
+        this.fireSound(shotId, origin, owner === this.playerEntity);
 
         // ── Direction (no gravity compensation — consistent power at all distances) ──
         const finalDir = new THREE.Vector3().subVectors(finalTarget, origin).normalize();
 
         if(!this.authoritative)this.createBall(origin, finalDir, owner);
-        return { shotId: createShotId(), origin: { x: origin.x, y: origin.y, z: origin.z },
+        return { shotId, origin: { x: origin.x, y: origin.y, z: origin.z },
             direction: { x: finalDir.x, y: finalDir.y, z: finalDir.z } };
     }
 
     /** Replay the resolved trajectory; never re-aim from an interpolated remote rat. */
     replayShot(owner: RatEntity, shot: ShotDescriptor): void {
         if (this.disposed) return;
-        this.fireAudio.play(shot.origin, false, this.fireCue);
+        this.fireSound(shot.shotId, shot.origin, false);
         owner.playShootAnimation(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z)
             .addScaledVector(new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), 30));
         if(!this.authoritative)this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
             new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
+    }
+
+    /** Bad Ammunition: a jam makes no gunshot and a dud only pops; the feel layer adds the click and cough. */
+    private fireSound(shotId: string, origin: { x: number; y: number; z: number }, local: boolean): void {
+        const round = this.fireCue === 'malfunction' ? badRound(shotId).round : 'crooked';
+        if (round === 'crooked') this.fireAudio.play(origin, local, this.fireCue);
+        else if (round === 'dud') playDudPop(origin);
     }
 
     setIncident(incident?: IncidentId): void {
