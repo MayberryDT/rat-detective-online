@@ -86,11 +86,11 @@ export function createPillarKit():PillarKit {
         bell:new THREE.MeshStandardMaterial({color:0xc3160f,roughness:.3,metalness:.45,emissive:0xd01508,emissiveIntensity:.55,side:THREE.DoubleSide}),
         beacon:new THREE.MeshStandardMaterial({color:0x6d0d08,roughness:.2,emissive:0xff1406,emissiveIntensity:.05}),
         reflector:new THREE.MeshBasicMaterial({color:0xffc2a0,toneMapped:false,side:THREE.DoubleSide}),
-        face,glass:new THREE.MeshStandardMaterial({color:0xbfd6e0,transparent:true,opacity:.22,roughness:.05,metalness:.1,depthWrite:false,side:THREE.DoubleSide}),
+        face,glass:new THREE.MeshStandardMaterial({color:0xbfd6e0,transparent:true,opacity:.3,roughness:.05,metalness:.1,depthWrite:false,side:THREE.DoubleSide}),
         ghost:new THREE.MeshBasicMaterial({color:0x9a8663,transparent:true,opacity:.3,depthWrite:false}),
         beam,sweep,faceCanvas,faceTexture,
         geometry:{bell,arm,head,ghosts,face:new THREE.PlaneGeometry(w,h),glass:new THREE.PlaneGeometry(w,h),remnant,
-            beacon:new THREE.SphereGeometry(.2,16,8,0,Math.PI*2,0,Math.PI/2).scale(1,1.4,1),reflector:new THREE.PlaneGeometry(.22,.16),
+            beacon:new THREE.SphereGeometry(.2,16,8,0,Math.PI*2,0,Math.PI/2).scale(1,1.1,1),reflector:new THREE.PlaneGeometry(.22,.16),
             beams,sweep:new THREE.PlaneGeometry(16,16)},
         frames:new Map(),
     };
@@ -117,15 +117,15 @@ function frame(kit:PillarKit,bell:number):PillarFrame {
     const cage=[part(round,0,bell-.4,0,0,0,0,.16,1.2,.16),
         ...[1,3,5,7].flatMap(k=>{const a=k*Math.PI/4;return [part(box,Math.sin(a)*.7,bell-1.02,Math.cos(a)*.7,0,a,0,.07,.07,1),part(round,Math.sin(a)*1.2,bell-.215,Math.cos(a)*1.2,0,0,0,.07,1.67,.07)];}),
         part(box,0,bell-1.02,.6,0,0,0,.07,.07,1.1),
-        part(new THREE.CylinderGeometry(1.3,1.3,.08,24),0,bell+.64,0),part(new THREE.ConeGeometry(1.28,.46,24),0,bell+.91,0),
-        part(new THREE.CylinderGeometry(.16,.2,.08,12),0,bell+1.14,0)];
+        part(new THREE.CylinderGeometry(1.3,1.3,.08,24),0,bell+.64,0),part(new THREE.ConeGeometry(1.28,.4,24),0,bell+.88,0),
+        part(new THREE.CylinderGeometry(.16,.2,.08,12),0,bell+1.08,0)];
     const {y,z,w,h}=FACE_WINDOW;
     const brass=[part(box,0,y+h/2+.025,z+.008,0,0,0,w+.08,.05,.04),part(box,0,y-h/2-.025,z+.008,0,0,0,w+.08,.05,.04),
         part(box,-w/2-.025,y,z+.008,0,0,0,.05,h+.1,.04),part(box,w/2+.025,y,z+.008,0,0,0,.05,h+.1,.04),
         part(box,0,1.8,z+.004,0,0,0,.44,.12,.02),part(box,.3,1.8,z+.03,0,0,0,.06,.2,.06),
         ...[.96,bell-1.4].map(y=>part(collar,0,y,0,Math.PI/2,0,0,1.03,1.03,.8))];
     // Brass trim around the hood's brim and the beacon's collar, so the housing's outline reads in the dark.
-    const trim=[part(new THREE.TorusGeometry(1.3,.045,6,40),0,bell+.64,0,Math.PI/2),part(new THREE.TorusGeometry(.2,.035,6,16),0,bell+1.18,0,Math.PI/2)];
+    const trim=[part(new THREE.TorusGeometry(1.3,.045,6,40),0,bell+.64,0,Math.PI/2),part(new THREE.TorusGeometry(.2,.035,6,16),0,bell+1.12,0,Math.PI/2)];
     cached={iron:merge(iron),brass:merge(brass),cage:merge(cage),trim:merge(trim)};
     for(const geometry of [box,round,collar])geometry.dispose();
     kit.frames.set(bell,cached);
@@ -147,12 +147,13 @@ export function buildPillar(kit:PillarKit,bell:number,face:number):PillarModel {
     const hammer=new THREE.Group();hammer.position.set(0,bell-1.02,1.12);hammer.rotation.x=.25;
     hammer.add(mesh(g.arm,kit.iron),mesh(g.head,kit.brass));
     const ghosts=mesh(g.ghosts,kit.ghost,0,bell-1.02,1.12);ghosts.visible=false;ghosts.raycast=passThrough;ghosts.name='dispatch-hammer-blur';
-    const beacon=mesh(g.beacon,kit.beacon,0,bell+1.18,0);
-    const lamp=new THREE.Group();lamp.position.y=bell+1.27;
+    // The beacon tops out 1.34 above the bell, under the sewer's ceiling (6 above its floor, bell at 4.6).
+    const beacon=mesh(g.beacon,kit.beacon,0,bell+1.12,0);
+    const lamp=new THREE.Group();lamp.position.y=bell+1.21;
     const reflector=mesh(g.reflector,kit.reflector);reflector.rotation.y=Math.PI/2;lamp.add(reflector);
     housing.add(mesh(cage,kit.iron),mesh(trim,kit.brass),bellMesh,hammer,ghosts,beacon,lamp);
     // Beams turn with the reflector but stay steady while the post trembles.
-    const rotor=new THREE.Group();rotor.position.y=bell+1.27;rotor.name='dispatch-beacon-beams';
+    const rotor=new THREE.Group();rotor.position.y=bell+1.21;rotor.name='dispatch-beacon-beams';
     const beams=mesh(g.beams,kit.beam);beams.raycast=passThrough;rotor.add(beams);
     const sweep=mesh(g.sweep,kit.sweep,0,.05,0);sweep.rotation.x=-Math.PI/2;sweep.raycast=passThrough;sweep.renderOrder=1;
     base.add(body,rotor,sweep);

@@ -94,7 +94,7 @@ export class DispatchPillars {
         // The push, in the pillar's own frame: away from where the ball struck.
         const wx=p.x-t.x,wz=p.z-t.z,lx=wx*Math.cos(f)-wz*Math.sin(f),lz=wx*Math.sin(f)+wz*Math.cos(f),l=Math.hypot(lx,lz)||1;
         view.hitX=-lx/l;view.hitZ=-lz/l;view.hitAge=0;view.hitBusy=busy;
-        if(camera)this.listen(view,camera);
+        if(camera){camera.getWorldPosition(this.ear);this.listen(view,camera);}
         const heard=camera?view.distance:Infinity;
         if(busy){
             if(state.on('dispatchPillar')){
@@ -114,9 +114,8 @@ export class DispatchPillars {
         return true;
     }
 
-    /** The view's distance and stereo pan from the listener at `camera`. */
+    /** The view's distance and stereo pan from the listener at `ear`, facing as `camera`. */
     private listen(view:PillarView,camera:THREE.Camera){
-        camera.getWorldPosition(this.ear);
         const t=view.station.target,dx=t.x-this.ear.x,dy=t.y-this.ear.y,dz=t.z-this.ear.z,e=camera.matrixWorld.elements;
         view.distance=Math.hypot(dx,dy,dz);
         view.pan=Math.max(-.85,Math.min(.85,(dx*e[0]!+dy*e[1]!+dz*e[2]!)/Math.max(1,view.distance)));
@@ -161,6 +160,7 @@ export class DispatchPillars {
         this.shotAge+=dt;this.finaleAge+=dt;this.tickAge+=dt;
         const beaconOn=d.phase!=='cooldown',finale=this.finaleAge<.9,rolling=d.phase==='rolling';
         this.spin+=dt*(rolling||finale?9:4.5);
+        camera?.getWorldPosition(this.ear);
         this.kit.beacon.emissiveIntensity=beaconOn?(juice?1.1+Math.sin(t*9)*.35:1.1):.05;
         for(let i=0;i<this.views.length;i++){
             const view=this.views[i]!,model=view.model;

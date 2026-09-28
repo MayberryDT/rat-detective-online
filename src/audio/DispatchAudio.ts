@@ -95,12 +95,14 @@ export class DispatchAudio {
     }
 }
 
-/** Fill a mono buffer of `seconds` from `sample(t)`, normalised to `peak`. */
-function render(ctx: AudioContext, seconds: number, peak: number, sample: (t: number) => number): AudioBuffer {
+/** Fill a mono buffer of `seconds` from `sample(t)`, normalised to `peak`; the last 15 ms fade out
+ * (unless it `loops`) so a one-shot never ends on a click. */
+function render(ctx: AudioContext, seconds: number, peak: number, sample: (t: number) => number, loops = false): AudioBuffer {
     const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * seconds), ctx.sampleRate), pcm = buffer.getChannelData(0);
     let max = 0;
     for (let i = 0; i < pcm.length; i++) { pcm[i] = sample(i / ctx.sampleRate); max = Math.max(max, Math.abs(pcm[i]!)); }
-    if (max > 0) for (let i = 0; i < pcm.length; i++) pcm[i] = pcm[i]! * peak / max;
+    const tail = loops ? 0 : Math.ceil(ctx.sampleRate * .015);
+    if (max > 0) for (let i = 0; i < pcm.length; i++) pcm[i] = pcm[i]! * peak / max * Math.min(1, (pcm.length - i) / Math.max(1, tail));
     return buffer;
 }
 /** Seeded noise, so every generated buffer is the same. */
@@ -137,7 +139,7 @@ function ring(ctx: AudioContext): AudioBuffer {
         const since = t % (1 / rate), strike = Math.floor(t * rate);
         for (let j = 0; j < 8; j++) v += strength[((strike - j) % rate + rate) % rate]! * metal(since + j / rate, 1180, ALARM_BELL);
         return v;
-    });
+    }, true);
 }
 const CUES: Record<DispatchCue, (ctx: AudioContext) => AudioBuffer> = {
     // A dull thud under a short dead clank: the line is busy.
