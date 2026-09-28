@@ -196,7 +196,15 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
   - **Status (2026-09-28):** Tyler said to do all of it on a branch, including the physics restructure ("we can fine tune the physics later"). Done on `perf/overhaul`, merged and **released to production** on his OK ("this feels a million times better"), Worker `48fb6913-82c5-443c-8794-6c03c91a7800`: server warm tick −80%, client 30→43 fps hosted on Halla. See [the overhaul receipt](verification/perf-overhaul-2026-09-28.md). Shadow freezing/removal were measured and left for Tyler to choose.
 - **3D model and ragdoll overhaul.** Done as the fifth batch (M1–M3, R1–R3); ragdolls reopened above.
 
-## Remaining outcomes (in order; one commit each)
+## Seventh batch: UI, Dispatch and ragdolls (brainstorming, 2026-09-28)
+
+Tyler wants all three worked at the same time. **Still brainstorming: nothing is implemented until he says so.**
+
+- **Ragdolls, confirmed direction:** the corpse must stop reading as a rigid cylinder flicked like a salt shaker. R1 a soft skinned spine in the coat (hips, belly, chest, head) so the body bends; R2 a client-only point-chain ragdoll (hips, chest, head, feet, arm, tail) with ground and wall collision, following the server corpse's position, replacing the rigid spin; R3 go limp first (knees buckle, fold at the waist, limbs trail); R4 land like a sack (belly flattens, head bounces, sprawl, a last twitch); R5 shots ripple and fold the body where hit. Legs (R6) undecided.
+- **UI, confirmed direction:** all of U1–U9 (one noir look and one motion kit that honours Reduced interface motion; title desk and swoop into the city; case-folder settings and pause; rolling numbers, sliding ranks, points flying to the score card, urgent timer; telegram kill feed; reactive crosshair; death camera before RAT DOWN; Case File awards stamping in; paper-slide scoreboard, card exits, springy touch controls). No separate health display. Tyler will judge it by playing.
+- **Dispatch, Tyler's direction:** no HUD direction or searchlight; the loud siren is the direction. Needs far more juice, possibly more boxes in better locations, a completely new look, much easier to shoot (today's target is a 0.84 × 0.84 face on one side only), and a reward for the rat who shoots it. Details under discussion.
+
+
 
 Each item gets its own switch in the `?feel=dev` panel, so Tyler can cut it at review.
 
