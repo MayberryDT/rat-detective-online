@@ -73,6 +73,17 @@ export class RatAnimator {
     private hatBlowSpin = 1;
     /** L6: launcher-flight flailing, 0…1 (legs kick, tail whips, ears and whiskers stream). */
     private flail = 0;
+    /** M1: seconds since a scream (launch) or startle (near miss) began, and how big it was. */
+    private screamAge = 10;
+    private screamSize = 1;
+    /** M1: ears and whiskers bounce on vertical jolts (angle, rate). */
+    private earFlop = 0;
+    private earFlopRate = 0;
+    /** M2: the tail swings out behind turns (offset, rate). */
+    private tailSwing = 0;
+    private tailSwingRate = 0;
+    /** M1: how open the mouth (and wide the eyes) are this frame, 0…1. */
+    private mouthOpen = 0;
     private hatKnockZ = 0;
     private hatKnockX = 0;
     private hatHidden = false;
@@ -202,6 +213,8 @@ export class RatAnimator {
         if(!this.locomotionPolish||!feelState().on('launchMoment')||this.deathAnimation||this.hatBlowAge<HAT_BLOW*.5)return;
         this.hatBlowAge=0;this.hatBlowSpin=(Math.random()<.5?-1:1)*Math.max(.4,Math.min(1.5,strength));
     }
+    /** M1: a near miss: wide eyes and a short gasp. */
+    startle():void {if(this.screamAge>.5){this.screamAge=0;this.screamSize=.6;}}
     /** True while the rat rides a launcher throw (until it lands). */
     get launchFlight():boolean {return this.actingEnabled&&this.acting.launchFlight;}
 
@@ -212,7 +225,7 @@ export class RatAnimator {
     setHustle(active:boolean):void {this.hustle=active;}
     resetReactions():void {
         this.acting.reset();this.hustle=false;
-        this.flight=0;this.wasLaunched=false;this.skidAge=this.nodAge=this.pulseAge=this.hatKnockAge=this.hatBlowAge=10;
+        this.flight=0;this.wasLaunched=false;this.skidAge=this.nodAge=this.pulseAge=this.hatKnockAge=this.hatBlowAge=this.screamAge=10;
         this.applyPose();
     }
     setActingEnabled(enabled:boolean):void {
@@ -300,7 +313,7 @@ export class RatAnimator {
     }
 
     /** R3: a shot or bounce jolts a corpse's limbs. */
-    joltDeath(strength=1):void {if(this.deathAnimation&&feelState().on('ragdoll'))this.ragdoll.impulse('all',6*strength,8*strength);}
+    joltDeath(strength=1):void {if(this.deathAnimation&&feelState().on('ragdoll'))this.ragdoll.impulse('all',6*strength*FEEL.ragdoll.params.jolt,8*strength*FEEL.ragdoll.params.jolt);}
     /** `headshot` snaps the head back as the ragdoll starts. */
     setDeathStyle(style:DeathStyle,headshot=false):void {
         this.deathStyle=feelState().on('deathVariety')||style==='flail'?style:'default';
@@ -335,7 +348,7 @@ export class RatAnimator {
         this.muzzleFlash.visible = false;
         this.lastPosition = null;
         this.hitAge = 10;
-        this.hatKnockAge = this.hatBlowAge = 10;this.flail = 0;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;this.deathStyle = 'default';
+        this.hatKnockAge = this.hatBlowAge = this.screamAge = 10;this.flail = this.mouthOpen = this.earFlop = this.earFlopRate = this.tailSwing = this.tailSwingRate = 0;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;this.deathStyle = 'default';
         this.skidAge = this.nodAge = this.pulseAge = 10;this.flight = 0;this.skidStarted = false;this.landedFall = 0;this.launched = this.wasLaunched = false;this.lastVelocity.set(0, 0, 0);
         this.ragdoll.reset();this.ragdollStarted=false;this.deathHeadshot=false;
         this.tailFall.set(0, 0, 0);
@@ -365,11 +378,12 @@ export class RatAnimator {
         const twitch = Math.sin(this.time * 9.3) * Math.max(0, Math.sin(this.time * .7)) * .06;
         const look = THREE.MathUtils.clamp(-this.turn * .35, -1, 1);
         for (const {part, kind, side} of this.extras) {
-            if (kind === 'brow') {
-                part.position.y += .035 * hitEnv - .012 * this.aim;
+            if (kind === 'mouth') part.scale.y = Math.max(1e-4, this.mouthOpen);
+            else if (kind === 'brow') {
+                part.position.y += .035 * hitEnv - .012 * this.aim + .045 * this.mouthOpen;
                 part.rotation.z += side * (.2 * this.aim - .25 * hitEnv);
             } else if (kind === 'whiskers') {
-                part.rotation.z += side * (sway * .22 + twitch) - side * .4 * hitEnv + side * this.flail * .5;
+                part.rotation.z += side * (sway * .22 + twitch) - side * .4 * hitEnv + side * this.flail * .5 + side * this.earFlop * .6;
                 part.rotation.y += side * stepLift * this.movement * .12;
             } else if (kind === 'shoe') {
                 const step = Math.sin(this.stride + (side < 0 ? 0 : Math.PI));
@@ -463,6 +477,19 @@ export class RatAnimator {
             this.jumpLift *= Math.exp(-15 * dt);
             this.jumpLanding *= Math.exp(-18 * dt);
         }
+        if (!correction && this.locomotionPolish) {
+            // Semi-implicit springs, stable at game frame rates.
+            const h = Math.min(dt, 1 / 30);
+            if (feelState().on('face')) {
+                const jolt = THREE.MathUtils.clamp((verticalSpeed - this.verticalSpeed) / Math.max(dt, 1e-3), -400, 400);
+                this.earFlopRate += (-this.earFlop * 140 - this.earFlopRate * 9 - jolt * .012) * h;
+                this.earFlop = THREE.MathUtils.clamp(this.earFlop + this.earFlopRate * h, -.8, .8);
+            } else this.earFlop = this.earFlopRate = 0;
+            if (feelState().on('bodySprings')) {
+                this.tailSwingRate += ((THREE.MathUtils.clamp(-turnRate * .08, -.9, .9) - this.tailSwing) * 40 - this.tailSwingRate * 5) * h;
+                this.tailSwing += this.tailSwingRate * h;
+            } else this.tailSwing = this.tailSwingRate = 0;
+        }
         this.verticalSpeed = verticalSpeed;
         const previousMovement = this.movement;
         this.movement = THREE.MathUtils.lerp(this.movement, Math.min(speed / 7, 1), blend);
@@ -490,7 +517,8 @@ export class RatAnimator {
         this.hitAge += dt;
         this.hatKnockAge += dt;this.hatBlowAge += dt;this.skidAge += dt;this.nodAge += dt;this.pulseAge += dt;
         const launchFlight = this.actingEnabled && this.acting.launchFlight;
-        if (launchFlight && !this.wasLaunched) this.launched = true;
+        if (launchFlight && !this.wasLaunched) {this.launched = true;this.screamAge = 0;this.screamSize = 1;}
+        this.screamAge += dt;
         this.wasLaunched = launchFlight;
         this.flight = THREE.MathUtils.lerp(this.flight, launchFlight ? 1 : 0, 1 - Math.exp(-6 * dt));
         this.hit = Math.exp(-this.hitAge * 16) * Math.cos(this.hitAge * 22);
@@ -530,6 +558,11 @@ export class RatAnimator {
         const flight=anim?this.flight:0;
         this.flail=anim&&feelState().on('launchFlight')?this.flight:0;
         const flap=Math.sin(this.time*17)*this.flail;
+        const face=!!anim&&feelState().on('face'),springs=!!anim&&feelState().on('bodySprings');
+        const screamEnd=1.2*this.screamSize,scream=this.screamAge<screamEnd?Math.min(1,this.screamAge/.08)*Math.min(1,(screamEnd-this.screamAge)/.3)*this.screamSize:0;
+        this.mouthOpen=face?Math.max(scream,this.flail*.35):0;
+        // M2: a flinch away from the hit, on the head and ears only (never the weapon-bearing body).
+        const flinch=springs&&this.hitAge<.6?Math.exp(-this.hitAge*8):0,flinchSide=Math.abs(this.aimDirection.x)>.05?Math.sign(this.aimDirection.x):1;
         const blow=this.hatBlowAge<HAT_BLOW?this.hatBlowAge/HAT_BLOW:1,blowArc=blow<1?Math.sin(blow*Math.PI):0;
         const settle=FEEL.hatKnock.params.settle;
         const knock=this.hatKnockAge<4*settle?Math.min(1,this.hatKnockAge/.05)*Math.exp(-this.hatKnockAge/settle)*(1+.3*Math.cos(this.hatKnockAge*15)*Math.exp(-this.hatKnockAge*6)):0;
@@ -590,6 +623,13 @@ export class RatAnimator {
                 else if (this.pulseKind === 'hustle') {hat.position.y += pulse * .12;leftEar.rotation.z += pulse * .3;rightEar.rotation.z -= pulse * .3;}
                 else {head.rotation.x -= pulse * .12;hat.position.y += pulse * .04;}
             }
+            if (springs) {
+                // A hat that rocks with each step.
+                hat.rotation.z += Math.sin(this.stride) * .05 * this.movement;hat.position.y += stepLift * .012 * this.movement;
+                head.rotation.z -= flinchSide * .35 * flinch;head.rotation.x -= .2 * flinch;
+                leftEar.rotation.x -= .5 * flinch;rightEar.rotation.x -= .5 * flinch;
+            }
+            if (face) {leftEar.rotation.x += this.earFlop;rightEar.rotation.x += this.earFlop;}
             if (this.hatHidden) hat.scale.setScalar(1e-4);
             // Keep the dragging section planted instead of inheriting the step bounce.
             tail.rotation.y = -this.turn * 0.2;
@@ -654,6 +694,11 @@ export class RatAnimator {
                 leftEye.scale.y*=a.eyes;rightEye.scale.y*=a.eyes;
                 leftEye.rotation.z-=a.eyeSlant;rightEye.rotation.z+=a.eyeSlant;
             }
+            if (this.mouthOpen > 0) {
+                // M1: wide eyes with the scream.
+                const wide = 1 + .3 * this.mouthOpen;
+                leftEye.scale.x *= wide;leftEye.scale.y *= wide;rightEye.scale.x *= wide;rightEye.scale.y *= wide;
+            }
         }
         this.poseExtras(sway, stepLift);
         this.gunSleeves.forEach(updateGunSleeve);
@@ -707,8 +752,8 @@ export class RatAnimator {
                     if(this.actingEnabled&&!this.deathAnimation&&!reset){
                         y+=weight*this.acting.tailLift;
                         x+=weight*this.acting.tailSide;
-                        // L6: the tail whips like a flag in flight.
-                        x+=weight*Math.sin(this.time*12-u*5)*this.flail*.55;
+                        // L6: the tail whips like a flag in flight. M2: it swings out behind turns.
+                        x+=weight*Math.sin(this.time*12-u*5)*this.flail*.55+weight*this.tailSwing;
                     }
                     waves[ring * 2] = x; waves[ring * 2 + 1] = y; waveReady[ring] = 1;
                 }

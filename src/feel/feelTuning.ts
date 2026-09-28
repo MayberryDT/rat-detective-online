@@ -101,6 +101,10 @@ export const FEEL={
     launchLanding:{label:'L7 Landing',toggle:true,params:{thud:.35,shake:2.2,shakeRange:35,decalLife:9,whistle:.14,paper:14}},
     /** R1–R3: floppy corpse limbs, cause-shaped deaths, splay and dead face, rolling hat; shots jolt limbs with a `squeak` heard within `squeakRange`. */
     ragdoll:{label:'R Ragdoll limbs',toggle:true,params:{squeak:.16,squeakRange:40,jolt:1}},
+    /** M1: living face: ears and whiskers bounce on jolts; wide eyes and an open-mouth scream on launches, a gasp on near misses. */
+    face:{label:'M1 Face',toggle:true,params:{}},
+    /** M2: springy tail behind turns, hat rocking with each step, a flinch of the head away from hits. */
+    bodySprings:{label:'M2 Body springs',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

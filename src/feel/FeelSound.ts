@@ -144,9 +144,10 @@ export class FeelSound {
         if(fade>.02)this.audio!.whistle(p.whistle*fade,this.pan(at,view),seconds);
     }
 
-    /** Balls from other rats passing within `whizz` units of your head. */
-    projectiles(shots:readonly {id:string;owner:string|null;p:Vec3Data;v:Vec3Data}[],myId:string,head:THREE.Vector3,view:THREE.Camera):void {
-        if(!this.on)return;
+    /** Balls from other rats passing within `whizz` units of your head; true when one whizzed by. */
+    projectiles(shots:readonly {id:string;owner:string|null;p:Vec3Data;v:Vec3Data}[],myId:string,head:THREE.Vector3,view:THREE.Camera):boolean {
+        if(!this.on)return false;
+        let whizzed=false;
         const reach=FEEL.sound.params.whizzRange;
         for(const shot of shots){
             if(shot.owner===myId||this.whizzed.has(shot.id))continue;
@@ -155,10 +156,11 @@ export class FeelSound {
             const len=vx*vx+vy*vy+vz*vz,t=len>0?THREE.MathUtils.clamp((ox*vx+oy*vy+oz*vz)/len,0,1):0;
             const d=Math.hypot(ox-vx*t,oy-vy*t,oz-vz*t);
             if(d>reach||d<.45)continue;
-            this.whizzed.add(shot.id);
+            this.whizzed.add(shot.id);whizzed=true;
             this.audio!.whizz(FEEL.sound.params.whizz,this.pan(shot.p,view));
         }
         if(this.whizzed.size>256)this.whizzed.clear();
+        return whizzed;
     }
 
     reset():void {this.walkers.clear();this.whizzed.clear();this.wasFast=false;this.audio?.setWind(0,0);}

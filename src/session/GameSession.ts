@@ -737,7 +737,8 @@ export class GameSession {
         for(const [id,{entity}] of this.remotes.rats)if(!entity.dead)n=pooledSource(n,id,entity.mesh.position);
         sources.length=n;
         this.feel.footsteps(dt,sources,self,this.stage.camera);
-        if(self&&this.lastChaos)this.feel.projectiles(this.lastChaos.shots,this.myId,HEAD_POSITION.copy(self).setY(self.y+1.6),this.stage.camera);
+        // M1: a near miss makes your rat gasp.
+        if(self&&this.lastChaos&&this.feel.projectiles(this.lastChaos.shots,this.myId,HEAD_POSITION.copy(self).setY(self.y+1.6),this.stage.camera))rat.entity.startle();
         // L6: contrails behind every rat riding a launcher throw.
         if(!this.observing)this.feel.flightTrail(this.myId,rat.entity.mesh.position,rat.entity.launchFlight,dt);
         for(const [id,{entity}] of this.remotes.rats)this.feel.flightTrail(id,entity.mesh.position,entity.launchFlight,dt);

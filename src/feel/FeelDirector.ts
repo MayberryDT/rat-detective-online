@@ -152,7 +152,8 @@ export class FeelDirector {
         this.city?.proximity(sources);
     }
     /** Near-miss whizz for other rats' balls. */
-    projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):void {this.sound.projectiles(shots,myId,head,view);}
+    /** Near-miss whizzes; true when a ball just passed your head. */
+    projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):boolean {return this.sound.projectiles(shots,myId,head,view);}
     /** Case pickup, your delivery, closing seconds. */
     sting(kind:Sting):void {
         this.sound.sting(kind);

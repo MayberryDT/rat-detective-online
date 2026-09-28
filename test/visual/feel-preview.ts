@@ -178,6 +178,7 @@ const actions:Record<string,()=>void>={
     'R Corpse 4 ahead: fling, splay, dead face':()=>studioCorpse('fling',false),
     'R Corpse 4 ahead: headshot':()=>studioCorpse('spin',true),
     'R Corpse 4 ahead: jolt':()=>corpse?.animator.joltDeath(1),
+    'M1 Suspects gasp':()=>{for(const s of suspects)s.startle();},
     'R Walk up to suspect 2 body':()=>{const body=suspects[1]!.mesh.position;stage.camera.getWorldDirection(aim);aim.setY(0).normalize();
         rat.entity.body.position.set(body.x-aim.x*3.4,Math.max(.5,body.y),body.z-aim.z*3.4);rat.entity.body.velocity.set(0,0,0);rat.onMouseMove(0,160);},
     'R Gentle death suspect 2':()=>{const v=suspects[1]!;if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});v.hp=1;v.takeDamage(1,new THREE.Vector3(.2,0,0));},
@@ -237,7 +238,7 @@ async function renderCues():Promise<string> {
     let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
     return btoa(binary);
 }
-Object.assign(window,{stage,rat,studioCorpseAt:()=>corpse?.at,renderCues,feelActions:actions,faceWall,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
+Object.assign(window,{stage,rat,suspects,studioCorpseAt:()=>corpse?.at,renderCues,feelActions:actions,faceWall,probeWalls:()=>Array.from({length:24},(_,i)=>i*15).map(d=>{const dir=new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),d*Math.PI/180);ray.set(rat.entity.mesh.position.clone().setY(1.6),dir);const hit=ray.intersectObjects(blockers,true)[0];return `${d}:${hit?hit.distance.toFixed(1):'-'}`;}).join(' ')});
 let previous=0;
 function frame(now:number){
     const dt=previous?Math.min(.05,(now-previous)/1000):1/60;previous=now;

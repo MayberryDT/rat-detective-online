@@ -403,6 +403,8 @@ export class RatEntity {
     public resetReactions():void {this.animator.resetReactions();}
     /** L5: a nearby launcher blew this rat's hat off (it lands back on). */
     public blowHat(strength=1):void {if(!this.dead&&this.hp>0)this.animator.blowHat(strength);}
+    /** M1: a near miss: wide eyes and a gasp. */
+    public startle():void {if(!this.dead&&this.hp>0)this.animator.startle();}
     /** True while riding a launcher throw, until the landing. */
     public get launchFlight():boolean {return !this.dead&&this.animator.launchFlight;}
     public playReaction(event:RatReaction,strength=1):void {
