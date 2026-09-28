@@ -5,7 +5,7 @@ import { SpatialRayQuery } from './SpatialRayQuery';
 import { sweepSphereBody } from './sweepSphere';
 import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS, NETPLAY_COMPENSATION_MS, NETPLAY_HISTORY_MS, type MovementPoint } from './netplay';
 import { StaticCityBroadphase, addCityBody } from './StaticCityBroadphase';
-import { launcherVelocity, LANDING_SHOCKWAVE } from './launcherVelocity';
+import { launcherVelocity, LANDING_SHOCKWAVE, SURGE, type ThrowSource } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
@@ -105,6 +105,12 @@ export class ChaosSimulation {
     private pressure:PressureState={serial:0,levels:{},launches:[]};
     /** Launched rats in the air, by id: the machine, launch time and highest point so far. */
     private readonly flights=new Map<string,{machineId:string;at:number;peak:number}>();
+    /** Clear street points (spawn grid) where Pressure Surge may open a street launcher. */
+    private streetPoints:readonly Vec3Data[]=[];
+    /** Street launchers still in their steam warning. */
+    private readonly pendingVents=new Set<string>();
+    /** Pressure Surge bookkeeping for the current incident (by Dispatch serial). */
+    private surge={serial:-1,finale:-1,nextWave:0,nextSuction:0,vents:0};
     /** Rat id → time until which a launcher throw or landing shove may carry it faster than walking. */
     private readonly thrownUntil=new Map<string,number>();
     /** True while `playerId` may still be riding a throw or shove (movement validation widens for it). */
@@ -165,6 +171,7 @@ export class ChaosSimulation {
     private seedPickups(spec?:WorldSpec):void{
         let clear:readonly Vec3Data[];
         try{clear=spec?worldSpawnPoints(spec):CASE_SPAWNS;}catch{clear=CASE_SPAWNS;}
+        this.streetPoints=clear;
         this.pickupPoints=resolvePickupPoints(clear,14,p=>this.supportedSpot(p));
         for(const point of this.pickupPoints){this.pickups.set(point.id,{kind:point.kind,p:{...point.p},availableAt:0});if(point.kind==='quick-fix')this.kitHomes.set(point.id,{...point.p});}
     }
@@ -473,15 +480,76 @@ export class ChaosSimulation {
         }
         if(this.pressure.blowing&&!Object.keys(this.pressure.blowing).length)delete this.pressure.blowing;
     }
+    /** Pressure Surge: street launchers open beside rats and erupt, pads suck rats in,
+     * and in the last moments every machine and a launcher under every rat blow at once. */
+    private stepSurge(now:number,playing:boolean){
+        if(this.pressure.vents){
+            for(const vent of this.pressure.vents){
+                if(!this.pendingVents.has(vent.id)||now<vent.at)continue;
+                this.pendingVents.delete(vent.id);
+                this.throwFrom({kind:'geyser',pad:{x:vent.x,y:vent.y,z:vent.z,radius:SURGE.radius}},!!vent.boost);
+            }
+            this.pressure.vents=this.pressure.vents.filter(vent=>now<vent.at+SURGE.keepMs);
+            if(!this.pressure.vents.length)delete this.pressure.vents;
+        }
+        if(!playing||!this.incidentActive('pressure-surge'))return;
+        const d=this.dispatch,s=this.surge;
+        if(s.serial!==d.serial){s.serial=d.serial;s.nextWave=now+600;s.nextSuction=now;}
+        const streetRats=[...this.players.values()].filter(p=>p.hp>0&&Math.abs(p.y)<1.2);
+        if(now>=d.until-SURGE.finaleMs&&s.finale!==d.serial){
+            s.finale=d.serial;
+            for(const machine of LAUNCH_MACHINES){
+                if(this.pressure.blowing?.[machine.id]!==undefined)continue;
+                const at=now+PRESSURE_TUNING.blowMs;
+                this.pressure.levels[machine.id]=PRESSURE_TUNING.full;
+                (this.pressure.blowing??={})[machine.id]=at;(this.pressure.boosts??={})[machine.id]=at;
+            }
+            for(const rat of streetRats)this.openVent(rat.x,rat.z,now+600,true);
+            return;
+        }
+        if(now>=s.nextWave){
+            s.nextWave=now+SURGE.every;
+            const targets=[...streetRats].sort(()=>Math.random()-.5).slice(0,SURGE.count-1);
+            for(const rat of targets){const a=Math.random()*Math.PI*2,r=1.5+Math.random()*5.5;this.openVent(rat.x+Math.sin(a)*r,rat.z+Math.cos(a)*r,now+SURGE.warnMs,false);}
+            const spot=this.streetPoints[Math.floor(Math.random()*this.streetPoints.length)];
+            if(spot)this.openVent(spot.x,spot.z,now+SURGE.warnMs,false);
+        }
+        if(now>=s.nextSuction){
+            s.nextSuction=now+SURGE.suctionEvery;
+            const shoves=this.pressure.shoves??[];
+            const pull=(p:Vec3Data,pad:LaunchMachine['pad'])=>{
+                const dx=pad.x-p.x,dz=pad.z-p.z,d=Math.hypot(dx,dz);
+                return d>pad.radius-.5&&d<SURGE.suctionRange&&Math.abs(p.y-pad.y)<2?{x:dx/d,z:dz/d}:null;
+            };
+            for(const machine of LAUNCH_MACHINES){
+                for(const player of this.players.values()){
+                    if(player.hp<=0||this.flights.has(player.id))continue;
+                    const toward=pull(player,machine.pad);if(!toward)continue;
+                    shoves.push({id:`pull-${this.tick}-${player.id}`,playerId:player.id,at:this.now,velocity:{x:toward.x*SURGE.suction,y:SURGE.suctionLift,z:toward.z*SURGE.suction}});
+                    this.thrownUntil.set(player.id,Math.max(this.thrownUntil.get(player.id)??0,this.now+3000));
+                }
+                for(const body of [...[...this.cases.values()].filter(c=>!c.owner&&!c.fake&&!c.armed&&c.body.type===C.Body.DYNAMIC).map(c=>c.body),...[...this.corpses.values()].map(c=>c.body)]){
+                    const toward=pull(body.position,machine.pad);if(!toward)continue;
+                    body.velocity.x+=toward.x*6;body.velocity.z+=toward.z*6;body.velocity.y+=2;body.wakeUp();
+                }
+            }
+            if(shoves.length)this.pressure.shoves=shoves.slice(-MAX_LAUNCH_EVENTS);
+        }
+    }
+    /** Open a street launcher at (x,z) if it is open street under the sky, erupting at `at`. */
+    private openVent(x:number,z:number,at:number,boost:boolean){
+        if((this.pressure.vents?.length??0)>=SURGE.maxVents)return;
+        if(!Number.isFinite(x+z)||x<CITY_BOUNDS.min+4||x>CITY_BOUNDS.max-4||z<CITY_BOUNDS.min+4||z>CITY_BOUNDS.max-4)return;
+        if(LAUNCH_MACHINES.some(m=>Math.hypot(x-m.pad.x,z-m.pad.z)<m.pad.radius+2||Math.hypot(x-m.box.x,z-m.box.z)<3))return;
+        // Open sky above and street below: the first thing straight down is the pavement.
+        const down=this.ray(new C.Vec3(x,60,z),new C.Vec3(x,-3,z),1);
+        if(!down.hasHit||Math.abs(down.hitPointWorld.y)>.6)return;
+        const id=`vent-${this.surge.serial}-${this.surge.vents++}`;
+        (this.pressure.vents??=[]).push({id,x,y:down.hitPointWorld.y,z,at,...(boost?{boost:true as const}:{})});
+        this.pendingVents.add(id);
+    }
     /** `at` is the scheduled firing time (clients key the firing and misfire look to it), not the step time. */
     private firePressure(machine:LaunchMachine,at:number){
-        const pad=machine.pad;
-        const onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;
-        const nearby=[...this.players.values()].filter(p=>p.hp>0&&onPad(p));
-        // Everything loose on the pad flies: evidence (counterfeits included; they
-        // re-plant where they land), bodies and cheese. A carried case needs no
-        // handling here, because carry() pins it to its rat every tick.
-        const caseRiders=[...this.cases.values()].filter(c=>!c.owner&&!c.returningUntil&&!c.armed&&onPad(c.body.position));
         // Fire even when empty: occupants alone receive impulses. Pressure resets,
         // and the cooldown runs from the firing.
         this.pressure.serial++;
@@ -490,12 +558,23 @@ export class ChaosSimulation {
         // An overpressure was earned by a hit during the hang; every rider of it goes high.
         const boost=this.pressure.boosts?.[machine.id]===at;
         if(!boost&&this.pressure.boosts){delete this.pressure.boosts[machine.id];if(!Object.keys(this.pressure.boosts).length)delete this.pressure.boosts;}
-        for(const c of caseRiders)this.launchCase(c,machine,boost);
+        this.throwFrom(machine,boost,machine.id);
+    }
+    /** Throw everything loose on a pad (or over a street launcher): rats, evidence
+     * (counterfeits too; they re-plant where they land), bodies and cheese. A carried
+     * case needs no handling, because carry() pins it to its rat every tick.
+     * `machineId` names the machine in launch events; street launchers have none. */
+    private throwFrom(source:ThrowSource,boost:boolean,machineId?:string){
+        const pad=source.pad,flightId=machineId??`vent-${this.pressure.serial}`;
+        const onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;
+        const nearby=[...this.players.values()].filter(p=>p.hp>0&&onPad(p));
+        const caseRiders=[...this.cases.values()].filter(c=>!c.owner&&!c.returningUntil&&!c.armed&&onPad(c.body.position));
+        for(const c of caseRiders)this.launchCase(c,source,boost);
         for(const corpse of this.corpses.values()){
             const body=corpse.body;
             if(!onPad(body.position))continue;
             // Bodies barely damp, so they get a shorter lift for a similar arc, and a wild tumble.
-            const v=launcherVelocity(machine,boost);
+            const v=launcherVelocity(source,boost);
             body.velocity.set(v.x,v.y*.8,v.z);
             body.angularVelocity.set((Math.random()*2-1)*14,(Math.random()*2-1)*9,(Math.random()*2-1)*14);
             body.wakeUp();
@@ -503,19 +582,19 @@ export class ChaosSimulation {
         for(const shot of this.shots){
             if(!onPad(shot.p))continue;
             if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);}
-            const v=launcherVelocity(machine,boost);
+            const v=launcherVelocity(source,boost);
             shot.v={x:v.x*.8,y:v.y*.6,z:v.z*.8};
         }
         // Keep other stations' outstanding events. A rat can only occupy one pad,
         // and its newest impulse replaces an older event if launched again.
         const selected=new Set(nearby.map(p=>p.id));
         for(const player of nearby){
-            this.flights.set(player.id,{machineId:machine.id,at:this.now,peak:player.y});
+            this.flights.set(player.id,{machineId:flightId,at:this.now,peak:player.y});
             this.thrownUntil.set(player.id,this.now+20000);
         }
         this.pressure.launches=[...this.pressure.launches.filter(e=>!selected.has(e.playerId)),
-            ...nearby.map(player=>({id:`launch-${this.pressure.serial}-${player.id}`,machineId:machine.id,
-                playerId:player.id,at:this.now,velocity:launcherVelocity(machine,boost),...(boost?{boost:true as const}:{})}))].slice(-MAX_LAUNCH_EVENTS);
+            ...nearby.map(player=>({id:`launch-${flightId}-${this.pressure.serial}-${player.id}`,...(machineId?{machineId}:{}),
+                playerId:player.id,at:this.now,velocity:launcherVelocity(source,boost),...(boost?{boost:true as const}:{})}))].slice(-MAX_LAUNCH_EVENTS);
     }
     /** A launched rat lands once it has come down from its peak onto something solid. */
     private stepFlights(now:number,playing:boolean){
@@ -876,9 +955,9 @@ export class ChaosSimulation {
         if(p.y<=1.5)return true;
         return isReachableLandmarkPosition(p.x,p.y,p.z)||isReachableVehiclePosition(p.x,p.y,p.z);
     }
-    /** Pad impulse from the same machine profile as its rat riders, tumbling. */
-    private launchCase(c:CaseRuntime,machine:LaunchMachine,boost:boolean){
-        const velocity=launcherVelocity(machine,boost);
+    /** Pad impulse from the same profile as the rat riders, tumbling. */
+    private launchCase(c:CaseRuntime,source:ThrowSource,boost:boolean){
+        const velocity=launcherVelocity(source,boost);
         c.launched=true;c.launchLift=velocity.y;
         // The watchdog treats a slow, high, unsupported case as lost. A case on a
         // pad has already been loose for seconds, so its apex would be swallowed.
@@ -1168,6 +1247,7 @@ export class ChaosSimulation {
         if(weaponized&&!this.casesWeaponized)this.beginEvidenceTampering();
         else if(!weaponized&&this.casesWeaponized)this.endEvidenceTampering();
         this.stepPressure(dt,now,playing);
+        this.stepSurge(now,playing);
         this.stepFlights(now,playing);
         if(!this.incidentActive('delayed-reaction')){
             for(const shot of this.shots)if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);}
@@ -1419,7 +1499,7 @@ export class ChaosSimulation {
     snapshot(drain=true):ChaosState{
         const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,case:this.caseSnapshot(this.primaryCase),
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
-            extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,levels:{...this.pressure.levels},...(this.pressure.blowing?{blowing:{...this.pressure.blowing}}:{}),...(this.pressure.fired?{fired:{...this.pressure.fired}}:{}),...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
+            extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,levels:{...this.pressure.levels},...(this.pressure.blowing?{blowing:{...this.pressure.blowing}}:{}),...(this.pressure.fired?{fired:{...this.pressure.fired}}:{}),...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),...(this.pressure.vents?{vents:this.pressure.vents.map(v=>({...v}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
             buffs:this.buffSnapshot(),
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
@@ -1433,7 +1513,7 @@ export class ChaosSimulation {
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.dispatchActivator=null;
-        this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();
+        this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();this.pendingVents.clear();
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
         this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){
@@ -1465,7 +1545,9 @@ export class ChaosSimulation {
         // hanging full. Checkpoints from before the pressure model have none.
         const saved=s.pressure;
         this.pressure={serial:saved?.serial||0,levels:{...saved?.levels},launches:[],
-            ...(saved?.blowing?{blowing:{...saved.blowing}}:{}),...(saved?.fired?{fired:{...saved.fired}}:{}),...(saved?.boosts?{boosts:{...saved.boosts}}:{})};
+            ...(saved?.blowing?{blowing:{...saved.blowing}}:{}),...(saved?.fired?{fired:{...saved.fired}}:{}),...(saved?.boosts?{boosts:{...saved.boosts}}:{}),
+            ...(saved?.vents?.length?{vents:saved.vents.map(v=>({...v}))}:{})};
+        for(const vent of this.pressure.vents??[])if(vent.at>s.time)this.pendingVents.add(vent.id);
         this.now=s.time;this.dispatch={...s.dispatch,...(s.dispatch.incident?{incident:incidentInfo(s.dispatch.incident).id}:{})};
         this.possession={...s.possession};this.notice={...s.notice};this.restoreCase(this.primaryCase,s.case,s.time);
         this.casesWeaponized=this.incidentActive('evidence-tampering')&&s.dispatch.until>Date.now();

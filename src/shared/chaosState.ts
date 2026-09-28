@@ -94,7 +94,10 @@ export const MAX_LAUNCH_SPEED = 110;
 export interface PressureState {
     serial:number; levels:Record<string,number>; blowing?:Record<string,number>; fired?:Record<string,number>;
     boosts?:Record<string,number>; launches:PressureLaunchEvent[]; shoves?:PressureLaunchEvent[];
+    /** Pressure Surge street launchers: steam warning until `at`, then they erupt (kept briefly for the eruption). */
+    vents?:SurgeVent[];
 }
+export interface SurgeVent { id:string; x:number; y:number; z:number; at:number; boost?:true }
 export interface PressureLaunchEvent { id:string; playerId:string; at:number; velocity:Vec3Data; machineId?:string; boost?:true }
 export type DispatchPhase = 'ready' | 'rolling' | 'active' | 'cooldown';
 export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec3Data }

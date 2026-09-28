@@ -459,6 +459,8 @@ function parseChaos(value:unknown):ChaosState|null{
       Object.entries(record).every(([id,value])=>LAUNCH_MACHINES.some(m=>m.id===id)&&finiteNumber(value)!==null&&valid(value as number));
     if(!perMachine(p.levels,level=>level>=0&&level<=PRESSURE_TUNING.full))return null;
     for(const key of ['blowing','fired','boosts'] as const)if(p[key]!==undefined&&!perMachine(p[key],()=>true))return null;
+    if(p.vents!==undefined&&(!Array.isArray(p.vents)||p.vents.length>MAX_LAUNCH_EVENTS||!p.vents.every(v=>isRecord(v)&&nonEmptyString(v.id,64)&&
+      [v.x,v.y,v.z,v.at].every(n=>finiteNumber(n)!==null)&&(v.boost===undefined||v.boost===true))))return null;
     const events=(list:unknown)=>Array.isArray(list)&&list.length<=MAX_LAUNCH_EVENTS&&list.every(e=>isRecord(e)&&nonEmptyString(e.id,128)&&nonEmptyString(e.playerId,64)&&
       finiteNumber(e.at)!==null&&(e.machineId===undefined||LAUNCH_MACHINES.some(m=>m.id===e.machineId))&&isVec3(e.velocity)&&Object.values(e.velocity as Record<string,unknown>).every(v=>typeof v==='number'&&Math.abs(v)<=MAX_LAUNCH_SPEED)&&(e.boost===undefined||e.boost===true));
     if(!events(p.launches)||p.shoves!==undefined&&!events(p.shoves))return null;

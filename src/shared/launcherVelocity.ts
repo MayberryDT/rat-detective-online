@@ -1,5 +1,5 @@
 import { CITY_BOUNDS, SEWER_FLOOR } from './grayboxLayout';
-import type { LaunchMachine, LaunchMachineKind } from './chaosState';
+import type { LaunchMachineKind } from './chaosState';
 import type { Vec3Data } from './networkProtocol';
 
 // Directed incidents retain full-flight containment independently of vertical pads.
@@ -23,11 +23,18 @@ export const OVERPRESSURE={lift:106,drift:1.3} as const;
  * `shove` u/s sideways plus `lift` up), and a rat within `squash` is landed on
  * for 1 damage. `minDrop` of fall from the flight's peak counts as a landing. */
 export const LANDING_SHOCKWAVE={radius:7,shove:[6,20] as const,lift:9,squash:2.2,minDrop:6} as const;
+/** Pressure Surge: street launchers erupt `warnMs` after their steam warning,
+ * throwing everything within `radius`; `every` ms a new wave of `count` spawns
+ * (most beside rats). Suction pulls rats within `suctionRange` of a pad toward
+ * it every `suctionEvery` ms. The finale sets everything off `finaleMs` before the end. */
+export const SURGE={warnMs:1000,radius:3.2,every:1300,count:3,keepMs:1600,suctionRange:15,suctionEvery:900,suction:9,suctionLift:4.5,finaleMs:1500,maxVents:18} as const;
 /** Drift fades by this rate (1/s) while airborne, for rats and cases alike. */
 export const LAUNCH_DRIFT_DECAY=.25;
 /** One rider's throw from a machine's profile; `boost` is decided once per
  * firing so every rider of an overpressure misfire goes high. `random` is [0,1). */
-export function launcherVelocity(machine:LaunchMachine,boost:boolean,random:()=>number=Math.random):Vec3Data {
+/** Anything that throws: a machine, or a Pressure Surge street launcher (thrown like a geyser). */
+export interface ThrowSource { kind:LaunchMachineKind; pad:{x:number;y:number;z:number;radius:number} }
+export function launcherVelocity(machine:ThrowSource,boost:boolean,random:()=>number=Math.random):Vec3Data {
     const profile=LAUNCH_PROFILES[machine.kind];
     const between=([low,high]:readonly [number,number])=>low+(high-low)*random();
     const lift=boost?OVERPRESSURE.lift:between(profile.lift);
