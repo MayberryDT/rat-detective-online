@@ -4,6 +4,7 @@ import type {FoleyWorld} from '../audio/FoleyWorld';
 import { createCaseGrip, disposeCaseGrip } from './CaseGrip';
 import {setText} from '../ui/setText';
 import {clearAimLabel} from '../ui/aimClearance';
+import {leave} from '../ui/motion';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { ChaosState, CorpseState, LaunchMachine, SurgeVent } from '../shared/chaosState';
@@ -47,6 +48,9 @@ export interface InteractionCandidate {
     target:PickupTarget;targetId:string;generation:number;pickup?:import('../shared/pickups').PickupKind;
 }
 
+/** U9: a pickup card drops away instead of vanishing. */
+const CARD_EXIT:Keyframe[]=[{opacity:1,transform:'none'},{opacity:0,transform:'translateY(46px) rotate(6deg) scale(.9)'}];
+
 export class ChaosView {
     private readonly reactions:RatReactionEvents;
     private readonly root=new THREE.Group();
@@ -67,8 +71,6 @@ export class ChaosView {
     private readonly jurisdictionZones:JurisdictionZones;
     private readonly assignmentDestinations:AssignmentDestinations;
     private readonly caseMarker=document.createElement('div');
-    private readonly caseMarkerIcon=document.createElement('div');
-    private readonly caseMarkerArrow=document.createElement('div');
     private readonly caseMarkerDetail=document.createElement('div');
     private readonly impacts:CheeseImpactEffects;
     private readonly ballGeometry=createCheeseBallGeometry();
@@ -147,27 +149,11 @@ export class ChaosView {
         this.assignmentDestinations=new AssignmentDestinations();this.jurisdictionZones=new JurisdictionZones(scene);
         // DOM projection stays crisp at city scale and visible through all architecture.
         // It adds no dynamic lights, raycasts, or physics to the physical case.
-        Object.assign(this.caseMarker.style,{position:'fixed',left:'0',top:'0',display:'none',width:'174px',
-            textAlign:'center',pointerEvents:'none',zIndex:'6',color:'#ffe6a1',font:'bold 12px monospace',
-            textShadow:'0 2px 3px #000, 0 0 5px #000',willChange:'transform'});
+        // U1: an evidence tag styled in dispatchHud.css (.hot-case-tag); its position is set each frame.
+        this.caseMarker.className='hot-case-tag';this.caseMarker.style.display='none';
         this.caseMarker.setAttribute('aria-label','Hot Case location');
-        Object.assign(this.caseMarkerIcon.style,{position:'relative',margin:'0 auto 5px',width:'38px',height:'34px',
-            boxSizing:'border-box',border:'2px solid #ffe6a1',borderRadius:'5px',background:'#311a15f2',
-            boxShadow:'0 0 0 3px #110d12dc, 0 0 16px #ff9b3266'});
-        const handle=document.createElement('div');
-        Object.assign(handle.style,{position:'absolute',left:'10px',top:'-8px',width:'10px',height:'6px',
-            border:'2px solid #ffe6a1',borderBottom:'0',borderRadius:'3px 3px 0 0',background:'#201218'});
-        const latch=document.createElement('div');
-        Object.assign(latch.style,{position:'absolute',left:'14px',top:'10px',width:'6px',height:'10px',
-            background:'#ffe6a1',boxShadow:'-10px 0 0 -2px #ffe6a1, 10px 0 0 -2px #ffe6a1'});
-        this.caseMarkerIcon.appendChild(handle);this.caseMarkerIcon.appendChild(latch);
-        Object.assign(this.caseMarkerArrow.style,{position:'absolute',left:'50%',top:'17px',width:'0',height:'0',
-            borderTop:'6px solid transparent',borderBottom:'6px solid transparent',borderLeft:'11px solid #fff1cc',
-            transformOrigin:'0 0',filter:'drop-shadow(0 0 2px #000)',display:'none'});
-        const title=document.createElement('div');title.textContent='HOT CASE';
-        Object.assign(title.style,{display:'inline-block',padding:'0',background:'none',
-            letterSpacing:'.8px',border:'none',fontSize:'11px'});
-        Object.assign(this.caseMarkerDetail.style,{marginTop:'2px',fontSize:'9px',color:'#d3c8b3'});
+        const title=document.createElement('div');title.className='hot-case-title';title.textContent='HOT CASE';
+        this.caseMarkerDetail.className='hot-case-detail';
         for(const child of [title,this.caseMarkerDetail])this.caseMarker.appendChild(child);
         document.body.appendChild(this.caseMarker);
         this.buffBar.className='pickup-buffs';this.buffBar.style.display='none';
@@ -177,7 +163,7 @@ export class ChaosView {
     /** Only the authoritative heal event confirms this instant pickup. */
     showHealing():void {
         this.healingUntil=performance.now()+3200;
-        this.buffCards.get('quick-fix')?.remove();this.buffCards.delete('quick-fix');
+        const healing=this.buffCards.get('quick-fix');if(healing)leave(healing,'paperSlide',CARD_EXIT);this.buffCards.delete('quick-fix');
         this.pickupFeedback('quick-fix');
     }
     private pickupFeedback(kind:PickupKind):void {
@@ -185,8 +171,8 @@ export class ChaosView {
     }
     private clearPickupCards():void {
         this.healingUntil=0;this.localBuffs={ironcladUntil:0,hustleUntil:0};
-        for(const card of this.buffCards.values())card.remove();
-        this.buffCards.clear();this.buffBar.style.display='none';
+        for(const card of this.buffCards.values())leave(card,'paperSlide',CARD_EXIT);
+        this.buffCards.clear();this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
     resetProjectiles():void{
         this.localShots.clear();this.presentation.clear();this.landings.length=0;this.clearPickupCards();this.clearInteractions();this.reactions.reset();
@@ -391,7 +377,7 @@ export class ChaosView {
         for(const kind of ['ironclad','hustle'] as const){
             const until=kind==='ironclad'?mine.ironcladUntil:mine.hustleUntil;
             let card=this.buffCards.get(kind);
-            if(!until){card?.remove();this.buffCards.delete(kind);continue;}
+            if(!until){if(card)leave(card,'paperSlide',CARD_EXIT);this.buffCards.delete(kind);continue;}
             if(!card){card=powerupCard(kind);this.buffCards.set(kind,card);this.buffBar.appendChild(card);}
             const remaining=Math.max(0,until-now),duration=kind==='ironclad'?PICKUP_TUNING.ironcladMs:PICKUP_TUNING.hustleMs;
             const seconds=String(Math.ceil(remaining/1000)),clock=card.querySelector('b')!;
@@ -403,8 +389,8 @@ export class ChaosView {
         if(performance.now()<this.healingUntil){
             if(!healing){const card=powerupCard('quick-fix');card.setAttribute('role','status');
                 this.buffCards.set('quick-fix',card);this.buffBar.appendChild(card);}
-        }else {healing?.remove();this.buffCards.delete('quick-fix');}
-        this.buffBar.style.display=this.buffCards.size?'flex':'none';
+        }else {if(healing)leave(healing,'paperSlide',CARD_EXIT);this.buffCards.delete('quick-fix');}
+        this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
 
     private setCarrier(entity:RatEntity|null){
@@ -454,7 +440,7 @@ export class ChaosView {
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
         this.updateBuffs(s.buffs,now);
-        this.updateCaseMarker(camera,now);
+        this.updateCaseMarker(camera);
         if(this.lastHitPoint)this.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const active=s.dispatch.phase==='active'?incidentInfo(s.dispatch.incident).id:undefined,crossfire=active==='crossfire';
@@ -559,10 +545,8 @@ export class ChaosView {
             const visual=ready[i];
             if(!visual){if(beacon)beacon.style.display='none';continue;}
             if(!beacon){
+                // Styled in dispatchHud.css; only its projected position changes per frame.
                 beacon=document.createElement('div');beacon.className='quick-fix-beacon';beacon.setAttribute('aria-hidden','true');
-                Object.assign(beacon.style,{position:'fixed',left:'0',top:'0',zIndex:'36',pointerEvents:'none',width:'40px',height:'40px',borderRadius:'50%',
-                    background:'radial-gradient(circle,#0b2a15f2 55%,#0b2a1500 72%)',boxShadow:'0 0 18px 6px #36ff7a99',font:"700 30px/40px 'Outfit',Arial,sans-serif",
-                    color:'#6dff9e',textAlign:'center',textShadow:'0 0 8px #36ff7a'});
                 beacon.textContent='+';document.body.appendChild(beacon);this.fixBeacons[i]=beacon;
             }
             this.p.copy(visual.root.position);this.p.y+=1.3;
@@ -572,7 +556,7 @@ export class ChaosView {
             beacon.style.opacity=i===0?'1':'.7';
         }
     }
-    private updateCaseMarker(camera:THREE.Camera,now:number){
+    private updateCaseMarker(camera:THREE.Camera){
         const s=this.state!;
         if(this.carrier?.isPlayer||this.lastHitPoint){this.caseMarker.style.display='none';return;}
         // Float the badge above the case so it does not cover the physical pickup
@@ -583,12 +567,9 @@ export class ChaosView {
         // The badge follows the case in world space; its label hangs below it.
         const label=clearAimLabel(location.x,location.y+15,190,90,window.innerWidth,window.innerHeight);
         this.caseMarker.style.transform=`translate(${label.x-87}px,${label.y-32}px)`;
-        this.caseMarkerIcon.style.transform=`scale(${1+Math.sin(now*.003)*.045})`;
-        this.caseMarkerArrow.style.display=location.edge?'block':'none';
-        this.caseMarkerArrow.style.transform=`rotate(${location.angle}rad) translate(29px,-6px)`;
+        const tag=s.case.owner?'hot-case-tag carried':'hot-case-tag';if(this.caseMarker.className!==tag)this.caseMarker.className=tag;
         const status=s.case.returningUntil?'RETURNING':s.case.owner?'CARRIED':'LOOSE';
         setText(this.caseMarkerDetail,`${status} · ${Math.round(location.distance)} m${location.behind?' · BEHIND':''}`);
-        this.caseMarkerIcon.style.background=s.case.owner?'#583315f2':'#311a15f2';
     }
     private bell(frequency:number){
         const context=this.audio;if(!context || context.state!=='running')return;

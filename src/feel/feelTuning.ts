@@ -116,6 +116,22 @@ export const FEEL={
     bodySprings:{label:'M2 Body springs',toggle:true,params:{}},
     /** M3: each rat wears one extra from its name: cigarette, detective's badge or scarf (applies to newly built rats). */
     extras:{label:'M3 Personality extras (reload)',toggle:true,params:{}},
+    /** U2: entering swoops from the title desk into the city (presentation only; control is immediate). */
+    titleSwoop:{label:'U2 Title swoop',toggle:true,params:{}},
+    /** U3: the settings and pause case folder opens, slides between tabs and puts itself away, with sounds. */
+    caseFolder:{label:'U3 Case-folder settings motion',toggle:true,params:{}},
+    /** U4: scores roll, ranks slide, points fly to the score card, bars ease, urgent timers shake and tick. */
+    scoreMotion:{label:'U4 Score and assignment motion',toggle:true,params:{}},
+    /** U5: telegram kill feed lines type in, tear away and close ranks. */
+    telegramFeed:{label:'U5 Telegram kill feed motion',toggle:true,params:{}},
+    /** U6: the crosshair spreads `move` px at `speed` u/s and `kick` px per shot (at most `max`), recovering `recover`/s; hit markers grow with damage. */
+    reactiveCrosshair:{label:'U6 Reactive crosshair',toggle:true,params:{move:3,speed:9,kick:3,max:8,recover:9}},
+    /** U7: RAT DOWN waits for the death camera and iris; the respawn countdown is a clock. */
+    deathBeat:{label:'U7 Death beat',toggle:true,params:{}},
+    /** U8: Case File awards count up and stamp in `gap` s apart, with a thump; results rows slide into order. */
+    caseFileStamps:{label:'U8 Case File stamping',toggle:true,params:{gap:.42}},
+    /** U9: scoreboard paper slide and live reordering, pickup-card exits, springy touch controls. */
+    paperSlide:{label:'U9 Scoreboard, card exits, touch springs',toggle:true,params:{}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;
