@@ -55,6 +55,9 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     const listener = new THREE.AudioListener();
     listener.gain.disconnect();listener.gain.connect(effectsOutput(listener.context));
     if (previewMuted()) void listener.context.suspend();
+    // Panning uses StereoPannerNodes; nothing reads the Web Audio listener pose,
+    // so skip three's nine per-frame AudioParam ramps and keep only the matrices.
+    listener.updateMatrixWorld = function (force?: boolean) { THREE.Object3D.prototype.updateMatrixWorld.call(this, force); };
     camera.add(listener);
     // ─── LIGHTING ─────────────────────────────────────────────────────
     const ambient = new THREE.AmbientLight(0x664488, lighting==='classic'?.38:.2);
