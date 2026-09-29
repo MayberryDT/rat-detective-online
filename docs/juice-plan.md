@@ -210,6 +210,7 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
   - **Phase 5:** preview playtest, production on Tyler's OK, before/after receipt.
   - **Status (2026-09-28):** Tyler said to do all of it on a branch, including the physics restructure ("we can fine tune the physics later"). Done on `perf/overhaul`, merged and **released to production** on his OK ("this feels a million times better"), Worker `48fb6913-82c5-443c-8794-6c03c91a7800`: server warm tick −80%, client 30→43 fps hosted on Halla. See [the overhaul receipt](verification/perf-overhaul-2026-09-28.md). Shadow freezing/removal were measured and left for Tyler to choose.
 - **3D model and ragdoll overhaul.** Done as the fifth batch (M1–M3, R1–R3); ragdolls reopened and redone in the seventh batch.
+- **Omarchy plugin overhaul, replay system first (Tyler, 2026-09-28).** Overhaul the Rat Detective Omarchy plugin, especially automatic highlights (the replay capture, clip library and reels; see [highlights](highlights.md)). Out of scope for now; Tyler will say when to start.
 
 ## Seventh batch: UI, Dispatch and ragdolls (released 2026-09-28)
 
