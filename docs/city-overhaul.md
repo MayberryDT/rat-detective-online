@@ -1,6 +1,6 @@
 # City overhaul plan
 
-Status (2026-09-29): **outline, under discussion with Tyler.** Nothing here is built. This file owns the scope, order and acceptance of the city overhaul. The layout evidence and the measuring tools live in [the city map](city-map.md); the agreed design decisions are recorded under "City and building model overhaul" in [the juice plan](juice-plan.md).
+Status (2026-09-29): **approved; building on branch `city/overhaul`.** Tyler answered every open decision and handed over the whole build. This file owns the scope, order and acceptance of the city overhaul. The layout evidence and the measuring tools live in [the city map](city-map.md); the agreed design decisions are recorded under "City and building model overhaul" in [the juice plan](juice-plan.md).
 
 **How it will be delivered (Tyler, 2026-09-29):** the whole plan in one run, not in rounds ("you're gonna one-shot it"), probably overnight. The plan must be complete and exact enough for that run to finish without questions. After it ships, the city map's data drives follow-up changes over the next week or more; each follow-up bumps the layout version.
 
@@ -185,13 +185,14 @@ Each workstream lists what it delivers and how it is proven. The order is the bu
   - the Halla copy of `AGENTS.md`;
   - a Chartroom session log.
 
-## Decisions needed from Tyler before the run
+## Decisions (Tyler, 2026-09-29, final: "no more questions")
 
-- **D1:** Harbour water: a hazard (a rat that falls in dies, or washes back), or just the map's edge?
-- **D2:** Rebuild the existing districts on the kit with the same look (cleaner, larger), or keep today's generators and use the kit for new and changed parts (smaller, two conventions)?
-- **D3:** Move the round-end lineup into the real precinct lineup room?
-- **D4:** The city map page's steps 4–6: in this run, or after it?
-- **D5:** Shadows: keep, freeze or remove (measured on 2026-09-28)?
-- **D6:** The Panopticon's floors: two or three? Where does the Jurisdiction zone go: the yard or the tower?
-- **D7:** The docks: climbable cranes? Warehouses you can enter?
-- **D8:** How Tyler judges the look: a private preview only, or lightweight three.js previews of the docks and precinct first?
+- **D1 Water kills.** A rat that falls into the harbour dies and respawns normally. The death credits nobody (cause `city`, a drowning joke in the feed).
+- **D2 Rebuild everything on the kit.** Every district, including the existing ones, is built from kit parts ("we have to do it right").
+- **D3 The lineup moves** into the precinct's real lineup room.
+- **D4 The city map page modes** (Observe, Analyse, Design at `/map`) are part of this run.
+- **D5 Shadows stay, highly optimized:** very light, whatever technique achieves that.
+- **D6 Agent's choice:** the Panopticon has three floors; the Jurisdiction zone is the yard.
+- **D7 Docks:** climbable cranes and a warehouse you can enter. **Plus boats:** one big boat moored at the docks, boardable.
+- **D8 No separate previews.** Build the whole map; Tyler looks at it afterwards.
+- **Bar for done (Tyler):** "a perfect map when you're done… highly optimized, built from the ground up, looking sexy, very noir, very Rat Detective. I want banking shots, I want a good time."
