@@ -51,7 +51,11 @@ function run(k:KitBuilder,c:Chute):void {
     for(const side of [-1,1])slick(side*(INNER+SIDE)/2,(HEAD-BED)/2,0,slope+.5,SIDE,HEAD+BED);
     slick(0,HEAD+LID/2,-2,lidEnd,CHUTE_OUTER_WIDTH,LID);
     foot(k,c);
+    // A caged bulb under the lid halfway down: the rider sees the run, the alley floor sees nothing.
+    const bulb=at(0,HEAD-.3,slope*.5);
+    k.fixture({x:bulb.x,y:bulb.y,z:bulb.z,color:0xffc98a,intensity:24,distance:8,pool:false});
     if(!k.visuals)return;
+    k.piece('lamp',bulb.x,bulb.y+.12,bulb.z,.26,.2,.26,{round:true});
 
     // Canvas tube: pale linen inside, dark striped duck outside, iron hoops.
     look('linen',0,.02,0,slope+.4,INNER,.06);

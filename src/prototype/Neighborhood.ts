@@ -13,8 +13,9 @@ import { KitArchitecture } from './KitArchitecture';
 import { cityHarbourWater, type HarbourWater } from './HarbourWater';
 import { kitCity } from '../shared/city/kit/city';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
-import {StreetLightPool,insideLightRoom} from './StreetLightPool';
+import {StreetLightPool} from './StreetLightPool';
 import {interiorFixtures,LIGHT_ROOMS,type InteriorFixture} from './InteriorLighting';
+import {applyFixedIllumination,FixedLightField} from './FixedLighting';
 import {readLightingMode,type LightingMode} from '../session/lightingMode';
 import {generatedStreetLamps,STREET_LAMP_HEIGHT,type StreetLampPosition} from '../shared/streetLampLayout';
 import {StreetReadability,streetReadabilityEnabled} from './StreetReadability';
@@ -171,12 +172,19 @@ export class Neighborhood {
         }
         const fixtures=lighting==='pools'?interiorFixtures():[];
         for(const fixture of fixtures)this.addInteriorFixture(fixture);
-        // Kit fixtures outside any room (quay floodlights, precinct globes): baked, and actor spots.
-        const outdoor=kitCity({visuals:false}).fixtures.filter(f=>!f.room);
-        for(const f of outdoor){const light=new THREE.PointLight(f.color,f.intensity,f.distance,1.5);light.position.set(f.x,f.y,f.z);this.add(light);}
+        // Kit fixtures outside any room (quay floodlights, precinct globes): baked outside rooms only, and actor spots.
+        const outdoor=kitCity({visuals:false}).fixtures.filter(f=>!f.room),outdoorLights=new Set<THREE.PointLight>();
+        for(const f of outdoor){const light=new THREE.PointLight(f.color,f.intensity,f.distance,1.5);light.position.set(f.x,f.y,f.z);this.add(light);outdoorLights.add(light);}
+        // Every steady source is known: one field bakes the graybox and the kit alike.
+        const field=new FixedLightField(this.fixedLights.map(light=>{
+            const f=this.interiorSources.get(light);
+            return {position:light.position,color:light.color,intensity:light.intensity,distance:light.distance,
+                ...(f?{fixture:{room:f.room.id,floor:f.floor,angle:f.angle??.85}}:{}),...(outdoorLights.has(light)?{outdoor:true as const}:{})};
+        }),LIGHT_ROOMS,lighting,LANDMARK_INTERIORS);
         this.architecture=new LandmarkArchitecture(scene,lighting==='classic');
         yield;
         this.kit=new KitArchitecture(scene);
+        yield* this.kit.build(field);
         this.water=cityHarbourWater(scene,kitCity());
         yield;
         this.vehicles=new ParkedVehicles(scene);
@@ -184,7 +192,7 @@ export class Neighborhood {
         this.grime=new CityGrime(scene,spec);
         yield;
         this.sewerPortals=new SewerPortals(scene);
-        yield* this.bakeFixedLighting();
+        yield* this.bakeFixedLighting(field);
         yield;
         this.batchStaticMeshes();
         // The graybox city (boxes, pipes, batches and the hidden aim/camera
@@ -212,7 +220,8 @@ export class Neighborhood {
             ...this.streetLamps
                 .map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:260,distance:24,angle:.88,penumbra:.5})),
             ...(this.readability?.lights??[]),...fixtures,
-            ...outdoor.map(f=>({x:f.x,y:f.y,z:f.z,color:f.color,intensity:f.intensity*3,distance:f.distance*1.4,angle:f.angle??.9,penumbra:.5})),
+            // Floodlights hang high and throw wide: they reach rats 18 below them, in a wider cone.
+            ...outdoor.map(f=>({x:f.x,y:f.y,z:f.z,color:f.color,intensity:f.intensity*3,distance:f.distance*1.4,angle:Math.min(1.3,(f.angle??.9)+.25),penumbra:.5,above:18})),
         ],LIGHT_ROOMS);
         if(this.overhead)for(const object of scene.children)if(!existingObjects.has(object))object.traverse(child=>{
             if(!(child instanceof THREE.Mesh))return;
@@ -268,17 +277,16 @@ export class Neighborhood {
     }
     /** Bake a modest diffuse contribution into static architecture. Unlike live point
      * lights this stays identical from every camera position, with no shader light limit. */
-    private *bakeFixedLighting():Generator<void> {
-        const position=new THREE.Vector3(),normal=new THREE.Vector3(),toward=new THREE.Vector3();
+    private *bakeFixedLighting(field:FixedLightField):Generator<void> {
+        const position=new THREE.Vector3(),normal=new THREE.Vector3(),light=new THREE.Color();
         const bounds=new THREE.Box3(),normalMatrix=new THREE.Matrix3();
+        const owned=new Set<THREE.Material>(this.materials.values());
         for(const obj of this.objects){
-            if(!(obj instanceof THREE.Mesh)||!obj.visible||!(obj.material instanceof THREE.MeshStandardMaterial))continue;
-            const material=obj.material as THREE.MeshStandardMaterial;
             // Restrict the shader to our static masonry/props, never shared rat materials.
-            if(![...this.materials.values()].includes(material))continue;
+            if(!(obj instanceof THREE.Mesh)||!obj.visible||!(obj.material instanceof THREE.MeshStandardMaterial)||!owned.has(obj.material))continue;
             obj.updateMatrixWorld(true);
             bounds.setFromObject(obj);
-            const sources=this.fixedLights.filter(light=>bounds.distanceToPoint(light.position)<light.distance);
+            const sources=field.near(bounds),rooms=field.roomsNear(bounds);
             if(obj.geometry instanceof THREE.BoxGeometry && sources.length){
                 const {width,height,depth}=obj.geometry.parameters;
                 const geometry=new THREE.BoxGeometry(width,height,depth,Math.max(1,Math.ceil(width/3)),Math.max(1,Math.ceil(height/3)),Math.max(1,Math.ceil(depth/3)));
@@ -290,43 +298,12 @@ export class Neighborhood {
             for(let i=0;i<vertices.count;i++){
                 position.fromBufferAttribute(vertices,i).applyMatrix4(obj.matrixWorld);
                 normal.fromBufferAttribute(normals,i).applyNormalMatrix(normalMatrix);
-                if(position.y<-.05&&this.lighting==='classic')continue;
-                let red=0,green=0,blue=0;
-                // A restrained room-only bounce term keeps the unlit side of a stair
-                // readable; it never raises the city-wide ambient or skyline brightness.
-                const hall=LANDMARK_INTERIORS.find(h=>position.y>=-.05&&position.y<24
-                    &&Math.abs(position.x-h.cx)<h.w/2-.3&&Math.abs(position.z-h.cz)<h.d/2-.3);
-                if(hall){const fill=this.lighting==='classic'?1:.65;red=.014*fill;green=.016*fill;blue=.020*fill;}
-                const vertexRoom=this.lighting==='pools'?LIGHT_ROOMS.find(r=>insideLightRoom(position,r)):undefined;
-                for(const source of sources){
-                    const fixture=this.interiorSources.get(source);
-                    if(fixture){
-                        if(vertexRoom?.id!==fixture.room.id||position.y<fixture.floor-.05||position.y>fixture.floor+7.5)continue;
-                    }else if(this.lighting==='pools'&&vertexRoom&&source.position.y>=4.5)continue;
-                    toward.copy(source.position).sub(position);
-                    const distance=toward.length();
-                    if(distance>=source.distance||distance<.001)continue;
-                    const facing=Math.max(0,normal.dot(toward.multiplyScalar(1/distance)));
-                    const falloff=1-distance/source.distance;
-                    const cone=fixture?THREE.MathUtils.smoothstep(toward.y,Math.cos(fixture.angle??.85),.96):1;
-                    const amount=AUTHORED_LIGHT_GAIN*Math.min(.075,source.intensity*(fixture ? .16 : .08)/(12+distance*distance))*falloff*facing*cone;
-                    red+=source.color.r*amount;green+=source.color.g*amount;blue+=source.color.b*amount;
-                }
-                colors[i*3]=Math.min(red,.12*AUTHORED_LIGHT_GAIN);colors[i*3+1]=Math.min(green,.12*AUTHORED_LIGHT_GAIN);colors[i*3+2]=Math.min(blue,.12*AUTHORED_LIGHT_GAIN);
+                field.sample(position,normal,sources,rooms,light).toArray(colors,i*3);
             }
             obj.geometry.setAttribute('fixedIllumination',new THREE.BufferAttribute(colors,3));
             yield;
         }
-        for(const material of this.materials.values()){
-            material.onBeforeCompile=shader=>{
-                shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 fixedIllumination;\nvarying vec3 vFixedIllumination;')
-                    .replace('#include <begin_vertex>','#include <begin_vertex>\nvFixedIllumination = fixedIllumination;');
-                shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vFixedIllumination;')
-                    .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance += vFixedIllumination;');
-            };
-            material.customProgramCacheKey=()=> 'neighborhood-fixed-illumination-v1';
-            material.needsUpdate=true;
-        }
+        for(const material of this.materials.values())applyFixedIllumination(material);
     }
     private initLampPool() {
         for(let i=0;i<SEWER_LAMPS;i++){

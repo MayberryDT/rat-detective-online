@@ -40,11 +40,13 @@ export function interiorFixtures():InteriorFixture[] {
     for(const z of [-6,6])fixtures.push({x:-137,y:5.8,z,color:0xcbb78e,intensity:65,distance:12,angle:.85,room:sluice,floor:0,ceiling:21,style:'utility'});
     const maintenance=LIGHT_ROOMS.find(r=>r.id==='maintenance')!;
     for(const z of [-33,-39])fixtures.push({x:65,y:-2.2,z,color:0xb7c6b1,intensity:32,distance:8,angle:.85,room:maintenance,floor:-7,ceiling:-1.2,style:'strip'});
-    // Kit fixtures in a kit room hang from that room's ceiling.
+    // Kit fixtures in a kit room hang from that room's ceiling; under a low one (a mezzanine,
+    // an office) a compact caged fitting, not a wide shade at head height.
     for(const f of kitCity({visuals:false}).fixtures){
         const room=f.room?LIGHT_ROOMS.find(r=>r.id===f.room):undefined;
         if(!room)continue;
-        fixtures.push({x:f.x,y:f.y,z:f.z,color:f.color,intensity:f.intensity,distance:f.distance,angle:f.angle??.85,room,floor:f.floor??room.ymin+.5,ceiling:f.ceiling??room.ymax,style:'pendant'});
+        const ceiling=f.ceiling??room.ymax;
+        fixtures.push({x:f.x,y:f.y,z:f.z,color:f.color,intensity:f.intensity,distance:f.distance,angle:f.angle??.85,room,floor:f.floor??room.ymin+.5,ceiling,style:ceiling-f.y<1.2?'utility':'pendant'});
     }
     return fixtures;
 }

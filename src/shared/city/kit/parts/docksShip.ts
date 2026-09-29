@@ -90,6 +90,8 @@ function deckhouse(k:KitBuilder):void {
     }
     k.room({id:'marlowe-cabin',xmin:H.x0,xmax:H.x1,zmin:H.z0,zmax:H.z1,ymin:deck,ymax:under});
     k.fixture({x:93,y:under-.5,z:SHIP_Z,color:0xe7c48e,intensity:45,distance:10,room:'marlowe-cabin',floor:deck,ceiling:under});
+    // The lamp over the house door lights the well deck and the foot of the stair.
+    k.fixture({x:H.x1+.6,y:under-.7,z:SHIP_Z,color:0xffd9a0,intensity:60,distance:16});
     crate(k,89,deck,SHIP_Z-1.5,1.4);k.solid('wood',96.5,deck+.5,SHIP_Z,3,1,1.6);
     // The bridge deck over the house, wider than it (the wings), railed round.
     k.slab('deck',(B.x0+B.x1)/2,bridge,(B.z0+B.z1)/2,B.x1-B.x0,B.z1-B.z0,.6);
@@ -169,7 +171,9 @@ function cargo(k:KitBuilder):void {
     k.solid('machine',134.2,deck+.7,SHIP_Z,1.8,1.4,2.6);
     for(const [x,z] of [[132,-178.9],[132,-188.1]] as const)
         for(const dz of [-.45,.45]){k.collide(x,deck+.45,z+dz,.5,.9,.5);k.piece('iron',x,deck+.45,z+dz,.5,.9,.5,{round:true});}
-    k.fixture({x:131,y:deck+12.5,z:SHIP_Z,color:0xffd9a0,intensity:45,distance:22,angle:1});
+    // The masthead light and a cargo lamp under the derrick head: pools on the forward deck.
+    k.fixture({x:131,y:deck+12.5,z:SHIP_Z,color:0xffd9a0,intensity:60,distance:24,angle:1});
+    k.fixture({x:120,y:deck+8.4,z:SHIP_Z,color:0xffd29a,intensity:25,distance:12,angle:1.1});
 }
 
 function gangway(k:KitBuilder):void {
@@ -178,6 +182,12 @@ function gangway(k:KitBuilder):void {
     for(const o of [-1.35,1.35])stairRailing(k,from,Math.PI/2,SHIP.deck,run,o,'steel');
     // Quay bollards the lines are made fast to.
     for(const x of [84,100,124,140])bollard(k,x,QUAY_EDGE_Z+1.2);
+    // A lamp on the bulwark over the gangway head: the boarding point and the well deck.
+    const top=SHIP.deck+1.1,z=SHIP.south;
+    k.fixture({x:GANGWAY_X-.6,y:top+2.8,z:z-.2,color:0xffd9a0,intensity:45,distance:14,angle:1.1});
+    if(!k.visuals)return;
+    k.piece('iron',GANGWAY_X-2.1,top+1.6,z,.14,3.2,.14);k.piece('iron',GANGWAY_X-1.35,top+3.15,z,1.6,.08,.08);
+    k.piece('iron',GANGWAY_X-.6,top+3.05,z,.44,.12,.44,{round:true});k.piece('lamp',GANGWAY_X-.6,top+2.9,z,.28,.22,.28,{round:true});
 }
 
 function dressing(k:KitBuilder):void {
@@ -193,7 +203,7 @@ function dressing(k:KitBuilder):void {
     line(k,{x:131.2,y:deck+2,z:SHIP_Z},{x:120,y:deck+12.5,z:SHIP_Z},'steel',.3);
     line(k,{x:120,y:deck+12.5,z:SHIP_Z},{x:131.5,y:deck+16,z:SHIP_Z},'iron',.05);
     line(k,{x:120,y:deck+12.5,z:SHIP_Z},{x:120,y:deck+9.2,z:SHIP_Z},'iron',.05);
-    k.piece('cranedark',120,deck+9,SHIP_Z,.5,.4,.5);
+    k.piece('cranedark',120,deck+9,SHIP_Z,.5,.4,.5);k.piece('lamp',120,deck+8.65,SHIP_Z,.3,.22,.3,{round:true});
     floodHead(k,131,deck+12.7,SHIP_Z,Math.PI/2);
     // Portholes along the hull, sparsely lit.
     let i=0;

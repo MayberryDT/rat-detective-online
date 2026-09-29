@@ -28,8 +28,12 @@ export const GLOWING_FINISHES: ReadonlySet<Finish> = new Set<Finish>(['warm','cr
 export interface KitPiece { finish:Finish; shape:'box'|'round'; x:number; y:number; z:number; w:number; h:number; d:number; rx:number; ry:number; rz:number;
     /** A lit window pane that may switch off now and then (occupancy). */
     flicker?:true; castShadow?:true }
-/** Baked light sources: they light static scenery in the fixed-lighting bake and can be picked by the four actor spots. */
-export interface KitFixture { x:number; y:number; z:number; color:number; intensity:number; distance:number; angle?:number; room?:string; floor?:number; ceiling?:number }
+/** Baked light sources: they light static scenery in the fixed-lighting bake and can be picked by the four actor spots.
+ * An outdoor fixture below y 20 also pools on the street-spill atlas, unless `pool` is false (it hangs inside the part's own shell). */
+export interface KitFixture { x:number; y:number; z:number; color:number; intensity:number; distance:number; angle?:number; room?:string; floor?:number; ceiling?:number; pool?:false }
+/** Light spilling from a lit doorway, window or sign onto the ground outside it (the street-spill
+ * atlas, its beam and an actor-spot candidate). `nx,nz` point outward; the part draws the opening. */
+export interface KitSpill { x:number; y:number; z:number; nx:number; nz:number; kind:'window'|'door'|'sign'; color:number; reach:number; width?:number }
 export interface KitSign { lines:string[]; x:number; y:number; z:number; w:number; h:number; ry:number; bg:string; fg:string; glow?:true }
 /** A rectangular room for interior lighting (actor spots stay inside their room). */
 export interface KitRoom { id:string; xmin:number; xmax:number; zmin:number; zmax:number; ymin:number; ymax:number }
@@ -43,6 +47,7 @@ export class KitBuilder {
     readonly boxes:GrayboxBox[]=[];
     readonly pieces:KitPiece[]=[];
     readonly fixtures:KitFixture[]=[];
+    readonly spills:KitSpill[]=[];
     readonly signs:KitSign[]=[];
     readonly rooms:KitRoom[]=[];
     readonly water:KitWater[]=[];
@@ -159,10 +164,13 @@ export class KitBuilder {
                 if(skin.windowH>2)this.piece('iron',mull.x,y,mull.z,skin.windowW,.12,.05,{ry});
                 if(skin.bars)for(const s of [-.3,0,.3])this.piece('iron',mull.x+ux*s*skin.windowW,y,mull.z+uz*s*skin.windowW,.07,skin.windowH,.07,{round:true});
                 this.piece('trim',sill.x,y-skin.windowH/2-.18,sill.z,skin.windowW+.65,.22,.16,{ry});
+                // A steady lit window at street level spills onto the pavement in front of it.
+                if(lit&&y<7&&(col+row)%3!==0){const out=at(u,.3);this.spill({x:out.x,y,z:out.z,nx,nz,kind:'window',color:FINISH_COLORS[(row+col)%5===0?'cream':skin.light],reach:10,width:skin.windowW});}
             }
         }
     }
     fixture(f:KitFixture):void {this.fixtures.push(f);}
+    spill(s:KitSpill):void {this.spills.push(s);}
     sign(s:KitSign):void {if(this.visuals)this.signs.push(s);}
     room(r:KitRoom):void {this.rooms.push(r);}
     lamp(x:number,z:number):void {this.lamps.push([x,z]);}

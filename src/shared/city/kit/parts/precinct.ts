@@ -282,6 +282,8 @@ function houseRooms(k:KitBuilder):void {
         for(const [x,z] of lamps)lamp(k,id,x,y,z,id==='precinct-lineup'?0xf2e2c0:0xe6bc7e);
     }
     k.room({id:'precinct-stairwell',xmin:IX0,xmax:WEST_ROOM.xmax,zmin:IZ0,zmax:WEST_ROOM.zmin,ymin:-.5,ymax:24});
+    // Stage lights over the lineup: the height chart and whoever stands against it read through the glass.
+    for(const dx of [-4.5,0,4.5])k.fixture({x:L.x+dx,y:5.9,z:L.wallZ+1.4,color:0xf2e2c0,intensity:60,distance:9,angle:1.2,room:'precinct-lineup',floor:0,ceiling:CEILING});
 }
 
 function desk(k:KitBuilder,x:number,floor:number,z:number):void {
@@ -335,6 +337,8 @@ function frontage(k:KitBuilder):void {
         k.piece('warm',cx,5.1,face+.02,3.2,.6,.04);
     }
     k.fixture({x:cx,y:4.6,z:face-1,color:0xe8c088,intensity:30,distance:9});
+    // The lobby's light out through the open doors onto the stoop and the street.
+    k.spill({x:cx,y:3.2,z:face+.1,nx:0,nz:1,kind:'door',color:0xe8c088,reach:11,width:4});
 }
 
 /** Facades: brick piers, stone cornices, barred ground-floor windows, lit upper rows. */
@@ -419,6 +423,7 @@ function ring(k:KitBuilder):void {
     for(const floor of FLOORS)for(let s=0;s<SLOTS;s++)cell(k,floor,s);
     for(const s of GATE_SLOTS)gatePassage(k,s);
     ringSkin(k);
+    parapetLamps(k);
     for(const floor of FLOORS){
         k.room({id:`cellblock-${floor}`,xmin:CX-RING_R,xmax:CX+RING_R,zmin:CZ-RING_R,zmax:CZ+RING_R,ymin:floor-.5,ymax:floor+CEILING});
         // Cage lamps over the gallery, every other slot, just inside the cell fronts.
@@ -535,6 +540,10 @@ function ringSkin(k:KitBuilder):void {
         k.piece('iron',p.x,26.6,p.z,.46,.08,.46,{round:true});
     }
 }
+/** The parapet lamps' light (steady, also when the look is skipped). */
+function parapetLamps(k:KitBuilder):void {
+    for(let s=1;s<SLOTS;s+=2){const p=polar(s*SLOT,RING_R-.5);k.fixture({x:p.x,y:26.2,z:p.z,color:0xffd9a0,intensity:22,distance:9});}
+}
 
 // ---------------------------------------------------------------- the guard tower
 
@@ -551,8 +560,8 @@ function tower(k:KitBuilder):void {
     // The searchlight on the roof.
     k.solid('iron',CX,floor+4.7,CZ,1.4,.6,1.4);
     k.fixture({x:PRECINCT_SEARCHLIGHT.x,y:PRECINCT_SEARCHLIGHT.y,z:PRECINCT_SEARCHLIGHT.z,color:0xfff0c8,intensity:60,distance:28});
-    // Bracket lamps round the tower's foot light the yard.
-    for(let i=0;i<4;i++){const p=polar(i*Math.PI/2+Math.PI/4,r+.5);lamp(k,'cellblock-0',p.x,0,p.z,0xe0c690,70,5.6);}
+    // Bracket lamps round the tower's foot flood the yard out to the galleries.
+    for(let i=0;i<4;i++){const p=polar(i*Math.PI/2+Math.PI/4,r+.5);k.fixture({x:p.x,y:4.9,z:p.z,color:0xe0c690,intensity:70,distance:13,angle:1.1,room:'cellblock-0',floor:0,ceiling:5.6});}
     k.fixture({x:CX,y:floor+3.3,z:CZ,color:0xe8c088,intensity:40,distance:9,angle:1.1,room:'cellblock-16',floor,ceiling:floor+3.9});
     // The bridge from the top gallery, between two cells so it hides neither from the
     // lookout: a flight rising 3 over 8 to the lookout's edge, railed both sides.

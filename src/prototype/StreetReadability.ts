@@ -10,6 +10,7 @@ import {STREET_LAMPS} from '../shared/grayboxLayout';
 import {generatedStreetLamps} from '../shared/streetLampLayout';
 import type {FacadeMass} from '../world/WindowApertures';
 import {cornerEntrances} from '../world/cornerShops';
+import {kitCity} from '../shared/city/kit/city';
 
 export interface SpillSource {
     x:number; z:number; y:number; nx:number; nz:number;
@@ -99,7 +100,9 @@ export function sampleStreetSpill(s:SpillSource,x:number,z:number,blockers:reado
 /** Fixed, occluded street spill in one 1 MiB atlas. The same visible fixtures
  * also feed the existing four-light pool so moving rats receive directional light. */
 export class StreetReadability {
+    /** The fixtures this layer draws (the kit draws its own openings). */
     readonly sources:readonly SpillSource[];
+    private readonly spills:readonly SpillSource[];
     readonly lights:readonly OverheadLight[];
     private readonly texture:THREE.DataTexture;
     private readonly geometry=new THREE.BoxGeometry(1,1,1);
@@ -112,12 +115,13 @@ export class StreetReadability {
      * generator so city preparation can spread the bake across frames. */
     constructor(private readonly scene:THREE.Scene,private readonly layout:readonly BuildingFootprint[],boxes:readonly GrayboxBox[],windows:readonly SpillSource[]=[],details:readonly FacadeMass[]=[]){
         this.sources=streetSpillSources(layout);
+        this.spills=[...this.sources,...kitCity().spills];
         // Yawed walls block by pieces of their bounds, so no light leaks through a diagonal wall.
         const yawed=boxes.filter(b=>!b.original&&!b.debris&&!b.passBalls&&!b.rx&&!b.rz&&b.ry).flatMap(yawedCover);
         const blockers:SpillBlocker[]=[...layout.flatMap(b=>b.chamfers?.length?footprintBlocks(b):[{x:b.cx,z:b.cz,w:b.bw,d:b.bd}]),
             ...[...boxes.filter(b=>!b.original&&!b.debris&&!b.passBalls&&!b.rx&&!b.ry&&!b.rz),...yawed].filter(b=>b.y-b.h/2<2&&b.y+b.h/2>2)
                 .map(b=>({x:b.x,z:b.z,w:b.w,d:b.d}))];
-        this.lights=[...this.sources,...windows.filter(s=>s.y<12)].map(s=>{
+        this.lights=[...this.spills,...windows.filter(s=>s.y<12)].map(s=>{
             const nearby=blockers.filter(b=>Math.abs(b.x-s.x)<s.reach+b.w/2&&Math.abs(b.z-s.z)<s.reach+b.d/2);
             return {x:s.x,y:s.y,z:s.z,color:s.color,intensity:(s.kind==='door'?65:85)*(s.powerShare??1),distance:18,angle:.9,penumbra:.5,
                 target:{x:s.x+s.nx*5,y:s.y-5*.85,z:s.z+s.nz*5},brightness:()=>windowBrightness(s),
@@ -127,7 +131,7 @@ export class StreetReadability {
         this.texture=new THREE.DataTexture(new Uint8Array(SIZE*SIZE*4),SIZE,SIZE,THREE.RGBAFormat);
         this.texture.minFilter=this.texture.magFilter=THREE.LinearFilter;
         this.texture.generateMipmaps=false;
-        this.beams=new FacadeBeams(scene,[...this.sources,...windows],[
+        this.beams=new FacadeBeams(scene,[...this.spills,...windows],[
             ...layout.flatMap(footprintBlocks),
             ...boxes.filter(b=>!b.original&&!b.hidden&&!b.debris&&!b.rx&&!b.ry&&!b.rz),
             ...yawed,
@@ -138,7 +142,7 @@ export class StreetReadability {
         const {blockers,layout}=this;
         const field=new Float32Array(SIZE*SIZE*3),color=new THREE.Color();
         let work=0;
-        for(const s of this.sources){
+        for(const s of this.spills){
             if(++work%12===0)yield;
             color.setHex(s.color);
             const nearby=blockers.filter(b=>Math.abs(b.x-s.x)<s.reach+b.w/2&&Math.abs(b.z-s.z)<s.reach+b.d/2);
@@ -153,17 +157,24 @@ export class StreetReadability {
             }
         }
         const data=this.texture.image.data as Uint8Array;
-        // Every authored pole contributes permanently, including supplemental
-        // poles. This texture is built once, independently of the nearby rat.
-        for(const [x,z] of [...STREET_LAMPS,...generatedStreetLamps([...layout],STREET_LAMPS)]){
+        // Every authored pole contributes permanently, including supplemental poles, and so
+        // does every outdoor kit fixture low enough to pool on the ground (floodlights, globes,
+        // lanterns). This texture is built once, independently of the nearby rat.
+        const pools=[
+            ...[...STREET_LAMPS,...generatedStreetLamps([...layout],STREET_LAMPS)].map(([x,z])=>({x,z,radius:11,peak:.08,color:0xffcf96})),
+            ...kitCity({visuals:false}).fixtures.filter(f=>!f.room&&f.y<20&&f.pool!==false)
+                .map(f=>({x:f.x,z:f.z,radius:Math.min(16,f.distance*.55),peak:.08*Math.min(1.4,f.intensity/60),color:f.color})),
+        ];
+        for(const {x,z,radius,peak,color:hex} of pools){
             if(++work%12===0)yield;
-            const nearby=blockers.filter(b=>Math.abs(b.x-x)<11+b.w/2&&Math.abs(b.z-z)<11+b.d/2);
-            for(let iz=Math.max(0,Math.floor((z-11-MIN)/SPAN*SIZE));iz<=Math.min(SIZE-1,Math.ceil((z+11-MIN)/SPAN*SIZE));iz++)
-                for(let ix=Math.max(0,Math.floor((x-11-MIN)/SPAN*SIZE));ix<=Math.min(SIZE-1,Math.ceil((x+11-MIN)/SPAN*SIZE));ix++){
+            const nearby=blockers.filter(b=>Math.abs(b.x-x)<radius+b.w/2&&Math.abs(b.z-z)<radius+b.d/2);
+            color.setHex(hex);
+            for(let iz=Math.max(0,Math.floor((z-radius-MIN)/SPAN*SIZE));iz<=Math.min(SIZE-1,Math.ceil((z+radius-MIN)/SPAN*SIZE));iz++)
+                for(let ix=Math.max(0,Math.floor((x-radius-MIN)/SPAN*SIZE));ix<=Math.min(SIZE-1,Math.ceil((x+radius-MIN)/SPAN*SIZE));ix++){
                     const px=MIN+(ix+.5)/SIZE*SPAN,pz=MIN+(iz+.5)/SIZE*SPAN;
-                    const radius=Math.hypot(px-x,pz-z),amount=.08*Math.max(0,1-radius/11)**2;
+                    const amount=peak*Math.max(0,1-Math.hypot(px-x,pz-z)/radius)**2;
                     if(!amount||blocked(x,z,px,pz,nearby))continue;
-                    color.setHex(0xffcf96);const i=(iz*SIZE+ix)*3;
+                    const i=(iz*SIZE+ix)*3;
                     field[i]+=amount*color.r;field[i+1]+=amount*color.g;field[i+2]+=amount*color.b;
                 }
         }

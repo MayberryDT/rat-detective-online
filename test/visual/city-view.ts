@@ -62,6 +62,7 @@ stage.renderer.setAnimationLoop(now=>{
     const dt=Math.min((now-last)/1000,.05);last=now;
     city.update(dt,stage.camera,stage.camera.position);feel.update(dt,stage.camera,stage.camera.position);
     stage.renderer.render(stage.scene,stage.camera);
-    if(++frames===30){(window as unknown as {cityViewReady:boolean}).cityViewReady=true;
-        info.textContent=`static art inspection · draws ${stage.renderer.info.render.calls} · tris ${stage.renderer.info.render.triangles} · programs ${stage.renderer.info.programs?.length??0}`;}
+    // Every frame: a headless screenshot may land before the thirtieth.
+    info.textContent=`static art inspection · draws ${stage.renderer.info.render.calls} · tris ${stage.renderer.info.render.triangles} · programs ${stage.renderer.info.programs?.length??0}`;
+    if(++frames===30)Object.assign(window,{cityViewReady:true});
 });

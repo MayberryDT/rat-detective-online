@@ -20,7 +20,12 @@ export function gateLane(k:KitBuilder):void {
     fireEscape(k,WEST,-82,-76,[8,16,24,32],1);
     fireEscape(k,WEST,-59,-53.5,[8,16,24],1);
     fireEscape(k,EAST,-87,-82,[8],-1);
+    // A gooseneck lamp over the side-alley crossing, where the lane is darkest.
+    const lampZ=(GAP0+GAP1)/2;
+    k.fixture({x:WEST+1.7,y:6.1,z:lampZ,color:0xffc98a,intensity:40,distance:14,angle:1.1});
     if(!k.visuals)return;
+    k.piece('iron',WEST+.9,6.75,lampZ,1.7,.1,.1);k.piece('iron',WEST+.08,6.3,lampZ,.16,1.3,.3);
+    k.piece('iron',WEST+1.7,6.45,lampZ,.5,.14,.5,{round:true});k.piece('lamp',WEST+1.7,6.28,lampZ,.3,.2,.3,{round:true});
     setts(k);
     overhead(k);
     k.sign({lines:['PAWN','LOANS · NO QUESTIONS'],x:WEST+1.05,y:11.5,z:-47,w:3.4,h:1.1,ry:Math.PI/2,bg:'#1a0f14',fg:'#ff5a4a',glow:true});

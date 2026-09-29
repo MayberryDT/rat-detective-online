@@ -39,6 +39,22 @@ it('bounds overhead lighting, aligns it with actual fixtures, fades distant ligh
  camera.position.set(0,20,0);pool.update(camera);expect(lights.every(l=>l.intensity===0)).toBe(true);
  pool.dispose();expect(scene.children).toHaveLength(0);
 });
+it('picks a floodlight mast for a rat below it only when the mast declares its reach, and uses the innermost room',()=>{
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();camera.position.set(0,3,6);
+ const lit=(pool:StreetLightPool,at:{x:number;y:number;z:number})=>{pool.update(camera,at);return scene.children.filter((o):o is THREE.SpotLight=>o instanceof THREE.SpotLight&&o.intensity>0);};
+ const mast={x:0,y:13.6,z:0,color:0xffffff,intensity:165,distance:42,angle:1.25};
+ const tall=new StreetLightPool(scene,[mast]);
+ expect(lit(tall,{x:6,y:0,z:0})).toHaveLength(0);
+ tall.dispose();
+ const reaching=new StreetLightPool(scene,[{...mast,above:18}]);
+ expect(lit(reaching,{x:6,y:0,z:0})).toHaveLength(1);
+ reaching.dispose();
+ const hall={id:'hall',xmin:0,xmax:40,zmin:0,zmax:40,ymin:0,ymax:14},office={id:'office',xmin:30,xmax:40,zmin:30,zmax:40,ymin:0,ymax:5};
+ const rooms=new StreetLightPool(scene,[{x:20,y:9,z:20,color:0xffffff,room:hall,floor:0},{x:35,y:4.4,z:35,color:0xffffff,room:office,floor:0}],[hall,office]);
+ const inOffice=lit(rooms,{x:33,y:0,z:33});
+ expect(inOffice).toHaveLength(1);expect(inOffice[0]!.position.x).toBe(35);
+ rooms.dispose();
+});
 it('makes the lighting trial reversible with a local query option',()=>{
  expect(readLightingMode('')).toBe('pools');expect(readLightingMode('?lighting=classic')).toBe('classic');
  expect(readLightingMode('?lighting=unknown')).toBe('pools');

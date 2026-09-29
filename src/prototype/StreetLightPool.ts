@@ -7,9 +7,21 @@ export interface OverheadLight {
     x:number;y:number;z:number;color:number;intensity?:number;distance?:number;angle?:number;penumbra?:number;
     room?:LightRoom;floor?:number;target?:LightAnchor;illuminates?:(point:LightAnchor)=>boolean;
     brightness?:()=>number;
+    /** How far above a rat an exterior light may hang and still be picked (default 12: street poles and windows; floodlight masts reach further). */
+    above?:number;
 }
 export function insideLightRoom(p:{x:number;y:number;z:number},room:LightRoom):boolean {
     return p.x>=room.xmin&&p.x<=room.xmax&&p.z>=room.zmin&&p.z<=room.zmax&&p.y>=room.ymin&&p.y<room.ymax;
+}
+/** The innermost room holding `p` (a harbour master's office inside a warehouse is its own room). */
+export function lightRoomAt(p:{x:number;y:number;z:number},rooms:readonly LightRoom[]):LightRoom|undefined {
+    let best:LightRoom|undefined,volume=Infinity;
+    for(const r of rooms){
+        if(!insideLightRoom(p,r))continue;
+        const v=(r.xmax-r.xmin)*(r.zmax-r.zmin)*(r.ymax-r.ymin);
+        if(v<volume){best=r;volume=v;}
+    }
+    return best;
 }
 /** Actor lights in the pool; program warm-up lights the stand-ins with this many. */
 export const ACTOR_SPOTS=4;
@@ -52,8 +64,7 @@ export class StreetLightPool {
     update(camera:THREE.Camera,anchor:{x:number;y:number;z:number}=camera.position):void {
         // The shoulder camera may sit outside a doorway or above a low ceiling.
         // Select the room/floor from the rat, not from that offset camera.
-        const p=anchor;let room:LightRoom|undefined;
-        for(const r of this.rooms)if(insideLightRoom(p,r)){room=r;break;}
+        const p=anchor,room=lightRoomAt(p,this.rooms);
         // Best four by score, highest first; equal scores keep source order
         // (the former stable sort). Runs every frame over ~230 sources: no allocation.
         const top=this.top,topD=this.topD,topScore=this.topScore;let count=0;
@@ -69,7 +80,7 @@ export class StreetLightPool {
                 // Contact resolution puts grounded feet a fraction below zero.
                 // Do not switch the whole street off at that boundary, or at
                 // exactly the nine-unit pole height above the pavement.
-                if(!(!room&&p.y>=-.5&&s.y>p.y-1&&s.y<=p.y+12&&(!s.illuminates||s.illuminates(p))))continue;
+                if(!(!room&&p.y>=-.5&&s.y>p.y-1&&s.y<=p.y+(s.above??12)&&(!s.illuminates||s.illuminates(p))))continue;
                 const tx=s.target?.x??s.x,ty=s.target?.y??s.y-8,tz=s.target?.z??s.z;
                 const dx=p.x-s.x,dy=p.y+1.2-s.y,dz=p.z-s.z;
                 const ax=tx-s.x,ay=ty-s.y,az=tz-s.z;

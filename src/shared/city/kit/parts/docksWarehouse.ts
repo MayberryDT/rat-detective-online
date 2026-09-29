@@ -127,6 +127,14 @@ function lights(k:KitBuilder):void {
     for(const [x,z] of [[94,-133],[109,-133],[124,-133],[109,-141]] as const)
         k.fixture({x,y:9,z,color:0xe9c38a,intensity:110,distance:20,room:'pier9-warehouse',floor:0,ceiling:PIER9.height});
     for(const x of [96,114])k.fixture({x,y:MEZZANINE_Y+3.6,z:-118,color:0xd9b27c,intensity:55,distance:12,room:'pier9-warehouse',floor:MEZZANINE_Y,ceiling:PIER9.height});
+    // Caged bulbs under the mezzanine: the aisle along the south wall and the stair feet.
+    for(const x of [90,104,116])k.fixture({x,y:MEZZANINE_Y-1.1,z:-118.5,color:0xd8b27a,intensity:45,distance:10,angle:1.1,room:'pier9-warehouse',floor:0,ceiling:MEZZANINE_Y-.5});
+    // The open doors throw the hall's light out onto the quay and the streets.
+    const mid=([a,b]:[number,number])=>(a+b)/2;
+    k.spill({x:mid(QUAY_DOOR),y:3.4,z:PIER9.z0-.5,nx:0,nz:-1,kind:'door',color:0xe9c38a,reach:12,width:9});
+    k.spill({x:PIER9.x1+.5,y:3.2,z:mid(EAST_DOOR),nx:1,nz:0,kind:'door',color:0xe9c38a,reach:11,width:7});
+    k.spill({x:mid(SOUTH_DOOR),y:3,z:PIER9.z1+.5,nx:0,nz:1,kind:'door',color:0xd9b27c,reach:10,width:4.5});
+    k.spill({x:PIER9.x0-.5,y:3,z:mid(WEST_DOOR),nx:-1,nz:0,kind:'door',color:0xd9b27c,reach:9,width:4});
     // Floodlights over the quay door and the east door.
     k.fixture({x:109,y:8.2,z:PIER9.z0-1.2,color:0xffd29a,intensity:55,distance:24,angle:1});
     k.fixture({x:PIER9.x1+1.2,y:8.2,z:-129,color:0xffd29a,intensity:45,distance:22,angle:1});
