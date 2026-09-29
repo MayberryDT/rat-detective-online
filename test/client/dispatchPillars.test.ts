@@ -49,6 +49,8 @@ describe('Dispatch alarm pillars',()=>{
  });
  it('never starts a second roll from busy hits, yet acknowledges each one',()=>{
   const {sim}=fixture(),t=DISPATCH_STATIONS[0].target,other=DISPATCH_STATIONS.at(-1)!.target;
+  // Bad Ammunition bends a busy-phase shot off the bell by design; pin a roll that leaves shots straight.
+  sim.forcedIncident='clean-bill';
   fire(sim,t,around(t,0,0,4),1010);
   expect(sim.snapshot().dispatch).toMatchObject({phase:'rolling',serial:1});
   const checks:Array<[number,string]>=[[1100,'rolling'],[1010+T.rollMs+100,'active'],[1010+T.rollMs+T.activeMs+100,'cooldown']];
@@ -89,6 +91,8 @@ describe('Dispatch alarm pillars',()=>{
  });
  it('grants the caller exactly one supply, never to anyone else',()=>{
   const {sim}=fixture(),t=DISPATCH_STATIONS[0].target;
+  // Rat Race hands every rat a Hot Pursuit buff by design; pin a roll that grants no buffs of its own.
+  sim.forcedIncident='clean-bill';
   fire(sim,t,around(t,0,0,4),1010);
   const granted=sim.snapshot(false).buffs??{};
   expect(Object.keys(granted)).toEqual(['caller']);
