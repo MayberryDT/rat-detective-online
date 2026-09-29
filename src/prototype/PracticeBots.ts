@@ -1,6 +1,7 @@
 import type { PlayerData, RatAppearance, Vec3Data } from '../shared/networkProtocol';
 import { applyHit, createPlayer, respawnPlayer } from '../worker/gameState';
 import { CITY_BOUNDS, grayboxBoxes, isRampOpening } from '../shared/grayboxLayout';
+import { boxHalfExtents } from '../shared/boxFrame';
 import { COAT_COLORS, FUR_COLORS, HAT_COLORS, HAT_TYPES } from '../shared/ratAppearance';
 
 const NAMES = ['Constable Trap', 'Inspector Nibbles', 'Sergeant Stilton', 'Detective Crumbs', 'Officer Whiskers', 'Captain Cheddar', 'Deputy Squeaks', 'Inspector Gouda', 'Constable Alley', 'Detective Rind', 'Sergeant Scurry'];
@@ -31,14 +32,7 @@ export function practiceSpawnPoints(center: Vec3Data): Vec3Data[] {
 
 /** Farthest-first street positions spread practice combat through the actual city. */
 export function cityPracticeSpawnPoints(human: Vec3Data): Vec3Data[] {
-    const boxes = grayboxBoxes().map(b => {
-        // Conservative world bounds also cover tilted pipe walls and ramps.
-        const sx = Math.sin(b.rx), cx = Math.cos(b.rx), sz = Math.sin(b.rz), cz = Math.cos(b.rz);
-        return {x:b.x,y:b.y,z:b.z,
-            hx:(Math.abs(cz)*b.w+Math.abs(sz*cx)*b.h+Math.abs(sz*sx)*b.d)/2,
-            hy:(Math.abs(sz)*b.w+Math.abs(cz*cx)*b.h+Math.abs(cz*sx)*b.d)/2,
-            hz:(Math.abs(sx)*b.h+Math.abs(cx)*b.d)/2};
-    });
+    const boxes = grayboxBoxes().map(b => ({ x:b.x, y:b.y, z:b.z, ...boxHalfExtents(b) }));
     const candidates: Vec3Data[] = [];
     for(let z=CITY_BOUNDS.min+24;z<=CITY_BOUNDS.max-24;z+=8) {
         for(let x=CITY_BOUNDS.min+24;x<=CITY_BOUNDS.max-24;x+=8) {

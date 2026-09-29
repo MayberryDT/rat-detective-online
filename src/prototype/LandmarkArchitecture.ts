@@ -343,7 +343,7 @@ export class LandmarkArchitecture {
     private interiors(){
         // Materials, floor joints and fittings follow the actual new playable floors.
         for(const floor of landmarkBoxes()){
-            if(floor.rx||floor.rz||Math.abs(floor.h-.6)>.001||floor.y>20||floor.w<2||floor.d<2)continue;
+            if(floor.rx||floor.ry||floor.rz||Math.abs(floor.h-.6)>.001||floor.y>20||floor.w<2||floor.d<2)continue;
             const top=floor.y+.3;
             for(let z=floor.z-floor.d/2+2;z<floor.z+floor.d/2-.3;z+=3)
                 this.box('tile',floor.x,top+.018,z,Math.max(.2,floor.w-.12),.02,.035);
@@ -371,7 +371,7 @@ export class LandmarkArchitecture {
             }
         }
         for(const wall of landmarkBoxes()){
-            if(wall.hidden||wall.rx||wall.rz)continue;
+            if(wall.hidden||wall.rx||wall.ry||wall.rz)continue;
             if(Math.abs(wall.h-1.1)<.001 && (wall.w<.5||wall.d<.5))
                 this.box('brass',wall.x,wall.y+.58,wall.z,wall.w+.08,.08,wall.d+.08);
             if(Math.abs(wall.h-6.6)<.001){

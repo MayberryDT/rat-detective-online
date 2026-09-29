@@ -4,7 +4,7 @@ import type {WorldFoleyCue} from './foleyEvents';
 import { SpatialRayQuery } from './SpatialRayQuery';
 import { sweepSphereBody } from './sweepSphere';
 import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS, NETPLAY_COMPENSATION_MS, NETPLAY_HISTORY_MS, type MovementPoint } from './netplay';
-import { StaticCityBroadphase, addCityBody } from './StaticCityBroadphase';
+import { StaticCityBroadphase, addCityBody, cityBoxBody } from './StaticCityBroadphase';
 import { launcherVelocity, LANDING_SHOCKWAVE, SURGE, type ThrowSource } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
@@ -152,8 +152,7 @@ export class ChaosSimulation {
         this.world.defaultContactMaterial.friction=.15;
         this.world.defaultContactMaterial.restitution=.72;
         for(const b of grayboxBoxes(spec)){
-            const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2))});
-            body.position.set(b.x,b.y,b.z);body.quaternion.setFromEuler(b.rx,0,b.rz);body.updateAABB();
+            const body=cityBoxBody(b);
             addCityBody(this.world,body);this.targets.set(body,{kind:'world'});
         }
         for(const station of DISPATCH_STATIONS){

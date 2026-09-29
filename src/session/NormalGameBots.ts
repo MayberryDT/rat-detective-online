@@ -2,7 +2,8 @@ import * as C from 'cannon-es';
 import { NetworkManager, resolveWebSocketUrl } from '../network/NetworkManager';
 import { ObjectiveBotBrain, type ObjectiveNavigation } from '../shared/ObjectiveBotBrain';
 import { BotNavigation } from '../shared/BotNavigation';
-import { StaticCityBroadphase } from '../shared/StaticCityBroadphase';
+import { StaticCityBroadphase, cityBoxBody } from '../shared/StaticCityBroadphase';
+import { CITY_BARS_GROUP } from '../shared/boxFrame';
 import { SpatialRayQuery } from '../shared/SpatialRayQuery';
 import { CITY_BOUNDS, grayboxBoxes } from '../shared/grayboxLayout';
 import { DISPATCH_STATIONS, LAUNCH_MACHINES, type ChaosState } from '../shared/chaosState';
@@ -68,9 +69,7 @@ export class NormalGameBots {
         this.world.defaultContactMaterial.friction = 0;
         this.world.defaultContactMaterial.restitution = .05;
         for (const b of grayboxBoxes(spec)) {
-            const body = new C.Body({mass:0, shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2)), position:new C.Vec3(b.x,b.y,b.z)});
-            body.quaternion.setFromEuler(b.rx,0,b.rz);
-            this.world.addBody(body);
+            this.world.addBody(cityBoxBody(b));
         }
         for (const control of [...DISPATCH_STATIONS, ...LAUNCH_MACHINES]) for (const b of [control.box, control.target]) {
             this.world.addBody(new C.Body({mass:0,shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2)),position:new C.Vec3(b.x,b.y,b.z)}));
@@ -93,7 +92,7 @@ export class NormalGameBots {
         };
         for (let i=0;i<11;i++) {
             const transport = options.createTransport?.() ?? new NetworkManager({url:resolveWebSocketUrl(),receiveMode:'welcome-only'});
-            const body = new C.Body({mass:5, fixedRotation:true, linearDamping:.1, angularDamping:1, collisionFilterGroup:2, collisionFilterMask:1});
+            const body = new C.Body({mass:5, fixedRotation:true, linearDamping:.1, angularDamping:1, collisionFilterGroup:2, collisionFilterMask:1|CITY_BARS_GROUP});
             body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
             body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));

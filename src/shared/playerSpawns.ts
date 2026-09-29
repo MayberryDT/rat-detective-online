@@ -1,6 +1,7 @@
 import { DISPATCH_STATIONS, LAUNCH_MACHINES } from './chaosState';
 import { CITY_BOUNDS, GRAYBOX_VERSION, grayboxBoxes, isRampOpening } from './grayboxLayout';
 import type { Vec3Data } from './networkProtocol';
+import { boxHalfExtents } from './boxFrame';
 import { DEFAULT_CITY_OPTIONS, generateBuildingLayout, overlapsBuildingFootprint, type WorldSpec } from './worldSpec';
 
 // Reuse geometry work across joins and respawns without retaining every room seed.
@@ -14,13 +15,7 @@ export function worldSpawnPoints(spec: WorldSpec): readonly Vec3Data[] {
   if (cached) return cached;
   const points: Vec3Data[] = [];
   if (spec.version === GRAYBOX_VERSION) {
-    const boxes = grayboxBoxes(spec).map(b => {
-      const sx = Math.sin(b.rx), cx = Math.cos(b.rx), sz = Math.sin(b.rz), cz = Math.cos(b.rz);
-      return { x:b.x, y:b.y, z:b.z,
-        hx:(Math.abs(cz)*b.w+Math.abs(sz*cx)*b.h+Math.abs(sz*sx)*b.d)/2,
-        hy:(Math.abs(sz)*b.w+Math.abs(cz*cx)*b.h+Math.abs(cz*sx)*b.d)/2,
-        hz:(Math.abs(sx)*b.h+Math.abs(cx)*b.d)/2 };
-    });
+    const boxes = grayboxBoxes(spec).map(b => ({ x:b.x, y:b.y, z:b.z, ...boxHalfExtents(b) }));
     for (const control of [...DISPATCH_STATIONS, ...LAUNCH_MACHINES]) {
       for (const b of [control.box, control.target]) boxes.push({x:b.x,y:b.y,z:b.z,hx:b.w/2,hy:b.h/2,hz:b.d/2});
     }

@@ -1,4 +1,5 @@
 import * as C from 'cannon-es';
+import {boxQuaternion,CITY_BARS_GROUP,type BoxPose} from './boxFrame';
 
 const CELL=8;
 const cellKey=(x:number,z:number)=>(x+1024)*2048+(z+1024);
@@ -102,4 +103,14 @@ export function addCityBody(world:C.World,body:C.Body):void {
 }
 export function removeCityBody(world:C.World,body:C.Body):void {
     if(!(world.broadphase instanceof StaticCityBroadphase)||!world.broadphase.removeFixed(body))world.removeBody(body);
+}
+
+/** The static body of one city box: posed by boxFrame, bars in their own group. */
+export function cityBoxBody(b:BoxPose&{passBalls?:true}):C.Body {
+    const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2))});
+    body.position.set(b.x,b.y,b.z);
+    const q=boxQuaternion(b);body.quaternion.set(q.x,q.y,q.z,q.w);
+    if(b.passBalls)body.collisionFilterGroup=CITY_BARS_GROUP;
+    body.updateAABB();
+    return body;
 }

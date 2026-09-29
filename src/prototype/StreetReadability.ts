@@ -96,7 +96,7 @@ export class StreetReadability {
     constructor(private readonly scene:THREE.Scene,private readonly layout:readonly BuildingFootprint[],boxes:readonly GrayboxBox[],windows:readonly SpillSource[]=[],details:readonly FacadeMass[]=[]){
         this.sources=streetSpillSources(layout);
         const blockers:SpillBlocker[]=[...layout.map(b=>({x:b.cx,z:b.cz,w:b.bw,d:b.bd})),
-            ...boxes.filter(b=>!b.original&&!b.debris&&!b.rx&&!b.rz&&b.y-b.h/2<2&&b.y+b.h/2>2)
+            ...boxes.filter(b=>!b.original&&!b.debris&&!b.passBalls&&!b.rx&&!b.ry&&!b.rz&&b.y-b.h/2<2&&b.y+b.h/2>2)
                 .map(b=>({x:b.x,z:b.z,w:b.w,d:b.d}))];
         this.lights=[...this.sources,...windows.filter(s=>s.y<12)].map(s=>{
             const nearby=blockers.filter(b=>Math.abs(b.x-s.x)<s.reach+b.w/2&&Math.abs(b.z-s.z)<s.reach+b.d/2);
@@ -110,7 +110,7 @@ export class StreetReadability {
         this.texture.generateMipmaps=false;
         this.beams=new FacadeBeams(scene,[...this.sources,...windows],[
             ...layout.flatMap(skylineMasses),
-            ...boxes.filter(b=>!b.original&&!b.hidden&&!b.debris&&!b.rx&&!b.rz),
+            ...boxes.filter(b=>!b.original&&!b.hidden&&!b.debris&&!b.rx&&!b.ry&&!b.rz),
             ...details,
         ],blockers);
     }

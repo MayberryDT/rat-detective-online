@@ -6,26 +6,31 @@ import { cityStreetBuildings, landmarkReservation } from './cityPlan';
 import { landmarkBoxes } from './landmarkLayout';
 import { vehicleBoxes } from './vehicleLayout';
 import { sewerBoxes, sewerGroundOpening, SEWER_ENTRIES } from './sewerLayout';
+import { kitCity } from './city/kit/city';
+import { QUAY_EDGE_Z } from './city/kit/northPlan';
 export const GRAYBOX_VERSION = 2;
 export const SEWER_FLOOR = -7;
 export const CITY_BOUNDS = {min:-196,max:166};
 export const CITY_PREVIEW_SEED = 20260907;
 export const originalCityBuildingAllowed=(x:number,z:number)=>!landmarkReservation(x,z) && !(Math.abs(x)<65&&Math.abs(z)<75);
 export const BLOCKS = CENTRAL_BUILDINGS.map(b=>[b.cx,b.cz,b.bw,b.bd,b.bh]);
-export const STREET_LAMPS=regularStreetLamps(cityStreetBuildings([]),48);
+export const STREET_LAMPS=[...regularStreetLamps(cityStreetBuildings([]),48),...kitCity({visuals:false}).lamps];
 export const ENTRIES=SEWER_ENTRIES;
 export const GRAYBOX_SPAWNS = [
     {x:-10,y:2,z:-27},{x:22,y:2,z:-28},{x:82,y:2,z:-24},{x:-55,y:2,z:25},
     {x:-166,y:2,z:35},{x:130,y:2,z:-24},{x:15,y:2,z:135},{x:-75,y:2,z:-87},
     {x:77,y:2,z:75},{x:-16,y:2,z:-48},{x:-105,y:2,z:120},{x:46,y:2,z:53},
 ];
-export interface GrayboxBox {debris?:DebrisKind;x:number;y:number;z:number;w:number;h:number;d:number;color:number;rx:number;rz:number;building?:boolean;hidden?:boolean;original?:boolean}
+/** `ry` yaws the box (see boxFrame). `passBalls`: cell bars that stop rats and bots but not
+ * cheese, sight or cases. `slick`: frictionless (chutes). */
+export interface GrayboxBox {debris?:DebrisKind;x:number;y:number;z:number;w:number;h:number;d:number;color:number;rx:number;ry?:number;rz:number;building?:boolean;hidden?:boolean;original?:boolean;passBalls?:true;slick?:true}
 export const isRampOpening=sewerGroundOpening;
 export function grayboxBoxes(spec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION}):GrayboxBox[] {
     const boxes:GrayboxBox[]=[];
     const box=(x:number,y:number,z:number,w:number,h:number,d:number,color=0x28222f,rx=0,rz=0,building=false)=>boxes.push({x,y,z,w,h,d,color,rx,rz,building});
-    for(let z=CITY_BOUNDS.min;z<CITY_BOUNDS.max;z+=2){let start=CITY_BOUNDS.min;for(let x=CITY_BOUNDS.min;x<=CITY_BOUNDS.max;x+=2){if(x===CITY_BOUNDS.max||isRampOpening(x+1,z+1)){if(x>start)box((start+x)/2,-.5,z+1,x-start,1,2,0x25222c);start=x+2;}}}
-    boxes.push(...sewerBoxes(),...landmarkBoxes(),...vehicleBoxes());
+    // No pavement over the harbour: the water has a sea floor far below (the harbour part).
+    for(let z=CITY_BOUNDS.min;z<CITY_BOUNDS.max;z+=2){if(z+1<QUAY_EDGE_Z)continue;let start=CITY_BOUNDS.min;for(let x=CITY_BOUNDS.min;x<=CITY_BOUNDS.max;x+=2){if(x===CITY_BOUNDS.max||isRampOpening(x+1,z+1)){if(x>start)box((start+x)/2,-.5,z+1,x-start,1,2,0x25222c);start=x+2;}}}
+    boxes.push(...sewerBoxes(),...landmarkBoxes(),...vehicleBoxes(),...kitCity({visuals:false}).boxes);
     for(const edge of [CITY_BOUNDS.min,CITY_BOUNDS.max]){box(edge,4,-15,1,8,362,0x19141e);box(-15,4,edge,362,8,1,0x19141e);}
     for(const b of CENTRAL_BUILDINGS)for(const m of skylineMasses(b)){
         box(m.x,m.y,m.z,m.w,m.h,m.d,0x25212e,0,0,true);

@@ -1,4 +1,5 @@
 import {LANDMARK_INTERIORS,landmarkBoxes} from '../shared/landmarkLayout';
+import {kitCity} from '../shared/city/kit/city';
 import type {OverheadLight,LightRoom} from './StreetLightPool';
 
 export interface InteriorFixture extends OverheadLight {
@@ -12,12 +13,13 @@ export const LIGHT_ROOMS:readonly LightRoom[]=[
     ...LANDMARK_INTERIORS.map(h=>({id:h.id,xmin:h.cx-h.w/2,xmax:h.cx+h.w/2,zmin:h.cz-h.d/2,zmax:h.cz+h.d/2,ymin:-.5,ymax:24})),
     {id:'sluice',xmin:-146,xmax:-128,zmin:-32,zmax:32,ymin:-.5,ymax:24},
     {id:'maintenance',xmin:60,xmax:70,zmin:-42,zmax:-30,ymin:-7.5,ymax:-1},
+    ...kitCity({visuals:false}).rooms,
 ];
 
 /** Fixtures follow the existing counters, aisles and galleries. They add no
  * collision geometry; floor slabs filter placements over open atriums. */
 export function interiorFixtures():InteriorFixture[] {
-    const slabs=landmarkBoxes().filter(b=>!b.hidden&&!b.rx&&!b.rz&&Math.abs(b.h-.6)<.001);
+    const slabs=landmarkBoxes().filter(b=>!b.hidden&&!b.rx&&!b.ry&&!b.rz&&Math.abs(b.h-.6)<.001);
     const floors=slabs.filter(b=>b.y<20);
     const fixtures:InteriorFixture[]=[];
     const plans:Record<string,{color:number;style:InteriorFixture['style'];points:readonly number[][]}>={
@@ -38,5 +40,11 @@ export function interiorFixtures():InteriorFixture[] {
     for(const z of [-6,6])fixtures.push({x:-137,y:5.8,z,color:0xcbb78e,intensity:65,distance:12,angle:.85,room:sluice,floor:0,ceiling:21,style:'utility'});
     const maintenance=LIGHT_ROOMS.find(r=>r.id==='maintenance')!;
     for(const z of [-33,-39])fixtures.push({x:65,y:-2.2,z,color:0xb7c6b1,intensity:32,distance:8,angle:.85,room:maintenance,floor:-7,ceiling:-1.2,style:'strip'});
+    // Kit fixtures in a kit room hang from that room's ceiling.
+    for(const f of kitCity({visuals:false}).fixtures){
+        const room=f.room?LIGHT_ROOMS.find(r=>r.id===f.room):undefined;
+        if(!room)continue;
+        fixtures.push({x:f.x,y:f.y,z:f.z,color:f.color,intensity:f.intensity,distance:f.distance,angle:f.angle??.85,room,floor:f.floor??room.ymin+.5,ceiling:f.ceiling??room.ymax,style:'pendant'});
+    }
     return fixtures;
 }

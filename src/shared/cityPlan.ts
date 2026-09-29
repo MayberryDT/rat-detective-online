@@ -1,8 +1,10 @@
 import type { BuildingFootprint } from './worldSpec';
 import {neighborhoodHeight} from './skyline';
+import {DOCKS_LOT,HARBOUR,PRECINCT_LOT,QUAY,overlaps} from './city/kit/northPlan';
 
-/** Street rectangles are an authored network: broad avenues, offset junctions and service lanes. */
-export const CITY_STREETS = [
+/** The layout-2 street network. Tenements are still cut from it, so every
+ * surviving building keeps its footprint, height and place in the order. */
+const LEGACY_STREETS = [
     {x:-15,z:-18,w:362,d:14}, {x:70,z:-15,w:14,d:362},
     {x:-60,z:-10,w:12,d:310}, {x:-15,z:-102,w:362,d:12},
     {x:-63,z:28,w:266,d:12}, {x:118,z:40,w:96,d:14},
@@ -11,6 +13,24 @@ export const CITY_STREETS = [
     {x:90,z:22,w:12,d:246}, {x:-63,z:130,w:266,d:12},
     {x:118,z:95,w:96,d:10}, {x:-16,z:-87,w:86,d:8},
     {x:160,z:-55,w:8,d:90}, {x:-100,z:-57,w:10,d:68},
+];
+
+/** Street rectangles are an authored network: broad avenues, offset junctions and service lanes.
+ * Layout 3: avenues that ran north now end at the quay; the quay apron is a street; a new
+ * lane runs north from the Gate to the precinct. */
+export const CITY_STREETS = [
+    {x:-15,z:-18,w:362,d:14}, {x:70,z:-3,w:14,d:338},
+    {x:-60,z:-13.5,w:12,d:317}, {x:-15,z:-102,w:362,d:12},
+    {x:-63,z:28,w:266,d:12}, {x:118,z:40,w:96,d:14},
+    {x:-15,z:145,w:362,d:10}, {x:-175,z:-3,w:12,d:338},
+    {x:-150,z:-137,w:10,d:70}, {x:145,z:-137,w:10,d:70},
+    {x:90,z:22,w:12,d:246}, {x:-63,z:130,w:266,d:12},
+    {x:118,z:95,w:96,d:10}, {x:-16,z:-87,w:86,d:8},
+    {x:160,z:-55,w:8,d:90}, {x:-100,z:-57,w:10,d:68},
+    // Quay Road: the concrete apron along the harbour, from the precinct row to the east breakwater.
+    {x:(QUAY.xmin+QUAY.xmax)/2,z:(QUAY.zmin+QUAY.zmax)/2,w:QUAY.xmax-QUAY.xmin,d:QUAY.zmax-QUAY.zmin},
+    // Gate Lane: north from the Gate's bridge to the precinct.
+    {x:-137,z:-68.5,w:10,d:67},
 ];
 
 export function landmarkReservation(x:number,z:number,w=0,d=0) {
@@ -99,7 +119,7 @@ function frontageSpans(min:number,max:number,maximum:number):Array<[number,numbe
  */
 export function cityStreetBuildings(original:BuildingFootprint[]):BuildingFootprint[] {
     const cuts=[
-        ...CITY_STREETS.map(r=>lot(r.x,r.z,r.w,r.d,1)),
+        ...LEGACY_STREETS.map(r=>lot(r.x,r.z,r.w,r.d,1)),
         ...LANDMARK_LOTS,
         ...CITY_SPAWN_CLEARANCES.map(([x,z])=>lot(x,z,4,4)),
         ...INFILL.map(b=>lot(b.cx,b.cz,b.bw,b.bd,6)),
@@ -126,5 +146,24 @@ export function cityStreetBuildings(original:BuildingFootprint[]):BuildingFootpr
             }
         }
     }
-    return buildings.map((b,i)=>({...b,bh:neighborhoodHeight(b.cx,b.cz,b.bh,i)}));
+    // Layout 3 removes, never reshuffles: buildings in the new districts or on new streets go,
+    // and every other building keeps its layout-2 height.
+    // New lanes trim the buildings they cross, keeping the part on each side when it is still a building.
+    const lanes=CITY_STREETS.filter(r=>!LEGACY_STREETS.some(l=>Math.abs(r.x-l.x)<=(l.w-r.w)/2&&Math.abs(r.z-l.z)<=(l.d-r.d)/2))
+        .map(r=>({xmin:r.x-r.w/2-1,xmax:r.x+r.w/2+1,zmin:r.z-r.d/2-1,zmax:r.z+r.d/2+1}));
+    const districts=[HARBOUR,DOCKS_LOT,PRECINCT_LOT];
+    return buildings.map((b,i)=>({...b,bh:neighborhoodHeight(b.cx,b.cz,b.bh,i)}))
+        .filter(b=>!districts.some(r=>overlaps(r,b.cx,b.cz,b.bw,b.bd)))
+        .flatMap(b=>lanes.reduce<BuildingFootprint[]>((kept,lane)=>kept.flatMap(p=>trim(p,lane)),[b]));
+}
+
+/** What remains of a footprint beside a lane; slivers under 9 units go. */
+function trim(b:BuildingFootprint,lane:{xmin:number;xmax:number;zmin:number;zmax:number}):BuildingFootprint[] {
+    const x0=b.cx-b.bw/2,x1=b.cx+b.bw/2,z0=b.cz-b.bd/2,z1=b.cz+b.bd/2;
+    if(x1<=lane.xmin||x0>=lane.xmax||z1<=lane.zmin||z0>=lane.zmax)return [b];
+    const alongZ=lane.zmax-lane.zmin>lane.xmax-lane.xmin;
+    const parts=alongZ
+        ?[[x0,Math.min(x1,lane.xmin)],[Math.max(x0,lane.xmax),x1]].map(([a,c])=>({...b,cx:(a!+c!)/2,bw:c!-a!}))
+        :[[z0,Math.min(z1,lane.zmin)],[Math.max(z0,lane.zmax),z1]].map(([a,c])=>({...b,cz:(a!+c!)/2,bd:c!-a!}));
+    return parts.filter(p=>p.bw>=9&&p.bd>=9);
 }

@@ -1,5 +1,6 @@
 import type { GrayboxBox } from './grayboxLayout';
 import type { Vec3Data } from './networkProtocol';
+import { fromBoxLocal, toBoxLocal } from './boxFrame';
 
 /** Playable civic interiors. Parent owns graybox/neighborhood visuals and imports these. */
 export interface LandmarkInterior {
@@ -147,20 +148,8 @@ function punch(rects:Rect[], hole:Rect):Rect[] {
     return rects.flatMap(r=>subtractRect(r,hole));
 }
 
-function toLocal(b:GrayboxBox,x:number,y:number,z:number) {
-    const dx=x-b.x, dy=y-b.y, dz=z-b.z;
-    const cx=Math.cos(b.rx), sx=Math.sin(b.rx);
-    const cz=Math.cos(b.rz), sz=Math.sin(b.rz);
-    const px=cz*dx+sz*dy, py=-sz*dx+cz*dy, pz=dz;
-    return {x:px, y:cx*py+sx*pz, z:-sx*py+cx*pz};
-}
-
-function fromLocal(b:GrayboxBox,lx:number,ly:number,lz:number) {
-    const cx=Math.cos(b.rx), sx=Math.sin(b.rx);
-    const cz=Math.cos(b.rz), sz=Math.sin(b.rz);
-    const y1=cx*ly-sx*lz, z1=sx*ly+cx*lz;
-    return {x:b.x+cz*lx-sz*y1, y:b.y+sz*lx+cz*y1, z:b.z+z1};
-}
+const toLocal=(b:GrayboxBox,x:number,y:number,z:number)=>toBoxLocal(b,x,y,z);
+const fromLocal=(b:GrayboxBox,lx:number,ly:number,lz:number)=>fromBoxLocal(b,lx,ly,lz);
 
 function addWall(boxes:GrayboxBox[], face:WallFace, spec:LandmarkSpec, opening?:Opening) {
     const {xmin,xmax,zmin,zmax,wall}=spec;
@@ -416,7 +405,7 @@ export function landmarkStairDetails():GrayboxBox[] {
 export const LANDMARK_STAIR_LIGHTS: LandmarkStairLight[] = assembled().lights;
 
 function onFloor(b:GrayboxBox,x:number,y:number,z:number) {
-    if(b.rx || b.rz || (!b.hidden && b.h>=4)) return false;
+    if(b.rx || b.ry || b.rz || (!b.hidden && b.h>=4)) return false;
     const top=b.y+b.h/2;
     if(top>20) return false;
     return Math.abs(x-b.x)<=b.w/2+0.45 && Math.abs(z-b.z)<=b.d/2+0.45 && y>=top-0.5 && y<=top+2;

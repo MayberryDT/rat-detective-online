@@ -9,6 +9,8 @@ import { SewerPortals } from './SewerPortals';
 import { CityGrime } from './CityGrime';
 import { ParkedVehicles } from './ParkedVehicles';
 import { LandmarkArchitecture } from './LandmarkArchitecture';
+import { KitArchitecture } from './KitArchitecture';
+import { kitCity } from '../shared/city/kit/city';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import {StreetLightPool,insideLightRoom} from './StreetLightPool';
 import {interiorFixtures,LIGHT_ROOMS,type InteriorFixture} from './InteriorLighting';
@@ -23,7 +25,8 @@ import {SEWER_LIGHTS} from '../shared/sewerLayout';
 import { SEWER_PORTAL_LIGHTS, sewerLightingActive } from './SewerLighting';
 import {CityGenerator} from '../world/CityGenerator';
 import {generateBuildingLayout, type WorldSpec} from '../shared/worldSpec';
-import {addCityBody,removeCityBody} from '../shared/StaticCityBroadphase';
+import {addCityBody,cityBoxBody,removeCityBody} from '../shared/StaticCityBroadphase';
+import {boxQuaternion} from '../shared/boxFrame';
 export { BLOCKS, ENTRIES, isRampOpening } from '../shared/grayboxLayout';
 
 /** Pooled sewer lamps (hidden above ground); program warm-up lights the stand-ins with this many. */
@@ -36,6 +39,7 @@ export class Neighborhood {
     private readonly materials = new Map<number,THREE.MeshStandardMaterial>();
     private readonly glowMaterials = new Map<number,THREE.MeshBasicMaterial>();
     private architecture!: LandmarkArchitecture;
+    private kit!: KitArchitecture;
     private vehicles!: ParkedVehicles;
     private grime!: CityGrime;
     private sewerPortals!: SewerPortals;
@@ -77,7 +81,7 @@ export class Neighborhood {
         for(const b of boxes){
             if (++builtBoxes % 40 === 0) yield;
             if(b.original)continue;
-            const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz);
+            const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz,b.ry,b.passBalls);
             if(b.hidden)mesh.visible=false;
             if(b.y+b.h/2<=.15&&b.y+b.h/2>=-.1)mesh.material.userData.streetSurface='ground';
             else if(b.rx||b.rz)mesh.material.userData.streetSurface='stairs';
@@ -96,7 +100,7 @@ export class Neighborhood {
         for(const b of landmarkStairDetails()){
             const material=this.material(b.color);material.userData.streetSurface='stairs';
             const tread=this.add(new THREE.Mesh(new THREE.BoxGeometry(b.w,b.h,b.d),material));
-            tread.position.set(b.x,b.y,b.z);tread.rotation.set(b.rx,0,b.rz);tread.receiveShadow=true;
+            const q=boxQuaternion(b);tread.position.set(b.x,b.y,b.z);tread.quaternion.set(q.x,q.y,q.z,q.w);tread.receiveShadow=true;
         }
         // Small pools at each stair landing and mid-flight preserve the dark interiors.
         for(const {x,y,z,color} of LANDMARK_STAIR_LIGHTS){
@@ -165,7 +169,12 @@ export class Neighborhood {
         }
         const fixtures=lighting==='pools'?interiorFixtures():[];
         for(const fixture of fixtures)this.addInteriorFixture(fixture);
+        // Kit fixtures outside any room (quay floodlights, precinct globes): baked, and actor spots.
+        const outdoor=kitCity({visuals:false}).fixtures.filter(f=>!f.room);
+        for(const f of outdoor){const light=new THREE.PointLight(f.color,f.intensity,f.distance,1.5);light.position.set(f.x,f.y,f.z);this.add(light);}
         this.architecture=new LandmarkArchitecture(scene,lighting==='classic');
+        yield;
+        this.kit=new KitArchitecture(scene);
         yield;
         this.vehicles=new ParkedVehicles(scene);
         yield;
@@ -200,6 +209,7 @@ export class Neighborhood {
             ...this.streetLamps
                 .map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:260,distance:24,angle:.88,penumbra:.5})),
             ...(this.readability?.lights??[]),...fixtures,
+            ...outdoor.map(f=>({x:f.x,y:f.y,z:f.z,color:f.color,intensity:f.intensity*3,distance:f.distance*1.4,angle:f.angle??.9,penumbra:.5})),
         ],LIGHT_ROOMS);
         if(this.overhead)for(const object of scene.children)if(!existingObjects.has(object))object.traverse(child=>{
             if(!(child instanceof THREE.Mesh))return;
@@ -216,6 +226,7 @@ export class Neighborhood {
         this.city.update(_dt,camera);
         this.readability?.update();
         this.architecture.update(_dt);
+        this.kit.update(_dt);
         this.grime.update(_dt);
         // Outdoor bounce light supplies a visibility floor; existing sewer lighting stays intact.
         if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera,anchor);}
@@ -375,12 +386,14 @@ export class Neighborhood {
             light.decay=source.decay;
         }
     }
-    private box(x:number,y:number,z:number,w:number,h:number,d:number,color:number,rx=0,rz=0) {
+    private box(x:number,y:number,z:number,w:number,h:number,d:number,color:number,rx=0,rz=0,ry=0,passBalls?:true) {
         const mesh=this.add(new THREE.Mesh(new THREE.BoxGeometry(w,h,d),this.material(color)));
-        mesh.position.set(x,y,z);mesh.rotation.set(rx,0,rz);mesh.receiveShadow=true;mesh.castShadow=true;mesh.userData.aimTarget=true;
-        this.solids.push(mesh);
-        const body=new CANNON.Body({mass:0,shape:new CANNON.Box(new CANNON.Vec3(w/2,h/2,d/2))});
-        body.position.set(x,y,z);body.quaternion.setFromEuler(rx,0,rz);addCityBody(this.world,body);this.bodies.push(body);
+        const q=boxQuaternion({rx,ry,rz});
+        mesh.position.set(x,y,z);mesh.quaternion.set(q.x,q.y,q.z,q.w);mesh.receiveShadow=true;mesh.castShadow=true;
+        // Bars stop rats, never aim or the camera.
+        if(!passBalls){mesh.userData.aimTarget=true;this.solids.push(mesh);}
+        const body=cityBoxBody({x,y,z,w,h,d,rx,ry,rz,...(passBalls?{passBalls}:{})});
+        addCityBody(this.world,body);this.bodies.push(body);
         return mesh;
     }
     private glow(x:number,y:number,z:number,w:number,h:number,d:number,color:number) {
@@ -394,7 +407,7 @@ export class Neighborhood {
     dispose() {
         this.readability?.dispose();
         this.overhead?.dispose();
-        this.architecture?.dispose();
+        this.architecture?.dispose();this.kit?.dispose();
         this.vehicles?.dispose();
         this.grime?.dispose();
         this.sewerPortals?.dispose();

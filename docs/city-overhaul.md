@@ -185,6 +185,35 @@ Each workstream lists what it delivers and how it is proven. The order is the bu
   - the Halla copy of `AGENTS.md`;
   - a Chartroom session log.
 
+## Technical design (the contract every slice builds on)
+
+### The kit
+- `src/shared/boxFrame.ts`: a city box may be yawed (`ry`). Rotation is Euler order YXZ (yaw first, then the `rx`/`rz` tilt of ramps in the yawed frame); with `ry` 0 it equals the old poses. `boxQuaternion`, `boxBasis`, `boxHalfExtents`, `toBoxLocal`, `fromBoxLocal`. `CITY_BARS_GROUP` (32).
+- `GrayboxBox` gains `ry?`, `passBalls?` (cell bars: bodies in group 32, which rats and bots collide with but cheese sweeps, sight and cases ignore) and `slick?` (frictionless: chutes).
+- Every static city body is built by `cityBoxBody(box)` in `src/shared/StaticCityBroadphase.ts` (server simulation, server bots, local bots and the client).
+- `src/shared/city/kit/kit.ts`: `KitBuilder` with `collide` (collider only), `piece` (look only), `solid` (both), `wall` (between two plan points, any angle), `ring` (curved wall of chords with door gaps), `bars`, `slab`, `stair` (any heading: hidden ramp plus treads and stringers), `facade` (piers, cornices and window rows along any wall line), `fixture` (baked light), `sign` (canvas sign), `room` (lighting room), `lamp` (street lamp site), and `water`. Finishes are a fixed palette (`FINISH_COLORS`); glowing finishes are emissive.
+- `src/shared/city/kit/city.ts`: `kitCity({visuals})` runs every registered part once (cached). `visuals:false` skips the look for the server and bots. Parts are listed in `PARTS`.
+- Consumers: `grayboxBoxes` appends the kit colliders; `STREET_LAMPS` appends kit lamps; `LIGHT_ROOMS` appends kit rooms; interior fixtures in a kit room become interior fixtures; outdoor kit fixtures become baked lights and actor-spot candidates; `src/prototype/KitArchitecture.ts` draws every piece (one instanced mesh per finish, shape and shadow role) and the signs.
+- `src/shared/city/kit/northPlan.ts`: the north's fixed numbers (quay edge z −172, water surface y −2.2, drown below y −1.6, sea floor y −12; the docks lot, the quay, the precinct lot, house and ring). Leaf module.
+- **Rules for parts:**
+  - A part file imports only leaf modules (`kit.ts`, `northPlan.ts`, `boxFrame.ts`, `networkProtocol` types), never `grayboxLayout`, `chaosState` or `cityPlan`, which import the kit and would make a cycle.
+  - A part is deterministic and seed-independent.
+  - A part's gameplay slots (case spawns, supply sites, pillars, zones, destinations) are exported as plain data from its own file, typed like the registries. The integration owner adds them to the registries.
+
+### Layout 3 streets
+- `CITY_STREETS` changes:
+  - avenues that ran north end at the quay (z −172);
+  - Quay Road (the apron, x −40…166, z −172…−150) and Gate Lane (x −137, z −102…−35) are new.
+- Tenements are still cut from the layout-2 street list, so surviving buildings keep their footprint and height. Buildings in the harbour, docks or precinct lots go; buildings crossed by a new lane are trimmed to the parts beside it (slivers under 9 units go).
+- There is no pavement north of the quay edge. The harbour part adds the sea floor, the quay's stone face and the water rectangle.
+
+### Style and budgets
+- Noir, Rat Detective: dark masonry and iron, wet concrete, sparse warm windows, a few neon and police-blue accents, fog. Signs are short and period (1940s).
+- No new live lights: light comes from baked fixtures, emissive panes and signs, the street-spill atlas and the four pooled actor spots.
+- Build from the instanced pieces and the shared finish materials; no new shader programs per part; no per-frame allocation.
+- Large solids cast shadows; fittings do not.
+- Every walkable surface has a collider. Every collider the player can see has a look. Nothing a rat can reach clips through a roof.
+
 ## Decisions (Tyler, 2026-09-29, final: "no more questions")
 
 - **D1 Water kills.** A rat that falls into the harbour dies and respawns normally. The death credits nobody (cause `city`, a drowning joke in the feed).

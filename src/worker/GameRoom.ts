@@ -1617,7 +1617,7 @@ export class GameRoom extends DurableObject<Env> {
       isBot: id => this.isManagedBot(id),
       connected: id => this.sessions.get(id)?.until == null,
       sight: (from, to) => this.lineOfSight(from, to),
-      solids: grayboxBoxes({ seed: this.world.seed, version: GRAYBOX_VERSION }).filter(b => !b.rx && !b.rz && b.w >= .5 && b.h >= .5 && b.d >= .5),
+      solids: grayboxBoxes({ seed: this.world.seed, version: GRAYBOX_VERSION }).filter(b => !b.rx && !b.ry && !b.rz && !b.passBalls && b.w >= .5 && b.h >= .5 && b.d >= .5),
     });
     return this.cityRecorder;
   }

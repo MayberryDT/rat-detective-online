@@ -4,6 +4,7 @@ import { LANDMARK_INTERIORS, landmarkExitPoint } from './landmarkLayout';
 import { SEWER_LIGHTS,sewerRampTravelPoint } from './sewerLayout';
 import type { Vec3Data } from './networkProtocol';
 import type { WorldSpec } from './worldSpec';
+import { boxBasis, boxHalfExtents, type Basis } from './boxFrame';
 import {BOT_LAUNCH_LINKS,type BotLaunchLink,type BotWaypoint} from './BotLaunchRoutes';
 
 // Share ONE navigator across the bots. route() queues/caches a route; call update()
@@ -16,7 +17,8 @@ const BUCKET = 8;
 const bucketKey=(x:number,z:number)=>(x+1024)*2048+(z+1024);
 /** The player body's three spheres: foot offset and radius. */
 const BODY_OFFSETS=[.6,1.3,1.9],BODY_RADII=[.58,.43,.26];
-interface Solid { box: GrayboxBox; cx:number; sx:number; cz:number; sz:number; nx:number; ny:number; nz:number; minX:number; maxX:number; minZ:number; maxZ:number }
+/** `m` is the box's row-major basis (boxFrame); `n` its top normal (the basis' second column). */
+interface Solid { box: GrayboxBox; m:Basis; nx:number; ny:number; nz:number; minX:number; maxX:number; minZ:number; maxZ:number }
 interface Node extends Vec3Data { id:string; gx:number; gz:number }
 /** A reverse breadth-first flow field visits each cell once. Grid edges differ
  * by at most sqrt(2), so routes favor few clear steps without an expensive
@@ -61,12 +63,10 @@ export class BotNavigation {
         // These controls are physical obstacles in both human and server bot worlds.
         // Omitting them from navigation sends routes through machines near objectives.
         const controls=[...DISPATCH_STATIONS,...LAUNCH_MACHINES].flatMap(c=>[c.box,c.target])
-            .map(box=>({...box,rx:0,rz:0,color:0}));
+            .map(box=>({...box,rx:0,ry:0,rz:0,color:0}));
         for(const box of [...grayboxBoxes(spec),...controls]) {
-            const cx=Math.cos(box.rx),sx=Math.sin(box.rx),cz=Math.cos(box.rz),sz=Math.sin(box.rz);
-            const dx=Math.abs(cz)*box.w/2+Math.abs(sz*cx)*box.h/2+Math.abs(sz*sx)*box.d/2;
-            const dz=Math.abs(sx)*box.h/2+Math.abs(cx)*box.d/2;
-            const solid:Solid={box,cx,sx,cz,sz,nx:-sz*cx,ny:cz*cx,nz:sx,minX:box.x-dx,maxX:box.x+dx,minZ:box.z-dz,maxZ:box.z+dz};
+            const m=boxBasis(box),{hx:dx,hz:dz}=boxHalfExtents(box);
+            const solid:Solid={box,m,nx:m[1],ny:m[4],nz:m[7],minX:box.x-dx,maxX:box.x+dx,minZ:box.z-dz,maxZ:box.z+dz};
             for(let x=Math.floor((solid.minX-1)/BUCKET);x<=Math.floor((solid.maxX+1)/BUCKET);x++)for(let z=Math.floor((solid.minZ-1)/BUCKET);z<=Math.floor((solid.maxZ+1)/BUCKET);z++) {
                 const key=bucketKey(x,z),bucket=this.buckets.get(key);if(bucket)bucket.push(solid);else this.buckets.set(key,[solid]);
             }
@@ -93,12 +93,11 @@ export class BotNavigation {
     private clear(x:number,y:number,z:number):boolean {
         for(const s of this.nearby(x,z)) {
             if(x<s.minX-.65||x>s.maxX+.65||z<s.minZ-.65||z>s.maxZ+.65)continue;
-            const b=s.box,dx=x-b.x,dz=z-b.z;
+            const b=s.box,m=s.m,dx=x-b.x,dz=z-b.z;
             for(let k=0;k<3;k++) {
-                // The solid's local frame (rotation about x, then z), as in surfaces().
+                // The solid's local frame (the transposed basis), as in surfaces().
                 const dy=y+BODY_OFFSETS[k]+.035-b.y;
-                const a=s.cz*dx+s.sz*dy,r=-s.sz*dx+s.cz*dy;
-                const ox=Math.max(0,Math.abs(a)-b.w/2),oy=Math.max(0,Math.abs(s.cx*r+s.sx*dz)-b.h/2),oz=Math.max(0,Math.abs(-s.sx*r+s.cx*dz)-b.d/2);
+                const ox=Math.max(0,Math.abs(m[0]*dx+m[3]*dy+m[6]*dz)-b.w/2),oy=Math.max(0,Math.abs(m[1]*dx+m[4]*dy+m[7]*dz)-b.h/2),oz=Math.max(0,Math.abs(m[2]*dx+m[5]*dy+m[8]*dz)-b.d/2);
                 if(ox*ox+oy*oy+oz*oz<BODY_RADII[k]*BODY_RADII[k])return false;
             }
         }return true;
@@ -114,8 +113,8 @@ export class BotNavigation {
             if(y < -7.2||y>36.3)continue;
             let duplicate=false;for(const h of heights)if(Math.abs(h-y)<.08){duplicate=true;break;}
             if(duplicate)continue;
-            const dx=x-b.x,dy=y-b.y,dz=z-b.z,r=-s.sz*dx+s.cz*dy;
-            if(Math.abs(s.cz*dx+s.sz*dy)>b.w/2+.001||Math.abs(-s.sx*r+s.cx*dz)>b.d/2+.001)continue;
+            const dx=x-b.x,dy=y-b.y,dz=z-b.z,m=s.m;
+            if(Math.abs(m[0]*dx+m[3]*dy+m[6]*dz)>b.w/2+.001||Math.abs(m[2]*dx+m[5]*dy+m[8]*dz)>b.d/2+.001)continue;
             if(this.clear(x,y,z))heights.push(y);
         }
         return heights;
