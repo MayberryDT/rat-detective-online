@@ -52,8 +52,8 @@
 <p class="lede">Every bot gets three parts: <b>perception</b> (what it can honestly see and hear), a <b>mind</b> (Jev choosing goals every second or on an event) and <b>motor</b> (code running at 60 Hz: moving, aiming, dodging, bank shots). Jev chooses what to do and code carries it out. When nobody human is playing, a free code mind runs the city instead, so it stays alive around the clock.</p>
 
 <div class="grid g3" style="margin-top:28px">
-  <div class="card kpi"><div class="big">~180 ms</div><div class="l">one rat's full decision (5 questions), measured from Halla</div></div>
-  <div class="card kpi"><div class="big">223 ms</div><div class="l">nine rats deciding at once, sent in parallel</div></div>
+  <div class="card kpi"><div class="big">~65 ms</div><div class="l">one rat's full decision, measured from inside a Cloudflare Worker (p90 ~80 ms)</div></div>
+  <div class="card kpi"><div class="big">130–296 ms</div><div class="l">nine rats deciding at once, sent in parallel from a Worker</div></div>
   <div class="card kpi"><div class="big">$1.47–2.31/h</div><div class="l">9 rats deciding once a second (measured tokens × $0.042 per million)</div></div>
 </div>
 
@@ -133,7 +133,7 @@ flowchart TB
   <div class="card">
     <h3>Jev decides <span class="tag t-jev">judgment</span></h3>
     <ul>
-      <li>Which goal to pursue now (a closed list; code only offers goals valid in this assignment)</li>
+      <li>How much sense each goal makes right now: one score per goal (a closed list; code only offers goals valid here, then combines the scores with the personality's weights)</li>
       <li>Which visible rat to aim at, or none</li>
       <li>Where to go <i>for each goal</i> (open-ended goals only: flee, ambush, roam, mischief)</li>
       <li>How much danger the rat is in</li>
@@ -146,7 +146,8 @@ flowchart TB
       <li>What the rat can see and hear, and the candidate lists Jev picks from</li>
       <li>Places a goal implies: the case, the carrier, the medkit, the zone, the delivery</li>
       <li>Routes, jumps, launchers, stairs and the sewer</li>
-      <li>Aim, lead, bank angles and fire timing</li>
+      <li>Aim, lead, bank angles and <b>when to fire</b>: firing is not a goal. Humans fire in 75% of recorded moments, whatever they're doing</li>
+      <li>Distances written in words, not numbers (Jev reads numbers badly)</li>
       <li>Checking that answers are still true: the target is alive and the world hasn't changed</li>
       <li>Personality weights, skill dials, budget, fallback</li>
     </ul>
@@ -378,7 +379,7 @@ flowchart TB
 
 <script>
   // Cast demo: Jev's goal probabilities for one situation, reweighted per personality in code.
-  const raw = { take_case: .05, fight: .62, ambush: .18, flee: .06, mischief: .06, heal: .03 };
+  const raw = { take_case: .05, hunt: .62, ambush: .18, flee: .06, mischief: .06, heal: .03 };
   const weights = {
     Tryhard: { sharpen: 3, boost: {} },
     Maverick: { sharpen: 1, boost: { ambush: 4 } },

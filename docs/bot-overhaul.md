@@ -67,26 +67,28 @@ flowchart TB
   CAST -- decision facts --> REC[(City recorder)]
 ```
 
-- **Intent:** the one type both minds return. It holds the goal, an optional target rat, an optional place and a stance. The goals form a closed list, and code offers only the goals that are valid in the current assignment and situation. The list:
+- **Intent:** the one type both minds return. It holds a movement goal, an optional target rat, an optional place and a stance. The goals form a closed list, and code offers only the goals that are valid in the current assignment and situation. The list:
   - take the case;
   - chase the carrier;
-  - deliver (Paper Chase);
+  - keep the case (and deliver it in Paper Chase);
   - hold the zone (Jurisdiction);
-  - fight;
+  - hunt (close in on a rat);
   - flee;
   - heal;
   - arm up;
   - ambush;
   - mischief;
   - roam.
+- **Firing is not a goal.** Humans fire in 75% of recorded moments, whatever else they are doing (B0). The motor fires whenever it has a shot or a useful bank, within the skill dials, whatever the goal. Goals are only about where to go and what to do there.
 - **What Jev is asked, per rat, in one request:**
-  - the goal (Choice);
+  - one Score per offered goal: how much sense it makes right now (five levels, from "makes no sense" to "clearly the best"). Code combines the scores with the cast weights and hysteresis. A single "which goal wins?" Choice is not used: in B0 it chose the objective every time and couldn't tell situations apart;
   - the target (Choice over visible rats, or none);
   - one place question per open-ended goal (Choice over candidate places);
   - danger (Score);
   - whether a bank shot is the way to reach the target (Noul).
 
   Questions in one request can't see each other's answers, so a goal that implies a place (the case, the carrier, a medkit, the zone, the delivery) takes that place from code.
+- **The situation is written in words, not numbers.** Jev reads numbers badly: in B0, the case score rose as the case got *further* away when distances were given in units. Perception writes distances as run times or plain bands ("next to me", "a short run", "across the city"). It also states where the zone and the pickups are relative to the rat, and what lies between (open street, a fight).
 - **Freshness:** each request carries a situation serial. An answer older than 1.5 s, or one that names a rat that is dead or out of view, is dropped. If Jev hasn't answered within 600 ms of a new situation, the code mind answers.
 - **Hysteresis:** a rat switches goal only when the new goal wins by a clear margin or an event fired (hit, case change, target lost, arrived).
 - **Backoff:** a 429 or an error backs off exponentially, and the code mind covers in the meantime.
@@ -126,10 +128,15 @@ flowchart TB
 
 Each step lists what it delivers and how it is proven.
 
-### B0. Offline test on real moments
-- Build situation text from recorded human frames in `output/city/city.db` (layouts 2 and 3). Ask Jev the draft questions, and compare its goal with what the human actually did in the next few seconds.
-- Measure response time from inside a Cloudflare Worker.
-- Output: a short receipt with agreement, confidence, tokens and latency. It either confirms the question design or shows what to change.
+### B0. Offline test on real moments (done, 29 September)
+- Built situation text from 326 recorded human moments in `output/city/city.db` (10 rounds, layouts 2 and 3; mostly one or two players). Asked Jev the draft questions, and compared its answers with what the human actually did in the next 6 seconds.
+- Measured response time from inside a Cloudflare Worker.
+- Result: the design holds, with three changes, now in "Architecture":
+  - firing moves to the motor;
+  - goals are scored one by one;
+  - situations are written in words.
+
+  Details under "Evidence so far".
 
 ### B1. Baseline
 - Today's bots on layout 3, from production's recorded data (no soak), for comparison with the new bots:
@@ -207,3 +214,17 @@ Each step lists what it delivers and how it is proven.
   - it used about 1,100 input tokens, and nine rats cost $1.47 an hour at one decision a second;
   - it made the right call in every hand-written test situation (loose case, dying, Ironclad, bank shot), and a player name written as an instruction didn't sway the goal;
   - in parallel questions, the place ignored the goal. Per-goal place questions fixed that (1.00 for the case's spot).
+- **B0, real moments** (`output/jev-probe/real-moments.mjs` and `scores.mjs`; the moments are saved on Halla in `output/jev-probe/`):
+  - **From Cloudflare:** a five-question decision took 65 ms at p50 and about 80 ms at p90 (36 calls, no errors). Nine in parallel took 130–296 ms. From Halla, it took about 200 ms.
+  - **One "which goal?" Choice doesn't work.** It picked the objective whenever one was offered (case goals 122 of 122, the zone 63 of 63). Humans went for the case about 60% of the time and never stood in a zone in these rounds. Its confidence was the same when it matched the human (0.87) as when it didn't (0.85).
+  - **Firing is constant.** Humans fired 3 or more shots in 75% of 6-second windows, so "fight" measures firing, not intent.
+  - **Scoring goals one by one follows the situation where the text holds the evidence:**
+    - heal separated medkit trips from the rest (AUC 0.89), scoring 2.00 at 1–2 HP and 0.03 at 5 HP;
+    - flee scored 2.49 at 1–2 HP and 0.52 at 5 HP.
+  - **Weak where the evidence was missing or numeric:**
+    - arm up (AUC 0.59): pickups weren't described;
+    - the zone (0.54): only "outside it";
+    - the case (0.61): the score *rose* with distance given in units.
+  - **Danger from text alone** separated rats who died in the next 6 seconds from those who lived: AUC 0.75, mean 1.30 against 0.66.
+  - **Size:** 640–850 input tokens a request.
+  - **Limit:** the human sample is small and mostly Tyler, so "humanlike" can't be measured well until more people play.
