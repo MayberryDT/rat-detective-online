@@ -45,17 +45,19 @@ export async function gpuDrained(renderer:THREE.WebGLRenderer,signal?:AbortSigna
 /** Compile every program the scene needs before Enter, without one long stall.
  * Hidden parts of the `reveal` stand-ins (muzzle flash, glow shells) are compiled too, and
  * with `lamps` lit as well (sewer lamps hidden above ground), so the first trip underground
- * does not recompile the city. Every variant is queued first and the GPU works through all
+ * does not recompile the city. `shadows` (see `shadowCasterProbes`) are compiled as shadow maps
+ * are drawn: into a render target. Every variant is queued first and the GPU works through all
  * of them before any program is queried. With KHR_parallel_shader_compile we then only
  * poll; without it, each link wait is forced separately between yields so the title keeps
  * painting while the name is typed. */
-export async function warmPrograms(renderer:THREE.WebGLRenderer,scene:THREE.Scene,camera:THREE.Camera,signal:AbortSignal,reveal:readonly THREE.Object3D[],lamps:readonly THREE.Light[]=[]):Promise<void> {
+export async function warmPrograms(renderer:THREE.WebGLRenderer,scene:THREE.Scene,camera:THREE.Camera,signal:AbortSignal,reveal:readonly THREE.Object3D[],lamps:readonly THREE.Light[]=[],shadows?:THREE.Object3D):Promise<void> {
     const hidden:THREE.Object3D[]=[];
     for(const root of reveal)root.traverse(object=>{if(!object.visible){hidden.push(object);object.visible=true;}});
     const programs=new Map<object,WarmProgram>();
     const collect=(materials:Iterable<THREE.Material>)=>{
         for(const material of materials){const program=warmProgram(renderer.properties.get(material));if(program)programs.set(program.program,program);}
     };
+    const target=shadows&&new THREE.WebGLRenderTarget(1,1),screen=renderer.getRenderTarget();
     try {
         for(const lit of lamps.length?[false,true]:[false]){
             for(const lamp of lamps)lamp.visible=lit;
@@ -65,8 +67,13 @@ export async function warmPrograms(renderer:THREE.WebGLRenderer,scene:THREE.Scen
             for(const root of reveal){await yieldToPage(signal);collect(renderer.compile(root,camera,scene));}
             await yieldToPage(signal);
             collect(renderer.compile(scene,camera));
+            if(target&&shadows){
+                // Shadow maps are drawn into a render target with no scene, so no fog.
+                const fog=scene.fog;scene.fog=null;renderer.setRenderTarget(target);
+                try {collect(renderer.compile(shadows,camera,scene));} finally {renderer.setRenderTarget(screen);scene.fog=fog;}
+            }
         }
-    } finally {for(const object of hidden)object.visible=false;for(const lamp of lamps)lamp.visible=false;}
+    } finally {for(const object of hidden)object.visible=false;for(const lamp of lamps)lamp.visible=false;renderer.setRenderTarget(screen);target?.dispose();}
     await gpuDrained(renderer,signal);
     const parallel=renderer.extensions.has('KHR_parallel_shader_compile');
     let slice=performance.now();
@@ -76,3 +83,42 @@ export async function warmPrograms(renderer:THREE.WebGLRenderer,scene:THREE.Scen
         if(performance.now()-slice>=8){await yieldToPage(signal);slice=performance.now();}
     }
 }
+
+const SHADOW_SIDE:Record<THREE.Side,THREE.Side>={[THREE.FrontSide]:THREE.BackSide,[THREE.BackSide]:THREE.FrontSide,[THREE.DoubleSide]:THREE.DoubleSide};
+const texture=(material:THREE.Material,key:'map'|'alphaMap'|'displacementMap'):THREE.Texture|null=>{
+    const value:unknown=key in material?Reflect.get(material,key):null;
+    return value instanceof THREE.Texture?value:null;
+};
+
+/** One depth-material stand-in for every kind of shadow caster under `roots`, for `warmPrograms`.
+ * three draws casters into shadow maps with one shared depth material that takes each caster's
+ * texture map and side and its form (plain, instanced, skinned), with the lights of the render
+ * before; otherwise those programs link when a caster first enters the flashlight. The stand-ins
+ * are never disposed (that would release the programs they link). */
+export function shadowCasterProbes(roots:readonly THREE.Object3D[]):THREE.Group {
+    const probes=new THREE.Group(),seen=new Set<string>();
+    for(const root of roots)root.traverse(object=>{
+        if(!(object instanceof THREE.Mesh)||!object.castShadow||object.customDepthMaterial)return;
+        const geometry=object.geometry,morphs=Object.keys(geometry.morphAttributes).length;
+        const form=object instanceof THREE.InstancedMesh?object.instanceColor?'instanced-color':'instanced':object instanceof THREE.SkinnedMesh?'skinned':'plain';
+        for(const material of Array.isArray(object.material)?object.material:[object.material]){
+            const map=texture(material,'map'),alphaMap=texture(material,'alphaMap'),displacement=texture(material,'displacementMap');
+            const own:THREE.Side=material.side,side=material.shadowSide??SHADOW_SIDE[own],wireframe='wireframe' in material&&material.wireframe===true;
+            const key=[form,morphs?geometry.uuid:'',map?.channel,alphaMap?.channel,material.alphaTest>0,side,displacement?.channel,wireframe].join(':');
+            if(seen.has(key))continue;
+            seen.add(key);
+            const depth=new THREE.MeshDepthMaterial({side,map,alphaMap,alphaTest:material.alphaTest,displacementMap:displacement,wireframe});
+            let probe:THREE.Mesh;
+            if(object instanceof THREE.InstancedMesh){
+                const instanced=new THREE.InstancedMesh(geometry,depth,1);
+                if(object.instanceColor)instanced.setColorAt(0,new THREE.Color());
+                probe=instanced;
+            }else if(object instanceof THREE.SkinnedMesh){
+                const skinned=new THREE.SkinnedMesh(geometry,depth);skinned.bind(object.skeleton,object.bindMatrix);probe=skinned;
+            }else probe=new THREE.Mesh(geometry,depth);
+            probes.add(probe);
+        }
+    });
+    return probes;
+}
+

@@ -4,13 +4,15 @@ import type {CameoView} from '../cameos/CameoView';
 import { GameSession } from './GameSession';
 import { createStage } from './createStage';
 import { Neighborhood } from '../prototype/Neighborhood';
+import { cityBakeKey, openCityBake } from '../prototype/CityBakeCache';
+import { streetReadabilityEnabled } from '../prototype/StreetReadability';
 import { CityGenerator } from '../world/CityGenerator';
 import { createWorldSpec, type WorldSpec } from '../shared/worldSpec';
 import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
 import { RatEntity } from '../entities/RatEntity';
 import { yieldToPage } from './yieldToPage';
-import { gpuDrained, issuePrograms, warmPrograms } from './warmPrograms';
+import { gpuDrained, issuePrograms, shadowCasterProbes, warmPrograms } from './warmPrograms';
 import { readLightingMode } from './lightingMode';
 import { PickupVisual } from '../prototype/PickupVisual';
 import { PickupRespawnVisual } from '../prototype/PickupRespawnVisual';
@@ -37,6 +39,8 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
     let built:GameSession|undefined;
     let cameos:CameoView|undefined,failed=false;
     const cameoLoad=spec.version===GRAYBOX_VERSION?loadCameos(signal).then(view=>{if(failed)view?.dispose();else cameos=view;}):Promise.resolve();
+    // The stored city bake is read while the stand-ins are made and the city generates.
+    const bake=spec.version===GRAYBOX_VERSION?openCityBake(cityBakeKey(spec.seed,readLightingMode(),streetReadabilityEnabled())):undefined;
     try {
         await yieldToPage(signal);
         performance.mark('city-prepare-start');
@@ -51,7 +55,11 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         models.push(new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE));
         const enemy=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE,true);
         enemy.enableRigidBatching();enemy.sense(.001);models.push(enemy);
-        for(const kind of PICKUP_KINDS)pickups.push(new PickupVisual(stage.scene,kind));
+        // An opponent under Ironclad draws its batch with the metal reflection: another program.
+        const ironclad=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE,true);
+        ironclad.setPowerups(1e6,0);ironclad.enableRigidBatching();models.push(ironclad);
+        // Quick Fix kits grow an x-ray shell at your last hit point.
+        for(const kind of PICKUP_KINDS){const pickup=new PickupVisual(stage.scene,kind);pickup.setXray(true);pickups.push(pickup);}
         addLeatherBriefcase(briefcase);stage.scene.add(briefcase);
         // The welcome builds the launchers, Dispatch pillars, the case's beacon, the zones, the
         // flying cheese and the supplies' restock dials; warm them too.
@@ -61,7 +69,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         for(const model of models)stage.world.removeBody(model.body);
         if(early)await issuePrograms(renderer,stage.scene,stage.camera,signal,standIns);
         stage.scene.remove(...standIns);
-        if(spec.version===GRAYBOX_VERSION)city=await Neighborhood.prepare(stage.scene,stage.world,spec,signal);
+        if(spec.version===GRAYBOX_VERSION)city=await Neighborhood.prepare(stage.scene,stage.world,spec,signal,bake);
         else {
             city=new CityGenerator(stage.scene,stage.world,undefined,spec);
             let slice=performance.now();
@@ -88,24 +96,13 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         stage.scene.add(...standIns);
         stage.syncViewport();
         const lamps=city instanceof Neighborhood?city.sewerLights:[];
-        await warmPrograms(renderer,stage.scene,stage.camera,signal,standIns,lamps);
+        // The flashlight's depth programs for every caster (city, rats, props), for both lamp
+        // states: none links when something first enters the flashlight or underground.
+        await warmPrograms(renderer,stage.scene,stage.camera,signal,standIns,lamps,shadowCasterProbes(stage.scene.children));
         stage.scene.remove(...standIns);
         await yieldToPage(signal);
+        // Draws the moon map from the city alone.
         renderer.render(stage.scene,stage.camera);
-        // That render drew the moon map from the city alone. Render again with the stand-ins (out
-        // of sight behind the camera, never culled), with the sewer lamps hidden and then shown, so
-        // the flashlight's shadow pass links the depth programs of rats and props for both light
-        // counts before Enter, not on the first frame of play or the first trip underground.
-        const behind=stage.camera.localToWorld(new THREE.Vector3(0,0,20));
-        for(const root of standIns){root.position.copy(behind);root.traverse(object=>{object.frustumCulled=false;});}
-        stage.scene.add(...standIns);
-        try {
-            for(const lit of lamps.length?[false,true]:[false]){
-                await yieldToPage(signal);
-                for(const lamp of lamps)lamp.visible=lit;
-                renderer.render(stage.scene,stage.camera);
-            }
-        } finally {stage.scene.remove(...standIns);for(const lamp of lamps)lamp.visible=false;}
         await gpuDrained(renderer,signal);
         if(cameos)warmCameoBuffers(cameos,stage.scene,renderer);
         performance.mark('city-render-ready');

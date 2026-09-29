@@ -697,6 +697,8 @@ export class GameSession {
         if(this.rat && this.transport.state==='playing' && !this.playFrameMarked && !this.compiling){
             this.playFrameMarked=true;
             performance.mark('city-first-play-frame');
+            // A full build's city bake is stored now, when idle, off the load's critical path.
+            if(this.city instanceof Neighborhood)this.city.saveBake();
         }
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
         this.frame = requestAnimationFrame(time => this.animate(time));

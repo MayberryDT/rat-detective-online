@@ -18,7 +18,8 @@ import {interiorFixtures,LIGHT_ROOMS,type InteriorFixture} from './InteriorLight
 import {applyFixedIllumination,FixedLightField} from './FixedLighting';
 import {readLightingMode,type LightingMode} from '../session/lightingMode';
 import {generatedStreetLamps,STREET_LAMP_HEIGHT,type StreetLampPosition} from '../shared/streetLampLayout';
-import {StreetReadability,streetReadabilityEnabled} from './StreetReadability';
+import {SPILL_ATLAS_BYTES,StreetReadability,streetReadabilityEnabled} from './StreetReadability';
+import {bakeGeometry,parseCityBake,restoreGeometry,type BakedGeometry,type CityBakeRecord,type CityBakeShape,type CityBakeSource} from './CityBakeCache';
 
 import { STREET_LAMPS, grayboxBoxes, CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import {cityStreetBuildings} from '../shared/cityPlan';
@@ -33,6 +34,10 @@ export { BLOCKS, ENTRIES, isRampOpening } from '../shared/grayboxLayout';
 
 /** Pooled sewer lamps (hidden above ground); program warm-up lights the stand-ins with this many. */
 export const SEWER_LAMPS=8;
+/** A build step at which `prepare` hands over the stored bake (read while the city generates). */
+const BAKE_STEP='bake';
+/** Graybox meshes merged into one draw: one material, 64-unit cell and shadow role. */
+interface GrayboxGroup {material:THREE.MeshStandardMaterial|THREE.MeshBasicMaterial;meshes:THREE.Mesh[];label:string}
 export class Neighborhood {
     private readonly streetFill = new THREE.AmbientLight(0x8995b5, 1.25);
     readonly solids: THREE.Mesh[] = [];
@@ -56,20 +61,43 @@ export class Neighborhood {
     private overhead?:StreetLightPool;
     private readability?:StreetReadability;
     private readonly interiorSources=new Map<THREE.PointLight,InteriorFixture>();
+    private readonly batches:THREE.Mesh[]=[];
+    /** The stored bake for this build (unchecked), set by `prepare` at `BAKE_STEP`. */
+    private bakeSource?:CityBakeSource;
+    private bakeValue:unknown;
+    /** A full build's record, written by `saveBake` once play has started. */
+    private pendingBake?:()=>CityBakeRecord;
     constructor(private scene:THREE.Scene, private world:CANNON.World, spec:WorldSpec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION},private readonly lighting:LightingMode=readLightingMode(), deferred=false) {
         if (!deferred) for (const _step of this.build(spec)) { /* Preserve synchronous fixtures and reconnects. */ }
     }
-    static async prepare(scene:THREE.Scene, world:CANNON.World, spec:WorldSpec, signal?:AbortSignal):Promise<Neighborhood> {
+    /** Build over many turns. With `bake`, a whole matching record replaces the baking; any
+     * other outcome is a full build, whose record `saveBake` stores later. */
+    static async prepare(scene:THREE.Scene, world:CANNON.World, spec:WorldSpec, signal?:AbortSignal, bake?:CityBakeSource):Promise<Neighborhood> {
         const city = new Neighborhood(scene,world,spec,readLightingMode(),true);
+        city.bakeSource=bake;
         let slice=performance.now();
-        try { for (const _step of city.build(spec)) {
+        try { for (const step of city.build(spec)) {
             if(signal?.aborted)throw new DOMException('Page closed','AbortError');
-            if(performance.now()-slice>=8){await yieldToPage(signal);slice=performance.now();}
+            if(step===BAKE_STEP&&bake){city.bakeValue=await bake.record;slice=performance.now();}
+            else if(performance.now()-slice>=8){await yieldToPage(signal);slice=performance.now();}
         } }
         catch (error) { city.dispose(); throw error; }
         return city;
     }
-    private *build(spec:WorldSpec):Generator<void> {
+    /** Store a full build's bake, when the page is idle. Call once play has started. */
+    saveBake():void {
+        const record=this.pendingBake,store=this.bakeSource?.store;
+        this.pendingBake=undefined;
+        if(!record||!store)return;
+        const write=()=>{
+            if(this.batches.length===0)return; // disposed
+            let value:CityBakeRecord;
+            try {value=record();} catch {return;}
+            void store.write(value);
+        };
+        if(typeof requestIdleCallback==='function')requestIdleCallback(write,{timeout:5000});else setTimeout(write,1000);
+    }
+    private *build(spec:WorldSpec):Generator<void|typeof BAKE_STEP> {
         const {scene,world,lighting}=this;
         const existingObjects=new Set(scene.children);
         this.streetFill.intensity=lighting==='classic'?1.25:.32;
@@ -182,9 +210,14 @@ export class Neighborhood {
                 ...(f?{fixture:{room:f.room.id,floor:f.floor,angle:f.angle??.85}}:{}),...(outdoorLights.has(light)?{outdoor:true as const}:{})};
         }),LIGHT_ROOMS,lighting,LANDMARK_INTERIORS);
         this.architecture=new LandmarkArchitecture(scene,lighting==='classic');
-        yield;
         this.kit=new KitArchitecture(scene);
-        yield* this.kit.build(field);
+        yield BAKE_STEP;
+        // The stored bake is used whole, only when it matches every draw this build makes.
+        const groups=this.batchPlan(),readable=lighting==='pools'&&streetReadabilityEnabled();
+        const shape:CityBakeShape={grayboxGroups:groups.map(g=>g.label),...this.kit.shape(),spill:readable,atlasBytes:SPILL_ATLAS_BYTES};
+        const cached=this.bakeSource&&parseCityBake(this.bakeValue,this.bakeSource.key,shape);
+        this.bakeValue=undefined;
+        yield* this.kit.build(field,cached);
         this.water=cityHarbourWater(scene,kitCity());
         yield;
         this.vehicles=new ParkedVehicles(scene);
@@ -192,9 +225,10 @@ export class Neighborhood {
         this.grime=new CityGrime(scene,spec);
         yield;
         this.sewerPortals=new SewerPortals(scene);
-        yield* this.bakeFixedLighting(field);
+        if(cached)for(const material of this.materials.values())applyFixedIllumination(material);
+        else yield* this.bakeFixedLighting(field);
         yield;
-        this.batchStaticMeshes();
+        this.batchStaticMeshes(groups,cached?.graybox);
         // The graybox city (boxes, pipes, batches and the hidden aim/camera
         // originals) never moves: compute matrices once, not every frame.
         for(const obj of this.objects){
@@ -203,9 +237,9 @@ export class Neighborhood {
         }
         yield;
         this.initLampPool();
-        if(lighting==='pools'&&streetReadabilityEnabled()){
+        if(readable){
             this.readability=new StreetReadability(scene,layout,boxes,this.city.windowLights,this.city.facadeOccluders);
-            yield* this.readability.build();
+            yield* this.readability.build(cached?.spill??undefined);
             // Only this city's owned scenery: never mutate an existing rat,
             // projectile, stage light or a previous scene during replacement.
             for(const object of scene.children)if(!existingObjects.has(object))object.traverse(child=>{
@@ -216,6 +250,16 @@ export class Neighborhood {
             });
         }
         this.streetLamps=[...STREET_LAMPS,...generatedStreetLamps(layout,STREET_LAMPS)];
+        if(this.bakeSource&&!cached){
+            const {key}=this.bakeSource,kit=this.kit,readability=this.readability,batches=this.batches;
+            this.pendingBake=()=>{
+                const out=kit.bakeOutput(),spill=readability?.bakeOutput();
+                if(!out)throw new Error('kit not baked');
+                return {key,grayboxGroups:[...shape.grayboxGroups],graybox:batches.map(mesh=>bakeGeometry(mesh.geometry)),
+                    kitMerged:[...shape.kitMerged],kitBatches:[...shape.kitBatches],kit:out.merged.map(bakeGeometry),kitColors:[...out.colors],signs:out.signs,
+                    spill:spill?{atlas:spill.atlas,cells:[...spill.cells],beams:spill.geometries.map(bakeGeometry)}:null};
+            };
+        }
         if(lighting==='pools')this.overhead=new StreetLightPool(scene,[
             ...this.streetLamps
                 .map(([x,z])=>({x,y:STREET_LAMP_HEIGHT,z,color:0xffcf96,intensity:260,distance:24,angle:.88,penumbra:.5})),
@@ -312,38 +356,59 @@ export class Neighborhood {
             this.scene.add(light);this.lampPool.push(light);
         }
     }
-    /** Lit surfaces may contain thousands of bake vertices. Keep those triangles
-     * out of camera/aim raycasts and merge the visible copies by local city cell.
-     * The original twelve-triangle boxes remain exact collision/aim silhouettes. */
-    private batchStaticMeshes() {
-        const groups=new Map<string,{material:THREE.Material;geometries:THREE.BufferGeometry[];cast:boolean;receive:boolean}>();
+    /** The graybox draws: every visible owned mesh, grouped by material, 64-unit XZ cell and
+     * shadow role, in build order. Baking never changes a group, so this runs before it. */
+    private batchPlan():GrayboxGroup[] {
+        const groups=new Map<string,GrayboxGroup>();
         const owned=new Set<THREE.Material>([...this.materials.values(),...this.glowMaterials.values()]);
-        for(const obj of [...this.objects]){
-            if(!(obj instanceof THREE.Mesh)||!obj.visible||Array.isArray(obj.material)||!owned.has(obj.material))continue;
-            obj.updateMatrixWorld(true);
-            const key=[obj.material.uuid,Math.floor(obj.position.x/64),Math.floor(obj.position.z/64),obj.castShadow,obj.receiveShadow].join(':');
+        for(const obj of this.objects){
+            const material=obj instanceof THREE.Mesh?obj.material:undefined;
+            if(!(obj instanceof THREE.Mesh)||!obj.visible||!(material instanceof THREE.MeshStandardMaterial||material instanceof THREE.MeshBasicMaterial)||!owned.has(material))continue;
+            const cell=`${Math.floor(obj.position.x/64)}:${Math.floor(obj.position.z/64)}:${obj.castShadow?1:0}:${obj.receiveShadow?1:0}`;
+            const key=`${material.uuid}:${cell}`;
             let group=groups.get(key);
-            if(!group){group={material:obj.material,geometries:[],cast:obj.castShadow,receive:obj.receiveShadow};groups.set(key,group);}
-            group.geometries.push(obj.geometry.clone().applyMatrix4(obj.matrixWorld));
-            const old=obj.geometry;
-            if(obj.userData.aimTarget && old instanceof THREE.BoxGeometry){
-                const {width,height,depth}=old.parameters;
-                obj.geometry=new THREE.BoxGeometry(width,height,depth);
-            }else{
-                obj.geometry=new THREE.BufferGeometry();
-                obj.raycast=()=>{};
+            if(!group){group={material,meshes:[],label:`${material.type}:${material.color.getHex()}:${cell}`};groups.set(key,group);}
+            group.meshes.push(obj);
+        }
+        for(const group of groups.values())group.label+=`:${group.meshes.length}`;
+        return [...groups.values()];
+    }
+    /** Lit surfaces may contain thousands of bake vertices. Keep those triangles
+     * out of camera/aim raycasts and merge the visible copies by local city cell
+     * (or take the merged copies from `cached`, a checked record).
+     * The original twelve-triangle boxes remain exact collision/aim silhouettes. */
+    private batchStaticMeshes(groups:readonly GrayboxGroup[],cached?:readonly BakedGeometry[]) {
+        const merged=groups.map(({meshes})=>{
+            const parts:THREE.BufferGeometry[]=[];
+            for(const obj of meshes){
+                obj.updateMatrixWorld(true);
+                const old=obj.geometry;
+                if(!cached)parts.push(old.clone().applyMatrix4(obj.matrixWorld));
+                if(obj.userData.aimTarget && old instanceof THREE.BoxGeometry){
+                    // Unbaked (from the cache), it is still the plain box.
+                    if(!cached){const {width,height,depth}=old.parameters;obj.geometry=new THREE.BoxGeometry(width,height,depth);old.dispose();}
+                }else{
+                    obj.geometry=new THREE.BufferGeometry();
+                    obj.raycast=()=>{};
+                    old.dispose();
+                }
+                obj.visible=false;
             }
-            old.dispose();
-            obj.visible=false;
-        }
-        for(const {material,geometries,cast,receive} of groups.values()){
-            const merged=mergeGeometries(geometries,false)!;
-            for(const geometry of geometries)geometry.dispose();
-            merged.computeBoundingBox();merged.computeBoundingSphere();
-            const batch=this.add(new THREE.Mesh(merged,material));
-            batch.castShadow=cast;batch.receiveShadow=receive;
+            return parts;
+        });
+        groups.forEach(({material,meshes},i)=>{
+            let geometry:THREE.BufferGeometry;
+            if(cached)geometry=restoreGeometry(cached[i]);
+            else{
+                geometry=mergeGeometries(merged[i],false)!;
+                for(const part of merged[i])part.dispose();
+                geometry.computeBoundingBox();geometry.computeBoundingSphere();
+            }
+            const batch=this.add(new THREE.Mesh(geometry,material));
+            batch.castShadow=meshes[0].castShadow;batch.receiveShadow=meshes[0].receiveShadow;
             batch.raycast=()=>{};
-        }
+            this.batches.push(batch);
+        });
     }
     private syncLampPool(camera?:THREE.Camera,anchor?:{x:number;y:number;z:number}) {
         if(!camera)return;
@@ -386,6 +451,7 @@ export class Neighborhood {
         // Navigation is expressed by architectural signs; floating map labels are retired.
     }
     dispose() {
+        this.pendingBake=undefined;this.batches.length=0;
         this.readability?.dispose();
         this.overhead?.dispose();
         this.architecture?.dispose();this.kit?.dispose();this.water?.dispose();

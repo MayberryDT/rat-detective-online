@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {sampleStreetSpill,type SpillSource,type SpillBlocker} from './StreetReadability';
 import {AUTHORED_LIGHT_GAIN} from '../session/lightingTuning';
+import {restoreGeometry,type SpillBake} from './CityBakeCache';
 
 interface Box {x:number;y:number;z:number;w:number;h:number;d:number}
 type Point={x:number;y:number;z:number};
@@ -42,6 +43,8 @@ export function beamReach(s:SpillSource,boxes:readonly Box[]):number {
  * positions never follow the camera. There are no extra live lights/shadows. */
 export class FacadeBeams {
     private readonly meshes:THREE.Mesh[]=[];
+    /** The cell of each mesh, as `cx,cz`. */
+    private readonly cells:string[]=[];
     private readonly states:(SpillSource['occupancy'])[]=[undefined];
     private readonly texture:THREE.DataTexture;
     private readonly material:THREE.ShaderMaterial;
@@ -72,8 +75,16 @@ export class FacadeBeams {
                 }`,
         });
     }
-    *build():Generator<void> {
-        const {scene,sources,boxes,blockers,stateIds}=this,size=this.texture.image.width;
+    /** The meshes' cells and geometries, for the bake cache. */
+    bakeOutput():{cells:readonly string[];geometries:THREE.BufferGeometry[]} {return {cells:this.cells,geometries:this.meshes.map(mesh=>mesh.geometry)};}
+    /** Build the shafts, or take them from `cached` (a checked record). */
+    *build(cached?:Pick<SpillBake,'cells'|'beams'>):Generator<void> {
+        if(cached){
+            cached.cells.forEach((cell,i)=>this.addCell(cell,restoreGeometry(cached.beams[i])));
+            this.update();
+            return;
+        }
+        const {sources,boxes,blockers,stateIds}=this,size=this.texture.image.width;
         type Batch={positions:number[];colors:number[];uvs:number[];rooms:number[];strengths:number[]};
         const cells=new Map<string,Batch>(),boxCells=new Map<string,Box[]>(),color=new THREE.Color();
         let work=0;
@@ -124,10 +135,13 @@ export class FacadeBeams {
             for(const [name,values,size] of [['position',b.positions,3],['tint',b.colors,3],['beamUv',b.uvs,2],['roomUv',b.rooms,1],['strength',b.strengths,1]] as const)
                 geometry.setAttribute(name,new THREE.Float32BufferAttribute(values,size));
             geometry.computeBoundingSphere();
-            const mesh=new THREE.Mesh(geometry,this.material);mesh.name=`facade-downward-beams-${cell}`;mesh.raycast=()=>{};
-            scene.add(mesh);this.meshes.push(mesh);
+            this.addCell(cell,geometry);
         }
         this.update();
+    }
+    private addCell(cell:string,geometry:THREE.BufferGeometry):void {
+        const mesh=new THREE.Mesh(geometry,this.material);mesh.name=`facade-downward-beams-${cell}`;mesh.raycast=()=>{};
+        this.scene.add(mesh);this.meshes.push(mesh);this.cells.push(cell);
     }
     update():void {
         const data=this.texture.image.data as Uint8Array;let changed=false;

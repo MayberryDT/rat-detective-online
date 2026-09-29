@@ -4,6 +4,13 @@ import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import { FINISH_COLORS, GLOWING_FINISHES, pieceQuaternion, type Finish, type KitBuilder, type KitPiece } from '../shared/city/kit/kit';
 import { kitCity } from '../shared/city/kit/city';
 import { applyFixedIllumination, type FixedLightField } from './FixedLighting';
+import { restoreGeometry, type CityBakeRecord } from './CityBakeCache';
+
+type KitBake=Pick<CityBakeRecord,'kit'|'kitColors'|'signs'>;
+interface KitPlan {
+    merged:{finish:Finish;shadow:boolean;pieces:KitPiece[]}[];
+    batches:{finish:Finish;shape:'box'|'round';shadow:boolean;baked:boolean;pieces:KitPiece[]}[];
+}
 
 /** A piece gets baked vertices of its own when it is a surface (a side of LARGE and another of
  * half a unit) or a beam of BEAM or longer; smaller pieces take one light each. */
@@ -46,11 +53,43 @@ export class KitArchitecture {
     private readonly flickers:Array<{mesh:THREE.InstancedMesh;index:number;period:number;offset:number}>=[];
     private readonly tint=new THREE.Color();
     private time=0;
+    private planned?:KitPlan;
+    /** What a full build baked (merged geometries, per-instance and sign light), for the bake cache. */
+    private baked?:{merged:THREE.BufferGeometry[];colors:Float32Array[];signs:Float64Array};
     constructor(private readonly scene:THREE.Scene,private readonly city:KitBuilder=kitCity()){}
-    /** Build the look, baking `field` into every piece that does not glow. */
-    *build(field:FixedLightField):Generator<void> {
-        const merged=new Map<string,{finish:Finish;shadow:boolean;geometries:THREE.BufferGeometry[]}>();
-        const batches=new Map<string,{finish:Finish;shape:'box'|'round';shadow:boolean;pieces:KitPiece[]}>();
+    /** Pieces by draw: merged baked groups and instanced batches, in build order. */
+    private plan():KitPlan {
+        if(this.planned)return this.planned;
+        const merged=new Map<string,KitPlan['merged'][number]>(),batches=new Map<string,KitPlan['batches'][number]>();
+        for(const p of this.city.pieces){
+            const baked=!p.flicker&&!GLOWING_FINISHES.has(p.finish),own=baked&&perVertex(p);
+            // Glowing panes and small round fittings (bars, posts, bolts) stay instanced.
+            if(!baked||!own&&p.shape==='round'){
+                const key=`${p.finish}:${p.shape}:${p.castShadow?1:0}`;
+                let batch=batches.get(key);
+                if(!batch){batch={finish:p.finish,shape:p.shape,shadow:!!p.castShadow,baked:true,pieces:[]};batches.set(key,batch);}
+                batch.pieces.push(p);continue;
+            }
+            const key=`${p.finish}:${p.castShadow?1:0}`;
+            let group=merged.get(key);
+            if(!group){group={finish:p.finish,shadow:!!p.castShadow,pieces:[]};merged.set(key,group);}
+            group.pieces.push(p);
+        }
+        for(const batch of batches.values())batch.baked=!batch.pieces.some(p=>p.flicker)&&!GLOWING_FINISHES.has(batch.finish);
+        return this.planned={merged:[...merged.values()],batches:[...batches.values()]};
+    }
+    /** The draws this build makes, as the bake cache checks a record against them. */
+    shape():{kitMerged:string[];kitBatches:string[];signs:number} {
+        const {merged,batches}=this.plan();
+        return {kitMerged:merged.map(g=>`${g.finish}:${g.shadow?1:0}:${g.pieces.length}`),
+            kitBatches:batches.map(b=>`${b.finish}:${b.shape}:${b.shadow?1:0}:${b.pieces.length}:${b.baked?1:0}`),signs:this.city.signs.length};
+    }
+    /** What the full build baked; undefined after a build from the cache. */
+    bakeOutput():{merged:readonly THREE.BufferGeometry[];colors:readonly Float32Array[];signs:Float64Array}|undefined {return this.baked;}
+    /** Build the look, baking `field` into every piece that does not glow, or taking the light
+     * from `cached` (a record already checked against `shape()`). */
+    *build(field:FixedLightField,cached?:KitBake):Generator<void> {
+        const {merged,batches}=this.plan();
         const matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3(),quaternion=new THREE.Quaternion();
         const bounds=new THREE.Box3(),unit=new THREE.Box3(new THREE.Vector3(-.5,-.5,-.5),new THREE.Vector3(.5,.5,.5));
         const point=new THREE.Vector3(),normal=new THREE.Vector3(),light=new THREE.Color(),surface=new THREE.Color();
@@ -58,80 +97,75 @@ export class KitArchitecture {
             const q=pieceQuaternion(p);
             return matrix.compose(position.set(p.x,p.y,p.z),quaternion.set(q.x,q.y,q.z,q.w),scale.set(p.w,p.h,p.d));
         };
+        const baked=cached?undefined:{merged:[] as THREE.BufferGeometry[],colors:[] as Float32Array[],signs:new Float64Array(this.city.signs.length*3)};
         let work=0;
-        for(const p of this.city.pieces){
-            const baked=!p.flicker&&!GLOWING_FINISHES.has(p.finish),own=baked&&perVertex(p);
-            // Glowing panes and small round fittings (bars, posts, bolts) stay instanced.
-            if(!baked||!own&&p.shape==='round'){
-                const key=`${p.finish}:${p.shape}:${p.castShadow?1:0}`;
-                let batch=batches.get(key);
-                if(!batch){batch={finish:p.finish,shape:p.shape,shadow:!!p.castShadow,pieces:[]};batches.set(key,batch);}
-                batch.pieces.push(p);continue;
-            }
-            bounds.copy(unit).applyMatrix4(place(p));bakeTint(p.finish,surface);
-            const sources=field.near(bounds),rooms=field.roomsNear(bounds);
+        for(const [g,group] of merged.entries()){
             let geometry:THREE.BufferGeometry;
-            if(own){
-                // Surfaces and beams: real vertices every SEGMENT units where a pool falls on
-                // them; a dim or evenly lit piece keeps its corners, which carry the gradient.
-                let lo=Infinity,hi=0;
-                const probe=(at:THREE.Vector3)=>{const c=field.sample(at,null,sources,rooms,light,surface),s=c.r+c.g+c.b;lo=Math.min(lo,s);hi=Math.max(hi,s);};
-                if(sources.length){
-                    for(const corner of PROBES)probe(point.copy(corner).applyMatrix4(matrix));
-                    for(const source of sources)probe(bounds.clampPoint(source.position,point));
+            if(cached)geometry=restoreGeometry(cached.kit[g]);
+            else{
+                const parts:THREE.BufferGeometry[]=[];
+                for(const p of group.pieces){
+                    bounds.copy(unit).applyMatrix4(place(p));bakeTint(p.finish,surface);
+                    const sources=field.near(bounds),rooms=field.roomsNear(bounds);
+                    let part:THREE.BufferGeometry;
+                    if(perVertex(p)){
+                        // Surfaces and beams: real vertices every SEGMENT units where a pool falls on
+                        // them; a dim or evenly lit piece keeps its corners, which carry the gradient.
+                        let lo=Infinity,hi=0;
+                        const probe=(at:THREE.Vector3)=>{const c=field.sample(at,null,sources,rooms,light,surface),s=c.r+c.g+c.b;lo=Math.min(lo,s);hi=Math.max(hi,s);};
+                        if(sources.length){
+                            for(const corner of PROBES)probe(point.copy(corner).applyMatrix4(matrix));
+                            for(const source of sources)probe(bounds.clampPoint(source.position,point));
+                        }
+                        const lit=hi>=FAINT&&hi-lo>=FAINT;
+                        const segments=(size:number)=>lit?Math.max(1,Math.ceil(size/SEGMENT)):1;
+                        part=p.shape==='round'?new THREE.CylinderGeometry(.5,.5,1,14,segments(p.h))
+                            :new THREE.BoxGeometry(1,1,1,segments(p.w),segments(p.h),segments(p.d));
+                        part.deleteAttribute('uv');part.applyMatrix4(matrix);
+                        const vertices=part.getAttribute('position'),normals=part.getAttribute('normal');
+                        const colors=new Float32Array(vertices.count*3);
+                        for(let i=0;i<vertices.count;i++)
+                            field.sample(point.fromBufferAttribute(vertices,i),normal.fromBufferAttribute(normals,i),sources,rooms,light,surface).toArray(colors,i*3);
+                        part.setAttribute('fixedIllumination',new THREE.BufferAttribute(colors,3));
+                    }else{
+                        // Small boxes (fittings, planks, setts): one light at the centre, merged with the
+                        // rest of their finish so a finish costs one draw, not two.
+                        part=new THREE.BufferGeometry().setIndex(this.box.index);
+                        part.setAttribute('position',this.box.getAttribute('position').clone());
+                        part.setAttribute('normal',this.box.getAttribute('normal').clone());
+                        part.applyMatrix4(matrix);
+                        field.sample(point.set(p.x,p.y,p.z),null,sources,rooms,light,surface);
+                        const colors=new Float32Array(24*3);
+                        for(let i=0;i<24;i++)light.toArray(colors,i*3);
+                        part.setAttribute('fixedIllumination',new THREE.BufferAttribute(colors,3));
+                    }
+                    parts.push(part);
+                    if(++work%48===0)yield;
                 }
-                const lit=hi>=FAINT&&hi-lo>=FAINT;
-                const segments=(size:number)=>lit?Math.max(1,Math.ceil(size/SEGMENT)):1;
-                geometry=p.shape==='round'?new THREE.CylinderGeometry(.5,.5,1,14,segments(p.h))
-                    :new THREE.BoxGeometry(1,1,1,segments(p.w),segments(p.h),segments(p.d));
-                geometry.deleteAttribute('uv');geometry.applyMatrix4(matrix);
-                const vertices=geometry.getAttribute('position'),normals=geometry.getAttribute('normal');
-                const colors=new Float32Array(vertices.count*3);
-                for(let i=0;i<vertices.count;i++)
-                    field.sample(point.fromBufferAttribute(vertices,i),normal.fromBufferAttribute(normals,i),sources,rooms,light,surface).toArray(colors,i*3);
-                geometry.setAttribute('fixedIllumination',new THREE.BufferAttribute(colors,3));
-            }else{
-                // Small boxes (fittings, planks, setts): one light at the centre, merged with the
-                // rest of their finish so a finish costs one draw, not two.
-                geometry=new THREE.BufferGeometry().setIndex(this.box.index);
-                geometry.setAttribute('position',this.box.getAttribute('position').clone());
-                geometry.setAttribute('normal',this.box.getAttribute('normal').clone());
-                geometry.applyMatrix4(matrix);
-                field.sample(point.set(p.x,p.y,p.z),null,sources,rooms,light,surface);
-                const colors=new Float32Array(24*3);
-                for(let i=0;i<24;i++)light.toArray(colors,i*3);
-                geometry.setAttribute('fixedIllumination',new THREE.BufferAttribute(colors,3));
+                geometry=mergeGeometries(parts,false)!;
+                for(const part of parts)part.dispose();
+                baked!.merged.push(geometry);
             }
-            const key=`${p.finish}:${p.castShadow?1:0}`;
-            let group=merged.get(key);
-            if(!group){group={finish:p.finish,shadow:!!p.castShadow,geometries:[]};merged.set(key,group);}
-            group.geometries.push(geometry);
-            if(++work%48===0)yield;
-        }
-        for(const group of merged.values()){
-            const geometry=mergeGeometries(group.geometries,false)!;
-            for(const part of group.geometries)part.dispose();
             const mesh=new THREE.Mesh(geometry,this.material(group.finish,false));
             mesh.castShadow=group.shadow;mesh.raycast=()=>{};
             this.add(mesh,`kit-${group.finish}-baked`);
             yield;
         }
-        for(const batch of batches.values()){
+        for(const [b,batch] of batches.entries()){
             const flicker=batch.pieces.some(p=>p.flicker),base=batch.shape==='round'?this.round:this.box;
-            const baked=!flicker&&!GLOWING_FINISHES.has(batch.finish);
             let geometry:THREE.BufferGeometry=base;
-            if(baked){
+            if(batch.baked){
                 // The unit shape's buffers, plus one steady light per instance.
                 geometry=new THREE.BufferGeometry();geometry.setIndex(base.index);
                 geometry.setAttribute('position',base.getAttribute('position'));geometry.setAttribute('normal',base.getAttribute('normal'));
                 this.geometries.push(geometry);
             }
             const mesh=new THREE.InstancedMesh(geometry,this.material(batch.finish,flicker),batch.pieces.length);
-            const colors=baked?new Float32Array(batch.pieces.length*3):undefined;
+            const colors=batch.baked?cached?.kitColors[b]??new Float32Array(batch.pieces.length*3):new Float32Array(0);
             bakeTint(batch.finish,surface);
             batch.pieces.forEach((p,i)=>{
                 mesh.setMatrixAt(i,place(p));
-                if(colors){
+                if(batch.baked&&!cached){
                     bounds.copy(unit).applyMatrix4(matrix);
                     field.sample(point.set(p.x,p.y,p.z),null,field.near(bounds),field.roomsNear(bounds),light,surface).toArray(colors,i*3);
                 }
@@ -140,18 +174,23 @@ export class KitArchitecture {
                     this.flickers.push({mesh,index:i,period:18+hash%25,offset:hash%47});
                 }
             });
-            if(colors)geometry.setAttribute('fixedIllumination',new THREE.InstancedBufferAttribute(colors,3));
+            baked?.colors.push(colors);
+            if(batch.baked)geometry.setAttribute('fixedIllumination',new THREE.InstancedBufferAttribute(colors,3));
             if(flicker)for(let i=0;i<batch.pieces.length;i++)mesh.setColorAt(i,this.tint.setRGB(1,1,1));
             mesh.computeBoundingSphere();mesh.castShadow=batch.shadow;
             this.add(mesh,`kit-${batch.finish}-${batch.shape}`);
             if(++work%8===0)yield;
         }
-        for(const s of this.city.signs){
+        for(const [i,s] of this.city.signs.entries()){
             const yaw=s.ry,n=normal.set(Math.sin(yaw),0,Math.cos(yaw));
-            bounds.setFromCenterAndSize(point.set(s.x,s.y,s.z),position.set(s.w,s.h,s.w));
-            field.sample(point.set(s.x,s.y,s.z).addScaledVector(n,.05),n,field.near(bounds),field.roomsNear(bounds),light);
+            if(cached)light.fromArray(cached.signs,i*3);
+            else{
+                bounds.setFromCenterAndSize(point.set(s.x,s.y,s.z),position.set(s.w,s.h,s.w));
+                field.sample(point.set(s.x,s.y,s.z).addScaledVector(n,.05),n,field.near(bounds),field.roomsNear(bounds),light).toArray(baked!.signs,i*3);
+            }
             this.sign(s.lines,s.x,s.y,s.z,s.w,s.h,yaw,s.bg,s.fg,!!s.glow,light);
         }
+        this.baked=baked;
     }
     update(dt:number):void {
         this.time+=Math.min(dt,.1);

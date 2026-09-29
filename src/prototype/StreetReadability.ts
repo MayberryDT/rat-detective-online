@@ -11,6 +11,7 @@ import {generatedStreetLamps} from '../shared/streetLampLayout';
 import type {FacadeMass} from '../world/WindowApertures';
 import {cornerEntrances} from '../world/cornerShops';
 import {kitCity} from '../shared/city/kit/city';
+import type {SpillBake} from './CityBakeCache';
 
 export interface SpillSource {
     x:number; z:number; y:number; nx:number; nz:number;
@@ -19,6 +20,8 @@ export interface SpillSource {
 }
 export interface SpillBlocker {x:number;z:number;w:number;d:number}
 const SIZE=512, MIN=-200, SPAN=376, MAX_LIGHT=.35;
+/** Bytes in the spill atlas (RGBA). */
+export const SPILL_ATLAS_BYTES=SIZE*SIZE*4;
 
 /** A presentation-only switch: the accepted streetlamp/ambient settings remain. */
 export function streetReadabilityEnabled(search=typeof location==='undefined'?'':location.search):boolean {
@@ -128,7 +131,7 @@ export class StreetReadability {
                 illuminates:(p)=>p.y<5.5&&!blocked(s.x,s.z,p.x,p.z,nearby)&&(p.x-s.x)*s.nx+(p.z-s.z)*s.nz>0};
         });
         this.blockers=blockers;
-        this.texture=new THREE.DataTexture(new Uint8Array(SIZE*SIZE*4),SIZE,SIZE,THREE.RGBAFormat);
+        this.texture=new THREE.DataTexture(new Uint8Array(SPILL_ATLAS_BYTES),SIZE,SIZE,THREE.RGBAFormat);
         this.texture.minFilter=this.texture.magFilter=THREE.LinearFilter;
         this.texture.generateMipmaps=false;
         this.beams=new FacadeBeams(scene,[...this.spills,...windows],[
@@ -138,7 +141,25 @@ export class StreetReadability {
             ...details,
         ],blockers);
     }
-    *build():Generator<void> {
+    /** The atlas and beams, for the bake cache. */
+    bakeOutput():{atlas:Uint8Array;cells:readonly string[];geometries:THREE.BufferGeometry[]} {
+        const {cells,geometries}=this.beams.bakeOutput();
+        return {atlas:this.atlas,cells,geometries};
+    }
+    private get atlas():Uint8Array {
+        const {data}=this.texture.image;
+        if(!(data instanceof Uint8Array))throw new TypeError('spill atlas');
+        return data;
+    }
+    /** Bake the atlas, fixtures and beams, or take the atlas and beams from `cached` (a checked record). */
+    *build(cached?:SpillBake):Generator<void> {
+        if(cached){
+            this.atlas.set(cached.atlas);
+            this.texture.needsUpdate=true;
+            this.addFixtures(this.scene);
+            yield* this.beams.build(cached);
+            return;
+        }
         const {blockers,layout}=this;
         const field=new Float32Array(SIZE*SIZE*3),color=new THREE.Color();
         let work=0;
@@ -156,7 +177,7 @@ export class StreetReadability {
                 field[i]+=amount*color.r;field[i+1]+=amount*color.g;field[i+2]+=amount*color.b;
             }
         }
-        const data=this.texture.image.data as Uint8Array;
+        const data=this.atlas;
         // Every authored pole contributes permanently, including supplemental poles, and so
         // does every outdoor kit fixture low enough to pool on the ground (floodlights, globes,
         // lanterns). This texture is built once, independently of the nearby rat.
