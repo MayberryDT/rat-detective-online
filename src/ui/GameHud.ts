@@ -24,6 +24,9 @@ export type FeedEntry =
     | { kind: 'note'; text: string };
 
 /** Owns title, kill feed, overlays, and connection status. */
+/** Matches roundEnd.css: below this the results use their own stacked and phone layouts. */
+const SMALL_RESULTS='(max-width:1100px),(max-height:640px)';
+
 export class GameHud {
     private readonly doc: Document;
     private readonly onRetry?: () => void;
@@ -161,7 +164,7 @@ export class GameHud {
     showVictory(winnerName: string, kills: number, assignment?: AssignmentState, awards?: readonly Award[]): void {
         if (this.disposed) return;
         if(!this.victoryVisible)this.victoryQuip=this.quips.next('victory');
-        this.victoryText.replaceChildren();this.caseFile=undefined;
+        this.caseFile?.list.parentElement?.remove();this.victoryText.replaceChildren();this.caseFile=undefined;
         const lines = [
             ['victory-kicker', assignment ? ASSIGNMENTS[assignment.id].title : 'OUTSTANDING MISCONDUCT'],
             ['victory-headline', 'CASE CLOSED!'],
@@ -189,11 +192,21 @@ export class GameHud {
         }
         if(!this.victoryVisible){if(this.foley)this.foley('victory');else this.feedback('victory');}
         this.victoryVisible=true;this.overlay(this.victoryOverlay,true);
+        this.layoutResults();
     }
 
     /** Round end, last beat: the Case File and final standings take the screen; U8 stamps the awards in one at a time. */
     showResults(on: boolean): void {
-        if(on)this.doc.body?.classList.add('round-results');else this.doc.body?.classList.remove('round-results');
+        const view=this.doc.defaultView;
+        if(on){
+            this.doc.body?.classList.add('round-results');
+            // Out of the banner, whose rotate would otherwise become the fixed panel's containing block.
+            const fileElement=this.caseFile?.list.parentElement;if(fileElement)this.victoryOverlay.appendChild(fileElement);
+            // Again next frame: the standings are shown just after this call.
+            this.layoutResults();view?.requestAnimationFrame(this.layoutResults);view?.addEventListener('resize',this.layoutResults);
+        }else{
+            this.doc.body?.classList.remove('round-results');view?.removeEventListener('resize',this.layoutResults);
+        }
         const file=this.caseFile;
         if(!on||!file||file.stamped)return;
         file.stamped=true;
@@ -312,7 +325,51 @@ export class GameHud {
         for (const id of this.timeouts) clearTimeout(id);
         this.timeouts.clear();
         this.retryButton.removeEventListener('click', this.handleRetry);
+        this.doc.defaultView?.removeEventListener('resize',this.layoutResults);
         this.statusPanel.remove();
+    }
+
+    /** Results board: the standings and the Case File sit side by side as one centred
+     * group just under the winner banner, both inside the screen. The banner's height
+     * varies with the winner's name, so it is measured. Small screens keep roundEnd.css's own layout. */
+    private layoutResults = (): void => {
+        const view=this.doc.defaultView, body=this.doc.body;
+        if(!view||!body?.classList.contains('round-results'))return;
+        const banner=[...this.victoryText.children].filter(el=>el.getBoundingClientRect().height>0);
+        const bannerBottom=Math.max(0,...banner.map(el=>el.getBoundingClientRect().bottom));
+        const w=view.innerWidth,h=view.innerHeight,margin=Math.max(16,Math.min(40,w*.025)),gap=Math.max(18,Math.min(32,w*.018));
+        const group=Math.min(1480,w-margin*2),fileWidth=this.caseFile?Math.max(360,Math.min(560,group*.36)):0;
+        const board=this.caseFile?group-fileWidth-gap:Math.min(1100,group),left=(w-(board+(fileWidth?fileWidth+gap:0)))/2;
+        const top=Math.round(bannerBottom+gap),available=Math.max(160,h-top-margin);
+        const vars:Record<string,string>={'--results-top':`${top}px`,'--results-h':`${available}px`,
+            '--results-board-left':`${left}px`,'--results-board-w':`${board}px`,'--results-file-left':`${left+board+gap}px`,'--results-file-w':`${fileWidth}px`};
+        for(const [key,value] of Object.entries(vars))body.style.setProperty(key,value);
+        // The pair should read as one spread: fit the Case File within the standings' height
+        // when it can (always within the screen), then give both the taller height.
+        body.style.removeProperty('--results-panel-h');
+        const standings=this.doc.querySelector<HTMLElement>('.match-scoreboard:not([hidden])');
+        const standingsHeight=standings?.getBoundingClientRect().height??0;
+        // A little taller than the standings beats shrinking the type another step.
+        const file=this.fitCaseFile(standingsHeight>0?Math.min(standingsHeight*1.12,available):available);
+        const tallest=Math.max(standingsHeight,file?.getBoundingClientRect().height??0);
+        if(tallest)body.style.setProperty('--results-panel-h',`${Math.ceil(tallest)}px`);
+        // Ease the pair down into spare room rather than leaving it all below.
+        if(tallest)body.style.setProperty('--results-top',`${top+Math.round(Math.min(80,Math.max(0,available-tallest)/3))}px`);
+    };
+
+    /** Awards never run off the screen: two columns for a long list, then smaller type, then three columns. */
+    private fitCaseFile(target: number): HTMLElement | undefined {
+        const file=this.caseFile?.list.parentElement;
+        if(!file)return;
+        file.classList.remove('fit-2','fit-compact','fit-3');
+        if(this.doc.defaultView?.matchMedia(SMALL_RESULTS).matches)return file;
+        // A long list reads better as two short columns than one tall one.
+        if(this.caseFile!.rows.length>6)file.classList.add('fit-2');
+        for(const step of ['fit-2','fit-compact','fit-3']){
+            if(file.scrollHeight<=target+1)break;
+            file.classList.add(step);
+        }
+        return file;
     }
 
     private handleRetry = (event: Event): void => {

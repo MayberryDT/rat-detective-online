@@ -10,13 +10,15 @@ body.lineup-on:not(.round-results) .victory-casefile{display:none}
 :is(body.lineup-on,body.round-results) .victory-winner::before{content:'CASE CLOSED BY ';font-size:.48em;color:var(--cheese);letter-spacing:2px;vertical-align:middle}
 :is(body.lineup-on,body.round-results) .victory-verdict{margin-top:10px;rotate:0deg;font-size:clamp(19px,2vw,28px)}
 @keyframes round-banner{from{opacity:0;translate:0 -24px}to{opacity:1;translate:0 0}}
-/* No transform on the banner here, so the fixed panels place against the viewport. */
-body.round-results #victory-text{animation:none;rotate:none;translate:none;transform:none}
+/* The banner may keep a rotate (the build drops rotate:none), so GameHud moves the Case File
+ * out of it into the overlay for the results; a rotated parent would otherwise capture it. */
+body.round-results #victory-text{animation:none;transform:none}
 body.round-results #victory-overlay{visibility:visible;background:radial-gradient(ellipse at 50% 60%,#0c1224d9,#05070df5)}
 body.round-results.scoreboard-open #victory-overlay{visibility:visible}
 body.round-results #police-lineup{opacity:0;transition:opacity .5s}
-body.round-results .match-scoreboard{left:3vw;top:calc(3vh + 150px);transform:none;width:min(840px,62vw);max-height:calc(100dvh - 3vh - 172px);animation:round-panel .45s .1s cubic-bezier(.2,.8,.3,1.1) both}
-body.round-results .victory-casefile{position:fixed;right:3vw;top:calc(3vh + 150px);width:min(420px,31vw);max-height:calc(100dvh - 3vh - 172px);overflow:hidden;margin:0;padding:18px 22px;rotate:0deg;
+/* GameHud.layoutResults sets the --results-* positions from the measured banner. */
+body.round-results .match-scoreboard{left:var(--results-board-left,3vw);top:var(--results-top,calc(3vh + 150px));transform:none;width:var(--results-board-w,min(840px,62vw));max-height:var(--results-h,calc(100dvh - 3vh - 172px));animation:round-panel .45s .1s cubic-bezier(.2,.8,.3,1.1) both}
+body.round-results .victory-casefile{position:fixed;left:var(--results-file-left,auto);top:var(--results-top,calc(3vh + 150px));width:var(--results-file-w,min(420px,31vw));max-height:var(--results-h,calc(100dvh - 3vh - 172px));box-sizing:border-box;overflow:hidden;margin:0;padding:18px 22px;rotate:0deg;
     text-align:left;background:radial-gradient(ellipse 30% 20% at 90% 94%,#4a68a82e,#0000 70%),linear-gradient(#0c1224cc,#0c1224cc);border-top:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge);animation:round-panel .45s .25s cubic-bezier(.2,.8,.3,1.1) both}
 body.round-results .match-scoreboard::after{display:none}
 body.round-results .victory-casefile.photo-corners::before{left:5px;top:5px}body.round-results .victory-casefile.photo-corners::after{right:5px;bottom:5px}
@@ -26,6 +28,33 @@ body.round-results .victory-casefile li{list-style:none;grid-template-columns:1f
 body.round-results .victory-casefile b{grid-area:title;font-size:20px;letter-spacing:1.2px}
 body.round-results .victory-casefile span{grid-area:who;font-size:14px}
 body.round-results .victory-casefile strong{grid-area:value;align-self:center;font-size:26px;color:var(--carbon-bright)}
+/* Fitting steps (GameHud.fitCaseFile): two columns of stamp, value and who (nothing shares a
+ * narrow column's width), then smaller type, then three columns. */
+body.round-results .victory-casefile:is(.fit-2,.fit-3) ul{grid-template-columns:1fr 1fr;gap:6px 18px}
+body.round-results .victory-casefile:is(.fit-2,.fit-3) li{grid-template-columns:minmax(0,1fr);grid-template-areas:'title' 'value' 'who';align-content:start;gap:1px;padding-bottom:5px}
+body.round-results .victory-casefile:is(.fit-2,.fit-3) b{justify-self:start;white-space:nowrap;font-size:17px}
+body.round-results .victory-casefile:is(.fit-2,.fit-3) strong{justify-self:start;margin-top:3px;font-size:18px}
+body.round-results .victory-casefile:is(.fit-2,.fit-3) span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+body.round-results .victory-casefile.fit-compact{padding:12px 16px}
+body.round-results .victory-casefile.fit-compact h3{font-size:21px;margin-bottom:8px}
+body.round-results .victory-casefile.fit-compact ul{gap:4px 14px}
+body.round-results .victory-casefile.fit-compact li{padding-bottom:3px}
+body.round-results .victory-casefile.fit-compact b{font-size:15px}
+body.round-results .victory-casefile.fit-compact strong{font-size:15px;margin-top:1px}
+body.round-results .victory-casefile.fit-compact span{font-size:11px}
+body.round-results .victory-casefile.fit-3 ul{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px}
+body.round-results .victory-casefile.fit-3 :is(b,strong){font-size:13px}
+body.round-results .victory-casefile.fit-3 span{font-size:10px}
+/* Equal heights (--results-panel-h from GameHud); the standings' footer stays at the bottom. */
+body.round-results :is(.match-scoreboard,.victory-casefile){min-height:min(var(--results-panel-h,0px),var(--results-h,100dvh))}
+body.round-results .match-scoreboard-scroll{flex:1}
+body.round-results .victory-casefile.fit-compact{padding:12px 16px}
+body.round-results .victory-casefile.fit-compact h3{font-size:22px;margin-bottom:8px}
+body.round-results .victory-casefile.fit-compact ul{gap:5px 16px}
+body.round-results .victory-casefile.fit-compact li{padding-bottom:4px;gap:1px 8px}
+body.round-results .victory-casefile.fit-compact b{font-size:16px}
+body.round-results .victory-casefile.fit-compact span{font-size:12px}
+body.round-results .victory-casefile.fit-compact strong{font-size:16px}
 @keyframes round-panel{from{opacity:0;translate:0 26px}to{opacity:1;translate:0 0}}
 @media(max-width:1100px),(max-height:640px){
     body.round-results .match-scoreboard{left:50%;transform:translateX(-50%);width:calc(100vw - 24px);top:calc(2vh + 118px);max-height:calc(62dvh - 118px)}

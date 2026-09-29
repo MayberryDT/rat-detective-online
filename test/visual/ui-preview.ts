@@ -87,6 +87,12 @@ requestAnimationFrame(frame);
 const award=(id:Award['id'],title:string,playerName:string,value:number):Award=>({id,title,playerId:playerName,playerName,value});
 const awards=[award('top-gun','TOP GUN','Detective Rind',14),award('sharpshooter','SHARPSHOOTER','Inspector Brie',41),award('headhunter','HEADHUNTER','Gumshoe Squeak',4),
     award('legwork','LEGWORK','Officer Crumb',812),award('dispatcher','DISPATCHER','Sergeant Stilton',3),award('frequent-flier','FREQUENT FLIER','Deputy Muenster',6)];
+// Every award a real round can hand out, with long names: the worst case for fitting the Case File.
+const allAwards=[award('top-gun','TOP GUN','Lieutenant Gorgonzola',14),award('most-cheesed','MOST CHEESED','Inspector Fontina',23),award('butterfingers','BUTTERFINGERS','Deputy Muenster',5),
+    award('sewer-dweller','SEWER DWELLER','Sergeant Stilton',96),award('high-flier','HIGH FLIER','Officer Crumb',129),award('sharpshooter','SHARPSHOOTER','Inspector Brie',41),
+    award('headhunter','HEADHUNTER','Gumshoe Squeak',4),award('long-shot','LONG SHOT','Detective Rind',87),award('case-keeper','CASE KEEPER','Lieutenant Curd',143),
+    award('frequent-flier','FREQUENT FLIER','Deputy Muenster',6),award('supply-run','SUPPLY RUN','Officer Crumb',9),award('legwork','LEGWORK','Constable Camembert',1812),
+    award('dispatcher','DISPATCHER','Sergeant Stilton',3)];
 function score(id:string,delta:number):void {
     const table=mode==='chain-of-custody'?assignment.deliveries:assignment.caseKills;table[id]=(table[id]??0)+delta;
     board.receive({type:'chaos',state});
@@ -129,6 +135,9 @@ const actions:Record<string,()=>void>={
     'Round end: results (Case File stamps)':()=>{
         assignment.result={winnerId:'rat-1',winnerName:'Detective Rind',at:0,method:'kills',posthumous:false};board.receive({type:'chaos',state});
         hud.showResults(true);board.setVisible(true);},
+    'Round end: full Case File (13 awards)':()=>{hud.showVictory('Lieutenant Gorgonzola',14,assignment,allAwards);
+        assignment.result={winnerId:'rat-1',winnerName:'Lieutenant Gorgonzola',at:0,method:'kills',posthumous:false};board.receive({type:'chaos',state});
+        hud.showResults(true);board.setVisible(true);},
     'Round end: done':()=>{hud.hideVictory();board.setVisible(false);delete assignment.result;},
     'Scoreboard: open':()=>board.setVisible(true),
     'Scoreboard: close':()=>board.setVisible(false),
@@ -167,4 +176,5 @@ for(const [label,run] of Object.entries(actions)){
     const button=document.createElement('button');button.type='button';button.textContent=label;button.addEventListener('click',run);buttons.appendChild(button);
 }
 Object.assign(window,{feelActions:actions,hud,board,dispatch,settings});
-void document.fonts.ready.then(()=>{document.body.dataset.ready='true';render();});
+// `?run=<action>` (repeatable) plays actions once ready, for headless captures.
+void document.fonts.ready.then(()=>{for(const name of params.getAll('run'))actions[name]?.();document.body.dataset.ready='true';render();});
