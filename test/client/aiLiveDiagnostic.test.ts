@@ -6,7 +6,7 @@ import {createWorldSpec} from '../../src/shared/worldSpec';
 import type {ChaosState} from '../../src/shared/chaosState';
 
 it('keeps eleven dispersed rats pursuing one carrier through real city geometry',()=>{
- const starts=[[-187,-57],[10,-47],[52,132],[-103,-108],[140,-44],[-172,-184],[160,-138],[162,160],[-92,28],[-52,140],[4,-172]];
+ const starts=[[-187,-57],[10,-47],[52,132],[-103,-108],[140,-44],[-175,-160],[160,-138],[162,160],[-92,28],[-52,140],[4,-160]];
  const bots=starts.map(([x,z],i)=>createPlayer(`rd-ai-${i}`,'Bot',DEFAULT_APPEARANCE,{x,y:0,z}));
  const carrier=createPlayer('carrier','Carrier',DEFAULT_APPEARANCE,{x:69,y:0,z:6});
  const players=new Map([...bots,carrier].map(p=>[p.id,p]));let shots=0,rescues=0;
