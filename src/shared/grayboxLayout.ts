@@ -1,6 +1,6 @@
 import {regularStreetLamps,generatedStreetLamps,STREET_LAMP_HEIGHT} from './streetLampLayout';
 import {streetDebris,type DebrisKind} from './streetDebris';
-import {CENTRAL_BUILDINGS,skylineMasses} from './skyline';
+import {CENTRAL_BUILDINGS,buildingColliders,skylineMasses} from './skyline';
 import { generateBuildingLayout } from './worldSpec';
 import { cityStreetBuildings, landmarkReservation } from './cityPlan';
 import { landmarkBoxes } from './landmarkLayout';
@@ -67,7 +67,8 @@ export function grayboxBoxes(spec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSIO
     box(125,12.4,137.4,16,.8,2,0x56604f);
     box(-128,2,117.5,8,4,1.8,0x252331);boxes[boxes.length-1].hidden=true;
     const buildings=cityStreetBuildings(generateBuildingLayout({...spec,version:1}));
-    for(const b of buildings){box(b.cx,b.bh/2,b.cz,b.bw,b.bh,b.bd,0x25212e,0,0,true);boxes[boxes.length-1].original=true;}
+    // A cut corner's yawed box is no `building` block: footprint consumers read those as rectangles.
+    for(const b of buildings)for(const m of buildingColliders(b))boxes.push({...m,color:0x25212e,rx:0,rz:0,original:true,...(m.ry===undefined?{building:true}:{})});
     for(const [x,z] of [...STREET_LAMPS,...generatedStreetLamps(buildings,STREET_LAMPS)]){box(x,STREET_LAMP_HEIGHT/2,z,.16,STREET_LAMP_HEIGHT,.16,0x17131d);boxes[boxes.length-1].hidden=true;box(x,STREET_LAMP_HEIGHT+.2,z,.65,.8,.65,0xffd087);boxes[boxes.length-1].hidden=true;}
     boxes.push(...streetDebris(boxes,isRampOpening));
     return boxes;

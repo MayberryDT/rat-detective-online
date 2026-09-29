@@ -26,6 +26,7 @@ vi.stubGlobal('document', {
     getContext: () => ({
       clearRect() {}, strokeText() {}, fillText() {}, fillRect() {},
       beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, fill() {}, stroke() {},
+      save() {}, restore() {}, strokeRect() {},
     }),
   }),
 });

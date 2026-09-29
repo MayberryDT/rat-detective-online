@@ -31,12 +31,20 @@ export const DEFAULT_CITY_OPTIONS: CityOptions = {
   buildingWidthMax: 14,
 };
 
+/** One 45° cut across a footprint corner: `sx`/`sz` name the corner (+1 = east/south). */
+export interface FootprintChamfer {
+  sx: -1 | 1;
+  sz: -1 | 1;
+}
+
 export interface BuildingFootprint {
   cx: number;
   cz: number;
   bw: number;
   bd: number;
   bh: number;
+  /** Cut corners at street junctions (bank faces); see `buildingColliders` in skyline. */
+  chamfers?: readonly FootprintChamfer[];
 }
 
 const RAT_RADIUS = 0.6;

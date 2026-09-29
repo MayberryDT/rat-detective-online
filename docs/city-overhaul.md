@@ -102,6 +102,7 @@ Each workstream lists what it delivers and how it is proven. The order is the bu
 
 ### W3. Changes to the existing city
 - **Cut corners:** at every junction corner with a building behind it, a 6-unit 45° face (the planning map computes the set). Keep sidewalks, lamps and doors clear.
+  - Done: `cityStreetBuildings` marks `chamfers` on tenement footprints (15 cuts in the current layout; skipped where a pillar, launcher or spawn stands in front of the face, the building is under 9 units, or a street does not run on past the corner). `buildingColliders` (skyline.ts) is the one collider set for server and client: the L remainder as axis boxes plus one yawed box on the cut. Each face is a corner shop (door, plate glass, canopy, neon or painted fascia and blade sign, door spill), names in `src/world/cornerShops.ts`.
 - **Bank walls:** one angled wall per landmark:
   - Records: a slanted shelf wall;
   - Icebox: an angled loading bay;

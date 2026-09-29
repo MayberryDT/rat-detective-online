@@ -1,14 +1,15 @@
 import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
-import {isCentralBuilding,skylineMasses} from '../shared/skyline';
+import {beyondCut,buildingColliders,chamferFace,footprintBlocks,isCentralBuilding,skylineMasses,type ChamferFace} from '../shared/skyline';
 import { WindowLightCycle } from './WindowLightCycle';
-import {windowApertures,uncoveredWindowApertures,type WindowPane,type FacadeMass} from './WindowApertures';
+import {windowApertures,uncoveredWindowApertures,facadeWalls,wallApertures,type FacadeWall,type WindowPane,type FacadeMass} from './WindowApertures';
+import {cornerEntrances,type CornerEntrance} from './cornerShops';
 import type {SpillSource} from '../prototype/StreetReadability';
 import {CITY_STREETS} from '../shared/cityPlan';
 import { STREET_LAMPS, originalCityBuildingAllowed, isRampOpening } from '../shared/grayboxLayout';
 import { generatedStreetLamps,STREET_LAMP_HEIGHT } from '../shared/streetLampLayout';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { addCityBody, removeCityBody } from '../shared/StaticCityBroadphase';
+import { addCityBody, cityBoxBody, removeCityBody } from '../shared/StaticCityBroadphase';
 import {
     createDecorationRandom,
     createWorldSpec,
@@ -64,6 +65,8 @@ export class CityGenerator {
     private steam: {mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>; x: number; z: number; phase: number}[] = [];
     private windowStates: {cycle: WindowLightCycle; uniform: {value: number}}[] = [];
     private counts: CityCounts = emptyCounts();
+    /** The chamfered building whose details are being placed: trim stops at its cut faces. */
+    private cut?: BuildingFootprint;
 
     constructor(scene: THREE.Scene, world: CANNON.World, opts: CityOptions = DEFAULT_CITY_OPTIONS, spec?: WorldSpec) {
         this.scene = scene;
@@ -178,6 +181,12 @@ export class CityGenerator {
         const wood = this.trackMaterial(new THREE.MeshStandardMaterial({color: 0x594431, roughness: 0.95}));
         bin.userData.streetSurface=wood.userData.streetSurface='obstacle';
         const canvas = this.trackMaterial(new THREE.MeshStandardMaterial({color:0x443239,roughness:1}));
+        const entrances=this.extension?cornerEntrances(layout):[];
+        // Lit shop windows of the corner entrances: an ordinary lit material, no extra program; lit
+        // glass takes no moon shadow (acne stripes across a small yawed pane).
+        const glass=entrances.length?this.trackMaterial(new THREE.MeshStandardMaterial({color:0x2a1c12,emissive:0xe89a4a,
+            emissiveIntensity:.24*AUTHORED_LIGHT_GAIN,roughness:.2,metalness:.2})):undefined;
+        if(glass)glass.userData.receiveDetailShadow=false;
         for (const building of layout) {
             yield;
             const windowStart=this.windowLights.length,detailStart=this.facadeOccluders.length;
@@ -192,10 +201,9 @@ export class CityGenerator {
                 finishWindows();
                 continue;
             }
+            this.cut=building.chamfers?.length?building:undefined;
             // Cornices and stone plinths give the original box silhouettes depth.
-            for (const y of [0.22, 3.4, bh - 0.35]) {
-                this.boxDetail(trim, cx, y, cz, bw + 0.22, 0.18, bd + 0.22);
-            }
+            for (const y of [0.22, 3.4, bh - 0.35]) this.ringDetail(building, trim, y, 0.18, 0.11);
             for (const x of [-1, 1]) for (const z of [-1, 1]) {
                 this.boxDetail(trim, cx + x * (bw / 2 - 0.08), bh / 2, cz + z * (bd / 2 - 0.08), 0.2, bh, 0.2);
             }
@@ -235,8 +243,8 @@ export class CityGenerator {
             // Restrained architectural families share the existing instance batches.
             // All relief is shallow; the original box remains the playable boundary.
             const capHeight = bh <= 16 ? 0.48 : 0.32;
-            this.boxDetail(trim, cx, bh - 0.65, cz, bw + 0.38, capHeight, bd + 0.38);
-            this.boxDetail(dark, cx, bh - 1.05, cz, bw + 0.12, 0.16, bd + 0.12);
+            this.ringDetail(building, trim, bh - 0.65, capHeight, 0.19);
+            this.ringDetail(building, dark, bh - 1.05, 0.16, 0.06);
             for (const side of [-1, 1]) {
                 const faceZ = cz + side * (bd / 2 + 0.06);
                 const faceX = cx + side * (bw / 2 + 0.06);
@@ -270,8 +278,7 @@ export class CityGenerator {
                         1.75 + slat * 0.27, cz, 0.04, 0.06, Math.min(2.8, bd * 0.32));
                     this.boxDetail(trim, cx, Math.min(6.4, bh - 2), faceZ, bw, 0.2, 0.18);
                 } else if (style === 2) {
-                    for (let y = 9; y < bh - 5; y += 12) this.boxDetail(trim, cx, y, cz,
-                        bw + 0.15, 0.15, bd + 0.15);
+                    for (let y = 9; y < bh - 5; y += 12) this.ringDetail(building, trim, y, 0.15, 0.075);
                 }
             }
             if (bh > 16) {
@@ -298,7 +305,8 @@ export class CityGenerator {
                 this.boxDetail(wood, crateX, 0.36, serviceZ, 0.65, 0.65, 0.65);
                 for (const offset of [-0.23, 0.23]) this.boxDetail(dark, crateX + offset, 0.36, serviceZ + 0.33, 0.055, 0.67, 0.035);
             }
-            if (propRandom() < 0.2) {
+            // A fire escape is one piece: it stays whole or goes when it would hang over a cut.
+            if (propRandom() < 0.2 && !building.chamfers?.some(k=>beyondCut(building,k,cx+bw/2+.95,cz+k.sz*1.3)>0)) {
                 for (let level = 0; level < 3 && 5.3 + level * 3 < bh; level++) {
                     const y = 4.5 + level * 3;
                     this.boxDetail(dark, cx + bw / 2 + 0.45, y, cz, 0.9, 0.10, 2.4);
@@ -314,12 +322,15 @@ export class CityGenerator {
                 this.boxDetail(brass, cx, 1.2, cz + side * (bd / 2 + 0.055), 0.055, 2.4, 0.035);
                 this.boxDetail(dark, cx, 2.65, cz + side * (bd / 2 + 0.25), 2.3, 0.14, 0.65);
             }
+            this.cut=undefined;
+            if(glass)for(const e of entrances)if(e.building===building)this.cornerEntrance(e,trim,dark,brass,glass);
             finishWindows();
         }
+        if(entrances.length)this.cornerSigns(entrances);
     }
 
     private addBuilding(building: BuildingFootprint, rooftopMat: THREE.Material, random: () => number): void {
-        const { cx, cz, bw, bd, bh } = building;
+        const { cx, cz, bw, bh } = building;
         const { facade, glow, rooms, panes } = this.createWindowTexture(Math.ceil(bw), Math.ceil(bh), random);
         this.textures.add(facade); this.textures.add(glow);
 
@@ -345,13 +356,14 @@ export class CityGenerator {
         });
         mat.onBeforeCompile = shader => {
             let declarations = '';
-            let emission = '#include <emissivemap_fragment>\nfloat occupancy = 1.0;\n';
+            // A cut face wraps the facade past u=1; rooms repeat with it.
+            let emission = '#include <emissivemap_fragment>\nfloat occupancy = 1.0;\n#ifdef USE_EMISSIVEMAP\nvec2 roomUv = vec2(fract(vEmissiveMapUv.x), vEmissiveMapUv.y);\n#endif\n';
             roomUniforms.forEach((room, i) => {
                 shader.uniforms[`roomRect${i}`] = room.rect;
                 shader.uniforms[`roomLight${i}`] = room.light;
                 declarations += `uniform vec4 roomRect${i};\nuniform float roomLight${i};\n`;
                 emission += `\n#ifdef USE_EMISSIVEMAP\n{
-                    vec2 insideRoom = step(roomRect${i}.xy, vEmissiveMapUv) * step(vEmissiveMapUv, roomRect${i}.zw);
+                    vec2 insideRoom = step(roomRect${i}.xy, roomUv) * step(roomUv, roomRect${i}.zw);
                     occupancy *= mix(1.0, roomLight${i}, insideRoom.x * insideRoom.y);
                 }\n#endif\n`;
             });
@@ -359,9 +371,19 @@ export class CityGenerator {
             shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + declarations)
                 .replace('#include <emissivemap_fragment>', emission);
         };
-        mat.customProgramCacheKey = () => `city-room-occupancy-v2-${roomUniforms.length}`;
+        mat.customProgramCacheKey = () => `city-room-occupancy-v3-${roomUniforms.length}`;
 
-        for(const mass of skylineMasses(building)){
+        if(building.chamfers?.length){
+            // A prism around the cut outline, the facade running on round every face.
+            facade.wrapS = glow.wrapS = THREE.RepeatWrapping;
+            const walls=facadeWalls(building);
+            if(this.extension)this.windowLights.push(...wallApertures(panes,roomUniforms,walls,bh));
+            const mesh = new THREE.Mesh(this.trackGeometry(prismGeometry(building,walls)), mat);
+            mesh.position.set(cx,bh/2,cz);
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            mesh.userData.aimTarget = true;
+            this.addObject(mesh);
+        }else for(const mass of skylineMasses(building)){
             if(this.extension)this.windowLights.push(...windowApertures(panes,roomUniforms,mass,bh));
             const geo = this.trackGeometry(new THREE.BoxGeometry(mass.w, mass.h, mass.d));
             const uv = geo.getAttribute('uv');
@@ -377,13 +399,14 @@ export class CityGenerator {
             mesh.castShadow = true; mesh.receiveShadow = true;
             mesh.userData.aimTarget = true;
             this.addObject(mesh);
-            const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC });
-            body.addShape(new CANNON.Box(new CANNON.Vec3(mass.w/2,mass.h/2,mass.d/2)));
-            body.position.set(mass.x,mass.y,mass.z);
+        }
+        // The same boxes the server gets as graybox `original` colliders.
+        for(const collider of buildingColliders(building)){
+            const body=cityBoxBody({...collider,rx:0,rz:0});
             addCityBody(this.world, body); this.bodies.push(body);
         }
         if (!isCentralBuilding(building) && random() < 0.4) {
-            this.addRooftopDetail(cx, cz, bw, bd, bh, rooftopMat, random);
+            this.addRooftopDetail(building, rooftopMat, random);
             this.counts.rooftops += 1;
         }
     }
@@ -430,15 +453,8 @@ export class CityGenerator {
         for(const side of [-1,1])this.boxDetail(brass,b.cx+side*crown.w*.28,b.bh+2,b.cz,.13,2.5,.13);
     }
 
-    private addRooftopDetail(
-        cx: number,
-        cz: number,
-        bw: number,
-        bd: number,
-        bh: number,
-        mat: THREE.Material,
-        random: () => number,
-    ): void {
+    private addRooftopDetail(building: BuildingFootprint, mat: THREE.Material, random: () => number): void {
+        const { cx, cz, bw, bd, bh } = building;
         const dw = 1.5 + random() * 2;
         const dh = 1 + random() * 2.5;
         const dd = 1.5 + random() * 2;
@@ -449,15 +465,135 @@ export class CityGenerator {
             bh + dh / 2,
             cz + (random() - 0.5) * bd * 0.4,
         );
+        // Never over a cut corner's missing roof.
+        if (building.chamfers?.some(k => beyondCut(building, k, detail.position.x + k.sx * dw / 2, detail.position.z + k.sz * dd / 2) > 0)) {
+            detail.position.x = cx; detail.position.z = cz;
+        }
         detail.castShadow = true;
         this.addObject(detail);
     }
 
-    private boxDetail(material: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number, slope=0): void {
-        if(this.extension&&!slope)this.facadeOccluders.push({x,y,z,w:sx,h:sy,d:sz});
-        dummy.position.set(x, y, z); dummy.rotation.set(slope, 0, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix();
+    private boxDetail(material: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number, slope=0, yaw=0): void {
+        const b=this.cut;
+        if(b&&!yaw)for(const k of b.chamfers??[]){
+            const over=beyondCut(b,k,x+k.sx*sx/2,z+k.sz*sz/2);
+            if(over<=.02)continue;
+            // Trim running along a wall stops at the cut; anything else in front of the face goes.
+            if(sx>=2.5&&sx>=2*sz){sx-=over;x-=k.sx*over/2;}
+            else if(sz>=2.5&&sz>=2*sx){sz-=over;z-=k.sz*over/2;}
+            else return;
+            if(sx<.3||sz<.3)return;
+        }
+        if(this.extension&&!slope){
+            // A yawed piece occludes windows by its bounds (conservative).
+            const c=Math.abs(Math.cos(yaw)),s=Math.abs(Math.sin(yaw));
+            this.facadeOccluders.push({x,y,z,w:c*sx+s*sz,h:sy,d:s*sx+c*sz});
+        }
+        dummy.position.set(x, y, z); dummy.rotation.set(slope, yaw, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix();
         const list = this.details.get(material) ?? [];
         list.push(dummy.matrix.clone()); this.details.set(material, list);
+    }
+
+    /** Trim wrapping the whole footprint (cornices, caps, belts); on a chamfered one it follows the cuts. */
+    private ringDetail(b: BuildingFootprint, material: THREE.Material, y: number, h: number, grow: number): void {
+        if(!b.chamfers?.length){this.boxDetail(material, b.cx, y, b.cz, b.bw + grow * 2, h, b.bd + grow * 2);return;}
+        const cut=this.cut;this.cut=undefined;
+        for(const m of footprintBlocks(b))this.boxDetail(material, m.x, y, m.z, m.w + grow * 2, h, m.d + grow * 2);
+        // Mitred into the side runs: the face grows by 2·grow·tan(22.5°).
+        for(const k of b.chamfers){const f=chamferFace(b,k);this.faceDetail(f, material, 0, y, -.1, f.length + grow * .83, h, grow * 2 + .2);}
+        this.cut=cut;
+    }
+
+    /** A detail on a cut face: `along` the face from its middle, `out` along its normal. */
+    private faceDetail(f: ChamferFace, material: THREE.Material, along: number, y: number, out: number, w: number, h: number, d: number): void {
+        const tx=(f.b.x-f.a.x)/f.length,tz=(f.b.z-f.a.z)/f.length;
+        this.boxDetail(material, f.x+tx*along+f.nx*out, y, f.z+tz*along+f.nz*out, w, h, d, 0, Math.atan2(-tz,tx));
+    }
+
+    /** A corner business on a cut face: quoins where the cut meets the walls, plate glass either side of
+     * a door, a canopy over it, and the boards and brackets of its fascia and blade signs. */
+    private cornerEntrance({building: b, face: f}: CornerEntrance, trim: THREE.Material, dark: THREE.Material, brass: THREE.Material, glass: THREE.Material): void {
+        const L=f.length;
+        for(const p of [f.a,f.b])this.boxDetail(trim, p.x-f.nx*.1, b.bh/2, p.z-f.nz*.1, .26, b.bh, .26);
+        // Stall riser, sill, plate glass and mullions under a transom bar.
+        this.faceDetail(f, dark, 0, .42, .06, L-.5, .84, .14);
+        this.faceDetail(f, trim, 0, .88, .1, L-.5, .08, .22);
+        for(const s of [-1,1]){
+            this.faceDetail(f, glass, s*2.5, 1.72, .03, 2.3, 1.6, .06);
+            for(const a of [1.3,3.7])this.faceDetail(f, trim, s*a, 1.72, .07, .12, 1.72, .14);
+            // Muntins split each window into a display pane under a transom row, and a café
+            // curtain rod and a dark counter line break up the lit glass.
+            this.faceDetail(f, trim, s*2.5, 1.72, .07, .07, 1.6, .1);
+            this.faceDetail(f, trim, s*2.5, 2.2, .07, 2.3, .07, .1);
+            this.faceDetail(f, dark, s*2.5, 1.32, .055, 2.26, .5, .03);
+            this.faceDetail(f, brass, s*2.5, 1.6, .06, 2.3, .03, .04);
+        }
+        this.faceDetail(f, trim, 0, 2.66, .09, L-.5, .12, .18);
+        // The door: frame, panel, its glass and a brass push bar.
+        for(const s of [-1,1])this.faceDetail(f, trim, s*.95, 1.3, .08, .16, 2.6, .16);
+        this.faceDetail(f, dark, 0, 1.15, .02, 1.6, 2.3, .06);
+        this.faceDetail(f, glass, 0, 1.65, .05, .8, .85, .04);
+        this.faceDetail(f, brass, 0, 1.08, .08, .7, .05, .05);
+        // Sign board over the shopfront, and a canopy over the door on two brackets.
+        this.faceDetail(f, dark, 0, 3.6, .05, L-.6, 1.05, .1);
+        this.faceDetail(f, brass, 0, 3.05, .08, L-.6, .06, .08);
+        this.faceDetail(f, dark, 0, 2.95, .72, 3.2, .12, 1.4);
+        this.faceDetail(f, brass, 0, 2.93, 1.42, 3.2, .2, .05);
+        for(const s of [-1,1])this.faceDetail(f, trim, s*1.45, 2.72, .6, .08, .42, 1.1);
+        // The blade sign stands off the face on two arms.
+        for(const y of [4.55,7.55])this.faceDetail(f, trim, 0, y, .45, .07, .07, .9);
+        this.faceDetail(f, dark, 0, 6.05, 1.02, .1, 3.35, .95);
+        if(this.extension&&b.bh<=16)this.faceDetail(f, trim, 0, b.bh+.35, -.3, L+.35, .7, .6);
+    }
+
+    /** Every corner sign from one canvas atlas: one material, one mesh. Neon glows; painted boards
+     * only catch a little light. Fascias run 512×64 down the left half, blades 64×256 on the right. */
+    private cornerSigns(entrances: readonly CornerEntrance[]): void {
+        if(typeof document==='undefined')return;
+        const color=document.createElement('canvas'),light=document.createElement('canvas');
+        color.width=color.height=light.width=light.height=1024;
+        const paint=color.getContext('2d')!,glow=light.getContext('2d')!;
+        paint.fillStyle='#0d0a0c';paint.fillRect(0,0,1024,1024);glow.fillStyle='#000';glow.fillRect(0,0,1024,1024);
+        const position:number[]=[],uv:number[]=[],index:number[]=[];
+        const quad=(x:number,y:number,z:number,nx:number,nz:number,hw:number,hh:number,u0:number,v0:number,u1:number,v1:number)=>{
+            const i=position.length/3,rx=nz*hw,rz=-nx*hw;
+            position.push(x-rx,y-hh,z-rz, x+rx,y-hh,z+rz, x+rx,y+hh,z+rz, x-rx,y+hh,z-rz);
+            uv.push(u0,v0,u1,v0,u1,v1,u0,v1);index.push(i,i+1,i+2,i,i+2,i+3);
+        };
+        const drawn=new Set<number>();
+        entrances.forEach(({face:f,shop},i)=>{
+            const slot=i%16,fy=slot*64,bx=512+slot%8*64,by=Math.floor(slot/8)*256;
+            if(!drawn.has(slot)){
+                drawn.add(slot);
+                for(const [ctx,lit] of [[paint,false],[glow,true]] as const){
+                    ctx.save();
+                    if(!shop.neon&&!lit){ctx.fillStyle=slot%2?'#1f2a24':'#2c1c1a';ctx.fillRect(4,fy+4,504,56);ctx.fillRect(bx+4,by+4,56,248);}
+                    ctx.strokeStyle=ctx.fillStyle=shop.ink;ctx.globalAlpha=lit&&!shop.neon?.22:1;
+                    if(shop.neon){ctx.shadowColor=shop.ink;ctx.shadowBlur=lit?14:6;}
+                    ctx.lineWidth=3;ctx.strokeRect(9,fy+9,494,46);ctx.strokeRect(bx+9,by+9,46,238);
+                    ctx.textAlign='center';ctx.textBaseline='middle';
+                    ctx.font='bold 34px Georgia, "Times New Roman", serif';ctx.fillText(shop.name,256,fy+33,470);
+                    const letters=[...shop.blade],step=226/letters.length;
+                    ctx.font=`bold ${Math.round(Math.min(38,step*.92))}px Georgia, "Times New Roman", serif`;
+                    letters.forEach((letter,n)=>ctx.fillText(letter,bx+32,by+15+step*(n+.5)));
+                    ctx.restore();
+                }
+            }
+            quad(f.x+f.nx*.12,3.6,f.z+f.nz*.12,f.nx,f.nz,3.2,.4,0,1-(fy+64)/1024,.5,1-fy/1024);
+            // Both faces of the blade, which stands along the face normal.
+            const tx=(f.b.x-f.a.x)/f.length,tz=(f.b.z-f.a.z)/f.length;
+            for(const s of [-1,1])quad(f.x+f.nx*1.02+tx*s*.056,6.05,f.z+f.nz*1.02+tz*s*.056,tx*s,tz*s,.4,1.6,bx/1024,1-(by+256)/1024,(bx+64)/1024,1-by/1024);
+        });
+        const map=new THREE.CanvasTexture(color),emissiveMap=new THREE.CanvasTexture(light);
+        map.colorSpace=emissiveMap.colorSpace=THREE.SRGBColorSpace;map.anisotropy=emissiveMap.anisotropy=4;
+        this.textures.add(map);this.textures.add(emissiveMap);
+        const geometry=new THREE.BufferGeometry();
+        geometry.setAttribute('position',new THREE.Float32BufferAttribute(position,3));
+        geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+        geometry.setIndex(index);geometry.computeVertexNormals();
+        const material=this.trackMaterial(new THREE.MeshStandardMaterial({map,emissiveMap,emissive:0xffffff,emissiveIntensity:1.25*AUTHORED_LIGHT_GAIN,roughness:.7}));
+        const signs=new THREE.Mesh(this.trackGeometry(geometry),material);
+        signs.name='corner-signs';this.addObject(signs);
     }
 
     private flushDetails(): void {
@@ -829,6 +965,28 @@ export class CityGenerator {
         this.counts.dashBatches += 1;
         this.counts.dashInstances += positions.length;
     }
+}
+
+/** Walls and roof of a chamfered building, centred like its BoxGeometry would be. The roof samples
+ * the blank texel at (0,0), as a box's top does. */
+function prismGeometry(b: BuildingFootprint, walls: readonly FacadeWall[]): THREE.BufferGeometry {
+    const position:number[]=[],normal:number[]=[],uv:number[]=[],index:number[]=[],h=b.bh/2;
+    for(const w of walls){
+        const i=position.length/3,ax=w.a.x-b.cx,az=w.a.z-b.cz,bx=w.b.x-b.cx,bz=w.b.z-b.cz;
+        position.push(ax,-h,az, bx,-h,bz, bx,h,bz, ax,h,az);
+        for(let k=0;k<4;k++)normal.push(w.nx,0,w.nz);
+        uv.push(w.u0,0,w.u1,0,w.u1,1,w.u0,1);
+        index.push(i,i+1,i+2,i,i+2,i+3);
+    }
+    const roof=position.length/3;
+    for(const w of walls){position.push(w.a.x-b.cx,h,w.a.z-b.cz);normal.push(0,1,0);uv.push(0,0);}
+    for(let k=1;k<walls.length-1;k++)index.push(roof,roof+k,roof+k+1);
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute('position',new THREE.Float32BufferAttribute(position,3));
+    geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normal,3));
+    geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    geometry.setIndex(index);
+    return geometry;
 }
 
 function emptyCounts(): CityCounts {

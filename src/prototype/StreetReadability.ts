@@ -2,13 +2,14 @@ import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import * as THREE from 'three';
 import type {BuildingFootprint} from '../shared/worldSpec';
 import type {GrayboxBox} from '../shared/grayboxLayout';
-import {isCentralBuilding} from '../shared/skyline';
+import {beyondCut,footprintBlocks,isCentralBuilding} from '../shared/skyline';
+import {boxHalfExtents,fromBoxLocal} from '../shared/boxFrame';
 import type {OverheadLight} from './StreetLightPool';
 import {FacadeBeams,windowBrightness} from './FacadeBeams';
-import {skylineMasses} from '../shared/skyline';
 import {STREET_LAMPS} from '../shared/grayboxLayout';
 import {generatedStreetLamps} from '../shared/streetLampLayout';
 import type {FacadeMass} from '../world/WindowApertures';
+import {cornerEntrances} from '../world/cornerShops';
 
 export interface SpillSource {
     x:number; z:number; y:number; nx:number; nz:number;
@@ -27,16 +28,19 @@ export function streetSpillSources(layout:readonly BuildingFootprint[]):SpillSou
     const sources:SpillSource[]=[];
     layout.forEach((b,i)=>{
         const central=isCentralBuilding(b);
+        // A cut corner takes the doors and panes that would stand in front of its face.
+        const open=(x:number,z:number,hx:number,hz:number)=>!b.chamfers?.some(k=>beyondCut(b,k,x+k.sx*hx,z+k.sz*hz)>0);
         for(const side of [-1,1]){
             // Steady transoms and workshop windows have their own visible panes;
             // upstairs apartment occupancy never leaves an invisible light source.
-            sources.push({x:b.cx,z:b.cz+side*(b.bd/2+(central?.36:.12)),y:central?4.35:2.46,nx:0,nz:side,
+            const doorZ=b.cz+side*(b.bd/2+(central?.36:.12));
+            if(open(b.cx,doorZ,.95,0))sources.push({x:b.cx,z:doorZ,y:central?4.35:2.46,nx:0,nz:side,
                 kind:'door',color:0xe0bd82,reach:10});
             // Long alley walls need spaced workshop panes, not one small pool
             // at the middle of an otherwise dark frontage. Keep the two batches.
             for(const offset of b.bd>=16?[-b.bd*.3,0,b.bd*.3]:[0]){
-                const sign=offset===0&&i%3===0;
-                sources.push({x:b.cx+side*(b.bw/2+.18),z:b.cz+offset,y:3.6,nx:side,nz:0,
+                const sign=offset===0&&i%3===0,x=b.cx+side*(b.bw/2+.18);
+                if(open(x,b.cz+offset,0,.8))sources.push({x,z:b.cz+offset,y:3.6,nx:side,nz:0,
                     kind:sign?'sign':'window',color:sign?0x9ebbc4:i%2?0xc5ab87:0x91aaa6,reach:12});
             }
         }
@@ -48,7 +52,20 @@ export function streetSpillSources(layout:readonly BuildingFootprint[]):SpillSou
         {x:-105,z:108.75,y:5.3,nx:0,nz:1,kind:'sign',color:0xc2979d,reach:12},
         {x:125,z:137.5,y:4.8,nx:0,nz:1,kind:'door',color:0xa3bda0,reach:12},
     );
+    // Corner doors on the cut faces, tinted by their signs, light the junction pavement.
+    for(const {face:f,shop} of cornerEntrances(layout))sources.push({x:f.x+f.nx*.12,z:f.z+f.nz*.12,y:2.46,nx:f.nx,nz:f.nz,
+        kind:'door',color:shop.spill,reach:11});
     return sources;
+}
+
+/** Axis boxes covering a yawed box, cut along its length so a thin diagonal wall stays thin. */
+function yawedCover(b:GrayboxBox):FacadeMass[] {
+    const alongW=b.w>=b.d,n=Math.min(32,Math.ceil(Math.max(b.w,b.d)/Math.max(1,Math.min(b.w,b.d))));
+    return Array.from({length:n},(_,i)=>{
+        const t=(i+.5)/n-.5,p=fromBoxLocal(b,alongW?t*b.w:0,0,alongW?0:t*b.d);
+        const {hx,hy,hz}=boxHalfExtents({...b,...p,w:alongW?b.w/n:b.w,d:alongW?b.d:b.d/n});
+        return {x:p.x,y:p.y,z:p.z,w:hx*2,h:hy*2,d:hz*2};
+    });
 }
 
 /** Segment/AABB clipping in the street plane. Used only during the one-time bake. */
@@ -95,8 +112,10 @@ export class StreetReadability {
      * generator so city preparation can spread the bake across frames. */
     constructor(private readonly scene:THREE.Scene,private readonly layout:readonly BuildingFootprint[],boxes:readonly GrayboxBox[],windows:readonly SpillSource[]=[],details:readonly FacadeMass[]=[]){
         this.sources=streetSpillSources(layout);
-        const blockers:SpillBlocker[]=[...layout.map(b=>({x:b.cx,z:b.cz,w:b.bw,d:b.bd})),
-            ...boxes.filter(b=>!b.original&&!b.debris&&!b.passBalls&&!b.rx&&!b.ry&&!b.rz&&b.y-b.h/2<2&&b.y+b.h/2>2)
+        // Yawed walls block by pieces of their bounds, so no light leaks through a diagonal wall.
+        const yawed=boxes.filter(b=>!b.original&&!b.debris&&!b.passBalls&&!b.rx&&!b.rz&&b.ry).flatMap(yawedCover);
+        const blockers:SpillBlocker[]=[...layout.flatMap(b=>b.chamfers?.length?footprintBlocks(b):[{x:b.cx,z:b.cz,w:b.bw,d:b.bd}]),
+            ...[...boxes.filter(b=>!b.original&&!b.debris&&!b.passBalls&&!b.rx&&!b.ry&&!b.rz),...yawed].filter(b=>b.y-b.h/2<2&&b.y+b.h/2>2)
                 .map(b=>({x:b.x,z:b.z,w:b.w,d:b.d}))];
         this.lights=[...this.sources,...windows.filter(s=>s.y<12)].map(s=>{
             const nearby=blockers.filter(b=>Math.abs(b.x-s.x)<s.reach+b.w/2&&Math.abs(b.z-s.z)<s.reach+b.d/2);
@@ -109,8 +128,9 @@ export class StreetReadability {
         this.texture.minFilter=this.texture.magFilter=THREE.LinearFilter;
         this.texture.generateMipmaps=false;
         this.beams=new FacadeBeams(scene,[...this.sources,...windows],[
-            ...layout.flatMap(skylineMasses),
+            ...layout.flatMap(footprintBlocks),
             ...boxes.filter(b=>!b.original&&!b.hidden&&!b.debris&&!b.rx&&!b.ry&&!b.rz),
+            ...yawed,
             ...details,
         ],blockers);
     }

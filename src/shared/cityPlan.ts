@@ -1,6 +1,7 @@
-import type { BuildingFootprint } from './worldSpec';
-import {neighborhoodHeight} from './skyline';
+import type { BuildingFootprint, FootprintChamfer } from './worldSpec';
+import {CORNER_CUT,chamferFace,neighborhoodHeight} from './skyline';
 import {DOCKS_LOT,HARBOUR,PRECINCT_LOT,QUAY,overlaps} from './city/kit/northPlan';
+import {DISPATCH_STATIONS,LAUNCH_MACHINES} from './chaosState';
 
 /** The layout-2 street network. Tenements are still cut from it, so every
  * surviving building keeps its footprint, height and place in the order. */
@@ -152,9 +153,45 @@ export function cityStreetBuildings(original:BuildingFootprint[]):BuildingFootpr
     const lanes=CITY_STREETS.filter(r=>!LEGACY_STREETS.some(l=>Math.abs(r.x-l.x)<=(l.w-r.w)/2&&Math.abs(r.z-l.z)<=(l.d-r.d)/2))
         .map(r=>({xmin:r.x-r.w/2-1,xmax:r.x+r.w/2+1,zmin:r.z-r.d/2-1,zmax:r.z+r.d/2+1}));
     const districts=[HARBOUR,DOCKS_LOT,PRECINCT_LOT];
-    return buildings.map((b,i)=>({...b,bh:neighborhoodHeight(b.cx,b.cz,b.bh,i)}))
+    return cutJunctionCorners(buildings.map((b,i)=>({...b,bh:neighborhoodHeight(b.cx,b.cz,b.bh,i)}))
         .filter(b=>!districts.some(r=>overlaps(r,b.cx,b.cz,b.bw,b.bd)))
-        .flatMap(b=>lanes.reduce<BuildingFootprint[]>((kept,lane)=>kept.flatMap(p=>trim(p,lane)),[b]));
+        .flatMap(b=>lanes.reduce<BuildingFootprint[]>((kept,lane)=>kept.flatMap(p=>trim(p,lane)),[b])));
+}
+
+/** Cut the corner of every tenement standing on a junction corner where both streets run on past it:
+ * a flat 45° face that turns a ball fired down one street into the cross street. A corner stays square
+ * when a pillar, launcher or spawn stands in front of the face, or the building is too small for it. */
+function cutJunctionCorners(buildings:BuildingFootprint[]):BuildingFootprint[] {
+    const c=CORNER_CUT,cuts=new Map<BuildingFootprint,FootprintChamfer[]>();
+    const clear=[...DISPATCH_STATIONS.filter(s=>s.y===0).map(s=>({x:s.x,z:s.z,r:2})),
+        ...LAUNCH_MACHINES.flatMap(m=>[{x:m.box.x,z:m.box.z,r:2.5},{x:m.pad.x,z:m.pad.z,r:m.pad.radius+1}]),
+        ...CITY_SPAWN_CLEARANCES.map(([x,z])=>({x,z,r:2}))];
+    for(const v of CITY_STREETS)for(const h of CITY_STREETS){
+        if(v.d<=v.w||h.w<=h.d)continue;
+        const x0=v.x-v.w/2,x1=v.x+v.w/2,z0=h.z-h.d/2,z1=h.z+h.d/2;
+        if(v.z-v.d/2>z1||v.z+v.d/2<z0||h.x-h.w/2>x1||h.x+h.w/2<x0)continue;
+        for(const qx of [-1,1] as const)for(const qz of [-1,1] as const){
+            const jx=qx<0?x0:x1,jz=qz<0?z0:z1;
+            // Both streets must run on past the corner, or the face would open onto a wall.
+            if((qz<0?v.z-v.d/2>jz-c:v.z+v.d/2<jz+c)||(qx<0?h.x-h.w/2>jx-c:h.x+h.w/2<jx+c))continue;
+            const k:FootprintChamfer={sx:qx<0?1:-1,sz:qz<0?1:-1};
+            const b=buildings.find(b=>{
+                const dx=(b.cx+k.sx*b.bw/2-jx)*qx,dz=(b.cz+k.sz*b.bd/2-jz)*qz;
+                return dx>=0&&dx<=2.5&&dz>=0&&dz<=2.5;
+            });
+            if(!b||b.bw<1.5*c||b.bd<1.5*c)continue;
+            const face=chamferFace(b,k),fx=face.b.x-face.a.x,fz=face.b.z-face.a.z;
+            if(clear.some(p=>{
+                const t=Math.max(0,Math.min(1,((p.x-face.a.x)*fx+(p.z-face.a.z)*fz)/(fx*fx+fz*fz)));
+                return Math.hypot(p.x-face.a.x-fx*t,p.z-face.a.z-fz*t)<p.r+2;
+            }))continue;
+            // Two cuts on one wall need room for the wall between them.
+            const all=[...cuts.get(b)??[],k];
+            if(all.some(o=>o!==k&&(o.sz!==k.sz?b.bd:b.bw)<=2*c+2))continue;
+            cuts.set(b,all);
+        }
+    }
+    return buildings.map(b=>cuts.has(b)?{...b,chamfers:cuts.get(b)}:b);
 }
 
 /** What remains of a footprint beside a lane; slivers under 9 units go. */
