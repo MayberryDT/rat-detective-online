@@ -8,6 +8,8 @@ import { MAX_HP, WIN_DISPLAY_MS, type PlayerData, type RoundState } from '../../
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
 import type { CityFact } from '../../src/shared/city/facts';
+import { cityModel } from '../../src/shared/city/model';
+import { cityDigest } from '../../src/worker/city/digest';
 
 // Ways the room could record the wrong story, written before the code:
 // 1. Bots are counted as humans (or the reverse), so Tyler's play is drowned by bots.
@@ -19,6 +21,7 @@ import type { CityFact } from '../../src/shared/city/facts';
 // 7. Heat from the earlier releases is lost or counted twice by the migration.
 // 8. The archive misses facts: situations without K/D/A, standing or fire rate; fight windows without the seconds before the hit.
 // 9. Private facts leak without the token, or public aggregates are unreadable from a file page.
+// 10. A banked hit is missed, a direct hit counts as banked, or one ball's wall bounce leaks onto another.
 type Internals = {
   players: Map<string, PlayerData>; round: RoundState; chaos: ChaosSimulation;
   sessions: Map<string, { token: string; until: number | null }>;
@@ -123,6 +126,30 @@ describe('city recorder in the room', () => {
     });
     const death = (await archived()).find(f => f.type === 'death');
     expect(death?.type === 'death' && death.cause).toBe('headshot');
+  });
+
+  it('tells banked hits from direct ones, ball by ball', async () => {
+    const stub = await cityRoom();
+    await runInDurableObject(stub, async (instance: GameRoom) => {
+      const game = instance as unknown as Internals, now = Date.now();
+      play(game, now, 0);
+      const bot = PERSISTENT_BOT_IDS[0], e = { shotId: 's', at: now, tick: 1, epoch: 'e', point: { x: -10, y: 1, z: -10 } };
+      game.city.balls([
+        { ...e, owner: 'human-live', ballId: 'bank', outcome: 'world-bounce' },
+        { ...e, owner: 'human-live', ballId: 'bank', outcome: 'world-bounce' },
+        { ...e, owner: 'human-live', ballId: 'direct', outcome: 'rat-body', victimId: bot },
+        { ...e, owner: 'human-live', ballId: 'bank', outcome: 'rat-head', victimId: bot },
+        { ...e, owner: 'human-live', ballId: 'wall-then-gone', outcome: 'world-bounce' },
+        { ...e, owner: 'human-live', ballId: 'wall-then-gone', outcome: 'lifetime' },
+        { ...e, owner: 'human-live', ballId: 'wall-then-gone', outcome: 'rat-body', victimId: bot },
+      ], now + 10);
+      game.city.flush(now + 20, true); await game.city.settled();
+    });
+    const balls = (await archived()).filter(f => f.type === 'ball');
+    expect(balls.map(b => b.type === 'ball' && [b.outcome, b.bounces ?? 0])).toEqual([['rat-body', 0], ['rat-head', 2], ['lifetime', 1], ['rat-body', 0]]);
+    const places = await stub.cityPlaces(all), flows = await stub.cityFlows(all), model = cityModel();
+    const text = cityDigest({ range: all, days: places.days, places: model.places, counts: places.places, modes: places.modes, flows: flows.flows });
+    expect(text).toContain('Banked off a wall: 33% of human hits');
   });
 
   it('keeps flushed counts through eviction without counting them twice', async () => {

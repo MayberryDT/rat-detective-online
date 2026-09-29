@@ -1,6 +1,6 @@
 # The city map
 
-Status (2026-09-29): **steps 1–3 are live** on production, Worker `00e3129e-6a33-40e0-acb8-f5810a251f60` (Tyler: "go ahead and deploy it to the live game"), with the same client and protocol 22. See [the receipt](verification/heat-map-release-2026-09-28.md). Steps 4–6 are the plan. **First question to answer once Tyler has played:** shots per minute alive, humans against bots (the digest's Shooting section).
+Status (2026-09-29): **steps 1–3 are live** on production, Worker `00e3129e-6a33-40e0-acb8-f5810a251f60` (Tyler: "go ahead and deploy it to the live game"), with the same client and protocol 22. See [the receipt](verification/heat-map-release-2026-09-28.md). Steps 4–6 are the plan. **First answer (Tyler's 12-minute Excessive Force session, 2026-09-29):** humans fire 176 shots per minute alive and hit 6%; bots fire 108 and hit 3%. Tyler clicks every shot (there is no hold-to-fire) and won 36/9/9. The session also exposed two recorder bugs, since fixed in source: every death was filed as `missile`, and sight stopped at 60 units.
 
 The city map is the single document for everything about the city: where things are, what happens there, how often, how dangerous, and what should change. People read it as the page at [/heatmap](https://ratdetective.online/heatmap) (to become `/map`). Agents read it as text, through this file and the live endpoints below. Both renderings come from the same data, so they can never disagree.
 
@@ -137,7 +137,7 @@ Defined once in `src/shared/city/facts.ts` (`RatSituation`, `WorldSituation`), w
 
 **Aggregates the room keeps live**, in SQLite, per UTC day, layout version and assignment, and kept forever:
 - `city_cells`: cells per layer. The layers are `humans` and `bots` (seconds), `deaths`, `kills`, `spawns`, `pickups`, `landings`, `anomalies`, `shots-human`, `shots-bot`, and `ball-<outcome>` for every ball of every rat.
-- `city_places`: per place, `human-s`, `bot-s`, `still-human-s`, `still-bot-s`, `deaths`, `deaths-human`, `deaths-bot`, `kills`, `kills-human`, `kills-bot`, `kill-dist-dm`, `shots-human`, `shots-bot`, `hits-human`, `hits-bot`, `spawns`, `spawn-deaths-5s`, `pickup:<kind>`, `launches`, `landings`, `landing-clips`, `case-take`, `case-drop`, `case-steal`, `deliveries`, `anomaly:<what>`.
+- `city_places`: per place, `human-s`, `bot-s`, `still-human-s`, `still-bot-s`, `deaths`, `deaths-human`, `deaths-bot`, `kills`, `kills-human`, `kills-bot`, `kill-dist-dm`, `shots-human`, `shots-bot`, `hits-human`, `hits-bot`, `bank-hits-human`, `bank-hits-bot` (hits that came off a wall first), `spawns`, `spawn-deaths-5s`, `pickup:<kind>`, `launches`, `landings`, `landing-clips`, `case-take`, `case-drop`, `case-steal`, `deliveries`, `anomaly:<what>`.
 - `city_flows`: place-to-place transitions, by humans and by bots.
 
 Discrete facts also sit in `city_events` for 30 days. Heat v1's tables were folded into `city_cells` by the migration.
@@ -260,4 +260,7 @@ The brainstorm sketch (`output/city-map/city-map.html`: docks, precinct, north s
 - **Sampling:** once a second, plus 5-a-second windows around every fight. The bot-only city records every 5 s.
 - **Bots:** they will be redone entirely ("in a way you can't even imagine"). The situation stays a shared definition they may use, not a constraint on them.
 - **Shooting:** measure how often humans and bots shoot (Tyler, 2026-09-29). This covers the counts and cells by who, fire rate in every situation, shots in K/D/A, and the digest's shots per minute.
+- **Shooting is always good** (Tyler, 2026-09-29): there is no downside to firing except that rivals hear it. Cheese banks off walls, so firing with nobody in view is round-corner fire at where a rat might be, not waste; the Hunch (seeing through walls at full health) makes those bank shots aimed. The recorder counts banked hits (`bank-hits-*`, `bounces` on a human's ball facts). The chaos and the volume of cheese are wanted; 5 HP exists so a rat can stay in the fight and take hits. Do not treat blind fire or low hit rates as problems to reduce.
+- **Bot skill ceiling:** bots must not outplay Tyler (a former collegiate League of Legends player) in the base game; their current level is about right. A separate "nightmare" difficulty could be fun later. The overhaul is about moving and playing more like humans, not about being stronger.
+- **Needleworks in the first session was an anomaly:** the case got stuck on its second floor and rats died there repeatedly retrieving it. Do not read that round's Needleworks heat as normal.
 - **Public detail:** aggregates and the page are public; events and the archive need the token.

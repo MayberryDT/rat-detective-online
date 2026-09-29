@@ -1,5 +1,5 @@
 import type { ChaosState } from '../../shared/chaosState';
-import type { PlayerData, RoundState, Vec3Data } from '../../shared/networkProtocol';
+import type { PlayerData, RoundState, ShotResultOutcome, Vec3Data } from '../../shared/networkProtocol';
 import type { PickupEvent, ShotResultEvent } from '../../shared/ChaosSimulation';
 import type { GrayboxBox } from '../../shared/grayboxLayout';
 import { CITY_BOUNDS } from '../../shared/grayboxLayout';
@@ -26,6 +26,8 @@ export const FLUSH_MS = 60_000;
 export const WINDOW_BEFORE_MS = 3000;
 export const WINDOW_AFTER_MS = 2000;
 const RING = 30;
+/** Ball outcomes after which the ball keeps flying. */
+const IN_FLIGHT: ReadonlySet<ShotResultOutcome> = new Set<ShotResultOutcome>(['first-step', 'world-bounce', 'ironclad-reflect', 'dispatch-contact', 'pressure-contact', 'case-contact']);
 /** Humans kill from far off (a third of Tyler's first 36 kills were past 50 units), so sight reaches across a district. */
 const SIGHT_RANGE = 150;
 const ANOMALY_COOLDOWN_MS = 10_000;
@@ -56,6 +58,8 @@ export class CityRecorder {
   private readonly lives = new Map<string, Life>();
   private readonly rings = new Map<string, Sample[]>();
   private readonly windows: Array<{ ids: Set<string>; from: number; until: number }> = [];
+  /** Wall bounces per live ball, so a hit knows whether it was banked. Bounded by the sim's ball cap. */
+  private readonly bounces = new Map<string, number>();
   private readonly flights = new Map<string, { machine?: string; start: number; apex: number }>();
   private readonly seenLaunches = new Set<string>();
   private readonly anomalyAt = new Map<string, number>();
@@ -142,17 +146,28 @@ export class CityRecorder {
     for (const e of events) {
       if (e.outcome === 'first-step') continue;
       const at = e.point ?? e.end;
+      if (e.outcome === 'world-bounce') {
+        this.bounces.set(e.ballId, (this.bounces.get(e.ballId) ?? 0) + 1);
+        if (this.bounces.size > 1024) this.bounces.delete(this.bounces.keys().next().value!);
+      }
+      const bounced = this.bounces.get(e.ballId) ?? 0;
+      if (!IN_FLIGHT.has(e.outcome)) this.bounces.delete(e.ballId);
       if (e.owner && (e.outcome === 'rat-body' || e.outcome === 'rat-head')) {
         this.ledger.hit(e.owner, e.outcome === 'rat-head');
         const shooter = this.lastPosition(e.owner);
-        if (shooter) this.measure(now, this.places.at(shooter.x, shooter.y, shooter.z).id, `hits-${this.who(e.owner)}`);
+        if (shooter) {
+          const place = this.places.at(shooter.x, shooter.y, shooter.z).id;
+          this.measure(now, place, `hits-${this.who(e.owner)}`);
+          // Shooting round corners is the game: a banked hit came off at least one wall first.
+          if (bounced) this.measure(now, place, `bank-hits-${this.who(e.owner)}`);
+        }
       }
       if (at) this.cell(now, `ball-${e.outcome}`, at);
       // World bounces and bots' balls only matter in aggregate; a human's ball ends are facts.
       if (e.outcome === 'world-bounce' || !e.owner || this.deps.isBot(e.owner)) continue;
       const place = at ? this.places.at(at.x, at.y, at.z).id : undefined;
       this.emit({ ...this.context(now), type: 'ball', ...(e.owner ? { a: this.actor(e.owner) } : {}), outcome: e.outcome,
-        ...(at ? { p: p3(at), place } : {}), ...(e.victimId ? { victim: this.actor(e.victimId) } : {}) });
+        ...(at ? { p: p3(at), place } : {}), ...(e.victimId ? { victim: this.actor(e.victimId) } : {}), ...(bounced ? { bounces: bounced } : {}) });
     }
   }
 

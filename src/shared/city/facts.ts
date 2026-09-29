@@ -61,7 +61,8 @@ export type CityFact = FactContext & (
   | { type: 'window'; reason: 'damage'; from: number; to: number; samples: Record<string, Array<[number, number, number, number, number, number]>> }
   | { type: 'spawn'; a: number; p: P3; place: string; nearest?: number }
   | { type: 'shot'; a: number; human: boolean; p: P3; place: string; dir: P3; gapMs?: number }
-  | { type: 'ball'; a?: number; outcome: ShotResultOutcome; p?: P3; place?: string; victim?: number }
+  /** `bounces`: wall bounces before this end; a banked hit has at least one. */
+  | { type: 'ball'; a?: number; outcome: ShotResultOutcome; p?: P3; place?: string; victim?: number; bounces?: number }
   /** `incoming`: the hit came with a ball's travel direction (true for ordinary shots). */
   | { type: 'damage'; a?: number; victim: number; dmg: number; head: boolean; explosive: boolean; incoming: boolean; ap?: P3; vp: P3; dist?: number; hpAfter: number }
   | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[] }

@@ -32,6 +32,8 @@ export function cityDigest(input: DigestInput): string {
   out.push('## Shooting');
   if (humanS > 0) out.push(`- Humans fire ${(shotsH / (humanS / 60)).toFixed(1)} shots per minute alive; ${shotsH ? pct(hitsH / shotsH) : '–'} hit a rat.`);
   if (botS > 0) out.push(`- Bots fire ${(shotsB / (botS / 60)).toFixed(1)} shots per minute alive; ${shotsB ? pct(hitsB / shotsB) : '–'} hit a rat.`);
+  const bankH = total('bank-hits-human'), bankB = total('bank-hits-bot');
+  if (hitsH || hitsB) out.push(`- Banked off a wall: ${hitsH ? pct(bankH / hitsH) : '–'} of human hits, ${hitsB ? pct(bankB / hitsB) : '–'} of bot hits.`);
   out.push('');
 
   const judged = rows.filter(r => r.use !== undefined && r.place.area >= 256 && humanS >= MIN_HUMAN_SECONDS * 3);
