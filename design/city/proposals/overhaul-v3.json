@@ -1,0 +1,48 @@
+{
+  "id": "proposal:overhaul-v3",
+  "title": "The city overhaul (layout 3)",
+  "status": "Building on branch city/overhaul; ships only on Tyler's OK",
+  "fromLayout": 2,
+  "toLayout": 3,
+  "summary": "Fill the dead north: the docks and the harbour along the north edge (quay, piers, cranes, container yard, the Pier 9 warehouse, a boardable freighter; the water drowns), the Panopticon precinct in the north-west (front house, a three-floor ring cellblock round a guard tower, the yard), Gate Lane from the Gate to the precinct, Quay Road, north sewer branches, cut corners and one bank wall in every landmark, a chute off Needleworks' upper floors, and Ironclad moved into the fights. Every district gets a job in every assignment. Plan: docs/city-overhaul.md.",
+  "goals": [
+    "Rats go north: the docks and the precinct become places people play, not the empty quarter of the map.",
+    "More banking shots: angled and curved walls (cut corners, landmark bank walls, the ring cellblock, cell bars) give cheese something to glance off.",
+    "The west comes alive: the precinct and Gate Lane bring the fight to the west side.",
+    "The case never sits stuck upstairs in Needleworks: the chute brings rats and a loose case down to the street.",
+    "Ironclad is worth taking: sites moved to where the fights are (the precinct armoury, beside the Records forecourt)."
+  ],
+  "predictions": [
+    {
+      "id": "north-use",
+      "says": "The north third's share of human time rises (the numerator of Use; layout 2 held about a quarter of the map with almost no play).",
+      "expect": "up",
+      "measure": { "kind": "share", "key": "human-s", "where": { "districts": ["north-west", "north", "north-east"] } }
+    },
+    {
+      "id": "banked-hits",
+      "says": "A bigger share of human hits come off a wall first.",
+      "expect": "up",
+      "measure": { "kind": "ratio", "num": "bank-hits-human", "den": "hits-human" }
+    },
+    {
+      "id": "west-deaths",
+      "says": "The west third's share of all deaths rises: the fight reaches the precinct and Gate Lane.",
+      "expect": "up",
+      "measure": { "kind": "share", "key": "deaths", "where": { "districts": ["north-west", "west", "south-west"] } }
+    },
+    {
+      "id": "needleworks-case-upstairs",
+      "says": "Less of the case's life happens on Needleworks' upper floors: the share of case takes, drops and steals on floors 8 and 16 falls (the public counts' stand-in for the case's time upstairs; the archive's case facts give the exact time).",
+      "expect": "down",
+      "measure": { "kind": "share", "key": ["case-take", "case-drop", "case-steal"], "where": { "places": ["floor:needleworks:8", "floor:needleworks:16"] } }
+    },
+    {
+      "id": "ironclad-claims",
+      "says": "Ironclad is claimed more often per rat-hour.",
+      "expect": "up",
+      "measure": { "kind": "rate", "key": "pickup:ironclad", "per": ["human-s", "bot-s"] }
+    }
+  ],
+  "baseline": "design/city/layouts/layout-2.json"
+}

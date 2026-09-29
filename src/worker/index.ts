@@ -189,6 +189,12 @@ export default {
         return respond(await room.fetch(request));
       }
 
+      // The city map moved from /heatmap to /map (map.html); old links and bookmarks keep working.
+      if(url.pathname==='/heatmap'||url.pathname==='/heatmap.html'){
+        url.pathname='/map';
+        return respond(Response.redirect(url.href,301));
+      }
+
       const asset=await env.ASSETS.fetch(request);
       // Vite fingerprints everything under /assets/, so returning visitors need not revalidate.
       // Never the single-page fallback: a missing old chunk must not pin the page at that name.

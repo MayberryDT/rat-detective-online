@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rat Detective · The city map</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preload" href="/fonts/bangers/Bangers-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/special-elite/SpecialElite-latin.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body>
+    <aside id="side">
+        <header>
+            <h1>The city map</h1>
+            <p class="file" id="file"></p>
+        </header>
+        <nav id="modes" aria-label="Mode"></nav>
+        <div id="panel"></div>
+        <p class="note" id="status"></p>
+    </aside>
+    <main id="wrap"><canvas id="map"></canvas><div id="tip" hidden></div><div id="legend"></div></main>
+    <script type="module" src="/src/map/main.ts"></script>
+</body>
+</html>

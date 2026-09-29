@@ -1,8 +1,8 @@
 # The city map
 
-Status (2026-09-29): **steps 1–3 are live** on production, Worker `00e3129e-6a33-40e0-acb8-f5810a251f60` (Tyler: "go ahead and deploy it to the live game"), then the recorder fixes in `a57db85b-bad7-483d-9dbf-51368235a768`, with the same client and protocol 22. See [the receipt](verification/heat-map-release-2026-09-28.md). Steps 4–6 are the plan. **First answer (Tyler's 12-minute Excessive Force session, 2026-09-29):** humans fire 176 shots per minute alive and hit 6%; bots fire 108 and hit 3%. Tyler clicks every shot (there is no hold-to-fire) and won 36/9/9. The session also exposed two recorder bugs, since fixed in source: every death was filed as `missile`, and sight stopped at 60 units.
+Status (2026-09-29): **steps 1–3 are live** on production, Worker `00e3129e-6a33-40e0-acb8-f5810a251f60` (Tyler: "go ahead and deploy it to the live game"), then the recorder fixes in `a57db85b-bad7-483d-9dbf-51368235a768`, with the same client and protocol 22. See [the receipt](verification/heat-map-release-2026-09-28.md). **Steps 4–6 (the `/map` page's Observe, Analyse and Design modes) are built on branch `city/overhaul`** and ship with the overhaul. **First answer (Tyler's 12-minute Excessive Force session, 2026-09-29):** humans fire 176 shots per minute alive and hit 6%; bots fire 108 and hit 3%. Tyler clicks every shot (there is no hold-to-fire) and won 36/9/9. The session also exposed two recorder bugs, since fixed in source: every death was filed as `missile`, and sight stopped at 60 units.
 
-The city map is the single document for everything about the city: where things are, what happens there, how often, how dangerous, and what should change. People read it as the page at [/heatmap](https://ratdetective.online/heatmap) (to become `/map`). Agents read it as text, through this file and the live endpoints below. Both renderings come from the same data, so they can never disagree.
+The city map is the single document for everything about the city: where things are, what happens there, how often, how dangerous, and what should change. People read it as the page at [/map](https://ratdetective.online/map) (the old `/heatmap` address redirects there once the overhaul ships; production serves the old heat map at `/heatmap` until then). Agents read it as text, through this file and the live endpoints below. Both renderings come from the same data, so they can never disagree.
 
 Tyler's brief (2026-09-28): track everything (pickups and their kinds, routes, cheese balls, when and where things go off), measure all of it, connect all of it, and make it readable at high fidelity. The aim is a deep, statistical understanding of how the game plays, so we can design the best map ever and keep it good for years.
 
@@ -184,43 +184,47 @@ Every rate is divided by its exposure and shown with its uncertainty. **Humans a
 
 ## Static analyses: what the layout implies before anyone plays
 
-These are computed from layers 0–1 alone. They are the priors, and telemetry tests them.
+These are computed from layers 0–1 alone. They are the priors, and telemetry tests them. Built in `src/shared/city/analysis.ts` on a 1-unit street grid from the collision boxes (`StreetGrid`: solids above a rat's hop height stop a walk, solids across eye height stop sight, solids across mid-body are cover, cell bars stop a walk but neither sight nor cheese, tilted ramps and stairs are walkable, the harbour is water except under decks), sampled on the map's 4-unit cells:
 
-- **Area** per place and district.
-- **Travel-time fields:** walking seconds from every cell to each spawn place, case spawn, destination, zone and pickup, over the navigation graph (including stairs, sewer and launch arcs).
-- **Exposure raster:** for each street cell, how much of the city is in line of sight, from footprints and heights. Long open lanes show up before anyone dies in them.
-- **Chokepoints:** the places with the highest betweenness on the place graph.
-- **Vertical access:** how each roof and upper floor can be reached, and how long it takes.
-- **Every place has a job:** a check that each district is used by at least one assignment objective, pickup or route.
+- **Exposure raster** (`sightlines`): for each street cell, the open ground in view and the longest clear line, 32 directions at eye height up to 180 units. Long open lanes show up before anyone dies in them.
+- **Cover density** (`coverDensity`): the share of ground within 6 units that shields a body.
+- **Travel-time field** (`travelSeconds`, `travelField`): running seconds (18 units a second, no corner cutting) from every street cell to the nearest objective (case spawn, supply, pillar, zone, Paper Chase stop; upstairs ones from the street below, sewer ones left out), and **spawn-to-objective** medians per district (`spawnReach`).
+- **Cut-off ground** (`islands`): street cells that cannot be walked to from the main network.
+- **Chokepoints** (`chokepoints`): the betweenness of each street place on the graph of places that touch.
+- **Every place has a job** (`jobs`): case spawns, supplies, pillars, zones, stops and spawn points per district; a district with no objective is stamped NO JOB.
+- Not built yet: routes through stairs, the sewer and launch arcs, and the vertical-access table (how each roof and upper floor is reached, and how long it takes).
 
 ## Agent surfaces
 
-| Surface | Returns | Status |
-| --- | --- | --- |
 All ranges take `days=1–3650`, `days=all`, or `from` and `to` (UTC days); aggregates also take `mode=` and `layout=`. Built in `src/worker/city/cityApi.ts`.
 
 | Surface | Returns | Status |
 | --- | --- | --- |
 | `GET /api/heat/v1` | Every cell layer | Live |
 | `GET /api/city/v1/digest` | The Markdown reading, with evidence handles | Built |
-| `GET /api/city/v1/model` | Layers 0–1: 71 entities and 196 places with IDs, kinds, names, areas and centres | Built |
+| `GET /api/city/v1/model` | Layers 0–1: every layout entity and every place (262 in layout 3; 196 in layout 2) with IDs, kinds, names, areas and centres | Built |
 | `GET /api/city/v1/places` | Summed place counts, and human time by assignment | Built; rates come from `src/shared/city/measures.ts` |
 | `GET /api/city/v1/flows` | Place-to-place transitions by humans and bots | Built |
 | `GET /api/city/v1/events?type=&round=&since=&limit=` | Discrete facts from the last 30 days (a round's timeline is `round=`) | Built; bearer `CITY_TOKEN` |
 | `GET /api/city/v1/archive?prefix=&cursor=`, `/archive/<key>` | The raw archive listing and objects | Built; bearer `CITY_TOKEN` |
 | `node scripts/city-mirror.mjs [--base=…]` | Mirrors the model, aggregates and every archived fact into `output/city/city.db`: tables `facts`, `situations` (one row per rat per frame), `place_counts`, `flows`, `cells`, `places`, `entities` | Built; agents only. The token is in `~/.config/rat-detective/city-token` on Veelox and Halla |
+| `/map` (alias `/heatmap`, a 301 that keeps the query) | The page below: the same public endpoints, drawn | Built on `city/overhaul`; production still serves the old `/heatmap` page until the overhaul ships |
+| `design/city/proposals/*.json`, `design/city/layouts/*.json` | Proposals (goals, predictions as measures) and layout snapshots for diffs | Built; parsed by `parseProposal`, judged by `judge` in `src/shared/city/verdict.ts` |
 
 Query the mirror with `read output/city/city.db?q=SELECT …`.
 
 ## The page
 
-`/heatmap` becomes **`/map`**, with the old address kept as an alias. It has three modes over the same canvas:
+**`/map`** (`map.html`, `src/map/`), with `/heatmap` kept as an alias: the Worker answers `/heatmap` and `/heatmap.html` with a 301 to `/map`, query intact (`run_worker_first` lists `/heatmap`). The city is drawn from the shared layout modules (graybox and kit colliders, `CITY_STREETS`, `kitCity().water`, piers, sewer halls, the jobs registries), so layout 3 shows as built. Every choice lives in the URL, so a refresh keeps the view; the open mode reloads its data every minute. `?api=https://ratdetective.online` points a local build at production's public endpoints. Three modes over one canvas:
 
-- **Observe:** any fact or measure as cells or as place shading. Adds timelines (scrub through a round), flow arrows between places, and per-place cards on hover.
-- **Analyse:** the static analyses (travel-time fields, exposure, chokepoints, vertical access).
-- **Design:** a proposal drawn over today's city, with its static analyses compared side by side. After it ships, before and after telemetry.
+- **Observe** (`observe.ts`): any recorded layer (human and bot time, deaths, killer spots, shots, cheese bounces, hits and run-outs, pickups, landings, spawns, faults) as 4-unit cells or shaded per place, by floor, date range, layout and assignment. Upper floors, rooms, roofs, lookouts and the chutes are chips at their building (8, 16, R, L, C). Flow arrows between places and the overlays (sewer, supplies, case spawns, launchers, pillars, zones, stops). Hover for a place card with its counts. Counts under retired layout-2 IDs fold into the place that now holds that ground (`PLACES.successor`).
+- **Analyse** (`analyse.ts`): the static analyses above as layers (continuous ones shaded by rank, so a city of long streets still shows its most exposed cells), and the measures per place: use, danger to humans, danger for all rats, lethality, human and bot fire rates, banked-hit share for humans and bots, spawn traps and bot divergence (per place, and the Jensen–Shannon distance for the whole city). Each shows its 95% interval and exposure; a place under the minimums (10 human rat-minutes, or 20 events for counted measures) is drawn faint and left out of the table. The digest is shown as written.
+- **Design** (`design.ts`): every proposal in `design/city/proposals/`, each prediction's reading on the layout before and the layout after (`/api/city/v1/places?layout=`), stamped *waiting for play*, *met*, *missed* or *too close to call*; the footprint diff against the proposal's baseline snapshot (added, removed, kept; Before and After views); and the static analyses of both layouts side by side (walkable ground, the north third's share, cut-off ground, median sightline and cover).
+- Not built: scrubbing a round's timeline. Round facts are behind the token (`events?round=`), and the page uses only public endpoints.
 
-The brainstorm sketch (`output/city-map/city-map.html`: the docks, the Panopticon precinct, north sewer branches, the Gate–precinct route, cut junction corners, landmark bank walls, the Needleworks chute and Ironclad moves; agreed 2026-09-29, see [the juice plan](juice-plan.md)) moves into Design mode as the first proposal. The overhaul itself is built in one run from [the city overhaul plan](city-overhaul.md); afterwards the layout is tuned from data for at least a week, one `layoutVersion` per adjustment.
+`proposal:overhaul-v3` is the first proposal: the layout-3 overhaul, with five predictions (north share of human time up, banked-hit share up, the west third's share of deaths up, the case's Needleworks-upstairs share down, Ironclad claims per rat-hour up). A prediction is judged only when both layouts have 30 human rat-minutes (`VERDICT_HUMAN_SECONDS`) and enough events, and called only when the 95% intervals part; play time counts in minutes, not seconds, so an hour is not 3,600 trials.
+
+The brainstorm sketch (`output/city-map/city-map.html`: the docks, the Panopticon precinct, north sewer branches, the Gate–precinct route, cut junction corners, landmark bank walls, the Needleworks chute and Ironclad moves; agreed 2026-09-29, see [the juice plan](juice-plan.md)) became that proposal. The overhaul itself is built in one run from [the city overhaul plan](city-overhaul.md); afterwards the layout is tuned from data for at least a week, one `layoutVersion` per adjustment.
 
 ## The design loop
 
@@ -244,13 +248,15 @@ The brainstorm sketch (`output/city-map/city-map.html`: the docks, the Panoptico
 ## Build order
 
 1. **Places and frames (built).** `src/shared/city/frame.ts`, `places.ts` (196 places: 60 street stretches, 28 junctions, 32 lots, 45 rooftop groups, 10 landmark floors and roofs, 2 Gate places, 10 sewer places, 9 air districts), `model.ts`. The landmark wall names are left as they are; the frame defines compass words. Originally: `cityModel()` gathers layer 0. Build the place graph and the cell-to-place index. `GET /api/city/v1/model` and `output/city/model.json`. Fix the compass naming. *Acceptance:* every walkable cell on every floor maps to exactly one place; place areas sum to the walkable area.
+   - **Layout 3** (W9 of [the city overhaul](city-overhaul.md)) names the new north: `quay:0`–`quay:2` (the quay edge, split where streets meet it), `pier:m20`, `pier:20`, `pier:70`, `pier:breakwater`, `boat:deck` and `boat:bridge`, `water:harbour` (anything below quay level over the harbour), `yard:containers` and `yard:containers:top`, `floor:pier9:0`, `floor:pier9:5` (catwalk) and `roof:pier9`, `floor:precinct:0/8/16` and `roof:precinct`, `floor:cellblock:0/8/16` and `roof:cellblock`, `yard:cellblock`, `grounds:precinct`, `landmark:cellblock-tower`, `lookout:tower`, `lookout:cranes`, `exit:precinct-sewer`, `exit:docks-sewer`, `street:gate-lane:*`, `street:quay-road:*`, `chute:needleworks:8` and `:16`, and one `room:<id>` per kit room in the north (`kitCity().rooms`: the precinct's lobby, lockup, radio room, armoury and the rest, the harbour master, the Marlowe's cabin and bridge). 262 places.
+   - **IDs stay stable.** Layout-2 streets, junctions, landmarks and sewer halls keep their IDs (their stretches are still counted at layout-2 crossings). Lots and rooftops are numbered by size, so each keeps its ID while its group still holds its layout-2 anchor cell and half its old cells (`src/shared/city/legacyPlaces.ts`, generated from layout 2); a retired one maps to the place that now holds that anchor (`successor`), and the page and verdicts fold old counts through it. Layout 3 retires 17 of layout 2's 196 IDs, all lots or rooftops that the docks, the precinct and Gate Lane were built over. A place spanning districts is filed where its centre lies.
 2. **Facts (built).** `src/worker/city/CityRecorder.ts`, `CityStore.ts`, `CityArchive.ts`, hooked into `GameRoom`. Originally: record all events in the table, with context and versions. Add the live aggregates, the anomaly detectors and the R2 archive.
    - *Acceptance:* failure-mode tests (bot versus human, corpses, disconnects, victory time, eviction, midnight, caps, schema version), plus measured tick cost under 1%.
    - Human play then builds up a baseline on today's city.
 3. **Agent surfaces (built).** Originally: digest, places, flows, timeline, events, and the mirror script. *Acceptance:* every digest line resolves through its handle; the mirror answers a query via `read`.
-4. **The page, Observe mode.** Places, timelines, flows and cards.
-5. **Static analyses and Analyse mode.**
-6. **Design mode.** Proposals and verdicts. Then the city overhaul proper: layout decisions from evidence, the kit of reusable parts, the load-time lessons.
+4. **The page, Observe mode (built on `city/overhaul`).** Places, flows and cards; round timelines are left to agents (`events?round=`, token).
+5. **Static analyses and Analyse mode (built on `city/overhaul`).** Vertical access and routes through stairs, sewer and launchers are still to come.
+6. **Design mode (built on `city/overhaul`).** Proposals and verdicts; `proposal:overhaul-v3` is the first. Then the city overhaul proper: layout decisions from evidence, the kit of reusable parts, the load-time lessons.
    - The bot overhaul uses the same places, navigation graph and bot divergence as its scorecard.
 
 ## Decisions (Tyler, 2026-09-28)

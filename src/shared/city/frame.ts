@@ -19,9 +19,12 @@ export const CELL_SPAN = CELL_MAX - CELL_MIN + 1;
 export type District = 'north-west' | 'north' | 'north-east' | 'west' | 'centre' | 'east' | 'south-west' | 'south' | 'south-east';
 const THIRD = (CITY_BOUNDS.max - CITY_BOUNDS.min) / 3;
 const band = (v: number) => v < CITY_BOUNDS.min + THIRD ? 0 : v < CITY_BOUNDS.min + 2 * THIRD ? 1 : 2;
-const DISTRICTS: District[][] = [['north-west', 'north', 'north-east'], ['west', 'centre', 'east'], ['south-west', 'south', 'south-east']];
+const GRID: District[][] = [['north-west', 'north', 'north-east'], ['west', 'centre', 'east'], ['south-west', 'south', 'south-east']];
+/** The nine districts, north-west first, row by row. */
+export const DISTRICTS: readonly District[] = GRID.flat();
+export const isDistrict = (v: string): v is District => DISTRICTS.some(d => d === v);
 /** Thirds of the city on each axis; north is the -z third. */
-export const districtAt = (x: number, z: number): District => DISTRICTS[band(z)]![band(x)]!;
+export const districtAt = (x: number, z: number): District => GRID[band(z)]![band(x)]!;
 
 /** `m` for minus keeps coordinates safe inside IDs: -18 -> m18. */
 export const coordLabel = (v: number): string => (v < 0 ? `m${-Math.round(v)}` : String(Math.round(v)));

@@ -15,6 +15,8 @@ export interface PlaceMeasures {
   dangerHuman?: Rate; danger?: Rate;
   fireHuman?: Rate; fireBot?: Rate;
   accuracyHuman?: Rate; accuracyBot?: Rate;
+  /** Share of hits that came off a wall first, by shooter place. */
+  bankHuman?: Rate; bankBot?: Rate;
   lethality?: number;
   spawnTrap?: Rate;
   stillHuman?: number;
@@ -59,7 +61,7 @@ export function divergence(a: Record<string, number>, b: Record<string, number>)
   return Math.sqrt(Math.max(0, js));
 }
 
-const walkable = (p: Place) => p.kind !== 'air' && p.kind !== 'outside' && !p.id.startsWith('sewer:pipe-');
+const walkable = (p: Place) => p.kind !== 'air' && p.kind !== 'outside' && p.kind !== 'water' && !p.id.startsWith('sewer:pipe-');
 
 /** Per-place measures from summed place counts (the `/api/city/v1/places` rows). Rates are per minute. */
 export function measurePlaces(places: readonly Place[], counts: Record<string, Record<string, number>>): Map<string, PlaceMeasures> {
@@ -79,6 +81,8 @@ export function measurePlaces(places: readonly Place[], counts: Record<string, R
       ...(botS > 0 ? { fireBot: rate(n('shots-bot'), botS / 60) } : {}),
       ...(n('shots-human') > 0 ? { accuracyHuman: proportion(n('hits-human'), n('shots-human')) } : {}),
       ...(n('shots-bot') > 0 ? { accuracyBot: proportion(n('hits-bot'), n('shots-bot')) } : {}),
+      ...(n('hits-human') > 0 ? { bankHuman: proportion(n('bank-hits-human'), n('hits-human')) } : {}),
+      ...(n('hits-bot') > 0 ? { bankBot: proportion(n('bank-hits-bot'), n('hits-bot')) } : {}),
       ...(kills + deaths > 0 ? { lethality: (kills + 1) / (deaths + 1) } : {}),
       ...(n('spawns') > 0 ? { spawnTrap: proportion(n('spawn-deaths-5s'), n('spawns')) } : {}),
       ...(humanS > 0 ? { stillHuman: n('still-human-s') / humanS } : {}),

@@ -1,6 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ROOM_NAME } from '../../src/shared/networkProtocol';
+import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 
 describe('worker', () => {
   it('returns health', async () => {
@@ -52,6 +53,20 @@ describe('worker', () => {
     expect(missing.headers.get('cache-control')).toBe(revalidate);
   });
 
+  it('serves the city map at /map and sends the old /heatmap address there, view intact', async () => {
+    const worker=(await import('../../src/worker/index')).default;
+    const asked:string[]=[];
+    const env={ASSETS:{fetch:async(r:Request)=>{asked.push(new URL(r.url).pathname);return new Response('<!doctype html>',{headers:{'content-type':'text/html'}});}}} as unknown as Env;
+    const map=await worker.fetch(new Request('https://ratdetective.online/map?mode=analyse'),env);
+    expect(map.status).toBe(200);expect(asked).toEqual(['/map']);
+    for(const old of ['/heatmap','/heatmap.html']){
+      const moved=await worker.fetch(new Request(`https://ratdetective.online${old}?layer=deaths&days=7`),env);
+      expect(moved.status).toBe(301);
+      expect(moved.headers.get('location')).toBe('https://ratdetective.online/map?layer=deaths&days=7');
+    }
+    expect(asked).toEqual(['/map']);
+  });
+
   it('rejects non-websocket /ws requests', async () => {
     const response = await SELF.fetch('https://rat-detective.test/ws');
 
@@ -76,7 +91,7 @@ describe('worker', () => {
     expect(empty.headers.get('cache-control')).toBe('no-store');
 
     const world=(board as typeof board & {world:{seed:number;version:number}}).world;
-    expect(world).toEqual({seed:expect.any(Number),version:2});
+    expect(world).toEqual({seed:expect.any(Number),version:GRAYBOX_VERSION});
     const prepared=await (await SELF.fetch('https://rat-detective.test/status')).json();
     expect(prepared).toMatchObject({world,players:board.bots,bots:board.bots});
 

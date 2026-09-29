@@ -17,7 +17,8 @@
       "/status",
       "/api/companion/v1/status",
       "/api/heat/v1",
-      "/api/city/v1/*"
+      "/api/city/v1/*",
+      "/heatmap"
     ]
   },
   "ratelimits": [
@@ -91,7 +92,8 @@
           "/status",
           "/api/companion/v1/status",
           "/api/heat/v1",
-          "/api/city/v1/*"
+          "/api/city/v1/*",
+          "/heatmap"
         ]
       },
       "r2_buckets": [
