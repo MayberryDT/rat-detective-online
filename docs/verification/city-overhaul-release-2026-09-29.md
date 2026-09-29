@@ -1,8 +1,17 @@
-# City overhaul (layout 3) on staging, 29 Sep 2026
+# City overhaul (layout 3): staging and production, 29 Sep 2026
 
-**Status:** the `city/overhaul` branch runs on **staging only**. Production is untouched: it still runs layout 2 on Worker `a57db85b-bad7-483d-9dbf-51368235a768`. Production needs Tyler's explicit OK after he has played the preview.
+**Status:** **live in production** (Tyler: "send it live"). Worker `d5c52eb9-ab32-471e-a439-8ec405e83899`, client `index-ftnkjpon.js`, protocol 23, commit `a0ef9eb` (branch `city/overhaul` fast-forwarded into `main` and pushed to GitHub `master`). Predecessor `a57db85b-bad7-483d-9dbf-51368235a768` (layout 2, protocol 22). Deployed with `npm run deploy:production` on Halla, at about 22:41 UTC.
 
-**Tyler's preview (D8):** https://rat-detective-staging.mayberrydt.workers.dev/ — the real hosted game on staging, with its own always-on canonical room (6–9 server bots, humans on top, ten-rat cap). The city map is at https://rat-detective-staging.mayberrydt.workers.dev/map. Open them normally; this build is audible for humans.
+**Checked after the deploy:**
+- `/health` 200.
+- `/status`: `public-live-v2`, world version 3, seed 341283204, 6 bots, playing. The stored version-2 world upgraded on load: a new round clock at the deploy, the old checkpoint dropped, the rats respawned on layout-3 ground. Kill and death totals carried into that first round only.
+- The companion revision advances and kills rise, so the room is ticking.
+- The root serves `index-ftnkjpon.js`; `/map` 200; `/heatmap?days=7` 301 to `/map?days=7`; the old host `rat-detective.animasai.co/map?x=1` 301 to the canonical `/map?x=1`; `/api/city/v1/digest` 200.
+- A protocol-23 join to the public room got a welcome with world version 3; one bot stood at (83, 5.6, −115.6), layout-3 ground in the north. The check rat left at once. `scripts/smoke-ws.mjs` cannot run against production: it asks for an ad-hoc `smoke-*` room, which production refuses (404, by design).
+
+**Not checked:** a human playtest on production, the round-end lineup live, Windows Direct3D 11.
+
+**Staging (Tyler's preview before the release):** https://rat-detective-staging.mayberrydt.workers.dev/, now the same build as production. The sections below are the staging record.
 
 Baseline for comparison: [W0 baseline](city-overhaul-baseline-2026-09-29.md). Plan and as-built notes: [the city overhaul plan](../city-overhaul.md).
 

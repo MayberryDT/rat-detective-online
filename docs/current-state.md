@@ -2,9 +2,9 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
-## City overhaul (layout 3) — on branch and staging, not in production (29 September)
+## City overhaul (layout 3) — 29 September production (protocol 23)
 
-The rebuilt city (docks, the Panopticon precinct, cut corners, bank walls, Gate Lane, chutes, north sewers; layout 3, protocol 23) lives on branch `city/overhaul` and runs on **staging only**: Worker `5aeb800a-dc54-467a-9825-b61408ace89f`, https://rat-detective-staging.mayberrydt.workers.dev/ (Tyler's preview) and its `/map`. That build includes a backstop that rescues a bot pacing a small pocket (a crane stair landing) after 90 s without real progress. Production still runs layout 2 and needs Tyler's OK. See [the release receipt](verification/city-overhaul-release-2026-09-29.md) and [the plan](city-overhaul.md).
+The rebuilt city (docks, the Panopticon precinct, cut corners, bank walls, Gate Lane, chutes, north sewers; layout 3, protocol 23) is live. Tyler: "send it live". Production Worker `d5c52eb9-ab32-471e-a439-8ec405e83899`, client `index-ftnkjpon.js`, commit `a0ef9eb` (branch `city/overhaul` fast-forwarded into `main` and pushed to GitHub `master`). Predecessor `a57db85b-bad7-483d-9dbf-51368235a768` (layout 2, protocol 22). `public-live-v2` kept its seed (341283204) and upgraded its stored world from version 2 to 3 on load: a fresh round clock, the old checkpoint dropped, every rat respawned on layout-3 streets. Kill and death totals carried into that first round only. Open protocol-22 tabs must reload. The city map is at [/map](https://ratdetective.online/map); `/heatmap` redirects there. The build includes a backstop that rescues a bot pacing a small pocket (a crane stair landing) after 90 s without real progress. See [the release receipt](verification/city-overhaul-release-2026-09-29.md) and [the plan](city-overhaul.md).
 
 ## Seventh batch, title and load time — 28 September production (protocol 22)
 

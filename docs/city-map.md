@@ -1,10 +1,10 @@
 # The city map
 
-Status (2026-09-29): **steps 1–3 are live** on production, Worker `00e3129e-6a33-40e0-acb8-f5810a251f60` (Tyler: "go ahead and deploy it to the live game"), then the recorder fixes in `a57db85b-bad7-483d-9dbf-51368235a768`, with the same client and protocol 22. See [the receipt](verification/heat-map-release-2026-09-28.md). **Steps 4–6 (the `/map` page's Observe, Analyse and Design modes) are built on branch `city/overhaul`** and ship with the overhaul. **First answer (Tyler's 12-minute Excessive Force session, 2026-09-29):** humans fire 176 shots per minute alive and hit 6%; bots fire 108 and hit 3%. Tyler clicks every shot (there is no hold-to-fire) and won 36/9/9. The session also exposed two recorder bugs, since fixed in source: every death was filed as `missile`, and sight stopped at 60 units.
+Status (2026-09-29): **steps 1–3 are live** on production, Worker `00e3129e-6a33-40e0-acb8-f5810a251f60` (Tyler: "go ahead and deploy it to the live game"), then the recorder fixes in `a57db85b-bad7-483d-9dbf-51368235a768`, with the same client and protocol 22. See [the receipt](verification/heat-map-release-2026-09-28.md). **Steps 4–6 (the `/map` page's Observe, Analyse and Design modes) shipped with the city overhaul** in Worker `d5c52eb9-ab32-471e-a439-8ec405e83899`. **First answer (Tyler's 12-minute Excessive Force session, 2026-09-29):** humans fire 176 shots per minute alive and hit 6%; bots fire 108 and hit 3%. Tyler clicks every shot (there is no hold-to-fire) and won 36/9/9. The session also exposed two recorder bugs, since fixed in source: every death was filed as `missile`, and sight stopped at 60 units.
 
-**Layout 3 (2026-09-29):** built on `city/overhaul` and deployed to **staging only** (Worker `5aeb800a-dc54-467a-9825-b61408ace89f`, [staging `/map`](https://rat-detective-staging.mayberrydt.workers.dev/map)); staging's recorder writes layout-3 facts to `rat-detective-city-staging` (mirror with `node scripts/city-mirror.mjs --base=https://rat-detective-staging.mayberrydt.workers.dev --out=<dir>`). Production is still layout 2, so `proposal:overhaul-v3` waits for production play. Soak results: [the release receipt](verification/city-overhaul-release-2026-09-29.md).
+**Layout 3 (2026-09-29):** live in production since Worker `d5c52eb9-ab32-471e-a439-8ec405e83899` (protocol 23), so the recorder now writes layout-3 facts, and `proposal:overhaul-v3` is judged as human play builds up on both layouts. Staging runs the same build and records to `rat-detective-city-staging`. See [the release receipt](verification/city-overhaul-release-2026-09-29.md).
 
-The city map is the single document for everything about the city: where things are, what happens there, how often, how dangerous, and what should change. People read it as the page at [/map](https://ratdetective.online/map) (the old `/heatmap` address redirects there once the overhaul ships; production serves the old heat map at `/heatmap` until then). Agents read it as text, through this file and the live endpoints below. Both renderings come from the same data, so they can never disagree.
+The city map is the single document for everything about the city: where things are, what happens there, how often, how dangerous, and what should change. People read it as the page at [/map](https://ratdetective.online/map) (the old `/heatmap` address redirects there). Agents read it as text, through this file and the live endpoints below. Both renderings come from the same data, so they can never disagree.
 
 Tyler's brief (2026-09-28): track everything (pickups and their kinds, routes, cheese balls, when and where things go off), measure all of it, connect all of it, and make it readable at high fidelity. The aim is a deep, statistical understanding of how the game plays, so we can design the best map ever and keep it good for years.
 
@@ -62,7 +62,7 @@ flowchart TB
   - `air` 45 and above (launch flights).
 - **Cells:** 4 × 4 units, keyed `floor:ix:iz` where `ix = floor(x/4)`. Every cell belongs to exactly one place per floor.
 - **Versions** stamped on every fact:
-  - `layoutVersion`: today the world version, 2, bumped by any layout change;
+  - `layoutVersion`: the world version (3 since 29 September; 2 before), bumped by any layout change;
   - `protocol`;
   - `schemaVersion`.
   - Measures carry a `measureVersion`.
@@ -210,7 +210,7 @@ All ranges take `days=1–3650`, `days=all`, or `from` and `to` (UTC days); aggr
 | `GET /api/city/v1/events?type=&round=&since=&limit=` | Discrete facts from the last 30 days (a round's timeline is `round=`) | Built; bearer `CITY_TOKEN` |
 | `GET /api/city/v1/archive?prefix=&cursor=`, `/archive/<key>` | The raw archive listing and objects | Built; bearer `CITY_TOKEN` |
 | `node scripts/city-mirror.mjs [--base=…]` | Mirrors the model, aggregates and every archived fact into `output/city/city.db`: tables `facts`, `situations` (one row per rat per frame), `place_counts`, `flows`, `cells`, `places`, `entities` | Built; agents only. The token is in `~/.config/rat-detective/city-token` on Veelox and Halla |
-| `/map` (alias `/heatmap`, a 301 that keeps the query) | The page below: the same public endpoints, drawn | Built on `city/overhaul`; production still serves the old `/heatmap` page until the overhaul ships |
+| `/map` (alias `/heatmap`, a 301 that keeps the query) | The page below: the same public endpoints, drawn | Live |
 | `design/city/proposals/*.json`, `design/city/layouts/*.json` | Proposals (goals, predictions as measures) and layout snapshots for diffs | Built; parsed by `parseProposal`, judged by `judge` in `src/shared/city/verdict.ts` |
 
 Query the mirror with `read output/city/city.db?q=SELECT …`.
