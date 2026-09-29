@@ -193,7 +193,7 @@ describe('persistent hosted bots', () => {
       expect([...game.players.keys()].filter(id => id.startsWith('rd-ai-'))).toHaveLength(0);
       expect(bots).toBeGreaterThanOrEqual(6);
     });
-  });
+  }, 30000); // Eleven sequential joins against a live 6–9 bot simulation; a busy full-suite run takes 2.5–5 s.
 
   it('keeps the deployed legacy eleven until its first round reset', async () => {
     const stub = room();
