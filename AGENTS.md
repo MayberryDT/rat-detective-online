@@ -2,6 +2,8 @@
 
 Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md](docs/README.md) for the documentation map. These describe the shipped game as verified on **2026-09-12**, not a new implementation request.
 
+**City, layout, telemetry and map design:** the city map is the document. Read [docs/city-map.md](docs/city-map.md) first: the frames (north is −z), IDs, every recorded fact, the measures and the design loop. A gameplay feature is not done until it emits its facts; any layout change bumps `layoutVersion`.
+
 **Active work:** the [juice plan](docs/juice-plan.md) (started 2026-09-27) owns current status, order and next action for **juice**, Tyler's name for the small layered responses that make the game feel good: screen shake, on-kill effects, tiny sounds, subtle animation and noir atmosphere. Read it first for any such task. It supersedes older animation, camera-shake and foley-pruning guidance where they conflict; older plans and handoffs are reference only.
 
 ## Preserve the game

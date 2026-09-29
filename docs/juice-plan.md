@@ -59,7 +59,7 @@ rat's identity stay as they are. Done means:
 - **T3 follow-up, enemy readability (built 2026-09-27):** far enemies were the worst, then enemies in shadow, then everything once hurt. The lab is removed. Opponents now get an opaque cream outline that stays about 2.5 px wide on screen at any distance (the existing shell, widened per frame; no extra pass or draw), hidden behind walls; Hot Pursuit keeps its red. Rats ignore the noir fog, so they keep full contrast at any distance and HP. First playtest: "way more clear" but too much; the thick cream line broke the noir, and he wants to rely on an outline as little as possible. Now a faint cool moonlit edge (slate blue, half opacity, at most 1.5 px) that only fades in between 16 and 45 units; close rats have none. Rats stay out of the fog.
 - **Nameplate and health bar, rebuilt (2026-09-27):** the four-year-old Courier name with a green segmented bar is replaced by a noir plate: the name in spaced cream small caps over five slanted pips like case-file tabs. Lost pips flash, jolt and drain to an empty outline; the last pip burns red; regained pips fill in; a dead rat's name dims and is struck through in red. It only redraws while something changes.
 - **Softer outline and nameplate reviewed (2026-09-27):** "That is great. Push it live." Released as Worker `80901b67…`.
-- **Next action:** the city and building model overhaul; see [Open decisions](#open-decisions).
+- **Next action:** Tyler's go on [the city map](city-map.md) build order (and the R2 archive), then its step 1; see [Open decisions](#open-decisions).
 
 ## Third batch (decided 2026-09-27)
 
@@ -201,6 +201,7 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
     - Build the street-spill atlas, fixed-illumination bake and facade beams offline (or cache them) instead of computing them on every page load; they are about 1–1.4 s of CPU on a desktop and more on phones.
     - Keep new city objects warmable before Enter: anything the welcome creates needs a stand-in in `createGame`, or its programs link after Enter.
     - The cameo models (870 KB) are served uncompressed (Cloudflare doesn't compress `.glb`); quantize or compress them, or load them only when a cameo appears.
+  - **The city map is the document (Tyler, 2026-09-28).** Track everything (pickups by kind, routes, cheese balls, when and where things go off), measure all of it and make it readable to an agent at high fidelity, so the redesign rests on evidence. Design and build order: [the city map](city-map.md). Recommended order: places and frames, then facts, then agent surfaces, before the layout brainstorm continues; awaiting Tyler's go and his call on the R2 archive.
   - **Brainstorm, still open (Tyler, 2026-09-28).** No renders and no game changes yet. Lightweight three.js previews built from what we have may come later. The map should be played for years ("this is our last chance"), so the layout gets planned first as a top-down map. The planning map is `output/city-map/city-map.html` (refresh after `city-data.js` is regenerated from source; it reads the live heat itself).
     - **Keep the layout in general, with tweaks for the good of the game.** Fill the empty north and north-west; don't cut anything. The city is not too big: 30–50 rats was a catastrophe (everyone died on spawn to the cheese) and 10 is still very chaotic.
     - **New districts:** Tyler likes both the docks and a police precinct, possibly both. Sketched on the map's proposal layer: a harbour along the north edge with piers, and the precinct in the north-west.
@@ -293,7 +294,7 @@ Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning 
 - **Noir pass and first-review choices:** settled 2026-09-28. Tyler delegated these calls ("make choices on that stuff… if something's wrong, I'll tell you"); every choice in [the review guide](juice/review.md#choices-to-confirm) stays as built.
 - **Dropped by Tyler (2026-09-28):** production CPU measurement and further speed work. Shadow freezing/removal is not pursued.
 - **Seventh batch closed (2026-09-28):** Tyler played the live release thoroughly and heard every sound; complete. Phones stay a last, low-priority check for later (nobody plays on a phone yet).
-- **Next (2026-09-28):** the city and building model overhaul (carries the load-time lessons), then the bot overhaul.
+- **Next (2026-09-28):** the city and building model overhaul (carries the load-time lessons), starting with [the city map](city-map.md) steps 1–3, then the bot overhaul (scored by the map's bot divergence).
 
 ## Evidence
 
