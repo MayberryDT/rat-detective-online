@@ -29,16 +29,18 @@ export async function loadCameos(signal?:AbortSignal):Promise<CameoView|undefine
     }finally{clearTimeout(timeout);signal?.removeEventListener('abort',cancel);}
 }
 
-/** Upload the two tiny models offscreen during title preparation using world lighting. */
+/** Upload the two tiny models during title preparation using world lighting. This draws to the
+ * canvas hidden under the title: an offscreen target would compile untone-mapped variants
+ * (seconds of linking on some GPUs) that the city never uses, then the real ones in play. */
 export function warmCameoBuffers(view:CameoView,scene:THREE.Scene,renderer:THREE.WebGLRenderer){
-    const target=new THREE.WebGLRenderTarget(1,1),camera=new THREE.PerspectiveCamera(45,1,.1,20);
+    const camera=new THREE.PerspectiveCamera(45,1,.1,20);
     const previousTarget=renderer.getRenderTarget(),autoUpdate=renderer.shadowMap.autoUpdate;
     const visible=new Map<THREE.Object3D,boolean>();
     for(const object of scene.children){visible.set(object,object.visible);if(object!==view.root&&!(object instanceof THREE.Light))object.visible=false;}
     const models=view.root.children;
     const modelVisibility=models.map(model=>model.visible);
     try{
-        renderer.shadowMap.autoUpdate=false;renderer.setRenderTarget(target);
+        renderer.shadowMap.autoUpdate=false;renderer.setRenderTarget(null);
         for(const model of models){
             for(const other of models)other.visible=other===model;
             camera.position.copy(model.position).add(new THREE.Vector3(0,1.3,5));
@@ -48,6 +50,6 @@ export function warmCameoBuffers(view:CameoView,scene:THREE.Scene,renderer:THREE
     }finally{
         models.forEach((model,i)=>model.visible=modelVisibility[i]);
         for(const [object,value] of visible)object.visible=value;
-        renderer.setRenderTarget(previousTarget);renderer.shadowMap.autoUpdate=autoUpdate;target.dispose();
+        renderer.setRenderTarget(previousTarget);renderer.shadowMap.autoUpdate=autoUpdate;
     }
 }

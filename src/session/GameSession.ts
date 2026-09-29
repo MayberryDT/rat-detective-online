@@ -44,6 +44,7 @@ import {FeelDirector} from '../feel/FeelDirector';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {entryRequested} from './yieldToPage';
+import {gpuDrained} from './warmPrograms';
 import {PoliceLineup,type LineupEntry} from '../feel/PoliceLineup';
 
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
@@ -52,7 +53,7 @@ const HEAD_POSITION=new THREE.Vector3();
 const LANDING_POSITION=new THREE.Vector3();
 const HEADSHOT_NORMAL=new THREE.Vector3();
 /** Longest a welcome waits for off-thread shader links before drawing anyway. */
-const WELCOME_COMPILE_MS=1500;
+const WELCOME_COMPILE_MS=2500;
 /** Fill slot `n` of the reused footstep list in place; returns the next slot. */
 function pooledSource(n:number,id:string,position:THREE.Vector3,grounded?:boolean):number {
     const source=FOOTSTEP_SOURCES[n]??={id,position,grounded};
@@ -346,11 +347,13 @@ export class GameSession {
             if(message.round.phase==='won')this.bots.receive({type:'gameWon',winnerId:message.round.winnerId??'',winnerName:message.round.winnerName??'',kills:message.round.kills??0,resetAt:message.round.resetAt??0});
         }
         // Link whatever the welcome added (other rats, the round's objects)
-        // off-thread; frames skip drawing until then instead of stalling.
+        // off-thread; frames skip drawing until then instead of stalling. Some drivers
+        // report a link complete while the GPU still has it queued, so also wait for
+        // the GPU to finish; the first draw would otherwise freeze the page behind it.
         // Bounded: three's readiness poll can throw inside its timer (a material
         // disposed mid-link, context loss) and never settle.
         clearTimeout(this.compileTimer);
-        const compiling=Promise.race([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera),
+        const compiling=Promise.race([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera).then(()=>gpuDrained(this.stage.renderer)),
             new Promise(resolve=>{this.compileTimer=setTimeout(resolve,WELCOME_COMPILE_MS);})]).catch(()=>undefined)
             .finally(()=>{if(this.compiling===compiling){clearTimeout(this.compileTimer);this.compiling=undefined;}});
         this.compiling=compiling;

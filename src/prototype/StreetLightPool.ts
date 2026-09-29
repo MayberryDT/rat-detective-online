@@ -11,6 +11,8 @@ export interface OverheadLight {
 export function insideLightRoom(p:{x:number;y:number;z:number},room:LightRoom):boolean {
     return p.x>=room.xmin&&p.x<=room.xmax&&p.z>=room.zmin&&p.z<=room.zmax&&p.y>=room.ymin&&p.y<room.ymax;
 }
+/** Actor lights in the pool; program warm-up lights the stand-ins with this many. */
+export const ACTOR_SPOTS=4;
 /** Four fixture lights shared by street poles, facade spill and interiors.
  * Positions/aim belong to fixtures; moving the rat only selects the useful four. */
 export class StreetLightPool {
@@ -18,7 +20,7 @@ export class StreetLightPool {
     private readonly exteriorPositions={value:Array.from({length:4},()=>new THREE.Vector4(0,0,0,0))};
     private readonly scenery=new Set<THREE.MeshStandardMaterial>();
     constructor(private readonly scene:THREE.Scene,private readonly sources:readonly OverheadLight[],private readonly rooms:readonly LightRoom[]=[]){
-        for(let i=0;i<4;i++){
+        for(let i=0;i<ACTOR_SPOTS;i++){
             const light=new THREE.SpotLight(0xffcf96,0,15,.68,.65,2);
             light.name='noir-overhead-light';light.castShadow=false;
             scene.add(light,light.target);this.lights.push(light);

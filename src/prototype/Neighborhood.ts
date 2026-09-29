@@ -26,6 +26,8 @@ import {generateBuildingLayout, type WorldSpec} from '../shared/worldSpec';
 import {addCityBody,removeCityBody} from '../shared/StaticCityBroadphase';
 export { BLOCKS, ENTRIES, isRampOpening } from '../shared/grayboxLayout';
 
+/** Pooled sewer lamps (hidden above ground); program warm-up lights the stand-ins with this many. */
+export const SEWER_LAMPS=8;
 export class Neighborhood {
     private readonly streetFill = new THREE.AmbientLight(0x8995b5, 1.25);
     readonly solids: THREE.Mesh[] = [];
@@ -312,7 +314,7 @@ export class Neighborhood {
         }
     }
     private initLampPool() {
-        for(let i=0;i<8;i++){
+        for(let i=0;i<SEWER_LAMPS;i++){
             const light=new THREE.PointLight(0xffffff,0,1,1.5);
             light.name='sewer-pooled-light';light.visible=false;
             this.scene.add(light);this.lampPool.push(light);
