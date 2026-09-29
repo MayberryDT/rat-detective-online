@@ -185,7 +185,14 @@ export default {
         return respond(await room.fetch(request));
       }
 
-      return respond(await env.ASSETS.fetch(request));
+      const asset=await env.ASSETS.fetch(request);
+      // Vite fingerprints everything under /assets/, so returning visitors need not revalidate.
+      // Never the single-page fallback: a missing old chunk must not pin the page at that name.
+      if(asset.ok&&url.pathname.startsWith('/assets/')&&!asset.headers.get('content-type')?.startsWith('text/html')){
+        const immutable=new Response(asset.body,asset);immutable.headers.set('cache-control','public, max-age=31536000, immutable');
+        return respond(immutable);
+      }
+      return respond(asset);
     } catch (error) {
       log('error', 'worker request failed', {
         path: url.pathname,

@@ -37,6 +37,21 @@ describe('worker', () => {
     expect(limited.status).toBe(429);expect(limited.headers.get('retry-after')).toBe('60');
   });
 
+  it('caches fingerprinted assets forever, but never the page or its fallback', async () => {
+    const worker=(await import('../../src/worker/index')).default;
+    const revalidate='public, max-age=0, must-revalidate';
+    const env=(type:string)=>({ASSETS:{fetch:async()=>new Response('x',{headers:{'content-type':type,'cache-control':revalidate}})}}) as unknown as Env;
+    const chunk=await worker.fetch(new Request('https://ratdetective.online/assets/createGame-Ab12.js'),env('text/javascript'));
+    expect(chunk.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(chunk.headers.get('x-content-type-options')).toBe('nosniff');
+    const page=await worker.fetch(new Request('https://ratdetective.online/'),env('text/html'));
+    expect(page.headers.get('cache-control')).toBe(revalidate);
+    const title=await worker.fetch(new Request('https://ratdetective.online/title/office.webp'),env('image/webp'));
+    expect(title.headers.get('cache-control')).toBe(revalidate);
+    const missing=await worker.fetch(new Request('https://ratdetective.online/assets/createGame-Old1.js'),env('text/html'));
+    expect(missing.headers.get('cache-control')).toBe(revalidate);
+  });
+
   it('rejects non-websocket /ws requests', async () => {
     const response = await SELF.fetch('https://rat-detective.test/ws');
 
