@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rat Detective · Heat map</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+</head>
+<body>
+    <aside id="side">
+        <h1>Heat map</h1>
+        <p class="note">Where rats spend their time in the live city, where they die and where the killers stood.</p>
+        <section><h2>Show</h2><div class="choices" id="layer"></div></section>
+        <section><h2>Floor</h2><div class="choices" id="floor"></div></section>
+        <section><h2>When</h2><div class="choices" id="when"></div>
+            <div class="dates"><label>From <input type="date" id="from"></label><label>To <input type="date" id="to"></label></div>
+        </section>
+        <section><h2>Totals</h2><dl id="totals"></dl></section>
+        <section><h2>On the map</h2><div id="overlays"></div>
+            <label class="toggle"><input type="checkbox" id="smooth" checked> Smooth heat</label>
+        </section>
+        <p class="note" id="status"></p>
+    </aside>
+    <main id="wrap"><canvas id="map"></canvas><div id="tip" hidden></div><div id="scale"></div></main>
+    <script type="module" src="/src/heatmap/main.ts"></script>
+</body>
+</html>
