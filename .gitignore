@@ -45,3 +45,6 @@ dist-visual-reference/
 __pycache__/
 *.py[cod]
 /.design/highlights-library/native-preview.tar.gz
+
+# Title scene textures (fetched by test/visual/title-assets/fetch.sh)
+/test/visual/title-assets/textures/
