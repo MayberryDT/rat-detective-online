@@ -53,13 +53,15 @@ export function streetSpillSources(layout:readonly BuildingFootprint[]):SpillSou
 
 /** Segment/AABB clipping in the street plane. Used only during the one-time bake. */
 export function blocked(ax:number,az:number,bx:number,bz:number,boxes:readonly SpillBlocker[]):boolean {
+    // Runs millions of times in the bake: no per-box allocation.
+    const dx=bx-ax,dz=bz-az;
     for(const b of boxes){
         let lo=0,hi=1;
-        for(const [a,delta,min,max] of [[ax,bx-ax,b.x-b.w/2,b.x+b.w/2],[az,bz-az,b.z-b.d/2,b.z+b.d/2]]){
-            if(Math.abs(delta)<1e-8){if(a<min||a>max){hi=-1;break;}continue;}
-            const t1=(min-a)/delta,t2=(max-a)/delta;
-            lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));
-        }
+        const minX=b.x-b.w/2,maxX=b.x+b.w/2,minZ=b.z-b.d/2,maxZ=b.z+b.d/2;
+        if(Math.abs(dx)<1e-8){if(ax<minX||ax>maxX)continue;}
+        else{const t1=(minX-ax)/dx,t2=(maxX-ax)/dx;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));}
+        if(Math.abs(dz)<1e-8){if(az<minZ||az>maxZ)continue;}
+        else{const t1=(minZ-az)/dz,t2=(maxZ-az)/dz;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));}
         if(lo<=hi&&hi>.001&&lo<.999)return true;
     }
     return false;
@@ -135,11 +137,12 @@ export class StreetReadability {
         // poles. This texture is built once, independently of the nearby rat.
         for(const [x,z] of [...STREET_LAMPS,...generatedStreetLamps([...layout],STREET_LAMPS)]){
             if(++work%12===0)yield;
+            const nearby=blockers.filter(b=>Math.abs(b.x-x)<11+b.w/2&&Math.abs(b.z-z)<11+b.d/2);
             for(let iz=Math.max(0,Math.floor((z-11-MIN)/SPAN*SIZE));iz<=Math.min(SIZE-1,Math.ceil((z+11-MIN)/SPAN*SIZE));iz++)
                 for(let ix=Math.max(0,Math.floor((x-11-MIN)/SPAN*SIZE));ix<=Math.min(SIZE-1,Math.ceil((x+11-MIN)/SPAN*SIZE));ix++){
                     const px=MIN+(ix+.5)/SIZE*SPAN,pz=MIN+(iz+.5)/SIZE*SPAN;
                     const radius=Math.hypot(px-x,pz-z),amount=.08*Math.max(0,1-radius/11)**2;
-                    if(!amount||blocked(x,z,px,pz,blockers))continue;
+                    if(!amount||blocked(x,z,px,pz,nearby))continue;
                     color.setHex(0xffcf96);const i=(iz*SIZE+ix)*3;
                     field[i]+=amount*color.r;field[i+1]+=amount*color.g;field[i+2]+=amount*color.b;
                 }

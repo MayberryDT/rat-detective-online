@@ -14,14 +14,16 @@ export function beamReach(s:SpillSource,boxes:readonly Box[]):number {
     let fraction=1;
     const width=(s.width??(s.kind==='door'?1.7:s.kind==='sign'?2.1:1.35))/2;
     const height=(s.height??(s.kind==='window'?.85:.24))/2;
+    // Runs for every source × nearby box × six rays in the bake: no allocation per test.
     const intersect=(a:Point,b:Point,box:Box)=>{
         let lo=0,hi=1;
-        for(const [start,delta,min,max] of [[a.x,b.x-a.x,box.x-box.w/2,box.x+box.w/2],
-            [a.y,b.y-a.y,box.y-box.h/2,box.y+box.h/2],[a.z,b.z-a.z,box.z-box.d/2,box.z+box.d/2]]){
-            if(Math.abs(delta)<1e-8){if(start<min||start>max)return 1;continue;}
-            const first=(min-start)/delta,last=(max-start)/delta;
-            lo=Math.max(lo,Math.min(first,last));hi=Math.min(hi,Math.max(first,last));
-        }
+        const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+        if(Math.abs(dx)<1e-8){if(a.x<box.x-box.w/2||a.x>box.x+box.w/2)return 1;}
+        else{const first=(box.x-box.w/2-a.x)/dx,last=(box.x+box.w/2-a.x)/dx;lo=Math.max(lo,Math.min(first,last));hi=Math.min(hi,Math.max(first,last));}
+        if(Math.abs(dy)<1e-8){if(a.y<box.y-box.h/2||a.y>box.y+box.h/2)return 1;}
+        else{const first=(box.y-box.h/2-a.y)/dy,last=(box.y+box.h/2-a.y)/dy;lo=Math.max(lo,Math.min(first,last));hi=Math.min(hi,Math.max(first,last));}
+        if(Math.abs(dz)<1e-8){if(a.z<box.z-box.d/2||a.z>box.z+box.d/2)return 1;}
+        else{const first=(box.z-box.d/2-a.z)/dz,last=(box.z+box.d/2-a.z)/dz;lo=Math.max(lo,Math.min(first,last));hi=Math.min(hi,Math.max(first,last));}
         return lo<=hi&&hi>0?Math.max(0,lo-.015/s.reach):1;
     };
     const nearby=boxes.filter(b=>Math.abs(b.x-s.x)<b.w/2+s.reach+width&&Math.abs(b.z-s.z)<b.d/2+s.reach+width
