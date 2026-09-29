@@ -232,7 +232,7 @@ async function traced(target:THREE.Scene,cam:THREE.Camera,samples:number):Promis
     }
     c.putImageData(img,0,0);return film;
 }
-function pause(ms:number):Promise<void> {const {promise,resolve}=Promise.withResolvers<void>();setTimeout(resolve,ms);return promise;}
+function pause(ms:number):Promise<void> {return new Promise(resolve=>setTimeout(resolve,ms));}
 async function run():Promise<Record<string,string>> {
     await pause(500);
     if(pass==='die')return dieStrip();
