@@ -73,11 +73,11 @@ it('fades an active physics sound as the listener moves away while personal feed
     sources[0].onended();ctx.currentTime=1;audio.play('hit-confirm');
     expect(volume()).toBe(.12);audio.dispose();
 });
-it('loads only the 13 deliberate cues with at most four concurrent loads and ignores disposed completions',()=>{
+it('loads only the 14 deliberate cues with at most four concurrent loads and ignores disposed completions',()=>{
     const loads:Array<(b:AudioBuffer)=>void>=[],urls:string[]=[];
     vi.spyOn(THREE.AudioLoader.prototype,'load').mockImplementation((url,onLoad)=>{urls.push(url);loads.push(onLoad!);});
     const audio=new FoleyAudio({context:{state:'running'}} as THREE.AudioListener);
-    expect(loads).toHaveLength(4);expect(Object.keys(FOLEY)).toHaveLength(13);audio.dispose();
+    expect(loads).toHaveLength(4);expect(Object.keys(FOLEY)).toHaveLength(14);audio.dispose();
     for(const load of loads)load({} as AudioBuffer);expect(loads).toHaveLength(4);
     expect(Object.keys(FOLEY).some(cue=>/drip|drain|horn|step|fridge|launch|grow|charge|split|unstick|kill-confirm/.test(cue))).toBe(false);
 });

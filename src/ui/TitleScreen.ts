@@ -5,17 +5,30 @@ import { generateRandomName } from '../shared/ratNames';
 import { bindGameCredits } from './GameCredits';
 import { readPublicInvitation } from '../network/publicInvitation';
 
+/** Who's on the line when you answer the desk phone. */
+const PHONE_LINES = [
+    'Chief here. The cheese is gone. All of it.',
+    'Wrong number, pal. …Or is it?',
+    '*heavy breathing* …squeak.',
+    'Meet me at the docks. Bring crackers.',
+    'The Big Cheese wants a word. Alone.',
+    "Somebody's been nibbling the evidence again.",
+    'Your mother called. Eat something.',
+    'The dame said Gouda. I heard Gouda.',
+];
+
 /** The title is usable without the renderer, physics, room metadata or audio. */
 export class TitleScreen {
     name = '';
     settings?:PlayerSettings;
     onEnter: (name: string) => void = () => {};
     onGesture: () => void = () => {};
-    onCue: (cue: 'name-tick' | 'name-stamp') => void = () => {};
+    onCue: (cue: 'name-tick' | 'name-stamp' | 'phone-answer') => void = () => {};
     available: () => boolean = () => true;
     readonly credits;
     private readonly events = new AbortController();
     private timer: ReturnType<typeof setTimeout> | null = null;
+    private hangUp = 0;
     private disposed = false;
     constructor(private readonly doc: Document = document, private readonly target: Window = window) {
         this.credits = bindGameCredits(this.events.signal, doc);
@@ -59,6 +72,10 @@ export class TitleScreen {
         for (const type of ['pointerdown', 'pointerup', 'click', 'keydown']) {
             doc.addEventListener(type, () => this.onGesture(), { ...options, capture: true });
         }
+        // Answering the desk phone keeps focus on ENTER CITY, so Enter still enters.
+        const phone = doc.getElementById('desk-phone');
+        phone?.addEventListener('pointerdown', event => event.preventDefault(), options);
+        phone?.addEventListener('click', event => { event.stopPropagation(); this.answer(); }, options);
         // Lean the still toward the pointer (a few pixels; the plate transitions the rest).
         const screen = doc.getElementById('title-screen');
         doc.addEventListener('pointermove', event => {
@@ -74,6 +91,14 @@ export class TitleScreen {
     private enter(): void {
         if (this.settings?.isOpen || !this.available()) return;
         this.clearRoll(); this.show(this.name); this.onGesture(); this.onEnter(this.name);
+    }
+    private answer(): void {
+        const phone = this.doc.getElementById('desk-phone'), talk = phone?.querySelector('.phone-talk');
+        if (!phone || !talk) return;
+        let line = PHONE_LINES[Math.floor(Math.random() * PHONE_LINES.length)];
+        if (line === talk.textContent) line = PHONE_LINES[(PHONE_LINES.indexOf(line) + 1) % PHONE_LINES.length];
+        talk.textContent = line; replay(phone, 'answered'); this.onCue('phone-answer');
+        clearTimeout(this.hangUp); this.hangUp = this.target.setTimeout(() => phone.classList.remove('answered'), 3400);
     }
     private pick(exclude = ''): string {
         let next = generateRandomName();
@@ -116,7 +141,7 @@ export class TitleScreen {
         if (!this.settings?.isOpen && this.available()) (this.doc.getElementById('enter-city-btn') as HTMLButtonElement)?.focus({ preventScroll: true });
     }
     dispose(): void {
-        this.disposed = true; this.settings?.dispose(); this.clearRoll(); this.events.abort();
+        this.disposed = true; this.settings?.dispose(); this.clearRoll(); clearTimeout(this.hangUp); this.events.abort();
         this.onEnter = this.onGesture = this.onCue = () => {};
     }
 }

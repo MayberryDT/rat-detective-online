@@ -80,6 +80,20 @@ class Sound:
             low+=.10*(rng.uniform(-1,1)-low)
             return low*math.exp(-t*9)
         return self.gesture(length,sample,at,gain)
+    def phone_voice(self, at, syllables, gain=1):
+        """A squeaky rat voice down a phone line: bright chirped syllables through a narrow telephone band."""
+        t0=0
+        for pitch,length,glide in syllables:
+            freq=440*2**((pitch-69)/12); phase=0; low=high=0
+            def sample(t,rng,freq=freq,length=length,glide=glide):
+                nonlocal phase,low,high
+                phase+=2*math.pi*freq*2**(glide*t/length/12)/RATE
+                # Buzzy source, then a crude 500 Hz–2.8 kHz telephone band.
+                value=sum(math.sin(n*phase)/n for n in range(1,9))+.05*rng.uniform(-1,1)
+                low+=.52*(value-low); high+=.12*(low-high)
+                return (low-high)*math.sin(math.pi*min(1,t/length))**.6
+            self.gesture(length,sample,at+t0,gain); t0+=length+.035
+        return self
     def save(self):
         peak=max(map(abs,self.values))
         if peak<1e-5: raise ValueError(self.name+' is silent')
@@ -103,6 +117,10 @@ def make(name):
     if name=='hit-confirm': return Sound(name,.075).add('punch',length=.065,rate=1.8)
     if name=='name-tick': return Sound(name,.12).add('heavy',length=.10,rate=1.15,lowpass=4200).add('wood',.018,.65,.09,.95)
     if name=='name-stamp': return Sound(name,.38).add('heavy',length=.25,rate=.75).add('punch',.018,.7,.20,.65,lowpass=2200).add('gear',.11,.30,.21,.8,lowpass=3500)
+    if name=='phone-answer':
+        # The handset lifts off its cradle, then a tiny rat squeaks something urgent down the line.
+        s=Sound(name,1.05).add('heavy',gain=.7,length=.09,rate=1.35,lowpass=3000).add('gear',.03,.25,.08,1.5,lowpass=4000)
+        return s.phone_voice(.2,[(79,.11,3),(83,.08,-2),(76,.14,4),(81,.09,-3),(86,.17,-6)],.55)
     if name=='respawn-tick':
         # A detective's clock: dry wooden tock, low damped body, soft mechanical tail.
         return Sound(name,.55).add('heavy',gain=.6,length=.13,rate=.72,lowpass=1050).add('soft',.012,.28,.16,.8,lowpass=500).bass(38,.012,.49,.7).brush(.06,.34,.20)
@@ -124,7 +142,7 @@ if __name__=='__main__':
     catalog=(ROOT/'src/audio/foleyCatalog.ts').read_text()
     names=re.findall(r"(?:'([^']+)'|\b([a-z][a-z-]*)):cue\(",catalog)
     names=[a or b for a,b in names]
-    assert len(names)==len(set(names)) and len(names)==13
+    assert len(names)==len(set(names)) and len(names)==14
     previous=json.loads((OUT/'manifest.json').read_text()) if (OUT/'manifest.json').exists() else []
     rejected=ROOT/'output/rejected-foley-assets'
     for row in previous:

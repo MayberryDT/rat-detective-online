@@ -1,6 +1,6 @@
 # Deliberate cartoon foley bank
 
-13 offline-rendered WAVs for the September 10, 2026 noir revision. Total WAV size: **239,372 bytes**. Mono, 24 kHz, signed 16-bit PCM; cues last 75 ms–2.1 seconds. There are no ambient beds.
+14 offline-rendered WAVs (13 from the September 10, 2026 noir revision, plus the September 28 title phone). Total WAV size: **289,816 bytes**. Mono, 24 kHz, signed 16-bit PCM; cues last 75 ms–2.1 seconds. There are no ambient beds.
 
 Regenerate from the repository root with `python3 scripts/generate-chaos-foley.py` (Python standard library and ffmpeg). The deterministic generator produces `manifest.json` measurements. Runtime volume, cooldown, range and priority live in `src/audio/foleyCatalog.ts`. Superseded files move to ignored `output/rejected-foley-assets/` and are not shipped.
 
@@ -9,6 +9,8 @@ Regenerate from the repository root with `python3 scripts/generate-chaos-foley.p
 Recorded components come from retained CC0 **Kenney Impact Sounds 1.0**, **XenosNS door-stopper twang** and **cabled_mess Jump_C_08**. Exact files, licenses, creator URLs and source hashes are in [the retained source notes](../../../assets/audio/cartoon-foley/README.md). Previously used balloon and slime recordings remain historical source material; neither is used in this bank.
 
 The generator crops, filters, layers and resamples those recordings. Eleven approved clips are byte-identical to the preceding revision: jump, heavy landing, wall bonk, corpse bounce/kick/hit, case floor/wall, name tick/stamp and hit confirm. Their runtime gains are unchanged.
+
+Phone answer (September 28) is a handset clack followed by five squeaky rat syllables through a crude telephone band, all original offline synthesis; it plays only when the title's desk phone is clicked, at gain .32.
 
 Only countdown and victory were remade. Countdown is a 550 ms low wooden clock tock with damped bass body and a soft mechanical tail, without bells or chimes. Victory is a 2.1-second muted D-minor jazz phrase over low plucked bass, a quiet minor-sixth voicing and soft brush strokes. A small falling horn bend and case-closed thock supply the comic touch. Victory gain is reduced from .78 to .43; countdown uses .30. The musical components are original offline synthesis, not live instrument recordings. No new external source was incorporated.
 

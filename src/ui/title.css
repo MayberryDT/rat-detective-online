@@ -11,7 +11,8 @@
   --card:matrix3d(0.624261,-0.019814,0,-0.000002,0.069661,0.65157,0,0.000053,0,0,1,0,443.1,547.6,0,1);
   --sticky:matrix3d(0.637707,-0.060054,0,-0.000005,0.106157,0.666854,0,0.000051,0,0,1,0,1268.7,196.7,0,1);
   --enter:matrix3d(0.62632,0.026222,0,0.000002,0.026821,0.649665,0,0.000053,0,0,1,0,1268.8,591.4,0,1);
-  --die:translate(916.6px,953.6px);--smoke:translate(1412.8px,948px);--glass:polygon(1.47% 41.30%,17.23% 41.30%,17.99% 67.08%,2.60% 67.08%);--die-size:196px;
+  --die:translate(916.6px,953.6px);--smoke:translate(1412.8px,948px);--steam:translate(251px,918px);--phone:translate(171px,894px);
+  --moth-x:1580px;--moth-y:556px;--wall-x:1250px;--wall-y:420px;--glass:polygon(1.47% 41.30%,17.23% 41.30%,17.99% 67.08%,2.60% 67.08%);--die-size:196px;
   position:fixed;inset:0;z-index:100;overflow:hidden;background:#0d0a0b;color:var(--ink);font-family:'Special Elite','Courier New',monospace}
 #title-screen.fade-out{opacity:0;pointer-events:none}
 #title-screen:not(.fade-out) ~ #hud{visibility:hidden}
@@ -19,7 +20,10 @@ body:has(#title-screen:not(.fade-out)) :is(.dispatch-hud,.assignment-destination
 .title-plate{position:absolute;left:50%;top:50%;width:var(--plate-w);height:var(--plate-h);margin:calc(var(--plate-h) / -2) 0 0 calc(var(--plate-w) / -2);
   scale:calc(var(--k) * 1.025);background:var(--still) 0 0/100% 100% no-repeat;
   /* A slight lean toward the pointer (set by TitleScreen), as if you were standing in the room. */
-  transform:translate3d(var(--lean-x,0px),var(--lean-y,0px),0);transition:transform .9s cubic-bezier(.2,.7,.3,1)}
+  transform:translate3d(var(--lean-x,0px),var(--lean-y,0px),0);transition:transform .9s cubic-bezier(.2,.7,.3,1);
+  /* …and a slow breath in and out, like a camera that can't quite hold still. */
+  animation:plate-breathe 26s ease-in-out infinite alternate}
+@keyframes plate-breathe{to{scale:calc(var(--k) * 1.055)}}
 .title-plate > *{position:absolute;left:0;top:0;transform-origin:0 0}
 
 /* Cheap life over the still, all compositor-only: rain running down the open pane, a car's headlights
@@ -62,6 +66,48 @@ body:has(#title-screen:not(.fade-out)) :is(.dispatch-hud,.assignment-destination
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 60'%3E%3Cg fill='%23000'%3E%3Cellipse cx='55' cy='40' rx='30' ry='15'/%3E%3Cpath d='M78 31Q100 29 114 39Q100 45 80 45Z'/%3E%3Ccircle cx='80' cy='26' r='7'/%3E%3Crect x='72' y='21' width='30' height='3'/%3E%3Cpath d='M77 22Q79 11 88 11Q97 11 98 22Z'/%3E%3Cpath d='M40 52l-4 7h4l3-7zM66 52l3 7h4l-3-7z'/%3E%3C/g%3E%3Cpath d='M27 42Q6 48 3 30' stroke='%23000' stroke-width='3' fill='none'/%3E%3C/svg%3E") 0 0/100% 100%}
 @keyframes scurry{0%{opacity:0;transform:translateX(760px)}.4%{opacity:.72}1%{transform:translate(890px,-8px)}1.6%{transform:translate(1020px,0)}2.2%{transform:translate(1150px,-8px)}2.8%{transform:translate(1280px,0)}
   3.4%{opacity:.72;transform:translate(1410px,-8px)}3.8%,100%{opacity:0;transform:translateX(1500px)}}
+/* A prowl car rolls past now and then: its red and blue lights strobe through the glass and the blinds. */
+.fx-siren b{position:absolute;inset:0;opacity:0;color:#ff2a1a;mix-blend-mode:screen;animation:siren-pass 41s ease-in-out 17s infinite,siren-strobe .44s steps(1) infinite}
+.fx-siren b:first-child{clip-path:var(--glass);background:radial-gradient(ellipse 7% 11% at 8% 60%,currentColor,#0000)}
+.fx-siren b+b{-webkit-mask:var(--stripes) 0 0/100% 100%;mask:var(--stripes) 0 0/100% 100%;right:auto;width:80%;
+  background:linear-gradient(100deg,#0000 15%,currentColor 50%,#0000 85%);animation-name:siren-sweep,siren-strobe}
+@keyframes siren-strobe{50%{color:#2f6bff}}
+@keyframes siren-pass{0%,86%,98%,100%{opacity:0}88%,95%{opacity:.7}}
+@keyframes siren-sweep{0%,86%{opacity:0;transform:translateX(-70%)}88%{opacity:.8}95%{opacity:.7}98%,100%{opacity:0;transform:translateX(140%)}}
+/* A moth worrying the desk lamp; its big soft shadow flaps across the lit wall. */
+.moth,.fx-moth-shadow b{--wings:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 26'%3E%3Cpath d='M20 12C14 0 2-2 1 6s9 10 19 7c10 3 20 0 19-7S26 0 20 12zm0 1c-4 5-11 11-12 8s6-7 12-8c6 1 13 5 12 8s-8-3-12-8z'/%3E%3Cellipse cx='20' cy='14' rx='1.8' ry='7'/%3E%3C/svg%3E");
+  position:absolute;left:var(--x);top:var(--y);transform-origin:50% 50%;width:calc(26px * var(--size));height:calc(17px * var(--size));margin:calc(-8.5px * var(--size)) 0 0 calc(-13px * var(--size));
+  -webkit-mask:var(--wings) 0 0/100% 100%;mask:var(--wings) 0 0/100% 100%;animation:moth-flit 3.3s linear infinite,moth-flap 90ms steps(2) infinite,moth-visit 19s linear 4s infinite both}
+.moth{--amp:1;--size:1.2;--x:var(--moth-x);--y:var(--moth-y);background:#f1e2b8;filter:drop-shadow(0 0 5px #ffe9b0)}
+.fx-moth-shadow{-webkit-mask:var(--lamp) 0 0/100% 100%;mask:var(--lamp) 0 0/100% 100%;mix-blend-mode:multiply}
+.fx-moth-shadow b{--amp:5;--size:10;--x:var(--wall-x);--y:var(--wall-y);background:#1a1210;filter:blur(11px);opacity:.42}
+@keyframes moth-flit{0%,100%{translate:0 0}12%{translate:calc(22px * var(--amp)) calc(-14px * var(--amp))}25%{translate:calc(-8px * var(--amp)) calc(-26px * var(--amp))}
+  37%{translate:calc(-26px * var(--amp)) calc(-6px * var(--amp))}50%{translate:calc(6px * var(--amp)) calc(10px * var(--amp))}62%{translate:calc(28px * var(--amp)) calc(-4px * var(--amp))}
+  75%{translate:calc(4px * var(--amp)) calc(-20px * var(--amp))}87%{translate:calc(-18px * var(--amp)) calc(4px * var(--amp))}}
+@keyframes moth-flap{50%{scale:.3 1}}
+@keyframes moth-visit{0%,64%,100%{visibility:hidden}1%,63%{visibility:visible}}
+/* Steam off the cold-by-now coffee. */
+.fx-steam{width:0;height:0;transform:var(--steam);opacity:.55}
+.fx-steam b{position:absolute;left:-16px;bottom:0;width:32px;height:70px;border-radius:50%;background:radial-gradient(closest-side,#f4efe6,#0000);filter:blur(7px);opacity:0;
+  animation:smoke-curl 4.6s ease-out infinite}
+.fx-steam b+b{animation-delay:-2.3s;animation-duration:5.4s;left:-6px}
+/* The desk phone rings now and then (and whenever you hover it); click it and a rat squeaks down the line. */
+.desk-phone{width:0;height:0;transform:var(--phone)}
+.phone-hit{position:absolute;left:-104px;top:-62px;width:208px;height:124px;pointer-events:auto;cursor:pointer}
+.phone-ring b{position:absolute;top:-72px;width:40px;height:72px;border:6px solid #f4e6c8;border-radius:50%;opacity:0;filter:drop-shadow(0 0 4px #ffe7b8a0);
+  animation:phone-ring 37s steps(1) 11s infinite}
+.phone-ring b:first-child{left:-124px;border-color:#0000 #0000 #0000 #f4e6c8;rotate:-12deg}
+.phone-ring b+b{left:86px;border-color:#0000 #f4e6c8 #0000 #0000;rotate:12deg}
+.phone-hit:hover + .phone-ring b{animation:phone-ring-now .5s steps(1) infinite}
+.desk-phone.answered .phone-ring b{visibility:hidden}
+@keyframes phone-ring{0%,90%,91.4%,94%,95.4%,100%{opacity:0;translate:0 0}90.2%,94.2%{opacity:1;translate:0 -4px}90.6%,94.6%{opacity:.8;translate:3px 0}91%,95%{opacity:1;translate:-3px -3px}}
+@keyframes phone-ring-now{0%{opacity:1;translate:0 -4px}25%{opacity:.8;translate:3px 0}50%{opacity:1;translate:-3px -3px}75%{opacity:0}}
+.phone-talk{position:absolute;left:112px;top:-50px;width:380px;padding:16px 22px 18px;border-radius:46% 50% 44% 52%/58% 50% 54% 46%;background:#f3ead2;color:var(--ink);
+  font:30px/1.1 'Permanent Marker',var(--font-display);text-align:center;box-shadow:6px 9px 8px #000a;opacity:0;pointer-events:none;transform-origin:0 70%}
+.phone-talk::before{content:'';position:absolute;left:-22px;top:52%;border:16px solid #0000;border-right:34px solid #f3ead2;border-left:0;rotate:18deg}
+.desk-phone.answered .phone-talk{opacity:1;animation:talk-pop .38s cubic-bezier(.2,.9,.3,1.4),talk-shake .12s 5 .4s}
+@keyframes talk-pop{0%{scale:.2;rotate:-14deg}100%{scale:1;rotate:0}}
+@keyframes talk-shake{50%{translate:2px -1px}}
 
 /* The case poster: Tyler's mark printed on the paper, RAT DETECTIVE rubber-stamped across it. */
 .wall-poster{width:620px;height:720px;transform:var(--poster);display:flex;flex-direction:column;align-items:center;mix-blend-mode:multiply;pointer-events:none}
@@ -145,7 +191,8 @@ body:has(#title-screen:not(.fade-out)) :is(.dispatch-hud,.assignment-destination
     --card:matrix3d(0.581707,-0.017601,0,-0.000001,0.047689,0.595364,0,0.000032,0,0,1,0,467.6,462.2,0,1);
     --sticky:matrix3d(0.588715,-0.054101,0,-0.000002,0.085554,0.603115,0,0.000033,0,0,1,0,1231.8,138.9,0,1);
     --enter:matrix3d(0.583423,0.024152,0,0.000002,0.009507,0.59502,0,0.000033,0,0,1,0,1236,503.1,0,1);
-    --die:translate(906.6px,832.5px);--smoke:translate(1363.4px,825.8px);--glass:polygon(4.21% 41.51%,18.89% 41.51%,19.32% 70.97%,4.85% 70.97%);--die-size:176px}
+    --die:translate(906.6px,832.5px);--smoke:translate(1363.4px,825.8px);--steam:translate(300px,796px);--phone:translate(214px,780px) scale(.85);
+    --moth-x:1505px;--moth-y:468px;--wall-x:1190px;--wall-y:330px;--glass:polygon(4.21% 41.51%,18.89% 41.51%,19.32% 70.97%,4.85% 70.97%);--die-size:176px}
 }
 /* Portrait: the still covers by height, shifted onto the poster; the controls become their own paper below it. */
 @media(max-aspect-ratio:4/5){
