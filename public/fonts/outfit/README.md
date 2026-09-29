@@ -1,0 +1,1 @@
+Outfit by the Outfit Project Authors. Unmodified Latin subset of the variable font (WOFF2, weights 300–700) from Google Fonts, retrieved 2026-09-28. Distributed under the SIL Open Font License 1.1; see OFL.txt. Self-hosted so the page no longer waits on a render-blocking Google Fonts stylesheet; used for body text and credits.

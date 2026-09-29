@@ -29,6 +29,8 @@ body:has(#title-screen:not(.fade-out)) :is(.dispatch-hud,.assignment-destination
 /* Cheap life over the still, all compositor-only: rain running down the open pane, a car's headlights
  * sweeping the blind stripes now and then, the lamp flickering, dust drifting in its light, ashtray smoke. */
 .fx{width:100%;height:100%;pointer-events:none}
+/* The first frame is only the room (the blends, masks and blurs cost ~200 ms of first paint); main.ts wakes the rest. */
+#title-screen:not(.awake) :is(.fx,.fx-smoke,.fx-steam,.moth,.phone-ring){display:none}
 .fx-rain{clip-path:var(--glass);overflow:hidden;mix-blend-mode:screen;opacity:.55}
 .fx-rain b{position:absolute;inset:-100% 0 0;background:repeating-linear-gradient(97deg,#0000 0 9px,#9fc4ff30 9px 10px,#0000 10px 23px,#c8dcff26 23px 24px,#0000 24px 41px) 0 0/100% 70px,
   repeating-linear-gradient(95deg,#0000 0 17px,#d6e6ff38 17px 18px,#0000 18px 31px) 0 0/100% 120px;animation:rain-fall .7s linear infinite}
@@ -67,25 +69,31 @@ body:has(#title-screen:not(.fade-out)) :is(.dispatch-hud,.assignment-destination
 @keyframes scurry{0%{opacity:0;transform:translateX(760px)}.4%{opacity:.72}1%{transform:translate(890px,-8px)}1.6%{transform:translate(1020px,0)}2.2%{transform:translate(1150px,-8px)}2.8%{transform:translate(1280px,0)}
   3.4%{opacity:.72;transform:translate(1410px,-8px)}3.8%,100%{opacity:0;transform:translateX(1500px)}}
 /* A prowl car rolls past now and then: its red and blue lights strobe through the glass and the blinds. */
-.fx-siren b{position:absolute;inset:0;opacity:0;color:#ff2a1a;mix-blend-mode:screen;animation:siren-pass 41s ease-in-out 17s infinite,siren-strobe .44s steps(1) infinite}
-.fx-siren b:first-child{clip-path:var(--glass);background:radial-gradient(ellipse 7% 11% at 8% 60%,currentColor,#0000)}
-.fx-siren b+b{-webkit-mask:var(--stripes) 0 0/100% 100%;mask:var(--stripes) 0 0/100% 100%;right:auto;width:80%;
-  background:linear-gradient(100deg,#0000 15%,currentColor 50%,#0000 85%);animation-name:siren-sweep,siren-strobe}
-@keyframes siren-strobe{50%{color:#2f6bff}}
+.fx-siren b{position:absolute;inset:0;opacity:0;mix-blend-mode:screen;animation:siren-pass 41s ease-in-out 17s infinite}
+.fx-siren b:first-child{clip-path:var(--glass)}
+.fx-siren b+b{-webkit-mask:var(--stripes) 0 0/100% 100%;mask:var(--stripes) 0 0/100% 100%;right:auto;width:80%;animation-name:siren-sweep}
+/* Red and blue take turns by opacity alone, so the strobe never repaints and runs off the main thread. */
+.fx-siren b::before,.fx-siren b::after{content:'';position:absolute;inset:0;animation:siren-strobe .44s steps(1) infinite}
+.fx-siren b::after{animation-delay:-.22s}
+.fx-siren b:first-child::before{background:radial-gradient(ellipse 7% 11% at 8% 60%,#ff2a1a,#0000)}
+.fx-siren b:first-child::after{background:radial-gradient(ellipse 7% 11% at 8% 60%,#2f6bff,#0000)}
+.fx-siren b+b::before{background:linear-gradient(100deg,#0000 15%,#ff2a1a 50%,#0000 85%)}
+.fx-siren b+b::after{background:linear-gradient(100deg,#0000 15%,#2f6bff 50%,#0000 85%)}
+@keyframes siren-strobe{50%{opacity:0}}
 @keyframes siren-pass{0%,86%,98%,100%{opacity:0}88%,95%{opacity:.7}}
 @keyframes siren-sweep{0%,86%{opacity:0;transform:translateX(-70%)}88%{opacity:.8}95%{opacity:.7}98%,100%{opacity:0;transform:translateX(140%)}}
 /* A moth worrying the desk lamp; its big soft shadow flaps across the lit wall. */
 .moth,.fx-moth-shadow b{--wings:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 26'%3E%3Cpath d='M20 12C14 0 2-2 1 6s9 10 19 7c10 3 20 0 19-7S26 0 20 12zm0 1c-4 5-11 11-12 8s6-7 12-8c6 1 13 5 12 8s-8-3-12-8z'/%3E%3Cellipse cx='20' cy='14' rx='1.8' ry='7'/%3E%3C/svg%3E");
   position:absolute;left:var(--x);top:var(--y);transform-origin:50% 50%;width:calc(26px * var(--size));height:calc(17px * var(--size));margin:calc(-8.5px * var(--size)) 0 0 calc(-13px * var(--size));
-  -webkit-mask:var(--wings) 0 0/100% 100%;mask:var(--wings) 0 0/100% 100%;animation:moth-flit 3.3s linear infinite,moth-flap 90ms steps(2) infinite,moth-visit 19s linear 4s infinite both}
+  -webkit-mask:var(--wings) 0 0/100% 100%;mask:var(--wings) 0 0/100% 100%;animation:moth-flit 3.3s linear infinite,moth-flap 90ms steps(2) infinite,moth-visit 19s linear 4s infinite both;opacity:0}
 .moth{--amp:1;--size:1.2;--x:var(--moth-x);--y:var(--moth-y);background:#f1e2b8;filter:drop-shadow(0 0 5px #ffe9b0)}
 .fx-moth-shadow{-webkit-mask:var(--lamp) 0 0/100% 100%;mask:var(--lamp) 0 0/100% 100%;mix-blend-mode:multiply}
-.fx-moth-shadow b{--amp:5;--size:10;--x:var(--wall-x);--y:var(--wall-y);background:#1a1210;filter:blur(11px);opacity:.42}
+.fx-moth-shadow b{--amp:5;--size:10;--x:var(--wall-x);--y:var(--wall-y);--seen:.42;background:#1a1210;filter:blur(11px)}
 @keyframes moth-flit{0%,100%{translate:0 0}12%{translate:calc(22px * var(--amp)) calc(-14px * var(--amp))}25%{translate:calc(-8px * var(--amp)) calc(-26px * var(--amp))}
   37%{translate:calc(-26px * var(--amp)) calc(-6px * var(--amp))}50%{translate:calc(6px * var(--amp)) calc(10px * var(--amp))}62%{translate:calc(28px * var(--amp)) calc(-4px * var(--amp))}
   75%{translate:calc(4px * var(--amp)) calc(-20px * var(--amp))}87%{translate:calc(-18px * var(--amp)) calc(4px * var(--amp))}}
 @keyframes moth-flap{50%{scale:.3 1}}
-@keyframes moth-visit{0%,64%,100%{visibility:hidden}1%,63%{visibility:visible}}
+@keyframes moth-visit{0%,64%,100%{opacity:0}1%,63%{opacity:var(--seen,1)}}
 /* Steam off the cold-by-now coffee. */
 .fx-steam{width:0;height:0;transform:var(--steam);opacity:.55}
 .fx-steam b{position:absolute;left:-16px;bottom:0;width:32px;height:70px;border-radius:50%;background:radial-gradient(closest-side,#f4efe6,#0000);filter:blur(7px);opacity:0;

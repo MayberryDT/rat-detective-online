@@ -51,6 +51,7 @@ window.addEventListener('pagehide', () => { startup.abort(); title.dispose(); mu
 // Paint and enable the small title before downloading/evaluating the game.
 requestAnimationFrame(() => setTimeout(() => {
   if (startup.signal.aborted) return;
+  document.getElementById('title-screen')?.classList.add('awake');
   music.start();
   void import('./session/prepareGame').then(module => module.prepareGame(title,music,startup.signal)).then(session => {
     if (!session) return;

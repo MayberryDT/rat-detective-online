@@ -41,6 +41,7 @@ const hud=new GameHud();
 const screen=new ScreenFeel(()=>1);
 let playing=false;
 function enter():void {playing=true;touch?.setPlaying(true);touch?.update(0,true);}
+document.getElementById('title-screen')?.classList.add('awake');
 const title=new TitleScreen();title.settings=settings;title.onEnter=()=>{hud.enterPlaying();enter();};
 
 const names=['Inspector Brie','Detective Rind','Gumshoe Squeak','Sergeant Stilton','Officer Crumb','Inspector Fontina','Deputy Muenster','Lieutenant Curd'];
