@@ -5,6 +5,8 @@ import { StaticCityBroadphase } from '../shared/StaticCityBroadphase';
 import {readLightingMode,type LightingMode} from './lightingMode';
 import { previewMuted } from '../audio/previewMuted';
 import { effectsAudioContext } from '../audio/effectsAudio';
+import { CITY_BOUNDS } from '../shared/grayboxLayout';
+import { ContactShadows, StaticMoonShadow, attachContactShadows, fitMoonShadow } from './shadows';
 
 export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
     let viewportWidth = window.innerWidth, viewportHeight = window.innerHeight;
@@ -12,7 +14,9 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     appRenderer.setPixelRatio(pixelRatio);
     appRenderer.setSize(viewportWidth, viewportHeight);
     appRenderer.shadowMap.enabled = true;
-    appRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Hard single-tap shadows: what the old PCFSoftShadowMap setting already drew (three r182
+    // compiles its deprecated value as the basic filter), named for what it is.
+    appRenderer.shadowMap.type = THREE.BasicShadowMap;
     appRenderer.toneMapping = THREE.ACESFilmicToneMapping;
     appRenderer.toneMappingExposure = 1.1;
     appRenderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -66,20 +70,25 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     const hemiLight = new THREE.HemisphereLight(0x776a9b, 0x17131c, lighting==='classic'?.65:.4);
     scene.add(hemiLight);
 
+    // The moon shadow covers the whole city and is drawn once (StaticMoonShadow), so its one-off
+    // map can be large: about the old 0.15 world units per texel over the whole city.
     const moonLight = new THREE.DirectionalLight(0x929cdb, lighting==='classic'?.85:.7);
-    moonLight.position.set(50, 100, 50);
-    moonLight.target.position.set(0, 0, 0);
+    const moonFit = fitMoonShadow(new THREE.Vector3(-50, -100, -50), CITY_BOUNDS, .15, Math.min(4096, appRenderer.capabilities?.maxTextureSize ?? 4096));
+    moonLight.position.copy(moonFit.position);
+    moonLight.target.position.copy(moonFit.target);
     moonLight.castShadow = true;
-    moonLight.shadow.mapSize.set(2048, 2048);
-    moonLight.shadow.camera.near = 10;
-    moonLight.shadow.camera.far = 300;
-    moonLight.shadow.camera.left = -150;
-    moonLight.shadow.camera.right = 150;
-    moonLight.shadow.camera.top = 150;
-    moonLight.shadow.camera.bottom = -150;
-    moonLight.shadow.bias = -0.0005;
+    moonLight.shadow.mapSize.set(moonFit.width, moonFit.height);
+    const moonCamera = moonLight.shadow.camera;
+    moonCamera.near = moonFit.near; moonCamera.far = moonFit.far;
+    moonCamera.left = moonFit.left; moonCamera.right = moonFit.right;
+    moonCamera.top = moonFit.top; moonCamera.bottom = moonFit.bottom;
+    moonCamera.updateProjectionMatrix();
+    // The old bias was 0.15 world units of depth; keep that offset over the longer depth range.
+    moonLight.shadow.bias = -.15 / (moonFit.far - moonFit.near);
+    moonLight.shadow.normalBias = .04;
     scene.add(moonLight);
     scene.add(moonLight.target);
+    const moonShadow = new StaticMoonShadow(moonLight, appRenderer.shadowMap);
 
     const flashlight = new THREE.SpotLight(0xfffebb, 2.0, 40, 0.6, 0.5, 1.2);
     flashlight.castShadow = true;
@@ -120,11 +129,17 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     groundMesh.receiveShadow = true;
     scene.add(groundMesh);
 
+    // Moving things drop no moon shadow; a soft contact disc grounds them instead.
+    const contacts = new ContactShadows(world);
+    attachContactShadows(scene, contacts);
+    scene.onBeforeRender = () => { moonShadow.beforeRender(scene); contacts.update(); };
+    scene.onAfterRender = () => moonShadow.afterRender();
+
 
     groundMesh.userData.aimTarget = true;
-    return { renderer: appRenderer, scene, camera, listener, world, flashlight, syncViewport, dispose() {
+    return { renderer: appRenderer, scene, camera, listener, world, flashlight, moonShadow, contacts, syncViewport, dispose() {
       groundGeo.dispose(); groundMat.dispose(); world.removeBody(groundBody);
-      moonLight.shadow.dispose(); flashlight.shadow.dispose();
+      moonLight.shadow.dispose(); flashlight.shadow.dispose(); contacts.dispose();
       scene.clear(); appRenderer.dispose(); appRenderer.domElement.remove();
     } };
 }

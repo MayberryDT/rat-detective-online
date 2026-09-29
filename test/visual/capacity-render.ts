@@ -14,7 +14,9 @@ stage.renderer.setPixelRatio(1);
 stage.renderer.info.autoReset=false;
 const gpu=gpuTimer(stage.renderer.getContext() as WebGL2RenderingContext);let gpuWarm=false;
 const spec={seed:341283204,version:2};
+const beforeCity=new Set(stage.scene.children);
 const city=new Neighborhood(stage.scene,stage.world,spec);city.generate();
+stage.moonShadow.adoptCity(stage.scene,beforeCity);
 // `?noir=1`: include the juice city layer (noir pass, props) in the measurement.
 const feel=params.get('noir')==='1'?new FeelDirector():undefined;
 if(feel){feel.attach(stage.renderer.domElement,stage.listener);feel.attachCity(stage.scene,city.streetLamps);}

@@ -205,7 +205,11 @@ Each workstream lists what it delivers and how it is proven. The order is the bu
   - the recorder's cost down to 1% of the tick or less (build frames less often);
   - the nav-graph build time.
 - **Tools:** `scripts/city-mirror.mjs` takes about 310 s and failed twice; make it fast and reliable.
-- **Open (decision D5):** shadow freezing or removal was measured in the performance overhaul and left for Tyler to choose.
+- **As built (decision D5, shadows):** `src/session/shadows.ts`.
+  - The moon's map covers the whole city, north included. It is drawn once, then again only when a city is built (`StaticMoonShadow.adoptCity`: the title's prepared city, the constructor, a rebuild for a new room). Only the adopted city casts into it: large kit solids, graybox buildings, parked vehicles. `fitMoonShadow` sizes it at about 0.15 m per texel, as before (3,584 × 3,136 for this city, capped at 4,096). It keeps world up, so the texel grid lies at 45° to the streets and shadow edges step one texel at a time; the tightest rectangle turned the grid a few degrees off the streets and drew long stairs.
+  - Rats, corpses and the loose case are grounded by `ContactShadows` instead: one instanced draw of soft discs. Each disc sits on the static ground, found by a short ray only when its thing moves, and fades and widens with height. The flashlight's small per-frame map is unchanged.
+  - The disc mesh is a scene child from the start, so the warm-up compiles it. The first render after the warm-up, before Enter, draws the moon map with the depth programs the flashlight also uses. `lighting=classic` is unchanged.
+  - Cost (Halla, `capacity-render.html`, 9 batched rats plus noir, against HEAD, runs interleaved): GPU median 11.9–12.3 to 10.1–10.2 ms; draws 1,046 to 729; triangles 1.86 M to 1.47 M. With 16 corpses: 12.8–13.2 to 10.8–10.9 ms; draws 1,190 to 825. The main thread stays saturated, and Halla was shared, so CPU is noisy: busy CPU per frame is about the same with rats (22.1 to 22.2 ms in the quietest pair) and 0.4–6 ms lower with corpses. The moon map costs about 90 MB of GPU memory (depth plus the render target's colour), against 34 MB for the old 2,048² map.
 
 ### W9. City map and data
 - `layoutVersion` 3, with the world version and protocol bumped together (protocol 23).

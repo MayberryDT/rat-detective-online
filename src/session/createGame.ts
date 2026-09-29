@@ -64,6 +64,8 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
             let slice=performance.now();
             for(const _step of city.generateSteps())if(performance.now()-slice>=8){await yieldToPage(signal);slice=performance.now();}
         }
+        // The city is the moon map's only caster; the first render below (after the warm-up) draws it.
+        stage.moonShadow.adoptCity(stage.scene,scenery);
         await cameoLoad;
         if(cameos)stage.scene.add(cameos.root);
         performance.mark('city-prepare-end');

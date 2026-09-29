@@ -19,6 +19,7 @@ import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppea
 import { RatBillboard } from '../ui/RatBillboard';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { playEntitySound } from '../audio/EntityAudio';
+import { contactShadowsOf } from '../session/shadows';
 export { initEntitySounds, disposeEntitySounds, playHitSound, playPlayerHitSound } from '../audio/EntityAudio';
 
 // ─── PHYSICS CONSTANTS ───
@@ -198,6 +199,8 @@ export class RatEntity {
         this.mesh.position.copy(position);
         this.mesh.userData.aimTarget = true;
         this.scene.add(this.mesh);
+        // Rats cast no moon shadow (the moon map is the static city's); a contact disc grounds them.
+        contactShadowsOf(scene)?.add(this.mesh, .75);
 
         // Cache materials for hit flash + apply emissive glow
         this.mesh.traverse((c) => {
@@ -898,6 +901,7 @@ export class RatEntity {
         this.headStains?.dispose();
         this.flyingHat?.dispose();
         this.scene.remove(this.mesh);
+        contactShadowsOf(this.scene)?.remove(this.mesh);
         disposeMeshResources(this.mesh);
         this.billboard.dispose();
         if(this.sketch){this.scene.remove(this.sketch);(Array.isArray(this.sketch.material)?this.sketch.material:[this.sketch.material]).forEach(m=>m.dispose());this.sketch=undefined;}

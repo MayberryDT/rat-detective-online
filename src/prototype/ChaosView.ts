@@ -39,10 +39,14 @@ import {closestPointOnSegment} from '../shared/netplay';
 import { updateCaseCarryPose } from './CaseCarryPose';
 import {RatReactionEvents} from './RatReactionEvents';
 import {FlyingHat} from '../entities/FlyingHat';
+import {contactShadowsOf} from '../session/shadows';
 import {cityImpact} from '../feel/CityReactions';
 import type {DeathStyle} from '../utils/RatAnimator';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
+
+/** A corpse model's origin is its feet; its body lies around this point of its own frame. */
+const CORPSE_CENTRE=new THREE.Vector3(0,.95,0);
 
 export interface InteractionCandidate {
     target:PickupTarget;targetId:string;generation:number;pickup?:import('../shared/pickups').PickupKind;
@@ -324,7 +328,7 @@ export class ChaosView {
             if(!hit.audioOnly){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='thud'?3:hit.scale??1);}
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
-        for(const [id,c] of this.corpses)if(!corpses.has(id)){c.hat?.dispose();this.root.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}
+        for(const [id,c] of this.corpses)if(!corpses.has(id)){c.hat?.dispose();this.root.remove(c.mesh);contactShadowsOf(this.scene)?.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}
         for(const c of state.corpses){
             const victim=this.resolveRat(c.victimId);if(victim?.dead)victim.useSharedCorpse();
             let model=this.corpses.get(c.id);
@@ -334,6 +338,7 @@ export class ChaosView {
                 // Polish 11: a fresh corpse pops its fedora (not one already lying there on join).
                 const hatPending=feelState().on('hatPop')&&state.time-c.born<600;
                 model={mesh,animator:new RatAnimator(mesh),state:c,hatPending,speed:0};this.corpses.set(c.id,model);this.root.add(mesh);
+                contactShadowsOf(this.scene)?.add(mesh,.9,CORPSE_CENTRE);
                 // Up to 16 corpses: one skinned draw each instead of ~40 per pass.
                 batchRigidMeshes(mesh);
                 const noted=this.deathStyles.get(c.victimId);
@@ -431,10 +436,13 @@ export class ChaosView {
         if(owner&&!owner.dead){
             const anchor=this.arm!.parent!;
             updateCaseCarryPose(this.caseRoot, anchor);
+            contactShadowsOf(this.scene)?.remove(this.caseRoot);
         }else{
             if(!this.extrapolate||!this.presentation.looseCase(renderTime,this.presented))copyPresentationPose(s.case,this.presented);
             const {p,q}=this.presented;
             this.caseRoot.position.set(p.x,p.y,p.z);this.caseRoot.quaternion.set(q.x,q.y,q.z,q.w);
+            // A loose case is grounded by a contact disc; a carried one by its carrier's.
+            contactShadowsOf(this.scene)?.add(this.caseRoot,.5);
         }
         this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer||this.lastHitPoint);
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
@@ -591,6 +599,7 @@ export class ChaosView {
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         this.pressureMachine.dispose();this.caseBeacon.dispose();this.setCarrier(null);this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();
+        const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);
         startCaseBuzz(false);disposeIncidentAudio();this.impacts.dispose();
         disposeMeshResources(this.root);this.bullets.dispose();this.chargedBullets.dispose();this.chargedGlow.dispose();this.dangerGlow.dispose();this.dangerTrails.dispose();this.missileTrail.dispose();this.ballGeometry.dispose();this.glowGeometry.dispose();this.ballMaterial.dispose();this.chargedMaterial.dispose();this.glowMaterial.dispose();

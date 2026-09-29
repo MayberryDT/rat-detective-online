@@ -163,8 +163,9 @@ export class GameSession {
         this.remotes = new RemotePlayers(scene, world);
         this.worldSpec = initialWorld ? { ...initialWorld } : createWorldSpec(1);
         if(!initialWorld && new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-')) this.worldSpec.version=GRAYBOX_VERSION;
+        const beforeCity=prepared.city?undefined:new Set(scene.children);
         this.city = prepared.city ?? (this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(scene,world,this.worldSpec) : new CityGenerator(scene, world, DEFAULT_CITY_OPTIONS, this.worldSpec));
-        if (!prepared.city) this.city.generate();
+        if (beforeCity) {this.city.generate();this.stage.moonShadow.adoptCity(scene,beforeCity);}
         if (this.city instanceof Neighborhood && this.city.streetLamps) this.feel.attachCity(scene, this.city.streetLamps);
         this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
         this.transport.onMessage = message => this.receive(message);
@@ -279,8 +280,11 @@ export class GameSession {
         if (message.world.seed !== this.worldSpec.seed || message.world.version !== this.worldSpec.version) {
             this.city.dispose();
             this.worldSpec = message.world;
+            const beforeCity=new Set(this.stage.scene.children);
             this.city = this.worldSpec.version===GRAYBOX_VERSION ? new Neighborhood(this.stage.scene,this.stage.world,this.worldSpec) : new CityGenerator(this.stage.scene, this.stage.world, DEFAULT_CITY_OPTIONS, this.worldSpec);
             this.city.generate();
+            // A new city: its moon shadow is drawn once more, with the next frame.
+            this.stage.moonShadow.adoptCity(this.stage.scene,beforeCity);
             this.foleyWorld?.dispose();this.foleyWorld=new FoleyWorld(this.foley,this.stage.scene);
             if (this.city instanceof Neighborhood && this.city.streetLamps) this.feel.attachCity(this.stage.scene, this.city.streetLamps);
         }
@@ -492,8 +496,8 @@ export class GameSession {
                     this.stats?.event('death',{respawnAt:message.respawnAt-this.serverOffset,incident:message.incident});
                     this.hud.showRespawn(message.respawnAt - this.serverOffset);
                 }
-                this.hud.addKillFeed(message.cause==='evidence-tampering'
-                    ? {kind:'note',text:this.deathQuips.caseDeath(message.victimName)}
+                this.hud.addKillFeed(message.cause
+                    ? {kind:'note',text:message.cause==='drowned'?this.deathQuips.drowned(message.victimName):this.deathQuips.caseDeath(message.victimName)}
                     : {kind:'kill',killer:message.killerName,victim:message.victimName,headshot,
                         ...(message.killerId===this.myId?{local:'killer' as const}:message.victimId===this.myId?{local:'victim' as const}:{})});
                 break;

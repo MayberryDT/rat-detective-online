@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { MAX_HP, PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosState } from '../../src/shared/chaosState';
 import { createAssignment } from '../../src/shared/assignments';
 import {ChaosView} from '../../src/prototype/ChaosView';
 import {playerPreferences} from '../../src/settings/PlayerPreferences';
+import {MUNICIPAL_QUIPS} from '../../src/ui/municipalQuips';
 
 const harness = vi.hoisted(() => {
     const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
@@ -166,7 +167,7 @@ const harness = vi.hoisted(() => {
         inputs: [] as { clear: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn>; keys: Record<string, boolean> }[],
         music: [] as { start: ReturnType<typeof vi.fn>; unlock: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }[],
         unlockEffects: vi.fn(),
-        stages: [] as { dispose: ReturnType<typeof vi.fn>; world: { step: ReturnType<typeof vi.fn> } }[],
+        stages: [] as { dispose: ReturnType<typeof vi.fn>; world: { step: ReturnType<typeof vi.fn> }; moonShadow: { adoptCity: Mock } }[],
         stats: [] as unknown[],
         initSounds: vi.fn(),
         disposeSounds: vi.fn(),
@@ -245,6 +246,7 @@ vi.mock('../../src/session/createStage', () => ({
                 position: { set: vi.fn() },
                 target: { position: { copy: () => ({ addScaledVector: vi.fn() }) } },
             },
+            moonShadow: { adoptCity: vi.fn() },
             dispose: vi.fn(),
         };
         harness.stages.push(stage);
@@ -510,15 +512,20 @@ describe('GameSession', () => {
         const prepared=harness.cities[0];
         expect(prepared.spec).toEqual(spec);
         expect(prepared.generate).toHaveBeenCalledOnce();
+        // The moon map is redrawn exactly when a city is built: once here, not for the same room, again for a new one.
+        const {adoptCity}=harness.stages.at(-1)!.moonShadow;
+        expect(adoptCity).toHaveBeenCalledOnce();
         expect(harness.rats).toHaveLength(0);
         expect(transport.connect).not.toHaveBeenCalled();
         enter.click();
         transport.onMessage?.({...welcome(),world:spec});
         expect(harness.cities).toHaveLength(1);
+        expect(adoptCity).toHaveBeenCalledOnce();
         expect(prepared.dispose).not.toHaveBeenCalled();
         transport.onMessage?.({...welcome(),world:{seed:42,version:2}});
         expect(prepared.dispose).toHaveBeenCalledOnce();
         expect(harness.cities).toHaveLength(2);
+        expect(adoptCity).toHaveBeenCalledTimes(2);
         expect(harness.cities[1].spec).toEqual({seed:42,version:2});
         session.dispose();
     });
@@ -640,6 +647,15 @@ describe('GameSession', () => {
         expect(hud.addKillFeed.mock.calls.at(-1)![0].kind).toBe('note');
         expect(remotes.get).not.toHaveBeenCalledWith(null);
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now()+3000);
+    });
+
+    it('tells a drowning with a harbour joke, never a case joke or a kill line',()=>{
+        const {transport,hud}=start();transport.onMessage?.(welcome());
+        transport.onMessage?.({type:'playerDied',victimId:'other',killerId:null,killerName:null,
+            cause:'drowned',victimName:'Inspector Brine',respawnAt:Date.now()+3000});
+        const entry=hud.addKillFeed.mock.calls.at(-1)![0];
+        expect(entry).toEqual({kind:'note',text:expect.stringContaining('Inspector Brine')});
+        expect(MUNICIPAL_QUIPS.drowned.map(q=>q.replace(/\{name\}/g,'Inspector Brine'))).toContain(entry.text);
     });
 
     it('shows both buffs but reflects predicted shots only for Ironclad, clearing stale effects',()=>{
