@@ -59,6 +59,14 @@ export class TitleScreen {
         for (const type of ['pointerdown', 'pointerup', 'click', 'keydown']) {
             doc.addEventListener(type, () => this.onGesture(), { ...options, capture: true });
         }
+        // Lean the still toward the pointer (a few pixels; the plate transitions the rest).
+        const screen = doc.getElementById('title-screen');
+        doc.addEventListener('pointermove', event => {
+            if (!screen || event.pointerType !== 'mouse' || reducedMotion()) return;
+            const width = target.innerWidth || 1, height = target.innerHeight || 1;
+            screen.style.setProperty('--lean-x', `${((.5 - event.clientX / width) * 22).toFixed(1)}px`);
+            screen.style.setProperty('--lean-y', `${((.5 - event.clientY / height) * 14).toFixed(1)}px`);
+        }, options);
         target.addEventListener('focus', () => this.focus(), options);
         doc.addEventListener('visibilitychange', () => { if (!doc.hidden) this.focus(); }, options);
         this.roll(); this.focus();
@@ -85,12 +93,15 @@ export class TitleScreen {
         const dice = this.doc.getElementById('reroll-name-btn');
         if (dice) replay(dice, 'rolling');
         this.doc.getElementById('player-name')?.classList.add('typing');
-        const name = this.name;
+        const name = this.name, card = this.doc.getElementById('player-name')?.parentElement;
         const type = (typed: number) => {
             if (this.disposed) return;
             this.show(name.slice(0, typed));
-            if (typed >= name.length) { this.onCue('name-stamp'); this.timer = setTimeout(() => this.clearRoll(), 400); return; }
-            if (typed % 2) this.onCue('name-tick');
+            if (typed >= name.length) {
+                this.onCue('name-stamp'); if (card) replay(card, 'ding');
+                this.timer = setTimeout(() => this.clearRoll(), 400); return;
+            }
+            if (typed % 2) { this.onCue('name-tick'); if (card) replay(card, 'strike'); }
             this.timer = setTimeout(() => type(typed + 1), 38);
         };
         type(1);
