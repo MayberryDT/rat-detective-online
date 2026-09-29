@@ -32,19 +32,22 @@ const bit=():Bit=>({p:new THREE.Vector3(),v:new THREE.Vector3(),spin:new THREE.V
 
 /** Scene-wide launcher juice (L5–L7): machine debris, overpressure sparks,
  * contrails behind launched rats, landing craters and case paperwork. Pooled
- * instanced draws built on first use; cosmetic only. */
+ * instanced draws, built up front and hidden while idle, so the title's warm-up
+ * compiles their programs; cosmetic only, never noir-patched. */
 export class LaunchJuice {
     private readonly bits=Array.from({length:BITS},bit);
     private readonly sparks=Array.from({length:SPARKS},bit);
     private readonly puffs=Array.from({length:PUFFS},()=>({p:new THREE.Vector3(),age:Infinity,life:1,size:1}));
     private readonly decals:{mesh:THREE.Mesh;material:THREE.MeshBasicMaterial;age:number;life:number}[]=[];
     private readonly trails=new Map<string,number>();
-    private bitMesh?:THREE.InstancedMesh;
-    private sparkMesh?:THREE.InstancedMesh;
-    private puffMesh?:THREE.InstancedMesh;
-    private crackTexture?:THREE.CanvasTexture;
-    private decalGeometry?:THREE.PlaneGeometry;
     private readonly owned:{dispose():void}[]=[];
+    private readonly bitMesh:THREE.InstancedMesh;
+    private readonly sparkMesh:THREE.InstancedMesh;
+    private readonly puffMesh:THREE.InstancedMesh;
+    /** Painted on the first landing; until then a blank texel keeps the craters' program. */
+    private crackTexture?:THREE.CanvasTexture;
+    private readonly blankTexture=new THREE.DataTexture(new Uint8Array(4),1,1);
+    private readonly decalGeometry=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
     private bitCursor=0;
     private sparkCursor=0;
     private puffCursor=0;
@@ -54,23 +57,27 @@ export class LaunchJuice {
     private readonly color=new THREE.Color();
     private readonly blast:LaunchBlast;
 
-    constructor(private readonly scene:THREE.Scene){this.blast=new LaunchBlast(scene);}
+    constructor(private readonly scene:THREE.Scene){
+        this.blast=new LaunchBlast(scene);
+        this.owned.push(this.blankTexture,this.decalGeometry);
+        this.bitMesh=this.instanced('launch-debris',new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({roughness:.8}),BITS,true);
+        this.sparkMesh=this.instanced('launch-sparks',new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({toneMapped:false}),SPARKS,true);
+        this.puffMesh=this.instanced('launch-contrails',new THREE.IcosahedronGeometry(1,1),
+            new THREE.MeshBasicMaterial({color:0xcfc9bb,transparent:true,opacity:.2,depthWrite:false}),PUFFS,false);
+        for(let i=0;i<DECALS;i++){
+            const material=new THREE.MeshBasicMaterial({map:this.blankTexture,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
+            const mesh=new THREE.Mesh(this.decalGeometry,material);mesh.name='launch-crater';mesh.renderOrder=1;mesh.visible=false;mesh.userData.noNoir=true;
+            this.scene.add(mesh);this.decals.push({mesh,material,age:0,life:1});this.owned.push(material);
+        }
+    }
 
-    private instanced(name:string,geometry:THREE.BufferGeometry,material:THREE.Material,count:number):THREE.InstancedMesh {
+    /** A hidden pool; `colored` pools carry per-instance colours from the start. */
+    private instanced(name:string,geometry:THREE.BufferGeometry,material:THREE.Material,count:number,colored:boolean):THREE.InstancedMesh {
         const mesh=new THREE.InstancedMesh(geometry,material,count);
-        mesh.name=name;mesh.count=0;mesh.frustumCulled=false;this.scene.add(mesh);
-        this.owned.push(geometry,material);
+        mesh.name=name;mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.userData.noNoir=true;
+        if(colored)mesh.setColorAt(0,this.color.setRGB(1,1,1));
+        this.scene.add(mesh);this.owned.push(geometry,material);
         return mesh;
-    }
-    private bitDraw():THREE.InstancedMesh {
-        return this.bitMesh??=this.instanced('launch-debris',new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({roughness:.8}),BITS);
-    }
-    private sparkDraw():THREE.InstancedMesh {
-        return this.sparkMesh??=this.instanced('launch-sparks',new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({toneMapped:false}),SPARKS);
-    }
-    private puffDraw():THREE.InstancedMesh {
-        return this.puffMesh??=this.instanced('launch-contrails',new THREE.IcosahedronGeometry(1,1),
-            new THREE.MeshBasicMaterial({color:0xcfc9bb,transparent:true,opacity:.2,depthWrite:false}),PUFFS);
     }
 
     private emit(pool:Bit[],mesh:THREE.InstancedMesh,cursor:number,at:THREE.Vector3,colors:readonly number[],size:readonly [number,number,number],speed:number,lift:number,flutter:number,life:number,floor:number):number {
@@ -85,12 +92,10 @@ export class LaunchJuice {
         return cursor+1;
     }
     private debris(at:THREE.Vector3,count:number,colors:readonly number[],size:readonly [number,number,number],speed:number,lift:number,flutter:number,life:number){
-        const mesh=this.bitDraw();
-        for(let i=0;i<count;i++)this.bitCursor=this.emit(this.bits,mesh,this.bitCursor,at,colors,size,speed,lift,flutter,life,at.y-.1);
+        for(let i=0;i<count;i++)this.bitCursor=this.emit(this.bits,this.bitMesh,this.bitCursor,at,colors,size,speed,lift,flutter,life,at.y-.1);
     }
     private spray(at:THREE.Vector3,count:number){
-        const mesh=this.sparkDraw();
-        for(let i=0;i<count;i++)this.sparkCursor=this.emit(this.sparks,mesh,this.sparkCursor,at,SPARK_COLORS,[.06,.06,.22],12,14,0,.55,-Infinity);
+        for(let i=0;i<count;i++)this.sparkCursor=this.emit(this.sparks,this.sparkMesh,this.sparkCursor,at,SPARK_COLORS,[.06,.06,.22],12,14,0,.55,-Infinity);
     }
 
     /** A machine fires: the layered blast, its own debris from the pad; overpressure adds a fountain of sparks. */
@@ -110,7 +115,6 @@ export class LaunchJuice {
         const timer=(this.trails.get(id)??0)-dt;
         if(timer>0){this.trails.set(id,timer);return;}
         this.trails.set(id,every);
-        this.puffDraw();
         const puff=this.puffs[this.puffCursor++%PUFFS]!;
         puff.p.set(at.x+(Math.random()-.5)*.3,at.y+1+(Math.random()-.5)*.3,at.z+(Math.random()-.5)*.3);
         puff.age=0;puff.life=.8+Math.random()*.4;puff.size=.13+Math.random()*.06;
@@ -132,23 +136,16 @@ export class LaunchJuice {
 
     private decal(at:THREE.Vector3,size:number,life:number){
         if(!this.crackTexture){
-            this.crackTexture=crackTexture();this.decalGeometry=new THREE.PlaneGeometry(1,1);this.decalGeometry.rotateX(-Math.PI/2);
-            this.owned.push(this.crackTexture,this.decalGeometry);
+            this.crackTexture=crackTexture();this.owned.push(this.crackTexture);
+            for(const {material} of this.decals)material.map=this.crackTexture;
         }
-        let decal=this.decals[this.decalCursor%DECALS];
-        if(!decal){
-            const material=new THREE.MeshBasicMaterial({map:this.crackTexture,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
-            const mesh=new THREE.Mesh(this.decalGeometry,material);mesh.name='launch-crater';mesh.renderOrder=1;
-            this.scene.add(mesh);decal={mesh,material,age:0,life};this.decals.push(decal);this.owned.push(material);
-        }
-        this.decalCursor++;
+        const decal=this.decals[this.decalCursor++%DECALS]!;
         decal.mesh.position.set(at.x,at.y+.03,at.z);decal.mesh.rotation.y=Math.random()*Math.PI*2;
         decal.mesh.scale.setScalar(size);decal.mesh.visible=true;decal.material.opacity=1;decal.age=0;decal.life=life;
         decal.mesh.updateMatrix();this.active=true;
     }
 
-    private step(pool:Bit[],mesh:THREE.InstancedMesh|undefined,dt:number):boolean {
-        if(!mesh)return false;
+    private step(pool:Bit[],mesh:THREE.InstancedMesh,dt:number):boolean {
         let live=false;
         for(let slot=0;slot<pool.length;slot++){
             const b=pool[slot]!;
@@ -165,7 +162,7 @@ export class LaunchJuice {
             this.dummy.position.copy(b.p);this.dummy.rotation.copy(b.rot);this.dummy.scale.copy(b.size).multiplyScalar(fade);
             this.dummy.updateMatrix();mesh.setMatrixAt(slot,this.dummy.matrix);
         }
-        mesh.count=live?pool.length:0;mesh.instanceMatrix.needsUpdate=true;
+        mesh.count=live?pool.length:0;mesh.visible=live;mesh.instanceMatrix.needsUpdate=true;
         return live;
     }
 
@@ -174,19 +171,17 @@ export class LaunchJuice {
         if(!this.active)return;
         let live=this.step(this.bits,this.bitMesh,dt);
         live=this.step(this.sparks,this.sparkMesh,dt)||live;
-        if(this.puffMesh){
-            let count=0;
-            for(let slot=0;slot<PUFFS;slot++){
-                const puff=this.puffs[(this.puffCursor+slot)%PUFFS]!;
-                if((puff.age+=dt)>=puff.life)continue;
-                const t=puff.age/puff.life;puff.p.y+=dt*.5;
-                this.dummy.position.copy(puff.p);this.dummy.rotation.set(0,0,0);
-                this.dummy.scale.setScalar(puff.size*(1+t*2.2)*(1-t*t));
-                this.dummy.updateMatrix();this.puffMesh.setMatrixAt(count++,this.dummy.matrix);
-            }
-            this.puffMesh.count=count;this.puffMesh.instanceMatrix.needsUpdate=true;
-            live||=count>0;
+        let count=0;
+        for(let slot=0;slot<PUFFS;slot++){
+            const puff=this.puffs[(this.puffCursor+slot)%PUFFS]!;
+            if((puff.age+=dt)>=puff.life)continue;
+            const t=puff.age/puff.life;puff.p.y+=dt*.5;
+            this.dummy.position.copy(puff.p);this.dummy.rotation.set(0,0,0);
+            this.dummy.scale.setScalar(puff.size*(1+t*2.2)*(1-t*t));
+            this.dummy.updateMatrix();this.puffMesh.setMatrixAt(count++,this.dummy.matrix);
         }
+        this.puffMesh.count=count;this.puffMesh.visible=count>0;this.puffMesh.instanceMatrix.needsUpdate=true;
+        live||=count>0;
         for(const decal of this.decals){
             if(!decal.mesh.visible)continue;
             decal.age+=dt;
@@ -201,11 +196,11 @@ export class LaunchJuice {
         for(const puff of this.puffs)puff.age=Infinity;
         for(const decal of this.decals)decal.mesh.visible=false;
         this.blast.clear();
-        for(const mesh of [this.bitMesh,this.sparkMesh,this.puffMesh])if(mesh)mesh.count=0;
+        for(const mesh of [this.bitMesh,this.sparkMesh,this.puffMesh]){mesh.count=0;mesh.visible=false;}
         this.trails.clear();this.active=false;
     }
     dispose():void {
-        for(const mesh of [this.bitMesh,this.sparkMesh,this.puffMesh]){mesh?.removeFromParent();mesh?.dispose();}
+        for(const mesh of [this.bitMesh,this.sparkMesh,this.puffMesh]){mesh.removeFromParent();mesh.dispose();}
         for(const decal of this.decals)decal.mesh.removeFromParent();
         for(const resource of this.owned)resource.dispose();
         this.owned.length=0;this.decals.length=0;this.trails.clear();this.blast.dispose();

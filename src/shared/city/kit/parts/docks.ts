@@ -124,8 +124,9 @@ function quay(k:KitBuilder):void {
         k.piece('iron',x,.9,z,.94,.06,.94,{round:true});
     }
     for(const [x,z,s,r] of [[-24,-153,1.8,.2],[-22.6,-152.6,1.2,.5],[28,-165,1.6,.1],[85,-155,1.8,.3],[146,-165,1.6,.2],[147.5,-163.8,1.1,0]] as const)crate(k,x,0,z,s,r);
-    // Harbour lamps along the edge (they suppress the regular kerb lamps nearby).
-    for(const [x,z] of [[-30,-170.6],[30,-170.6],[78.5,-170.6],[118,-170.6]] as const)k.lamp(x,z);
+    // Harbour lamps on the quay wall's kerb row, off the apron like every kerb lamp (they
+    // suppress the regular kerb lamps nearby).
+    for(const x of [-30,30,78.5,118])k.lamp(x,E-.6);
     k.sign({lines:['NO LOITERING','BY ORDER OF THE PORT AUTHORITY'],x:-37,y:2.4,z:-151.2,w:3.6,h:1.3,ry:0,bg:'#e3dcc4',fg:'#2b1c1a'});
     if(k.visuals){k.piece('iron',-37,1.2,-151.35,.12,2.4,.12);}
 }

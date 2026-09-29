@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 const SAMPLES=32, TRAIL_SECONDS=.45;
 /** Bounded world-space ribbon and a brief upward healing sweep. No lights,
- * shadow passes, per-frame meshes or through-wall rendering. */
+ * shadow passes, per-frame meshes or through-wall rendering. Always in the scene
+ * (hidden when idle), so the title's warm-up compiles its programs. */
 export class RatPowerupEffects {
     private readonly trailGeometry=new THREE.BufferGeometry();
     private readonly positions=new Float32Array(SAMPLES*4*3);
@@ -26,7 +27,7 @@ export class RatPowerupEffects {
         depthTest:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
     readonly applyWave=new THREE.Mesh(new THREE.TorusGeometry(.72,.09,8,40),this.applyMaterial);
     private readonly root=new THREE.Group();
-    constructor(private readonly scene:THREE.Scene){
+    constructor(scene:THREE.Scene){
         this.trailGeometry.setAttribute('position',new THREE.BufferAttribute(this.positions,3).setUsage(THREE.DynamicDrawUsage));
         this.trailGeometry.setAttribute('strength',new THREE.BufferAttribute(this.strengths,1).setUsage(THREE.DynamicDrawUsage));
         const indices:number[]=[];
@@ -36,10 +37,11 @@ export class RatPowerupEffects {
         this.wave.name='quick-fix-wave';this.wave.rotation.x=-Math.PI/2;this.wave.raycast=()=>{};
         this.applyWave.name='pickup-application-wave';this.applyWave.rotation.x=-Math.PI/2;this.applyWave.raycast=()=>{};
         this.trail.visible=this.wave.visible=this.applyWave.visible=false;this.root.add(this.applyWave);this.root.name="rat-powerup-effects";this.root.add(this.trail,this.wave);
+        this.root.visible=false;scene.add(this.root);
     }
     heal():void {this.healing=.7;}
     apply(kind:'ironclad'|'hustle'):void {this.applying=.42;this.applyMaterial.color.setHex(kind==='ironclad'?0xd9eeff:0xff2108);}
-    clear():void {this.root.removeFromParent();this.count=0;this.healing=0;this.applying=0;this.lastSample=-Infinity;this.trail.visible=this.wave.visible=this.applyWave.visible=false;this.trailGeometry.setDrawRange(0,0);}
+    clear():void {this.root.visible=false;this.count=0;this.healing=0;this.applying=0;this.lastSample=-Infinity;this.trail.visible=this.wave.visible=this.applyWave.visible=false;this.trailGeometry.setDrawRange(0,0);}
     update(dt:number,position:THREE.Vector3,hustle:boolean):void {
         this.time+=Math.min(dt,.1);
         if(this.count&&this.points[0].p.distanceToSquared(position)>64)this.clear();
@@ -80,8 +82,7 @@ export class RatPowerupEffects {
             this.applyWave.scale.setScalar(.65+Math.sin(t*Math.PI)*.5);
             this.applyMaterial.opacity=Math.sin(t*Math.PI);
         }
-        if(this.trail.visible||this.wave.visible||this.applyWave.visible){if(!this.root.parent)this.scene.add(this.root);}
-        else this.root.removeFromParent();
+        this.root.visible=this.trail.visible||this.wave.visible||this.applyWave.visible;
     }
     dispose():void {this.root.removeFromParent();this.trail.removeFromParent();this.wave.removeFromParent();this.trailGeometry.dispose();this.trailMaterial.dispose();this.wave.geometry.dispose();this.healMaterial.dispose();this.applyWave.geometry.dispose();this.applyMaterial.dispose();}
 }

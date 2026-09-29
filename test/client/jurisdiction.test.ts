@@ -111,8 +111,9 @@ describe('Jurisdiction geometry and presentation',()=>{
  it('renders only active and preview footprints and disposes resources',()=>{
   const {state,j}=fixture(),scene=new THREE.Scene(),view=new JurisdictionZones(scene);view.update(state);
   expect(view.root.children.filter(c=>c.visible)).toHaveLength(1);j.remainingMs=9000;view.update(state);expect(view.root.children.filter(c=>c.visible)).toHaveLength(2);
-  const disposals=vi.fn();view.root.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.LineSegments)o.geometry.addEventListener('dispose',disposals);});
-  view.clear();expect(view.root.visible).toBe(false);view.dispose();expect(scene.children).toHaveLength(0);expect(disposals).toHaveBeenCalledTimes(4);
+  const geometries:THREE.BufferGeometry[]=[];view.root.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.LineSegments)geometries.push(o.geometry);});
+  const disposals=vi.fn();for(const geometry of geometries)geometry.addEventListener('dispose',disposals);
+  view.clear();expect(view.root.visible).toBe(false);view.dispose();expect(scene.children).toHaveLength(0);expect(disposals).toHaveBeenCalledTimes(geometries.length);
  });
  it('guides negative grounded street feet correctly and labels the sewer layer',()=>{
   const {state,j}=fixture();j.index=j.order.indexOf('sewer-junction');j.serial=j.index;

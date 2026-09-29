@@ -52,8 +52,13 @@ export class Hunch {
     private readonly material=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,depthWrite:false,depthFunc:THREE.GreaterDepth,
         blending:THREE.AdditiveBlending,fog:false,toneMapped:false});
 
+    /** Always in the scene, never drawn: the trails' program compiles with the title's warm-up. */
+    private readonly warmLine=new THREE.Line(new THREE.BufferGeometry(),this.material);
+
     constructor(private readonly scene:THREE.Scene,private readonly state:FeelState,private readonly sound:FeelSound,
-        private readonly doc:Document|undefined=globalThis.document){}
+        private readonly doc:Document|undefined=globalThis.document){
+        this.warmLine.visible=false;this.warmLine.name='hunch-trail-warm';scene.add(this.warmLine);
+    }
 
     /** Clean Bill: everyone at full health with a city-wide, stronger Hunch. */
     setSupercharged(on:boolean):void {this.supercharged=on;}
@@ -186,7 +191,7 @@ export class Hunch {
         for(const trail of this.trails.values()){trail.line.visible=false;trail.count=0;}
     }
     dispose():void {
-        this.reset();for(const id of [...this.trails.keys()])this.dropTrail(id);this.material.dispose();
+        this.reset();for(const id of [...this.trails.keys()])this.dropTrail(id);this.warmLine.removeFromParent();this.warmLine.geometry.dispose();this.material.dispose();
         this.root?.remove();this.root=this.eye=this.card=undefined;this.photos.length=0;this.lastMade.clear();
     }
 

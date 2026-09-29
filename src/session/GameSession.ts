@@ -109,6 +109,7 @@ export class GameSession {
     private touch?: TouchControls;
     private roundWon = false;
     private releasePreparedModels?:()=>void;
+    private playFrameMarked=false;
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
     /** The stage's own exposure; Blackout scales it. */
@@ -691,8 +692,10 @@ export class GameSession {
             this.stats?.gpu.end();
             this.feel.afterRender(camera);
         }
-        if(this.rat && this.transport.state==='playing' && this.releasePreparedModels && !this.compiling){
-            this.releasePreparedModels();this.releasePreparedModels=undefined;
+        // The prepared stand-ins live until the session ends: their programs (round-end lineup
+        // rats, powerups, the Hunch sketch) would otherwise be released here and relinked in play.
+        if(this.rat && this.transport.state==='playing' && !this.playFrameMarked && !this.compiling){
+            this.playFrameMarked=true;
             performance.mark('city-first-play-frame');
         }
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});

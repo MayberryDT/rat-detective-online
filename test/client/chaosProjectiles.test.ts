@@ -62,7 +62,7 @@ describe('authoritative ball presentation', () => {
       if(moved)expect(displayedMuzzle.distanceTo(muzzle)).toBeGreaterThan(1);
       clock.mockReturnValue(70);view.apply(travelled);
       clock.mockReturnValue(80);view.update(1/60,camera);
-      const balls=scene.getObjectByName('records-chaos')!.children[0] as THREE.InstancedMesh,matrix=new THREE.Matrix4(),point=new THREE.Vector3();
+      const balls=scene.getObjectByName('cheese-balls') as THREE.InstancedMesh,matrix=new THREE.Matrix4(),point=new THREE.Vector3();
       expect(balls.count).toBe(fired.length);
       for(let i=0;i<balls.count;i++){balls.getMatrixAt(i,matrix);expect(point.setFromMatrixPosition(matrix).distanceTo(displayedMuzzle)).toBeLessThan(1e-5);}
       // Repeated delivery cannot create a second draw entry or replay the birth.
@@ -86,7 +86,7 @@ describe('authoritative ball presentation', () => {
       while(incident==='bad-ammunition'&&badRound(shot.shotId).round!=='crooked')shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
       const muzzle=player.entity.getMuzzlePosition();view.fire(shot);
       const fired=sim.shoot(rat.id,shot);
-      const balls=scene.getObjectByName('records-chaos')!.children[0] as THREE.InstancedMesh,matrix=new THREE.Matrix4(),point=new THREE.Vector3();
+      const balls=scene.getObjectByName('cheese-balls') as THREE.InstancedMesh,matrix=new THREE.Matrix4(),point=new THREE.Vector3();
       clock.mockReturnValue(8);view.update(1/60,camera);expect(balls.count).toBe(fired.length);
       for(let i=0;i<balls.count;i++){balls.getMatrixAt(i,matrix);expect(point.setFromMatrixPosition(matrix).distanceTo(muzzle)).toBeLessThan(1e-5);}
       clock.mockReturnValue(24);view.update(1/60,camera);
@@ -105,7 +105,7 @@ describe('authoritative ball presentation', () => {
     state.shots=Array.from({length:CHAOS_TUNING.maxShots},(_,i)=>({id:`ball-${i}`,owner:'local',
       p:{x:i,y:2,z:0},v:{x:175,y:0,z:0},age:0}));
     const root=scene.getObjectByName('records-chaos')!;
-    const balls=root.children[0] as THREE.InstancedMesh;
+    const balls=root.getObjectByName('cheese-balls') as THREE.InstancedMesh;
     for(const phase of ['ready','rolling','active','cooldown'] as const){
       state.dispatch.phase=phase;view.apply(state);view.update(1/60,camera);
       expect(root.visible&&balls.visible).toBe(true);
@@ -120,7 +120,7 @@ describe('authoritative ball presentation', () => {
     const scene=new THREE.Scene(),view=new ChaosView(scene,()=>undefined,undefined,false),state=snapshot();
     state.shots=[false,true].map((wallBounced,i)=>({id:`color-${i}`,owner:'local',p:{x:i,y:2,z:0},v:{x:20,y:0,z:0},age:0,wallBounced}));
     state.dispatch={phase:'active',incident:'crossfire',started:1000,until:26000,serial:1};
-    const root=scene.getObjectByName('records-chaos')!,yellow=root.children[0] as THREE.InstancedMesh;
+    const yellow=scene.getObjectByName('cheese-balls') as THREE.InstancedMesh;
     const red=scene.getObjectByName('crossfire-balls') as THREE.InstancedMesh;
     const glow=scene.getObjectByName('crossfire-glow') as THREE.InstancedMesh;
     view.apply(state);view.update(1/60,camera);expect(yellow.count).toBe(1);expect(red.count).toBe(1);expect(glow.count).toBe(1);
@@ -142,7 +142,7 @@ describe('authoritative ball presentation', () => {
     view.apply(state);
     clock.mockReturnValue(1050); // CPU work between stepping and drawing is not more simulation time.
     view.update(1 / 60, camera);
-    const ball = scene.getObjectByName('records-chaos')!.children[0] as THREE.InstancedMesh;
+    const ball = scene.getObjectByName('cheese-balls') as THREE.InstancedMesh;
     const matrix=new THREE.Matrix4();const position=new THREE.Vector3();
     const current=()=>{ball.getMatrixAt(0,matrix);return position.setFromMatrixPosition(matrix);};
     expect(current().distanceTo(new THREE.Vector3(8.75,1.958,0))).toBeLessThan(1e-5);
@@ -162,11 +162,12 @@ describe('authoritative ball presentation', () => {
     view.apply(state);
     view.update(1 / 60, camera);
     const root = scene.getObjectByName('records-chaos')!;
-    expect((root.children[0] as THREE.InstancedMesh).count).toBe(1);
+    expect((root.getObjectByName('cheese-balls') as THREE.InstancedMesh).count).toBe(1);
     expect((root.getObjectByName('danger-cheese-rims') as THREE.InstancedMesh).count).toBe(1);
     view.apply(snapshot());
     view.update(1 / 60, camera);
-    expect(root.children.filter(m=>m instanceof THREE.InstancedMesh).every(m=>m.count===0)).toBe(true);
+    const draws:THREE.InstancedMesh[]=[];root.traverse(m=>{if(m instanceof THREE.InstancedMesh)draws.push(m);});
+    expect(draws.length).toBeGreaterThan(0);expect(draws.every(m=>m.count===0)).toBe(true);
     view.dispose();
   });
 });

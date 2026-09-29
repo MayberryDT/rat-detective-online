@@ -240,7 +240,8 @@ export class StreetReadability {
                     diffuseColor.rgb+=streetSurfaceLift*streetHeight*vec3(.014,.017,.022);
                 }`);
         };
-        material.customProgramCacheKey=()=>cacheKey+'-street-spill-v3-'+lift;
+        // The lift is a uniform: pavement, curbs, stairs and obstacles share one program.
+        material.customProgramCacheKey=()=>cacheKey+'-street-spill-v4';
         material.needsUpdate=true;
     }
     dispose():void {

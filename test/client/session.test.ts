@@ -232,7 +232,7 @@ vi.mock('../../src/session/createStage', () => ({
         const stage = {
             renderer,
             syncViewport: () => false,
-            scene: { children: [] },
+            scene: { children: [], add: vi.fn() },
             camera: {
                 aspect: 1,
                 position: { clone: () => ({ addScaledVector: () => ({ x: 0, y: 4, z: 10 }) }) },

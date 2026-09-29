@@ -61,6 +61,8 @@ export class PressureMachine {
         }
         this.steamMesh=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),new THREE.MeshBasicMaterial({color:0xd9dcd6,transparent:true,opacity:.3,depthWrite:false}),STEAM);
         this.steamMesh.name='launcher-steam';this.steamMesh.count=0;this.steamMesh.frustumCulled=false;this.root.add(this.steamMesh);
+        // One Surge vent up front (hidden, free), so the title's warm-up compiles its programs.
+        this.ventView();
         scene.add(this.root);
     }
 

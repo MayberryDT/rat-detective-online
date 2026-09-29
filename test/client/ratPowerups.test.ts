@@ -19,7 +19,7 @@ it.each([false,true])('restores every material after silver expiry, hit flashes 
         expect([...materials].map(m=>[m.color.getHex(),m.emissive.getHex(),m.emissiveIntensity,m.metalness,m.roughness])).toEqual(before);
         rat.setPowerups(10,10);rat.useSharedCorpse();
         expect([...materials].map(m=>[m.color.getHex(),m.emissive.getHex(),m.emissiveIntensity,m.metalness,m.roughness])).toEqual(before);
-        expect(scene.getObjectByName('hot-pursuit-trail')).toBeUndefined();
+        expect(scene.getObjectByName('hot-pursuit-trail')?.visible).toBe(false);
     }finally{rat.dispose();}
     expect(scene.children).toHaveLength(0);
 });

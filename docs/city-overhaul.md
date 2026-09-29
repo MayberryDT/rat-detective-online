@@ -217,6 +217,28 @@ Each workstream lists what it delivers and how it is proven. The order is the bu
   - `scripts/city-mirror.mjs`: the old run spent 807 of its 870 s inserting heat cells one autocommit at a time. The model and aggregates now replace their tables in one transaction; archive objects download six at a time, stream through gunzip into SQL and each commits with its mark, so a failed run keeps what it finished and a rerun fetches only the rest; retries with backoff on network errors, timeouts, 5xx and 429; errors name the request, the status and the cause. Production (100 objects, 56,033 facts, 70,308 aggregate rows): 870 s to 4.8 s from empty; 1.0 s with nothing new. `--out`, `--concurrency`, `--backoff-ms`; test `test/scripts/cityMirror.test.mjs`.
   - Cameos: the game ships `src/assets/cameos/*.glb.gz` (GNU `gzip -9 -n`, written by the exporter), unpacked by the browser's `DecompressionStream` in `readCameoAsset`, no decoder library. Transfer 870,208 to 280,844 bytes (spider 533,188 to 186,485, bat 337,020 to 94,359); the GLBs are byte-identical after unpacking, and `cameo-preview.html` (now in the visual build, loading the game's copies) screenshots byte-identical before and after.
 
+- **As built (load time, 2026-09-29, partial):**
+  - **Sewer lamps: two variants kept.** A tried design kept the eight lamps visible and black above ground, with a shader test on uniforms that skipped black point lights. It needed one program per material, but it cost GPU time on Halla (9-rat fixture, interleaved, 2 runs each): street 9.94/10.01 → 10.21/10.30 ms, sewer 18.50/18.52 → 18.89/19.12 ms. It was reverted. The lamps stay hidden above ground and both light variants are warmed, as the September 28 rule says.
+  - **Folded key.** `StreetReadability.apply` keys the spill patch without the surface lift, which was already a uniform. Pavement, curbs, stairs and obstacles share one program per base material.
+  - **Stand-ins and eager pools.**
+    - `createGame` adds these stand-ins: a `CaseBeacon`, a `JurisdictionZones`, a supply restock dial (`PickupRespawnVisual`) and a one-instance `createShotDraws` set. The set holds ChaosView's balls, Crossfire and danger glows and trails, and the missile trail, with instance colours allocated from the start.
+    - After the moon-map render, `createGame` renders twice more, with the lamps hidden and then shown. The stand-ins sit behind the camera and are never culled, so the flashlight's shadow pass links their depth programs before Enter.
+    - The prepared stand-ins now live until the session ends. Before, they were released at the first frame, and the lineup, powerup and Hunch-sketch programs relinked in play. `GameSession` only marks `city-first-play-frame` there now.
+    - These are now built up front, hidden: every zone's draws in `JurisdictionZones`; one Surge vent in `PressureMachine`; the pools, blasts and crater decals in `LaunchJuice` and `LaunchBlast` (`noNoir`; the crater texture is painted on the first landing over a blank texel); and a warm line for the Hunch trails.
+    - `RatPowerupEffects` stays in the scene, hidden when idle.
+  - **Street lamps.** The four harbour lamps stand on the quay wall's kerb row (z −172.6), like the other quay lamps, instead of 1.4 units into Quay Road. `streetLampLayout.test.ts` checks kit lamps (pier heads, breakwater, precinct grounds) for "outside every street and building, on a deck". Kerb lamps are still checked for "beside a curb".
+  - **Measured.**
+    - Setup: Halla, headless Chrome with gl-egl, a local frozen build, and the hosted staging Worker (deployed from HEAD) through a throwaway relay. A hook on `linkProgram` counted links; a diagnostic build exposed the renderer and session.
+    - Links after Enter in 20 s of play: **5–8 → 1**. The one left is the skinned depth program without the lamps, at the first frame.
+    - Forced launch, landing, trigger, surge, kills, lightning, powerups and the lineup now link **0** programs; before these changes they linked 7 or more.
+    - Program links for the whole load: **160–170 → 183**, against a baseline of 153–154. The stand-ins that now live all session and the depth warm-up add programs, and the two sewer-lamp variants double every lit one. The program-count target is **not met**.
+    - Warm load: title 0.15 s; Enter-ready 3.75–4.17 s → 4.55 s; first gameplay frame 5.25–6.56 s → 5.68 s (one run after the changes).
+    - Same-view screenshots from `city-view.html` (10 views) and the capacity fixture with rats are in `~/.cache/rd-shots/w8/`. The mean absolute difference is 0.69–0.94 levels in every view, with at most 0.95% of pixels past the diff threshold (quay, where the lamps moved). The rat scene differs by 1.78, because its rats move.
+  - **Not done:**
+    - The bake cache. The warm-load profile gives what it would save: spill atlas ≈80 ms, facade beams ≈265 ms, graybox bake 138 ms plus batching 128 ms, kit bake ≈270 ms. The design is an IndexedDB record of those outputs, keyed by layout version, seed, lighting mode, the readability flag and the chunk URL, holding at most two entries.
+    - The last link after Enter.
+    - The program count.
+
 ### W9. City map and data
 - `layoutVersion` 3, with the world version and protocol bumped together (protocol 23).
 - Place IDs stay stable where places still exist. Ship an old-to-new mapping for the rest, and add the new places (docks, precinct floors and cells, the chute, the new streets).

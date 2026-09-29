@@ -55,6 +55,30 @@ export interface InteractionCandidate {
 /** U9: a pickup card drops away instead of vanishing. */
 const CARD_EXIT:Keyframe[]=[{opacity:1,transform:'none'},{opacity:0,transform:'translateY(46px) rotate(6deg) scale(.9)'}];
 
+/** Instanced shot draws: balls, Crossfire balls and glows, danger rims and trails, the case
+ * missile's trail. Instance colours exist from the start, as play will need them, so the
+ * programs never change. The title warm-up builds a one-instance set as a stand-in; the
+ * welcome's full set then links nothing. */
+export function createShotDraws(capacity:number){
+    const ballGeometry=createCheeseBallGeometry(),glowGeometry=new THREE.SphereGeometry(.17,24,16);
+    const glow=(color:number,opacity:number)=>new THREE.MeshBasicMaterial({color,side:THREE.BackSide,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false});
+    const trail=(radius:number,segments:number,rings:number,color:number,opacity:number,count:number)=>
+        new THREE.InstancedMesh(new THREE.SphereGeometry(radius,segments,rings),new THREE.MeshBasicMaterial({color,transparent:true,opacity,toneMapped:false,depthWrite:false}),count);
+    const draws={root:new THREE.Group(),
+        bullets:new THREE.InstancedMesh(ballGeometry,createCheeseBallMaterial(),capacity),
+        chargedBullets:new THREE.InstancedMesh(ballGeometry,createCheeseBallMaterial(true),capacity),
+        chargedGlow:new THREE.InstancedMesh(glowGeometry,glow(0xff240b,.96),capacity),
+        dangerGlow:new THREE.InstancedMesh(glowGeometry,glow(0xff4822,.9),capacity),
+        dangerTrails:trail(.1,8,6,0xffffff,.65,capacity),
+        missileTrail:trail(.18,8,8,0xff2a12,.42,12),
+        dispose(){draws.root.removeFromParent();disposeMeshResources(draws.root);for(const mesh of meshes)mesh.dispose();}};
+    const meshes=[draws.bullets,draws.chargedBullets,draws.chargedGlow,draws.dangerGlow,draws.dangerTrails,draws.missileTrail];
+    const names=['cheese-balls','crossfire-balls','crossfire-glow','danger-cheese-rims','danger-cheese-trails','case-missile-trail'];
+    meshes.forEach((mesh,i)=>{mesh.count=0;mesh.frustumCulled=false;mesh.name=names[i]!;draws.root.add(mesh);});
+    for(const mesh of [draws.chargedBullets,draws.dangerTrails])mesh.setColorAt(0,new THREE.Color(1,1,1));
+    return draws;
+}
+
 export class ChaosView {
     private readonly reactions:RatReactionEvents;
     private readonly root=new THREE.Group();
@@ -77,16 +101,13 @@ export class ChaosView {
     private readonly caseMarker=document.createElement('div');
     private readonly caseMarkerDetail=document.createElement('div');
     private readonly impacts:CheeseImpactEffects;
-    private readonly ballGeometry=createCheeseBallGeometry();
-    private readonly ballMaterial=createCheeseBallMaterial();
-    private readonly bullets=new THREE.InstancedMesh(this.ballGeometry,this.ballMaterial,CHAOS_TUNING.maxShots);
-    private readonly chargedMaterial=createCheeseBallMaterial(true);
-    private readonly chargedBullets=new THREE.InstancedMesh(this.ballGeometry,this.chargedMaterial,CHAOS_TUNING.maxShots);
-    private readonly glowGeometry=new THREE.SphereGeometry(.17,24,16);
-    private readonly glowMaterial=new THREE.MeshBasicMaterial({color:0xff240b,side:THREE.BackSide,transparent:true,opacity:.96,blending:THREE.AdditiveBlending,depthTest:true,depthWrite:false,toneMapped:false});
-    private readonly chargedGlow=new THREE.InstancedMesh(this.glowGeometry,this.glowMaterial,CHAOS_TUNING.maxShots);
-    private readonly dangerGlow=new THREE.InstancedMesh(this.glowGeometry,new THREE.MeshBasicMaterial({color:0xff4822,side:THREE.BackSide,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false}),CHAOS_TUNING.maxShots);
-    private readonly dangerTrails=new THREE.InstancedMesh(new THREE.SphereGeometry(.1,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.65,depthWrite:false,toneMapped:false}),CHAOS_TUNING.maxShots);
+    private readonly draws=createShotDraws(CHAOS_TUNING.maxShots);
+    private readonly bullets=this.draws.bullets;
+    private readonly chargedBullets=this.draws.chargedBullets;
+    private readonly chargedGlow=this.draws.chargedGlow;
+    private readonly dangerGlow=this.draws.dangerGlow;
+    private readonly dangerTrails=this.draws.dangerTrails;
+    private readonly missileTrail=this.draws.missileTrail;
     private readonly trailPose=new THREE.Object3D();
     private readonly trailDirection=new THREE.Vector3();
     private readonly trailAxis=new THREE.Vector3(0,0,1);
@@ -96,7 +117,6 @@ export class ChaosView {
     private readonly enemyCrossfireTint=new THREE.Color(2.4,1.4,1.2);
     private myId='';
     private readonly ballPose=new THREE.Object3D();
-    private readonly missileTrail=new THREE.InstancedMesh(new THREE.SphereGeometry(.18,8,8),new THREE.MeshBasicMaterial({color:0xff2a12,transparent:true,opacity:.42,toneMapped:false,depthWrite:false}),12);
     /** Polish 12: recent death causes by victim, consumed when the shared corpse appears. */
     private readonly deathStyles=new Map<string,{style:DeathStyle;headshot:boolean;at:number}>();
     /** `speed`: last presented speed, so a sudden stop reads as an impact for the limbs. */
@@ -136,11 +156,7 @@ export class ChaosView {
     constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace){
         this.reactions=new RatReactionEvents(resolveRat);
         this.localShots=new LocalShotPresentation(traceShot);
-        this.bullets.count=0;this.bullets.frustumCulled=false;this.root.add(this.bullets);
-        this.chargedBullets.count=0;this.chargedBullets.frustumCulled=false;this.chargedBullets.name='crossfire-balls';this.root.add(this.chargedBullets);
-        this.chargedGlow.count=0;this.chargedGlow.frustumCulled=false;this.chargedGlow.name='crossfire-glow';this.root.add(this.chargedGlow);
-        for(const [mesh,name] of [[this.dangerGlow,'danger-cheese-rims'],[this.dangerTrails,'danger-cheese-trails']] as const){mesh.count=0;mesh.frustumCulled=false;mesh.name=name;this.root.add(mesh);}
-        this.missileTrail.count=0;this.missileTrail.frustumCulled=false;this.missileTrail.name='case-missile-trail';this.root.add(this.missileTrail);
+        this.root.add(this.draws.root);
         bindIncidentAudio(this.audio);
         this.root.name='records-chaos';scene.add(this.root);scene.add(this.caseRoot);
         this.caseRoot.name='hot-case';
@@ -602,6 +618,6 @@ export class ChaosView {
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);
         startCaseBuzz(false);disposeIncidentAudio();this.impacts.dispose();
-        disposeMeshResources(this.root);this.bullets.dispose();this.chargedBullets.dispose();this.chargedGlow.dispose();this.dangerGlow.dispose();this.dangerTrails.dispose();this.missileTrail.dispose();this.ballGeometry.dispose();this.glowGeometry.dispose();this.ballMaterial.dispose();this.chargedMaterial.dispose();this.glowMaterial.dispose();
+        this.draws.dispose();disposeMeshResources(this.root);
     }
 }

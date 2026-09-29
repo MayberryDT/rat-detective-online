@@ -3,11 +3,15 @@ import type { AssignmentState } from '../shared/assignments';
 import { activeZone, nextZone, JURISDICTION_TUNING } from '../shared/jurisdiction';
 import { JURISDICTION_ZONES, JURISDICTION_ZONE_IDS, zoneTiles, type JurisdictionZoneId } from '../shared/jurisdictionZones';
 
-/** Two static draws per visible footprint. No lights, polling, colliders or wall outlines. */
+/** Two static draws per visible footprint. No lights, polling, colliders or wall outlines.
+ * Every zone's draws exist (hidden) from the start, so the title's warm-up compiles them. */
 export class JurisdictionZones {
     readonly root=new THREE.Group();
     private readonly views=new Map<JurisdictionZoneId,{group:THREE.Group;fill:THREE.MeshBasicMaterial;line:THREE.LineBasicMaterial}>();
-    constructor(scene:THREE.Scene){scene.add(this.root);this.root.name='jurisdiction-zones';this.root.visible=false;}
+    constructor(scene:THREE.Scene){
+        scene.add(this.root);this.root.name='jurisdiction-zones';this.root.visible=false;
+        for(const id of JURISDICTION_ZONE_IDS)this.view(id).group.visible=false;
+    }
     private view(id:JurisdictionZoneId){
         let view=this.views.get(id);if(view)return view;
         const y=JURISDICTION_ZONES[id].floorY+.045,vertices:number[]=[],edges=new Map<string,number[]>();
@@ -31,7 +35,6 @@ export class JurisdictionZones {
         this.root.visible=!!a?.jurisdiction&&a.phase!=='closed';
         if(!this.root.visible||!a?.jurisdiction)return;
         const s=a.jurisdiction,id=activeZone(s),next=s.remainingMs<=JURISDICTION_TUNING.warningMs?nextZone(s):undefined;
-        this.view(id);if(next)this.view(next);
         for(const key of JURISDICTION_ZONE_IDS){
             const v=this.views.get(key);if(!v)continue;
             v.group.visible=key===id||key===next;v.fill.opacity=key===id?.09:.025;v.line.opacity=key===id?.85:.25;
