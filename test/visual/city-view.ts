@@ -1,0 +1,51 @@
+/**
+ * Static art inspection of the whole city (not gameplay): the real Neighborhood with
+ * the noir layer, no network, no rats. Camera from the URL:
+ *   ?view=<name>  a named view (see VIEWS), or
+ *   ?eye=x,y,z&at=x,y,z  any camera.
+ * `window.cityViewReady` turns true once a few frames have rendered (for screenshots).
+ */
+import * as THREE from 'three';
+import {createStage} from '../../src/session/createStage';
+import {Neighborhood} from '../../src/prototype/Neighborhood';
+import {FeelDirector} from '../../src/feel/FeelDirector';
+
+const VIEWS:Record<string,[number[],number[]]>={
+    overview:[[-15,260,40],[-15,0,-10]],
+    north:[[-15,150,-40],[-15,0,-150]],
+    quay:[[40,9,-152],[110,4,-178]],
+    docks:[[20,40,-95],[60,0,-160]],
+    boat:[[60,14,-150],[112,5,-184]],
+    yard:[[-10,6,-104],[20,3,-140]],
+    warehouse:[[110,5,-104],[110,4,-128]],
+    precinct:[[-70,24,-80],[-105,8,-140]],
+    'precinct-front':[[-105,4,-92],[-105,8,-118]],
+    cellblock:[[-105,18,-138],[-105,8,-160]],
+    'gate-lane':[[-137,6,-28],[-137,3,-95]],
+    corner:[[-50,5,-30],[-66,4,-12]],
+    needleworks:[[-85,10,25],[-95,10,60]],
+    records:[[-16,8,-20],[-16,8,-50]],
+};
+const params=new URLSearchParams(location.search);
+const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
+stage.renderer.setPixelRatio(1);
+const city=new Neighborhood(stage.scene,stage.world,{seed:341283204,version:3});city.generate();
+const feel=new FeelDirector();
+feel.attach(stage.renderer.domElement,stage.listener);feel.attachCity(stage.scene,city.streetLamps);
+const named=VIEWS[params.get('view')??'overview']??VIEWS.overview!;
+const parse=(v:string|null,fallback:number[])=>v?v.split(',').map(Number):fallback;
+const [ex,ey,ez]=parse(params.get('eye'),named[0]!),[ax,ay,az]=parse(params.get('at'),named[1]!);
+stage.camera.position.set(ex!,ey!,ez!);stage.camera.lookAt(ax!,ay!,az!);
+stage.camera.far=Math.max(stage.camera.far,900);
+stage.flashlight.position.copy(stage.camera.position);stage.flashlight.target.position.set(ax!,ay!,az!);
+function resize(){stage.renderer.setSize(innerWidth,innerHeight);stage.camera.aspect=innerWidth/innerHeight;stage.camera.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+let frames=0,last=performance.now();
+const info=document.getElementById('info')!;
+stage.renderer.setAnimationLoop(now=>{
+    const dt=Math.min((now-last)/1000,.05);last=now;
+    city.update(dt,stage.camera,stage.camera.position);feel.update(dt,stage.camera,stage.camera.position);
+    stage.renderer.render(stage.scene,stage.camera);
+    if(++frames===30){(window as unknown as {cityViewReady:boolean}).cityViewReady=true;
+        info.textContent=`static art inspection · draws ${stage.renderer.info.render.calls} · tris ${stage.renderer.info.render.triangles} · programs ${stage.renderer.info.programs?.length??0}`;}
+});

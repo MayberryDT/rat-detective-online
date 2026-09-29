@@ -3,7 +3,7 @@ import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 
-export const PROTOCOL_VERSION = 22;
+export const PROTOCOL_VERSION = 23;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;

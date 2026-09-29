@@ -28,7 +28,7 @@ import {
   type RoundState,
   type ServerMessage,
 } from '../shared/networkProtocol';
-import { createWorldSpec, type WorldSpec } from '../shared/worldSpec';
+import { createSafeSpawn, createWorldSpec, type WorldSpec } from '../shared/worldSpec';
 import {
   applyHit,
   buildScoreboard,
@@ -102,6 +102,8 @@ interface PendingEventRow extends Record<string, SqlStorageValue> {
 }
 
 const WORLD_KEY = 'world';
+/** City layouts the room upgrades from on load (layout 3 added the harbour, docks and precinct). */
+const PREVIOUS_GRAYBOX_VERSIONS: readonly number[] = [2];
 const ROUND_KEY = 'round';
 const ASSIGNMENT_ROTATION_KEY = 'assignment-rotation-v1';
 const PERSISTENT_BOTS_KEY = 'persistent-bots-v1';
@@ -167,6 +169,8 @@ export class GameRoom extends DurableObject<Env> {
   /** Practice-only: force every Dispatch roll to one incident. Null = normal shuffle. */
   private forcedIncident: IncidentId | null = null;
   private world: WorldSpec = createWorldSpec();
+  /** The stored world was an older city layout: its checkpoint and positions belong to streets that moved. */
+  private layoutChanged = false;
   private lastCheckpointAt = new Map<string, number>();
   /** Routine pose checkpoints waiting for the next chaos checkpoint transaction. */
   private readonly dueCheckpoints = new Set<string>();
@@ -854,6 +858,11 @@ export class GameRoom extends DurableObject<Env> {
         const parsed = JSON.parse(worldRow) as WorldSpec;
         if (typeof parsed.seed === 'number' && typeof parsed.version === 'number') {
           this.world = parsed;
+          if (PREVIOUS_GRAYBOX_VERSIONS.includes(parsed.version)) {
+            this.world = { ...parsed, version: GRAYBOX_VERSION };
+            this.layoutChanged = true;
+            this.persistWorld();
+          }
         } else {
           this.world = createWorldSpec();
           this.persistWorld();
@@ -1406,6 +1415,12 @@ export class GameRoom extends DurableObject<Env> {
     if(!this.chaos){
       let saved:ChaosState|undefined;
       try{const raw=this.readRoomState('chaos-v1');if(raw)saved=JSON.parse(raw) as ChaosState;}catch{/* start a recoverable case */}
+      if(this.layoutChanged){
+        // A new city layout: the old checkpoint's cases, sites and rats stand in streets that moved.
+        saved=undefined;this.layoutChanged=false;this.round=playingRound(this.now());this.persistRound();
+        this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");
+        for(const player of this.players.values()){Object.assign(player,createSafeSpawn(this.world));this.persistPlayer(player,true);}
+      }
       const previous=saved?.assignment as {id?:string;destinations?:string[]}|undefined;
       const retiredAssignment=previous?.id==='misfiled-evidence'||(previous?.id==='chain-of-custody'&&previous.destinations?.includes('icebox-check'));
       if(retiredAssignment){this.round=playingRound(this.now());this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");}

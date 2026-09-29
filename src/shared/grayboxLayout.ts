@@ -8,7 +8,7 @@ import { vehicleBoxes } from './vehicleLayout';
 import { sewerBoxes, sewerGroundOpening, SEWER_ENTRIES } from './sewerLayout';
 import { kitCity } from './city/kit/city';
 import { QUAY_EDGE_Z } from './city/kit/northPlan';
-export const GRAYBOX_VERSION = 2;
+export const GRAYBOX_VERSION = 3;
 export const SEWER_FLOOR = -7;
 export const CITY_BOUNDS = {min:-196,max:166};
 export const CITY_PREVIEW_SEED = 20260907;
