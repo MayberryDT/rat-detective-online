@@ -19,17 +19,33 @@ const VIEWS:Record<string,[number[],number[]]>={
     yard:[[-10,6,-104],[20,3,-140]],
     warehouse:[[110,5,-104],[110,4,-128]],
     precinct:[[-70,24,-80],[-105,8,-140]],
-    'precinct-front':[[-105,4,-92],[-105,8,-118]],
+    'precinct-front':[[-122,3,-97],[-102,9,-110]],
     cellblock:[[-105,18,-138],[-105,8,-160]],
+    'precinct-aerial':[[-150,55,-205],[-104,4,-138]],
+    'precinct-yard':[[-115,1.8,-151],[-103,13,-148]],
+    'precinct-gallery':[[-116.7,9.8,-145.7],[-110.1,9,-135.9]],
+    'precinct-cell':[[-90.3,9.6,-160.7],[-105,12,-150]],
+    'precinct-lookout':[[-105,21,-146.6],[-105,6,-130]],
+    'precinct-lineup':[[-88.4,2.2,-118.4],[-88.4,2.4,-127]],
+    'precinct-observation':[[-88.4,2.4,-111],[-88.4,2.4,-127]],
+    'precinct-stairs':[[-114,3,-120],[-126,6,-121]],
     'gate-lane':[[-137,6,-28],[-137,3,-95]],
     corner:[[-50,5,-30],[-66,4,-12]],
     needleworks:[[-85,10,25],[-95,10,60]],
     records:[[-16,8,-20],[-16,8,-50]],
+    'precinct-sewer':[[-66,4.5,-168],[-72,3,-140]],
+    'docks-sewer':[[58,4.5,-168],[52,3,-140]],
+    'precinct-branch':[[-60,-4.2,2.5],[-60,-4.5,-60]],
+    'precinct-ramp':[[-66,-4.6,-113],[-72,-2,-146]],
+    'docks-branch':[[64,-4.2,-33],[70,-4.5,-100]],
+    'docks-ramp':[[66,-4.6,-113],[52,-2,-140]],
 };
 const params=new URLSearchParams(location.search);
 const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 stage.renderer.setPixelRatio(1);
+const beforeCity=new Set(stage.scene.children);
 const city=new Neighborhood(stage.scene,stage.world,{seed:341283204,version:3});city.generate();
+stage.moonShadow.adoptCity(stage.scene,beforeCity);
 const feel=new FeelDirector();
 feel.attach(stage.renderer.domElement,stage.listener);feel.attachCity(stage.scene,city.streetLamps);
 const named=VIEWS[params.get('view')??'overview']??VIEWS.overview!;

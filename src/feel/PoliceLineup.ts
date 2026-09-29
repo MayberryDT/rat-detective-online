@@ -4,20 +4,22 @@ import type {Award} from '../shared/networkProtocol';
 import {awardValue} from '../shared/awardUnits';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import './policeLineup.css';
+import {PRECINCT_LINEUP} from '../shared/city/kit/parts/precinct';
 import {replay} from '../ui/motion';
 
 export interface LineupEntry {id:string;name:string;appearance:RatOptions;award?:Award;winner:boolean}
 
-/** Far below the city and its sewers; nothing else is ever this deep. */
-const ORIGIN=new THREE.Vector3(0,-320,0);
-const SPACING=1.75,WALL_Z=-1.3,ROOM_HALF_WIDTH=6.8,ROOM_HEIGHT=4.6;
+const SPACING=1.75,WALL_Z=-1.3,CHART_HEIGHT=4.6;
+/** On the stage of the precinct's lineup room, 1.3 in front of its height-chart wall. The room
+ * is closed on every side (its glass stops rats and balls), so nothing live is ever in shot. */
+const ORIGIN=new THREE.Vector3(PRECINCT_LINEUP.x,PRECINCT_LINEUP.y,PRECINCT_LINEUP.wallZ-WALL_Z);
 /** Seconds: first flash, then one per rat; the winner (last) gets a double flash. Five rats
  * finish in about 2.4 s, inside the 2.6 s the round end leaves the lineup. */
 const FIRST_FLASH=.3,FLASH_STEP=.38,WINNER_PAUSE=.25;
 
-/** Juice T5: a noir police lineup at round end. The top rats stand against a
- * height chart in a precinct room, lit by the stage's own spotlight (moved here,
- * so no extra light is added); flashbulbs pop one rat at a time, each gets a
+/** Juice T5: a noir police lineup at round end. The top rats stand against the
+ * height chart in the precinct's lineup room, lit by the stage's own spotlight (moved
+ * here, so no extra light is added); flashbulbs pop one rat at a time, each gets a
  * rubber-stamped award, and the winner goes last. */
 export class PoliceLineup {
     private readonly room=new THREE.Group();
@@ -39,7 +41,7 @@ export class PoliceLineup {
     constructor(scene:THREE.Scene,private readonly doc:Document|undefined,private readonly onFlash:()=>void){
         this.buildRoom();
         this.room.position.copy(ORIGIN);this.room.name='police-lineup';
-        // Always present (so the title warm-up compiles it) but never on screen during play.
+        // Always present (so the title warm-up compiles it); the city's lineup room is its stage.
         scene.add(this.room);
     }
     get active():boolean {return this.running;}
@@ -112,19 +114,12 @@ export class PoliceLineup {
         return FIRST_FLASH+Math.min(index,last)*FLASH_STEP+(index>=last?WINNER_PAUSE:0)+(index>last?.35:0);
     }
 
+    /** The labelled height chart, just proud of the room's own ruled panel. The walls, floor and ceiling are the city's. */
     private buildRoom():void {
-        const wall=new THREE.MeshStandardMaterial({color:0x6f7266,roughness:.9,map:this.heightChart()});
-        const dark=new THREE.MeshStandardMaterial({color:0x1d1c21,roughness:.95});
-        const floor=new THREE.MeshStandardMaterial({color:0x2c2a2e,roughness:.8});
-        const add=(geometry:THREE.BufferGeometry,material:THREE.Material,x:number,y:number,z:number,ry=0,rx=0)=>{
-            const mesh=new THREE.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.rotation.set(rx,ry,0);
-            mesh.receiveShadow=true;mesh.userData.noNoir=true;mesh.raycast=()=>{};this.room.add(mesh);
-        };
-        add(new THREE.PlaneGeometry(ROOM_HALF_WIDTH*2,ROOM_HEIGHT),wall,0,ROOM_HEIGHT/2,WALL_Z);
-        add(new THREE.PlaneGeometry(ROOM_HALF_WIDTH*2,12),floor,0,0,4.7,0,-Math.PI/2);
-        add(new THREE.PlaneGeometry(ROOM_HALF_WIDTH*2,12),dark,0,ROOM_HEIGHT,4.7,0,Math.PI/2);
-        for(const side of [-1,1])add(new THREE.PlaneGeometry(12,ROOM_HEIGHT),dark,side*ROOM_HALF_WIDTH,ROOM_HEIGHT/2,4.7,-side*Math.PI/2);
-        add(new THREE.PlaneGeometry(ROOM_HALF_WIDTH*2,ROOM_HEIGHT),dark,0,ROOM_HEIGHT/2,10.7,Math.PI);
+        const chart=new THREE.MeshStandardMaterial({color:0x6f7266,roughness:.9,map:this.heightChart()});
+        const mesh=new THREE.Mesh(new THREE.PlaneGeometry(PRECINCT_LINEUP.halfWidth*2-.6,CHART_HEIGHT),chart);
+        mesh.position.set(0,CHART_HEIGHT/2,WALL_Z+.06);
+        mesh.receiveShadow=true;mesh.userData.noNoir=true;mesh.raycast=()=>{};this.room.add(mesh);
     }
 
     /** Height chart: a line every half foot, labelled every foot (one unit is two feet). */
@@ -134,7 +129,7 @@ export class PoliceLineup {
         if(!canvas||!context)return null;
         canvas.width=512;canvas.height=512;
         context.fillStyle='#b9b6a4';context.fillRect(0,0,512,512);
-        const feet=ROOM_HEIGHT*2,px=512/feet;
+        const feet=CHART_HEIGHT*2,px=512/feet;
         context.strokeStyle='#26221f';context.fillStyle='#26221f';context.font='bold 34px Impact, sans-serif';
         for(let half=1;half<feet*2;half++){
             const y=512-half*px/2,foot=half%2===0;

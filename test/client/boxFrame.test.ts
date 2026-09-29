@@ -14,8 +14,8 @@ const world = () => { const w = new C.World(); w.broadphase = new StaticCityBroa
 const ray = (w: C.World, from: C.Vec3, to: C.Vec3, mask = -1) => { const r = new C.RaycastResult(); w.raycastClosest(from, to, { collisionFilterMask: mask, skipBackfaces: true }, r); return r; };
 
 describe('yawed city boxes', () => {
-  it('keeps every tilted box of the city in the pose the older Euler order gave it', () => {
-    for (const b of grayboxBoxes().filter(b => b.rx || b.rz)) {
+  it('keeps every unyawed tilted box of the city in the pose the older Euler order gave it', () => {
+    for (const b of grayboxBoxes().filter(b => (b.rx || b.rz) && !b.ry)) {
       const old = new C.Quaternion(); old.setFromEuler(b.rx, 0, b.rz);
       const q = boxQuaternion(b);
       expect(Math.abs(old.x * q.x + old.y * q.y + old.z * q.z + old.w * q.w)).toBeCloseTo(1, 12);

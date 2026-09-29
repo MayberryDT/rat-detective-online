@@ -136,6 +136,12 @@ Each workstream lists what it delivers and how it is proven. The order is the bu
 - Jobs: a Jurisdiction zone (the yard or the tower?), case spawns, supplies, a pillar.
 - **Open (decision D3):** does the round-end lineup move into the real precinct lineup room? Today it sits in a room 320 units below the city.
 - Most Wanted's searchlight comes from the tower.
+- **As built (kit part `precinct`, `src/shared/city/kit/parts/precinct.ts`):**
+  - The house: brick with stone trim, a portico with the POLICE sign and twin police globes, barred ground-floor windows and a lit POLICE · PRECINCT 13 sign on the roof. Ground floor: lobby and front desk, evidence lockup (a wire cage), the hall to the cellblock gate, and the lineup room with its observation room. Floor 8: dispatch radio room and bullpen. Floor 16: armoury and detective bureau. A switchback stair (flights of 4 over 10, about 22°) climbs to a fenced roof with a stair hut.
+  - The ring: 40 wall chords (balls ride the curve in a string of chords, out in the cells), three tiers of 20 cells with bar partitions and fronts (ground-floor cells all open; upper tiers every third), galleries 10 to 15.2 from the centre, three ground-floor gates (east toward the sewer ramp, west to the street, south to the house). Iron flights cross the yard either side of the tower (0→8 and 8→16, 8 over 20); the ring roof is reached by a footbridge from the house roof.
+  - The tower: a shaft to a lit lookout at y 19, reached by a bridge from gallery 16 between two cells; a searchlight drum on top. From the lookout every upper-tier cell is in sight; the ground-tier cells are hidden under gallery 8.
+  - The lineup (D3): `PoliceLineup` stands the rats on the lineup room's stage (`PRECINCT_LINEUP`) against the height chart; the room is closed (glass stops rats and balls), so no live rat can walk into the shot.
+  - Job slots are exported as `PRECINCT_JOBS`. Most Wanted's searchlight still comes from the sky: a beam from the tower would cross the whole city through walls to reach a leader far away.
 
 ### W6. Jobs, placements and routes, city-wide
 - Rebalance case spawns (20 today), supply sites (14), pillars (9), Jurisdiction zones (6), Paper Chase destinations (6) and spawn points (about 820, generated) across all regions, so none is empty in any assignment.
