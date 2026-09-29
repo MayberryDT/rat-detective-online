@@ -1,6 +1,6 @@
 # The city map
 
-Status: **design, agreed direction pending Tyler's go (2026-09-28)**. Heat v1 is live (see [the receipt](verification/heat-map-release-2026-09-28.md)). Everything else below is the plan unless marked *live*.
+Status (2026-09-29): **steps 1–3 are built** and running on staging. They go to production on Tyler's OK. Heat v1 is live on production (see [the receipt](verification/heat-map-release-2026-09-28.md)). Steps 4–6 are the plan.
 
 The city map is the single document for everything about the city: where things are, what happens there, how often, how dangerous, and what should change. People read it as the page at [/heatmap](https://ratdetective.online/heatmap) (to become `/map`). Agents read it as text, through this file and the live endpoints below. Both renderings come from the same data, so they can never disagree.
 
@@ -100,38 +100,55 @@ Counted from source on 2026-09-28, layout version 2:
 
 ## Layer 2: every fact recorded
 
-"Source" names where the fact already exists in code, so recording it is a matter of listening, not inventing. The volume column is a first estimate for 6–10 rats at all hours [INFERENCE; the first build measures it].
+The schema is `src/shared/city/facts.ts` (`CITY_SCHEMA_VERSION` 1). Every fact carries `t` (UTC ms), `rm` (ms since the round went live), `room`, `round`, `layout`, `schema`, `mode` (the assignment) and `incident`. Positions are rounded to 0.1 units. Actors are per-round numbers; no names or IDs are stored.
 
-| Fact | Emitted when | Key fields | Source | Volume per day | Kept |
-| --- | --- | --- | --- | --- | --- |
-| `presence` | Every second per living, connected rat during play | position, floor, place, speed, heading, hp, carrying case, buffs, human/bot | room tick (heat v1 already samples this) | about 700k | aggregates in the room; raw in the archive |
-| `spawn` | A rat enters play | spawn point, place, nearest rat's distance | join/respawn | about 10k | raw |
-| `shot` | A trigger pull is accepted | origin, aim direction, pattern (Scattershot, Bad Ammunition), incident | `handleShoot` | 100k+ [INFERENCE] | aggregates; raw in the archive |
-| `ball-end` | A cheese ball's life ends | end point, surface normal, outcome (`rat-body`, `rat-head`, `ironclad-reflect`, `case-contact`, `world-bounce`, `dispatch-contact`, `pressure-contact`, `fake-case`, `lifetime`), bounces, age | `drainShotEvents` (ShotResultEvent) | 100k+ | aggregates; raw in the archive |
-| `damage` | A hit lands | attacker and victim positions and places, damage, headshot, explosive, incoming (corpse or case), ricochet count | `handleHit` | about 30k | raw |
-| `death` | A rat dies | victim and killer positions and places, distance, cause (shot, headshot, explosion, trap, landing, case missile), incident, time alive, hp history | `handleHit` death branch | about 10k | raw |
-| `pickup` | A site is claimed | site, kind, claimant, hp before, time since restock, distance travelled for it, buffs overwritten | `drainPickupEvents` (`collected`) | about 5k | raw |
-| `restock` / `expire` | A site returns; a buff ends | site, kind; buff and remaining | pickup deadlines; buff clock | about 5k | raw |
-| `heal` | Health is restored | cause (`pickup`, `incident`, `bounty`), amount | `drainPickupEvents` (`healed`) | about 3k | raw |
-| `case` | The case changes hands or state | `take`, `drop`, `steal` (killed carrier), `loose`, `return`, `respawn`, `deliver`, with position, place, carry time, carry distance | chaos case transitions; assignment | about 5k | raw |
-| `launch` | A machine or street vent throws | machine or vent, riders, overpressure, pressure at firing, trigger shooter | `PressureLaunchEvent` | about 3k | raw |
-| `landing` | A launched rat touches down | landing point, place, airtime, apex, damage dealt, **inside-geometry check** | flight state on landing | about 3k | raw |
-| `trigger` | A ball hits a pressure trigger | machine, shooter, pressure after | pressure contact outcome | about 20k | aggregates |
-| `dispatch` | A pillar is rung; an incident starts or ends | pillar, caller, incident, duration, deaths during | dispatch state | about 1k | raw |
-| `zone` | A Jurisdiction zone activates, is scored or rotates | zone, scorer, held milliseconds, contestants inside | assignment state | about 2k | raw |
-| `round` | A round begins or ends | assignment, incident rotation, winner, method, duration, humans and bots, lineup | round and assignment | about 100 | raw |
-| `session` | A human joins, leaves or reconnects | anonymous actor, platform (touch or desktop), length | join/leave | about 100 | raw |
-| `anomaly` | A detector fires | `stuck` (alive, moving under 0.3 u/s for 8 s while not holding still on purpose), `inside-geometry` (feet inside a building box), `fell-through` (y below its floor), `out-of-bounds`, `landing-clip` | detectors on the presence stream | small | raw |
+| Fact | Emitted when | Key fields | Kept |
+| --- | --- | --- | --- |
+| `frame` | Every second while a human is connected; every 5 s in the bot-only city | the world's situation plus every connected rat's situation (see below) | archive |
+| `window` | 3 s before to 2 s after any damage, merged while a fight continues | per actor, 5 samples a second of `[ms, x, y, z, yaw, hp]` | archive |
+| `spawn` | A rat enters play | point, place, nearest rival | archive, SQL, counts |
+| `shot` | A human's trigger pull is accepted | origin, place, aim, gap since their last shot | archive, SQL, counts. **Bots' shots are counts only**, because they fire about 100 times a minute each |
+| `ball` | A human's cheese ball hits a rat, a case, a bell, a trigger, a counterfeit, a coat, or runs out of time | outcome, point, place, victim | archive, SQL; **every ball of every rat**, bounces included, is counted in cells by outcome |
+| `damage` | A hit lands | attacker and victim, positions, damage, headshot, explosive, missile, distance, health after | archive, SQL |
+| `death` | A rat dies | killer and victim positions and places, distance, cause (`shot`, `headshot`, `explosion`, `missile`, `city`), time alive, assists | archive, SQL, counts |
+| `pickup` / `restock` / `heal` / `buff-end` | A site is claimed or returns; health is restored; a buff runs out | site, kind, place, health before, time the site sat full; heal cause | archive, SQL, counts |
+| `case` | `take`, `drop`, `steal`, `deliver`, `respawn` | who, from whom, point, place, carry time | archive, SQL, counts |
+| `launch` / `landing` | A machine throws; the rider comes down | machine, overpressure, landing place, airtime, apex, **landed inside geometry** | archive, SQL, counts |
+| `dispatch` | Dispatch changes phase or incident | phase, incident, caller, pillar rung, Most Wanted | archive, SQL |
+| `zone` | A Jurisdiction zone activates or changes scorer | zone, scorer | archive, SQL |
+| `round` | A round starts or ends | humans, bots; winner, method, duration, every rat's final standing and K/D/A | archive, SQL |
+| `session` | A human joins or leaves | actor | archive, SQL |
+| `anomaly` | `inside-geometry`, `fell-through`, `out-of-bounds` (at most once per 10 s per rat) | point, place | archive, SQL, counts |
 
-**Aggregates the room keeps live**, in SQLite, per UTC day, assignment and layout version:
-- cells per layer: presence (human and bot), deaths, killer spots, ball ends by outcome, shots;
-- place totals for every measure's numerator and exposure;
-- place-to-place transitions;
-- per-site pickup counts.
+### The situation: what every rat faces, every second
 
-Heat v1's `heat_cells` becomes the cell part of this.
+Defined once in `src/shared/city/facts.ts` (`RatSituation`, `WorldSituation`), with K/D/A and standings in `src/shared/city/ledger.ts`. The future AI is meant to learn from exactly this view. The bots will be redone from scratch; they can read the same definition, or the definition can change with them under a new schema version.
 
-**The raw archive** holds every fact, hourly, as compressed JSON lines in R2 (`city/raw/YYYY/MM/DD/HH.jsonl.gz`), kept forever. First estimate: about 5 MB a day compressed, about 2 GB a year [INFERENCE]. The archive is private; public endpoints serve aggregates only.
+- **The rat:** position, floor, place, velocity, yaw, aim pitch, health, alive, respawn countdown, time alive.
+- **Pickups on it:** Ironclad and Hot Pursuit time left; its last pickup and how long ago.
+- **Case:** carrying it and for how long; distance to the case; distance to the current objective (Paper Chase destination, Jurisdiction zone, or the case).
+- **Standing:** `progress` (its fraction of the win: deliveries out of 3, zone time out of 60 s, case kills out of 10, Closing Time case time as a share of the best), `rank` (ties broken by kills), `lead` (against the nearest rival; negative when behind), `raw`.
+- **K/D/A this round:** kills, deaths, assists, streak, damage dealt and taken, headshots, shots, hits. **An assist** is damage dealt to a victim in the 10 s before someone else (or the city) killed it.
+- **Shooting:** trigger pulls in the last 10 s and time since the last one.
+- **Danger:** rivals in line of sight within 60 units, the nearest rival's distance, when it was last hit and by whom, and whether it is Most Wanted.
+- **The world:** the case (holder, loose, returning, place, time since it changed hands, decoys), Dispatch (phase, incident, time left, caller, Most Wanted), every pickup site's restock countdown, every machine's pressure, the Jurisdiction zone (time left, who is inside, scorer), and how many humans, bots, corpses and balls are in play.
+
+**Episodes:** a round is an episode and each life (spawn to death) a smaller one. Outcomes attach to situations by time: died within N s, got the kill, took the pickup, won the round.
+
+**Aggregates the room keeps live**, in SQLite, per UTC day, layout version and assignment, and kept forever:
+- `city_cells`: cells per layer. The layers are `humans` and `bots` (seconds), `deaths`, `kills`, `spawns`, `pickups`, `landings`, `anomalies`, `shots-human`, `shots-bot`, and `ball-<outcome>` for every ball of every rat.
+- `city_places`: per place, `human-s`, `bot-s`, `still-human-s`, `still-bot-s`, `deaths`, `deaths-human`, `deaths-bot`, `kills`, `kills-human`, `kills-bot`, `kill-dist-dm`, `shots-human`, `shots-bot`, `hits-human`, `hits-bot`, `spawns`, `spawn-deaths-5s`, `pickup:<kind>`, `launches`, `landings`, `landing-clips`, `case-take`, `case-drop`, `case-steal`, `deliveries`, `anomaly:<what>`.
+- `city_flows`: place-to-place transitions, by humans and by bots.
+
+Discrete facts also sit in `city_events` for 30 days. Heat v1's tables were folded into `city_cells` by the migration.
+
+**The raw archive:** R2 bucket `rat-detective-city` (staging `rat-detective-city-staging`), keys `city/raw/v1/<room>/YYYY/MM/DD/HH-mm-ss-<id>.jsonl.gz`. It is flushed every 5 minutes, at 2 MB, and when the city stops, and kept forever. An eviction loses at most the buffer.
+
+**Measured cost** (`node scripts/benchmark-server-tick.mjs --city`, 9 bots, 2 minutes):
+- the recorder costs 0.01–0.02 ms a tick, 1–2% of the benchmark's tick, over the 1% aim;
+- the trajectory hash is unchanged, so recording does not alter the game;
+- the bot-only city archives about 6.5 MB a day compressed, about 2.4 GB a year;
+- human play adds 1 Hz frames and every human shot while it lasts.
 
 ## Layer 3: measures
 
@@ -180,16 +197,20 @@ These are computed from layers 0–1 alone. They are the priors, and telemetry t
 
 | Surface | Returns | Status |
 | --- | --- | --- |
-| `GET /api/heat/v1?days=…` | Cell heat (humans, bots, deaths, kills) | *Live*; stays as a compatibility view of the cell aggregates |
-| `GET /api/city/v1/digest?days=…` | The Markdown reading described above | Plan |
-| `GET /api/city/v1/model` | Layers 0–1: entities, places, portals and districts with IDs, bounds and adjacency | Plan (also written to `output/city/model.json` from source) |
-| `GET /api/city/v1/places?days=…&assignment=…` | Measures per place with exposure and intervals | Plan |
-| `GET /api/city/v1/flows?days=…` | Place-to-place transitions and transit times | Plan |
-| `GET /api/city/v1/timeline?round=…` | One round's facts in order | Plan |
-| `GET /api/city/v1/events?type=…&since=…` | Discrete facts, paged | Plan |
-| `node scripts/city.mjs mirror` | Pulls the archive and aggregates into `output/city/city.db` for the agent | Plan; agents only. Tyler never needs a script |
+All ranges take `days=1–3650`, `days=all`, or `from` and `to` (UTC days); aggregates also take `mode=` and `layout=`. Built in `src/worker/city/cityApi.ts`.
 
-The endpoints return compact JSON with the evidence handle on every row. The page and the digest are two renderings of the same responses.
+| Surface | Returns | Status |
+| --- | --- | --- |
+| `GET /api/heat/v1` | Every cell layer | Built (production serves heat v1's four layers until the deploy) |
+| `GET /api/city/v1/digest` | The Markdown reading, with evidence handles | Built |
+| `GET /api/city/v1/model` | Layers 0–1: 71 entities and 196 places with IDs, kinds, names, areas and centres | Built |
+| `GET /api/city/v1/places` | Summed place counts, and human time by assignment | Built; rates come from `src/shared/city/measures.ts` |
+| `GET /api/city/v1/flows` | Place-to-place transitions by humans and bots | Built |
+| `GET /api/city/v1/events?type=&round=&since=&limit=` | Discrete facts from the last 30 days (a round's timeline is `round=`) | Built; bearer `CITY_TOKEN` |
+| `GET /api/city/v1/archive?prefix=&cursor=`, `/archive/<key>` | The raw archive listing and objects | Built; bearer `CITY_TOKEN` |
+| `node scripts/city-mirror.mjs [--base=…]` | Mirrors the model, aggregates and every archived fact into `output/city/city.db`: tables `facts`, `situations` (one row per rat per frame), `place_counts`, `flows`, `cells`, `places`, `entities` | Built; agents only. The token is in `~/.config/rat-detective/city-token` on Veelox and Halla |
+
+Query the mirror with `read output/city/city.db?q=SELECT …`.
 
 ## The page
 
@@ -215,25 +236,28 @@ The brainstorm sketch (`output/city-map/city-map.html`: docks, precinct, north s
 - **Any layout change bumps `layoutVersion`.** Place IDs stay stable, or the change ships an old-to-new mapping.
 - **Measures are pure functions of facts and places**, versioned, and recomputed rather than patched.
 - **Recording stays cheap:**
-  - at most 1% of room tick time, checked with the existing `work` counters;
+  - at most 1% of room tick time, checked with `benchmark-server-tick.mjs --city` (today 1–2%; the next saving is building frames less often);
   - bounded memory between flushes;
   - no work at all per cheese-ball bounce beyond the existing events.
 - **Public surfaces carry counts only.** The raw archive is private.
 
-## Build order (for approval)
+## Build order
 
-1. **Places and frames.** `cityModel()` gathers layer 0. Build the place graph and the cell-to-place index. `GET /api/city/v1/model` and `output/city/model.json`. Fix the compass naming. *Acceptance:* every walkable cell on every floor maps to exactly one place; place areas sum to the walkable area.
-2. **Facts.** Record all events in the table, with context and versions. Add the live aggregates, the anomaly detectors and the R2 archive.
+1. **Places and frames (built).** `src/shared/city/frame.ts`, `places.ts` (196 places: 60 street stretches, 28 junctions, 32 lots, 45 rooftop groups, 10 landmark floors and roofs, 2 Gate places, 10 sewer places, 9 air districts), `model.ts`. The landmark wall names are left as they are; the frame defines compass words. Originally: `cityModel()` gathers layer 0. Build the place graph and the cell-to-place index. `GET /api/city/v1/model` and `output/city/model.json`. Fix the compass naming. *Acceptance:* every walkable cell on every floor maps to exactly one place; place areas sum to the walkable area.
+2. **Facts (built).** `src/worker/city/CityRecorder.ts`, `CityStore.ts`, `CityArchive.ts`, hooked into `GameRoom`. Originally: record all events in the table, with context and versions. Add the live aggregates, the anomaly detectors and the R2 archive.
    - *Acceptance:* failure-mode tests (bot versus human, corpses, disconnects, victory time, eviction, midnight, caps, schema version), plus measured tick cost under 1%.
    - Human play then builds up a baseline on today's city.
-3. **Agent surfaces.** Digest, places, flows, timeline, events, and the mirror script. *Acceptance:* every digest line resolves through its handle; the mirror answers a query via `read`.
+3. **Agent surfaces (built).** Originally: digest, places, flows, timeline, events, and the mirror script. *Acceptance:* every digest line resolves through its handle; the mirror answers a query via `read`.
 4. **The page, Observe mode.** Places, timelines, flows and cards.
 5. **Static analyses and Analyse mode.**
 6. **Design mode.** Proposals and verdicts. Then the city overhaul proper: layout decisions from evidence, the kit of reusable parts, the load-time lessons.
    - The bot overhaul uses the same places, navigation graph and bot divergence as its scorecard.
 
-## Open decisions for Tyler
+## Decisions (Tyler, 2026-09-28)
 
-- **R2 archive:** a new private bucket bound to the Worker, to keep every raw fact forever. It costs cents per month at this volume [INFERENCE: confirm current R2 pricing]. Recommended: yes, since it is what lets new questions be answered about the past.
-- **Public detail:** the page and aggregate endpoints stay public, as now; per-round timelines and events need a bearer token, as the private fixture's routes do. Recommended.
-- **Order:** build steps 1–3 before continuing the layout brainstorm, so the redesign starts from evidence on today's city. Recommended.
+- **R2 archive:** yes. The buckets `rat-detective-city` and `rat-detective-city-staging` were created on 2026-09-29.
+- **Assists:** damage in the 10 s before someone else's kill.
+- **Sampling:** once a second, plus 5-a-second windows around every fight. The bot-only city records every 5 s.
+- **Bots:** they will be redone entirely ("in a way you can't even imagine"). The situation stays a shared definition they may use, not a constraint on them.
+- **Shooting:** measure how often humans and bots shoot (Tyler, 2026-09-29). This covers the counts and cells by who, fire rate in every situation, shots in K/D/A, and the digest's shots per minute.
+- **Public detail:** aggregates and the page are public; events and the archive need the token.
