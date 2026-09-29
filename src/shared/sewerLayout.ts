@@ -39,6 +39,9 @@ export const SEWER_HALLS: Rect[] = [
     {xmin:60, xmax:70, zmin:-42, zmax:-30},
 ];
 
+/** Place names for SEWER_HALLS, index for index (docs/city-map.md). Overlaps resolve to the later hall. */
+export const SEWER_HALL_NAMES = ['trunk-ew','trunk-south','junction','west-loop','west-loop','west-loop','west-loop','east-spur','east-spur','maintenance'] as const;
+
 /** Full-width ends that open onto ramps — no closing wall. */
 const OPENINGS: Rect[] = [
     {xmin:112, xmax:112, zmin:-HALF, zmax:HALF},
