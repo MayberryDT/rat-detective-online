@@ -14,7 +14,7 @@ Reviewed against repository source and the latest release receipts through **202
 
 | Document | Purpose |
 | --- | --- |
-| [Heat map release](verification/heat-map-release-2026-09-28.md) | Production `7e1cfa2c…`: `/api/heat/v1` presence/death/kill heat map feeding the city planning map, and the bot refill fix |
+| [Heat map release](verification/heat-map-release-2026-09-28.md) | Production `14d903be…`: permanent heat map at `/heatmap` (kept forever, any range), round-end layout fix, bot refill fix |
 | [Server CPU and delivery gating](verification/server-cpu-2026-09-27.md) | Production `360dbcdd…`: shared walk graph, same-result ray-index refresh, room `work` counters, routine checkpoints off the delivery path; hosted A/B and live checks |
 | [Committed source release](verification/full-source-release-2026-09-22.md) | All pending changes committed, current build deployed, retired branding absent from live assets |
 | [Social sharing image](verification/social-share-2026-09-22.md) | Approved action card deployed; exact image/metadata checks, unchanged gameplay |
