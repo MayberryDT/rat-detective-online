@@ -45,8 +45,12 @@ Tyler reviewed the private preview and said: "push it live and make note of the 
 - An 8 s default-matchmaking join got a protocol-22 welcome (7 bots plus the client, Excessive Force active), 234 chaos frames and ordinary play (one death, maximum HP 5).
 - A muted headless screenshot of the live title shows the office, logo, name card, ENTER CITY and effects.
 
+## Tyler's playtest (2026-09-28)
+
+Tyler played the live release thoroughly and listened to every sound, including the pillars and the phone: "It's fine." He marked it complete. Phones are a last, low-priority check for later; nobody plays on a phone yet.
+
 ## Limits
 
 - Load times were measured on Veelox in headless Chrome, which uses the Intel integrated GPU, through a local relay. They were not measured on production or on phones.
-- Pillar audio and the phone sound have not been heard by an agent. Portrait layout and real phones are unchecked.
+- Portrait layout and real phones are unchecked (deferred by Tyler, see above).
 - Rollback to `a9947e28…` needs protocol 21 clients. Stored rooms may hold protocol-22 Dispatch state that the old validator rejects [INFERENCE: not tested].
