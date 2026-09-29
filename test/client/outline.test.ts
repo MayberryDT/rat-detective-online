@@ -5,12 +5,13 @@ import * as CANNON from 'cannon-es';
 import { RatController } from '../../src/player/RatController';
 import { RatEntity } from '../../src/entities/RatEntity';
 
+const isShell = (o: THREE.Object3D) => { const m = o.getObjectByProperty('isMesh', true); return m instanceof THREE.Mesh && m.material instanceof THREE.MeshBasicMaterial && m.material.side === THREE.BackSide; };
 it('hides only the local outline through normal death, shared death and respawn', () => {
   const scene = new THREE.Scene(), world = new CANNON.World();
   const local = new RatEntity(scene, world, new THREE.Vector3(), 'You', {});
-  const localGlow = scene.children.find(child => child instanceof THREE.Group && child !== local.mesh)!;
+  const localGlow = scene.children.find(isShell)!;
   const remote = new RatEntity(scene, world, new THREE.Vector3(8, 0, 0), 'Enemy', {}, true);
-  const remoteGlow = scene.children.find(child => child instanceof THREE.Group && child !== local.mesh && child !== localGlow && child !== remote.mesh)!;
+  const remoteGlow = scene.children.find(child => child !== localGlow && isShell(child))!;
   local.isPlayer = true;
   expect(localGlow.visible).toBe(false); expect(remoteGlow.visible).toBe(true);
   local.takeDamage(MAX_HP, new THREE.Vector3(10, 0, 0)); local.update(1 / 60);

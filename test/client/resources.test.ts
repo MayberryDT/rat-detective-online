@@ -8,6 +8,7 @@ describe('character resource ownership', () => {
     const scene = new THREE.Scene();
     const world = new CANNON.World();
     const first = new RatEntity(scene, world, new THREE.Vector3(), 'Leaving', {});
+    const firstObjects = [...scene.children];
     const owned = new Set<THREE.BufferGeometry | THREE.Material | THREE.Texture>();
     scene.traverse(child => {
       if (child instanceof THREE.Mesh) {
@@ -32,7 +33,7 @@ describe('character resource ownership', () => {
     expect(secondDispose).not.toHaveBeenCalled();
     expect(spriteGeometryDispose).not.toHaveBeenCalled();
     expect(world.bodies).toEqual([second.body]);
-    expect(scene.children).toHaveLength(3); // second model, outline, billboard
+    expect(scene.children.filter(child => firstObjects.includes(child))).toEqual([]);
     second.update(1 / 60);
     expect(second.mesh.parent).toBe(scene);
     second.dispose();

@@ -3,6 +3,7 @@ import type { ChaosState } from '../../src/shared/chaosState';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NetworkManager, resolveWebSocketUrl, type TransportOptions } from '../../src/network/NetworkManager';
 import { PROTOCOL_VERSION } from '../../src/shared/networkProtocol';
+import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 
 class FakeSocket extends EventTarget {
     static OPEN = 1;
@@ -359,7 +360,7 @@ describe('network session transport', () => {
     it('accepts the supported graybox world before enabling gameplay', () => {
         network.connect('Rat', appearance);
         sockets[0].open();
-        sockets[0].receive({ ...welcome(), world: { seed: 1, version: 2 } });
+        sockets[0].receive({ ...welcome(), world: { seed: 1, version: GRAYBOX_VERSION } });
         expect(network.state).toBe('playing');
     });
 

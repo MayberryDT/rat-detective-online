@@ -5,6 +5,7 @@ import { createAssignment } from '../../src/shared/assignments';
 import {ChaosView} from '../../src/prototype/ChaosView';
 import {playerPreferences} from '../../src/settings/PlayerPreferences';
 import {MUNICIPAL_QUIPS} from '../../src/ui/municipalQuips';
+import { GRAYBOX_VERSION as version } from '../../src/shared/grayboxLayout';
 
 const harness = vi.hoisted(() => {
     const appearance = { hatType: 'fedora' as const, hatColor: 1, furColor: 2, coatColor: 3 };
@@ -507,7 +508,7 @@ describe('GameSession', () => {
     });
 
     it('reuses the prepared city on entry and still rebuilds for a different assigned room', () => {
-        const spec={seed:341283204,version:2};
+        const spec={seed:341283204,version};
         const {session,enter,transport}=start(spec);
         const prepared=harness.cities[0];
         expect(prepared.spec).toEqual(spec);
@@ -522,11 +523,11 @@ describe('GameSession', () => {
         expect(harness.cities).toHaveLength(1);
         expect(adoptCity).toHaveBeenCalledOnce();
         expect(prepared.dispose).not.toHaveBeenCalled();
-        transport.onMessage?.({...welcome(),world:{seed:42,version:2}});
+        transport.onMessage?.({...welcome(),world:{seed:42,version}});
         expect(prepared.dispose).toHaveBeenCalledOnce();
         expect(harness.cities).toHaveLength(2);
         expect(adoptCity).toHaveBeenCalledTimes(2);
-        expect(harness.cities[1].spec).toEqual({seed:42,version:2});
+        expect(harness.cities[1].spec).toEqual({seed:42,version});
         session.dispose();
     });
 
@@ -674,8 +675,8 @@ describe('GameSession', () => {
 
     it('uses births only for the firing player and never replays their gun animation or sound',()=>{
         const launched=vi.spyOn(ChaosView.prototype,'launch');
-        const {transport,gun,session}=start({seed:1,version:2});
-        const joined=welcome({world:{seed:1,version:2}});transport.onMessage?.(joined);
+        const {transport,gun,session}=start({seed:1,version});
+        const joined=welcome({world:{seed:1,version}});transport.onMessage?.(joined);
         const shot:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:joined.id,shotId:'own',
             origin:{x:0,y:2,z:0},direction:{x:1,y:0,z:0},launch:{at:1000,balls:[{id:'own',velocity:{x:175,y:0,z:0}}]}};
         transport.onMessage?.(shot);expect(launched).toHaveBeenCalledExactlyOnceWith(shot);
@@ -686,7 +687,7 @@ describe('GameSession', () => {
     });
 
     it('starts a single local ball only when the authoritative shot was sent',()=>{
-        const {transport,doc,renderer,session}=start();const joined=welcome();joined.world.version=2;
+        const {transport,doc,renderer,session}=start();const joined=welcome();joined.world.version=version;
         transport.onMessage?.(joined);transport.state='playing';doc.pointerLockElement=renderer.domElement as unknown as Element;
         const fire=vi.spyOn(ChaosView.prototype,'fire');
         doc.dispatch('mousedown',Object.assign(new Event('mousedown'),{button:0}));expect(fire).toHaveBeenCalledOnce();

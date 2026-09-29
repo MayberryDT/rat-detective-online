@@ -1,12 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { loadTitleWorld } from '../../src/session/titleWorld';
+import { GRAYBOX_VERSION as version } from '../../src/shared/grayboxLayout';
 
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 const url='wss://ratdetective.online/ws?chaos=compact-v2';
 it('prepares the authoritative public world with HTTP, without entering a lobby',async()=>{
-    const fetcher=vi.fn(async(_url:URL,_init:RequestInit)=>Response.json({room:'public-live-v2',world:{seed:341283204,version:2}}));
+    const fetcher=vi.fn(async(_url:URL,_init:RequestInit)=>Response.json({room:'public-live-v2',world:{seed:341283204,version}}));
     vi.stubGlobal('fetch',fetcher);
-    expect(await loadTitleWorld(undefined,url)).toEqual({seed:341283204,version:2});
+    expect(await loadTitleWorld(undefined,url)).toEqual({seed:341283204,version});
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls[0][0].toString()).toBe('https://ratdetective.online/status');
     expect(fetcher.mock.calls[0][1]).toMatchObject({cache:'no-store'});
@@ -24,7 +25,7 @@ it('does not warm the canonical room for an overflow invitation',async()=>{
 });
 it('falls back safely for legacy, malformed, mismatched or unavailable metadata',async()=>{
     const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
-    for(const data of [{}, {room:'other',world:{seed:1,version:2}}, {room:'public-live-v2',world:{seed:-1,version:2}}, {room:'public-live-v2',world:{seed:1,version:9}}]){
+    for(const data of [{}, {room:'other',world:{seed:1,version}}, {room:'public-live-v2',world:{seed:-1,version}}, {room:'public-live-v2',world:{seed:1,version:9}}]){
         fetcher.mockResolvedValueOnce(Response.json(data));
         expect(await loadTitleWorld(undefined,url)).toBeUndefined();
     }
@@ -49,7 +50,7 @@ it('bounds preparation and cancels it when the page leaves',async()=>{
 
 it('warms the exact hosted private pool instead of building the public or placeholder city',async()=>{
     const room='graybox-benchmark-match-pickups';
-    const fetcher=vi.fn(async(_url:URL)=>Response.json({room,world:{seed:341283204,version:2}}));vi.stubGlobal('fetch',fetcher);
-    expect(await loadTitleWorld(undefined,`ws://127.0.0.1:5193/ws?room=${room}`)).toEqual({seed:341283204,version:2});
+    const fetcher=vi.fn(async(_url:URL)=>Response.json({room,world:{seed:341283204,version}}));vi.stubGlobal('fetch',fetcher);
+    expect(await loadTitleWorld(undefined,`ws://127.0.0.1:5193/ws?room=${room}`)).toEqual({seed:341283204,version});
     expect(String(fetcher.mock.calls[0][0])).toBe(`http://127.0.0.1:5193/status?room=${room}`);
 });

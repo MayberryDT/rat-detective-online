@@ -1,7 +1,7 @@
 import type { PlayerData, RatAppearance, Vec3Data } from '../shared/networkProtocol';
 import { applyHit, createPlayer, respawnPlayer } from '../worker/gameState';
-import { CITY_BOUNDS, grayboxBoxes, isRampOpening } from '../shared/grayboxLayout';
-import { boxHalfExtents } from '../shared/boxFrame';
+import { CITY_BOUNDS, CITY_PREVIEW_SEED, GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
+import { worldSpawnPoints } from '../shared/playerSpawns';
 import { COAT_COLORS, FUR_COLORS, HAT_COLORS, HAT_TYPES } from '../shared/ratAppearance';
 
 const NAMES = ['Constable Trap', 'Inspector Nibbles', 'Sergeant Stilton', 'Detective Crumbs', 'Officer Whiskers', 'Captain Cheddar', 'Deputy Squeaks', 'Inspector Gouda', 'Constable Alley', 'Detective Rind', 'Sergeant Scurry'];
@@ -32,16 +32,7 @@ export function practiceSpawnPoints(center: Vec3Data): Vec3Data[] {
 
 /** Farthest-first street positions spread practice combat through the actual city. */
 export function cityPracticeSpawnPoints(human: Vec3Data): Vec3Data[] {
-    const boxes = grayboxBoxes().map(b => ({ x:b.x, y:b.y, z:b.z, ...boxHalfExtents(b) }));
-    const candidates: Vec3Data[] = [];
-    for(let z=CITY_BOUNDS.min+24;z<=CITY_BOUNDS.max-24;z+=8) {
-        for(let x=CITY_BOUNDS.min+24;x<=CITY_BOUNDS.max-24;x+=8) {
-            if(Math.hypot(x-human.x,z-human.z)<32)continue;
-            if([-1.2,0,1.2].some(dx=>[-1.2,0,1.2].some(dz=>isRampOpening(x+dx,z+dz))))continue;
-            if(boxes.some(b=>b.y+b.hy>=.5 && b.y-b.hy<=4.4 && Math.abs(x-b.x)<b.hx+1.2 && Math.abs(z-b.z)<b.hz+1.2))continue;
-            candidates.push({x,y:2,z});
-        }
-    }
+    const candidates = worldSpawnPoints({seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION}).filter(p=>Math.hypot(p.x-human.x,p.z-human.z)>=32).map(p=>({...p}));
     const selected: Vec3Data[] = [];
     const distance = (a:Vec3Data,b:Vec3Data)=>(a.x-b.x)**2+(a.z-b.z)**2;
     const nearest = candidates.map(p=>distance(p,human));

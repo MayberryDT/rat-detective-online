@@ -3,6 +3,7 @@ import { MAX_HP } from '../../src/shared/networkProtocol';
 import {PracticeBotBrain,PracticeLifeCycle,addPracticePlayers,practiceBotCount,practiceSpawnPoints,cityPracticeSpawnPoints,practiceRespawnPoint,PRACTICE_RESPAWN_MS} from '../../src/prototype/PracticeBots';
 import * as C from 'cannon-es';
 import {grayboxBoxes,isRampOpening} from '../../src/shared/grayboxLayout';
+import {cityBoxBody} from '../../src/shared/StaticCityBroadphase';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createSeededRandom} from '../../src/shared/worldSpec';
@@ -26,10 +27,7 @@ describe('local practice bots',()=>{
   expect(Math.max(...bots.map(p=>p.z))-Math.min(...bots.map(p=>p.z))).toBeGreaterThan(260);
   for(let i=0;i<bots.length;i++)for(let j=i+1;j<bots.length;j++)expect(Math.hypot(bots[i].x-bots[j].x,bots[i].z-bots[j].z)).toBeGreaterThan(65);
   const world=new C.World();
-  for(const box of grayboxBoxes()){
-   const body=new C.Body({mass:0,position:new C.Vec3(box.x,box.y,box.z),shape:new C.Box(new C.Vec3(box.w/2,box.h/2,box.d/2))});
-   body.quaternion.setFromEuler(box.rx,0,box.rz);body.updateAABB();world.addBody(body);
-  }
+  for(const box of grayboxBoxes()){const body=cityBoxBody(box);body.updateAABB();world.addBody(body);}
   for(const p of points){
    expect(isRampOpening(p.x,p.z)).toBe(false);
    const bounds=new C.AABB({lowerBound:new C.Vec3(p.x-1.19,.51,p.z-1.19),upperBound:new C.Vec3(p.x+1.19,4.39,p.z+1.19)});
