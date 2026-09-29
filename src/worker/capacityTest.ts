@@ -2,6 +2,7 @@ import worker from './index';
 import { verifyBearerToken } from './auth';
 import { MAX_PLAYERS, MAX_SCORE_ENTRIES } from '../shared/networkProtocol';
 import { isAssignmentId } from '../shared/assignments';
+import { heatRange } from './HeatMap';
 export { GameRoom } from './GameRoom';
 export { Matchmaker } from './Matchmaker';
 
@@ -28,7 +29,8 @@ export default {
     if(url.pathname==='/api/heat/v1'){
       const name=url.searchParams.get('room')??'';
       if(!/^graybox-(?:practice-probe|benchmark)-[a-z0-9-]{1,80}$/.test(name))return new Response('Not found',{status:404});
-      return Response.json({room:name,...await env.GAME_ROOM.getByName(name).heat(1)},{headers:{'cache-control':'no-store'}});
+      const range=heatRange(url.searchParams,Date.now());if(!range)return new Response('Bad range',{status:400});
+      return Response.json({room:name,...await env.GAME_ROOM.getByName(name).heat(range)},{headers:{'cache-control':'no-store'}});
     }
     if (url.pathname !== '/ws' || !/^graybox-(?:practice-probe|benchmark)-[a-z0-9-]{1,80}$/.test(url.searchParams.get('room') ?? '')) {
       return new Response('Not found', { status: 404 });

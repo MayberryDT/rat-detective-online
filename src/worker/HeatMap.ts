@@ -1,15 +1,16 @@
 import { CITY_BOUNDS } from '../shared/grayboxLayout';
 
-/** Where rats spend time, die and kill, for planning the city. Counts only;
- * no names or IDs are kept. One JSON row per UTC day per room. */
+/** Where rats spend time, die and kill, for planning the city. Counts only; no names
+ * or IDs are kept. Rooms hold new counts in memory and add them to one SQL row per
+ * day, layer and cell about once a minute. Every day is kept. */
 export const HEAT_CELL = 4;
 export const HEAT_SAMPLE_MS = 1000;
 export const HEAT_FLUSH_MS = 60_000;
-export const HEAT_RETENTION_DAYS = 30;
+/** Bounds one flush's pending entries (a day of the whole city fits several times over). */
 export const HEAT_MAX_CELLS = 40_000;
 export const HEAT_LAYERS = ['humans', 'bots', 'deaths', 'kills'] as const;
 export type HeatLayer = typeof HEAT_LAYERS[number];
-const isHeatLayer = (value: string): value is HeatLayer => (HEAT_LAYERS as readonly string[]).includes(value);
+export const isHeatLayer = (value: string): value is HeatLayer => (HEAT_LAYERS as readonly string[]).includes(value);
 export type HeatFloor = 'sewer' | 'street' | 'upper' | 'air';
 export interface HeatData { layers: Record<HeatLayer, Record<string, number>> }
 
@@ -30,7 +31,7 @@ function cellKey(x: number, y: number, z: number): string | null {
   return inCity(ix) && inCity(iz) ? `${heatFloor(y)}:${ix}:${iz}` : null;
 }
 
-function validKey(key: string): boolean {
+export function validHeatKey(key: string): boolean {
   const parts = key.split(':');
   return parts.length === 3 && (FLOORS as readonly string[]).includes(parts[0]!)
     && /^-?\d+$/.test(parts[1]!) && /^-?\d+$/.test(parts[2]!) && inCity(Number(parts[1])) && inCity(Number(parts[2]));
@@ -61,7 +62,7 @@ export class HeatDay {
     for (const [layer, source] of Object.entries(layers)) {
       if (!isHeatLayer(layer) || !source || typeof source !== 'object' || Array.isArray(source)) continue;
       for (const [key, n] of Object.entries(source)) {
-        if (!validKey(key) || typeof n !== 'number' || !Number.isSafeInteger(n) || n <= 0 || this.cells.size >= this.maxCells) continue;
+        if (!validHeatKey(key) || typeof n !== 'number' || !Number.isSafeInteger(n) || n <= 0 || this.cells.size >= this.maxCells) continue;
         this.layers[layer][key] = n;
         this.cells.add(`${layer}|${key}`);
       }
@@ -83,14 +84,33 @@ export class HeatDay {
   }
 
   toJSON(): HeatData { return { layers: this.layers }; }
-}
 
-export function mergeHeat(days: readonly HeatData[]): HeatData {
-  const layers = emptyLayers();
-  for (const day of days) for (const layer of HEAT_LAYERS) {
-    for (const [key, n] of Object.entries(day.layers[layer])) layers[layer][key] = (layers[layer][key] ?? 0) + n;
+  *entries(): Generator<[HeatLayer, string, number]> {
+    for (const layer of HEAT_LAYERS) for (const [key, n] of Object.entries(this.layers[layer])) yield [layer, key, n];
   }
-  return { layers };
 }
 
 export const heatDayKey = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+
+export const emptyHeat = (): HeatData => ({ layers: emptyLayers() });
+
+const DAY_MS = 86_400_000;
+function isDay(value: string | null): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const ms = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(ms) && heatDayKey(ms) === value;
+}
+
+/** `days=N` (1–3650, today counts as one), `days=all`, or `from` and `to` together
+ * (UTC days, inclusive). Absent means the last week. Anything else is null. */
+export function heatRange(params: URLSearchParams, now: number): { from: string; to: string } | null {
+  const days = params.get('days'), from = params.get('from'), to = params.get('to');
+  if (from !== null || to !== null) {
+    if (days !== null || !isDay(from) || !isDay(to) || from > to) return null;
+    return { from, to };
+  }
+  if (days === 'all') return { from: '0000-01-01', to: '9999-12-31' };
+  const count = days === null ? 7 : /^\d{1,4}$/.test(days) ? Number(days) : 0;
+  if (count < 1 || count > 3650) return null;
+  return { from: heatDayKey(now - (count - 1) * DAY_MS), to: heatDayKey(now) };
+}

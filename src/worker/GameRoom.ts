@@ -44,7 +44,7 @@ import { RoomDiagnostics } from './RoomDiagnostics';
 import { ServerBotController } from './ServerBotController';
 import { createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
-import { HEAT_CELL, HEAT_FLUSH_MS, HEAT_RETENTION_DAYS, HEAT_SAMPLE_MS, HeatDay, heatDayKey, mergeHeat, type HeatData, type HeatLayer } from './HeatMap';
+import { HEAT_CELL, HEAT_FLUSH_MS, HEAT_SAMPLE_MS, HeatDay, emptyHeat, heatDayKey, isHeatLayer, validHeatKey, type HeatData, type HeatLayer } from './HeatMap';
 import { logClientDiagnostics, allowsLocalDiagnostics } from './clientDiagnostics';
 import { companionProjectionDue, companionProjectionSignature, projectCompanionRoom } from './companionStatus';
 import {
@@ -167,9 +167,8 @@ export class GameRoom extends DurableObject<Env> {
   private readonly dueCheckpoints = new Set<string>();
   /** Polish 19: cosmetic per-round Case File tallies (memory only). */
   private readonly awards = new RoundAwards();
-  /** City-planning heat map: today's cells in memory, one JSON row per UTC day. */
-  private readonly heatDays = new Map<string, HeatDay>();
-  private readonly heatDirty = new Set<string>();
+  /** City-planning heat map: counts since the last flush, per UTC day. */
+  private readonly heatPending = new Map<string, HeatDay>();
   private heatSampleAt = 0;
   private heatSavedAt = 0;
   private lastActiveAt = new Map<string, number>();
@@ -797,11 +796,22 @@ export class GameRoom extends DurableObject<Env> {
         due_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_pending_events_due_at ON pending_events(due_at);
-      CREATE TABLE IF NOT EXISTS heat_days (
-        day TEXT PRIMARY KEY,
-        data TEXT NOT NULL
-      );
+      CREATE TABLE IF NOT EXISTS heat_cells (
+        day TEXT NOT NULL,
+        layer TEXT NOT NULL,
+        cell TEXT NOT NULL,
+        n INTEGER NOT NULL,
+        PRIMARY KEY (day, layer, cell)
+      ) WITHOUT ROWID;
     `);
+    // The first heat release stored one JSON row per day; fold it into the cells once.
+    if (this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'heat_days'").toArray().length) {
+      for (const row of this.ctx.storage.sql.exec<{ day: string; data: string }>('SELECT day, data FROM heat_days').toArray()) {
+        for (const [layer, cell, n] of HeatDay.parse(row.data).entries()) this.ctx.storage.sql.exec(
+          'INSERT INTO heat_cells (day, layer, cell, n) VALUES (?, ?, ?, ?) ON CONFLICT(day, layer, cell) DO UPDATE SET n = n + excluded.n', row.day, layer, cell, n);
+      }
+      this.ctx.storage.sql.exec('DROP TABLE heat_days');
+    }
 
     const columns = this.ctx.storage.sql
       .exec<{ name: string }>('PRAGMA table_info(players)')
@@ -1601,28 +1611,22 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  /** Aggregated heat for the last `days` UTC days (1–30), current memory included. */
-  async heat(days: number, now = this.now()): Promise<{ days: string[]; cell: number } & HeatData> {
+  /** Summed heat for UTC days `from`–`to` inclusive, unflushed counts included, plus every day on record. */
+  async heat(range: { from: string; to: string }, now = this.now()): Promise<{ from: string; to: string; days: string[]; allDays: string[]; cell: number } & HeatData> {
     this.flushHeat(now);
-    const from = heatDayKey(now - (days - 1) * 86_400_000);
-    const rows = this.ctx.storage.sql.exec<{ day: string; data: string }>('SELECT day, data FROM heat_days WHERE day >= ? ORDER BY day', from).toArray();
-    return { days: rows.map(row => row.day), cell: HEAT_CELL, ...mergeHeat(rows.map(row => HeatDay.parse(row.data).toJSON())) };
-  }
-
-  private heatDay(now: number): [string, HeatDay] {
-    const key = heatDayKey(now);
-    let day = this.heatDays.get(key);
-    if (!day) {
-      const row = this.ctx.storage.sql.exec<{ data: string }>('SELECT data FROM heat_days WHERE day = ?', key).toArray()[0];
-      day = HeatDay.parse(row?.data);
-      this.heatDays.set(key, day);
-    }
-    return [key, day];
+    const heat = emptyHeat();
+    const rows = this.ctx.storage.sql.exec<{ layer: string; cell: string; n: number }>(
+      'SELECT layer, cell, SUM(n) AS n FROM heat_cells WHERE day BETWEEN ? AND ? GROUP BY layer, cell', range.from, range.to);
+    for (const row of rows) if (isHeatLayer(row.layer) && validHeatKey(row.cell)) heat.layers[row.layer][row.cell] = row.n;
+    const allDays = this.ctx.storage.sql.exec<{ day: string }>('SELECT DISTINCT day FROM heat_cells ORDER BY day').toArray().map(row => row.day);
+    return { ...range, days: allDays.filter(day => day >= range.from && day <= range.to), allDays, cell: HEAT_CELL, ...heat };
   }
 
   private recordHeat(layer: HeatLayer, p: { x: number; y: number; z: number }, now: number): void {
-    const [key, day] = this.heatDay(now);
-    if (day.add(layer, p.x, p.y, p.z)) this.heatDirty.add(key);
+    const key = heatDayKey(now);
+    let day = this.heatPending.get(key);
+    if (!day) { day = new HeatDay(); this.heatPending.set(key, day); }
+    day.add(layer, p.x, p.y, p.z);
   }
 
   /** Living, connected rats during play; reserved disconnects and corpses would pile onto one spot. */
@@ -1634,16 +1638,14 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
+  /** Adds the pending counts to their rows; memory then starts from zero, so nothing counts twice. */
   private flushHeat(now: number): void {
     this.heatSavedAt = now;
-    for (const key of this.heatDirty) {
-      const day = this.heatDays.get(key);
-      if (day) this.ctx.storage.sql.exec('INSERT INTO heat_days (day, data) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET data = excluded.data', key, JSON.stringify(day));
+    for (const [day, pending] of this.heatPending) {
+      for (const [layer, cell, n] of pending.entries()) this.ctx.storage.sql.exec(
+        'INSERT INTO heat_cells (day, layer, cell, n) VALUES (?, ?, ?, ?) ON CONFLICT(day, layer, cell) DO UPDATE SET n = n + excluded.n', day, layer, cell, n);
     }
-    this.heatDirty.clear();
-    const today = heatDayKey(now);
-    for (const key of this.heatDays.keys()) if (key !== today) this.heatDays.delete(key);
-    this.ctx.storage.sql.exec('DELETE FROM heat_days WHERE day < ?', heatDayKey(now - (HEAT_RETENTION_DAYS - 1) * 86_400_000));
+    this.heatPending.clear();
   }
 
   private readRoomState(key: string): string | undefined {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HEAT_CELL, HeatDay, heatDayKey, mergeHeat } from '../../src/worker/HeatMap';
+import { HEAT_CELL, HeatDay, heatDayKey, heatRange } from '../../src/worker/HeatMap';
 
 // Ways the heat map could lie or break, written before the code:
 // 1. NaN/Infinity positions create cells or corrupt the stored JSON.
@@ -9,8 +9,8 @@ import { HEAT_CELL, HeatDay, heatDayKey, mergeHeat } from '../../src/worker/Heat
 // 5. A day grows without bound.
 // 6. A corrupt or tampered stored day crashes the room or poisons counts.
 // 7. The cell cap forgets cells loaded back from storage.
-// 8. Merging days drops or double counts cells.
-// 9. Days split on local time instead of UTC, or off by one at midnight.
+// 8. Days split on local time instead of UTC, or off by one at midnight.
+// 9. A range request with junk, impossible dates or a backwards span reaches storage.
 describe('heat map cells', () => {
   it('ignores non-finite positions without throwing', () => {
     const day = new HeatDay();
@@ -84,17 +84,29 @@ describe('stored heat days', () => {
     expect(day.toJSON().layers.humans['street:2:2']).toBe(2);
   });
 
-  it('sums days cell by cell', () => {
-    const a = new HeatDay(), b = new HeatDay();
-    a.add('humans', 1, 0, 1); a.add('deaths', 1, 0, 1);
-    b.add('humans', 1, 0, 1); b.add('humans', -9, -7, 1);
-    expect(mergeHeat([a.toJSON(), b.toJSON()]).layers).toEqual({
-      humans: { 'street:0:0': 2, 'sewer:-3:0': 1 }, bots: {}, deaths: { 'street:0:0': 1 }, kills: {},
-    });
-  });
-
   it('splits days on UTC midnight', () => {
     expect(heatDayKey(Date.parse('2026-09-28T23:59:59.999Z'))).toBe('2026-09-28');
     expect(heatDayKey(Date.parse('2026-09-29T00:00:00.000Z'))).toBe('2026-09-29');
+  });
+});
+
+describe('heat ranges', () => {
+  const now = Date.parse('2026-09-29T08:00:00Z');
+  const range = (query: string) => heatRange(new URLSearchParams(query), now);
+  it('defaults to the last week and counts today as one day', () => {
+    expect(range('')).toEqual({ from: '2026-09-23', to: '2026-09-29' });
+    expect(range('days=1')).toEqual({ from: '2026-09-29', to: '2026-09-29' });
+  });
+  it('covers all time and exact spans', () => {
+    expect(range('days=all')).toEqual({ from: '0000-01-01', to: '9999-12-31' });
+    expect(range('from=2026-09-01&to=2026-09-29')).toEqual({ from: '2026-09-01', to: '2026-09-29' });
+    expect(range('from=2026-09-28&to=2026-09-28')).toEqual({ from: '2026-09-28', to: '2026-09-28' });
+  });
+  it('rejects junk, impossible dates, half spans and backwards spans', () => {
+    for (const query of ['days=0', 'days=3651', 'days=x', 'days=2.5', 'days=-1', 'days=',
+      'from=2026-09-01', 'to=2026-09-01', 'from=2026-02-30&to=2026-03-01', 'from=2026-9-1&to=2026-09-02',
+      'from=2026-09-29&to=2026-09-01', 'from=2026-09-01&to=2026-09-02&days=3']) {
+      expect(range(query), query).toBeNull();
+    }
   });
 });

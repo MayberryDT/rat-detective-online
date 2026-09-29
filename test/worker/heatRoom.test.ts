@@ -1,7 +1,7 @@
 import { env, evictDurableObject, runInDurableObject, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { GameRoom } from '../../src/worker/GameRoom';
-import { HEAT_RETENTION_DAYS } from '../../src/worker/HeatMap';
+import { HeatDay } from '../../src/worker/HeatMap';
 import { PERSISTENT_BOT_IDS, type PersistentBot } from '../../src/shared/botRoster';
 import { MAX_HP, WIN_DISPLAY_MS, type PlayerData, type RoundState } from '../../src/shared/networkProtocol';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
@@ -12,8 +12,9 @@ import type { ServerBotController } from '../../src/worker/ServerBotController';
 // 3. Victory display time counts as play.
 // 4. A death is recorded at the killer's spot, a self-kill credits a kill cell.
 // 5. Data is lost when the Durable Object is evicted, or counted twice after reload.
-// 6. Midnight rollover writes into the old day; old days are never pruned.
+// 6. Midnight rollover writes into the old day, or old days are thrown away (heat is kept forever).
 // 7. The endpoint accepts junk ranges, other methods, or is unreadable from a file:// page.
+// 8. Heat recorded before the per-cell store is lost or counted twice by the migration.
 type Internals = {
   players: Map<string, PlayerData>; round: RoundState; botRoster: PersistentBot[];
   sessions: Map<string, { token: string; until: number | null }>;
@@ -21,7 +22,7 @@ type Internals = {
   sampleHeat: (now: number) => void; flushHeat: (now: number) => void;
   handleHit: (id: string | null, message: { type: 'hit'; victimId: string; damage: number }) => Promise<void>;
 };
-type Heat = { days: string[]; cell: number; layers: Record<string, Record<string, number>> };
+type Heat = { from: string; to: string; days: string[]; cell: number; layers: Record<string, Record<string, number>> };
 const rooms: DurableObjectStub<GameRoom>[] = [];
 const DAY = Date.parse('2026-09-28T12:00:00Z');
 
@@ -46,7 +47,9 @@ async function cityRoom() {
   });
   return stub;
 }
-const heatOf = (stub: DurableObjectStub<GameRoom>, days: number, now = DAY) => stub.heat(days, now) as Promise<Heat>;
+const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const heatOf = (stub: DurableObjectStub<GameRoom>, days: number | 'all', now = DAY) =>
+  stub.heat(days === 'all' ? { from: '0000-01-01', to: '9999-12-31' } : { from: dayOf(now - (days - 1) * 86_400_000), to: dayOf(now) }, now) as Promise<Heat>;
 afterEach(async () => {
   for (const stub of rooms.splice(0)) await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
     const game = instance as unknown as Internals; quiet(game); game.persistentBots = false;
@@ -97,9 +100,9 @@ describe('room heat map', () => {
     expect((await heatOf(stub, 1)).layers.bots).toEqual({ 'street:2:2': 2 });
   });
 
-  it('starts a new day at UTC midnight and prunes days past retention', async () => {
+  it('starts a new day at UTC midnight and keeps every day forever', async () => {
     const stub = await cityRoom();
-    const old = DAY - (HEAT_RETENTION_DAYS + 1) * 86_400_000;
+    const old = DAY - 400 * 86_400_000;
     await runInDurableObject(stub, (instance: GameRoom) => {
       const game = instance as unknown as Internals;
       game.sampleHeat(old); game.flushHeat(old);
@@ -107,24 +110,48 @@ describe('room heat map', () => {
       game.flushHeat(Date.parse('2026-09-29T00:00:01Z'));
     });
     const next = Date.parse('2026-09-29T08:00:00Z');
-    expect((await heatOf(stub, 1, next)).days).toEqual(['2026-09-29']);
-    expect((await heatOf(stub, 1, next)).layers.bots).toEqual({ 'street:2:2': 1 });
-    const all = await heatOf(stub, HEAT_RETENTION_DAYS, next);
-    expect(all.days).toEqual(['2026-09-28', '2026-09-29']);
-    expect(all.layers.bots).toEqual({ 'street:2:2': 2 });
+    const today = await heatOf(stub, 1, next);
+    expect(today.days).toEqual(['2026-09-29']);
+    expect(today.layers.bots).toEqual({ 'street:2:2': 1 });
+    const all = await heatOf(stub, 'all', next);
+    expect(all.days).toEqual([dayOf(old), '2026-09-28', '2026-09-29']);
+    expect(all.layers.bots).toEqual({ 'street:2:2': 3 });
+    const span = await stub.heat({ from: '2026-09-28', to: '2026-09-28' }, next) as Heat;
+    expect(span.layers.bots).toEqual({ 'street:2:2': 1 });
+  });
+
+  it('moves heat from the first release into the per-cell store once, without loss', async () => {
+    const stub = await cityRoom();
+    const legacy = new HeatDay(); legacy.add('humans', 10, 0.3, 10); legacy.add('humans', 10, 0.3, 10); legacy.add('deaths', -10, -7, 5);
+    await runInDurableObject(stub, (_instance: GameRoom, ctx) => {
+      ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS heat_days (day TEXT PRIMARY KEY, data TEXT NOT NULL)');
+      ctx.storage.sql.exec('INSERT INTO heat_days (day, data) VALUES (?, ?)', '2026-09-28', JSON.stringify(legacy));
+      ctx.storage.sql.exec('INSERT INTO heat_days (day, data) VALUES (?, ?)', '2026-09-27', '{corrupt');
+    });
+    await evictDurableObject(stub);
+    await runInDurableObject(stub, (instance: GameRoom) => quiet(instance as unknown as Internals));
+    await evictDurableObject(stub);
+    const heat = await heatOf(stub, 'all');
+    expect(heat.layers.humans).toEqual({ 'street:2:2': 2 });
+    expect(heat.layers.deaths).toEqual({ 'sewer:-3:1': 1 });
+    await runInDurableObject(stub, (_instance: GameRoom, ctx) => {
+      expect(ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE name = 'heat_days'").toArray()).toEqual([]);
+    });
   });
 });
 
 describe('heat endpoint', () => {
   it('serves the canonical city readable from a local file page, and rejects junk', async () => {
-    const ok = await SELF.fetch('https://ratdetective.online/api/heat/v1?days=3');
+    const ok = await SELF.fetch('https://ratdetective.online/api/heat/v1?days=all');
     expect(ok.status).toBe(200);
     expect(ok.headers.get('access-control-allow-origin')).toBe('*');
     const body = await ok.json() as Heat;
     expect(body.cell).toBe(4);
     expect(Object.keys(body.layers).sort()).toEqual(['bots', 'deaths', 'humans', 'kills']);
-    for (const days of ['0', '31', 'x', '2.5', '-1']) {
-      expect((await SELF.fetch(`https://ratdetective.online/api/heat/v1?days=${days}`)).status).toBe(400);
+    expect(body.from).toBe('0000-01-01');
+    expect((await SELF.fetch('https://ratdetective.online/api/heat/v1?from=2026-09-01&to=2026-09-29')).status).toBe(200);
+    for (const query of ['days=0', 'days=x', 'from=2026-09-29&to=2026-09-01', 'from=2026-09-01']) {
+      expect((await SELF.fetch(`https://ratdetective.online/api/heat/v1?${query}`)).status).toBe(400);
     }
     expect((await SELF.fetch('https://ratdetective.online/api/heat/v1', { method: 'POST' })).status).toBe(405);
   });

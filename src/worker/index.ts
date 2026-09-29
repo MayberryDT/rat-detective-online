@@ -6,7 +6,7 @@ import { isEvidenceMode, isIncidentId } from '../shared/incidentCatalog';
 import { allowsLocalDiagnostics } from './clientDiagnostics';
 import { verifyBearerToken } from './auth';
 import { companionPageSize, isCompanionCursor } from '../shared/companionStatus';
-import { HEAT_RETENTION_DAYS } from './HeatMap';
+import { heatRange } from './HeatMap';
 
 export { GameRoom } from './GameRoom';
 export { Matchmaker } from './Matchmaker';
@@ -18,13 +18,6 @@ type AdmissionEnv = Env & {
 };
 
 const ROOM_NAME = /^[a-z0-9-]{1,160}$/;
-/** Heat map range in UTC days; absent means one week. */
-function heatRange(value: string | null): number | null {
-  if (value === null) return 7;
-  if (!/^\d{1,2}$/.test(value)) return null;
-  const days = Number(value);
-  return days >= 1 && days <= HEAT_RETENTION_DAYS ? days : null;
-}
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
@@ -153,9 +146,9 @@ export default {
       if (url.pathname === '/api/heat/v1') {
         const cors = { 'access-control-allow-origin': '*', 'cache-control': 'no-store' };
         if (request.method !== 'GET') return respond(json({ error: 'Method not allowed' }, { status: 405, headers: cors }));
-        const days = heatRange(url.searchParams.get('days'));
-        if (days === null) return respond(json({ error: 'days must be a whole number from 1 to 30' }, { status: 400, headers: cors }));
-        const heat = await env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME).heat(days);
+        const range = heatRange(url.searchParams, Date.now());
+        if (range === null) return respond(json({ error: 'Use days=1-3650, days=all, or from and to as YYYY-MM-DD' }, { status: 400, headers: cors }));
+        const heat = await env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME).heat(range);
         return respond(json({ room: DEFAULT_ROOM_NAME, ...heat }, { headers: cors }));
       }
 
