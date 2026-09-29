@@ -110,6 +110,10 @@ export class ObjectiveBotBrain {
     }
     /** Initial pending work counts as stalled until a usable route or reached goal exists. */
     get navigationStalled():boolean{return this.stalled;}
+    /** Counts genuine progress: a route waypoint reached, the goal reached or held, a launch pad worked, a
+     * visible fight. Escape hops and local jitter never count, so a parked bot's rescue clock keeps running. */
+    get progressMark():number{return this.progress;}
+    private progress=0;
     get failedCasePosition():Readonly<Vec3Data>|undefined{return this.failedCase;}
     reset(): void {
         this.jumpTravel=undefined;this.jumpProbeAt=0;this.approach=undefined;this.approachAt=0;this.maneuver.reset();this.attention.reset();this.protectedVisible=[];this.visibleRats=[];this.caseAim=false;this.zoneHolding.reset();
@@ -459,7 +463,7 @@ export class ObjectiveBotBrain {
                 this.planAt=now+(now-pending.started>5000?1000:140+this.random()*160);
             }
         }
-        while(this.routeIndex<this.route.length&&!this.route[this.routeIndex].launch&&!this.route[this.routeIndex].drop&&distance(self,this.route[this.routeIndex])<1.8)this.routeIndex++;
+        while(this.routeIndex<this.route.length&&!this.route[this.routeIndex].launch&&!this.route[this.routeIndex].drop&&distance(self,this.route[this.routeIndex])<1.8){this.routeIndex++;this.progress++;}
         let waypoint:BotWaypoint|undefined=this.route[this.routeIndex];
         if(waypoint?.drop&&distance(self,waypoint)<2.5){
             this.flight={landing:waypoint.drop,started:now};return this.fly(now,self,false)!;
@@ -482,7 +486,7 @@ export class ObjectiveBotBrain {
                 // Stand on the real pad and fire real cheese at its trigger.
                 // Only the authoritative launch event starts flight steering.
                 const speed=d>.25?Math.min(6,d*4):0;
-                this.stalled=false;return{x:d?dx/d*speed:0,z:d?dz/d*speed:0,jump:false,facing:this.heading,shoot};
+                this.stalled=false;this.progress++;return{x:d?dx/d*speed:0,z:d?dz/d*speed:0,jump:false,facing:this.heading,shoot};
             }
         }
         const patrolling=this.objective==='intercept'&&this.destination&&distance(self,this.destination)<6&&grounded;
@@ -525,6 +529,7 @@ export class ObjectiveBotBrain {
         if(this.objective==='zone-hold'&&this.destination&&distance(self,this.destination)<.8){x=0;z=0;this.stalled=false;}
         // Stop at the objective rather than repeatedly running across the case.
         if(this.destination&&(this.objective==='case'&&distance(self,this.destination)<1.15||this.objective==='dispatch'&&distance(self,this.destination)<1.5)){x=0;z=0;}
+        if(patrolling||this.destination&&distance(self,this.destination)<3)this.progress++;
         let facing=this.heading;
         // Tunnel ramps are walking links. Recovery hops hit their arched ceiling.
         let jump=!sewerRampAt(self)&&!approachingCase&&grounded&&now>=this.jumpAt&&(obstacleJump||!this.pendingPlan&&now<this.recoverUntil||blocked&&!!waypoint||!!waypoint&&waypoint.y-self.y>1.1);
@@ -532,7 +537,7 @@ export class ObjectiveBotBrain {
         if(holdingZone){
             const threat=this.visibleRats.find(p=>p.hp>0&&distance(self,p)<22);
             const hold=this.zoneHolding.step(now,holdingZone,`${assignment!.roundId}:${assignment!.jurisdiction!.serial}`,self,threat,grounded,this.navigation,clearControl);
-            x=hold.x;z=hold.z;facing=hold.facing;jump=hold.jump;this.stalled=false;
+            x=hold.x;z=hold.z;facing=hold.facing;jump=hold.jump;this.stalled=false;this.progress++;
         }
         this.protectedVisible=this.visibleRats.filter(p=>p.hp>0&&hasIronclad(state?.buffs,p.id,state?.time??now));
         const protectedTarget=!!this.target&&hasIronclad(state?.buffs,this.target.id,state?.time??now);
@@ -541,7 +546,7 @@ export class ObjectiveBotBrain {
         this.caseAim=!!casePoint;
         const visibleTarget=!!this.target?.hp&&distance(self,this.target)<85&&clear(this.target)&&(!protectedTarget||!!casePoint);
         if(!obstacleJump&&pursuingAssignment&&(this.objective==='combat'||this.objective==='carrier'&&this.target&&distance(self,this.target)<10||this.objective==='intercept')&&visibleTarget&&this.target&&distance(self,this.target)<22&&grounded){
-            const dx=self.x-this.target.x,dz=self.z-this.target.z,length=Math.hypot(dx,dz)||1;
+            const dx=self.x-this.target.x,dz=self.z-this.target.z,length=Math.hypot(dx,dz)||1;this.progress++;
             const side=(this.wanderIndex+Math.floor(now/2600))%2?1:-1,back=length<9?1:.1;
             const point={x:self.x+(dx*back+dz*side)/length*5,y:self.y,z:self.z+(dz*back-dx*side)/length*5};
             const safe=this.behaviors.maneuvers?this.maneuver.step(now,this.key,self,this.target,this.navigation):this.navigation.localStep?.(self,point);

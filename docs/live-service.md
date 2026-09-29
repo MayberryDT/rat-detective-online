@@ -12,6 +12,7 @@ Last release receipt: **2026-09-28**. [Heat map](verification/heat-map-release-2
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Canonical `public-live-v2` stays alive with 6–9 bots and zero humans; overflow still sleeps |
+| Staging (not production) | `rat-detective-staging`, https://rat-detective-staging.mayberrydt.workers.dev/ — city overhaul, layout 3, protocol 23: Worker `5aeb800a-dc54-467a-9825-b61408ace89f` (predecessors `125dc4b0-ddfb-403f-b7c8-89549bd0fa1b`, `50e7cd63-90f1-4ad6-b560-4d4331a1810c`, `c1df21f6-7048-43be-b80c-4d6de7245f9e`). Tyler's preview; production needs his OK. [Receipt](verification/city-overhaul-release-2026-09-29.md) |
 
 Protocol 19 requires matching client and Worker; open protocol-18 tabs must reload. Before any rollback to protocol 15,
 review stored Jurisdiction rounds: the old validator does not understand that mode. Existing older game tabs should

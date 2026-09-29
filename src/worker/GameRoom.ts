@@ -546,12 +546,13 @@ export class GameRoom extends DurableObject<Env> {
     const player=this.players.get(id);
     if(!this.isManagedBot(id)||!player||player.hp<=0||this.round.phase!=='playing')return;
     this.chaos?.recoverCarrierCase(id);
+    const from={x:Math.round(player.x*10)/10,y:Math.round(player.y*10)/10,z:Math.round(player.z*10)/10};
     // Rescue is not a death, heal or score reset. Use ordinary clear spawn selection.
     Object.assign(player,spawnForWorld(this.world,Math.random,this.players.values(),id,this.chaos?.assignmentState));
     this.serverBots?.reset(id,player);
     this.lastMovementBroadcast.delete(id);this.movementAllowances.set(id,createMovementAllowance(this.now()));this.persistPlayer(player,true);
     this.broadcast({type:'playerRespawn',id,x:player.x,y:player.y,z:player.z,hp:player.hp});
-    log('info','stranded bot recovered',{playerId:id});
+    log('info','stranded bot recovered',{playerId:id,from});
   }
 
   /** Public city board includes managed rats, with names/scores but no positions. */

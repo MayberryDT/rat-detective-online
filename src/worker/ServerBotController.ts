@@ -26,7 +26,13 @@ interface Bot {
     driftX:number;driftZ:number;
     strandedSince:number;escapeCheckAt:number;escapeX:number;escapeZ:number;
     progressAt:number;progressX:number;progressZ:number;
+    pocketAt:number;pocketX:number;pocketZ:number;progressMark:number;
 }
+
+/** Backstop for a bot that paces a small pocket (a railed crane landing, a hop up the next flight and back):
+ * no waypoint, goal or fight and never this far from one spot, for this long, is a rescue even when the
+ * 1.5-unit clock keeps restarting. Long enough that a bot briefly circling a street is never teleported. */
+const POCKET_RADIUS=24,POCKET_RESCUE_MS=90000;
 
 /** RatModel's raised firing arm (-.49, .91+.36, .09+.10) plus its
  * rat-muzzle anchor (0,.106,.28), rotated by the current authoritative yaw.
@@ -85,7 +91,7 @@ export class ServerBotController {
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
             this.bots.set(id,{id,body,brain:new ObjectiveBotBrain(sharedNavigation,index++,Math.random,experiment),facing:0,initialized:false,alive:false,
                 normalJump:false,zoneHop:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,driftX:0,driftZ:0,
-                strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0});
+                strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0,pocketAt:0,pocketX:0,pocketZ:0,progressMark:0});
         }
     }
     reset(id:string,position:Vec3Data):void {
@@ -99,6 +105,7 @@ export class ServerBotController {
         bot.lastLaunchAt=this.now;bot.lastMovementAt=-Infinity;bot.brain.reset();
         bot.strandedSince=0;bot.escapeCheckAt=0;bot.escapeX=0;bot.escapeZ=0;
         bot.progressAt=this.now;bot.progressX=position.x;bot.progressZ=position.z;
+        bot.pocketAt=this.now;bot.pocketX=position.x;bot.pocketZ=position.z;bot.progressMark=bot.brain.progressMark;
     }
     private visible(bot:Bot,target:Vec3Data,control=false):boolean {
         this.from.set(bot.body.position.x,bot.body.position.y+1.5,bot.body.position.z);
@@ -211,10 +218,13 @@ export class ServerBotController {
                 bot.progressAt=now;bot.progressX=body.position.x;bot.progressZ=body.position.z;
             }
             const wantsMove=bot.brain.navigationStalled||Math.hypot(intent.x,intent.z)>.5;
+            if(!bot.pocketAt||!wantsMove&&grounded||bot.brain.progressMark!==bot.progressMark||Math.hypot(body.position.x-bot.pocketX,body.position.z-bot.pocketZ)>POCKET_RADIUS){
+                bot.pocketAt=now;bot.pocketX=body.position.x;bot.pocketZ=body.position.z;bot.progressMark=bot.brain.progressMark;
+            }
             if(!wantsMove){bot.strandedSince=0;bot.progressAt=now;}
             else if(grounded&&now>bot.lastLaunchAt+8000){
                 bot.strandedSince=bot.progressAt;
-                if(now-bot.progressAt>=30000&&this.callbacks.recover){
+                if((now-bot.progressAt>=30000||now-bot.pocketAt>=POCKET_RESCUE_MS)&&this.callbacks.recover){
                     bot.strandedSince=0;this.callbacks.recover(bot.id);continue;
                 }
                 if(now-bot.progressAt>=8000){

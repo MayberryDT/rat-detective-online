@@ -2,6 +2,10 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## City overhaul (layout 3) — on branch and staging, not in production (29 September)
+
+The rebuilt city (docks, the Panopticon precinct, cut corners, bank walls, Gate Lane, chutes, north sewers; layout 3, protocol 23) lives on branch `city/overhaul` and runs on **staging only**: Worker `5aeb800a-dc54-467a-9825-b61408ace89f`, https://rat-detective-staging.mayberrydt.workers.dev/ (Tyler's preview) and its `/map`. That build includes a backstop that rescues a bot pacing a small pocket (a crane stair landing) after 90 s without real progress. Production still runs layout 2 and needs Tyler's OK. See [the release receipt](verification/city-overhaul-release-2026-09-29.md) and [the plan](city-overhaul.md).
+
 ## Seventh batch, title and load time — 28 September production (protocol 22)
 
 Heat map (Worker `14d903be-b6d7-4f43-9e2b-959ad6854019`, client `index-BqZFQ1Ko.js`, protocol 22): the canonical city records where rats spend time, die and kill, kept forever and shown at [/heatmap](https://ratdetective.online/heatmap); the round-end standings and Case File sit as one centred pair and the awards always fit. See [the receipt](verification/heat-map-release-2026-09-28.md).
