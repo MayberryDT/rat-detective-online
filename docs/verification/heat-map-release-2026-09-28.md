@@ -65,3 +65,19 @@ Checks:
 Limits:
 - Screens narrower than 1100 px or shorter than 640 px keep their previous stacked results layout; phones remain Tyler's later check.
 - The heat map page is public, like `/status`. It shows counts only.
+
+## Follow-up: the city map recorder (Worker `00e3129e-6a33-40e0-acb8-f5810a251f60`, 2026-09-29)
+
+Steps 1–3 of [the city map](../city-map.md) went live on Tyler's OK. The deploy is Worker only: the client stays `index-BqZFQ1Ko.js` and the protocol stays 22.
+
+Staging first (`daf59c8a-1d99-4ae9-b7e9-57833bfd8786`):
+- events, aggregates and the digest worked;
+- an archive object was written to R2;
+- `city-mirror.mjs` built `output/city/city.db`, and `read` queried it.
+
+Production after the deploy:
+- `/status` played normally with 8 bots, and `/heatmap` returned 200;
+- the migration kept every earlier cell (10.0 bot-hours, 25 human-minutes, 711 deaths, 704 kills on 2026-09-29), and the new layers (`shots-bot`, `ball-*`, `spawns`) began filling within seconds;
+- `/api/city/v1/events` returned 401 without the token, and with it returned round, case, Dispatch, damage, death, spawn and heal facts.
+
+**Limit:** fire rate and place measures only count from this deploy. The earlier heat rows have presence and deaths but no shots.

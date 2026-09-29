@@ -1,6 +1,6 @@
 # The city map
 
-Status (2026-09-29): **steps 1–3 are built** and running on staging. They go to production on Tyler's OK. Heat v1 is live on production (see [the receipt](verification/heat-map-release-2026-09-28.md)). Steps 4–6 are the plan.
+Status (2026-09-29): **steps 1–3 are live** on production, Worker `00e3129e-6a33-40e0-acb8-f5810a251f60` (Tyler: "go ahead and deploy it to the live game"), with the same client and protocol 22. See [the receipt](verification/heat-map-release-2026-09-28.md). Steps 4–6 are the plan. **First question to answer once Tyler has played:** shots per minute alive, humans against bots (the digest's Shooting section).
 
 The city map is the single document for everything about the city: where things are, what happens there, how often, how dangerous, and what should change. People read it as the page at [/heatmap](https://ratdetective.online/heatmap) (to become `/map`). Agents read it as text, through this file and the live endpoints below. Both renderings come from the same data, so they can never disagree.
 
@@ -201,7 +201,7 @@ All ranges take `days=1–3650`, `days=all`, or `from` and `to` (UTC days); aggr
 
 | Surface | Returns | Status |
 | --- | --- | --- |
-| `GET /api/heat/v1` | Every cell layer | Built (production serves heat v1's four layers until the deploy) |
+| `GET /api/heat/v1` | Every cell layer | Live |
 | `GET /api/city/v1/digest` | The Markdown reading, with evidence handles | Built |
 | `GET /api/city/v1/model` | Layers 0–1: 71 entities and 196 places with IDs, kinds, names, areas and centres | Built |
 | `GET /api/city/v1/places` | Summed place counts, and human time by assignment | Built; rates come from `src/shared/city/measures.ts` |
