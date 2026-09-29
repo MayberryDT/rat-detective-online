@@ -60,25 +60,9 @@ export class TitleScreen {
             doc.addEventListener(type, () => this.onGesture(), { ...options, capture: true });
         }
         target.addEventListener('focus', () => this.focus(), options);
-        target.addEventListener('resize', this.strings, options);
         doc.addEventListener('visibilitychange', () => { if (!doc.hidden) this.focus(); }, options);
-        void doc.fonts?.ready.then(this.strings);
-        this.roll(); this.focus(); this.strings();
+        this.roll(); this.focus();
     }
-    /** Red string runs pin to pin; pins hang at layout positions, so this runs on layout changes only. */
-    private readonly strings = (): void => {
-        const svg = this.doc.getElementById('title-strings');
-        if (this.disposed || !svg?.getBoundingClientRect) return;
-        const box = svg.getBoundingClientRect();
-        for (const line of Array.from(svg.children)) {
-            const a = this.doc.getElementById(line.getAttribute('data-a') ?? '')?.getBoundingClientRect();
-            const b = this.doc.getElementById(line.getAttribute('data-b') ?? '')?.getBoundingClientRect();
-            (line as SVGElement).style.display = a?.width && b?.width ? '' : 'none';
-            if (!a?.width || !b?.width) continue;
-            line.setAttribute('x1', String(a.x + a.width / 2 - box.x)); line.setAttribute('y1', String(a.y + a.height / 2 - box.y));
-            line.setAttribute('x2', String(b.x + b.width / 2 - box.x)); line.setAttribute('y2', String(b.y + b.height / 2 - box.y));
-        }
-    };
     private enter(): void {
         if (this.settings?.isOpen || !this.available()) return;
         this.clearRoll(); this.show(this.name); this.onGesture(); this.onEnter(this.name);
@@ -88,10 +72,11 @@ export class TitleScreen {
         for (let tries = 0; tries < 8 && next === exclude; tries++) next = generateRandomName();
         return next;
     }
-    private show(name: string, animate = false): void {
+    private show(name: string): void {
         const plate = this.doc.getElementById('player-name');
-        if (plate) { plate.textContent = name; if (animate) replay(plate, 'shuffling'); }
+        if (plate) plate.textContent = name;
     }
+    /** The die tumbles and clatters while the new name types onto the card, a key every 38 ms. */
     private roll(animate = false): void {
         this.clearRoll(); this.name = this.pick(this.name);
         if (!animate || reducedMotion()) {
@@ -99,21 +84,21 @@ export class TitleScreen {
         }
         const dice = this.doc.getElementById('reroll-name-btn');
         if (dice) replay(dice, 'rolling');
-        const tick = (step: number) => {
+        this.doc.getElementById('player-name')?.classList.add('typing');
+        const name = this.name;
+        const type = (typed: number) => {
             if (this.disposed) return;
-            if (step >= 4) {
-                this.show(this.name, true); this.onCue('name-stamp');
-                this.timer = setTimeout(() => this.clearRoll(), 180); return;
-            }
-            this.onCue('name-tick'); this.show(this.pick(this.name), true);
-            this.timer = setTimeout(() => tick(step + 1), 55);
+            this.show(name.slice(0, typed));
+            if (typed >= name.length) { this.onCue('name-stamp'); this.timer = setTimeout(() => this.clearRoll(), 400); return; }
+            if (typed % 2) this.onCue('name-tick');
+            this.timer = setTimeout(() => type(typed + 1), 38);
         };
-        tick(0);
+        type(1);
     }
     private clearRoll(): void {
         if (this.timer !== null) clearTimeout(this.timer);
         this.timer = null;
-        this.doc.getElementById('player-name')?.classList.remove('shuffling');
+        this.doc.getElementById('player-name')?.classList.remove('typing');
         this.doc.getElementById('reroll-name-btn')?.classList.remove('rolling');
     }
     focus(): void {

@@ -93,6 +93,7 @@ function score(id:string,delta:number):void {
 const actions:Record<string,()=>void>={
     'Title: back to the wall':()=>location.reload(),
     'Title: roll a name (dice)':()=>document.getElementById('reroll-name-btn')!.click(),
+    'Title: headlights through the blinds':()=>{for(const a of document.querySelector('.fx-sweep b')?.getAnimations()??[]){a.currentTime=3500+13000*.89;a.pause();}},
     'Title: pinned Settings':()=>document.getElementById('title-settings-btn')!.click(),
     'Title: ENTER CITY (swoop)':()=>document.getElementById('enter-city-btn')!.click(),
     'Title: swoop held mid-way':()=>{document.getElementById('enter-city-btn')!.click();

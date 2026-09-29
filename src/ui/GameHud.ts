@@ -103,8 +103,8 @@ export class GameHud {
         this.retryButton.style.display = state === 'disconnected' && this.onRetry ? 'inline-flex' : 'none';
     }
 
-    /** The title is gone and inert in this call; the swoop is a non-interactive copy of the evidence wall
-     * whose scraps tear away while an iris opens from the magnifying glass onto the city. */
+    /** The title is gone and inert in this call; the swoop is a non-interactive copy of the office that
+     * pushes in on the case poster while an iris opens from Tyler's mark onto the city. */
     enterPlaying(): void {
         if (this.disposed) return;
         const entering=!this.titleScreen.classList.contains('fade-out');
@@ -113,8 +113,8 @@ export class GameHud {
         if(entering&&this.titleScreen.style.display!=='none'&&typeof this.titleScreen.cloneNode==='function'&&uiMotion('titleSwoop')){
             const swoop=this.titleScreen.cloneNode(true) as HTMLElement;
             swoop.classList.add('title-swoop');swoop.inert=true;swoop.setAttribute('aria-hidden','true');swoop.style.display='';
-            const lens=this.titleScreen.querySelector('.logo-lens')?.getBoundingClientRect();
-            if(lens?.width){swoop.style.setProperty('--iris-x',`${lens.x+lens.width/2}px`);swoop.style.setProperty('--iris-y',`${lens.y+lens.height/2}px`);}
+            const logo=this.titleScreen.querySelector('.poster-logo')?.getBoundingClientRect();
+            if(logo?.width){swoop.style.setProperty('--iris-x',`${logo.x+logo.width/2}px`);swoop.style.setProperty('--iris-y',`${logo.y+logo.height/2}px`);}
             for(const link of Array.from(swoop.querySelectorAll('a')))link.removeAttribute('href');
             swoop.addEventListener('animationend',event=>{if(event.target===swoop)swoop.remove();});
             this.doc.body.appendChild(swoop);this.swoop=swoop;
