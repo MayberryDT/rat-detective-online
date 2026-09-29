@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rat Detective: the bot overhaul</title>
+<style>
+  :root {
+    --ink: #0b0f16; --panel: #121a26; --panel2: #172233; --line: #2a3a52;
+    --text: #d9e2ef; --dim: #8fa1ba; --stamp: #d8433b; --cheese: #e8c547; --jev: #6cc4a4; --code: #7aa7e8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(1200px 600px at 20% -10%, #1a2436 0%, var(--ink) 60%) fixed; color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 48px 28px 96px; }
+  h1, h2, h3 { font-family: "Courier New", Courier, monospace; letter-spacing: .02em; }
+  h1 { font-size: 44px; margin: 0 0 4px; }
+  h1 .stamp { color: var(--stamp); border: 3px solid var(--stamp); padding: 0 10px; transform: rotate(-3deg); display: inline-block; margin-left: 10px; font-size: 22px; vertical-align: middle; }
+  h2 { font-size: 26px; margin: 64px 0 12px; border-bottom: 1px dashed var(--line); padding-bottom: 8px; }
+  h2 .n { color: var(--stamp); margin-right: 10px; }
+  h3 { font-size: 18px; margin: 22px 0 8px; color: var(--cheese); }
+  p.lede { font-size: 19px; color: var(--dim); max-width: 860px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+  .grid { display: grid; gap: 16px; align-items: start; }
+  .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 860px) { .g2, .g3 { grid-template-columns: 1fr; } }
+  .diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; overflow-x: auto; }
+  .diagram .mermaid { display: flex; justify-content: center; }
+  .tag { display: inline-block; font: 12px/1 "Courier New", monospace; padding: 4px 7px; border-radius: 4px; margin-right: 6px; }
+  .t-jev { background: #173a30; color: var(--jev); } .t-code { background: #182c4a; color: var(--code); }
+  .t-keep { background: #173a30; color: var(--jev); } .t-new { background: #3a3317; color: var(--cheese); } .t-del { background: #3f1a1a; color: #f08a84; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+  code { font: 13.5px "Courier New", monospace; color: var(--cheese); }
+  pre { background: #0a0e15; border: 1px solid var(--line); border-radius: 8px; padding: 14px; overflow-x: auto; font: 13px/1.45 "Courier New", monospace; color: #c9d6e8; margin: 0; }
+  .big { font: 700 34px "Courier New", monospace; color: var(--cheese); }
+  .kpi .l { color: var(--dim); font-size: 14px; }
+  .bars { display: grid; grid-template-columns: 90px 1fr; gap: 6px 10px; align-items: center; font-size: 13px; }
+  .bar { height: 16px; background: var(--code); border-radius: 3px; min-width: 2px; }
+  .bar.win { background: var(--stamp); }
+  .muted { color: var(--dim); }
+  .note { border-left: 3px solid var(--stamp); padding: 6px 14px; color: var(--dim); margin: 14px 0; }
+  ol li, ul li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The bot overhaul <span class="stamp">PLAN</span></h1>
+<p class="lede">Every bot gets three parts: <b>perception</b> (what it can honestly see and hear), a <b>mind</b> (Jev choosing goals every second or on an event) and <b>motor</b> (code running at 60 Hz: moving, aiming, dodging, bank shots). Jev chooses what to do and code carries it out. When nobody human is playing, a free code mind runs the city instead, so it stays alive around the clock.</p>
+
+<div class="grid g3" style="margin-top:28px">
+  <div class="card kpi"><div class="big">~180 ms</div><div class="l">one rat's full decision (5 questions), measured from Halla</div></div>
+  <div class="card kpi"><div class="big">223 ms</div><div class="l">nine rats deciding at once, sent in parallel</div></div>
+  <div class="card kpi"><div class="big">$1.47–2.31/h</div><div class="l">9 rats deciding once a second (measured tokens × $0.042 per million)</div></div>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="n">01</span>The whole thing at a glance</h2>
+<div class="diagram"><pre class="mermaid">
+mindmap
+  root((Bot overhaul))
+    Perception
+      Place names from the city map
+      Honest sight to 150 units
+      The Hunch like humans
+      Heard shots, alarms, throws
+      Candidates chosen by code
+    Mind
+      Jev when humans play
+        Goal
+        Target
+        Place for each goal
+        Danger
+        Bank shot
+      Code mind when empty
+      Cast 80 10 10
+        Tryhard
+        Maverick
+        Gremlin
+      Freshness and hysteresis
+    Motor
+      Keep flow fields and routes
+      Executor per goal
+      Human-like aim and reaction
+      Bank shot solver
+      Stuck rescues stay
+    Measure
+      City map decision facts
+      Bots against humans per place
+      Cost and latency
+      Never outplay Tyler
+    Ship
+      Offline test on real moments
+      Private preview and observe
+      Production on Tyler's OK
+</pre></div>
+
+<!-- ============================================================ -->
+<h2><span class="n">02</span>How a bot thinks</h2>
+<p>Each layer runs at its own speed. The motor never waits for the mind: a rat always acts on the last goal it was given.</p>
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+  W["GAMEROOM · world state<br/>rats, case, buffs, machines, balls<br/>authority for damage, score, pickups"]
+  V["PERCEPTION · code · 1 Hz + events<br/>RatView: place, floor, HP, buffs,<br/>visible rats as r1..r9, heard shots and alarms,<br/>candidate places"]
+  subgraph M["MIND · 1 Hz + events"]
+    direction LR
+    J["Jev mind<br/>one request per rat, ~180 ms, async"]
+    R["Code mind<br/>free, instant, same Intent type"]
+  end
+  CAST["Cast weights and hysteresis<br/>Tryhard / Maverick / Gremlin"]
+  subgraph MO["MOTOR · code · every tick"]
+    direction LR
+    X["Executor for the goal<br/>go, hold, chase, flee, fight, bank, trigger"]
+    N["BotNavigation<br/>flow fields, launch routes"]
+    A["Aim and reaction<br/>human-like error"]
+  end
+  REC[("City recorder · /map")]
+  W --> V --> M
+  J --> CAST
+  R --> CAST
+  CAST -- "Intent: goal, target, place, stance" --> X
+  X --> N
+  X --> A
+  MO -- "move and shoot callbacks" --> W
+  W -. "events: hit, case change, target lost, arrived" .-> M
+  CAST -- "decision facts" --> REC
+</pre></div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card">
+    <h3>Jev decides <span class="tag t-jev">judgment</span></h3>
+    <ul>
+      <li>Which goal to pursue now (a closed list; code only offers goals valid in this assignment)</li>
+      <li>Which visible rat to aim at, or none</li>
+      <li>Where to go <i>for each goal</i> (open-ended goals only: flee, ambush, roam, mischief)</li>
+      <li>How much danger the rat is in</li>
+      <li>Whether a bank shot is the way to reach the target</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Code decides <span class="tag t-code">exact</span></h3>
+    <ul>
+      <li>What the rat can see and hear, and the candidate lists Jev picks from</li>
+      <li>Places a goal implies: the case, the carrier, the medkit, the zone, the delivery</li>
+      <li>Routes, jumps, launchers, stairs and the sewer</li>
+      <li>Aim, lead, bank angles and fire timing</li>
+      <li>Checking that answers are still true: the target is alive and the world hasn't changed</li>
+      <li>Personality weights, skill dials, budget, fallback</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="n">03</span>One decision, step by step</h2>
+<div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant G as GameRoom tick
+  participant P as Perception
+  participant Mi as Mind
+  participant J as Jev API
+  participant Mo as Motor
+  G->>P: beat (1 s) or event (hit, case dropped, target lost)
+  P->>Mi: RatView with serial 42
+  Mi->>J: POST /v1/systemone (5 + 7 questions, ~1.7k tokens)
+  Note over G,Mo: The room keeps ticking. The motor runs the old goal.
+  G->>Mo: tick x 10
+  J-->>Mi: goal, target, place per goal, danger, bank (~180 ms)
+  Mi->>Mi: fresh? serial ≤ 1.5 s old, target alive and in view
+  Mi->>Mi: cast weights, then hysteresis (switch only if clearly better)
+  Mi->>Mo: new Intent
+  alt Jev slow, down, 429 or over budget
+    Mi->>Mi: code mind answers instead
+  end
+  Mi->>G: decision fact to the recorder
+</pre></div>
+
+<h3>A real request and answer (from the probe, 29 Sep)</h3>
+<div class="grid g2">
+<pre>{
+  "assignment": "Excessive Force: most kills wins.",
+  "me": { "hp": "5 of 5", "place": "Gate Lane" },
+  "visible": [
+    { "id": "r4", "where": "10 units away, wearing
+       Ironclad Alibi, which reflects every cheese
+       ball straight back at the shooter" },
+    { "id": "r6", "where": "25 units away, unarmoured,
+       2 of 5 HP, not looking at me" }
+  ],
+  "reachable_places": [
+    { "id": "doorway", "what": "6 units away, view of r6" },
+    { "id": "toward_r4", "what": "Straight at r4." }
+  ]
+}</pre>
+<pre>goal:   fight   0.74   ambush 0.18   take_case 0.05
+target: r6      0.84   none   0.15   r4        0.01
+place:  doorway 0.96   toward_r4 0.04
+danger: 0.86 of 3
+bank:   0.17
+
+1,066 input tokens · 200–209 ms · same on 3 repeats
+
+It left the armoured rat alone, picked the weak
+one who wasn't looking, and walked to the doorway
+that sees it. Code turns that into a route, a
+lead on r6 and fire at the human rate cap.</pre>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="n">04</span>The cast: 80 / 10 / 10</h2>
+<p>All three share the same Jev answers. A personality is just weights that code applies to the probabilities, so it adds no calls and no cost. Skill is separate: the same dials apply to aim and reaction whatever the personality. <b>Personalities are hidden from players</b>; they work it out from behaviour.</p>
+<div class="grid g2">
+  <div class="diagram"><pre class="mermaid">
+pie showData
+  title Who each bot is (rolled per roster name, kept across rounds)
+  "Tryhard: plays to win the assignment" : 80
+  "Maverick: wins their own way" : 10
+  "Gremlin: causes chaos" : 10
+  </pre></div>
+  <div class="card">
+    <h3>Same answer, three rats</h3>
+    <p class="muted" style="margin-top:0">Jev's goal probabilities for one situation (a lone rival nearby, a pressure machine in reach), then each personality's weights. The red bar is the goal that rat picks.</p>
+    <div id="cast"></div>
+  </div>
+</div>
+<table style="margin-top:16px">
+  <tr><th>Personality</th><th>Weights applied in code</th><th>What you'd see</th></tr>
+  <tr><td><b>Tryhard</b> (80%)</td><td>Sharpens the distribution (takes the likeliest answer almost every time)</td><td>Case first, intercepts the carrier, holds chokepoints, finishes weak rats</td></tr>
+  <tr><td><b>Maverick</b> (10%)</td><td>Boosts ambush, bank shots, launcher routes and counterfeit traps near the case</td><td>Bank-shot sniper on the crane, launcher ambushes, baiting fights to steal the case</td></tr>
+  <tr><td><b>Gremlin</b> (10%)</td><td>Boosts mischief: machines, counterfeits, starting fights between others</td><td>Sets off pressure machines, shoots fake cases into crowds, drags fights into the water</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2><span class="n">05</span>When Jev runs</h2>
+<p>Only a room with a human in it pays for Jev. The public city never sleeps: with nobody playing, the code mind keeps six to nine bots running at no cost.</p>
+<div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> CodeMind: room wakes (6 to 9 bots)
+  CodeMind: Code mind · $0 · living city
+  JevMind: Jev mind · ~$1.5–2.3 per hour
+  Fallback: Code mind, temporarily
+  CodeMind --> JevMind: a human joins
+  JevMind --> CodeMind: last human leaves (30 s reconnect hold ends)
+  JevMind --> Fallback: Jev slow, 429, error or daily budget hit
+  Fallback --> JevMind: backoff ends and budget remains
+  Fallback --> CodeMind: last human leaves
+</pre></div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="diagram"><pre class="mermaid">
+xychart-beta
+  title "Jev cost for one room of 9 rats"
+  x-axis ["every 2 s", "every 1 s", "twice a second"]
+  y-axis "Dollars per hour" 0 --> 5
+  bar [1.16, 2.31, 4.63]
+  </pre></div>
+  <div class="card">
+    <h3>Limits that shape it</h3>
+    <ul>
+      <li><b>Price:</b> $0.042 per million input tokens; output free. About 1,700 tokens per decision with the per-goal place questions.</li>
+      <li><b>Requests:</b> 1,200 per minute, on Rat Detective's own TypeSafe account. One room deciding every second uses 540, so two busy rooms fit. Beyond that: decide less often, or ask TypeSafe for a higher limit.</li>
+      <li><b>Budget guard:</b> <b>$25 a day</b> in production, as a Worker variable. When it's reached, rooms fall back to the code mind until the next day.</li>
+      <li><b>Key:</b> Worker secret <code>TYPESAFE_API_KEY</code>, on staging first. Model pinned to <code>jev-1.13.0</code>.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2><span class="n">06</span>What happens to the code</h2>
+<p>A clean cutover. Navigation, physics and the rescues stay; the stacked decision rules go.</p>
+<table>
+  <tr><th></th><th>File</th><th>Now</th><th>After</th></tr>
+  <tr><td><span class="tag t-keep">KEEP</span></td><td><code>BotNavigation.ts</code>, <code>BotLaunchRoutes.ts</code></td><td>Flow fields, routes, launcher routes</td><td>The motor's legs, unchanged</td></tr>
+  <tr><td><span class="tag t-keep">KEEP</span></td><td><code>ServerBotController.ts</code></td><td>Physics body, movement, 30 s and 90 s rescues</td><td>Drives executors instead of the old brain</td></tr>
+  <tr><td><span class="tag t-keep">KEEP</span></td><td><code>botRoster.ts</code>, <code>BotTargeting.ts</code>, aim in <code>BotCombat.ts</code></td><td>Names, Ironclad checks, imperfect aim</td><td>Roster also rolls each rat's personality</td></tr>
+  <tr><td><span class="tag t-keep">REUSE</span></td><td><code>city/CityRecorder.ts</code>, <code>city/places.ts</code></td><td>Situations each second, 262 named places</td><td>Perception's vocabulary; new <code>decision</code> facts</td></tr>
+  <tr><td><span class="tag t-new">NEW</span></td><td><code>bots/perception.ts</code></td><td></td><td>RatView: honest sight, sound, candidates</td></tr>
+  <tr><td><span class="tag t-new">NEW</span></td><td><code>bots/intent.ts</code></td><td></td><td>The Intent type both minds return</td></tr>
+  <tr><td><span class="tag t-new">NEW</span></td><td><code>bots/jevMind.ts</code></td><td></td><td>Question set, async client, freshness, backoff, budget</td></tr>
+  <tr><td><span class="tag t-new">NEW</span></td><td><code>bots/codeMind.ts</code></td><td></td><td>Cheap scorer: living city and fallback</td></tr>
+  <tr><td><span class="tag t-new">NEW</span></td><td><code>bots/cast.ts</code></td><td></td><td>Personality weights, hysteresis, skill dials</td></tr>
+  <tr><td><span class="tag t-new">NEW</span></td><td><code>bots/motor/*.ts</code></td><td></td><td>One executor per goal, plus the bank-shot solver</td></tr>
+  <tr><td><span class="tag t-del">DELETE</span></td><td><code>ObjectiveBotBrain.ts</code> (634 lines)</td><td>Priority rules</td><td>Replaced by mind + executors</td></tr>
+  <tr><td><span class="tag t-del">DELETE</span></td><td><code>BotManeuver</code>, <code>BotAttention</code>, <code>BotPurposefulHolding</code>, <code>BotZoneHolding</code>, <code>BotOpportunisticFire</code>, <code>BotExperiments</code></td><td>Patch layers and A/B modes</td><td>Gone; their good ideas become executors</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2><span class="n">07</span>Failure modes, written first</h2>
+<p>Each one gets its guard before the code it guards. The deterministic ones get a failing test first.</p>
+<table>
+  <tr><th>What could go wrong</th><th>Guard</th></tr>
+  <tr><td>Jev is slow, down or rate-limited</td><td>Rat keeps its last goal; the code mind answers after 600 ms; exponential backoff on 429</td></tr>
+  <tr><td>An answer arrives after the world changed</td><td>Serial and age check (≤ 1.5 s); target must still be alive and in view; otherwise dropped</td></tr>
+  <tr><td>Parallel questions disagree (goal: case, place: alley)</td><td>One place question per goal; code uses the place the goal implies</td></tr>
+  <tr><td>Rats flip-flop between goals</td><td>Hysteresis: switch only when the new goal wins by a margin or an event fires</td></tr>
+  <tr><td>Every bot does the same thing</td><td>Cast weights plus sampling from the probabilities instead of always taking the top answer</td></tr>
+  <tr><td>A player names themselves to steer the bots</td><td>Rats are sent as r1..r9; chosen names never reach Jev</td></tr>
+  <tr><td>Bots get too good</td><td>Skill lives in the motor: reaction delay, aim error, fire cap. Their hit rate stays under the human median on the map</td></tr>
+  <tr><td>Bots cheat with knowledge a human lacks</td><td>Perception gives what a human gets: sight, the Hunch, sounds, the HUD's case marker</td></tr>
+  <tr><td>Cost runs away</td><td>Jev only with humans; daily cap; per-room cadence; tokens logged per decision</td></tr>
+  <tr><td>The game stalls</td><td>Executors always move forward; the 30 s and 90 s rescues stay; the case recovery stays</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2><span class="n">08</span>How we'll know it works</h2>
+<div class="grid g3">
+  <div class="card"><h3>Baseline (no soaks)</h3><p>Today's bots are already recorded on layout 3 in production. The <code>/map</code> digest gives their numbers before any change: time per place, deaths, fire and hit rates, banked-hit share, stuck anomalies.</p></div>
+  <div class="card"><h3>Decision facts</h3><p>Every decision is recorded: mind (Jev or code), goal and its top probabilities, confidence, latency, tokens, dropped as stale or not, and whether the goal was achieved.</p></div>
+  <div class="card"><h3>Bots against humans</h3><p>Per place: do bots go where humans go and die where humans die? Tryhards should look like humans; the target is humanlike, not optimal.</p></div>
+</div>
+<p class="note">The repeatable artifact at the end: a receipt with the baseline digest, the new digest, the decision stats (goal mix per personality, latency p50 and p90, dollars per hour, fallback share) and the side-by-side maps.</p>
+
+<!-- ============================================================ -->
+<h2><span class="n">09</span>Order of work</h2>
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+  A["0 · Offline test<br/>Jev on real recorded moments from city.db<br/>latency from a Worker"] --> B
+  B["1 · Spec with Tyler<br/>goal list, cast weights, skill dials,<br/>what Jev decides and what code decides"] --> C
+  C["2 · Baseline<br/>today's bots from production's layout-3 data"] --> D
+  D["3 · Motor and code mind<br/>Intent type, executors, bank solver;<br/>old brain deleted"] --> E
+  E["4 · Jev mind<br/>perception text, questions, async client,<br/>freshness, fallback, budget, cast"] --> F
+  F["5 · Recorder and /map<br/>decision facts, a Minds layer"] --> G
+  G{"6 · Private hosted preview<br/>Tyler plays and watches in observe mode"} -- "tune" --> E
+  G -- "Tyler: send it" --> H["7 · Production<br/>secret, deploy, Jev only with humans"]
+  H --> I["Week of data: tune cast and dials<br/>one change at a time"]
+  classDef gate fill:#3f1a1a,stroke:#d8433b,color:#fff;
+  class G gate;
+</pre></div>
+
+<!-- ============================================================ -->
+<h2><span class="n">10</span>How the bots keep getting better</h2>
+<p class="lede" style="color:var(--text)">Every game played teaches the bots something. Each decision is recorded with what happened next, so we can see which choices worked and which didn't. Then we change something, test the change against thousands of real recorded moments, ship it as a new version and measure again. The loop never stops, and it gets faster as the data grows.</p>
+
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+  PLAY(["Humans play<br/>against the bots"]) --> REC["Record<br/>every decision + what happened next:<br/>goal reached? died? scored? got a kill?"]
+  REC --> MEAS["Measure<br/>/map and the digest:<br/>bots against humans, place by place"]
+  MEAS --> PROP["Propose one change<br/>with predictions<br/>(an agent can draft it)"]
+  PROP --> TEST["Replay test<br/>ask the new version about<br/>recorded moments; nothing gets worse"]
+  TEST --> PREV{"Private preview<br/>Tyler plays"}
+  PREV -- "not yet" --> PROP
+  PREV -- "ship" --> VER["New mindVersion<br/>stamped on every decision"]
+  VER --> PLAY
+  classDef gate fill:#3f1a1a,stroke:#d8433b,color:#fff;
+  class PREV gate;
+</pre></div>
+
+<div class="grid g3" style="margin-top:16px">
+  <div class="card"><h3>1 · Every game is data</h3><p>Every decision fact carries its outcome, so after a week of play we can answer questions like "do Tryhards who chase the carrier through the precinct yard die more often than ones who wait at the lineup-room stairs?" The answers are the evidence for the next change.</p></div>
+  <div class="card"><h3>2 · The test set grows by itself</h3><p>Recorded moments become the exam. Before a change ships, the new question wording or weights are replayed against them, and good calls that stop being made show up before any player sees them. More play makes a bigger exam.</p></div>
+  <div class="card"><h3>3 · The free bots inherit it</h3><p>The code mind that runs the empty city can copy what Jev chose in recorded situations. As the Jev bots get smarter, the $0 living city gets smarter too, without calling Jev.</p></div>
+</div>
+
+<h3 style="margin-top:28px">What gets tuned</h3>
+<table>
+  <tr><th>Knob</th><th>What changing it does</th><th>How it's checked</th></tr>
+  <tr><td>Question wording and criteria</td><td>Sharper judgments: spells out the edge cases where Jev read us too literally</td><td>Replay test against recorded moments</td></tr>
+  <tr><td>What perception tells Jev</td><td>Adds what mattered and removes noise (Jev does worse with details that don't matter)</td><td>Replay test, then outcome rates</td></tr>
+  <tr><td>Cast weights</td><td>How bold, sneaky or chaotic each personality is</td><td>Goal mix and outcomes per personality on /map</td></tr>
+  <tr><td>Skill dials</td><td>Reaction, aim error, fire cap: how hard the bots are</td><td>Bot hit rate stays under the human median</td></tr>
+  <tr><td>Code mind</td><td>Better empty-city bots by imitating Jev's recorded choices</td><td>Agreement with Jev on recorded moments</td></tr>
+  <tr><td>A learned layer (later, optional)</td><td>A small model trained on Jev's probabilities plus real outcomes, to weight answers by what actually wins (TypeSafe's own cookbook shows this pattern)</td><td>Held-out recorded games</td></tr>
+  <tr><td>New Jev releases</td><td>TypeSafe improves the model itself; we move up from the pinned version when we choose</td><td>The whole replay test, before switching</td></tr>
+</table>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card"><h3>"Better" means more fun, not stronger</h3><p>Success is measured on the humans: longer sessions, more rounds, players who come back, fights spread around the city. The bots aim to play like people, including the 10% who just want chaos. Base bots never outplay Tyler; a nightmare tier would be a separate dial.</p></div>
+  <div class="card"><h3>One change at a time</h3><p>Like <code>layoutVersion</code> for the city, every decision carries a <code>mindVersion</code>, and each version changes one thing. So every improvement (or mistake) shows up cleanly in the data and can be undone. An agent can run most of the loop; Tyler decides what ships.</p></div>
+</div>
+<p class="note">What doesn't change: Jev's own weights. TypeSafe doesn't retrain Jev on customer data; you shape it through what you send it. So the tuning happens in everything around the model: the questions, the situation text, the weights and the code. That's also what keeps every step measurable and reversible.</p>
+
+<p class="muted" style="margin-top:40px">Numbers marked "measured" come from <code>output/jev-probe/probe.mjs</code> run from Halla on 29 September 2026 against <code>jev-1.13.0</code>; latency from inside a Cloudflare Worker is not yet measured. Personality names are working names.</p>
+</main>
+
+<script>
+  // Cast demo: Jev's goal probabilities for one situation, reweighted per personality in code.
+  const raw = { take_case: .05, fight: .62, ambush: .18, flee: .06, mischief: .06, heal: .03 };
+  const weights = {
+    Tryhard: { sharpen: 3, boost: {} },
+    Maverick: { sharpen: 1, boost: { ambush: 4 } },
+    Gremlin: { sharpen: 1, boost: { mischief: 12 } },
+  };
+  const reweigh = ({ sharpen, boost }) => {
+    const w = Object.fromEntries(Object.entries(raw).map(([k, p]) => [k, Math.pow(p, sharpen) * (boost[k] ?? 1)]));
+    const sum = Object.values(w).reduce((a, b) => a + b, 0);
+    return Object.fromEntries(Object.entries(w).map(([k, v]) => [k, v / sum]));
+  };
+  const row = (label, dist) => {
+    const top = Object.entries(dist).sort((a, b) => b[1] - a[1])[0][0];
+    return `<h3 style="margin:14px 0 6px">${label}</h3><div class="bars">` + Object.entries(dist).map(([k, p]) =>
+      `<span>${k}</span><div style="display:flex;align-items:center;gap:8px"><div class="bar${k === top ? " win" : ""}" style="width:${(p * 100).toFixed(1)}%"></div><span class="muted">${p.toFixed(2)}</span></div>`).join("") + "</div>";
+  };
+  document.getElementById("cast").innerHTML = row("Jev's answer", raw) + Object.entries(weights).map(([n, w]) => row(n, reweigh(w))).join("");
+</script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: true, theme: "dark", securityLevel: "loose", deterministicIds: true, deterministicIDSeed: "bot-plan",
+    themeVariables: { background: "#121a26", primaryColor: "#172233", primaryTextColor: "#d9e2ef", primaryBorderColor: "#2a3a52",
+      lineColor: "#8fa1ba", secondaryColor: "#1f2e44", tertiaryColor: "#121a26", fontFamily: "system-ui, sans-serif", fontSize: "16px",
+      clusterBkg: "#0f1622", clusterBorder: "#3a4f6e", titleColor: "#e8c547", edgeLabelBackground: "#121a26",
+      noteBkgColor: "#2a2412", noteTextColor: "#e8c547", noteBorderColor: "#6b5a22",
+      pie1: "#7aa7e8", pie2: "#e8c547", pie3: "#d8433b", pieTitleTextColor: "#d9e2ef", pieSectionTextColor: "#0b0f16", pieLegendTextColor: "#d9e2ef",
+      xyChart: { plotColorPalette: "#e8c547", backgroundColor: "#121a26", titleColor: "#d9e2ef", xAxisLabelColor: "#d9e2ef", yAxisLabelColor: "#d9e2ef", xAxisTitleColor: "#d9e2ef", yAxisTitleColor: "#d9e2ef" } },
+  });
+</script>
+</body>
+</html>
