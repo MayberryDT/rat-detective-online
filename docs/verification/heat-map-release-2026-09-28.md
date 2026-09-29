@@ -81,3 +81,11 @@ Production after the deploy:
 - `/api/city/v1/events` returned 401 without the token, and with it returned round, case, Dispatch, damage, death, spawn and heal facts.
 
 **Limit:** fire rate and place measures only count from this deploy. The earlier heat rows have presence and deaths but no shots.
+
+## Follow-up: recorder fixes from Tyler's first session (Worker `a57db85b-bad7-483d-9dbf-51368235a768`, 2026-09-29)
+
+Deployed on Tyler's OK ("go ahead and deploy that"). Worker only: the client stays `index-BqZFQ1Ko.js`, protocol 22.
+- **Death cause:** every death had been filed as `missile`, because every shot carries the ball's travel direction (`incoming`, used for ragdolls). Causes are now `shot`, `headshot`, `explosion` or `city`. A room test fails on the old code.
+- **Sight:** a rival counts as visible out to 150 units (was 60); situations add `nearestVisible`.
+- **Banked hits:** the recorder counts world bounces per ball; hits after at least one bounce count as `bank-hits-human`/`bank-hits-bot`, a human's ball facts carry `bounces`, and the digest reports the banked share.
+- **Checked:** worker suite 199 passed and typecheck on Halla; after deploy, `/status` served the canonical room with 8 bots and the digest printed the new "Banked off a wall" line.
