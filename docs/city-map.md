@@ -220,7 +220,7 @@ Query the mirror with `read output/city/city.db?q=SELECT …`.
 - **Analyse:** the static analyses (travel-time fields, exposure, chokepoints, vertical access).
 - **Design:** a proposal drawn over today's city, with its static analyses compared side by side. After it ships, before and after telemetry.
 
-The brainstorm sketch (`output/city-map/city-map.html`: docks, precinct, north sewer branches) moves into Design mode as the first proposal.
+The brainstorm sketch (`output/city-map/city-map.html`: the docks, the Panopticon precinct, north sewer branches, the Gate–precinct route, cut junction corners, landmark bank walls, the Needleworks chute and Ironclad moves; agreed 2026-09-29, see [the juice plan](juice-plan.md)) moves into Design mode as the first proposal. The redesign runs as a loop for at least a week: change, measure, change again, one `layoutVersion` per round.
 
 ## The design loop
 
