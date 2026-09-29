@@ -4,6 +4,8 @@ Verified from source and production through **2026-09-27** (juice release, proto
 
 ## Seventh batch, title and load time — 28 September production (protocol 22)
 
+Heat map follow-up (Worker `7e1cfa2c-2f60-4d11-852c-8b150525457c`, same client and protocol): the canonical city records where rats spend time, die and kill, served at `/api/heat/v1`; see [the receipt](verification/heat-map-release-2026-09-28.md).
+
 Worker `d05432f7-17b9-47f5-9d9b-973548da9e01` (client `index-BBYLGu_G.js`): corpses are real ragdolls; nine Dispatch alarm pillars with a red bell (hit from any side, 21 s LINE BUSY, the caller gets a supply and the DISPATCHER award); the Carbon scrawl HUD and one motion kit; the round end is a 5 s card and lineup then a 10 s results board. The title is a rendered detective's office with live paper, effects and a desk phone. Loading no longer freezes the title, and Enter reaches play sooner. See [the receipt](verification/seventh-batch-release-2026-09-28.md).
 
 ## Launchers, ragdolls and pressure machines — 28 September production (protocol 21)
