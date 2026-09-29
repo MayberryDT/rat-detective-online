@@ -25,9 +25,9 @@ For a quick look without playing, the **feel workshop** fires each effect on dem
 
 Private hosted fixture (production matchmaking, server bots, 10-rat cap, audible), serving this branch's client and Worker:
 
-- **Play:** http://127.0.0.1:5193/?room=graybox-benchmark-match-ui-dispatch-r2 on Veelox. Add `&feel=off` to compare, `&feel=dev` for the switches.
-- **Fixture:** Worker `rat-detective-capacity-test`, version `4d36bfa7-ee64-4a2d-b155-a0f01603ccdc` (seventh batch plus the evidence-wall title, Carbon scrawl HUD and 5 s + 10 s round end; protocol 22, client `index-2N0BOxl9.js`). It expires about **6:00 PM PDT, 28 September**.
-- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-28T22-01-35-121Z/deployment.json`.
+- **Play:** http://127.0.0.1:5193/?room=graybox-benchmark-match-ui-dispatch-r3 on Veelox. Add `&feel=off` to compare, `&feel=dev` for the switches.
+- **Fixture:** Worker `rat-detective-capacity-test`, version `cecdd3b1-6b40-430b-9351-3b252784060f` (seventh batch plus the evidence-wall title, Carbon scrawl HUD and 5 s + 10 s round end; protocol 22, plus the rendered title, new logo and settings polish; client `index-2EmYaFJA.js`). It expires about **10:20 PM PDT, 28 September**.
+- **Deploy receipt:** `output/hosted-capacity-deployment-2026-09-29T01-22-10-459Z/deployment.json`.
 - **Smoke-tested:** a scripted client joined through the relay: protocol 22, seed 341283204, 9 server bots plus the client; within seconds it saw a bot's Dispatch call on the wire (`caller` set, Blackout active, then cooldown). The scripted client acknowledges every frame and gets disconnected after 5–30 s (relay backpressure or the room's inbound budget); that is the throwaway client, not the game client.
 
 **If the preview has expired**, build and redeploy, then start the relay again:
@@ -35,7 +35,7 @@ Private hosted fixture (production matchmaking, server bots, 10-rat cap, audible
 ```sh
 npm run build
 node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=9 --cap=10
-node scripts/preview-capacity.mjs --deployment=/absolute/path/to/new/deployment.json --port=5193 --room=graybox-benchmark-match-ui-dispatch-r2
+node scripts/preview-capacity.mjs --deployment=/absolute/path/to/new/deployment.json --port=5193 --room=graybox-benchmark-match-ui-dispatch-r3
 ```
 
 ## What each item does and how to see it
