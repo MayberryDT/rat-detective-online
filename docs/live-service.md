@@ -7,7 +7,7 @@ Last release receipt: **2026-09-27**. [Juice release, protocol 19](verification/
 | Canonical URL | https://ratdetective.online/ |
 | Redirect | https://rat-detective.animasai.co → canonical host, preserving path/query |
 | Production Worker | `rat-detective-preview`, environment `production` |
-| Last deployed version | `a9947e28-19c3-441f-8acf-dd1695ab25b4` — fifth and sixth juice batches (launchers, ragdolls, living model, launcher machines, pressure triggers, Pressure Surge); protocol 21, `index-BaXSTxLx.js` / `createGame-DgyKh_2W.js`; [receipt](verification/juice-launchers-release-2026-09-28.md) |
+| Last deployed version | `d05432f7-17b9-47f5-9d9b-973548da9e01` — seventh juice batch (ragdolls, Dispatch pillars, UI motion and Carbon scrawl HUD, faster round end), the rendered title and the load-time pass; protocol 22, `index-BBYLGu_G.js` / `createGame-CTaM3s-B.js`; [receipt](verification/seventh-batch-release-2026-09-28.md). Predecessor `a9947e28-19c3-441f-8acf-dd1695ab25b4` (protocol 21) |
 | Previous version | `48fb6913-82c5-443c-8794-6c03c91a7800` — optimization overhaul; protocol 20; rollback needs care (see receipt) |
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 2; seed persisted for the room (recorded public seed: 341283204) |

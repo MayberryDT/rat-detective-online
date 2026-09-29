@@ -2,6 +2,10 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Seventh batch, title and load time — 28 September production (protocol 22)
+
+Worker `d05432f7-17b9-47f5-9d9b-973548da9e01` (client `index-BBYLGu_G.js`): corpses are real ragdolls; nine Dispatch alarm pillars with a red bell (hit from any side, 21 s LINE BUSY, the caller gets a supply and the DISPATCHER award); the Carbon scrawl HUD and one motion kit; the round end is a 5 s card and lineup then a 10 s results board. The title is a rendered detective's office with live paper, effects and a desk phone. Loading no longer freezes the title, and Enter reaches play sooner. See [the receipt](verification/seventh-batch-release-2026-09-28.md).
+
 ## Launchers, ragdolls and pressure machines — 28 September production (protocol 21)
 
 Worker `a9947e28-19c3-441f-8acf-dd1695ab25b4` (client `index-BaXSTxLx.js`): each launcher machine throws its own

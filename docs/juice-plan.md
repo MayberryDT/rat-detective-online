@@ -211,9 +211,9 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
   - **Status (2026-09-28):** Tyler said to do all of it on a branch, including the physics restructure ("we can fine tune the physics later"). Done on `perf/overhaul`, merged and **released to production** on his OK ("this feels a million times better"), Worker `48fb6913-82c5-443c-8794-6c03c91a7800`: server warm tick −80%, client 30→43 fps hosted on Halla. See [the overhaul receipt](verification/perf-overhaul-2026-09-28.md). Shadow freezing/removal were measured and left for Tyler to choose.
 - **3D model and ragdoll overhaul.** Done as the fifth batch (M1–M3, R1–R3); ragdolls reopened above.
 
-## Seventh batch: UI, Dispatch and ragdolls (brainstorming, 2026-09-28)
+## Seventh batch: UI, Dispatch and ragdolls (released 2026-09-28)
 
-Tyler wants all three worked at the same time. **Still brainstorming: nothing is implemented until he says so.**
+Tyler wanted all three worked at the same time. **Released to production (2026-09-28)** with the title and load-time pass on Tyler's OK ("push it live"): Worker `d05432f7-17b9-47f5-9d9b-973548da9e01`, protocol 22. See [the receipt](verification/seventh-batch-release-2026-09-28.md).
 
 - **Ragdolls, confirmed direction:** the corpse must stop reading as a rigid cylinder flicked like a salt shaker. R1 a soft skinned spine in the coat (hips, belly, chest, head) so the body bends; R2 a client-only point-chain ragdoll (hips, chest, head, feet, arm, tail) with ground and wall collision, following the server corpse's position, replacing the rigid spin; R3 go limp first (knees buckle, fold at the waist, limbs trail); R4 land like a sack (belly flattens, head bounces, sprawl, a last twitch); R5 shots ripple and fold the body where hit. Legs (R6) undecided.
 - **UI, confirmed direction:** all of U1–U9 (one noir look and one motion kit that honours Reduced interface motion; title desk and swoop into the city; case-folder settings and pause; rolling numbers, sliding ranks, points flying to the score card, urgent timer; telegram kill feed; reactive crosshair; death camera before RAT DOWN; Case File awards stamping in; paper-slide scoreboard, card exits, springy touch controls). No separate health display. Tyler will judge it by playing.
@@ -283,10 +283,10 @@ Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning 
 
 - **Noir pass and first-review choices:** settled 2026-09-28. Tyler delegated these calls ("make choices on that stuff… if something's wrong, I'll tell you"); every choice in [the review guide](juice/review.md#choices-to-confirm) stays as built.
 - **Dropped by Tyler (2026-09-28):** production CPU measurement and further speed work. Shadow freezing/removal is not pursued.
-- **Open (2026-09-28):** UI overhaul, Dispatch overhaul and ragdolls revisited, worked together as the seventh batch (brainstorming now); the bot overhaul after.
+- **Open (2026-09-28):** the bot overhaul and the city and building model overhaul (which carries the load-time lessons). The seventh batch (UI, Dispatch, ragdolls) is released.
 
 ## Evidence
 
 - Current game: [current state](current-state.md), [documentation map](README.md).
-- Last release (server CPU and delivery gating): [receipt](verification/server-cpu-2026-09-27.md).
+- Last release (seventh batch, title and load time): [receipt](verification/seventh-batch-release-2026-09-28.md).
 - Reference only: [2026-09-12 animation handoff](handoffs/animation-polish-2026-09-12.md) (rig map and hazards), [foley history](chaos-foley.md), [player settings](player-settings.md).
