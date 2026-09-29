@@ -41,6 +41,18 @@ export const MUNICIPAL_QUIPS = {
         '{name} has been professionally compressed.',
         'The case promoted {name} to floor manager.',
     ],
+    drowned: [
+        '{name} went to sleep with the fishes.',
+        'The harbour took {name}\'s statement. Permanently.',
+        '{name} is helping the Port Authority with its inquiries. Underwater.',
+        '{name} found the bottom of the case. And the harbour.',
+        'The tide rolled in. {name} did not roll out.',
+        '{name} was last seen doing the backstroke into eternity.',
+        'The water was cold. So is the case on {name}.',
+        '{name} tried to walk on water. The water objected.',
+        '{name} was filed under WET WORK.',
+        'The harbour master logged {name} as cargo, lost at sea.',
+    ],
     death: ['A MINOR CAREER SETBACK.', 'TEMPORARILY OUT OF OFFICE.', 'YOUR PENSION IS UNDER REVIEW.', 'UNSCHEDULED FLOOR INSPECTION.', 'PLEASE RESUBMIT YOURSELF.', 'ANOTHER WORKPLACE INCIDENT.', 'HORIZONTAL. STILL EMPLOYED.', 'THE REPORT WILL BE UNFLATTERING.', 'PAID LEAVE DENIED.', 'YOUR HAT HAS FILED A COMPLAINT.', 'CURRENTLY BETWEEN HEARTBEATS.', 'OFFICER DOWN. MORALE UNCLEAR.'],
     victory: ['PROMOTED?!', 'MANAGEMENT HAS QUESTIONS.', 'EMPLOYEE OF THE INCIDENT.', 'A RAISE IS NOT GUARANTEED.', 'YOUR METHODS WERE NOTED.', 'SOMEHOW, THIS COUNTS.', 'CORNER OFFICE. NO WINDOWS.', 'OUTSTANDING QUESTIONABLE CONDUCT.', 'THE MAYOR DENIES INVOLVEMENT.', 'PLEASE TRAIN YOUR REPLACEMENT.', 'A MODEL OF MUNICIPAL EFFICIENCY.', 'THE PAPERWORK CHECKS OUT.'],
     casePickup: [
@@ -110,6 +122,7 @@ export class MunicipalQuips {
     private readonly last=new Map<keyof typeof MUNICIPAL_QUIPS,string>();
     constructor(private readonly random= Math.random){}
     caseDeath(name:string):string{return this.next('caseDeath').replace(/\{name\}/g,()=>name);}
+    drowned(name:string):string{return this.next('drowned').replace(/\{name\}/g,()=>name);}
     next(kind:keyof typeof MUNICIPAL_QUIPS):string {
         let bag=this.bags.get(kind);
         if(!bag?.length){

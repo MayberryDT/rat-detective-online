@@ -602,10 +602,11 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const id = nonEmptyString(parsed.id, 64);
       const hp = boundedInteger(parsed.hp, 0, MAX_HP);
       const attackerId = nonEmptyString(parsed.attackerId, 64);
-      const environmental=parsed.cause==='evidence-tampering'&&parsed.attackerId===null;
+      const cause=parsed.cause==='evidence-tampering'||parsed.cause==='drowned'?parsed.cause:undefined;
+      const environmental=!!cause&&parsed.attackerId===null;
       if (!id || hp === null || (!environmental&&!attackerId) ||
           (parsed.cause!==undefined&&!environmental)) return null;
-      return { type: 'playerDamaged', id, hp, attackerId, ...(environmental?{cause:'evidence-tampering' as const}:{}) };
+      return { type: 'playerDamaged', id, hp, attackerId, ...(environmental?{cause}:{}) };
     }
     case 'playerHealed': {
       const id = nonEmptyString(parsed.id, 64);
@@ -619,13 +620,14 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const killerName = typeof parsed.killerName === 'string' && parsed.killerName.length <= 32 ? parsed.killerName : null;
       const victimName = typeof parsed.victimName === 'string' && parsed.victimName.length <= 32 ? parsed.victimName : null;
       const respawnAt = integer(parsed.respawnAt);
-      const environmental=parsed.cause==='evidence-tampering'&&parsed.killerId===null&&parsed.killerName===null;
+      const cause=parsed.cause==='evidence-tampering'||parsed.cause==='drowned'?parsed.cause:undefined;
+      const environmental=!!cause&&parsed.killerId===null&&parsed.killerName===null;
       if (!victimId || (!environmental&&(!killerId||killerName===null)) || victimName === null || respawnAt === null ||
           (parsed.cause!==undefined&&!environmental)) return null;
       const incoming=parsed.incoming===undefined?undefined:parseVec3(parsed.incoming);
       if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean') || (parsed.headshot!==undefined&&parsed.headshot!==true))return null;
       return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
-        ...(environmental?{cause:'evidence-tampering' as const}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}) };
+        ...(environmental?{cause}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}) };
     }
     case 'scoreboardUpdate': {
       const scores = parseScores(parsed.scores);

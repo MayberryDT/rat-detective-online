@@ -161,6 +161,8 @@ export type ClientMessage = (
 
 /** Why a rat was healed: a Quick Fix, Clean Bill, or a Most Wanted bounty. */
 export type HealCause = 'pickup' | 'incident' | 'bounty';
+/** A death nobody is credited with: a runaway case missile, or the harbour. */
+export type EnvironmentCause = 'evidence-tampering' | 'drowned';
 export type ServerMessage =
   | { type: 'chaos'; state: ChaosState }
   | {
@@ -209,14 +211,14 @@ export type ServerMessage =
       rewindMs?:number; targetDelta?:number }
   | { type:'pickupResult'; interactionId:string; target:PickupTarget; targetId:string; accepted:boolean; at:number; tick:number;
       epoch:string; playerId:string; pickup?:import('./pickups').PickupKind; effectUntil?:number; reason?:PickupRejectReason }
-  | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: 'evidence-tampering' }
+  | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: EnvironmentCause }
   | { type: 'playerHealed'; id: string; hp: number; cause?: HealCause }
   | {
       type: 'playerDied';
       victimId: string;
       killerId: string | null;
       killerName: string | null;
-      cause?: 'evidence-tampering';
+      cause?: EnvironmentCause;
       victimName: string;
       respawnAt: number;
       incoming?: Vec3Data;

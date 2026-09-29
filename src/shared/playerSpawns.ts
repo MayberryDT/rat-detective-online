@@ -3,12 +3,14 @@ import { CITY_BOUNDS, GRAYBOX_VERSION, grayboxBoxes, isRampOpening } from './gra
 import type { Vec3Data } from './networkProtocol';
 import { boxHalfExtents } from './boxFrame';
 import { DEFAULT_CITY_OPTIONS, generateBuildingLayout, overlapsBuildingFootprint, type WorldSpec } from './worldSpec';
+import { kitCity } from './city/kit/city';
+import { inside } from './city/kit/northPlan';
 
 // Reuse geometry work across joins and respawns without retaining every room seed.
 const pools = new Map<string, readonly Vec3Data[]>();
 const MAX_CACHED_WORLDS = 4;
 
-/** Street-level starts with body clearance, outside sewer openings and controls. */
+/** Street-level starts with body clearance, outside sewer openings, controls and the harbour (piers included: never a start at the water's edge). */
 export function worldSpawnPoints(spec: WorldSpec): readonly Vec3Data[] {
   const key = `${spec.version}:${spec.seed}`;
   const cached = pools.get(key);
@@ -19,10 +21,12 @@ export function worldSpawnPoints(spec: WorldSpec): readonly Vec3Data[] {
     for (const control of [...DISPATCH_STATIONS, ...LAUNCH_MACHINES]) {
       for (const b of [control.box, control.target]) boxes.push({x:b.x,y:b.y,z:b.z,hx:b.w/2,hy:b.h/2,hz:b.d/2});
     }
+    const water = kitCity({visuals:false}).water;
     for (let z=CITY_BOUNDS.min+24; z<=CITY_BOUNDS.max-24; z+=8) {
       for (let x=CITY_BOUNDS.min+24; x<=CITY_BOUNDS.max-24; x+=8) {
         if ([-1.2,0,1.2].some(dx => [-1.2,0,1.2].some(dz => isRampOpening(x+dx,z+dz)))) continue;
         if (boxes.some(b => b.y+b.hy>=.5 && b.y-b.hy<=4.4 && Math.abs(x-b.x)<b.hx+1.2 && Math.abs(z-b.z)<b.hz+1.2)) continue;
+        if (water.some(w => inside(w, x, z, 2))) continue;
         if (LAUNCH_MACHINES.some(m => Math.hypot(x-m.pad.x,z-m.pad.z)<m.pad.radius+1.2)) continue;
         points.push(Object.freeze({x,y:2,z}));
       }

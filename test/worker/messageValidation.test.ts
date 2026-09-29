@@ -214,11 +214,11 @@ describe('parseServerMessage', () => {
     ).toMatchObject({ type: 'playerDied', respawnAt: 123 });
   });
 
-  it('accepts explicit environmental deaths while rejecting mixed or missing attribution',()=>{
-    const death={type:'playerDied',victimId:'v',victimName:'Captain Crawley',killerId:null,killerName:null,cause:'evidence-tampering',respawnAt:1000};
+  it.each(['evidence-tampering','drowned'])('accepts explicit environmental deaths (%s) while rejecting mixed or missing attribution',cause=>{
+    const death={type:'playerDied',victimId:'v',victimName:'Captain Crawley',killerId:null,killerName:null,cause,respawnAt:1000};
     expect(parseServerMessage(death)).toEqual(death);
     for(const patch of [{cause:undefined},{cause:'unknown'},{killerId:'a'},{killerName:'A'}])expect(parseServerMessage({...death,...patch})).toBeNull();
-    const damage={type:'playerDamaged',id:'v',hp:0,attackerId:null,cause:'evidence-tampering'};
+    const damage={type:'playerDamaged',id:'v',hp:0,attackerId:null,cause};
     expect(parseServerMessage(damage)).toEqual(damage);
     expect(parseServerMessage({...damage,cause:undefined})).toBeNull();
     expect(parseServerMessage({...damage,attackerId:'a'})).toBeNull();

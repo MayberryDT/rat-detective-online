@@ -120,6 +120,8 @@ Each workstream lists what it delivers and how it is proven. The order is the bu
 - Long sightlines with enough cover to cross them.
 - Jobs: a Paper Chase destination (harbour master?), case spawns, a Jurisdiction zone (the quay), supplies, a Dispatch pillar, spawn points.
 - Sewer branch under x 70 ending at the docks.
+- **As built (kit part `docks`, `src/shared/city/kit/parts/docks*.ts`):** three timber piers (x −18, 18, 70) to z −193; the freighter *Marlowe* in the berth (gangway, main deck y 4, bridge deck y 9, wheelhouse roof y 13.3); two gantry cranes with a stair tower to the boom walkway (y 18.6); the container yard; the Pier 9 warehouse (mezzanine y 5.6, harbour master's office); the east breakwater and lighthouse; a dressed sea wall on the harbour's outer edges. Every stair climbs at most about 22°: steeper ramps are not walkable for rats or bots. Job slots are exported as `DOCKS_JOBS`; its Hot Pursuit on the quay replaces `pursuit-north-avenue`.
+- **Water (D1):** the client draws `kitCity().water` with `HarbourWater` (one standard material, drifting ripple normals, baked glints and foam). The server drowns a living rat whose feet are inside a water rectangle below `DROWN_Y` (`drowned()` in `city.ts`, checked on every movement report, humans and server bots): no credit, a death, cause `drowned` on the wire (`city` in the recorder) and a harbour joke in the feed. Spawns keep 2 units clear of the water; cases and corpses that sink below y −9 are recovered or cleared.
 
 ### W5. The Panopticon precinct
 - Front house on the −102 street:
