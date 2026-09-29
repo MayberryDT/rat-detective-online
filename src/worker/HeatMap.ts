@@ -18,11 +18,23 @@ const MIN_CELL = Math.floor((CITY_BOUNDS.min - MARGIN) / HEAT_CELL);
 const MAX_CELL = Math.floor((CITY_BOUNDS.max + MARGIN) / HEAT_CELL);
 const inCity = (i: number) => Number.isInteger(i) && i >= MIN_CELL && i <= MAX_CELL;
 
+const SPAN = MAX_CELL - MIN_CELL + 1;
+
+/** The cell a position falls in as a number (-1 when unusable or far outside the city), so hot
+ * paths can count cells without building the key; `heatCellKey` turns it into `floor:ix:iz`. */
+export function heatCellIndex(x: number, y: number, z: number): number {
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return -1;
+  const ix = Math.floor(x / HEAT_CELL), iz = Math.floor(z / HEAT_CELL);
+  return inCity(ix) && inCity(iz) ? (FLOORS.indexOf(cityFloor(y)) * SPAN + ix - MIN_CELL) * SPAN + iz - MIN_CELL : -1;
+}
+
+export const heatCellKey = (index: number): string =>
+  `${FLOORS[Math.floor(index / (SPAN * SPAN))]}:${Math.floor(index / SPAN) % SPAN + MIN_CELL}:${index % SPAN + MIN_CELL}`;
+
 /** The cell a position falls in, or null when it is unusable or far outside the city. */
 export function heatCell(x: number, y: number, z: number): string | null {
-  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
-  const ix = Math.floor(x / HEAT_CELL), iz = Math.floor(z / HEAT_CELL);
-  return inCity(ix) && inCity(iz) ? `${cityFloor(y)}:${ix}:${iz}` : null;
+  const index = heatCellIndex(x, y, z);
+  return index < 0 ? null : heatCellKey(index);
 }
 
 export function validHeatKey(key: string): boolean {

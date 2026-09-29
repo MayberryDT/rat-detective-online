@@ -4,8 +4,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { CameoKind } from './cameos/CameoRatModel';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import spiderAsset from './cameos/exports/spider-rat.glb?url';
-import batAsset from './cameos/exports/bat-rat.glb?url';
+// The game's own gzipped copies through the game's reader, so this page shows what players are sent.
+import spiderAsset from '../../src/assets/cameos/spider-rat.glb.gz?url';
+import batAsset from '../../src/assets/cameos/bat-rat.glb.gz?url';
+import { readCameoAsset } from '../../src/cameos/loadCameos';
+import spiderDownload from './cameos/exports/spider-rat.glb?url';
+import batDownload from './cameos/exports/bat-rat.glb?url';
 import { CameoAnimator, CAMEO_DURATIONS, CAMEO_REACTIONS, type CameoReaction } from './cameos/CameoAnimator';
 import { disposeMeshResources } from '../../src/utils/disposeMeshResources';
 
@@ -72,13 +76,15 @@ function releaseSubject(subject:ReturnType<typeof setup>){
     subject.renderer.dispose();subject.renderer.domElement.remove();
 }
 function showError(error:unknown){el('error').hidden=false;el('error').textContent=`Could not show the models: ${error instanceof Error?error.message:String(error)}`;}
-async function loadSubject(kind:CameoKind,url:string){
+async function loadSubject(kind:CameoKind,url:string,download:string){
     const viewport=el(`${kind}-viewport`);
     let subject:ReturnType<typeof setup>|undefined;
     viewport.setAttribute('aria-busy','true');el(`${kind}-stats`).textContent='Loading…';
-    viewport.closest('section')!.querySelector<HTMLAnchorElement>('.download')!.href=url;
+    viewport.closest('section')!.querySelector<HTMLAnchorElement>('.download')!.href=download;
     try{
-        const asset=await new GLTFLoader().loadAsync(url);
+        const response=await fetch(url);
+        if(!response.ok)throw new Error(`HTTP ${response.status}`);
+        const asset=await new GLTFLoader().parseAsync(await readCameoAsset(response),'');
         if(disposed){disposeMeshResources(asset.scene);return;}
         subject=setup(kind,asset.scene);subjects.push(subject);
         subject.controls.autoRotate=turning;
@@ -163,5 +169,5 @@ function dispose(){
 addEventListener('pagehide',dispose,{once:true});
 addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 if(import.meta.hot)import.meta.hot.dispose(dispose);
-void loadSubject('spider',spiderAsset);
-void loadSubject('bat',batAsset);
+void loadSubject('spider',spiderAsset,spiderDownload);
+void loadSubject('bat',batAsset,batDownload);

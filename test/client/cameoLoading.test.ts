@@ -1,16 +1,18 @@
 /// <reference types="node" />
 import {afterEach,expect,it,vi} from 'vitest';
 import {readFile} from 'node:fs/promises';
+import {gunzipSync} from 'node:zlib';
 import * as THREE from 'three';
 import {loadCameos,warmCameoBuffers} from '../../src/cameos/loadCameos';
 import {CameoView} from '../../src/cameos/CameoView';
 const fetchOriginal=globalThis.fetch;
 afterEach(()=>{globalThis.fetch=fetchOriginal;vi.restoreAllMocks();});
-it('loads both packed assets and keeps their accepted rig without procedural construction',async()=>{
+// The assets ship gzipped; a server that already decoded them (Content-Encoding: gzip) hands over the GLB itself.
+it.each([['gzipped',(data:Buffer)=>data],['already decoded by the server',(data:Buffer)=>gunzipSync(data)]])('loads both packed assets (%s) and keeps their accepted rig without procedural construction',async(_label,served)=>{
     globalThis.fetch=vi.fn(async(input)=>{
         const kind=String(input).includes('spider')?'spider':'bat';
-        const data=await readFile(`src/assets/cameos/${kind}-rat.glb`);
-        return new Response(data);
+        const data=await readFile(`src/assets/cameos/${kind}-rat.glb.gz`);
+        return new Response(new Uint8Array(served(data)));
     });
     const view=await loadCameos();expect(view?.root.children).toHaveLength(2);
     expect(view?.root.getObjectByName('scalloped-cape')).toBeDefined();

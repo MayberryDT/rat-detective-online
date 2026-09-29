@@ -12,6 +12,7 @@ const DISPATCH_STATION=DISPATCH_STATIONS[0]!,DISPATCH_SHOT={origin:{x:DISPATCH_S
 function same(world:C.World,index:SpatialRayQuery,from:C.Vec3,to:C.Vec3,mask=15){
  const expected=new C.RaycastResult();world.raycastClosest(from,to,{collisionFilterGroup:16,collisionFilterMask:mask,skipBackfaces:true},expected);
  const actual=index.closest(from,to,mask);
+ expect(index.blocked(from,to,mask)).toBe(expected.hasHit);
  expect(actual.hasHit).toBe(expected.hasHit);expect(actual.body).toBe(expected.body);expect(actual.shape).toBe(expected.shape);
  expect(actual.distance).toBeCloseTo(expected.distance,10);
  expect(actual.hitPointWorld.almostEquals(expected.hitPointWorld,1e-10)).toBe(true);
@@ -69,6 +70,23 @@ describe('exact spatial ray broadphase',()=>{
    expect(actual.hasHit).toBe(expected.hasHit);expect(actual.distance).toBe(expected.distance);
   }
  });
+ it('says a sight line is blocked exactly when the closest hit exists, across the whole city',()=>{
+  const world=new C.World();world.broadphase=new StaticCityBroadphase(world);
+  for(const b of grayboxBoxes()){
+   const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2)),position:new C.Vec3(b.x,b.y,b.z)});
+   body.quaternion.setFromEuler(b.rx,b.ry??0,b.rz);addCityBody(world,body);
+  }
+  const rat=new C.Body({type:C.Body.KINEMATIC,shape:new C.Sphere(.6),position:new C.Vec3(-16,.6,-28)});world.addBody(rat);
+  const query=new SpatialRayQuery(world);query.refresh();
+  let seed=11;const random=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+  const point=()=>new C.Vec3(-196+random()*362,-8+random()*40,-196+random()*362);
+  // Long diagonal sight lines, axis-aligned ones (a zero extent on two axes), grazing ones, and lines through the rat.
+  const lines:[C.Vec3,C.Vec3][]=Array.from({length:3000},()=>{const from=point(),to=from.vadd(new C.Vec3((random()-.5)*300,(random()-.5)*20,(random()-.5)*300));return [from,to];});
+  lines.push([new C.Vec3(-100,1.5,-18),new C.Vec3(60,1.5,-18)],[new C.Vec3(-16,1.5,-100),new C.Vec3(-16,1.5,60)],[new C.Vec3(-16,-20,-28),new C.Vec3(-16,40,-28)],[new C.Vec3(-30,.6,-28),new C.Vec3(0,.6,-28)]);
+  let blocked=0;
+  for(const [from,to] of lines){const hit=query.closest(from,to,1).hasHit;expect(query.blocked(from,to,1)).toBe(hit);if(hit)blocked++;}
+  expect(blocked).toBeGreaterThan(300);expect(blocked).toBeLessThan(lines.length-300);
+ });
  it('keeps the exact original SAP contact pair sequence across axes, filters and sleeping bodies',()=>{
   const world=new C.World();const original=new C.SAPBroadphase(world),optimized=new StaticCityBroadphase(world);
   original.useBoundingBoxes=optimized.useBoundingBoxes=true;
@@ -117,6 +135,9 @@ describe('exact spatial ray broadphase',()=>{
   body.position.set(10,0,0);body.updateAABB();index.refresh();same(world,index,from,to);
   body.type=C.Body.KINEMATIC;index.refresh();body.position.set(0,0,0);body.updateAABB();same(world,index,from,to);
   world.removeBody(body);same(world,index,from,to);
+  // A static wall that was indexed, then taken out of the world.
+  const wall=new C.Body({mass:0,shape:new C.Box(new C.Vec3(.1,2,2))});world.addBody(wall);same(world,index,from,to);
+  world.removeBody(wall);same(world,index,from,to);
   world.broadphase=new C.NaiveBroadphase();world.addBody(body);same(world,index,from,to);
  });
  it('matches the complete real-map 120-ball burst trajectory and physical aftermath',()=>{

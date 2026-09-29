@@ -1,11 +1,20 @@
 /// <reference types="vite/client" />
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import spiderAsset from '../assets/cameos/spider-rat.glb?url';
-import batAsset from '../assets/cameos/bat-rat.glb?url';
+// Gzipped: Cloudflare serves .glb uncompressed, and these two are 870 KB raw, 281 KB gzipped.
+import spiderAsset from '../assets/cameos/spider-rat.glb.gz?url';
+import batAsset from '../assets/cameos/bat-rat.glb.gz?url';
 import {CameoView} from './CameoView';
 import type {CameoKind} from './cameoLayout';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
+
+/** A cameo model's GLB bytes: the gzipped asset unpacked by the browser's own decoder, or passed through
+ * when a server already decoded it (sent `Content-Encoding: gzip`). */
+export async function readCameoAsset(response:Response):Promise<ArrayBuffer>{
+    const bytes=await response.arrayBuffer(),head=new Uint8Array(bytes,0,Math.min(2,bytes.byteLength));
+    if(head[0]!==0x1f||head[1]!==0x8b)return bytes;
+    return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+}
 
 /** Start beside city preparation. Missing cosmetic assets never reject entry. */
 export async function loadCameos(signal?:AbortSignal):Promise<CameoView|undefined>{
@@ -19,7 +28,7 @@ export async function loadCameos(signal?:AbortSignal):Promise<CameoView|undefine
             try{
                 const response=await fetch(url,{signal:abort.signal});
                 if(!response.ok)throw new Error(`HTTP ${response.status}`);
-                const asset=await new GLTFLoader().parseAsync(await response.arrayBuffer(),'');
+                const asset=await new GLTFLoader().parseAsync(await readCameoAsset(response),'');
                 if(abort.signal.aborted){disposeMeshResources(asset.scene);return;}
                 models.set(kind,asset.scene);
             }catch(error){if(!abort.signal.aborted)console.warn(`Could not load ${kind} cameo`,error);}

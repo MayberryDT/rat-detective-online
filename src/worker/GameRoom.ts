@@ -1653,7 +1653,7 @@ export class GameRoom extends DurableObject<Env> {
     if (this.sightQuery?.world !== world) { this.sightQuery?.query.dispose(); this.sightQuery = { world, query: new SpatialRayQuery(world), refreshedAt: 0 }; }
     const sight = this.sightQuery, now = this.now();
     if (now - sight.refreshedAt >= 1000) { sight.query.refresh(); sight.refreshedAt = now; }
-    return !sight.query.closest(new CANNON.Vec3(from.x, from.y, from.z), new CANNON.Vec3(to.x, to.y, to.z), 1).hasHit;
+    return !sight.query.blocked(new CANNON.Vec3(from.x, from.y, from.z), new CANNON.Vec3(to.x, to.y, to.z), 1);
   }
 
   /** The city map's aggregates over UTC days `from`–`to`, unflushed counts included (docs/city-map.md). */

@@ -10,7 +10,9 @@
 //   --ref      build src/ from that commit instead of the working tree
 //   --profile  write a V8 CPU profile and an allocation sampling profile of the tick loop
 //   --profile-from=<tick>  start profiling after warm-up (default 0)
-//   --city     also run the city map recorder (docs/city-map.md) and report its cost and archive volume
+//   --city     also run the city map recorder (docs/city-map.md) as GameRoom builds it (solids, line of sight)
+//              and report its cost, archive volume and a hash of every fact and aggregate it recorded
+//   --human    with --city, the recorder counts rd-ai-0 as a connected human (1 Hz frames, human facts)
 import {build} from 'esbuild';
 import {execFileSync} from 'node:child_process';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -21,40 +23,48 @@ import {parseArgs} from 'node:util';
 import {Session} from 'node:inspector/promises';
 
 const {values}=parseArgs({options:{scenario:{type:'string',default:'idle'},bots:{type:'string',default:'9'},
-    recipients:{type:'string',default:'1'},ticks:{type:'string',default:'1800'},ref:{type:'string'},profile:{type:'boolean',default:false},'profile-from':{type:'string',default:'0'},city:{type:'boolean',default:false},label:{type:'string'}}});
+    recipients:{type:'string',default:'1'},ticks:{type:'string',default:'1800'},ref:{type:'string'},profile:{type:'boolean',default:false},'profile-from':{type:'string',default:'0'},city:{type:'boolean',default:false},human:{type:'boolean',default:false},label:{type:'string'}}});
 const scenario=values.scenario,bots=Number(values.bots),recipients=Number(values.recipients);
 if(!['idle','burst'].includes(scenario))throw Error('scenario must be idle or burst');
 const root=process.cwd(),out=resolve(root,'test-results/server-tick');await mkdir(out,{recursive:true});
 const ref=values.ref&&execFileSync('git',['rev-parse',values.ref],{encoding:'utf8'}).trim();
 const label=values.label??`${ref?ref.slice(0,7):'worktree'}-${scenario}`;
 const outfile=resolve(out,`runtime-${ref?ref.slice(0,12):'worktree'}.mjs`);
-await build({stdin:{contents:"export {CityRecorder} from './src/worker/city/CityRecorder.ts';export {grayboxBoxes} from './src/shared/grayboxLayout.ts';export {ServerBotController} from './src/worker/ServerBotController.ts';export {ChaosSimulation} from './src/shared/ChaosSimulation.ts';export {createPlayer} from './src/worker/gameState.ts';export {prepareChaos} from './src/shared/chaosWire.ts';export {ChaosDelivery} from './src/worker/ChaosDelivery.ts';",resolveDir:root,loader:'ts'},
+await build({stdin:{contents:"export {CityRecorder} from './src/worker/city/CityRecorder.ts';export {grayboxBoxes,GRAYBOX_VERSION} from './src/shared/grayboxLayout.ts';export {SpatialRayQuery} from './src/shared/SpatialRayQuery.ts';export {ServerBotController} from './src/worker/ServerBotController.ts';export {ChaosSimulation} from './src/shared/ChaosSimulation.ts';export {createPlayer} from './src/worker/gameState.ts';export {prepareChaos} from './src/shared/chaosWire.ts';export {ChaosDelivery} from './src/worker/ChaosDelivery.ts';",resolveDir:root,loader:'ts'},
     outfile,bundle:true,packages:'external',platform:'node',format:'esm',logLevel:'error',define:{'performance.now':'__simClock'},
     plugins:ref?[{name:'ref',setup(b){b.onLoad({filter:/\/src\/.*\.ts$/},args=>({contents:execFileSync('git',['show',`${ref}:${relative(root,args.path)}`],{encoding:'utf8'}),loader:'ts'}));}}]:[]});
 // Deterministic randomness, installed before any module captures Math.random.
 let seed=341283204;Math.random=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
 let simClock=0,uuid=0;globalThis.__simClock=()=>simClock;
 globalThis.crypto.randomUUID=()=>`00000000-0000-4000-8000-${String(++uuid).padStart(12,'0')}`;
-const {ServerBotController,ChaosSimulation,createPlayer,prepareChaos,ChaosDelivery,CityRecorder,grayboxBoxes}=await import(pathToFileURL(outfile)+'?'+Date.now());
-const {ObjectCollisionMatrix}=await import('cannon-es');
+const {ServerBotController,ChaosSimulation,createPlayer,prepareChaos,ChaosDelivery,CityRecorder,grayboxBoxes,GRAYBOX_VERSION,SpatialRayQuery}=await import(pathToFileURL(outfile)+'?'+Date.now());
+const {ObjectCollisionMatrix,Vec3}=await import('cannon-es');
 
-const spec={seed:341283204,version:2};
+// The live city layout (rooms run GRAYBOX_VERSION; older versions are the retired procedural city).
+const spec={seed:341283204,version:GRAYBOX_VERSION};
 const ids=Array.from({length:bots},(_,i)=>`rd-ai-${i}`);
 const players=new Map(ids.map((id,i)=>[id,createPlayer(id,`Rat ${i}`,{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},{x:-100+i*4,y:2,z:-18})]));
 const sim=new ChaosSimulation(players,()=>{},undefined,spec);
 // Sparse contact history, as GameRoom set it before ChaosSimulation did (keeps --ref A/B fair).
 sim.world.collisionMatrix=new ObjectCollisionMatrix();sim.world.collisionMatrixPrevious=new ObjectCollisionMatrix();
 let shot=0;
-// --city: the recorder with a no-op store and an archive that keeps each line (compression is timed after the loop).
-const archivedLines=[];
-const city=values.city?new CityRecorder({room:'bench',layout:()=>2,isBot:()=>true,connected:()=>true,
-    store:{addCell(){},addPlace(){},addFlow(){},addEvent(){},pruneEvents(){}},
+// --city: the recorder as GameRoom builds it, with a store and an archive that keep what they are given
+// (compression and hashing happen after the loop).
+const archivedLines=[],stored=[];
+const sight=values.city?{query:new SpatialRayQuery(sim.world),refreshedAt:-Infinity}:null;
+const city=values.city?new CityRecorder({room:'bench',layout:()=>GRAYBOX_VERSION,isBot:id=>!values.human||id!==ids[0],connected:()=>true,
+    store:{addCell:(...a)=>stored.push(['cell',...a]),addPlace:(...a)=>stored.push(['place',...a]),addFlow:(...a)=>stored.push(['flow',...a]),addEvent:(...a)=>stored.push(['event',...a]),pruneEvents(){}},
     archive:{push:f=>archivedLines.push(JSON.stringify(f)),due:()=>false,flush(){},settled:async()=>{}},
-    solids:grayboxBoxes(spec).filter(b=>!b.rx&&!b.rz&&b.w>=.5&&b.h>=.5&&b.d>=.5)}):null;
+    // GameRoom.lineOfSight: the chaos world's bodies, the index refreshed at most once a second (`closest` before `blocked` existed).
+    sight:(from,to)=>{if(simClock-sight.refreshedAt>=1000){sight.query.refresh();sight.refreshedAt=simClock;}const a=new Vec3(from.x,from.y,from.z),b=new Vec3(to.x,to.y,to.z);
+        return !(sight.query.blocked?sight.query.blocked(a,b,1):sight.query.closest(a,b,1).hasHit);},
+    solids:grayboxBoxes(spec).filter(b=>!b.rx&&!b.ry&&!b.rz&&!b.passBalls&&b.w>=.5&&b.h>=.5&&b.d>=.5)}):null;
 const round={phase:'playing'};
+// The recorder's shot hook runs inside the bots' step; its time is moved from bots to city.
+let shotMs=0;
 const controller=()=>new ServerBotController(spec,ids,{
     move:(id,p)=>Object.assign(players.get(id),p),
-    shoot:(id,origin,direction)=>{sim.shoot(id,{shotId:`shot-${shot++}`,origin,direction});city?.shot(players.get(id),direction,simClock);},
+    shoot:(id,origin,direction)=>{sim.shoot(id,{shotId:`shot-${shot++}`,origin,direction});if(city){const at=clock();city.shot(players.get(id),direction,simClock);shotMs+=ms(at,clock());}},
 });
 let bot=controller();
 const delivery=Array.from({length:recipients},()=>new ChaosDelivery(true));
@@ -82,14 +92,14 @@ for(let tick=0;tick<TICKS;tick++){
     if(tick===RECREATE){bot.dispose();bot=controller();}
     // Improper Disposal / Planted Evidence eruption beside a rotating bot.
     if(scenario==='burst'&&tick%BURST_EVERY===45){const p=players.get(ids[bursts++%ids.length]);sim.cheeseBurst({x:p.x,y:p.y+1,z:p.z},null);}
-    const now=1000+tick*1000/30,c=cost[tick];simClock=now;
+    const now=1000+tick*1000/30,c=cost[tick];simClock=now;shotMs=0;
     for(let s=0;s<2;s++){
         const stepAt=now-(1-s)*1000/60;
         let at=clock();bot.step(1/60,stepAt,players,state,true);c.bots+=ms(at,clock());
         at=clock();sim.step(1/60,stepAt,true);c.chaos+=ms(at,clock());
     }
     let at=clock();state=sim.snapshot();c.snapshot=ms(at,clock());
-    if(city){at=clock();city.balls(sim.drainShotEvents(),now);city.tick(now,players,state,round);c.city=ms(at,clock());}
+    if(city){c.bots-=shotMs;at=clock();city.balls(sim.drainShotEvents(),now);city.tick(now,players,state,round);c.city=ms(at,clock())+shotMs;}
     at=clock();
     if(delivery.length){const prepared=prepareChaos(state);
         for(const d of delivery){const payload=d.offer(state,now,prepared);if(payload)bytes+=payload.length;d.acknowledge({type:'chaosAck',stream:d.lastFrame.ack.stream,seq:d.lastFrame.seq});}}
@@ -103,12 +113,18 @@ for(let tick=0;tick<TICKS;tick++){
 bot.dispose();
 let cityReport;
 if(city){
+    city.flush(simClock);sight.query.dispose();
     // Everything the archive buffered, compressed the way CityArchive does, extrapolated to a day.
     const {gzipSync}=await import('node:zlib');const lines=archivedLines;
     const raw=lines.join('\n');let at=clock();const gz=gzipSync(raw);const gzMs=ms(at,clock());
     const simSeconds=TICKS/30,day=86400/simSeconds;
     const byType={};for(const l of lines){const t=JSON.parse(l).type;byType[t]=+((byType[t]??0)+l.length*day/1e6).toFixed(1);}
-    cityReport={facts:lines.length,rawMBPerDayByType:byType,rawMBPerDay:+(raw.length*day/1e6).toFixed(1),gzMBPerDay:+(gz.length*day/1e6).toFixed(1),gzipMsPerDay:+(gzMs*day).toFixed(0)};
+    // Equal hashes prove a recorder change kept every fact (in order) and every aggregate total (in any flush order).
+    const totals=new Map(),events=[];
+    for(const [kind,...a] of stored){if(kind==='event'){events.push(JSON.stringify(a));continue;}const n=a.pop(),key=JSON.stringify([kind,...a]);totals.set(key,(totals.get(key)??0)+n);}
+    const digest=text=>createHash('sha256').update(text).digest('hex').slice(0,16);
+    cityReport={facts:lines.length,factsHash:digest(raw),aggregates:totals.size,aggregatesHash:digest([...totals].map(([k,n])=>`${k}=${n}`).sort().join('\n')),eventsHash:digest(events.join('\n')),
+        rawMBPerDayByType:byType,rawMBPerDay:+(raw.length*day/1e6).toFixed(1),gzMBPerDay:+(gz.length*day/1e6).toFixed(1),gzipMsPerDay:+(gzMs*day).toFixed(0)};
 }
 const files={};
 if(session){
@@ -121,8 +137,10 @@ if(session){
     await writeFile(files.summary,JSON.stringify({cpuSelf:cpuSelf(profile),allocations:heapSelf(heap)},null,2));
 }
 const sum=(a,b,k)=>cost.slice(a,b).reduce((t,c)=>t+c[k],0);
+// The recorder's share of the tick after the first 300 ticks' warm-up (docs/city-map.md: at most 1%).
+const citySharePct=city?+(100*sum(300,TICKS,'city')/parts.reduce((t,k)=>t+sum(300,TICKS,k),0)).toFixed(2):undefined;
 const result={label,scenario,bots,recipients,ref:ref??'worktree',peakBalls:peak,shots:shot,bursts,avgFrameBytes:recipients?Math.round(bytes/TICKS/recipients):0,
-    trajectory:hash.digest('hex').slice(0,16),profiled:!!session,...(cityReport?{city:cityReport}:{}),
+    trajectory:hash.digest('hex').slice(0,16),profiled:!!session,...(cityReport?{city:{citySharePct,...cityReport}}:{}),
     windows:Object.fromEntries(windows.map(([a,b])=>[`${a}-${b}`,Object.fromEntries(parts.map(k=>[k,+(sum(a,b,k)/(b-a)).toFixed(3)])
         .concat([['totalPerTickMs',+(parts.reduce((t,k)=>t+sum(a,b,k),0)/(b-a)).toFixed(3)]]))])),files};
 await writeFile(resolve(out,`${label}.json`),JSON.stringify(result,null,2)+'\n');

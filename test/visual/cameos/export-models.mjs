@@ -1,5 +1,6 @@
 import { build } from 'vite';
 import { mkdir, writeFile, cp } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -62,8 +63,9 @@ for(const kind of ['spider','bat']){
   }
   const filename=`${kind}-rat.glb`;
   await writeFile(resolve(output,filename),buffer);
+  // The game copy ships gzipped (Cloudflare leaves .glb uncompressed); GNU gzip -9 packs these ~14% smaller than Node's zlib.
   const gameAssets=resolve(here,'../../../src/assets/cameos');
-  await mkdir(gameAssets,{recursive:true});await writeFile(resolve(gameAssets,filename),buffer);
+  await mkdir(gameAssets,{recursive:true});await writeFile(resolve(gameAssets,`${filename}.gz`),execFileSync('gzip',['-9','-n','-c'],{input:buffer}));
   manifest.models.push({kind,filename,bytes:buffer.length,meshes,triangles,size:size.toArray(),bounds:{min:bounds.min.toArray(),max:bounds.max.toArray()},gltfMeshes:gltf.meshes.length,roundtripBoundsVerified:true,roundtripAnimationPosesVerified:true,animations:roundtrip.animations.map(clip=>({name:clip.name,duration:clip.duration,tracks:clip.tracks.length}))});
 }
 await writeFile(resolve(output,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
