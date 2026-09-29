@@ -27,10 +27,10 @@ function availableNames(excluded: Iterable<string>): string[] {
     .filter(name => name.length <= NAME_MAX_LENGTH && !skip.has(name));
 }
 
-function assignBotSlots(start: number, end: number, excludedNames: Iterable<string>, random: () => number): PersistentBot[] {
+function assignBots(entries: readonly PersistentBot[], excludedNames: Iterable<string>, random: () => number): PersistentBot[] {
   const available = availableNames(excludedNames);
   const appearances = Array.from({ length: APPEARANCE_COUNT }, (_, index) => index);
-  return PERSISTENT_BOT_ROSTER.slice(start, end).map(entry => {
+  return entries.map(entry => {
     const index = Math.floor(random() * available.length);
     const [name] = available.splice(index, 1);
     const [appearanceIndex] = appearances.splice(Math.floor(random() * appearances.length), 1);
@@ -40,7 +40,7 @@ function assignBotSlots(start: number, end: number, excludedNames: Iterable<stri
 
 /** Sample without replacement, so even a constant RNG cannot repeat names. */
 export function createRoundBotRoster(previousNames: Iterable<string> = [], random = Math.random): PersistentBot[] {
-  return assignBotSlots(0, rollBotCount(random), previousNames, random);
+  return assignBots(PERSISTENT_BOT_ROSTER.slice(0, rollBotCount(random)), previousNames, random);
 }
 
 /** Keep overlapping rats and their names; only newcomers get fresh names. */
@@ -52,5 +52,17 @@ export function nextRoundBotRoster(
   const count = rollBotCount(random);
   const keep = previous.slice(0, Math.min(previous.length, count)).map(bot => ({ ...bot }));
   if (keep.length === count) return keep;
-  return keep.concat(assignBotSlots(keep.length, count, [...reservedNames, ...keep.map(bot => bot.name)], random));
+  return keep.concat(assignBots(PERSISTENT_BOT_ROSTER.slice(keep.length, count), [...reservedNames, ...keep.map(bot => bot.name)], random));
+}
+
+/** Top a roster up to `target` from the free slots; existing rats keep their ids and names. */
+export function fillBotRoster(
+  roster: readonly PersistentBot[],
+  target: number,
+  reservedNames: Iterable<string> = [],
+  random = Math.random,
+): PersistentBot[] {
+  const used = new Set(roster.map(bot => bot.id));
+  const free = PERSISTENT_BOT_ROSTER.filter(bot => !used.has(bot.id)).slice(0, Math.max(0, target - roster.length));
+  return roster.concat(assignBots(free, [...reservedNames, ...roster.map(bot => bot.name)], random));
 }

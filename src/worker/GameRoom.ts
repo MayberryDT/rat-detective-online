@@ -42,7 +42,7 @@ import {
 import { log } from './logging';
 import { RoomDiagnostics } from './RoomDiagnostics';
 import { ServerBotController } from './ServerBotController';
-import { createRoundBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
+import { createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { logClientDiagnostics, allowsLocalDiagnostics } from './clientDiagnostics';
 import { companionProjectionDue, companionProjectionSignature, projectCompanionRoom } from './companionStatus';
@@ -370,11 +370,7 @@ export class GameRoom extends DurableObject<Env> {
       for (const {id} of removed) this.removePlayerById(id, true);
       this.botRoster = this.botRoster.slice(0, target);
     } else if (this.botRoster.length < target) {
-      const used = new Set(this.botRoster.map(bot => bot.id));
-      const fresh = createRoundBotRoster([...this.players.values()].map(player => player.name));
-      for (const bot of fresh) {
-        if (!used.has(bot.id) && this.botRoster.length < target) this.botRoster.push(bot);
-      }
+      this.botRoster = fillBotRoster(this.botRoster, target, [...this.players.values()].map(player => player.name));
     }
     if (rosterChanged) this.writeRoomState(BOT_ROSTER_KEY, JSON.stringify(this.botRoster));
     if (humans) { if (rosterChanged || !this.serverBots) this.activatePersistentBots();

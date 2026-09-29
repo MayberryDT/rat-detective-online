@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRoundBotRoster, nextRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
+import { createRoundBotRoster, fillBotRoster, nextRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
 import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from '../../src/shared/ratNames';
 
 describe('round bot roster', () => {
@@ -28,5 +28,17 @@ describe('round bot roster', () => {
     const shrunk = nextRoundBotRoster(grown, grown.map(bot => bot.name), () => 0);
     expect(shrunk).toHaveLength(6);
     expect(shrunk.map(bot => bot.name)).toEqual(grown.slice(0, 6).map(bot => bot.name));
+  });
+  // Failure modes: a small fresh roll leaves the room short of its rolled count;
+  // a refill renames or re-ids a rat that stayed; a newcomer reuses a live name.
+  it('refills to the target from free slots even when a fresh roll would be small', () => {
+    const seven = nextRoundBotRoster(createRoundBotRoster([], () => 0), [], () => 0.25);
+    const filled = fillBotRoster(seven, 9, ['Human Name'], () => 0);
+    expect(filled.map(bot => bot.id)).toEqual(PERSISTENT_BOT_IDS.slice(0, 9));
+    expect(filled.slice(0, 7)).toEqual(seven);
+    expect(new Set([...filled.map(bot => bot.name), 'Human Name']).size).toBe(10);
+    const gap = fillBotRoster(seven.filter(bot => bot.id !== 'rd-ai-02'), 7, [], () => 0);
+    expect(gap.map(bot => bot.id).sort()).toEqual(PERSISTENT_BOT_IDS.slice(0, 7));
+    expect(fillBotRoster(seven, 5)).toEqual(seven);
   });
 });

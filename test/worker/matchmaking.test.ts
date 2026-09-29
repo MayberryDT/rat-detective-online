@@ -44,7 +44,7 @@ afterEach(async()=>{
       const game=instance as any;
       if(game.chaosTimer)clearInterval(game.chaosTimer);
       game.chaosTimer=null;game.preparedBots?.dispose();game.preparedBots=null;game.preparedUntil=0;game.serverBots?.dispose();game.serverBots=null;game.persistentBots=false;game.matchRoom=null;game.refillAt=0;
-      game.players?.clear();game.botRoster=[];
+      game.players?.clear();game.botRoster=[];game.roundBotCount=0;
       ctx.storage.sql.exec('DELETE FROM players');
       ctx.storage.sql.exec("DELETE FROM room_state WHERE key IN ('match-room-v1','persistent-bots-v1','persistent-bot-roster-v1','round-bot-count-v1','match-pool-v1')");
       return ctx.storage.deleteAlarm();
@@ -183,7 +183,8 @@ describe('automatic public room population',()=>{
       if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;
     });
     await evictDurableObject(stub);
-    expect((await stub.status()).bots).toBe(bots);
+    // A rolled nine fills the room with the first human, so the second human's join kicked one bot.
+    expect((await stub.status()).bots).toBe(Math.min(bots,MAX_PLAYERS-2));
     await close(second.ws);
     expect(first.messages.some(m=>m.type==='playerLeft'&&m.id===second.welcome!.id)).toBe(false);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
