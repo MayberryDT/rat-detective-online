@@ -3,6 +3,8 @@ import type { IncidentId } from './incidentCatalog';
 import type { AssignmentState } from './assignments';
 import type { WorldFoleyCue } from './foleyEvents';
 import type { BuffMap, PickupState } from './pickups';
+import { DOCKS_JOBS } from './city/kit/parts/docks';
+import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
 export const CHAOS_TUNING = {
     pickupRadius: 2.25, formerCarrierDelay: 900,
@@ -28,16 +30,19 @@ export const COUNTERFEIT_IDS = ['fake-01','fake-02','fake-03','fake-04','fake-05
     'fake-06','fake-07','fake-08','fake-09','fake-10'] as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
 export const CASE_LOOSE_SCALE = 2;
-// Street-level frontages distributed around the city; the simulation verifies
-// floor support and clearance against the current world's actual collision boxes.
+// Street-level frontages distributed around the city, and the north's slots from its kit
+// parts; the simulation verifies floor support and clearance against the actual collision boxes.
 export const CASE_SPAWNS = [CASE_HOME,
     {x:22,y:1.3,z:-28},{x:82,y:1.3,z:-24},{x:-55,y:1.3,z:25},
     {x:-166,y:1.3,z:35},{x:130,y:1.3,z:-24},{x:15,y:1.3,z:135},
     {x:-75,y:1.3,z:-87},{x:77,y:1.3,z:75},{x:-105,y:1.3,z:120},
     {x:46,y:1.3,z:53},{x:138,y:1.3,z:135},
     {x:-9.8,y:1.3,z:-28},{x:115,y:1.3,z:-22},{x:-110,y:1.3,z:118},
-    {x:145,y:1.3,z:128},{x:-150,y:1.3,z:18},
+    {x:145,y:1.3,z:128},{x:-150,y:1.3,z:17},
     {x:0,y:-5.7,z:0},{x:-84,y:-5.7,z:0},{x:48,y:-5.7,z:0},
+    // Gate Lane, south of its zone.
+    {x:-137,y:1.3,z:-40},
+    ...DOCKS_JOBS.caseSpawns,...PRECINCT_JOBS.caseSpawns,
 ] as const;
 export const CASE_SIZE = { x: .82, y: .62, z: .34 };
 // Hang from the unused hand, with the broad face running along the rat's side.
@@ -48,12 +53,15 @@ export const CASE_CARRY_ROTATION = { x: 0, y: Math.SQRT1_2, z: 0, w: Math.SQRT1_
  * the call box's yaw (radians, 0 faces +z). `box` is the iron post and call box;
  * `target` is the bell and its housing, a cube shootable from any side. */
 export const DISPATCH_STATIONS = [
-    // Street corners at each landmark, the central crossroads and the north avenue, one in the sewer.
+    // Street corners at each landmark, the central crossroads, the north avenue and the south
+    // avenue, one in the sewer, one on the quay and one upstairs in the precinct's radio room.
     { id:'records', x:-45, z:-28, face:-.98 }, { id:'icebox', x:99, z:-28, face:-.73 },
     { id:'needleworks', x:-121, z:122, face:0 }, { id:'pump', x:97, z:139, face:-.86 },
     { id:'gate', x:-155, z:-7, face:-2.4 }, { id:'crossroads', x:60, z:-27.5, face:.81 },
     { id:'avenue-east', x:79, z:-93, face:-2.36 }, { id:'avenue-west', x:-68, z:-93, face:2.42 },
     { id:'sewer', x:0, y:-7, z:40, bell:4.6, face:-1.57 },
+    { id:'south-avenue', x:28, z:126, face:0 },
+    DOCKS_JOBS.dispatch, PRECINCT_JOBS.dispatch,
 ].map(({id,x,y=0,z,bell=5.4,face=0}:{id:string;x:number;y?:number;z:number;bell?:number;face?:number})=>({id,x,y,z,bell,face,
     box:{x,y:y+(bell-1.3)/2,z,w:1.1,h:bell-1.3,d:1.1},
     target:{x,y:y+bell,z,w:2.6,h:2.6,d:2.6},

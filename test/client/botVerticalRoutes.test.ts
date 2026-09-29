@@ -55,6 +55,8 @@ it.each(BOT_LAUNCH_LINKS.filter(link=>PICKUP_ANCHORS.some(a=>a.kind==='ironclad'
     const now=1_000_000,spec={seed:341283204,version:2};vi.spyOn(Date,'now').mockReturnValue(now);vi.spyOn(Math,'random').mockReturnValue(.5);
     const bot=createPlayer('bot','Supply Inspector',DEFAULT_APPEARANCE,{x:link.machine.pad.x,y:0,z:link.machine.pad.z+6});
     const players=new Map([[bot.id,bot]]),sim=new ChaosSimulation(players,()=>{},undefined,spec);
+    // The case waits across the city, whichever spawn the draw picked: the armor is the nearer errand.
+    sim.caseBody.position.set(-16,1.3,-28);sim.caseBody.velocity.setZero();
     const id=sim.snapshot(false).pickups!.find(p=>p.kind==='ironclad'&&p.x===link.landing.x&&p.z===link.landing.z&&Math.abs(p.y-link.landing.y-.7)<.01)!.id;
     let shots=0,claimed=false,returned=false;
     const recover=vi.fn(),controller=new ServerBotController(spec,[bot.id],{

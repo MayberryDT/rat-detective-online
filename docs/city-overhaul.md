@@ -155,6 +155,29 @@ Each workstream lists what it delivers and how it is proven. The order is the bu
 - New street alleys north (x −20 and x 120).
 - Street names for guidance and places.
 - Proof: a static analysis per region (every job present, every site clear and reachable on foot from a spawn), and a bot-only soak on staging.
+- **As built (the registries):**
+  - `DOCKS_JOBS` and `PRECINCT_JOBS` are spliced into `CASE_SPAWNS` and `DISPATCH_STATIONS` (`chaosState.ts`), `PICKUP_ANCHORS` (`pickups.ts`), `JURISDICTION_ZONES` (`jurisdictionZones.ts`, ids `the-quay` and `precinct-yard`) and `ASSIGNMENT_DESTINATIONS` / `CHAIN_ROUTE` (`assignments.ts`, ids `harbour-master` and `precinct`). The registries import the part files; the parts import only types from them. Existing ids are unchanged; `pursuit-north-avenue` is gone (the quay's `pursuit-quay-west` replaces it).
+  - Gaps filled: a Gate Lane case spawn (−137, −40); three zones, `gate-lane` (the lane round the side-alley crossing, west), `south-crossing` (where the −60 avenue meets the south avenue, south) and `pier9-floor` (Pier 9's open bay under the roof trusses, enclosed, north-east); a `south-avenue` pillar at (28, 126).
+  - Moved to pass the simulation's own clearance check (the case's loose size against collider bounds), which had silently dropped them: the geyser-side spawn (−150, 18) to z 17, the Marlowe's deck spawn to x 119, the drunk-tank spawn to 16.6 from the ring's centre. The yard Quick Fix sits in the lane between the south stacks (−14, −117.5), an alley like every street Quick Fix.
+  - Totals: 30 case spawns, 16 supply sites (5 Ironclad, 4 Hot Pursuit, 7 Quick Fix), 12 pillars, 11 zones (7 outdoor, 4 enclosed), 8 destinations.
+  - Jurisdiction bags: each bag holds every zone once. The larger category opens every bag and the smaller is spread through it, never twice running; equal categories alternate strictly, as before. Stored bags are checked against that pattern and the zone count; a room stored with the old six-zone bag or six-stop route drops that assignment state (protocol 23 already breaks old rooms).
+  - Street directions: guidance gives the destination or zone, and the sewer's via labels; there is no street-name table, so nothing to add.
+  - Jobs per district (thirds of the city, `districtAt`); case spawns counted, other jobs named:
+
+    | District | Case spawns | Supplies | Pillars | Zones | Destinations | Launchers |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | north-west | 4 | alibi-precinct-armoury, fix-precinct-infirmary | precinct | precinct-yard | precinct | — |
+    | north | 4 | fix-container-yard, pursuit-quay-west | avenue-west | the-quay | — | — |
+    | north-east | 2 | alibi-icebox-upper | avenue-east, quay | pier9-floor | harbour-master | — |
+    | west | 4 | pursuit-gate-mouth, fix-gate-lane | gate | gate-lane | sluice | geyser |
+    | centre | 5 | alibi-records-upper, alibi-records-forecourt, fix-crossroads-west, fix-crossroads-east | records, sewer | records-forecourt, sewer-junction | records | dumpster |
+    | east | 4 | pursuit-icebox-mouth, fix-icebox-alley | icebox, crossroads | icebox-yard, central-crossroads | icebox, maintenance | freight, fan |
+    | south-west | 2 | pursuit-south-avenue | needleworks | needleworks-floor | needleworks | mousetrap |
+    | south | 1 | fix-south-central | south-avenue | south-crossing | — | — |
+    | south-east | 4 | alibi-pump-roof | pump | pump-floor | pump | pressure |
+
+  - Every district has a case spawn, a supply site and a pillar (live in every assignment) and a Jurisdiction zone. Still open: no Paper Chase destination in the north or the south (neither has an enterable room), and no launcher in the north-west, north, north-east or south.
+  - Proof: `test/client/cityJobs.test.ts` (every district's jobs; every case spawn supported and clear at the loose size; every new slot, zone post and approach walked to by `BotNavigation` from a street spawn; every destination entered from its approach), with the registry, zone, placement, bot-route and assignment suites on Halla.
 
 ### W7. Lighting and atmosphere for the new city
 - Street lamps, windows, signs, fixtures and facade beams in the docks and the precinct, within today's light budget (the four-spot actor pool, the fixture batches).

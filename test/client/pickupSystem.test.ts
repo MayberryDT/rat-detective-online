@@ -40,8 +40,9 @@ describe('pickup system',()=>{
         for(const a of armor)for(const b of armor)if(a!==b)expect(Math.hypot(a.x-b.x,a.z-b.z),`${a.id} / ${b.id}`).toBeGreaterThan(40);
         const blocked=(p:{x:number;y:number;z:number},dx:number,dz:number,reach:number)=>
             sim.world.raycastClosest(new C.Vec3(p.x,p.y+.3,p.z),new C.Vec3(p.x+dx*reach,p.y+.3,p.z+dz*reach),{collisionFilterMask:1});
-        for(const kit of kits){
-            // An alley: walls close on both sides of one axis, the other axis open to walk through.
+        // Street kits hide in alleys: walls close on both sides of one axis, the other axis open to
+        // walk through. (The precinct's infirmary kit is a cell open onto its gallery.)
+        for(const kit of kits.filter(k=>k.y<2)){
             const eastWest=blocked(kit,1,0,10)&&blocked(kit,-1,0,10),northSouth=blocked(kit,0,1,10)&&blocked(kit,0,-1,10);
             expect(eastWest!==northSouth,kit.id).toBe(true);
             const open=eastWest?[[0,1],[0,-1]]:[[1,0],[-1,0]];

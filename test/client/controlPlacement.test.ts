@@ -61,9 +61,11 @@ it('stands every Dispatch pillar on open pavement, clear of the city, launchers 
    expect(Math.hypot(s.x-m.box.x,s.z-m.box.z),`${s.id} near ${m.id}`).toBeGreaterThan(5);
   }
   for(const o of DISPATCH_STATIONS)if(o!==s)expect(Math.hypot(s.x-o.x,s.z-o.z),`${s.id} near ${o.id}`).toBeGreaterThan(25);
-  // Rat eyes 30 units out, in the open, that see the bell; two of them look along crossing streets.
+  // Rat eyes out in the open that see the bell (30 units out; across the room for a pillar upstairs
+  // indoors); two of them look along crossing streets or aisles.
+  const out=s.y>0?4:30;
   const views=Array.from({length:16},(_,a)=>a).filter(a=>{
-   const eye=new C.Vec3(s.x+Math.cos(a*Math.PI/8)*30,s.y+1.9,s.z+Math.sin(a*Math.PI/8)*30),hit=new C.RaycastResult();
+   const eye=new C.Vec3(s.x+Math.cos(a*Math.PI/8)*out,s.y+1.9,s.z+Math.sin(a*Math.PI/8)*out),hit=new C.RaycastResult();
    if(boxes.some(b=>Math.abs(eye.x-b.x)<b.w/2+.3&&Math.abs(eye.y-b.y)<b.h/2&&Math.abs(eye.z-b.z)<b.d/2+.3))return false;
    world.raycastClosest(eye,new C.Vec3(s.x,s.target.y,s.z),{},hit);return !hit.hasHit;
   });

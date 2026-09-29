@@ -65,12 +65,13 @@ describe('Dispatch assignment rules',()=>{
         expect(state.deliveries).toEqual({a:3,b:2});expect(state.result?.winnerId).toBe('a');
         expect(parseAssignment(state)).toEqual(state);
     });
-    it('keeps rotating random landmarks beyond six deliveries without an immediate repeat',()=>{
-        const {players,state}=fixture('chain-of-custody');players.set('c',createPlayer('c','C',appearance,{x:0,y:0,z:0}));
+    it('keeps rotating random landmarks beyond a whole bag of deliveries without an immediate repeat',()=>{
+        const {players,state}=fixture('chain-of-custody'),rats=['a','b','c','d'],n=CHAIN_ROUTE.length;
+        for(const id of ['c','d'])players.set(id,createPlayer(id,id.toUpperCase(),appearance,{x:0,y:0,z:0}));
         const rules=new AssignmentRules(state,players,()=>.12),route=[...state.destinations];
-        for(let i=0;i<6;i++)expect(rules.visit(['a','b','c'][i%3],destinationPoint(route[i],false),i+1)).toBe('delivered');
-        expect(state.deliveries).toEqual({a:2,b:2,c:2});expect(state.result).toBeUndefined();
-        expect(new Set(state.destinations)).toEqual(new Set(CHAIN_ROUTE));expect(state.destinations[0]).not.toBe(route[5]);
+        for(let i=0;i<n;i++)expect(rules.visit(rats[i%4],destinationPoint(route[i],false),i+1)).toBe('delivered');
+        expect(state.deliveries).toEqual({a:2,b:2,c:2,d:2});expect(state.result).toBeUndefined();
+        expect(new Set(state.destinations)).toEqual(new Set(CHAIN_ROUTE));expect(state.destinations[0]).not.toBe(route[n-1]);
         expect(parseAssignment(state)).toEqual(state);
         expect(rules.visit('b',destinationPoint(state.destinations[0],false),10)).toBe('closed');
     });
@@ -81,7 +82,7 @@ describe('Dispatch assignment rules',()=>{
         }
         expect(state.result).toBeUndefined();
     });
-    it('shuffles all six unique landmarks, including the last, and preserves the order on decode/restore',()=>{
+    it('shuffles every unique landmark, including the last, and preserves the order on decode/restore',()=>{
         const orders=new Set<string>(),finals=new Set<string>();
         let seed=123;
         const rng=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
@@ -91,10 +92,10 @@ describe('Dispatch assignment rules',()=>{
             expect(parseAssignment(state)).toEqual(state);expect(restoreAssignment(state,5000)).toEqual(state);
             orders.add(state.destinations.join(','));finals.add(state.destinations.at(-1)!);
         }
-        expect(orders.size).toBeGreaterThan(70);expect(finals.size).toBe(6);
+        expect(orders.size).toBeGreaterThan(70);expect(finals.size).toBe(CHAIN_ROUTE.length);
         const state=createAssignment('chain-of-custody',0);
-        expect(parseAssignment({...state,destinations:[...state.destinations.slice(0,5),state.destinations[0]]})).toBeNull();
-        expect(parseAssignment({...state,destinations:[...state.destinations.slice(0,5),'unknown']})).toBeNull();
+        expect(parseAssignment({...state,destinations:[...state.destinations.slice(0,-1),state.destinations[0]]})).toBeNull();
+        expect(parseAssignment({...state,destinations:[...state.destinations.slice(0,-1),'unknown']})).toBeNull();
     });
     it('scores exactly once at kill resolution, retains personal progress through death and theft',()=>{
         const {rules,state,first}=fixture('excessive-force');

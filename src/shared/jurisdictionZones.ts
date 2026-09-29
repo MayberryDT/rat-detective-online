@@ -1,5 +1,8 @@
 import type { Vec3Data } from './networkProtocol';
 import { sewerRampTravelPoint,SEWER_PIPE_ENTRANCES, sewerPipePoint } from './sewerLayout';
+import { DOCKS_JOBS } from './city/kit/parts/docks';
+import { PRECINCT_JOBS } from './city/kit/parts/precinct';
+import { PIER9 } from './city/kit/parts/docksWarehouse';
 
 export interface ZoneRect { xmin:number; xmax:number; zmin:number; zmax:number }
 export interface JurisdictionZone {
@@ -22,6 +25,17 @@ export const JURISDICTION_ZONES = {
         approaches:posts(.3,[[125,141],[125,95],[154,118]]),posts:posts(.3,[[125,120],[125,110],[136,120]])},
     'sewer-junction':{label:'SEWER JUNCTION',category:'enclosed',floor:'SEWER',floorY:-7,
         areas:[rect(-6,6,-6,6),rect(-16,16,-3.5,3.5),rect(-3.5,3.5,0,16)],exclusions:[],approaches:posts(-6.7,[[-22,0],[22,0],[0,22]]),posts:posts(-6.7,[[0,0],[-10,0],[10,0],[0,10]])},
+    ...DOCKS_JOBS.zone,
+    'precinct-yard':PRECINCT_JOBS.zone,
+    // The lane from the Gate to the precinct, round the side-alley crossing; the fire escapes start at 8.
+    'gate-lane':{label:'GATE LANE',category:'outdoor',floor:'STREET',floorY:0,
+        areas:[rect(-143,-131,-74,-44)],exclusions:[],approaches:posts(.3,[[-137,-92],[-137,-38],[-128,-65]]),posts:posts(.3,[[-137,-62],[-139,-68],[-135,-50]])},
+    // Where the -60 avenue meets the south avenue.
+    'south-crossing':{label:'SOUTH AVENUE CROSSING',category:'outdoor',floor:'STREET',floorY:0,
+        areas:[rect(-72,-48,124,136),rect(-66,-54,118,140)],exclusions:[],approaches:posts(.3,[[-60,106],[-84,130],[-36,130]]),posts:posts(.3,[[-60,130],[-66,130],[-54,130],[-60,121]])},
+    // Pier 9's open bay, between the mezzanine (y 5.6) along the south and the catwalk over the quay door.
+    'pier9-floor':{label:'PIER 9 WAREHOUSE FLOOR',category:'enclosed',floor:'GROUND FLOOR',floorY:0,
+        areas:[rect(PIER9.x0+8,122,-138.5,-122.3)],exclusions:[],approaches:posts(.3,[[109,-150],[99,-110],[142,-129]]),posts:posts(.3,[[110,-132],[105,-130],[113,-136]])},
 } as const satisfies Record<string,JurisdictionZone>;
 export type JurisdictionZoneId=keyof typeof JURISDICTION_ZONES;
 export const JURISDICTION_ZONE_IDS=Object.keys(JURISDICTION_ZONES) as JurisdictionZoneId[];

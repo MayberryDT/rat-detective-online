@@ -74,7 +74,7 @@ flowchart TB
 
 ## Layer 0: what is on the map today
 
-Counted from source on 2026-09-28, layout version 2:
+Counted from source on 2026-09-28, layout version 2; the job rows (pickup sites, pillars, case spawns, zones, destinations) recounted on 2026-09-29 after W6 of [the city overhaul](city-overhaul.md) spliced in the docks' and precinct's slots:
 
 | Entity | Count | Notes |
 | --- | --- | --- |
@@ -83,12 +83,12 @@ Counted from source on 2026-09-28, layout version 2:
 | Buildings (collision boxes marked building) | 94 | Of 1,411 collision boxes |
 | Landmark furnishings | 32 | Desks, crates, shelves |
 | Sewer halls / entrances | 10 / 4 + manhole | Entrances: Gate, Icebox, Alley, Needleworks; manhole at (72, 0) |
-| Pickup sites | 14 | 5 Ironclad (3 upstairs or roof, 1 sewer), 4 Hot Pursuit, 5 Quick Fix |
+| Pickup sites | 16 | 5 Ironclad (Records upstairs, Icebox catwalk, Pump roof, Records forecourt street, precinct armoury), 4 Hot Pursuit, 7 Quick Fix |
 | Launchers | 6 | pressure, dumpster, freight, geyser, mousetrap, fan |
-| Dispatch pillars | 9 | One in the sewer |
-| Case spawns | 20 | Includes the home at (−16, −28) |
-| Jurisdiction zones | 6 | 3 outdoor, 3 enclosed |
-| Paper Chase destinations | 6 | Icebox, maintenance, pump, Needleworks, West Sluice, Records |
+| Dispatch pillars | 12 | One in the sewer, one upstairs in the precinct radio room |
+| Case spawns | 30 | Includes the home at (−16, −28) |
+| Jurisdiction zones | 11 | 7 outdoor, 4 enclosed; at least one in each of the nine districts |
+| Paper Chase destinations | 8 | Icebox, maintenance, pump, Needleworks, West Sluice, Records, Harbour Master, Precinct Front Desk |
 | Street lamps | 76 | |
 | Player spawn points | about 820 | Generated street points with clearance |
 

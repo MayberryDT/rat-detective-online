@@ -1,6 +1,8 @@
 import type { Vec3Data } from './networkProtocol';
 import { createJurisdiction, parseJurisdiction, JURISDICTION_TUNING, type JurisdictionState } from './jurisdiction';
 import { LANDMARK_INTERIORS } from './landmarkLayout';
+import { DOCKS_JOBS } from './city/kit/parts/docks';
+import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
 export const ASSIGNMENT_IDS = ['closing-time', 'chain-of-custody', 'excessive-force', 'jurisdiction'] as const;
 export type AssignmentId = typeof ASSIGNMENT_IDS[number];
@@ -29,11 +31,14 @@ export const ASSIGNMENT_DESTINATIONS = {
     sluice:{label:'WEST SLUICE',short:'WEST SLUICE',center:{x:-137,y:12,z:0},
         bounds:{xmin:-146,xmax:-128,ymin:-.5,ymax:24,zmin:-32,zmax:32},approach:{x:-123,y:.3,z:8},arrival:{x:-133,y:.3,z:8}},
     records:building('records','RECORDS BUREAU',{x:-16,y:.3,z:-32},{x:-16,y:.3,z:-41}),
+    // The north's slots: rooms rather than whole landmarks, each with its own bounds.
+    'harbour-master':DOCKS_JOBS.destination.harbourMaster,
+    precinct:PRECINCT_JOBS.destination,
 } as const;
 export type DestinationId = keyof typeof ASSIGNMENT_DESTINATIONS;
 export type AssignmentDestination = typeof ASSIGNMENT_DESTINATIONS[DestinationId];
 /** Eligible landmark inventory; the actual match route is shuffled and stored. */
-export const CHAIN_ROUTE: readonly DestinationId[] = ['icebox','maintenance','pump','needleworks','sluice','records'];
+export const CHAIN_ROUTE: readonly DestinationId[] = ['icebox','maintenance','pump','needleworks','sluice','records','harbour-master','precinct'];
 
 export function destinationContains(id:DestinationId,p:Vec3Data):boolean {
     const b=ASSIGNMENT_DESTINATIONS[id].bounds;

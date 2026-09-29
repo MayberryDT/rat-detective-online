@@ -44,15 +44,17 @@ describe('Jurisdiction authority',()=>{
   expect(j.serial).toBe(1);expect(j.heldMs.a).toBe(60000);expect(j.scorerId).toBeNull();expect(parseAssignment(state)).toEqual(state);
   rules.advance(NOW+2000,NOW+9000,'b');expect(state.result?.winnerId).toBe('a');
  });
- it('retains announced bags through restoration and alternates all six without repeats',()=>{
-  const {j,state}=fixture();const sequence:JurisdictionZoneId[]=[];
-  for(let i=0;i<24;i++){
+ it('retains announced bags through restoration and runs every zone once per bag, never the smaller category twice running',()=>{
+  const {j,state}=fixture(),n=JURISDICTION_ZONE_IDS.length,sequence:JurisdictionZoneId[]=[];
+  const count=(c:'outdoor'|'enclosed')=>JURISDICTION_ZONE_IDS.filter(id=>JURISDICTION_ZONES[id].category===c).length;
+  const smaller=count('outdoor')<count('enclosed')?'outdoor':'enclosed';
+  for(let i=0;i<4*n;i++){
    sequence.push(activeZone(j));const announced=nextZone(j);j.remainingMs=9000;
    const restored=restoreAssignment(state,NOW+999999)!;expect(restored).toEqual(state);
    rotateZone(j,()=>.7);expect(activeZone(j)).toBe(announced);
   }
-  for(let i=0;i<24;i+=6)expect(new Set(sequence.slice(i,i+6))).toEqual(new Set(JURISDICTION_ZONE_IDS));
-  for(let i=1;i<24;i++)expect(JURISDICTION_ZONES[sequence[i]].category).not.toBe(JURISDICTION_ZONES[sequence[i-1]].category);
+  for(let i=0;i<4*n;i+=n)expect(new Set(sequence.slice(i,i+n))).toEqual(new Set(JURISDICTION_ZONE_IDS));
+  for(let i=1;i<4*n;i++)if(JURISDICTION_ZONES[sequence[i]].category===smaller)expect(JURISDICTION_ZONES[sequence[i-1]].category,`${i}`).not.toBe(smaller);
  });
  it('keeps continuous progress out of the transition revision and prunes only expired identities',()=>{
   const {state,j,rules}=fixture();rules.advance(NOW,NOW+10,'a');const revision=state.revision;
@@ -62,7 +64,8 @@ describe('Jurisdiction authority',()=>{
  });
  it('rejects malformed mode state and preserves other stored modes',()=>{
   const {state,j}=fixture();
-  for(const patch of [{remainingMs:NaN},{remainingMs:75001},{remainingMs:0},{serial:1},{index:9},{scorerId:''},{order:Array(6).fill(activeZone(j))},{heldMs:{a:60001}},{heldMs:{a:60000}},{heldMs:{a:-1}},{heldMs:Object.fromEntries(Array.from({length:17},(_,i)=>[String(i),1]))}]){
+  const n=JURISDICTION_ZONE_IDS.length,smallerFirst=[...j.order].sort((x,y)=>JURISDICTION_ZONES[x].category===JURISDICTION_ZONES[y].category?0:JURISDICTION_ZONES[x].category==='enclosed'?-1:1);
+  for(const patch of [{remainingMs:NaN},{remainingMs:75001},{remainingMs:0},{serial:1},{index:n,serial:n},{scorerId:''},{order:Array(n).fill(activeZone(j))},{order:smallerFirst},{order:j.order.slice(1)},{heldMs:{a:60001}},{heldMs:{a:60000}},{heldMs:{a:-1}},{heldMs:Object.fromEntries(Array.from({length:17},(_,i)=>[String(i),1]))}]){
    expect(parseAssignment({...state,jurisdiction:{...j,...patch}}),JSON.stringify(patch)).toBeNull();
   }
   for(const id of ASSIGNMENT_IDS.filter(id=>id!=='jurisdiction')){
@@ -133,7 +136,8 @@ describe('Jurisdiction real physics',()=>{
  it.each([...JURISDICTION_ZONE_IDS.map(id=>({id,central:false})),{id:'sewer-junction' as const,central:true}])('a hosted bot reaches and scores in $id (central=$central) using real controls',({id,central})=>{
   vi.spyOn(Math,'random').mockReturnValue(.3);vi.spyOn(Date,'now').mockReturnValue(NOW);
   const spec={seed:341283204,version:2};
-  const starts={'records-forecourt':[-45,-18],'icebox-yard':[100,-18],'central-crossroads':[70,12],'needleworks-floor':[-105,116],'pump-floor':[125,145],'sewer-junction':[148,0]} as const;
+  const starts={'records-forecourt':[-45,-18],'icebox-yard':[100,-18],'central-crossroads':[70,12],'needleworks-floor':[-105,116],'pump-floor':[125,145],'sewer-junction':[148,0],
+   'the-quay':[70,-120],'precinct-yard':[-105,-100],'gate-lane':[-137,-100],'south-crossing':[-60,100],'pier9-floor':[109,-156]} as const;
   const [x,z]=central?[84,-53]:starts[id],bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,{x,y:.3,z}),players=new Map([[bot.id,bot]]);
   const sim=new ChaosSimulation(players,()=>{},undefined,spec),a=createAssignment('jurisdiction',NOW,'bots',()=>.3),j=a.jurisdiction!;
   a.liveAt=NOW;a.phase='active';j.index=j.order.indexOf(id);j.serial=j.index;sim.setAssignment(a);

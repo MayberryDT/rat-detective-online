@@ -128,7 +128,7 @@ describe('assignments in the real city case simulation',()=>{
     });
     it.each(CHAIN_ROUTE)('Tampering expiry cannot award an edge-overlapping %s case to a waiting carrier',id=>{
         const initial=fixture('chain-of-custody');initial.sim.assignmentState!.destinations=[...CHAIN_ROUTE.filter(d=>d!==id),id];
-        initial.sim.assignmentState!.deliverySerial=5;initial.sim.assignmentState!.deliveries.a=2;
+        const last=CHAIN_ROUTE.length-1;initial.sim.assignmentState!.deliverySerial=last;initial.sim.assignmentState!.deliveries.a=2;
         const saved=initial.sim.snapshot(false);saved.dispatch={phase:'rolling',incident:'evidence-tampering',serial:1,started:NOW,until:NOW+100};
         const {sim,a}=fixture('chain-of-custody',saved);sim.step(0,NOW+100);
         const b=ASSIGNMENT_DESTINATIONS[id].bounds,inside=destinationPoint(id,false);
@@ -136,7 +136,7 @@ describe('assignments in the real city case simulation',()=>{
         sim.caseBody.position.set(b.xmin-.1,inside.y+.9,a.z);sim.caseBody.velocity.setZero();
         expect(destinationContains(id,sim.caseBody.position)).toBe(false);
         sim.step(0,NOW+100+CHAOS_TUNING.activeMs);
-        expect(sim.assignmentState).toMatchObject({phase:'active',deliverySerial:5});expect(sim.assignmentState!.result).toBeUndefined();
+        expect(sim.assignmentState).toMatchObject({phase:'active',deliverySerial:last});expect(sim.assignmentState!.result).toBeUndefined();
         expect(sim.caseHolderId).toBeNull();expect(sim.caseBody.position.x).toBeCloseTo(destinationPoint(id).x);
         const at=NOW+200+CHAOS_TUNING.activeMs,outside=destinationPoint(id);
         Object.assign(a,outside);sim.caseBody.position.set(outside.x,outside.y+.8,outside.z);sim.step(0,at);

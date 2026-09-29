@@ -26,9 +26,13 @@ A direct-shot guard vetoes known silver-coat hits before the case. Existing aim
 error, reflection rules and physical case vulnerability remain. See the
 [follow-up verification](verification/zone-ironclad-2026-09-13.md).
 
-The 6 sites are Records Forecourt, Icebox Loading Yard, Central Crossroads,
-Needleworks Factory Floor, Pump Station Ground Floor and Sewer Junction.
-Outdoor/enclosed categories alternate in shuffled bags. Only the marked floor
+The 11 sites are Records Forecourt, Icebox Loading Yard, Central Crossroads,
+The Quay, Precinct Yard, Gate Lane and South Avenue Crossing (outdoor), and
+Needleworks Factory Floor, Pump Station Ground Floor, Sewer Junction and Pier 9
+Warehouse Floor (enclosed): one or more in each of the nine districts. Every
+zone comes once per shuffled bag; the larger category opens each bag and the
+smaller is spread through it, never twice running (equal categories strictly
+alternate). Only the marked floor
 counts, with ordinary jumps allowed. Planted Evidence stays live; private classic
 Tampering freezes progress and relocation time. The retained vulnerable rat keeps
 its points through the existing 30-second reconnect reservation.
@@ -47,7 +51,7 @@ are historical.
 | Jurisdiction | Earn 60 personal zone points | Hold the genuine case inside the active floor-specific zone; 1 point per second |
 | PAPER CHASE | Earn three personal paperwork delivery points | Carry the case anywhere inside the currently named whole landmark for one point. Respawn the case at a random clear pickup site and activate the next landmark immediately. Personal scores survive death, disarm, theft and Tampering |
 
-Chain landmarks rotate in a server-shuffled six-landmark bag until someone earns three points. Every landmark appears once per bag; if a match needs another bag it reshuffles without repeating the previous destination immediately. There is no fixed first/last building, no six-delivery match requirement and no stamp mechanic. Snapshots, theft, late joining and eviction retain the selected order and personal scores. Random shuffling does not promise that an entire permutation can never recur.
+Chain landmarks rotate in a server-shuffled eight-landmark bag until someone earns three points. Every landmark appears once per bag; if a match needs another bag it reshuffles without repeating the previous destination immediately. There is no fixed first/last building, no full-bag match requirement and no stamp mechanic. Snapshots, theft, late joining and eviction retain the selected order and personal scores. Random shuffling does not promise that an entire permutation can never recur.
 
 | Landmark | Accepted player interior bounds: X / Z / Y | Existing navigation approach |
 | --- | --- | --- |
@@ -57,6 +61,8 @@ Chain landmarks rotate in a server-shuffled six-landmark bag until someone earns
 | Needleworks | −143..−67 / 56..108 / −0.5..24 | South entrance |
 | West Sluice | −146..−128 / −32..32 / −0.5..24 | Walk strip beside the ramp |
 | Records Bureau | −48..16 / −81..−37 / −0.5..24 | South entrance |
+| Harbour Master (Pier 9 office) | 122..135.6 / −125..−114.4 / −0.5..5.1 | Pier 9 south door, then the office door |
+| Precinct Front Desk (lobby) | −113..−96 / −118.4..−109 / −0.5..7.4 | Precinct front door on the −102 street |
 
 X/Z must be strictly inside; Y includes the lower bound and excludes the upper. This accepts alternate entrances and interior floors while excluding roofs, outside pavement, and the street directly above Maintenance. Approach coordinates guide the existing bots and recovery only; they do not constrain where entry scores. There are no interaction buttons, stationary waits, north/south building subdivisions or new map geometry. Needleworks is the existing name of the user’s Needle landmark. West Sluice is separate from Pump Station, so including the omitted landmark makes six eligible destinations. Historical geography was checked against GBrain `brain:sessions/2026/09/rat-detective-distinct-interiors-playtest-pass-2026-09-07` and current shared layouts.
 

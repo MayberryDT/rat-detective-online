@@ -196,12 +196,12 @@ export const DOCKS_JOBS = {
         {x:40,y:1.3,z:-160},
         {x:-9,y:1.3,z:-130.5},
         {x:109,y:1.3,z:-139},
-        {x:118,y:SHIP.deck+1.3,z:-182.8},
+        {x:119,y:SHIP.deck+1.3,z:-182.8},
         {x:18,y:1.3,z:-189},
     ] as readonly Vec3Data[],
     /** The yard's Quick Fix, and the quay's Hot Pursuit: it replaces `pursuit-north-avenue` (70,-150), which now stands at a pier head. */
     pickups:[
-        {id:'fix-container-yard',kind:'quick-fix',x:-5,z:-124.5,y:.7,near:'Container yard, the lane between the south stacks'},
+        {id:'fix-container-yard',kind:'quick-fix',x:-14,z:-117.5,y:.7,near:'Container yard, the lane between the south stacks'},
         {id:'pursuit-quay-west',kind:'hustle',x:-34,z:-161,y:.7,near:'West end of Quay Road, a straight sprint east along the water'},
     ] as readonly PickupAnchor[],
     /** A street-corner iron post where Seventy Avenue meets the quay (DISPATCH_STATIONS entry shape). */

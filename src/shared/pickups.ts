@@ -1,4 +1,6 @@
 import type { Vec3Data } from './networkProtocol';
+import { DOCKS_JOBS } from './city/kit/parts/docks';
+import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
 /** The three approved pickups. Kept literal so snapshot validation can share it. */
 export const PICKUP_KINDS = ['ironclad', 'hustle', 'quick-fix'] as const;
@@ -38,13 +40,14 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
     {id:'alibi-records-forecourt',kind:'ironclad',x:8,z:-12,y:.7,near:'Street in front of Records Hall, east of the forecourt'},
     {id:'pursuit-gate-mouth',kind:'hustle',x:-148,z:0,y:.7,near:'Gate sewer entrance, before the long tunnel east'},
     {id:'pursuit-icebox-mouth',kind:'hustle',x:148,z:0,y:.7,near:'Icebox sewer entrance, before the long tunnel west'},
-    {id:'pursuit-north-avenue',kind:'hustle',x:70,z:-150,y:.7,near:'North end of Seventy Avenue, a straight sprint south'},
+    ...DOCKS_JOBS.pickups,
     {id:'pursuit-south-avenue',kind:'hustle',x:-150,z:130,y:.7,near:'West end of the south avenue, a straight sprint east'},
     {id:'fix-crossroads-west',kind:'quick-fix',x:-25.5,z:10,y:.7,near:'Alley between the central blocks, west of the crossroads'},
     {id:'fix-crossroads-east',kind:'quick-fix',x:11.5,z:10,y:.7,near:'Alley between the central blocks, east of the crossroads'},
     {id:'fix-south-central',kind:'quick-fix',x:-17,z:58,y:.7,near:'Alley between the south-central blocks'},
     {id:'fix-icebox-alley',kind:'quick-fix',x:124,z:22,y:.7,near:'Alley between the shops south of the Icebox forecourt'},
     {id:'fix-gate-lane',kind:'quick-fix',x:-100,z:-45,y:.7,near:'Service lane between Records Hall and the Gate'},
+    ...PRECINCT_JOBS.supplies,
 ];
 
 /** Active timed effects on one rat. Absent keys mean no effect. */

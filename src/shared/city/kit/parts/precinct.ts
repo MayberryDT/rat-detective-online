@@ -637,7 +637,7 @@ export const PRECINCT_JOBS={
         {x:-105,y:1.3,z:-112.2},                 // lobby, in front of the desk
         {x:-122.2,y:1.3,z:-114.4},               // evidence lockup cage
         {x:CX,y:1.3,z:CZ+6},                     // yard, south of the tower
-        {...polar(DRUNK_TANK*SLOT,CELL_MID),y:1.3},  // the open drunk tank (south-west)
+        {...polar(DRUNK_TANK*SLOT,16.6),y:1.3},  // the open drunk tank (south-west), short of the bounds of its partitions
     ] satisfies readonly Vec3Data[],
     supplies:[
         {id:'alibi-precinct-armoury',kind:'ironclad',x:-121,z:-113.7,y:16.7,near:'Precinct armoury, top floor'},
