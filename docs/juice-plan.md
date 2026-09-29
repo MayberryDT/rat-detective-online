@@ -189,9 +189,9 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
 - **Status (2026-09-28, before release):** built on `juice/launch-machines` and on the private preview (fixture `d7af3558-5e9d-43f5-8463-fb8c206077dc`, client `index-Bbe9u7e0.js`, protocol 21) for Tyler to judge the machines. One independent review found 4 issues (finale skipped hanging machines, repeated vent launch ids, surge bookkeeping lost on restore, per-frame vent allocations); all fixed in `3953c02`. What to look for: [review guide](juice/review.md#sixth-batch-launcher-machines-pressure-triggers-and-pressure-surge-protocol-21).
 
 **Later (not now):**
-- **UI overhaul (Tyler, 2026-09-28).** Overhaul the UI and add a lot of juice to it. Scope open; this lifts the standing "no HUD changes" rule only for this item.
-- **Dispatch overhaul (Tyler, 2026-09-28).** Overhaul the Dispatch system: the alarm you shoot to start an incident, and how incidents begin.
-- **Ragdolls revisited (Tyler, 2026-09-28).** After the fifth batch Tyler is "not really seeing a difference" in ragdolls (R1–R3). Tyler's exact complaint: a dead rat "becomes like a cylinder block", completely stiff, toppling like a salt shaker flicked across a table; it doesn't look like a living thing. The body itself must bend and go limp, not just the limbs.
+- **UI overhaul (Tyler, 2026-09-28).** Done as the seventh batch (released 2026-09-28).
+- **Dispatch overhaul (Tyler, 2026-09-28).** Done as the seventh batch (released 2026-09-28).
+- **Ragdolls revisited (Tyler, 2026-09-28).** Done as the seventh batch (R1–R5, released 2026-09-28); legs (R6) undecided. After the fifth batch Tyler is "not really seeing a difference" in ragdolls (R1–R3). Tyler's exact complaint: a dead rat "becomes like a cylinder block", completely stiff, toppling like a salt shaker flicked across a table; it doesn't look like a living thing. The body itself must bend and go limp, not just the limbs.
 - **Launcher overhaul.** Done as the fifth and sixth batches (released 2026-09-28). Tyler (2026-09-28) closed the leftover extras and accepted the code-built machine models as done.
 - **Bot overhaul.** How bots act, their decision-making and how they work.
 - **City and building model overhaul (Tyler, 2026-09-28).** Overhaul the city models and the building models.
@@ -209,7 +209,7 @@ Tyler playtested the fifth batch ("this is looking amazing") and asked for bette
   - **Phase 4:** measured yes/no on sewer lights, shadow redraws, grain/filter, the two physics worlds, navigation, cameo compression. Look changes go to Tyler as choices.
   - **Phase 5:** preview playtest, production on Tyler's OK, before/after receipt.
   - **Status (2026-09-28):** Tyler said to do all of it on a branch, including the physics restructure ("we can fine tune the physics later"). Done on `perf/overhaul`, merged and **released to production** on his OK ("this feels a million times better"), Worker `48fb6913-82c5-443c-8794-6c03c91a7800`: server warm tick −80%, client 30→43 fps hosted on Halla. See [the overhaul receipt](verification/perf-overhaul-2026-09-28.md). Shadow freezing/removal were measured and left for Tyler to choose.
-- **3D model and ragdoll overhaul.** Done as the fifth batch (M1–M3, R1–R3); ragdolls reopened above.
+- **3D model and ragdoll overhaul.** Done as the fifth batch (M1–M3, R1–R3); ragdolls reopened and redone in the seventh batch.
 
 ## Seventh batch: UI, Dispatch and ragdolls (released 2026-09-28)
 
