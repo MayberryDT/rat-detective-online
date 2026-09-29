@@ -6,7 +6,7 @@ import { isEvidenceMode, isIncidentId } from '../shared/incidentCatalog';
 import { allowsLocalDiagnostics } from './clientDiagnostics';
 import { verifyBearerToken } from './auth';
 import { companionPageSize, isCompanionCursor } from '../shared/companionStatus';
-import { heatRange } from './HeatMap';
+import { cityApi, type CityEnv } from './city/cityApi';
 
 export { GameRoom } from './GameRoom';
 export { Matchmaker } from './Matchmaker';
@@ -143,14 +143,8 @@ export default {
         }));
       }
 
-      if (url.pathname === '/api/heat/v1') {
-        const cors = { 'access-control-allow-origin': '*', 'cache-control': 'no-store' };
-        if (request.method !== 'GET') return respond(json({ error: 'Method not allowed' }, { status: 405, headers: cors }));
-        const range = heatRange(url.searchParams, Date.now());
-        if (range === null) return respond(json({ error: 'Use days=1-3650, days=all, or from and to as YYYY-MM-DD' }, { status: 400, headers: cors }));
-        const heat = await env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME).heat(range);
-        return respond(json({ room: DEFAULT_ROOM_NAME, ...heat }, { headers: cors }));
-      }
+      const city = await cityApi(request, url, env as CityEnv);
+      if (city) return respond(city);
 
       if (url.pathname === '/ws') {
         if (request.headers.get('Upgrade') !== 'websocket') {

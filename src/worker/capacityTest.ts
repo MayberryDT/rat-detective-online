@@ -30,7 +30,7 @@ export default {
       const name=url.searchParams.get('room')??'';
       if(!/^graybox-(?:practice-probe|benchmark)-[a-z0-9-]{1,80}$/.test(name))return new Response('Not found',{status:404});
       const range=heatRange(url.searchParams,Date.now());if(!range)return new Response('Bad range',{status:400});
-      return Response.json({room:name,...await env.GAME_ROOM.getByName(name).heat(range)},{headers:{'cache-control':'no-store'}});
+      return Response.json({room:name,...await env.GAME_ROOM.getByName(name).cityHeat(range)},{headers:{'cache-control':'no-store'}});
     }
     if (url.pathname !== '/ws' || !/^graybox-(?:practice-probe|benchmark)-[a-z0-9-]{1,80}$/.test(url.searchParams.get('room') ?? '')) {
       return new Response('Not found', { status: 404 });

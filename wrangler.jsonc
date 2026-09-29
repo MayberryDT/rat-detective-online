@@ -16,7 +16,8 @@
       "/health",
       "/status",
       "/api/companion/v1/status",
-      "/api/heat/v1"
+      "/api/heat/v1",
+      "/api/city/v1/*"
     ]
   },
   "ratelimits": [
@@ -28,6 +29,9 @@
         "period": 60
       }
     }
+  ],
+  "r2_buckets": [
+    { "binding": "CITY_ARCHIVE", "bucket_name": "rat-detective-city-local" }
   ],
   "durable_objects": {
     "bindings": [
@@ -86,9 +90,13 @@
           "/health",
           "/status",
           "/api/companion/v1/status",
-          "/api/heat/v1"
+          "/api/heat/v1",
+          "/api/city/v1/*"
         ]
       },
+      "r2_buckets": [
+        { "binding": "CITY_ARCHIVE", "bucket_name": "rat-detective-city-staging" }
+      ],
       "durable_objects": {
         "bindings": [
           {
@@ -131,6 +139,9 @@
         "not_found_handling": "single-page-application",
         "run_worker_first": true
       },
+      "r2_buckets": [
+        { "binding": "CITY_ARCHIVE", "bucket_name": "rat-detective-city" }
+      ],
       "durable_objects": {
         "bindings": [
           {

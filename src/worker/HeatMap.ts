@@ -1,12 +1,10 @@
 import { CITY_BOUNDS } from '../shared/grayboxLayout';
+import { CITY_CELL, cityFloor } from '../shared/city/frame';
 
-/** Where rats spend time, die and kill, for planning the city. Counts only; no names
- * or IDs are kept. Rooms hold new counts in memory and add them to one SQL row per
- * day, layer and cell about once a minute. Every day is kept. */
-export const HEAT_CELL = 4;
-export const HEAT_SAMPLE_MS = 1000;
-export const HEAT_FLUSH_MS = 60_000;
-/** Bounds one flush's pending entries (a day of the whole city fits several times over). */
+/** Heat cells: counts in 4-unit cells keyed `floor:ix:iz` (docs/city-map.md). The city
+ * recorder writes them; this module owns the key format, the range syntax and the
+ * parser for heat v1's stored JSON days (read once by the migration). */
+export const HEAT_CELL = CITY_CELL;
 export const HEAT_MAX_CELLS = 40_000;
 export const HEAT_LAYERS = ['humans', 'bots', 'deaths', 'kills'] as const;
 export type HeatLayer = typeof HEAT_LAYERS[number];
@@ -20,15 +18,11 @@ const MIN_CELL = Math.floor((CITY_BOUNDS.min - MARGIN) / HEAT_CELL);
 const MAX_CELL = Math.floor((CITY_BOUNDS.max + MARGIN) / HEAT_CELL);
 const inCity = (i: number) => Number.isInteger(i) && i >= MIN_CELL && i <= MAX_CELL;
 
-/** Sewer floor is -7; landmark upper floors start at 8; roofs top out near 37; launch flights go far higher. */
-export function heatFloor(y: number): HeatFloor {
-  return y < -2 ? 'sewer' : y < 5 ? 'street' : y < 45 ? 'upper' : 'air';
-}
-
-function cellKey(x: number, y: number, z: number): string | null {
+/** The cell a position falls in, or null when it is unusable or far outside the city. */
+export function heatCell(x: number, y: number, z: number): string | null {
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
   const ix = Math.floor(x / HEAT_CELL), iz = Math.floor(z / HEAT_CELL);
-  return inCity(ix) && inCity(iz) ? `${heatFloor(y)}:${ix}:${iz}` : null;
+  return inCity(ix) && inCity(iz) ? `${cityFloor(y)}:${ix}:${iz}` : null;
 }
 
 export function validHeatKey(key: string): boolean {
@@ -71,7 +65,7 @@ export class HeatDay {
 
   /** False when the position is unusable or the day is full of other cells. */
   add(layer: HeatLayer, x: number, y: number, z: number): boolean {
-    const key = cellKey(x, y, z);
+    const key = heatCell(x, y, z);
     if (!key) return false;
     const entry = `${layer}|${key}`;
     if (!this.cells.has(entry)) {
@@ -92,7 +86,6 @@ export class HeatDay {
 
 export const heatDayKey = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
-export const emptyHeat = (): HeatData => ({ layers: emptyLayers() });
 
 const DAY_MS = 86_400_000;
 function isDay(value: string | null): value is string {

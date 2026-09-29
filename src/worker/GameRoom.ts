@@ -10,7 +10,7 @@ import { CHAOS_WIRE_MODE, prepareChaos, type PreparedChaos } from '../shared/cha
 import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import { serializeServerMessage } from './serializeServerMessage';
 import type { ChaosState } from '../shared/chaosState';
-import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
+import { GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
 import { ASSIGNMENT_IDS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
 import { incidentRoster, isEvidenceMode, isIncidentId, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
 import { DurableObject } from 'cloudflare:workers';
@@ -44,7 +44,12 @@ import { RoomDiagnostics } from './RoomDiagnostics';
 import { ServerBotController } from './ServerBotController';
 import { createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
-import { HEAT_CELL, HEAT_FLUSH_MS, HEAT_SAMPLE_MS, HeatDay, emptyHeat, heatDayKey, isHeatLayer, validHeatKey, type HeatData, type HeatLayer } from './HeatMap';
+import { HEAT_CELL } from './HeatMap';
+import { CityStore, type Filter, type Range } from './city/CityStore';
+import { CityArchive } from './city/CityArchive';
+import { CityRecorder } from './city/CityRecorder';
+import { SpatialRayQuery } from '../shared/SpatialRayQuery';
+import * as CANNON from 'cannon-es';
 import { logClientDiagnostics, allowsLocalDiagnostics } from './clientDiagnostics';
 import { companionProjectionDue, companionProjectionSignature, projectCompanionRoom } from './companionStatus';
 import {
@@ -167,10 +172,10 @@ export class GameRoom extends DurableObject<Env> {
   private readonly dueCheckpoints = new Set<string>();
   /** Polish 19: cosmetic per-round Case File tallies (memory only). */
   private readonly awards = new RoundAwards();
-  /** City-planning heat map: counts since the last flush, per UTC day. */
-  private readonly heatPending = new Map<string, HeatDay>();
-  private heatSampleAt = 0;
-  private heatSavedAt = 0;
+  /** The city map's recorder (docs/city-map.md); built on first use from this room's world. */
+  private cityRecorder: CityRecorder | null = null;
+  private readonly cityStore: CityStore;
+  private sightQuery: { world: CANNON.World; query: SpatialRayQuery; refreshedAt: number } | null = null;
   private lastActiveAt = new Map<string, number>();
   private recentShots = new Map<string, string[]>();
   private lastMovementSequence = new Map<string, number>();
@@ -194,6 +199,7 @@ export class GameRoom extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.cityStore = new CityStore(ctx.storage.sql);
     ctx.blockConcurrencyWhile(async () => {
       this.migrate();
       this.hydrate();
@@ -385,7 +391,7 @@ export class GameRoom extends DurableObject<Env> {
       this.activateCompanion();
     } else {
       this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined;
-      if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; this.flushHeat(this.now()); }
+      if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; this.cityRecorder?.flush(this.now(), true); }
       if (this.chaos && wasRunning) this.checkpointGame();
       this.nextBotHeartbeat = 0;
       if (this.roundBotCount) { this.roundBotCount = 0; this.writeRoundBotCount(); }
@@ -796,22 +802,8 @@ export class GameRoom extends DurableObject<Env> {
         due_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_pending_events_due_at ON pending_events(due_at);
-      CREATE TABLE IF NOT EXISTS heat_cells (
-        day TEXT NOT NULL,
-        layer TEXT NOT NULL,
-        cell TEXT NOT NULL,
-        n INTEGER NOT NULL,
-        PRIMARY KEY (day, layer, cell)
-      ) WITHOUT ROWID;
     `);
-    // The first heat release stored one JSON row per day; fold it into the cells once.
-    if (this.ctx.storage.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'heat_days'").toArray().length) {
-      for (const row of this.ctx.storage.sql.exec<{ day: string; data: string }>('SELECT day, data FROM heat_days').toArray()) {
-        for (const [layer, cell, n] of HeatDay.parse(row.data).entries()) this.ctx.storage.sql.exec(
-          'INSERT INTO heat_cells (day, layer, cell, n) VALUES (?, ?, ?, ?) ON CONFLICT(day, layer, cell) DO UPDATE SET n = n + excluded.n', row.day, layer, cell, n);
-      }
-      this.ctx.storage.sql.exec('DROP TABLE heat_days');
-    }
+    this.cityStore.migrate();
 
     const columns = this.ctx.storage.sql
       .exec<{ name: string }>('PRAGMA table_info(players)')
@@ -1001,6 +993,7 @@ export class GameRoom extends DurableObject<Env> {
 
   private finishJoin(ws:WebSocket, player:PlayerData, fresh:boolean):void {
     const id=player.id;
+    this.city.session('join',id,this.now());
     this.movementAllowances.set(id,createMovementAllowance(this.now()));
     this.joining.add(ws);this.audience=null;
     this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined, titleUntil:undefined, delivery: true });
@@ -1130,6 +1123,7 @@ export class GameRoom extends DurableObject<Env> {
     if(this.shotAcceptedAt.size>128)this.shotAcceptedAt.delete(this.shotAcceptedAt.keys().next().value!);
     const fired=this.chaos?.shoot(playerId,message);
     this.awards.shot(playerId, message.shotId);
+    this.city.shot(player,message.direction,this.now());
     this.diagnostics.shot('accepted');
     const event:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:playerId,
       shotId:message.shotId,origin:message.origin,direction:message.direction};
@@ -1153,7 +1147,9 @@ export class GameRoom extends DurableObject<Env> {
     this.diagnostics.netplay('shot','rejected',0,reason);
   }
   private applyShotEvents():void {
-    for(const event of this.chaos?.drainShotEvents()??[]){
+    const events=this.chaos?.drainShotEvents()??[];
+    this.city.balls(events,this.now());
+    for(const event of events){
       if(event.owner&&(event.outcome==='rat-body'||event.outcome==='rat-head'))this.awards.hit(event.owner,event.shotId);
       if(event.owner)this.sendToPlayer(event.owner,{type:'shotResult',shotId:event.shotId,ballId:event.ballId,outcome:event.outcome,at:event.at,tick:event.tick,epoch:event.epoch,
         ...(event.victimId?{victimId:event.victimId}:{}),...(event.damage===undefined?{}:{damage:event.damage}),...(event.point?{point:event.point}:{}),
@@ -1179,7 +1175,9 @@ export class GameRoom extends DurableObject<Env> {
    * the durable health write and the wire event. Cosmetic claim feedback is local. */
   private applyPickupEvents(): void {
     if (!this.chaos) return;
-    for (const event of this.chaos.drainPickupEvents()) {
+    const events=this.chaos.drainPickupEvents();
+    this.city.pickups(events,this.players,this.now());
+    for (const event of events) {
       if (event.kind === 'collected') this.awards.pickup(event.playerId);
       if (event.kind !== 'healed') continue;
       const player = this.players.get(event.playerId);
@@ -1224,9 +1222,8 @@ export class GameRoom extends DurableObject<Env> {
     this.awards.damage(victim.id, hpBefore - victim.hp);
     if (result.killed && shooter && shooter !== victim) this.awards.kill(shooter, victim, headshot);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
+    this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming }, now);
     if (!result.killed) return;
-    this.recordHeat('deaths', victim, now);
-    if (shooter && shooter !== victim) this.recordHeat('kills', shooter, now);
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
       respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{})});
     this.broadcastScoreboard();
@@ -1347,6 +1344,7 @@ export class GameRoom extends DurableObject<Env> {
     }
     const playerId = this.getPlayerId(ws);
     if (playerId) {
+      this.city.session('leave',playerId,this.now());
       const session=this.sessions.get(playerId);
       if(session && this.players.has(playerId)){
         session.until=this.now()+RECONNECT_GRACE_MS;this.persistSession(playerId,session);
@@ -1459,8 +1457,7 @@ export class GameRoom extends DurableObject<Env> {
       this.flushMovement('tick');
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
-      if(now>=this.heatSampleAt){this.heatSampleAt=now+HEAT_SAMPLE_MS;this.sampleHeat(now);}
-      if(now-this.heatSavedAt>=HEAT_FLUSH_MS)this.flushHeat(now);
+      this.city.tick(now,this.players,state,this.round);
       if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0,state.pressure?.launches,state.dispatch);
       const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
       // Ownership/Dispatch/assignment changes persist before any client sees them.
@@ -1611,41 +1608,48 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  /** Summed heat for UTC days `from`–`to` inclusive, unflushed counts included, plus every day on record. */
-  async heat(range: { from: string; to: string }, now = this.now()): Promise<{ from: string; to: string; days: string[]; allDays: string[]; cell: number } & HeatData> {
-    this.flushHeat(now);
-    const heat = emptyHeat();
-    const rows = this.ctx.storage.sql.exec<{ layer: string; cell: string; n: number }>(
-      'SELECT layer, cell, SUM(n) AS n FROM heat_cells WHERE day BETWEEN ? AND ? GROUP BY layer, cell', range.from, range.to);
-    for (const row of rows) if (isHeatLayer(row.layer) && validHeatKey(row.cell)) heat.layers[row.layer][row.cell] = row.n;
-    const allDays = this.ctx.storage.sql.exec<{ day: string }>('SELECT DISTINCT day FROM heat_cells ORDER BY day').toArray().map(row => row.day);
-    return { ...range, days: allDays.filter(day => day >= range.from && day <= range.to), allDays, cell: HEAT_CELL, ...heat };
+  private get city(): CityRecorder {
+    this.cityRecorder ??= new CityRecorder({
+      room: this.matchRoom ?? this.ctx.id.name ?? 'room',
+      store: this.cityStore,
+      archive: new CityArchive(this.matchRoom ?? this.ctx.id.name ?? 'room', this.env.CITY_ARCHIVE, promise => this.ctx.waitUntil(promise)),
+      layout: () => this.world.version,
+      isBot: id => this.isManagedBot(id),
+      connected: id => this.sessions.get(id)?.until == null,
+      sight: (from, to) => this.lineOfSight(from, to),
+      solids: grayboxBoxes({ seed: this.world.seed, version: GRAYBOX_VERSION }).filter(b => !b.rx && !b.rz && b.w >= .5 && b.h >= .5 && b.d >= .5),
+    });
+    return this.cityRecorder;
   }
 
-  private recordHeat(layer: HeatLayer, p: { x: number; y: number; z: number }, now: number): void {
-    const key = heatDayKey(now);
-    let day = this.heatPending.get(key);
-    if (!day) { day = new HeatDay(); this.heatPending.set(key, day); }
-    day.add(layer, p.x, p.y, p.z);
+  /** Line of sight through the chaos world's solid bodies; the index is refreshed at most once a second. */
+  private lineOfSight(from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }): boolean {
+    const world = this.chaos?.world;
+    if (!world) return true;
+    if (this.sightQuery?.world !== world) { this.sightQuery?.query.dispose(); this.sightQuery = { world, query: new SpatialRayQuery(world), refreshedAt: 0 }; }
+    const sight = this.sightQuery, now = this.now();
+    if (now - sight.refreshedAt >= 1000) { sight.query.refresh(); sight.refreshedAt = now; }
+    return !sight.query.closest(new CANNON.Vec3(from.x, from.y, from.z), new CANNON.Vec3(to.x, to.y, to.z), 1).hasHit;
   }
 
-  /** Living, connected rats during play; reserved disconnects and corpses would pile onto one spot. */
-  private sampleHeat(now: number): void {
-    if (this.round.phase !== 'playing') return;
-    for (const player of this.players.values()) {
-      if (player.hp <= 0 || this.sessions.get(player.id)?.until != null) continue;
-      this.recordHeat(this.isManagedBot(player.id) ? 'bots' : 'humans', player, now);
-    }
+  /** The city map's aggregates over UTC days `from`–`to`, unflushed counts included (docs/city-map.md). */
+  async cityHeat(range: Range, filter: Filter = {}, now = this.now()) {
+    this.cityRecorder?.flush(now);
+    return { ...range, ...this.cityStore.days(range), cell: HEAT_CELL, layers: this.cityStore.cells(range, filter) };
+  }
+  async cityPlaces(range: Range, filter: Filter = {}, now = this.now()) {
+    this.cityRecorder?.flush(now);
+    return { ...range, ...this.cityStore.days(range), modes: this.cityStore.modes(range), places: this.cityStore.places(range, filter) };
+  }
+  async cityFlows(range: Range, filter: Filter = {}, now = this.now()) {
+    this.cityRecorder?.flush(now);
+    return { ...range, ...this.cityStore.days(range), flows: this.cityStore.flows(range, filter) };
   }
 
-  /** Adds the pending counts to their rows; memory then starts from zero, so nothing counts twice. */
-  private flushHeat(now: number): void {
-    this.heatSavedAt = now;
-    for (const [day, pending] of this.heatPending) {
-      for (const [layer, cell, n] of pending.entries()) this.ctx.storage.sql.exec(
-        'INSERT INTO heat_cells (day, layer, cell, n) VALUES (?, ?, ?, ?) ON CONFLICT(day, layer, cell) DO UPDATE SET n = n + excluded.n', day, layer, cell, n);
-    }
-    this.heatPending.clear();
+  /** Discrete city facts from the last 30 days. */
+  async cityEvents(filter: { type?: string; round?: string; since?: number; limit: number }, now = this.now()): Promise<unknown[]> {
+    this.cityRecorder?.flush(now);
+    return this.cityStore.events(filter).map(row => JSON.parse(row.data) as unknown);
   }
 
   private readRoomState(key: string): string | undefined {

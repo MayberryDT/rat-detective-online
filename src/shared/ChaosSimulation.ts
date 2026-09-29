@@ -49,7 +49,8 @@ interface CaseRuntime {
 }
 /** null ownership is an environmental Tampering hit, including neutral chains. */
 export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true }
-export interface ShotResultEvent {owner:string|null;shotId:string;ballId:string;outcome:ShotResultOutcome;at:number;tick:number;epoch:string;victimId?:string;damage?:number;point?:Vec3Data;normal?:Vec3Data;compensated?:boolean;fallback?:string;rewindMs?:number;targetDelta?:number}
+/** `end` is where a ball's life ran out (city map facts only; never sent to clients). */
+export interface ShotResultEvent {owner:string|null;shotId:string;ballId:string;outcome:ShotResultOutcome;at:number;tick:number;epoch:string;victimId?:string;damage?:number;point?:Vec3Data;normal?:Vec3Data;compensated?:boolean;fallback?:string;rewindMs?:number;targetDelta?:number;end?:Vec3Data}
 export interface PickupClaimResult {accepted:boolean;target:PickupTarget;targetId:string;playerId:string;pickup?:PickupKind;effectUntil?:number;reason?:PickupRejectReason}
 /** A pickup claim the room must announce. Healing is drained so the room can
  * persist and broadcast the restored health without the sim owning networking. */
@@ -1274,7 +1275,7 @@ export class ChaosSimulation {
         for(let i=this.shots.length-1;i>=0;i--){
             const shot=this.shots[i];shot.age+=dt;
             if(this.shotTriggers.has(shot.id)&&!this.shotStepped.has(shot)){this.shotStepped.add(shot);this.noteShot(shot,'first-step');}
-            if(shot.age>BALL_LIFETIME){this.finishShot(shot,'lifetime');this.shots.splice(i,1);continue;}
+            if(shot.age>BALL_LIFETIME){this.finishShot(shot,'lifetime',{end:data(shot.p)});this.shots.splice(i,1);continue;}
             if(shot.stuckUntil){
                 if(now<shot.stuckUntil)continue;
                 shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);
