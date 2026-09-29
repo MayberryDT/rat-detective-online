@@ -14,6 +14,7 @@ Reviewed against repository source and the latest release receipts through **202
 
 | Document | Purpose |
 | --- | --- |
+| [City overhaul plan](city-overhaul.md) | **Active (outline, 2026-09-29).** Scope, build order, acceptance and open decisions for the city overhaul: docks, the Panopticon precinct, angled walls, the kit of parts, load-time optimization |
 | [The city map](city-map.md) | The agent-first document for the city: layout IDs, places, every recorded fact, measures, agent surfaces, the design loop and build order |
 | [Heat map release](verification/heat-map-release-2026-09-28.md) | Production `14d903be…`: permanent heat map at `/heatmap` (kept forever, any range), round-end layout fix, bot refill fix |
 | [Server CPU and delivery gating](verification/server-cpu-2026-09-27.md) | Production `360dbcdd…`: shared walk graph, same-result ray-index refresh, room `work` counters, routine checkpoints off the delivery path; hosted A/B and live checks |
