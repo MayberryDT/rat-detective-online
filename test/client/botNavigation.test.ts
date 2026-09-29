@@ -3,6 +3,7 @@ import {DISPATCH_STATIONS,LAUNCH_MACHINES} from '../../src/shared/chaosState';
 import { BotNavigation } from '../../src/shared/BotNavigation';
 import { CITY_PREVIEW_SEED, GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
+import { PICKUP_ANCHORS } from '../../src/shared/pickups';
 
 const spec={seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION};
 function solve(nav:BotNavigation,from:Vec3Data,to:Vec3Data) {
@@ -136,4 +137,9 @@ it.each([
 ] as const)('connects the street to the %s second-floor supply',(_id,from,to)=>{
  const nav=new BotNavigation({seed:341283204,version:2});
  const path=solve(nav,from,to);expect(path.length).toBeGreaterThan(0);
+});
+
+it.each(PICKUP_ANCHORS.filter(a=>a.kind==='ironclad').map(a=>[a.id,{x:a.x,y:(a.y??.7)-.7,z:a.z}] as const))('reaches the %s armor from the central crossroads, on foot or by launcher',(_id,to)=>{
+ const nav=new BotNavigation(spec),path=solve(nav,{x:70,y:0,z:-18},to),end=path.at(-1);
+ expect(end&&Math.hypot(end.x-to.x,end.z-to.z)<2.9&&Math.abs(end.y-to.y)<.5).toBe(true);
 });

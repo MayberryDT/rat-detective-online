@@ -9,6 +9,7 @@ import {parseServerMessage} from '../../src/shared/messageValidation';
 import {CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../../src/shared/grayboxLayout';
 import {createPlayer} from '../../src/worker/gameState';
 import type {PlayerData,Vec3Data} from '../../src/shared/networkProtocol';
+import {JURISDICTION_ZONE_IDS,zoneContains} from '../../src/shared/jurisdictionZones';
 
 afterEach(()=>vi.restoreAllMocks());
 const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
@@ -232,7 +233,8 @@ it('keeps upper-floor rewards unavailable to a rat directly below them',()=>{
     stand(a,{...upper,y:8});sim.step(1/60,now+40);
     expect(sites(sim).some(p=>p.id===upper.id)).toBe(false);
 });
-it('never puts armor on the street',()=>{
+it('keeps armor out of every Jurisdiction zone, so holding a zone never hands out Ironclad',()=>{
     const {sim}=fixture();
-    expect(sites(sim).filter(p=>p.kind==='ironclad').every(p=>p.y>8||p.y<0)).toBe(true);
+    for(const p of sites(sim).filter(p=>p.kind==='ironclad'))for(const id of JURISDICTION_ZONE_IDS)
+        expect(zoneContains(id,{x:p.x,y:p.y-.7,z:p.z}),`${p.id} in ${id}`).toBe(false);
 });

@@ -1,6 +1,7 @@
 import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import * as THREE from 'three';
 import {LANDMARK_INTERIORS, LANDMARK_FURNISHINGS, landmarkBoxes} from '../shared/landmarkLayout';
+import {CHUTE_OUTER_WIDTH, NEEDLEWORKS_CHUTES} from '../shared/city/kit/parts/chute';
 import {registerLandmarkReactions} from './LandmarkReactions';
 import {SEWER_MAINTENANCE_FURNISHINGS} from '../shared/sewerLayout';
 
@@ -312,7 +313,8 @@ export class LandmarkArchitecture {
             this.box('iron',x,y-.035,-41.50,.09,.17,.07);
         }
         this.round('steel',63.2,-2.2,-41.8,.15,.9,.15);
-        this.round('steel',65.1,-1.79,-41.8,.15,3.9,.15,0,0,Math.PI/2);
+        // Runs west into the corner: the wall east of the cabinet opens onto the docks branch.
+        this.round('steel',61.65,-1.79,-41.8,.15,3.3,.15,0,0,Math.PI/2);
         this.sign(['MAINTENANCE'],69.94,-1.93,-37.1,4.7,.61,'#1d2326','#a39d87',-Math.PI/2);
         this.sign(['POWER'],63.2,-2.85,-41.57,1.22,.28,'#24282b','#a39d87');
     }
@@ -360,6 +362,7 @@ export class LandmarkArchitecture {
             for(const level of hall.levels)for(const side of [-1,1]){
                 for(let u=-hall.w/2+3;u<hall.w/2-2;u+=4){
                     if(level===0&&Math.abs(u)<8)continue;
+                    if(hall.id==='needleworks'&&side<0&&NEEDLEWORKS_CHUTES.some(c=>c.floor===level&&Math.abs(hall.cx+u-c.mouthX)<1.9+CHUTE_OUTER_WIDTH/2))continue;
                     this.box(body,hall.cx+u,level+1.25,hall.cz+side*(hall.d/2-1.23),3.6,2.1,.06);
                     this.box('trim',hall.cx+u,level+2.35,hall.cz+side*(hall.d/2-1.28),3.8,.1,.10);
                 }
@@ -435,12 +438,24 @@ export class LandmarkArchitecture {
             if(id==='needleworks')return side>0&&Math.abs(u)<6;
             return side>0&&Math.abs(u)<5;
         };
+        // Needleworks' north face: the fabric chutes leave through the wall, so piers,
+        // cornices and windows stop at their mouths (u along the face, y up).
+        const mouths=id==='needleworks'&&!rotate&&side<0&&bottom===0?NEEDLEWORKS_CHUTES.map(c=>({
+            u0:c.mouthX-cx-CHUTE_OUTER_WIDTH/2-.3,u1:c.mouthX-cx+CHUTE_OUTER_WIDTH/2+.3,y0:c.mouthBottom-.4,y1:c.mouthBottom+c.mouthHeight+.4})):[];
+        const mouthAt=(u0:number,u1:number,y0:number,y1:number)=>mouths.find(m=>u1>m.u0&&u0<m.u1&&y1>m.y0&&y0<m.y1);
         // Cornices follow every floor, while the ground threshold remains completely open.
-        for(let y=bottom+7.8;y<top;y+=8)place('trim',0,y,span+.22,.28,.16,.12);
+        for(let y=bottom+7.8;y<top;y+=8){
+            let from=-span/2-.11;
+            for(const m of mouths.filter(m=>y>m.y0&&y<m.y1).sort((a,b)=>a.u0-b.u0)){place('trim',(from+m.u0)/2,y,m.u0-from,.28,.16,.12);from=m.u1;}
+            place('trim',(from+span/2+.11)/2,y,span/2+.11-from,.28,.16,.12);
+        }
         place('trim',0,top-.25,span+.35,.5,.20,.15);
         for(let u=-span/2+1;u<span/2;u+=skin.pitch){
-            const lower=bottom===0&&door(u)?7:bottom;
-            place(skin.body,u,(top+lower)/2,.72,top-lower,.18,.12);
+            const lower=bottom===0&&door(u)?7:bottom,mouth=mouthAt(u-.36,u+.36,lower,top);
+            if(mouth){
+                place(skin.body,u,(mouth.y0+lower)/2,.72,mouth.y0-lower,.18,.12);
+                place(skin.body,u,(top+mouth.y1)/2,.72,top-mouth.y1,.18,.12);
+            }else place(skin.body,u,(top+lower)/2,.72,top-lower,.18,.12);
             place('trim',u,top-.9,1.1,.18,.22,.16);
         }
         let row=0;
@@ -448,6 +463,7 @@ export class LandmarkArchitecture {
             let col=0;
             for(let u=-span/2+skin.pitch/2;u<span/2-2;u+=skin.pitch,col++){
                 if(y<7&&door(u))continue;
+                if(mouthAt(u-skin.windowW/2-.3,u+skin.windowW/2+.3,y-skin.windowH/2-.4,y+skin.windowH/2+.3))continue;
                 const lit=(row*7+col*3+(rotate?2:0)+(side>0?1:0))%7<4;
                 const tone:Finish=lit?((row+col)%5===0?'cream':skin.light):'glass';
                 place('iron',u,y,skin.windowW+.45,skin.windowH+.45,.09,.11);

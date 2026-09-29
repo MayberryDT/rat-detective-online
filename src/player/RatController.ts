@@ -5,6 +5,7 @@ import { RatEntity } from '../entities/RatEntity';
 import { RatOptions } from '../utils/RatModel';
 import { PRESSURE_LAUNCH, type ChaosState } from '../shared/chaosState';
 import { LAUNCH_DRIFT_DECAY } from '../shared/launcherVelocity';
+import { guardFastFall, touchingSlick } from '../shared/ratSurfaces';
 import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
 import type {TouchMovement} from '../session/TouchInput';
@@ -96,7 +97,7 @@ export class RatController {
     prepareMovement(dt: number, keys: Record<string, boolean>, touch?: TouchMovement): void {
         if (this.disposed) return;
         this.groundGrace = Math.max(0, this.groundGrace - dt);
-        if (!this.entity.dead && this.entity.hp > 0) this.applyMovement(dt, keys, touch);
+        if (!this.entity.dead && this.entity.hp > 0) {this.applyMovement(dt, keys, touch);guardFastFall(this.entity.world,this.entity.body,dt);}
         else {this.normalJump=false;this.beforeLaunchDamping=undefined;this.driftX=this.driftZ=0;this.hangLeft=0;}
     }
 
@@ -214,7 +215,10 @@ export class RatController {
             const fade = Math.exp(-LAUNCH_DRIFT_DECAY * dt);
             this.driftX *= fade; this.driftZ *= fade;
         }
-        if (len > 0 || drifting) {
+        // A chute owns the ride: no legs, no brakes and no jump until the street.
+        const riding = touchingSlick(this.entity.world, this.entity.body);
+        if (riding) this.entity.body.wakeUp();
+        else if (len > 0 || drifting) {
             this.entity.body.wakeUp();
             v.x += (desiredX + this.driftX - v.x) * acceleration;
             v.z += (desiredZ + this.driftZ - v.z) * acceleration;
@@ -224,7 +228,7 @@ export class RatController {
         }
 
         // Jump
-        if ((keys['Space'] || touch?.jump) && this.groundGrace > 0) {
+        if ((keys['Space'] || touch?.jump) && this.groundGrace > 0 && !riding) {
             v.y = JUMP_IMPULSE;
             emitWorldSound(this.entity.scene,'jump',this.entity.body.position,{key:'local-jump'});
             this.groundGrace = 0;

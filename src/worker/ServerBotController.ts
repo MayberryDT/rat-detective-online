@@ -8,6 +8,7 @@ import {SpatialRayQuery} from '../shared/SpatialRayQuery';
 import {CITY_BOUNDS,grayboxBoxes} from '../shared/grayboxLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
 import {LAUNCH_DRIFT_DECAY} from '../shared/launcherVelocity';
+import {guardFastFall,touchingSlick} from '../shared/ratSurfaces';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
 import type {WorldSpec} from '../shared/worldSpec';
 
@@ -224,16 +225,17 @@ export class ServerBotController {
             if(grounded&&now>=bot.launchedUntil)bot.driftX=bot.driftZ=0;
             else if(bot.driftX||bot.driftZ){const fade=Math.exp(-LAUNCH_DRIFT_DECAY*Math.min(dt,1/30));bot.driftX*=fade;bot.driftZ*=fade;}
             // A bot steering a planned roof route cancels the drift to reach its landing.
-            const drift=bot.brain.flyingRoute?0:1;
-            body.velocity.x+=(intent.x+bot.driftX*drift-body.velocity.x)*.14;body.velocity.z+=(intent.z+bot.driftZ*drift-body.velocity.z)*.14;
+            // A chute owns the ride (bots never plan into one; they may be knocked in).
+            const drift=bot.brain.flyingRoute?0:1,riding=touchingSlick(this.world,body);
+            if(!riding){body.velocity.x+=(intent.x+bot.driftX*drift-body.velocity.x)*.14;body.velocity.z+=(intent.z+bot.driftZ*drift-body.velocity.z)*.14;}
             // Ignore stale takeoff contacts briefly, without ever locking air steering.
-            if(intent.jump&&grounded&&now>=bot.launchedUntil){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
+            if(intent.jump&&grounded&&!riding&&now>=bot.launchedUntil){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
             if(bot.normalJump)body.force.y+=body.mass*this.world.gravity.y*.28;
             for(const axis of ['x','z'] as const){
                 if(body.position[axis]<CITY_BOUNDS.min+4&&body.velocity[axis]<0)body.velocity[axis]=Math.max(8,-body.velocity[axis]*.45);
                 if(body.position[axis]>CITY_BOUNDS.max-4&&body.velocity[axis]>0)body.velocity[axis]=-Math.max(8,body.velocity[axis]*.45);
             }
-            bot.facing=intent.facing;body.wakeUp();
+            bot.facing=intent.facing;body.wakeUp();guardFastFall(this.world,body,Math.min(dt,1/30));
             if(intent.shoot){
                 const origin=serverBotMuzzle(body.position,bot.facing),dx=intent.shoot.x-origin.x,dy=intent.shoot.y-origin.y,dz=intent.shoot.z-origin.z;
                 const length=Math.hypot(dx,dy,dz);

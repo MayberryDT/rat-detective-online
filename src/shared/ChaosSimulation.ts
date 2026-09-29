@@ -4,7 +4,7 @@ import type {WorldFoleyCue} from './foleyEvents';
 import { SpatialRayQuery } from './SpatialRayQuery';
 import { sweepSphereBody } from './sweepSphere';
 import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS, NETPLAY_COMPENSATION_MS, NETPLAY_HISTORY_MS, type MovementPoint } from './netplay';
-import { StaticCityBroadphase, addCityBody, cityBoxBody } from './StaticCityBroadphase';
+import { SLICK_MATERIAL, StaticCityBroadphase, addCityBody, cityBoxBody } from './StaticCityBroadphase';
 import { launcherVelocity, LANDING_SHOCKWAVE, SURGE, type ThrowSource } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
@@ -29,6 +29,8 @@ const caseCarryRotation=new C.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATI
 /** A launched case lands rather than ping-ponging: balls keep their 0.9 bounce,
  * but a heavy briefcase sheds most of its speed on each ground contact. */
 const LAUNCHED_CASE_RESTITUTION = .35;
+/** Cases carry their own material so chutes (slick) can drop friction and most of the bounce. */
+const CASE_MATERIAL = new C.Material('case');
 
 const outsideCity=(x:number,z:number)=>x<CITY_BOUNDS.min||x>CITY_BOUNDS.max||z<CITY_BOUNDS.min||z>CITY_BOUNDS.max;
 
@@ -151,6 +153,8 @@ export class ChaosSimulation {
         this.world.collisionMatrixPrevious=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
         this.world.defaultContactMaterial.friction=.15;
         this.world.defaultContactMaterial.restitution=.72;
+        // A loose case that falls into a chute rides it to the street; it never snags upstairs.
+        this.world.addContactMaterial(new C.ContactMaterial(SLICK_MATERIAL,CASE_MATERIAL,{friction:0,restitution:.1}));
         for(const b of grayboxBoxes(spec)){
             const body=cityBoxBody(b);
             addCityBody(this.world,body);this.targets.set(body,{kind:'world'});
@@ -204,7 +208,7 @@ export class ChaosSimulation {
         return true;
     }
     private createCase(id:string,fake=false):CaseRuntime{
-        const body=new C.Body({mass:1.5,shape:new C.Box(new C.Vec3(CASE_SIZE.x/2,CASE_SIZE.y/2,CASE_SIZE.z/2)),
+        const body=new C.Body({mass:1.5,shape:new C.Box(new C.Vec3(CASE_SIZE.x/2,CASE_SIZE.y/2,CASE_SIZE.z/2)),material:CASE_MATERIAL,
             position:vec(CASE_HOME),collisionFilterGroup:4,collisionFilterMask:1|8|16,linearDamping:.2,angularDamping:.25});
         body.addShape(new C.Box(new C.Vec3(.15,.035,.04)),new C.Vec3(0,.43,0));
         for(const x of [-.12,.12])body.addShape(new C.Box(new C.Vec3(.0275,.065,.04)),new C.Vec3(x,.36,0));
@@ -1387,7 +1391,8 @@ export class ChaosSimulation {
             }
             this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:shotRadius(shot)>radiusBefore?'grow' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,v.length())}:{})});
         }
-        for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -20||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
+        // A corpse knocked into the harbour sinks out of sight (the case rule's line: y -9).
+        for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -9||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
         for(const c of this.cases.values())this.stepLooseCase(c,now,playing);
         for(const id of this.pickupApproaches.keys())if(!this.players.has(id))this.pickupApproaches.delete(id);
         for(const player of this.players.values()){

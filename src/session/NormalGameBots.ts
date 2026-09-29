@@ -5,6 +5,7 @@ import { BotNavigation } from '../shared/BotNavigation';
 import { StaticCityBroadphase, cityBoxBody } from '../shared/StaticCityBroadphase';
 import { CITY_BARS_GROUP } from '../shared/boxFrame';
 import { SpatialRayQuery } from '../shared/SpatialRayQuery';
+import { guardFastFall, touchingSlick } from '../shared/ratSurfaces';
 import { CITY_BOUNDS, grayboxBoxes } from '../shared/grayboxLayout';
 import { DISPATCH_STATIONS, LAUNCH_MACHINES, type ChaosState } from '../shared/chaosState';
 import { COAT_COLORS, FUR_COLORS, HAT_COLORS, HAT_TYPES } from '../shared/ratAppearance';
@@ -179,7 +180,7 @@ export class NormalGameBots {
             if(grounded&&(!bot.zoneHop||body.velocity.y<=1)){bot.normalJump=false;bot.zoneHop=false;}
             Object.assign(self,{x:body.position.x,y:body.position.y,z:body.position.z});
             const intent=bot.brain.step(now,self,this.players.values(),this.chaos,target=>this.visible(bot,target),grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visibleControl(bot,target));
-            if(now>=bot.launchedUntil){
+            if(now>=bot.launchedUntil&&!touchingSlick(this.world,body)){
                 body.velocity.x+=(intent.x-body.velocity.x)*.14;body.velocity.z+=(intent.z-body.velocity.z)*.14;
                 if(intent.jump){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
             }
@@ -188,7 +189,7 @@ export class NormalGameBots {
                 if(body.position[axis]<CITY_BOUNDS.min+4&&body.velocity[axis]<0)body.velocity[axis]=Math.max(8,-body.velocity[axis]*.45);
                 if(body.position[axis]>CITY_BOUNDS.max-4&&body.velocity[axis]>0)body.velocity[axis]=-Math.max(8,body.velocity[axis]*.45);
             }
-            bot.facing=intent.facing;body.wakeUp();
+            bot.facing=intent.facing;body.wakeUp();guardFastFall(this.world,body,dt);
             if(intent.shoot){
                 const origin=this.options.muzzle?.(bot.id,body.position,bot.facing);
                 if(origin){

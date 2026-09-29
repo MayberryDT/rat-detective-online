@@ -105,12 +105,18 @@ export function removeCityBody(world:C.World,body:C.Body):void {
     if(!(world.broadphase instanceof StaticCityBroadphase)||!world.broadphase.removeFixed(body))world.removeBody(body);
 }
 
+/** Slick city surfaces (chutes). Cannon combines friction per material pair, so a
+ * world makes slick contacts frictionless with a ContactMaterial against its movers'
+ * material; the rat controllers recognise it to hand the ride to gravity. */
+export const SLICK_MATERIAL=new C.Material('slick');
+
 /** The static body of one city box: posed by boxFrame, bars in their own group. */
-export function cityBoxBody(b:BoxPose&{passBalls?:true}):C.Body {
+export function cityBoxBody(b:BoxPose&{passBalls?:true;slick?:true}):C.Body {
     const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(b.w/2,b.h/2,b.d/2))});
     body.position.set(b.x,b.y,b.z);
     const q=boxQuaternion(b);body.quaternion.set(q.x,q.y,q.z,q.w);
     if(b.passBalls)body.collisionFilterGroup=CITY_BARS_GROUP;
+    if(b.slick)body.material=SLICK_MATERIAL;
     body.updateAABB();
     return body;
 }

@@ -10,6 +10,7 @@ import { CityGrime } from './CityGrime';
 import { ParkedVehicles } from './ParkedVehicles';
 import { LandmarkArchitecture } from './LandmarkArchitecture';
 import { KitArchitecture } from './KitArchitecture';
+import { cityHarbourWater, type HarbourWater } from './HarbourWater';
 import { kitCity } from '../shared/city/kit/city';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import {StreetLightPool,insideLightRoom} from './StreetLightPool';
@@ -40,6 +41,7 @@ export class Neighborhood {
     private readonly glowMaterials = new Map<number,THREE.MeshBasicMaterial>();
     private architecture!: LandmarkArchitecture;
     private kit!: KitArchitecture;
+    private water?: HarbourWater;
     private vehicles!: ParkedVehicles;
     private grime!: CityGrime;
     private sewerPortals!: SewerPortals;
@@ -81,7 +83,7 @@ export class Neighborhood {
         for(const b of boxes){
             if (++builtBoxes % 40 === 0) yield;
             if(b.original)continue;
-            const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz,b.ry,b.passBalls);
+            const mesh=this.box(b.x,b.y,b.z,b.w,b.h,b.d,b.color,b.rx,b.rz,b.ry,b);
             if(b.hidden)mesh.visible=false;
             if(b.y+b.h/2<=.15&&b.y+b.h/2>=-.1)mesh.material.userData.streetSurface='ground';
             else if(b.rx||b.rz)mesh.material.userData.streetSurface='stairs';
@@ -175,6 +177,7 @@ export class Neighborhood {
         this.architecture=new LandmarkArchitecture(scene,lighting==='classic');
         yield;
         this.kit=new KitArchitecture(scene);
+        this.water=cityHarbourWater(scene,kitCity());
         yield;
         this.vehicles=new ParkedVehicles(scene);
         yield;
@@ -227,6 +230,7 @@ export class Neighborhood {
         this.readability?.update();
         this.architecture.update(_dt);
         this.kit.update(_dt);
+        this.water?.update(_dt);
         this.grime.update(_dt);
         // Outdoor bounce light supplies a visibility floor; existing sewer lighting stays intact.
         if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera,anchor);}
@@ -386,13 +390,13 @@ export class Neighborhood {
             light.decay=source.decay;
         }
     }
-    private box(x:number,y:number,z:number,w:number,h:number,d:number,color:number,rx=0,rz=0,ry=0,passBalls?:true) {
+    private box(x:number,y:number,z:number,w:number,h:number,d:number,color:number,rx=0,rz=0,ry=0,flags:{passBalls?:true;slick?:true}={}) {
         const mesh=this.add(new THREE.Mesh(new THREE.BoxGeometry(w,h,d),this.material(color)));
         const q=boxQuaternion({rx,ry,rz});
         mesh.position.set(x,y,z);mesh.quaternion.set(q.x,q.y,q.z,q.w);mesh.receiveShadow=true;mesh.castShadow=true;
         // Bars stop rats, never aim or the camera.
-        if(!passBalls){mesh.userData.aimTarget=true;this.solids.push(mesh);}
-        const body=cityBoxBody({x,y,z,w,h,d,rx,ry,rz,...(passBalls?{passBalls}:{})});
+        if(!flags.passBalls){mesh.userData.aimTarget=true;this.solids.push(mesh);}
+        const body=cityBoxBody({x,y,z,w,h,d,rx,ry,rz,...(flags.passBalls?{passBalls:true as const}:{}),...(flags.slick?{slick:true as const}:{})});
         addCityBody(this.world,body);this.bodies.push(body);
         return mesh;
     }
@@ -407,7 +411,7 @@ export class Neighborhood {
     dispose() {
         this.readability?.dispose();
         this.overhead?.dispose();
-        this.architecture?.dispose();this.kit?.dispose();
+        this.architecture?.dispose();this.kit?.dispose();this.water?.dispose();
         this.vehicles?.dispose();
         this.grime?.dispose();
         this.sewerPortals?.dispose();

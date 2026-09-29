@@ -4,12 +4,15 @@ import { harbour } from './parts/harbour';
 import { docks } from './parts/docks';
 import { sewer } from './parts/sewer';
 import { precinct } from './parts/precinct';
+import { needleworksChutes } from './parts/chute';
+import { bankWalls } from './parts/bankWalls';
+import { gateLane } from './parts/gateLane';
 
 /** A part writes its colliders, look, lights and rooms into the builder. */
 export type KitPart = (k:KitBuilder)=>void;
 
 /** Every kit part of the city, in build order. */
-const PARTS:KitPart[] = [harbour,docks,sewer,precinct];
+const PARTS:KitPart[] = [harbour,docks,sewer,precinct,needleworksChutes,bankWalls,gateLane];
 
 const cache=new Map<boolean,KitBuilder>();
 

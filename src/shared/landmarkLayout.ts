@@ -1,6 +1,7 @@
 import type { GrayboxBox } from './grayboxLayout';
 import type { Vec3Data } from './networkProtocol';
 import { fromBoxLocal, toBoxLocal } from './boxFrame';
+import { CHUTE_OUTER_WIDTH, NEEDLEWORKS_CHUTES } from './city/kit/parts/chute';
 
 /** Playable civic interiors. Parent owns graybox/neighborhood visuals and imports these. */
 export interface LandmarkInterior {
@@ -41,6 +42,8 @@ interface Opening {
     center: number;
     width: number;
     height: number;
+    /** Sill height; doors start at the floor (0). */
+    bottom?: number;
 }
 
 interface LandmarkSpec {
@@ -95,6 +98,8 @@ const SPECS: LandmarkSpec[] = [
             {wall:'south', center:-105, width:12, height:DOOR_H},
             {wall:'east', center:82, width:10, height:DOOR_H},
             {wall:'north', center:-105, width:8, height:DOOR_H},
+            // The fabric chutes' mouths (floors 8 and 16), cut down to the slide's pitch.
+            ...NEEDLEWORKS_CHUTES.map(c=>({wall:'north' as const,center:c.mouthX,width:CHUTE_OUTER_WIDTH,height:c.mouthHeight,bottom:c.mouthBottom})),
         ],
     },
     {
@@ -119,7 +124,8 @@ export function landmarkExitPoint(from:Vec3Data,to:Vec3Data):Vec3Data {
     if(index<0)return to;
     const h=SPECS[index];
     if(to.x>=h.xmin-1&&to.x<=h.xmax+1&&to.z>=h.zmin-1&&to.z<=h.zmax+1)return to;
-    const exits=h.openings.map(o=>o.wall==='north'?{x:o.center,y:0,z:h.zmin-4}:
+    // Doors only: a chute mouth is a one-way ride, never a planned exit.
+    const exits=h.openings.filter(o=>!o.bottom).map(o=>o.wall==='north'?{x:o.center,y:0,z:h.zmin-4}:
         o.wall==='south'?{x:o.center,y:0,z:h.zmax+4}:
         o.wall==='west'?{x:h.xmin-4,y:0,z:o.center}:{x:h.xmax+4,y:0,z:o.center});
     const cost=(p:Vec3Data)=>Math.hypot(from.x-p.x,from.z-p.z)+Math.hypot(to.x-p.x,to.z-p.z);
@@ -151,22 +157,19 @@ function punch(rects:Rect[], hole:Rect):Rect[] {
 const toLocal=(b:GrayboxBox,x:number,y:number,z:number)=>toBoxLocal(b,x,y,z);
 const fromLocal=(b:GrayboxBox,lx:number,ly:number,lz:number)=>fromBoxLocal(b,lx,ly,lz);
 
-function addWall(boxes:GrayboxBox[], face:WallFace, spec:LandmarkSpec, opening?:Opening) {
+function addWall(boxes:GrayboxBox[], face:WallFace, spec:LandmarkSpec, openings:readonly Opening[]) {
     const {xmin,xmax,zmin,zmax,wall}=spec;
-    const y0=0, y1=ROOF, mid=(y0+y1)/2, h=y1-y0;
     const alongX=face==='north'||face==='south';
     const u=alongX ? (face==='south'?zmax-WALL/2:zmin+WALL/2) : (face==='east'?xmax-WALL/2:xmin+WALL/2);
-    const v0=alongX?xmin:zmin, v1=alongX?xmax:zmax;
-    const push=(vc:number,vw:number,yc:number,yh:number)=>{
+    // The wall's elevation as a rectangle (along the wall × height), minus every opening.
+    let parts:Rect[]=[{xmin:alongX?xmin:zmin,xmax:alongX?xmax:zmax,zmin:0,zmax:ROOF}];
+    for(const o of openings){
+        const bottom=o.bottom??0;
+        parts=punch(parts,{xmin:o.center-o.width/2,xmax:o.center+o.width/2,zmin:bottom,zmax:bottom+o.height});
+    }
+    for(const r of parts){
+        const vc=(r.xmin+r.xmax)/2,vw=r.xmax-r.xmin,yc=(r.zmin+r.zmax)/2,yh=r.zmax-r.zmin;
         boxes.push(alongX ? make(vc,yc,u,vw,yh,WALL,wall) : make(u,yc,vc,WALL,yh,vw,wall));
-    };
-    if(!opening){push((v0+v1)/2,v1-v0,mid,h);return;}
-    const o0=opening.center-opening.width/2, o1=opening.center+opening.width/2;
-    if(o0>v0) push((v0+o0)/2,o0-v0,mid,h);
-    if(o1<v1) push((o1+v1)/2,v1-o1,mid,h);
-    if(opening.height<h){
-        const ly0=y0+opening.height;
-        push(opening.center,opening.width,(ly0+y1)/2,y1-ly0);
     }
 }
 
@@ -221,11 +224,7 @@ function addFloorRects(boxes:GrayboxBox[], spec:LandmarkSpec, level:number, rect
 }
 
 function addEnclosure(boxes:GrayboxBox[], spec:LandmarkSpec) {
-    const openingAt=(wall:WallFace)=>spec.openings.find(o=>o.wall===wall);
-    addWall(boxes,'south',spec,openingAt('south'));
-    addWall(boxes,'north',spec,openingAt('north'));
-    addWall(boxes,'east',spec,openingAt('east'));
-    addWall(boxes,'west',spec,openingAt('west'));
+    for(const face of ['south','north','east','west'] as const)addWall(boxes,face,spec,spec.openings.filter(o=>o.wall===face));
     const {cx,cz}=hallCenter(spec);
     boxes.push(make(cx, ROOF+FLOOR_H/2, cz, spec.xmax-spec.xmin-0.2, FLOOR_H, spec.zmax-spec.zmin-0.2, spec.floor));
     // The upper mass starts above the ceiling slab, avoiding two coplanar

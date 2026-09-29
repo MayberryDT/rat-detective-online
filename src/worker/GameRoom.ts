@@ -11,6 +11,7 @@ import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import { serializeServerMessage } from './serializeServerMessage';
 import type { ChaosState } from '../shared/chaosState';
 import { GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
+import { drowned } from '../shared/city/kit/city';
 import { ASSIGNMENT_IDS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
 import { incidentRoster, isEvidenceMode, isIncidentId, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
 import { DurableObject } from 'cloudflare:workers';
@@ -18,11 +19,13 @@ import {
   MAX_CONNECTIONS,
   MAX_SERVER_MESSAGE_BYTES,
   MAX_PLAYERS,
+  MAX_HP,
   DEFAULT_ROOM_NAME,
   PROTOCOL_VERSION,
   RESPAWN_DELAY_MS,
   WIN_DISPLAY_MS,
   type ClientMessage,
+  type EnvironmentCause,
   type PlayerData,
   type PublicRoomStatus,
   type RoundState,
@@ -1083,6 +1086,12 @@ export class GameRoom extends DurableObject<Env> {
     player.meshQw = message.meshRotation.w;
     this.chaos?.recordMovement(playerId,from,position,at,seq);
     this.persistPlayer(player, corrected);
+    // The harbour (plan D1): a rat whose feet sink into the water dies, credited to nobody.
+    // The claim is the rat's own, so trusting it can only drown the claimant.
+    const claimed=bounded.position;
+    if(this.world.version===GRAYBOX_VERSION&&player.hp>0&&drowned(claimed.x,claimed.y,claimed.z))
+      void this.handleHit(null,{type:'hit',victimId:playerId,damage:MAX_HP},undefined,false,false,'drowned')
+        .catch(error=>log('error','drowning failed',{error:String(error)}));
 
     const pose = {
       id: player.id,
@@ -1196,7 +1205,7 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false): Promise<void> {
+  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false, environment:EnvironmentCause = 'evidence-tampering'): Promise<void> {
     if (this.round.phase !== 'playing') return;
 
     const victim = this.players.get(message.victimId);
@@ -1204,7 +1213,7 @@ export class GameRoom extends DurableObject<Env> {
     const hpBefore = victim?.hp ?? 0;
     const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, playerId && this.chaos?.isCaseHolder(playerId) ? playerId : null, !!this.chaos?.assignmentState, explosive);
     if (!result.applied || !victim) return;
-    const cause = playerId === null ? {cause:'evidence-tampering' as const} : {};
+    const cause = playerId === null ? {cause:environment} : {};
 
     // Final mutations precede persistence and externally visible events.
     // Nonlethal hits do not change the shooter; lethal hits persist the victim

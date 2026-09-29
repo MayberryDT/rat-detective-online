@@ -26,12 +26,12 @@ it('allows the existing rat body to descend and climb each sewer ramp',()=>{
  for(const entry of ENTRIES){
   const rat=new RatEntity(scene,world,new THREE.Vector3(entry.x,0.05,entry.z),'',{});
   const axis=entry.axis;
-  const sign=Math.sign(entry[axis]);
+  const sign=entry.direction;
   for(let i=0;i<300;i++){rat.body.velocity[axis]=-sign*6;world.step(1/60);rat.update(1/60);}
-  expect(Math.abs(rat.body.position[axis])).toBeLessThan(Math.abs(entry[axis])-26);
+  expect(rat.body.position[axis]*sign).toBeLessThan(entry[axis]*sign-26);
   expect(rat.body.position.y).toBeLessThan(-6.7);
   for(let i=0;i<330;i++){rat.body.velocity[axis]=sign*6;world.step(1/60);rat.update(1/60);}
-  expect(Math.abs(rat.body.position[axis])).toBeGreaterThan(Math.abs(entry[axis])-2);
+  expect(rat.body.position[axis]*sign).toBeGreaterThan(entry[axis]*sign-2);
   expect(rat.body.position.y).toBeGreaterThan(-0.15);
   rat.dispose();
  }
