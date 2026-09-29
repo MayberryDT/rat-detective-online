@@ -26,7 +26,8 @@ export const FLUSH_MS = 60_000;
 export const WINDOW_BEFORE_MS = 3000;
 export const WINDOW_AFTER_MS = 2000;
 const RING = 30;
-const SIGHT_RANGE = 60;
+/** Humans kill from far off (a third of Tyler's first 36 kills were past 50 units), so sight reaches across a district. */
+const SIGHT_RANGE = 150;
 const ANOMALY_COOLDOWN_MS = 10_000;
 const PENDING_LIMIT = 50_000;
 
@@ -184,7 +185,8 @@ export class CityRecorder {
     if (!h.killed) return;
     const killer = a && a.id !== v.id ? a : undefined;
     const assists = this.ledger.death(killer?.id ?? null, v.id, now).map(id => this.actor(id));
-    const cause = h.incoming ? 'missile' : h.explosive ? 'explosion' : !killer && !a ? 'city' : h.headshot ? 'headshot' : 'shot';
+    // `incoming` is the ball's travel for the ragdoll (every shot has one), not a missile.
+    const cause = h.explosive ? 'explosion' : !killer && !a ? 'city' : h.headshot ? 'headshot' : 'shot';
     this.cell(now, 'deaths', v); this.measure(now, vPlace, 'deaths'); this.measure(now, vPlace, `deaths-${this.who(v.id)}`);
     if (now - life.start < 5000) this.measure(now, life.spawnPlace, 'spawn-deaths-5s');
     if (killer && aPlace) {
@@ -391,12 +393,12 @@ export class CityRecorder {
       const v: [number, number] = prev && dt > 0 ? [round1((p.x - prev.x) / dt), round1((p.z - prev.z) / dt)] : [0, 0];
       life.prev = { x: p.x, z: p.z, at: now };
       const b = state.buffs?.[p.id], carrying = state.case.owner === p.id;
-      let visible = 0, nearest: number | undefined;
+      let visible = 0, nearest: number | undefined, nearestVisible: number | undefined;
       for (const o of players.values()) {
         if (o.id === p.id || o.hp <= 0 || !alive) continue;
         const dist = Math.hypot(o.x - p.x, o.y - p.y, o.z - p.z);
         nearest = Math.min(nearest ?? Infinity, dist);
-        if (dist <= SIGHT_RANGE && (!this.deps.sight || this.deps.sight({ x: p.x, y: p.y + 1.5, z: p.z }, { x: o.x, y: o.y + 1, z: o.z }))) visible++;
+        if (dist <= SIGHT_RANGE && (!this.deps.sight || this.deps.sight({ x: p.x, y: p.y + 1.5, z: p.z }, { x: o.x, y: o.y + 1, z: o.z }))) { visible++; nearestVisible = Math.min(nearestVisible ?? Infinity, dist); }
       }
       life.shots = life.shots.filter(t => now - t <= 10_000);
       const lastShot = life.shots[life.shots.length - 1];
@@ -408,7 +410,7 @@ export class CityRecorder {
         ...(objective ? { objectiveDist: round1(Math.hypot(objective.x - p.x, objective.z - p.z)) } : {}),
         standing: table.get(p.id)!, kda: this.ledger.kda(p.id),
         fire: { last10s: life.shots.length, ...(lastShot === undefined ? {} : { lastAgoMs: now - lastShot }) },
-        danger: { visible, ...(nearest === undefined ? {} : { nearest: round1(nearest) }),
+        danger: { visible, ...(nearest === undefined ? {} : { nearest: round1(nearest) }), ...(nearestVisible === undefined ? {} : { nearestVisible: round1(nearestVisible) }),
           ...(life.lastHit ? { lastHitAgoMs: now - life.lastHit.at, ...(life.lastHit.by ? { lastHitBy: this.actor(life.lastHit.by) } : {}) } : {}),
           ...(state.dispatch.wanted === p.id ? { wanted: true as const } : {}) } });
       if (!alive) continue;

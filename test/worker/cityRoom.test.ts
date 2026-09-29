@@ -111,6 +111,20 @@ describe('city recorder in the room', () => {
     expect(byCity.type === 'death' && byCity.cause).toBe('city');
   });
 
+  it('names a death by what killed it: every shot carries a ball direction, which is not a missile', async () => {
+    const stub = await cityRoom();
+    await runInDurableObject(stub, async (instance: GameRoom) => {
+      const game = instance as unknown as Internals, now = Date.now();
+      play(game, now, 0);
+      const killer = game.players.get('human-live')!, v = game.players.get(PERSISTENT_BOT_IDS[0])!;
+      v.hp = 0;
+      game.city.hit({ attacker: killer, victim: v, damage: MAX_HP, killed: true, headshot: true, explosive: false, incoming: true }, now + 10);
+      game.city.flush(now + 20, true); await game.city.settled();
+    });
+    const death = (await archived()).find(f => f.type === 'death');
+    expect(death?.type === 'death' && death.cause).toBe('headshot');
+  });
+
   it('keeps flushed counts through eviction without counting them twice', async () => {
     const stub = await cityRoom();
     await runInDurableObject(stub, (instance: GameRoom) => {

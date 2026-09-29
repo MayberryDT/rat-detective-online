@@ -40,7 +40,8 @@ export interface RatSituation {
   kda: Kda;
   /** How often it is shooting: trigger pulls in the last 10 s, and time since the last one. */
   fire: { last10s: number; lastAgoMs?: number };
-  danger: { visible: number; nearest?: number; lastHitAgoMs?: number; lastHitBy?: number; wanted?: true };
+  /** Rivals in line of sight within 150 units, and the nearest of them; `nearest` ignores walls. */
+  danger: { visible: number; nearest?: number; nearestVisible?: number; lastHitAgoMs?: number; lastHitBy?: number; wanted?: true };
 }
 
 /** The whole city at one moment, recorded every second with the rats' situations. */
@@ -61,8 +62,9 @@ export type CityFact = FactContext & (
   | { type: 'spawn'; a: number; p: P3; place: string; nearest?: number }
   | { type: 'shot'; a: number; human: boolean; p: P3; place: string; dir: P3; gapMs?: number }
   | { type: 'ball'; a?: number; outcome: ShotResultOutcome; p?: P3; place?: string; victim?: number }
+  /** `incoming`: the hit came with a ball's travel direction (true for ordinary shots). */
   | { type: 'damage'; a?: number; victim: number; dmg: number; head: boolean; explosive: boolean; incoming: boolean; ap?: P3; vp: P3; dist?: number; hpAfter: number }
-  | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'missile' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[] }
+  | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[] }
   | { type: 'pickup'; a: number; site: string; kind: PickupKind; p: P3; place: string; hpBefore: number; waitedMs?: number }
   | { type: 'restock'; site: string; kind: PickupKind }
   | { type: 'heal'; a: number; cause: HealCause; hp: number }
