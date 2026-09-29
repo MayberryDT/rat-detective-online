@@ -24,6 +24,12 @@ export default {
       const room=env.GAME_ROOM.getByName(name);await room.enableMatchmaking(name);
       return Response.json({room:name,...await room.status()},{headers:{'cache-control':'no-store'}});
     }
+    // Authenticated heat map of one private room, for smoke-testing the recorder.
+    if(url.pathname==='/api/heat/v1'){
+      const name=url.searchParams.get('room')??'';
+      if(!/^graybox-(?:practice-probe|benchmark)-[a-z0-9-]{1,80}$/.test(name))return new Response('Not found',{status:404});
+      return Response.json({room:name,...await env.GAME_ROOM.getByName(name).heat(1)},{headers:{'cache-control':'no-store'}});
+    }
     if (url.pathname !== '/ws' || !/^graybox-(?:practice-probe|benchmark)-[a-z0-9-]{1,80}$/.test(url.searchParams.get('room') ?? '')) {
       return new Response('Not found', { status: 404 });
     }

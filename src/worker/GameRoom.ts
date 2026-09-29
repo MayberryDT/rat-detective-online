@@ -44,6 +44,7 @@ import { RoomDiagnostics } from './RoomDiagnostics';
 import { ServerBotController } from './ServerBotController';
 import { createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
+import { HEAT_CELL, HEAT_FLUSH_MS, HEAT_RETENTION_DAYS, HEAT_SAMPLE_MS, HeatDay, heatDayKey, mergeHeat, type HeatData, type HeatLayer } from './HeatMap';
 import { logClientDiagnostics, allowsLocalDiagnostics } from './clientDiagnostics';
 import { companionProjectionDue, companionProjectionSignature, projectCompanionRoom } from './companionStatus';
 import {
@@ -166,6 +167,11 @@ export class GameRoom extends DurableObject<Env> {
   private readonly dueCheckpoints = new Set<string>();
   /** Polish 19: cosmetic per-round Case File tallies (memory only). */
   private readonly awards = new RoundAwards();
+  /** City-planning heat map: today's cells in memory, one JSON row per UTC day. */
+  private readonly heatDays = new Map<string, HeatDay>();
+  private readonly heatDirty = new Set<string>();
+  private heatSampleAt = 0;
+  private heatSavedAt = 0;
   private lastActiveAt = new Map<string, number>();
   private recentShots = new Map<string, string[]>();
   private lastMovementSequence = new Map<string, number>();
@@ -380,7 +386,7 @@ export class GameRoom extends DurableObject<Env> {
       this.activateCompanion();
     } else {
       this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined;
-      if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; }
+      if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; this.flushHeat(this.now()); }
       if (this.chaos && wasRunning) this.checkpointGame();
       this.nextBotHeartbeat = 0;
       if (this.roundBotCount) { this.roundBotCount = 0; this.writeRoundBotCount(); }
@@ -791,6 +797,10 @@ export class GameRoom extends DurableObject<Env> {
         due_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_pending_events_due_at ON pending_events(due_at);
+      CREATE TABLE IF NOT EXISTS heat_days (
+        day TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
     `);
 
     const columns = this.ctx.storage.sql
@@ -1205,6 +1215,8 @@ export class GameRoom extends DurableObject<Env> {
     if (result.killed && shooter && shooter !== victim) this.awards.kill(shooter, victim, headshot);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
     if (!result.killed) return;
+    this.recordHeat('deaths', victim, now);
+    if (shooter && shooter !== victim) this.recordHeat('kills', shooter, now);
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
       respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{})});
     this.broadcastScoreboard();
@@ -1437,6 +1449,8 @@ export class GameRoom extends DurableObject<Env> {
       this.flushMovement('tick');
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
+      if(now>=this.heatSampleAt){this.heatSampleAt=now+HEAT_SAMPLE_MS;this.sampleHeat(now);}
+      if(now-this.heatSavedAt>=HEAT_FLUSH_MS)this.flushHeat(now);
       if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0,state.pressure?.launches,state.dispatch);
       const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
       // Ownership/Dispatch/assignment changes persist before any client sees them.
@@ -1585,6 +1599,51 @@ export class GameRoom extends DurableObject<Env> {
       this.round = { ...this.round, startedAt: this.now() };
       this.persistRound();
     }
+  }
+
+  /** Aggregated heat for the last `days` UTC days (1–30), current memory included. */
+  async heat(days: number, now = this.now()): Promise<{ days: string[]; cell: number } & HeatData> {
+    this.flushHeat(now);
+    const from = heatDayKey(now - (days - 1) * 86_400_000);
+    const rows = this.ctx.storage.sql.exec<{ day: string; data: string }>('SELECT day, data FROM heat_days WHERE day >= ? ORDER BY day', from).toArray();
+    return { days: rows.map(row => row.day), cell: HEAT_CELL, ...mergeHeat(rows.map(row => HeatDay.parse(row.data).toJSON())) };
+  }
+
+  private heatDay(now: number): [string, HeatDay] {
+    const key = heatDayKey(now);
+    let day = this.heatDays.get(key);
+    if (!day) {
+      const row = this.ctx.storage.sql.exec<{ data: string }>('SELECT data FROM heat_days WHERE day = ?', key).toArray()[0];
+      day = HeatDay.parse(row?.data);
+      this.heatDays.set(key, day);
+    }
+    return [key, day];
+  }
+
+  private recordHeat(layer: HeatLayer, p: { x: number; y: number; z: number }, now: number): void {
+    const [key, day] = this.heatDay(now);
+    if (day.add(layer, p.x, p.y, p.z)) this.heatDirty.add(key);
+  }
+
+  /** Living, connected rats during play; reserved disconnects and corpses would pile onto one spot. */
+  private sampleHeat(now: number): void {
+    if (this.round.phase !== 'playing') return;
+    for (const player of this.players.values()) {
+      if (player.hp <= 0 || this.sessions.get(player.id)?.until != null) continue;
+      this.recordHeat(this.isManagedBot(player.id) ? 'bots' : 'humans', player, now);
+    }
+  }
+
+  private flushHeat(now: number): void {
+    this.heatSavedAt = now;
+    for (const key of this.heatDirty) {
+      const day = this.heatDays.get(key);
+      if (day) this.ctx.storage.sql.exec('INSERT INTO heat_days (day, data) VALUES (?, ?) ON CONFLICT(day) DO UPDATE SET data = excluded.data', key, JSON.stringify(day));
+    }
+    this.heatDirty.clear();
+    const today = heatDayKey(now);
+    for (const key of this.heatDays.keys()) if (key !== today) this.heatDays.delete(key);
+    this.ctx.storage.sql.exec('DELETE FROM heat_days WHERE day < ?', heatDayKey(now - (HEAT_RETENTION_DAYS - 1) * 86_400_000));
   }
 
   private readRoomState(key: string): string | undefined {
