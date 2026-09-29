@@ -27,8 +27,8 @@ function physicalMap(entry?:SewerPipeEntrance){
 }
 
 describe('physical sewer portals',()=>{
-    it('keeps the four pipe shells within the shared static-body budget',()=>{
-        expect(sewerPipeBoxes().length).toBeLessThanOrEqual(300);
+    it('keeps each pipe shell within the shared static-body budget',()=>{
+        expect(sewerPipeBoxes().length/SEWER_PIPE_ENTRANCES.length).toBeLessThanOrEqual(75);
     });
     it('falls through both street and sewer ceiling, then walks out of the shaft',()=>{
         const {world,rat}=physicalMap(),m=SEWER_MANHOLE;

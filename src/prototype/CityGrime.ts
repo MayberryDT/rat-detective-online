@@ -81,7 +81,7 @@ export class CityGrime {
                 this.part('round',0x253c31,x,-6.978,z,1.2+(i+j)%3,.025,.65+(j%2)*.7);
                 this.part('bag',0x39452a,x+.48,-6.93,z,.65,.1,.38);
                 this.part('box',0x8a8064,x-.4,-6.955,z+.3,.33,.025,.24,0,j,0);
-                if(this.dripSites.length<48)this.dripSites.push(new THREE.Vector3(x,-1.1,z));
+                if(this.dripSites.length<72)this.dripSites.push(new THREE.Vector3(x,-1.1,z));
             }
         }
         for(const [key,matrices] of this.batches){

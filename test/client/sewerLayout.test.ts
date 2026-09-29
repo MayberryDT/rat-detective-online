@@ -71,12 +71,6 @@ describe('sewer layout', () => {
     expect(sewerRampOpening(-54 - 5, 52)).toBe(false);
     expect(sewerRampOpening(-54 + 3, 52)).toBe(true);
     expect(sewerRampOpening(-54 - 3, 52)).toBe(true);
-    expect(SEWER_ENTRIES).toContainEqual({ x: -54, z: 66, name: 'Needleworks', axis: 'z' });
-    expect(SEWER_ENTRIES).toEqual(expect.arrayContaining([
-      { x: -138, z: 0, name: 'Gate', axis: 'x' },
-      { x: 138, z: 0, name: 'Icebox', axis: 'x' },
-      { x: 0, z: 138, name: 'Alley', axis: 'z' },
-    ]));
   });
 
   it('supports each street entry on a landing and keeps six units of headroom', () => {

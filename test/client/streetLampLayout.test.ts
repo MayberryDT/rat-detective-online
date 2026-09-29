@@ -23,8 +23,7 @@ describe('street lamp clearance',()=>{
         for(const [x,z] of all){
             expect(Math.hypot(x-SEWER_MANHOLE.x,z-SEWER_MANHOLE.z)).toBeGreaterThanOrEqual(7);
             for(const entry of SEWER_ENTRIES){
-                const direction=entry.axis==='x'?Math.sign(entry.x):1;
-                const along=((entry.axis==='x'?x:z)-entry[entry.axis])*direction;
+                const along=((entry.axis==='x'?x:z)-entry[entry.axis])*entry.direction;
                 const across=Math.abs((entry.axis==='x'?z:x)-(entry.axis==='x'?entry.z:entry.x));
                 expect(along>-28&&along<16&&across<9,`pole ${x},${z} blocks ${entry.name}`).toBe(false);
             }

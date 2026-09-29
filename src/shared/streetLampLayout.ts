@@ -22,8 +22,7 @@ export function isStreetLampSite(x:number,z:number,buildings:BuildingFootprint[]
     // Keep both the full descending pipe and its street-level approach empty.
     if(SEWER_ENTRIES.some(entry=>{
         const along=entry.axis==='x'?x:z, across=entry.axis==='x'?z:x;
-        const direction=entry.axis==='x'?Math.sign(entry.x):1;
-        const distance=(along-entry[entry.axis])*direction;
+        const distance=(along-entry[entry.axis])*entry.direction;
         return distance>-28 && distance<16 && Math.abs(across-(entry.axis==='x'?entry.z:entry.x))<9;
     }))return false;
     return true;

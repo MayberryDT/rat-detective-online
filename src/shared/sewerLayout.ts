@@ -37,32 +37,43 @@ export const SEWER_HALLS: Rect[] = [
     {xmin:44, xmax:52, zmin:-40, zmax:HALF},
     {xmin:52, xmax:68, zmin:-40, zmax:-32},
     {xmin:60, xmax:70, zmin:-42, zmax:-30},
+    // North branches: under the -60 avenue to the precinct, and on from Maintenance under the 70 avenue to the docks.
+    {xmin:-64, xmax:-56, zmin:-118, zmax:-HALF},
+    {xmin:-76, xmax:-56, zmin:-118, zmax:-110},
+    {xmin:66, xmax:74, zmin:-118, zmax:-42},
+    {xmin:48, xmax:74, zmin:-118, zmax:-110},
 ];
 
 /** Place names for SEWER_HALLS, index for index (docs/city-map.md). Overlaps resolve to the later hall. */
-export const SEWER_HALL_NAMES = ['trunk-ew','trunk-south','junction','west-loop','west-loop','west-loop','west-loop','east-spur','east-spur','maintenance'] as const;
+export const SEWER_HALL_NAMES = ['trunk-ew','trunk-south','junction','west-loop','west-loop','west-loop','west-loop','east-spur','east-spur','maintenance',
+    'precinct-branch','precinct-branch','docks-branch','docks-branch'] as const;
+
+/** A walk-in pipe ramp. `direction` points from the hall out to the street mouth along `axis`;
+ * `sign` is the enamel plate over the mouth. */
+export interface SewerEntry {x:number; z:number; name:string; axis:'x'|'z'; direction:1|-1; sign?:string}
+export const SEWER_ENTRIES: readonly SewerEntry[] = [
+    {x:-138, z:0, name:'Gate', axis:'x', direction:-1},
+    {x:138, z:0, name:'Icebox', axis:'x', direction:1},
+    {x:0, z:138, name:'Alley', axis:'z', direction:1},
+    {x:-54, z:66, name:'Needleworks', axis:'z', direction:1},
+    // Inside PRECINCT_SEWER_EXIT and DOCKS_SEWER_EXIT (northPlan); both mouths open north.
+    {x:-72, z:-144, name:'Precinct', axis:'z', direction:-1, sign:'PRECINCT SALLY PORT'},
+    {x:52, z:-144, name:'Docks', axis:'z', direction:-1, sign:'DOCKSIDE OUTFALL'},
+];
+
+/** Where each ramp foot meets its hall, measured along the entry axis. */
+const rampFoot=(e:SewerEntry)=>e[e.axis]-e.direction*(RUN+2);
 
 /** Full-width ends that open onto ramps — no closing wall. */
-const OPENINGS: Rect[] = [
-    {xmin:112, xmax:112, zmin:-HALF, zmax:HALF},
-    {xmin:-112, xmax:-112, zmin:-HALF, zmax:HALF},
-    {xmin:-HALF, xmax:HALF, zmin:112, zmax:112},
-    {xmin:-58, xmax:-50, zmin:40, zmax:40},
-];
-
-export const SEWER_ENTRIES = [
-    {x:-138, z:0, name:'Gate', axis:'x' as const},
-    {x:138, z:0, name:'Icebox', axis:'x' as const},
-    {x:0, z:138, name:'Alley', axis:'z' as const},
-    {x:-54, z:66, name:'Needleworks', axis:'z' as const},
-];
+const OPENINGS: Rect[] = SEWER_ENTRIES.map(e=>e.axis==='x'
+    ?{xmin:rampFoot(e), xmax:rampFoot(e), zmin:e.z-HALF, zmax:e.z+HALF}
+    :{xmin:e.x-HALF, xmax:e.x+HALF, zmin:rampFoot(e), zmax:rampFoot(e)});
 
 /** Street openings share their shape with the physical and visible pipe shells. */
 export const SEWER_MANHOLE = {x:72,z:0,halfWidth:2,shaftBottom:-3,floorY:FLOOR} as const;
 export const SEWER_PIPE_PORTAL = {mouthX:-142,endX:-112,z:0,radius:4.5,springY:.65} as const;
 export const SEWER_PIPE_ENTRANCES = SEWER_ENTRIES.map(entry=>({
-    ...entry, direction:entry.axis==='x'?Math.sign(entry.x):1,
-    radius:SEWER_PIPE_PORTAL.radius,springY:SEWER_PIPE_PORTAL.springY,length:30,
+    ...entry,radius:SEWER_PIPE_PORTAL.radius,springY:SEWER_PIPE_PORTAL.springY,length:30,
 }));
 export type SewerPipeEntrance = typeof SEWER_PIPE_ENTRANCES[number];
 
@@ -161,6 +172,8 @@ export const SEWER_LIGHTS = [
     {x:-84, z:20}, {x:-84, z:40}, {x:-60, z:40}, {x:-36, z:40},
     {x:-54, z:40},
     {x:48, z:-18}, {x:48, z:-36}, {x:64, z:-36},
+    {x:-60, z:-26}, {x:-60, z:-50}, {x:-60, z:-74}, {x:-60, z:-98}, {x:-68, z:-114},
+    {x:70, z:-60}, {x:70, z:-84}, {x:70, z:-108}, {x:56, z:-114},
 ];
 
 function make(x:number,y:number,z:number,w:number,h:number,d:number,color:number,rx=0,rz=0):GrayboxBox {
@@ -180,58 +193,50 @@ function onOpening(x:number, z:number, eps=1e-4) {
 }
 
 function boundaryWalls():GrayboxBox[] {
-    const xs=unique(SEWER_HALLS.flatMap(r=>[r.xmin,r.xmax]));
-    const zs=unique(SEWER_HALLS.flatMap(r=>[r.zmin,r.zmax]));
+    // Ramp feet split the hall edges they open, so the rest of that edge keeps its wall.
+    const xs=unique([...SEWER_HALLS,...OPENINGS].flatMap(r=>[r.xmin,r.xmax]));
+    const zs=unique([...SEWER_HALLS,...OPENINGS].flatMap(r=>[r.zmin,r.zmax]));
     const walls:GrayboxBox[]=[];
     const y=FLOOR+WALK/2;
     const probe=1e-3;
-
-    for(let i=0;i<xs.length-1;i++){
-        const x0=xs[i], x1=xs[i+1], w=x1-x0, mid=(x0+x1)/2;
-        if(w<probe) continue;
-        for(const z of zs){
-            const neg=inside(SEWER_HALLS,mid,z-probe);
-            const pos=inside(SEWER_HALLS,mid,z+probe);
-            if(neg===pos || onOpening(mid,z)) continue;
-            walls.push(make(mid,y,z+(neg?1:-1)*WALL/2,w,WALK,WALL,WALL_COLOR));
+    // Collinear walls facing the same way merge into one run: fewer static bodies, same surface.
+    // `side` is +1/-1 for a wall on the far/near side of the line, 0 for open.
+    const runs=(cuts:number[],lines:number[],side:(line:number,mid:number)=>number,push:(line:number,side:number,a:number,b:number)=>void)=>{
+        for(const line of lines){
+            let start=cuts[0],current=0;
+            for(let i=0;i<cuts.length-1;i++){
+                const s=side(line,(cuts[i]+cuts[i+1])/2);
+                if(s===current)continue;
+                if(current)push(line,current,start,cuts[i]);
+                start=cuts[i];current=s;
+            }
+            if(current)push(line,current,start,cuts[cuts.length-1]);
         }
-    }
-    for(let j=0;j<zs.length-1;j++){
-        const z0=zs[j], z1=zs[j+1], d=z1-z0, mid=(z0+z1)/2;
-        if(d<probe) continue;
-        for(const x of xs){
-            const neg=inside(SEWER_HALLS,x-probe,mid);
-            const pos=inside(SEWER_HALLS,x+probe,mid);
-            if(neg===pos || onOpening(x,mid)) continue;
-            walls.push(make(x+(neg?1:-1)*WALL/2,y,mid,WALL,WALK,d,WALL_COLOR));
-        }
-    }
+    };
+    const facing=(neg:boolean,pos:boolean,open:boolean)=>neg===pos||open?0:neg?1:-1;
+    runs(xs,zs,(z,mid)=>facing(inside(SEWER_HALLS,mid,z-probe),inside(SEWER_HALLS,mid,z+probe),onOpening(mid,z)),
+        (z,side,x0,x1)=>walls.push(make((x0+x1)/2,y,z+side*WALL/2,x1-x0,WALK,WALL,WALL_COLOR)));
+    runs(zs,xs,(x,mid)=>facing(inside(SEWER_HALLS,x-probe,mid),inside(SEWER_HALLS,x+probe,mid),onOpening(x,mid)),
+        (x,side,z0,z1)=>walls.push(make(x+side*WALL/2,y,(z0+z1)/2,WALL,WALK,z1-z0,WALL_COLOR)));
     return walls;
 }
 
+/** One tilted slab per entry, from the hall floor up to the street landing. */
 function ramps():GrayboxBox[] {
     const slope=Math.atan(RISE/RUN);
     const length=Math.hypot(RUN,RISE);
     const y=FLOOR+RISE/2-(WALL/2)*Math.cos(slope);
-    return [
-        make(124,y,0,length,WALL,HALL,RAMP_COLOR,0,slope),
-        make(-124,y,0,length,WALL,HALL,RAMP_COLOR,0,-slope),
-        make(0,y,124,HALL,WALL,length,RAMP_COLOR,-slope,0),
-        make(-54,y,52,HALL,WALL,length,RAMP_COLOR,-slope,0),
-    ];
+    return SEWER_ENTRIES.map(e=>{
+        const along=e[e.axis]-e.direction*(RUN/2+2);
+        return e.axis==='x'?make(along,y,e.z,length,WALL,HALL,RAMP_COLOR,0,e.direction*slope)
+            :make(e.x,y,along,HALL,WALL,length,RAMP_COLOR,-e.direction*slope,0);
+    });
 }
 
 /** Street-height aprons under ENTRIES, filling the 4-unit cutout past each ramp top. */
 function landings():GrayboxBox[] {
     const y=CEILING+WALL/2;
-    const along=4;
-    const across=10;
-    return [
-        make(138,y,0,along,WALL,across,FLOOR_COLOR),
-        make(-138,y,0,along,WALL,across,FLOOR_COLOR),
-        make(0,y,138,across,WALL,along,FLOOR_COLOR),
-        make(-54,y,66,across,WALL,along,FLOOR_COLOR),
-    ];
+    return SEWER_ENTRIES.map(e=>e.axis==='x'?make(e.x,y,e.z,4,WALL,10,FLOOR_COLOR):make(e.x,y,e.z,10,WALL,4,FLOOR_COLOR));
 }
 
 export function sewerBoxes():GrayboxBox[] {
@@ -251,10 +256,10 @@ export function sewerBoxes():GrayboxBox[] {
     return boxes;
 }
 
+/** The street hole over each ramp and landing, from the hall foot to two units past the entry point. */
 export function sewerRampOpening(x:number, z:number):boolean {
-    if(x>=112 && x<=140 && Math.abs(z)<5) return true;
-    if(x<=-112 && x>=-140 && Math.abs(z)<5) return true;
-    if(z>=112 && z<=140 && Math.abs(x)<5) return true;
-    if(z>=40 && z<=68 && Math.abs(x+54)<5) return true;
-    return false;
+    return SEWER_ENTRIES.some(e=>{
+        const distance=4-((e.axis==='x'?x:z)-e[e.axis])*e.direction;
+        return distance>=2 && distance<=RUN+6 && Math.abs(e.axis==='x'?z-e.z:x-e.x)<5;
+    });
 }
