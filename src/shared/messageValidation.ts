@@ -199,6 +199,7 @@ function parsePlayer(value: unknown): PlayerData | null {
   const hp = boundedInteger(value.hp, 0, MAX_HP);
   const kills = boundedInteger(value.kills, 0, 10_000);
   const deaths = boundedInteger(value.deaths, 0, 10_000);
+  const streak = value.streak === undefined ? undefined : boundedInteger(value.streak, 1, 10_000);
   const respawnAt = value.respawnAt === undefined ? undefined : integer(value.respawnAt);
   if (
     !appearance ||
@@ -218,6 +219,7 @@ function parsePlayer(value: unknown): PlayerData | null {
     hp === null ||
     kills === null ||
     deaths === null ||
+    streak === null ||
     respawnAt === null
   ) {
     return null;
@@ -240,6 +242,7 @@ function parsePlayer(value: unknown): PlayerData | null {
     hp,
     kills,
     deaths,
+    ...(streak !== undefined ? { streak } : {}),
     ...(respawnAt !== undefined ? { respawnAt } : {}),
   };
 }
@@ -637,8 +640,11 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
           (parsed.cause!==undefined&&!environmental)) return null;
       const incoming=parsed.incoming===undefined?undefined:parseVec3(parsed.incoming);
       if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean') || (parsed.headshot!==undefined&&parsed.headshot!==true))return null;
+      const killerStreak=parsed.killerStreak===undefined?undefined:boundedInteger(parsed.killerStreak,1,10_000);
+      if(killerStreak===null||(killerStreak!==undefined&&!killerId))return null;
       return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
-        ...(environmental?{cause}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}) };
+        ...(environmental?{cause}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}),
+        ...(killerStreak!==undefined?{killerStreak}:{}) };
     }
     case 'scoreboardUpdate': {
       const scores = parseScores(parsed.scores);

@@ -151,6 +151,35 @@ describe('game state', () => {
     expect(victim.deaths).toBe(2);
   });
 
+  it.each(['human', 'rd-ai-bot'])('counts a %s kill streak in one life: one per kill, ended by any death', (id) => {
+    const shooter = createPlayer(id, id, appearance, { x: 0, y: 2, z: 0 });
+    const victim = createPlayer('victim', 'Victim', appearance, { x: 5, y: 2, z: 0 });
+    const players = new Map([[id, shooter], [victim.id, victim]]);
+    const kill = (caseHolder: string | null = null) => { victim.hp = MAX_HP; applyHit(players, id, victim.id, MAX_HP, true, caseHolder); };
+    kill(); kill(id); kill();
+    // Case-holder points count double on the scoreboard, but a kill is one kill.
+    expect(shooter).toMatchObject({ kills: 4, streak: 3 });
+    expect(victim.streak).toBeUndefined();
+    // Dying ends it, whoever or whatever did it; the next life starts again.
+    applyHit(players, null, id, MAX_HP, true);
+    expect(shooter.streak).toBeUndefined();
+    shooter.hp = MAX_HP; kill();
+    expect(shooter.streak).toBe(1);
+    victim.hp = MAX_HP;
+    applyHit(players, victim.id, id, MAX_HP, true);
+    expect([shooter.streak, victim.streak]).toEqual([undefined, 1]);
+    // A ball still in flight when its dead shooter lands a kill scores, but starts no streak.
+    kill();
+    expect([shooter.kills, shooter.streak]).toEqual([6, undefined]);
+  });
+
+  it('ends a streak with a self-inflicted explosion', () => {
+    const p = createPlayer('self', 'Self', appearance, { x: 0, y: 2, z: 0 });
+    p.streak = 4;
+    applyHit(new Map([[p.id, p]]), p.id, p.id, MAX_HP, true, null, false, true);
+    expect(p.streak).toBeUndefined();
+  });
+
   it('fills a blank name from the detective bank', () => {
     const player = createPlayer('id', '  ', appearance, { x: 0, y: 2, z: 0 });
     const [title, surname] = player.name.split(' ');
@@ -167,10 +196,12 @@ describe('game state', () => {
     const first = createPlayer('first', 'First', appearance, { x: 0, y: 2, z: 0 });
     first.kills = 4;
     first.deaths = 2;
+    first.streak = 4;
     first.hp = 0;
 
     const resetPlayers = resetRound([first], () => ({ x: 9, y: 2, z: -9 }));
 
     expect(resetPlayers[0]).toMatchObject({ kills: 0, deaths: 0, hp: MAX_HP, x: 9, y: 2, z: -9 });
+    expect(resetPlayers[0].streak).toBeUndefined();
   });
 });

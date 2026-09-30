@@ -477,6 +477,8 @@ export class GameSession {
                 const deathStyle = entity?.launchFlight && feelState().on('launchFlight') ? 'flail' : this.feel.deathStyle(message.killerId, message.cause);
                 entity?.setDeathStyle(deathStyle);this.chaos?.noteDeathStyle(message.victimId, deathStyle, headshot);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
+                // Kill streaks: the victim's ends; the credited killer takes the server's count.
+                entity?.setStreak(0);if(killer&&killer!==entity)killer.setStreak(message.killerStreak??0);
                 if (entity && !entity.dead) {
                     if(message.incident){entity.useSharedCorpse();}
                     else {
@@ -542,8 +544,8 @@ export class GameSession {
                 this.highlightBaseline = true;
                 this.seenHighlightLaunches.clear();
                 this.highlightCorpseSeen.clear();
-                this.roundWon=false;this.rat?.entity.setPowerups(0,0);this.rat?.entity.resetReactions();
-                for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0);entity.resetReactions();}
+                this.roundWon=false;this.rat?.entity.setPowerups(0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
+                for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0);entity.resetReactions();entity.setStreak(0);}
                 this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;

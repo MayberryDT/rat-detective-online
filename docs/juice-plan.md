@@ -61,6 +61,17 @@ rat's identity stay as they are. Done means:
 - **Softer outline and nameplate reviewed (2026-09-27):** "That is great. Push it live." Released as Worker `80901b67…`.
 - **Next action:** Tyler's OK to put [the city map](city-map.md) recorder on production, then he plays and we read the digest; then step 4 (the page's Observe mode). See [Open decisions](#open-decisions).
 
+## Kill streak mark (Tyler, 2026-09-30)
+
+Tyler, after playing production with a friend: "i want a visual indicator for rats that are on a 3+ kill streak."
+
+- [x] **Built (not yet deployed).** A kill streak is the kills a rat has made since its last death. Deaths of any kind end it (shot, drowned, own explosion), and so does a new round. Case-holder kills count once, and a kill by a dead rat's ball still in flight starts no streak. Bots and humans are counted the same way, on the server.
+  - **Nameplate stamp.** From 3 kills, a small red rubber stamp sits under the pips: **ARMED** (3–4), **DANGEROUS** (5–7) and **PUBLIC ENEMY** (8 or more), with a tally mark per kill (four strokes and a slash per five). It comes down again, big and faint, on each new kill. The nameplate keeps its colour when the city goes black and white at 1 HP, so the red still reads.
+  - **Smouldering fedora.** The hat gives off a thin wisp of smoke at 3, thicker at 5 with the odd ember from the hat band, and a heavy column at 8. The smoke is unlit and plain grey: no glow, no outline. It reads over the rat's head from behind and at mid-range, where the stamp is too small to read.
+  - **Your own streak.** Your own nameplate carries the same stamp. Your own smoke is fainter, so it never clouds the crosshair.
+  - **Not "WANTED".** The first idea was a WANTED stamp, but Most Wanted already means the leader in the searchlight, so the stamp uses police bulletin words instead. The comic words (DOUBLE CHEESE and so on) are a separate, private screen callout for quick kills and are unchanged.
+  - **How it works:** `PlayerData.streak` (absent at zero) is sent with every rat in the welcome and join messages, and `playerDied.killerStreak` gives the killer's new count. Both are optional, so protocol 23 clients and servers still work together (no protocol bump). The stamp is drawn on the existing nameplate canvas (`src/ui/RatBillboard.ts`); the smoke is one pooled instanced draw per rat, hidden while idle (`src/entities/RatStreakSmoke.ts`). Situations in the city map already record the streak, so no new facts were needed.
+
 ## Third batch (decided 2026-09-27)
 
 Tyler's brain dump, sorted into now and later, with his answers.

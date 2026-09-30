@@ -1,5 +1,6 @@
 import {metalReflection} from '../utils/metalReflection';
 import {RatPowerupEffects} from './RatPowerupEffects';
+import {RatStreakSmoke} from './RatStreakSmoke';
 import {emitWorldSound} from '../audio/WorldSoundEvents';
 import * as THREE from 'three';
 import {RatStains} from './RatStains';
@@ -16,7 +17,7 @@ import { RatAnimator } from '../utils/RatAnimator';
 import { setRagdollWorld } from '../utils/RatCorpseChain';
 import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
 import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppearance';
-import { RatBillboard } from '../ui/RatBillboard';
+import { RatBillboard, streakTier } from '../ui/RatBillboard';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { playEntitySound } from '../audio/EntityAudio';
 import { contactShadowsOf } from '../session/shadows';
@@ -98,6 +99,9 @@ export class RatEntity {
     private allMaterials: THREE.MeshStandardMaterial[] = [];
     private originalColors: { color: THREE.Color; emissive: THREE.Color; emissiveIntensity: number; metalness:number; roughness:number; envMap:THREE.Texture|null; envMapIntensity:number }[] = [];
     private readonly powerupEffects:RatPowerupEffects;
+    private readonly streakSmoke:RatStreakSmoke;
+    /** Kills since this rat's last death (authoritative, from snapshots and kill events). */
+    private streak=0;
     private ironcladRemaining=0;
     private metalApplication=0;
     private hustleRemaining=0;
@@ -223,6 +227,7 @@ export class RatEntity {
         // skip matrix updates while hidden and catch up on the frame it shows.
         this.glowMesh.updateMatrixWorld = function (force?: boolean) { if (this.visible) THREE.Group.prototype.updateMatrixWorld.call(this, force); };
         this.powerupEffects=new RatPowerupEffects(scene);
+        this.streakSmoke=new RatStreakSmoke(scene,this.mesh.getObjectByName('rat-hat'));
         this.animator = new RatAnimator(this.mesh, this.glowMesh);
         this.syncGlowTransform();
 
@@ -440,7 +445,10 @@ export class RatEntity {
         this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
         if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||!this.isPlayer&&this.outlineFade>.01);
     }
-    private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.updatePowerupOutline();this.resetColor();}
+    private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.streakSmoke.clear();this.updatePowerupOutline();this.resetColor();}
+
+    /** Kill streak: 3 or more stamps the nameplate and makes the fedora smoulder. A death ends it. */
+    public setStreak(streak:number):void {this.streak=this.dead?0:streak;this.billboard.setStreak(this.streak);if(streakTier(this.streak)===0)this.streakSmoke.clear();}
 
     /** Hit-stop: hold this rat's animated pose for `seconds`. `holdPosition` also pins the
      * rendered root (remote rats); the local rat keeps moving so its camera never hitches.
@@ -481,6 +489,7 @@ export class RatEntity {
         if(silver&&this.ironcladRemaining===0)this.resetColor();
         if(pursuit&&this.hustleRemaining===0)this.updatePowerupOutline();
         this.powerupEffects.update(dt,p,this.hustleRemaining>0);
+        this.streakSmoke.update(dt,streakTier(this.streak),this.isPlayer);
 
         // Flash Logic
         if (this.flashTimer > 0) {
@@ -553,7 +562,7 @@ export class RatEntity {
     /** The incident corpse is a separate shared object; this player waits for respawn. */
     public useSharedCorpse():void {
         if(this.sharedDeath)return;
-        this.sharedDeath=true;this.dead=true;this.hp=0;this.clearPowerups();
+        this.sharedDeath=true;this.dead=true;this.hp=0;this.clearPowerups();this.setStreak(0);
         // The shared corpse model pops its own hat (ChaosView); drop any local one.
         this.flyingHat?.dispose();this.flyingHat=undefined;
         this.animator.resetReactions();
@@ -672,6 +681,7 @@ export class RatEntity {
     private die(impactVel: THREE.Vector3) {
         if (this.dead) return;
         this.dead = true;
+        this.setStreak(0);
         this.clearPowerups();
         this.animator.reset();
         this.deathTimer = 0;
@@ -845,6 +855,7 @@ export class RatEntity {
             this.billboard.sprite.position.set(data.x, data.y + 2.2, data.z);
             this.syncGlowTransform();
         }
+        this.setStreak(data.streak ?? 0);
     }
 
     /** Restore the existing local/remote alive-body settings after a server respawn. */
@@ -886,7 +897,7 @@ export class RatEntity {
         if (this.comboKeyStr) {
             usedCombinations.delete(this.comboKeyStr);
         }
-        this.powerupEffects.dispose();
+        this.powerupEffects.dispose();this.streakSmoke.dispose();
         // Shared stain resources must leave the rig before its resources are disposed.
         this.stains?.dispose();
         this.headStains?.dispose();

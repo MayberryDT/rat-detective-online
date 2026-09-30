@@ -77,6 +77,8 @@ export interface PlayerData extends RatAppearance {
   hp: number;
   kills: number;
   deaths: number;
+  /** Kills since this rat's last death this round (its kill streak); absent at zero. */
+  streak?: number;
   /** Present while dead: authoritative respawn (or round-reset) deadline. */
   respawnAt?: number;
 }
@@ -229,6 +231,8 @@ export type ServerMessage =
       incoming?: Vec3Data;
       incident?: boolean;
       headshot?: true;
+      /** The credited killer's kill streak including this kill. */
+      killerStreak?: number;
     }
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }

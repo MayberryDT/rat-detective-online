@@ -2,6 +2,10 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Kill streak mark — 30 September batch (built, not deployed)
+
+A rat (human or bot) on a kill streak of 3 or more (kills since its last death; any death or a new round ends it) carries a red rubber stamp under its nameplate pips (ARMED at 3, DANGEROUS at 5, PUBLIC ENEMY at 8, with a tally mark per kill), and its fedora smoulders (a thin wisp, thicker with embers at 5, a heavy column at 8). Your own plate shows your stamp; your own smoke is fainter. The server counts the streak (`PlayerData.streak`, `playerDied.killerStreak`, both optional, so protocol stays 23). See [the juice plan](juice-plan.md#kill-streak-mark-tyler-2026-09-30).
+
 ## Bot overhaul — 30 September production (protocol 23, `mindVersion` 3)
 
 Tyler: "Send it live… Don't ship it without input recording." Production Worker `aecb77d2-8d51-4792-a5fb-af077c036c3d`, client `index-D5qko-pp.js`, commit `c878e52` on `main` (GitHub `master`). Predecessor `d5c52eb9-ab32-471e-a439-8ec405e83899` (same protocol and layout, old bots). Bots drive the shared rat body (`src/shared/rat/ratBody.ts`) by pressing `RatControls`, like a player; only their mind and `SkillDials` differ. The code mind runs the empty city; the Jev mind takes over while a human has sent input in the last 60 seconds, capped at $25 a day by the `jev-budget` ledger. Every rat's controls (move axes, jump presses, key flips) are recorded in fight windows beside aim and shot facts, so humans and bots are measured the same way (`scripts/motor-compare.mjs`). The first session with humans (accuracy by distance, inputs) is in [the receipt](verification/bot-overhaul-release-2026-09-30.md); the plan is [bot-overhaul.md](bot-overhaul.md).

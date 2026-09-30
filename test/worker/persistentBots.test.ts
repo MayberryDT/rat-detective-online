@@ -228,8 +228,9 @@ describe('persistent hosted bots', () => {
       const game = instance as unknown as Internals;
       if (game.chaosTimer) clearInterval(game.chaosTimer); game.chaosTimer = null;
       const previous = game.botRoster;
-      const human = { ...game.players.get(PERSISTENT_BOT_IDS[0])!, id: 'human-preserved', name: 'Human Name', kills: 9, deaths: 4 };
+      const human = { ...game.players.get(PERSISTENT_BOT_IDS[0])!, id: 'human-preserved', name: 'Human Name', kills: 9, deaths: 4, streak: 3 };
       game.players.set(human.id, human); game.persistPlayer(human, true);
+      game.players.get(previous[0].id)!.streak = 5;
       const appearance = { hatType: human.hatType, hatColor: human.hatColor, coatColor: human.coatColor, furColor: human.furColor };
       const now = Date.now();
       game.round={phase:'won',resetAt:now};
@@ -248,6 +249,8 @@ describe('persistent hosted bots', () => {
         expect(game.serverBots).not.toBe(controller); expect(dispose).toHaveBeenCalledOnce();
         expect(game.players.get(human.id)).toBe(human);
         expect(human).toMatchObject({ name: 'Human Name', ...appearance, hp: MAX_HP, kills: 0, deaths: 0 });
+        // A new round ends every kill streak, bots' and humans' alike.
+        expect([human.streak, game.players.get(previous[0].id)!.streak]).toEqual([undefined, undefined]);
         expect(game.players.size).toBe(7);
         expect(ctx.storage.sql.exec('SELECT id FROM pending_events WHERE player_id IS NOT NULL').toArray()).toHaveLength(0);
         for (const id of PERSISTENT_BOT_IDS.slice(6)) {

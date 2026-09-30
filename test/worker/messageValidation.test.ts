@@ -240,6 +240,17 @@ describe('parseServerMessage', () => {
     ).toMatchObject({ type: 'playerDied', respawnAt: 123 });
   });
 
+  it('carries kill streaks on rats and kills, and rejects impossible ones', () => {
+    const streaking = player('p1', { kills: 4, streak: 3 });
+    expect(parseServerMessage({ type: 'playerJoined', player: streaking })).toEqual({ type: 'playerJoined', player: streaking });
+    for (const streak of [0, -1, 1.5, '3', 10_001]) expect(parseServerMessage({ type: 'playerJoined', player: { ...streaking, streak } })).toBeNull();
+    const kill = { type: 'playerDied', victimId: 'a', killerId: 'b', killerName: 'B', victimName: 'A', respawnAt: 123, killerStreak: 5 };
+    expect(parseServerMessage(kill)).toEqual(kill);
+    expect(parseServerMessage({ ...kill, killerStreak: 0 })).toBeNull();
+    // Nobody to credit, no streak.
+    expect(parseServerMessage({ ...kill, killerId: null, killerName: null, cause: 'drowned' })).toBeNull();
+  });
+
   it.each(['evidence-tampering','drowned'])('accepts explicit environmental deaths (%s) while rejecting mixed or missing attribution',cause=>{
     const death={type:'playerDied',victimId:'v',victimName:'Captain Crawley',killerId:null,killerName:null,cause,respawnAt:1000};
     expect(parseServerMessage(death)).toEqual(death);

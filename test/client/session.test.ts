@@ -107,6 +107,7 @@ const harness = vi.hoisted(() => {
             resetReactions: ReturnType<typeof vi.fn>;
             resetMotionHistory: ReturnType<typeof vi.fn>;
             useSharedCorpse: ReturnType<typeof vi.fn>;
+            setStreak: ReturnType<typeof vi.fn>;
         };
         onMouseMove = vi.fn();
         setSpeedScale = vi.fn();
@@ -145,6 +146,7 @@ const harness = vi.hoisted(() => {
                 resetReactions: vi.fn(),
                 resetMotionHistory: vi.fn(),
                 useSharedCorpse: vi.fn(),
+                setStreak: vi.fn(),
             };
             harness.rats.push(this);
         }
@@ -614,7 +616,7 @@ describe('GameSession', () => {
         transport.onMessage?.(welcome({ player: local, players: { me: local } }));
         const rat = harness.rats[0];
         remotes.get.mockImplementation((id: string) => id === 'other'
-            ? { mesh: rat.entity.mesh, dead: false, hp: MAX_HP, takeDamage: vi.fn(), setDeathStyle: vi.fn() }
+            ? { mesh: rat.entity.mesh, dead: false, hp: MAX_HP, takeDamage: vi.fn(), setDeathStyle: vi.fn(), setStreak: vi.fn() }
             : undefined);
         transport.onMessage?.({
             type: 'playerDied', victimId: 'me', killerId: 'other', killerName: 'other',

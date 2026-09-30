@@ -131,9 +131,15 @@ export function applyHit(
     return { applied: true, killed: false, roundWon: false, damage };
   }
 
-  // Ownership comes from the authoritative simulation at kill resolution.
-  if (shooter && !selfHit) shooter.kills += !assignmentMode && shooterId === caseHolderId ? 2 : 1;
+  // Ownership comes from the authoritative simulation at kill resolution. A kill
+  // streak counts kills (not case-holder points) in one life, so a dead rat's
+  // ball still in flight scores but starts no streak.
+  if (shooter && !selfHit) {
+    shooter.kills += !assignmentMode && shooterId === caseHolderId ? 2 : 1;
+    if (shooter.hp > 0) shooter.streak = (shooter.streak ?? 0) + 1;
+  }
   victim.deaths += 1;
+  delete victim.streak;
 
   return {
     applied: true,
@@ -160,11 +166,17 @@ export function respawnPlayer(player: PlayerData, spawn: Vec3Data): PlayerData {
   return player;
 }
 
+/** A new round's clean record: no kills, deaths or streak. */
+export function clearRecord(player: PlayerData): void {
+  player.kills = 0;
+  player.deaths = 0;
+  delete player.streak;
+}
+
 export function resetRound(players: Iterable<PlayerData>, spawnFor: (id: string) => Vec3Data): PlayerData[] {
   const resetPlayers: PlayerData[] = [];
   for (const player of players) {
-    player.kills = 0;
-    player.deaths = 0;
+    clearRecord(player);
     resetPlayers.push(respawnPlayer(player, spawnFor(player.id)));
   }
   return resetPlayers;

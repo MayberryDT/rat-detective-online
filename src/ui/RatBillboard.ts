@@ -14,13 +14,29 @@ const GOLD = '#f3cf6f';
 const EYE_SIZE = 0.2, EYE_GAP = 0.14;
 /** Seconds for the eye to open, and to shut then fade. */
 const EYE_OPEN = 0.4, EYE_SHUT = 0.2, EYE_FADE = 0.35;
+/** Kill streak stamp under the pips: the lowest streak of each tier, the bulletin word per tier,
+ * the most tally marks drawn, and seconds for the stamp to land. */
+const STREAK_TIERS = [3, 5, 8] as const;
+const STREAK_WORDS = ['ARMED', 'DANGEROUS', 'PUBLIC ENEMY'] as const;
+const MAX_TALLIES = 10, STAMP_SECONDS = 0.28;
+const STAMP_FONT = '400 28px Bangers, Impact, sans-serif';
+const STAMP_RED = '#c8322a', STAMP_INK = '#ee5b4f';
 /** Nameplate brightness shared by every rat; Blackout dims it with the city. */
 export const NAMEPLATE_LIGHT = { value: 1 };
+
+/** 0 below a 3-kill streak, then 1 (3–4), 2 (5–7) and 3 (8 or more). */
+export function streakTier(streak: number): number {
+    let tier = 0;
+    for (const floor of STREAK_TIERS) if (streak >= floor) tier++;
+    return tier;
+}
 
 /** Noir nameplate: the rat's name in spaced small caps over a row of slanted
  * pips, one per hit point, like tabs on a case file. Lost pips flash, shake and
  * drain to an empty outline; the last one burns red. Dead rats' names dim and
- * are struck through. The canvas only redraws while something changes. */
+ * are struck through. A rat on a kill streak of 3 or more carries a red rubber
+ * stamp under its pips (ARMED, DANGEROUS, PUBLIC ENEMY) with a tally mark per
+ * kill. The canvas only redraws while something changes. */
 export class RatBillboard {
     public sprite: THREE.Sprite;
     private canvas: HTMLCanvasElement;
@@ -39,6 +55,10 @@ export class RatBillboard {
     private eye?: THREE.Sprite;
     private hunch = false;
     private eyeAge = Infinity;
+    private streak = 0;
+    /** Seconds since the stamp last came down (a new kill while on a streak). */
+    private stampAge = Infinity;
+    private stampFont = false;
 
     constructor(name: string, initialHealth: number = MAX_HP) {
         this.name = name.toUpperCase();
@@ -80,6 +100,18 @@ export class RatBillboard {
         this.draw();
     }
 
+    /** Kills since this rat's last death; the stamp comes down again on each new kill from 3. */
+    public setStreak(streak: number): void {
+        if (streak === this.streak) return;
+        const up = streak > this.streak;
+        this.streak = streak;
+        if (up && streakTier(streak) > 0) {
+            this.stampAge = 0; this.animating = this.health > 0;
+            if (!this.stampFont) { this.stampFont = true; void document.fonts?.load?.(STAMP_FONT).then(() => { if (!this.disposed) this.draw(); }, () => {}); }
+        }
+        this.draw();
+    }
+
     public setHealth(hp: number) {
         // Dead: the eye resets without ceremony so the next life opens it again.
         if (hp <= 0 && this.hunch) { this.hunch = false; this.eyeAge = Infinity; if (this.eye) this.eye.visible = false; }
@@ -95,7 +127,7 @@ export class RatBillboard {
         this.draw();
     }
 
-    /** Advance pip animations; redraws only while one is running. */
+    /** Advance pip and stamp animations; redraws only while one is running. */
     public update(dt: number): void {
         if (this.sprite.material.opacity !== NAMEPLATE_LIGHT.value) this.sprite.material.opacity = NAMEPLATE_LIGHT.value;
         this.animateEye(dt);
@@ -108,6 +140,7 @@ export class RatBillboard {
             running ||= times[i]! >= 0;
         };
         for (let i = 0; i < MAX_HP; i++) { advance(this.lost, i, LOSS_SECONDS); advance(this.gained, i, GAIN_SECONDS); }
+        if (this.stampAge < STAMP_SECONDS) { this.stampAge += dt; running = true; }
         this.animating = running;
         this.draw();
     }
@@ -205,8 +238,38 @@ export class RatBillboard {
                 }
             }
         }
+        if (this.streak >= STREAK_TIERS[0]) this.drawStamp(w);
         ctx.globalAlpha = 1;
         this.texture.needsUpdate = true;
+    }
+
+    /** A red rubber stamp under the pips: the tier's word and a tally mark per kill (four
+     * strokes and a slash per five). It comes down big and faint and lands with a small squash. */
+    private drawStamp(w: number): void {
+        const ctx = this.ctx, word = STREAK_WORDS[streakTier(this.streak) - 1]!;
+        const tallies = Math.min(this.streak, MAX_TALLIES), more = this.streak > MAX_TALLIES;
+        const t = Math.min(1, this.stampAge / STAMP_SECONDS);
+        ctx.save();
+        ctx.font = STAMP_FONT; ctx.letterSpacing = '2px'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        const textW = typeof ctx.measureText === 'function' ? ctx.measureText(word).width : word.length * 15;
+        const tallyW = Math.floor(tallies / 5) * 35 + (tallies % 5) * 7 + (more ? 14 : 0);
+        const boxW = 14 + textW + 10 + tallyW + 8, boxH = 34, left = -boxW / 2, top = -boxH / 2;
+        const scale = Math.min(1, (w - 12) / boxW) * (t < 1 ? 1 + 1.3 * (1 - t) * (1 - t) - 0.08 * Math.sin(t * Math.PI) : 1);
+        ctx.translate(w / 2, 105); ctx.rotate(-0.04); ctx.scale(scale, scale);
+        ctx.globalAlpha = Math.min(1, 0.25 + t * 1.5);
+        // A single heavy border: a double line turns to mush at nameplate size.
+        ctx.fillStyle = 'rgba(10,8,12,.55)'; ctx.fillRect(left, top, boxW, boxH);
+        ctx.strokeStyle = STAMP_RED; ctx.lineWidth = 3; ctx.strokeRect(left, top, boxW, boxH);
+        ctx.fillStyle = STAMP_INK; ctx.fillText(word, left + 14, 1);
+        ctx.strokeStyle = STAMP_INK; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath();
+        let x = left + 14 + textW + 10;
+        for (let i = 0; i < tallies; i++) {
+            if (i % 5 === 4) { ctx.moveTo(x - 31, 7); ctx.lineTo(x - 4, -7); x += 7; continue; }
+            ctx.moveTo(x, -8); ctx.lineTo(x + 1, 8); x += 7;
+        }
+        ctx.stroke();
+        if (more) ctx.fillText('+', x, 1);
+        ctx.restore();
     }
 
     public dispose(): void {

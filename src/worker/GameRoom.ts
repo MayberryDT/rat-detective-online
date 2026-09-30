@@ -35,6 +35,7 @@ import { createSafeSpawn, createWorldSpec, type WorldSpec } from '../shared/worl
 import {
   applyHit,
   buildScoreboard,
+  clearRecord,
   createPlayer,
   playingRound,
   resetRoundForWorld,
@@ -594,8 +595,7 @@ export class GameRoom extends DurableObject<Env> {
     for (const id of keptIds) {
       const player = this.players.get(id);
       if (!player) continue;
-      player.kills = 0;
-      player.deaths = 0;
+      clearRecord(player);
       respawnPlayer(player, spawnForWorld(this.world, Math.random, this.players.values(), id, this.chaos?.assignmentState));
       this.persistPlayer(player, true);
       this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
@@ -1314,7 +1314,8 @@ export class GameRoom extends DurableObject<Env> {
     if (this.isManagedBot(victim.id)) this.jevMind?.hit(victim.id, shooter?.id, now);
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
-      respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{})});
+      respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{}),
+      ...(shooter&&shooter!==victim&&shooter.streak?{killerStreak:shooter.streak}:{})});
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
     if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt,...this.caseFile(shooter.id)});

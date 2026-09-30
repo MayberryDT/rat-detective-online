@@ -115,6 +115,22 @@ describe('GameRoom websockets', () => {
     await a.inbox.waitFor('scoreboardUpdate');
   });
 
+  it('tells everyone the killer\'s streak with each kill, and a late joiner every rat\'s streak',async()=>{
+    const room=`streak-${crypto.randomUUID()}`,a=await openClient(room),b=await openClient(room);
+    a.ws.send(joinPayload('Shooter'));const aw=await a.inbox.waitFor('welcome');
+    b.ws.send(joinPayload('Victim'));const bw=await b.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom)=>{
+      const game=instance as unknown as {players:Map<string,PlayerData>;handleHit(id:string,message:ClientMessage):Promise<void>};
+      for(let i=0;i<3;i++){game.players.get(bw.id)!.hp=MAX_HP;await game.handleHit(aw.id,{type:'hit',victimId:bw.id,damage:MAX_HP});}
+    });
+    const streaks=[];
+    for(let i=0;i<3;i++)streaks.push((await b.inbox.waitFor('playerDied')).killerStreak);
+    expect(streaks).toEqual([1,2,3]);
+    const late=await openClient(room);late.ws.send(joinPayload('Late'));
+    const welcome=await late.inbox.waitFor('welcome');
+    expect([welcome.players[aw.id]?.streak,welcome.players[bw.id]?.streak]).toEqual([3,undefined]);
+  });
+
   it('bounds malformed ingress and clears unjoined connection buckets on close',async()=>{
     const room=`ingress-${crypto.randomUUID()}`,client=await openClient(room),stub=env.GAME_ROOM.getByName(room);
     await runInDurableObject(stub,async(instance:GameRoom,ctx)=>{
