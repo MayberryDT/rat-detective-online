@@ -1,6 +1,6 @@
 # Data plan: from recordings to answers for Tyler
 
-**Status:** proposed 30 September 2026. Nothing below is built yet unless it says so.
+**Status:** proposed 30 September 2026. Nothing below is built yet unless it says so. The order of work lives in [the bot learning plan](bot-learning-plan.md); this file is its data section.
 
 The city recorder already captures almost everything that happens in a round (see [the city map](city-map.md)). This plan is about making that data easy to answer questions with. Tyler should be able to ask "did that change work?" and get a plain answer backed by numbers, with the amount of data behind it.
 
@@ -80,10 +80,8 @@ Tyler agreed on 30 September that Jev should be asked only when something happen
 
 It should also be asked at most every 10 seconds otherwise, and never within 3 seconds of the last request. Each answer also sets a fight-or-ignore stance. This is the era comparison to set up before that change ships.
 
-- **Before:** production, `mindVersion` 3. Jev has run for about 44 minutes, all in one human session on 30 September, 06:49–07:32 UTC, costing $0.80.
-  - That's plenty for the mechanical measures: requests per bot-minute, cost per hour and stale share.
-  - It's thin for behaviour measures such as goal success and human-likeness. More human play on the current build before the switch would strengthen those.
-- **After:** the lighter Jev, as a new `mindVersion` and build.
+- **Before:** release A of [the bot learning plan](bot-learning-plan.md) (L3): the current staging batch, the data foundation and the pickup reflex, with Jev as it is today. Today's production data (`mindVersion` 3, about 44 minutes of Jev in one human session, $0.80) is a rough guide only: it predates the new rules and has no build stamp.
+- **After:** the lighter Jev (L4), as a new `mindVersion` and build, shipped on its own.
 - **Predictions:**
   - requests per bot-minute fall from about 48 to under 12;
   - dollars per Jev-hour fall at least fivefold;
@@ -92,8 +90,8 @@ It should also be asked at most every 10 seconds otherwise, and never within 3 s
 
 ## Order of work
 
-1. Build stamp, the agent flag and aggregates keyed by build. These must ship before the Jev change so the "after" era is clean.
-2. The era registry, back-filled.
-3. The lighter-Jev proposal with the predictions above.
-4. `scripts/era-report.mjs` and the new scorecard measures, including pickups passed but not taken.
-5. The Jev change itself, recording each decision's inputs for later fitting.
+The steps belong to the learning plan:
+
+- L1: build stamp, agent flag, aggregates keyed by build, decision inputs and the `pickup-passed` fact
+- before L3 ships: the era registry, back-filled, and the lighter-Jev proposal with the predictions above
+- before L4 is judged: `scripts/era-report.mjs` and the rest of the scorecard
