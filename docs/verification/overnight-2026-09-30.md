@@ -66,6 +66,7 @@ Before each staging deploy: both typechecks, the worker, client and script suite
 | `7b331917-5064-4203-b6b9-ea6b314f2f62` | Gameplay batch |
 | `44a71940-1a64-4ff1-956d-0f8325c77e9e` | + bots iteration 3, adaptive quality, telemetry, first perf wave |
 | `93fd2a2d-d227-43c9-9135-92824140bc64` | + bots iterations 4–5 and every perf commit through `7d9d580` (client `index-CuxdowyE.js`) |
+| `136bd427-024a-4cf3-b091-fb93c17a47ee` | **Final:** everything through `e2102a7`, including texture pre-upload and shared supply shapes (client `index-Cq-PgP4w.js`). Full suites green on a clean copy (worker 238/238, client 1,533/1,533, scripts 125/125) |
 
 A perf report from a real staging session was recorded end to end (`/api/city/v1/events?type=perf`).
 
