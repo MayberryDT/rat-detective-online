@@ -5,16 +5,16 @@ import {reducedMotion,replay,scrawl,uiMotion} from '../ui/motion';
 
 const ARROWS=4;
 
-/** A small tile of monochrome noise for the film-grain overlay, as a data URL. */
-function grainImage(doc:Document):string|undefined {
-    // Minimal/headless canvases may lack pixel access; grain is then simply skipped.
-    try{
-        const canvas=doc.createElement('canvas');canvas.width=canvas.height=96;
-        const g=canvas.getContext?.('2d');if(!g)return undefined;
-        const image=g.createImageData(96,96);
-        for(let i=0;i<image.data.length;i+=4){const v=Math.random()*255;image.data[i]=image.data[i+1]=image.data[i+2]=v;image.data[i+3]=255;}
-        g.putImageData(image,0,0);return canvas.toDataURL();
-    }catch{return undefined;}
+/** A small tile of monochrome noise for the film-grain overlay, as a data URL: an 8-bit grey BMP
+ * written directly. Drawing and encoding a canvas instead cost 90–380 ms on its first use (a GPU
+ * canvas read back), a frame frozen as play began. */
+function grainImage():string {
+    const side=96,header=54+256*4,bytes=new Uint8Array(header+side*side),view=new DataView(bytes.buffer);
+    bytes[0]=0x42;bytes[1]=0x4d;view.setUint32(2,bytes.length,true);view.setUint32(10,header,true);
+    view.setUint32(14,40,true);view.setInt32(18,side,true);view.setInt32(22,side,true);view.setUint16(26,1,true);view.setUint16(28,8,true);view.setUint32(46,256,true);
+    for(let i=0;i<256;i++)bytes.fill(i,54+i*4,57+i*4);
+    for(let i=header;i<bytes.length;i++)bytes[i]=Math.random()*256;
+    return `data:image/bmp;base64,${btoa(String.fromCharCode(...bytes))}`;
 }
 interface Arrow {node:HTMLElement;from:THREE.Vector3|null;age:number;life:number}
 
@@ -208,7 +208,7 @@ export class ScreenFeel {
         this.noirEdge=this.doc.createElement('div');this.noirEdge.className='feel-noir';this.root.appendChild(this.noirEdge);
         this.vignetteNode=this.doc.createElement('div');this.vignetteNode.className='feel-vignette';this.root.appendChild(this.vignetteNode);
         this.grainNode=this.doc.createElement('div');this.grainNode.className='feel-grain';this.grainNode.style.display='none';
-        const noise=grainImage(this.doc);if(noise)this.grainNode.style.backgroundImage=`url(${noise})`;
+        this.grainNode.style.backgroundImage=`url(${grainImage()})`;
         this.root.appendChild(this.grainNode);
         for(const edge of ['top','bottom']){const bar=this.doc.createElement('div');bar.className=`feel-letterbox ${edge}`;this.root.appendChild(bar);}
         this.speedNode=this.doc.createElement('div');this.speedNode.className='feel-speed';this.root.appendChild(this.speedNode);
