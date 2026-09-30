@@ -508,7 +508,9 @@ export class GameRoom extends DurableObject<Env> {
     if (!jev) return;
     let human = false;
     if (this.serverBots && this.jevKey()) for (const id of this.players.keys()) {
-      if (!this.isManagedBot(id) && this.sessions.get(id)?.until == null && now - (this.lastInputAt.get(id) ?? -Infinity) < this.jevPresenceMs) { human = true; break; }
+      // Agent browsers (`agent=1`) are not people: they never switch Jev on or spend its budget.
+      const session = this.sessions.get(id);
+      if (!this.isManagedBot(id) && !session?.agent && session?.until == null && now - (this.lastInputAt.get(id) ?? -Infinity) < this.jevPresenceMs) { human = true; break; }
     }
     const budget = this.jevBudget, on = human && budget.allows(now), off = jev.enabled && !on;
     budget.tick(now, off);

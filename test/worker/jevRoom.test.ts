@@ -50,8 +50,8 @@ async function room(key: { value?: string }, held?: Array<() => void>): Promise<
   return { stub, bodies };
 }
 type Welcome = { player: { x: number; y: number; z: number } };
-async function join(stub: Stub): Promise<{ ws: WebSocket; welcome: Welcome }> {
-  const response = await stub.fetch('https://rat-detective.test/ws', { headers: { Upgrade: 'websocket' } });
+async function join(stub: Stub, agent = false): Promise<{ ws: WebSocket; welcome: Welcome }> {
+  const response = await stub.fetch(`https://rat-detective.test/ws${agent ? '?agent=1' : ''}`, { headers: { Upgrade: 'websocket' } });
   const ws = response.webSocket!; ws.accept(); sockets.push(ws);
   const welcome = new Promise<Welcome>(resolve => ws.addEventListener('message', event => {
     const message = readSocketMessage(ws, event.data);
@@ -83,6 +83,15 @@ describe('Jev in a room', () => {
     const asked = bodies.length;
     await play(1200);
     expect(bodies.length).toBe(asked);
+  }, 20000);
+
+  it('never switches on for an agent browser, however it plays', async () => {
+    const { stub, bodies } = await room({ value: 'test-key' });
+    const { ws, welcome } = await join(stub, true);
+    const { x, y, z } = welcome.player;
+    ws.send(JSON.stringify({ type: 'updateMovement', seq: 1, position: { x, y, z }, rotation: { x: 0, y: .38, z: 0, w: .92 }, meshRotation: { x: 0, y: .38, z: 0, w: .92 } }));
+    await play(1500);
+    expect(bodies).toEqual([]);
   }, 20000);
 
   it('counts a human only while they play: an idle tab turns Jev off, and input turns it on again', async () => {
