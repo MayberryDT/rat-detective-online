@@ -6,6 +6,7 @@ import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createWorldSpec} from '../../src/shared/worldSpec';
 import {DISPATCH_STATIONS,type ChaosState} from '../../src/shared/chaosState';
 import type {Vec3Data} from '../../src/shared/networkProtocol';
+import {STEER} from '../../src/shared/bots/motor/steer';
 
 const navigation=vi.hoisted(()=>({route:vi.fn((_from:Vec3Data,to:Vec3Data)=>[to]),update:vi.fn()}));
 vi.mock('../../src/shared/BotNavigation',()=>({BotNavigation:class{
@@ -38,7 +39,8 @@ describe('hosted server bot controller',()=>{
     it('publishes normal-speed movement at twenty Hz plus pre-shot poses with source timestamps',()=>{
         const {controller,players,bot,move}=fixture();players.delete('human');
         for(let i=0;i<=120;i++)controller.step(1/60,1000+i*1000/60,players,state(1000+i*1000/60),true);
-        expect(bot.x).toBeGreaterThan(21);expect(bot.x).toBeLessThan(24);
+        // Two seconds at the rat's own running pace, from a standing start.
+        expect(bot.x).toBeGreaterThan(21);expect(bot.x).toBeLessThan(2*STEER.pace[1]);
         expect(move.mock.calls.length).toBeGreaterThanOrEqual(39);
         expect(move.mock.calls.length).toBeLessThanOrEqual(50);
         const times=(move.mock.calls as unknown as [string,Vec3Data,number,number][]).map(c=>c[3]);
@@ -85,7 +87,8 @@ describe('hosted server bot controller',()=>{
         controller.step(1/60,1000,players,state(),true);
         expect(shoot).not.toHaveBeenCalled();
         let now=1017;
-        for(;now<1600&&!shoot.mock.calls.length;now+=17)controller.step(1/60,now,players,state(now),true);
+        // The rival stands off to the side: noticing it and swinging round takes a moment.
+        for(;now<2600&&!shoot.mock.calls.length;now+=17)controller.step(1/60,now,players,state(now),true);
         const shotIndex=events.indexOf('shoot');expect(shotIndex).toBeGreaterThan(0);
         expect(events[shotIndex-1]).toBe('move');expect(shoot).toHaveBeenCalledTimes(1);
         const call=shoot.mock.calls[0] as unknown as [string,Vec3Data,Vec3Data];

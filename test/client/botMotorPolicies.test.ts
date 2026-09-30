@@ -1,10 +1,9 @@
 import {expect,it} from 'vitest';
 import {RatBot} from '../../src/shared/bots/ratBot';
 import type {MotorNavigation} from '../../src/shared/bots/motor';
-import {BotPurposefulHolding} from '../../src/shared/bots/motor/BotPurposefulHolding';
-import {BotManeuver} from '../../src/shared/bots/motor/BotManeuver';
+import {BotZoneHold} from '../../src/shared/bots/motor/zoneHold';
+import {seededRandom} from '../../src/shared/bots/random';
 import {BotNavigation} from '../../src/shared/BotNavigation';
-import {BotAttention} from '../../src/shared/bots/motor/BotAttention';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createAssignment,ASSIGNMENT_IDS} from '../../src/shared/assignments';
@@ -22,31 +21,19 @@ it.each(ASSIGNMENT_IDS)('keeps a fight through distance ties while preserving be
  b.x=12;brain.step(3300,self,[a,b],state,()=>true,false,true);expect(brain.goalKey).toBe('combat:b');
  state.case.returningUntil=0;state.case.p={x:8,y:0,z:0};brain.step(3310,self,[a,b],state,()=>true,false,true);expect(brain.objective).toBe('case');
 });
-it('finishes a supported combat maneuver across the old clock reversal and releases a failed route',()=>{
- const m=new BotManeuver(0),self={x:0,y:0,z:0},threat={x:0,y:0,z:12};
- const first=m.step(2500,'combat:a',self,threat,nav)!;
- expect(m.step(2700,'combat:a',self,threat,nav)).toEqual(first);
- expect(m.step(2750,'combat:a',first,threat,nav)).not.toEqual(first);
- expect(m.step(2800,'combat:a',self,threat,{...nav,localStep:()=>undefined})).toBeUndefined();
- m.reset();expect(m.step(2900,'combat:b',self,{x:12,y:0,z:0},nav)).not.toEqual(first);
-});
-it('uses supported quiet posts, responds to threats, and keeps all six zone boundaries with bounded local work',()=>{
+it('settles quietly on a supported post inside all six zones with bounded local work',()=>{
  const realNav=new BotNavigation({seed:341283204,version:2});
- for(const id of JURISDICTION_ZONE_IDS)for(const threats of [0,1,9]){
-  const hold=new BotPurposefulHolding(1),zone=JURISDICTION_ZONES[id];
-  const self={...zone.posts[0],y:zone.floorY};let hops=0,calls=0,lateTravel=0;
+ for(const id of JURISDICTION_ZONE_IDS)for(const seed of [0,1,5]){
+  const hold=new BotZoneHold(seed,seededRandom(seed)),zone=JURISDICTION_ZONES[id],move={x:0,z:0};
+  const self={...zone.posts[0],y:zone.floorY};self.x+=.8;let calls=0,lateTravel=0;
   const local:MotorNavigation={...nav,localStep:(from,to)=>{calls++;return realNav.localStep(from,to);}};
   for(let t=0;t<20000;t+=50){
-   // Scripted nearest visible attacker changes approach every four seconds.
-   // Crowd condition rotates nine distinct positions; it is steering, not damage.
-   const angle=Math.floor(t/4000)*(threats===9?.7:.3);
-   const threat=threats?{x:zone.posts[0].x+Math.sin(angle)*8,y:zone.floorY,z:zone.posts[0].z+Math.cos(angle)*8}:undefined;
-   const intent=hold.step(t,id,'round',self,threat,true,local,()=>false);
-   const d=Math.hypot(intent.x,intent.z)*.05;if(t>=15000)lateTravel+=d;if(intent.jump)hops++;
-   self.x+=intent.x*.05;self.z+=intent.z*.05;
-   expect(zoneContains(id,self),`${id} ${threats}`).toBe(true);
+   hold.hold(t,id,'round',self,local,move);
+   if(t>=15000)lateTravel+=Math.hypot(move.x,move.z)*.05;
+   self.x+=move.x*.05;self.z+=move.z*.05;
+   expect(zoneContains(id,self),`${id} ${seed}`).toBe(true);
   }
-  expect(calls).toBeLessThan(1000);if(!threats){expect(hops).toBe(0);expect(lateTravel).toBeLessThan(.2);}
+  expect(calls).toBeLessThan(1000);expect(lateTravel).toBeLessThan(.2);
  }
 },20000);
 function acquisition(behind:boolean){
@@ -60,11 +47,10 @@ function acquisition(behind:boolean){
  }
  return{first,maxTurnDegrees:maxTurn*180/Math.PI};
 }
-it('charges for an off-screen flank and turns the gun at a bounded rate',()=>{
+it('notices an off-screen flank later than a rival in front',()=>{
  const front=acquisition(false),rear=acquisition(true);
  expect(front.first).toBeDefined();
- expect(rear.first!).toBeGreaterThan(front.first!+200);expect(rear.maxTurnDegrees).toBeLessThan(6.4);
- const attention=new BotAttention();attention.turn(0,Math.PI,0);attention.turn(20,Math.PI,0);attention.reset();expect(attention.turn(1000,0,0)).toBe(0);
+ expect(rear.first!).toBeGreaterThan(front.first!+200);
 });
 
 it.each(ASSIGNMENT_IDS)('keeps %s case priorities above combat commitment',mode=>{

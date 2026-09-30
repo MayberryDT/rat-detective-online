@@ -11,6 +11,9 @@ import {MAX_HP,type PlayerData,type Vec3Data} from '../networkProtocol';
 const DISPATCH_DETOUR_MS=12000;
 /** How far an alarm pillar may be for a detour, and how many times nearer than the case or carrier. */
 const PILLAR_REACH={other:{range:45,ratio:2},gremlin:{range:90,ratio:1}} as const;
+/** Fleeing: a place `near`–`far` away within `levels` of height, at least `safer` further from the rats in
+ * sight than the rat stands now; a local run only if it gets `local` away. A flee place holds `stickMs`. */
+const FLEE={near:15,far:70,levels:6,safer:6,local:6,stickMs:8000} as const;
 
 /** What a decision starts from, gathered once per decision. */
 export interface GoalInput {
@@ -306,7 +309,7 @@ export class BotGoals {
             else if(changed)this.supplyTripAt=now+25000+this.random()*10000;
         }
         else if(plan.mode==='dispatch'){if(changed)this.dispatchGiveUpAt=now+DISPATCH_DETOUR_MS;}
-        else if(plan.goal==='flee'){if(changed)this.fleeAt=now+2200;}
+        else if(plan.goal==='flee'){if(changed)this.fleeAt=now+FLEE.stickMs;}
         else if(plan.goal==='roam'){
             const explore=this.exploration(ctx);
             if(!explore.kept){
@@ -343,18 +346,23 @@ export class BotGoals {
             return ctx.memo.flee=[{key:m.key,index:-1,point:m.destination,what:`where I was running, ${where(self,m.destination)}`}];
         return ctx.memo.flee=this.awayFrom(self,visible,now,'flee',4);
     }
-    /** Open ground away from the rats in sight, same floor, nearest safest first, keyed `<prefix>:<index>`;
-     * with none, a step straight away from the nearest rat (`<prefix>:local`, index -1). */
+    /** Somewhere genuinely safer a real run away, nearest safest first, keyed `<prefix>:<index>`: an exploration
+     * point `FLEE.near`–`FLEE.far` away (any floor a route can reach), preferably one further from the rats in
+     * sight than the rat is now. With none, a few checked steps straight away from the nearest rat
+     * (`<prefix>:local`, index -1), only if they get somewhere. */
     private awayFrom(self:Vec3Data,visible:readonly PlayerData[],now:number,prefix:'flee'|'evade',limit:number):Place[] {
         const safety=(point:Vec3Data)=>visible.length?Math.min(...visible.map(p=>distance(point,p))):10;
-        const places=this.places.map((point,index)=>({point,index,d:distance(self,point)}))
-            .filter(({point,index,d})=>d>10&&d<55&&Math.abs(point.y-self.y)<2&&!this.motor.suppressed(`${prefix}:${index}`,point,now))
-            .sort((a,b)=>(safety(b.point)-b.d*.35)-(safety(a.point)-a.d*.35)).slice(0,limit)
+        const here=safety(self);
+        const candidates=this.places.map((point,index)=>({point,index,d:distance(self,point),safe:safety(point)}))
+            .filter(({point,index,d})=>d>=FLEE.near&&d<=FLEE.far&&Math.abs(point.y-self.y)<FLEE.levels&&!this.motor.suppressed(`${prefix}:${index}`,point,now));
+        const safer=candidates.filter(c=>!visible.length||c.safe>=here+FLEE.safer);
+        const places=(safer.length?safer:candidates).sort((a,b)=>(b.safe-b.d*.35)-(a.safe-a.d*.35)).slice(0,limit)
             .map(({point,index})=>({key:`${prefix}:${index}`,index,point,what:`away from the fight, ${where(self,point)}`}));
-        if(!places.length&&visible[0]){
+        if(!places.length&&visible[0]&&this.navigation.localStep){
             const threat=visible[0],dx=self.x-threat.x,dz=self.z-threat.z,d=Math.hypot(dx,dz)||1;
-            const point=this.navigation.localStep?.(self,{x:self.x+dx/d*8,y:self.y,z:self.z+dz/d*8});
-            if(point)places.push({key:`${prefix}:local`,index:-1,point,what:'a step straight away from the nearest rat'});
+            let point:Vec3Data=self;
+            for(let i=0;i<4;i++)point=this.navigation.localStep(point,{x:point.x+dx/d*8,y:point.y,z:point.z+dz/d*8})??point;
+            if(distance(self,point)>=FLEE.local)places.push({key:`${prefix}:local`,index:-1,point,what:'a run straight away from the nearest rat'});
         }
         return places;
     }

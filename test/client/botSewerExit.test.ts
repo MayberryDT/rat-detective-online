@@ -4,7 +4,7 @@ import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createAssignment} from '../../src/shared/assignments';
 import type {ChaosState} from '../../src/shared/chaosState';
-import {combatRandom} from '../../src/shared/BotCombat';
+import {seededRandom} from '../../src/shared/bots/random';
 
 import {SEWER_PIPE_ENTRANCES,sewerPipePoint,sewerRampOpening,sewerRampAt,sewerRampTravelPoint} from '../../src/shared/sewerLayout';
 
@@ -13,7 +13,7 @@ afterEach(()=>vi.restoreAllMocks());
 
 const exits=SEWER_PIPE_ENTRANCES.flatMap(entry=>[12,22,29].flatMap(depth=>(['jurisdiction','chain-of-custody'] as const).flatMap(mode=>[false,true].map(descending=>({entry,depth,mode,descending})))));
 it.each(exits)('$mode carrier crosses $entry.name from $depth, descending=$descending',({entry,depth,mode,descending})=>{
-    vi.spyOn(Math,'random').mockImplementation(combatRandom(81));
+    vi.spyOn(Math,'random').mockImplementation(seededRandom(81));
     const steering=vi.spyOn(RatBot.prototype,'step');
     const p=sewerPipePoint(entry,depth),start={x:p.x,y:p.floorY+.1,z:p.z};
     const now=1_000_000,bot=createPlayer('carrier','Carrier',DEFAULT_APPEARANCE,start);

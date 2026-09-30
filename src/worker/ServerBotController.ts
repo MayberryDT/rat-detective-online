@@ -89,6 +89,7 @@ export class ServerBotController {
             approachStep:(from,to)=>this.navigation.approachStep(from,to),
             route:(from,to)=>this.navigation.route(from,to),
             localStep:(from,to)=>this.navigation.localStep(from,to),
+            walkable:(from,to)=>this.navigation.walkable(from,to),
             ray:(from,to)=>{
                 this.from.set(from.x,from.y,from.z);this.to.set(to.x,to.y,to.z);
                 const hit=this.ray.closest(this.from,this.to,1);

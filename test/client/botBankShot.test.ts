@@ -97,7 +97,7 @@ describe('bank shots in play',()=>{
     function play(personality:Personality) {
         const count={n:0},ray=rayWorld([crate,eastWall],count),self=player('me',0,0),rival=player('rival',0,20),s=state();
         const navigation:MotorNavigation={route:(_from,to)=>[{...to}],localStep:()=>undefined,explorationTargets:()=>[{x:0,y:0,z:0}],ray};
-        const bot=new RatBot(navigation,0,()=>.5,{personality,skill:{...BASE_SKILL,aimErrorRadians:[0,0]}});
+        const bot=new RatBot(navigation,0,()=>.5,{personality,skill:{...BASE_SKILL,aimWanderRadians:0,flickError:0}});
         let hidden=false;const shots:Array<{now:number;aim:Vec3Data}>=[];const rays:number[]=[];
         for(let now=0;now<4000;now+=20){
             hidden=now>=1000;

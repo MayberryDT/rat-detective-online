@@ -4,12 +4,12 @@ import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createAssignment} from '../../src/shared/assignments';
-import {combatRandom} from '../../src/shared/BotCombat';
+import {seededRandom} from '../../src/shared/bots/random';
 import {JURISDICTION_ZONES} from '../../src/shared/jurisdictionZones';
 afterEach(()=>vi.restoreAllMocks());
 it.each([8,10])('real movement, shots, damage and case scoring with %s participants',population=>{
  const now=1_000_000,spec={seed:341283204,version:2},start=JURISDICTION_ZONES['records-forecourt'].posts[0];
- vi.spyOn(Date,'now').mockReturnValue(now);vi.spyOn(Math,'random').mockImplementation(combatRandom(81));
+ vi.spyOn(Date,'now').mockReturnValue(now);vi.spyOn(Math,'random').mockImplementation(seededRandom(81));
  const players=new Map(Array.from({length:population},(_,i)=>{
   const angle=i/(population-1)*Math.PI*2;
   const p=createPlayer(i===population-1?'human':`bot-${i}`,'Rat',DEFAULT_APPEARANCE,i?{x:start.x+Math.sin(angle)*9,y:.3,z:start.z+Math.cos(angle)*8}:start);

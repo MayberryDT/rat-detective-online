@@ -123,7 +123,7 @@ flowchart TB
 - **Split, then deleted:** `ObjectiveBotBrain.ts` is two things in one file, and both survive in new homes:
   - its deciding half (the priority ladder: case, intercept, carrier, zone, delivery, evade, combat, explore, with pickup, armour and alarm-pillar detours) becomes `goals.ts` plus the code mind's scores;
   - its moving half becomes the motor: routes, launches and flights, local steps, case approaches, obstacle jumps, zone holding, strafing, Ironclad caution, aim, fire, speculative corner fire, the turn rate and trap avoidance.
-- **Moved into the motor, unchanged in behaviour:** `BotManeuver`, `BotAttention`, `BotPurposefulHolding` (zone holding), `BotOpportunisticFire` (corner fire) and `zoneStepSafe`. They are motor behaviour worth keeping, not patch layers. The experiment switch goes: `BotExperiments`, the unused non-default `BotZoneHolding` class, and the capacity-fixture modes that only switch between them.
+- **Moved into the motor, unchanged in behaviour (until the motor rewrite, below):** `BotManeuver`, `BotAttention`, `BotPurposefulHolding` (zone holding), `BotOpportunisticFire` (corner fire) and `zoneStepSafe`. The rewrite replaced all but `zoneStepSafe`. The experiment switch goes: `BotExperiments`, the unused non-default `BotZoneHolding` class, and the capacity-fixture modes that only switch between them.
 - **Tests:** 26 test files name the old brain or its layers. They drive the new composed bot (the tryhard code mind plus the motor), with the same step signature, so their behaviour still has to hold. Tests of experiment switching are deleted.
 
 ## Order of work
@@ -171,7 +171,7 @@ Each step lists what it delivers and how it is proven.
 
     A tryhard on the code mind takes the top score, exactly as before. A Jev tryhard keeps its goal until another leads by one level of five, or an event fires. Mavericks and gremlins sample (softmax, temperature 0.75, their own seeded stream) and hold a sample for 2.5 s between beats. Offered goals an answer left out take the code mind's score; an answer that scored none of them gives way to the code mind.
   - **Personality** (`botPersonality` in `botRoster.ts`): a fixed FNV-1a hash of the roster name, 846 / 106 / 104 over the 1,056-name pool. The server derives it where the bot is driven; it is never sent.
-  - **Skill dials** (`BASE_SKILL` in `intent.ts`): reaction 200–450 ms, aim error 2.8–5.6°, burst gaps 200–240 ms, 200 ms between motor shots: today's numbers, exactly.
+  - **Skill dials** (`BASE_SKILL` in `intent.ts`): at B2b, today's numbers exactly (reaction 200–450 ms, aim error 2.8–5.6°, burst gaps 200–240 ms, 200 ms between motor shots). The motor rewrite redefined them (see "Motor rewrite").
   - **Bank shots** (`src/shared/bots/motor/bankShot.ts`): at a rat last seen at most 2.5 s ago within 35 units, now behind cover: six wall probes, then the shortest mirror bounce whose two legs check clear; at most 12 rays an attempt, one attempt every 600 ms, fired within 400 ms with the dials' aim error. Mavericks always; any rat whose answer's `bank` is at least 0.6.
   - **Gremlin fire:** a visible counterfeit with another rat within 5 units, from more than 10 units away; a launch trigger with another rat on its pad while the machine is not cooling; targets within 50 units. Gremlins also look for alarm pillars up to 90 units away (others 45).
   - **Parity:** with every bot a tryhard on the code mind, B2a and B2b match frame by frame (all four assignments, 6 and 10 rats, 60 s, seeded).
@@ -299,3 +299,39 @@ Each step lists what it delivers and how it is proven.
     - Paper Chase deliveries: 30 against 49 per room-hour, with 1 win against 3;
     - death places: 135 against 144.
   - **Likely cause** [inference]: tryhards on the code mind are frame-identical to the old bots, so the gap comes from the non-tryhards and the Pier 9 exit legs. The sim had 3 non-tryhards in 9, more than the 80/10/10 mix gives, and gremlins weight keep-case at 0.85. **Open before production:** rerun with the real mix, and check whether mavericks and gremlins carrying the case in Paper Chase deliver.
+
+## Motor rewrite
+
+Tyler's staging playtest: the bots now decide like humans but still move and shoot like a computer. The motor (`src/shared/bots/motor.ts`, `src/shared/bots/motor/`) is rewritten from the ground up in short iterations, each played by Tyler on staging for about ten minutes. Routes, flights, launches, rescue semantics, Ironclad rules, bank shots and mischief are kept; how a rat runs, aims and fights is new.
+
+**What humans do in a fight** (fight `window` facts, layout 3, both mirrors, 29 September; humans are about 6,200 samples at 5 a second, mostly Tyler; the old bots about 330,000):
+
+| While fighting | Humans | Old bots |
+| --- | --- | --- |
+| Speed p50 / p90, units a second | 12.9 / 19.9 | 10.2 / 13.0 |
+| Stopped (under 1.5), share / stops per moving second / p50 length | 13% / 0.09 / 0.46 s | 12% / 0.15 / 0.46 s |
+| Moving forward / back / sideways (against facing) | 56 / 18 / 26% | 64 / 12 / 24% |
+| Heading turns over 45° per 0.23 s sample | 21% | 16% |
+| Turn rate p50 / p90, rad a second | 0.22 / 2.6 | 0.39 / 3.9 |
+| Distance to the nearest rival, p50 | 35 | 29 |
+| Closing speed at 5 HP / 2–4 HP, mean | +2.8 / +0.5 | +4.4 / +1.8 |
+
+**Iteration 1 (the new motor):**
+- **Running** (`steer.ts`): pure pursuit along the route, to the furthest point walkable in a straight line within 4.5 units plus 0.2 a unit of speed (`BotNavigation.walkable`), so corners are cut and grid zig-zags vanish. The running direction swings at 8 rad/s; the rat eases off into sharp bends. Each rat has its own pace, 12.8–14.4 (humans 18), drifting a few percent.
+- **Aim** (`aim.ts`): a crosshair moved like a hand. A reaction (240–480 ms, plus 120–260 ms for a rat off to the side and 320–600 ms behind), a minimum-jerk flick that lands short or long (20% of its size) and follows the target as it moves, then tracking with lag (130–210 ms) and a lead of 20–75% of the true one. A drifting wander (4.8° at mid range) grows at point blank, at range, with the target's and its own speed, and after a hit (a flinch). Shots leave along the crosshair. With no rival in sight it looks at a rat just lost, heard gunfire, the case, zone approaches or the corner ahead, glancing aside now and then, and fires groups there.
+- **Fighting** (`fight.ts`): strafes at a preferred range of 17–27 with irregular timing (220 ms plus an exponential tail, a 22% chance of stopping to shoot for 180–480 ms), pushes a rival on 2 HP or one who just emptied a burst, and when hurt backs off, hides behind cover found by a ray and peeks out again. Carrying and delivering keep their route and keep shooting.
+- **Flee:** a flee place is 15–70 units away, at least 6 units further from the rats in sight than the rat is now, and is kept for 8 s. (Before, a step of under 3 units was "reached" 16 times in 4 s.)
+- **Sim** (`scripts/bot-sim.mjs`, 12 rooms of 5 minutes, all four assignments, 9 bots cast 7/1/1):
+
+  | | Old motor (`79583d0`) | Iteration 1 |
+  | --- | --- | --- |
+  | Rescues per bot-hour | 1.00 | 1.44 (13 rescues; runs ranged 0.56–2.1) |
+  | Case changes / completions per room-hour | 252 / 3 | 269 / 4 |
+  | Paper Chase deliveries per room-hour | 56 | 57 |
+  | Kills per bot-hour, bot hit rate | 60 / 4.1% | 62 / 3.4% (more shots: 119 a bot-minute against 102) |
+  | Death places | 91 | 94 |
+
+  Longest a loose case sat untouched in a live assignment: 26 s (old 34 s). Hits at under 12 units land more often than the old bots' (about 18% against 13% a shot), fewer beyond.
+
+Iteration log (one line each):
+1. New motor: pursuit running, hand-like aim, strafe/push/cover fighting, flee fix. Staging `ITER1_VERSION`.

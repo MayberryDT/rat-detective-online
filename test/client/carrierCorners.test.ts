@@ -5,7 +5,7 @@ import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createAssignment} from '../../src/shared/assignments';
 import {LANDMARK_INTERIORS} from '../../src/shared/landmarkLayout';
 import type {ChaosState} from '../../src/shared/chaosState';
-import {combatRandom} from '../../src/shared/BotCombat';
+import {seededRandom} from '../../src/shared/bots/random';
 
 afterEach(()=>vi.restoreAllMocks());
 const corners=LANDMARK_INTERIORS.flatMap(h=>[[-1,-1],[-1,1],[1,-1],[1,1]].map(([x,z])=>({
@@ -19,7 +19,7 @@ const upstairs=LANDMARK_INTERIORS.map(h=>({...h,start:{...UPSTAIRS[h.id]!,y:8},m
 // A carrier must leave through a doorway without requiring a recovery teleport.
 // Checking only eventual exit missed the several-second corner death traps.
 it.each([...corners,...upstairs])('carrier exits $id from $start toward the next Jurisdiction zone',h=>{
-    vi.spyOn(Math,'random').mockImplementation(combatRandom(81));
+    vi.spyOn(Math,'random').mockImplementation(seededRandom(81));
     const now=1_000_000,bot=createPlayer('carrier','Carrier',DEFAULT_APPEARANCE,h.start);
     const players=new Map([[bot.id,bot]]);
     const assignment=createAssignment('jurisdiction',now,'exit',()=>.3);

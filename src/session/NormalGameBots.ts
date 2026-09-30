@@ -88,6 +88,8 @@ export class NormalGameBots {
             supported: from => navigation.supported?.(from)??false,
             jumpStep: (from,to) => navigation.jumpStep?.(from,to),
             approachStep: (from,to) => navigation.approachStep?.(from,to),
+            localStep: (from,to) => navigation.localStep?.(from,to),
+            walkable: (from,to) => navigation.walkable?.(from,to)??false,
             route: (from, to) => {
                 // Eleven brains share one planner budget: never eleven A* calls
                 // in the same frame, and no path work during every physics tick.

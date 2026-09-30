@@ -1,6 +1,7 @@
 import {cityPlaces,type Place} from '../../shared/city/places';
 import {distance} from '../../shared/bots/motor';
 import {BANK} from '../../shared/bots/motor/bankShot';
+import {STEER} from '../../shared/bots/motor/steer';
 import type {GoalContext} from '../../shared/bots/goals';
 import type {Goal,PlaceOption} from '../../shared/bots/intent';
 import {activeZone,nextZone,JURISDICTION_TUNING} from '../../shared/jurisdiction';
@@ -16,8 +17,8 @@ import {MAX_HP,type Vec3Data} from '../../shared/networkProtocol';
  * for this request only, never their chosen names. Rats in view follow the motor's sight (line of sight,
  * the same rays that aim); the Hunch and sounds are listed apart. */
 
-/** The motor's sprint, in units a second: distance bands are run times at this speed. */
-const RUN_SPEED=12;
+/** The motor's typical running pace, in units a second: distance bands are run times at this speed. */
+const RUN_SPEED=(STEER.pace[0]+STEER.pace[1])/2;
 /** At full HP a rat senses others this close through walls, as humans do. */
 const HUNCH_RANGE=40;
 const HEARING={shotRange:60,shotAge:1,launchRange:100,launchMs:3000,alarmMs:4000};

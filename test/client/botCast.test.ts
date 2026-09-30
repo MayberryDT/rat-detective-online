@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest';
 import {Cast,CAST,completeAnswer} from '../../src/shared/bots/cast';
-import {combatRandom} from '../../src/shared/BotCombat';
+import {seededRandom} from '../../src/shared/bots/random';
 import type {Goal,GoalScores,MindAnswer,Personality} from '../../src/shared/bots/intent';
 
 const code=(scores:GoalScores):MindAnswer=>({source:'code',scores});
@@ -8,7 +8,7 @@ const jev=(scores:GoalScores):MindAnswer=>({source:'jev',scores});
 const never=()=>{throw new Error('the tryhard code cast must not sample');};
 
 function shares(personality:Personality,scores:GoalScores,seed:number,n=4000):Partial<Record<Goal,number>> {
-    const cast=new Cast(combatRandom(seed)),offered=Object.keys(scores) as Goal[],counts:Partial<Record<Goal,number>>={};
+    const cast=new Cast(seededRandom(seed)),offered=Object.keys(scores) as Goal[],counts:Partial<Record<Goal,number>>={};
     for(let i=0;i<n;i++){const first=cast.rank(personality,code(scores),offered,i*300,'event').ranked[0];counts[first]=(counts[first]??0)+1;}
     for(const goal of offered)counts[goal]=(counts[goal]??0)/n;
     return counts;
@@ -41,12 +41,12 @@ describe('the cast',()=>{
     });
 
     it('samples the same way from the same seed',()=>{
-        const run=()=>{const cast=new Cast(combatRandom(7));return Array.from({length:50},(_,i)=>cast.rank('gremlin',code({hunt:3,roam:2.5,mischief:2}),['hunt','roam','mischief'],i*300,'event').ranked[0]);};
+        const run=()=>{const cast=new Cast(seededRandom(7));return Array.from({length:50},(_,i)=>cast.rank('gremlin',code({hunt:3,roam:2.5,mischief:2}),['hunt','roam','mischief'],i*300,'event').ranked[0]);};
         expect(run()).toEqual(run());
     });
 
     it('holds a sampled goal between beats and draws afresh on an event',()=>{
-        const cast=new Cast(combatRandom(3)),offered:Goal[]=['take-case','roam'];
+        const cast=new Cast(seededRandom(3)),offered:Goal[]=['take-case','roam'];
         cast.took('roam');cast.rank('maverick',code({'take-case':4,roam:.5}),offered,0,'event');cast.took('roam');
         for(let now=100;now<CAST.commitMs;now+=250)expect(cast.rank('maverick',code({'take-case':4,roam:.5}),offered,now,'beat').ranked[0]).toBe('roam');
         const redrawn=Array.from({length:40},(_,i)=>{cast.took('roam');return cast.rank('maverick',code({'take-case':4,roam:.5}),offered,100+i,'event').ranked[0];});

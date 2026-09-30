@@ -168,6 +168,14 @@ export class BotNavigation {
         }
         this.edges.set(node.id,out);return out;
     }
+    /** Whether the whole rat can walk the straight segment from `from` (feet) to `to` on supported floor, up to
+     * 12 units: the route follower's corner-cutting check. */
+    walkable(from:Vec3Data,to:Vec3Data):boolean {
+        if(Math.hypot(to.x-from.x,to.z-from.z)>12)return false;
+        let support:number|undefined,best=.65;
+        for(const y of this.surfaces(from.x,from.z))if(Math.abs(y-from.y)<best){best=Math.abs(y-from.y);support=y;}
+        return support!==undefined&&this.connected({x:from.x,y:support,z:from.z},to);
+    }
     /** A short supported step while a city route is still being discovered.
      * Every candidate sweeps the complete body; a clear eye ray is insufficient
      * for walls, stair openings, floor gaps and the lip of a sewer shaft. */

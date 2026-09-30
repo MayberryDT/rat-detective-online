@@ -1,6 +1,7 @@
 import {badRound} from '../../src/shared/shotPattern';
 import {it,expect,vi} from 'vitest';
-import {BotCombat,combatRandom} from '../../src/shared/BotCombat';
+import {RatBot} from '../../src/shared/bots/ratBot';
+import type {MotorNavigation} from '../../src/shared/bots/motor';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING} from '../../src/shared/chaosState';
 import {createPlayer} from '../../src/worker/gameState';
@@ -12,11 +13,14 @@ it.each(['scattershot','bad-ammunition'] as const)('keeps fresh human fire admit
  const players=new Map([...bots,human].map(p=>[p.id,p]));
  const initial=new ChaosSimulation(players,()=>{}),saved=initial.snapshot(false);
  saved.dispatch={phase:'active',started:now,until:now+25000,serial:1,incident};
- const sim=new ChaosSimulation(players,()=>{},saved),brains=bots.map((_,i)=>new BotCombat(combatRandom(i)));
+ const sim=new ChaosSimulation(players,()=>{},saved);
+ // Bots that stand still and fire at the visible human.
+ const nav:MotorNavigation={route:()=>[],explorationTargets:()=>[]};
+ const brains=bots.map((_,i)=>new RatBot(nav,i,()=>.5));
  let triggers=0;
  for(let frame=0;frame<600;frame++){
-  const t=now+frame*1000/60;
-  bots.forEach((bot,i)=>{const shot=brains[i].step(t,bot,human,true).shoot;if(!shot)return;
+  const t=now+frame*1000/60,state=sim.snapshot(false);
+  bots.forEach((bot,i)=>{const shot=brains[i].step(t,bot,[human],state,()=>true,false,true).shoot;if(!shot)return;
    triggers++;sim.shoot(bot.id,{shotId:`${i}-${frame}`,origin:{x:bot.x,y:200.9,z:0},direction:{x:shot.x-bot.x,y:shot.y-200.9,z:shot.z}});
   });
   sim.step(1/60,t);

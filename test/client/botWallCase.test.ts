@@ -3,7 +3,7 @@ import {ServerBotController} from '../../src/worker/ServerBotController';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
-import {combatRandom} from '../../src/shared/BotCombat';
+import {seededRandom} from '../../src/shared/bots/random';
 import {createAssignment} from '../../src/shared/assignments';
 import {grayboxBoxes} from '../../src/shared/grayboxLayout';
 afterEach(()=>vi.restoreAllMocks());
@@ -11,7 +11,7 @@ it.each([
  [-36,-35.9,0,1],[-35,-35.9,0,1],[-36,-82.1,0,-1],[-35,-82.1,0,-1],
  [17.1,-68,1,0],[17.1,-67,1,0],[-49.1,-68,-1,0],[-49.1,-67,-1,0],
 ] as const)('collects the real case beside a wall at %s,%s',(x,z,dx,dz)=>{
- vi.spyOn(Math,'random').mockImplementation(combatRandom(81));const now=1_000_000,spec={seed:341283204,version:2};
+ vi.spyOn(Math,'random').mockImplementation(seededRandom(81));const now=1_000_000,spec={seed:341283204,version:2};
  const bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,{x:x+dx*8,y:.3,z:z+dz*8}),players=new Map([[bot.id,bot]]);
  const sim=new ChaosSimulation(players,()=>{},undefined,spec),a=createAssignment('jurisdiction',now,'wall',()=>.3);a.phase='active';a.liveAt=now;sim.setAssignment(a);
  sim.caseBody.position.set(x,.8,z);sim.caseBody.velocity.setZero();sim.caseBody.angularVelocity.setZero();
@@ -26,7 +26,7 @@ it.each([
 },30000);
 
 it.each(['bin','crate','dumpster'] as const)('jumps along the curb over a real city %s',kind=>{
- vi.spyOn(Math,'random').mockImplementation(combatRandom(81));const now=1_000_000,spec={seed:341283204,version:2};
+ vi.spyOn(Math,'random').mockImplementation(seededRandom(81));const now=1_000_000,spec={seed:341283204,version:2};
  const obstacle=grayboxBoxes(spec).find(b=>b.debris===kind)!;
  const bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,{x:obstacle.x-3.5,y:.3,z:obstacle.z}),players=new Map([[bot.id,bot]]);
  const sim=new ChaosSimulation(players,()=>{},undefined,spec);sim.caseBody.position.set(obstacle.x+3.5,.6,obstacle.z);sim.caseBody.velocity.setZero();

@@ -2,7 +2,6 @@ import {describe,it,expect} from 'vitest';
 import {RatBot} from '../../src/shared/bots/ratBot';
 import type {MotorNavigation} from '../../src/shared/bots/motor';
 import {exposedCarrierCase,shotHitsIronclad} from '../../src/shared/BotTargeting';
-import {BotCombat} from '../../src/shared/BotCombat';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {ASSIGNMENT_IDS,createAssignment} from '../../src/shared/assignments';
@@ -45,12 +44,19 @@ describe('Ironclad-aware bots',()=>{
   expect(exposedCarrierCase({...self,z:30},silver,s,()=>true)).toBeUndefined();
   s.case.p.z=8.74;expect(exposedCarrierCase(self,silver,s,()=>true)).toBeUndefined();
  });
- it('aims at the exposed case instead of the body, with ordinary reaction and aim error',()=>{
-  const {self,silver,s}=fixture(),combat=new BotCombat(()=>.5);s.case.p={x:0,y:.52,z:7.26};
-  expect(combat.step(1000,self,silver,true,true,s.case.p).shoot).toBeUndefined();
-  const shot=combat.step(1400,self,silver,true,true,s.case.p).shoot!;
-  expect(shot).toBeDefined();expect(shot.y).toBeCloseTo(.52);expect(Math.abs(shot.x)).toBeGreaterThan(.1);
-  expect(combat.step(1420,self,silver,true).shoot).toBeUndefined();
+ it('aims at the exposed case instead of the body, after a reaction and with imperfect aim',()=>{
+  const {self,silver,s,brain}=fixture();s.case.owner=silver.id;s.case.p={x:0,y:.52,z:7.26};
+  let first:number|undefined;const offCase:number[]=[],offChest:number[]=[];
+  for(let t=1000;t<3000;t+=20){
+   s.time=t;const shot=brain.step(t,self,[silver],s,()=>true,false,true).shoot;
+   if(!shot)continue;first??=t;
+   offCase.push(Math.hypot(shot.x-s.case.p.x,shot.y-s.case.p.y,shot.z-s.case.p.z));
+   offChest.push(Math.hypot(shot.x-silver.x,shot.y-silver.y-1.2,shot.z-silver.z));
+  }
+  const mean=(v:number[])=>v.reduce((a,b)=>a+b,0)/v.length;
+  expect(first).toBeGreaterThanOrEqual(1200);
+  expect(mean(offCase)).toBeLessThan(mean(offChest));
+  expect(Math.max(...offCase)).toBeGreaterThan(.05);
  });
  it('vetoes a direct body hit or a shield blocking another enemy, but permits a case hit first',()=>{
   const {self,silver,s}=fixture();

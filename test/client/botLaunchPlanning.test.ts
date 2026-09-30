@@ -18,9 +18,11 @@ it('holds the pad, respects cooldown/occlusion and waits for the real launch bef
  const step=(at:number,grounded=true,clear=true)=>{state.time=at;return brain.step(at,self,[human],state,()=>false,true,grounded,()=>clear);};
  // Fired at 2000: cooling until 3000.
  state.pressure={serial:0,levels:{},launches:[],fired:{[link.machine.id]:3000-PRESSURE_TUNING.cooldownMs}};
- expect(step(1000)).toMatchObject({x:0,z:0,jump:false,shoot:undefined});
+ // Waiting out the cooldown on the pad, the gun swings onto the trigger without firing.
+ for(let at=1000;at<=1600;at+=20)expect(step(at)).toMatchObject({x:0,z:0,jump:false,shoot:undefined});
  expect(step(3100,true,false).shoot).toBeUndefined();
- expect(step(3200).shoot).toBeDefined();
+ let fired=false;for(let at=3120;at<3500&&!fired;at+=20)fired=!!step(at).shoot;
+ expect(fired).toBe(true);
  // More than the ordinary stuck-route interval: deliberate waiting must not
  // trigger its recovery jump, abandon the route or pretend launch succeeded.
  expect(step(3600)).toMatchObject({x:0,z:0,jump:false});

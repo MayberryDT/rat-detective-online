@@ -5,7 +5,7 @@ import type {Vec3Data} from '../networkProtocol';
  * Firing is not a goal: the motor fires whenever it has a shot, within the skill dials. */
 
 /** Raised by every change to the minds, questions, weights or dials; stamped on city facts next to `layoutVersion`. */
-export const MIND_VERSION=1;
+export const MIND_VERSION=2;
 
 /** Where to go and what to do there. Code offers only the goals valid for this rat right now. */
 export const GOALS=['take-case','chase-carrier','keep-case','hold-zone','hunt','flee','heal','arm-up','ambush','mischief','roam'] as const;
@@ -72,16 +72,24 @@ export interface Decision {
 }
 
 /** Motor skill: one tier for every personality ("base bots never outplay Tyler"). A harder tier is only
- * different numbers. Uniform ranges are [min, max]. */
+ * different numbers. Uniform ranges are [min, max]. The crosshair is a physical thing the rat moves: every
+ * miss comes from reaction, a flick that lands short or long, lag behind a moving target and wander. */
 export interface SkillDials {
-    /** Reaction before a newly seen target can be shot, ms. */
+    /** Reaction before a newly seen target is engaged, ms. A target off to the side or behind adds more. */
     reactionMs:readonly [number,number];
-    /** Angular aim error, radians, re-rolled at every aim correction. */
-    aimErrorRadians:readonly [number,number];
+    /** The crosshair's steady wander (one standard deviation, radians) for a still rat at mid range; distance,
+     * the target's motion, the rat's own motion and being hit scale it. */
+    aimWanderRadians:number;
+    /** A flick's endpoint error as a share of its size (one standard deviation): overshoot or undershoot. */
+    flickError:number;
+    /** How far the crosshair trails what the rat sees (the tracking lag's time constant), ms. */
+    trackingMs:readonly [number,number];
+    /** Share of a moving target's true lead the rat applies, drawn per engagement. */
+    lead:readonly [number,number];
     /** Gap between shots within a burst, ms. */
     burstShotMs:readonly [number,number];
     /** Minimum ms after one motor shot (aimed, speculative or banked) before the next. */
     fireGapMs:number;
 }
-/** The base tier: today's bots, exactly. */
-export const BASE_SKILL:SkillDials={reactionMs:[200,450],aimErrorRadians:[2.8*Math.PI/180,5.6*Math.PI/180],burstShotMs:[200,240],fireGapMs:200};
+/** The base tier: below the median human's hit rate (docs/bot-overhaul.md, "Motor rewrite"). */
+export const BASE_SKILL:SkillDials={reactionMs:[240,480],aimWanderRadians:4.8*Math.PI/180,flickError:.2,trackingMs:[130,210],lead:[.2,.75],burstShotMs:[190,280],fireGapMs:200};

@@ -3,7 +3,7 @@ import {BotGoals,type GoalContext,type GoalInput} from './goals';
 import {codeMind} from './codeMind';
 import {Cast,completeAnswer} from './cast';
 import {BASE_SKILL,type Decision,type Mind,type MotorMode,type Personality,type Plan,type SkillDials} from './intent';
-import {combatRandom} from '../BotCombat';
+import {seededRandom} from './random';
 import type {ChaosState} from '../chaosState';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
 
@@ -32,7 +32,7 @@ export class RatBot {
         this.motor=new BotMotor(navigation,seed,random,options.skill??BASE_SKILL);
         this.goals=new BotGoals(navigation,this.motor,seed,random);
         // Its own stream: a sampling personality never shifts the navigation or combat randomness.
-        this.cast=new Cast(combatRandom(seed+20000));
+        this.cast=new Cast(seededRandom(seed+20000));
         this.mind=options.mind??codeMind;
         this.personality=options.personality??'tryhard';
     }
@@ -80,7 +80,7 @@ export class RatBot {
         this.cast.took(plan.goal);
         this.goals.adopt(plan,ctx);
         this.motor.setPlan(plan);
-        this.motor.tactics={bank:personality==='maverick'||(answer.bank??0)>=.6,mischief:personality==='gremlin'};
+        this.motor.tactics={bank:personality==='maverick'||(answer.bank??0)>=.6,mischief:personality==='gremlin',...(answer.danger===undefined?{}:{danger:answer.danger})};
         // The dispatch detour's give-up happens in the survey above, so failures are read after it.
         const failed=this.motor.failures!==this.failuresSeen;
         this.failuresSeen=this.motor.failures;
