@@ -1,4 +1,4 @@
-// Headless Chrome CPU and allocation profile of a game page, muted, 1280x720 at DPR 1.
+// Headless Chrome CPU and allocation profile of a game page, muted, 1280x720 at DPR 1 by default.
 // Used for the optimization baseline: the synthetic render fixture and hosted
 // observation rooms. No gameplay input is sent; `--click` only presses a button
 // such as the title's Enter.
@@ -6,6 +6,8 @@
 // usage: node scripts/profile-client.mjs --url=<url> --out=<dir> [--label=name]
 //        [--warmup=15000] [--seconds=20] [--click=#enter-city-btn]
 //        [--result=<js expression read after profiling>] [--sourcemaps=dist]
+//        [--width=1280] [--height=720] [--dpr=1] [--gl]
+//   --gl          count program links and buffer/texture uploads in the profiled window, naming each linked program
 //   --sourcemaps  attribute minified frames through a `vite build --sourcemap` output
 //   --analyze     re-summarize an existing <out>/<label>.cpuprofile/.heapprofile; no browser
 // env: CHROME_BIN (default google-chrome), ANGLE (default gl-egl)
@@ -16,7 +18,9 @@ import {join} from 'node:path';
 import {parseArgs} from 'node:util';
 
 const {values}=parseArgs({options:{url:{type:'string'},out:{type:'string'},label:{type:'string',default:'client'},
-    warmup:{type:'string',default:'15000'},sourcemaps:{type:'string'},analyze:{type:'boolean',default:false},seconds:{type:'string',default:'20'},click:{type:'string'},result:{type:'string'}}});
+    warmup:{type:'string',default:'15000'},sourcemaps:{type:'string'},analyze:{type:'boolean',default:false},seconds:{type:'string',default:'20'},click:{type:'string'},result:{type:'string'},
+    width:{type:'string',default:'1280'},height:{type:'string',default:'720'},dpr:{type:'string',default:'1'},gl:{type:'boolean',default:false}}});
+const [width,height,dpr]=[values.width,values.height,values.dpr].map(Number);
 if(!values.out||!values.url&&!values.analyze)throw Error('--out and --url (or --analyze) are required');
 mkdirSync(values.out,{recursive:true});
 const maps=new Map(),frameKey=await frameNamer(values.sourcemaps);
@@ -28,9 +32,32 @@ if(values.analyze){
     writeFileSync(join(values.out,`${values.label}.summary.json`),JSON.stringify(previous,null,2));
     console.log(JSON.stringify({label:values.label,reanalyzed:true}));process.exit(0);
 }
+
+/** Injected before the page's scripts: WebGL2 program links, buffer/texture allocations, program switches,
+ * uniform calls and draws per (framebuffer, program) since `reset()`. Wrapping costs time: never time a `--gl` run. */
+const GL_COUNTERS=`(()=>{const P=WebGL2RenderingContext.prototype,source=new WeakMap(),shaders=new WeakMap(),label=new WeakMap(),fbs=new WeakMap();
+let program='',fb='screen';
+const g=window.__gl={links:0,bufferData:0,bufferBytes:0,texImage:0,useProgram:0,uniforms:0,draws:new Map(),linked:[],
+  reset(){g.links=g.bufferData=g.bufferBytes=g.texImage=g.useProgram=g.uniforms=0;g.linked.length=0;g.draws.clear();},
+  read(){const draws=[...g.draws].sort((a,b)=>b[1]-a[1]);return {links:g.links,bufferData:g.bufferData,bufferMB:+(g.bufferBytes/1048576).toFixed(2),texImage:g.texImage,useProgram:g.useProgram,uniforms:g.uniforms,
+    draws:draws.reduce((a,[,n])=>a+n,0),drawsBy:draws.slice(0,80).map(([k,n])=>k+' = '+n),linked:g.linked.slice(0,60)};}};
+const wrap=(n,f)=>{const o=P[n];if(o)P[n]=function(...a){f.apply(this,a);return o.apply(this,a);};};
+wrap('shaderSource',(s,t)=>source.set(s,t));
+wrap('attachShader',(p,s)=>{if(!shaders.has(p))shaders.set(p,[]);shaders.get(p).push(s);});
+wrap('linkProgram',p=>{g.links++;const t=(shaders.get(p)??[]).map(s=>source.get(s)??'').join('\\n');
+  const name=[/#define SHADER_TYPE (.*)/.exec(t)?.[1],/#define SHADER_NAME (.*)/.exec(t)?.[1]].filter(Boolean).join(' ')+' '+[...new Set(t.match(/#define (USE_[A-Z_]+|[A-Z_]+_MAP|FLIP_SIDED|DOUBLE_SIDED|NUM_[A-Z_]+ \\d+)/g)??[])].map(d=>d.slice(8)).join(',');
+  label.set(p,name);g.linked.push(name);});
+wrap('useProgram',p=>{g.useProgram++;program=p?label.get(p)??'?':'';});
+let fbCount=0;wrap('bindFramebuffer',(t,f)=>{if(t===0x8CA9||t===0x8D40){if(!f)fb='screen';else{if(!fbs.has(f))fbs.set(f,'fb'+ ++fbCount);fb=fbs.get(f);}}});
+const draw=()=>{const k=fb+' | '+program;g.draws.set(k,(g.draws.get(k)??0)+1);};
+for(const n of ['drawElements','drawArrays','drawElementsInstanced','drawArraysInstanced','drawRangeElements'])wrap(n,draw);
+for(const n of Object.getOwnPropertyNames(P))if(/^uniform(\\d|Matrix)/.test(n))wrap(n,()=>{g.uniforms++;});
+wrap('bufferData',(t,d)=>{g.bufferData++;g.bufferBytes+=typeof d==='number'?d:d?.byteLength??0;});
+wrap('texImage2D',()=>{g.texImage++;});wrap('texImage3D',()=>{g.texImage++;});
+})();`;
 const port=9800+Math.floor(Math.random()*150),profile=mkdtempSync(join(tmpdir(),'rat-profile-'));
 const chrome=spawn(process.env.CHROME_BIN??'google-chrome',['--headless=new',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,
-    '--window-size=1280,720','--no-first-run','--mute-audio','--autoplay-policy=no-user-gesture-required','--ignore-gpu-blocklist',
+    `--window-size=${width},${height}`,'--no-first-run','--mute-audio','--autoplay-policy=no-user-gesture-required','--ignore-gpu-blocklist',
     `--use-angle=${process.env.ANGLE??'gl-egl'}`,'about:blank'],{stdio:'ignore'});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function json(u,init){for(let i=0;i<100;i++){try{return await (await fetch(u,init)).json();}catch{await sleep(100);}}throw Error(u);}
@@ -45,7 +72,8 @@ try{
     const send=(method,params={})=>new Promise(r=>{const n=++id;pending.set(n,r);socket.send(JSON.stringify({id:n,method,params}));});
     const evaluate=async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.result?.value;
     await send('Runtime.enable');await send('Page.enable');
-    await send('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
+    if(values.gl)await send('Page.addScriptToEvaluateOnNewDocument',{source:GL_COUNTERS});
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:dpr,mobile:false});
     await send('Page.navigate',{url:values.url});
     if(values.click){
         for(let i=0;i<300&&!await evaluate(`!!document.querySelector(${JSON.stringify(values.click)})&&!document.querySelector(${JSON.stringify(values.click)}).disabled`);i++)await sleep(100);
@@ -55,19 +83,23 @@ try{
     await send('Profiler.enable');await send('Profiler.setSamplingInterval',{interval:200});
     await send('HeapProfiler.enable');
     await send('HeapProfiler.startSampling',{samplingInterval:4096,includeObjectsCollectedByMajorGC:true,includeObjectsCollectedByMinorGC:true});
-    const frames=await evaluate('(()=>{const f=window.__profileFrames={count:0,start:performance.now()};const tick=()=>{f.count++;requestAnimationFrame(tick);};requestAnimationFrame(tick);return true;})()');
+    const frames=await evaluate('(()=>{const f=window.__profileFrames={count:0,start:performance.now(),gaps:[]};let last=0;const tick=t=>{if(last)f.gaps.push(t-last);last=t;f.count++;requestAnimationFrame(tick);};requestAnimationFrame(tick);if(window.__gl)window.__gl.reset();return true;})()');
     await send('Profiler.start');
     await sleep(Number(values.seconds)*1000);
     const cpu=(await send('Profiler.stop')).result.profile;
     const heap=(await send('HeapProfiler.stopSampling')).result.profile;
     const fps=await evaluate('(()=>{const f=window.__profileFrames;return f?f.count/((performance.now()-f.start)/1000):null;})()');
+    const gaps=await evaluate('(()=>{const g=[...window.__profileFrames.gaps].sort((a,b)=>a-b),q=p=>+(g[Math.floor((g.length-1)*p)]??0).toFixed(1);return {p50:q(.5),p95:q(.95),p99:q(.99)};})()');
+    const gl=values.gl?await evaluate('window.__gl.read()'):undefined;
     const result=values.result?await evaluate(values.result):undefined;
     const gpu=await evaluate('(()=>{const g=document.createElement("canvas").getContext("webgl2");const d=g?.getExtension("WEBGL_debug_renderer_info");return d?g.getParameter(d.UNMASKED_RENDERER_WEBGL):null;})()');
     writeFileSync(join(values.out,`${values.label}.cpuprofile`),JSON.stringify(cpu));
     writeFileSync(join(values.out,`${values.label}.heapprofile`),JSON.stringify(heap));
-    const summary={label:values.label,url:values.url,gpu,frames:!!frames,fps:fps&&+fps.toFixed(1),seconds:Number(values.seconds),result,cpuSelf:cpuSelf(cpu),gameInclusive:gameInclusive(cpu),allocations:heapSelf(heap),errors};
+    const summary={label:values.label,url:values.url,gpu,viewport:{width,height,dpr},frames:!!frames,fps:fps&&+fps.toFixed(1),frameMs:gaps,seconds:Number(values.seconds),gl,result,cpuSelf:cpuSelf(cpu),gameInclusive:gameInclusive(cpu),allocations:heapSelf(heap),errors};
     writeFileSync(join(values.out,`${values.label}.summary.json`),JSON.stringify(summary,null,2));
-    console.log(JSON.stringify({label:summary.label,fps:summary.fps,gpu,busyMs:summary.cpuSelf.busyMs,idleMs:summary.cpuSelf.idleMs,allocatedMB:summary.allocations.sampledMB,errors:errors.length}));
+    const perFrame=gl&&fps?(n=>+(n/(fps*Number(values.seconds))).toFixed(1)):()=>undefined;
+    console.log(JSON.stringify({label:summary.label,fps:summary.fps,frameMs:gaps,gpu,busyMs:summary.cpuSelf.busyMs,idleMs:summary.cpuSelf.idleMs,allocatedMB:summary.allocations.sampledMB,
+        ...gl&&{links:gl.links,uploads:[gl.bufferData,gl.texImage],drawsPerFrame:perFrame(gl.draws),programSwitchesPerFrame:perFrame(gl.useProgram),uniformCallsPerFrame:perFrame(gl.uniforms)},errors:errors.length}));
     socket.close();
 }finally{
     chrome.kill('SIGTERM');await sleep(300);rmSync(profile,{recursive:true,force:true});
