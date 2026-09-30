@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 // How humans and bots move, jump, aim and press their controls in fights, alone, in pairs and all together (docs/bot-overhaul.md, "Motor rewrite").
 // Reads fight windows (5 Hz position, 20 Hz aim, 20 Hz controls) and shot facts from a city.db mirror.
-// Usage: node scripts/motor-compare.mjs [--db=output/city-staging/city.db] [--mind=2] [--since=ISO] [--until=ISO] [--json=out.json]
+// Usage: node scripts/motor-compare.mjs [--db=output/city-staging/city.db] [--mind=2] [--build=<build>|unknown] [--since=ISO] [--until=ISO] [--json=out.json]
+// Agent rats (`agent=1` browsers) are left out: they are neither humans nor bots.
 import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync } from 'node:fs';
 import { accumulate, empty, features } from './lib/fight-motion.mjs';
+import { actorClasses, buildOf } from './lib/traffic.mjs';
 
 const arg = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
 const db = new DatabaseSync(arg('db', 'output/city-staging/city.db'), { readOnly: true });
-const mind = arg('mind', undefined), since = Date.parse(arg('since', '2000-01-01')), until = Date.parse(arg('until', '2100-01-01'));
+const mind = arg('mind', undefined), build = arg('build', undefined), since = Date.parse(arg('since', '2000-01-01')), until = Date.parse(arg('until', '2100-01-01'));
 
 const rows = (type) => db.prepare('select t, round, data from facts where type = ? and t between ? and ? order by t').all(type, since, until)
-  .map(r => ({ t: r.t, round: r.round, ...JSON.parse(r.data) })).filter(f => mind === undefined || String(f.mindVersion ?? '') === mind);
-const humanOf = new Map(db.prepare('select distinct round, a, human from situations').all().map(r => [`${r.round}:${r.a}`, !!r.human]));
+  .map(r => ({ t: r.t, round: r.round, ...JSON.parse(r.data) })).filter(f => (mind === undefined || String(f.mindVersion ?? '') === mind) && (build === undefined || buildOf(f) === build));
+const classes = actorClasses(db);
 const shotsBy = new Map();
 for (const s of rows('shot')) { const k = `${s.round}:${s.a}`; (shotsBy.get(k) ?? shotsBy.set(k, []).get(k)).push(s); }
 /** Stretches left out: launcher flights (launch to landing, plus 0.3 s) and Hot Pursuit (claim to its end), which
@@ -33,8 +35,9 @@ const groups = { human: empty(), bot: empty() };
 
 for (const w of rows('window')) {
   for (const a of Object.keys(w.samples ?? {})) {
-    const k = `${w.round}:${a}`, g = groups[humanOf.get(k) ? 'human' : 'bot'];
-    accumulate(g, w, a, { skips: skipBy.get(k), shots: shotsBy.get(k) });
+    const k = `${w.round}:${a}`, who = classes.get(k) ?? 'bot';
+    if (who === 'agent') continue;
+    accumulate(groups[who], w, a, { skips: skipBy.get(k), shots: shotsBy.get(k) });
   }
 }
 
@@ -51,7 +54,7 @@ const scored = Object.values(gaps).filter(d => d !== null);
 // The inputs family: its three parts (alone, pairs, all) count in the overall score as the other families do; `inputs` is their mean.
 const inputs = ['inputs.alone', 'inputs.pairs', 'inputs.all'].map(k => gaps[k]).filter(d => d !== null && d !== undefined);
 const out = {
-  window: { mind: mind ?? 'any', since: new Date(since).toISOString(), until: new Date(Math.min(until, Date.now())).toISOString() },
+  window: { mind: mind ?? 'any', build: build ?? 'any', since: new Date(since).toISOString(), until: new Date(Math.min(until, Date.now())).toISOString() },
   sample: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, { fightMin: r3(g.fightS / 60), leftOutMin: r3(g.skippedS / 60), jumps: g.jumps, shots: Math.round(g.shots), aimSamples: g.aimSamples,
     controlMin: r3(g.controlS / 60), jumpPresses: g.jumpPresses }])),
   measures: table,

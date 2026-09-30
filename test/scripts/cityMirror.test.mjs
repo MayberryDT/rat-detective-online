@@ -22,8 +22,8 @@ const OBJECTS = {
 };
 const KEYS = Object.keys(OBJECTS);
 
-function server() {
-  const requests = [], failures = new Map();
+function server(objects = OBJECTS) {
+  const keys = Object.keys(objects), requests = [], failures = new Map();
   const http = createServer((req, res) => {
     const url = new URL(req.url, 'http://mirror'), send = (status, body) => { res.writeHead(status); res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };
     requests.push(url.pathname + url.search);
@@ -36,9 +36,9 @@ function server() {
     if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(401, 'no token');
     // Two pages, as R2 lists at most 1,000 keys a time.
     if (url.pathname === '/api/city/v1/archive') return send(200, url.searchParams.get('cursor') === 'page-2'
-      ? { objects: [{ key: KEYS[2], size: 90 }] } : { objects: KEYS.slice(0, 2).map(key => ({ key, size: 90 })), cursor: 'page-2' });
+      ? { objects: keys.slice(2).map(key => ({ key, size: 90 })) } : { objects: keys.slice(0, 2).map(key => ({ key, size: 90 })), ...(keys.length > 2 ? { cursor: 'page-2' } : {}) });
     const key = decodeURIComponent(url.pathname.slice('/api/city/v1/archive/'.length));
-    return OBJECTS[key] ? send(200, lines(OBJECTS[key])) : send(404, 'Not found');
+    return objects[key] ? send(200, lines(objects[key])) : send(404, 'Not found');
   });
   return new Promise(ready => http.listen(0, '127.0.0.1', () => ready({ http, requests, failures, base: `http://127.0.0.1:${http.address().port}` })));
 }
@@ -92,6 +92,38 @@ test('a rejected token stops the run with the status instead of retrying', async
     assert.equal(run.code, 1);
     assert.match(run.stderr, /GET \/api\/city\/v1\/archive\?prefix=city\/raw\/v1\/: HTTP 401 no token/);
     assert.equal(requests.filter(r => r.startsWith('/api/city/v1/archive')).length, 1);
+  } finally {
+    http.close();
+    await rm(out, { recursive: true, force: true });
+  }
+});
+
+// A mirror made before build stamps and the agent flag must upgrade in place (not lose or refetch its facts), and an
+// agent browser's rat must not read as a bot or a human.
+test('an older mirror gains the build and agent columns in place; new facts fill them', async () => {
+  const key = 'city/raw/v1/room/2026/10/02/00-00-00-d.jsonl.gz', build = 'production-2026-10-02-abc1234';
+  const { http, base } = await server({ [key]: [
+    { t: 10, type: 'shot', room: 'room', mode: 'jurisdiction', layout: 5, build, a: 3, human: false, agent: true, place: 'street:x' },
+    { t: 11, type: 'frame', room: 'room', mode: 'jurisdiction', layout: 5, build, rats: [rat(2, 'lot:y'), { ...rat(3, 'street:x'), human: false, agent: true }] },
+  ] });
+  const out = await mkdtemp(join(tmpdir(), 'city-mirror-'));
+  try {
+    let db = new DatabaseSync(join(out, 'city.db'));
+    db.exec(`CREATE TABLE archive_objects (key TEXT PRIMARY KEY, lines INTEGER);
+      CREATE TABLE facts (t INTEGER, type TEXT, room TEXT, round TEXT, mode TEXT, layout INTEGER, incident TEXT, a INTEGER, place TEXT, data TEXT);
+      CREATE TABLE situations (t INTEGER, round TEXT, mode TEXT, incident TEXT, a INTEGER, human INTEGER, alive INTEGER, place TEXT, floor TEXT, x REAL, y REAL, z REAL,
+        hp INTEGER, carrying INTEGER, progress REAL, rank INTEGER, lead REAL, k INTEGER, d INTEGER, assists INTEGER, streak INTEGER, shots10s INTEGER, visible INTEGER, nearest REAL, data TEXT);
+      INSERT INTO archive_objects VALUES ('${KEYS[0]}', 1);
+      INSERT INTO facts (t, type, room, layout, data) VALUES (1, 'shot', 'room', 3, '{}');
+      INSERT INTO situations (t, a, human, place) VALUES (1, 1, 1, 'street:x');`);
+    db.close();
+    const run = await mirror(base, out);
+    assert.equal(run.code, 0, run.stderr);
+    db = new DatabaseSync(join(out, 'city.db'), { readOnly: true });
+    const all = sql => db.prepare(sql).all().map(r => Object.values(r));
+    assert.deepEqual(all('SELECT t, type, build, agent FROM facts ORDER BY t'), [[1, 'shot', null, null], [10, 'shot', build, 1], [11, 'frame', build, null]]);
+    assert.deepEqual(all('SELECT t, a, human, agent, build FROM situations ORDER BY t, a'), [[1, 1, 1, null, null], [11, 2, 0, 0, build], [11, 3, 0, 1, build]]);
+    db.close();
   } finally {
     http.close();
     await rm(out, { recursive: true, force: true });

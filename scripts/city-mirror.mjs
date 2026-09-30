@@ -58,10 +58,17 @@ db.exec(`
   PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;
   CREATE TABLE IF NOT EXISTS archive_objects (key TEXT PRIMARY KEY, lines INTEGER);
   CREATE TABLE IF NOT EXISTS facts (t INTEGER, type TEXT, room TEXT, round TEXT, mode TEXT, layout INTEGER, incident TEXT, a INTEGER, place TEXT, data TEXT);
-  CREATE INDEX IF NOT EXISTS facts_type ON facts(type, t);
-  CREATE INDEX IF NOT EXISTS facts_round ON facts(round, t);
   CREATE TABLE IF NOT EXISTS situations (t INTEGER, round TEXT, mode TEXT, incident TEXT, a INTEGER, human INTEGER, alive INTEGER, place TEXT, floor TEXT, x REAL, y REAL, z REAL,
     hp INTEGER, carrying INTEGER, progress REAL, rank INTEGER, lead REAL, k INTEGER, d INTEGER, assists INTEGER, streak INTEGER, shots10s INTEGER, visible INTEGER, nearest REAL, data TEXT);
+`);
+// Columns added since the first mirrors, so an existing city.db upgrades in place: the release `build` (null on facts
+// recorded before build stamps) and `agent` (1 for an agent browser's rat, shot, session or perf report; null before the flag).
+for (const [table, column, type] of [['facts', 'build', 'TEXT'], ['facts', 'agent', 'INTEGER'], ['situations', 'build', 'TEXT'], ['situations', 'agent', 'INTEGER']])
+  if (!db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+db.exec(`
+  CREATE INDEX IF NOT EXISTS facts_type ON facts(type, t);
+  CREATE INDEX IF NOT EXISTS facts_round ON facts(round, t);
+  CREATE INDEX IF NOT EXISTS facts_build ON facts(build, type, t);
   CREATE INDEX IF NOT EXISTS situations_round ON situations(round, a, t);
   CREATE INDEX IF NOT EXISTS situations_place ON situations(place);
 `);
@@ -110,8 +117,9 @@ async function main() {
   const bytes = todo.reduce((sum, o) => sum + (o.size ?? 0), 0);
   log(`${seconds()} s  archive: ${listed} objects, ${todo.length} new (${(bytes / 1e6).toFixed(1)} MB compressed)`);
 
-  const addFact = db.prepare('INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-  const addSituation = db.prepare('INSERT INTO situations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  const addFact = db.prepare('INSERT INTO facts (t, type, room, round, mode, layout, incident, a, place, data, build, agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  const addSituation = db.prepare(`INSERT INTO situations (t, round, mode, incident, a, human, alive, place, floor, x, y, z, hp, carrying, progress, rank, lead, k, d, assists, streak, shots10s, visible, nearest, data, build, agent)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const markObject = db.prepare('INSERT INTO archive_objects VALUES (?, ?)');
   /** Streams one object's gzipped JSON lines into SQL; the object is marked mirrored in the same transaction. */
   async function mirror(key, gz) {
@@ -122,10 +130,10 @@ async function main() {
       const insert = line => {
         if (!line) return;
         const f = JSON.parse(line);
-        addFact.run(f.t, f.type, f.room, f.round ?? null, f.mode, f.layout, f.incident ?? null, f.a ?? f.victim ?? null, f.place ?? f.vplace ?? null, line);
+        addFact.run(f.t, f.type, f.room, f.round ?? null, f.mode, f.layout, f.incident ?? null, f.a ?? f.victim ?? null, f.place ?? f.vplace ?? null, line, f.build ?? null, f.agent ? 1 : null);
         if (f.type === 'frame') for (const r of f.rats) addSituation.run(f.t, f.round ?? null, f.mode, f.incident ?? null, r.a, r.human ? 1 : 0, r.alive ? 1 : 0, r.place, r.floor,
           r.p[0], r.p[1], r.p[2], r.hp, r.case.carrying ? 1 : 0, r.standing.progress, r.standing.rank, r.standing.lead, r.kda.k, r.kda.d, r.kda.a, r.kda.streak,
-          r.fire.last10s, r.danger.visible, r.danger.nearest ?? null, JSON.stringify(r));
+          r.fire.last10s, r.danger.visible, r.danger.nearest ?? null, JSON.stringify(r), f.build ?? null, r.agent ? 1 : 0);
         facts++;
       };
       await pipeline(Readable.from([gz]), createGunzip(), async source => {

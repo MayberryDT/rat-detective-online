@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 // Bot gate metrics (docs/bot-overhaul.md, "Acceptance"): how the bots play, from the city map mirror.
 // Usage: node scripts/bot-gate.mjs [--db=output/city/city.db] [--room=public-live-v2] [--layout=3]
-//        [--since=ISO] [--until=ISO] [--mind=<mindVersion>] [--mode=<assignment id>] [--json=out.json]
-// `minds` (B5) reads the `decision`, `goal-end` and `minds` facts.
+//        [--since=ISO] [--until=ISO] [--mind=<mindVersion>] [--build=<build>|unknown] [--mode=<assignment id>] [--json=out.json]
+// `minds` (B5) reads the `decision`, `goal-end` and `minds` facts. Agent rats (`agent=1` browsers) count as neither humans nor bots.
 import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync } from 'node:fs';
+import { actorClasses, buildOf, ratClass } from './lib/traffic.mjs';
 
 const arg = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
 const db = new DatabaseSync(arg('db', 'output/city/city.db'), { readOnly: true });
 const room = arg('room', 'public-live-v2'), layout = Number(arg('layout', '3'));
 const since = Date.parse(arg('since', '2000-01-01')), until = Date.parse(arg('until', '2100-01-01'));
-const mind = arg('mind', undefined), mode = arg('mode', undefined);
+const mind = arg('mind', undefined), mode = arg('mode', undefined), build = arg('build', undefined);
 
 /** A jump this long and faster than any rat can run (12 u/s, 17.4 with Hot Pursuit), with no death,
  * respawn or recent launch, is a stuck-bot rescue. An estimate for data recorded before the `rescue` fact (B2b). */
@@ -18,9 +19,10 @@ const RESCUE_JUMP = 40, RESCUE_SPEED = 25, FRAME_CAP_S = 6;
 
 const facts = (type) => db.prepare('select data from facts where type = ? and room = ? and layout = ? and t between ? and ? order by t')
   .all(type, room, layout, since, until).map(r => JSON.parse(r.data))
-  .filter(f => (mind === undefined || String(f.mindVersion ?? '') === mind) && (mode === undefined || f.mode === mode));
-const human = new Map(db.prepare('select distinct round, a, human from situations').all().map(r => [`${r.round}:${r.a}`, !!r.human]));
-const isHuman = (round, a) => human.get(`${round}:${a}`) ?? false;
+  .filter(f => (mind === undefined || String(f.mindVersion ?? '') === mind) && (mode === undefined || f.mode === mode) && (build === undefined || buildOf(f) === build));
+const classes = actorClasses(db);
+const classOf = (round, a) => classes.get(`${round}:${a}`) ?? 'bot';
+const isBot = (round, a) => classOf(round, a) === 'bot';
 
 const frames = facts('frame');
 const launches = facts('launch'), deaths = facts('death'), balls = facts('ball'), cases = facts('case'), rescues = facts('rescue');
@@ -34,7 +36,9 @@ for (const f of frames) {
   const dt = Math.min(FRAME_CAP_S, prevFrameT.has(f.round) ? (f.t - prevFrameT.get(f.round)) / 1000 : 1);
   prevFrameT.set(f.round, f.t); roomSeconds += dt;
   for (const r of f.rats) {
-    const key = `${f.round}:${r.a}`, bot = !(r.human ?? isHuman(f.round, r.a));
+    const who = r.human === undefined ? classOf(f.round, r.a) : ratClass(r);
+    if (who === 'agent') continue;
+    const key = `${f.round}:${r.a}`, bot = who === 'bot';
     const k = kda.get(key) ?? { first: r.kda, last: r.kda, bot };
     k.last = r.kda; kda.set(key, k);
     if (!r.alive) { last.delete(key); continue; }
@@ -58,11 +62,11 @@ const humanRows = shooters(false).filter(k => delta(k, 'shots') >= 30);
 const humanHitRate = median(humanRows.map(k => delta(k, 'hits') / delta(k, 'shots')));
 const humanKd = median(humanRows.map(k => delta(k, 'k') / Math.max(1, delta(k, 'd'))));
 
-const botDeaths = deaths.filter(d => !isHuman(d.round, d.victim));
+const botDeaths = deaths.filter(d => isBot(d.round, d.victim));
 const deathPlaces = new Map(); for (const d of botDeaths) deathPlaces.set(d.vplace, (deathPlaces.get(d.vplace) ?? 0) + 1);
 const topShare = (map, n) => { const v = [...map.values()].sort((a, b) => b - a); return sum(v) ? sum(v.slice(0, n)) / sum(v) : null; };
-const botKills = deaths.filter(d => d.a !== undefined && d.a !== d.victim && !isHuman(d.round, d.a)).length;
-const botHitBalls = balls.filter(b => (b.outcome === 'rat-body' || b.outcome === 'rat-head') && !isHuman(b.round, b.a));
+const botKills = deaths.filter(d => d.a !== undefined && d.a !== d.victim && isBot(d.round, d.a) && classOf(d.round, d.victim) !== 'agent').length;
+const botHitBalls = balls.filter(b => (b.outcome === 'rat-body' || b.outcome === 'rat-head') && isBot(b.round, b.a));
 const round3 = (x) => x === null || x === undefined ? null : Math.round(x * 1000) / 1000;
 const perHour = (n) => botHours ? round3(n / botHours) : null;
 const perRoomHour = (n) => roomSeconds ? round3(n / (roomSeconds / 3600)) : null;
@@ -89,7 +93,7 @@ const minds = {
 };
 
 const out = {
-  window: { room, layout, since: new Date(Math.max(since, frames[0]?.t ?? since)).toISOString(), until: new Date(Math.min(until, frames.at(-1)?.t ?? until)).toISOString(), mind: mind ?? 'any', rounds: new Set(frames.map(f => f.round)).size },
+  window: { room, layout, since: new Date(Math.max(since, frames[0]?.t ?? since)).toISOString(), until: new Date(Math.min(until, frames.at(-1)?.t ?? until)).toISOString(), mind: mind ?? 'any', build: build ?? 'any', rounds: new Set(frames.map(f => f.round)).size },
   botHours: round3(botHours), humanHours: round3(humanSeconds / 3600), roomHours: round3(roomSeconds / 3600),
   stuck: {
     rescuesPerBotHour: rescues.length ? perHour(rescues.length) : null,
