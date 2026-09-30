@@ -16,6 +16,7 @@ export class AssignmentDestinations {
     private measureAt=0;
     private measuring=false;
     private obstacles:HudRect[]=[];
+    private readonly placed={x:0,y:0};
     private width=250;
     private height=150;
     constructor() {
@@ -38,7 +39,7 @@ export class AssignmentDestinations {
         // A task queued here runs once the frame has painted, when layout is already clean.
         const now=performance.now(),first=this.measureAt===0;
         if(now>=this.measureAt&&!this.measuring){this.measureAt=now+150;if(first)this.measure();else{this.measuring=true;setTimeout(this.measure);}}
-        const label=placeHudLabel(p.x,p.y,this.width,this.height,window.innerWidth,window.innerHeight,this.obstacles);
+        const label=placeHudLabel(p.x,p.y,this.width,this.height,window.innerWidth,window.innerHeight,this.obstacles,this.placed);
         this.cue.style.left=`${label.x}px`;this.cue.style.top=`${label.y}px`;
         this.cue.dataset.edge=String(p.edge);this.cue.dataset.paused=String(state?.phase==='suspended');
         const moved=Math.hypot(label.x-p.x,label.y-p.y)>20;
@@ -52,7 +53,7 @@ export class AssignmentDestinations {
         const bounds=this.cue.getBoundingClientRect();this.width=bounds.width||250;
         this.height=(bounds.height||100)+(this.arrow.hidden?40:0);
         this.obstacles=Array.from(document.querySelectorAll<HTMLElement>('.jurisdiction-timer:not([hidden]),.assignment-ledger,.dispatch-ledger,.dispatch-roulette:not([hidden]),.assignment-reveal:not([hidden]),.case-broadcast:not([hidden]),.pickup-buffs,.touch-stick,.touch-fire,.touch-jump'))
-            .filter(el=>el.getClientRects().length>0).map(el=>el.getBoundingClientRect());
+            .filter(el=>el.getClientRects().length>0).map(el=>{const {left,top,right,bottom}=el.getBoundingClientRect();return {left,top,right,bottom};});
     };
     dispose():void {this.cue.remove();}
 }
