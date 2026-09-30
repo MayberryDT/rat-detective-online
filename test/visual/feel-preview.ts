@@ -383,7 +383,7 @@ function frame(now:number){
     advanceDispatch(performance.now());pillars.update(dispatch,performance.now(),stage.camera);
     feel.update(dt,stage.camera,rat.entity.mesh.position);
     if(lineup.active)lineup.update(dt,stage.camera,stage.flashlight);
-    stage.renderer.toneMappingExposure=1.1*feel.exposure;
+    stage.renderer.toneMappingExposure=1.1;
     feel.beforeRender(stage.camera);
     stage.renderer.render(stage.scene,stage.camera);
     feel.afterRender(stage.camera);

@@ -212,8 +212,6 @@ export class FeelDirector {
         // Blackout: the HUD goes black and white (feel.css).
         this.doc?.body.classList.toggle('blackout',blackout);
     }
-    /** Renderer exposure multiplier: Blackout sinks everything but the lamps' own glow. */
-    get exposure():number {return 1-this.dark*FEEL.blackout.params.exposure;}
     /** The city's own lights, 0…1: out in a Blackout (a nearby muzzle flash lifts them for a blink), stuttering in a Pressure Surge. */
     get power():number {return 1-this.dark;}
     /** How far a Blackout has set in, 0…1: every rat's flashlight takes over from the city's lights. */

@@ -1,7 +1,9 @@
 import {expect,it,vi} from 'vitest';
 import {BALL_GRAVITY,BALL_LIFETIME,BALL_RADIUS,BALL_RESTITUTION} from '../../src/shared/ballTuning';
 import {INCIDENT_TUNING as I,type ChaosShot} from '../../src/shared/chaosState';
-import {bounceShot,bounces,cheeseBounce,shotGravity} from '../../src/shared/shotBallistics';
+import {bounceShot,bounces,cheeseBounce,cheeseDamage,shotGravity} from '../../src/shared/shotBallistics';
+import {MAX_HP} from '../../src/shared/networkProtocol';
+import {RAT_BODY} from '../../src/shared/rat/ratBody';
 import {ShotSpacing} from '../../src/shared/shotTiming';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {RatBot} from '../../src/shared/bots/ratBot';
@@ -66,4 +68,18 @@ it('grows a Big Cheese ball a step per real bounce up to the largest, adding lif
     expect(shot.radius).toBe(I.cheeseRadii[I.cheeseRadii.indexOf(I.cheeseStartRadius)+1]);expect(shot.life).toBe(BALL_LIFETIME+I.cheeseBounceLife);
     for(let i=0;i<12;i++)cheeseBounce(shot);
     expect(shot.radius).toBe(MAX);expect(shot.life).toBe(I.cheeseMaxLife);
+});
+
+it('hits for double from the muzzle, one more per size step, and is at least rat-sized once it is lethal',()=>{
+    expect(cheeseDamage(BALL_RADIUS,MAX_HP)).toBe(1);
+    const shot:ChaosShot={id:'s',owner:null,p:{x:0,y:0,z:0},v:{x:0,y:0,z:0},age:0,radius:.3};
+    expect(cheeseDamage(shot.radius!,MAX_HP)).toBe(2);
+    shot.radius=I.cheeseStartRadius;
+    const seen=[cheeseDamage(shot.radius,MAX_HP)];
+    while(seen[seen.length-1]!<MAX_HP){cheeseBounce(shot);seen.push(cheeseDamage(shot.radius!,MAX_HP));}
+    expect(seen).toEqual([2,3,4,5]);
+    const ratHeight=Math.max(...RAT_BODY.spheres.map(s=>s.y+s.radius));
+    expect(2*shot.radius!).toBeGreaterThanOrEqual(ratHeight);
+    for(let i=0;i<12;i++)cheeseBounce(shot);
+    expect(cheeseDamage(shot.radius!,MAX_HP)).toBe(MAX_HP);
 });

@@ -32,6 +32,13 @@ export function growIn(shot:ChaosShot):boolean {
     if(next<=radius)return false;
     shot.radius=next;return true;
 }
+/** Big Cheese damage: `cheeseDamage` at its start size and one more for every size step grown since, up to lethal.
+ * An ordinary ball deals 1. */
+export function cheeseDamage(radius:number,maxHp:number):number {
+    if(!heft(radius))return 1;
+    let steps=0;for(const r of I.cheeseRadii)if(r>I.cheeseStartRadius+.001&&r<=radius+.001)steps++;
+    return Math.min(maxHp,I.cheeseDamage+steps);
+}
 /** Big Cheese, one real world bounce: a step bigger and a little longer-lived, up to the cap. */
 export function cheeseBounce(shot:ChaosShot):void {
     shot.radius=nextCheeseRadius(shot.radius??BALL_RADIUS);

@@ -15,7 +15,7 @@ export const RAT_BODY={mass:5,linearDamping:.1,angularDamping:1,respawnDamping:.
     spheres:[{radius:.6,y:.6},{radius:.45,y:1.3},{radius:.28,y:1.9}]} as const;
 /** Every rat carries a flashlight; its beam reaches this far (units). In a Blackout a rat sees other rats only
  * this near, human or bot. */
-export const FLASHLIGHT_REACH=40;
+export const FLASHLIGHT_REACH=60;
 
 /** One step's controls, the same for a player's keys, mouse and touch and for a bot's motor.
  * `moveForward` / `moveRight`: -1..1 along and across the look, as the keys or stick produce (longer than 1 is

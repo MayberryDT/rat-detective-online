@@ -85,9 +85,10 @@ export const FEEL={
     headshot:{label:'T4 Headshot juice',toggle:true,params:{hatSpeed:2.6,hatLift:1.5,hold:.16,burst:2.4}},
     /** T5: the police lineup at round end (top five, winner last). */
     lineup:{label:'T5 Police lineup',toggle:true,params:{}},
-    /** Blackout (incident, always on): seconds to fade, how far exposure sinks (the city's own lights go out entirely),
-     * every rat's `flashlight` intensity, and the lift from muzzle flashes within `muzzleRange`. */
-    blackout:{label:'I3 Blackout',toggle:false,params:{fade:1.2,exposure:.72,flashlight:80,muzzle:.7,muzzleRange:40}},
+    /** Blackout (incident, always on): seconds to fade; every rat's flashlight becomes a hard, narrow beam (`beam`
+     * intensity, cone half-angle `angle` rad, `penumbra`, `decay`) that carries to `FLASHLIGHT_REACH`. The city's own
+     * lights go out; exposure stays, so what a beam lights reads bright. Muzzle flashes within `muzzleRange` lift the dark. */
+    blackout:{label:'I3 Blackout',toggle:false,params:{fade:1.2,beam:200,angle:.3,penumbra:.2,decay:1,muzzle:.7,muzzleRange:40}},
     /** Bad Ammunition juice: jams click, duds wah-wah, backfires soot the lens, muzzle smoke and coughs; `wobble` is the balls' visual wobble (units). */
     badAmmo:{label:'I2 Bad Ammunition juice',toggle:true,params:{wobble:.12}},
     /** The Hunch (gameplay, always on): at full health you see rats within `range` through walls as a pencil sketch

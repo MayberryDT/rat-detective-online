@@ -124,6 +124,8 @@ export class GameSession {
     private baseExposure = 1;
     /** Your flashlight's everyday intensity; a Blackout brightens it. */
     private baseFlashlight = 2;
+    /** Your flashlight's everyday cone; a Blackout narrows it. */
+    private baseBeam = {angle:.6,penumbra:.5,decay:1.2};
     /** The Blackout level the nameplates were last shaded for (0: every plate lit). */
     private plateDark = 0;
     private compiling?:Promise<unknown>;
@@ -175,6 +177,7 @@ export class GameSession {
         this.gun = new CheeseGun(scene, world, listener);
         this.feel.attach(this.stage.renderer.domElement, listener, touchControlsAvailable());
         this.baseExposure=this.stage.renderer.toneMappingExposure;this.baseFlashlight=this.stage.flashlight.intensity;
+        this.baseBeam={angle:this.stage.flashlight.angle,penumbra:this.stage.flashlight.penumbra,decay:this.stage.flashlight.decay};
         this.feel.attachScene(scene);
         this.lineup=new PoliceLineup(scene,typeof document==='undefined'?undefined:document,()=>this.feel.flashbulb());
         this.remotes = new RemotePlayers(scene, world);
@@ -718,7 +721,7 @@ export class GameSession {
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
         if(!this.compiling){
-            renderer.toneMappingExposure=this.baseExposure*this.feel.exposure;
+            renderer.toneMappingExposure=this.baseExposure;
             this.feel.beforeRender(camera);
             this.stats?.gpu.begin();
             renderer.render(scene, camera);
@@ -739,13 +742,16 @@ export class GameSession {
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 
-    /** Blackout: your flashlight brightens, the street light pool carries the four nearest rats' flashlights, the
-     * city's own lights follow the power, and only rats in your beam show their nameplates. */
+    /** Blackout: your flashlight narrows to a hard, intense beam, the street light pool carries the four nearest rats'
+     * copies of it, the city's own lights follow the power, and only rats in your beam show their nameplates. */
     private blackoutFrame(camera:THREE.Camera):void {
-        const level=this.feel.blackoutLevel,{flashlight}=this.stage,beam=level*FEEL.blackout.params.flashlight;
-        // The round-end lineup owns the flashlight (and reads its everyday intensity) once it is on its way.
-        if(!this.pendingLineup&&!this.lineup?.active)flashlight.intensity=Math.max(this.baseFlashlight,beam);
-        if(this.city instanceof Neighborhood){this.city.power=this.feel.power;this.city.streetLights?.flashlights(flashlight,camera.position,this.remotes.rats,beam);}
+        const level=this.feel.blackoutLevel,{flashlight}=this.stage,p=FEEL.blackout.params,base=this.baseBeam;
+        // The round-end lineup owns the flashlight's intensity (it reads the everyday one) once it is on its way.
+        const lineup=!!this.pendingLineup||!!this.lineup?.active,shape=lineup?0:level;
+        flashlight.angle=base.angle+(p.angle-base.angle)*shape;flashlight.penumbra=base.penumbra+(p.penumbra-base.penumbra)*shape;
+        flashlight.decay=base.decay+(p.decay-base.decay)*shape;
+        if(!lineup)flashlight.intensity=this.baseFlashlight+(p.beam-this.baseFlashlight)*level;
+        if(this.city instanceof Neighborhood){this.city.power=this.feel.power;this.city.streetLights?.flashlights(flashlight,camera.position,this.remotes.rats,level*p.beam);}
         if(level<=0&&this.plateDark<=0)return;
         this.plateDark=level;
         const from=flashlight.position,to=flashlight.target.position,ax=to.x-from.x,ay=to.y-from.y,az=to.z-from.z;

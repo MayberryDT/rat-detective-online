@@ -30,7 +30,9 @@ export const INCIDENT_TUNING = {
      * speed beats `cheeseBounceMin`, grows the ball a step and adds `cheeseBounceLife` s of life, at most
      * `cheeseMaxLife` s in all. At the largest radius gravity is `cheeseGravity`× and a bounce keeps
      * `cheeseRestitution` of the normal and `cheeseTangent` of the tangential speed (ordinary: .9 of both). */
-    cheeseShotIntervalMs: 2000, cheeseShotSlackMs: 250, cheeseShotSpeed: 110, cheeseStartRadius: .52, cheeseGrowIn: .08,
+    cheeseShotIntervalMs: 1000, cheeseShotSlackMs: 250, cheeseShotSpeed: 110, cheeseStartRadius: .52, cheeseGrowIn: .08,
+    /** Big Cheese damage: `cheeseDamage` from the muzzle (a bigger ball), one more per size step it has grown. */
+    cheeseDamage: 2,
     cheeseBounceMin: 5, cheeseBounceLife: .5, cheeseMaxLife: 5, cheeseGravity: 2.2, cheeseRestitution: .35, cheeseTangent: .85,
     /** Big Cheese juice: a ball of at least `cheeseShakeRadius` landing within `cheeseShakeRange` shakes the view
      * up to `cheeseShake` (at most every `cheeseShakeMs`) with the thud pitched to `cheeseThudPitch`. Pistols grow

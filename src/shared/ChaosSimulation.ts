@@ -11,7 +11,7 @@ import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
 import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballTuning';
-import { bounceShot, bounces, cheeseBounce, growIn, shotGravity, shotLife } from './shotBallistics';
+import { bounceShot, bounces, cheeseBounce, cheeseDamage, growIn, shotGravity, shotLife } from './shotBallistics';
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
     COUNTERFEIT_IDS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState } from './chaosState';
@@ -1312,9 +1312,9 @@ export class ChaosSimulation {
             shot.p=data(point);
             const incoming={...shot.v};
             if(target?.kind==='rat' && target.player && target.player.hp>0){
-                // Body hits take one hit point; a headshot or a Crossfire bank shot is lethal.
+                // Body hits take one hit point (a Big Cheese ball more, by its size); a headshot or a Crossfire bank shot is lethal.
                 const headshot=hit.shape===target.head;
-                const damage=headshot||(this.incidentActive('crossfire')&&shot.wallBounced)?MAX_HP:1;
+                const damage=headshot||(this.incidentActive('crossfire')&&shot.wallBounced)?MAX_HP:cheeseDamage(radius,MAX_HP);
                 // A dud just bonks off whoever it reaches.
                 if(shot.dud){bounceShot(shot.v,normal,radius);this.impacts.push({p:data(point),n:data(normal),surface:false,scale:.6});continue;}
                 if((useRat?ratHit!.ironclad:hasIronclad(this.buffs,target.player.id,now))){
