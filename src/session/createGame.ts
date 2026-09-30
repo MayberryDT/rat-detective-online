@@ -58,7 +58,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         // An opponent under Ironclad draws its batch with the metal reflection: another program.
         const ironclad=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE,true);
         ironclad.setPowerups(1e6,0);ironclad.enableRigidBatching();models.push(ironclad);
-        // Quick Fix kits grow an x-ray shell at your last hit point.
+        // Quick Fix kits grow an x-ray shell at low health.
         for(const kind of PICKUP_KINDS){const pickup=new PickupVisual(stage.scene,kind);pickup.setXray(true);pickups.push(pickup);}
         addLeatherBriefcase(briefcase);stage.scene.add(briefcase);
         // The welcome builds the launchers, Dispatch pillars, the case's beacon, the zones, the

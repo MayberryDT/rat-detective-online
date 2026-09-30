@@ -671,6 +671,7 @@ export class GameSession {
         if(this.transport.state==='playing'&&!document.hidden&&this.rat)this.feelAudioFrame(dt);
         this.cameos?.beginFrame(dt,camera.position);
         this.chaos?.setLastHitPoint(!this.observing&&this.feel.lastHitPoint);
+        this.chaos?.setFixXray(!this.observing&&this.feel.fixXray);
         this.chaos?.update(dt*this.feel.timeScale,camera,this.feel.presentTime(performance.now()));
         if(this.pendingVictory&&now>=this.pendingVictory.at){
             const won=this.pendingVictory.message;this.pendingVictory=undefined;

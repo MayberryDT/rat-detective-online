@@ -32,8 +32,10 @@ export const FEEL={
     killBloom:{label:'8 Kill bloom and punch-in',toggle:true,params:{punch:4}},
     /** Comic words: kill streaks within `streakWindow` s, air kills, Big Cheese hits; `cooldown` s between non-streak words. */
     comicWords:{label:'9 Comic words',toggle:true,params:{streakWindow:4,cooldown:6}},
-    /** Noir low health: colour drain/vignette by danger (linear from max HP to the last hit point), muffle cutoff (Hz), heartbeat period/volume, heal flood. */
-    lowHealth:{label:'10 Noir low health',toggle:true,params:{drain:.9,vignette:.55,flood:.6,ease:3,closed:900,period:.95,heartbeat:.5}},
+    /** Noir low health, by danger (linear from max HP to the last hit point): the city fades to black and white with its shadows
+     * lifted to `lift` (a gamma, so the last hit point reads clearer, not darker) and old-film `grain`; a light edge `vignette`;
+     * muffle cutoff (Hz), heartbeat period/volume, heal flood. Rats, cheese, cases and pickups keep their colour. */
+    lowHealth:{label:'10 Noir low health',toggle:true,params:{lift:.86,grain:.1,vignette:.22,flood:.6,ease:3,closed:900,period:.95,heartbeat:.5}},
     /** Fedora knocked askew by hits (radians), settling over `settle` s. */
     hatKnock:{label:'11a Hat knock',toggle:true,params:{tilt:.32,lift:.12,settle:.45}},
     /** On death the fedora pops off and tumbles (horizontal speed, upward speed). */
@@ -74,10 +76,10 @@ export const FEEL={
     noirNeon:{label:'N7 Neon accents',toggle:true,params:{brightness:1,flickerRate:.08}},
     /** N6: film grain (off on phones), vignette, and letterbox bars during the death camera and victory slow-motion. */
     noirFilm:{label:'N6 Film grain, vignette, letterbox',toggle:true,params:{grain:.09,vignette:.55}},
-    /** T2: noir perception effects (shadows, drain, fog, grain, vignette) scale from `Noir strength · clear` at max HP to full at the last hit point. */
+    /** T2: the city's noir look stays at `Noir strength · clear` at every health; low health fades it to black and white (item 10). */
     noirByHealth:{label:'T2 Noir scales with health',toggle:true,params:{}},
-    /** T2: at the last hit point the case loses its markers and Quick Fix kits glow green through walls. */
-    lastHitPoint:{label:'T2b Last hit point: case hidden, Quick Fix x-ray',toggle:true,params:{}},
+    /** T2: from two hit points Quick Fix kits glow green through walls; at the last hit point the case also loses its markers. */
+    lastHitPoint:{label:'T2b Low health: Quick Fix x-ray (2 HP), case hidden (1 HP)',toggle:true,params:{}},
     /** T4: a lethal headshot. Hat speed/lift multiply the hat pop; `hold` is the beat before the fall;
      * `burst` scales the cheese burst at the head. */
     headshot:{label:'T4 Headshot juice',toggle:true,params:{hatSpeed:2.6,hatLift:1.5,hold:.16,burst:2.4}},

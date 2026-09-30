@@ -185,19 +185,21 @@ export class FeelDirector {
 
     /** Authoritative local health changed; `healed` floods colour back. */
     health(hp:number,healed=false):void {
-        const previous=this.dangerTarget;
+        const previous=this.dangerTarget;this.hp=hp;
         // Linear from max HP (clear) to the last hit point (full danger).
         this.dangerTarget=hp>=MAX_HP?0:hp<=1?1:(MAX_HP-hp)/(MAX_HP-1);
         if(healed&&previous>0&&this.dangerTarget<previous)this.flood=1;
     }
+    private hp=MAX_HP;
 
-    /** Your last hit point (or dead): case markers hide and Quick Fix shows through walls. */
-    get lastHitPoint():boolean {return this.state.on('lastHitPoint')&&this.dangerTarget>=1;}
-    /** Noir perception scale: a background hint at max HP, full strength at the last hit point. */
-    private perception():number {
-        if(!this.state.on('noirByHealth'))return 1;
-        const clear=FEEL.noir.params.clear;return clear+(1-clear)*this.danger;
-    }
+    /** Your last hit point (or dead): case markers hide. */
+    get lastHitPoint():boolean {return this.state.on('lastHitPoint')&&this.hp<=1;}
+    /** Two hit points or fewer: Quick Fix kits show through walls. */
+    get fixXray():boolean {return this.state.on('lastHitPoint')&&this.hp<=2;}
+    /** Noir perception scale: the full-health hint at every health (low health fades to black and white instead); full without T2. */
+    private perception():number {return this.state.on('noirByHealth')?FEEL.noir.params.clear:1;}
+    /** Low-health black and white, 0 (colour) … 1 (last hit point). */
+    private mono():number {return this.state.on('noirByHealth')?this.danger:0;}
 
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
     setIncident(incident?:IncidentId):void {
@@ -430,7 +432,7 @@ export class FeelDirector {
         this.dust?.update(dt);
         this.launchJuice?.update(dt);
         this.city?.update(dt);
-        this.noirCity?.update(this.perception());
+        this.noirCity?.update(this.perception(),this.mono(),FEEL.lowHealth.params.lift);
         this.noirDressing?.update(dt);
         this.lampAlarm?.update(dt);
         if(this.noirRain){
@@ -439,7 +441,7 @@ export class FeelDirector {
             this.sound.rain(this.noirRain.level);
         }
         if(this.noirAtmosphere){
-            this.noirAtmosphere.update(dt,view,!self||spaceAt(self)==='open',this.perception());
+            this.noirAtmosphere.update(dt,view,!self||spaceAt(self)==='open',this.perception(),this.mono());
             if(this.noirAtmosphere.thunderIn>=0&&(this.noirAtmosphere.thunderIn-=dt)<0)this.sound.thunder();
         }
         this.screen.update(dt,view,self);
@@ -453,8 +455,10 @@ export class FeelDirector {
         if(Math.abs(target-this.danger)<.002)this.danger=target;
         this.flood=Math.max(0,this.flood-dt*1.4);
         this.screen.noir(this.danger,on?this.flood:0,this.colourFilter);
-        const noir=this.state.noir()*this.perception(),film=this.state.on('noirFilm')?noir/.65:0,f=FEEL.noirFilm.params;
-        this.screen.film(this.colourFilter?film*f.grain:0,film*f.vignette,film>0&&(!!this.deathTarget||this.slowAge<FEEL.rewards.params.slowmo));
+        const noir=this.state.noir()*this.perception(),filmOn=this.state.on('noirFilm'),film=filmOn?noir/.65:0,f=FEEL.noirFilm.params;
+        // Old film: grain thickens as the city turns black and white.
+        const grain=film*f.grain+(filmOn&&this.state.noir()>0?this.mono()*p.grain:0);
+        this.screen.film(this.colourFilter?grain:0,film*f.vignette,film>0&&(!!this.deathTarget||this.slowAge<FEEL.rewards.params.slowmo));
         if(this.noirAudio){
             this.noirAudio.space=this.state.on('sound')&&self?spaceAt(self):'open';
             this.noirAudio.update(dt,this.danger,p.closed,p.period,on?p.heartbeat:0);
@@ -487,6 +491,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
     dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);NAMEPLATE_LIGHT.value=1;}
 }

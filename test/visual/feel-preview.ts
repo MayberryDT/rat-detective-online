@@ -124,7 +124,7 @@ const actions:Record<string,()=>void>={
     'Kill (bloom + punch-in)':()=>{const c=document.getElementById('crosshair')!;c.classList.remove('kill-confirmed');void c.offsetWidth;c.classList.add('kill-confirmed');feel.killed(suspects[1]!.mesh.position,false,stage.camera);},
     'Double kill (comic word)':()=>{feel.killed(suspects[0]!.mesh.position,false,stage.camera);feel.killed(suspects[2]!.mesh.position,false,stage.camera);},
     'Air kill (comic word)':()=>{feel.reset();feel.killed(suspects[1]!.mesh.position,true,stage.camera,performance.now()+60_000);},
-    'Wounded (2 HP)':()=>feel.health(2),
+    'Wounded (2 HP)':()=>{feel.health(2);kit.setXray(true);},
     'Last hit point (1 HP)':()=>{feel.health(1);kit.setXray(true);},
     'Quick Fix heal':()=>{feel.health(3,true);kit.setXray(false);},
     'Headshot suspect 2 (T4)':()=>{const v=suspects[1]!;const c=document.getElementById('crosshair')!;c.classList.remove('kill-confirmed','headshot');void c.offsetWidth;c.classList.add('kill-confirmed','headshot');

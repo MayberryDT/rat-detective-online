@@ -63,17 +63,18 @@ export class ScreenFeel {
     /** The game canvas, for the low-health colour drain. */
     attachCanvas(canvas:HTMLElement):void {this.canvas=canvas;}
 
-    /** Low-health noir: `level` 0 (full colour) … 1 (near black and white); `flood` 0…1 is the heal overshoot. */
+    /** Low health: `level` 0 (clear) … 1 (last hit point) sets the edge vignette; `flood` 0…1 is the heal overshoot.
+     * The black and white itself is on city materials (`NoirCity`), so rats and cheese keep their colour. */
     noir(level:number,flood:number,filter:boolean):void {
         const key=level*1000+flood;
         if(key===this.lastNoir)return;
         this.lastNoir=key;
         if(!(level>0||flood>0)&&!this.root)return;
         if(!this.build())return;
-        const flash=this.flash(),p=FEEL.lowHealth.params,drain=level*flash;
-        if(this.noirEdge)this.noirEdge.style.opacity=String(drain*p.vignette);
+        const p=FEEL.lowHealth.params;
+        if(this.noirEdge)this.noirEdge.style.opacity=String(level*this.flash()*p.vignette);
         if(!this.canvas)return;
-        const value=filter&&(drain>.001||flood>.001)?`saturate(${(1-p.drain*drain+p.flood*flood).toFixed(3)}) contrast(${(1+.12*drain).toFixed(3)})`:'';
+        const value=filter&&flood>.001?`saturate(${(1+p.flood*flood).toFixed(3)})`:'';
         if(value!==this.lastFilter){this.canvas.style.filter=value;this.lastFilter=value;}
     }
 

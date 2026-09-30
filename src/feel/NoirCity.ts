@@ -5,17 +5,21 @@ import {feelState} from './feelState';
  * sharing these uniforms, so the look dials live with the Noir strength slider:
  *  - drain: albedo toward cold grey-blue (unlit window/sign materials drain less,
  *    so lamps and windows keep their warmth);
- *  - gamma: a contrast curve on the final colour, so dark areas sink while lamp
- *    pools and lit windows stay bright.
+ *  - gamma: a curve on the final colour: above 1 dark areas sink while lamp
+ *    pools stay bright; below 1 (low health) shadows lift;
+ *  - mono: the final colour toward black and white (low health), glows and
+ *    light beams included.
  * Rats, cheese, cases, pickups and cameos are never patched: anything created
  * after the city, or under an object tagged `userData.noNoir`, is left alone. */
 export class NoirCity {
     /** Blackout darkness 0…1, shared by every patched material. */
     private readonly dark={value:0};
-    private readonly lit={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark};
-    private readonly unlit={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark};
-    /** Additive glows (lamp haze, light shafts) only go dark with the power. */
-    private readonly glow={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark};
+    /** Low-health black and white 0…1, shared by every patched material. */
+    private readonly mono={value:0};
+    private readonly lit={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark,noirMono:this.mono};
+    private readonly unlit={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark,noirMono:this.mono};
+    /** Additive glows (lamp haze, light shafts) only go dark with the power, and grey with low health. */
+    private readonly glow={noirDrain:{value:0},noirGamma:{value:1},noirDark:this.dark,noirMono:this.mono};
     private readonly patched=new Set<THREE.Material>();
 
     constructor(scene:THREE.Scene){this.collect(scene);}
@@ -44,23 +48,26 @@ export class NoirCity {
             compile.call(material,shader,renderer);
             Object.assign(shader.uniforms,uniforms);
             shader.fragmentShader=shader.fragmentShader
-                .replace('#include <common>','#include <common>\nuniform float noirDrain;\nuniform float noirGamma;\nuniform float noirDark;')
+                .replace('#include <common>','#include <common>\nuniform float noirDrain;\nuniform float noirGamma;\nuniform float noirDark;\nuniform float noirMono;')
                 .replace('#include <color_fragment>',`#include <color_fragment>
                     float noirLuma=dot(diffuseColor.rgb,vec3(.299,.587,.114));
                     diffuseColor.rgb=mix(diffuseColor.rgb,noirLuma*vec3(.84,.91,1.08),noirDrain);`)
                 .replace('#include <dithering_fragment>',`gl_FragColor.rgb=pow(max(gl_FragColor.rgb,vec3(0.)),vec3(noirGamma))*(1.-noirDark);
+                    gl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(dot(gl_FragColor.rgb,vec3(.299,.587,.114))),noirMono);
                     #include <dithering_fragment>`);
         };
-        material.customProgramCacheKey=()=>key+'-noir-city-v2';
+        material.customProgramCacheKey=()=>key+'-noir-city-v3';
         material.needsUpdate=true;
     }
 
-    /** Called every frame: follow the strength slider and the N1/N2 switches. */
-    update(perception=1):void {
+    /** Called every frame: follow the strength slider and the N1/N2 switches. `mono` 0…1 fades to black and white,
+     * easing the shadow curve toward `lift` on the way. */
+    update(perception=1,mono=0,lift=1):void {
         const state=feelState(),strength=state.noir()*perception;
-        const drain=state.on('noirDrain')?strength*.9:0,gamma=state.on('noirShadows')?1+strength*.45:1;
+        const drain=state.on('noirDrain')?strength*.9:0,shadows=state.on('noirShadows')?1+strength*.45:1,gamma=shadows+(lift-shadows)*mono;
         this.lit.noirDrain.value=drain;this.lit.noirGamma.value=gamma;
         this.unlit.noirDrain.value=drain*.35;this.unlit.noirGamma.value=1+(gamma-1)*.4;
+        this.mono.value=mono;
     }
 
     /** Custom shaders (light beams, haze) have no shared chunks: they only dim with the Blackout. */
@@ -69,11 +76,12 @@ export class NoirCity {
         const compile=material.onBeforeCompile,key=material.customProgramCacheKey();
         material.onBeforeCompile=(shader,renderer)=>{
             compile.call(material,shader,renderer);
-            shader.uniforms.noirDark=this.dark;
+            shader.uniforms.noirDark=this.dark;shader.uniforms.noirMono=this.mono;
             const end=shader.fragmentShader.lastIndexOf('}');
-            shader.fragmentShader='uniform float noirDark;\n'+shader.fragmentShader.slice(0,end)+'gl_FragColor*=1.-noirDark;\n}'+shader.fragmentShader.slice(end+1);
+            shader.fragmentShader='uniform float noirDark;\nuniform float noirMono;\n'+shader.fragmentShader.slice(0,end)
+                +'gl_FragColor*=1.-noirDark;\ngl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(dot(gl_FragColor.rgb,vec3(.299,.587,.114))),noirMono);\n}'+shader.fragmentShader.slice(end+1);
         };
-        material.customProgramCacheKey=()=>key+'-noir-dark-v1';
+        material.customProgramCacheKey=()=>key+'-noir-dark-v2';
         material.needsUpdate=true;
     }
 
@@ -83,7 +91,7 @@ export class NoirCity {
     /** Leave patched materials visually neutral (they are disposed with the city). */
     dispose():void {
         for(const uniforms of [this.lit,this.unlit]){uniforms.noirDrain.value=0;uniforms.noirGamma.value=1;}
-        this.dark.value=0;
+        this.dark.value=0;this.mono.value=0;
         this.patched.clear();
     }
 }

@@ -256,7 +256,7 @@ Each item gets its own switch in the `?feel=dev` panel, so Tyler can cut it at r
 - [x] **F3 Perf baseline:** fixture numbers with feel off, before any effect ([budget](juice/foundation.md#performance-budget)).
 - [x] **1 Shot kick** · **2 Hit jolt** · **3 Damage direction and edge flash** → [spec §1–3](juice/feel-spec.md#1-camera)
 - [x] **4 Impact freeze** · **5 Bigger dripping splats** · **6 Cheese stains** · **7 Ironclad sparks** · **8 Kill bloom and punch-in** · **9 Comic words**
-- [x] **10 Noir low health** (colour drain, muffle, heartbeat) · **11 Hat knock and pop-off** · **12 Death variety** · **13 Death camera and iris**
+- [x] **10 Noir low health** (black-and-white fade with lifted shadows and film grain since 30 September, was a colour drain toward dark; muffle, heartbeat) · **11 Hat knock and pop-off** · **12 Death variety** · **13 Death camera and iris**
 - [x] **14 Model:** whiskers, eyebrows, eye tracking, cheeks, brim, hem, shoes, plus render sheets → [character](juice/character.md)
 - [x] **15 Animation:** squash and stretch, skid, sneaky carry, launch pose, idle fidgets, kill nod, hit and pickup reactions
 - [x] **16 Movement:** landing dip, launch view and wind, Hot Pursuit speed, dust → [spec §5](juice/feel-spec.md#5-movement-and-flight)

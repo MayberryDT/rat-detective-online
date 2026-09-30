@@ -215,18 +215,23 @@ export class ChaosView {
     }
     /** The live position of `victimId`'s shared corpse model, if one is shown. */
     /** Juice T2: at your last hit point the case loses its outline, badge and
-     * guidance (the case itself stays visible) and Quick Fix kits glow green
-     * through walls. */
+     * guidance (the case itself stays visible). */
     private lastHitPoint=false;
-    /** Screen beacons for Quick Fix kits at the last hit point. DOM, so the
-     * low-health colour drain on the canvas never turns them grey. */
+    /** From two hit points Quick Fix kits glow green through walls. */
+    private fixXray=false;
+    /** Screen beacons for Quick Fix kits at low health. DOM, so the black-and-white
+     * city never turns them grey. */
     private readonly fixBeacons:HTMLElement[]=[];
     setLastHitPoint(on:boolean):void {
         if(on===this.lastHitPoint)return;
         this.lastHitPoint=on;
-        for(const visual of this.pickups.values())visual.setXray(on);
         if(on){this.caseBeacon.root.visible=false;this.caseMarker.style.display='none';this.assignmentDestinations.clear();}
-        else for(const beacon of this.fixBeacons)beacon.style.display='none';
+    }
+    setFixXray(on:boolean):void {
+        if(on===this.fixXray)return;
+        this.fixXray=on;
+        for(const visual of this.pickups.values())visual.setXray(on);
+        if(!on)for(const beacon of this.fixBeacons)beacon.style.display='none';
     }
     corpseOf(victimId:string):THREE.Vector3|undefined {
         // Newest matching corpse only; an older body of the same rat may still be lying elsewhere.
@@ -370,7 +375,7 @@ export class ChaosView {
         for(const [id,visual] of this.pickups)if(!live.has(id)){visual.dispose();this.pickups.delete(id);}
         for(const pickup of state.pickups??[]){
             let visual=this.pickups.get(pickup.id);
-            if(!visual){visual=new PickupVisual(this.scene,pickup.kind);visual.setXray(this.lastHitPoint);this.pickups.set(pickup.id,visual);}
+            if(!visual){visual=new PickupVisual(this.scene,pickup.kind);visual.setXray(this.fixXray);this.pickups.set(pickup.id,visual);}
             visual.setPosition(pickup.x,pickup.y,pickup.z);
             visual.setNervous(pickup.kind==='quick-fix'&&state.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='malpractice');
             visual.setAvailableAt(pickup.availableAt??0);
@@ -465,7 +470,7 @@ export class ChaosView {
         for(const visual of this.pickups.values())visual.update(now,camera);
         this.updateBuffs(s.buffs,now);
         this.updateCaseMarker(camera);
-        if(this.lastHitPoint)this.updateFixBeacons(camera,now);
+        if(this.fixXray)this.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const active=s.dispatch.phase==='active'?incidentInfo(s.dispatch.incident).id:undefined,crossfire=active==='crossfire';
         // Bad Ammunition: crooked balls visibly wobble in flight (presentation only; hits stay authoritative).

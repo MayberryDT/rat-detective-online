@@ -47,6 +47,7 @@ export class NoirAtmosphere {
     private readonly background?:THREE.Color;
     private readonly baseBackground=new THREE.Color();
     private readonly flashSky=new THREE.Color(0x5a6278);
+    private readonly grey=new THREE.Color();
     private nearestAt=Infinity;private time=0;private nextStrike=25;private strikeAge=Infinity;private seed=97531;
     /** Set when thunder should roll (seconds of delay); consumed by the director. */
     thunderIn=-1;
@@ -77,8 +78,9 @@ export class NoirAtmosphere {
 
     private random():number {this.seed=(this.seed*1103515245+12345)&0x7fffffff;return this.seed/0x7fffffff;}
 
-    /** `perception` scales only the fog (the part that hides things); haze cones and the sky stay constant. */
-    update(dt:number,camera:THREE.Camera,outdoors:boolean,perception=1):void {
+    /** `perception` scales only the fog (the part that hides things); haze cones and the sky stay constant.
+     * `mono` (low health) turns fog and sky grey and thins the fog, so the black-and-white city reads clearer. */
+    update(dt:number,camera:THREE.Camera,outdoors:boolean,perception=1,mono=0):void {
         dt=Math.min(Math.max(dt,0),.1);this.time+=dt;
         const state=feelState(),strength=state.noir(),hazeOn=state.on('noirHaze')&&strength>0,skyOn=state.on('noirSky')&&strength>0;
         const p=FEEL.noirHaze.params,s=FEEL.noirSky.params;
@@ -93,8 +95,9 @@ export class NoirAtmosphere {
         }
         if(!hazeOn)this.haze.count=0;
         if(this.fog){
-            this.fog.density=this.baseFog*(1+(hazeOn?p.fog*strength*perception*1.6:0));
+            this.fog.density=this.baseFog*(1+(hazeOn?p.fog*strength*perception*1.6:0))*(1-.35*mono);
             this.fog.color.copy(this.baseFogColor).lerp(this.coldFog,hazeOn?strength*.7:0);
+            this.toGrey(this.fog.color,mono);
         }
         // Searchlights: slow sweeping beams over the landmark roofs.
         this.beamOpacity.value=skyOn?s.beamOpacity*strength:0;
@@ -120,7 +123,12 @@ export class NoirAtmosphere {
         }
         this.flash=flash;
         if(this.hemisphere)this.hemisphere.intensity=this.baseHemisphere*(1+flash*s.flash);
-        if(this.background)this.background.copy(this.baseBackground).lerp(this.flashSky,Math.min(1,flash*.8));
+        if(this.background){this.background.copy(this.baseBackground).lerp(this.flashSky,Math.min(1,flash*.8));this.toGrey(this.background,mono);}
+    }
+
+    private toGrey(colour:THREE.Color,amount:number):void {
+        if(amount<=0)return;
+        const l=colour.r*.299+colour.g*.587+colour.b*.114;colour.lerp(this.grey.setRGB(l,l,l),amount);
     }
 
     /** Strike on the next frame (workshop review). */
