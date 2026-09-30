@@ -4,7 +4,7 @@
 import { judge, parseProposal, VERDICT_HUMAN_SECONDS, type Counts, type Outcome, type Proposal, type Reading } from '../shared/city/verdict';
 import { coverDensity, islands, sightlines, type StreetGrid } from '../shared/city/analysis';
 import { CITY_BOUNDS } from '../shared/grayboxLayout';
-import { cityGrid, FOOTPRINTS, footprintKey, LAYOUT, layoutSnapshot, PLACES, type Footprint, type LayoutSnapshot } from './city';
+import { cityGrid, FOOTPRINTS, footprintKey, LAYOUT, layoutSnapshot, PLACES, SUPPLIES, type Footprint, type LayoutSnapshot, type SnapshotSupply } from './city';
 import { drawCity, drawLabels } from './canvas';
 import type { PlaceCounts } from './data';
 import { choices, definitions, duration, el, esc, pct, section } from './dom';
@@ -17,7 +17,7 @@ const PROPOSALS: Array<{ file: string; proposal?: Proposal; error?: string }> = 
   try { return { file, proposal: parseProposal(json) }; } catch (error) { return { file, error: error instanceof Error ? error.message : String(error) }; }
 });
 const STAMP: Record<Outcome, string> = { waiting: 'Waiting for play', met: 'Met', missed: 'Missed', unclear: 'Too close to call' };
-const ADDED = ['rgba(217,185,94,.55)', '#d9b95e'] as const, REMOVED = ['rgba(200,50,42,.5)', '#e65a50'] as const;
+const ADDED = ['rgba(217,185,94,.55)', '#d9b95e'] as const, REMOVED = ['rgba(200,50,42,.5)', '#e65a50'] as const, KEPT = '#8a8f98';
 
 /** What a layout implies before play, summarised for the before/after table. */
 interface StaticSummary { walk: number; north: number; cutOff: number; sight: number; cover: number }
@@ -30,11 +30,13 @@ function summarise(grid: StreetGrid): StaticSummary {
   return { walk, north, cutOff: cut.total ? cut.cutOff / cut.total : 0, sight: median(sightlines(grid).longest.values), cover: median(coverDensity(grid).values) };
 }
 
-interface Diff { added: Footprint[]; removed: Footprint[]; kept: Footprint[] }
-function diff(before: readonly Footprint[], after: readonly Footprint[]): Diff {
-  const old = new Set(before.map(footprintKey)), now = new Set(after.map(footprintKey));
-  return { added: after.filter(f => !old.has(footprintKey(f))), removed: before.filter(f => !now.has(footprintKey(f))), kept: after.filter(f => old.has(footprintKey(f))) };
+interface Diff<T> { added: T[]; removed: T[]; kept: T[] }
+function diff<T>(before: readonly T[], after: readonly T[], key: (t: T) => string): Diff<T> {
+  const old = new Set(before.map(key)), now = new Set(after.map(key));
+  return { added: after.filter(f => !old.has(key(f))), removed: before.filter(f => !now.has(key(f))), kept: after.filter(f => old.has(key(f))) };
 }
+/** A supply that keeps its ID but moves counts as removed and added. */
+const supplyKey = (s: SnapshotSupply) => `${s.id}@${s.x},${s.y},${s.z}`;
 
 export function design(ctx: Context): Mode {
   const p = ctx.params;
@@ -44,7 +46,9 @@ export function design(ctx: Context): Mode {
     show: p.get('show') === 'before' ? 'before' : p.get('show') === 'after' ? 'after' : 'diff',
   };
   const counts = new Map<number, Counts>(), summaries = new Map<number, StaticSummary>();
-  let snapshot: LayoutSnapshot | undefined, snapshotFor = '', changes: Diff | undefined, error = '';
+  // The layout after: its snapshot when the proposal is older than today's layout, else today's city.
+  let snapshot: LayoutSnapshot | undefined, later: LayoutSnapshot | undefined, snapshotFor = '', error = '';
+  let changes: Diff<Footprint> | undefined, supplies: Diff<SnapshotSupply> | undefined;
 
   const selected = () => valid.find(q => q.id === state.id);
   const save = () => {
@@ -105,6 +109,7 @@ export function design(ctx: Context): Mode {
           staticRow('Median longest sightline', s => `${Math.round(s.sight)} u`),
           staticRow('Median cover density', s => pct(s.cover))),
         changes ? el('p', { className: 'note', text: `Footprints: ${changes.added.length} added, ${changes.removed.length} removed, ${changes.kept.length} kept.` }) : null,
+        supplies ? el('p', { className: 'note', text: `Supply sites: ${supplies.added.length} added, ${supplies.removed.length} removed or moved, ${supplies.kept.length} kept.` }) : null,
         error ? el('p', { className: 'note', text: error }) : null),
       section('The case', el('p', { text: q.summary }), el('ul', { className: 'goals' }, ...q.goals.map(g => el('li', { text: g })))),
     );
@@ -124,38 +129,47 @@ export function design(ctx: Context): Mode {
         ctx.status(`Could not load the place counts (${e instanceof Error ? e.message : 'error'}).`);
       }
       render(); ctx.redraw();
-      if (q.baseline && snapshotFor !== q.baseline) {
+      const pair = `${q.baseline}→${q.toLayout}`;
+      if (q.baseline && snapshotFor !== pair) {
         const loading = layoutSnapshot(q.baseline);
-        snapshotFor = q.baseline;
+        snapshotFor = pair;
         if (!loading) { error = `The baseline ${q.baseline} is not in design/city/layouts/.`; render(); return; }
-        snapshot = await loading;
-        changes = diff(snapshot.footprints, FOOTPRINTS);
+        [snapshot, later] = await Promise.all([loading, q.toLayout === LAYOUT ? undefined : layoutSnapshot(`design/city/layouts/layout-${q.toLayout}.json`)]);
+        changes = diff(snapshot.footprints, later?.footprints ?? FOOTPRINTS, footprintKey);
+        const after = later ? later.supplies : SUPPLIES;
+        supplies = snapshot.supplies && after ? diff(snapshot.supplies, after, supplyKey) : undefined;
         render(); ctx.redraw();
       }
-      if (snapshot && !summaries.has(q.fromLayout)) {
+      if (snapshot && !(summaries.has(q.fromLayout) && summaries.has(q.toLayout))) {
         ctx.status('Working out the static analyses of both layouts…');
         await new Promise(r => setTimeout(r, 30));
         summaries.set(snapshot.layoutVersion, summarise(snapshot.grid));
-        summaries.set(LAYOUT, summarise(cityGrid()));
-        ctx.status(`Static analyses of layouts ${snapshot.layoutVersion} and ${LAYOUT} done; verdicts refresh every minute.`);
+        summaries.set(q.toLayout, summarise(later?.grid ?? cityGrid()));
+        ctx.status(`Static analyses of layouts ${snapshot.layoutVersion} and ${q.toLayout} done; verdicts refresh every minute.`);
         render();
       }
     },
     draw() {
       const view = ctx.view, q = selected();
+      const dots = (list: readonly SnapshotSupply[] | undefined, fill: string, stroke = '#000') => { for (const s of list ?? []) view.dot(s.x, s.z, 5, fill, stroke, 2); };
       if (state.show === 'before' && snapshot) {
         drawCity(view, snapshot.footprints, { today: false });
+        dots(snapshot.supplies, KEPT);
       } else if (state.show === 'diff' && changes) {
         drawCity(view, changes.kept, { dim: .55 });
         for (const f of changes.removed) view.quad(f, REMOVED[0], REMOVED[1], 1);
         for (const f of changes.added) view.quad(f, ADDED[0], ADDED[1], .8);
-      } else drawCity(view, FOOTPRINTS);
+        dots(supplies?.kept, KEPT); dots(supplies?.removed, 'transparent', REMOVED[1]); dots(supplies?.added, ADDED[1]);
+      } else if (later) {
+        drawCity(view, later.footprints, { today: false });
+        dots(later.supplies, KEPT);
+      } else { drawCity(view, FOOTPRINTS); dots(SUPPLIES, KEPT); }
       drawLabels(view, false);
       if (!q) return '<b>No proposal</b>';
       const which = state.show === 'before' ? `Layout ${q.fromLayout}, before` : state.show === 'after' ? `Layout ${q.toLayout}, after` : `Layout ${q.fromLayout} → ${q.toLayout}`;
       return `<b>${esc(q.title)}: ${esc(which)}</b>` + (state.show === 'diff'
-        ? `<p><span style="color:${ADDED[1]}">■</span> added (${changes?.added.length ?? '…'}) &nbsp; <span style="color:${REMOVED[1]}">■</span> removed (${changes?.removed.length ?? '…'}) &nbsp; dim: unchanged. Streets, piers and harbour as built.</p>`
-        : state.show === 'before' ? `<p>${snapshot ? 'Standing footprints as shipped; streets are not in the snapshot.' : 'Loading the snapshot…'}</p>` : '<p>The city as built today.</p>');
+        ? `<p><span style="color:${ADDED[1]}">■</span> added (${changes?.added.length ?? '…'}) &nbsp; <span style="color:${REMOVED[1]}">■</span> removed (${changes?.removed.length ?? '…'}) &nbsp; dim: unchanged.${supplies ? ` Supply sites as dots: <span style="color:${ADDED[1]}">●</span> added, <span style="color:${REMOVED[1]}">○</span> removed or moved, <span style="color:${KEPT}">●</span> kept.` : ''} Streets, piers and harbour as built.</p>`
+        : state.show === 'before' ? `<p>${snapshot ? 'Standing footprints as shipped; streets are not in the snapshot.' : 'Loading the snapshot…'}</p>` : `<p>${later ? `Layout ${later.layoutVersion} as shipped, from its snapshot.` : 'The city as built today.'}</p>`);
     },
     hover(px, py, x, z) {
       const hit = (fs: readonly Footprint[] | undefined) => fs?.find(f => {

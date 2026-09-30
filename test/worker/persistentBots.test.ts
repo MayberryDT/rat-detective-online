@@ -10,6 +10,7 @@ import type { ServerBotController } from '../../src/worker/ServerBotController';
 import { createAssignment } from '../../src/shared/assignments';
 import { cityPlaces } from '../../src/shared/city/places';
 import { p3 } from '../../src/shared/city/facts';
+import { PICKUP_ANCHORS } from '../../src/shared/pickups';
 
 type Stub = DurableObjectStub<GameRoom>;
 type Internals = {
@@ -140,6 +141,32 @@ describe('persistent hosted bots', () => {
       expect(await ctx.storage.getAlarm()).toBeGreaterThan(Date.now());
     });
     await stub.ensurePersistentBots(); expect((await stub.status()).players).toBe(before.roster.length);
+  });
+
+  it('brings a city stored on the previous layout back on the current one, its old checkpoint dropped', async () => {
+    const stub = room(); await stub.ensurePersistentBots();
+    const seed = await runInDurableObject(stub, (instance: GameRoom, ctx) => {
+      const game = instance as unknown as Internals;
+      clearInterval(game.chaosTimer ?? undefined); game.chaosTimer = null;
+      game.serverBots?.dispose(); game.serverBots = null;
+      // What the live room holds when a new layout deploys: the previous layout's world, and a
+      // checkpoint with every supply claimed.
+      const saved = game.chaos.snapshot(false);
+      saved.pickups = saved.pickups!.map(p => ({ ...p, availableAt: saved.time + 40_000 }));
+      const put = "INSERT INTO room_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+      ctx.storage.sql.exec(put, 'world', JSON.stringify({ seed: game.world.seed, version: GRAYBOX_VERSION - 1 }));
+      ctx.storage.sql.exec(put, 'chaos-v1', JSON.stringify(saved));
+      return game.world.seed;
+    });
+    await evictDurableObject(stub);
+    await runDurableObjectAlarm(stub);
+    await runInDurableObject(stub, (instance: GameRoom) => {
+      const game = instance as unknown as Internals;
+      expect(game.world).toEqual({ seed, version: GRAYBOX_VERSION });
+      const sites = game.chaos.snapshot(false).pickups!;
+      expect(sites.map(p => p.id).sort()).toEqual(PICKUP_ANCHORS.map(a => a.id).sort());
+      expect(sites.filter(p => (p.availableAt ?? 0) > 0)).toEqual([]);
+    });
   });
 
   it('gives bot deaths and wins the ordinary deadlines without replacing them with the heartbeat', async () => {

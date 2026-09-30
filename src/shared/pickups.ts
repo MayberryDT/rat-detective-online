@@ -29,15 +29,17 @@ export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
     'quick-fix': { title: 'QUICK FIX', effect: 'Full health', flavor: 'Fit for duty. Allegedly.' },
 };
 
-/** Authored floor heights keep rewards on their intended routes. Every site has
- * a reason: Ironclad is one hard trip per landmark, never stacked; Hot Pursuit
- * waits where long runs start; Quick Fix hides in alleys just off the fights. */
+/** Authored floor heights keep rewards on their intended routes. Every site has a
+ * reason (layout 4, from layout 3's recorded play): Ironclad stands in the fight on
+ * each landmark's ground floor, never upstairs, where nobody went for it; Hot Pursuit
+ * waits where long runs start; Quick Fix hides just off the fight lines, within about
+ * four seconds' run of every place where rats die most. */
 export interface PickupAnchor { id: string; kind: PickupKind; x: number; z: number; y?:number; near: string }
 export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
-    {id:'alibi-records-upper',kind:'ironclad',x:-16,z:-47,y:8.7,near:'Records Hall archive, second floor'},
-    {id:'alibi-icebox-upper',kind:'ironclad',x:116,z:-84,y:8.7,near:'Icebox open rear catwalk'},
-    {id:'alibi-pump-roof',kind:'ironclad',x:125,z:130,y:36.7,near:'Pumping Station roof, by launcher only'},
     {id:'alibi-records-forecourt',kind:'ironclad',x:8,z:-12,y:.7,near:'Street in front of Records Hall, east of the forecourt'},
+    {id:'alibi-icebox-floor',kind:'ironclad',x:116,z:-76,y:.7,near:'Icebox ground floor, the west aisle under the catwalk'},
+    {id:'alibi-pump-floor',kind:'ironclad',x:142,z:128,y:.7,near:'Pumping Station ground floor, the east aisle'},
+    {id:'alibi-needleworks-floor',kind:'ironclad',x:-82,z:72,y:.7,near:'Needleworks ground floor, inside the east door'},
     {id:'pursuit-gate-mouth',kind:'hustle',x:-148,z:0,y:.7,near:'Gate sewer entrance, before the long tunnel east'},
     {id:'pursuit-icebox-mouth',kind:'hustle',x:148,z:0,y:.7,near:'Icebox sewer entrance, before the long tunnel west'},
     ...DOCKS_JOBS.pickups,
@@ -47,6 +49,12 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
     {id:'fix-south-central',kind:'quick-fix',x:-17,z:58,y:.7,near:'Alley between the south-central blocks'},
     {id:'fix-icebox-alley',kind:'quick-fix',x:124,z:22,y:.7,near:'Alley between the shops south of the Icebox forecourt'},
     {id:'fix-gate-lane',kind:'quick-fix',x:-100,z:-45,y:.7,near:'Service lane between Records Hall and the Gate'},
+    {id:'fix-records-corner',kind:'quick-fix',x:-44,z:-42,y:.7,near:'Records Hall ground floor, the south-west corner'},
+    {id:'fix-gate-alley',kind:'quick-fix',x:-148,z:26,y:.7,near:'Alley south of the Gate'},
+    {id:'fix-needleworks-corner',kind:'quick-fix',x:-137,z:103,y:.7,near:'Needleworks ground floor, the south-west corner'},
+    {id:'fix-south-lot',kind:'quick-fix',x:-53,z:102,y:.7,near:'Against the block across the avenue from Needleworks'},
+    {id:'fix-icebox-corner',kind:'quick-fix',x:110,z:-37,y:.7,near:'Icebox ground floor, the south-west corner'},
+    {id:'fix-pump-north',kind:'quick-fix',x:108,z:96,y:.7,near:'Against the Pumping Station\'s north wall'},
     ...PRECINCT_JOBS.supplies,
 ];
 

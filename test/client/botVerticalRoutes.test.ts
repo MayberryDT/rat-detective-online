@@ -1,4 +1,3 @@
-import {PICKUP_ANCHORS} from '../../src/shared/pickups';
 import {afterEach,expect,it,vi} from 'vitest';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {ServerBotController} from '../../src/worker/ServerBotController';
@@ -30,46 +29,6 @@ it.each(BOT_LAUNCH_LINKS)('uses the real $machine.id trigger and flight to conte
                 controller.world.contacts.some(c=>c.bi.mass>0&&-c.ni.y>.5||c.bj.mass>0&&c.ni.y>.5);
         }
         expect({launched,landed},JSON.stringify({shots,peak,x:bot.x,y:bot.y,z:bot.z})).toEqual({launched:true,landed:true});
-        expect(recover).not.toHaveBeenCalled();
-    }finally{controller.dispose();}
-},30_000);
-
-it.each([
-    ['alibi-records-upper',-16,-30],['alibi-icebox-upper',130,-25],
-] as const)('plans from street level and climbs to %s', (id,x,z)=>{
-    const now=1_000_000,spec={seed:341283204,version:2};vi.spyOn(Date,'now').mockReturnValue(now);vi.spyOn(Math,'random').mockReturnValue(.5);
-    const bot=createPlayer('bot','Stair Inspector',DEFAULT_APPEARANCE,{x,y:0,z}),players=new Map([[bot.id,bot]]);
-    const sim=new ChaosSimulation(players,()=>{},undefined,spec);let claimed=false;
-    const recover=vi.fn(),controller=new ServerBotController(spec,[bot.id],{move:(_,p)=>Object.assign(bot,p),shoot:()=>{},recover});
-    try{
-        for(let frame=1;frame<=3600&&!claimed;frame++){
-            const at=now+frame*1000/60,state=sim.snapshot(false);
-            controller.step(1/60,at,players,{...state,pickups:state.pickups?.filter(p=>p.id===id)},true);sim.step(1/60,at);
-            claimed=sim.drainPickupEvents().some(e=>e.kind==='collected'&&e.playerId===bot.id&&e.pickupId===id);
-        }
-        expect(claimed,JSON.stringify({x:bot.x,y:bot.y,z:bot.z})).toBe(true);expect(recover).not.toHaveBeenCalled();
-    }finally{controller.dispose();}
-},30_000);
-
-it.each(BOT_LAUNCH_LINKS.filter(link=>PICKUP_ANCHORS.some(a=>a.kind==='ironclad'&&a.x===link.landing.x&&a.z===link.landing.z)))('seeks $machine.id roof armor from the street and returns to street objectives',link=>{
-    const now=1_000_000,spec={seed:341283204,version:2};vi.spyOn(Date,'now').mockReturnValue(now);vi.spyOn(Math,'random').mockReturnValue(.5);
-    const bot=createPlayer('bot','Supply Inspector',DEFAULT_APPEARANCE,{x:link.machine.pad.x,y:0,z:link.machine.pad.z+6});
-    const players=new Map([[bot.id,bot]]),sim=new ChaosSimulation(players,()=>{},undefined,spec);
-    // The case waits across the city, whichever spawn the draw picked: the armor is the nearer errand.
-    sim.caseBody.position.set(-16,1.3,-28);sim.caseBody.velocity.setZero();
-    const id=sim.snapshot(false).pickups!.find(p=>p.kind==='ironclad'&&p.x===link.landing.x&&p.z===link.landing.z&&Math.abs(p.y-link.landing.y-.7)<.01)!.id;
-    let shots=0,claimed=false,returned=false;
-    const recover=vi.fn(),controller=new ServerBotController(spec,[bot.id],{
-        move:(_,p)=>Object.assign(bot,p),shoot:(owner,origin,direction)=>sim.shoot(owner,{shotId:`supply-${++shots}`,origin,direction}),recover,
-    });
-    try{
-        for(let frame=1;frame<=2400&&!returned;frame++){
-            const at=now+frame*1000/60,state=sim.snapshot(false);
-            controller.step(1/60,at,players,{...state,pickups:state.pickups?.filter(p=>p.id===id)},true);sim.step(1/60,at);
-            claimed ||= sim.drainPickupEvents().some(e=>e.kind==='collected'&&e.playerId===bot.id&&e.pickupId===id);
-            returned=claimed&&Math.abs(bot.y)<1;
-        }
-        expect({claimed,returned},JSON.stringify({id,x:bot.x,y:bot.y,z:bot.z,shots})).toEqual({claimed:true,returned:true});
         expect(recover).not.toHaveBeenCalled();
     }finally{controller.dispose();}
 },30_000);

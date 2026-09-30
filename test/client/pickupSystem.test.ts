@@ -30,7 +30,7 @@ const sites=(sim:ChaosSimulation)=>{const s=sim.snapshot(false);return s.pickups
 const site=(sim:ChaosSimulation,kind:string)=>sites(sim).find(p=>p.kind===kind);
 
 describe('pickup system',()=>{
-    it.each([341283204,CITY_PREVIEW_SEED])('gives every supply site a reason: lone armor, sprint starts, alley medkits (seed %i)',seed=>{
+    it.each([341283204,CITY_PREVIEW_SEED])('gives every supply site a reason: lone armor, sprint starts, sheltered medkits (seed %i)',seed=>{
         const sim=new ChaosSimulation(new Map(),()=>{},undefined,{seed,version:GRAYBOX_VERSION});
         const all=sim.snapshot(false).pickups!;
         expect(all).toHaveLength(PICKUP_ANCHORS.length);
@@ -38,16 +38,10 @@ describe('pickup system',()=>{
         // Ironclad is rare and never stacked floor-over-roof on one landmark.
         expect(armor.length).toBeLessThanOrEqual(5);
         for(const a of armor)for(const b of armor)if(a!==b)expect(Math.hypot(a.x-b.x,a.z-b.z),`${a.id} / ${b.id}`).toBeGreaterThan(40);
-        const blocked=(p:{x:number;y:number;z:number},dx:number,dz:number,reach:number)=>
-            sim.world.raycastClosest(new C.Vec3(p.x,p.y+.3,p.z),new C.Vec3(p.x+dx*reach,p.y+.3,p.z+dz*reach),{collisionFilterMask:1});
-        // Street kits hide in alleys: walls close on both sides of one axis, the other axis open to
-        // walk through. (The precinct's infirmary kit is a cell open onto its gallery.)
-        for(const kit of kits.filter(k=>k.y<2)){
-            const eastWest=blocked(kit,1,0,10)&&blocked(kit,-1,0,10),northSouth=blocked(kit,0,1,10)&&blocked(kit,0,-1,10);
-            expect(eastWest!==northSouth,kit.id).toBe(true);
-            const open=eastWest?[[0,1],[0,-1]]:[[1,0],[-1,0]];
-            expect(open.some(([dx,dz])=>!blocked(kit,dx!,dz!,10)),kit.id).toBe(true);
-        }
+        // Medkits stand off the open ground: walls within reach on at least two sides, never mid-avenue.
+        const walled=(p:{x:number;y:number;z:number},a:number)=>sim.world.raycastClosest(new C.Vec3(p.x,p.y+.3,p.z),
+            new C.Vec3(p.x+Math.cos(a)*10,p.y+.3,p.z+Math.sin(a)*10),{collisionFilterMask:1});
+        for(const kit of kits)expect(Array.from({length:8},(_,i)=>i*Math.PI/4).filter(a=>walled(kit,a)).length,kit.id).toBeGreaterThanOrEqual(2);
     });
 
     it('retires sites that are no longer authored when restoring a room while retaining other supply deadlines',()=>{
@@ -60,13 +54,12 @@ describe('pickup system',()=>{
         expect(restored.find(p=>p.id===saved.pickups![0]!.id)?.availableAt).toBe(now+30_000);
     });
 
-    it('places Icebox armor outside its racks and speed packs six units in front of the long-tunnel portals',()=>{
-        const {sim}=fixture(),all=sites(sim),armor=all.find(p=>p.id==='alibi-icebox-upper')!;
-        expect(armor).toMatchObject({x:116,y:8.7,z:-84});
-        for(const f of LANDMARK_FURNISHINGS){
-            const foot=armor.y-.7;
+    it('keeps supplies clear of landmark furniture and speed packs six units in front of the long-tunnel portals',()=>{
+        const {sim}=fixture(),all=sites(sim);
+        for(const site of all)for(const f of LANDMARK_FURNISHINGS){
+            const foot=site.y-.7;
             if(foot+2<f.y-f.h/2||foot>f.y+f.h/2)continue;
-            expect(Math.hypot(Math.max(0,Math.abs(armor.x-f.x)-f.w/2),Math.max(0,Math.abs(armor.z-f.z)-f.d/2))).toBeGreaterThan(1);
+            expect(Math.hypot(Math.max(0,Math.abs(site.x-f.x)-f.w/2),Math.max(0,Math.abs(site.z-f.z)-f.d/2)),`${site.id} / ${f.kind}`).toBeGreaterThan(1);
         }
         for(const entry of SEWER_PIPE_ENTRANCES.filter(e=>e.axis==='x')){
             const front=sewerPipePoint(entry,-6);
@@ -226,13 +219,13 @@ describe('Ironclad Alibi',()=>{
     });
 });
 
-it('keeps upper-floor rewards unavailable to a rat directly below them',()=>{
-    const {sim,a,now}=fixture();const upper=sites(sim).find(p=>p.id==='alibi-records-upper')!;
-    stand(a,{...upper,y:0});sim.step(1/60,now+20);
-    expect(sites(sim).some(p=>p.id===upper.id)).toBe(true);
+it('keeps a ground-floor reward out of reach of a rat on the floor above it',()=>{
+    const {sim,a,now}=fixture();const armor=sites(sim).find(p=>p.id==='alibi-icebox-floor')!;
+    stand(a,{...armor,y:8});sim.step(1/60,now+20);
+    expect(sites(sim).some(p=>p.id===armor.id)).toBe(true);
     expect(sim.snapshot(false).buffs?.[a.id]?.ironcladUntil).toBeUndefined();
-    stand(a,{...upper,y:8});sim.step(1/60,now+40);
-    expect(sites(sim).some(p=>p.id===upper.id)).toBe(false);
+    stand(a,{...armor,y:0});sim.step(1/60,now+40);
+    expect(sites(sim).some(p=>p.id===armor.id)).toBe(false);
 });
 it('keeps armor out of every Jurisdiction zone, so holding a zone never hands out Ironclad',()=>{
     const {sim}=fixture();

@@ -1,0 +1,41 @@
+{
+  "id": "proposal:supplies-v4",
+  "title": "Supplies where the fights are (layout 4)",
+  "status": "Built on branch bots/overhaul on 30 September 2026; ships only on Tyler's OK",
+  "fromLayout": 3,
+  "toLayout": 4,
+  "summary": "Tyler, 30 September 2026: \"we need to rethink pickup locations and add more health packs.\" On layout 3 (live 29 September to 30 September 07:36 UTC: 87 human minutes, 68.5 bot hours) four of the five Ironclad sites were never or almost never claimed: Records Hall's archive (0 claims), the Pumping Station roof (0), the precinct armoury (0) and the Icebox catwalk (2), against 189 at the one street site, the Records forecourt. The upstairs Quick Fix in the Panopticon infirmary was never claimed either. The 25 street places where the most rats died were up to 6.7 s' run (median) from the nearest medkit, 7.8 s at the 90th percentile; 15% of all street deaths and 26% of human street deaths were more than 6 s from one. Layout 4 moves every upstairs supply down to the ground floor where the fights are and doubles the medkits: Ironclad on each landmark's ground floor (the Icebox's west aisle, the Pumping Station's east aisle, inside Needleworks' east door, the Panopticon's north gallery) beside the kept Records forecourt site; Quick Fix from 7 sites (6 reachable on the street) to 14, all on the ground, each just off a fight line with walls on at least two sides: Records Hall's, Needleworks' and the Icebox's south-west corners, the precinct hall, the alley south of the Gate, beside Pier 9's south door, against the Pumping Station's north wall and against the block across the avenue from Needleworks. The Hot Pursuit sites stay: all four were used. Static check (street grid, 18 units a second): the worst of the 25 deadliest street places is now 3.4 s from a medkit (median), 4.1 s at the 90th percentile; every street death on layout 3 lies within 6 s of a medkit, and 99% of human hits. Retired site IDs: alibi-records-upper, alibi-icebox-upper, alibi-pump-roof, alibi-precinct-armoury, fix-precinct-infirmary. Kept IDs unchanged. Place IDs unchanged (no geometry changed).",
+  "goals": [
+    "Every place where rats die a lot has a medkit a short run away: under 4 s (median) from each of the 25 deadliest street places, under 6 s from 99% of human hits.",
+    "Medkits sit just off the fight lines: against a wall or in a corner, never in the open middle of an avenue.",
+    "Every Ironclad site is one that rats actually take: in the fight on a landmark's ground floor, not a trip upstairs nobody makes.",
+    "Every district has a medkit."
+  ],
+  "predictions": [
+    {
+      "id": "quick-fix-claims",
+      "says": "Quick Fix is claimed more often per rat-hour: twice the sites, all on the ground near the fights (layout 3: 2.9 per rat-hour; expected about 6).",
+      "expect": "up",
+      "measure": { "kind": "rate", "key": "pickup:quick-fix", "per": ["human-s", "bot-s"] }
+    },
+    {
+      "id": "ironclad-claims",
+      "says": "Ironclad is claimed more often per rat-hour: five live sites instead of one (layout 3: 3.1 per rat-hour; expected over 6).",
+      "expect": "up",
+      "measure": { "kind": "rate", "key": "pickup:ironclad", "per": ["human-s", "bot-s"] }
+    },
+    {
+      "id": "ironclad-on-landmark-floors",
+      "says": "Most Ironclad claims happen on the landmarks' ground floors and in the cellblock, not only at the Records forecourt (layout 3: none there).",
+      "expect": "up",
+      "measure": { "kind": "share", "key": "pickup:ironclad", "where": { "places": ["floor:icebox:0", "floor:pump:0", "floor:needleworks:0", "floor:cellblock:0"] } }
+    },
+    {
+      "id": "human-deaths",
+      "says": "Humans die less often per hour alive, because a medkit is always close (layout 3: 56 deaths per human rat-hour over 87 minutes; the bots changed on 30 September too, so read this with the minds version).",
+      "expect": "down",
+      "measure": { "kind": "rate", "key": "deaths-human", "per": "human-s" }
+    }
+  ],
+  "baseline": "design/city/layouts/layout-3.json"
+}

@@ -252,7 +252,7 @@ describe('city endpoints', () => {
     expect(digest.headers.get('content-type')).toContain('text/markdown');
     expect(await digest.text()).toContain('# City digest');
     const model = await (await SELF.fetch(`${base}/city/v1/model`)).json() as { entities: Array<{ id: string; place: string }> };
-    expect(model.entities.find(e => e.id === 'pickup:alibi-records-upper')!.place).toBe('floor:records:8');
+    expect(model.entities.find(e => e.id === 'pickup:fix-precinct-hall')!.place).toBe('room:precinct-hall');
     for (const path of ['/city/v1/events', '/city/v1/archive']) expect((await SELF.fetch(base + path)).status, path).toBe(401);
     for (const query of ['days=0', 'from=2026-09-29', 'mode=Bad!']) expect((await SELF.fetch(`${base}/city/v1/places?${query}`)).status, query).toBe(400);
     expect((await SELF.fetch(`${base}/heat/v1`, { method: 'POST' })).status).toBe(405);

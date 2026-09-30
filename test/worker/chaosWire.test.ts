@@ -50,7 +50,7 @@ it('resets optional fields and refreshes complete keyframes',()=>{
 });
 it.each([false,true])('carries pickup claims and buff expiry through compact snapshots (delta=%s)',delta=>{
  const s=state(),e=new ChaosEncoder('pickups',delta),d=new ChaosDecoder();
- s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:-16,y:.7,z:-18}];s.buffs={};
+ s.pickups=[{id:'alibi-records-forecourt',kind:'ironclad',x:8,y:.7,z:-12}];s.buffs={};
  const decode=()=>{const wire=e.encode(s).payload;const decoded=d.read(wire);expect(decoded?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));return JSON.parse(wire);};
  decode();
  s.time+=40;s.pickups[0].availableAt=s.time+45000;s.buffs={rat:{ironcladUntil:13040,hustleUntil:11040}};

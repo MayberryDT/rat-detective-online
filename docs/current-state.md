@@ -2,6 +2,10 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Supplies, layout 4 — 30 September batch (built, not deployed)
+
+Tyler: "we need to rethink pickup locations and add more health packs." `GRAYBOX_VERSION` (the layout and world version) is 4; only the supply sites change, not the geometry or place IDs. 23 sites, all on the ground: 5 Ironclad in the fights (the Records forecourt street and the ground floors of the Icebox, the Pumping Station, Needleworks and the Panopticon's north gallery), 4 Hot Pursuit (unchanged) and 14 Quick Fix (7 before), each just off a fight line. The upstairs and roof sites nobody claimed on layout 3 are gone. A room stored on layout 2 or 3 upgrades to 4 on load (checkpoint dropped, rats respawned); protocol stays 23, and an older client sees "The game has updated" from the world version. Evidence, static check and predictions: `proposal:supplies-v4` in [the city map](city-map.md).
+
 ## Kill streak mark — 30 September batch (built, not deployed)
 
 A rat (human or bot) on a kill streak of 3 or more (kills since its last death; any death or a new round ends it) carries a red rubber stamp under its nameplate pips (ARMED at 3, DANGEROUS at 5, PUBLIC ENEMY at 8, with a tally mark per kill), and its fedora smoulders (a thin wisp, thicker with embers at 5, a heavy column at 8). Your own plate shows your stamp; your own smoke is fainter. The server counts the streak (`PlayerData.streak`, `playerDied.killerStreak`, both optional, so protocol stays 23). See [the juice plan](juice-plan.md#kill-streak-mark-tyler-2026-09-30).

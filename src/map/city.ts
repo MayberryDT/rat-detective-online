@@ -9,6 +9,7 @@ import { cityModel } from '../shared/city/model';
 import { worldSpawnPoints } from '../shared/playerSpawns';
 import { StreetGrid, type GridBox, type JobKind, type Slot } from '../shared/city/analysis';
 import { CELL_MIN, CELL_SPAN, CITY_CELL } from '../shared/city/frame';
+import { PICKUP_ANCHORS, type PickupKind } from '../shared/pickups';
 
 export interface Footprint { x: number; z: number; w: number; d: number; top: number; ry: number }
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -68,19 +69,25 @@ export function placeRaster(y: number): Array<Place | undefined> {
 let grid: StreetGrid | undefined;
 export const cityGrid = (): StreetGrid => (grid ??= new StreetGrid(BOXES, WATER, BOUNDS));
 
-/** A layout before a change, from its snapshot (design/city/layouts/*.json): standing footprints, a street grid from its colliders, and its place IDs. */
-export interface LayoutSnapshot { layoutVersion: number; footprints: Footprint[]; grid: StreetGrid; places: Array<{ id: string; name: string }> }
+/** A supply site in a layout snapshot. */
+export interface SnapshotSupply { id: string; kind: PickupKind; x: number; y: number; z: number }
+/** A layout before a change, from its snapshot (design/city/layouts/*.json): standing footprints, a street grid from its colliders, its place IDs and, from layout 3 on, its supply sites. */
+export interface LayoutSnapshot { layoutVersion: number; footprints: Footprint[]; grid: StreetGrid; places: Array<{ id: string; name: string }>; supplies?: SnapshotSupply[] }
 interface LayoutJson {
   layoutVersion: number;
-  /** [x, z, w, d, top] */
+  /** [x, z, w, d, top, yaw?] */
   footprints: number[][];
-  /** [x, y, z, w, h, d, tilted] */
+  /** [x, y, z, w, h, d, tilted, yaw?, passBalls?] */
   colliders: number[][];
   places: Array<{ id: string; name: string }>;
+  /** [xmin, xmax, zmin, zmax]: water no rat stands in (from layout 3 on) */
+  water?: number[][];
+  /** [id, kind, x, y, z] */
+  pickups?: Array<[string, PickupKind, number, number, number]>;
 }
 const SNAPSHOT_FILES = import.meta.glob<LayoutJson>('../../design/city/layouts/*.json', { import: 'default' });
 const snapshots = new Map<string, Promise<LayoutSnapshot>>();
-/** The snapshot a proposal names as its baseline (a repo path such as design/city/layouts/layout-2.json); undefined when no such file ships. */
+/** The snapshot at a repo path such as design/city/layouts/layout-2.json; undefined when no such file ships. */
 export function layoutSnapshot(path: string): Promise<LayoutSnapshot> | undefined {
   const load = SNAPSHOT_FILES[`../../${path}`];
   if (!load) return undefined;
@@ -88,11 +95,16 @@ export function layoutSnapshot(path: string): Promise<LayoutSnapshot> | undefine
   if (!found) {
     found = load().then(json => ({
       layoutVersion: json.layoutVersion,
-      footprints: json.footprints.map(([x = 0, z = 0, w = 0, d = 0, top = 0]) => ({ x, z, w, d, top, ry: 0 })),
-      grid: new StreetGrid(json.colliders.map(([x = 0, y = 0, z = 0, w = 0, h = 0, d = 0, tilted = 0]): GridBox => ({ x, y, z, w, h, d, rx: tilted ? 1 : 0, rz: 0 })), [], BOUNDS),
+      footprints: json.footprints.map(([x = 0, z = 0, w = 0, d = 0, top = 0, ry = 0]) => ({ x, z, w, d, top, ry })),
+      grid: new StreetGrid(json.colliders.map(([x = 0, y = 0, z = 0, w = 0, h = 0, d = 0, tilted = 0, ry = 0, bars = 0]): GridBox =>
+        ({ x, y, z, w, h, d, rx: tilted ? 1 : 0, rz: 0, ry, ...(bars ? { passBalls: true } : {}) })),
+        (json.water ?? []).map(([xmin = 0, xmax = 0, zmin = 0, zmax = 0]) => ({ xmin, xmax, zmin, zmax })), BOUNDS),
       places: json.places,
+      ...(json.pickups ? { supplies: json.pickups.map(([id, kind, x, y, z]) => ({ id, kind, x, y, z })) } : {}),
     }));
     snapshots.set(path, found);
   }
   return found;
 }
+/** Today's supply sites, in snapshot form. */
+export const SUPPLIES: SnapshotSupply[] = PICKUP_ANCHORS.map(a => ({ id: a.id, kind: a.kind, x: a.x, y: a.y ?? .7, z: a.z }));

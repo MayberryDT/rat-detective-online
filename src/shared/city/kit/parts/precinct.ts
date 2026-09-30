@@ -20,7 +20,7 @@ export const PRECINCT_YARD_RADIUS=10;
  * and the bots' two-unit walk grid stays unbroken all the way round. */
 const GALLERY_R=PRECINCT_YARD_RADIUS;
 const BARS_R=15.2, CELL_BACK=19, WALL_T=1;
-/** Middle of a cell: cots, and the slots in the drunk tank and the infirmary. */
+/** Middle of a cell, where the cots stand. */
 const CELL_MID=17.1;
 export const PRECINCT_TOWER_RADIUS=2.6;
 const CABIN_R=3.6;
@@ -34,7 +34,7 @@ const SLOTS=20, SLOT=Math.PI*2/SLOTS;
 /** Ground-floor gate passages: the east sally port (to the sewer ramp), the west yard gate and the house gate (south). */
 const GATE_SLOTS=[0,10,15];
 const GATE_LABELS:Record<number,string>={0:'CELLBLOCK · EAST GATE',10:'CELLBLOCK · YARD GATE',15:'CELLBLOCK · NO VISITORS'};
-/** Cells with no front at all: the drunk tank (a case spawn) and the infirmary (Quick Fix). */
+/** Cells with no front at all: the drunk tank (a case spawn) and the infirmary. */
 const DRUNK_TANK=12, INFIRMARY=5;
 const OPEN_FRONT:Record<string,true>={[`0:${DRUNK_TANK}`]:true,[`8:${INFIRMARY}`]:true};
 
@@ -639,9 +639,10 @@ export const PRECINCT_JOBS={
         {x:CX,y:1.3,z:CZ+6},                     // yard, south of the tower
         {...polar(DRUNK_TANK*SLOT,16.6),y:1.3},  // the open drunk tank (south-west), short of the bounds of its partitions
     ] satisfies readonly Vec3Data[],
+    /** Ground floor only (layout 4): the armoury and infirmary sites upstairs went unclaimed on layout 3. */
     supplies:[
-        {id:'alibi-precinct-armoury',kind:'ironclad',x:-121,z:-113.7,y:16.7,near:'Precinct armoury, top floor'},
-        {id:'fix-precinct-infirmary',kind:'quick-fix',...polar(INFIRMARY*SLOT,CELL_MID),y:8.7,near:'Panopticon infirmary cell, second tier'},
+        {id:'alibi-cellblock-gallery',kind:'ironclad',...polar(INFIRMARY*SLOT,(PRECINCT_YARD_RADIUS+BARS_R)/2),y:.7,near:'Panopticon ground gallery, north side, under the infirmary'},
+        {id:'fix-precinct-hall',kind:'quick-fix',x:-111,z:-123,y:.7,near:'Precinct hall, between the lobby and the cellblock gate'},
     ] satisfies readonly PickupAnchor[],
     dispatch:{id:'precinct',x:-121,y:8,z:-113.7,face:0},
     zone:{label:'PRECINCT YARD',category:'outdoor',floor:'STREET',floorY:0,

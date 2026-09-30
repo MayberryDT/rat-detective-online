@@ -134,12 +134,12 @@ it.each([
  ['icebox',{x:130,y:0,z:-25},{x:116,y:8,z:-84}],
  ['needleworks',{x:-105,y:0,z:116},{x:-105,y:8,z:96}],
  ['pump',{x:144,y:0,z:145},{x:144,y:8,z:118}],
-] as const)('connects the street to the %s second-floor supply',(_id,from,to)=>{
+] as const)('connects the street to the %s second floor',(_id,from,to)=>{
  const nav=new BotNavigation({seed:341283204,version:2});
  const path=solve(nav,from,to);expect(path.length).toBeGreaterThan(0);
 });
 
-it.each(PICKUP_ANCHORS.filter(a=>a.kind==='ironclad').map(a=>[a.id,{x:a.x,y:(a.y??.7)-.7,z:a.z}] as const))('reaches the %s armor from the central crossroads, on foot or by launcher',(_id,to)=>{
+it.each(PICKUP_ANCHORS.map(a=>[a.id,{x:a.x,y:(a.y??.7)-.7,z:a.z}] as const))('reaches the %s supply from the central crossroads',(_id,to)=>{
  const nav=new BotNavigation(spec),path=solve(nav,{x:70,y:0,z:-18},to),end=path.at(-1);
  expect(end&&Math.hypot(end.x-to.x,end.z-to.z)<2.9&&Math.abs(end.y-to.y)<.5).toBe(true);
 });
