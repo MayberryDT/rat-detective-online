@@ -48,8 +48,10 @@ const FIGHTING_MODES:Partial<Record<MotorMode,true>>={combat:true,intercept:true
 const MEMORY_MS=2500;
 /** Hops in a fight, pressed like a player's space bar: after landing, the ground time before the next is this
  * plus an exponential tail with this mean, ms (humans press jump 20 times a fight-minute and are in the air 27%
- * of it; one hop is about 1.1 s of air). */
-const HOP={afterMs:250,tailMs:1100} as const;
+ * of it; one hop is about 1.1 s of air). With a rival in sight the finger clicks as the space bar goes down and
+ * once more `clickMs` later (humans pull about 1.4 times within 200 ms of each jump); a click not fired within
+ * `clickWindowMs` of its time is dropped. */
+const HOP={afterMs:250,tailMs:1100,clickMs:[110,170],clickWindowMs:250} as const;
 /** Keys busy beside a rival (no route to run) stay busy at least this long, ms. */
 const IDLE_MS=500;
 /** Gunfire from out of sight holds the eye this long, ms; then the rat ignores other gunfire this long. */
@@ -148,6 +150,9 @@ export class BotMotor {
     /** The next fight hop is due (set on landing). */
     private hopAt=0;
     private wasGrounded=false;
+    /** Clicks still due with the last hop, and when the next is. */
+    private hopClicks=0;
+    private hopClickAt=0;
     /** Busy keys beside a rival last at least until then. */
     private idleUntil=0;
     /** The rat's own ground velocity, seen from its position, and the velocity its keys asked for last tick;
@@ -221,7 +226,7 @@ export class BotMotor {
         this.assignmentSignature='';this.urgent=false;
         this.sighting=undefined;this.post=undefined;this.postAt=0;this.heard.until=0;this.listenAt=0;this.rivalShots=0;this.rivalNewest=Infinity;
         this.suppressUntil=0;this.hitAt=-Infinity;this.lastHp=Infinity;this.lastDriveAt=undefined;this.ownSpeed=0;this.glanceUntil=0;this.glanceAt=0;
-        this.hopAt=0;this.wasGrounded=false;this.idleUntil=0;this.heard.next=0;
+        this.hopAt=0;this.wasGrounded=false;this.idleUntil=0;this.heard.next=0;this.hopClicks=0;
         this.seenAt=undefined;this.pushingSince=undefined;this.velX=this.velZ=this.pressX=this.pressZ=this.driftX=this.driftZ=0;this.legs=1;
     }
     /** Take the decision's plan. A new key restarts routing; the same key keeps the current route. */
@@ -597,7 +602,8 @@ export class BotMotor {
         this.wasGrounded=grounded;
         const hop=!jump&&grounded&&now>=this.hopAt&&(fighting||visibleTarget&&!!target&&distance(self,target)<FIGHT.reach)&&!holdingZone&&
             !this.jumpTravel&&!sewerRampAt(self)&&!approachingCase&&!obstacleJump&&!waypoint?.launch&&!waypoint?.drop;
-        if(hop){jump=true;this.hopAt=now+400;}
+        if(hop){jump=true;this.hopAt=now+400;this.hopClicks=2;this.hopClickAt=now;}
+        if(this.hopClicks&&now>this.hopClickAt+HOP.clickWindowMs)this.hopClicks=0;
         const bell=this.bell;
         const dispatchReady=!!bell&&state?.dispatch.phase==='ready'&&clearControl(bell);
         // Follow an armored carrier without running into their gun at point-blank range.
@@ -643,9 +649,13 @@ export class BotMotor {
                 if(!this.aim.flicking&&this.aim.felt<(trick===bank?0.02:0.05)){shoot=this.aim.point(eye,distance(eye,trick));if(trick===bank)this.tricks.banked();}
             }else if(visibleTarget&&target){
                 // Fire once the crosshair is roughly where the rat believes the target is (it cannot see its own miss),
-                // as a hand does, not when it is perfect; a player jumping in a fight clicks as the space bar goes down.
-                const range=distance(eye,casePoint??target),tolerance=Math.atan2(1.5,range)+.04;
-                if(this.aim.onTarget&&!this.aim.flicking&&this.aim.felt<tolerance&&this.trigger.pull(now,hop))shoot=this.aim.point(eye,range);
+                // as a hand does, not when it is perfect; a player jumping in a fight clicks as the space bar goes down
+                // and just after, once the crosshair is near the rival (three times as loose).
+                const range=distance(eye,casePoint??target),tolerance=Math.atan2(1.5,range)+.04,click=this.hopClicks>0&&now>=this.hopClickAt;
+                if(this.aim.onTarget&&!this.aim.flicking&&this.aim.felt<(click?tolerance*3:tolerance)&&this.trigger.pull(now,click)){
+                    shoot=this.aim.point(eye,range);
+                    if(click){this.hopClicks--;this.hopClickAt=now+HOP.clickMs[0]+this.motorRandom()*(HOP.clickMs[1]-HOP.clickMs[0]);}
+                }
             }else if(suppressing){
                 if(this.aim.error<.08&&this.trigger.pull(now))shoot=this.aim.point(eye,Math.max(8,distance(self,seen!.p)));
             }else{

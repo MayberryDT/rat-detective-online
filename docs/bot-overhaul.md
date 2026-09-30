@@ -428,30 +428,31 @@ Tyler's staging playtest: the bots now decide like humans but still move and sho
 
 **Overnight loop (iterations 4 on, 30 September; `mindVersion` stays 4):** one small motor or `SkillDials` change at a time, each measured with `bot-sim` on 24 rooms of 4 minutes (all four assignments, seeds 1–6) against the commit before it. `bot-sim` now prints the gap to the humans as `motor-compare` scores it (`gaps`: 0 plays like the humans, 1 nothing alike; the mean per family, `overall` the mean of the ten families, `accuracy` the blind share and hit rate by distance, not in the overall). The sim is deterministic per seed but chaotic: any change moves every fight, so guard rails differ by chance between runs (12-room and 24-room runs of the same commit differ by about 0.005 in the overall gap; rescues are a count of 10–20).
 
-  | 24 rooms of 4 minutes | Humans | Iteration 3 | Iteration 4 |
-  | --- | --- | --- | --- |
-  | Strafe key held, median (ms) | 314 | 200 | 200 |
-  | Strafe flips a minute | 21.8 | 37.5 | 34.8 |
-  | Aim turn rate, median / p90 (rad/s) | 0.15 / 1.62 | 0.24 / 3.80 | 0.24 / 3.86 |
-  | Aim held still | 44% | 42% | 42% |
-  | Flicks a fight-minute | 6.2 | 11.4 | 11.6 |
-  | Trigger pulls a fight-minute | 261 | 178 | 212 |
-  | Pulls while strafe-jumping, a minute | 27.5 | 15.0 | 18.0 |
-  | Pulls within 150 ms of a jump | 10.4% | 8.1% | 8.1% |
-  | Shots with no rat in sight | 40% | 61% | 60% |
-  | Hit rate 0–5 / 5–10 / 10–15 / 20–30 / 30–45 units | 25 / 9 / 10 / 10 / 10% | 32 / 12 / 10 / 8 / 7% | 30 / 13 / 9 / 8 / 7% |
-  | Hit rate, all shots | 5% | 3.3% | 3.3% |
-  | Stopped | 3.4% | 6.2% | 5.5% |
-  | Forward held / controls released | 55.7 / 4.9% | 50.1 / 8.6% | 53.2 / 7.8% |
-  | Gap: aim / move / inputs | — | 0.362 / 0.268 / 0.227 | 0.364 / 0.231 / 0.191 |
-  | Gap: accuracy (not in the overall) | — | 0.230 | 0.230 |
-  | **Overall gap** | — | **0.193** | **0.177** |
-  | Rescues per bot-hour | — | 0.90 | 1.18 |
-  | Case changes per room-hour | — | 262 | 283 |
-  | Completions per room-hour | — | 3.13 | 3.75 |
-  | Paper Chase deliveries per room-hour | — | 54 | 51 |
+  | 24 rooms of 4 minutes | Humans | Iteration 3 | Iteration 4 | Iteration 5 |
+  | --- | --- | --- | --- | --- |
+  | Strafe key held, median (ms) | 314 | 200 | 200 | 200 |
+  | Strafe flips a minute | 21.8 | 37.5 | 34.8 | 36.3 |
+  | Aim turn rate, median / p90 (rad/s) | 0.15 / 1.62 | 0.24 / 3.80 | 0.24 / 3.86 | 0.22 / 3.92 |
+  | Aim held still | 44% | 42% | 42% | 43% |
+  | Flicks a fight-minute | 6.2 | 11.4 | 11.6 | 11.5 |
+  | Trigger pulls a fight-minute | 261 | 178 | 212 | 218 |
+  | Pulls while strafe-jumping, a minute | 27.5 | 15.0 | 18.0 | 20.6 |
+  | Pulls within 150 ms of a jump | 10.4% | 8.1% | 8.1% | 8.8% |
+  | Shots with no rat in sight | 40% | 61% | 60% | 59% |
+  | Hit rate 0–5 / 5–10 / 10–15 / 20–30 / 30–45 units | 25 / 9 / 10 / 10 / 10% | 32 / 12 / 10 / 8 / 7% | 30 / 13 / 9 / 8 / 7% | 30 / 11 / 10 / 8 / 7% |
+  | Hit rate, all shots | 5% | 3.3% | 3.3% | 3.3% |
+  | Stopped | 3.4% | 6.2% | 5.5% | 5.7% |
+  | Forward held / controls released | 55.7 / 4.9% | 50.1 / 8.6% | 53.2 / 7.8% | 52.9 / 8.3% |
+  | Gap: aim / move / inputs | — | 0.362 / 0.268 / 0.227 | 0.364 / 0.231 / 0.191 | 0.346 / 0.243 / 0.157 |
+  | Gap: accuracy (not in the overall) | — | 0.230 | 0.230 | 0.217 |
+  | **Overall gap** | — | **0.193** | **0.177** | **0.155** |
+  | Rescues per bot-hour | — | 0.90 | 1.18 | 0.76 |
+  | Case changes per room-hour | — | 262 | 283 | 270 |
+  | Completions per room-hour | — | 3.13 | 3.75 | 3.75 |
+  | Paper Chase deliveries per room-hour | — | 54 | 51 | 41 |
 
 - **Iteration 4, faster aimed clicks:** `SkillDials.burstShotMs` 100–170 (was 150–240), `fireGapMs` 100 (was 150). A rat in sight is clicked at about 7 a second in a run instead of 5. Pulls rose from 178 to 212 a fight-minute, the hit rate stayed 3.3%. Rescues 18 against 13 in 21.6 bot-hours; the gate's ground floor had 6 of them (3 at iteration 3), a known pocket, not a firing effect.
+- **Iteration 5, clicks with a hop:** with a rival in sight, the finger clicks as the space bar goes down and once more 110–170 ms later, once the crosshair has arrived near the rival (three times the usual firing tolerance); a click not fired within 250 ms of its time is dropped (`HOP` in `motor.ts`). Firing wherever the crosshair was, mid-flick, sent shots at an armoured bystander and away from a mind's preferred rat (`botIronclad`, `ratBotMind` tests), so the click waits for the crosshair. Pulls while strafe-jumping 18.0 → 20.6 a minute, near a jump 8.1% → 8.8%. Paper Chase deliveries 41 a room-hour looked like a drop, so Paper Chase alone was run on 12 rooms of 5 minutes: iteration 3 delivered 40 a room-hour, iteration 5 49.
 - **Tried and dropped** (12 rooms each, against the overall gap 0.191 of iteration 3):
   - a running look that turns at most 3.5 rad/s and never flicks: fewer flicks (10.0) but slower, longer turns, more strafe flips (40) and less still aim; overall 0.194;
   - the forward key held while the running look steers, and then the eight key directions held with 45° of slack while running: flips fell only a little (34.4), because most running flips come while the rat looks at something other than where it runs (a rival in sight, where one was lost, a heard shot), and the error of a held key cost the routes: Paper Chase deliveries fell to 20 a room-hour and rescues rose to 1.67. Keys stay analogue, as a stick.
@@ -478,3 +479,4 @@ Iteration log (one line each):
 2. One rat body: bots press the player's controls through the shared step; fight hops, key strafes, held aim. Staging `820c8057-aa51-432b-89f7-084a502b1367` (commit `8ad85f3`).
 3. First human session: aim holds still between movements, keys pressed against the look, local steps keep their way round obstacles, more aimed clicks and clicks with hops, harder point blank against moving rats (`mindVersion` 4).
 4. Faster aimed clicks (`burstShotMs` 100–170, `fireGapMs` 100); `bot-sim` prints the gap to the humans. Overall gap 0.193 → 0.177 (24 rooms).
+5. A click as the fight hop goes down and one just after, once the crosshair is near the rival. Overall gap 0.177 → 0.155.
