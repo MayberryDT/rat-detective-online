@@ -38,14 +38,12 @@ interface Bot {
     strandedSince:number;escapeCheckAt:number;escapeX:number;escapeZ:number;
     progressAt:number;progressX:number;progressZ:number;
     pocketAt:number;pocketX:number;pocketZ:number;progressMark:number;
-    nearAt:number;nearX:number;nearZ:number;
 }
 
-/** Backstops for a bot that paces a pocket (a railed crane landing, a hop up the next flight and back, an explore
- * leg down the stairs and a chase back up): no new waypoint spot, goal or fight and never `radius` from one spot,
- * for `ms`, is a rescue even when the 1.5-unit clock keeps restarting. The wide one is long enough that a bot
- * briefly circling a street is never teleported. */
-const POCKET={radius:24,ms:90000} as const,NEAR_POCKET={radius:10,ms:30000} as const;
+/** Backstop for a bot that paces a small pocket (a railed crane landing, a hop up the next flight and back):
+ * no waypoint, goal or fight and never this far from one spot, for this long, is a rescue even when the
+ * 1.5-unit clock keeps restarting. Long enough that a bot briefly circling a street is never teleported. */
+const POCKET_RADIUS=24,POCKET_RESCUE_MS=90000;
 
 /** Hosted, render-free steering and physical movement. GameRoom owns all player
  * records, health, spawn/reset decisions, shots, incident effects and scoring. */
@@ -105,7 +103,7 @@ export class ServerBotController {
             addRatShapes(body);
             this.bots.set(id,{id,body,rat:new RatBody(body,this.world,bounds),brain:new RatBot(sharedNavigation,index++,Math.random,{mind}),
                 facing:0,lookYaw:Math.PI,lookPitch:0,initialized:false,alive:false,lived:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,
-                strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0,pocketAt:0,pocketX:0,pocketZ:0,progressMark:0,nearAt:0,nearX:0,nearZ:0});
+                strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0,pocketAt:0,pocketX:0,pocketZ:0,progressMark:0});
         }
     }
     reset(id:string,position:Vec3Data):void {
@@ -122,7 +120,6 @@ export class ServerBotController {
         bot.strandedSince=0;bot.escapeCheckAt=0;bot.escapeX=0;bot.escapeZ=0;
         bot.progressAt=this.now;bot.progressX=position.x;bot.progressZ=position.z;
         bot.pocketAt=this.now;bot.pocketX=position.x;bot.pocketZ=position.z;bot.progressMark=bot.brain.progressMark;
-        bot.nearAt=this.now;bot.nearX=position.x;bot.nearZ=position.z;
     }
     private visible(bot:Bot,target:Vec3Data,control=false):boolean {
         this.from.set(bot.body.position.x,bot.body.position.y+1.5,bot.body.position.z);
@@ -227,12 +224,8 @@ export class ServerBotController {
                 bot.progressAt=now;bot.progressX=body.position.x;bot.progressZ=body.position.z;
             }
             const wantsMove=bot.brain.navigationStalled||Math.hypot(controls.moveForward,controls.moveRight)*RAT_MOVEMENT.run>.5;
-            const settled=!wantsMove&&grounded,marked=bot.brain.progressMark!==bot.progressMark;bot.progressMark=bot.brain.progressMark;
-            if(!bot.pocketAt||settled||marked||Math.hypot(body.position.x-bot.pocketX,body.position.z-bot.pocketZ)>POCKET.radius){
-                bot.pocketAt=now;bot.pocketX=body.position.x;bot.pocketZ=body.position.z;
-            }
-            if(!bot.nearAt||settled||marked||Math.hypot(body.position.x-bot.nearX,body.position.z-bot.nearZ)>NEAR_POCKET.radius){
-                bot.nearAt=now;bot.nearX=body.position.x;bot.nearZ=body.position.z;
+            if(!bot.pocketAt||!wantsMove&&grounded||bot.brain.progressMark!==bot.progressMark||Math.hypot(body.position.x-bot.pocketX,body.position.z-bot.pocketZ)>POCKET_RADIUS){
+                bot.pocketAt=now;bot.pocketX=body.position.x;bot.pocketZ=body.position.z;bot.progressMark=bot.brain.progressMark;
             }
             // Stalled on a floor the walk graph lacks (a building's solid roof, thrown there by someone else's
             // launcher): no route or local step starts here, so walk off it now, not after the stuck clock.
@@ -240,8 +233,7 @@ export class ServerBotController {
             if(!wantsMove){bot.strandedSince=0;bot.progressAt=now;}
             else if(grounded&&(now>bot.lastLaunchAt+8000||offGraph)){
                 bot.strandedSince=bot.progressAt;
-                // Off the walk graph the escape walk is the way out; the near pocket is for pacing on it.
-                if(now>bot.lastLaunchAt+8000&&(now-bot.progressAt>=30000||!offGraph&&now-bot.nearAt>=NEAR_POCKET.ms||now-bot.pocketAt>=POCKET.ms)&&this.callbacks.recover){
+                if(now>bot.lastLaunchAt+8000&&(now-bot.progressAt>=30000||now-bot.pocketAt>=POCKET_RESCUE_MS)&&this.callbacks.recover){
                     bot.strandedSince=0;this.callbacks.recover(bot.id);continue;
                 }
                 if(offGraph||now-bot.progressAt>=8000){
