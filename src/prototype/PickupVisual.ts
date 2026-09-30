@@ -7,6 +7,7 @@ import {PickupRespawnVisual} from './PickupRespawnVisual';
 import type {PickupKind} from '../shared/pickups';
 import {kickDust} from '../feel/Dust';
 import {supplyCue} from '../feel/supplyCues';
+import {freezeStatic} from '../utils/freezeStatic';
 
 /** Warm tungsten from each supply's own lamp. */
 const LAMP_COLOR=0xffd9a0;
@@ -193,6 +194,9 @@ export class PickupVisual {
         // Left visible until the first update, so the title warm-up compiles its program.
         this.root.add(this.burstMesh);
         this.root.name='pickup-'+kind;scene.add(this.root);
+        // Only the display turns, lifts and squashes: every other part is composed once, and the
+        // site itself (placement, Malpractice hops) and the claim burst compose when they change.
+        freezeStatic(this.root,[this.item]);
     }
     /** A kind-coloured outline shell on the prop, sharing the batch's geometry and bones. */
     private addRim(batch:THREE.SkinnedMesh):void {
@@ -224,9 +228,9 @@ export class PickupVisual {
     /** A kit that moves (Malpractice) hops there instead of teleporting. */
     setPosition(x:number,y:number,z:number):void {
         this.to.set(x,y-.7,z);
-        if(!this.placed){this.placed=true;this.root.position.copy(this.to);return;}
+        if(!this.placed){this.placed=true;this.root.position.copy(this.to);this.root.updateMatrix();return;}
         if(this.root.position.distanceToSquared(this.to)>.25&&!(performance.now()-this.hopAt<HOP_MS)){this.from.copy(this.root.position);this.hopAt=performance.now();}
-        else if(!(performance.now()-this.hopAt<HOP_MS))this.root.position.copy(this.to);
+        else if(!(performance.now()-this.hopAt<HOP_MS)&&!this.root.position.equals(this.to)){this.root.position.copy(this.to);this.root.updateMatrix();}
     }
     /** Malpractice: kits fidget, ready to bolt. */
     setNervous(on:boolean):void {this.nervous=on;}
@@ -245,7 +249,7 @@ export class PickupVisual {
                 vertexShader:`varying vec3 n;varying vec3 eye;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);eye=-p.xyz;gl_Position=projectionMatrix*p;}`,
                 fragmentShader:`varying vec3 n;varying vec3 eye;void main(){float rim=1.-abs(dot(normalize(n),normalize(eye)));gl_FragColor=vec4(.2,1.,.45,smoothstep(.3,.85,rim)*1.2);}`});
             this.xray=new THREE.Mesh(new RoundedBoxGeometry(1.35,1.05,.9,2,.12),material);
-            this.xray.position.y=.6;this.xray.renderOrder=2000;this.xray.raycast=()=>{};this.root.add(this.xray);
+            this.xray.position.y=.6;this.xray.renderOrder=2000;this.xray.raycast=()=>{};freezeStatic(this.xray);this.root.add(this.xray);
         }
     }
 
@@ -287,11 +291,11 @@ export class PickupVisual {
         if(this.restock)this.restock.root.visible=unavailable;
         const burst=this.popAge<this.dropAge?this.popAge:this.dropAge;
         this.burstMesh.visible=burst<.35;
-        if(this.burstMesh.visible){this.burstMesh.scale.setScalar(.4+burst*6);this.burst.opacity=.7*(1-burst/.35);}
+        if(this.burstMesh.visible){this.burstMesh.scale.setScalar(.4+burst*6);this.burstMesh.updateMatrix();this.burst.opacity=.7*(1-burst/.35);}
         const hop=(performance.now()-this.hopAt)/HOP_MS;
         if(hop>=0&&hop<1){
-            this.root.position.lerpVectors(this.from,this.to,hop);this.root.position.y+=Math.sin(hop*Math.PI)*HOP_HEIGHT;
-        }else if(hop>=1&&this.hopAt>-Infinity){this.root.position.copy(this.to);this.hopAt=-Infinity;}
+            this.root.position.lerpVectors(this.from,this.to,hop);this.root.position.y+=Math.sin(hop*Math.PI)*HOP_HEIGHT;this.root.updateMatrix();
+        }else if(hop>=1&&this.hopAt>-Infinity){this.root.position.copy(this.to);this.root.updateMatrix();this.hopAt=-Infinity;}
         // Scale and height: claim pop, restock drop with a bounce, Malpractice hop squash, or rest.
         let lift=0,scale=1,squash=0;
         if(this.popAge<POP){const t=this.popAge/POP;lift=Math.sin(t*Math.PI*.5)*.8;scale=t<.35?1+t*.9:Math.max(0,1.3*(1-(t-.35)/.65));}
