@@ -6,6 +6,7 @@ import { RemotePlayers } from '../../src/session/RemotePlayers';
 import { GameSession } from '../../src/session/GameSession';
 import { CASE_HAND } from '../../src/shared/chaosState';
 import { RAT_CARRY_SHOULDER } from '../../src/utils/RatAnimator';
+import { RigidBatch } from '../../src/utils/RigidMeshBatch';
 import { createCaseGrip } from '../../src/prototype/CaseGrip';
 import { SimulationClock } from '../../src/session/SimulationClock';
 import { MotionFoley } from '../../src/audio/MotionFoley';
@@ -31,7 +32,7 @@ function replay(fps: number, speed: number) {
         disposed: false, previousTime: 0, stats: null, rat: null, bots: null, chaos: null,
         stage: { syncViewport: () => false, scene: new THREE.Scene(), world, camera: new THREE.PerspectiveCamera(), renderer: { render() {} } },
         transport: { state: 'playing' }, simulation: new SimulationClock(), remotes,
-        gun: { update() {} }, city: { update() {} },
+        gun: { update() {} }, city: { update() {} }, perf: { frame() {} },
         foleyWorld:{listener(){},motion:new MotionFoley(()=>{})},
         feel:new FeelDirector(new FeelState('on'),undefined),
     });
@@ -89,6 +90,9 @@ it('keeps moving remote glow, muzzle, tail and case grip attached across a pause
         expect(shell.getObjectByName('rat-body')!.position.toArray()).toEqual(entity.mesh.getObjectByName('rat-body')!.position.toArray());
         expect(shell.getObjectByName('rat-muzzle')!.getWorldPosition(new THREE.Vector3()).distanceTo(entity.getMuzzlePosition())).toBeLessThan(1e-9);
     }
+    // The tail takes its pose when drawn.
+    const batch = entity.mesh.getObjectByName('rat-rigid-batch');
+    if (batch instanceof RigidBatch) batch.showPose();
     expect(Array.from(tail.geometry.getAttribute('position').array)).not.toEqual(restTail);
     const paw = grip.getObjectByName('case-sleeve-grip')!;
     // Check the public grip anchor independently of the new shared-arm hierarchy.

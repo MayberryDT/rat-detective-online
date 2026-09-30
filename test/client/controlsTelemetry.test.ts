@@ -33,7 +33,7 @@ it('sends taps shorter than one send, at once, even while the rat holds still', 
         disposed: false, previousTime: 0, stats: null, bots: null, chaos: null, rat, gun, remotes,
         title: {}, roundWon: false, myId: 'keys', lastMovementAt: 0, lastMovement: [], direction: new THREE.Vector3(), aim: new THREE.Vector3(), input: {keys},
         stage: {syncViewport: () => false, scene, world, camera, renderer: {render() {}}, flashlight: new THREE.SpotLight()},
-        simulation: new SimulationClock(), city: {update() {}},
+        simulation: new SimulationClock(), city: {update() {}}, perf: {frame() {}},
         foleyWorld: {listener() {}, motion: new MotionFoley(() => {})},
         feel: new FeelDirector(new FeelState('on'), undefined),
         transport: {state: 'playing', send(message: ClientMessage) {
