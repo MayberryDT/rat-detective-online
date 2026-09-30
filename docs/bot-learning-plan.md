@@ -1,6 +1,6 @@
 # Bot learning plan
 
-Status (30 September 2026): release A (L1 and L2) is live in production (build `production-2026-09-30-76701ab`, [receipt](verification/release-a-2026-09-30.md)) and is gathering its baseline human hours; L4 is being built on staging. This file owns the order, status and acceptance for teaching the bots to decide like Jev, and then like humans. How the data is organised is in [the data plan](data-plan.md). The bot design this builds on is [the bot overhaul plan](bot-overhaul.md).
+Status (30 September 2026): release A (L1 and L2) is live in production (build `production-2026-09-30-76701ab`, [receipt](verification/release-a-2026-09-30.md)) and is gathering its baseline human hours. L4 is built and on staging (build `staging-2026-09-30-8a86be3`) and waits for Tyler's playtest; it ships to production on its own once release A has its hours. This file owns the order, status and acceptance for teaching the bots to decide like Jev, and then like humans. How the data is organised is in [the data plan](data-plan.md). The bot design this builds on is [the bot overhaul plan](bot-overhaul.md).
 
 ## Goal
 
@@ -50,7 +50,7 @@ At least 3 seconds separate 2 requests to Jev. Between decisions, the bot keeps 
 | L1 | Data foundation: build stamp, agent traffic flag, aggregates by build, decision inputs, pickups passed | Built (`13a7a6e`, `2271371`) |
 | L2 | Pickup reflex | Built (`6d08299`, `10fc4b6`) |
 | L3 | Release A: the baseline era, with Jev as it is today | Live: production `7888521b`, build `production-2026-09-30-76701ab`; gathering human hours |
-| L4 | Lighter Jev: event-driven decisions, stance, goals held, code-only rounds | Next, on staging |
+| L4 | Lighter Jev: event-driven decisions, stance, goals held, code-only rounds | On staging (`e4ab17b0`, build `staging-2026-09-30-8a86be3`); needs Tyler's playtest, then production after release A's hours |
 | L5 | Tyler's further changes, then the frozen build and a month of data | Waits for Tyler's list |
 | L6 | Copy Jev into the code mind | After a fortnight of frozen data |
 | L7 | Switch Jev off, then tune to humans | After L6 passes |
@@ -117,6 +117,19 @@ The era report compares A with this era, on Jev rounds only. The predictions are
 - dollars per Jev-hour fall at least 5 times
 - the share of take-the-case goals replaced before they end falls well below 89%
 - the bots are no less human-like on the scorecard
+
+Checks before shipping (30 September, commits `f5cf0b9` and `8a86be3`):
+
+- The full suites passed on a clean tree: worker 246 of 246, client 1,544 of 1,544, scripts 133 of 133. The build passed.
+- A bot decides 4 times in 32 steady seconds: at spawn, then as each 10 seconds runs out. It decides at once when the case changes hands.
+- Jev asks only at moments and never twice within 3 seconds. A late answer is dropped. Code-only rounds keep Jev off with a human playing. An agent browser never switches Jev on.
+- Bot-only simulation, before (release A) and after, 24 rooms of 4 minutes for each of 2 seed sets:
+  - the overall gap to humans moved from 0.175 and 0.178 to 0.181 and 0.172, which is within noise
+  - rescues per bot-hour went from 1.04 and 1.18 to 0.69 and 1.04
+  - case changes per room-hour fell about 9% on both sets, from 269 and 258 to 244 and 234
+  - completions per room-hour went from 3.75 and 3.75 to 3.75 and 3.13
+  - Paper Chase deliveries per room-hour went from 49 and 33 to 35 and 55; the sets moved in opposite directions, which is noise
+- On staging with bots only, the code mind decided about 6.6 times a bot-minute. On production, `mindVersion` 3 recorded 16.7 decisions a bot-minute. Jev's request rate needs a human session.
 
 ### L5. The frozen build
 

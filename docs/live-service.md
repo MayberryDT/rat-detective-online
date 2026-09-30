@@ -12,7 +12,7 @@ Last release receipt: **2026-09-30**. [Release A](verification/release-a-2026-09
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 5 (layout 5, since 30 September; upgraded from version 3 on load); seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Canonical `public-live-v2` stays alive with 6–9 bots and zero humans; overflow still sleeps |
-| Staging | `rat-detective-staging`, https://rat-detective-staging.mayberrydt.workers.dev/ — Worker `728d9bd5-56f0-408a-a8b4-0b37e5daf93f`, build `staging-2026-09-30-76701ab`: the same code as production. Agent browsers join with `?agent=1&mute=1` |
+| Staging | `rat-detective-staging`, https://rat-detective-staging.mayberrydt.workers.dev/ — Worker `e4ab17b0-cb63-4f7b-b14a-885fca8c6983`, build `staging-2026-09-30-8a86be3`: release A plus the lighter Jev (L4 of [the bot learning plan](bot-learning-plan.md), `mindVersion` 6, code-only rounds). Agent browsers join with `?agent=1&mute=1` |
 
 Protocol 24 requires matching client and Worker; open protocol-23 tabs must reload. Before any rollback to protocol 15,
 review stored Jurisdiction rounds: the old validator does not understand that mode. Existing older game tabs should
