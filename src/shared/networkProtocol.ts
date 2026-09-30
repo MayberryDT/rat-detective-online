@@ -3,6 +3,7 @@ import type { WorldSpec } from './worldSpec';
 import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 import type { ControlsInput } from './rat/controlTally';
+import type { PerfReport } from './perfReport';
 
 export const PROTOCOL_VERSION = 23;
 /** Body hits deal 1; a headshot is always lethal. */
@@ -164,6 +165,8 @@ export type ClientMessage = (
   | { type: 'deliveryAck'; stream: string; seq: number }
   | { type: 'ping'; sentAt: number }
   | { type: 'diagnostics'; report: Record<string, unknown> }
+  /** Frame performance on the player's machine, for the city map only; authority never reads it. */
+  | { type: 'perf'; report: PerfReport }
 ) & { deliveryAck?: {stream:string;seq:number} };
 
 /** Why a rat was healed: a Quick Fix, Clean Bill, or a Most Wanted bounty. */

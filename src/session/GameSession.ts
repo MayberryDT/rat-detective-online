@@ -23,6 +23,7 @@ import { RemotePlayers } from './RemotePlayers';
 import { InputState } from './InputState';
 import { SessionMusic } from './SessionMusic';
 import { PerformanceStats } from './PerformanceStats';
+import { PerfReporter } from './perfReporter';
 import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
@@ -82,6 +83,8 @@ export class GameSession {
     private readonly foley:FoleyAudio;
     private foleyWorld!:FoleyWorld;
     private readonly stats: PerformanceStats | null;
+    /** Frame performance sent to the city map every 30 s of play. */
+    readonly perf: PerfReporter;
     private diagnosticChaos:{receivedAt:number;serverTime:number;shots:number;tick:number;epoch:string}={receivedAt:0,serverTime:0,shots:0,tick:0,epoch:''};
     private shotsAttempted=0;
     private shotsSent=0;
@@ -151,6 +154,7 @@ export class GameSession {
         this.stats = diagnostics!==null || normalGameBotCount(window.location) ? new PerformanceStats(renderer,showDiagnostics,report=>{
             if(['localhost','127.0.0.1','[::1]'].includes(window.location.hostname)&&this.transport.state==='playing')this.transport.send({type:'diagnostics',report});
         }) : null;
+        this.perf=new PerfReporter(renderer,report=>this.transport.send({type:'perf',report}),this.events.signal);
         const { scene, world, listener } = this.stage;
         initEntitySounds(listener);
         this.music = prepared.music ?? new SessionMusic(listener);
@@ -714,6 +718,7 @@ export class GameSession {
             if(this.city instanceof Neighborhood)this.city.saveBake();
         }
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
+        if(this.transport.state==='playing'&&!this.observing)this.perf.frame(frameMs,performance.now()-now);
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 
@@ -867,6 +872,7 @@ export class GameSession {
         this.touch?.dispose();
         this.input.dispose();
         this.bots?.dispose();this.bots=null;
+        this.perf.leave();
         this.transport.destroy();
         this.hud.dispose();
         this.scoreboard.dispose();

@@ -3,6 +3,7 @@ import {expandMovement} from './movementWire';
 import {BALL_SPEED} from './ballTuning';
 import {isWorldFoleyCue} from './foleyEvents';
 import { sanitizeDiagnosticReport } from './diagnosticReport';
+import { parsePerfReport } from './perfReport';
 import { parseAssignment } from './assignments';
 import { INCIDENTS, incidentInfo, isLegacyIncidentId, type IncidentId } from './incidentCatalog';
 import {
@@ -362,6 +363,10 @@ function parseClientBody(parsed:Record<string,unknown>):ClientMessage|null {
   if (parsed.type === 'diagnostics') {
     const report = sanitizeDiagnosticReport(parsed.report);
     return report ? { type: 'diagnostics', report } : null;
+  }
+  if (parsed.type === 'perf') {
+    const report = parsePerfReport(parsed.report);
+    return report ? { type: 'perf', report } : null;
   }
 
   if (parsed.type === 'join') {

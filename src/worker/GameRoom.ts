@@ -65,6 +65,7 @@ import {
   JOIN_RATE,
   MOVEMENT_RATE,
   PING_RATE,
+  PERF_RATE,
   RateLimiter,
   SHOOT_RATE,
   createMovementAllowance,
@@ -770,6 +771,11 @@ export class GameRoom extends DurableObject<Env> {
           this.rateLimiter.allow(`${playerId}:diagnostics`, 1, 4_000, this.now())) {
         logClientDiagnostics(message.report);
       }
+      return;
+    }
+
+    if (message.type === 'perf') {
+      if (this.rateLimiter.allow(`${playerId}:perf`, PERF_RATE.limit, PERF_RATE.windowMs, this.now())) this.city.perf(playerId, message.report, this.now());
       return;
     }
 

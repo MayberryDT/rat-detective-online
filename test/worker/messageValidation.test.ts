@@ -133,6 +133,19 @@ describe('parseClientMessage', () => {
       expect(shot?.type==='shoot'?shot.movement:undefined).not.toHaveProperty('controls');
     }
   });
+
+  // A player's perf report is telemetry: one odd field (a new browser, a strange GPU string) must not lose the rest.
+  it('keeps a perf report, drops each bad field alone, and drops a report without its frame counts',()=>{
+    const report={ms:30012,frames:1790,p50:16.7,p95:21.2,p99:40.1,worst:212.4,over33:9,over100:2,cpu50:6.1,cpu95:11.3,heapMb:182.4,w:2400,h:1350,dpr:1.25,pr:1.25,
+      gpu:'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)',gpuVendor:'Google Inc. (Intel)',os:'windows',browser:'edge',browserMajor:129,cores:8,memGb:8,quality:'high',scale:1};
+    expect(parseClientMessage({type:'perf',report})).toEqual({type:'perf',report:{...report,fps:59.6,fps50:59.9}});
+    const bad={gpu:'x'.repeat(161),gpuVendor:'\u0000evil',os:'plan9',browser:'netscape',dpr:Number.NaN,w:-3,cores:1.5,quality:'<b>',scale:40,heapMb:'lots'};
+    const parsed=parseClientMessage({type:'perf',report:{...report,...bad}});
+    expect(parsed).toMatchObject({type:'perf',report:{frames:1790,p99:40.1,h:1350,browserMajor:129}});
+    for(const key of Object.keys(bad))expect(parsed?.type==='perf'?parsed.report:undefined).not.toHaveProperty(key);
+    for(const broken of [{...report,frames:0},{...report,p95:Number.POSITIVE_INFINITY},{...report,over33:1791},{...report,worst:undefined},'fast',null])
+      expect(parseClientMessage({type:'perf',report:broken})).toBeNull();
+  });
 });
 
 describe('parseServerMessage', () => {

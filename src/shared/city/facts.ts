@@ -5,6 +5,7 @@ import type { ShotResultOutcome, HealCause } from '../networkProtocol';
 import type { CityFloor } from './frame';
 import type { Goal, MotorMode, Personality } from '../bots/intent';
 import type { GoalOutcome, MindName } from './minds';
+import type { PerfReport } from '../perfReport';
 
 /** Layer 2 of the city map (docs/city-map.md): one JSON line per fact in the R2 archive.
  * Positions are rounded to 0.1 u, times are UTC ms. Actors are per-round numbers, never names or IDs. */
@@ -107,4 +108,6 @@ export type CityFact = FactContext & (
    * counts per 20 ms bucket (`hist`, keyed by the bucket's lower bound), so windows pool exactly. */
   | { type: 'minds'; ms: number; decisions: number; requests: number; answers: number; failures: number; staleDrops: number; fallbacks: number;
       throttled: number; tokens: number; dollars: number; p50?: number; p90?: number; hist: Record<string, number> }
+  /** A human client's frame performance over about 30 s of play (`PerfReport`); humans only. */
+  | ({ type: 'perf'; a: number; human: true } & PerfReport)
 );

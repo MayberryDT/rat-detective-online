@@ -4,7 +4,9 @@ import type { GameRoom } from '../../src/worker/GameRoom';
 import type { CityRecorder } from '../../src/worker/city/CityRecorder';
 import { HeatDay } from '../../src/worker/HeatMap';
 import { PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
-import { MAX_HP, WIN_DISPLAY_MS, type PlayerData, type RoundState } from '../../src/shared/networkProtocol';
+import { MAX_HP, PROTOCOL_VERSION, WIN_DISPLAY_MS, type PlayerData, type RoundState } from '../../src/shared/networkProtocol';
+import type { PerfReport } from '../../src/shared/perfReport';
+import { readSocketMessage } from './socketMessages';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
 import type { CityFact } from '../../src/shared/city/facts';
@@ -237,6 +239,41 @@ describe('city recorder in the room', () => {
       expect(track[0]![0]).toBeLessThanOrEqual(400);
       expect(track[track.length - 1]![0]).toBeGreaterThanOrEqual(4600);
     }
+  });
+
+  // How the game runs on players' machines: kept for humans only, never at the cost of the socket, never flooding SQL.
+  it('records a human client\'s perf report without its name or ID, drops junk without dropping the socket, and rate-limits', async () => {
+    const stub = env.GAME_ROOM.getByName(`city-perf-${crypto.randomUUID()}`); rooms.push(stub);
+    await stub.ensurePersistentBots();
+    const ws = (await stub.fetch('http://localhost/ws', { headers: { Upgrade: 'websocket', Origin: 'http://localhost' } })).webSocket!;
+    ws.accept();
+    const welcome = new Promise<string>(resolve => ws.addEventListener('message', event => {
+      const message = readSocketMessage(ws, event.data); if (message?.type === 'welcome') resolve(message.id);
+    }));
+    ws.send(JSON.stringify({ type: 'join', protocolVersion: PROTOCOL_VERSION, name: 'Frametester', appearance: { hatType: 'fedora', hatColor: 1, furColor: 2, coatColor: 3 } }));
+    const id = await welcome;
+    const report: PerfReport = { ms: 30000, frames: 900, fps: 30, fps50: 30, p50: 33.3, p95: 50, p99: 120, worst: 480, over33: 400, over100: 3,
+      gpu: 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', os: 'windows', browser: 'chrome', browserMajor: 129 };
+    const rows = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
+      const game = instance as unknown as Internals & { clock: () => number }; quiet(game);
+      let now = Date.now(); game.clock = () => now;
+      const server = ctx.getWebSockets()[0]!, send = (body: unknown) => instance.webSocketMessage(server, JSON.stringify(body));
+      await send({ type: 'perf', report: 'fast' });
+      await send({ type: 'perf', report: { ...report, frames: -1 } });
+      for (let i = 0; i < 5; i++) await send({ type: 'perf', report: { ...report, worst: 480 + i } });
+      now += 60_000; await send({ type: 'perf', report: { ...report, worst: 999 } });
+      game.city.perf(PERSISTENT_BOT_IDS[0], report, now);
+      expect(game.players.has(id)).toBe(true);
+      game.city.flush(now, true); await game.city.settled();
+      return ctx.storage.sql.exec<{ data: string }>("SELECT data FROM city_events WHERE type = 'perf' ORDER BY seq").toArray().map(r => r.data);
+    });
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    const facts = rows.map(r => JSON.parse(r) as CityFact);
+    expect(facts.map(f => f.type === 'perf' ? f.worst : 0)).toEqual([480, 481, 482, 999]);
+    expect(facts[0]).toMatchObject({ type: 'perf', human: true, a: expect.any(Number), frames: 900, fps: 30, over100: 3, os: 'windows', gpu: report.gpu });
+    for (const row of rows) expect(row).not.toMatch(new RegExp(`${id}|Frametester`));
+    expect((await archived()).filter(f => f.type === 'perf')).toHaveLength(4);
+    ws.close(1000, 'done');
   });
 });
 

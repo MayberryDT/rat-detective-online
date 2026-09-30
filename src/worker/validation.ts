@@ -7,6 +7,8 @@ export { SHOOT_RATE } from '../shared/shotTiming';
 export const HIT_RATE = { limit: 12, windowMs: 1_000 };
 export const PING_RATE = { limit: 4, windowMs: 1_000 };
 export const JOIN_RATE = { limit: 3, windowMs: 10_000 };
+/** A client reports its frame performance every 30 s and once when it leaves. */
+export const PERF_RATE = { limit: 3, windowMs: 60_000 };
 
 /**
  * Far envelope only. Local physics is unbounded; a rat walking at speed 18

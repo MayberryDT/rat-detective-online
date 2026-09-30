@@ -11,6 +11,7 @@ import type { PickupKind } from '../../shared/pickups';
 import { cityPlaces } from '../../shared/city/places';
 import { cityFloor } from '../../shared/city/frame';
 import { CITY_SCHEMA_VERSION, p3, type CityFact, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
+import type { PerfReport } from '../../shared/perfReport';
 import { decideMeasure, goalMeasure, JEV_COUNTS, latencyBucket, type GoalOutcome, type MindName } from '../../shared/city/minds';
 import { MIND_VERSION, type Decision, type Goal, type MotorMode, type Personality } from '../../shared/bots/intent';
 import { RoundLedger, standings } from '../../shared/city/ledger';
@@ -456,6 +457,11 @@ export class CityRecorder {
 
   session(what: 'join' | 'leave', id: string, now: number): void {
     this.emit({ ...this.context(now), type: 'session', what, a: this.actor(id), human: !this.deps.isBot(id) });
+  }
+
+  /** A human client's frame performance; a bot has no screen. */
+  perf(id: string, report: PerfReport, now: number): void {
+    if (!this.deps.isBot(id)) this.emit({ ...this.context(now), type: 'perf', a: this.actor(id), human: true, ...report });
   }
 
   /** A stuck bot is about to be moved to a spawn point: recorded where it was stuck. */
