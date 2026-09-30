@@ -334,4 +334,4 @@ Tyler's staging playtest: the bots now decide like humans but still move and sho
   Longest a loose case sat untouched in a live assignment: 26 s (old 34 s). Hits at under 12 units land more often than the old bots' (about 18% against 13% a shot), fewer beyond.
 
 Iteration log (one line each):
-1. New motor: pursuit running, hand-like aim, strafe/push/cover fighting, flee fix. Staging `ITER1_VERSION`.
+1. New motor: pursuit running, hand-like aim, strafe/push/cover fighting, flee fix. Staging `a496ae7d-af2a-4901-a765-b41481b4f0c0` (commit `404ccea`).
