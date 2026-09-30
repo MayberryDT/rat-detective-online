@@ -169,8 +169,9 @@ export class SpatialRayQuery {
         else{this.collect(node.left);this.collect(node.right);}
     }
     private readonly byRank=(a:C.Body,b:C.Body)=>(this.ranks.get(a)??this.city.get(a)!)-(this.ranks.get(b)??this.city.get(b)!);
-    closest(from:C.Vec3,to:C.Vec3,mask:number,accept?:(body:C.Body)=>boolean,group=16):C.RaycastResult{
-        const result=new C.RaycastResult(),broadphase=this.world.broadphase;this.queries++;
+    /** `result` is reset and filled; pass a kept one where the hit is read before the next query. */
+    closest(from:C.Vec3,to:C.Vec3,mask:number,accept?:(body:C.Body)=>boolean,group=16,result=new C.RaycastResult()):C.RaycastResult{
+        const broadphase=this.world.broadphase;result.reset();this.queries++;
         if(!(broadphase instanceof C.SAPBroadphase)&&!accept){
             this.world.raycastClosest(from,to,{collisionFilterGroup:group,collisionFilterMask:mask,skipBackfaces:true},result);return result;
         }

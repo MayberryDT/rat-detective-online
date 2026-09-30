@@ -59,6 +59,8 @@ export class CheeseGun {
     private readonly rayFrom = new CANNON.Vec3();
     private readonly rayTo = new CANNON.Vec3();
     private readonly rayResult = new CANNON.RaycastResult();
+    /** Presentation sweeps read their hit before the next sweep. */
+    private readonly traceResult = new CANNON.RaycastResult();
     private readonly rayOptions: CANNON.RayOptions = {
         collisionFilterGroup: GROUP_PROJECTILE,
         collisionFilterMask: GROUP_DEFAULT,
@@ -168,7 +170,7 @@ export class CheeseGun {
     readonly tracePresentation:ShotTrace=(from,to)=>{
         this.rayFrom.set(from.x,from.y,from.z);this.rayTo.set(to.x,to.y,to.z);
         this.presentationRay??=new SpatialRayQuery(this.world);
-        const hit=this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptPresentationBody,GROUP_PROJECTILE);
+        const hit=this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptPresentationBody,GROUP_PROJECTILE,this.traceResult);
         if(!hit.hasHit)return undefined;
         const entity=(hit.body as CANNON.Body&{userData?:{entity?:RatEntity}}|null)?.userData?.entity;
         return{p:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},
@@ -180,7 +182,7 @@ export class CheeseGun {
     readonly sceneryClear=(from:{x:number;y:number;z:number},to:{x:number;y:number;z:number}):boolean=>{
         this.rayFrom.set(from.x,from.y,from.z);this.rayTo.set(to.x,to.y,to.z);
         this.presentationRay??=new SpatialRayQuery(this.world);
-        return !this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptSceneryBody,GROUP_PROJECTILE).hasHit;
+        return !this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptSceneryBody,GROUP_PROJECTILE,this.traceResult).hasHit;
     };
 
     clearProjectiles(): void {
