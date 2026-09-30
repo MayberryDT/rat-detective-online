@@ -55,6 +55,9 @@ export class Neighborhood {
     private readonly lampSources:THREE.PointLight[]=[];
     private readonly fixedLights:THREE.PointLight[]=[];
     private readonly lampPool:THREE.PointLight[]=[];
+    /** Scratch for `syncLampPool`: the nearest sources and their squared distances, nearest first. */
+    private readonly nearestLamps:THREE.PointLight[]=[];
+    private readonly nearestDistances:number[]=[];
     /** The eight pooled sewer lamps. Hidden, not merely dark, away from the
      * sewers: every lit pixel loops over each visible light (-30% GPU time). */
     get sewerLights():readonly THREE.PointLight[] {return this.lampPool;}
@@ -419,14 +422,20 @@ export class Neighborhood {
         // All eight show or hide together: two shader variants, both compiled before entry.
         if(!sewerLightingActive(p)){for(const light of this.lampPool){light.intensity=0;light.visible=false;}return;}
         for(const light of this.lampPool)light.visible=true;
-        const px=p.x,py=p.y,pz=p.z;
-        const ranked=this.lampSources.map(source=>{
-            const dx=source.position.x-px,dy=source.position.y-py,dz=source.position.z-pz;
-            return {source,d:dx*dx+dy*dy+dz*dz};
-        }).sort((a,b)=>a.d-b.d);
-        for(let i=0;i<this.lampPool.length;i++){
-            const light=this.lampPool[i],source=ranked[i]?.source;
-            if(!source){light.intensity=0;continue;}
+        const px=p.x,py=p.y,pz=p.z,count=this.lampPool.length,nearest=this.nearestLamps,distances=this.nearestDistances;
+        // The nearest `count` sources, kept sorted by insertion; equal distances keep source order.
+        let found=0;
+        for(const source of this.lampSources){
+            const dx=source.position.x-px,dy=source.position.y-py,dz=source.position.z-pz,d=dx*dx+dy*dy+dz*dz;
+            if(found===count&&!(d<distances[count-1]))continue;
+            let i=found<count?found++:count-1;
+            for(;i>0&&distances[i-1]>d;i--){distances[i]=distances[i-1];nearest[i]=nearest[i-1];}
+            distances[i]=d;nearest[i]=source;
+        }
+        for(let i=0;i<count;i++){
+            const light=this.lampPool[i];
+            if(i>=found){light.intensity=0;continue;}
+            const source=nearest[i];
             light.position.copy(source.position);
             light.color.copy(source.color);
             light.intensity=source.intensity*AUTHORED_LIGHT_GAIN;
