@@ -12,7 +12,7 @@ import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
 import { RatEntity } from '../entities/RatEntity';
 import { yieldToPage } from './yieldToPage';
-import { gpuDrained, issuePrograms, shadowCasterProbes, warmPrograms } from './warmPrograms';
+import { checkPrograms, issuePrograms, shadowCasterProbes, warmPrograms } from './warmPrograms';
 import { readLightingMode } from './lightingMode';
 import { PickupVisual } from '../prototype/PickupVisual';
 import { PickupRespawnVisual } from '../prototype/PickupRespawnVisual';
@@ -105,9 +105,9 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         await warmPrograms(renderer,stage.scene,stage.camera,signal,standIns,lamps,shadowCasterProbes(stage.scene.children));
         stage.scene.remove(...standIns);
         await yieldToPage(signal);
-        // Draws the moon map from the city alone.
+        // Draws the moon map from the city alone; any program that first draw linked is checked now, not in play.
         renderer.render(stage.scene,stage.camera);
-        await gpuDrained(renderer,signal);
+        await checkPrograms(renderer,signal);
         if(cameos)warmCameoBuffers(cameos,stage.scene,renderer);
         performance.mark('city-render-ready');
         Object.assign(title,bound);

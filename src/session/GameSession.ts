@@ -46,7 +46,7 @@ import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {PoliceLineup,type LineupEntry} from '../feel/PoliceLineup';
 import {entryRequested} from './yieldToPage';
-import {gpuDrained} from './warmPrograms';
+import {checkPrograms} from './warmPrograms';
 import {qualityFrame,qualityStatus,settleQuality} from './graphicsQuality';
 
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
@@ -364,11 +364,12 @@ export class GameSession {
         // Link whatever the welcome added (other rats, the round's objects)
         // off-thread; frames skip drawing until then instead of stalling. Some drivers
         // report a link complete while the GPU still has it queued, so also wait for
-        // the GPU to finish; the first draw would otherwise freeze the page behind it.
+        // the GPU to finish and take each new program's first use now; the first draw
+        // would otherwise freeze the page behind it.
         // Bounded: three's readiness poll can throw inside its timer (a material
         // disposed mid-link, context loss) and never settle.
         clearTimeout(this.compileTimer);
-        const compiling=Promise.race([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera).then(()=>gpuDrained(this.stage.renderer)),
+        const compiling=Promise.race([this.stage.renderer.compileAsync(this.stage.scene,this.stage.camera).then(()=>checkPrograms(this.stage.renderer)),
             new Promise(resolve=>{this.compileTimer=setTimeout(resolve,WELCOME_COMPILE_MS);})]).catch(()=>undefined)
             .finally(()=>{if(this.compiling===compiling){clearTimeout(this.compileTimer);this.compiling=undefined;}});
         this.compiling=compiling;
