@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {PickupVisual} from '../../src/prototype/PickupVisual';
+import {PICKUP_KINDS} from '../../src/shared/pickups';
 import {PickupRespawnVisual} from '../../src/prototype/PickupRespawnVisual';
 
 vi.mock('../../src/utils/metalReflection',()=>({metalReflection:()=>null}));
@@ -11,12 +12,12 @@ function canvas(){
     vi.stubGlobal('Path2D',class {});
 }
 describe('pickup restock presentation',()=>{
-    it.each(['ironclad','hustle','quick-fix'] as const)('restores %s exactly at its deadline, reuses its dial, and releases resources',kind=>{
+    it.each(PICKUP_KINDS)('restores %s exactly at its deadline, reuses its dial, and releases resources',kind=>{
         canvas();const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera();
         const prop=new PickupVisual(scene,kind);prop.setAvailableAt(46000);prop.update(1000,camera);
         const dial=prop.root.getObjectByName('supply-restock-'+kind)!;
         const mesh=dial.children[0] as THREE.Mesh<THREE.PlaneGeometry,THREE.ShaderMaterial>;
-        const item=prop.root.getObjectByName(({ironclad:'iron-trenchcoat-dummy',hustle:'red-wingtips','quick-fix':'doctors-bag'} as const)[kind])!;
+        const item=prop.root.getObjectByName(({ironclad:'iron-trenchcoat-dummy',hustle:'red-wingtips','quick-fix':'doctors-bag',stakeout:'brass-magnifying-glass'} as const)[kind])!;
         expect(item.visible).toBe(false);expect(mesh.material.uniforms.progress.value).toBe(0);
         expect(mesh.material.depthTest).toBe(true);expect(mesh.material.depthWrite).toBe(false);
         prop.update(23500,camera);expect(mesh.material.uniforms.progress.value).toBe(.5);

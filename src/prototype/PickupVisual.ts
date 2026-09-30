@@ -16,7 +16,7 @@ const LAMP_HEAD=new THREE.Vector3(0,2.75,0);
 /** Malpractice hop duration (ms) and height. */
 const HOP_MS=380, HOP_HEIGHT=1.5;
 /** Each supply's own colour for the far beam and the outline that finds it from across the street. */
-const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95};
+const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0xf3cf6f};
 /** Claim pop and restock drop (seconds); beacon fades in with distance (units). */
 const POP=.32, DROP=.5, BEAM_HEIGHT=34;
 /** Part shapes built once and shared by every display: the welcome builds two dozen displays of up
@@ -51,7 +51,8 @@ function lightFromLamp(root:THREE.Group,strength:number):THREE.SkinnedMesh|undef
 }
 
 /** Supplies as noir evidence displays: an iron-plated trench coat on a tailor's
- * dummy, a doctor's bag and winged red wingtips on a shoeshine box, each under a
+ * dummy, a doctor's bag, winged red wingtips on a shoeshine box and a brass
+ * magnifying glass on a turned stand, each under a
  * work lamp that throws a cone and a pool of light. Never lost in the dark: the
  * props ignore fog, and from a distance a coloured beam rises from the site and an
  * outline picks out the prop, like the far-rat edge. They turn slowly on the
@@ -145,6 +146,26 @@ export class PickupVisual {
                 for(const [i,length] of [[0,.34],[1,.27],[2,.2]] as const){
                     const feather=box(shoe,.03,.07,length,sign*.17,.33-i*.07,-.3,cream,.02);feather.rotation.set(.5+i*.12,sign*.35,0);
                 }
+            }
+        }else if(kind==='stakeout'){
+            this.item.name='brass-magnifying-glass';
+            const handleWood=new THREE.MeshStandardMaterial({color:0x3b2416,metalness:.1,roughness:.38});
+            // Pale glass lit a touch from within so the disc reads in the dark; the glints catch the lamp.
+            const glass=new THREE.MeshStandardMaterial({color:0xc4cfc4,emissive:0x3d3a2a,emissiveIntensity:.4,metalness:.2,roughness:.06});
+            const glint=new THREE.MeshStandardMaterial({color:0xfff4d6,emissive:0xfff1c8,emissiveIntensity:.9,metalness:0,roughness:.2});
+            // A turned wooden stand with a brass collar holding the glass up, leaning like it was just set down.
+            cylinder(this.item,.26,.34,.14,0,.07,0,wood,16);
+            cylinder(this.item,.09,.11,.1,0,.19,0,brass,10);
+            const lens=new THREE.Group();lens.position.y=.2;lens.rotation.set(-.12,0,.2);this.item.add(lens);
+            cylinder(lens,.07,.08,.62,0,.31,0,handleWood,10);
+            cylinder(lens,.09,.09,.08,0,.66,0,brass,10);
+            cylinder(lens,.05,.05,.12,0,.75,0,brass,8);
+            const rim=new THREE.Mesh(part('t.44,.065',()=>new THREE.TorusGeometry(.44,.065,8,32)),brass);rim.position.y=1.24;lens.add(rim);
+            const disc=cylinder(lens,.42,.42,.04,0,1.24,0,glass,32);disc.rotation.x=Math.PI/2;
+            // A curved streak and a dot of light on both faces: a lens glinting, not a lamp.
+            for(const face of [-1,1]){
+                const streak=box(lens,.05,.26,.02,-.19,1.37,face*.025,glint,.01);streak.rotation.z=.62;
+                box(lens,.05,.05,.02,-.06,1.47,face*.025,glint,.01);
             }
         }else{
             this.item.name='doctors-bag';

@@ -668,12 +668,12 @@ describe('GameSession', () => {
         const rat=harness.rats.at(-1)!.entity;
         const state={time:1000,shots:[],dispatch:{phase:'ready',started:0,until:0,serial:0},buffs:{me:{hustleUntil:11000}}} as unknown as ChaosState;
         transport.onMessage?.({type:'chaos',state});
-        expect(rat.setPowerups).toHaveBeenLastCalledWith(0,10);
+        expect(rat.setPowerups).toHaveBeenLastCalledWith(0,10,0);
         expect(gun.setProtectedRats.mock.calls.at(-1)?.[0]).toEqual(new Set());
         state.buffs!.me.ironcladUntil=13000;transport.onMessage?.({type:'chaos',state});
         expect(gun.setProtectedRats.mock.calls.at(-1)?.[0]).toEqual(new Set([rat]));
         state.buffs={};transport.onMessage?.({type:'chaos',state});
-        expect(rat.setPowerups).toHaveBeenLastCalledWith(0,0);
+        expect(rat.setPowerups).toHaveBeenLastCalledWith(0,0,0);
         expect(gun.setProtectedRats.mock.calls.at(-1)?.[0]).toEqual(new Set());session.dispose();
     });
 

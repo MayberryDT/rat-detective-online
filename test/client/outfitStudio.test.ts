@@ -37,7 +37,7 @@ it.each([false,true])('keeps the actual studio handle attached through walking, 
         expect(subject.rat.mesh.getObjectByName('case-sleeve-grip')).toBeUndefined();
         expect(subject.rat.mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
         expect(subject.rat.mesh.getObjectByName('rat-case-cuff')).toBeUndefined();
-        subject.rat.setPowerups(2,0);subject.rat.presentAlive(.3);
+        subject.rat.setPowerups(2,0,0);subject.rat.presentAlive(.3);
         subject.setCarried(true);subject.updateCarry();
         expect(subject.rat.mesh.getObjectByName('case-sleeve-grip')).toBeDefined();
         const cuff=subject.rat.mesh.getObjectByName('rat-case-cuff') as THREE.Mesh;
@@ -82,7 +82,7 @@ it.each([
             const handle=subject.caseRoot.getObjectByName('case-handle-grip')!.getWorldPosition(new THREE.Vector3());
             expect(hand.distanceTo(handle)).toBeLessThan(1e-6);
         }
-        subject.rat.setPowerups(2,0);subject.rat.presentAlive(.3);
+        subject.rat.setPowerups(2,0,0);subject.rat.presentAlive(.3);
         const paw=subject.rat.mesh.getObjectByName('case-gripping-paw') as THREE.Mesh;
         expect((paw.material as THREE.MeshStandardMaterial).metalness).toBe(.88);
         subject.setOffHand('none');expect(subject.caseRoot.visible).toBe(false);

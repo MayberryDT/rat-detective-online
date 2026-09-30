@@ -10,6 +10,7 @@ import {TitleScreen} from '../../src/ui/TitleScreen';
 import {DispatchHud} from '../../src/prototype/DispatchHud';
 import {AssignmentDestinations} from '../../src/prototype/AssignmentDestinations';
 import {powerupCard} from '../../src/prototype/pickupArtwork';
+import {PICKUP_KINDS} from '../../src/shared/pickups';
 import {ScreenFeel} from '../../src/feel/ScreenFeel';
 import {leave} from '../../src/ui/motion';
 import {playerPreferences} from '../../src/settings/PlayerPreferences';
@@ -149,7 +150,7 @@ const actions:Record<string,()=>void>={
     'Settings: sliders mid-way':()=>playerPreferences().update({mouseSensitivity:1.55,touchSensitivity:1.6,masterVolume:.5,effectsVolume:.35,uiScale:1.05,cameraShake:.6,flashStrength:.4}),
     'Settings: stamp + on mouse sensitivity':()=>document.querySelector<HTMLButtonElement>('[aria-label="Raise mouse sensitivity"]')!.click(),
     'Settings: close':()=>{document.querySelector<HTMLButtonElement>('.settings-back')!.click();},
-    'Cards: three pickups':()=>{buffs.style.display='flex';for(const kind of ['ironclad','hustle','quick-fix'] as const)buffs.appendChild(powerupCard(kind));},
+    'Cards: every pickup':()=>{buffs.style.display='flex';for(const kind of PICKUP_KINDS)buffs.appendChild(powerupCard(kind));},
     'Cards: expire one':()=>{const card=buffs.firstElementChild;if(card instanceof HTMLElement)leave(card,'paperSlide',[{opacity:1,transform:'none'},{opacity:0,transform:'translateY(46px) rotate(6deg) scale(.9)'}]);},
     'Connection: reconnecting':()=>hud.setConnection('reconnecting'),
     'Connection: disconnected':()=>hud.setConnection('disconnected','Connection lost. The city keeps turning.'),

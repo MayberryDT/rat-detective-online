@@ -11,6 +11,7 @@ import {RatRagdoll} from './RatRagdoll';
 import {RatCorpseChain} from './RatCorpseChain';
 import {RAT_SPINE_JOINTS} from './RatModel';
 import {setDeformer} from './RigidMeshBatch';
+import type {TimedPickup} from '../shared/pickups';
 
 /** Polish 14 parts, present only on rats built with model touch-ups. */
 const EXTRA_PARTS = ['rat-brow-left','rat-brow-right','rat-whiskers-left','rat-whiskers-right','rat-shoe-left','rat-shoe-right',
@@ -144,7 +145,7 @@ export class RatAnimator {
     private skidAge = 10;
     private nodAge = 10;
     private pulseAge = 10;
-    private pulseKind: 'ironclad'|'hustle'|'heal' = 'heal';
+    private pulseKind: TimedPickup|'heal' = 'heal';
     private flight = 0;
     private readonly velocity = new THREE.Vector3();
     private readonly lastVelocity = new THREE.Vector3();
@@ -390,8 +391,8 @@ export class RatAnimator {
 
     /** Composed nod that tips the brim (your kill). */
     nod():void {this.nodAge=0;}
-    /** Pickup body reaction: Ironclad chest puff, Hot Pursuit bounce, Quick Fix relieved breath. */
-    pulse(kind:'ironclad'|'hustle'|'heal'):void {this.pulseKind=kind;this.pulseAge=0;}
+    /** Pickup body reaction: Ironclad chest puff, Hot Pursuit bounce, Stakeout head-forward squint, Quick Fix relieved breath. */
+    pulse(kind:TimedPickup|'heal'):void {this.pulseKind=kind;this.pulseAge=0;}
 
     /** The fedora has flown off as its own object; collapse the rig's copy until reset. */
     setHatHidden(hidden:boolean):void {this.hatHidden=hidden;}
@@ -691,6 +692,7 @@ export class RatAnimator {
                 head.rotation.x += nod * anim.nod;hat.rotation.x += nod * anim.nod * 1.4;
                 if (this.pulseKind === 'ironclad') {head.position.y += pulse * .05;head.rotation.x -= pulse * .1;}
                 else if (this.pulseKind === 'hustle') {hat.position.y += pulse * .12;leftEar.rotation.z += pulse * .3;rightEar.rotation.z -= pulse * .3;}
+                else if (this.pulseKind === 'stakeout') {head.position.z += pulse * .08;head.rotation.x += pulse * .07;hat.rotation.x += pulse * .08;}
                 else {head.rotation.x -= pulse * .12;hat.position.y += pulse * .04;}
             }
             if (springs) {
@@ -718,6 +720,8 @@ export class RatAnimator {
             pistol.rotation.x = -this.recoil * 0.14;
             pistol.position.z = -this.recoil * 0.035;
             leftEye.scale.y = rightEye.scale.y = 1 - Math.max(blink, this.extras.length && this.hitAge < .14 ? Math.sin(this.hitAge / .14 * Math.PI) : 0) * 0.94;
+            // Stakeout: a hard squint while peering forward.
+            if (this.pulseKind === 'stakeout' && pulse) {leftEye.scale.y *= 1 - pulse * .6;rightEye.scale.y *= 1 - pulse * .6;}
             leftEar.rotation.z = twitch;
             rightEar.rotation.z = -twitch * 0.65;
             // L6: ears flap in flight (after the twitch, which assigns them).

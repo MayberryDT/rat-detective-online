@@ -94,9 +94,13 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 .powerup-quick-fix{--powerup:#7fbf92;rotate:-1deg}
 .powerup-quick-fix .powerup-clock small{font-size:9px;letter-spacing:0;white-space:nowrap}
 .powerup-healed{margin-top:10px;padding:3px 0;border-top:1px dashed var(--powerup);color:var(--powerup);font:13px/1 var(--font-type);letter-spacing:.06em}
-/* All three rewards can be visible together, including landscape phones. */
-@media(max-width:1050px){.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle){gap:6px}.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-card{width:29vw}}
-@media(max-width:700px){.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-art{width:30px}.pickup-buffs:has(.powerup-quick-fix):has(.powerup-ironclad):has(.powerup-hustle) .powerup-copy strong{font-size:18px}.powerup-healed{font-size:11px}}
+.powerup-stakeout{--powerup:#e0b95a;rotate:1deg}
+/* Three or four rewards can be visible together, including landscape phones. */
+@media(max-width:1050px){.pickup-buffs:has(.powerup-card:nth-child(3)){gap:6px}.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-card{width:29vw}}
+@media(max-width:700px){.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-art{width:30px}.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-copy strong{font-size:18px}.powerup-healed{font-size:11px}}
+@media(max-width:1400px){.pickup-buffs:has(.powerup-card:nth-child(4)){gap:6px}.pickup-buffs:has(.powerup-card:nth-child(4)) .powerup-card{width:22.5vw}}
+@media(max-width:1250px){.pickup-buffs:has(.powerup-card:nth-child(4)) .powerup-art{width:44px}.pickup-buffs:has(.powerup-card:nth-child(4)) .powerup-copy strong{font-size:22px}.pickup-buffs:has(.powerup-card:nth-child(4)) .powerup-copy>small{display:none}}
+@media(max-width:800px){.pickup-buffs:has(.powerup-card:nth-child(4)) .powerup-art{width:26px}.pickup-buffs:has(.powerup-card:nth-child(4)) .powerup-copy strong{font-size:16px}}
 
 /* Give broadcasts their own lane when the permanent score card fills the left.
  * Touch layouts retain their existing scaled positions. */

@@ -28,8 +28,8 @@ export class CharacterReactionStudy {
         this.duration=entry[2];this.label=entry[1];
         if(id==='carry'||id==='case-loss'||id==='delivery')subject.setOffHand('case');
         if(id==='case-pickup')subject.setOffHand('none');
-        if(id==='reflect')subject.rat.setPowerups(12,0);
-        if(id==='hustle')subject.rat.setPowerups(0,10);
+        if(id==='reflect')subject.rat.setPowerups(12,0,0);
+        if(id==='hustle')subject.rat.setPowerups(0,10,0);
     }
     update(dt:number):void {
         if(!(dt>0))return;

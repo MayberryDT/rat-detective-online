@@ -125,7 +125,7 @@ function rebuild(){
         const heading=environment==='street'?-Math.PI/2:0;
         subject.controller.onMouseMove((Math.PI-heading)/.002,-180);subject.rat.mesh.rotation.y=heading+Math.PI;
     }
-    if(ironclad)subject.rat.setPowerups(3600,0);
+    if(ironclad)subject.rat.setPowerups(3600,0,0);
     subject.rat.update(0);subject.updateCarry();
     baseYaw=subject.rat.mesh.rotation.y;sequenceTime=0;
     // Establish the presented position/yaw before the first art-sequence step.
@@ -227,7 +227,7 @@ el('fire').onclick=()=>{
 el('presentation').onchange=()=>{remote=(el('presentation') as unknown as HTMLSelectElement).value==='remote';refreshOutfit();};
 el('finish').onchange=()=>{
     ironclad=(el('finish') as unknown as HTMLSelectElement).value==='ironclad';
-    if(!preparing)subject.rat.setPowerups(ironclad?3600:0,0);
+    if(!preparing)subject.rat.setPowerups(ironclad?3600:0,0,0);
 };
 void setEnvironment(environment).then(()=>{if(reviewRequested&&!disposed)startReview(selectedReaction);});
 let last=performance.now(),lastStats=0;

@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import type {TimedPickup} from '../shared/pickups';
+
+/** Each timed supply's apply-wave colour: silver coat, red speed, Hunch gold. */
+const APPLY_COLOR:Record<TimedPickup,number>={ironclad:0xd9eeff,hustle:0xff2108,stakeout:0xf3cf6f};
 
 const SAMPLES=32, TRAIL_SECONDS=.45;
 /** Bounded world-space ribbon and a brief upward healing sweep. No lights,
@@ -40,7 +44,7 @@ export class RatPowerupEffects {
         this.root.visible=false;scene.add(this.root);
     }
     heal():void {this.healing=.7;}
-    apply(kind:'ironclad'|'hustle'):void {this.applying=.42;this.applyMaterial.color.setHex(kind==='ironclad'?0xd9eeff:0xff2108);}
+    apply(kind:TimedPickup):void {this.applying=.42;this.applyMaterial.color.setHex(APPLY_COLOR[kind]);}
     clear():void {this.root.visible=false;this.count=0;this.healing=0;this.applying=0;this.lastSample=-Infinity;this.trail.visible=this.wave.visible=this.applyWave.visible=false;this.trailGeometry.setDrawRange(0,0);}
     update(dt:number,position:THREE.Vector3,hustle:boolean):void {
         this.time+=Math.min(dt,.1);

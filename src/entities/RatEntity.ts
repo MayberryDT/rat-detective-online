@@ -106,6 +106,7 @@ export class RatEntity {
     private ironcladRemaining=0;
     private metalApplication=0;
     private hustleRemaining=0;
+    private stakeoutRemaining=0;
     private glowMaterial?:THREE.MeshBasicMaterial;
     /** Extra shell offset (world units) that keeps the outline's on-screen width. */
     private outlineReach=0;
@@ -421,15 +422,19 @@ export class RatEntity {
     }
 
     /** Durations are relative to the latest authoritative snapshot, then expire locally. */
-    public setPowerups(ironcladSeconds:number,hustleSeconds:number):void {
+    public setPowerups(ironcladSeconds:number,hustleSeconds:number,stakeoutSeconds:number):void {
         const silver=this.ironcladRemaining>0;
         if(!this.dead&&ironcladSeconds>this.ironcladRemaining+.5){this.metalApplication=.28;this.powerupEffects.apply('ironclad');this.animator.pulse('ironclad');}
         if(!this.dead&&hustleSeconds>this.hustleRemaining+.5){this.powerupEffects.apply('hustle');this.animator.pulse('hustle');}
+        if(!this.dead&&stakeoutSeconds>this.stakeoutRemaining+.5){this.powerupEffects.apply('stakeout');this.animator.pulse('stakeout');}
         this.ironcladRemaining=this.dead?0:Math.max(0,ironcladSeconds);
         this.hustleRemaining=this.dead?0:Math.max(0,hustleSeconds);
+        this.stakeoutRemaining=this.dead?0:Math.max(0,stakeoutSeconds);
         if(silver!==(this.ironcladRemaining>0)){this.resetColor();if(this.flashTimer>0)this.applyHitColor();}
         this.updatePowerupOutline();
     }
+    /** Stakeout: this rat's Hunch reaches the whole city. */
+    get staking():boolean {return !this.dead&&this.stakeoutRemaining>0;}
     /** Per frame: widen the shell so the outline keeps its on-screen width.
      * `unitsPerPixel` is the world size of one screen pixel at one unit away. */
     public fitOutline(camera:THREE.Vector3,unitsPerPixel:number):void {
@@ -445,7 +450,7 @@ export class RatEntity {
         this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
         if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||!this.isPlayer&&this.outlineFade>.01);
     }
-    private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=0;this.powerupEffects.clear();this.streakSmoke.clear();this.updatePowerupOutline();this.resetColor();}
+    private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=this.stakeoutRemaining=0;this.powerupEffects.clear();this.streakSmoke.clear();this.updatePowerupOutline();this.resetColor();}
 
     /** Kill streak: 3 or more stamps the nameplate and makes the fedora smoulder. A death ends it. */
     public setStreak(streak:number):void {this.streak=this.dead?0:streak;this.billboard.setStreak(this.streak);if(streakTier(this.streak)===0)this.streakSmoke.clear();}
@@ -485,6 +490,7 @@ export class RatEntity {
         const silver=this.ironcladRemaining>0,pursuit=this.hustleRemaining>0;
         this.ironcladRemaining=Math.max(0,this.ironcladRemaining-dt);
         this.hustleRemaining=Math.max(0,this.hustleRemaining-dt);
+        this.stakeoutRemaining=Math.max(0,this.stakeoutRemaining-dt);
         if(this.metalApplication>0){this.metalApplication=Math.max(0,this.metalApplication-dt);this.resetColor();}
         if(silver&&this.ironcladRemaining===0)this.resetColor();
         if(pursuit&&this.hustleRemaining===0)this.updatePowerupOutline();

@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import {PICKUP_TUNING,type PickupKind} from '../shared/pickups';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 
+/** Each supply's dial ring colour. */
+const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0xe8c46a};
 /** One icon texture per supply kind, drawn and uploaded once (the load's stand-in dial) and shared by
  * every dial after, so a site's first claim in play draws no canvas and uploads nothing. */
 const ICONS=new Map<PickupKind,THREE.CanvasTexture>();
@@ -26,6 +28,11 @@ function icon(kind:PickupKind):THREE.CanvasTexture {
             c.strokeStyle='#ccbab1';c.lineWidth=3;c.stroke(new Path2D('m17 59 17 5m-20 3 18 5M14 80h30'));
             c.restore();
         }
+    }else if(kind==='stakeout'){
+        path('M55 61 61 55 86 80 80 86Z','#6b4a2e');
+        path('M40 13a27 27 0 1 0 .01 0Z','#a8894a');
+        path('M40 22a18 18 0 1 0 .01 0Z','#c8c4a6','#15101b',4);
+        c.strokeStyle='#efe6c8';c.lineWidth=4;c.stroke(new Path2D('M29 36a12 12 0 0 1 9-9'));
     }else{
         path('M37 15H63V37H85V63H63V85H37V63H15V37H37Z','#75b792');
     }
@@ -41,7 +48,7 @@ export class PickupRespawnVisual {
     constructor(kind:PickupKind){
         this.root.name='supply-restock-'+kind;this.root.position.y=1.3;
         this.fill=new THREE.ShaderMaterial({transparent:true,depthTest:true,depthWrite:false,toneMapped:false,
-            uniforms:{map:{value:icon(kind)},progress:{value:0},accent:{value:new THREE.Color(kind==='ironclad'?0xc4d2df:kind==='hustle'?0xe16a59:0x87d8a5)}},
+            uniforms:{map:{value:icon(kind)},progress:{value:0},accent:{value:new THREE.Color(ACCENT[kind])}},
             vertexShader:'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
             fragmentShader:`uniform sampler2D map;uniform float progress;uniform vec3 accent;varying vec2 vUv;
                 void main(){

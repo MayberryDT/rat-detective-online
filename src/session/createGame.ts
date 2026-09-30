@@ -61,7 +61,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         enemy.enableRigidBatching();enemy.sense(.001);models.push(enemy);
         // An opponent under Ironclad draws its batch with the metal reflection: another program.
         const ironclad=new RatEntity(stage.scene,stage.world,new THREE.Vector3(),'Preparation',DEFAULT_APPEARANCE,true);
-        ironclad.setPowerups(1e6,0);ironclad.enableRigidBatching();models.push(ironclad);
+        ironclad.setPowerups(1e6,0,0);ironclad.enableRigidBatching();models.push(ironclad);
         // Quick Fix kits grow an x-ray shell at low health.
         for(const kind of PICKUP_KINDS){const pickup=new PickupVisual(stage.scene,kind);pickup.setXray(true);pickups.push(pickup);}
         addLeatherBriefcase(briefcase);stage.scene.add(briefcase);

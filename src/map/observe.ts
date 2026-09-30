@@ -1,7 +1,7 @@
 // Observe: what happened, where. Any recorded layer as cells or as place shading, flows between places, and place cards.
 import { ASSIGNMENTS, ASSIGNMENT_IDS, ASSIGNMENT_DESTINATIONS } from '../shared/assignments';
 import { CASE_SPAWNS, DISPATCH_STATIONS, LAUNCH_MACHINES } from '../shared/chaosState';
-import { PICKUP_ANCHORS, type PickupKind } from '../shared/pickups';
+import { PICKUP_ANCHORS, PICKUP_KINDS, type PickupKind } from '../shared/pickups';
 import { JURISDICTION_ZONES } from '../shared/jurisdictionZones';
 import { SEWER_ENTRIES, SEWER_HALLS, SEWER_MANHOLE } from '../shared/sewerLayout';
 import { cellIndex } from '../shared/city/frame';
@@ -27,7 +27,7 @@ const LAYERS: Record<string, { label: string; cells: string[]; place?: string[];
   bounces: { label: 'Cheese bounces', cells: ['ball-world-bounce'] },
   'ball-hits': { label: 'Cheese hits', cells: ['ball-rat-body', 'ball-rat-head'] },
   expired: { label: 'Cheese run out', cells: ['ball-lifetime'] },
-  pickups: { label: 'Pickups taken', cells: ['pickups'], place: ['pickup:ironclad', 'pickup:hustle', 'pickup:quick-fix'] },
+  pickups: { label: 'Pickups taken', cells: ['pickups'], place: PICKUP_KINDS.map(kind => `pickup:${kind}`) },
   landings: { label: 'Launch landings', cells: ['landings'], place: ['landings'] },
   spawns: { label: 'Spawns', cells: ['spawns'], place: ['spawns'] },
   anomalies: { label: 'Faults', cells: ['anomalies'] },
@@ -38,7 +38,7 @@ const OVERLAYS: Record<string, [string, string, boolean]> = {
   cases: ['Case spawns', '#c8963e', false], launchers: ['Launchers', '#e2352b', true], pillars: ['Dispatch pillars', '#ff7a1f', false],
   zones: ['Jurisdiction zones', '#8a5cf6', false], dest: ['Paper Chase stops', '#ffd23f', false],
 };
-const PICKUP_COLOR: Record<PickupKind, string> = { ironclad: '#d9dde3', hustle: '#ff3b3b', 'quick-fix': '#3ddc6a' };
+const PICKUP_COLOR: Record<PickupKind, string> = { ironclad: '#d9dde3', hustle: '#ff3b3b', 'quick-fix': '#3ddc6a', stakeout: '#f3cf6f' };
 const COUNT_ROWS: Array<[string, string, boolean?]> = [
   ['human-s', 'Human time', true], ['bot-s', 'Bot time', true], ['deaths-human', 'Human deaths'], ['deaths-bot', 'Bot deaths'], ['kills', 'Kills made here'],
   ['shots-human', 'Human shots'], ['hits-human', 'Human hits'], ['bank-hits-human', '…banked off a wall'], ['shots-bot', 'Bot shots'],

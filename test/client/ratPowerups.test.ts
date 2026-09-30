@@ -12,14 +12,15 @@ it.each([false,true])('restores every material after silver expiry, hit flashes 
         rat.mesh.traverse(o=>{if(o instanceof THREE.Mesh&&o.name!=='rat-muzzle-flash'&&o.material instanceof THREE.MeshStandardMaterial)materials.add(o.material);});
         const before=[...materials].map(m=>[m.color.getHex(),m.emissive.getHex(),m.emissiveIntensity,m.metalness,m.roughness]);
         if(batched)rat.enableRigidBatching();
-        rat.setPowerups(1,2);rat.presentAlive(.3);expect([...materials].every(m=>m.color.getHex()===0xdce4ed&&m.metalness===.88)).toBe(true);
+        rat.setPowerups(1,2,3);rat.presentAlive(.3);expect([...materials].every(m=>m.color.getHex()===0xdce4ed&&m.metalness===.88)).toBe(true);
+        expect(rat.staking).toBe(true);
         rat.flashColor(0xff0000);rat.presentAlive(.3);
         expect([...materials].every(m=>m.color.getHex()===0xdce4ed)).toBe(true);
-        rat.presentAlive(1);
+        rat.presentAlive(1);expect(rat.staking).toBe(true);
         expect([...materials].map(m=>[m.color.getHex(),m.emissive.getHex(),m.emissiveIntensity,m.metalness,m.roughness])).toEqual(before);
-        rat.setPowerups(10,10);rat.useSharedCorpse();
+        rat.setPowerups(10,10,10);rat.useSharedCorpse();
         expect([...materials].map(m=>[m.color.getHex(),m.emissive.getHex(),m.emissiveIntensity,m.metalness,m.roughness])).toEqual(before);
-        expect(scene.getObjectByName('hot-pursuit-trail')?.visible).toBe(false);
+        expect(scene.getObjectByName('hot-pursuit-trail')?.visible).toBe(false);expect(rat.staking).toBe(false);
     }finally{rat.dispose();}
     expect(scene.children).toHaveLength(0);
 });
@@ -38,12 +39,12 @@ it.each([false,true])('shares coat and highlight with the matching carry sleeve 
     const rat=new RatEntity(new THREE.Scene(),new C.World(),new THREE.Vector3(),'Rat',{});
     try{
         if(batched)rat.enableRigidBatching();
-        rat.setPowerups(12,0);rat.presentAlive(.3);
+        rat.setPowerups(12,0,0);rat.presentAlive(.3);
         const arm=createCaseGrip(rat),materials=new Set<THREE.MeshStandardMaterial>();
         arm.traverse(o=>{if(o instanceof THREE.Mesh)materials.add(o.material);});
         expect([...materials].map(m=>m.name).sort()).toEqual(['rat-coat','rat-highlight']);
         expect([...materials].every(m=>m.color.getHex()===0xdce4ed&&m.metalness===.88)).toBe(true);
-        rat.setPowerups(0,0);
+        rat.setPowerups(0,0,0);
         expect([...materials].every(m=>m.color.getHex()!==0xdce4ed&&m.metalness!==.88)).toBe(true);
         const disposals=[...materials].map(m=>vi.spyOn(m,'dispose'));
         disposeCaseGrip(arm);expect(disposals.every(s=>s.mock.calls.length===0)).toBe(true);
