@@ -289,3 +289,13 @@ Each step lists what it delivers and how it is proven.
   - **Pier 9 had no exit leg.** A far goal's route search restarts whenever the goal moves 7 units, so a bot chasing moving rats across the city often has no route. It walks straight at the goal instead, and from the quay-road spawn that line runs into Pier 9 and ends in the south-west corner of the mezzanine (11 of staging's 30 rescues) or in the harbour master's office. The walk graph itself was sound: the mezzanine connects to the whole city. `pier9ExitPoint` now sends a bot inside to the nearer stair foot, the office door or the better outer door first, as landmarks already do. That search is short and finishes at once.
   - **Building roofs aren't in the walk graph.** A bot thrown onto one by someone else's launcher had no route and no local step. Its escape waited for the 8-second stuck clock and stopped after 1.5 units, so it crept until the 90-second rescue. A stalled bot on a floor the graph lacks now walks off at once. The 30-second and 90-second rescues are unchanged.
   - **Sims:** 48 seeded 10-minute rooms (four assignments, six seeds, nine bots including two gremlins) gave 73 rescues before the fix and 41 after (2.03 and 1.14 a bot-hour). Rescues at Pier 9 fell from 21 to 0, and rescues on roofs after a launch from 2 to 0.
+- **Code-mind gate in sims (30 September):** the same 48-run harness was run on the pre-overhaul bots (`23cb997`) and on `5a19806`, 36 bot-hours each. The new build ran with 6 tryhards, 1 maverick and 2 gremlins.
+  - **Passes:**
+    - rescues: 1.14 per bot-hour against 2.14;
+    - no assignment stalled.
+  - **Misses:**
+    - case changes: 230 per room-hour against 247;
+    - assignments finished: 5.25 per room-hour against 6;
+    - Paper Chase deliveries: 30 against 49 per room-hour, with 1 win against 3;
+    - death places: 135 against 144.
+  - **Likely cause** [inference]: tryhards on the code mind are frame-identical to the old bots, so the gap comes from the non-tryhards and the Pier 9 exit legs. The sim had 3 non-tryhards in 9, more than the 80/10/10 mix gives, and gremlins weight keep-case at 0.85. **Open before production:** rerun with the real mix, and check whether mavericks and gremlins carrying the case in Paper Chase deliver.
