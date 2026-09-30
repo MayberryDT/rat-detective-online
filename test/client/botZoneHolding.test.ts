@@ -1,7 +1,8 @@
-import {expect,it,vi} from 'vitest';
-import {BotZoneHolding,zoneStepSafe} from '../../src/shared/BotZoneHolding';
+import {expect,it} from 'vitest';
+import {zoneStepSafe} from '../../src/shared/bots/motor/zoneStepSafe';
 import {JURISDICTION_ZONES,zoneContains} from '../../src/shared/jurisdictionZones';
-import {ObjectiveBotBrain,type ObjectiveNavigation} from '../../src/shared/ObjectiveBotBrain';
+import {RatBot} from '../../src/shared/bots/ratBot';
+import type {MotorNavigation} from '../../src/shared/bots/motor';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createAssignment} from '../../src/shared/assignments';
@@ -14,24 +15,12 @@ it('rejects shortcuts over the sewer missing corner and excluded pump machinery'
  expect(zoneStepSafe('records-forecourt',{x:-4.05,y:0,z:-27},{x:-6.5,y:0,z:-27})).toBe(true);
  expect(zoneStepSafe('records-forecourt',{x:-4.05,y:0,z:-27},{x:-3,y:0,z:-27})).toBe(false);
 });
-it('varies quiet activity across seeds, limits local work and rejects unsupported steps and jumps under a ceiling',()=>{
- const self={x:0,y:-7,z:0},nav={localStep:vi.fn((_from,to)=>to),route:vi.fn(),explorationTargets:()=>[]} as ObjectiveNavigation;
- const traces=[];
- for(let seed=0;seed<8;seed++){
-  const hold=new BotZoneHolding(seed),samples=[];
-  for(let t=1000;t<15000;t+=50){const intent=hold.step(t,'sewer-junction','round',self,undefined,true,nav,()=>false);expect(intent.jump).toBe(false);samples.push([intent.x,intent.z,intent.facing]);}
-  traces.push(JSON.stringify(samples));
- }
- expect(new Set(traces).size).toBe(8);expect(nav.route).not.toHaveBeenCalled();expect(vi.mocked(nav.localStep!).mock.calls.length).toBeLessThan(8*14*6);
- const blocked={...nav,localStep:()=>undefined},hold=new BotZoneHolding(0);
- expect(hold.step(1000,'sewer-junction','round',self,undefined,true,blocked,()=>false)).toMatchObject({x:0,z:0,jump:false});
-});
 it('keeps final counterfeit avoidance inside the zone and transitions on case loss, death and relocation',()=>{
  const a=createAssignment('jurisdiction',1000,'transition',()=>.3);a.liveAt=1000;a.phase='active';const j=a.jurisdiction!,id=activeZone(j),p=JURISDICTION_ZONES[id].posts[0];
  const self=createPlayer('self','Self',DEFAULT_APPEARANCE,p),other=createPlayer('other','Other',DEFAULT_APPEARANCE,{...p,x:p.x+8});
  const sim=new ChaosSimulation(new Map([[self.id,self],[other.id,other]]),()=>{},undefined,{seed:341283204,version:2});sim.setAssignment(a);
  const s=sim.snapshot(false);s.case.owner=self.id;s.pickups=[];
- const nav:ObjectiveNavigation={route:(_from,to)=>[to],localStep:(_from,to)=>to,explorationTargets:()=>[p]};const brain=new ObjectiveBotBrain(nav,2,()=>.3);
+ const nav:MotorNavigation={route:(_from,to)=>[to],localStep:(_from,to)=>to,explorationTargets:()=>[p]};const brain=new RatBot(nav,2,()=>.3);
  for(let t=1000;t<3000;t+=50){
   s.extraCases=[{...s.case,id:'fake',fake:true,owner:null,p:{x:self.x+1,y:self.y,z:self.z+1}}];
   const intent=brain.step(t,self,[other],s,()=>true,false,true);

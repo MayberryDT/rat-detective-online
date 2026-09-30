@@ -307,11 +307,12 @@ The matching client includes the accepted title/Escape/touch player settings,
 styled settings scrollbar, and aligned Resume/Settings actions. See
 [player settings](player-settings.md) and the [release receipt](verification/maneuvers-production-2026-09-14.md).
 
-Commitment and attention remain separate private experiments. They are not public
-defaults. The [experiment report](verification/bot-experiments-2026-09-14.md)
-retains measured comparisons and the independently frozen preview links. Its
-pre-release status is superseded by this release. The older continuous quiet
-movement/hopping policy remains an explicit comparison baseline.
+Commitment and attention were later released with maneuvers as the `combined`
+default. The bot overhaul (B2, 29 September) removed the experiment switch: those
+composed policies are the only behaviour, now in the motor under
+`src/shared/bots/`, and the older continuous quiet movement/hopping baseline is gone.
+The [experiment report](verification/bot-experiments-2026-09-14.md) keeps its
+measured comparisons as history.
 
 ## Omarchy Dispatch companion — September 14
 
@@ -910,7 +911,7 @@ Recovery measures actual progress. After sustained grounded failure, an escape a
 | --- | --- |
 | Session / networking / remote presentation | `src/session/GameSession.ts`, `src/network/NetworkManager.ts`, `src/session/RemotePlayers.ts`, `src/shared/SnapshotBuffer.ts` |
 | Authoritative room / rules / roster | `src/worker/GameRoom.ts`, `src/worker/gameState.ts`, `src/shared/botRoster.ts` |
-| Bots | `src/worker/ServerBotController.ts`, `src/shared/ObjectiveBotBrain.ts`, `src/shared/BotNavigation.ts` |
+| Bots | `src/worker/ServerBotController.ts`, `src/shared/bots/` (`ratBot.ts`, `goals.ts`, `codeMind.ts`, `motor.ts`), `src/shared/BotNavigation.ts` |
 | Projectiles, cases, corpses, incidents | `src/shared/ChaosSimulation.ts`, `chaosState.ts`, `incidentCatalog.ts`, `ballTuning.ts` in the same directory |
 | Collision performance | `src/shared/SpatialRayQuery.ts`, `src/shared/StaticCityBroadphase.ts` |
 | Shared map geometry | `src/shared/grayboxLayout.ts`, `cityPlan.ts`, `landmarkLayout.ts`, `sewerLayout.ts`, `playerSpawns.ts` |

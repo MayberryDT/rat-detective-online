@@ -114,24 +114,19 @@ Disconnected rats now reserve their slot for 30 seconds before empty-room sleep.
 Human reload tests should re-enter within that window; the same tab retains its
 private reconnect credential. Do not expose the credential in diagnostic artifacts.
 
-## Current bot experiment preview
+## Private bot preview
 
 Build the client, then prepare the private Worker with
-`node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=10 --cap=10 --full-lobby --bot-experiments --assignment=jurisdiction`.
+`node scripts/prepare-hosted-capacity.mjs --deploy --minutes=240 --window=8 --bots=10 --cap=10 --full-lobby --assignment=jurisdiction`.
 Use the returned frozen receipt with `scripts/preview-capacity.mjs`.
 For a rotating playtest, replace `--assignment=jurisdiction` with
 `--first-assignment=chain-of-custody`: Paper Chase starts the first cycle, followed
 by the other three assignments and then normal shuffled cycles. Omit both options
 for the ordinary playlist. First-assignment and pinned-assignment options are
 mutually exclusive.
-Only explicit `graybox-benchmark-ai-bot-{baseline,maneuvers,commitment,attention,combined}-*`
-rooms fill all ten slots (nine bots after a human joins).
-`graybox-benchmark-match-bot-{baseline,maneuvers,commitment,attention,combined}-*` pools
-retain normal eight-participant matchmaking, human replacement and empty-room sleep.
-The private Worker alone resolves these experiment names; public source defaults
-to maneuvers. The ten-rat cap is released; the independently frozen experiment
-rooms retain their explicit baseline and variant selections.
-See [results and current links](verification/bot-experiments-2026-09-14.md).
+The bots run the one production behaviour; the September 14 experiment rooms and
+their `--bot-experiments` switch were removed in the bot overhaul (B2). Their
+[results](verification/bot-experiments-2026-09-14.md) remain as history.
 
 ## Historical 16-rat full-game preview
 

@@ -21,8 +21,9 @@ export interface Plan {
     mode:MotorMode;
     /** Stable identity: a changed key restarts routing; an unchanged key keeps the current route. */
     key:string;
+    /** Where to go. For a followed rat this is the rat's own record, so the motor tracks its live position. */
     destination?:Vec3Data;
-    /** A rat whose live position the motor follows (the carrier, a hunted rat). */
+    /** The rat being followed (the carrier, a hunted rat). */
     follow?:string;
 }
 
@@ -44,6 +45,12 @@ export interface MindAnswer {
     danger?:number;
     /** Probability that a bank shot is the way to reach the target. */
     bank?:number;
+}
+
+/** Answers for one rat from a decision context. A mind that thinks asynchronously (Jev) returns its latest
+ * fresh answer, or undefined when it has none; the code mind then answers instead. */
+export interface Mind<Context> {
+    answer(context:Context):MindAnswer|undefined;
 }
 
 /** What the cast chose, for the motor and the recorder's decision fact. */

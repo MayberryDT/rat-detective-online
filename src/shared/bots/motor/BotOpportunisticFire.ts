@@ -1,4 +1,4 @@
-import type { Vec3Data } from './networkProtocol';
+import type { Vec3Data } from '../../networkProtocol';
 
 export const BOT_OPPORTUNISTIC_FIRE = {
     pauseMinMs: 250, pauseMaxMs: 700,

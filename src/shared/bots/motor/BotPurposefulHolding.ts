@@ -1,8 +1,8 @@
-import {combatRandom} from './BotCombat';
-import {zoneStepSafe} from './BotZoneHolding';
-import {JURISDICTION_ZONES,type JurisdictionZoneId} from './jurisdictionZones';
-import type {Vec3Data} from './networkProtocol';
-import type {ObjectiveNavigation} from './ObjectiveBotBrain';
+import {combatRandom} from '../../BotCombat';
+import {zoneStepSafe} from './zoneStepSafe';
+import {JURISDICTION_ZONES,type JurisdictionZoneId} from '../../jurisdictionZones';
+import type {Vec3Data} from '../../networkProtocol';
+import type {MotorNavigation} from '../motor';
 
 /** Quiet carriers take a useful post and watch approaches. Visible pressure
  * triggers a bounded lateral move. Arrival ends the maneuver, not a clock. */
@@ -24,7 +24,7 @@ export class BotPurposefulHolding {
     reset():void{this.key='';this.goal=undefined;this.threat=undefined;this.settled=false;this.retryAt=0;this.best=Infinity;this.lastAt=undefined;this.lookAt=0;this.hopAt=0;}
     invalidate():void{this.goal=undefined;this.settled=false;this.retryAt=0;}
     step(now:number,id:JurisdictionZoneId,key:string,self:Vec3Data,threat:Vec3Data|undefined,
-        grounded:boolean,nav:ObjectiveNavigation,clear:(p:Vec3Data)=>boolean){
+        grounded:boolean,nav:MotorNavigation,clear:(p:Vec3Data)=>boolean){
         const zone=JURISDICTION_ZONES[id],floor={x:self.x,y:zone.floorY,z:self.z};
         const dist=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.z-b.z);
         if(this.key!==key){this.reset();this.key=key;this.lookIndex=Math.abs(this.seed)%zone.approaches.length;}

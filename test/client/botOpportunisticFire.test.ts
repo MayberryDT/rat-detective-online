@@ -1,7 +1,7 @@
 import {it,expect,vi} from 'vitest';
-import {BotOpportunisticFire} from '../../src/shared/BotOpportunisticFire';
+import {BotOpportunisticFire} from '../../src/shared/bots/motor/BotOpportunisticFire';
 import {combatRandom} from '../../src/shared/BotCombat';
-import {ObjectiveBotBrain} from '../../src/shared/ObjectiveBotBrain';
+import {RatBot} from '../../src/shared/bots/ratBot';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {DISPATCH_STATIONS,type ChaosState} from '../../src/shared/chaosState';
@@ -36,7 +36,7 @@ it('cancels speculative groups for visible combat or Dispatch and honors the sha
 });
 it('shoots while following the case with nobody in sight without changing navigation or movement',()=>{
  const nav={route:vi.fn((_from:unknown,to:{x:number;y:number;z:number})=>[to]),explorationTargets:()=>[]};
- const brain=new ObjectiveBotBrain(nav,4,()=>.5),bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,self);
+ const brain=new RatBot(nav,4,()=>.5),bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,self);
  const state:ChaosState={time:0,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:0,y:0,z:400},q:{x:0,y:0,z:0,w:1},v:self,spin:self},dispatch:{phase:'cooldown',started:0,until:60000,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
  let shots=0;
  for(let now=0;now<10000;now+=17){const intent=brain.step(now,bot,[bot],state,()=>false,false,true);

@@ -82,26 +82,6 @@ test('private fixture allows an explicit zero-bot solo playtest without opening 
  }finally{await rm(out,{recursive:true,force:true});}
 });
 
-test('bot experiments are isolated to explicit private room names and keep normal eight-participant backfill',async()=>{
- const out=await mkdtemp(join(tmpdir(),'rat-bot-experiments-'));
- try{
-  const f=await prepareFixture(out,{hosted:true,expiresAt:Date.now()+60000,serverBots:10,maxPlayers:10,fullLobby:true,botExperiments:true});
-  const room=await readFile(join(f.stage,'src/worker/GameRoom.ts'),'utf8');
-  const resolver=room.slice(room.indexOf('function privateBotExperiment'),room.indexOf('\n}',room.indexOf('function privateBotExperiment'))+2);
-  const js=resolver.replace(/:import\('[^']+'\)\.BotExperiment/,'').replace('pool:string','pool');
-  const resolve=new Function(`${js};return privateBotExperiment;`)();
-  for(const variant of ['maneuvers','commitment','attention','combined']){
-   assert.equal(resolve(`graybox-benchmark-ai-bot-${variant}-r1`),variant);
-   assert.equal(resolve(`graybox-benchmark-match-bot-${variant}-r1`),variant);
-   assert.equal(resolve(`public-live-v2-bot-${variant}`),'baseline');
-  }
-  assert.equal(resolve('graybox-benchmark-match-bot-baseline-r1'),'baseline');
-  assert.match(room,/privateBotExperiment\(this.matchPool/);
-  assert.match(room,/MAX_PLAYERS - humans\) : humans \? Math.min\(this.ensureRoundBotRoster\(humans\), MAX_PLAYERS - humans\) : 0/);
-  assert.doesNotMatch(await readFile(new URL('../../src/worker/GameRoom.ts',import.meta.url),'utf8'),/privateBotExperiment/);
- }finally{await rm(out,{recursive:true,force:true});}
-});
-
 test('private first assignment starts a playlist without pinning later rounds',async()=>{
  const out=await mkdtemp(join(tmpdir(),'rat-first-assignment-'));
  try{

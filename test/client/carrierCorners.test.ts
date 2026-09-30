@@ -35,7 +35,7 @@ it.each([...corners,...upstairs])('carrier exits $id from $start toward the next
     let recoveries=0,exitAt=0,progressAt=0,maxPause=0,progress={...bot};
     const controller=new ServerBotController({seed:341283204,version:2},[bot.id],{
         move:(_id,p)=>Object.assign(bot,p),shoot:()=>{},recover:()=>{recoveries++;},
-    },'combined');
+    });
     try{
         for(let frame=0;frame<2400;frame++){
             const at=now+frame*1000/60;state.time=at;state.case.p={x:bot.x,y:bot.y+1,z:bot.z};

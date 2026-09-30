@@ -1,5 +1,6 @@
 import {describe,it,expect} from 'vitest';
-import {ObjectiveBotBrain,type ObjectiveNavigation} from '../../src/shared/ObjectiveBotBrain';
+import {RatBot} from '../../src/shared/bots/ratBot';
+import type {MotorNavigation} from '../../src/shared/bots/motor';
 import {exposedCarrierCase,shotHitsIronclad} from '../../src/shared/BotTargeting';
 import {BotCombat} from '../../src/shared/BotCombat';
 import {createPlayer} from '../../src/worker/gameState';
@@ -10,8 +11,8 @@ const player=(id:string,x=0,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z
 function fixture(){
  const self=player('me'),silver=player('silver',0,8),enemy=player('enemy',12,0);
  const s:ChaosState={time:1000,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:40,y:0,z:0},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'cooldown',started:0,until:99999,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''},buffs:{silver:{ironcladUntil:20000}}};
- const navigation:ObjectiveNavigation={route:(_from,to)=>[{...to}],explorationTargets:()=>[{x:40,y:0,z:40}],localStep:(_from,to)=>to};
- const brain=new ObjectiveBotBrain(navigation,0,()=>.5);
+ const navigation:MotorNavigation={route:(_from,to)=>[{...to}],explorationTargets:()=>[{x:40,y:0,z:40}],localStep:(_from,to)=>to};
+ const brain=new RatBot(navigation,0,()=>.5);
  return {self,silver,enemy,s,brain};
 }
 describe('Ironclad-aware bots',()=>{

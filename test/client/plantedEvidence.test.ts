@@ -5,7 +5,7 @@ import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING as T,COUNTERFEIT_IDS,EXTRA_CASE_IDS} from '../../src/shared/chaosState';
 import {createAssignment} from '../../src/shared/assignments';
 import {CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../../src/shared/grayboxLayout';
-import {ObjectiveBotBrain} from '../../src/shared/ObjectiveBotBrain';
+import {RatBot} from '../../src/shared/bots/ratBot';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {createPlayer} from '../../src/worker/gameState';
 
@@ -152,7 +152,7 @@ describe('Planted Evidence',()=>{
     it('treats a counterfeit as a hazard, never as a bot objective',()=>{
         const {sim,shooter,now}=fixture();
         const state=sim.snapshot(false);
-        const brain=new ObjectiveBotBrain({route:()=>[],explorationTargets:()=>[]});
+        const brain=new RatBot({route:()=>[],explorationTargets:()=>[]});
         const clear=()=>true;
         // Counterfeits are hazards: the bot may still chase the genuine case, but it
         // must never adopt a counterfeit as a collectible objective.

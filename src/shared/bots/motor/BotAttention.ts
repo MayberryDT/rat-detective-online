@@ -1,4 +1,4 @@
-import type {Vec3Data} from './networkProtocol';
+import type {Vec3Data} from '../../networkProtocol';
 const wrap=(angle:number)=>Math.atan2(Math.sin(angle),Math.cos(angle));
 /** Coarse shoulder-camera attention, not a new visibility oracle. Existing
  * world rays still decide visibility. Off-screen sightings cost attention;

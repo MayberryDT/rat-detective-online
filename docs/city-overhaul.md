@@ -44,7 +44,7 @@ About 58 source files import the layout modules, and 69 test files import them t
 | Rendering | `src/prototype/Neighborhood.ts` (415), `LandmarkArchitecture.ts` (511), `src/world/CityGenerator.ts` (852), `CityGrime.ts`, `FacadeBeams.ts`, `StreetReadability.ts` (street-spill atlas), `InteriorLighting.ts`, `SewerLighting.ts`, `SewerPortals.ts` | Facades, windows, beams and the spill atlas are built per axis-aligned face. |
 | Feel | `src/feel/NoirAtmosphere.ts`, `NoirDressing.ts`, `FeelSound.ts`, `CityReactions.ts` | Read `LANDMARK_INTERIORS` and `CITY_STREETS` by name. |
 | Gameplay placements | `chaosState.ts` (`CASE_SPAWNS`, `DISPATCH_STATIONS`, `LAUNCH_MACHINES`), `pickups.ts` (`PICKUP_ANCHORS`), `jurisdictionZones.ts`, `assignments.ts` (`ASSIGNMENT_DESTINATIONS`) | Hand-placed coordinates. |
-| Bots | `BotNavigation.ts` (2-unit walk grid from boxes; `Solid` stores tilt only), `BotLaunchRoutes.ts` (`ROOF_LANDINGS` per landmark), `BotZoneHolding.ts`, `ServerBotController.ts` | No yaw; roof landings keyed by landmark. |
+| Bots | `BotNavigation.ts` (2-unit walk grid from boxes; `Solid` stores tilt only), `BotLaunchRoutes.ts` (`ROOF_LANDINGS` per landmark), `bots/motor/zoneStepSafe.ts`, `ServerBotController.ts` | No yaw; roof landings keyed by landmark. |
 | City map | `src/shared/city/places.ts`, `frame.ts`, `model.ts` (`layoutVersion` = `GRAYBOX_VERSION`), `src/map/` (was `src/heatmap/main.ts`), `output/city-map/map.ts` | Place names come from streets and landmarks. |
 
 ## Workstreams

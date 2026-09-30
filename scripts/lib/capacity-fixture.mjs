@@ -9,7 +9,7 @@ export function replaceOnce(text, before, after) {
   if (text.split(before).length !== 2) throw new Error(`Capacity fixture anchor changed: ${before.slice(0, 90)}`);
   return text.replace(before, after);
 }
-export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 8, serverBots = 11, maxPlayers = 100, fullLobby = false, checkpointControl = false, botExperiments = false, assignment, firstAssignment } = {}) {
+export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 8, serverBots = 11, maxPlayers = 100, fullLobby = false, checkpointControl = false, assignment, firstAssignment } = {}) {
   if(firstAssignment!==undefined&&(!hosted||assignment!==undefined||!['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(firstAssignment)))throw Error('First assignment requires a known hosted mode and cannot be pinned');
   if(assignment!==undefined&&(!hosted||!['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(assignment)))throw Error('Assignment override requires a known mode in a hosted private fixture');
   if(!Number.isInteger(serverBots)||serverBots<0||serverBots>99||serverBots>0&&serverBots<8)throw Error('Fixture serverBots must be 0 or 8–99');
@@ -31,17 +31,8 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
   }
   await hashTree('src');
   const controlHash=createHash('sha256').update(await readFile(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'))).digest('hex');
-  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 15, botExperiments, assignment, firstAssignment, maxPlayers, fullLobby, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
+  const fixtureId = createHash('sha256').update(JSON.stringify({ version: 15, assignment, firstAssignment, maxPlayers, fullLobby, checkpointControl, controlHash, window, seed: 341283204, serverBots, sourceHashes })).digest('hex');
   async function patch(name, before, after) { const path=join(stage,name); await writeFile(path,replaceOnce(await readFile(path,'utf8'),before,after)); }
-  if(botExperiments){
-    if(!hosted)throw Error('Bot experiments require a hosted private fixture');
-    await patch('src/worker/GameRoom.ts', "import { ChaosDelivery } from './ChaosDelivery';", `import { ChaosDelivery } from './ChaosDelivery';
-function privateBotExperiment(pool:string):import('../shared/BotExperiments').BotExperiment {
-  const value=/^graybox-benchmark-(?:ai|match)-bot-(maneuvers|commitment|attention|combined)(?:-|$)/.exec(pool)?.[1];
-  return value==='maneuvers'||value==='commitment'||value==='attention'||value==='combined'?value:'baseline';
-}`);
-    await patch('src/worker/GameRoom.ts','      });\n  }\n\n  private activatePersistentBots()', '      },privateBotExperiment(this.matchPool??""));\n  }\n\n  private activatePersistentBots()');
-  }
   if(firstAssignment)await patch('src/worker/GameRoom.ts','    const id=nextAssignment(this.assignmentRotation);',`    // Private first cycle; following cycles use the normal shuffled playlist.
     if(!this.assignmentRotation.last)this.assignmentRotation.remaining=[${JSON.stringify(firstAssignment)},...ASSIGNMENT_IDS.filter(id=>id!==${JSON.stringify(firstAssignment)})];
     const id=nextAssignment(this.assignmentRotation);`);
@@ -122,8 +113,8 @@ function privateBotExperiment(pool:string):import('../shared/BotExperiments').Bo
   const validator = join(stage, 'validator.mjs');
   await cp(join(projectRoot,'scripts/fixtures/ApprovedSnapshotBuffer.ts'),join(stage,'approved-buffer.ts'));
   await build({ stdin:{contents:"export * from './src/shared/chaosWire.ts'; export {DeliveryDecoder} from './src/shared/deliveryWire.ts'; export {PROTOCOL_VERSION} from './src/shared/networkProtocol.ts'; export {TOUCH_SHOT_INTERVAL_MS} from './src/shared/shotTiming.ts'; export {INCIDENTS} from './src/shared/incidentCatalog.ts'; export {SnapshotBuffer,BotSnapshotBuffer} from './src/shared/SnapshotBuffer.ts'; export {SnapshotBuffer as ApprovedSnapshotBuffer} from './approved-buffer.ts';",resolveDir:stage}, outfile:validator, bundle:true, platform:'node', format:'esm' });
-  const manifest = { createdAt:new Date().toISOString(), fixtureId, sourceHashes, controlHash, hosted, expiresAt, window, serverBots, maxPlayers, fullLobby, checkpointControl, botExperiments, assignment, firstAssignment,
-    overrides:[...(firstAssignment?[`private first assignment ${firstAssignment}, then playlist rotation`]:[]),...(botExperiments?['private bot variants selected by explicit bot-baseline/maneuvers/commitment/attention/combined room names; normal match pools retain eight participants']:[]),...(assignment?[`private assignment pinned to ${assignment}`]:[]),...(checkpointControl?['DIAGNOSTIC ONLY: copied periodic player and chaos checkpoint intervals 10 seconds; forced writes unchanged']:[]),...(fullLobby?['private full lobby stays active until expiry; bots fill cap and yield to human joins']:[]),...(serverBots===0?['private solo playtest: zero server bots']:[]),`copied MAX_PLAYERS=${maxPlayers}, MAX_CONNECTIONS=${maxPlayers+8}`, 'fixed city seed 341283204', 'copied 25-second controls for all ten incidents', `private AI rooms use ${serverBots} production-controller bots, with hosted expiry`], stage, validator, configPath };
+  const manifest = { createdAt:new Date().toISOString(), fixtureId, sourceHashes, controlHash, hosted, expiresAt, window, serverBots, maxPlayers, fullLobby, checkpointControl, assignment, firstAssignment,
+    overrides:[...(firstAssignment?[`private first assignment ${firstAssignment}, then playlist rotation`]:[]),...(assignment?[`private assignment pinned to ${assignment}`]:[]),...(checkpointControl?['DIAGNOSTIC ONLY: copied periodic player and chaos checkpoint intervals 10 seconds; forced writes unchanged']:[]),...(fullLobby?['private full lobby stays active until expiry; bots fill cap and yield to human joins']:[]),...(serverBots===0?['private solo playtest: zero server bots']:[]),`copied MAX_PLAYERS=${maxPlayers}, MAX_CONNECTIONS=${maxPlayers+8}`, 'fixed city seed 341283204', 'copied 25-second controls for all ten incidents', `private AI rooms use ${serverBots} production-controller bots, with hosted expiry`], stage, validator, configPath };
   await writeFile(join(out,'fixture.json'), JSON.stringify(manifest,null,2));
   return manifest;
 }

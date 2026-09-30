@@ -1,6 +1,7 @@
 import * as C from 'cannon-es';
 import { NetworkManager, resolveWebSocketUrl } from '../network/NetworkManager';
-import { ObjectiveBotBrain, type ObjectiveNavigation } from '../shared/ObjectiveBotBrain';
+import { RatBot } from '../shared/bots/ratBot';
+import type { MotorNavigation } from '../shared/bots/motor';
 import { BotNavigation } from '../shared/BotNavigation';
 import { StaticCityBroadphase, cityBoxBody } from '../shared/StaticCityBroadphase';
 import { CITY_BARS_GROUP } from '../shared/boxFrame';
@@ -30,7 +31,7 @@ interface Bot {
     transport: BotTransport;
     id: string;
     body: C.Body;
-    brain: ObjectiveBotBrain;
+    brain: RatBot;
     facing: number;
     launchedUntil: number;
     normalJump: boolean;
@@ -42,7 +43,7 @@ interface BotOptions {
     createTransport?: () => BotTransport;
     /** Uses the one rendered remote rat's animated gun, without building duplicate models. */
     muzzle?: (id: string, position: Vec3Data, facing: number) => Vec3Data | undefined;
-    navigation?: ObjectiveNavigation;
+    navigation?: MotorNavigation;
 }
 
 /** Eleven ordinary network clients. Only steering is local; health, scoring,
@@ -59,7 +60,7 @@ export class NormalGameBots {
     private chaos?: ChaosState;
     private simulationNow = 0;
     private nextRouteAt = -Infinity;
-    private readonly navigation: ObjectiveNavigation;
+    private readonly navigation: MotorNavigation;
     private lastNavigationAt = -Infinity;
     constructor(spec: WorldSpec, snapshot: Record<string, PlayerData>, private readonly options: BotOptions = {}) {
         for (const p of Object.values(snapshot)) this.players.set(p.id, { ...p });
@@ -77,7 +78,7 @@ export class NormalGameBots {
         }
         const navigation = options.navigation ?? new BotNavigation(spec);
         this.navigation=navigation;
-        const sharedNavigation: ObjectiveNavigation = {
+        const sharedNavigation: MotorNavigation = {
             explorationTargets: () => navigation.explorationTargets(),
             travelPoint: (from,to) => navigation.travelPoint?.(from,to)??to,
             supported: from => navigation.supported?.(from)??false,
@@ -97,7 +98,7 @@ export class NormalGameBots {
             body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
             body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
-            const bot: Bot = {transport,id:'',body,brain:new ObjectiveBotBrain(sharedNavigation,i),facing:0,launchedUntil:0,normalJump:false,zoneHop:false,lastLaunch:'',lastMovementAt:-Infinity};
+            const bot: Bot = {transport,id:'',body,brain:new RatBot(sharedNavigation,i),facing:0,launchedUntil:0,normalJump:false,zoneHop:false,lastLaunch:'',lastMovementAt:-Infinity};
             this.bots.push(bot);
             // The human's feed is the common source. Each extra socket only needs
             // its own welcome, including reconnection identity and server spawn.

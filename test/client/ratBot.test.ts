@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ObjectiveBotBrain, type ObjectiveNavigation } from '../../src/shared/ObjectiveBotBrain';
+import { RatBot } from '../../src/shared/bots/ratBot';
+import type { MotorNavigation } from '../../src/shared/bots/motor';
 import { createPlayer } from '../../src/worker/gameState';
 import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
@@ -14,12 +15,12 @@ function state(owner:string|null=null):ChaosState {
     return {time:1000,case:{owner,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:40,y:0,z:0},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'cooldown',started:0,until:1e9,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
 }
 function fixture(seed=0){
-    const navigation:ObjectiveNavigation={route:vi.fn((_from,to)=>[{...to}]),explorationTargets:()=>Array.from({length:24},(_,i)=>({x:i*4+20,y:i%2?-7:0,z:60}))};
-    return {brain:new ObjectiveBotBrain(navigation,seed,()=>.5),navigation,self:player('me',0),near:player('near',0,8),holder:player('holder',35)};
+    const navigation:MotorNavigation={route:vi.fn((_from,to)=>[{...to}]),explorationTargets:()=>Array.from({length:24},(_,i)=>({x:i*4+20,y:i%2?-7:0,z:60}))};
+    return {brain:new RatBot(navigation,seed,()=>.5),navigation,self:player('me',0),near:player('near',0,8),holder:player('holder',35)};
 }
 // Attention turns on simulation ticks; a single multi-second clock jump must
 // not stand in for those ticks or authorize an instant sideways shot.
-function firstShot(brain:ObjectiveBotBrain,from:number,until:number,self:ReturnType<typeof player>,rats:ReturnType<typeof player>[],s:ChaosState,clearControl=()=>true){
+function firstShot(brain:RatBot,from:number,until:number,self:ReturnType<typeof player>,rats:ReturnType<typeof player>[],s:ChaosState,clearControl=()=>true){
     let intent;
     for(let now=from;now<=until;now+=20){
         intent=brain.step(now,self,rats,s,()=>true,false,true,clearControl);
@@ -282,8 +283,8 @@ describe('case-first normal match bots',()=>{
         expect(vi.mocked(navigation.route).mock.calls.length).toBeLessThan(165);expect(shots).toBeGreaterThan(30);
     });
     it('handles an empty exploration inventory and clears failure state on ownership change/reset',()=>{
-        const navigation:ObjectiveNavigation={route:vi.fn(()=>[]),explorationTargets:()=>[]};
-        const brain=new ObjectiveBotBrain(navigation,0,()=>.5),self=player('me',0),loose=state();
+        const navigation:MotorNavigation={route:vi.fn(()=>[]),explorationTargets:()=>[]};
+        const brain=new RatBot(navigation,0,()=>.5),self=player('me',0),loose=state();
         brain.step(1000,self,[self],loose,()=>false,false,true);brain.step(7000,self,[self],loose,()=>false,false,true);
         expect(brain.objective).toBe('explore');expect(brain.navigationStalled).toBe(true);expect(brain.failedCasePosition).toEqual(loose.case.p);
         brain.step(7010,self,[self],state('me'),()=>false,false,true);expect(brain.failedCasePosition).toBeUndefined();
@@ -395,10 +396,10 @@ describe('case-first normal match bots',()=>{
         expect(brain.objective).toBe('case');expect(brain.failedCasePosition).toBeUndefined();expect(brain.navigationStalled).toBe(true);
     });
     it('keeps roof/no-support local failures stopped and prefers a nearby exploration location',()=>{
-        const navigation:ObjectiveNavigation={route:vi.fn(()=>[]),localStep:vi.fn(()=>undefined),explorationTargets:()=>[
+        const navigation:MotorNavigation={route:vi.fn(()=>[]),localStep:vi.fn(()=>undefined),explorationTargets:()=>[
             {x:200,y:0,z:200},{x:8,y:0,z:0},{x:-200,y:0,z:-200},
         ]};
-        const brain=new ObjectiveBotBrain(navigation,0,()=>.5),self=player('me',0);
+        const brain=new RatBot(navigation,0,()=>.5),self=player('me',0);
         const intent=brain.step(1000,self,[self],state('me'),()=>false,false,true);
         expect(navigation.route).toHaveBeenCalledWith({x:0,y:0,z:0},{x:8,y:0,z:0});
         expect(intent.x).toBe(0);expect(intent.z).toBe(0);expect(brain.navigationStalled).toBe(true);
@@ -414,8 +415,8 @@ it('sprints along short flat navigation cells, slows at pickup, and does not bla
 });
 it('takes the Closing case away from visible danger while still returning fire',()=>{
  const self=player('me',0),enemy=player('enemy',10),s=state('me');s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';
- const nav:ObjectiveNavigation={route:vi.fn((_from,to)=>[to]),explorationTargets:()=>[{x:-25,y:0,z:0},{x:25,y:0,z:0}]};
- const brain=new ObjectiveBotBrain(nav,1,()=>.5);
+ const nav:MotorNavigation={route:vi.fn((_from,to)=>[to]),explorationTargets:()=>[{x:-25,y:0,z:0},{x:25,y:0,z:0}]};
+ const brain=new RatBot(nav,1,()=>.5);
  expect(brain.step(1000,self,[self,enemy],s,()=>true,false,true).x).toBe(-12);expect(brain.objective).toBe('evade');
  expect(firstShot(brain,1020,2400,self,[self,enemy],s).shoot).toBeDefined();
 });

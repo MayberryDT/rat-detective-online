@@ -8,13 +8,13 @@ import {combatRandom} from '../../src/shared/BotCombat';
 
 import {SEWER_PIPE_ENTRANCES,sewerPipePoint,sewerRampOpening,sewerRampAt,sewerRampTravelPoint} from '../../src/shared/sewerLayout';
 
-import {ObjectiveBotBrain} from '../../src/shared/ObjectiveBotBrain';
+import {RatBot} from '../../src/shared/bots/ratBot';
 afterEach(()=>vi.restoreAllMocks());
 
 const exits=SEWER_PIPE_ENTRANCES.flatMap(entry=>[12,22,29].flatMap(depth=>(['jurisdiction','chain-of-custody'] as const).flatMap(mode=>[false,true].map(descending=>({entry,depth,mode,descending})))));
 it.each(exits)('$mode carrier crosses $entry.name from $depth, descending=$descending',({entry,depth,mode,descending})=>{
     vi.spyOn(Math,'random').mockImplementation(combatRandom(81));
-    const steering=vi.spyOn(ObjectiveBotBrain.prototype,'step');
+    const steering=vi.spyOn(RatBot.prototype,'step');
     const p=sewerPipePoint(entry,depth),start={x:p.x,y:p.floorY+.1,z:p.z};
     const now=1_000_000,bot=createPlayer('carrier','Carrier',DEFAULT_APPEARANCE,start);
     const players=new Map([[bot.id,bot]]);
@@ -34,7 +34,7 @@ it.each(exits)('$mode carrier crosses $entry.name from $depth, descending=$desce
     const trace:unknown[]=[];
     const controller=new ServerBotController({seed:341283204,version:2},[bot.id],{
         move:(_id,p)=>Object.assign(bot,p),shoot:()=>{},recover:()=>{recoveries++;},
-    },'combined');
+    });
     try{
         for(let frame=0;frame<2400;frame++){
             const at=now+frame*1000/60;state.time=at;state.case.p={x:bot.x,y:bot.y+1,z:bot.z};

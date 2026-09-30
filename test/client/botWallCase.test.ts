@@ -15,7 +15,7 @@ it.each([
  const bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,{x:x+dx*8,y:.3,z:z+dz*8}),players=new Map([[bot.id,bot]]);
  const sim=new ChaosSimulation(players,()=>{},undefined,spec),a=createAssignment('jurisdiction',now,'wall',()=>.3);a.phase='active';a.liveAt=now;sim.setAssignment(a);
  sim.caseBody.position.set(x,.8,z);sim.caseBody.velocity.setZero();sim.caseBody.angularVelocity.setZero();
- const ctl=new ServerBotController(spec,[bot.id],{move:(_id,p)=>Object.assign(bot,p),shoot:()=>{},recover:()=>{}},'combined');
+ const ctl=new ServerBotController(spec,[bot.id],{move:(_id,p)=>Object.assign(bot,p),shoot:()=>{},recover:()=>{}});
 
  try{
  for(let i=0;i<900&&!sim.caseHolderId;i++){
@@ -30,7 +30,7 @@ it.each(['bin','crate','dumpster'] as const)('jumps along the curb over a real c
  const obstacle=grayboxBoxes(spec).find(b=>b.debris===kind)!;
  const bot=createPlayer('bot','Bot',DEFAULT_APPEARANCE,{x:obstacle.x-3.5,y:.3,z:obstacle.z}),players=new Map([[bot.id,bot]]);
  const sim=new ChaosSimulation(players,()=>{},undefined,spec);sim.caseBody.position.set(obstacle.x+3.5,.6,obstacle.z);sim.caseBody.velocity.setZero();
- const ctl=new ServerBotController(spec,[bot.id],{move:(_id,p)=>Object.assign(bot,p),shoot:()=>{},recover:()=>{}},'combined');
+ const ctl=new ServerBotController(spec,[bot.id],{move:(_id,p)=>Object.assign(bot,p),shoot:()=>{},recover:()=>{}});
  let crossed=false;
  try{for(let i=0;i<900&&!sim.caseHolderId;i++){const at=now+i*1000/60,s=sim.snapshot(false);s.pickups=[];ctl.step(1/60,at,players,s,true);sim.step(1/60,at);if(Math.abs(bot.x-obstacle.x)<.65&&Math.abs(bot.z-obstacle.z)<obstacle.d/2+.58&&bot.y>obstacle.h-.05)crossed=true;}
  expect(crossed,JSON.stringify({obstacle,p:{x:bot.x,y:bot.y,z:bot.z},holder:sim.caseHolderId})).toBe(true);expect(sim.caseHolderId).toBe(bot.id);

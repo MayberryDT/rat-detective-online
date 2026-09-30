@@ -1,7 +1,7 @@
-import {DEFAULT_BOT_EXPERIMENT,type BotExperiment} from '../shared/BotExperiments';
 import * as C from 'cannon-es';
 import {BotNavigation} from '../shared/BotNavigation';
-import {ObjectiveBotBrain,type ObjectiveNavigation} from '../shared/ObjectiveBotBrain';
+import {RatBot} from '../shared/bots/ratBot';
+import type {MotorNavigation} from '../shared/bots/motor';
 import {StaticCityBroadphase,addCityBody,cityBoxBody} from '../shared/StaticCityBroadphase';
 import {CITY_BARS_GROUP} from '../shared/boxFrame';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
@@ -19,7 +19,7 @@ export interface ServerBotCallbacks {
     recoverCase?:()=>void;
 }
 interface Bot {
-    id:string;body:C.Body;brain:ObjectiveBotBrain;actor?:PlayerData;
+    id:string;body:C.Body;brain:RatBot;actor?:PlayerData;
     facing:number;initialized:boolean;alive:boolean;normalJump:boolean;zoneHop:boolean;
     launchedUntil:number;lastLaunchAt:number;lastMovementAt:number;
     /** The launcher's sideways throw, fading until landing, under the brain's steering. */
@@ -60,7 +60,7 @@ export class ServerBotController {
     private looseCaseSince=0;
     private looseCasePosition?:Vec3Data;
 
-    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks,experiment:BotExperiment=DEFAULT_BOT_EXPERIMENT){
+    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks){
         this.world.broadphase=new StaticCityBroadphase(this.world);
         this.world.broadphase.useBoundingBoxes=true;
         this.world.collisionMatrix=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
@@ -74,7 +74,7 @@ export class ServerBotController {
             addCityBody(this.world,body);
         }
         this.navigation=new BotNavigation(spec);
-        const sharedNavigation:ObjectiveNavigation={
+        const sharedNavigation:MotorNavigation={
             explorationTargets:()=>this.navigation.explorationTargets(),
             travelPoint:(from,to)=>this.navigation.travelPoint(from,to),
             supported:from=>this.navigation.supported(from),
@@ -89,7 +89,7 @@ export class ServerBotController {
             body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
             body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
-            this.bots.set(id,{id,body,brain:new ObjectiveBotBrain(sharedNavigation,index++,Math.random,experiment),facing:0,initialized:false,alive:false,
+            this.bots.set(id,{id,body,brain:new RatBot(sharedNavigation,index++,Math.random),facing:0,initialized:false,alive:false,
                 normalJump:false,zoneHop:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,driftX:0,driftZ:0,
                 strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0,pocketAt:0,pocketX:0,pocketZ:0,progressMark:0});
         }

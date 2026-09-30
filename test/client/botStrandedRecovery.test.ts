@@ -22,7 +22,7 @@ function room(seed:number,placed:Record<string,{x:number;y:number;z:number}>,roa
     const sim=new ChaosSimulation(players,()=>{},undefined,spec);
     const assignment=createAssignment(mode,NOW-3000);assignment.phase='active';sim.setAssignment(assignment);
     const recovered:string[]=[];
-    const controller=new ServerBotController(spec,[...players.keys()],{move:(id,p)=>Object.assign(players.get(id)!,p),shoot:()=>{},recover:id=>recovered.push(id)},'combined');
+    const controller=new ServerBotController(spec,[...players.keys()],{move:(id,p)=>Object.assign(players.get(id)!,p),shoot:()=>{},recover:id=>recovered.push(id)});
     const run=(seconds:number,each:(t:number)=>boolean|void=()=>{})=>{
         for(let frame=1;frame<=seconds*60;frame++){
             clock=NOW+frame*1000/60;

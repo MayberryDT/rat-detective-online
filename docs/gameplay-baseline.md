@@ -9,7 +9,7 @@ The launcher, ball lifetime, local projectile presentation and Bad Ammunition ch
 | Stage capacity | 10 total rats; each round rolls 6–9 server bots that keep names across overlapping slots; humans add on top until the cap, and a bot is kicked only when the room is already at ten. Empty overflow rooms sleep. Private full-lobby mode still fills the cap and replaces bots on human joins |
 | World sound | Shared 3D fade uses scale 32 with a 1.5 gain after range fades, capped at near volume: about 55.3% at 50 units, 16.5% at 100, 2.87% at 250. Gun base gain .40. Close foley/sirens/launchers retain their range limits; personal UI cues remain local |
 | Human movement | 18; acceleration/braking 0.28 / 0.12 at fixed 60 Hz (`RatController.ts`) |
-| AI movement | 12 on flat active-objective routes; 6.5 near goals/stairs, 8 for supported combat strafes (`ObjectiveBotBrain.ts`), independent of human speed |
+| AI movement | 12 on flat active-objective routes; 6.5 near goals/stairs, 8 for supported combat strafes (`src/shared/bots/motor.ts`), independent of human speed |
 | Mobile firing | One tap fires once; holding never repeats. The fire finger can still drag to aim, with the existing 85 ms rapid-tap bound and cancellation cleanup |
 | Keyboard jump | Base 16 × sqrt(1.28), extra jump-only gravity factor 1.28; world/ball gravity unchanged |
 | Camera | Radius 6, pivot 3.5, shoulder 1.25, mouse sensitivity 0.002, obstruction checks |
