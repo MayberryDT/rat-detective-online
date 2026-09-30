@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Bot gate metrics (docs/bot-overhaul.md, "Acceptance"): how the bots play, from the city map mirror.
 // Usage: node scripts/bot-gate.mjs [--db=output/city/city.db] [--room=public-live-v2] [--layout=3]
-//        [--since=ISO] [--until=ISO] [--mind=<mindVersion>] [--json=out.json]
+//        [--since=ISO] [--until=ISO] [--mind=<mindVersion>] [--mode=<assignment id>] [--json=out.json]
 // `minds` (B5) reads the `decision`, `goal-end` and `minds` facts.
 import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync } from 'node:fs';
@@ -10,7 +10,7 @@ const arg = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`
 const db = new DatabaseSync(arg('db', 'output/city/city.db'), { readOnly: true });
 const room = arg('room', 'public-live-v2'), layout = Number(arg('layout', '3'));
 const since = Date.parse(arg('since', '2000-01-01')), until = Date.parse(arg('until', '2100-01-01'));
-const mind = arg('mind', undefined);
+const mind = arg('mind', undefined), mode = arg('mode', undefined);
 
 /** A jump this long and faster than any rat can run (12 u/s, 17.4 with Hot Pursuit), with no death,
  * respawn or recent launch, is a stuck-bot rescue. An estimate for data recorded before the `rescue` fact (B2b). */
@@ -18,7 +18,7 @@ const RESCUE_JUMP = 40, RESCUE_SPEED = 25, FRAME_CAP_S = 6;
 
 const facts = (type) => db.prepare('select data from facts where type = ? and room = ? and layout = ? and t between ? and ? order by t')
   .all(type, room, layout, since, until).map(r => JSON.parse(r.data))
-  .filter(f => mind === undefined || String(f.mindVersion ?? '') === mind);
+  .filter(f => (mind === undefined || String(f.mindVersion ?? '') === mind) && (mode === undefined || f.mode === mode));
 const human = new Map(db.prepare('select distinct round, a, human from situations').all().map(r => [`${r.round}:${r.a}`, !!r.human]));
 const isHuman = (round, a) => human.get(`${round}:${a}`) ?? false;
 
