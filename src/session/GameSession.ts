@@ -106,6 +106,8 @@ export class GameSession {
     private readonly netplay=new NetplayAuditLog();
     private readonly simulation = new SimulationClock();
     private readonly direction = new THREE.Vector3();
+    /** The camera's look direction sent with movement for the city map's aim record (rounded, so noise sends nothing). */
+    private readonly aim = new THREE.Vector3();
     private touch?: TouchControls;
     private roundWon = false;
     private releasePreparedModels?:()=>void;
@@ -569,24 +571,29 @@ export class GameSession {
     private sendMovement(now: number): void {
         if (this.observing || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0 || now - this.lastMovementAt < 50) return;
         const { position: p, quaternion: q } = this.rat.entity.body;
-        const mq = this.rat.entity.mesh.quaternion;
-        const pose=[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w];
+        const mq = this.rat.entity.mesh.quaternion,a=this.lookDirection();
+        const pose=[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w,a.x,a.y,a.z];
         if (pose.every((value,i)=>value===this.lastMovement[i]) && now-this.lastMovementAt<1_000) return;
         const movement=this.movementInput();if(!movement)return;
         const message: ClientMessage = { type: 'updateMovement', ...movement };
         if (this.transport.send(message)) this.rememberMovement(movement,now,pose);
     }
 
+    private lookDirection():THREE.Vector3 {
+        const a=this.stage.camera.getWorldDirection(this.aim);
+        return a.set(Math.round(a.x*1000)/1000,Math.round(a.y*1000)/1000,Math.round(a.z*1000)/1000);
+    }
+
     private movementInput():MovementInput|undefined {
         if(!this.rat)return;
-        const {position:p,quaternion:q}=this.rat.entity.body,mq=this.rat.entity.mesh.quaternion??q;
+        const {position:p,quaternion:q}=this.rat.entity.body,mq=this.rat.entity.mesh.quaternion??q,a=this.lookDirection();
         this.movementSequence=(this.movementSequence??0)+1;
         return{seq:this.movementSequence,position:{x:p.x,y:p.y,z:p.z},rotation:{x:q.x,y:q.y,z:q.z,w:q.w},
-            meshRotation:{x:mq.x,y:mq.y,z:mq.z,w:mq.w}};
+            meshRotation:{x:mq.x,y:mq.y,z:mq.z,w:mq.w},aim:{x:a.x,y:a.y,z:a.z}};
     }
     private rememberMovement(movement:MovementInput,now:number,pose?:number[]):void {
-        const p=movement.position,q=movement.rotation,mq=movement.meshRotation;
-        this.lastMovement=pose??[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w];this.lastMovementAt=now;
+        const p=movement.position,q=movement.rotation,mq=movement.meshRotation,a=movement.aim;
+        this.lastMovement=pose??[p.x,p.y,p.z,q.x,q.y,q.z,q.w,mq.x,mq.y,mq.z,mq.w,a?.x??0,a?.y??0,a?.z??0];this.lastMovementAt=now;
     }
     private checkInteractions(now:number):void {
         if(this.observing||!this.rat||!this.chaos||this.rat.entity.dead||this.rat.entity.hp<=0)return;

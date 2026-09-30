@@ -107,6 +107,17 @@ describe('parseClientMessage', () => {
     for(const rotation of [{x:0,y:0,z:0,w:0},{x:1e308,y:1e308,z:1e308,w:1e308},{x:0,y:0,z:0,w:.1}])
       expect(parseClientMessage({...base,rotation})).toBeNull();
   });
+
+  // The camera look is telemetry: a bad one must never cost the player their movement.
+  it('keeps a unit camera look and drops a bad one without dropping the movement',()=>{
+    const base={type:'updateMovement',position:{x:1,y:2,z:3},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}};
+    expect(parseClientMessage({...base,aim:{x:0,y:.6,z:.8}})).toMatchObject({aim:{x:0,y:.6,z:.8}});
+    for(const aim of [{x:0,y:0,z:0},{x:5,y:0,z:0},{x:Number.NaN,y:0,z:1},'up']){
+      const parsed=parseClientMessage({...base,aim});
+      expect(parsed).toMatchObject({type:'updateMovement',position:{x:1,y:2,z:3}});
+      expect(parsed).not.toHaveProperty('aim');
+    }
+  });
 });
 
 describe('parseServerMessage', () => {

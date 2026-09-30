@@ -10,7 +10,7 @@ import { activeZone } from '../../shared/jurisdiction';
 import type { PickupKind } from '../../shared/pickups';
 import { cityPlaces } from '../../shared/city/places';
 import { cityFloor } from '../../shared/city/frame';
-import { CITY_SCHEMA_VERSION, p3, type CityFact, type FactContext, type RatSituation, type WorldSituation } from '../../shared/city/facts';
+import { CITY_SCHEMA_VERSION, p3, type CityFact, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
 import { decideMeasure, goalMeasure, JEV_COUNTS, latencyBucket, type GoalOutcome, type MindName } from '../../shared/city/minds';
 import { MIND_VERSION, type Decision, type Goal, type MotorMode, type Personality } from '../../shared/bots/intent';
 import { RoundLedger, standings } from '../../shared/city/ledger';
@@ -37,6 +37,16 @@ const ANOMALY_COOLDOWN_MS = 10_000;
 const PENDING_LIMIT = 50_000;
 /** A bot this close to the place its goal was heading for has reached it. */
 const ARRIVED = 3;
+/** Aim rings: 20 samples a second, 8 s deep, so a fight window gets its whole aim trace. */
+const AIM_MS = 50, AIM_RING = 160;
+/** A human's camera look older than this is stale; the ring falls back to the body's facing. */
+const AIM_FRESH_MS = 300;
+/** One bot shot in this many is kept as a fact with its targets, for comparing bot aim with human aim. */
+const BOT_SHOT_SAMPLE = 10;
+/** Rats in sight nearest the aim line, measured for each kept shot. */
+const SHOT_TARGETS = 3;
+/** Heights above a rat's feet: the eye sight lines start from, and the body and head spheres (ServerBotController). */
+const EYE = 1.5, CHEST = 1.3, HEAD = 1.9;
 
 export interface RecorderDeps {
   room: string;
@@ -70,6 +80,8 @@ const PLACE_GOALS: ReadonlySet<Goal> = new Set<Goal>(['roam', 'flee', 'ambush', 
 const ARCHIVE_ONLY: ReadonlySet<CityFact['type']> = new Set<CityFact['type']>(['frame', 'window', 'decision', 'goal-end']);
 
 type Sample = [number, number, number, number, number, number];
+/** ms, yaw, pitch (NaN: not known). */
+type AimSample = [number, number, number];
 interface Life { start: number; spawnPlace: string; lastPickup?: { kind: PickupKind; at: number }; lastHit?: { at: number; by?: string }; prev?: { x: number; z: number; at: number }; place?: string; carryStart?: number; shots: number[] }
 
 /** Counts under an aggregate key (day|layout|mode), then two labels: no key string is built per count. */
@@ -147,6 +159,11 @@ export class CityRecorder {
   private readonly actors = new Map<string, number>();
   private readonly lives = new Map<string, Life>();
   private readonly rings = new Map<string, Sample[]>();
+  private readonly aimRings = new Map<string, AimSample[]>();
+  /** Each human's latest camera look (unit vector) and when it arrived. */
+  private readonly looks = new Map<string, { x: number; y: number; z: number; at: number }>();
+  private aimAt = 0;
+  private botShots = 0;
   private readonly windows: Array<{ ids: Set<string>; from: number; until: number }> = [];
   /** Wall bounces per live ball, so a hit knows whether it was banked. Bounded by the sim's ball cap. */
   private readonly bounces = new Map<string, number>();
@@ -199,9 +216,9 @@ export class CityRecorder {
   }
   /** Archive every fact; keep the discrete ones in SQL for 30 days too, except the bots' decisions and goal ends
    * (hundreds per bot-hour), which the aggregates and the archive hold. */
-  private emit(fact: CityFact): void {
+  private emit(fact: CityFact, archiveOnly = ARCHIVE_ONLY.has(fact.type)): void {
     this.deps.archive.push(fact, fact.t);
-    if (!ARCHIVE_ONLY.has(fact.type)) this.events.push({ t: fact.t, round: fact.round, type: fact.type, data: JSON.stringify(fact) });
+    if (!archiveOnly) this.events.push({ t: fact.t, round: fact.round, type: fact.type, data: JSON.stringify(fact) });
   }
   /** Aggregate key prefix, rebuilt only when the UTC day, layout or mode changes (it runs for every shot). */
   private keyCache = { dayStart: 0, dayEnd: -1, layout: -1, mode: '', key: '' };
@@ -262,6 +279,12 @@ export class CityRecorder {
       this.shotIds[i] = player.id; this.shotKeys[i] = this.key(now);
       s[i * 4] = now; s[i * 4 + 1] = player.x; s[i * 4 + 2] = player.y; s[i * 4 + 3] = player.z;
       if (this.shotCount === QUEUE_LIMIT) this.drain();
+      // A sample kept as a fact (archive only), measured where everyone stands now; queued work drains first so facts keep their order.
+      if (++this.botShots % BOT_SHOT_SAMPLE === 0) {
+        this.drain();
+        this.emit({ ...this.context(now), type: 'shot', a: this.actor(player.id), human: false, p: p3(player), place: this.places.at(player.x, player.y, player.z).id,
+          dir: d3(direction), sample: BOT_SHOT_SAMPLE, targets: this.shotTargets(player, direction) }, true);
+      }
       return;
     }
     const life = this.life(player.id, now, player), place = this.places.at(player.x, player.y, player.z).id;
@@ -270,7 +293,47 @@ export class CityRecorder {
     this.ledger.shot(player.id);
     this.cell(now, SHOTS.human, player);
     this.measure(now, place, SHOTS.human);
-    this.emit({ ...this.context(now), type: 'shot', a: this.actor(player.id), human: true, p: p3(player), place, dir: p3(direction), ...(gap === undefined ? {} : { gapMs: gap }) });
+    this.emit({ ...this.context(now), type: 'shot', a: this.actor(player.id), human: true, p: p3(player), place, dir: d3(direction), ...(gap === undefined ? {} : { gapMs: gap }),
+      targets: this.shotTargets(player, direction) });
+  }
+
+  /** A human's camera look, sent with their movement. Only the aim rings read it. */
+  aim(id: string, look: Vec3Data, now: number): void {
+    const l = this.looks.get(id);
+    if (l) { l.x = look.x; l.y = look.y; l.z = look.z; l.at = now; } else this.looks.set(id, { x: look.x, y: look.y, z: look.z, at: now });
+  }
+
+  /** The rats in sight nearest a shot's line, from the shooter's eye: how far off it was, and whether it led a crossing rat. */
+  private shotTargets(p: PlayerData, dir: Vec3Data): ShotTarget[] {
+    const ex = p.x, ey = p.y + EYE, ez = p.z, dl = Math.hypot(dir.x, dir.y, dir.z) || 1, ux = dir.x / dl, uy = dir.y / dl, uz = dir.z / dl;
+    const near: Array<{ id: string; x: number; y: number; z: number; d: number; e: number }> = [];
+    for (const [id, o] of this.last) {
+      if (id === p.id || o.hp <= 0) continue;
+      const dx = o.x - ex, dy = o.y + CHEST - ey, dz = o.z - ez, d = Math.hypot(dx, dy, dz);
+      if (d < 1 || d > SIGHT_RANGE) continue;
+      const cos = (ux * dx + uy * dy + uz * dz) / d;
+      if (cos > 0) near.push({ id, x: o.x, y: o.y, z: o.z, d, e: Math.acos(Math.min(1, cos)) });
+    }
+    near.sort((a, b) => a.e - b.e);
+    const out: ShotTarget[] = [];
+    for (const t of near) {
+      if (out.length === SHOT_TARGETS) break;
+      if (this.deps.sight && !this.deps.sight({ x: ex, y: ey, z: ez }, { x: t.x, y: t.y + 1, z: t.z })) continue;
+      const hx = t.x - ex, hy = t.y + HEAD - ey, hz = t.z - ez, hd = Math.hypot(hx, hy, hz);
+      const eh = Math.acos(Math.max(-1, Math.min(1, (ux * hx + uy * hy + uz * hz) / hd)));
+      // The target's velocity from its last two 5 Hz samples, split into along and across the line of sight.
+      const ring = this.rings.get(t.id), s1 = ring?.[ring.length - 1], s0 = ring?.[ring.length - 2], dt = s1 && s0 ? (s1[0] - s0[0]) / 1000 : 0;
+      const lx = (t.x - ex) / t.d, ly = (t.y + CHEST - ey) / t.d, lz = (t.z - ez) / t.d;
+      let lat = 0, lead: number | undefined;
+      if (dt > 0) {
+        const vx = (s1![1] - s0![1]) / dt, vy = (s1![2] - s0![2]) / dt, vz = (s1![3] - s0![3]) / dt, along = vx * lx + vy * ly + vz * lz;
+        const cx = vx - lx * along, cy = vy - ly * along, cz = vz - lz * along;
+        lat = Math.hypot(cx, cy, cz);
+        if (lat >= .5) { const aim = ux * lx + uy * ly + uz * lz; lead = ((ux - lx * aim) * cx + (uy - ly * aim) * cy + (uz - lz * aim) * cz) / lat; }
+      }
+      out.push({ a: this.actor(t.id), d: Math.round(t.d * 10) / 10, e: round3(t.e), eh: round3(eh), lat: Math.round(lat * 10) / 10, ...(lead === undefined ? {} : { lead: round3(lead) }) });
+    }
+    return out;
   }
 
   balls(events: readonly ShotResultEvent[], now: number): void {
@@ -440,6 +503,19 @@ export class CityRecorder {
       const last = this.last.get(p.id);
       if (last) { last.x = p.x; last.y = p.y; last.z = p.z; last.hp = p.hp; } else this.last.set(p.id, { x: p.x, y: p.y, z: p.z, hp: p.hp });
     }
+    // 20 Hz aim: a human's camera look while fresh, otherwise (and for every bot) the body's facing with no pitch.
+    if (now >= this.aimAt) {
+      this.aimAt = now + AIM_MS;
+      for (const p of players.values()) {
+        if (p.hp <= 0) continue;
+        let ring = this.aimRings.get(p.id);
+        if (!ring) this.aimRings.set(p.id, ring = []);
+        const s: AimSample = ring.length >= AIM_RING ? ring.shift()! : [0, 0, 0], look = this.looks.get(p.id);
+        const fresh = !!look && now - look.at <= AIM_FRESH_MS;
+        s[0] = now; s[1] = round3(fresh ? Math.atan2(look!.x, look!.z) : yaw(p)); s[2] = fresh ? round3(Math.asin(Math.max(-1, Math.min(1, look!.y)))) : NaN;
+        ring.push(s);
+      }
+    }
     if (now >= this.sampleAt) {
       this.sampleAt = now + SAMPLE_MS;
       this.sample(now, players);
@@ -513,9 +589,13 @@ export class CityRecorder {
       const w = this.windows[i]!;
       if (now < w.until) continue;
       this.windows.splice(i, 1);
-      const samples: Record<string, Sample[]> = {};
-      for (const id of w.ids) samples[String(this.actor(id))] = (this.rings.get(id) ?? []).filter(s => s[0] >= w.from && s[0] <= w.until).map(s => [s[0] - w.from, s[1], s[2], s[3], s[4], s[5]]);
-      this.emit({ ...this.context(w.from), type: 'window', reason: 'damage', from: w.from, to: w.until, samples });
+      const samples: Record<string, Sample[]> = {}, aim: Record<string, Array<[number, number, number | null]>> = {};
+      for (const id of w.ids) {
+        const a = String(this.actor(id));
+        samples[a] = (this.rings.get(id) ?? []).filter(s => s[0] >= w.from && s[0] <= w.until).map(s => [s[0] - w.from, s[1], s[2], s[3], s[4], s[5]]);
+        aim[a] = (this.aimRings.get(id) ?? []).filter(s => s[0] >= w.from && s[0] <= w.until).map(s => [s[0] - w.from, s[1], Number.isNaN(s[2]) ? null : s[2]]);
+      }
+      this.emit({ ...this.context(w.from), type: 'window', reason: 'damage', from: w.from, to: w.until, samples, aim });
     }
   }
 
@@ -647,7 +727,9 @@ export class CityRecorder {
       }
       life.shots = life.shots.filter(t => now - t <= 10_000);
       const lastShot = life.shots[life.shots.length - 1];
-      rats.push({ a: this.actor(p.id), human: who === 'human', p: p3(p), floor: cityFloor(p.y), place: place.id, v, yaw: round2(yaw(p)), pitch: round2(pitch(p)),
+      // The view rotation carries no pitch; a human's fresh camera look does.
+      const look = this.looks.get(p.id), lookPitch = look && now - look.at <= AIM_FRESH_MS ? Math.asin(Math.max(-1, Math.min(1, look.y))) : pitch(p);
+      rats.push({ a: this.actor(p.id), human: who === 'human', p: p3(p), floor: cityFloor(p.y), place: place.id, v, yaw: round2(yaw(p)), pitch: round2(lookPitch),
         hp: p.hp, alive, ...(p.respawnAt !== undefined && !alive ? { respawnIn: Math.max(0, p.respawnAt - now) } : {}), lifeMs: now - life.start,
         buffs: { ...((b?.ironcladUntil ?? 0) > now ? { ironclad: b!.ironcladUntil! - now } : {}), ...((b?.hustleUntil ?? 0) > now ? { hustle: b!.hustleUntil! - now } : {}) },
         ...(life.lastPickup ? { lastPickup: { kind: life.lastPickup.kind, agoMs: now - life.lastPickup.at } } : {}),
@@ -736,3 +818,6 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 const yaw = (p: PlayerData) => 2 * Math.atan2(p.meshQy, p.meshQw);
 /** Aim pitch from the view rotation. */
 const pitch = (p: PlayerData) => Math.asin(Math.max(-1, Math.min(1, 2 * (p.qw * p.qx - p.qy * p.qz))));
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+/** A direction to 0.001: `p3`'s 0.1 would blur aim by several degrees. */
+const d3 = (v: Vec3Data): [number, number, number] => [round3(v.x), round3(v.y), round3(v.z)];

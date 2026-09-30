@@ -108,9 +108,9 @@ The schema is `src/shared/city/facts.ts` (`CITY_SCHEMA_VERSION` 1). Every fact c
 | Fact | Emitted when | Key fields | Kept |
 | --- | --- | --- | --- |
 | `frame` | Every second while a human is connected; every 5 s in the bot-only city | the world's situation plus every connected rat's situation (see below) | archive |
-| `window` | 3 s before to 2 s after any damage, merged while a fight continues | per actor, 5 samples a second of `[ms, x, y, z, yaw, hp]` | archive |
+| `window` | 3 s before to 2 s after any damage, merged while a fight continues | per actor, 5 samples a second of `[ms, x, y, z, yaw, hp]`; `aim`: per actor, 20 samples a second of `[ms, yaw, pitch]`: a human's camera look (sent with movement since 30 September; pitch `null` from older clients), a bot's facing (pitch `null`) | archive |
 | `spawn` | A rat enters play | point, place, nearest rival | archive, SQL, counts |
-| `shot` | A human's trigger pull is accepted | origin, place, aim, gap since their last shot | archive, SQL, counts. **Bots' shots are counts only**, because they fire about 100 times a minute each |
+| `shot` | A human's trigger pull is accepted; one bot shot in ten (`sample: 10`, archive only) | origin, place, aim `dir` (to 0.001), gap since their last shot, `targets`: up to 3 rats in sight nearest the aim line, each with distance `d`, angle off their chest `e` and head `eh` (radians, from the shooter's eye), speed across the line of sight `lat`, and `lead` (the aim error along that motion; positive means aimed ahead) | archive, SQL (humans' shots). **Bots' other shots are counts only**, because they fire about 100 times a minute each |
 | `ball` | A human's cheese ball hits a rat, a case, a bell, a trigger, a counterfeit, a coat, or runs out of time | outcome, point, place, victim | archive, SQL; **every ball of every rat**, bounces included, is counted in cells by outcome |
 | `damage` | A hit lands | attacker and victim, positions, damage, headshot, explosive, missile, distance, health after | archive, SQL |
 | `death` | A rat dies | killer and victim positions and places, distance, cause (`shot`, `headshot`, `explosion`, `missile`, `city`), time alive, assists | archive, SQL, counts |
@@ -131,7 +131,7 @@ The schema is `src/shared/city/facts.ts` (`CITY_SCHEMA_VERSION` 1). Every fact c
 
 Defined once in `src/shared/city/facts.ts` (`RatSituation`, `WorldSituation`), with K/D/A and standings in `src/shared/city/ledger.ts`. The future AI is meant to learn from exactly this view. The bots will be redone from scratch; they can read the same definition, or the definition can change with them under a new schema version.
 
-- **The rat:** position, floor, place, velocity, yaw, aim pitch, health, alive, respawn countdown, time alive.
+- **The rat:** position, floor, place, velocity, yaw, aim pitch (a human's camera pitch while their client sends it; otherwise 0), health, alive, respawn countdown, time alive.
 - **Pickups on it:** Ironclad and Hot Pursuit time left; its last pickup and how long ago.
 - **Case:** carrying it and for how long; distance to the case; distance to the current objective (Paper Chase destination, Jurisdiction zone, or the case).
 - **Standing:** `progress` (its fraction of the win: deliveries out of 3, zone time out of 60 s, case kills out of 10, Closing Time case time as a share of the best), `rank` (ties broken by kills), `lead` (against the nearest rival; negative when behind), `raw`.

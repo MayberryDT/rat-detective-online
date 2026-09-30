@@ -291,7 +291,9 @@ function parseMovementInput(value:unknown):MovementInput|null {
   if(!isRecord(value))return null;
   const seq=value.seq===undefined?undefined:integer(value.seq),position=parseVec3(value.position),rotation=parseQuat(value.rotation),meshRotation=parseQuat(value.meshRotation);
   if(seq===null||seq!==undefined&&(seq<1||!Number.isSafeInteger(seq))||!position||!rotation||!meshRotation)return null;
-  return{...(seq===undefined?{}:{seq}),position,rotation,meshRotation};
+  // Telemetry only: a bad aim is dropped, never the movement it rode on.
+  const aim=value.aim===undefined?undefined:parseVec3(value.aim),aimLength=aim?Math.hypot(aim.x,aim.y,aim.z):0;
+  return{...(seq===undefined?{}:{seq}),position,rotation,meshRotation,...(aim&&aimLength>.9&&aimLength<1.1?{aim}:{})};
 }
 
 function parsePosePlayer(value: unknown): Extract<ServerMessage, { type: 'playerMoved' }>['player'] | null {

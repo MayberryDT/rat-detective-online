@@ -11,6 +11,10 @@ import type { GoalOutcome, MindName } from './minds';
 export const CITY_SCHEMA_VERSION = 1;
 export type P3 = [number, number, number];
 export const p3 = (v: Vec3Data): P3 => [Math.round(v.x * 10) / 10, Math.round(v.y * 10) / 10, Math.round(v.z * 10) / 10];
+/** A rat in sight when a shot left the gun, measured from the shooter's eye (radians, units, units a second).
+ * `e`/`eh`: angle between the shot and the target's chest/head. `lat`: the target's speed across the line of sight.
+ * `lead`: the aim error along that crossing motion (positive: aimed ahead of the rat), when it moved at least .5 u/s. */
+export interface ShotTarget { a: number; d: number; e: number; eh: number; lat: number; lead?: number }
 
 export interface FactContext {
   /** UTC ms; `rm` is ms since the round went live (absent between rounds). */
@@ -62,9 +66,11 @@ export interface WorldSituation {
 
 export type CityFact = FactContext & (
   | { type: 'frame'; world: WorldSituation; rats: RatSituation[] }
-  | { type: 'window'; reason: 'damage'; from: number; to: number; samples: Record<string, Array<[number, number, number, number, number, number]>> }
+  /** `aim`: per actor, 20 samples a second of `[ms, yaw, pitch]`: a human's camera look (pitch null when the client sent none), a bot's facing (pitch null). */
+  | { type: 'window'; reason: 'damage'; from: number; to: number; samples: Record<string, Array<[number, number, number, number, number, number]>>; aim?: Record<string, Array<[number, number, number | null]>> }
   | { type: 'spawn'; a: number; p: P3; place: string; nearest?: number }
-  | { type: 'shot'; a: number; human: boolean; p: P3; place: string; dir: P3; gapMs?: number }
+  /** Every human shot; one bot shot in `sample` (archive only). `targets`: the rats in sight nearest the aim line. */
+  | { type: 'shot'; a: number; human: boolean; p: P3; place: string; dir: P3; gapMs?: number; sample?: number; targets?: ShotTarget[] }
   /** `bounces`: wall bounces before this end; a banked hit has at least one. */
   | { type: 'ball'; a?: number; outcome: ShotResultOutcome; p?: P3; place?: string; victim?: number; bounces?: number }
   /** `incoming`: the hit came with a ball's travel direction (true for ordinary shots). */

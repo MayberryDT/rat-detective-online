@@ -133,6 +133,8 @@ export interface MovementInput {
   position: Vec3Data;
   rotation: QuatData;
   meshRotation: QuatData;
+  /** The camera's unit look direction, for the city map's aim record only; authority never reads it. */
+  aim?: Vec3Data;
 }
 
 export interface ShotDescriptor {

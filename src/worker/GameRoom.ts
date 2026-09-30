@@ -1152,6 +1152,7 @@ export class GameRoom extends DurableObject<Env> {
     player.meshQz = message.meshRotation.z;
     player.meshQw = message.meshRotation.w;
     this.chaos?.recordMovement(playerId,from,position,at,seq);
+    if(message.aim)this.city.aim(playerId,message.aim,at);
     this.persistPlayer(player, corrected);
     // The harbour (plan D1): a rat whose feet sink into the water dies, credited to nobody.
     // The claim is the rat's own, so trusting it can only drown the claimant.

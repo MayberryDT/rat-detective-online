@@ -81,3 +81,79 @@ describe('city recorder rescues', () => {
     expect(cityPlaces().at(61.26, 30.04, -12.33).id).not.toBe(cityPlaces().at(-100, .3, 120).id);
   });
 });
+
+// Aim recording: how far off a shot was from each rat in sight, and whether it led a crossing rat, plus 20 Hz aim
+// traces in fight windows. Ways it could go wrong: angle measured from the feet or to the wrong height (a dead-on
+// shot reads as a miss); lead with the wrong sign; a rat behind a wall counted as a target; the camera's pitch lost
+// (the view rotation carries none); bot shots flooding SQL or not sampled at all.
+describe('city recorder aim', () => {
+  const now = Date.UTC(2026, 8, 30, 12);
+  const setup = (sight?: (from: Vec3Data, to: Vec3Data) => boolean) => {
+    const sql: CityFact[] = [], archived: CityFact[] = [];
+    const store = { addEvent: (_t: number, _round: string | undefined, _type: string, data: string) => { sql.push(JSON.parse(data) as CityFact); },
+      addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
+    const archive = { push: (fact: CityFact) => { archived.push(JSON.parse(JSON.stringify(fact)) as CityFact); }, due: () => false, flush: () => {} } as unknown as CityArchive;
+    const city = new CityRecorder({ room: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [], ...(sight ? { sight } : {}) });
+    const human = createPlayer('human', 'Tyler', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 0 });
+    const bot = createPlayer('bot-1', 'Bot', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 20 });
+    const players = new Map([[human.id, human], [bot.id, bot]]);
+    // The bot crosses the human's view to +x at 5 u/s, sampled by the 5 Hz rings.
+    for (let ms = 0; ms <= 1000; ms += 50) { bot.x = ms / 1000 * 5; city.tick(now + ms, players, undefined, { phase: 'playing' }); }
+    const at = (x: number, y: number, z: number) => { const d = Math.hypot(x, y - 1.5, z); return { x: x / d, y: (y - 1.5) / d, z: z / d }; };
+    return { city, sql, archived, human, bot, players, at };
+  };
+  const shots = (facts: CityFact[]) => facts.flatMap(f => f.type === 'shot' ? [f] : []);
+
+  it('reads a dead-on shot as dead on, and leads by the sign of the crossing', () => {
+    const { city, archived, human, bot, at } = setup();
+    city.shot(human, at(bot.x, 1.3, 20), now + 1001);
+    const turn = (dx: number) => at(bot.x + dx, 1.3, 20);
+    city.shot(human, turn(1), now + 1002); // ahead of the rat's motion
+    city.shot(human, turn(-1), now + 1003); // behind it
+    const [dead, ahead, behind] = shots(archived).map(s => s.targets?.[0]);
+    expect(dead!.d).toBeCloseTo(20.6, 1);
+    expect(dead!.lat).toBeGreaterThan(4.5);
+    expect(dead!.e).toBeLessThan(.002);
+    expect(dead!.eh).toBeGreaterThan(.02); // the head is higher than the chest
+    expect(ahead!.e).toBeGreaterThan(.04);
+    expect(ahead!.e).toBeLessThan(.06);
+    expect(ahead!.lead).toBeGreaterThan(.03);
+    expect(behind!.lead).toBeLessThan(-.03);
+  });
+
+  it('never counts a rat behind a wall', () => {
+    const { city, archived, human, bot, at } = setup(() => false);
+    city.shot(human, at(bot.x, 1.3, 20), now + 1001);
+    expect(shots(archived)[0]?.targets).toEqual([]);
+  });
+
+  it('keeps the camera pitch in fight windows, and none for bots', () => {
+    const { city, archived, human, bot, players } = setup();
+    const up = { x: 0, y: Math.sin(.3), z: Math.cos(.3) };
+    for (let ms = 1050; ms <= 4000; ms += 50) {
+      city.aim(human.id, up, now + ms);
+      if (ms === 2000) city.hit({ attacker: human, victim: bot, damage: 1, killed: false, headshot: false, explosive: false, incoming: true }, now + ms);
+      city.tick(now + ms, players, undefined, { phase: 'playing' });
+    }
+    const window = archived.find(f => f.type === 'window');
+    expect(window?.type).toBe('window');
+    if (window?.type !== 'window') return;
+    const humanTrace = Object.values(window.aim ?? {}).find(trace => trace.some(s => s[2] !== null));
+    expect(humanTrace?.filter(s => s[2] === .3).length).toBeGreaterThan(40);
+    expect(humanTrace?.at(-1)?.[2]).toBe(.3);
+    expect(Object.values(window.aim ?? {}).filter(trace => trace.every(s => s[2] === null))).toHaveLength(1);
+  });
+
+  it('keeps one bot shot in ten, in the archive only, with its targets', () => {
+    const { city, sql, archived, human, bot, at } = setup();
+    const toHuman = { x: -bot.x / Math.hypot(bot.x, 20), y: 0, z: -20 / Math.hypot(bot.x, 20) };
+    for (let i = 0; i < 20; i++) city.shot(bot, toHuman, now + 1001 + i);
+    city.shot(human, at(bot.x, 1.3, 20), now + 1030);
+    city.flush(now + 1040);
+    expect(shots(sql).map(s => s.human)).toEqual([true]);
+    const kept = shots(archived).filter(s => !s.human);
+    expect(kept).toHaveLength(2);
+    expect(kept.every(s => !s.human && s.sample === 10 && s.targets?.length === 1)).toBe(true);
+    expect(kept[0]?.dir[2]).toBeLessThan(-.9);
+  });
+});
