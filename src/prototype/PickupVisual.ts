@@ -19,6 +19,15 @@ const HOP_MS=380, HOP_HEIGHT=1.5;
 const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95};
 /** Claim pop and restock drop (seconds); beacon fades in with distance (units). */
 const POP=.32, DROP=.5, BEAM_HEIGHT=34;
+/** Part shapes built once and shared by every display: the welcome builds two dozen displays of up
+ * to fifty parts each, and rounding every box again was the largest share of that frame. A display's
+ * dispose may release a shared shape's buffers; the next draw simply uploads them again. */
+const PARTS=new Map<string,THREE.BufferGeometry>();
+function part(key:string,make:()=>THREE.BufferGeometry):THREE.BufferGeometry {
+    let geometry=PARTS.get(key);
+    if(!geometry){geometry=make();PARTS.set(key,geometry);}
+    return geometry;
+}
 
 /** The display is lit by its own lamp, not by self-glow: surfaces facing up toward
  * the shade catch warm light and the sides fall off into the dark. Chained after
@@ -87,10 +96,10 @@ export class PickupVisual {
         const brass=new THREE.MeshStandardMaterial({color:0xb38a3e,metalness:.85,roughness:.3});
         for(const material of [iron,rivet,brass]){material.envMap=metalReflection();material.envMapIntensity=.65;}
         const box=(parent:THREE.Group,w:number,h:number,d:number,x:number,y:number,z:number,material:THREE.Material,r=.04)=>{
-            const mesh=new THREE.Mesh(new RoundedBoxGeometry(w,h,d,2,Math.min(r,w/2,h/2,d/2)),material);mesh.position.set(x,y,z);parent.add(mesh);return mesh;
+            const radius=Math.min(r,w/2,h/2,d/2),mesh=new THREE.Mesh(part(`b${w},${h},${d},${radius}`,()=>new RoundedBoxGeometry(w,h,d,2,radius)),material);mesh.position.set(x,y,z);parent.add(mesh);return mesh;
         };
         const cylinder=(parent:THREE.Group,top:number,bottom:number,h:number,x:number,y:number,z:number,material:THREE.Material,segments=12)=>{
-            const mesh=new THREE.Mesh(new THREE.CylinderGeometry(top,bottom,h,segments),material);mesh.position.set(x,y,z);parent.add(mesh);return mesh;
+            const mesh=new THREE.Mesh(part(`c${top},${bottom},${h},${segments}`,()=>new THREE.CylinderGeometry(top,bottom,h,segments)),material);mesh.position.set(x,y,z);parent.add(mesh);return mesh;
         };
         // Low evidence plinth, in its own copy of the lamp's finish: the lamp batch draws `dark` skinned, and one
         // material drawn both skinned and unskinned makes three re-select its program on every draw.
