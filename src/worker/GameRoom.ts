@@ -2,6 +2,7 @@ import { MAX_OBSERVERS, observationAllowed } from '../shared/observation';
 import {RoundAwards} from './RoundAwards';
 import type {Award} from '../shared/networkProtocol';
 import { RECONNECT_GRACE_MS, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
+import { newStreakTitle } from '../shared/streak';
 import { ChaosDelivery } from './ChaosDelivery';
 import { ConnectionDelivery } from './ConnectionDelivery';
 import { wireBytes } from '../shared/networkProtocol';
@@ -1324,6 +1325,8 @@ export class GameRoom extends DurableObject<Env> {
       ...(shooter&&shooter!==victim&&shooter.streak?{killerStreak:shooter.streak}:{})});
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
+    // Each new kill streak title (3, 5, 8) earns a random supply on the spot; a round's final kill earns nothing.
+    if(!result.roundWon&&shooter&&shooter!==victim&&newStreakTitle(shooter.streak??0)&&this.chaos?.rewardSupply(shooter.id))this.applyPickupEvents();
     if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt,...this.caseFile(shooter.id)});
     await this.scheduleNextAlarm();
   }

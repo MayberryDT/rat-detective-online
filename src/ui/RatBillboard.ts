@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MAX_HP } from '../shared/networkProtocol';
+import { STREAK_TIERS, streakTier } from '../shared/streak';
 
 const HEIGHT = 128;
 const WORLD_HEIGHT = 0.6;
@@ -14,22 +15,14 @@ const GOLD = '#f3cf6f';
 const EYE_SIZE = 0.2, EYE_GAP = 0.14;
 /** Seconds for the eye to open, and to shut then fade. */
 const EYE_OPEN = 0.4, EYE_SHUT = 0.2, EYE_FADE = 0.35;
-/** Kill streak stamp under the pips: the lowest streak of each tier, the bulletin word per tier,
+/** Kill streak stamp under the pips: the bulletin word per tier (`STREAK_TIERS`),
  * the most tally marks drawn, and seconds for the stamp to land. */
-const STREAK_TIERS = [3, 5, 8] as const;
 const STREAK_WORDS = ['ARMED', 'DANGEROUS', 'PUBLIC ENEMY'] as const;
 const MAX_TALLIES = 10, STAMP_SECONDS = 0.28;
 const STAMP_FONT = '400 28px Bangers, Impact, sans-serif';
 const STAMP_RED = '#c8322a', STAMP_INK = '#ee5b4f';
 /** Nameplate brightness shared by every rat; Blackout dims it with the city. */
 export const NAMEPLATE_LIGHT = { value: 1 };
-
-/** 0 below a 3-kill streak, then 1 (3–4), 2 (5–7) and 3 (8 or more). */
-export function streakTier(streak: number): number {
-    let tier = 0;
-    for (const floor of STREAK_TIERS) if (streak >= floor) tier++;
-    return tier;
-}
 
 /** Noir nameplate: the rat's name in spaced small caps over a row of slanted
  * pips, one per hit point, like tabs on a case file. Lost pips flash, shake and

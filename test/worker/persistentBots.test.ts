@@ -192,8 +192,13 @@ describe('persistent hosted bots', () => {
         game.chaos.step(0,now);expect(game.chaos.caseHolderId).toBe(killer.id);
         game.chaos.step(.001,now+1);game.finishAssignment();await instance.alarm();
         expect(game.round.phase).toBe('won');
-        expect(await ctx.storage.getAlarm()).toBe(now + WIN_DISPLAY_MS);
-        now += WIN_DISPLAY_MS; await instance.alarm();
+        // The 30 s round end outlasts the 15 s heartbeat: the heartbeat wakes first and leaves the reset due.
+        const won = now;
+        expect(await ctx.storage.getAlarm()).toBe(won + BOT_HEARTBEAT_MS);
+        now += BOT_HEARTBEAT_MS; await instance.alarm();
+        expect(game.round.phase).toBe('won');
+        expect(await ctx.storage.getAlarm()).toBe(won + WIN_DISPLAY_MS);
+        now = won + WIN_DISPLAY_MS; await instance.alarm();
         expect(game.round.phase).toBe('playing');
         expect([...game.players.values()].every(p => p.hp === MAX_HP && p.kills === 0 && p.deaths === 0)).toBe(true);
         expect(game.players.get(killer.id)).toBe(killer);

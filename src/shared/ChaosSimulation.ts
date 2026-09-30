@@ -736,12 +736,18 @@ export class ChaosSimulation {
         const incident=forced??choices[Math.floor(Math.random()*choices.length)].id;
         const caller=owner?this.players.get(owner):undefined;
         this.dispatch={phase:'rolling',started:this.now,until:this.now+T.rollMs,serial:this.dispatch.serial+1,incident,...(caller?{caller:caller.id}:{})};
-        if(!caller||caller.hp<=0)return;
-        // The caller's reward: a random supply on the spot, through the ordinary claim effects.
-        const supplies:PickupKind[]=caller.hp<MAX_HP?['ironclad','hustle','quick-fix']:['ironclad','hustle'];
+        if(caller)this.rewardSupply(caller.id);
+    }
+    /** A random supply on the spot through the ordinary claim effects: the Dispatch caller's reward
+     * and each new kill streak title's. Quick Fix is only in the draw when it would heal. */
+    rewardSupply(playerId:string):PickupKind|undefined{
+        const player=this.players.get(playerId);
+        if(!player||player.hp<=0)return undefined;
+        const supplies:PickupKind[]=player.hp<MAX_HP?['ironclad','hustle','quick-fix']:['ironclad','hustle'];
         const supply=supplies[Math.floor(Math.random()*supplies.length)]!;
-        if(supply==='quick-fix'){caller.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:caller.id,hp:MAX_HP,cause:'pickup'});}
-        else this.buffs[caller.id]=mergePickup(this.buffs[caller.id],supply,this.now);
+        if(supply==='quick-fix'){player.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:player.id,hp:MAX_HP,cause:'pickup'});}
+        else this.buffs[player.id]=mergePickup(this.buffs[player.id],supply,this.now);
+        return supply;
     }
     private reserveShots(count:number){
         while(this.shots.length>T.maxShots-count){

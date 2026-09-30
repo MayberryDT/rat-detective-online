@@ -131,6 +131,36 @@ describe('GameRoom websockets', () => {
     expect([welcome.players[aw.id]?.streak,welcome.players[bw.id]?.streak]).toEqual([3,undefined]);
   });
 
+  it('hands a random supply to a rat reaching each new streak title (3, 5, 8) and at no other kill',async()=>{
+    const room=`graybox-streak-reward-${crypto.randomUUID()}`,a=await openClient(room),b=await openClient(room);
+    a.ws.send(joinPayload('Shooter'));const aw=await a.inbox.waitFor('welcome');
+    b.ws.send(joinPayload('Victim'));const bw=await b.inbox.waitFor('welcome');
+    const random=vi.spyOn(Math,'random').mockReturnValue(.99);
+    try{
+      await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom)=>{
+        const game=instance as unknown as {players:Map<string,PlayerData>;startChaos():void;chaos:{snapshot(full:boolean):{buffs?:Record<string,{hustleUntil?:number}>}};handleHit(id:string,message:ClientMessage):Promise<void>};
+        game.startChaos();
+        const shooter=game.players.get(aw.id)!,healed:number[]=[];
+        for(let kill=1;kill<=7;kill++){
+          // Hurt, the last draw is Quick Fix: a reward shows as a full heal.
+          shooter.hp=1;game.players.get(bw.id)!.hp=MAX_HP;
+          await game.handleHit(aw.id,{type:'hit',victimId:bw.id,damage:MAX_HP});
+          if(shooter.hp===MAX_HP)healed.push(kill);
+        }
+        expect(healed).toEqual([3,5]);
+        shooter.hp=MAX_HP;
+        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.hustleUntil).toBeUndefined();
+        // Unhurt, Quick Fix leaves the draw: the last is Hot Pursuit.
+        game.players.get(bw.id)!.hp=MAX_HP;
+        await game.handleHit(aw.id,{type:'hit',victimId:bw.id,damage:MAX_HP});
+        expect(shooter.streak).toBe(8);
+        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.hustleUntil).toBeGreaterThan(0);
+      });
+    }finally{random.mockRestore();}
+    const heal=await b.inbox.waitFor('playerHealed');
+    expect(heal).toMatchObject({id:aw.id,hp:MAX_HP,cause:'pickup'});
+  });
+
   it('bounds malformed ingress and clears unjoined connection buckets on close',async()=>{
     const room=`ingress-${crypto.randomUUID()}`,client=await openClient(room),stub=env.GAME_ROOM.getByName(room);
     await runInDurableObject(stub,async(instance:GameRoom,ctx)=>{
