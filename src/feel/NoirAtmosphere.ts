@@ -4,6 +4,7 @@ import {STREET_LAMP_HEIGHT,type StreetLampPosition} from '../shared/streetLampLa
 import {feelState} from './feelState';
 import {FEEL} from './feelTuning';
 import {GRAPHICS} from '../session/graphicsQuality';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const HAZE_SLOTS=16;
 
@@ -74,7 +75,7 @@ export class NoirAtmosphere {
         if(this.fog)this.baseFogColor.copy(this.fog.color);
         this.background=scene.background instanceof THREE.Color?scene.background:undefined;
         if(this.background)this.baseBackground.copy(this.background);
-        scene.add(this.root);
+        freezeStatic(this.root);scene.add(this.root);
     }
 
     private random():number {this.seed=(this.seed*1103515245+12345)&0x7fffffff;return this.seed/0x7fffffff;}

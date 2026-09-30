@@ -3,6 +3,7 @@ import type {Vec3Data} from '../shared/networkProtocol';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {CameoAnimator,CAMEO_DURATIONS,type CameoReaction} from './CameoAnimator';
 import {CAMEO_LAYOUT,type CameoKind} from './cameoLayout';
+import {freezeStatic} from '../utils/freezeStatic';
 
 export interface CameoVisitor {id:string;position:Vec3Data;dead?:boolean}
 type State={model:THREE.Group;animator:CameoAnimator;kind:CameoKind;center:THREE.Vector3;reaction:CameoReaction;started:number;cooldown:number;direction:number;near:Set<string>;range:number};
@@ -21,7 +22,7 @@ export class CameoView {
     private enabled=true;
     private awake=false;
     constructor(models:ReadonlyMap<CameoKind,THREE.Group>){
-        this.root.name='superhero-cameos';
+        this.root.name='superhero-cameos';this.root.matrixAutoUpdate=false;
         for(const placement of CAMEO_LAYOUT){
             const model=models.get(placement.kind);if(!model)continue;
             model.name=`cameo-${placement.kind}`;model.position.set(placement.x,placement.y,placement.z);model.rotation.y=placement.yaw;
@@ -34,13 +35,20 @@ export class CameoView {
             for(const material of materials){material.color.multiplyScalar(1.16);material.emissive.copy(material.color).lerp(new THREE.Color(0x73697b),.15).multiplyScalar(.5);material.emissiveIntensity=.28;}
             this.root.add(model);
             this.states.push({model,kind:placement.kind,animator:new CameoAnimator(model,placement.kind),center:new THREE.Vector3(placement.x,placement.y+1.1,placement.z),reaction:'idle',started:0,cooldown:0,direction:1,near:new Set(),range:placement.viewDistance});
-            model.visible=false;
+            // Posed once for the title's buffer warm-up; `show` resumes updates when it comes in range.
+            model.visible=false;freezeStatic(model);
         }
     }
     /** The world/room owner resets transient state on welcome, reset and disconnect. */
     reset(){
         this.shots.clear();this.time=0;this.nextScan=0;this.awake=false;
-        for(const s of this.states){s.reaction='idle';s.started=0;s.cooldown=0;s.near.clear();s.animator.reset();s.model.visible=false;}
+        for(const s of this.states){s.reaction='idle';s.started=0;s.cooldown=0;s.near.clear();s.animator.reset();this.show(s.model,false);}
+    }
+    /** A hidden cameo keeps its last pose without recomposing its ~40 matrices every frame. */
+    private show(model:THREE.Group,visible:boolean){
+        if(model.visible===visible)return;
+        model.visible=visible;
+        model.traverse(node=>{node.matrixAutoUpdate=visible;});
     }
     setEnabled(value:boolean){this.enabled=value;this.root.visible=value;if(!value)this.reset();}
     beginFrame(dt:number,camera:Vec3Data){
@@ -49,7 +57,7 @@ export class CameoView {
         for(const [id,shot] of this.shots)if(this.frame-shot.frame>2)this.shots.delete(id);
         for(const s of this.states){
             const p=s.center,d=Math.hypot(camera.x-p.x,camera.y-p.y,camera.z-p.z);
-            s.model.visible=this.enabled&&d<s.range;
+            this.show(s.model,this.enabled&&d<s.range);
             if(s.model.visible)this.awake=true;
             else{s.near.clear();s.reaction='idle';}
         }

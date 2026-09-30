@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {LANDMARK_INTERIORS} from '../shared/landmarkLayout';
 import {feelState} from './feelState';
 import {FEEL} from './feelTuning';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const NEON:readonly [string,number][]=[['HOTEL',0xff3b4f],['JAZZ',0x2fe0d0],['BAR',0xff3b4f],['DINER',0x2fe0d0],['NOIR',0xff3b4f],['CHEESE',0xffb03a],['OPEN',0x2fe0d0],['DETECTIVE',0xff3b4f]];
 
@@ -70,7 +71,7 @@ export class NoirDressing {
                 this.root.add(mesh);this.signs.push({mesh,material,flicker:0,phase:h*1.7+index});
             }
         });
-        scene.add(this.root);
+        freezeStatic(this.root);scene.add(this.root);
     }
 
     private random():number {this.seed=(this.seed*1103515245+12345)&0x7fffffff;return this.seed/0x7fffffff;}

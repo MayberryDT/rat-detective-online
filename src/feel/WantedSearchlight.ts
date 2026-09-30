@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const HEIGHT=34, TOP=.25, BOTTOM=2.1;
 
@@ -19,7 +20,7 @@ export class WantedSearchlight {
         const pool=new THREE.Mesh(new THREE.CircleGeometry(BOTTOM*1.1,28),this.pool);pool.rotation.x=-Math.PI/2;pool.position.y=.08;pool.raycast=()=>{};
         this.root.add(cone,pool);this.root.name='most-wanted-searchlight';this.root.userData.noNoir=true;this.root.visible=false;
         // In the scene from the start, hidden, so the load's warm-up links its program, not the first Most Wanted.
-        scene.add(this.root);
+        freezeStatic(this.root,[this.root]);scene.add(this.root);
     }
     /** `target` is the wanted rat's feet, or undefined when nobody is wanted. */
     update(dt:number,target:THREE.Vector3|undefined):void {

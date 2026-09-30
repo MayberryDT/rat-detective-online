@@ -142,7 +142,7 @@ export class ContactShadows {
         this.mesh=new THREE.InstancedMesh(geometry,material,CONTACT_CAPACITY);
         this.mesh.name='contact-shadows';this.mesh.count=0;this.mesh.frustumCulled=false;
         this.mesh.castShadow=this.mesh.receiveShadow=false;this.mesh.renderOrder=-1;
-        this.mesh.raycast=()=>{};this.mesh.userData.noNoir=true;
+        this.mesh.raycast=()=>{};this.mesh.userData.noNoir=true;this.mesh.matrixAutoUpdate=false;
         this.ray.mode=CANNON.Ray.CLOSEST;this.ray.skipBackfaces=true;this.ray.collisionFilterMask=1;
     }
     get size():number {return this.contacts.size;}

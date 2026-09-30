@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {STREET_LAMP_HEIGHT,type StreetLampPosition} from '../shared/streetLampLayout';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {FEEL} from './feelTuning';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const RED=new THREE.Color(1,.09,.04);
 
@@ -40,7 +41,7 @@ export class LampAlarm {
             this.halos.setColorAt(i,this.colour.setScalar(0));this.pools.setColorAt(i,this.colour);
         });
         for(const mesh of [this.halos,this.pools]){mesh.count=this.lamps.length;mesh.frustumCulled=false;this.root.add(mesh);}
-        scene.add(this.root);
+        freezeStatic(this.root);scene.add(this.root);
     }
 
     /** Start the flash from `at`. */

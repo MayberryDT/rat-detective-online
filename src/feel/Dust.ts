@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {feelState} from './feelState';
 import {FEEL} from './feelTuning';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const PUFFS=48;
 
@@ -24,7 +25,7 @@ export class Dust {
         this.material=new THREE.MeshStandardMaterial({color:0x6d6474,roughness:1,transparent:true,opacity:.42,depthWrite:false});
         this.mesh=new THREE.InstancedMesh(this.geometry,this.material,PUFFS);
         this.mesh.name='feel-dust';this.mesh.count=0;this.mesh.frustumCulled=false;
-        this.scene.add(this.mesh);
+        freezeStatic(this.mesh);this.scene.add(this.mesh);
         return this.mesh;
     }
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AssignmentState } from '../shared/assignments';
 import { activeZone, nextZone, JURISDICTION_TUNING } from '../shared/jurisdiction';
 import { JURISDICTION_ZONES, JURISDICTION_ZONE_IDS, zoneTiles, type JurisdictionZoneId } from '../shared/jurisdictionZones';
+import { freezeStatic } from '../utils/freezeStatic';
 
 /** Two static draws per visible footprint. No lights, polling, colliders or wall outlines.
  * Every zone's draws exist (hidden) from the start, so the title's warm-up compiles them. */
@@ -11,6 +12,8 @@ export class JurisdictionZones {
     constructor(scene:THREE.Scene){
         scene.add(this.root);this.root.name='jurisdiction-zones';this.root.visible=false;
         for(const id of JURISDICTION_ZONE_IDS)this.view(id).group.visible=false;
+        // Tiles are laid out in world space: nothing here ever moves.
+        freezeStatic(this.root);
     }
     private view(id:JurisdictionZoneId){
         let view=this.views.get(id);if(view)return view;

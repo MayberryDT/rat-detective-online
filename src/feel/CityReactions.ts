@@ -4,6 +4,7 @@ import {SEWER_MANHOLE} from '../shared/sewerLayout';
 import {STREET_LAMP_HEIGHT,type StreetLampPosition} from '../shared/streetLampLayout';
 import {feelState} from './feelState';
 import {FEEL} from './feelTuning';
+import {freezeStatic} from '../utils/freezeStatic';
 
 type Point={x:number;y:number;z:number};
 interface Bird {home:THREE.Vector3;position:THREE.Vector3;velocity:THREE.Vector3;flying:boolean;away:number;phase:number;yaw:number}
@@ -67,7 +68,7 @@ export class CityReactions {
         this.steamMesh=this.instanced(new THREE.IcosahedronGeometry(1,1),new THREE.MeshStandardMaterial({color:0xb9b4c4,roughness:1,transparent:true,opacity:.22,depthWrite:false}),this.puffs.length);
         this.bulbMesh=this.instanced(new THREE.SphereGeometry(.7,10,8),new THREE.MeshBasicMaterial({color:0xffd9a0,transparent:true,opacity:.8,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false}),8);
         this.bulbMesh.count=0;this.steamMesh.count=0;
-        scene.add(this.root);
+        freezeStatic(this.root);scene.add(this.root);
         this.writeRest();
     }
 

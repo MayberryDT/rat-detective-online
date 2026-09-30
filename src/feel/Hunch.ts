@@ -4,6 +4,7 @@ import {advanceHunchSketch,type RatEntity} from '../entities/RatEntity';
 import type {FeelState} from './feelState';
 import type {FeelSound} from './FeelSound';
 import {FEEL} from './feelTuning';
+import {freezeStatic} from '../utils/freezeStatic';
 import './hunch.css';
 
 export interface HunchRat {readonly entity:RatEntity}
@@ -57,7 +58,7 @@ export class Hunch {
 
     constructor(private readonly scene:THREE.Scene,private readonly state:FeelState,private readonly sound:FeelSound,
         private readonly doc:Document|undefined=globalThis.document){
-        this.warmLine.visible=false;this.warmLine.name='hunch-trail-warm';scene.add(this.warmLine);
+        this.warmLine.visible=false;this.warmLine.name='hunch-trail-warm';freezeStatic(this.warmLine);scene.add(this.warmLine);
     }
 
     /** Clean Bill: everyone at full health with a city-wide, stronger Hunch. */
@@ -123,7 +124,8 @@ export class Hunch {
         if(!trail){
             const geometry=new THREE.BufferGeometry(),points=new Float32Array(TRAIL_POINTS*3),colors=new Float32Array(TRAIL_POINTS*3);
             geometry.setAttribute('position',new THREE.BufferAttribute(points,3));geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
-            const line=new THREE.Line(geometry,this.material);line.frustumCulled=false;line.raycast=()=>{};line.name='hunch-trail';
+            // Points are written in world space: the line itself never moves.
+            const line=new THREE.Line(geometry,this.material);line.frustumCulled=false;line.raycast=()=>{};line.name='hunch-trail';freezeStatic(line);
             this.scene.add(line);trail={line,points,colors,count:0,timer:0};this.trails.set(id,trail);
         }
         const p=entity.mesh.position,level=FEEL.hunch.params.trail;

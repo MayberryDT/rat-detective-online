@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type {LaunchMachineKind} from '../shared/chaosState';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const BLASTS=8;
 const STREAKS=200;
@@ -52,7 +53,8 @@ export class LaunchBlast {
             const column=new THREE.Mesh(this.geometry.column,material(false)),core=new THREE.Mesh(this.geometry.column,material(true));
             const ring=new THREE.Mesh(this.geometry.ring,material(false)),flash=new THREE.Mesh(this.geometry.flash,material(true));
             for(const mesh of [column,core,ring,flash]){mesh.frustumCulled=false;mesh.renderOrder=2;root.add(mesh);}
-            root.visible=false;scene.add(root);
+            // Hidden until fired: `fire` and `update` compose the matrices they change.
+            root.visible=false;freezeStatic(root);scene.add(root);
             this.blasts.push({root,core,column,ring,flash,age:Infinity,life:1,width:1,height:1,boost:false});
         }
         this.streakMesh=this.pool('launch-streaks',new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({color:0xf4f2ea,transparent:true,opacity:.75,depthWrite:false}),STREAKS);
@@ -62,12 +64,12 @@ export class LaunchBlast {
 
     private pool(name:string,geometry:THREE.BufferGeometry,material:THREE.MeshBasicMaterial,count:number):THREE.InstancedMesh<THREE.BufferGeometry,THREE.MeshBasicMaterial> {
         const mesh=new THREE.InstancedMesh(geometry,material,count);
-        mesh.name=name;mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.userData.noNoir=true;this.scene.add(mesh);return mesh;
+        mesh.name=name;mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.userData.noNoir=true;freezeStatic(mesh);this.scene.add(mesh);return mesh;
     }
 
     fire(kind:LaunchMachineKind,pad:{x:number;y:number;z:number;radius:number},boost:boolean):void {
         const look=LOOK[kind],blast=this.blasts[this.blastCursor++%BLASTS]!;
-        blast.root.position.set(pad.x,pad.y+.1,pad.z);blast.root.visible=true;
+        blast.root.position.set(pad.x,pad.y+.1,pad.z);blast.root.updateMatrix();blast.root.visible=true;
         blast.age=0;blast.boost=boost;blast.life=boost?1.3:1;
         blast.width=look.width*(boost?1.5:1)*pad.radius/5;blast.height=look.height*(boost?1.45:1);
         blast.column.material.color.setHex(boost?OVERPRESSURE.air:look.air);
@@ -126,6 +128,7 @@ export class LaunchBlast {
             const f=a<.05?a/.05:Math.max(0,1-(a-.05)/.13);
             b.flash.scale.setScalar(Math.max(.001,4.5*b.width*f));b.flash.position.y=.8;
             b.flash.material.opacity=f*(b.boost?1:.8);
+            b.core.updateMatrix();b.column.updateMatrix();b.ring.updateMatrix();b.flash.updateMatrix();
         }
         for(let i=0;i<STREAKS;i++){
             const m=this.streaks[i]!;

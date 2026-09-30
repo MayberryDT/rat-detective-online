@@ -44,6 +44,7 @@ import {cityImpact} from '../feel/CityReactions';
 import type {DeathStyle} from '../utils/RatAnimator';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
+import {freezeStatic} from '../utils/freezeStatic';
 
 /** A corpse model's origin is its feet; its body lies around this point of its own frame. */
 const CORPSE_CENTRE=new THREE.Vector3(0,.95,0);
@@ -158,7 +159,8 @@ export class ChaosView {
         this.localShots=new LocalShotPresentation(traceShot);
         this.root.add(this.draws.root);
         bindIncidentAudio(this.audio);
-        this.root.name='records-chaos';scene.add(this.root);scene.add(this.caseRoot);
+        // The root and the shot draws (moved by instance) stay put; corpses added later keep updating.
+        this.root.name='records-chaos';freezeStatic(this.root);scene.add(this.root);scene.add(this.caseRoot);
         this.caseRoot.name='hot-case';
         this.caseBeacon=new CaseBeacon(scene);
         addLeatherBriefcase(this.caseRoot);

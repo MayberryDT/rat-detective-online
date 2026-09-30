@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type {LaunchMachineKind} from '../shared/chaosState';
 import {LaunchBlast} from './LaunchBlast';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const BITS=220;
 const SPARKS=64;
@@ -67,7 +68,8 @@ export class LaunchJuice {
         for(let i=0;i<DECALS;i++){
             const material=new THREE.MeshBasicMaterial({map:this.blankTexture,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
             const mesh=new THREE.Mesh(this.decalGeometry,material);mesh.name='launch-crater';mesh.renderOrder=1;mesh.visible=false;mesh.userData.noNoir=true;
-            this.scene.add(mesh);this.decals.push({mesh,material,age:0,life:1});this.owned.push(material);
+            // `decal` composes the matrix when it places a crater.
+            mesh.matrixAutoUpdate=false;this.scene.add(mesh);this.decals.push({mesh,material,age:0,life:1});this.owned.push(material);
         }
     }
 
@@ -76,7 +78,7 @@ export class LaunchJuice {
         const mesh=new THREE.InstancedMesh(geometry,material,count);
         mesh.name=name;mesh.count=0;mesh.visible=false;mesh.frustumCulled=false;mesh.userData.noNoir=true;
         if(colored)mesh.setColorAt(0,this.color.setRGB(1,1,1));
-        this.scene.add(mesh);this.owned.push(geometry,material);
+        freezeStatic(mesh);this.scene.add(mesh);this.owned.push(geometry,material);
         return mesh;
     }
 

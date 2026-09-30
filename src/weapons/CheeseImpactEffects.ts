@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const DRIPS=60;
 const SPARKS=48;
@@ -56,7 +57,7 @@ export class CheeseImpactEffects {
         this.root.name = 'cheese-impact-effects';this.root.userData.noNoir = true;
         this.crumbs.count = this.splats.count = this.drips.count = this.sparks.count = 0;
         this.crumbs.frustumCulled = this.splats.frustumCulled = this.drips.frustumCulled = this.sparks.frustumCulled = false;
-        this.root.add(this.crumbs, this.splats, this.drips, this.sparks); scene.add(this.root);
+        this.root.add(this.crumbs, this.splats, this.drips, this.sparks); freezeStatic(this.root); scene.add(this.root);
     }
 
     emit(point: THREE.Vector3, normal: THREE.Vector3, surface: boolean, scale=1): void {

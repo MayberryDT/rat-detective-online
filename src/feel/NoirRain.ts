@@ -3,6 +3,7 @@ import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {feelState} from './feelState';
 import {FEEL} from './feelTuning';
 import {GRAPHICS} from '../session/graphicsQuality';
+import {freezeStatic} from '../utils/freezeStatic';
 
 /** Soft vertical gradient (bright at the lamp end) for wet-street reflection streaks. */
 function streakTexture():THREE.CanvasTexture|undefined {
@@ -49,7 +50,7 @@ export class NoirRain {
         this.positions=new Float32Array(count*3);
         for(let i=0;i<count;i++){this.place(i);this.positions[i*3+1]=this.random()*25;}
         this.splashAges=new Float32Array(64).fill(Infinity);this.splashPoints=new Float32Array(64*2);
-        scene.add(this.root);
+        freezeStatic(this.root);scene.add(this.root);
     }
 
     /** Horizontal drop position around the camera, never right in front of the lens. */
