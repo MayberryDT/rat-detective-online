@@ -148,7 +148,8 @@ export class PressureMachine {
             const swell=1+.035*intensity*intensity+.05*danger*Math.abs(Math.sin(t*28));
             model.body.scale.set(swell,1+.02*intensity+.03*danger*Math.abs(Math.sin(t*33)),swell);
             if(model.needle)model.needle.rotation.z=2.36-(intensity+view.needleKick*(1-intensity))*4.71+Math.sin(t*40)*.06*danger;
-            (model.glow.material as THREE.MeshBasicMaterial).opacity=danger*.28*(.7+.3*Math.sin(t*14))+(hang?.3:0);
+            // Additive and depth-free: at zero opacity it adds nothing, so skip the draw.
+            const glow=model.glow.material as THREE.MeshBasicMaterial;glow.opacity=danger*.28*(.7+.3*Math.sin(t*14))+(hang?.3:0);model.glow.visible=glow.opacity>0;
             // Steam: wisps when building, more seams and a taller plume as it rises.
             if(intensity>.03&&dt>0){
                 view.steamDebt+=dt*(1.5+intensity*10+danger*22);
@@ -262,7 +263,7 @@ export class PressureMachine {
             this.dummy.position.copy(s.p);this.dummy.scale.setScalar(s.size*(1+k*3)*(1-k*k));this.dummy.updateMatrix();
             this.steamMesh.setMatrixAt(count++,this.dummy.matrix);
         }
-        this.steamMesh.count=count;if(count)this.steamMesh.instanceMatrix.needsUpdate=true;
+        this.steamMesh.count=count;this.steamMesh.visible=count>0;if(count)this.steamMesh.instanceMatrix.needsUpdate=true;
     }
 
     dispose(){

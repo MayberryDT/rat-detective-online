@@ -109,6 +109,7 @@ export class ChaosView {
     private readonly dangerGlow=this.draws.dangerGlow;
     private readonly dangerTrails=this.draws.dangerTrails;
     private readonly missileTrail=this.draws.missileTrail;
+    private readonly shotMeshes=[this.bullets,this.chargedBullets,this.chargedGlow,this.dangerGlow,this.dangerTrails,this.missileTrail];
     private readonly trailPose=new THREE.Object3D();
     private readonly trailDirection=new THREE.Vector3();
     private readonly trailAxis=new THREE.Vector3(0,0,1);
@@ -526,11 +527,8 @@ export class ChaosView {
             this.ballPose.scale.set(1.5,.8,1.2);this.ballPose.updateMatrix();
             this.missileTrail.setMatrixAt(this.missileTrail.count++,this.ballPose.matrix);
         }
-        this.bullets.instanceMatrix.needsUpdate=true;this.chargedBullets.instanceMatrix.needsUpdate=true;
-        if(this.chargedBullets.instanceColor)this.chargedBullets.instanceColor.needsUpdate=true;
-        this.chargedGlow.instanceMatrix.needsUpdate=true;this.missileTrail.instanceMatrix.needsUpdate=true;
-        this.dangerGlow.instanceMatrix.needsUpdate=true;this.dangerTrails.instanceMatrix.needsUpdate=true;
-        if(this.dangerTrails.instanceColor)this.dangerTrails.instanceColor.needsUpdate=true;
+        // An empty pool still costs a program bind and uniform upload per frame, and its instance buffer an upload.
+        for(const mesh of this.shotMeshes){mesh.visible=mesh.count>0;if(mesh.count){mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}}
         for(const c of this.corpses.values()){
             const b=c.state;
             if(!this.extrapolate||!this.presentation.corpse(b.id,renderTime,this.presented))copyPresentationPose(b,this.presented);

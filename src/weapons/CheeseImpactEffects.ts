@@ -56,6 +56,7 @@ export class CheeseImpactEffects {
         this.splats = new THREE.InstancedMesh(this.splatGeometry, this.splatMaterial, 40);
         this.root.name = 'cheese-impact-effects';this.root.userData.noNoir = true;
         this.crumbs.count = this.splats.count = this.drips.count = this.sparks.count = 0;
+        this.crumbs.visible = this.splats.visible = this.drips.visible = this.sparks.visible = false;
         this.crumbs.frustumCulled = this.splats.frustumCulled = this.drips.frustumCulled = this.sparks.frustumCulled = false;
         this.root.add(this.crumbs, this.splats, this.drips, this.sparks); freezeStatic(this.root); scene.add(this.root);
     }
@@ -142,6 +143,8 @@ export class CheeseImpactEffects {
             this.dummy.updateMatrix();this.sparks.setMatrixAt(sparkCount++,this.dummy.matrix);
         }
         this.crumbs.count=particleCount;this.splats.count=markCount;this.drips.count=dripCount;this.sparks.count=sparkCount;
+        // Empty pools skip the draw setup entirely.
+        this.crumbs.visible=particleCount>0;this.splats.visible=markCount>0;this.drips.visible=dripCount>0;this.sparks.visible=sparkCount>0;
         this.active=particleCount+markCount+dripCount+sparkCount>0;
         this.crumbs.instanceMatrix.needsUpdate = this.splats.instanceMatrix.needsUpdate = this.drips.instanceMatrix.needsUpdate = this.sparks.instanceMatrix.needsUpdate = true;
     }
@@ -185,6 +188,7 @@ export class CheeseImpactEffects {
         for(const drip of this.dripSlots)drip.age=Infinity;
         for(const spark of this.sparkSlots)spark.age=Infinity;
         this.active=false;this.particleCursor=this.markCursor=this.dripCursor=this.sparkCursor=0;this.crumbs.count=this.splats.count=this.drips.count=this.sparks.count=0;
+        this.crumbs.visible=this.splats.visible=this.drips.visible=this.sparks.visible=false;
     }
 
     dispose(): void {

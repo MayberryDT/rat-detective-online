@@ -292,7 +292,7 @@ export class DispatchPillars {
             this.dummy.scale.setScalar(1-s.age/s.life);this.dummy.updateMatrix();
             this.sparks.setMatrixAt(count++,this.dummy.matrix);
         }
-        this.sparks.count=count;if(count)this.sparks.instanceMatrix.needsUpdate=true;
+        this.sparks.count=count;this.sparks.visible=count>0;if(count)this.sparks.instanceMatrix.needsUpdate=true;
         count=0;
         for(const s of this.shardPool){
             if((s.age+=dt)>=s.life)continue;
@@ -306,7 +306,7 @@ export class DispatchPillars {
             this.dummy.position.copy(s.p);this.dummy.scale.setScalar(Math.min(1,(s.life-s.age)/.4));this.dummy.updateMatrix();
             this.shards.setMatrixAt(count++,this.dummy.matrix);
         }
-        this.shards.count=count;if(count)this.shards.instanceMatrix.needsUpdate=true;
+        this.shards.count=count;this.shards.visible=count>0;if(count)this.shards.instanceMatrix.needsUpdate=true;
     }
 
     dispose(){

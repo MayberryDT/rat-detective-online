@@ -169,7 +169,7 @@ export class CityReactions {
             this.dummy.scale.setScalar(puff.size*(.4+t*1.4)*(1-t*t));
             this.dummy.updateMatrix();this.steamMesh.setMatrixAt(puffs++,this.dummy.matrix);
         }
-        this.steamMesh.count=puffs;
+        this.steamMesh.count=puffs;this.steamMesh.visible=puffs>0;
         let bulbs=0;
         for(let i=this.bulbs.length-1;i>=0;i--){
             const bulb=this.bulbs[i]!;
@@ -179,7 +179,7 @@ export class CityReactions {
             this.dummy.position.copy(bulb.position);this.dummy.rotation.set(0,0,0);this.dummy.scale.setScalar(on?1.3:.35);
             this.dummy.updateMatrix();this.bulbMesh.setMatrixAt(bulbs++,this.dummy.matrix);
         }
-        this.bulbMesh.count=bulbs;
+        this.bulbMesh.count=bulbs;this.bulbMesh.visible=bulbs>0;
         for(const mesh of this.meshes)mesh.instanceMatrix.needsUpdate=true;
     }
 
