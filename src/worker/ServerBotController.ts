@@ -235,13 +235,16 @@ export class ServerBotController {
             if(!bot.pocketAt||!wantsMove&&grounded||bot.brain.progressMark!==bot.progressMark||Math.hypot(body.position.x-bot.pocketX,body.position.z-bot.pocketZ)>POCKET_RADIUS){
                 bot.pocketAt=now;bot.pocketX=body.position.x;bot.pocketZ=body.position.z;bot.progressMark=bot.brain.progressMark;
             }
+            // Stalled on a floor the walk graph lacks (a building's solid roof, thrown there by someone else's
+            // launcher): no route or local step starts here, so walk off it now, not after the stuck clock.
+            const offGraph=grounded&&now>=bot.launchedUntil&&bot.brain.navigationStalled&&!this.navigation.supported(body.position);
             if(!wantsMove){bot.strandedSince=0;bot.progressAt=now;}
-            else if(grounded&&now>bot.lastLaunchAt+8000){
+            else if(grounded&&(now>bot.lastLaunchAt+8000||offGraph)){
                 bot.strandedSince=bot.progressAt;
-                if((now-bot.progressAt>=30000||now-bot.pocketAt>=POCKET_RESCUE_MS)&&this.callbacks.recover){
+                if(now>bot.lastLaunchAt+8000&&(now-bot.progressAt>=30000||now-bot.pocketAt>=POCKET_RESCUE_MS)&&this.callbacks.recover){
                     bot.strandedSince=0;this.callbacks.recover(bot.id);continue;
                 }
-                if(now-bot.progressAt>=8000){
+                if(offGraph||now-bot.progressAt>=8000){
                     this.escape(bot,now);intent.x=bot.escapeX;intent.z=bot.escapeZ;
                     if(intent.x||intent.z)intent.facing=Math.atan2(intent.x,intent.z);
                 }

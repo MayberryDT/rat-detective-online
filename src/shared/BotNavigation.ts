@@ -1,6 +1,7 @@
 import {DISPATCH_STATIONS,LAUNCH_MACHINES} from './chaosState';
 import { CITY_BOUNDS, GRAYBOX_SPAWNS, grayboxBoxes, type GrayboxBox } from './grayboxLayout';
 import { LANDMARK_INTERIORS, landmarkExitPoint } from './landmarkLayout';
+import { pier9ExitPoint } from './city/kit/parts/docksWarehouse';
 import { SEWER_LIGHTS,sewerRampTravelPoint } from './sewerLayout';
 import type { Vec3Data } from './networkProtocol';
 import type { WorldSpec } from './worldSpec';
@@ -83,7 +84,7 @@ export class BotNavigation {
         }
         graphs.set(spec,{buckets:this.buckets,columns:this.columns,edges:this.edges,targets:this.targets,launchEdges:this.launchEdges});
     }
-    travelPoint(from:Vec3Data,to:Vec3Data):Vec3Data {return sewerRampTravelPoint(from,to)??landmarkExitPoint(from,to);}
+    travelPoint(from:Vec3Data,to:Vec3Data):Vec3Data {return sewerRampTravelPoint(from,to)??pier9ExitPoint(from,to)??landmarkExitPoint(from,to);}
     /** Spawn/landing feet can have support before Cannon publishes its next contact. */
     supported(from:Vec3Data):boolean {return this.surfaces(from.x,from.z).some(y=>Math.abs(y-from.y)<.65);}
     explorationTargets():Vec3Data[] {return this.targets.map(p=>({...p}));}

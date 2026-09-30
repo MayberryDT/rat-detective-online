@@ -1,3 +1,4 @@
+import type { Vec3Data } from '../../../networkProtocol';
 import type { KitBuilder } from '../kit';
 import { crate, floodHead, railing, stairRailing } from './docksKit';
 
@@ -8,10 +9,52 @@ export const HARBOUR_MASTER = {x0:122, x1:135.6, z0:-125, z1:-114.4, height:5.1}
 export const MEZZANINE_Y = 5.6;
 /** Mezzanine stairs climb about 22° (steeper ramps are not walkable). */
 const STAIR_RUN = 13.9;
+/** The mezzanine's front edge, where both stairs arrive, and the stairs' centre lines. */
+const EDGE = -122, STAIR_X = [100, 118] as const, STAIR_W = 2.8;
 const T = .8;
 /** Door openings: [from,to] along each wall, all 6 high except the small ones. */
 const QUAY_DOOR:[number,number] = [103,115], EAST_DOOR:[number,number] = [-134,-124];
 const SOUTH_DOOR:[number,number] = [96,102], WEST_DOOR:[number,number] = [-124,-119];
+/** The office's door, in its north glass wall. */
+const OFFICE_DOOR:[number,number] = [124,126.6];
+
+/** Walking decks up there (the south floor, its west arm, the catwalk) and the stairs, with the heights a rat
+ * on them, or hopping on them, has. The floor below is out of reach: the deck overhead stops its jumps short. */
+const UPSTAIRS = [
+    {x0:82, x1:136, z0:EDGE, z1:-114, y0:MEZZANINE_Y-1},
+    {x0:82, x1:90, z0:-141.2, z1:EDGE, y0:MEZZANINE_Y-1},
+    {x0:90, x1:128, z0:-141.2, z1:-138.8, y0:MEZZANINE_Y-1},
+    ...STAIR_X.map(x=>({x0:x-STAIR_W/2, x1:x+STAIR_W/2, z0:EDGE-STAIR_RUN, z1:EDGE, y0:.5})),
+];
+const within = (p:Vec3Data,r:{x0:number;x1:number;z0:number;z1:number}) => p.x>=r.x0&&p.x<=r.x1&&p.z>=r.z0&&p.z<=r.z1;
+const upstairs = (p:Vec3Data) => UPSTAIRS.some(r=>within(p,r)&&p.y>=r.y0&&p.y<MEZZANINE_Y+7);
+const indoors = (p:Vec3Data) => within(p,PIER9)&&p.y>-1&&p.y<PIER9.height;
+const inOffice = (p:Vec3Data) => within(p,HARBOUR_MASTER)&&p.y>-1&&p.y<HARBOUR_MASTER.height;
+/** The ways out, 4 past each wall so waypoint tolerance cannot call one reached from inside. */
+const DOORS:Vec3Data[] = [
+    {x:(QUAY_DOOR[0]+QUAY_DOOR[1])/2, y:0, z:PIER9.z0-4},
+    {x:(SOUTH_DOOR[0]+SOUTH_DOOR[1])/2, y:0, z:PIER9.z1+4},
+    {x:PIER9.x1+4, y:0, z:(EAST_DOOR[0]+EAST_DOOR[1])/2},
+    {x:PIER9.x0-4, y:0, z:(WEST_DOOR[0]+WEST_DOOR[1])/2},
+];
+
+/** Pier 9's exit leg, as a landmark's: for a rat inside whose goal is elsewhere, the foot of the better stair
+ * from the mezzanine, the office door from the harbour master's office, else the better outer door. With no
+ * route yet (a far goal's search can take longer than a moving goal stays put), walking straight at the goal
+ * ends in a corner of the hall or the mezzanine; a nearby leg's search finishes at once. Each point is a little
+ * past its opening, so waypoint tolerance cannot call it reached early. Undefined outside or for a goal inside
+ * the same space. */
+export function pier9ExitPoint(from:Vec3Data,to:Vec3Data):Vec3Data|undefined {
+    if(upstairs(from)){
+        if(upstairs(to))return undefined;
+        const cost=(x:number)=>Math.hypot(from.x-x,from.z-EDGE)+Math.hypot(to.x-x,to.z-(EDGE-STAIR_RUN));
+        return {x:cost(STAIR_X[0])<=cost(STAIR_X[1])?STAIR_X[0]:STAIR_X[1],y:0,z:EDGE-STAIR_RUN-1.5};
+    }
+    if(inOffice(from))return inOffice(to)?undefined:{x:(OFFICE_DOOR[0]+OFFICE_DOOR[1])/2,y:0,z:HARBOUR_MASTER.z0-2};
+    if(!indoors(from)||indoors(to))return undefined;
+    const cost=(p:Vec3Data)=>Math.hypot(from.x-p.x,from.z-p.z)+Math.hypot(to.x-p.x,to.z-p.z);
+    return DOORS.reduce((best,p)=>cost(p)<cost(best)?p:best);
+}
 
 export function pier9(k:KitBuilder):void {
     const {x0,x1,z0,z1,height:H}=PIER9,door=6;
@@ -46,16 +89,16 @@ function shutter(k:KitBuilder,fixed:'x'|'z',at:number,[a,b]:[number,number],bott
 
 /** The mezzanine along the south wall with a west arm, and a catwalk across the north bay. */
 function mezzanine(k:KitBuilder):void {
-    const {x0,x1,z1}=PIER9,Y=MEZZANINE_Y,edge=-122,T2=T/2;
+    const {x0,x1,z1}=PIER9,Y=MEZZANINE_Y,edge=EDGE,T2=T/2;
     k.slab('steel',(x0+x1)/2,Y,(edge+z1-T2)/2,x1-x0-T,z1-T2-edge,.5);
     k.slab('steel',(x0+T2+90)/2,Y,(-141.2+edge)/2,90-x0-T2,edge+141.2,.5);
     // The catwalk: from the west arm, across the bay, over the quay door.
     k.slab('steel',(90+128)/2,Y,-140,38,2.4,.3);
     railing(k,90,-141.2,128,-141.2,Y);railing(k,90,-138.8,128,-138.8,Y);railing(k,128,-141.2,128,-138.8,Y);
     // Stairs up to the mezzanine front, rising south.
-    for(const x of [100,118]){
+    for(const x of STAIR_X){
         const from={x,y:0,z:edge-STAIR_RUN};
-        k.stair('steel',from,-Math.PI/2,Y,STAIR_RUN,2.8);
+        k.stair('steel',from,-Math.PI/2,Y,STAIR_RUN,STAIR_W);
         for(const o of [-1.5,1.5])stairRailing(k,from,-Math.PI/2,Y,STAIR_RUN,o);
     }
     // Railings along the mezzanine edge, open at the stair heads and the catwalk.
@@ -71,7 +114,7 @@ function mezzanine(k:KitBuilder):void {
 
 /** The harbour master's office: glass on iron mullions over a wooden dado, a desk and files. */
 function office(k:KitBuilder):void {
-    const {x0,x1,z0,z1,height:H}=HARBOUR_MASTER,door:[number,number]=[124,126.6];
+    const {x0,x1,z0,z1,height:H}=HARBOUR_MASTER,door=OFFICE_DOOR;
     const glass=(ax:number,az:number,bx:number,bz:number)=>{
         k.wall('wood',ax,az,bx,bz,0,1.1,.2);
         k.wall('glass',ax,az,bx,bz,1.1,H-.4,.08);
