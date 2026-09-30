@@ -156,6 +156,8 @@ export class GameSession {
             if(['localhost','127.0.0.1','[::1]'].includes(window.location.hostname)&&this.transport.state==='playing')this.transport.send({type:'diagnostics',report});
         }) : null;
         this.perf=new PerfReporter(renderer,report=>this.transport.send({type:'perf',report}),this.events.signal);
+        // The page's first pagehide listener (main.ts) closes the socket before the session's own runs.
+        this.transport.onDestroy=()=>this.perf.leave();
         this.perf.quality=()=>{const q=qualityStatus();return{quality:q.mode==='auto'?`auto-${q.tier}`:q.tier,scale:q.scale};};
         const { scene, world, listener } = this.stage;
         initEntitySounds(listener);
@@ -875,7 +877,6 @@ export class GameSession {
         this.touch?.dispose();
         this.input.dispose();
         this.bots?.dispose();this.bots=null;
-        this.perf.leave();
         this.transport.destroy();
         this.hud.dispose();
         this.scoreboard.dispose();

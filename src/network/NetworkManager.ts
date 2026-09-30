@@ -86,6 +86,8 @@ export class NetworkManager {
     public state: ConnectionState = 'idle';
     public onState: ((state: ConnectionState, message?: string) => void) | null = null;
     public onMessage: ((message: ServerMessage) => void) | null = null;
+    /** Last words on the open socket before it is torn down for good (the page is leaving). */
+    public onDestroy: (() => void) | null = null;
     private socket: WebSocket | null = null;
     private credentials: { name: string; appearance: RatAppearance } | null = null;
     private retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -418,6 +420,7 @@ export class NetworkManager {
     }
 
     destroy(): void {
+        const last=this.onDestroy;this.onDestroy=null;last?.();
         const prepared=this.prepared;this.prepared=null;prepared?.cleanup();prepared?.socket.close();
         this.cancelConnection();
         this.credentials = null;

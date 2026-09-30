@@ -168,6 +168,15 @@ describe('network session transport', () => {
         expect(JSON.parse(sockets[3].sent[0]).resumeToken).toBeUndefined();expect(urls[3]).not.toContain('preferred=');
         expect(urls[3]).not.toContain('resume=');expect(data.size).toBe(0);
     });
+    // The leaving player's last perf report must reach the room: the page tears the socket down before the session's own pagehide.
+    it('sends its last words on the open socket before tearing it down, once',()=>{
+        network.connect('Rat',appearance);sockets[0].open();sockets[0].receive(welcome());
+        const report={ms:9000,frames:540,fps:60,fps50:60,p50:16.7,p95:18,p99:20,worst:40,over33:1,over100:0};
+        network.onDestroy=()=>{network.send({type:'perf',report});};
+        network.destroy();network.destroy();
+        expect(sockets[0].sent.map(m=>JSON.parse(m).type).filter(t=>t==='perf')).toHaveLength(1);
+        expect(sockets[0].readyState).toBe(FakeSocket.CLOSED);
+    });
 
     it('uses explicit invitation intent instead of a saved ordinary-return credential',()=>{
         const token='12345678-1234-4123-8123-123456789abc',data=new Map<string,string>([['rat-detective-resume',JSON.stringify({

@@ -27,6 +27,8 @@ export class PerfReporter {
     // rAF stops in a hidden tab; the first frame back spans the whole absence.
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.skip = true; }, { signal });
   }
+  /** The page is leaving: what it has, from 5 s of play. */
+  leave(): void { if (this.ms >= LEAVE_MIN_MS) this.flush(); }
 
   /** One play frame: `frameMs` since the previous rAF, `cpuMs` of work inside this one. */
   frame(frameMs: number, cpuMs: number): void {
@@ -34,7 +36,6 @@ export class PerfReporter {
     this.frames[this.count] = frameMs; this.cpu[this.count] = cpuMs; this.count++; this.ms += frameMs;
     if (this.ms >= REPORT_MS || this.count === CAPACITY) this.flush();
   }
-  leave(): void { if (this.ms >= LEAVE_MIN_MS) this.flush(); }
 
   private flush(): void {
     const n = this.count, frames = this.frames.subarray(0, n).sort(), cpu = this.cpu.subarray(0, n).sort();

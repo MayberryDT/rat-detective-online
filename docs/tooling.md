@@ -67,6 +67,7 @@ Check the port is free first. `/model-preview.html` is the rat model tool, `/sta
 - `scripts/benchmark-server-tick.mjs`: deterministic room-tick benchmark. An optimization must keep its trajectory hash; `--ref=<commit>` builds another revision for back-to-back comparison.
 - `scripts/profile-client.mjs`: headless, muted Chrome CPU and allocation profile of a game page, with source-map attribution for `vite build --sourcemap` builds.
 - `?diagnostics=quiet` reports frame, per-phase mean/max and GPU render time; `window.ratDiagnostics.snapshot()` reads them.
+- Players' machines: every human client sends a `perf` report (frame times, hitches, CPU per frame, GPU renderer, OS, browser, resolution) every 30 s of play and on leave; `node scripts/city-mirror.mjs && node scripts/perf-report.mjs` prints it per session and by OS and GPU. See the `perf` fact in [the city map](city-map.md).
 
 Usage and the current numbers: [performance baseline](verification/perf-baseline-2026-09-28.md).
 
