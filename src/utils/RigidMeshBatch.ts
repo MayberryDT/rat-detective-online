@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {ratSpineWeights} from './RatModel';
+import {useShadowDepthForm} from './shadowDepthForms';
 
 /** How a deforming mesh (a rat's tail) reaches the current pose. Whoever draws it calls this
  * first: the renderer through the hooks of the mesh and the parts riding it, or the rigid batch. */
@@ -181,7 +182,7 @@ export function batchRigidMeshes(root:THREE.Group):RigidBatch|undefined {
     // largest death/respawn stretch. Verified against animated vertices.
     batch.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,1,0),4);
     batch.castShadow=sources[0]?.castShadow??deforming[0]!.castShadow;batch.receiveShadow=sources[0]?.receiveShadow??deforming[0]!.receiveShadow;
-    batch.bind(skeleton,new THREE.Matrix4());
+    batch.bind(skeleton,new THREE.Matrix4());useShadowDepthForm(batch);
     // Picking keeps original object identity, transforms and exact geometry.
     batch.raycast=()=>{};
     // Shadow maps draw before the camera pass: whichever comes first brings the tail up to date.

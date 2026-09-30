@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {yieldToPage} from './yieldToPage';
 import {ACTOR_SPOTS} from '../prototype/StreetLightPool';
 import {SEWER_LAMPS} from '../prototype/Neighborhood';
+import {isShadowDepthForm} from '../utils/shadowDepthForms';
 
 /** Issue the stand-ins' programs, without waiting on them, lit as the finished city will be:
  * the stage lights plus the city's actor spots, then with its sewer lamps as well. The driver
@@ -95,14 +96,15 @@ const texture=(material:THREE.Material,key:'map'|'alphaMap'|'displacementMap'):T
 };
 
 /** One depth-material stand-in for every kind of shadow caster under `roots`, for `warmPrograms`.
- * three draws casters into shadow maps with one shared depth material that takes each caster's
- * texture map and side and its form (plain, instanced, skinned), with the lights of the render
- * before; otherwise those programs link when a caster first enters the flashlight. The stand-ins
- * are never disposed (that would release the programs they link). */
+ * three draws casters into shadow maps with one shared depth material (or their form's, see
+ * `useShadowDepthForm`, which links the same programs) that takes each caster's texture map and
+ * side and its form (plain, instanced, skinned), with the lights of the render before; otherwise
+ * those programs link when a caster first enters the flashlight. The stand-ins are never disposed
+ * (that would release the programs they link). */
 export function shadowCasterProbes(roots:readonly THREE.Object3D[]):THREE.Group {
     const probes=new THREE.Group(),seen=new Set<string>();
     for(const root of roots)root.traverse(object=>{
-        if(!(object instanceof THREE.Mesh)||!object.castShadow||object.customDepthMaterial)return;
+        if(!(object instanceof THREE.Mesh)||!object.castShadow||object.customDepthMaterial&&!isShadowDepthForm(object.customDepthMaterial))return;
         const geometry=object.geometry,morphs=Object.keys(geometry.morphAttributes).length;
         const form=object instanceof THREE.InstancedMesh?object.instanceColor?'instanced-color':'instanced':object instanceof THREE.SkinnedMesh?'skinned':'plain';
         for(const material of Array.isArray(object.material)?object.material:[object.material]){

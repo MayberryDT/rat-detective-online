@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import {useShadowDepthForm} from '../utils/shadowDepthForms';
 
 /** City extent on x and z (both axes share it), as `CITY_BOUNDS`. */
 export interface CityExtent {min:number;max:number}
@@ -53,9 +54,11 @@ export class StaticMoonShadow {
     constructor(readonly light:THREE.DirectionalLight,private readonly shadowMap:{enabled:boolean;autoUpdate:boolean;needsUpdate:boolean}) {}
 
     /** Every scene child not in `before` is the city's static scenery, replacing any earlier
-     * city; the map is redrawn with the next frame. Call after the city is built. */
+     * city; the map is redrawn with the next frame. Call after the city is built. The scenery's
+     * instanced casters get their form's depth material (see `useShadowDepthForm`). */
     adoptCity(scene:THREE.Scene,before:ReadonlySet<THREE.Object3D>):void {
         this.scenery=new Set(scene.children.filter(object=>!before.has(object)));
+        for(const root of this.scenery)root.traverse(object=>{if(object instanceof THREE.Mesh)useShadowDepthForm(object);});
         this.pending=true;this.light.shadow.autoUpdate=false;
     }
 
