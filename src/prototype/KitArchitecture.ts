@@ -5,6 +5,7 @@ import { FINISH_COLORS, GLOWING_FINISHES, pieceQuaternion, type Finish, type Kit
 import { kitCity } from '../shared/city/kit/city';
 import { applyFixedIllumination, type FixedLightField } from './FixedLighting';
 import { restoreGeometry, type CityBakeRecord } from './CityBakeCache';
+import { instanceGeometry } from '../utils/instanceGeometry';
 
 type KitBake=Pick<CityBakeRecord,'kit'|'kitColors'|'signs'>;
 interface KitPlan {
@@ -46,7 +47,8 @@ export class KitArchitecture {
     private readonly round=new THREE.CylinderGeometry(.5,.5,1,14);
     private readonly meshes:THREE.Mesh[]=[];
     private readonly geometries:THREE.BufferGeometry[]=[];
-    private readonly materials=new Map<Finish,THREE.MeshStandardMaterial>();
+    /** Per finish, plain meshes then instanced ones: a material drawn both ways makes three reselect its program every frame. */
+    private readonly materials=[new Map<Finish,THREE.MeshStandardMaterial>(),new Map<Finish,THREE.MeshStandardMaterial>()];
     private readonly extra:THREE.Material[]=[];
     private readonly signs:THREE.Mesh[]=[];
     private readonly textures:THREE.Texture[]=[];
@@ -146,21 +148,21 @@ export class KitArchitecture {
                 for(const part of parts)part.dispose();
                 baked!.merged.push(geometry);
             }
-            const mesh=new THREE.Mesh(geometry,this.material(group.finish,false));
+            const mesh=new THREE.Mesh(geometry,this.material(group.finish,false,false));
             mesh.castShadow=group.shadow;mesh.raycast=()=>{};
             this.add(mesh,`kit-${group.finish}-baked`);
             yield;
         }
         for(const [b,batch] of batches.entries()){
             const flicker=batch.pieces.some(p=>p.flicker),base=batch.shape==='round'?this.round:this.box;
-            let geometry:THREE.BufferGeometry=base;
+            const geometry=batch.baked?new THREE.BufferGeometry():instanceGeometry(base);
             if(batch.baked){
                 // The unit shape's buffers, plus one steady light per instance.
-                geometry=new THREE.BufferGeometry();geometry.setIndex(base.index);
+                geometry.setIndex(base.index);
                 geometry.setAttribute('position',base.getAttribute('position'));geometry.setAttribute('normal',base.getAttribute('normal'));
                 this.geometries.push(geometry);
             }
-            const mesh=new THREE.InstancedMesh(geometry,this.material(batch.finish,flicker),batch.pieces.length);
+            const mesh=new THREE.InstancedMesh(geometry,this.material(batch.finish,flicker,true),batch.pieces.length);
             const colors=batch.baked?cached?.kitColors[b]??new Float32Array(batch.pieces.length*3):new Float32Array(0);
             bakeTint(batch.finish,surface);
             batch.pieces.forEach((p,i)=>{
@@ -206,8 +208,8 @@ export class KitArchitecture {
         mesh.receiveShadow=true;mesh.matrixAutoUpdate=false;mesh.updateMatrix();mesh.name=name;
         this.scene.add(mesh);this.meshes.push(mesh);
     }
-    private material(finish:Finish,flicker:boolean):THREE.MeshStandardMaterial {
-        const shared=flicker?undefined:this.materials.get(finish);if(shared)return shared;
+    private material(finish:Finish,flicker:boolean,instanced:boolean):THREE.MeshStandardMaterial {
+        const materials=this.materials[+instanced]!,shared=flicker?undefined:materials.get(finish);if(shared)return shared;
         const color=FINISH_COLORS[finish],glowing=GLOWING_FINISHES.has(finish);
         const material=new THREE.MeshStandardMaterial({color,roughness:finish==='hull'||finish==='steel'?.6:.86,
             metalness:finish==='brass'||finish==='crane'||finish==='steel'?.45:.05,
@@ -222,7 +224,7 @@ export class KitArchitecture {
             return material;
         }
         if(!glowing)applyFixedIllumination(material);
-        this.materials.set(finish,material);
+        materials.set(finish,material);
         return material;
     }
     private sign(lines:string[],x:number,y:number,z:number,w:number,h:number,yaw:number,bg:string,ink:string,glow:boolean,light:THREE.Color){
@@ -251,7 +253,7 @@ export class KitArchitecture {
         for(const geometry of this.geometries)geometry.dispose();
         for(const sign of this.signs){this.scene.remove(sign);sign.geometry.dispose();}
         for(const t of this.textures)t.dispose();
-        for(const m of [...this.materials.values(),...this.extra])m.dispose();
+        for(const m of [...this.materials[0]!.values(),...this.materials[1]!.values(),...this.extra])m.dispose();
         this.box.dispose();this.round.dispose();
     }
 }
