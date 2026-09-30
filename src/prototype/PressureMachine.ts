@@ -4,6 +4,7 @@ import {SURGE} from '../shared/launcherVelocity';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {LauncherAudio} from '../audio/LauncherAudio';
 import {buildMachine,createMachineMaterials,TRIGGER_SCALE as TRIGGER_BASE,type MachineMaterials,type MachineModel} from './LaunchMachineModels';
+import {freezeStatic} from '../utils/freezeStatic';
 
 const STEAM=180;
 const smooth=(edge0:number,edge1:number,x:number)=>{const t=Math.min(1,Math.max(0,(x-edge0)/(edge1-edge0)));return t*t*(3-2*t);};
@@ -64,6 +65,9 @@ export class PressureMachine {
         // One Surge vent up front (hidden, free), so the title's warm-up compiles its programs.
         this.ventView();
         scene.add(this.root);
+        // Only what `update`/`animate` moves keeps updating: every other matrix is composed once.
+        freezeStatic(this.root,[...this.views.flatMap(({model})=>[model.body,model.trigger,...model.needle?[model.needle]:[],...Object.values(model.parts),...model.parts.streamers?.children??[]]),
+            ...this.ventViews.flatMap(({root,cover})=>[root,cover])]);
     }
 
     /** A trigger hit reported at `p` (world) by the snapshot: the trigger punches in and
@@ -243,7 +247,7 @@ export class PressureMachine {
         const glow=new THREE.Mesh(this.ventGeometry.ring,new THREE.MeshBasicMaterial({color:0xff5a20,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false,fog:false}));
         glow.rotation.x=-Math.PI/2;glow.position.y=.03;
         const cover=new THREE.Group(),lid=new THREE.Mesh(this.ventGeometry.cover,this.materials.iron);lid.castShadow=true;cover.add(lid);
-        root.add(hole,glow,cover);this.root.add(root);
+        root.add(hole,glow,cover);freezeStatic(root,[root,cover]);this.root.add(root);
         const view={root,cover,glow,id:null,erupted:false,warned:false,debt:0};this.ventViews.push(view);
         return view;
     }

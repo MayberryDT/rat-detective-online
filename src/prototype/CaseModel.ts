@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASE_SIZE } from '../shared/chaosState';
+import { freezeStatic } from '../utils/freezeStatic';
 
 /** A closed, overstuffed leather document case. All detail is unlit geometry;
  * the shared shell and handle dimensions retain the physical collision shape.
@@ -69,4 +70,6 @@ export function addLeatherBriefcase(root:THREE.Group){
     }
     // Keep the named grip reference after its vertices join the rigid batch.
     const grip=new THREE.Object3D();grip.name='case-handle-grip';grip.position.y=.43;root.add(grip);
+    // The case moves as one: its parts never move within it.
+    for(const child of root.children)freezeStatic(child);
 }

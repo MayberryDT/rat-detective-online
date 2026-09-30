@@ -6,6 +6,7 @@ import {worldSoundGain} from '../audio/worldSoundGain';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {buildPillar,createPillarKit,disposePillarKit,FACE_WINDOW,type PillarKit,type PillarModel} from './DispatchPillarModel';
+import {freezeStatic} from '../utils/freezeStatic';
 
 export type DispatchStation=typeof DISPATCH_STATIONS[number];
 type Dispatch=ChaosState['dispatch'];
@@ -77,6 +78,9 @@ export class DispatchPillars {
         for(const mesh of [this.sparks,this.shards]){mesh.count=0;mesh.frustumCulled=false;this.fx.add(mesh);}
         this.fx.name='dispatch-pillar-fx';this.fx.userData.noNoir=true;
         scene.add(this.root,this.fx);
+        // The post trembles, the bell rocks, the hammer strikes and the beacon turns; nothing else moves.
+        freezeStatic(this.root,this.views.flatMap(({model})=>[model.body,model.bell,model.hammer,model.lamp,model.rotor,model.sweep]));
+        freezeStatic(this.fx);
     }
 
     /** A ball the authority counted on a bell at `p` (world). `busy` hits land while the

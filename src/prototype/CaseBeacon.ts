@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {freezeStatic} from '../utils/freezeStatic';
 /** Enlarged view-dependent rim of the actual case shape, visible through the city. */
 export class CaseBeacon {
     readonly root=new THREE.Group();
@@ -15,7 +16,7 @@ export class CaseBeacon {
         const body=new THREE.Mesh(new RoundedBoxGeometry(.86,.66,.38,3,.06),this.material);this.root.add(body);
         const handle=new THREE.Mesh(new THREE.TorusGeometry(.13,.025,6,16,Math.PI),this.material);
         handle.position.y=.36;this.root.add(handle);
-        this.root.traverse(o=>{o.renderOrder=2000;o.raycast=()=>{};});scene.add(this.root);
+        this.root.traverse(o=>{o.renderOrder=2000;o.raycast=()=>{};});freezeStatic(this.root,[this.root]);scene.add(this.root);
     }
     update(target:THREE.Object3D,camera:THREE.Camera,hidden:boolean){
         this.root.position.copy(target.position);this.root.quaternion.copy(target.quaternion);
