@@ -1,12 +1,11 @@
 import type { PlayerData, Vec3Data } from './networkProtocol';
+import { BASE_SKILL, type SkillDials } from './bots/intent';
 
+/** Trigger rhythm the skill dials leave alone; reaction, aim error and shot gaps are dials. */
 export const BOT_COMBAT = {
-    reactionMinMs: 200, reactionMaxMs: 450,
-    shotMinMs: 200, shotMaxMs: 240,
     pauseMinMs: 120, pauseMaxMs: 300,
     observationMinMs: 160, observationMaxMs: 260,
     trackingMs: 200, correctionMinMs: 250, correctionMaxMs: 500,
-    errorMinRadians: 2.8 * Math.PI / 180, errorMaxRadians: 5.6 * Math.PI / 180,
     followThroughMs: 180, followThroughChance: .25,
 } as const;
 
@@ -39,7 +38,7 @@ export class BotCombat {
     private yawError = 0;
     private pitchError = 0;
     private canFollow = false;
-    constructor(private readonly random: () => number) {}
+    constructor(private readonly random: () => number, private readonly skill: SkillDials = BASE_SKILL) {}
     private between(min: number, max: number): number { return min + this.random() * (max-min); }
     reset(): void {
         this.targetId=undefined;this.aimingAtCase=false;this.observed=undefined;this.tracked=undefined;
@@ -52,7 +51,7 @@ export class BotCombat {
             if(target.id!==this.targetId||!!casePoint!==this.aimingAtCase){
                 this.reset();this.targetId=target.id;
                 this.aimingAtCase=!!casePoint;
-                this.readyAt=now+this.between(BOT_COMBAT.reactionMinMs,BOT_COMBAT.reactionMaxMs)+Math.max(0,Math.min(300,acquisitionCostMs));
+                this.readyAt=now+this.between(...this.skill.reactionMs)+Math.max(0,Math.min(300,acquisitionCostMs));
                 this.observeAt=0;this.correctionAt=0;
                 this.observed=casePoint?{...casePoint}:{x:target.x,y:target.y+.9,z:target.z};this.tracked={...this.observed};
             }
@@ -67,7 +66,7 @@ export class BotCombat {
         const blend=1-Math.exp(-dt/BOT_COMBAT.trackingMs);
         for(const axis of ['x','y','z'] as const)this.tracked[axis]+=(this.observed[axis]-this.tracked[axis])*blend;
         if(now>=this.correctionAt){
-            const angle=this.between(BOT_COMBAT.errorMinRadians,BOT_COMBAT.errorMaxRadians),azimuth=this.random()*Math.PI*2;
+            const angle=this.between(...this.skill.aimErrorRadians),azimuth=this.random()*Math.PI*2;
             this.yawError=Math.cos(azimuth)*angle;this.pitchError=Math.sin(azimuth)*angle;
             this.correctionAt=now+this.between(BOT_COMBAT.correctionMinMs,BOT_COMBAT.correctionMaxMs);
         }
@@ -88,7 +87,7 @@ export class BotCombat {
             this.canFollow=this.random()<BOT_COMBAT.followThroughChance;
         }
         this.remaining--;
-        this.nextShot=now+this.between(BOT_COMBAT.shotMinMs,BOT_COMBAT.shotMaxMs);
+        this.nextShot=now+this.between(...this.skill.burstShotMs);
         return {aim,shoot:aim};
     }
 }

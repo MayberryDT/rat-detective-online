@@ -78,4 +78,6 @@ export type CityFact = FactContext & (
   | { type: 'round'; what: 'start' | 'end'; winner?: number; method?: string; durationMs?: number; humans: number; bots: number; standings?: Array<{ a: number; human: boolean; standing: Standing; kda: Kda }> }
   | { type: 'session'; what: 'join' | 'leave'; a: number; human: boolean }
   | { type: 'anomaly'; what: 'inside-geometry' | 'fell-through' | 'out-of-bounds'; a: number; p: P3; place: string }
+  /** A stuck bot was moved to a spawn point; `from` and `place` are where it was stuck. */
+  | { type: 'rescue'; a: number; from: P3; place: string }
 );

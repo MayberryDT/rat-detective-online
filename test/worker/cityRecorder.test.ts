@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { SolidGrid } from '../../src/worker/city/CityRecorder';
+import { CityRecorder, SolidGrid } from '../../src/worker/city/CityRecorder';
+import { CityArchive } from '../../src/worker/city/CityArchive';
+import type { CityStore } from '../../src/worker/city/CityStore';
+import { cityPlaces } from '../../src/shared/city/places';
+import type { CityFact } from '../../src/shared/city/facts';
 import type { GrayboxBox } from '../../src/shared/grayboxLayout';
+import { createPlayer } from '../../src/worker/gameState';
+import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
 
 // The recorder files a rat as inside geometry (anomalies, landing clips) through a grid index over the
@@ -46,5 +52,32 @@ describe('city recorder solid index', () => {
 
   it('finds nothing when there are no solids', () => {
     expect(new SolidGrid([]).inside({ x: 0, y: 0, z: 0 })).toBe(false);
+  });
+});
+
+// A stuck bot's rescue is the bot gate's measure of stuck rats. Ways it could go wrong: no fact, or more
+// than one; the actor as a raw id or a number other than the one the rat's other facts use; the position
+// or place taken after the teleport (where it was sent) rather than where it was stuck.
+describe('city recorder rescues', () => {
+  const recorder = () => {
+    const facts: CityFact[] = [];
+    const store = { addEvent: (_t: number, _round: string | undefined, _type: string, data: string) => { facts.push(JSON.parse(data) as CityFact); },
+      addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
+    const city = new CityRecorder({ room: 'test', store, archive: new CityArchive('test', undefined, () => {}), layout: () => 3,
+      isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
+    return { city, facts };
+  };
+
+  it('records one rescue with the rat, where it was stuck and that place', () => {
+    const { city, facts } = recorder(), now = Date.UTC(2026, 8, 29, 12);
+    city.session('join', 'human', now); city.session('join', 'bot-1', now);
+    const bot = createPlayer('bot-1', 'Bot', DEFAULT_APPEARANCE, { x: 61.26, y: 30.04, z: -12.33 });
+    city.rescue(bot, now + 5);
+    Object.assign(bot, { x: -100, y: .3, z: 120 });
+    city.flush(now + 10);
+    const joined = facts.find(f => f.type === 'session' && !f.human), rescues = facts.filter(f => f.type === 'rescue');
+    expect(rescues).toEqual([expect.objectContaining({ type: 'rescue', t: now + 5, room: 'test', layout: 3, a: joined?.type === 'session' ? joined.a : -1,
+      from: [61.3, 30, -12.3], place: cityPlaces().at(61.26, 30.04, -12.33).id })]);
+    expect(cityPlaces().at(61.26, 30.04, -12.33).id).not.toBe(cityPlaces().at(-100, .3, 120).id);
   });
 });

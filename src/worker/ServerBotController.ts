@@ -10,6 +10,7 @@ import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} fro
 import {LAUNCH_DRIFT_DECAY} from '../shared/launcherVelocity';
 import {guardFastFall,touchingSlick} from '../shared/ratSurfaces';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
+import type {Personality} from '../shared/bots/intent';
 import type {WorldSpec} from '../shared/worldSpec';
 
 export interface ServerBotCallbacks {
@@ -60,7 +61,9 @@ export class ServerBotController {
     private looseCaseSince=0;
     private looseCasePosition?:Vec3Data;
 
-    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks){
+    /** `personality` names each bot's hidden personality, looked up whenever the bot is (re)placed, since a
+     * slot's rat and name can change between rounds. Default: every bot a tryhard. */
+    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks,private readonly personality:(id:string)=>Personality=()=>'tryhard'){
         this.world.broadphase=new StaticCityBroadphase(this.world);
         this.world.broadphase.useBoundingBoxes=true;
         this.world.collisionMatrix=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
@@ -82,6 +85,11 @@ export class ServerBotController {
             approachStep:(from,to)=>this.navigation.approachStep(from,to),
             route:(from,to)=>this.navigation.route(from,to),
             localStep:(from,to)=>this.navigation.localStep(from,to),
+            ray:(from,to)=>{
+                this.from.set(from.x,from.y,from.z);this.to.set(to.x,to.y,to.z);
+                const hit=this.ray.closest(this.from,this.to,1);
+                return hit.hasHit?{point:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},normal:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z}}:undefined;
+            },
         };
         let index=0;
         for(const id of new Set(botIds)){
@@ -102,7 +110,7 @@ export class ServerBotController {
         body.velocity.setZero();body.force.setZero();body.angularVelocity.setZero();body.torque.setZero();body.aabbNeedsUpdate=true;
         if(!body.world)this.world.addBody(body);
         body.wakeUp();bot.initialized=true;bot.alive=true;bot.normalJump=false;bot.zoneHop=false;bot.launchedUntil=0;bot.driftX=bot.driftZ=0;
-        bot.lastLaunchAt=this.now;bot.lastMovementAt=-Infinity;bot.brain.reset();
+        bot.lastLaunchAt=this.now;bot.lastMovementAt=-Infinity;bot.brain.reset();bot.brain.personality=this.personality(id);
         bot.strandedSince=0;bot.escapeCheckAt=0;bot.escapeX=0;bot.escapeZ=0;
         bot.progressAt=this.now;bot.progressX=position.x;bot.progressZ=position.z;
         bot.pocketAt=this.now;bot.pocketX=position.x;bot.pocketZ=position.z;bot.progressMark=bot.brain.progressMark;

@@ -265,7 +265,8 @@ vi.mock('../../src/entities/RatEntity', () => ({
     initEntitySounds: (...args: unknown[]) => harness.initSounds(...args),
     disposeEntitySounds: (...args: unknown[]) => harness.disposeSounds(...args),
 }));
-vi.mock('../../src/shared/ratAppearance', () => ({
+vi.mock('../../src/shared/ratAppearance', async importOriginal => ({
+    ...(await importOriginal<object>()),
     generateRandomAppearance: () => harness.appearance,
 }));
 vi.mock('../../src/shared/ratNames', () => ({

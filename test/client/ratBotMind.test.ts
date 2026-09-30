@@ -15,7 +15,7 @@ function state():ChaosState {
 
 it('falls back to the code mind whenever the mind has no fresh answer',()=>{
     const silent:Mind<GoalContext>={answer:()=>undefined};
-    const coded=new RatBot(nav,3,()=>.5),quiet=new RatBot(nav,3,()=>.5,silent);
+    const coded=new RatBot(nav,3,()=>.5),quiet=new RatBot(nav,3,()=>.5,{mind:silent});
     const a=player('me',0),b=player('me',0),rival=player('rival',6,6),s=state();
     for(let now=1000;now<4000;now+=50){
         expect(quiet.step(now,b,[b,rival],s,()=>true,false,true)).toEqual(coded.step(now,a,[a,rival],s,()=>true,false,true));
@@ -24,15 +24,31 @@ it('falls back to the code mind whenever the mind has no fresh answer',()=>{
     expect(quiet.decision?.answer.source).toBe('code');
 });
 
-it('follows the mind\'s goal scores and place choice over the ladder',()=>{
-    // Code alone takes the loose case; this mind prefers to roam, to the nearer of the two spots.
-    const roamer:Mind<GoalContext>={answer:ctx=>ctx.offered.includes('roam')?{source:'jev',scores:{roam:4,'take-case':0},places:{roam:'explore:0'}}:undefined};
-    const coded=new RatBot(nav,0,()=>.5),minded=new RatBot(nav,0,()=>.5,roamer),s=state();
+it('follows the mind\'s goal scores and its pick among the places code lists',()=>{
+    // Code alone takes the loose case; this mind prefers to roam, to the nearest of the spots on offer.
+    let picked:string|undefined;
+    const roamer:Mind<GoalContext>={answer:ctx=>{
+        if(!ctx.offered.includes('roam'))return;
+        picked=[...ctx.places('roam')].sort((a,b)=>Math.hypot(a.point.x,a.point.z)-Math.hypot(b.point.x,b.point.z))[0]?.id;
+        return {source:'jev',scores:{roam:4,'take-case':0},places:{roam:picked}};
+    }};
+    const coded=new RatBot(nav,0,()=>.5),minded=new RatBot(nav,0,()=>.5,{mind:roamer}),s=state();
     coded.step(1000,player('me',0),[],s,()=>true,false,true);
     minded.step(1000,player('me',0),[],s,()=>true,false,true);
     expect(coded.objective).toBe('case');
-    expect(minded.objective).toBe('explore');expect(minded.goalKey).toBe('explore:0');
+    expect(picked).toBeDefined();
+    expect(minded.objective).toBe('explore');expect(minded.goalKey).toBe(picked);
     expect(minded.decision).toMatchObject({plan:{goal:'roam',destination:{x:10,y:0,z:0}},answer:{source:'jev'}});
+});
+
+it('scores the goals a mind left out as the code mind would, never by declaration order',()=>{
+    // Only roam is scored, and low: the offered case keeps the code mind's top score and wins.
+    const terse:Mind<GoalContext>={answer:()=>({source:'jev',scores:{roam:1}})};
+    const bot=new RatBot(nav,0,()=>.5,{mind:terse});
+    bot.step(1000,player('me',0),[],state(),()=>true,false,true);
+    expect(bot.objective).toBe('case');
+    expect(bot.decision?.answer.source).toBe('jev');
+    expect(bot.decision?.weighted.roam).toBe(1);
 });
 
 it('shoots the mind\'s preferred rat when it is visible, not the nearest',()=>{
@@ -46,7 +62,7 @@ it('shoots the mind\'s preferred rat when it is visible, not the nearest',()=>{
         }
     };
     const picky:Mind<GoalContext>={answer:()=>({source:'jev',scores:{hunt:4},target:'far'})};
-    const shot=firstShotAfter(new RatBot(nav,0,()=>.5,picky),600)!;
+    const shot=firstShotAfter(new RatBot(nav,0,()=>.5,{mind:picky}),600)!;
     expect(angleTo(shot,far)).toBeLessThan(angleTo(shot,near));
     Object.assign(self,{x:0,z:0,meshQy:0,meshQw:1});
     const coded=firstShotAfter(new RatBot(nav,0,()=>.5),600)!;

@@ -8,13 +8,14 @@ import {activeZone} from '../jurisdiction';
 import {zoneContains} from '../jurisdictionZones';
 import {BotCombat,combatRandom} from '../BotCombat';
 import {exposedCarrierCase,shotHitsIronclad} from '../BotTargeting';
-import {DISPATCH_STATIONS,PRESSURE_TUNING,type CaseState,type ChaosState} from '../chaosState';
+import {DISPATCH_STATIONS,LAUNCH_MACHINES,PRESSURE_TUNING,type CaseState,type ChaosState} from '../chaosState';
 import {incidentInfo} from '../incidentCatalog';
 import {hasHustle,hasIronclad,PICKUP_TUNING} from '../pickups';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
 import type {BotWaypoint} from '../BotLaunchRoutes';
 import {BALL_GRAVITY,BALL_SPEED} from '../ballTuning';
-import type {MotorMode,Plan} from './intent';
+import {BASE_SKILL,type MotorMode,type Plan,type SkillDials} from './intent';
+import {BANK,bankShot,type RayHit} from './motor/bankShot';
 
 export interface MotorNavigation {
     /** A supported local route leg, without replacing the actual objective. */
@@ -28,6 +29,8 @@ export interface MotorNavigation {
     localStep?(from:Vec3Data,to:Vec3Data):Vec3Data|undefined;
     explorationTargets(): Vec3Data[];
     update?(budgetMs?: number): void;
+    /** The first solid surface on a segment, with its normal; undefined when clear. Bank shots need it. */
+    ray?(from:Vec3Data,to:Vec3Data):RayHit|undefined;
 }
 /** One tick's controls: walking velocity, a jump, an optional shot and the gun's facing. */
 export interface MotorIntent { x: number; z: number; jump: boolean; zoneHop?: boolean; shoot?: Vec3Data; facing: number }
@@ -35,7 +38,17 @@ export interface MotorIntent { x: number; z: number; jump: boolean; zoneHop?: bo
 export interface CaseEntry { key:string; value:CaseState }
 export const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
 const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
+/** Gremlin mischief: a counterfeit is shot when another rat is within `bait` of it and this rat further than
+ * `safe`; a trigger when another rat stands on its pad. Targets within `range`, looked for every `lookMs`. */
+const MISCHIEF={bait:5,safe:10,range:50,lookMs:200} as const;
 
+/** Firing beyond the aimed and speculative shots every rat takes. */
+export interface Tactics {
+    /** Bank shots at a rat that just went behind cover. */
+    bank:boolean;
+    /** Shoot counterfeits next to other rats and launch triggers under them. */
+    mischief:boolean;
+}
 /** The moving half of a bot: executes the current Plan every tick (routes, launches and flights, local
  * steps, case approaches, obstacle jumps, zone holding, strafing, Ironclad caution) and fires whenever it
  * has a shot, whatever the goal. It also keeps the per-goal failure memory the goal code consults.
@@ -90,10 +103,19 @@ export class BotMotor {
     private readonly maneuver:BotManeuver;
     private readonly attention=new BotAttention();
     private progress=0;
-    constructor(private readonly navigation: MotorNavigation, seed: number, private readonly random: () => number) {
+    /** Set at each decision from the rat's personality and its mind's answer. */
+    tactics:Tactics={bank:false,mischief:false};
+    private sighting?:{id:string;p:Vec3Data;at:number};
+    private bankAt=0;
+    private bankAim?:{point:Vec3Data;until:number};
+    private mischiefAt=0;
+    private mischiefAim?:Vec3Data;
+    private readonly tacticRandom:()=>number;
+    constructor(private readonly navigation: MotorNavigation, seed: number, private readonly random: () => number,private readonly skill:SkillDials=BASE_SKILL) {
         this.zoneHolding=new BotPurposefulHolding(seed);this.maneuver=new BotManeuver(seed);
-        this.combat = new BotCombat(combatRandom(seed));
+        this.combat = new BotCombat(combatRandom(seed),skill);
         this.opportunisticFire = new BotOpportunisticFire(combatRandom(seed+10000));
+        this.tacticRandom=combatRandom(seed+30000);
         this.wander = seed * 7;
     }
     /** True while steering a planned launcher or drop flight onto a known landing. */
@@ -123,6 +145,7 @@ export class BotMotor {
         this.caseLifecycles.clear();this.cases=[];
         this.flight=undefined;this.launchWaitAt=undefined;
         this.assignmentSignature='';this.urgent=false;
+        this.sighting=undefined;this.bankAim=undefined;this.bankAt=0;this.mischiefAim=undefined;this.mischiefAt=0;
     }
     /** Take the decision's plan. A new key restarts routing; the same key keeps the current route. */
     setPlan(plan:Plan): void {
@@ -243,6 +266,8 @@ export class BotMotor {
         const time=state?.time??now;
         const visible=living.filter(p=>distance(self,p)<80&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
         this.visible=visible;
+        // A rat seen dying (the kill feed) is not banked at.
+        if(this.sighting&&!living.some(p=>p.id===this.sighting?.id))this.sighting=undefined;
         this.protectedVisible=visible.filter(p=>hasIronclad(state?.buffs,p.id,time));
         const vulnerable=visible.filter(p=>!hasIronclad(state?.buffs,p.id,time));
         const shootable=(p:PlayerData)=>vulnerable.includes(p)||!!exposedCarrierCase(self,p,state,clearControl);
@@ -415,21 +440,31 @@ export class BotMotor {
                 x=len?sx/len*6:0;z=len?sz/len*6:0;
             }
         }
-        const combat=this.combat.step(now,self,target,visibleTarget,now>=this.shotAt&&!dispatchReady,casePoint,target?this.attention.acquisitionCost(self,target,initialFacing):0);
+        if(this.tactics.bank&&visibleTarget&&target&&!casePoint)this.sighting={id:target.id,p:{x:target.x,y:target.y,z:target.z},at:now};
+        const mischief=this.tactics.mischief&&!holdingZone&&!dispatchReady?this.mischiefTarget(now,self,state,clearControl):undefined;
+        const combat=this.combat.step(now,self,target,visibleTarget,now>=this.shotAt&&!dispatchReady&&!mischief,casePoint,target?this.attention.acquisitionCost(self,target,initialFacing):0);
         if(combat.aim)facing=Math.atan2(combat.aim.x-self.x,combat.aim.z-self.z);
+        const bank=this.tactics.bank&&!visibleTarget&&!combat.aim&&!holdingZone&&!dispatchReady&&!mischief?this.bankTarget(now,self,state):undefined;
         const speculative=this.opportunisticFire.step(now,self,this.heading,waypoint,
-            !holdingZone&&!visibleTarget&&!dispatchReady&&!this.protectedVisible.some(p=>hasIronclad(state?.buffs,p.id,state?.time??now))&&!(this.mode==='case'&&this.destination&&distance(self,this.destination)<24),now>=this.shotAt&&!combat.aim);
+            !holdingZone&&!visibleTarget&&!dispatchReady&&!this.protectedVisible.some(p=>hasIronclad(state?.buffs,p.id,state?.time??now))&&!(this.mode==='case'&&this.destination&&distance(self,this.destination)<24),now>=this.shotAt&&!combat.aim&&!bank&&!mischief);
         const speculativeFacing=this.opportunisticFire.facing(now);
         if(!combat.aim&&speculativeFacing!==undefined)facing=speculativeFacing;
+        // A deliberate trick shot turns the gun its way.
+        const trick=mischief??bank;
+        if(trick)facing=Math.atan2(trick.x-self.x,trick.z-self.z);
         let shoot:Vec3Data|undefined;
         if(bell&&dispatchReady){
             // The bell is a big box shootable from any side; aim somewhere on it, imperfectly.
             shoot={x:bell.x+(this.random()-.5)*3,y:bell.y+(this.random()-.5)*2.4,z:bell.z+(this.random()-.5)*3};
             facing=Math.atan2(bell.x-self.x,bell.z-self.z);
+        } else if(mischief&&now>=this.shotAt){
+            shoot=mischief;
         } else if(combat.shoot){
-            shoot=combat.shoot;this.shotAt=now+200;
+            shoot=combat.shoot;this.shotAt=now+this.skill.fireGapMs;
+        } else if(bank&&now>=this.shotAt){
+            shoot=bank;
         } else if(speculative){
-            shoot=speculative;this.shotAt=now+200;
+            shoot=speculative;this.shotAt=now+this.skill.fireGapMs;
             facing=Math.atan2(shoot.x-self.x,shoot.z-self.z);
         }
         facing=this.attention.turn(now,facing,initialFacing);
@@ -439,6 +474,8 @@ export class BotMotor {
         // Turning toward a Dispatch control is not a fired shot. Keep aiming
         // until aligned; consuming its cooldown early repeatedly turns us away.
         if(shoot&&dispatchReady)this.shotAt=now+350+this.random()*400;
+        // A trick shot spends the fire cap only when it actually leaves the gun.
+        if(shoot&&shoot===trick){this.shotAt=now+this.skill.fireGapMs;if(shoot===bank)this.bankAim=undefined;}
         if(this.jumpTravel&&!grounded){
             // A floor probe is expected to fail in the air. Keep steering toward
             // the takeoff's landing target, then brake there instead of jumping
@@ -479,5 +516,48 @@ export class BotMotor {
             x=0;z=0;jump=false;this.jumpTravel=undefined;this.zoneHolding.invalidate();
         }
         return{x,z,jump,...(jump&&holdingZone?{zoneHop:true}:{}),shoot,facing};
+    }
+
+    /** A bank shot at the rat last in sight, if it went behind cover moments ago nearby: a held solution, or
+     * a fresh bounded attempt at most every `BANK.attemptMs`. */
+    private bankTarget(now:number,self:Vec3Data,state:ChaosState|undefined):Vec3Data|undefined {
+        if(this.bankAim&&now<this.bankAim.until)return this.bankAim.point;
+        this.bankAim=undefined;
+        const seen=this.sighting,ray=this.navigation.ray;
+        if(!seen||!ray||now<this.bankAt||now-seen.at>BANK.memoryMs||distance(self,seen.p)>BANK.range||hasIronclad(state?.buffs,seen.id,state?.time??now))return;
+        this.bankAt=now+BANK.attemptMs;
+        const point=bankShot({x:self.x,y:self.y+1.376,z:self.z},{x:seen.p.x,y:seen.p.y+.9,z:seen.p.z},ray,this.protectedVisible.map(p=>({x:p.x,y:p.y+1,z:p.z})));
+        if(!point)return;
+        this.bankAim={point:this.skew(self,point),until:now+BANK.holdMs};
+        return this.bankAim.point;
+    }
+
+    /** A gremlin's chaos shot: a visible counterfeit with another rat beside it (never one close to this rat),
+     * else the trigger of a launch machine that is not cooling while another rat stands on its pad. Ordinary
+     * shots; the server decides what they do. */
+    private mischiefTarget(now:number,self:Vec3Data,state:ChaosState|undefined,clearControl:(p:Vec3Data)=>boolean):Vec3Data|undefined {
+        if(now<this.mischiefAt)return this.mischiefAim;
+        this.mischiefAt=now+MISCHIEF.lookMs;this.mischiefAim=undefined;
+        if(!state)return;
+        const others=this.visible.filter(p=>p.hp>0);
+        const lob=(p:Vec3Data)=>{const travel=Math.hypot(p.x-self.x,p.z-self.z)/BALL_SPEED;return this.mischiefAim=this.skew(self,{x:p.x,y:p.y-BALL_GRAVITY*travel*travel/2,z:p.z});};
+        for(const fake of state.extraCases??[]){
+            const d=distance(self,fake.p);
+            if(fake.fake&&d>MISCHIEF.safe&&d<MISCHIEF.range&&others.some(p=>distance(p,fake.p)<MISCHIEF.bait)&&clearControl(fake.p))return lob(fake.p);
+        }
+        for(const machine of LAUNCH_MACHINES){
+            const pad=machine.pad,onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;
+            const cooling=state.time<(state.pressure?.fired?.[machine.id]??-Infinity)+PRESSURE_TUNING.cooldownMs;
+            if(onPad(self)||cooling||distance(self,machine.target)>MISCHIEF.range||!others.some(onPad)||!clearControl(machine.target))continue;
+            return lob(machine.target);
+        }
+    }
+
+    /** The skill dials' aim error on a deliberate shot, as seen from the gun. */
+    private skew(self:Vec3Data,point:Vec3Data):Vec3Data {
+        const eye={x:self.x,y:self.y+1.376,z:self.z},dx=point.x-eye.x,dy=point.y-eye.y,dz=point.z-eye.z,length=Math.hypot(dx,dy,dz);
+        const [min,max]=this.skill.aimErrorRadians,angle=min+this.tacticRandom()*(max-min),azimuth=this.tacticRandom()*Math.PI*2;
+        const yaw=Math.atan2(dx,dz)+Math.cos(azimuth)*angle,pitch=Math.atan2(dy,Math.hypot(dx,dz))+Math.sin(azimuth)*angle;
+        return {x:eye.x+Math.sin(yaw)*Math.cos(pitch)*length,y:eye.y+Math.sin(pitch)*length,z:eye.z+Math.cos(yaw)*Math.cos(pitch)*length};
     }
 }

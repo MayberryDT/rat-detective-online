@@ -64,12 +64,17 @@ export interface Decision {
     trigger:'beat'|'event'|'fallback';
 }
 
-/** Motor skill: one tier for every personality ("base bots never outplay Tyler"). */
+/** Motor skill: one tier for every personality ("base bots never outplay Tyler"). A harder tier is only
+ * different numbers. Uniform ranges are [min, max]. */
 export interface SkillDials {
-    /** Added to the motor's reaction before a new target can be shot, ms. */
-    reactionMs:number;
-    /** Multiplier on the motor's angular aim error. */
-    aimError:number;
-    /** Minimum ms between shots. */
-    fireIntervalMs:number;
+    /** Reaction before a newly seen target can be shot, ms. */
+    reactionMs:readonly [number,number];
+    /** Angular aim error, radians, re-rolled at every aim correction. */
+    aimErrorRadians:readonly [number,number];
+    /** Gap between shots within a burst, ms. */
+    burstShotMs:readonly [number,number];
+    /** Minimum ms after one motor shot (aimed, speculative or banked) before the next. */
+    fireGapMs:number;
 }
+/** The base tier: today's bots, exactly. */
+export const BASE_SKILL:SkillDials={reactionMs:[200,450],aimErrorRadians:[2.8*Math.PI/180,5.6*Math.PI/180],burstShotMs:[200,240],fireGapMs:200};

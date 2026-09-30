@@ -45,7 +45,7 @@ import {
 import { log } from './logging';
 import { RoomDiagnostics } from './RoomDiagnostics';
 import { ServerBotController } from './ServerBotController';
-import { createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
+import { botPersonality, createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { HEAT_CELL } from './HeatMap';
 import { CityStore, type Filter, type Range } from './city/CityStore';
@@ -454,7 +454,7 @@ export class GameRoom extends DurableObject<Env> {
           if (!this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) return;
           this.handleShoot(id, { type: 'shoot', shotId: crypto.randomUUID(), origin, direction });
         },
-      });
+      }, id => { const bot = this.botRoster.find(entry => entry.id === id); return bot ? botPersonality(bot.name) : 'tryhard'; });
   }
 
   private activatePersistentBots(): void {
@@ -547,6 +547,7 @@ export class GameRoom extends DurableObject<Env> {
     if(!this.isManagedBot(id)||!player||player.hp<=0||this.round.phase!=='playing')return;
     this.chaos?.recoverCarrierCase(id);
     const from={x:Math.round(player.x*10)/10,y:Math.round(player.y*10)/10,z:Math.round(player.z*10)/10};
+    this.city.rescue(player,this.now());
     // Rescue is not a death, heal or score reset. Use ordinary clear spawn selection.
     Object.assign(player,spawnForWorld(this.world,Math.random,this.players.values(),id,this.chaos?.assignmentState));
     this.serverBots?.reset(id,player);

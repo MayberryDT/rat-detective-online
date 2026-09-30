@@ -8,6 +8,8 @@ import { MAX_HP, MAX_PLAYERS, PROTOCOL_VERSION, RESPAWN_DELAY_MS, WIN_DISPLAY_MS
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
 import { createAssignment } from '../../src/shared/assignments';
+import { cityPlaces } from '../../src/shared/city/places';
+import { p3 } from '../../src/shared/city/facts';
 
 type Stub = DurableObjectStub<GameRoom>;
 type Internals = {
@@ -66,7 +68,7 @@ describe('persistent hosted bots', () => {
   });
   it('rescues only the stranded bot, keeps scores/health, and returns its case without resetting the match',async()=>{
     const stub=room();await stub.ensurePersistentBots();
-    await runInDurableObject(stub,(instance:GameRoom)=>{
+    await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as unknown as Internals;
       if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;
       const bot=game.players.get(PERSISTENT_BOT_IDS[0])!;
@@ -74,13 +76,17 @@ describe('persistent hosted bots', () => {
       Object.assign(bot,{x:p.x,y:p.y-.8,z:p.z,hp:2,kills:7,deaths:4});
       game.chaos.step(0,Date.now());expect(game.chaos.caseHolderId).toBe(bot.id);
       const others=JSON.stringify([...game.players.values()].filter(p=>p.id!==bot.id));
-      Object.assign(bot,{y:80});game.recoverManagedBot(bot.id);
+      Object.assign(bot,{y:80});const stuck={x:bot.x,y:bot.y,z:bot.z};game.recoverManagedBot(bot.id);
       expect(bot.y).toBeLessThan(5);expect(bot).toMatchObject({hp:2,kills:7,deaths:4});
       expect(game.chaos.caseHolderId).toBeNull();expect(game.chaos.snapshot(false).case.returningUntil).toBeGreaterThan(0);
       expect(JSON.stringify([...game.players.values()].filter(p=>p.id!==bot.id))).toBe(others);
       const human={...bot,id:'human',y:80};game.players.set(human.id,human);
       game.recoverManagedBot(human.id);expect(human.y).toBe(80);
       expect(game.round.phase).toBe('playing');
+      // Exactly one rescue fact, placed where the bot was stuck rather than where it was sent.
+      const rescues=await instance.cityEvents({type:'rescue',limit:10});
+      expect(rescues).toEqual([expect.objectContaining({type:'rescue',from:p3(stuck),place:cityPlaces().at(stuck.x,stuck.y,stuck.z).id})]);
+      expect(cityPlaces().at(stuck.x,stuck.y,stuck.z).id).not.toBe(cityPlaces().at(bot.x,bot.y,bot.z).id);
     });
   });
   it('boots one random roster once and advances with no sockets', async () => {

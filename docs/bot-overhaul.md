@@ -89,14 +89,17 @@ flowchart TB
 
   Questions in one request can't see each other's answers, so a goal that implies a place (the case, the carrier, a medkit, the zone, the delivery) takes that place from code.
 - **The situation is written in words, not numbers.** Jev reads numbers badly: in B0, the case score rose as the case got *further* away when distances were given in units. Perception writes distances as run times or plain bands ("next to me", "a short run", "across the city"). It also states where the zone and the pickups are relative to the rat, and what lies between (open street, a fight).
-- **Freshness:** each request carries a situation serial. An answer older than 1.5 s, or one that names a rat that is dead or out of view, is dropped. If Jev hasn't answered within 600 ms of a new situation, the code mind answers.
+- **Freshness:** each request carries a situation serial. An answer older than 1.5 s, or one that names a rat that is dead or out of view, is dropped. The code decides every 180–300 ms, as before. On each decision, the Jev mind returns its latest fresh answer, and it sends a new request once a second or on an event. Offered goals the answer didn't score take the code mind's score. With no fresh answer, the code mind decides.
 - **Hysteresis:** a rat switches goal only when the new goal wins by a clear margin or an event fired (hit, case change, target lost, arrived).
 - **Backoff:** a 429 or an error backs off exponentially, and the code mind covers in the meantime.
 - **When Jev runs:**
-  - public rooms: at least one connected human;
-  - private fixtures: a human or an observer, so Tyler can watch Jev bots in observe mode;
-  - never over the daily cap.
+  - at least one connected human in the room (staging included);
+  - the key is set;
+  - the day's spend is under the cap.
+- **Daily cap:** each room adds up its own spend and reports it every 30 s or so to one `Matchmaker` Durable Object instance named `jev-budget`, the budget ledger. The Matchmaker class already exists in every environment, so nothing new needs migrating. The total per UTC day across rooms is checked against the `JEV_DAILY_BUDGET_USD` Worker variable ($25). A room that finds the day spent falls back to the code mind until the next UTC day.
+- **Rate:** each room keeps under 600 requests a minute, half the account's limit, so a second busy room still fits.
 - **Cadence:** one decision a second per rat, plus events. At about 1,700 tokens a decision, one room of nine rats costs about $2.30 an hour and uses 540 of the 1,200 requests a minute.
+- **`mindVersion`:** a constant in code, stamped on every city fact next to `layoutVersion`, and raised by each change to the minds, questions, weights or dials.
 
 ## What happens to the code
 
@@ -142,7 +145,7 @@ Each step lists what it delivers and how it is proven.
   - time and deaths per place (spread);
   - fire and hit rates, kills and deaths per bot-hour;
   - the banked-hit share (null while bot balls aren't recorded one by one);
-  - rescues per bot-hour (an estimate from teleports in the frames for today's bots, which recorded no `rescue` fact);
+  - rescues per bot-hour (from the `rescue` fact, recorded since B2b; for the baseline's bots, which had no such fact, an estimate from teleports in the frames);
   - case takes, deliveries and respawns per room-hour;
   - the median human's hit rate and kills per death.
 - The first 9.4 bot-hours on layout 3 give:
@@ -161,6 +164,17 @@ Each step lists what it delivers and how it is proven.
   - behaviour tests for each executor, written failure-first;
   - a short hosted bot-only run;
   - the code-mind gate (see "Acceptance").
+- **Built (B2b):**
+  - **Cast** (`src/shared/bots/cast.ts`): personality weights multiply a mind's scores, so a boost never makes a senseless (0) goal sensible:
+    - mavericks: ambush ×1.6, hunt ×1.15;
+    - gremlins: mischief ×1.8, roam ×1.25, hunt ×1.1, keep the case ×0.85.
+
+    A tryhard on the code mind takes the top score, exactly as before. A Jev tryhard keeps its goal until another leads by one level of five, or an event fires. Mavericks and gremlins sample (softmax, temperature 0.75, their own seeded stream) and hold a sample for 2.5 s between beats. Offered goals an answer left out take the code mind's score; an answer that scored none of them gives way to the code mind.
+  - **Personality** (`botPersonality` in `botRoster.ts`): a fixed FNV-1a hash of the roster name, 846 / 106 / 104 over the 1,056-name pool. The server derives it where the bot is driven; it is never sent.
+  - **Skill dials** (`BASE_SKILL` in `intent.ts`): reaction 200–450 ms, aim error 2.8–5.6°, burst gaps 200–240 ms, 200 ms between motor shots: today's numbers, exactly.
+  - **Bank shots** (`src/shared/bots/motor/bankShot.ts`): at a rat last seen at most 2.5 s ago within 35 units, now behind cover: six wall probes, then the shortest mirror bounce whose two legs check clear; at most 12 rays an attempt, one attempt every 600 ms, fired within 400 ms with the dials' aim error. Mavericks always; any rat whose answer's `bank` is at least 0.6.
+  - **Gremlin fire:** a visible counterfeit with another rat within 5 units, from more than 10 units away; a launch trigger with another rat on its pad while the machine is not cooling; targets within 50 units. Gremlins also look for alarm pillars up to 90 units away (others 45).
+  - **Parity:** with every bot a tryhard on the code mind, B2a and B2b match frame by frame (all four assignments, 6 and 10 rats, 60 s, seeded).
 
 ### B3. Perception
 - `RatView` from the room:
@@ -175,21 +189,35 @@ Each step lists what it delivers and how it is proven.
 ### B4. Jev mind
 - The Worker-side client with the question set, freshness, hysteresis, backoff, the $25 daily cap and on/off by human presence.
 - Proof:
-  - on staging, decisions flow, and the fallback takes over when the key is removed or requests fail;
+  - behaviour tests with a fake API (stale answers dropped, fallback on timeout, 429 and errors, the cap holds, no chosen name in any request, off without humans);
+  - on staging, decisions flow;
   - cost and latency are logged per decision.
 
 ### B5. Recorder and `/map`
-- `decision` facts record:
-  - the mind (Jev or code);
-  - `mindVersion`;
-  - the goal and its top probabilities;
-  - confidence, latency and tokens;
+- `decision` facts are recorded for every Jev answer that is applied, and for every goal change on the code mind (a decision every 180–300 ms is too many to record each one). They hold:
+  - the mind (Jev or code) and `mindVersion`;
+  - the personality;
+  - the goal and its top scores, raw and weighted;
+  - latency and tokens;
   - whether the answer was dropped as stale;
-  - the outcome (goal reached, died, scored, killed).
-- A Minds layer on `/map`, and digest lines for the goal mix per personality, fallback share and dollars per hour.
+  - the trigger.
+- `goal-end` facts record the outcome when a goal ends: reached, died, replaced or failed, and how long it ran.
+- A Minds layer on `/map`, and digest lines for the goal mix per personality, fallback share, latency and dollars per hour.
 
-### B6. Private preview
-- A hosted fixture with the Jev mind, which Tyler plays and watches in observe mode. Tune, then repeat.
+### B6. Preview on staging
+- The gate run and Tyler's preview both use staging, not a capacity fixture:
+  - staging runs `public-live-v2` with production-style bots and a matching client;
+  - it records to its own archive (`rat-detective-city-staging`);
+  - it has the Jev key.
+
+  The fixture has no city archive, so it couldn't feed the gate.
+- **Gate run:**
+  1. deploy to staging;
+  2. let the empty city run on the code mind for at least 10 minutes;
+  3. mirror staging;
+  4. run `bot-gate.mjs` against the production baseline.
+- **Jev check:** a scripted protocol-23 client holds a connection so the room counts a human (about 10 minutes, roughly $0.40).
+- Then Tyler plays staging (audible). Tune, then repeat.
 
 ### B7. Production
 - The Worker secret, then the deploy, on Tyler's OK. Afterwards, one change per `mindVersion`, measured on `/map`.

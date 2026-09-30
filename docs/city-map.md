@@ -121,6 +121,7 @@ The schema is `src/shared/city/facts.ts` (`CITY_SCHEMA_VERSION` 1). Every fact c
 | `round` | A round starts or ends | humans, bots; winner, method, duration, every rat's final standing and K/D/A | archive, SQL |
 | `session` | A human joins or leaves | actor | archive, SQL |
 | `anomaly` | `inside-geometry`, `fell-through`, `out-of-bounds` (at most once per 10 s per rat) | point, place | archive, SQL, counts |
+| `rescue` | A stuck bot is moved to a spawn point (`GameRoom.recoverManagedBot`), from B2b of [the bot overhaul](bot-overhaul.md) | the bot, the point and place where it was stuck | archive, SQL, counts. The bot gate counts rescues per bot-hour |
 
 ### The situation: what every rat faces, every second
 
@@ -139,7 +140,7 @@ Defined once in `src/shared/city/facts.ts` (`RatSituation`, `WorldSituation`), w
 
 **Aggregates the room keeps live**, in SQLite, per UTC day, layout version and assignment, and kept forever:
 - `city_cells`: cells per layer. The layers are `humans` and `bots` (seconds), `deaths`, `kills`, `spawns`, `pickups`, `landings`, `anomalies`, `shots-human`, `shots-bot`, and `ball-<outcome>` for every ball of every rat.
-- `city_places`: per place, `human-s`, `bot-s`, `still-human-s`, `still-bot-s`, `deaths`, `deaths-human`, `deaths-bot`, `kills`, `kills-human`, `kills-bot`, `kill-dist-dm`, `shots-human`, `shots-bot`, `hits-human`, `hits-bot`, `bank-hits-human`, `bank-hits-bot` (hits that came off a wall first), `spawns`, `spawn-deaths-5s`, `pickup:<kind>`, `launches`, `landings`, `landing-clips`, `case-take`, `case-drop`, `case-steal`, `deliveries`, `anomaly:<what>`.
+- `city_places`: per place, `human-s`, `bot-s`, `still-human-s`, `still-bot-s`, `deaths`, `deaths-human`, `deaths-bot`, `kills`, `kills-human`, `kills-bot`, `kill-dist-dm`, `shots-human`, `shots-bot`, `hits-human`, `hits-bot`, `bank-hits-human`, `bank-hits-bot` (hits that came off a wall first), `spawns`, `spawn-deaths-5s`, `pickup:<kind>`, `launches`, `landings`, `landing-clips`, `case-take`, `case-drop`, `case-steal`, `deliveries`, `anomaly:<what>`, `rescues` (stuck bots moved away from here).
 - `city_flows`: place-to-place transitions, by humans and by bots.
 
 Discrete facts also sit in `city_events` for 30 days. Heat v1's tables were folded into `city_cells` by the migration.

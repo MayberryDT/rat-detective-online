@@ -12,7 +12,7 @@ const since = Date.parse(arg('since', '2000-01-01')), until = Date.parse(arg('un
 const mind = arg('mind', undefined);
 
 /** A jump this long and faster than any rat can run (12 u/s, 17.4 with Hot Pursuit), with no death,
- * respawn or recent launch, is a stuck-bot rescue. Estimate only: rescues had no fact before `rescue`. */
+ * respawn or recent launch, is a stuck-bot rescue. An estimate for data recorded before the `rescue` fact (B2b). */
 const RESCUE_JUMP = 40, RESCUE_SPEED = 25, FRAME_CAP_S = 6;
 
 const facts = (type) => db.prepare('select data from facts where type = ? and room = ? and layout = ? and t between ? and ? order by t')

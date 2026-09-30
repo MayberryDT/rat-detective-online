@@ -2,6 +2,8 @@ import * as C from 'cannon-es';
 import { NetworkManager, resolveWebSocketUrl } from '../network/NetworkManager';
 import { RatBot } from '../shared/bots/ratBot';
 import type { MotorNavigation } from '../shared/bots/motor';
+import type { Personality } from '../shared/bots/intent';
+import { botPersonality } from '../shared/botRoster';
 import { BotNavigation } from '../shared/BotNavigation';
 import { StaticCityBroadphase, cityBoxBody } from '../shared/StaticCityBroadphase';
 import { CITY_BARS_GROUP } from '../shared/boxFrame';
@@ -44,6 +46,8 @@ interface BotOptions {
     /** Uses the one rendered remote rat's animated gun, without building duplicate models. */
     muzzle?: (id: string, position: Vec3Data, facing: number) => Vec3Data | undefined;
     navigation?: MotorNavigation;
+    /** Each bot's hidden personality by name. Default: the roster's, from the name. */
+    personality?: (name: string) => Personality;
 }
 
 /** Eleven ordinary network clients. Only steering is local; health, scoring,
@@ -91,6 +95,11 @@ export class NormalGameBots {
                 this.nextRouteAt=this.simulationNow+80;
                 return navigation.route(from,to);
             },
+            ray: (from, to) => {
+                this.from.set(from.x,from.y,from.z);this.to.set(to.x,to.y,to.z);
+                const hit=this.ray.closest(this.from,this.to,1);
+                return hit.hasHit?{point:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},normal:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z}}:undefined;
+            },
         };
         for (let i=0;i<11;i++) {
             const transport = options.createTransport?.() ?? new NetworkManager({url:resolveWebSocketUrl(),receiveMode:'welcome-only'});
@@ -98,7 +107,7 @@ export class NormalGameBots {
             body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
             body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
-            const bot: Bot = {transport,id:'',body,brain:new RatBot(sharedNavigation,i),facing:0,launchedUntil:0,normalJump:false,zoneHop:false,lastLaunch:'',lastMovementAt:-Infinity};
+            const bot: Bot = {transport,id:'',body,brain:new RatBot(sharedNavigation,i,Math.random,{personality:(options.personality??botPersonality)(NAMES[i])}),facing:0,launchedUntil:0,normalJump:false,zoneHop:false,lastLaunch:'',lastMovementAt:-Infinity};
             this.bots.push(bot);
             // The human's feed is the common source. Each extra socket only needs
             // its own welcome, including reconnection identity and server spawn.

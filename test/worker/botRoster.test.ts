@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRoundBotRoster, fillBotRoster, nextRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
+import { botPersonality, createRoundBotRoster, fillBotRoster, nextRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
 import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from '../../src/shared/ratNames';
 
 describe('round bot roster', () => {
@@ -40,5 +40,14 @@ describe('round bot roster', () => {
     const gap = fillBotRoster(seven.filter(bot => bot.id !== 'rd-ai-02'), 7, [], () => 0);
     expect(gap.map(bot => bot.id).sort()).toEqual(PERSISTENT_BOT_IDS.slice(0, 7));
     expect(fillBotRoster(seven, 5)).toEqual(seven);
+  });
+});
+
+describe('bot personalities', () => {
+  const pool = RAT_TITLES.flatMap(title => RAT_SURNAMES.map(surname => `${title} ${surname}`)).filter(name => name.length <= NAME_MAX_LENGTH);
+  it('splits the name pool about 80/10/10 into tryhards, mavericks and gremlins', () => {
+    const share = (personality: string) => pool.filter(name => botPersonality(name) === personality).length / pool.length;
+    expect(share('tryhard')).toBeGreaterThan(.75); expect(share('tryhard')).toBeLessThan(.85);
+    for (const personality of ['maverick', 'gremlin']) { expect(share(personality)).toBeGreaterThan(.07); expect(share(personality)).toBeLessThan(.13); }
   });
 });

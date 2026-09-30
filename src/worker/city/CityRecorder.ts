@@ -337,6 +337,13 @@ export class CityRecorder {
     this.emit({ ...this.context(now), type: 'session', what, a: this.actor(id), human: !this.deps.isBot(id) });
   }
 
+  /** A stuck bot is about to be moved to a spawn point: recorded where it was stuck. */
+  rescue(p: PlayerData, now: number): void {
+    const place = this.places.at(p.x, p.y, p.z).id;
+    this.measure(now, place, 'rescues');
+    this.emit({ ...this.context(now), type: 'rescue', a: this.actor(p.id), from: p3(p), place });
+  }
+
   // ---- the room tick ----
   /** Each rat's position and health at the previous tick (hooks run before this tick's). */
   private readonly last = new Map<string, { x: number; y: number; z: number; hp: number }>();
