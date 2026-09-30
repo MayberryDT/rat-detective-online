@@ -16,7 +16,7 @@ import { ShotSpacing } from '../shared/shotTiming';
 import { GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
 import { drowned } from '../shared/city/kit/city';
 import { ASSIGNMENT_IDS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
-import { incidentRoster, isEvidenceMode, isIncidentId, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
+import { incidentRoster, isEvidenceMode, isIncidentId, parseIncidentList, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
 import { DurableObject } from 'cloudflare:workers';
 import {
   MAX_CONNECTIONS,
@@ -1128,7 +1128,7 @@ export class GameRoom extends DurableObject<Env> {
       protocolVersion: PROTOCOL_VERSION,
       serverTime: this.lastSnapshotAt,
       movementSeq:this.lastMovementSequence.get(id)??0,
-      incidents: incidentRoster(this.evidenceMode).map(incident => incident.id),
+      incidents: incidentRoster(this.evidenceMode, parseIncidentList(this.env.INCIDENTS)).map(incident => incident.id),
     };
   }
 
@@ -1542,6 +1542,7 @@ export class GameRoom extends DurableObject<Env> {
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
       },saved,this.world);
       this.chaos.evidenceMode=this.evidenceMode;
+      this.chaos.onlyIncidents=parseIncidentList(this.env.INCIDENTS);
       this.chaos.enforceIncidentRoster();
       this.chaos.forcedIncident=this.forcedIncident;
       if(retiredAssignment)this.checkpointGame();

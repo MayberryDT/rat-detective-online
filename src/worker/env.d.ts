@@ -5,4 +5,6 @@ interface Env {
 	TYPESAFE_API_KEY?: string;
 	/** The release name, `<env>-<YYYY-MM-DD>-<git short sha>[-dirty]`, set by scripts/deploy.mjs; the city facts' `build`. */
 	BUILD?: string;
+	/** Staging playtests only: a comma-separated incident allow-list, set by scripts/deploy.mjs from `INCIDENTS`. */
+	INCIDENTS?: string;
 }

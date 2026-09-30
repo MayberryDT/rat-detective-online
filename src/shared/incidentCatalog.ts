@@ -29,11 +29,13 @@ export const isLegacyIncidentId = (value: unknown): value is LegacyIncidentId =>
  * available behind the classic mode toggle rather than being deleted outright. */
 export type EvidenceMode = 'planted' | 'classic';
 export const isEvidenceMode = (value: unknown): value is EvidenceMode => value === 'planted' || value === 'classic';
-/** Dispatch choices for a room, excluding whichever evidence incident is retired. */
-export function incidentRoster(mode: EvidenceMode = 'planted'): typeof INCIDENTS[number][] {
+/** Dispatch choices for a room, excluding whichever evidence incident is retired, and limited to `only` when given. */
+export function incidentRoster(mode: EvidenceMode = 'planted', only?: readonly IncidentId[]): typeof INCIDENTS[number][] {
     const retired: IncidentId = mode === 'classic' ? 'planted-evidence' : 'evidence-tampering';
-    return INCIDENTS.filter(incident => incident.id !== retired);
+    return INCIDENTS.filter(incident => incident.id !== retired && (!only?.length || only.includes(incident.id)));
 }
+/** A deploy's comma-separated incident allow-list (the `INCIDENTS` var, staging playtests only); unknown ids are dropped. */
+export const parseIncidentList = (value?: string): IncidentId[] => (value ?? '').split(',').map(id => id.trim()).filter(isIncidentId);
 export function incidentInfo(id?:IncidentId|LegacyIncidentId){
     const live=isLegacyIncidentId(id)?LEGACY_INCIDENTS[id]:id;
     // Old active snapshots only contained Improper Disposal.

@@ -21,5 +21,8 @@ const build = spawnSync('npm', ['run', 'build'], { stdio: 'inherit' });
 if (build.status !== 0) process.exit(build.status ?? 1);
 
 console.log(`Deploying build ${name}`);
-const deploy = spawnSync('npx', ['wrangler', 'deploy', '--env', target, '--var', `BUILD:${name}`], { stdio: 'inherit' });
+// Staging playtests only: `INCIDENTS=blackout,big-cheese npm run deploy:staging` limits every room's incident rolls.
+const incidents = target === 'staging' && process.env.INCIDENTS ? ['--var', `INCIDENTS:${process.env.INCIDENTS}`] : [];
+if (incidents.length) console.log(`Incidents limited to ${process.env.INCIDENTS}`);
+const deploy = spawnSync('npx', ['wrangler', 'deploy', '--env', target, '--var', `BUILD:${name}`, ...incidents], { stdio: 'inherit' });
 process.exit(deploy.status ?? 1);

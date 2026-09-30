@@ -105,6 +105,8 @@ export class ChaosSimulation {
     evidenceMode:EvidenceMode='planted';
     /** Practice-only override: force every roll to one incident id. */
     forcedIncident:IncidentId|null=null;
+    /** A deploy's allow-list (`INCIDENTS`, staging playtests): rolls draw only these. Empty = every incident. */
+    onlyIncidents:readonly IncidentId[]=[];
     private pressure:PressureState={serial:0,levels:{},launches:[]};
     /** Launched rats in the air, by id: the machine, launch time and highest point so far. */
     private readonly flights=new Map<string,{machineId:string;at:number;peak:number}>();
@@ -397,7 +399,7 @@ export class ChaosSimulation {
     /** Drop a restored incident this room's roster no longer runs, without
      * disturbing an in-flight incident that the current mode still owns. */
     enforceIncidentRoster():void{
-        const roster=incidentRoster(this.evidenceMode);
+        const roster=incidentRoster(this.evidenceMode,this.onlyIncidents);
         if(this.dispatch.incident&&!roster.some(incident=>incident.id===this.dispatch.incident))
             this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};
     }
@@ -731,7 +733,7 @@ export class ChaosSimulation {
     private activate(owner?:string|null){
         if(this.dispatch.phase!=='ready')return;
         const previous=this.dispatch.incident??(this.dispatch.serial>0?incidentInfo().id:undefined);
-        const roster=incidentRoster(this.evidenceMode);
+        const roster=incidentRoster(this.evidenceMode,this.onlyIncidents);
         // A forced practice roll may repeat; a normal roll keeps the no-repeat rule.
         const forced=this.forcedIncident&&roster.some(incident=>incident.id===this.forcedIncident)?this.forcedIncident:undefined;
         const choices=roster.filter(incident=>incident.id!==previous);
