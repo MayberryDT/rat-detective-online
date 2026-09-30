@@ -57,7 +57,7 @@ wrap('texImage2D',()=>{g.texImage++;});wrap('texImage3D',()=>{g.texImage++;});
 })();`;
 const port=9800+Math.floor(Math.random()*150),profile=mkdtempSync(join(tmpdir(),'rat-profile-'));
 const chrome=spawn(process.env.CHROME_BIN??'google-chrome',['--headless=new',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,
-    `--window-size=${width},${height}`,'--no-first-run','--mute-audio','--autoplay-policy=no-user-gesture-required','--ignore-gpu-blocklist',
+    `--window-size=${width},${height}`,'--no-first-run','--password-store=basic','--mute-audio','--autoplay-policy=no-user-gesture-required','--ignore-gpu-blocklist',
     `--use-angle=${process.env.ANGLE??'gl-egl'}`,'about:blank'],{stdio:'ignore'});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function json(u,init){for(let i=0;i<100;i++){try{return await (await fetch(u,init)).json();}catch{await sleep(100);}}throw Error(u);}
