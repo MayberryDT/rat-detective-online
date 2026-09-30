@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Rat Detective Online</title>
+    <meta name="description" content="Grab the Hot Case, sling ricocheting cheese balls, and send rival rats flying. A chaotic multiplayer shooter in a run-down noir city. Play free in your browser." />
+    <link rel="canonical" href="https://ratdetective.online/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Rat Detective" />
+    <meta property="og:title" content="Rat Detective — Cheese. Crime. Chaos." />
+    <meta property="og:description" content="Grab the Hot Case, sling ricocheting cheese balls, and send rival rats flying. A chaotic multiplayer shooter in a run-down noir city. Play free in your browser." />
+    <meta property="og:url" content="https://ratdetective.online/" />
+    <meta property="og:image" content="https://ratdetective.online/share-action-v2.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1731" />
+    <meta property="og:image:height" content="909" />
+    <meta property="og:image:alt" content="Rat Detective: cartoon rats in a noir alley cheese gunfight, carrying a red-rimmed case with papers caught in its seam. Hot Cases. Citywide Chaos." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Rat Detective — Cheese. Crime. Chaos." />
+    <meta name="twitter:description" content="Grab the Hot Case, sling ricocheting cheese balls, and send rival rats flying. A chaotic multiplayer shooter in a run-down noir city. Play free in your browser." />
+    <meta name="twitter:image" content="https://ratdetective.online/share-action-v2.png" />
+    <meta name="twitter:image:alt" content="Rat Detective: cartoon rats in a noir alley cheese gunfight, carrying a red-rimmed case with papers caught in its seam. Hot Cases. Citywide Chaos." />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preload" href="/title/office.webp" as="image" fetchpriority="high" media="(max-aspect-ratio: 2/1)">
+    <link rel="preload" href="/title/office-wide.webp" as="image" fetchpriority="high" media="(min-aspect-ratio: 2/1)">
+    <link rel="preload" href="/logo-rat.webp" as="image" fetchpriority="high">
+    <link rel="preload" href="/fonts/bangers/Bangers-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/special-elite/SpecialElite-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="../../src/style.css" />
+</head>
+
+<body>
+    <!-- Title Screen: the detective's office at night (a rendered still with live paper on it) -->
+    <div id="title-screen">
+        <div class="title-plate">
+            <i class="fx fx-rain" aria-hidden="true"><b></b><b></b></i>
+            <i class="fx fx-sweep" aria-hidden="true"><b></b></i>
+            <i class="fx fx-flicker" aria-hidden="true"></i>
+            <i class="fx fx-dust" aria-hidden="true"><b></b><b></b></i>
+            <i class="fx-smoke" aria-hidden="true"><b></b><b></b><b></b></i>
+            <i class="fx fx-neon" aria-hidden="true"></i>
+            <i class="fx fx-lightning" aria-hidden="true"><b></b><b></b></i>
+            <i class="fx fx-scurry" aria-hidden="true"><b></b></i>
+            <i class="fx fx-siren" aria-hidden="true"><b></b><b></b></i>
+            <i class="fx fx-moth-shadow" aria-hidden="true"><b></b></i>
+            <i class="moth" aria-hidden="true"></i>
+            <i class="fx-steam" aria-hidden="true"><b></b><b></b></i>
+            <div class="desk-phone" id="desk-phone" aria-hidden="true"><i class="phone-hit"></i><i class="phone-ring"><b></b><b></b></i><p class="phone-talk"></p></div>
+            <div class="wall-poster">
+                <p class="poster-head" aria-hidden="true">RAT CITY POLICE · DETECTIVE BUREAU</p>
+                <img class="poster-logo" src="/logo-rat.webp" alt="" width="640" height="640" fetchpriority="high" decoding="async">
+                <h1 class="logo-stamp" aria-label="Rat Detective">RAT DETECTIVE</h1>
+                <p class="poster-foot" aria-hidden="true">CASE OPEN · REWARD: ONE CHEESE</p>
+            </div>
+            <p class="wall-sticky" aria-hidden="true">this city runs on cheese and lies. I'm all out of cheese.</p>
+            <div class="wall-card">
+                <p class="card-label" aria-hidden="true">DETECTIVE ON RECORD</p>
+                <div id="player-name"></div>
+                <p class="card-hint" aria-hidden="true">not your name? roll it ↘</p>
+            </div>
+            <div class="die-spot">
+                <button type="button" id="reroll-name-btn" aria-label="Roll another name"><i class="die-shadow"></i><i class="die"></i></button>
+            </div>
+            <div class="wall-enter">
+                <button id="enter-city-btn" disabled autofocus><span id="enter-city-label">ENTER CITY!</span></button>
+                <p id="invitation-status" role="status" hidden></p>
+            </div>
+        </div>
+        <button type="button" id="title-settings-btn"><i class="pin"></i>⚙ Settings</button>
+        <p class="music-credit game-credit">Music: <a id="music-credit-link" href="https://www.youtube.com/watch?v=k4hjX6ZsplU" target="_blank" rel="noopener noreferrer">Rat Detective Boogie</a> by Stellar Cruise</p>
+    </div>
+
+    <!-- Kill Feed -->
+    <div id="kill-feed"></div>
+
+    <!-- Victory Overlay -->
+    <div id="victory-overlay">
+        <div id="victory-text"></div>
+    </div>
+
+    <!-- Respawn Countdown -->
+    <div id="respawn-overlay">
+        <div class="death-burst" aria-hidden="true">POW!</div>
+        <div class="respawn-label">RAT DOWN!</div>
+        <div id="respawn-note" class="respawn-note">A MINOR CAREER SETBACK.</div>
+        <div class="respawn-count"><span id="respawn-clock" class="respawn-clock" aria-hidden="true"><i></i></span>BACK IN <span id="respawn-timer">3</span></div>
+    </div>
+
+    <!-- Crosshair -->
+    <div id="crosshair"></div>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div>WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; Space — Jump &nbsp;|&nbsp; LMB — Shoot &nbsp;|&nbsp; <kbd>Tab</kbd> — Hold for scoreboard &nbsp;|&nbsp;
+            Close the case to win.</div>
+    </div>
+
+    <div id="creator-credit" class="game-credit">Made by <a id="creator-credit-link" href="https://tylermayberry.dev" target="_blank" rel="noopener noreferrer">Tyler Mayberry</a></div>
+
+    <script type="module" src="./hitch-census.ts"></script>
+</body>
+
+</html>
