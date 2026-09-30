@@ -11,10 +11,13 @@ import type { PickupKind } from '../../shared/pickups';
 import { cityPlaces } from '../../shared/city/places';
 import { cityFloor } from '../../shared/city/frame';
 import { CITY_SCHEMA_VERSION, p3, type CityFact, type FactContext, type RatSituation, type WorldSituation } from '../../shared/city/facts';
+import { decideMeasure, goalMeasure, JEV_COUNTS, latencyBucket, type GoalOutcome, type MindName } from '../../shared/city/minds';
+import { MIND_VERSION, type Decision, type Goal, type MotorMode, type Personality } from '../../shared/bots/intent';
 import { RoundLedger, standings } from '../../shared/city/ledger';
 import { heatCellIndex, heatCellKey, heatDayKey } from '../HeatMap';
 import type { CityStore } from './CityStore';
 import type { CityArchive } from './CityArchive';
+import type { JevOutcome, JevStats } from '../bots/jevMind';
 
 /** Watches one room and writes the city map's facts (docs/city-map.md, layer 2): situations every
  * second, 5 Hz windows around fights, discrete events, and the aggregates the map reads. */
@@ -32,6 +35,8 @@ const IN_FLIGHT: ReadonlySet<ShotResultOutcome> = new Set<ShotResultOutcome>(['f
 const SIGHT_RANGE = 150;
 const ANOMALY_COOLDOWN_MS = 10_000;
 const PENDING_LIMIT = 50_000;
+/** A bot this close to the place its goal was heading for has reached it. */
+const ARRIVED = 3;
 
 export interface RecorderDeps {
   room: string;
@@ -47,6 +52,22 @@ export interface RecorderDeps {
   solids: readonly GrayboxBox[];
 }
 export interface HitRecord { attacker?: PlayerData; victim: PlayerData; damage: number; killed: boolean; headshot: boolean; explosive: boolean; incoming: boolean }
+/** One window of the Jev mind while it was on (`GameRoom.updateJev`). */
+export interface MindsWindow { ms: number; stats: JevStats; latencies: readonly number[]; p50?: number; p90?: number }
+/** A bot's current goal, from the decision that took it up to its end. */
+interface OpenGoal {
+  goal: Goal; mode: MotorMode; mind: MindName; personality: Personality; start: number; place: string;
+  /** The rat hunted or chased. */
+  quarry?: string;
+  /** The pickup site sought. */
+  site?: string;
+  /** The place a roam, flee, ambush, mischief or evading carrier heads for. */
+  to?: Vec3Data;
+}
+/** Goals whose end is getting to their place. */
+const PLACE_GOALS: ReadonlySet<Goal> = new Set<Goal>(['roam', 'flee', 'ambush', 'mischief']);
+/** Facts too many to keep in SQL: the archive (and, for decisions, the aggregates) holds them. */
+const ARCHIVE_ONLY: ReadonlySet<CityFact['type']> = new Set<CityFact['type']>(['frame', 'window', 'decision', 'goal-end']);
 
 type Sample = [number, number, number, number, number, number];
 interface Life { start: number; spawnPlace: string; lastPickup?: { kind: PickupKind; at: number }; lastHit?: { at: number; by?: string }; prev?: { x: number; z: number; at: number }; place?: string; carryStart?: number; shots: number[] }
@@ -135,6 +156,11 @@ export class CityRecorder {
   private readonly cells = new Tally<number>();
   private readonly placeCounts = new Tally<string>();
   private readonly flows = new Map<string, number>();
+  /** Jev room measures under `day|layout|mode|measure`. */
+  private readonly mindCounts = new Map<string, number>();
+  /** Each bot's open goal, and the send time of the last Jev answer recorded for it. */
+  private readonly goals = new Map<string, OpenGoal>();
+  private readonly jevApplied = new Map<string, number>();
   private events: Array<{ t: number; round?: string; type: string; data: string }> = [];
   private readonly alive = new Map<string, boolean>();
   private readonly buffs = new Map<string, { ironclad: boolean; hustle: boolean }>();
@@ -168,13 +194,14 @@ export class CityRecorder {
   }
   private context(now: number): FactContext {
     return { t: now, ...(this.liveAt !== undefined && now >= this.liveAt ? { rm: now - this.liveAt } : {}), room: this.deps.room,
-      ...(this.roundId ? { round: this.roundId } : {}), layout: this.deps.layout(), schema: CITY_SCHEMA_VERSION, mode: this.mode,
+      ...(this.roundId ? { round: this.roundId } : {}), layout: this.deps.layout(), schema: CITY_SCHEMA_VERSION, mindVersion: MIND_VERSION, mode: this.mode,
       ...(this.incident ? { incident: this.incident } : {}) };
   }
-  /** Archive every fact; keep the discrete ones (not frames or windows) in SQL for 30 days too. */
+  /** Archive every fact; keep the discrete ones in SQL for 30 days too, except the bots' decisions and goal ends
+   * (hundreds per bot-hour), which the aggregates and the archive hold. */
   private emit(fact: CityFact): void {
     this.deps.archive.push(fact, fact.t);
-    if (fact.type !== 'frame' && fact.type !== 'window') this.events.push({ t: fact.t, round: fact.round, type: fact.type, data: JSON.stringify(fact) });
+    if (!ARCHIVE_ONLY.has(fact.type)) this.events.push({ t: fact.t, round: fact.round, type: fact.type, data: JSON.stringify(fact) });
   }
   /** Aggregate key prefix, rebuilt only when the UTC day, layout or mode changes (it runs for every shot). */
   private keyCache = { dayStart: 0, dayEnd: -1, layout: -1, mode: '', key: '' };
@@ -303,6 +330,7 @@ export class CityRecorder {
       this.emit({ ...this.context(now), type: 'pickup', a: this.actor(player.id), site: e.pickupId, kind: e.pickup, p: p3(player), place,
         hpBefore: this.last.get(player.id)?.hp ?? player.hp, ...(restocked === undefined ? {} : { waitedMs: now - restocked }) });
       this.siteAvailable.set(e.pickupId, false);
+      this.reach(player, now, g => (g.goal === 'heal' || g.goal === 'arm-up') && g.site === e.pickupId);
     }
   }
 
@@ -331,6 +359,9 @@ export class CityRecorder {
     this.emit({ ...this.context(now), type: 'death', ...(killer ? { a: this.actor(killer.id), ap: p3(killer), aplace: aPlace } : {}), victim: this.actor(v.id), cause,
       vp: p3(v), vplace: vPlace, ...(killer && dist !== undefined ? { dist } : {}), lifeMs: now - life.start, assists });
     this.alive.set(v.id, false);
+    this.reach(killer, now, g => (g.goal === 'hunt' || g.goal === 'chase-carrier') && g.quarry === v.id);
+    const open = this.goals.get(v.id);
+    if (open) this.endGoal(v, open, 'died', now);
   }
 
   session(what: 'join' | 'leave', id: string, now: number): void {
@@ -342,6 +373,58 @@ export class CityRecorder {
     const place = this.places.at(p.x, p.y, p.z).id;
     this.measure(now, place, 'rescues');
     this.emit({ ...this.context(now), type: 'rescue', a: this.actor(p.id), from: p3(p), place });
+  }
+
+  // ---- the minds (docs/bot-overhaul.md, B5) ----
+  /** A bot's decision, recorded when it takes up a goal (the open one having ended: reached, died, failed, or
+   * replaced by this one) or applies a Jev answer not yet recorded. A new combat target keeps the goal, so the
+   * code mind's 180–300 ms beat records nothing until the goal changes. */
+  decision(p: PlayerData, d: Decision, now: number, jev?: JevOutcome): void {
+    const { plan, answer } = d, open = this.goals.get(p.id);
+    if (open && (d.failed || open.goal !== plan.goal)) this.endGoal(p, open, d.failed ? 'failed' : 'replaced', now);
+    const opening = !this.goals.has(p.id), sent = answer.jev?.sentAt;
+    if (!opening && (sent === undefined || this.jevApplied.get(p.id) === sent)) return;
+    if (sent !== undefined) this.jevApplied.set(p.id, sent);
+    const place = this.places.at(p.x, p.y, p.z).id, mind = answer.source;
+    const top = (Object.entries(d.weighted) as Array<[Goal, number]>).sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([goal, weighted]): [Goal, number, number] => [goal, round2(answer.scores[goal] ?? 0), round2(weighted)]);
+    this.measure(now, place, decideMeasure(mind, d.personality, plan.goal));
+    this.emit({ ...this.context(now), type: 'decision', a: this.actor(p.id), p: p3(p), place, mind, personality: d.personality, goal: plan.goal, motor: plan.mode,
+      trigger: d.trigger, top, ...(answer.danger === undefined ? {} : { danger: round2(answer.danger) }), target: answer.target !== undefined,
+      ...(d.failed ? { failed: true as const } : {}), ...(answer.jev ? { latencyMs: answer.jev.latencyMs, tokens: answer.jev.tokens } : {}),
+      ...(jev && mind === 'code' ? { jev } : {}) });
+    if (!opening) return;
+    const quarry = plan.goal === 'hunt' ? plan.follow : plan.goal === 'chase-carrier' ? plan.follow ?? (this.caseOwner || undefined) : undefined;
+    const to = plan.destination && (PLACE_GOALS.has(plan.goal) || plan.goal === 'keep-case' && plan.mode === 'evade') ? plan.destination : undefined;
+    this.goals.set(p.id, { goal: plan.goal, mode: plan.mode, mind, personality: d.personality, start: now, place, ...(quarry ? { quarry } : {}),
+      ...(plan.mode === 'pickup' ? { site: plan.key.slice('pickup:'.length) } : {}), ...(to ? { to: { x: to.x, y: to.y, z: to.z } } : {}) });
+  }
+
+  /** A window of the Jev mind while it was on: a `minds` fact and the room-wide measures. */
+  minds(w: MindsWindow, now: number): void {
+    const key = this.key(now), s = w.stats;
+    const add = (measure: string, n: number) => { if (n) this.count(this.mindCounts, `${key}|${measure}`, n); };
+    const counts: Record<typeof JEV_COUNTS[number], number> = { decisions: s.decisions, requests: s.requests, answers: s.answers, failures: s.failures,
+      stale: s.staleDrops, fallbacks: s.fallbacks, throttled: s.throttled, tokens: s.tokens };
+    for (const measure of JEV_COUNTS) add(measure, counts[measure]);
+    add('on-ms', w.ms); add('microdollars', Math.round(s.dollars * 1e6));
+    const hist: Record<string, number> = {};
+    for (const ms of w.latencies) { const bucket = latencyBucket(ms); hist[bucket] = (hist[bucket] ?? 0) + 1; }
+    for (const [bucket, n] of Object.entries(hist)) add(`latency:${bucket}`, n);
+    this.emit({ ...this.context(now), type: 'minds', ms: w.ms, ...s, dollars: Math.round(s.dollars * 1e6) / 1e6,
+      ...(w.p50 === undefined ? {} : { p50: w.p50 }), ...(w.p90 === undefined ? {} : { p90: w.p90 }), hist });
+  }
+
+  private endGoal(p: PlayerData, open: OpenGoal, outcome: GoalOutcome, now: number): void {
+    this.goals.delete(p.id);
+    this.measure(now, open.place, goalMeasure(open.mind, open.personality, open.goal, outcome));
+    this.emit({ ...this.context(now), type: 'goal-end', a: this.actor(p.id), goal: open.goal, motor: open.mode, mind: open.mind, personality: open.personality,
+      outcome, durationMs: now - open.start, from: open.place, p: p3(p), place: this.places.at(p.x, p.y, p.z).id });
+  }
+  /** `p` did what its open goal is for, when `does` says so. */
+  private reach(p: PlayerData | undefined, now: number, does: (goal: OpenGoal) => boolean): void {
+    const open = p && this.goals.get(p.id);
+    if (p && open && does(open)) this.endGoal(p, open, 'reached', now);
   }
 
   // ---- the room tick ----
@@ -377,6 +460,8 @@ export class CityRecorder {
     if (a && a.roundId !== this.roundId) {
       this.roundId = a.roundId; this.mode = a.id; this.liveAt = a.liveAt;
       this.ledger.reset(); this.actors.clear(); this.deliverySerial = a.deliverySerial;
+      // Actors are per round: a goal open when the round changed ends unrecorded.
+      this.goals.clear(); this.jevApplied.clear();
       const ids = [...players.keys()];
       this.emit({ ...this.context(now), type: 'round', what: 'start', humans: ids.filter(id => !this.deps.isBot(id)).length, bots: ids.filter(id => this.deps.isBot(id)).length });
     }
@@ -420,6 +505,8 @@ export class CityRecorder {
         if (p.hp <= 0 || now - flight.start > 15_000) this.flights.delete(p.id);
         else if (now - flight.start > 500 && Math.abs(vy) < .4) this.land(p, flight, now);
       }
+      const to = this.goals.get(p.id)?.to;
+      if (to && Math.hypot(p.x - to.x, p.y - to.y, p.z - to.z) < ARRIVED) this.reach(p, now, () => true);
     }
     this.started = true;
     for (let i = this.windows.length - 1; i >= 0; i--) {
@@ -469,6 +556,7 @@ export class CityRecorder {
         const stolen = prev !== null;
         this.measure(now, place, stolen ? 'case-steal' : 'case-take');
         this.emit({ ...this.context(now), type: 'case', what: stolen ? 'steal' : 'take', a: this.actor(owner), ...(prev ? { from: this.actor(prev) } : {}), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }) });
+        this.reach(players.get(owner), now, g => g.goal === 'take-case' || g.goal === 'chase-carrier' && g.quarry === prev);
       } else if (prev) {
         this.measure(now, place, 'case-drop');
         this.emit({ ...this.context(now), type: 'case', what: 'drop', a: this.actor(prev), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }) });
@@ -485,6 +573,7 @@ export class CityRecorder {
         const place = this.places.at(p.x, p.y, p.z).id;
         this.measure(now, place, 'deliveries');
         this.emit({ ...this.context(now), type: 'case', what: 'deliver', a: this.actor(by), p: p3(p), place });
+        this.reach(p, now, g => g.goal === 'keep-case');
       }
       this.deliverySerial = a.deliverySerial;
     }
@@ -495,13 +584,17 @@ export class CityRecorder {
       this.emit({ ...this.context(now), type: 'dispatch', phase: d.phase, ...(d.incident ? { incident: d.incident } : {}), ...(d.caller ? { caller: this.actor(d.caller) } : {}),
         ...(pillar ? { pillar } : {}), ...(d.wanted ? { wanted: this.actor(d.wanted) } : {}) });
       this.dispatchKey = dispatchKey;
+      if (d.phase === 'rolling') this.reach(caller, now, g => g.goal === 'mischief');
     }
     const j = a?.jurisdiction;
     if (j) {
       const zone = activeZone(j), zoneKey = `${j.serial}:${zone}`;
       if (zoneKey !== this.zoneKey) { this.emit({ ...this.context(now), type: 'zone', what: 'activate', zone }); this.zoneKey = zoneKey; }
       if (j.scorerId !== this.scorer) {
-        if (j.scorerId) this.emit({ ...this.context(now), type: 'zone', what: 'scorer', zone, scorer: this.actor(j.scorerId) });
+        if (j.scorerId) {
+          this.emit({ ...this.context(now), type: 'zone', what: 'scorer', zone, scorer: this.actor(j.scorerId) });
+          this.reach(players.get(j.scorerId), now, g => g.goal === 'keep-case');
+        }
         this.scorer = j.scorerId;
       }
     }
@@ -629,8 +722,9 @@ export class CityRecorder {
     for (const [key, layers] of this.cells.buckets) { const [day, layout, mode] = prefix(key); for (const [layer, counts] of layers) for (const [cell, n] of counts) this.deps.store.addCell(day, layout, mode, layer, heatCellKey(cell), n); }
     for (const [key, places] of this.placeCounts.buckets) { const [day, layout, mode] = prefix(key); for (const [place, counts] of places) for (const [measure, n] of counts) this.deps.store.addPlace(day, layout, mode, place, measure, n); }
     for (const [key, n] of this.flows) { const [day, layout, mode, src, dst, who] = key.split('|') as [string, string, string, string, string, string]; this.deps.store.addFlow(day, Number(layout), mode, src, dst, who, n); }
+    for (const [key, n] of this.mindCounts) { const [day, layout, mode, measure] = key.split('|') as [string, string, string, string]; this.deps.store.addMind(day, Number(layout), mode, measure, n); }
     for (const e of this.events) this.deps.store.addEvent(e.t, e.round, e.type, e.data);
-    this.cells.clear(); this.placeCounts.clear(); this.flows.clear(); this.events = [];
+    this.cells.clear(); this.placeCounts.clear(); this.flows.clear(); this.mindCounts.clear(); this.events = [];
     this.deps.store.pruneEvents(now);
     if (archive || this.deps.archive.due(now)) this.deps.archive.flush(now);
   }

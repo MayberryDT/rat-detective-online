@@ -128,6 +128,8 @@ export const BOT_HEARTBEAT_MS = 15_000;
 export const STALE_PLAYER_MS = 2 * 60_000;
 export const CHECKPOINT_MS = 2_500;
 const RECENT_SHOT_LIMIT = 24;
+/** A human counts as present for Jev while they played this recently; a `minds` fact covers this long. */
+const JEV_PRESENCE_MS = 60_000, JEV_REPORT_MS = 60_000;
 const POSE_FIELDS = ['x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'meshQx', 'meshQy', 'meshQz', 'meshQw'] as const;
 type MovementPose = Extract<ServerMessage, { type: 'playerMoved' }>['player'];
 
@@ -187,10 +189,15 @@ export class GameRoom extends DurableObject<Env> {
   /** The Jev mind for this room's server bots, and the day's budget (docs/bot-overhaul.md, B4). */
   private jevMind: JevMind | null = null;
   private jevBudgetState: JevBudget | null = null;
-  private jevLogAt = 0;
-  /** Tests replace these: the TypeSafe key (a Worker secret) and the transport. */
+  /** The current `minds` window: when it started (0 while Jev is off) and when it is reported. */
+  private jevWindowStart = 0;
+  private jevReportAt = 0;
+  /** When each human last played (moved, turned, fired, took a pickup, joined): only recent play keeps Jev on. */
+  private lastInputAt = new Map<string, number>();
+  /** Tests replace these: the TypeSafe key (a Worker secret), the transport, and how long play counts as presence. */
   private jevKey: () => string | undefined = () => this.env.TYPESAFE_API_KEY;
   private jevFetch: typeof fetch = (input, init) => fetch(input, init);
+  private jevPresenceMs = JEV_PRESENCE_MS;
   private readonly cityStore: CityStore;
   private sightQuery: { world: CANNON.World; query: SpatialRayQuery; refreshedAt: number } | null = null;
   private lastActiveAt = new Map<string, number>();
@@ -464,36 +471,50 @@ export class GameRoom extends DurableObject<Env> {
           if (!this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) return;
           this.handleShoot(id, { type: 'shoot', shotId: crypto.randomUUID(), origin, direction });
         },
+        decide: (id, decision, now) => {
+          const player = this.players.get(id), jev = this.jevMind;
+          if (player) this.city.decision(player, decision, now, jev?.enabled && decision.answer.source === 'code' ? jev.outcome(id) : undefined);
+        },
       }, id => { const bot = this.botRoster.find(entry => entry.id === id); return bot ? botPersonality(bot.name) : 'tryhard'; }, this.jev);
   }
 
   private get jev(): JevMind {
     return this.jevMind ??= new JevMind({ waitUntil: work => this.ctx.waitUntil(work),
-      client: new JevClient({ key: () => this.jevKey(), model: this.env.JEV_MODEL || JEV_MODEL, fetch: (input, init) => this.jevFetch(input, init), clock: () => this.now() }) });
+      client: new JevClient({ key: () => this.jevKey(), model: this.env.JEV_MODEL || JEV_MODEL, fetch: (input, init) => this.jevFetch(input, init), clock: () => this.now() }),
+      // A reply that lands after Jev switched off (or its bots were disposed) is reported at once.
+      spend: dollars => { const budget = this.jevBudget; budget.add(dollars); if (!this.jevMind?.enabled) budget.tick(this.now(), true); } });
   }
 
   private get jevBudget(): JevBudget {
     const ledger = () => this.env.MATCHMAKER.getByName(JEV_LEDGER), room = this.matchRoom ?? this.ctx.id.name ?? 'room';
     return this.jevBudgetState ??= new JevBudget({ spend: (dollars, now) => ledger().jevSpend(room, dollars, now), read: now => ledger().jevBudget(now) },
-      work => this.ctx.waitUntil(work));
+      work => this.ctx.waitUntil(work), () => this.now());
   }
 
-  /** Jev thinks for the server bots only while a human is connected, the key is set and the day's budget is
-   * open; otherwise the code mind does, so the empty city costs nothing. Switching resets no bot or route.
-   * Spend is reported about every 30 s and whenever Jev switches off. */
+  /** Jev thinks for the server bots only while a human is playing (connected, and moved, fired or took a pickup
+   * within `JEV_PRESENCE_MS`), the key is set and the day's budget is open; otherwise the code mind does, so the
+   * empty city and an idle tab cost nothing. Switching resets no bot or route. Spend is reported about every
+   * 30 s and whenever Jev switches off; a `minds` fact and a log line cover every minute Jev is on. */
   private updateJev(now: number): void {
     const jev = this.jevMind;
     if (!jev) return;
     let human = false;
-    if (this.serverBots && this.jevKey()) for (const id of this.players.keys()) if (!this.isManagedBot(id) && this.sessions.get(id)?.until == null) { human = true; break; }
-    const budget = this.jevBudget, on = human && budget.allows(now);
-    budget.add(jev.takeSpend());
-    budget.tick(now, jev.enabled && !on);
+    if (this.serverBots && this.jevKey()) for (const id of this.players.keys()) {
+      if (!this.isManagedBot(id) && this.sessions.get(id)?.until == null && now - (this.lastInputAt.get(id) ?? -Infinity) < this.jevPresenceMs) { human = true; break; }
+    }
+    const budget = this.jevBudget, on = human && budget.allows(now), off = jev.enabled && !on;
+    budget.tick(now, off);
+    if (on && !jev.enabled) { this.jevWindowStart = now; this.jevReportAt = now + JEV_REPORT_MS; }
     jev.enabled = on;
-    if (now < this.jevLogAt) return;
-    this.jevLogAt = now + 30_000;
-    const latencies = jev.takeLatencies().sort((a, b) => a - b);
-    if (on || latencies.length) log('info', 'jev', { on, ...jev.stats, latencyP50: latencies[Math.floor(latencies.length / 2)], latencyP90: latencies[Math.floor(latencies.length * .9)] });
+    if (off || on && now >= this.jevReportAt) this.reportJev(jev, now, on);
+  }
+  private reportJev(jev: JevMind, now: number, on: boolean): void {
+    const { stats, latencies } = jev.takeWindow(), ms = now - this.jevWindowStart;
+    latencies.sort((a, b) => a - b);
+    const p50 = latencies[Math.floor(latencies.length / 2)], p90 = latencies[Math.floor(latencies.length * .9)];
+    log('info', 'jev', { on, ms, ...stats, latencyP50: p50, latencyP90: p90 });
+    this.city.minds({ ms, stats, latencies, ...(p50 === undefined || p90 === undefined ? {} : { p50, p90 }) }, now);
+    this.jevWindowStart = now; this.jevReportAt = now + JEV_REPORT_MS;
   }
 
   private activatePersistentBots(): void {
@@ -711,6 +732,8 @@ export class GameRoom extends DurableObject<Env> {
         return;
       }
       this.handleJoin(ws, message);
+      const joined = this.getPlayerId(ws);
+      if (joined) this.lastInputAt.set(joined, this.now());
       return;
     }
 
@@ -751,13 +774,14 @@ export class GameRoom extends DurableObject<Env> {
 
     if (message.type === 'updateMovement') {
       if (!this.rateLimiter.allow(`${playerId}:move`, MOVEMENT_RATE.limit, MOVEMENT_RATE.windowMs, this.now())) return;
+      this.noteMovementInput(playerId, message);
       this.handleMovement(playerId, message);
       this.touchActivity(playerId);
       return;
     }
 
     if(message.type==='pickupIntent'){
-      this.touchActivity(playerId);
+      this.touchActivity(playerId); this.lastInputAt.set(playerId, this.now());
       if(!this.rateLimiter.allow(`${playerId}:pickup`,20,1000,this.now())){
         const state=this.chaos?.snapshot(false),at=this.now();
         this.sendToPlayer(playerId,{type:'pickupResult',interactionId:message.interactionId,target:message.target,targetId:message.targetId,
@@ -768,6 +792,8 @@ export class GameRoom extends DurableObject<Env> {
     }
 
     this.touchActivity(playerId);
+    // Shots and hit claims are play; a background tab sends neither.
+    if (message.type === 'shoot' || message.type === 'hit') this.lastInputAt.set(playerId, this.now());
 
     if (message.type === 'shoot') {
       if (!this.rateLimiter.allow(`${playerId}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) {
@@ -1440,6 +1466,7 @@ export class GameRoom extends DurableObject<Env> {
     this.lastCheckpointAt.delete(playerId);
     this.dueCheckpoints.delete(playerId);
     this.lastActiveAt.delete(playerId);
+    this.lastInputAt.delete(playerId);
     this.recentShots.delete(playerId);
     this.lastMovementBroadcast.delete(playerId);
     this.lastMovementSequence.delete(playerId);
@@ -1606,6 +1633,15 @@ export class GameRoom extends DurableObject<Env> {
     });
   }
 
+  /** A movement update is play when the rat moved or turned; an idle or background tab resends the same pose. */
+  private noteMovementInput(playerId: string, message: Extract<ClientMessage, { type: 'updateMovement' }>): void {
+    const player = this.players.get(playerId);
+    if (!player) return;
+    const { position: p, rotation: r } = message;
+    const turned = Math.abs(player.qx - r.x) + Math.abs(player.qy - r.y) + Math.abs(player.qz - r.z) + Math.abs(player.qw - r.w) > 1e-3;
+    if (turned || Math.hypot(player.x - p.x, player.y - p.y, player.z - p.z) > .05) this.lastInputAt.set(playerId, this.now());
+  }
+
   private touchActivity(playerId: string | undefined): void {
     if (!playerId) return;
     const player = this.players.get(playerId);
@@ -1706,7 +1742,7 @@ export class GameRoom extends DurableObject<Env> {
   }
   async cityPlaces(range: Range, filter: Filter = {}, now = this.now()) {
     this.cityRecorder?.flush(now);
-    return { ...range, ...this.cityStore.days(range), modes: this.cityStore.modes(range), places: this.cityStore.places(range, filter) };
+    return { ...range, ...this.cityStore.days(range), modes: this.cityStore.modes(range), places: this.cityStore.places(range, filter), minds: this.cityStore.minds(range, filter) };
   }
   async cityFlows(range: Range, filter: Filter = {}, now = this.now()) {
     this.cityRecorder?.flush(now);

@@ -2,6 +2,7 @@
 // Bot gate metrics (docs/bot-overhaul.md, "Acceptance"): how the bots play, from the city map mirror.
 // Usage: node scripts/bot-gate.mjs [--db=output/city/city.db] [--room=public-live-v2] [--layout=3]
 //        [--since=ISO] [--until=ISO] [--mind=<mindVersion>] [--json=out.json]
+// `minds` (B5) reads the `decision`, `goal-end` and `minds` facts.
 import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync } from 'node:fs';
 
@@ -66,6 +67,27 @@ const round3 = (x) => x === null || x === undefined ? null : Math.round(x * 1000
 const perHour = (n) => botHours ? round3(n / botHours) : null;
 const perRoomHour = (n) => roomSeconds ? round3(n / (roomSeconds / 3600)) : null;
 
+// Minds (B5): decisions per bot-hour by mind, Jev's share, how goals ended, and Jev's latency and cost.
+const decisions = facts('decision'), goalEnds = facts('goal-end'), windows = facts('minds');
+const byMind = { jev: decisions.filter(d => d.mind === 'jev').length, code: decisions.filter(d => d.mind === 'code').length };
+const goals = {};
+for (const e of goalEnds) { const g = goals[e.goal] ??= { ended: 0, reached: 0, died: 0, replaced: 0, failed: 0 }; g.ended++; g[e.outcome]++; }
+const jevHours = sum(windows.map(w => w.ms)) / 3_600_000, jev = (field) => sum(windows.map(w => w[field] ?? 0));
+// Every reply's latency, pooled over the windows' 20 ms buckets and read at the bucket's middle (as the digest does).
+const latency = new Map();
+for (const w of windows) for (const [bucket, n] of Object.entries(w.hist ?? {})) latency.set(Number(bucket), (latency.get(Number(bucket)) ?? 0) + n);
+const buckets = [...latency].sort((a, b) => a[0] - b[0]), replies = sum(buckets.map(([, n]) => n));
+const quantile = (q) => { let seen = 0; for (const [lo, n] of buckets) if ((seen += n) > q * replies) return lo + 10; return null; };
+const minds = {
+  decisionsPerBotHour: { jev: perHour(byMind.jev), code: perHour(byMind.code) },
+  jevShare: byMind.jev + byMind.code ? round3(byMind.jev / (byMind.jev + byMind.code)) : null,
+  goalSuccess: Object.fromEntries(Object.entries(goals).sort((a, b) => b[1].ended - a[1].ended).map(([goal, g]) => [goal, { ended: g.ended, reached: round3(g.reached / g.ended),
+    died: round3(g.died / g.ended), replaced: round3(g.replaced / g.ended), failed: round3(g.failed / g.ended) }])),
+  jev: { hoursOn: round3(jevHours), latencyP50: replies ? quantile(.5) : null, latencyP90: replies ? quantile(.9) : null,
+    dollarsPerHourOn: jevHours ? round3(jev('dollars') / jevHours) : null, dollarsPerHumanHour: humanSeconds ? round3(jev('dollars') / (humanSeconds / 3600)) : null,
+    fallbackShare: jev('decisions') ? round3(jev('fallbacks') / jev('decisions')) : null, staleShare: jev('answers') ? round3(jev('staleDrops') / jev('answers')) : null },
+};
+
 const out = {
   window: { room, layout, since: new Date(Math.max(since, frames[0]?.t ?? since)).toISOString(), until: new Date(Math.min(until, frames.at(-1)?.t ?? until)).toISOString(), mind: mind ?? 'any', rounds: new Set(frames.map(f => f.round)).size },
   botHours: round3(botHours), humanHours: round3(humanSeconds / 3600), roomHours: round3(roomSeconds / 3600),
@@ -89,6 +111,7 @@ const out = {
   },
   skillBar: { humanRats: humanRows.length, medianHumanHitRate: round3(humanHitRate), medianHumanKd: round3(humanKd), botHitRate: botShots ? round3(botHits / botShots) : null,
     botKd: botDeaths.length ? round3(botKills / botDeaths.length) : null },
+  minds,
 };
 console.log(JSON.stringify(out, null, 2));
 const json = arg('json', undefined);

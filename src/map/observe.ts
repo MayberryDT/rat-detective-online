@@ -10,12 +10,14 @@ import { FOOTPRINTS, LAYOUT, PLACES } from './city';
 import { drawCity, drawLabels, RAMP_CSS, rampColor, type MapView } from './canvas';
 import { foldCounts, rangeQuery, type FoldedCounts, type Flows, type Heat, type PlaceCounts, type RangeChoice } from './data';
 import { choices, definitions, duration, el, esc, section, toggle } from './dom';
+import { MindsLayer } from './minds';
 import type { Context, Mode } from './mode';
 import type { PlaceFloor } from './placeLayer';
 
 type Floor = 'all' | 'street' | 'upper' | 'sewer' | 'air';
-/** A recorded layer: its heat cells, and the place counts that measure the same thing (none for ball ends). */
-const LAYERS: Record<string, { label: string; cells: string[]; place?: string[]; seconds?: true }> = {
+/** A recorded layer: its heat cells, and the place counts that measure the same thing (none for ball ends).
+ * The Minds layer is places only, read through its own filter. */
+const LAYERS: Record<string, { label: string; cells: string[]; place?: string[]; seconds?: true; minds?: true }> = {
   humans: { label: 'Human time', cells: ['humans'], place: ['human-s'], seconds: true },
   bots: { label: 'Bot time', cells: ['bots'], place: ['bot-s'], seconds: true },
   deaths: { label: 'Deaths', cells: ['deaths'], place: ['deaths'] },
@@ -29,6 +31,7 @@ const LAYERS: Record<string, { label: string; cells: string[]; place?: string[];
   landings: { label: 'Launch landings', cells: ['landings'], place: ['landings'] },
   spawns: { label: 'Spawns', cells: ['spawns'], place: ['spawns'] },
   anomalies: { label: 'Faults', cells: ['anomalies'] },
+  minds: { label: 'Minds', cells: [], minds: true },
 };
 const OVERLAYS: Record<string, [string, string, boolean]> = {
   entries: ['Sewer entrances', '#2fd3e6', true], sewer: ['Sewer tunnels', '#2f8f9d', false], pickups: ['Supplies', '#3ddc6a', true],
@@ -52,14 +55,16 @@ export function observe(ctx: Context): Mode {
     range: { when: p.get('days') ?? 'all', from: p.get('from') ?? '', to: p.get('to') ?? '', layout: p.get('layout') ?? '', assignment: p.get('assign') ?? '' } as RangeChoice,
   };
   if (state.range.from && state.range.to) state.range.when = 'custom';
+  if (LAYERS[state.layer]!.minds) state.show = 'places';
   const shown = new Map(Object.entries(OVERLAYS).map(([k, [, , on]]) => [k, on]));
-  let heat: Heat | undefined, folded: FoldedCounts | undefined, flows: Flows | undefined;
+  let heat: Heat | undefined, folded: FoldedCounts | undefined, flows: Flows | undefined, mindCounts: Record<string, number> = {};
+  const minds = new MindsLayer(p, () => { save(); renderTotals(); ctx.redraw(); });
 
   const save = () => {
     const set = (k: string, v: string, fallback: string) => { if (v === fallback) p.delete(k); else p.set(k, v); };
     set('layer', state.layer, 'humans'); set('floor', state.floor, 'all'); set('show', state.show, 'cells'); set('flows', state.flows ? '1' : '0', '0'); set('smooth', state.smooth ? '1' : '0', '1');
     set('days', state.range.when === 'custom' ? 'all' : state.range.when, 'all'); set('from', state.range.when === 'custom' ? state.range.from : '', ''); set('to', state.range.when === 'custom' ? state.range.to : '', '');
-    set('layout', state.range.layout, ''); set('assign', state.range.assignment, '');
+    set('layout', state.range.layout, ''); set('assign', state.range.assignment, ''); minds.save(set);
     ctx.save();
   };
   const change = () => { save(); ctx.redraw(); };
@@ -75,11 +80,19 @@ export function observe(ctx: Context): Mode {
   }
   const when = choices([['1', 'Today'], ['7', '7 days'], ['30', '30 days'], ['all', 'All time']], () => state.range.when, v => { state.range.when = v; reload(); });
   const totals = el('div');
-  const showAs = choices([['cells', '4-unit cells'], ['places', 'Places']], () => state.show, v => { state.show = v; change(); }, v => v === 'places' && !LAYERS[state.layer]!.place);
+  const showAs = choices([['cells', '4-unit cells'], ['places', 'Places']], () => state.show, v => { state.show = v; change(); },
+    v => v === 'places' ? !LAYERS[state.layer]!.place && !LAYERS[state.layer]!.minds : !!LAYERS[state.layer]!.minds);
+  const mindsBox = el('div', {}, minds.panel);
+  mindsBox.hidden = !LAYERS[state.layer]!.minds;
   const overlayBox = el('div', {}, ...Object.entries(OVERLAYS).map(([k, [name, color]]) => toggle(name, shown.get(k)!, on => { shown.set(k, on); ctx.redraw(); }, color)));
   const panel = el('div', {},
     el('p', { className: 'note', text: 'Where rats spend their time in the live city, where they die, where the killers stood and where the cheese goes, drawn over today\'s layout. Hover for a place card.' }),
-    section('Show', choices(Object.entries(LAYERS).map(([k, v]) => [k, v.label] as const), () => state.layer, v => { state.layer = v; if (!LAYERS[v]!.place) state.show = 'cells'; showAs.render(); change(); })),
+    section('Show', choices(Object.entries(LAYERS).map(([k, v]) => [k, v.label] as const), () => state.layer, v => {
+      const layer = LAYERS[v]!;
+      state.layer = v; if (layer.minds) state.show = 'places'; else if (!layer.place) state.show = 'cells';
+      mindsBox.hidden = !layer.minds; showAs.render(); renderTotals(); change();
+    })),
+    mindsBox,
     section('As', showAs),
     section('Floor', choices([['all', 'All floors'], ['street', 'Street'], ['upper', 'Upstairs & roofs'], ['sewer', 'Sewer'], ['air', 'In the air']], () => state.floor, v => { state.floor = v as Floor; change(); })),
     section('When', when, el('div', { className: 'dates' }, el('label', {}, 'From', fromInput), el('label', {}, 'To', toInput))),
@@ -107,9 +120,21 @@ export function observe(ctx: Context): Mode {
     }
     return out;
   };
-  const placeValue = (place: Place) => (LAYERS[state.layer]!.place ?? []).reduce((t, k) => t + (folded?.counts[place.id]?.[k] ?? 0), 0);
+  const placeValue = (place: Place) => LAYERS[state.layer]!.minds ? minds.tally(folded?.counts[place.id]).decisions
+    : (LAYERS[state.layer]!.place ?? []).reduce((t, k) => t + (folded?.counts[place.id]?.[k] ?? 0), 0);
   const show = (n: number) => LAYERS[state.layer]!.seconds ? duration(n) : String(Math.round(n));
   let hot = new Map<string, number>(), hottest = 0;
+  const renderTotals = () => {
+    const sum = (layer: string) => Object.values(heat?.layers[layer] ?? {}).reduce((t, n) => t + n, 0);
+    totals.replaceChildren(definitions([
+      ['Human time', duration(sum('humans'))], ['Bot time', duration(sum('bots'))],
+      ['Deaths', String(sum('deaths'))], ['Human shots', String(sum('shots-human'))], ['Bot shots', String(sum('shots-bot'))],
+      ['Cheese hits', String(sum('ball-rat-body') + sum('ball-rat-head'))],
+      ['Days', heat ? `${heat.days.length} of ${heat.allDays.length}` : '–'],
+      ...(folded?.unplaced ? [['Place IDs not on this layout', String(folded.unplaced)] as const] : []),
+      ...(LAYERS[state.layer]!.minds ? minds.totals(Object.values(folded?.counts ?? {}), mindCounts) : []),
+    ]));
+  };
 
   const mode: Mode = {
     id: 'observe', label: 'Observe', panel,
@@ -121,7 +146,7 @@ export function observe(ctx: Context): Mode {
         [heat, counts, flows] = await Promise.all([
           ctx.api.json<Heat>(`/api/heat/v1?${query}`), ctx.api.json<PlaceCounts>(`/api/city/v1/places?${query}`), ctx.api.json<Flows>(`/api/city/v1/flows?${query}`),
         ]);
-        folded = foldCounts(counts.places);
+        folded = foldCounts(counts.places); mindCounts = counts.minds ?? {};
         const first = heat.allDays[0], last = heat.allDays[heat.allDays.length - 1];
         for (const input of [fromInput, toInput]) { if (first) input.min = first; if (last) input.max = last; }
         if (state.range.when !== 'custom') { fromInput.value = heat.days[0] ?? ''; toInput.value = heat.days[heat.days.length - 1] ?? ''; }
@@ -129,14 +154,7 @@ export function observe(ctx: Context): Mode {
       } catch (error) {
         ctx.status(`Could not load the city (${error instanceof Error ? error.message : 'error'}).`);
       }
-      const sum = (layer: string) => Object.values(heat?.layers[layer] ?? {}).reduce((t, n) => t + n, 0);
-      totals.replaceChildren(definitions([
-        ['Human time', duration(sum('humans'))], ['Bot time', duration(sum('bots'))],
-        ['Deaths', String(sum('deaths'))], ['Human shots', String(sum('shots-human'))], ['Bot shots', String(sum('shots-bot'))],
-        ['Cheese hits', String(sum('ball-rat-body') + sum('ball-rat-head'))],
-        ['Days', heat ? `${heat.days.length} of ${heat.allDays.length}` : '–'],
-        ...(folded?.unplaced ? [['Place IDs not on this layout', String(folded.unplaced)] as const] : []),
-      ]));
+      renderTotals();
       ctx.redraw();
     },
     draw() {
@@ -144,12 +162,16 @@ export function observe(ctx: Context): Mode {
       drawCity(view, FOOTPRINTS);
       if (shown.get('sewer')) for (const h of SEWER_HALLS) view.rect(h.xmin, h.xmax, h.zmin, h.zmax, 'rgba(47,143,157,.16)', '#2f8f9d', 1, [6, 5]);
       let scale: string;
-      if (state.show === 'places' && layer.place) {
+      if (state.show === 'places' && (layer.place || layer.minds)) {
         const floor: PlaceFloor = state.floor === 'air' ? 'all' : state.floor;
         const values = PLACES.list.map(pl => placeValue(pl) / Math.max(16, pl.area));
         const top = Math.max(0, ...values);
-        ctx.places.draw(view, floor, pl => { const v = placeValue(pl) / Math.max(16, pl.area); return v > 0 ? rampColor(Math.sqrt(v / top)) : undefined; });
-        scale = top ? `per 100 u²: up to ${show(top * 100)}` : 'Nothing recorded for this choice yet.';
+        ctx.places.draw(view, floor, pl => {
+          const v = placeValue(pl) / Math.max(16, pl.area);
+          if (v <= 0) return undefined;
+          return layer.minds ? minds.color(minds.tally(folded?.counts[pl.id]), Math.sqrt(v / top), rampColor) : rampColor(Math.sqrt(v / top));
+        });
+        scale = top ? `per 100 u²: up to ${show(top * 100)}${layer.minds ? ' decisions' : ''}` : 'Nothing recorded for this choice yet.';
       } else {
         hot = heatCells(); hottest = Math.max(0, ...hot.values());
         view.cells((ix, iz) => { const n = hot.get(`${ix}:${iz}`); return n ? rampColor(Math.log1p(n) / Math.log1p(hottest)) : undefined; }, state.smooth);
@@ -173,8 +195,9 @@ export function observe(ctx: Context): Mode {
         g.fillStyle = s.y < 0 ? '#ff9a3c' : '#ff5a1f'; g.fill(); g.strokeStyle = '#000'; g.lineWidth = 1.2; g.stroke();
       }
       if (shown.get('pickups')) for (const s of PICKUP_ANCHORS) view.dot(s.x, s.z, 5, PICKUP_COLOR[s.kind]);
-      return `<b>${esc(layer.label)}${state.show === 'places' ? ', by place' : ''}</b><div class="ramp"><span>less</span><i style="background:${RAMP_CSS}"></i><span>${esc(scale)}</span></div>`
-        + `<p>${state.range.layout ? `Layout ${esc(state.range.layout)} only` : 'Every layout'}; ${state.floor === 'all' ? 'every floor' : esc(state.floor)}. ${state.show === 'places' ? 'Shaded by count per area of each place; upper floors and rooms are the chips (8, 16, R = roof, L = lookout, C = chute).' : 'Log scale.'}</p>`;
+      const where = `<p>${state.range.layout ? `Layout ${esc(state.range.layout)} only` : 'Every layout'}; ${state.floor === 'all' ? 'every floor' : esc(state.floor)}. ${state.show === 'places' ? 'Shaded by count per area of each place; upper floors and rooms are the chips (8, 16, R = roof, L = lookout, C = chute).' : 'Log scale.'}</p>`;
+      const goals = layer.minds ? minds.legend(scale) : undefined;
+      return goals ? goals + where : `<b>${esc(layer.label)}${state.show === 'places' ? ', by place' : ''}</b><div class="ramp"><span>less</span><i style="background:${RAMP_CSS}"></i><span>${esc(scale)}</span></div>` + where;
     },
     hover(px, py, x, z) {
       const floor: PlaceFloor = state.floor === 'air' || state.floor === 'all' ? (state.show === 'places' ? 'all' : 'street') : state.floor;
@@ -185,6 +208,7 @@ export function observe(ctx: Context): Mode {
       for (const [k, label, seconds] of COUNT_ROWS) if (row[k]) lines.push(`${label}: ${seconds ? duration(row[k]!) : row[k]}`);
       const supplies = Object.entries(row).filter(([k]) => k.startsWith('pickup:')).map(([k, n]) => `${k.slice(7)} ${n}`).join(', ');
       if (supplies) lines.push(`Supplies taken: ${supplies}`);
+      if (LAYERS[state.layer]!.minds) lines.push(...minds.card(minds.tally(row)));
       return `<b>${esc(place.name)}</b>\n<code>${esc(place.id)}</code> · ${esc(place.district)} · ${place.area} u²\n${esc(lines.join('\n'))}`;
     },
   };

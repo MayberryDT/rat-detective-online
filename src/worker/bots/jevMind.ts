@@ -12,8 +12,10 @@ const DANGER_LEVELS=['Safe: nobody threatening nearby.','Some risk: enemies arou
 const PLACE_KEYS=[...'abcdefghijklmnop'];
 const HITS_KEPT=4;
 
-/** Room-wide counts since the mind was made, for logs and the recorder (B5). */
+/** Room-wide counts, for logs and the recorder's `minds` facts. */
 export interface JevStats {
+    /** Decisions taken while Jev was on, whoever answered. */
+    decisions:number;
     requests:number;answers:number;failures:number;
     /** Answers thrown away because the world moved on (an event, or their target left view). */
     staleDrops:number;
@@ -23,6 +25,7 @@ export interface JevStats {
     throttled:number;
     tokens:number;dollars:number;
 }
+const NO_STATS:JevStats={decisions:0,requests:0,answers:0,failures:0,staleDrops:0,fallbacks:0,throttled:0,tokens:0,dollars:0};
 /** How one rat's last decision went, for the recorder. */
 export type JevOutcome='answered'|'stale'|'fallback';
 interface Rat {
@@ -39,6 +42,8 @@ export interface JevMindOptions {
     client:JevClient;
     /** Keeps a request alive past the tick that sent it (the Durable Object's `ctx.waitUntil`). */
     waitUntil:(work:Promise<unknown>)=>void;
+    /** Each reply's cost as it lands, even after the mind was switched off or its bots were gone. */
+    spend?:(dollars:number)=>void;
 }
 
 /** The Jev mind (docs/bot-overhaul.md, B4) for every server bot in one room. Each decision gets the rat's
@@ -47,17 +52,18 @@ export interface JevMindOptions {
 export class JevMind implements Mind<GoalContext> {
     /** Set by the room: a human is connected, the key is set and the day's budget is not spent. */
     enabled=false;
-    readonly stats:JevStats={requests:0,answers:0,failures:0,staleDrops:0,fallbacks:0,throttled:0,tokens:0,dollars:0};
+    readonly stats:JevStats={...NO_STATS};
     private readonly rats=new Map<string,Rat>();
     private tokens:number=JEV.roomBurst;
     private tokensAt=0;
-    private unreported=0;
+    private reported:JevStats={...NO_STATS};
     private latencies:number[]=[];
     /** Times are the bots' decision clock (`ctx.now`), the room's clock. */
     constructor(private readonly options:JevMindOptions){}
 
     answer(ctx:GoalContext):MindAnswer|undefined {
         if(!this.enabled)return;
+        this.stats.decisions++;
         const rat=this.rat(ctx.self.id);
         if(ctx.trigger==='event'){rat.serial++;rat.event=true;}
         this.ask(ctx,rat);
@@ -79,10 +85,14 @@ export class JevMind implements Mind<GoalContext> {
     }
     /** How a rat's last decision went while Jev was on. */
     outcome(id:string):JevOutcome|undefined{return this.rats.get(id)?.outcome;}
-    /** Dollars spent since the last call, for the budget. */
-    takeSpend():number{const spent=this.unreported;this.unreported=0;return spent;}
-    /** Latencies since the last call, for the room's log. */
-    takeLatencies():number[]{const taken=this.latencies;this.latencies=[];return taken;}
+    /** The counts and reply latencies since the last call, for the room's log and `minds` fact. */
+    takeWindow():{stats:JevStats;latencies:number[]} {
+        const stats={...NO_STATS};
+        for(const key of Object.keys(stats) as (keyof JevStats)[])stats[key]=this.stats[key]-this.reported[key];
+        this.reported={...this.stats};
+        const latencies=this.latencies;this.latencies=[];
+        return {stats,latencies};
+    }
 
     private rat(id:string):Rat {
         let rat=this.rats.get(id);
@@ -104,7 +114,7 @@ export class JevMind implements Mind<GoalContext> {
         this.options.waitUntil(this.options.client.ask(view.state,questions).then(reply=>{
             this.stats.answers++;this.stats.tokens+=reply.tokens;
             const dollars=reply.tokens*JEV_DOLLARS_PER_TOKEN;
-            this.stats.dollars+=dollars;this.unreported+=dollars;this.latencies.push(reply.latencyMs);
+            this.stats.dollars+=dollars;this.latencies.push(reply.latencyMs);this.options.spend?.(dollars);
             if(serial!==rat.serial){this.stats.staleDrops++;return;}
             rat.latest={serial,sentAt:now,answer:{...read(view,ctx.offered,reply.answers),jev:{latencyMs:reply.latencyMs,tokens:reply.tokens,sentAt:now}}};
         },()=>{this.stats.failures++;}).finally(()=>{rat.inFlight=false;}));

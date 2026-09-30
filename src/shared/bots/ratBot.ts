@@ -24,6 +24,7 @@ export class RatBot {
     private readonly cast:Cast;
     private readonly mind:Mind<GoalContext>;
     private decisionAt=0;
+    private failuresSeen=0;
     private last?:Decision;
     /** Hidden from players; the cast's weights and the motor's tactics follow it. */
     personality:Personality;
@@ -45,7 +46,7 @@ export class RatBot {
     get failedCasePosition():Readonly<Vec3Data>|undefined{return this.motor.failedCasePosition;}
     /** The last decision, for the recorder. */
     get decision():Decision|undefined{return this.last;}
-    reset():void{this.motor.reset();this.goals.reset();this.cast.reset();this.decisionAt=0;this.last=undefined;}
+    reset():void{this.motor.reset();this.goals.reset();this.cast.reset();this.decisionAt=0;this.last=undefined;this.failuresSeen=this.motor.failures;}
 
     step(now: number, self: PlayerData, others: Iterable<PlayerData>, state: ChaosState | undefined,
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
@@ -80,6 +81,9 @@ export class RatBot {
         this.goals.adopt(plan,ctx);
         this.motor.setPlan(plan);
         this.motor.tactics={bank:personality==='maverick'||(answer.bank??0)>=.6,mischief:personality==='gremlin'};
-        this.last={plan,answer,personality,weighted,trigger};
+        // The dispatch detour's give-up happens in the survey above, so failures are read after it.
+        const failed=this.motor.failures!==this.failuresSeen;
+        this.failuresSeen=this.motor.failures;
+        this.last={plan,answer,personality,weighted,trigger,...(failed?{failed:true as const}:{})};
     }
 }

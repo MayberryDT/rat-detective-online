@@ -44,7 +44,7 @@ export async function cityApi(request: Request, url: URL, env: CityEnv): Promise
       if (!range || !filter) return badRange();
       model ??= cityModel();
       const places = await room.cityPlaces(range, filter), flows = await room.cityFlows(range, filter);
-      const text = cityDigest({ range, days: places.days, places: model.places, counts: places.places, modes: places.modes, flows: flows.flows });
+      const text = cityDigest({ range, days: places.days, places: model.places, counts: places.places, modes: places.modes, flows: flows.flows, minds: places.minds });
       return new Response(text, { headers: { ...PUBLIC, 'content-type': 'text/markdown; charset=utf-8' } });
     }
   }

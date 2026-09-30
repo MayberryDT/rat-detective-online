@@ -3,6 +3,8 @@ import type { AssignmentId } from '../assignments';
 import type { PickupKind } from '../pickups';
 import type { ShotResultOutcome, HealCause } from '../networkProtocol';
 import type { CityFloor } from './frame';
+import type { Goal, MotorMode, Personality } from '../bots/intent';
+import type { GoalOutcome, MindName } from './minds';
 
 /** Layer 2 of the city map (docs/city-map.md): one JSON line per fact in the R2 archive.
  * Positions are rounded to 0.1 u, times are UTC ms. Actors are per-round numbers, never names or IDs. */
@@ -14,6 +16,8 @@ export interface FactContext {
   /** UTC ms; `rm` is ms since the round went live (absent between rounds). */
   t: number; rm?: number;
   room: string; round?: string; layout: number; schema: number;
+  /** The bots' `MIND_VERSION` (docs/bot-overhaul.md): minds, questions, weights and dials. */
+  mindVersion: number;
   mode: AssignmentId | 'none';
   incident?: string;
 }
@@ -80,4 +84,16 @@ export type CityFact = FactContext & (
   | { type: 'anomaly'; what: 'inside-geometry' | 'fell-through' | 'out-of-bounds'; a: number; p: P3; place: string }
   /** A stuck bot was moved to a spawn point; `from` and `place` are where it was stuck. */
   | { type: 'rescue'; a: number; from: P3; place: string }
+  /** A bot took up a goal, or applied a fresh Jev answer. `motor`: the motor mode of its plan; `top`: the best three
+   * offered goals by weighted score, as [goal, raw, weighted]; `target`: the answer named a rat to shoot; `failed`: the
+   * motor gave up the previous plan; `jev`: how Jev fared when the code mind decided while Jev was on. */
+  | { type: 'decision'; a: number; p: P3; place: string; mind: MindName; personality: Personality; goal: Goal; motor: MotorMode;
+      trigger: 'beat' | 'event' | 'fallback'; top: Array<[Goal, number, number]>; danger?: number; target: boolean; failed?: true;
+      latencyMs?: number; tokens?: number; jev?: 'answered' | 'stale' | 'fallback' }
+  /** A bot's goal ended; `from` is where it was taken up, `p` and `place` where it ended. */
+  | { type: 'goal-end'; a: number; goal: Goal; motor: MotorMode; mind: MindName; personality: Personality; outcome: GoalOutcome; durationMs: number; from: string; p: P3; place: string }
+  /** The Jev mind's counts over `ms` while it was on; reply latency p50 and p90 in ms, and every reply's latency as
+   * counts per 20 ms bucket (`hist`, keyed by the bucket's lower bound), so windows pool exactly. */
+  | { type: 'minds'; ms: number; decisions: number; requests: number; answers: number; failures: number; staleDrops: number; fallbacks: number;
+      throttled: number; tokens: number; dollars: number; p50?: number; p90?: number; hist: Record<string, number> }
 );

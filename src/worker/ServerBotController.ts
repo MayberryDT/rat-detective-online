@@ -10,7 +10,7 @@ import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} fro
 import {LAUNCH_DRIFT_DECAY} from '../shared/launcherVelocity';
 import {guardFastFall,touchingSlick} from '../shared/ratSurfaces';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
-import type {Mind,Personality} from '../shared/bots/intent';
+import type {Decision,Mind,Personality} from '../shared/bots/intent';
 import type {GoalContext} from '../shared/bots/goals';
 import type {WorldSpec} from '../shared/worldSpec';
 
@@ -19,9 +19,11 @@ export interface ServerBotCallbacks {
     shoot:(id:string,origin:Vec3Data,direction:Vec3Data)=>void;
     recover?:(id:string)=>void;
     recoverCase?:()=>void;
+    /** Each new decision a bot takes (every 180–300 ms and on events), for the recorder. */
+    decide?:(id:string,decision:Decision,now:number)=>void;
 }
 interface Bot {
-    id:string;body:C.Body;brain:RatBot;actor?:PlayerData;
+    id:string;body:C.Body;brain:RatBot;actor?:PlayerData;decided?:Decision;
     facing:number;initialized:boolean;alive:boolean;normalJump:boolean;zoneHop:boolean;
     launchedUntil:number;lastLaunchAt:number;lastMovementAt:number;
     /** The launcher's sideways throw, fading until landing, under the brain's steering. */
@@ -224,6 +226,8 @@ export class ServerBotController {
             if(grounded&&(!bot.zoneHop||body.velocity.y<=1)){bot.normalJump=false;bot.zoneHop=false;}
             const intent=bot.brain.step(now,self,this.actors.values(),chaos,target=>this.visible(bot,target),
                 grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visible(bot,target,true));
+            const decision=bot.brain.decision;
+            if(decision&&decision!==bot.decided){bot.decided=decision;this.callbacks.decide?.(bot.id,decision,now);}
             if(!bot.progressAt||Math.hypot(body.position.x-bot.progressX,body.position.z-bot.progressZ)>1.5){
                 bot.progressAt=now;bot.progressX=body.position.x;bot.progressZ=body.position.z;
             }

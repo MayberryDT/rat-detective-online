@@ -67,6 +67,8 @@ export interface Decision {
     weighted:GoalScores;
     /** Why the decision was taken now. */
     trigger:'beat'|'event'|'fallback';
+    /** The motor gave up the previous plan since the last decision. */
+    failed?:true;
 }
 
 /** Motor skill: one tier for every personality ("base bots never outplay Tyler"). A harder tier is only

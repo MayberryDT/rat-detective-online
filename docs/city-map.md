@@ -63,6 +63,7 @@ flowchart TB
 - **Cells:** 4 × 4 units, keyed `floor:ix:iz` where `ix = floor(x/4)`. Every cell belongs to exactly one place per floor.
 - **Versions** stamped on every fact:
   - `layoutVersion`: the world version (3 since 29 September; 2 before), bumped by any layout change;
+  - `mindVersion`: the bots' `MIND_VERSION` (`src/shared/bots/intent.ts`, 1 since B5 of [the bot overhaul](bot-overhaul.md)), raised by any change to the minds, questions, weights or dials;
   - `protocol`;
   - `schemaVersion`.
   - Measures carry a `measureVersion`.
@@ -102,7 +103,7 @@ Counted from source on 2026-09-28, layout version 2; the job rows (pickup sites,
 
 ## Layer 2: every fact recorded
 
-The schema is `src/shared/city/facts.ts` (`CITY_SCHEMA_VERSION` 1). Every fact carries `t` (UTC ms), `rm` (ms since the round went live), `room`, `round`, `layout`, `schema`, `mode` (the assignment) and `incident`. Positions are rounded to 0.1 units. Actors are per-round numbers; no names or IDs are stored.
+The schema is `src/shared/city/facts.ts` (`CITY_SCHEMA_VERSION` 1). Every fact carries `t` (UTC ms), `rm` (ms since the round went live), `room`, `round`, `layout`, `schema`, `mindVersion` (since B5; older facts lack it), `mode` (the assignment) and `incident`. Positions are rounded to 0.1 units. Actors are per-round numbers; no names or IDs are stored.
 
 | Fact | Emitted when | Key fields | Kept |
 | --- | --- | --- | --- |
@@ -122,6 +123,9 @@ The schema is `src/shared/city/facts.ts` (`CITY_SCHEMA_VERSION` 1). Every fact c
 | `session` | A human joins or leaves | actor | archive, SQL |
 | `anomaly` | `inside-geometry`, `fell-through`, `out-of-bounds` (at most once per 10 s per rat) | point, place | archive, SQL, counts |
 | `rescue` | A stuck bot is moved to a spawn point (`GameRoom.recoverManagedBot`), from B2b of [the bot overhaul](bot-overhaul.md) | the bot, the point and place where it was stuck | archive, SQL, counts. The bot gate counts rescues per bot-hour |
+| `decision` | A server bot takes up a goal (its open goal ended, or this decision replaced it), or applies a Jev answer not yet recorded. The code mind decides every 180–300 ms, but a new combat target under the same goal records nothing | the bot, point and place; `mind` (`jev` or `code`), `personality`, `goal`, `motor` (the plan's motor mode), `trigger` (`beat`, `event`), `top` (the best three offered goals as `[goal, raw score, weighted score]`), `danger`, `target` (the answer named a rat), `failed` (the motor gave up the previous plan); for Jev, `latencyMs` and `tokens`; for a code decision while Jev was on, `jev` (`stale`, `fallback`, or `answered` when Jev scored none of the offered goals) | archive, counts (`decide:*`); not SQL events (see volume below) |
+| `goal-end` | A bot's goal ends: `reached`, `died`, `replaced` (a decision changed the goal) or `failed` (the motor gave it up). Reached means: took the case (`take-case`); took the case from the chased carrier or killed them (`chase-carrier`); killed the hunted rat itself (`hunt`); claimed the pickup it went for (`heal`, `arm-up`); delivered, or started scoring in the zone (`keep-case`); rang the pillar (`mischief`); came within 3 units of its place (`roam`, `flee`, `ambush`, `mischief`, and an evading Closing Time carrier). A goal open when the round changes ends unrecorded | the bot, `goal`, `motor`, `mind` and `personality` of the decision that took it up, `outcome`, `durationMs`, `from` (the place it was taken up), and the point and place where it ended | archive, counts (`goal:*`); not SQL events |
+| `minds` | Every minute while Jev is on, and when it switches off | that window's `ms` and the Jev mind's counts: `decisions` taken while on, `requests`, `answers`, `failures`, `staleDrops`, `fallbacks`, `throttled`, `tokens`, `dollars`; reply latency `p50` and `p90`, and `hist` (every reply's latency, counted per 20 ms bucket keyed by its lower bound) | archive, SQL, `city_minds` |
 
 ### The situation: what every rat faces, every second
 
@@ -140,10 +144,11 @@ Defined once in `src/shared/city/facts.ts` (`RatSituation`, `WorldSituation`), w
 
 **Aggregates the room keeps live**, in SQLite, per UTC day, layout version and assignment, and kept forever:
 - `city_cells`: cells per layer. The layers are `humans` and `bots` (seconds), `deaths`, `kills`, `spawns`, `pickups`, `landings`, `anomalies`, `shots-human`, `shots-bot`, and `ball-<outcome>` for every ball of every rat.
-- `city_places`: per place, `human-s`, `bot-s`, `still-human-s`, `still-bot-s`, `deaths`, `deaths-human`, `deaths-bot`, `kills`, `kills-human`, `kills-bot`, `kill-dist-dm`, `shots-human`, `shots-bot`, `hits-human`, `hits-bot`, `bank-hits-human`, `bank-hits-bot` (hits that came off a wall first), `spawns`, `spawn-deaths-5s`, `pickup:<kind>`, `launches`, `landings`, `landing-clips`, `case-take`, `case-drop`, `case-steal`, `deliveries`, `anomaly:<what>`, `rescues` (stuck bots moved away from here).
+- `city_places`: per place, `human-s`, `bot-s`, `still-human-s`, `still-bot-s`, `deaths`, `deaths-human`, `deaths-bot`, `kills`, `kills-human`, `kills-bot`, `kill-dist-dm`, `shots-human`, `shots-bot`, `hits-human`, `hits-bot`, `bank-hits-human`, `bank-hits-bot` (hits that came off a wall first), `spawns`, `spawn-deaths-5s`, `pickup:<kind>`, `launches`, `landings`, `landing-clips`, `case-take`, `case-drop`, `case-steal`, `deliveries`, `anomaly:<what>`, `rescues` (stuck bots moved away from here); and the minds (`src/shared/city/minds.ts`): `decide:<mind>:<personality>:<goal>` for each `decision` fact made here, and `goal:<mind>:<personality>:<goal>:<outcome>` for each goal taken up here when it ended.
 - `city_flows`: place-to-place transitions, by humans and by bots.
+- `city_minds`: the Jev mind's room-wide measures, summed from `minds` facts: `on-ms` (time Jev was on), `decisions`, `requests`, `answers`, `failures`, `stale`, `fallbacks`, `throttled`, `tokens`, `microdollars`, and `latency:<ms>` (replies per 20 ms bucket; `latency:2000` holds 2 s and over). Aggregates are not split by `mindVersion`; compare minds versions from the facts (`scripts/bot-gate.mjs --mind=`).
 
-Discrete facts also sit in `city_events` for 30 days. Heat v1's tables were folded into `city_cells` by the migration.
+Discrete facts also sit in `city_events` for 30 days, except `decision` and `goal-end` (hundreds per bot-hour), which only the archive and the aggregates keep. Heat v1's tables were folded into `city_cells` by the migration.
 
 **The raw archive:** R2 bucket `rat-detective-city` (staging `rat-detective-city-staging`), keys `city/raw/v1/<room>/YYYY/MM/DD/HH-mm-ss-<id>.jsonl.gz`. It is flushed every 5 minutes, at 2 MB, and when the city stops, and kept forever. An eviction loses at most the buffer.
 
@@ -151,7 +156,8 @@ Discrete facts also sit in `city_events` for 30 days. Heat v1's tables were fold
 - the recorder costs 0.01–0.02 ms a tick, 1–2% of the benchmark's tick, over the 1% aim;
 - the trajectory hash is unchanged, so recording does not alter the game;
 - the bot-only city archives about 6.5 MB a day compressed, about 2.4 GB a year;
-- human play adds 1 Hz frames and every human shot while it lasts.
+- human play adds 1 Hz frames and every human shot while it lasts;
+- the bots' minds (B5) add `decision` and `goal-end` facts: about 680–1,120 decisions and 520–970 goal ends per bot-hour on the code mind, and about 3,300 decisions per bot-hour with Jev on (one per answer; measured in a worker room with 9 bots, see [the bot overhaul](bot-overhaul.md), B5). Gzipped they take about 26 and 29 bytes each, about 10 MB a day more for the bot-only city (about 17 MB a day in all). They are archived and counted per place, never kept in the SQL events.
 
 ## Layer 3: measures
 
@@ -177,6 +183,7 @@ Every rate is divided by its exposure and shown with its uncertainty. **Humans a
 | Dispatch | calls per pillar, deaths during each incident against baseline | Which pillars matter; which incidents bite |
 | Stuck rate | anomaly counts per rat-hour per place | Collision bugs, including roof clipping |
 | Bot divergence | Jensen–Shannon distance between the human and bot place-occupancy distributions (0 = same, 1 = unrelated) | The bot overhaul's scorecard |
+| Minds (B5 of [the bot overhaul](bot-overhaul.md); `tallyMinds`, `jevSummary` in `src/shared/city/minds.ts`) | recorded decisions by mind and Jev's share of them; the goal mix per personality (decisions per goal); goal success (`reached` ÷ ended, per goal, with the died, replaced and failed shares); Jev reply latency p50 and p90 (pooled 20 ms buckets, read at the bucket's middle); dollars per hour Jev was on and per human rat-hour; fallback share (code-mind decisions ÷ decisions while Jev was on) and stale share (stale drops ÷ replies) | What the minds choose, where, whether it works, and what Jev costs |
 
 **Statistical rules:**
 - No finding from under 10 human rat-minutes in a place, or under 20 events.
@@ -204,13 +211,14 @@ All ranges take `days=1–3650`, `days=all`, or `from` and `to` (UTC days); aggr
 | Surface | Returns | Status |
 | --- | --- | --- |
 | `GET /api/heat/v1` | Every cell layer | Live |
-| `GET /api/city/v1/digest` | The Markdown reading, with evidence handles | Built |
+| `GET /api/city/v1/digest` | The Markdown reading, with evidence handles. Its **Minds** section (when anything was decided) gives decisions per mind and Jev's share, the goal mix per personality, success per goal, and while Jev ran: latency p50/p90, dollars per hour on and per human rat-hour, fallback and stale shares, failures and throttled requests; handles `minds:decide`, `minds:decide:<personality>`, `minds:goal:<goal>`, `minds:jev`, each answered by `places` (its `decide:*`/`goal:*` measures and `minds`) | Built |
 | `GET /api/city/v1/model` | Layers 0–1: every layout entity and every place (262 in layout 3; 196 in layout 2) with IDs, kinds, names, areas and centres | Built |
-| `GET /api/city/v1/places` | Summed place counts, and human time by assignment | Built; rates come from `src/shared/city/measures.ts` |
+| `GET /api/city/v1/places` | Summed place counts, human time by assignment, and `minds` (the `city_minds` measures) | Built; rates come from `src/shared/city/measures.ts` |
 | `GET /api/city/v1/flows` | Place-to-place transitions by humans and bots | Built |
 | `GET /api/city/v1/events?type=&round=&since=&limit=` | Discrete facts from the last 30 days (a round's timeline is `round=`) | Built; bearer `CITY_TOKEN` |
 | `GET /api/city/v1/archive?prefix=&cursor=`, `/archive/<key>` | The raw archive listing and objects | Built; bearer `CITY_TOKEN` |
-| `node scripts/city-mirror.mjs [--base=…]` | Mirrors the model, aggregates and every archived fact into `output/city/city.db`: tables `facts`, `situations` (one row per rat per frame), `place_counts`, `flows`, `cells`, `places`, `entities` | Built; agents only. The token is in `~/.config/rat-detective/city-token` on Veelox and Halla |
+| `node scripts/city-mirror.mjs [--base=…]` | Mirrors the model, aggregates and every archived fact into `output/city/city.db`: tables `facts`, `situations` (one row per rat per frame), `place_counts`, `flows`, `cells`, `places`, `entities`. `city_minds` is not mirrored; its facts (`minds`) are | Built; agents only. The token is in `~/.config/rat-detective/city-token` on Veelox and Halla |
+| `node scripts/bot-gate.mjs [--mind=<mindVersion>] …` | The bot gate's numbers from the mirror, with a `minds` section: decisions per bot-hour by mind, Jev's share, success per goal, Jev latency p50/p90 (every reply, from the `minds` facts' `hist`), dollars per hour on and per human-hour, fallback and stale shares | Built; agents only |
 | `/map` (alias `/heatmap`, a 301 that keeps the query) | The page below: the same public endpoints, drawn | Live |
 | `design/city/proposals/*.json`, `design/city/layouts/*.json` | Proposals (goals, predictions as measures) and layout snapshots for diffs | Built; parsed by `parseProposal`, judged by `judge` in `src/shared/city/verdict.ts` |
 
@@ -221,6 +229,7 @@ Query the mirror with `read output/city/city.db?q=SELECT …`.
 **`/map`** (`map.html`, `src/map/`), with `/heatmap` kept as an alias: the Worker answers `/heatmap` and `/heatmap.html` with a 301 to `/map`, query intact (`run_worker_first` lists `/heatmap`). The city is drawn from the shared layout modules (graybox and kit colliders, `CITY_STREETS`, `kitCity().water`, piers, sewer halls, the jobs registries), so layout 3 shows as built. Every choice lives in the URL, so a refresh keeps the view; the open mode reloads its data every minute. `?api=https://ratdetective.online` points a local build at production's public endpoints. Three modes over one canvas:
 
 - **Observe** (`observe.ts`): any recorded layer (human and bot time, deaths, killer spots, shots, cheese bounces, hits and run-outs, pickups, landings, spawns, faults) as 4-unit cells or shaded per place, by floor, date range, layout and assignment. Upper floors, rooms, roofs, lookouts and the chutes are chips at their building (8, 16, R, L, C). Flow arrows between places and the overlays (sewer, supplies, case spawns, launchers, pillars, zones, stops). Hover for a place card with its counts. Counts under retired layout-2 IDs fold into the place that now holds that ground (`PLACES.successor`).
+  - **Minds** (`minds.ts`, places only): where the bots take up each goal (the `decide:*` counts), filtered by mind (both, Jev, code), personality and goal (`?layer=minds&mind=&persona=&goal=`). With every goal shown, each place takes the colour of its most chosen goal, brighter where more is decided per area (the legend lists the goal colours); with one goal, the usual ramp. The place card adds the decisions there by mind, the goal mix, and how the goals taken up there ended; the totals add decisions and Jev's share, hours Jev was on, its latency p50/p90 and dollars per hour on.
 - **Analyse** (`analyse.ts`): the static analyses above as layers (continuous ones shaded by rank, so a city of long streets still shows its most exposed cells), and the measures per place: use, danger to humans, danger for all rats, lethality, human and bot fire rates, banked-hit share for humans and bots, spawn traps and bot divergence (per place, and the Jensen–Shannon distance for the whole city). Each shows its 95% interval and exposure; a place under the minimums (10 human rat-minutes, or 20 events for counted measures) is drawn faint and left out of the table. The digest is shown as written.
 - **Design** (`design.ts`): every proposal in `design/city/proposals/`, each prediction's reading on the layout before and the layout after (`/api/city/v1/places?layout=`), stamped *waiting for play*, *met*, *missed* or *too close to call*; the footprint diff against the proposal's baseline snapshot (added, removed, kept; Before and After views); and the static analyses of both layouts side by side (walkable ground, the north third's share, cut-off ground, median sightline and cover).
 - Not built: scrubbing a round's timeline. Round facts are behind the token (`events?round=`), and the page uses only public endpoints.

@@ -20,6 +20,8 @@ export class CityStore {
         PRIMARY KEY (day, layout, mode, place, measure)) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS city_flows (day TEXT NOT NULL, layout INTEGER NOT NULL, mode TEXT NOT NULL, src TEXT NOT NULL, dst TEXT NOT NULL, who TEXT NOT NULL, n INTEGER NOT NULL,
         PRIMARY KEY (day, layout, mode, src, dst, who)) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS city_minds (day TEXT NOT NULL, layout INTEGER NOT NULL, mode TEXT NOT NULL, measure TEXT NOT NULL, n INTEGER NOT NULL,
+        PRIMARY KEY (day, layout, mode, measure)) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS city_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, t INTEGER NOT NULL, round TEXT, type TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS idx_city_events_type ON city_events(type, t);
       CREATE INDEX IF NOT EXISTS idx_city_events_round ON city_events(round, t);
@@ -49,6 +51,11 @@ export class CityStore {
   addFlow(day: string, layout: number, mode: string, src: string, dst: string, who: string, n: number): void {
     this.sql.exec('INSERT INTO city_flows (day, layout, mode, src, dst, who, n) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(day, layout, mode, src, dst, who) DO UPDATE SET n = n + excluded.n',
       day, layout, mode, src, dst, who, n);
+  }
+  /** The Jev mind's room-wide measures (`src/shared/city/minds.ts`). */
+  addMind(day: string, layout: number, mode: string, measure: string, n: number): void {
+    this.sql.exec('INSERT INTO city_minds (day, layout, mode, measure, n) VALUES (?, ?, ?, ?, ?) ON CONFLICT(day, layout, mode, measure) DO UPDATE SET n = n + excluded.n',
+      day, layout, mode, measure, n);
   }
   addEvent(t: number, round: string | undefined, type: string, data: string): void {
     this.sql.exec('INSERT INTO city_events (day, t, round, type, data) VALUES (?, ?, ?, ?, ?)', heatDayKey(t), t, round ?? null, type, data);
@@ -84,6 +91,11 @@ export class CityStore {
   flows(range: Range, filter: Filter = {}): Array<{ src: string; dst: string; who: string; n: number }> {
     const [where, args] = this.where(range, filter);
     return this.sql.exec<{ src: string; dst: string; who: string; n: number }>(`SELECT src, dst, who, SUM(n) AS n FROM city_flows WHERE ${where} GROUP BY src, dst, who ORDER BY n DESC`, ...args).toArray();
+  }
+  minds(range: Range, filter: Filter = {}): Record<string, number> {
+    const [where, args] = this.where(range, filter), out: Record<string, number> = {};
+    for (const row of this.sql.exec<{ measure: string; n: number }>(`SELECT measure, SUM(n) AS n FROM city_minds WHERE ${where} GROUP BY measure`, ...args)) out[row.measure] = row.n;
+    return out;
   }
   modes(range: Range): Record<string, number> {
     const out: Record<string, number> = {};

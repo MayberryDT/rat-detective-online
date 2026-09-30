@@ -148,7 +148,7 @@ describe('city recorder in the room', () => {
     const balls = (await archived()).filter(f => f.type === 'ball');
     expect(balls.map(b => b.type === 'ball' && [b.outcome, b.bounces ?? 0])).toEqual([['rat-body', 0], ['rat-head', 2], ['lifetime', 1], ['rat-body', 0]]);
     const places = await stub.cityPlaces(all), flows = await stub.cityFlows(all), model = cityModel();
-    const text = cityDigest({ range: all, days: places.days, places: model.places, counts: places.places, modes: places.modes, flows: flows.flows });
+    const text = cityDigest({ range: all, days: places.days, places: model.places, counts: places.places, modes: places.modes, flows: flows.flows, minds: places.minds });
     expect(text).toContain('Banked off a wall: 33% of human hits');
   });
 

@@ -1,5 +1,7 @@
 import type { Place } from '../../shared/city/places';
 import { divergence, measurePlaces, MIN_EVENTS, MIN_HUMAN_SECONDS, type Rate } from '../../shared/city/measures';
+import { jevSummary, tallyMinds } from '../../shared/city/minds';
+import { GOALS, PERSONALITIES } from '../../shared/bots/intent';
 
 /** Layer 4 of the city map: a short Markdown reading, each line with an evidence handle
  * that `/api/city/v1/places` or `/flows` answers exactly (docs/city-map.md). */
@@ -9,6 +11,8 @@ export interface DigestInput {
   counts: Record<string, Record<string, number>>;
   modes: Record<string, number>;
   flows: Array<{ src: string; dst: string; who: string; n: number }>;
+  /** The Jev mind's room-wide measures (`city_minds`). */
+  minds: Record<string, number>;
 }
 const hours = (s: number) => (s / 3600).toFixed(1);
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -76,6 +80,27 @@ export function cityDigest(input: DigestInput): string {
     const h: Record<string, number> = {}, b: Record<string, number> = {};
     for (const r of rows) { if (r.humanS) h[r.place.id] = r.humanS; if (r.botS) b[r.place.id] = r.botS; }
     out.push('## Bots against humans', `- Bot divergence (place time, 0 same to 1 unrelated): ${divergence(h, b).toFixed(2)}.`, '');
+  }
+  // The bots' minds (docs/bot-overhaul.md, B5): what they decide, how it ends, and what Jev costs.
+  const minds = tallyMinds(Object.values(input.counts)), jev = jevSummary(input.minds);
+  if (minds.decisions || jev.onMs) {
+    const mind = (what: string) => `\`minds:${what} · ${input.range.from}..${input.range.to}\``;
+    out.push('## Minds');
+    out.push(`- Decisions recorded: ${minds.byMind.code} by the code mind, ${minds.byMind.jev} by Jev (Jev's share ${minds.decisions ? pct(minds.byMind.jev / minds.decisions) : '–'}) ${mind('decide')}`);
+    for (const personality of PERSONALITIES) {
+      const goals = Object.entries(minds.byPersonality[personality]).sort((a, b) => b[1] - a[1]), n = goals.reduce((t, [, k]) => t + k, 0);
+      if (n) out.push(`- Goal mix, ${personality}s (${n} decisions): ${goals.slice(0, 5).map(([goal, k]) => `${goal} ${pct(k / n)}`).join(', ')} ${mind(`decide:${personality}`)}`);
+    }
+    for (const goal of GOALS) {
+      const o = minds.outcomes[goal], ended = o ? o.reached + o.died + o.replaced + o.failed : 0;
+      if (o && ended) out.push(`- ${goal}: reached ${pct(o.reached / ended)} of ${ended} (died ${pct(o.died / ended)}, replaced ${pct(o.replaced / ended)}, failed ${pct(o.failed / ended)}) ${mind(`goal:${goal}`)}`);
+    }
+    if (jev.onMs) {
+      const on = jev.onMs / 3_600_000, c = jev.counts;
+      out.push(`- Jev on for ${on.toFixed(1)} h: reply latency p50 ${jev.p50 ?? '–'} ms, p90 ${jev.p90 ?? '–'} ms over ${c.answers} replies; $${(jev.dollars / on).toFixed(2)} per hour on${humanS ? `, $${(jev.dollars / (humanS / 3600)).toFixed(2)} per human rat-hour` : ''} ($${jev.dollars.toFixed(2)} in all) ${mind('jev')}`);
+      out.push(`- While Jev was on, the code mind took ${c.decisions ? pct(c.fallbacks / c.decisions) : '–'} of ${c.decisions} decisions (fallbacks); ${c.answers ? pct(c.stale / c.answers) : '–'} of replies came back stale; ${c.failures} requests failed and ${c.throttled} were held back by the room's rate ${mind('jev')}`);
+    }
+    out.push('');
   }
   const busiest = input.flows.filter(f => f.who === 'human').slice(0, 5);
   if (busiest.length) {

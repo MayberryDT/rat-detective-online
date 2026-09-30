@@ -53,18 +53,19 @@ let shot=0;
 const archivedLines=[],stored=[];
 const sight=values.city?{query:new SpatialRayQuery(sim.world),refreshedAt:-Infinity}:null;
 const city=values.city?new CityRecorder({room:'bench',layout:()=>GRAYBOX_VERSION,isBot:id=>!values.human||id!==ids[0],connected:()=>true,
-    store:{addCell:(...a)=>stored.push(['cell',...a]),addPlace:(...a)=>stored.push(['place',...a]),addFlow:(...a)=>stored.push(['flow',...a]),addEvent:(...a)=>stored.push(['event',...a]),pruneEvents(){}},
+    store:{addCell:(...a)=>stored.push(['cell',...a]),addPlace:(...a)=>stored.push(['place',...a]),addFlow:(...a)=>stored.push(['flow',...a]),addMind:(...a)=>stored.push(['mind',...a]),addEvent:(...a)=>stored.push(['event',...a]),pruneEvents(){}},
     archive:{push:f=>archivedLines.push(JSON.stringify(f)),due:()=>false,flush(){},settled:async()=>{}},
     // GameRoom.lineOfSight: the chaos world's bodies, the index refreshed at most once a second (`closest` before `blocked` existed).
     sight:(from,to)=>{if(simClock-sight.refreshedAt>=1000){sight.query.refresh();sight.refreshedAt=simClock;}const a=new Vec3(from.x,from.y,from.z),b=new Vec3(to.x,to.y,to.z);
         return !(sight.query.blocked?sight.query.blocked(a,b,1):sight.query.closest(a,b,1).hasHit);},
     solids:grayboxBoxes(spec).filter(b=>!b.rx&&!b.ry&&!b.rz&&!b.passBalls&&b.w>=.5&&b.h>=.5&&b.d>=.5)}):null;
 const round={phase:'playing'};
-// The recorder's shot hook runs inside the bots' step; its time is moved from bots to city.
+// The recorder's shot and decision hooks run inside the bots' step; their time is moved from bots to city.
 let shotMs=0;
 const controller=()=>new ServerBotController(spec,ids,{
     move:(id,p)=>Object.assign(players.get(id),p),
     shoot:(id,origin,direction)=>{sim.shoot(id,{shotId:`shot-${shot++}`,origin,direction});if(city){const at=clock();city.shot(players.get(id),direction,simClock);shotMs+=ms(at,clock());}},
+    decide:(id,decision,now)=>{if(city){const at=clock();city.decision(players.get(id),decision,now);shotMs+=ms(at,clock());}},
 });
 let bot=controller();
 const delivery=Array.from({length:recipients},()=>new ChaosDelivery(true));
@@ -118,13 +119,15 @@ if(city){
     const {gzipSync}=await import('node:zlib');const lines=archivedLines;
     const raw=lines.join('\n');let at=clock();const gz=gzipSync(raw);const gzMs=ms(at,clock());
     const simSeconds=TICKS/30,day=86400/simSeconds;
-    const byType={};for(const l of lines){const t=JSON.parse(l).type;byType[t]=+((byType[t]??0)+l.length*day/1e6).toFixed(1);}
+    const byType={},perBotHour={};for(const l of lines){const t=JSON.parse(l).type;byType[t]=+((byType[t]??0)+l.length*day/1e6).toFixed(1);perBotHour[t]=(perBotHour[t]??0)+1;}
+    // Facts per bot-hour by type: the recorder's volume, decisions and goal ends included (bots live all run here).
+    for(const t in perBotHour)perBotHour[t]=Math.round(perBotHour[t]/(bots*simSeconds/3600));
     // Equal hashes prove a recorder change kept every fact (in order) and every aggregate total (in any flush order).
     const totals=new Map(),events=[];
     for(const [kind,...a] of stored){if(kind==='event'){events.push(JSON.stringify(a));continue;}const n=a.pop(),key=JSON.stringify([kind,...a]);totals.set(key,(totals.get(key)??0)+n);}
     const digest=text=>createHash('sha256').update(text).digest('hex').slice(0,16);
     cityReport={facts:lines.length,factsHash:digest(raw),aggregates:totals.size,aggregatesHash:digest([...totals].map(([k,n])=>`${k}=${n}`).sort().join('\n')),eventsHash:digest(events.join('\n')),
-        rawMBPerDayByType:byType,rawMBPerDay:+(raw.length*day/1e6).toFixed(1),gzMBPerDay:+(gz.length*day/1e6).toFixed(1),gzipMsPerDay:+(gzMs*day).toFixed(0)};
+        rawMBPerDayByType:byType,factsPerBotHourByType:perBotHour,rawMBPerDay:+(raw.length*day/1e6).toFixed(1),gzMBPerDay:+(gz.length*day/1e6).toFixed(1),gzipMsPerDay:+(gzMs*day).toFixed(0)};
 }
 const files={};
 if(session){

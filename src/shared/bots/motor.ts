@@ -62,6 +62,8 @@ export class BotMotor {
     wander: number;
     /** Something happened (a case changed hands, a goal failed, a landing) that warrants deciding now. */
     urgent = false;
+    /** Goals given up so far (`failGoal`), for the recorder's goal outcomes. Never reset. */
+    failures = 0;
     private shotTarget?: PlayerData;
     private protectedVisible:PlayerData[]=[];
     private visible:PlayerData[]=[];
@@ -179,7 +181,7 @@ export class BotMotor {
         }
         this.route=[];this.routeIndex=0;this.pendingPlan=undefined;this.routeWaitStarted=undefined;
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
-        this.plannedDestination=undefined;this.destination=undefined;this.urgent=true;this.planAt=0;this.recoverUntil=0;
+        this.plannedDestination=undefined;this.destination=undefined;this.urgent=true;this.planAt=0;this.recoverUntil=0;this.failures++;
     }
 
     private fly(now:number,self:Vec3Data,grounded:boolean):MotorIntent|undefined {

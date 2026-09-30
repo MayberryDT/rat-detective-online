@@ -1,5 +1,6 @@
 /** TypeSafe's System One endpoint (https://docs.typesafe.ai/api.md), from the Worker only: the key never
- * reaches a browser. Failures back off exponentially for the whole room; the mind answers nothing meanwhile. */
+ * reaches a browser. Failures back off exponentially for the whole room, one step per outage; the mind
+ * answers nothing meanwhile. */
 export const JEV_URL='https://api.typesafe.ai/v1/systemone';
 /** Pinned: moving to a new release is a deliberate change, replayed first. */
 export const JEV_MODEL='jev-1.13.0';
@@ -30,6 +31,8 @@ export class JevClient {
     /** No request before this time (the room clock). */
     backoffUntil=0;
     private failures=0;
+    /** When the current outage's last backoff began: a request sent before it tells nothing new. */
+    private backoffAt=-Infinity;
     private readonly clock:()=>number;
     constructor(private readonly options:JevClientOptions){this.clock=options.clock??Date.now;}
     ready(now:number):boolean{return now>=this.backoffUntil;}
@@ -45,21 +48,28 @@ export class JevClient {
                 response=await (this.options.fetch??fetch)(JEV_URL,{method:'POST',signal:controller.signal,
                     headers:{authorization:`Bearer ${key}`,'content-type':'application/json'},
                     body:JSON.stringify({model:this.options.model??JEV_MODEL,state,questions})});
-            }catch{throw this.fail(controller.signal.aborted?'timeout':'network');}
-            if(!response.ok)throw this.fail(response.status,retryAfter(response.headers.get('retry-after'),this.clock()));
+            }catch{throw this.fail(started,controller.signal.aborted?'timeout':'network');}
+            if(!response.ok)throw this.fail(started,response.status,retryAfter(response.headers.get('retry-after'),this.clock()));
             let body:unknown;
             // The abort also cuts a body that is still arriving.
-            try{body=await response.json();}catch{throw this.fail(controller.signal.aborted?'timeout':'malformed');}
+            try{body=await response.json();}catch{throw this.fail(started,controller.signal.aborted?'timeout':'malformed');}
             const reply=parse(body);
-            if(!reply)throw this.fail('malformed');
-            this.failures=0;
+            if(!reply)throw this.fail(started,'malformed');
+            // Only a request sent since the outage's last backoff began shows it is over.
+            if(started>=this.backoffAt)this.failures=0;
             return {...reply,latencyMs:this.clock()-started};
         }finally{clearTimeout(timer);}
     }
 
-    private fail(failure:JevFailure,retryAfterMs=0):JevError {
-        const delay=Math.max(retryAfterMs,Math.min(MAX_BACKOFF_MS,BACKOFF_MS*2**this.failures++));
-        this.backoffUntil=Math.max(this.backoffUntil,this.clock()+delay);
+    /** A failure of a request sent before the current backoff began is part of the same outage: no new step,
+     * though a `retry-after` still holds. */
+    private fail(started:number,failure:JevFailure,retryAfterMs=0):JevError {
+        const now=this.clock();
+        if(started<this.backoffAt)this.backoffUntil=Math.max(this.backoffUntil,now+retryAfterMs);
+        else {
+            this.backoffUntil=Math.max(this.backoffUntil,now+Math.max(retryAfterMs,Math.min(MAX_BACKOFF_MS,BACKOFF_MS*2**this.failures++)));
+            this.backoffAt=now;
+        }
         return new JevError(failure);
     }
 }

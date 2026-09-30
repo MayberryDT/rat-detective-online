@@ -219,6 +219,24 @@ describe('the Jev mind',()=>{
             expect(text.replace(/\b[0-5] of 5\b/g,'').replace(/\br[1-9]\b/g,'').replace('jev-1.13.0','')).not.toMatch(/\d/);
         }
     });
+
+    it('backs off once per outage, however many requests were out when it began, and a late success from before it ends nothing',async()=>{
+        let now=1000;
+        const replies:((response:Response)=>void)[]=[];
+        const client=new JevClient({key:()=>'test-key',clock:()=>now,fetch:()=>new Promise<Response>(resolve=>{replies.push(resolve);})});
+        const out=[0,1,2].map(()=>client.ask({},{}).catch(()=>undefined));
+        now=1100;
+        replies[0](new Response('down',{status:503}));await out[0];
+        replies[1](new Response('down',{status:503}));await out[1];
+        // One outage: the first one-second step, however many requests it failed.
+        expect(client.ready(2099)).toBe(false);expect(client.ready(2100)).toBe(true);
+        replies[2](Response.json({answers:{},usage:{input_tokens:10}}));await out[2];
+        now=2100;
+        const retry=client.ask({},{}).catch(()=>undefined);
+        replies[3](new Response('down',{status:503}));await retry;
+        // Still the same outage: the next step is two seconds.
+        expect(client.ready(4099)).toBe(false);expect(client.ready(4100)).toBe(true);
+    });
 });
 
 describe('perception',()=>{

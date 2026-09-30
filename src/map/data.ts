@@ -3,7 +3,8 @@ import { PLACES } from './city';
 
 /** The public city endpoints (docs/city-map.md, "Agent surfaces"). */
 export interface Heat { from: string; to: string; days: string[]; allDays: string[]; cell: number; layers: Record<string, Record<string, number>> }
-export interface PlaceCounts { from: string; to: string; days: string[]; allDays: string[]; modes: Record<string, number>; places: Counts }
+/** `minds`: the Jev mind's room-wide measures (`src/shared/city/minds.ts`); absent from deployments before B5. */
+export interface PlaceCounts { from: string; to: string; days: string[]; allDays: string[]; modes: Record<string, number>; places: Counts; minds?: Record<string, number> }
 export interface Flow { src: string; dst: string; who: string; n: number }
 export interface Flows { flows: Flow[] }
 
