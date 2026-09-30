@@ -12,6 +12,7 @@ import {parseClientMessage} from '../../src/shared/messageValidation';
 import type {ClientMessage, ShotDescriptor} from '../../src/shared/networkProtocol';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {FeelState} from '../../src/feel/feelState';
+import {ShotSpacing} from '../../src/shared/shotTiming';
 
 const canvasDocument = document;
 beforeEach(() => vi.stubGlobal('document', canvasDocument));
@@ -35,7 +36,7 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
     // GPU, city and transport are replaced; no browser input automation.
     const session = Object.assign(Object.create(GameSession.prototype), {
         disposed: false, previousTime: 0, stats: null, bots: null, chaos: null, rat, gun, remotes,
-        title: {},roundWon: false, myId: 'phone', shotsAttempted: 0, shotsSent: 0,
+        title: {},roundWon: false, myId: 'phone', shotsAttempted: 0, shotsSent: 0, shotSpacing: new ShotSpacing(),
         lastMovementAt: 0, lastMovement: '', direction: new THREE.Vector3(), aim: new THREE.Vector3(), input: {keys: {}},
         stage: {syncViewport: () => false, scene, world, camera, renderer: {render}, flashlight: new THREE.SpotLight()},
         simulation: new SimulationClock(), city: {update() {}}, perf: {frame() {}},

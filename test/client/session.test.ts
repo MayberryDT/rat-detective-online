@@ -97,6 +97,7 @@ const harness = vi.hoisted(() => {
             mesh: { position: { x: number; y: number; z: number; clone(): { x: number; y: number; z: number }; sub(): { y: number; normalize(): { multiplyScalar(): { x: number; y: number; z: number } } } } };
             body: { position: { x: number; y: number; z: number }; quaternion: { x: number; y: number; z: number; w: number } };
             applySnapshot: ReturnType<typeof vi.fn>;
+            setBigPistol: ReturnType<typeof vi.fn>;
             respawn: ReturnType<typeof vi.fn>;
             takeDamage: ReturnType<typeof vi.fn>;
             freeze: ReturnType<typeof vi.fn>;
@@ -136,6 +137,7 @@ const harness = vi.hoisted(() => {
                 },
                 body: { position: { x: spawn.x, y: spawn.y, z: spawn.z }, quaternion: { x: 0, y: 0, z: 0, w: 1 } },
                 applySnapshot: vi.fn(),
+                setBigPistol: vi.fn(),
                 respawn: vi.fn(),
                 takeDamage: vi.fn(),
                 freeze: vi.fn(),
