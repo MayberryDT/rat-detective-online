@@ -21,11 +21,18 @@ export interface FactContext {
   /** UTC ms; `rm` is ms since the round went live (absent between rounds). */
   t: number; rm?: number;
   room: string; round?: string; layout: number; schema: number;
+  /** The release: `<env>-<YYYY-MM-DD>-<git short sha>[-dirty]`, set at deploy time (`BUILD`, scripts/deploy.mjs); `dev` when unset. */
+  build: string;
   /** The bots' `MIND_VERSION` (docs/bot-overhaul.md): minds, questions, weights and dials. */
   mindVersion: number;
   mode: AssignmentId | 'none';
   incident?: string;
 }
+
+/** What a bot faced when it decided, from the world at that moment. Distances are horizontal, to 0.1 u: `case` to the
+ * case (or its carrier), `carrier` to the carrier when another rat carries it, `rival` to the nearest living rival.
+ * `closer`: nearer the case than every living rival. `seen`: rats in line of sight. */
+export interface DecisionInputs { case: number; carrier?: number; rival?: number; closer: boolean; hp: number; rivalHp?: number; seen: number; carrying: boolean }
 
 /** Running K/D/A for one rat in this round. An assist is damage dealt to a victim in the
  * 10 s before someone else (or the city) killed it. */
@@ -37,7 +44,8 @@ export interface Standing { progress: number; rank: number; lead: number; raw: n
 /** One rat, one moment: what it is, has, knows and faces. Recorded every second, and
  * five times a second around fights. Shared so future bots can decide from the same view. */
 export interface RatSituation {
-  a: number; human: boolean;
+  /** `human` is false for bots and agents; an agent (a headless test browser joined with `agent=1`) adds `agent`. */
+  a: number; human: boolean; agent?: true;
   p: P3; floor: CityFloor; place: string;
   v: [number, number]; yaw: number; pitch: number;
   hp: number; alive: boolean; respawnIn?: number; lifeMs: number;
@@ -62,7 +70,8 @@ export interface WorldSituation {
   pickups: Record<string, number>;
   pressure: Record<string, number>;
   zone?: { id: string; leftMs: number; inside: number[]; scorer?: number };
-  humans: number; bots: number; corpses: number; balls: number;
+  /** `humans` leaves out agents, counted in `agents`. */
+  humans: number; bots: number; agents?: number; corpses: number; balls: number;
 }
 
 export type CityFact = FactContext & (
@@ -75,8 +84,8 @@ export type CityFact = FactContext & (
   | { type: 'window'; reason: 'damage'; from: number; to: number; samples: Record<string, Array<[number, number, number, number, number, number]>>; aim?: Record<string, Array<[number, number, number | null]>>;
       controls?: Record<string, Array<[number, number, number, number, number, number]>> }
   | { type: 'spawn'; a: number; p: P3; place: string; nearest?: number }
-  /** Every human shot; one bot shot in `sample` (archive only). `targets`: the rats in sight nearest the aim line. */
-  | { type: 'shot'; a: number; human: boolean; p: P3; place: string; dir: P3; gapMs?: number; sample?: number; targets?: ShotTarget[] }
+  /** Every shot by a human or an agent; one bot shot in `sample` (archive only). `targets`: the rats in sight nearest the aim line. */
+  | { type: 'shot'; a: number; human: boolean; agent?: true; p: P3; place: string; dir: P3; gapMs?: number; sample?: number; targets?: ShotTarget[] }
   /** `bounces`: wall bounces before this end; a banked hit has at least one. */
   | { type: 'ball'; a?: number; outcome: ShotResultOutcome; p?: P3; place?: string; victim?: number; bounces?: number }
   /** `incoming`: the hit came with a ball's travel direction (true for ordinary shots). */
@@ -91,23 +100,29 @@ export type CityFact = FactContext & (
   | { type: 'landing'; a: number; machine?: string; p: P3; place: string; airMs: number; apex: number; clip: boolean }
   | { type: 'dispatch'; phase: string; incident?: string; caller?: number; pillar?: string; wanted?: number }
   | { type: 'zone'; what: 'activate' | 'scorer'; zone: string; scorer?: number }
-  | { type: 'round'; what: 'start' | 'end'; winner?: number; method?: string; durationMs?: number; humans: number; bots: number; standings?: Array<{ a: number; human: boolean; standing: Standing; kda: Kda }> }
-  | { type: 'session'; what: 'join' | 'leave'; a: number; human: boolean }
+  | { type: 'round'; what: 'start' | 'end'; winner?: number; method?: string; durationMs?: number; humans: number; bots: number; agents?: number;
+      standings?: Array<{ a: number; human: boolean; agent?: true; standing: Standing; kda: Kda }> }
+  | { type: 'session'; what: 'join' | 'leave'; a: number; human: boolean; agent?: true }
   | { type: 'anomaly'; what: 'inside-geometry' | 'fell-through' | 'out-of-bounds'; a: number; p: P3; place: string }
   /** A stuck bot was moved to a spawn point; `from` and `place` are where it was stuck. */
   | { type: 'rescue'; a: number; from: P3; place: string }
   /** A bot took up a goal, or applied a fresh Jev answer. `motor`: the motor mode of its plan; `top`: the best three
    * offered goals by weighted score, as [goal, raw, weighted]; `target`: the answer named a rat to shoot; `failed`: the
-   * motor gave up the previous plan; `jev`: how Jev fared when the code mind decided while Jev was on. */
+   * motor gave up the previous plan; `jev`: how Jev fared when the code mind decided while Jev was on; `in`: what it faced
+   * (absent only before the recorder has seen the world). */
   | { type: 'decision'; a: number; p: P3; place: string; mind: MindName; personality: Personality; goal: Goal; motor: MotorMode;
       trigger: 'beat' | 'event' | 'fallback'; top: Array<[Goal, number, number]>; danger?: number; target: boolean; failed?: true;
-      latencyMs?: number; tokens?: number; jev?: 'answered' | 'stale' | 'fallback' }
+      latencyMs?: number; tokens?: number; jev?: 'answered' | 'stale' | 'fallback'; in?: DecisionInputs }
+  /** A stocked supply the rat could use (not a Quick Fix at full health) came within 12 u on its floor in clear sight, and the
+   * rat went more than 16 u away (or died) without claiming it while it stayed stocked. One per approach. `dist`, `p`,
+   * `place` and `hp`: the nearest the rat came (horizontal, to 0.1 u), where, and its health there. */
+  | { type: 'pickup-passed'; a: number; site: string; kind: PickupKind; dist: number; p: P3; place: string; hp: number }
   /** A bot's goal ended; `from` is where it was taken up, `p` and `place` where it ended. */
   | { type: 'goal-end'; a: number; goal: Goal; motor: MotorMode; mind: MindName; personality: Personality; outcome: GoalOutcome; durationMs: number; from: string; p: P3; place: string }
   /** The Jev mind's counts over `ms` while it was on; reply latency p50 and p90 in ms, and every reply's latency as
    * counts per 20 ms bucket (`hist`, keyed by the bucket's lower bound), so windows pool exactly. */
   | { type: 'minds'; ms: number; decisions: number; requests: number; answers: number; failures: number; staleDrops: number; fallbacks: number;
       throttled: number; tokens: number; dollars: number; p50?: number; p90?: number; hist: Record<string, number> }
-  /** A human client's frame performance over about 30 s of play (`PerfReport`); humans only. */
-  | ({ type: 'perf'; a: number; human: true } & PerfReport)
+  /** A player's client frame performance over about 30 s of play (`PerfReport`); never bots. An agent's is `human: false, agent: true`. */
+  | ({ type: 'perf'; a: number; human: boolean; agent?: true } & PerfReport)
 );

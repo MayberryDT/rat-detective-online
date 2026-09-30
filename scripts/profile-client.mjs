@@ -74,7 +74,9 @@ try{
     await send('Runtime.enable');await send('Page.enable');
     if(values.gl)await send('Page.addScriptToEvaluateOnNewDocument',{source:GL_COUNTERS});
     await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:dpr,mobile:false});
-    await send('Page.navigate',{url:values.url});
+    // An agent's browser: muted, and flagged so the room records its rat and frame reports as `agent`, never `human`.
+    const target=new URL(values.url);target.searchParams.set('agent','1');target.searchParams.set('mute','1');
+    await send('Page.navigate',{url:target.toString()});
     if(values.click){
         for(let i=0;i<300&&!await evaluate(`!!document.querySelector(${JSON.stringify(values.click)})&&!document.querySelector(${JSON.stringify(values.click)}).disabled`);i++)await sleep(100);
         await evaluate(`document.querySelector(${JSON.stringify(values.click)}).click()`);

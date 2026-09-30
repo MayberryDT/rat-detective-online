@@ -26,7 +26,7 @@ import { cityDigest } from '../../src/worker/city/digest';
 // 10. A banked hit is missed, a direct hit counts as banked, or one ball's wall bounce leaks onto another.
 type Internals = {
   players: Map<string, PlayerData>; round: RoundState; chaos: ChaosSimulation;
-  sessions: Map<string, { token: string; until: number | null }>;
+  sessions: Map<string, { token: string; until: number | null; agent?: true }>;
   chaosTimer: ReturnType<typeof setInterval> | null; serverBots: ServerBotController | null; persistentBots: boolean;
   city: CityRecorder;
   handleHit: (id: string | null, message: { type: 'hit'; victimId: string; damage: number }) => Promise<void>;
@@ -275,12 +275,89 @@ describe('city recorder in the room', () => {
     expect((await archived()).filter(f => f.type === 'perf')).toHaveLength(4);
     ws.close(1000, 'done');
   });
+
+  // Agent browsers (docs/data-plan.md, "Who is playing"). Ways it could go wrong: the flag lost between the socket and the
+  // rat, so an agent reads as a human in situations, sessions or frame reports; its time or routes landing in the human
+  // heat, place counts or digest.
+  it('records an agent=1 socket\'s rat as an agent, never a human, and leaves it out of every human measure', async () => {
+    const stub = env.GAME_ROOM.getByName(`city-agent-${crypto.randomUUID()}`); rooms.push(stub);
+    await stub.ensurePersistentBots();
+    const ws = (await stub.fetch('http://localhost/ws?agent=1', { headers: { Upgrade: 'websocket', Origin: 'http://localhost' } })).webSocket!;
+    ws.accept();
+    const welcome = new Promise<string>(resolve => ws.addEventListener('message', event => {
+      const message = readSocketMessage(ws, event.data); if (message?.type === 'welcome') resolve(message.id);
+    }));
+    ws.send(JSON.stringify({ type: 'join', protocolVersion: PROTOCOL_VERSION, name: 'Harness', appearance: { hatType: 'fedora', hatColor: 1, furColor: 2, coatColor: 3 } }));
+    const id = await welcome;
+    const report: PerfReport = { ms: 30000, frames: 900, fps: 30, fps50: 30, p50: 33.3, p95: 50, p99: 120, worst: 480, over33: 400, over100: 3, os: 'linux', browser: 'chrome', browserMajor: 129 };
+    await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
+      const game = instance as unknown as Internals; quiet(game);
+      for (const other of [...game.players.keys()]) if (other !== id) game.players.delete(other);
+      Object.assign(game.players.get(id)!, { x: -10, y: 0.3, z: -10, hp: MAX_HP });
+      await instance.webSocketMessage(ctx.getWebSockets()[0]!, JSON.stringify({ type: 'perf', report }));
+      play(game, DAY, 1.9);
+      game.city.flush(DAY + 3000, true); await game.city.settled();
+    });
+    ws.close(1000, 'done');
+    const facts = await archived(), rats = facts.flatMap(f => f.type === 'frame' ? f.rats : []);
+    expect(rats.some(r => r.agent === true && !r.human)).toBe(true);
+    expect(rats.some(r => r.human)).toBe(false);
+    expect(facts.find(f => f.type === 'session')).toMatchObject({ what: 'join', human: false, agent: true });
+    expect(facts.find(f => f.type === 'perf')).toMatchObject({ human: false, agent: true, frames: 900 });
+    expect(facts.find(f => f.type === 'frame')).toMatchObject({ build: 'dev', world: { humans: 0, agents: 1 } });
+    const heat = await stub.cityHeat(synthetic, {}, DAY + 4000);
+    expect(heat.layers['humans']).toBeUndefined();
+    expect(heat.layers['agents']).toEqual({ 'street:-3:-3': 2 });
+    const places = await stub.cityPlaces(synthetic, {}, DAY + 4000), flows = await stub.cityFlows(synthetic, {}, DAY + 4000);
+    expect(Object.values(places.places).some(m => m['human-s'])).toBe(false);
+    expect(Object.values(places.places).reduce((t, m) => t + (m['agent-s'] ?? 0), 0)).toBe(2);
+    const text = cityDigest({ range: synthetic, days: places.days, places: cityModel().places, counts: places.places, modes: places.modes, flows: flows.flows, minds: places.minds });
+    expect(text).toContain('Exposure: 0.0 human rat-hours');
+    expect(text).toContain('Agent browsers: 0.0 rat-hours, left out of every human measure.');
+  });
+
+  // Aggregates by build (docs/data-plan.md, "Aggregates by era"). Ways it could go wrong: the migration loses the counts
+  // from before builds, or files them under today's build; two builds on one day merge; a filter by build leaks others.
+  it('keys aggregates by build, keeping the counts from before builds as build unknown', async () => {
+    const stub = await cityRoom();
+    await runInDurableObject(stub, (_instance: GameRoom, ctx) => {
+      // The tables as the previous release left them, with a day of counts.
+      const sql = ctx.storage.sql;
+      for (const table of ['city_cells', 'city_places', 'city_flows', 'city_minds']) sql.exec(`DROP TABLE ${table}`);
+      sql.exec('CREATE TABLE city_cells (day TEXT NOT NULL, layout INTEGER NOT NULL, mode TEXT NOT NULL, layer TEXT NOT NULL, cell TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (day, layout, mode, layer, cell)) WITHOUT ROWID');
+      sql.exec('CREATE TABLE city_places (day TEXT NOT NULL, layout INTEGER NOT NULL, mode TEXT NOT NULL, place TEXT NOT NULL, measure TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (day, layout, mode, place, measure)) WITHOUT ROWID');
+      sql.exec('CREATE TABLE city_flows (day TEXT NOT NULL, layout INTEGER NOT NULL, mode TEXT NOT NULL, src TEXT NOT NULL, dst TEXT NOT NULL, who TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (day, layout, mode, src, dst, who)) WITHOUT ROWID');
+      sql.exec('CREATE TABLE city_minds (day TEXT NOT NULL, layout INTEGER NOT NULL, mode TEXT NOT NULL, measure TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (day, layout, mode, measure)) WITHOUT ROWID');
+      sql.exec("INSERT INTO city_cells VALUES ('2030-03-14', 5, 'excessive-force', 'bots', 'street:2:2', 7)");
+      sql.exec("INSERT INTO city_places VALUES ('2030-03-14', 5, 'excessive-force', 'street:old', 'human-s', 60)");
+      sql.exec("INSERT INTO city_flows VALUES ('2030-03-14', 5, 'excessive-force', 'a', 'b', 'human', 4)");
+      sql.exec("INSERT INTO city_minds VALUES ('2030-03-14', 5, 'excessive-force', 'requests', 9)");
+    });
+    await evictDurableObject(stub);
+    await runInDurableObject(stub, (instance: GameRoom) => {
+      const game = instance as unknown as Internals; quiet(game);
+      const bot = game.players.get(PERSISTENT_BOT_IDS[0])!; Object.assign(bot, { x: 10, y: 0.3, z: 10, hp: MAX_HP });
+      for (const id of [...game.players.keys()]) if (id !== bot.id) game.players.delete(id);
+      play(game, DAY, 0); game.city.flush(DAY);
+    });
+    // The bot-only city's one 5 s frame, under this build; the old day's 7 under `unknown`.
+    expect((await stub.cityHeat(synthetic, {}, DAY + 1000)).layers['bots']).toEqual({ 'street:2:2': 12 });
+    expect((await stub.cityHeat(synthetic, { build: 'unknown' }, DAY + 1000)).layers['bots']).toEqual({ 'street:2:2': 7 });
+    expect((await stub.cityHeat(synthetic, { build: 'dev' }, DAY + 1000)).layers['bots']).toEqual({ 'street:2:2': 5 });
+    const old = await stub.cityPlaces(synthetic, { build: 'unknown' }, DAY + 1000);
+    expect(old.places).toEqual({ 'street:old': { 'human-s': 60 } });
+    expect(old.minds).toEqual({ requests: 9 });
+    expect(old.builds['unknown']).toEqual({ 'human-s': 60 });
+    expect(Object.keys(old.builds).sort()).toEqual(['dev', 'unknown']);
+    expect((await stub.cityFlows(synthetic, { build: 'unknown' }, DAY + 1000)).flows).toEqual([{ src: 'a', dst: 'b', who: 'human', n: 4 }]);
+    expect((await stub.cityFlows(synthetic, { build: 'dev' }, DAY + 1000)).flows).toEqual([]);
+  });
 });
 
 describe('city endpoints', () => {
   it('serves aggregates and the digest openly, and keeps events and the archive behind the token', async () => {
     const base = 'https://ratdetective.online/api';
-    for (const path of ['/heat/v1?days=all', '/city/v1/places?days=7', '/city/v1/flows?days=7&mode=jurisdiction', '/city/v1/model']) {
+    for (const path of ['/heat/v1?days=all', '/city/v1/places?days=7', '/city/v1/flows?days=7&mode=jurisdiction', '/city/v1/places?days=all&build=unknown', '/city/v1/model']) {
       const response = await SELF.fetch(base + path);
       expect(response.status, path).toBe(200);
       expect(response.headers.get('access-control-allow-origin')).toBe('*');
@@ -291,7 +368,7 @@ describe('city endpoints', () => {
     const model = await (await SELF.fetch(`${base}/city/v1/model`)).json() as { entities: Array<{ id: string; place: string }> };
     expect(model.entities.find(e => e.id === 'pickup:fix-precinct-hall')!.place).toBe('room:precinct-hall');
     for (const path of ['/city/v1/events', '/city/v1/archive']) expect((await SELF.fetch(base + path)).status, path).toBe(401);
-    for (const query of ['days=0', 'from=2026-09-29', 'mode=Bad!']) expect((await SELF.fetch(`${base}/city/v1/places?${query}`)).status, query).toBe(400);
+    for (const query of ['days=0', 'from=2026-09-29', 'mode=Bad!', 'days=7&build=no|pipes']) expect((await SELF.fetch(`${base}/city/v1/places?${query}`)).status, query).toBe(400);
     expect((await SELF.fetch(`${base}/heat/v1`, { method: 'POST' })).status).toBe(405);
   });
 });

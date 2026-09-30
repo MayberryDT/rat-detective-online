@@ -6,7 +6,7 @@ if(!['127.0.0.1','localhost'].includes(origin.hostname))throw Error('Use the loc
 const pool=`graybox-benchmark-match-check-${Date.now().toString(36)}`;
 const sockets=[];
 const join=()=>new Promise((resolve,reject)=>{
- const url=new URL('/ws',origin);url.protocol='ws:';url.searchParams.set('room',pool);
+ const url=new URL('/ws',origin);url.protocol='ws:';url.searchParams.set('room',pool);url.searchParams.set('agent','1');
  const ws=new WebSocket(url,{origin:origin.origin});sockets.push(ws);
  const timer=setTimeout(()=>{ws.terminate();reject(Error('Join timeout'));},20000);
  const players=new Map();let welcome;

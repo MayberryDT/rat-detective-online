@@ -1,5 +1,5 @@
 import type { ChaosState } from '../../shared/chaosState';
-import type { PlayerData, RoundState, ShotResultOutcome, Vec3Data } from '../../shared/networkProtocol';
+import { MAX_HP, type PlayerData, type RoundState, type ShotResultOutcome, type Vec3Data } from '../../shared/networkProtocol';
 import type { PickupEvent, ShotResultEvent } from '../../shared/ChaosSimulation';
 import type { GrayboxBox } from '../../shared/grayboxLayout';
 import { CITY_BOUNDS } from '../../shared/grayboxLayout';
@@ -10,7 +10,7 @@ import { activeZone } from '../../shared/jurisdiction';
 import { BUFF_FIELD, TIMED_PICKUPS, type PickupKind, type PlayerBuffs, type TimedPickup } from '../../shared/pickups';
 import { cityPlaces } from '../../shared/city/places';
 import { cityFloor } from '../../shared/city/frame';
-import { CITY_SCHEMA_VERSION, p3, type CityFact, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
+import { CITY_SCHEMA_VERSION, p3, type CityFact, type DecisionInputs, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
 import type { PerfReport } from '../../shared/perfReport';
 import { decideMeasure, goalMeasure, JEV_COUNTS, latencyBucket, type GoalOutcome, type MindName } from '../../shared/city/minds';
 import { MIND_VERSION, type Decision, type Goal, type MotorMode, type Personality } from '../../shared/bots/intent';
@@ -52,13 +52,21 @@ const BOT_SHOT_SAMPLE = 10;
 const SHOT_TARGETS = 3;
 /** Heights above a rat's feet: the eye sight lines start from, and the body and head spheres (ServerBotController). */
 const EYE = 1.5, CHEST = 1.3, HEAD = 1.9;
+/** Pickups passed: a supply this near (horizontally) and this little above or below a rat is in its reach; the rat has
+ * gone past it once this far away or this far above or below. */
+const PASS_REACH = 12, PASS_LEAVE = 16, PASS_FLOOR = 3, PASS_OFF_FLOOR = 6;
+const PASSED: Record<PickupKind, string> = { ironclad: 'passed:ironclad', hustle: 'passed:hustle', 'quick-fix': 'passed:quick-fix', stakeout: 'passed:stakeout' };
 
 export interface RecorderDeps {
   room: string;
+  /** The release every fact and aggregate is stamped with (`FactContext.build`). */
+  build: string;
   store: CityStore;
   archive: CityArchive;
   layout: () => number;
   isBot: (id: string) => boolean;
+  /** A headless agent browser (joined with `agent=1`): recorded apart from humans; absent means none. */
+  isAgent?: (id: string) => boolean;
   /** False while a human's seat is reserved after a disconnect. */
   connected: (id: string) => boolean;
   /** Line of sight between two eye positions; absent means everyone counts as visible. */
@@ -90,6 +98,10 @@ type AimSample = [number, number, number];
 /** ms, the move axes f and r, then jump presses and forward/back and left/right key changes within the slot. */
 type ControlSample = [number, number, number, number, number, number];
 interface Life { start: number; spawnPlace: string; lastPickup?: { kind: PickupKind; at: number }; lastHit?: { at: number; by?: string }; prev?: { x: number; z: number; at: number }; place?: string; carryStart?: number; shots: number[] }
+/** A usable stocked supply a rat came within reach of: the site, and the nearest the rat has come (x, y, z, horizontal distance, health there). */
+interface Approach { site: string; kind: PickupKind; sx: number; sy: number; sz: number; d: number; x: number; y: number; z: number; hp: number }
+/** Humans, bots and agents are counted apart, so no human measure includes an agent. */
+type Who = 'human' | 'bot' | 'agent';
 
 /** Remaining milliseconds of each timed pickup a rat holds. */
 function situationBuffs(b: PlayerBuffs | undefined, now: number): RatSituation['buffs'] {
@@ -98,7 +110,7 @@ function situationBuffs(b: PlayerBuffs | undefined, now: number): RatSituation['
   return out;
 }
 
-/** Counts under an aggregate key (day|layout|mode), then two labels: no key string is built per count. */
+/** Counts under an aggregate key (day|build|layout|mode), then two labels: no key string is built per count. */
 class Tally<B> {
   readonly buckets = new Map<string, Map<string, Map<B, number>>>();
   /** Distinct entries, which is what the pending limit bounds. */
@@ -158,9 +170,9 @@ export class SolidGrid {
 const BALL_LAYERS: Record<ShotResultOutcome, string> = { 'first-step': 'ball-first-step', 'rat-body': 'ball-rat-body', 'rat-head': 'ball-rat-head', 'ironclad-reflect': 'ball-ironclad-reflect',
   'case-contact': 'ball-case-contact', 'world-bounce': 'ball-world-bounce', 'dispatch-contact': 'ball-dispatch-contact', 'pressure-contact': 'ball-pressure-contact', 'fake-case': 'ball-fake-case',
   lifetime: 'ball-lifetime', capacity: 'ball-capacity', reset: 'ball-reset', rejected: 'ball-rejected' };
-const SHOTS = { human: 'shots-human', bot: 'shots-bot' } as const;
-const HITS = { human: 'hits-human', bot: 'hits-bot' } as const;
-const BANK_HITS = { human: 'bank-hits-human', bot: 'bank-hits-bot' } as const;
+const SHOTS: Record<Who, string> = { human: 'shots-human', bot: 'shots-bot', agent: 'shots-agent' };
+const HITS: Record<Who, string> = { human: 'hits-human', bot: 'hits-bot', agent: 'hits-agent' };
+const BANK_HITS: Record<Who, string> = { human: 'bank-hits-human', bot: 'bank-hits-bot', agent: 'bank-hits-agent' };
 
 /** Queued bot shots or ball batches that force a pass (see `CityRecorder.drain`). */
 const QUEUE_LIMIT = 256;
@@ -216,6 +228,14 @@ export class CityRecorder {
   private sampleAt = 0;
   private flushedAt = 0;
   private started = false;
+  /** The players and world of the latest tick, which decisions between ticks are measured against. */
+  private seenPlayers?: ReadonlyMap<string, PlayerData>;
+  private seenState?: ChaosState;
+  /** Reused sight-line ends, so sight checks allocate nothing here. */
+  private readonly eyeAt = { x: 0, y: 0, z: 0 };
+  private readonly otherAt = { x: 0, y: 0, z: 0 };
+  /** Each rat's open approaches to usable stocked supplies (`pickup-passed`). */
+  private readonly approaches = new Map<string, Approach[]>();
 
   private readonly solids: SolidGrid;
   constructor(private readonly deps: RecorderDeps) { this.solids = new SolidGrid(deps.solids); }
@@ -228,7 +248,7 @@ export class CityRecorder {
   }
   private context(now: number): FactContext {
     return { t: now, ...(this.liveAt !== undefined && now >= this.liveAt ? { rm: now - this.liveAt } : {}), room: this.deps.room,
-      ...(this.roundId ? { round: this.roundId } : {}), layout: this.deps.layout(), schema: CITY_SCHEMA_VERSION, mindVersion: MIND_VERSION, mode: this.mode,
+      ...(this.roundId ? { round: this.roundId } : {}), layout: this.deps.layout(), schema: CITY_SCHEMA_VERSION, build: this.deps.build, mindVersion: MIND_VERSION, mode: this.mode,
       ...(this.incident ? { incident: this.incident } : {}) };
   }
   /** Archive every fact; keep the discrete ones in SQL for 30 days too, except the bots' decisions and goal ends
@@ -243,7 +263,7 @@ export class CityRecorder {
     const c = this.keyCache, layout = this.deps.layout();
     if (now < c.dayStart || now >= c.dayEnd || layout !== c.layout || this.mode !== c.mode) {
       const dayStart = Math.floor(now / 86_400_000) * 86_400_000;
-      this.keyCache = { dayStart, dayEnd: dayStart + 86_400_000, layout, mode: this.mode, key: `${heatDayKey(now)}|${layout}|${this.mode}` };
+      this.keyCache = { dayStart, dayEnd: dayStart + 86_400_000, layout, mode: this.mode, key: `${heatDayKey(now)}|${this.deps.build}|${layout}|${this.mode}` };
     }
     return this.keyCache.key;
   }
@@ -253,7 +273,12 @@ export class CityRecorder {
     if (c >= 0) this.cells.add(this.key(now), layer, c, n);
   }
   private measure(now: number, place: string, measure: string, n = 1): void { this.placeCounts.add(this.key(now), place, measure, n); }
-  private who(id: string): 'human' | 'bot' { return this.deps.isBot(id) ? 'bot' : 'human'; }
+  private who(id: string): Who { return this.deps.isBot(id) ? 'bot' : this.deps.isAgent?.(id) ? 'agent' : 'human'; }
+  /** A fact's `human` flag, and `agent` for an agent. */
+  private ratFlags(id: string): { human: boolean; agent?: true } {
+    const who = this.who(id);
+    return who === 'agent' ? { human: false, agent: true } : { human: who === 'human' };
+  }
   private life(id: string, now: number, p?: Vec3Data): Life {
     let l = this.lives.get(id);
     if (!l) { l = { start: now, spawnPlace: p ? this.places.at(p.x, p.y, p.z).id : 'outside', shots: [] }; this.lives.set(id, l); }
@@ -304,14 +329,14 @@ export class CityRecorder {
       }
       return;
     }
-    const life = this.life(player.id, now, player), place = this.places.at(player.x, player.y, player.z).id;
+    const life = this.life(player.id, now, player), place = this.places.at(player.x, player.y, player.z).id, who = this.who(player.id);
     const gap = life.shots.length ? now - life.shots[life.shots.length - 1]! : undefined;
     life.shots.push(now); if (life.shots.length > 40) life.shots.shift();
     this.ledger.shot(player.id);
-    this.cell(now, SHOTS.human, player);
-    this.measure(now, place, SHOTS.human);
-    this.emit({ ...this.context(now), type: 'shot', a: this.actor(player.id), human: true, p: p3(player), place, dir: d3(direction), ...(gap === undefined ? {} : { gapMs: gap }),
-      targets: this.shotTargets(player, direction) });
+    this.cell(now, SHOTS[who], player);
+    this.measure(now, place, SHOTS[who]);
+    this.emit({ ...this.context(now), type: 'shot', a: this.actor(player.id), human: who === 'human', ...(who === 'agent' ? { agent: true as const } : {}), p: p3(player), place,
+      dir: d3(direction), ...(gap === undefined ? {} : { gapMs: gap }), targets: this.shotTargets(player, direction) });
   }
 
   /** A human's camera look, sent with their movement. Only the aim rings read it. */
@@ -428,6 +453,9 @@ export class CityRecorder {
       this.emit({ ...this.context(now), type: 'pickup', a: this.actor(player.id), site: e.pickupId, kind: e.pickup, p: p3(player), place,
         hpBefore: this.last.get(player.id)?.hp ?? player.hp, ...(restocked === undefined ? {} : { waitedMs: now - restocked }) });
       this.siteAvailable.set(e.pickupId, false);
+      // Claimed, so not passed.
+      const open = this.approaches.get(player.id);
+      if (open) for (let i = open.length - 1; i >= 0; i--) if (open[i]!.site === e.pickupId) { open[i] = open[open.length - 1]!; open.length--; }
       this.reach(player, now, g => (g.goal === 'heal' || g.goal === 'arm-up') && g.site === e.pickupId);
     }
   }
@@ -463,12 +491,12 @@ export class CityRecorder {
   }
 
   session(what: 'join' | 'leave', id: string, now: number): void {
-    this.emit({ ...this.context(now), type: 'session', what, a: this.actor(id), human: !this.deps.isBot(id) });
+    this.emit({ ...this.context(now), type: 'session', what, a: this.actor(id), ...this.ratFlags(id) });
   }
 
-  /** A human client's frame performance; a bot has no screen. */
+  /** A player's client frame performance; a bot has no screen. */
   perf(id: string, report: PerfReport, now: number): void {
-    if (!this.deps.isBot(id)) this.emit({ ...this.context(now), type: 'perf', a: this.actor(id), human: true, ...report });
+    if (!this.deps.isBot(id)) this.emit({ ...this.context(now), type: 'perf', a: this.actor(id), ...this.ratFlags(id), ...report });
   }
 
   /** A stuck bot is about to be moved to a spawn point: recorded where it was stuck. */
@@ -492,15 +520,36 @@ export class CityRecorder {
     const top = (Object.entries(d.weighted) as Array<[Goal, number]>).sort((a, b) => b[1] - a[1]).slice(0, 3)
       .map(([goal, weighted]): [Goal, number, number] => [goal, round2(answer.scores[goal] ?? 0), round2(weighted)]);
     this.measure(now, place, decideMeasure(mind, d.personality, plan.goal));
+    const inputs = this.inputs(p);
     this.emit({ ...this.context(now), type: 'decision', a: this.actor(p.id), p: p3(p), place, mind, personality: d.personality, goal: plan.goal, motor: plan.mode,
       trigger: d.trigger, top, ...(answer.danger === undefined ? {} : { danger: round2(answer.danger) }), target: answer.target !== undefined,
       ...(d.failed ? { failed: true as const } : {}), ...(answer.jev ? { latencyMs: answer.jev.latencyMs, tokens: answer.jev.tokens } : {}),
-      ...(jev && mind === 'code' ? { jev } : {}) });
+      ...(jev && mind === 'code' ? { jev } : {}), ...(inputs ? { in: inputs } : {}) });
     if (!opening) return;
     const quarry = plan.goal === 'hunt' ? plan.follow : plan.goal === 'chase-carrier' ? plan.follow ?? (this.caseOwner || undefined) : undefined;
     const to = plan.destination && (PLACE_GOALS.has(plan.goal) || plan.goal === 'keep-case' && plan.mode === 'evade') ? plan.destination : undefined;
     this.goals.set(p.id, { goal: plan.goal, mode: plan.mode, mind, personality: d.personality, start: now, place, ...(quarry ? { quarry } : {}),
       ...(plan.mode === 'pickup' ? { site: plan.key.slice('pickup:'.length) } : {}), ...(to ? { to: { x: to.x, y: to.y, z: to.z } } : {}) });
+  }
+
+  /** What a deciding bot faces in the world of the room's latest tick; undefined before the recorder has seen one. */
+  private inputs(p: PlayerData): DecisionInputs | undefined {
+    const state = this.seenState, players = this.seenPlayers;
+    if (!state || !players) return undefined;
+    const owner = state.case.owner, carrier = owner ? players.get(owner) : undefined, c = carrier ?? state.case.p;
+    const mine = Math.hypot(c.x - p.x, c.z - p.z), eye = this.eyeAt, other = this.otherAt;
+    eye.x = p.x; eye.y = p.y + EYE; eye.z = p.z;
+    let closer = true, seen = 0, rival: PlayerData | undefined, rivalD = Infinity;
+    for (const o of players.values()) {
+      if (o.id === p.id || o.hp <= 0) continue;
+      const d = Math.hypot(o.x - p.x, o.z - p.z);
+      if (d < rivalD) { rivalD = d; rival = o; }
+      if (Math.hypot(c.x - o.x, c.z - o.z) <= mine) closer = false;
+      other.x = o.x; other.y = o.y + 1; other.z = o.z;
+      if (Math.hypot(o.x - p.x, o.y - p.y, o.z - p.z) <= SIGHT_RANGE && (!this.deps.sight || this.deps.sight(eye, other))) seen++;
+    }
+    return { case: round1(mine), ...(carrier && owner !== p.id ? { carrier: round1(mine) } : {}), ...(rival ? { rival: round1(rivalD) } : {}), closer, hp: p.hp,
+      ...(rival ? { rivalHp: rival.hp } : {}), seen, carrying: owner === p.id };
   }
 
   /** A window of the Jev mind while it was on: a `minds` fact and the room-wide measures. */
@@ -539,6 +588,7 @@ export class CityRecorder {
     const a = state?.assignment;
     if (now >= this.frameAt || a && a.roundId !== this.roundId || round.phase !== this.phase) this.drain();
     this.watchRound(now, players, state, round);
+    this.seenPlayers = players; this.seenState = state;
     for (const p of players.values()) {
       const last = this.last.get(p.id);
       if (last) { last.x = p.x; last.y = p.y; last.z = p.z; last.hp = p.hp; } else this.last.set(p.id, { x: p.x, y: p.y, z: p.z, hp: p.hp });
@@ -571,6 +621,7 @@ export class CityRecorder {
       this.sampleAt = now + SAMPLE_MS;
       this.sample(now, players);
       if (state) this.watchWorld(now, players, state);
+      if (state && round.phase === 'playing') this.passing(now, players, state); else this.approaches.clear();
     }
     if (now >= this.frameAt) {
       const humans = [...players.keys()].some(id => !this.deps.isBot(id) && this.deps.connected(id));
@@ -588,9 +639,8 @@ export class CityRecorder {
       this.roundId = a.roundId; this.mode = a.id; this.liveAt = a.liveAt;
       this.ledger.reset(); this.actors.clear(); this.deliverySerial = a.deliverySerial;
       // Actors are per round: a goal open when the round changed ends unrecorded.
-      this.goals.clear(); this.jevApplied.clear();
-      const ids = [...players.keys()];
-      this.emit({ ...this.context(now), type: 'round', what: 'start', humans: ids.filter(id => !this.deps.isBot(id)).length, bots: ids.filter(id => this.deps.isBot(id)).length });
+      this.goals.clear(); this.jevApplied.clear(); this.approaches.clear();
+      this.emit({ ...this.context(now), type: 'round', what: 'start', ...this.census(players) });
     }
     if (round.phase !== this.phase) {
       if (this.phase === 'playing' && round.phase === 'won') this.roundEnd(now, players, state, round);
@@ -602,9 +652,15 @@ export class CityRecorder {
     const ids = [...players.keys()], table = this.standingsFor(ids, players, state);
     this.emit({ ...this.context(now), type: 'round', what: 'end', ...(round.winnerId ? { winner: this.actor(round.winnerId) } : {}),
       ...(state?.assignment?.result ? { method: state.assignment.result.method } : {}),
-      ...(this.liveAt !== undefined ? { durationMs: now - this.liveAt } : {}),
-      humans: ids.filter(id => !this.deps.isBot(id)).length, bots: ids.filter(id => this.deps.isBot(id)).length,
-      standings: ids.map(id => ({ a: this.actor(id), human: !this.deps.isBot(id), standing: table.get(id)!, kda: this.ledger.kda(id) })) });
+      ...(this.liveAt !== undefined ? { durationMs: now - this.liveAt } : {}), ...this.census(players),
+      standings: ids.map(id => ({ a: this.actor(id), ...this.ratFlags(id), standing: table.get(id)!, kda: this.ledger.kda(id) })) });
+  }
+
+  /** Rats present by kind, for round and world facts; `agents` only when there are any. */
+  private census(players: ReadonlyMap<string, PlayerData>): { humans: number; bots: number; agents?: number } {
+    let humans = 0, bots = 0, agents = 0;
+    for (const id of players.keys()) { const who = this.who(id); if (who === 'bot') bots++; else if (who === 'agent') agents++; else humans++; }
+    return { humans, bots, ...(agents ? { agents } : {}) };
   }
 
   private standingsFor(ids: string[], players: ReadonlyMap<string, PlayerData>, state: ChaosState | undefined) {
@@ -760,6 +816,45 @@ export class CityRecorder {
     }
   }
 
+  /** 5 Hz: supplies each connected rat comes within reach of and goes past (`pickup-passed`). A usable stocked supply
+   * within `PASS_REACH` on the rat's floor, in clear sight, opens an approach (sight is checked only then); the approach
+   * closes unrecorded if the rat claims the supply or it stops being stocked, and records one fact once the rat is
+   * `PASS_LEAVE` away, on another floor, or dead. Nothing is allocated unless an approach opens or a fact is made. */
+  private passing(now: number, players: ReadonlyMap<string, PlayerData>, state: ChaosState): void {
+    const sites = state.pickups;
+    if (this.approaches.size > players.size) for (const id of this.approaches.keys()) if (!players.has(id)) this.approaches.delete(id);
+    for (const p of players.values()) {
+      if (!this.deps.connected(p.id)) continue;
+      let open = this.approaches.get(p.id);
+      if (open) for (let i = open.length - 1; i >= 0; i--) {
+        const a = open[i]!, d = Math.hypot(p.x - a.sx, p.z - a.sz), stocked = this.siteAvailable.get(a.site) !== false;
+        const gone = p.hp <= 0 || d > PASS_LEAVE || Math.abs(p.y - a.sy) > PASS_OFF_FLOOR;
+        if (stocked && !gone) { if (d < a.d) { a.d = d; a.x = p.x; a.y = p.y; a.z = p.z; a.hp = p.hp; } continue; }
+        if (stocked) this.passed(p, a, now);
+        open[i] = open[open.length - 1]!; open.length--;
+      }
+      if (p.hp <= 0 || !sites) continue;
+      for (const s of sites) {
+        if (s.availableAt !== undefined && s.availableAt > now || s.kind === 'quick-fix' && p.hp >= MAX_HP || Math.abs(p.y - s.y) > PASS_FLOOR) continue;
+        const d = Math.hypot(p.x - s.x, p.z - s.z);
+        if (d > PASS_REACH) continue;
+        let tracked = false;
+        if (open) for (const a of open) if (a.site === s.id) { tracked = true; break; }
+        if (tracked) continue;
+        const eye = this.eyeAt, at = this.otherAt;
+        eye.x = p.x; eye.y = p.y + EYE; eye.z = p.z; at.x = s.x; at.y = s.y + .5; at.z = s.z;
+        if (this.deps.sight && !this.deps.sight(eye, at)) continue;
+        if (!open) this.approaches.set(p.id, open = []);
+        open.push({ site: s.id, kind: s.kind, sx: s.x, sy: s.y, sz: s.z, d, x: p.x, y: p.y, z: p.z, hp: p.hp });
+      }
+    }
+  }
+  private passed(p: PlayerData, a: Approach, now: number): void {
+    const place = this.places.at(a.x, a.y, a.z).id;
+    this.measure(now, place, PASSED[a.kind]);
+    this.emit({ ...this.context(now), type: 'pickup-passed', a: this.actor(p.id), site: a.site, kind: a.kind, dist: round1(a.d), p: [round1(a.x), round1(a.y), round1(a.z)], place, hp: a.hp });
+  }
+
   /** 1 Hz: every rat's situation plus the world's, presence heat, flows and anomalies. */
   /** `seconds` is how long this frame stands for (5 in the bot-only city), so presence stays in seconds. */
   private frame(now: number, players: ReadonlyMap<string, PlayerData>, state: ChaosState | undefined, round: RoundState, seconds: number): void {
@@ -784,7 +879,8 @@ export class CityRecorder {
       const lastShot = life.shots[life.shots.length - 1];
       // The view rotation carries no pitch; a human's fresh camera look does.
       const look = this.looks.get(p.id), lookPitch = look && now - look.at <= AIM_FRESH_MS ? Math.asin(Math.max(-1, Math.min(1, look.y))) : pitch(p);
-      rats.push({ a: this.actor(p.id), human: who === 'human', p: p3(p), floor: cityFloor(p.y), place: place.id, v, yaw: round2(yaw(p)), pitch: round2(lookPitch),
+      rats.push({ a: this.actor(p.id), human: who === 'human', ...(who === 'agent' ? { agent: true as const } : {}), p: p3(p), floor: cityFloor(p.y), place: place.id, v,
+        yaw: round2(yaw(p)), pitch: round2(lookPitch),
         hp: p.hp, alive, ...(p.respawnAt !== undefined && !alive ? { respawnIn: Math.max(0, p.respawnAt - now) } : {}), lifeMs: now - life.start,
         buffs: situationBuffs(b, now),
         ...(life.lastPickup ? { lastPickup: { kind: life.lastPickup.kind, agoMs: now - life.lastPickup.at } } : {}),
@@ -819,7 +915,6 @@ export class CityRecorder {
     for (const s of state.pickups ?? []) pickups[s.id] = s.availableAt === undefined ? 0 : Math.max(0, s.availableAt - now);
     const pressure: Record<string, number> = {};
     for (const [id, level] of Object.entries(state.pressure?.levels ?? {})) pressure[id] = round1(level);
-    const ids = [...players.keys()];
     let zone: WorldSituation['zone'];
     if (j) {
       const id = activeZone(j), z = JURISDICTION_ZONES[id];
@@ -832,7 +927,7 @@ export class CityRecorder {
       dispatch: { phase: d.phase, ...(d.incident && d.phase !== 'ready' ? { incident: d.incident } : {}), ...(d.until > now ? { leftMs: d.until - now } : {}),
         ...(d.caller ? { caller: this.actor(d.caller) } : {}), ...(d.wanted ? { wanted: this.actor(d.wanted) } : {}) },
       pickups, pressure, ...(zone ? { zone } : {}),
-      humans: ids.filter(id => !this.deps.isBot(id)).length, bots: ids.filter(id => this.deps.isBot(id)).length,
+      ...this.census(players),
       corpses: state.corpses.length, balls: state.shots.length };
   }
 
@@ -855,11 +950,11 @@ export class CityRecorder {
   /** Aggregates go to SQL; the archive buffer goes to R2 when due. */
   flush(now: number, archive = false): void {
     this.flushedAt = now; this.drain();
-    const prefix = (key: string) => { const [day, layout, mode] = key.split('|') as [string, string, string]; return [day, Number(layout), mode] as const; };
-    for (const [key, layers] of this.cells.buckets) { const [day, layout, mode] = prefix(key); for (const [layer, counts] of layers) for (const [cell, n] of counts) this.deps.store.addCell(day, layout, mode, layer, heatCellKey(cell), n); }
-    for (const [key, places] of this.placeCounts.buckets) { const [day, layout, mode] = prefix(key); for (const [place, counts] of places) for (const [measure, n] of counts) this.deps.store.addPlace(day, layout, mode, place, measure, n); }
-    for (const [key, n] of this.flows) { const [day, layout, mode, src, dst, who] = key.split('|') as [string, string, string, string, string, string]; this.deps.store.addFlow(day, Number(layout), mode, src, dst, who, n); }
-    for (const [key, n] of this.mindCounts) { const [day, layout, mode, measure] = key.split('|') as [string, string, string, string]; this.deps.store.addMind(day, Number(layout), mode, measure, n); }
+    const prefix = (key: string) => { const [day, build, layout, mode] = key.split('|') as [string, string, string, string]; return [day, build, Number(layout), mode] as const; };
+    for (const [key, layers] of this.cells.buckets) { const [day, build, layout, mode] = prefix(key); for (const [layer, counts] of layers) for (const [cell, n] of counts) this.deps.store.addCell(day, build, layout, mode, layer, heatCellKey(cell), n); }
+    for (const [key, places] of this.placeCounts.buckets) { const [day, build, layout, mode] = prefix(key); for (const [place, counts] of places) for (const [measure, n] of counts) this.deps.store.addPlace(day, build, layout, mode, place, measure, n); }
+    for (const [key, n] of this.flows) { const [day, build, layout, mode, src, dst, who] = key.split('|') as [string, string, string, string, string, string, string]; this.deps.store.addFlow(day, build, Number(layout), mode, src, dst, who, n); }
+    for (const [key, n] of this.mindCounts) { const [day, build, layout, mode, measure] = key.split('|') as [string, string, string, string, string]; this.deps.store.addMind(day, build, Number(layout), mode, measure, n); }
     for (const e of this.events) this.deps.store.addEvent(e.t, e.round, e.type, e.data);
     this.cells.clear(); this.placeCounts.clear(); this.flows.clear(); this.mindCounts.clear(); this.events = [];
     this.deps.store.pruneEvents(now);

@@ -7,6 +7,7 @@ import { allowsLocalDiagnostics } from './clientDiagnostics';
 import { verifyBearerToken } from './auth';
 import { companionPageSize, isCompanionCursor } from '../shared/companionStatus';
 import { cityApi, type CityEnv } from './city/cityApi';
+import { buildName } from './city/CityStore';
 
 export { GameRoom } from './GameRoom';
 export { Matchmaker } from './Matchmaker';
@@ -86,7 +87,7 @@ export default {
 
     try {
       if (url.pathname === '/health') {
-        return respond(json({ ok: true, service: 'rat-detective', runtime: 'cloudflare-workers' }));
+        return respond(json({ ok: true, service: 'rat-detective', runtime: 'cloudflare-workers', build: buildName(env.BUILD) }));
       }
 
       if (url.pathname === '/status') {

@@ -3,8 +3,9 @@ import { PLACES } from './city';
 
 /** The public city endpoints (docs/city-map.md, "Agent surfaces"). */
 export interface Heat { from: string; to: string; days: string[]; allDays: string[]; cell: number; layers: Record<string, Record<string, number>> }
-/** `minds`: the Jev mind's room-wide measures (`src/shared/city/minds.ts`); absent from deployments before B5. */
-export interface PlaceCounts { from: string; to: string; days: string[]; allDays: string[]; modes: Record<string, number>; places: Counts; minds?: Record<string, number> }
+/** `minds`: the Jev mind's room-wide measures (`src/shared/city/minds.ts`); absent from deployments before B5.
+ * `builds`: rat-seconds per recorded build over the range (`human-s`, `bot-s`, `agent-s`); absent before builds were recorded. */
+export interface PlaceCounts { from: string; to: string; days: string[]; allDays: string[]; modes: Record<string, number>; builds?: Record<string, Record<string, number>>; places: Counts; minds?: Record<string, number> }
 export interface Flow { src: string; dst: string; who: string; n: number }
 export interface Flows { flows: Flow[] }
 
@@ -41,11 +42,12 @@ export function foldCounts(counts: Counts): FoldedCounts {
   return { counts: out, unplaced };
 }
 
-/** The range query shared by every aggregate: days=… or from/to, plus layout and assignment filters. */
-export interface RangeChoice { when: string; from: string; to: string; layout: string; assignment: string }
+/** The range query shared by every aggregate: days=… or from/to, plus layout, assignment and build filters. */
+export interface RangeChoice { when: string; from: string; to: string; layout: string; assignment: string; build?: string }
 export function rangeQuery(r: RangeChoice): string {
   const q = new URLSearchParams(r.when === 'custom' && r.from && r.to ? { from: r.from, to: r.to } : { days: r.when === 'custom' ? 'all' : r.when });
   if (r.layout) q.set('layout', r.layout);
   if (r.assignment) q.set('mode', r.assignment);
+  if (r.build) q.set('build', r.build);
   return q.toString();
 }

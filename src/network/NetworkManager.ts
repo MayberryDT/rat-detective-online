@@ -69,7 +69,8 @@ export function resolveWebSocketUrl(serverUrl?: string): string {
     if (url.protocol === 'https:') url.protocol = 'wss:';
     if (url.pathname === '/') url.pathname = '/ws';
     const params = new URLSearchParams(window.location.search);
-    for (const key of ['room', 'assignment', 'incidents', 'incident', 'observe']) {
+    // `agent=1`: a headless agent browser, recorded apart from humans in the city map.
+    for (const key of ['room', 'assignment', 'incidents', 'incident', 'observe', 'agent']) {
         const value = params.get(key);
         if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
     }

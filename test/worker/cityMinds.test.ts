@@ -23,13 +23,13 @@ const T = Date.UTC(2026, 8, 29, 12);
 function recorder() {
   const facts: CityFact[] = [], sql: string[] = [], counts: Record<string, Record<string, number>> = {}, minds: Record<string, number> = {};
   const store = {
-    addPlace: (_day: string, _layout: number, _mode: string, place: string, measure: string, n: number) => { const row = counts[place] ??= {}; row[measure] = (row[measure] ?? 0) + n; },
-    addMind: (_day: string, _layout: number, _mode: string, measure: string, n: number) => { minds[measure] = (minds[measure] ?? 0) + n; },
+    addPlace: (_day: string, _build: string, _layout: number, _mode: string, place: string, measure: string, n: number) => { const row = counts[place] ??= {}; row[measure] = (row[measure] ?? 0) + n; },
+    addMind: (_day: string, _build: string, _layout: number, _mode: string, measure: string, n: number) => { minds[measure] = (minds[measure] ?? 0) + n; },
     addEvent: (_t: number, _round: string | undefined, type: string) => { sql.push(type); }, addCell: () => {}, addFlow: () => {}, pruneEvents: () => {},
   } as unknown as CityStore;
   // Decisions and goal ends are archived, not kept in SQL: the archive sees every fact as it is made.
   const archive = { push: (fact: CityFact) => { facts.push(fact); }, due: () => false, flush: () => {}, settled: async () => {} } as unknown as CityArchive;
-  const city = new CityRecorder({ room: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
+  const city = new CityRecorder({ room: 'test', build: 'test-build', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
   const decisions = () => facts.flatMap(f => f.type === 'decision' ? [f] : []), ends = () => facts.flatMap(f => f.type === 'goal-end' ? [f] : []);
   return { city, facts, sql, counts, minds, decisions, ends };
 }
@@ -60,7 +60,7 @@ describe('the minds in the city recorder', () => {
     expect(decisions().map(d => [d.goal, d.t, d.mind])).toEqual([['hunt', T, 'code'], ['roam', T + 500, 'code'], ['roam', T + 900, 'code']]);
     expect(decisions()[0]).toMatchObject({ personality: 'tryhard', motor: 'combat', trigger: 'beat', target: false, top: [['hunt', 3, 3], ['roam', 1.5, 1.5]] });
     expect(ends().map(e => [e.goal, e.outcome, e.durationMs, e.mind])).toEqual([['hunt', 'replaced', 500, 'code'], ['roam', 'failed', 400, 'code'], ['roam', 'died', 500, 'code']]);
-    expect(facts.every(f => f.mindVersion === MIND_VERSION)).toBe(true);
+    expect(facts.every(f => f.mindVersion === MIND_VERSION && f.build === 'test-build')).toBe(true);
   });
 
   it('counts a goal reached only when the bot itself did what it was for', () => {
@@ -100,6 +100,25 @@ describe('the minds in the city recorder', () => {
       ['jev', 'hunt', T + 200, 180, 1500, undefined], ['jev', 'hunt', T + 1200, 180, 1500, undefined], ['code', 'flee', T + 1700, undefined, undefined, 'stale']]);
     expect(decisions()[0]).toMatchObject({ danger: 2, target: true });
     expect(ends().map(e => [e.goal, e.outcome, e.mind, e.durationMs])).toEqual([['hunt', 'replaced', 'jev', 1500]]);
+  });
+
+  // Decision inputs (docs/bot-learning-plan.md, L1). Ways it could go wrong: a dead rat counted as a rival or as nearer
+  // the case; distance to the case measured to where the case was dropped rather than to whoever carries it; the carrier
+  // itself never treated as nearer; the carrying bot not marked closer; the rival's health taken from the wrong rat.
+  it('records what the bot faced when it decided: distances to the case and carrier, who is nearer, health and rats in view', () => {
+    const { city, decisions } = recorder(), state = world(); // the case lies loose at (40, 0, 0)
+    const me = bot('bot-1'), near = bot('bot-2', -30), far = bot('bot-3', 0, -50), dead = bot('bot-4', 39);
+    near.hp = 2; dead.hp = 0;
+    city.tick(T, new Map([me, near, far, dead].map(p => [p.id, p])), state, playing);
+    city.decision(me, decide('take-case', { plan: { mode: 'case', key: 'case' } }), T + 10);
+    expect(decisions()[0]?.in).toEqual({ case: 40, rival: 30, closer: true, hp: 5, rivalHp: 2, seen: 2, carrying: false });
+    // A rival picks it up: the case is where its carrier is.
+    state.case.owner = near.id; Object.assign(near, { x: 20, z: 15 });
+    city.decision(me, decide('chase-carrier', { plan: { mode: 'combat', key: 'combat:bot-2', follow: 'bot-2' } }), T + 20);
+    expect(decisions()[1]?.in).toEqual({ case: 25, carrier: 25, rival: 25, closer: false, hp: 5, rivalHp: 2, seen: 2, carrying: false });
+    state.case.owner = me.id; me.hp = 3;
+    city.decision(me, decide('keep-case', { plan: { mode: 'evade', key: 'evade' } }), T + 30);
+    expect(decisions()[2]?.in).toEqual({ case: 0, rival: 25, closer: true, hp: 3, rivalHp: 2, seen: 2, carrying: true });
   });
 
   it('adds up decisions, outcomes and Jev windows into the digest\'s lines', () => {

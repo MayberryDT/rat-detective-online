@@ -52,7 +52,7 @@ let shot=0;
 // (compression and hashing happen after the loop).
 const archivedLines=[],stored=[];
 const sight=values.city?{query:new SpatialRayQuery(sim.world),refreshedAt:-Infinity}:null;
-const city=values.city?new CityRecorder({room:'bench',layout:()=>GRAYBOX_VERSION,isBot:id=>!values.human||id!==ids[0],connected:()=>true,
+const city=values.city?new CityRecorder({room:'bench',build:'bench',layout:()=>GRAYBOX_VERSION,isBot:id=>!values.human||id!==ids[0],connected:()=>true,
     store:{addCell:(...a)=>stored.push(['cell',...a]),addPlace:(...a)=>stored.push(['place',...a]),addFlow:(...a)=>stored.push(['flow',...a]),addMind:(...a)=>stored.push(['mind',...a]),addEvent:(...a)=>stored.push(['event',...a]),pruneEvents(){}},
     archive:{push:f=>archivedLines.push(JSON.stringify(f)),due:()=>false,flush(){},settled:async()=>{}},
     // GameRoom.lineOfSight: the chaos world's bodies, the index refreshed at most once a second (`closest` before `blocked` existed).

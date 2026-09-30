@@ -70,7 +70,8 @@ export function measurePlaces(places: readonly Place[], counts: Record<string, R
   const out = new Map<string, PlaceMeasures>();
   for (const place of places) {
     const raw = counts[place.id] ?? {}, n = (k: string) => raw[k] ?? 0;
-    const humanS = n('human-s'), botS = n('bot-s'), minutes = (humanS + botS) / 60;
+    // Deaths count every rat, so the all-rat exposure takes in agents' time too.
+    const humanS = n('human-s'), botS = n('bot-s'), minutes = (humanS + botS + n('agent-s')) / 60;
     const kills = n('kills'), deaths = n('deaths');
     out.set(place.id, {
       place, humanS, botS, raw,

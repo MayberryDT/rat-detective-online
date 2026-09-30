@@ -19,6 +19,8 @@ function withBrowserSmokeRoom(rawUrl) {
   if (!url.searchParams.has('room')) {
     url.searchParams.set('room', `browser-smoke-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   }
+  // An agent's browser: the room records its rat as `agent`, never `human`.
+  url.searchParams.set('agent', '1');
   return url.toString();
 }
 

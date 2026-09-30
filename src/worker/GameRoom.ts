@@ -53,7 +53,7 @@ import { JevBudget, JEV_LEDGER } from './bots/jevBudget';
 import { botPersonality, createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { HEAT_CELL } from './HeatMap';
-import { CityStore, type Filter, type Range } from './city/CityStore';
+import { buildName, CityStore, type Filter, type Range } from './city/CityStore';
 import { CityArchive } from './city/CityArchive';
 import { CityRecorder } from './city/CityRecorder';
 import { SpatialRayQuery } from '../shared/SpatialRayQuery';
@@ -94,6 +94,8 @@ interface SocketAttachment {
   delivered?: boolean;
   admissionUntil?: number;
   titleUntil?: number;
+  /** Joined with `agent=1`: a headless agent browser, recorded as `agent`, never `human` (docs/city-map.md). */
+  agent?: boolean;
 }
 
 interface StoredPlayerRow extends Record<string, SqlStorageValue> {
@@ -172,7 +174,8 @@ export class GameRoom extends DurableObject<Env> {
   private botState: ChaosState | undefined;
   private nextBotHeartbeat = 0;
   private players = new Map<string, PlayerData>();
-  private readonly sessions = new Map<string, {token:string; until:number | null}>();
+  /** `agent`: the rat is an agent browser's (`agent=1`); kept with the seat so a reconnect or an eviction keeps it. */
+  private readonly sessions = new Map<string, {token:string; until:number | null; agent?: true}>();
   private round: RoundState = playingRound();
   private assignmentRotation: AssignmentRotation = { remaining: [] };
   /** Shipped default is Planted Evidence; the missile incident is an opt-in mode. */
@@ -283,6 +286,7 @@ export class GameRoom extends DurableObject<Env> {
       ...(['batch-v1','tuple-v1'].includes(requestUrl.searchParams.get('movement')??'')?{batchMovement:true}:{}),
       ...(requestUrl.searchParams.get('movement')==='tuple-v1'?{tupleMovement:true}:{}),
       ...(requestUrl.searchParams.get('receive') === 'welcome-only' ? { receiveMode: 'welcome-only' as const } : {}),
+      ...(requestUrl.searchParams.get('agent') === '1' ? { agent: true } : {}),
     });
     this.ctx.acceptWebSocket(server);
     this.audience = null;
@@ -894,6 +898,9 @@ export class GameRoom extends DurableObject<Env> {
     if (!columns.includes('last_active_at')) {
       this.ctx.storage.sql.exec('ALTER TABLE players ADD COLUMN last_active_at INTEGER NOT NULL DEFAULT 0');
     }
+    if (!this.ctx.storage.sql.exec<{ name: string }>('PRAGMA table_info(reconnect_sessions)').toArray().some(row => row.name === 'agent')) {
+      this.ctx.storage.sql.exec('ALTER TABLE reconnect_sessions ADD COLUMN agent INTEGER NOT NULL DEFAULT 0');
+    }
 
     const currentVersion = this.ctx.storage.sql
       .exec<{ version: number }>('SELECT COALESCE(MAX(id), 0) as version FROM _sql_schema_migrations')
@@ -927,8 +934,8 @@ export class GameRoom extends DurableObject<Env> {
     if (this.persistentBots) this.restoreBotRoster();
     this.roundBotCount = Math.max(0, Number(this.readRoomState(ROUND_BOT_COUNT_KEY)) || this.botRoster.length);
     const attachedIds = this.attachedPlayerIds();
-    for (const row of this.ctx.storage.sql.exec<{player_id:string;token:string;disconnected_until:number|null}>('SELECT * FROM reconnect_sessions').toArray())
-      this.sessions.set(row.player_id,{token:row.token,until:row.disconnected_until});
+    for (const row of this.ctx.storage.sql.exec<{player_id:string;token:string;disconnected_until:number|null;agent:number}>('SELECT * FROM reconnect_sessions').toArray())
+      this.sessions.set(row.player_id,{token:row.token,until:row.disconnected_until,...(row.agent?{agent:true as const}:{})});
 
     const worldRow = this.readRoomState(WORLD_KEY);
     if (worldRow) {
@@ -1036,7 +1043,7 @@ export class GameRoom extends DurableObject<Env> {
       const session=this.sessions.get(resumedId);
       // A resume credential is single-use. Rotate it before disconnecting the
       // previous controller so replay cannot seize the newly active transport.
-      if(session){session.token=crypto.randomUUID();session.until=null;this.persistSession(resumedId,session);}
+      if(session){session.token=crypto.randomUUID();session.until=null;if(attachment.agent)session.agent=true;this.persistSession(resumedId,session);}
       // Replace the controller before closing the old transport. Its delayed
       // messages/close callback must never move or delete the resumed rat.
       for(const old of this.ctx.getWebSockets())if(old!==ws && this.getPlayerId(old)===resumedId){
@@ -1074,7 +1081,7 @@ export class GameRoom extends DurableObject<Env> {
     const player = createPlayer(id, message.name, message.appearance, spawnForWorld(this.world, Math.random, this.players.values(), undefined, this.chaos?.assignmentState));
     this.players.set(id, player);
     this.persistPlayer(player, true);
-    const session={token:crypto.randomUUID(),until:null};this.sessions.set(id,session);this.persistSession(id,session);
+    const session={token:crypto.randomUUID(),until:null,...(attachment.agent?{agent:true as const}:{})};this.sessions.set(id,session);this.persistSession(id,session);
     this.finishJoin(ws,player,true);
   }
 
@@ -1463,8 +1470,8 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private persistSession(id:string, session:{token:string;until:number|null}):void {
-    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO reconnect_sessions(player_id,token,disconnected_until) VALUES (?,?,?)',id,session.token,session.until);
+  private persistSession(id:string, session:{token:string;until:number|null;agent?:true}):void {
+    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO reconnect_sessions(player_id,token,disconnected_until,agent) VALUES (?,?,?,?)',id,session.token,session.until,session.agent?1:0);
   }
 
   private removePlayerById(playerId: string, allowManaged = false): void {
@@ -1727,10 +1734,12 @@ export class GameRoom extends DurableObject<Env> {
   private get city(): CityRecorder {
     this.cityRecorder ??= new CityRecorder({
       room: this.matchRoom ?? this.ctx.id.name ?? 'room',
+      build: buildName(this.env.BUILD),
       store: this.cityStore,
       archive: new CityArchive(this.matchRoom ?? this.ctx.id.name ?? 'room', this.env.CITY_ARCHIVE, promise => this.ctx.waitUntil(promise)),
       layout: () => this.world.version,
       isBot: id => this.isManagedBot(id),
+      isAgent: id => this.sessions.get(id)?.agent === true,
       connected: id => this.sessions.get(id)?.until == null,
       sight: (from, to) => this.lineOfSight(from, to),
       solids: grayboxBoxes({ seed: this.world.seed, version: GRAYBOX_VERSION }).filter(b => !b.rx && !b.ry && !b.rz && !b.passBalls && b.w >= .5 && b.h >= .5 && b.d >= .5),
@@ -1755,7 +1764,7 @@ export class GameRoom extends DurableObject<Env> {
   }
   async cityPlaces(range: Range, filter: Filter = {}, now = this.now()) {
     this.cityRecorder?.flush(now);
-    return { ...range, ...this.cityStore.days(range), modes: this.cityStore.modes(range), places: this.cityStore.places(range, filter), minds: this.cityStore.minds(range, filter) };
+    return { ...range, ...this.cityStore.days(range), modes: this.cityStore.modes(range, filter), builds: this.cityStore.builds(range), places: this.cityStore.places(range, filter), minds: this.cityStore.minds(range, filter) };
   }
   async cityFlows(range: Range, filter: Filter = {}, now = this.now()) {
     this.cityRecorder?.flush(now);

@@ -31,7 +31,7 @@ async function status(query='') {
 }
 function join(preferred) {
   return new Promise((resolve,reject)=>{
-    const url=new URL('/ws',origin);url.protocol='wss:';
+    const url=new URL('/ws',origin);url.protocol='wss:';url.searchParams.set('agent','1');
     if(preferred)url.searchParams.set('preferred',preferred);
     const ws=new WebSocket(url,{origin:origin.origin});sockets.push(ws);
     const timeout=setTimeout(()=>{ws.terminate();reject(new Error('Welcome timeout'));},15000);

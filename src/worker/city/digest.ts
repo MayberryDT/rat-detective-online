@@ -8,6 +8,8 @@ import { PICKUP_KINDS } from '../../shared/pickups';
  * that `/api/city/v1/places` or `/flows` answers exactly (docs/city-map.md). */
 export interface DigestInput {
   range: { from: string; to: string }; days: string[];
+  /** The build the counts were filtered to, if any. */
+  build?: string;
   places: readonly Place[];
   counts: Record<string, Record<string, number>>;
   modes: Record<string, number>;
@@ -24,9 +26,11 @@ export function cityDigest(input: DigestInput): string {
   const m = measurePlaces(input.places, input.counts), rows = [...m.values()];
   const handle = (place: string, measure: string) => `\`place:${place} · measure:${measure} · ${input.range.from}..${input.range.to}\``;
   const total = (key: string) => rows.reduce((t, r) => t + (r.raw[key] ?? 0), 0);
-  const humanS = total('human-s'), botS = total('bot-s');
-  const out: string[] = [`# City digest, ${input.range.from} to ${input.range.to}`, ''];
+  const humanS = total('human-s'), botS = total('bot-s'), agentS = total('agent-s');
+  const out: string[] = [`# City digest, ${input.range.from} to ${input.range.to}${input.build ? `, build ${input.build}` : ''}`, ''];
   out.push(`Exposure: ${hours(humanS)} human rat-hours, ${hours(botS)} bot rat-hours, over ${input.days.length} recorded day(s).`);
+  // Agents' headless browsers count under their own label, never as humans.
+  if (agentS) out.push(`Agent browsers: ${hours(agentS)} rat-hours, left out of every human measure.`);
   const modes = Object.entries(input.modes).filter(([, s]) => s > 0).map(([mode, s]) => `${mode} ${hours(s)} h`).join(', ');
   if (modes) out.push(`Human time by assignment: ${modes}.`);
   if (humanS < MIN_HUMAN_SECONDS * 3) out.push(`**Too little human play for place findings yet** (need about ${Math.round(MIN_HUMAN_SECONDS * 3 / 60)} human rat-minutes); bot and fire figures below still hold.`);

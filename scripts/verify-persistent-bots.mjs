@@ -13,7 +13,7 @@ const validCount=n=>assert(Number.isInteger(n)&&n>=8&&n<=11,'expected 8–11 bot
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function status(){const r=await fetch(new URL('/status',origin),{headers});assert.equal(r.status,200);return r.json();}
 async function observe(duration){
-  const url=new URL('/ws',origin);url.protocol=url.protocol==='https:'?'wss:':'ws:';
+  const url=new URL('/ws',origin);url.protocol=url.protocol==='https:'?'wss:':'ws:';url.searchParams.set('agent','1');
   const ws=new WebSocket(url,{headers});let welcome,state,closed=false,error;const gaps=[],counts={},positions=new Map();let last=0;
   const ready=new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>reject(new Error('welcome timeout')),20000);

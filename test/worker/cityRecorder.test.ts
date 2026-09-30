@@ -7,8 +7,11 @@ import type { CityFact } from '../../src/shared/city/facts';
 import type { GrayboxBox } from '../../src/shared/grayboxLayout';
 import { createPlayer } from '../../src/worker/gameState';
 import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
-import type { Vec3Data } from '../../src/shared/networkProtocol';
+import { MAX_HP, type PlayerData, type Vec3Data } from '../../src/shared/networkProtocol';
 import { noControls } from '../../src/shared/rat/ratBody';
+import { createAssignment } from '../../src/shared/assignments';
+import type { ChaosState } from '../../src/shared/chaosState';
+import type { PickupState } from '../../src/shared/pickups';
 
 // The recorder files a rat as inside geometry (anomalies, landing clips) through a grid index over the
 // solids. Ways it could go wrong: a box missing from a grid cell it overlaps (big slabs, boxes on a cell
@@ -64,7 +67,7 @@ describe('city recorder rescues', () => {
     const facts: CityFact[] = [];
     const store = { addEvent: (_t: number, _round: string | undefined, _type: string, data: string) => { facts.push(JSON.parse(data) as CityFact); },
       addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
-    const city = new CityRecorder({ room: 'test', store, archive: new CityArchive('test', undefined, () => {}), layout: () => 3,
+    const city = new CityRecorder({ room: 'test', build: 'test', store, archive: new CityArchive('test', undefined, () => {}), layout: () => 3,
       isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
     return { city, facts };
   };
@@ -94,7 +97,7 @@ describe('city recorder aim', () => {
     const store = { addEvent: (_t: number, _round: string | undefined, _type: string, data: string) => { sql.push(JSON.parse(data) as CityFact); },
       addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
     const archive = { push: (fact: CityFact) => { archived.push(JSON.parse(JSON.stringify(fact)) as CityFact); }, due: () => false, flush: () => {} } as unknown as CityArchive;
-    const city = new CityRecorder({ room: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [], ...(sight ? { sight } : {}) });
+    const city = new CityRecorder({ room: 'test', build: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [], ...(sight ? { sight } : {}) });
     const human = createPlayer('human', 'Tyler', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 0 });
     const bot = createPlayer('bot-1', 'Bot', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 20 });
     const players = new Map([[human.id, human], [bot.id, bot]]);
@@ -169,7 +172,7 @@ describe('city recorder controls', () => {
     const archived: CityFact[] = [];
     const store = { addEvent: () => {}, addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
     const archive = { push: (fact: CityFact) => { archived.push(JSON.parse(JSON.stringify(fact)) as CityFact); }, due: () => false, flush: () => {} } as unknown as CityArchive;
-    const city = new CityRecorder({ room: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
+    const city = new CityRecorder({ room: 'test', build: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
     const human = createPlayer('human', 'Tyler', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 0 });
     const bot = createPlayer('bot-1', 'Bot', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 20 });
     const players = new Map([[human.id, human], [bot.id, bot]]);
@@ -204,5 +207,70 @@ describe('city recorder controls', () => {
     const tapSlot = botTrace!.find(s => s[3] === 1)!;
     expect(tapSlot).toEqual([2050, -.6, -.5, 1, 0, 2]);
     expect(botTrace!.filter(s => s !== tapSlot).every(s => s[1] === -.6 && s[2] === -.5 && s[3] + s[4] + s[5] === 0)).toBe(true);
+  });
+});
+
+// Pickups passed (docs/bot-learning-plan.md, L1): a usable supply within reach that the rat did not take. Ways it could go
+// wrong: a fact every sample of one approach instead of one; a Quick Fix counted for a rat at full health, or a timed
+// supply not counted at full health; a claimed supply, or one someone else took, counted as passed; a supply behind a
+// wall or on another floor counted; a rat that dies beside it never counted; the nearest point of the approach lost.
+describe('city recorder pickups passed', () => {
+  const T = Date.UTC(2026, 8, 30, 12);
+  const setup = (sight?: (from: Vec3Data, to: Vec3Data) => boolean) => {
+    const archived: CityFact[] = [], counts: Record<string, number> = {};
+    const store = { addEvent: () => {}, addCell: () => {}, addFlow: () => {}, pruneEvents: () => {},
+      addPlace: (_day: string, _build: string, _layout: number, _mode: string, _place: string, measure: string, n: number) => { counts[measure] = (counts[measure] ?? 0) + n; } } as unknown as CityStore;
+    const archive = { push: (fact: CityFact) => { archived.push(fact); }, due: () => false, flush: () => {} } as unknown as CityArchive;
+    const city = new CityRecorder({ room: 'test', build: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [], ...(sight ? { sight } : {}) });
+    const fix: PickupState = { id: 'fix', kind: 'quick-fix', x: 0, y: .7, z: 0 }, alibi: PickupState = { id: 'alibi', kind: 'ironclad', x: 200, y: .7, z: 0 };
+    const state: ChaosState = { time: T, assignment: { ...createAssignment('excessive-force', 0, 'round-1', () => 0), phase: 'active' as const },
+      case: { owner: null, previousOwner: null, pickupAfter: 0, returningUntil: 0, p: { x: 0, y: 0, z: 100 }, q: { x: 0, y: 0, z: 0, w: 1 }, v: { x: 0, y: 0, z: 0 }, spin: { x: 0, y: 0, z: 0 } },
+      dispatch: { phase: 'ready', started: 0, until: 0, serial: 0 }, pickups: [fix, alibi], possession: {}, corpses: [], shots: [], impacts: [], notice: { serial: 0, text: '' } };
+    let t = T;
+    const tick = (rat: PlayerData) => city.tick(t += 200, new Map([[rat.id, rat]]), state, { phase: 'playing' });
+    /** Walks `rat` along z = `z` from x = `from` to `to`, a unit per 200 ms (every 5 Hz sample). */
+    const walk = (rat: PlayerData, from: number, to: number, z: number) => {
+      for (let x = from; from < to ? x <= to : x >= to; x += from < to ? 1 : -1) { rat.x = x; rat.z = z; tick(rat); }
+    };
+    const passed = () => archived.flatMap(f => f.type === 'pickup-passed' ? [f] : []);
+    return { city, fix, counts, tick, walk, passed, now: () => t, flush: () => city.flush(t) };
+  };
+  const rat = (id: string, hp: number, y = .3) => Object.assign(createPlayer(id, 'Rat', DEFAULT_APPEARANCE, { x: -30, y, z: 0 }), { hp });
+
+  it('records one fact per approach, at its nearest point, for a hurt rat passing a Quick Fix and any rat passing a timed supply', () => {
+    const { walk, tick, passed, counts, flush } = setup(), hurt = rat('human', 3);
+    walk(hurt, -30, 30, 5);
+    expect(passed()).toEqual([expect.objectContaining({ type: 'pickup-passed', build: 'test', site: 'fix', kind: 'quick-fix', dist: 5, p: [0, .3, 5], hp: 3 })]);
+    walk(hurt, 30, -30, 5);
+    expect(passed()).toHaveLength(2);
+    walk(rat('bot-1', MAX_HP), 170, 230, -8);
+    expect(passed()[2]).toMatchObject({ site: 'alibi', kind: 'ironclad', dist: 8, hp: MAX_HP });
+    // Dying beside it is passing it too.
+    const doomed = rat('bot-2', 2);
+    walk(doomed, -30, -3, 4);
+    doomed.hp = 0; tick(doomed);
+    expect(passed()[3]).toMatchObject({ site: 'fix', dist: 5, hp: 2 });
+    flush();
+    expect(counts).toMatchObject({ 'passed:quick-fix': 3, 'passed:ironclad': 1 });
+  });
+
+  it('records nothing for a Quick Fix at full health, a supply claimed or taken by another, one out of sight or on another floor', () => {
+    const { city, fix, walk, passed, now } = setup();
+    walk(rat('human', MAX_HP), -30, 30, 5);
+    walk(rat('human-upstairs', 3, 8.3), -30, 30, 5);
+    const claimer = rat('bot-1', 3);
+    walk(claimer, -30, 0, 1);
+    city.pickups([{ kind: 'collected', pickupId: 'fix', pickup: 'quick-fix', playerId: claimer.id }], new Map([[claimer.id, claimer]]), now());
+    fix.availableAt = now() + 60_000;
+    walk(claimer, 0, 30, 1);
+    delete fix.availableAt;
+    const beaten = rat('bot-2', 3);
+    walk(beaten, -30, 0, 3);
+    fix.availableAt = now() + 60_000; // someone else took it
+    walk(beaten, 0, 30, 3);
+    expect(passed()).toEqual([]);
+    const walled = setup(() => false);
+    walled.walk(rat('human', 3), -30, 30, 5);
+    expect(walled.passed()).toEqual([]);
   });
 });

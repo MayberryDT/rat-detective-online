@@ -3,7 +3,7 @@ import { cityModel, type CityModel } from '../../shared/city/model';
 import { heatRange } from '../HeatMap';
 import { verifyBearerToken } from '../auth';
 import { cityDigest } from './digest';
-import type { Filter } from './CityStore';
+import { BUILD_NAME, type Filter } from './CityStore';
 
 /** The city map's agent surfaces (docs/city-map.md, "Agent surfaces"). Aggregates are public;
  * discrete events and the raw archive need the CITY_TOKEN bearer token. */
@@ -13,10 +13,11 @@ const json = (body: unknown, status = 200) => Response.json(body, { status, head
 let model: CityModel | undefined;
 
 function filterOf(params: URLSearchParams): Filter | null {
-  const mode = params.get('mode'), layout = params.get('layout');
+  const mode = params.get('mode'), layout = params.get('layout'), build = params.get('build');
   if (mode !== null && !/^[a-z-]{1,40}$/.test(mode)) return null;
   if (layout !== null && !/^\d{1,4}$/.test(layout)) return null;
-  return { ...(mode ? { mode } : {}), ...(layout ? { layout: Number(layout) } : {}) };
+  if (build !== null && !BUILD_NAME.test(build)) return null;
+  return { ...(mode ? { mode } : {}), ...(layout ? { layout: Number(layout) } : {}), ...(build ? { build } : {}) };
 }
 
 /** Handles `/api/heat/v1` and `/api/city/v1/*`; null for any other path. */
@@ -26,7 +27,7 @@ export async function cityApi(request: Request, url: URL, env: CityEnv): Promise
   if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
   const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME), now = Date.now();
   const range = heatRange(url.searchParams, now), filter = filterOf(url.searchParams);
-  const badRange = () => json({ error: 'Use days=1-3650, days=all, or from and to as YYYY-MM-DD; mode and layout are optional' }, 400);
+  const badRange = () => json({ error: 'Use days=1-3650, days=all, or from and to as YYYY-MM-DD; mode, layout and build are optional' }, 400);
   switch (path) {
     case '/api/heat/v1':
       if (!range || !filter) return badRange();
@@ -44,7 +45,7 @@ export async function cityApi(request: Request, url: URL, env: CityEnv): Promise
       if (!range || !filter) return badRange();
       model ??= cityModel();
       const places = await room.cityPlaces(range, filter), flows = await room.cityFlows(range, filter);
-      const text = cityDigest({ range, days: places.days, places: model.places, counts: places.places, modes: places.modes, flows: flows.flows, minds: places.minds });
+      const text = cityDigest({ range, ...(filter.build ? { build: filter.build } : {}), days: places.days, places: model.places, counts: places.places, modes: places.modes, flows: flows.flows, minds: places.minds });
       return new Response(text, { headers: { ...PUBLIC, 'content-type': 'text/markdown; charset=utf-8' } });
     }
   }

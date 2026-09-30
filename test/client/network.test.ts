@@ -71,6 +71,14 @@ describe('network session transport', () => {
         expect(explicit.searchParams.get('incident')).toBe('auto');
     });
 
+    // An agent's headless browser must reach the room flagged, or its rat and frame reports count as a human's.
+    it('forwards the agent flag from the page URL to the socket, and nothing else of the page', () => {
+        vi.stubGlobal('window', { location: { href: 'https://ratdetective.online/?agent=1&mute=1', search: '?agent=1&mute=1' } });
+        const url = new URL(resolveWebSocketUrl());
+        expect(url.searchParams.get('agent')).toBe('1');
+        expect(url.searchParams.has('mute')).toBe(false);
+    });
+
     it('forwards only validated public invitation preferences from the page URL',()=>{
         vi.stubGlobal('window',{location:{href:`https://ratdetective.online/?preferred=${publicOverflow}`,search:`?preferred=${publicOverflow}`}});
         expect(new URL(resolveWebSocketUrl()).searchParams.get('preferred')).toBe(publicOverflow);

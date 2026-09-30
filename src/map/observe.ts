@@ -52,7 +52,7 @@ export function observe(ctx: Context): Mode {
     floor: (['all', 'street', 'upper', 'sewer', 'air'] as const).find(f => f === p.get('floor')) ?? 'all' as Floor,
     show: p.get('show') === 'places' ? 'places' : 'cells',
     flows: p.get('flows') === '1', smooth: p.get('smooth') !== '0',
-    range: { when: p.get('days') ?? 'all', from: p.get('from') ?? '', to: p.get('to') ?? '', layout: p.get('layout') ?? '', assignment: p.get('assign') ?? '' } as RangeChoice,
+    range: { when: p.get('days') ?? 'all', from: p.get('from') ?? '', to: p.get('to') ?? '', layout: p.get('layout') ?? '', assignment: p.get('assign') ?? '', build: p.get('build') ?? '' } as RangeChoice,
   };
   if (state.range.from && state.range.to) state.range.when = 'custom';
   if (LAYERS[state.layer]!.minds) state.show = 'places';
@@ -64,7 +64,7 @@ export function observe(ctx: Context): Mode {
     const set = (k: string, v: string, fallback: string) => { if (v === fallback) p.delete(k); else p.set(k, v); };
     set('layer', state.layer, 'humans'); set('floor', state.floor, 'all'); set('show', state.show, 'cells'); set('flows', state.flows ? '1' : '0', '0'); set('smooth', state.smooth ? '1' : '0', '1');
     set('days', state.range.when === 'custom' ? 'all' : state.range.when, 'all'); set('from', state.range.when === 'custom' ? state.range.from : '', ''); set('to', state.range.when === 'custom' ? state.range.to : '', '');
-    set('layout', state.range.layout, ''); set('assign', state.range.assignment, ''); minds.save(set);
+    set('layout', state.range.layout, ''); set('assign', state.range.assignment, ''); set('build', state.range.build ?? '', ''); minds.save(set);
     ctx.save();
   };
   const change = () => { save(); ctx.redraw(); };
@@ -85,6 +85,17 @@ export function observe(ctx: Context): Mode {
   const mindsBox = el('div', {}, minds.panel);
   mindsBox.hidden = !LAYERS[state.layer]!.minds;
   const overlayBox = el('div', {}, ...Object.entries(OVERLAYS).map(([k, [name, color]]) => toggle(name, shown.get(k)!, on => { shown.set(k, on); ctx.redraw(); }, color)));
+  // Builds (release names) recorded over the range, filled in on each load; the chosen one stays listed even with no play.
+  const buildSelect = el('select');
+  buildSelect.addEventListener('change', () => { state.range.build = buildSelect.value; reload(); });
+  const renderBuilds = (builds: Record<string, Record<string, number>>) => {
+    const names = Object.keys(builds).sort().reverse(), chosen = state.range.build ?? '';
+    if (chosen && !names.includes(chosen)) names.unshift(chosen);
+    buildSelect.replaceChildren(...[['', 'Every build'] as const, ...names.map(b => [b, `${b} (${duration(builds[b]?.['human-s'] ?? 0)} human)`] as const)]
+      .map(([v, label]) => { const o = el('option', { text: label }); o.value = v; return o; }));
+    buildSelect.value = chosen;
+  };
+  renderBuilds({});
   const panel = el('div', {},
     el('p', { className: 'note', text: 'Where rats spend their time in the live city, where they die, where the killers stood and where the cheese goes, drawn over today\'s layout. Hover for a place card.' }),
     section('Show', choices(Object.entries(LAYERS).map(([k, v]) => [k, v.label] as const), () => state.layer, v => {
@@ -96,7 +107,7 @@ export function observe(ctx: Context): Mode {
     section('As', showAs),
     section('Floor', choices([['all', 'All floors'], ['street', 'Street'], ['upper', 'Upstairs & roofs'], ['sewer', 'Sewer'], ['air', 'In the air']], () => state.floor, v => { state.floor = v as Floor; change(); })),
     section('When', when, el('div', { className: 'dates' }, el('label', {}, 'From', fromInput), el('label', {}, 'To', toInput))),
-    section('Layout and assignment',
+    section('Layout, assignment and build',
       choices([['', 'All layouts'], [String(LAYOUT), `Layout ${LAYOUT} (now)`], [String(LAYOUT - 1), `Layout ${LAYOUT - 1}`]], () => state.range.layout, v => { state.range.layout = v; reload(); }),
       (() => {
         const select = el('select');
@@ -104,7 +115,8 @@ export function observe(ctx: Context): Mode {
         select.value = state.range.assignment;
         select.addEventListener('change', () => { state.range.assignment = select.value; reload(); });
         return el('div', { className: 'choices' }, select);
-      })()),
+      })(),
+      el('div', { className: 'choices' }, buildSelect)),
     section('Totals', totals),
     section('On the map', toggle('Flow arrows between places (busiest 40)', state.flows, on => { state.flows = on; change(); }), toggle('Smooth heat', state.smooth, on => { state.smooth = on; change(); }), overlayBox),
   );
@@ -146,7 +158,7 @@ export function observe(ctx: Context): Mode {
         [heat, counts, flows] = await Promise.all([
           ctx.api.json<Heat>(`/api/heat/v1?${query}`), ctx.api.json<PlaceCounts>(`/api/city/v1/places?${query}`), ctx.api.json<Flows>(`/api/city/v1/flows?${query}`),
         ]);
-        folded = foldCounts(counts.places); mindCounts = counts.minds ?? {};
+        folded = foldCounts(counts.places); mindCounts = counts.minds ?? {}; renderBuilds(counts.builds ?? {});
         const first = heat.allDays[0], last = heat.allDays[heat.allDays.length - 1];
         for (const input of [fromInput, toInput]) { if (first) input.min = first; if (last) input.max = last; }
         if (state.range.when !== 'custom') { fromInput.value = heat.days[0] ?? ''; toInput.value = heat.days[heat.days.length - 1] ?? ''; }
@@ -195,7 +207,7 @@ export function observe(ctx: Context): Mode {
         g.fillStyle = s.y < 0 ? '#ff9a3c' : '#ff5a1f'; g.fill(); g.strokeStyle = '#000'; g.lineWidth = 1.2; g.stroke();
       }
       if (shown.get('pickups')) for (const s of PICKUP_ANCHORS) view.dot(s.x, s.z, 5, PICKUP_COLOR[s.kind]);
-      const where = `<p>${state.range.layout ? `Layout ${esc(state.range.layout)} only` : 'Every layout'}; ${state.floor === 'all' ? 'every floor' : esc(state.floor)}. ${state.show === 'places' ? 'Shaded by count per area of each place; upper floors and rooms are the chips (8, 16, R = roof, L = lookout, C = chute).' : 'Log scale.'}</p>`;
+      const where = `<p>${state.range.layout ? `Layout ${esc(state.range.layout)} only` : 'Every layout'}${state.range.build ? `, build ${esc(state.range.build)}` : ''}; ${state.floor === 'all' ? 'every floor' : esc(state.floor)}. ${state.show === 'places' ? 'Shaded by count per area of each place; upper floors and rooms are the chips (8, 16, R = roof, L = lookout, C = chute).' : 'Log scale.'}</p>`;
       const goals = layer.minds ? minds.legend(scale) : undefined;
       return goals ? goals + where : `<b>${esc(layer.label)}${state.show === 'places' ? ', by place' : ''}</b><div class="ramp"><span>less</span><i style="background:${RAMP_CSS}"></i><span>${esc(scale)}</span></div>` + where;
     },
