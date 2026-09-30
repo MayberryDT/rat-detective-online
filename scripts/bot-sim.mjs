@@ -26,18 +26,19 @@ const band=d=>BANDS.findIndex(limit=>d<limit);
  * shot's line, banded as the production accuracy table is; a hit is banded by the shooter's distance at impact. */
 const SIGHT=150,EYE=1.5,CHEST=1.3,AIM_BANDS=[5,10,15,20,30,45,70,Infinity],AIM_BAND_NAMES=['0-5','5-10','10-15','15-20','20-30','30-45','45-70','70+'];
 const aimBand=d=>AIM_BANDS.findIndex(limit=>d<limit);
-/** The humans in production (motor-compare --mind=3 --since=2026-09-30T06:46:00Z, 27.6 fight minutes), printed beside the bots'. */
+/** The humans in production (motor-compare --mind=3 --since=2026-09-30T06:46:00Z, 27.6 fight minutes; flick measures
+ * recounted on the same mirror once every flick counted, 30 September), printed beside the bots'. */
 const HUMANS={'move.speedMedian':16.5,'move.speedP90':21.9,'move.stopShare':.034,'move.directionChangesPerMovingMin':30.4,
     'jump.jumpsPerFightMin':14.8,'jump.airShare':.271,
-    'aim.turnRateMedian':.152,'aim.turnRateP90':1.62,'aim.stillAimShare':.442,'aim.flicksPerFightMin':6.2,'aim.shotErrorMedian':.13,'aim.leadAheadShare':.29,
+    'aim.turnRateMedian':.152,'aim.turnRateP90':1.62,'aim.stillAimShare':.442,'aim.flicksPerFightMin':11.76,'aim.shotErrorMedian':.13,'aim.leadAheadShare':.29,
     'moveAim.decoupledShare':.426,'moveAim.backpedalShare':.218,'moveAim.offAngleMedian':.836,'moveJump.jumpsWhileMovingShare':.99,'moveJump.strafeJumpShare':.57,
     'jumpAim.airShotShare':.286,'jumpAim.airTurnRateMedian':.227,'jumpAim.groundTurnRateMedian':.136,'jumpAim.airShotErrorMedian':.154,'jumpAim.groundShotErrorMedian':.12,
     'all.airborneDecoupledShareOfMovingAir':.478,'all.airborneDecoupledPerFightMin':7.6,
     'inputs.alone.forwardShare':.557,'inputs.alone.backShare':.231,'inputs.alone.strafeShare':.511,'inputs.alone.releasedShare':.049,
     'inputs.alone.strafeHoldMedianMs':314,'inputs.alone.strafeFlipsPerMin':21.8,'inputs.alone.jumpPressesPerMin':20,'inputs.alone.triggerPullsPerMin':261,
-    'inputs.alone.mouseStillShare':.442,'inputs.alone.flickSizeMedian':1.07,'inputs.alone.flickSizeP90':2.23,
-    'inputs.pairs.jumpsStrafingShare':.741,'inputs.pairs.pullsNearJumpShare':.104,'inputs.pairs.pullsStrafingShare':.584,'inputs.pairs.pullsAfterFlickShare':.027,
-    'inputs.pairs.flickToPullMedianMs':225,'inputs.all.strafeJumpPullsPerMin':27.5,'inputs.all.strafeJumpPullShare':.105,
+    'inputs.alone.mouseStillShare':.442,'inputs.alone.flickSizeMedian':1.08,'inputs.alone.flickSizeP90':2,
+    'inputs.pairs.jumpsStrafingShare':.741,'inputs.pairs.pullsNearJumpShare':.104,'inputs.pairs.pullsStrafingShare':.584,'inputs.pairs.pullsAfterFlickShare':.058,
+    'inputs.pairs.flickToPullMedianMs':200,'inputs.all.strafeJumpPullsPerMin':27.5,'inputs.all.strafeJumpPullShare':.105,
     blindShotShare:.4,botHitRate:'5%','byAimDistance.0-5':.25,'byAimDistance.5-10':.09,'byAimDistance.10-15':.1,'byAimDistance.15-20':.08,
     'byAimDistance.20-30':.1,'byAimDistance.30-45':.1,'byAimDistance.45-70':.1,'byAimDistance.70+':.05};
 const {values}=parseArgs({options:{assignment:{type:'string',default:'all'},seeds:{type:'string',default:'3'},'first-seed':{type:'string',default:'1'},minutes:{type:'string',default:'4'},

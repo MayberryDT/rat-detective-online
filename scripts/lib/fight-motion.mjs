@@ -103,7 +103,8 @@ export function accumulate(g, w, a, { skips = [], shots = [] } = {}) {
       let size = 0, end = aim[i][0];
       for (let k = i + 1; k < aim.length && aim[k][0] - aim[i][0] <= 2 * FLICK_MS; k++) { const turn = Math.abs(wrap(aim[k][1] - aim[i][1])); if (turn > size) { size = turn; end = aim[k][0]; } }
       g.flickSizes.push(size); flicks.push([aim[i][0], end]);
-      while (i + 1 < aim.length && aim[i + 1][0] - aim[i][0] < 2 * FLICK_MS) i++;
+      // The next flick may start 300 ms after this one did.
+      for (const start = aim[i][0]; i + 1 < aim.length && aim[i + 1][0] - start < 2 * FLICK_MS;) i++;
     }
   }
   // Shots in this window: accuracy and lead, in the air and on the ground; pulls during or just after a flick.
