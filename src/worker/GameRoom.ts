@@ -45,6 +45,9 @@ import {
 import { log } from './logging';
 import { RoomDiagnostics } from './RoomDiagnostics';
 import { ServerBotController } from './ServerBotController';
+import { JevClient, JEV_MODEL } from './bots/jevClient';
+import { JevMind } from './bots/jevMind';
+import { JevBudget, JEV_LEDGER } from './bots/jevBudget';
 import { botPersonality, createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { HEAT_CELL } from './HeatMap';
@@ -181,6 +184,13 @@ export class GameRoom extends DurableObject<Env> {
   private readonly awards = new RoundAwards();
   /** The city map's recorder (docs/city-map.md); built on first use from this room's world. */
   private cityRecorder: CityRecorder | null = null;
+  /** The Jev mind for this room's server bots, and the day's budget (docs/bot-overhaul.md, B4). */
+  private jevMind: JevMind | null = null;
+  private jevBudgetState: JevBudget | null = null;
+  private jevLogAt = 0;
+  /** Tests replace these: the TypeSafe key (a Worker secret) and the transport. */
+  private jevKey: () => string | undefined = () => this.env.TYPESAFE_API_KEY;
+  private jevFetch: typeof fetch = (input, init) => fetch(input, init);
   private readonly cityStore: CityStore;
   private sightQuery: { world: CANNON.World; query: SpatialRayQuery; refreshedAt: number } | null = null;
   private lastActiveAt = new Map<string, number>();
@@ -397,7 +407,7 @@ export class GameRoom extends DurableObject<Env> {
       if (rosterChanged || !this.serverBots) this.activatePersistentBots();
       this.activateCompanion();
     } else {
-      this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined;
+      this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined; this.updateJev(this.now());
       if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; this.cityRecorder?.flush(this.now(), true); }
       if (this.chaos && wasRunning) this.checkpointGame();
       this.nextBotHeartbeat = 0;
@@ -454,7 +464,36 @@ export class GameRoom extends DurableObject<Env> {
           if (!this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) return;
           this.handleShoot(id, { type: 'shoot', shotId: crypto.randomUUID(), origin, direction });
         },
-      }, id => { const bot = this.botRoster.find(entry => entry.id === id); return bot ? botPersonality(bot.name) : 'tryhard'; });
+      }, id => { const bot = this.botRoster.find(entry => entry.id === id); return bot ? botPersonality(bot.name) : 'tryhard'; }, this.jev);
+  }
+
+  private get jev(): JevMind {
+    return this.jevMind ??= new JevMind({ waitUntil: work => this.ctx.waitUntil(work),
+      client: new JevClient({ key: () => this.jevKey(), model: this.env.JEV_MODEL || JEV_MODEL, fetch: (input, init) => this.jevFetch(input, init), clock: () => this.now() }) });
+  }
+
+  private get jevBudget(): JevBudget {
+    const ledger = () => this.env.MATCHMAKER.getByName(JEV_LEDGER), room = this.matchRoom ?? this.ctx.id.name ?? 'room';
+    return this.jevBudgetState ??= new JevBudget({ spend: (dollars, now) => ledger().jevSpend(room, dollars, now), read: now => ledger().jevBudget(now) },
+      work => this.ctx.waitUntil(work));
+  }
+
+  /** Jev thinks for the server bots only while a human is connected, the key is set and the day's budget is
+   * open; otherwise the code mind does, so the empty city costs nothing. Switching resets no bot or route.
+   * Spend is reported about every 30 s and whenever Jev switches off. */
+  private updateJev(now: number): void {
+    const jev = this.jevMind;
+    if (!jev) return;
+    let human = false;
+    if (this.serverBots && this.jevKey()) for (const id of this.players.keys()) if (!this.isManagedBot(id) && this.sessions.get(id)?.until == null) { human = true; break; }
+    const budget = this.jevBudget, on = human && budget.allows(now);
+    budget.add(jev.takeSpend());
+    budget.tick(now, jev.enabled && !on);
+    jev.enabled = on;
+    if (now < this.jevLogAt) return;
+    this.jevLogAt = now + 30_000;
+    const latencies = jev.takeLatencies().sort((a, b) => a - b);
+    if (on || latencies.length) log('info', 'jev', { on, ...jev.stats, latencyP50: latencies[Math.floor(latencies.length / 2)], latencyP90: latencies[Math.floor(latencies.length * .9)] });
   }
 
   private activatePersistentBots(): void {
@@ -1243,6 +1282,7 @@ export class GameRoom extends DurableObject<Env> {
     if (result.killed && shooter && shooter !== victim) this.awards.kill(shooter, victim, headshot);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
     this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming }, now);
+    if (this.isManagedBot(victim.id)) this.jevMind?.hit(victim.id, shooter?.id, now);
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
       respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{})});
@@ -1467,6 +1507,7 @@ export class GameRoom extends DurableObject<Env> {
       const now=this.now(), tickStart=performance.now();
       this.diagnostics.event(now);
       this.processLiveDeadlines(now);
+      this.updateJev(now);
       const gapMs=Math.max(0,now-this.chaosLast);
       let steps=0;
       this.chaosAccumulator+=Math.min(.2,gapMs/1000);this.chaosLast=now;

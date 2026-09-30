@@ -10,7 +10,8 @@ import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} fro
 import {LAUNCH_DRIFT_DECAY} from '../shared/launcherVelocity';
 import {guardFastFall,touchingSlick} from '../shared/ratSurfaces';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
-import type {Personality} from '../shared/bots/intent';
+import type {Mind,Personality} from '../shared/bots/intent';
+import type {GoalContext} from '../shared/bots/goals';
 import type {WorldSpec} from '../shared/worldSpec';
 
 export interface ServerBotCallbacks {
@@ -62,8 +63,9 @@ export class ServerBotController {
     private looseCasePosition?:Vec3Data;
 
     /** `personality` names each bot's hidden personality, looked up whenever the bot is (re)placed, since a
-     * slot's rat and name can change between rounds. Default: every bot a tryhard. */
-    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks,private readonly personality:(id:string)=>Personality=()=>'tryhard'){
+     * slot's rat and name can change between rounds. Default: every bot a tryhard. `mind` answers before the
+     * code mind for every bot (the room's Jev mind); it switches on and off without resetting a bot. */
+    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks,private readonly personality:(id:string)=>Personality=()=>'tryhard',mind?:Mind<GoalContext>){
         this.world.broadphase=new StaticCityBroadphase(this.world);
         this.world.broadphase.useBoundingBoxes=true;
         this.world.collisionMatrix=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
@@ -97,7 +99,7 @@ export class ServerBotController {
             body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
             body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
             body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
-            this.bots.set(id,{id,body,brain:new RatBot(sharedNavigation,index++,Math.random),facing:0,initialized:false,alive:false,
+            this.bots.set(id,{id,body,brain:new RatBot(sharedNavigation,index++,Math.random,{mind}),facing:0,initialized:false,alive:false,
                 normalJump:false,zoneHop:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,driftX:0,driftZ:0,
                 strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0,pocketAt:0,pocketX:0,pocketZ:0,progressMark:0});
         }

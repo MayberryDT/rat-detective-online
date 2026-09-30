@@ -4,6 +4,9 @@ import type {Vec3Data} from '../networkProtocol';
  * goal scores pass through the cast, and code turns the chosen goal into a Plan the motor runs every tick.
  * Firing is not a goal: the motor fires whenever it has a shot, within the skill dials. */
 
+/** Raised by every change to the minds, questions, weights or dials; stamped on city facts next to `layoutVersion`. */
+export const MIND_VERSION=1;
+
 /** Where to go and what to do there. Code offers only the goals valid for this rat right now. */
 export const GOALS=['take-case','chase-carrier','keep-case','hold-zone','hunt','flee','heal','arm-up','ambush','mischief','roam'] as const;
 export type Goal=typeof GOALS[number];
@@ -45,6 +48,8 @@ export interface MindAnswer {
     danger?:number;
     /** Probability that a bank shot is the way to reach the target. */
     bank?:number;
+    /** A Jev answer's cost and timing, for the recorder. */
+    jev?:{latencyMs:number;tokens:number;/** When its situation was sent. */sentAt:number};
 }
 
 /** Answers for one rat from a decision context. A mind that thinks asynchronously (Jev) returns its latest

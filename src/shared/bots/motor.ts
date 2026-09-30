@@ -134,6 +134,8 @@ export class BotMotor {
     get ringing():boolean{return !!this.bell;}
     /** The genuine cases seen this tick. */
     get genuineCases():readonly CaseEntry[]{return this.cases;}
+    /** The rat last shot at while in sight, where and when: a bank shot's quarry once it hides. */
+    get sighted():Readonly<{id:string;p:Vec3Data;at:number}>|undefined{return this.sighting;}
     reset(): void {
         this.jumpTravel=undefined;this.jumpProbeAt=0;this.approach=undefined;this.approachAt=0;this.maneuver.reset();this.attention.reset();this.protectedVisible=[];this.visible=[];this.caseAim=false;this.zoneHolding.reset();
         this.assignmentActive=false;
@@ -440,7 +442,11 @@ export class BotMotor {
                 x=len?sx/len*6:0;z=len?sz/len*6:0;
             }
         }
-        if(this.tactics.bank&&visibleTarget&&target&&!casePoint)this.sighting={id:target.id,p:{x:target.x,y:target.y,z:target.z},at:now};
+        // Every rat remembers its quarry (a mind may ask for a bank shot); only `tactics.bank` shoots at it.
+        if(visibleTarget&&target&&!casePoint){
+            const seen=this.sighting??={id:target.id,p:{x:0,y:0,z:0},at:now};
+            seen.id=target.id;seen.p.x=target.x;seen.p.y=target.y;seen.p.z=target.z;seen.at=now;
+        }
         const mischief=this.tactics.mischief&&!holdingZone&&!dispatchReady?this.mischiefTarget(now,self,state,clearControl):undefined;
         const combat=this.combat.step(now,self,target,visibleTarget,now>=this.shotAt&&!dispatchReady&&!mischief,casePoint,target?this.attention.acquisitionCost(self,target,initialFacing):0);
         if(combat.aim)facing=Math.atan2(combat.aim.x-self.x,combat.aim.z-self.z);

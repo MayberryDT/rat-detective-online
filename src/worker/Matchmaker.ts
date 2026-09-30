@@ -10,6 +10,7 @@ import {
   type CompanionRoomPublication,
   type CompanionStatusEnvelope,
 } from '../shared/companionStatus';
+import { utcDay, type JevBudgetStatus } from './bots/jevBudget';
 
 const COMPANION_TOMBSTONE_RETENTION_MS = 24 * 60 * 60_000;
 
@@ -37,6 +38,7 @@ export class Matchmaker extends DurableObject<Env> {
       ctx.storage.sql.exec('ALTER TABLE companion_summaries ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
     }
     ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS companion_fresh ON companion_summaries(pool, active, expires_at, name)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS jev_spend (day TEXT NOT NULL, room TEXT NOT NULL, dollars REAL NOT NULL, PRIMARY KEY (day, room))');
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -101,6 +103,23 @@ export class Matchmaker extends DurableObject<Env> {
     // A stale availability hint can only cause an extra probe: GameRoom owns
     // admission and never trusts the directory count to grant a slot.
     this.ctx.storage.sql.exec('UPDATE rooms SET checked = 0, slots = ? WHERE name = ?',slots,name);
+  }
+
+  /** The Jev budget ledger (only the instance named `jev-budget`): a room's spend added to its UTC day.
+   * Earlier days are pruned. The cap is `JEV_DAILY_BUDGET_USD`; unset or invalid means no Jev at all. */
+  jevSpend(room: string, dollars: number, now: number): JevBudgetStatus {
+    const day = utcDay(now);
+    this.ctx.storage.sql.exec('DELETE FROM jev_spend WHERE day < ?', day);
+    if (Number.isFinite(dollars) && dollars > 0) this.ctx.storage.sql.exec(
+      'INSERT INTO jev_spend (day, room, dollars) VALUES (?, ?, ?) ON CONFLICT (day, room) DO UPDATE SET dollars = dollars + excluded.dollars', day, room, dollars);
+    return this.jevBudget(now);
+  }
+
+  jevBudget(now: number): JevBudgetStatus {
+    const day = utcDay(now), cap = Number(this.env.JEV_DAILY_BUDGET_USD);
+    const total = this.ctx.storage.sql.exec<{ total: number | null }>('SELECT SUM(dollars) AS total FROM jev_spend WHERE day = ?', day).one().total ?? 0;
+    const limit = Number.isFinite(cap) && cap > 0 ? cap : 0;
+    return { day, total, cap: limit, capped: total >= limit };
   }
 
   /** Public GameRooms publish here; companion reads never fan out to gameplay DOs. */

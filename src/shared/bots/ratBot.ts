@@ -66,7 +66,7 @@ export class RatBot {
         const living=rats.filter(p=>p.id!==self.id&&p.hp>0);
         const carrying=cases.some(c=>c.value.owner===self.id);
         const carriers=living.filter(p=>cases.some(c=>c.value.owner===p.id)).sort((a,b)=>distance(self,a)-distance(self,b));
-        const input:GoalInput={now,self,state,cases,living,carriers,carrying,ownershipChanged,clear,personality};
+        const input:GoalInput={now,self,state,cases,living,carriers,carrying,ownershipChanged,trigger,clear,personality};
         const available=this.goals.takeable(input);
         // The mind's preferred target arrives with its answer, so it steers the motor from the next decision.
         this.motor.perceive(now,self,living,carriers,state,clear,clearControl,carrying||!!available&&distance(self,available.value.p)<24,this.last?.answer.target);

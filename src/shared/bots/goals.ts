@@ -26,6 +26,8 @@ export interface GoalInput {
     carrying:boolean;
     /** A case changed hands (or started or stopped returning) this tick. */
     ownershipChanged:boolean;
+    /** Why the decision is taken now: an event (a case changed hands, a goal failed, the assignment moved on) or the beat. */
+    trigger:'beat'|'event';
     clear:(p:Vec3Data)=>boolean;
     /** Gremlins look further for alarm pillars. */
     personality:Personality;
@@ -43,6 +45,8 @@ export interface GoalContext extends GoalInput {
     available?:CaseEntry;
     /** The rat to fight. */
     combat?:PlayerData;
+    /** The rat the motor last shot at while it was in sight, where and when (bank shots). */
+    sighting?:Readonly<{id:string;p:Vec3Data;at:number}>;
     /** A useful pickup on the way (or an emergency medkit). */
     pickup?:PickupState;
     /** A mapped Ironclad site worth an occasional trip. */
@@ -232,7 +236,7 @@ export class BotGoals {
             }
             return true;
         });
-        const ctx:GoalContext={...input,active,visible,carrier,available,combat,pickup,armor,pillars,delivery,
+        const ctx:GoalContext={...input,active,visible,carrier,available,combat,sighting:motor.sighted,pickup,armor,pillars,delivery,
             intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,escape,offered:[],memo:{},
             places:goal=>(ctx.memo.options??={})[goal]??=this.placeOptions(goal,ctx)};
         ctx.offered=GOALS.filter(goal=>this.offers(goal,ctx));
