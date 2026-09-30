@@ -84,7 +84,7 @@ export class StreetLightPool {
             const mesh=near[i]!,p=mesh.position;near[i]=undefined;
             // Carried at the head like yours, along the way the rat faces.
             this.view.set(0,0,-1).applyQuaternion(mesh.quaternion);
-            light.position.set(p.x,p.y+2,p.z);light.target.position.copy(p).addScaledVector(this.view,15);
+            light.position.set(p.x,p.y+2,p.z);light.target.position.copy(p).addScaledVector(this.view,template.distance).setY(p.y+1);
             light.color.copy(template.color);light.distance=template.distance;light.angle=template.angle;
             light.penumbra=template.penumbra;light.decay=template.decay;light.intensity=intensity;
         }
