@@ -48,7 +48,8 @@ function playBuffer(buffer: AudioBuffer, volume: number, pitch = 1): void {
     source.start();
 }
 
-export function playDelayedThud(origin?: Vec3Data): void {
+/** The Delayed Reaction thud; Big Cheese's heavy landings replay it lower (`pitch` under 1). */
+export function playDelayedThud(origin?: Vec3Data, pitch = 1): void {
     const ctx = context; if (!ctx || ctx.state !== 'running' || voices.size >= MAX_VOICES) return;
     // Preserve the separate Delayed Reaction thud as a short rendered buffer.
     if (!thudBuffer) {
@@ -59,7 +60,7 @@ export function playDelayedThud(origin?: Vec3Data): void {
             samples[i] = Math.sin(2 * Math.PI * (90 * t - 130 * t * t)) * Math.exp(-t * 28) * .16;
         }
     }
-    playBuffer(thudBuffer, distanceGain(origin));
+    playBuffer(thudBuffer, distanceGain(origin), pitch);
 }
 
 /** Bad Ammunition: a dud cartridge's feeble pop as the ball dribbles out. */

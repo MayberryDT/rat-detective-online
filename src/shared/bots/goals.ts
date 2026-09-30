@@ -64,7 +64,6 @@ export interface GoalContext extends GoalInput {
     delivery?:Post;
     intercept?:Post;
     zone?:Post&{early:boolean};
-    escape?:Post;
     offered:readonly Goal[];
     /** Candidate places for an open-ended goal (flee, ambush, roam, mischief), for a mind to pick an id from. */
     places(goal:Goal):readonly PlaceOption[];
@@ -98,7 +97,6 @@ export class BotGoals {
     private explorationAt=0;
     private deliveryKey='';
     private deliveryEntering=false;
-    private evadeAt=0;
     private fleeAt=0;
     private zonePostAt=0;
     private zonePost=0;
@@ -110,7 +108,7 @@ export class BotGoals {
     }
     reset():void {
         this.reflexSite=undefined;this.reflexUntil=0;this.supplyTripAt=0;this.dispatchGiveUpAt=0;this.dispatchDetour='';
-        this.deliveryKey='';this.deliveryEntering=false;this.evadeAt=0;this.fleeAt=0;this.zonePostAt=0;this.zonePost=0;
+        this.deliveryKey='';this.deliveryEntering=false;this.fleeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
     /** A new round, phase, delivery or zone: pick the zone post afresh. */
     newAssignment():void {this.zonePostAt=0;}
@@ -247,18 +245,10 @@ export class BotGoals {
             const approaches=JURISDICTION_ZONES[activeZone(jurisdiction)].approaches,post=approaches[this.zoneLane%approaches.length];
             if(distance(self,post)>5&&distance(self,post)+distance(post,carrier)<distance(self,carrier)+8&&!motor.suppressed(`intercept:${post.x},${post.z}`,post,now))intercept=jurisdictionTravelPoint(self,post);
         }
-        let escape:Post|undefined;
-        if(carrying&&assignment?.id==='closing-time'&&active){
-            if(motor.mode==='evade'&&motor.destination&&distance(self,motor.destination)>3&&now<this.evadeAt)escape={key:motor.key,point:motor.destination};
-            else {
-                const [place]=this.awayFrom(self,visible,now,'evade',1);
-                if(place){escape={key:place.key,point:place.point};this.evadeAt=now+(place.index<0?1000:2200);}
-            }
-        }
-        const goal=available?.value.p??(!carrying?carrier:undefined)??zone?.point??delivery?.point??escape?.point??(carrying&&active?combat:undefined);
+        const goal=available?.value.p??(!carrying?carrier:undefined)??zone?.point??delivery?.point??(carrying&&active?combat:undefined);
         const pickup=active&&goal?undefined:this.wantedPickup(state,self,now,input.clear);
         const ctx:GoalContext={...input,active,visible,carrier,available,combat,sighting:motor.sighted,pickup,armor,pillars,delivery,
-            intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,escape,offered:[],memo:{},
+            intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,offered:[],memo:{},
             places:goal=>(ctx.memo.options??={})[goal]??=this.placeOptions(goal,ctx)};
         ctx.offered=GOALS.filter(goal=>this.offers(goal,ctx));
         return ctx;
@@ -268,7 +258,7 @@ export class BotGoals {
         switch(goal){
         case 'take-case':return !!ctx.available;
         case 'chase-carrier':return !ctx.carrying&&!!ctx.carrier;
-        case 'keep-case':return !!(ctx.zone||ctx.delivery||ctx.escape||ctx.carrying&&ctx.active&&ctx.combat);
+        case 'keep-case':return !!(ctx.zone||ctx.delivery||ctx.carrying&&ctx.active&&ctx.combat);
         // Only the carrier scores in the zone: holding it is keeping the case.
         case 'hold-zone':return false;
         case 'hunt':return !!ctx.combat;
@@ -298,7 +288,6 @@ export class BotGoals {
         case 'keep-case':
             if(ctx.zone)return {goal,mode:ctx.zone.early?'delivery':'zone-hold',key:ctx.zone.key,destination:ctx.zone.point};
             if(ctx.delivery)return {goal,mode:'delivery',key:ctx.delivery.key,destination:ctx.delivery.point};
-            if(ctx.escape)return {goal,mode:'evade',key:ctx.escape.key,destination:ctx.escape.point};
             return ctx.carrying&&ctx.active&&ctx.combat?{goal,mode:'combat',key:`combat:${ctx.combat.id}`,destination:ctx.combat,follow:ctx.combat.id}:undefined;
         case 'hold-zone':return undefined;
         case 'hunt':return ctx.combat&&{goal,mode:'combat',key:`combat:${ctx.combat.id}`,destination:ctx.combat,follow:ctx.combat.id};
@@ -356,31 +345,31 @@ export class BotGoals {
         const options=nearby.filter(p=>p.score<=nearby[0].score+20).map(({index,point})=>({key:`explore:${index}`,index,point,what:where(self,point)}));
         return ctx.memo.explore={kept:false,options,choice:options.length?options[(m.wander+1)%options.length]:undefined};
     }
-    /** Where to run from the rats in sight (flee, and the Closing Time carrier's evade). */
+    /** Where to run from the rats in sight. */
     private fleePlaces(ctx:GoalContext):Place[] {
         if(ctx.memo.flee)return ctx.memo.flee;
         const {now,self,visible}=ctx,m=this.motor;
         if(m.mode==='evade'&&m.key.startsWith('flee:')&&m.destination&&distance(self,m.destination)>3&&now<this.fleeAt)
             return ctx.memo.flee=[{key:m.key,index:-1,point:m.destination,what:`where I was running, ${where(self,m.destination)}`}];
-        return ctx.memo.flee=this.awayFrom(self,visible,now,'flee',4);
+        return ctx.memo.flee=this.awayFrom(self,visible,now);
     }
-    /** Somewhere genuinely safer a real run away, nearest safest first, keyed `<prefix>:<index>`: an exploration
+    /** Somewhere genuinely safer a real run away, nearest safest first, keyed `flee:<index>`: an exploration
      * point `FLEE.near`–`FLEE.far` away (any floor a route can reach), preferably one further from the rats in
      * sight than the rat is now. With none, a few checked steps straight away from the nearest rat
-     * (`<prefix>:local`, index -1), only if they get somewhere. */
-    private awayFrom(self:Vec3Data,visible:readonly PlayerData[],now:number,prefix:'flee'|'evade',limit:number):Place[] {
+     * (`flee:local`, index -1), only if they get somewhere. */
+    private awayFrom(self:Vec3Data,visible:readonly PlayerData[],now:number):Place[] {
         const safety=(point:Vec3Data)=>visible.length?Math.min(...visible.map(p=>distance(point,p))):10;
         const here=safety(self);
         const candidates=this.places.map((point,index)=>({point,index,d:distance(self,point),safe:safety(point)}))
-            .filter(({point,index,d})=>d>=FLEE.near&&d<=FLEE.far&&Math.abs(point.y-self.y)<FLEE.levels&&!this.motor.suppressed(`${prefix}:${index}`,point,now));
+            .filter(({point,index,d})=>d>=FLEE.near&&d<=FLEE.far&&Math.abs(point.y-self.y)<FLEE.levels&&!this.motor.suppressed(`flee:${index}`,point,now));
         const safer=candidates.filter(c=>!visible.length||c.safe>=here+FLEE.safer);
-        const places=(safer.length?safer:candidates).sort((a,b)=>(b.safe-b.d*.35)-(a.safe-a.d*.35)).slice(0,limit)
-            .map(({point,index})=>({key:`${prefix}:${index}`,index,point,what:`away from the fight, ${where(self,point)}`}));
+        const places=(safer.length?safer:candidates).sort((a,b)=>(b.safe-b.d*.35)-(a.safe-a.d*.35)).slice(0,4)
+            .map(({point,index})=>({key:`flee:${index}`,index,point,what:`away from the fight, ${where(self,point)}`}));
         if(!places.length&&visible[0]&&this.navigation.localStep){
             const threat=visible[0],dx=self.x-threat.x,dz=self.z-threat.z,d=Math.hypot(dx,dz)||1;
             let point:Vec3Data=self;
             for(let i=0;i<4;i++)point=this.navigation.localStep(point,{x:point.x+dx/d*8,y:point.y,z:point.z+dz/d*8})??point;
-            if(distance(self,point)>=FLEE.local)places.push({key:`${prefix}:local`,index:-1,point,what:'a run straight away from the nearest rat'});
+            if(distance(self,point)>=FLEE.local)places.push({key:'flee:local',index:-1,point,what:'a run straight away from the nearest rat'});
         }
         return places;
     }

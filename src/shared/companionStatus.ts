@@ -5,7 +5,7 @@ export const COMPANION_DEFAULT_PAGE_SIZE = 16;
 export const COMPANION_MAX_PAGE_SIZE = 32;
 export const COMPANION_FRESHNESS_MS = 75_000;
 
-export type CompanionObjectiveUnit = 'deliveries' | 'seconds' | 'case-kills' | 'last-holder';
+export type CompanionObjectiveUnit = 'deliveries' | 'seconds' | 'case-kills';
 
 export interface CompanionLocation {
   id: string;
@@ -16,7 +16,6 @@ export interface CompanionAssignment {
   id: AssignmentId;
   title: string;
   phase: 'briefing' | 'active' | 'suspended' | 'closed';
-  remainingMs: number | null;
   clockRunning: boolean;
   objectiveTarget: number | null;
   objectiveUnit: CompanionObjectiveUnit;
@@ -85,12 +84,11 @@ export function isCompanionRoomPublication(value: unknown): value is CompanionRo
   const assignment = room.assignment;
   if (!assignment || typeof assignment !== 'object' || Array.isArray(assignment)) return false;
   const a = assignment as Record<string, unknown>;
-  if (!['closing-time', 'chain-of-custody', 'excessive-force', 'jurisdiction'].includes(String(a.id)) ||
+  if (!['chain-of-custody', 'excessive-force', 'jurisdiction'].includes(String(a.id)) ||
       !text(a.title, 40) || !['briefing', 'active', 'suspended', 'closed'].includes(String(a.phase)) ||
-      !(a.remainingMs === null || finite(a.remainingMs) && a.remainingMs >= 0) ||
       typeof a.clockRunning !== 'boolean' ||
       !(a.objectiveTarget === null || finite(a.objectiveTarget) && a.objectiveTarget >= 0) ||
-      !['deliveries', 'seconds', 'case-kills', 'last-holder'].includes(String(a.objectiveUnit)) ||
+      !['deliveries', 'seconds', 'case-kills'].includes(String(a.objectiveUnit)) ||
       !(a.destination === null || location(a.destination)) || !(a.zone === null || location(a.zone)) ||
       !(a.nextZone === null || location(a.nextZone)) ||
       !(a.zoneRemainingMs === null || finite(a.zoneRemainingMs) && a.zoneRemainingMs >= 0)) return false;
@@ -106,7 +104,7 @@ export function isCompanionRoomPublication(value: unknown): value is CompanionRo
     if (!room.result || typeof room.result !== 'object' || Array.isArray(room.result)) return false;
     const result = room.result as Record<string, unknown>;
     if (!text(result.winnerId, 64) || !text(result.winnerName, 32) || !finite(result.at) || result.at < 0 ||
-        !['held', 'carried', 'kills', 'zone-held'].includes(String(result.method)) ||
+        !['carried', 'kills', 'zone-held'].includes(String(result.method)) ||
         typeof result.posthumous !== 'boolean') return false;
   }
   return true;

@@ -7,7 +7,7 @@ export const MESSAGE_BYTES = 16 * 1024;
 export const HIGHLIGHTS_ID_RE = /^[A-Za-z0-9._:-]{8,80}$/;
 
 export const TITLE_KEYS = [
-    'round-win', 'triple-kill', 'double-kill', 'paperwork-delivered', 'last-second-steal',
+    'round-win', 'triple-kill', 'double-kill', 'paperwork-delivered',
     'launcher-escape', 'spectacular-launch', 'local-chaos-death', 'visible-pileup',
     'manual-save', 'paperwork-in-orbit',
 ] as const;

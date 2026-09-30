@@ -6,7 +6,7 @@
 // Not a capacity or balance claim: no humans, no network.
 //
 // usage: node scripts/bot-sim.mjs [--assignment=all|<id>] [--seeds=3] [--first-seed=1] [--minutes=4] [--jobs=4] [--ref=<git rev>] [--json]
-//   --assignment  the assignment each room starts on; later ones follow the room's rotation (default: all four)
+//   --assignment  the assignment each room starts on; later ones follow the room's rotation (default: all three)
 //   --seeds       rooms per starting assignment, seeds first..first+N-1 (a second set of seeds is a fresh sample of the
 //                 same build: fight measures and guard rails move by chance between sets)
 //   --ref         build src/ from that commit instead of the working tree (A/B against older bots)

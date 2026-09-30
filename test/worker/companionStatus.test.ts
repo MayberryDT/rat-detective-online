@@ -69,30 +69,6 @@ describe('companion projection', () => {
     });
     expect(excessive.scores[0]).toMatchObject({ id: 'b', objectiveScore: 7 });
 
-    const closing = createAssignment('closing-time', now, 'closing-round');
-    closing.phase = 'active';
-    closing.remainingMs = 54_321;
-    const clock = projectCompanionRoom({ ...base, round: round(closing), assignment: closing });
-    expect(clock.assignment).toMatchObject({
-      remainingMs: 54_321, objectiveTarget: null, objectiveUnit: 'last-holder', clockRunning: true,
-    });
-    expect(projectCompanionRoom({
-      ...base, holderId: null, round: round(closing), assignment: closing,
-    }).assignment.clockRunning).toBe(false);
-    b.hp = 0;
-    expect(projectCompanionRoom({
-      ...base, round: round(closing), assignment: closing,
-    }).assignment.clockRunning).toBe(false);
-    b.hp = MAX_HP;
-    closing.phase = 'suspended';
-    expect(projectCompanionRoom({
-      ...base, round: round(closing), assignment: closing,
-    }).assignment.clockRunning).toBe(false);
-    closing.phase = 'closed';
-    expect(projectCompanionRoom({
-      ...base, round: round(closing), assignment: closing,
-    }).assignment.clockRunning).toBe(false);
-
     const jurisdiction = createAssignment('jurisdiction', now, 'zone-round', () => 0);
     jurisdiction.phase = 'active';
     jurisdiction.jurisdiction!.heldMs.a = 12_500;

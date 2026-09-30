@@ -2,6 +2,8 @@ import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SEL
 import { afterEach, describe, expect, it } from 'vitest';
 import { RECONNECT_GRACE_MS } from '../../src/shared/reconnect';
 import { createAssignment } from '../../src/shared/assignments';
+import { activeZone } from '../../src/shared/jurisdiction';
+import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { DEFAULT_ROOM_NAME, PROTOCOL_VERSION, WIN_DISPLAY_MS, type ServerMessage } from '../../src/shared/networkProtocol';
 import { BOT_HEARTBEAT_MS, type GameRoom } from '../../src/worker/GameRoom';
 import { readSocketMessage } from './socketMessages';
@@ -436,17 +438,19 @@ describe('canonical public city without humans', () => {
       expect(game.assignmentRotation.forced).toBeUndefined();
       const nextId = previousId === 'jurisdiction' ? 'excessive-force' : 'jurisdiction';
       game.assignmentRotation = {
-        remaining: [nextId, 'chain-of-custody', 'closing-time'].filter(id => id !== previousId),
+        remaining: [nextId, 'chain-of-custody'].filter(id => id !== previousId),
         last: previousId,
       };
       const started = Date.now();
       game.clock = () => started;
-      const assignment = createAssignment('closing-time', started, 'city-win');
+      const assignment = createAssignment('jurisdiction', started, 'city-win');
       assignment.phase = 'active';
       assignment.liveAt = started;
-      assignment.remainingMs = 1;
-      game.chaos.setAssignment(assignment);
+      const zone = assignment.jurisdiction!;
       const winner = game.players.get(game.botRoster[0].id)!;
+      zone.heldMs[winner.id] = 59_999;
+      Object.assign(winner, JURISDICTION_ZONES[activeZone(zone)].posts[0]);
+      game.chaos.setAssignment(assignment);
       game.chaos.caseBody.position.set(winner.x, winner.y + .8, winner.z);
       game.chaos.caseBody.velocity.setZero();
       game.chaos.step(0, started);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_HP } from '../../src/shared/networkProtocol';
 import { AssignmentRules } from '../../src/shared/AssignmentRules';
-import { ASSIGNMENT_IDS, ASSIGNMENT_TUNING, CHAIN_ROUTE, destinationPoint, destinationContains, ASSIGNMENT_DESTINATIONS, createAssignment, nextAssignment, parseAssignment, restoreAssignment, type AssignmentId, type AssignmentRotation } from '../../src/shared/assignments';
+import { ASSIGNMENT_IDS, CHAIN_ROUTE, destinationPoint, destinationContains, ASSIGNMENT_DESTINATIONS, createAssignment, nextAssignment, parseAssignment, restoreAssignment, type AssignmentId, type AssignmentRotation } from '../../src/shared/assignments';
 import { applyHit, createPlayer } from '../../src/worker/gameState';
 import { ChaosEncoder, ChaosDecoder } from '../../src/shared/chaosWire';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
@@ -28,26 +28,10 @@ describe('Dispatch assignment rules',()=>{
         const bag:AssignmentRotation={remaining:[]};nextAssignment(bag,()=>.1);
         const restored=JSON.parse(JSON.stringify(bag)) as AssignmentRotation;
         expect(nextAssignment(restored)).toBe(bag.remaining[0]);
-        restored.forced='closing-time';
-        expect(nextAssignment(restored)).toBe('closing-time');expect(nextAssignment(restored)).toBe('closing-time');
+        restored.forced='jurisdiction';
+        expect(nextAssignment(restored)).toBe('jurisdiction');expect(nextAssignment(restored)).toBe('jurisdiction');
         delete restored.forced;restored.remaining=[];
-        expect(nextAssignment(restored,()=>.9)).not.toBe('closing-time');
-    });
-    it('counts only living held time and keeps the final instant available to a thief',()=>{
-        const {rules,state,first,second}=fixture('closing-time');
-        rules.advance(0,119_999,first.id);expect(state.remainingMs).toBe(1);
-        rules.advance(119_999,130_000,null);expect(state.remainingMs).toBe(1);
-        first.hp=0;rules.advance(130_000,140_000,first.id);expect(state.remainingMs).toBe(1);
-        rules.advance(140_000,140_001,second.id);
-        expect(state.result).toMatchObject({winnerId:second.id,at:140_001,method:'held'});
-        rules.advance(140_001,150_000,first.id);expect(state.result?.winnerId).toBe(second.id);
-    });
-    it('does not count briefing, suspended time, or time without a participant',()=>{
-        const {rules,state}=fixture('closing-time');state.liveAt=2400;
-        rules.setPhase(0,false);rules.advance(0,2400,'a');expect(state.remainingMs).toBe(ASSIGNMENT_TUNING.processingMs);
-        rules.setPhase(2400,false);rules.advance(2400,3400,'a');
-        rules.setPhase(3400,true);rules.advance(3400,30_000,'a');expect(state.remainingMs).toBe(119_000);
-        rules.setPhase(30_000,false);rules.advance(30_000,31_000,'disconnected');expect(state.remainingMs).toBe(119_000);
+        expect(nextAssignment(restored,()=>.9)).not.toBe('jurisdiction');
     });
     it('awards personal delivery points through theft and ends only at three for one rat',()=>{
         const {rules,state,first}=fixture('chain-of-custody'),route=[...state.destinations];
@@ -119,7 +103,7 @@ describe('Dispatch assignment rules',()=>{
         rules.kill('a','a',7);expect(state.caseKills.a).toBe(2);
     });
     it('records actual kills and never ends an assignment at the legacy kill limit',()=>{
-        const {first,second,players}=fixture('closing-time');first.kills=19;
+        const {first,second,players}=fixture('jurisdiction');first.kills=19;
         const result=applyHit(players,first.id,second.id,MAX_HP,false,first.id,true);
         expect(result).toMatchObject({killed:true,roundWon:false});expect(first.kills).toBe(20);
     });
@@ -140,7 +124,7 @@ describe('Dispatch assignment rules',()=>{
     it('validates objective variants and strips unrelated state',()=>{
         const {state}=fixture('excessive-force');
         expect(parseAssignment({...state,unexpected:'discard'})).toEqual(state);
-        for(const bad of [{remainingMs:Infinity},{deliverySerial:3},{destinations:['records-intake','records-intake']},{phase:'closed'},{caseKills:{a:11}},{caseKills:{a:-1}},{caseKills:{a:NaN}},{caseKills:{a:10}},{id:'misfiled-evidence'},{id:'deathmatch'}])expect(parseAssignment({...state,...bad})).toBeNull();
+        for(const bad of [{deliverySerial:3},{destinations:['records-intake','records-intake']},{phase:'closed'},{caseKills:{a:11}},{caseKills:{a:-1}},{caseKills:{a:NaN}},{caseKills:{a:10}},{id:'misfiled-evidence'},{id:'closing-time'},{id:'deathmatch'}])expect(parseAssignment({...state,...bad})).toBeNull();
     });
     it('retains attributed deliveries on restore and starts a fresh Chain for old shared stamps',()=>{
         const {rules,state}=fixture('chain-of-custody');rules.visit('a',destinationPoint(state.destinations[0],false),1);
@@ -150,12 +134,18 @@ describe('Dispatch assignment rules',()=>{
         const legacy={...old,stamps:4};expect(parseAssignment(legacy)).toBeNull();
         expect(restoreAssignment(legacy,5000)).toMatchObject({id:'chain-of-custody',phase:'briefing',deliveries:{},deliverySerial:0});
     });
-    it('upgrades only persisted old assignments and preserves already accumulated held time',()=>{
-        const {caseKills:_,...old}=createAssignment('closing-time',0);
-        const legacy={...old,phase:'active',remainingMs:40_000,claimant:null};
-        expect(parseAssignment(legacy)).toBeNull();
-        expect(restoreAssignment(legacy,5000)).toMatchObject({id:'closing-time',remainingMs:115_000,caseKills:{}});
-        expect(restoreAssignment({...legacy,id:'misfiled-evidence',remainingMs:0},5000)).toMatchObject({id:'excessive-force',phase:'briefing',caseKills:{},destinations:[]});
+    it('turns a persisted retired assignment into a fresh valid round of a current mode',()=>{
+        const {state}=fixture('excessive-force');
+        const closing={...state,id:'closing-time',remainingMs:40_000};
+        const closed={...closing,phase:'closed',remainingMs:0,result:{winnerId:'a',winnerName:'Inspector Brie',at:1,method:'held',posthumous:false}};
+        for(const saved of [closing,closed]){
+            const restored=restoreAssignment(saved,5000)!;
+            expect(ASSIGNMENT_IDS).toContain(restored.id);expect(parseAssignment(restored)).toEqual(restored);
+            expect(restored).toMatchObject({phase:'briefing',revealedAt:5000,caseKills:{}});
+            expect(restored.roundId).not.toBe(state.roundId);expect(restored.result).toBeUndefined();
+        }
+        const {caseKills:_,...old}=state;
+        expect(restoreAssignment({...old,id:'misfiled-evidence',claimant:null},5000)).toMatchObject({id:'excessive-force',phase:'briefing',caseKills:{},destinations:[]});
     });
     it('round-trips every assignment over both compact modes and ordinary snapshots',()=>{
         const sim=new ChaosSimulation(new Map(),()=>{});

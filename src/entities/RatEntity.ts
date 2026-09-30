@@ -41,6 +41,10 @@ const OUTLINE_COLOR = 0xaebfd6;
 const OUTLINE_PIXELS = 1.5;
 const OUTLINE_NEAR = 16, OUTLINE_FAR = 45;
 const EMISSIVE_INTENSITY = 0.28;  // Rat-only lift; lamps still model the hat and coat
+/** Blackout 0…1, shared by every rat: the fill light and far outline go out (only flashlights show a rat),
+ * and your own rat keeps a thin pale black-and-white edge. */
+export const RAT_BLACKOUT = { value: 0 };
+const SELF_OUTLINE = 0xd4d4d4, SELF_OUTLINE_OPACITY = 0.55;
 /** The Hunch: occluded parts of a rat drawn as a pale boiling pencil sketch.
  * One time uniform shared by every rat; materials stay per rat for disposal. */
 const HUNCH_TIME={value:0};
@@ -118,6 +122,8 @@ export class RatEntity {
     /** The rig's bound centre (rig space), placed in the world each frame for the sketch's culling. */
     private readonly sketchCenter=new THREE.Vector3();
     private readonly shellOffset={value:0};
+    /** The Blackout level last applied to this rat's fill and outline. */
+    private blackout=0;
 
     // State
     public hp: number = MAX_HP;
@@ -129,7 +135,7 @@ export class RatEntity {
     public get isPlayer(): boolean { return this.localPlayer; }
     public set isPlayer(value: boolean) {
         this.localPlayer = value;
-        if (this.glowMesh) this.glowMesh.visible = (!value || this.hustleRemaining>0) && !this.sharedDeath;
+        this.updatePowerupOutline();
     }
 
     // Combo tracking
@@ -421,6 +427,8 @@ export class RatEntity {
         if(!this.dead&&this.hp>0)this.animator.playReaction(event,strength);
     }
 
+    /** Big Cheese: this rat's pistol eases up to its chunky size, or back down. */
+    public setBigPistol(on:boolean):void {this.animator.bigPistol=on;}
     /** Durations are relative to the latest authoritative snapshot, then expire locally. */
     public setPowerups(ironcladSeconds:number,hustleSeconds:number,stakeoutSeconds:number):void {
         const silver=this.ironcladRemaining>0;
@@ -445,10 +453,10 @@ export class RatEntity {
         this.updatePowerupOutline();
     }
     private updatePowerupOutline():void {
-        const pursuit=this.hustleRemaining>0&&!this.dead;
-        if(this.glowMaterial){this.glowMaterial.color.setHex(pursuit?0xff1605:OUTLINE_COLOR);this.glowMaterial.opacity=pursuit?.95:GLOW_OPACITY*this.outlineFade;}
+        const pursuit=this.hustleRemaining>0&&!this.dead,own=this.isPlayer&&!this.dead?this.blackout:0,far=this.isPlayer?0:this.outlineFade*(1-this.blackout);
+        if(this.glowMaterial){this.glowMaterial.color.setHex(pursuit?0xff1605:own>0?SELF_OUTLINE:OUTLINE_COLOR);this.glowMaterial.opacity=pursuit?.95:own>0?SELF_OUTLINE_OPACITY*own:GLOW_OPACITY*far;}
         this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
-        if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||!this.isPlayer&&this.outlineFade>.01);
+        if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||own>.01||far>.01);
     }
     private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=this.stakeoutRemaining=0;this.powerupEffects.clear();this.streakSmoke.clear();this.updatePowerupOutline();this.resetColor();}
 
@@ -467,6 +475,7 @@ export class RatEntity {
     /** Animate the current render root; remote presentation need not read physics. */
     public presentAlive(dt: number, previewSpeed?:number): void {
         if (this.dead) return;
+        if (this.blackout !== RAT_BLACKOUT.value) { this.blackout = RAT_BLACKOUT.value; if (this.flashTimer <= 0) this.resetColor(); this.updatePowerupOutline(); }
         this.billboard.update(dt);
         const p = this.mesh.position;
         if(this.freezeLeft>0){
@@ -675,10 +684,10 @@ export class RatEntity {
             if(m.envMap!==envMap){m.envMap=envMap;m.needsUpdate=true;}
             m.envMapIntensity=this.ironcladRemaining>0?1.6:orig.envMapIntensity;
             if(this.ironcladRemaining>0){
-                m.color.setHex(0xdce4ed).lerp(orig.color,this.metalApplication/.28);m.emissive.setHex(0x9facbb);m.emissiveIntensity=.22;
+                m.color.setHex(0xdce4ed).lerp(orig.color,this.metalApplication/.28);m.emissive.setHex(0x9facbb);m.emissiveIntensity=.22*(1-this.blackout);
                 m.metalness=.88;m.roughness=.16;
             }else{
-                m.color.copy(orig.color);m.emissive.copy(orig.emissive);m.emissiveIntensity=orig.emissiveIntensity;
+                m.color.copy(orig.color);m.emissive.copy(orig.emissive);m.emissiveIntensity=orig.emissiveIntensity*(1-this.blackout);
                 m.metalness=orig.metalness;m.roughness=orig.roughness;
             }
         });

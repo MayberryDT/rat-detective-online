@@ -12,7 +12,7 @@ it.each(BOT_LAUNCH_LINKS)('uses the real $machine.id trigger and flight to conte
     const bot=createPlayer('bot','Roof Inspector',DEFAULT_APPEARANCE,{x:link.machine.pad.x,y:0,z:link.machine.pad.z+6});
     const human=createPlayer('human','Rooftop Camper',DEFAULT_APPEARANCE,link.landing);
     const players=new Map([[bot.id,bot],[human.id,human]]),sim=new ChaosSimulation(players,()=>{},undefined,spec);
-    const assignment=createAssignment('closing-time',now-3000);assignment.phase='active';sim.setAssignment(assignment);
+    const assignment=createAssignment('excessive-force',now-3000);assignment.phase='active';sim.setAssignment(assignment);
     sim.caseBody.position.set(human.x,human.y+.8,human.z);sim.step(0,now);expect(sim.caseHolderId).toBe(human.id);
     let shots=0,launched=false,landed=false,peak=0;
     const recover=vi.fn(),controller=new ServerBotController(spec,[bot.id],{

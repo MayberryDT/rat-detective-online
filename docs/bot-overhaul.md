@@ -192,7 +192,7 @@ Each step lists what it delivers and how it is proven.
 - **Built** (`src/worker/bots/perception.ts`, Worker-only, so the city's place names stay out of the client bundle):
   - a `Situation` object in words: the assignment's rule, standing and time pressure, me (place, level, HP as "3 of 5", buffs, carrying, hit a moment ago and by whom), the case, the zone, the drop-off, stocked pickups in sight, rats in view, a rat just gone behind cover, sounds heard, the Hunch and the Dispatch incident;
   - distances are run times at sprint speed ("right here", "a few steps", "a short run", "a long run", "across the city") with a compass direction and above/below; places are named without their coordinates (street, pier and quay names carry them, so they become "a north–south street in the west" and the like); no number reaches Jev except HP;
-  - rats in view are the motor's own (80 units and a clear ray, the rays that aim), not the recorder's 150; the Hunch (within 40 at full HP) and sounds (gunfire within 60, alarm pillars, launchers within 100) have fields of their own, and an unseen shooter gets no alias;
+  - rats in view are the motor's own (80 units, or the flashlight's 40 in a Blackout, and a clear ray, the rays that aim), not the recorder's 150; the Hunch (within 40 at full HP) and sounds (gunfire within 60, alarm pillars, launchers within 100) have fields of their own, and an unseen shooter gets no alias;
   - rats are `r1`… for one request only, nearest in view first; a chosen name is never read.
 
 ### B4. Jev mind

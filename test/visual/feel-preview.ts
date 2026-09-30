@@ -348,7 +348,7 @@ async function renderCues():Promise<string> {
         ['step metal',.35,a=>a.step('c','metal',.5,0)],['step wood',.3,a=>a.step('d','wood',.5,0)],
         ['rustle',.4,a=>a.rustle(.5)],['jostle',.25,a=>a.jostle(.5)],['squelch',.3,a=>a.squelch(.5,0)],
         ['whizz',.35,a=>a.whizz(.5,0)],['brass',.7,a=>a.brass(.5)],['sting case',.6,a=>a.sting('case',.5)],
-        ['sting delivery',1,a=>a.sting('delivery',.5)],['sting closing',1.3,a=>a.sting('closing',.5)]];
+        ['sting delivery',1,a=>a.sting('delivery',.5)]];
     const parts:Float32Array[]=[];
     for(const [,length,play] of cues){
         const context=new OfflineAudioContext(1,Math.ceil(rate*length),rate);

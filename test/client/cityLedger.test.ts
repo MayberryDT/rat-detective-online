@@ -70,14 +70,10 @@ describe('standings', () => {
     expect(s.get('x')!.progress).toBeCloseTo(.4);
   });
 
-  it('reads Jurisdiction in zone time, Closing Time as a share of case time, and no assignment as kills to 20', () => {
+  it('reads Jurisdiction in zone time and no assignment as kills to 20', () => {
     const j = createAssignment('jurisdiction', 0);
     j.jurisdiction!.heldMs = { x: 30_000 };
     expect(standings(['x'], { assignment: j }).get('x')!.progress).toBeCloseTo(.5);
-    const c = createAssignment('closing-time', 0);
-    const closing = standings(['x', 'y'], { assignment: c, possession: { x: 30, y: 10 } });
-    expect(closing.get('x')!.progress).toBeCloseTo(1);
-    expect(closing.get('y')!.progress).toBeCloseTo(1 / 3);
     expect(standings(['x'], { kills: { x: 10 } }).get('x')!.progress).toBeCloseTo(.5);
   });
 });

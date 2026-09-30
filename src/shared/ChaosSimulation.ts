@@ -10,7 +10,8 @@ import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from
 import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
 import { isReachableVehiclePosition } from './vehicleLayout';
-import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_LIFETIME, BALL_RADIUS } from './ballTuning';
+import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballTuning';
+import { bounceShot, bounces, cheeseBounce, growIn, shotGravity, shotLife } from './shotBallistics';
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
     COUNTERFEIT_IDS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState } from './chaosState';
@@ -689,7 +690,6 @@ export class ChaosSimulation {
             switch(a.id){
                 case 'chain-of-custody':return a.deliveries[id]??0;
                 case 'jurisdiction':return a.jurisdiction?.heldMs[id]??0;
-                case 'closing-time':return this.possession[id]??0;
                 case 'excessive-force':return a.caseKills[id]??0;
             }
         };
@@ -725,6 +725,8 @@ export class ChaosSimulation {
             }
         }
     }
+    /** The running Dispatch incident, if any. */
+    get activeIncident():IncidentId|undefined {return this.dispatch.phase==='active'?incidentInfo(this.dispatch.incident).id:undefined;}
     private incidentActive(id:IncidentId){return this.dispatch.phase==='active'&&incidentInfo(this.dispatch.incident).id===id;}
     private activate(owner?:string|null){
         if(this.dispatch.phase!=='ready')return;
@@ -1105,10 +1107,6 @@ export class ChaosSimulation {
     private ray(from:C.Vec3,to:C.Vec3,mask:number){
         return this.rayQuery.closest(from,to,mask);
     }
-    private nextCheeseRadius(current:number){
-        for(const radius of I.cheeseRadii)if(radius>current+.001)return radius;
-        return I.cheeseRadii[I.cheeseRadii.length-1];
-    }
     private unstickShot(shot:ChaosShot){
         const radius=shotRadius(shot),origin=vec(shot.p);
         for(const dir of [new C.Vec3(1,0,0),new C.Vec3(-1,0,0),new C.Vec3(0,1,0),new C.Vec3(0,-1,0),new C.Vec3(0,0,1),new C.Vec3(0,0,-1)]){
@@ -1119,14 +1117,10 @@ export class ChaosSimulation {
         }
         shot.p=data(origin);
     }
+    /** Big Cheese, a real world bounce: a step bigger (clear of the wall) and longer-lived. */
     private growShot(shot:ChaosShot){
-        if(!this.incidentActive('big-cheese'))return;
-        const next=this.nextCheeseRadius(shotRadius(shot));
-        if(next<=shotRadius(shot)+.001)return;
-        shot.radius=next;this.unstickShot(shot);
-    }
-    private reflect(shot:ChaosShot,normal:C.Vec3){
-        const v=vec(shot.v);v.vadd(normal.scale(-2*v.dot(normal)),v);v.scale(BALL_RESTITUTION,v);shot.v=data(v);return v;
+        const radius=shotRadius(shot);cheeseBounce(shot);
+        if(shotRadius(shot)>radius+.001)this.unstickShot(shot);
     }
     private recordRatHistory(now:number):void {
         for(const [id,player] of this.players){
@@ -1269,7 +1263,8 @@ export class ChaosSimulation {
         if(!this.incidentActive('delayed-reaction')){
             for(const shot of this.shots)if(shot.stuckUntil){shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);}
         }
-        if(!this.incidentActive('big-cheese')){
+        const heavy=this.incidentActive('big-cheese');
+        if(!heavy){
             for(const shot of this.shots)if((shot.radius??BALL_RADIUS)>BALL_RADIUS+.001){shot.radius=BALL_RADIUS;this.unstickShot(shot);}
         }
         this.stepIncidentEffects(now,playing);
@@ -1284,13 +1279,14 @@ export class ChaosSimulation {
         for(let i=this.shots.length-1;i>=0;i--){
             const shot=this.shots[i];shot.age+=dt;
             if(this.shotTriggers.has(shot.id)&&!this.shotStepped.has(shot)){this.shotStepped.add(shot);this.noteShot(shot,'first-step');}
-            if(shot.age>BALL_LIFETIME){this.finishShot(shot,'lifetime',{end:data(shot.p)});this.shots.splice(i,1);continue;}
+            if(shot.age>shotLife(shot)){this.finishShot(shot,'lifetime',{end:data(shot.p)});this.shots.splice(i,1);continue;}
             if(shot.stuckUntil){
                 if(now<shot.stuckUntil)continue;
                 shot.stuckUntil=undefined;this.unstickShot(shot);this.sound('unstick',shot.p);
             }
-            shot.v.y+=BALL_GRAVITY*dt;
+            if(heavy&&growIn(shot))this.unstickShot(shot);
             const radius=shotRadius(shot);
+            shot.v.y+=shotGravity(radius)*dt;
             const from=vec(shot.p),motion=vec(shot.v).scale(dt),to=from.vadd(motion);
             const travel=motion.length()||1;
             // Ordinary rounds skip their shooter; explosive debris can hit them.
@@ -1318,11 +1314,11 @@ export class ChaosSimulation {
                 const headshot=hit.shape===target.head;
                 const damage=headshot||(this.incidentActive('crossfire')&&shot.wallBounced)?MAX_HP:1;
                 // A dud just bonks off whoever it reaches.
-                if(shot.dud){this.reflect(shot,normal);this.impacts.push({p:data(point),n:data(normal),surface:false,scale:.6});continue;}
+                if(shot.dud){bounceShot(shot.v,normal,radius);this.impacts.push({p:data(point),n:data(normal),surface:false,scale:.6});continue;}
                 if((useRat?ratHit!.ironclad:hasIronclad(this.buffs,target.player.id,now))){
                     // A reflective coat, not a hit shield: keep the original shooter
                     // and finite budget, and never treat a rat contact as a wall bounce.
-                    this.reflect(shot,normal);
+                    bounceShot(shot.v,normal,radius);
                     this.impacts.push({p:data(point),n:data(normal),surface:false,scale:1.1,cue:'armor-clang'});
                     this.noteShot(shot,'ironclad-reflect',{victimId:target.player.id,point:data(hit.hitPointWorld),normal:data(normal),
                         compensated:useRat&&ratHit!.compensated,...(useRat?{rewindMs:ratHit!.rewindMs,targetDelta:ratHit!.targetDelta}:{})});
@@ -1376,7 +1372,10 @@ export class ChaosSimulation {
             }
             const firstWorld=target?.kind==='world'&&!shot.wallBounced;
             const delay=firstWorld&&this.incidentActive('delayed-reaction')&&!shot.delayed;
+            const impact=bounceShot(shot.v,normal,radius);
             if(target?.kind==='world')shot.wallBounced=true;
+            // A heavy ball rolling or resting on a surface is not bouncing: no event, growth, life, trigger or sound.
+            if(!bounces(impact,radius))continue;
             if(target?.kind==='world')this.noteShot(shot,'world-bounce',{point:data(hit.hitPointWorld),normal:data(normal)});
             if(target?.kind==='dispatch')this.noteShot(shot,'dispatch-contact',{point:data(hit.hitPointWorld),normal:data(normal)});
             if(target?.kind==='pressure')this.noteShot(shot,'pressure-contact',{point:data(hit.hitPointWorld),normal:data(normal)});
@@ -1386,16 +1385,14 @@ export class ChaosSimulation {
                 const pumped=this.pumpedBy.get(shot)??[];
                 if(!pumped.includes(target.machineId!)){pumped.push(target.machineId!);this.pumpedBy.set(shot,pumped);this.addPressure(target.machineId!,PRESSURE_TUNING.hit,true);}
             }
-            const v=this.reflect(shot,normal);
-            const radiusBefore=shotRadius(shot);
-            if(target?.kind==='world')this.growShot(shot);
+            if(heavy&&target?.kind==='world')this.growShot(shot);
             if(delay){
                 shot.delayed=true;
                 shot.stuckUntil=now+(I.delayedMin+Math.random()*(I.delayedMax-I.delayedMin))*1000;
                 this.impacts.push({p:data(point),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,cue:'thud'});
                 continue;
             }
-            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:shotRadius(shot)>radiusBefore?'grow' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,v.length())}:{})});
+            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:shotRadius(shot)>radius?'grow' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,Math.hypot(shot.v.x,shot.v.y,shot.v.z))}:{})});
         }
         // A corpse knocked into the harbour sinks out of sight (the case rule's line: y -9).
         for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -9||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
@@ -1595,7 +1592,7 @@ export class ChaosSimulation {
             }
         }
         const elapsed=Math.max(0,(Date.now()-s.time)/1000);
-        this.shots=s.shots.filter(shot=>shot.age+elapsed<BALL_LIFETIME).map(shot=>({...shot,p:{...shot.p},v:{...shot.v},age:shot.age+elapsed,
+        this.shots=s.shots.filter(shot=>shot.age+elapsed<shotLife(shot)).map(shot=>({...shot,p:{...shot.p},v:{...shot.v},age:shot.age+elapsed,
             radius:shot.radius??BALL_RADIUS,delayed:shot.delayed===true}));
         for(const c of s.corpses){
             if(c.expires<=Date.now())continue;

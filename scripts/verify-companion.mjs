@@ -24,7 +24,7 @@ async function status(query='') {
     assert.ok(room.players<=16 && room.humans<=room.players);
     assert.equal(room.scores.length,room.players);
     assert.ok(room.expiresAt>room.observedAt);
-    assert.ok(['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(room.assignment.id));
+    assert.ok(['chain-of-custody','excessive-force','jurisdiction'].includes(room.assignment.id));
   }
   assert.ok(!/resumeToken|resumeCredential|authorization/i.test(JSON.stringify(data)));
   return data;

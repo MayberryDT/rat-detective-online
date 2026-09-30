@@ -84,13 +84,11 @@ describe('case-first normal match bots',()=>{
         brain.step(3520,self,[self,near],s,()=>true,false,true);
         expect(brain.objective).not.toBe('delivery');expect(brain.objective).not.toBe('case');
     });
-    it('fights with the case in Excessive Force and keeps Closing Time mobile',()=>{
+    it('fights with the case in Excessive Force',()=>{
         const {brain,self,near}=fixture(),s=state('me');
         s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
         brain.step(3000,self,[self,near],s,()=>true,false,true);
         expect(brain.objective).toBe('combat');
-        s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';
-        brain.step(3010,self,[self,near],s,()=>true,false,true);expect(brain.objective).toBe('evade');
     });
     it('walks to the loose case while opportunistically shooting a visible enemy',()=>{
         const {brain,self,near}=fixture();
@@ -425,13 +423,6 @@ it('sprints along short flat navigation cells, slows at pickup, and does not bla
  brain.reset();s.case.p.x=4;
  for(let now=2000;now<8000;now+=100){const intent=act(brain,now,self,[self],s,()=>false,false,true);expect(Math.hypot(intent.x,intent.z)).toBeLessThanOrEqual(6.5+1e-9);expect(intent.shoot).toBeUndefined();}
 });
-it('takes the Closing case away from visible danger while still returning fire',()=>{
- const self=player('me',0),enemy=player('enemy',10),s=state('me');s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';
- const nav:MotorNavigation={route:vi.fn((_from,to)=>[to]),explorationTargets:()=>[{x:-25,y:0,z:0},{x:25,y:0,z:0}]};
- const brain=new RatBot(nav,1,()=>.5);
- expect(act(brain,1000,self,[self,enemy],s,()=>true,false,true).x).toBeLessThan(-RUNNING);expect(brain.objective).toBe('evade');
- expect(firstShot(brain,1020,2400,self,[self,enemy],s).shoot).toBeDefined();
-});
 it('intercepts a distant Chain carrier at the next landmark when already closer to it',()=>{
  const {brain,self,holder,navigation}=fixture(0),s=state('holder');s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';s.assignment.destinations=[...CHAIN_ROUTE];
  Object.assign(self,destinationPoint('icebox'));self.x-=8;holder.x=-100;holder.z=-100;
@@ -526,7 +517,7 @@ it('plans a bounded trip to mapped upstairs armor, then resumes work when claime
 
 it('pursues a rooftop carrier instead of taking a long armor detour',()=>{
     const {brain,self,holder}=fixture(),s=state('holder');holder.y=36;
-    s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';
+    s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:15,y:8.7,z:0}];
     brain.step(1000,self,[holder],s,()=>false,false,true);
     expect(brain.objective).toBe('carrier');
@@ -547,7 +538,7 @@ describe('assignment commitment',()=>{
   s.case.p.x=10;brain.step(1400,self,[],s,()=>true,false,true);expect(brain.goalKey).toBe('pickup:heal');
  });
  it('does not start a mapped roof excursion while a live assignment case is available',()=>{
-  const {brain,self}=fixture(),s=state();s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';s.case.p.x=100;
+  const {brain,self}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';s.case.p.x=100;
   s.pickups=[{id:'upper-armor',kind:'ironclad',x:15,y:8.7,z:0}];
   brain.step(1000,self,[],s,()=>false,false,true);expect(brain.objective).toBe('case');
   s.case.returningUntil=10000;brain.step(1400,self,[],s,()=>false,false,true);expect(brain.objective).toBe('pickup');
@@ -576,10 +567,5 @@ describe('assignment commitment',()=>{
   const {brain,self,holder}=fixture(0),s=state('holder');s.assignment=createAssignment('jurisdiction',0);s.assignment.phase='active';
   const j=s.assignment.jurisdiction!;j.remainingMs=5000;Object.assign(holder,JURISDICTION_ZONES[activeZone(j)].posts[0]);self.x=holder.x+70;self.z=holder.z;self.y=holder.y;
   brain.step(1000,self,[holder],s,()=>false,false,true);expect(brain.objective).toBe('carrier');
- });
- it('uses a supported escape with Closing Time instead of chasing an attacker when no patrol target is nearby',()=>{
-  const {brain,self,near,navigation}=fixture(),s=state('me');s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';navigation.localStep=vi.fn((_from,to)=>to);
-  brain.step(1000,self,[near],s,()=>true,false,true);expect(brain.objective).toBe('evade');
-  aimedNear(act(brain,1500,self,[near],s,()=>true,false,true).shoot,self,near);
  });
 });

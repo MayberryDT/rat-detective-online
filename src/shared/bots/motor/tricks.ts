@@ -1,5 +1,6 @@
 import {LAUNCH_MACHINES,PRESSURE_TUNING,type ChaosState} from '../../chaosState';
-import {BALL_GRAVITY,BALL_SPEED} from '../../ballTuning';
+import type {IncidentId} from '../../incidentCatalog';
+import {launchGravity,launchSpeed} from '../../shotBallistics';
 import {hasIronclad} from '../../pickups';
 import type {PlayerData,Vec3Data} from '../../networkProtocol';
 import type {MotorNavigation} from '../motor';
@@ -25,13 +26,13 @@ export class BotTricks {
     /** A bank shot at the rat last in sight, if it went behind cover moments ago nearby: a held solution, or
      * a fresh bounded attempt at most every `BANK.attemptMs`. */
     bank(now:number,self:Vec3Data,state:ChaosState|undefined,seen:{id:string;p:Vec3Data;at:number}|undefined,
-        protectedVisible:readonly PlayerData[],nav:MotorNavigation):Vec3Data|undefined {
+        protectedVisible:readonly PlayerData[],nav:MotorNavigation,incident?:IncidentId):Vec3Data|undefined {
         if(this.bankAim&&now<this.bankAim.until)return this.bankAim.point;
         this.bankAim=undefined;
         const ray=nav.ray;
         if(!seen||!ray||now<this.bankAt||now-seen.at>BANK.memoryMs||distance(self,seen.p)>BANK.range||hasIronclad(state?.buffs,seen.id,state?.time??now))return;
         this.bankAt=now+BANK.attemptMs;
-        const point=bankShot({x:self.x,y:self.y+EYE,z:self.z},{x:seen.p.x,y:seen.p.y+.9,z:seen.p.z},ray,protectedVisible.map(p=>({x:p.x,y:p.y+1,z:p.z})));
+        const point=bankShot({x:self.x,y:self.y+EYE,z:self.z},{x:seen.p.x,y:seen.p.y+.9,z:seen.p.z},ray,protectedVisible.map(p=>({x:p.x,y:p.y+1,z:p.z})),incident);
         if(!point)return;
         this.bankAim={point,until:now+BANK.holdMs};
         return point;
@@ -40,12 +41,13 @@ export class BotTricks {
     /** A gremlin's chaos shot: a visible counterfeit with another rat beside it (never one close to this rat),
      * else the trigger of a launch machine that is not cooling while another rat stands on its pad. Ordinary
      * shots; the server decides what they do. */
-    mischief(now:number,self:Vec3Data,state:ChaosState|undefined,visible:readonly PlayerData[],clearControl:(p:Vec3Data)=>boolean):Vec3Data|undefined {
+    mischief(now:number,self:Vec3Data,state:ChaosState|undefined,visible:readonly PlayerData[],clearControl:(p:Vec3Data)=>boolean,incident?:IncidentId):Vec3Data|undefined {
         if(now<this.mischiefAt)return this.mischiefAim;
         this.mischiefAt=now+MISCHIEF.lookMs;this.mischiefAim=undefined;
         if(!state)return;
         const others=visible.filter(p=>p.hp>0);
-        const lob=(p:Vec3Data)=>{const travel=Math.hypot(p.x-self.x,p.z-self.z)/BALL_SPEED;return this.mischiefAim={x:p.x,y:p.y-BALL_GRAVITY*travel*travel/2,z:p.z};};
+        const speed=launchSpeed(incident),gravity=launchGravity(incident);
+        const lob=(p:Vec3Data)=>{const travel=Math.hypot(p.x-self.x,p.z-self.z)/speed;return this.mischiefAim={x:p.x,y:p.y-gravity*travel*travel/2,z:p.z};};
         for(const fake of state.extraCases??[]){
             const d=distance(self,fake.p);
             if(fake.fake&&d>MISCHIEF.safe&&d<MISCHIEF.range&&others.some(p=>distance(p,fake.p)<MISCHIEF.bait)&&clearControl(fake.p))return lob(fake.p);

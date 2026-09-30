@@ -13,7 +13,7 @@ const VALID_EPOCH = '99999999-8888-7777-6666-555555555555';
 
 function detector() {
     const d = new HighlightDetector();
-    d.welcome({localId: 'me', epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 0, owner: null, remainingMs: 20_000, assignmentId: 'chain-of-custody'});
+    d.welcome({localId: 'me', epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 0, owner: null});
     return d;
 }
 
@@ -45,35 +45,25 @@ describe('highlight detector', () => {
     it('attributes a fresh delivery serial and ignores silent welcome', () => {
         const d = detector();
         expect(d.onSnapshot({
-            epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 2, owner: 'me', remainingMs: null,
-            assignmentId: 'chain-of-custody', lastDeliveryPlayerId: 'me', launches: [], presentedAtMs: 50, silent: true,
+            epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 2, owner: 'me',
+            lastDeliveryPlayerId: 'me', launches: [], presentedAtMs: 50, silent: true,
         })).toEqual([]);
         const markers = d.onSnapshot({
-            epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 3, owner: 'me', remainingMs: null,
-            assignmentId: 'chain-of-custody', lastDeliveryPlayerId: 'me', launches: [], presentedAtMs: 80,
+            epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 3, owner: 'me',
+            lastDeliveryPlayerId: 'me', launches: [], presentedAtMs: 80,
         });
         expect(markers.map(m => m.kind)).toContain('paperwork-delivered');
-    });
-
-    it('emits a last-second steal only inside Closing Time', () => {
-        const d = new HighlightDetector();
-        d.welcome({localId: 'me', epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 0, owner: 'them', remainingMs: 4000, assignmentId: 'closing-time'});
-        const markers = d.onSnapshot({
-            epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 0, owner: 'me', remainingMs: 3000,
-            assignmentId: 'closing-time', launches: [], presentedAtMs: 20,
-        });
-        expect(markers.map(m => m.kind)).toContain('last-second-steal');
     });
 
     it('resets on epoch change instead of replaying history', () => {
         const d = detector();
         d.onSnapshot({
-            epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 1, owner: 'me', remainingMs: null,
-            assignmentId: 'chain-of-custody', lastDeliveryPlayerId: 'me', launches: [], presentedAtMs: 40,
+            epoch: VALID_EPOCH, roundId: VALID_ROUND, deliverySerial: 1, owner: 'me',
+            lastDeliveryPlayerId: 'me', launches: [], presentedAtMs: 40,
         });
         const markers = d.onSnapshot({
-            epoch: 'e2e2e2e2-e2e2-e2e2-e2e2-e2e2e2e2e2e2', roundId: 'r2r2r2r2-r2r2-r2r2-r2r2-r2r2r2r2r2r2', deliverySerial: 9, owner: 'me', remainingMs: null,
-            assignmentId: 'chain-of-custody', lastDeliveryPlayerId: 'me', launches: [], presentedAtMs: 50,
+            epoch: 'e2e2e2e2-e2e2-e2e2-e2e2-e2e2e2e2e2e2', roundId: 'r2r2r2r2-r2r2-r2r2-r2r2-r2r2r2r2r2r2', deliverySerial: 9, owner: 'me',
+            lastDeliveryPlayerId: 'me', launches: [], presentedAtMs: 50,
         });
         expect(markers).toEqual([]);
     });
@@ -100,7 +90,7 @@ describe('highlight detector', () => {
         d.noteLocalLaunch(1000, 0);
         expect(d.observePhysical({presentedAtMs: 3000, localY: 40, localLaunchedAtMs: 1000, localLaunchY: 0, corpses: []}).map(m => m.kind)).toContain('spectacular-launch');
         expect(d.onDeath({victimId: 'other', killerId: 'me', eventKey: 'death-1', presentedAtMs: 3100, local: false, localKill: true}).map(m => m.kind)).toContain('launcher-escape');
-        d.beginRound({epoch: 'e2e2e2e2-e2e2-e2e2-e2e2-e2e2e2e2e2e2', roundId: 'r2r2r2r2-r2r2-r2r2-r2r2-r2r2r2r2r2r2', deliverySerial: 0, owner: null, remainingMs: 20000, assignmentId: 'chain-of-custody'});
+        d.beginRound({epoch: 'e2e2e2e2-e2e2-e2e2-e2e2-e2e2e2e2e2e2', roundId: 'r2r2r2r2-r2r2-r2r2-r2r2-r2r2r2r2r2r2', deliverySerial: 0, owner: null});
         expect(d.onWin('me', 25000).map(m => m.kind)).toContain('round-win');
     });
 
@@ -139,7 +129,7 @@ describe('highlight protocol', () => {
         const d = detector();
         expect(HIGHLIGHTS_ID_RE.test(d.onWin('me', 1000)[0].roundId)).toBe(true);
         const empty = new HighlightDetector();
-        empty.welcome({localId: 'me', epoch: '', roundId: '', deliverySerial: 0, owner: null, remainingMs: null, assignmentId: ''});
+        empty.welcome({localId: 'me', epoch: '', roundId: '', deliverySerial: 0, owner: null});
         expect(HIGHLIGHTS_ID_RE.test(empty.onWin('me', 1)[0].roundId)).toBe(true);
     });
 });

@@ -22,12 +22,14 @@ export function createRatArm(coat:THREE.Material,highlight:THREE.Material):THREE
 /** The visible sleeve pivots here; weapon aiming keeps its existing independent rig. */
 export const RAT_GUN_SHOULDER=new THREE.Vector3(-.49,1.20,-.12);
 export type GunSleeveRig={shoulder:THREE.Object3D;sleeve:THREE.Object3D;arm:THREE.Object3D;pistol:THREE.Object3D};
+/** Where the cuff holds the pistol, in the pistol's frame. */
+export const RAT_PISTOL_GRIP=new THREE.Vector3(-.035,-.065,-.055);
 const sleeveTip=new THREE.Vector3(),sleeveForward=new THREE.Vector3(0,0,1);
 
 /** Keep the shoulder fixed in coat space while the cuff follows the actual pistol grip. */
 export function updateGunSleeve({shoulder,sleeve,arm,pistol}:GunSleeveRig):void {
     arm.updateMatrix();pistol.updateMatrix();
-    sleeveTip.set(-.035,-.065,-.055).applyMatrix4(pistol.matrix).applyMatrix4(arm.matrix).sub(shoulder.position);
+    sleeveTip.copy(RAT_PISTOL_GRIP).applyMatrix4(pistol.matrix).applyMatrix4(arm.matrix).sub(shoulder.position);
     const reach=Math.max(.001,sleeveTip.length());
     shoulder.quaternion.setFromUnitVectors(sleeveForward,sleeveTip.divideScalar(reach));
     // Straight cloth span changes slightly with the existing weapon motion. Its top

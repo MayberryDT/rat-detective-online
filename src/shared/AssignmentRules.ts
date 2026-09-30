@@ -28,20 +28,9 @@ export class AssignmentRules {
         if(phase!=='active'&&this.state.jurisdiction)this.state.jurisdiction.scorerId=null;
         if (phase !== this.state.phase) { this.state.phase = phase; this.state.revision++; }
     }
-    /** Only elapsed simulated held time counts. The caller divides intervals at
+    /** Only elapsed simulated zone time counts. The caller divides intervals at
      * actual incident deadlines; elapsed wall time while a room sleeps is absent. */
-    advance(from: number, to: number, holder: string | null): void {
-        if(this.state.id==='jurisdiction'){this.advanceJurisdiction(from,to,holder);return;}
-        if (!this.active || this.state.id !== 'closing-time' || this.closed) return;
-        const p = this.living(holder);
-        if (!p) return;
-        const start = Math.max(from, this.state.liveAt), elapsed = Math.max(0, to - start);
-        if (!elapsed) return;
-        const previous = this.state.remainingMs;
-        this.state.remainingMs = Math.max(0, previous - elapsed);
-        if (this.state.remainingMs <= .000001) { this.state.remainingMs = 0; this.close(p, start + previous, 'held'); }
-    }
-    private advanceJurisdiction(from:number,to:number,holder:string|null):void {
+    advance(from:number,to:number,holder:string|null):void {
         const s=this.state.jurisdiction;if(!s||!this.active||this.closed)return;
         let at=Math.max(from,this.state.liveAt),left=Math.max(0,to-at);
         const p=this.living(holder);

@@ -65,6 +65,6 @@ describe('whole-landmark destination guidance',()=>{
         expect(cue.x).toBeGreaterThan(0);expect(cue.x).toBeLessThan(1440);expect(cue.y).toBeGreaterThan(0);expect(cue.y).toBeLessThan(900);
     });
     it('shows no landmark guidance in the other assignments',()=>{
-        for(const id of ['closing-time','excessive-force'] as const)expect(assignmentGuidance(createAssignment(id,0),{x:0,y:3,z:0})).toBeUndefined();
+        expect(assignmentGuidance(createAssignment('excessive-force',0),{x:0,y:3,z:0})).toBeUndefined();
     });
 });

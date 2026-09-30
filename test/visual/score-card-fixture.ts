@@ -10,11 +10,11 @@ const id=isAssignmentId(selected)?selected:'chain-of-custody';
 if(query.has('touch'))document.body.classList.add('touch-mode');
 const hud=new DispatchHud(()=>{});
 hud.setScores(Array.from({length:5},(_,i)=>({id:i?'rat-'+i:'me',name:['Inspector Brie','Officer Cheddar','Sergeant Stilton','Agent Gouda','Detective Swiss'][i],kills:5-i,deaths:i})),'me');
-const a=createAssignment(id,0);a.phase='active';a.deliveries={me:1,'rat-1':2};a.caseKills={me:3,'rat-1':5};a.remainingMs=57000;
+const a=createAssignment(id,0);a.phase='active';a.deliveries={me:1,'rat-1':2};a.caseKills={me:3,'rat-1':5};
 const state={time:5000,assignment:a,dispatch:{phase:'rolling',started:4500,until:6900,serial:1,incident:'blackout'},case:{owner:null,p:{x:0,y:0,z:0}},possession:{}} as unknown as ChaosState;
 const report=document.createElement('output');report.style.cssText='position:fixed;bottom:12px;left:16px;z-index:99;color:#cabfd0;font:14px system-ui;max-width:90vw';document.body.appendChild(report);
 let checked=0;
-for(const mode of ['closing-time','chain-of-custody','excessive-force'] as const){
+for(const mode of ['chain-of-custody','excessive-force','jurisdiction'] as const){
  state.assignment=createAssignment(mode,0);
  for(const [phase,started,now] of [['ready',0,1000],['rolling',4500,5000],['active',5000,6000],['active',5000,7850],['cooldown',5000,9000]] as const){
   state.dispatch={phase,started,until:30000,serial:1,incident:'blackout'};hud.update(state,now);

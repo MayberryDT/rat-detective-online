@@ -117,7 +117,6 @@ export class RoundAwards {
             switch(assignment.id){
                 case 'chain-of-custody':return assignment.deliveries[player.id]??0;
                 case 'jurisdiction':return assignment.jurisdiction?.heldMs[player.id]??0;
-                case 'closing-time':return this.stats.get(player.id)?.caseSeconds??0;
                 case 'excessive-force':return assignment.caseKills[player.id]??0;
             }
         };

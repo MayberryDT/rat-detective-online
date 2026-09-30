@@ -24,6 +24,19 @@ export const INCIDENT_TUNING = {
     malpracticeScare: 7, malpracticeHop: 5, malpracticeHopMs: 650, malpracticeLeash: 12, malpracticeExplodeChance: .35,
     /** Rat Race: cheese flies this much faster. */
     ratRaceShotSpeed: 1.35,
+    /** Big Cheese: every rat fires at most once per `cheeseShotIntervalMs` (the room admits a shot up to
+     * `cheeseShotSlackMs` early, for network jitter). Balls launch at `cheeseShotSpeed` and swell from ordinary
+     * to `cheeseStartRadius` (a `cheeseRadii` step) over `cheeseGrowIn` s. A real world bounce, one whose normal
+     * speed beats `cheeseBounceMin`, grows the ball a step and adds `cheeseBounceLife` s of life, at most
+     * `cheeseMaxLife` s in all. At the largest radius gravity is `cheeseGravity`× and a bounce keeps
+     * `cheeseRestitution` of the normal and `cheeseTangent` of the tangential speed (ordinary: .9 of both). */
+    cheeseShotIntervalMs: 2000, cheeseShotSlackMs: 250, cheeseShotSpeed: 110, cheeseStartRadius: .52, cheeseGrowIn: .08,
+    cheeseBounceMin: 5, cheeseBounceLife: .5, cheeseMaxLife: 5, cheeseGravity: 2.2, cheeseRestitution: .35, cheeseTangent: .85,
+    /** Big Cheese juice: a ball of at least `cheeseShakeRadius` landing within `cheeseShakeRange` shakes the view
+     * up to `cheeseShake` (at most every `cheeseShakeMs`) with the thud pitched to `cheeseThudPitch`. Pistols grow
+     * `cheesePistolWidth`× thicker and `cheesePistolLength`× longer, easing at `cheesePistolRate` per second. */
+    cheeseShakeRadius: 1.24, cheeseShakeRange: 25, cheeseShake: .9, cheeseShakeMs: 250, cheeseThudPitch: .6,
+    cheesePistolWidth: 1.8, cheesePistolLength: 1.15, cheesePistolRate: 6,
 } as const;
 /** Planted Evidence: additional hazards, never objectives. Bursts share deathBurstBalls. */
 export const COUNTERFEIT_IDS = ['fake-01','fake-02','fake-03','fake-04','fake-05',
@@ -118,6 +131,8 @@ export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
 export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; radius?: number; stuckUntil?: number;
+    /** Seconds this ball lives when Big Cheese bounces extended it; absent is the ordinary lifetime. */
+    life?: number;
     /** Bad Ammunition dud: bounces off rats harmlessly. Authority-only; not on the wire. */
     dud?: true;
     /** Authoritative explosion provenance, retained in storage. Network visual

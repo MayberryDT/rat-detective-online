@@ -11,7 +11,8 @@ import { serializeMovement } from '../shared/movementWire';
 import { CHAOS_WIRE_MODE, prepareChaos, type PreparedChaos } from '../shared/chaosWire';
 import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import { serializeServerMessage } from './serializeServerMessage';
-import type { ChaosState } from '../shared/chaosState';
+import { INCIDENT_TUNING, type ChaosState } from '../shared/chaosState';
+import { ShotSpacing } from '../shared/shotTiming';
 import { GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
 import { drowned } from '../shared/city/kit/city';
 import { ASSIGNMENT_IDS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
@@ -214,6 +215,7 @@ export class GameRoom extends DurableObject<Env> {
   private readonly shotAcceptedAt = new Map<string, number>();
   private lastMovementBroadcast = new Map<string, { pose: MovementPose; at: number; stationary: boolean }>();
   private readonly rateLimiter = new RateLimiter();
+  private readonly shotSpacing = new ShotSpacing();
   private messagesIn = 0;
   private broadcasts = 0;
   private readonly pendingMovement=new Map<string,Extract<ServerMessage,{type:'playersMoved'}>['players'][number]>();
@@ -476,7 +478,7 @@ export class GameRoom extends DurableObject<Env> {
             meshRotation: { x: 0, y: Math.sin(facing / 2), z: 0, w: Math.cos(facing / 2) }, ...(look ? { aim: look } : {}) }, at);
         },
         shoot: (id, origin, direction) => {
-          if (!this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) return;
+          if (!this.admitShot(id)) return;
           this.handleShoot(id, { type: 'shoot', shotId: crypto.randomUUID(), origin, direction });
         },
         decide: (id, decision, now) => {
@@ -813,7 +815,7 @@ export class GameRoom extends DurableObject<Env> {
     if (message.type === 'shoot' || message.type === 'hit') this.lastInputAt.set(playerId, this.now());
 
     if (message.type === 'shoot') {
-      if (!this.rateLimiter.allow(`${playerId}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) {
+      if (!this.admitShot(playerId)) {
         this.diagnostics.shot('rateLimited');
         this.sendShotRejection(playerId,message.shotId,'rate-limited');
         return;
@@ -1215,6 +1217,14 @@ export class GameRoom extends DurableObject<Env> {
     return true;
   }
 
+  /** Every rat's trigger, human or bot: the shared rate ceiling, then the incident's fire interval
+   * (a little early is admitted, for network jitter). */
+  private admitShot(id: string): boolean {
+    const now = this.now();
+    return this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, now) &&
+      this.shotSpacing.allow(id, this.chaos?.activeIncident, now, INCIDENT_TUNING.cheeseShotSlackMs);
+  }
+
   private handleShoot(playerId: string, message: Extract<ClientMessage, { type: 'shoot' }>): void {
     const player = this.players.get(playerId);
     const reject=(reason:'dead'|'roundOver'|'implausible'|'duplicate')=>{
@@ -1525,7 +1535,7 @@ export class GameRoom extends DurableObject<Env> {
         for(const player of this.players.values()){Object.assign(player,createSafeSpawn(this.world));this.persistPlayer(player,true);}
       }
       const previous=saved?.assignment as {id?:string;destinations?:string[]}|undefined;
-      const retiredAssignment=previous?.id==='misfiled-evidence'||(previous?.id==='chain-of-custody'&&previous.destinations?.includes('icebox-check'));
+      const retiredAssignment=previous?.id==='misfiled-evidence'||previous?.id==='closing-time'||(previous?.id==='chain-of-custody'&&previous.destinations?.includes('icebox-check'));
       if(retiredAssignment){this.round=playingRound(this.now());this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");}
       this.chaos=new ChaosSimulation(this.players,hit=>{
         void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true,hit.headshot===true)

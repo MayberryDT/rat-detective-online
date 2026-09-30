@@ -1,7 +1,7 @@
 import {effectsOutput} from '../audio/PlayerAudioMix';
 
 export type Surface='pavement'|'water'|'metal'|'wood';
-export type Sting='case'|'delivery'|'closing';
+export type Sting='case'|'delivery';
 
 const MAX_VOICES=6;
 
@@ -208,14 +208,13 @@ export class FeelAudio {
         for(const [f,d] of [[1318.5,0],[1396.9,.03]])this.tone(filter,at+d,.9,'sawtooth',f,f*1.035,.22);
         this.tone(out,at,.25,'triangle',98,92,.5);
     }
-    /** Music stings: case pickup, your delivery, closing seconds. */
+    /** Music stings: case pickup, your delivery. */
     sting(kind:Sting,volume:number):void {
-        if(!this.allow(`sting:${kind}`,kind==='closing'?20:1.5))return;
+        if(!this.allow(`sting:${kind}`,1.5))return;
         const at=this.context.currentTime,out=this.out(volume,0,1.4);
         const filter=this.context.createBiquadFilter();filter.type='lowpass';filter.frequency.value=1800;filter.connect(out);
         if(kind==='case'){this.tone(filter,at,.18,'square',293.7,293.7,.25);this.tone(filter,at+.16,.32,'square',392,392,.25);}
-        else if(kind==='delivery'){for(const f of [196,246.9,293.7,392])this.tone(filter,at,.9,'sawtooth',f,f,.16);}
-        else for(let i=0;i<6;i++){this.tone(filter,at+i*.2,.12,'triangle',110,104,.4);this.tone(filter,at+i*.2+.1,.08,'square',880,860,.08);}
+        else for(const f of [196,246.9,293.7,392])this.tone(filter,at,.9,'sawtooth',f,f,.16);
     }
     /** Distant thunder: a slow low rumble. */
     thunder(volume:number):void {

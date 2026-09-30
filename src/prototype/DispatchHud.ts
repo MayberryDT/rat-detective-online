@@ -66,7 +66,6 @@ export class DispatchHud {
     observing=false;
     private scores:readonly ScoreEntry[]=[];
     private previousPoints=0;
-    private previousCountdown=-1;
     private confirmationUntil=0;
     private confirmation:HTMLElement;
     private stats:HTMLElement;
@@ -171,12 +170,12 @@ export class DispatchHud {
         if(a){
             const info=ASSIGNMENTS[a.id],destination=activeDestination(a);
             const newAssignment=a.roundId!==this.previousAssignment;
-            const j=a.jurisdiction,chain=a.id==='chain-of-custody',race=a.id==='excessive-force'||chain||!!j;
+            const j=a.jurisdiction,chain=a.id==='chain-of-custody';
             const target=j?JURISDICTION_TUNING.targetMs/1000:chain?ASSIGNMENT_TUNING.deliveryTarget:ASSIGNMENT_TUNING.caseKillTarget;
             const table=j?Object.fromEntries(Object.entries(j.heldMs).map(([id,ms])=>[id,ms/1000])):chain?a.deliveries:a.caseKills,rawPoints=table[this.myId]??0,points=Math.floor(rawPoints);
             if(newAssignment){
                 this.zoneSerial=j?.serial??-1;this.zoneWarning=j&&j.remainingMs<=JURISDICTION_TUNING.warningMs?j.serial:-1;
-                this.previousAssignment=a.roundId;this.previousDeliverySerial=a.deliverySerial;this.previousPoints=points;this.previousCountdown=-1;this.confirmationUntil=0;
+                this.previousAssignment=a.roundId;this.previousDeliverySerial=a.deliverySerial;this.previousPoints=points;this.confirmationUntil=0;
                 if(now<a.liveAt)this.feedback?.('dispatch');
                 this.assignmentReveal.classList.remove('assignment-arrival');void this.assignmentReveal.offsetWidth;this.assignmentReveal.classList.add('assignment-arrival');
                 this.assignmentPanel.classList.toggle('ui-ease',uiMotion('scoreMotion'));
@@ -196,7 +195,7 @@ export class DispatchHud {
             this.previousPoints=points;
             const score=this.scores.find(s=>s.id===this.myId);
             setText(this.stats,score?`TOTAL KILLS ${score.kills} · DEATHS ${score.deaths}`:'');
-            this.rankings.hidden=!race;this.destinationLabel.hidden=!chain&&!j;
+            this.destinationLabel.hidden=!chain&&!j;
             setText(this.destinationLabel,j?`${JURISDICTION_ZONES[activeZone(j)].label} · ${JURISDICTION_ZONES[activeZone(j)].floor}`:destination?`DELIVER TO: ${ASSIGNMENT_DESTINATIONS[destination].label}`:'');
             this.zoneNext.hidden=!j||j.remainingMs>JURISDICTION_TUNING.warningMs;
             if(j){
@@ -213,10 +212,10 @@ export class DispatchHud {
                 if(!newAssignment&&this.zoneSerial!==j.serial){this.feedback?.('dispatch');this.zoneSerial=j.serial;}
                 if(!newAssignment&&a.phase==='active'&&j.remainingMs<=JURISDICTION_TUNING.warningMs&&this.zoneWarning!==j.serial){this.feedback?.('countdown');this.zoneWarning=j.serial;}
             }
-            this.stats.hidden=chain||!race||!score;
+            this.stats.hidden=chain||!score;
             const leaders=this.scores.map(s=>({...s,points:table[s.id]??0})).sort((x,y)=>y.points-x.points||x.name.localeCompare(y.name)||x.id.localeCompare(y.id));
             const rank=leaders.findIndex(s=>s.id===this.myId)+1;
-            setText(this.leader,race&&rank>5?`YOU’RE #${rank} · ${points}/${target}`:'');
+            setText(this.leader,rank>5?`YOU’RE #${rank} · ${points}/${target}`:'');
             this.leader.hidden=!this.leader.textContent;
             const rankingSignature=JSON.stringify([a.id,this.myId,leaders.slice(0,5).map(s=>[s.id,s.name,Math.floor(s.points)])]);
             if(rankingSignature!==this.rankingSignature){
@@ -233,19 +232,14 @@ export class DispatchHud {
                 for(const id of this.rankRows.keys())if(!top.some(s=>s.id===id))this.rankRows.delete(id);
                 arrange(this.rankings,rows,'scoreMotion');
             }
-            setText(this.counter,(this.observing?'OBSERVING · ':'')+(race?`TOP FIVE · FIRST TO ${target}`:'HOLD IT AT ZERO!'));
+            setText(this.counter,(this.observing?'OBSERVING · ':'')+`TOP FIVE · FIRST TO ${target}`);
             scrawl(this.assignmentTitle,info.title);setText(this.assignmentRule,info.rule);
             scrawl(this.assignmentRevealTitle,info.title);setText(this.assignmentRevealRule,info.rule);setText(this.assignmentFlavor,info.flavor);
             let progress='',detail='',fraction=0;
             if(j){
                 progress=`YOU: ${points} / ${target}`;fraction=rawPoints/target;
                 detail=j.scorerId===this.myId?'SCORING':ownerIsLocal?'TAKE THE CASE TO THE ZONE':j.scorerId?'DISARM THE CARRIER':'GET THE CASE';
-            }else if(a.id==='closing-time'){
-                const seconds=Math.ceil(a.remainingMs/1000);
-                progress=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
-                detail=state.case.owner?`RUNNING · ${ownerIsLocal?'YOU':holder} HOLDING`:'PAUSED · CASE LOOSE';
-                fraction=1-a.remainingMs/ASSIGNMENT_TUNING.processingMs;
-            }else if(a.id==='chain-of-custody'){
+            }else if(chain){
                 progress=`YOU: ${points} / ${target}`;
                 detail=ownerIsLocal?'TAKE THE CASE INSIDE':'GET THE CASE TO DELIVER';fraction=points/target;
             }else{
@@ -253,29 +247,22 @@ export class DispatchHud {
                 detail=ownerIsLocal?'KILLS COUNT':'GET THE CASE TO SCORE';fraction=points/ASSIGNMENT_TUNING.caseKillTarget;
             }
             if(this.observing){
-                if(race){const leader=leaders[0];progress=leader?`LEAD: ${Math.floor(leader.points)} / ${target}`:`FIRST TO ${target}`;fraction=(leader?.points??0)/target;}
+                const leader=leaders[0];progress=leader?`LEAD: ${Math.floor(leader.points)} / ${target}`:`FIRST TO ${target}`;fraction=(leader?.points??0)/target;
                 detail=j?.scorerId?`${this.scores.find(s=>s.id===j.scorerId)?.name??'CARRIER'} SCORING`:state.case.owner?`${holder} HOLDING`:'CASE LOOSE';
             }
             if(a.phase==='suspended')detail='TAMPERING! PROGRESS PAUSED';
             else if(a.phase==='briefing')detail='GET READY!';
             else if(a.result){progress='CASE CLOSED';detail=`${a.result.winnerName} · ASSIGNMENT COMPLETE`;fraction=1;}
-            const running=a.id==='closing-time'&&a.phase==='active'&&!!state.case.owner;
-            const countdown=Math.ceil(a.remainingMs/(a.remainingMs<=5000?500:1000));
-            if(running&&a.remainingMs<=20_000&&this.previousCountdown>=0&&countdown!==this.previousCountdown)this.feedback?.(a.remainingMs<=5000?'countdown-final':'countdown');
-            this.previousCountdown=running?countdown:-1;
             this.assignmentPanel.dataset.mode=a.id;this.root.dataset.mode=a.id;
-            this.assignmentPanel.dataset.running=String(running);
             setText(this.assignmentProgress,progress);setText(this.assignmentDetail,detail);
             this.assignmentPanel.dataset.phase=a.phase;
-            this.assignmentPanel.dataset.urgent=String(a.id==='closing-time'&&a.remainingMs<=20_000&&running);
-            this.assignmentPanel.dataset.final=String(running&&a.remainingMs<=5000);
             this.assignmentBar.style.transform=`scaleX(${fraction})`;
             // Polish 19 and U4: your row punches, the score rolls, and the points fly in from the scoring moment.
             if(gained>0){
                 const row=this.rankRows.get(this.myId),view=document.defaultView;
                 if(row&&feelState().on('rewards'))replay(row,'feel-pop',true);
                 if(uiMotion('scoreMotion'))replay(this.assignmentProgress,'ui-roll',true);
-                if(view&&!j)fly(document,`+${gained}`,{x:view.innerWidth/2,y:view.innerHeight/2-110},row&&!this.rankings.hidden?row:this.assignmentProgress,'scoreMotion');
+                if(view&&!j)fly(document,`+${gained}`,{x:view.innerWidth/2,y:view.innerHeight/2-110},row??this.assignmentProgress,'scoreMotion');
             }
         }
         this.confirmation.hidden=now>=this.confirmationUntil||!a||a.phase==='suspended';

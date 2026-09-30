@@ -28,6 +28,7 @@ import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo } from '../shared/incidentCatalog';
+import { ShotSpacing } from '../shared/shotTiming';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
 import { PICKUP_TUNING } from '../shared/pickups';
 import type { RatEntity } from '../entities/RatEntity';
@@ -89,6 +90,7 @@ export class GameSession {
     private diagnosticChaos:{receivedAt:number;serverTime:number;shots:number;tick:number;epoch:string}={receivedAt:0,serverTime:0,shots:0,tick:0,epoch:''};
     private shotsAttempted=0;
     private shotsSent=0;
+    private readonly shotSpacing=new ShotSpacing();
     private chaos:ChaosView|null=null;
     private cameos?:CameoView;
     private cameoLoading=false;
@@ -120,6 +122,10 @@ export class GameSession {
     private readonly feel = new FeelDirector();
     /** The stage's own exposure; Blackout scales it. */
     private baseExposure = 1;
+    /** Your flashlight's everyday intensity; a Blackout brightens it. */
+    private baseFlashlight = 2;
+    /** The Blackout level the nameplates were last shaded for (0: every plate lit). */
+    private plateDark = 0;
     private compiling?:Promise<unknown>;
     private compileTimer?:ReturnType<typeof setTimeout>;
     private readonly lineup?:PoliceLineup;
@@ -168,7 +174,7 @@ export class GameSession {
         this.foley.setEnabled(false);
         this.gun = new CheeseGun(scene, world, listener);
         this.feel.attach(this.stage.renderer.domElement, listener, touchControlsAvailable());
-        this.baseExposure=this.stage.renderer.toneMappingExposure;
+        this.baseExposure=this.stage.renderer.toneMappingExposure;this.baseFlashlight=this.stage.flashlight.intensity;
         this.feel.attachScene(scene);
         this.lineup=new PoliceLineup(scene,typeof document==='undefined'?undefined:document,()=>this.feel.flashbulb());
         this.remotes = new RemotePlayers(scene, world);
@@ -259,6 +265,9 @@ export class GameSession {
     /** Both input devices use the real camera ray, animated muzzle and transport. */
     private shoot(): void {
         if (this.observing || this.title.settings?.isOpen || this.transport.state !== 'playing' || this.roundWon || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
+        // Big Cheese spaces every rat's shots, as the room does; an early press only dry-clicks.
+        const dispatch=this.lastChaos?.dispatch,incident=dispatch?.phase==='active'?incidentInfo(dispatch.incident).id:undefined;
+        if (!this.shotSpacing.allow(this.myId, incident, performance.now())) { this.feel.sound.jam(); return; }
         this.rat.updateView();
         this.stage.camera.getWorldDirection(this.direction);
         const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
@@ -350,8 +359,6 @@ export class GameSession {
             roundId: message.round.assignment?.roundId ?? '',
             deliverySerial: 0,
             owner: null,
-            remainingMs: message.round.assignment?.remainingMs ?? null,
-            assignmentId: message.round.assignment?.id ?? '',
         });
         this.highlights.setIdentity(!this.observing, this.observing);
         if(!this.observing && normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
@@ -386,7 +393,11 @@ export class GameSession {
                 this.gun.setIncident(incident);this.feel.setIncident(incident);
                 // A new call: everyone reads who rang Dispatch.
                 const d=message.state.dispatch,caller=d.caller&&this.lastChaos&&d.serial!==this.lastChaos.dispatch.serial?d.caller===this.myId?this.rat?.entity:this.remotes.get(d.caller):undefined;
-                if(caller)this.hud.addKillFeed({kind:'dispatch',caller:caller.name,...(d.caller===this.myId?{local:true}:{})});}
+                if(caller)this.hud.addKillFeed({kind:'dispatch',caller:caller.name,...(d.caller===this.myId?{local:true}:{})});
+                // Big Cheese: every rat's pistol goes big, and big balls landing nearby thud.
+                const big=incident==='big-cheese';this.rat?.entity.setBigPistol(big);
+                for(const {entity} of this.remotes.rats.values())entity.setBigPistol(big);
+                if(big)this.feel.cheeseLandings(message.state.impacts,this.stage.camera);}
                 this.applyPickupState(message.state);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
                 this.feelStings(this.lastChaos,message.state);
@@ -547,8 +558,6 @@ export class GameSession {
                     roundId: message.round?.assignment?.roundId ?? '',
                     deliverySerial: 0,
                     owner: null,
-                    remainingMs: message.round?.assignment?.remainingMs ?? null,
-                    assignmentId: message.round?.assignment?.id ?? '',
                 });
                 this.highlightBaseline = true;
                 this.seenHighlightLaunches.clear();
@@ -690,6 +699,7 @@ export class GameSession {
             if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,won.assignment,...(won.awards?[won.awards]:[]));
         }
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
+        this.blackoutFrame(camera);
         this.city.update(dt, camera, this.rat?.entity.body.position);
         // Opponent outlines keep their on-screen width at any distance.
         const unitsPerPixel=2*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)/(globalThis.innerHeight||720);
@@ -729,6 +739,23 @@ export class GameSession {
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 
+    /** Blackout: your flashlight brightens, the street light pool carries the four nearest rats' flashlights, the
+     * city's own lights follow the power, and only rats in your beam show their nameplates. */
+    private blackoutFrame(camera:THREE.Camera):void {
+        const level=this.feel.blackoutLevel,{flashlight}=this.stage,beam=level*FEEL.blackout.params.flashlight;
+        // The round-end lineup owns the flashlight (and reads its everyday intensity) once it is on its way.
+        if(!this.pendingLineup&&!this.lineup?.active)flashlight.intensity=Math.max(this.baseFlashlight,beam);
+        if(this.city instanceof Neighborhood){this.city.power=this.feel.power;this.city.streetLights?.flashlights(flashlight,camera.position,this.remotes.rats,beam);}
+        if(level<=0&&this.plateDark<=0)return;
+        this.plateDark=level;
+        const from=flashlight.position,to=flashlight.target.position,ax=to.x-from.x,ay=to.y-from.y,az=to.z-from.z;
+        const aim=Math.sqrt(ax*ax+ay*ay+az*az)||1,cone=Math.cos(flashlight.angle);
+        for(const {entity} of this.remotes.rats.values()){
+            const p=entity.mesh.position,dx=p.x-from.x,dy=p.y+1.2-from.y,dz=p.z-from.z,d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+            entity.billboard.light=d<flashlight.distance&&dx*ax+dy*ay+dz*az>=cone*d*aim?1:1-level;
+        }
+    }
+
     /** Leave the round-end results board (reset, reconnect, leaving play). */
     private endResults():void {
         const shown=this.resultsShown;this.pendingResults=undefined;this.resultsShown=false;
@@ -753,7 +780,6 @@ export class GameSession {
         const before=previous.assignment,after=next.assignment;
         if(!before||!after||before.roundId!==after.roundId)return;
         if((after.deliverySerial??0)>(before.deliverySerial??0)&&after.lastDelivery?.playerId===this.myId)this.feel.sting('delivery');
-        if((before.remainingMs??0)>10_000&&(after.remainingMs??0)<=10_000&&(after.remainingMs??0)>0)this.feel.sting('closing');
     }
 
     /** L5: a machine fired in the presented timeline: its debris and rumble, and hats blown off rats near the pad. */
@@ -830,8 +856,6 @@ export class GameSession {
             roundId: state.assignment?.roundId ?? '',
             deliverySerial: state.assignment?.deliverySerial ?? 0,
             owner: state.case.owner,
-            remainingMs: state.assignment?.remainingMs ?? null,
-            assignmentId: state.assignment?.id ?? '',
             lastDeliveryPlayerId: state.assignment?.lastDelivery?.playerId,
             launches: (state.pressure?.launches ?? []).map(launch => ({id: launch.id, playerId: launch.playerId, at: launch.at})),
             presentedAtMs,

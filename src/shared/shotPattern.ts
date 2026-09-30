@@ -2,7 +2,7 @@ import * as C from 'cannon-es';
 import type {ShotDescriptor,Vec3Data} from './networkProtocol';
 import type {IncidentId} from './incidentCatalog';
 import {BALL_SPEED} from './ballTuning';
-import {INCIDENT_TUNING} from './chaosState';
+import {launchSpeed} from './shotBallistics';
 
 function hash(text:string):number {
     let n=2166136261;for(let i=0;i<text.length;i++)n=Math.imul(n^text.charCodeAt(i),16777619);return n>>>0;
@@ -45,6 +45,6 @@ export function resolveShotPattern(shot:ShotDescriptor,incident?:IncidentId,rand
             add(direction.scale(Math.cos(angle)).vadd(side.scale(Math.sin(angle)*Math.cos(azimuth)))
                 .vadd(up.scale(Math.sin(angle)*Math.sin(azimuth))).scale(BALL_SPEED));
         }
-    }else add(direction.scale(incident==='rat-race'?BALL_SPEED*INCIDENT_TUNING.ratRaceShotSpeed:BALL_SPEED));
+    }else add(direction.scale(launchSpeed(incident)));
     return result;
 }

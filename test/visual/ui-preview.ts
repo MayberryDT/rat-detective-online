@@ -66,16 +66,13 @@ board.setAvailable(true);
 const touch=params.get('controls')==='touch'?new TouchControls({canvas:stage.renderer.domElement,look:()=>{},shoot:()=>{},scores:visible=>board.setVisible(visible),clearKeys:()=>{}}):undefined;
 const buffs=document.createElement('div');buffs.className='pickup-buffs';buffs.style.display='none';document.body.appendChild(buffs);
 
-// Animated clocks: Closing Time and Jurisdiction count down in real time once started.
-let clock:{kind:'closing'|'zone';until:number}|undefined;
+// Animated clock: the Jurisdiction zone counts down in real time once started.
+let zoneUntil:number|undefined;
 let spreadSpeed=0,iris=-1;
 let last=performance.now();
 function frame(now:number){
     const dt=Math.min(.05,(now-last)/1000);last=now;
-    if(clock&&assignment){
-        const left=Math.max(0,clock.until-now);
-        if(clock.kind==='closing')assignment.remainingMs=left;else if(assignment.jurisdiction)assignment.jurisdiction.remainingMs=left;
-    }
+    if(zoneUntil!==undefined&&assignment?.jurisdiction)assignment.jurisdiction.remainingMs=Math.max(0,zoneUntil-now);
     state.time=now;
     if(playing){dispatch.update(state,now,'YOU',state.case.owner==='me');destinations.updateCue(assignment,stage.camera,{x:15,y:0,z:23});}
     screen.crosshairMotion(spreadSpeed);
@@ -121,8 +118,7 @@ const actions:Record<string,()=>void>={
     'Score: case kill +1 (roll, fly)':()=>score('me',1),
     'Score: rank swap (you overtake)':()=>{score('me',3);},
     'Score: rival overtakes':()=>score('rat-3',5),
-    'Score: Closing Time final 8 s':()=>{setMode('closing-time');state.case.owner='me';clock={kind:'closing',until:performance.now()+8000};},
-    'Score: Jurisdiction last 10 s':()=>{setMode('jurisdiction');clock={kind:'zone',until:performance.now()+10000};},
+    'Score: Jurisdiction last 10 s':()=>{setMode('jurisdiction');zoneUntil=performance.now()+10000;},
     'Crosshair: walk (spread)':()=>{spreadSpeed=9;},
     'Crosshair: stand still':()=>{spreadSpeed=0;},
     'Crosshair: fire ×3':()=>{for(let i=0;i<3;i++)setTimeout(()=>screen.crosshairKick(),i*110);},

@@ -13,7 +13,6 @@ export const HIGHLIGHT_RULES: Record<HighlightKind, DetectorRule> = {
     'triple-kill': {kind: 'triple-kill', titleKey: 'triple-kill', score: 90, preMs: 10_000, postMs: 5_000},
     'double-kill': {kind: 'double-kill', titleKey: 'double-kill', score: 75, preMs: 10_000, postMs: 5_000},
     'paperwork-delivered': {kind: 'paperwork-delivered', titleKey: 'paperwork-delivered', score: 70, preMs: 10_000, postMs: 5_000},
-    'last-second-steal': {kind: 'last-second-steal', titleKey: 'last-second-steal', score: 85, preMs: 10_000, postMs: 5_000},
     'launcher-escape': {kind: 'launcher-escape', titleKey: 'launcher-escape', score: 75, preMs: 10_000, postMs: 5_000},
     'spectacular-launch': {kind: 'spectacular-launch', titleKey: 'paperwork-in-orbit', score: 60, preMs: 8_000, postMs: 6_000},
     'local-chaos-death': {kind: 'local-chaos-death', titleKey: 'local-chaos-death', score: 65, preMs: 8_000, postMs: 5_000},
@@ -63,8 +62,6 @@ export class HighlightDetector {
     private localId = '';
     private deliverySerial = 0;
     private owner: string | null = null;
-    private remainingMs: number | null = null;
-    private assignmentId = '';
     private kills: Array<{key: string; at: number}> = [];
     private seenDeaths = new Set<string>();
     private launches = new Map<string, {at: number; y: number; playerId: string}>();
@@ -77,8 +74,6 @@ export class HighlightDetector {
         this.epoch = this.roundId = this.localId = '';
         this.deliverySerial = 0;
         this.owner = null;
-        this.remainingMs = null;
-        this.assignmentId = '';
         this.kills = [];
         this.seenDeaths.clear();
         this.launches.clear();
@@ -87,13 +82,11 @@ export class HighlightDetector {
         this.pending = [];
     }
 
-    beginRound(input: {epoch: string; roundId: string; deliverySerial: number; owner: string | null; remainingMs: number | null; assignmentId: string}): void {
+    beginRound(input: {epoch: string; roundId: string; deliverySerial: number; owner: string | null}): void {
         this.epoch = input.epoch;
         this.roundId = input.roundId;
         this.deliverySerial = input.deliverySerial;
         this.owner = input.owner;
-        this.remainingMs = input.remainingMs;
-        this.assignmentId = input.assignmentId;
         this.kills = [];
         this.seenDeaths.clear();
         this.launches.clear();
@@ -101,7 +94,7 @@ export class HighlightDetector {
         if (this.localId) this.primed = true;
     }
 
-    welcome(input: {localId: string; epoch: string; roundId: string; deliverySerial: number; owner: string | null; remainingMs: number | null; assignmentId: string}): void {
+    welcome(input: {localId: string; epoch: string; roundId: string; deliverySerial: number; owner: string | null}): void {
         const keepId = input.localId;
         this.reset();
         this.localId = keepId;
@@ -143,7 +136,7 @@ export class HighlightDetector {
 
     onSnapshot(input: {
         epoch: string; roundId: string; deliverySerial: number; owner: string | null;
-        remainingMs: number | null; assignmentId: string; lastDeliveryPlayerId?: string;
+        lastDeliveryPlayerId?: string;
         launches: Array<{id: string; playerId: string; at: number}>;
         presentedAtMs: number; silent?: boolean;
     }): HighlightMarker[] {
@@ -152,25 +145,16 @@ export class HighlightDetector {
             this.beginRound({
                 epoch: input.epoch, roundId: input.roundId,
                 deliverySerial: input.deliverySerial, owner: input.owner,
-                remainingMs: input.remainingMs, assignmentId: input.assignmentId,
             });
             if (input.silent) return [];
         }
         if (input.silent) {
             this.deliverySerial = input.deliverySerial;
             this.owner = input.owner;
-            this.remainingMs = input.remainingMs;
             return [];
         }
         if (input.deliverySerial > this.deliverySerial && input.lastDeliveryPlayerId === this.localId) {
             this.emit(HIGHLIGHT_RULES['paperwork-delivered'], input.presentedAtMs, {serial: input.deliverySerial});
-        }
-        if (
-            this.assignmentId === 'closing-time' &&
-            this.remainingMs !== null && this.remainingMs <= 5_000 &&
-            this.owner !== this.localId && input.owner === this.localId
-        ) {
-            this.emit(HIGHLIGHT_RULES['last-second-steal'], input.presentedAtMs);
         }
         if (input.owner === this.localId) {
             const launch = this.localLaunch();
@@ -188,8 +172,6 @@ export class HighlightDetector {
         while (this.launches.size > 32) this.launches.delete(this.launches.keys().next().value!);
         this.deliverySerial = input.deliverySerial;
         this.owner = input.owner;
-        this.remainingMs = input.remainingMs;
-        this.assignmentId = input.assignmentId;
         return this.drain();
     }
 

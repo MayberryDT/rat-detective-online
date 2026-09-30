@@ -1,4 +1,5 @@
-import {BALL_GRAVITY,BALL_LIFETIME,BALL_RESTITUTION} from './ballTuning';
+import {BALL_RADIUS} from './ballTuning';
+import {bounceShot,bounces,cheeseBounce,growIn,shotGravity,shotLife} from './shotBallistics';
 import {CHAOS_TUNING,type ChaosShot,type ChaosState} from './chaosState';
 import {resolveShotPattern} from './shotPattern';
 import type {IncidentId} from './incidentCatalog';
@@ -106,13 +107,16 @@ export class LocalShotPresentation {
         if(this.retired.size>CHAOS_TUNING.maxShots*2)this.retired.delete(this.retired.values().next().value!);
     }
     private advance(shot:ChaosShot,elapsed:number,incident?:IncidentId):boolean {
-        // Match the authoritative semi-implicit 60 Hz integration. At most
-        // 30 replay steps reconcile a received snapshot; no per-ball world copy.
+        // Match the authoritative semi-implicit 60 Hz integration, Big Cheese included. At
+        // most 30 replay steps reconcile a received snapshot; no per-ball world copy.
+        const heavy=incident==='big-cheese';
         for(let remaining=elapsed;remaining>1e-8;remaining-=STEP){
             const dt=Math.min(STEP,remaining);shot.age+=dt;
-            if(shot.age>BALL_LIFETIME)return true;
-            if(shot.stuckUntil){shot.age+=Math.max(0,remaining-dt);return shot.age>BALL_LIFETIME;}
-            shot.v.y+=BALL_GRAVITY*dt;
+            if(shot.age>shotLife(shot))return true;
+            if(shot.stuckUntil){shot.age+=Math.max(0,remaining-dt);return shot.age>shotLife(shot);}
+            if(heavy)growIn(shot);
+            const radius=shot.radius??BALL_RADIUS;
+            shot.v.y+=shotGravity(radius)*dt;
             const next={x:shot.p.x+shot.v.x*dt,y:shot.p.y+shot.v.y*dt,z:shot.p.z+shot.v.z*dt};
             const hit=this.trace?.(shot.p,next);
             if(!hit){shot.p=next;continue;}
@@ -122,8 +126,8 @@ export class LocalShotPresentation {
             if(hit.rat&&!hit.reflect&&!shot.dud)return true;
             if(!hit.rat)shot.wallBounced=true;
             if(!hit.rat&&incident==='delayed-reaction'&&!shot.delayed){shot.delayed=true;shot.stuckUntil=Number.MAX_SAFE_INTEGER;shot.age+=Math.max(0,remaining-dt);return false;}
-            const dot=shot.v.x*hit.n.x+shot.v.y*hit.n.y+shot.v.z*hit.n.z;
-            shot.v={x:(shot.v.x-2*dot*hit.n.x)*BALL_RESTITUTION,y:(shot.v.y-2*dot*hit.n.y)*BALL_RESTITUTION,z:(shot.v.z-2*dot*hit.n.z)*BALL_RESTITUTION};
+            const contact=bounceShot(shot.v,hit.n,radius);
+            if(heavy&&!hit.rat&&bounces(contact,radius))cheeseBounce(shot);
         }
         return false;
     }

@@ -1,5 +1,6 @@
 import type {Vec3Data} from '../../networkProtocol';
-import {BALL_GRAVITY,BALL_SPEED} from '../../ballTuning';
+import type {IncidentId} from '../../incidentCatalog';
+import {launchGravity,launchSpeed} from '../../shotBallistics';
 import type {SkillDials} from '../intent';
 
 /** Gun height above the feet (the hosted muzzle's height). Aim angles are taken from here. */
@@ -46,6 +47,8 @@ const between=(r:()=>number,[a,b]:readonly [number,number])=>a+r()*(b-a);
  * with lag and imperfect lead. Shots leave along the crosshair, so every miss is one the rat actually made. */
 export class BotAim {
     yaw=0;pitch=0;
+    /** The active incident: its launch speed and drop set the lead. */
+    incident?:IncidentId;
     private ready=false;
     private desiredYaw=0;private desiredPitch=0;
     private engaged=false;
@@ -119,9 +122,9 @@ export class BotAim {
         }
         this.last.x=target.x;this.last.y=target.y;this.last.z=target.z;
         if(now<this.readyAt)return;
-        const d=Math.hypot(this.seen.x-eye.x,this.seen.z-eye.z),travel=d/BALL_SPEED;
+        const d=Math.hypot(this.seen.x-eye.x,this.seen.z-eye.z),travel=d/launchSpeed(this.incident);
         const x=this.seen.x+(fixed?0:this.vx*travel*this.lead),z=this.seen.z+(fixed?0:this.vz*travel*this.lead);
-        const y=this.seen.y+(fixed?0:CHEST)-BALL_GRAVITY*travel*travel/2*.7;
+        const y=this.seen.y+(fixed?0:CHEST)-launchGravity(this.incident)*travel*travel/2*.7;
         this.desiredYaw=Math.atan2(x-eye.x,z-eye.z);this.desiredPitch=Math.atan2(y-eye.y,Math.max(.5,Math.hypot(x-eye.x,z-eye.z)));
     }
     /** A calm look at a point (pre-aim, a corner, a heard shot), or a deliberate trick shot's point when `exact`. */

@@ -34,27 +34,23 @@ export interface CompanionProjectionInput {
   holderId: string | null;
 }
 
-function assignmentProjection(state: AssignmentState, round: RoundState, holder?: PlayerData): CompanionAssignment {
+function assignmentProjection(state: AssignmentState, round: RoundState): CompanionAssignment {
   const destinationId = activeDestination(state);
   const jurisdiction = state.jurisdiction;
   const zoneId = jurisdiction ? activeZone(jurisdiction) : undefined;
   const revealNext = jurisdiction && state.phase === 'active' &&
     jurisdiction.remainingMs <= JURISDICTION_TUNING.warningMs;
   const nextZoneId = revealNext ? nextZone(jurisdiction) : undefined;
-  const clockRunning = round.phase === 'playing' && state.phase === 'active' &&
-    (state.id === 'jurisdiction' || state.id === 'closing-time' && !!holder && holder.hp > 0);
+  const clockRunning = round.phase === 'playing' && state.phase === 'active' && state.id === 'jurisdiction';
   return {
     id: state.id,
     title: ASSIGNMENTS[state.id].title,
     phase: state.phase,
-    remainingMs: state.id === 'closing-time' ? state.remainingMs : null,
     clockRunning,
     objectiveTarget: state.id === 'chain-of-custody' ? ASSIGNMENT_TUNING.deliveryTarget :
-      state.id === 'jurisdiction' ? JURISDICTION_TUNING.targetMs / 1_000 :
-      state.id === 'excessive-force' ? ASSIGNMENT_TUNING.caseKillTarget : null,
+      state.id === 'jurisdiction' ? JURISDICTION_TUNING.targetMs / 1_000 : ASSIGNMENT_TUNING.caseKillTarget,
     objectiveUnit: state.id === 'chain-of-custody' ? 'deliveries' :
-      state.id === 'jurisdiction' ? 'seconds' :
-      state.id === 'excessive-force' ? 'case-kills' : 'last-holder',
+      state.id === 'jurisdiction' ? 'seconds' : 'case-kills',
     destination: destinationId ?
       { id: destinationId, label: ASSIGNMENT_DESTINATIONS[destinationId].label } : null,
     zone: zoneId ? { id: zoneId, label: JURISDICTION_ZONES[zoneId].label } : null,
@@ -63,11 +59,10 @@ function assignmentProjection(state: AssignmentState, round: RoundState, holder?
   };
 }
 
-function objectiveScore(state: AssignmentState, playerId: string): number | null {
+function objectiveScore(state: AssignmentState, playerId: string): number {
   if (state.id === 'chain-of-custody') return state.deliveries[playerId] ?? 0;
   if (state.id === 'jurisdiction') return (state.jurisdiction?.heldMs[playerId] ?? 0) / 1_000;
-  if (state.id === 'excessive-force') return state.caseKills[playerId] ?? 0;
-  return null;
+  return state.caseKills[playerId] ?? 0;
 }
 
 /** Build the bounded public projection from the same authoritative state used by gameplay. */
@@ -94,7 +89,7 @@ export function projectCompanionRoom(input: CompanionProjectionInput): Companion
     players: players.length,
     humans: players.filter(player => input.humanIds.has(player.id)).length,
     roundId: input.assignment.roundId,
-    assignment: assignmentProjection(input.assignment, input.round, holder),
+    assignment: assignmentProjection(input.assignment, input.round),
     scores,
     holderName: holder?.name ?? null,
     result: input.assignment.result ? { ...input.assignment.result } : null,
@@ -109,8 +104,6 @@ export function companionProjectionSignature(room: CompanionRoomPublication): st
     ...state,
     assignment: {
       ...state.assignment,
-      remainingMs: state.assignment.remainingMs === null ? null :
-        Math.floor(state.assignment.remainingMs / 1_000),
       zoneRemainingMs: state.assignment.zoneRemainingMs === null ? null :
         Math.floor(state.assignment.zoneRemainingMs / 1_000),
     },

@@ -120,7 +120,7 @@ const appearance={hatType:'fedora' as const,hatColor:0x386caa,coatColor:0x885b89
 const me=createPlayer('me','Census',appearance,{x:-10,y:1,z:-27});
 const rivals:PlayerData[]=Array.from({length:8},(_,i)=>createPlayer(`rat-${i}`,`Rival ${i}`,{...appearance,hatColor:0x224466+i*0x101010,coatColor:0x553322+i*0x080808},{x:-4+i*1.6,y:1,z:-29+(i%3)*1.8}));
 const players=Object.fromEntries([me,...rivals].map(p=>[p.id,p]));
-transport.welcome={type:'welcome',id:me.id,player:me,players,round:{phase:'playing',assignment:{roundId:'census',id:'chain-of-custody',phase:'active',revealedAt:now(),liveAt:now(),remainingMs:600_000,deliverySerial:0,destinations:['records'],deliveries:{},caseKills:{},revision:1}},
+transport.welcome={type:'welcome',id:me.id,player:me,players,round:{phase:'playing',assignment:{roundId:'census',id:'chain-of-custody',phase:'active',revealedAt:now(),liveAt:now(),deliverySerial:0,destinations:['records'],deliveries:{},caseKills:{},revision:1}},
     world:{seed:341283204,version:GRAYBOX_VERSION},protocolVersion:PROTOCOL_VERSION,serverTime:now(),incidents:['improper-disposal','bad-ammunition','pressure-surge','crossfire','scattershot','delayed-reaction','big-cheese','planted-evidence','blackout','clean-bill','malpractice','most-wanted','rat-race','all-units']};
 const pose=(x:number,y:number,z:number)=>({p:{x,y,z},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}});
 const near:PickupState[]=[{id:'near-ironclad',kind:'ironclad',x:-6,y:.7,z:-25},{id:'near-hustle',kind:'hustle',x:-3,y:.7,z:-25},{id:'near-fix',kind:'quick-fix',x:0,y:.7,z:-25}];

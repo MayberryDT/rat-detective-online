@@ -10,8 +10,8 @@ export function replaceOnce(text, before, after) {
   return text.replace(before, after);
 }
 export async function prepareFixture(out, { hosted = false, expiresAt = 0, window = 8, serverBots = 11, maxPlayers = 100, fullLobby = false, checkpointControl = false, assignment, firstAssignment } = {}) {
-  if(firstAssignment!==undefined&&(!hosted||assignment!==undefined||!['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(firstAssignment)))throw Error('First assignment requires a known hosted mode and cannot be pinned');
-  if(assignment!==undefined&&(!hosted||!['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(assignment)))throw Error('Assignment override requires a known mode in a hosted private fixture');
+  if(firstAssignment!==undefined&&(!hosted||assignment!==undefined||!['chain-of-custody','excessive-force','jurisdiction'].includes(firstAssignment)))throw Error('First assignment requires a known hosted mode and cannot be pinned');
+  if(assignment!==undefined&&(!hosted||!['chain-of-custody','excessive-force','jurisdiction'].includes(assignment)))throw Error('Assignment override requires a known mode in a hosted private fixture');
   if(!Number.isInteger(serverBots)||serverBots<0||serverBots>99||serverBots>0&&serverBots<8)throw Error('Fixture serverBots must be 0 or 8–99');
   const minimumCap=10;
   if(!Number.isInteger(maxPlayers)||maxPlayers<minimumCap||maxPlayers>100||serverBots>maxPlayers||serverBots===maxPlayers&&!fullLobby)throw Error(`Fixture cap must be ${minimumCap}–100; a full bot roster requires fullLobby`);

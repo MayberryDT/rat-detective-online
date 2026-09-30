@@ -30,9 +30,11 @@ export function prepareChaos(state:ChaosState):PreparedChaos {
   const flag=(v:boolean|undefined)=>v===undefined?0:v?2:1;
   return {shots:state.shots.map(s=>{
     const flags=flag(s.wallBounced)|(flag(s.delayed)<<2);
-    const radius=Math.round((s.radius??BALL_RADIUS)*1000),stuck=s.stuckUntil?Math.round(s.stuckUntil):0;
+    const radius=Math.round((s.radius??BALL_RADIUS)*1000),stuck=s.stuckUntil?Math.round(s.stuckUntil):0,life=s.life===undefined?0:Math.round(s.life*1000);
     const values=[...[s.p.x,s.p.y,s.p.z,s.v.x,s.v.y,s.v.z,s.age].map(n=>Math.round(n*1000)),flags];
-    if(radius!==Math.round(BALL_RADIUS*1000)||stuck)values.push(radius,stuck);
+    // Optional tail: radius and stuck time, then a Big Cheese lifetime.
+    if(radius!==Math.round(BALL_RADIUS*1000)||stuck||life)values.push(radius,stuck);
+    if(life)values.push(life);
     return {id:s.id,owner:s.owner,values,motion:values.join(','),deltas:new WeakMap<number[],string>()};
   }),
     impacts:state.impacts,impactText:rounded(state.impacts),pressure:state.pressure,pressureText:rounded(state.pressure??null),
@@ -122,7 +124,7 @@ export class ChaosDecoder {
     const shots:ChaosShot[]=[],active=new Set<number>(),ids=new Set<string>();
     const motions=new Map<number,number[]>();
     for(const encoded of f.motion){
-      if(!Array.isArray(encoded)||(encoded.length!==9&&encoded.length!==11)||!encoded.every(integer)||encoded[0]===0)return null;
+      if(!Array.isArray(encoded)||(encoded.length!==9&&encoded.length!==11&&encoded.length!==12)||!encoded.every(integer)||encoded[0]===0)return null;
       const handle=Math.abs(encoded[0]);if(active.has(handle))return null;
       const previous=this.motions.get(handle);
       if(encoded[0]<0&&(f.motionEncoding!=='delta-v1'||full||changed.has(handle)||!previous||previous.length!==encoded.length-1))return null;
@@ -135,13 +137,14 @@ export class ChaosDecoder {
       const d=definitions.get(handle),flags=row[8];
       if(!d||ids.has(d[0])||flags<0||flags>10||(flags&3)===3||((flags>>2)&3)===3)return null;
       active.add(handle);ids.add(d[0]);motions.set(handle,row.slice(1));
-      const radius=row[9],stuck=row[10];
+      const radius=row[9],stuck=row[10],life=row[11];
       const bounced=flags&3,delayed=(flags>>2)&3;
       const shot:ChaosShot={id:d[0],owner:d[1],p:{x:row[1]/1000,y:row[2]/1000,z:row[3]/1000},v:{x:row[4]/1000,y:row[5]/1000,z:row[6]/1000},age:row[7]/1000};
       if(bounced)shot.wallBounced=bounced===2;
       if(delayed)shot.delayed=delayed===2;
       if(radius&&radius!==Math.round(BALL_RADIUS*1000))shot.radius=radius/1000;
       if(stuck)shot.stuckUntil=stuck;
+      if(life)shot.life=life/1000;
       shots.push(shot);
     }
     // Membership is complete on every frame, so omitted projectiles cannot linger.

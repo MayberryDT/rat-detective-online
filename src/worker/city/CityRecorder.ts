@@ -523,7 +523,7 @@ export class CityRecorder {
       ...(jev && mind === 'code' ? { jev } : {}), ...(inputs ? { in: inputs } : {}), stance: d.stance });
     if (!opening) return;
     const quarry = plan.goal === 'hunt' ? plan.follow : plan.goal === 'chase-carrier' ? plan.follow ?? (this.caseOwner || undefined) : undefined;
-    const to = plan.destination && (PLACE_GOALS.has(plan.goal) || plan.goal === 'keep-case' && plan.mode === 'evade') ? plan.destination : undefined;
+    const to = plan.destination && PLACE_GOALS.has(plan.goal) ? plan.destination : undefined;
     this.goals.set(p.id, { goal: plan.goal, mode: plan.mode, mind, personality: d.personality, start: now, place, ...(quarry ? { quarry } : {}),
       ...(plan.mode === 'pickup' ? { site: plan.key.slice('pickup:'.length) } : {}), ...(to ? { to: { x: to.x, y: to.y, z: to.z } } : {}) });
   }
@@ -660,7 +660,7 @@ export class CityRecorder {
   }
 
   private standingsFor(ids: string[], players: ReadonlyMap<string, PlayerData>, state: ChaosState | undefined) {
-    return standings(ids, { ...(state?.assignment ? { assignment: state.assignment } : {}), possession: state?.possession ?? {},
+    return standings(ids, { ...(state?.assignment ? { assignment: state.assignment } : {}),
       kills: Object.fromEntries(ids.map(id => [id, players.get(id)?.kills ?? 0])) });
   }
 

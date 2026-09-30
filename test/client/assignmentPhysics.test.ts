@@ -42,25 +42,6 @@ describe('assignments in the real city case simulation',()=>{
         expect(restored.sim.snapshot(false).possession).toEqual(saved.possession);
         restored.sim.reset();expect(restored.sim.snapshot(false).possession).toEqual({});
     });
-    it('finishes Closing Time for a living holder, before a later resolved disarm',()=>{
-        const {sim,a,b}=fixture('closing-time');pickup(sim,a,-16,-30);
-        sim.assignmentState!.remainingMs=1;
-        const p=sim.caseBody.position;
-        sim.shoot(b.id,{shotId:'late-disarm',origin:{x:p.x,y:p.y,z:p.z+1.5},direction:{x:0,y:0,z:-1}});
-        sim.step(1/60,NOW+1000/60);
-        expect(sim.assignmentState!.result).toMatchObject({winnerId:'a',method:'held'});
-    });
-    it('a disarm resolved first pauses the remaining countdown until a legitimate steal',()=>{
-        const {sim,a,b}=fixture('closing-time');pickup(sim,a,-16,-30);
-        sim.assignmentState!.remainingMs=100;
-        const p=sim.caseBody.position;
-        sim.shoot(b.id,{shotId:'early-disarm',origin:{x:p.x,y:p.y,z:p.z+1.5},direction:{x:0,y:0,z:-1}});
-        sim.step(1/60,NOW+1000/60);expect(sim.caseHolderId).toBeNull();
-        const remaining=sim.assignmentState!.remainingMs;frames(sim,10,NOW+1000/60);
-        expect(sim.assignmentState!.remainingMs).toBeCloseTo(remaining);expect(sim.assignmentState!.result).toBeUndefined();
-        Object.assign(a,{x:100,z:100});pickup(sim,b,-16,-30,NOW+1000);frames(sim,10,NOW+1000);
-        expect(sim.assignmentState!.result?.winnerId).toBe('b');
-    });
     it('banks deliveries per carrier and preserves a thief’s earlier paperwork',()=>{
         const {sim,a,b}=fixture('chain-of-custody');pickup(sim,a,130,-25);
         for(let i=0;i<2;i++){if(i)pickup(sim,a,-16,-30,NOW+100+i*10);carriedEntry(sim,a,CHAIN_ROUTE[i],NOW+101+i*10);}
@@ -103,18 +84,6 @@ describe('assignments in the real city case simulation',()=>{
         sim.shoot(b.id,{shotId:'old-filing',origin:{x:-16,y:1.3,z:-29},direction:{x:0,y:0,z:-1}});frames(sim,45,NOW+10);
         expect(sim.assignmentState!.result).toBeUndefined();expect(sim.assignmentState!.caseKills).toEqual({});
     });
-    it('restoring held processing or expired Tampering never credits time while the room was asleep',()=>{
-        const {sim,a}=fixture('closing-time');pickup(sim,a,-16,-30);frames(sim,60);
-        const saved=sim.snapshot(false),remaining=saved.assignment!.remainingMs;
-        vi.mocked(Date.now).mockReturnValue(NOW+60_000);
-        const restored=fixture('closing-time',saved);restored.sim.step(0,NOW+60_000);
-        expect(restored.sim.assignmentState!.remainingMs).toBe(remaining);
-        saved.assignment!.phase='suspended';saved.dispatch={phase:'active',incident:'evidence-tampering',serial:1,started:NOW,until:NOW+25_000};
-        saved.case.owner=null;saved.case.p={x:-16,y:1.3,z:-37};
-        const expired=fixture('closing-time',saved);expired.sim.step(0,NOW+60_000);
-        expect(expired.sim.assignmentState).toMatchObject({phase:'active',remainingMs:remaining});
-        expect(expired.sim.snapshot(false).extraCases).toHaveLength(0);
-    });
     it('pauses at actual Tampering activation, keeps eight hazards and restores progress outside the intake',()=>{
         const initial=fixture('chain-of-custody');initial.sim.assignmentState!.deliverySerial=5;initial.sim.assignmentState!.deliveries.a=2;
         const saved=initial.sim.snapshot(false);saved.dispatch={phase:'rolling',incident:'evidence-tampering',serial:1,started:NOW,until:NOW+100};
@@ -143,29 +112,20 @@ describe('assignments in the real city case simulation',()=>{
         expect(sim.caseHolderId).toBe(a.id);carriedEntry(sim,a,id,at+10);
         expect(sim.assignmentState!.result?.winnerId).toBe(a.id);
     });
-    it('counts the held portion before activation and never counts the incident interval',()=>{
-        const initial=fixture('closing-time');pickup(initial.sim,initial.a,-16,-30);
-        const saved=initial.sim.snapshot(false);saved.dispatch={phase:'rolling',incident:'evidence-tampering',serial:1,started:NOW,until:NOW+10};
-        const {sim}=fixture('closing-time',saved);
-        sim.step(.02,NOW+20);
-        expect(sim.assignmentState!.remainingMs).toBe(119_990);expect(sim.caseHolderId).toBeNull();
-        frames(sim,5,NOW+20);expect(sim.assignmentState!.remainingMs).toBe(119_990);
-    });
     it('recovery preserves investigation progress, retains case kills, and cannot finish',()=>{
-        for(const id of ['closing-time','chain-of-custody','excessive-force'] as const){
+        for(const id of ['chain-of-custody','excessive-force'] as const){
             const {sim}=fixture(id);
-            if(id==='closing-time')sim.assignmentState!.remainingMs=100;
             if(id==='chain-of-custody')sim.assignmentState!.deliverySerial=5;
             if(id==='excessive-force')sim.assignmentState!.caseKills.b=4;
-            const before={points:structuredClone(sim.assignmentState!.caseKills),remaining:sim.assignmentState!.remainingMs,deliverySerial:sim.assignmentState!.deliverySerial};
+            const before={points:structuredClone(sim.assignmentState!.caseKills),deliverySerial:sim.assignmentState!.deliverySerial};
             expect(sim.recoverLooseCase()).toBe(true);sim.step(0,NOW+CHAOS_TUNING.recoverMs);
-            expect(sim.assignmentState).toMatchObject({remainingMs:before.remaining,deliverySerial:before.deliverySerial,caseKills:before.points});
+            expect(sim.assignmentState).toMatchObject({deliverySerial:before.deliverySerial,caseKills:before.points});
             expect(sim.assignmentState!.result).toBeUndefined();
         }
     });
     it('reset clears case kills, shots, corpses and objective identity',()=>{
         const {sim,a}=fixture('excessive-force');sim.assignmentState!.caseKills.a=4;a.hp=0;sim.death(a,{x:1,y:0,z:0});
-        const old=sim.assignmentState!.roundId;sim.reset();sim.setAssignment(createAssignment('closing-time',NOW+100));
+        const old=sim.assignmentState!.roundId;sim.reset();sim.setAssignment(createAssignment('jurisdiction',NOW+100));
         frames(sim,5,NOW+100);
         const state=sim.snapshot(false);expect(state.assignment!.roundId).not.toBe(old);
         expect(state.shots).toEqual([]);expect(state.corpses).toEqual([]);expect(state.assignment!.caseKills).toEqual({});expect(state.assignment!.result).toBeUndefined();

@@ -62,6 +62,10 @@ export class Neighborhood {
      * sewers: every lit pixel loops over each visible light (-30% GPU time). */
     get sewerLights():readonly THREE.PointLight[] {return this.lampPool;}
     private overhead?:StreetLightPool;
+    /** The four actor lights (none with `lighting=classic`); in a Blackout they carry other rats' flashlights. */
+    get streetLights():StreetLightPool|undefined {return this.overhead;}
+    /** 0…1: the city's own lights (street fill, sewer lamps, fixtures) dim with the power (Blackout, surge flicker). */
+    power=1;
     private readability?:StreetReadability;
     private readonly interiorSources=new Map<THREE.PointLight,InteriorFixture>();
     private readonly batches:THREE.Mesh[]=[];
@@ -289,7 +293,7 @@ export class Neighborhood {
         this.water?.update(_dt);
         this.grime.update(_dt);
         // Outdoor bounce light supplies a visibility floor; existing sewer lighting stays intact.
-        if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera,anchor);}
+        if(camera){this.streetFill.intensity=(this.lighting==='classic'?1.25:.32)*this.power*THREE.MathUtils.smoothstep(camera.position.y,-2,1);this.overhead?.update(camera,anchor,this.power);}
         this.syncLampPool(camera,anchor);
     }
     private addInteriorFixture(f:InteriorFixture):void {
@@ -438,7 +442,7 @@ export class Neighborhood {
             const source=nearest[i];
             light.position.copy(source.position);
             light.color.copy(source.color);
-            light.intensity=source.intensity*AUTHORED_LIGHT_GAIN;
+            light.intensity=source.intensity*AUTHORED_LIGHT_GAIN*this.power;
             light.distance=source.distance;
             light.decay=source.decay;
         }

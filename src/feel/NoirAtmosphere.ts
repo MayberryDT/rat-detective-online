@@ -30,7 +30,9 @@ function shaftMaterial(color:number):{material:THREE.ShaderMaterial;opacity:{val
  * under the nearest streetlamps and a little more cold fog. Searchlights: slow
  * beams sweeping over the landmark roofs. Lightning: an occasional double flash
  * that briefly lifts the sky and ambient light, followed by distant thunder.
- * No new lights; the flash scales the existing hemisphere light. */
+ * No new lights; the flash scales the existing hemisphere light. A Blackout
+ * sinks the stage's ambient, hemisphere and moon light, the fog and the sky to
+ * black, and stops the lightning. */
 export class NoirAtmosphere {
     readonly root=new THREE.Group();
     private readonly haze:THREE.InstancedMesh;
@@ -42,6 +44,10 @@ export class NoirAtmosphere {
     private readonly dummy=new THREE.Object3D();
     private hemisphere?:THREE.HemisphereLight;
     private readonly baseHemisphere:number;
+    private ambient?:THREE.AmbientLight;
+    private readonly baseAmbient:number;
+    private moon?:THREE.DirectionalLight;
+    private readonly baseMoon:number;
     private readonly fog?:THREE.FogExp2;
     private readonly baseFog:number;
     private readonly baseFogColor=new THREE.Color();
@@ -69,8 +75,13 @@ export class NoirAtmosphere {
         this.beamOrigins=LANDMARK_INTERIORS.slice(0,3).map(hall=>new THREE.Vector3(hall.cx,36.5,hall.cz));
         this.beams=new THREE.InstancedMesh(beamGeometry,beam.material,this.beamOrigins.length);this.beamOpacity=beam.opacity;
         for(const mesh of [this.haze,this.beams]){mesh.frustumCulled=false;mesh.castShadow=false;mesh.count=0;this.root.add(mesh);}
-        scene.traverse(object=>{if(object instanceof THREE.HemisphereLight)this.hemisphere??=object;});
-        this.baseHemisphere=this.hemisphere?.intensity??0;
+        // The stage's own lights come first in the scene (the city's street fill follows its own power).
+        scene.traverse(object=>{
+            if(object instanceof THREE.HemisphereLight)this.hemisphere??=object;
+            else if(object instanceof THREE.AmbientLight)this.ambient??=object;
+            else if(object instanceof THREE.DirectionalLight)this.moon??=object;
+        });
+        this.baseHemisphere=this.hemisphere?.intensity??0;this.baseAmbient=this.ambient?.intensity??0;this.baseMoon=this.moon?.intensity??0;
         this.fog=scene.fog instanceof THREE.FogExp2?scene.fog:undefined;this.baseFog=this.fog?.density??0;
         if(this.fog)this.baseFogColor.copy(this.fog.color);
         this.background=scene.background instanceof THREE.Color?scene.background:undefined;
@@ -81,8 +92,9 @@ export class NoirAtmosphere {
     private random():number {this.seed=(this.seed*1103515245+12345)&0x7fffffff;return this.seed/0x7fffffff;}
 
     /** `perception` scales only the fog (the part that hides things); haze cones and the sky stay constant.
-     * `mono` (low health) turns fog and sky grey and thins the fog, so the black-and-white city reads clearer. */
-    update(dt:number,camera:THREE.Camera,outdoors:boolean,perception=1,mono=0):void {
+     * `mono` (low health) turns fog and sky grey and thins the fog, so the black-and-white city reads clearer.
+     * `dark` (Blackout, surge flicker) 0…1 takes the stage's light, fog colour and sky to black. */
+    update(dt:number,camera:THREE.Camera,outdoors:boolean,perception=1,mono=0,dark=0):void {
         dt=Math.min(Math.max(dt,0),.1);this.time+=dt;
         const state=feelState(),strength=state.noir(),hazeOn=state.on('noirHaze')&&strength>0,skyOn=state.on('noirSky')&&strength>0;
         const p=FEEL.noirHaze.params,s=FEEL.noirSky.params,cones=hazeOn&&GRAPHICS.haze;
@@ -99,7 +111,7 @@ export class NoirAtmosphere {
         if(this.fog){
             this.fog.density=this.baseFog*(1+(hazeOn?p.fog*strength*perception*1.6:0))*(1-.35*mono);
             this.fog.color.copy(this.baseFogColor).lerp(this.coldFog,hazeOn?strength*.7:0);
-            this.toGrey(this.fog.color,mono);
+            this.toGrey(this.fog.color,mono);this.fog.color.multiplyScalar(1-dark);
         }
         // Searchlights: slow sweeping beams over the landmark roofs.
         this.beamOpacity.value=skyOn?s.beamOpacity*strength:0;
@@ -113,10 +125,10 @@ export class NoirAtmosphere {
             });
             this.beams.count=this.beamOrigins.length;this.beams.instanceMatrix.needsUpdate=true;
         }else this.beams.count=0;
-        // Lightning: a double flash that lifts the sky and ambient light, then thunder.
+        // Lightning: a double flash that lifts the sky and ambient light, then thunder. Never in a Blackout.
         let flash=0;
-        if(skyOn){
-            if((this.nextStrike-=dt)<=0){this.strikeAge=0;this.nextStrike=this.stormy?2.5+this.random()*4.5:s.minGap+this.random()*(s.maxGap-s.minGap);this.thunderIn=.8+this.random()*1.6;}
+        if(skyOn&&!this.blackout){
+            if((this.nextStrike-=dt)<=0){this.strikeAge=0;this.nextStrike=s.minGap+this.random()*(s.maxGap-s.minGap);this.thunderIn=.8+this.random()*1.6;}
             if(this.strikeAge<.5){
                 this.strikeAge+=dt;const t=this.strikeAge;
                 flash=Math.max(0,1-Math.abs(t-.04)/.05)+.7*Math.max(0,1-Math.abs(t-.2)/.07);
@@ -124,8 +136,10 @@ export class NoirAtmosphere {
             }
         }
         this.flash=flash;
-        if(this.hemisphere)this.hemisphere.intensity=this.baseHemisphere*(1+flash*s.flash);
-        if(this.background){this.background.copy(this.baseBackground).lerp(this.flashSky,Math.min(1,flash*.8));this.toGrey(this.background,mono);}
+        if(this.hemisphere)this.hemisphere.intensity=this.baseHemisphere*(1+flash*s.flash)*(1-dark);
+        if(this.ambient)this.ambient.intensity=this.baseAmbient*(1-dark);
+        if(this.moon)this.moon.intensity=this.baseMoon*(1-dark);
+        if(this.background){this.background.copy(this.baseBackground).lerp(this.flashSky,Math.min(1,flash*.8));this.toGrey(this.background,mono);this.background.multiplyScalar(1-dark);}
     }
 
     private toGrey(colour:THREE.Color,amount:number):void {
@@ -135,15 +149,16 @@ export class NoirAtmosphere {
 
     /** Strike on the next frame (workshop review). */
     strike():void {this.nextStrike=0;}
-    /** Blackout storm: lightning every few seconds instead of every half minute. */
-    set storm(on:boolean){if(on&&!this.stormy)this.nextStrike=Math.min(this.nextStrike,1.5);this.stormy=on;}
-    private stormy=false;
+    /** Blackout: no lightning. */
+    blackout=false;
     /** The current lightning flash, 0…1+, for effects that should light up with it. */
     flash=0;
 
     /** Restore the stage's own fog, sky and hemisphere light. */
     dispose():void {
         if(this.hemisphere)this.hemisphere.intensity=this.baseHemisphere;
+        if(this.ambient)this.ambient.intensity=this.baseAmbient;
+        if(this.moon)this.moon.intensity=this.baseMoon;
         if(this.fog){this.fog.density=this.baseFog;this.fog.color.copy(this.baseFogColor);}
         if(this.background)this.background.copy(this.baseBackground);
         this.root.removeFromParent();

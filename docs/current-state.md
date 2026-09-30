@@ -2,6 +2,10 @@
 
 Verified from source and production through **2026-09-30** (release A, protocol 24). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Closing Time removed — staging (protocol 25)
+
+Three assignments remain: Excessive Force, Jurisdiction and PAPER CHASE, shuffled with no immediate repeat. Closing Time's clock, HUD card, countdown ticks, closing music sting, last-second-steal highlight, bot evade goal and companion `remainingMs`/`last-holder` fields are gone. A room restored with a saved Closing Time round starts a fresh Jurisdiction round and clears any pending win screen; a stored playlist bag that names it is reshuffled. Sections below that describe four modes or Closing Time are history.
+
 ## Release A — 30 September production (protocol 24, layout 5, `mindVersion` 5)
 
 Tyler: "A goes to production before freeze." Production Worker `7888521b-9c3c-4baf-bbf8-6781a13d4dce`, build `production-2026-09-30-76701ab`, client `index-oYCLxMmt.js`, commit `76701ab`. Everything in the sections below marked 30 September is live: graphics quality, layouts 4 and 5 with Stakeout, the kill streak mark, the black-and-white low-health look, the 30-second round end and a random supply for each new streak title. Also live: the data foundation (every city fact stamped with its build, agent browsers recorded apart from humans, aggregates by build) and the bots' pickup reflex. This build is the baseline era for the lighter Jev in [the bot learning plan](bot-learning-plan.md). See [the receipt](verification/release-a-2026-09-30.md).
@@ -434,7 +438,7 @@ score ticks do not increment the checkpoint transition revision.
 Tyler accepted the final preview and authorized production release. Worker
 `506ae57e-fd98-4a9d-b5e3-b51ce6e44779` serves the matching client on
 `https://ratdetective.online/`. Existing tabs must reload. The normal four-mode
-playlist is live; retained older bags finish before refilling with four modes.
+playlist went live (three modes since protocol 25, above); retained older bags finished before refilling with four modes.
 See the [release receipt](verification/jurisdiction-production-2026-09-13.md).
 Phone performance remains unmeasured. See the [implementation receipt](verification/jurisdiction-2026-09-13.md)
 and [agreed outline](jurisdiction-implementation-outline.md).

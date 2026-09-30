@@ -21,8 +21,6 @@ const STREAK_WORDS = ['ARMED', 'DANGEROUS', 'PUBLIC ENEMY'] as const;
 const MAX_TALLIES = 10, STAMP_SECONDS = 0.28;
 const STAMP_FONT = '400 28px Bangers, Impact, sans-serif';
 const STAMP_RED = '#c8322a', STAMP_INK = '#ee5b4f';
-/** Nameplate brightness shared by every rat; Blackout dims it with the city. */
-export const NAMEPLATE_LIGHT = { value: 1 };
 
 /** Noir nameplate: the rat's name in spaced small caps over a row of slanted
  * pips, one per hit point, like tabs on a case file. Lost pips flash, shake and
@@ -52,6 +50,8 @@ export class RatBillboard {
     /** Seconds since the stamp last came down (a new kill while on a streak). */
     private stampAge = Infinity;
     private stampFont = false;
+    /** Plate brightness: a Blackout hides the plates of rats outside your flashlight. */
+    public light = 1;
 
     constructor(name: string, initialHealth: number = MAX_HP) {
         this.name = name.toUpperCase();
@@ -122,7 +122,7 @@ export class RatBillboard {
 
     /** Advance pip and stamp animations; redraws only while one is running. */
     public update(dt: number): void {
-        if (this.sprite.material.opacity !== NAMEPLATE_LIGHT.value) this.sprite.material.opacity = NAMEPLATE_LIGHT.value;
+        if (this.sprite.material.opacity !== this.light) this.sprite.material.opacity = this.light;
         this.animateEye(dt);
         if (!this.animating || this.disposed) return;
         let running = false;
@@ -178,7 +178,7 @@ export class RatBillboard {
         this.eye.visible = alpha > .01;
         if (!this.eye.visible) return;
         this.placeEye(this.eye, EYE_SIZE, Math.max(.06, open));
-        this.eye.material.opacity = alpha * NAMEPLATE_LIGHT.value;
+        this.eye.material.opacity = alpha;
     }
 
     private draw() {

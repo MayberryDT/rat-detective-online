@@ -6,7 +6,7 @@ import {parseServerMessage} from '../../src/shared/messageValidation';
 import {createPlayer} from '../../src/worker/gameState';
 import {WORLD_FOLEY_CUES} from '../../src/shared/foleyEvents';
 import {MAX_SERVER_MESSAGE_BYTES} from '../../src/shared/networkProtocol';
-import {BALL_SPEED} from '../../src/shared/ballTuning';
+import {launchSpeed} from '../../src/shared/shotBallistics';
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},grayboxBoxes:()=>[
     {x:0,y:-.5,z:0,w:50,h:1,d:50,rx:0,rz:0},
     {x:10,y:10,z:0,w:1,h:20,d:50,rx:0,rz:0},
@@ -34,11 +34,11 @@ it('emits shared corpse contacts and shot kicks, retains shooter attribution and
     sim.shoot('a',{shotId:'kick',origin:{x:-2,y:4,z:0},direction:{x:1,y:0,z:0}});sim.step(.01,now+600);
     expect(sim.snapshot().impacts.some(e=>e.foley==='corpse-kick')).toBe(true);
 });
-it.each(['big-cheese','crossfire','delayed-reaction'] as const)('marks %s events while retaining normal speed and incident physics',incident=>{
+it.each(['big-cheese','crossfire','delayed-reaction'] as const)('marks %s events while retaining launch speed and incident physics',incident=>{
     const {sim:initial,players,now}=fixture(),saved=initial.snapshot();saved.dispatch={phase:'active',incident,serial:1,started:now,until:now+25000};
     const sim=new ChaosSimulation(players,()=>{},saved);
     sim.shoot('a',{shotId:'event',origin:{x:8,y:4,z:0},direction:{x:1,y:0,z:0}});
-    expect(sim.snapshot(false).shots[0].v.x).toBe(BALL_SPEED);sim.step(.015,now+15);
+    expect(sim.snapshot(false).shots[0].v.x).toBe(launchSpeed(incident));sim.step(.015,now+15);
     const state=sim.snapshot();
     if(incident==='delayed-reaction'){
         expect(state.impacts.some(i=>i.cue==='thud')).toBe(true);sim.step(.001,now+1500);expect(sim.snapshot().impacts.some(i=>i.foley==='unstick')).toBe(true);

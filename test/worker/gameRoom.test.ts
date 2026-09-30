@@ -2,6 +2,8 @@ import {createMovementAllowance} from '../../src/worker/validation';
 import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
 import { createAssignment } from '../../src/shared/assignments';
+import { activeZone } from '../../src/shared/jurisdiction';
+import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_HP, WIN_DISPLAY_MS, MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
@@ -552,7 +554,8 @@ describe('GameRoom websockets', () => {
       await game.handleHit(carrier.id, {type:'hit',victimId:victim.id,damage:MAX_HP}, {x:1,y:0,z:0});
       expect(champion.kills).toBe(20);
       expect(game.round.phase).toBe('playing');
-      const assignment=createAssignment('closing-time',now);assignment.liveAt=now;assignment.remainingMs=1;
+      const assignment=createAssignment('jurisdiction',now);assignment.liveAt=now;const zone=assignment.jurisdiction!;zone.heldMs[carrier.id]=59_999;
+      Object.assign(champion,JURISDICTION_ZONES[activeZone(zone)].posts[0]);
       game.chaos.setAssignment(assignment);game.chaos.step(.001,now+1);game.finishAssignment();
       expect(game.players.get(victim.id)!.deaths).toBe(1);
       expect(game.round).toMatchObject({phase:'won',winnerId:carrier.id,kills:20,resetAt:now+WIN_DISPLAY_MS});
@@ -565,7 +568,7 @@ describe('GameRoom websockets', () => {
         .toEqual([{type:'reset',due_at:now+WIN_DISPLAY_MS}]);
     });
     const won = await first.inbox.waitFor('gameWon');
-    expect(won).toMatchObject({winnerId:carrier.id,kills:20,resetAt:now+WIN_DISPLAY_MS,assignment:{id:'closing-time',phase:'closed'}});
+    expect(won).toMatchObject({winnerId:carrier.id,kills:20,resetAt:now+WIN_DISPLAY_MS,assignment:{id:'jurisdiction',phase:'closed'}});
     const board = await first.inbox.waitFor('scoreboardUpdate', message => message.scores.some(p => p.id === carrier.id && p.kills === 20));
     expect(board.scores.find(p => p.id === victim.id)!.deaths).toBe(1);
     await runInDurableObject(stub, async (instance:GameRoom) => {

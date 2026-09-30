@@ -67,8 +67,8 @@ describe('shared assignment room lifecycle',()=>{
         expect(first.invalid).toEqual([]);expect(second.invalid).toEqual([]);
     });
     it('restricts direct selection to local private rooms and keeps repeated requests stable',async()=>{
-        expect((await SELF.fetch('https://rat.test/ws?assignment=closing-time',{headers:{Upgrade:'websocket'}})).status).toBe(400);
-        expect((await SELF.fetch('https://rat.test/ws?room=graybox-practice-external&assignment=closing-time',{headers:{Upgrade:'websocket'}})).status).toBe(404);
+        expect((await SELF.fetch('https://rat.test/ws?assignment=jurisdiction',{headers:{Upgrade:'websocket'}})).status).toBe(400);
+        expect((await SELF.fetch('https://rat.test/ws?room=graybox-practice-external&assignment=jurisdiction',{headers:{Upgrade:'websocket'}})).status).toBe(404);
         for(const url of ['http://localhost/ws?room=graybox-practice-invalid&assignment=unknown',
             'http://localhost/ws?room=graybox-practice-retired&assignment=misfiled-evidence'])
             expect((await SELF.fetch(url,{headers:{Upgrade:'websocket',Origin:'http://localhost'}})).status).toBe(400);
@@ -77,10 +77,10 @@ describe('shared assignment room lifecycle',()=>{
         expect(response.status).toBe(101);const ws=response.webSocket!;ws.accept();sockets.push(ws);
         const client=await open(name);expect(client.welcome.round.assignment?.id).toBe('chain-of-custody');
         expect(await stub.configureAssignment('chain-of-custody')).toBe(true);
-        expect(await stub.configureAssignment('closing-time')).toBe(false);
+        expect(await stub.configureAssignment('jurisdiction')).toBe(false);
         await runInDurableObject(stub,instance=>pause(instance as unknown as Internals));
     });
-    it('delivers the same four physical finishes and two shuffle cycles to ordinary and compact clients',async()=>{
+    it('delivers the same three physical finishes and two shuffle cycles to ordinary and compact clients',async()=>{
         const {name,stub}=room(),first=await open(name),second=await open(name,true);
         expect(first.welcome.round.assignment?.roundId).toBe(second.welcome.round.assignment?.roundId);
         const sequence:AssignmentId[]=[];
@@ -94,8 +94,6 @@ describe('shared assignment room lifecycle',()=>{
                     expect(sim.caseHolderId).toBe(a.id);
                     if(assignment.id==='excessive-force'){
                         for(let i=0;i<10;i++){b.hp=MAX_HP;await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:MAX_HP},{x:0,y:0,z:-1});}
-                    }else if(assignment.id==='closing-time'){
-                        assignment.remainingMs=1;now+=1;sim.step(.001,now);
                     }else if(assignment.jurisdiction){
                         const j=assignment.jurisdiction;Object.assign(a,JURISDICTION_ZONES[activeZone(j)].posts[0]);j.heldMs[a.id]=59999;now++;sim.step(.001,now);
                     }else for(const id of assignment.destinations){
@@ -161,24 +159,25 @@ describe('shared assignment room lifecycle',()=>{
         expect(late.welcome.players[first.welcome.id].kills).toBe(21);expect(late.invalid).toEqual([]);
         await runInDurableObject(stub,instance=>pause(instance as unknown as Internals));
     });
-    it('ignores an obsolete reset deadline while Closing Time still has possession time remaining',async()=>{
-        const {name,stub}=room();await stub.configureAssignment('closing-time');await open(name);
+    it('ignores an obsolete reset deadline while the assignment is still undecided',async()=>{
+        const {name,stub}=room();await stub.configureAssignment('jurisdiction');await open(name);
         await runInDurableObject(stub,async(instance,ctx)=>{
             const game=instance as unknown as Internals;pause(game);const before=structuredClone(game.chaos.assignmentState!);
             const now=before.liveAt+600_000;game.clock=()=>now;game.round.startedAt=now-600_000;
             ctx.storage.sql.exec("INSERT INTO pending_events (id,type,player_id,due_at) VALUES ('obsolete-timeout','reset',NULL,?)",now);
             await instance.alarm();pause(game);
             expect(game.round.phase).toBe('playing');expect(game.chaos.assignmentState!.roundId).toBe(before.roundId);
-            expect(game.chaos.assignmentState!.remainingMs).toBe(before.remainingMs);expect(game.chaos.assignmentState!.result).toBeUndefined();
+            expect(game.chaos.assignmentState!.result).toBeUndefined();
         });
     });
     it('restores a closed result and its reset deadline without awarding another win',async()=>{
-        const {name,stub}=room();await stub.configureAssignment('closing-time');const first=await open(name);
+        const {name,stub}=room();await stub.configureAssignment('jurisdiction');const first=await open(name);
         const result=await runInDurableObject(stub,(instance)=>{
             const game=instance as unknown as Internals;pause(game);const sim=game.chaos,a=game.players.get(first.welcome.id)!;
             const now=sim.assignmentState!.liveAt+1;game.clock=()=>now;
             sim.caseBody.position.set(a.x,a.y+.8,a.z);sim.caseBody.velocity.setZero();sim.step(0,now);
-            sim.assignmentState!.remainingMs=1;sim.step(.001,now+1);game.finishAssignment();
+            Object.assign(a,JURISDICTION_ZONES[activeZone(sim.assignmentState!.jurisdiction!)].posts[0]);sim.assignmentState!.jurisdiction!.heldMs[a.id]=59999;
+            sim.step(.001,now+1);game.finishAssignment();
             return {assignment:structuredClone(sim.assignmentState!) as AssignmentState,resetAt:now+WIN_DISPLAY_MS};
         });
         await first.wait('gameWon');await evictDurableObject(stub,{webSockets:'hibernate'});

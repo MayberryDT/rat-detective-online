@@ -45,7 +45,7 @@ describe('full lobby scoreboard', () => {
         expect(f.row('rd-ai-2')).toBe(other);expect(f.cells('me')).toContain(`1 / ${MAX_HP} HP`);
         f.board.dispose();
     });
-    it.each(['closing-time', 'excessive-force', 'chain-of-custody', 'jurisdiction'] as const)('uses authoritative mode scores and all players in %s', mode => {
+    it.each(['excessive-force', 'chain-of-custody', 'jurisdiction'] as const)('uses authoritative mode scores and all players in %s', mode => {
         const f = fixture(mode);
         if (mode === 'excessive-force') f.assignment.caseKills = {'rd-ai-1': 7, me: 4};
         if (mode === 'jurisdiction') f.assignment.jurisdiction!.heldMs={'rd-ai-1':7000,me:4000};
@@ -55,7 +55,7 @@ describe('full lobby scoreboard', () => {
         expect(f.row('me').dataset.local).toBe('true'); expect(f.row('rd-ai-1').dataset.carrier).toBe('true');
         const mine = f.cells('me'); expect(mine).toContain('19'); expect(mine).toContain('2'); expect(mine).toContain('9.50');
         expect(mine).toContain('0:30'); expect(mine).toContain('25%');
-        if (mode !== 'closing-time') expect(mine).toContain(mode === 'jurisdiction' ? '4 / 60' : mode === 'excessive-force' ? '4 / 10' : '1 / 3');
+        expect(mine).toContain(mode === 'jurisdiction' ? '4 / 60' : mode === 'excessive-force' ? '4 / 10' : '1 / 3');
         expect(f.cells('rd-ai-1')).toContain('∞'); expect(f.cells('rd-ai-1')).toContain('1:30');
         const name = f.row('me').children[1]; expect(name.children[0].textContent).toBe('<img onerror="bad">'); expect(name.children[0].innerHTML).toBe('');
         f.board.dispose();
@@ -71,13 +71,13 @@ describe('full lobby scoreboard', () => {
         f.board.setVisible(false); expect(f.body.classes.has('scoreboard-open')).toBe(false);
         f.board.setAvailable(false); f.board.setVisible(true); expect(f.root.hidden).toBe(true); f.board.dispose();
     });
-    it('retains late-join/paused time, updates life status, and honors the actual Closing winner instead of most-held time', () => {
-        const f = fixture('closing-time'); f.board.setVisible(true);
+    it('retains late-join/paused time, updates life status, and honors the actual winner instead of the best score', () => {
+        const f = fixture('excessive-force'); f.assignment.caseKills = {'rd-ai-1': 9}; f.board.setVisible(true);
         f.board.receive({type: 'playerDamaged', id: 'me', hp: 0} as ServerMessage); expect(f.cells('me')).toContain('RAT DOWN');
         f.board.receive({type: 'playerRespawn', id: 'me', hp: MAX_HP, x: 0, y: 0, z: 0}); expect(f.cells('me')).toContain(`${MAX_HP} / ${MAX_HP} HP`);
         f.assignment.phase = 'suspended'; f.board.receive({type: 'chaos', state: f.state});
         expect(f.cells('me')).toContain('0:30'); expect(f.root.querySelector('.match-scoreboard-mode span').textContent).toContain('PAUSED');
-        f.assignment.phase = 'closed'; f.assignment.result = {winnerId: 'me', winnerName: 'You', at: 10_000, method: 'held', posthumous: false};
+        f.assignment.phase = 'closed'; f.assignment.result = {winnerId: 'me', winnerName: 'You', at: 10_000, method: 'kills', posthumous: false};
         f.board.receive({type: 'gameWon', assignment: f.assignment} as ServerMessage);
         expect(f.rows()[0].dataset.player).toBe('me'); expect(f.cells('me')).toContain('WINNER'); f.board.dispose();
     });

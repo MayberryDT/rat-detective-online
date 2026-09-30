@@ -1,6 +1,7 @@
 import {expect,it} from 'vitest';
 import {RatBot} from '../../src/shared/bots/ratBot';
-import type {MotorNavigation} from '../../src/shared/bots/motor';
+import {BotMotor,type MotorNavigation} from '../../src/shared/bots/motor';
+import {FLASHLIGHT_REACH} from '../../src/shared/rat/ratBody';
 import {BotZoneHold} from '../../src/shared/bots/motor/zoneHold';
 import {seededRandom} from '../../src/shared/bots/random';
 import {BotNavigation} from '../../src/shared/BotNavigation';
@@ -62,7 +63,7 @@ it.each(ASSIGNMENT_IDS)('keeps %s case priorities above combat commitment',mode=
  expect(brain.goalKey).toBe('combat:enemy');
  state.case.owner=self.id;state.case.returningUntil=0;
  brain.step(20,self,[target],state,()=>true,false,true);
- expect(brain.objective).toBe(mode==='jurisdiction'?'zone-hold':mode==='chain-of-custody'?'delivery':mode==='closing-time'?'evade':'combat');
+ expect(brain.objective).toBe(mode==='jurisdiction'?'zone-hold':mode==='chain-of-custody'?'delivery':'combat');
  state.case.owner=target.id;brain.step(40,self,[target],state,()=>true,false,true);expect(brain.objective).toBe('carrier');
  target.hp=0;state.case.owner=null;state.case.p={x:8,y:0,z:0};brain.step(60,self,[target],state,()=>true,false,true);expect(brain.objective).toBe('case');
 });
@@ -86,4 +87,13 @@ it('a carrier repositions while turning, fights, cancels body fire on armor and 
  self.hp=0;const dead=worldIntent(brain.step(2000,self,[target],state,()=>true,false,true),self);expect(dead).toMatchObject({x:0,z:0,jump:false});expect(dead.shoot).toBeUndefined();
  brain.reset();self.hp=3;state.buffs={};state.case.owner=null;state.case.p={x:self.x+3,y:self.y,z:self.z};state.case.returningUntil=0;
  const fresh=brain.step(2020,self,[target],state,()=>true,false,true);expect(brain.objective).toBe('case');expect(fresh.fire).toBeUndefined();
+});
+it('sees rats only within flashlight reach in a Blackout, and as far as ever otherwise',()=>{
+ const self=player('self'),near=player('near',0,FLASHLIGHT_REACH-5),far=player('far',FLASHLIGHT_REACH+15,0);
+ const state=new ChaosSimulation(new Map([self,near,far].map(p=>[p.id,p])),()=>{}).snapshot(false),motor=new BotMotor(nav,0,()=>.5);
+ const seen=()=>{motor.perceive(0,self,[near,far],[],state,()=>true,()=>true,true);return motor.visibleRats.map(p=>p.id);};
+ state.dispatch={phase:'active',started:0,until:25000,serial:1,incident:'blackout'};
+ expect(seen()).toEqual(['near']);
+ state.dispatch={phase:'cooldown',started:25000,until:40000,serial:1,incident:'blackout'};
+ expect(seen()).toEqual(['near','far']);
 });

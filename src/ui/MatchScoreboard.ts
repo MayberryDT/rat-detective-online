@@ -117,7 +117,7 @@ export class MatchScoreboard {
     private render(): void {
         const assignment = this.assignment, mode = assignment?.id;
         const held = (id: string) => Math.max(0, this.state?.possession[id] ?? 0);
-        const points = (id: string) => mode==='jurisdiction'?(assignment?.jurisdiction?.heldMs[id]??0)/1000:mode === 'excessive-force' ? assignment?.caseKills[id] ?? 0 : mode === 'chain-of-custody' ? assignment?.deliveries[id] ?? 0 : held(id);
+        const points = (id: string) => mode==='jurisdiction'?(assignment?.jurisdiction?.heldMs[id]??0)/1000:mode === 'chain-of-custody' ? assignment?.deliveries[id] ?? 0 : assignment?.caseKills[id] ?? 0;
         const winner = assignment?.result?.winnerId;
         const rows = [...this.players.values()].sort((a, b) => this.byKills ? b.kills - a.kills || a.name.localeCompare(b.name) || a.id.localeCompare(b.id) : Number(b.id === winner) - Number(a.id === winner) ||
             (mode ? points(b.id) - points(a.id) : b.kills - a.kills) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -127,7 +127,7 @@ export class MatchScoreboard {
         text(this.summary, `${rows.length} INVESTIGATORS · ${totalKills} KILLS`);
         text(this.mode, mode ? ASSIGNMENTS[mode].title : 'DEATHMATCH');
         text(this.context, assignment?.result ? `${assignment.result.winnerName} WINS` : assignment?.phase === 'suspended' ? 'TAMPERING · OBJECTIVE PAUSED' :
-            mode === 'jurisdiction' ? 'FIRST TO 60 ZONE POINTS' : mode === 'closing-time' ? `${caseTime(Math.ceil(assignment!.remainingMs / 1000))} REMAINING` : mode === 'chain-of-custody' ? 'FIRST TO 3 DELIVERIES' : mode === 'excessive-force' ? 'FIRST TO 10 CASE KILLS' : 'THIS ROUND');
+            mode === 'jurisdiction' ? 'FIRST TO 60 ZONE POINTS' : mode === 'chain-of-custody' ? 'FIRST TO 3 DELIVERIES' : mode === 'excessive-force' ? 'FIRST TO 10 CASE KILLS' : 'THIS ROUND');
         const columns = ['#', 'INVESTIGATOR', ...(mode === 'jurisdiction' ? ['ZONE POINTS'] : mode === 'excessive-force' ? ['CASE KILLS'] : mode === 'chain-of-custody' ? ['DELIVERIES'] : []), 'KILLS', 'DEATHS', 'K/D', 'CASE TIME', 'CASE SHARE', 'STATUS'];
         const columnSignature = columns.join('|');
         if (columnSignature !== this.columns) {
@@ -172,7 +172,7 @@ export class MatchScoreboard {
                     }
                     const cell = this.doc.createElement('td'); cell.textContent = value;
                     if (i === p.cells.length - 1) cell.className = 'investigator-status';
-                    else if ((i === 1 && (mode === 'excessive-force' || mode === 'chain-of-custody' || mode === 'jurisdiction')) || (i === 4 && mode === 'closing-time')) cell.className = 'investigator-objective';
+                    else if (i === 1 && mode) cell.className = 'investigator-objective';
                     parts.push(cell);
                 });
                 row.replaceChildren(...parts);

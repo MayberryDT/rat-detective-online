@@ -43,7 +43,7 @@ async function connect(){
     ws.send(JSON.stringify({type:'shoot',shotId:'observer-forbidden',origin:{x:m.player.x,y:m.player.y,z:m.player.z},direction:{x:1,y:0,z:0}}));
     ws.send(JSON.stringify({type:'hit',victimId:Object.keys(m.players)[0],damage:3}));
    }
-   if(m.type==='chaos'){assert(['closing-time','chain-of-custody','excessive-force','jurisdiction'].includes(m.state.assignment?.id));if(receipt.assignment??receipt.firstAssignment)assert.equal(m.state.assignment?.id,receipt.assignment??receipt.firstAssignment);assert(!m.state.shots.some(s=>s.owner===welcome?.id));assert.notEqual(m.state.case.owner,welcome?.id);frames++;}
+   if(m.type==='chaos'){assert(['chain-of-custody','excessive-force','jurisdiction'].includes(m.state.assignment?.id));if(receipt.assignment??receipt.firstAssignment)assert.equal(m.state.assignment?.id,receipt.assignment??receipt.firstAssignment);assert(!m.state.shots.some(s=>s.owner===welcome?.id));assert.notEqual(m.state.case.owner,welcome?.id);frames++;}
    if(m.type==='playerMoved'){moves++;moved.add(m.player.id);}
    if(m.type==='playersMoved'){moves++;for(const p of m.players){assert.equal(typeof p.player.id,'string');moved.add(p.player.id);}}
    if(welcome&&frames>=30&&moves>=3)finish();

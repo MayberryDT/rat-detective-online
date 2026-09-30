@@ -39,20 +39,18 @@ export class RoundLedger {
 
 /** Each rat's share of the win in the current mode, its rank (ties broken by kills) and its
  * lead over the nearest rival (negative when behind the leader). */
-export function standings(ids: readonly string[], context: { assignment?: AssignmentState; possession?: Record<string, number>; kills?: Record<string, number> }): Map<string, Standing> {
+export function standings(ids: readonly string[], context: { assignment?: AssignmentState; kills?: Record<string, number> }): Map<string, Standing> {
   const a = context.assignment, kills = context.kills ?? {};
   const raw = (id: string): number => {
     if (!a) return kills[id] ?? 0;
     switch (a.id) {
       case 'chain-of-custody': return a.deliveries[id] ?? 0;
       case 'jurisdiction': return a.jurisdiction?.heldMs[id] ?? 0;
-      case 'closing-time': return context.possession?.[id] ?? 0;
       case 'excessive-force': return a.caseKills[id] ?? 0;
     }
   };
-  const bestPossession = Math.max(0, ...ids.map(id => context.possession?.[id] ?? 0));
   const target = !a ? KILLS_TO_WIN : a.id === 'chain-of-custody' ? ASSIGNMENT_TUNING.deliveryTarget
-    : a.id === 'jurisdiction' ? JURISDICTION_TUNING.targetMs : a.id === 'excessive-force' ? ASSIGNMENT_TUNING.caseKillTarget : bestPossession;
+    : a.id === 'jurisdiction' ? JURISDICTION_TUNING.targetMs : ASSIGNMENT_TUNING.caseKillTarget;
   const progress = (id: string) => target > 0 ? Math.min(1, raw(id) / target) : 0;
   const order = [...ids].sort((x, y) => raw(y) - raw(x) || (kills[y] ?? 0) - (kills[x] ?? 0));
   const out = new Map<string, Standing>();

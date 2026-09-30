@@ -99,15 +99,15 @@ test('private first assignment starts a playlist without pinning later rounds',a
   const assignmentSource=await readFile(new URL('../../src/shared/assignments.ts',import.meta.url),'utf8');
   const {transpile}=await import('typescript');
   const declaration=assignmentSource.slice(assignmentSource.indexOf('export function nextAssignment'),assignmentSource.indexOf('/** The server shuffles'));
-  const ASSIGNMENT_IDS=['closing-time','chain-of-custody','excessive-force','jurisdiction'];
+  const ASSIGNMENT_IDS=['chain-of-custody','excessive-force','jurisdiction'];
   const nextAssignment=new Function('ASSIGNMENT_IDS',transpile(declaration.replace('export ',''))+';return nextAssignment;')(ASSIGNMENT_IDS);
   const initialize=new Function('ASSIGNMENT_IDS',source.slice(start,end));
   const room={assignmentRotation:{remaining:[]}};
   const rounds=[];
-  for(let i=0;i<8;i++){initialize.call(room,ASSIGNMENT_IDS);rounds.push(nextAssignment(room.assignmentRotation,()=>.3));}
+  for(let i=0;i<6;i++){initialize.call(room,ASSIGNMENT_IDS);rounds.push(nextAssignment(room.assignmentRotation,()=>.3));}
   assert.equal(rounds[0],'chain-of-custody');
-  assert.equal(new Set(rounds.slice(0,4)).size,4);
-  assert.equal(new Set(rounds.slice(4)).size,4);
+  assert.equal(new Set(rounds.slice(0,3)).size,3);
+  assert.equal(new Set(rounds.slice(3)).size,3);
   assert(rounds.every((id,i)=>!i||id!==rounds[i-1]));
   assert.equal(room.assignmentRotation.forced,undefined);
  }finally{await rm(out,{recursive:true,force:true});}

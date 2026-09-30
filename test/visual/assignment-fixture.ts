@@ -68,7 +68,6 @@ const actor=createPlayer('local','Inspector Brie',appearance,position),players=n
 const sim=new ChaosSimulation(players,()=>{},undefined,spec);
 const assignment=createAssignment(id,now-(phase==='briefing'?0:5000));
 if(phase!=='briefing')assignment.phase='active';
-if(id==='closing-time')assignment.remainingMs=Number(query.get('remaining'))||7300;
 if(id==='chain-of-custody'){assignment.destinations=[...CHAIN_ROUTE];assignment.deliverySerial=Math.min(CHAIN_ROUTE.length-1,Math.max(0,Number(query.get('stop')??query.get('stamps'))||0));}
 if(id==='chain-of-custody'){assignment.deliveries={local:1,'other-0':2,'other-2':1};assignment.deliverySerial+=6;}
 if(id==='excessive-force')assignment.caseKills={local:6,'other-0':8,'other-2':4,'other-3':2};
@@ -104,9 +103,9 @@ if(phase==='suspended'){
     state.extraCases=incident.snapshot(false).extraCases;
 }
 if(phase==='closed'){
-    const a=state.assignment!;a.phase='closed';a.remainingMs=0;if(id==='chain-of-custody'){a.deliverySerial++;a.deliveries.local=3;}
+    const a=state.assignment!;a.phase='closed';if(id==='chain-of-custody'){a.deliverySerial++;a.deliveries.local=3;}
     if(id==='excessive-force')a.caseKills.local=10;if(a.jurisdiction){a.jurisdiction.heldMs.local=60000;a.jurisdiction.scorerId=null;}
-    a.result={winnerId:actor.id,winnerName:actor.name,at:now,method:id==='jurisdiction'?'zone-held':id==='closing-time'?'held':id==='chain-of-custody'?'carried':'kills',posthumous:false};
+    a.result={winnerId:actor.id,winnerName:actor.name,at:now,method:id==='jurisdiction'?'zone-held':id==='chain-of-custody'?'carried':'kills',posthumous:false};
 }
 const chaosView=new ChaosView(stage.scene,playerId=>playerId===actor.id?player.entity:undefined,undefined,false);
 chaosView.apply(state);

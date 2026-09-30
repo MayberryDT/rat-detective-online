@@ -13,7 +13,7 @@ afterEach(()=>vi.restoreAllMocks());
 const NOW=1_000_000,PRODUCTION=341283204,STAGING=2383011301;
 
 /** A deterministic room: seeded Math.random, a frame clock for Date.now and performance.now (count-bounded planner work). */
-function room(seed:number,placed:Record<string,{x:number;y:number;z:number}>,roamers:number,mode:'jurisdiction'|'closing-time'|'excessive-force',world=PRODUCTION){
+function room(seed:number,placed:Record<string,{x:number;y:number;z:number}>,roamers:number,mode:'jurisdiction'|'excessive-force',world=PRODUCTION){
     const spec={seed:world,version:GRAYBOX_VERSION};
     let s=seed*2654435761>>>0;
     vi.spyOn(Math,'random').mockImplementation(()=>{s=s+0x6D2B79F5>>>0;let t=s;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;});
@@ -53,7 +53,7 @@ it('rescues a bot pacing a crane stair landing, where escape hops and local jitt
 
 it('never rescues a bot that keeps reaching route waypoints across the city',()=>{
     // A long foot journey from the docks to a case in the south-west, with no rivals to distract it.
-    const {players,sim,controller,recovered,run}=room(2,{bot:{x:100,y:.3,z:-140}},0,'closing-time');
+    const {players,sim,controller,recovered,run}=room(2,{bot:{x:100,y:.3,z:-140}},0,'excessive-force');
     sim.caseBody.position.set(-110,1,118);sim.caseBody.velocity.setZero();
     let travelled=0,last={x:100,z:-140};
     try{

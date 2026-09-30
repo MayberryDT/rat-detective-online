@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type {IncidentId} from '../shared/incidentCatalog';
-import type {RatEntity} from '../entities/RatEntity';
+import {RAT_BLACKOUT,type RatEntity} from '../entities/RatEntity';
 import type {DeathStyle} from '../utils/RatAnimator';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
@@ -16,12 +16,13 @@ import {NoirDressing} from './NoirDressing';
 import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
 import type {Sting} from './FeelAudio';
-import type {ChaosShot} from '../shared/chaosState';
+import {INCIDENT_TUNING,type ChaosImpact,type ChaosShot} from '../shared/chaosState';
+import {BALL_RADIUS} from '../shared/ballTuning';
+import {playDelayedThud} from '../audio/IncidentAudio';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
 import {GRAPHICS} from '../session/graphicsQuality';
-import {NAMEPLATE_LIGHT} from '../ui/RatBillboard';
 import {Hunch,type HunchRat} from './Hunch';
 import {WantedSearchlight} from './WantedSearchlight';
 import {registerSupplyCues} from './supplyCues';
@@ -39,6 +40,7 @@ export class FeelDirector {
     private incident?:IncidentId;
     private readonly killTimes:number[]=[];
     private lastWordAt=-Infinity;
+    private cheeseLandedAt=-Infinity;
     private danger=0;
     private dangerTarget=0;
     private flood=0;
@@ -79,7 +81,7 @@ export class FeelDirector {
     private readonly impulse=new THREE.Vector3();
     private readonly up=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
-    constructor(readonly state:FeelState=feelState(),doc:Document|undefined=globalThis.document){
+    constructor(readonly state:FeelState=feelState(),private readonly doc:Document|undefined=globalThis.document){
         this.camera=new CameraFeel(()=>this.state.shake());
         this.screen=new ScreenFeel(()=>this.state.flash(),doc);
         this.sound=new FeelSound(this.state);
@@ -161,7 +163,7 @@ export class FeelDirector {
     /** Near-miss whizz for other rats' balls. */
     /** Near-miss whizzes; true when a ball just passed your head. */
     projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):boolean {return this.sound.projectiles(shots,myId,head,view);}
-    /** Case pickup, your delivery, closing seconds. */
+    /** Case pickup, your delivery. */
     sting(kind:Sting):void {
         this.sound.sting(kind);
         if(kind==='case')this.callout('ON THE CASE');
@@ -205,10 +207,17 @@ export class FeelDirector {
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
     setIncident(incident?:IncidentId):void {
         this.incident=incident;this.hunchView?.setSupercharged(incident==='clean-bill');
-        if(this.noirAtmosphere)this.noirAtmosphere.storm=incident==='blackout';
+        const blackout=incident==='blackout';
+        if(this.noirAtmosphere)this.noirAtmosphere.blackout=blackout;
+        // Blackout: the HUD goes black and white (feel.css).
+        if(this.doc&&this.doc.body.hasAttribute('data-blackout')!==blackout)this.doc.body.toggleAttribute('data-blackout',blackout);
     }
     /** Renderer exposure multiplier: Blackout sinks everything but the lamps' own glow. */
     get exposure():number {return 1-this.dark*FEEL.blackout.params.exposure;}
+    /** The city's own lights, 0…1: out in a Blackout (a nearby muzzle flash lifts them for a blink), stuttering in a Pressure Surge. */
+    get power():number {return 1-this.dark;}
+    /** How far a Blackout has set in, 0…1: every rat's flashlight takes over from the city's lights. */
+    get blackoutLevel():number {return this.blackout;}
 
     /** A local shot left the muzzle (a Bad Ammunition jam fires nothing, so no kick). */
     shot(shotId?:string):void {
@@ -379,6 +388,22 @@ export class FeelDirector {
         }
         this.word(heavy>.6?'KA-THUD!':'THUD!',at,view,now,heavy>.6);
     }
+    /** Big Cheese, per snapshot: a big ball landing nearby shakes the view a little, more for bigger and
+     * nearer, with a low thud; at most one every `cheeseShakeMs`. */
+    cheeseLandings(impacts:readonly ChaosImpact[],view:THREE.Camera,now=performance.now()):void {
+        const I=INCIDENT_TUNING,big=I.cheeseShakeRadius/BALL_RADIUS,max=I.cheeseRadii[I.cheeseRadii.length-1]/BALL_RADIUS;
+        if(now-this.cheeseLandedAt<I.cheeseShakeMs)return;
+        for(const hit of impacts){
+            const scale=hit.scale??1;
+            if(hit.foley!=='bounce'&&hit.foley!=='grow'||hit.n.y<.5||scale<big)continue;
+            const d=this.impulse.set(hit.p.x,hit.p.y,hit.p.z).distanceTo(view.position);
+            if(d>=I.cheeseShakeRange)continue;
+            const s=(.5+.5*Math.min(1,(scale-big)/(max-big)))*(1-d/I.cheeseShakeRange);
+            this.camera.kick(-I.cheeseShake*s,(Math.random()*2-1)*I.cheeseShake*s*.4);
+            playDelayedThud(hit.p,I.cheeseThudPitch);
+            this.cheeseLandedAt=now;return;
+        }
+    }
     /** L7, per snapshot: a thrown case whistles as it falls and bursts paperwork where it lands. */
     cases(list:readonly {id?:string;p:Vec3Data;v:Vec3Data;owner:string|null}[],view:THREE.Camera):void {
         if(!this.state.on('launchLanding')){this.fallingCases.clear();return;}
@@ -442,7 +467,7 @@ export class FeelDirector {
             this.sound.rain(this.noirRain.level);
         }
         if(this.noirAtmosphere){
-            this.noirAtmosphere.update(dt,view,!self||spaceAt(self)==='open',this.perception(),this.mono());
+            this.noirAtmosphere.update(dt,view,!self||spaceAt(self)==='open',this.perception(),this.mono(),this.dark);
             if(this.noirAtmosphere.thunderIn>=0&&(this.noirAtmosphere.thunderIn-=dt)<0)this.sound.thunder();
         }
         this.screen.update(dt,view,self);
@@ -475,7 +500,7 @@ export class FeelDirector {
         this.surgeFlicker*=Math.exp(-dt/.18);if(!on)this.surgeFlicker=0;
     }
     /** Blackout eases in with the lights stuttering out, and back on the same way.
-     * Lightning and muzzle flashes lift the dark for a beat. */
+     * Muzzle flashes lift the dark for a beat; there is no lightning. */
     private updateBlackout(dt:number):void {
         const p=FEEL.blackout.params,target=this.incident==='blackout'?1:0;
         this.blackout+=Math.sign(target-this.blackout)*Math.min(Math.abs(target-this.blackout),dt/p.fade);
@@ -485,13 +510,13 @@ export class FeelDirector {
         // A surge pulse makes the lights stutter for a beat.
         const flicker=this.surgeFlicker>.02&&Math.sin(performance.now()*.09)>0?this.surgeFlicker*FEEL.surgeLook.params.flicker:0;
         this.dark=Math.max(this.blackout*stutter,flicker)*(1-flash);
-        this.noirCity?.setDark(this.dark*p.city);
-        NAMEPLATE_LIGHT.value=1-this.dark*p.nameplates;
+        this.noirCity?.setDark(this.dark);
+        RAT_BLACKOUT.value=this.blackout;
     }
     /** Offset the rendered view; `afterRender` must follow the same frame. */
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);NAMEPLATE_LIGHT.value=1;}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.removeAttribute('data-blackout');}
 }

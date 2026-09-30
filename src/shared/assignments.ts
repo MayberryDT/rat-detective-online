@@ -4,12 +4,11 @@ import { LANDMARK_INTERIORS } from './landmarkLayout';
 import { DOCKS_JOBS } from './city/kit/parts/docks';
 import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
-export const ASSIGNMENT_IDS = ['closing-time', 'chain-of-custody', 'excessive-force', 'jurisdiction'] as const;
+export const ASSIGNMENT_IDS = ['chain-of-custody', 'excessive-force', 'jurisdiction'] as const;
 export type AssignmentId = typeof ASSIGNMENT_IDS[number];
-export const ASSIGNMENT_TUNING = { processingMs: 120_000, caseKillTarget: 10, deliveryTarget: 3, briefingMs: 2_400 } as const;
+export const ASSIGNMENT_TUNING = { caseKillTarget: 10, deliveryTarget: 3, briefingMs: 2_400 } as const;
 export const ASSIGNMENTS = {
     jurisdiction: {title:'JURISDICTION',rule:'HOLD THE CASE IN THE ZONE. FIRST TO 60 WINS.',flavor:'Your jurisdiction. Their problem.'},
-    'closing-time': { title: 'CLOSING TIME', rule: 'HOLD THE CASE AT ZERO. STEAL IT TO STEAL THE WIN.', flavor: 'Whoever signs last gets the commendation.' },
     'chain-of-custody': { title: 'PAPER CHASE', rule: 'Deliver the paperwork. First to three wins.', flavor: 'Previous investigators need not be acknowledged.' },
     'excessive-force': { title: 'EXCESSIVE FORCE', rule: 'HOLD THE CASE. GET 10 KILLS.', flavor: 'Disproportionate response. Impeccable paperwork.' },
 } satisfies Record<AssignmentId, { title: string; rule: string; flavor: string }>;
@@ -49,7 +48,7 @@ export interface AssignmentResult {
     winnerId: string;
     winnerName: string;
     at: number;
-    method: 'held' | 'carried' | 'kills' | 'zone-held';
+    method: 'carried' | 'kills' | 'zone-held';
     posthumous: boolean;
 }
 export interface AssignmentState {
@@ -58,7 +57,6 @@ export interface AssignmentState {
     phase: 'briefing' | 'active' | 'suspended' | 'closed';
     revealedAt: number;
     liveAt: number;
-    remainingMs: number;
     deliverySerial: number;
     destinations: DestinationId[];
     deliveries: Record<string, number>;
@@ -104,7 +102,7 @@ export function shuffledChainRoute(random = Math.random, previous?: DestinationI
 }
 export function createAssignment(id: AssignmentId, now: number, roundId: string = crypto.randomUUID(), random = Math.random): AssignmentState {
     return { roundId, id, phase: 'briefing', revealedAt: now, liveAt: now + ASSIGNMENT_TUNING.briefingMs,
-        remainingMs: id === 'closing-time' ? ASSIGNMENT_TUNING.processingMs : 0, deliverySerial: 0, deliveries: {},
+        deliverySerial: 0, deliveries: {},
         destinations: id === 'chain-of-custody' ? shuffledChainRoute(random) : [],
         caseKills: {}, revision: 0, ...(id==='jurisdiction'?{jurisdiction:createJurisdiction(random)}:{}) };
 }
@@ -123,14 +121,13 @@ export function parseAssignment(value: unknown): AssignmentState | null {
     const number = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
     if (!str(a.roundId, 64) || !isAssignmentId(a.id) || !['briefing', 'active', 'suspended', 'closed'].includes(String(a.phase)) ||
         !number(a.revealedAt) || !number(a.liveAt) || a.liveAt < a.revealedAt ||
-        !number(a.remainingMs) || a.remainingMs > ASSIGNMENT_TUNING.processingMs ||
         !Number.isSafeInteger(a.deliverySerial) || Number(a.deliverySerial) < 0 ||
         !Number.isSafeInteger(a.revision) || Number(a.revision) < 0 ||
         !a.caseKills || typeof a.caseKills !== 'object' || Array.isArray(a.caseKills) || !Array.isArray(a.destinations) ||
         !a.deliveries || typeof a.deliveries !== 'object' || Array.isArray(a.deliveries)) return null;
     const expected = a.id === 'chain-of-custody' ? CHAIN_ROUTE : [];
     if (a.destinations.length !== expected.length || new Set(a.destinations).size !== expected.length || a.destinations.some(id => !expected.includes(id)) ||
-        (a.id !== 'closing-time' && a.remainingMs !== 0) || (a.id !== 'chain-of-custody' && (a.deliverySerial !== 0 || Object.keys(a.deliveries).length!==0 || a.lastDelivery!==undefined)) ||
+        (a.id !== 'chain-of-custody' && (a.deliverySerial !== 0 || Object.keys(a.deliveries).length!==0 || a.lastDelivery!==undefined)) ||
         (a.id !== 'excessive-force' && Object.keys(a.caseKills).length !== 0)) return null;
     const entries = Object.entries(a.caseKills);
     if (entries.length > 100 || entries.some(([id, points]) => !str(id, 64) ||
@@ -155,9 +152,8 @@ export function parseAssignment(value: unknown): AssignmentState | null {
         if (!a.result || typeof a.result !== 'object') return null;
         const r = a.result as Record<string, unknown>;
         if (!str(r.winnerId, 64) || !str(r.winnerName, 32) || !number(r.at) || r.at < a.liveAt ||
-            !['held', 'carried', 'kills', 'zone-held'].includes(String(r.method)) || typeof r.posthumous !== 'boolean') return null;
-        if (a.id === 'closing-time' ? r.method !== 'held' || a.remainingMs !== 0 :
-            a.id === 'jurisdiction' ? r.method!=='zone-held'||jurisdiction?.heldMs[r.winnerId]!==JURISDICTION_TUNING.targetMs :
+            !['carried', 'kills', 'zone-held'].includes(String(r.method)) || typeof r.posthumous !== 'boolean') return null;
+        if (a.id === 'jurisdiction' ? r.method!=='zone-held'||jurisdiction?.heldMs[r.winnerId]!==JURISDICTION_TUNING.targetMs :
             a.id === 'chain-of-custody' ? r.method !== 'carried' || deliveries[r.winnerId] !== ASSIGNMENT_TUNING.deliveryTarget : r.method !== 'kills' || caseKills[r.winnerId] !== ASSIGNMENT_TUNING.caseKillTarget) return null;
         if (r.posthumous) return null;
         result = { winnerId: r.winnerId, winnerName: r.winnerName, at: r.at, method: r.method as AssignmentResult['method'], posthumous: r.posthumous };
@@ -166,17 +162,18 @@ export function parseAssignment(value: unknown): AssignmentState | null {
     if(deliveriesEntries.some(([id,points])=>points===ASSIGNMENT_TUNING.deliveryTarget&&id!==result?.winnerId))return null;
     if ((a.phase === 'closed') !== !!result || entries.some(([id, points]) => points === ASSIGNMENT_TUNING.caseKillTarget && id !== result?.winnerId)) return null;
     return { roundId: a.roundId, id: a.id, phase: a.phase as AssignmentState['phase'], revealedAt: a.revealedAt,
-        liveAt: a.liveAt, remainingMs: a.remainingMs, deliverySerial: Number(a.deliverySerial), destinations: [...a.destinations],
+        liveAt: a.liveAt, deliverySerial: Number(a.deliverySerial), destinations: [...a.destinations],
         deliveries, ...(jurisdiction?{jurisdiction}:{}), ...(lastDelivery?{lastDelivery}:{}), caseKills, revision: Number(a.revision), ...(result ? { result } : {}) };
 }
 
-/** Storage-only upgrade from the superseded private assignment prototype.
- * Shared stamps cannot become personal credit. Old Chain rounds restart;
- * other modes preserve their accumulated progress. Network uses protocol 5. */
+/** Storage-only upgrade from retired assignments and the superseded private
+ * prototype. Shared stamps cannot become personal credit. Old Chain rounds
+ * restart; a retired mode becomes a fresh round of its closest successor. */
 export function restoreAssignment(value:unknown, now:number):AssignmentState|null {
     const current=parseAssignment(value);if(current)return current;
     if(!value||typeof value!=='object')return null;
     const old=value as Record<string,unknown>;
+    if(old.id==='closing-time')return createAssignment('jurisdiction',now);
     if('stamps' in old&&'caseKills' in old){
         if(old.id==='chain-of-custody')return createAssignment('chain-of-custody',now);
         return parseAssignment({...old,deliverySerial:0,deliveries:{}});
@@ -184,8 +181,6 @@ export function restoreAssignment(value:unknown, now:number):AssignmentState|nul
     if(old.id==='chain-of-custody'&&Array.isArray(old.destinations)&&old.destinations.includes('icebox-check'))return createAssignment('chain-of-custody',now);
     if('caseKills' in old||!('claimant' in old))return null;
     if(old.id==='misfiled-evidence')return createAssignment('excessive-force',now);
-    if(old.id!=='closing-time'&&old.id!=='chain-of-custody')return null;
-    const remaining=old.remainingMs;
-    if(typeof remaining!=='number'||!Number.isFinite(remaining)||remaining<0||remaining>45_000)return null;
-    return parseAssignment({...old,deliverySerial:0,deliveries:{},caseKills:{},remainingMs:old.id==='closing-time'&&old.phase!=='closed'?remaining+75_000:remaining});
+    if(old.id!=='chain-of-custody')return null;
+    return parseAssignment({...old,deliverySerial:0,deliveries:{},caseKills:{}});
 }

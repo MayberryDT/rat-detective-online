@@ -5,8 +5,8 @@ import type { IncidentId } from './incidentCatalog';
 import type { ControlsInput } from './rat/controlTally';
 import type { PerfReport } from './perfReport';
 
-/** 24: the Stakeout pickup (kind `stakeout`, buff `stakeoutUntil`). */
-export const PROTOCOL_VERSION = 24;
+/** 25: Closing Time removed; Big Cheese heavy balls and fire interval; Blackout flashlights. */
+export const PROTOCOL_VERSION = 25;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;

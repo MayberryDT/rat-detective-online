@@ -195,12 +195,12 @@ describe('the Jev mind',()=>{
     });
 
     it('never sends a chosen name, a coordinate or a unit, in any assignment',async()=>{
-        for(const assignment of ['chain-of-custody','jurisdiction','closing-time','excessive-force'] as const){
+        for(const assignment of ['chain-of-custody','jurisdiction','excessive-force'] as const){
             // A rat in view, one behind a wall within the Hunch, one out of sight firing, the carrier far away.
             const others=[rat('rival',6,6),rat('lurker',-12,20),rat('gunner',-45,-30),rat('carrier',90,-60)];
             const r=rig({assignment,others});
             r.hidden.add(others[1]);r.hidden.add(others[2]);r.hidden.add(others[3]);
-            r.state.case.owner=assignment==='closing-time'?null:'carrier';
+            r.state.case.owner=assignment==='excessive-force'?null:'carrier';
             r.state.shots.push({id:'ball',owner:'gunner',p:{x:-44,y:1.4,z:-29},v:{x:30,y:0,z:0},age:.2});
             r.state.dispatch={phase:'active',started:0,until:1e9,serial:1,incident:'most-wanted',wanted:'rival'};
             r.mind.hit('me','rival',1000);

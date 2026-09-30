@@ -27,7 +27,6 @@ const HEARING={shotRange:60,shotAge:1,launchRange:100,launchMs:3000,alarmMs:4000
 const RECENT_HIT_MS=3000;
 const COMPASS=['north','north-east','east','south-east','south','south-west','west','north-west'];
 const RULES:Record<AssignmentId,string>={
-    'closing-time':'Closing Time: the clock runs only while someone holds the case; whoever holds it when the clock runs out wins.',
     'chain-of-custody':'Paper Chase: carry the case into the named drop-off; the first rat to make three deliveries wins.',
     jurisdiction:'Jurisdiction: only the rat carrying the case scores, while it stands inside the active zone; the first to sixty zone points wins.',
     'excessive-force':'Excessive Force: a kill counts only when made while carrying the case; the first to ten such kills wins.',
@@ -138,11 +137,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
     let standing='No assignment is running.';
     if(assignment)standing=assignment.phase==='briefing'?'The assignment is about to start.':assignment.phase==='suspended'?'The assignment is paused.'
         :assignment.phase==='closed'?'The assignment is over.':'';
-    if(active?.id==='closing-time'){
-        const holder=c?.owner;
-        standing=`${holder===self.id?'I hold the case, so the clock is running for me':holder?`${alias(holder)} holds the case, so the clock is running for it`:'Nobody holds the case, so the clock is stopped'}; `+
-            `${active.remainingMs>60_000?'plenty of time is left':active.remainingMs>20_000?'under a minute is left':'only seconds are left'}.`;
-    }else if(active){
+    if(active){
         const score=active.id==='chain-of-custody'?active.deliveries:active.id==='jurisdiction'?active.jurisdiction?.heldMs??{}:active.caseKills;
         const target=active.id==='chain-of-custody'?ASSIGNMENT_TUNING.deliveryTarget:active.id==='jurisdiction'?JURISDICTION_TUNING.targetMs:ASSIGNMENT_TUNING.caseKillTarget;
         const mine=score[self.id]??0,best=Math.max(0,...Object.entries(score).filter(([id])=>id!==self.id).map(([,value])=>value));
@@ -201,7 +196,8 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
     if(dispatch?.phase==='active'&&dispatch.incident){
         const info=incidentInfo(dispatch.incident);
         incident=`${info.title}: ${info.description}`+(info.id==='most-wanted'&&dispatch.wanted
-            ?dispatch.wanted===self.id?' I am the wanted rat.':` The wanted rat is ${alias(dispatch.wanted)}.`:'');
+            ?dispatch.wanted===self.id?' I am the wanted rat.':` The wanted rat is ${alias(dispatch.wanted)}.`
+            :info.id==='blackout'?' I see rats only as far as my flashlight reaches.':'');
     }
 
     // Only aliases already given: an unseen attacker stays unnamed.
@@ -252,7 +248,6 @@ function describe(goal:Goal,ctx:GoalContext,alias:(id:string)=>string):string {
     case 'keep-case':
         if(ctx.zone)return ctx.zone.early?'Carry the case to the next zone before it moves there.':'Carry the case into the active zone and hold it there.';
         if(ctx.delivery)return 'Carry the case to the drop-off.';
-        if(ctx.escape)return 'Keep the case and run from the other rats.';
         return ctx.combat?`Keep the case and fight ${alias(ctx.combat.id)}.`:'Keep the case.';
     case 'hold-zone':return 'Get into the active zone and stay in it.';
     case 'hunt':return ctx.combat?`Close in on ${alias(ctx.combat.id)} and shoot it.`:'Close in on a rat and shoot it.';

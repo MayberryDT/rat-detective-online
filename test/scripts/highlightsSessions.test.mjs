@@ -46,10 +46,10 @@ with tempfile.TemporaryDirectory() as root:
     for sequence,mode in enumerate(['chain-of-custody','jurisdiction','invalid',None],2):
         msg.update(type='heartbeat',messageId='message-'+str(sequence).zfill(4),sequence=sequence,gameMode=mode)
         assert svc.handle(json.dumps(msg).encode())['status']=='accepted'
-    msg.update(messageId='message-stale',sequence=10,documentEpoch='stale-document',gameMode='closing-time')
+    msg.update(messageId='message-stale',sequence=10,documentEpoch='stale-document',gameMode='excessive-force')
     assert svc.handle(json.dumps(msg).encode())['status']=='rejected'
     svc.library.record_session_mode('session-test',{})
-    svc.library.record_session_mode('absent-session','closing-time')
+    svc.library.record_session_mode('absent-session','excessive-force')
     assert svc.library.list_sessions()[0]['game_modes']==['chain-of-custody','jurisdiction']
     other=Library()
     assert other.list_sessions()[0]['game_modes']==['chain-of-custody','jurisdiction']

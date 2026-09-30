@@ -23,9 +23,6 @@
 .assignment-track{height:5px;background:var(--carbon-faint)}.assignment-track i{display:block;height:100%;background:#a5b9e18c;transform-origin:left;clip-path:polygon(0 20%,100% 0,97% 100%,2% 80%)}
 .assignment-rankings{padding:0;margin:0;list-style:none;display:grid;gap:2px}.assignment-rankings li{display:flex;align-items:center;gap:7px;padding:3px 6px;font:17px/1.1 var(--font-type)}.assignment-rankings li i{color:var(--carbon-dim);font:15px/1 var(--font-type);font-style:normal;width:14px}.assignment-rankings li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.assignment-rankings li b{font-weight:400;color:var(--carbon-ink);font-variant-numeric:tabular-nums}.assignment-rankings li[data-local=true]{background:var(--stamp-wash);color:var(--carbon-bright);rotate:-.6deg}
 .assignment-leader{font:15px/1 var(--font-type)}.assignment-ledger .assignment-stats{font:11px/1.2 var(--font-type);color:var(--carbon-dim);border:0;letter-spacing:.04em}
-.assignment-ledger[data-mode=closing-time]{left:20px;transform:none;width:290px;text-align:center;rotate:-2deg;gap:6px;clip-path:polygon(1% 0,98% 2%,100% 96%,93% 100%,84% 97%,73% 100%,64% 97%,52% 100%,41% 97%,30% 100%,20% 97%,8% 100%,0 97%);padding:12px 15px 15px}
-.assignment-ledger[data-mode=closing-time] .assignment-title{font-size:27px;order:-2;color:var(--carbon-ink)}.assignment-ledger[data-mode=closing-time] .assignment-counter{order:1;font-size:12px}.assignment-ledger[data-mode=closing-time] .assignment-progress{font:82px/.9 var(--font-display);letter-spacing:3px;color:var(--carbon-bright);text-shadow:4px 3px var(--carbon-deep);rotate:2deg}.assignment-ledger[data-mode=closing-time] .assignment-detail{font-size:15px}.assignment-ledger[data-mode=closing-time] .assignment-track{height:8px}
-.assignment-ledger[data-running=false][data-mode=closing-time] .assignment-progress{color:var(--carbon-dim);text-shadow:3px 3px var(--carbon-deep)}.assignment-ledger[data-urgent=true] .assignment-progress{animation:closing-tick .65s ease-in-out infinite;color:var(--stamp-ink)!important;text-shadow:4px 3px #2a0a0c!important}
 .assignment-ledger[data-mode=chain-of-custody]{width:308px;rotate:-1.5deg;gap:7px}
 .assignment-ledger[data-mode=chain-of-custody] .assignment-title{font-size:29px}.assignment-ledger[data-mode=chain-of-custody] .assignment-progress{font-size:28px}.assignment-target{font:24px/1.04 var(--font-display);letter-spacing:.04em;color:var(--cheese-dim);order:1;border-top:1px dashed var(--carbon-line);padding-top:9px}.assignment-ledger[data-mode=chain-of-custody] .assignment-detail{font-size:14px}.assignment-ledger[data-phase=suspended] .assignment-detail{background:#c8322a26;border-color:#e65a5080;color:var(--stamp-ink)}
 
@@ -42,12 +39,11 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 @keyframes incident-slam{0%{opacity:0;transform:scale(1.35) rotate(-9deg)}55%{opacity:1;transform:scale(.94) rotate(3deg)}100%{transform:none}}
 @keyframes stamp-hit{0%{opacity:0;transform:translateX(-50%) rotate(3deg) scale(1.15)}60%{opacity:1;transform:translateX(-50%) rotate(-3deg) scale(.96)}100%{transform:translateX(-50%) rotate(-4deg) scale(1)}}
 @keyframes case-bulletin{0%{opacity:0;transform:translateX(-50%) translateY(-20px) scale(1.15) rotate(-4deg)}12%,82%{opacity:1;transform:translateX(-50%) translateY(0) scale(1) rotate(1deg)}100%{opacity:0}}
-@keyframes closing-tick{50%{transform:scale(1.06) rotate(-2deg)}}
 @keyframes dispatch-arrival{from{opacity:0;transform:translateX(-50%) translateY(-25px) rotate(-7deg) scale(1.2)}to{opacity:1;transform:translateX(-50%) rotate(-2deg)}}
 @keyframes dispatch-departure{to{opacity:0;transform:translateX(-50%) translateY(-10px) rotate(-2deg)}}
-@media(max-width:1050px){.dispatch-hud:has(.assignment-reveal:not([hidden])) .dispatch-ledger,.dispatch-hud:has(.dispatch-roulette:not([hidden])) .dispatch-ledger{visibility:hidden}.assignment-ledger[data-mode=closing-time]{left:20px;transform:none;width:290px}}
-@media(max-width:700px){.assignment-ledger{left:12px;top:18px;width:260px;padding:12px;gap:6px}.assignment-title{font-size:27px}.assignment-rankings li{font-size:15px}.assignment-ledger[data-mode=closing-time]{left:12px;width:275px}.assignment-ledger[data-mode=closing-time] .assignment-progress{font-size:76px}.assignment-ledger[data-mode=chain-of-custody]{width:min(290px,calc(100vw - 24px))}.assignment-ledger[data-mode=chain-of-custody] .assignment-progress{font-size:26px}.dispatch-ledger{top:auto;bottom:52px;right:12px;width:190px;padding:16px 10px 8px}.dispatch-brief,.case-ledger,.dispatch-next,.dispatch-time-track{display:none}.dispatch-status{font-size:22px}.dispatch-status-row{padding-right:32px}.dispatch-artwork{flex-basis:32px;height:36px}.dispatch-clock{position:absolute;right:6px;bottom:9px}.dispatch-timer{font-size:23px;padding:2px}.dispatch-alert-label{font-size:11px}.assignment-confirmation{top:29%;font-size:21px;max-width:78vw;padding:9px 14px}.case-broadcast{top:12%;max-height:100px;overflow:hidden}.assignment-destination{width:210px}.assignment-destination strong{font-size:20px}body:has(.dispatch-hud) #kill-feed{top:auto;bottom:145px}}
-@media(max-height:620px) and (min-width:701px){.assignment-ledger{gap:5px;top:16px}.assignment-rankings li{padding:2px 6px}.assignment-ledger[data-mode=closing-time] .assignment-progress{font-size:72px}.assignment-ledger[data-mode=chain-of-custody] .assignment-progress{font-size:26px}.assignment-confirmation{top:27%}.case-broadcast{top:10%;max-height:90px;overflow:hidden}}
+@media(max-width:1050px){.dispatch-hud:has(.assignment-reveal:not([hidden])) .dispatch-ledger,.dispatch-hud:has(.dispatch-roulette:not([hidden])) .dispatch-ledger{visibility:hidden}}
+@media(max-width:700px){.assignment-ledger{left:12px;top:18px;width:260px;padding:12px;gap:6px}.assignment-title{font-size:27px}.assignment-rankings li{font-size:15px}.assignment-ledger[data-mode=chain-of-custody]{width:min(290px,calc(100vw - 24px))}.assignment-ledger[data-mode=chain-of-custody] .assignment-progress{font-size:26px}.dispatch-ledger{top:auto;bottom:52px;right:12px;width:190px;padding:16px 10px 8px}.dispatch-brief,.case-ledger,.dispatch-next,.dispatch-time-track{display:none}.dispatch-status{font-size:22px}.dispatch-status-row{padding-right:32px}.dispatch-artwork{flex-basis:32px;height:36px}.dispatch-clock{position:absolute;right:6px;bottom:9px}.dispatch-timer{font-size:23px;padding:2px}.dispatch-alert-label{font-size:11px}.assignment-confirmation{top:29%;font-size:21px;max-width:78vw;padding:9px 14px}.case-broadcast{top:12%;max-height:100px;overflow:hidden}.assignment-destination{width:210px}.assignment-destination strong{font-size:20px}body:has(.dispatch-hud) #kill-feed{top:auto;bottom:145px}}
+@media(max-height:620px) and (min-width:701px){.assignment-ledger{gap:5px;top:16px}.assignment-rankings li{padding:2px 6px}.assignment-ledger[data-mode=chain-of-custody] .assignment-progress{font-size:26px}.assignment-confirmation{top:27%}.case-broadcast{top:10%;max-height:90px;overflow:hidden}}
 @media(prefers-reduced-motion:reduce){.dispatch-hud *{animation:none!important}.roulette-strip{will-change:auto}.dispatch-roulette.roulette-leaving{opacity:0}}
 @media(max-height:600px) and (max-width:700px){.assignment-ledger[data-mode=chain-of-custody]{gap:5px;padding:10px 12px}.assignment-ledger[data-mode=chain-of-custody] .assignment-title{font-size:19px}.assignment-ledger[data-mode=chain-of-custody] .assignment-counter{font-size:11px}.assignment-ledger[data-mode=chain-of-custody] .assignment-progress{font-size:28px}.assignment-ledger[data-mode=chain-of-custody] .assignment-detail{font-size:13px;padding:5px}.assignment-target{font-size:21px}}
 
@@ -62,11 +58,10 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 /* The carbon roulette is see-through; where it reaches the broadcast lane, the broadcast waits. */
 @media(max-height:900px){.dispatch-hud:has(:is(.dispatch-roulette,.assignment-reveal):not([hidden])) .case-broadcast{visibility:hidden}}
 @media(max-width:700px){
- .assignment-ledger,.assignment-ledger[data-mode=closing-time],.assignment-ledger[data-mode=chain-of-custody]{max-width:calc(50vw - 64px);padding:10px;gap:5px}
+ .assignment-ledger,.assignment-ledger[data-mode=chain-of-custody]{max-width:calc(50vw - 64px);padding:10px;gap:5px}
  .assignment-ledger[data-mode=chain-of-custody] .assignment-title{font-size:23px}
  .assignment-rankings li{font-size:14px;gap:5px}
  .assignment-ledger[data-mode=chain-of-custody] .assignment-target{font-size:19px}
- .assignment-ledger[data-mode=closing-time] .assignment-progress{font-size:clamp(44px,11vw,70px)}
 }
 
 /* One illustrated carbon card per pickup, in a single bottom-center row; each keeps its own faded ink. */
@@ -164,9 +159,8 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 /* Destination guidance reads as an evidence tag too. */
 .assignment-destination strong{position:relative;padding-left:22px}
 .assignment-destination strong::before{content:'';position:absolute;left:8px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--cheese-dim);box-shadow:0 0 0 2px var(--carbon-deep)}
-/* U4: bars ease, the closing seconds shake, ranks slide (script). */
+/* U4: bars ease, the zone's closing seconds shake, ranks slide (script). */
 .assignment-ledger.ui-ease .assignment-track i{transition:transform .5s var(--ui-out)}
-.assignment-ledger[data-final=true] .assignment-progress{animation:closing-tick .5s ease-in-out infinite,ui-shake .16s linear infinite}
 .jurisdiction-timer[data-urgent=true] .assignment-zone-clock{animation:ui-shake .45s linear infinite}
 .jurisdiction-timer[data-final=true] .assignment-zone-clock{animation-duration:.16s;color:var(--stamp-ink)}
 .assignment-rankings li{position:relative}

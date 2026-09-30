@@ -267,6 +267,7 @@ vi.mock('../../src/session/PerformanceStats', () => ({
 vi.mock('../../src/entities/RatEntity', () => ({
     initEntitySounds: (...args: unknown[]) => harness.initSounds(...args),
     disposeEntitySounds: (...args: unknown[]) => harness.disposeSounds(...args),
+    RAT_BLACKOUT: { value: 0 },
 }));
 vi.mock('../../src/shared/ratAppearance', async importOriginal => ({
     ...(await importOriginal<object>()),

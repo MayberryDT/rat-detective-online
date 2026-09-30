@@ -3,11 +3,12 @@ import {activeZone} from '../jurisdiction';
 import {zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {exposedCarrierCase,shotHitsIronclad} from '../BotTargeting';
 import {DISPATCH_STATIONS,PRESSURE_TUNING,type CaseState,type ChaosState} from '../chaosState';
-import {incidentInfo} from '../incidentCatalog';
+import {incidentInfo,type IncidentId} from '../incidentCatalog';
 import {hasHustle,hasIronclad,PICKUP_TUNING} from '../pickups';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
 import type {BotWaypoint} from '../BotLaunchRoutes';
-import {BALL_GRAVITY,BALL_SPEED} from '../ballTuning';
+import {launchGravity,launchSpeed} from '../shotBallistics';
+import {shotIntervalMs} from '../shotTiming';
 import {BASE_SKILL,type Goal,type MotorMode,type Plan,type SkillDials,type Stance} from './intent';
 import type {RayHit} from './motor/bankShot';
 import {seededRandom} from './random';
@@ -17,7 +18,7 @@ import {BotFight,FIGHT,type FightView} from './motor/fight';
 import {BotZoneHold} from './motor/zoneHold';
 import {BotTricks} from './motor/tricks';
 import {zoneStepSafe} from './motor/zoneStepSafe';
-import {RAT_MOVEMENT,lookHeading,noControls,ratMuzzle,type RatControls} from '../rat/ratBody';
+import {FLASHLIGHT_REACH,RAT_MOVEMENT,lookHeading,noControls,ratMuzzle,type RatControls} from '../rat/ratBody';
 
 export interface MotorNavigation {
     /** A supported local route leg, without replacing the actual objective. */
@@ -123,6 +124,9 @@ export class BotMotor {
     private stalled=false;
     private planAt = 0;
     private shotAt = 0;
+    /** When this rat last fired, and this tick's incident (its fire interval, lead and drop). */
+    private firedAt = -Infinity;
+    private incident?: IncidentId;
     private progressAt = 0;
     private readonly progressPosition={x:0,y:0,z:0};
     private progressSet=false;
@@ -335,6 +339,7 @@ export class BotMotor {
 
     /** The start of a tick: death, launcher flights and authoritative launches take over the controls. */
     begin(now:number,self:PlayerData,state:ChaosState|undefined,grounded:boolean):RatControls|undefined {
+        this.incident=state?.dispatch.phase==='active'?incidentInfo(state.dispatch.incident).id:undefined;this.aim.incident=this.incident;
         this.see(now,self,state,grounded);
         if(self.hp<=0){
             this.jumpTravel=undefined;this.flight=undefined;this.launchWaitAt=undefined;this.aim.reset();this.trigger.reset();this.fight.reset();this.zoneHold.reset();
@@ -401,11 +406,12 @@ export class BotMotor {
 
     /** At a decision: who is in sight, whom to shoot and whether to ring a bell in passing. Visible carriers
      * first (their exposed case through Ironclad), then Most Wanted, the retained target, the nearest
-     * vulnerable rat. A preferred rat (the mind's target) wins when it is visible and shootable. */
+     * vulnerable rat. A preferred rat (the mind's target) wins when it is visible and shootable. In a Blackout
+     * sight reaches only as far as a flashlight. */
     perceive(now:number,self:PlayerData,living:readonly PlayerData[],carriers:readonly PlayerData[],state:ChaosState|undefined,
         clear:(p:Vec3Data)=>boolean,clearControl:(p:Vec3Data)=>boolean,quietBell:boolean,preferred?:string):void {
-        const time=state?.time??now;
-        const visible=living.filter(p=>distance(self,p)<80&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
+        const time=state?.time??now,sight=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='blackout'?FLASHLIGHT_REACH:80;
+        const visible=living.filter(p=>distance(self,p)<sight&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
         this.visible=visible;
         // A rat seen dying (the kill feed) is not banked at.
         if(this.sighting&&!living.some(p=>p.id===this.sighting?.id))this.sighting=undefined;
@@ -640,7 +646,7 @@ export class BotMotor {
         }
         // Aim and fire: a bell, a gremlin's trick, the rival in sight, a bank at one just hidden, fire where one
         // just was, and otherwise a look ahead with the odd speculative group.
-        const mischief=this.tactics.mischief&&!holdingZone&&!dispatchReady?this.tricks.mischief(now,self,state,this.visible,clearControl):undefined;
+        const mischief=this.tactics.mischief&&!holdingZone&&!dispatchReady?this.tricks.mischief(now,self,state,this.visible,clearControl,this.incident):undefined;
         if(visibleTarget&&target){
             const point=casePoint??target;
             if(this.aim.engagedId!==target.id)this.trigger.reset();
@@ -649,7 +655,7 @@ export class BotMotor {
             this.aim.disengage(now);
             if(this.motorRandom()<.35)this.suppressUntil=now+200+this.motorRandom()*500;
         }
-        const bank=this.tactics.bank&&!visibleTarget&&!holdingZone&&!dispatchReady&&!mischief?this.tricks.bank(now,self,state,this.sighting,this.protectedVisible,this.navigation):undefined;
+        const bank=this.tactics.bank&&!visibleTarget&&!holdingZone&&!dispatchReady&&!mischief?this.tricks.bank(now,self,state,this.sighting,this.protectedVisible,this.navigation,this.incident):undefined;
         const suppressing=!visibleTarget&&now<this.suppressUntil&&!!seen;
         const trick=mischief??bank;
         let shoot:Vec3Data|undefined;
@@ -663,7 +669,8 @@ export class BotMotor {
         this.aim.difficulty(visibleTarget&&target?distance(self,target):25,visibleTarget?this.aim.targetSpeed:0,this.ownSpeed);
         this.aim.update(now);
         const facing=this.aim.yaw;
-        if(now>=this.shotAt){
+        // Big Cheese spaces every rat's shots; hold the trigger until the gun is ready.
+        if(now>=this.shotAt&&now-this.firedAt>=shotIntervalMs(this.incident)){
             if(dispatchReady&&bell&&!visibleTarget){
                 if(this.aim.offBy(eye,this.bellAim)<.06){shoot=this.aim.point(eye,distance(eye,this.bellAim));this.shotAt=now+350+this.random()*400;}
             }else if(trick&&!visibleTarget){
@@ -687,6 +694,7 @@ export class BotMotor {
             if(shoot&&!(dispatchReady&&bell&&!visibleTarget))this.shotAt=now+this.skill.fireGapMs;
         }
         if(shoot&&shotHitsIronclad(self,facing,shoot,this.protectedVisible,state))shoot=undefined;
+        if(shoot)this.firedAt=now;
         if(this.jumpTravel&&!grounded){
             // A floor probe is expected to fail in the air. Keep steering toward
             // the takeoff's landing target, then brake there instead of jumping
@@ -745,14 +753,14 @@ export class BotMotor {
     private workPad(now:number,self:PlayerData,state:ChaosState|undefined,waypoint:BotWaypoint,grounded:boolean,clearControl:(p:Vec3Data)=>boolean):RatControls {
         const machine=waypoint.launch!.machine,target=machine.target,eye=this.eye;
         const dx=machine.pad.x-self.x,dz=machine.pad.z-self.z,d=Math.hypot(dx,dz);
-        const travel=Math.hypot(target.x-self.x,target.z-self.z)/BALL_SPEED;
-        const lob={x:target.x,y:target.y-BALL_GRAVITY*travel*travel/2,z:target.z};
+        const travel=Math.hypot(target.x-self.x,target.z-self.z)/launchSpeed(this.incident);
+        const lob={x:target.x,y:target.y-launchGravity(this.incident)*travel*travel/2,z:target.z};
         this.aim.look(eye,lob,true);this.aim.update(now);
         let shoot:Vec3Data|undefined;
         // Standing builds pressure; every hit on the trigger adds more. Keep pumping it.
         const cooling=(state?.time??now)<(state?.pressure?.fired?.[machine.id]??-Infinity)+PRESSURE_TUNING.cooldownMs;
-        if(d<.6&&grounded&&now>=this.shotAt&&!cooling&&this.aim.offBy(eye,lob)<.05&&clearControl(target)){
-            shoot=this.aim.point(eye,distance(eye,lob));this.shotAt=now+350;
+        if(d<.6&&grounded&&now>=this.shotAt&&now-this.firedAt>=shotIntervalMs(this.incident)&&!cooling&&this.aim.offBy(eye,lob)<.05&&clearControl(target)){
+            shoot=this.aim.point(eye,distance(eye,lob));this.shotAt=now+350;this.firedAt=now;
         }
         const speed=d>.25?Math.min(6,d*4):0;
         this.stalled=false;this.progress++;

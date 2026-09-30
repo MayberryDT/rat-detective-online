@@ -47,16 +47,19 @@ export class NoirCity {
         material.onBeforeCompile=(shader,renderer)=>{
             compile.call(material,shader,renderer);
             Object.assign(shader.uniforms,uniforms);
+            // Lit surfaces lose only their own glow (lamps, windows, baked street light) with the power: the
+            // lights themselves dim by intensity, so flashlights still show them. Unlit ones simply go dark.
             shader.fragmentShader=shader.fragmentShader
                 .replace('#include <common>','#include <common>\nuniform float noirDrain;\nuniform float noirGamma;\nuniform float noirDark;\nuniform float noirMono;')
                 .replace('#include <color_fragment>',`#include <color_fragment>
                     float noirLuma=dot(diffuseColor.rgb,vec3(.299,.587,.114));
                     diffuseColor.rgb=mix(diffuseColor.rgb,noirLuma*vec3(.84,.91,1.08),noirDrain);`)
-                .replace('#include <dithering_fragment>',`gl_FragColor.rgb=pow(max(gl_FragColor.rgb,vec3(0.)),vec3(noirGamma))*(1.-noirDark);
+                .replace('#include <aomap_fragment>',unlit?'#include <aomap_fragment>':'totalEmissiveRadiance*=1.-noirDark;\n#include <aomap_fragment>')
+                .replace('#include <dithering_fragment>',`gl_FragColor.rgb=pow(max(gl_FragColor.rgb,vec3(0.)),vec3(noirGamma))${unlit?'*(1.-noirDark)':''};
                     gl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(dot(gl_FragColor.rgb,vec3(.299,.587,.114))),noirMono);
                     #include <dithering_fragment>`);
         };
-        material.customProgramCacheKey=()=>key+'-noir-city-v3';
+        material.customProgramCacheKey=()=>key+'-noir-city-v4';
         material.needsUpdate=true;
     }
 

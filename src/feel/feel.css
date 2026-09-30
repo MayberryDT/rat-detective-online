@@ -79,3 +79,5 @@ body.reduced-motion :is(.feel-kill-bloom,.feel-soot).on{animation:none}
   .feel-callout.on{animation:ui-fade-hold 1500ms linear both}
   :is(.feel-kill-bloom,.feel-soot).on{animation:none}
 }
+/* Blackout: the HUD turns black and white; the game view, screen effects and the Hunch keep their own look. */
+body[data-blackout]>:not(canvas,script,#title-screen,.feel-screen,.hunch-screen,.player-settings){filter:grayscale(1) contrast(1.08)}

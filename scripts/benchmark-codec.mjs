@@ -12,7 +12,7 @@ async function runtime(baseline){
  return import(pathToFileURL(outfile));
 }
 const before=await runtime(true),after=await runtime(false);
-function state(api){return {time:10000,case:{p:{x:1.123456,y:1,z:2},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0},owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},extraCases:[],dispatch:{phase:'ready',started:0,until:0,serial:0},pressure:{serial:0,until:0,launches:[]},possession:{},notice:{serial:0,text:'Audit fixture'},corpses:[],impacts:[],assignment:api.createAssignment('closing-time',1000),shots:Array.from({length:256},(_,i)=>({id:`12345678-1234-1234-1234-${String(i).padStart(12,'0')}`,owner:`12345678-1234-1234-1234-${String(1000+i%24).padStart(12,'0')}`,p:{x:45.123456+i*.137,y:7.456789,z:123.456789},v:{x:38.123456,y:8.345678,z:32.56789},age:1.234567,original:true,wallBounced:i%2===0}))};}
+function state(api){return {time:10000,case:{p:{x:1.123456,y:1,z:2},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0},owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},extraCases:[],dispatch:{phase:'ready',started:0,until:0,serial:0},pressure:{serial:0,until:0,launches:[]},possession:{},notice:{serial:0,text:'Audit fixture'},corpses:[],impacts:[],assignment:api.createAssignment('excessive-force',1000),shots:Array.from({length:256},(_,i)=>({id:`12345678-1234-1234-1234-${String(i).padStart(12,'0')}`,owner:`12345678-1234-1234-1234-${String(1000+i%24).padStart(12,'0')}`,p:{x:45.123456+i*.137,y:7.456789,z:123.456789},v:{x:38.123456,y:8.345678,z:32.56789},age:1.234567,original:true,wallBounced:i%2===0}))};}
 function measure(api,count){
  const s=state(api),receivers=Array.from({length:count},()=>new api.ChaosDelivery(true)),samples=[];let bytes=0;
  for(let frame=0;frame<240;frame++){

@@ -61,7 +61,37 @@ export class StreetLightPool {
         };
         material.customProgramCacheKey=()=>key+'-steady-exterior-v1';material.needsUpdate=true;
     }
-    update(camera:THREE.Camera,anchor:{x:number;y:number;z:number}=camera.position):void {
+    /** Blackout: the four lights become the flashlights of the four nearest other living rats within the
+     * flashlight's reach of `eye`, shaped like `template` (your own flashlight) at `intensity`. They light
+     * scenery like yours and cast no shadows. `intensity` 0 hands them back to the fixtures. */
+    flashlights(template:THREE.SpotLight,eye:THREE.Vector3,rats:ReadonlyMap<string,{readonly entity:{readonly dead:boolean;readonly mesh:THREE.Object3D}}>,intensity:number):void {
+        this.beamIntensity=intensity;
+        if(!(intensity>0))return;
+        const near=this.beamRats,d=this.topD;let count=0;
+        for(const {entity} of rats.values()){
+            if(entity.dead)continue;
+            const dist=entity.mesh.position.distanceTo(eye);
+            if(dist>=template.distance)continue;
+            let at=count;while(at>0&&d[at-1]>dist)at--;
+            if(at>=4)continue;
+            for(let k=Math.min(count,3);k>at;k--){near[k]=near[k-1];d[k]=d[k-1];}
+            near[at]=entity.mesh;d[at]=dist;count=Math.min(4,count+1);
+        }
+        for(let i=0;i<this.lights.length;i++){
+            const light=this.lights[i];
+            this.exteriorPositions.value[i].set(0,0,0,0);
+            if(i>=count){light.intensity=0;continue;}
+            const mesh=near[i]!,p=mesh.position;near[i]=undefined;
+            // Carried at the head like yours, along the way the rat faces.
+            this.view.set(0,0,-1).applyQuaternion(mesh.quaternion);
+            light.position.set(p.x,p.y+2,p.z);light.target.position.copy(p).addScaledVector(this.view,15);
+            light.color.copy(template.color);light.distance=template.distance;light.angle=template.angle;
+            light.penumbra=template.penumbra;light.decay=template.decay;light.intensity=intensity;
+        }
+    }
+    /** `power` 0…1 dims the fixtures with the city's lights (Blackout, Pressure Surge flicker). */
+    update(camera:THREE.Camera,anchor:{x:number;y:number;z:number}=camera.position,power=1):void {
+        if(this.beamIntensity>0)return;
         // The shoulder camera may sit outside a doorway or above a low ceiling.
         // Select the room/floor from the rat, not from that offset camera.
         const p=anchor,room=lightRoomAt(p,this.rooms);
@@ -104,8 +134,8 @@ export class StreetLightPool {
             const s=top[i]!,d=topD[i];
             light.position.set(s.x,s.y,s.z);light.target.position.set(s.target?.x??s.x,s.target?.y??s.y-8,s.target?.z??s.z);light.color.setHex(s.color);
             light.distance=s.distance??15;light.angle=s.angle??.68;
-            light.penumbra=s.penumbra??.65;
-            light.intensity=AUTHORED_LIGHT_GAIN*(s.intensity??45)*(s.brightness?.()??1)*(1-THREE.MathUtils.smoothstep(d,18,32));
+            light.penumbra=s.penumbra??.65;light.decay=2;
+            light.intensity=power*AUTHORED_LIGHT_GAIN*(s.intensity??45)*(s.brightness?.()??1)*(1-THREE.MathUtils.smoothstep(d,18,32));
             if(!s.room){
                 const view=this.view.copy(light.position).applyMatrix4(camera.matrixWorldInverse);
                 this.exteriorPositions.value[i].set(view.x,view.y,view.z,1);
@@ -113,6 +143,8 @@ export class StreetLightPool {
         }
     }
     private readonly top:(OverheadLight|undefined)[]=[undefined,undefined,undefined,undefined];
+    private readonly beamRats:(THREE.Object3D|undefined)[]=[undefined,undefined,undefined,undefined];
+    private beamIntensity=0;
     private readonly topD=new Float64Array(4);
     private readonly topScore=new Float64Array(4);
     private readonly view=new THREE.Vector3();
