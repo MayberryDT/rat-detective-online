@@ -141,7 +141,9 @@ describe('cut corners at junctions',()=>{
         const matrix=new THREE.Matrix4(),p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();
         let checked=0;
         const lamps=[...STREET_LAMPS,...generatedStreetLamps(buildings,STREET_LAMPS)];
-        for(const mesh of scene.children)if(mesh instanceof THREE.InstancedMesh&&mesh.geometry instanceof THREE.BoxGeometry)for(let i=0;i<mesh.count;i++){
+        // Details are unit boxes scaled per instance; instanced meshes draw geometry views of the shared box.
+        const unitBox=(g:THREE.BufferGeometry)=>{if(!g.boundingBox)g.computeBoundingBox();const b=g.boundingBox!;return b.min.x===-.5&&b.min.y===-.5&&b.min.z===-.5&&b.max.x===.5&&b.max.y===.5&&b.max.z===.5;};
+        for(const mesh of scene.children)if(mesh instanceof THREE.InstancedMesh&&unitBox(mesh.geometry))for(let i=0;i<mesh.count;i++){
             mesh.getMatrixAt(i,matrix);matrix.decompose(p,q,s);
             // Pavement, lamp brackets and the pieces set on the face itself (yawed) are meant to be there.
             if(p.y+s.y/2<.15||Math.abs(q.y)>1e-6||lamps.some(([x,z])=>Math.hypot(p.x-x,p.z-z)<.8))continue;
