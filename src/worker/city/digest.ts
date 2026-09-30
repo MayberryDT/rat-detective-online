@@ -2,6 +2,7 @@ import type { Place } from '../../shared/city/places';
 import { divergence, measurePlaces, MIN_EVENTS, MIN_HUMAN_SECONDS, type Rate } from '../../shared/city/measures';
 import { jevSummary, tallyMinds } from '../../shared/city/minds';
 import { GOALS, PERSONALITIES } from '../../shared/bots/intent';
+import { PICKUP_KINDS } from '../../shared/pickups';
 
 /** Layer 4 of the city map: a short Markdown reading, each line with an evidence handle
  * that `/api/city/v1/places` or `/flows` answers exactly (docs/city-map.md). */
@@ -68,7 +69,7 @@ export function cityDigest(input: DigestInput): string {
     for (const r of roosts) out.push(`- ${r.place.name}: ${r.lethality!.toFixed(1)} (${r.raw['kills']} kills, ${r.raw['deaths'] ?? 0} deaths) ${handle(r.place.id, 'lethality')}`);
     out.push('');
   }
-  const pickups = (['ironclad', 'hustle', 'quick-fix'] as const).map(kind => [kind, total(`pickup:${kind}`)] as const);
+  const pickups = PICKUP_KINDS.map(kind => [kind, total(`pickup:${kind}`)] as const);
   out.push('## Pickups, launchers and faults');
   out.push(`- Pickups claimed: ${pickups.map(([k, n]) => `${k} ${n}`).join(', ')}.`);
   out.push(`- Launches ${total('launches')}, landings ${total('landings')}, landings inside geometry ${total('landing-clips')}.`);

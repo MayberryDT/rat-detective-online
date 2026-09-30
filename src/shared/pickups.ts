@@ -2,8 +2,8 @@ import type { Vec3Data } from './networkProtocol';
 import { DOCKS_JOBS } from './city/kit/parts/docks';
 import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
-/** The three approved pickups. Kept literal so snapshot validation can share it. */
-export const PICKUP_KINDS = ['ironclad', 'hustle', 'quick-fix'] as const;
+/** The four approved pickups. Kept literal so snapshot validation can share it. */
+export const PICKUP_KINDS = ['ironclad', 'hustle', 'quick-fix', 'stakeout'] as const;
 export type PickupKind = typeof PICKUP_KINDS[number];
 export const isPickupKind = (value: unknown): value is PickupKind =>
     typeof value === 'string' && (PICKUP_KINDS as readonly string[]).includes(value);
@@ -20,20 +20,31 @@ export const PICKUP_TUNING = {
     hustleMs: 10_000,
     /** Clearly noticeable without breaking the established camera and steering. */
     hustleMultiplier: 1.45,
+    /** Stakeout: the Hunch city-wide at any health, long enough to pick a target and get there. */
+    stakeoutMs: 12_000,
 } as const;
+/** Timed pickups (Quick Fix is instant), and the buff field and duration each one sets. */
+export const TIMED_PICKUPS = ['ironclad', 'hustle', 'stakeout'] as const;
+export type TimedPickup = typeof TIMED_PICKUPS[number];
+export const BUFF_FIELD = { ironclad: 'ironcladUntil', hustle: 'hustleUntil', stakeout: 'stakeoutUntil' } as const satisfies Record<TimedPickup, keyof PlayerBuffs>;
+export const BUFF_MS: Record<TimedPickup, number> = { ironclad: PICKUP_TUNING.ironcladMs, hustle: PICKUP_TUNING.hustleMs, stakeout: PICKUP_TUNING.stakeoutMs };
+export const BUFF_FIELDS: readonly (keyof PlayerBuffs)[] = TIMED_PICKUPS.map(kind => BUFF_FIELD[kind]);
+export const isTimedPickup = (kind: PickupKind): kind is TimedPickup => kind !== 'quick-fix';
 
 export interface PickupCopy { title: string; effect: string; flavor: string }
 export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
     ironclad: { title: 'IRONCLAD ALIBI', effect: 'Reflects cheese balls', flavor: 'Nothing sticks.' },
     hustle: { title: 'HOT PURSUIT', effect: 'Temporary speed boost', flavor: 'Move it, detective.' },
     'quick-fix': { title: 'QUICK FIX', effect: 'Full health', flavor: 'Fit for duty. Allegedly.' },
+    stakeout: { title: 'STAKEOUT', effect: 'See every rat in the city through walls', flavor: 'Eyes on the whole town.' },
 };
 
 /** Authored floor heights keep rewards on their intended routes. Every site has a
  * reason (layout 4, from layout 3's recorded play): Ironclad stands in the fight on
  * each landmark's ground floor, never upstairs, where nobody went for it; Hot Pursuit
  * waits where long runs start; Quick Fix hides just off the fight lines, within about
- * four seconds' run of every place where rats die most. */
+ * four seconds' run of every place where rats die most. Stakeout (layout 5) stands on a
+ * four-way crossroads in each corner of the city: see everyone, pick a target, go. */
 export interface PickupAnchor { id: string; kind: PickupKind; x: number; z: number; y?:number; near: string }
 export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
     {id:'alibi-records-forecourt',kind:'ironclad',x:8,z:-12,y:.7,near:'Street in front of Records Hall, east of the forecourt'},
@@ -56,31 +67,35 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
     {id:'fix-icebox-corner',kind:'quick-fix',x:110,z:-37,y:.7,near:'Icebox ground floor, the south-west corner'},
     {id:'fix-pump-north',kind:'quick-fix',x:108,z:96,y:.7,near:'Against the Pumping Station\'s north wall'},
     ...PRECINCT_JOBS.supplies,
+    {id:'stakeout-precinct-corner',kind:'stakeout',x:-54,z:-104,y:.7,near:'Crossroads of the x -60 avenue and the -102 street, between the precinct and the container yard'},
+    {id:'stakeout-pier9-corner',kind:'stakeout',x:68,z:-104,y:.7,near:'Crossroads of the x 70 avenue and the -102 street, between the container yard and Pier 9'},
+    {id:'stakeout-east-crossing',kind:'stakeout',x:92,z:44,y:.7,near:'Crossroads of the x 90 street and the 40 street, south of the Icebox shops'},
+    {id:'stakeout-south-avenue',kind:'stakeout',x:-64,z:140,y:.7,near:'Crossroads of the x -60 avenue and the 145 street, south of the south crossing'},
 ];
 
 /** Active timed effects on one rat. Absent keys mean no effect. */
-export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number }
+export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number }
 export type BuffMap = Record<string, PlayerBuffs>;
 
 /** All sites remain advertised while empty; the authority supplies their restock deadline. */
 export interface PickupState { id: string; kind: PickupKind; x: number; y: number; z: number; availableAt?: number }
 
 export const activeBuffs = (buffs: BuffMap | undefined, id: string, now: number): PlayerBuffs => {
-    const entry = buffs?.[id];
-    if (!entry) return {};
-    return {
-        ...(entry.ironcladUntil !== undefined && entry.ironcladUntil > now ? { ironcladUntil: entry.ironcladUntil } : {}),
-        ...(entry.hustleUntil !== undefined && entry.hustleUntil > now ? { hustleUntil: entry.hustleUntil } : {}),
-    };
+    const entry = buffs?.[id], active: PlayerBuffs = {};
+    if (!entry) return active;
+    for (const kind of TIMED_PICKUPS) { const until = entry[BUFF_FIELD[kind]]; if (until !== undefined && until > now) active[BUFF_FIELD[kind]] = until; }
+    return active;
 };
 export const hasIronclad = (buffs: BuffMap | undefined, id: string, now: number): boolean =>
     (buffs?.[id]?.ironcladUntil ?? 0) > now;
 export const hasHustle = (buffs: BuffMap | undefined, id: string, now: number): boolean =>
     (buffs?.[id]?.hustleUntil ?? 0) > now;
+export const hasStakeout = (buffs: BuffMap | undefined, id: string, now: number): boolean =>
+    (buffs?.[id]?.stakeoutUntil ?? 0) > now;
 
 /** True when the entry has fallen out of every effect and can be pruned. */
 export const buffExpired = (entry: PlayerBuffs | undefined, now: number): boolean =>
-    !entry || ((entry.ironcladUntil ?? 0) <= now && (entry.hustleUntil ?? 0) <= now);
+    !entry || TIMED_PICKUPS.every(kind => (entry[BUFF_FIELD[kind]] ?? 0) <= now);
 
 /** Merge a fresh claim into a rat's existing effects. Re-collecting the same
  * benefit refreshes to the full duration; it never stacks or accumulates. */
@@ -90,8 +105,7 @@ export function mergePickup(
     now: number,
 ): PlayerBuffs {
     const next: PlayerBuffs = { ...existing };
-    if (pickup === 'ironclad') next.ironcladUntil = now + PICKUP_TUNING.ironcladMs;
-    else if (pickup === 'hustle') next.hustleUntil = now + PICKUP_TUNING.hustleMs;
+    if (isTimedPickup(pickup)) next[BUFF_FIELD[pickup]] = now + BUFF_MS[pickup];
     return next;
 }
 

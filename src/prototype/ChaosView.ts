@@ -34,7 +34,7 @@ import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentat
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
 import {powerupCard} from './pickupArtwork';
-import { PICKUP_TUNING, activeBuffs, type BuffMap, type PickupKind } from '../shared/pickups';
+import { BUFF_FIELD, BUFF_MS, PICKUP_TUNING, TIMED_PICKUPS, activeBuffs, type BuffMap, type PickupKind, type TimedPickup } from '../shared/pickups';
 import {closestPointOnSegment} from '../shared/netplay';
 
 import { updateCaseCarryPose } from './CaseCarryPose';
@@ -91,7 +91,7 @@ export class ChaosView {
     private readonly buffBar=document.createElement('div');
     private readonly buffCards=new Map<PickupKind,HTMLElement>();
     private healingUntil=0;
-    private localBuffs={ironcladUntil:0,hustleUntil:0};
+    private readonly localBuffs:Record<TimedPickup,number>={ironclad:0,hustle:0,stakeout:0};
     private readonly pendingInteractions=new Map<string,InteractionCandidate>();
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
     private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
@@ -195,7 +195,7 @@ export class ChaosView {
         this.feedback?.('pickup-slap');this.feedback?.(`pickup-${kind}`);
     }
     private clearPickupCards():void {
-        this.healingUntil=0;this.localBuffs={ironcladUntil:0,hustleUntil:0};
+        this.healingUntil=0;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;
         for(const card of this.buffCards.values())leave(card,'paperSlide',CARD_EXIT);
         this.buffCards.clear();this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
@@ -397,23 +397,22 @@ export class ChaosView {
     private noteLocalBuffs(state:ChaosState):void{
         if(!this.myId)return;
         const mine=state.buffs?.[this.myId];
-        const next={ironcladUntil:mine?.ironcladUntil??0,hustleUntil:mine?.hustleUntil??0};
-        if(next.ironcladUntil!==this.localBuffs.ironcladUntil&&next.ironcladUntil>state.time)
-            this.pickupFeedback('ironclad');
-        if(next.hustleUntil!==this.localBuffs.hustleUntil&&next.hustleUntil>state.time)
-            this.pickupFeedback('hustle');
-        this.localBuffs=next;
+        for(const kind of TIMED_PICKUPS){
+            const until=mine?.[BUFF_FIELD[kind]]??0;
+            if(until!==this.localBuffs[kind]&&until>state.time)this.pickupFeedback(kind);
+            this.localBuffs[kind]=until;
+        }
     }
     private updateBuffs(buffs:BuffMap|undefined,now:number):void{
         if(this.resolveRat(this.myId)?.dead){this.clearPickupCards();return;}
         const mine=activeBuffs(buffs,this.myId,now);
         if(typeof this.buffBar.replaceChildren!=='function')return;
-        for(const kind of ['ironclad','hustle'] as const){
-            const until=kind==='ironclad'?mine.ironcladUntil:mine.hustleUntil;
+        for(const kind of TIMED_PICKUPS){
+            const until=mine[BUFF_FIELD[kind]];
             let card=this.buffCards.get(kind);
             if(!until){if(card)leave(card,'paperSlide',CARD_EXIT);this.buffCards.delete(kind);continue;}
             if(!card){card=powerupCard(kind);this.buffCards.set(kind,card);this.buffBar.appendChild(card);}
-            const remaining=Math.max(0,until-now),duration=kind==='ironclad'?PICKUP_TUNING.ironcladMs:PICKUP_TUNING.hustleMs;
+            const remaining=Math.max(0,until-now),duration=BUFF_MS[kind];
             const seconds=String(Math.ceil(remaining/1000)),clock=card.querySelector('b')!;
             if(clock.textContent!==seconds)clock.textContent=seconds;
             card.style.setProperty('--remaining',String(Math.min(1,remaining/duration)));

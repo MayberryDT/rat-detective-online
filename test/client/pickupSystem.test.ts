@@ -1,7 +1,7 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
-import {PICKUP_ANCHORS,PICKUP_TUNING} from '../../src/shared/pickups';
+import {PICKUP_ANCHORS,PICKUP_KINDS,PICKUP_TUNING} from '../../src/shared/pickups';
 import {LANDMARK_FURNISHINGS} from '../../src/shared/landmarkLayout';
 import {SEWER_PIPE_ENTRANCES,sewerPipePoint} from '../../src/shared/sewerLayout';
 import {MAX_HP} from '../../src/shared/networkProtocol';
@@ -89,11 +89,11 @@ describe('pickup system',()=>{
         const pickups=sites(sim);
         expect(pickups.length).toBe(PICKUP_ANCHORS.length);
         expect(new Set(pickups.map(p=>p.id)).size).toBe(pickups.length);
-        expect(new Set(pickups.map(p=>p.kind)).size).toBe(3);
+        expect(new Set(pickups.map(p=>p.kind))).toEqual(new Set(PICKUP_KINDS));
         for(const pickup of pickups){
             expect(PICKUP_ANCHORS.some(a=>a.id===pickup.id)).toBe(true);
             const anchor=PICKUP_ANCHORS.find(a=>a.id===pickup.id)!;
-            expect(pickup.y).toBeCloseTo(anchor.y??.7);
+            expect([pickup.x,pickup.y,pickup.z],pickup.id).toEqual([anchor.x,anchor.y??.7,anchor.z]);
             expect(sim.world.raycastClosest(new C.Vec3(pickup.x,pickup.y+.2,pickup.z),new C.Vec3(pickup.x,pickup.y-1.8,pickup.z),{collisionFilterMask:1})).toBe(true);
         }
     });

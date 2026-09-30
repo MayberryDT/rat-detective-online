@@ -7,7 +7,7 @@ import { DISPATCH_STATIONS } from '../../shared/chaosState';
 import { activeDestination, destinationPoint } from '../../shared/assignments';
 import { JURISDICTION_ZONES } from '../../shared/jurisdictionZones';
 import { activeZone } from '../../shared/jurisdiction';
-import type { PickupKind } from '../../shared/pickups';
+import { BUFF_FIELD, TIMED_PICKUPS, type PickupKind, type PlayerBuffs, type TimedPickup } from '../../shared/pickups';
 import { cityPlaces } from '../../shared/city/places';
 import { cityFloor } from '../../shared/city/frame';
 import { CITY_SCHEMA_VERSION, p3, type CityFact, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
@@ -90,6 +90,13 @@ type AimSample = [number, number, number];
 /** ms, the move axes f and r, then jump presses and forward/back and left/right key changes within the slot. */
 type ControlSample = [number, number, number, number, number, number];
 interface Life { start: number; spawnPlace: string; lastPickup?: { kind: PickupKind; at: number }; lastHit?: { at: number; by?: string }; prev?: { x: number; z: number; at: number }; place?: string; carryStart?: number; shots: number[] }
+
+/** Remaining milliseconds of each timed pickup a rat holds. */
+function situationBuffs(b: PlayerBuffs | undefined, now: number): RatSituation['buffs'] {
+  const out: RatSituation['buffs'] = {};
+  for (const kind of TIMED_PICKUPS) { const until = b?.[BUFF_FIELD[kind]] ?? 0; if (until > now) out[kind] = until - now; }
+  return out;
+}
 
 /** Counts under an aggregate key (day|layout|mode), then two labels: no key string is built per count. */
 class Tally<B> {
@@ -190,7 +197,7 @@ export class CityRecorder {
   private readonly jevApplied = new Map<string, number>();
   private events: Array<{ t: number; round?: string; type: string; data: string }> = [];
   private readonly alive = new Map<string, boolean>();
-  private readonly buffs = new Map<string, { ironclad: boolean; hustle: boolean }>();
+  private readonly buffs = new Map<string, Record<TimedPickup, boolean>>();
   private readonly siteAvailable = new Map<string, boolean>();
   private readonly siteRestockedAt = new Map<string, number>();
   private roundId?: string;
@@ -743,11 +750,13 @@ export class CityRecorder {
       if (available !== was) this.siteAvailable.set(site.id, available);
     }
     for (const p of players.values()) {
-      const b = state.buffs?.[p.id], ironclad = (b?.ironcladUntil ?? 0) > now, hustle = (b?.hustleUntil ?? 0) > now, was = this.buffs.get(p.id);
-      if (!was) { this.buffs.set(p.id, { ironclad, hustle }); continue; }
-      if (was.ironclad && !ironclad) this.emit({ ...this.context(now), type: 'buff-end', a: this.actor(p.id), buff: 'ironclad' });
-      if (was.hustle && !hustle) this.emit({ ...this.context(now), type: 'buff-end', a: this.actor(p.id), buff: 'hustle' });
-      was.ironclad = ironclad; was.hustle = hustle;
+      const b = state.buffs?.[p.id], was = this.buffs.get(p.id) ?? { ironclad: false, hustle: false, stakeout: false }, seen = this.buffs.has(p.id);
+      for (const kind of TIMED_PICKUPS) {
+        const on = (b?.[BUFF_FIELD[kind]] ?? 0) > now;
+        if (seen && was[kind] && !on) this.emit({ ...this.context(now), type: 'buff-end', a: this.actor(p.id), buff: kind });
+        was[kind] = on;
+      }
+      if (!seen) this.buffs.set(p.id, was);
     }
   }
 
@@ -777,7 +786,7 @@ export class CityRecorder {
       const look = this.looks.get(p.id), lookPitch = look && now - look.at <= AIM_FRESH_MS ? Math.asin(Math.max(-1, Math.min(1, look.y))) : pitch(p);
       rats.push({ a: this.actor(p.id), human: who === 'human', p: p3(p), floor: cityFloor(p.y), place: place.id, v, yaw: round2(yaw(p)), pitch: round2(lookPitch),
         hp: p.hp, alive, ...(p.respawnAt !== undefined && !alive ? { respawnIn: Math.max(0, p.respawnAt - now) } : {}), lifeMs: now - life.start,
-        buffs: { ...((b?.ironcladUntil ?? 0) > now ? { ironclad: b!.ironcladUntil! - now } : {}), ...((b?.hustleUntil ?? 0) > now ? { hustle: b!.hustleUntil! - now } : {}) },
+        buffs: situationBuffs(b, now),
         ...(life.lastPickup ? { lastPickup: { kind: life.lastPickup.kind, agoMs: now - life.lastPickup.at } } : {}),
         case: { carrying, ...(carrying && life.carryStart !== undefined ? { carryMs: now - life.carryStart } : {}), dist: round1(Math.hypot(state.case.p.x - p.x, state.case.p.y - p.y, state.case.p.z - p.z)) },
         ...(objective ? { objectiveDist: round1(Math.hypot(objective.x - p.x, objective.z - p.z)) } : {}),

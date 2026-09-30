@@ -30,7 +30,7 @@ import {
 } from './networkProtocol';
 import type { ControlsInput } from './rat/controlTally';
 import { CHAOS_TUNING, INCIDENT_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, PRESSURE_TUNING, type ChaosState } from './chaosState';
-import { PICKUP_ANCHORS, isPickupKind } from './pickups';
+import { BUFF_FIELDS, PICKUP_ANCHORS, isPickupKind } from './pickups';
 import { isSupportedWorldVersion } from './worldSpec';
 
 const HAT_TYPES = new Set<HatTypeName>(['fedora', 'trilby', 'porkpie']);
@@ -457,9 +457,7 @@ function parseChaos(value:unknown):ChaosState|null{
     if(!isRecord(value.buffs)||Object.keys(value.buffs).length>100)return null;
     for(const entry of Object.values(value.buffs)){
       if(!isRecord(entry))return null;
-      if(entry.ironcladUntil!==undefined&&finiteNumber(entry.ironcladUntil)===null)return null;
-      if(entry.hustleUntil!==undefined&&finiteNumber(entry.hustleUntil)===null)return null;
-      if(Object.keys(entry).some(key=>key!=='ironcladUntil'&&key!=='hustleUntil'))return null;
+      if(Object.entries(entry).some(([key,until])=>!(BUFF_FIELDS as readonly string[]).includes(key)||finiteNumber(until)===null))return null;
     }
   }
   if(!['ready','rolling','active','cooldown'].includes(String(d.phase))||finiteNumber(d.started)===null||finiteNumber(d.until)===null||integer(d.serial)===null)return null;

@@ -21,6 +21,8 @@ import {MAX_HP,type Vec3Data} from '../../shared/networkProtocol';
 const RUN_SPEED=(STEER.pace[0]+STEER.pace[1])/2;
 /** At full HP a rat senses others this close through walls, as humans do. */
 const HUNCH_RANGE=40;
+/** On Stakeout the Hunch covers the whole city, at any health (the client's `hunch.superRange`). */
+const STAKEOUT_RANGE=400;
 const HEARING={shotRange:60,shotAge:1,launchRange:100,launchMs:3000,alarmMs:4000};
 const RECENT_HIT_MS=3000;
 const COMPASS=['north','north-east','east','south-east','south','south-west','west','north-west'];
@@ -34,6 +36,7 @@ const PICKUPS:Record<PickupKind,string>={
     'quick-fix':'a Quick Fix medkit (restores full HP)',
     ironclad:'an Ironclad Alibi (cheese balls bounce off for a while)',
     hustle:'a Hot Pursuit (run much faster for a while)',
+    stakeout:'a Stakeout magnifying glass (see every rat in the city through walls for a while)',
 };
 
 /** What the rat remembers between requests (the room tells the mind). */
@@ -56,7 +59,7 @@ export interface Situation {
     last_target?:string;
     /** Sounds from things out of sight. */
     heard?:string[];
-    /** The Hunch: rats close by, through walls, at full HP. */
+    /** The Hunch: rats close by, through walls, at full HP; every rat in the city on Stakeout. */
     sensed_through_walls?:string[];
     dispatch?:string;
 }
@@ -190,7 +193,8 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         machines.add(machine.id);heard.push(`a launcher threw a rat into the air, ${relative(self,machine.pad)}`);
     }
 
-    const sensed=self.hp>=MAX_HP?ctx.living.filter(p=>!visible.has(p.id)&&distance(self,p)<=HUNCH_RANGE)
+    const staking=(state?.buffs?.[self.id]?.stakeoutUntil??0)>time,reach=staking?STAKEOUT_RANGE:HUNCH_RANGE;
+    const sensed=self.hp>=MAX_HP||staking?ctx.living.filter(p=>!visible.has(p.id)&&distance(self,p)<=reach)
         .sort((a,b)=>distance(self,a)-distance(self,b)).map(p=>`${alias(p.id)}, ${where(self,p)}`):[];
 
     let incident:string|undefined;

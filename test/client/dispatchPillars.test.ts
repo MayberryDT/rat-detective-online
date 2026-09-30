@@ -96,7 +96,7 @@ describe('Dispatch alarm pillars',()=>{
   fire(sim,t,around(t,0,0,4),1010);
   const granted=sim.snapshot(false).buffs??{};
   expect(Object.keys(granted)).toEqual(['caller']);
-  const until=granted.caller!.ironcladUntil??granted.caller!.hustleUntil;
+  const until=granted.caller!.ironcladUntil??granted.caller!.hustleUntil??granted.caller!.stakeoutUntil;
   expect(until).toBeGreaterThan(1010);
   sim.drainPickupEvents();
   // Busy hits by the caller grant nothing more.
@@ -114,7 +114,7 @@ describe('Dispatch alarm pillars',()=>{
    expect(sim.drainPickupEvents(),`roll ${roll}`).toEqual([]);
    expect(caller.hp).toBe(MAX_HP);
    const buff=sim.snapshot(false).buffs?.caller;
-   expect(buff?.ironcladUntil??buff?.hustleUntil,`roll ${roll}`).toBeGreaterThan(1010);
+   expect(buff?.ironcladUntil??buff?.hustleUntil??buff?.stakeoutUntil,`roll ${roll}`).toBeGreaterThan(1010);
    vi.restoreAllMocks();
   }
   vi.spyOn(Math,'random').mockReturnValue(.99);

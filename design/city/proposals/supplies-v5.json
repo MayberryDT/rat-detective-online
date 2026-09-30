@@ -1,0 +1,25 @@
+{
+  "id": "proposal:supplies-v5",
+  "title": "Stakeout sites (layout 5)",
+  "status": "Built on branch bots/overhaul on 30 September 2026; ships only on Tyler's OK",
+  "fromLayout": 4,
+  "toLayout": 5,
+  "summary": "Tyler, 30 September 2026: a fourth pickup, Stakeout: for 12 s the holder sees every rat in the city through walls. Layout 5 adds four Stakeout sites and changes nothing else. Each stands on a four-way street junction, one in each corner of the city: the x -60 avenue at the -102 street, between the precinct and the container yard (-54, -104); the x 70 avenue at the -102 street, between the container yard and Pier 9 (68, -104); the x 90 street at the 40 street, south of the Icebox shops (92, 44); and the x -60 avenue at the 145 street, just south of the south-crossing zone (-64, 140). You take it to pick a target, then go, so each has open street on all four sides (clear 25 units each way) and is at least 38 units from every other supply site, 8 from case spawns and pillars, 10 from launcher pads and outside every Jurisdiction zone. All four are supported and clear of geometry at their exact authored point (so the authority keeps them where authored), and a server bot's route reaches each from the central crossroads.",
+  "goals": [
+    "Every corner of the city has a Stakeout within reach, so seeing the whole city is a choice anywhere, not a trip across it.",
+    "A Stakeout sends its holder out on the hunt: it stands where several streets leave, never in a dead end or on top of another supply."
+  ],
+  "predictions": [
+    {
+      "id": "human-kills",
+      "says": "Humans make more kills per hour alive: a Stakeout shows them where every rat is.",
+      "expect": "up",
+      "measure": {
+        "kind": "rate",
+        "key": "kills-human",
+        "per": "human-s"
+      }
+    }
+  ],
+  "baseline": "design/city/layouts/layout-4.json"
+}

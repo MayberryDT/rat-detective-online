@@ -5,7 +5,7 @@ import {JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains} from '../jurisd
 import {DISPATCH_STATIONS,type ChaosState} from '../chaosState';
 import {incidentInfo} from '../incidentCatalog';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS} from '../assignments';
-import {hasIronclad,type PickupState} from '../pickups';
+import {BUFF_FIELD,hasIronclad,isTimedPickup,type PickupState} from '../pickups';
 import {MAX_HP,type PlayerData,type Vec3Data} from '../networkProtocol';
 
 const DISPATCH_DETOUR_MS=12000;
@@ -234,7 +234,7 @@ export class BotGoals {
                 // Collect useful supplies along the route without walking
                 // back for a refresh or making a 24-unit side excursion.
                 if(d>12||d+distance(p,goal)-distance(self,goal)>5)return false;
-                const buff=state?.buffs?.[self.id],until=p.kind==='ironclad'?buff?.ironcladUntil:p.kind==='hustle'?buff?.hustleUntil:0;
+                const until=isTimedPickup(p.kind)?state?.buffs?.[self.id]?.[BUFF_FIELD[p.kind]]:0;
                 if((until??0)>(state?.time??now)+2000)return false;
             }
             return true;

@@ -553,8 +553,8 @@ export class GameSession {
                 this.highlightBaseline = true;
                 this.seenHighlightLaunches.clear();
                 this.highlightCorpseSeen.clear();
-                this.roundWon=false;this.rat?.entity.setPowerups(0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
-                for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0);entity.resetReactions();entity.setStreak(0);}
+                this.roundWon=false;this.rat?.entity.setPowerups(0,0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
+                for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0,0);entity.resetReactions();entity.setStreak(0);}
                 this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
@@ -569,7 +569,8 @@ export class GameSession {
             const buff=state.buffs?.[id];
             const ironclad=Math.max(0,((buff?.ironcladUntil??0)-state.time)/1000);
             const hustle=Math.max(0,((buff?.hustleUntil??0)-state.time)/1000);
-            entity.setPowerups(ironclad,hustle);
+            const stakeout=Math.max(0,((buff?.stakeoutUntil??0)-state.time)/1000);
+            entity.setPowerups(ironclad,hustle,stakeout);
             if(ironclad>0&&!entity.dead)protectedRats.add(entity);
         };
         if(this.rat)apply(this.myId,this.rat.entity);

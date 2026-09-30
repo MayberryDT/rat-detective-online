@@ -1,6 +1,6 @@
 import type { Vec3Data } from '../networkProtocol';
 import type { AssignmentId } from '../assignments';
-import type { PickupKind } from '../pickups';
+import type { PickupKind, TimedPickup } from '../pickups';
 import type { ShotResultOutcome, HealCause } from '../networkProtocol';
 import type { CityFloor } from './frame';
 import type { Goal, MotorMode, Personality } from '../bots/intent';
@@ -41,7 +41,7 @@ export interface RatSituation {
   p: P3; floor: CityFloor; place: string;
   v: [number, number]; yaw: number; pitch: number;
   hp: number; alive: boolean; respawnIn?: number; lifeMs: number;
-  buffs: { ironclad?: number; hustle?: number };
+  buffs: Partial<Record<TimedPickup, number>>;
   lastPickup?: { kind: PickupKind; agoMs: number };
   case: { carrying: boolean; carryMs?: number; dist: number };
   objectiveDist?: number;
@@ -85,7 +85,7 @@ export type CityFact = FactContext & (
   | { type: 'pickup'; a: number; site: string; kind: PickupKind; p: P3; place: string; hpBefore: number; waitedMs?: number }
   | { type: 'restock'; site: string; kind: PickupKind }
   | { type: 'heal'; a: number; cause: HealCause; hp: number }
-  | { type: 'buff-end'; a: number; buff: 'ironclad' | 'hustle' }
+  | { type: 'buff-end'; a: number; buff: TimedPickup }
   | { type: 'case'; what: 'take' | 'drop' | 'steal' | 'deliver' | 'respawn'; a?: number; from?: number; p: P3; place: string; carryMs?: number }
   | { type: 'launch'; a: number; machine?: string; boost: boolean; p: P3; place: string }
   | { type: 'landing'; a: number; machine?: string; p: P3; place: string; airMs: number; apex: number; clip: boolean }

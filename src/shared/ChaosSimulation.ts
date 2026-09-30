@@ -14,7 +14,7 @@ import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_LIFETIME, BALL_RADIUS 
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
     COUNTERFEIT_IDS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState } from './chaosState';
-import { hasIronclad, mergePickup, activeBuffs, buffExpired, PICKUP_TUNING, resolvePickupPoints,
+import { hasIronclad, mergePickup, activeBuffs, buffExpired, isTimedPickup, BUFF_FIELD, PICKUP_TUNING, resolvePickupPoints,
     type BuffMap, type PickupKind, type PickupPoint } from './pickups';
 import type { WorldSpec } from './worldSpec';
 import { worldSpawnPoints } from './playerSpawns';
@@ -330,7 +330,7 @@ export class ChaosSimulation {
         this.impacts.push({p:{...site.p},n:{x:0,y:1,z:0},surface:false,scale:1.4,audioOnly:true});
         const effect=this.buffs[player.id];
         const accepted={accepted:true as const,target:'pickup' as const,targetId:id,playerId:player.id,pickup:site.kind,
-            ...(site.kind==='ironclad'?{effectUntil:effect?.ironcladUntil}:site.kind==='hustle'?{effectUntil:effect?.hustleUntil}:{})};
+            ...(isTimedPickup(site.kind)?{effectUntil:effect?.[BUFF_FIELD[site.kind]]}:{})};
         this.recentPickupClaims.set(id,{playerId:player.id,generation,at:now,pickup:site.kind,...(accepted.effectUntil===undefined?{}:{effectUntil:accepted.effectUntil})});
         return accepted;
     }
@@ -743,7 +743,7 @@ export class ChaosSimulation {
     rewardSupply(playerId:string):PickupKind|undefined{
         const player=this.players.get(playerId);
         if(!player||player.hp<=0)return undefined;
-        const supplies:PickupKind[]=player.hp<MAX_HP?['ironclad','hustle','quick-fix']:['ironclad','hustle'];
+        const supplies:PickupKind[]=player.hp<MAX_HP?['ironclad','hustle','stakeout','quick-fix']:['ironclad','hustle','stakeout'];
         const supply=supplies[Math.floor(Math.random()*supplies.length)]!;
         if(supply==='quick-fix'){player.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:player.id,hp:MAX_HP,cause:'pickup'});}
         else this.buffs[player.id]=mergePickup(this.buffs[player.id],supply,this.now);
@@ -1498,7 +1498,7 @@ export class ChaosSimulation {
         const active:BuffMap={};
         for(const id of Object.keys(this.buffs)){
             const entry=activeBuffs(this.buffs,id,this.now);
-            if(entry.ironcladUntil||entry.hustleUntil)active[id]=entry;
+            if(Object.keys(entry).length)active[id]=entry;
         }
         return active;
     }
