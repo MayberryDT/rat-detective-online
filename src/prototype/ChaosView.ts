@@ -225,6 +225,9 @@ export class ChaosView {
     /** Screen beacons for Quick Fix kits at low health. DOM, so the black-and-white
      * city never turns them grey. */
     private readonly fixBeacons:HTMLElement[]=[];
+    /** Scratch for `updateFixBeacons`: the nearest ready kits and their squared distances, nearest first. */
+    private readonly nearestFixes:PickupVisual[]=[];
+    private readonly nearestFixDistances:number[]=[];
     setLastHitPoint(on:boolean):void {
         if(on===this.lastHitPoint)return;
         this.lastHitPoint=on;
@@ -566,12 +569,20 @@ export class ChaosView {
         this.pillars.update(d,now,camera);
     }
     private updateFixBeacons(camera:THREE.Camera,now:number){
-        const ready:PickupVisual[]=[];
-        for(const visual of this.pickups.values())if(visual.readyQuickFix(now))ready.push(visual);
-        ready.sort((a,b)=>a.root.position.distanceToSquared(camera.position)-b.root.position.distanceToSquared(camera.position));
+        // The three nearest ready kits, kept sorted by insertion; equal distances keep pickup order.
+        const nearest=this.nearestFixes,distances=this.nearestFixDistances;
+        let found=0;
+        for(const visual of this.pickups.values()){
+            if(!visual.readyQuickFix(now))continue;
+            const d=visual.root.position.distanceToSquared(camera.position);
+            if(found===3&&!(d<distances[2]))continue;
+            let i=found<3?found++:2;
+            for(;i>0&&distances[i-1]>d;i--){distances[i]=distances[i-1];nearest[i]=nearest[i-1];}
+            distances[i]=d;nearest[i]=visual;
+        }
         for(let i=0;i<3;i++){
             let beacon=this.fixBeacons[i];
-            const visual=ready[i];
+            const visual=i<found?nearest[i]:undefined;
             if(!visual){if(beacon)beacon.style.display='none';continue;}
             if(!beacon){
                 // Styled in dispatchHud.css; only its projected position changes per frame.
