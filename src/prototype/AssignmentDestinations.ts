@@ -14,6 +14,7 @@ export class AssignmentDestinations {
     private readonly viewer=new THREE.Vector3();
     private readonly target=new THREE.Vector3();
     private measureAt=0;
+    private measuring=false;
     private obstacles:HudRect[]=[];
     private width=250;
     private height=150;
@@ -32,16 +33,11 @@ export class AssignmentDestinations {
         const p=locateCase(this.target,camera,window.innerWidth,window.innerHeight);
         setText(this.label,guidance.label);
         setText(this.detail,`${guidance.via||guidance.action} · ${Math.round(p.distance)}m`);
-        // Measure at most 7 times/sec, not on every rendered world update.
-        // Reserve the arrow's height even when it was previously hidden.
-        const now=performance.now();
-        if(now>=this.measureAt){
-            this.measureAt=now+150;
-            const bounds=this.cue.getBoundingClientRect();this.width=bounds.width||250;
-            this.height=(bounds.height||100)+(this.arrow.hidden?40:0);
-            this.obstacles=Array.from(document.querySelectorAll<HTMLElement>('.jurisdiction-timer:not([hidden]),.assignment-ledger,.dispatch-ledger,.dispatch-roulette:not([hidden]),.assignment-reveal:not([hidden]),.case-broadcast:not([hidden]),.pickup-buffs,.touch-stick,.touch-fire,.touch-jump'))
-                .filter(el=>el.getClientRects().length>0).map(el=>el.getBoundingClientRect());
-        }
+        // Measure at most 7 times/sec, and after the first time never inside the frame: reading
+        // layout after this frame's HUD writes would force a synchronous style and layout pass.
+        // A task queued here runs once the frame has painted, when layout is already clean.
+        const now=performance.now(),first=this.measureAt===0;
+        if(now>=this.measureAt&&!this.measuring){this.measureAt=now+150;if(first)this.measure();else{this.measuring=true;setTimeout(this.measure);}}
         const label=placeHudLabel(p.x,p.y,this.width,this.height,window.innerWidth,window.innerHeight,this.obstacles);
         this.cue.style.left=`${label.x}px`;this.cue.style.top=`${label.y}px`;
         this.cue.dataset.edge=String(p.edge);this.cue.dataset.paused=String(state?.phase==='suspended');
@@ -49,5 +45,14 @@ export class AssignmentDestinations {
         this.arrow.hidden=!p.edge&&!moved;
         this.arrow.style.transform=`rotate(${p.edge?p.angle:Math.atan2(p.y-label.y,p.x-label.x)}rad)`;
     }
+    private readonly measure=():void=>{
+        this.measuring=false;
+        if(this.cue.hidden)return;
+        // Reserve the arrow's height even when it was previously hidden.
+        const bounds=this.cue.getBoundingClientRect();this.width=bounds.width||250;
+        this.height=(bounds.height||100)+(this.arrow.hidden?40:0);
+        this.obstacles=Array.from(document.querySelectorAll<HTMLElement>('.jurisdiction-timer:not([hidden]),.assignment-ledger,.dispatch-ledger,.dispatch-roulette:not([hidden]),.assignment-reveal:not([hidden]),.case-broadcast:not([hidden]),.pickup-buffs,.touch-stick,.touch-fire,.touch-jump'))
+            .filter(el=>el.getClientRects().length>0).map(el=>el.getBoundingClientRect());
+    };
     dispose():void {this.cue.remove();}
 }
