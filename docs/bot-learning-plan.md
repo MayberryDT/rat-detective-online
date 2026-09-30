@@ -92,11 +92,26 @@ Enough data is about 3 hours of human play over several sessions. Cost and call 
 
 If Tyler prefers that nothing reaches production before the freeze, the baseline comes from staging playtests. That gives far fewer hours.
 
-### L4. Lighter Jev
+### L4. Lighter Jev (built, on staging)
 
-The decision moments, the stance and goal holding described above, as a new `mindVersion`. It ships on its own, so the comparison with release A measures this change alone.
+The decision moments, the stance and goal holding described above, as `mindVersion` 6, with code-only rounds. It ships on its own, so the comparison with release A measures this change alone. As built:
 
-The era report compares A with this era. The predictions are:
+- `RatBot` decides only at a moment. Between moments it keeps its goal and code refreshes the plan every 180 to 300 ms, because a followed rat moves and a case lands.
+- The moments are:
+  - spawning
+  - the held goal ending or failing
+  - the case changing hands
+  - a case goal becoming possible: the case free to take, a carrier within reach again, a zone to hold
+  - the assignment moving on
+  - Jev coming on because a human started playing
+  - 10 seconds (`DECIDE.holdMs`) since the last decision
+- At a moment, Jev gets up to 1.5 seconds to answer while the held goal lasts. If the held goal is over, the code mind's pick runs meanwhile and is not recorded. An answer is used once. Requests for one rat are at least 3 seconds apart, and a moment inside that gap goes to the code mind.
+- Every answer also carries a stance. With `fight`, a rival close by takes over the rat's movement, whatever its goal. With `focus`, the rival takes over only where the plan itself fights, or for 2 seconds after the rat is hit. The pickup reflex is never taken over, and firing never depends on the stance. The code mind's stance is `focus` for a tryhard taking, keeping or holding the case, healing, arming up or fleeing, and `fight` otherwise.
+- A hit is no longer a Jev moment, because shooting back is the motor's reflex.
+- Every moment is recorded as a `decision` fact with its `stance`.
+- About 1 round in 5 is code-only (`codeOnlyRound`). Its facts carry `codeOnly: true`, and Jev stays off in that round even with humans playing.
+
+The era report compares A with this era, on Jev rounds only. The predictions are:
 
 - Jev requests fall from about 48 per bot per minute to under 12
 - dollars per Jev-hour fall at least 5 times

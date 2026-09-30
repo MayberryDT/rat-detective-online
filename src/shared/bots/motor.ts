@@ -8,7 +8,7 @@ import {hasHustle,hasIronclad,PICKUP_TUNING} from '../pickups';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
 import type {BotWaypoint} from '../BotLaunchRoutes';
 import {BALL_GRAVITY,BALL_SPEED} from '../ballTuning';
-import {BASE_SKILL,type Goal,type MotorMode,type Plan,type SkillDials} from './intent';
+import {BASE_SKILL,type Goal,type MotorMode,type Plan,type SkillDials,type Stance} from './intent';
 import type {RayHit} from './motor/bankShot';
 import {seededRandom} from './random';
 import {BotAim,BotSpray,BotTrigger,EYE} from './motor/aim';
@@ -48,6 +48,8 @@ const CAREFUL=6.5;
 const FIGHTING_MODES:Partial<Record<MotorMode,true>>={combat:true,intercept:true,explore:true};
 /** How long a rat keeps fighting (and looking) where a rival was last seen, ms. */
 const MEMORY_MS=2500;
+/** A focused rat hit this recently fights back as if its plan were a fight, ms. */
+const FIGHT_BACK_MS=2000;
 /** Hops in a fight, pressed like a player's space bar: after landing, the ground time before the next is this
  * plus an exponential tail with this mean, ms (humans press jump 20 times a fight-minute and are in the air 27%
  * of it; one hop is about 1.1 s of air). With a rival in sight the finger clicks as the space bar goes down and
@@ -67,6 +69,10 @@ export interface Tactics {
     mischief:boolean;
     /** The mind's danger (0 safe … 3 about to die), when it gave one. */
     danger?:number;
+    /** `fight`: a rival close by takes over the rat's movement whatever the plan; `focus`: only where the plan
+     * itself fights (hunting, intercepting, exploring, near the chased carrier, in the zone) or when a rival has
+     * just hit it. Firing never depends on it. Absent: `focus`. */
+    stance?:Stance;
 }
 
 /** The moving half of a bot: runs the current Plan every tick and fires whenever it has a shot, whatever the
@@ -594,7 +600,7 @@ export class BotMotor {
         // A hop never ends the fight: its keys stay held in the air.
         const fighting=this.assignmentActive&&!obstacleJump&&!this.jumpTravel&&!!target&&!protectedTarget&&recent&&!!seen&&
             Math.hypot(seen.p.x-self.x,seen.p.z-self.z)<FIGHT.reach&&
-            (FIGHTING_MODES[this.mode]||this.mode==='carrier'&&Math.hypot(seen.p.x-self.x,seen.p.z-self.z)<12||!!holdingZone&&!quietZone);
+            (FIGHTING_MODES[this.mode]||this.mode!=='pickup'&&(this.tactics.stance==='fight'||now-this.hitAt<FIGHT_BACK_MS)||this.mode==='carrier'&&Math.hypot(seen.p.x-self.x,seen.p.z-self.z)<12||!!holdingZone&&!quietZone);
         // With nowhere to run (at its case, beside the carrier it chases) and a rat in sight close by, the keys
         // stay busy as in a fight: players hardly ever stand still near a rival. This is not progress.
         const near=this.visible[0];

@@ -11,6 +11,7 @@ import { JURISDICTION_ZONES, zoneContains } from '../../src/shared/jurisdictionZ
 import { STEER } from '../../src/shared/bots/motor/steer';
 import { muzzleRange, worldIntent, type WorldIntent } from './botControls';
 import type { PickupState } from '../../src/shared/pickups';
+import type { Decision } from '../../src/shared/bots/intent';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 /** A rat running on open flat ground: at least its slowest pace, a little under for the drift. */
@@ -122,6 +123,16 @@ describe('case-first normal match bots',()=>{
         b.brain.step(1000,b.self,[b.self],returning,()=>false,false,true);
         expect(a.brain.objective).toBe('explore');expect(b.brain.objective).toBe('explore');
         expect(vi.mocked(a.navigation.route).mock.calls[0][1]).not.toEqual(vi.mocked(b.navigation.route).mock.calls[0][1]);
+    });
+    it('decides like a player: holds its goal between moments, rethinks every 10 s, and at once when the case changes hands',()=>{
+        const {brain,self,holder}=fixture(),s=state('holder');
+        const decisions=new Set<Decision|undefined>();
+        for(let now=1000;now<=33000;now+=100){s.time=now;brain.step(now,self,[self,holder],s,()=>false,false,true);decisions.add(brain.decision);}
+        // At spawn and each time 10 s run out (the 180–300 ms beat adds a little to each): about 1, 11, 21 and 31 s.
+        expect(decisions.size).toBe(4);
+        expect([...decisions].map(d=>d?.trigger)).toEqual(['event','beat','beat','beat']);
+        s.case.owner=null;s.time=33100;brain.step(33100,self,[self,holder],s,()=>false,false,true);
+        expect(brain.decision).toMatchObject({trigger:'event',plan:{goal:'take-case'}});
     });
     it('respects the former-carrier pickup delay and immediately drops old plans after reset',()=>{
         const {brain,self,near,navigation}=fixture(),loose=state();loose.case.previousOwner='me';loose.case.pickupAfter=1500;

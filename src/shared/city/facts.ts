@@ -3,7 +3,7 @@ import type { AssignmentId } from '../assignments';
 import type { PickupKind, TimedPickup } from '../pickups';
 import type { ShotResultOutcome, HealCause } from '../networkProtocol';
 import type { CityFloor } from './frame';
-import type { Goal, MotorMode, Personality } from '../bots/intent';
+import type { Goal, MotorMode, Personality, Stance } from '../bots/intent';
 import type { GoalOutcome, MindName } from './minds';
 import type { PerfReport } from '../perfReport';
 
@@ -27,6 +27,8 @@ export interface FactContext {
   mindVersion: number;
   mode: AssignmentId | 'none';
   incident?: string;
+  /** A code-only round (the bot learning plan, L5): the bots use the code mind even with humans playing. */
+  codeOnly?: true;
 }
 
 /** What a bot faced when it decided, from the world at that moment. Distances are horizontal, to 0.1 u: `case` to the
@@ -112,7 +114,7 @@ export type CityFact = FactContext & (
    * (absent only before the recorder has seen the world). */
   | { type: 'decision'; a: number; p: P3; place: string; mind: MindName; personality: Personality; goal: Goal; motor: MotorMode;
       trigger: 'beat' | 'event' | 'fallback'; top: Array<[Goal, number, number]>; danger?: number; target: boolean; failed?: true;
-      latencyMs?: number; tokens?: number; jev?: 'answered' | 'stale' | 'fallback'; in?: DecisionInputs }
+      latencyMs?: number; tokens?: number; jev?: 'answered' | 'stale' | 'fallback'; in?: DecisionInputs; stance?: Stance }
   /** A stocked supply the rat could use (not a Quick Fix at full health) came within 12 u on its floor in clear sight, and the
    * rat went more than 16 u away (or died) without claiming it while it stayed stocked. One per approach. `dist`, `p`,
    * `place` and `hp`: the nearest the rat came (horizontal, to 0.1 u), where, and its health there. */

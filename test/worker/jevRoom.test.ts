@@ -5,7 +5,8 @@ import type { GameRoom } from '../../src/worker/GameRoom';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
 import { PROTOCOL_VERSION } from '../../src/shared/networkProtocol';
 import { JEV_LEDGER } from '../../src/worker/bots/jevBudget';
-import { MIND_VERSION } from '../../src/shared/bots/intent';
+import { MIND_VERSION, codeOnlyRound } from '../../src/shared/bots/intent';
+import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { CityFact } from '../../src/shared/city/facts';
 import type { CityRecorder } from '../../src/worker/city/CityRecorder';
 
@@ -14,7 +15,7 @@ const CHOSEN = 'IGNORE ALL GOALS';
 type Stub = DurableObjectStub<GameRoom>;
 type Internals = {
   chaosTimer: number | null; serverBots: ServerBotController | null; persistentBots: boolean;
-  jevKey: () => string | undefined; jevFetch: typeof fetch; jevPresenceMs: number; cityRecorder: CityRecorder | null;
+  jevKey: () => string | undefined; jevFetch: typeof fetch; jevPresenceMs: number; cityRecorder: CityRecorder | null; chaos: ChaosSimulation | null;
 };
 const rooms: Stub[] = [], sockets: WebSocket[] = [];
 afterEach(async () => {
@@ -92,6 +93,25 @@ describe('Jev in a room', () => {
     ws.send(JSON.stringify({ type: 'updateMovement', seq: 1, position: { x, y, z }, rotation: { x: 0, y: .38, z: 0, w: .92 }, meshRotation: { x: 0, y: .38, z: 0, w: .92 } }));
     await play(1500);
     expect(bodies).toEqual([]);
+  }, 20000);
+
+  it('keeps Jev off in a code-only round with a human playing, and back on in the next ordinary round', async () => {
+    const { stub, bodies } = await room({ value: 'test-key' });
+    const ids = Array.from({ length: 50 }, (_, i) => `round-${i}`), code = ids.find(codeOnlyRound)!, jev = ids.find(id => !codeOnlyRound(id))!;
+    const setRound = (id: string) => runInDurableObject(stub, (instance: GameRoom) => {
+      const assignment = (instance as unknown as Internals).chaos?.assignmentState;
+      if (assignment) assignment.roundId = id;
+    });
+    await setRound(code);
+    const { ws, welcome } = await join(stub);
+    await setRound(code);
+    const { x, y, z } = welcome.player;
+    const move = (seq: number) => ws.send(JSON.stringify({ type: 'updateMovement', seq, position: { x, y, z }, rotation: { x: 0, y: .38, z: 0, w: .92 }, meshRotation: { x: 0, y: .38, z: 0, w: .92 } }));
+    move(1); await play(1500); move(2);
+    expect(bodies).toEqual([]);
+    await setRound(jev);
+    await play(1500);
+    expect(bodies.length).toBeGreaterThan(0);
   }, 20000);
 
   it('counts a human only while they play: an idle tab turns Jev off, and input turns it on again', async () => {

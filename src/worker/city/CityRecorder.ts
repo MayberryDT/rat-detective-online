@@ -13,7 +13,7 @@ import { cityFloor } from '../../shared/city/frame';
 import { CITY_SCHEMA_VERSION, p3, type CityFact, type DecisionInputs, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
 import type { PerfReport } from '../../shared/perfReport';
 import { decideMeasure, goalMeasure, JEV_COUNTS, latencyBucket, type GoalOutcome, type MindName } from '../../shared/city/minds';
-import { MIND_VERSION, type Decision, type Goal, type MotorMode, type Personality } from '../../shared/bots/intent';
+import { MIND_VERSION, codeOnlyRound, type Decision, type Goal, type MotorMode, type Personality } from '../../shared/bots/intent';
 import { RoundLedger, standings } from '../../shared/city/ledger';
 import { heatCellIndex, heatCellKey, heatDayKey } from '../HeatMap';
 import type { CityStore } from './CityStore';
@@ -204,9 +204,8 @@ export class CityRecorder {
   private readonly flows = new Map<string, number>();
   /** Jev room measures under `day|layout|mode|measure`. */
   private readonly mindCounts = new Map<string, number>();
-  /** Each bot's open goal, and the send time of the last Jev answer recorded for it. */
+  /** Each bot's open goal. */
   private readonly goals = new Map<string, OpenGoal>();
-  private readonly jevApplied = new Map<string, number>();
   private events: Array<{ t: number; round?: string; type: string; data: string }> = [];
   private readonly alive = new Map<string, boolean>();
   private readonly buffs = new Map<string, Record<TimedPickup, boolean>>();
@@ -249,7 +248,7 @@ export class CityRecorder {
   private context(now: number): FactContext {
     return { t: now, ...(this.liveAt !== undefined && now >= this.liveAt ? { rm: now - this.liveAt } : {}), room: this.deps.room,
       ...(this.roundId ? { round: this.roundId } : {}), layout: this.deps.layout(), schema: CITY_SCHEMA_VERSION, build: this.deps.build, mindVersion: MIND_VERSION, mode: this.mode,
-      ...(this.incident ? { incident: this.incident } : {}) };
+      ...(this.incident ? { incident: this.incident } : {}), ...(codeOnlyRound(this.roundId) ? { codeOnly: true as const } : {}) };
   }
   /** Archive every fact; keep the discrete ones in SQL for 30 days too, except the bots' decisions and goal ends
    * (hundreds per bot-hour), which the aggregates and the archive hold. */
@@ -507,16 +506,13 @@ export class CityRecorder {
   }
 
   // ---- the minds (docs/bot-overhaul.md, B5) ----
-  /** A bot's decision, recorded when it takes up a goal (the open one having ended: reached, died, failed, or
-   * replaced by this one) or applies a Jev answer not yet recorded. A new combat target keeps the goal, so the
-   * code mind's 180–300 ms beat records nothing until the goal changes. */
+  /** A bot's decision. Since L4 of the bot learning plan every `Decision` is a decision moment (an event, or the
+   * 10 s hold running out; the goal is only refreshed in between), so each is recorded, keeping the same goal
+   * or not: the open goal ends as replaced or failed when the goal changes. */
   decision(p: PlayerData, d: Decision, now: number, jev?: JevOutcome): void {
     const { plan, answer } = d, open = this.goals.get(p.id);
     if (open && (d.failed || open.goal !== plan.goal)) this.endGoal(p, open, d.failed ? 'failed' : 'replaced', now);
-    const opening = !this.goals.has(p.id), sent = answer.jev?.sentAt;
-    if (!opening && (sent === undefined || this.jevApplied.get(p.id) === sent)) return;
-    if (sent !== undefined) this.jevApplied.set(p.id, sent);
-    const place = this.places.at(p.x, p.y, p.z).id, mind = answer.source;
+    const opening = !this.goals.has(p.id), place = this.places.at(p.x, p.y, p.z).id, mind = answer.source;
     const top = (Object.entries(d.weighted) as Array<[Goal, number]>).sort((a, b) => b[1] - a[1]).slice(0, 3)
       .map(([goal, weighted]): [Goal, number, number] => [goal, round2(answer.scores[goal] ?? 0), round2(weighted)]);
     this.measure(now, place, decideMeasure(mind, d.personality, plan.goal));
@@ -524,7 +520,7 @@ export class CityRecorder {
     this.emit({ ...this.context(now), type: 'decision', a: this.actor(p.id), p: p3(p), place, mind, personality: d.personality, goal: plan.goal, motor: plan.mode,
       trigger: d.trigger, top, ...(answer.danger === undefined ? {} : { danger: round2(answer.danger) }), target: answer.target !== undefined,
       ...(d.failed ? { failed: true as const } : {}), ...(answer.jev ? { latencyMs: answer.jev.latencyMs, tokens: answer.jev.tokens } : {}),
-      ...(jev && mind === 'code' ? { jev } : {}), ...(inputs ? { in: inputs } : {}) });
+      ...(jev && mind === 'code' ? { jev } : {}), ...(inputs ? { in: inputs } : {}), stance: d.stance });
     if (!opening) return;
     const quarry = plan.goal === 'hunt' ? plan.follow : plan.goal === 'chase-carrier' ? plan.follow ?? (this.caseOwner || undefined) : undefined;
     const to = plan.destination && (PLACE_GOALS.has(plan.goal) || plan.goal === 'keep-case' && plan.mode === 'evade') ? plan.destination : undefined;
@@ -639,7 +635,7 @@ export class CityRecorder {
       this.roundId = a.roundId; this.mode = a.id; this.liveAt = a.liveAt;
       this.ledger.reset(); this.actors.clear(); this.deliverySerial = a.deliverySerial;
       // Actors are per round: a goal open when the round changed ends unrecorded.
-      this.goals.clear(); this.jevApplied.clear(); this.approaches.clear();
+      this.goals.clear(); this.approaches.clear();
       this.emit({ ...this.context(now), type: 'round', what: 'start', ...this.census(players) });
     }
     if (round.phase !== this.phase) {

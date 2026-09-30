@@ -3,6 +3,7 @@ import {RoundAwards} from './RoundAwards';
 import type {Award} from '../shared/networkProtocol';
 import { RECONNECT_GRACE_MS, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
 import { newStreakTitle } from '../shared/streak';
+import { codeOnlyRound } from '../shared/bots/intent';
 import { ChaosDelivery } from './ChaosDelivery';
 import { ConnectionDelivery } from './ConnectionDelivery';
 import { wireBytes } from '../shared/networkProtocol';
@@ -512,7 +513,9 @@ export class GameRoom extends DurableObject<Env> {
       const session = this.sessions.get(id);
       if (!this.isManagedBot(id) && !session?.agent && session?.until == null && now - (this.lastInputAt.get(id) ?? -Infinity) < this.jevPresenceMs) { human = true; break; }
     }
-    const budget = this.jevBudget, on = human && budget.allows(now), off = jev.enabled && !on;
+    // Code-only rounds keep Jev off with humans playing: the fair comparison with Jev (the bot learning plan, L5).
+    const codeRound = codeOnlyRound(this.chaos?.assignmentState?.roundId);
+    const budget = this.jevBudget, on = human && !codeRound && budget.allows(now), off = jev.enabled && !on;
     budget.tick(now, off);
     if (on && !jev.enabled) { this.jevWindowStart = now; this.jevReportAt = now + JEV_REPORT_MS; }
     jev.enabled = on;

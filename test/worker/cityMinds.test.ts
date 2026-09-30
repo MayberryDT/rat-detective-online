@@ -37,7 +37,7 @@ const bot = (id: string, x = 0, z = 0) => createPlayer(id, 'Bot', DEFAULT_APPEAR
 function decide(goal: Goal, { plan = {}, answer = {}, failed = false }: { plan?: Partial<Plan>; answer?: Partial<MindAnswer>; failed?: boolean } = {}): Decision {
   const scores = { roam: 1.5, hunt: 1, [goal]: 3 };
   return { plan: { goal, mode: 'explore', key: goal, ...plan }, answer: { source: 'code', scores, ...answer }, personality: 'tryhard', weighted: scores,
-    trigger: 'beat', ...(failed ? { failed: true as const } : {}) };
+    stance: 'focus', trigger: 'beat', ...(failed ? { failed: true as const } : {}) };
 }
 const killed = (victim: PlayerData, attacker?: PlayerData) => ({ ...(attacker ? { attacker } : {}), victim: Object.assign(victim, { hp: 0 }), damage: 5, killed: true, headshot: false, explosive: false, incoming: true });
 function world(): ChaosState {
@@ -48,7 +48,7 @@ function world(): ChaosState {
 const playing: RoundState = { phase: 'playing' };
 
 describe('the minds in the city recorder', () => {
-  it('records a code-mind goal once, not every beat, and ends it replaced, failed or died', () => {
+  it('records every decision moment, whether it keeps the goal or not, and ends a goal replaced, failed or died', () => {
     const { city, decisions, ends, facts } = recorder(), b = bot('bot-1');
     city.decision(b, decide('hunt', { plan: { mode: 'combat', key: 'combat:a', follow: 'a' } }), T);
     city.decision(b, decide('hunt', { plan: { mode: 'combat', key: 'combat:b', follow: 'b' } }), T + 250);
@@ -57,8 +57,8 @@ describe('the minds in the city recorder', () => {
     city.decision(b, decide('roam', { failed: true }), T + 900);
     city.hit(killed(b), T + 1400);
     city.flush(T + 2000);
-    expect(decisions().map(d => [d.goal, d.t, d.mind])).toEqual([['hunt', T, 'code'], ['roam', T + 500, 'code'], ['roam', T + 900, 'code']]);
-    expect(decisions()[0]).toMatchObject({ personality: 'tryhard', motor: 'combat', trigger: 'beat', target: false, top: [['hunt', 3, 3], ['roam', 1.5, 1.5]] });
+    expect(decisions().map(d => [d.goal, d.t, d.mind])).toEqual([['hunt', T, 'code'], ['hunt', T + 250, 'code'], ['roam', T + 500, 'code'], ['roam', T + 750, 'code'], ['roam', T + 900, 'code']]);
+    expect(decisions()[0]).toMatchObject({ personality: 'tryhard', motor: 'combat', trigger: 'beat', target: false, stance: 'focus', top: [['hunt', 3, 3], ['roam', 1.5, 1.5]] });
     expect(ends().map(e => [e.goal, e.outcome, e.durationMs, e.mind])).toEqual([['hunt', 'replaced', 500, 'code'], ['roam', 'failed', 400, 'code'], ['roam', 'died', 500, 'code']]);
     expect(facts.every(f => f.mindVersion === MIND_VERSION && f.build === 'test-build')).toBe(true);
   });
@@ -88,16 +88,16 @@ describe('the minds in the city recorder', () => {
     expect(ends().at(-1)).toMatchObject({ goal: 'hunt', outcome: 'replaced', durationMs: 490 });
   });
 
-  it('records each applied Jev answer once with its cost, and how Jev fared when the code mind decided', () => {
+  it('records each Jev answer with its cost, and how Jev fared when the code mind decided', () => {
     const { city, decisions, ends } = recorder(), b = bot('bot-1');
     const jev = (sentAt: number): Partial<MindAnswer> => ({ source: 'jev', danger: 2, target: 'bot-9', jev: { latencyMs: 180, tokens: 1500, sentAt } });
     city.decision(b, decide('hunt', { answer: jev(T) }), T + 200);
-    city.decision(b, decide('hunt', { answer: jev(T) }), T + 450);
     city.decision(b, decide('hunt', { answer: jev(T + 1000) }), T + 1200);
     city.decision(b, decide('hunt'), T + 1500, 'stale');
     city.decision(b, decide('flee'), T + 1700, 'stale');
     expect(decisions().map(d => [d.mind, d.goal, d.t, d.latencyMs, d.tokens, d.jev])).toEqual([
-      ['jev', 'hunt', T + 200, 180, 1500, undefined], ['jev', 'hunt', T + 1200, 180, 1500, undefined], ['code', 'flee', T + 1700, undefined, undefined, 'stale']]);
+      ['jev', 'hunt', T + 200, 180, 1500, undefined], ['jev', 'hunt', T + 1200, 180, 1500, undefined],
+      ['code', 'hunt', T + 1500, undefined, undefined, 'stale'], ['code', 'flee', T + 1700, undefined, undefined, 'stale']]);
     expect(decisions()[0]).toMatchObject({ danger: 2, target: true });
     expect(ends().map(e => [e.goal, e.outcome, e.mind, e.durationMs])).toEqual([['hunt', 'replaced', 'jev', 1500]]);
   });

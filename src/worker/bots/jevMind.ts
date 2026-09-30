@@ -1,14 +1,18 @@
 import type {GoalContext} from '../../shared/bots/goals';
-import type {Goal,GoalScores,Mind,MindAnswer} from '../../shared/bots/intent';
+import {DECIDE,STANCES,type Goal,type GoalScores,type Mind,type MindAnswer} from '../../shared/bots/intent';
 import {JEV_DOLLARS_PER_TOKEN,type JevAnswer,type JevClient,type JevQuestion} from './jevClient';
 import {perceive,type RatView} from './perception';
 
-/** How long an answer stays playable after its situation was sent; the beat between one rat's requests
- * (events jump it); the room's request rate and burst: at most 580 in any minute, under half the account's
- * 1,200, so a second busy room still fits. */
-export const JEV={freshMs:1500,beatMs:1000,roomPerSecond:9.5,roomBurst:10} as const;
+/** How long an answer stays playable after its situation was sent; the shortest gap between one rat's requests
+ * (the bot learning plan, L4: a rat asks only at its decision moments, never twice within 3 s); the room's
+ * request rate and burst: at most 580 in any minute, under half the account's 1,200, so a second busy room fits. */
+export const JEV={freshMs:DECIDE.waitMs,minGapMs:3000,roomPerSecond:9.5,roomBurst:10} as const;
 const GOAL_LEVELS=['Makes no sense right now.','A poor idea right now.','A reasonable option.','A good idea right now.','Clearly the best thing to do right now.'];
 const DANGER_LEVELS=['Safe: nobody threatening nearby.','Some risk: enemies around but not on me.','Under pressure: being shot at or outnumbered.','About to die: low HP and taking fire.'];
+const STANCE_CRITERIA:Record<typeof STANCES[number],string>={
+    fight:'Fight them: stop and shoot it out with any rival that comes close on the way.',
+    focus:'Stay on the goal: keep moving, shoot on the run, and only fight a rat that blocks the way or shoots at `me`.',
+};
 const PLACE_KEYS=[...'abcdefghijklmnop'];
 const HITS_KEPT=4;
 
@@ -29,12 +33,12 @@ const NO_STATS:JevStats={decisions:0,requests:0,answers:0,failures:0,staleDrops:
 /** How one rat's last decision went, for the recorder. */
 export type JevOutcome='answered'|'stale'|'fallback';
 interface Rat {
-    /** Raised by every event; an answer to an older serial is stale. */
-    serial:number;
-    event:boolean;
+    /** The mind's `onSince` when this rat last decided with Jev on; behind it, the rat is due. */
+    generation:number;
     inFlight:boolean;
     sentAt:number;
-    latest?:{answer:MindAnswer;serial:number;sentAt:number};
+    /** The answer to its last request, until a decision uses it. */
+    latest?:{answer:MindAnswer;sentAt:number};
     outcome?:JevOutcome;
     memory:{hits:{at:number;by?:string}[]};
 }
@@ -46,12 +50,17 @@ export interface JevMindOptions {
     spend?:(dollars:number)=>void;
 }
 
-/** The Jev mind (docs/bot-overhaul.md, B4) for every server bot in one room. Each decision gets the rat's
- * latest fresh answer, or nothing (the code mind decides). A rat asks at most once a second, at once on
- * an event, never twice at once; requests go out without holding the tick. */
+/** The Jev mind (docs/bot-overhaul.md, B4; cadence from the bot learning plan, L4) for every server bot in one
+ * room. A rat asks only at its decision moments, at most once every 3 s, and a decision waits briefly for the
+ * answer (`'wait'`); each answer is used once. Without one in time, the code mind decides. Requests go out
+ * without holding the tick. */
 export class JevMind implements Mind<GoalContext> {
-    /** Set by the room: a human is connected, the key is set and the day's budget is not spent. */
-    enabled=false;
+    /** Set by the room: a human is connected, the key is set, the day's budget is not spent and the round is not
+     * code-only. Coming on makes every rat due, so Jev decides at once rather than at each rat's next moment. */
+    get enabled():boolean{return this.on;}
+    set enabled(on:boolean){if(on&&!this.on)this.onSince++;this.on=on;}
+    private on=false;
+    private onSince=0;
     readonly stats:JevStats={...NO_STATS};
     private readonly rats=new Map<string,Rat>();
     private tokens:number=JEV.roomBurst;
@@ -61,25 +70,29 @@ export class JevMind implements Mind<GoalContext> {
     /** Times are the bots' decision clock (`ctx.now`), the room's clock. */
     constructor(private readonly options:JevMindOptions){}
 
-    answer(ctx:GoalContext):MindAnswer|undefined {
+    answer(ctx:GoalContext):MindAnswer|'wait'|undefined {
         if(!this.enabled)return;
-        this.stats.decisions++;
-        const rat=this.rat(ctx.self.id);
-        if(ctx.trigger==='event'){rat.serial++;rat.event=true;}
-        this.ask(ctx,rat);
-        const latest=rat.latest,now=ctx.now;
-        if(latest&&(latest.serial!==rat.serial||latest.answer.target!==undefined&&!ctx.visible.some(p=>p.id===latest.answer.target))){
-            rat.latest=undefined;this.stats.staleDrops++;return this.fallback(rat,'stale');
+        const rat=this.rat(ctx.self.id),now=ctx.now,latest=rat.latest;
+        rat.generation=this.onSince;
+        if(latest){
+            rat.latest=undefined;
+            // Too old for this moment, or aimed at a rat gone from view: ask afresh below.
+            if(now-latest.sentAt>JEV.freshMs||latest.answer.target!==undefined&&!ctx.visible.some(p=>p.id===latest.answer.target))this.stats.staleDrops++;
+            else {this.stats.decisions++;rat.outcome='answered';return latest.answer;}
         }
-        if(!latest||!this.options.client.ready(now)||now-latest.sentAt>JEV.freshMs)return this.fallback(rat,'fallback');
-        rat.outcome='answered';
-        return latest.answer;
+        if(rat.inFlight)return now-rat.sentAt<JEV.freshMs?'wait':this.fallback(rat,'fallback');
+        const gap=rat.sentAt+JEV.minGapMs-now;
+        if(gap<=0)return this.ask(ctx,rat)?'wait':this.fallback(rat,'fallback');
+        // Asked moments ago: wait out a short gap, otherwise the code mind decides this one.
+        return gap<DECIDE.waitMs?'wait':this.fallback(rat,'fallback');
     }
 
-    /** The room saw `victim` hit (by `attacker`, or the city): an event for that rat, and a memory. */
+    due(id:string):boolean {return this.on&&this.rats.get(id)?.generation!==this.onSince;}
+
+    /** The room saw `victim` hit (by `attacker`, or the city): a memory for its next request. Shooting back is
+     * the motor's reflex, so a hit is not a decision moment. */
     hit(victim:string,attacker:string|undefined,at:number):void {
         const rat=this.rat(victim);
-        rat.serial++;rat.event=true;
         rat.memory.hits.push({at,...(attacker&&attacker!==victim?{by:attacker}:{})});
         if(rat.memory.hits.length>HITS_KEPT)rat.memory.hits.shift();
     }
@@ -96,33 +109,34 @@ export class JevMind implements Mind<GoalContext> {
 
     private rat(id:string):Rat {
         let rat=this.rats.get(id);
-        if(!rat)this.rats.set(id,rat={serial:0,event:false,inFlight:false,sentAt:-Infinity,memory:{hits:[]}});
+        if(!rat)this.rats.set(id,rat={generation:-1,inFlight:false,sentAt:-Infinity,memory:{hits:[]}});
         return rat;
     }
-    private fallback(rat:Rat,outcome:JevOutcome):undefined {rat.outcome=outcome;this.stats.fallbacks++;return undefined;}
+    private fallback(rat:Rat,outcome:JevOutcome):undefined {rat.outcome=outcome;this.stats.decisions++;this.stats.fallbacks++;return undefined;}
 
-    private ask(ctx:GoalContext,rat:Rat):void {
+    /** Sends one request; false when the client or the room's rate holds it back. */
+    private ask(ctx:GoalContext,rat:Rat):boolean {
         const now=ctx.now;
-        if(rat.inFlight||!this.options.client.ready(now)||!rat.event&&now<rat.sentAt+JEV.beatMs)return;
+        if(!this.options.client.ready(now))return false;
         this.tokens=Math.min(JEV.roomBurst,this.tokens+(now-this.tokensAt)/1000*JEV.roomPerSecond);this.tokensAt=now;
-        if(this.tokens<1){this.stats.throttled++;return;}
+        if(this.tokens<1){this.stats.throttled++;return false;}
         this.tokens--;
-        rat.inFlight=true;rat.event=false;rat.sentAt=now;
-        const view=perceive(ctx,rat.memory),serial=rat.serial;
+        rat.inFlight=true;rat.sentAt=now;
+        const view=perceive(ctx,rat.memory);
         const questions=questionsFor(view,ctx.offered);
         this.stats.requests++;
         this.options.waitUntil(this.options.client.ask(view.state,questions).then(reply=>{
             this.stats.answers++;this.stats.tokens+=reply.tokens;
             const dollars=reply.tokens*JEV_DOLLARS_PER_TOKEN;
             this.stats.dollars+=dollars;this.latencies.push(reply.latencyMs);this.options.spend?.(dollars);
-            if(serial!==rat.serial){this.stats.staleDrops++;return;}
-            rat.latest={serial,sentAt:now,answer:{...read(view,ctx.offered,reply.answers),jev:{latencyMs:reply.latencyMs,tokens:reply.tokens,sentAt:now}}};
+            rat.latest={sentAt:now,answer:{...read(view,ctx.offered,reply.answers),jev:{latencyMs:reply.latencyMs,tokens:reply.tokens,sentAt:now}}};
         },()=>{this.stats.failures++;}).finally(()=>{rat.inFlight=false;}));
+        return true;
     }
 }
 
 /** One Score per offered goal, the target among rats in view, a place per open-ended goal with a choice,
- * danger, and a bank shot only at a rat seen moments ago that is now behind cover. */
+ * danger, the stance toward rivals on the way, and a bank shot only at a rat seen moments ago that is now behind cover. */
 export function questionsFor(view:RatView,offered:readonly Goal[]):Record<string,JevQuestion> {
     const questions:Record<string,JevQuestion>={};
     for(const goal of offered)questions[`goal_${goal}`]={type:'score',criteria:GOAL_LEVELS,
@@ -143,6 +157,8 @@ export function questionsFor(view:RatView,offered:readonly Goal[]):Record<string
             instructions:{goal:view.goals[goal],question:'If `me` pursues `goal`, which of these places should it head for?'}};
     }
     questions.danger={type:'score',criteria:DANGER_LEVELS,instructions:'How much danger is `me` in right now?'};
+    questions.stance={type:'choice',criteria:STANCE_CRITERIA,
+        instructions:'Until `me` next stops to think, what should it do about rival rats that come close on the way to its goal?'};
     if(view.hidden)questions.bank={type:'noul',
         instructions:'`last_target` has just gone behind cover. Is a cheese ball bounced off a nearby wall a good way for `me` to hit it now?'};
     return questions;
@@ -158,8 +174,9 @@ function read(view:RatView,offered:readonly Goal[],answers:Record<string,JevAnsw
         const options=view.places[goal],a=answers[`place_${goal}`],i=a?.type==='choice'?PLACE_KEYS.indexOf(a.choice):-1;
         if(options&&i>=0&&options[i])places[goal]=options[i].id;
     }
-    const target=answers.target,bank=answers.bank,danger=score('danger',3);
+    const target=answers.target,bank=answers.bank,danger=score('danger',3),stance=answers.stance;
     const id=target?.type==='choice'?view.inView.get(target.choice):undefined;
+    const chosen=stance?.type==='choice'?STANCES.find(s=>s===stance.choice):undefined;
     return {source:'jev',scores,...(Object.keys(places).length?{places}:{}),...(id?{target:id}:{}),
-        ...(danger===undefined?{}:{danger}),...(bank?.type==='noul'?{bank:bank.noul}:{})};
+        ...(danger===undefined?{}:{danger}),...(bank?.type==='noul'?{bank:bank.noul}:{}),...(chosen?{stance:chosen}:{})};
 }

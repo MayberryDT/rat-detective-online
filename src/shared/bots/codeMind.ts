@@ -1,4 +1,4 @@
-import type {Goal,GoalScores,Mind} from './intent';
+import type {Goal,GoalScores,Mind,MindAnswer,Personality,Stance} from './intent';
 import type {GoalContext} from './goals';
 
 /** Where the plan each goal would make now stands on the old brain's priority ladder: supply trip, armour
@@ -21,7 +21,7 @@ const LADDER_SCORES=[4,3,2,1.5];
 
 /** Free and instant: the tryhard's old priority ladder as goal scores. The ladder's choice scores 4, the
  * next candidates 3, 2, 1.5, then 1; goals off the ladder 0.5, so the argmax is always the old choice. */
-export const codeMind:Mind<GoalContext>={
+export const codeMind={
     answer(ctx){
         const scores:GoalScores={};
         const ranked=ctx.offered.flatMap(goal=>{const rank=ladderRank(goal,ctx);return rank===undefined?[]:[{goal,rank}];}).sort((a,b)=>a.rank-b.rank);
@@ -29,4 +29,12 @@ export const codeMind:Mind<GoalContext>={
         ranked.forEach(({goal},i)=>{scores[goal]=LADDER_SCORES[i]??1;});
         return {source:'code',scores};
     },
-};
+} satisfies Mind<GoalContext> as {answer(ctx:GoalContext):MindAnswer};
+
+/** Goals a tryhard keeps to rather than fighting rats on the way: the case, the zone, getting healed or armed,
+ * getting away. Mavericks and gremlins fight whatever they are doing. */
+const FOCUSED:Partial<Record<Goal,true>>={'take-case':true,'keep-case':true,'hold-zone':true,heal:true,'arm-up':true,flee:true};
+/** The code mind's stance for a chosen goal, when the mind's answer gave none. */
+export function codeStance(goal:Goal,personality:Personality):Stance {
+    return personality==='tryhard'&&FOCUSED[goal]?'focus':'fight';
+}

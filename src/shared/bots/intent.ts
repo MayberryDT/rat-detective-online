@@ -5,7 +5,25 @@ import type {Vec3Data} from '../networkProtocol';
  * Firing is not a goal: the motor fires whenever it has a shot, within the skill dials. */
 
 /** Raised by every change to the minds, questions, weights or dials; stamped on city facts next to `layoutVersion`. */
-export const MIND_VERSION=5;
+export const MIND_VERSION=6;
+
+/** When a bot decides (the bot learning plan, L4): on events (spawn, its goal ending or failing, the case changing
+ * state, the assignment moving on) and at most `holdMs` after its last decision otherwise; between decisions it
+ * holds its goal. A mind that asked for time (`'wait'`) gets up to `waitMs` while the held goal is still possible. */
+export const DECIDE={holdMs:10_000,waitMs:1500} as const;
+
+/** What a rat does about rivals on the way: fight them, or keep to the goal and fight only rats that block it or shoot. */
+export const STANCES=['fight','focus'] as const;
+export type Stance=typeof STANCES[number];
+
+/** Code-only rounds (Tyler, 30 September): about 1 round in 5, picked from the round's id so every part of the room
+ * agrees without storing it, the bots use the code mind even with humans playing, to measure what Jev is worth. */
+export function codeOnlyRound(roundId:string|undefined):boolean {
+    if(!roundId)return false;
+    let hash=2166136261;
+    for(let i=0;i<roundId.length;i++)hash=Math.imul(hash^roundId.charCodeAt(i),16777619);
+    return (hash>>>0)%5===0;
+}
 
 /** Where to go and what to do there. Code offers only the goals valid for this rat right now. */
 export const GOALS=['take-case','chase-carrier','keep-case','hold-zone','hunt','flee','heal','arm-up','ambush','mischief','roam'] as const;
@@ -48,14 +66,18 @@ export interface MindAnswer {
     danger?:number;
     /** Probability that a bank shot is the way to reach the target. */
     bank?:number;
+    /** Fight rivals on the way, or keep to the goal. Absent: code's stance for the chosen goal. */
+    stance?:Stance;
     /** A Jev answer's cost and timing, for the recorder. */
     jev?:{latencyMs:number;tokens:number;/** When its situation was sent. */sentAt:number};
 }
 
-/** Answers for one rat from a decision context. A mind that thinks asynchronously (Jev) returns its latest
- * fresh answer, or undefined when it has none; the code mind then answers instead. */
+/** Answers for one rat at a decision moment. A mind that thinks asynchronously (Jev) returns its answer to this
+ * moment, `'wait'` while one is on its way, or undefined when it has none; the code mind then answers instead. */
 export interface Mind<Context> {
-    answer(context:Context):MindAnswer|undefined;
+    answer(context:Context):MindAnswer|'wait'|undefined;
+    /** True when this rat should decide now whatever it holds (Jev just came on: a human started playing). */
+    due?(id:string):boolean;
 }
 
 /** What the cast chose, for the motor and the recorder's decision fact. */
@@ -65,7 +87,8 @@ export interface Decision {
     personality:Personality;
     /** Scores after the personality's weights. */
     weighted:GoalScores;
-    /** Why the decision was taken now. */
+    stance:Stance;
+    /** Why the decision was taken now: an event, or `holdMs` passed. */
     trigger:'beat'|'event'|'fallback';
     /** The motor gave up the previous plan since the last decision. */
     failed?:true;

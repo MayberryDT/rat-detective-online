@@ -72,59 +72,71 @@ describe('the Jev mind',()=>{
         expect(r.bot.decision?.answer.source).toBe('code');
     });
 
-    it('asks once a second per rat, never twice at once, and plays only a fresh answer',async()=>{
+    it('asks only at decision moments: at spawn, then not while the goal holds, until 10 s have passed',async()=>{
         const r=rig();
         r.step(1000);expect(r.calls).toHaveLength(1);
-        r.step(1100);await r.answer(0);
-        r.step(1400);expect(r.bot.decision?.answer).toMatchObject({source:'jev',jev:{tokens:1000,sentAt:1000}});
-        r.step(1980);expect(r.calls).toHaveLength(1);
-        r.step(2400);expect(r.calls).toHaveLength(2);expect(r.calls[1].at).toBeGreaterThanOrEqual(2000);
-        // Out for two seconds: no second request meanwhile, and the old answer ages out.
-        r.step(4000);expect(r.calls).toHaveLength(2);
-        expect(r.bot.decision?.answer.source).toBe('code');
+        await r.answer(0);
+        r.step(1300);expect(r.bot.decision?.answer).toMatchObject({source:'jev',jev:{tokens:1000,sentAt:1000}});
+        const first=r.bot.decision;
+        r.step(10900);expect(r.calls).toHaveLength(1);expect(r.bot.decision).toBe(first);
+        r.step(11400);expect(r.calls).toHaveLength(2);expect(r.calls[1].at).toBeGreaterThanOrEqual(11000);
         await r.answer(1);
-        r.step(4400);expect(r.bot.decision?.answer.source).toBe('code');
-        expect(r.calls).toHaveLength(3);
-        expect(r.mind.stats).toMatchObject({requests:3,answers:2,tokens:2000});
+        r.step(11800);expect(r.bot.decision?.answer).toMatchObject({source:'jev',jev:{sentAt:r.calls[1].at}});
+        expect(r.mind.stats).toMatchObject({requests:2,answers:2,tokens:2000});
         expect(r.mind.stats.dollars).toBeCloseTo(2000*.042/1e6,12);
     });
 
-    it('asks again at once when the case changes hands, never while a request is out, and drops the answer the event overtook',async()=>{
+    it('asks at once when the case changes hands, never within 3 s of the last ask: then the code mind decides that moment',async()=>{
         const r=rig();
-        r.step(1000);r.step(1100);await r.answer(0);
-        r.step(1380);expect(r.calls).toHaveLength(1);
+        r.step(1000);await r.answer(0);r.step(1300);
         r.state.case.owner='rival';
-        r.step(1400);expect(r.calls).toHaveLength(2);expect(r.calls[1].at).toBeLessThan(2000);
-        r.state.case.owner=null;
-        r.step(1600);expect(r.calls).toHaveLength(2);
-        // Both the answer in hand (at the first event) and the one out (at the second) were overtaken.
-        await r.answer(1);expect(r.mind.stats.staleDrops).toBe(2);
-        r.step(1700);expect(r.bot.decision?.answer.source).toBe('code');
-        r.step(1960);expect(r.calls).toHaveLength(3);
+        r.step(1400);expect(r.calls).toHaveLength(1);
+        expect(r.bot.decision?.answer.source).toBe('code');expect(r.bot.decision?.trigger).toBe('event');
+        r.step(4000);r.state.case.owner=null;
+        r.step(4200);expect(r.calls).toHaveLength(2);expect(r.calls[1].at).toBeGreaterThanOrEqual(4000);
+        await r.answer(1);
+        r.step(4400);expect(r.bot.decision).toMatchObject({trigger:'event',answer:{source:'jev'}});
+    });
+
+    it('waits for the answer to its moment while the held goal lasts, and a late answer is never played later',async()=>{
+        const r=rig();
+        r.step(1000);r.step(2800);
+        // No answer within 1.5 s: the code mind decided the spawn.
+        expect(r.bot.decision?.answer.source).toBe('code');
+        await r.answer(0);
+        r.state.case.owner='rival';
+        r.step(4200);
+        expect(r.mind.stats.staleDrops).toBe(1);expect(r.calls).toHaveLength(2);
     });
 
     it('drops an answer that names a rat no longer in view',async()=>{
         const r=rig();
-        r.step(1000);await r.answer(0,reply(r.calls[0].body,{target:'r1'}));
-        r.step(1300);expect(r.bot.decision?.answer).toMatchObject({source:'jev',target:'rival'});
-        r.hidden.add(r.others[0]);
-        r.step(1600);
+        r.step(1000);r.hidden.add(r.others[0]);
+        await r.answer(0,reply(r.calls[0].body,{target:'r1'}));
+        r.step(1300);
         expect(r.bot.decision?.answer.source).toBe('code');
         expect(r.mind.stats.staleDrops).toBe(1);
     });
 
-    it('maps the scores, the target, the place picks and the danger back onto goals and ids',async()=>{
+    it('maps the scores, the target, the place picks, the danger and the stance back onto goals and ids',async()=>{
         const r=rig();
         r.step(1000);
         const questions=r.calls[0].body.questions;
-        expect(Object.keys(questions)).toEqual(expect.arrayContaining(['goal_flee','goal_take-case','goal_roam','target','danger','place_flee']));
+        expect(Object.keys(questions)).toEqual(expect.arrayContaining(['goal_flee','goal_take-case','goal_roam','target','danger','place_flee','stance']));
         expect(Object.keys(questions.target.criteria as object)).toEqual(['r1','none']);
+        expect(Object.keys(questions.stance.criteria as object)).toEqual(['fight','focus']);
         const flee=r.ctx.places('flee');expect(flee.length).toBeGreaterThan(1);
         const scores=Object.fromEntries(Object.keys(questions).filter(k=>k.startsWith('goal_')).map(k=>[k,0]));
-        await r.answer(0,reply(r.calls[0].body,{...scores,goal_flee:4,place_flee:'b',target:'r1',danger:3}));
+        await r.answer(0,reply(r.calls[0].body,{...scores,goal_flee:4,place_flee:'b',target:'r1',danger:3,stance:'fight'}));
         r.step(1300);
         expect(r.bot.decision?.plan).toMatchObject({goal:'flee',key:flee[1].id});
-        expect(r.bot.decision?.answer).toMatchObject({source:'jev',target:'rival',danger:3,scores:{flee:4,'take-case':0}});
+        expect(r.bot.decision).toMatchObject({stance:'fight',answer:{source:'jev',target:'rival',danger:3,scores:{flee:4,'take-case':0}}});
+    });
+
+    it('takes the code stance for the chosen goal when no mind gave one: a tryhard keeps to the case',()=>{
+        const r=rig();r.mind.enabled=false;
+        r.step(1500);
+        expect(r.bot.decision).toMatchObject({plan:{goal:'take-case'},stance:'focus'});
     });
 
     it('asks whether to bank a shot only about a rat it saw moments ago that has gone behind cover',async()=>{
@@ -132,45 +144,26 @@ describe('the Jev mind',()=>{
         r.step(1000);expect(r.calls[0].body.questions.bank).toBeUndefined();
         // Hunting the rival long enough to have shot at it in sight, then it ducks behind a wall.
         await r.answer(0,reply(r.calls[0].body,{goal_hunt:4,target:'r1'}));
-        r.step(1900);r.hidden.add(r.others[0]);
-        r.step(2400);
+        r.step(3900);r.hidden.add(r.others[0]);
+        r.state.case.owner='rival';
+        r.step(4200);
         const asked=r.calls.at(-1)!.body;
         expect(asked.questions.bank).toBeDefined();expect(asked.questions.target).toBeUndefined();
         await r.answer(r.calls.length-1,reply(asked,{goal_hunt:4,bank:.9}));
-        r.step(2700);expect(r.bot.decision?.answer.bank).toBeCloseTo(.9);
+        r.step(4500);expect(r.bot.decision?.answer.bank).toBeCloseTo(.9);
     });
 
-    it('backs off for as long as a 429 says, with the code mind covering',async()=>{
+    it('asks nothing while the client backs off after a 429, with the code mind deciding',async()=>{
         const r=rig();
-        r.step(1000);r.step(1100);
-        await r.answer(0,new Response('slow down',{status:429,headers:{'retry-after':'3'}}));
-        r.step(4000);
-        expect(r.calls).toHaveLength(1);expect(r.bot.decision?.answer.source).toBe('code');
+        r.step(1000);
+        await r.answer(0,new Response('slow down',{status:429,headers:{'retry-after':'5'}}));
+        r.step(1300);expect(r.bot.decision?.answer.source).toBe('code');
+        r.state.case.owner='rival';
+        r.step(4500);
+        expect(r.calls).toHaveLength(1);expect(r.bot.decision).toMatchObject({trigger:'event',answer:{source:'code'}});
         expect(r.mind.stats.failures).toBe(1);
-        r.step(4400);expect(r.calls).toHaveLength(2);expect(r.calls[1].at).toBeGreaterThanOrEqual(4100);
-    });
-
-    it('backs off exponentially on server errors and malformed replies, and stops answering meanwhile',async()=>{
-        const r=rig();
-        r.step(1000);await r.answer(0);
-        r.step(2400);expect(r.calls).toHaveLength(2);
-        const failures=[new Response('down',{status:503}),new Response('not json',{status:200}),Response.json({answers:'none',usage:{input_tokens:5}})];
-        const delays:number[]=[];
-        for(const failure of failures){
-            const i=r.calls.length-1,failedAt=r.now;
-            await r.answer(i,failure);
-            // The last good answer is under 1.5 s old, but the mind is backing off.
-            r.step(r.now+100);expect(r.bot.decision?.answer.source).toBe('code');
-            r.step(r.now+10000);expect(r.calls.length).toBe(i+2);
-            delays.push(r.calls[i+1].at-failedAt);
-        }
-        // Each wait clearly longer than the last, beyond the 180–300 ms decision beat.
-        expect(delays[0]).toBeGreaterThan(500);
-        expect(delays[1]).toBeGreaterThan(delays[0]+500);expect(delays[2]).toBeGreaterThan(delays[1]+1000);
-        // A good reply ends the backoff: back to one a second.
-        await r.answer(r.calls.length-1);
-        r.step(r.now+2000);expect(r.calls.length).toBeGreaterThanOrEqual(6);
-        expect(r.mind.stats.failures).toBe(3);
+        r.step(6100);r.state.case.owner=null;
+        r.step(6400);expect(r.calls).toHaveLength(2);expect(r.calls[1].at).toBeGreaterThanOrEqual(6000);
     });
 
     it('gives up on a request after the timeout and backs off',async()=>{
