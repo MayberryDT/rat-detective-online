@@ -12,7 +12,7 @@ import { GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import { DEFAULT_APPEARANCE } from '../shared/ratAppearance';
 import { RatEntity } from '../entities/RatEntity';
 import { yieldToPage } from './yieldToPage';
-import { checkPrograms, issuePrograms, shadowCasterProbes, warmPrograms } from './warmPrograms';
+import { checkPrograms, issuePrograms, shadowCasterProbes, uploadTextures, warmPrograms } from './warmPrograms';
 import { readLightingMode } from './lightingMode';
 import { PickupVisual } from '../prototype/PickupVisual';
 import { PickupRespawnVisual } from '../prototype/PickupRespawnVisual';
@@ -66,9 +66,9 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         for(const kind of PICKUP_KINDS){const pickup=new PickupVisual(stage.scene,kind);pickup.setXray(true);pickups.push(pickup);}
         addLeatherBriefcase(briefcase);stage.scene.add(briefcase);
         // The welcome builds the launchers, Dispatch pillars, the case's beacon, the zones, the
-        // flying cheese and the supplies' restock dials; warm them too.
-        const shots=createShotDraws(1),restock=new PickupRespawnVisual('quick-fix');stage.scene.add(shots.root,restock.root);
-        street.push(new PressureMachine(stage.scene),new DispatchPillars(stage.scene),new CaseBeacon(stage.scene),new JurisdictionZones(stage.scene),shots,restock);
+        // flying cheese and the supplies' restock dials (one per kind: each draws its shared icon); warm them too.
+        const shots=createShotDraws(1),restocks=PICKUP_KINDS.map(kind=>new PickupRespawnVisual(kind));stage.scene.add(shots.root,...restocks.map(dial=>dial.root));
+        street.push(new PressureMachine(stage.scene),new DispatchPillars(stage.scene),new CaseBeacon(stage.scene),new JurisdictionZones(stage.scene),shots,...restocks);
         const standIns=stage.scene.children.filter(object=>!scenery.has(object));
         for(const model of models)stage.world.removeBody(model.body);
         if(early)await issuePrograms(renderer,stage.scene,stage.camera,signal,standIns);
@@ -103,6 +103,8 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         // The flashlight's depth programs for every caster (city, rats, props), for both lamp
         // states: none links when something first enters the flashlight or underground.
         await warmPrograms(renderer,stage.scene,stage.camera,signal,standIns,lamps,shadowCasterProbes(stage.scene.children));
+        // Textures upload now too (stand-ins' canvases, city parts first seen from a launch), not when first drawn in play.
+        uploadTextures(renderer,stage.scene);
         stage.scene.remove(...standIns);
         await yieldToPage(signal);
         // Draws the moon map from the city alone; any program that first draw linked is checked now, not in play.

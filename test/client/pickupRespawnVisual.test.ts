@@ -24,9 +24,8 @@ describe('pickup restock presentation',()=>{
         prop.update(46000,camera);expect(item.visible).toBe(true);expect(dial.visible).toBe(false);
         prop.setAvailableAt(91000);prop.update(46000,camera);
         expect(prop.root.getObjectByName(dial.name)).toBe(dial);expect(mesh.material.uniforms.progress.value).toBe(0);
-        const texture=mesh.material.uniforms.map.value as THREE.Texture;
-        const releaseTexture=vi.spyOn(texture,'dispose'),releaseMaterial=vi.spyOn(mesh.material,'dispose');
-        prop.dispose();expect(scene.children).toHaveLength(0);expect(releaseTexture).toHaveBeenCalledTimes(1);expect(releaseMaterial).toHaveBeenCalledTimes(1);
+        const releaseMaterial=vi.spyOn(mesh.material,'dispose');
+        prop.dispose();expect(scene.children).toHaveLength(0);expect(releaseMaterial).toHaveBeenCalledTimes(1);
     });
     it('clamps restored deadlines and faces the camera without changing timing',()=>{
         canvas();const dial=new PickupRespawnVisual('ironclad'),camera=new THREE.PerspectiveCamera();

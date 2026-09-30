@@ -2,38 +2,46 @@ import * as THREE from 'three';
 import {PICKUP_TUNING,type PickupKind} from '../shared/pickups';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 
+/** One icon texture per supply kind, drawn and uploaded once (the load's stand-in dial) and shared by
+ * every dial after, so a site's first claim in play draws no canvas and uploads nothing. */
+const ICONS=new Map<PickupKind,THREE.CanvasTexture>();
+function icon(kind:PickupKind):THREE.CanvasTexture {
+    const cached=ICONS.get(kind);if(cached)return cached;
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
+    const c=canvas.getContext('2d')!;
+    c.scale(2.56,2.56);c.lineJoin='round';c.lineCap='round';
+    const path=(d:string,fill:string,stroke='#15101b',width=5)=>{
+        const shape=new Path2D(d);c.fillStyle=fill;c.fill(shape);
+        c.strokeStyle=stroke;c.lineWidth=width;c.stroke(shape);
+    };
+    // Recognizable supply silhouettes, deliberately subdued while unavailable.
+    if(kind==='ironclad'){
+        path('M30 20 43 14 57 14 70 20 84 57 68 63 65 47 70 88 30 88 35 47 32 63 16 57Z','#9aa9b8');
+        path('m43 16 7 25-17-7 7 23 10-10 10 10 7-23-17 7 7-25','#c1cbd1');
+        c.strokeStyle='#15101b';c.lineWidth=4;c.stroke(new Path2D('M32 69h36M50 48v37'));
+    }else if(kind==='hustle'){
+        for(const x of [0,34]){
+            c.save();c.translate(x,0);
+            path('M20 22 40 24 37 55 48 66 49 81 43 86H13L9 75 16 57Z','#be5148');
+            c.strokeStyle='#ccbab1';c.lineWidth=3;c.stroke(new Path2D('m17 59 17 5m-20 3 18 5M14 80h30'));
+            c.restore();
+        }
+    }else{
+        path('M37 15H63V37H85V63H63V85H37V63H15V37H37Z','#75b792');
+    }
+    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+    ICONS.set(kind,texture);
+    return texture;
+}
+
 /** Item-specific restock dial. One depth-tested plane; only its progress uniform changes. */
 export class PickupRespawnVisual {
     readonly root=new THREE.Group();
     private readonly fill:THREE.ShaderMaterial;
-    private readonly texture:THREE.CanvasTexture;
     constructor(kind:PickupKind){
         this.root.name='supply-restock-'+kind;this.root.position.y=1.3;
-        const canvas=document.createElement('canvas');canvas.width=canvas.height=256;
-        const c=canvas.getContext('2d')!;
-        c.scale(2.56,2.56);c.lineJoin='round';c.lineCap='round';
-        const path=(d:string,fill:string,stroke='#15101b',width=5)=>{
-            const shape=new Path2D(d);c.fillStyle=fill;c.fill(shape);
-            c.strokeStyle=stroke;c.lineWidth=width;c.stroke(shape);
-        };
-        // Recognizable supply silhouettes, deliberately subdued while unavailable.
-        if(kind==='ironclad'){
-            path('M30 20 43 14 57 14 70 20 84 57 68 63 65 47 70 88 30 88 35 47 32 63 16 57Z','#9aa9b8');
-            path('m43 16 7 25-17-7 7 23 10-10 10 10 7-23-17 7 7-25','#c1cbd1');
-            c.strokeStyle='#15101b';c.lineWidth=4;c.stroke(new Path2D('M32 69h36M50 48v37'));
-        }else if(kind==='hustle'){
-            for(const x of [0,34]){
-                c.save();c.translate(x,0);
-                path('M20 22 40 24 37 55 48 66 49 81 43 86H13L9 75 16 57Z','#be5148');
-                c.strokeStyle='#ccbab1';c.lineWidth=3;c.stroke(new Path2D('m17 59 17 5m-20 3 18 5M14 80h30'));
-                c.restore();
-            }
-        }else{
-            path('M37 15H63V37H85V63H63V85H37V63H15V37H37Z','#75b792');
-        }
-        this.texture=new THREE.CanvasTexture(canvas);this.texture.colorSpace=THREE.SRGBColorSpace;
         this.fill=new THREE.ShaderMaterial({transparent:true,depthTest:true,depthWrite:false,toneMapped:false,
-            uniforms:{map:{value:this.texture},progress:{value:0},accent:{value:new THREE.Color(kind==='ironclad'?0xc4d2df:kind==='hustle'?0xe16a59:0x87d8a5)}},
+            uniforms:{map:{value:icon(kind)},progress:{value:0},accent:{value:new THREE.Color(kind==='ironclad'?0xc4d2df:kind==='hustle'?0xe16a59:0x87d8a5)}},
             vertexShader:'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
             fragmentShader:`uniform sampler2D map;uniform float progress;uniform vec3 accent;varying vec2 vUv;
                 void main(){
@@ -62,5 +70,6 @@ export class PickupRespawnVisual {
         camera.getWorldQuaternion(this.root.quaternion);
         this.fill.uniforms.progress.value=1-Math.max(0,Math.min(1,(availableAt-now)/PICKUP_TUNING.respawnMs));
     }
-    dispose():void {this.root.removeFromParent();this.texture.dispose();disposeMeshResources(this.root);}
+    /** The icon stays: it is shared by every dial of its kind. */
+    dispose():void {this.root.removeFromParent();disposeMeshResources(this.root);}
 }

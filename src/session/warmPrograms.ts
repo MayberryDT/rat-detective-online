@@ -89,6 +89,24 @@ export async function warmPrograms(renderer:THREE.WebGLRenderer,scene:THREE.Scen
     await checkPrograms(renderer,signal);
 }
 
+/** Upload every texture the scene's materials use (hidden parts included) now, not on the frame that
+ * first draws them: a launch's first view over the roofs, a stand-in's canvas. Already uploaded ones
+ * are skipped by three.js. */
+export function uploadTextures(renderer:THREE.WebGLRenderer,scene:THREE.Object3D):void {
+    const seen=new Set<THREE.Texture>();
+    scene.traverse(object=>{
+        if(!drawable(object))return;
+        for(const material of [object.material].flat()){
+            const values:unknown[]=Object.values(material);
+            if(material instanceof THREE.ShaderMaterial)for(const uniform of Object.values(material.uniforms))values.push(uniform.value);
+            for(const value of values)if(value instanceof THREE.Texture&&!seen.has(value)&&!(value instanceof THREE.CubeTexture)){seen.add(value);renderer.initTexture(value);}
+        }
+    });
+}
+
+const drawable=(object:THREE.Object3D):object is THREE.Mesh|THREE.Points|THREE.Line|THREE.Sprite=>
+    object instanceof THREE.Mesh||object instanceof THREE.Points||object instanceof THREE.Line||object instanceof THREE.Sprite;
+
 const SHADOW_SIDE:Record<THREE.Side,THREE.Side>={[THREE.FrontSide]:THREE.BackSide,[THREE.BackSide]:THREE.FrontSide,[THREE.DoubleSide]:THREE.DoubleSide};
 const texture=(material:THREE.Material,key:'map'|'alphaMap'|'displacementMap'):THREE.Texture|null=>{
     const value:unknown=key in material?Reflect.get(material,key):null;
