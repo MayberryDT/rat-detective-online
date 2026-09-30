@@ -66,7 +66,9 @@ export class PickupVisual {
     private placed=false;
     private nervous=false;
     private readonly beam:THREE.MeshBasicMaterial;
+    private readonly beamMesh:THREE.Mesh;
     private rim?:THREE.MeshBasicMaterial;
+    private rimShell?:THREE.SkinnedMesh;
     private readonly rimReach={value:0};
     private readonly burst:THREE.MeshBasicMaterial;
     private readonly burstMesh:THREE.Mesh;
@@ -183,8 +185,8 @@ export class PickupVisual {
             shader.fragmentShader='varying float vBeamV;\n'+shader.fragmentShader.replace('#include <opaque_fragment>','#include <opaque_fragment>\ngl_FragColor.a*=pow(1.-vBeamV,1.4)*smoothstep(0.,.04,vBeamV);');
         };
         this.beam.customProgramCacheKey=()=>'supply-beacon-beam';
-        const beam=new THREE.Mesh(new THREE.CylinderGeometry(.45,.7,BEAM_HEIGHT,16,1,true),this.beam);
-        beam.position.y=BEAM_HEIGHT/2+.1;beam.name='supply-beacon';beam.raycast=()=>{};this.root.add(beam);
+        this.beamMesh=new THREE.Mesh(new THREE.CylinderGeometry(.45,.7,BEAM_HEIGHT,16,1,true),this.beam);
+        this.beamMesh.position.y=BEAM_HEIGHT/2+.1;this.beamMesh.name='supply-beacon';this.beamMesh.raycast=()=>{};this.root.add(this.beamMesh);
         // Claim and restock flash: a burst of the supply's colour.
         this.burst=new THREE.MeshBasicMaterial({color:KIND_COLOR[kind],transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,fog:false,toneMapped:false});
         this.burstMesh=new THREE.Mesh(new THREE.SphereGeometry(.6,16,12),this.burst);this.burstMesh.position.y=.9;this.burstMesh.raycast=()=>{};
@@ -200,8 +202,10 @@ export class PickupVisual {
             shader.vertexShader='uniform float rimReach;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed+=normal*rimReach;');
         };
         this.rim.customProgramCacheKey=()=>'supply-rim';
-        const shell=new THREE.SkinnedMesh(batch.geometry,this.rim);shell.bind(batch.skeleton,batch.bindMatrix);
-        shell.frustumCulled=false;shell.raycast=()=>{};shell.name='supply-rim';this.item.add(shell);
+        // Culled with the batch's conservative bound: an uncullable shell drew every kit's
+        // thousands of skinned triangles each frame from anywhere in the city.
+        const shell=new THREE.SkinnedMesh(batch.geometry,this.rim);shell.bind(batch.skeleton,batch.bindMatrix);shell.boundingSphere=batch.boundingSphere;
+        shell.raycast=()=>{};shell.name='supply-rim';this.item.add(shell);this.rimShell=shell;
     }
     /** Additive warm light: a soft-edged cone, or a floor pool fading from the center. */
     private glowMaterial(opacity:number,pool:boolean):THREE.MeshBasicMaterial {
@@ -272,8 +276,9 @@ export class PickupVisual {
         if(camera){
             const distance=camera.position.distanceTo(world);
             const far=THREE.MathUtils.smoothstep(distance,10,40),edge=THREE.MathUtils.smoothstep(distance,6,22);
-            this.beam.opacity=empty?0:.3*far*breath;
-            if(this.rim){this.rim.opacity=empty?0:.85*edge;this.rimReach.value=.025+Math.min(.22,distance*.0035);}
+            // Transparent layers still draw (and fill) at zero opacity: hide them instead.
+            this.beam.opacity=empty?0:.3*far*breath;this.beamMesh.visible=this.beam.opacity>0;
+            if(this.rim&&this.rimShell){this.rim.opacity=empty?0:.85*edge;this.rimShell.visible=this.rim.opacity>0;this.rimReach.value=.025+Math.min(.22,distance*.0035);}
         }
         if(unavailable&&camera){
             if(!this.restock){this.restock=new PickupRespawnVisual(this.kind);this.root.add(this.restock.root);}
