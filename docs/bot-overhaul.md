@@ -109,20 +109,19 @@ flowchart TB
   - `src/worker/city/CityRecorder.ts` and `src/shared/city/places.ts` supply perception's vocabulary;
   - the recorder gains `decision` facts.
 - **New, under `src/shared/bots/`:**
-  - perception;
-  - the Intent type;
+  - `intent.ts`, the shared contract: goals, personalities, `Plan`, `MindAnswer`, `Decision`, skill dials;
+  - perception (B3);
+  - `goals.ts`: which goals are offered, and the plan code makes for each one;
   - the code mind;
-  - the cast (weights, hysteresis, skill dials);
-  - one motor executor per goal, plus a bank-shot solver.
+  - the cast (weights, hysteresis, sampling, skill dials);
+  - the motor, with a bank-shot solver.
 
   The Jev mind (client, freshness, backoff, budget) lives in the Worker.
-- **Deleted:**
-  - `ObjectiveBotBrain.ts`;
-  - `BotManeuver`, `BotAttention`, `BotPurposefulHolding`, `BotZoneHolding`, `BotOpportunisticFire` and `BotExperiments`;
-  - the capacity-fixture experiment modes that exist only to switch between them.
-
-  Their good behaviour moves into executors: doorway exits, wall-case approaches, directional obstacle jumps, sewer ramp crossings and zone stepping.
-- **Tests:** 26 test files name the old brain or its layers. Behaviour worth keeping is re-proved against the new executors. Tests of the old layers' internals are deleted.
+- **Split, then deleted:** `ObjectiveBotBrain.ts` is two things in one file, and both survive in new homes:
+  - its deciding half (the priority ladder: case, intercept, carrier, zone, delivery, evade, combat, explore, with pickup, armour and alarm-pillar detours) becomes `goals.ts` plus the code mind's scores;
+  - its moving half becomes the motor: routes, launches and flights, local steps, case approaches, obstacle jumps, zone holding, strafing, Ironclad caution, aim, fire, speculative corner fire, the turn rate and trap avoidance.
+- **Moved into the motor, unchanged in behaviour:** `BotManeuver`, `BotAttention`, `BotPurposefulHolding` (zone holding), `BotOpportunisticFire` (corner fire) and `zoneStepSafe`. They are motor behaviour worth keeping, not patch layers. The experiment switch goes: `BotExperiments`, the unused non-default `BotZoneHolding` class, and the capacity-fixture modes that only switch between them.
+- **Tests:** 26 test files name the old brain or its layers. They drive the new composed bot (the tryhard code mind plus the motor), with the same step signature, so their behaviour still has to hold. Tests of experiment switching are deleted.
 
 ## Order of work
 
@@ -138,14 +137,22 @@ Each step lists what it delivers and how it is proven.
 
   Details under "Evidence so far".
 
-### B1. Baseline
-- Today's bots on layout 3, from production's recorded data (no soak), for comparison with the new bots:
-  - time per place;
-  - deaths per place;
-  - fire and hit rates;
-  - banked-hit share;
-  - stuck anomalies and rescues per bot-hour;
-  - case changes and rounds finished.
+### B1. Baseline (tool done, 29 September)
+- `scripts/bot-gate.mjs` computes the gate numbers from `output/city/city.db` for any room, layout, time window or `mindVersion`:
+  - time and deaths per place (spread);
+  - fire and hit rates, kills and deaths per bot-hour;
+  - the banked-hit share (null while bot balls aren't recorded one by one);
+  - rescues per bot-hour (an estimate from teleports in the frames for today's bots, which recorded no `rescue` fact);
+  - case takes, deliveries and respawns per room-hour;
+  - the median human's hit rate and kills per death.
+- The first 9.4 bot-hours on layout 3 give:
+  - about 1.6 rescues per bot-hour;
+  - 205 places visited, with the top 10 holding 38% of bot time;
+  - deaths in 103 places, with the top 5 holding 28%;
+  - 80 shots a bot-minute at a 4% hit rate, and 0.92 kills per death;
+  - 216 case takes and 10.5 deliveries per room-hour.
+
+  The median human hit 7.1% (only 5 human rats). The final baseline window is re-run at the gate, covering every hour of today's bots on layout 3.
 
 ### B2. Intent, motor and code mind (the cutover)
 - The Intent type, one executor per goal, the bank-shot solver, the code mind, the cast and the skill dials.
