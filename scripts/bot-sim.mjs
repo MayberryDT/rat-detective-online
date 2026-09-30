@@ -127,6 +127,8 @@ function report(rooms,wall){
         deliveriesPerRoomHour:Object.fromEntries(Object.entries(deliveries).map(([id,n])=>[id,per(n,hours[id])])),
         // Supplies claimed, and supplies passed as the city map's `pickup-passed` counts them.
         pickupsPerBotHour:per(sum('pickups'),botHours),passedPerBotHour:per(sum('passed'),botHours),
+        // Share of live assignment time the case lay loose: how quickly the bots take it.
+        looseCaseShare:Math.round(sum('looseMs')/Math.max(1,sum('activeMs'))*1000)/1000,
         killsPerBotHour:per(sum('kills'),botHours),deaths:sum('deaths'),deathPlaces:deathPlaces.size,
         botShots:sum('shots'),botHitRate:Math.round(sum('hits')/Math.max(1,sum('shots'))*1000)/10+'%',
         // As the production accuracy table: shots with no rat in sight, and hits per shot by the distance to the rat in sight nearest the shot's line.
@@ -289,7 +291,7 @@ async function room(seed,start,minutes,runtimePath){
     const players=new Map();
     for(const [i,id] of ids.entries())players.set(id,m.createPlayer(id,names[i],{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},m.spawnForWorld(spec,Math.random,players.values())));
     const stats={seed,start,ms:0,rescues:0,rescuePlaces:[],rescueNotes:[],shotsByRange:BANDS.map(()=>0),hitsByRange:BANDS.map(()=>0),caseChanges:0,completions:0,deliveries:{},assignmentMs:{},kills:0,deaths:0,deathPlaces:[],shots:0,hits:0,longestStill:0,
-        blindShots:0,aimShots:AIM_BANDS.map(()=>0),aimHits:AIM_BANDS.map(()=>0),pickups:0,passed:0};
+        blindShots:0,aimShots:AIM_BANDS.map(()=>0),aimHits:AIM_BANDS.map(()=>0),pickups:0,passed:0,activeMs:0,looseMs:0};
     const passes=supplyPasses(sight,m.MAX_HP);
     const fight=fightRecorder(ids,m.ControlTally);
     let sim;
@@ -370,6 +372,7 @@ async function room(seed,start,minutes,runtimePath){
         if(a){stats.assignmentMs[a.id]=(stats.assignmentMs[a.id]??0)+DT*1000;}
         const c=snap.case;
         if(c.owner!==owner){if(c.owner)stats.caseChanges++;owner=c.owner;stillSince=clock;}
+        if(a?.phase==='active'){stats.activeMs+=DT*1000;if(!c.owner)stats.looseMs+=DT*1000;}
         if(a?.phase!=='active'||c.owner)stillSince=clock;
         if(clock-stillSince>stats.longestStill){stats.longestStill=clock-stillSince;stats.stillAt=`${a?.id} seed ${seed} at ${places.at(c.p.x,c.p.y,c.p.z).id}`;}
         if(a&&a.deliverySerial!==serial){if(a.deliverySerial>serial)stats.deliveries[a.id]=(stats.deliveries[a.id]??0)+a.deliverySerial-serial;serial=a.deliverySerial;}
