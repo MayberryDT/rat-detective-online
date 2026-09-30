@@ -113,6 +113,8 @@ export class RatEntity {
     /** The Hunch sketch, sharing the rigid batch's geometry and skeleton. */
     private sketch?:THREE.SkinnedMesh;
     private sketchUniform?:{value:number};
+    /** The rig's bound centre (rig space), placed in the world each frame for the sketch's culling. */
+    private readonly sketchCenter=new THREE.Vector3();
     private readonly shellOffset={value:0};
 
     // State
@@ -390,11 +392,14 @@ export class RatEntity {
             geometry.setIndex(batch.geometry.index);geometry.setDrawRange(0,batch.rigidIndexCount);
             this.sketch=new THREE.SkinnedMesh(geometry,material);this.sketchUniform=strength;
             this.sketch.bind(batch.skeleton,batch.bindMatrix);
-            this.sketch.name='rat-hunch-sketch';this.sketch.frustumCulled=false;this.sketch.raycast=()=>{};
+            // Culled with the rig's own bound (the sketch's matrix stays identity, so the bound is placed in world space below).
+            this.sketch.name='rat-hunch-sketch';this.sketch.boundingSphere=new THREE.Sphere(new THREE.Vector3(),batch.boundingSphere!.radius);this.sketch.raycast=()=>{};
+            this.sketchCenter.copy(batch.boundingSphere!.center);
             this.sketch.castShadow=this.sketch.receiveShadow=false;this.sketch.matrixAutoUpdate=false;
             this.scene.add(this.sketch);
         }
         this.sketch.visible=true;
+        this.sketch.boundingSphere!.center.copy(this.sketchCenter).applyQuaternion(this.mesh.quaternion).add(this.mesh.position);
         if(this.sketchUniform)this.sketchUniform.value=strength;
     }
 
