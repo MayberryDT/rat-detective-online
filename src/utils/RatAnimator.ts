@@ -23,7 +23,13 @@ const EXTRA_KIND:Record<typeof EXTRA_PARTS[number],ExtraKind>={
 interface ExtraPart {part:THREE.Object3D;kind:ExtraKind;side:number;position:THREE.Vector3;rotation:THREE.Euler;scale:THREE.Vector3}
 /** A deforming tail: its rest shape, each vertex's ring (a TubeGeometry ring shares one u), each
  * ring's u and the offsets its geometry shows, and the pose (`RatAnimator.tailPose`) it last caught up to. */
-interface TailRig {tail:THREE.Mesh<THREE.TubeGeometry>;rest:Float32Array;ring:Uint8Array;ringU:Float64Array;offsets:Float64Array;tip:THREE.Object3D;tipRest:THREE.Vector3;shown:number}
+interface TailRig {tail:THREE.Mesh<THREE.TubeGeometry>;rest:Float32Array;ring:Uint8Array;ringU:Float64Array;offsets:Float64Array;tip:THREE.Object3D;tipRest:THREE.Vector3;shown:number;centers?:Float64Array}
+/** The tail's rest centre line at each ring. Its path never changes: read once when the tail first lies dead. */
+function restCenters(path:THREE.Curve<THREE.Vector3>,ringU:Float64Array):Float64Array {
+    const centers=new Float64Array(ringU.length*3),point=new THREE.Vector3();
+    for(let r=0;r<ringU.length;r++){path.getPointAt(ringU[r],point);centers[r*3]=point.x;centers[r*3+1]=point.y;centers[r*3+2]=point.z;}
+    return centers;
+}
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;
 /** R1: the soft-spine joints (absent on the frozen reference models). */
@@ -631,9 +637,9 @@ export class RatAnimator {
         const settle=FEEL.hatKnock.params.settle;
         const knock=this.hatKnockAge<4*settle?Math.min(1,this.hatKnockAge/.05)*Math.exp(-this.hatKnockAge/settle)*(1+.3*Math.cos(this.hatKnockAge*15)*Math.exp(-this.hatKnockAge*6)):0;
         for (const rig of this.rigs) {
-            const [{ part: body }, { part: head }, { part: hat }, { part: tail },
-                { part: leftEye }, { part: rightEye }, { part: leftEar }, { part: rightEar },
-                { part: arm }, { part: pistol }] = rig;
+            // Indexed, not array-destructured: destructuring walks an iterator per rig per frame.
+            const body = rig[0].part, head = rig[1].part, hat = rig[2].part, tail = rig[3].part, leftEye = rig[4].part,
+                rightEye = rig[5].part, leftEar = rig[6].part, rightEar = rig[7].part, arm = rig[8].part, pistol = rig[9].part;
             // Rock from one side of the coat hem to the other, with a small
             // lift to keep the tilted hem above the floor. All offsets are visual.
             body.scale.y = 1 + breath * 0.006 - compression * 0.022 - this.hit * 0.045;
@@ -809,8 +815,8 @@ export class RatAnimator {
                 x += weight * (this.tailFall.x * 0.85 + this.tailTip.x);
                 y += weight * (this.tailFall.y * 0.85 + this.tailTip.y);
                 z += weight * (this.tailFall.z * 0.85 + this.tailTip.z);
-                tail.geometry.parameters.path.getPointAt(u, this.tailCenter);
-                this.tailCenter.x += x; this.tailCenter.y += y; this.tailCenter.z += z;
+                const c = rig.centers ??= restCenters(tail.geometry.parameters.path, ringU);
+                this.tailCenter.set(c[r * 3] + x, c[r * 3 + 1] + y, c[r * 3 + 2] + z);
                 this.tailCenter.applyMatrix4(tail.matrixWorld);
                 const lift = Math.max(0, 0.068 - this.tailCenter.y);
                 // Keep the flexible tail resting on the floor as the torso rolls.
@@ -823,7 +829,7 @@ export class RatAnimator {
             offsets[o] = x; offsets[o + 1] = y; offsets[o + 2] = z;
         }
         if (!changed) return;
-        rig.offsets.set(offsets.subarray(0, rig.offsets.length));
+        for (let i = 0; i < rig.offsets.length; i++) rig.offsets[i] = offsets[i];
         const positions = tail.geometry.getAttribute('position'), array = positions.array;
         for (let i = 0; i < ring.length; i++) {
             const o = ring[i] * 3;
