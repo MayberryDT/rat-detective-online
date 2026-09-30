@@ -254,4 +254,5 @@ for(const [label,run,wait=60] of script){
     step.textures=newUploads();
     if(latent&&!game.compiling){renderer.compile(scene,camera);const all=programKeys();step.latent=describe(new Set([...all].filter(key=>!after.has(key))));}
 }
+Object.assign(result,{marks:Object.fromEntries(performance.getEntriesByType('mark').map(mark=>[mark.name,mark.startTime]))});
 Object.assign(window,{censusDone:true});
