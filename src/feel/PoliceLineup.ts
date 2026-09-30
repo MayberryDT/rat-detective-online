@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {createRatMesh,ratAccessory,type RatOptions} from '../utils/RatModel';
+import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import type {Award} from '../shared/networkProtocol';
 import {awardValue} from '../shared/awardUnits';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
@@ -55,6 +56,8 @@ export class PoliceLineup {
             const rat=createRatMesh({...entry.appearance,accessory:ratAccessory(entry.name)});
             rat.position.set((i-(this.entries.length-1)/2)*SPACING,0,0);
             rat.traverse(object=>{object.castShadow=true;});
+            // One skinned draw per rat and pass instead of about 65: the lineup is the round end's busiest view.
+            batchRigidMeshes(rat);
             this.room.add(rat);this.rats.push(rat);
         });
         this.age=0;this.fired=0;this.flash=0;this.running=true;
