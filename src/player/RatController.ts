@@ -15,6 +15,12 @@ const CAM_PIVOT_Y = 3.5;
 const CAM_SHOULDER = 1.25;
 const MOUSE_SENS = 0.002;
 
+/** three's recursive `intersect` without its sort: every hit under `object`, children in order. */
+function castInto(object:THREE.Object3D,ray:THREE.Raycaster,hits:THREE.Intersection[]):void {
+    if(object.layers.test(ray.layers)){const result:unknown=object.raycast(ray,hits);if(result===false)return;}
+    for(let i=0;i<object.children.length;i++)castInto(object.children[i]!,ray,hits);
+}
+
 /** The player's rat: keys, mouse and touch read into `RatControls`, the shared rat body (`RatBody`, the same
  * step every bot runs) and the shoulder camera. */
 export class RatController {
@@ -33,7 +39,6 @@ export class RatController {
     private readonly solids: THREE.Mesh[];
     private readonly solidSpheres: Float64Array;
     private readonly movingBlockers: THREE.Object3D[];
-    private readonly rayCandidates: THREE.Object3D[] = [];
     private readonly rayHits: THREE.Intersection[] = [];
     private readonly cameraRay = new THREE.Raycaster();
     get grounded():boolean {return this.movement.grounded;}
@@ -183,17 +188,19 @@ export class RatController {
 
     /** The nearest blocker along `cameraRay` within its `far`: the same hit as raycasting every blocker. */
     private firstBlockerHit(): THREE.Intersection|undefined {
-        const {origin,direction}=this.cameraRay.ray,far=this.cameraRay.far,spheres=this.solidSpheres,candidates=this.rayCandidates;
-        candidates.length=0;
+        const ray=this.cameraRay,{origin,direction}=ray.ray,far=ray.far,spheres=this.solidSpheres,hits=this.rayHits;
+        hits.length=0;
         for(let i=0;i<this.solids.length;i++){
             const x=spheres[i*4]-origin.x,y=spheres[i*4+1]-origin.y,z=spheres[i*4+2]-origin.z,r=spheres[i*4+3];
             const along=x*direction.x+y*direction.y+z*direction.z;
             // Wholly behind the origin, wholly past `far`, or off the line: no hit is possible.
             if(along<-r||along>far+r||x*x+y*y+z*z-along*along>r*r)continue;
-            candidates.push(this.solids[i]);
+            castInto(this.solids[i]!,ray,hits);
         }
-        for(const blocker of this.movingBlockers)candidates.push(blocker);
-        this.rayHits.length=0;
-        return this.cameraRay.intersectObjects(candidates,true,this.rayHits)[0];
+        for(let i=0;i<this.movingBlockers.length;i++)castInto(this.movingBlockers[i]!,ray,hits);
+        // The nearest, and the first found among equals: what three's stable sort puts first.
+        let nearest=hits[0];
+        for(let i=1;i<hits.length;i++)if(hits[i]!.distance<nearest!.distance)nearest=hits[i];
+        return nearest;
     }
 }
