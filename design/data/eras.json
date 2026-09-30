@@ -244,10 +244,11 @@
       "build": null,
       "from": null,
       "to": null,
+      "mindVersion": 6,
       "commits": [],
-      "change": "The lighter Jev (L4): a bot asks Jev only when it spawns, its goal ends or the case changes state, at most every 10 s otherwise and never within 3 s of the last request; each answer also sets a fight-or-ignore stance. A new mindVersion, shipped on its own.",
+      "change": "The lighter Jev (L4, mindVersion 6): a bot decides only at decision moments (it spawns, its goal ends or fails, the case changes state, or 10 s pass) and holds its goal in between; Jev is asked at those moments, never within 3 s of the last request; each decision also sets a stance, fight or focus (ignore rats unless they block the way or shoot). Every decision moment is recorded with its stance. About 1 round in 5 is a code-only round: the bots keep the code mind even with humans playing, to measure what Jev is worth. Shipped on its own.",
       "baseline": "release-a",
-      "notes": "Production's bot overhaul era measured 56 requests per bot-minute (bots counted from the frames, about 7 in the room); the plan's 48 matches about 9 bots. The bound of 12 stands either way.",
+      "notes": "Jev, decision and human-likeness measures and these verdicts read ordinary rounds only; the report compares code-only rounds with ordinary ones in their own section. Production's bot overhaul era measured 56 requests per bot-minute (bots counted from the frames, about 7 in the room); the plan's 48 matches about 9 bots. The bound of 12 stands either way.",
       "predictions": [
         { "id": "jev-requests", "says": "Jev requests per bot-minute fall from about 48 to under 12.", "measure": "jev.requestsPerBotMinute", "expect": "down", "target": { "below": 12 } },
         { "id": "jev-dollars", "says": "Dollars per hour Jev is on fall at least fivefold.", "measure": "jev.dollarsPerJevHour", "expect": "down", "target": { "factor": 5 } },

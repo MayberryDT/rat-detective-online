@@ -62,8 +62,10 @@ db.exec(`
     hp INTEGER, carrying INTEGER, progress REAL, rank INTEGER, lead REAL, k INTEGER, d INTEGER, assists INTEGER, streak INTEGER, shots10s INTEGER, visible INTEGER, nearest REAL, data TEXT);
 `);
 // Columns added since the first mirrors, so an existing city.db upgrades in place: the release `build` (null on facts
-// recorded before build stamps) and `agent` (1 for an agent browser's rat, shot, session or perf report; null before the flag).
-for (const [table, column, type] of [['facts', 'build', 'TEXT'], ['facts', 'agent', 'INTEGER'], ['situations', 'build', 'TEXT'], ['situations', 'agent', 'INTEGER']])
+// recorded before build stamps), `agent` (1 for an agent browser's rat, shot, session or perf report; null before the flag)
+// and `code_only` (1 in a code-only round, where the bots keep the code mind with humans playing; null otherwise).
+for (const [table, column, type] of [['facts', 'build', 'TEXT'], ['facts', 'agent', 'INTEGER'], ['facts', 'code_only', 'INTEGER'],
+  ['situations', 'build', 'TEXT'], ['situations', 'agent', 'INTEGER'], ['situations', 'code_only', 'INTEGER']])
   if (!db.prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`).get(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 db.exec(`
   CREATE INDEX IF NOT EXISTS facts_type ON facts(type, t);
@@ -117,9 +119,9 @@ async function main() {
   const bytes = todo.reduce((sum, o) => sum + (o.size ?? 0), 0);
   log(`${seconds()} s  archive: ${listed} objects, ${todo.length} new (${(bytes / 1e6).toFixed(1)} MB compressed)`);
 
-  const addFact = db.prepare('INSERT INTO facts (t, type, room, round, mode, layout, incident, a, place, data, build, agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-  const addSituation = db.prepare(`INSERT INTO situations (t, round, mode, incident, a, human, alive, place, floor, x, y, z, hp, carrying, progress, rank, lead, k, d, assists, streak, shots10s, visible, nearest, data, build, agent)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const addFact = db.prepare('INSERT INTO facts (t, type, room, round, mode, layout, incident, a, place, data, build, agent, code_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  const addSituation = db.prepare(`INSERT INTO situations (t, round, mode, incident, a, human, alive, place, floor, x, y, z, hp, carrying, progress, rank, lead, k, d, assists, streak, shots10s, visible, nearest, data, build, agent, code_only)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const markObject = db.prepare('INSERT INTO archive_objects VALUES (?, ?)');
   /** Streams one object's gzipped JSON lines into SQL; the object is marked mirrored in the same transaction. */
   async function mirror(key, gz) {
@@ -130,10 +132,10 @@ async function main() {
       const insert = line => {
         if (!line) return;
         const f = JSON.parse(line);
-        addFact.run(f.t, f.type, f.room, f.round ?? null, f.mode, f.layout, f.incident ?? null, f.a ?? f.victim ?? null, f.place ?? f.vplace ?? null, line, f.build ?? null, f.agent ? 1 : null);
+        addFact.run(f.t, f.type, f.room, f.round ?? null, f.mode, f.layout, f.incident ?? null, f.a ?? f.victim ?? null, f.place ?? f.vplace ?? null, line, f.build ?? null, f.agent ? 1 : null, f.codeOnly ? 1 : null);
         if (f.type === 'frame') for (const r of f.rats) addSituation.run(f.t, f.round ?? null, f.mode, f.incident ?? null, r.a, r.human ? 1 : 0, r.alive ? 1 : 0, r.place, r.floor,
           r.p[0], r.p[1], r.p[2], r.hp, r.case.carrying ? 1 : 0, r.standing.progress, r.standing.rank, r.standing.lead, r.kda.k, r.kda.d, r.kda.a, r.kda.streak,
-          r.fire.last10s, r.danger.visible, r.danger.nearest ?? null, JSON.stringify(r), f.build ?? null, r.agent ? 1 : 0);
+          r.fire.last10s, r.danger.visible, r.danger.nearest ?? null, JSON.stringify(r), f.build ?? null, r.agent ? 1 : 0, f.codeOnly ? 1 : null);
         facts++;
       };
       await pipeline(Readable.from([gz]), createGunzip(), async source => {

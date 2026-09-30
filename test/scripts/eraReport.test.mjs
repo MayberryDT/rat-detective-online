@@ -6,12 +6,13 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { judgePrediction, parseEras, scorecard } from '../../scripts/lib/eras.mjs';
+import { compareReadings, judgePrediction, parseEras, scorecards } from '../../scripts/lib/eras.mjs';
 
 // Ways the era report could go wrong: an old era (no build stamp) picking up facts of the next mind version recorded in
 // its window; a stamped era picking up unstamped facts from the same hours; an agent browser counted as a human or as a
 // bot (in exposure, requests per bot-minute, kills or blind shots); an era without the newer facts throwing or reading
-// as zero instead of waiting; verdicts called when intervals overlap, or in the wrong direction.
+// as zero instead of waiting; code-only rounds (no Jev, humans playing) diluting Jev's cost per human-hour or the goal and
+// likeness measures the lighter Jev is judged on; verdicts called when intervals overlap, or in the wrong direction.
 const T = Date.UTC(2026, 9, 2), H = 3_600_000, iso = t => new Date(t).toISOString(), BUILD = 'production-2026-10-02-abc1234';
 const ERAS = { eras: [
   { id: 'old-bots', environment: 'production', from: iso(T), to: iso(T + H), layout: 3, mindVersion: null, change: 'Old bots.', predictions: [] },
@@ -51,10 +52,23 @@ function makeDb(path) {
 
   // The lighter Jev, stamped: 6 requests a minute with two bots (3 per bot-minute), a tenth of the cost. In the same hours
   // an unstamped room (a stray older build) asks 10,000 times: it must not be read into the stamped era.
-  const light = { round: 'r2', mindVersion: 4, build: BUILD };
+  const light = { round: 'r2', mindVersion: 6, build: BUILD };
   for (let i = 0; i < 1800; i++) fact({ ...light, t: T + 2 * H + i * 1000, type: 'frame', rats: [rat(1, true), rat(2, false), rat(3, false)] });
   for (let w = 1; w <= 30; w++) fact({ ...light, t: T + 2 * H + w * 60_000, type: 'minds', ms: 60_000, requests: 6, answers: 6, decisions: 100, fallbacks: 1, staleDrops: 0, dollars: .002 });
   fact({ round: 'r9', t: T + 2 * H + 90_000, type: 'minds', ms: 60_000, requests: 10_000, answers: 10_000, dollars: 5 });
+  // 120 decision moments over 60 bot-minutes: 90 on events, 30 on the hold running out; a third fight. Take-case goals
+  // are held: 3 of 30 replaced. The bots fire at a rat in sight 9 times in 10.
+  for (let i = 0; i < 120; i++) fact({ ...light, t: T + 2 * H + 100_000 + i, type: 'decision', a: 2, mind: 'jev', goal: 'take-case', trigger: i < 90 ? 'event' : 'beat', stance: i % 3 ? 'focus' : 'fight' });
+  for (let i = 0; i < 30; i++) fact({ ...light, t: T + 2 * H + 200_000 + i, type: 'goal-end', a: 2, goal: 'take-case', outcome: i < 3 ? 'replaced' : 'reached', durationMs: 9000 });
+  for (let i = 0; i < 40; i++) fact({ ...light, t: T + 2 * H + 300_000 + i, type: 'shot', a: 2, human: false, sample: 10, targets: i % 10 ? [{ d: 3 }] : [] });
+  // A code-only round after it, 30 minutes with the same rats: no Jev, the code mind replaces nearly every take-case goal
+  // and fires blind 9 times in 10. Read into the ordinary rounds, it would halve Jev's cost per human-hour and flip the
+  // take-case verdict (303 of 330 replaced).
+  const code = { round: 'r3', mindVersion: 6, build: BUILD, codeOnly: true };
+  for (let i = 0; i < 1800; i++) fact({ ...code, t: T + 2.5 * H + i * 1000, type: 'frame', rats: [rat(1, true), rat(2, false), rat(3, false)] });
+  for (let i = 0; i < 60; i++) fact({ ...code, t: T + 2.5 * H + 100_000 + i, type: 'decision', a: 2, mind: 'code', goal: 'take-case', trigger: 'event', stance: 'fight' });
+  for (let i = 0; i < 300; i++) fact({ ...code, t: T + 2.5 * H + 200_000 + i, type: 'goal-end', a: 2, goal: 'take-case', outcome: 'replaced', durationMs: 1000 });
+  for (let i = 0; i < 40; i++) fact({ ...code, t: T + 2.5 * H + 300_000 + i, type: 'shot', a: 2, human: false, sample: 10, targets: i % 10 ? [] : [{ d: 3 }] });
   db.close();
 }
 
@@ -67,7 +81,7 @@ const near = (x, y, what) => assert.ok(Math.abs(x - y) < 1e-6, `${what}: ${x} ag
 test('eras select their own facts: old eras by window and mind version, stamped eras by build; agents count as nobody', async () => {
   await withDb(async path => {
     const db = new DatabaseSync(path, { readOnly: true }), [old, jev, lighter] = parseEras(ERAS);
-    const o = scorecard(db, old), j = scorecard(db, jev), l = scorecard(db, lighter, { now: T + 3 * H });
+    const o = scorecards(db, old).all, j = scorecards(db, jev).all, l = scorecards(db, lighter, { now: T + 3 * H }).ordinary;
     db.close();
     near(o.data.humanHours, 2400 / 3600, 'old era human hours');
     near(o.data.botHours, 2400 / 3600, 'old era bot hours');
@@ -82,11 +96,33 @@ test('eras select their own facts: old eras by window and mind version, stamped 
     near(j.measures['likeness.blindShare.human'].value, .5, 'the humans\' blind-shot share leaves the agent\'s shots out');
     near(j.measures['likeness.blindShare.bot'].value, .75, 'bots');
     near(j.measures['goals.take-case.replaced'].value, .9, 'take-case replaced');
+    assert.equal(j.measures['decisions.stance.fight'], undefined, 'no stance recorded: no reading, not a zero');
 
     near(l.measures['jev.requestsPerBotMinute'].value, 3, 'stamped era requests per bot-minute (unstamped facts left out)');
     near(l.data.jevHours, .5, 'stamped era Jev hours');
-    assert.equal(l.measures['goals.take-case.replaced'], undefined, 'no goal ends: no reading, not a zero');
     assert.equal(l.measures['pickups.passedPerRatHour.bot'], undefined, 'pickups passed not recorded: no reading');
+  });
+});
+
+test('code-only rounds stay out of the Jev, decision and likeness measures and are compared on their own', async () => {
+  await withDb(async path => {
+    const db = new DatabaseSync(path, { readOnly: true }), lighter = parseEras(ERAS)[2];
+    const { all, ordinary, codeOnly } = scorecards(db, lighter, { now: T + 3 * H });
+    db.close();
+    near(all.data.humanHours, 1, 'every round');
+    near(ordinary.data.humanHours, .5, 'ordinary rounds');
+    near(codeOnly.data.humanHours, .5, 'code-only rounds');
+    near(ordinary.measures['jev.dollarsPerHumanHour'].value, .12, 'Jev\'s cost per human-hour counts the hours Jev could be asked');
+    near(ordinary.measures['decisions.perBotMinute'].value, 2, 'decision moments per bot-minute');
+    near(ordinary.measures['decisions.trigger.event'].value, .75, 'decided on an event');
+    near(ordinary.measures['decisions.trigger.beat'].value, .25, 'decided on the hold running out');
+    near(ordinary.measures['decisions.stance.fight'].value, 1 / 3, 'fight stance');
+    near(ordinary.measures['goals.take-case.replaced'].value, .1, 'take-case replaced, ordinary rounds');
+    near(codeOnly.measures['goals.take-case.replaced'].value, 1, 'take-case replaced, code-only rounds');
+    near(codeOnly.measures['decisions.stance.fight'].value, 1, 'code-only stance');
+    // Blind shots: the code mind's 90% against Jev's 10%, 40 shots each with 30 human minutes on both sides.
+    assert.equal(compareReadings(ordinary.measures['likeness.blindShare.bot'], codeOnly.measures['likeness.blindShare.bot']), 'higher');
+    assert.equal(compareReadings(ordinary.measures['players.humanDuelShare'], codeOnly.measures['players.humanDuelShare']), 'waiting', 'no duels: waiting for data');
   });
 });
 
@@ -98,9 +134,10 @@ test('the report judges the after era\'s predictions against the before era', as
     const { stdout } = await run(['jev', 'lighter']);
     assert.ok(stdout.length > 0);
     const verdicts = Object.fromEntries(JSON.parse(await readFile(json, 'utf8')).verdicts.map(v => [v.id, v.outcome]));
-    // Requests: 3 per bot-minute, wholly under 12. Dollars: 0.12 an hour against 1.20, a tenth. The lighter era has no goal
-    // ends and no shots with targets, so those two wait for data.
-    assert.deepEqual(verdicts, { requests: 'met', dollars: 'met', 'take-case': 'waiting', blind: 'waiting' });
+    // Requests: 3 per bot-minute, wholly under 12. Dollars: 0.12 an hour against 1.20, a tenth. Take-case goals: 10% replaced
+    // in ordinary rounds against 90% (the code-only round's 300 replacements left out). The lighter era has no human shots
+    // with targets, so the blind-shot gap waits for data.
+    assert.deepEqual(verdicts, { requests: 'met', dollars: 'met', 'take-case': 'met', blind: 'waiting' });
     // Before the old-bots era, Jev did not run at all: the factor prediction waits rather than dividing by nothing.
     await run(['old-bots', 'lighter']);
     assert.equal(JSON.parse(await readFile(json, 'utf8')).verdicts.find(v => v.id === 'dollars').outcome, 'waiting');

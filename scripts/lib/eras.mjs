@@ -51,7 +51,7 @@ function gap(h, b, enough) {
 // The era registry.
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
 /** Measures a prediction may name (the scorecard's keys). */
-const PREDICTABLE = /^(jev\.(requestsPerBotMinute|answerShare|staleShare|fallbackShare|dollarsPerJevHour|latencyP90)|goals\.holdMedianS|goals\.[a-z-]+\.(reached|replaced|failed|died|holdMedianS)|pickups\.passedPerRatHour\.(human|bot)|likeness\.(hitRate\.(human|bot)|hitRateBandGap|blindShare\.(human|bot)|blindShotGap)|players\.(killsPerHumanHour|deathsPerHumanHour))$/;
+const PREDICTABLE = /^(jev\.(requestsPerBotMinute|answerShare|staleShare|fallbackShare|dollarsPerJevHour|latencyP90)|goals\.holdMedianS|goals\.[a-z-]+\.(reached|replaced|failed|died|holdMedianS)|decisions\.(perBotMinute|trigger\.(event|beat|fallback)|stance\.(fight|focus))|pickups\.passedPerRatHour\.(human|bot)|likeness\.(hitRate\.(human|bot)|hitRateBandGap|blindShare\.(human|bot)|blindShotGap)|players\.(killsPerHumanHour|deathsPerHumanHour|humanKillsOfBotsPerHumanHour|botKillsOfHumansPerHumanHour|humanDuelShare))$/;
 const EXPECT = ['up', 'down', 'not-up', 'not-down'];
 
 /** The registry, checked: unique ids, a window or a build for every era that has started, well-formed predictions. */
@@ -125,16 +125,30 @@ export function gpuName(gpu) {
 }
 
 const TYPES = ['frame', 'minds', 'decision', 'goal-end', 'shot', 'damage', 'death', 'session', 'perf', 'pickup-passed'];
+export const TRIGGERS = ['event', 'beat', 'fallback'], STANCES = ['fight', 'focus'];
 
-/** The whole scorecard for one era: how much data it has, every measure as a Reading, and the tables behind them. */
-export function scorecard(db, era, { now = Date.now(), classes } = {}) {
-  const facts = eraFacts(db, era, TYPES, now), by = Object.fromEntries(TYPES.map(t => [t, []]));
+/**
+ * The era's scorecards from one read of its facts: `all` rounds, `ordinary` rounds (Jev on while humans play) and
+ * `codeOnly` rounds (from L4, about 1 round in 5 in which the bots keep the code mind with humans playing; their facts
+ * carry `codeOnly`). Jev, decision and human-likeness measures and the predictions read `ordinary`; before L4 every
+ * round is ordinary.
+ */
+export function scorecards(db, era, { now = Date.now(), classes } = {}) {
+  const facts = eraFacts(db, era, TYPES, now), known = classes ?? actorClasses(db);
+  return { all: score(facts, era, known), ordinary: score(facts.filter(f => !f.codeOnly), era, known), codeOnly: score(facts.filter(f => f.codeOnly), era, known) };
+}
+
+/** One scorecard from a set of facts: how much data it has, every measure as a Reading, and the tables behind them. */
+function score(facts, era, known) {
+  const by = Object.fromEntries(TYPES.map(t => [t, []]));
   for (const f of facts) by[f.type].push(f);
-  const known = classes ?? actorClasses(db), seen = new Map();
+  const seen = new Map();
   const classOf = (round, a) => seen.get(`${round}:${a}`) ?? known.get(`${round}:${a}`) ?? 'bot';
 
-  // Exposure from the frames: alive seconds per class, bots present in each room over time, K/D/A ledgers per rat-round.
+  // Exposure from the frames: alive seconds per class, bot seconds present (alive or not), bots present in each room
+  // over time, K/D/A ledgers per rat-round.
   const alive = { human: 0, bot: 0, agent: 0 }, rounds = new Set(), prevT = new Map(), ledgers = new Map(), botsAt = new Map();
+  let botPresentS = 0;
   for (const f of by.frame) {
     const dt = Math.min(FRAME_CAP_S, prevT.has(f.round) ? (f.t - prevT.get(f.round)) / 1000 : 1);
     prevT.set(f.round, f.t); rounds.add(f.round);
@@ -147,6 +161,7 @@ export function scorecard(db, era, { now = Date.now(), classes } = {}) {
       if (who !== 'agent' && r.kda) { const l = ledgers.get(key); if (l) l.last = r.kda; else ledgers.set(key, { who, first: r.kda, last: r.kda }); }
     }
     (botsAt.get(f.room) ?? botsAt.set(f.room, []).get(f.room)).push([f.t, bots]);
+    botPresentS += bots * dt;
   }
   const humanS = alive.human, humanEnough = humanS >= VERDICT_HUMAN_SECONDS;
   const sessions = by.session.filter(s => s.what === 'join' && ratClass(s) === 'human').length;
@@ -193,6 +208,12 @@ export function scorecard(db, era, { now = Date.now(), classes } = {}) {
   }
   const decisions = { jev: by.decision.filter(d => d.mind === 'jev').length, code: by.decision.filter(d => d.mind === 'code').length };
   const withInputs = by.decision.filter(d => d.in).length;
+  // Decision moments (from mindVersion 6 every moment is recorded; before, only goal changes and fresh Jev answers).
+  const moments = by.decision.length;
+  if (botPresentS > 0 && moments) { const min = botPresentS / 60, [lo, hi] = poissonInterval(moments); put('decisions.perBotMinute', { value: moments / min, lo: lo / min, hi: hi / min, n: moments, enough: moments >= MIN_EVENTS }); }
+  if (moments) for (const t of TRIGGERS) put(`decisions.trigger.${t}`, share(by.decision.filter(d => d.trigger === t).length, moments));
+  const staged = by.decision.filter(d => d.stance), withStance = staged.length;
+  if (withStance) for (const s of STANCES) put(`decisions.stance.${s}`, share(staged.filter(d => d.stance === s).length, withStance));
 
   // Pickups passed (new in release A): usable supplies within reach a rat did not claim, per alive rat-hour.
   const passed = { human: 0, bot: 0 };
@@ -248,8 +269,15 @@ export function scorecard(db, era, { now = Date.now(), classes } = {}) {
     if (killer !== 'agent') kills[`${killer}-${victim}`]++;
   }
   const humanKills = kills['human-bot'] + kills['human-human'], humanDeaths = kills['bot-human'] + kills['human-human'] + kills['city-human'];
-  put('players.killsPerHumanHour', perHour(humanKills, humanS, humanEnough));
-  put('players.deathsPerHumanHour', perHour(humanDeaths, humanS, humanEnough));
+  // Kill and death rates need the human time and 20 events, as the city map's counted measures do.
+  const rate = k => perHour(k, humanS, humanEnough && k >= MIN_EVENTS);
+  put('players.killsPerHumanHour', rate(humanKills));
+  put('players.deathsPerHumanHour', rate(humanDeaths));
+  // Duels between humans and bots: each side's kills of the other per human rat-hour, and the humans' share of them.
+  put('players.humanKillsOfBotsPerHumanHour', rate(kills['human-bot']));
+  put('players.botKillsOfHumansPerHumanHour', rate(kills['bot-human']));
+  const duels = kills['human-bot'] + kills['bot-human'];
+  put('players.humanDuelShare', share(kills['human-bot'], duels, humanEnough && duels >= MIN_EVENTS));
 
   // Game health: humans' perf reports by operating system and GPU.
   const perf = new Map();
@@ -267,7 +295,7 @@ export function scorecard(db, era, { now = Date.now(), classes } = {}) {
     era: era.id,
     window: { from: era.from ?? null, to: era.to ?? null, firstFact: first ?? null, lastFact: last ?? null },
     data: { facts: facts.length, rounds: rounds.size, humanHours: humanS / 3600, humanSessions: sessions, agentHours: alive.agent / 3600, botHours: alive.bot / 3600,
-      jevHours: jevS / 3600, jevWindows: windows.length, decisions, decisionsWithInputs: withInputs, goalEnds: ends.length, stamped: facts.filter(f => f.build).length },
+      jevHours: jevS / 3600, jevWindows: windows.length, decisions, decisionsWithInputs: withInputs, decisionsWithStance: withStance, goalEnds: ends.length, stamped: facts.filter(f => f.build).length },
     cost: { dollars, requests, answers, tokens: sum(windows, 'tokens') },
     measures: m,
     tables: {
@@ -277,7 +305,7 @@ export function scorecard(db, era, { now = Date.now(), classes } = {}) {
       perf: [...perf].sort((a, b) => b[1].ms - a[1].ms).map(([machine, g]) => ({ machine, reports: g.reports, minutes: g.ms / 60_000, fps50: median(g.fps50)?.value ?? null, fps95: median(g.fps95)?.value ?? null })),
       agentPerfReports: agentPerf,
     },
-    recorded: { shotTargets: aimedRecorded, pickupPassed: passedRecorded, decisionInputs: withInputs > 0, perf: by.perf.length > 0, build: facts.some(f => f.build) },
+    recorded: { shotTargets: aimedRecorded, pickupPassed: passedRecorded, decisionInputs: withInputs > 0, stance: withStance > 0, perf: by.perf.length > 0, build: facts.some(f => f.build), codeOnly: facts.some(f => f.codeOnly) },
   };
 }
 
@@ -309,4 +337,11 @@ export function judgePrediction(p, before, after) {
     : p.expect === 'not-down' ? (a.hi < b.lo ? 'missed' : a.lo >= b.lo ? 'met' : 'unclear')
     : (() => { const up = a.lo > b.hi, down = a.hi < b.lo; return !up && !down ? 'unclear' : up === (p.expect === 'up') ? 'met' : 'missed'; })();
   return { ...readings, outcome };
+}
+
+/** Two readings side by side (code-only rounds against ordinary ones): `waiting` unless both clear the minimums, then
+ * `higher` or `lower` (the second against the first) only when the 95% intervals part, else `unclear`. */
+export function compareReadings(first, second) {
+  if (!first?.enough || !second?.enough) return 'waiting';
+  return second.lo > first.hi ? 'higher' : second.hi < first.lo ? 'lower' : 'unclear';
 }

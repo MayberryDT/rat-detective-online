@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Bot gate metrics (docs/bot-overhaul.md, "Acceptance"): how the bots play, from the city map mirror.
 // Usage: node scripts/bot-gate.mjs [--db=output/city/city.db] [--room=public-live-v2] [--layout=3]
-//        [--since=ISO] [--until=ISO] [--mind=<mindVersion>] [--build=<build>|unknown] [--mode=<assignment id>] [--json=out.json]
+//        [--since=ISO] [--until=ISO] [--mind=<mindVersion>] [--build=<build>|unknown] [--mode=<assignment id>] [--rounds=ordinary|code-only] [--json=out.json]
 // `minds` (B5) reads the `decision`, `goal-end` and `minds` facts. Agent rats (`agent=1` browsers) count as neither humans nor bots.
+// `--rounds=ordinary` leaves out code-only rounds (from L4, the bots keep the code mind with humans playing), so Jev's cost per
+// human-hour counts only the hours Jev could be asked; `code-only` keeps only them. Default: every round.
 import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync } from 'node:fs';
 import { actorClasses, buildOf, ratClass } from './lib/traffic.mjs';
@@ -11,7 +13,9 @@ const arg = (name, fallback) => process.argv.find(a => a.startsWith(`--${name}=`
 const db = new DatabaseSync(arg('db', 'output/city/city.db'), { readOnly: true });
 const room = arg('room', 'public-live-v2'), layout = Number(arg('layout', '3'));
 const since = Date.parse(arg('since', '2000-01-01')), until = Date.parse(arg('until', '2100-01-01'));
-const mind = arg('mind', undefined), mode = arg('mode', undefined), build = arg('build', undefined);
+const mind = arg('mind', undefined), mode = arg('mode', undefined), build = arg('build', undefined), rounds = arg('rounds', 'all');
+if (!['all', 'ordinary', 'code-only'].includes(rounds)) throw new Error('--rounds must be ordinary or code-only');
+const inRounds = f => rounds === 'all' || (rounds === 'code-only') === !!f.codeOnly;
 
 /** A jump this long and faster than any rat can run (12 u/s, 17.4 with Hot Pursuit), with no death,
  * respawn or recent launch, is a stuck-bot rescue. An estimate for data recorded before the `rescue` fact (B2b). */
@@ -19,14 +23,14 @@ const RESCUE_JUMP = 40, RESCUE_SPEED = 25, FRAME_CAP_S = 6;
 
 const facts = (type) => db.prepare('select data from facts where type = ? and room = ? and layout = ? and t between ? and ? order by t')
   .all(type, room, layout, since, until).map(r => JSON.parse(r.data))
-  .filter(f => (mind === undefined || String(f.mindVersion ?? '') === mind) && (mode === undefined || f.mode === mode) && (build === undefined || buildOf(f) === build));
+  .filter(f => (mind === undefined || String(f.mindVersion ?? '') === mind) && (mode === undefined || f.mode === mode) && (build === undefined || buildOf(f) === build) && inRounds(f));
 const classes = actorClasses(db);
 const classOf = (round, a) => classes.get(`${round}:${a}`) ?? 'bot';
 const isBot = (round, a) => classOf(round, a) === 'bot';
 
 const frames = facts('frame');
 const launches = facts('launch'), deaths = facts('death'), balls = facts('ball'), cases = facts('case'), rescues = facts('rescue');
-const anomalies = frames.length ? db.prepare("select count(*) n from facts where type = 'anomaly' and room = ? and layout = ? and t between ? and ?").get(room, layout, since, until).n : 0;
+const anomalies = frames.length ? facts('anomaly').length : 0;
 
 // Alive time per place and per rat, shots and hits from cumulative kda, teleports.
 const botTime = new Map(), last = new Map(), kda = new Map(), prevFrameT = new Map();
@@ -93,7 +97,7 @@ const minds = {
 };
 
 const out = {
-  window: { room, layout, since: new Date(Math.max(since, frames[0]?.t ?? since)).toISOString(), until: new Date(Math.min(until, frames.at(-1)?.t ?? until)).toISOString(), mind: mind ?? 'any', build: build ?? 'any', rounds: new Set(frames.map(f => f.round)).size },
+  window: { room, layout, since: new Date(Math.max(since, frames[0]?.t ?? since)).toISOString(), until: new Date(Math.min(until, frames.at(-1)?.t ?? until)).toISOString(), mind: mind ?? 'any', build: build ?? 'any', roundKind: rounds, rounds: new Set(frames.map(f => f.round)).size },
   botHours: round3(botHours), humanHours: round3(humanSeconds / 3600), roomHours: round3(roomSeconds / 3600),
   stuck: {
     rescuesPerBotHour: rescues.length ? perHour(rescues.length) : null,

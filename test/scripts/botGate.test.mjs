@@ -69,3 +69,30 @@ test('the bot gate leaves agents out and selects one build', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// Code-only rounds (L4) have humans but no Jev: counting their human hours halves Jev's cost per human-hour.
+test('the bot gate reads ordinary or code-only rounds on request', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'bot-gate-')), path = join(dir, 'city.db');
+  try {
+    const db = new DatabaseSync(path);
+    db.exec(`CREATE TABLE facts (t INTEGER, type TEXT, room TEXT, round TEXT, mode TEXT, layout INTEGER, incident TEXT, a INTEGER, place TEXT, data TEXT);
+      CREATE TABLE situations (t INTEGER, round TEXT, a INTEGER, human INTEGER);`);
+    const insert = db.prepare('INSERT INTO facts (t, type, room, round, layout, data) VALUES (?, ?, ?, ?, ?, ?)');
+    const T = Date.UTC(2026, 9, 3), fact = (f, round, codeOnly) => insert.run(T + f.t, f.type, 'public-live-v2', round, 3,
+      JSON.stringify({ room: 'public-live-v2', round, layout: 3, ...(codeOnly ? { codeOnly: true } : {}), ...f, t: T + f.t }));
+    const rat = (a, human) => ({ a, human, alive: true, place: 'street:x', p: [0, 0, 0], lifeMs: 0, kda: { shots: 0, hits: 0, k: 0, d: 0 } });
+    // An ordinary hour with Jev ($2), then a code-only hour: a human and a bot in each.
+    for (let t = 0; t <= 3_600_000; t += 5000) fact({ t, type: 'frame', rats: [rat(1, true), rat(2, false)] }, 'r1');
+    fact({ t: 3_600_000, type: 'minds', ms: 3_600_000, dollars: 2, decisions: 10, answers: 10 }, 'r1');
+    for (let t = 0; t <= 3_600_000; t += 5000) fact({ t: t + 3_700_000, type: 'frame', rats: [rat(1, true), rat(2, false)] }, 'r2', true);
+    db.close();
+    const gate = async rounds => JSON.parse((await promisify(execFile)(process.execPath, ['scripts/bot-gate.mjs', `--db=${path}`, ...(rounds ? [`--rounds=${rounds}`] : [])])).stdout);
+    const [all, ordinary, codeOnly] = [await gate(), await gate('ordinary'), await gate('code-only')];
+    const near = (x, y) => Math.abs(x - y) < .01;
+    assert.ok(near(all.humanHours, 2) && near(ordinary.humanHours, 1) && near(codeOnly.humanHours, 1), JSON.stringify([all.humanHours, ordinary.humanHours, codeOnly.humanHours]));
+    assert.ok(near(ordinary.minds.jev.dollarsPerHumanHour, 2), String(ordinary.minds.jev.dollarsPerHumanHour));
+    assert.equal(codeOnly.minds.jev.hoursOn, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

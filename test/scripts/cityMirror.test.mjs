@@ -98,13 +98,14 @@ test('a rejected token stops the run with the status instead of retrying', async
   }
 });
 
-// A mirror made before build stamps and the agent flag must upgrade in place (not lose or refetch its facts), and an
-// agent browser's rat must not read as a bot or a human.
-test('an older mirror gains the build and agent columns in place; new facts fill them', async () => {
+// A mirror made before build stamps, the agent flag and code-only rounds must upgrade in place (not lose or refetch its
+// facts); an agent browser's rat must not read as a bot or a human, and a code-only round's facts must be findable.
+test('an older mirror gains the build, agent and code_only columns in place; new facts fill them', async () => {
   const key = 'city/raw/v1/room/2026/10/02/00-00-00-d.jsonl.gz', build = 'production-2026-10-02-abc1234';
   const { http, base } = await server({ [key]: [
     { t: 10, type: 'shot', room: 'room', mode: 'jurisdiction', layout: 5, build, a: 3, human: false, agent: true, place: 'street:x' },
     { t: 11, type: 'frame', room: 'room', mode: 'jurisdiction', layout: 5, build, rats: [rat(2, 'lot:y'), { ...rat(3, 'street:x'), human: false, agent: true }] },
+    { t: 12, type: 'frame', room: 'room', mode: 'jurisdiction', layout: 5, build, codeOnly: true, rats: [rat(1, 'street:x')] },
   ] });
   const out = await mkdtemp(join(tmpdir(), 'city-mirror-'));
   try {
@@ -121,8 +122,9 @@ test('an older mirror gains the build and agent columns in place; new facts fill
     assert.equal(run.code, 0, run.stderr);
     db = new DatabaseSync(join(out, 'city.db'), { readOnly: true });
     const all = sql => db.prepare(sql).all().map(r => Object.values(r));
-    assert.deepEqual(all('SELECT t, type, build, agent FROM facts ORDER BY t'), [[1, 'shot', null, null], [10, 'shot', build, 1], [11, 'frame', build, null]]);
-    assert.deepEqual(all('SELECT t, a, human, agent, build FROM situations ORDER BY t, a'), [[1, 1, 1, null, null], [11, 2, 0, 0, build], [11, 3, 0, 1, build]]);
+    assert.deepEqual(all('SELECT t, type, build, agent, code_only FROM facts ORDER BY t'), [[1, 'shot', null, null, null], [10, 'shot', build, 1, null], [11, 'frame', build, null, null], [12, 'frame', build, null, 1]]);
+    assert.deepEqual(all('SELECT t, a, human, agent, build, code_only FROM situations ORDER BY t, a'),
+      [[1, 1, 1, null, null, null], [11, 2, 0, 0, build, null], [11, 3, 0, 1, build, null], [12, 1, 1, 0, build, 1]]);
     db.close();
   } finally {
     http.close();
