@@ -1,6 +1,6 @@
 # Bot overhaul plan
 
-Status (2026-09-30): **B0–B5 built; B6 (Tyler's preview) is on staging.** Tyler agreed the design, answered every open decision and asked for the whole build ("do it all"). Branch `bots/overhaul` (not merged, not in production). Staging Worker `49fc0763-043f-4f13-95b5-247811f2f05e` runs it: the code mind for the empty city, the Jev mind whenever a human is playing. **Next:** Tyler plays staging, then tuning; production (B7) only on his OK. This file owns the scope, order, decisions and acceptance of the bot overhaul. The visual version of the design, with diagrams, is [design/bots/overhaul-plan.html](../design/bots/overhaul-plan.html). Measurement uses [the city map](city-map.md).
+Status (2026-09-30): **B0–B7 done: released to production** on Tyler's order ("Send it live… Don't ship it without input recording"). Production Worker `aecb77d2-8d51-4792-a5fb-af077c036c3d` runs motor iteration 2 with controls recording (`mindVersion` 3, commit `c878e52` on `main`, merged back into `bots/overhaul`). Staging Worker `820c8057-aa51-432b-89f7-084a502b1367`. **Next:** motor iteration 3 from the first human session (see [the release receipt](verification/bot-overhaul-release-2026-09-30.md)): longer strafe holds, calmer aim between flicks, fewer shots at nothing, lower point-blank accuracy, shooting while strafe-jumping. This file owns the scope, order, decisions and acceptance of the bot overhaul. The visual version of the design, with diagrams, is [design/bots/overhaul-plan.html](../design/bots/overhaul-plan.html). Measurement uses [the city map](city-map.md).
 
 ## The idea
 
@@ -247,6 +247,7 @@ Each step lists what it delivers and how it is proven.
 
 ### B7. Production
 - The Worker secret, then the deploy, on Tyler's OK. Afterwards, one change per `mindVersion`, measured on `/map`.
+- Done 30 September: Worker `aecb77d2-8d51-4792-a5fb-af077c036c3d`, client `index-D5qko-pp.js`. [Receipt](verification/bot-overhaul-release-2026-09-30.md).
 
 ## Acceptance
 
