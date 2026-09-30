@@ -92,8 +92,9 @@ export class PickupVisual {
         const cylinder=(parent:THREE.Group,top:number,bottom:number,h:number,x:number,y:number,z:number,material:THREE.Material,segments=12)=>{
             const mesh=new THREE.Mesh(new THREE.CylinderGeometry(top,bottom,h,segments),material);mesh.position.set(x,y,z);parent.add(mesh);return mesh;
         };
-        // Low evidence plinth.
-        cylinder(this.root,.78,.84,.12,0,.06,0,dark,20);
+        // Low evidence plinth, in its own copy of the lamp's finish: the lamp batch draws `dark` skinned, and one
+        // material drawn both skinned and unskinned makes three re-select its program on every draw.
+        cylinder(this.root,.78,.84,.12,0,.06,0,dark.clone(),20);
         this.root.add(this.item);
         if(kind==='ironclad'){
             this.item.name='iron-trenchcoat-dummy';
