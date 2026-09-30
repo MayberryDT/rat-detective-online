@@ -4,6 +4,7 @@ import {LANDMARK_INTERIORS, LANDMARK_FURNISHINGS, landmarkBoxes} from '../shared
 import {CHUTE_OUTER_WIDTH, NEEDLEWORKS_CHUTES} from '../shared/city/kit/parts/chute';
 import {registerLandmarkReactions} from './LandmarkReactions';
 import {SEWER_MAINTENANCE_FURNISHINGS} from '../shared/sewerLayout';
+import {freezeStatic} from '../utils/freezeStatic';
 
 type Finish='stone'|'steel'|'brick'|'patina'|'trim'|'iron'|'brass'|'glass'|'warm'|'cream'|'cyan'|'rose'|'green'|'wood'|'paper'|'tile'|'machine'|'cloth'|'linen';
 interface Skin {body:Finish; light:Finish; pitch:number; windowW:number; windowH:number}
@@ -38,6 +39,9 @@ export class LandmarkArchitecture {
         this.interiors();this.maintenanceRoom();
         this.craftDetails();
         this.flush();
+        // Only the dial needles turn: every other matrix is composed once.
+        for(const object of [...this.meshes,...this.signs])freezeStatic(object);
+        for(const {root,rotor} of this.mechanisms)freezeStatic(root,[rotor]);
         this.unregister=registerLandmarkReactions(scene,point=>{
             for(const mechanism of this.mechanisms){
                 const p=mechanism.root.position,dx=p.x-point.x,dy=p.y-point.y,dz=p.z-point.z;

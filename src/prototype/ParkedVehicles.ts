@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {PARKED_VEHICLES,VEHICLE_SHAPES,VEHICLE_SCALE,type ParkedVehicle} from '../shared/vehicleLayout';
+import {freezeStatic} from '../utils/freezeStatic';
 
 /** Parked municipal/delivery stock. Primary body volumes match vehicleLayout's cover. */
 export class ParkedVehicles {
@@ -23,6 +24,8 @@ export class ParkedVehicles {
             scene.add(mesh);this.meshes.push(mesh);
         }
         this.groups.clear();
+        // Parked for good: every matrix is composed once.
+        for(const mesh of this.meshes)freezeStatic(mesh);
     }
     private build(v:ParkedVehicle){
         const shape=VEHICLE_SHAPES[v.kind],black=0x181b22,chrome=0x9a9486,glass=0x344b59;

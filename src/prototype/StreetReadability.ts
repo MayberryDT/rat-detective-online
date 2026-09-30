@@ -12,6 +12,7 @@ import type {FacadeMass} from '../world/WindowApertures';
 import {cornerEntrances} from '../world/cornerShops';
 import {kitCity} from '../shared/city/kit/city';
 import type {SpillBake} from './CityBakeCache';
+import {freezeStatic} from '../utils/freezeStatic';
 
 export interface SpillSource {
     x:number; z:number; y:number; nx:number; nz:number;
@@ -222,7 +223,7 @@ export class StreetReadability {
                 else part(w,h,.04,.025);
             }
             mesh.name=index===0?'street-spill-fixture-frames':'street-spill-fixture-panes';
-            mesh.computeBoundingSphere();mesh.raycast=()=>{};scene.add(mesh);this.fixtures.push(mesh);
+            mesh.computeBoundingSphere();mesh.raycast=()=>{};freezeStatic(mesh);scene.add(mesh);this.fixtures.push(mesh);
         }
     }
     apply(material:THREE.MeshStandardMaterial):void {

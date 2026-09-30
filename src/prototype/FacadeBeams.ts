@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {sampleStreetSpill,type SpillSource,type SpillBlocker} from './StreetReadability';
 import {AUTHORED_LIGHT_GAIN} from '../session/lightingTuning';
 import {restoreGeometry,type SpillBake} from './CityBakeCache';
+import {freezeStatic} from '../utils/freezeStatic';
 
 interface Box {x:number;y:number;z:number;w:number;h:number;d:number}
 type Point={x:number;y:number;z:number};
@@ -140,7 +141,7 @@ export class FacadeBeams {
         this.update();
     }
     private addCell(cell:string,geometry:THREE.BufferGeometry):void {
-        const mesh=new THREE.Mesh(geometry,this.material);mesh.name=`facade-downward-beams-${cell}`;mesh.raycast=()=>{};
+        const mesh=new THREE.Mesh(geometry,this.material);mesh.name=`facade-downward-beams-${cell}`;mesh.raycast=()=>{};freezeStatic(mesh);
         this.scene.add(mesh);this.meshes.push(mesh);this.cells.push(cell);
     }
     update():void {

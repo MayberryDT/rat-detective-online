@@ -28,6 +28,9 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
 
     // ─── SCENE ────────────────────────────────────────────────────────
     const scene = new THREE.Scene();
+    // The root never moves: without this, its per-frame local update forces every object's
+    // world matrix to be recomputed, frozen scenery included.
+    scene.matrixAutoUpdate = false;
     scene.background = new THREE.Color(0x100b19);
     scene.fog = new THREE.FogExp2(0x100b19, 0.008);
 

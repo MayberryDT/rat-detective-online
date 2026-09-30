@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {grayboxBoxes,CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../shared/grayboxLayout';
 import {sewerBoxes} from '../shared/sewerLayout';
 import type {WorldSpec} from '../shared/worldSpec';
+import {freezeStatic} from '../utils/freezeStatic';
 
 /** Battered curbside stock and sewer deposits, batched by material and shape. */
 export class CityGrime {
@@ -94,6 +95,8 @@ export class CityGrime {
         this.batches.clear();
         const dripMat=new THREE.MeshBasicMaterial({color:0x74978c,transparent:true,opacity:.36});this.materials.push(dripMat);
         this.drops=new THREE.InstancedMesh(this.geometry.bag,dripMat,this.dripSites.length);this.drops.frustumCulled=false;scene.add(this.drops);this.meshes.push(this.drops);this.update(0);
+        // Drops fall by instance; no object here moves.
+        for(const mesh of this.meshes)freezeStatic(mesh);
     }
     private part(shape:keyof CityGrime['geometry'],color:number,x:number,y:number,z:number,w:number,h:number,d:number,rx=0,ry=0,rz=0){
         this.dummy.position.set(x,y,z);this.dummy.scale.set(w,h,d);this.dummy.rotation.set(rx,ry,rz);this.dummy.updateMatrix();

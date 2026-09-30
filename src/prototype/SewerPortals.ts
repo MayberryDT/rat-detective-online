@@ -2,6 +2,7 @@ import { AUTHORED_LIGHT_GAIN } from '../session/lightingTuning';
 import * as THREE from 'three';
 import {SEWER_MANHOLE,SEWER_PIPE_ENTRANCES,sewerPipeBoxes,sewerPipePoint,type SewerPipeEntrance} from '../shared/sewerLayout';
 import { SEWER_TUNNEL_LAMP_DISTANCES } from './SewerLighting';
+import {freezeStatic} from '../utils/freezeStatic';
 
 /** Battered walk-in drain pipe and open drop shaft; collisions live in sewerLayout. */
 export class SewerPortals {
@@ -17,6 +18,7 @@ export class SewerPortals {
         }
         for(const entry of SEWER_PIPE_ENTRANCES)this.pipe(entry);
         this.manhole();this.batch();this.scene.add(this.root);
+        freezeStatic(this.root);
     }
     private pipe(entry:SewerPipeEntrance){
         const horizontal=entry.axis==='x';
