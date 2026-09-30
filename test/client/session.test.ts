@@ -117,6 +117,7 @@ const harness = vi.hoisted(() => {
         updateView = vi.fn();
         resetGrounding = vi.fn();
         dispose = vi.fn();
+        tally = { f: 0, r: 0, j: 0, fx: 0, rx: 0, pending: false, clear: vi.fn() };
         constructor(_scene: unknown, _world: unknown, _camera: unknown, _name: string, options: { hp?: number }, spawn: { x: number; y: number; z: number }) {
             const vec = () => ({
                 x: spawn.x, y: spawn.y, z: spawn.z,

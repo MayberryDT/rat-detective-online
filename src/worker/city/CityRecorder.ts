@@ -18,6 +18,8 @@ import { heatCellIndex, heatCellKey, heatDayKey } from '../HeatMap';
 import type { CityStore } from './CityStore';
 import type { CityArchive } from './CityArchive';
 import type { JevOutcome, JevStats } from '../bots/jevMind';
+import { ControlTally, type ControlsInput } from '../../shared/rat/controlTally';
+import type { RatControls } from '../../shared/rat/ratBody';
 
 /** Watches one room and writes the city map's facts (docs/city-map.md, layer 2): situations every
  * second, 5 Hz windows around fights, discrete events, and the aggregates the map reads. */
@@ -41,6 +43,8 @@ const ARRIVED = 3;
 const AIM_MS = 50, AIM_RING = 160;
 /** A human's camera look older than this is stale; the ring falls back to the body's facing. */
 const AIM_FRESH_MS = 300;
+/** A player's client sends its controls at least once a second; older than this, a rat's controls are unknown. */
+const CONTROLS_FRESH_MS = 1500;
 /** One bot shot in this many is kept as a fact with its targets, for comparing bot aim with human aim. */
 const BOT_SHOT_SAMPLE = 10;
 /** Rats in sight nearest the aim line, measured for each kept shot. */
@@ -82,6 +86,8 @@ const ARCHIVE_ONLY: ReadonlySet<CityFact['type']> = new Set<CityFact['type']>(['
 type Sample = [number, number, number, number, number, number];
 /** ms, yaw, pitch (NaN: not known). */
 type AimSample = [number, number, number];
+/** ms, the move axes f and r, then jump presses and forward/back and left/right key changes within the slot. */
+type ControlSample = [number, number, number, number, number, number];
 interface Life { start: number; spawnPlace: string; lastPickup?: { kind: PickupKind; at: number }; lastHit?: { at: number; by?: string }; prev?: { x: number; z: number; at: number }; place?: string; carryStart?: number; shots: number[] }
 
 /** Counts under an aggregate key (day|layout|mode), then two labels: no key string is built per count. */
@@ -162,6 +168,9 @@ export class CityRecorder {
   private readonly aimRings = new Map<string, AimSample[]>();
   /** Each human's latest camera look (unit vector) and when it arrived. */
   private readonly looks = new Map<string, { x: number; y: number; z: number; at: number }>();
+  /** Each rat's controls since the last 20 Hz slot, and when they last arrived; the rings behind fight windows. */
+  private readonly tallies = new Map<string, { tally: ControlTally; at: number }>();
+  private readonly controlRings = new Map<string, ControlSample[]>();
   private aimAt = 0;
   private botShots = 0;
   private readonly windows: Array<{ ids: Set<string>; from: number; until: number }> = [];
@@ -301,6 +310,24 @@ export class CityRecorder {
   aim(id: string, look: Vec3Data, now: number): void {
     const l = this.looks.get(id);
     if (l) { l.x = look.x; l.y = look.y; l.z = look.z; l.at = now; } else this.looks.set(id, { x: look.x, y: look.y, z: look.z, at: now });
+  }
+
+  /** A human's controls, tallied by their client since its previous send. Only the controls rings read them. */
+  controls(id: string, input: ControlsInput, now: number): void {
+    const t = this.tallyOf(id);
+    t.tally.add(input); t.at = now;
+  }
+
+  /** A bot's controls this step, tallied here as a player's client tallies its own. Only the controls rings read them. */
+  botControls(id: string, controls: RatControls, now: number): void {
+    const t = this.tallyOf(id);
+    t.tally.note(controls); t.at = now;
+  }
+
+  private tallyOf(id: string): { tally: ControlTally; at: number } {
+    let t = this.tallies.get(id);
+    if (!t) this.tallies.set(id, t = { tally: new ControlTally(), at: 0 });
+    return t;
   }
 
   /** The rats in sight nearest a shot's line, from the shooter's eye: how far off it was, and whether it led a crossing rat. */
@@ -504,16 +531,27 @@ export class CityRecorder {
       if (last) { last.x = p.x; last.y = p.y; last.z = p.z; last.hp = p.hp; } else this.last.set(p.id, { x: p.x, y: p.y, z: p.z, hp: p.hp });
     }
     // 20 Hz aim: a human's camera look while fresh, otherwise (and for every bot) the body's facing with no pitch.
+    // 20 Hz controls: the latest axes and the presses and key changes since the last slot, while fresh.
     if (now >= this.aimAt) {
       this.aimAt = now + AIM_MS;
       for (const p of players.values()) {
-        if (p.hp <= 0) continue;
+        const t = this.tallies.get(p.id);
+        if (p.hp <= 0) { t?.tally.clear(); continue; }
         let ring = this.aimRings.get(p.id);
         if (!ring) this.aimRings.set(p.id, ring = []);
         const s: AimSample = ring.length >= AIM_RING ? ring.shift()! : [0, 0, 0], look = this.looks.get(p.id);
         const fresh = !!look && now - look.at <= AIM_FRESH_MS;
         s[0] = now; s[1] = round3(fresh ? Math.atan2(look!.x, look!.z) : yaw(p)); s[2] = fresh ? round3(Math.asin(Math.max(-1, Math.min(1, look!.y)))) : NaN;
         ring.push(s);
+        if (!t) continue;
+        if (now - t.at <= CONTROLS_FRESH_MS) {
+          let controls = this.controlRings.get(p.id);
+          if (!controls) this.controlRings.set(p.id, controls = []);
+          const c: ControlSample = controls.length >= AIM_RING ? controls.shift()! : [0, 0, 0, 0, 0, 0], k = t.tally;
+          c[0] = now; c[1] = k.f; c[2] = k.r; c[3] = k.j; c[4] = k.fx; c[5] = k.rx;
+          controls.push(c);
+        }
+        t.tally.clear();
       }
     }
     if (now >= this.sampleAt) {
@@ -589,13 +627,15 @@ export class CityRecorder {
       const w = this.windows[i]!;
       if (now < w.until) continue;
       this.windows.splice(i, 1);
-      const samples: Record<string, Sample[]> = {}, aim: Record<string, Array<[number, number, number | null]>> = {};
+      const samples: Record<string, Sample[]> = {}, aim: Record<string, Array<[number, number, number | null]>> = {}, controls: Record<string, ControlSample[]> = {};
       for (const id of w.ids) {
         const a = String(this.actor(id));
         samples[a] = (this.rings.get(id) ?? []).filter(s => s[0] >= w.from && s[0] <= w.until).map(s => [s[0] - w.from, s[1], s[2], s[3], s[4], s[5]]);
         aim[a] = (this.aimRings.get(id) ?? []).filter(s => s[0] >= w.from && s[0] <= w.until).map(s => [s[0] - w.from, s[1], Number.isNaN(s[2]) ? null : s[2]]);
+        const pressed = (this.controlRings.get(id) ?? []).filter(s => s[0] >= w.from && s[0] <= w.until).map((s): ControlSample => [s[0] - w.from, s[1], s[2], s[3], s[4], s[5]]);
+        if (pressed.length) controls[a] = pressed;
       }
-      this.emit({ ...this.context(w.from), type: 'window', reason: 'damage', from: w.from, to: w.until, samples, aim });
+      this.emit({ ...this.context(w.from), type: 'window', reason: 'damage', from: w.from, to: w.until, samples, aim, controls });
     }
   }
 

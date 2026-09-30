@@ -8,6 +8,7 @@ import type { GrayboxBox } from '../../src/shared/grayboxLayout';
 import { createPlayer } from '../../src/worker/gameState';
 import { DEFAULT_APPEARANCE } from '../../src/shared/ratAppearance';
 import type { Vec3Data } from '../../src/shared/networkProtocol';
+import { noControls } from '../../src/shared/rat/ratBody';
 
 // The recorder files a rat as inside geometry (anomalies, landing clips) through a grid index over the
 // solids. Ways it could go wrong: a box missing from a grid cell it overlaps (big slabs, boxes on a cell
@@ -155,5 +156,53 @@ describe('city recorder aim', () => {
     expect(kept).toHaveLength(2);
     expect(kept.every(s => !s.human && s.sample === 10 && s.targets?.length === 1)).toBe(true);
     expect(kept[0]?.dir[2]).toBeLessThan(-.9);
+  });
+});
+
+// Controls recording: every rat's presses in fight windows, humans from their client's sends and bots from their motor
+// each step, in one shape. Ways it could go wrong: a tap or jump shorter than a slot (or a send) lost; the bots' trace
+// in another shape, rate or axis order than the humans'; counts carried into the next slot or across a death; an
+// analogue push read as no key.
+describe('city recorder controls', () => {
+  const now = Date.UTC(2026, 8, 30, 12);
+  it('keeps humans\' and bots\' presses in the same 20 Hz shape, taps shorter than a slot included', () => {
+    const archived: CityFact[] = [];
+    const store = { addEvent: () => {}, addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
+    const archive = { push: (fact: CityFact) => { archived.push(JSON.parse(JSON.stringify(fact)) as CityFact); }, due: () => false, flush: () => {} } as unknown as CityArchive;
+    const city = new CityRecorder({ room: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
+    const human = createPlayer('human', 'Tyler', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 0 });
+    const bot = createPlayer('bot-1', 'Bot', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 20 });
+    const players = new Map([[human.id, human], [bot.id, bot]]);
+    const pressed = noControls();
+    let step = 0;
+    // From a second before the window, so the first presses (from no keys) fall outside it.
+    for (let ms = -1000; ms <= 5000; ms += 50) {
+      // The human holds W; one send at 2 s carries a D tap and a jump made between two sends.
+      city.controls(human.id, ms === 2000 ? { f: 1, r: 0, j: 1, fx: 0, rx: 2 } : { f: 1, r: 0, j: 0, fx: 0, rx: 0 }, now + ms);
+      // The bot's motor at 60 Hz: an analogue back-left push, with one step of right strafe and jump at 2017 ms.
+      for (; -1000 + step * 1000 / 60 <= ms; step++) {
+        const tap = step === 181;
+        pressed.moveForward = -.6; pressed.moveRight = tap ? 1 : -.5; pressed.jump = tap;
+        city.botControls(bot.id, pressed, now - 1000 + step * 1000 / 60);
+      }
+      if (ms === 3000) city.hit({ attacker: human, victim: bot, damage: 1, killed: false, headshot: false, explosive: false, incoming: true }, now + ms);
+      city.tick(now + ms, players, undefined, { phase: 'playing' });
+    }
+    const window = archived.find(f => f.type === 'window');
+    if (window?.type !== 'window') throw Error('no window');
+    const traces = Object.values(window.controls ?? {});
+    expect(traces).toHaveLength(2);
+    const [humanTrace, botTrace] = traces[0]![0]![1] === 1 ? traces : [traces[1]!, traces[0]!];
+    for (const trace of [humanTrace!, botTrace!]) {
+      expect(trace.every(s => s.length === 6 && s.every(Number.isFinite))).toBe(true);
+      expect(trace.map(s => s[0])).toEqual(Array.from({ length: 101 }, (_, i) => i * 50));
+      // Each press is counted once, in one slot.
+      expect(trace.reduce((n, s) => n + s[3], 0)).toBe(1);
+    }
+    expect(humanTrace!.find(s => s[3] === 1)).toEqual([2000, 1, 0, 1, 0, 2]);
+    // The bot's tap: right pressed and let go within one slot, from the back-left diagonal it holds.
+    const tapSlot = botTrace!.find(s => s[3] === 1)!;
+    expect(tapSlot).toEqual([2050, -.6, -.5, 1, 0, 2]);
+    expect(botTrace!.filter(s => s !== tapSlot).every(s => s[1] === -.6 && s[2] === -.5 && s[3] + s[4] + s[5] === 0)).toBe(true);
   });
 });
