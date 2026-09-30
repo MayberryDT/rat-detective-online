@@ -1,6 +1,6 @@
 # Bot overhaul plan
 
-Status (2026-09-29): **approved; starting.** Tyler agreed the design and answered every open decision. This file owns the scope, order, decisions and acceptance of the bot overhaul. The visual version of the design, with diagrams, is [design/bots/overhaul-plan.html](../design/bots/overhaul-plan.html). Measurement uses [the city map](city-map.md).
+Status (2026-09-30): **B0–B5 built; B6 (Tyler's preview) is on staging.** Tyler agreed the design, answered every open decision and asked for the whole build ("do it all"). Branch `bots/overhaul` (not merged, not in production). Staging Worker `49fc0763-043f-4f13-95b5-247811f2f05e` runs it: the code mind for the empty city, the Jev mind whenever a human is playing. **Next:** Tyler plays staging, then tuning; production (B7) only on his OK. This file owns the scope, order, decisions and acceptance of the bot overhaul. The visual version of the design, with diagrams, is [design/bots/overhaul-plan.html](../design/bots/overhaul-plan.html). Measurement uses [the city map](city-map.md).
 
 ## The idea
 

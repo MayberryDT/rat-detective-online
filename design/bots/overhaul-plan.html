@@ -325,7 +325,7 @@ flowchart TB
   D["3 · Motor and code mind<br/>Intent type, executors, bank solver;<br/>old brain deleted"] --> E
   E["4 · Jev mind<br/>perception text, questions, async client,<br/>freshness, fallback, budget, cast"] --> F
   F["5 · Recorder and /map<br/>decision facts, a Minds layer"] --> G
-  G{"6 · Private hosted preview<br/>Tyler plays and watches in observe mode"} -- "tune" --> E
+  G{"6 · Preview on staging<br/>Tyler plays; Jev on while he does"} -- "tune" --> E
   G -- "Tyler: send it" --> H["7 · Production<br/>secret, deploy, Jev only with humans"]
   H --> I["Week of data: tune cast and dials<br/>one change at a time"]
   classDef gate fill:#3f1a1a,stroke:#d8433b,color:#fff;
@@ -342,7 +342,7 @@ flowchart TB
   REC --> MEAS["Measure<br/>/map and the digest:<br/>bots against humans, place by place"]
   MEAS --> PROP["Propose one change<br/>with predictions<br/>(an agent can draft it)"]
   PROP --> TEST["Replay test<br/>ask the new version about<br/>recorded moments; nothing gets worse"]
-  TEST --> PREV{"Private preview<br/>Tyler plays"}
+  TEST --> PREV{"Staging preview<br/>Tyler plays"}
   PREV -- "not yet" --> PROP
   PREV -- "ship" --> VER["New mindVersion<br/>stamped on every decision"]
   VER --> PLAY

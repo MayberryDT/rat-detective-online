@@ -12,7 +12,7 @@ Last release receipt: **2026-09-28**. [Heat map](verification/heat-map-release-2
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 3 (layout 3, since 29 September; upgraded from version 2 on load); seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Canonical `public-live-v2` stays alive with 6–9 bots and zero humans; overflow still sleeps |
-| Staging | `rat-detective-staging`, https://rat-detective-staging.mayberrydt.workers.dev/ — Worker `5aeb800a-dc54-467a-9825-b61408ace89f`, the same build as production |
+| Staging | `rat-detective-staging`, https://rat-detective-staging.mayberrydt.workers.dev/ — Worker `49fc0763-043f-4f13-95b5-247811f2f05e` (30 September): the **bot overhaul** from branch `bots/overhaul` (code mind for the empty city, the Jev mind when a human is playing, the $25/day budget ledger, decision facts). Protocol 23 like production. Secret `TYPESAFE_API_KEY` and vars `JEV_DAILY_BUDGET_USD`/`JEV_MODEL` are set for staging only; production has neither, so Jev is off there. See [the bot overhaul plan](bot-overhaul.md) |
 
 Protocol 23 requires matching client and Worker; open protocol-22 tabs must reload. Before any rollback to protocol 15,
 review stored Jurisdiction rounds: the old validator does not understand that mode. Existing older game tabs should
