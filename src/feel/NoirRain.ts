@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {feelState} from './feelState';
 import {FEEL} from './feelTuning';
+import {GRAPHICS} from '../session/graphicsQuality';
 
 /** Soft vertical gradient (bright at the lamp end) for wet-street reflection streaks. */
 function streakTexture():THREE.CanvasTexture|undefined {
@@ -67,7 +68,7 @@ export class NoirRain {
         const p=FEEL.noirRain.params,cx=camera.position.x,cy=camera.position.y,cz=camera.position.z;
         const yaw=Math.atan2(camera.matrixWorld.elements[8],camera.matrixWorld.elements[10]);
         // Rain: a box of drops that follows the camera and wraps.
-        const fall=p.speed*dt,visible=Math.round(this.count*this.level);
+        const fall=p.speed*dt,visible=Math.round(this.count*this.level*GRAPHICS.rain);
         // Every drop shares one rotation: compose it once, then write only each
         // drop's translation (identical to composing per drop at unit scale).
         this.dummy.position.set(0,0,0);this.dummy.rotation.set(0,yaw,p.slant);this.dummy.scale.set(1,1,1);this.dummy.updateMatrix();

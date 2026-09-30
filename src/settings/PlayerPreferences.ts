@@ -2,14 +2,18 @@ export const PREFERENCES_KEY='rat-player-settings-v1';
 export const ACTIONS={forward:'Move forward',back:'Move back',left:'Move left',right:'Move right',jump:'Jump',fire:'Fire',scores:'Hold scoreboard'} as const;
 export type Action=keyof typeof ACTIONS;
 export type Bindings=Record<Action,[string,string]>;
+/** Settings → Graphics: Auto adapts to measured frame time; High is the full look (src/session/graphicsQuality.ts). */
+export const GRAPHICS_MODES={auto:'Auto',high:'High',medium:'Medium',low:'Low'} as const;
+export type GraphicsMode=keyof typeof GRAPHICS_MODES;
 export interface PlayerPreferences {
     version:1; mouseSensitivity:number; touchSensitivity:number; invertMouseY:boolean; invertTouchY:boolean;
     masterVolume:number; effectsVolume:number; uiScale:number; reducedMotion:boolean; bindings:Bindings;
     /** Presentation-only feel multipliers; Reduced interface motion also zeroes shake. */
     cameraShake:number; flashStrength:number;
+    graphics:GraphicsMode;
 }
 export const DEFAULT_PREFERENCES:PlayerPreferences={version:1,mouseSensitivity:1,touchSensitivity:1.5,
-    invertMouseY:false,invertTouchY:false,masterVolume:1,effectsVolume:1,uiScale:1,reducedMotion:false,cameraShake:1,flashStrength:1,
+    invertMouseY:false,invertTouchY:false,masterVolume:1,effectsVolume:1,uiScale:1,reducedMotion:false,cameraShake:1,flashStrength:1,graphics:'auto',
     bindings:{forward:['KeyW','ArrowUp'],back:['KeyS','ArrowDown'],left:['KeyA','ArrowLeft'],right:['KeyD','ArrowRight'],jump:['Space',''],fire:['Mouse0',''],scores:['Tab','']}};
 export const RANGES={mouseSensitivity:[.1,3,.05],touchSensitivity:[.2,3,.05],masterVolume:[0,1,.01],effectsVolume:[0,1,.01],uiScale:[.8,1.3,.05],cameraShake:[0,1,.01],flashStrength:[0,1,.01]} as const;
 export type NumericPreference=keyof typeof RANGES;
@@ -26,6 +30,7 @@ export function validatePreferences(raw:unknown):PlayerPreferences {
         if(typeof value==='number'&&Number.isFinite(value))result[key]=Math.max(min,Math.min(max,value));
     }
     for(const key of ['invertMouseY','invertTouchY','reducedMotion'] as const)if(typeof data[key]==='boolean')result[key]=data[key];
+    if(data.graphics==='auto'||data.graphics==='high'||data.graphics==='medium'||data.graphics==='low')result.graphics=data.graphics;
     // Bindings are atomic: malformed/conflicting maps must not disable an action.
     const bindings=data.bindings as Bindings|undefined,seen=new Set<string>();
     if(bindings&&Object.keys(ACTIONS).every(name=>{

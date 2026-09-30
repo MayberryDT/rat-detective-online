@@ -2,6 +2,10 @@
 
 Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Graphics quality — 30 September batch (built, not deployed)
+
+For a Windows player reporting low frame rates: Settings has a **GRAPHICS** tab with Auto (default), High, Medium and Low. High is the accepted look (render scale min(DPR, 2), every effect). Auto measures live play and, when it runs under 55 fps, lowers the render scale toward native and then to 0.7 of native, and thins the costly extras (rain, flashlight shadow refresh, film grain overlay, haze cones) without recompiling any shader or recreating the renderer; it steps back up after steady 60 fps, with growing waits after a failed try, and undoes any step that does not help (a processor-bound machine keeps the full look). Owner: `src/session/graphicsQuality.ts` (`qualityStatus()` feeds the perf report). Details in [player settings](player-settings.md#graphics).
+
 ## Supplies, layout 4 — 30 September batch (built, not deployed)
 
 Tyler: "we need to rethink pickup locations and add more health packs." `GRAYBOX_VERSION` (the layout and world version) is 4; only the supply sites change, not the geometry or place IDs. 23 sites, all on the ground: 5 Ironclad in the fights (the Records forecourt street and the ground floors of the Icebox, the Pumping Station, Needleworks and the Panopticon's north gallery), 4 Hot Pursuit (unchanged) and 14 Quick Fix (7 before), each just off a fight line. The upstairs and roof sites nobody claimed on layout 3 are gone. A room stored on layout 2 or 3 upgrades to 4 on load (checkpoint dropped, rats respawned); protocol stays 23, and an older client sees "The game has updated" from the world version. Evidence, static check and predictions: `proposal:supplies-v4` in [the city map](city-map.md).

@@ -20,6 +20,7 @@ import type {ChaosShot} from '../shared/chaosState';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
+import {GRAPHICS} from '../session/graphicsQuality';
 import {NAMEPLATE_LIGHT} from '../ui/RatBillboard';
 import {Hunch,type HunchRat} from './Hunch';
 import {WantedSearchlight} from './WantedSearchlight';
@@ -458,7 +459,7 @@ export class FeelDirector {
         const noir=this.state.noir()*this.perception(),filmOn=this.state.on('noirFilm'),film=filmOn?noir/.65:0,f=FEEL.noirFilm.params;
         // Old film: grain thickens as the city turns black and white.
         const grain=film*f.grain+(filmOn&&this.state.noir()>0?this.mono()*p.grain:0);
-        this.screen.film(this.colourFilter?grain:0,film*f.vignette,film>0&&(!!this.deathTarget||this.slowAge<FEEL.rewards.params.slowmo));
+        this.screen.film(this.colourFilter&&GRAPHICS.grain?grain:0,film*f.vignette,film>0&&(!!this.deathTarget||this.slowAge<FEEL.rewards.params.slowmo));
         if(this.noirAudio){
             this.noirAudio.space=this.state.on('sound')&&self?spaceAt(self):'open';
             this.noirAudio.update(dt,this.danger,p.closed,p.period,on?p.heartbeat:0);

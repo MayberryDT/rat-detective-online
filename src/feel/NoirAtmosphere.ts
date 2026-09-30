@@ -3,6 +3,7 @@ import {LANDMARK_INTERIORS} from '../shared/landmarkLayout';
 import {STREET_LAMP_HEIGHT,type StreetLampPosition} from '../shared/streetLampLayout';
 import {feelState} from './feelState';
 import {FEEL} from './feelTuning';
+import {GRAPHICS} from '../session/graphicsQuality';
 
 const HAZE_SLOTS=16;
 
@@ -83,17 +84,17 @@ export class NoirAtmosphere {
     update(dt:number,camera:THREE.Camera,outdoors:boolean,perception=1,mono=0):void {
         dt=Math.min(Math.max(dt,0),.1);this.time+=dt;
         const state=feelState(),strength=state.noir(),hazeOn=state.on('noirHaze')&&strength>0,skyOn=state.on('noirSky')&&strength>0;
-        const p=FEEL.noirHaze.params,s=FEEL.noirSky.params;
-        // Haze: re-pick the nearest lamps a few times a second.
-        this.hazeOpacity.value=hazeOn?p.opacity*strength:0;
-        if(hazeOn&&(this.nearestAt+=dt)>.4){
+        const p=FEEL.noirHaze.params,s=FEEL.noirSky.params,cones=hazeOn&&GRAPHICS.haze;
+        // Haze: re-pick the nearest lamps a few times a second (Low graphics keeps only the fog).
+        this.hazeOpacity.value=cones?p.opacity*strength:0;
+        if(cones&&(this.nearestAt+=dt)>.4){
             this.nearestAt=0;
             const c=camera.position;
             const near=this.lamps.map(lamp=>({lamp,d:(lamp.x-c.x)**2+(lamp.z-c.z)**2})).filter(n=>n.d<p.range*p.range).sort((a,b)=>a.d-b.d).slice(0,HAZE_SLOTS);
             near.forEach(({lamp},i)=>{this.dummy.position.copy(lamp);this.dummy.rotation.set(0,0,0);this.dummy.scale.setScalar(1);this.dummy.updateMatrix();this.haze.setMatrixAt(i,this.dummy.matrix);});
             this.haze.count=near.length;this.haze.instanceMatrix.needsUpdate=true;
         }
-        if(!hazeOn)this.haze.count=0;
+        if(!cones)this.haze.count=0;
         if(this.fog){
             this.fog.density=this.baseFog*(1+(hazeOn?p.fog*strength*perception*1.6:0))*(1-.35*mono);
             this.fog.color.copy(this.baseFogColor).lerp(this.coldFog,hazeOn?strength*.7:0);

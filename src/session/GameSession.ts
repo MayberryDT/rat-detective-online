@@ -44,9 +44,10 @@ import {HighlightBridge} from '../highlights/HighlightBridge';
 import {FeelDirector} from '../feel/FeelDirector';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
+import {PoliceLineup,type LineupEntry} from '../feel/PoliceLineup';
 import {entryRequested} from './yieldToPage';
 import {gpuDrained} from './warmPrograms';
-import {PoliceLineup,type LineupEntry} from '../feel/PoliceLineup';
+import {qualityFrame,qualityStatus,settleQuality} from './graphicsQuality';
 
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean}[]=[];
@@ -155,6 +156,7 @@ export class GameSession {
             if(['localhost','127.0.0.1','[::1]'].includes(window.location.hostname)&&this.transport.state==='playing')this.transport.send({type:'diagnostics',report});
         }) : null;
         this.perf=new PerfReporter(renderer,report=>this.transport.send({type:'perf',report}),this.events.signal);
+        this.perf.quality=()=>{const q=qualityStatus();return{quality:q.mode==='auto'?`auto-${q.tier}`:q.tier,scale:q.scale};};
         const { scene, world, listener } = this.stage;
         initEntitySounds(listener);
         this.music = prepared.music ?? new SessionMusic(listener);
@@ -514,7 +516,7 @@ export class GameSession {
             case 'playerRespawn':
                 if (message.id === this.myId && this.rat) this.rat.setSpeedScale(1);
                 if (message.id === this.myId) {
-                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset(); this.feel.health(message.hp);
+                    this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset(); this.feel.health(message.hp); settleQuality();
                     this.lastInteractionPosition.set(message.x,message.y+.8,message.z);this.clearInput(); this.hud.hideRespawn();
                 } else this.remotes.respawn(message.id, message);
                 break;
@@ -708,6 +710,7 @@ export class GameSession {
             renderer.render(scene, camera);
             this.stats?.gpu.end();
             this.feel.afterRender(camera);
+            if(this.transport.state==='playing')qualityFrame(now);
         }
         // The prepared stand-ins live until the session ends: their programs (round-end lineup
         // rats, powerups, the Hunch sketch) would otherwise be released here and relinked in play.

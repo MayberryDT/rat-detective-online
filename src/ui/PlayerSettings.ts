@@ -1,4 +1,5 @@
-import { ACTIONS, RANGES, bindingLabel, playerPreferences, type Action, type NumericPreference, type PreferenceStore } from '../settings/PlayerPreferences';
+import { ACTIONS, GRAPHICS_MODES, RANGES, bindingLabel, playerPreferences, type Action, type GraphicsMode, type NumericPreference, type PreferenceStore } from '../settings/PlayerPreferences';
+import { onQualityChange, qualityStatus, type QualityStatus } from '../session/graphicsQuality';
 import { mountFeelReview } from '../feel/FeelReviewSection';
 import './playerSettings.css';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
@@ -24,6 +25,7 @@ export class PlayerSettings {
     private freshDown=true;
     private unlockedAt=-Infinity;
     private readonly unsubscribe:()=>void;
+    private stopQuality?:()=>void;
     private readonly refreshers:Array<()=>void>=[];
     constructor(private readonly store:PreferenceStore=playerPreferences(),private readonly doc:Document=document){
         this.root=doc.createElement('dialog');this.root.className='player-settings';this.root.setAttribute('aria-labelledby','settings-heading');
@@ -110,6 +112,7 @@ export class PlayerSettings {
         const audio=section('SOUND');this.range(audio,'Master volume','masterVolume','%',100);this.range(audio,'Effects volume','effectsVolume','%',100);
         const display=section('READABILITY');this.range(display,'UI scale','uiScale','%',100);this.toggle(display,'Reduced interface motion','reducedMotion');
         const effects=section('SCREEN EFFECTS');this.range(effects,'Camera shake','cameraShake','%',100);this.range(effects,'Flash strength','flashStrength','%',100);
+        this.graphics(section('GRAPHICS'));
         mountFeelReview(this.content,this.doc,this.events.signal);
         const keys=section('KEY BINDINGS');this.make('p',keys,'Choose a binding, then press a key. Delete clears an alternate; Escape cancels. Left mouse always remains available for Fire.');
         for(const action of Object.keys(ACTIONS) as Action[]){
@@ -121,6 +124,21 @@ export class PlayerSettings {
                 this.refreshers.push(()=>{button.textContent=bindingLabel(this.store.current.bindings[action][slot]);button.setAttribute('aria-label',`${ACTIONS[action]}, ${slot?'alternate':'primary'}: ${button.textContent}`);});
             }
         }
+    }
+    /** Auto, High, Medium, Low as a row of stamps, and what Auto is drawing right now. */
+    private graphics(parent:HTMLElement):void {
+        this.make('p',parent,'Auto keeps the game near 60 frames a second: when it falls behind it lowers the resolution, then thins rain and shadows, and it raises them again when there is room. High always draws everything.');
+        const row=this.make('div',parent);row.className='settings-choice';row.setAttribute('role','radiogroup');row.setAttribute('aria-label','Graphics quality');
+        for(const mode of Object.keys(GRAPHICS_MODES) as GraphicsMode[]){
+            const button=this.button(row,GRAPHICS_MODES[mode],()=>this.store.update({graphics:mode}));button.setAttribute('role','radio');
+            this.refreshers.push(()=>button.setAttribute('aria-checked',String(this.store.current.graphics===mode)));
+        }
+        const now=this.make('p',parent);now.className='settings-graphics-now';
+        const show=(q:Readonly<QualityStatus>)=>{
+            const w=globalThis.innerWidth||0,h=globalThis.innerHeight||0,effects=q.tier==='high'?'all effects':q.tier==='medium'?'lighter rain and shadows':'no film grain or haze';
+            now.textContent=`Now drawing ${Math.round(w*q.scale)} × ${Math.round(h*q.scale)}, ${effects}.`;
+        };
+        show(qualityStatus());this.stopQuality=onQualityChange(show);
     }
     private range(parent:HTMLElement,label:string,key:NumericPreference,unit:string,factor=1):void {
         const row=this.make('div',parent);row.className='settings-range';const id=`setting-${key}`;
@@ -203,5 +221,5 @@ export class PlayerSettings {
         }else this.close();
     }
     private close():void {this.capture=undefined;if(this.isOpen){ghost(this.doc,this.root,'caseFolder');this.session?.cue?.('menu-close');}this.root.close();this.doc.body.classList.remove('settings-open');this.opener?.focus();}
-    dispose():void {this.unsubscribe();this.events.abort();this.root.remove();this.doc.body.classList.remove('settings-open');}
+    dispose():void {this.unsubscribe();this.stopQuality?.();this.events.abort();this.root.remove();this.doc.body.classList.remove('settings-open');}
 }

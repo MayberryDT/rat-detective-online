@@ -7,10 +7,12 @@ import { previewMuted } from '../audio/previewMuted';
 import { effectsAudioContext } from '../audio/effectsAudio';
 import { CITY_BOUNDS } from '../shared/grayboxLayout';
 import { ContactShadows, StaticMoonShadow, attachContactShadows, fitMoonShadow } from './shadows';
+import { GRAPHICS, renderScale } from './graphicsQuality';
 
 export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
     let viewportWidth = window.innerWidth, viewportHeight = window.innerHeight;
-    let pixelRatio = Math.min(window.devicePixelRatio, 2);
+    // Settings → Graphics (Auto by default) picks the drawing buffer's pixels per CSS pixel.
+    let pixelRatio = renderScale(window.devicePixelRatio);
     appRenderer.setPixelRatio(pixelRatio);
     appRenderer.setSize(viewportWidth, viewportHeight);
     appRenderer.shadowMap.enabled = true;
@@ -41,9 +43,11 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
 
     // Preparation yields to the page before GameSession exists. Reconcile at
     // render time so a fullscreen/resize notification in that gap cannot be lost.
+    // A graphics step changes only the drawing buffer; the CSS size, camera aspect
+    // and every screen-space projection stay as they are.
     function syncViewport(): boolean {
       const width = window.innerWidth, height = window.innerHeight;
-      const ratio = Math.min(window.devicePixelRatio, 2);
+      const ratio = renderScale(window.devicePixelRatio);
       if (width <= 0 || height <= 0 ||
           (width === viewportWidth && height === viewportHeight && ratio === pixelRatio)) return false;
       if (ratio !== pixelRatio) appRenderer.setPixelRatio(ratio);
@@ -132,7 +136,14 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     // Moving things drop no moon shadow; a soft contact disc grounds them instead.
     const contacts = new ContactShadows(world);
     attachContactShadows(scene, contacts);
-    scene.onBeforeRender = () => { moonShadow.beforeRender(scene); contacts.update(); };
+    // Medium/Low graphics redraw the flashlight's shadow every few frames (same programs, map and matrix stay paired).
+    let shadowFrame = Infinity;
+    scene.onBeforeRender = () => {
+      const every = GRAPHICS.shadowEvery;
+      flashlight.shadow.autoUpdate = every <= 1;
+      if (every > 1 && ++shadowFrame >= every) { shadowFrame = 0; flashlight.shadow.needsUpdate = true; }
+      moonShadow.beforeRender(scene); contacts.update();
+    };
     scene.onAfterRender = () => moonShadow.afterRender();
 
 

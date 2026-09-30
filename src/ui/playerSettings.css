@@ -16,6 +16,13 @@
 .player-settings .settings-tab.active{background:#070b17;border-style:solid;color:var(--carbon-bright);transform:translateY(-4px);padding-bottom:10px;margin-bottom:-3px}
 .settings-range{display:grid;grid-template-columns:minmax(125px,1fr) minmax(80px,1.3fr) auto 20px 64px;gap:10px;align-items:center;margin:12px 0}.settings-range>input{min-width:0;width:100%}
 .settings-toggle{display:flex;align-items:center;gap:12px;margin:12px 0;cursor:pointer}.settings-binding{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:10px;margin:8px 0}.settings-status{min-height:1.4em}
+/* Graphics: four carbon slips; the chosen one is stamped in red. */
+.settings-choice{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 4px}
+.player-settings .settings-choice button{font:400 19px/1 var(--font-display);letter-spacing:1px;text-transform:uppercase;transition:transform .18s var(--ui-spring),background .15s,color .15s}
+.player-settings .settings-choice button:nth-child(even){rotate:.8deg}.player-settings .settings-choice button:nth-child(odd){rotate:-.8deg}
+.player-settings .settings-choice button[aria-checked=true]{background:#c8322a1f;border:3px double var(--stamp);color:var(--stamp-ink);transform:scale(1.04) rotate(-2deg)}
+.player-settings .settings-choice button[aria-checked=true]:hover{background:#c8322a33}
+.player-settings .settings-graphics-now{margin-top:12px;color:var(--carbon-dim);font:13px/1.4 var(--font-type);letter-spacing:.04em}
 /* Tick boxes: an empty typed box with its carbon ghost; ticking thumps a red check across it. */
 .player-settings input[type=checkbox]{appearance:none;-webkit-appearance:none;position:relative;flex:none;box-sizing:border-box;width:22px;height:22px;margin:0 2px;border:2px solid var(--carbon-ink);border-radius:1px;background:var(--carbon-deep);box-shadow:2px 2px 0 #0009;rotate:-2deg;cursor:pointer;transition:border-color .15s,background .15s}
 .player-settings input[type=checkbox]::before{content:'';position:absolute;inset:-3px;border:1px solid var(--carbon-line);translate:2px 1px;opacity:.6;pointer-events:none}

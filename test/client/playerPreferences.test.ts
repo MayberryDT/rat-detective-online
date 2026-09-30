@@ -16,6 +16,11 @@ it('survives malformed, unavailable and future storage and validates finite boun
  store.update({mouseSensitivity:.3,effectsVolume:0});expect(store.current.mouseSensitivity).toBe(.3);
  expect(validatePreferences({version:1,mouseSensitivity:NaN,touchSensitivity:Infinity,uiScale:99,invertMouseY:'yes'})).toMatchObject({mouseSensitivity:1,touchSensitivity:1.5,uiScale:1.3,invertMouseY:false});
 });
+it('keeps a chosen graphics mode across reloads and falls back to Auto for anything else',()=>{
+ const disk=storage(),store=new PreferenceStore(disk);expect(store.current.graphics).toBe('auto');
+ store.update({graphics:'low'});expect(new PreferenceStore(disk).current.graphics).toBe('low');
+ for(const graphics of ['ultra','constructor',3,null])expect(validatePreferences({version:1,graphics}).graphics).toBe('auto');
+});
 it('scales and inverts each input exactly once without coupling devices',()=>{
  const p={...DEFAULT_PREFERENCES,mouseSensitivity:.25,touchSensitivity:2,invertMouseY:true};
  expect(lookDelta(100,20,'mouse',p)).toEqual([25,-5]);expect(lookDelta(100,20,'touch',p)).toEqual([200,40]);

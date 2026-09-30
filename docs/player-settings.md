@@ -21,6 +21,7 @@ play. Escape alone does not resume the match.
 | Reduced interface motion | Off by default; suppresses title/HUD animation and zeroes camera shake |
 | Camera shake | 0–100%, default 100%; scales every view-only camera effect from the [juice plan](juice-plan.md) |
 | Flash strength | 0–100%, default 100%; scales screen flashes and the low-health colour drain |
+| Graphics | Auto (default), High, Medium or Low; see [Graphics](#graphics) |
 
 Sensitivity has a slider, editable numeric value and individual reset. Changes
 apply immediately. Touch retains its existing screen-size normalization, with
@@ -35,7 +36,8 @@ Defaults preserve the accepted camera, sound mix and touch sensitivity. Reset al
 restores defaults, including bindings, and persists them so an old touch value
 cannot reappear after reload. Malformed settings fall back safely. If storage is
 unavailable, settings work for the visit and the menu says they cannot be saved.
-No preferences or new control permissions are sent to the game server.
+No preferences or new control permissions are sent to the game server, except that
+the periodic performance report carries the current graphics mode, render scale and tier.
 
 Camera effects (shot kick, hit jolt, landing dip, view widening) are view-only. The
 camera is offset just before rendering and restored straight afterwards, so aim,
@@ -43,5 +45,34 @@ shots and raycasts always use the steady view. `?feel=off` removes every polish
 effect for comparison. `?feel=dev` adds a Juice review section with per-item
 switches and live values, saved under `rat-feel-review-v1` and ignored outside
 `feel=dev`. FOV, shoulder position, camera distance, touch layout editing,
-graphics presets, controller support, profiles and private-match host controls
+controller support, profiles and private-match host controls
 remain outside this delivery.
+
+## Graphics
+
+`src/session/graphicsQuality.ts` owns the render resolution (the drawing buffer's
+pixels per CSS pixel) and a tier of costly extras. Nothing it changes compiles a
+shader, and the renderer is never recreated (antialiasing stays on).
+
+| Mode | Render scale | Extras |
+| --- | --- | --- |
+| High | min(device pixel ratio, 2), the accepted look | all |
+| Medium | about ¾ of High's width, never below native (1.0) | half the rain; the flashlight's shadow redrawn every other frame |
+| Low | 0.7 of native | 30% of the rain, flashlight shadow every third frame, no film grain overlay, no haze cones under streetlamps (the fog stays) |
+| Auto | moves between High and Low | as the level it is at |
+
+Auto measures the frame interval during live play in 1.5 s windows, leaving out each
+window's slowest 5% of frames so one hitch cannot move it (the title, loading, a hidden
+tab and the first 4 s after any gap or respawn are not measured). Two windows running
+under 55 fps take one step down: the resolution to native in steps of about 28% fewer
+pixels, then medium extras, 0.85, low extras, 0.7. A step whose next two windows are
+not at least 5% faster than the two before it is undone, and that kind of step waits a
+minute (doubling each time) — so a machine limited by its processor, or a browser capped at 30 fps,
+keeps the full look instead of blurring for nothing. After 8 s of steady 58.5 fps
+Auto tries one step back up; if that is slow it returns within about 2 s and waits
+twice as long before trying again (up to 2 minutes). The target is 60 fps on any
+display; faster screens are not chased. Auto stores where it settled
+(`rat-graphics-auto-v1`) and starts there next visit, still climbing when there is room.
+
+The Settings **GRAPHICS** tab shows the four modes as stamps and what is being drawn
+now (for example "Now drawing 2880 × 1620, all effects").
