@@ -388,9 +388,11 @@ export class Neighborhood {
                     // Unbaked (from the cache), it is still the plain box.
                     if(!cached){const {width,height,depth}=old.parameters;obj.geometry=new THREE.BoxGeometry(width,height,depth);old.dispose();}
                 }else{
+                    // Neither drawn nor hit: out of the scene, so no frame walks it.
                     obj.geometry=new THREE.BufferGeometry();
                     obj.raycast=()=>{};
                     old.dispose();
+                    obj.removeFromParent();
                 }
                 obj.visible=false;
             }
