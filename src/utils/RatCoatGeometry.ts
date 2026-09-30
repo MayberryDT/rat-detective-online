@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { ratPartGeometries } from './ratPartGeometry';
 
 /** Keep the rat's accepted body volume; tailoring sits just above this surface. */
 export const COAT_PROFILE = [[0,0],[.485,0],[.505,.025],[.503,.07],
@@ -20,7 +21,22 @@ export function addCoatTailoring(body:THREE.Group, coat:THREE.Material, highligh
         const part=new THREE.Mesh(geometry,mat);part.name=name;part.castShadow=true;
         part.userData.noOutline=true;body.add(part);return part;
     };
-    const panel=(name:string,points:number[][],mat:THREE.Material,offset:number,bevel=.005)=>{
+    const [shirtInsert,tie,knot,lapelLeft,lapelRight,tailoring,pockets,button]=ratPartGeometries('coat-tailoring',tailoringGeometries);
+    // Small recessed shirt; the lapels carry the main color instead of a second white collar.
+    add('rat-shirt-insert',shirtInsert!,shirt);add('rat-tie',tie!,fasteners);add('rat-tie-knot',knot!,fasteners);
+    add('rat-lapel-left',lapelLeft!,highlight);add('rat-lapel-right',lapelRight!,highlight);
+    add('rat-coat-tailoring',tailoring!,coat);add('rat-pocket-openings',pockets!,fasteners);
+    // Three shallow rounded buttons; their central depression catches light as a broad shape.
+    for(const [index,y] of [1.035,.80,.565].entries()){
+        const part=add(`rat-button-${index+1}`,button!,fasteners);
+        part.rotation.x=Math.PI/2;part.position.set(.072,y,frontZ(.072,y)+.016);
+    }
+}
+
+/** The tailoring in `addCoatTailoring`'s order: shirt insert, tie, knot, both lapels, the merged
+ * folds (placket, seam, hem, pocket lips), the pocket openings and one button. */
+function tailoringGeometries():THREE.BufferGeometry[] {
+    const panel=(points:number[][],offset:number,bevel=.005)=>{
         const shape=new THREE.Shape(points.map(([x,y])=>new THREE.Vector2(x,y)));
         const geometry=new THREE.ExtrudeGeometry(shape,{depth:.009,bevelEnabled:true,
             bevelSize:bevel,bevelThickness:.004,bevelSegments:1,steps:1,curveSegments:2});
@@ -29,18 +45,17 @@ export function addCoatTailoring(body:THREE.Group, coat:THREE.Material, highligh
             const x=positions.getX(i),y=positions.getY(i);
             positions.setZ(i,positions.getZ(i)+.445-Math.abs(x)*.30-(y-1.35)*.18+offset);
         }
-        geometry.computeVertexNormals();return add(name,geometry,mat);
+        geometry.computeVertexNormals();return geometry;
     };
-    // Small recessed shirt; the lapels carry the main color instead of a second white collar.
-    panel('rat-shirt-insert',[[-.11,1.397],[.11,1.397],[.068,1.25],[0,1.205],[-.068,1.25]],shirt,-.014);
-    panel('rat-tie',[[0,1.327],[.026,1.288],[.034,1.223],[0,1.185],[-.034,1.223],[-.026,1.288]],fasteners,.006,.003);
-    panel('rat-tie-knot',[[-.026,1.344],[.026,1.344],[.022,1.31],[0,1.298],[-.022,1.31]],fasteners,.015,.004);
-    for(const side of [-1,1]){
-        panel(side<0?'rat-lapel-left':'rat-lapel-right',[
+    const parts:THREE.BufferGeometry[]=[
+        panel([[-.11,1.397],[.11,1.397],[.068,1.25],[0,1.205],[-.068,1.25]],-.014),
+        panel([[0,1.327],[.026,1.288],[.034,1.223],[0,1.185],[-.034,1.223],[-.026,1.288]],.006,.003),
+        panel([[-.026,1.344],[.026,1.344],[.022,1.31],[0,1.298],[-.022,1.31]],.015,.004),
+        ...[-1,1].map(side=>panel([
             [.068,1.36],[.211,1.457],[.287,1.397],[.256,1.367],
             [.274,1.343],[.185,1.218],
-        ].map(([x,y])=>[side*x,y]),highlight,.003,.006);
-    }
+        ].map(([x,y])=>[side*x,y]),.003,.006)),
+    ];
     // Pressed overlapping fabric edges, with broad enough faces to avoid thin-line shimmer.
     const folds:THREE.BufferGeometry[]=[];
     function strip(points:THREE.Vector3[],width:number,height:number){
@@ -84,19 +99,13 @@ export function addCoatTailoring(body:THREE.Group, coat:THREE.Material, highligh
         const recess=new THREE.PlaneGeometry(.156,.010);recess.rotateZ(side*.47);recess.rotateY(side*.63);
         recess.translate(x,y-.010,frontZ(x,y)+.025);pocketRecesses.push(recess);
     }
-    const merge=(name:string,pieces:THREE.BufferGeometry[],mat:THREE.Material)=>{
+    const merge=(pieces:THREE.BufferGeometry[])=>{
         // Normalize indexed and non-indexed geometry once during construction.
         const normalized=pieces.map(g=>g.index?g.toNonIndexed():g.clone());
         const merged=mergeGeometries(normalized)!;
-        add(name,merged,mat);pieces.forEach(g=>g.dispose());normalized.forEach(g=>g.dispose());
+        pieces.forEach(g=>g.dispose());normalized.forEach(g=>g.dispose());return merged;
     };
-    merge('rat-coat-tailoring',folds,coat);
-    merge('rat-pocket-openings',pocketRecesses,fasteners);
-    // Three shallow rounded buttons; their central depression catches light as a broad shape.
-    for(const [index,y] of [1.035,.80,.565].entries()){
-        const geometry=new THREE.LatheGeometry([[0,-.008],[.033,-.008],[.043,-.002],
-            [.043,.003],[.034,.013],[.024,.014],[0,.008]].map(([r,h])=>new THREE.Vector2(r,h)),16);
-        const button=add(`rat-button-${index+1}`,geometry,fasteners);
-        button.rotation.x=Math.PI/2;button.position.set(.072,y,frontZ(.072,y)+.016);
-    }
+    parts.push(merge(folds),merge(pocketRecesses),new THREE.LatheGeometry([[0,-.008],[.033,-.008],[.043,-.002],
+        [.043,.003],[.034,.013],[.024,.014],[0,.008]].map(([r,h])=>new THREE.Vector2(r,h)),16));
+    return parts;
 }

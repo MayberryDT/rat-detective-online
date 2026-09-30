@@ -17,8 +17,14 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
     if(sources.length<2)return;
     const materials=[...new Set(sources.map(s=>s.material as THREE.Material))];
     sources.sort((a,b)=>materials.indexOf(a.material as THREE.Material)-materials.indexOf(b.material as THREE.Material));
-    const positions:number[]=[],normals:number[]=[],uvs:number[]=[],indices:number[]=[],skinIndices:number[]=[],weights:number[]=[],materialIndices:number[]=[];
-    const geometry=new THREE.BufferGeometry();let vertexOffset=0;
+    // Sized up front and written in place: a corpse is batched on every death, mid-fight.
+    let vertexCount=0,indexCount=0;
+    for(const {geometry} of sources){const count=geometry.getAttribute('position').count;vertexCount+=count;indexCount+=geometry.index?.count??count;}
+    const positions=new Float32Array(vertexCount*3),normals=new Float32Array(vertexCount*3),uvs=new Float32Array(vertexCount*2),materialIndices=new Float32Array(vertexCount);
+    const skinIndices=new Uint16Array(vertexCount*4),weights=new Float32Array(vertexCount*4);
+    // The largest index is vertexCount-1: the type an index array would have picked.
+    const indices=vertexCount>65535?new Uint32Array(indexCount):new Uint16Array(indexCount);
+    const geometry=new THREE.BufferGeometry();let vertexOffset=0,indexOffset=0;
     const body=root.getObjectByName('rat-body'),belly=body?.getObjectByName('rat-spine-belly'),chest=body?.getObjectByName('rat-spine-chest');
     const spine=body&&belly&&chest?[body,belly,chest]:[];
     // Spine bones follow the leaf bones; at rest each spine joint is identity in body space.
@@ -26,31 +32,34 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
     const point=new THREE.Vector3(),normal=new THREE.Vector3(),normalMatrix=new THREE.Matrix3();
     sources.forEach((source,bone)=>{
         const g=source.geometry,p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv');
-        const start=indices.length,skinned=spine.length>0&&source.parent===body;
+        const start=indexOffset,skinned=spine.length>0&&source.parent===body,materialIndex=materials.indexOf(source.material as THREE.Material);
         // Skinned leaves are baked into body space and blended by height.
         if(skinned){source.updateMatrix();normalMatrix.getNormalMatrix(source.matrix);}
         for(let i=0;i<p.count;i++){
+            const v=vertexOffset+i;
             point.fromBufferAttribute(p,i);normal.set(n?.getX(i)??0,n?.getY(i)??0,n?.getZ(i)??1);
             if(skinned){
                 point.applyMatrix4(source.matrix);normal.applyMatrix3(normalMatrix).normalize();
                 const w=ratSpineWeights(point.y);
-                skinIndices.push(spineBone,spineBone+1,spineBone+2,0);weights.push(1-w.belly-w.chest,w.belly,w.chest,0);
-            }else{skinIndices.push(bone,0,0,0);weights.push(1,0,0,0);}
-            positions.push(point.x,point.y,point.z);normals.push(normal.x,normal.y,normal.z);
-            uvs.push(uv?.getX(i)??0,uv?.getY(i)??0);materialIndices.push(materials.indexOf(source.material as THREE.Material));
+                skinIndices[v*4]=spineBone;skinIndices[v*4+1]=spineBone+1;skinIndices[v*4+2]=spineBone+2;
+                weights[v*4]=1-w.belly-w.chest;weights[v*4+1]=w.belly;weights[v*4+2]=w.chest;
+            }else{skinIndices[v*4]=bone;weights[v*4]=1;}
+            positions[v*3]=point.x;positions[v*3+1]=point.y;positions[v*3+2]=point.z;
+            normals[v*3]=normal.x;normals[v*3+1]=normal.y;normals[v*3+2]=normal.z;
+            uvs[v*2]=uv?.getX(i)??0;uvs[v*2+1]=uv?.getY(i)??0;materialIndices[v]=materialIndex;
         }
         const count=g.index?.count??p.count;
-        for(let i=0;i<count;i++)indices.push(vertexOffset+(g.index?.getX(i)??i));
-        const materialIndex=materials.indexOf(source.material as THREE.Material),last=geometry.groups[geometry.groups.length-1];
+        for(let i=0;i<count;i++)indices[indexOffset+i]=vertexOffset+(g.index?.getX(i)??i);
+        const last=geometry.groups[geometry.groups.length-1];
         if(last?.materialIndex===materialIndex)last.count+=count;else geometry.addGroup(start,count,materialIndex);
-        vertexOffset+=p.count;
+        vertexOffset+=p.count;indexOffset+=count;
     });
-    geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
-    geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
-    geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
-    geometry.setAttribute('ratMaterial',new THREE.Float32BufferAttribute(materialIndices,1));
-    geometry.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));
-    geometry.setAttribute('skinWeight',new THREE.Float32BufferAttribute(weights,4));geometry.setIndex(indices);
+    geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+    geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3));
+    geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
+    geometry.setAttribute('ratMaterial',new THREE.BufferAttribute(materialIndices,1));
+    geometry.setAttribute('skinIndex',new THREE.BufferAttribute(skinIndices,4));
+    geometry.setAttribute('skinWeight',new THREE.BufferAttribute(weights,4));geometry.setIndex(new THREE.BufferAttribute(indices,1));
     // The model uses opaque untextured standard materials. A small palette
     // retains their exact per-part PBR parameters in one draw, including flashes.
     let drawMaterial:THREE.Material|THREE.Material[]=materials.length===1?materials[0]:materials;

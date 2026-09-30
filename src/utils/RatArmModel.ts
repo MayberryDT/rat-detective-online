@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {ratPartGeometry} from './ratPartGeometry';
 
 /** A floating cartoon sleeve and cuff, without an elbow or anatomical hand.
  * Used for the pistol and equipped case; local +Z points toward the grip.
@@ -6,8 +7,7 @@ import * as THREE from 'three';
 export function createRatArm(coat:THREE.Material,highlight:THREE.Material):THREE.Group {
     const root=new THREE.Group();root.name='rat-floating-sleeve';
     const add=(name:string,profile:number[][],material:THREE.Material)=>{
-        const geometry=new THREE.LatheGeometry(profile.map(([r,z])=>new THREE.Vector2(r,z)),16);
-        geometry.rotateX(Math.PI/2);
+        const geometry=ratPartGeometry(name,()=>new THREE.LatheGeometry(profile.map(([r,z])=>new THREE.Vector2(r,z)),16).rotateX(Math.PI/2));
         const part=new THREE.Mesh(geometry,material);part.name=name;part.castShadow=true;
         root.add(part);
     };
