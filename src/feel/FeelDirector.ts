@@ -210,7 +210,7 @@ export class FeelDirector {
         const blackout=incident==='blackout';
         if(this.noirAtmosphere)this.noirAtmosphere.blackout=blackout;
         // Blackout: the HUD goes black and white (feel.css).
-        if(this.doc&&this.doc.body.hasAttribute('data-blackout')!==blackout)this.doc.body.toggleAttribute('data-blackout',blackout);
+        this.doc?.body.classList.toggle('blackout',blackout);
     }
     /** Renderer exposure multiplier: Blackout sinks everything but the lamps' own glow. */
     get exposure():number {return 1-this.dark*FEEL.blackout.params.exposure;}
@@ -518,5 +518,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.removeAttribute('data-blackout');}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
 }
