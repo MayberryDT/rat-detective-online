@@ -27,10 +27,14 @@ import { createShotDraws } from '../prototype/ChaosView';
 import type { NetworkManager } from '../network/NetworkManager';
 import type { TitleScreen } from '../ui/TitleScreen';
 import type { TitleMusic } from '../ui/TitleMusic';
+import { showSoftwareRenderNotice, softwareRenderer } from '../ui/softwareRenderNotice';
 
 export async function createGame(title:TitleScreen,music:TitleMusic,transport:NetworkManager,world:WorldSpec|undefined,signal:AbortSignal):Promise<GameSession> {
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    // An opaque canvas (the scene always clears to its background) composites cheaper; dual-GPU laptops pick the fast GPU.
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
     const stage=createStage(renderer);
+    const titleRoot=document.getElementById('title-screen');
+    if(titleRoot&&softwareRenderer(renderer.getContext()))showSoftwareRenderNotice(titleRoot);
     const spec=world??createWorldSpec(1);
     if(!world&&new URLSearchParams(window.location.search).get('room')?.startsWith('graybox-'))spec.version=GRAYBOX_VERSION;
     let city:CityGenerator|Neighborhood|undefined;
