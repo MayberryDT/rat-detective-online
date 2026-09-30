@@ -5,6 +5,7 @@ import {CHUTE_OUTER_WIDTH, NEEDLEWORKS_CHUTES} from '../shared/city/kit/parts/ch
 import {registerLandmarkReactions} from './LandmarkReactions';
 import {SEWER_MAINTENANCE_FURNISHINGS} from '../shared/sewerLayout';
 import {freezeStatic} from '../utils/freezeStatic';
+import {instanceGeometry} from '../utils/instanceGeometry';
 
 type Finish='stone'|'steel'|'brick'|'patina'|'trim'|'iron'|'brass'|'glass'|'warm'|'cream'|'cyan'|'rose'|'green'|'wood'|'paper'|'tile'|'machine'|'cloth'|'linen';
 interface Skin {body:Finish; light:Finish; pitch:number; windowW:number; windowH:number}
@@ -508,7 +509,7 @@ export class LandmarkArchitecture {
             const glowing=['warm','cream','cyan','rose','green'].includes(finish);
             const material=new THREE.MeshStandardMaterial({color:colors[finish],roughness:.85,metalness:finish==='brass'?.45:.05,emissive:glowing?colors[finish]:0,emissiveIntensity:glowing?.65*AUTHORED_LIGHT_GAIN:0});
             this.materials.push(material);
-            const mesh=new THREE.InstancedMesh(shape==='round'?this.roundGeometry:this.geometry,material,matrices.length);
+            const mesh=new THREE.InstancedMesh(instanceGeometry(shape==='round'?this.roundGeometry:this.geometry),material,matrices.length);
             matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));
             const slots=this.windowSlots.get(key);
             if(slots?.size){

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {SEWER_MANHOLE,SEWER_PIPE_ENTRANCES,sewerPipeBoxes,sewerPipePoint,type SewerPipeEntrance} from '../shared/sewerLayout';
 import { SEWER_TUNNEL_LAMP_DISTANCES } from './SewerLighting';
 import {freezeStatic} from '../utils/freezeStatic';
+import {instanceGeometry} from '../utils/instanceGeometry';
 
 /** Battered walk-in drain pipe and open drop shaft; collisions live in sewerLayout. */
 export class SewerPortals {
@@ -96,7 +97,7 @@ export class SewerPortals {
             group.matrices.push(mesh.matrix.clone());this.root.remove(mesh);
         }
         for(const group of groups.values()){
-            const mesh=new THREE.InstancedMesh(group.geometry,group.material,group.matrices.length);
+            const mesh=new THREE.InstancedMesh(instanceGeometry(group.geometry),group.material,group.matrices.length);
             group.matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));mesh.computeBoundingSphere();
             mesh.receiveShadow=true;this.root.add(mesh);
         }

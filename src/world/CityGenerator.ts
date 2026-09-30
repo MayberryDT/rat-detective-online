@@ -10,6 +10,7 @@ import { generatedStreetLamps,STREET_LAMP_HEIGHT } from '../shared/streetLampLay
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { addCityBody, cityBoxBody, removeCityBody } from '../shared/StaticCityBroadphase';
+import { instanceGeometry } from '../utils/instanceGeometry';
 import {
     createDecorationRandom,
     createWorldSpec,
@@ -599,7 +600,7 @@ export class CityGenerator {
     private flushDetails(): void {
         const geometry = this.trackGeometry(new THREE.BoxGeometry(1, 1, 1));
         for (const [material, matrices] of this.details) {
-            const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
+            const mesh = new THREE.InstancedMesh(instanceGeometry(geometry), material, matrices.length);
             matrices.forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
             // Main building masses cast shadows; thin trim and paint should not
             // produce large-map shadow acne or jagged crossing stripes.
@@ -722,7 +723,7 @@ export class CityGenerator {
             map: glowTexture, transparent: true, opacity: 0.42, depthWrite: false,
             blending: THREE.AdditiveBlending }));
         for (const lamps of cells.values()) {
-            const pools = new THREE.InstancedMesh(poolGeo, poolMat, lamps.length);
+            const pools = new THREE.InstancedMesh(instanceGeometry(poolGeo), poolMat, lamps.length);
             lamps.forEach(({x,z}, i) => {
                 dummy.position.set(x, 0.055, z); dummy.rotation.set(-Math.PI / 2, 0, 0);
                 dummy.scale.set(1, 1, 1); dummy.updateMatrix(); pools.setMatrixAt(i, dummy.matrix);
@@ -758,9 +759,9 @@ export class CityGenerator {
         coneGeo: THREE.BufferGeometry,
         coneMat: THREE.Material,
     ): void {
-        const poles = new THREE.InstancedMesh(poleGeo, poleMat, lamps.length);
-        const heads = new THREE.InstancedMesh(headGeo, headMat, lamps.length);
-        const cones = new THREE.InstancedMesh(coneGeo, coneMat, lamps.length);
+        const poles = new THREE.InstancedMesh(instanceGeometry(poleGeo), poleMat, lamps.length);
+        const heads = new THREE.InstancedMesh(instanceGeometry(headGeo), headMat, lamps.length);
+        const cones = new THREE.InstancedMesh(instanceGeometry(coneGeo), coneMat, lamps.length);
         poles.castShadow = true;
         heads.castShadow = false;
         poles.frustumCulled = true;
@@ -950,7 +951,7 @@ export class CityGenerator {
     ): void {
         if(this.extension)positions=positions.filter(([x,z])=>!isRampOpening(x,z));
         if (positions.length === 0) return;
-        const mesh = new THREE.InstancedMesh(geometry, material, positions.length);
+        const mesh = new THREE.InstancedMesh(instanceGeometry(geometry), material, positions.length);
         mesh.frustumCulled = true;
         dummy.rotation.set(-Math.PI / 2, 0, 0);
         dummy.scale.set(1, 1, 1);

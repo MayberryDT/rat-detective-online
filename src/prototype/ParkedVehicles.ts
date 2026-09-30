@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {PARKED_VEHICLES,VEHICLE_SHAPES,VEHICLE_SCALE,type ParkedVehicle} from '../shared/vehicleLayout';
 import {freezeStatic} from '../utils/freezeStatic';
+import {instanceGeometry} from '../utils/instanceGeometry';
 
 /** Parked municipal/delivery stock. Primary body volumes match vehicleLayout's cover. */
 export class ParkedVehicles {
@@ -18,7 +19,7 @@ export class ParkedVehicles {
             const mat=new THREE.MeshStandardMaterial({color:group.color,roughness:.72,metalness:group.shape==='wheel'?.05:.25,emissive:group.emissive?group.color:0,emissiveIntensity:group.emissive?.6:0});
             this.materials.push(mat);
             if(!group.emissive)mat.userData.streetSurface='obstacle';
-            const mesh=new THREE.InstancedMesh(this.geometry[group.shape],mat,group.matrices.length);
+            const mesh=new THREE.InstancedMesh(instanceGeometry(this.geometry[group.shape]),mat,group.matrices.length);
             group.matrices.forEach((matrix,i)=>mesh.setMatrixAt(i,matrix));
             mesh.computeBoundingSphere();mesh.castShadow=group.shape==='body';mesh.receiveShadow=true;
             scene.add(mesh);this.meshes.push(mesh);

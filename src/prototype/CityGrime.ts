@@ -3,6 +3,7 @@ import {grayboxBoxes,CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../shared/grayboxL
 import {sewerBoxes} from '../shared/sewerLayout';
 import type {WorldSpec} from '../shared/worldSpec';
 import {freezeStatic} from '../utils/freezeStatic';
+import {instanceGeometry} from '../utils/instanceGeometry';
 
 /** Battered curbside stock and sewer deposits, batched by material and shape. */
 export class CityGrime {
@@ -89,12 +90,12 @@ export class CityGrime {
             const [shape,color]=key.split(':');const tone=Number(color);
             const material=new THREE.MeshStandardMaterial({color:tone,roughness:tone===0x253c31?.25:.95,metalness:shape==='round'?.25:0,emissive:tone,emissiveIntensity:.06});this.materials.push(material);
             material.userData.streetSurface='obstacle';
-            const mesh=new THREE.InstancedMesh(this.geometry[shape as keyof CityGrime['geometry']],material,matrices.length);
+            const mesh=new THREE.InstancedMesh(instanceGeometry(this.geometry[shape as keyof CityGrime['geometry']]),material,matrices.length);
             matrices.forEach((m,i)=>mesh.setMatrixAt(i,m));mesh.computeBoundingSphere();mesh.receiveShadow=true;scene.add(mesh);this.meshes.push(mesh);
         }
         this.batches.clear();
         const dripMat=new THREE.MeshBasicMaterial({color:0x74978c,transparent:true,opacity:.36});this.materials.push(dripMat);
-        this.drops=new THREE.InstancedMesh(this.geometry.bag,dripMat,this.dripSites.length);this.drops.frustumCulled=false;scene.add(this.drops);this.meshes.push(this.drops);this.update(0);
+        this.drops=new THREE.InstancedMesh(instanceGeometry(this.geometry.bag),dripMat,this.dripSites.length);this.drops.frustumCulled=false;scene.add(this.drops);this.meshes.push(this.drops);this.update(0);
         // Drops fall by instance; no object here moves.
         for(const mesh of this.meshes)freezeStatic(mesh);
     }
@@ -102,9 +103,9 @@ export class CityGrime {
         this.dummy.position.set(x,y,z);this.dummy.scale.set(w,h,d);this.dummy.rotation.set(rx,ry,rz);this.dummy.updateMatrix();
         const key=shape+':'+color;if(!this.batches.has(key))this.batches.set(key,[]);this.batches.get(key)!.push(this.dummy.matrix.clone());
     }
-    update(dt:number){this.time+=Math.min(dt,.1);this.dripSites.forEach((site,i)=>{
-        const phase=(this.time*.23+i*.371)%1;this.dummy.position.copy(site);this.dummy.position.y-=phase*5.8;
+    update(dt:number){this.time+=Math.min(dt,.1);for(let i=0;i<this.dripSites.length;i++){
+        const phase=(this.time*.23+i*.371)%1;this.dummy.position.copy(this.dripSites[i]!);this.dummy.position.y-=phase*5.8;
         this.dummy.scale.set(.035,.13,.035);this.dummy.rotation.set(0,0,0);this.dummy.updateMatrix();this.drops.setMatrixAt(i,this.dummy.matrix);
-    });this.drops.instanceMatrix.needsUpdate=true;}
+    }this.drops.instanceMatrix.needsUpdate=true;}
     dispose(){for(const mesh of this.meshes){mesh.removeFromParent();mesh.dispose();}for(const geometry of Object.values(this.geometry))geometry.dispose();for(const material of this.materials)material.dispose();}
 }
