@@ -61,8 +61,10 @@ export function createPillarKit():PillarKit {
     const faceCanvas=document.createElement('canvas');faceCanvas.width=256;faceCanvas.height=192;
     const faceTexture=new THREE.CanvasTexture(faceCanvas);faceTexture.colorSpace=THREE.SRGBColorSpace;
     const beamMap=lightTexture(32,false),sweepMap=lightTexture(64,true);
+    // Additive light and a flat pane look the same drawn once. Left two-pass, three draws a transparent double-sided
+    // material back then front and flips its side with needsUpdate for each: two draws and two program lookups.
     const light=(map:THREE.Texture,opacity:number)=>new THREE.MeshBasicMaterial({color:0xff2a14,map,transparent:true,opacity,blending:THREE.AdditiveBlending,
-        depthWrite:false,side:THREE.DoubleSide,toneMapped:false});
+        depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,toneMapped:false});
     const beam=light(beamMap,.32),sweep=light(sweepMap,.8);
     beam.addEventListener('dispose',()=>beamMap.dispose());sweep.addEventListener('dispose',()=>sweepMap.dispose());
     const face=new THREE.MeshBasicMaterial({map:faceTexture});
@@ -86,7 +88,7 @@ export function createPillarKit():PillarKit {
         bell:new THREE.MeshStandardMaterial({color:0xc3160f,roughness:.3,metalness:.45,emissive:0xd01508,emissiveIntensity:.55,side:THREE.DoubleSide}),
         beacon:new THREE.MeshStandardMaterial({color:0x6d0d08,roughness:.2,emissive:0xff1406,emissiveIntensity:.05}),
         reflector:new THREE.MeshBasicMaterial({color:0xffc2a0,toneMapped:false,side:THREE.DoubleSide}),
-        face,glass:new THREE.MeshStandardMaterial({color:0xbfd6e0,transparent:true,opacity:.3,roughness:.05,metalness:.1,depthWrite:false,side:THREE.DoubleSide}),
+        face,glass:new THREE.MeshStandardMaterial({color:0xbfd6e0,transparent:true,opacity:.3,roughness:.05,metalness:.1,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true}),
         ghost:new THREE.MeshBasicMaterial({color:0x9a8663,transparent:true,opacity:.3,depthWrite:false}),
         beam,sweep,faceCanvas,faceTexture,
         geometry:{bell,arm,head,ghosts,face:new THREE.PlaneGeometry(w,h),glass:new THREE.PlaneGeometry(w,h),remnant,
