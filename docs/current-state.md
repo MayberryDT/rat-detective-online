@@ -1,20 +1,24 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-09-27** (juice release, protocol 19). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-09-30** (release A, protocol 24). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
-## Graphics quality — 30 September batch (built, not deployed)
+## Release A — 30 September production (protocol 24, layout 5, `mindVersion` 5)
 
-For a Windows player reporting low frame rates: Settings has a **GRAPHICS** tab with Auto (default), High, Medium and Low. High is the accepted look (render scale min(DPR, 2), every effect). Auto measures live play and, when it runs under 55 fps, lowers the render scale toward native and then to 0.7 of native, and thins the costly extras (rain, flashlight shadow refresh, film grain overlay, haze cones) without recompiling any shader or recreating the renderer; it steps back up after steady 60 fps, with growing waits after a failed try, and undoes any step that does not help (a processor-bound machine keeps the full look). Owner: `src/session/graphicsQuality.ts` (`qualityStatus()` feeds the perf report). Details in [player settings](player-settings.md#graphics).
+Tyler: "A goes to production before freeze." Production Worker `7888521b-9c3c-4baf-bbf8-6781a13d4dce`, build `production-2026-09-30-76701ab`, client `index-oYCLxMmt.js`, commit `76701ab`. Everything in the sections below marked 30 September is live: graphics quality, layouts 4 and 5 with Stakeout, the kill streak mark, the black-and-white low-health look, the 30-second round end and a random supply for each new streak title. Also live: the data foundation (every city fact stamped with its build, agent browsers recorded apart from humans, aggregates by build) and the bots' pickup reflex. This build is the baseline era for the lighter Jev in [the bot learning plan](bot-learning-plan.md). See [the receipt](verification/release-a-2026-09-30.md).
 
-## Supplies, layouts 4 and 5 — 30 September batch (built, not deployed)
+## Graphics quality — 30 September (release A)
 
-Tyler: "we need to rethink pickup locations and add more health packs." Layout 4 (`GRAYBOX_VERSION` 4) changes only the supply sites, not the geometry or place IDs. 23 sites, all on the ground: 5 Ironclad in the fights (the Records forecourt street and the ground floors of the Icebox, the Pumping Station, Needleworks and the Panopticon's north gallery), 4 Hot Pursuit (unchanged) and 14 Quick Fix (7 before), each just off a fight line. The upstairs and roof sites nobody claimed on layout 3 are gone. A stored older layout upgrades on load (checkpoint dropped, rats respawned); protocol stays 23, and an older client sees "The game has updated" from the world version. Evidence, static check and predictions: `proposal:supplies-v4` in [the city map](city-map.md).
+For a Windows player reporting low frame rates: Settings has a **GRAPHICS** tab with Auto (default), High, Medium and Low. High is the accepted look (render scale min(DPR, 2), every effect). Auto measures live play and, when it runs under 55 fps, lowers the render scale toward native and then to 0.7 of native, and thins the costly extras (rain, film grain overlay, haze cones) without recompiling any shader or recreating the renderer; the flashlight shadow redraws every frame at every level (skipping frames made the rat's own shadow jump). It steps back up after steady 60 fps, with growing waits after a failed try, and undoes any step that does not help (a processor-bound machine keeps the full look). Owner: `src/session/graphicsQuality.ts` (`qualityStatus()` feeds the perf report). Details in [player settings](player-settings.md#graphics).
+
+## Supplies, layouts 4 and 5 — 30 September (release A)
+
+Tyler: "we need to rethink pickup locations and add more health packs." Layout 4 (`GRAYBOX_VERSION` 4) changes only the supply sites, not the geometry or place IDs. 23 sites, all on the ground: 5 Ironclad in the fights (the Records forecourt street and the ground floors of the Icebox, the Pumping Station, Needleworks and the Panopticon's north gallery), 4 Hot Pursuit (unchanged) and 14 Quick Fix (7 before), each just off a fight line. The upstairs and roof sites nobody claimed on layout 3 are gone. A stored older layout upgrades on load (checkpoint dropped, rats respawned), and an older client sees "The game has updated" from the world version. Evidence, static check and predictions: `proposal:supplies-v4` in [the city map](city-map.md).
 
 Layout 5 (`GRAYBOX_VERSION` 5) adds four sites for the fourth pickup, Stakeout, on four-way crossroads, one in each corner of the city: (−54, −104), (68, −104), (92, 44) and (−64, 140). That makes 27 sites. A room stored on layout 2, 3 or 4 upgrades to 5 on load. See `proposal:supplies-v5` in [the city map](city-map.md).
 
-## Kill streak mark — 30 September batch (built, not deployed)
+## Kill streak mark — 30 September (release A)
 
-A rat (human or bot) on a kill streak of 3 or more (kills since its last death; any death or a new round ends it) carries a red rubber stamp under its nameplate pips (ARMED at 3, DANGEROUS at 5, PUBLIC ENEMY at 8, with a tally mark per kill), and its fedora smoulders (a thin wisp, thicker with embers at 5, a heavy column at 8). Your own plate shows your stamp; your own smoke is fainter. The server counts the streak (`PlayerData.streak`, `playerDied.killerStreak`, both optional, so protocol stays 23). See [the juice plan](juice-plan.md#kill-streak-mark-tyler-2026-09-30).
+A rat (human or bot) on a kill streak of 3 or more (kills since its last death; any death or a new round ends it) carries a red rubber stamp under its nameplate pips (ARMED at 3, DANGEROUS at 5, PUBLIC ENEMY at 8, with a tally mark per kill), and its fedora smoulders (a thin wisp, thicker with embers at 5, a heavy column at 8). Your own plate shows your stamp; your own smoke is fainter. The server counts the streak (`PlayerData.streak`, `playerDied.killerStreak`). Each new title also hands the rat a random supply. See [the juice plan](juice-plan.md#kill-streak-mark-tyler-2026-09-30).
 
 ## Bot overhaul — 30 September production (protocol 23, `mindVersion` 3)
 

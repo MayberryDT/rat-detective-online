@@ -1,6 +1,6 @@
 # Bot learning plan
 
-Status (30 September 2026): L1 and L2 are built on `bots/overhaul` (`13a7a6e`, `6d08299`, `10fc4b6`) and release A is going to production on Tyler's OK; next is L4, built on staging while release A gathers baseline play. This file owns the order, status and acceptance for teaching the bots to decide like Jev, and then like humans. How the data is organised is in [the data plan](data-plan.md). The bot design this builds on is [the bot overhaul plan](bot-overhaul.md).
+Status (30 September 2026): release A (L1 and L2) is live in production (build `production-2026-09-30-76701ab`, [receipt](verification/release-a-2026-09-30.md)) and is gathering its baseline human hours; L4 is being built on staging. This file owns the order, status and acceptance for teaching the bots to decide like Jev, and then like humans. How the data is organised is in [the data plan](data-plan.md). The bot design this builds on is [the bot overhaul plan](bot-overhaul.md).
 
 ## Goal
 
@@ -49,7 +49,7 @@ At least 3 seconds separate 2 requests to Jev. Between decisions, the bot keeps 
 | --- | --- | --- |
 | L1 | Data foundation: build stamp, agent traffic flag, aggregates by build, decision inputs, pickups passed | Built (`13a7a6e`, `2271371`) |
 | L2 | Pickup reflex | Built (`6d08299`, `10fc4b6`) |
-| L3 | Release A: the baseline era, with Jev as it is today | Deploying (Tyler's OK, 30 September) |
+| L3 | Release A: the baseline era, with Jev as it is today | Live: production `7888521b`, build `production-2026-09-30-76701ab`; gathering human hours |
 | L4 | Lighter Jev: event-driven decisions, stance, goals held, code-only rounds | Next, on staging |
 | L5 | Tyler's further changes, then the frozen build and a month of data | Waits for Tyler's list |
 | L6 | Copy Jev into the code mind | After a fortnight of frozen data |
