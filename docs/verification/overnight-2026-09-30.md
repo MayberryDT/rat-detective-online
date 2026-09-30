@@ -68,6 +68,7 @@ Before each staging deploy: both typechecks, the worker, client and script suite
 | `93fd2a2d-d227-43c9-9135-92824140bc64` | + bots iterations 4–5 and every perf commit through `7d9d580` (client `index-CuxdowyE.js`) |
 | `136bd427-024a-4cf3-b091-fb93c17a47ee` | **Final:** everything through `e2102a7`, including texture pre-upload and shared supply shapes (client `index-Cq-PgP4w.js`). Full suites green on a clean copy (worker 238/238, client 1,533/1,533, scripts 125/125) |
 | `4c39e3f2-c145-49d1-9473-8dbe3d80c605` | Morning fix `37551e0` (client `index-Cvbd1Zkc.js`): Tyler found Medium and Low unusable, with jumpy rat movement. They had redrawn the flashlight's shadow only every second or third frame, and the flashlight rides with the rat, so the rat's own shadow lagged and snapped. It now redraws every frame at every level |
+| `a252ebcb-caa0-46c8-b0f5-d503834ea55f` | Tyler's morning asks (client `index-CiWfjEoy.js`, **protocol 24**, **layout 5**): round end 30 s (`d48c7bd`); a random supply for each new kill streak title (`d48c7bd`); the **Stakeout** pickup (`99acf64`, `8d7d59e`) with four crossroads sites. Worker suite 239/239, client 1,542/1,542 after the Dispatch test update, scripts 125/125, build passed |
 
 A perf report from a real staging session was recorded end to end (`/api/city/v1/events?type=perf`).
 
