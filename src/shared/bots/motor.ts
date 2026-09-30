@@ -47,9 +47,13 @@ const FIGHTING_MODES:Partial<Record<MotorMode,true>>={combat:true,intercept:true
 /** How long a rat keeps fighting (and looking) where a rival was last seen, ms. */
 const MEMORY_MS=2500;
 /** Hops in a fight, pressed like a player's space bar: after landing, the ground time before the next is this
- * plus an exponential tail with this mean, ms (Tyler hops 15.8 times a fight-minute and is in the air 28% of
- * it; one hop is about 1.1 s of air). */
-const HOP={afterMs:250,tailMs:1700} as const;
+ * plus an exponential tail with this mean, ms (humans press jump 20 times a fight-minute and are in the air 27%
+ * of it; one hop is about 1.1 s of air). */
+const HOP={afterMs:250,tailMs:1100} as const;
+/** Keys busy beside a rival (no route to run) stay busy at least this long, ms. */
+const IDLE_MS=500;
+/** Gunfire from out of sight holds the eye this long, ms; then the rat ignores other gunfire this long. */
+const HEARD={lookMs:[900,1600],quietMs:[2000,5000]} as const;
 
 /** Firing beyond the aimed and speculative shots every rat takes. */
 export interface Tactics {
@@ -101,6 +105,9 @@ export class BotMotor {
     private bestRouteDistance=Infinity;
     private localWaypoint?:Vec3Data;
     private localStepAt=0;
+    /** The direction of the last local step, while stepping without a route; its probe point. */
+    private readonly localWay={x:0,z:0,set:false};
+    private readonly localGoal={x:0,y:0,z:0};
     private readonly failedGoals=new Map<string,{position:Vec3Data;until:number}>();
     private failedCase?:Vec3Data;
     private stalled=false;
@@ -121,8 +128,9 @@ export class BotMotor {
     /** A defended spot near an intercept post, and when to pick another. */
     private post?:Vec3Data;
     private postAt=0;
-    /** Gunfire heard from a rat out of sight: where it came from, until when it holds the rat's eye. */
-    private readonly heard={x:0,y:0,z:0,until:0};
+    /** Gunfire heard from a rat out of sight: where it came from, until when it holds the rat's eye, and when the
+     * rat next turns to gunfire (a player glances at a firefight now and then, not at every shot in the city). */
+    private readonly heard={x:0,y:0,z:0,until:0,next:0};
     private listenAt=0;
     /** The fight's rival's recent fire: shots in the air lately and the youngest one's age, s. */
     private rivalShots=0;
@@ -140,6 +148,8 @@ export class BotMotor {
     /** The next fight hop is due (set on landing). */
     private hopAt=0;
     private wasGrounded=false;
+    /** Busy keys beside a rival last at least until then. */
+    private idleUntil=0;
     /** The rat's own ground velocity, seen from its position, and the velocity its keys asked for last tick;
      * in a throw, the gap between them is the machine's drift the keys press against. */
     private seenAt?:number;
@@ -153,9 +163,6 @@ export class BotMotor {
     private readonly out:RatControls=noControls();
     private readonly fireOut={direction:{x:0,y:0,z:0}};
     private readonly muzzle={x:0,y:0,z:0};
-    /** A route look point held a moment, so the eyes do not chase every carrot. */
-    private lookHold?:Vec3Data;
-    private lookHoldUntil=0;
     private readonly eye={x:0,y:0,z:0};
     private readonly dir={x:0,z:0};
     private readonly holdMove={x:0,z:0};
@@ -179,7 +186,7 @@ export class BotMotor {
         this.motorRandom=seededRandom(seed+40000);
         this.steer=new BotSteer(seededRandom(seed+50000));
         this.fight=new BotFight(seededRandom(seed+60000),seed);
-        this.view={now:0,self:this.eye,enemy:this.lost,visible:false,hurt:false,push:false,airborne:false,nav:navigation};
+        this.view={now:0,self:this.eye,enemy:this.lost,look:0,visible:false,hurt:false,push:false,airborne:false,nav:navigation};
         this.zoneHold=new BotZoneHold(seed,seededRandom(seed+73001));
         this.wander = seed * 7;
     }
@@ -214,7 +221,7 @@ export class BotMotor {
         this.assignmentSignature='';this.urgent=false;
         this.sighting=undefined;this.post=undefined;this.postAt=0;this.heard.until=0;this.listenAt=0;this.rivalShots=0;this.rivalNewest=Infinity;
         this.suppressUntil=0;this.hitAt=-Infinity;this.lastHp=Infinity;this.lastDriveAt=undefined;this.ownSpeed=0;this.glanceUntil=0;this.glanceAt=0;
-        this.hopAt=0;this.wasGrounded=false;this.lookHold=undefined;this.lookHoldUntil=0;
+        this.hopAt=0;this.wasGrounded=false;this.idleUntil=0;this.heard.next=0;
         this.seenAt=undefined;this.pushingSince=undefined;this.velX=this.velZ=this.pressX=this.pressZ=this.driftX=this.driftZ=0;this.legs=1;
     }
     /** Take the decision's plan. A new key restarts routing; the same key keeps the current route. */
@@ -404,10 +411,11 @@ export class BotMotor {
         for(const shot of state.shots){
             if(!shot.owner||shot.owner===self.id)continue;
             if(shot.owner===rival){shots++;newest=Math.min(newest,shot.age);continue;}
-            if(shot.age>.25||this.heard.until-now>800)continue;
+            if(shot.age>.25||now<this.heard.next)continue;
             const ox=shot.p.x-shot.v.x*shot.age,oz=shot.p.z-shot.v.z*shot.age;
             if(Math.hypot(ox-self.x,oz-self.z)>60||this.visible.some(p=>p.id===shot.owner))continue;
-            this.heard.x=ox;this.heard.y=shot.p.y-shot.v.y*shot.age-EYE;this.heard.z=oz;this.heard.until=now+1100+this.motorRandom()*900;
+            this.heard.x=ox;this.heard.y=shot.p.y-shot.v.y*shot.age-EYE;this.heard.z=oz;this.heard.until=now+HEARD.lookMs[0]+this.motorRandom()*(HEARD.lookMs[1]-HEARD.lookMs[0]);
+            this.heard.next=this.heard.until+HEARD.quietMs[0]+this.motorRandom()*(HEARD.quietMs[1]-HEARD.quietMs[0]);
         }
         this.rivalShots=shots;this.rivalNewest=newest;
     }
@@ -471,12 +479,27 @@ export class BotMotor {
             this.post=this.navigation.localStep?.(self,{x:this.destination!.x+Math.sin(angle)*reach,y:this.destination!.y,z:this.destination!.z+Math.cos(angle)*reach});
         }
         if(!holdingZone&&!waypoint&&!guarding&&this.destination){
-            if(now>=this.localStepAt&&!this.jumpTravel){
+            // A reached step is replaced at once: a player does not let go of the keys between steps.
+            if((now>=this.localStepAt||!!this.localWaypoint&&distance(self,this.localWaypoint)<.6&&now>=this.localStepAt-100)&&!this.jumpTravel){
                 this.localStepAt=now+150;
-                this.localWaypoint=this.navigation.localStep?.(self,routeDestination??this.destination);
+                const goal=routeDestination??this.destination,next=this.navigation.localStep?.(self,goal),way=this.localWay;
+                // Round an obstacle toward the goal, a new detour (a step that does not head straight at the goal and turns
+                // away from the last one) gives way to carrying on the same way while that is walkable and still gains
+                // ground, as a player keeps a key down instead of zig-zagging between the ways round.
+                this.localWaypoint=next;
+                if(next&&way.set){
+                    const nx=next.x-self.x,nz=next.z-self.z,n=Math.hypot(nx,nz),gx=goal.x-self.x,gz=goal.z-self.z,g=Math.hypot(gx,gz)||1;
+                    if(nx*gx+nz*gz<.995*n*g&&nx*way.x+nz*way.z<.94*n&&way.x*gx+way.z*gz>.5*g){
+                        const probe=this.localGoal;probe.x=self.x+way.x*2.5;probe.y=self.y;probe.z=self.z+way.z*2.5;
+                        const on=this.navigation.localStep?.(self,probe);
+                        if(on&&(on.x-self.x)*way.x+(on.z-self.z)*way.z>.94*Math.hypot(on.x-self.x,on.z-self.z))this.localWaypoint=on;
+                    }
+                }
+                const lx=this.localWaypoint?this.localWaypoint.x-self.x:0,lz=this.localWaypoint?this.localWaypoint.z-self.z:0,l=Math.hypot(lx,lz);
+                way.set=l>.3;if(way.set){way.x=lx/l;way.z=lz/l;}
             }
             if(this.localWaypoint&&distance(self,this.localWaypoint)>.3)waypoint=this.localWaypoint;
-        }
+        }else this.localWay.set=false;
         if(guarding)waypoint=this.post&&distance(self,this.post)>.5?this.post:undefined;
         let approachingCase=false;
         if(this.mode==='case'&&this.destination&&grounded&&!this.jumpTravel&&distance(self,this.destination)<10&&clearControl(this.destination)){
@@ -554,12 +577,14 @@ export class BotMotor {
         // With nowhere to run (at its case, beside the carrier it chases) and a rat in sight close by, the keys
         // stay busy as in a fight: players hardly ever stand still near a rival. This is not progress.
         const near=this.visible[0];
-        const idleNear=!fighting&&!holdingZone&&!obstacleJump&&!this.jumpTravel&&Math.hypot(x,z)<1&&!!near&&near.hp>0&&distance(self,near)<FIGHT.reach;
+        // Once the keys are busy they stay busy a moment: a route that comes and goes must not flicker them.
+        const idleNear=!fighting&&!holdingZone&&!obstacleJump&&!this.jumpTravel&&(Math.hypot(x,z)<1||now<this.idleUntil)&&!!near&&near.hp>0&&distance(self,near)<FIGHT.reach;
+        if(idleNear&&now>=this.idleUntil)this.idleUntil=now+IDLE_MS;
         if(fighting||idleNear){
             const hurt=self.hp<=2||(this.tactics.danger??0)>=2&&self.hp<=3||now-this.hitAt<1500&&self.hp<=3;
             const push=fighting&&(!!target&&target.hp<=2&&self.hp>=3||this.rivalShots>=3&&this.rivalNewest>.35);
             const view=this.view;
-            view.now=now;view.self=self;view.enemy=fighting?seen!.p:near!;view.visible=fighting?visibleTarget:true;view.hurt=hurt;view.push=push;view.airborne=!grounded;
+            view.now=now;view.self=self;view.enemy=fighting?seen!.p:near!;view.look=this.aim.yaw;view.visible=fighting?visibleTarget:true;view.hurt=hurt;view.push=push;view.airborne=!grounded;
             if(holdingZone&&this.leashZone!==holdingZone){const zone=this.leashZone=holdingZone;this.leash=(from,to)=>zoneStepSafe(zone,from,to);}
             view.leash=holdingZone?this.leash:undefined;
             this.fight.run(view);
@@ -615,11 +640,12 @@ export class BotMotor {
                 if(this.aim.offBy(eye,this.bellAim)<.06){shoot=this.aim.point(eye,distance(eye,this.bellAim));this.shotAt=now+350+this.random()*400;}
             }else if(trick&&!visibleTarget){
                 // A bank is lined up with care; a chaos shot only needs to be close.
-                if(!this.aim.flicking&&this.aim.offBy(eye,trick)<(trick===bank?0.02:0.05)){shoot=this.aim.point(eye,distance(eye,trick));if(trick===bank)this.tricks.banked();}
+                if(!this.aim.flicking&&this.aim.felt<(trick===bank?0.02:0.05)){shoot=this.aim.point(eye,distance(eye,trick));if(trick===bank)this.tricks.banked();}
             }else if(visibleTarget&&target){
-                // Fire once the crosshair is roughly there, as a hand does, not when it is perfect.
-                const range=distance(eye,casePoint??target),tolerance=Math.atan2(2.8,range)+.06;
-                if(this.aim.onTarget&&!this.aim.flicking&&this.aim.error<tolerance&&this.trigger.pull(now))shoot=this.aim.point(eye,range);
+                // Fire once the crosshair is roughly where the rat believes the target is (it cannot see its own miss),
+                // as a hand does, not when it is perfect; a player jumping in a fight clicks as the space bar goes down.
+                const range=distance(eye,casePoint??target),tolerance=Math.atan2(1.5,range)+.04;
+                if(this.aim.onTarget&&!this.aim.flicking&&this.aim.felt<tolerance&&this.trigger.pull(now,hop))shoot=this.aim.point(eye,range);
             }else if(suppressing){
                 if(this.aim.error<.08&&this.trigger.pull(now))shoot=this.aim.point(eye,Math.max(8,distance(self,seen!.p)));
             }else{
@@ -666,8 +692,8 @@ export class BotMotor {
     }
 
     /** Where the eyes go with no rival in sight: a rat just lost, gunfire just heard, the case being run at, the
-     * zone's approaches, the carrier's side of an intercept, the corner ahead on the route, else where it runs.
-     * Now and then, a glance to the side. */
+     * zone's approaches, the carrier's side of an intercept, else where it runs, as a player steers with the mouse
+     * over held keys. Now and then, a glance to the side. */
     private preAim(now:number,self:PlayerData,state:ChaosState|undefined,waypoint:Vec3Data|undefined,x:number,z:number,holding:boolean):void {
         const eye=this.eye,seen=this.sighting;
         if(seen&&now-seen.at<MEMORY_MS){this.aim.look(eye,seen.p);return;}
@@ -675,15 +701,11 @@ export class BotMotor {
         if(holding&&this.zoneHold.look){this.aim.look(eye,this.zoneHold.look);return;}
         if(this.mode==='case'&&this.destination&&distance(self,this.destination)<30){this.aim.look(eye,this.destination,true);return;}
         if(this.mode==='intercept'&&this.post!==undefined&&state?.case.owner&&state.case.owner!==self.id){this.aim.look(eye,state.case.p);return;}
-        if(now>=this.glanceAt){this.glanceAt=now+4000+this.motorRandom()*7000;this.glanceUntil=now+350+this.motorRandom()*450;this.glanceTurn=(this.motorRandom()<.5?-1:1)*(.5+this.motorRandom()*.5);}
+        if(now>=this.glanceAt){this.glanceAt=now+8000+this.motorRandom()*12000;this.glanceUntil=now+350+this.motorRandom()*450;this.glanceTurn=(this.motorRandom()<.5?-1:1)*(.5+this.motorRandom()*.5);}
         const running=Math.hypot(x,z)>1;
         if(now<this.glanceUntil&&running){this.aim.lookAlong(Math.atan2(x,z)+this.glanceTurn);return;}
-        // Hold a route look point for a moment: the eyes settle on a corner, not on every step of the route.
-        if(this.lookHold&&now<this.lookHoldUntil&&distance(self,this.lookHold)>3){this.aim.look(eye,this.lookHold);return;}
-        const ahead=this.route[Math.min(this.route.length-1,this.steer.carrotIndex+4)];
-        const look=ahead&&this.routeIndex<this.route.length&&distance(self,ahead)>4?ahead:waypoint&&distance(self,waypoint)>2?waypoint:undefined;
-        if(look){this.lookHold=look;this.lookHoldUntil=now+600+this.motorRandom()*500;this.aim.look(eye,look);return;}
-        if(running)this.aim.lookAlong(Math.atan2(x,z));
+        if(running){this.aim.lookAlong(Math.atan2(x,z),true);return;}
+        if(waypoint&&distance(self,waypoint)>2)this.aim.look(eye,waypoint);
     }
 
     /** Stand on a launcher's pad and fire real cheese at its trigger until the machine throws. Only the

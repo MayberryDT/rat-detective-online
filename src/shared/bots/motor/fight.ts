@@ -9,12 +9,12 @@ export const FIGHT={
     range:[17,27] as readonly [number,number],
     /** Beyond this the fight is over for movement: follow the route. */
     reach:34,
-    /** One strafe lasts 150 ms plus an exponential tail with this mean, capped (Tyler changes direction 40
-     * times a moving minute). */
-    strafeMs:150,strafeTailMs:330,strafeMaxMs:1200,
+    /** One strafe lasts this plus an exponential tail with this mean, capped (humans hold a strafe key 314 ms at
+     * the median and reverse it 22 times a minute). */
+    strafeMs:200,strafeTailMs:450,strafeMaxMs:1500,
     /** After a strafe: chance to stop and shoot, and for how long (humans hardly stop); otherwise chance to
      * keep the same side. */
-    stopChance:.03,stopMs:[150,350] as readonly [number,number],keepSide:.2,
+    stopChance:.03,stopMs:[150,350] as readonly [number,number],keepSide:.4,
     /** Which keys a strafe holds, as weights for [back, back-diagonal, side, forward-diagonal, forward] against
      * the rival: at a comfortable range, too close, too far and hurt. Humans back-pedal a third of their moving
      * fight time (they look at the rival, so S and S+A/D are back-pedalling). */
@@ -38,6 +38,8 @@ export interface FightView {
     self:Vec3Data;
     /** Where the enemy is (or was last seen). */
     enemy:Vec3Data;
+    /** Where the crosshair points (yaw): the keys are pressed against it. */
+    look:number;
     /** The enemy is in sight now. */
     visible:boolean;
     /** Back off and use cover. */
@@ -63,6 +65,8 @@ export class BotFight {
     /** The strafe's keys: forward (-1 back, 1 forward) and side (0 none, else `side`). */
     private forward=0;
     private sideKey=1;
+    /** Walls met in this strafe. */
+    private blocked=0;
     private readonly range:number;
     private phase:'fight'|'hide'|'peek'='fight';
     private phaseUntil=0;
@@ -75,7 +79,8 @@ export class BotFight {
     constructor(private readonly random:()=>number,seed:number){
         this.side=seed%2?1:-1;this.range=between(random,FIGHT.range);
     }
-    reset():void{this.segmentUntil=0;this.stopUntil=0;this.pushUntil=0;this.phase='fight';this.phaseUntil=0;this.coverAt=0;this.step=undefined;this.stepAt=0;}
+    /** A break in the fight ends a stop, a push and cover, but the keys of a strafe stay held until it ends. */
+    reset():void{this.stopUntil=0;this.pushUntil=0;this.phase='fight';this.phaseUntil=0;this.coverAt=0;this.step=undefined;this.stepAt=0;}
     /** Hiding or peeking from cover. */
     get covering():boolean{return this.phase!=='fight';}
 
@@ -109,6 +114,7 @@ export class BotFight {
             if(now>=this.stopUntil&&this.random()<FIGHT.stopChance){this.stopUntil=now+between(this.random,FIGHT.stopMs);this.segmentUntil=this.stopUntil;}
             else {
                 if(this.random()>=FIGHT.keepSide)this.side*=-1;
+                this.blocked=0;
                 this.segmentUntil=now+FIGHT.strafeMs+Math.min(FIGHT.strafeMaxMs,-Math.log(1-this.random()*.999)*FIGHT.strafeTailMs);
                 const mix=v.hurt?FIGHT.keys.hurt:d<this.range-5?FIGHT.keys.close:d>this.range+9?FIGHT.keys.far:FIGHT.keys.mid;
                 let pick=this.random(),choice=0;
@@ -118,12 +124,14 @@ export class BotFight {
         }
         const pushing=now<this.pushUntil;
         if(!pushing&&now<this.stopUntil){this.move.x=this.move.z=0;return;}
-        // Keys against the rival: forward/back along the line, side across it. Out on a peek, side only.
-        const radial=peeking?0:pushing?1:this.forward,lateral=peeking?1:pushing?this.sideKey*.5:this.sideKey;
-        this.walk(v,tx*radial+tz*this.side*lateral,tz*radial-tx*this.side*lateral,FIGHT.speed);
+        // Keys pressed against the look (the crosshair is on the rival, or where it was): forward/back along it, a
+        // side key across it, as a player presses them. Out on a peek, side only.
+        const radial=peeking?0:pushing?1:this.forward,lateral=peeking?1:this.sideKey,fx=Math.sin(v.look),fz=Math.cos(v.look);
+        this.walk(v,fx*radial+fz*this.side*lateral,fz*radial-fx*this.side*lateral,FIGHT.speed);
     }
 
-    /** Walk in a direction on a checked local step; a blocked side flips the strafe. In the air the keys stay
+    /** Walk in a direction on a checked local step: the keys stay as pressed while the step goes their way; a
+     * step that has to turn away is followed instead, and a blocked one changes the strafe. In the air the keys stay
      * held as they are: there is no floor to check. */
     private walk(v:FightView,dx:number,dz:number,speed:number):void {
         const {now,self,nav}=v,length=Math.hypot(dx,dz);
@@ -138,8 +146,14 @@ export class BotFight {
         }
         const step=this.step;
         const sx=step?step.x-self.x:0,sz=step?step.z-self.z:0,d=Math.hypot(sx,sz);
-        if(!step||d<.3){this.side*=-1;this.segmentUntil=now;this.stepAt=0;return;}
-        this.move.x=sx/d*speed;this.move.z=sz/d*speed;
+        if(!step||d<.3){
+            // Blocked: the other side; blocked again, straight back or in; then stand for the rest of the strafe.
+            if(++this.blocked===1)this.side*=-1;else if(this.blocked===2){this.sideKey=0;this.forward=this.forward>0?-1:1;}
+            else this.stopUntil=this.segmentUntil;
+            this.stepAt=0;return;
+        }
+        const along=(sx*dx+sz*dz)/(d*length)>.95;
+        this.move.x=(along?dx/length:sx/d)*speed;this.move.z=(along?dz/length:sz/d)*speed;
     }
 
     /** A spot a few units away, walkable in a straight line, that the enemy can't see. */

@@ -5,7 +5,7 @@ import type {Vec3Data} from '../networkProtocol';
  * Firing is not a goal: the motor fires whenever it has a shot, within the skill dials. */
 
 /** Raised by every change to the minds, questions, weights or dials; stamped on city facts next to `layoutVersion`. */
-export const MIND_VERSION=3;
+export const MIND_VERSION=4;
 
 /** Where to go and what to do there. Code offers only the goals valid for this rat right now. */
 export const GOALS=['take-case','chase-carrier','keep-case','hold-zone','hunt','flee','heal','arm-up','ambush','mischief','roam'] as const;
@@ -77,8 +77,9 @@ export interface Decision {
 export interface SkillDials {
     /** Reaction before a newly seen target is engaged, ms. A target off to the side or behind adds more. */
     reactionMs:readonly [number,number];
-    /** The crosshair's steady wander (one standard deviation, radians) for a still rat at mid range; distance,
-     * the target's motion, the rat's own motion and being hit scale it. */
+    /** How far a movement of the crosshair (a flick's end or a correction) lands off where the rat means to aim
+     * (one standard deviation, radians) for a still rat at mid range; distance, the target's motion, the rat's own
+     * motion and being hit scale it. Between movements the hand holds still. */
     aimWanderRadians:number;
     /** A flick's endpoint error as a share of its size (one standard deviation): overshoot or undershoot. */
     flickError:number;
@@ -92,4 +93,4 @@ export interface SkillDials {
     fireGapMs:number;
 }
 /** The base tier: below the median human's hit rate (docs/bot-overhaul.md, "Motor rewrite"). */
-export const BASE_SKILL:SkillDials={reactionMs:[240,480],aimWanderRadians:4.8*Math.PI/180,flickError:.2,trackingMs:[130,210],lead:[.2,.75],burstShotMs:[190,280],fireGapMs:200};
+export const BASE_SKILL:SkillDials={reactionMs:[240,480],aimWanderRadians:2.2*Math.PI/180,flickError:.2,trackingMs:[130,210],lead:[.2,.75],burstShotMs:[150,240],fireGapMs:150};

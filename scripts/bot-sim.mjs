@@ -21,11 +21,24 @@ const WORLD=2383011301,BOTS=9,DT=1/60;
 /** Distance bands (units) to the nearest other rat when a shot leaves, and between shooter and victim on a hit. */
 const BANDS=[6,12,25,50,Infinity],BAND_NAMES=['<6','6-12','12-25','25-50','50+'];
 const band=d=>BANDS.findIndex(limit=>d<limit);
-/** Tyler's own fight motion (motor-compare on the staging mirror), printed beside the bots'. */
-const TYLER={'jump.jumpsPerFightMin':15.8,'jump.airShare':.28,'jumpAim.airShotShare':.31,'move.stopShare':.02,'moveAim.backpedalShare':.33,
-    'aim.stillAimShare':.45,'aim.flicksPerFightMin':6.6,'all.airborneDecoupledPerFightMin':8.6,
-    'inputs.alone.triggerPullsPerMin':236,'inputs.alone.mouseStillShare':.45,'inputs.alone.flickSizeMedian':1.28,'inputs.alone.flickSizeP90':2.06,
-    'inputs.pairs.pullsAfterFlickShare':.027,'inputs.pairs.flickToPullMedianMs':204};
+/** The city map's shot targets (CityRecorder.shotTargets): the rat in sight (150 units, in front, a clear line) nearest the
+ * shot's line, banded as the production accuracy table is; a hit is banded by the shooter's distance at impact. */
+const SIGHT=150,EYE=1.5,CHEST=1.3,AIM_BANDS=[5,10,15,20,30,45,70,Infinity],AIM_BAND_NAMES=['0-5','5-10','10-15','15-20','20-30','30-45','45-70','70+'];
+const aimBand=d=>AIM_BANDS.findIndex(limit=>d<limit);
+/** The humans in production (motor-compare --mind=3 --since=2026-09-30T06:46:00Z, 27.6 fight minutes), printed beside the bots'. */
+const HUMANS={'move.speedMedian':16.5,'move.speedP90':21.9,'move.stopShare':.034,'move.directionChangesPerMovingMin':30.4,
+    'jump.jumpsPerFightMin':14.8,'jump.airShare':.271,
+    'aim.turnRateMedian':.152,'aim.turnRateP90':1.62,'aim.stillAimShare':.442,'aim.flicksPerFightMin':6.2,'aim.shotErrorMedian':.13,'aim.leadAheadShare':.29,
+    'moveAim.decoupledShare':.426,'moveAim.backpedalShare':.218,'moveAim.offAngleMedian':.836,'moveJump.jumpsWhileMovingShare':.99,'moveJump.strafeJumpShare':.57,
+    'jumpAim.airShotShare':.286,'jumpAim.airTurnRateMedian':.227,'jumpAim.groundTurnRateMedian':.136,'jumpAim.airShotErrorMedian':.154,'jumpAim.groundShotErrorMedian':.12,
+    'all.airborneDecoupledShareOfMovingAir':.478,'all.airborneDecoupledPerFightMin':7.6,
+    'inputs.alone.forwardShare':.557,'inputs.alone.backShare':.231,'inputs.alone.strafeShare':.511,'inputs.alone.releasedShare':.049,
+    'inputs.alone.strafeHoldMedianMs':314,'inputs.alone.strafeFlipsPerMin':21.8,'inputs.alone.jumpPressesPerMin':20,'inputs.alone.triggerPullsPerMin':261,
+    'inputs.alone.mouseStillShare':.442,'inputs.alone.flickSizeMedian':1.07,'inputs.alone.flickSizeP90':2.23,
+    'inputs.pairs.jumpsStrafingShare':.741,'inputs.pairs.pullsNearJumpShare':.104,'inputs.pairs.pullsStrafingShare':.584,'inputs.pairs.pullsAfterFlickShare':.027,
+    'inputs.pairs.flickToPullMedianMs':225,'inputs.all.strafeJumpPullsPerMin':27.5,'inputs.all.strafeJumpPullShare':.105,
+    blindShotShare:.4,botHitRate:'5%','byAimDistance.0-5':.25,'byAimDistance.5-10':.09,'byAimDistance.10-15':.1,'byAimDistance.15-20':.08,
+    'byAimDistance.20-30':.1,'byAimDistance.30-45':.1,'byAimDistance.45-70':.1,'byAimDistance.70+':.05};
 const {values}=parseArgs({options:{assignment:{type:'string',default:'all'},seeds:{type:'string',default:'3'},minutes:{type:'string',default:'4'},
     jobs:{type:'string',default:'4'},ref:{type:'string'},json:{type:'boolean',default:false},child:{type:'string'},runtime:{type:'string'}}});
 const root=process.cwd();
@@ -52,6 +65,8 @@ await build({stdin:{contents:[
     "export {createAssignment,nextAssignment,ASSIGNMENT_IDS} from './src/shared/assignments.ts';",
     "export {botPersonality,createRoundBotRoster} from './src/shared/botRoster.ts';",
     "export {cityPlaces} from './src/shared/city/places.ts';",
+    "export {SpatialRayQuery} from './src/shared/SpatialRayQuery.ts';",
+    "export {Vec3} from 'cannon-es';",
     // The worktree's controls tally, even for an older --ref (whose bots hand no controls, so its input measures are empty).
     `export {ControlTally} from ${JSON.stringify(resolve(root,'src/shared/rat/controlTally.ts'))};`,
 ].join(''),resolveDir:tree,loader:'ts'},outfile:runtime,bundle:true,packages:'external',platform:'node',format:'esm',logLevel:'error',
@@ -91,6 +106,10 @@ function report(rooms,wall){
         deliveriesPerRoomHour:Object.fromEntries(Object.entries(deliveries).map(([id,n])=>[id,per(n,hours[id])])),
         killsPerBotHour:per(sum('kills'),botHours),deaths:sum('deaths'),deathPlaces:deathPlaces.size,
         botShots:sum('shots'),botHitRate:Math.round(sum('hits')/Math.max(1,sum('shots'))*1000)/10+'%',
+        // As the production accuracy table: shots with no rat in sight, and hits per shot by the distance to the rat in sight nearest the shot's line.
+        blindShotShare:Math.round(sum('blindShots')/Math.max(1,sum('shots'))*1000)/1000,
+        byAimDistance:Object.fromEntries(AIM_BAND_NAMES.map((name,i)=>{const shots=rooms.reduce((a,r)=>a+r.aimShots[i],0),hits=rooms.reduce((a,r)=>a+r.aimHits[i],0);
+            return [name,{hitRate:Math.round(hits/Math.max(1,shots)*1000)/1000,shots}];})),
         fight:fightMotion(rooms),
         // Per band of the nearest rival: share of shots, and hits landing at that range per shot fired there.
         byRange:Object.fromEntries(BAND_NAMES.map((name,i)=>{const shots=rooms.reduce((a,r)=>a+r.shotsByRange[i],0),hits=rooms.reduce((a,r)=>a+r.hitsByRange[i],0);
@@ -100,11 +119,16 @@ function report(rooms,wall){
         rescuePlaces:Object.entries(rescuePlaces).sort((a,b)=>b[1]-a[1]).slice(0,8)};
     if(values.json)console.log(JSON.stringify({summary,rooms:rooms.map(({fight,...r})=>r)},null,1));
     else for(const [key,value] of Object.entries(summary)){
-        if(key!=='fight'){console.log(`${key.padEnd(24)} ${typeof value==='object'?JSON.stringify(value):value}`);continue;}
-        console.log(`${key.padEnd(24)} ${value.fightMinutes} bot fight minutes (bot, then Tyler where known)`);
+        if(key==='byAimDistance'){
+            console.log(`${key.padEnd(24)} bot hit rate (shots), then the humans'`);
+            for(const [name,v] of Object.entries(value))console.log(`  ${name.padEnd(40)} ${String(v.hitRate).padStart(8)} (${v.shots})  ${HUMANS[`${key}.${name}`]}`);
+            continue;
+        }
+        if(key!=='fight'){console.log(`${key.padEnd(24)} ${typeof value==='object'?JSON.stringify(value):value}${key in HUMANS?`  (humans ${HUMANS[key]})`:''}`);continue;}
+        console.log(`${key.padEnd(24)} ${value.fightMinutes} bot fight minutes (bot, then the humans in production)`);
         for(const [family,measures] of Object.entries(value))if(family!=='fightMinutes')for(const [name,v] of Object.entries(measures)){
             const measure=`${family}.${name}`;
-            console.log(`  ${measure.padEnd(40)} ${String(v).padStart(8)}${measure in TYLER?`  ${String(TYLER[measure]).padStart(8)}`:''}`);
+            console.log(`  ${measure.padEnd(40)} ${String(v).padStart(8)}${measure in HUMANS?`  ${String(HUMANS[measure]).padStart(8)}`:''}`);
         }
     }
 }
@@ -213,7 +237,8 @@ async function room(seed,start,minutes,runtimePath){
     const ids=names.map((_,i)=>`rd-ai-${String(i).padStart(2,'0')}`),personality=new Map(ids.map((id,i)=>[id,m.botPersonality(names[i])]));
     const players=new Map();
     for(const [i,id] of ids.entries())players.set(id,m.createPlayer(id,names[i],{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},m.spawnForWorld(spec,Math.random,players.values())));
-    const stats={seed,start,ms:0,rescues:0,rescuePlaces:[],rescueNotes:[],shotsByRange:BANDS.map(()=>0),hitsByRange:BANDS.map(()=>0),caseChanges:0,completions:0,deliveries:{},assignmentMs:{},kills:0,deaths:0,deathPlaces:[],shots:0,hits:0,longestStill:0};
+    const stats={seed,start,ms:0,rescues:0,rescuePlaces:[],rescueNotes:[],shotsByRange:BANDS.map(()=>0),hitsByRange:BANDS.map(()=>0),caseChanges:0,completions:0,deliveries:{},assignmentMs:{},kills:0,deaths:0,deathPlaces:[],shots:0,hits:0,longestStill:0,
+        blindShots:0,aimShots:AIM_BANDS.map(()=>0),aimHits:AIM_BANDS.map(()=>0)};
     const fight=fightRecorder(ids,m.ControlTally);
     let sim;
     const onHit=hit=>{
@@ -226,6 +251,21 @@ async function room(seed,start,minutes,runtimePath){
         if(hit.incoming)sim.death(victim,hit.incoming,hit.owner);
     };
     sim=new m.ChaosSimulation(players,onHit,undefined,spec);
+    // GameRoom.lineOfSight: the chaos world's solid bodies, the index refreshed at most once a second.
+    const sightQuery=new m.SpatialRayQuery(sim.world),sightFrom=new m.Vec3(),sightTo=new m.Vec3();let sightAt=-Infinity;
+    const sight=(a,b)=>{if(clock-sightAt>=1000){sightQuery.refresh();sightAt=clock;}sightFrom.set(a.x,a.y,a.z);sightTo.set(b.x,b.y,b.z);return !sightQuery.blocked(sightFrom,sightTo,1);};
+    /** CityRecorder.shotTargets' first target: its distance, or undefined with no rat in sight. */
+    const aimTarget=(shooter,dir)=>{
+        const ex=shooter.x,ey=shooter.y+EYE,ez=shooter.z,l=Math.hypot(dir.x,dir.y,dir.z)||1,near=[];
+        for(const o of players.values()){
+            if(o.id===shooter.id||o.hp<=0)continue;
+            const dx=o.x-ex,dy=o.y+CHEST-ey,dz=o.z-ez,d=Math.hypot(dx,dy,dz);
+            if(d<1||d>SIGHT)continue;
+            const cos=(dir.x*dx+dir.y*dy+dir.z*dz)/l/d;if(cos>0)near.push({o,d,cos});
+        }
+        near.sort((a,b)=>b.cos-a.cos);
+        return near.find(({o})=>sight({x:ex,y:ey,z:ez},{x:o.x,y:o.y+1,z:o.z}))?.d;
+    };
     const rotation={remaining:[],last:start};
     const begin=id=>sim.setAssignment(m.createAssignment(id,clock));
     const shotTimes=new Map(ids.map(id=>[id,[]]));
@@ -239,6 +279,8 @@ async function room(seed,start,minutes,runtimePath){
             const shooter=players.get(id);let nearest=Infinity;
             for(const p of players.values())if(p.id!==id&&p.hp>0)nearest=Math.min(nearest,Math.hypot(p.x-shooter.x,p.z-shooter.z));
             stats.shotsByRange[band(nearest)]++;
+            const aimed=aimTarget(shooter,direction);
+            if(aimed===undefined)stats.blindShots++;else stats.aimShots[aimBand(aimed)]++;
         },
         recover:id=>{
             const player=players.get(id);if(!player||player.hp<=0)return;
@@ -267,7 +309,7 @@ async function room(seed,start,minutes,runtimePath){
             if(event.outcome!=='rat-body'&&event.outcome!=='rat-head')continue;
             stats.hits++;fight.hit(event.victimId,event.owner,clock);
             const shooter=players.get(event.owner),victim=players.get(event.victimId);
-            if(shooter&&victim)stats.hitsByRange[band(Math.hypot(victim.x-shooter.x,victim.z-shooter.z))]++;
+            if(shooter&&victim){stats.hitsByRange[band(Math.hypot(victim.x-shooter.x,victim.z-shooter.z))]++;stats.aimHits[aimBand(Math.hypot(victim.x-shooter.x,victim.y-shooter.y,victim.z-shooter.z))]++;}
         }
         const snap=sim.snapshot(false),a=sim.assignmentState;
         fight.tick(clock,players,snap);

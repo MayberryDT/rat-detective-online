@@ -1,6 +1,6 @@
 # Bot overhaul plan
 
-Status (2026-09-30): **B0–B7 done: released to production** on Tyler's order ("Send it live… Don't ship it without input recording"). Production Worker `aecb77d2-8d51-4792-a5fb-af077c036c3d` runs motor iteration 2 with controls recording (`mindVersion` 3, commit `c878e52` on `main`, merged back into `bots/overhaul`). Staging Worker `820c8057-aa51-432b-89f7-084a502b1367`. **Next:** motor iteration 3 from the first human session (see [the release receipt](verification/bot-overhaul-release-2026-09-30.md)): longer strafe holds, calmer aim between flicks, fewer shots at nothing, lower point-blank accuracy, shooting while strafe-jumping. This file owns the scope, order, decisions and acceptance of the bot overhaul. The visual version of the design, with diagrams, is [design/bots/overhaul-plan.html](../design/bots/overhaul-plan.html). Measurement uses [the city map](city-map.md).
+Status (2026-09-30): **B0–B7 done: released to production** on Tyler's order ("Send it live… Don't ship it without input recording"). Production Worker `aecb77d2-8d51-4792-a5fb-af077c036c3d` runs motor iteration 2 with controls recording (`mindVersion` 3, commit `c878e52` on `main`, merged back into `bots/overhaul`). Staging Worker `820c8057-aa51-432b-89f7-084a502b1367`. **Motor iteration 3** (`mindVersion` 4, from the first human session; see "Motor rewrite") is committed on `bots/overhaul`, not yet deployed. This file owns the scope, order, decisions and acceptance of the bot overhaul. The visual version of the design, with diagrams, is [design/bots/overhaul-plan.html](../design/bots/overhaul-plan.html). Measurement uses [the city map](city-map.md).
 
 ## The idea
 
@@ -398,6 +398,34 @@ Tyler's staging playtest: the bots now decide like humans but still move and sho
 
   The bots' strafe keys flip often and briefly (150 ms holds, 60 flips a minute) [inference: route steering turns the run direction against the look, so the nearest key changes]; the human side will say whether that is unlike a player.
 
+**Iteration 3 (30 September, from the first human session; `mindVersion` 4):** the gaps in [the release receipt](verification/bot-overhaul-release-2026-09-30.md) had four causes, found by tagging every control slot in the sim with what the motor was doing:
+- **Aim wandered between flicks.** The crosshair's miss was a fast random drift, so it never held still. Now the miss is drawn only when the hand moves (a flick's end or a correction, keeping 70% of the last miss) and the hand holds still in between (`aim.ts`). A rat fires when its crosshair is where it *believes* the target is (it cannot see its own miss), within `atan(1.5/range) + 0.04` rad.
+- **Keys flickered.** Three sources: a fight's strafe keys were chosen against the rival's position, not the look, so aim movement changed the keys; while no route has arrived yet (most of a sim's running), local steps alternated between the two ways round an obstacle every 150 ms, and the keys let go for one tick between steps; and the calm look lagged the running direction. Now fight keys are pressed against the crosshair (`fight.ts`), a step round an obstacle keeps going the same way while it still gains ground, a reached step is replaced at once, and a calm running look steers: the crosshair stays on the heading closely (`lookAlong(heading, true)`). Strafes last 200 ms plus a 450 ms tail and keep their side 40% of the time; a blocked strafe tries the other side, then straight in or out, then stands, instead of flipping every tick. Turning to gunfire happens at most once every few seconds (0.9–1.6 s, then 2–5 s of ignoring it).
+- **Too few aimed pulls.** Runs of 3–9 clicks 150–240 ms apart with 60–460 ms pauses (`SkillDials.burstShotMs` 150–240, `fireGapMs` 150), and a click with each fight hop. Hops come sooner after landing (tail mean 1.1 s). Blind fire is unchanged.
+- **Point blank was too easy.** `SkillDials.aimWanderRadians` is 2.2° (was 4.8°). Closer than 15 units, the miss of a hand following a moving rat (full effect at 8 units a second) grows by up to 15 times the mid-range miss at the muzzle, and the hand lets the crosshair drift up to 7 times further before correcting. A still rat close by stays easy to hit, as for a player.
+
+  `bot-sim` (12 rooms of 4 minutes; `scripts/bot-sim.mjs` now prints the production humans beside the bots, and accuracy the way the receipt measures it: the rat in sight nearest the shot's line):
+
+  | | Humans (production) | Iteration 2 | Iteration 3 |
+  | --- | --- | --- | --- |
+  | Strafe key held, median | 314 ms | 150 ms | 200 ms |
+  | Strafe flips a minute | 22 | 62 | 37 |
+  | Aim turn rate, median | 0.15 rad/s | 0.44 | 0.24 |
+  | Aim held still | 44% | 27% | 42% |
+  | Flicks a fight-minute | 6.2 | 10.9 | 11.3 |
+  | Trigger pulls a fight-minute | 261 | 120 | 177 |
+  | Pulls while strafe-jumping, a minute | 27.5 | 8.9 | 15.0 |
+  | Pulls within 150 ms of a jump | 10.4% | 6.4% | 8.3% |
+  | Shots with no rat in sight | 40% | 73% | 62% |
+  | Hit rate, 0–5 / 5–10 / 10–15 / 20–30 units | 25 / 9 / 10 / 10% | 55 / 23 / 16 / 9% | 32 / 13 / 10 / 8% |
+  | Hit rate, all shots | 5% | 3.9% | 3.2% |
+  | Forward held / controls released | 56 / 4.9% | 46 / 8.3% | 50 / 9.2% |
+  | Rescues per bot-hour | — | 1.11 | 0.56 |
+  | Case changes per room-hour | — | 311 | 253 |
+  | Paper Chase deliveries per room-hour | — | 50 | 66 |
+
+  Case changes fell by about a fifth (24 rooms: 257 against 321). Balls hit the case 2.3 times as often (585 against 253 in 12 rooms), knocking it loose and kicking it away, so it changes hands less cleanly [inference: more shots fly around rats fighting near the case]; kills and completions are unchanged. Still far from the humans: flicks (most come from the running look following local steps round obstacles, and from glances), strafe flips while running without a route, and controls released.
+
 **Moment replay (designed, not built; deferred on 30 September to ship recording first):** `scripts/moment-replay.mjs` would take each human fight window with controls from the mirror and:
 1. build the headless runtime as `bot-sim` does (the real `ServerBotController`, motor and code mind, `ChaosSimulation`, the staging world; only windows on the current layout);
 2. place one bot where the human was at the first controls slot, with the human's HP, and its body facing the recorded look (the motor's crosshair starts at the body's facing, `BotAim.begin`); start the window's assignment (`mode`);
@@ -417,3 +445,4 @@ Tyler's staging playtest: the bots now decide like humans but still move and sho
 Iteration log (one line each):
 1. New motor: pursuit running, hand-like aim, strafe/push/cover fighting, flee fix. Staging `a496ae7d-af2a-4901-a765-b41481b4f0c0` (commit `404ccea`).
 2. One rat body: bots press the player's controls through the shared step; fight hops, key strafes, held aim. Staging `820c8057-aa51-432b-89f7-084a502b1367` (commit `8ad85f3`).
+3. First human session: aim holds still between movements, keys pressed against the look, local steps keep their way round obstacles, more aimed clicks and clicks with hops, harder point blank against moving rats (`mindVersion` 4).
