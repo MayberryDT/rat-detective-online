@@ -18,7 +18,8 @@ export interface RatBotOptions {
 
 /** One bot: a mind scores the goals code offers, the cast picks one, code makes it a Plan and the motor runs
  * that plan every tick. Decides every 180–300 ms, and at once when a case changes hands, the assignment
- * moves on or a goal fails. Objective choice knows the same globally advertised case position as a human. */
+ * moves on or a goal fails. Objective choice knows the same globally advertised case position as a human.
+ * The pickup reflex comes before any decision: while it takes a supply, the goal waits and no mind is asked. */
 export class RatBot {
     private readonly motor:BotMotor;
     private readonly goals:BotGoals;
@@ -26,6 +27,9 @@ export class RatBot {
     private readonly mind:Mind<GoalContext>;
     private decisionAt=0;
     private failuresSeen=0;
+    /** The pickup reflex drove the motor at the last beat; an event it held back is decided after it. */
+    private reflexing=false;
+    private held=false;
     private last?:Decision;
     /** Hidden from players; the cast's weights and the motor's tactics follow it. */
     personality:Personality;
@@ -47,7 +51,7 @@ export class RatBot {
     get failedCasePosition():Readonly<Vec3Data>|undefined{return this.motor.failedCasePosition;}
     /** The last decision, for the recorder. */
     get decision():Decision|undefined{return this.last;}
-    reset():void{this.motor.reset();this.goals.reset();this.cast.reset();this.decisionAt=0;this.last=undefined;this.failuresSeen=this.motor.failures;}
+    reset():void{this.motor.reset();this.goals.reset();this.cast.reset();this.decisionAt=0;this.last=undefined;this.failuresSeen=this.motor.failures;this.reflexing=this.held=false;}
 
     step(now: number, self: PlayerData, others: Iterable<PlayerData>, state: ChaosState | undefined,
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
@@ -61,7 +65,7 @@ export class RatBot {
 
     private decide(now:number,self:PlayerData,rats:readonly PlayerData[],state:ChaosState|undefined,
         clear:(target:Vec3Data)=>boolean,clearControl:(target:Vec3Data)=>boolean,ownershipChanged:boolean):void {
-        const trigger=this.motor.urgent?'event':'beat',personality=this.personality;
+        const trigger=this.motor.urgent||this.held?'event':'beat',personality=this.personality;
         this.motor.urgent=false;
         this.decisionAt=now+180+this.random()*120;
         const cases=this.motor.genuineCases;
@@ -72,6 +76,12 @@ export class RatBot {
         const available=this.goals.takeable(input);
         // The mind's preferred target arrives with its answer, so it steers the motor from the next decision.
         this.motor.perceive(now,self,living,carriers,state,clear,clearControl,carrying||!!available&&distance(self,available.value.p)<24,this.last?.answer.target);
+        const supply=this.goals.reflex(input,available);
+        if(supply){
+            this.reflexing=true;this.held=trigger==='event';
+            this.motor.setPlan({goal:supply.kind==='quick-fix'?'heal':'arm-up',mode:'pickup',key:`pickup:${supply.id}`,destination:supply});
+            return;
+        }
         const ctx=this.goals.survey(input,available);
         const answer=completeAnswer(this.mind.answer(ctx),ctx.offered,()=>codeMind.answer(ctx)!);
         const {ranked,weighted}=this.cast.rank(personality,answer,ctx.offered,now,trigger);
@@ -82,9 +92,10 @@ export class RatBot {
         this.goals.adopt(plan,ctx);
         this.motor.setPlan(plan);
         this.motor.tactics={bank:personality==='maverick'||(answer.bank??0)>=.6,mischief:personality==='gremlin',...(answer.danger===undefined?{}:{danger:answer.danger})};
-        // The dispatch detour's give-up happens in the survey above, so failures are read after it.
-        const failed=this.motor.failures!==this.failuresSeen;
-        this.failuresSeen=this.motor.failures;
+        // The dispatch detour's give-up happens in the survey above, so failures are read after it. A route the
+        // motor gave up while the reflex drove it was the reflex's, not the goal's.
+        const failed=!this.reflexing&&this.motor.failures!==this.failuresSeen;
+        this.failuresSeen=this.motor.failures;this.reflexing=this.held=false;
         this.last={plan,answer,personality,weighted,trigger,...(failed?{failed:true as const}:{})};
     }
 }

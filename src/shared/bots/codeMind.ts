@@ -1,9 +1,9 @@
 import type {Goal,GoalScores,Mind} from './intent';
 import type {GoalContext} from './goals';
 
-/** Where the plan each goal would make now stands on the old brain's priority ladder: on-route pickup,
- * armour trip, alarm pillar, case, intercept, carrier, zone, delivery, evade, combat, explore. Flee and
- * ambush were never on it. */
+/** Where the plan each goal would make now stands on the old brain's priority ladder: supply trip, armour
+ * trip, alarm pillar, case, intercept, carrier, zone, delivery, evade, combat, explore. Flee and ambush were
+ * never on it. Supplies close by are the pickup reflex's (goals.ts `REFLEX`), never a goal. */
 function ladderRank(goal:Goal,ctx:GoalContext):number|undefined {
     switch(goal){
     case 'heal':return 0;

@@ -40,6 +40,8 @@ export interface MotorNavigation {
 export interface CaseEntry { key:string; value:CaseState }
 export const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
 const ROUTE_WAIT_MS=6000,FAILED_GOAL_RETRY_MS=12000;
+/** Reached waypoints count as progress only this far from each of the last `PROGRESS_SPOTS` counted spots. */
+const PROGRESS_CLEAR=8,PROGRESS_SPOTS=4;
 /** The slow, careful pace on stairs, ledges and final approaches, units a second. */
 const CAREFUL=6.5;
 /** Plans whose movement the fight takes over while a rival is in reach. */
@@ -124,8 +126,10 @@ export class BotMotor {
     private assignmentSignature = '';
     private assignmentActive=false;
     private progress=0;
-    /** Where a reached waypoint last counted as progress: pacing a pocket of a few units never does. */
-    private readonly progressFrom={x:0,y:0,z:0};
+    /** The last few spots where a reached waypoint counted as progress, the first where the life began (a ring):
+     * a waypoint counts only well clear of all of them, so pacing between two or three spots never does. */
+    private readonly counted=Array.from({length:PROGRESS_SPOTS},()=>({x:0,y:0,z:0}));
+    private countedSpots=0;
     private sighting?:{id:string;p:Vec3Data;at:number};
     /** A defended spot near an intercept post, and when to pick another. */
     private post?:Vec3Data;
@@ -251,20 +255,28 @@ export class BotMotor {
     failGoal(now:number):void {
         const position=this.destination??this.pendingPlan?.to;
         if(position){
-            const copy={x:position.x,y:position.y,z:position.z};
             const retry=this.assignmentActive&&['case','carrier','delivery','zone-hold'].includes(this.mode)?4000:FAILED_GOAL_RETRY_MS;
-            this.failedGoals.set(this.failureKey(this.key),{position:copy,until:now+retry});
-            if(this.key==='case')this.failedCase=copy;
-            if(this.failedGoals.size>32)this.failedGoals.delete(this.failedGoals.keys().next().value!);
+            this.remember(this.key,position,now+retry);
+            if(this.key==='case')this.failedCase={x:position.x,y:position.y,z:position.z};
         }
         this.route=[];this.routeIndex=0;this.pendingPlan=undefined;this.routeWaitStarted=undefined;
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
         this.plannedDestination=undefined;this.destination=undefined;this.urgent=true;this.planAt=0;this.recoverUntil=0;this.failures++;
     }
+    /** Leave a detour the rat never reached (the pickup reflex's supply) for `ms` without failing its goal. */
+    abandon(key:string,position:Vec3Data,now:number,ms:number):void {this.remember(key,position,now+ms);}
+    private remember(key:string,position:Vec3Data,until:number):void {
+        this.failedGoals.set(this.failureKey(key),{position:{x:position.x,y:position.y,z:position.z},until});
+        if(this.failedGoals.size>32)this.failedGoals.delete(this.failedGoals.keys().next().value!);
+    }
 
     /** Facing from the body's rotation, for the first tick after a reset. */
     private bodyFacing(self:PlayerData):number {
         return Math.atan2(2*(self.meshQw*self.meshQy+self.meshQx*self.meshQz),1-2*(self.meshQy*self.meshQy+self.meshQz*self.meshQz));
+    }
+    private clearOfCounted(self:Vec3Data):boolean {
+        for(let i=0;i<Math.min(this.countedSpots,PROGRESS_SPOTS);i++)if(distance(self,this.counted[i])<=PROGRESS_CLEAR)return false;
+        return true;
     }
     private fly(now:number,self:PlayerData,grounded:boolean):RatControls|undefined {
         const flight=this.flight;if(!flight)return;
@@ -443,7 +455,7 @@ export class BotMotor {
         if(this.shotTarget&&this.shotTarget.hp<=0){this.aim.disengage(now);this.shotTarget=undefined;}
         if(!this.progressSet){
             this.progressSet=true;this.progressPosition.x=self.x;this.progressPosition.y=self.y;this.progressPosition.z=self.z;this.progressAt=now;
-            this.progressFrom.x=self.x;this.progressFrom.y=self.y;this.progressFrom.z=self.z;
+            this.counted[0].x=self.x;this.counted[0].y=self.y;this.counted[0].z=self.z;this.countedSpots=1;
         }
         if(now-this.progressAt>1500){
             if(this.launchWaitAt===undefined&&!this.pendingPlan&&this.routeIndex<this.route.length&&this.destination&&distance(self,this.destination)>3&&Math.hypot(self.x-this.progressPosition.x,self.z-this.progressPosition.z)<1.1&&grounded){
@@ -456,11 +468,15 @@ export class BotMotor {
         else {this.pendingPlan=undefined;this.route=[];this.routeIndex=0;this.routeWaitStarted=undefined;this.recoverUntil=0;}
         const routeDestination=this.destination&&(this.navigation.travelPoint?.(self,this.destination)??this.destination);
         this.planRoute(now,self,routeDestination,!!holdingZone,grounded);
-        // Waypoints close by count as reached; as progress only once the rat is well clear of the last counted
-        // spot (a rat hopping up the next flight and back, at a player's pace, reaches the same few nodes again).
+        // Waypoints close by count as reached; as progress only well clear of the last few counted spots (a rat
+        // hopping up the next flight and back, or pacing a stair landing and the flight's foot, reaches the same
+        // few nodes again).
         while(this.routeIndex<this.route.length&&!this.route[this.routeIndex].launch&&!this.route[this.routeIndex].drop&&distance(self,this.route[this.routeIndex])<1.8){
             this.routeIndex++;
-            if(distance(self,this.progressFrom)>8){this.progress++;this.progressFrom.x=self.x;this.progressFrom.y=self.y;this.progressFrom.z=self.z;}
+            if(this.clearOfCounted(self)){
+                const spot=this.counted[this.countedSpots%PROGRESS_SPOTS];spot.x=self.x;spot.y=self.y;spot.z=self.z;
+                this.countedSpots++;this.progress++;
+            }
         }
         // Passing nodes while cutting corners moves the route on but is not counted: re-attaching after each
         // search would count the same patch again, and pacing a pocket must never look like progress.

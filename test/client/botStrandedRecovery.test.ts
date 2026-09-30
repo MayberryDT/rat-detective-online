@@ -78,7 +78,8 @@ it.each([
             if(out)travelled+=Math.hypot(bot.x-last.x,bot.z-last.z);
             last={x:bot.x,z:bot.z};
         });
-        expect({out:out>0&&out<20,recovered},JSON.stringify({out,bot:players.get('bot')})).toEqual({out:true,recovered:[]});
+        // Only the bot under test: a roamer stuck somewhere else in the city is rightly rescued.
+        expect({out:out>0&&out<20,recovered:recovered.filter(id=>id==='bot')},JSON.stringify({out,bot:players.get('bot')})).toEqual({out:true,recovered:[]});
         expect(travelled).toBeGreaterThan(40);
     }finally{controller.dispose();}
 },240_000);
@@ -91,6 +92,6 @@ it.each([[-79,2],[-111,-36]])('walks off the building roof a launcher threw it o
     let down=0;
     try{
         run(40,t=>{if(!down&&players.get('bot')!.y<top-2)down=t;});
-        expect({down:down>0&&down<10,recovered},JSON.stringify({down,top,bot:players.get('bot')})).toEqual({down:true,recovered:[]});
+        expect({down:down>0&&down<10,recovered:recovered.filter(id=>id==='bot')},JSON.stringify({down,top,bot:players.get('bot')})).toEqual({down:true,recovered:[]});
     }finally{controller.dispose();}
 },240_000);

@@ -68,6 +68,7 @@ await build({stdin:{contents:[
     "export {botPersonality,createRoundBotRoster} from './src/shared/botRoster.ts';",
     "export {cityPlaces} from './src/shared/city/places.ts';",
     "export {SpatialRayQuery} from './src/shared/SpatialRayQuery.ts';",
+    "export {MAX_HP} from './src/shared/networkProtocol.ts';",
     "export {Vec3} from 'cannon-es';",
     // The worktree's controls tally, even for an older --ref (whose bots hand no controls, so its input measures are empty).
     `export {ControlTally} from ${JSON.stringify(resolve(root,'src/shared/rat/controlTally.ts'))};`,
@@ -120,7 +121,12 @@ function report(rooms,wall){
     const summary={rooms:rooms.length,roomHours:Math.round(roomHours*1000)/1000,wallSeconds:Math.round(wall),
         rescuesPerBotHour:per(sum('rescues'),botHours),caseChangesPerRoomHour:per(sum('caseChanges'),roomHours),
         completionsPerRoomHour:per(sum('completions'),roomHours),
+        // Per round won: a room's unfinished last round is left out, so these lean a little high on short runs.
+        caseTakesPerRound:per(sum('caseChanges'),sum('completions')),
+        deliveriesPerRound:per(Object.values(deliveries).reduce((a,n)=>a+n,0),sum('completions')),
         deliveriesPerRoomHour:Object.fromEntries(Object.entries(deliveries).map(([id,n])=>[id,per(n,hours[id])])),
+        // Supplies claimed, and supplies passed as the city map's `pickup-passed` counts them.
+        pickupsPerBotHour:per(sum('pickups'),botHours),passedPerBotHour:per(sum('passed'),botHours),
         killsPerBotHour:per(sum('kills'),botHours),deaths:sum('deaths'),deathPlaces:deathPlaces.size,
         botShots:sum('shots'),botHitRate:Math.round(sum('hits')/Math.max(1,sum('shots'))*1000)/10+'%',
         // As the production accuracy table: shots with no rat in sight, and hits per shot by the distance to the rat in sight nearest the shot's line.
@@ -152,6 +158,32 @@ function report(rooms,wall){
     }
 }
 
+/** Supplies passed, as the city map's `pickup-passed` fact counts them: a stocked supply a rat could use (not a Quick
+ * Fix at full health) came within 12 units on its floor with a clear line of sight, then the rat got more than 16
+ * units away (or died) while the supply stayed stocked and unclaimed by it. Checked every 100 ms. */
+function supplyPasses(sight,MAX_HP){
+    const near=new Map();let at=-Infinity;
+    return {
+        clear(){near.clear();},
+        tick(clock,players,snap,claims){
+            for(const c of claims)near.delete(`${c.playerId}|${c.pickupId}`);
+            if(clock-at<100)return 0;
+            at=clock;let passed=0;
+            const stocked=s=>!!s&&(s.availableAt??0)<=snap.time,distance=(p,s)=>Math.hypot(p.x-s.x,p.y-s.y,p.z-s.z);
+            for(const [key,{id,site}] of near){
+                const p=players.get(id),s=snap.pickups?.find(x=>x.id===site);
+                if(!stocked(s))near.delete(key);
+                else if(p.hp<=0||distance(p,s)>16){near.delete(key);passed++;}
+            }
+            for(const p of players.values())if(p.hp>0)for(const s of snap.pickups??[]){
+                const key=`${p.id}|${s.id}`;
+                if(near.has(key)||!stocked(s)||s.kind==='quick-fix'&&p.hp>=MAX_HP||Math.abs(s.y-.7-p.y)>=2.5||distance(p,s)>=12)continue;
+                if(sight({x:p.x,y:p.y+1.5,z:p.z},s))near.set(key,{id:p.id,site:s.id});
+            }
+            return passed;
+        },
+    };
+}
 /** A room's fight windows, kept as CityRecorder keeps them: 5 Hz `[t, x, y, z, yaw, hp]`, 20 Hz `[t, yaw, pitch]` and 20 Hz
  * controls `[t, f, r, jumps, fx, rx]` rings, windows from 3 s before to 2 s after each hit (merged when they overlap),
  * launcher flights and Hot Pursuit left out. */
@@ -257,7 +289,8 @@ async function room(seed,start,minutes,runtimePath){
     const players=new Map();
     for(const [i,id] of ids.entries())players.set(id,m.createPlayer(id,names[i],{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},m.spawnForWorld(spec,Math.random,players.values())));
     const stats={seed,start,ms:0,rescues:0,rescuePlaces:[],rescueNotes:[],shotsByRange:BANDS.map(()=>0),hitsByRange:BANDS.map(()=>0),caseChanges:0,completions:0,deliveries:{},assignmentMs:{},kills:0,deaths:0,deathPlaces:[],shots:0,hits:0,longestStill:0,
-        blindShots:0,aimShots:AIM_BANDS.map(()=>0),aimHits:AIM_BANDS.map(()=>0)};
+        blindShots:0,aimShots:AIM_BANDS.map(()=>0),aimHits:AIM_BANDS.map(()=>0),pickups:0,passed:0};
+    const passes=supplyPasses(sight,m.MAX_HP);
     const fight=fightRecorder(ids,m.ControlTally);
     let sim;
     const onHit=hit=>{
@@ -272,7 +305,7 @@ async function room(seed,start,minutes,runtimePath){
     sim=new m.ChaosSimulation(players,onHit,undefined,spec);
     // GameRoom.lineOfSight: the chaos world's solid bodies, the index refreshed at most once a second.
     const sightQuery=new m.SpatialRayQuery(sim.world),sightFrom=new m.Vec3(),sightTo=new m.Vec3();let sightAt=-Infinity;
-    const sight=(a,b)=>{if(clock-sightAt>=1000){sightQuery.refresh();sightAt=clock;}sightFrom.set(a.x,a.y,a.z);sightTo.set(b.x,b.y,b.z);return !sightQuery.blocked(sightFrom,sightTo,1);};
+    function sight(a,b){if(clock-sightAt>=1000){sightQuery.refresh();sightAt=clock;}sightFrom.set(a.x,a.y,a.z);sightTo.set(b.x,b.y,b.z);return !sightQuery.blocked(sightFrom,sightTo,1);}
     /** CityRecorder.shotTargets' first target: its distance, or undefined with no rat in sight. */
     const aimTarget=(shooter,dir)=>{
         const ex=shooter.x,ey=shooter.y+EYE,ez=shooter.z,l=Math.hypot(dir.x,dir.y,dir.z)||1,near=[];
@@ -331,6 +364,8 @@ async function room(seed,start,minutes,runtimePath){
             if(shooter&&victim){stats.hitsByRange[band(Math.hypot(victim.x-shooter.x,victim.z-shooter.z))]++;stats.aimHits[aimBand(Math.hypot(victim.x-shooter.x,victim.y-shooter.y,victim.z-shooter.z))]++;}
         }
         const snap=sim.snapshot(false),a=sim.assignmentState;
+        const claims=sim.drainPickupEvents().filter(e=>e.kind==='collected');stats.pickups+=claims.length;
+        stats.passed+=passes.tick(clock,players,snap,claims);
         fight.tick(clock,players,snap);
         if(a){stats.assignmentMs[a.id]=(stats.assignmentMs[a.id]??0)+DT*1000;}
         const c=snap.case;
@@ -340,7 +375,7 @@ async function room(seed,start,minutes,runtimePath){
         if(a&&a.deliverySerial!==serial){if(a.deliverySerial>serial)stats.deliveries[a.id]=(stats.deliveries[a.id]??0)+a.deliverySerial-serial;serial=a.deliverySerial;}
         if(a?.result){
             // GameRoom shows the win, then resets the city and starts the next assignment.
-            stats.completions++;sim.reset();serial=0;owner=null;
+            stats.completions++;sim.reset();passes.clear();serial=0;owner=null;
             for(const [id,player] of players){m.respawnPlayer(player,m.spawnForWorld(spec,Math.random,players.values(),id));controller.reset(id,player);}
             begin(m.nextAssignment(rotation,Math.random));
         }

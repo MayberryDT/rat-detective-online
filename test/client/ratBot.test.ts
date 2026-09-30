@@ -10,6 +10,7 @@ import { activeZone } from '../../src/shared/jurisdiction';
 import { JURISDICTION_ZONES, zoneContains } from '../../src/shared/jurisdictionZones';
 import { STEER } from '../../src/shared/bots/motor/steer';
 import { muzzleRange, worldIntent, type WorldIntent } from './botControls';
+import type { PickupState } from '../../src/shared/pickups';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 /** A rat running on open flat ground: at least its slowest pace, a little under for the drift. */
@@ -429,15 +430,41 @@ it('intercepts a distant Chain carrier at the next landmark when already closer 
  expect(vi.mocked(navigation.route).mock.calls.at(-1)?.[1]).not.toEqual(destinationPoint('icebox'));
 });
 
-it.each([null,'me','holder'])('keeps objective priority over an unnecessary buff refresh (owner=%s)',owner=>{
+// The pickup reflex (docs/bot-learning-plan.md): a rat never runs past a usable supply in sight close by,
+// whatever its goal. Failure modes: the case run skips a supply beside the route, or never resumes after it;
+// a held buff or carrying the case stops the refresh; a full-health rat detours for a Quick Fix; an unreachable
+// supply parks the bot, is retried at once, or is recorded as its goal failing.
+it('takes a Hot Pursuit beside the route to the case, then carries on to the case',()=>{
+    const {brain,self}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
+    const supply:PickupState={id:'hustle-side',kind:'hustle',x:6,y:.7,z:8};s.pickups=[supply];
+    let claimedAt:number|undefined;
+    for(let now=1000;now<4000;now+=20){
+        s.time=now;const intent=act(brain,now,self,[self],s,()=>true,false,true);
+        self.x+=intent.x*.02;self.z+=intent.z*.02;
+        // Within 2 units the run carries the body onto the supply (pickupBotRoutes claims them in the real city).
+        if(claimedAt===undefined&&Math.hypot(self.x-supply.x,self.z-supply.z)<2){claimedAt=now;supply.availableAt=now+45000;s.buffs={me:{hustleUntil:now+8000}};}
+    }
+    expect(claimedAt).toBeLessThan(2500);
+    expect(brain.objective).toBe('case');expect(brain.decision?.plan.goal).toBe('take-case');
+    expect(self.x).toBeGreaterThan(supply.x+10);
+});
+it.each([null,'me','holder'])('refreshes a timed supply it already holds, whatever the goal (owner=%s)',owner=>{
     const {brain,self,holder}=fixture(),s=state(owner);
     s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:5,y:.7,z:0}];
-    s.buffs={[self.id]:{ironcladUntil:9000}}; // Still eight seconds left; do the assignment.
+    s.buffs={[self.id]:{ironcladUntil:9000}};
     brain.step(1000,self,[holder],s,()=>true,false,true);
-    expect(brain.objective).not.toBe('pickup');
-    s.pickups=[];brain.step(1400,self,[holder],s,()=>true,false,true);
-    expect(brain.objective).not.toBe('pickup');
+    expect(brain.goalKey).toBe('pickup:alibi-records-upper');
+});
+it('abandons an unreachable supply within its timeout without failing its goal, and does not go back to it',()=>{
+    const {brain,self}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
+    s.pickups=[{id:'fenced',kind:'stakeout',x:6,y:.7,z:1}];
+    brain.step(1000,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
+    brain.step(3600,self,[],s,()=>true,false,true);
+    expect(brain.objective).toBe('case');expect(brain.decision?.failed).toBeUndefined();
+    for(const now of [4000,12000,24000]){brain.step(now,self,[],s,()=>true,false,true);expect(brain.objective).toBe('case');}
+    // A new life forgets it.
+    brain.reset();brain.step(24100,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
 });
 it('leaves full-health medkits alone but seeks them when injured, even while carrying',()=>{
     const {brain,self}=fixture(),s=state('me');
@@ -502,19 +529,11 @@ describe('assignment commitment',()=>{
   brain.step(1000,self,[near],s,()=>true,false,true);expect(brain.objective).toBe('case');
   const intent=act(brain,1500,self,[near],s,()=>true,false,true);expect(intent.x).toBeGreaterThan(0);aimedNear(intent.shoot,self,near);
  });
- it.each(ASSIGNMENT_IDS)('%s keeps helpful on-route pickups brief and returns to work',id=>{
-  const {brain,self}=fixture(),s=state();s.assignment=createAssignment(id,0);s.assignment.phase='active';
-  s.pickups=[{id:'on-route',kind:'hustle',x:6,y:.7,z:1}];
-  brain.step(1000,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
-  brain.step(3400,self,[],s,()=>true,false,true);expect(brain.objective).toBe('case');
-  brain.step(4000,self,[],s,()=>true,false,true);expect(brain.objective).toBe('case');
-  brain.reset();brain.step(4100,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
- });
- it('grabs a close case before supplies, except for an immediately reachable emergency heal',()=>{
+ it('takes a loose case nearer than a supply first, and any supply nearer than the case',()=>{
   const {brain,self}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';s.case.p.x=5;
-  s.pickups=[{id:'heal',kind:'quick-fix',x:2,y:.7,z:0}];self.hp=2;
+  s.pickups=[{id:'heal',kind:'quick-fix',x:0,y:.7,z:8}];self.hp=2;
   brain.step(1000,self,[],s,()=>true,false,true);expect(brain.objective).toBe('case');
-  self.hp=1;brain.step(1400,self,[],s,()=>true,false,true);expect(brain.objective).toBe('pickup');
+  s.case.p.x=10;brain.step(1400,self,[],s,()=>true,false,true);expect(brain.goalKey).toBe('pickup:heal');
  });
  it('does not start a mapped roof excursion while a live assignment case is available',()=>{
   const {brain,self}=fixture(),s=state();s.assignment=createAssignment('closing-time',0);s.assignment.phase='active';s.case.p.x=100;
@@ -529,6 +548,18 @@ describe('assignment commitment',()=>{
   for(const t of [1000,4500,7000]){
    const intent=act(brain,t,self,[],s,()=>true,false,true);expect(brain.objective).toBe('zone-hold');expect(zoneContains(activeZone(j),{x:self.x+intent.x*.35,y:self.y,z:self.z+intent.z*.35})).toBe(true);
   }
+ });
+ it('lets a scoring Jurisdiction carrier take a supply inside the zone, never one outside it',()=>{
+  const {brain,self}=fixture(),s=state('me');s.assignment=createAssignment('jurisdiction',0);s.assignment.phase='active';
+  const id=activeZone(s.assignment.jurisdiction!);Object.assign(self,JURISDICTION_ZONES[id].posts[0]);self.hp=2;
+  const spot=(inside:boolean)=>{
+   for(let d=6;d<11;d++)for(let a=0;a<16;a++){const p={x:self.x+Math.sin(a*Math.PI/8)*d,y:self.y,z:self.z+Math.cos(a*Math.PI/8)*d};if(zoneContains(id,p)===inside)return {x:p.x,y:p.y+.7,z:p.z};}
+   throw Error(`no spot ${inside?'inside':'outside'} the zone`);
+  };
+  s.pickups=[{id:'outside',kind:'quick-fix',...spot(false)}];
+  brain.step(1000,self,[],s,()=>true,false,true);expect(brain.objective).toBe('zone-hold');
+  s.pickups.push({id:'inside',kind:'quick-fix',...spot(true)});
+  brain.step(1400,self,[],s,()=>true,false,true);expect(brain.goalKey).toBe('pickup:inside');
  });
  it('pursues the currently scoring carrier rather than camping the announced next zone',()=>{
   const {brain,self,holder}=fixture(0),s=state('holder');s.assignment=createAssignment('jurisdiction',0);s.assignment.phase='active';

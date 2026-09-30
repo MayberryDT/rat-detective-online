@@ -1,11 +1,11 @@
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
 import {activeZone,nextZone,JURISDICTION_TUNING} from '../jurisdiction';
-import {JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains} from '../jurisdictionZones';
+import {JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {DISPATCH_STATIONS,type ChaosState} from '../chaosState';
 import {incidentInfo} from '../incidentCatalog';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS} from '../assignments';
-import {BUFF_FIELD,hasIronclad,isTimedPickup,type PickupState} from '../pickups';
+import {hasIronclad,type PickupState} from '../pickups';
 import {MAX_HP,type PlayerData,type Vec3Data} from '../networkProtocol';
 
 const DISPATCH_DETOUR_MS=12000;
@@ -14,6 +14,11 @@ const PILLAR_REACH={other:{range:45,ratio:2},gremlin:{range:90,ratio:1}} as cons
 /** Fleeing: a place `near`–`far` away within `levels` of height, at least `safer` further from the rats in
  * sight than the rat stands now; a local run only if it gets `local` away. A flee place holds `stickMs`. */
 const FLEE={near:15,far:70,levels:6,safer:6,local:6,stickMs:8000} as const;
+/** The pickup reflex (docs/bot-learning-plan.md): a supply in sight within `range` on the rat's floor is taken
+ * whatever the goal; one kept while it stays within `keep`. Not reached within `ms`, it is left for `retryMs`. */
+export const REFLEX={range:12,keep:16,floor:2.5,ms:2500,retryMs:30000} as const;
+/** How far a longer supply trip, a goal a mind may choose, may lead. */
+const SUPPLY_TRIP=24;
 
 /** What a decision starts from, gathered once per decision. */
 export interface GoalInput {
@@ -50,7 +55,7 @@ export interface GoalContext extends GoalInput {
     combat?:PlayerData;
     /** The rat the motor last shot at while it was in sight, where and when (bank shots). */
     sighting?:Readonly<{id:string;p:Vec3Data;at:number}>;
-    /** A useful pickup on the way (or an emergency medkit). */
+    /** A supply worth a longer trip (heal, arm up): in sight beyond the reflex's reach, off objective time. */
     pickup?:PickupState;
     /** A mapped Ironclad site worth an occasional trip. */
     armor?:PickupState;
@@ -83,10 +88,13 @@ function where(self:Vec3Data,point:Vec3Data):string {
  * zone is part of keeping the case, never a goal of its own. */
 export class BotGoals {
     private supplyTripAt=0;
-    private pickupUntil=0;
-    private nextPickupAt=0;
-    /** When the current alarm-pillar detour is abandoned if its bell still has not rung. */
+    /** The supply the pickup reflex is taking, and when it gives up. */
+    private reflexSite?:PickupState;
+    private reflexUntil=0;
+    /** When the current alarm-pillar detour (pillar and Dispatch serial) is abandoned if its bell still has not
+     * rung. Kept while the plan flips to the chase and back, so a bell out of reach never parks the bot there. */
     private dispatchGiveUpAt=0;
+    private dispatchDetour='';
     private explorationAt=0;
     private deliveryKey='';
     private deliveryEntering=false;
@@ -101,7 +109,7 @@ export class BotGoals {
         this.places=navigation.explorationTargets();
     }
     reset():void {
-        this.pickupUntil=0;this.nextPickupAt=0;this.supplyTripAt=0;this.dispatchGiveUpAt=0;
+        this.reflexSite=undefined;this.reflexUntil=0;this.supplyTripAt=0;this.dispatchGiveUpAt=0;this.dispatchDetour='';
         this.deliveryKey='';this.deliveryEntering=false;this.evadeAt=0;this.fleeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
     /** A new round, phase, delivery or zone: pick the zone post afresh. */
@@ -116,15 +124,40 @@ export class BotGoals {
             .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
     }
 
-    /** Immediate detours stay visible and on the current floor. Longer armor
-     * trips use the separate, throttled map-site policy below. */
-    private wantedPickup(state: ChaosState | undefined, self: PlayerData, now:number, clear:(p:Vec3Data)=>boolean, allowed:(p:PickupState)=>boolean) {
-        return state?.pickups?.filter(p=>(p.availableAt??0)<=(state?.time??now))
-            .filter(p=>p.kind!=='quick-fix'||self.hp<MAX_HP)
-            .filter(p=>Math.abs(p.y-.7-self.y)<2.5&&distance(self,p)<24&&clear(p))
-            .filter(p=>!this.motor.suppressed(`pickup:${p.id}`,p,now))
-            .filter(allowed)
-            .sort((a,b)=>distance(self,a)-distance(self,b))[0];
+    /** Whether a stocked supply is of use to this rat now: never a Quick Fix at full health; a timed supply it
+     * already holds refreshes. A Jurisdiction carrier scoring in `zone` takes only supplies inside it. */
+    private usable(p:PickupState,self:PlayerData,state:ChaosState|undefined,now:number,zone?:JurisdictionZoneId):boolean {
+        return (p.availableAt??0)<=(state?.time??now)&&(p.kind!=='quick-fix'||self.hp<MAX_HP)&&Math.abs(p.y-.7-self.y)<REFLEX.floor&&
+            !this.motor.suppressed(`pickup:${p.id}`,p,now)&&!(zone&&!zoneContains(zone,{x:p.x,y:p.y-.7,z:p.z}));
+    }
+    /** The pickup reflex: the nearest stocked, usable supply in sight within `REFLEX.range` on this floor,
+     * whatever the goal (carrying the case too). A loose case nearer than the supply comes first. The supply
+     * chosen is kept while it stays usable and within `REFLEX.keep`; one not reached within `REFLEX.ms` is left
+     * for `REFLEX.retryMs`, and the rat's goal carries on. */
+    reflex(input:GoalInput,available:CaseEntry|undefined):PickupState|undefined {
+        const {now,self,state,carrying}=input,assignment=state?.assignment,j=assignment?.phase==='active'?assignment.jurisdiction:undefined;
+        const current=j&&activeZone(j),scoring=carrying&&current&&zoneContains(current,self)?current:undefined;
+        const caseAt=available?distance(self,available.value.p):Infinity;
+        const kept=this.reflexSite&&state?.pickups?.find(p=>p.id===this.reflexSite!.id);
+        if(kept&&now>=this.reflexUntil){this.motor.abandon(`pickup:${kept.id}`,kept,now,REFLEX.retryMs);this.reflexSite=undefined;}
+        else if(kept&&this.usable(kept,self,state,now,scoring)&&distance(self,kept)<Math.min(REFLEX.keep,caseAt))return this.reflexSite=kept;
+        let best:PickupState|undefined,bestAt=Math.min(REFLEX.range,caseAt);
+        for(const p of state?.pickups??[]){
+            const d=distance(self,p);
+            if(d<bestAt&&this.usable(p,self,state,now,scoring)&&input.clear(p)){best=p;bestAt=d;}
+        }
+        if(best&&best.id!==this.reflexSite?.id)this.reflexUntil=now+REFLEX.ms;
+        return this.reflexSite=best;
+    }
+    /** A longer supply trip a mind may choose: in sight on this floor, beyond the reflex's reach and within
+     * `SUPPLY_TRIP`, never while a live objective has somewhere to be. */
+    private wantedPickup(state:ChaosState|undefined,self:PlayerData,now:number,clear:(p:Vec3Data)=>boolean){
+        let best:PickupState|undefined,bestAt:number=SUPPLY_TRIP;
+        for(const p of state?.pickups??[]){
+            const d=distance(self,p);
+            if(d>=REFLEX.range&&d<bestAt&&this.usable(p,self,state,now)&&clear(p)){best=p;bestAt=d;}
+        }
+        return best;
     }
     /** Fixed supply sites are map knowledge. A bounded occasional trip can use
      * stairs or a launcher; it never replaces pursuit of an advertised carrier. */
@@ -166,7 +199,7 @@ export class BotGoals {
         // or its carrier is less than twice as far as the pillar (gremlins: up to twice as far away, and
         // whenever the case is further than the pillar). A bell still unrung after
         // DISPATCH_DETOUR_MS is given up for a while, so a bad angle never parks the bot there.
-        if(motor.mode==='dispatch'&&now>=this.dispatchGiveUpAt)motor.failGoal(now);
+        if(motor.mode==='dispatch'&&now>=this.dispatchGiveUpAt){motor.failGoal(now);this.dispatchDetour='';}
         const chase=Math.min(available?distance(self,available.value.p):Infinity,carrier?distance(self,carrier):Infinity);
         const reach=PILLAR_REACH[input.personality==='gremlin'?'gremlin':'other'];
         const pillars=state?.dispatch.phase==='ready'&&!motor.ringing&&!carrying&&!motor.target&&chase>=24?DISPATCH_STATIONS
@@ -223,22 +256,7 @@ export class BotGoals {
             }
         }
         const goal=available?.value.p??(!carrying?carrier:undefined)??zone?.point??delivery?.point??escape?.point??(carrying&&active?combat:undefined);
-        const scoring=!!jurisdiction&&carrying&&zoneContains(activeZone(jurisdiction),self);
-        const pickup=this.wantedPickup(state,self,now,input.clear,p=>{
-            if(!active||!goal)return true;
-            const d=distance(self,p),emergency=p.kind==='quick-fix'&&self.hp===1&&d<=6;
-            if(scoring&&!zoneContains(activeZone(jurisdiction!),{x:p.x,y:p.y-.7,z:p.z}))return false;
-            if(!emergency){
-                if(available&&distance(self,available.value.p)<8)return false;
-                if((motor.key===`pickup:${p.id}`?now>=this.pickupUntil:now<this.nextPickupAt))return false;
-                // Collect useful supplies along the route without walking
-                // back for a refresh or making a 24-unit side excursion.
-                if(d>12||d+distance(p,goal)-distance(self,goal)>5)return false;
-                const until=isTimedPickup(p.kind)?state?.buffs?.[self.id]?.[BUFF_FIELD[p.kind]]:0;
-                if((until??0)>(state?.time??now)+2000)return false;
-            }
-            return true;
-        });
+        const pickup=active&&goal?undefined:this.wantedPickup(state,self,now,input.clear);
         const ctx:GoalContext={...input,active,visible,carrier,available,combat,sighting:motor.sighted,pickup,armor,pillars,delivery,
             intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,escape,offered:[],memo:{},
             places:goal=>(ctx.memo.options??={})[goal]??=this.placeOptions(goal,ctx)};
@@ -304,11 +322,11 @@ export class BotGoals {
     /** Timers that start when a plan is taken, not merely considered. */
     adopt(plan:Plan,ctx:GoalContext):void {
         const {now}=ctx,changed=this.motor.key!==plan.key;
-        if(plan.mode==='pickup'){
-            if(plan.key===`pickup:${ctx.pickup?.id}`){if(changed){this.pickupUntil=now+2200;this.nextPickupAt=now+8000;}}
-            else if(changed)this.supplyTripAt=now+25000+this.random()*10000;
+        if(plan.mode==='pickup'){if(changed&&plan.key!==`pickup:${ctx.pickup?.id}`)this.supplyTripAt=now+25000+this.random()*10000;}
+        else if(plan.mode==='dispatch'){
+            const detour=`${plan.key}:${ctx.state?.dispatch.serial}`;
+            if(detour!==this.dispatchDetour){this.dispatchDetour=detour;this.dispatchGiveUpAt=now+DISPATCH_DETOUR_MS;}
         }
-        else if(plan.mode==='dispatch'){if(changed)this.dispatchGiveUpAt=now+DISPATCH_DETOUR_MS;}
         else if(plan.goal==='flee'){if(changed)this.fleeAt=now+FLEE.stickMs;}
         else if(plan.goal==='roam'){
             const explore=this.exploration(ctx);
