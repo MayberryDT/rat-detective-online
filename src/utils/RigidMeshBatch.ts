@@ -1,49 +1,87 @@
 import * as THREE from 'three';
 import {ratSpineWeights} from './RatModel';
 
-/** Draw static rig leaves together while retaining the original animated/pickable
- * hierarchy. Deforming tails and transient effects remain ordinary meshes. A rat's
- * coat and tailoring (direct `rat-body` meshes) are skinned across its soft spine
- * (body, belly, chest) so a corpse bends smoothly; every other leaf is rigid. */
-export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
+/** How a deforming mesh (a rat's tail) reaches the current pose. Whoever draws it calls this
+ * first: the renderer through the hooks of the mesh and the parts riding it, or the rigid batch. */
+const deformers=new WeakMap<THREE.Object3D,()=>void>();
+export function setDeformer(mesh:THREE.Mesh,deform:()=>void):void {
+    deformers.set(mesh,deform);
+    mesh.traverse(part=>{part.onBeforeRender=part.onBeforeShadow=deform;});
+}
+
+function batchable(object:THREE.Object3D):object is THREE.Mesh {
+    return object instanceof THREE.Mesh&&!(object instanceof THREE.SkinnedMesh)&&!(object instanceof THREE.InstancedMesh)&&object.visible&&!Array.isArray(object.material);
+}
+
+/** A rig's leaves in one skinned draw: each bone follows its original leaf (then the spine
+ * joints, then the tail). The deforming tail's vertices come last, rewritten when it moves. */
+export class RigidBatch extends THREE.SkinnedMesh {
+    /** Brings the tail's vertices up to the current pose; called before every draw. */
+    readonly showPose:()=>void;
+    constructor(geometry:THREE.BufferGeometry,material:THREE.Material|THREE.Material[],
+        private readonly follow:readonly THREE.Object3D[],
+        /** Indices before the tail's: a draw range over them leaves the tail out. */
+        readonly rigidIndexCount:number,showPose:()=>void){
+        super(geometry,material);this.showPose=showPose;
+    }
+    override updateMatrixWorld(force?:boolean):void {
+        super.updateMatrixWorld(force);
+        // Original leaves precede this appended batch in root traversal.
+        const bones=this.skeleton.bones;
+        for(let i=0;i<this.follow.length;i++)bones[i]!.matrixWorld.copy(this.follow[i]!.matrixWorld);
+    }
+}
+
+/** Draw a rig's leaves together while retaining the original animated/pickable
+ * hierarchy. Transient effects remain ordinary meshes. A rat's coat and tailoring
+ * (direct `rat-body` meshes) are skinned across its soft spine (body, belly, chest) so a
+ * corpse bends smoothly; its tail (and tip) ride one bone with vertices copied from the
+ * deformed tail; every other leaf is rigid. */
+export function batchRigidMeshes(root:THREE.Group):RigidBatch|undefined {
     const sources:THREE.Mesh[]=[];
     root.traverse(object=>{
-        if(!(object instanceof THREE.Mesh)||object instanceof THREE.SkinnedMesh||object instanceof THREE.InstancedMesh||!object.visible||object.children.length||Array.isArray(object.material))return;
+        if(!batchable(object)||object.children.length)return;
         for(let parent:THREE.Object3D|null=object;parent&&parent!==root;parent=parent.parent){
             if(parent.name==='rat-tail'||parent.name==='rat-muzzle'||!parent.visible)return;
         }
         sources.push(object);
     });
-    if(sources.length<2)return;
-    const materials=[...new Set(sources.map(s=>s.material as THREE.Material))];
+    const tail=root.getObjectByName('rat-tail'),tip=tail?.children[0];
+    const deforming=tail&&batchable(tail)&&tail.children.length===1&&tip&&batchable(tip)&&!tip.children.length?[tail,tip]:[];
+    if(sources.length+deforming.length<2)return;
+    const materials=[...new Set([...sources,...deforming].map(s=>s.material as THREE.Material))];
     sources.sort((a,b)=>materials.indexOf(a.material as THREE.Material)-materials.indexOf(b.material as THREE.Material));
+    const parts=[...sources,...deforming];
     // Sized up front and written in place: a corpse is batched on every death, mid-fight.
     let vertexCount=0,indexCount=0;
-    for(const {geometry} of sources){const count=geometry.getAttribute('position').count;vertexCount+=count;indexCount+=geometry.index?.count??count;}
+    for(const {geometry} of parts){const count=geometry.getAttribute('position').count;vertexCount+=count;indexCount+=geometry.index?.count??count;}
     const positions=new Float32Array(vertexCount*3),normals=new Float32Array(vertexCount*3),uvs=new Float32Array(vertexCount*2),materialIndices=new Float32Array(vertexCount);
     const skinIndices=new Uint16Array(vertexCount*4),weights=new Float32Array(vertexCount*4);
     // The largest index is vertexCount-1: the type an index array would have picked.
     const indices=vertexCount>65535?new Uint32Array(indexCount):new Uint16Array(indexCount);
-    const geometry=new THREE.BufferGeometry();let vertexOffset=0,indexOffset=0;
+    const geometry=new THREE.BufferGeometry();let vertexOffset=0,indexOffset=0,rigidIndexCount=0,tailStart=0;
     const body=root.getObjectByName('rat-body'),belly=body?.getObjectByName('rat-spine-belly'),chest=body?.getObjectByName('rat-spine-chest');
     const spine=body&&belly&&chest?[body,belly,chest]:[];
     // Spine bones follow the leaf bones; at rest each spine joint is identity in body space.
-    const spineBone=sources.length,bones=[...sources,...spine].map(()=>new THREE.Bone());
+    const spineBone=sources.length,tailBone=spineBone+spine.length;
+    const follow=[...sources,...spine,...deforming.slice(0,1)],bones=follow.map(()=>new THREE.Bone());
     const point=new THREE.Vector3(),normal=new THREE.Vector3(),normalMatrix=new THREE.Matrix3();
-    sources.forEach((source,bone)=>{
+    parts.forEach((source,bone)=>{
         const g=source.geometry,p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv');
         const start=indexOffset,skinned=spine.length>0&&source.parent===body,materialIndex=materials.indexOf(source.material as THREE.Material);
-        // Skinned leaves are baked into body space and blended by height.
-        if(skinned){source.updateMatrix();normalMatrix.getNormalMatrix(source.matrix);}
+        // Skinned leaves are baked into body space and blended by height; the tip into tail space.
+        const baked=skinned||source===tip&&deforming.length>0;
+        if(source===tail)tailStart=vertexOffset;
+        if(baked){source.updateMatrix();normalMatrix.getNormalMatrix(source.matrix);}
         for(let i=0;i<p.count;i++){
             const v=vertexOffset+i;
             point.fromBufferAttribute(p,i);normal.set(n?.getX(i)??0,n?.getY(i)??0,n?.getZ(i)??1);
+            if(baked){point.applyMatrix4(source.matrix);normal.applyMatrix3(normalMatrix).normalize();}
             if(skinned){
-                point.applyMatrix4(source.matrix);normal.applyMatrix3(normalMatrix).normalize();
                 const w=ratSpineWeights(point.y);
                 skinIndices[v*4]=spineBone;skinIndices[v*4+1]=spineBone+1;skinIndices[v*4+2]=spineBone+2;
                 weights[v*4]=1-w.belly-w.chest;weights[v*4+1]=w.belly;weights[v*4+2]=w.chest;
-            }else{skinIndices[v*4]=bone;weights[v*4]=1;}
+            }else{skinIndices[v*4]=bone<sources.length?bone:tailBone;weights[v*4]=1;}
             positions[v*3]=point.x;positions[v*3+1]=point.y;positions[v*3+2]=point.z;
             normals[v*3]=normal.x;normals[v*3+1]=normal.y;normals[v*3+2]=normal.z;
             uvs[v*2]=uv?.getX(i)??0;uvs[v*2+1]=uv?.getY(i)??0;materialIndices[v]=materialIndex;
@@ -53,13 +91,36 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
         const last=geometry.groups[geometry.groups.length-1];
         if(last?.materialIndex===materialIndex)last.count+=count;else geometry.addGroup(start,count,materialIndex);
         vertexOffset+=p.count;indexOffset+=count;
+        if(bone===sources.length-1)rigidIndexCount=indexOffset;
     });
-    geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
-    geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3));
+    const positionAttribute=new THREE.BufferAttribute(positions,3),normalAttribute=new THREE.BufferAttribute(normals,3);
+    geometry.setAttribute('position',positionAttribute);
+    geometry.setAttribute('normal',normalAttribute);
     geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));
     geometry.setAttribute('ratMaterial',new THREE.BufferAttribute(materialIndices,1));
     geometry.setAttribute('skinIndex',new THREE.BufferAttribute(skinIndices,4));
     geometry.setAttribute('skinWeight',new THREE.BufferAttribute(weights,4));geometry.setIndex(new THREE.BufferAttribute(indices,1));
+    // The tail's vertices follow its deformed geometry (and the tip its offset), copied only when they changed.
+    let showPose=()=>{};
+    if(tail instanceof THREE.Mesh&&tip instanceof THREE.Mesh&&deforming.length){
+        const tailPositions=tail.geometry.getAttribute('position'),tailNormals=tail.geometry.getAttribute('normal');
+        const tipPositions=tip.geometry.getAttribute('position'),tailCount=tailPositions.count,count=tailCount+tipPositions.count;
+        let positionVersion=tailPositions.version,normalVersion=tailNormals.version;
+        showPose=()=>{
+            deformers.get(tail)?.();
+            if(tailNormals.version!==normalVersion){
+                normalVersion=tailNormals.version;normals.set(tailNormals.array,tailStart*3);
+                normalAttribute.addUpdateRange(tailStart*3,tailCount*3);normalAttribute.needsUpdate=true;
+            }
+            if(tailPositions.version===positionVersion)return;
+            positionVersion=tailPositions.version;positions.set(tailPositions.array,tailStart*3);
+            tip.updateMatrix();
+            for(let i=0,v=(tailStart+tailCount)*3;i<tipPositions.count;i++,v+=3){
+                point.fromBufferAttribute(tipPositions,i).applyMatrix4(tip.matrix);positions[v]=point.x;positions[v+1]=point.y;positions[v+2]=point.z;
+            }
+            positionAttribute.addUpdateRange(tailStart*3,count*3);positionAttribute.needsUpdate=true;
+        };
+    }
     // The model uses opaque untextured standard materials. A small palette
     // retains their exact per-part PBR parameters in one draw, including flashes.
     let drawMaterial:THREE.Material|THREE.Material[]=materials.length===1?materials[0]:materials;
@@ -114,24 +175,18 @@ export function batchRigidMeshes(root:THREE.Group):THREE.SkinnedMesh|undefined {
         material.needsUpdate=true;
     }
     const skeleton=new THREE.Skeleton(bones,bones.map(()=>new THREE.Matrix4()));
-    class RigidBatch extends THREE.SkinnedMesh {
-        override updateMatrixWorld(force?:boolean):void {
-            super.updateMatrixWorld(force);
-            // Original leaves precede this appended batch in root traversal.
-            sources.forEach((source,i)=>bones[i].matrixWorld.copy(source.matrixWorld));
-            for(let i=0;i<spine.length;i++)bones[spineBone+i].matrixWorld.copy(spine[i].matrixWorld);
-        }
-    }
-    const batch=new RigidBatch(geometry,drawMaterial);
+    const batch=new RigidBatch(geometry,drawMaterial,follow,deforming.length?rigidIndexCount:indexCount,showPose);
     batch.name='rat-rigid-batch';
     // Conservative local bound for the approved procedural rig, including its
     // largest death/respawn stretch. Verified against animated vertices.
     batch.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,1,0),4);
-    batch.castShadow=sources[0].castShadow;batch.receiveShadow=sources[0].receiveShadow;
+    batch.castShadow=sources[0]?.castShadow??deforming[0]!.castShadow;batch.receiveShadow=sources[0]?.receiveShadow??deforming[0]!.receiveShadow;
     batch.bind(skeleton,new THREE.Matrix4());
     // Picking keeps original object identity, transforms and exact geometry.
-    batch.raycast=()=>{};batch.onBeforeRender=syncPalette;
-    batch.userData.rigidSources=sources;
-    sources.forEach(source=>{source.visible=false;source.userData.rigidBatchSource=true;});
+    batch.raycast=()=>{};
+    // Shadow maps draw before the camera pass: whichever comes first brings the tail up to date.
+    batch.onBeforeShadow=showPose;batch.onBeforeRender=()=>{syncPalette();showPose();};
+    batch.userData.rigidSources=parts;
+    parts.forEach(source=>{source.visible=false;source.userData.rigidBatchSource=true;});
     root.add(batch);return batch;
 }

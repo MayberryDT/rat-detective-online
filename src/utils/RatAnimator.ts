@@ -10,6 +10,7 @@ import {RatActing,type RatReaction} from './RatActing';
 import {RatRagdoll} from './RatRagdoll';
 import {RatCorpseChain} from './RatCorpseChain';
 import {RAT_SPINE_JOINTS} from './RatModel';
+import {setDeformer} from './RigidMeshBatch';
 
 /** Polish 14 parts, present only on rats built with model touch-ups. */
 const EXTRA_PARTS = ['rat-brow-left','rat-brow-right','rat-whiskers-left','rat-whiskers-right','rat-shoe-left','rat-shoe-right',
@@ -20,6 +21,9 @@ const EXTRA_KIND:Record<typeof EXTRA_PARTS[number],ExtraKind>={
     'rat-shoe-left':'shoe','rat-shoe-right':'shoe','rat-mouth':'mouth','rat-tongue':'tongue','rat-x-left':'x','rat-x-right':'x',
 };
 interface ExtraPart {part:THREE.Object3D;kind:ExtraKind;side:number;position:THREE.Vector3;rotation:THREE.Euler;scale:THREE.Vector3}
+/** A deforming tail: its rest shape, each vertex's ring (a TubeGeometry ring shares one u), each
+ * ring's u and the offsets its geometry shows, and the pose (`RatAnimator.tailPose`) it last caught up to. */
+interface TailRig {tail:THREE.Mesh<THREE.TubeGeometry>;rest:Float32Array;ring:Uint8Array;ringU:Float64Array;offsets:Float64Array;tip:THREE.Object3D;tipRest:THREE.Vector3;shown:number}
 const PARTS = ['rat-body', 'rat-head', 'rat-hat', 'rat-tail',
     'rat-eye-left', 'rat-eye-right', 'rat-ear-left', 'rat-ear-right', 'rat-arm', 'rat-pistol'] as const;
 /** R1: the soft-spine joints (absent on the frozen reference models). */
@@ -57,7 +61,9 @@ export class RatAnimator {
     private airPose = 0;
     private jumpLift = 0;
     private jumpLanding = 0;
-    private readonly tails;
+    /** Bumped by every pose; a tail is deformed to it only when drawn (off-screen rats and hidden outline shells skip the work). */
+    private tailPose = 0;
+    private tailReset = false;
     private tailMotion = 0;
     private tailTurn = 0;
     private time = 0;
@@ -112,12 +118,8 @@ export class RatAnimator {
     private landingPulse = 0;
     private deathAnimation = false;
     private readonly tailCenter = new THREE.Vector3();
-    /** Per-ring tail offsets: every vertex of a TubeGeometry ring shares its u,
-     * so the wave and death projection are computed once per ring, not per vertex. */
-    private ringWave = new Float64Array(0);
+    /** Per-ring tail offsets for the pose being shown; every vertex of a ring shares them. */
     private ringOffset = new Float64Array(0);
-    private ringWaveReady = new Uint8Array(0);
-    private ringReady = new Uint8Array(0);
     private readonly inverseTail = new THREE.Matrix4();
     private turn = 0;
     private aimHold = 0;
@@ -191,13 +193,18 @@ export class RatAnimator {
         this.muzzleFlash.visible = false;
         this.muzzleFlash.raycast = () => {};
         root.getObjectByName('rat-muzzle')!.add(this.muzzleFlash);
-        this.tails = models.map(model => {
+        for (const model of models) {
             const tail = model.getObjectByName('rat-tail') as THREE.Mesh<THREE.TubeGeometry>;
-            const positions = tail.geometry.getAttribute('position') as THREE.BufferAttribute;
+            const positions = tail.geometry.getAttribute('position') as THREE.BufferAttribute, uv = tail.geometry.getAttribute('uv');
             positions.setUsage(THREE.DynamicDrawUsage);
-            return { tail, rest: positions.array.slice(), tip: tail.children[0],
-                tipRest: tail.children[0].position.clone() };
-        });
+            const segments = tail.geometry.parameters.tubularSegments, ring = new Uint8Array(positions.count), ringU = new Float64Array(segments + 1);
+            for (let i = 0; i < ring.length; i++) { ring[i] = Math.round(uv.getX(i) * segments); ringU[ring[i]] = uv.getX(i); }
+            const rig: TailRig = { tail, rest: Float32Array.from(positions.array), ring, ringU, offsets: new Float64Array((segments + 1) * 3),
+                tip: tail.children[0], tipRest: tail.children[0].position.clone(), shown: 0 };
+            // Deformed only right before a draw (by the renderer or the rigid batch drawing the tail).
+            setDeformer(tail, () => this.showTail(rig));
+            if (this.ringOffset.length < ringU.length * 3) this.ringOffset = new Float64Array(ringU.length * 3);
+        }
         this.rigs = models.map(model => PARTS.map(name => {
             const part = model.getObjectByName(name)!;
             return { part, position: part.position.clone(), rotation: part.rotation.clone(), scale: part.scale.clone() };
@@ -329,7 +336,7 @@ export class RatAnimator {
         this.tailTurn = limbs.head.z * 0.6;
         this.poseDeadExtras(time, !!chain);
         this.gunSleeves.forEach(updateGunSleeve);
-        this.deformTails();
+        this.tailPose++; this.tailReset = false;
     }
     /** R1/R3 on the extras: kicking then splayed shoes, limp whiskers, X eyes, a lolling tongue.
      * With the chain body the shoes sit on the chain's feet. */
@@ -409,7 +416,7 @@ export class RatAnimator {
         this.tailMotion = this.tailTurn = 0;
         this.restore();
         this.gunSleeves.forEach(updateGunSleeve);
-        this.deformTails(true);
+        this.tailPose++; this.tailReset = true;
     }
 
     private restore(): void {
@@ -761,95 +768,102 @@ export class RatAnimator {
         }
         this.poseExtras(sway, stepLift);
         this.gunSleeves.forEach(updateGunSleeve);
-        this.deformTails();
+        this.tailPose++; this.tailReset = false;
     }
 
-    private deformTails(reset = false): void {
-        // The longitudinal wave is identical around each ring and across rigs.
-        // Death contact projection remains per rig in world space below.
-        let rings = 0;
-        for (const { tail } of this.tails) rings = Math.max(rings, tail.geometry.parameters.tubularSegments + 1);
-        if (this.ringReady.length < rings) {
-            this.ringWave = new Float64Array(rings * 2); this.ringOffset = new Float64Array(rings * 3);
-            this.ringWaveReady = new Uint8Array(rings); this.ringReady = new Uint8Array(rings);
+    /** Deform one tail to the latest pose, right before it is drawn. The wave and death
+     * projection are computed once per ring; a tail already showing this shape is left alone. */
+    private showTail(rig: TailRig): void {
+        if (rig.shown === this.tailPose) return;
+        rig.shown = this.tailPose;
+        const { tail, rest, ring, ringU, tip, tipRest } = rig, reset = this.tailReset, offsets = this.ringOffset;
+        if (this.deathAnimation) {
+            tail.updateWorldMatrix(true, false);
+            this.inverseTail.copy(tail.matrixWorld).invert();
         }
-        const waves = this.ringWave, waveReady = this.ringWaveReady, offsets = this.ringOffset, ready = this.ringReady;
-        let waveSegments = -1;
-        for (const { tail, rest, tip, tipRest } of this.tails) {
-            const positions = tail.geometry.getAttribute('position') as THREE.BufferAttribute;
-            const segments = tail.geometry.parameters.tubularSegments;
-            // Rigs share the wave per u; ring indices only match at equal segment counts.
-            if (segments !== waveSegments) { waveReady.fill(0); waveSegments = segments; }
-            ready.fill(0);
-            const uv = tail.geometry.getAttribute('uv');
-            let tipX = 0, tipY = 0, tipZ = 0;
-            if (this.deathAnimation) {
-                tail.updateWorldMatrix(true, false);
-                this.inverseTail.copy(tail.matrixWorld).invert();
+        let changed = false;
+        for (let r = 0; r < ringU.length; r++) {
+            const u = ringU[r];
+            // The root stays attached; a delayed wave bends the middle before
+            // reaching the tip, instead of swinging the whole tail rigidly.
+            const weight = u * u;
+            let x = reset ? 0 : weight * (
+                Math.sin(this.time * 1.5 - u * 2.4) * 0.07 * (this.deathAnimation ? this.tailMotion : 1) +
+                Math.sin(this.stride - u * 2.8) * this.tailMotion * 0.38 *
+                    (this.actingEnabled&&!this.deathAnimation?1-this.acting.tailStream:1) +
+                this.tailTurn * 1.1);
+            // Ground contact stays steady through the middle. Only the last
+            // quarter lifts slightly as the tip flicks across the floor.
+            const tipWeight = Math.max(0, (u - 0.75) / 0.25);
+            let y = reset ? 0 : tipWeight * tipWeight *
+                (1 + Math.sin(this.stride - u * 2.8 - 0.8)) * this.tailMotion * 0.025;
+            if (!this.deathAnimation && !reset) y += weight * Math.max(0,this.airPose) * .12;
+            if(this.actingEnabled&&!this.deathAnimation&&!reset){
+                y+=weight*this.acting.tailLift;
+                x+=weight*this.acting.tailSide;
+                // L6: the tail whips like a flag in flight. M2: it swings out behind turns.
+                x+=weight*Math.sin(this.time*12-u*5)*this.flail*.55+weight*this.tailSwing;
             }
-            for (let i = 0; i < positions.count; i++) {
-                const u = uv.getX(i), ring = Math.round(u * segments);
-                if (ready[ring]) {
-                    positions.setXYZ(i, rest[i * 3] + offsets[ring * 3], rest[i * 3 + 1] + offsets[ring * 3 + 1], rest[i * 3 + 2] + offsets[ring * 3 + 2]);
-                    continue;
-                }
-                // The root stays attached; a delayed wave bends the middle before
-                // reaching the tip, instead of swinging the whole tail rigidly.
-                const weight = u * u;
-                if (!waveReady[ring]) {
-                    let x = reset ? 0 : weight * (
-                        Math.sin(this.time * 1.5 - u * 2.4) * 0.07 * (this.deathAnimation ? this.tailMotion : 1) +
-                        Math.sin(this.stride - u * 2.8) * this.tailMotion * 0.38 *
-                            (this.actingEnabled&&!this.deathAnimation?1-this.acting.tailStream:1) +
-                        this.tailTurn * 1.1);
-                    // Ground contact stays steady through the middle. Only the last
-                    // quarter lifts slightly as the tip flicks across the floor.
-                    const tipWeight = Math.max(0, (u - 0.75) / 0.25);
-                    let y = reset ? 0 : tipWeight * tipWeight *
-                        (1 + Math.sin(this.stride - u * 2.8 - 0.8)) * this.tailMotion * 0.025;
-                    if (!this.deathAnimation && !reset) y += weight * Math.max(0,this.airPose) * .12;
-                    if(this.actingEnabled&&!this.deathAnimation&&!reset){
-                        y+=weight*this.acting.tailLift;
-                        x+=weight*this.acting.tailSide;
-                        // L6: the tail whips like a flag in flight. M2: it swings out behind turns.
-                        x+=weight*Math.sin(this.time*12-u*5)*this.flail*.55+weight*this.tailSwing;
-                    }
-                    waves[ring * 2] = x; waves[ring * 2 + 1] = y; waveReady[ring] = 1;
-                }
-                let x = waves[ring * 2], y = waves[ring * 2 + 1];
-                let z = 0;
-                if (this.deathAnimation && !reset) {
-                    x += weight * (this.tailFall.x * 0.85 + this.tailTip.x);
-                    y += weight * (this.tailFall.y * 0.85 + this.tailTip.y);
-                    z += weight * (this.tailFall.z * 0.85 + this.tailTip.z);
-                    tail.geometry.parameters.path.getPointAt(u, this.tailCenter);
-                    this.tailCenter.x += x; this.tailCenter.y += y; this.tailCenter.z += z;
-                    this.tailCenter.applyMatrix4(tail.matrixWorld);
-                    const lift = Math.max(0, 0.068 - this.tailCenter.y);
-                    // Keep the flexible tail resting on the floor as the torso rolls.
-                    x += this.inverseTail.elements[4] * lift;
-                    y += this.inverseTail.elements[5] * lift;
-                    z += this.inverseTail.elements[6] * lift;
-                }
-                offsets[ring * 3] = x; offsets[ring * 3 + 1] = y; offsets[ring * 3 + 2] = z; ready[ring] = 1;
-                positions.setXYZ(i, rest[i * 3] + x, rest[i * 3 + 1] + y, rest[i * 3 + 2] + z);
-                if (u === 1) { tipX = x; tipY = y; tipZ = z; }
+            let z = 0;
+            if (this.deathAnimation && !reset) {
+                x += weight * (this.tailFall.x * 0.85 + this.tailTip.x);
+                y += weight * (this.tailFall.y * 0.85 + this.tailTip.y);
+                z += weight * (this.tailFall.z * 0.85 + this.tailTip.z);
+                tail.geometry.parameters.path.getPointAt(u, this.tailCenter);
+                this.tailCenter.x += x; this.tailCenter.y += y; this.tailCenter.z += z;
+                this.tailCenter.applyMatrix4(tail.matrixWorld);
+                const lift = Math.max(0, 0.068 - this.tailCenter.y);
+                // Keep the flexible tail resting on the floor as the torso rolls.
+                x += this.inverseTail.elements[4] * lift;
+                y += this.inverseTail.elements[5] * lift;
+                z += this.inverseTail.elements[6] * lift;
             }
-            tip.position.copy(tipRest);
-            tip.position.x += tipX;
-            tip.position.y += tipY;
-            tip.position.z += tipZ;
-            positions.needsUpdate = true;
-            // The additive outline is unlit and casts no shadow: its deformed
-            // normals are never consumed. Keep lit-tail normals exact.
-            if(!(tail.material instanceof THREE.MeshBasicMaterial&&!tail.castShadow&&!tail.material.envMap))tail.geometry.computeVertexNormals();
-            if(this.deathAnimation)tail.geometry.computeBoundingSphere();
-            else {
-                // Living-tail displacement is bounded by the clamped motion/turn
-                // wave; avoid a per-vertex bounds scan on every display frame.
-                tail.geometry.boundingSphere??=new THREE.Sphere();
-                tail.geometry.boundingSphere.center.set(0,0,-.6);tail.geometry.boundingSphere.radius=2;
-            }
+            const o = r * 3;
+            if (x !== rig.offsets[o] || y !== rig.offsets[o + 1] || z !== rig.offsets[o + 2]) changed = true;
+            offsets[o] = x; offsets[o + 1] = y; offsets[o + 2] = z;
+        }
+        if (!changed) return;
+        rig.offsets.set(offsets.subarray(0, rig.offsets.length));
+        const positions = tail.geometry.getAttribute('position'), array = positions.array;
+        for (let i = 0; i < ring.length; i++) {
+            const o = ring[i] * 3;
+            array[i * 3] = rest[i * 3] + offsets[o]; array[i * 3 + 1] = rest[i * 3 + 1] + offsets[o + 1]; array[i * 3 + 2] = rest[i * 3 + 2] + offsets[o + 2];
+        }
+        const end = (ringU.length - 1) * 3;
+        tip.position.set(tipRest.x + offsets[end], tipRest.y + offsets[end + 1], tipRest.z + offsets[end + 2]);
+        // Drawn after this hook in the same pass, so its world matrix must be current.
+        tip.updateMatrixWorld();
+        positions.needsUpdate = true;
+        // The additive outline is unlit and casts no shadow: its deformed
+        // normals are never consumed. Keep lit-tail normals exact.
+        if(!(tail.material instanceof THREE.MeshBasicMaterial&&!tail.castShadow&&!tail.material.envMap))tubeNormals(tail.geometry);
+        if(this.deathAnimation)tail.geometry.computeBoundingSphere();
+        else {
+            // Living-tail displacement is bounded by the clamped motion/turn
+            // wave; avoid a per-vertex bounds scan on every display frame.
+            tail.geometry.boundingSphere??=new THREE.Sphere();
+            tail.geometry.boundingSphere.center.set(0,0,-.6);tail.geometry.boundingSphere.radius=2;
         }
     }
+}
+
+/** `BufferGeometry.computeVertexNormals` for an indexed geometry, on its typed arrays: the same
+ * arithmetic in the same order (bit-identical normals) without its accessor calls and per-call vectors. */
+function tubeNormals(geometry: THREE.BufferGeometry): void {
+    const p = geometry.getAttribute('position').array, attribute = geometry.getAttribute('normal'), n = attribute.array, index = geometry.index!.array;
+    n.fill(0);
+    for (let i = 0; i < index.length; i += 3) {
+        const a = index[i] * 3, b = index[i + 1] * 3, c = index[i + 2] * 3;
+        const bx = p[b], by = p[b + 1], bz = p[b + 2];
+        const cbx = p[c] - bx, cby = p[c + 1] - by, cbz = p[c + 2] - bz, abx = p[a] - bx, aby = p[a + 1] - by, abz = p[a + 2] - bz;
+        const x = cby * abz - cbz * aby, y = cbz * abx - cbx * abz, z = cbx * aby - cby * abx;
+        // All three read before any write, as three.js does (shared corners accumulate identically).
+        const ax = n[a] + x, ay = n[a + 1] + y, az = n[a + 2] + z, ex = n[b] + x, ey = n[b + 1] + y, ez = n[b + 2] + z, fx = n[c] + x, fy = n[c + 1] + y, fz = n[c + 2] + z;
+        n[a] = ax; n[a + 1] = ay; n[a + 2] = az; n[b] = ex; n[b + 1] = ey; n[b + 2] = ez; n[c] = fx; n[c + 1] = fy; n[c + 2] = fz;
+    }
+    for (let i = 0; i < n.length; i += 3) {
+        const x = n[i], y = n[i + 1], z = n[i + 2], s = 1 / (Math.sqrt(x * x + y * y + z * z) || 1);
+        n[i] = x * s; n[i + 1] = y * s; n[i + 2] = z * s;
+    }
+    attribute.needsUpdate = true;
 }

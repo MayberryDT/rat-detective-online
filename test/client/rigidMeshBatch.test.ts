@@ -5,30 +5,34 @@ import {RatAnimator} from '../../src/utils/RatAnimator';
 import {RAT_REACTIONS} from '../../src/utils/RatActing';
 import {batchRigidMeshes} from '../../src/utils/RigidMeshBatch';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
-it('preserves every vertex of the living rat and every rigid (non-coat) vertex of a bent corpse',()=>{
+it('preserves every vertex of the living rat (its bending tail included) and every rigid (non-coat) vertex of a bent corpse',()=>{
  const root=createRatMesh(),animator=new RatAnimator(root),batch=batchRigidMeshes(root)!;
  const sources=batch.userData.rigidSources as THREE.Mesh[],body=root.getObjectByName('rat-body');
+ const tail=root.getObjectByName('rat-tail') as THREE.Mesh,tailRest=Array.from(tail.geometry.getAttribute('position').array);
  expect(batch.geometry.groups.length).toBeLessThan(sources.length/2);
- const before=new THREE.Vector3(),after=new THREE.Vector3();let worst=0,bent=0;
+ const before=new THREE.Vector3(),after=new THREE.Vector3();let worst=0,bent=0,wagged=0,outside=0;
  for(let frame=0;frame<330;frame++){
   root.position.set(frame*.01,frame>100&&frame<130?1:0,-4);root.rotation.y=frame*.01;
   if(frame===60)animator.shoot(new THREE.Vector3(5,3,9));
   if(frame<300&&frame%30===0)animator.playReaction(RAT_REACTIONS[frame/30]);
   if(frame>300)animator.poseDeath((frame-300)/60,1/60,{x:1,y:2,z:3},.4,true);else animator.update(1/60);
-  root.updateMatrixWorld(true);batch.skeleton.update();
+  // What the renderer does: world matrices, bones, then the batch's pre-draw hook.
+  root.updateMatrixWorld(true);batch.skeleton.update();batch.showPose();
   if(frame%15)continue;
+  const tailNow=tail.geometry.getAttribute('position').array;for(let i=0;i<tailNow.length;i++)wagged=Math.max(wagged,Math.abs(tailNow[i]!-tailRest[i]!));
   let vertex=0;
   for(const source of sources){const p=source.geometry.getAttribute('position');for(let i=0;i<p.count;i++,vertex++){
    before.fromBufferAttribute(p,i).applyMatrix4(source.matrixWorld);
-   batch.getVertexPosition(vertex,after);expect(batch.boundingSphere!.containsPoint(after)).toBe(true);after.applyMatrix4(batch.matrixWorld);
+   batch.getVertexPosition(vertex,after);if(!batch.boundingSphere!.containsPoint(after))outside++;after.applyMatrix4(batch.matrixWorld);
    // A corpse's coat and tailoring bend with its soft spine; everything else stays rigid.
    if(frame>300&&source.parent===body)bent=Math.max(bent,before.distanceTo(after));
    else worst=Math.max(worst,before.distanceTo(after));
   }}
  }
+ expect(outside).toBe(0);
  expect(worst).toBeLessThan(1e-5);
  expect(bent).toBeGreaterThan(.05);
- expect(root.getObjectByName('rat-tail')!.visible).toBe(true);
+ expect(wagged).toBeGreaterThan(.03);
  expect(root.getObjectByName('rat-muzzle')).toBeDefined();
  const dispose=vi.spyOn(batch.skeleton,'dispose');disposeMeshResources(root);expect(dispose).toHaveBeenCalledOnce();
 });

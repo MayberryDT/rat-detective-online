@@ -3,6 +3,7 @@ import { MAX_HP } from '../../src/shared/networkProtocol';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../../src/entities/RatEntity';
+import { RigidBatch } from '../../src/utils/RigidMeshBatch';
 import { CheeseGun } from '../../src/weapons/CheeseGun';
 import { feelState } from '../../src/feel/feelState';
 
@@ -89,7 +90,10 @@ it('keeps the aimed pistol and outline together while moving, and lowers the paw
 it('flexes the tail without detaching its root or tip, matches the outline and resets geometry', () => {
     const scene = new THREE.Scene();
     const rat = new RatEntity(scene, new CANNON.World(), new THREE.Vector3(), 'Rat', {});
+    rat.enableRigidBatching();
     const shell = scene.children.find(child => child instanceof THREE.Group && child !== rat.mesh)!;
+    // The tail takes its pose when drawn: the batches' pre-draw hook, as the renderer calls it.
+    const draw = () => { for (const root of [rat.mesh, shell]) { const batch = root.getObjectByName('rat-rigid-batch'); if (batch instanceof RigidBatch) batch.showPose(); } };
     const tail = rat.mesh.getObjectByName('rat-tail') as THREE.Mesh;
     const glow = shell.getObjectByName('rat-tail') as THREE.Mesh;
     const positions = tail.geometry.getAttribute('position');
@@ -102,6 +106,7 @@ it('flexes the tail without detaching its root or tip, matches the outline and r
     for (let frame = 0; frame < 60; frame++) {
         rat.body.position.z += 0.1;
         rat.update(1 / 60);
+        draw();
         const groundBounds = new THREE.Box3().setFromObject(tail);
         expect(groundBounds.min.y).toBeGreaterThanOrEqual(0);
         expect(groundBounds.min.y).toBeLessThan(0.02);
@@ -119,8 +124,12 @@ it('flexes the tail without detaching its root or tip, matches the outline and r
         }
     }
     expect(maxBend).toBeGreaterThan(0.03);
+    // The bent tail shades exactly as three.js would shade it.
+    const reference = tail.geometry.clone(); reference.computeVertexNormals();
+    expect(Array.from(tail.geometry.getAttribute('normal').array)).toEqual(Array.from(reference.getAttribute('normal').array));
     expect(tail.geometry).toBe(geometry);
     rat.respawn({ x: 0, y: 0, z: 0, hp: MAX_HP });
+    draw();
     expect(Array.from(positions.array)).toEqual(rest);
     expect(tail.children[0].position).toEqual(tipRest);
     rat.dispose();

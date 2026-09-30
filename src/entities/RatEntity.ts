@@ -11,7 +11,7 @@ import {FEEL} from '../feel/feelTuning';
 import {feelState} from '../feel/feelState';
 import * as CANNON from 'cannon-es';
 import { createRatMesh, ratAccessory, RatOptions } from '../utils/RatModel';
-import {batchRigidMeshes} from '../utils/RigidMeshBatch';
+import {batchRigidMeshes,RigidBatch} from '../utils/RigidMeshBatch';
 import type {RatReaction} from '../utils/RatActing';
 import { RatAnimator } from '../utils/RatAnimator';
 import { setRagdollWorld } from '../utils/RatCorpseChain';
@@ -105,7 +105,7 @@ export class RatEntity {
     private ironcladRemaining=0;
     private metalApplication=0;
     private hustleRemaining=0;
-    private glowMaterials:THREE.MeshBasicMaterial[]=[];
+    private glowMaterial?:THREE.MeshBasicMaterial;
     /** Extra shell offset (world units) that keeps the outline's on-screen width. */
     private outlineReach=0;
     /** 0 (close: no outline) … 1 (far: full edge). Local and preview rats stay at 1. */
@@ -287,24 +287,17 @@ export class RatEntity {
         // Eyes/ears can share geometry, so expand each geometry only once.
         // Every shell part has the same tint and lifetime. Share one owned
         // material per rat so a crowd does not switch identical GPU state.
-        // The deforming tail and muzzle stay ordinary meshes while the rest is
-        // skin-batched; one material shared by both kinds would switch shader
-        // programs twice per rat per frame, so they get an identical twin.
-        const shell = () => {
-            const material = new THREE.MeshBasicMaterial({
-                color: OUTLINE_COLOR, transparent: true, opacity: GLOW_OPACITY,
-                side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false,
-            });
-            material.onBeforeCompile=shader=>{
-                shader.uniforms.pursuitShell=this.shellOffset;
-                shader.vertexShader='uniform float pursuitShell;\n'+shader.vertexShader;
-                shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed+=normal*pursuitShell;');
-            };
-            material.customProgramCacheKey=()=> 'rat-pursuit-shell-v1';
-            return material;
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: OUTLINE_COLOR, transparent: true, opacity: GLOW_OPACITY,
+            side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false,
+        });
+        glowMaterial.onBeforeCompile=shader=>{
+            shader.uniforms.pursuitShell=this.shellOffset;
+            shader.vertexShader='uniform float pursuitShell;\n'+shader.vertexShader;
+            shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed+=normal*pursuitShell;');
         };
-        const glowMaterial = shell(), glowTailMaterial = shell();
-        this.glowMaterials=[glowMaterial,glowTailMaterial];
+        glowMaterial.customProgramCacheKey=()=> 'rat-pursuit-shell-v1';
+        this.glowMaterial=glowMaterial;
         const expandedGeometries = new Set<THREE.BufferGeometry>();
         const replacedMaterials = new Set<THREE.Material>();
         glowGroup.traverse((c) => {
@@ -325,9 +318,7 @@ export class RatEntity {
                 for (const material of Array.isArray(c.material) ? c.material : [c.material]) {
                     replacedMaterials.add(material);
                 }
-                let deforming=false;
-                for(let parent:THREE.Object3D|null=c;parent&&parent!==glowGroup;parent=parent.parent)if(parent.name==='rat-tail'||parent.name==='rat-muzzle')deforming=true;
-                c.material = deforming ? glowTailMaterial : glowMaterial;
+                c.material = glowMaterial;
                 c.castShadow = false;
                 c.receiveShadow = false;
                 if (c.userData.noOutline) c.visible = false;
@@ -391,10 +382,13 @@ export class RatEntity {
         if(!on){if(this.sketch)this.sketch.visible=false;return;}
         if(!this.sketch){
             const batch=this.mesh.getObjectByName('rat-rigid-batch');
-            if(!(batch instanceof THREE.SkinnedMesh))return;
-            // Bones carry world matrices, so the sketch lives at the scene root.
-            const {material,strength}=hunchSketchMaterial();
-            this.sketch=new THREE.SkinnedMesh(batch.geometry,material);this.sketchUniform=strength;
+            if(!(batch instanceof RigidBatch))return;
+            // Bones carry world matrices, so the sketch lives at the scene root. It draws the
+            // batch's buffers without the tail (whose vertices only follow it when the rat is drawn).
+            const {material,strength}=hunchSketchMaterial(),geometry=new THREE.BufferGeometry();
+            for(const [name,attribute] of Object.entries(batch.geometry.attributes))geometry.setAttribute(name,attribute);
+            geometry.setIndex(batch.geometry.index);geometry.setDrawRange(0,batch.rigidIndexCount);
+            this.sketch=new THREE.SkinnedMesh(geometry,material);this.sketchUniform=strength;
             this.sketch.bind(batch.skeleton,batch.bindMatrix);
             this.sketch.name='rat-hunch-sketch';this.sketch.frustumCulled=false;this.sketch.raycast=()=>{};
             this.sketch.castShadow=this.sketch.receiveShadow=false;this.sketch.matrixAutoUpdate=false;
@@ -441,7 +435,7 @@ export class RatEntity {
     }
     private updatePowerupOutline():void {
         const pursuit=this.hustleRemaining>0&&!this.dead;
-        for(const material of this.glowMaterials){material.color.setHex(pursuit?0xff1605:OUTLINE_COLOR);material.opacity=pursuit?.95:GLOW_OPACITY*this.outlineFade;}
+        if(this.glowMaterial){this.glowMaterial.color.setHex(pursuit?0xff1605:OUTLINE_COLOR);this.glowMaterial.opacity=pursuit?.95:GLOW_OPACITY*this.outlineFade;}
         this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
         if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||!this.isPlayer&&this.outlineFade>.01);
     }
@@ -906,7 +900,12 @@ export class RatEntity {
         contactShadowsOf(this.scene)?.remove(this.mesh);
         disposeMeshResources(this.mesh);
         this.billboard.dispose();
-        if(this.sketch){this.scene.remove(this.sketch);(Array.isArray(this.sketch.material)?this.sketch.material:[this.sketch.material]).forEach(m=>m.dispose());this.sketch=undefined;}
+        if(this.sketch){
+            this.scene.remove(this.sketch);(Array.isArray(this.sketch.material)?this.sketch.material:[this.sketch.material]).forEach(m=>m.dispose());
+            // The buffers are the batch's (disposed with the rig): release only the sketch's own draw state.
+            const geometry=this.sketch.geometry;for(const name of Object.keys(geometry.attributes))geometry.deleteAttribute(name);geometry.setIndex(null);geometry.dispose();
+            this.sketch=undefined;
+        }
         // Remove glow outline
         if (this.glowMesh) {
             disposeMeshResources(this.glowMesh);
