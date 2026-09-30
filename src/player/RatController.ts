@@ -27,7 +27,14 @@ export class RatController {
     /** The controls pressed since the last movement send (the city map's record; authority never reads it). */
     readonly tally = new ControlTally();
 
-    private readonly cameraBlockers: THREE.Object3D[];
+    /** Frozen city solids (2,400, mostly hidden behind the baked city) never move, so their world
+     * bounding spheres are kept (x, y, z, radius) and a camera ray only raycasts the few it can
+     * reach; each ray used to sphere-test every solid. Rats and props with parts raycast as before. */
+    private readonly solids: THREE.Mesh[];
+    private readonly solidSpheres: Float64Array;
+    private readonly movingBlockers: THREE.Object3D[];
+    private readonly rayCandidates: THREE.Object3D[] = [];
+    private readonly rayHits: THREE.Intersection[] = [];
     private readonly cameraRay = new THREE.Raycaster();
     get grounded():boolean {return this.movement.grounded;}
     private readonly appliedLaunches = new Set<string>();
@@ -51,7 +58,16 @@ export class RatController {
     ) {
         this.camera = camera;
         scene.updateMatrixWorld(true);
-        this.cameraBlockers = scene.children.filter(o=>o.userData.aimTarget===true);
+        const blockers = scene.children.filter(o=>o.userData.aimTarget===true);
+        this.solids = blockers.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh&&!o.matrixAutoUpdate&&!o.children.length);
+        const solids = new Set<THREE.Object3D>(this.solids), sphere = new THREE.Sphere();
+        this.movingBlockers = blockers.filter(o=>!solids.has(o));
+        this.solidSpheres = new Float64Array(this.solids.length*4);
+        this.solids.forEach((mesh,i)=>{
+            if(!mesh.geometry.boundingSphere)mesh.geometry.computeBoundingSphere();
+            sphere.copy(mesh.geometry.boundingSphere!).applyMatrix4(mesh.matrixWorld);
+            this.solidSpheres.set([sphere.center.x,sphere.center.y,sphere.center.z,sphere.radius],i*4);
+        });
 
         // Create the Player Entity with the player's chosen name and appearance
         const pos = spawnPos ?? new THREE.Vector3(15, 2, 15);
@@ -153,15 +169,31 @@ export class RatController {
         // shorten distance without collapsing the view back onto the rat.
         this.cameraRay.set(pivot,this.shoulderDirection.copy(this.shoulder).normalize());
         this.cameraRay.far=CAM_SHOULDER;
-        const shoulderHit=this.cameraRay.intersectObjects(this.cameraBlockers,true)[0];
+        const shoulderHit=this.firstBlockerHit();
         if(shoulderHit)this.shoulder.setLength(Math.max(0,shoulderHit.distance-.3));
         this.camera.position.add(this.shoulder);
         pivot.add(this.shoulder);
         offset.copy(this.camera.position).sub(pivot);
         this.cameraRay.far = offset.length();
         this.cameraRay.set(pivot, offset.normalize());
-        const hit = this.cameraRay.intersectObjects(this.cameraBlockers,true)[0];
+        const hit = this.firstBlockerHit();
         if(hit) this.camera.position.copy(pivot).addScaledVector(this.cameraRay.ray.direction,Math.max(.3,hit.distance-.3));
         this.camera.lookAt(this.offset.copy(this.camera.position).add(this.viewDirection));
+    }
+
+    /** The nearest blocker along `cameraRay` within its `far`: the same hit as raycasting every blocker. */
+    private firstBlockerHit(): THREE.Intersection|undefined {
+        const {origin,direction}=this.cameraRay.ray,far=this.cameraRay.far,spheres=this.solidSpheres,candidates=this.rayCandidates;
+        candidates.length=0;
+        for(let i=0;i<this.solids.length;i++){
+            const x=spheres[i*4]-origin.x,y=spheres[i*4+1]-origin.y,z=spheres[i*4+2]-origin.z,r=spheres[i*4+3];
+            const along=x*direction.x+y*direction.y+z*direction.z;
+            // Wholly behind the origin, wholly past `far`, or off the line: no hit is possible.
+            if(along<-r||along>far+r||x*x+y*y+z*z-along*along>r*r)continue;
+            candidates.push(this.solids[i]);
+        }
+        for(const blocker of this.movingBlockers)candidates.push(blocker);
+        this.rayHits.length=0;
+        return this.cameraRay.intersectObjects(candidates,true,this.rayHits)[0];
     }
 }

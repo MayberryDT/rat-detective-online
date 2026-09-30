@@ -96,10 +96,12 @@ it('keeps every shared spawn above ground and clear of solid scenery',()=>{
  stage.dispose();
 });
 
-it('pulls the shared camera in front of a wall without moving the rat',()=>{
+it.each([false,true])('pulls the shared camera in front of a wall without moving the rat (frozen city solid: %s)',frozen=>{
  const scene=new THREE.Scene(),world=new CANNON.World(),camera=new THREE.PerspectiveCamera();
  const wall=new THREE.Mesh(new THREE.BoxGeometry(20,20,1),new THREE.MeshBasicMaterial());
  wall.position.set(0,5,-3);wall.userData.aimTarget=true;scene.add(wall);
+ // The city's solids are frozen (static matrices, often hidden behind the baked city) among many others.
+ if(frozen)for(const solid of [wall,...Array.from({length:40},(_,i)=>{const box=new THREE.Mesh(wall.geometry,wall.material);box.position.set(60+i*3,5,-3);box.userData.aimTarget=true;box.visible=false;scene.add(box);return box;})]){solid.updateMatrix();solid.matrixAutoUpdate=false;}
  const player=new RatController(scene,world,camera,'',{},new THREE.Vector3());
  const before=player.entity.body.position.clone();
  player.updateView();
