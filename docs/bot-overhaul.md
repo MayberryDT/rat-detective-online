@@ -371,6 +371,41 @@ Tyler's staging playtest: the bots now decide like humans but still move and sho
 - **Rescues went up** (15 against 13 in 9 bot-hours). Before the pocket rule above the same build had 1.22; the rule turns pacing that used to go unnoticed into rescues (2 at the crane lookout). The new place is the precinct observation room (5 rescues, 4 of them stalled with no route, chasing a carrier or the case); it had none in iteration 1. Why bots end up there with no route is not yet known. Two rescues were in the harbour water; the sim does not drown rats, a server does.
 - **Still far from Tyler:** aim held still (27% against 45%) and flicks (10.9 against 6.6 a minute). Most flicks happen while engaged on the same rat, mid-flick or tracking; the likely cause (not yet checked) is close range, where the aim's wander grows. Most stops are bots chasing a carrier, at their case or holding a zone with no keys pressed while a rival is within 30 units; the likely reason is that the rival is out of sight.
 
+**Controls recording (30 September, commit `065d085`):** every rat's controls are recorded in fight windows, humans and bots in one format (the `window` row of [the city map](city-map.md); `ControlTally` in `src/shared/rat/controlTally.ts`):
+- a player's client tallies `RatControls` every physics step and sends `controls: {f, r, j, fx, rx}` with each movement: the move axes, then jump presses and key changes on each axis since the last send, so a tap shorter than a send still counts; a change alone triggers a send within 50 ms;
+- `ServerBotController` hands the recorder each bot's `RatControls` every step (`ServerBotCallbacks.controls`), tallied the same way;
+- the recorder keeps a 20 Hz, 8 s ring per rat, and fight windows gain `controls: {actor: [[ms, f, r, jumps, fx, rx], …]}`; trigger pulls are the `shot` facts;
+- telemetry only: authority never reads it, and `parseMovementInput` drops a malformed `controls` without dropping the movement. `bot-sim` against `617d398` gave identical rooms (12 rooms of 4 minutes: rescues, kills, deaths, case changes, completions, deliveries, shots, hits).
+
+**Input measures** (`scripts/lib/fight-motion.mjs`, families `inputs.alone`, `inputs.pairs`, `inputs.all`, each counted in `motor-compare`'s overall gap; `inputs` is their mean). An analogue push reads as the nearest of the eight key directions. Humans' controls exist only from the release that records them, so until then only the aim- and shot-based measures have a human side (`motor-compare --mind=2` on the staging mirror):
+
+  | In fights | Tyler | Bots (`bot-sim`, 12 rooms of 4 minutes, 109 bot fight minutes) |
+  | --- | --- | --- |
+  | Forward / back / strafe key held, share of slots | — | 47% / 27% / 53% |
+  | All keys released | — | 8.5% |
+  | Strafe key hold, median | — | 150 ms |
+  | Strafe direction flips per minute | — | 60 |
+  | Jump presses per minute | — | 13.7 |
+  | Trigger pulls per minute | 236 | 120 (staging bots: 106) |
+  | Mouse still | 45% | 28% |
+  | Flick size, median / p90, radians | 1.28 / 2.06 | 1.48 / 2.47 |
+  | Jump presses with a strafe key down within 100 ms | — | 82% |
+  | Pulls with a jump press within 150 ms | — | 6.3% |
+  | Pulls with a strafe key down | — | 60% |
+  | Pulls during a flick or within 200 ms after it; median delay from the flick's start | 2.7%; 204 ms | 5.2%; 200 ms |
+  | Strafe + jump + pull within 200 ms, per minute (share of pulls) | — | 8.5 (7.1%) |
+
+  The bots' strafe keys flip often and briefly (150 ms holds, 60 flips a minute) [inference: route steering turns the run direction against the look, so the nearest key changes]; the human side will say whether that is unlike a player.
+
+**Moment replay (designed, not built; deferred on 30 September to ship recording first):** `scripts/moment-replay.mjs` would take each human fight window with controls from the mirror and:
+1. build the headless runtime as `bot-sim` does (the real `ServerBotController`, motor and code mind, `ChaosSimulation`, the staging world; only windows on the current layout);
+2. place one bot where the human was at the first controls slot, with the human's HP, and its body facing the recorded look (the motor's crosshair starts at the body's facing, `BotAim.begin`); start the window's assignment (`mode`);
+3. put every other rat in the window in the players map as a scripted rat moved along its recorded 5 Hz track (interpolated), so sight and targeting see them;
+4. step at 60 Hz for the window's length (until the human's controls end or it dies), tallying the bot's controls into 50 ms slots with `ControlTally` and its shots through the 12-a-second limit, without applying their damage;
+5. compare slot by slot with the human's controls: the strafe key (same key share, against the agreement the two key mixes would give by chance, and the same direction when both strafe), jump presses matched within 200 ms and pulls within 150 ms (share of each side matched).
+
+  Limits: the case, pickups and other rats' shots are not replayed, the replayed bot keeps its HP, and its mind starts fresh, so its goal may differ from the human's. It needs human windows with controls, which exist only after the recording release.
+
 **Differences left between a player's body and a bot's** (everything else is the same code and the same numbers):
 - **Other rats.** In a player's own client the other rats are solid, so the player can bump into them. On the server no rat touches another; bots pass through players and each other. The authority has never simulated rat-to-rat contact; the bump exists only in each player's own prediction.
 - **Where a shot leaves.** A player's shot leaves the animated gun's muzzle, which the server checks. A bot's leaves `ratMuzzle`: the model's raised arm at the body's eased facing, without walk or recoil animation. The server has no rendered model.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// How humans and bots move, jump and aim in fights, alone, in pairs and all three together (docs/bot-overhaul.md, "Motor rewrite").
-// Reads fight windows (5 Hz position, 20 Hz aim) and shot facts from a city.db mirror.
+// How humans and bots move, jump, aim and press their controls in fights, alone, in pairs and all together (docs/bot-overhaul.md, "Motor rewrite").
+// Reads fight windows (5 Hz position, 20 Hz aim, 20 Hz controls) and shot facts from a city.db mirror.
 // Usage: node scripts/motor-compare.mjs [--db=output/city-staging/city.db] [--mind=2] [--since=ISO] [--until=ISO] [--json=out.json]
 import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync } from 'node:fs';
@@ -48,12 +48,15 @@ for (const [cat, fs] of Object.entries(human)) {
   gaps[cat] = g.length ? r3(g.reduce((a, b) => a + b, 0) / g.length) : null;
 }
 const scored = Object.values(gaps).filter(d => d !== null);
+// The inputs family: its three parts (alone, pairs, all) count in the overall score as the other families do; `inputs` is their mean.
+const inputs = ['inputs.alone', 'inputs.pairs', 'inputs.all'].map(k => gaps[k]).filter(d => d !== null && d !== undefined);
 const out = {
   window: { mind: mind ?? 'any', since: new Date(since).toISOString(), until: new Date(Math.min(until, Date.now())).toISOString() },
-  sample: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, { fightMin: r3(g.fightS / 60), leftOutMin: r3(g.skippedS / 60), jumps: g.jumps, shots: Math.round(g.shots), aimSamples: g.aimSamples }])),
+  sample: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, { fightMin: r3(g.fightS / 60), leftOutMin: r3(g.skippedS / 60), jumps: g.jumps, shots: Math.round(g.shots), aimSamples: g.aimSamples,
+    controlMin: r3(g.controlS / 60), jumpPresses: g.jumpPresses }])),
   measures: table,
   /** Mean gap per family and overall (0: plays like the humans recorded; 1: nothing alike). */
-  gaps: { ...gaps, overall: scored.length ? r3(scored.reduce((a, b) => a + b, 0) / scored.length) : null },
+  gaps: { ...gaps, inputs: inputs.length ? r3(inputs.reduce((a, b) => a + b, 0) / inputs.length) : null, overall: scored.length ? r3(scored.reduce((a, b) => a + b, 0) / scored.length) : null },
 };
 console.log(JSON.stringify(out, null, 2));
 const json = arg('json', undefined);

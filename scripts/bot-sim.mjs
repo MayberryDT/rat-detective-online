@@ -23,7 +23,9 @@ const BANDS=[6,12,25,50,Infinity],BAND_NAMES=['<6','6-12','12-25','25-50','50+']
 const band=d=>BANDS.findIndex(limit=>d<limit);
 /** Tyler's own fight motion (motor-compare on the staging mirror), printed beside the bots'. */
 const TYLER={'jump.jumpsPerFightMin':15.8,'jump.airShare':.28,'jumpAim.airShotShare':.31,'move.stopShare':.02,'moveAim.backpedalShare':.33,
-    'aim.stillAimShare':.45,'aim.flicksPerFightMin':6.6,'all.airborneDecoupledPerFightMin':8.6};
+    'aim.stillAimShare':.45,'aim.flicksPerFightMin':6.6,'all.airborneDecoupledPerFightMin':8.6,
+    'inputs.alone.triggerPullsPerMin':236,'inputs.alone.mouseStillShare':.45,'inputs.alone.flickSizeMedian':1.28,'inputs.alone.flickSizeP90':2.06,
+    'inputs.pairs.pullsAfterFlickShare':.027,'inputs.pairs.flickToPullMedianMs':204};
 const {values}=parseArgs({options:{assignment:{type:'string',default:'all'},seeds:{type:'string',default:'3'},minutes:{type:'string',default:'4'},
     jobs:{type:'string',default:'4'},ref:{type:'string'},json:{type:'boolean',default:false},child:{type:'string'},runtime:{type:'string'}}});
 const root=process.cwd();
@@ -50,6 +52,8 @@ await build({stdin:{contents:[
     "export {createAssignment,nextAssignment,ASSIGNMENT_IDS} from './src/shared/assignments.ts';",
     "export {botPersonality,createRoundBotRoster} from './src/shared/botRoster.ts';",
     "export {cityPlaces} from './src/shared/city/places.ts';",
+    // The worktree's controls tally, even for an older --ref (whose bots hand no controls, so its input measures are empty).
+    `export {ControlTally} from ${JSON.stringify(resolve(root,'src/shared/rat/controlTally.ts'))};`,
 ].join(''),resolveDir:tree,loader:'ts'},outfile:runtime,bundle:true,packages:'external',platform:'node',format:'esm',logLevel:'error',
     define:{'performance.now':'__simClock'}});
 const {ASSIGNMENT_IDS}=await import(pathToFileURL(runtime));
@@ -105,18 +109,22 @@ function report(rooms,wall){
     }
 }
 
-/** A room's fight windows, kept as CityRecorder keeps them: 5 Hz `[t, x, y, z, yaw, hp]` and 20 Hz `[t, yaw, pitch]` rings,
- * windows from 3 s before to 2 s after each hit (merged when they overlap), launcher flights and Hot Pursuit left out. */
-function fightRecorder(ids){
-    const RING=30,AIM_RING=160,AIM_FRESH_MS=300,KEEP_MS=10_000;
+/** A room's fight windows, kept as CityRecorder keeps them: 5 Hz `[t, x, y, z, yaw, hp]`, 20 Hz `[t, yaw, pitch]` and 20 Hz
+ * controls `[t, f, r, jumps, fx, rx]` rings, windows from 3 s before to 2 s after each hit (merged when they overlap),
+ * launcher flights and Hot Pursuit left out. */
+function fightRecorder(ids,ControlTally){
+    const RING=30,AIM_RING=160,AIM_FRESH_MS=300,CONTROLS_FRESH_MS=1500,KEEP_MS=10_000;
     const r1=v=>Math.round(v*10)/10,r2=v=>Math.round(v*100)/100,r3=v=>Math.round(v*1000)/1000,yaw=p=>2*Math.atan2(p.meshQy,p.meshQw);
     const per=()=>new Map(ids.map(id=>[id,[]]));
-    const rings=per(),aimRings=per(),shots=per(),skips=per(),looks=new Map(),flights=new Map(),hustle=new Map(),seenLaunches=new Set(),windows=[];
+    const rings=per(),aimRings=per(),controlRings=per(),shots=per(),skips=per(),looks=new Map(),flights=new Map(),hustle=new Map(),seenLaunches=new Set(),windows=[];
+    const tallies=new Map(ids.map(id=>[id,{tally:new ControlTally(),at:-Infinity}]));
     const acc=empty();
     let sampleAt=-Infinity,aimAt=-Infinity;
     return {acc,
         /** The unit look vector a bot sent with its movement, if any. */
         look(id,look,now){if(look)looks.set(id,{x:look.x,y:look.y,z:look.z,at:now});},
+        /** The controls a bot pressed this step (CityRecorder.botControls). */
+        controls(id,controls,now){const t=tallies.get(id);if(t){t.tally.note(controls);t.at=now;}},
         shot(id,now){shots.get(id)?.push({t:now,sample:1});},
         hit(victim,owner,now){
             if(!rings.has(victim))return;
@@ -140,10 +148,18 @@ function fightRecorder(ids){
             if(now>=aimAt-1e-6){
                 aimAt=now+50;
                 for(const [id,p] of players){
-                    if(p.hp<=0)continue;
+                    const t=tallies.get(id);
+                    if(p.hp<=0){t?.tally.clear();continue;}
                     const ring=aimRings.get(id),l=looks.get(id),fresh=!!l&&now-l.at<=AIM_FRESH_MS;
                     if(ring.length>=AIM_RING)ring.shift();
                     ring.push([now,r3(fresh?Math.atan2(l.x,l.z):yaw(p)),fresh?r3(Math.asin(Math.max(-1,Math.min(1,l.y)))):null]);
+                    if(!t)continue;
+                    if(now-t.at<=CONTROLS_FRESH_MS){
+                        const pressed=controlRings.get(id),k=t.tally;
+                        if(pressed.length>=AIM_RING)pressed.shift();
+                        pressed.push([now,k.f,k.r,k.j,k.fx,k.rx]);
+                    }
+                    t.tally.clear();
                 }
             }
             if(now<sampleAt-1e-6)return;
@@ -167,10 +183,12 @@ function fightRecorder(ids){
                 const w=windows[i];
                 if(now<w.until)continue;
                 windows.splice(i,1);
-                const window={from:w.from,samples:{},aim:{}};
+                const window={from:w.from,samples:{},aim:{},controls:{}};
                 for(const id of w.ids){
                     window.samples[id]=rings.get(id).filter(s=>s[0]>=w.from&&s[0]<=w.until).map(([t,...rest])=>[t-w.from,...rest]);
                     window.aim[id]=aimRings.get(id).filter(s=>s[0]>=w.from&&s[0]<=w.until).map(([t,...rest])=>[t-w.from,...rest]);
+                    const pressed=controlRings.get(id).filter(s=>s[0]>=w.from&&s[0]<=w.until).map(([t,...rest])=>[t-w.from,...rest]);
+                    if(pressed.length)window.controls[id]=pressed;
                 }
                 // A flight still in the air runs past the window's end.
                 for(const id of w.ids)accumulate(acc,window,id,{skips:flights.has(id)?[...skips.get(id),[flights.get(id),Infinity]]:skips.get(id),shots:shots.get(id)});
@@ -196,7 +214,7 @@ async function room(seed,start,minutes,runtimePath){
     const players=new Map();
     for(const [i,id] of ids.entries())players.set(id,m.createPlayer(id,names[i],{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},m.spawnForWorld(spec,Math.random,players.values())));
     const stats={seed,start,ms:0,rescues:0,rescuePlaces:[],rescueNotes:[],shotsByRange:BANDS.map(()=>0),hitsByRange:BANDS.map(()=>0),caseChanges:0,completions:0,deliveries:{},assignmentMs:{},kills:0,deaths:0,deathPlaces:[],shots:0,hits:0,longestStill:0};
-    const fight=fightRecorder(ids);
+    const fight=fightRecorder(ids,m.ControlTally);
     let sim;
     const onHit=hit=>{
         const victim=players.get(hit.victim);if(!victim||victim.hp<=0)return;
@@ -233,6 +251,7 @@ async function room(seed,start,minutes,runtimePath){
             Object.assign(player,m.spawnForWorld(spec,Math.random,players.values(),id,sim.assignmentState));controller.reset(id,player);
         },
         recoverCase:()=>sim.recoverLooseCase(),
+        controls:(id,controls)=>fight.controls(id,controls,clock),
     },id=>personality.get(id));
     begin(start);
     let owner=null,serial=0,stillSince=clock;
