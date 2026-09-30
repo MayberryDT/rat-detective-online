@@ -91,3 +91,11 @@ it('starts where the last visit settled, and still climbs when there is room',()
     run(q,0,90,()=>VSYNC);
     expect([q.scale,q.tier]).toEqual([1.5,'high']);
 });
+
+it('climbs back to the full look when it is slow for reasons the lower levels do not fix',()=>{
+    // Last visit settled low; this one is processor-bound at 40 fps whatever the resolution.
+    const q=new QualityController(1.5,'auto',{scale:.7,tier:2});
+    const {changes}=run(q,0,180,()=>25);
+    expect([q.scale,q.tier]).toEqual([1.5,'high']);
+    expect(changes.filter(c=>c.scale<.7+1e-9&&c.t>60_000)).toEqual([]);
+});

@@ -68,11 +68,13 @@ under 55 fps take one step down: the resolution to native in steps of about 28% 
 pixels, then medium extras, 0.85, low extras, 0.7. A step whose next two windows are
 not at least 5% faster than the two before it is undone, and that kind of step waits a
 minute (doubling each time) — so a machine limited by its processor, or a browser capped at 30 fps,
-keeps the full look instead of blurring for nothing. After 8 s of steady 58.5 fps
-Auto tries one step back up; if that is slow it returns within about 2 s and waits
+keeps the full look instead of blurring for nothing. After 8 s of steady 58.5 fps — or
+of slow frames with nothing left worth lowering — Auto tries one step back up; if the
+next window is slower than 55 fps and than before, it returns within about 2 s and waits
 twice as long before trying again (up to 2 minutes). The target is 60 fps on any
 display; faster screens are not chased. Auto stores where it settled
-(`rat-graphics-auto-v1`) and starts there next visit, still climbing when there is room.
+(`rat-graphics-auto-v1`) and starts there next visit; a start that turns out too low
+climbs back (a processor-bound machine returns to High in about a minute).
 
 The Settings **GRAPHICS** tab shows the four modes as stamps and what is being drawn
 now (for example "Now drawing 2880 × 1620, all effects").

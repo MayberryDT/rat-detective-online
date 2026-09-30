@@ -33,8 +33,9 @@ function stepOrder(ladder:number[]):Step[] {
 }
 
 /** Auto's timing (ms). A window's mean frame interval above `slow` (55 fps) twice running steps down;
- * `calm` (58.5 fps) windows for `probe` ms try one step back up; one slow window within `probeFail`
- * of that try goes straight back and doubles the wait. Each window leaves out its slowest `trim`
+ * `probe` ms of `calm` (58.5 fps) windows, or of slow windows with nothing left worth trying, try one
+ * step back up; if the next window is slower than `slow` and than before it goes straight back and
+ * the wait doubles (to `probeMax`). Each window leaves out its slowest `trim`
  * share of frames, so one long hitch cannot move anything; gaps over `gap` (hidden tab, title,
  * loading) and the first `warm` ms after them or a respawn are not measured. A step that does
  * not cut frame time by `gain` is undone and that kind of step waits `block` (doubling). */
@@ -49,8 +50,10 @@ export class QualityController {
     private last=-Infinity;private ignoreUntil=0;private windowStart=0;private n=0;
     /** This window's frame intervals; a window closes early if it fills (over 340 fps). */
     private readonly samples=new Float64Array(512);
-    private slowRun=0;private previousMean=0;private calmFor=0;
-    private probeWait=AUTO.probe as number;private upAt=-Infinity;private probed?:Step;
+    private slowRun=0;private previousMean=0;private calmFor=0;private stuckFor=0;
+    /** The step just taken back up: judged on the next window against the two before it. */
+    private probe?:{step:Step;before:number;at:number;stuck:boolean;judged:boolean};
+    private probeWait=AUTO.probe as number;
     private check?:{step:Step;before:number;after:number};
     private readonly blocked:Record<Step,{until:number;wait:number}>={scale:{until:0,wait:AUTO.block},tier:{until:0,wait:AUTO.block}};
 
@@ -78,7 +81,7 @@ export class QualityController {
     }
     setMode(mode:GraphicsMode):void {
         if(mode===this.mode)return;
-        this.mode=mode;this.restore(0,0);this.probeWait=AUTO.probe;this.probed=undefined;
+        this.mode=mode;this.restore(0,0);this.probeWait=AUTO.probe;this.probe=undefined;
         for(const b of Object.values(this.blocked)){b.until=0;b.wait=AUTO.block;}
         this.settle(this.last);
     }
@@ -104,7 +107,8 @@ export class QualityController {
         const before=this.previousMean;this.previousMean=mean;
         this.slowRun=mean>AUTO.slow?this.slowRun+1:0;
         this.calmFor=mean<=AUTO.calm?this.calmFor+span:0;
-        if(this.probed&&now-this.upAt>=AUTO.probeFail){this.probed=undefined;this.probeWait=AUTO.probe;}
+        const probe=this.probe;
+        if(probe&&now-probe.at>=AUTO.probeFail){this.probe=undefined;this.probeWait=AUTO.probe;}
         const check=this.check;
         // Judge a step on the two windows after it against the two before, so one noisy window cannot decide.
         if(check&&!check.after)check.after=mean;
@@ -117,23 +121,32 @@ export class QualityController {
             }
             this.blocked[check.step].wait=AUTO.block;
         }
-        if(this.probed&&this.slowRun){
-            // The step back up did not hold: return to where it was comfortable and wait longer to retry.
-            this.push(this.probed);this.probed=undefined;this.probeWait=Math.min(this.probeWait*2,AUTO.probeMax);
-            this.quiet(now,AUTO.settle);return true;
+        if(probe&&!probe.judged){
+            probe.judged=true;
+            if(mean>Math.max(AUTO.slow,probe.before*(1+AUTO.gain))){
+                // The step back up costs frames: return to where it was and wait longer to retry.
+                this.push(probe.step);this.probe=undefined;this.probeWait=Math.min(this.probeWait*2,AUTO.probeMax);
+                this.quiet(now,AUTO.settle);return true;
+            }
+            // Slow before and no worse now: that step was never the bottleneck, so do not take it again soon.
+            if(probe.stuck)this.blocked[probe.step].until=now+this.blocked[probe.step].wait;
         }
         if(this.slowRun>=2){
-            const step=this.next(now);if(!step)return false;
-            this.push(step);this.check={step,before:(mean+before)/2,after:0};
-            this.quiet(now,AUTO.settle);return true;
+            const step=this.next(now);
+            if(step){
+                this.push(step);this.check={step,before:(mean+before)/2,after:0};
+                this.quiet(now,AUTO.settle);return true;
+            }
+            // Slow with nothing left worth trying (a processor-bound spell, or a start from last visit's level).
+            this.stuckFor+=span;
         }
-        if(this.calmFor>=this.probeWait&&this.applied.length){
-            this.probed=this.pop();this.upAt=now;
+        if((this.calmFor>=this.probeWait||this.stuckFor>=this.probeWait)&&this.applied.length){
+            this.probe={step:this.pop()!,before:(mean+before)/2,at:now,stuck:this.stuckFor>0,judged:false};
             this.quiet(now,AUTO.settle);return true;
         }
         return false;
     }
-    private quiet(now:number,ms:number):void {this.ignoreUntil=Math.max(this.ignoreUntil,now+ms);this.n=this.slowRun=this.calmFor=0;}
+    private quiet(now:number,ms:number):void {this.ignoreUntil=Math.max(this.ignoreUntil,now+ms);this.n=this.slowRun=this.calmFor=this.stuckFor=0;}
     private next(now:number):Step|undefined {
         const seen:Record<Step,number>={scale:0,tier:0};
         for(const step of this.order){
