@@ -9,7 +9,7 @@ import { CITY_BOUNDS } from '../shared/grayboxLayout';
 import { ContactShadows, StaticMoonShadow, attachContactShadows, fitMoonShadow } from './shadows';
 import { renderScale } from './graphicsQuality';
 import { guardLightLoops } from '../utils/lightLoopGuard';
-import { FLASHLIGHT_REACH } from '../shared/rat/ratBody';
+import { FLASHLIGHT, FLASHLIGHT_REACH } from '../shared/rat/ratBody';
 
 export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
     guardLightLoops();
@@ -101,7 +101,7 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     const moonShadow = new StaticMoonShadow(moonLight, appRenderer.shadowMap);
 
     // Your rat's flashlight; in a Blackout it brightens and the street light pool carries other rats' copies of it.
-    const flashlight = new THREE.SpotLight(0xfffebb, 2.0, FLASHLIGHT_REACH, 0.6, 0.5, 1.2);
+    const flashlight = new THREE.SpotLight(FLASHLIGHT.color, FLASHLIGHT.intensity, FLASHLIGHT_REACH, FLASHLIGHT.angle, FLASHLIGHT.penumbra, FLASHLIGHT.decay);
     flashlight.castShadow = true;
     flashlight.shadow.mapSize.set(512, 512);
     flashlight.shadow.camera.near = 0.5;

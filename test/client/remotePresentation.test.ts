@@ -29,7 +29,7 @@ function replay(fps: number, speed: number) {
     // Run the production frame orchestration with real remotes/physics; only
     // replace the GPU, transport and unrelated city work. No constructor UI.
     const session = Object.assign(Object.create(GameSession.prototype), {
-        disposed: false, previousTime: 0, stats: null, rat: null, bots: null, chaos: null, baseBeam: {angle:.6,penumbra:.5,decay:1.2},
+        disposed: false, previousTime: 0, stats: null, rat: null, bots: null, chaos: null,
         stage: { syncViewport: () => false, scene: new THREE.Scene(), world, camera: new THREE.PerspectiveCamera(), renderer: { render() {} }, flashlight: new THREE.SpotLight() },
         transport: { state: 'playing' }, simulation: new SimulationClock(), remotes,
         gun: { update() {} }, city: { update() {} }, perf: { frame() {} },
