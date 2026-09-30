@@ -23,8 +23,21 @@ const rows = (type) => db.prepare('select t, round, data from facts where type =
 const humanOf = new Map(db.prepare('select distinct round, a, human from situations').all().map(r => [`${r.round}:${r.a}`, !!r.human]));
 const shotsBy = new Map();
 for (const s of rows('shot')) { const k = `${s.round}:${s.a}`; (shotsBy.get(k) ?? shotsBy.set(k, []).get(k)).push(s); }
+/** Stretches left out: launcher flights (launch to landing, plus 0.3 s) and Hot Pursuit (claim to its end), which
+ * move a rat faster and higher than its own legs and jumps can. */
+const skipBy = new Map(), skip = (k, from, to) => (skipBy.get(k) ?? skipBy.set(k, []).get(k)).push([from, to]);
+const landings = rows('landing');
+for (const l of rows('launch')) {
+  const land = landings.find(x => x.round === l.round && x.a === l.a && x.t >= l.t && x.t - l.t < 15_000);
+  skip(`${l.round}:${l.a}`, l.t, land ? land.t + 300 : l.t + 15_000);
+}
+const hustleEnds = rows('buff-end').filter(b => b.buff === 'hustle');
+for (const p of rows('pickup').filter(p => p.kind === 'hustle')) {
+  const end = hustleEnds.find(b => b.round === p.round && b.a === p.a && b.t >= p.t);
+  skip(`${p.round}:${p.a}`, p.t, end ? end.t : p.t + 12_000);
+}
 
-const empty = () => ({ fightS: 0, moveS: 0, speeds: [], stops: 0, samples: 0, turns: 0, jumps: 0, jumpsMoving: 0, strafeJumps: 0, airS: 0,
+const empty = () => ({ fightS: 0, skippedS: 0, moveS: 0, speeds: [], stops: 0, samples: 0, turns: 0, jumps: 0, jumpsMoving: 0, strafeJumps: 0, airS: 0,
   turnRates: [], airTurnRates: [], groundTurnRates: [], still: 0, aimSamples: 0, flicks: 0, offAngles: [], decoupled: 0, back: 0, movingAim: 0,
   shots: 0, airShots: 0, errs: [], airErrs: [], groundErrs: [], leads: [], airDecoupledS: 0, airMovingS: 0 });
 const groups = { human: empty(), bot: empty() };
@@ -32,9 +45,11 @@ const groups = { human: empty(), bot: empty() };
 for (const w of rows('window')) {
   for (const [a, pos] of Object.entries(w.samples ?? {})) {
     const human = humanOf.get(`${w.round}:${a}`) ?? false, g = groups[human ? 'human' : 'bot'];
-    const alive = pos.filter(s => s[5] > 0);
+    const skips = skipBy.get(`${w.round}:${a}`) ?? [], skipped = (ms) => skips.some(([s, e]) => w.from + ms >= s && w.from + ms <= e);
+    const living = pos.filter(s => s[5] > 0), alive = living.filter(s => !skipped(s[0]));
+    g.skippedS += (living.length - alive.length) * .2;
     if (alive.length < 3) continue;
-    const aim = (w.aim?.[a] ?? []);
+    const aim = (w.aim?.[a] ?? []).filter(s => !skipped(s[0]));
     const yawAt = (ms) => { let best; for (const s of aim) if (!best || Math.abs(s[0] - ms) < Math.abs(best[0] - ms)) best = s; return best && Math.abs(best[0] - ms) <= 100 ? best[1] : undefined; };
     // Jumps and the time spent in the air.
     const air = [];
@@ -43,7 +58,9 @@ for (const w of rows('window')) {
       if (before >= JUMP_RISE && after >= JUMP_RISE && before < JUMP_MAX && y >= alive[i - 1][2] && y >= alive[i + 1][2]) air.push([alive[i][0] - AIR_MS, alive[i][0] + AIR_MS]);
     }
     const inAir = (ms) => air.some(([s, e]) => ms >= s && ms <= e);
-    const span = (alive.at(-1)[0] - alive[0][0]) / 1000;
+    // Fight time: the kept stretches only (a gap over 0.5 s is a skipped flight or buff).
+    let span = 0;
+    for (let i = 1; i < alive.length; i++) { const dt = (alive[i][0] - alive[i - 1][0]) / 1000; if (dt > 0 && dt <= .5) span += dt; }
     g.fightS += span; g.jumps += air.length;
     // Movement, and how it relates to jumping and to where the rat looks.
     let lastHeading;
@@ -85,7 +102,7 @@ for (const w of rows('window')) {
     // Shots in this window: accuracy and lead, in the air and on the ground.
     for (const s of shotsBy.get(`${w.round}:${a}`) ?? []) {
       const ms = s.t - w.from;
-      if (ms < alive[0][0] || ms > alive.at(-1)[0]) continue;
+      if (ms < alive[0][0] || ms > alive.at(-1)[0] || skipped(ms)) continue;
       const weight = s.sample ?? 1, airborne = inAir(ms), target = s.targets?.[0];
       g.shots += weight; if (airborne) g.airShots += weight;
       if (!target) continue;
@@ -121,7 +138,7 @@ for (const [cat, fs] of Object.entries(human)) {
 const scored = Object.values(gaps).filter(d => d !== null);
 const out = {
   window: { mind: mind ?? 'any', since: new Date(since).toISOString(), until: new Date(Math.min(until, Date.now())).toISOString() },
-  sample: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, { fightMin: r3(g.fightS / 60), jumps: g.jumps, shots: Math.round(g.shots), aimSamples: g.aimSamples }])),
+  sample: Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, { fightMin: r3(g.fightS / 60), leftOutMin: r3(g.skippedS / 60), jumps: g.jumps, shots: Math.round(g.shots), aimSamples: g.aimSamples }])),
   measures: table,
   /** Mean gap per family and overall (0: plays like the humans recorded; 1: nothing alike). */
   gaps: { ...gaps, overall: scored.length ? r3(scored.reduce((a, b) => a + b, 0) / scored.length) : null },
