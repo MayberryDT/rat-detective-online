@@ -337,5 +337,47 @@ Tyler's staging playtest: the bots now decide like humans but still move and sho
 
   Longest a loose case sat untouched in a live assignment: 26 s (old 34 s). Hits at under 12 units land more often than the old bots' (about 18% against 13% a shot), fewer beyond.
 
+**Iteration 2 (one rat body, 30 September):**
+- **One body for every rat.** `src/shared/rat/ratBody.ts` is the physics step every rat runs, human or bot. It turns `RatControls` into motion:
+  - `RatControls` are the move keys or stick along and across the look, the look's yaw and pitch, the jump control held, and a shot's direction;
+  - the step applies the player's run speed, acceleration and braking, jump impulse and jump gravity, full air control, 80 ms ground grace, Hot Pursuit, launcher drift, the floaty apex, city containment in flight and chute rides;
+  - the same file holds the body's mass, damping and spheres, the model's turn toward the look and the muzzle.
+- **Who runs it.** `RatController` reads keys, mouse and touch into `RatControls` and runs the step. `ServerBotController` and `NormalGameBots` run the same step on each bot with the controls the motor outputs. Fire still goes through the room's shot handling and its shared rate limit.
+- **Deleted bot-only rules:** the bots' own steering blends (0.14, and the copied acceleration), inline jump numbers, the 1.8–3.2 s jump cooldown, the always-on city-edge bounce and clamp, the zone-hop flag, the 1.6 s launch lockout in `NormalGameBots`, the motor's own Hot Pursuit speed-up and the cap on the bots' pace.
+- **The player's movement is unchanged, bit for bit.** A recorded session was replayed through the old controller (`0b709e6`) and the new one: 3 runs of 6,000 steps on the real city, one starting in a Needleworks chute, with keys held for irregular stretches, mouse turns, jumps, touch stretches, launcher throws, shoves and Hot Pursuit. Positions, velocities, damping, the model's turn and grounding matched at every step. The one exception is A and D held together with W or S: the old code added the opposing side keys one after the other, which left a rounding difference of one part in 10¹⁶ in the wanted velocity (at most 4 × 10⁻¹⁵ units of position over 100 s). Keyboard and touch at the same time was not replayed.
+- **Measured the same way.** `scripts/lib/fight-motion.mjs` is `motor-compare`'s measure. `bot-sim` records fight windows as the recorder does (5 Hz positions, 20 Hz look, 3 s before to 2 s after each hit) and prints the bots' numbers next to Tyler's. Server bots now send their look with each pose, as a player's camera does, so the city map's aim record reads a bot's look, not its body's facing.
+- **Behaviour on top:**
+  - fight hops: the jump pressed 0.25 s plus a random wait (mean 1.7 s) after each landing while a rival is close, and the fight carries on in the air;
+  - fight strafes are key choices against the rival (back, back-diagonal, side, forward-diagonal, forward), weighted by range and health, at full speed;
+  - a rat with nowhere to run and a rival in sight close by strafes instead of standing;
+  - the recovery jump needs the keys to push for 0.15 s without moving the rat (before, any stop jumped, held back only by the cooldown);
+  - aim holds still until the crosshair is 0.09 rad off, then corrects quickly (deliberate trigger, bell and bank shots never hold);
+  - in a launcher flight the motor presses against the drift it sees;
+  - a reached route waypoint counts as progress only 8 units or more from the last one that counted, so a bot pacing a pocket (the crane landing's flights up and back) is rescued by the 90 s pocket backstop instead of looking busy.
+- **Fights** (`bot-sim`, 12 rooms of 5 minutes; iteration 1 is the same harness on `6981146`; Tyler's numbers are `motor-compare --mind=2` on the staging mirror):
+
+  | In fights | Tyler | Iteration 1 | Iteration 2 |
+  | --- | --- | --- | --- |
+  | Jumps per fight-minute | 15.8 | 6.0 | 14.1 |
+  | Share of fight time in the air | 28% | 9% | 21% |
+  | Shots fired in the air | 31% | 10% | 23% |
+  | Stopped | 2% | 12% | 7% |
+  | Back-pedalling, of moving time | 33% | 20% | 23% |
+  | Aim held still | 45% | 23% | 27% |
+  | Flicks per fight-minute | 6.6 | 11.1 | 10.9 |
+  | In the air, moving and looking away from the movement, seconds per fight-minute | 8.6 | 1.2 | 6.6 |
+
+- **Rooms** (same runs): rescues per bot-hour 1.67 (iteration 1: 1.44); case changes 340 per room-hour (269), completions 3 (4); Paper Chase deliveries 72 per room-hour (57); kills per bot-hour 67 (62), hit rate 3.8% (3.4%); the longest a loose case sat untouched 22 s (26 s).
+- **Rescues went up** (15 against 13 in 9 bot-hours). Before the pocket rule above the same build had 1.22; the rule turns pacing that used to go unnoticed into rescues (2 at the crane lookout). The new place is the precinct observation room (5 rescues, 4 of them stalled with no route, chasing a carrier or the case); it had none in iteration 1. Why bots end up there with no route is not yet known. Two rescues were in the harbour water; the sim does not drown rats, a server does.
+- **Still far from Tyler:** aim held still (27% against 45%) and flicks (10.9 against 6.6 a minute). Most flicks happen while engaged on the same rat, mid-flick or tracking; the likely cause (not yet checked) is close range, where the aim's wander grows. Most stops are bots chasing a carrier, at their case or holding a zone with no keys pressed while a rival is within 30 units; the likely reason is that the rival is out of sight.
+
+**Differences left between a player's body and a bot's** (everything else is the same code and the same numbers):
+- **Other rats.** In a player's own client the other rats are solid, so the player can bump into them. On the server no rat touches another; bots pass through players and each other. The authority has never simulated rat-to-rat contact; the bump exists only in each player's own prediction.
+- **Where a shot leaves.** A player's shot leaves the animated gun's muzzle, which the server checks. A bot's leaves `ratMuzzle`: the model's raised arm at the body's eased facing, without walk or recoil animation. The server has no rendered model.
+- **The floaty apex of a launcher throw.** A player can switch it off with `?feel=off`; bots always have the default (on).
+- **Opposing side keys.** Only a player can hold A and D together; see the rounding note above.
+- **The mind and skill:** the mind, and the `SkillDials` (reaction, aim error, crosshair speed). This is the intended difference.
+
 Iteration log (one line each):
 1. New motor: pursuit running, hand-like aim, strafe/push/cover fighting, flee fix. Staging `a496ae7d-af2a-4901-a765-b41481b4f0c0` (commit `404ccea`).
+2. One rat body: bots press the player's controls through the shared step; fight hops, key strafes, held aim. Staging `820c8057-aa51-432b-89f7-084a502b1367` (commit `8ad85f3`).
