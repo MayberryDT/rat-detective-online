@@ -127,7 +127,7 @@ export class PlayerSettings {
     }
     /** Auto, High, Medium, Low as a row of stamps, and what Auto is drawing right now. */
     private graphics(parent:HTMLElement):void {
-        this.make('p',parent,'Auto keeps the game near 60 frames a second: when it falls behind it lowers the resolution, then thins rain and shadows, and it raises them again when there is room. High always draws everything.');
+        this.make('p',parent,'Auto keeps the game near 60 frames a second: when it falls behind it lowers the resolution, then thins rain and effects, and it raises them again when there is room. High always draws everything.');
         const row=this.make('div',parent);row.className='settings-choice';row.setAttribute('role','radiogroup');row.setAttribute('aria-label','Graphics quality');
         for(const mode of Object.keys(GRAPHICS_MODES) as GraphicsMode[]){
             const button=this.button(row,GRAPHICS_MODES[mode],()=>this.store.update({graphics:mode}));button.setAttribute('role','radio');
@@ -135,7 +135,7 @@ export class PlayerSettings {
         }
         const now=this.make('p',parent);now.className='settings-graphics-now';
         const show=(q:Readonly<QualityStatus>)=>{
-            const w=globalThis.innerWidth||0,h=globalThis.innerHeight||0,effects=q.tier==='high'?'all effects':q.tier==='medium'?'lighter rain and shadows':'no film grain or haze';
+            const w=globalThis.innerWidth||0,h=globalThis.innerHeight||0,effects=q.tier==='high'?'all effects':q.tier==='medium'?'lighter rain':'no film grain or haze';
             now.textContent=`Now drawing ${Math.round(w*q.scale)} × ${Math.round(h*q.scale)}, ${effects}.`;
         };
         show(qualityStatus());this.stopQuality=onQualityChange(show);

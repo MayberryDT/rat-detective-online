@@ -7,7 +7,7 @@ import { previewMuted } from '../audio/previewMuted';
 import { effectsAudioContext } from '../audio/effectsAudio';
 import { CITY_BOUNDS } from '../shared/grayboxLayout';
 import { ContactShadows, StaticMoonShadow, attachContactShadows, fitMoonShadow } from './shadows';
-import { GRAPHICS, renderScale } from './graphicsQuality';
+import { renderScale } from './graphicsQuality';
 import { guardLightLoops } from '../utils/lightLoopGuard';
 
 export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
@@ -141,12 +141,7 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
     // Moving things drop no moon shadow; a soft contact disc grounds them instead.
     const contacts = new ContactShadows(world);
     attachContactShadows(scene, contacts);
-    // Medium/Low graphics redraw the flashlight's shadow every few frames (same programs, map and matrix stay paired).
-    let shadowFrame = Infinity;
     scene.onBeforeRender = () => {
-      const every = GRAPHICS.shadowEvery;
-      flashlight.shadow.autoUpdate = every <= 1;
-      if (every > 1 && ++shadowFrame >= every) { shadowFrame = 0; flashlight.shadow.needsUpdate = true; }
       moonShadow.beforeRender(scene); contacts.update();
     };
     scene.onAfterRender = () => moonShadow.afterRender();

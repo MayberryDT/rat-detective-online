@@ -7,11 +7,12 @@ export type Tier=typeof TIERS[number];
 export interface QualityStatus {mode:GraphicsMode;scale:number;tier:Tier}
 
 /** Costly extras per tier, least visible loss first. Nothing here changes a shader program, so no step
- * relinks on ANGLE: medium thins the rain and redraws the flashlight's shadow every other frame;
- * low also drops the film grain overlay and the haze cones under streetlamps (the fog stays). */
-const EXTRAS=[{rain:1,grain:true,haze:true,shadowEvery:1},{rain:.5,grain:true,haze:true,shadowEvery:2},{rain:.3,grain:false,haze:false,shadowEvery:3}] as const;
+ * relinks on ANGLE: medium thins the rain; low also drops the film grain overlay and the haze cones
+ * under streetlamps (the fog stays). The flashlight's shadow always redraws every frame: it rides with
+ * the rat, so a skipped frame makes the rat's own shadow lag and snap (Tyler: jumpy movement). */
+const EXTRAS=[{rain:1,grain:true,haze:true},{rain:.5,grain:true,haze:true},{rain:.3,grain:false,haze:false}] as const;
 /** The live extras, read by the effects each frame. */
-export const GRAPHICS:{rain:number;grain:boolean;haze:boolean;shadowEvery:number}={...EXTRAS[0]};
+export const GRAPHICS:{rain:number;grain:boolean;haze:boolean}={...EXTRAS[0]};
 
 /** Render scales (drawing-buffer pixels per CSS pixel), finest first: min(DPR, 2), then about 28% fewer
  * pixels a step down to native, then .85 and .7 of native. */

@@ -57,9 +57,14 @@ shader, and the renderer is never recreated (antialiasing stays on).
 | Mode | Render scale | Extras |
 | --- | --- | --- |
 | High | min(device pixel ratio, 2), the accepted look | all |
-| Medium | about ¾ of High's width, never below native (1.0) | half the rain; the flashlight's shadow redrawn every other frame |
-| Low | 0.7 of native | 30% of the rain, flashlight shadow every third frame, no film grain overlay, no haze cones under streetlamps (the fog stays) |
+| Medium | about ¾ of High's width, never below native (1.0) | half the rain |
+| Low | 0.7 of native | 30% of the rain, no film grain overlay, no haze cones under streetlamps (the fog stays) |
 | Auto | moves between High and Low | as the level it is at |
+
+The flashlight's shadow redraws every frame at every level. An earlier staging build
+redrew it every second or third frame on Medium and Low; because the flashlight rides
+with the rat, the rat's own shadow lagged and snapped, and Tyler found movement jumpy
+and unusable (30 September).
 
 Auto measures the frame interval during live play in 1.5 s windows, leaving out each
 window's slowest 5% of frames so one hitch cannot move it (the title, loading, a hidden
