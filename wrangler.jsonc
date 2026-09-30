@@ -152,6 +152,10 @@
       "r2_buckets": [
         { "binding": "CITY_ARCHIVE", "bucket_name": "rat-detective-city" }
       ],
+      "vars": {
+        "JEV_DAILY_BUDGET_USD": "25",
+        "JEV_MODEL": "jev-1.13.0"
+      },
       "durable_objects": {
         "bindings": [
           {
