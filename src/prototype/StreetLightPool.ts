@@ -57,7 +57,7 @@ export class StreetLightPool {
                     return 1.0;
                 }`).replace('#include <lights_fragment_begin>',THREE.ShaderChunk.lights_fragment_begin.replace(
                     'getSpotLightInfo( spotLight, geometryPosition, directLight );',
-                    'getSpotLightInfo( spotLight, geometryPosition, directLight );\n directLight.color *= scenerySpot(spotLight.position);'));
+                    'getSpotLightInfo( spotLight, geometryPosition, directLight );\n directLight.color *= scenerySpot(spotLight.position);\n directLight.visible = directLight.visible && directLight.color != vec3( 0.0 );'));
         };
         material.customProgramCacheKey=()=>key+'-steady-exterior-v1';material.needsUpdate=true;
     }

@@ -8,8 +8,10 @@ import { effectsAudioContext } from '../audio/effectsAudio';
 import { CITY_BOUNDS } from '../shared/grayboxLayout';
 import { ContactShadows, StaticMoonShadow, attachContactShadows, fitMoonShadow } from './shadows';
 import { GRAPHICS, renderScale } from './graphicsQuality';
+import { guardLightLoops } from '../utils/lightLoopGuard';
 
 export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
+    guardLightLoops();
     let viewportWidth = window.innerWidth, viewportHeight = window.innerHeight;
     // Settings → Graphics (Auto by default) picks the drawing buffer's pixels per CSS pixel.
     let pixelRatio = renderScale(window.devicePixelRatio);
