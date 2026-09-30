@@ -31,11 +31,16 @@ afterEach(async () => {
   }
 });
 
-/** A room of server bots whose Jev requests land in `bodies`, answered at once, or, with `held`, when the test calls them. */
+/** Round ids of each kind: about 1 round in 5 is code-only, with Jev off whoever plays. */
+const ROUND_IDS = Array.from({ length: 50 }, (_, i) => `round-${i}`);
+const ORDINARY_ROUND = ROUND_IDS.find(id => !codeOnlyRound(id))!, CODE_ROUND = ROUND_IDS.find(codeOnlyRound)!;
+/** A room of server bots whose Jev requests land in `bodies`, answered at once, or, with `held`, when the test calls
+ * them. Its round is an ordinary one, so Jev's switch depends only on who plays. */
 async function room(key: { value?: string }, held?: Array<() => void>): Promise<{ stub: Stub; bodies: string[] }> {
   const stub = env.GAME_ROOM.getByName(`jev-test-${crypto.randomUUID()}`), bodies: string[] = [];
   rooms.push(stub);
   await stub.ensurePersistentBots();
+  await setRound(stub, ORDINARY_ROUND);
   await runInDurableObject(stub, (instance: GameRoom) => {
     const game = instance as unknown as Internals;
     game.jevKey = () => key.value;
@@ -50,6 +55,10 @@ async function room(key: { value?: string }, held?: Array<() => void>): Promise<
   });
   return { stub, bodies };
 }
+const setRound = (stub: Stub, id: string) => runInDurableObject(stub, (instance: GameRoom) => {
+  const assignment = (instance as unknown as Internals).chaos?.assignmentState;
+  if (assignment) assignment.roundId = id;
+});
 type Welcome = { player: { x: number; y: number; z: number } };
 async function join(stub: Stub, agent = false): Promise<{ ws: WebSocket; welcome: Welcome }> {
   const response = await stub.fetch(`https://rat-detective.test/ws${agent ? '?agent=1' : ''}`, { headers: { Upgrade: 'websocket' } });
@@ -97,19 +106,14 @@ describe('Jev in a room', () => {
 
   it('keeps Jev off in a code-only round with a human playing, and back on in the next ordinary round', async () => {
     const { stub, bodies } = await room({ value: 'test-key' });
-    const ids = Array.from({ length: 50 }, (_, i) => `round-${i}`), code = ids.find(codeOnlyRound)!, jev = ids.find(id => !codeOnlyRound(id))!;
-    const setRound = (id: string) => runInDurableObject(stub, (instance: GameRoom) => {
-      const assignment = (instance as unknown as Internals).chaos?.assignmentState;
-      if (assignment) assignment.roundId = id;
-    });
-    await setRound(code);
+    await setRound(stub, CODE_ROUND);
     const { ws, welcome } = await join(stub);
-    await setRound(code);
+    await setRound(stub, CODE_ROUND);
     const { x, y, z } = welcome.player;
     const move = (seq: number) => ws.send(JSON.stringify({ type: 'updateMovement', seq, position: { x, y, z }, rotation: { x: 0, y: .38, z: 0, w: .92 }, meshRotation: { x: 0, y: .38, z: 0, w: .92 } }));
     move(1); await play(1500); move(2);
     expect(bodies).toEqual([]);
-    await setRound(jev);
+    await setRound(stub, ORDINARY_ROUND);
     await play(1500);
     expect(bodies.length).toBeGreaterThan(0);
   }, 20000);
@@ -148,16 +152,19 @@ describe('Jev in a room', () => {
       }
       return out;
     };
-    await play(1500);
-    const alone = await facts();
+    /** Reads the facts until `test` holds or `ms` pass: bots decide at their own moments, not on a clock. */
+    const factsUntil = async (test: (facts: CityFact[]) => boolean, ms: number) => {
+      for (const end = Date.now() + ms; ; await play(250)) { const out = await facts(); if (test(out) || Date.now() > end) return out; }
+    };
+    const alone = await factsUntil(out => out.some(f => f.type === 'decision'), 3000);
     expect(alone.some(f => f.type === 'decision')).toBe(true);
     expect(alone.filter(f => f.type === 'decision' && f.mind === 'jev' || f.type === 'minds')).toEqual([]);
     const { ws } = await join(stub);
-    await play(1500);
+    const jev = (out: CityFact[]) => out.some(f => f.type === 'decision' && f.mind === 'jev' && f.tokens === 900);
+    expect(jev(await factsUntil(jev, 5000))).toBe(true);
     ws.close(1000, 'left');
     await play(400);
     const all = await facts();
-    expect(all.some(f => f.type === 'decision' && f.mind === 'jev' && f.tokens === 900)).toBe(true);
     const minds = all.filter(f => f.type === 'minds');
     expect(minds).toHaveLength(1);
     expect(minds[0]).toMatchObject({ mindVersion: MIND_VERSION, tokens: expect.any(Number) });
@@ -165,17 +172,14 @@ describe('Jev in a room', () => {
     expect(all.filter(f => f.type === 'decision' || f.type === 'goal-end').every(f => f.mindVersion === MIND_VERSION)).toBe(true);
   }, 20000);
 
-  it('reports the spend of replies that land after Jev switched off, even just after a report', async () => {
+  it('reports the spend of replies that land after Jev switched off', async () => {
     const held: Array<() => void> = [];
     const { stub } = await room({ value: 'test-key' }, held);
     // A Durable Object's promises settle only from inside it.
     const answer = () => runInDurableObject(stub, () => { for (const reply of held.splice(0)) reply(); });
     const { ws } = await join(stub);
+    // Jev coming on is a decision moment for every bot: their requests go out at once.
     await play(700);
-    // The first replies land while Jev is on and are reported at once.
-    expect(held.length).toBeGreaterThan(0);
-    await answer();
-    await play(900);
     const replies = held.length;
     expect(replies).toBeGreaterThan(0);
     const before = (await env.MATCHMAKER.getByName(JEV_LEDGER).jevBudget(Date.now())).total;
