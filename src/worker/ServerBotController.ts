@@ -5,17 +5,19 @@ import type {MotorNavigation} from '../shared/bots/motor';
 import {StaticCityBroadphase,addCityBody,cityBoxBody} from '../shared/StaticCityBroadphase';
 import {CITY_BARS_GROUP} from '../shared/boxFrame';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
-import {CITY_BOUNDS,grayboxBoxes} from '../shared/grayboxLayout';
+import {CITY_BOUNDS,GRAYBOX_VERSION,grayboxBoxes} from '../shared/grayboxLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
-import {LAUNCH_DRIFT_DECAY} from '../shared/launcherVelocity';
-import {guardFastFall,touchingSlick} from '../shared/ratSurfaces';
+import {hasHustle,PICKUP_TUNING} from '../shared/pickups';
+import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,ratMuzzle,turnFacing} from '../shared/rat/ratBody';
+import {FEEL} from '../feel/feelTuning';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
 import type {Decision,Mind,Personality} from '../shared/bots/intent';
 import type {GoalContext} from '../shared/bots/goals';
 import type {WorldSpec} from '../shared/worldSpec';
 
 export interface ServerBotCallbacks {
-    move:(id:string,position:Vec3Data,facing:number,at?:number)=>void;
+    /** `facing`: the body's heading; `look`: the unit look direction (the city map's aim record, as a player's camera sends). */
+    move:(id:string,position:Vec3Data,facing:number,at?:number,look?:Vec3Data)=>void;
     shoot:(id:string,origin:Vec3Data,direction:Vec3Data)=>void;
     recover?:(id:string)=>void;
     recoverCase?:()=>void;
@@ -23,11 +25,13 @@ export interface ServerBotCallbacks {
     decide?:(id:string,decision:Decision,now:number)=>void;
 }
 interface Bot {
-    id:string;body:C.Body;brain:RatBot;actor?:PlayerData;decided?:Decision;
-    facing:number;initialized:boolean;alive:boolean;normalJump:boolean;zoneHop:boolean;
+    id:string;body:C.Body;rat:RatBody;brain:RatBot;actor?:PlayerData;decided?:Decision;
+    /** The body's heading, eased toward the look as a player's model turns; and the look itself. */
+    facing:number;lookYaw:number;lookPitch:number;
+    /** `lived`: placed before, so a new placement is a respawn (a player's lower respawn damping). */
+    initialized:boolean;alive:boolean;lived:boolean;
+    /** A throw or shove just arrived: the stuck rescue waits for the landing. */
     launchedUntil:number;lastLaunchAt:number;lastMovementAt:number;
-    /** The launcher's sideways throw, fading until landing, under the brain's steering. */
-    driftX:number;driftZ:number;
     strandedSince:number;escapeCheckAt:number;escapeX:number;escapeZ:number;
     progressAt:number;progressX:number;progressZ:number;
     pocketAt:number;pocketX:number;pocketZ:number;progressMark:number;
@@ -37,14 +41,6 @@ interface Bot {
  * no waypoint, goal or fight and never this far from one spot, for this long, is a rescue even when the
  * 1.5-unit clock keeps restarting. Long enough that a bot briefly circling a street is never teleported. */
 const POCKET_RADIUS=24,POCKET_RESCUE_MS=90000;
-
-/** RatModel's raised firing arm (-.49, .91+.36, .09+.10) plus its
- * rat-muzzle anchor (0,.106,.28), rotated by the current authoritative yaw.
- * Rendering recoil/walk animation must never move the server's shot origin. */
-export function serverBotMuzzle(position:Vec3Data,facing:number):Vec3Data {
-    const x=-.49,z=.47,c=Math.cos(facing),s=Math.sin(facing);
-    return{x:position.x+x*c+z*s,y:position.y+1.376,z:position.z-x*s+z*c};
-}
 
 /** Hosted, render-free steering and physical movement. GameRoom owns all player
  * records, health, spawn/reset decisions, shots, incident effects and scoring. */
@@ -97,13 +93,13 @@ export class ServerBotController {
             },
         };
         let index=0;
+        const bounds=spec.version===GRAYBOX_VERSION?CITY_BOUNDS:undefined;
         for(const id of new Set(botIds)){
-            const body=new C.Body({mass:5,fixedRotation:true,linearDamping:.1,angularDamping:1,collisionFilterGroup:2,collisionFilterMask:1|CITY_BARS_GROUP});
-            body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
-            body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
-            body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
-            this.bots.set(id,{id,body,brain:new RatBot(sharedNavigation,index++,Math.random,{mind}),facing:0,initialized:false,alive:false,
-                normalJump:false,zoneHop:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,driftX:0,driftZ:0,
+            // The player's body; bots pass through each other, as they always have in this world.
+            const body=new C.Body({mass:RAT_BODY.mass,fixedRotation:true,linearDamping:RAT_BODY.linearDamping,angularDamping:RAT_BODY.angularDamping,collisionFilterGroup:2,collisionFilterMask:1|CITY_BARS_GROUP});
+            addRatShapes(body);
+            this.bots.set(id,{id,body,rat:new RatBody(body,this.world,bounds),brain:new RatBot(sharedNavigation,index++,Math.random,{mind}),
+                facing:0,lookYaw:Math.PI,lookPitch:0,initialized:false,alive:false,lived:false,launchedUntil:0,lastLaunchAt:-Infinity,lastMovementAt:-Infinity,
                 strandedSince:0,escapeCheckAt:0,escapeX:0,escapeZ:0,progressAt:0,progressX:0,progressZ:0,pocketAt:0,pocketX:0,pocketZ:0,progressMark:0});
         }
     }
@@ -114,7 +110,9 @@ export class ServerBotController {
         body.position.set(position.x,position.y,position.z);body.previousPosition.copy(body.position);body.interpolatedPosition.copy(body.position);
         body.velocity.setZero();body.force.setZero();body.angularVelocity.setZero();body.torque.setZero();body.aabbNeedsUpdate=true;
         if(!body.world)this.world.addBody(body);
-        body.wakeUp();bot.initialized=true;bot.alive=true;bot.normalJump=false;bot.zoneHop=false;bot.launchedUntil=0;bot.driftX=bot.driftZ=0;
+        // A player's respawn lowers the body's damping (RatEntity.respawn); the first placement keeps the constructor's.
+        if(bot.lived)body.linearDamping=body.angularDamping=RAT_BODY.respawnDamping;
+        body.wakeUp();bot.rat.reset();bot.initialized=true;bot.alive=true;bot.lived=true;bot.launchedUntil=0;
         bot.lastLaunchAt=this.now;bot.lastMovementAt=-Infinity;bot.brain.reset();bot.brain.personality=this.personality(id);
         bot.strandedSince=0;bot.escapeCheckAt=0;bot.escapeX=0;bot.escapeZ=0;
         bot.progressAt=this.now;bot.progressX=position.x;bot.progressZ=position.z;
@@ -133,8 +131,8 @@ export class ServerBotController {
         bot.body.velocity.setZero();bot.body.force.setZero();bot.body.sleep();
     }
     private move(bot:Bot,now:number):void {
-        const p=bot.body.position;
-        this.callbacks.move(bot.id,{x:p.x,y:p.y,z:p.z},bot.facing,now);bot.lastMovementAt=now;
+        const p=bot.body.position,c=Math.cos(bot.lookPitch);
+        this.callbacks.move(bot.id,{x:p.x,y:p.y,z:p.z},bot.facing,now,{x:-Math.sin(bot.lookYaw)*c,y:Math.sin(bot.lookPitch),z:-Math.cos(bot.lookYaw)*c});bot.lastMovementAt=now;
     }
     /** Try walking off an unsupported roof without walking through walls. */
     private escape(bot:Bot,now:number):void {
@@ -191,10 +189,9 @@ export class ServerBotController {
             if(this.launchesSeen.size>MAX_LAUNCH_EVENTS*2)this.launchesSeen.delete(this.launchesSeen.values().next().value!);
             const bot=this.bots.get(launch.playerId);
             if(!bot?.alive||launch.at<bot.lastLaunchAt||now-launch.at>1500||launch.at>now+100)continue;
-            bot.lastLaunchAt=launch.at;bot.body.velocity.set(launch.velocity.x,launch.velocity.y,launch.velocity.z);
-            bot.strandedSince=0;bot.progressAt=now;
-            bot.launchedUntil=now+150;bot.normalJump=false;bot.zoneHop=false;bot.body.wakeUp();
-            bot.driftX=launch.velocity.x;bot.driftZ=launch.velocity.z;
+            bot.lastLaunchAt=launch.at;bot.strandedSince=0;bot.progressAt=now;bot.launchedUntil=now+150;
+            // A player's throw: the same flight damping, drift and floaty apex.
+            bot.rat.launch(launch.velocity,FEEL.launchFlight.params.hang,FEEL.launchFlight.params.hangLift);
         }
         for(const shove of chaos?.pressure?.shoves??[]){
             if(this.launchesSeen.has(shove.id))continue;
@@ -202,9 +199,7 @@ export class ServerBotController {
             if(this.launchesSeen.size>MAX_LAUNCH_EVENTS*2)this.launchesSeen.delete(this.launchesSeen.values().next().value!);
             const bot=this.bots.get(shove.playerId);
             if(!bot?.alive||now-shove.at>1500||shove.at>now+100)continue;
-            const v=bot.body.velocity;v.x+=shove.velocity.x;v.z+=shove.velocity.z;v.y=Math.max(v.y,shove.velocity.y);
-            bot.driftX+=shove.velocity.x;bot.driftZ+=shove.velocity.z;
-            bot.launchedUntil=now+150;bot.normalJump=false;bot.zoneHop=false;bot.body.wakeUp();
+            bot.rat.shove(shove.velocity);bot.launchedUntil=now+150;
         }
         if(now-this.lastNavigationAt>=15){
             // The second bound is required in Workers, where performance.now()
@@ -213,26 +208,19 @@ export class ServerBotController {
             this.lastNavigationAt=now;
         }
         this.ray.refresh();
-        const groundedBodies=new Set<C.Body>();
-        for(const contact of this.world.contacts){
-            if(-contact.ni.y>.5)groundedBodies.add(contact.bi);
-            if(contact.ni.y>.5)groundedBodies.add(contact.bj);
-        }
+        const step=Math.min(dt,1/30);
         for(const bot of this.bots.values()){
             const self=bot.actor,body=bot.body;
             if(!self||!bot.alive||(players.get(bot.id)?.hp??0)<=0)continue;
-            const grounded=groundedBodies.has(body);
-            // Cannon retains the takeoff contact for a step. Keep jump gravity
-            // through the new zone hop. Preserve the established traversal arc.
-            if(grounded&&(!bot.zoneHop||body.velocity.y<=1)){bot.normalJump=false;bot.zoneHop=false;}
-            const intent=bot.brain.step(now,self,this.actors.values(),chaos,target=>this.visible(bot,target),
+            const grounded=bot.rat.grounded;
+            const controls=bot.brain.step(now,self,this.actors.values(),chaos,target=>this.visible(bot,target),
                 grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visible(bot,target,true));
             const decision=bot.brain.decision;
             if(decision&&decision!==bot.decided){bot.decided=decision;this.callbacks.decide?.(bot.id,decision,now);}
             if(!bot.progressAt||Math.hypot(body.position.x-bot.progressX,body.position.z-bot.progressZ)>1.5){
                 bot.progressAt=now;bot.progressX=body.position.x;bot.progressZ=body.position.z;
             }
-            const wantsMove=bot.brain.navigationStalled||Math.hypot(intent.x,intent.z)>.5;
+            const wantsMove=bot.brain.navigationStalled||Math.hypot(controls.moveForward,controls.moveRight)*RAT_MOVEMENT.run>.5;
             if(!bot.pocketAt||!wantsMove&&grounded||bot.brain.progressMark!==bot.progressMark||Math.hypot(body.position.x-bot.pocketX,body.position.z-bot.pocketZ)>POCKET_RADIUS){
                 bot.pocketAt=now;bot.pocketX=body.position.x;bot.pocketZ=body.position.z;bot.progressMark=bot.brain.progressMark;
             }
@@ -246,36 +234,27 @@ export class ServerBotController {
                     bot.strandedSince=0;this.callbacks.recover(bot.id);continue;
                 }
                 if(offGraph||now-bot.progressAt>=8000){
-                    this.escape(bot,now);intent.x=bot.escapeX;intent.z=bot.escapeZ;
-                    if(intent.x||intent.z)intent.facing=Math.atan2(intent.x,intent.z);
+                    // The rescue's own walk: forward along the way out, at the old escape pace.
+                    this.escape(bot,now);
+                    controls.moveRight=0;controls.moveForward=Math.hypot(bot.escapeX,bot.escapeZ)/RAT_MOVEMENT.run;
+                    if(controls.moveForward)controls.lookYaw=lookHeading(Math.atan2(bot.escapeX,bot.escapeZ));
                 }
             }
-            if(grounded&&now>=bot.launchedUntil)bot.driftX=bot.driftZ=0;
-            else if(bot.driftX||bot.driftZ){const fade=Math.exp(-LAUNCH_DRIFT_DECAY*Math.min(dt,1/30));bot.driftX*=fade;bot.driftZ*=fade;}
-            // A bot steering a planned roof route cancels the drift to reach its landing.
-            // A chute owns the ride (bots never plan into one; they may be knocked in).
-            const drift=bot.brain.flyingRoute?0:1,riding=touchingSlick(this.world,body);
-            if(!riding){body.velocity.x+=(intent.x+bot.driftX*drift-body.velocity.x)*.14;body.velocity.z+=(intent.z+bot.driftZ*drift-body.velocity.z)*.14;}
-            // Ignore stale takeoff contacts briefly, without ever locking air steering.
-            if(intent.jump&&grounded&&!riding&&now>=bot.launchedUntil){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
-            if(bot.normalJump)body.force.y+=body.mass*this.world.gravity.y*.28;
-            for(const axis of ['x','z'] as const){
-                if(body.position[axis]<CITY_BOUNDS.min+4&&body.velocity[axis]<0)body.velocity[axis]=Math.max(8,-body.velocity[axis]*.45);
-                if(body.position[axis]>CITY_BOUNDS.max-4&&body.velocity[axis]>0)body.velocity[axis]=-Math.max(8,body.velocity[axis]*.45);
-            }
-            bot.facing=intent.facing;body.wakeUp();guardFastFall(this.world,body,Math.min(dt,1/30));
-            if(intent.shoot){
-                const origin=serverBotMuzzle(body.position,bot.facing),dx=intent.shoot.x-origin.x,dy=intent.shoot.y-origin.y,dz=intent.shoot.z-origin.z;
-                const length=Math.hypot(dx,dy,dz);
-                if(length>0){this.move(bot,now);this.callbacks.shoot(bot.id,origin,{x:dx/length,y:dy/length,z:dz/length});}
+            bot.rat.speedScale=hasHustle(chaos?.buffs,bot.id,chaos?.time??now)?PICKUP_TUNING.hustleMultiplier:1;
+            bot.rat.step(step,controls,true);
+            bot.facing=turnFacing(bot.facing,controls.lookYaw,step);bot.lookYaw=controls.lookYaw;bot.lookPitch=controls.lookPitch;
+            if(controls.fire){
+                // Through the room's shot handling and rate limit, from the muzzle where the body faces.
+                const d=controls.fire.direction;
+                this.move(bot,now);this.callbacks.shoot(bot.id,ratMuzzle(body.position,bot.facing),{x:d.x,y:d.y,z:d.z});
             }
         }
         this.recoverLooseCase(now,chaos);
-        this.world.step(Math.min(dt,1/30));
+        this.world.step(step);
         for(const bot of this.bots.values()){
             if(!bot.alive||(players.get(bot.id)?.hp??0)<=0)continue;
+            bot.rat.settle(true);
             const p=bot.body.position;
-            for(const axis of ['x','z'] as const){const old=p[axis];p[axis]=Math.max(CITY_BOUNDS.min+3,Math.min(CITY_BOUNDS.max-3,old));if(old!==p[axis])bot.body.aabbNeedsUpdate=true;}
             if(bot.actor)Object.assign(bot.actor,{x:p.x,y:p.y,z:p.z});
             if(now-bot.lastMovementAt>=49.5)this.move(bot,now);
         }

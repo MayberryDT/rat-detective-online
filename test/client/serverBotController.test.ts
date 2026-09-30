@@ -1,6 +1,7 @@
 import {describe,it,expect,vi} from 'vitest';
 import * as C from 'cannon-es';
-import {ServerBotController,serverBotMuzzle} from '../../src/worker/ServerBotController';
+import {ServerBotController} from '../../src/worker/ServerBotController';
+import {RAT_MOVEMENT,ratMuzzle} from '../../src/shared/rat/ratBody';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createWorldSpec} from '../../src/shared/worldSpec';
@@ -113,7 +114,8 @@ describe('hosted server bot controller',()=>{
         move.mockClear();shoot.mockClear();controller.step(1/60,1020,players,state(),false);
         expect(move).not.toHaveBeenCalled();expect(shoot).not.toHaveBeenCalled();
         Object.assign(bot,{x:-80,y:0,z:80});controller.step(1/60,8000,players,state(8000),true);
-        expect(move.mock.calls[0][1].x).toBeCloseTo(-80,1);expect(move.mock.calls[0][1].z).toBeCloseTo(80,1);controller.dispose();
+        // The first pose after the reset is the reset spot (one step of the player's acceleration away at most).
+        expect(move.mock.calls[0][1].x).toBeCloseTo(-80,0);expect(move.mock.calls[0][1].z).toBeCloseTo(80,0);controller.dispose();
     });
     it('applies pressure launches once, preserves their force, and ignores stale launch history after reset',()=>{
         const {controller,players,bot}=fixture();controller.step(1/60,1000,players,state(),true);
@@ -123,7 +125,8 @@ describe('hosted server bot controller',()=>{
         ]};
         controller.step(1/60,1017,players,launch,true);
         const body=controller.world.bodies.find(body=>body.mass>0)!;
-        expect(body.velocity.x).toBeGreaterThan(1);expect(body.velocity.x).toBeLessThan(3);expect(body.velocity.y).toBeGreaterThan(39);
+        // The newest throw wins and keeps its force; the keys steer on top of it from the first step, as a player's do.
+        expect(body.velocity.x).toBeGreaterThan(1);expect(body.velocity.x).toBeLessThan(RAT_MOVEMENT.run*RAT_MOVEMENT.accel+.5);expect(body.velocity.y).toBeGreaterThan(39);
         controller.step(1/60,1034,players,launch,true);expect(body.velocity.y).toBeLessThan(39.5);
         controller.reset('bot',bot);controller.step(1/60,1051,players,launch,true);expect(body.velocity.y).toBeLessThan(5);
         controller.dispose();
@@ -139,17 +142,18 @@ describe('hosted server bot controller',()=>{
         const along=(target.x-origin.x)*direction.x+(target.y-origin.y)*direction.y+(target.z-origin.z)*direction.z;
         expect(Math.hypot(origin.x+direction.x*along-target.x,origin.y+direction.y*along-target.y,origin.z+direction.z*along-target.z)).toBeLessThan(2.2);controller.dispose();
     });
-    it('uses real ground contacts for its jump and keeps the normal physical jump impulse',()=>{
-        const {controller,players}=fixture();
-        for(let i=0;i<10;i++)controller.step(1/60,1000+i*17,players,state(1000+i*17),true);
+    it('jumps with the player impulse when its keys push into a wall without moving it',()=>{
+        const {controller,players}=fixture();players.delete('human');
+        controller.world.addBody(new C.Body({mass:0,shape:new C.Box(new C.Vec3(.2,15,4)),position:new C.Vec3(1.2,15,0)}));
+        controller.step(1/60,1000,players,state(),true);
         const body=controller.world.bodies.find(body=>body.mass>0)!;
-        body.velocity.x=0;body.velocity.z=0; // A grounded obstruction triggers the recovery jump.
-        controller.step(1/60,1170,players,state(1170),true);
-        expect(body.velocity.y).toBeGreaterThan(15);expect(body.position.y).toBeGreaterThan(0);controller.dispose();
+        let rise=0;
+        for(let i=1;i<60;i++){controller.step(1/60,1000+i*1000/60,players,state(1000+i*1000/60),true);rise=Math.max(rise,body.velocity.y);}
+        expect(body.position.x).toBeLessThan(1);expect(rise).toBeGreaterThan(RAT_MOVEMENT.jumpImpulse*.9);controller.dispose();
     });
     it('derives a compact yaw-relative gun origin and disposes idempotently',()=>{
-        const origin=serverBotMuzzle({x:5,y:2,z:3},0);expect(origin.x).toBeCloseTo(4.51);expect(origin.y).toBeCloseTo(3.376);expect(origin.z).toBeCloseTo(3.47);
-        const rotated=serverBotMuzzle({x:0,y:0,z:0},Math.PI/2);expect(rotated.x).toBeCloseTo(.47);expect(rotated.z).toBeCloseTo(.49);
+        const origin=ratMuzzle({x:5,y:2,z:3},0);expect(origin.x).toBeCloseTo(4.51);expect(origin.y).toBeCloseTo(3.376);expect(origin.z).toBeCloseTo(3.47);
+        const rotated=ratMuzzle({x:0,y:0,z:0},Math.PI/2);expect(rotated.x).toBeCloseTo(.47);expect(rotated.z).toBeCloseTo(.49);
         const {controller,players,move}=fixture();controller.dispose();controller.dispose();controller.step(1/60,1000,players,state(),true);
         expect(move).not.toHaveBeenCalled();expect(controller.world.bodies).toHaveLength(0);
     });

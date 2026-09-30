@@ -6,6 +6,7 @@ import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {CHAOS_TUNING} from '../../src/shared/chaosState';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
+import {worldIntent} from './botControls';
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},grayboxBoxes:()=>[]}));
 it.each(['scattershot','bad-ammunition'] as const)('keeps fresh human fire admitted during seven-bot %s bursts',incident=>{
  const now=Date.now(),human=createPlayer('human','Human',DEFAULT_APPEARANCE,{x:0,y:200,z:30});
@@ -20,7 +21,7 @@ it.each(['scattershot','bad-ammunition'] as const)('keeps fresh human fire admit
  let triggers=0;
  for(let frame=0;frame<600;frame++){
   const t=now+frame*1000/60,state=sim.snapshot(false);
-  bots.forEach((bot,i)=>{const shot=brains[i].step(t,bot,[human],state,()=>true,false,true).shoot;if(!shot)return;
+  bots.forEach((bot,i)=>{const shot=worldIntent(brains[i].step(t,bot,[human],state,()=>true,false,true),bot).shoot;if(!shot)return;
    triggers++;sim.shoot(bot.id,{shotId:`${i}-${frame}`,origin:{x:bot.x,y:200.9,z:0},direction:{x:shot.x-bot.x,y:shot.y-200.9,z:shot.z}});
   });
   sim.step(1/60,t);

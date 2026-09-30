@@ -1,3 +1,4 @@
+import {RAT_MOVEMENT} from '../../rat/ratBody';
 import type {Vec3Data} from '../../networkProtocol';
 import type {MotorNavigation} from '../motor';
 import {EYE} from './aim';
@@ -8,12 +9,18 @@ export const FIGHT={
     range:[17,27] as readonly [number,number],
     /** Beyond this the fight is over for movement: follow the route. */
     reach:34,
-    /** One strafe lasts 220 ms plus an exponential tail with this mean, capped. */
-    strafeMs:220,strafeTailMs:420,strafeMaxMs:1400,
-    /** After a strafe: chance to stop and shoot, and for how long; otherwise chance to keep the same side. */
-    stopChance:.22,stopMs:[180,480] as readonly [number,number],keepSide:.3,
-    /** Speeds: strafing, pushing, backing off, units a second. */
-    strafe:[8.5,11] as readonly [number,number],push:12.5,retreat:9.5,
+    /** One strafe lasts 150 ms plus an exponential tail with this mean, capped (Tyler changes direction 40
+     * times a moving minute). */
+    strafeMs:150,strafeTailMs:330,strafeMaxMs:1200,
+    /** After a strafe: chance to stop and shoot, and for how long (humans hardly stop); otherwise chance to
+     * keep the same side. */
+    stopChance:.03,stopMs:[150,350] as readonly [number,number],keepSide:.2,
+    /** Which keys a strafe holds, as weights for [back, back-diagonal, side, forward-diagonal, forward] against
+     * the rival: at a comfortable range, too close, too far and hurt. Humans back-pedal a third of their moving
+     * fight time (they look at the rival, so S and S+A/D are back-pedalling). */
+    keys:{mid:[.22,.34,.28,.12,.04],close:[.34,.42,.18,.06,0],far:[0,.12,.2,.43,.25],hurt:[.4,.48,.12,0,0]} as const,
+    /** Keys are held down, as players do: full running speed, units a second. */
+    speed:RAT_MOVEMENT.run,
     /** A push lasts this long, ms. */
     pushMs:[700,1500] as readonly [number,number],
     /** Cover: look for it this often while hurt, this far away; hide, then peek for these long, ms. */
@@ -22,6 +29,8 @@ export const FIGHT={
     stepMs:120,
 } as const;
 const between=(r:()=>number,[a,b]:readonly [number,number])=>a+r()*(b-a);
+/** Back and forward keys held for each strafe choice in `FIGHT.keys` (-1 back, 1 forward), and whether a side key is. */
+const KEY_FORWARD=[-1,-1,0,1,1] as const,KEY_SIDE=[0,1,1,1,0] as const;
 
 /** What the fight looks like this tick. */
 export interface FightView {
@@ -36,6 +45,8 @@ export interface FightView {
     /** Press in now: the enemy is weak or just emptied a burst. */
     push:boolean;
     nav:MotorNavigation;
+    /** In the air: the keys stay held without a floor check (air control is full). */
+    airborne:boolean;
     /** Every step must stay where this allows (a Jurisdiction zone). */
     leash?:(from:Vec3Data,to:Vec3Data)=>boolean;
 }
@@ -49,9 +60,10 @@ export class BotFight {
     private segmentUntil=0;
     private stopUntil=0;
     private pushUntil=0;
-    private drift=0;
+    /** The strafe's keys: forward (-1 back, 1 forward) and side (0 none, else `side`). */
+    private forward=0;
+    private sideKey=1;
     private readonly range:number;
-    private readonly strafe:number;
     private phase:'fight'|'hide'|'peek'='fight';
     private phaseUntil=0;
     private coverAt=0;
@@ -61,7 +73,7 @@ export class BotFight {
     private stepAt=0;
     private readonly goal={x:0,y:0,z:0};
     constructor(private readonly random:()=>number,seed:number){
-        this.side=seed%2?1:-1;this.range=between(random,FIGHT.range);this.strafe=between(random,FIGHT.strafe);
+        this.side=seed%2?1:-1;this.range=between(random,FIGHT.range);
     }
     reset():void{this.segmentUntil=0;this.stopUntil=0;this.pushUntil=0;this.phase='fight';this.phaseUntil=0;this.coverAt=0;this.step=undefined;this.stepAt=0;}
     /** Hiding or peeking from cover. */
@@ -75,7 +87,7 @@ export class BotFight {
         if(!v.hurt&&this.phase!=='fight'){this.phase='fight';}
         if(this.phase==='hide'){
             const gone=Math.hypot(this.cover.x-self.x,this.cover.z-self.z);
-            if(gone>.8){this.walk(v,this.cover.x-self.x,this.cover.z-self.z,FIGHT.retreat);return;}
+            if(gone>.8){this.walk(v,this.cover.x-self.x,this.cover.z-self.z,FIGHT.speed);return;}
             if(!this.phaseUntil)this.phaseUntil=now+between(this.random,FIGHT.hideMs);
             if(now<this.phaseUntil){this.move.x=this.move.z=0;return;}
             this.phase='peek';this.phaseUntil=0;
@@ -85,34 +97,39 @@ export class BotFight {
                 const back=Math.hypot(this.peek.x-self.x,this.peek.z-self.z);
                 // Lost the angle entirely: give cover up and fight in the open.
                 if(back<.6){this.phase='fight';this.coverAt=now+FIGHT.coverEveryMs;}
-                else {this.walk(v,this.peek.x-self.x,this.peek.z-self.z,this.strafe);return;}
+                else {this.walk(v,this.peek.x-self.x,this.peek.z-self.z,FIGHT.speed);return;}
             }else{
+                // Out on the angle: jiggle across it, never standing still, then back into cover.
                 if(!this.phaseUntil)this.phaseUntil=now+between(this.random,FIGHT.peekMs);
                 if(now>=this.phaseUntil){this.phase='hide';this.phaseUntil=0;}
-                this.move.x=this.move.z=0;return;
             }
         }
+        const peeking=this.phase==='peek';
         if(now>=this.segmentUntil){
             if(now>=this.stopUntil&&this.random()<FIGHT.stopChance){this.stopUntil=now+between(this.random,FIGHT.stopMs);this.segmentUntil=this.stopUntil;}
             else {
                 if(this.random()>=FIGHT.keepSide)this.side*=-1;
                 this.segmentUntil=now+FIGHT.strafeMs+Math.min(FIGHT.strafeMaxMs,-Math.log(1-this.random()*.999)*FIGHT.strafeTailMs);
-                this.drift=(this.random()-.5)*.7;
+                const mix=v.hurt?FIGHT.keys.hurt:d<this.range-5?FIGHT.keys.close:d>this.range+9?FIGHT.keys.far:FIGHT.keys.mid;
+                let pick=this.random(),choice=0;
+                while(choice<mix.length-1&&pick>=mix[choice]!){pick-=mix[choice]!;choice++;}
+                this.forward=KEY_FORWARD[choice]!;this.sideKey=KEY_SIDE[choice]!;
             }
         }
         const pushing=now<this.pushUntil;
         if(!pushing&&now<this.stopUntil){this.move.x=this.move.z=0;return;}
-        // Toward or away from the enemy along the line, plus the strafe across it.
-        const radial=pushing?1.1:v.hurt?-.9:d>this.range+6?.75:d<this.range-6?-.75:this.drift;
-        const lateral=pushing?.35:1;
-        this.walk(v,tx*radial+tz*this.side*lateral,tz*radial-tx*this.side*lateral,pushing?FIGHT.push:v.hurt?FIGHT.retreat:this.strafe);
+        // Keys against the rival: forward/back along the line, side across it. Out on a peek, side only.
+        const radial=peeking?0:pushing?1:this.forward,lateral=peeking?1:pushing?this.sideKey*.5:this.sideKey;
+        this.walk(v,tx*radial+tz*this.side*lateral,tz*radial-tx*this.side*lateral,FIGHT.speed);
     }
 
-    /** Walk in a direction on a checked local step; a blocked side flips the strafe. */
+    /** Walk in a direction on a checked local step; a blocked side flips the strafe. In the air the keys stay
+     * held as they are: there is no floor to check. */
     private walk(v:FightView,dx:number,dz:number,speed:number):void {
         const {now,self,nav}=v,length=Math.hypot(dx,dz);
         this.move.x=this.move.z=0;
         if(length<.01)return;
+        if(v.airborne){this.move.x=dx/length*speed;this.move.z=dz/length*speed;return;}
         const gx=self.x+dx/length*3,gz=self.z+dz/length*3;
         if(now>=this.stepAt||Math.hypot(gx-this.goal.x,gz-this.goal.z)>1.2){
             this.stepAt=now+FIGHT.stepMs;this.goal.x=gx;this.goal.y=self.y;this.goal.z=gz;

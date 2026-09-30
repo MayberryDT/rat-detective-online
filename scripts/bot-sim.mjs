@@ -1,8 +1,9 @@
 // Headless seeded bot rooms for motor iterations: the real ServerBotController and ChaosSimulation on the
 // staging world, nine server bots cast 80/10/10 from real roster names, 3 s respawns, stuck rescues handled
 // as GameRoom.recoverManagedBot does, and the next assignment as soon as one is won. Catches stuck and stall
-// regressions and reports the gate's movement and case numbers. Not a capacity or balance claim: no humans,
-// no network, no recorder.
+// regressions and reports the gate's movement and case numbers, and the bots' fight motion measured as the
+// humans' is: fight windows kept as CityRecorder keeps them, read by scripts/lib/fight-motion.mjs.
+// Not a capacity or balance claim: no humans, no network.
 //
 // usage: node scripts/bot-sim.mjs [--assignment=all|<id>] [--seeds=3] [--minutes=4] [--jobs=4] [--ref=<git rev>] [--json]
 //   --assignment  the assignment each room starts on; later ones follow the room's rotation (default: all four)
@@ -14,11 +15,15 @@ import {mkdir,rm} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {parseArgs} from 'node:util';
+import {accumulate,empty,features,merge} from './lib/fight-motion.mjs';
 
 const WORLD=2383011301,BOTS=9,DT=1/60;
 /** Distance bands (units) to the nearest other rat when a shot leaves, and between shooter and victim on a hit. */
 const BANDS=[6,12,25,50,Infinity],BAND_NAMES=['<6','6-12','12-25','25-50','50+'];
 const band=d=>BANDS.findIndex(limit=>d<limit);
+/** Tyler's own fight motion (motor-compare on the staging mirror), printed beside the bots'. */
+const TYLER={'jump.jumpsPerFightMin':15.8,'jump.airShare':.28,'jumpAim.airShotShare':.31,'move.stopShare':.02,'moveAim.backpedalShare':.33,
+    'aim.stillAimShare':.45,'aim.flicksPerFightMin':6.6,'all.airborneDecoupledPerFightMin':8.6};
 const {values}=parseArgs({options:{assignment:{type:'string',default:'all'},seeds:{type:'string',default:'3'},minutes:{type:'string',default:'4'},
     jobs:{type:'string',default:'4'},ref:{type:'string'},json:{type:'boolean',default:false},child:{type:'string'},runtime:{type:'string'}}});
 const root=process.cwd();
@@ -26,8 +31,9 @@ const root=process.cwd();
 if(values.child){
     // One room, in its own process: its own seeded Math.random and clock.
     const {seed,assignment,minutes}=JSON.parse(values.child);
-    process.send(await room(seed,assignment,minutes,values.runtime));
-    process.exit(0);
+    // Exit only once the (large) result has crossed the IPC channel.
+    process.send(await room(seed,assignment,minutes,values.runtime),()=>process.exit(0));
+    await new Promise(()=>{});
 }
 
 const ref=values.ref&&execFileSync('git',['rev-parse',values.ref],{encoding:'utf8'}).trim();
@@ -61,6 +67,12 @@ await Promise.all(Array.from({length:Math.min(Number(values.jobs),runs.length)},
 }));
 report(results,(Date.now()-started)/1000);
 
+/** The bots' fight motion, pooled over every room, in motor-compare's measures. */
+function fightMotion(rooms){
+    const g=rooms.reduce((all,r)=>merge(all,r.fight),empty()),r3=x=>x===null?null:Math.round(x*1000)/1000;
+    return {fightMinutes:r3(g.fightS/60),...Object.fromEntries(Object.entries(features(g)).map(([family,measures])=>
+        [family,Object.fromEntries(Object.entries(measures).map(([name,v])=>[name,r3(v)]))]))};
+}
 function report(rooms,wall){
     const sum=key=>rooms.reduce((a,r)=>a+r[key],0),roomHours=sum('ms')/3600000,botHours=roomHours*BOTS;
     const per=(n,h)=>Math.round(n/h*100)/100;
@@ -75,14 +87,95 @@ function report(rooms,wall){
         deliveriesPerRoomHour:Object.fromEntries(Object.entries(deliveries).map(([id,n])=>[id,per(n,hours[id])])),
         killsPerBotHour:per(sum('kills'),botHours),deaths:sum('deaths'),deathPlaces:deathPlaces.size,
         botShots:sum('shots'),botHitRate:Math.round(sum('hits')/Math.max(1,sum('shots'))*1000)/10+'%',
+        fight:fightMotion(rooms),
         // Per band of the nearest rival: share of shots, and hits landing at that range per shot fired there.
         byRange:Object.fromEntries(BAND_NAMES.map((name,i)=>{const shots=rooms.reduce((a,r)=>a+r.shotsByRange[i],0),hits=rooms.reduce((a,r)=>a+r.hitsByRange[i],0);
             return [name,`${Math.round(shots/Math.max(1,sum('shots'))*100)}% of shots, ${Math.round(hits/Math.max(1,shots)*1000)/10}% hit`];})),
         longestStillCaseSeconds:Math.round(Math.max(...rooms.map(r=>r.longestStill))/100)/10,
         longestStillCase:rooms.reduce((a,r)=>r.longestStill>a.longestStill?r:a).stillAt,
         rescuePlaces:Object.entries(rescuePlaces).sort((a,b)=>b[1]-a[1]).slice(0,8)};
-    if(values.json)console.log(JSON.stringify({summary,rooms},null,1));
-    else for(const [key,value] of Object.entries(summary))console.log(`${key.padEnd(24)} ${typeof value==='object'?JSON.stringify(value):value}`);
+    if(values.json)console.log(JSON.stringify({summary,rooms:rooms.map(({fight,...r})=>r)},null,1));
+    else for(const [key,value] of Object.entries(summary)){
+        if(key!=='fight'){console.log(`${key.padEnd(24)} ${typeof value==='object'?JSON.stringify(value):value}`);continue;}
+        console.log(`${key.padEnd(24)} ${value.fightMinutes} bot fight minutes (bot, then Tyler where known)`);
+        for(const [family,measures] of Object.entries(value))if(family!=='fightMinutes')for(const [name,v] of Object.entries(measures)){
+            const measure=`${family}.${name}`;
+            console.log(`  ${measure.padEnd(40)} ${String(v).padStart(8)}${measure in TYLER?`  ${String(TYLER[measure]).padStart(8)}`:''}`);
+        }
+    }
+}
+
+/** A room's fight windows, kept as CityRecorder keeps them: 5 Hz `[t, x, y, z, yaw, hp]` and 20 Hz `[t, yaw, pitch]` rings,
+ * windows from 3 s before to 2 s after each hit (merged when they overlap), launcher flights and Hot Pursuit left out. */
+function fightRecorder(ids){
+    const RING=30,AIM_RING=160,AIM_FRESH_MS=300,KEEP_MS=10_000;
+    const r1=v=>Math.round(v*10)/10,r2=v=>Math.round(v*100)/100,r3=v=>Math.round(v*1000)/1000,yaw=p=>2*Math.atan2(p.meshQy,p.meshQw);
+    const per=()=>new Map(ids.map(id=>[id,[]]));
+    const rings=per(),aimRings=per(),shots=per(),skips=per(),looks=new Map(),flights=new Map(),hustle=new Map(),seenLaunches=new Set(),windows=[];
+    const acc=empty();
+    let sampleAt=-Infinity,aimAt=-Infinity;
+    return {acc,
+        /** The unit look vector a bot sent with its movement, if any. */
+        look(id,look,now){if(look)looks.set(id,{x:look.x,y:look.y,z:look.z,at:now});},
+        shot(id,now){shots.get(id)?.push({t:now,sample:1});},
+        hit(victim,owner,now){
+            if(!rings.has(victim))return;
+            const hitIds=[victim,...(owner&&owner!==victim&&rings.has(owner)?[owner]:[])];
+            const open=windows.find(w=>hitIds.some(id=>w.ids.has(id))&&now<=w.until);
+            if(open){for(const id of hitIds)open.ids.add(id);open.until=now+2000;return;}
+            windows.push({ids:new Set(hitIds),from:now-3000,until:now+2000});
+        },
+        tick(now,players,snap){
+            for(const launch of snap.pressure?.launches??[]){
+                if(seenLaunches.has(launch.id))continue;
+                seenLaunches.add(launch.id);if(seenLaunches.size>256)seenLaunches.delete(seenLaunches.values().next().value);
+                if(rings.has(launch.playerId))flights.set(launch.playerId,launch.at);
+            }
+            for(const id of ids){
+                const until=snap.buffs?.[id]?.hustleUntil,open=hustle.get(id);
+                if(until>snap.time){if(open)open[1]=until;else{const span=[now,until];skips.get(id).push(span);hustle.set(id,span);}}
+                else if(open){open[1]=Math.min(open[1],now);hustle.delete(id);}
+            }
+            // Float ticks: a hair of slack keeps the cadence at 12 and 3 ticks.
+            if(now>=aimAt-1e-6){
+                aimAt=now+50;
+                for(const [id,p] of players){
+                    if(p.hp<=0)continue;
+                    const ring=aimRings.get(id),l=looks.get(id),fresh=!!l&&now-l.at<=AIM_FRESH_MS;
+                    if(ring.length>=AIM_RING)ring.shift();
+                    ring.push([now,r3(fresh?Math.atan2(l.x,l.z):yaw(p)),fresh?r3(Math.asin(Math.max(-1,Math.min(1,l.y)))):null]);
+                }
+            }
+            if(now<sampleAt-1e-6)return;
+            sampleAt=now+200;
+            for(const [id,p] of players){
+                const ring=rings.get(id);
+                if(ring.length>=RING)ring.shift();
+                ring.push([now,r1(p.x),r1(p.y),r1(p.z),r2(yaw(p)),p.hp]);
+                // A launched rat has landed once it stops moving up or down, half a second on (CityRecorder.sample).
+                const start=flights.get(id);
+                if(start!==undefined){
+                    const prev=ring[ring.length-2],vy=prev?(p.y-prev[2])/((now-prev[0])/1000):Infinity;
+                    if(p.hp<=0||now-start>15_000){skips.get(id).push([start,start+15_000]);flights.delete(id);}
+                    else if(now-start>500&&Math.abs(vy)<.4){skips.get(id).push([start,now+300]);flights.delete(id);}
+                }
+                const s=shots.get(id),k=skips.get(id);
+                while(s.length&&s[0].t<now-KEEP_MS)s.shift();
+                for(let i=k.length-1;i>=0;i--)if(k[i][1]<now-KEEP_MS&&k[i]!==hustle.get(id))k.splice(i,1);
+            }
+            for(let i=windows.length-1;i>=0;i--){
+                const w=windows[i];
+                if(now<w.until)continue;
+                windows.splice(i,1);
+                const window={from:w.from,samples:{},aim:{}};
+                for(const id of w.ids){
+                    window.samples[id]=rings.get(id).filter(s=>s[0]>=w.from&&s[0]<=w.until).map(([t,...rest])=>[t-w.from,...rest]);
+                    window.aim[id]=aimRings.get(id).filter(s=>s[0]>=w.from&&s[0]<=w.until).map(([t,...rest])=>[t-w.from,...rest]);
+                }
+                // A flight still in the air runs past the window's end.
+                for(const id of w.ids)accumulate(acc,window,id,{skips:flights.has(id)?[...skips.get(id),[flights.get(id),Infinity]]:skips.get(id),shots:shots.get(id)});
+            }
+        }};
 }
 
 async function room(seed,start,minutes,runtimePath){
@@ -103,6 +196,7 @@ async function room(seed,start,minutes,runtimePath){
     const players=new Map();
     for(const [i,id] of ids.entries())players.set(id,m.createPlayer(id,names[i],{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},m.spawnForWorld(spec,Math.random,players.values())));
     const stats={seed,start,ms:0,rescues:0,rescuePlaces:[],rescueNotes:[],shotsByRange:BANDS.map(()=>0),hitsByRange:BANDS.map(()=>0),caseChanges:0,completions:0,deliveries:{},assignmentMs:{},kills:0,deaths:0,deathPlaces:[],shots:0,hits:0,longestStill:0};
+    const fight=fightRecorder(ids);
     let sim;
     const onHit=hit=>{
         const victim=players.get(hit.victim);if(!victim||victim.hp<=0)return;
@@ -118,12 +212,12 @@ async function room(seed,start,minutes,runtimePath){
     const begin=id=>sim.setAssignment(m.createAssignment(id,clock));
     const shotTimes=new Map(ids.map(id=>[id,[]]));
     const controller=new m.ServerBotController(spec,ids,{
-        move:(id,p,facing)=>{const player=players.get(id);if(!player)return;player.x=p.x;player.y=p.y;player.z=p.z;player.meshQy=Math.sin(facing/2);player.meshQw=Math.cos(facing/2);},
+        move:(id,p,facing,at,look)=>{const player=players.get(id);if(!player)return;player.x=p.x;player.y=p.y;player.z=p.z;player.meshQy=Math.sin(facing/2);player.meshQw=Math.cos(facing/2);fight.look(id,look,clock);},
         shoot:(id,origin,direction)=>{
             // GameRoom's per-rat limit: 12 shots a second.
             const times=shotTimes.get(id);while(times.length&&clock-times[0]>=1000)times.shift();
             if(times.length>=12||players.get(id).hp<=0)return;
-            times.push(clock);stats.shots++;sim.shoot(id,{type:'shoot',shotId:crypto.randomUUID(),origin,direction});
+            times.push(clock);stats.shots++;fight.shot(id,clock);sim.shoot(id,{type:'shoot',shotId:crypto.randomUUID(),origin,direction});
             const shooter=players.get(id);let nearest=Infinity;
             for(const p of players.values())if(p.id!==id&&p.hp>0)nearest=Math.min(nearest,Math.hypot(p.x-shooter.x,p.z-shooter.z));
             stats.shotsByRange[band(nearest)]++;
@@ -152,13 +246,14 @@ async function room(seed,start,minutes,runtimePath){
         sim.step(DT,clock);
         for(const event of sim.drainShotEvents()){
             if(event.outcome!=='rat-body'&&event.outcome!=='rat-head')continue;
-            stats.hits++;
+            stats.hits++;fight.hit(event.victimId,event.owner,clock);
             const shooter=players.get(event.owner),victim=players.get(event.victimId);
             if(shooter&&victim)stats.hitsByRange[band(Math.hypot(victim.x-shooter.x,victim.z-shooter.z))]++;
         }
-        const a=sim.assignmentState;
+        const snap=sim.snapshot(false),a=sim.assignmentState;
+        fight.tick(clock,players,snap);
         if(a){stats.assignmentMs[a.id]=(stats.assignmentMs[a.id]??0)+DT*1000;}
-        const c=sim.snapshot(false).case;
+        const c=snap.case;
         if(c.owner!==owner){if(c.owner)stats.caseChanges++;owner=c.owner;stillSince=clock;}
         if(a?.phase!=='active'||c.owner)stillSince=clock;
         if(clock-stillSince>stats.longestStill){stats.longestStill=clock-stillSince;stats.stillAt=`${a?.id} seed ${seed} at ${places.at(c.p.x,c.p.y,c.p.z).id}`;}
@@ -172,5 +267,5 @@ async function room(seed,start,minutes,runtimePath){
         stats.ms+=DT*1000;
     }
     controller.dispose();
-    return stats;
+    return {...stats,fight:fight.acc};
 }

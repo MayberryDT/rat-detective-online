@@ -8,6 +8,8 @@ import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import type {PlayerData,Vec3Data} from '../../src/shared/networkProtocol';
 import type {ChaosState} from '../../src/shared/chaosState';
+import {ratMuzzle} from '../../src/shared/rat/ratBody';
+import {worldIntent} from './botControls';
 
 interface Box {min:Vec3Data;max:Vec3Data}
 const box=(x0:number,x1:number,z0:number,z1:number,y1=6):Box=>({min:{x:x0,y:0,z:z0},max:{x:x1,y:y1,z:z1}});
@@ -98,23 +100,23 @@ describe('bank shots in play',()=>{
         const count={n:0},ray=rayWorld([crate,eastWall],count),self=player('me',0,0),rival=player('rival',0,20),s=state();
         const navigation:MotorNavigation={route:(_from,to)=>[{...to}],localStep:()=>undefined,explorationTargets:()=>[{x:0,y:0,z:0}],ray};
         const bot=new RatBot(navigation,0,()=>.5,{personality,skill:{...BASE_SKILL,aimWanderRadians:0,flickError:0}});
-        let hidden=false;const shots:Array<{now:number;aim:Vec3Data}>=[];const rays:number[]=[];
+        let hidden=false;const shots:Array<{now:number;from:Vec3Data;aim:Vec3Data}>=[];const rays:number[]=[];
         for(let now=0;now<4000;now+=20){
             hidden=now>=1000;
             const before=count.n;
-            const intent=bot.step(now,self,[self,rival],s,p=>!hidden||p!==rival&&Math.hypot(p.x-rival.x,p.z-rival.z)>.5,false,true);
+            const intent=worldIntent(bot.step(now,self,[self,rival],s,p=>!hidden||p!==rival&&Math.hypot(p.x-rival.x,p.z-rival.z)>.5,false,true),self);
             rays.push(count.n-before);
             self.meshQy=Math.sin(intent.facing/2);self.meshQw=Math.cos(intent.facing/2);
-            if(hidden&&intent.shoot)shots.push({now,aim:intent.shoot});
+            if(hidden&&intent.shoot)shots.push({now,from:ratMuzzle(self,intent.facing),aim:intent.shoot});
         }
-        return {shots,rays,self};
+        return {shots,rays};
     }
 
     it('lets a maverick bank at a rat that just went behind cover, and a code-mind tryhard never',()=>{
         const maverick=play('maverick'),tryhard=play('tryhard');
         const banked=maverick.shots.filter(s=>s.aim.x>5);
         expect(banked.length).toBeGreaterThan(0);
-        for(const shot of banked)expect(lands([crate,eastWall],{x:maverick.self.x,y:maverick.self.y+1.376,z:maverick.self.z},shot.aim,feet)).toBe(true);
+        for(const shot of banked)expect(lands([crate,eastWall],shot.from,shot.aim,feet)).toBe(true);
         // Memory fades: no bank shot once the sighting is too old.
         expect(banked.every(s=>s.now<=1000+BANK.memoryMs+BANK.holdMs)).toBe(true);
         expect(tryhard.shots.some(s=>s.aim.x>5)).toBe(false);

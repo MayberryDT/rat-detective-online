@@ -8,6 +8,7 @@ import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createAssignment} from '../../src/shared/assignments';
 import {activeZone,rotateZone} from '../../src/shared/jurisdiction';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
+import {worldIntent} from './botControls';
 it('rejects shortcuts over the sewer missing corner and excluded pump machinery',()=>{
  expect(zoneStepSafe('sewer-junction',{x:10,y:-7,z:0},{x:0,y:-7,z:10})).toBe(false);
  expect(zoneStepSafe('pump-floor',{x:125,y:0,z:113},{x:136,y:0,z:113})).toBe(false);
@@ -23,10 +24,10 @@ it('keeps final counterfeit avoidance inside the zone and transitions on case lo
  const nav:MotorNavigation={route:(_from,to)=>[to],localStep:(_from,to)=>to,explorationTargets:()=>[p]};const brain=new RatBot(nav,2,()=>.3);
  for(let t=1000;t<3000;t+=50){
   s.extraCases=[{...s.case,id:'fake',fake:true,owner:null,p:{x:self.x+1,y:self.y,z:self.z+1}}];
-  const intent=brain.step(t,self,[other],s,()=>true,false,true);
+  const intent=worldIntent(brain.step(t,self,[other],s,()=>true,false,true),self);
   expect(brain.objective).toBe('zone-hold');expect(zoneContains(id,{x:self.x+intent.x*.35,y:self.y,z:self.z+intent.z*.35})).toBe(true);
  }
- self.hp=0;expect(brain.step(3010,self,[other],s,()=>true,false,true)).toMatchObject({x:0,z:0,jump:false});
+ self.hp=0;expect(worldIntent(brain.step(3010,self,[other],s,()=>true,false,true),self)).toMatchObject({x:0,z:0,jump:false});
  self.hp=3;s.case.owner=other.id;brain.step(3020,self,[other],s,()=>true,false,true);expect(brain.objective).toBe('carrier');
  s.case.owner=self.id;rotateZone(s.assignment!.jurisdiction!,()=>.3);brain.step(3030,self,[other],s,()=>true,false,true);
  expect(brain.goalKey).toContain(activeZone(s.assignment!.jurisdiction!));expect(brain.goalKey).not.toContain(`:${id}:`);

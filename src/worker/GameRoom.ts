@@ -463,9 +463,9 @@ export class GameRoom extends DurableObject<Env> {
     return new ServerBotController(this.world, this.matchRoom ? PERSISTENT_BOT_IDS : this.botRoster.map(bot => bot.id), {
         recover: id => this.recoverManagedBot(id),
         recoverCase: () => { this.chaos?.recoverLooseCase(); },
-        move: (id, position, facing, at) => {
+        move: (id, position, facing, at, look) => {
           this.handleMovement(id, { type: 'updateMovement', position, rotation: { x: 0, y: 0, z: 0, w: 1 },
-            meshRotation: { x: 0, y: Math.sin(facing / 2), z: 0, w: Math.cos(facing / 2) } }, at);
+            meshRotation: { x: 0, y: Math.sin(facing / 2), z: 0, w: Math.cos(facing / 2) }, ...(look ? { aim: look } : {}) }, at);
         },
         shoot: (id, origin, direction) => {
           if (!this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, this.now())) return;

@@ -12,11 +12,11 @@ export const AIM={
     /** A flick's duration: base plus per radian of travel (Fitts-like), ms. */
     flickMs:90,flickPerRadMs:120,
     /** A gap bigger than this starts a flick instead of tracking, radians (engaged; a calm look uses 3×). */
-    flickAt:.12,
+    flickAt:.18,
     /** Time constant of a calm look (no target), ms. */
     lookMs:240,
-    /** Correlation time of the crosshair's wander, ms. */
-    wanderMs:380,
+    /** Correlation time of the crosshair's wander, ms: slow, so the hand holds still between flicks. */
+    wanderMs:900,
     /** How long the eye takes to register where a target is, ms (visual lag before tracking). */
     seeMs:70,
     /** A hit knocks the crosshair this far (radians, random direction) and widens the wander for `flinchMs`. */
@@ -25,6 +25,10 @@ export const AIM={
     sideMs:[120,260] as readonly [number,number],rearMs:[320,600] as readonly [number,number],
     /** A target seen again this soon after losing it is re-acquired at this share of a reaction. */
     reseenMs:1200,reseenShare:.4,
+    /** A hand holds the mouse still until the crosshair is this far off (radians; a calm look: 2×), then corrects
+     * at this share of its tracking lag until it is within `settleAt`, and holds again (humans hold aim still
+     * 45% of a fight). A deliberate shot (a trigger, a bell, a bank) is lined up without holding. */
+    holdAt:.09,settleAt:.02,correctShare:.35,
 } as const;
 const wrap=(a:number)=>Math.atan2(Math.sin(a),Math.cos(a));
 /** About one standard deviation of noise from three uniforms. */
@@ -39,10 +43,13 @@ export class BotAim {
     private ready=false;
     private desiredYaw=0;private desiredPitch=0;
     private engaged=false;
+    /** Lining up a deliberate shot (a trigger, a bell, a bank): the hand moves with purpose, not calmly. */
+    private deliberate=false;
     private flickStart=0;private flickEnd=0;
     /** A flick starts here and lands off the (moving) aim point by this much: the hand follows the target. */
     private fromYaw=0;private fromPitch=0;private offYaw=0;private offPitch=0;
     private wanderYaw=0;private wanderPitch=0;
+    private holding=false;
     private flinchUntil=0;
     private lastAt?:number;
     private targetId?:string;
@@ -59,7 +66,7 @@ export class BotAim {
     constructor(private readonly random:()=>number,private readonly skill:SkillDials){}
     reset():void {
         this.ready=false;this.engaged=false;this.flickEnd=0;this.wanderYaw=this.wanderPitch=0;this.flinchUntil=0;this.lastAt=undefined;
-        this.targetId=undefined;this.lostAt=-Infinity;this.vx=this.vz=0;
+        this.targetId=undefined;this.lostAt=-Infinity;this.vx=this.vz=0;this.holding=false;
     }
     /** The crosshair starts where the body faces. */
     begin(facing:number):void {if(!this.ready){this.yaw=this.desiredYaw=facing;this.pitch=this.desiredPitch=0;this.ready=true;}}
@@ -111,10 +118,11 @@ export class BotAim {
     look(eye:Vec3Data,point:Vec3Data,exact=false):void {
         if(this.engaged)return;
         const y=exact?point.y:point.y+HEAD;
+        this.deliberate=exact;
         this.desiredYaw=Math.atan2(point.x-eye.x,point.z-eye.z);this.desiredPitch=Math.atan2(y-eye.y,Math.max(.5,Math.hypot(point.x-eye.x,point.z-eye.z)));
     }
     /** Look along a heading, level. */
-    lookAlong(heading:number):void {if(!this.engaged){this.desiredYaw=heading;this.desiredPitch=0;}}
+    lookAlong(heading:number):void {if(!this.engaged){this.desiredYaw=heading;this.desiredPitch=0;this.deliberate=false;}}
     /** How far the crosshair is from where the rat wants it, radians. */
     get error():number{return Math.hypot(wrap(this.desiredYaw-this.yaw),this.desiredPitch-this.pitch);}
     /** The angle a point subtends away from the crosshair, radians. */
@@ -132,9 +140,9 @@ export class BotAim {
     update(now:number):void {
         const dt=this.lastAt===undefined?0:Math.min(.1,Math.max(0,(now-this.lastAt)/1000));this.lastAt=now;
         if(!dt)return;
-        const engaged=this.engaged&&now>=this.readyAt;
+        const engaged=this.engaged&&now>=this.readyAt,purposeful=engaged||this.deliberate&&!this.engaged;
         // Wander: an Ornstein–Uhlenbeck drift, wider after a hit; a calm rat sways a little.
-        const sigma=this.skill.aimWanderRadians*(engaged?this.scale:.4)*(now<this.flinchUntil?1.8:1),k=dt*1000/AIM.wanderMs;
+        const sigma=this.skill.aimWanderRadians*(engaged?this.scale:.2)*(now<this.flinchUntil?1.8:1),k=dt*1000/AIM.wanderMs;
         const kick=sigma*Math.sqrt(2*k);
         this.wanderYaw+=-this.wanderYaw*k+kick*normal(this.random);this.wanderPitch+=-this.wanderPitch*k+kick*.6*normal(this.random);
         // The hand aims at where it thinks the target is, off by its wander; only a big gap to that is a flick.
@@ -145,15 +153,20 @@ export class BotAim {
             this.yaw=wrap(this.fromYaw+wrap(this.desiredYaw+this.wanderYaw+this.offYaw-this.fromYaw)*s);
             this.pitch=this.fromPitch+(this.desiredPitch+this.wanderPitch+this.offPitch-this.fromPitch)*s;return;
         }
-        if(gap>AIM.flickAt*(engaged?1:3)){
+        if(gap>AIM.flickAt*(purposeful?1:3)){
             // A flick lands short or long along its line, and a little to one side.
             const along=1-.04+normal(this.random)*this.skill.flickError,across=normal(this.random)*this.skill.flickError*.35;
             const ux=gapYaw/gap,uy=gapPitch/gap;
-            this.fromYaw=this.yaw;this.fromPitch=this.pitch;
+            this.fromYaw=this.yaw;this.fromPitch=this.pitch;this.holding=false;
             this.offYaw=gapYaw*(along-1)-uy*gap*across;this.offPitch=gapPitch*(along-1)+ux*gap*across;
-            this.flickStart=now;this.flickEnd=now+Math.max(gap/AIM.maxRate*1000,(AIM.flickMs+AIM.flickPerRadMs*gap)*(engaged?1:1.5));return;
+            this.flickStart=now;this.flickEnd=now+Math.max(gap/AIM.maxRate*1000,(AIM.flickMs+AIM.flickPerRadMs*gap)*(purposeful?1:1.5));return;
         }
-        const follow=1-Math.exp(-dt*1000/(engaged?this.trackMs:AIM.lookMs)),limit=AIM.maxRate*dt;
+        // Hold still while close enough; past that, a quick correction back in. A deliberate shot never holds.
+        const steady=engaged||!this.deliberate;
+        if(steady&&this.holding&&gap<AIM.holdAt*(engaged?1:2))return;
+        this.holding=steady&&gap<AIM.settleAt;
+        if(this.holding)return;
+        const follow=1-Math.exp(-dt*1000/(purposeful?this.trackMs*AIM.correctShare:AIM.lookMs)),limit=AIM.maxRate*dt;
         const dy=gapYaw*follow,dp=gapPitch*follow;
         this.yaw=wrap(this.yaw+Math.max(-limit,Math.min(limit,dy)));this.pitch+=Math.max(-limit,Math.min(limit,dp));
     }

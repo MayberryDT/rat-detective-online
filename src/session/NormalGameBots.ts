@@ -8,9 +8,11 @@ import { BotNavigation } from '../shared/BotNavigation';
 import { StaticCityBroadphase, cityBoxBody } from '../shared/StaticCityBroadphase';
 import { CITY_BARS_GROUP } from '../shared/boxFrame';
 import { SpatialRayQuery } from '../shared/SpatialRayQuery';
-import { guardFastFall, touchingSlick } from '../shared/ratSurfaces';
-import { CITY_BOUNDS, grayboxBoxes } from '../shared/grayboxLayout';
+import { CITY_BOUNDS, GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
 import { DISPATCH_STATIONS, LAUNCH_MACHINES, type ChaosState } from '../shared/chaosState';
+import { hasHustle, PICKUP_TUNING } from '../shared/pickups';
+import { RAT_BODY, RatBody, addRatShapes, turnFacing } from '../shared/rat/ratBody';
+import { FEEL } from '../feel/feelTuning';
 import { COAT_COLORS, FUR_COLORS, HAT_COLORS, HAT_TYPES } from '../shared/ratAppearance';
 import type { ClientMessage, PlayerData, RatAppearance, ServerMessage, Vec3Data } from '../shared/networkProtocol';
 import type { WorldSpec } from '../shared/worldSpec';
@@ -33,11 +35,11 @@ interface Bot {
     transport: BotTransport;
     id: string;
     body: C.Body;
+    rat: RatBody;
     brain: RatBot;
+    /** The body's heading, eased toward the look as a player's model turns. */
     facing: number;
-    launchedUntil: number;
-    normalJump: boolean;
-    zoneHop: boolean;
+    lived: boolean;
     lastLaunch: string;
     lastMovementAt: number;
 }
@@ -103,13 +105,13 @@ export class NormalGameBots {
                 return hit.hasHit?{point:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},normal:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z}}:undefined;
             },
         };
+        const bounds=spec.version===GRAYBOX_VERSION?CITY_BOUNDS:undefined;
         for (let i=0;i<11;i++) {
             const transport = options.createTransport?.() ?? new NetworkManager({url:resolveWebSocketUrl(),receiveMode:'welcome-only'});
-            const body = new C.Body({mass:5, fixedRotation:true, linearDamping:.1, angularDamping:1, collisionFilterGroup:2, collisionFilterMask:1|CITY_BARS_GROUP});
-            body.addShape(new C.Sphere(.6),new C.Vec3(0,.6,0));
-            body.addShape(new C.Sphere(.45),new C.Vec3(0,1.3,0));
-            body.addShape(new C.Sphere(.28),new C.Vec3(0,1.9,0));
-            const bot: Bot = {transport,id:'',body,brain:new RatBot(sharedNavigation,i,Math.random,{personality:(options.personality??botPersonality)(NAMES[i])}),facing:0,launchedUntil:0,normalJump:false,zoneHop:false,lastLaunch:'',lastMovementAt:-Infinity};
+            // The player's body; the local bots pass through each other.
+            const body = new C.Body({mass:RAT_BODY.mass, fixedRotation:true, linearDamping:RAT_BODY.linearDamping, angularDamping:RAT_BODY.angularDamping, collisionFilterGroup:2, collisionFilterMask:1|CITY_BARS_GROUP});
+            addRatShapes(body);
+            const bot: Bot = {transport,id:'',body,rat:new RatBody(body,this.world,bounds),brain:new RatBot(sharedNavigation,i,Math.random,{personality:(options.personality??botPersonality)(NAMES[i])}),facing:0,lived:false,lastLaunch:'',lastMovementAt:-Infinity};
             this.bots.push(bot);
             // The human's feed is the common source. Each extra socket only needs
             // its own welcome, including reconnection identity and server spawn.
@@ -128,7 +130,8 @@ export class NormalGameBots {
     get count(): number { return this.bots.length; }
     private place(bot: Bot, p: Vec3Data): void {
         bot.body.position.set(p.x,p.y,p.z);bot.body.velocity.setZero();bot.body.force.setZero();bot.body.aabbNeedsUpdate=true;
-        bot.launchedUntil=0;bot.normalJump=false;bot.zoneHop=false;bot.lastMovementAt=-Infinity;bot.body.wakeUp();
+        if(bot.lived)bot.body.linearDamping=bot.body.angularDamping=RAT_BODY.respawnDamping;
+        bot.lived=true;bot.rat.reset();bot.lastMovementAt=-Infinity;bot.body.wakeUp();
         bot.brain.reset();
     }
     updateHuman(id: string, p: Vec3Data, hp: number): void {
@@ -158,8 +161,12 @@ export class NormalGameBots {
                 for(const launch of message.state.pressure?.launches??[]){
                     const bot=this.bots.find(b=>b.id===launch.playerId);
                     if(!bot||bot.lastLaunch===launch.id||message.state.time-launch.at>1500||!this.players.get(bot.id)?.hp)continue;
-                    bot.lastLaunch=launch.id;bot.body.velocity.set(launch.velocity.x,launch.velocity.y,launch.velocity.z);
-                    bot.launchedUntil=Date.now()+1600;bot.normalJump=false;bot.zoneHop=false;bot.body.wakeUp();
+                    bot.lastLaunch=launch.id;bot.rat.launch(launch.velocity,FEEL.launchFlight.params.hang,FEEL.launchFlight.params.hangLift);
+                }
+                for(const shove of message.state.pressure?.shoves??[]){
+                    const bot=this.bots.find(b=>b.id===shove.playerId);
+                    if(!bot||bot.lastLaunch===shove.id||message.state.time-shove.at>1500||!this.players.get(bot.id)?.hp)continue;
+                    bot.lastLaunch=shove.id;bot.rat.shove(shove.velocity);
                 }
                 break;
         }
@@ -187,46 +194,38 @@ export class NormalGameBots {
         for(const bot of this.bots){
             const self=this.players.get(bot.id),body=bot.body;
             if(bot.transport.state!=='playing'||!self||self.hp<=0){body.velocity.setZero();body.sleep();continue;}
-            let grounded=false;
-            for(const contact of this.world.contacts){const normal=contact.bi===body?-contact.ni.y:contact.bj===body?contact.ni.y:0;if(normal>.5){grounded=true;break;}}
-            if(grounded&&(!bot.zoneHop||body.velocity.y<=1)){bot.normalJump=false;bot.zoneHop=false;}
+            const grounded=bot.rat.grounded;
             Object.assign(self,{x:body.position.x,y:body.position.y,z:body.position.z});
-            const intent=bot.brain.step(now,self,this.players.values(),this.chaos,target=>this.visible(bot,target),grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visibleControl(bot,target));
-            if(now>=bot.launchedUntil&&!touchingSlick(this.world,body)){
-                body.velocity.x+=(intent.x-body.velocity.x)*.14;body.velocity.z+=(intent.z-body.velocity.z)*.14;
-                if(intent.jump){body.velocity.y=16*Math.sqrt(1.28);bot.normalJump=true;bot.zoneHop=!!intent.zoneHop;}
-            }
-            if(bot.normalJump)body.force.y+=body.mass*this.world.gravity.y*.28;
-            for(const axis of ['x','z'] as const){
-                if(body.position[axis]<CITY_BOUNDS.min+4&&body.velocity[axis]<0)body.velocity[axis]=Math.max(8,-body.velocity[axis]*.45);
-                if(body.position[axis]>CITY_BOUNDS.max-4&&body.velocity[axis]>0)body.velocity[axis]=-Math.max(8,body.velocity[axis]*.45);
-            }
-            bot.facing=intent.facing;body.wakeUp();guardFastFall(this.world,body,dt);
-            if(intent.shoot){
+            const controls=bot.brain.step(now,self,this.players.values(),this.chaos,target=>this.visible(bot,target),grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visibleControl(bot,target));
+            bot.rat.speedScale=hasHustle(this.chaos?.buffs,bot.id,this.chaos?.time??now)?PICKUP_TUNING.hustleMultiplier:1;
+            bot.rat.step(dt,controls,true);
+            bot.facing=turnFacing(bot.facing,controls.lookYaw,dt);
+            if(controls.fire){
                 const origin=this.options.muzzle?.(bot.id,body.position,bot.facing);
                 if(origin){
                     // Ordered pose then shot keeps fast airborne bots' muzzle
                     // validation tied to the same pose, not a 100ms-old update.
-                    const q={x:0,y:Math.sin(bot.facing/2),z:0,w:Math.cos(bot.facing/2)};
-                    const poseSent=bot.transport.send({type:'updateMovement',position:{x:body.position.x,y:body.position.y,z:body.position.z},rotation:{x:0,y:0,z:0,w:1},meshRotation:q});
-                    if(!poseSent)continue;
+                    if(!this.sendPose(bot,controls.lookYaw,controls.lookPitch))continue;
                     bot.lastMovementAt=now;
-                    const dx=intent.shoot.x-origin.x,dy=intent.shoot.y-origin.y,dz=intent.shoot.z-origin.z,length=Math.hypot(dx,dy,dz);
-                    if(length>0)bot.transport.send({type:'shoot',shotId:crypto.randomUUID(),origin,direction:{x:dx/length,y:dy/length,z:dz/length}});
+                    const d=controls.fire.direction;
+                    bot.transport.send({type:'shoot',shotId:crypto.randomUUID(),origin,direction:{x:d.x,y:d.y,z:d.z}});
                 }
             }
+            if(now-bot.lastMovementAt>=100&&this.sendPose(bot,controls.lookYaw,controls.lookPitch))bot.lastMovementAt=now;
         }
         this.world.step(dt);
         for(const bot of this.bots){
             const self=this.players.get(bot.id);if(bot.transport.state!=='playing'||!self||self.hp<=0)continue;
+            bot.rat.settle(true);
             const p=bot.body.position;
-            for(const axis of ['x','z'] as const){const old=p[axis];p[axis]=Math.max(CITY_BOUNDS.min+3,Math.min(CITY_BOUNDS.max-3,old));if(old!==p[axis])bot.body.aabbNeedsUpdate=true;}
             Object.assign(self,{x:p.x,y:p.y,z:p.z});
-            if(now-bot.lastMovementAt>=100){
-                const q={x:0,y:Math.sin(bot.facing/2),z:0,w:Math.cos(bot.facing/2)};
-                if(bot.transport.send({type:'updateMovement',position:{x:p.x,y:p.y,z:p.z},rotation:{x:0,y:0,z:0,w:1},meshRotation:q}))bot.lastMovementAt=now;
-            }
         }
+    }
+    /** The pose and camera look a player's client sends. */
+    private sendPose(bot:Bot,lookYaw:number,lookPitch:number):boolean {
+        const p=bot.body.position,c=Math.cos(lookPitch);
+        return bot.transport.send({type:'updateMovement',position:{x:p.x,y:p.y,z:p.z},rotation:{x:0,y:0,z:0,w:1},
+            meshRotation:{x:0,y:Math.sin(bot.facing/2),z:0,w:Math.cos(bot.facing/2)},aim:{x:-Math.sin(lookYaw)*c,y:Math.sin(lookPitch),z:-Math.cos(lookYaw)*c}});
     }
     dispose():void {
         if(this.disposed)return;this.disposed=true;

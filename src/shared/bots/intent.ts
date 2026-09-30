@@ -5,7 +5,7 @@ import type {Vec3Data} from '../networkProtocol';
  * Firing is not a goal: the motor fires whenever it has a shot, within the skill dials. */
 
 /** Raised by every change to the minds, questions, weights or dials; stamped on city facts next to `layoutVersion`. */
-export const MIND_VERSION=2;
+export const MIND_VERSION=3;
 
 /** Where to go and what to do there. Code offers only the goals valid for this rat right now. */
 export const GOALS=['take-case','chase-carrier','keep-case','hold-zone','hunt','flee','heal','arm-up','ambush','mischief','roam'] as const;

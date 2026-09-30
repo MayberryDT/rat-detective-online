@@ -6,6 +6,7 @@ import type {Mind} from '../../src/shared/bots/intent';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import type {ChaosState} from '../../src/shared/chaosState';
+import {worldIntent} from './botControls';
 
 const player=(id:string,x:number,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 const nav:MotorNavigation={route:(_from,to)=>[{...to}],localStep:(_from,to)=>to,explorationTargets:()=>[{x:10,y:0,z:0},{x:14,y:0,z:0}]};
@@ -56,7 +57,7 @@ it('shoots the mind\'s preferred rat when it is visible, not the nearest',()=>{
     const angleTo=(shot:{x:number;z:number},rat:{x:number;z:number})=>Math.abs(Math.atan2(Math.sin(Math.atan2(shot.x,shot.z)-Math.atan2(rat.x,rat.z)),Math.cos(Math.atan2(shot.x,shot.z)-Math.atan2(rat.x,rat.z))));
     const firstShotAfter=(bot:RatBot,from:number)=>{
         for(let now=0;now<6000;now+=20){
-            const intent=bot.step(now,self,[self,near,far],undefined,()=>true,false,true);
+            const intent=worldIntent(bot.step(now,self,[self,near,far],undefined,()=>true,false,true),self);
             self.meshQy=Math.sin(intent.facing/2);self.meshQw=Math.cos(intent.facing/2);
             if(intent.shoot&&now>=from)return intent.shoot;
         }

@@ -20,11 +20,8 @@ import { RatBillboard } from '../ui/RatBillboard';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { playEntitySound } from '../audio/EntityAudio';
 import { contactShadowsOf } from '../session/shadows';
+import { RAT_BODY, addRatShapes } from '../shared/rat/ratBody';
 export { initEntitySounds, disposeEntitySounds, playHitSound, playPlayerHitSound } from '../audio/EntityAudio';
-
-// ─── PHYSICS CONSTANTS ───
-const HEAD_RADIUS = 0.28;
-const HEAD_OFFSET_Y = 1.9;
 
 // ─── GAMEPLAY CONSTANTS ───
 const FLASH_DURATION = 0.24;
@@ -237,22 +234,16 @@ export class RatEntity {
         // 4. PHYSICS — Compound shape: Body + Chest + Head
         // Remote entities get kinematic bodies (mass=0, no gravity)
         this.body = new CANNON.Body({
-            mass: isRemote ? 0 : 5,
+            mass: isRemote ? 0 : RAT_BODY.mass,
             type: isRemote ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC,
             fixedRotation: true,
-            linearDamping: isRemote ? 0 : 0.1,
-            angularDamping: isRemote ? 0 : 1.0,
+            linearDamping: isRemote ? 0 : RAT_BODY.linearDamping,
+            angularDamping: isRemote ? 0 : RAT_BODY.angularDamping,
             position: new CANNON.Vec3(position.x, position.y, position.z)
         });
 
-        const bodyShape = new CANNON.Sphere(0.6);
-        this.body.addShape(bodyShape, new CANNON.Vec3(0, 0.6, 0));
-
-        const chestShape = new CANNON.Sphere(0.45);
-        this.body.addShape(chestShape, new CANNON.Vec3(0, 1.3, 0));
-
-        this.headShape = new CANNON.Sphere(HEAD_RADIUS);
-        this.body.addShape(this.headShape, new CANNON.Vec3(0, HEAD_OFFSET_Y, 0));
+        // The foot, chest and head spheres every rat shares.
+        this.headShape = addRatShapes(this.body)[2]!;
 
         (this.body as any).userData = { entity: this };
         this.body.addEventListener('collide', this.onRagdollContact);
@@ -869,12 +860,12 @@ export class RatEntity {
         this.scene.add(this.billboard.sprite);
 
         const body = this.body;
-        body.mass = this.isRemote ? 0 : 5;
+        body.mass = this.isRemote ? 0 : RAT_BODY.mass;
         body.type = this.isRemote ? CANNON.Body.KINEMATIC : CANNON.Body.DYNAMIC;
         body.fixedRotation = true;
         // Respawn damping intentionally differs from constructor damping.
-        body.linearDamping = this.isRemote ? 0 : 0.01;
-        body.angularDamping = this.isRemote ? 0 : 0.01;
+        body.linearDamping = this.isRemote ? 0 : RAT_BODY.respawnDamping;
+        body.angularDamping = this.isRemote ? 0 : RAT_BODY.respawnDamping;
         body.updateMassProperties();
         body.position.set(data.x, data.y, data.z);
         body.velocity.set(0, 0, 0);

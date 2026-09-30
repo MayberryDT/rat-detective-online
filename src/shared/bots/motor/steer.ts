@@ -1,14 +1,16 @@
 import type {Vec3Data} from '../../networkProtocol';
 import type {BotWaypoint} from '../../BotLaunchRoutes';
 import type {MotorNavigation} from '../motor';
+import {RAT_MOVEMENT} from '../../rat/ratBody';
 
 /** Route following, the way a hand on the keys and mouse runs it: look ahead along the route to the furthest
  * point the rat can walk to in a straight line and run at that (cutting corners the geometry allows),
  * swing the running direction round at a hand's pace, and ease off for sharp turns. Each rat has its own
  * pace, which drifts a little over time. */
 export const STEER={
-    /** Running pace per rat, units a second (humans run 18; the base tier stays slower). */
-    pace:[12.8,14.4] as readonly [number,number],
+    /** Running pace per rat, units a second: a human's run speed (players hold the key down), a rat a few
+     * percent under it at most. */
+    pace:[RAT_MOVEMENT.run*.96,RAT_MOVEMENT.run] as readonly [number,number],
     /** How far ahead along the route the rat looks for a straight line, units, plus per unit of speed. */
     lookahead:4.5,lookaheadPerSpeed:.2,
     /** Re-choose the point to run at this often, ms. */
@@ -79,10 +81,11 @@ export class BotSteer {
         this.carrot.x=w.x;this.carrot.y=w.y;this.carrot.z=w.z;this.carrotIndex=pick;
     }
 
-    /** This rat's running pace now: its own speed, drifting a few percent over seconds. */
+    /** This rat's running pace now: its own speed, drifting a few percent over seconds (past `run` is simply the
+     * key held down). */
     cruise(now:number):number {
         const t=now/1000+this.phase;
-        return this.pace*(1+.045*Math.sin(t*.83)+.03*Math.sin(t*2.1+1.3));
+        return this.pace*(1+.02*Math.sin(t*.83)+.015*Math.sin(t*2.1+1.3));
     }
 
     /** Swing the running direction toward (dx, dz) at a hand's pace; `sharp` turns at once (stairs, pads,

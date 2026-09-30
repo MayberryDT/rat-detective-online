@@ -17,6 +17,7 @@ import {BotFight,FIGHT,type FightView} from './motor/fight';
 import {BotZoneHold} from './motor/zoneHold';
 import {BotTricks} from './motor/tricks';
 import {zoneStepSafe} from './motor/zoneStepSafe';
+import {RAT_MOVEMENT,lookHeading,noControls,ratMuzzle,type RatControls} from '../rat/ratBody';
 
 export interface MotorNavigation {
     /** A supported local route leg, without replacing the actual objective. */
@@ -35,8 +36,6 @@ export interface MotorNavigation {
     /** The first solid surface on a segment, with its normal; undefined when clear. Bank shots and cover need it. */
     ray?(from:Vec3Data,to:Vec3Data):RayHit|undefined;
 }
-/** One tick's controls: walking velocity, a jump, an optional shot and the gun's facing. */
-export interface MotorIntent { x: number; z: number; jump: boolean; zoneHop?: boolean; shoot?: Vec3Data; facing: number }
 /** A genuine (collectible) case under its goal key: `case` for the primary, `case:<id>` for extras. */
 export interface CaseEntry { key:string; value:CaseState }
 export const distance = (a: Vec3Data, b: Vec3Data) => Math.hypot(a.x-b.x, a.z-b.z, a.y-b.y);
@@ -47,6 +46,10 @@ const CAREFUL=6.5;
 const FIGHTING_MODES:Partial<Record<MotorMode,true>>={combat:true,intercept:true,explore:true};
 /** How long a rat keeps fighting (and looking) where a rival was last seen, ms. */
 const MEMORY_MS=2500;
+/** Hops in a fight, pressed like a player's space bar: after landing, the ground time before the next is this
+ * plus an exponential tail with this mean, ms (Tyler hops 15.8 times a fight-minute and is in the air 28% of
+ * it; one hop is about 1.1 s of air). */
+const HOP={afterMs:250,tailMs:1700} as const;
 
 /** Firing beyond the aimed and speculative shots every rat takes. */
 export interface Tactics {
@@ -103,7 +106,6 @@ export class BotMotor {
     private stalled=false;
     private planAt = 0;
     private shotAt = 0;
-    private jumpAt = 0;
     private progressAt = 0;
     private readonly progressPosition={x:0,y:0,z:0};
     private progressSet=false;
@@ -113,6 +115,8 @@ export class BotMotor {
     private assignmentSignature = '';
     private assignmentActive=false;
     private progress=0;
+    /** Where a reached waypoint last counted as progress: pacing a pocket of a few units never does. */
+    private readonly progressFrom={x:0,y:0,z:0};
     private sighting?:{id:string;p:Vec3Data;at:number};
     /** A defended spot near an intercept post, and when to pick another. */
     private post?:Vec3Data;
@@ -133,6 +137,25 @@ export class BotMotor {
     private glanceUntil=0;
     private glanceAt=0;
     private glanceTurn=0;
+    /** The next fight hop is due (set on landing). */
+    private hopAt=0;
+    private wasGrounded=false;
+    /** The rat's own ground velocity, seen from its position, and the velocity its keys asked for last tick;
+     * in a throw, the gap between them is the machine's drift the keys press against. */
+    private seenAt?:number;
+    private seenX=0;private seenZ=0;private velX=0;private velZ=0;
+    private pressX=0;private pressZ=0;private driftX=0;private driftZ=0;
+    /** Hot Pursuit's scale on the legs this tick (the body applies it; the motor only expects it). */
+    private legs=1;
+    /** Since when the keys have pushed without moving the rat (a wall, a bin): a player's cue to jump. */
+    private pushingSince?:number;
+    /** This tick's controls, reused every tick. */
+    private readonly out:RatControls=noControls();
+    private readonly fireOut={direction:{x:0,y:0,z:0}};
+    private readonly muzzle={x:0,y:0,z:0};
+    /** A route look point held a moment, so the eyes do not chase every carrot. */
+    private lookHold?:Vec3Data;
+    private lookHoldUntil=0;
     private readonly eye={x:0,y:0,z:0};
     private readonly dir={x:0,z:0};
     private readonly holdMove={x:0,z:0};
@@ -156,7 +179,7 @@ export class BotMotor {
         this.motorRandom=seededRandom(seed+40000);
         this.steer=new BotSteer(seededRandom(seed+50000));
         this.fight=new BotFight(seededRandom(seed+60000),seed);
-        this.view={now:0,self:this.eye,enemy:this.lost,visible:false,hurt:false,push:false,nav:navigation};
+        this.view={now:0,self:this.eye,enemy:this.lost,visible:false,hurt:false,push:false,airborne:false,nav:navigation};
         this.zoneHold=new BotZoneHold(seed,seededRandom(seed+73001));
         this.wander = seed * 7;
     }
@@ -191,6 +214,8 @@ export class BotMotor {
         this.assignmentSignature='';this.urgent=false;
         this.sighting=undefined;this.post=undefined;this.postAt=0;this.heard.until=0;this.listenAt=0;this.rivalShots=0;this.rivalNewest=Infinity;
         this.suppressUntil=0;this.hitAt=-Infinity;this.lastHp=Infinity;this.lastDriveAt=undefined;this.ownSpeed=0;this.glanceUntil=0;this.glanceAt=0;
+        this.hopAt=0;this.wasGrounded=false;this.lookHold=undefined;this.lookHoldUntil=0;
+        this.seenAt=undefined;this.pushingSince=undefined;this.velX=this.velZ=this.pressX=this.pressZ=this.driftX=this.driftZ=0;this.legs=1;
     }
     /** Take the decision's plan. A new key restarts routing; the same key keeps the current route. */
     setPlan(plan:Plan): void {
@@ -229,7 +254,7 @@ export class BotMotor {
     private bodyFacing(self:PlayerData):number {
         return Math.atan2(2*(self.meshQw*self.meshQy+self.meshQx*self.meshQz),1-2*(self.meshQy*self.meshQy+self.meshQz*self.meshQz));
     }
-    private fly(now:number,self:PlayerData,grounded:boolean):MotorIntent|undefined {
+    private fly(now:number,self:PlayerData,grounded:boolean):RatControls|undefined {
         const flight=this.flight;if(!flight)return;
         if(now-flight.started>1000&&grounded&&Math.abs(self.y-flight.landing.y)<2){
             this.flight=undefined;this.route=[];this.routeIndex=0;this.pendingPlan=undefined;
@@ -244,15 +269,47 @@ export class BotMotor {
         this.aim.begin(this.bodyFacing(self));
         if(d>.1&&speed)this.aim.lookAlong(Math.atan2(dx,dz));
         this.aim.update(now);
-        return {x:d>.1&&speed>0?dx/d*speed:0,z:d>.1&&speed>0?dz/d*speed:0,jump:false,facing:this.aim.yaw};
+        return this.controls(self,d>.1&&speed>0?dx/d*speed:0,d>.1&&speed>0?dz/d*speed:0,false);
+    }
+
+    /** The rat's own motion this tick, as a player sees their rat move: its ground velocity, and in a throw the
+     * drift its keys are not causing. */
+    private see(now:number,self:PlayerData,state:ChaosState|undefined,grounded:boolean):void {
+        const dt=this.seenAt===undefined?0:(now-this.seenAt)/1000;this.seenAt=now;
+        const fresh=dt>0&&dt<.2;
+        if(fresh){this.velX=(self.x-this.seenX)/dt;this.velZ=(self.z-this.seenZ)/dt;}
+        this.seenX=self.x;this.seenZ=self.z;
+        if(this.flight&&!grounded&&fresh){const k=Math.min(1,dt*8);this.driftX+=(this.velX-this.pressX-this.driftX)*k;this.driftZ+=(this.velZ-this.pressZ-this.driftZ)*k;}
+        else this.driftX=this.driftZ=0;
+        this.legs=hasHustle(state?.buffs,self.id,state?.time??now)?PICKUP_TUNING.hustleMultiplier:1;
+        // Keys held into something that does not give: since when (the last tick's keys, the rat not moving).
+        if(grounded&&Math.hypot(this.pressX,this.pressZ)>3&&Math.hypot(this.velX,this.velZ)<1)this.pushingSince??=now;else this.pushingSince=undefined;
+    }
+
+    /** The keys, look and trigger a player would press this tick to move at world velocity (x, z) with the
+     * crosshair where the aim holds it, jumping on `jump`, firing at `shoot`. Reused every tick. */
+    private controls(self:Vec3Data,x:number,z:number,jump:boolean,shoot?:Vec3Data):RatControls {
+        const out=this.out,heading=this.aim.yaw,s=Math.sin(heading),c=Math.cos(heading),run=RAT_MOVEMENT.run;
+        // In a throw, press against its drift to hold the wanted course, as far as the keys reach.
+        x-=this.driftX;z-=this.driftZ;
+        const held=Math.min(1,run/(Math.hypot(x,z)||run));
+        this.pressX=x*held*this.legs;this.pressZ=z*held*this.legs;
+        out.moveForward=(x*s+z*c)/run;out.moveRight=(z*s-x*c)/run;
+        out.lookYaw=lookHeading(heading);out.lookPitch=this.aim.pitch;out.jump=jump;out.fire=undefined;
+        if(shoot){
+            const m=ratMuzzle(self,heading,this.muzzle),dx=shoot.x-m.x,dy=shoot.y-m.y,dz=shoot.z-m.z,length=Math.hypot(dx,dy,dz);
+            if(length>0){const d=this.fireOut.direction;d.x=dx/length;d.y=dy/length;d.z=dz/length;out.fire=this.fireOut;}
+        }
+        return out;
     }
 
     /** The start of a tick: death, launcher flights and authoritative launches take over the controls. */
-    begin(now:number,self:PlayerData,state:ChaosState|undefined,grounded:boolean):MotorIntent|undefined {
+    begin(now:number,self:PlayerData,state:ChaosState|undefined,grounded:boolean):RatControls|undefined {
+        this.see(now,self,state,grounded);
         if(self.hp<=0){
             this.jumpTravel=undefined;this.flight=undefined;this.launchWaitAt=undefined;this.aim.reset();this.trigger.reset();this.fight.reset();this.zoneHold.reset();
             this.stalled=false;this.lastHp=Infinity;
-            return{x:0,z:0,jump:false,facing:this.aim.yaw};
+            return this.controls(self,0,0,false);
         }
         if(this.jumpTravel&&(now-this.jumpTravel.started>2200||grounded&&now-this.jumpTravel.started>250))this.jumpTravel=undefined;
         const airborne=this.fly(now,self,grounded);if(airborne)return airborne;
@@ -358,7 +415,7 @@ export class BotMotor {
     /** The rest of the tick: move along the plan, fight and fire. */
     drive(now: number, self: PlayerData, state: ChaosState | undefined,
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
-        clearControl: (target: Vec3Data) => boolean): MotorIntent {
+        clearControl: (target: Vec3Data) => boolean): RatControls {
         const assignment=state?.assignment,time=state?.time??now;
         const dt=this.lastDriveAt===undefined?0:Math.min(.1,Math.max(0,(now-this.lastDriveAt)/1000));this.lastDriveAt=now;
         if(dt>0)this.ownSpeed+=(Math.min(30,Math.hypot(self.x-this.lastX,self.z-this.lastZ)/dt)-this.ownSpeed)*Math.min(1,dt*6);
@@ -371,7 +428,10 @@ export class BotMotor {
         // destination is its own record, so it tracks the rat's live position already.
         this.followCase();
         if(this.shotTarget&&this.shotTarget.hp<=0){this.aim.disengage(now);this.shotTarget=undefined;}
-        if(!this.progressSet){this.progressSet=true;this.progressPosition.x=self.x;this.progressPosition.y=self.y;this.progressPosition.z=self.z;this.progressAt=now;}
+        if(!this.progressSet){
+            this.progressSet=true;this.progressPosition.x=self.x;this.progressPosition.y=self.y;this.progressPosition.z=self.z;this.progressAt=now;
+            this.progressFrom.x=self.x;this.progressFrom.y=self.y;this.progressFrom.z=self.z;
+        }
         if(now-this.progressAt>1500){
             if(this.launchWaitAt===undefined&&!this.pendingPlan&&this.routeIndex<this.route.length&&this.destination&&distance(self,this.destination)>3&&Math.hypot(self.x-this.progressPosition.x,self.z-this.progressPosition.z)<1.1&&grounded){
                 this.recoverUntil=now+550;this.planAt=this.recoverUntil;this.route=[];
@@ -383,8 +443,12 @@ export class BotMotor {
         else {this.pendingPlan=undefined;this.route=[];this.routeIndex=0;this.routeWaitStarted=undefined;this.recoverUntil=0;}
         const routeDestination=this.destination&&(this.navigation.travelPoint?.(self,this.destination)??this.destination);
         this.planRoute(now,self,routeDestination,!!holdingZone,grounded);
-        // Waypoints close by count as reached.
-        while(this.routeIndex<this.route.length&&!this.route[this.routeIndex].launch&&!this.route[this.routeIndex].drop&&distance(self,this.route[this.routeIndex])<1.8){this.routeIndex++;this.progress++;}
+        // Waypoints close by count as reached; as progress only once the rat is well clear of the last counted
+        // spot (a rat hopping up the next flight and back, at a player's pace, reaches the same few nodes again).
+        while(this.routeIndex<this.route.length&&!this.route[this.routeIndex].launch&&!this.route[this.routeIndex].drop&&distance(self,this.route[this.routeIndex])<1.8){
+            this.routeIndex++;
+            if(distance(self,this.progressFrom)>8){this.progress++;this.progressFrom.x=self.x;this.progressFrom.y=self.y;this.progressFrom.z=self.z;}
+        }
         // Passing nodes while cutting corners moves the route on but is not counted: re-attaching after each
         // search would count the same patch again, and pacing a pocket must never look like progress.
         if(this.routeIndex<this.route.length)this.routeIndex=this.steer.passed(self,this.route,this.routeIndex);
@@ -420,7 +484,7 @@ export class BotMotor {
             if(this.approach){waypoint=this.approach;approachingCase=true;}
         }else{this.approach=undefined;this.approachAt=0;}
         let obstacleJump=false;
-        if(!holdingZone&&!approachingCase&&!this.jumpTravel&&grounded&&now>=this.jumpAt&&now>=this.jumpProbeAt&&routeDestination&&!waypoint?.launch&&!waypoint?.drop){
+        if(!holdingZone&&!approachingCase&&!this.jumpTravel&&grounded&&now>=this.jumpProbeAt&&routeDestination&&!waypoint?.launch&&!waypoint?.drop){
             this.jumpProbeAt=now+900;
             const landing=this.navigation.jumpStep?.(self,routeDestination);
             if(landing&&!state?.extraCases?.some(c=>c.fake&&distance(c.p,landing)<3&&clear(c.p))){
@@ -461,8 +525,10 @@ export class BotMotor {
         if(this.destination&&(this.mode==='case'&&distance(self,this.destination)<1.15||this.mode==='dispatch'&&distance(self,this.destination)<1.5)){x=0;z=0;}
         if(guarding||this.destination&&distance(self,this.destination)<3)this.progress++;
         // Tunnel ramps are walking links. Recovery hops hit their arched ceiling.
-        let jump=!sewerRampAt(self)&&!approachingCase&&grounded&&now>=this.jumpAt&&(obstacleJump||!this.pendingPlan&&now<this.recoverUntil||blocked&&!!waypoint||!!waypoint&&waypoint.y-self.y>1.1);
-        if(jump)this.jumpAt=now+1800+this.random()*1400;
+        // Jump at a ledge just ahead, or when the keys have pushed into something for a moment without moving the rat.
+        const stuck=blocked&&this.pushingSince!==undefined&&now-this.pushingSince>=150;
+        let jump=!sewerRampAt(self)&&!approachingCase&&grounded&&(obstacleJump||!this.pendingPlan&&now<this.recoverUntil||stuck&&!!waypoint||
+            !!waypoint&&waypoint.y-self.y>1.1&&Math.hypot(waypoint.x-self.x,waypoint.z-self.z)<3);
         // Who the fight is with: the target in sight, or where it was seen moments ago.
         const target=this.shotTarget;
         this.protectedVisible=this.visible.filter(p=>p.hp>0&&hasIronclad(state?.buffs,p.id,time));
@@ -481,19 +547,32 @@ export class BotMotor {
             this.zoneHold.hold(now,holdingZone,`${assignment!.roundId}:${assignment!.jurisdiction!.serial}`,self,this.navigation,this.holdMove);
             x=this.holdMove.x;z=this.holdMove.z;jump=false;this.stalled=false;this.progress++;
         }
-        const fighting=this.assignmentActive&&!obstacleJump&&grounded&&!this.jumpTravel&&!!target&&!protectedTarget&&recent&&!!seen&&
+        // A hop never ends the fight: its keys stay held in the air.
+        const fighting=this.assignmentActive&&!obstacleJump&&!this.jumpTravel&&!!target&&!protectedTarget&&recent&&!!seen&&
             Math.hypot(seen.p.x-self.x,seen.p.z-self.z)<FIGHT.reach&&
             (FIGHTING_MODES[this.mode]||this.mode==='carrier'&&Math.hypot(seen.p.x-self.x,seen.p.z-self.z)<12||!!holdingZone&&!quietZone);
-        if(fighting){
+        // With nowhere to run (at its case, beside the carrier it chases) and a rat in sight close by, the keys
+        // stay busy as in a fight: players hardly ever stand still near a rival. This is not progress.
+        const near=this.visible[0];
+        const idleNear=!fighting&&!holdingZone&&!obstacleJump&&!this.jumpTravel&&Math.hypot(x,z)<1&&!!near&&near.hp>0&&distance(self,near)<FIGHT.reach;
+        if(fighting||idleNear){
             const hurt=self.hp<=2||(this.tactics.danger??0)>=2&&self.hp<=3||now-this.hitAt<1500&&self.hp<=3;
-            const push=!!target&&target.hp<=2&&self.hp>=3||this.rivalShots>=3&&this.rivalNewest>.35;
+            const push=fighting&&(!!target&&target.hp<=2&&self.hp>=3||this.rivalShots>=3&&this.rivalNewest>.35);
             const view=this.view;
-            view.now=now;view.self=self;view.enemy=seen!.p;view.visible=visibleTarget;view.hurt=hurt;view.push=push;
+            view.now=now;view.self=self;view.enemy=fighting?seen!.p:near!;view.visible=fighting?visibleTarget:true;view.hurt=hurt;view.push=push;view.airborne=!grounded;
             if(holdingZone&&this.leashZone!==holdingZone){const zone=this.leashZone=holdingZone;this.leash=(from,to)=>zoneStepSafe(zone,from,to);}
             view.leash=holdingZone?this.leash:undefined;
             this.fight.run(view);
-            x=this.fight.move.x;z=this.fight.move.z;this.stalled=false;this.progress++;if(holdingZone)jump=false;
+            x=this.fight.move.x;z=this.fight.move.z;if(holdingZone)jump=false;
+            if(fighting){this.stalled=false;this.progress++;}
         }else this.fight.reset();
+        // Players hop as they fight, jump-strafing and shooting in the air: the space bar, pressed some time
+        // after each landing while a rival is close.
+        if(grounded&&!this.wasGrounded)this.hopAt=now+HOP.afterMs-Math.log(1-this.motorRandom()*.999)*HOP.tailMs;
+        this.wasGrounded=grounded;
+        const hop=!jump&&grounded&&now>=this.hopAt&&(fighting||visibleTarget&&!!target&&distance(self,target)<FIGHT.reach)&&!holdingZone&&
+            !this.jumpTravel&&!sewerRampAt(self)&&!approachingCase&&!obstacleJump&&!waypoint?.launch&&!waypoint?.drop;
+        if(hop){jump=true;this.hopAt=now+400;}
         const bell=this.bell;
         const dispatchReady=!!bell&&state?.dispatch.phase==='ready'&&clearControl(bell);
         // Follow an armored carrier without running into their gun at point-blank range.
@@ -503,7 +582,7 @@ export class BotMotor {
                 const dx=self.x-carrier.x,dz=self.z-carrier.z,d=Math.hypot(dx,dz)||1;
                 const safe=this.navigation.localStep?.(self,{x:self.x+dx/d*4,y:self.y,z:self.z+dz/d*4});
                 const sx=safe?safe.x-self.x:0,sz=safe?safe.z-self.z:0,len=Math.hypot(sx,sz);
-                x=len?sx/len*6:0;z=len?sz/len*6:0;
+                if(len){x=sx/len*6;z=sz/len*6;}
             }
         }
         // Aim and fire: a bell, a gremlin's trick, the rival in sight, a bank at one just hidden, fire where one
@@ -557,7 +636,6 @@ export class BotMotor {
             const dx=this.jumpTravel.goal.x-self.x,dz=this.jumpTravel.goal.z-self.z,d=Math.hypot(dx,dz);
             const speed=Math.min(CAREFUL,d*5);x=d>.15?dx/d*speed:0;z=d>.15?dz/d*speed:0;
         }
-        if(hasHustle(state?.buffs,self.id,time)){x*=PICKUP_TUNING.hustleMultiplier;z*=PICKUP_TUNING.hustleMultiplier;}
         // Steer around any planted counterfeit the current step would enter.
         // Local, bounded and visible-only: the bot never reads hidden traps, it
         // simply refuses to walk into one it can see ahead of it.
@@ -576,7 +654,7 @@ export class BotMotor {
                 z=nz*stepLength*.5-nx*away*stepLength*1.2;
             }
         }
-        if(jump&&Math.hypot(x,z)>.5){
+        if(jump&&!hop&&Math.hypot(x,z)>.5){
             const speed=Math.hypot(x,z),goal=waypoint&&!holdingZone?waypoint:{x:self.x+x/speed*3,y:self.y,z:self.z+z/speed*3};
             this.jumpTravel={goal:{x:goal.x,y:goal.y,z:goal.z},started:now};
         }
@@ -584,7 +662,7 @@ export class BotMotor {
         if(holdingZone&&!zoneStepSafe(holdingZone,self,{x:self.x+x*.35,y:self.y,z:self.z+z*.35},.6)){
             x=0;z=0;jump=false;this.jumpTravel=undefined;this.zoneHold.invalidate();
         }
-        return{x,z,jump,...(jump&&holdingZone?{zoneHop:true}:{}),shoot,facing};
+        return this.controls(self,x,z,jump,shoot);
     }
 
     /** Where the eyes go with no rival in sight: a rat just lost, gunfire just heard, the case being run at, the
@@ -600,15 +678,17 @@ export class BotMotor {
         if(now>=this.glanceAt){this.glanceAt=now+4000+this.motorRandom()*7000;this.glanceUntil=now+350+this.motorRandom()*450;this.glanceTurn=(this.motorRandom()<.5?-1:1)*(.5+this.motorRandom()*.5);}
         const running=Math.hypot(x,z)>1;
         if(now<this.glanceUntil&&running){this.aim.lookAlong(Math.atan2(x,z)+this.glanceTurn);return;}
+        // Hold a route look point for a moment: the eyes settle on a corner, not on every step of the route.
+        if(this.lookHold&&now<this.lookHoldUntil&&distance(self,this.lookHold)>3){this.aim.look(eye,this.lookHold);return;}
         const ahead=this.route[Math.min(this.route.length-1,this.steer.carrotIndex+4)];
-        if(ahead&&this.routeIndex<this.route.length&&distance(self,ahead)>4){this.aim.look(eye,ahead);return;}
-        if(waypoint&&distance(self,waypoint)>2){this.aim.look(eye,waypoint);return;}
+        const look=ahead&&this.routeIndex<this.route.length&&distance(self,ahead)>4?ahead:waypoint&&distance(self,waypoint)>2?waypoint:undefined;
+        if(look){this.lookHold=look;this.lookHoldUntil=now+600+this.motorRandom()*500;this.aim.look(eye,look);return;}
         if(running)this.aim.lookAlong(Math.atan2(x,z));
     }
 
     /** Stand on a launcher's pad and fire real cheese at its trigger until the machine throws. Only the
      * authoritative launch event starts flight steering. */
-    private workPad(now:number,self:PlayerData,state:ChaosState|undefined,waypoint:BotWaypoint,grounded:boolean,clearControl:(p:Vec3Data)=>boolean):MotorIntent {
+    private workPad(now:number,self:PlayerData,state:ChaosState|undefined,waypoint:BotWaypoint,grounded:boolean,clearControl:(p:Vec3Data)=>boolean):RatControls {
         const machine=waypoint.launch!.machine,target=machine.target,eye=this.eye;
         const dx=machine.pad.x-self.x,dz=machine.pad.z-self.z,d=Math.hypot(dx,dz);
         const travel=Math.hypot(target.x-self.x,target.z-self.z)/BALL_SPEED;
@@ -622,7 +702,7 @@ export class BotMotor {
         }
         const speed=d>.25?Math.min(6,d*4):0;
         this.stalled=false;this.progress++;
-        return{x:d?dx/d*speed:0,z:d?dz/d*speed:0,jump:false,facing:this.aim.yaw,shoot};
+        return this.controls(self,d?dx/d*speed:0,d?dz/d*speed:0,false,shoot);
     }
 
     /** Search a route toward the travel point when due; attach it at the nearest supported waypoint. */

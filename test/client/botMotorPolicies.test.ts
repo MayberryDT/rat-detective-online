@@ -9,6 +9,7 @@ import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {createAssignment,ASSIGNMENT_IDS} from '../../src/shared/assignments';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {JURISDICTION_ZONE_IDS,JURISDICTION_ZONES,zoneContains} from '../../src/shared/jurisdictionZones';
+import {worldIntent} from './botControls';
 const nav:MotorNavigation={route:(_f,to)=>[to],localStep:(_f,to)=>to,explorationTargets:()=>[{x:50,y:0,z:50}]};
 const player=(id:string,x=0,z=0)=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 it.each(ASSIGNMENT_IDS)('keeps a fight through distance ties while preserving better targets and immediate case priority in %s',mode=>{
@@ -40,7 +41,7 @@ function acquisition(behind:boolean){
  const self=player('self'),target=player('enemy',0,behind?-20:20),brain=new RatBot(nav,0,()=>.5);
  let first:number|undefined,maxTurn=0,previous=0;
  for(let now=0;now<5000;now+=20){
-  const intent=brain.step(now,self,[target],undefined,()=>true,false,true);
+  const intent=worldIntent(brain.step(now,self,[target],undefined,()=>true,false,true),self);
   const delta=Math.abs(Math.atan2(Math.sin(intent.facing-previous),Math.cos(intent.facing-previous)));maxTurn=Math.max(maxTurn,delta);previous=intent.facing;
   self.meshQy=Math.sin(intent.facing/2);self.meshQw=Math.cos(intent.facing/2);
   if(intent.shoot)first??=now;
@@ -73,7 +74,7 @@ it('a carrier repositions while turning, fights, cancels body fire on armor and 
  state.assignment=a;state.time=0;state.case.owner=self.id;state.pickups=[];state.dispatch.phase='cooldown';
  const brain=new RatBot(nav,0,()=>.5);let shots=0,movingWhileTurning=false;
  for(let now=0;now<1600;now+=20){
-  state.time=now;const intent=brain.step(now,self,[target],state,()=>true,false,true);
+  state.time=now;const intent=worldIntent(brain.step(now,self,[target],state,()=>true,false,true),self);
   if(now<200&&Math.hypot(intent.x,intent.z)>.1&&!intent.shoot)movingWhileTurning=true;
   if(intent.shoot)shots++;
   self.meshQy=Math.sin(intent.facing/2);self.meshQw=Math.cos(intent.facing/2);
@@ -81,8 +82,8 @@ it('a carrier repositions while turning, fights, cancels body fire on armor and 
  }
  expect(movingWhileTurning).toBe(true);expect(shots).toBeGreaterThan(0);
  state.buffs={[target.id]:{ironcladUntil:15000}};
- for(let now=1600;now<2000;now+=20){state.time=now;expect(brain.step(now,self,[target],state,()=>true,false,true).shoot).toBeUndefined();}
- self.hp=0;const dead=brain.step(2000,self,[target],state,()=>true,false,true);expect(dead).toMatchObject({x:0,z:0,jump:false});expect(dead.shoot).toBeUndefined();
+ for(let now=1600;now<2000;now+=20){state.time=now;expect(brain.step(now,self,[target],state,()=>true,false,true).fire).toBeUndefined();}
+ self.hp=0;const dead=worldIntent(brain.step(2000,self,[target],state,()=>true,false,true),self);expect(dead).toMatchObject({x:0,z:0,jump:false});expect(dead.shoot).toBeUndefined();
  brain.reset();self.hp=3;state.buffs={};state.case.owner=null;state.case.p={x:self.x+3,y:self.y,z:self.z};state.case.returningUntil=0;
- const fresh=brain.step(2020,self,[target],state,()=>true,false,true);expect(brain.objective).toBe('case');expect(fresh.shoot).toBeUndefined();
+ const fresh=brain.step(2020,self,[target],state,()=>true,false,true);expect(brain.objective).toBe('case');expect(fresh.fire).toBeUndefined();
 });

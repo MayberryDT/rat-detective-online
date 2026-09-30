@@ -1,4 +1,5 @@
-import {BotMotor,distance,type MotorIntent,type MotorNavigation} from './motor';
+import {BotMotor,distance,type MotorNavigation} from './motor';
+import type {RatControls} from '../rat/ratBody';
 import {BotGoals,type GoalContext,type GoalInput} from './goals';
 import {codeMind} from './codeMind';
 import {Cast,completeAnswer} from './cast';
@@ -50,7 +51,7 @@ export class RatBot {
 
     step(now: number, self: PlayerData, others: Iterable<PlayerData>, state: ChaosState | undefined,
         clear: (target: Vec3Data) => boolean, blocked: boolean, grounded: boolean,
-        clearControl: (target: Vec3Data) => boolean = clear): MotorIntent {
+        clearControl: (target: Vec3Data) => boolean = clear): RatControls {
         const early=this.motor.begin(now,self,state,grounded);if(early)return early;
         const {ownershipChanged,assignmentChanged}=this.motor.observe(now,self,state);
         if(assignmentChanged)this.goals.newAssignment();

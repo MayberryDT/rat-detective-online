@@ -6,6 +6,7 @@ import {LAUNCH_MACHINES,type ChaosState} from '../../src/shared/chaosState';
 import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import type {PlayerData,Vec3Data} from '../../src/shared/networkProtocol';
+import {muzzleRange,worldIntent} from './botControls';
 
 const player=(id:string,x:number,z:number):PlayerData=>createPlayer(id,id,DEFAULT_APPEARANCE,{x,y:0,z});
 const nav:MotorNavigation={route:(_from,to)=>[{...to}],localStep:()=>undefined,explorationTargets:()=>[{x:0,y:0,z:0}]};
@@ -19,11 +20,12 @@ function state(others:readonly PlayerData[],extra:Partial<ChaosState>={}):ChaosS
         buffs:Object.fromEntries(others.map(p=>[p.id,{ironcladUntil:1e9}])),...extra};
 }
 const counterfeit=(p:Vec3Data):ChaosState['extraCases']=>[{id:'evidence-1',fake:true,owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p,q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}}];
-/** Shots over three seconds from a rat that stands still. */
-function shots(personality:Personality,self:PlayerData,others:PlayerData[],s:ChaosState):Vec3Data[] {
+/** Shots over three seconds from a rat that stands still, each where it passes `target`'s range (if given). */
+function shots(personality:Personality,self:PlayerData,others:PlayerData[],s:ChaosState,target?:Vec3Data):Vec3Data[] {
     const bot=new RatBot(nav,0,()=>.5,{personality}),out:Vec3Data[]=[];
     for(let now=0;now<3000;now+=20){
-        const intent=bot.step(now,self,[self,...others],s,()=>true,false,true);
+        const controls=bot.step(now,self,[self,...others],s,()=>true,false,true);
+        const intent=worldIntent(controls,self,target&&muzzleRange(controls,self,target));
         self.meshQy=Math.sin(intent.facing/2);self.meshQw=Math.cos(intent.facing/2);
         if(intent.shoot)out.push(intent.shoot);
     }
@@ -35,7 +37,7 @@ describe('gremlin mischief fire',()=>{
     it('shoots a counterfeit with another rat beside it, from a safe distance',()=>{
         const fake={x:0,y:.25,z:20},bait=player('bait',3,20);
         const s=state([bait],{extraCases:counterfeit(fake)});
-        expect(shots('gremlin',player('me',0,0),[bait],s).filter(p=>near(p,fake,3.5)).length).toBeGreaterThan(0);
+        expect(shots('gremlin',player('me',0,0),[bait],s,fake).filter(p=>near(p,fake,3.5)).length).toBeGreaterThan(0);
         expect(shots('tryhard',player('me',0,0),[bait],s)).toEqual([]);
     });
 
@@ -49,7 +51,7 @@ describe('gremlin mischief fire',()=>{
     it('shoots a launch trigger while another rat stands on its pad, never while the machine cools',()=>{
         const rider=player('rider',machine.pad.x,machine.pad.z),me=()=>player('me',machine.target.x-20,machine.target.z);
         const ready=state([rider],{pressure:{serial:0,levels:{},launches:[],fired:{}}});
-        expect(shots('gremlin',me(),[rider],ready).filter(p=>near(p,machine.target,3)).length).toBeGreaterThan(0);
+        expect(shots('gremlin',me(),[rider],ready,machine.target).filter(p=>near(p,machine.target,3)).length).toBeGreaterThan(0);
         const cooling=state([rider],{pressure:{serial:0,levels:{},launches:[],fired:{[machine.id]:-200}}});
         expect(shots('gremlin',me(),[rider],cooling)).toEqual([]);
         const empty=player('elsewhere',machine.pad.x+40,machine.pad.z);
