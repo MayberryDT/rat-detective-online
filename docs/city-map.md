@@ -67,7 +67,7 @@ flowchart TB
 - **Cells:** 4 × 4 units, keyed `floor:ix:iz` where `ix = floor(x/4)`. Every cell belongs to exactly one place per floor.
 - **Versions** stamped on every fact:
   - `layoutVersion`: the world version (`GRAYBOX_VERSION`: 5 from the Stakeout sites of 30 September once deployed, 4 from that day's supplies redesign; 3 since 29 September; 2 before), bumped by any layout change;
-  - `mindVersion`: the bots' `MIND_VERSION` (`src/shared/bots/intent.ts`, 1 since B5 of [the bot overhaul](bot-overhaul.md)), raised by any change to the minds, questions, weights or dials;
+  - `mindVersion`: the bots' `MIND_VERSION` (`src/shared/bots/intent.ts`: 1 from B5 of [the bot overhaul](bot-overhaul.md), 3 in the 30 September production release, 4 for motor iterations 3 to 5, 5 from the pickup reflex of [the bot learning plan](bot-learning-plan.md)), raised by any change to the minds, questions, weights or dials;
   - `build`: the release, `<env>-<YYYY-MM-DD>-<git short sha>`, with `-dirty` when the tree had uncommitted changes (for example `staging-2026-09-30-119015e`). `node scripts/deploy.mjs` sets it as the Worker var `BUILD` for staging and production; it reads `dev` when unset (local runs, tests) and `unknown` on aggregates from before builds were recorded. `GET /health` answers with it;
   - `protocol`;
   - `schemaVersion`.
