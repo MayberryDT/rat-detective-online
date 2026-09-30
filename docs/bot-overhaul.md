@@ -426,6 +426,37 @@ Tyler's staging playtest: the bots now decide like humans but still move and sho
 
   Case changes fell by about a fifth (24 rooms: 257 against 321). Balls hit the case 2.3 times as often (585 against 253 in 12 rooms), knocking it loose and kicking it away, so it changes hands less cleanly [inference: more shots fly around rats fighting near the case]; kills and completions are unchanged. Still far from the humans: flicks (most come from the running look following local steps round obstacles, and from glances), strafe flips while running without a route, and controls released.
 
+**Overnight loop (iterations 4 on, 30 September; `mindVersion` stays 4):** one small motor or `SkillDials` change at a time, each measured with `bot-sim` on 24 rooms of 4 minutes (all four assignments, seeds 1–6) against the commit before it. `bot-sim` now prints the gap to the humans as `motor-compare` scores it (`gaps`: 0 plays like the humans, 1 nothing alike; the mean per family, `overall` the mean of the ten families, `accuracy` the blind share and hit rate by distance, not in the overall). The sim is deterministic per seed but chaotic: any change moves every fight, so guard rails differ by chance between runs (12-room and 24-room runs of the same commit differ by about 0.005 in the overall gap; rescues are a count of 10–20).
+
+  | 24 rooms of 4 minutes | Humans | Iteration 3 | Iteration 4 |
+  | --- | --- | --- | --- |
+  | Strafe key held, median (ms) | 314 | 200 | 200 |
+  | Strafe flips a minute | 21.8 | 37.5 | 34.8 |
+  | Aim turn rate, median / p90 (rad/s) | 0.15 / 1.62 | 0.24 / 3.80 | 0.24 / 3.86 |
+  | Aim held still | 44% | 42% | 42% |
+  | Flicks a fight-minute | 6.2 | 11.4 | 11.6 |
+  | Trigger pulls a fight-minute | 261 | 178 | 212 |
+  | Pulls while strafe-jumping, a minute | 27.5 | 15.0 | 18.0 |
+  | Pulls within 150 ms of a jump | 10.4% | 8.1% | 8.1% |
+  | Shots with no rat in sight | 40% | 61% | 60% |
+  | Hit rate 0–5 / 5–10 / 10–15 / 20–30 / 30–45 units | 25 / 9 / 10 / 10 / 10% | 32 / 12 / 10 / 8 / 7% | 30 / 13 / 9 / 8 / 7% |
+  | Hit rate, all shots | 5% | 3.3% | 3.3% |
+  | Stopped | 3.4% | 6.2% | 5.5% |
+  | Forward held / controls released | 55.7 / 4.9% | 50.1 / 8.6% | 53.2 / 7.8% |
+  | Gap: aim / move / inputs | — | 0.362 / 0.268 / 0.227 | 0.364 / 0.231 / 0.191 |
+  | Gap: accuracy (not in the overall) | — | 0.230 | 0.230 |
+  | **Overall gap** | — | **0.193** | **0.177** |
+  | Rescues per bot-hour | — | 0.90 | 1.18 |
+  | Case changes per room-hour | — | 262 | 283 |
+  | Completions per room-hour | — | 3.13 | 3.75 |
+  | Paper Chase deliveries per room-hour | — | 54 | 51 |
+
+- **Iteration 4, faster aimed clicks:** `SkillDials.burstShotMs` 100–170 (was 150–240), `fireGapMs` 100 (was 150). A rat in sight is clicked at about 7 a second in a run instead of 5. Pulls rose from 178 to 212 a fight-minute, the hit rate stayed 3.3%. Rescues 18 against 13 in 21.6 bot-hours; the gate's ground floor had 6 of them (3 at iteration 3), a known pocket, not a firing effect.
+- **Tried and dropped** (12 rooms each, against the overall gap 0.191 of iteration 3):
+  - a running look that turns at most 3.5 rad/s and never flicks: fewer flicks (10.0) but slower, longer turns, more strafe flips (40) and less still aim; overall 0.194;
+  - the forward key held while the running look steers, and then the eight key directions held with 45° of slack while running: flips fell only a little (34.4), because most running flips come while the rat looks at something other than where it runs (a rival in sight, where one was lost, a heard shot), and the error of a held key cost the routes: Paper Chase deliveries fell to 20 a room-hour and rescues rose to 1.67. Keys stay analogue, as a stick.
+- **Where the gaps come from** (the sim tagged with what the motor was doing each tick, `output/polish/motor4-diag.mjs`, not kept): running without a route (local steps) is 40% of fight-window control time, and flips there come mostly while looking at a rival, where one was lost or a heard shot. Flicks come from engaging a new rat (3.6 a minute, counted), the running look (3.3) and re-flicks while tracking (1.3). Standing still is mostly a rat chasing the carrier or the case while its route is still being searched and no local step leads toward it. `fight-motion` counts at most one flick per unbroken aim record in a window (its skip after a flick runs to the end of the record), so "flicks a fight-minute" is windows with a flick; humans are counted the same way.
+
 **Moment replay (designed, not built; deferred on 30 September to ship recording first):** `scripts/moment-replay.mjs` would take each human fight window with controls from the mirror and:
 1. build the headless runtime as `bot-sim` does (the real `ServerBotController`, motor and code mind, `ChaosSimulation`, the staging world; only windows on the current layout);
 2. place one bot where the human was at the first controls slot, with the human's HP, and its body facing the recorded look (the motor's crosshair starts at the body's facing, `BotAim.begin`); start the window's assignment (`mode`);
@@ -446,3 +477,4 @@ Iteration log (one line each):
 1. New motor: pursuit running, hand-like aim, strafe/push/cover fighting, flee fix. Staging `a496ae7d-af2a-4901-a765-b41481b4f0c0` (commit `404ccea`).
 2. One rat body: bots press the player's controls through the shared step; fight hops, key strafes, held aim. Staging `820c8057-aa51-432b-89f7-084a502b1367` (commit `8ad85f3`).
 3. First human session: aim holds still between movements, keys pressed against the look, local steps keep their way round obstacles, more aimed clicks and clicks with hops, harder point blank against moving rats (`mindVersion` 4).
+4. Faster aimed clicks (`burstShotMs` 100–170, `fireGapMs` 100); `bot-sim` prints the gap to the humans. Overall gap 0.193 → 0.177 (24 rooms).

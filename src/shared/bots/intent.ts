@@ -93,4 +93,4 @@ export interface SkillDials {
     fireGapMs:number;
 }
 /** The base tier: below the median human's hit rate (docs/bot-overhaul.md, "Motor rewrite"). */
-export const BASE_SKILL:SkillDials={reactionMs:[240,480],aimWanderRadians:2.2*Math.PI/180,flickError:.2,trackingMs:[130,210],lead:[.2,.75],burstShotMs:[150,240],fireGapMs:150};
+export const BASE_SKILL:SkillDials={reactionMs:[240,480],aimWanderRadians:2.2*Math.PI/180,flickError:.2,trackingMs:[130,210],lead:[.2,.75],burstShotMs:[100,170],fireGapMs:100};

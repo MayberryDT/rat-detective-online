@@ -92,6 +92,21 @@ function fightMotion(rooms){
     return {fightMinutes:r3(g.fightS/60),...Object.fromEntries(Object.entries(features(g)).map(([family,measures])=>
         [family,Object.fromEntries(Object.entries(measures).map(([name,v])=>[name,r3(v)]))]))};
 }
+/** How far the bots are from the humans, as motor-compare scores it (0 the same, 1 nothing alike): the mean gap per
+ * fight family, `inputs` the mean of its three parts, `overall` the mean of the families; `accuracy` (not in the
+ * overall) is the mean over the blind shot share and the hit rate by aim distance. */
+function gaps(summary){
+    const gap=(h,b)=>b===null||b===undefined?null:Math.abs(h-b)/Math.max(Math.abs(h),Math.abs(b),1e-9),r3=x=>Math.round(x*1000)/1000;
+    const mean=list=>{const kept=list.filter(d=>d!==null);return kept.length?r3(kept.reduce((a,b)=>a+b,0)/kept.length):null;};
+    const families={};
+    for(const [family,measures] of Object.entries(summary.fight))if(family!=='fightMinutes'){
+        const score=mean(Object.entries(measures).filter(([name])=>`${family}.${name}` in HUMANS).map(([name,v])=>gap(HUMANS[`${family}.${name}`],v)));
+        if(score!==null)families[family]=score;
+    }
+    const accuracy=mean([gap(HUMANS.blindShotShare,summary.blindShotShare),
+        ...Object.entries(summary.byAimDistance).map(([name,v])=>gap(HUMANS[`byAimDistance.${name}`],v.hitRate))]);
+    return {...families,inputs:mean(['inputs.alone','inputs.pairs','inputs.all'].map(k=>families[k]??null)),overall:mean(Object.values(families)),accuracy};
+}
 function report(rooms,wall){
     const sum=key=>rooms.reduce((a,r)=>a+r[key],0),roomHours=sum('ms')/3600000,botHours=roomHours*BOTS;
     const per=(n,h)=>Math.round(n/h*100)/100;
@@ -111,12 +126,14 @@ function report(rooms,wall){
         byAimDistance:Object.fromEntries(AIM_BAND_NAMES.map((name,i)=>{const shots=rooms.reduce((a,r)=>a+r.aimShots[i],0),hits=rooms.reduce((a,r)=>a+r.aimHits[i],0);
             return [name,{hitRate:Math.round(hits/Math.max(1,shots)*1000)/1000,shots}];})),
         fight:fightMotion(rooms),
+        gaps:null,
         // Per band of the nearest rival: share of shots, and hits landing at that range per shot fired there.
         byRange:Object.fromEntries(BAND_NAMES.map((name,i)=>{const shots=rooms.reduce((a,r)=>a+r.shotsByRange[i],0),hits=rooms.reduce((a,r)=>a+r.hitsByRange[i],0);
             return [name,`${Math.round(shots/Math.max(1,sum('shots'))*100)}% of shots, ${Math.round(hits/Math.max(1,shots)*1000)/10}% hit`];})),
         longestStillCaseSeconds:Math.round(Math.max(...rooms.map(r=>r.longestStill))/100)/10,
         longestStillCase:rooms.reduce((a,r)=>r.longestStill>a.longestStill?r:a).stillAt,
         rescuePlaces:Object.entries(rescuePlaces).sort((a,b)=>b[1]-a[1]).slice(0,8)};
+    summary.gaps=gaps(summary);
     if(values.json)console.log(JSON.stringify({summary,rooms:rooms.map(({fight,...r})=>r)},null,1));
     else for(const [key,value] of Object.entries(summary)){
         if(key==='byAimDistance'){
