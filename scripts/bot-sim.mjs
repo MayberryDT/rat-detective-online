@@ -5,9 +5,10 @@
 // humans' is: fight windows kept as CityRecorder keeps them, read by scripts/lib/fight-motion.mjs.
 // Not a capacity or balance claim: no humans, no network.
 //
-// usage: node scripts/bot-sim.mjs [--assignment=all|<id>] [--seeds=3] [--minutes=4] [--jobs=4] [--ref=<git rev>] [--json]
+// usage: node scripts/bot-sim.mjs [--assignment=all|<id>] [--seeds=3] [--first-seed=1] [--minutes=4] [--jobs=4] [--ref=<git rev>] [--json]
 //   --assignment  the assignment each room starts on; later ones follow the room's rotation (default: all four)
-//   --seeds       rooms per starting assignment, seeds 1..N
+//   --seeds       rooms per starting assignment, seeds first..first+N-1 (a second set of seeds is a fresh sample of the
+//                 same build: fight measures and guard rails move by chance between sets)
 //   --ref         build src/ from that commit instead of the working tree (A/B against older bots)
 import {build} from 'esbuild';
 import {execFileSync,fork} from 'node:child_process';
@@ -39,7 +40,7 @@ const HUMANS={'move.speedMedian':16.5,'move.speedP90':21.9,'move.stopShare':.034
     'inputs.pairs.flickToPullMedianMs':225,'inputs.all.strafeJumpPullsPerMin':27.5,'inputs.all.strafeJumpPullShare':.105,
     blindShotShare:.4,botHitRate:'5%','byAimDistance.0-5':.25,'byAimDistance.5-10':.09,'byAimDistance.10-15':.1,'byAimDistance.15-20':.08,
     'byAimDistance.20-30':.1,'byAimDistance.30-45':.1,'byAimDistance.45-70':.1,'byAimDistance.70+':.05};
-const {values}=parseArgs({options:{assignment:{type:'string',default:'all'},seeds:{type:'string',default:'3'},minutes:{type:'string',default:'4'},
+const {values}=parseArgs({options:{assignment:{type:'string',default:'all'},seeds:{type:'string',default:'3'},'first-seed':{type:'string',default:'1'},minutes:{type:'string',default:'4'},
     jobs:{type:'string',default:'4'},ref:{type:'string'},json:{type:'boolean',default:false},child:{type:'string'},runtime:{type:'string'}}});
 const root=process.cwd();
 
@@ -74,7 +75,7 @@ await build({stdin:{contents:[
 const {ASSIGNMENT_IDS}=await import(pathToFileURL(runtime));
 const starts=values.assignment==='all'?ASSIGNMENT_IDS:[values.assignment];
 if(starts.some(id=>!ASSIGNMENT_IDS.includes(id)))throw Error(`--assignment must be all or one of ${ASSIGNMENT_IDS.join(', ')}`);
-const runs=starts.flatMap(assignment=>Array.from({length:Number(values.seeds)},(_,i)=>({seed:i+1,assignment,minutes:Number(values.minutes)})));
+const runs=starts.flatMap(assignment=>Array.from({length:Number(values.seeds)},(_,i)=>({seed:Number(values['first-seed'])+i,assignment,minutes:Number(values.minutes)})));
 const started=Date.now(),results=[];
 await Promise.all(Array.from({length:Math.min(Number(values.jobs),runs.length)},async()=>{
     for(let run;(run=runs.shift());){
