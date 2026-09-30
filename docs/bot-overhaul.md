@@ -32,6 +32,10 @@ Jev judges; code knows. Jev picks from candidates that code lists and never inve
 - **Verification runs:** short private bot-only runs of the *new* bots are allowed (about 10 minutes on a hosted fixture; Jev capped at about $1 a run). Today's bots are still not soaked or tuned.
 - **They keep getting better.** Every decision is recorded with its outcome. Changes are replayed against recorded moments before they ship, and each version changes one thing. Jev's own weights are not trained on our data; tuning happens in the questions, the situation text, the weights and the code.
 - **"Better" means more fun and more humanlike, not stronger.**
+- **Bots are equal participants (Tyler, 30 September).** A bot has exactly the tools and abilities a human has. It drives the same shared rat body with the same controls a player produces: move keys, look, jump, fire. Speed, acceleration, jumping, air control, Hot Pursuit, the hitbox and the fire-rate limit are shared code, not copies, and there are no bot-only movement rules or limits. Only two things differ, on purpose:
+  - the mind (what to do);
+  - skill (reaction, aim error and how fast the crosshair turns, through `SkillDials`), which keeps base bots below the median human.
+- **Measure everything, the same way for everyone.** Human and bot inputs are recorded in the same control format (move keys, look, jump presses, trigger pulls; 20 times a second in fights), next to position and aim. The recorded controls are compared directly: alone, in pairs and all together (`scripts/motor-compare.mjs`), and moment by moment, by giving the bot's motor a recorded human situation and comparing its presses with the human's.
 
 ## Authority and boundaries
 
