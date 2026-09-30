@@ -118,6 +118,21 @@ describe('parseClientMessage', () => {
       expect(parsed).not.toHaveProperty('aim');
     }
   });
+
+  // Controls are telemetry too: a bad one must never cost the player their movement, on its own or riding a shot.
+  it('keeps sent controls and drops malformed ones without dropping the movement',()=>{
+    const base={type:'updateMovement',position:{x:1,y:2,z:3},rotation:{x:0,y:0,z:0,w:1},meshRotation:{x:0,y:0,z:0,w:1}};
+    const controls={f:1,r:-.71,j:2,fx:1,rx:4};
+    expect(parseClientMessage({...base,controls})).toMatchObject({controls});
+    for(const bad of [{...controls,f:Number.NaN},{...controls,r:5},{...controls,j:-1},{...controls,rx:1.5},{...controls,fx:1e9},{f:1,r:0,j:0,fx:0},'keys',null]){
+      const parsed=parseClientMessage({...base,controls:bad});
+      expect(parsed).toMatchObject({type:'updateMovement',position:{x:1,y:2,z:3}});
+      expect(parsed).not.toHaveProperty('controls');
+      const shot=parseClientMessage({type:'shoot',shotId:'s1',origin:{x:0,y:1,z:0},direction:{x:0,y:0,z:1},movement:{...base,controls:bad}});
+      expect(shot).toMatchObject({type:'shoot',movement:{position:{x:1,y:2,z:3}}});
+      expect(shot?.type==='shoot'?shot.movement:undefined).not.toHaveProperty('controls');
+    }
+  });
 });
 
 describe('parseServerMessage', () => {

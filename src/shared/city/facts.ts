@@ -66,8 +66,13 @@ export interface WorldSituation {
 
 export type CityFact = FactContext & (
   | { type: 'frame'; world: WorldSituation; rats: RatSituation[] }
-  /** `aim`: per actor, 20 samples a second of `[ms, yaw, pitch]`: a human's camera look (pitch null when the client sent none), a bot's facing (pitch null). */
-  | { type: 'window'; reason: 'damage'; from: number; to: number; samples: Record<string, Array<[number, number, number, number, number, number]>>; aim?: Record<string, Array<[number, number, number | null]>> }
+  /** `aim`: per actor, 20 samples a second of `[ms, yaw, pitch]`: a human's camera look (pitch null when the client sent none), a bot's facing (pitch null).
+   * `controls`: per actor, the same 20 Hz slots of `[ms, f, r, jumps, fx, rx]`, the same for humans and bots (`ControlTally`): the move
+   * axes pressed at the slot's end (`RatControls.moveForward` / `moveRight`, -1..1), then within the slot the jump presses and the key
+   * changes on the forward/back and on the left/right axis (a tap is two). Humans from their client's sends, bots from their motor each
+   * step; a rat with no fresh controls (an older client) has no entry. Trigger pulls are `shot` facts. */
+  | { type: 'window'; reason: 'damage'; from: number; to: number; samples: Record<string, Array<[number, number, number, number, number, number]>>; aim?: Record<string, Array<[number, number, number | null]>>;
+      controls?: Record<string, Array<[number, number, number, number, number, number]>> }
   | { type: 'spawn'; a: number; p: P3; place: string; nearest?: number }
   /** Every human shot; one bot shot in `sample` (archive only). `targets`: the rats in sight nearest the aim line. */
   | { type: 'shot'; a: number; human: boolean; p: P3; place: string; dir: P3; gapMs?: number; sample?: number; targets?: ShotTarget[] }

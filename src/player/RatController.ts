@@ -5,6 +5,7 @@ import { RatEntity } from '../entities/RatEntity';
 import { RatOptions } from '../utils/RatModel';
 import { PRESSURE_LAUNCH, type ChaosState } from '../shared/chaosState';
 import { RatBody, noControls, turnFacing } from '../shared/rat/ratBody';
+import { ControlTally } from '../shared/rat/controlTally';
 import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
 import type {TouchMovement} from '../session/TouchInput';
@@ -23,6 +24,8 @@ export class RatController {
     private camera: THREE.PerspectiveCamera;
     private spherical = new THREE.Spherical(CAM_RADIUS, Math.PI * 0.4, Math.PI);
     private readonly controls = noControls();
+    /** The controls pressed since the last movement send (the city map's record; authority never reads it). */
+    readonly tally = new ControlTally();
 
     private readonly cameraBlockers: THREE.Object3D[];
     private readonly cameraRay = new THREE.Raycaster();
@@ -84,6 +87,7 @@ export class RatController {
         c.lookYaw = this.spherical.theta;
         c.lookPitch = this.spherical.phi - Math.PI / 2;
         c.jump = !!(keys['Space'] || touch?.jump);
+        this.tally.note(c);
         if (this.movement.step(dt, c, alive)) emitWorldSound(this.entity.scene,'jump',this.entity.body.position,{key:'local-jump'});
         // Face the camera (always strafe, for shooting).
         if (alive) this.entity.mesh.rotation.y = turnFacing(this.entity.mesh.rotation.y, c.lookYaw, dt);

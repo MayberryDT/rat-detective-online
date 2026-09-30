@@ -475,6 +475,7 @@ export class GameRoom extends DurableObject<Env> {
           const player = this.players.get(id), jev = this.jevMind;
           if (player) this.city.decision(player, decision, now, jev?.enabled && decision.answer.source === 'code' ? jev.outcome(id) : undefined);
         },
+        controls: (id, controls, now) => { this.city.botControls(id, controls, now); },
       }, id => { const bot = this.botRoster.find(entry => entry.id === id); return bot ? botPersonality(bot.name) : 'tryhard'; }, this.jev);
   }
 
@@ -1153,6 +1154,7 @@ export class GameRoom extends DurableObject<Env> {
     player.meshQw = message.meshRotation.w;
     this.chaos?.recordMovement(playerId,from,position,at,seq);
     if(message.aim)this.city.aim(playerId,message.aim,at);
+    if(message.controls)this.city.controls(playerId,message.controls,at);
     this.persistPlayer(player, corrected);
     // The harbour (plan D1): a rat whose feet sink into the water dies, credited to nobody.
     // The claim is the rat's own, so trusting it can only drown the claimant.

@@ -27,6 +27,7 @@ import {
   type MovementInput,
   type WorldSpec,
 } from './networkProtocol';
+import type { ControlsInput } from './rat/controlTally';
 import { CHAOS_TUNING, INCIDENT_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, PRESSURE_TUNING, type ChaosState } from './chaosState';
 import { PICKUP_ANCHORS, isPickupKind } from './pickups';
 import { isSupportedWorldVersion } from './worldSpec';
@@ -291,9 +292,17 @@ function parseMovementInput(value:unknown):MovementInput|null {
   if(!isRecord(value))return null;
   const seq=value.seq===undefined?undefined:integer(value.seq),position=parseVec3(value.position),rotation=parseQuat(value.rotation),meshRotation=parseQuat(value.meshRotation);
   if(seq===null||seq!==undefined&&(seq<1||!Number.isSafeInteger(seq))||!position||!rotation||!meshRotation)return null;
-  // Telemetry only: a bad aim is dropped, never the movement it rode on.
+  // Telemetry only: a bad aim or bad controls are dropped, never the movement they rode on.
   const aim=value.aim===undefined?undefined:parseVec3(value.aim),aimLength=aim?Math.hypot(aim.x,aim.y,aim.z):0;
-  return{...(seq===undefined?{}:{seq}),position,rotation,meshRotation,...(aim&&aimLength>.9&&aimLength<1.1?{aim}:{})};
+  const controls=value.controls===undefined?undefined:parseControls(value.controls);
+  return{...(seq===undefined?{}:{seq}),position,rotation,meshRotation,...(aim&&aimLength>.9&&aimLength<1.1?{aim}:{}),...(controls?{controls}:{})};
+}
+
+/** Move axes as keys plus a touch stick can make them; counts a client could gather between sends. */
+function parseControls(value:unknown):ControlsInput|null {
+  if(!isRecord(value))return null;
+  const f=finiteNumber(value.f),r=finiteNumber(value.r),j=boundedInteger(value.j,0,1000),fx=boundedInteger(value.fx,0,1000),rx=boundedInteger(value.rx,0,1000);
+  return f===null||r===null||Math.abs(f)>2||Math.abs(r)>2||j===null||fx===null||rx===null?null:{f,r,j,fx,rx};
 }
 
 function parsePosePlayer(value: unknown): Extract<ServerMessage, { type: 'playerMoved' }>['player'] | null {

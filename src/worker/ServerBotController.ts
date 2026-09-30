@@ -8,7 +8,7 @@ import {SpatialRayQuery} from '../shared/SpatialRayQuery';
 import {CITY_BOUNDS,GRAYBOX_VERSION,grayboxBoxes} from '../shared/grayboxLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
 import {hasHustle,PICKUP_TUNING} from '../shared/pickups';
-import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,ratMuzzle,turnFacing} from '../shared/rat/ratBody';
+import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,ratMuzzle,turnFacing,type RatControls} from '../shared/rat/ratBody';
 import {FEEL} from '../feel/feelTuning';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
 import type {Decision,Mind,Personality} from '../shared/bots/intent';
@@ -23,6 +23,9 @@ export interface ServerBotCallbacks {
     recoverCase?:()=>void;
     /** Each new decision a bot takes (every 180–300 ms and on events), for the recorder. */
     decide?:(id:string,decision:Decision,now:number)=>void;
+    /** The controls a bot pressed this step, as a player's client tallies its own (the recorder's controls record).
+     * The object is the motor's own, reused next step: read it, never keep it. */
+    controls?:(id:string,controls:RatControls,now:number)=>void;
 }
 interface Bot {
     id:string;body:C.Body;rat:RatBody;brain:RatBot;actor?:PlayerData;decided?:Decision;
@@ -242,6 +245,7 @@ export class ServerBotController {
             }
             bot.rat.speedScale=hasHustle(chaos?.buffs,bot.id,chaos?.time??now)?PICKUP_TUNING.hustleMultiplier:1;
             bot.rat.step(step,controls,true);
+            this.callbacks.controls?.(bot.id,controls,now);
             bot.facing=turnFacing(bot.facing,controls.lookYaw,step);bot.lookYaw=controls.lookYaw;bot.lookPitch=controls.lookPitch;
             if(controls.fire){
                 // Through the room's shot handling and rate limit, from the muzzle where the body faces.
