@@ -201,7 +201,8 @@ let registered:CityReactions|undefined;
 export function registerCity(city:CityReactions|undefined):void {registered=city;}
 export function cityImpact(point:Point,energy:number):void {registered?.impact(point,energy);}
 
-function distance(a:Point,b:Point):number {return Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);}
+/** Per impact against every bird, paper, can and lamp: no Math.hypot, which allocates its arguments. */
+function distance(a:Point,b:Point):number {const x=a.x-b.x,y=a.y-b.y,z=a.z-b.z;return Math.sqrt(x*x+y*y+z*z);}
 
 /** Pigeon body plus a wing slab as one non-indexed geometry. */
 function mergeTwo(a:THREE.BufferGeometry,b:THREE.BufferGeometry):THREE.BufferGeometry {

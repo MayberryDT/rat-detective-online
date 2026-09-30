@@ -66,10 +66,11 @@ export class StreetLightPool {
         // Select the room/floor from the rat, not from that offset camera.
         const p=anchor,room=lightRoomAt(p,this.rooms);
         // Best four by score, highest first; equal scores keep source order
-        // (the former stable sort). Runs every frame over ~230 sources: no allocation.
+        // (the former stable sort). Runs every frame over ~230 sources: no allocation
+        // (V8's Math.hypot allocates its arguments, megabytes a minute here).
         const top=this.top,topD=this.topD,topScore=this.topScore;let count=0;
         for(const s of this.sources){
-            const d=Math.hypot(s.x-p.x,s.z-p.z);
+            const hx=s.x-p.x,hz=s.z-p.z,d=Math.sqrt(hx*hx+hz*hz);
             if(d>=32||(s.brightness?.()??1)<=0)continue;
             let score:number;
             if(s.room){
@@ -84,8 +85,8 @@ export class StreetLightPool {
                 const tx=s.target?.x??s.x,ty=s.target?.y??s.y-8,tz=s.target?.z??s.z;
                 const dx=p.x-s.x,dy=p.y+1.2-s.y,dz=p.z-s.z;
                 const ax=tx-s.x,ay=ty-s.y,az=tz-s.z;
-                const distance=Math.hypot(dx,dy,dz),range=s.distance??15,angle=s.angle??.68;
-                const cosine=(dx*ax+dy*ay+dz*az)/Math.max(.001,distance*Math.hypot(ax,ay,az));
+                const distance=Math.sqrt(dx*dx+dy*dy+dz*dz),range=s.distance??15,angle=s.angle??.68;
+                const cosine=(dx*ax+dy*ay+dz*az)/Math.max(.001,distance*Math.sqrt(ax*ax+ay*ay+az*az));
                 const cone=THREE.MathUtils.smoothstep(cosine,Math.cos(angle),Math.cos(angle*(1-(s.penumbra??.65))));
                 score=(s.intensity??45)*(s.brightness?.()??1)*cone*Math.max(0,1-distance/range)**2/Math.max(1,distance*distance);
             }
