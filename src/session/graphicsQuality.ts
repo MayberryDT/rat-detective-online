@@ -34,12 +34,13 @@ function stepOrder(ladder:number[]):Step[] {
 
 /** Auto's timing (ms). A window's mean frame interval above `slow` (55 fps) twice running steps down;
  * `probe` ms of `calm` (58.5 fps) windows, or of slow windows with nothing left worth trying, try one
- * step back up; if the next window is slower than `slow` and than before it goes straight back and
- * the wait doubles (to `probeMax`). Each window leaves out its slowest `trim`
+ * step back up; if the next two windows are slower than `slow` and `cost` slower than before, it goes
+ * straight back and the wait doubles (to `probeMax`). Each window leaves out its slowest `trim`
  * share of frames, so one long hitch cannot move anything; gaps over `gap` (hidden tab, title,
- * loading) and the first `warm` ms after them or a respawn are not measured. A step that does
- * not cut frame time by `gain` is undone and that kind of step waits `block` (doubling). */
-export const AUTO={window:1500,slow:1000/55,calm:1000/58.5,trim:.05,gap:1000,warm:4000,settle:600,gain:.05,probe:8000,probeMax:120000,probeFail:6000,block:60000,blockMax:600000} as const;
+ * loading) and the first `warm` ms after them or a respawn are not measured. A step whose next two
+ * windows are not `gain` faster than the two before is undone and that kind waits `block` (doubling).
+ * Both margins sit above ordinary frame-to-frame noise; a resolution step moves 28-38% of the pixels. */
+export const AUTO={window:1500,slow:1000/55,calm:1000/58.5,trim:.05,gap:1000,warm:4000,settle:600,gain:.08,cost:.1,probe:8000,probeMax:120000,probeFail:8000,block:60000,blockMax:600000} as const;
 
 /** The quality decision alone: no DOM, fed one timestamp per presented frame. */
 export class QualityController {
@@ -51,8 +52,8 @@ export class QualityController {
     /** This window's frame intervals; a window closes early if it fills (over 340 fps). */
     private readonly samples=new Float64Array(512);
     private slowRun=0;private previousMean=0;private calmFor=0;private stuckFor=0;
-    /** The step just taken back up: judged on the next window against the two before it. */
-    private probe?:{step:Step;before:number;at:number;stuck:boolean;judged:boolean};
+    /** The step just taken back up: judged on the two windows after it against the two before. */
+    private probe?:{step:Step;before:number;after:number;at:number;stuck:boolean};
     private probeWait=AUTO.probe as number;
     private check?:{step:Step;before:number;after:number};
     private readonly blocked:Record<Step,{until:number;wait:number}>={scale:{until:0,wait:AUTO.block},tier:{until:0,wait:AUTO.block}};
@@ -121,9 +122,10 @@ export class QualityController {
             }
             this.blocked[check.step].wait=AUTO.block;
         }
-        if(probe&&!probe.judged){
-            probe.judged=true;
-            if(mean>Math.max(AUTO.slow,probe.before*(1+AUTO.gain))){
+        if(probe?.after===0)probe.after=mean;
+        else if(probe&&probe.after>0){
+            const after=(probe.after+mean)/2;probe.after=-1;
+            if(after>Math.max(AUTO.slow,probe.before*(1+AUTO.cost))){
                 // The step back up costs frames: return to where it was and wait longer to retry.
                 this.push(probe.step);this.probe=undefined;this.probeWait=Math.min(this.probeWait*2,AUTO.probeMax);
                 this.quiet(now,AUTO.settle);return true;
@@ -141,7 +143,7 @@ export class QualityController {
             this.stuckFor+=span;
         }
         if((this.calmFor>=this.probeWait||this.stuckFor>=this.probeWait)&&this.applied.length){
-            this.probe={step:this.pop()!,before:(mean+before)/2,at:now,stuck:this.stuckFor>0,judged:false};
+            this.probe={step:this.pop()!,before:(mean+before)/2,after:0,at:now,stuck:this.stuckFor>0};
             this.quiet(now,AUTO.settle);return true;
         }
         return false;

@@ -2,8 +2,8 @@ import {expect,it} from 'vitest';
 import {AUTO,QualityController} from '../../src/session/graphicsQuality';
 
 const VSYNC=1000/60;
-/** A fill-bound machine at DPR 1.5: frame cost grows with drawn pixels; each extras step saves 1 ms. `load` scales the scene. */
-const gpuBound=(load=1)=>(q:QualityController)=>Math.max(VSYNC,(6+14*q.scale**2)*load-(q.tier==='high'?0:q.tier==='medium'?1:2));
+/** A fill-bound machine at DPR 1.5: frame cost grows with drawn pixels; each extras step saves 2.5 ms. `load` scales the scene. */
+const gpuBound=(load=1)=>(q:QualityController)=>Math.max(VSYNC,(6+14*q.scale**2)*load-(q.tier==='high'?0:q.tier==='medium'?2.5:5));
 /** Present frames for `seconds` from `t`; returns the end time and every (time, scale, tier) change. */
 function run(q:QualityController,t:number,seconds:number,cost:(q:QualityController)=>number){
     const end=t+seconds*1000,changes:{t:number;scale:number;tier:string}[]=[];let slow=0,frames=0;
@@ -15,14 +15,15 @@ function run(q:QualityController,t:number,seconds:number,cost:(q:QualityControll
     return {t,changes,slowShare:slow/frames};
 }
 
-it('steps a fill-bound machine down until frames fit 60 fps, finest scale first',()=>{
+it('steps a fill-bound machine down until frames fit 60 fps: resolution to native, then extras before blur',()=>{
     const q=new QualityController(1.5),cost=gpuBound();
     expect(q.scale).toBe(1.5);
-    const {t,changes}=run(q,0,40,cost),settled=changes.findIndex(c=>c.scale===.85);
-    expect(settled).toBeGreaterThan(0);expect(changes[settled]!.t).toBeLessThan(25_000);
-    expect(changes.slice(0,settled+1).every((c,i)=>i===0||c.scale<=changes[i-1]!.scale)).toBe(true);
-    expect(q.scale).toBe(.85);expect(q.tier).toBe('medium');
-    // Settled: frames now fit the budget, and it holds there (occasional probes aside).
+    const {t,changes}=run(q,0,40,cost);
+    // 1.5 (37.5 ms) -> 1.275 (28.8) -> 1.0 (20) -> medium extras (17.5 ms, fits): never below native.
+    expect(changes.slice(0,3).map(c=>`${c.scale}/${c.tier}`)).toEqual(['1.275/high','1/high','1/medium']);
+    expect(changes[2]!.t).toBeLessThan(20_000);
+    expect(q.scale).toBe(1);expect(q.tier).toBe('medium');
+    // Settled: frames now fit the budget, and it holds there (occasional tries back up aside).
     expect(cost(q)).toBeLessThanOrEqual(AUTO.slow);
     expect(run(q,t,60,cost).slowShare).toBeLessThan(.1);
 });
@@ -34,9 +35,10 @@ it('steps down a machine far below 20 fps as well, measuring how much each step 
 });
 it('reaches the same level on a noisy machine (jittery frames, stalls from other programs)',()=>{
     let seed=7;const noise=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};
-    const q=new QualityController(1.5),clean=gpuBound();
+    const q=new QualityController(1.5),clean=gpuBound(),quiet=new QualityController(1.5);
     run(q,0,60,c=>{const r=noise();return r<.02?150+r*5000:clean(c)*(.75+noise()*.5);});
-    expect(q.scale).toBe(.85);
+    run(quiet,0,60,clean);
+    expect([q.scale,q.tier]).toEqual([quiet.scale,quiet.tier]);
 });
 
 it('does not move on hitches: long frames alone, or a hidden tab',()=>{
@@ -52,7 +54,7 @@ it('does not move on hitches: long frames alone, or a hidden tab',()=>{
 
 it('recovers when the load drops, slowly, and backs off from a level that failed',()=>{
     const q=new QualityController(1.5);
-    let {t}=run(q,0,40,gpuBound(1));
+    let {t}=run(q,0,60,gpuBound(1.3));
     const low=q.scale;expect(low).toBeLessThan(1);
     // A lighter scene: 1.275 now fits (6+22.8)*.55 ≈ 15.8 ms but 1.5 does not (20.7 ms).
     const light=run(q,t,5,gpuBound(.55));t=light.t;
