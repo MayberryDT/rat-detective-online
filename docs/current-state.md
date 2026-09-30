@@ -396,7 +396,7 @@ Released after accepted playtesting: Chain of Custody is now **PAPER CHASE**
 (“Deliver the paperwork. First to three wins.”), retaining its stored mode ID.
 Bots favor active case/mode objectives over supply excursions. Useful on-route
 pickups remain, with short detour budgets and a cooldown; unnecessary buff
-refreshes and long armor trips yield to a live objective. Jurisdiction carriers
+refreshes and long armor trips yield to a live objective (superseded on 30 September by the pickup reflex: bots take every usable supply they pass; see [the bot learning plan](bot-learning-plan.md)). Jurisdiction carriers
 stay in a scoring zone through its warning, and quiet defenders hold their posts.
 Destination guidance stays visible during roulette and finds space around HUD
 cards. See the [follow-up receipt](verification/objective-focus-paper-chase-2026-09-13.md).

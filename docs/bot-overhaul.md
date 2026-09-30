@@ -1,6 +1,6 @@
 # Bot overhaul plan
 
-Status (2026-09-30): **B0–B7 done: released to production** on Tyler's order ("Send it live… Don't ship it without input recording"). Production Worker `aecb77d2-8d51-4792-a5fb-af077c036c3d` runs motor iteration 2 with controls recording (`mindVersion` 3, commit `c878e52` on `main`, merged back into `bots/overhaul`). **Motor iterations 3–5** (`mindVersion` 4, from the first human session; see "Motor rewrite") are on staging. **The next phase is [the bot learning plan](bot-learning-plan.md)**: copy Jev into the code mind, then tune to humans. It replaces this plan's once-a-second Jev cadence ("Cadence", "Freshness") with event-driven decisions every 10 s at most, and the on-route pickup limits with a pickup reflex. This file owns the scope, order, decisions and acceptance of the bot overhaul. The visual version of the design, with diagrams, is [design/bots/overhaul-plan.html](../design/bots/overhaul-plan.html). Measurement uses [the city map](city-map.md).
+Status (2026-09-30): **B0–B7 done: released to production** on Tyler's order ("Send it live… Don't ship it without input recording"). Production Worker `aecb77d2-8d51-4792-a5fb-af077c036c3d` runs motor iteration 2 with controls recording (`mindVersion` 3, commit `c878e52` on `main`, merged back into `bots/overhaul`). **Motor iterations 3–5** (`mindVersion` 4) and the pickup reflex (`mindVersion` 5) go to production with release A of the learning plan. **The next phase is [the bot learning plan](bot-learning-plan.md)**: copy Jev into the code mind, then tune to humans. It replaces this plan's once-a-second Jev cadence ("Cadence", "Freshness") with event-driven decisions every 10 s at most, and the on-route pickup detours in the priority ladder (below) with a pickup reflex. This file owns the scope, order, decisions and acceptance of the bot overhaul. The visual version of the design, with diagrams, is [design/bots/overhaul-plan.html](../design/bots/overhaul-plan.html). Measurement uses [the city map](city-map.md).
 
 ## The idea
 
@@ -354,7 +354,7 @@ Tyler's staging playtest: the bots now decide like humans but still move and sho
   - the recovery jump needs the keys to push for 0.15 s without moving the rat (before, any stop jumped, held back only by the cooldown);
   - aim holds still until the crosshair is 0.09 rad off, then corrects quickly (deliberate trigger, bell and bank shots never hold);
   - in a launcher flight the motor presses against the drift it sees;
-  - a reached route waypoint counts as progress only 8 units or more from the last one that counted, so a bot pacing a pocket (the crane landing's flights up and back) is rescued by the 90 s pocket backstop instead of looking busy.
+  - a reached route waypoint counts as progress only 8 units or more from each of the last four that counted (the spawn point is the first; since L2 of [the bot learning plan](bot-learning-plan.md), before that only the last one), so a bot pacing a pocket (the crane landing's flights up and back) is rescued by the 90 s pocket backstop instead of looking busy.
 - **Fights** (`bot-sim`, 12 rooms of 5 minutes; iteration 1 is the same harness on `6981146`; Tyler's numbers are `motor-compare --mind=2` on the staging mirror):
 
   | In fights | Tyler | Iteration 1 | Iteration 2 |

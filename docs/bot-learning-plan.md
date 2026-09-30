@@ -1,6 +1,6 @@
 # Bot learning plan
 
-Status (30 September 2026): agreed in outline with Tyler; nothing built yet. The next action is L1. This file owns the order, status and acceptance for teaching the bots to decide like Jev, and then like humans. How the data is organised is in [the data plan](data-plan.md). The bot design this builds on is [the bot overhaul plan](bot-overhaul.md).
+Status (30 September 2026): L1 and L2 are built on `bots/overhaul` (`13a7a6e`, `6d08299`, `10fc4b6`) and release A is going to production on Tyler's OK; next is L4, built on staging while release A gathers baseline play. This file owns the order, status and acceptance for teaching the bots to decide like Jev, and then like humans. How the data is organised is in [the data plan](data-plan.md). The bot design this builds on is [the bot overhaul plan](bot-overhaul.md).
 
 ## Goal
 
@@ -47,15 +47,15 @@ At least 3 seconds separate 2 requests to Jev. Between decisions, the bot keeps 
 
 | Step | What it gives | Status |
 | --- | --- | --- |
-| L1 | Data foundation: build stamp, agent traffic flag, aggregates by build, decision inputs, pickups passed | Next |
-| L2 | Pickup reflex | Planned |
-| L3 | Release A: the baseline era, with Jev as it is today | Waits for L1, L2 and Tyler's OK |
-| L4 | Lighter Jev: event-driven decisions, stance, goals held | Planned |
+| L1 | Data foundation: build stamp, agent traffic flag, aggregates by build, decision inputs, pickups passed | Built (`13a7a6e`, `2271371`) |
+| L2 | Pickup reflex | Built (`6d08299`, `10fc4b6`) |
+| L3 | Release A: the baseline era, with Jev as it is today | Deploying (Tyler's OK, 30 September) |
+| L4 | Lighter Jev: event-driven decisions, stance, goals held, code-only rounds | Next, on staging |
 | L5 | Tyler's further changes, then the frozen build and a month of data | Waits for Tyler's list |
 | L6 | Copy Jev into the code mind | After a fortnight of frozen data |
 | L7 | Switch Jev off, then tune to humans | After L6 passes |
 
-### L1. Data foundation (next)
+### L1. Data foundation (built)
 
 Build on staging, on top of the current staging batch:
 
@@ -65,13 +65,24 @@ Build on staging, on top of the current staging batch:
 - every `decision` fact records its inputs: run time to the case and to the carrier, whether the bot is closer to the case than the nearest rival, its health, the nearest rival's health, the rats in view and the stance (from L4)
 - a new `pickup-passed` fact: a stocked, usable supply was in view within 12 units and the rat did not claim it
 
-Done when a staging session shows all 5 in the mirror, and the digest leaves agent rats out of every human measure.
+Done when a staging session shows all 5 in the mirror, and the digest leaves agent rats out of every human measure. A local Worker session with an agent browser showed all 5 (`13a7a6e`). Agent browsers also never switch Jev on (`2271371`).
 
-### L2. Pickup reflex
+Rolling back to a build before L1 breaks aggregate writes: L1 rebuilds the aggregate tables with a build key, and older code writes the old key. Facts and the archive are unaffected.
 
-The motor takes any supply that meets the reflex rule above, whatever the goal. The code mind no longer offers pickups as goals, except a longer trip to heal or arm up.
+### L2. Pickup reflex (built)
 
-Done when a bot-only staging run shows `pickup-passed` falling to near zero for bots, with no fall in case pickups or deliveries.
+Before any decision, a bot checks for a stocked supply in sight within 12 units on its floor. It goes for it whatever its goal, carrying the case too, except a Quick Fix at full health; a held buff refreshes. A loose case nearer than the supply comes first. A carrier scoring in a Jurisdiction zone only takes supplies inside the zone. A supply not reached within 2.5 seconds is left alone for 30 seconds. Supplies 12 to 24 units away (heal or arm up, when no live objective needs the bot) and the Ironclad trip remain goals. `mindVersion` 5.
+
+The same change stopped a bot pacing between 2 or 3 spots from counting as progress, and gave each alarm pillar its own 12-second give-up timer. Stuck-bot rescues are unchanged.
+
+Bot-only simulation, 24 rooms of 4 minutes per seed set, before and after:
+
+| Seeds | Pickups per bot-hour | Passed per bot-hour | Rescues per bot-hour | Case takes per room-hour |
+| --- | --- | --- | --- | --- |
+| 1 to 6 | 31.9 to 51.0 | 40.4 to 6.2 | 0.83 to 1.04 | 285 to 269 |
+| 7 to 12 | 29.4 to 52.6 | 46.3 to 6.1 | 1.39 to 1.18 | 261 to 258 |
+
+Case takes fell 3% because carriers survive longer; the case lies loose for the same share of time.
 
 ### L3. Release A: the baseline era
 
@@ -100,7 +111,7 @@ Tyler's further changes go in first. Then one build freezes for about a month:
 - performance, crash and recording fixes are allowed, because players cannot see them
 - a weekly note reports human hours, Jev spend and anything readable
 
-Proposed, for Tyler to decide: code-only rounds. In 1 round in 5 with humans present, the bots use the code mind instead of Jev. These rounds are the only fair test of whether Jev is worth its cost. Without them, the code mind is only seen in the empty city, where it plays bots alone.
+Agreed by Tyler (30 September): code-only rounds. In 1 round in 5 with humans present, the bots use the code mind instead of Jev. These rounds are the only fair test of whether Jev is worth its cost. Without them, the code mind is only seen in the empty city, where it plays bots alone. They ship with L4, so the comparison starts early; the L4 era report compares Jev rounds only with release A.
 
 ### L6. Copy Jev into the code mind
 
