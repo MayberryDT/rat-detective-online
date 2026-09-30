@@ -12,7 +12,7 @@ Last release receipt: **2026-09-30**. [Bot overhaul and controls recording](veri
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 3 (layout 3, since 29 September; upgraded from version 2 on load); seed persisted for the room (recorded public seed: 341283204) |
 | Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Canonical `public-live-v2` stays alive with 6–9 bots and zero humans; overflow still sleeps |
-| Staging | `rat-detective-staging`, https://rat-detective-staging.mayberrydt.workers.dev/ — Worker `820c8057-aa51-432b-89f7-084a502b1367` (30 September): bot overhaul motor iteration 2 from branch `bots/overhaul`. Protocol 23 like production; secret and Jev vars set. See [the bot overhaul plan](bot-overhaul.md) |
+| Staging | `rat-detective-staging`, https://rat-detective-staging.mayberrydt.workers.dev/ — Worker `93fd2a2d-d227-43c9-9135-92824140bc64` (30 September, overnight): low-HP black and white, kill streak mark, **layout 4** (23 supply sites), bot motor iterations 3–5 (`mindVersion` 4), Graphics setting with Auto quality, perf telemetry and the Windows performance work. Protocol 23; secret and Jev vars set. See [the overnight receipt](verification/overnight-2026-09-30.md) |
 
 Protocol 23 requires matching client and Worker; open protocol-22 tabs must reload. Before any rollback to protocol 15,
 review stored Jurisdiction rounds: the old validator does not understand that mode. Existing older game tabs should
