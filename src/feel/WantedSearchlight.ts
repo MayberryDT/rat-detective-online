@@ -11,13 +11,15 @@ export class WantedSearchlight {
     private readonly pool:THREE.MeshBasicMaterial;
     private level=0;
     private sway=0;
-    constructor(private readonly scene:THREE.Scene){
+    constructor(scene:THREE.Scene){
         const glow=(opacity:number,side:THREE.Side)=>new THREE.MeshBasicMaterial({color:0xdfe8ff,transparent:true,opacity,depthWrite:false,
             blending:THREE.AdditiveBlending,side,forceSinglePass:true,fog:false,toneMapped:false});
         this.beam=glow(.14,THREE.DoubleSide);this.pool=glow(.42,THREE.FrontSide);
         const cone=new THREE.Mesh(new THREE.CylinderGeometry(TOP,BOTTOM,HEIGHT,24,1,true),this.beam);cone.position.y=HEIGHT/2;cone.raycast=()=>{};
         const pool=new THREE.Mesh(new THREE.CircleGeometry(BOTTOM*1.1,28),this.pool);pool.rotation.x=-Math.PI/2;pool.position.y=.08;pool.raycast=()=>{};
         this.root.add(cone,pool);this.root.name='most-wanted-searchlight';this.root.userData.noNoir=true;this.root.visible=false;
+        // In the scene from the start, hidden, so the load's warm-up links its program, not the first Most Wanted.
+        scene.add(this.root);
     }
     /** `target` is the wanted rat's feet, or undefined when nobody is wanted. */
     update(dt:number,target:THREE.Vector3|undefined):void {
@@ -25,7 +27,6 @@ export class WantedSearchlight {
         this.level=Math.max(0,Math.min(1,this.level+(target?dt*3:-dt*3)));
         this.root.visible=this.level>0;
         if(!this.root.visible)return;
-        if(!this.root.parent)this.scene.add(this.root);
         if(target)this.aim.lerp(target,1-Math.exp(-6*dt));
         this.sway+=dt;
         this.root.position.set(this.aim.x+Math.sin(this.sway*1.7)*.35,this.aim.y,this.aim.z+Math.cos(this.sway*1.3)*.35);
