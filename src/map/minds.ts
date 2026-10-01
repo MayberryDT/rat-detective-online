@@ -1,4 +1,4 @@
-// Observe's Minds layer: where the bots take up which goal, by mind and personality, and how those goals end.
+// Observe's Minds layer: where the bots take up which goal, by mind and archetype, and how those goals end.
 import { GOALS, PERSONALITIES, type Goal } from '../shared/bots/intent';
 import { GOAL_OUTCOMES, jevSummary, MIND_NAMES, tallyMinds, type MindFilter, type MindTally } from '../shared/city/minds';
 import { choices, el, esc, pct, section } from './dom';
@@ -27,7 +27,7 @@ export class MindsLayer {
     this.panel = el('div', {},
       el('p', { className: 'note', text: 'Where bots took up each goal (their decisions), coloured by the goal chosen most in each place, or shaded by one goal. Hover for the mix and how those goals ended.' }),
       section('Mind', choices([['', 'Both'], ['jev', 'Jev'], ['code', 'Code']], () => this.filter.mind ?? '', v => pick('mind', v, MIND_NAMES))),
-      section('Personality', choices([['', 'All'], ['tryhard', 'Tryhards'], ['maverick', 'Mavericks'], ['gremlin', 'Gremlins']], () => this.filter.personality ?? '', v => pick('personality', v, PERSONALITIES))),
+      section('Archetype', choices([['', 'All'], ['sniper', 'Snipers'], ['hose', 'Hoses'], ['camper', 'Campers'], ['joyrider', 'Joyriders'], ['gremlin', 'Gremlins']], () => this.filter.personality ?? '', v => pick('personality', v, PERSONALITIES))),
       section('Goal', choices([['', 'Every goal'], ...GOALS.filter(g => g !== 'hold-zone').map(g => [g, g] as const)], () => this.filter.goal ?? '', v => pick('goal', v, GOALS))),
     );
   }

@@ -246,8 +246,10 @@ describe('natural briefcase carry',()=>{
         expect(badge.style.display).toBe('block');
         entity.isPlayer=true;
         const p=simulation.caseBody.position;
-        simulation.shoot(attacker.id,{shotId:'disarm',origin:{x:p.x+2,y:p.y,z:p.z},direction:{x:-1,y:0,z:0}});
-        simulation.step(1/60,1017);
+        for(let i=0;i<CHAOS_TUNING.caseGripHits;i++){
+            simulation.shoot(attacker.id,{shotId:`disarm-${i}`,origin:{x:p.x+2,y:p.y,z:p.z},direction:{x:-1,y:0,z:0}});
+            simulation.step(1/60,1017+i*100);
+        }
         expect(simulation.snapshot().case.owner).toBeNull();
         expect(simulation.snapshot().shots[0].v.x).toBeGreaterThan(0);
         view.apply(simulation.snapshot());view.update(1/60,camera);

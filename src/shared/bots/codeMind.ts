@@ -19,8 +19,8 @@ function ladderRank(goal:Goal,ctx:GoalContext):number|undefined {
 }
 const LADDER_SCORES=[4,3,2,1.5];
 
-/** Free and instant: the tryhard's old priority ladder as goal scores. The ladder's choice scores 4, the
- * next candidates 3, 2, 1.5, then 1; goals off the ladder 0.5, so the argmax is always the old choice. */
+/** Free and instant: the old priority ladder as goal scores. The ladder's choice scores 4, the next candidates
+ * 3, 2, 1.5, then 1; goals off the ladder 0.5, so the argmax is always the old choice. */
 export const codeMind={
     answer(ctx){
         const scores:GoalScores={};
@@ -31,10 +31,12 @@ export const codeMind={
     },
 } satisfies Mind<GoalContext> as {answer(ctx:GoalContext):MindAnswer};
 
-/** Goals a tryhard keeps to rather than fighting rats on the way: the case, the zone, getting healed or armed,
- * getting away. Mavericks and gremlins fight whatever they are doing. */
+/** Goals a steady rat keeps to rather than fighting rats on the way: the case, the zone, getting healed or armed,
+ * getting away. Snipers, campers and a bot with no archetype are steady; hoses, joyriders and gremlins fight
+ * whatever they are doing, except while keeping the case: every carrier keeps to it, so the case moves on. */
 const FOCUSED:Partial<Record<Goal,true>>={'take-case':true,'keep-case':true,'hold-zone':true,heal:true,'arm-up':true,flee:true};
+const STEADY:Partial<Record<Personality,true>>={sniper:true,camper:true};
 /** The code mind's stance for a chosen goal, when the mind's answer gave none. */
-export function codeStance(goal:Goal,personality:Personality):Stance {
-    return personality==='tryhard'&&FOCUSED[goal]?'focus':'fight';
+export function codeStance(goal:Goal,personality:Personality|undefined):Stance {
+    return goal==='keep-case'||goal==='hold-zone'||(!personality||STEADY[personality])&&FOCUSED[goal]?'focus':'fight';
 }

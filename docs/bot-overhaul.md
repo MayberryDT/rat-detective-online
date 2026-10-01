@@ -17,13 +17,10 @@ Jev judges; code knows. Jev picks from candidates that code lists and never inve
 ## Decisions (Tyler, 2026-09-29)
 
 - **Jev is the intent layer, not the hands.** A decision takes about 180 ms, so it can't steer a rat directly. It sets the plan, and the code carries it out.
-- **The cast is 80 / 10 / 10:**
-  - **Tryhards** (80%) play hard to win the assignment;
-  - **Mavericks** (10%) win in their own way: bank shots, launcher ambushes, counterfeit traps;
-  - **Gremlins** (10%) cause chaos.
+- **The cast is five archetypes, evenly (Tyler, 1 October; replaces the 80 / 10 / 10 cast of tryhards, mavericks and gremlins):** snipers, hoses, campers, joyriders and gremlins. See "Archetypes (Tyler, 1 October)" below.
 
-  A personality is a set of weights applied in code to the same Jev answers, so it costs no extra calls. Each roster name keeps its personality across rounds. **Personalities are hidden from players**; the names are internal.
-- **Skill is separate from personality.** Skill lives in the motor: reaction delay, aim error and fire cap. **Base bots never outplay Tyler.** Measured on `/map`, the bots' hit rate and kills per death stay below the median human's. There is one tier; a harder "nightmare" tier would be a later dial.
+  An archetype is a set of goal weights applied in code to the same Jev answers, so it costs no extra calls, plus its own tactics and skill dials. Each roster name keeps its archetype across rounds. **Archetypes are hidden from players**; the names are internal.
+- **Skill lives in the motor:** reaction delay, aim error and fire habits. **Base bots never outplay Tyler.** Measured on `/map`, the bots' hit rate and kills per death stay below the median human's. Each archetype has its own dials, none sharper than `BASE_SKILL` (Tyler, 1 October); a harder "nightmare" tier would be a later dial.
 - **The living city stays.** With no human present, the code mind runs six to nine bots around the clock at no cost. Jev switches on when a human joins and off when the last one leaves.
 - **Clean cutover, with a gate.** The new code mind replaces today's brain (`ObjectiveBotBrain` and its layers). Before production, it must match today's bots on the baseline (see "Acceptance").
 - **Budget:** a **$25 a day** cap on Jev in production. When it is reached, rooms fall back to the code mind until the next day (UTC).
@@ -110,13 +107,13 @@ flowchart TB
 - **Kept:**
   - `BotNavigation.ts` and `BotLaunchRoutes.ts` (flow fields, routes, launcher routes);
   - `ServerBotController.ts` (physics body, movement, rescues), which now drives executors;
-  - `botRoster.ts`, which also rolls each rat's personality;
+  - `botRoster.ts`, which also rolls each rat's archetype;
   - `BotTargeting.ts` and the imperfect aim in `BotCombat.ts`.
 - **Reused:**
   - `src/worker/city/CityRecorder.ts` and `src/shared/city/places.ts` supply perception's vocabulary;
   - the recorder gains `decision` facts.
 - **New, under `src/shared/bots/`:**
-  - `intent.ts`, the shared contract: goals, personalities, `Plan`, `MindAnswer`, `Decision`, skill dials;
+  - `intent.ts`, the shared contract: goals, archetypes (`PERSONALITIES`), `Plan`, `MindAnswer`, `Decision`, skill dials;
   - perception (B3);
   - `goals.ts`: which goals are offered, and the plan code makes for each one;
   - the code mind;
@@ -168,7 +165,7 @@ Each step lists what it delivers and how it is proven.
   - behaviour tests for each executor, written failure-first;
   - a short hosted bot-only run;
   - the code-mind gate (see "Acceptance").
-- **Built (B2b):**
+- **Built (B2b; the tryhard / maverick / gremlin cast below was replaced by five archetypes on 1 October, see "Archetypes (Tyler, 1 October)"):**
   - **Cast** (`src/shared/bots/cast.ts`): personality weights multiply a mind's scores, so a boost never makes a senseless (0) goal sensible:
     - mavericks: ambush ×1.6, hunt ×1.15;
     - gremlins: mischief ×1.8, roam ×1.25, hunt ×1.1, keep the case ×0.85.
@@ -502,3 +499,58 @@ Iteration log (one line each):
 3. First human session: aim holds still between movements, keys pressed against the look, local steps keep their way round obstacles, more aimed clicks and clicks with hops, harder point blank against moving rats (`mindVersion` 4).
 4. Faster aimed clicks (`burstShotMs` 100–170, `fireGapMs` 100); `bot-sim` prints the gap to the humans. Overall gap 0.193 → 0.177 (24 rooms).
 5. A click as the fight hop goes down and one just after, once the crosshair is near the rival. Overall gap 0.177 → 0.155.
+
+## Archetypes (Tyler, 1 October)
+
+Five human-like archetypes replace the tryhard, maverick and gremlin cast (`mindVersion` 7). Each has its own goal weights, tactics and `SkillDials`. No archetype's dials are sharper than `BASE_SKILL`, so base bots still stay below the median human.
+
+### Why
+
+A 56-minute Excessive Force round on 1 October (production, 2 humans, 8 bots) showed that the bots all played alike and differently from the humans:
+
+- all 8 bots shot alike: 153 to 162 shots a minute alive, a 2.4% to 3.4% hit rate; 80% were tryhards, and every bot used `BASE_SKILL`
+- the 2 humans played opposite styles with the same kill rate (about 1.67 kills a minute alive):
+  - human #11, a sniper: 179 shots a minute, 4.6% hit rate, 106 shots a kill, median kill distance 41 units
+  - human #12, a hose and case keeper: 273 shots a minute, 2.4% hit rate, bursts of 15 to 247 shots at 5 to 6 clicks a second, 18% of shots from the air; held the case 10 of 36 minutes
+- the humans played with the city: 18% of their time alive was airborne, they made 51 of the 68 launches, and their balls hit machine triggers 738 times and Dispatch pillars 258 times
+- the bots launched from a machine once in 56 minutes (their 16 other launches were vents)
+- the bots felt too good to Tyler: half their kills were headshots (humans 35%), and they took 0.53 s from first hit to kill (humans 0.89 s)
+
+The headshots had a separate cause, fixed before this change. Bots pre-aimed at head height, so their first shot at a rat stepping into view was a headshot. They now pre-aim at chest height (`src/shared/bots/motor/aim.ts`, the `CHEST` constant and `look()`).
+
+### The five archetypes
+
+Roster names are split evenly by the FNV-1a hash in `botRoster.ts`: tenths 0 to 1 are snipers, 2 to 3 hoses, 4 to 5 campers, 6 to 7 joyriders and 8 to 9 gremlins (221, 203, 212, 210 and 210 of the 1,056-name pool). A rat keeps its archetype across rounds. The server passes the archetype's dials (`ARCHETYPE_SKILL` in `intent.ts`) to `RatBot.play` each time it places a bot. Tactics are in `ARCHETYPE_TACTICS` (`ratBot.ts`) and goal weights in `CAST_WEIGHTS` (`cast.ts`).
+
+| Archetype | Dials (others as `BASE_SKILL`) | Goal weights | Play |
+| --- | --- | --- | --- |
+| Sniper | bursts of 1 to 3, 150 to 240 ms clicks, 500 to 1,300 ms pauses; point-blank miss 24 (base 15) | ambush 1.6, hunt 1.1, chase the carrier 0.9 | fights from a spot at 38 to 55 units and keeps fighting out to 70, backing off a rival inside its range; half the speculative fire; bank shots |
+| Hose | aim wander 1.6×, flick error 0.3 (base 0.2), bursts of 8 to 20, 90 to 140 ms clicks (the 100 ms `fireGapMs` still floors each shot), 60 to 300 ms pauses | hunt 1.35, chase the carrier 1.15, flee 0.7 | fights at 12 to 22 units, twice the speculative fire, fights on the way, bank shots |
+| Camper | side notice 220 to 420 ms (base 120 to 260), rear 520 to 900 ms (base 320 to 600) | take the case 1.15, keep it 1.3, ambush 1.3, roam 0.8 | with the case in Excessive Force, holds the nearest defensible spot in 70 units: a Jurisdiction zone (enclosed ones count as 0.7 times as far), using the zone hold's post and watch of the approaches, fighting on the zone leash and shooting whoever comes; delivers in Paper Chase and holds the zone in Jurisdiction as before |
+| Joyrider | aim wander 1.3× | roam 1.25, hunt 1.1 | rides launch machines on the way (below), shoots triggers under other rats, fights from the air |
+| Gremlin | reaction 260 to 500 ms (base 240 to 480), aim wander 1.2×, flick error 0.22 | mischief 1.8, roam 1.25, hunt 1.1, keep the case 0.85 | as before: counterfeit and trigger mischief, alarm pillars up to 90 units |
+
+Base burst habits are unchanged: bursts of 3 to 9, 100 to 170 ms clicks and 60 to 460 ms pauses. Burst length, click speed and pauses are now `SkillDials` fields (`burst`, `burstShotMs`, `burstPauseMs`), as are `sideMs`, `rearMs` and `pointBlankMiss`. One invariant test (`test/client/botArchetypeSkill.test.ts`) checks that no archetype reacts, notices or tracks faster, aims steadier, misses less up close, fires faster or leads truer than base.
+
+### How the cast and stance changed
+
+- Campers (and a bot with no archetype, as in tests) take their weighted best goal on the code mind and keep a Jev goal until another leads by one level. Snipers, hoses, joyriders and gremlins sample, as mavericks and gremlins did.
+- A rat carrying the case plays it straight: no archetype weights, ranked as a deliberate rat, and stance `focus` while keeping or holding the case. This keeps every objective moving. Gremlins weight keeping the case at 0.85 and roaming at 1.25, so before this rule a gremlin carrier in Paper Chase roamed with the case.
+- The code stance is `focus` for snipers and campers taking the case, healing, arming up or fleeing, and `fight` for hoses, joyriders and gremlins.
+- Jev is told how the rat plays: `me.style` in the situation is one sentence per archetype (`perception.ts`). The camper's keep-the-case goal names its spot.
+
+### Why bots barely used the machines, and the fix
+
+Routes only took a launch when a launch was the shortest way to the goal. `BotNavigation` adds one pad-to-roof link for 5 machines (`BOT_LAUNCH_LINKS`), and the flow field takes it only when the goal is on or beyond that landmark roof. Almost every goal is on the street or inside a building, so no route used a pad, and no goal or tactic ever chose a machine. The one launch in 56 minutes fits this.
+
+Joyriders now ride by tactic (`RIDE` in `motor.ts`). Every second on the ground, a joyrider without the case looks for a machine pad within 45 units that is at most 25 units out of its way to a destination at least 40 units off. While roaming, any pad within reach will do. It walks to the pad and works it as a route launch does: standing on the pad and shooting the trigger. When the authoritative launch event arrives, it flies. In the air, the ordinary drive runs, so it fights and fires from the air and otherwise steers for its plan's destination against the throw's drift. The ride ends on any landing, and the next waits 25 s. A pad not thrown within 16 s is left for 30 s. The goal itself never changes, so the game moves on either way. Joyriders also shoot a machine's trigger while another rat stands on its pad, as gremlins do.
+
+### Smoke runs (headless, not kept)
+
+Each run used the real `ServerBotController` and `ChaosSimulation` on the staging world: 10 bots, 2 of each archetype, 6 minutes a room, one room for each assignment. Runs are not frame-exact, because the route search budget uses wall time.
+
+- Joyriders made 10 to 12 machine launches a room between the pair (other archetypes 0 to 1) and were airborne 20% to 21% of their time alive. Before this change, 8 bots made one machine launch in 56 minutes.
+- Shots a minute alive: snipers 75 to 89, hoses 177 to 204, campers, joyriders and gremlins 146 to 186.
+- In Excessive Force, a camper carrier spent 76 s of an 85 s carry in a zone hold.
+- Paper Chase deliveries over 4 seeds (6-minute rooms): 17 with archetypes and 17 with every bot on base play, with the same seeds. One room varies from 1 to 8 deliveries. Before the carrier rule, gremlin carriers roamed with the case (73 s of roaming while carrying in one room).
+- Rescues stayed at 0 to 2 a room, as on base play.

@@ -112,19 +112,21 @@ describe('bank shots in play',()=>{
         return {shots,rays};
     }
 
-    it('lets a maverick bank at a rat that just went behind cover, and a code-mind tryhard never',()=>{
-        const maverick=play('maverick'),tryhard=play('tryhard');
-        const banked=maverick.shots.filter(s=>s.aim.x>5);
-        expect(banked.length).toBeGreaterThan(0);
-        for(const shot of banked)expect(lands([crate,eastWall],shot.from,shot.aim,feet)).toBe(true);
-        // Memory fades: no bank shot once the sighting is too old.
-        expect(banked.every(s=>s.now<=1000+BANK.memoryMs+BANK.holdMs)).toBe(true);
-        expect(tryhard.shots.some(s=>s.aim.x>5)).toBe(false);
-        expect(tryhard.rays.every(n=>n===0)).toBe(true);
-        // At most one bounded attempt per interval.
-        for(let i=0;i<maverick.rays.length;i++){
-            const window=maverick.rays.slice(i,i+Math.floor(BANK.attemptMs/20)).reduce((a,b)=>a+b,0);
-            expect(window).toBeLessThanOrEqual(BANK.rays);
+    it('lets snipers and hoses bank at a rat that just went behind cover, and a code-mind camper never',()=>{
+        const camper=play('camper');
+        for(const banker of ['sniper','hose'] as const){
+            const played=play(banker),banked=played.shots.filter(s=>s.aim.x>5);
+            expect(banked.length,banker).toBeGreaterThan(0);
+            for(const shot of banked)expect(lands([crate,eastWall],shot.from,shot.aim,feet)).toBe(true);
+            // Memory fades: no bank shot once the sighting is too old.
+            expect(banked.every(s=>s.now<=1000+BANK.memoryMs+BANK.holdMs)).toBe(true);
+            // At most one bounded attempt per interval.
+            for(let i=0;i<played.rays.length;i++){
+                const window=played.rays.slice(i,i+Math.floor(BANK.attemptMs/20)).reduce((a,b)=>a+b,0);
+                expect(window).toBeLessThanOrEqual(BANK.rays);
+            }
         }
+        expect(camper.shots.some(s=>s.aim.x>5)).toBe(false);
+        expect(camper.rays.every(n=>n===0)).toBe(true);
     });
 });

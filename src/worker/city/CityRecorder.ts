@@ -79,7 +79,7 @@ export interface HitRecord { attacker?: PlayerData; victim: PlayerData; damage: 
 export interface MindsWindow { ms: number; stats: JevStats; latencies: readonly number[]; p50?: number; p90?: number }
 /** A bot's current goal, from the decision that took it up to its end. */
 interface OpenGoal {
-  goal: Goal; mode: MotorMode; mind: MindName; personality: Personality; start: number; place: string;
+  goal: Goal; mode: MotorMode; mind: MindName; personality: Personality | undefined; start: number; place: string;
   /** The rat hunted or chased. */
   quarry?: string;
   /** The pickup site sought. */
@@ -517,7 +517,7 @@ export class CityRecorder {
       .map(([goal, weighted]): [Goal, number, number] => [goal, round2(answer.scores[goal] ?? 0), round2(weighted)]);
     this.measure(now, place, decideMeasure(mind, d.personality, plan.goal));
     const inputs = this.inputs(p);
-    this.emit({ ...this.context(now), type: 'decision', a: this.actor(p.id), p: p3(p), place, mind, personality: d.personality, goal: plan.goal, motor: plan.mode,
+    this.emit({ ...this.context(now), type: 'decision', a: this.actor(p.id), p: p3(p), place, mind, ...(d.personality ? { personality: d.personality } : {}), goal: plan.goal, motor: plan.mode,
       trigger: d.trigger, top, ...(answer.danger === undefined ? {} : { danger: round2(answer.danger) }), target: answer.target !== undefined,
       ...(d.failed ? { failed: true as const } : {}), ...(answer.jev ? { latencyMs: answer.jev.latencyMs, tokens: answer.jev.tokens } : {}),
       ...(jev && mind === 'code' ? { jev } : {}), ...(inputs ? { in: inputs } : {}), stance: d.stance });
@@ -566,7 +566,7 @@ export class CityRecorder {
   private endGoal(p: PlayerData, open: OpenGoal, outcome: GoalOutcome, now: number): void {
     this.goals.delete(p.id);
     this.measure(now, open.place, goalMeasure(open.mind, open.personality, open.goal, outcome));
-    this.emit({ ...this.context(now), type: 'goal-end', a: this.actor(p.id), goal: open.goal, motor: open.mode, mind: open.mind, personality: open.personality,
+    this.emit({ ...this.context(now), type: 'goal-end', a: this.actor(p.id), goal: open.goal, motor: open.mode, mind: open.mind, ...(open.personality ? { personality: open.personality } : {}),
       outcome, durationMs: now - open.start, from: open.place, p: p3(p), place: this.places.at(p.x, p.y, p.z).id });
   }
   /** `p` did what its open goal is for, when `does` says so. */

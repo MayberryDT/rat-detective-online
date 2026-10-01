@@ -1,8 +1,7 @@
 import {sewerRampAt} from '../sewerLayout';
-import {activeZone} from '../jurisdiction';
 import {zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {exposedCarrierCase,shotHitsIronclad} from '../BotTargeting';
-import {DISPATCH_STATIONS,PRESSURE_TUNING,type CaseState,type ChaosState} from '../chaosState';
+import {DISPATCH_STATIONS,LAUNCH_MACHINES,PRESSURE_TUNING,type CaseState,type ChaosState,type LaunchMachine} from '../chaosState';
 import {incidentInfo,type IncidentId} from '../incidentCatalog';
 import {hasHustle,hasIronclad,PICKUP_TUNING} from '../pickups';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
@@ -61,13 +60,28 @@ const HOP={afterMs:250,tailMs:1100,clickMs:[110,170],clickWindowMs:250} as const
 const IDLE_MS=500;
 /** Gunfire from out of sight holds the eye this long, ms; then the rat ignores other gunfire this long. */
 const HEARD={lookMs:[900,1600],quietMs:[2000,5000]} as const;
+/** A joyrider's ride (docs/bot-overhaul.md, "Archetypes"): every `checkMs` on the ground it looks for a launch
+ * machine within `reach` whose pad is at most `detour` out of its way to a destination at least `far` off (roaming,
+ * any pad in reach), never with the case. It goes to the pad and works it; a ride not thrown within `ms` is left
+ * for `retryMs`. After a landing the next ride waits `restMs`. In the air it steers for its destination and fights. */
+const RIDE={reach:45,detour:25,far:40,checkMs:1000,ms:16000,retryMs:30000,restMs:25000} as const;
 
-/** Firing beyond the aimed and speculative shots every rat takes. */
+/** Firing and movement beyond what every rat does, set at each decision from the rat's archetype and its mind's answer. */
 export interface Tactics {
     /** Bank shots at a rat that just went behind cover. */
     bank:boolean;
     /** Shoot counterfeits next to other rats and launch triggers under them. */
     mischief:boolean;
+    /** Shoot launch triggers under other rats (counterfeits only with `mischief`). */
+    triggers?:boolean;
+    /** Ride launch machines on the way (`RIDE`). */
+    joyride?:boolean;
+    /** The preferred fight range's span, and how near a rival must be for the fight to take over the movement,
+     * units. Absent: `FIGHT`'s. */
+    range?:readonly [number,number];
+    reach?:number;
+    /** Speculative fire with nobody in sight, as a share of the usual (`BotSpray`). Absent: 1. */
+    spray?:number;
     /** The mind's danger (0 safe … 3 about to die), when it gave one. */
     danger?:number;
     /** `fight`: a rival close by takes over the rat's movement whatever the plan; `focus`: only where the plan
@@ -92,7 +106,7 @@ export class BotMotor {
     urgent = false;
     /** Goals given up so far (`failGoal`), for the recorder's goal outcomes. Never reset. */
     failures = 0;
-    /** Set at each decision from the rat's personality and its mind's answer. */
+    /** Set at each decision from the rat's archetype and its mind's answer. */
     tactics:Tactics={bank:false,mischief:false};
     private shotTarget?: PlayerData;
     private protectedVisible:PlayerData[]=[];
@@ -103,7 +117,13 @@ export class BotMotor {
     private bellAimAt=0;
     private route: BotWaypoint[] = [];
     private routeIndex = 0;
-    private flight?:{landing:Vec3Data;started:number};
+    /** A planned flight onto a known landing; a `free` one (a joyride) steers for the plan's destination and fights. */
+    private flight?:{landing:Vec3Data;started:number;free?:true};
+    /** The launch machine a joyrider is heading for or working, since when, and until when it waits for the throw. */
+    private ride?:{machine:LaunchMachine;since:number;until:number};
+    private rideAt=0;
+    /** The zone a `zone-hold` plan holds. */
+    private holdZone?:JurisdictionZoneId;
     private jumpTravel?:{goal:Vec3Data;started:number};
     private jumpProbeAt=0;
     private approachAt=0;
@@ -198,17 +218,19 @@ export class BotMotor {
     private readonly zoneHold:BotZoneHold;
     private readonly tricks=new BotTricks();
     private readonly motorRandom:()=>number;
-    constructor(private readonly navigation: MotorNavigation, seed: number, private readonly random: () => number,private readonly skill:SkillDials=BASE_SKILL) {
+    constructor(private readonly navigation: MotorNavigation, seed: number, private readonly random: () => number,private skill:SkillDials=BASE_SKILL) {
         this.aim=new BotAim(seededRandom(seed),skill);
         this.trigger=new BotTrigger(seededRandom(seed+10000),skill);
         this.spray=new BotSpray(seededRandom(seed+30000));
         this.motorRandom=seededRandom(seed+40000);
         this.steer=new BotSteer(seededRandom(seed+50000));
         this.fight=new BotFight(seededRandom(seed+60000),seed);
-        this.view={now:0,self:this.eye,enemy:this.lost,look:0,visible:false,hurt:false,push:false,airborne:false,nav:navigation};
+        this.view={now:0,self:this.eye,enemy:this.lost,look:0,visible:false,hurt:false,push:false,airborne:false,nav:navigation,range:FIGHT.range};
         this.zoneHold=new BotZoneHold(seed,seededRandom(seed+73001));
         this.wander = seed * 7;
     }
+    /** The rat's dials: an archetype's, which can change when a slot's rat changes between rounds. */
+    useSkill(skill:SkillDials):void {this.skill=this.aim.skill=this.trigger.skill=skill;}
     /** True while steering a planned launcher or drop flight onto a known landing. */
     get flyingRoute():boolean {return !!this.flight;}
     /** Initial pending work counts as stalled until a usable route or reached goal exists. */
@@ -236,7 +258,7 @@ export class BotMotor {
         this.routeWaitStarted=undefined;this.failedGoals.clear();this.failedCase=undefined;this.stalled=false;
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
         this.caseLifecycles.clear();this.cases=[];
-        this.flight=undefined;this.launchWaitAt=undefined;
+        this.flight=undefined;this.launchWaitAt=undefined;this.ride=undefined;this.rideAt=0;
         this.assignmentSignature='';this.urgent=false;
         this.sighting=undefined;this.post=undefined;this.postAt=0;this.heard.until=0;this.listenAt=0;this.rivalShots=0;this.rivalNewest=Infinity;
         this.suppressUntil=0;this.hitAt=-Infinity;this.lastHp=Infinity;this.lastDriveAt=undefined;this.ownSpeed=0;this.glanceUntil=0;this.glanceAt=0;
@@ -247,7 +269,7 @@ export class BotMotor {
     setPlan(plan:Plan): void {
         if(this.key!==plan.key){this.approach=undefined;this.approachAt=0;this.launchWaitAt=undefined;this.route=[];this.routeIndex=0;this.plannedDestination=undefined;this.pendingPlan=undefined;this.routeWaitStarted=undefined;this.recoverUntil=0;this.planAt=0;this.key=plan.key;
             this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;this.steer.reset();this.post=undefined;}
-        this.mode=plan.mode;this.goal=plan.goal;this.destination=plan.destination;
+        this.mode=plan.mode;this.goal=plan.goal;this.destination=plan.destination;this.holdZone=plan.zone;
     }
     private failureKey(key:string):string {
         // A carrier with an unreachable route must not immediately become the
@@ -289,7 +311,7 @@ export class BotMotor {
         return true;
     }
     private fly(now:number,self:PlayerData,grounded:boolean):RatControls|undefined {
-        const flight=this.flight;if(!flight)return;
+        const flight=this.flight;if(!flight||flight.free)return;
         if(now-flight.started>1000&&grounded&&Math.abs(self.y-flight.landing.y)<2){
             this.flight=undefined;this.route=[];this.routeIndex=0;this.pendingPlan=undefined;
             this.plannedDestination=undefined;this.planAt=0;this.urgent=true;return;
@@ -342,7 +364,7 @@ export class BotMotor {
         this.incident=state?.dispatch.phase==='active'?incidentInfo(state.dispatch.incident).id:undefined;this.aim.incident=this.incident;
         this.see(now,self,state,grounded);
         if(self.hp<=0){
-            this.jumpTravel=undefined;this.flight=undefined;this.launchWaitAt=undefined;this.aim.reset();this.trigger.reset();this.fight.reset();this.zoneHold.reset();
+            this.jumpTravel=undefined;this.flight=undefined;this.launchWaitAt=undefined;this.ride=undefined;this.aim.reset();this.trigger.reset();this.fight.reset();this.zoneHold.reset();
             this.stalled=false;this.lastHp=Infinity;
             return this.controls(self,0,0,false);
         }
@@ -354,6 +376,13 @@ export class BotMotor {
         if(launch&&launchStep){
             this.jumpTravel=undefined;this.flight={landing:launchStep.landing,started:now};this.launchWaitAt=undefined;
             return this.fly(now,self,false)!;
+        }
+        // A joyrider thrown by the machine it worked: the flight is the drive's (steering and fighting in the air).
+        const ride=this.ride;
+        if(ride&&state?.pressure?.launches.some(e=>e.playerId===self.id&&e.machineId===ride.machine.id&&e.at>=ride.since&&now-e.at<1500)){
+            this.ride=undefined;this.jumpTravel=undefined;
+            this.flight={landing:{x:ride.machine.pad.x,y:ride.machine.pad.y,z:ride.machine.pad.z},started:now,free:true};
+            this.route=[];this.routeIndex=0;this.pendingPlan=undefined;this.plannedDestination=undefined;
         }
     }
 
@@ -475,10 +504,17 @@ export class BotMotor {
             }
             this.progressPosition.x=self.x;this.progressPosition.y=self.y;this.progressPosition.z=self.z;this.progressAt=now;
         }
-        const holdingZone=this.mode==='zone-hold'&&assignment?.phase==='active'&&assignment.jurisdiction&&state?.case.owner===self.id&&zoneContains(activeZone(assignment.jurisdiction),self) ? activeZone(assignment.jurisdiction) : undefined;
+        // Holding the plan's zone with the case: Jurisdiction's active zone, or a camper's spot.
+        const held=this.mode==='zone-hold'&&assignment?.phase==='active'?this.holdZone:undefined;
+        const holdingZone=held&&state?.case.owner===self.id&&zoneContains(held,self)?held:undefined;
         if(!holdingZone)this.zoneHold.reset();
         else {this.pendingPlan=undefined;this.route=[];this.routeIndex=0;this.routeWaitStarted=undefined;this.recoverUntil=0;}
-        const routeDestination=this.destination&&(this.navigation.travelPoint?.(self,this.destination)??this.destination);
+        if(this.tactics.joyride)this.joyride(now,self,state,grounded,!!holdingZone);
+        else this.ride=undefined;
+        const ride=this.ride,riding=this.flight?.free?this.flight:undefined;
+        // A joyride ends on any landing, wherever the throw and the steering took the rat.
+        if(riding&&(grounded&&now-riding.started>1000||now-riding.started>15000)){this.flight=undefined;this.urgent=true;this.planAt=0;this.rideAt=now+RIDE.restMs;}
+        const routeDestination=ride?ride.machine.pad:this.destination&&(this.navigation.travelPoint?.(self,this.destination)??this.destination);
         this.planRoute(now,self,routeDestination,!!holdingZone,grounded);
         // Waypoints close by count as reached; as progress only well clear of the last few counted spots (a rat
         // hopping up the next flight and back, or pacing a stair landing and the flight's foot, reaches the same
@@ -501,8 +537,9 @@ export class BotMotor {
             this.launchWaitAt??=now;
             // Standing alone fills a machine in 10 s; give up only well past that.
             if(now-this.launchWaitAt>12500){this.launchWaitAt=undefined;this.failGoal(now);waypoint=undefined;}
-            else return this.workPad(now,self,state,waypoint,grounded,clearControl);
+            else return this.workPad(now,self,state,waypoint.launch.machine,grounded,clearControl);
         }
+        if(ride&&Math.hypot(self.x-ride.machine.pad.x,self.z-ride.machine.pad.z)<2.5&&Math.abs(self.y-ride.machine.pad.y)<1)return this.workPad(now,self,state,ride.machine,grounded,clearControl);
         // Defend an interception post from a spot near it, changing spots at irregular intervals.
         const guarding=this.mode==='intercept'&&!!this.destination&&distance(self,this.destination)<6&&grounded;
         if(!guarding)this.post=undefined;
@@ -600,12 +637,12 @@ export class BotMotor {
         const seen=this.sighting,recent=!!seen&&!!target&&seen.id===target.id&&now-seen.at<MEMORY_MS;
         const quietZone=holdingZone&&!(visibleTarget&&target&&distance(self,target)<22);
         if(holdingZone&&quietZone){
-            this.zoneHold.hold(now,holdingZone,`${assignment!.roundId}:${assignment!.jurisdiction!.serial}`,self,this.navigation,this.holdMove);
+            this.zoneHold.hold(now,holdingZone,assignment!.jurisdiction?`${assignment!.roundId}:${assignment!.jurisdiction.serial}`:this.key,self,this.navigation,this.holdMove);
             x=this.holdMove.x;z=this.holdMove.z;jump=false;this.stalled=false;this.progress++;
         }
         // A hop never ends the fight: its keys stay held in the air.
         const fighting=this.assignmentActive&&!obstacleJump&&!this.jumpTravel&&!!target&&!protectedTarget&&recent&&!!seen&&
-            Math.hypot(seen.p.x-self.x,seen.p.z-self.z)<FIGHT.reach&&
+            Math.hypot(seen.p.x-self.x,seen.p.z-self.z)<(this.tactics.reach??FIGHT.reach)&&
             (FIGHTING_MODES[this.mode]||this.mode!=='pickup'&&(this.tactics.stance==='fight'||now-this.hitAt<FIGHT_BACK_MS)||this.mode==='carrier'&&Math.hypot(seen.p.x-self.x,seen.p.z-self.z)<12||!!holdingZone&&!quietZone);
         // With nowhere to run (at its case, beside the carrier it chases) and a rat in sight close by, the keys
         // stay busy as in a fight: players hardly ever stand still near a rival. This is not progress.
@@ -618,12 +655,18 @@ export class BotMotor {
             const push=fighting&&(!!target&&target.hp<=2&&self.hp>=3||this.rivalShots>=3&&this.rivalNewest>.35);
             const view=this.view;
             view.now=now;view.self=self;view.enemy=fighting?seen!.p:near!;view.look=this.aim.yaw;view.visible=fighting?visibleTarget:true;view.hurt=hurt;view.push=push;view.airborne=!grounded;
+            view.range=this.tactics.range??FIGHT.range;
             if(holdingZone&&this.leashZone!==holdingZone){const zone=this.leashZone=holdingZone;this.leash=(from,to)=>zoneStepSafe(zone,from,to);}
             view.leash=holdingZone?this.leash:undefined;
             this.fight.run(view);
             x=this.fight.move.x;z=this.fight.move.z;if(holdingZone)jump=false;
             if(fighting){this.stalled=false;this.progress++;}
         }else this.fight.reset();
+        // On a joyride, out of a fight: steer for the destination through the air (the drift is pressed against).
+        if(this.flight?.free&&!grounded&&!fighting){
+            const to=this.destination??this.flight.landing,dx=to.x-self.x,dz=to.z-self.z,d=Math.hypot(dx,dz),speed=Math.min(RAT_MOVEMENT.run,d*2);
+            x=d>.5?dx/d*speed:0;z=d>.5?dz/d*speed:0;jump=false;this.stalled=false;
+        }
         // Players hop as they fight, jump-strafing and shooting in the air: the space bar, pressed some time
         // after each landing while a rival is close.
         if(grounded&&!this.wasGrounded)this.hopAt=now+HOP.afterMs-Math.log(1-this.motorRandom()*.999)*HOP.tailMs;
@@ -646,7 +689,7 @@ export class BotMotor {
         }
         // Aim and fire: a bell, a gremlin's trick, the rival in sight, a bank at one just hidden, fire where one
         // just was, and otherwise a look ahead with the odd speculative group.
-        const mischief=this.tactics.mischief&&!holdingZone&&!dispatchReady?this.tricks.mischief(now,self,state,this.visible,clearControl,this.incident):undefined;
+        const mischief=(this.tactics.mischief||this.tactics.triggers)&&!holdingZone&&!dispatchReady?this.tricks.mischief(now,self,state,this.visible,clearControl,this.tactics.mischief,this.incident):undefined;
         if(visibleTarget&&target){
             const point=casePoint??target;
             if(this.aim.engagedId!==target.id)this.trigger.reset();
@@ -689,7 +732,7 @@ export class BotMotor {
                 if(this.aim.error<.08&&this.trigger.pull(now))shoot=this.aim.point(eye,Math.max(8,distance(self,seen!.p)));
             }else{
                 const spray=!holdingZone&&!dispatchReady&&!this.protectedVisible.length&&!(this.mode==='case'&&this.destination&&distance(self,this.destination)<24);
-                if(this.spray.pull(now,spray,!bank&&!mischief&&this.aim.error<.3))shoot=this.aim.point(eye,this.spray.range);
+                if(this.spray.pull(now,spray,!bank&&!mischief&&this.aim.error<.3,this.tactics.spray))shoot=this.aim.point(eye,this.spray.range);
             }
             if(shoot&&!(dispatchReady&&bell&&!visibleTarget))this.shotAt=now+this.skill.fireGapMs;
         }
@@ -750,8 +793,8 @@ export class BotMotor {
 
     /** Stand on a launcher's pad and fire real cheese at its trigger until the machine throws. Only the
      * authoritative launch event starts flight steering. */
-    private workPad(now:number,self:PlayerData,state:ChaosState|undefined,waypoint:BotWaypoint,grounded:boolean,clearControl:(p:Vec3Data)=>boolean):RatControls {
-        const machine=waypoint.launch!.machine,target=machine.target,eye=this.eye;
+    private workPad(now:number,self:PlayerData,state:ChaosState|undefined,machine:LaunchMachine,grounded:boolean,clearControl:(p:Vec3Data)=>boolean):RatControls {
+        const target=machine.target,eye=this.eye;
         const dx=machine.pad.x-self.x,dz=machine.pad.z-self.z,d=Math.hypot(dx,dz);
         const travel=Math.hypot(target.x-self.x,target.z-self.z)/launchSpeed(this.incident);
         const lob={x:target.x,y:target.y-launchGravity(this.incident)*travel*travel/2,z:target.z};
@@ -765,6 +808,30 @@ export class BotMotor {
         const speed=d>.25?Math.min(6,d*4):0;
         this.stalled=false;this.progress++;
         return this.controls(self,d?dx/d*speed:0,d?dz/d*speed:0,false,shoot);
+    }
+
+    /** A joyrider's choice of ride (`RIDE`), or giving up one never thrown. Never with the case, in a held zone, or
+     * on the way to a supply or an alarm pillar; the plan's goal is untouched, so the game carries on either way. */
+    private joyride(now:number,self:PlayerData,state:ChaosState|undefined,grounded:boolean,holding:boolean):void {
+        let carrying=false;for(const c of this.cases)if(c.value.owner===self.id){carrying=true;break;}
+        const errand=this.mode==='pickup'||this.mode==='dispatch'||this.mode==='zone-hold';
+        const ride=this.ride;
+        if(ride){
+            if(now<ride.until&&!holding&&!carrying&&!errand&&this.destination)return;
+            if(now>=ride.until)this.remember(`ride:${ride.machine.id}`,ride.machine.pad,now+RIDE.retryMs);
+            this.ride=undefined;this.rideAt=now+RIDE.checkMs;return;
+        }
+        if(now<this.rideAt||!grounded||this.flight||holding||carrying||errand||!this.destination||!state)return;
+        this.rideAt=now+RIDE.checkMs;
+        const to=this.destination,far=distance(self,to),roaming=this.mode==='explore';
+        if(!roaming&&far<RIDE.far)return;
+        let best:LaunchMachine|undefined,bestAt:number=RIDE.reach;
+        for(const machine of LAUNCH_MACHINES){
+            const pad=machine.pad,d=Math.hypot(pad.x-self.x,pad.z-self.z);
+            if(d>=bestAt||Math.abs(pad.y-self.y)>2||!roaming&&d+distance(pad,to)-far>RIDE.detour||this.suppressed(`ride:${machine.id}`,pad,now))continue;
+            best=machine;bestAt=d;
+        }
+        if(best)this.ride={machine:best,since:now,until:now+RIDE.ms};
     }
 
     /** Search a route toward the travel point when due; attach it at the nearest supported waypoint. */

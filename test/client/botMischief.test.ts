@@ -12,7 +12,7 @@ const player=(id:string,x:number,z:number):PlayerData=>createPlayer(id,id,DEFAUL
 const nav:MotorNavigation={route:(_from,to)=>[{...to}],localStep:()=>undefined,explorationTargets:()=>[{x:0,y:0,z:0}]};
 const machine=LAUNCH_MACHINES[0];
 /** Every other rat wears Ironclad, so nobody takes an ordinary shot at them and corner fire stays off:
- * any shot is the gremlin's mischief. */
+ * any shot is mischief. */
 function state(others:readonly PlayerData[],extra:Partial<ChaosState>={}):ChaosState {
     const pose={q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}};
     return {time:0,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:-200,y:0,z:0},...pose},
@@ -33,12 +33,12 @@ function shots(personality:Personality,self:PlayerData,others:PlayerData[],s:Cha
 }
 const near=(a:Vec3Data,b:Vec3Data,r:number)=>Math.hypot(a.x-b.x,a.z-b.z)<r;
 
-describe('gremlin mischief fire',()=>{
-    it('shoots a counterfeit with another rat beside it, from a safe distance',()=>{
+describe('mischief fire',()=>{
+    it('shoots a counterfeit with another rat beside it, from a safe distance: gremlins only',()=>{
         const fake={x:0,y:.25,z:20},bait=player('bait',3,20);
         const s=state([bait],{extraCases:counterfeit(fake)});
         expect(shots('gremlin',player('me',0,0),[bait],s,fake).filter(p=>near(p,fake,3.5)).length).toBeGreaterThan(0);
-        expect(shots('tryhard',player('me',0,0),[bait],s)).toEqual([]);
+        for(const other of ['camper','joyrider'] as const)expect(shots(other,player('me',0,0),[bait],s)).toEqual([]);
     });
 
     it('leaves a counterfeit alone when it is close to itself or nobody is near it',()=>{
@@ -48,10 +48,11 @@ describe('gremlin mischief fire',()=>{
         expect(shots('gremlin',player('me',0,0),[far],state([far],{extraCases:counterfeit(lonely)}))).toEqual([]);
     });
 
-    it('shoots a launch trigger while another rat stands on its pad, never while the machine cools',()=>{
+    it('shoots a launch trigger while another rat stands on its pad (gremlins and joyriders), never while the machine cools',()=>{
         const rider=player('rider',machine.pad.x,machine.pad.z),me=()=>player('me',machine.target.x-20,machine.target.z);
         const ready=state([rider],{pressure:{serial:0,levels:{},launches:[],fired:{}}});
-        expect(shots('gremlin',me(),[rider],ready,machine.target).filter(p=>near(p,machine.target,3)).length).toBeGreaterThan(0);
+        for(const prankster of ['gremlin','joyrider'] as const)expect(shots(prankster,me(),[rider],ready,machine.target).filter(p=>near(p,machine.target,3)).length).toBeGreaterThan(0);
+        expect(shots('camper',me(),[rider],ready)).toEqual([]);
         const cooling=state([rider],{pressure:{serial:0,levels:{},launches:[],fired:{[machine.id]:-200}}});
         expect(shots('gremlin',me(),[rider],cooling)).toEqual([]);
         const empty=player('elsewhere',machine.pad.x+40,machine.pad.z);

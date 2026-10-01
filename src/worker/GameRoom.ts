@@ -486,7 +486,7 @@ export class GameRoom extends DurableObject<Env> {
           if (player) this.city.decision(player, decision, now, jev?.enabled && decision.answer.source === 'code' ? jev.outcome(id) : undefined);
         },
         controls: (id, controls, now) => { this.city.botControls(id, controls, now); },
-      }, id => { const bot = this.botRoster.find(entry => entry.id === id); return bot ? botPersonality(bot.name) : 'tryhard'; }, this.jev);
+      }, id => { const bot = this.botRoster.find(entry => entry.id === id); return bot && botPersonality(bot.name); }, this.jev);
   }
 
   private get jev(): JevMind {

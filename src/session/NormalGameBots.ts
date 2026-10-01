@@ -48,7 +48,7 @@ interface BotOptions {
     /** Uses the one rendered remote rat's animated gun, without building duplicate models. */
     muzzle?: (id: string, position: Vec3Data, facing: number) => Vec3Data | undefined;
     navigation?: MotorNavigation;
-    /** Each bot's hidden personality by name. Default: the roster's, from the name. */
+    /** Each bot's hidden archetype by name (it plays with the archetype's dials). Default: the roster's, from the name. */
     personality?: (name: string) => Personality;
 }
 

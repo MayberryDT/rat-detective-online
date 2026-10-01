@@ -1,11 +1,12 @@
 import type {Vec3Data} from '../networkProtocol';
+import type {JurisdictionZoneId} from '../jurisdictionZones';
 
 /** The bot overhaul's shared contract (docs/bot-overhaul.md): perception feeds a mind, the mind's
  * goal scores pass through the cast, and code turns the chosen goal into a Plan the motor runs every tick.
  * Firing is not a goal: the motor fires whenever it has a shot, within the skill dials. */
 
 /** Raised by every change to the minds, questions, weights or dials; stamped on city facts next to `layoutVersion`. */
-export const MIND_VERSION=6;
+export const MIND_VERSION=7;
 
 /** When a bot decides (the bot learning plan, L4): on events (spawn, its goal ending or failing, the case changing
  * state, the assignment moving on) and at most `holdMs` after its last decision otherwise; between decisions it
@@ -29,8 +30,9 @@ export function codeOnlyRound(roundId:string|undefined):boolean {
 export const GOALS=['take-case','chase-carrier','keep-case','hold-zone','hunt','flee','heal','arm-up','ambush','mischief','roam'] as const;
 export type Goal=typeof GOALS[number];
 
-/** Hidden from players. Rolled per roster name (80/10/10) and kept across rounds. */
-export const PERSONALITIES=['tryhard','maverick','gremlin'] as const;
+/** Hidden from players: five human styles of play (Tyler, 1 October 2026), each with its own goal weights (cast.ts),
+ * tactics (ratBot.ts) and dials (`ARCHETYPE_SKILL`). Rolled evenly per roster name and kept across rounds. */
+export const PERSONALITIES=['sniper','hose','camper','joyrider','gremlin'] as const;
 export type Personality=typeof PERSONALITIES[number];
 
 /** How the motor approaches a plan; approach, stop and fight rules differ per mode. */
@@ -46,6 +48,8 @@ export interface Plan {
     destination?:Vec3Data;
     /** The rat being followed (the carrier, a hunted rat). */
     follow?:string;
+    /** The zone a `zone-hold` plan holds: Jurisdiction's active zone, or the defensible spot a camper holds the case at. */
+    zone?:JurisdictionZoneId;
 }
 
 /** One candidate place for an open-ended goal (flee, ambush, roam, mischief): code lists, a mind picks. */
@@ -84,8 +88,9 @@ export interface Mind<Context> {
 export interface Decision {
     plan:Plan;
     answer:MindAnswer;
-    personality:Personality;
-    /** Scores after the personality's weights. */
+    /** The rat's archetype; absent for a bot given none (base play, as in tests and one-behaviour simulations). */
+    personality?:Personality;
+    /** Scores after the archetype's weights. */
     weighted:GoalScores;
     stance:Stance;
     /** Why the decision was taken now: an event, or `holdMs` passed. */
@@ -94,26 +99,50 @@ export interface Decision {
     failed?:true;
 }
 
-/** Motor skill: one tier for every personality ("base bots never outplay Tyler"). A harder tier is only
- * different numbers. Uniform ranges are [min, max]. The crosshair is a physical thing the rat moves: every
- * miss comes from reaction, a flick that lands short or long, lag behind a moving target and wander. */
+/** Motor skill. Every archetype has its own dials, none sharper than `BASE_SKILL` ("base bots never outplay Tyler";
+ * Tyler, 1 October 2026: per-archetype dials). A harder tier is only different numbers. Uniform ranges are
+ * [min, max]. The crosshair is a physical thing the rat moves: every miss comes from reaction, a flick that lands
+ * short or long, lag behind a moving target and wander. */
 export interface SkillDials {
     /** Reaction before a newly seen target is engaged, ms. A target off to the side or behind adds more. */
     reactionMs:readonly [number,number];
+    /** Noticing a rat off to the side (60°–120° from the crosshair) or behind, on top of the reaction, ms. */
+    sideMs:readonly [number,number];
+    rearMs:readonly [number,number];
     /** How far a movement of the crosshair (a flick's end or a correction) lands off where the rat means to aim
      * (one standard deviation, radians) for a still rat at mid range; distance, the target's motion, the rat's own
      * motion and being hit scale it. Between movements the hand holds still. */
     aimWanderRadians:number;
     /** A flick's endpoint error as a share of its size (one standard deviation): overshoot or undershoot. */
     flickError:number;
+    /** Point blank, a rat moving 8 units a second or more: the miss at the muzzle grows by up to this share of the
+     * mid-range miss (`AIM.pointBlank` in motor/aim.ts). */
+    pointBlankMiss:number;
     /** How far the crosshair trails what the rat sees (the tracking lag's time constant), ms. */
     trackingMs:readonly [number,number];
     /** Share of a moving target's true lead the rat applies, drawn per engagement. */
     lead:readonly [number,number];
+    /** Clicks in one run of the trigger at a rat in sight (whole numbers, inclusive). */
+    burst:readonly [number,number];
     /** Gap between shots within a burst, ms. */
     burstShotMs:readonly [number,number];
+    /** The pause after a burst, ms: the low end plus the span times the product of two uniforms (mostly short). */
+    burstPauseMs:readonly [number,number];
     /** Minimum ms after one motor shot (aimed, speculative or banked) before the next. */
     fireGapMs:number;
 }
 /** The base tier: below the median human's hit rate (docs/bot-overhaul.md, "Motor rewrite"). */
-export const BASE_SKILL:SkillDials={reactionMs:[240,480],aimWanderRadians:2.2*Math.PI/180,flickError:.2,trackingMs:[130,210],lead:[.2,.75],burstShotMs:[100,170],fireGapMs:100};
+export const BASE_SKILL:SkillDials={reactionMs:[240,480],sideMs:[120,260],rearMs:[320,600],aimWanderRadians:2.2*Math.PI/180,flickError:.2,
+    pointBlankMiss:15,trackingMs:[130,210],lead:[.2,.75],burst:[3,9],burstShotMs:[100,170],burstPauseMs:[60,460],fireGapMs:100};
+/** Each archetype's dials (docs/bot-overhaul.md, "Archetypes"): base, or worse, in its own way. How long a burst runs
+ * and how quick its clicks are is a habit, not sharpness; `fireGapMs` still floors every shot. */
+export const ARCHETYPE_SKILL:Record<Personality,SkillDials>={
+    // Deliberate short bursts with long pauses; worse up close.
+    sniper:{...BASE_SKILL,burst:[1,3],burstShotMs:[150,240],burstPauseMs:[500,1300],pointBlankMiss:24},
+    // Long quick bursts with loose aim.
+    hose:{...BASE_SKILL,aimWanderRadians:BASE_SKILL.aimWanderRadians*1.6,flickError:.3,burst:[8,20],burstShotMs:[90,140],burstPauseMs:[60,300]},
+    // Slow to notice a rat to the side or behind: easier to flank.
+    camper:{...BASE_SKILL,sideMs:[220,420],rearMs:[520,900]},
+    joyrider:{...BASE_SKILL,aimWanderRadians:BASE_SKILL.aimWanderRadians*1.3},
+    gremlin:{...BASE_SKILL,reactionMs:[260,500],aimWanderRadians:BASE_SKILL.aimWanderRadians*1.2,flickError:.22},
+};

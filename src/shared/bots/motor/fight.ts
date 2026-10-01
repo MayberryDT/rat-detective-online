@@ -5,9 +5,10 @@ import {EYE} from './aim';
 
 /** How a rat moves in a gunfight, from recorded human fights (docs/bot-overhaul.md, "Motor rewrite"). */
 export const FIGHT={
-    /** Preferred range per rat, units (humans hold about 35 from the nearest rival; bots shoot worse, so closer). */
+    /** Preferred range, units: each rat holds its own spot in this span, or in its archetype's (humans hold about 35
+     * from the nearest rival; bots shoot worse, so closer). */
     range:[17,27] as readonly [number,number],
-    /** Beyond this the fight is over for movement: follow the route. */
+    /** Beyond this the fight is over for movement: follow the route (an archetype may reach further). */
     reach:34,
     /** One strafe lasts this plus an exponential tail with this mean, capped (humans hold a strafe key 314 ms at
      * the median and reverse it 22 times a minute). */
@@ -47,6 +48,8 @@ export interface FightView {
     /** Press in now: the enemy is weak or just emptied a burst. */
     push:boolean;
     nav:MotorNavigation;
+    /** The preferred range's span (`FIGHT.range`, or the rat's archetype's). */
+    range:readonly [number,number];
     /** In the air: the keys stay held without a floor check (air control is full). */
     airborne:boolean;
     /** Every step must stay where this allows (a Jurisdiction zone). */
@@ -67,7 +70,8 @@ export class BotFight {
     private sideKey=1;
     /** Walls met in this strafe. */
     private blocked=0;
-    private readonly range:number;
+    /** Where in the preferred range's span this rat likes to be (0 near end … 1 far end). */
+    private readonly spot:number;
     private phase:'fight'|'hide'|'peek'='fight';
     private phaseUntil=0;
     private coverAt=0;
@@ -77,7 +81,7 @@ export class BotFight {
     private stepAt=0;
     private readonly goal={x:0,y:0,z:0};
     constructor(private readonly random:()=>number,seed:number){
-        this.side=seed%2?1:-1;this.range=between(random,FIGHT.range);
+        this.side=seed%2?1:-1;this.spot=random();
     }
     /** A break in the fight ends a stop, a push and cover, but the keys of a strafe stay held until it ends. */
     reset():void{this.stopUntil=0;this.pushUntil=0;this.phase='fight';this.phaseUntil=0;this.coverAt=0;this.step=undefined;this.stepAt=0;}
@@ -87,6 +91,7 @@ export class BotFight {
     /** Choose this tick's fight movement into `move`. */
     run(v:FightView):void {
         const {now,self,enemy}=v,dx=enemy.x-self.x,dz=enemy.z-self.z,d=Math.hypot(dx,dz)||1,tx=dx/d,tz=dz/d;
+        const range=v.range[0]+this.spot*(v.range[1]-v.range[0]);
         if(v.push&&now>=this.pushUntil&&!v.hurt)this.pushUntil=now+between(this.random,FIGHT.pushMs);
         if(v.hurt&&this.phase==='fight'&&now>=this.coverAt)this.findCover(v,tx,tz);
         if(!v.hurt&&this.phase!=='fight'){this.phase='fight';}
@@ -116,7 +121,7 @@ export class BotFight {
                 if(this.random()>=FIGHT.keepSide)this.side*=-1;
                 this.blocked=0;
                 this.segmentUntil=now+FIGHT.strafeMs+Math.min(FIGHT.strafeMaxMs,-Math.log(1-this.random()*.999)*FIGHT.strafeTailMs);
-                const mix=v.hurt?FIGHT.keys.hurt:d<this.range-5?FIGHT.keys.close:d>this.range+9?FIGHT.keys.far:FIGHT.keys.mid;
+                const mix=v.hurt?FIGHT.keys.hurt:d<range-5?FIGHT.keys.close:d>range+9?FIGHT.keys.far:FIGHT.keys.mid;
                 let pick=this.random(),choice=0;
                 while(choice<mix.length-1&&pick>=mix[choice]!){pick-=mix[choice]!;choice++;}
                 this.forward=KEY_FORWARD[choice]!;this.sideKey=KEY_SIDE[choice]!;

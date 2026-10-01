@@ -11,7 +11,7 @@ import {hasHustle,PICKUP_TUNING} from '../shared/pickups';
 import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,ratMuzzle,turnFacing,type RatControls} from '../shared/rat/ratBody';
 import {FEEL} from '../feel/feelTuning';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
-import type {Decision,Mind,Personality} from '../shared/bots/intent';
+import {ARCHETYPE_SKILL,BASE_SKILL,type Decision,type Mind,type Personality} from '../shared/bots/intent';
 import type {GoalContext} from '../shared/bots/goals';
 import type {WorldSpec} from '../shared/worldSpec';
 
@@ -63,10 +63,11 @@ export class ServerBotController {
     private looseCaseSince=0;
     private looseCasePosition?:Vec3Data;
 
-    /** `personality` names each bot's hidden personality, looked up whenever the bot is (re)placed, since a
-     * slot's rat and name can change between rounds. Default: every bot a tryhard. `mind` answers before the
-     * code mind for every bot (the room's Jev mind); it switches on and off without resetting a bot. */
-    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks,private readonly personality:(id:string)=>Personality=()=>'tryhard',mind?:Mind<GoalContext>){
+    /** `personality` names each bot's hidden archetype, looked up whenever the bot is (re)placed, since a slot's rat
+     * and name can change between rounds; the bot plays it with the archetype's dials. Default: none (base play).
+     * `mind` answers before the code mind for every bot (the room's Jev mind); it switches on and off without
+     * resetting a bot. */
+    constructor(spec:WorldSpec,botIds:readonly string[],private readonly callbacks:ServerBotCallbacks,private readonly personality:(id:string)=>Personality|undefined=()=>undefined,mind?:Mind<GoalContext>){
         this.world.broadphase=new StaticCityBroadphase(this.world);
         this.world.broadphase.useBoundingBoxes=true;
         this.world.collisionMatrix=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
@@ -116,7 +117,8 @@ export class ServerBotController {
         // A player's respawn lowers the body's damping (RatEntity.respawn); the first placement keeps the constructor's.
         if(bot.lived)body.linearDamping=body.angularDamping=RAT_BODY.respawnDamping;
         body.wakeUp();bot.rat.reset();bot.initialized=true;bot.alive=true;bot.lived=true;bot.launchedUntil=0;
-        bot.lastLaunchAt=this.now;bot.lastMovementAt=-Infinity;bot.brain.reset();bot.brain.personality=this.personality(id);
+        bot.lastLaunchAt=this.now;bot.lastMovementAt=-Infinity;bot.brain.reset();
+        const personality=this.personality(id);bot.brain.play(personality,personality?ARCHETYPE_SKILL[personality]:BASE_SKILL);
         bot.strandedSince=0;bot.escapeCheckAt=0;bot.escapeX=0;bot.escapeZ=0;
         bot.progressAt=this.now;bot.progressX=position.x;bot.progressZ=position.z;
         bot.pocketAt=this.now;bot.pocketX=position.x;bot.pocketZ=position.z;bot.progressMark=bot.brain.progressMark;

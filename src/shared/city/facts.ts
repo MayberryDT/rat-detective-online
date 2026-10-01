@@ -112,7 +112,7 @@ export type CityFact = FactContext & (
    * offered goals by weighted score, as [goal, raw, weighted]; `target`: the answer named a rat to shoot; `failed`: the
    * motor gave up the previous plan; `jev`: how Jev fared when the code mind decided while Jev was on; `in`: what it faced
    * (absent only before the recorder has seen the world). */
-  | { type: 'decision'; a: number; p: P3; place: string; mind: MindName; personality: Personality; goal: Goal; motor: MotorMode;
+  | { type: 'decision'; a: number; p: P3; place: string; mind: MindName; personality?: Personality; goal: Goal; motor: MotorMode;
       trigger: 'beat' | 'event' | 'fallback'; top: Array<[Goal, number, number]>; danger?: number; target: boolean; failed?: true;
       latencyMs?: number; tokens?: number; jev?: 'answered' | 'stale' | 'fallback'; in?: DecisionInputs; stance?: Stance }
   /** A stocked supply the rat could use (not a Quick Fix at full health) came within 12 u on its floor in clear sight, and the
@@ -120,7 +120,7 @@ export type CityFact = FactContext & (
    * `place` and `hp`: the nearest the rat came (horizontal, to 0.1 u), where, and its health there. */
   | { type: 'pickup-passed'; a: number; site: string; kind: PickupKind; dist: number; p: P3; place: string; hp: number }
   /** A bot's goal ended; `from` is where it was taken up, `p` and `place` where it ended. */
-  | { type: 'goal-end'; a: number; goal: Goal; motor: MotorMode; mind: MindName; personality: Personality; outcome: GoalOutcome; durationMs: number; from: string; p: P3; place: string }
+  | { type: 'goal-end'; a: number; goal: Goal; motor: MotorMode; mind: MindName; personality?: Personality; outcome: GoalOutcome; durationMs: number; from: string; p: P3; place: string }
   /** The Jev mind's counts over `ms` while it was on; reply latency p50 and p90 in ms, and every reply's latency as
    * counts per 20 ms bucket (`hist`, keyed by the bucket's lower bound), so windows pool exactly. */
   | { type: 'minds'; ms: number; decisions: number; requests: number; answers: number; failures: number; staleDrops: number; fallbacks: number;

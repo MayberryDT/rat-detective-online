@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { botPersonality, createRoundBotRoster, fillBotRoster, nextRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
+import { PERSONALITIES } from '../../src/shared/bots/intent';
 import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from '../../src/shared/ratNames';
 
 describe('round bot roster', () => {
@@ -43,11 +44,10 @@ describe('round bot roster', () => {
   });
 });
 
-describe('bot personalities', () => {
+describe('bot archetypes', () => {
   const pool = RAT_TITLES.flatMap(title => RAT_SURNAMES.map(surname => `${title} ${surname}`)).filter(name => name.length <= NAME_MAX_LENGTH);
-  it('splits the name pool about 80/10/10 into tryhards, mavericks and gremlins', () => {
+  it('splits the name pool about evenly into the five archetypes', () => {
     const share = (personality: string) => pool.filter(name => botPersonality(name) === personality).length / pool.length;
-    expect(share('tryhard')).toBeGreaterThan(.75); expect(share('tryhard')).toBeLessThan(.85);
-    for (const personality of ['maverick', 'gremlin']) { expect(share(personality)).toBeGreaterThan(.07); expect(share(personality)).toBeLessThan(.13); }
+    for (const personality of PERSONALITIES) { expect(share(personality)).toBeGreaterThan(.15); expect(share(personality)).toBeLessThan(.25); }
   });
 });

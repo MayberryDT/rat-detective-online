@@ -18,18 +18,16 @@ export const AIM={
     /** Time constant of a calm look (no target), ms. */
     lookMs:240,
     /** Point blank: closer than this (units), a moving rat crosses the screen faster than a hand follows. For a rat
-     * moving at 8 units a second or more, the miss at the muzzle grows by `pointBlankMiss` (a share of the mid-range
-     * miss) and the hand lets the crosshair drift `pointBlankHold` times further before correcting; both fade out to
-     * this distance and with a slower rat (humans hit a quarter of their shots under 5 units, a tenth at 5–10). */
-    pointBlank:15,pointBlankMiss:15,pointBlankHold:6,
+     * moving at 8 units a second or more, the miss at the muzzle grows by the dials' `pointBlankMiss` (a share of the
+     * mid-range miss) and the hand lets the crosshair drift `pointBlankHold` times further before correcting; both fade
+     * out to this distance and with a slower rat (humans hit a quarter of their shots under 5 units, a tenth at 5–10). */
+    pointBlank:15,pointBlankHold:6,
     /** Share of the last miss the next one keeps (the rest is fresh). */
     missKeep:.7,
     /** How long the eye takes to register where a target is, ms (visual lag before tracking). */
     seeMs:70,
     /** A hit knocks the crosshair this far (radians, random direction) and widens the wander for `flinchMs`. */
     flinch:[.04,.11] as readonly [number,number],flinchMs:700,
-    /** Noticing a rat off to the side (60°–120° from the crosshair) or behind, on top of the reaction, ms. */
-    sideMs:[120,260] as readonly [number,number],rearMs:[320,600] as readonly [number,number],
     /** A target seen again this soon after losing it is re-acquired at this share of a reaction. */
     reseenMs:1200,reseenShare:.4,
     /** A hand holds the mouse still until the crosshair is this far off (radians; a calm look: 2×; engaged at point
@@ -77,7 +75,8 @@ export class BotAim {
     private scale=1;
     /** How far an engaged crosshair may drift before the hand corrects, radians (`difficulty`). */
     private hold:number=AIM.holdAt;
-    constructor(private readonly random:()=>number,private readonly skill:SkillDials){}
+    /** The dials; the rat's archetype can change between lives. */
+    constructor(private readonly random:()=>number,public skill:SkillDials){}
     reset():void {
         this.ready=false;this.engaged=false;this.flickEnd=0;this.wanderYaw=this.wanderPitch=0;this.flinchUntil=0;this.lastAt=undefined;
         this.targetId=undefined;this.lostAt=-Infinity;this.vx=this.vz=0;this.holding=false;
@@ -107,7 +106,7 @@ export class BotAim {
         if(!this.engaged||id!==this.targetId){
             const again=id===this.targetId&&now-this.lostAt<AIM.reseenMs;
             const off=Math.abs(wrap(Math.atan2(target.x-eye.x,target.z-eye.z)-this.yaw));
-            const notice=off>Math.PI*2/3?between(this.random,AIM.rearMs):off>Math.PI/3?between(this.random,AIM.sideMs):0;
+            const notice=off>Math.PI*2/3?between(this.random,this.skill.rearMs):off>Math.PI/3?between(this.random,this.skill.sideMs):0;
             this.readyAt=now+(again?between(this.random,this.skill.reactionMs)*AIM.reseenShare:between(this.random,this.skill.reactionMs)+notice);
             if(!again){
                 this.trackMs=between(this.random,this.skill.trackingMs);this.lead=between(this.random,this.skill.lead);
@@ -152,7 +151,7 @@ export class BotAim {
      * the target's and its own speed. */
     difficulty(distance:number,targetSpeed:number,ownSpeed:number):void {
         const close=Math.max(0,1-distance/AIM.pointBlank)*Math.min(1,targetSpeed/8);
-        this.scale=(.8+Math.min(80,distance)/80+AIM.pointBlankMiss*close)*(1+.5*Math.min(1,targetSpeed/12))*(1+.6*Math.min(1,ownSpeed/13));
+        this.scale=(.8+Math.min(80,distance)/80+this.skill.pointBlankMiss*close)*(1+.5*Math.min(1,targetSpeed/12))*(1+.6*Math.min(1,ownSpeed/13));
         this.hold=AIM.holdAt*(1+AIM.pointBlankHold*close);
     }
     /** Where the next movement of the hand lands, off where the rat means to aim: wider when aiming is hard and
@@ -206,22 +205,23 @@ export class BotAim {
     }
 }
 
-/** When the finger pulls: long runs of clicks with short pauses (humans pull about 260 times a fight-minute),
- * never faster than the dials allow. */
+/** When the finger pulls: runs of clicks with pauses (humans pull about 260 times a fight-minute), each run as long
+ * and as quick as the dials' habit, never faster than the dials allow. */
 export class BotTrigger {
     private nextShot=0;
     private remaining=0;
     private pauseUntil=0;
-    constructor(private readonly random:()=>number,private readonly skill:SkillDials){}
+    constructor(private readonly random:()=>number,public skill:SkillDials){}
     reset():void{this.nextShot=0;this.remaining=0;this.pauseUntil=0;}
     /** Whether to fire now, given the crosshair is where the rat wants it. With `anyway` the hand clicks as it
      * does something else (a jump): the click counts toward the run but ignores the gaps. */
     pull(now:number,anyway=false):boolean {
         if(!anyway&&(now<this.nextShot||now<this.pauseUntil))return false;
-        if(!this.remaining)this.remaining=3+Math.floor(this.random()*7);
+        const [few,many]=this.skill.burst,[rest,restMost]=this.skill.burstPauseMs;
+        if(!this.remaining)this.remaining=few+Math.floor(this.random()*(many-few+1));
         this.remaining--;
         this.nextShot=now+between(this.random,this.skill.burstShotMs);
-        if(!this.remaining)this.pauseUntil=now+60+this.random()*this.random()*400;
+        if(!this.remaining)this.pauseUntil=now+rest+this.random()*this.random()*(restMost-rest);
         return true;
     }
 }
@@ -231,7 +231,8 @@ export const SPRAY={
     shotMs:[220,320] as readonly [number,number],range:[18,42] as readonly [number,number],
 } as const;
 /** Fire at where a rat might be, with nobody in sight: groups of shots at the pre-aim point, in active
- * stretches and quiet ones. Cheese banks off walls, so this is round-corner fire, not waste. */
+ * stretches and quiet ones. Cheese banks off walls, so this is round-corner fire, not waste. `amount` is the
+ * rat's habit (1 usual): groups that many times as long, pauses and quiet stretches that many times as short. */
 export class BotSpray {
     private nextShot?:number;
     private remaining=0;
@@ -240,15 +241,15 @@ export class BotSpray {
     range=30;
     constructor(private readonly random:()=>number){}
     reset():void{this.nextShot=undefined;this.remaining=0;this.activeUntil=0;}
-    pull(now:number,enabled:boolean,allowed:boolean):boolean {
+    pull(now:number,enabled:boolean,allowed:boolean,amount=1):boolean {
         if(!enabled){this.reset();return false;}
         if(this.nextShot===undefined){this.nextShot=now+800+this.random()*1000;return false;}
-        if(this.activeUntil&&now>=this.activeUntil){this.activeUntil=0;this.remaining=0;this.nextShot=now+between(this.random,SPRAY.quietMs);}
+        if(this.activeUntil&&now>=this.activeUntil){this.activeUntil=0;this.remaining=0;this.nextShot=now+between(this.random,SPRAY.quietMs)/amount;}
         if(!allowed||now<this.nextShot)return false;
         if(!this.activeUntil)this.activeUntil=now+between(this.random,SPRAY.activeMs);
-        if(!this.remaining){this.remaining=this.random()<.4?1:2+Math.floor(this.random()*4);this.range=between(this.random,SPRAY.range);}
+        if(!this.remaining){this.remaining=Math.max(1,Math.round((this.random()<.4?1:2+Math.floor(this.random()*4))*amount));this.range=between(this.random,SPRAY.range);}
         this.remaining--;
-        this.nextShot=now+between(this.random,this.remaining?SPRAY.shotMs:SPRAY.pauseMs);
+        this.nextShot=now+(this.remaining?between(this.random,SPRAY.shotMs):between(this.random,SPRAY.pauseMs)/amount);
         return true;
     }
 }

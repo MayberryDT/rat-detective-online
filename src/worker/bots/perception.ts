@@ -3,7 +3,7 @@ import {distance} from '../../shared/bots/motor';
 import {BANK} from '../../shared/bots/motor/bankShot';
 import {STEER} from '../../shared/bots/motor/steer';
 import type {GoalContext} from '../../shared/bots/goals';
-import type {Goal,PlaceOption} from '../../shared/bots/intent';
+import type {Goal,Personality,PlaceOption} from '../../shared/bots/intent';
 import {activeZone,nextZone,JURISDICTION_TUNING} from '../../shared/jurisdiction';
 import {JURISDICTION_ZONES,zoneContains} from '../../shared/jurisdictionZones';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS,ASSIGNMENT_TUNING,type AssignmentId} from '../../shared/assignments';
@@ -31,6 +31,14 @@ const RULES:Record<AssignmentId,string>={
     jurisdiction:'Jurisdiction: only the rat carrying the case scores, while it stands inside the active zone; the first to sixty zone points wins.',
     'excessive-force':'Excessive Force: a kill counts only when made while carrying the case; the first to ten such kills wins.',
 };
+/** How `me` plays (its archetype, docs/bot-overhaul.md "Archetypes"), so Jev's scores fit the style. */
+const STYLES:Record<Personality,string>={
+    sniper:'A sniper: picks fights from 35 to 70 units away, backs off from rats that get close, and likes long sightlines and ambush spots.',
+    hose:'A hose: aggressive; closes in, sprays long bursts and keeps hunting.',
+    camper:'A camper: takes the case to a defensible spot and holds it there, shooting whoever comes; still delivers and scores.',
+    joyrider:'A joyrider: loves the launch machines; rides them on the way and fights from the air.',
+    gremlin:'A gremlin: causes chaos; rings alarm pillars and shoots launch triggers and counterfeits next to other rats.',
+};
 const PICKUPS:Record<PickupKind,string>={
     'quick-fix':'a Quick Fix medkit (restores full HP)',
     ironclad:'an Ironclad Alibi (cheese balls bounce off for a while)',
@@ -48,7 +56,7 @@ export interface RatSeen {id:string;where:string;hp:string;armour?:string;speed?
 export interface Situation {
     assignment:string;
     standing:string;
-    me:{where:string;level:string;hp:string;buffs?:string;carrying:string;hit?:string};
+    me:{where:string;level:string;hp:string;buffs?:string;carrying:string;hit?:string;style?:string};
     case:string;
     zone?:string;
     delivery?:string;
@@ -219,7 +227,8 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         assignment:assignment?RULES[assignment.id]:'No assignment is running: kills are all that count.',
         standing,
         me:{where:spoken(place),level:place.kind==='roof'||place.kind==='lookout'?'on a roof':place.floor==='upper'?'upstairs':place.floor==='sewer'?'in the sewer':place.floor==='air'?'in the air':'at street level',
-            hp:`${self.hp} of ${MAX_HP}`,...(myBuffs?{buffs:myBuffs}:{}),carrying:ctx.carrying?'the case':'nothing',...(hitText?{hit:hitText}:{})},
+            hp:`${self.hp} of ${MAX_HP}`,...(myBuffs?{buffs:myBuffs}:{}),carrying:ctx.carrying?'the case':'nothing',...(hitText?{hit:hitText}:{}),
+            ...(ctx.personality?{style:STYLES[ctx.personality]}:{})},
         case:caseText,
         ...(zone?{zone}:{}),...(delivery?{delivery}:{}),...(pickups.length?{pickups}:{}),
         rats_in_view,
@@ -246,7 +255,8 @@ function describe(goal:Goal,ctx:GoalContext,alias:(id:string)=>string):string {
         if(ctx.intercept)return `Get ahead of the rat carrying the case, at a place it must pass, ${relative(self,ctx.intercept.point)}.`;
         return ctx.carrier?`Go after ${alias(ctx.carrier.id)}, who carries the case, to take it.`:'Go after the rat carrying the case, to take it.';
     case 'keep-case':
-        if(ctx.zone)return ctx.zone.early?'Carry the case to the next zone before it moves there.':'Carry the case into the active zone and hold it there.';
+        if(ctx.zone)return ctx.zone.camp?`Carry the case to the ${label(JURISDICTION_ZONES[ctx.zone.id].label)}, a defensible spot ${relative(self,ctx.zone.point)}, and hold it there, shooting whoever comes.`:
+            ctx.zone.early?'Carry the case to the next zone before it moves there.':'Carry the case into the active zone and hold it there.';
         if(ctx.delivery)return 'Carry the case to the drop-off.';
         return ctx.combat?`Keep the case and fight ${alias(ctx.combat.id)}.`:'Keep the case.';
     case 'hold-zone':return 'Get into the active zone and stay in it.';

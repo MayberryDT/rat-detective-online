@@ -104,7 +104,7 @@ The decision moments, the stance and goal holding described above, as `mindVersi
   - Jev coming on because a human started playing
   - 10 seconds (`DECIDE.holdMs`) since the last decision
 - At a moment, Jev gets up to 1.5 seconds to answer while the held goal lasts. If the held goal is over, the code mind's pick runs meanwhile and is not recorded. An answer is used once. Requests for one rat are at least 3 seconds apart, and a moment inside that gap goes to the code mind.
-- Every answer also carries a stance. With `fight`, a rival close by takes over the rat's movement, whatever its goal. With `focus`, the rival takes over only where the plan itself fights, or for 2 seconds after the rat is hit. The pickup reflex is never taken over, and firing never depends on the stance. The code mind's stance is `focus` for a tryhard taking, keeping or holding the case, healing, arming up or fleeing, and `fight` otherwise.
+- Every answer also carries a stance. With `fight`, a rival close by takes over the rat's movement, whatever its goal. With `focus`, the rival takes over only where the plan itself fights, or for 2 seconds after the rat is hit. The pickup reflex is never taken over, and firing never depends on the stance. The code mind's stance is `focus` for every rat keeping or holding the case, and for a sniper or camper taking the case, healing, arming up or fleeing; `fight` otherwise (hoses, joyriders and gremlins fight on the way).
 - A hit is no longer a Jev moment, because shooting back is the motor's reflex.
 - Every moment is recorded as a `decision` fact with its `stance`.
 - About 1 round in 5 is code-only (`codeOnlyRound`). Its facts carry `codeOnly: true`, and Jev stays off in that round even with humans playing.
@@ -141,11 +141,11 @@ Agreed by Tyler (30 September): code-only rounds. In 1 round in 5 with humans pr
 
 ### L6. Copy Jev into the code mind
 
-Fit the code mind's goal and stance scores, per personality, to Jev's decisions from the frozen build. Check the fit on rounds held back from the fitting.
+Fit the code mind's goal and stance scores, per archetype, to Jev's decisions from the frozen build. Check the fit on rounds held back from the fitting.
 
 Done when:
 
-- the code mind picks Jev's goal in at least 80% of decisions, and Jev's stance in at least 80%, for each personality
+- the code mind picks Jev's goal in at least 80% of decisions, and Jev's stance in at least 80%, for each archetype
 - in code-only rounds, the fitted bots score within noise of Jev bots on the scorecard
 
 ### L7. Switch Jev off and tune to humans
@@ -159,4 +159,4 @@ Then tune the code mind towards humans. Humans' goals are inferred from what the
 - Rule changes during the freeze would split the data into small piles. Only changes players cannot see are allowed.
 - Human hours may stay thin. More playtest sessions help more than any code.
 - Jev's choices may not be human-like. The code-only rounds and the scorecard show this. If Jev is no closer to humans than the code mind, we stop paying for it.
-- Deterministic bots can become predictable. Seeded randomness and the 3 personalities stay.
+- Deterministic bots can become predictable. Seeded randomness and the five archetypes (sniper, hose, camper, joyrider, gremlin; 1 October) stay.

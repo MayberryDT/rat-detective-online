@@ -1,7 +1,7 @@
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
 import {activeZone,nextZone,JURISDICTION_TUNING} from '../jurisdiction';
-import {JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
+import {JURISDICTION_ZONE_IDS,JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {DISPATCH_STATIONS,type ChaosState} from '../chaosState';
 import {incidentInfo} from '../incidentCatalog';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS} from '../assignments';
@@ -19,6 +19,9 @@ const FLEE={near:15,far:70,levels:6,safer:6,local:6,stickMs:8000} as const;
 export const REFLEX={range:12,keep:16,floor:2.5,ms:2500,retryMs:30000} as const;
 /** How far a longer supply trip, a goal a mind may choose, may lead. */
 const SUPPLY_TRIP=24;
+/** A camper with the Excessive Force case holds it at the nearest defensible spot within `range`: a Jurisdiction
+ * zone (a few approaches, cover), enclosed ones counted as `enclosed` times as far. */
+const CAMP={range:70,enclosed:.7} as const;
 
 /** What a decision starts from, gathered once per decision. */
 export interface GoalInput {
@@ -37,8 +40,8 @@ export interface GoalInput {
     /** Why the decision is taken now: an event (a case changed hands, a goal failed, the assignment moved on) or the beat. */
     trigger:'beat'|'event';
     clear:(p:Vec3Data)=>boolean;
-    /** Gremlins look further for alarm pillars. */
-    personality:Personality;
+    /** The rat's archetype (absent: none). Gremlins look further for alarm pillars; campers hold the case. */
+    personality?:Personality;
 }
 interface Post {key:string;point:Vec3Data}
 interface Place extends Post {index:number;what:string}
@@ -63,7 +66,8 @@ export interface GoalContext extends GoalInput {
     pillars:readonly Place[];
     delivery?:Post;
     intercept?:Post;
-    zone?:Post&{early:boolean};
+    /** Where to hold or take the case: Jurisdiction's zone (or the next one, `early`), or a camper's spot (`camp`). */
+    zone?:Post&{id:JurisdictionZoneId;early:boolean;camp:boolean};
     offered:readonly Goal[];
     /** Candidate places for an open-ended goal (flee, ambush, roam, mischief), for a mind to pick an id from. */
     places(goal:Goal):readonly PlaceOption[];
@@ -235,8 +239,9 @@ export class BotGoals {
             const post=(this.zonePost+this.zoneLane)%posts.length,point=jurisdictionTravelPoint(self,posts[post]);
             const key=`zone:${assignment!.roundId}:${jurisdiction.serial}:${id}:${post}:${point.x},${point.y},${point.z}`;
             if(motor.suppressed(key,point,now)){this.zonePost++;this.zonePostAt=now+6000;}
-            else zone={key,point,early};
+            else zone={key,point,early,id,camp:false};
         }
+        if(!jurisdiction&&carrying&&active&&assignment!.id==='excessive-force'&&input.personality==='camper'&&state?.case.owner===self.id)zone=this.camp(self,now,assignment!.roundId);
         if(jurisdiction&&!carrying&&carrier&&this.zoneLane===0&&!zoneContains(activeZone(jurisdiction),carrier)&&jurisdiction.remainingMs<=JURISDICTION_TUNING.warningMs&&distance(self,carrier)>35){
             const post=JURISDICTION_ZONES[nextZone(jurisdiction)].approaches[0];
             if(distance(self,post)<distance(carrier,post))intercept=post;
@@ -286,7 +291,7 @@ export class BotGoals {
             if(ctx.intercept)return {goal,mode:'intercept',key:ctx.intercept.key,destination:ctx.intercept.point};
             return !ctx.carrying&&ctx.carrier?{goal,mode:'carrier',key:`carrier:${ctx.carrier.id}`,destination:ctx.carrier,follow:ctx.carrier.id}:undefined;
         case 'keep-case':
-            if(ctx.zone)return {goal,mode:ctx.zone.early?'delivery':'zone-hold',key:ctx.zone.key,destination:ctx.zone.point};
+            if(ctx.zone)return {goal,mode:ctx.zone.early?'delivery':'zone-hold',key:ctx.zone.key,destination:ctx.zone.point,zone:ctx.zone.id};
             if(ctx.delivery)return {goal,mode:'delivery',key:ctx.delivery.key,destination:ctx.delivery.point};
             return ctx.carrying&&ctx.active&&ctx.combat?{goal,mode:'combat',key:`combat:${ctx.combat.id}`,destination:ctx.combat,follow:ctx.combat.id}:undefined;
         case 'hold-zone':return undefined;
@@ -344,6 +349,20 @@ export class BotGoals {
         }
         const options=nearby.filter(p=>p.score<=nearby[0].score+20).map(({index,point})=>({key:`explore:${index}`,index,point,what:where(self,point)}));
         return ctx.memo.explore={kept:false,options,choice:options.length?options[(m.wander+1)%options.length]:undefined};
+    }
+    /** A camper's spot with the case: the zone it is holding, else the nearest defensible one in reach. Its post is
+     * one of the zone's (by the rat's lane); once inside, the zone hold walks to a post and watches the approaches. */
+    private camp(self:Vec3Data,now:number,roundId:string):GoalContext['zone'] {
+        let best:JurisdictionZoneId|undefined,bestAt:number=CAMP.range;
+        for(const id of JURISDICTION_ZONE_IDS){
+            const zone=JURISDICTION_ZONES[id],post=zone.posts[this.zoneLane%zone.posts.length];
+            if(Math.abs(zone.floorY-self.y)>4||this.motor.suppressed(`camp:${roundId}:${id}`,post,now))continue;
+            const at=this.motor.key===`camp:${roundId}:${id}`?0:distance(self,post)*(zone.category==='enclosed'?CAMP.enclosed:1);
+            if(at<bestAt){best=id;bestAt=at;}
+        }
+        if(!best)return;
+        const zone=JURISDICTION_ZONES[best],post=zone.posts[this.zoneLane%zone.posts.length];
+        return {key:`camp:${roundId}:${best}`,point:jurisdictionTravelPoint(self,post),id:best,early:false,camp:true};
     }
     /** Where to run from the rats in sight. */
     private fleePlaces(ctx:GoalContext):Place[] {

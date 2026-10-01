@@ -1,9 +1,9 @@
-import {BotMotor,distance,type MotorNavigation} from './motor';
+import {BotMotor,distance,type MotorNavigation,type Tactics} from './motor';
 import type {RatControls} from '../rat/ratBody';
 import {BotGoals,type GoalContext,type GoalInput} from './goals';
 import {codeMind,codeStance} from './codeMind';
 import {Cast,completeAnswer} from './cast';
-import {BASE_SKILL,DECIDE,type Decision,type Goal,type Mind,type MindAnswer,type MotorMode,type Personality,type Plan,type SkillDials} from './intent';
+import {ARCHETYPE_SKILL,BASE_SKILL,DECIDE,type Decision,type Goal,type Mind,type MindAnswer,type MotorMode,type Personality,type Plan,type SkillDials} from './intent';
 import {seededRandom} from './random';
 import type {ChaosState} from '../chaosState';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
@@ -11,10 +11,25 @@ import type {PlayerData,Vec3Data} from '../networkProtocol';
 export interface RatBotOptions {
     /** Answers first; when it has no fresh answer the code mind does. Default: the code mind. */
     mind?:Mind<GoalContext>;
-    /** Default: tryhard. */
+    /** The rat's archetype. Absent: none (base play: no archetype's weights or tactics). */
     personality?:Personality;
+    /** Default: the archetype's dials, else `BASE_SKILL`. */
     skill?:SkillDials;
 }
+
+/** What each archetype does beyond its goal weights (cast.ts) and dials (`ARCHETYPE_SKILL`), docs/bot-overhaul.md
+ * "Archetypes". Snipers fight from 38–55 units and keep fighting out to 70 (backing off a rival that comes inside
+ * the range), banking now and then, with half the speculative fire; hoses close in to 12–22 and spray twice as
+ * much, banking too; joyriders ride launch machines and shoot their triggers under other rats; gremlins make
+ * mischief. A camper's difference is where it holds the case (goals.ts). */
+export const ARCHETYPE_TACTICS:Record<Personality,Omit<Tactics,'danger'|'stance'>>={
+    sniper:{bank:true,mischief:false,range:[38,55],reach:70,spray:.5},
+    hose:{bank:true,mischief:false,range:[12,22],spray:2},
+    camper:{bank:false,mischief:false},
+    joyrider:{bank:false,mischief:false,triggers:true,joyride:true},
+    gremlin:{bank:false,mischief:true},
+};
+const BASE_TACTICS:Omit<Tactics,'danger'|'stance'>={bank:false,mischief:false};
 
 /** Goals about the case: one of them becoming possible is the case changing state, a decision moment. */
 const CASE_GOALS:Partial<Record<Goal,true>>={'take-case':true,'chase-carrier':true,'keep-case':true,'hold-zone':true};
@@ -43,16 +58,19 @@ export class RatBot {
     private last?:Decision;
     /** The case goals offered at the last beat. */
     private readonly caseGoals:Goal[]=[];
-    /** Hidden from players; the cast's weights and the motor's tactics follow it. */
-    personality:Personality;
+    /** Hidden from players; the cast's weights and the motor's tactics follow it (`play`). */
+    personality:Personality|undefined;
     constructor(navigation:MotorNavigation,seed=0,private readonly random:()=>number=Math.random,options:RatBotOptions={}){
-        this.motor=new BotMotor(navigation,seed,random,options.skill??BASE_SKILL);
+        this.personality=options.personality;
+        this.motor=new BotMotor(navigation,seed,random,options.skill??(options.personality?ARCHETYPE_SKILL[options.personality]:BASE_SKILL));
         this.goals=new BotGoals(navigation,this.motor,seed,random);
-        // Its own stream: a sampling personality never shifts the navigation or combat randomness.
+        // Its own stream: a sampling archetype never shifts the navigation or combat randomness.
         this.cast=new Cast(seededRandom(seed+20000));
         this.mind=options.mind??codeMind;
-        this.personality=options.personality??'tryhard';
     }
+    /** Play as `personality` with `skill` from the next decision: a slot's rat (and so its archetype) can change
+     * between rounds. */
+    play(personality:Personality|undefined,skill:SkillDials):void {this.personality=personality;this.motor.useSkill(skill);}
     /** The motor mode of the current plan. */
     get objective():MotorMode{return this.motor.mode;}
     /** The current plan's key, for tests and diagnostics. */
@@ -125,12 +143,13 @@ export class RatBot {
         if(this.waiting&&this.waiting.trigger==='event')trigger='event';
         this.waiting=this.interim=undefined;
         const answer=completeAnswer(asked==='wait'?undefined:asked,ctx.offered,()=>codeMind.answer(ctx));
-        const {ranked,weighted}=this.cast.rank(personality,answer,ctx.offered,now,trigger);
+        const {ranked,weighted}=this.cast.rank(personality,answer,ctx.offered,now,trigger,carrying);
         const plan=this.best(answer,ctx,ranked);
         this.cast.took(plan.goal);
         this.run(plan,ctx);
         const stance=answer.stance??codeStance(plan.goal,personality);
-        this.motor.tactics={bank:personality==='maverick'||(answer.bank??0)>=.6,mischief:personality==='gremlin',stance,...(answer.danger===undefined?{}:{danger:answer.danger})};
+        this.motor.tactics={...(personality?ARCHETYPE_TACTICS[personality]:BASE_TACTICS),stance,...(answer.danger===undefined?{}:{danger:answer.danger})};
+        if((answer.bank??0)>=.6)this.motor.tactics.bank=true;
         // The dispatch detour's give-up happens in the survey above, so failures are read after it.
         const failed=this.motor.failures!==this.failuresSeen;
         this.failuresSeen=this.motor.failures;this.decidedAt=now;

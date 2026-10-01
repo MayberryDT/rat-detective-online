@@ -133,7 +133,7 @@ describe('the Jev mind',()=>{
         expect(r.bot.decision).toMatchObject({stance:'fight',answer:{source:'jev',target:'rival',danger:3,scores:{flee:4,'take-case':0}}});
     });
 
-    it('takes the code stance for the chosen goal when no mind gave one: a tryhard keeps to the case',()=>{
+    it('takes the code stance for the chosen goal when no mind gave one: a steady rat keeps to the case',()=>{
         const r=rig();r.mind.enabled=false;
         r.step(1500);
         expect(r.bot.decision).toMatchObject({plan:{goal:'take-case'},stance:'focus'});

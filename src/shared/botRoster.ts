@@ -1,16 +1,15 @@
 import {MAX_PLAYERS} from './networkProtocol';
 import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from './ratNames';
 import { APPEARANCE_COUNT, appearanceAt } from './ratAppearance';
-import type { Personality } from './bots/intent';
+import { PERSONALITIES, type Personality } from './bots/intent';
 
-/** A roster name's hidden personality: a fixed FNV-1a hash of the name, so a rat keeps it across rounds and
- * deploys. Tenths 0–7 are tryhards, 8 mavericks, 9 gremlins (80/10/10 over the name pool). Never sent to
- * clients: the server derives it from the name where the bot is driven. */
+/** A roster name's hidden archetype: a fixed FNV-1a hash of the name, so a rat keeps it across rounds and deploys.
+ * Tenths 0–1 are snipers, 2–3 hoses, 4–5 campers, 6–7 joyriders, 8–9 gremlins (even over the name pool). Never
+ * sent to clients: the server derives it from the name where the bot is driven. */
 export function botPersonality(name: string): Personality {
   let hash = 0x811c9dc5;
   for (let i = 0; i < name.length; i++) hash = Math.imul(hash ^ name.charCodeAt(i), 0x01000193);
-  const tenth = (hash >>> 0) % 10;
-  return tenth < 8 ? 'tryhard' : tenth === 8 ? 'maverick' : 'gremlin';
+  return PERSONALITIES[Math.floor((hash >>> 0) % 10 / 2)]!;
 }
 
 const names = ['Constable Trap', 'Inspector Nibbles', 'Sergeant Stilton', 'Detective Crumbs',

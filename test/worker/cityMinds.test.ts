@@ -36,7 +36,7 @@ function recorder() {
 const bot = (id: string, x = 0, z = 0) => createPlayer(id, 'Bot', DEFAULT_APPEARANCE, { x, y: 0, z });
 function decide(goal: Goal, { plan = {}, answer = {}, failed = false }: { plan?: Partial<Plan>; answer?: Partial<MindAnswer>; failed?: boolean } = {}): Decision {
   const scores = { roam: 1.5, hunt: 1, [goal]: 3 };
-  return { plan: { goal, mode: 'explore', key: goal, ...plan }, answer: { source: 'code', scores, ...answer }, personality: 'tryhard', weighted: scores,
+  return { plan: { goal, mode: 'explore', key: goal, ...plan }, answer: { source: 'code', scores, ...answer }, personality: 'camper', weighted: scores,
     stance: 'focus', trigger: 'beat', ...(failed ? { failed: true as const } : {}) };
 }
 const killed = (victim: PlayerData, attacker?: PlayerData) => ({ ...(attacker ? { attacker } : {}), victim: Object.assign(victim, { hp: 0 }), damage: 5, killed: true, headshot: false, explosive: false, incoming: true });
@@ -58,7 +58,7 @@ describe('the minds in the city recorder', () => {
     city.hit(killed(b), T + 1400);
     city.flush(T + 2000);
     expect(decisions().map(d => [d.goal, d.t, d.mind])).toEqual([['hunt', T, 'code'], ['hunt', T + 250, 'code'], ['roam', T + 500, 'code'], ['roam', T + 750, 'code'], ['roam', T + 900, 'code']]);
-    expect(decisions()[0]).toMatchObject({ personality: 'tryhard', motor: 'combat', trigger: 'beat', target: false, stance: 'focus', top: [['hunt', 3, 3], ['roam', 1.5, 1.5]] });
+    expect(decisions()[0]).toMatchObject({ personality: 'camper', motor: 'combat', trigger: 'beat', target: false, stance: 'focus', top: [['hunt', 3, 3], ['roam', 1.5, 1.5]] });
     expect(ends().map(e => [e.goal, e.outcome, e.durationMs, e.mind])).toEqual([['hunt', 'replaced', 500, 'code'], ['roam', 'failed', 400, 'code'], ['roam', 'died', 500, 'code']]);
     expect(facts.every(f => f.mindVersion === MIND_VERSION && f.build === 'test-build')).toBe(true);
   });
@@ -136,7 +136,7 @@ describe('the minds in the city recorder', () => {
     expect(sql.filter(type => type === 'minds' || type === 'decision' || type === 'goal-end')).toEqual(['minds']);
     const text = cityDigest({ range: { from: '2026-09-29', to: '2026-09-29' }, days: ['2026-09-29'], places: cityModel().places, counts, modes: {}, flows: [], minds });
     expect(text).toContain('Decisions recorded: 3 by the code mind, 1 by Jev (Jev\'s share 25%)');
-    expect(text).toContain('Goal mix, tryhards (4 decisions): hunt 50%, take-case 25%, roam 25%');
+    expect(text).toContain('Goal mix, campers (4 decisions): hunt 50%, take-case 25%, roam 25%');
     expect(text).toContain('- hunt: reached 0% of 2 (died 50%, replaced 50%, failed 0%)');
     expect(text).toContain('reply latency p50 190 ms, p90 610 ms over 55 replies; $0.21 per hour on');
     expect(text).toContain('the code mind took 17% of 540 decisions (fallbacks); 7% of replies came back stale; 5 requests failed and 2 were held back');

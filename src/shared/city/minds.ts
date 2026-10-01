@@ -7,10 +7,10 @@ export type MindName = typeof MIND_NAMES[number];
 export const GOAL_OUTCOMES = ['reached', 'died', 'replaced', 'failed'] as const;
 export type GoalOutcome = typeof GOAL_OUTCOMES[number];
 
-/** Counted where a bot took up a goal, or applied a fresh Jev answer. */
-export const decideMeasure = (mind: MindName, personality: Personality, goal: Goal) => `decide:${mind}:${personality}:${goal}`;
+/** Counted where a bot took up a goal, or applied a fresh Jev answer. A bot with no archetype counts as `none`. */
+export const decideMeasure = (mind: MindName, personality: Personality | undefined, goal: Goal) => `decide:${mind}:${personality ?? 'none'}:${goal}`;
 /** Counted where the goal was taken up, when it ended. */
-export const goalMeasure = (mind: MindName, personality: Personality, goal: Goal, outcome: GoalOutcome) => `goal:${mind}:${personality}:${goal}:${outcome}`;
+export const goalMeasure = (mind: MindName, personality: Personality | undefined, goal: Goal, outcome: GoalOutcome) => `goal:${mind}:${personality ?? 'none'}:${goal}:${outcome}`;
 
 /** `city_minds` measures, summed over `minds` facts: how long Jev was on, the Jev mind's counts, its dollars in
  * millionths, and each reply's latency in 20 ms buckets (`latency:<lower bound>`, the last holding 2 s and over). */
@@ -35,12 +35,13 @@ const isPersonality = (v: string | undefined): v is Personality => PERSONALITIES
 const isGoal = (v: string | undefined): v is Goal => GOALS.some(g => g === v);
 const isOutcome = (v: string | undefined): v is GoalOutcome => GOAL_OUTCOMES.some(o => o === v);
 
-/** Decisions and goal outcomes in some place counts (one place's row, or every place's), under a filter. */
+/** Decisions and goal outcomes in some place counts (one place's row, or every place's), under a filter. Rows from
+ * bots with no archetype, or a retired one (mind version 6 and before), count in every total but no archetype's. */
 export function tallyMinds(rows: Iterable<Readonly<Record<string, number>>>, filter: MindFilter = {}): MindTally {
-  const t: MindTally = { decisions: 0, byMind: { jev: 0, code: 0 }, byGoal: {}, byPersonality: { tryhard: {}, maverick: {}, gremlin: {} }, outcomes: {} };
+  const t: MindTally = { decisions: 0, byMind: { jev: 0, code: 0 }, byGoal: {}, byPersonality: { sniper: {}, hose: {}, camper: {}, joyrider: {}, gremlin: {} }, outcomes: {} };
   for (const row of rows) for (const [key, n] of Object.entries(row)) {
     const [kind, mind, personality, goal, outcome] = key.split(':');
-    if (kind !== 'decide' && kind !== 'goal' || !isMind(mind) || !isPersonality(personality) || !isGoal(goal)) continue;
+    if (kind !== 'decide' && kind !== 'goal' || !isMind(mind) || !isGoal(goal)) continue;
     if (filter.mind && filter.mind !== mind || filter.personality && filter.personality !== personality || filter.goal && filter.goal !== goal) continue;
     if (kind === 'goal') {
       if (isOutcome(outcome)) (t.outcomes[goal] ??= { reached: 0, died: 0, replaced: 0, failed: 0 })[outcome] += n;
@@ -48,7 +49,7 @@ export function tallyMinds(rows: Iterable<Readonly<Record<string, number>>>, fil
     }
     t.decisions += n; t.byMind[mind] += n;
     t.byGoal[goal] = (t.byGoal[goal] ?? 0) + n;
-    t.byPersonality[personality][goal] = (t.byPersonality[personality][goal] ?? 0) + n;
+    if (isPersonality(personality)) t.byPersonality[personality][goal] = (t.byPersonality[personality][goal] ?? 0) + n;
   }
   return t;
 }

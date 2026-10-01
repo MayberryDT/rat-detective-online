@@ -1,5 +1,5 @@
 // Headless seeded bot rooms for motor iterations: the real ServerBotController and ChaosSimulation on the
-// staging world, nine server bots cast 80/10/10 from real roster names, 3 s respawns, stuck rescues handled
+// staging world, nine server bots cast evenly across the five archetypes from real roster names, 3 s respawns, stuck rescues handled
 // as GameRoom.recoverManagedBot does, and the next assignment as soon as one is won. Catches stuck and stall
 // regressions and reports the gate's movement and case numbers, and the bots' fight motion measured as the
 // humans' is: fight windows kept as CityRecorder keeps them, read by scripts/lib/fight-motion.mjs.
@@ -282,8 +282,8 @@ async function room(seed,start,minutes,runtimePath){
     globalThis.crypto.randomUUID=()=>`00000000-0000-4000-8000-${String(++uuid).padStart(12,'0')}`;
     const m=await import(pathToFileURL(runtimePath));
     const spec={seed:WORLD,version:m.GRAYBOX_VERSION},places=m.cityPlaces();
-    // Real roster names in the 80/10/10 mix: seven tryhards, a maverick and a gremlin.
-    const want={tryhard:7,maverick:1,gremlin:1},names=[];
+    // Real roster names in the even archetype mix: two of each, one gremlin.
+    const want={sniper:2,hose:2,camper:2,joyrider:2,gremlin:1},names=[];
     for(let i=0;names.length<BOTS&&i<500;i++)for(const {name} of m.createRoundBotRoster([],Math.random)){
         const p=m.botPersonality(name);if(want[p]>0&&!names.includes(name)){want[p]--;names.push(name);}
     }
