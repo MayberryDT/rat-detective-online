@@ -32,7 +32,9 @@ function fixture(){
     return{view,state,feedback,draw,cards};
 }
 it('keeps one illustrated card per effect and confirms heals without a duration or a duplicate title card',()=>{
-    const {view,state,draw,cards,feedback}=fixture();draw();draw();
+    const {view,state,draw,cards,feedback}=fixture();
+    // A view's first state is its baseline (a reconnect never replays a claim): the buffs arrive after it.
+    const buffs=state.buffs;state.buffs={};draw();state.buffs=buffs;draw();draw();
     expect(cards()).toHaveLength(2);expect(nodes.some(n=>n.className==='pickup-broadcast')).toBe(false);
     expect(feedback.mock.calls.filter(([cue])=>cue==='pickup-hustle')).toHaveLength(1);
     view.resolveInteraction({type:'pickupResult',interactionId:'heal',target:'pickup',targetId:'medkit',accepted:true,pickup:'quick-fix',at:1000,tick:1,epoch:'round',playerId:'me'});

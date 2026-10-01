@@ -101,6 +101,7 @@ export class ChaosView {
     /** Your own supply claim (not other rats'), raised the frame its card is up. */
     onClaim?:(kind:PickupKind,camera:THREE.Camera)=>void;
     private readonly localBuffs:Record<TimedPickup,number>={ironclad:0,hustle:0,stakeout:0};
+    private buffsSeen=false;
     private readonly pendingInteractions=new Map<string,InteractionCandidate>();
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
     private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
@@ -428,13 +429,14 @@ export class ChaosView {
             visual.setPending(this.pendingTarget('pickup',pickup.id)||this.acceptedPickups.has(pickup.id));
         }
     }
-    /** Announce a claim locally when the authoritative buff first appears. */
+    /** Announce a claim locally when the authoritative buff first appears; a new view's first state (a reconnect
+     * with a buff running) is only the baseline. */
     private noteLocalBuffs(state:ChaosState):void{
         if(!this.myId)return;
-        const mine=state.buffs?.[this.myId];
+        const mine=state.buffs?.[this.myId],seen=this.buffsSeen;this.buffsSeen=true;
         for(const kind of TIMED_PICKUPS){
             const until=mine?.[BUFF_FIELD[kind]]??0;
-            if(until!==this.localBuffs[kind]&&until>state.time)this.pickupFeedback(kind);
+            if(seen&&until!==this.localBuffs[kind]&&until>state.time)this.pickupFeedback(kind);
             this.localBuffs[kind]=until;
         }
     }
@@ -667,6 +669,8 @@ export class ChaosView {
         this.pillars.dispose();this.assignmentDestinations.dispose();this.jurisdictionZones.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
+        // Supply sites live at the scene root: a reconnect's new view would otherwise draw over stale ones.
+        for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
         this.pressureMachine.dispose();this.caseBeacon.dispose();this.setCarrier(null);this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);

@@ -322,7 +322,7 @@ export class GameSession {
         this.rat = new RatController(this.stage.scene, this.stage.world, this.stage.camera, player.name, player,
             new THREE.Vector3(player.x, player.y, player.z),this.worldSpec.version===GRAYBOX_VERSION?CITY_BOUNDS:undefined);
         this.rat.entity.isPlayer = true;
-        this.rat.entity.applySnapshot(player);
+        this.rat.entity.applySnapshot(player);this.rat.lookAlongFacing();
         this.feel.health(player.hp);
         this.gun.setPlayer(this.stage.camera, this.rat.entity);
         if(this.observing)this.rat.entity.body.collisionFilterMask=1;

@@ -857,6 +857,10 @@ export class RatEntity {
         this.body.aabbNeedsUpdate = true;
         this.mesh.position.set(data.x, data.y, data.z);
         this.mesh.quaternion.set(data.meshQx, data.meshQy, data.meshQz, data.meshQw);
+        // A living rat's model only ever turns about y, and the local rat turns by writing `rotation.y`. Facing past
+        // ±90° decomposes to x = z = π in three's default order, which mirrors that turn (the rat faced the camera
+        // after a reconnect); keep the heading as a pure yaw.
+        this.mesh.rotation.setFromQuaternion(this.mesh.quaternion,'YXZ');this.mesh.rotation.set(0,this.mesh.rotation.y,0,'XYZ');
         this.billboard.setHealth(data.hp);
         if (this.dead) {
             // A snapshot depicts an existing corpse, not a new death event.

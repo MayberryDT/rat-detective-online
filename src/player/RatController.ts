@@ -92,6 +92,8 @@ export class RatController {
         // Wider clamp so you can look almost straight up/down without snap
         this.spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.spherical.phi));
     }
+    /** Point the camera along the rat's current heading (a restored rat keeps the view it had). */
+    lookAlongFacing(): void { this.spherical.theta = this.entity.mesh.rotation.y - Math.PI; }
 
     update(dt: number, keys: Record<string, boolean>): void {
         this.prepareMovement(dt, keys);

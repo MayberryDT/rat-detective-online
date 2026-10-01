@@ -111,6 +111,7 @@ const harness = vi.hoisted(() => {
             setStreak: ReturnType<typeof vi.fn>;
         };
         onMouseMove = vi.fn();
+        lookAlongFacing = vi.fn();
         setSpeedScale = vi.fn();
         applyPressureLaunches = vi.fn();
         update = vi.fn();
