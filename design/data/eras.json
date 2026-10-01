@@ -265,10 +265,10 @@
       "id": "case-grip",
       "environment": "production",
       "layout": 5,
-      "mindVersion": 6,
+      "mindVersion": 7,
       "protocol": 25,
       "commits": [],
-      "change": "Case grip and calmer bot aim (Tyler, 1 October): a carried case is knocked loose by 3 enemy balls each within 2 s of the last (it was one ball); killing the carrier still drops it. Bots pre-aim at chest height, not head height. Perf reports carry ping and how far behind other rats are drawn (measurement only). Excessive Force stays at 10 kills; no time limits, ever.",
+      "change": "Case grip, calmer bot aim and bot archetypes (Tyler, 1 October): a carried case is knocked loose by 3 enemy balls each within 2 s of the last (it was one ball); killing the carrier still drops it. Bots pre-aim at chest height, not head height, and play as five archetypes with their own dials, none sharper than base (sniper, hose, camper, joyrider, gremlin; mindVersion 7); joyriders use the launch machines. Perf reports carry ping and how far behind other rats are drawn (measurement only). Excessive Force stays at 10 kills; no time limits, ever.",
       "baseline": "lighter-jev",
       "notes": "Tyler's target: Excessive Force averages 15–20 minutes, the longest mode but not by much (it was 27.5 minutes over 45 rounds from 29 September to 1 October, bot-only rounds included). If Paper Chase or Jurisdiction get too short, raise their targets. Bot-only rounds count: the city runs them all day.",
       "predictions": [
@@ -300,6 +300,15 @@
           "expect": "down",
           "target": {
             "below": "kills.headshotShare.human"
+          }
+        },
+        {
+          "id": "bots-below-humans",
+          "says": "Bots still hit less often than humans",
+          "measure": "likeness.hitRate.bot",
+          "expect": "not-up",
+          "target": {
+            "below": "likeness.hitRate.human"
           }
         }
       ]
