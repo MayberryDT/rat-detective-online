@@ -50,7 +50,7 @@ At least 3 seconds separate 2 requests to Jev. Between decisions, the bot keeps 
 | L1 | Data foundation: build stamp, agent traffic flag, aggregates by build, decision inputs, pickups passed | Built (`13a7a6e`, `2271371`) |
 | L2 | Pickup reflex | Built (`6d08299`, `10fc4b6`) |
 | L3 | Release A: the baseline era, with Jev as it is today | Live: production `7888521b`, build `production-2026-09-30-76701ab` |
-| L4 | Lighter Jev: event-driven decisions, stance, goals held, code-only rounds | On staging with protocol 25 (`13b208fe`, build `staging-2026-10-01-b2cec1f`); production on Tyler's OK |
+| L4 | Lighter Jev: event-driven decisions, stance, goals held, code-only rounds | On staging with protocol 25 (`a872995f`, build `staging-2026-10-01-1a9af7b`); production on Tyler's OK |
 | L5 | Tyler's further changes, then the frozen build and a month of data | Waits for Tyler's list |
 | L6 | Copy Jev into the code mind | After a fortnight of frozen data |
 | L7 | Switch Jev off, then tune to humans | After L6 passes |
