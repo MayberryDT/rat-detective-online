@@ -149,7 +149,7 @@ function city(overlay,{sites=false}={}){
 const ratLabel=r=>`<span class="dot" style="--c:${r.color}"></span>${esc(r.label)}${r.win?'<span class="win">WINNER</span>':''}`;
 
 // ---- Hero.
-const title=M.mode.replace(/-/g,' ').toUpperCase(), when=new Date(M.start), utc=d=>d.toISOString().slice(11,16);
+const title=({'chain-of-custody':'PAPER CHASE'})[M.mode]??M.mode.replace(/-/g,' ').toUpperCase(), when=new Date(M.start), utc=d=>d.toISOString().slice(11,16);
 const deaths=D.deathCount, allShots=S.totals.shots;
 document.getElementById('hero').innerHTML=`<div class="kicker">Case file · ${esc(M.room)} · round ${esc(M.round.slice(0,8))}</div><h1>${esc(title)}</h1>
 <div class="rule">${M.mode==='excessive-force'?'Hold the case. Get 10 kills.':''}</div>
@@ -170,7 +170,7 @@ R.push(tiles([
 ]));
 const G=[];
 G.push(card('Standings','The lineup','Every rat in the round, ranked by kills made while holding the case. Rates are per minute alive, so humans who joined late compare fairly with bots who played the whole round.',
-`<div style="overflow-x:auto"><table><tr><th>Rat</th><th>Case kills</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>Alive min</th><th>Kills/min</th><th>Shots</th><th>Hits</th><th>Accuracy</th><th>Headshots</th><th>Dmg out</th><th>Held case</th><th>Takes</th><th>Supplies</th><th>Launches</th><th>Air min</th></tr>
+`<div style="overflow-x:auto"><table><tr><th>Rat</th><th>${({'chain-of-custody':'Deliveries',jurisdiction:'Zone points'})[M.mode]??'Case kills'}</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>Alive min</th><th>Kills/min</th><th>Shots</th><th>Hits</th><th>Accuracy</th><th>Headshots</th><th>Dmg out</th><th>Held case</th><th>Takes</th><th>Supplies</th><th>Launches</th><th>Air min</th></tr>
 ${D.rats.map(r=>`<tr class="${r.human?'human':''}"><td>${ratLabel(r)}</td><td>${r.raw}</td><td>${r.k}</td><td>${r.d}</td><td>${r.as}</td><td>${r.kd.toFixed(2)}</td><td>${r.aliveMin}</td><td>${r.killsPerMin.toFixed(2)}</td><td>${n(r.shots)}</td><td>${r.hits}</td><td>${pct(r.acc)}</td><td>${r.hs}</td><td>${r.dmgOut}</td><td>${r.heldMin} min</td><td>${r.takes}</td><td>${r.supplies}</td><td>${r.launches}</td><td>${r.airMin}</td></tr>`).join('')}</table></div>`,12));
 const hJoin=D.sessions.filter(s=>s.what==='join'), hLeave=D.sessions.filter(s=>s.what==='leave');
 // Mark the first human join, and every drop that came back within 30 s.
@@ -194,7 +194,7 @@ G.push(card('Kills','Kills per minute',`Stacked by who killed whom.${humans.leng
 const cs=D.caseStats;
 G.push(card('The case','How carries ended',`<b>${cs.dropsLoose} of ${cs.dropsKilled+cs.dropsLoose}</b> carries ended with the case knocked loose by a shot, not a death. The longest carry lasted ${cs.longestS} s.`,
   cols({labels:binLabels(cs.carryEdges,' s'),series:[{name:'humans',color:HC,values:cs.carry.H},{name:'bots',color:BC,values:cs.carry.B}],h:200})+legend([['carries by humans',HC],['carries by bots',BC]])+
-  bars([{l:'carrier killed',v:cs.dropsKilled,c:RED},{l:'knocked loose',v:cs.dropsLoose,c:HC},{l:'case respawned',v:cs.respawns,c:BC}]),6));
+  bars([{l:'carrier killed',v:cs.dropsKilled,c:RED},{l:'knocked loose',v:cs.dropsLoose,c:HC},...(cs.dropsDelivered?[{l:'delivered',v:cs.dropsDelivered,c:'#7fe0c0'}]:[]),{l:'case respawned',v:cs.respawns,c:BC}]),6));
 G.push(card('Deaths','How long a life lasted',`Median life: humans <b>${D.lifeMedian.H} s</b>, bots <b>${D.lifeMedian.B} s</b>. Share of each group's deaths.`,
   cols({labels:binLabels(D.lifeEdges,' s'),series:[{name:'humans',color:HC,values:share(D.life.H)},{name:'bots',color:BC,values:share(D.life.B)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200})+legend([['humans',HC],['bots',BC]]),6));
 G.push(card('Deaths','How rats died','Shots, headshots, explosions (Planted Evidence, Improper Disposal) and the city (drowning, falls).',
@@ -217,7 +217,7 @@ G.push(card('Frame rate','Frames per second, each human',D.perf.map(p=>`${esc(p.
   lines({series:D.perf.map(p=>({name:p.label,color:p.color,pts:p.pts.map(q=>[q[0],q[1]]),dots:true})),xMax:Math.ceil(M.durationMin),yMax:60,h:200,xLabel:'minutes into the round'})+legend(D.perf.map(p=>[p.label,p.color])),6,
   'Each dot is 30 seconds of play. Main-thread work at the 95th-percentile frame: '+D.perf.map(p=>`${esc(p.label)} ${Math.round(p.pts.reduce((s,q)=>s+q[3],0)/p.pts.length)} ms`).join(', ')+'.'+
   D.perf.map(p=>{const med=i=>{const v=p.pts.map(q=>q[i]).filter(x=>x!=null).sort((a,b)=>a-b);return v.length?v[v.length>>1]:null};const rtt=med(5),bot=med(6),hum=med(7);
-    return rtt==null?'':` ${esc(p.label)}: ping ${rtt} ms; bots drawn ${bot??'—'} ms and humans ${hum??'—'} ms in the past (medians).`}).join(''));
+    return rtt==null?'':` ${esc(p.label)}: ping ${rtt} ms; bots drawn ${bot??'—'} ms and humans ${hum??'—'} ms in the past (medians).`}).join('')));
 document.getElementById('round').innerHTML=R.join('')+`<div class="grid">${G.join('')}</div>`;
 
 // ---- SHOOTING.

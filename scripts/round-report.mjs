@@ -56,7 +56,8 @@ for (const c of cases) {
   if (c.what === 'take' || c.what === 'steal') cur = { a: c.a, from: MIN(c.t) };
 }
 if (cur) { cur.to = DUR; holder.push(cur); }
-const drops = cases.filter(c => c.what === 'drop').map(c => ({ ...c, killed: deaths.some(d => d.victim === c.a && Math.abs(d.t - c.t) < 300) }));
+// Since protocol 26 a drop names its cause; older drops count as a death when the carrier died within 300 ms.
+const drops = cases.filter(c => c.what === 'drop').map(c => ({ ...c, killed: c.cause ? c.cause === 'death' : deaths.some(d => d.victim === c.a && Math.abs(d.t - c.t) < 300) }));
 
 // Incidents: each active stretch until Dispatch leaves the active phase. Most Wanted repeats `active` when the wanted rat changes.
 const incidents = [];
@@ -221,7 +222,8 @@ const D = {
   sessions: sessions.filter(s => s.human).map(s => ({ a: s.a, what: s.what, m: r2(MIN(s.t)) })),
   holder: holder.map(h => ({ a: h.a, from: r2(h.from), to: r2(h.to) })), incidents: incidents.map(s => ({ ...s, from: r2(s.from), to: r2(s.to) })),
   caseStats: { takes: cases.filter(c => c.what === 'take').length, steals: cases.filter(c => c.what === 'steal').length, respawns: cases.filter(c => c.what === 'respawn').length,
-    dropsKilled: drops.filter(d => d.killed).length, dropsLoose: drops.filter(d => !d.killed).length, heldMin: r1(sum(holder, h => h.to - h.from)),
+    dropsKilled: drops.filter(d => d.killed).length, dropsLoose: drops.filter(d => !d.killed && d.cause !== 'delivered' && d.cause !== 'left').length,
+    dropsDelivered: drops.filter(d => d.cause === 'delivered').length, heldMin: r1(sum(holder, h => h.to - h.from)),
     carryEdges: [0, 2, 5, 10, 20, 30, 60, 120], carry: { H: hist([0, 2, 5, 10, 20, 30, 60, 120], drops.filter(d => isHuman(d.a)), d => d.carryMs / 1000), B: hist([0, 2, 5, 10, 20, 30, 60, 120], drops.filter(d => !isHuman(d.a)), d => d.carryMs / 1000) },
     carryMedianS: r1((median(drops.map(d => d.carryMs)) ?? 0) / 1000), longestS: Math.round(Math.max(0, ...drops.map(d => d.carryMs)) / 1000) },
   killsPerMin, deathCount: deaths.length,
