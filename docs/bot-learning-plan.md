@@ -51,7 +51,7 @@ At least 3 seconds separate 2 requests to Jev. Between decisions, the bot keeps 
 | L2 | Pickup reflex | Built (`6d08299`, `10fc4b6`) |
 | L3 | Release A: the baseline era, with Jev as it is today | Was live: production `7888521b`, build `production-2026-09-30-76701ab`, until 1 October |
 | L4 | Lighter Jev: event-driven decisions, stance, goals held, code-only rounds | Live: production `88171c4c`, build `production-2026-10-01-6356f81`, with protocol 25 (1 October) |
-| L5 | Tyler's further changes, then the frozen build and a month of data | Waits for Tyler's list |
+| L5 | Tyler's further changes, then the frozen build and a month of data | Queued from Tyler's list: an incident engagement audit and a larger pickup system; first the case batch (protocol 26) and the round-end results board finish on staging |
 | L6 | Copy Jev into the code mind | After a fortnight of frozen data |
 | L7 | Switch Jev off, then tune to humans | After L6 passes |
 
@@ -131,7 +131,12 @@ Checks before shipping (30 September, commits `f5cf0b9` and `8a86be3`):
 
 ### L5. The frozen build
 
-Tyler's further changes go in first. Then one build freezes for about a month:
+Tyler's further changes go in first. Queued, not started (Tyler, 1 October: "don't do this yet, just add it to the plan"):
+
+- **Incident engagement audit.** How engaging is each incident? Read every incident's facts (what players and bots do during it, kills, case movement, pickups, deaths to it, how often it is noticed) and Tyler's playtest notes, then rank them and propose cuts, changes and new ones.
+- **Expand the pickup system.** More kinds of supply and more ways to get them, built on the four supplies, the 27 sites and the reward draw (`rewardSupply`: kill streak titles, Dispatch calls and, since protocol 26, taking the case).
+
+Then one build freezes for about a month:
 
 - the rules, layout, supplies, incidents, bot mind and Jev model (`jev-1.13.0`) stay fixed
 - performance, crash and recording fixes are allowed, because players cannot see them

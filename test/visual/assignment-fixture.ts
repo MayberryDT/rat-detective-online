@@ -143,7 +143,7 @@ if(phase==='closed'){
     // `results`: the round end's last beat, with a full Case File and the standings.
     const awards=query.has('results')?([['headhunter','HEADHUNTER',4],['sharpshooter','SHARPSHOOTER',41],['long-shot','LONG SHOT',63],['case-keeper','CASE KEEPER',48],
         ['frequent-flier','FREQUENT FLIER',3],['supply-run','SUPPLY RUN',5],['legwork','LEGWORK',812]] as const).map(([id,title,value],i)=>({id,title,value,playerId:`p${i}`,playerName:['Detective Rind','Inspector Brie','Gumshoe Squeak','Sergeant Stilton'][i%4]!})):undefined;
-    hud.showVictory(actor.name,0,state.assignment,...(awards?[awards]:[]));
+    hud.showVictory(actor.name,0,{assignment:state.assignment,awards});
     if(query.has('results'))hud.showResults(true);
 }
 const direction=new THREE.Vector3();

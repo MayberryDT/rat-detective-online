@@ -1,6 +1,6 @@
 import { MAX_OBSERVERS, observationAllowed } from '../shared/observation';
 import {RoundAwards} from './RoundAwards';
-import type {Award} from '../shared/networkProtocol';
+import type {Award,RoundReport} from '../shared/networkProtocol';
 import { RECONNECT_GRACE_MS, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
 import { newStreakTitle } from '../shared/streak';
 import { codeOnlyRound, type Personality } from '../shared/bots/intent';
@@ -1299,7 +1299,7 @@ export class GameRoom extends DurableObject<Env> {
     const events=this.chaos.drainPickupEvents();
     this.city.pickups(events,this.players,this.now());
     for (const event of events) {
-      if (event.kind === 'collected') this.awards.pickup(event.playerId);
+      if (event.kind === 'collected' || event.kind === 'rewarded') this.awards.pickup(event.playerId);
       if (event.kind !== 'healed') continue;
       const player = this.players.get(event.playerId);
       if (!player) continue;
@@ -1592,7 +1592,7 @@ export class GameRoom extends DurableObject<Env> {
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
       this.city.tick(now,this.players,state,this.round);
-      if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0,state.pressure?.launches,state.dispatch);
+      if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0,state.pressure?.launches,state.dispatch,state.assignment);
       const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
       // Ownership/Dispatch/assignment changes persist before any client sees them.
       // Routine checkpoints hold nothing clients depend on, so write after this
@@ -1739,10 +1739,11 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.waitUntil(this.scheduleNextAlarm());
   }
 
-  /** Optional Case File for a round-end frame; omitted when nothing qualifies. */
-  private caseFile(winnerId:string,assignment?:AssignmentState):{awards?:Award[];lineup:string[]} {
-    const awards=this.awards.awards(this.players);
-    return {...(awards.length?{awards}:{}),lineup:this.awards.lineup(this.players,winnerId,assignment)};
+  /** The round-end frame's Case File (omitted when nothing qualifies), lineup and round report. */
+  private caseFile(winnerId:string,assignment?:AssignmentState):{awards?:Award[];lineup:string[];report:RoundReport} {
+    const awards=this.awards.awards(this.players),now=this.now();
+    return {...(awards.length?{awards}:{}),lineup:this.awards.lineup(this.players,winnerId,assignment),
+      report:this.awards.report(this.players,(now-(this.round.startedAt??now))/1000,assignment)};
   }
   private ensureRoundClock(): void {
     if (this.round.phase === 'playing' && !this.round.startedAt) {

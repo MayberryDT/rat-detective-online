@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import { MAX_HP } from '../../src/shared/networkProtocol';
 import {MatchScoreboard} from '../../src/ui/MatchScoreboard';
-import {createAssignment, type AssignmentId} from '../../src/shared/assignments';
+import {createAssignment, objectiveTarget, type AssignmentId} from '../../src/shared/assignments';
 import {createPlayer} from '../../src/worker/gameState';
 import type {ChaosState} from '../../src/shared/chaosState';
 import type {ServerMessage} from '../../src/shared/networkProtocol';
@@ -55,7 +55,7 @@ describe('full lobby scoreboard', () => {
         expect(f.row('me').dataset.local).toBe('true'); expect(f.row('rd-ai-1').dataset.carrier).toBe('true');
         const mine = f.cells('me'); expect(mine).toContain('19'); expect(mine).toContain('2'); expect(mine).toContain('9.50');
         expect(mine).toContain('0:30'); expect(mine).toContain('25%');
-        expect(mine).toContain(mode === 'jurisdiction' ? '4 / 60' : mode === 'excessive-force' ? '4 / 10' : '1 / 3');
+        expect(mine).toContain(`${mode === 'chain-of-custody' ? 1 : 4} / ${objectiveTarget(mode)}`);
         expect(f.cells('rd-ai-1')).toContain('∞'); expect(f.cells('rd-ai-1')).toContain('1:30');
         const name = f.row('me').children[1]; expect(name.children[0].textContent).toBe('<img onerror="bad">'); expect(name.children[0].innerHTML).toBe('');
         f.board.dispose();
@@ -78,8 +78,12 @@ describe('full lobby scoreboard', () => {
         f.assignment.phase = 'suspended'; f.board.receive({type: 'chaos', state: f.state});
         expect(f.cells('me')).toContain('0:30'); expect(f.root.querySelector('.match-scoreboard-mode span').textContent).toContain('PAUSED');
         f.assignment.phase = 'closed'; f.assignment.result = {winnerId: 'me', winnerName: 'You', at: 10_000, method: 'kills', posthumous: false};
-        f.board.receive({type: 'gameWon', assignment: f.assignment} as ServerMessage);
-        expect(f.rows()[0].dataset.player).toBe('me'); expect(f.cells('me')).toContain('WINNER'); f.board.dispose();
+        const report = {seconds: 600, kills: 21, handoffs: 3, supplies: 0, flights: 0, calls: 0, rats: [{id: 'me', shots: 20, hits: 8, headshots: 3, longest: 40, caseSeconds: 31, streak: 6, supplies: 0, flights: 0, damage: 4}]};
+        f.board.receive({type: 'gameWon', assignment: f.assignment, report} as ServerMessage);
+        expect(f.rows()[0].dataset.player).toBe('me'); expect(f.row('me').dataset.winner).toBe('true');
+        // The results board shows the report's line (accuracy, headshots, best streak), not live health.
+        expect(f.cells('me')).toEqual(expect.arrayContaining(['40%', '3', '6'])); expect(f.cells('me')).not.toContain(`${MAX_HP} / ${MAX_HP} HP`);
+        expect(f.cells('rd-ai-1')).toContain('—'); f.board.dispose();
     });
     it('reconciles join/leave, resets round totals, replaces a reconnect roster, and cleans up', () => {
         const f = fixture(); f.board.setVisible(true);
@@ -89,7 +93,7 @@ describe('full lobby scoreboard', () => {
         expect(f.rows()).toHaveLength(1); expect(f.cells('me')).toContain('20');
         const assignment = createAssignment('chain-of-custody', 20_000);
         f.board.receive({type: 'gameReset', round: {phase: 'playing', assignment}}); expect(f.root.hidden).toBe(false);
-        f.board.setVisible(true); expect(f.cells('me')).toContain('0 / 3'); expect(f.cells('me')).not.toContain('20'); expect(f.cells('me')).not.toContain('0:30');
+        f.board.setVisible(true); expect(f.cells('me')).toContain(`0 / ${objectiveTarget('chain-of-custody')}`); expect(f.cells('me')).not.toContain('20'); expect(f.cells('me')).not.toContain('0:30');
         f.board.receive({type: 'welcome', id: 'newcomer', player: {...f.people[2], id: 'newcomer'}, players: {newcomer: {...f.people[2], id: 'newcomer'}}, round: {phase: 'playing', assignment}, world: createWorldSpec(1), protocolVersion: PROTOCOL_VERSION, serverTime: 20_000});
         expect(f.root.hidden).toBe(true); f.board.setVisible(true); expect(f.rows()).toHaveLength(1); expect(f.row('newcomer').dataset.local).toBe('true');
         f.board.dispose(); expect(f.root.removed).toBe(true); expect(f.body.classes.has('scoreboard-open')).toBe(false);

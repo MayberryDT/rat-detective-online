@@ -353,7 +353,7 @@ export class GameSession {
         this.hud.hideRespawn();
         this.hud.hideVictory();
         if (player.hp <= 0 && player.respawnAt) this.hud.showRespawn(player.respawnAt - this.serverOffset);
-        if (message.round.phase === 'won') {this.hud.hideRespawn();this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0,message.round.assignment);}
+        if (message.round.phase === 'won') {this.hud.hideRespawn();this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0,{assignment:message.round.assignment,localId:this.myId});}
         this.lastMovement = [];
         this.lastMovementAt = 0;
         this.lastInteractionPosition.set(player.x,player.y+.8,player.z);
@@ -551,7 +551,7 @@ export class GameSession {
                 // Polish 19: let the winning moment play in slow motion before the card slams in.
                 const hold=this.feel.victory();
                 if(hold>0)this.pendingVictory={message,at:performance.now()+hold*1000};
-                else this.hud.showVictory(message.winnerName, message.kills,message.assignment,...(message.awards?[message.awards]:[]));
+                else this.hud.showVictory(message.winnerName,message.kills,{assignment:message.assignment,awards:message.awards,report:message.report,localId:this.myId});
                 // Round end: the CASE CLOSED card holds the screen, then the police lineup,
                 // then the Case File and final standings for the rest of the 30 seconds.
                 const won=performance.now(),entries=feelState().on('lineup')?this.lineupEntries(message):[];
@@ -706,7 +706,7 @@ export class GameSession {
         this.chaos?.update(dt*this.feel.timeScale,camera,this.feel.presentTime(performance.now()));
         if(this.pendingVictory&&now>=this.pendingVictory.at){
             const won=this.pendingVictory.message;this.pendingVictory=undefined;
-            if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,won.assignment,...(won.awards?[won.awards]:[]));
+            if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,{assignment:won.assignment,awards:won.awards,report:won.report,localId:this.myId});
         }
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
         this.blackoutFrame(camera);

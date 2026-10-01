@@ -97,6 +97,33 @@ export interface ScoreEntry {
 export type AwardId = 'top-gun' | 'most-cheesed' | 'butterfingers' | 'sewer-dweller' | 'high-flier'
   | 'sharpshooter' | 'headhunter' | 'long-shot' | 'case-keeper' | 'frequent-flier' | 'supply-run' | 'legwork' | 'dispatcher';
 export interface Award { id: AwardId; title: string; playerId: string; playerName: string; value: number }
+/** The round report's race: at most this many rats, each with at most this many points. */
+export const RACE_LIMIT = { rats: 5, points: 64 } as const;
+/** One present rat's round, server-counted (cosmetic; never scoring). */
+export interface ReportRat {
+  id: string; shots: number; hits: number; headshots: number;
+  /** Longest kill, in metres (world units). */
+  longest: number;
+  /** Whole seconds carrying the case. */
+  caseSeconds: number;
+  /** Best kill streak this round. */
+  streak: number;
+  /** Site pickups plus rewarded supplies. */
+  supplies: number; flights: number;
+  /** Damage taken. */
+  damage: number;
+}
+/** The results board's round report on `gameWon`: the round's big numbers, every present rat's
+ * line, and the race (the leading rats' objective progress every `step` seconds, last point at the finish). */
+export interface RoundReport {
+  seconds: number; kills: number;
+  /** Times the case passed to a different rat. */
+  handoffs: number;
+  carry?: { playerId: string; playerName: string; seconds: number };
+  supplies: number; flights: number; calls: number;
+  rats: ReportRat[];
+  race?: { step: number; ids: string[]; points: number[][] };
+}
 
 export interface RoundState {
   phase: RoundPhase;
@@ -242,7 +269,7 @@ export type ServerMessage =
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }
   | { type: 'playerLeft'; id: string }
-  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState; awards?: Award[]; lineup?: string[] }
+  | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState; awards?: Award[]; lineup?: string[]; report?: RoundReport }
   | { type: 'gameReset'; round: RoundState }
   | { type: 'pong'; sentAt: number; receivedAt: number }
   | { type: 'error'; message: string; code?: 'resume-unavailable' };

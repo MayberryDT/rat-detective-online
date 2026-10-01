@@ -2,9 +2,11 @@ import './roundEnd.css';
 import { awardValue } from '../shared/awardUnits';
 import type {FoleyPlay} from '../audio/foleyCatalog';
 import { ASSIGNMENTS, objectiveTarget, type AssignmentState } from '../shared/assignments';
+import { JURISDICTION_TUNING } from '../shared/jurisdiction';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import { MunicipalQuips } from './municipalQuips';
-import type { Award } from '../shared/networkProtocol';
+import type { Award, RoundReport } from '../shared/networkProtocol';
+import { caseTime } from './MatchScoreboard';
 import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
 import { countUp, leave, measure, reducedMotion, replay, scrawl, slide, uiMotion } from './motion';
@@ -22,6 +24,8 @@ export type FeedEntry =
     | { kind: 'kill'; killer: string | null; victim: string; headshot?: boolean; local?: 'killer' | 'victim' }
     | { kind: 'dispatch'; caller: string; local?: boolean }
     | { kind: 'note'; text: string };
+/** What the round-end screens show beyond the winner: all optional, from the `gameWon` frame. */
+export interface RoundEnd { assignment?: AssignmentState; awards?: readonly Award[]; report?: RoundReport; localId?: string }
 
 /** Owns title, kill feed, overlays, and connection status. */
 /** Matches roundEnd.css: below this the results use their own stacked and phone layouts. */
@@ -56,6 +60,8 @@ export class GameHud {
     private readonly overlayAnimations = new Map<HTMLElement, Animation>();
     private swoop?: HTMLElement;
     private caseFile: {list: HTMLElement; rows: {row: HTMLElement; value: HTMLElement; award: Award}[]; stamped: boolean} | undefined;
+    /** The results board's strip of the round's big numbers. */
+    private headline?: HTMLElement;
     private feedLines = 0;
 
     constructor(doc: Document = document, onRetry?: () => void, private readonly feedback:(cue:FeedbackCue)=>void=()=>{},private readonly foley?:FoleyPlay) {
@@ -161,10 +167,11 @@ export class GameHud {
         slide(this.killFeed, before, 'telegramFeed', 240, false);
     }
 
-    showVictory(winnerName: string, kills: number, assignment?: AssignmentState, awards?: readonly Award[]): void {
+    showVictory(winnerName: string, kills: number, {assignment, awards, report, localId}: RoundEnd = {}): void {
         if (this.disposed) return;
         if(!this.victoryVisible)this.victoryQuip=this.quips.next('victory');
         this.caseFile?.list.parentElement?.remove();this.victoryText.replaceChildren();this.caseFile=undefined;
+        this.headline?.remove();this.headline=report&&this.headlineStrip(report,assignment,localId);
         const lines = [
             ['victory-kicker', assignment ? ASSIGNMENTS[assignment.id].title : 'OUTSTANDING MISCONDUCT'],
             ['victory-headline', 'CASE CLOSED!'],
@@ -184,6 +191,7 @@ export class GameHud {
             for(const award of awards){
                 const row=this.doc.createElement('li'),title=this.doc.createElement('b'),who=this.doc.createElement('span'),value=this.doc.createElement('strong');
                 title.textContent=award.title;who.textContent=award.playerName;value.textContent=awardValue(award);
+                if(award.playerId===localId)row.classList.add('you');
                 row.appendChild(title);row.appendChild(who);row.appendChild(value);list.appendChild(row);
                 rows.push({row,value,award});
             }
@@ -195,6 +203,32 @@ export class GameHud {
         this.layoutResults();
     }
 
+    /** The round's big numbers: length, the mode's objective, kills, case hand-offs, the longest carry, then supplies, flights and calls. */
+    private headlineStrip(report: RoundReport, assignment: AssignmentState | undefined, localId: string | undefined): HTMLElement {
+        const strip=this.doc.createElement('dl');strip.className='results-headline';
+        const cell=(value:string,label:string,className:string,who?:string)=>{
+            const item=this.doc.createElement('div'),term=this.doc.createElement('dt'),detail=this.doc.createElement('dd');
+            item.className=className;term.textContent=label;detail.textContent=value;item.appendChild(term);item.appendChild(detail);
+            if(who!==undefined){const name=this.doc.createElement('small');name.textContent=who;item.appendChild(name);}
+            strip.appendChild(item);return item;
+        };
+        cell(caseTime(report.seconds),'ROUND LENGTH','headline-major');
+        if(assignment){
+            const sum=(table:Record<string,number>)=>Object.values(table).reduce((total,n)=>total+n,0);
+            const [value,label]=assignment.id==='chain-of-custody'?[assignment.deliverySerial,'DELIVERIES']:assignment.id==='jurisdiction'
+                ?[Math.floor(sum(assignment.jurisdiction?.heldMs??{})/JURISDICTION_TUNING.zoneMs),'ZONES EMPTIED']:[sum(assignment.caseKills),'CASE KILLS'];
+            cell(String(value),label,'headline-major headline-objective');
+        }
+        cell(String(report.kills),'KILLS','headline-major');
+        cell(String(report.handoffs),'CASE HAND-OFFS','headline-major');
+        if(report.carry)cell(caseTime(report.carry.seconds),'LONGEST CARRY','headline-major headline-carry',report.carry.playerName).classList.toggle('you',report.carry.playerId===localId);
+        cell(String(report.supplies),'SUPPLIES','headline-minor');
+        cell(String(report.flights),'FLIGHTS','headline-minor');
+        cell(String(report.calls),'DISPATCH CALLS','headline-minor');
+        this.victoryOverlay.appendChild(strip);
+        return strip;
+    }
+
     /** Round end, last beat: the Case File and final standings take the screen; U8 stamps the awards in one at a time. */
     showResults(on: boolean): void {
         const view=this.doc.defaultView;
@@ -202,10 +236,11 @@ export class GameHud {
             this.doc.body?.classList.add('round-results');
             // Out of the banner, whose rotate would otherwise become the fixed panel's containing block.
             const fileElement=this.caseFile?.list.parentElement;if(fileElement)this.victoryOverlay.appendChild(fileElement);
-            // Again next frame: the standings are shown just after this call.
-            this.layoutResults();view?.requestAnimationFrame(this.layoutResults);view?.addEventListener('resize',this.layoutResults);
+            // Again next frame (the standings are shown just after this call), and once fonts first used there have loaded.
+            this.layoutResults();view?.addEventListener('resize',this.layoutResults);
+            view?.requestAnimationFrame(()=>{this.layoutResults();void this.doc.fonts?.ready.then(this.layoutResults);});
         }else{
-            this.doc.body?.classList.remove('round-results');view?.removeEventListener('resize',this.layoutResults);
+            this.doc.body?.classList.remove('round-results','results-tight');view?.removeEventListener('resize',this.layoutResults);
         }
         const file=this.caseFile;
         if(!on||!file||file.stamped)return;
@@ -329,47 +364,56 @@ export class GameHud {
         this.statusPanel.remove();
     }
 
-    /** Results board: the standings and the Case File sit side by side as one centred
-     * group just under the winner banner, both inside the screen. The banner's height
-     * varies with the winner's name, so it is measured. Small screens keep roundEnd.css's own layout. */
+    /** Results board: the strip of big numbers, then the standings and the Case File side by side,
+     * as one centred group just under the winner banner, all inside the screen. The banner's height
+     * varies with the winner's name, so it is measured. Small screens keep roundEnd.css's own placement
+     * of the panels below the measured banner and strip. */
     private layoutResults = (): void => {
         const view=this.doc.defaultView, body=this.doc.body;
         if(!view||!body?.classList.contains('round-results'))return;
+        const small=view.matchMedia(SMALL_RESULTS).matches;
         const banner=[...this.victoryText.children].filter(el=>el.getBoundingClientRect().height>0);
         const bannerBottom=Math.max(0,...banner.map(el=>el.getBoundingClientRect().bottom));
-        const w=view.innerWidth,h=view.innerHeight,margin=Math.max(16,Math.min(40,w*.025)),gap=Math.max(18,Math.min(32,w*.018));
-        const group=Math.min(1480,w-margin*2),fileWidth=this.caseFile?Math.max(360,Math.min(560,group*.36)):0;
-        const board=this.caseFile?group-fileWidth-gap:Math.min(1100,group),left=(w-(board+(fileWidth?fileWidth+gap:0)))/2;
-        const top=Math.round(bannerBottom+gap),available=Math.max(160,h-top-margin);
+        const w=view.innerWidth,h=view.innerHeight,margin=small?8:Math.max(16,Math.min(40,w*.025)),gap=small?10:Math.max(18,Math.min(32,w*.018));
+        const group=Math.min(1480,w-margin*2),fileWidth=this.caseFile?Math.max(360,Math.min(540,group*.36)):0;
+        const board=this.caseFile?group-fileWidth-gap:Math.min(1100,group),width=board+(fileWidth?fileWidth+gap:0),left=(w-width)/2;
+        const stripTop=Math.round(bannerBottom+gap*.6);
+        body.style.setProperty('--results-strip-top',`${stripTop}px`);
+        body.style.setProperty('--results-strip-left',`${left}px`);body.style.setProperty('--results-strip-w',`${width}px`);
+        const strip=this.headline?.getBoundingClientRect().height??0;
+        const top=strip?Math.round(stripTop+strip+gap*.6):Math.round(bannerBottom+gap),available=Math.max(120,h-top-margin);
         const vars:Record<string,string>={'--results-top':`${top}px`,'--results-h':`${available}px`,
             '--results-board-left':`${left}px`,'--results-board-w':`${board}px`,'--results-file-left':`${left+board+gap}px`,'--results-file-w':`${fileWidth}px`};
         for(const [key,value] of Object.entries(vars))body.style.setProperty(key,value);
+        body.style.removeProperty('--results-panel-h');body.classList.remove('results-tight');
+        const standings=this.doc.querySelector<HTMLElement>('.match-scoreboard:not([hidden])');
+        // Every standings row stays in view: the race below the table goes first when they do not fit.
+        const tight=!!standings&&standings.scrollHeight>standings.clientHeight+1;
+        body.classList.toggle('results-tight',tight);
+        const file=this.caseFile?.list.parentElement;
+        if(small){if(file)this.fitCaseFile(file,file.clientHeight);return;}
         // The pair should read as one spread: fit the Case File within the standings' height
         // when it can (always within the screen), then give both the taller height.
-        body.style.removeProperty('--results-panel-h');
-        const standings=this.doc.querySelector<HTMLElement>('.match-scoreboard:not([hidden])');
         const standingsHeight=standings?.getBoundingClientRect().height??0;
         // A little taller than the standings beats shrinking the type another step.
-        const file=this.fitCaseFile(standingsHeight>0?Math.min(standingsHeight*1.12,available):available);
+        if(file)this.fitCaseFile(file,standingsHeight>0?Math.min(standingsHeight*1.12,available):available);
         const tallest=Math.max(standingsHeight,file?.getBoundingClientRect().height??0);
-        if(tallest)body.style.setProperty('--results-panel-h',`${Math.ceil(tallest)}px`);
-        // Ease the pair down into spare room rather than leaving it all below.
-        if(tallest)body.style.setProperty('--results-top',`${top+Math.round(Math.min(80,Math.max(0,available-tallest)/3))}px`);
+        if(!tallest)return;
+        body.style.setProperty('--results-panel-h',`${Math.ceil(tallest)}px`);
+        // Ease the whole spread down into spare room rather than leaving it all below.
+        const ease=tight?0:Math.round(Math.min(60,Math.max(0,available-tallest)/3));
+        body.style.setProperty('--results-top',`${top+ease}px`);body.style.setProperty('--results-strip-top',`${stripTop+ease}px`);
     };
 
     /** Awards never run off the screen: two columns for a long list, then smaller type, then three columns. */
-    private fitCaseFile(target: number): HTMLElement | undefined {
-        const file=this.caseFile?.list.parentElement;
-        if(!file)return;
+    private fitCaseFile(file: HTMLElement, target: number): void {
         file.classList.remove('fit-2','fit-compact','fit-3');
-        if(this.doc.defaultView?.matchMedia(SMALL_RESULTS).matches)return file;
         // A long list reads better as two short columns than one tall one.
         if(this.caseFile!.rows.length>6)file.classList.add('fit-2');
         for(const step of ['fit-2','fit-compact','fit-3']){
             if(file.scrollHeight<=target+1)break;
             file.classList.add(step);
         }
-        return file;
     }
 
     private handleRetry = (event: Event): void => {

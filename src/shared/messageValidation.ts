@@ -14,6 +14,7 @@ import {
   wireBytes,
   MAX_SERVER_MESSAGE_BYTES,
   PROTOCOL_VERSION,
+  RACE_LIMIT,
   type Award,
   type AwardId,
   type ClientMessage,
@@ -21,6 +22,8 @@ import {
   type PlayerData,
   type QuatData,
   type RatAppearance,
+  type ReportRat,
+  type RoundReport,
   type RoundState,
   type ScoreEntry,
   type ServerMessage,
@@ -154,6 +157,57 @@ function parseAwards(value: unknown): Award[] | null {
     awards.push({ id: id as AwardId, title, playerId, playerName, value: amount });
   }
   return awards;
+}
+
+const REPORT_MAX = 1_000_000;
+/** A whole tally on the round report. */
+const tally = (value: unknown) => boundedInteger(value, 0, REPORT_MAX);
+/** A non-negative measure on the round report (seconds, race progress). */
+function measure(value: unknown): number | null {
+  const number = finiteNumber(value);
+  return number !== null && number >= 0 && number <= REPORT_MAX ? number : null;
+}
+function parseReportRat(value: unknown): ReportRat | null {
+  if (!isRecord(value)) return null;
+  const id = nonEmptyString(value.id, 64), shots = tally(value.shots), hits = tally(value.hits), headshots = tally(value.headshots),
+    longest = tally(value.longest), caseSeconds = tally(value.caseSeconds), streak = tally(value.streak),
+    supplies = tally(value.supplies), flights = tally(value.flights), damage = tally(value.damage);
+  if (!id || shots === null || hits === null || hits > shots || headshots === null || longest === null || caseSeconds === null ||
+    streak === null || supplies === null || flights === null || damage === null) return null;
+  return { id, shots, hits, headshots, longest, caseSeconds, streak, supplies, flights, damage };
+}
+function parseRace(value: unknown): NonNullable<RoundReport['race']> | null {
+  if (!isRecord(value) || !Array.isArray(value.ids) || !Array.isArray(value.points)) return null;
+  const step = measure(value.step), rawIds: unknown[] = value.ids, rawPoints: unknown[] = value.points;
+  if (!step || rawIds.length < 1 || rawIds.length > RACE_LIMIT.rats || rawPoints.length !== rawIds.length) return null;
+  const ids: string[] = [], points: number[][] = [];
+  for (let i = 0; i < rawIds.length; i++) {
+    const id = nonEmptyString(rawIds[i], 64), series = rawPoints[i];
+    if (!id || !Array.isArray(series) || series.length < 1 || series.length > RACE_LIMIT.points || (i && series.length !== points[0]!.length)) return null;
+    const line: number[] = [];
+    for (const point of series) { const v = measure(point); if (v === null) return null; line.push(v); }
+    ids.push(id); points.push(line);
+  }
+  return { step, ids, points };
+}
+/** Optional round report on gameWon; anything malformed or out of bounds rejects the frame. */
+function parseRoundReport(value: unknown): RoundReport | null {
+  if (!isRecord(value) || !Array.isArray(value.rats) || value.rats.length > MAX_SCORE_ENTRIES) return null;
+  const seconds = measure(value.seconds), kills = tally(value.kills), handoffs = tally(value.handoffs),
+    supplies = tally(value.supplies), flights = tally(value.flights), calls = tally(value.calls);
+  if (seconds === null || kills === null || handoffs === null || supplies === null || flights === null || calls === null) return null;
+  const rats: ReportRat[] = [];
+  for (const entry of value.rats) { const rat = parseReportRat(entry); if (!rat) return null; rats.push(rat); }
+  let carry: RoundReport['carry'];
+  if (value.carry !== undefined) {
+    if (!isRecord(value.carry)) return null;
+    const playerId = nonEmptyString(value.carry.playerId, 64), playerName = value.carry.playerName, held = measure(value.carry.seconds);
+    if (!playerId || typeof playerName !== 'string' || playerName.length > 32 || held === null) return null;
+    carry = { playerId, playerName, seconds: held };
+  }
+  const race = value.race === undefined ? undefined : parseRace(value.race);
+  if (race === null) return null;
+  return { seconds, kills, handoffs, ...(carry ? { carry } : {}), supplies, flights, calls, rats, ...(race ? { race } : {}) };
 }
 
 function parseRound(value: unknown): RoundState | null {
@@ -680,8 +734,10 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       // Juice T5: up to five player ids for the police lineup, winner first.
       const lineup=parsed.lineup===undefined?undefined:Array.isArray(parsed.lineup)&&parsed.lineup.length<=5?parsed.lineup.map(id=>nonEmptyString(id,64)):null;
       if(lineup===null||lineup?.some(id=>!id))return null;
+      const report=parsed.report===undefined?undefined:parseRoundReport(parsed.report);
+      if(report===null)return null;
       return { type: 'gameWon', winnerId, winnerName, kills, resetAt, ...(assignment?{assignment}:{}), ...(awards?.length?{awards}:{}),
-        ...(lineup?.length?{lineup:lineup.filter((id):id is string=>!!id)}:{}) };
+        ...(lineup?.length?{lineup:lineup.filter((id):id is string=>!!id)}:{}), ...(report?{report}:{}) };
     }
     case 'gameReset': {
       const round = parseRound(parsed.round);

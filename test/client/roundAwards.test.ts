@@ -2,7 +2,8 @@ import {expect,it} from 'vitest';
 import {RoundAwards} from '../../src/worker/RoundAwards';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {createPlayer} from '../../src/worker/gameState';
-import type {PlayerData} from '../../src/shared/networkProtocol';
+import {createAssignment} from '../../src/shared/assignments';
+import {MAX_SCORE_ENTRIES,RACE_LIMIT,type PlayerData,type RoundReport} from '../../src/shared/networkProtocol';
 
 // Failure modes, written before the checks:
 // 1. A delivery (case leaves the carrier on purpose) is counted as a drop.
@@ -101,4 +102,46 @@ it('counts each Dispatch call once and names the rat with the most calls',()=>{
     expect(parseServerMessage(JSON.stringify({type:'gameWon',winnerId:'b',winnerName:'B',kills:3,resetAt:1,awards:awards.awards(players)}))).not.toBeNull();
     awards.reset();
     expect(awards.awards(players).find(w=>w.id==='dispatcher')).toBeUndefined();
+});
+
+// Round report failure modes, written before the checks:
+// (see below)
+// 15. Taking the case back after dropping it counts as a hand-off; a carry still running at the finish is lost.
+// 16. A long round grows the race past its wire bound, or the race stops ending on the final score.
+// 17. An oversized, out-of-range or inconsistent report is accepted on the wire.
+it('counts hand-offs between rats and the longest carry, including one running at the finish',()=>{
+    const awards=new RoundAwards(),a=rat('a'),b=rat('b'),players=new Map([['a',a],['b',b]]);
+    for(const [owner,seconds] of [['a',5],[null,2],['a',3],['b',12]] as const)for(let i=0;i<seconds;i++)awards.sample(players.values(),1,owner,0);
+    const report=awards.report(players,22);
+    expect(report.handoffs).toBe(2);
+    expect(report.carry).toEqual({playerId:'b',playerName:'B',seconds:12});
+});
+it('keeps a long round\'s race within its bound, ending on each leader\'s final progress',()=>{
+    const awards=new RoundAwards(),assignment=createAssignment('chain-of-custody',0);
+    const players=new Map(Array.from({length:8},(_,i)=>[`r${i}`,rat(`r${i}`)] as const));
+    for(let t=0;t<4000;t++){
+        if(t%300===0)for(const id of players.keys())assignment.deliveries[id]=(assignment.deliveries[id]??0)+Number(id.slice(1))%3;
+        awards.sample(players.values(),1,null,0,[],undefined,assignment);
+    }
+    assignment.deliveries.r2=99;
+    const report=awards.report(players,4000,assignment),race=report.race!;
+    expect(race.ids).toHaveLength(RACE_LIMIT.rats);expect(race.ids[0]).toBe('r2');
+    expect(race.points.every(line=>line.length===race.points[0]!.length&&line.length<=RACE_LIMIT.points)).toBe(true);
+    expect((race.points[0]!.length-2)*race.step).toBeLessThanOrEqual(4000);expect((race.points[0]!.length-1)*race.step).toBeGreaterThan(4000-race.step*2);
+    const leader=race.points[0]!;expect(leader[leader.length-1]).toBe(99);
+    expect(parseServerMessage(JSON.stringify({type:'gameWon',winnerId:'r2',winnerName:'R2',kills:0,resetAt:1,report}))).toMatchObject({report:{race:{ids:race.ids}}});
+});
+it('rejects oversized, out-of-range or inconsistent round reports',()=>{
+    const line={id:'a',shots:10,hits:4,headshots:1,longest:30,caseSeconds:12,streak:2,supplies:3,flights:1,damage:6};
+    const report:RoundReport={seconds:600,kills:9,handoffs:4,supplies:3,flights:1,calls:0,rats:[line],race:{step:10,ids:['a'],points:[[0,1,2]]}};
+    const won=(r:unknown)=>parseServerMessage(JSON.stringify({type:'gameWon',winnerId:'a',winnerName:'A',kills:3,resetAt:1,report:r}));
+    expect(won(report)).toMatchObject({report});
+    expect(won({...report,rats:Array.from({length:MAX_SCORE_ENTRIES+1},(_,i)=>({...line,id:`r${i}`}))})).toBeNull();
+    expect(won({...report,rats:[{...line,hits:11}]})).toBeNull();
+    expect(won({...report,seconds:-1})).toBeNull();
+    expect(won({...report,kills:Number.NaN})).toBeNull();
+    expect(won({...report,race:{step:10,ids:['a','b','c','d','e','f'],points:Array.from({length:6},()=>[1])}})).toBeNull();
+    expect(won({...report,race:{step:10,ids:['a','b'],points:[[0,1],[0]]}})).toBeNull();
+    expect(won({...report,race:{step:10,ids:['a'],points:[Array.from({length:RACE_LIMIT.points+1},()=>0)]}})).toBeNull();
+    expect(won({...report,race:{step:0,ids:['a'],points:[[1]]}})).toBeNull();
 });

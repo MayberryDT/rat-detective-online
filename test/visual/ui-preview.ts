@@ -16,7 +16,7 @@ import {leave} from '../../src/ui/motion';
 import {playerPreferences} from '../../src/settings/PlayerPreferences';
 import {createAssignment,type AssignmentId} from '../../src/shared/assignments';
 import type {ChaosState} from '../../src/shared/chaosState';
-import {PROTOCOL_VERSION,type Award,type ScoreEntry} from '../../src/shared/networkProtocol';
+import {PROTOCOL_VERSION,type Award,type RoundReport,type ScoreEntry} from '../../src/shared/networkProtocol';
 import {createWorldSpec,DEFAULT_CITY_OPTIONS} from '../../src/shared/worldSpec';
 import {createPlayer} from '../../src/worker/gameState';
 import {createStage} from '../../src/session/createStage';
@@ -91,6 +91,10 @@ const allAwards=[award('top-gun','TOP GUN','Lieutenant Gorgonzola',14),award('mo
     award('headhunter','HEADHUNTER','Gumshoe Squeak',4),award('long-shot','LONG SHOT','Detective Rind',87),award('case-keeper','CASE KEEPER','Lieutenant Curd',143),
     award('frequent-flier','FREQUENT FLIER','Deputy Muenster',6),award('supply-run','SUPPLY RUN','Officer Crumb',9),award('legwork','LEGWORK','Constable Camembert',1812),
     award('dispatcher','DISPATCHER','Sergeant Stilton',3)];
+const climb=(final:number,n=22)=>Array.from({length:n},(_,i)=>Math.floor(final*Math.pow(i/(n-1),1.4)));
+const report:RoundReport={seconds:871,kills:47,handoffs:23,carry:{playerId:'rat-1',playerName:'Detective Rind',seconds:72},supplies:31,flights:12,calls:3,
+    rats:people.map((p,i)=>({id:p.id,shots:60-i*5,hits:24-i*2,headshots:3-i%3,longest:70-i*6,caseSeconds:[31,62,12,0,8,0,4,0][i]!,streak:4-i%4,supplies:5-i%5,flights:i%3,damage:9+i})),
+    race:{step:40,ids:['rat-1','rat-2','me','rat-3'],points:[climb(6),climb(5),climb(4),climb(2)]}};
 function score(id:string,delta:number):void {
     const table=mode==='chain-of-custody'?assignment.deliveries:assignment.caseKills;table[id]=(table[id]??0)+delta;
     board.receive({type:'chaos',state});
@@ -128,14 +132,16 @@ const actions:Record<string,()=>void>={
     'Crosshair: headshot X':()=>hud.showKillConfirmation('Detective Rind',true),
     'Death: iris, then RAT DOWN and clock':()=>{iris=0;hud.showRespawn(Date.now()+3000);},
     'Death: respawn':()=>{iris=-1;screen.reset();hud.hideRespawn();},
-    'Round end: CASE CLOSED card':()=>{hud.showVictory('Detective Rind',9,assignment,awards);},
+    'Round end: CASE CLOSED card':()=>{hud.showVictory('Detective Rind',9,{assignment,awards,report,localId:'me'});},
     'Round end: results (Case File stamps)':()=>{
         assignment.result={winnerId:'rat-1',winnerName:'Detective Rind',at:0,method:'kills',posthumous:false};board.receive({type:'chaos',state});
+        board.receive({type:'gameWon',winnerId:'rat-1',winnerName:'Detective Rind',kills:9,resetAt:0,assignment,report});
         hud.showResults(true);board.setVisible(true);},
-    'Round end: full Case File (13 awards)':()=>{hud.showVictory('Lieutenant Gorgonzola',14,assignment,allAwards);
+    'Round end: full Case File (13 awards)':()=>{hud.showVictory('Lieutenant Gorgonzola',14,{assignment,awards:allAwards,report,localId:'me'});
         assignment.result={winnerId:'rat-1',winnerName:'Lieutenant Gorgonzola',at:0,method:'kills',posthumous:false};board.receive({type:'chaos',state});
+        board.receive({type:'gameWon',winnerId:'rat-1',winnerName:'Lieutenant Gorgonzola',kills:14,resetAt:0,assignment,report});
         hud.showResults(true);board.setVisible(true);},
-    'Round end: done':()=>{hud.hideVictory();board.setVisible(false);delete assignment.result;},
+    'Round end: done':()=>{hud.hideVictory();board.setVisible(false);delete assignment.result;board.receive({type:'gameReset',round:{phase:'playing',assignment}});},
     'Scoreboard: open':()=>board.setVisible(true),
     'Scoreboard: close':()=>board.setVisible(false),
     'Scoreboard: live reorder':()=>{const p=people[5]!;p.kills+=12;board.receive({type:'scoreboardUpdate',scores:people.map(x=>({id:x.id,name:x.name,kills:x.kills,deaths:x.deaths}))});score('rat-5',9);},

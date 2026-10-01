@@ -596,7 +596,7 @@ describe('GameSession', () => {
         expect(harness.cities[1].generate).toHaveBeenCalled();
         expect(harness.rats).toHaveLength(2);
         expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 3_000);
-        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, undefined);
+        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, expect.objectContaining({assignment: undefined}));
         transport.onMessage?.({ type: 'currentPlayers', players: { me: dead } });
         expect(harness.rats).toHaveLength(2);
     });
@@ -609,10 +609,10 @@ describe('GameSession', () => {
         // Reduced motion skips the victory slow-motion, so the card is immediate.
         playerPreferences().update({reducedMotion:true});
         try{transport.onMessage?.({type:'gameWon',...result});}finally{playerPreferences().update({reducedMotion:false});}
-        expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,assignment);
+        expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,expect.objectContaining({assignment}));
         expect(hud.hideRespawn).toHaveBeenCalled();
         transport.onMessage?.(welcome({round:{phase:'won',...result}}));
-        expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,assignment);
+        expect(hud.showVictory).toHaveBeenLastCalledWith(result.winnerName,0,expect.objectContaining({assignment}));
     });
     it('routes death, respawn, victory, reset, and notice errors through the HUD', () => {
         const { transport, hud, remotes } = start();
@@ -636,7 +636,7 @@ describe('GameSession', () => {
         playerPreferences().update({reducedMotion:true});
         try{transport.onMessage?.({ type: 'gameWon', winnerId: 'me', winnerName: '<Rat & Co>', kills: 20, resetAt: Date.now() + 6_000 });}
         finally{playerPreferences().update({reducedMotion:false});}
-        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, undefined);
+        expect(hud.showVictory).toHaveBeenCalledWith('<Rat & Co>', 20, expect.objectContaining({assignment: undefined}));
         transport.onMessage?.({ type: 'gameReset', round: { phase: 'playing' } });
         expect(rat.entity.resetReactions).toHaveBeenCalledOnce();
         expect(hud.hideVictory).toHaveBeenCalled();

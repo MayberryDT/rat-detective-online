@@ -129,7 +129,7 @@ rooms, actor positions or unrevealed assignment/zone choices.
 | Assignment | Primary panel information |
 |---|---|
 | Paper Chase | Deliveries out of three and current destination |
-| Jurisdiction | Personal zone points out of 60, current zone and relocation time; next zone only during its announced warning |
+| Jurisdiction | Personal zone points out of 60, current zone and relocation time; `nextZone` is always null since protocol 26 (only the active zone is ever shown) |
 | Excessive Force | Qualifying case kills out of ten |
 | Closing Time | Remaining processing time and current holder; winner only from committed result |
 
