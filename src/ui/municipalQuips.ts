@@ -56,29 +56,17 @@ export const MUNICIPAL_QUIPS = {
     ],
     meteor: [
         'The sky fell on {name}. It was cheese.',
-        '{name} was struck by an Act of God. Insurance will not cover it.',
+        '{name} got caught in the Cheddar Shower. Heavy at times.',
         'A meteor of aged cheddar flattened {name}. Vintage.',
         '{name} looked up. That was the mistake.',
-        'Heaven sent {name} a cheese wheel. Express.',
+        'The clouds sent {name} a cheese wheel. Express.',
         '{name} is now a crater with a hat.',
         'The forecast said cheese. {name} did not bring an umbrella.',
         '{name} was in the wrong shadow at the wrong time.',
-        'Divine intervention, cheese-shaped, found {name}.',
-        '{name} has been filed under ACTS OF GOD. Case closed.',
-        'The heavens dropped a wheel of brie on {name}.',
+        'Scattered cheese, heavy at times. Mostly on {name}.',
+        '{name} has been filed under WEATHER. Case closed.',
+        'A passing cloud dropped a wheel of brie on {name}.',
         '{name} was pressed into a fine cheese.',
-    ],
-    malfunction: [
-        'The city failed its inspection. So did {name}.',
-        '{name} was taken out by faulty municipal equipment.',
-        'A supply exploded on {name}. Please report defects.',
-        '{name} has been condemned by the building inspector.',
-        'Out of order: {name}.',
-        'The warranty did not cover {name}.',
-        '{name} touched the equipment. The equipment touched back.',
-        'A loose wire found {name}. The city denies all wires.',
-        '{name} was recalled by the manufacturer.',
-        'Code Violation 404: {name} not found.',
     ],
     death: ['A MINOR CAREER SETBACK.', 'TEMPORARILY OUT OF OFFICE.', 'YOUR PENSION IS UNDER REVIEW.', 'UNSCHEDULED FLOOR INSPECTION.', 'PLEASE RESUBMIT YOURSELF.', 'ANOTHER WORKPLACE INCIDENT.', 'HORIZONTAL. STILL EMPLOYED.', 'THE REPORT WILL BE UNFLATTERING.', 'PAID LEAVE DENIED.', 'YOUR HAT HAS FILED A COMPLAINT.', 'CURRENTLY BETWEEN HEARTBEATS.', 'OFFICER DOWN. MORALE UNCLEAR.'],
     victory: ['PROMOTED?!', 'MANAGEMENT HAS QUESTIONS.', 'EMPLOYEE OF THE INCIDENT.', 'A RAISE IS NOT GUARANTEED.', 'YOUR METHODS WERE NOTED.', 'SOMEHOW, THIS COUNTS.', 'CORNER OFFICE. NO WINDOWS.', 'OUTSTANDING QUESTIONABLE CONDUCT.', 'THE MAYOR DENIES INVOLVEMENT.', 'PLEASE TRAIN YOUR REPLACEMENT.', 'A MODEL OF MUNICIPAL EFFICIENCY.', 'THE PAPERWORK CHECKS OUT.'],
@@ -124,7 +112,7 @@ export const MUNICIPAL_QUIPS = {
     ],
 } as const;
 /** Which joke bag tells a death nobody is credited with. */
-const ENVIRONMENT_QUIPS:Record<EnvironmentCause,keyof typeof MUNICIPAL_QUIPS>={'evidence-tampering':'caseDeath',drowned:'drowned',meteor:'meteor',malfunction:'malfunction'};
+const ENVIRONMENT_QUIPS:Record<EnvironmentCause,keyof typeof MUNICIPAL_QUIPS>={'evidence-tampering':'caseDeath',drowned:'drowned',meteor:'meteor'};
 
 /** Flavor for incident broadcasts; the title, countdown and objective status
  * carry the actionable information without a recurring tutorial paragraph. */
@@ -142,7 +130,7 @@ export const INCIDENT_QUIPS:Record<IncidentId,string>={
     'most-wanted':'THE CITY WOULD LIKE A WORD WITH WHOEVER IS WINNING.',
     'all-units':'DEATH IS NO EXCUSE FOR MISSING THE ACTION.',
     bobbleheads:'THE COMMISSIONER ORDERED BIGGER HEADS. NOBODY ASKED WHY.',
-    'act-of-god':'THE SKY IS FALLING. IT IS CHEESE. WATCH FOR SHADOWS.',
+    'cheddar-shower':'THE FORECAST IS CHEESE. FIND A ROOF.',
 };
 /** Local flavor only. Every phrase appears before reuse, with no boundary repeat. */
 export class MunicipalQuips {

@@ -40,8 +40,8 @@ import {BAD_AMMO} from '../shared/shotBallistics';
 import {LAUNCH_MACHINES} from '../shared/chaosState';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
-import {pickupArtwork, powerupCard} from './pickupArtwork';
-import { BUFF_FIELD, BUFF_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, activeBuffs, entryWeapon, heldWeapon, isTimedPickup, type BuffMap, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
+import {faultyCard, pickupArtwork, powerupCard} from './pickupArtwork';
+import { BUFF_FIELD, BUFF_MS, FAULTY_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, activeBuffs, entryFaulty, entryWeapon, heldWeapon, isTimedPickup, weaponArming, type BuffMap, type FaultyKind, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
 import {TrapField,type TrapEvent} from './TrapVisual';
 import {closestPointOnSegment} from '../shared/netplay';
 
@@ -116,13 +116,20 @@ export class ChaosView {
     private readonly claimChips=new Map<PickupKind,HTMLElement>();
     private readonly claimAt=new THREE.Vector3();
     private readonly claimFrom={x:0,y:0};
-    /** Your own supply claim (not other rats'), raised the frame its card is up. */
-    onClaim?:(kind:PickupKind,camera:THREE.Camera)=>void;
+    /** Your own supply claim (not other rats'), raised the frame its card is up; `lockMs` is what is left of a
+     * just-taken Mousetrap's trigger lockout (0 otherwise). */
+    onClaim?:(kind:PickupKind,camera:THREE.Camera,lockMs:number)=>void;
     private readonly localBuffs:Record<TimedPickup,number>={ironclad:0,hustle:0,stakeout:0};
     private buffsSeen=false;
     /** Your special weapon and its deadline as last seen, so a new claim (or a refresh) is announced once. */
     private localWeapon?:WeaponKind;
     private localWeaponUntil=0;
+    /** Your Mousetrap is still coming up into the paw (its lockout), and the lockout left at its claim. */
+    private localArming=false;
+    private trapLockMs=0;
+    /** Your Code Violation dud's deadline as last seen (so a new one is announced once), and its card. */
+    private localDudUntil=0;
+    private dud?:{kind:FaultyKind;card:HTMLElement};
     private readonly pendingInteractions=new Map<string,InteractionCandidate>();
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
     private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
@@ -168,7 +175,7 @@ export class ChaosView {
     private readonly localShots:LocalShotPresentation;
     /** W2: every rat's laser beams, scorches and their zap/crack (yours drawn on the press). */
     private readonly beams:LaserBeamVisual;
-    /** Act of God: falling meteors, their shadows and shock rings. */
+    /** Cheddar Shower: falling meteors, their shadows and shock rings. */
     private readonly meteors:MeteorVisual;
     /** Code Violation: when the next malfunction spark (and its zap) may fly. */
     private sparkAt=0;
@@ -184,7 +191,7 @@ export class ChaosView {
     onCorpseJolt?: (p:Vec3Data)=>void;
     /** K1: the case burst paperwork at `p` (taken, knocked loose or shot): `kind` sizes it. */
     onCasePaper?: (p:Vec3Data,kind:'taken'|'loose'|'kick')=>void;
-    /** Act of God: a meteor's shadow first shows (`seconds` before it lands), and its landing, in the presented timeline. */
+    /** Cheddar Shower: a meteor's shadow first shows (`seconds` before it lands), and its landing, in the presented timeline. */
     set onMeteorWarn(listener:((at:THREE.Vector3,seconds:number)=>void)|undefined){this.meteors.onWarn=listener;}
     set onMeteorImpact(listener:((at:THREE.Vector3)=>void)|undefined){this.meteors.onImpact=listener;}
     /** Bad Ammunition: a superball bounced off the world at `p`. */
@@ -269,11 +276,12 @@ export class ChaosView {
             const angle=i*2.4+Math.random();
             this.impacts.spark(this.impactPoint.set(me.x+Math.cos(angle)*.35,me.y+1.1+i*.25,me.z+Math.sin(angle)*.35),this.impactNormal.set(Math.cos(angle),.8,Math.sin(angle)));
         }
-        this.onClaim?.(kind,camera);
+        this.onClaim?.(kind,camera,kind==='mousetrap'?this.trapLockMs:0);
     }
     private clearPickupCards():void {
-        this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;this.localWeapon=undefined;this.localWeaponUntil=0;
+        this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;this.localWeapon=undefined;this.localWeaponUntil=0;this.localArming=false;this.localDudUntil=0;
         for(const card of this.buffCards.values())leave(card,'paperSlide',CARD_EXIT);
+        if(this.dud){leave(this.dud.card,'paperSlide',CARD_EXIT);this.dud=undefined;}
         this.buffCards.clear();this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
     resetProjectiles():void{
@@ -493,7 +501,8 @@ export class ChaosView {
         for(const id of this.armed)if(!heldWeapon(state.buffs,id,state.time)){this.resolveRat(id)?.setWeapon(undefined);this.armed.delete(id);}
         for(const id in state.buffs){
             const weapon=heldWeapon(state.buffs,id,state.time);
-            if(weapon){this.resolveRat(id)?.setWeapon(weapon);this.armed.add(id);}
+            // A Mousetrap just taken (still in its lockout) is swapped in: the gun goes away and the trap comes up big.
+            if(weapon){this.resolveRat(id)?.setWeapon(weapon,weaponArming(state.buffs?.[id],state.time));this.armed.add(id);}
         }
     }
     /** Announce a claim locally when the authoritative buff first appears; a new view's first state (a reconnect
@@ -506,9 +515,19 @@ export class ChaosView {
             if(seen&&until!==this.localBuffs[kind]&&until>state.time)this.pickupFeedback(kind);
             this.localBuffs[kind]=until;
         }
-        const weapon=entryWeapon(mine,state.time),until=mine?.weaponUntil??0;
-        if(seen&&weapon&&(weapon!==this.localWeapon||until!==this.localWeaponUntil))this.pickupFeedback(weapon);
-        this.localWeapon=weapon;this.localWeaponUntil=until;
+        const weapon=entryWeapon(mine,state.time),until=mine?.weaponUntil??0,arming=weaponArming(mine,state.time);
+        if(seen&&weapon&&(weapon!==this.localWeapon||until!==this.localWeaponUntil)){this.trapLockMs=arming?mine!.weaponReadyAt!-state.time:0;this.pickupFeedback(weapon);}
+        // W3: the trap is up in your paws: the next press sets it down.
+        if(seen&&weapon==='mousetrap'&&this.localArming&&!arming)this.feedback?.('trap-ready');
+        this.localWeapon=weapon;this.localWeaponUntil=until;this.localArming=arming;
+        // A Code Violation dud: the slap of a claim, then the faulty fitting's zap.
+        const dud=entryFaulty(mine,state.time),dudUntil=dud?mine!.faultyUntil!:0;
+        if(seen&&dud&&dudUntil!==this.localDudUntil){
+            this.feedback?.('pickup-slap');
+            const me=this.resolveRat(this.myId)?.mesh.position;
+            if(me&&feelState().on('codeViolation'))playSynth('zap',me,.8,FEEL.codeViolation.params.zap*1.4);
+        }
+        this.localDudUntil=dudUntil;
     }
     private updateBuffs(buffs:BuffMap|undefined,now:number):void{
         if(this.resolveRat(this.myId)?.dead){this.clearPickupCards();return;}
@@ -522,6 +541,12 @@ export class ChaosView {
             if(!healing){const card=powerupCard('quick-fix');card.setAttribute('role','status');
                 this.buffCards.set('quick-fix',card);this.buffBar.appendChild(card);}
         }else {if(healing)leave(healing,'paperSlide',CARD_EXIT);this.buffCards.delete('quick-fix');}
+        // Code Violation's dud: its own condemned card, saying what it does to you, until it wears off.
+        if(this.dud&&this.dud.kind!==mine.faulty){leave(this.dud.card,'paperSlide',CARD_EXIT);this.dud=undefined;}
+        if(mine.faulty&&mine.faultyUntil!==undefined){
+            if(!this.dud){this.dud={kind:mine.faulty,card:faultyCard(mine.faulty)};this.buffBar.appendChild(this.dud.card);}
+            this.tickCard(this.dud.card,mine.faultyUntil-now,FAULTY_MS[mine.faulty]);
+        }
         this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
     /** Show, tick or drop the card of an effect running until `until` (Infinity: held until used). */
@@ -530,8 +555,11 @@ export class ChaosView {
         if(!until){if(card)leave(card,'paperSlide',CARD_EXIT);this.buffCards.delete(kind);return;}
         if(!card){card=powerupCard(kind);this.buffCards.set(kind,card);this.buffBar.appendChild(card);}
         const duration=isTimedPickup(kind)?BUFF_MS[kind]:WEAPON_MS[kind];
-        if(duration===undefined)return;
-        const remaining=Math.max(0,until-now);
+        if(duration!==undefined)this.tickCard(card,until-now,duration);
+    }
+    /** A timed card's seconds clock and gauge, `remaining` of `duration` ms; it flickers through its last three seconds. */
+    private tickCard(card:HTMLElement,remaining:number,duration:number):void{
+        remaining=Math.max(0,remaining);
         const seconds=String(Math.ceil(remaining/1000)),clock=card.querySelector('b')!;
         if(clock.textContent!==seconds)clock.textContent=seconds;
         card.style.setProperty('--remaining',String(Math.min(1,remaining/duration)));

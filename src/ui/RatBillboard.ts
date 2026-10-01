@@ -21,6 +21,8 @@ const STREAK_WORDS = ['ARMED', 'DANGEROUS', 'PUBLIC ENEMY'] as const;
 const MAX_TALLIES = 10, STAMP_SECONDS = 0.28;
 const STAMP_FONT = '400 28px Bangers, Impact, sans-serif';
 const STAMP_RED = '#c8322a', STAMP_INK = '#ee5b4f';
+/** A Code Violation dud's condemned-notice ink. */
+const DUD_INK = '#ff7a52';
 
 /** Noir nameplate: the rat's name in spaced small caps over a row of slanted
  * pips, one per hit point, like tabs on a case file. Lost pips flash, shake and
@@ -52,6 +54,8 @@ export class RatBillboard {
     private streak = 0;
     /** Most Wanted: this rat is in the searchlight. */
     private wanted = false;
+    /** A Code Violation dud's name (COLD FEET, …) while this rat has one. */
+    private dud?: string;
     /** Seconds since the stamp last came down (a new kill while on a streak). */
     private stampAge = Infinity;
     private stampFont = false;
@@ -115,6 +119,17 @@ export class RatBillboard {
         if (on === this.wanted) return;
         this.wanted = on;
         if (on) {
+            this.stampAge = 0; this.animating = this.health > 0;
+            if (!this.stampFont) { this.stampFont = true; void document.fonts?.load?.(STAMP_FONT).then(() => { if (!this.disposed) this.draw(); }, () => {}); }
+        }
+        this.draw();
+    }
+
+    /** Code Violation: the dud's name comes down as a condemned-notice stamp under the pips (under WANTED, over a streak). */
+    public setDud(word?: string): void {
+        if (word === this.dud) return;
+        this.dud = word;
+        if (word) {
             this.stampAge = 0; this.animating = this.health > 0;
             if (!this.stampFont) { this.stampFont = true; void document.fonts?.load?.(STAMP_FONT).then(() => { if (!this.disposed) this.draw(); }, () => {}); }
         }
@@ -258,7 +273,8 @@ export class RatBillboard {
                 }
             }
         }
-        if (this.wanted) this.drawWanted(w);
+        if (this.wanted) this.drawSlab(w, 'WANTED', true);
+        else if (this.dud) this.drawSlab(w, this.dud, false);
         else if (this.streak >= STREAK_TIERS[0]) this.drawStamp(w);
         ctx.globalAlpha = 1;
         this.texture.needsUpdate = true;
@@ -293,19 +309,22 @@ export class RatBillboard {
         ctx.restore();
     }
 
-    /** WANTED: a filled stamp-red slab with cream letters, heavier than a streak stamp so it reads from across the city. */
-    private drawWanted(w: number): void {
-        const ctx = this.ctx, word = 'WANTED', t = Math.min(1, this.stampAge / STAMP_SECONDS);
+    /** WANTED: a filled stamp-red slab with cream letters, heavier than a streak stamp so it reads from across the city.
+     * A dud (`solid` false): a dark condemned notice with a dashed red-orange rule and letters. */
+    private drawSlab(w: number, word: string, solid: boolean): void {
+        const ctx = this.ctx, t = Math.min(1, this.stampAge / STAMP_SECONDS);
         ctx.save();
-        ctx.font = STAMP_FONT; ctx.letterSpacing = '4px'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = STAMP_FONT; ctx.letterSpacing = solid ? '4px' : '2px'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         const textW = typeof ctx.measureText === 'function' ? ctx.measureText(word).width : word.length * 17;
         const boxW = textW + 36, boxH = 38;
         const scale = Math.min(1, (w - 12) / boxW) * (t < 1 ? 1 + 1.3 * (1 - t) * (1 - t) - 0.08 * Math.sin(t * Math.PI) : 1);
-        ctx.translate(w / 2, 104); ctx.rotate(0.05); ctx.scale(scale, scale);
+        ctx.translate(w / 2, 104); ctx.rotate(solid ? 0.05 : -0.05); ctx.scale(scale, scale);
         ctx.globalAlpha = Math.min(1, 0.25 + t * 1.5);
-        ctx.fillStyle = STAMP_RED; ctx.fillRect(-boxW / 2, -boxH / 2, boxW, boxH);
-        ctx.strokeStyle = CREAM; ctx.lineWidth = 2; ctx.strokeRect(-boxW / 2 + 4, -boxH / 2 + 4, boxW - 8, boxH - 8);
-        ctx.fillStyle = CREAM; ctx.fillText(word, 0, 2);
+        ctx.fillStyle = solid ? STAMP_RED : 'rgba(10,8,12,.72)'; ctx.fillRect(-boxW / 2, -boxH / 2, boxW, boxH);
+        ctx.strokeStyle = solid ? CREAM : DUD_INK; ctx.lineWidth = solid ? 2 : 3;
+        if (!solid && typeof ctx.setLineDash === 'function') ctx.setLineDash([7, 4]);
+        ctx.strokeRect(-boxW / 2 + 4, -boxH / 2 + 4, boxW - 8, boxH - 8);
+        ctx.fillStyle = solid ? CREAM : DUD_INK; ctx.fillText(word, 0, 2);
         ctx.restore();
     }
 

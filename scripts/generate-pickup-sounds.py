@@ -175,36 +175,46 @@ def case_knock(t,n):
     # A carrier's grip takes a hit: a hard knock and a latch rattling in the paw.
     return leather(t,.9,1.5)+latch(t-.015,.55)+latch(t-.055,.35)
 
-# The arsenal (protocol 27): the Laser is a pulp ray gun, the Tommy a racked bolt and a brass stab, the Mousetrap sneaky.
+# The arsenal (protocol 27): the Laser is a pulp ray gun firing molten cheese, the Tommy a racked bolt and a brass stab,
+# the Mousetrap sneaky.
 def ray(t,f0,f1,k,wobble=28,depth=2.6):
     # A ray-gun tone: a falling (or rising) pitch, frequency-modulated into a warbling, slightly square buzz.
     if t<0:return 0
     return math.tanh(2.2*math.sin(glide(t,f0,f1,k)+depth*math.sin(TAU*wobble*t)))
+def bloop(t,f,d=.03,g=1):
+    # A bubble bursting in melted cheese: a short sine whose pitch leaps up an octave and more as it pops.
+    if t<0 or t>d*4:return 0
+    return math.sin(glide(t,f,f*2.4,1/d))*(1-math.exp(-t*1500))*math.exp(-t/d)*g
+def squelch(t,rate,d):
+    # Wet goo: dark noise pumped by a slow pulse, like cheese pulled and slapped.
+    return 0 if t<0 else noise(DARK,t)*(.5+.5*math.sin(TAU*rate*t))**2*math.exp(-t/d)
 def laser_fire(t,n):
-    # Wheee-ZAP: a 70 ms charge whine climbing, then the beam's warbling "pew" diving from 2.6 kHz, a crackle of
-    # static and a soft sub thump under it.
-    whine=ray(t,700,3000,22,40,.4)*min(1,t/.05)*(1 if t<.07 else math.exp(-(t-.07)*90))*.45
+    # Wheee-GLORP: a 70 ms charge whine climbing, then the beam's "pew" diving from 2.2 kHz through a slow, deep, wet
+    # wobble (a strand of molten cheese), a squelch under it, bubbles popping as it goes and a soft sub thump.
+    whine=ray(t,700,2600,22,40,.4)*min(1,t/.05)*(1 if t<.07 else math.exp(-(t-.07)*90))*.4
     u=t-.06
-    zap=0 if u<0 else ray(u,2600,150,7.5)*min(1,u/.004)*math.exp(-u*5.5)
-    static=0 if u<0 else noise(AIR,t)*math.exp(-u*30)*.4
-    return whine+zap*.75+static+thump(u,110,40,.09)*.45
+    zap=0 if u<0 else ray(u,2200,140,6.5,14,4.2)*min(1,u/.004)*math.exp(-u*5)
+    pops=sum(bloop(u-s,f,.03,g) for s,f,g in ((.09,420,.5),(.17,560,.4),(.26,350,.45),(.36,620,.3)))
+    return whine+zap*.7+squelch(u,11,.18)*.5+pops+thump(u,110,40,.09)*.45
 def laser_hit(t,n):
-    # Crack and sizzle: a hard broadband crack with a bright inharmonic ping, then frying static that spits and fades.
-    crack=noise(AIR,t)*math.exp(-t*260)*1.4+noise(MID,t)*math.exp(-t*90)*.6
-    ping=(math.sin(TAU*3130*t)+math.sin(TAU*4870*t)*.6)*math.exp(-t*45)*.3
+    # Splat and sizzle: a wet slap of cheese with a squelch and a few bubbles, then fat frying in a pan that spits and fades.
+    splat=noise(DARK,t)*math.exp(-t*45)*1.1+noise(MID,t)*math.exp(-t*120)*.5+thump(t,170,55,.06)*.6
     spit=1 if (hash((int(t*600),7))%9)<2 else .25
-    sizzle=n*spit*math.exp(-t*6)*min(1,t/.03)*.55+noise(AIR,t)*math.exp(-t*9)*.25
-    return crack+ping+sizzle+thump(t,160,60,.05)*.4
+    sizzle=(n*spit*.55+noise(AIR,t)*.3)*math.exp(-t*5)*min(1,t/.04)
+    pops=sum(bloop(t-s,f,.025,g) for s,f,g in ((.05,700,.35),(.12,520,.3),(.21,880,.25)))
+    return splat+squelch(t,16,.09)*.4+sizzle+pops
 def claim_tommy(t,n):
     # The bolt racks back and slams home, the drum slaps on, then two short trombone hits a fourth up over a brush.
     bolt=latch(t,1.1)+latch(t-.09,1.3)+leather(t-.03,.9,.7)+thump(t-.09,140,60,.06)*.6
     stab=bone(t-.28,98,.06)*.8+bone(t-.28,146.8,.06)*.5+bone(t-.4,130.8,.22)+bone(t-.4,196,.22)*.6
     return bolt+brush(t-.2)*.4+stab*.55
 def claim_laser(t,n):
-    # The ray gun powers up (a rising whine and static), a theremin swoops up an octave, a vibraphone glints on top.
-    power=ray(t,180,1600,3.5,9,.6)*math.sin(math.pi*min(1,t/.42))**2*.35+noise(AIR,t)*math.sin(math.pi*min(1,t/.42))**3*.08
+    # The ray gun powers up (a rising whine wobbling like goo, bubbles popping), a theremin swoops up an octave, a
+    # vibraphone glints on top.
+    power=ray(t,180,1600,3.5,7,1.4)*math.sin(math.pi*min(1,t/.42))**2*.35+squelch(t,9,.3)*.12
+    pops=sum(bloop(t-s,f,.035,g) for s,f,g in ((.08,300,.35),(.18,420,.3),(.27,520,.25)))
     theremin=0 if t<.3 else math.sin(glide(t-.3,440,880,9)+.12*math.sin(TAU*6*(t-.3)))*min(1,(t-.3)/.05)*math.exp(-(t-.3)*2.6)*.4
-    return power+theremin+vibes(t-.5,1318.5,.4)*.18+vibes(t-.56,1760,.35)*.14
+    return power+pops+theremin+vibes(t-.5,1318.5,.4)*.18+vibes(t-.56,1760,.35)*.14
 def claim_mousetrap(t,n):
     # A pine thunk, the spring creaking as it is pulled back, the bar's click, then two sneaky upright-bass notes.
     creak=0 if t<.05 or t>.3 else math.tanh(3*math.sin(glide(t-.05,260,520,4)))*(1+math.sin(TAU*31*t))*.5*math.sin(math.pi*(t-.05)/.25)*.18

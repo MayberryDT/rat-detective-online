@@ -34,10 +34,11 @@ import type {LaunchMachineKind} from '../shared/chaosState';
 import type {PickupKind,WeaponKind} from '../shared/pickups';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {reducedMotion} from '../ui/motion';
+import {pickupArtwork} from '../prototype/pickupArtwork';
 
 /** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, brass Stakeout; the arsenal's
- * gunmetal-brass Tommy Gun, the Laser's electric green and the Mousetrap's raw pine. */
-const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#d6a843','tommy-gun':'#c8a060',laser:'#39ff7a',mousetrap:'#d9b27a'};
+ * gunmetal-brass Tommy Gun, the Laser's greasy cheesy yellow-green and the Mousetrap's raw pine. */
+const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#d6a843','tommy-gun':'#c8a060',laser:'#c8f040',mousetrap:'#d9b27a'};
 /** C4: Hot Pursuit claim dust, a multiplier on the grey dust colour. */
 const CLAIM_DUST=new THREE.Color(3.2,.42,.26);
 /** Bad Ammunition: the word over your own ball, by its personality. */
@@ -204,8 +205,9 @@ export class FeelDirector {
         this.launchJuice?.spill(this.impulse.set(at.x,at.y+.3,at.z),kind==='kick'?p.kickPaper:kind==='loose'?Math.round(p.paper*.6):p.paper);
     }
     /** C1–C4: your own supply claim (other rats' claims keep only their world effects): an edge flash in the supply's colour,
-     * a punch-in, a small kick and a squash-and-pop, then the supply's signature. The card flight and Ironclad sparks are ChaosView's. */
-    claimed(kind:PickupKind,self:RatEntity|undefined,view:THREE.Camera):void {
+     * a punch-in, a small kick and a squash-and-pop, then the supply's signature. The card flight and Ironclad sparks are ChaosView's.
+     * W3: a Mousetrap just taken (`lockMs` of its trigger lockout left) gets the TRAP IN PAW moment and a heave of the view. */
+    claimed(kind:PickupKind,self:RatEntity|undefined,view:THREE.Camera,lockMs=0):void {
         if(!self||self.dead)return;
         const widens=kind==='hustle'&&this.state.on('claimHustle');
         if(this.state.on('claimMoment')){
@@ -228,6 +230,10 @@ export class FeelDirector {
             this.camera.widen(p.widen);
             if(!reducedMotion())this.claimStreaks=p.streaks;
             this.dust?.puff(self.mesh.position,p.dust,CLAIM_DUST);
+        }else if(kind==='mousetrap'&&lockMs>0&&this.state.on('mousetrap')){
+            const p=FEEL.mousetrap.params;
+            this.screen.trapInPaw(pickupArtwork('mousetrap'),lockMs,p.inPaw);
+            this.camera.kick(-p.heave,(Math.random()*2-1)*p.heave*.3);
         }
     }
     /** C5: seconds between your nameplate's restored pips refilling on a Quick Fix (0: all at once). */
@@ -350,17 +356,17 @@ export class FeelDirector {
     superballBounce(at:Vec3Data):void {
         if(this.state.on('badAmmo'))playSynth('boing',at,FEEL.badAmmo.params.superballPitch*(.9+Math.random()*.2),FEEL.badAmmo.params.volume*.7);
     }
-    /** Act of God: a meteor's shadow showed at `at`, landing in `seconds`: its whistle swells as it falls (shortened to fit). */
+    /** Cheddar Shower: a meteor's shadow showed at `at`, landing in `seconds`: its whistle swells as it falls (shortened to fit). */
     meteorWarned(at:Vec3Data,seconds:number):void {
-        if(!this.state.on('actOfGod'))return;
+        if(!this.state.on('cheddarShower'))return;
         const whistle=INCIDENT_TUNING.meteorWarnMs/1000;
-        playSynth('meteor-whistle',at,Math.min(2,Math.max(1,whistle/seconds)),FEEL.actOfGod.params.whistle);
+        playSynth('meteor-whistle',at,Math.min(2,Math.max(1,whistle/seconds)),FEEL.cheddarShower.params.whistle);
     }
-    /** Act of God: a meteor landed at `at`: a boom, a crater with pavement flying, dust, and the view shaken harder the
+    /** Cheddar Shower: a meteor landed at `at`: a boom, a crater with pavement flying, dust, and the view shaken harder the
      * nearer you are; KA-BOOM! close by. */
     meteorLanded(at:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
-        if(!this.state.on('actOfGod'))return;
-        const p=FEEL.actOfGod.params;
+        if(!this.state.on('cheddarShower'))return;
+        const p=FEEL.cheddarShower.params;
         playSynth('meteor-boom',at,.9+Math.random()*.2,p.boom);
         this.launchJuice?.landed(at,1,FEEL.launchLanding.params.decalLife);
         for(let i=0;i<8;i++){const a=i*Math.PI/4;this.dust?.puff(this.impulse.set(at.x+Math.cos(a)*3,at.y+.2,at.z+Math.sin(a)*3),1);}
@@ -394,10 +400,10 @@ export class FeelDirector {
         this.deathTarget=target;this.deathAge=0;
     }
 
-    /** Cause-flavoured corpse motion: meteors and exploding equipment fling, other neutral traps and case missiles flop,
+    /** Cause-flavoured corpse motion: meteors fling, other neutral traps and case missiles flop,
      * explosive incidents fling, ordinary shots spin. */
     deathStyle(killerId:string|null,cause?:string):DeathStyle {
-        if(cause==='meteor'||cause==='malfunction')return 'fling';
+        if(cause==='meteor')return 'fling';
         if(killerId===null||cause==='evidence-tampering')return 'flop';
         return this.incident==='improper-disposal'||this.incident==='planted-evidence'?'fling':'spin';
     }

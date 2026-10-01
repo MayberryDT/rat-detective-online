@@ -18,7 +18,7 @@ import {RatRagdoll} from './RatRagdoll';
 import {RatCorpseChain} from './RatCorpseChain';
 import {RAT_SPINE_JOINTS} from './RatModel';
 import {setDeformer} from './RigidMeshBatch';
-import type {TimedPickup,WeaponKind} from '../shared/pickups';
+import {WEAPON_TUNING,type TimedPickup,type WeaponKind} from '../shared/pickups';
 import {heldWeaponModel,WEAPON_MUZZLE} from './WeaponModel';
 
 /** Polish 14 parts, present only on rats built with model touch-ups. */
@@ -46,6 +46,8 @@ const HIP_JOINT = RAT_SPINE_JOINTS[0], WAIST = RAT_SPINE_JOINTS[1];
 
 /** L5 hat blow-off, seconds from lift to landing back on the head. */
 const HAT_BLOW = 1.1;
+/** W3, taking up a Mousetrap: seconds the gun takes to drop away, and the whole swap (the trigger's lockout). */
+const TRAP_SWAP = {out: .3, total: WEAPON_TUNING.trapLockMs / 1000} as const;
 
 export const RAT_CARRY_SHOULDER = new THREE.Vector3(.43, 1.23, .02);
 
@@ -75,6 +77,13 @@ export class RatAnimator {
      * weapon (they are drawn in the rigid batch), and a held weapon replaces Big Cheese's chunky pistol. */
     private weapon?: WeaponKind;
     private weaponModel?: THREE.Object3D;
+    /** W3, taking up a Mousetrap: seconds into the swap (the gun drops away for `TRAP_SWAP.out`, then the trap heaves up big
+     * into the paws), the gun on its way out (undefined: the house pistol), and the trap's resting place. */
+    private swapAge = Infinity;
+    private outgoing?: THREE.Object3D;
+    private outPending = false;
+    private readonly trapRest = new THREE.Vector3();
+    private readonly trapTurn = new THREE.Euler();
     private readonly pistolParts: THREE.Object3D[] = [];
     private readonly muzzle: THREE.Object3D;
     private readonly restMuzzle = new THREE.Vector3();
@@ -301,17 +310,45 @@ export class RatAnimator {
     }
     setHustle(active:boolean):void {this.hustle=active;}
     /** A special weapon replaces the pistol in hand (the Mousetrap is carried across the chest instead); the muzzle
-     * moves to the new barrel's end, so shots and the flash leave from it. Undefined puts the pistol back. */
-    setWeapon(kind?: WeaponKind): void {
+     * moves to the new barrel's end, so shots and the flash leave from it. Undefined puts the pistol back. `swap` (a
+     * Mousetrap just taken, in its lockout) plays W3's swap: the gun in hand drops away, then the trap heaves up big. */
+    setWeapon(kind?: WeaponKind, swap = false): void {
         if (kind === this.weapon) return;
-        this.weapon = kind;
-        this.weaponModel?.removeFromParent();this.weaponModel = undefined;
-        for (const part of this.pistolParts) part.scale.setScalar(kind ? 1e-3 : 1);
+        if (this.outPending) this.dropOutgoing();
+        this.swapAge = Infinity;
+        const swapping = swap && kind === 'mousetrap';
+        const previous = this.weaponModel;
+        this.weapon = kind;this.weaponModel = undefined;
+        // Swapping, the gun in hand (a held weapon, or the pistol) stays until it has dropped away.
+        if (swapping) {this.swapAge = 0;this.outgoing = previous;this.outPending = true;}
+        else {
+            previous?.removeFromParent();
+            for (const part of this.pistolParts) part.scale.setScalar(kind ? 1e-3 : 1);
+        }
         this.muzzle.position.copy(kind && kind !== 'mousetrap' ? WEAPON_MUZZLE[kind] : this.restMuzzle);
         if (!kind) return;
         this.weaponModel = heldWeaponModel(kind);
+        if (kind === 'mousetrap') {this.trapRest.copy(this.weaponModel.position);this.trapTurn.copy(this.weaponModel.rotation);}
+        if (swapping) this.weaponModel.scale.setScalar(1e-3);
         const holder = kind === 'mousetrap' ? this.root.getObjectByName('rat-spine-chest') ?? this.root.getObjectByName('rat-body') : this.root.getObjectByName('rat-pistol');
         holder!.add(this.weaponModel);
+    }
+    /** The swap's gun has dropped away: it leaves the hand, and the pistol's parts hide under the held weapon. */
+    private dropOutgoing(): void {
+        this.outgoing?.removeFromParent();this.outgoing = undefined;this.outPending = false;
+        for (const part of this.pistolParts) part.scale.setScalar(this.weapon ? 1e-3 : 1);
+    }
+    /** W3: the trap heaves up from the hip into the paws, overshooting big and wobbling as it settles (rest at the end). */
+    private poseTrapSwap(): void {
+        const model = this.weaponModel;
+        if (!model || this.weapon !== 'mousetrap' || this.swapAge >= TRAP_SWAP.total + .1) return;
+        const t = THREE.MathUtils.clamp((this.swapAge - TRAP_SWAP.out) / (TRAP_SWAP.total - TRAP_SWAP.out), 0, 1);
+        if (this.swapAge < TRAP_SWAP.out) {model.scale.setScalar(1e-3);return;}
+        const rise = 1 - (1 - Math.min(1, t / .4)) ** 3, settle = t < .4 ? 0 : THREE.MathUtils.smoothstep(t, .4, 1);
+        const size = t < .4 ? 1.75 * rise : 1.75 - .75 * settle, wobble = Math.sin(t * 20) * .3 * (1 - t);
+        model.scale.setScalar(Math.max(1e-3, size));
+        model.position.set(this.trapRest.x, this.trapRest.y - .85 * (1 - rise), this.trapRest.z + .3 * (1 - t));
+        model.rotation.set(this.trapTurn.x + wobble * .5, this.trapTurn.y, this.trapTurn.z + wobble);
     }
     resetReactions():void {
         this.acting.reset();this.hustle=false;
@@ -707,7 +744,9 @@ export class RatAnimator {
         this.aim = THREE.MathUtils.lerp(this.aim, this.aimHold > 0 ? 1 : 0, 1 - Math.exp(-7 * dt));
         this.pistolGrowth = THREE.MathUtils.lerp(this.pistolGrowth, this.bigPistol && !this.weapon ? 1 : 0, 1 - Math.exp(-INCIDENT_TUNING.cheesePistolRate * dt));
         this.headGrowth = THREE.MathUtils.lerp(this.headGrowth, this.bobblehead ? 1 : 0, 1 - Math.exp(-BOBBLE_RATE * dt));
+        if (this.swapAge < TRAP_SWAP.total + .1) {this.swapAge += dt;if (this.outPending && this.swapAge >= TRAP_SWAP.out) this.dropOutgoing();}
         this.applyPose();
+        this.poseTrapSwap();
     }
 
     private applyPose(): void {
@@ -870,6 +909,12 @@ export class RatAnimator {
                 const g = this.pistolGrowth, w = 1 + (INCIDENT_TUNING.cheesePistolWidth - 1) * g, l = 1 + (INCIDENT_TUNING.cheesePistolLength - 1) * g;
                 pistol.scale.set(w, w, l);
                 pistol.position.x += RAT_PISTOL_GRIP.x * (1 - w); pistol.position.y += RAT_PISTOL_GRIP.y * (1 - w); pistol.position.z += RAT_PISTOL_GRIP.z * (1 - l);
+            }
+            if (this.outPending) {
+                // W3: the gun in hand tips down and drops away, shrinking, before the trap comes up.
+                const e = THREE.MathUtils.smoothstep(this.swapAge / TRAP_SWAP.out, 0, 1);
+                pistol.position.y -= e * .45;pistol.rotation.x += e * 1.9;pistol.rotation.z += e * .9;
+                pistol.scale.multiplyScalar(Math.max(1e-3, 1 - e));
             }
             if (this.headGrowth > .001) this.bobble(head, this.time, 1);
             leftEye.scale.y = rightEye.scale.y = 1 - Math.max(blink, this.extras.length && this.hitAge < .14 ? Math.sin(this.hitAge / .14 * Math.PI) : 0) * 0.94;

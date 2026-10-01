@@ -9,11 +9,11 @@ export const INCIDENTS = [
     {id:'big-cheese',title:'Big Cheese',description:'Heavy cheese. Slow trigger. Every rebound makes it bigger.'},
     {id:'planted-evidence',title:'Planted Evidence',description:'Fake cases explode. The real case still counts.'},
     {id:'blackout',title:'Blackout',description:'The power is out. Every rat has a flashlight.'},
-    {id:'code-violation',title:'Code Violation',description:'Every machine in the city is out of order.'},
+    {id:'code-violation',title:'Code Violation',description:'Every machine is out of order and supplies come out faulty. Quick Fix still heals.'},
     {id:'most-wanted',title:'Most Wanted',description:'Whoever is winning is in the searchlight. Take them down for a supply.'},
     {id:'all-units',title:'All Units',description:'The fallen respawn as backup, right beside the action.'},
     {id:'bobbleheads',title:'Bobbleheads',description:'Every head is huge, and a headshot always kills. Aim high.'},
-    {id:'act-of-god',title:'Act of God',description:'The sky is falling. It is cheese.'},
+    {id:'cheddar-shower',title:'Cheddar Shower',description:'Today\'s forecast: scattered cheese, heavy at times. Watch for shadows.'},
 ] as const;
 export type IncidentId = typeof INCIDENTS[number]['id'];
 export const isIncidentId = (value: unknown): value is IncidentId => INCIDENTS.some(incident => incident.id === value);
@@ -23,6 +23,8 @@ export const LEGACY_INCIDENTS = {
     // Retired 1 October (protocol 27): stored rooms may still hold them.
     'delayed-reaction':'crossfire','clean-bill':'most-wanted','rat-race':'all-units','malpractice':'code-violation',
     'cheesequake':'big-cheese','ricochet-racket':'scattershot','popcorn-panic':'scattershot',
+    // Renamed after Tyler's playtest (1 October, "nothing about God"): stored staging rooms may still hold it.
+    'act-of-god':'cheddar-shower',
 } as const satisfies Record<string,IncidentId>;
 export type LegacyIncidentId = keyof typeof LEGACY_INCIDENTS;
 export const isLegacyIncidentId = (value: unknown): value is LegacyIncidentId => typeof value === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_INCIDENTS, value);

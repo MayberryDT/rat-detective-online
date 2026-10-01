@@ -16,7 +16,8 @@ const drawings: Record<IncidentId | 'dispatch', string> = {
     'most-wanted': '<path d="M10 6h44v52H10z"/><path class="incident-ink" d="M17 14h30"/><circle cx="32" cy="31" r="8"/><path d="M20 49q12-13 24 0M17 14h30M24 22l-3-4m19 4 3-4"/>',
     'all-units': '<path d="M26 44V24a6 6 0 0 1 12 0v20M20 44h24l3 10H17zM32 18V10M20 22l-6-5M44 22l6-5M12 32H5m54 0h-7"/><path class="incident-ink" d="M29 30h6v10h-6z"/>',
     bobbleheads: '<circle cx="32" cy="22" r="16"/><circle cx="17" cy="9" r="5"/><circle cx="47" cy="9" r="5"/><path d="m32 38-4 3 8 3-8 3 4 3M24 58l4-8h8l4 8M6 18q-3 4 0 8m52-8q3 4 0 8"/><path class="incident-ink" d="M26 20h2m8 0h2M27 28q5 4 10 0"/>',
-    'act-of-god': '<path d="M14 30a13 12 0 1 0 26 0a13 12 0 1 0-26 0M38 22l19-16M41 30l19-11M33 18l12-14"/><circle cx="22" cy="27" r="2.5"/><circle cx="31" cy="34" r="3"/><circle cx="30" cy="23" r="1.5"/><path class="incident-ink" d="M12 57a15 4 0 1 0 30 0a15 4 0 1 0-30 0"/>',
+    // A rain cloud pouring cheese wedges and rain onto a puddle of melted cheddar.
+    'cheddar-shower': '<path d="M15 25a7 7 0 0 1 2-14 11 11 0 0 1 21-3 8 8 0 0 1 13 5 6 6 0 0 1-1 12z"/><path d="M9 31 29 28 21 45zM35 36 55 40 42 53zM33 29l-2 5M56 29l-2 5M27 47l-2 5M8 45l-2 4"/><circle cx="20" cy="33" r=".8"/><circle cx="44" cy="42" r=".8"/><path class="incident-ink" d="M29 59a11 3 0 1 0 22 0a11 3 0 1 0-22 0"/>',
 };
 
 export function incidentArtwork(id: IncidentId | 'dispatch'): string {

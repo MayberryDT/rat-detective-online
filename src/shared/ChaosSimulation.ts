@@ -17,8 +17,9 @@ import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE,
     COUNTERFEIT_IDS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState, type TrapState, type LaserBeam, MAX_TRAPS, MAX_BEAMS,
     type Meteor, METEOR_KEEP_MS } from './chaosState';
-import { hasIronclad, mergePickup, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, resolvePickupPoints,
-    type BuffMap, type PickupKind, type PickupPoint, type WeaponKind } from './pickups';
+import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, shortedOut, weaponArming, FAULTY_COPY, FAULTY_TUNING, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, TRAP_SCALE, TRAP_TALL, resolvePickupPoints,
+    type BuffMap, type FaultyKind, type PickupKind, type PickupPoint, type WeaponKind } from './pickups';
+import { overWater } from './city/kit/city';
 import type { WorldSpec } from './worldSpec';
 import { worldSpawnPoints } from './playerSpawns';
 import { addRatShapes, setBobblehead } from './rat/ratBody';
@@ -36,6 +37,10 @@ const LAUNCHED_CASE_RESTITUTION = .35;
 const CASE_MATERIAL = new C.Material('case');
 
 const outsideCity=(x:number,z:number)=>x<CITY_BOUNDS.min||x>CITY_BOUNDS.max||z<CITY_BOUNDS.min||z>CITY_BOUNDS.max;
+/** Code Violation's throws (`safeShove`): extra units past the worst-case landing that must stay dry and in the city,
+ * and the turns (radians) tried from the intended line, nearest first. */
+const SAFE_SHOVE_MARGIN=4;
+const SAFE_SHOVE_TURNS=[0,.5,-.5,1,-1,1.6,-1.6,2.3,-2.3,Math.PI];
 
 const vec=(v:Vec3Data)=>new C.Vec3(v.x,v.y,v.z);
 const data=(v:Vec3Data)=>({x:v.x,y:v.y,z:v.z});
@@ -58,18 +63,19 @@ interface CaseRuntime {
 }
 /** null ownership is an environmental hit, including neutral chains; `cause` names it when it is not Tampering. `weapon`: a special weapon made the hit. */
 export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true; weapon?:WeaponKind; cause?:EnvironmentCause }
-/** Code Violation malfunctions and Act of God impacts, for the city map (`drainIncidentEvents`). `flattened`: rats a meteor
- * landed on; `shoved`: rats a blast threw; `playerId`: the rat a kit blew up on. */
+/** Code Violation malfunctions and Cheddar Shower impacts, for the city map (`drainIncidentEvents`). `flattened`: rats a
+ * meteor landed on; `shoved`: rats a blast threw; `faulty`: a supply came out as the `pickup` dud on `playerId`. */
 export type IncidentEvent =
     | { kind:'meteor'; p:Vec3Data; flattened:string[]; shoved:number }
-    | { kind:'malfunction'; what:'kit-explode'|'machine'|'pillar'; site:string; p:Vec3Data; playerId?:string; shoved:number };
+    | { kind:'malfunction'; what:'faulty'|'machine'|'pillar'; site:string; p:Vec3Data; playerId?:string; pickup?:FaultyKind; shoved:number };
 /** `end` is where a ball's life ran out (city map facts only; never sent to clients). */
 export interface ShotResultEvent {owner:string|null;shotId:string;ballId:string;outcome:ShotResultOutcome;at:number;tick:number;epoch:string;victimId?:string;damage?:number;point?:Vec3Data;normal?:Vec3Data;compensated?:boolean;fallback?:string;rewindMs?:number;targetDelta?:number;end?:Vec3Data}
-export interface PickupClaimResult {accepted:boolean;target:PickupTarget;targetId:string;playerId:string;pickup?:PickupKind;effectUntil?:number;reason?:PickupRejectReason}
+/** `faulty`: Code Violation made the claim a dud (`FAULTY_KINDS`); `effectUntil` is then when the dud ends. */
+export interface PickupClaimResult {accepted:boolean;target:PickupTarget;targetId:string;playerId:string;pickup?:PickupKind;effectUntil?:number;faulty?:true;reason?:PickupRejectReason}
 /** A pickup claim the room must announce. Healing is drained so the room can
  * persist and broadcast the restored health without the sim owning networking. */
 export type PickupEvent =
-    | { kind:'collected'; pickupId:string; pickup:PickupKind; playerId:string }
+    | { kind:'collected'; pickupId:string; pickup:PickupKind; playerId:string; faulty?:true }
     | { kind:'healed'; playerId:string; hp:number; cause:HealCause }
     /** A supply handed over on the spot (`rewardSupply`), not from a site. */
     | { kind:'rewarded'; playerId:string; pickup:PickupKind; why:RewardReason }
@@ -106,7 +112,7 @@ export class ChaosSimulation {
     private readonly pickups=new Map<string,{kind:PickupKind;p:Vec3Data;availableAt:number}>();
     private buffs:BuffMap={};
     private readonly pickupEvents:PickupEvent[]=[];
-    private readonly recentPickupClaims=new Map<string,{playerId:string;generation:number;at:number;pickup:PickupKind;effectUntil?:number}>();
+    private readonly recentPickupClaims=new Map<string,{playerId:string;generation:number;at:number;pickup:PickupKind;effectUntil?:number;faulty?:true}>();
     private pickupPoints?:PickupPoint[];
     /** Set Mousetraps by id, each with its shootable static body; at most one per rat. */
     private readonly traps=new Map<string,{state:TrapState;body:C.Body}>();
@@ -129,11 +135,11 @@ export class ChaosSimulation {
     private readonly siteHopAt=new Map<string,number>();
     private readonly misfireAt=new Map<string,number>();
     private clangAt=0;
-    /** Act of God: meteors falling or just landed, when the next is called down, and the id counter. */
+    /** Cheddar Shower: meteors falling or just landed, when the next is called down, and the id counter. */
     private meteors:Meteor[]=[];
     private meteorAt=0;
     private meteorSerial=0;
-    /** Meteors that have not landed yet, and the Dispatch serial whose Act of God is calling them down. */
+    /** Meteors that have not landed yet, and the Dispatch serial whose Cheddar Shower is calling them down. */
     private readonly pendingMeteors=new Set<string>();
     private meteorIncident=-1;
     private readonly incidentEvents:IncidentEvent[]=[];
@@ -366,23 +372,37 @@ export class ChaosSimulation {
         if(closest.distanceTo(vec(site.p))>PICKUP_TUNING.claimRadius)return{accepted:false,target:'pickup',targetId:id,playerId:player.id,reason:'too-far'};
         if(this.ray(closest,vec(site.p),1).hasHit||this.ray(reach,vec(site.p),1).hasHit)return{accepted:false,target:'pickup',targetId:id,playerId:player.id,reason:'blocked'};
         const generation=site.availableAt;
-        if(this.incidentActive('code-violation')&&Math.random()<I.violationExplodeChance){
-            // Code Violation: the supply was a bomb. Neutral cheese, no effect, the site restocks as usual.
-            this.cheeseBurst({...site.p},null,'malfunction');
-            this.impacts.push({p:{...site.p},n:{x:0,y:1,z:0},surface:false,scale:2.6,cue:'case-hit'});
-            this.incidentEvents.push({kind:'malfunction',what:'kit-explode',site:id,p:{...site.p},playerId:player.id,shoved:0});
-            this.tell(`CODE VIOLATION! THE SUPPLY EXPLODED ON ${player.name.toUpperCase()}`);
-        }else if(site.kind==='quick-fix'){
+        // Code Violation: every supply but Quick Fix comes out faulty (`faultyClaim`); Quick Fix heals as ever.
+        const faulty=site.kind!=='quick-fix'&&this.incidentActive('code-violation')?site.kind:undefined;
+        if(faulty)this.faultyClaim(player,faulty,id,site.p,now);
+        else if(site.kind==='quick-fix'){
             player.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:player.id,hp:player.hp,cause:'pickup'});
         }else this.buffs[player.id]=mergePickup(this.buffs[player.id],site.kind,now);
         site.availableAt=now+PICKUP_TUNING.respawnMs;
-        this.pickupEvents.push({kind:'collected',pickupId:id,pickup:site.kind,playerId:player.id});
+        const dud=faulty?{faulty:true as const}:{};
+        this.pickupEvents.push({kind:'collected',pickupId:id,pickup:site.kind,playerId:player.id,...dud});
         this.impacts.push({p:{...site.p},n:{x:0,y:1,z:0},surface:false,scale:1.4,audioOnly:true});
-        const effectUntil=pickupEffectUntil(this.buffs[player.id],site.kind);
+        const effectUntil=faulty?this.buffs[player.id]?.faultyUntil:pickupEffectUntil(this.buffs[player.id],site.kind);
         const accepted={accepted:true as const,target:'pickup' as const,targetId:id,playerId:player.id,pickup:site.kind,
-            ...(effectUntil===undefined?{}:{effectUntil})};
-        this.recentPickupClaims.set(id,{playerId:player.id,generation,at:now,pickup:site.kind,...(effectUntil===undefined?{}:{effectUntil})});
+            ...(effectUntil===undefined?{}:{effectUntil}),...dud};
+        this.recentPickupClaims.set(id,{playerId:player.id,generation,at:now,pickup:site.kind,...(effectUntil===undefined?{}:{effectUntil}),...dud});
         return accepted;
+    }
+    /** Code Violation (Tyler, 1 October): a claimed supply comes out as its dud (`FAULTY_KINDS`) instead, told to the
+     * whole city. Nothing about it can hurt: Backfire's throw only goes where its landing is safe (`safeShove`). */
+    private faultyClaim(player:PlayerData,kind:FaultyKind,site:string,at:Vec3Data,now:number):void{
+        this.buffs[player.id]=mergeFaulty(this.buffs[player.id],kind,now);
+        let shoved=0;
+        if(kind==='tommy-gun'){
+            // The gun blows up in the paws: a bang and soot, and the rat thrown backwards off its feet.
+            const {meshQx:x,meshQy:y,meshQz:z,meshQw:w}=player,backX=2*(x*z+w*y),backZ=1-2*(x*x+y*y);
+            const back=Math.hypot(backX,backZ)>.1?Math.atan2(backX,backZ):Math.random()*Math.PI*2;
+            if(this.safeShove(player,back,FAULTY_TUNING.backfireShove,FAULTY_TUNING.backfireLift,'backfire'))shoved=1;
+            this.impacts.push({p:{x:player.x,y:player.y+1.2,z:player.z},n:{x:0,y:1,z:0},surface:false,scale:2.2,cue:'case-hit'});
+        }else this.impacts.push({p:{...at},n:{x:0,y:1,z:0},surface:false,scale:1.8,cue:'armor-clang'});
+        this.incidentEvents.push({kind:'malfunction',what:'faulty',site,p:{...at},playerId:player.id,pickup:kind,shoved});
+        const {title,effect}=FAULTY_COPY[kind];
+        this.tell(`CODE VIOLATION · ${player.name.toUpperCase()}: ${title}, ${effect.toUpperCase()}`);
     }
     private collectCase(player:PlayerData,now:number):PickupClaimResult {
         const c=this.primaryCase,p=c.body.position;
@@ -417,7 +437,7 @@ export class ChaosSimulation {
         if(generation!==site.availableAt){
             const recent=this.recentPickupClaims.get(targetId);
             if(recent&&recent.playerId===playerId&&recent.generation===generation&&now-recent.at<=500)
-                return{accepted:true,target,targetId,playerId,pickup:recent.pickup,...(recent.effectUntil===undefined?{}:{effectUntil:recent.effectUntil})};
+                return{accepted:true,target,targetId,playerId,pickup:recent.pickup,...(recent.effectUntil===undefined?{}:{effectUntil:recent.effectUntil}),...(recent.faulty?{faulty:true}:{})};
             return{accepted:false,target,targetId,playerId,reason:'stale'};
         }
         return this.collectPickup(targetId,site,player,now);
@@ -433,7 +453,7 @@ export class ChaosSimulation {
         // Most rats are nowhere near a site. The claim point lies on the recent
         // approach segment ending at the rat, so anything farther than the claim
         // radius plus the longest segment is rejected as too far without building
-        // the claim; acceptance and Malpractice's roll are unchanged.
+        // the claim; acceptance and Code Violation's duds are unchanged.
         const farSquared=(PICKUP_TUNING.claimRadius+INTERACTION_SWEEP_DISTANCE+1)**2;
         for(const [id,site] of this.pickups){
             if(now<site.availableAt)continue;
@@ -723,7 +743,7 @@ export class ChaosSimulation {
         return true;
     }
     private tell(text:string){this.notice={serial:this.notice.serial+1,text};}
-    /** Most Wanted, Code Violation and Act of God act on rats, supplies and machines each step. */
+    /** Most Wanted, Code Violation and Cheddar Shower act on rats, supplies and machines each step. */
     private stepIncidentEffects(now:number,playing:boolean):void{
         const d=this.dispatch;
         if(this.incidentActive('most-wanted')){
@@ -763,27 +783,29 @@ export class ChaosSimulation {
         }
         return best?.id;
     }
-    /** Code Violation: every piece of city equipment misbehaves at once. Supplies of every kind hop away from rats that
-     * come close (on their own supported floor near home) and walk home when it ends; each launch machine fills itself to
-     * bursting now and then (`firePressure` flings the rats around it); alarm pillars beside rats clang and knock them over. */
+    /** Code Violation: every piece of city equipment misbehaves at once, and none of it can kill (Tyler, 1 October).
+     * Supplies of every kind hop away from rats that come close (on their own supported floor near home; Quick Fix
+     * scares sooner and hops further and faster) and walk home when it ends; each launch machine fills itself to bursting
+     * now and then (`firePressure` flings the rats around it); alarm pillars beside rats clang and knock them over. */
     private stepCodeViolation(now:number,playing:boolean):void{
         const active=playing&&this.incidentActive('code-violation');
         for(const [id,home] of this.siteHomes){
             const site=this.pickups.get(id);if(!site)continue;
             if(!active){if(site.p.x!==home.x||site.p.z!==home.z)site.p={...home};continue;}
             if(now<site.availableAt||now<(this.siteHopAt.get(id)??0))continue;
-            let nearest:PlayerData|undefined,distance:number=I.violationScare;
+            const fix=site.kind==='quick-fix';
+            let nearest:PlayerData|undefined,distance:number=fix?I.violationFixScare:I.violationScare;
             for(const player of this.players.values()){
                 if(player.hp<=0||Math.abs(player.y+.7-site.p.y)>2.5)continue;
                 const d=Math.hypot(player.x-site.p.x,player.z-site.p.z);if(d<distance){distance=d;nearest=player;}
             }
             if(!nearest)continue;
             // Throttle the search whether or not a spot is found; the support check is not cheap.
-            this.siteHopAt.set(id,now+I.violationHopMs);
-            const away=Math.atan2(site.p.z-nearest.z,site.p.x-nearest.x);
+            this.siteHopAt.set(id,now+(fix?I.violationFixHopMs:I.violationHopMs));
+            const away=Math.atan2(site.p.z-nearest.z,site.p.x-nearest.x),hop=fix?I.violationFixHop:I.violationHop,leash=fix?I.violationFixLeash:I.violationLeash;
             for(const turn of [0,.6,-.6,1.2,-1.2,1.9,-1.9]){
-                const angle=away+turn,next={x:site.p.x+Math.cos(angle)*I.violationHop,y:site.p.y,z:site.p.z+Math.sin(angle)*I.violationHop};
-                if(Math.hypot(next.x-home.x,next.z-home.z)>I.violationLeash||!this.supportedSpot(next))continue;
+                const angle=away+turn,next={x:site.p.x+Math.cos(angle)*hop,y:site.p.y,z:site.p.z+Math.sin(angle)*hop};
+                if(Math.hypot(next.x-home.x,next.z-home.z)>leash||!this.supportedSpot(next))continue;
                 site.p=next;break;
             }
         }
@@ -813,28 +835,46 @@ export class ChaosSimulation {
         this.impacts.push({p:bell,n:{x:0,y:1,z:0},surface:false,scale:2.4,cue:'armor-clang'});
         this.incidentEvents.push({kind:'malfunction',what:'pillar',site:station.id,p:{x:station.x,y:station.y,z:station.z},shoved:this.blast(station,I.violationClang,0,'clang')});
     }
-    /** Shove every living rat within `radius` of `at` (beyond `inner`, on its floor) straight away from it: Code Violation's
-     * strength, harder nearer. Returns how many went flying. */
+    /** Shove every living rat within `radius` of `at` (beyond `inner`, on its floor) away from it, harder nearer, along
+     * the nearest safe line (`safeShove`). Returns how many went flying. */
     private blast(at:Vec3Data,radius:number,inner:number,kind:string):number{
         let shoved=0;
         for(const player of this.players.values()){
             if(player.hp<=0||Math.abs(player.y-at.y)>3)continue;
             const dx=player.x-at.x,dz=player.z-at.z,d=Math.hypot(dx,dz);
             if(d<=inner||d>radius)continue;
-            const angle=d>.05?Math.atan2(dx,dz):Math.random()*Math.PI*2,speed=I.violationShove*(1-.5*d/radius);
-            if(this.shove(player.id,{x:Math.sin(angle)*speed,y:I.violationLift,z:Math.cos(angle)*speed},kind))shoved++;
+            const angle=d>.05?Math.atan2(dx,dz):Math.random()*Math.PI*2;
+            if(this.safeShove(player,angle,I.violationShove*(1-.5*d/radius),I.violationLift,kind))shoved++;
         }
         return shoved;
     }
-    /** Act of God: giant cheese meteors called down near random living rats, at most `meteorMax` falling at once, more
+    /** Code Violation never kills (Tyler, 1 October: "no one should die from code violation"): its throws go out along
+     * `angle` (radians from +z toward +x) only if every point out to where the rat could come down, falling from its
+     * height plus `SAFE_SHOVE_MARGIN`, stays inside the city and off the harbour (piers included). Otherwise it turns to
+     * the nearest safe line; with none it does not throw at all. */
+    private safeShove(player:PlayerData,angle:number,speed:number,lift:number,kind:string):boolean{
+        const g=-this.world.gravity.y,fall=Math.max(0,player.y+3);
+        const reach=speed*(lift+Math.sqrt(lift*lift+2*g*fall))/g+SAFE_SHOVE_MARGIN,inset=CITY_BOUNDS.min+SAFE_SHOVE_MARGIN,outset=CITY_BOUNDS.max-SAFE_SHOVE_MARGIN;
+        for(const turn of SAFE_SHOVE_TURNS){
+            const sx=Math.sin(angle+turn),sz=Math.cos(angle+turn);
+            let safe=true;
+            for(let d=0;d<=reach&&safe;d+=1.5){
+                const x=player.x+sx*d,z=player.z+sz*d;
+                safe=x>inset&&x<outset&&z>inset&&z<outset&&!overWater(x,z);
+            }
+            if(safe)return this.shove(player.id,{x:sx*speed,y:lift,z:sz*speed},kind);
+        }
+        return false;
+    }
+    /** Cheddar Shower: giant cheese meteors called down near random living rats, at most `meteorMax` falling at once, more
      * often as the incident goes on. Each lands when its shadow has warned for `meteorWarnMs`, even after the incident. */
     private stepMeteors(now:number,playing:boolean):void{
         for(const m of this.meteors)if(now>=m.at&&this.pendingMeteors.delete(m.id))this.landMeteor(m,playing);
         let expired=0;while(expired<this.meteors.length&&now>=this.meteors[expired]!.at+METEOR_KEEP_MS)expired++;
         if(expired)this.meteors.splice(0,expired);
         const d=this.dispatch;
-        if(!playing||!this.incidentActive('act-of-god'))return;
-        if(this.meteorIncident!==d.serial){this.meteorIncident=d.serial;this.meteorAt=now+600;this.tell('ACT OF GOD · THE SKY IS FALLING. IT IS CHEESE.');}
+        if(!playing||!this.incidentActive('cheddar-shower'))return;
+        if(this.meteorIncident!==d.serial){this.meteorIncident=d.serial;this.meteorAt=now+600;this.tell('CHEDDAR SHOWER · SCATTERED CHEESE, HEAVY AT TIMES. WATCH FOR SHADOWS.');}
         if(now<this.meteorAt)return;
         const progress=Math.max(0,Math.min(1,(now-d.started)/T.activeMs));
         this.meteorAt=now+I.meteorEveryMs[0]+(I.meteorEveryMs[1]-I.meteorEveryMs[0])*progress;
@@ -876,7 +916,7 @@ export class ChaosSimulation {
         this.cheeseBurst({x:m.x,y:m.y+.8,z:m.z},null,'meteor');
         this.incidentEvents.push({kind:'meteor',p,flattened,shoved});
     }
-    /** Code Violation malfunctions and Act of God impacts since the previous call (the city map). */
+    /** Code Violation malfunctions and Cheddar Shower impacts since the previous call (the city map). */
     drainIncidentEvents():IncidentEvent[]{return this.incidentEvents.length?this.incidentEvents.splice(0,this.incidentEvents.length):[];}
     /** The running Dispatch incident, if any. */
     get activeIncident():IncidentId|undefined {return this.dispatch.phase==='active'?incidentInfo(this.dispatch.incident).id:undefined;}
@@ -922,6 +962,8 @@ export class ChaosSimulation {
     }
     /** The special weapon a rat holds now, if any. */
     weapon(playerId:string):WeaponKind|undefined{return heldWeapon(this.buffs,playerId,this.now);}
+    /** Short Circuit (a Code Violation dud): this rat's gun does not fire for now. */
+    shorted(playerId:string):boolean{return shortedOut(this.buffs,playerId,this.now);}
     shoot(owner:string,shot:ShotDescriptor):ChaosShot[]{
         if(!this.players.get(owner)||this.players.get(owner)!.hp<=0)return [];
         // A held special weapon replaces the incident's pattern. The Mousetrap is set down (`placeTrap`), never fired.
@@ -1041,12 +1083,14 @@ export class ChaosSimulation {
         this.sound('corpse-kick',point,normal);
         corpse.body.angularVelocity.x+=kick.z*.3;corpse.body.angularVelocity.z-=kick.x*.3;
     }
+    /** A Mousetrap just taken is still coming up into the paw (`trapLockMs`): it cannot be set down yet. */
+    trapArming(owner:string):boolean{return weaponArming(this.buffs[owner],this.now);}
     /** The Mousetrap: set down `trapReach` ahead along the rat's horizontal aim, on a supported floor with room around
-     * it and nothing between. It leaves the paw and replaces the rat's earlier trap. False (the trap stays in paw) when
-     * there is no such spot. */
+     * it and nothing between. It leaves the paw and replaces the rat's earlier trap. False (the trap stays in paw) while
+     * it is still coming up (`trapArming`) or when there is no such spot. */
     placeTrap(owner:string,direction:Vec3Data):boolean{
         const rat=this.players.get(owner);
-        if(!rat||rat.hp<=0||this.weapon(owner)!=='mousetrap')return false;
+        if(!rat||rat.hp<=0||this.weapon(owner)!=='mousetrap'||this.trapArming(owner))return false;
         const length=Math.hypot(direction.x,direction.z);if(!(length>.05))return false;
         const fx=direction.x/length,fz=direction.z/length;
         this.rayQuery.refresh();
@@ -1055,7 +1099,7 @@ export class ChaosSimulation {
         if(!spot)return false;
         for(const [id,trap] of this.traps)if(trap.state.owner===owner)this.removeTrap(id);
         if(this.traps.size>=MAX_TRAPS)this.removeTrap(this.traps.keys().next().value!);
-        const entry=this.buffs[owner]!;delete entry.weapon;delete entry.weaponUntil;
+        const entry=this.buffs[owner]!;delete entry.weapon;delete entry.weaponUntil;delete entry.weaponReadyAt;
         const id=`trap-${++this.trapSerial}`;
         this.addTrap({id,owner,x:spot.x,y:spot.y,z:spot.z,yaw:Math.atan2(fx,fz),hp:W.trapHp,at:this.now});
         this.pickupEvents.push({kind:'trap',what:'set',trapId:id,playerId:owner,p:{x:spot.x,y:spot.y,z:spot.z}});
@@ -1063,7 +1107,7 @@ export class ChaosSimulation {
     }
     /** A trap and its shootable block, for balls and beams only: rats walk onto it (and die), cases and corpses pass. */
     private addTrap(state:TrapState):void{
-        const body=new C.Body({mass:0,type:C.Body.STATIC,shape:new C.Box(new C.Vec3(.8,.3,W.trapRadius)),position:new C.Vec3(state.x,state.y+.3,state.z),
+        const body=new C.Body({mass:0,type:C.Body.STATIC,shape:new C.Box(new C.Vec3(.75*TRAP_SCALE+.05,.3*TRAP_TALL,W.trapRadius)),position:new C.Vec3(state.x,state.y+.3*TRAP_TALL,state.z),
             collisionFilterGroup:4,collisionFilterMask:16});
         body.quaternion.setFromAxisAngle(new C.Vec3(0,1,0),state.yaw);
         this.world.addBody(body);this.targets.set(body,{kind:'trap',trapId:state.id});this.traps.set(state.id,{state,body});
@@ -1226,7 +1270,7 @@ export class ChaosSimulation {
     private deathBurst(corpse:CorpseState){
         this.cheeseBurst(corpse.p,corpse.owner===undefined?corpse.victimId:corpse.owner);
     }
-    /** Identical radial eruption for Improper Disposal, Planted Evidence, exploding supplies and meteors. Neutral debris
+    /** Identical radial eruption for Improper Disposal, Planted Evidence and meteors. Neutral debris
      * (`owner` null) reports `cause` for the deaths it deals. */
     private cheeseBurst(origin:Vec3Data,owner:string|null,cause?:EnvironmentCause):void {
         this.sound('burst',origin);
@@ -1931,7 +1975,7 @@ export class ChaosSimulation {
         this.meteors=(s.meteors??[]).filter(m=>m.at+METEOR_KEEP_MS>s.time).map(m=>({...m}));
         for(const m of this.meteors)if(m.at>s.time)this.pendingMeteors.add(m.id);
         this.meteorSerial=1+Math.max(-1,...this.meteors.map(m=>Number(m.id.split('-').pop())).filter(Number.isFinite));
-        if(this.incidentActive('act-of-god'))this.meteorIncident=this.dispatch.serial;
+        if(this.incidentActive('cheddar-shower'))this.meteorIncident=this.dispatch.serial;
         this.shots=s.shots.filter(shot=>shot.age+elapsed<shotLife(shot)).map(shot=>({...shot,p:{...shot.p},v:{...shot.v},age:shot.age+elapsed,
             radius:shot.radius??BALL_RADIUS}));
         for(const c of s.corpses){

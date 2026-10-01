@@ -42,12 +42,17 @@ export const WEAPON_TUNING = {
      * (headshots kill), reflects off walls and Ironclad coats up to `laserBounces` times within `laserRange` units in
      * all, `laserRadius` thick. Others draw it from the snapshot for `laserBeamMs`. */
     laserDamage: 3, laserBounces: 2, laserRange: 180, laserRadius: .12, laserBeamMs: 600,
-    /** Mousetrap: set down `trapReach` ahead of the rat on a supported floor with `trapRadius` clear around it. Any other
-     * rat whose feet come within `trapRadius` + `trapFoot` (and `trapHeight` above or below) dies in one snap; it re-arms
-     * after `trapRearmMs`. `trapHp` ball hits destroy it (a laser hit counts `laserTrapHits`); a broken trap stays in the
-     * snapshot `trapBrokenMs` so clients can play the break. One per rat; it outlives its owner's death, not the round. */
-    trapReach: 2.6, trapRadius: 1.25, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapRearmMs: 900, trapBrokenMs: 700,
+    /** Mousetrap: set down `trapReach` ahead of the rat on a supported floor with `trapRadius` clear around it (the
+     * board's half-length as drawn: the model scales with it). Any other rat whose feet come within `trapRadius` +
+     * `trapFoot` (and `trapHeight` above or below) dies in one snap; it re-arms after `trapRearmMs`. `trapHp` ball hits
+     * destroy it (a laser hit counts `laserTrapHits`); a broken trap stays in the snapshot `trapBrokenMs` so clients can
+     * play the break. One per rat; it outlives its owner's death, not the round. A rat that gets one cannot set it down
+     * (nor fire) for `trapLockMs` (`PlayerBuffs.weaponReadyAt`) while the gun goes away and the trap comes up. */
+    trapReach: 2.9, trapRadius: 1.5, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapRearmMs: 900, trapBrokenMs: 700, trapLockMs: 1000,
 } as const;
+/** The placed Mousetrap's size: the model's board (1.5 wide, 2.5 long) scaled so its half-length is `trapRadius`, and
+ * a little taller again. The drawn trap and its shootable block share it, so what you see is what snaps and stops balls. */
+export const TRAP_SCALE = WEAPON_TUNING.trapRadius / 1.25, TRAP_TALL = TRAP_SCALE * 1.15;
 /** Timed supplies (Quick Fix is instant, weapons have their own slot), and the buff field and duration each one sets. */
 export const TIMED_PICKUPS = ['ironclad', 'hustle', 'stakeout'] as const;
 export type TimedPickup = typeof TIMED_PICKUPS[number];
@@ -113,8 +118,9 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
 ];
 
 /** Active effects on one rat. Absent keys mean no effect. `weapon` is the one special weapon held, until
- * `weaponUntil` (absent for the Mousetrap, held until set down). */
-export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number; weapon?: WeaponKind; weaponUntil?: number }
+ * `weaponUntil` (absent for the Mousetrap, held until set down). A Mousetrap just taken cannot be set down before
+ * `weaponReadyAt` (`WEAPON_TUNING.trapLockMs`). `faulty` is a Code Violation dud running until `faultyUntil`. */
+export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number; weapon?: WeaponKind; weaponUntil?: number; weaponReadyAt?: number; faulty?: FaultyKind; faultyUntil?: number }
 export type BuffMap = Record<string, PlayerBuffs>;
 
 /** All sites remain advertised while empty; the authority supplies their restock deadline. */
@@ -129,7 +135,12 @@ export const activeBuffs = (buffs: BuffMap | undefined, id: string, now: number)
     if (!entry) return active;
     for (const kind of TIMED_PICKUPS) { const until = entry[BUFF_FIELD[kind]]; if (until !== undefined && until > now) active[BUFF_FIELD[kind]] = until; }
     const weapon = entryWeapon(entry, now);
-    if (weapon) { active.weapon = weapon; if (entry.weaponUntil !== undefined) active.weaponUntil = entry.weaponUntil; }
+    if (weapon) {
+        active.weapon = weapon; if (entry.weaponUntil !== undefined) active.weaponUntil = entry.weaponUntil;
+        if (entry.weaponReadyAt !== undefined && entry.weaponReadyAt > now) active.weaponReadyAt = entry.weaponReadyAt;
+    }
+    const faulty = entryFaulty(entry, now);
+    if (faulty) { active.faulty = faulty; active.faultyUntil = entry.faultyUntil; }
     return active;
 };
 export const hasIronclad = (buffs: BuffMap | undefined, id: string, now: number): boolean =>
@@ -139,13 +150,62 @@ export const hasHustle = (buffs: BuffMap | undefined, id: string, now: number): 
 export const hasStakeout = (buffs: BuffMap | undefined, id: string, now: number): boolean =>
     (buffs?.[id]?.stakeoutUntil ?? 0) > now;
 
+/** Whether a held weapon is still being taken up (a Mousetrap's `trapLockMs`): no shot and no set-down yet. */
+export const weaponArming = (entry: PlayerBuffs | undefined, now: number): boolean =>
+    !!entryWeapon(entry, now) && (entry?.weaponReadyAt ?? -Infinity) > now;
+
+/** Code Violation (Tyler, 1 October: "no one should die from code violation … but let's give negative effects"): a
+ * supply claimed while it runs comes out faulty, a short, harmless bad version that never kills and never stalls the
+ * game. Quick Fix is never faulty ("health packs are too important"). A rat has at most one dud at a time; a new one
+ * replaces it, and death or the round's reset clears it. The same for every rat, human or bot. */
+export const FAULTY_KINDS = ['hustle', 'ironclad', 'stakeout', 'tommy-gun', 'laser', 'mousetrap'] as const;
+export type FaultyKind = typeof FAULTY_KINDS[number];
+export const isFaultyKind = (value: unknown): value is FaultyKind =>
+    typeof value === 'string' && (FAULTY_KINDS as readonly string[]).includes(value);
+/** How long each dud lasts (Backfire's is its soot: the throw itself is instant). */
+export const FAULTY_MS: Record<FaultyKind, number> = { hustle: 6_000, ironclad: 6_000, stakeout: 8_000, 'tommy-gun': 4_000, laser: 3_000, mousetrap: 2_000 };
+/** Cold Feet: legs at `coldFeet` of a run. Backfire: the gun blows up in the paws, throwing the rat `backfireShove` u/s
+ * backwards and `backfireLift` up, only along a line whose landing is safe. */
+export const FAULTY_TUNING = { coldFeet: .55, backfireShove: 20, backfireLift: 10 } as const;
+/** Each dud's name and what it does, in plain words (cards, the city-wide notice, bots' perception). */
+export const FAULTY_COPY: Record<FaultyKind, { title: string; effect: string }> = {
+    hustle: { title: 'COLD FEET', effect: 'slowed down' },
+    ironclad: { title: 'RUST BUCKET', effect: 'rusted stiff: no jumping' },
+    stakeout: { title: 'STAKED OUT', effect: 'every rat sees them through walls' },
+    'tommy-gun': { title: 'BACKFIRE', effect: 'the gun blew up in their paws' },
+    laser: { title: 'SHORT CIRCUIT', effect: 'gun shorted out: no firing' },
+    mousetrap: { title: 'SNAPPED PAW', effect: 'caught in their own trap: stuck in place' },
+};
+/** The dud an effects entry still runs at `now`. */
+export const entryFaulty = (entry: PlayerBuffs | undefined, now: number): FaultyKind | undefined =>
+    entry?.faulty && (entry.faultyUntil ?? 0) > now ? entry.faulty : undefined;
+export const faultyOf = (buffs: BuffMap | undefined, id: string, now: number): FaultyKind | undefined => entryFaulty(buffs?.[id], now);
+/** How fast a rat's legs carry it: Snapped Paw pins it, Cold Feet slows it, Hot Pursuit speeds it up. */
+export function legScale(buffs: BuffMap | undefined, id: string, now: number): number {
+    const faulty = faultyOf(buffs, id, now);
+    return faulty === 'mousetrap' ? 0 : faulty === 'hustle' ? FAULTY_TUNING.coldFeet : hasHustle(buffs, id, now) ? PICKUP_TUNING.hustleMultiplier : 1;
+}
+/** Rust Bucket and Snapped Paw: the rat cannot jump. */
+export const jumpBlocked = (buffs: BuffMap | undefined, id: string, now: number): boolean => {
+    const faulty = faultyOf(buffs, id, now);
+    return faulty === 'ironclad' || faulty === 'mousetrap';
+};
+/** Short Circuit: the rat's gun does not fire. */
+export const shortedOut = (buffs: BuffMap | undefined, id: string, now: number): boolean => faultyOf(buffs, id, now) === 'laser';
+/** Staked Out: every rat sees this one through walls, city-wide. */
+export const stakedOut = (buffs: BuffMap | undefined, id: string, now: number): boolean => faultyOf(buffs, id, now) === 'stakeout';
+/** A faulty claim: the dud replaces any running dud; the rat's real effects are untouched. */
+export const mergeFaulty = (existing: PlayerBuffs | undefined, kind: FaultyKind, now: number): PlayerBuffs =>
+    ({ ...existing, faulty: kind, faultyUntil: now + FAULTY_MS[kind] });
+
 /** True when the entry has fallen out of every effect and can be pruned. */
 export const buffExpired = (entry: PlayerBuffs | undefined, now: number): boolean =>
-    !entry || TIMED_PICKUPS.every(kind => (entry[BUFF_FIELD[kind]] ?? 0) <= now) && !entryWeapon(entry, now);
+    !entry || TIMED_PICKUPS.every(kind => (entry[BUFF_FIELD[kind]] ?? 0) <= now) && !entryWeapon(entry, now) && !entryFaulty(entry, now);
 
 /** Merge a fresh claim into a rat's existing effects. Re-collecting the same
  * benefit refreshes to the full duration; it never stacks or accumulates.
- * A weapon replaces whichever weapon the rat held. */
+ * A weapon replaces whichever weapon the rat held. Taking up a Mousetrap (not
+ * already in paw) locks the trigger for `trapLockMs`. */
 export function mergePickup(
     existing: PlayerBuffs | undefined,
     pickup: PickupKind,
@@ -154,8 +214,10 @@ export function mergePickup(
     const next: PlayerBuffs = { ...existing };
     if (isTimedPickup(pickup)) next[BUFF_FIELD[pickup]] = now + BUFF_MS[pickup];
     else if (isWeaponKind(pickup)) {
-        next.weapon = pickup;
         const ms = WEAPON_MS[pickup];
+        if (pickup !== 'mousetrap') delete next.weaponReadyAt;
+        else if (entryWeapon(existing, now) !== 'mousetrap') next.weaponReadyAt = now + WEAPON_TUNING.trapLockMs;
+        next.weapon = pickup;
         if (ms === undefined) delete next.weaponUntil; else next.weaponUntil = now + ms;
     }
     return next;

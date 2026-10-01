@@ -1223,11 +1223,11 @@ export class GameRoom extends DurableObject<Env> {
     return true;
   }
 
-  /** Every rat's trigger, human or bot: the shared rate ceiling, then the incident's (or held weapon's) fire interval
-   * (a little early is admitted, for network jitter). */
+  /** Every rat's trigger, human or bot: nothing while its gun is shorted out (Code Violation's Short Circuit), then the
+   * shared rate ceiling, then the incident's (or held weapon's) fire interval (a little early is admitted, for network jitter). */
   private admitShot(id: string): boolean {
     const now = this.now();
-    return this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, now) &&
+    return !this.chaos?.shorted(id) && this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, now) &&
       this.shotSpacing.allow(id, this.chaos?.activeIncident, now, INCIDENT_TUNING.cheeseShotSlackMs, this.chaos?.weapon(id));
   }
 
@@ -1243,9 +1243,11 @@ export class GameRoom extends DurableObject<Env> {
     if (!isPlausibleShot(message.origin, message.direction, player)) { reject('implausible'); return; }
     if (!this.rememberShot(playerId, message.shotId)) { reject('duplicate'); return; }
     const weapon=this.chaos?.weapon(playerId);
-    // A held Mousetrap is set down, not fired: no shot, no muzzle, no accuracy count. No room for it keeps it in paw.
+    // A held Mousetrap is set down, not fired: no shot, no muzzle, no accuracy count. No room for it keeps it in paw;
+    // so does a press while it is still coming up into the paw (`trapLockMs`, every rat alike).
     if(weapon==='mousetrap'){
-      if(this.chaos!.placeTrap(playerId,message.direction))this.applyPickupEvents();
+      if(this.chaos!.trapArming(playerId))this.sendShotRejection(playerId,message.shotId,'trap-arming');
+      else if(this.chaos!.placeTrap(playerId,message.direction))this.applyPickupEvents();
       else this.sendShotRejection(playerId,message.shotId,'trap-blocked');
       return;
     }
@@ -1297,7 +1299,7 @@ export class GameRoom extends DurableObject<Env> {
     this.applyPickupEvents();
     this.sendToPlayer(playerId,{type:'pickupResult',interactionId:message.interactionId,target:message.target,targetId:message.targetId,
       accepted:result.accepted,at,tick:state.tick??0,epoch:state.epoch??'room',playerId,...(result.pickup?{pickup:result.pickup}:{}),
-      ...(result.effectUntil===undefined?{}:{effectUntil:result.effectUntil}),...(result.reason?{reason:result.reason}:{})});
+      ...(result.effectUntil===undefined?{}:{effectUntil:result.effectUntil}),...(result.faulty?{faulty:true as const}:{}),...(result.reason?{reason:result.reason}:{})});
     this.diagnostics.netplay('pickup',result.accepted?'accepted':'rejected',performance.now()-started,result.reason);
   }
 

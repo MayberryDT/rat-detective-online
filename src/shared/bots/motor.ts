@@ -5,7 +5,7 @@ import {activeDestination,destinationPoint} from '../assignments';
 import {exposedCarrierCase,shotHitsIronclad} from '../BotTargeting';
 import {DISPATCH_STATIONS,INCIDENT_TUNING,LAUNCH_MACHINES,PRESSURE_TUNING,type CaseState,type ChaosState,type LaunchMachine,type Meteor} from '../chaosState';
 import {incidentInfo,type IncidentId} from '../incidentCatalog';
-import {hasHustle,hasIronclad,heldWeapon,PICKUP_TUNING,WEAPON_TUNING,type WeaponKind} from '../pickups';
+import {hasIronclad,heldWeapon,legScale,weaponArming,WEAPON_TUNING,type WeaponKind} from '../pickups';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
 import type {BotWaypoint} from '../BotLaunchRoutes';
 import {launchGravity,launchSpeed} from '../shotBallistics';
@@ -78,7 +78,7 @@ const TRAP={settleMs:400,patienceMs:[2000,4500],lookMs:250,retryMs:1200,choke:3.
 const HELD_SLACK_MS=8;
 /** Another rat's Mousetrap counts as underfoot this near (its snap reach and a margin), units. */
 export const TRAP_REACH=WEAPON_TUNING.trapRadius+WEAPON_TUNING.trapFoot+.5;
-/** Act of God: a falling meteor's shadow counts as overhead this far beyond the reach it flattens, units. */
+/** Cheddar Shower: a falling meteor's shadow counts as overhead this far beyond the reach it flattens, units. */
 const METEOR_MARGIN=1.5;
 /** Another rat's unbroken Mousetrap in sight within `reach` of `p` (horizontally, on its level). A rat's own trap
  * is harmless to it; hidden ones are never read. */
@@ -373,7 +373,7 @@ export class BotMotor {
         this.seenX=self.x;this.seenZ=self.z;
         if(this.flight&&!grounded&&fresh){const k=Math.min(1,dt*8);this.driftX+=(this.velX-this.pressX-this.driftX)*k;this.driftZ+=(this.velZ-this.pressZ-this.driftZ)*k;}
         else this.driftX=this.driftZ=0;
-        this.legs=hasHustle(state?.buffs,self.id,state?.time??now)?PICKUP_TUNING.hustleMultiplier:1;
+        this.legs=legScale(state?.buffs,self.id,state?.time??now);
         // Keys held into something that does not give: since when (the last tick's keys, the rat not moving).
         if(grounded&&Math.hypot(this.pressX,this.pressZ)>3&&Math.hypot(this.velX,this.velZ)<1)this.pushingSince??=now;else this.pushingSince=undefined;
     }
@@ -851,7 +851,7 @@ export class BotMotor {
     /** A falling meteor's shadow, a little above the ground it lands on (`shadow`, reused). */
     private shadowOf(m:Meteor):Vec3Data {const s=this.shadow;s.x=m.x;s.y=m.y+.5;s.z=m.z;return s;}
 
-    /** Act of God: the way out (into `veered`, at a run) from under every falling meteor's shadow in sight on this
+    /** Cheddar Shower: the way out (into `veered`, at a run) from under every falling meteor's shadow in sight on this
      * level within the reach it flattens plus `METEOR_MARGIN`, nearest centres pushing hardest; dead centre runs on
      * along the facing. False when no shadow it sees is underfoot. */
     private meteorEscape(self:Vec3Data,time:number,meteors:readonly Meteor[],clear:(p:Vec3Data)=>boolean):boolean {
@@ -871,11 +871,12 @@ export class BotMotor {
         return true;
     }
 
-    /** Whether to press fire now to set the Mousetrap in paw down (`TRAP`): on the ground, where the press puts it
+    /** Whether to press fire now to set the Mousetrap in paw down (`TRAP`): on the ground, once it has come up into the
+     * paw (the swap a human watches, `trapLockMs`; the room refuses earlier presses), where the press puts it
      * (`trapReach` ahead along the crosshair) is a floor with nothing solid in between, and the spot is useful. */
     private setTrap(now:number,self:PlayerData,state:ChaosState|undefined,grounded:boolean,rival:boolean):boolean {
         const since=this.trapHeldAt;
-        if(since===undefined||now-since<TRAP.settleMs||now<this.trapPressAt||now<this.trapLookAt||!grounded||this.jumpTravel||this.flight)return false;
+        if(since===undefined||now-since<TRAP.settleMs||weaponArming(state?.buffs?.[self.id],state?.time??now)||now<this.trapPressAt||now<this.trapLookAt||!grounded||this.jumpTravel||this.flight)return false;
         this.trapLookAt=now+TRAP.lookMs;
         const nav=this.navigation,ray=nav.ray,reach=WEAPON_TUNING.trapReach,sx=Math.sin(this.aim.yaw),sz=Math.cos(this.aim.yaw);
         const spot=this.trapSpot,from=this.trapRay,to=this.trapTo;

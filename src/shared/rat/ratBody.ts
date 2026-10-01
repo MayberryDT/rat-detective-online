@@ -87,8 +87,11 @@ function rotateY(vx:number,vy:number,vz:number,angle:number,out:{x:number;z:numb
 export class RatBody {
     /** Seconds this rat may still jump since its feet last touched a floor. */
     groundGrace=0;
-    /** Hot Pursuit: scales the legs' speed while active; 1 otherwise. */
+    /** The legs' speed (`legScale`): Hot Pursuit speeds them up, Code Violation's Cold Feet slows them and Snapped Paw
+     * pins them (0); 1 otherwise. */
     speedScale=1;
+    /** Code Violation's Rust Bucket and Snapped Paw (`jumpBlocked`): no jumping. */
+    jumpBlocked=false;
     /** A launcher throw's sideways speed, kept (and slowly fading) under the rat's own steering until landing. */
     driftX=0;driftZ=0;
     /** A deliberate jump is in the air: its extra gravity applies until landing. */
@@ -193,7 +196,7 @@ export class RatBody {
             v.z+=(desiredZ+this.driftZ-v.z)*acceleration;
         }else{v.x*=braking;v.z*=braking;}
         let jumped=false;
-        if(controls.jump&&this.groundGrace>0&&!riding){v.y=RAT_MOVEMENT.jumpImpulse;this.groundGrace=0;this.normalJump=true;jumped=true;}
+        if(controls.jump&&!this.jumpBlocked&&this.groundGrace>0&&!riding){v.y=RAT_MOVEMENT.jumpImpulse;this.groundGrace=0;this.normalJump=true;jumped=true;}
         // Only deliberate jumps get the extra gravity. Falling off ledges, ragdolls and machine throws keep
         // their own arc.
         if(this.normalJump)body.force.y+=body.mass*world.gravity.y*(RAT_MOVEMENT.jumpGravityScale-1);

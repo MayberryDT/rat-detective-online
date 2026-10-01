@@ -46,12 +46,12 @@ const SYNTH = {
         let buzz = 0; for (let k = 1; k <= 6; k++) buzz += Math.sin(k * phase) / k;
         return buzz * (.85 + .15 * Math.sin(2 * Math.PI * 6 * t)) * Math.min(1, t * 30) * Math.min(1, (.9 - t) * 12);
     }},
-    // Act of God: the falling meteor's whistle, sliding down and swelling until it lands (its shadow's warning, 2.2 s).
+    // Cheddar Shower: the falling meteor's whistle, sliding down and swelling until it lands (its shadow's warning, 2.2 s).
     'meteor-whistle': {seconds: 2.2, peak: .5, sample: (t: number, n: () => number) => {
         const k = Math.log(2300 / 650) / 2.2, phase = 2 * Math.PI * 2300 * (1 - Math.exp(-k * t)) / k;
         return (Math.sin(phase) + .15 * n()) * Math.pow(t / 2.2, 1.6) * Math.min(1, (2.2 - t) * 40);
     }},
-    // Act of God: the meteor hits, a deep boom, a crunch of pavement and a long rumble.
+    // Cheddar Shower: the meteor hits, a deep boom, a crunch of pavement and a long rumble.
     'meteor-boom': {seconds: 2, peak: .9, sample: (t: number, n: () => number) =>
         Math.sin(2 * Math.PI * (42 * t - 8 * t * t)) * Math.exp(-t * 2.2) + n() * Math.exp(-t * 9) * .8 + n() * Math.exp(-t * 1.5) * .15 + Math.sin(2 * Math.PI * 28 * t) * Math.exp(-t * 1.2) * .5},
     // Code Violation: a faulty fitting arcing, a crackle over a mains buzz.

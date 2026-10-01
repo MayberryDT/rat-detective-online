@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {worldSoundGain} from './worldSoundGain';
 import {AudioVoicePool} from './AudioVoicePool';
-export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-tommy-gun'|'pickup-laser'|'pickup-mousetrap'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'laser-fire'|'laser-hit'|'trap-set'|'trap-snap'|'trap-splinter'|'trap-break'|'trap-refused'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
+export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-tommy-gun'|'pickup-laser'|'pickup-mousetrap'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'laser-fire'|'laser-hit'|'trap-set'|'trap-snap'|'trap-splinter'|'trap-break'|'trap-refused'|'trap-ready'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
 const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
     'pickup-ironclad':{file:'pickup-ironclad',volume:.7,cooldown:150},
     'pickup-hustle':{file:'pickup-hustle',volume:.65,cooldown:150},
@@ -14,12 +14,14 @@ const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:n
     'pickup-laser':{file:'pickup-laser',volume:.65,cooldown:150},
     'pickup-mousetrap':{file:'pickup-mousetrap',volume:.65,cooldown:150},
     'laser-fire':{file:'laser-fire',volume:.6,cooldown:50},
-    'laser-hit':{file:'laser-hit',volume:.5,cooldown:50},
+    'laser-hit':{file:'laser-hit',volume:.3,cooldown:50},
     'trap-set':{file:'trap-set',volume:.55,cooldown:120},
     'trap-snap':{file:'trap-snap',volume:.85,cooldown:80},
     'trap-splinter':{file:'trap-splinter',volume:.32,cooldown:45},
     'trap-break':{file:'trap-break',volume:.6,cooldown:150},
     'trap-refused':{file:'trap-refused',volume:.45,cooldown:150},
+    // Your just-taken trap is up in your paws (its lockout is over): the next press sets it down.
+    'trap-ready':{file:'trap-ready',volume:.6,cooldown:300},
     'pickup-slap':{file:'pickup-slap',volume:.58,cooldown:100},
     'armor-clang':{file:'armor-clang',volume:.8,cooldown:75},
     'stakeout-shutter':{file:'stakeout-shutter',volume:.35,cooldown:40},

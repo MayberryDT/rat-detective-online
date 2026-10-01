@@ -3,7 +3,7 @@ import {PICKUP_TUNING,type PickupKind} from '../shared/pickups';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 
 /** Each supply's dial ring colour. */
-const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0xe8c46a,'tommy-gun':0xe8873e,laser:0x5fd8e6,mousetrap:0xe6dcc4};
+const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0xe8c46a,'tommy-gun':0xe8873e,laser:0xc6e64a,mousetrap:0xe6dcc4};
 /** One icon texture per supply kind, drawn and uploaded once (the load's stand-in dial) and shared by
  * every dial after, so a site's first claim in play draws no canvas and uploads nothing. */
 const ICONS=new Map<PickupKind,THREE.CanvasTexture>();
@@ -42,7 +42,9 @@ function icon(kind:PickupKind):THREE.CanvasTexture {
         path('M14 38 26 30 26 66 14 58Z','#b04a3e');
         path('M20 48c0-12 12-18 26-18 10 0 16 8 18 14h14v8H64c-2 6-8 14-18 14-14 0-26-6-26-18Z','#9ea8b2');
         path('M78 38 90 32V64L78 58Z','#9ea8b2');
-        c.strokeStyle='#5fd88a';c.lineWidth=5;c.stroke(new Path2D('M68 40v16M74 40v16'));
+        c.strokeStyle='#c9ad42';c.lineWidth=5;c.stroke(new Path2D('M68 40v16'));
+        c.strokeStyle='#8eb83c';c.stroke(new Path2D('M74 40v16'));
+        path('M82 59 87 61V71a2.5 2.5 0 1 1-5 0Z','#c9ad42','#15101b',3);
         path('M34 62h10l-2 20h-10Z','#3a2c26');
     }else if(kind==='mousetrap'){
         path('M10 60 30 40H90L70 60Z','#c8a46a');

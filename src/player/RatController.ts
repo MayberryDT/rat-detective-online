@@ -83,8 +83,12 @@ export class RatController {
         this.movement = new RatBody(this.entity.body, world, launcherBounds);
     }
 
-    /** Hot Pursuit only: 1 restores the ratified ordinary movement exactly; never a new base speed. */
-    setSpeedScale(scale:number):void { this.movement.speedScale = Number.isFinite(scale) && scale > 0 ? scale : 1; }
+    /** The legs (`legScale`, `jumpBlocked`): Hot Pursuit, or a Code Violation dud's slow, pin or no-jump. `(1,false)`
+     * restores the ratified ordinary movement exactly; never a new base speed. */
+    setLegs(scale:number,jumpBlocked=false):void {
+        this.movement.speedScale = Number.isFinite(scale) && scale >= 0 ? scale : 1;
+        this.movement.jumpBlocked = jumpBlocked;
+    }
     get moveSpeedScale():number { return this.movement.speedScale; }
     onMouseMove(dx: number, dy: number): void {
         this.spherical.theta -= dx * MOUSE_SENS;

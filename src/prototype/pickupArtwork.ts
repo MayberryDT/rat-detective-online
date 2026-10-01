@@ -1,4 +1,4 @@
-import type {PickupKind} from '../shared/pickups';
+import type {FaultyKind,PickupKind} from '../shared/pickups';
 
 const ink='stroke="#0a0e1a" stroke-width="5" stroke-linejoin="round"';
 /** Hand-inked silhouettes shared by the active-effect cards. No external assets. */
@@ -10,8 +10,8 @@ const ART:Record<PickupKind,string>={
     stakeout:`<path d="m59 63 7-7 30 30-7 7Z" fill="#a8683a" ${ink}/><circle cx="40" cy="42" r="32" fill="#f3cf6f" ${ink}/><circle cx="40" cy="42" r="22" fill="#e3e6d6" ${ink}/><path d="M26 55c1-8 7-13 14-13s13 5 15 10l-7 2c-7 4-15 4-22 1Zm4-10a5 5 0 1 1 7-3m6-1a5 5 0 1 1 7 3" fill="none" stroke="#b58a2e" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 3"/><path d="M26 36a16 16 0 0 1 9-10" fill="none" stroke="#fffbea" stroke-width="5" stroke-linecap="round"/><path d="m84 5 2 8 8 2-8 3-2 8-2-8-8-3 8-2Z" fill="#ffe7a3"/>`,
     // A drum-fed Thompson: walnut stock and grips, finned barrel, a cheese-faced drum.
     'tommy-gun':`<path d="M4 41 31 36 34 50 9 63Z" fill="#c27a3e" ${ink}/><path d="M28 33H68V48H28Z" fill="#8f99ab" ${ink}/><path d="M68 37H90V45H68Z" fill="#8f99ab" ${ink}/><path d="M72 34v14m6-14v14m6-14v14" stroke="#0a0e1a" stroke-width="3"/><path d="M89 34h8v14h-8Z" fill="#5d6576" ${ink}/><path d="M35 47h10l-4 19-10-3Z" fill="#c27a3e" ${ink}/><path d="M74 45h8l-1 18h-8Z" fill="#c27a3e" ${ink}/><circle cx="56" cy="62" r="16" fill="#f3c04a" ${ink}/><circle cx="56" cy="62" r="5" fill="#d29a3a" ${ink}/><circle cx="48" cy="55" r="2.6" fill="#b47a12"/><circle cx="64" cy="57" r="2.2" fill="#b47a12"/><circle cx="51" cy="71" r="2.4" fill="#b47a12"/><path d="m92 18 2 8 8 2-8 3-2 8-2-8-8-3 8-2Z" fill="#ffd27a"/>`,
-    // A pulp ray gun: chrome body, red fins, the coil glowing the beam's green, a zap from the dish.
-    laser:`<path d="m6 30 20 10-2 16-18 10Z" fill="#e0453a" ${ink}/><path d="M18 48c0-14 12-20 26-20 11 0 17 9 19 15h12v10H63c-2 6-8 15-19 15-14 0-26-6-26-20Z" fill="#c9d3dc" ${ink}/><circle cx="40" cy="30" r="7" fill="#d8ffe4" ${ink}/><path d="M68 41v14m6-14v14" stroke="#39ff7a" stroke-width="6"/><path d="m80 38 12-8v36l-12-8Z" fill="#c9d3dc" ${ink}/><path d="M30 64h11l-3 22H27Z" fill="#3a2a22" ${ink}/><path d="m92 48 4-6 4 7" fill="none" stroke="#39ff7a" stroke-width="4" stroke-linecap="round"/><path d="M28 40a14 14 0 0 1 10-7" fill="none" stroke="#fffbea" stroke-width="4" stroke-linecap="round"/>`,
+    // A pulp ray gun: chrome body, red fins, a molten cheese dome, a coil of yellow and greasy green, cheese oozing from the dish.
+    laser:`<path d="m6 30 20 10-2 16-18 10Z" fill="#e0453a" ${ink}/><path d="M18 48c0-14 12-20 26-20 11 0 17 9 19 15h12v10H63c-2 6-8 15-19 15-14 0-26-6-26-20Z" fill="#c9d3dc" ${ink}/><circle cx="41" cy="27" r="10" fill="#ffd23a" ${ink}/><path d="M42 31h10v12a5 5 0 0 1-10 0Z" fill="#ffd23a" stroke="#0a0e1a" stroke-width="3" stroke-linejoin="round"/><path d="M68 41v14" stroke="#ffd23a" stroke-width="6"/><path d="M74 41v14" stroke="#9fe82e" stroke-width="6"/><path d="m80 38 12-8v36l-12-8Z" fill="#c9d3dc" ${ink}/><path d="M30 64h11l-3 22H27Z" fill="#3a2a22" ${ink}/><path d="M92 48c4-7 6 6 9-1" fill="none" stroke="#9fe82e" stroke-width="11" stroke-linecap="round"/><path d="M92 48c4-7 6 6 9-1" fill="none" stroke="#ffd23a" stroke-width="5" stroke-linecap="round"/><path d="M82 59 92 64V79a5 5 0 0 1-10 0Z" fill="#ffd23a" stroke="#0a0e1a" stroke-width="3" stroke-linejoin="round"/><circle cx="98" cy="64" r="3.5" fill="#ffd23a" stroke="#0a0e1a" stroke-width="2.5"/><path d="M27 41a14 14 0 0 1 6-7" fill="none" stroke="#fffbea" stroke-width="4" stroke-linecap="round"/>`,
     // A big set Mousetrap: pine board, brass bar pulled back, a wedge of cheese on the pedal.
     mousetrap:`<path d="M6 66 30 42H96L72 66Z" fill="#e8c88e" ${ink}/><path d="M6 66H72L96 42V52L72 76H6Z" fill="#a8743e" ${ink}/><path d="M22 56 40 38H70L52 56" fill="none" stroke="#0a0e1a" stroke-width="9" stroke-linejoin="round"/><path d="M22 56 40 38H70L52 56" fill="none" stroke="#e8b54a" stroke-width="4" stroke-linejoin="round"/><circle cx="44" cy="51" r="5" fill="#e8b54a" ${ink}/><path d="m64 52 22-13 2 12Z" fill="#ffd04a" ${ink}/><circle cx="78" cy="47" r="2" fill="#b47a12"/><path d="m10 22 4 10m10-16 1 11m14-7-6 9" stroke="#fff0cf" stroke-width="4" stroke-linecap="round"/>`,
 };
@@ -40,5 +40,25 @@ export function powerupCard(kind:PickupKind):HTMLElement {
     const clock=kind==='mousetrap'?'':`<div class="powerup-clock"><b>${healing?'+':''}</b><small>${healing?'FULL HP':'SEC'}</small></div>`;
     card.innerHTML=`<div class="powerup-art">${pickupArtwork(kind)}</div><div class="powerup-copy"><small>${shout}</small><strong>${title}</strong>${STATUS[kind]??'<div class="powerup-gauge"><i></i></div>'}</div>${clock}<div class="powerup-stamp">${stamp}</div>`;
     card.setAttribute('aria-label',label);
+    return card;
+}
+
+/** Code Violation's mark over a dud's drawing: soot, condemned tape and a spark. */
+const CONDEMNED=`<svg class="powerup-dud-mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M14 72c8-11 24-8 28 1s-15 15-25 9-7-6-3-10Z" fill="#0a0e1a" opacity=".6"/><circle cx="70" cy="62" r="9" fill="#0a0e1a" opacity=".45"/><circle cx="58" cy="80" r="5" fill="#0a0e1a" opacity=".5"/><path d="M2 30 98 76" stroke="#e4553a" stroke-width="13" opacity=".9"/><path d="M2 30 98 76" stroke="#0a0e1a" stroke-width="3" stroke-dasharray="7 7"/><path d="m80 4-7 13h9l-7 14" fill="none" stroke="#ffd04a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+/** Each dud's card copy, said to you: the title, what it does to you, the stamp and the spoken label. */
+const DUD:Record<FaultyKind,{title:string;status:string;stamp:string;label:string}>={
+    hustle:{title:'COLD<br>FEET',status:'YOU RUN SLOWLY',stamp:'RECALLED',label:'Cold Feet · you run slowly'},
+    ironclad:{title:'RUST<br>BUCKET',status:'RUSTED STIFF: NO JUMPING',stamp:'CONDEMNED',label:'Rust Bucket · no jumping'},
+    stakeout:{title:'STAKED<br>OUT',status:'EVERY RAT SEES YOU THROUGH WALLS',stamp:'LENS ON BACKWARDS',label:'Staked Out · every rat sees you through walls'},
+    'tommy-gun':{title:'BACK-<br>FIRE',status:'IT BLEW UP IN YOUR PAWS',stamp:'OUT OF ORDER',label:'Backfire · the gun blew up in your paws'},
+    laser:{title:'SHORT<br>CIRCUIT',status:'YOUR GUN WON\'T FIRE',stamp:'BLOWN FUSE',label:'Short Circuit · your gun will not fire'},
+    mousetrap:{title:'SNAPPED<br>PAW',status:'STUCK IN YOUR OWN TRAP',stamp:'OUCH',label:'Snapped Paw · stuck in place'},
+};
+/** A Code Violation dud's card: the claimed supply's drawing, condemned, with what it does to you and its clock. */
+export function faultyCard(kind:FaultyKind):HTMLElement {
+    const card=document.createElement('div');card.className=`powerup-card powerup-faulty powerup-faulty-${kind}`;
+    const {title,status,stamp,label}=DUD[kind];
+    card.innerHTML=`<div class="powerup-art">${pickupArtwork(kind)}${CONDEMNED}</div><div class="powerup-copy"><small>CODE VIOLATION · FAULTY</small><strong>${title}</strong><div class="powerup-healed powerup-dud">${status}</div><div class="powerup-gauge"><i></i></div></div><div class="powerup-clock"><b></b><small>SEC</small></div><div class="powerup-stamp">${stamp}</div>`;
+    card.setAttribute('role','status');card.setAttribute('aria-label',`Code Violation: ${label}`);
     return card;
 }

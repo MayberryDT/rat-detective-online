@@ -4,7 +4,7 @@ import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js'
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import {PickupRespawnVisual} from './PickupRespawnVisual';
-import type {PickupKind} from '../shared/pickups';
+import {TRAP_SCALE,TRAP_TALL,type PickupKind} from '../shared/pickups';
 import {PartKit,mousetrap,rayGun,tommyGun,weaponFinish,type WeaponFinish} from '../utils/WeaponModel';
 import {kickDust} from '../feel/Dust';
 import {supplyCue} from '../feel/supplyCues';
@@ -17,7 +17,7 @@ const LAMP_HEAD=new THREE.Vector3(0,2.75,0);
 /** Malpractice hop duration (ms) and height. */
 const HOP_MS=380, HOP_HEIGHT=1.5;
 /** Each supply's own colour for the far beam and the outline that finds it from across the street. */
-const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0xf3cf6f,'tommy-gun':0xff8a24,laser:0x3fe8ff,mousetrap:0xf2e6c8};
+const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0xf3cf6f,'tommy-gun':0xff8a24,laser:0xc8ff3a,mousetrap:0xf2e6c8};
 /** Claim pop and restock drop (seconds); beacon fades in with distance (units). */
 const POP=.32, DROP=.5, BEAM_HEIGHT=34;
 /** Part shapes built once and shared by every display: the welcome builds two dozen displays of up
@@ -70,7 +70,8 @@ function weaponDisplay(kind:'tommy-gun'|'laser'|'mousetrap',kit:PartKit,f:Weapon
         kit.box(.56,.04,.06,0,.62,0,f.brass,.015);
     }else{
         kit.box(.3,.16,.02,.42,.24,.62,f.brass,.01,-.3,.5);
-        place(kit,0,.12,0,0,.35,0,.55);mousetrap(()=>kit,f);
+        // The set trap a little bigger and taller than it once was, in the placed trap's proportions.
+        place(kit,0,.12,0,0,.35,0,.66);kit.frame.scale(new THREE.Vector3(1,TRAP_TALL/TRAP_SCALE,1));mousetrap(()=>kit,f);
         kit.frame.identity();
     }
 }

@@ -202,8 +202,9 @@ export type ClientMessage = (
 
 /** Why a rat was healed: a Quick Fix (site or reward), or an Excessive Force case kill. */
 export type HealCause = 'pickup' | 'case-kill';
-/** A death nobody is credited with: a runaway case missile, the harbour, an Act of God meteor, or Code Violation equipment. */
-export const ENVIRONMENT_CAUSES = ['evidence-tampering','drowned','meteor','malfunction'] as const;
+/** A death nobody is credited with: a runaway case missile, the harbour, or a Cheddar Shower meteor. Code Violation
+ * kills nobody (Tyler, 1 October). */
+export const ENVIRONMENT_CAUSES = ['evidence-tampering','drowned','meteor'] as const;
 export type EnvironmentCause = typeof ENVIRONMENT_CAUSES[number];
 export const isEnvironmentCause = (value: unknown): value is EnvironmentCause => ENVIRONMENT_CAUSES.some(cause => cause === value);
 export type ServerMessage =
@@ -253,7 +254,7 @@ export type ServerMessage =
       victimId?:string; damage?:number; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; fallback?:string;
       rewindMs?:number; targetDelta?:number }
   | { type:'pickupResult'; interactionId:string; target:PickupTarget; targetId:string; accepted:boolean; at:number; tick:number;
-      epoch:string; playerId:string; pickup?:import('./pickups').PickupKind; effectUntil?:number; reason?:PickupRejectReason }
+      epoch:string; playerId:string; pickup?:import('./pickups').PickupKind; effectUntil?:number; faulty?:true; reason?:PickupRejectReason }
   | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: EnvironmentCause }
   | { type: 'playerHealed'; id: string; hp: number; cause?: HealCause }
   | {

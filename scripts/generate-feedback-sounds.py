@@ -157,22 +157,61 @@ cue.spring(.13, .75, .8, rate=.55, start=8.155).save()
 cue = Cue('trap-refused', .2)
 cue.add(0, 'impactWood_heavy_000', 1, .16, rate=.7, lowpass=900, decay=18)
 cue.add(.01, 'impactSoft_heavy_000', .35, .1, lowpass=1200).save()
+# Ready (the lockout after taking a trap is over): the spring winds tight and the bar locks back, ka-CHUNK.
+cue = Cue('trap-ready', .36)
+cue.spring(0, .45, .14, rate=1.45)
+cue.latch(.11, 1, 1.1)
+cue.add(.12, 'impactWood_heavy_000', .8, .14, rate=1.05, lowpass=3000).save()
 
-# The Tommy Gun: single Thompson rounds cut from the CC0 burst recording at its full 48 kHz (a gun's crack lives up
-# high). Each is a burst's last round (no next round for at least 0.2 s), so its room tail is its own; the game
-# rotates them, ten a second, into the rattle.
+# The Tommy Gun: each round is the ordinary cheese gun's shot (`public/sounds/gunshot.mp3`), pitched up a touch, laid
+# over a recorded Thompson round, low-passed and quieter, both aligned on the transient (Tyler: the bare Thompson was
+# "just too realistic"; this sits between it and the cheese gun). The Thompson rounds are cut from the CC0 burst
+# recording at its full 48 kHz; each is a burst's last round (no next round for at least 0.2 s), so its room tail is
+# its own. The game rotates them, ten a second, into the rattle.
 WEAPONS = ROOT / 'public/sounds/weapons'
 WEAPONS.mkdir(parents=True, exist_ok=True)
 FULL = 48000
-thompson = array.array('f', subprocess.check_output([
-    'ffmpeg', '-v', 'error', '-i', str(ROOT / 'assets/audio/tommy-gun-craigsmith.mp3'), '-ac', '1', '-ar', str(FULL), '-f', 'f32le', '-']))
+# The cheese gun's transient (first sample over a tenth of its peak), its pitch, and the Thompson's cutoff and level.
+CHEESE_ONSET, CHEESE_RATE, THOMPSON_CUTOFF, THOMPSON_GAIN = .0323, 1.08, 3500, .5
+
+
+def decode(path):
+    return array.array('f', subprocess.check_output([
+        'ffmpeg', '-v', 'error', '-i', str(path), '-ac', '1', '-ar', str(FULL), '-f', 'f32le', '-']))
+
+
+def lowpass(samples, cutoff, q=.7071):
+    # A Butterworth biquad (RBJ cookbook): takes the crack off the top without dulling the thump.
+    w = 2*math.pi*cutoff/FULL
+    alpha, cos = math.sin(w)/(2*q), math.cos(w)
+    a0 = 1+alpha
+    b0, b1, a1, a2 = (1-cos)/2/a0, (1-cos)/a0, -2*cos/a0, (1-alpha)/a0
+    out, x1, x2, y1, y2 = [], 0., 0., 0., 0.
+    for v in samples:
+        y = b0*v+b1*x1+b0*x2-a1*y1-a2*y2
+        x2, x1, y2, y1 = x1, v, y1, y
+        out.append(y)
+    return out
+
+
+thompson = decode(ROOT / 'assets/audio/tommy-gun-craigsmith.mp3')
+cheese = decode(ROOT / 'public/sounds/gunshot.mp3')
+cheese_peak = max(map(abs, cheese)) or 1
 for index, (onset, seconds) in enumerate([(1.114, .195), (3.093, .26), (4.243, .2), (5.648, .26)]):
     start, length = round((onset-.004)*FULL), round(seconds*FULL)
-    cut = thompson[start:start+length]
+    cut = lowpass(thompson[start:start+length], THOMPSON_CUTOFF)
     peak = max(map(abs, cut)) or 1
+    mix = []
+    for i, v in enumerate(cut):
+        # Both layers start 4 ms before their transient; the cheese shot is resampled (linear) to its pitch.
+        position = (CHEESE_ONSET-.004)*FULL+i*CHEESE_RATE
+        j = int(position)
+        layer = (cheese[j]*(1-position+j)+cheese[j+1]*(position-j))/cheese_peak if j+1 < len(cheese) else 0
+        mix.append(layer+THOMPSON_GAIN*v/peak)
+    peak = max(map(abs, mix)) or 1
     # 0.2 ms in, the recording's own decay, then a 50 ms close.
-    pcm = [round(v/peak*.86*min(1, i/10, (length-1-i)/(.05*FULL))*32767) for i, v in enumerate(cut)]
+    pcm = [round(v/peak*.86*min(1, i/10, (length-1-i)/(.05*FULL))*32767) for i, v in enumerate(mix)]
     with wave.open(str(WEAPONS / f'tommy-{index}.wav'), 'wb') as out:
         out.setparams((1, 2, FULL, 0, 'NONE', 'not compressed'))
         out.writeframes(struct.pack('<'+'h'*len(pcm), *pcm))
-print('Rendered 15 edited physical cartoon foley cues and 4 Thompson rounds')
+print('Rendered 16 edited physical cartoon foley cues and 4 cheese-gun Thompson rounds')

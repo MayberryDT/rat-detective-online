@@ -7,7 +7,7 @@ import {CITY_BARS_GROUP} from '../shared/boxFrame';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
 import {CITY_BOUNDS,GRAYBOX_VERSION,grayboxBoxes} from '../shared/grayboxLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
-import {hasHustle,heldWeapon,PICKUP_TUNING} from '../shared/pickups';
+import {heldWeapon,jumpBlocked,legScale} from '../shared/pickups';
 import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,muzzleReach,ratMuzzle,turnFacing,type RatControls} from '../shared/rat/ratBody';
 import {FEEL} from '../feel/feelTuning';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
@@ -245,7 +245,7 @@ export class ServerBotController {
                     if(controls.moveForward)controls.lookYaw=lookHeading(Math.atan2(bot.escapeX,bot.escapeZ));
                 }
             }
-            bot.rat.speedScale=hasHustle(chaos?.buffs,bot.id,chaos?.time??now)?PICKUP_TUNING.hustleMultiplier:1;
+            const at=chaos?.time??now;bot.rat.speedScale=legScale(chaos?.buffs,bot.id,at);bot.rat.jumpBlocked=jumpBlocked(chaos?.buffs,bot.id,at);
             bot.rat.step(step,controls,true);
             this.callbacks.controls?.(bot.id,controls,now);
             bot.facing=turnFacing(bot.facing,controls.lookYaw,step);bot.lookYaw=controls.lookYaw;bot.lookPitch=controls.lookPitch;

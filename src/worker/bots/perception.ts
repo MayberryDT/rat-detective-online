@@ -9,7 +9,7 @@ import {JURISDICTION_ZONES,zoneContains} from '../../shared/jurisdictionZones';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS,ASSIGNMENT_TUNING,type AssignmentId} from '../../shared/assignments';
 import {DISPATCH_STATIONS,INCIDENT_TUNING,LAUNCH_MACHINES,type Meteor} from '../../shared/chaosState';
 import {incidentInfo} from '../../shared/incidentCatalog';
-import {hasHustle,hasIronclad,heldWeapon,type PickupKind,type PickupState,type WeaponKind} from '../../shared/pickups';
+import {FAULTY_COPY,hasHustle,hasIronclad,heldWeapon,faultyOf,stakedOut,type FaultyKind,type PickupKind,type PickupState,type WeaponKind} from '../../shared/pickups';
 import {MAX_HP,type Vec3Data} from '../../shared/networkProtocol';
 
 /** Perception (docs/bot-overhaul.md, B3): what one rat can honestly know, in the words the city map uses.
@@ -53,6 +53,15 @@ const WEAPONS:Record<WeaponKind,string>={
     laser:'I hold a laser: an instant beam that bounces off walls, one shot a second, for a while.',
     mousetrap:'I carry a mousetrap to set down: my next shot puts it on the floor just ahead, and any other rat that steps on it dies. It cannot hurt me.',
 };
+/** My own Code Violation dud (`FAULTY_KINDS`), in my words. */
+const MY_DUD:Record<FaultyKind,string>={
+    hustle:'Cold Feet, a Code Violation dud: I run slowly for a few seconds',
+    ironclad:'Rust Bucket, a Code Violation dud: my coat rusted stiff and I cannot jump for a few seconds',
+    stakeout:'Staked Out, a Code Violation dud: every rat in the city sees me through walls for a few seconds',
+    'tommy-gun':'Backfire, a Code Violation dud: the gun blew up in my paws and threw me backwards; I got no gun',
+    laser:'Short Circuit, a Code Violation dud: my gun is shorted out and cannot fire for a few seconds',
+    mousetrap:'Snapped Paw, a Code Violation dud: the trap snapped on my own paw and I cannot move for a moment',
+};
 /** At most this many Mousetraps in sight, within a long run, are listed, nearest first. */
 const TRAPS_LISTED=4;
 
@@ -61,7 +70,7 @@ export interface RatMemory {
     /** Hits taken, oldest first: when (room clock) and from whom (absent: the city). */
     hits:readonly {at:number;by?:string}[];
 }
-export interface RatSeen {id:string;where:string;hp:string;armour?:string;speed?:string;carrying?:string;shooting_at_me?:string}
+export interface RatSeen {id:string;where:string;hp:string;armour?:string;speed?:string;faulty?:string;carrying?:string;shooting_at_me?:string}
 /** The situation sent to Jev as `state`. */
 export interface Situation {
     assignment:string;
@@ -140,10 +149,11 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
 
     const inView=new Map<string,string>();
     const rats_in_view=ctx.visible.map((p):RatSeen=>{
-        const id=alias(p.id);inView.set(id,p.id);
+        const id=alias(p.id),dud=faultyOf(buffs,p.id,time);inView.set(id,p.id);
         return {id,where:where(self,p),hp:`${p.hp} of ${MAX_HP}`,
             ...(hasIronclad(buffs,p.id,time)?{armour:'Ironclad Alibi: reflects every cheese ball back at the shooter'}:{}),
-            ...(hasHustle(buffs,p.id,time)?{speed:'Hot Pursuit: running much faster'}:{}),
+            ...(hasHustle(buffs,p.id,time)&&dud!=='hustle'?{speed:'Hot Pursuit: running much faster'}:{}),
+            ...(dud?{faulty:`a Code Violation dud, ${FAULTY_COPY[dud].title.toLowerCase()}: ${FAULTY_COPY[dud].effect}`}:{}),
             ...(ctx.cases.some(c=>c.value.owner===p.id)?{carrying:'the case'}:{}),
             ...(recentHit(p.id)||aimedAtMe(p.id,self,state?.shots)?{shooting_at_me:'yes'}:{})};
     });
@@ -212,9 +222,10 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         machines.add(machine.id);heard.push(`a launcher threw a rat into the air, ${relative(self,machine.pad)}`);
     }
 
-    const staking=(state?.buffs?.[self.id]?.stakeoutUntil??0)>time,reach=staking?STAKEOUT_RANGE:HUNCH_RANGE;
-    const sensed=self.hp>=MAX_HP||staking?ctx.living.filter(p=>!visible.has(p.id)&&distance(self,p)<=reach)
-        .sort((a,b)=>distance(self,a)-distance(self,b)).map(p=>`${alias(p.id)}, ${where(self,p)}`):[];
+    // A rat Staked Out (Code Violation's faulty Stakeout) is sensed through walls by every rat, city-wide.
+    const staking=(state?.buffs?.[self.id]?.stakeoutUntil??0)>time,reach=staking?STAKEOUT_RANGE:HUNCH_RANGE,sharp=self.hp>=MAX_HP||staking;
+    const sensed=ctx.living.filter(p=>p.id!==self.id&&!visible.has(p.id)&&(sharp&&distance(self,p)<=reach||stakedOut(buffs,p.id,time)))
+        .sort((a,b)=>distance(self,a)-distance(self,b)).map(p=>`${alias(p.id)}, ${where(self,p)}`);
 
     let incident:string|undefined;
     if(dispatch?.phase==='active'&&dispatch.incident){
@@ -223,15 +234,17 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
             ?dispatch.wanted===self.id?' I am the wanted rat.':` The wanted rat is ${alias(dispatch.wanted)}.`
             :info.id==='blackout'?' I see rats only as far as my flashlight reaches.'
             :info.id==='bad-ammunition'?' Every ball I fire has a quirk: it corkscrews, snakes, bounces without slowing, floats or hiccups.'
-            :info.id==='code-violation'?' Supplies hop away from rats and some explode when claimed; launch machines fire on their own and shove rats near their pads; alarm pillars clang and shove rats beside them.'
-            :info.id==='act-of-god'?` Cheese meteors fall near rats; a dark shadow marks each landing a moment ahead. Standing in a shadow flattens me, the blast throws rats nearby, and a roof overhead shelters me.${shadows(self,time,state?.meteors,ctx.clear)}`:'');
+            :info.id==='code-violation'?' Supplies hop away from rats, and the Quick Fix hops furthest and fastest; every other supply I claim now comes out as a short, harmless dud (slower legs, no jumping, seen through walls, a gun that blows up in my paws, a gun that cannot fire, or a paw stuck in a trap); a Quick Fix still heals fully. Launch machines fire on their own and alarm pillars clang; both shove rats beside them, but never into the water. Nothing in this incident can kill me.'
+            :info.id==='cheddar-shower'?` Cheese meteors fall near rats; a dark shadow marks each landing a moment ahead. Standing in a shadow flattens me, the blast throws rats nearby, and a roof overhead shelters me.${shadows(self,time,state?.meteors,ctx.clear)}`:'');
     }
 
     // Only aliases already given: an unseen attacker stays unnamed.
     const hit=memory.hits[memory.hits.length-1];
     const hitText=hit&&now-hit.at<RECENT_HIT_MS?!hit.by?'hurt by the city a moment ago':aliases.has(hit.by)?`hit by ${aliases.get(hit.by)} a moment ago`:'hit by a rat I cannot see, a moment ago':undefined;
     const place=placeOf(self);
-    const myBuffs=[hasIronclad(buffs,self.id,time)&&'Ironclad Alibi (cheese balls bounce off me)',hasHustle(buffs,self.id,time)&&'Hot Pursuit (running much faster)'].filter(Boolean).join(' and ');
+    const myDud=faultyOf(buffs,self.id,time);
+    const myBuffs=[hasIronclad(buffs,self.id,time)&&'Ironclad Alibi (cheese balls bounce off me)',hasHustle(buffs,self.id,time)&&myDud!=='hustle'&&'Hot Pursuit (running much faster)',
+        myDud&&MY_DUD[myDud]].filter(Boolean).join(' and ');
 
     const goals:Partial<Record<Goal,string>>={},places:Partial<Record<Goal,readonly PlaceOption[]>>={};
     for(const goal of ctx.offered){
@@ -255,7 +268,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
     }};
 }
 
-/** Act of God: the falling meteors' shadows in sight within a long run, nearest first, in words. */
+/** Cheddar Shower: the falling meteors' shadows in sight within a long run, nearest first, in words. */
 function shadows(self:Vec3Data,time:number,meteors:readonly Meteor[]|undefined,clear:(p:Vec3Data)=>boolean):string {
     const seen=(meteors??[]).filter(m=>m.at>time&&distance(self,m)<9*RUN_SPEED&&clear({x:m.x,y:m.y+.5,z:m.z}))
         .sort((a,b)=>distance(self,a)-distance(self,b)).slice(0,TRAPS_LISTED);

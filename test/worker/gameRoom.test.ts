@@ -12,6 +12,7 @@ import { parseServerMessage } from '../../src/shared/messageValidation';
 import { WORLD_LAYOUT_VERSION } from '../../src/shared/worldSpec';
 import { CHECKPOINT_MS, GameRoom, STALE_PLAYER_MS } from '../../src/worker/GameRoom';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
+import { PICKUP_KINDS, WEAPON_TUNING, type PickupKind } from '../../src/shared/pickups';
 import type { ClientMessage, RoundState } from '../../src/shared/networkProtocol';
 
 const appearance = {
@@ -389,6 +390,37 @@ describe('GameRoom websockets', () => {
       game.round = { phase:'won', startedAt:Date.now(), winnerId:welcome.id, winnerName:'Shooter', kills:20, resetAt:Date.now()+6000 };
       game.handleShoot(welcome.id, {...shot,shotId:'after-victory'});
       expect(game.chaos.snapshot(false).shots.some(ball=>ball.id==='after-victory')).toBe(false);
+    });
+  });
+
+  it('holds a just-taken Mousetrap for its lockout: a press then neither shoots nor sets it down, a fresh press after does',async()=>{
+    const room=`graybox-trap-lock-${crypto.randomUUID()}`,client=await openClient(room);
+    client.ws.send(joinPayload('Trapper'));const welcome=await client.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
+      // The room's private trigger path and clock, reached the way the other room tests reach them.
+      const game=instance as unknown as {chaosTimer:number|null;now:()=>number;startChaos():void;players:Map<string,PlayerData>;chaos:ChaosSimulation;
+        handleShoot(id:string,message:Extract<ClientMessage,{type:'shoot'}>):void;sendShotRejection(id:string,shotId:string,reason:string):void};
+      clearInterval(game.chaosTimer??undefined);game.chaosTimer=null;
+      let now=Date.now();game.now=()=>now;game.startChaos();
+      // An open stretch of the x 70 avenue, facing south down it; a Tommy in paw, then a Mousetrap as a kill reward.
+      const rat=game.players.get(welcome.id)!;rat.x=70;rat.y=0;rat.z=-46;rat.hp=MAX_HP;game.chaos.step(0,now);
+      const kinds:readonly PickupKind[]=PICKUP_KINDS.filter(k=>k!=='quick-fix'),reward=(kind:PickupKind)=>{
+        const random=vi.spyOn(Math,'random').mockReturnValue((kinds.indexOf(kind)+.5)/kinds.length);
+        try{game.chaos.rewardSupply(welcome.id,'streak');}finally{random.mockRestore();}
+      };
+      reward('tommy-gun');reward('mousetrap');
+      const rejected=vi.spyOn(game,'sendShotRejection');
+      // Every rat's trigger, human or bot, lands here (bots through the room's own shoot hook).
+      const press=(shotId:string)=>game.handleShoot(welcome.id,{type:'shoot',shotId,origin:{x:rat.x,y:rat.y+1.4,z:rat.z},direction:{x:0,y:0,z:1}});
+      press('held-1');now+=WEAPON_TUNING.trapLockMs-100;game.chaos.step(0,now);press('held-2');
+      const state=game.chaos.snapshot(false);
+      expect(state.traps??[]).toEqual([]);expect(state.shots.filter(ball=>ball.owner===welcome.id)).toEqual([]);
+      expect(state.buffs?.[welcome.id]?.weapon).toBe('mousetrap');
+      expect(rejected.mock.calls.map(call=>call[2])).toEqual(['trap-arming','trap-arming']);
+      now+=100;game.chaos.step(0,now);press('fresh');
+      expect(game.chaos.snapshot(false).traps).toMatchObject([{owner:welcome.id}]);
+      expect(game.chaos.snapshot(false).buffs?.[welcome.id]?.weapon).toBeUndefined();
+      rejected.mockRestore();
     });
   });
 

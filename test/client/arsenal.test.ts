@@ -130,27 +130,28 @@ describe('the Laser',()=>{
 });
 describe('the Mousetrap',()=>{
     const traps=(sim:ChaosSimulation)=>sim.snapshot(false).traps??[];
-    const setDown=(sim:ChaosSimulation,p:PlayerData,direction={x:0,y:0,z:1})=>{arm(sim,p.id,'mousetrap');return sim.placeTrap(p.id,direction);};
+    /** Take up a Mousetrap, wait out its lockout (`trapLockMs`), and press. */
+    const setDown=(sim:ChaosSimulation,p:PlayerData,direction={x:0,y:0,z:1})=>{arm(sim,p.id,'mousetrap');sim.step(0,sim.time+W.trapLockMs);return sim.placeTrap(p.id,direction);};
     it('is set down ahead, never kills its owner, and snaps any other rat, coat or not, for its owner',()=>{
-        const {sim,a,b,hits,now}=fixture();
+        const {sim,a,b,hits}=fixture();
         expect(setDown(sim,a)).toBe(true);
         const [trap]=traps(sim);
         expect(trap).toMatchObject({owner:'a',hp:W.trapHp});
         expect(Math.hypot(trap!.x-a.x,trap!.z-(a.z+W.trapReach))).toBeLessThan(1);
         expect(weaponOf(sim,'a')).toBeUndefined();
-        stand(a,trap!);sim.step(1/60,now+16);
+        stand(a,trap!);sim.step(1/60,sim.time+16);
         expect(hits).toEqual([]);
-        arm(sim,'b','ironclad');stand(b,{x:trap!.x+.8,y:trap!.y,z:trap!.z});sim.step(1/60,now+32);
+        arm(sim,'b','ironclad');stand(b,{x:trap!.x+.8,y:trap!.y,z:trap!.z});sim.step(1/60,sim.time+16);
         expect(hits).toMatchObject([{owner:'a',victim:'b',damage:MAX_HP,weapon:'mousetrap'}]);
         expect(hits[0]!.incoming.y).toBeGreaterThan(0);
     });
     it('keeps one trap per rat, and the trap outlives its owner',()=>{
-        const {sim,a,now}=fixture();
+        const {sim,a}=fixture();
         setDown(sim,a);const first=traps(sim)[0]!.id;
-        stand(a,{x:STREET.x,y:0,z:STREET.z+6});setDown(sim,a);
+        stand(a,{x:STREET.x,y:0,z:STREET.z+5});setDown(sim,a);
         expect(traps(sim).map(t=>t.id)).not.toContain(first);
         expect(traps(sim)).toHaveLength(1);
-        a.hp=0;sim.step(1/60,now+16);
+        a.hp=0;sim.step(1/60,sim.time+16);
         expect(traps(sim)).toHaveLength(1);
     });
     it('stays in paw when there is no room ahead',()=>{
@@ -163,22 +164,22 @@ describe('the Mousetrap',()=>{
         expect(traps(sim)).toEqual([]);
     });
     it('is not set down on another living rat, only clear of it',()=>{
-        const {sim,a,b,hits,now}=fixture();
+        const {sim,a,b,hits}=fixture();
         stand(b,{x:a.x,y:a.y,z:a.z+W.trapReach});
         expect(setDown(sim,a)).toBe(false);
         expect(weaponOf(sim,'a')).toBe('mousetrap');
-        sim.step(1/60,now+16);expect(hits).toEqual([]);
+        sim.step(1/60,sim.time+16);expect(hits).toEqual([]);
         // A rat on the floor below is no obstacle, nor is a dead one.
         stand(b,{x:a.x,y:a.y-W.trapHeight-1,z:a.z+W.trapReach});
         expect(sim.placeTrap('a',{x:0,y:0,z:1})).toBe(true);
-        arm(sim,'a','mousetrap');stand(b,{x:a.x,y:a.y,z:a.z-W.trapReach});b.hp=0;
-        expect(sim.placeTrap('a',{x:0,y:0,z:-1})).toBe(true);
+        stand(b,{x:a.x,y:a.y,z:a.z-W.trapReach});b.hp=0;
+        expect(setDown(sim,a,{x:0,y:0,z:-1})).toBe(true);
     });
     it('breaks after its hits: eight balls, or three laser hits; the breaker is recorded',()=>{
-        const {sim,a,b,now}=fixture();
+        const {sim,a,b}=fixture();
         setDown(sim,a);const trap=traps(sim)[0]!,target={x:trap.x,y:trap.y+.3,z:trap.z};
         stand(b,{x:trap.x,y:0,z:trap.z+6});
-        let t=now;
+        let t=sim.time;
         for(let i=1;i<=W.trapHp;i++){
             fire(sim,b,target);for(let s=0;s<6;s++)sim.step(1/60,t+=16);
             expect(traps(sim)[0]?.hp??0,`after ${i}`).toBe(W.trapHp-i);

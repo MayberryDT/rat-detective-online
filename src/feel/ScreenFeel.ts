@@ -34,6 +34,7 @@ export class ScreenFeel {
     private inkNode?:HTMLElement;
     private lensNode?:HTMLElement;
     private caseNode?:HTMLElement;
+    private trapNode?:HTMLElement;
     private readonly caseSheets:HTMLElement[]=[];
     private lastFilm='';
     private lastSpeed=0;
@@ -165,6 +166,20 @@ export class ScreenFeel {
         });
         replay(this.caseNode,'on');
     }
+    /** W3: you took up a Mousetrap: the trap (`art`) comes up big from the bottom of the screen, a TRAP IN PAW stamp slams
+     * on, and a fuse burns for `lockMs` (the trigger's lockout) before SET IT DOWN! says the next press sets it. A pine
+     * edge flash (`flash` × Flash strength). Reduced interface motion fades it in place. */
+    trapInPaw(art:string,lockMs:number,flash:number):void {
+        this.claim('#e2b46e',flash);
+        if(!this.build()||!this.root)return;
+        if(!this.trapNode){
+            this.trapNode=this.doc!.createElement('div');this.trapNode.className='feel-trap';
+            this.trapNode.innerHTML=`<div class="feel-trap-art">${art}</div><div class="feel-trap-stamp">TRAP IN PAW</div><div class="feel-trap-fuse"><i></i></div><div class="feel-trap-ready">SET IT DOWN!</div>`;
+            this.root.appendChild(this.trapNode);
+        }
+        this.trapNode.style.setProperty('--lock',`${Math.round(lockMs)}ms`);
+        replay(this.trapNode,'on');
+    }
     /** C2: your Stakeout claim: an ink ripple spreads across the screen from `at`, under a brief magnifying-glass
      * lens vignette lasting `lens` s. Skipped under Reduced interface motion. */
     stakeout(at:THREE.Vector3,camera:THREE.Camera,lens:number):void {
@@ -222,14 +237,14 @@ export class ScreenFeel {
         if(this.irisNode)this.irisNode.style.opacity='0';
         if(this.speedNode){this.speedNode.style.opacity='0';this.speedNode.classList.remove('on');}
         this.calloutNode?.classList.remove('on');
-        for(const node of [this.claimNode,this.inkNode,this.lensNode,this.caseNode])node?.classList.remove('on');
+        for(const node of [this.claimNode,this.inkNode,this.lensNode,this.caseNode,this.trapNode])node?.classList.remove('on');
         this.lastSpeed=0;
         this.lastFilm='';this.root?.classList.remove('letterboxed');
         if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=this.caseNode=undefined;this.caseSheets.length=0;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=this.caseNode=this.trapNode=undefined;this.caseSheets.length=0;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;

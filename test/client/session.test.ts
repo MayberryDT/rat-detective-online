@@ -107,6 +107,7 @@ const harness = vi.hoisted(() => {
             nod: ReturnType<typeof vi.fn>;
             heal: ReturnType<typeof vi.fn>;
             setPowerups: ReturnType<typeof vi.fn>;
+            setDud: ReturnType<typeof vi.fn>;
             resetReactions: ReturnType<typeof vi.fn>;
             resetMotionHistory: ReturnType<typeof vi.fn>;
             useSharedCorpse: ReturnType<typeof vi.fn>;
@@ -114,7 +115,7 @@ const harness = vi.hoisted(() => {
         };
         onMouseMove = vi.fn();
         lookAlongFacing = vi.fn();
-        setSpeedScale = vi.fn();
+        setLegs = vi.fn();
         applyPressureLaunches = vi.fn();
         update = vi.fn();
         prepareMovement = vi.fn();
@@ -150,6 +151,7 @@ const harness = vi.hoisted(() => {
                 nod: vi.fn(),
                 heal: vi.fn(),
                 setPowerups: vi.fn(),
+                setDud: vi.fn(),
                 resetReactions: vi.fn(),
                 resetMotionHistory: vi.fn(),
                 useSharedCorpse: vi.fn(),

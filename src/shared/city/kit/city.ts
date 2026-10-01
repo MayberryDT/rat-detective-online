@@ -27,5 +27,9 @@ export function kitCity(options:BuildOptions={visuals:true}):KitBuilder {
 
 /** True when feet at (x,y,z) have sunk into harbour water: the rat drowns (plan D1). Decks over the water stand well above DROWN_Y. */
 export function drowned(x:number,y:number,z:number):boolean {
-    return y<DROWN_Y&&kitCity({visuals:false}).water.some(w=>x>=w.xmin&&x<=w.xmax&&z>=w.zmin&&z<=w.zmax);
+    return y<DROWN_Y&&overWater(x,z);
+}
+/** True over harbour water (x,z), whatever stands on it: a pier or the breakwater counts too. */
+export function overWater(x:number,z:number):boolean {
+    return kitCity({visuals:false}).water.some(w=>x>=w.xmin&&x<=w.xmax&&z>=w.zmin&&z<=w.zmax);
 }

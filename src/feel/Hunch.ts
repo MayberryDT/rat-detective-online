@@ -14,7 +14,8 @@ interface Photo {node:HTMLElement;caption:HTMLElement;target?:RatEntity;age:numb
 interface Trail {line:THREE.Line;points:Float32Array;colors:Float32Array;count:number;timer:number}
 
 /** Rats this client's detective has on the Hunch, and the rats that have it on you. A rat on
- * Stakeout has it whatever its health, out to `superRange`, for as long as it lasts. */
+ * Stakeout has it whatever its health, out to `superRange`, for as long as it lasts. A rat Staked Out
+ * (Code Violation's faulty Stakeout, `RatEntity.exposed`) is on everyone's Hunch, city-wide. */
 export function hunchReads(self:RatEntity|undefined,rats:Iterable<[string,HunchRat]>,range:number,superRange:number,
     sensed:Set<string>,watchers:RatEntity[]):void {
     sensed.clear();watchers.length=0;
@@ -23,8 +24,8 @@ export function hunchReads(self:RatEntity|undefined,rats:Iterable<[string,HunchR
     for(const [id,{entity}] of rats){
         if(entity.dead||entity.hp<=0)continue;
         const d=entity.mesh.position.distanceToSquared(self.mesh.position);
-        if(sharp&&d<=reach)sensed.add(id);
-        if(entity.staking?d<=far:d<=near&&entity.hp>=MAX_HP)watchers.push(entity);
+        if(entity.exposed||sharp&&d<=reach)sensed.add(id);
+        if(self.exposed||(entity.staking?d<=far:d<=near&&entity.hp>=MAX_HP))watchers.push(entity);
     }
 }
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {MAX_TRAPS,type TrapState} from '../shared/chaosState';
-import {WEAPON_TUNING} from '../shared/pickups';
+import {TRAP_SCALE,TRAP_TALL,WEAPON_TUNING} from '../shared/pickups';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {kickDust} from '../feel/Dust';
 import {PartKit,TRAP_PIECES,TRAP_PIVOTS,mousetrap,weaponFinish,type TrapPiece,type WeaponFinish} from '../utils/WeaponModel';
@@ -78,6 +78,8 @@ class TrapDebris {
  * scatter) when it breaks. Animated from snapshot changes on the local clock. */
 class TrapVisual {
     readonly root=new THREE.Group();
+    /** Trap space scaled to the gameplay footprint (`TRAP_SCALE`, `TRAP_TALL`): what you see is what snaps. */
+    private readonly sized=new THREE.Group();
     private readonly body=new THREE.Group();
     private readonly pieces:Record<TrapPiece,THREE.Object3D>;
     id='';
@@ -95,7 +97,7 @@ class TrapVisual {
     private readonly flight=new Float32Array(TRAP_PIECES.length*6);
     private readonly at=new THREE.Vector3();
     constructor(templates:Record<TrapPiece,THREE.Group>){
-        this.root.name='mousetrap';this.root.add(this.body);
+        this.root.name='mousetrap';this.sized.scale.set(TRAP_SCALE,TRAP_TALL,TRAP_SCALE);this.sized.add(this.body);this.root.add(this.sized);
         const pieces:Partial<Record<TrapPiece,THREE.Object3D>>={};
         for(const piece of TRAP_PIECES){const part=templates[piece].clone();this.body.add(part);pieces[piece]=part;}
         this.pieces=pieces as Record<TrapPiece,THREE.Object3D>;
@@ -115,19 +117,19 @@ class TrapVisual {
         if(trap.snapAt!==undefined&&trap.snapAt!==this.snapAt&&!this.broken){this.snapAge=0;announce?.('snap',trap);}
         if(trap.hitAt!==undefined&&trap.hitAt!==this.hitAt){
             this.hitAge=0;announce?.('hit',trap);
-            this.at.set((Math.random()-.5)*1.2,.2,(Math.random()-.5)*2).applyEuler(this.root.rotation).add(this.root.position);
+            this.at.set((Math.random()-.5)*1.2*TRAP_SCALE,.2*TRAP_TALL,(Math.random()-.5)*2*TRAP_SCALE).applyEuler(this.root.rotation).add(this.root.position);
             debris.burst(this.at,6,3.2,trap.y);
         }
         this.snapAt=trap.snapAt;this.hitAt=trap.hitAt;this.hp=trap.hp;
         const corners=this.lostCorners();
         for(let i=this.corners;i<corners;i++){
             const [x,y,z]=TRAP_PIVOTS[CORNER_PIECES[i]!];
-            debris.burst(this.at.set(x,y,z).applyEuler(this.root.rotation).add(this.root.position),8,4,trap.y);
+            debris.burst(this.at.set(x*TRAP_SCALE,y*TRAP_TALL,z*TRAP_SCALE).applyEuler(this.root.rotation).add(this.root.position),8,4,trap.y);
         }
         this.corners=corners;
         if(trap.brokenAt!==undefined&&!this.broken){
             this.broken=true;this.breakAge=0;announce?.('break',trap);
-            this.launch();debris.burst(this.at.set(trap.x,trap.y+.3,trap.z),18,6,trap.y,6);
+            this.launch();debris.burst(this.at.set(trap.x,trap.y+.3*TRAP_TALL,trap.z),18,6,trap.y,6);
         }
     }
     private lostCorners():number {

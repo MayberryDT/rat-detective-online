@@ -469,7 +469,7 @@ export class CityRecorder {
       this.cell(now, 'pickups', player);
       this.measure(now, place, `pickup:${e.pickup}`);
       this.emit({ ...this.context(now), type: 'pickup', a: this.actor(player.id), site: e.pickupId, kind: e.pickup, p: p3(player), place,
-        hpBefore: this.last.get(player.id)?.hp ?? player.hp, ...(restocked === undefined ? {} : { waitedMs: now - restocked }) });
+        hpBefore: this.last.get(player.id)?.hp ?? player.hp, ...(restocked === undefined ? {} : { waitedMs: now - restocked }), ...(e.faulty ? { faulty: true as const } : {}) });
       this.siteAvailable.set(e.pickupId, false);
       // Claimed, so not passed.
       const open = this.approaches.get(player.id);
@@ -507,7 +507,7 @@ export class CityRecorder {
     const open = this.goals.get(v.id);
     if (open) this.endGoal(v, open, 'died', now);
   }
-  /** Act of God impacts and Code Violation malfunctions (`ChaosSimulation.drainIncidentEvents`). */
+  /** Cheddar Shower impacts and Code Violation malfunctions (`ChaosSimulation.drainIncidentEvents`). */
   incidents(events: readonly IncidentEvent[], players: ReadonlyMap<string, PlayerData>, now: number): void {
     for (const e of events) {
       const place = this.places.at(e.p.x, e.p.y, e.p.z).id;
@@ -518,7 +518,8 @@ export class CityRecorder {
       }
       this.measure(now, place, `malfunction:${e.what}`);
       const victim = e.playerId ? players.get(e.playerId) : undefined;
-      this.emit({ ...this.context(now), type: 'malfunction', what: e.what, site: e.site, p: p3(e.p), place, ...(victim ? { a: this.actor(victim.id) } : {}), shoved: e.shoved });
+      this.emit({ ...this.context(now), type: 'malfunction', what: e.what, site: e.site, p: p3(e.p), place, ...(victim ? { a: this.actor(victim.id) } : {}),
+        ...(e.pickup ? { kind: e.pickup } : {}), shoved: e.shoved });
     }
   }
 

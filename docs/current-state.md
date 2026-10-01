@@ -9,7 +9,7 @@ Tyler (1 October): double down on what Big Cheese and Blackout do, make pickups 
 - **Targets:** PAPER CHASE 10 deliveries, Jurisdiction 100 points (zones of 20), Excessive Force 10 case kills.
 - **Excessive Force carrier:** double damage and a full heal on every case kill; its balls look heavier.
 - **Weapons** (one at a time; six new sites; also in the reward draw): Tommy Gun (hold to fire on a timer), Laser (hitscan, ricochets, 3 damage, headshots kill), Mousetrap (the gun goes away; the next click sets a big one-shot trap that takes 8 balls or 3 lasers to break).
-- **Incidents:** Rat Race, Delayed Reaction and Clean Bill removed; Code Violation replaces Malpractice; Bad Ammunition personalities; Scattershot shoves; Most Wanted follows the leader and pays a random supply; All Units told clearly; new Bobbleheads and Act of God.
+- **Incidents:** Rat Race, Delayed Reaction and Clean Bill removed; Code Violation replaces Malpractice (after Tyler's playtest it kills nobody and claimed supplies come out as harmless duds; Quick Fix still heals but is harder to catch); Bad Ammunition personalities; Scattershot shoves; Most Wanted follows the leader and pays a random supply; All Units told clearly; new Bobbleheads and Cheddar Shower (first called Act of God).
 
 ## Case grip, bot archetypes and the case batch — 1 October production
 

@@ -442,8 +442,9 @@ export class RatEntity {
 
     /** Big Cheese: this rat's pistol eases up to its chunky size, or back down. */
     public setBigPistol(on:boolean):void {this.animator.bigPistol=on;}
-    /** The special weapon this rat holds (undefined: its pistol). A dead rat holds none. */
-    public setWeapon(kind:WeaponKind|undefined):void {this.animator.setWeapon(this.dead?undefined:kind);}
+    /** The special weapon this rat holds (undefined: its pistol). A dead rat holds none. `swap`: a Mousetrap just taken
+     * (in its lockout) plays the swap: the gun drops away and the trap heaves up big. */
+    public setWeapon(kind:WeaponKind|undefined,swap=false):void {this.animator.setWeapon(this.dead?undefined:kind,swap);}
     /** Bobbleheads: the head swells and wobbles; another rat's head sphere (what your shots are predicted against)
      * grows to match the authority's. Your own moving body never changes. */
     public setBobblehead(on:boolean):void {
@@ -456,6 +457,8 @@ export class RatEntity {
     public backupStrobe(seconds:number):void {if(!this.dead)this.strobeLeft=seconds;}
     /** Most Wanted: this rat's nameplate carries the WANTED stamp. */
     public setWanted(on:boolean):void {this.billboard.setWanted(on);}
+    /** Code Violation: this rat's nameplate carries its dud's name (COLD FEET, …), or nothing. */
+    public setDud(word?:string):void {this.billboard.setDud(word);}
     /** Durations are relative to the latest authoritative snapshot, then expire locally. */
     public setPowerups(ironcladSeconds:number,hustleSeconds:number,stakeoutSeconds:number):void {
         const silver=this.ironcladRemaining>0;
@@ -470,6 +473,8 @@ export class RatEntity {
     }
     /** Stakeout: this rat's Hunch reaches the whole city. */
     get staking():boolean {return !this.dead&&this.stakeoutRemaining>0;}
+    /** Code Violation's Staked Out (`stakedOut`, from each snapshot): every rat has this one on the Hunch, city-wide. */
+    public exposed=false;
     /** Per frame: widen the shell so the outline keeps its on-screen width.
      * `unitsPerPixel` is the world size of one screen pixel at one unit away. */
     public fitOutline(camera:THREE.Vector3,unitsPerPixel:number):void {

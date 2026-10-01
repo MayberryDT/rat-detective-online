@@ -33,16 +33,20 @@ export const INCIDENT_TUNING = {
     cheeseRadii: [0.15, 0.24, 0.36, 0.52, 0.72, 0.96, 1.24, 1.55, 1.9, 2.4] as const,
     caseMissileSpeed: 145, caseShotSpeed: 160, caseMissileLift: 6, caseEjectSpeed: 22,
     caseRicochetMinSpeed: 140, caseBounceLift: 7, caseMaxLift: 10,
-    /** Code Violation (Tyler, 1 October: "every machine in the city misbehaves"). Every supply kit hops `violationHop` units
-     * away from a rat within `violationScare`, at most every `violationHopMs`, within `violationLeash` of home, and
-     * `violationExplodeChance` of claims blow up instead. Each launch machine fills itself to bursting every
-     * `violationMachineMs` (a random span), its blast shoving rats within `violationFling` of the pad. Each `violationClangMs`
-     * an alarm pillar near a rat clangs, shoving rats within `violationClang` of it. Shoves: `violationShove` u/s out, `violationLift` up. */
-    violationScare: 7, violationHop: 5, violationHopMs: 650, violationLeash: 12, violationExplodeChance: .35,
+    /** Code Violation (Tyler, 1 October: "every machine in the city misbehaves", and "no one should die from code
+     * violation"). Every supply kit hops `violationHop` units away from a rat within `violationScare`, at most every
+     * `violationHopMs`, within `violationLeash` of home; Quick Fix is harder to catch ("a little bit harder"): it scares at
+     * `violationFixScare`, hops `violationFixHop` every `violationFixHopMs`, within `violationFixLeash`. Claims of every
+     * other kind come out faulty (`FAULTY_KINDS`). Each launch machine fills itself to bursting every `violationMachineMs`
+     * (a random span), its blast shoving rats within `violationFling` of the pad. Each `violationClangMs` an alarm pillar
+     * near a rat clangs, shoving rats within `violationClang` of it. Shoves: `violationShove` u/s out, `violationLift` up,
+     * only where the landing is safe. */
+    violationScare: 7, violationHop: 5, violationHopMs: 650, violationLeash: 12,
+    violationFixScare: 10, violationFixHop: 7, violationFixHopMs: 480, violationFixLeash: 16,
     violationMachineMs: [3500,7500] as const, violationFling: 11, violationClangMs: [1800,4200] as const, violationClang: 7,
     violationShove: 26, violationLift: 13,
-    /** Act of God: a giant cheese meteor every `meteorEveryMs` (from the first value to the second as the incident runs),
-     * aimed within `meteorSpread` of a random living rat, at most `meteorMax` falling at once. Its shadow warns for
+    /** Cheddar Shower: a giant cheese meteor every `meteorEveryMs` (from the first value to the second as the incident
+     * runs), aimed within `meteorSpread` of a random living rat, at most `meteorMax` falling at once. Its shadow warns for
      * `meteorWarnMs`. On impact rats within `meteorRadius` are flattened (lethal, nobody credited), rats within
      * `meteorBlast` are shoved out (`meteorShove` u/s, edge to centre) and `meteorLift` up, and it bursts into cheese. */
     meteorEveryMs: [1400,700] as const, meteorSpread: 6, meteorMax: 8, meteorWarnMs: 2200,
@@ -181,7 +185,7 @@ export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-
  * destroyed (inert, kept `trapBrokenMs` so clients can play the break). At most one per rat. */
 export interface TrapState { id:string; owner:string; x:number; y:number; z:number; yaw:number; hp:number; at:number; snapAt?:number; hitAt?:number; brokenAt?:number }
 export const MAX_TRAPS = 16;
-/** Act of God: a cheese meteor landing on (`x`,`y`,`z`), the floor under it, at `at`; its shadow shows from `born`.
+/** Cheddar Shower: a cheese meteor landing on (`x`,`y`,`z`), the floor under it, at `at`; its shadow shows from `born`.
  * Kept `METEOR_KEEP_MS` after impact so every client plays the landing. */
 export interface Meteor { id:string; x:number; y:number; z:number; born:number; at:number }
 export const METEOR_KEEP_MS = 800;
@@ -215,7 +219,7 @@ export interface ChaosState {
     buffs?: BuffMap;
     /** Set Mousetraps. */
     traps?: TrapState[];
-    /** Act of God: meteors falling or just landed. */
+    /** Cheddar Shower: meteors falling or just landed. */
     meteors?: Meteor[];
     /** Recent laser beams, newest last. */
     beams?: LaserBeam[];

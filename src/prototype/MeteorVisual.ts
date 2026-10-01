@@ -81,7 +81,7 @@ interface View {
 }
 interface Puff {p:THREE.Vector3;age:number;life:number;size:number}
 
-/** Act of God meteors (presentation only): each falls from high on a slant with a fiery emissive trail and smoke,
+/** Cheddar Shower meteors (presentation only): each falls from high on a slant with a fiery emissive trail and smoke,
  * its shadow growing darker and wider on the spot it will hit; at the impact a cheese-cream shock ring runs out to
  * the blast's reach. Emissive and transparent geometry only, no lights. `onWarn` fires once per meteor (with its
  * seconds left), `onImpact` once when the playback reaches its landing. */
@@ -101,7 +101,7 @@ export class MeteorVisual {
     private scorchCursor=0;
     private lastNow=NaN;
     constructor(scene:THREE.Scene){
-        this.root.name='act-of-god-meteors';this.root.userData.noNoir=true;
+        this.root.name='cheddar-shower-meteors';this.root.userData.noNoir=true;
         const glowTexture=falloff(),streakTexture=streak(),shadowTexture=shadow(),scorchTexture=scorch(),rockGeometry=rock();
         const trailGeometry=new THREE.CylinderGeometry(.15,1,1,14,1,true).translate(0,.5,0);
         const plane=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),ringGeometry=new THREE.RingGeometry(.86,1,48).rotateX(-Math.PI/2);

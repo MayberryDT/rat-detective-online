@@ -15,8 +15,9 @@ export interface FeelSpec {
 export const FEEL={
     cameraSpring:{label:'Camera spring',toggle:false,params:{stiffness:260,damping:.78,maxTurn:.08,maxShift:.35,maxWiden:14,fovStiffness:60}},
     /** Very subtle upward view nudge (rad/s impulse; peak ≈ 0.4°) and a tiny backward shove per local shot. Toned down 2026-09-27 at Tyler's request.
-     * Scattershot is a shotgun: `scattershot`× the kick and a `scatterWiden`° field-of-view thump. */
-    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.28,yawJitter:.15,push:.15,scattershot:3.2,scatterWiden:3}},
+     * Scattershot is a shotgun: `scattershot`× the kick and a `scatterWiden`° field-of-view thump (trimmed about 80% on
+     * 1 October after Tyler's protocol 27 playtest: 3.2× and 3°). */
+    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.28,yawJitter:.15,push:.15,scattershot:.65,scatterWiden:.6}},
     /** Shove away from the attacker when you take nonlethal damage, scaled by damage. */
     hitJolt:{label:'2 Hit jolt',toggle:true,params:{push:7,yaw:1.4,dip:-1.1,perDamage:.35}},
     /** Red edge flash (scaled by Flash strength) and arrows tracking the attacker. */
@@ -93,9 +94,9 @@ export const FEEL={
     /** Bad Ammunition juice: muzzle `smoke` and each ball's personality sound (`volume`; a superball's boing at
      * `superballPitch`, at launch and every bounce), and your own ball's word. The paths themselves are gameplay. */
     badAmmo:{label:'I2 Bad Ammunition juice',toggle:true,params:{smoke:.6,volume:.8,superballPitch:1.7}},
-    /** Act of God juice: the meteor's whistle (`whistle` volume) as its shadow shows; at the impact a `boom`, a view shake up
-     * to `shake` degrees fading out to `shakeRange` units, pavement chunks and a crater, dust, and KA-BOOM! within `wordRange`. */
-    actOfGod:{label:'I4 Act of God juice',toggle:true,params:{whistle:.9,boom:1,shake:3.2,shakeRange:70,wordRange:45}},
+    /** Cheddar Shower juice: the meteor's whistle (`whistle` volume) as its shadow shows; at the impact a `boom`, a view shake
+     * up to `shake` degrees fading out to `shakeRange` units, pavement chunks and a crater, dust, and KA-BOOM! within `wordRange`. */
+    cheddarShower:{label:'I4 Cheddar Shower juice',toggle:true,params:{whistle:.9,boom:1,shake:3.2,shakeRange:70,wordRange:45}},
     /** Code Violation juice: sparks off supplies and machines with a zap (`zap` volume) when close. */
     codeViolation:{label:'I5 Code Violation juice',toggle:true,params:{zap:.7}},
     /** The Hunch (gameplay, always on): at full health you see rats within `range` through walls as a pencil sketch
@@ -178,15 +179,19 @@ export const FEEL={
      * jump looked like "torpedoing to the side") the coat stays upright, lagging only `sway` (rad), while the tail, hat
      * and ears trail by `drag` (rad), springing over when the rat reverses. */
     airActing:{label:'A1 Air acting',toggle:true,params:{takeOff:9,fall:7,stretch:.22,squash:.12,reach:.1,tuck:.55,arch:.14,lean:.12,sway:.05,drag:.5,pivot:.9,feet:1,ears:.7,tail:.6,hat:.1,land:.22}},
-    /** W1 Tommy Gun (protocol 27): each of your shots kicks the view hard (`kick` rad/s, `yaw` jitter share, `push` u/s back) and,
-     * while the trigger is held, the view rattles (`rattle`); every Tommy's muzzle throws a flash (`flash` size) and brass casings
-     * (`casings` in the pool, `casingLife` s), seen within `range` units. */
-    tommyGun:{label:'W1 Tommy Gun juice',toggle:true,params:{kick:1.1,yaw:.9,push:.45,rattle:.55,flash:1,casings:64,casingLife:1.6,range:70}},
-    /** W2 Laser: your shot's kick (`kick`, `push`); the beam's core and glow widths (units), glow opacity and zigzag (units);
-     * scorch marks on walls (`scorches` in the pool, `scorchSize` units, `scorchLife` s). The beam itself always draws. */
-    laser:{label:'W2 Laser juice',toggle:true,params:{kick:1.6,push:.9,core:.13,width:1.15,glow:.9,zigzag:.16,scorches:32,scorchSize:1.1,scorchLife:9}},
-    /** W3 Mousetrap: a kill's SNAP shakes the view within `snapRange` (`snap` rad/s); a refused placement nudges it (`refuse`). */
-    mousetrap:{label:'W3 Mousetrap juice',toggle:true,params:{snap:1.8,snapRange:24,refuse:.35}},
+    /** W1 Tommy Gun (protocol 27; halved after Tyler's playtest, still above Scattershot): each of your shots kicks the view
+     * (`kick` rad/s, `yaw` jitter share, `push` u/s back) and, while the trigger is held, the view rattles (`rattle`); every
+     * Tommy's muzzle throws a cheese-yellow flash (`flash` size) and puff (`puff` size), `crumbs` cheese crumbs a round and
+     * cheese-cube casings (`casings` in the pool, `casingLife` s), seen within `range` units. */
+    tommyGun:{label:'W1 Tommy Gun juice',toggle:true,params:{kick:.55,yaw:.9,push:.22,rattle:.28,flash:1,puff:1,crumbs:4,casings:64,casingLife:1.6,range:70}},
+    /** W2 Laser, a molten cheese beam: your shot's kick (`kick`, `push`); widths (units) of the hot centre (`core`), the
+     * cheese strand (`strand`) and its greasy green sheen (`sheen`, opacity `glow`); its gooey wobble and end-of-life sag
+     * (units); `gobs` dripped per beam (`gobSize` units); cheese splats on walls (`splats` in the pool, `splatSize` units,
+     * `splatLife` s). The beam itself always draws. */
+    laser:{label:'W2 Laser juice',toggle:true,params:{kick:1.6,push:.9,core:.08,strand:.26,sheen:1.1,glow:.9,wobble:.12,sag:.8,gobs:9,gobSize:.07,splats:32,splatSize:1.1,splatLife:9}},
+    /** W3 Mousetrap: a kill's SNAP shakes the view within `snapRange` (`snap` rad/s); a refused placement nudges it (`refuse`).
+     * Taking one up: the TRAP IN PAW moment's pine edge flash (`inPaw` × Flash strength) and the view's heave (`heave` rad/s). */
+    mousetrap:{label:'W3 Mousetrap juice',toggle:true,params:{snap:1.8,snapRange:24,refuse:.35,inPaw:.9,heave:.9}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

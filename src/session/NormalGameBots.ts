@@ -10,7 +10,7 @@ import { CITY_BARS_GROUP } from '../shared/boxFrame';
 import { SpatialRayQuery } from '../shared/SpatialRayQuery';
 import { CITY_BOUNDS, GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
 import { DISPATCH_STATIONS, LAUNCH_MACHINES, type ChaosState } from '../shared/chaosState';
-import { hasHustle, PICKUP_TUNING } from '../shared/pickups';
+import { jumpBlocked, legScale } from '../shared/pickups';
 import { RAT_BODY, RatBody, addRatShapes, turnFacing } from '../shared/rat/ratBody';
 import { FEEL } from '../feel/feelTuning';
 import { COAT_COLORS, FUR_COLORS, HAT_COLORS, HAT_TYPES } from '../shared/ratAppearance';
@@ -199,7 +199,7 @@ export class NormalGameBots {
             const grounded=bot.rat.grounded;
             Object.assign(self,{x:body.position.x,y:body.position.y,z:body.position.z});
             const controls=bot.brain.step(now,self,this.players.values(),this.chaos,target=>this.visible(bot,target),grounded&&Math.hypot(body.velocity.x,body.velocity.z)<1,grounded,target=>this.visibleControl(bot,target));
-            bot.rat.speedScale=hasHustle(this.chaos?.buffs,bot.id,this.chaos?.time??now)?PICKUP_TUNING.hustleMultiplier:1;
+            const at=this.chaos?.time??now;bot.rat.speedScale=legScale(this.chaos?.buffs,bot.id,at);bot.rat.jumpBlocked=jumpBlocked(this.chaos?.buffs,bot.id,at);
             bot.rat.step(dt,controls,true);
             bot.facing=turnFacing(bot.facing,controls.lookYaw,dt);
             if(controls.fire){

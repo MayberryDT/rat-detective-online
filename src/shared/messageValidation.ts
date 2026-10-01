@@ -34,7 +34,7 @@ import {
 } from './networkProtocol';
 import type { ControlsInput } from './rat/controlTally';
 import { CHAOS_TUNING, INCIDENT_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LASER_SURFACES, LAUNCH_MACHINES, MAX_BEAMS, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, MAX_TRAPS, PRESSURE_TUNING, type ChaosState } from './chaosState';
-import { BUFF_FIELDS, PICKUP_ANCHORS, WEAPON_TUNING, isPickupKind, isWeaponKind } from './pickups';
+import { BUFF_FIELDS, PICKUP_ANCHORS, WEAPON_TUNING, isFaultyKind, isPickupKind, isWeaponKind } from './pickups';
 import { isSupportedWorldVersion } from './worldSpec';
 
 const HAT_TYPES = new Set<HatTypeName>(['fedora', 'trilby', 'porkpie']);
@@ -522,7 +522,8 @@ function parseChaos(value:unknown):ChaosState|null{
     if(!isRecord(value.buffs)||Object.keys(value.buffs).length>100)return null;
     for(const entry of Object.values(value.buffs)){
       if(!isRecord(entry))return null;
-      if(Object.entries(entry).some(([key,v])=>key==='weapon'?!isWeaponKind(v):!(BUFF_FIELDS as readonly string[]).includes(key)&&key!=='weaponUntil'||finiteNumber(v)===null))return null;
+      if(Object.entries(entry).some(([key,v])=>key==='weapon'?!isWeaponKind(v):key==='faulty'?!isFaultyKind(v):
+        !(BUFF_FIELDS as readonly string[]).includes(key)&&key!=='weaponUntil'&&key!=='weaponReadyAt'&&key!=='faultyUntil'||finiteNumber(v)===null))return null;
     }
   }
   if(!['ready','rolling','active','cooldown'].includes(String(d.phase))||finiteNumber(d.started)===null||finiteNumber(d.until)===null||integer(d.serial)===null)return null;
@@ -676,9 +677,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const reasons=new Set(['stale','unavailable','blocked','ineligible','too-far','invalid-target','rate-limited']);
       if(!interactionId||!targetId||!epoch||!playerId||at===null||at<0||tick===null||tick<0||typeof parsed.accepted!=='boolean'||
         (parsed.target!=='case'&&parsed.target!=='pickup')||(parsed.pickup!==undefined&&!isPickupKind(parsed.pickup))||effectUntil===null||
-        (parsed.reason!==undefined&&!reasons.has(String(parsed.reason))))return null;
+        (parsed.faulty!==undefined&&parsed.faulty!==true)||(parsed.reason!==undefined&&!reasons.has(String(parsed.reason))))return null;
       return{type:'pickupResult',interactionId,target:parsed.target,targetId,accepted:parsed.accepted,at,tick,epoch,playerId,
-        ...(parsed.pickup===undefined?{}:{pickup:parsed.pickup}),...(effectUntil===undefined?{}:{effectUntil}),
+        ...(parsed.pickup===undefined?{}:{pickup:parsed.pickup}),...(effectUntil===undefined?{}:{effectUntil}),...(parsed.faulty===true?{faulty:true as const}:{}),
         ...(parsed.reason===undefined?{}:{reason:parsed.reason as Extract<ServerMessage,{type:'pickupResult'}>['reason']})};
     }
     case 'playerDamaged': {

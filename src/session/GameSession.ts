@@ -31,7 +31,7 @@ import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import { ShotSpacing } from '../shared/shotTiming';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
-import { PICKUP_TUNING, WEAPON_TUNING, heldWeapon, type WeaponKind } from '../shared/pickups';
+import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, weaponArming, type WeaponKind } from '../shared/pickups';
 import { tommyHeat } from '../shared/shotPattern';
 import { laserPath } from '../shared/laser';
 import { HeldFire } from './HeldFire';
@@ -160,6 +160,9 @@ export class GameSession {
     private seenHighlightLaunches = new Set<string>();
     /** Launch events already given their scream and view kick (L5/L6). */
     private readonly feltLaunches = new Set<string>();
+    /** Code Violation: each rat's dud deadline as last seen (a new one goes in the feed once), after the first snapshot. */
+    private readonly dudsSeen = new Map<string, number>();
+    private dudsPrimed = false;
     private highlightCorpseSeen = new Map<string, number>();
     private readonly highlightFrustum = new THREE.Frustum();
     private readonly highlightMatrix = new THREE.Matrix4();
@@ -303,6 +306,11 @@ export class GameSession {
         // Big Cheese and the Laser space every rat's shots, as the room does; an early press only dry-clicks.
         const dispatch=this.lastChaos?.dispatch,incident=dispatch?.phase==='active'?incidentInfo(dispatch.incident).id:undefined;
         const now=performance.now(),weapon=this.weaponNow();
+        // A Mousetrap just taken is still coming up into the paw: the press does nothing (no shot, no set-down predicted;
+        // the room refuses it too). Only a press after that sets it down: a held trigger never repeats into it.
+        if (weaponArming(this.lastChaos?.buffs?.[this.myId], Date.now() + this.serverOffset)) return;
+        // Short Circuit (a Code Violation dud): the gun is shorted out and only dry-clicks, as the room refuses it.
+        if (shortedOut(this.lastChaos?.buffs, this.myId, Date.now() + this.serverOffset)) { this.feel.sound.jam(); return; }
         if (!this.shotSpacing.allow(this.myId, incident, now, 0, weapon)) { this.feel.sound.jam(); return; }
         this.rat.updateView();
         this.stage.camera.getWorldDirection(this.direction);
@@ -380,7 +388,7 @@ export class GameSession {
             this.chaos.onMeteorImpact=at=>this.feel.meteorLanded(at,this.stage.camera);
             this.chaos.onSuperball=p=>this.feel.superballBounce(p);
             this.chaos.onCasePaper=(p,kind)=>this.feel.casePaper(p,kind);
-            this.chaos.onClaim=(kind,camera)=>this.feel.claimed(kind,this.rat?.entity,camera);
+            this.chaos.onClaim=(kind,camera,lockMs)=>this.feel.claimed(kind,this.rat?.entity,camera,lockMs);
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onDispatchShot=(_station,at)=>this.feel.dispatchShot(at,this.stage.camera);
             this.chaos.onVentErupted=vent=>{
@@ -506,7 +514,7 @@ export class GameSession {
                 this.pendingInteractions.delete(message.interactionId);
                 this.netplay.end(message.interactionId,message.accepted?'accepted':'rejected',message.reason);
                 this.chaos?.resolveInteraction(message);
-                if(message.accepted&&message.pickup==='hustle')this.rat?.setSpeedScale(PICKUP_TUNING.hustleMultiplier);
+                if(message.accepted&&message.pickup==='hustle'&&!message.faulty)this.rat?.setLegs(PICKUP_TUNING.hustleMultiplier);
                 break;
             case 'playerDamaged': {
                 if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){const victim=this.remotes.get(message.id);this.hud.showHitMarker(victim?victim.hp-message.hp:1);this.foley.play('hit-confirm');if(victim)this.feel.hitDealt(victim.mesh.position,this.stage.camera);}
@@ -598,7 +606,7 @@ export class GameSession {
                 break;
             }
             case 'playerRespawn':
-                if (message.id === this.myId && this.rat) this.rat.setSpeedScale(1);
+                if (message.id === this.myId && this.rat) this.rat.setLegs(1);
                 if (message.id === this.myId) {
                     this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset(); this.feel.health(message.hp); settleQuality();
                     this.lastInteractionPosition.set(message.x,message.y+.8,message.z);this.clearInput(); this.hud.hideRespawn();
@@ -640,7 +648,7 @@ export class GameSession {
                 this.highlightCorpseSeen.clear();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0,0);entity.resetReactions();entity.setStreak(0);}
-                this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+                this.rat?.setLegs(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -656,13 +664,21 @@ export class GameSession {
             const hustle=Math.max(0,((buff?.hustleUntil??0)-state.time)/1000);
             const stakeout=Math.max(0,((buff?.stakeoutUntil??0)-state.time)/1000);
             entity.setPowerups(ironclad,hustle,stakeout);
+            // Code Violation: a rat's dud is stamped on its nameplate, told once in the feed, and Staked Out puts it on everyone's Hunch.
+            const dud=faultyOf(state.buffs,id,state.time),until=dud?buff!.faultyUntil!:0;
+            entity.setDud(dud&&FAULTY_COPY[dud].title);entity.exposed=dud==='stakeout';
+            if(dud&&until!==this.dudsSeen.get(id)&&this.dudsPrimed){
+                const {title,effect}=FAULTY_COPY[dud],mine=id===this.myId;
+                this.hud.addKillFeed({kind:'note',text:`CODE VIOLATION · ${mine?'YOU':entity.name.toUpperCase()}: ${title}${mine?'':`, ${effect}`}`});
+            }
+            this.dudsSeen.set(id,until);
             if(ironclad>0&&!entity.dead)protectedRats.add(entity);
         };
         if(this.rat)apply(this.myId,this.rat.entity);
         for(const [id,{entity}] of this.remotes.rats)apply(id,entity);
-        this.gun.setProtectedRats(protectedRats);
-        const hustle = (state.buffs?.[this.myId]?.hustleUntil ?? 0) > state.time;
-        this.rat?.setSpeedScale(hustle ? PICKUP_TUNING.hustleMultiplier : 1);
+        this.gun.setProtectedRats(protectedRats);this.dudsPrimed=true;
+        // Hot Pursuit, or a Code Violation dud's slow, pin or no-jump: the same rule every bot's legs follow.
+        this.rat?.setLegs(legScale(state.buffs,this.myId,state.time),jumpBlocked(state.buffs,this.myId,state.time));
     }
 
     private sendMovement(now: number): void {

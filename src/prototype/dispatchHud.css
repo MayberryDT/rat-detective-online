@@ -91,12 +91,19 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 .powerup-healed{margin-top:10px;padding:3px 0;border-top:1px dashed var(--powerup);color:var(--powerup);font:13px/1 var(--font-type);letter-spacing:.06em}
 .powerup-stakeout{--powerup:#e0b95a;rotate:1deg}
 .powerup-tommy-gun{--powerup:#e8873e;rotate:-1.5deg}
-.powerup-laser{--powerup:#5fd8e6;rotate:1.5deg}
+.powerup-laser{--powerup:#cde84a;rotate:1.5deg}
 /* The Mousetrap is held until set down: no clock, only how to set it down (touch says FIRE). */
 .powerup-mousetrap{--powerup:#e6dcc4;rotate:-.5deg}
 .powerup-mousetrap .powerup-copy{padding-right:0}
 .powerup-touch-hint,.touch-mode .powerup-desktop-hint{display:none}
 .touch-mode .powerup-touch-hint{display:inline}
+/* Code Violation duds: the claimed supply's card, condemned: red-orange ink over a darkened, soot-stained, taped drawing. */
+.powerup-faulty{--powerup:#e4553a;rotate:1deg}
+.powerup-faulty .powerup-art{position:relative;filter:grayscale(.5) brightness(.8) drop-shadow(3px 4px 0 var(--carbon-deep))}
+.powerup-dud-mark{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.powerup-faulty .powerup-copy strong{font-size:28px}
+.powerup-dud{margin-top:5px;padding:2px 0;font-size:11px;line-height:1.15}
+.powerup-faulty .powerup-gauge{margin-top:5px}
 /* Three or four rewards can be visible together, including landscape phones. */
 @media(max-width:1050px){.pickup-buffs:has(.powerup-card:nth-child(3)){gap:6px}.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-card{width:29vw}}
 @media(max-width:700px){.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-art{width:30px}.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-copy strong{font-size:18px}.powerup-healed{font-size:11px}}

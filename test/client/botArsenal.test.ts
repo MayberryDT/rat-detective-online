@@ -58,6 +58,19 @@ describe('bots with the arsenal',()=>{
         expect(door[0]).toBeLessThan(1000);
     });
 
+    it('waits out a just-taken Mousetrap\'s lockout like anyone, then sets it down',()=>{
+        // A doorway: without the lockout it goes down within the first second.
+        const doorway:MotorNavigation={...nav,ray:(from,to)=>from.y>.7?{point:to,normal:{x:1,y:0,z:0}}:undefined};
+        const s=state('mousetrap'),ready=WEAPON_TUNING.trapLockMs+500;s.buffs!.me!.weaponReadyAt=ready;
+        const self=player('me',0,0),bot=new RatBot(doorway,0,()=>.5),presses:number[]=[];
+        for(let now=0;now<ready+2000;now+=1000/60){
+            s.time=now;
+            if(worldIntent(bot.step(now,self,[self],s,()=>true,false,true),self).shoot)presses.push(now);
+        }
+        expect(presses[0]).toBeGreaterThanOrEqual(ready);
+        expect(presses[0]).toBeLessThan(ready+1000);
+    });
+
     it('never walks onto another rat\'s trap it can see, but runs straight over its own',()=>{
         const closest=(owner:string)=>{
             const self=player('me',0,0),s=state(undefined,owner),bot=new RatBot(nav,0,()=>.5),dt=1000/60;
