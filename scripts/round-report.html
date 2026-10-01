@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Case file · round report</title>
+<!-- Template for scripts/round-report.mjs, which fills in the data and the font folder. -->
+<style>
+@font-face{font-family:'Bangers';src:url('__FONTS__/bangers/Bangers-latin.woff2') format('woff2')}
+@font-face{font-family:'Outfit';src:url('__FONTS__/outfit/Outfit-latin.woff2') format('woff2');font-weight:300 700}
+@font-face{font-family:'Special Elite';src:url('__FONTS__/special-elite/SpecialElite-latin.woff2') format('woff2')}
+:root{color-scheme:dark;--deep:#05070d;--paper:#0a0f1e;--card:#0c1224;--ink:#a5b9e1d9;--bright:#dfe6f7;--dim:#a5b9e18c;--line:#a5b9e140;--faint:#a5b9e11a;
+  --cheese:#f2c14e;--bot:#7f97c9;--stamp:#c8322a;--stamp-ink:#ff6b5f;--display:'Bangers',Impact,sans-serif;--body:'Outfit',Arial,sans-serif;--type:'Special Elite','Courier New',monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse 80% 40% at 50% 0,#1b2848 0,#0000 70%),var(--deep);color:var(--ink);font:14px/1.45 var(--body)}
+header{max-width:1320px;margin:0 auto;padding:34px 28px 8px;position:relative}
+.kicker{font:12px/1 var(--type);letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+h1{margin:10px 0 2px;font:400 72px/.9 var(--display);letter-spacing:.03em;color:var(--bright);text-shadow:3px 2px 0 #506ebe73;rotate:-1deg;transform-origin:left}
+.rule{font:400 22px/1.1 var(--display);letter-spacing:.05em;color:var(--cheese)}
+.meta{margin-top:10px;font:12.5px/1.6 var(--type);color:var(--dim)}
+.stamp{position:absolute;right:34px;top:40px;padding:10px 16px;border:4px double var(--stamp);color:var(--stamp-ink);font:400 30px/1 var(--display);letter-spacing:.06em;rotate:7deg;text-align:center;opacity:.92;background:#c8322a12}
+.stamp small{display:block;margin-top:5px;font:12px/1.2 var(--type);letter-spacing:.12em}
+nav{position:sticky;top:0;z-index:5;background:#05070dee;backdrop-filter:blur(6px);border-bottom:1px dashed var(--line)}
+nav div{max-width:1320px;margin:0 auto;padding:10px 28px 0;display:flex;gap:6px}
+nav button{padding:10px 22px 8px;background:#0c1224b8;border:1px dashed var(--line);border-bottom:0;color:var(--dim);font:400 24px/1 var(--display);letter-spacing:.06em;cursor:pointer;transition:transform .18s cubic-bezier(.3,1.7,.5,1),color .15s}
+nav button:hover{color:var(--bright);transform:translateY(-2px)}
+nav button.on{background:var(--card);border-style:solid;color:var(--bright)}
+main{max-width:1320px;margin:0 auto;padding:22px 28px 60px}
+.tab{display:none}.tab.on{display:block}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.tile{background:var(--card);border:1px solid var(--line);padding:12px 14px 10px;position:relative;overflow:hidden}
+.tile b{display:block;font:400 34px/1 var(--display);letter-spacing:.03em;color:var(--bright)}
+.tile span{display:block;margin-top:4px;font:11px/1.3 var(--type);letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.tile i{display:block;margin-top:4px;font-style:normal;font-size:12px;color:var(--ink)}
+.tile.hot b{color:var(--cheese)}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.card{grid-column:span 6;background:var(--card);border:1px solid var(--line);padding:14px 16px 16px;min-width:0}
+.card.w12{grid-column:span 12}.card.w8{grid-column:span 8}.card.w4{grid-column:span 4}
+@media (max-width:980px){.card,.card.w8,.card.w4{grid-column:span 12}}
+.card h2{margin:0 0 2px;font:11px/1 var(--type);letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+.card h2::before{content:'FILE · '}
+.card h3{margin:4px 0 4px;font:400 26px/1.02 var(--display);letter-spacing:.03em;color:var(--bright)}
+.card p.cap{margin:0 0 10px;color:var(--ink);font-size:13.5px;max-width:78ch}
+.card p.cap b{color:var(--cheese);font-weight:600}
+.note{margin:8px 0 0;font:11.5px/1.45 var(--type);color:var(--dim)}
+svg{display:block;width:100%;height:auto;overflow:visible}
+svg text{font-family:var(--type);fill:var(--dim);font-size:10px}
+svg .ax{stroke:var(--line);stroke-width:1}
+svg .grid{stroke:var(--faint);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 2px;font:11.5px/1.2 var(--type);color:var(--ink)}
+.legend span::before{content:'';display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px;background:var(--c)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font:10.5px/1.2 var(--type);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);text-align:right;padding:6px 7px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{text-align:right;padding:6px 7px;border-bottom:1px dashed var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+tr.human td{background:#f2c14e0d}
+tr.human td:first-child{color:var(--bright);font-weight:600}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;background:var(--c)}
+.win{margin-left:6px;padding:1px 5px;border:1px solid var(--stamp);color:var(--stamp-ink);font:10px/1 var(--type);letter-spacing:.1em}
+.cellbar{position:relative}.cellbar::after{content:'';position:absolute;left:auto;right:0;bottom:3px;height:3px;width:var(--w);background:var(--c);opacity:.55}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:5px 10px;align-items:center;font-size:13px}
+.bars .l{white-space:nowrap}.bars .v{font-variant-numeric:tabular-nums;color:var(--bright);text-align:right}
+.bars .t{height:14px;background:var(--faint);position:relative}.bars .t i{position:absolute;inset:0 auto 0 0;background:var(--c)}
+.matrix td{text-align:center;padding:3px 0;font-size:11px;border:1px solid #05070d;min-width:30px}
+.matrix th{text-align:center;padding:3px 2px;font-size:9.5px;letter-spacing:0}
+.matrix th.row{text-align:left}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:700px){.split{grid-template-columns:1fr}}
+.foot{margin-top:26px;padding-top:12px;border-top:1px dashed var(--line);font:12px/1.6 var(--type);color:var(--dim)}
+.foot li{margin:3px 0}
+</style>
+</head>
+<body>
+<header id="hero"></header>
+<nav><div><button data-tab="round" class="on">THE ROUND</button><button data-tab="shooting">SHOOTING</button></div></nav>
+<main><div id="round" class="tab on"></div><div id="shooting" class="tab"></div></main>
+<script>
+const D=/*__DATA__*/null;
+const S=D.shooting, M=D.meta;
+const HC='#f2c14e', BC='#7f97c9', RED='#ff6b5f';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const n=v=>v==null?'—':Number(v).toLocaleString('en-GB');
+const pct=(v,d=1)=>v==null||!isFinite(v)?'—':(v*100).toFixed(d)+'%';
+const sum=a=>a.reduce((s,x)=>s+x,0);
+const share=a=>{const t=sum(a);return a.map(x=>t?x/t:0)};
+const ratio=(a,b)=>a.map((x,i)=>b[i]?x/b[i]:null);
+const binLabels=(edges,unit='')=>edges.map((e,i)=>i<edges.length-1?`${e}–${edges[i+1]}${unit}`:`${e}${unit}+`);
+const ratById=Object.fromEntries(D.rats.map(r=>[r.a,r]));
+const humans=D.rats.filter(r=>r.human), bots=D.rats.filter(r=>!r.human);
+
+// ---- Building blocks.
+const card=(id,title,cap,body,w=6,note='')=>`<section class="card w${w}"><h2>${esc(id)}</h2><h3>${esc(title)}</h3>${cap?`<p class="cap">${cap}</p>`:''}${body}${note?`<p class="note">${note}</p>`:''}</section>`;
+const tiles=list=>`<div class="tiles">${list.map(t=>`<div class="tile${t.hot?' hot':''}"><b>${t.v}</b><span>${esc(t.l)}</span>${t.s?`<i>${t.s}</i>`:''}</div>`).join('')}</div>`;
+const legend=items=>`<div class="legend">${items.map(([l,c])=>`<span style="--c:${c}">${esc(l)}</span>`).join('')}</div>`;
+const bars=(rows,f=n)=>{const max=Math.max(...rows.map(r=>r.v),1e-9);return `<div class="bars">${rows.map(r=>`<span class="l"><span class="dot" style="--c:${r.c}"></span>${esc(r.l)}</span><span class="t"><i style="width:${100*r.v/max}%;--c:${r.c}"></i></span><span class="v">${f(r.v)}</span>`).join('')}</div>`};
+const nice=v=>{if(v<=0)return 1;const p=10**Math.floor(Math.log10(v)),m=v/p;return (m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*p};
+/** Grouped columns: one group per label, one column per series. */
+function cols({labels,series,fmt=n,h=200,yMax,yFmt=fmt,marks=[],W=640}){
+  const L=44,T=12,g=labels.length,gw=(W-L-8)/g,rot=labels.some(l=>l.length*6>gw-4),B=rot?60:34,iw=W-L-8,ih=h-B-T,bw=Math.min(28,(gw-6)/series.length);
+  const top=yMax??nice(Math.max(...series.flatMap(s=>s.values.filter(v=>v!=null)),1e-9));
+  const y=v=>T+ih-ih*Math.min(v,top)/top;let o=`<svg viewBox="0 0 ${W} ${h}">`;
+  for(let i=0;i<=4;i++){const v=top*i/4;o+=`<line class="grid" x1="${L}" x2="${W-8}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${yFmt(v)}</text>`}
+  labels.forEach((lab,i)=>{const x0=L+i*gw+(gw-bw*series.length)/2;series.forEach((s,j)=>{const v=s.values[i];if(v==null)return;o+=`<rect x="${x0+j*bw}" y="${y(v)}" width="${bw-2}" height="${T+ih-y(v)}" fill="${s.color}" opacity=".9"><title>${esc(s.name)} · ${esc(lab)}: ${fmt(v)}</title></rect>`});
+    const cx=L+i*gw+gw/2;o+=rot?`<text transform="translate(${cx+3},${T+ih+12}) rotate(-35)" text-anchor="end">${esc(lab)}</text>`:`<text x="${cx}" y="${h-B+14}" text-anchor="middle">${esc(lab)}</text>`});
+  for(const m of marks){const x=L+m.at*gw;o+=`<line x1="${x}" x2="${x}" y1="${T}" y2="${T+ih}" stroke="${m.color??RED}" stroke-dasharray="4 3"/><text x="${x+4}" y="${T+10}" style="fill:${m.color??RED}">${esc(m.label)}</text>`}
+  return o+`<line class="ax" x1="${L}" x2="${W-8}" y1="${T+ih}" y2="${T+ih}"/></svg>`;
+}
+/** Stacked columns over time. */
+function stack({series,xs,h=190,fmt=n,xLabel='',W=640}){
+  const L=40,B=30,T=10,iw=W-L-8,ih=h-B-T,bw=iw/xs.length,top=nice(Math.max(...xs.map((_,i)=>sum(series.map(s=>s.values[i]))),1));
+  const y=v=>ih*v/top;let o=`<svg viewBox="0 0 ${W} ${h}">`;
+  for(let i=0;i<=4;i++){const v=top*i/4,yy=T+ih-y(v);o+=`<line class="grid" x1="${L}" x2="${W-8}" y1="${yy}" y2="${yy}"/><text x="${L-6}" y="${yy+3}" text-anchor="end">${fmt(v)}</text>`}
+  xs.forEach((x,i)=>{let base=T+ih;for(const s of series){const v=s.values[i];if(!v)continue;const hh=y(v);base-=hh;o+=`<rect x="${L+i*bw+.5}" y="${base}" width="${Math.max(1,bw-1)}" height="${hh}" fill="${s.color}"><title>minute ${x}: ${esc(s.name)} ${fmt(v)}</title></rect>`}
+    if(i%5===0)o+=`<text x="${L+i*bw}" y="${h-B+14}">${x}</text>`});
+  return o+`<text x="${W-8}" y="${h-4}" text-anchor="end">${esc(xLabel)}</text><line class="ax" x1="${L}" x2="${W-8}" y1="${T+ih}" y2="${T+ih}"/></svg>`;
+}
+/** Lines (optionally steps) over x. */
+function lines({series,xMax,yMax,h=230,xFmt=v=>v,yFmt=v=>v,xLabel='',marks=[],bands=[],W=640}){
+  const L=44,B=30,T=12,iw=W-L-10,ih=h-B-T,top=yMax??nice(Math.max(...series.flatMap(s=>s.pts.map(p=>p[1]??0)),1e-9));
+  const x=v=>L+iw*v/xMax,y=v=>T+ih-ih*Math.min(v,top)/top;let o=`<svg viewBox="0 0 ${W} ${h}">`;
+  for(const b of bands)o+=`<rect x="${x(b.from)}" y="${T}" width="${Math.max(.5,x(b.to)-x(b.from))}" height="${ih}" fill="${b.color}"><title>${esc(b.label)}</title></rect>`;
+  for(let i=0;i<=4;i++){const v=top*i/4;o+=`<line class="grid" x1="${L}" x2="${W-10}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+3}" text-anchor="end">${yFmt(v)}</text>`}
+  const step=xMax>30?10:5;for(let v=0;v<=xMax;v+=step)o+=`<text x="${x(v)}" y="${h-B+14}" text-anchor="middle">${xFmt(v)}</text>`;
+  for(const m of marks)o+=`<line x1="${x(m.at)}" x2="${x(m.at)}" y1="${T}" y2="${T+ih}" stroke="${m.color??'#a5b9e166'}" stroke-dasharray="3 3"/><text x="${x(m.at)+3}" y="${T+9+(m.row??0)*11}" style="fill:${m.color??'var(--dim)'}">${esc(m.label)}</text>`;
+  for(const s of series){const pts=s.pts.filter(p=>p[1]!=null);if(!pts.length)continue;let d='';pts.forEach((p,i)=>{d+=i?(s.step?`H${x(p[0])}V${y(p[1])}`:`L${x(p[0])},${y(p[1])}`):`M${x(p[0])},${y(p[1])}`});if(s.step&&s.until!=null)d+=`H${x(s.until)}`;
+    o+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width??1.6}" opacity="${s.opacity??1}" stroke-linejoin="round"><title>${esc(s.name)}</title></path>`;if(s.dots)for(const p of pts)o+=`<circle cx="${x(p[0])}" cy="${y(p[1])}" r="2.6" fill="${s.color}"><title>${esc(s.name)}: ${yFmt(p[1])}</title></circle>`}
+  return o+`<text x="${W-10}" y="${h-4}" text-anchor="end">${esc(xLabel)}</text><line class="ax" x1="${L}" x2="${W-10}" y1="${T+ih}" y2="${T+ih}"/></svg>`;
+}
+/** Horizontal ribbons of time segments. */
+function ribbons(rows,xMax,W=640){
+  const L=90,R=10,rh=22,h=rows.length*(rh+6)+18,x=v=>L+(W-L-R)*v/xMax;let o=`<svg viewBox="0 0 ${W} ${h}">`;
+  rows.forEach((row,i)=>{const yy=i*(rh+6);o+=`<text x="${L-8}" y="${yy+rh/2+4}" text-anchor="end">${esc(row.label)}</text><rect x="${L}" y="${yy}" width="${W-L-R}" height="${rh}" fill="#a5b9e10d"/>`;
+    for(const s of row.segs)o+=`<rect x="${x(s.from)}" y="${yy}" width="${Math.max(.6,x(s.to)-x(s.from))}" height="${rh}" fill="${s.color}"><title>${esc(s.title)}</title></rect>`});
+  for(let v=0;v<=xMax;v+=10)o+=`<text x="${x(v)}" y="${h-2}" text-anchor="middle">${v}</text>`;
+  return o+'</svg>';
+}
+function matrix(mx,title){
+  const max=Math.max(...mx.m.flat(),1);
+  return `<table class="matrix"><tr><th class="row">${esc(title)}</th>${mx.labels.map((l,j)=>`<th style="color:${mx.colors[j]}">${esc(l.replace(/^(Human|Bot) /,''))}</th>`).join('')}</tr>${mx.m.map((row,i)=>`<tr><th class="row" style="color:${mx.colors[i]}">${esc(mx.labels[i])}</th>${row.map((v,j)=>{const a=v/max,hot=ratById[mx.order[i]].human||ratById[mx.order[j]].human;return `<td style="background:${hot?`rgba(242,193,78,${.08+a*.8})`:`rgba(127,151,201,${.06+a*.75})`};color:${a>.5?'#05070d':'var(--ink)'}" title="${esc(mx.labels[i])} → ${esc(mx.labels[j])}: ${v}">${i===j?'·':v}</td>`}).join('')}</tr>`).join('')}</table>`;
+}
+/** The city plan with footprints, harbour and overlay marks; north is up (−z). */
+function city(overlay,{sites=false}={}){
+  const {min,max}=D.map.bounds,s=max-min;let o=`<svg viewBox="${min} ${min} ${s} ${s}" style="background:#070b17">`;
+  for(const [x0,x1,z0,z1] of D.map.water)o+=`<rect x="${x0}" y="${z0}" width="${x1-x0}" height="${z1-z0}" fill="#0e2a44"/>`;
+  for(const [x,z,w,d,top,ry] of D.map.footprints){const a=Math.min(.42,.08+top/90);o+=`<rect x="${x-w/2}" y="${z-d/2}" width="${w}" height="${d}" fill="rgba(110,125,160,${a})" transform="rotate(${-ry*180/Math.PI} ${x} ${z})"/>`}
+  if(sites){for(const [x,z] of D.map.sites)o+=`<circle cx="${x}" cy="${z}" r="1.6" fill="none" stroke="#7fe0c0" stroke-width=".6"/>`;for(const [x,z,m] of D.map.launchers)o+=`<rect x="${x-2}" y="${z-2}" width="4" height="4" fill="none" stroke="#e58fd8" stroke-width=".7"><title>${esc(m)}</title></rect>`}
+  return o+overlay+'</svg>';
+}
+const ratLabel=r=>`<span class="dot" style="--c:${r.color}"></span>${esc(r.label)}${r.win?'<span class="win">WINNER</span>':''}`;
+
+// ---- Hero.
+const title=M.mode.replace(/-/g,' ').toUpperCase(), when=new Date(M.start), utc=d=>d.toISOString().slice(11,16);
+const deaths=D.deathCount, allShots=S.totals.shots;
+document.getElementById('hero').innerHTML=`<div class="kicker">Case file · ${esc(M.room)} · round ${esc(M.round.slice(0,8))}</div><h1>${esc(title)}</h1>
+<div class="rule">${M.mode==='excessive-force'?'Hold the case. Get 10 kills.':''}</div>
+<div class="meta">${when.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'})} · ${utc(when)}–${utc(new Date(M.end))} UTC · ${M.durationMin} minutes · ${humans.length} humans, ${bots.length} bots · layout ${M.layout} · build ${esc(M.build)} · mind version ${M.mindVersion}</div>
+${M.winner!=null?`<div class="stamp">CASE CLOSED<small>${esc(M.winnerLabel)} · ${esc({kills:'ten kills with the case',carried:'delivered the paperwork','zone-held':'held the zone',held:'held the case'}[M.method]??M.method)}</small></div>`:''}`;
+
+// ---- THE ROUND.
+const R=[];
+const lastSession=D.sessions.length?D.sessions:[];
+R.push(tiles([
+  {v:`${M.durationMin}<small style="font-size:18px"> min</small>`,l:'Round length',s:humans.length?`humans joined at minute ${Math.min(...humans.map(h=>h.joinMin))}`:'bots only',hot:true},
+  {v:n(deaths),l:'Deaths',s:`${(deaths/M.durationMin).toFixed(1)} a minute`},
+  {v:n(allShots),l:'Shots fired',s:`${n(S.totals.hits)} hit a rat (${pct(S.totals.hits/allShots)})`},
+  {v:n(D.caseStats.takes+D.caseStats.steals),l:'Case changed hands',s:`median carry ${D.caseStats.carryMedianS} s`},
+  {v:n(D.incidentStats.reduce((s,x)=>s+x.count,0)),l:'Incidents',s:`one every ${Math.round(M.durationMin*60/D.incidentStats.reduce((s,x)=>s+x.count,0))} s`},
+  {v:n(D.air.H.launches+D.air.B.launches),l:'Launches',s:`${D.air.H.launches} by humans`},
+  {v:n(D.mind.answers),l:'Jev answers',s:`$${D.mind.dollars.toFixed(2)} all round`},
+]));
+const G=[];
+G.push(card('Standings','The lineup','Every rat in the round, ranked by kills made while holding the case. Rates are per minute alive, so humans who joined late compare fairly with bots who played the whole round.',
+`<div style="overflow-x:auto"><table><tr><th>Rat</th><th>Case kills</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>Alive min</th><th>Kills/min</th><th>Shots</th><th>Hits</th><th>Accuracy</th><th>Headshots</th><th>Dmg out</th><th>Held case</th><th>Takes</th><th>Supplies</th><th>Launches</th><th>Air min</th></tr>
+${D.rats.map(r=>`<tr class="${r.human?'human':''}"><td>${ratLabel(r)}</td><td>${r.raw}</td><td>${r.k}</td><td>${r.d}</td><td>${r.as}</td><td>${r.kd.toFixed(2)}</td><td>${r.aliveMin}</td><td>${r.killsPerMin.toFixed(2)}</td><td>${n(r.shots)}</td><td>${r.hits}</td><td>${pct(r.acc)}</td><td>${r.hs}</td><td>${r.dmgOut}</td><td>${r.heldMin} min</td><td>${r.takes}</td><td>${r.supplies}</td><td>${r.launches}</td><td>${r.airMin}</td></tr>`).join('')}</table></div>`,12));
+const hJoin=D.sessions.filter(s=>s.what==='join'), hLeave=D.sessions.filter(s=>s.what==='leave');
+// Mark the first human join, and every drop that came back within 30 s.
+const marks=hJoin.length?[{at:hJoin[0].m,label:'humans join'}]:[];
+for(const l of hLeave){const back=hJoin.find(j=>j.a===l.a&&j.m>=l.m&&j.m-l.m<.5);if(back&&!marks.some(m=>Math.abs(m.at-l.m)<.2))marks.push({at:l.m,label:`${hLeave.filter(x=>Math.abs(x.m-l.m)<.05).length>1?'humans drop':'a human drops'}, back in ${Math.round(60*(back.m-l.m))} s`,row:1})}
+const nearly=D.rats.filter(r=>!r.win&&r.progress>=.9).length;
+const raceTop=Math.max(...D.rats.map(r=>r.progress));
+G.push(card('The race',`The race to ${M.mode==='excessive-force'?'ten':'the win'}`,
+  `Each line is a rat's share of the win. Humans are the thick lines.${nearly?` ${nearly} rat${nearly>1?'s':''} sat one step from winning at the end.`:''}`,
+  lines({series:[...D.race.filter(r=>!r.human),...D.race.filter(r=>r.human)].map(r=>({name:r.label,color:r.color,pts:r.pts,step:true,until:M.durationMin,width:r.human?3.2:1.4,opacity:r.human?1:.8})),xMax:Math.ceil(M.durationMin),yMax:1,h:300,yFmt:v=>Math.round(v*100)+'%',xLabel:'minutes into the round',marks,W:860})+legend(D.race.map(r=>[r.label,r.color])),8));
+G.push(card('The case','Who held the case',`The case was held for <b>${D.caseStats.heldMin} of ${M.durationMin} minutes</b>; the rest of the time it lay loose.`,
+  bars(D.rats.map(r=>({l:r.label,v:r.heldMin,c:r.color})).sort((a,b)=>b.v-a.v),v=>v.toFixed(1)+' min'),4));
+const segs=D.holder.map(h=>({from:h.from,to:h.to,color:ratById[h.a]?.color??'#888',title:`${ratById[h.a]?.label}: ${(60*(h.to-h.from)).toFixed(0)} s from minute ${h.from.toFixed(1)}`}));
+const IC=['#c8322a','#e58fd8','#7fe0c0','#f2c14e','#7f97c9','#8fb07a','#c99a7f','#a08fc9','#5fa8a0','#b3a26a','#ff6b5f','#6f88a8','#9aa3b5','#d8c39a'];
+const incIds=[...new Set(D.incidents.map(i=>i.id))];
+G.push(card('Timeline','The case and the incidents, minute by minute','Top: who held the case (gaps are a loose case). Bottom: each incident while it was active.',
+  ribbons([{label:'case holder',segs},{label:'incident',segs:D.incidents.map(i=>({from:i.from,to:i.to,color:IC[incIds.indexOf(i.id)%IC.length],title:`${i.id} at minute ${i.from.toFixed(1)}`}))}],Math.ceil(M.durationMin),1280)+legend(incIds.map((id,i)=>[id,IC[i%IC.length]])),12));
+G.push(card('Kills','Kills per minute',`Stacked by who killed whom.${humans.length?` Humans arrive at minute ${Math.round(Math.min(...humans.map(h=>h.joinMin)))}.`:''}`,
+  stack({xs:D.killsPerMin.map(b=>b.m),series:[{name:'bot kills bot',color:'#4a5f8a',values:D.killsPerMin.map(b=>b.BB)},{name:'bot kills human',color:'#9fb4e0',values:D.killsPerMin.map(b=>b.BH)},{name:'human kills bot',color:HC,values:D.killsPerMin.map(b=>b.HB)},{name:'human kills human',color:RED,values:D.killsPerMin.map(b=>b.HH)},{name:'no killer',color:'#555',values:D.killsPerMin.map(b=>b.other)}],xLabel:'minute'})+
+  legend([['bot kills bot','#4a5f8a'],['bot kills human','#9fb4e0'],['human kills bot',HC],['human kills human',RED]]),6));
+const cs=D.caseStats;
+G.push(card('The case','How carries ended',`<b>${cs.dropsLoose} of ${cs.dropsKilled+cs.dropsLoose}</b> carries ended with the case knocked loose by a shot, not a death. The longest carry lasted ${cs.longestS} s.`,
+  cols({labels:binLabels(cs.carryEdges,' s'),series:[{name:'humans',color:HC,values:cs.carry.H},{name:'bots',color:BC,values:cs.carry.B}],h:200})+legend([['carries by humans',HC],['carries by bots',BC]])+
+  bars([{l:'carrier killed',v:cs.dropsKilled,c:RED},{l:'knocked loose',v:cs.dropsLoose,c:HC},{l:'case respawned',v:cs.respawns,c:BC}]),6));
+G.push(card('Deaths','How long a life lasted',`Median life: humans <b>${D.lifeMedian.H} s</b>, bots <b>${D.lifeMedian.B} s</b>. Share of each group's deaths.`,
+  cols({labels:binLabels(D.lifeEdges,' s'),series:[{name:'humans',color:HC,values:share(D.life.H)},{name:'bots',color:BC,values:share(D.life.B)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200})+legend([['humans',HC],['bots',BC]]),6));
+G.push(card('Deaths','How rats died','Shots, headshots, explosions (Planted Evidence, Improper Disposal) and the city (drowning, falls).',
+  cols({labels:D.causes.map(c=>c.c),series:[{name:'humans',color:HC,values:D.causes.map(c=>c.H)},{name:'bots',color:BC,values:D.causes.map(c=>c.B)}],h:200})+legend([['human deaths',HC],['bot deaths',BC]]),6));
+G.push(card('Kills','Who killed whom','Rows are killers, columns are victims. Gold cells involve a human.',matrix(D.killMatrix,'killer ↓ victim →'),6));
+const deathDots=D.map.deaths.map(([x,z,k,v])=>`<circle cx="${x}" cy="${z}" r="${v==='H'?2.4:1.5}" fill="${k==='H'?HC:k==='B'?'#b9c9ee':'#888'}" stroke="${v==='H'?RED:'none'}" stroke-width=".9" opacity=".9"/>`).join('');
+G.push(card('The map','Where rats died',`Every death at the victim's spot. Gold: killed by a human. Blue: killed by a bot. Red rings: a human died there. North is up.`,
+  city(deathDots,{sites:true})+legend([['killed by a human',HC],['killed by a bot','#b9c9ee'],['supply site','#7fe0c0'],['launch machine','#e58fd8']]),6));
+G.push(card('Supplies','Supplies claimed per hour alive',`Two humans claimed ${sum(D.supplies.map(s=>s.H))} supplies, the bots ${sum(D.supplies.map(s=>s.B))}. Per hour alive, so the groups compare.`,
+  cols({labels:D.supplies.map(s=>s.kind),series:[{name:'humans',color:HC,values:D.supplies.map(s=>s.perHourH)},{name:'bots',color:BC,values:D.supplies.map(s=>s.perHourB)}],fmt:v=>v.toFixed(1),h:200})+legend([['humans',HC],['bots',BC]]),6,
+  `Walked past a usable supply: humans ${D.supplies.map(s=>`${s.kind} ${s.passedH}`).join(', ')}; bots ${D.supplies.map(s=>`${s.kind} ${s.passedB}`).join(', ')}.`));
+G.push(card('The air','Who flies',`Humans spent <b>${pct(D.air.H.airMin/D.air.H.aliveMin)}</b> of their time alive in the air; bots ${pct(D.air.B.airMin/D.air.B.aliveMin)}. ${D.air.deathsInAir} deaths happened in the air; ${D.air.killsFromAir} kills were made from it. A vent is a launch with no machine (a Pressure Surge or sewer vent).`,
+  cols({labels:D.air.machines.map(m=>m.m),series:[{name:'humans',color:HC,values:D.air.machines.map(m=>m.H)},{name:'bots',color:BC,values:D.air.machines.map(m=>m.B)}],h:200})+legend([['launches by humans',HC],['launches by bots',BC]]),6));
+G.push(card('Incidents','What each incident did',`Kills per minute and accuracy while each incident was active, against the quiet stretches between them.`,
+  `<table><tr><th>Incident</th><th>Times</th><th>Minutes</th><th>Kills/min</th><th>Human accuracy</th><th>Bot accuracy</th><th>Human shots</th></tr>${D.incidentStats.map(i=>`<tr class="${i.id==='none'?'human':''}"><td>${i.id==='none'?'no incident':esc(i.id)}</td><td>${i.count||''}</td><td>${i.minutes}</td><td class="cellbar" style="--w:${Math.min(100,i.killsPerMin*5)}%;--c:${RED}">${i.killsPerMin.toFixed(1)}</td><td>${pct(i.accH)}</td><td>${pct(i.accB)}</td><td>${n(i.hShots)}</td></tr>`).join('')}</table>`,12));
+const mind=D.mind;
+G.push(card('Minds','The bots\' Jev mind',`${n(mind.decisions)} decisions; ${n(mind.answers)} of ${n(mind.requests)} requests answered; median reply ${Math.round(mind.p50)} ms (p90 ${Math.round(mind.p90)} ms).`,
+  tiles([{v:'$'+mind.dollars.toFixed(3),l:'Cost, whole round'},{v:pct(mind.fallbacks/mind.requests),l:'Fallbacks',s:`${n(mind.fallbacks)} requests`},{v:n(mind.staleDrops),l:'Stale answers dropped'},{v:n(D.rescues),l:'Stuck bots rescued'}]),6));
+G.push(card('Frame rate','Frames per second, each human',D.perf.map(p=>`${esc(p.label)}: ${esc(p.gpu??'')}`).join(' · '),
+  lines({series:D.perf.map(p=>({name:p.label,color:p.color,pts:p.pts.map(q=>[q[0],q[1]]),dots:true})),xMax:Math.ceil(M.durationMin),yMax:60,h:200,xLabel:'minutes into the round'})+legend(D.perf.map(p=>[p.label,p.color])),6,
+  'Each dot is 30 seconds of play. Main-thread work at the 95th-percentile frame: '+D.perf.map(p=>`${esc(p.label)} ${Math.round(p.pts.reduce((s,q)=>s+q[3],0)/p.pts.length)} ms`).join(', ')+'.'));
+document.getElementById('round').innerHTML=R.join('')+`<div class="grid">${G.join('')}</div>`;
+
+// ---- SHOOTING.
+const T=S.totals,Hh=T.H,Bb=T.B;
+const X=[];
+X.push(tiles([
+  {v:n(T.shots),l:'Shots fired',s:`humans ${n(Hh.shots)} · bots ${n(Bb.shots)}`,hot:true},
+  {v:`${Math.round(Hh.shots/Hh.aliveMin)} <small style="font-size:16px">vs</small> ${Math.round(Bb.shots/Bb.aliveMin)}`,l:'Shots per minute alive',s:'a human against a bot'},
+  {v:`${pct(Hh.hits/Hh.shots)} <small style="font-size:16px">vs</small> ${pct(Bb.hits/Bb.shots)}`,l:'Shots that hit a rat',s:'humans against bots'},
+  {v:`${Math.round(Hh.shots/Hh.k)} <small style="font-size:16px">vs</small> ${Math.round(Bb.shots/Bb.k)}`,l:'Shots per kill',s:'humans against bots'},
+  {v:pct(sum(S.bank.map(b=>b.banked))/sum(S.bank.map(b=>b.hits)),0),l:'Human hits banked',s:'off a wall first'},
+  {v:`${S.killDistMedian.H} <small style="font-size:16px">vs</small> ${S.killDistMedian.B}`,l:'Median kill distance',s:'units, humans against bots'},
+  (()=>{const t=k=>sum(S.fates.map(f=>f.counts[k]??0)),gone=t('lifetime')+t('capacity'),ends=gone+t('rat-body')+t('rat-head')+t('fake-case');return {v:pct(gone/ends,0),l:'Human balls that never hit a rat',s:'they ran out of time or hit the ball cap'}})(),
+]));
+const Y=[];
+const gunMax=k=>Math.max(...D.rats.map(r=>r[k]??0));
+Y.push(card('Every gun','Every gun in the room','Per rat: how hard they fired, how often they hit, and what it took to kill.',
+  `<div style="overflow-x:auto"><table><tr><th>Rat</th><th>Shots</th><th>Per min alive</th><th>Hits</th><th>Accuracy</th><th>Shots per kill</th><th>Dmg per 100 shots</th><th>Headshot kills</th><th>Kills</th></tr>${D.rats.map(r=>`<tr class="${r.human?'human':''}"><td>${ratLabel(r)}</td><td>${n(r.shots)}</td><td class="cellbar" style="--w:${100*r.shotsPerMin/gunMax('shotsPerMin')}%;--c:${r.color}">${r.shotsPerMin}</td><td>${r.hits}</td><td class="cellbar" style="--w:${100*r.acc/gunMax('acc')}%;--c:${r.color}">${pct(r.acc)}</td><td>${r.shotsPerKill??'—'}</td><td>${r.dmgPer100.toFixed(1)}</td><td>${r.headshotKills}</td><td>${r.k}</td></tr>`).join('')}</table></div>`,12));
+Y.push(card('Rate of fire','Time between shots',`Every human shot, by the gap since that rat's previous shot. Fire is one shot per click with no limit; the humans sustained <b>${S.bursts.map(b=>`${b.clicksPerS} clicks a second`).join(' and ')}</b> in a burst.`,
+  cols({labels:binLabels(S.gapEdges).map(l=>l.replace('–','–')),series:S.gaps.map(g=>({name:g.label,color:g.color,values:share(g.counts)})),fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:210})+legend(S.gaps.map(g=>[g.label+' (ms between shots)',g.color])),6,
+  'Gaps are measured when the server receives each shot, so network batching blurs the shortest ones.'));
+Y.push(card('Rate of fire','Bursts',`A burst is a run of shots with no pause over ${S.burstGap} ms. ${S.bursts.map(b=>`${esc(b.label)}: ${b.bursts} bursts, median ${b.shotsPerBurst} shots, longest ${b.longest} shots over ${b.longestS} s`).join('. ')}.`,
+  cols({labels:binLabels(S.burstEdges),series:S.bursts.map(b=>({name:b.label,color:b.color,values:b.counts})),h:210})+legend(S.bursts.map(b=>[b.label+' (shots per burst)',b.color])),6));
+const perBot=bots.length||1;
+Y.push(card('Volume','Shots per minute through the round','Each human, and the average bot.',
+  lines({series:[{name:'average bot',color:BC,pts:S.timeline.map(b=>[b.m+.5,b.bots/perBot]),width:2},...humans.map(h=>({name:h.label,color:h.color,pts:S.timeline.filter(b=>b.m+1>=h.joinMin).map(b=>[b.m+.5,b[h.a]]),width:2.2}))],xMax:Math.ceil(M.durationMin),h:240,xLabel:'minutes into the round',W:1280})+legend([['average bot',BC],...humans.map(h=>[h.label,h.color])]),12));
+const accH=ratio(S.dist.H.hits,S.dist.H.shots),accB=ratio(S.dist.B.hits,S.dist.B.shots);
+Y.push(card('Range','How far away the target was',`Distance to the rat nearest the aim line when the trigger was pulled. <b>${pct(S.noTarget.H,0)}</b> of human shots and ${pct(S.noTarget.B,0)} of bot shots had no rat in sight at all.`,
+  cols({labels:binLabels(S.distEdges),series:[{name:'humans',color:HC,values:share(S.dist.H.shots)},{name:'bots',color:BC,values:share(S.dist.B.shots)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:210})+legend([['human shots',HC],['bot shots',BC]]),6));
+const accIn=(c,from,to)=>{const e=S.distEdges,i0=e.indexOf(from),i1=to==null?e.length:e.indexOf(to);const h=sum(S.dist[c].hits.slice(i0,i1)),s=sum(S.dist[c].shots.slice(i0,i1));return s?h/s:null};
+Y.push(card('Range','Accuracy by distance',`Hits at each distance per shot aimed at that distance. Inside 20 units: humans <b>${pct(accIn('H',0,20))}</b>, bots <b>${pct(accIn('B',0,20))}</b>. Beyond 30 units: humans <b>${pct(accIn('H',30))}</b>, bots <b>${pct(accIn('B',30))}</b>.`,
+  cols({labels:binLabels(S.distEdges),series:[{name:'humans',color:HC,values:accH},{name:'bots',color:BC,values:accB}],fmt:v=>pct(v),yFmt:v=>pct(v,0),h:210})+legend([['humans',HC],['bots',BC]]),6,
+  'Approximate: a hit is counted at its own distance and set against shots aimed at a rat at that distance, banked shots included.'));
+Y.push(card('Range','Kill distance',`Median kill distance: humans <b>${S.killDistMedian.H}</b> units, bots <b>${S.killDistMedian.B}</b>. Median hit distance: ${S.hitDistMedian.H} and ${S.hitDistMedian.B}.`,
+  cols({labels:binLabels(S.killEdges),series:[{name:'humans',color:HC,values:share(S.killDist.H)},{name:'bots',color:BC,values:share(S.killDist.B)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200})+legend([['kills by humans',HC],['kills by bots',BC]]),6));
+Y.push(card('Aim','How far off the aim was',`Angle between the shot and the nearest rat's chest. Median: humans <b>${S.aimMedian.H}°</b>, bots <b>${S.aimMedian.B}°</b>.`,
+  cols({labels:binLabels(S.aimEdges,'°'),series:[{name:'humans',color:HC,values:share(S.aim.H)},{name:'bots',color:BC,values:share(S.aim.B)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200})+legend([['humans',HC],['bots',BC]]),6));
+const leadLabels=S.leadEdges.map((e,i)=>i===0?`< ${S.leadEdges[1]}°`:i<S.leadEdges.length-1?`${e}–${S.leadEdges[i+1]}°`:`> ${e}°`);
+const needAt=(()=>{const e=S.leadEdges;for(let i=e.length-1;i>=0;i--)if(S.neededLead>=e[i])return i+(i<e.length-1?(S.neededLead-e[i])/(e[i+1]-e[i]):.5);return 0})();
+Y.push(card('Aim','Leading a moving rat',`For rats crossing the line of fire (3+ units a second), how far ahead of them the shot went; negative is behind. Median: humans <b>${S.leadMedian.H}°</b>, bots <b>${S.leadMedian.B}°</b>. Hitting the median crossing rat needs about <b>+${S.neededLead}°</b>.${S.leadMedian.H<0&&S.leadMedian.B<0?' Both groups shoot behind.':''}`,
+  cols({labels:leadLabels,series:[{name:'humans',color:HC,values:share(S.lead.H)},{name:'bots',color:BC,values:share(S.lead.B)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200,marks:[{at:needAt,label:'lead needed',color:RED}]})+legend([['humans',HC],['bots',BC]]),6,
+  'Measured on the server. Humans see other rats about a quarter of a second in the past, which puts part of their lag here.'));
+const OC={'rat-body':HC,'rat-head':RED,'case-contact':'#e58fd8','pressure-contact':'#7fe0c0','dispatch-contact':'#c99a7f','ironclad-reflect':'#dfe6f7','fake-case':'#a08fc9','capacity':'#555','lifetime':'#2a3552'};
+const OL={'rat-body':'hit a body','rat-head':'hit a head','case-contact':'hit a case','pressure-contact':'hit a machine trigger','dispatch-contact':'hit a Dispatch pillar','ironclad-reflect':'bounced off a coat','fake-case':'hit a counterfeit','capacity':'removed at the ball cap','lifetime':'ran out of time'};
+const fateBar=f=>{let x=0;return `<div style="margin:6px 0 2px;font:12px var(--type)">${esc(f.label)} · ${n(f.total)} balls</div><svg viewBox="0 0 640 26">${S.outcomes.map(o=>{const w=640*(f.counts[o]??0)/f.total,r=`<rect x="${x}" y="0" width="${w}" height="26" fill="${OC[o]}"><title>${OL[o]}: ${n(f.counts[o]??0)} (${pct((f.counts[o]??0)/f.total)})</title></rect>`;x+=w;return r}).join('')}</svg>`};
+Y.push(card('Ball fates','Where every human ball went',(()=>{const t=k=>sum(S.fates.map(f=>f.counts[k]??0)),rat=t('rat-body')+t('rat-head');return `Of ${n(sum(S.fates.map(f=>f.total)))} human balls, <b>${n(rat)}</b> hit a rat, ${n(t('pressure-contact'))} set off a machine trigger, ${n(t('dispatch-contact'))} hit a Dispatch pillar and ${n(t('case-contact'))} hit a case.`})(),
+  S.fates.map(fateBar).join('')+legend(S.outcomes.map(o=>[OL[o],OC[o]]))+`<table style="margin-top:8px"><tr><th>Outcome</th>${S.fates.map(f=>`<th>${esc(f.label)}</th>`).join('')}</tr>${S.outcomes.map(o=>`<tr><td><span class="dot" style="--c:${OC[o]}"></span>${OL[o]}</td>${S.fates.map(f=>`<td>${n(f.counts[o]??0)}</td>`).join('')}</tr>`).join('')}</table>`,6,
+  'A ball can set off a trigger, hit a pillar or a case, or bounce off a coat and fly on, so these are contacts as well as endings. Scattershot and the explosions add balls of their own. Bots\' balls are counted only in daily totals, not per round.'));
+Y.push(card('Banks','Banked hits',`Share of each human's hits that bounced off a wall first: ${S.bank.map(b=>`${esc(b.label)} <b>${pct(b.banked/b.hits,0)}</b>`).join(', ')}.`,
+  cols({labels:['straight','1 bounce','2','3','4+'],series:S.bank.map(b=>({name:b.label,color:b.color,values:share(b.bounces)})),fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200})+legend(S.bank.map(b=>[b.label,b.color])),6));
+const [hsH,hsB]=S.headshots;
+Y.push(card('Headshots','Headshots',`A headshot always kills. Humans: <b>${pct(hsH.hitShare)}</b> of hits and <b>${pct(hsH.killShare,0)}</b> of kills. Bots: ${pct(hsB.hitShare)} of hits and ${pct(hsB.killShare,0)} of kills.`,
+  cols({labels:['share of hits','share of kills'],series:[{name:'humans',color:HC,values:[hsH.hitShare,hsH.killShare]},{name:'bots',color:BC,values:[hsB.hitShare,hsB.killShare]}],fmt:v=>pct(v),yFmt:v=>pct(v,0),h:200})+legend([['humans',HC],['bots',BC]]),6));
+const [tH,tB]=S.ttk;
+Y.push(card('Time to kill','Time to kill',`From the killer's first hit on the victim to the death. Median: humans <b>${tH.medianS} s</b>, bots <b>${tB.medianS} s</b>. About ${pct(tH.oneShot,0)} of human kills and ${pct(tB.oneShot,0)} of bot kills were one shot.`,
+  cols({labels:binLabels(S.ttkEdges,' s'),series:[{name:'humans',color:HC,values:share(tH.ttk)},{name:'bots',color:BC,values:share(tB.ttk)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200})+legend([['kills by humans',HC],['kills by bots',BC]]),6));
+Y.push(card('Time to kill','Hits a victim took before dying','Every hit the victim took in that life, from anyone. Five body hits kill; one headshot kills.',
+  cols({labels:S.takenEdges.map((e,i)=>i<S.takenEdges.length-1&&S.takenEdges[i+1]===e+1?String(e):i<S.takenEdges.length-1?`${e}–${S.takenEdges[i+1]-1}`:`${e}+`),series:[{name:'killed by humans',color:HC,values:share(tH.taken)},{name:'killed by bots',color:BC,values:share(tB.taken)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200})+legend([['killed by a human',HC],['killed by a bot',BC]]),6));
+Y.push(card('Accuracy','Accuracy through the round',`Hits per shot in ${S.accBin}-minute stretches.`,
+  lines({series:[{name:'bots',color:BC,pts:S.accOverTime.map(b=>[b.from+S.accBin/2,b.bots]),dots:true,width:2},...humans.map(h=>({name:h.label,color:h.color,pts:S.accOverTime.map(b=>[b.from+S.accBin/2,b[h.a]]),dots:true,width:2.2}))],xMax:Math.ceil(M.durationMin),h:210,yFmt:v=>pct(v,0),xLabel:'minutes into the round'})+legend([['bots',BC],...humans.map(h=>[h.label,h.color])]),6));
+const inc=D.incidentStats.filter(i=>i.hShots>=150);
+Y.push(card('Accuracy','Accuracy by incident','Hits per shot while each incident was active; only incidents with at least 150 human shots.',
+  cols({labels:inc.map(i=>i.id==='none'?'none':i.id.replace(/-/g,' ')),series:[{name:'humans',color:HC,values:inc.map(i=>i.accH)},{name:'bots',color:BC,values:inc.map(i=>i.accB)}],fmt:v=>pct(v),yFmt:v=>pct(v,0),h:220})+legend([['humans',HC],['bots',BC]]),6));
+const hitLines=D.map.humanHits.map(([ax,az,vx,vz,head,a])=>`<line x1="${ax}" y1="${az}" x2="${vx}" y2="${vz}" stroke="${ratById[a]?.color}" stroke-width="${head?.9:.45}" opacity="${head?.95:.55}"/><circle cx="${vx}" cy="${vz}" r="${head?1.4:.7}" fill="${head?RED:ratById[a]?.color}"/>`).join('');
+Y.push(card('The map','Every human hit',`A line from the shooter to the rat they hit; red dots are headshots. Shots fired in the air: ${humans.map(h=>`${esc(h.label)} ${pct(S.airShots[h.a],0)}`).join(', ')}.`,
+  city(hitLines)+legend([...humans.map(h=>[h.label,h.color]),['headshot',RED]]),6));
+Y.push(card('Hits','Who hit whom','Rows are shooters, columns are the rats hit. Explosions are left out.',matrix(S.hitMatrix,'shooter ↓ hit →'),6));
+document.getElementById('shooting').innerHTML=X.join('')+`<div class="grid">${Y.join('')}</div>
+<div class="foot"><b>How these numbers were made.</b><ul>
+<li>Source: the city recorder's facts for round ${esc(M.round)}, mirrored by <code>scripts/city-mirror.mjs</code>; page made by <code>scripts/round-report.mjs</code> at ${esc(M.generated.slice(0,16).replace('T',' '))} UTC.</li>
+<li>Shots, hits, damage and headshot counts per rat come from the round's final standings. Every human shot is recorded; one bot shot in ten is, so the bots' distance, aim and lead charts count each of those ten times.</li>
+<li>Time alive and time in the air come from the per-second situations (every 5 s before any human joined).</li>
+<li>Aim, lead and range use the rat nearest the aim line in clear sight at the moment the server accepted the shot.</li></ul></div>`;
+
+for(const b of document.querySelectorAll('nav button'))b.onclick=()=>{for(const x of document.querySelectorAll('nav button'))x.classList.toggle('on',x===b);for(const t of document.querySelectorAll('.tab'))t.classList.toggle('on',t.id===b.dataset.tab);scrollTo({top:0})};
+if(location.hash==='#shooting')document.querySelector('nav button[data-tab=shooting]').click();
+</script>
+</body>
+</html>
