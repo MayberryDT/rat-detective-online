@@ -196,18 +196,22 @@ describe('the Jev mind',()=>{
 
     it('never sends a chosen name, a coordinate or a unit, in any assignment',async()=>{
         for(const assignment of ['chain-of-custody','jurisdiction','excessive-force'] as const){
-            // A rat in view, one behind a wall within the Hunch, one out of sight firing, the carrier far away.
+            // A rat in view, one behind a wall within the Hunch, one out of sight firing, the carrier far away; a Laser in
+            // paw, its own Mousetrap and another rat's in sight.
             const others=[rat('rival',6,6),rat('lurker',-12,20),rat('gunner',-45,-30),rat('carrier',90,-60)];
             const r=rig({assignment,others});
             r.hidden.add(others[1]);r.hidden.add(others[2]);r.hidden.add(others[3]);
             r.state.case.owner=assignment==='excessive-force'?null:'carrier';
             r.state.shots.push({id:'ball',owner:'gunner',p:{x:-44,y:1.4,z:-29},v:{x:30,y:0,z:0},age:.2});
             r.state.dispatch={phase:'active',started:0,until:1e9,serial:1,incident:'most-wanted',wanted:'rival'};
+            r.state.buffs={me:{weapon:'laser',weaponUntil:1e9}};
+            r.state.traps=[{id:'trap-1',owner:'me',x:4,y:0,z:-8,yaw:1.2,hp:8,at:0},{id:'trap-2',owner:'rival',x:-9,y:0,z:3,yaw:0,hp:5,at:0,hitAt:900}];
             r.mind.hit('me','rival',1000);
             r.step(1000);
             const text=JSON.stringify(r.calls[0].body);
             expect(text).not.toContain(CHOSEN);
             expect(text).not.toMatch(/units?\b/i);
+            expect(text).toContain('I hold a laser');expect(text).toContain('my mousetrap');expect(text).toContain('another rat\'s mousetrap');
             // What is left once HP ("3 of 5"), the aliases (r1…r9) and the model name are removed: no numbers at all.
             expect(text.replace(/\b[0-5] of 5\b/g,'').replace(/\br[1-9]\b/g,'').replace('jev-1.13.0','')).not.toMatch(/\d/);
         }

@@ -13,6 +13,7 @@ import type {ClientMessage, ShotDescriptor} from '../../src/shared/networkProtoc
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {FeelState} from '../../src/feel/feelState';
 import {ShotSpacing} from '../../src/shared/shotTiming';
+import {HeldFire} from '../../src/session/HeldFire';
 
 const canvasDocument = document;
 beforeEach(() => vi.stubGlobal('document', canvasDocument));
@@ -36,7 +37,7 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
     // GPU, city and transport are replaced; no browser input automation.
     const session = Object.assign(Object.create(GameSession.prototype), {
         disposed: false, previousTime: 0, stats: null, bots: null, chaos: null, rat, gun, remotes,
-        title: {},roundWon: false, myId: 'phone', shotsAttempted: 0, shotsSent: 0, shotSpacing: new ShotSpacing(),
+        title: {},roundWon: false, myId: 'phone', shotsAttempted: 0, shotsSent: 0, shotSpacing: new ShotSpacing(), heldFire: new HeldFire(), serverOffset: 0,
         lastMovementAt: 0, lastMovement: '', direction: new THREE.Vector3(), aim: new THREE.Vector3(), input: {keys: {}},
         stage: {syncViewport: () => false, scene, world, camera, renderer: {render}, flashlight: new THREE.SpotLight()},
         simulation: new SimulationClock(), city: {update() {}}, perf: {frame() {}},
@@ -68,4 +69,25 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
         for (const shot of shots) expect(shot.shotId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
         expect(scene.children.filter(child=>child instanceof THREE.Mesh)).toHaveLength(0);
     } finally { gun.dispose(); rat.dispose(); remotes.dispose(); }
+});
+
+it('repeats a held Tommy Gun FIRE only while held and while the Tommy lasts; taps stay single', () => {
+    const input = new TouchInput(() => {}), shots: number[] = [];
+    let tommy: number | undefined = 100;
+    const tick = (now: number) => input.tick(now, () => shots.push(now), tommy);
+    input.start(1, 'fire', 700, 300);
+    for (let now = 0; now <= 450; now += 16) tick(now);
+    // The press, then one round every 100 ms on the frame that reaches it.
+    expect(shots).toEqual([0, 112, 208, 304, 400]);
+    input.end(1); shots.length = 0;
+    for (let now = 466; now <= 800; now += 16) tick(now);
+    expect(shots).toEqual([]);
+    // The weapon runs out mid-hold: the repeat ends and does not resume when another Tommy is claimed.
+    input.start(2, 'fire', 700, 300); tick(1000); tick(1100); tommy = undefined; tick(1200); tommy = 100; tick(1300); tick(1400);
+    expect(shots).toEqual([1000, 1100]);
+    input.end(2); shots.length = 0;
+    // Any other gun: holding FIRE is one shot.
+    input.start(3, 'fire', 700, 300); tommy = undefined;
+    for (let now = 2000; now <= 2500; now += 16) tick(now);
+    expect(shots).toEqual([2000]);
 });

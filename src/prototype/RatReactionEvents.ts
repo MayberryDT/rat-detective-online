@@ -3,6 +3,9 @@ import type {ServerMessage} from '../shared/networkProtocol';
 import type {RatEntity} from '../entities/RatEntity';
 import type {RatReaction} from '../utils/RatActing';
 
+/** Sideways speed (u/s) from which a shove reads as being knocked flying. */
+export const HARD_SHOVE=15;
+
 /** Presentation-only bridge from confirmed outcomes. Initial/rebased snapshots
  * establish state silently; anticipated pickups never reach this bridge. */
 export class RatReactionEvents {
@@ -38,7 +41,13 @@ export class RatReactionEvents {
             this.launches.add(launch.id);
             if(fresh&&state.time>=launch.at&&state.time-launch.at<300)this.play(launch.playerId,'launch');
         }
-        while(this.launches.size>32)this.launches.delete(this.launches.values().next().value!);
+        // A hard shove (a Scattershot blast, a meteor) flings the rat like a launch: scream and flail.
+        for(const shove of state.pressure?.shoves??[]){
+            if(this.launches.has(shove.id))continue;
+            this.launches.add(shove.id);
+            if(fresh&&state.time>=shove.at&&state.time-shove.at<300&&Math.hypot(shove.velocity.x,shove.velocity.z)>=HARD_SHOVE)this.play(shove.playerId,'launch');
+        }
+        while(this.launches.size>48)this.launches.delete(this.launches.values().next().value!);
         if(fresh)for(const impact of state.impacts){
             if(impact.cue!=='armor-clang')continue;
             // Broadcast impacts carry a point but no victim ID. React only when

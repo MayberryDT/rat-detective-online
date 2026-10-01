@@ -10,6 +10,7 @@ import { wireBytes } from '../shared/networkProtocol';
 import { serializeMovement } from '../shared/movementWire';
 import { CHAOS_WIRE_MODE, prepareChaos, type PreparedChaos } from '../shared/chaosWire';
 import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
+import type { WeaponKind } from '../shared/pickups';
 import { serializeServerMessage } from './serializeServerMessage';
 import { INCIDENT_TUNING, type ChaosState } from '../shared/chaosState';
 import { ShotSpacing } from '../shared/shotTiming';
@@ -115,8 +116,9 @@ interface PendingEventRow extends Record<string, SqlStorageValue> {
 }
 
 const WORLD_KEY = 'world';
-/** City layouts the room upgrades from on load (layout 3 added the harbour, docks and precinct; layout 4 moved the supplies; layout 5 added Stakeout). */
-const PREVIOUS_GRAYBOX_VERSIONS: readonly number[] = [2, 3, 4];
+/** City layouts the room upgrades from on load (layout 3 added the harbour, docks and precinct; layout 4 moved the supplies; layout 5 added Stakeout;
+ * layout 6 added the weapon sites). */
+const PREVIOUS_GRAYBOX_VERSIONS: readonly number[] = [2, 3, 4, 5];
 const ROUND_KEY = 'round';
 const ASSIGNMENT_ROTATION_KEY = 'assignment-rotation-v1';
 const PERSISTENT_BOTS_KEY = 'persistent-bots-v1';
@@ -1221,12 +1223,12 @@ export class GameRoom extends DurableObject<Env> {
     return true;
   }
 
-  /** Every rat's trigger, human or bot: the shared rate ceiling, then the incident's fire interval
+  /** Every rat's trigger, human or bot: the shared rate ceiling, then the incident's (or held weapon's) fire interval
    * (a little early is admitted, for network jitter). */
   private admitShot(id: string): boolean {
     const now = this.now();
     return this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, now) &&
-      this.shotSpacing.allow(id, this.chaos?.activeIncident, now, INCIDENT_TUNING.cheeseShotSlackMs);
+      this.shotSpacing.allow(id, this.chaos?.activeIncident, now, INCIDENT_TUNING.cheeseShotSlackMs, this.chaos?.weapon(id));
   }
 
   private handleShoot(playerId: string, message: Extract<ClientMessage, { type: 'shoot' }>): void {
@@ -1240,11 +1242,18 @@ export class GameRoom extends DurableObject<Env> {
     if(message.movement)this.handleMovement(playerId,{type:'updateMovement',...message.movement},this.now());
     if (!isPlausibleShot(message.origin, message.direction, player)) { reject('implausible'); return; }
     if (!this.rememberShot(playerId, message.shotId)) { reject('duplicate'); return; }
+    const weapon=this.chaos?.weapon(playerId);
+    // A held Mousetrap is set down, not fired: no shot, no muzzle, no accuracy count. No room for it keeps it in paw.
+    if(weapon==='mousetrap'){
+      if(this.chaos!.placeTrap(playerId,message.direction))this.applyPickupEvents();
+      else this.sendShotRejection(playerId,message.shotId,'trap-blocked');
+      return;
+    }
     this.shotAcceptedAt.set(message.shotId,performance.now());
     if(this.shotAcceptedAt.size>128)this.shotAcceptedAt.delete(this.shotAcceptedAt.keys().next().value!);
     const fired=this.chaos?.shoot(playerId,message);
     this.awards.shot(playerId, message.shotId);
-    this.city.shot(player,message.direction,this.now());
+    this.city.shot(player,message.direction,this.now(),weapon);
     this.diagnostics.shot('accepted');
     const event:Extract<ServerMessage,{type:'playerShot'}>={type:'playerShot',shooterId:playerId,
       shotId:message.shotId,origin:message.origin,direction:message.direction};
@@ -1308,7 +1317,7 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false, environment:EnvironmentCause = 'evidence-tampering'): Promise<void> {
+  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false, environment:EnvironmentCause = 'evidence-tampering', weapon?:WeaponKind): Promise<void> {
     if (this.round.phase !== 'playing') return;
 
     const victim = this.players.get(message.victimId);
@@ -1328,7 +1337,7 @@ export class GameRoom extends DurableObject<Env> {
     if (result.killed && shooter && shooter !== victim) this.persistPlayer(shooter, true);
 
     const casePoint=result.killed && playerId !== victim.id && (this.chaos?.creditCaseKill(playerId)??false);
-    if(casePoint)this.checkpointGame();
+    if(casePoint){this.checkpointGame();this.applyPickupEvents();}
     const incident=result.killed && incoming?this.chaos?.death(victim,incoming,playerId):false;
     const assignmentWon=casePoint && !!this.chaos?.assignmentState?.result;
     if (result.killed && !assignmentWon) {
@@ -1343,11 +1352,11 @@ export class GameRoom extends DurableObject<Env> {
     this.awards.damage(victim.id, hpBefore - victim.hp);
     if (result.killed && shooter && shooter !== victim) this.awards.kill(shooter, victim, headshot);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
-    this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming }, now);
+    this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming, ...(weapon?{weapon}:{}), ...(playerId === null ? { environment } : {}) }, now);
     if (this.isManagedBot(victim.id)) this.jevMind?.hit(victim.id, shooter?.id, now);
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
-      respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{}),
+      respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{}),...(weapon?{weapon}:{}),
       ...(shooter&&shooter!==victim&&shooter.streak?{killerStreak:shooter.streak}:{})});
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
@@ -1542,7 +1551,7 @@ export class GameRoom extends DurableObject<Env> {
       const retiredAssignment=previous?.id==='misfiled-evidence'||previous?.id==='closing-time'||(previous?.id==='chain-of-custody'&&previous.destinations?.includes('icebox-check'));
       if(retiredAssignment){this.round=playingRound(this.now());this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");}
       this.chaos=new ChaosSimulation(this.players,hit=>{
-        void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true,hit.headshot===true)
+        void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true,hit.headshot===true,hit.cause,hit.weapon)
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
       },saved,this.world);
       this.chaos.evidenceMode=this.evidenceMode;
@@ -1585,6 +1594,7 @@ export class GameRoom extends DurableObject<Env> {
         this.chaos.step(1/60,stepAt,this.round.phase==='playing');
         this.applyPickupEvents();
         this.applyShotEvents();
+        this.city.incidents(this.chaos.drainIncidentEvents(),this.players,this.now());
         this.finishAssignment();
       }
       this.diagnostics.work({...this.serverBots?.takeWork(),...this.chaos.takeWork()});

@@ -1,8 +1,9 @@
-import type { PlayerData, QuatData, RatAppearance, Vec3Data } from './networkProtocol';
+import type { EnvironmentCause, PlayerData, QuatData, RatAppearance, Vec3Data } from './networkProtocol';
 import type { IncidentId } from './incidentCatalog';
+import type { BadRound } from './shotBallistics';
 import type { AssignmentState } from './assignments';
 import type { WorldFoleyCue } from './foleyEvents';
-import type { BuffMap, PickupState } from './pickups';
+import type { BuffMap, PickupKind, PickupState } from './pickups';
 import { DOCKS_JOBS } from './city/kit/parts/docks';
 import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
@@ -16,21 +17,36 @@ export const CHAOS_TUNING = {
     caseGripHits: 3, caseGripMs: 2000,
     /** Taking the case brings a random supply, at most once per this long per rat. */
     caseRewardMs: 20000,
+    /** Excessive Force: the carrier's hits deal this many times their damage, and each case kill heals it to full. */
+    carrierDamage: 2,
     rollMs: 2400, activeMs: 25000, cooldownMs: 21000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
     corpseHitMinSpeed: 12, corpseHitCooldownMs: 700, corpseShotKick: 19, deathBurstBalls: 120,
     maxShots: 256, recoverMs: 900, stuckMs: 18000,
 } as const;
 export const INCIDENT_TUNING = {
-    delayedMin: .35, delayedMax: .575,
+    /** Scattershot: each ball that lands on a rat shoves it `scatterShove` u/s along the shot and `scatterLift` up.
+     * A shove (any cause) sums within a step up to `shoveMax` u/s sideways. */
+    scatterShove: 22, scatterLift: 9, shoveMax: 60,
+    /** Most Wanted: how often (ms) the searchlight looks again for whoever is winning. */
+    wantedEveryMs: 1000,
     cheeseRadii: [0.15, 0.24, 0.36, 0.52, 0.72, 0.96, 1.24, 1.55, 1.9, 2.4] as const,
     caseMissileSpeed: 145, caseShotSpeed: 160, caseMissileLift: 6, caseEjectSpeed: 22,
     caseRicochetMinSpeed: 140, caseBounceLift: 7, caseMaxLift: 10,
-    /** Malpractice: a Quick Fix kit hops `hop` units away from a rat within `scare`, at most every
-     * `hopMs`, staying within `leash` of home; `explodeChance` of claims blow up instead of healing. */
-    malpracticeScare: 7, malpracticeHop: 5, malpracticeHopMs: 650, malpracticeLeash: 12, malpracticeExplodeChance: .35,
-    /** Rat Race: cheese flies this much faster. */
-    ratRaceShotSpeed: 1.35,
+    /** Code Violation (Tyler, 1 October: "every machine in the city misbehaves"). Every supply kit hops `violationHop` units
+     * away from a rat within `violationScare`, at most every `violationHopMs`, within `violationLeash` of home, and
+     * `violationExplodeChance` of claims blow up instead. Each launch machine fills itself to bursting every
+     * `violationMachineMs` (a random span), its blast shoving rats within `violationFling` of the pad. Each `violationClangMs`
+     * an alarm pillar near a rat clangs, shoving rats within `violationClang` of it. Shoves: `violationShove` u/s out, `violationLift` up. */
+    violationScare: 7, violationHop: 5, violationHopMs: 650, violationLeash: 12, violationExplodeChance: .35,
+    violationMachineMs: [3500,7500] as const, violationFling: 11, violationClangMs: [1800,4200] as const, violationClang: 7,
+    violationShove: 26, violationLift: 13,
+    /** Act of God: a giant cheese meteor every `meteorEveryMs` (from the first value to the second as the incident runs),
+     * aimed within `meteorSpread` of a random living rat, at most `meteorMax` falling at once. Its shadow warns for
+     * `meteorWarnMs`. On impact rats within `meteorRadius` are flattened (lethal, nobody credited), rats within
+     * `meteorBlast` are shoved out (`meteorShove` u/s, edge to centre) and `meteorLift` up, and it bursts into cheese. */
+    meteorEveryMs: [1400,700] as const, meteorSpread: 6, meteorMax: 8, meteorWarnMs: 2200,
+    meteorRadius: 3, meteorBlast: 13, meteorShove: [14,36] as const, meteorLift: 16,
     /** Big Cheese: every rat fires at most once per `cheeseShotIntervalMs` (the room admits a shot up to
      * `cheeseShotSlackMs` early, for network jitter). Balls launch at `cheeseShotSpeed` and swell from ordinary
      * to `cheeseStartRadius` (a `cheeseRadii` step) over `cheeseGrowIn` s. A real world bounce, one whose normal
@@ -139,11 +155,14 @@ export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec
 export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
-export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; delayed?: boolean; radius?: number; stuckUntil?: number;
+export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; radius?: number;
     /** Seconds this ball lives when Big Cheese bounces extended it; absent is the ordinary lifetime. */
     life?: number;
-    /** Bad Ammunition dud: bounces off rats harmlessly. Authority-only; not on the wire. */
-    dud?: true;
+    /** Bad Ammunition: this ball's personality and the unit aim its path keeps to (`steerQuirk`). A path personality
+     * ends at the ball's first contact; a superball keeps bouncing. Authority and local prediction only; not on the wire. */
+    quirk?: BadRound; aim?: Vec3Data;
+    /** Neutral debris that kills nobody's victim: the environmental cause its deaths report. Authority-only. */
+    cause?: EnvironmentCause;
     /** Authoritative explosion provenance, retained in storage. Network visual
      * snapshots omit it: clients never decide projectile damage eligibility. */
     explosive?: true;
@@ -157,6 +176,22 @@ export interface CaseState extends PhysicalPose {
     fake?: boolean;
 }
 export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
+/** A set Mousetrap (`WEAPON_TUNING`): kills any other rat that steps on it. `hp` ball hits left; `at` when set;
+ * `snapAt` its latest kill (it re-arms after `trapRearmMs`); `hitAt` the latest hit it took; `brokenAt` when it was
+ * destroyed (inert, kept `trapBrokenMs` so clients can play the break). At most one per rat. */
+export interface TrapState { id:string; owner:string; x:number; y:number; z:number; yaw:number; hp:number; at:number; snapAt?:number; hitAt?:number; brokenAt?:number }
+export const MAX_TRAPS = 16;
+/** Act of God: a cheese meteor landing on (`x`,`y`,`z`), the floor under it, at `at`; its shadow shows from `born`.
+ * Kept `METEOR_KEEP_MS` after impact so every client plays the landing. */
+export interface Meteor { id:string; x:number; y:number; z:number; born:number; at:number }
+export const METEOR_KEEP_MS = 800;
+/** What a laser beam struck at a point. */
+export const LASER_SURFACES = ['world','armor','rat','head','trap','case','trigger','corpse'] as const;
+export type LaserSurface = typeof LASER_SURFACES[number];
+/** A laser shot (`id` is its shot id): `points[0]` is the muzzle, then each reflection (`on` 'world' or 'armor')
+ * and the end, where `on` names what stopped it (absent: it ran out of range in the air). Kept `laserBeamMs`. */
+export interface LaserBeam { id:string; owner:string; at:number; points:Array<Vec3Data&{on?:LaserSurface}> }
+export const MAX_BEAMS = 16;
 export interface ChaosState {
     time: number;
     /** Monotonic simulation identity for time-aligned interactions. Optional only
@@ -166,15 +201,24 @@ export interface ChaosState {
     assignment?: AssignmentState;
     case: CaseState;
     extraCases?: Array<CaseState & {id:string}>;
-    /** `wanted`: Most Wanted's current target, the leader in the searchlight. `caller`: the rat whose
+    /** `wanted`: Most Wanted's current target, whoever is winning, in the searchlight. `bounty`: the latest
+     * Most Wanted takedown (`hunter` took down `target` at `at` and was handed `pickup`). `caller`: the rat whose
      * shot started the current roll; kept through rolling, active and cooldown, cleared at ready. */
-    dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId; wanted?:string; caller?:string };
-    /** Launchers; `shoves` are landing-shockwave knockbacks, added once to a rat's velocity like a launch. */
+    dispatch: { phase: DispatchPhase; started: number; until: number; serial: number; incident?:IncidentId; wanted?:string;
+        bounty?:{hunter:string;target:string;at:number;pickup:PickupKind}; caller?:string };
+    /** Launchers; `shoves` are knockbacks (landing shockwaves, Scattershot hits, …; `ChaosSimulation.shove`),
+     * added once to a rat's velocity. */
     pressure?: PressureState;
     /** Pickup sites currently available to claim; absent entries are active elsewhere or claimed. */
     pickups?: PickupState[];
-    /** Living timed effects by player id. */
+    /** Living timed effects and held weapons by player id. */
     buffs?: BuffMap;
+    /** Set Mousetraps. */
+    traps?: TrapState[];
+    /** Act of God: meteors falling or just landed. */
+    meteors?: Meteor[];
+    /** Recent laser beams, newest last. */
+    beams?: LaserBeam[];
     possession: Record<string, number>;
     corpses: CorpseState[];
     shots: ChaosShot[];

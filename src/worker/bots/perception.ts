@@ -7,9 +7,9 @@ import type {Goal,Personality,PlaceOption} from '../../shared/bots/intent';
 import {activeZone,JURISDICTION_TUNING} from '../../shared/jurisdiction';
 import {JURISDICTION_ZONES,zoneContains} from '../../shared/jurisdictionZones';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS,ASSIGNMENT_TUNING,type AssignmentId} from '../../shared/assignments';
-import {DISPATCH_STATIONS,LAUNCH_MACHINES} from '../../shared/chaosState';
+import {DISPATCH_STATIONS,INCIDENT_TUNING,LAUNCH_MACHINES,type Meteor} from '../../shared/chaosState';
 import {incidentInfo} from '../../shared/incidentCatalog';
-import {hasHustle,hasIronclad,type PickupKind,type PickupState} from '../../shared/pickups';
+import {hasHustle,hasIronclad,heldWeapon,type PickupKind,type PickupState,type WeaponKind} from '../../shared/pickups';
 import {MAX_HP,type Vec3Data} from '../../shared/networkProtocol';
 
 /** Perception (docs/bot-overhaul.md, B3): what one rat can honestly know, in the words the city map uses.
@@ -27,9 +27,9 @@ const HEARING={shotRange:60,shotAge:1,launchRange:100,launchMs:3000,alarmMs:4000
 const RECENT_HIT_MS=3000;
 const COMPASS=['north','north-east','east','south-east','south','south-west','west','north-west'];
 const RULES:Record<AssignmentId,string>={
-    'chain-of-custody':'Paper Chase: carry the case into the named drop-off; the first rat to make five deliveries wins.',
-    jurisdiction:'Jurisdiction: only the rat carrying the case scores, while it stands inside the active zone: each zone holds twenty points that drain to the carrier, then the zone moves; the first to sixty points wins.',
-    'excessive-force':'Excessive Force: a kill counts only when made while carrying the case; the first to ten such kills wins.',
+    'chain-of-custody':'Paper Chase: carry the case into the named drop-off; the first rat to make ten deliveries wins.',
+    jurisdiction:'Jurisdiction: only the rat carrying the case scores, while it stands inside the active zone: each zone holds twenty points that drain to the carrier, then the zone moves; the first to a hundred points wins.',
+    'excessive-force':'Excessive Force: a kill counts only when made while carrying the case; the first to ten such kills wins. The carrier hits twice as hard and every kill it makes heals it to full.',
 };
 /** How `me` plays (its archetype, docs/bot-overhaul.md "Archetypes"), so Jev's scores fit the style. */
 const STYLES:Record<Personality,string>={
@@ -44,7 +44,17 @@ const PICKUPS:Record<PickupKind,string>={
     ironclad:'an Ironclad Alibi (cheese balls bounce off for a while)',
     hustle:'a Hot Pursuit (run much faster for a while)',
     stakeout:'a Stakeout magnifying glass (see every rat in the city through walls for a while)',
+    'tommy-gun':'a Tommy Gun (hold the trigger to spray cheese for a while)',
+    laser:'a Laser (an instant beam that bounces off walls, one shot a second, for a while)',
+    mousetrap:'a Mousetrap (set it down; any other rat that steps on it dies)',
 };
+const WEAPONS:Record<WeaponKind,string>={
+    'tommy-gun':'I hold a Tommy Gun: holding the trigger sprays cheese, for a while.',
+    laser:'I hold a laser: an instant beam that bounces off walls, one shot a second, for a while.',
+    mousetrap:'I carry a mousetrap to set down: my next shot puts it on the floor just ahead, and any other rat that steps on it dies. It cannot hurt me.',
+};
+/** At most this many Mousetraps in sight, within a long run, are listed, nearest first. */
+const TRAPS_LISTED=4;
 
 /** What the rat remembers between requests (the room tells the mind). */
 export interface RatMemory {
@@ -56,11 +66,13 @@ export interface RatSeen {id:string;where:string;hp:string;armour?:string;speed?
 export interface Situation {
     assignment:string;
     standing:string;
-    me:{where:string;level:string;hp:string;buffs?:string;carrying:string;hit?:string;style?:string};
+    me:{where:string;level:string;hp:string;buffs?:string;weapon?:string;carrying:string;hit?:string;style?:string};
     case:string;
     zone?:string;
     delivery?:string;
     pickups?:string[];
+    /** Mousetraps in sight: whose (mine is harmless to me; another rat's kills me if I step on it) and where. */
+    traps?:string[];
     rats_in_view:RatSeen[];
     /** A rat shot at moments ago that is now behind cover (bank shots). */
     last_target?:string;
@@ -170,6 +182,10 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         if((p.availableAt??0)<=time&&distance(self,p)<9*RUN_SPEED&&(!kept||distance(self,p)<distance(self,kept)))nearest.set(p.kind,p);
     }
     const pickups=[...nearest.values()].filter(p=>ctx.clear(p)).map(p=>`${PICKUPS[p.kind]}, ${where(self,p)}`);
+    const traps=(state?.traps??[]).filter(t=>t.brokenAt===undefined&&distance(self,t)<9*RUN_SPEED&&ctx.clear(t))
+        .sort((a,b)=>distance(self,a)-distance(self,b)).slice(0,TRAPS_LISTED)
+        .map(t=>`${t.owner===self.id?'my mousetrap (harmless to me)':'another rat\'s mousetrap (it kills me if I step on it; shooting breaks it)'}, ${where(self,t)}`);
+    const weapon=heldWeapon(buffs,self.id,time);
 
     const s=ctx.sighting,quarry=s&&!visible.has(s.id)&&now-s.at<=BANK.memoryMs&&distance(self,s.p)<=BANK.range&&ctx.living.some(p=>p.id===s.id)?s:undefined;
     const hidden=quarry&&alias(quarry.id);
@@ -205,7 +221,10 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         const info=incidentInfo(dispatch.incident);
         incident=`${info.title}: ${info.description}`+(info.id==='most-wanted'&&dispatch.wanted
             ?dispatch.wanted===self.id?' I am the wanted rat.':` The wanted rat is ${alias(dispatch.wanted)}.`
-            :info.id==='blackout'?' I see rats only as far as my flashlight reaches.':'');
+            :info.id==='blackout'?' I see rats only as far as my flashlight reaches.'
+            :info.id==='bad-ammunition'?' Every ball I fire has a quirk: it corkscrews, snakes, bounces without slowing, floats or hiccups.'
+            :info.id==='code-violation'?' Supplies hop away from rats and some explode when claimed; launch machines fire on their own and shove rats near their pads; alarm pillars clang and shove rats beside them.'
+            :info.id==='act-of-god'?` Cheese meteors fall near rats; a dark shadow marks each landing a moment ahead. Standing in a shadow flattens me, the blast throws rats nearby, and a roof overhead shelters me.${shadows(self,time,state?.meteors,ctx.clear)}`:'');
     }
 
     // Only aliases already given: an unseen attacker stays unnamed.
@@ -227,13 +246,21 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         assignment:assignment?RULES[assignment.id]:'No assignment is running: kills are all that count.',
         standing,
         me:{where:spoken(place),level:place.kind==='roof'||place.kind==='lookout'?'on a roof':place.floor==='upper'?'upstairs':place.floor==='sewer'?'in the sewer':place.floor==='air'?'in the air':'at street level',
-            hp:`${self.hp} of ${MAX_HP}`,...(myBuffs?{buffs:myBuffs}:{}),carrying:ctx.carrying?'the case':'nothing',...(hitText?{hit:hitText}:{}),
+            hp:`${self.hp} of ${MAX_HP}`,...(myBuffs?{buffs:myBuffs}:{}),...(weapon?{weapon:WEAPONS[weapon]}:{}),carrying:ctx.carrying?'the case':'nothing',...(hitText?{hit:hitText}:{}),
             ...(ctx.personality?{style:STYLES[ctx.personality]}:{})},
         case:caseText,
-        ...(zone?{zone}:{}),...(delivery?{delivery}:{}),...(pickups.length?{pickups}:{}),
+        ...(zone?{zone}:{}),...(delivery?{delivery}:{}),...(pickups.length?{pickups}:{}),...(traps.length?{traps}:{}),
         rats_in_view,
         ...(last_target?{last_target}:{}),...(heard.length?{heard}:{}),...(sensed.length?{sensed_through_walls:sensed}:{}),...(incident?{dispatch:incident}:{}),
     }};
+}
+
+/** Act of God: the falling meteors' shadows in sight within a long run, nearest first, in words. */
+function shadows(self:Vec3Data,time:number,meteors:readonly Meteor[]|undefined,clear:(p:Vec3Data)=>boolean):string {
+    const seen=(meteors??[]).filter(m=>m.at>time&&distance(self,m)<9*RUN_SPEED&&clear({x:m.x,y:m.y+.5,z:m.z}))
+        .sort((a,b)=>distance(self,a)-distance(self,b)).slice(0,TRAPS_LISTED);
+    const under=seen.some(m=>Math.abs(m.y-self.y)<=3&&Math.hypot(m.x-self.x,m.z-self.z)<INCIDENT_TUNING.meteorRadius+1.5);
+    return (under?' A meteor shadow is under me: step out of it now.':'')+(seen.length?` Meteor shadows I see: ${seen.map(m=>relative(self,m)).join('; ')}.`:'');
 }
 
 /** A ball of this rat's still flying, less than a second old, whose line passes within a body of me. */

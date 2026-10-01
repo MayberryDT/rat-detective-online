@@ -19,7 +19,7 @@ it('rotates every contextual quip before reuse without consecutive repeats',()=>
 });
 it('names the actual victim in every case-death joke without interpreting name characters',()=>{
  const deck=new MunicipalQuips(()=>.4),name='Captain <$& Crawley>';
- const jokes=Array.from({length:MUNICIPAL_QUIPS.caseDeath.length},()=>deck.caseDeath(name));
+ const jokes=Array.from({length:MUNICIPAL_QUIPS.caseDeath.length},()=>deck.environmental('evidence-tampering',name));
  expect(new Set(jokes).size).toBe(MUNICIPAL_QUIPS.caseDeath.length);
  for(const joke of jokes){expect(joke).toContain(name);expect(joke).not.toContain('{name}');expect(joke).not.toContain('eliminated');}
 });

@@ -7,6 +7,7 @@ import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
 import {Dust,registerDust,muzzleSmoke} from './Dust';
 import {badRound} from '../shared/shotPattern';
+import {BAD_AMMO,type BadRound} from '../shared/shotBallistics';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {CityReactions,registerCity} from './CityReactions';
 import {NoirCity} from './NoirCity';
@@ -18,7 +19,7 @@ import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
 import type {Sting} from './FeelAudio';
 import {INCIDENT_TUNING,type ChaosImpact,type ChaosShot} from '../shared/chaosState';
 import {BALL_RADIUS} from '../shared/ballTuning';
-import {playDelayedThud} from '../audio/IncidentAudio';
+import {playHic,playSynth} from '../audio/IncidentAudio';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
 import {FEEL} from './feelTuning';
@@ -27,16 +28,20 @@ import {Hunch,type HunchRat} from './Hunch';
 import {WantedSearchlight} from './WantedSearchlight';
 import {registerSupplyCues} from './supplyCues';
 import {LaunchJuice} from './LaunchJuice';
+import {TommyJuice} from './TommyJuice';
 import {LampAlarm} from './LampAlarm';
 import type {LaunchMachineKind} from '../shared/chaosState';
-import type {PickupKind} from '../shared/pickups';
+import type {PickupKind,WeaponKind} from '../shared/pickups';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {reducedMotion} from '../ui/motion';
 
-/** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, brass Stakeout. */
-const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#d6a843'};
+/** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, brass Stakeout; the arsenal's
+ * gunmetal-brass Tommy Gun, the Laser's electric green and the Mousetrap's raw pine. */
+const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#d6a843','tommy-gun':'#c8a060',laser:'#39ff7a',mousetrap:'#d9b27a'};
 /** C4: Hot Pursuit claim dust, a multiplier on the grey dust colour. */
 const CLAIM_DUST=new THREE.Color(3.2,.42,.26);
+/** Bad Ammunition: the word over your own ball, by its personality. */
+const BAD_WORDS:Record<BadRound,string>={corkscrew:'WHEEE!',snake:'WIGGLE!',superball:'BOING!',floater:'PFFFT.',hiccup:'HIC!'};
 
 /** One entry point from game events to presentation-only feel effects.
  * GameSession calls it at existing event sources; channels never parse
@@ -79,6 +84,9 @@ export class FeelDirector {
     private pursuit=0;
     /** C4: seconds of Hot Pursuit claim speed lines left. */
     private claimStreaks=0;
+    /** W1: muzzle flashes and casings for every Tommy, and whether your trigger is held (the rattle). */
+    private tommy?:TommyJuice;
+    private rattle=false;
     /** Edited feedback cues (Stakeout claim shutters, Quick Fix pip ticks), wired by the session. */
     cue?:(cue:FeedbackCue)=>void;
     /** Blackout: eased power-off level, and the brief lift from nearby muzzle flashes. */
@@ -110,9 +118,10 @@ export class FeelDirector {
     attachScene(scene:THREE.Scene):void {
         this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);
         this.launchJuice?.dispose();this.launchJuice=new LaunchJuice(scene);
+        this.tommy?.dispose();this.tommy=new TommyJuice(scene);
         this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);this.hunchView.onReveal=()=>this.cue?.('stakeout-shutter');
         this.searchlight?.dispose();this.searchlight=new WantedSearchlight(scene);
-        registerSupplyCues((cue,at)=>{if(this.view)this.sound.supply(cue,at,this.view);});this.hunchView.setSupercharged(this.incident==='clean-bill');
+        registerSupplyCues((cue,at)=>{if(this.view)this.sound.supply(cue,at,this.view);});
     }
     /** Most Wanted each frame: the searchlight follows `target` (the leader's feet);
      * `me` when the leader is you, which gets its own callout. */
@@ -121,8 +130,6 @@ export class FeelDirector {
         if(me&&!this.wasWanted){this.lastCalloutAt=-Infinity;this.callout('YOU ARE MOST WANTED');this.sound.sting('case');}
         this.wasWanted=me;
     }
-    /** You collected the Most Wanted bounty. */
-    bounty():void {this.lastCalloutAt=-Infinity;this.callout('BOUNTY COLLECTED');this.sound.brass();}
     /** The Hunch each frame; `self` only while your rat is alive and in play. */
     hunch(dt:number,now:number,view:THREE.Camera,self:RatEntity|undefined,rats:ReadonlyMap<string,HunchRat>,wanted?:string):void {this.hunchView?.update(dt,now,view,self,rats,wanted);}
 
@@ -263,7 +270,7 @@ export class FeelDirector {
 
     /** The active Dispatch incident, for effects that scale with heavier volleys. */
     setIncident(incident?:IncidentId):void {
-        this.incident=incident;this.hunchView?.setSupercharged(incident==='clean-bill');
+        this.incident=incident;
         const blackout=incident==='blackout';
         if(this.noirAtmosphere)this.noirAtmosphere.blackout=blackout;
         // Blackout: the HUD goes black and white (feel.css).
@@ -274,38 +281,96 @@ export class FeelDirector {
     /** How far a Blackout has set in, 0…1: every rat's flashlight takes over from the city's lights. */
     get blackoutLevel():number {return this.blackout;}
 
-    /** A local shot left the muzzle (a Bad Ammunition jam fires nothing, so no kick). */
-    shot(shotId?:string):void {
-        if(shotId&&this.incident==='bad-ammunition'&&badRound(shotId).round==='jam')return;
+    /** A local shot left the muzzle; a held special weapon has its own kick (a Mousetrap press has none). */
+    shot(weapon?:WeaponKind):void {
+        if(weapon==='mousetrap')return;
         this.screen.crosshairKick();
+        if(weapon==='tommy-gun'||weapon==='laser'){
+            const tommy=weapon==='tommy-gun',on=this.state.on(tommy?'tommyGun':'laser');
+            if(!on)return;
+            const kick=tommy?FEEL.tommyGun.params.kick:FEEL.laser.params.kick,push=tommy?FEEL.tommyGun.params.push:FEEL.laser.params.push;
+            this.camera.kick(kick*(.75+Math.random()*.5),(Math.random()*2-1)*kick*(tommy?FEEL.tommyGun.params.yaw:.25));
+            this.camera.push(this.impulse.set((Math.random()*2-1)*push*.4,0,push));
+            return;
+        }
         if(!this.state.on('shotKick'))return;
         const p=FEEL.shotKick.params;
-        const scale=this.incident==='scattershot'?p.scattershot:1;
+        const blast=this.incident==='scattershot',scale=blast?p.scattershot:1;
         this.camera.kick(p.pitch*scale,(Math.random()*2-1)*p.yawJitter*p.pitch*scale);
         this.camera.push(this.impulse.set(0,0,p.push*scale));
+        // Scattershot: the shotgun's punch, a field-of-view thump with the kick.
+        if(blast)this.camera.widen(p.scatterWiden);
+    }
+    /** W1, each frame: your Tommy's trigger is held (its rounds rattle the view between kicks). */
+    tommyHeld(held:boolean):void {this.rattle=held&&this.state.on('tommyGun');}
+    /** W1: any rat's Tommy round within range: muzzle flash and a flung casing. */
+    tommyRound(origin:Vec3Data,direction:Vec3Data,view:THREE.Camera):void {
+        if(!this.state.on('tommyGun'))return;
+        const reach=FEEL.tommyGun.params.range;
+        if(Math.hypot(origin.x-view.position.x,origin.y-view.position.y,origin.z-view.position.z)<reach)this.tommy?.fired(origin,direction);
+    }
+    /** W3: your trap would not go down here: a small shake and the word, at the spot you tried. */
+    trapRefused(at:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
+        if(!this.state.on('mousetrap'))return;
+        const s=FEEL.mousetrap.params.refuse;
+        this.camera.kick(-s,(Math.random()*2-1)*s);
+        this.word('NO ROOM.',at,view,now,true);
+    }
+    /** W3: a trap snapped a rat at `at` (`involved` when it was yours or you): SNAP!, and a jolt nearby. */
+    trapSnapped(at:THREE.Vector3,view:THREE.Camera,involved:boolean,now=performance.now()):void {
+        if(!this.state.on('mousetrap'))return;
+        const p=FEEL.mousetrap.params,d=at.distanceTo(view.position);
+        if(d<p.snapRange){const s=1-d/p.snapRange;this.camera.kick(-p.snap*s,(Math.random()*2-1)*p.snap*s*.6);}
+        if(involved||d<p.snapRange*2)this.word('SNAP!',at,view,now,true);
     }
 
-    /** Bad Ammunition, per trigger: smoke and a cough for everyone nearby; for your
-     * own shot a jam clicks, a dud goes wah-wah and a backfire smears soot on the lens. */
-    fired(shotId:string,origin:Vec3Data,direction:Vec3Data,local:boolean,view:THREE.Camera,now=performance.now()):void {
+    /** Bad Ammunition, per trigger (`plain` when a special weapon fired it instead): a puff of muzzle smoke and the
+     * ball's personality sound for everyone near (a corkscrew's drill, a snake's slide whistle, a superball's boing, a
+     * floater's lazy kazoo, a hiccup's HIC! where it stops); your own also gets its word. */
+    fired(shotId:string,origin:Vec3Data,direction:Vec3Data,local:boolean,view:THREE.Camera,now=performance.now(),plain=false):void {
         // Blackout: a shot nearby lights the street for a blink.
         if(this.incident==='blackout'){
             const d=Math.hypot(origin.x-view.position.x,origin.y-view.position.y,origin.z-view.position.z),reach=FEEL.blackout.params.muzzleRange;
             if(d<reach)this.muzzleFlash=Math.max(this.muzzleFlash,FEEL.blackout.params.muzzle*(1-d/reach));
         }
-        if(this.incident!=='bad-ammunition'||!this.state.on('badAmmo'))return;
-        const {round,backfire}=badRound(shotId),muzzle=new THREE.Vector3(origin.x,origin.y,origin.z);
-        if(round!=='jam')muzzleSmoke(muzzle,new THREE.Vector3(direction.x,direction.y,direction.z),round==='dud'?.4:1);
-        if(round==='crooked')this.sound.cough(local?undefined:origin,view);
-        if(!local)return;
-        if(round==='jam'){
-            this.sound.jam();this.word('CLICK.',muzzle,view,now,true);
-            this.camera.kick(.25,(Math.random()*2-1)*.8);
-        }else if(round==='dud'){this.sound.womp();this.word('PFFT.',muzzle,view,now,true);}
-        else if(backfire){
-            this.screen.soot();this.word('BACKFIRE!',muzzle,view,now,true);
-            this.camera.kick(FEEL.shotKick.params.pitch*3,(Math.random()*2-1)*.6);
+        if(plain||this.incident!=='bad-ammunition'||!this.state.on('badAmmo'))return;
+        const quirk=badRound(shotId),p=FEEL.badAmmo.params,muzzle=new THREE.Vector3(origin.x,origin.y,origin.z);
+        const aim=new THREE.Vector3(direction.x,direction.y,direction.z).normalize();
+        muzzleSmoke(muzzle,aim,p.smoke);
+        if(quirk==='hiccup'){
+            // It hangs in the air where it stops, the hiccup's own spot along the aim.
+            const at=muzzle.clone().addScaledVector(aim,BAD_AMMO.hiccup.speed*BAD_AMMO.hiccup.stopAt);
+            setTimeout(()=>{playHic(at);if(local&&this.view)this.word('HIC!',at,this.view,performance.now(),true);},BAD_AMMO.hiccup.stopAt*1000);
+            return;
         }
+        playSynth(quirk==='superball'?'boing':quirk,local?undefined:origin,quirk==='superball'?p.superballPitch:1,p.volume);
+        if(local)this.word(BAD_WORDS[quirk],muzzle.addScaledVector(aim,4),view,now,true);
+    }
+    /** Bad Ammunition: a superball struck a wall or floor at `at`. */
+    superballBounce(at:Vec3Data):void {
+        if(this.state.on('badAmmo'))playSynth('boing',at,FEEL.badAmmo.params.superballPitch*(.9+Math.random()*.2),FEEL.badAmmo.params.volume*.7);
+    }
+    /** Act of God: a meteor's shadow showed at `at`, landing in `seconds`: its whistle swells as it falls (shortened to fit). */
+    meteorWarned(at:Vec3Data,seconds:number):void {
+        if(!this.state.on('actOfGod'))return;
+        const whistle=INCIDENT_TUNING.meteorWarnMs/1000;
+        playSynth('meteor-whistle',at,Math.min(2,Math.max(1,whistle/seconds)),FEEL.actOfGod.params.whistle);
+    }
+    /** Act of God: a meteor landed at `at`: a boom, a crater with pavement flying, dust, and the view shaken harder the
+     * nearer you are; KA-BOOM! close by. */
+    meteorLanded(at:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
+        if(!this.state.on('actOfGod'))return;
+        const p=FEEL.actOfGod.params;
+        playSynth('meteor-boom',at,.9+Math.random()*.2,p.boom);
+        this.launchJuice?.landed(at,1,FEEL.launchLanding.params.decalLife);
+        for(let i=0;i<8;i++){const a=i*Math.PI/4;this.dust?.puff(this.impulse.set(at.x+Math.cos(a)*3,at.y+.2,at.z+Math.sin(a)*3),1);}
+        for(let i=0;i<3;i++)this.dust?.smoke(this.impulse.set(at.x,at.y+.6,at.z),this.up.set(0,1,0),1);
+        const d=at.distanceTo(view.position);
+        if(d<p.shakeRange){
+            const s=(1-d/p.shakeRange)**1.5;
+            this.camera.kick(-p.shake*s,(Math.random()*2-1)*p.shake*s*.5);this.camera.push(this.impulse.set(0,-6*s,0));
+        }
+        if(d<p.wordRange)this.word('KA-BOOM!',this.impulse.copy(at).setY(at.y+2),view,now,true);
     }
 
     /** You took nonlethal damage. `from` is the attacker's live position when known. */
@@ -329,9 +394,10 @@ export class FeelDirector {
         this.deathTarget=target;this.deathAge=0;
     }
 
-    /** Cause-flavoured corpse motion: neutral traps and case missiles flop,
+    /** Cause-flavoured corpse motion: meteors and exploding equipment fling, other neutral traps and case missiles flop,
      * explosive incidents fling, ordinary shots spin. */
     deathStyle(killerId:string|null,cause?:string):DeathStyle {
+        if(cause==='meteor'||cause==='malfunction')return 'fling';
         if(killerId===null||cause==='evidence-tampering')return 'flop';
         return this.incident==='improper-disposal'||this.incident==='planted-evidence'?'fling':'spin';
     }
@@ -455,7 +521,7 @@ export class FeelDirector {
             if(d>=I.cheeseShakeRange)continue;
             const s=(.5+.5*Math.min(1,(scale-big)/(max-big)))*(1-d/I.cheeseShakeRange);
             this.camera.kick(-I.cheeseShake*s,(Math.random()*2-1)*I.cheeseShake*s*.4);
-            playDelayedThud(hit.p,I.cheeseThudPitch);
+            playSynth('thud',hit.p,I.cheeseThudPitch);
             this.cheeseLandedAt=now;return;
         }
     }
@@ -512,6 +578,8 @@ export class FeelDirector {
         this.updateBlackout(dt);
         this.dust?.update(dt);
         this.launchJuice?.update(dt);
+        this.tommy?.update(dt);
+        if(this.rattle&&dt>0){const s=FEEL.tommyGun.params.rattle*dt*9;this.camera.kick((Math.random()*2-1)*s,(Math.random()*2-1)*s);}
         this.city?.update(dt);
         this.noirCity?.update(this.perception(),this.mono(),FEEL.lowHealth.params.lift);
         this.noirDressing?.update(dt);
@@ -572,6 +640,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.claimStreaks=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.tommy?.clear();this.rattle=false;this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.claimStreaks=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.tommy?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
 }

@@ -1,0 +1,134 @@
+import * as THREE from 'three';
+import './incidentStory.css';
+import {reducedMotion,replay,scrawl} from '../ui/motion';
+import {DispatchAudio} from '../audio/DispatchAudio';
+import {worldSoundGain} from '../audio/worldSoundGain';
+import {incidentInfo} from '../shared/incidentCatalog';
+import {allUnitsPoint} from '../shared/allUnits';
+import {pickupArtwork} from '../prototype/pickupArtwork';
+import type {ChaosState} from '../shared/chaosState';
+import type {Vec3Data} from '../shared/networkProtocol';
+
+/** How long (ms) the WANTED poster, the BOUNTY CLAIMED stamp, the ALL UNITS radio call and the YOU'RE BACKUP
+ * card stay up, and how long an arriving backup rat strobes (s). */
+export const STORY={posterMs:3600,bountyMs:2800,radioMs:3400,backupMs:4500,strobe:2.2} as const;
+
+/** Incident storytelling overlays, the same for every player: Most Wanted's WANTED poster slapped on the screen and the
+ * BOUNTY CLAIMED stamp; All Units' radio call, and your YOU'RE BACKUP card with an arrow to the action. Read from
+ * consecutive chaos snapshots, so a join mid-incident sets the baseline silently. DOM built lazily (tests pay nothing). */
+export class IncidentStory {
+    private root?:HTMLElement;
+    private poster?:HTMLElement;private posterName?:HTMLElement;
+    private bounty?:HTMLElement;private bountyLine?:HTMLElement;private bountyArt?:HTMLElement;
+    private radio?:HTMLElement;private radioCall?:HTMLElement;
+    private backupCard?:HTMLElement;private arrow?:HTMLElement;
+    private readonly audio:DispatchAudio;
+    private previous?:ChaosState;
+    private readonly hideAt={poster:0,bounty:0,radio:0,backup:0};
+    /** When a WANTED poster held back behind the BOUNTY CLAIMED stamp goes up (0: none waiting). Both use the top of the screen. */
+    private posterAt=0;
+    /** Where the YOU'RE BACKUP arrow points (the action), while the card is up. */
+    private readonly target=new THREE.Vector3();
+    private readonly local=new THREE.Vector3();
+    private readonly inverse=new THREE.Quaternion();
+    private lastAngle=NaN;
+    constructor(private readonly doc:Document|undefined=globalThis.document,context?:AudioContext){this.audio=new DispatchAudio(context);}
+
+    /** Each chaos snapshot: `name` resolves a rat's display name. */
+    apply(state:ChaosState,myId:string,name:(id:string)=>string|undefined,now=performance.now()):void {
+        const before=this.previous;this.previous=state;
+        const d=state.dispatch,incident=d.phase==='active'?incidentInfo(d.incident).id:undefined;
+        if(!before||before.epoch!==state.epoch)return;
+        const was=before.dispatch;
+        // All Units: the radio call as it starts.
+        if(incident==='all-units'&&(was.phase!=='active'||was.serial!==d.serial)&&state.time-d.started<2000){
+            if(this.build()){scrawl(this.radioCall!,'ALL UNITS · ALL UNITS');this.show('radio',this.radio!,now,STORY.radioMs);}
+            this.audio.play('squawk',.6);
+        }
+        // The takedown: BOUNTY CLAIMED for everyone, with the supply it paid. It takes the poster's place.
+        const b=d.bounty;
+        if(b&&b.at!==was.bounty?.at&&state.time-b.at<2000&&this.build()){
+            const hunter=b.hunter===myId?'YOU':(name(b.hunter)??'SOMEBODY').toUpperCase(),target=b.target===myId?'YOU':(name(b.target)??'THE LEADER').toUpperCase();
+            scrawl(this.bountyLine!,`${hunter} TOOK DOWN ${target}`);this.bountyArt!.innerHTML=pickupArtwork(b.pickup);
+            this.bounty!.classList.toggle('story-self',b.hunter===myId);
+            this.hideAt.poster=0;this.posterAt=0;this.poster!.classList.remove('on');
+            this.show('bounty',this.bounty!,now,STORY.bountyMs);
+            this.audio.play('strike',.55);
+        }
+        // Most Wanted: a fresh WANTED poster whenever the light moves to a new rat, after any BOUNTY CLAIMED still up.
+        if(incident==='most-wanted'&&d.wanted&&d.wanted!==was.wanted){
+            const who=d.wanted===myId?'YOU':(name(d.wanted)??'UNKNOWN').toUpperCase();
+            if(this.build()){
+                scrawl(this.posterName!,who);this.poster!.classList.toggle('story-self',d.wanted===myId);
+                if(this.hideAt.bounty>now)this.posterAt=this.hideAt.bounty;else this.show('poster',this.poster!,now,STORY.posterMs);
+            }
+            this.audio.play('clank',.5);
+        }
+    }
+
+    /** All Units: a rat just respawned as backup. Yours gets the YOU'RE BACKUP card; everyone hears the yelp from it. */
+    arrived(at:Vec3Data,local:boolean,listener:Vec3Data,now=performance.now()):void {
+        const distance=Math.hypot(at.x-listener.x,at.y-listener.y,at.z-listener.z);
+        this.audio.play('yelp',local?.55:.55*worldSoundGain(distance,Math.max(0,1-distance/140)));
+        if(!local||!this.previous||!this.build())return;
+        const p=allUnitsPoint(this.previous.assignment,this.previous.case.p);this.target.set(p.x,p.y,p.z);this.lastAngle=NaN;
+        this.show('backup',this.backupCard!,now,STORY.backupMs);
+    }
+
+    /** Each frame: hide what has run its time, and turn the backup arrow toward the action. */
+    update(camera:THREE.Camera,self:THREE.Vector3|undefined,now=performance.now()):void {
+        if(!this.root)return;
+        for(const key of ['poster','bounty','radio','backup'] as const){
+            if(this.hideAt[key]&&now>=this.hideAt[key]){this.hideAt[key]=0;this.node(key)?.classList.remove('on');}
+        }
+        if(this.posterAt&&now>=this.posterAt){
+            this.posterAt=0;
+            const d=this.previous?.dispatch;
+            if(d?.phase==='active'&&d.wanted)this.show('poster',this.poster!,now,STORY.posterMs);
+        }
+        if(!this.hideAt.backup||!this.arrow)return;
+        this.inverse.copy(camera.quaternion).invert();
+        this.local.copy(this.target).sub(self??camera.position).applyQuaternion(this.inverse);
+        const angle=Math.round(Math.atan2(this.local.x,-this.local.z)*100)/100;
+        if(angle!==this.lastAngle){this.lastAngle=angle;this.arrow.style.transform=`rotate(${angle}rad)`;}
+    }
+
+    reset():void {
+        this.previous=undefined;this.posterAt=0;
+        for(const key of ['poster','bounty','radio','backup'] as const){this.hideAt[key]=0;this.node(key)?.classList.remove('on');}
+    }
+    dispose():void {this.reset();this.audio.dispose();this.root?.remove();this.root=undefined;}
+
+    private node(key:keyof IncidentStory['hideAt']):HTMLElement|undefined {
+        return key==='poster'?this.poster:key==='bounty'?this.bounty:key==='radio'?this.radio:this.backupCard;
+    }
+    private show(key:keyof IncidentStory['hideAt'],node:HTMLElement,now:number,ms:number):void {
+        node.classList.toggle('still',reducedMotion());replay(node,'on');this.hideAt[key]=now+ms;
+    }
+    private build():boolean {
+        if(this.root)return true;
+        const doc=this.doc;
+        if(!doc?.body||typeof doc.createElement!=='function')return false;
+        const make=(parent:HTMLElement,className:string,text?:string)=>{const el=doc.createElement('div');el.className=className;if(text)el.textContent=text;parent.appendChild(el);return el;};
+        this.root=doc.createElement('div');this.root.className='incident-story';this.root.setAttribute('aria-live','polite');
+        this.poster=make(this.root,'story-poster');
+        make(this.poster,'story-poster-head','WANTED');
+        make(this.poster,'story-poster-mug');
+        this.posterName=make(this.poster,'story-poster-name');
+        make(this.poster,'story-poster-reward','REWARD: ONE SUPPLY\nDEAD OR ALIVE');
+        this.bounty=make(this.root,'story-bounty');
+        this.bountyArt=make(this.bounty,'story-bounty-art');
+        make(this.bounty,'story-bounty-stamp','BOUNTY CLAIMED');
+        this.bountyLine=make(this.bounty,'story-bounty-line');
+        this.radio=make(this.root,'story-radio');
+        make(this.radio,'story-radio-dot');
+        this.radioCall=make(this.radio,'story-radio-call');
+        make(this.radio,'story-radio-line','THE FALLEN RESPAWN AT THE SCENE · RESPOND');
+        this.backupCard=make(this.root,'story-backup');
+        make(this.backupCard,'story-backup-title',"YOU'RE BACKUP");
+        this.arrow=make(this.backupCard,'story-backup-arrow');
+        make(this.backupCard,'story-backup-line','GET TO THE ACTION');
+        doc.body.appendChild(this.root);
+        return true;
+    }
+}

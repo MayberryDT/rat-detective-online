@@ -5,6 +5,7 @@ import { unlockEffectsAudio } from '../audio/effectsAudio';
 import {FoleyWorld} from '../audio/FoleyWorld';
 import * as THREE from 'three';
 import { ChaosView } from '../prototype/ChaosView';
+import { HARD_SHOVE } from '../prototype/RatReactionEvents';
 import { Neighborhood } from '../prototype/Neighborhood';
 import { CITY_BOUNDS, GRAYBOX_VERSION } from '../shared/grayboxLayout';
 import { CityGenerator } from '../world/CityGenerator';
@@ -27,10 +28,13 @@ import { PerfReporter } from './perfReporter';
 import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
-import { incidentInfo } from '../shared/incidentCatalog';
+import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import { ShotSpacing } from '../shared/shotTiming';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
-import { PICKUP_TUNING } from '../shared/pickups';
+import { PICKUP_TUNING, WEAPON_TUNING, heldWeapon, type WeaponKind } from '../shared/pickups';
+import { tommyHeat } from '../shared/shotPattern';
+import { laserPath } from '../shared/laser';
+import { HeldFire } from './HeldFire';
 import type { RatEntity } from '../entities/RatEntity';
 import { bindGamePointerLock } from './GamePointerLock';
 import { FeedbackAudio } from '../audio/FeedbackAudio';
@@ -43,6 +47,8 @@ import type {CameoView,CameoVisitor} from '../cameos/CameoView';
 import {loadCameos} from '../cameos/loadCameos';
 import {HighlightBridge} from '../highlights/HighlightBridge';
 import {FeelDirector} from '../feel/FeelDirector';
+import {IncidentStory,STORY} from '../feel/IncidentStory';
+import {playSynth} from '../audio/IncidentAudio';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {FLASHLIGHT,FLASHLIGHT_REACH} from '../shared/rat/ratBody';
@@ -55,6 +61,8 @@ import {qualityFrame,qualityStatus,settleQuality} from './graphicsQuality';
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean}[]=[];
 const HEAD_POSITION=new THREE.Vector3();
 const LANDING_POSITION=new THREE.Vector3();
+/** Where a refused Mousetrap would have gone (its NO ROOM word). */
+const TRAP_SPOT=new THREE.Vector3();
 const HEADSHOT_NORMAL=new THREE.Vector3();
 /** Longest a welcome waits for off-thread shader links before drawing anyway. */
 const WELCOME_COMPILE_MS=2500;
@@ -92,6 +100,10 @@ export class GameSession {
     private shotsAttempted=0;
     private shotsSent=0;
     private readonly shotSpacing=new ShotSpacing();
+    /** The Tommy Gun's held trigger (mouse/key), and its bloom count of your own triggers. */
+    private readonly heldFire=new HeldFire();
+    private tommyHeat=0;
+    private tommyAt:number|undefined;
     private chaos:ChaosView|null=null;
     private cameos?:CameoView;
     private cameoLoading=false;
@@ -121,6 +133,10 @@ export class GameSession {
     private playFrameMarked=false;
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
+    /** Incident storytelling overlays (WANTED poster, BOUNTY CLAIMED, ALL UNITS radio call, YOU'RE BACKUP card). */
+    private story?: IncidentStory;
+    /** The running Dispatch incident, from the latest chaos snapshot. */
+    private activeIncident: IncidentId | undefined;
     /** C5: one tick per nameplate pip a Quick Fix refills. */
     private readonly pipTick = () => this.feedback.play('pip-tick');
     /** The stage's own exposure (a Blackout leaves it alone: beam-lit surfaces read bright). */
@@ -182,6 +198,7 @@ export class GameSession {
         this.feel.attach(this.stage.renderer.domElement, listener, touchControlsAvailable());
         this.baseExposure=this.stage.renderer.toneMappingExposure;
         this.feel.attachScene(scene);
+        this.story=new IncidentStory(typeof document==='undefined'?undefined:document,listener.context as AudioContext);
         this.lineup=new PoliceLineup(scene,typeof document==='undefined'?undefined:document,()=>this.feel.flashbulb());
         this.remotes = new RemotePlayers(scene, world);
         this.worldSpec = initialWorld ? { ...initialWorld } : createWorldSpec(1);
@@ -238,7 +255,7 @@ export class GameSession {
         };
         this.title.onCue = cue => { this.foley.setEnabled(!document.hidden); this.foley.play(cue); };
         if (touchControlsAvailable()) this.touch = new TouchControls({canvas:this.stage.renderer.domElement,
-            look:(dx,dy)=>this.rat?.onMouseMove(dx,dy),shoot:()=>this.shoot(),
+            look:(dx,dy)=>this.rat?.onMouseMove(dx,dy),shoot:()=>this.shoot(),holdMs:()=>this.tommyRepeatMs(),
             openSettings:()=>this.title.settings?.open(),blocked:()=>!!this.title.settings?.isOpen,
             scores:visible=>this.scoreboard.setVisible(visible),clearKeys:()=>this.input.clear()});
         this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
@@ -258,34 +275,53 @@ export class GameSession {
         }, options);
         document.addEventListener('mousedown', event => {
             if (this.title.settings?.isOpen || this.touch?.active || !actionBound('fire',`Mouse${event.button}`) || document.pointerLockElement !== this.stage.renderer.domElement) return;
-            this.shoot();
+            this.pressFire();
         }, options);
         document.addEventListener('keydown',event=>{
-            if(!event.repeat&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&!this.title.settings?.isOpen&&document.pointerLockElement===this.stage.renderer.domElement&&actionBound('fire',event.code)){event.preventDefault();this.shoot();}
+            if(!event.repeat&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&!this.title.settings?.isOpen&&document.pointerLockElement===this.stage.renderer.domElement&&actionBound('fire',event.code)){event.preventDefault();this.pressFire();}
         },options);
+        // The Tommy Gun fires while the button is held: releasing it, losing the lock or the window ends the burst.
+        document.addEventListener('mouseup',event=>{if(actionBound('fire',`Mouse${event.button}`))this.heldFire.release();},options);
+        document.addEventListener('keyup',event=>{if(actionBound('fire',event.code))this.heldFire.release();},options);
+        document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==this.stage.renderer.domElement)this.heldFire.release();},options);
+        window.addEventListener('blur',()=>this.heldFire.release(),options);
         window.addEventListener('pagehide', () => this.dispose(), options);
     }
 
-    private clearInput(): void { this.input.clear(); this.touch?.clear(); }
+    private clearInput(): void { this.input.clear(); this.touch?.clear(); this.heldFire.release(); }
+
+    /** The special weapon your rat holds now, by the server's clock. */
+    private weaponNow(): WeaponKind | undefined { return heldWeapon(this.lastChaos?.buffs, this.myId, Date.now() + this.serverOffset); }
+    /** The Tommy Gun's held-fire repeat; undefined (one shot per press) for every other gun. */
+    private tommyRepeatMs(): number | undefined { return this.weaponNow() === 'tommy-gun' ? WEAPON_TUNING.tommyIntervalMs : undefined; }
+    private pressFire(): void { this.shoot(); this.heldFire.press(performance.now(), this.tommyRepeatMs()); }
+    private readonly fireRound = () => this.shoot();
 
     /** Both input devices use the real camera ray, animated muzzle and transport. */
     private shoot(): void {
         if (this.observing || this.title.settings?.isOpen || this.transport.state !== 'playing' || this.roundWon || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
-        // Big Cheese spaces every rat's shots, as the room does; an early press only dry-clicks.
+        // Big Cheese and the Laser space every rat's shots, as the room does; an early press only dry-clicks.
         const dispatch=this.lastChaos?.dispatch,incident=dispatch?.phase==='active'?incidentInfo(dispatch.incident).id:undefined;
-        if (!this.shotSpacing.allow(this.myId, incident, performance.now())) { this.feel.sound.jam(); return; }
+        const now=performance.now(),weapon=this.weaponNow();
+        if (!this.shotSpacing.allow(this.myId, incident, now, 0, weapon)) { this.feel.sound.jam(); return; }
         this.rat.updateView();
         this.stage.camera.getWorldDirection(this.direction);
         const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
         this.shotsAttempted++;
-        const shot = this.gun.shoot(this.rat.entity, target);
+        const shot = this.gun.shoot(this.rat.entity, target, weapon);
         if(!shot)return;
-        this.feel.shot(shot.shotId);this.feel.fired(shot.shotId,shot.origin,shot.direction,true,this.stage.camera);
+        this.feel.shot(weapon);
+        if(weapon!=='mousetrap')this.feel.fired(shot.shotId,shot.origin,shot.direction,true,this.stage.camera,now,weapon!==undefined);
+        if(weapon==='tommy-gun')this.feel.tommyRound(shot.origin,shot.direction,this.stage.camera);
         const movement=this.movementInput(),viewAt=this.remotes.viewAt?.(shot.origin,shot.direction);
         if (movement && this.transport.send({type:'shoot', ...shot, movement, ...(viewAt===undefined?{}:{viewAt})})) {
-            this.rememberMovement(movement,performance.now());
-            this.netplay?.begin(shot.shotId,'shot');
-            this.shotsSent++;this.chaos?.fire(shot);
+            this.rememberMovement(movement,now);
+            // A Mousetrap press sets a trap down: no ball, so no netplay shot timing.
+            if(weapon!=='mousetrap')this.netplay?.begin(shot.shotId,'shot');
+            this.shotsSent++;
+            // Shooter and authority each count their own Tommy triggers for its bloom.
+            if(weapon==='tommy-gun'){this.tommyHeat=tommyHeat(this.tommyHeat,this.tommyAt,now);this.tommyAt=now;}
+            this.chaos?.fire(shot,weapon&&{kind:weapon,heat:this.tommyHeat},weapon==='laser'?laserPath(shot.origin,shot.direction,this.gun.traceLaser):undefined);
         }
     }
     private requestPointerLock(): void { if (!this.title.settings?.isOpen && !this.touch?.active) this.pointerLock.request(); }
@@ -294,7 +330,7 @@ export class GameSession {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
-        this.feel.reset();this.feel.resetRound();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults();
+        this.feel.reset();this.feel.resetRound();this.story?.reset();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults();
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -335,9 +371,14 @@ export class GameSession {
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
         if(this.chaos){
             this.chaos.onPresentedShot=(id,p,radius)=>this.cameos?.observeShot(id,p,radius,this.gun.sceneryClear);
+            // W3: the trap's own foley where it happens: set down, SNAP with a spring twang, splinters per hit, a sad boing as it breaks.
+            this.chaos.onTrap=(event,p)=>this.feedback.play(event==='set'?'trap-set':event==='snap'?'trap-snap':event==='hit'?'trap-splinter':'trap-break',p);
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
+            this.chaos.onMeteorWarn=(at,seconds)=>this.feel.meteorWarned(at,seconds);
+            this.chaos.onMeteorImpact=at=>this.feel.meteorLanded(at,this.stage.camera);
+            this.chaos.onSuperball=p=>this.feel.superballBounce(p);
             this.chaos.onCasePaper=(p,kind)=>this.feel.casePaper(p,kind);
             this.chaos.onClaim=(kind,camera)=>this.feel.claimed(kind,this.rat?.entity,camera);
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
@@ -398,14 +439,18 @@ export class GameSession {
         switch (message.type) {
             case 'chaos':
                 {const incident=message.state.dispatch.phase==='active'?incidentInfo(message.state.dispatch.incident).id:undefined;
-                this.gun.setIncident(incident);this.feel.setIncident(incident);
+                this.gun.setIncident(incident);this.feel.setIncident(incident);this.activeIncident=incident;
                 // A new call: everyone reads who rang Dispatch.
                 const d=message.state.dispatch,caller=d.caller&&this.lastChaos&&d.serial!==this.lastChaos.dispatch.serial?d.caller===this.myId?this.rat?.entity:this.remotes.get(d.caller):undefined;
                 if(caller)this.hud.addKillFeed({kind:'dispatch',caller:caller.name,...(d.caller===this.myId?{local:true}:{})});
                 // Big Cheese: every rat's pistol goes big, and big balls landing nearby thud.
                 const big=incident==='big-cheese';this.rat?.entity.setBigPistol(big);
-                for(const {entity} of this.remotes.rats.values())entity.setBigPistol(big);
-                if(big)this.feel.cheeseLandings(message.state.impacts,this.stage.camera);}
+                // Bobbleheads: every rat's head swells (other rats' head spheres with it); Most Wanted stamps the target's nameplate.
+                const bobble=incident==='bobbleheads',wanted=incident==='most-wanted'?d.wanted:undefined;
+                this.rat?.entity.setBobblehead(bobble);this.rat?.entity.setWanted(!!wanted&&wanted===this.myId);
+                for(const [id,{entity}] of this.remotes.rats){entity.setBigPistol(big);entity.setBobblehead(bobble);entity.setWanted(id===wanted);}
+                if(big)this.feel.cheeseLandings(message.state.impacts,this.stage.camera);
+                if(!this.observing)this.story?.apply(message.state,this.myId,id=>id===this.myId?this.rat?.entity.name:this.remotes.get(id)?.name);}
                 this.applyPickupState(message.state);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
                 this.feelStings(this.lastChaos,message.state);
@@ -436,7 +481,12 @@ export class GameSession {
             case 'playerShot': {
                 if(message.shooterId===this.myId){this.netplay?.lap(message.shotId,'confirmed');this.chaos?.launch(message);break;}
                 const owner = this.remotes.get(message.shooterId);
-                if (owner) {this.gun.replayShot(owner, message);this.feel.fired(message.shotId,message.origin,message.direction,false,this.stage.camera);}
+                if (owner) {
+                    // Observers read the shooter's weapon from the buffs: the Tommy's own report, flash and brass; the Laser's zap comes with its beam.
+                    const weapon=heldWeapon(this.lastChaos?.buffs,message.shooterId,Date.now()+this.serverOffset);
+                    this.gun.replayShot(owner,message,weapon);this.feel.fired(message.shotId,message.origin,message.direction,false,this.stage.camera,performance.now(),weapon!==undefined);
+                    if(weapon==='tommy-gun')this.feel.tommyRound(message.origin,message.direction,this.stage.camera);
+                }
                 break;
             }
             case 'shotResult':
@@ -445,6 +495,12 @@ export class GameSession {
                 else if(message.ballId===message.shotId)this.netplay?.end(message.shotId,message.outcome,message.compensated?`rewind:${Math.round(message.rewindMs??0)}ms/delta:${(message.targetDelta??0).toFixed(2)}`:message.fallback);
                 else this.netplay?.count('shot-ball',message.outcome,message.compensated?'compensated':message.fallback);
                 this.chaos?.shotResult(message);
+                // W3: the Mousetrap would not go down there; it stays in your paw.
+                if(message.outcome==='rejected'&&message.fallback==='trap-blocked'&&this.rat){
+                    this.stage.camera.getWorldDirection(this.direction).setY(0).normalize();
+                    TRAP_SPOT.copy(this.rat.entity.mesh.position).addScaledVector(this.direction,WEAPON_TUNING.trapReach);
+                    this.feedback.play('trap-refused');this.feel.trapRefused(TRAP_SPOT,this.stage.camera);
+                }
                 break;
             case 'pickupResult':
                 this.pendingInteractions.delete(message.interactionId);
@@ -472,6 +528,8 @@ export class GameSession {
                         if(message.id===this.myId)this.feel.hurt(entity.hp-message.hp,entity.mesh.position,attacker?.mesh.position,this.stage.camera);
                         if(message.id===this.myId||message.attackerId===this.myId)this.feel.impact(entity,message.id===this.myId);
                         entity.takeDamage(entity.hp - message.hp, direction);
+                        // Bobbleheads: every hit boings the big head.
+                        if(this.activeIncident==='bobbleheads')playSynth('boing',entity.mesh.position,.9+Math.random()*.25);
                     }
                 }
                 break;
@@ -479,11 +537,10 @@ export class GameSession {
             case 'playerHealed': {
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 // C5: your Quick Fix refills the nameplate pips one at a time, ticking each.
-                const fix = message.id === this.myId && message.cause !== 'bounty' && message.cause !== 'incident';
+                const fix = message.id === this.myId;
                 entity?.heal(message.hp, fix ? this.feel.pipStagger : 0, this.pipTick);
                 if (message.id === this.myId) {
-                    // Clean Bill heals everyone without a Quick Fix card; a bounty gets its own callout.
-                    if(message.cause==='bounty')this.feel.bounty();else if(message.cause!=='incident')this.chaos?.showHealing();
+                    this.chaos?.showHealing();
                     this.feel.health(message.hp,true);
                 }
                 break;
@@ -507,6 +564,8 @@ export class GameSession {
                 const deathStyle = entity?.launchFlight && feelState().on('launchFlight') ? 'flail' : this.feel.deathStyle(message.killerId, message.cause);
                 entity?.setDeathStyle(deathStyle);this.chaos?.noteDeathStyle(message.victimId, deathStyle, headshot);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
+                // W3: the trap's SNAP! (its sound comes with the trap's own snap in the snapshot).
+                if(message.weapon==='mousetrap'&&entity)this.feel.trapSnapped(entity.mesh.position,this.stage.camera,message.killerId===this.myId||message.victimId===this.myId);
                 // Kill streaks: the victim's ends; the credited killer takes the server's count.
                 entity?.setStreak(0);if(killer&&killer!==entity)killer.setStreak(message.killerStreak??0);
                 if (entity && !entity.dead) {
@@ -521,6 +580,7 @@ export class GameSession {
                         const head=entity.mesh.getObjectByName('rat-head')?.getWorldPosition(HEAD_POSITION)??HEAD_POSITION.copy(entity.mesh.position).setY(entity.mesh.position.y+1.6);
                         if(feelState().on('headshot'))this.chaos?.burst(head,HEADSHOT_NORMAL.copy(impact).negate(),FEEL.headshot.params.burst);
                         this.feel.headshot(head,this.stage.camera,message.killerId===this.myId||message.victimId===this.myId);
+                        if(this.activeIncident==='bobbleheads')playSynth('boing',head,.7);
                     }
                     entity.takeDamage(entity.hp, impact.multiplyScalar(50));
                     }
@@ -532,7 +592,7 @@ export class GameSession {
                     this.hud.showRespawn(message.respawnAt - this.serverOffset);
                 }
                 this.hud.addKillFeed(message.cause
-                    ? {kind:'note',text:message.cause==='drowned'?this.deathQuips.drowned(message.victimName):this.deathQuips.caseDeath(message.victimName)}
+                    ? {kind:'note',text:this.deathQuips.environmental(message.cause,message.victimName)}
                     : {kind:'kill',killer:message.killerName,victim:message.victimName,headshot,
                         ...(message.killerId===this.myId?{local:'killer' as const}:message.victimId===this.myId?{local:'victim' as const}:{})});
                 break;
@@ -543,6 +603,12 @@ export class GameSession {
                     this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset(); this.feel.health(message.hp); settleQuality();
                     this.lastInteractionPosition.set(message.x,message.y+.8,message.z);this.clearInput(); this.hud.hideRespawn();
                 } else this.remotes.respawn(message.id, message);
+                // All Units: the fallen arrive as backup, strobing red and blue to a prowl-car yelp; yours gets the card.
+                if(this.activeIncident==='all-units'){
+                    const arrived=message.id===this.myId?this.rat?.entity:this.remotes.get(message.id);
+                    arrived?.backupStrobe(STORY.strobe);
+                    this.story?.arrived(message,message.id===this.myId,this.stage.camera.position);
+                }
                 break;
             case 'playerLeft': this.remotes.remove(message.id); break;
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
@@ -574,7 +640,7 @@ export class GameSession {
                 this.highlightCorpseSeen.clear();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0,0);entity.resetReactions();entity.setStreak(0);}
-                this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+                this.rat?.setSpeedScale(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -676,6 +742,8 @@ export class GameSession {
             this.remotes.presentFrame();
             this.rat?.updateView();
             this.touch?.update(now, !!this.rat && !this.rat.entity.dead && this.rat.entity.hp > 0 && !this.roundWon);
+            if(!this.touch?.active)this.heldFire.tick(now,this.tommyRepeatMs(),this.fireRound);
+            this.feel.tommyHeld(this.heldFire.active||!!this.touch?.input.holding);
             this.checkInteractions(now);
             this.sendMovement(now);
             this.observeHighlights(now);
@@ -722,6 +790,7 @@ export class GameSession {
         this.feel.wanted(dt,wantedRat&&!wantedRat.dead?wantedRat.mesh.position:undefined,!!wanted&&wanted===this.myId);
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
+        this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
         if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon){
             this.pendingResults=undefined;this.resultsShown=true;this.hud.showResults(true);this.scoreboard.setVisible(true);
         }
@@ -818,6 +887,14 @@ export class GameSession {
             if(this.feltLaunches.size>64)this.feltLaunches.delete(this.feltLaunches.values().next().value!);
             const local=launch.playerId===this.myId,entity=local?this.rat?.entity:this.remotes.get(launch.playerId);
             if(entity&&!entity.dead)this.feel.launched(entity.mesh.position,local,!!launch.boost,this.stage.camera);
+        }
+        // A hard shove (Scattershot, a meteor) is felt like a small launch: the scream, and your view kicks.
+        for(const shove of state.pressure?.shoves??[]){
+            if(this.feltLaunches.has(shove.id)||Math.hypot(shove.velocity.x,shove.velocity.z)<HARD_SHOVE)continue;
+            this.feltLaunches.add(shove.id);
+            if(this.feltLaunches.size>64)this.feltLaunches.delete(this.feltLaunches.values().next().value!);
+            const local=shove.playerId===this.myId,entity=local?this.rat?.entity:this.remotes.get(shove.playerId);
+            if(entity&&!entity.dead&&state.time-shove.at<500)this.feel.launched(entity.mesh.position,local,false,this.stage.camera);
         }
         if(state.case)this.feel.cases([state.case,...state.extraCases??[]],this.stage.camera);
     }
@@ -930,7 +1007,7 @@ export class GameSession {
         this.city.dispose();
         this.music.dispose();
         this.feedback.dispose();
-        this.foleyWorld.dispose();this.foley.dispose();this.feel.dispose();this.lineup?.dispose();clearTimeout(this.compileTimer);
+        this.foleyWorld.dispose();this.foley.dispose();this.feel.dispose();this.story?.dispose();this.lineup?.dispose();clearTimeout(this.compileTimer);
         disposeEntitySounds();
         this.stats?.dispose();
         this.stage.dispose();

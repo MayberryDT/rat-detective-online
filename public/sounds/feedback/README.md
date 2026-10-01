@@ -44,3 +44,27 @@ Tyler asked for the case's sounds to be redone across the board. They are made b
 | Knocked loose | `case-loose` | A leather thud and fluttering papers | 0.46 s |
 | A ball on the case | `case-thwack` | Leather thwack, latch jingle, a little paper | 0.30 s |
 | The grip takes a hit | `case-knock` | A hard knock and latch rattle, played faster as the grip weakens | 0.24 s |
+
+## The arsenal (protocol 27, 1 October)
+
+The Mousetrap's foley is edited from the same retained cartoon recordings by `python3 scripts/generate-feedback-sounds.py` (24 kHz). There is no synthesis in it.
+
+| Cue | File | Edit | Length |
+| --- | --- | --- | --- |
+| Trap set down | `trap-set` | A pine thunk, the bar latching and a short creak of the spring | 0.34 s |
+| A rat snapped | `trap-snap` | A sharp crack of the bar, the steel slapping home, a body thump and the big door-stopper spring twang | 0.68 s |
+| A ball chips it | `trap-splinter` | One small dry wood splinter | 0.10 s |
+| Broken | `trap-break` | The base crunches, three splinters, then the freed spring sags out a slow, low boing | 0.95 s |
+| No room to set it | `trap-refused` | A dull, low-passed wooden clack | 0.20 s |
+
+The Laser and the three weapon claims are original deterministic synthesis from `python3 scripts/generate-pickup-sounds.py` (48 kHz, 0.86 peak):
+
+| Cue | File | Design | Length |
+| --- | --- | --- | --- |
+| Laser fired (yours on the press, others' with the beam) | `laser-fire` | Pulp ray gun: a 70 ms charge whine climbing to 3 kHz, then a warbling FM "pew" diving from 2.6 kHz, a crackle of static and a soft sub thump | 0.62 s |
+| Laser strikes | `laser-hit` | A hard broadband crack with a bright inharmonic ping, then frying, spitting static | 0.50 s |
+| Tommy Gun claim | `pickup-tommy-gun` | The bolt racks and slams home, the drum slaps on, a brush and two short trombone hits a fourth up | 0.85 s |
+| Laser claim | `pickup-laser` | The ray gun powers up, a theremin swoops up an octave, two vibraphone glints | 0.95 s |
+| Mousetrap claim | `pickup-mousetrap` | A pine thunk, the spring creaking back, the bar's click and two sneaky upright-bass notes | 0.90 s |
+
+Listening in the full game mix has not been checked yet.

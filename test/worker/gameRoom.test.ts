@@ -137,26 +137,26 @@ describe('GameRoom websockets', () => {
     const room=`graybox-streak-reward-${crypto.randomUUID()}`,a=await openClient(room),b=await openClient(room);
     a.ws.send(joinPayload('Shooter'));const aw=await a.inbox.waitFor('welcome');
     b.ws.send(joinPayload('Victim'));const bw=await b.inbox.waitFor('welcome');
-    const random=vi.spyOn(Math,'random').mockReturnValue(.99);
+    const random=vi.spyOn(Math,'random').mockReturnValue(.3);
     try{
       await runInDurableObject(env.GAME_ROOM.getByName(room),async(instance:GameRoom)=>{
-        const game=instance as unknown as {players:Map<string,PlayerData>;startChaos():void;chaos:{snapshot(full:boolean):{buffs?:Record<string,{stakeoutUntil?:number}>}};handleHit(id:string,message:ClientMessage):Promise<void>};
+        const game=instance as unknown as {players:Map<string,PlayerData>;startChaos():void;chaos:{snapshot(full:boolean):{buffs?:Record<string,{hustleUntil?:number}>}};handleHit(id:string,message:ClientMessage):Promise<void>};
         game.startChaos();
         const shooter=game.players.get(aw.id)!,healed:number[]=[];
         for(let kill=1;kill<=7;kill++){
-          // Hurt, the last draw is Quick Fix: a reward shows as a full heal.
+          // Hurt, the draw is every kind in PICKUP_KINDS order: this one is Quick Fix, so a reward shows as a full heal.
           shooter.hp=1;game.players.get(bw.id)!.hp=MAX_HP;
           await game.handleHit(aw.id,{type:'hit',victimId:bw.id,damage:MAX_HP});
           if(shooter.hp===MAX_HP)healed.push(kill);
         }
         expect(healed).toEqual([3,5]);
         shooter.hp=MAX_HP;
-        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.stakeoutUntil).toBeUndefined();
-        // Unhurt, Quick Fix leaves the draw: the last is Stakeout.
+        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.hustleUntil).toBeUndefined();
+        // Unhurt, Quick Fix leaves the draw: the same roll is Hot Pursuit.
         game.players.get(bw.id)!.hp=MAX_HP;
         await game.handleHit(aw.id,{type:'hit',victimId:bw.id,damage:MAX_HP});
         expect(shooter.streak).toBe(8);
-        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.stakeoutUntil).toBeGreaterThan(0);
+        expect(game.chaos.snapshot(false).buffs?.[aw.id]?.hustleUntil).toBeGreaterThan(0);
       });
     }finally{random.mockRestore();}
     const heal=await b.inbox.waitFor('playerHealed');

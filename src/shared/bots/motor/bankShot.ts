@@ -18,8 +18,8 @@ const PROBES=[.5,-.5,1,-1,1.45,-1.45];
  * walls; the target's mirror image across each wall gives the bounce point; the shortest path whose first leg
  * meets that wall beside that point, and whose second leg reaches the target unobstructed and clear of `avoid`
  * (points a returning ball must not pass near, like silver coats), wins. At most `BANK.rays` rays. The drop
- * uses the active `incident`'s launch speed and gravity. */
-export function bankShot(eye:Vec3Data,target:Vec3Data,ray:RayCast,avoid:readonly Vec3Data[]=[],incident?:IncidentId):Vec3Data|undefined {
+ * uses the active `incident`'s launch speed and gravity; a `beam` (the Laser) flies straight. */
+export function bankShot(eye:Vec3Data,target:Vec3Data,ray:RayCast,avoid:readonly Vec3Data[]=[],incident?:IncidentId,beam=false):Vec3Data|undefined {
     const bearing=Math.atan2(target.x-eye.x,target.z-eye.z);
     const walls:RayHit[]=[];
     for(const turn of PROBES){
@@ -53,6 +53,7 @@ export function bankShot(eye:Vec3Data,target:Vec3Data,ray:RayCast,avoid:readonly
             Math.hypot(first.point.x-bounce.x,first.point.y-bounce.y,first.point.z-bounce.z)>1)continue;
         if(ray({x:bounce.x+normal.x*.3,y:bounce.y,z:bounce.z+normal.z*.3},target))continue;
         if(avoid.some(p=>segmentDistance(bounce,target,p)<1.2))continue;
+        if(beam)return bounce;
         // Lift the aim so the drop over both legs (the second slowed by the bounce) lands on the target.
         const speed=launchSpeed(incident),t=out/speed+back/(speed*BALL_RESTITUTION);
         return {x:bounce.x,y:bounce.y-launchGravity(incident)*t*t/2*out/(out+back),z:bounce.z};

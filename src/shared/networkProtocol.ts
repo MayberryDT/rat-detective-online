@@ -4,9 +4,11 @@ import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 import type { ControlsInput } from './rat/controlTally';
 import type { PerfReport } from './perfReport';
+import type { WeaponKind } from './pickups';
 
-/** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there. */
-export const PROTOCOL_VERSION = 26;
+/** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there.
+ * 27: Tommy Gun, Laser and Mousetrap pickups; a stronger Excessive Force carrier; targets of 10 / 100 / 10; the incident rework. */
+export const PROTOCOL_VERSION = 27;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
@@ -182,7 +184,7 @@ export interface ShotDescriptor {
 
 export type PickupTarget = 'case' | 'pickup';
 export type PickupRejectReason = 'stale'|'unavailable'|'blocked'|'ineligible'|'too-far'|'invalid-target'|'rate-limited';
-export type ShotResultOutcome = 'first-step'|'rat-body'|'rat-head'|'ironclad-reflect'|'case-contact'|'world-bounce'|'dispatch-contact'|'pressure-contact'|'fake-case'|'lifetime'|'capacity'|'reset'|'rejected';
+export type ShotResultOutcome = 'first-step'|'rat-body'|'rat-head'|'ironclad-reflect'|'case-contact'|'world-bounce'|'dispatch-contact'|'pressure-contact'|'fake-case'|'trap-contact'|'lifetime'|'capacity'|'reset'|'rejected';
 
 export type ClientMessage = (
   | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance; resumeToken?: string }
@@ -198,10 +200,12 @@ export type ClientMessage = (
   | { type: 'perf'; report: PerfReport }
 ) & { deliveryAck?: {stream:string;seq:number} };
 
-/** Why a rat was healed: a Quick Fix, Clean Bill, or a Most Wanted bounty. */
-export type HealCause = 'pickup' | 'incident' | 'bounty';
-/** A death nobody is credited with: a runaway case missile, or the harbour. */
-export type EnvironmentCause = 'evidence-tampering' | 'drowned';
+/** Why a rat was healed: a Quick Fix (site or reward), or an Excessive Force case kill. */
+export type HealCause = 'pickup' | 'case-kill';
+/** A death nobody is credited with: a runaway case missile, the harbour, an Act of God meteor, or Code Violation equipment. */
+export const ENVIRONMENT_CAUSES = ['evidence-tampering','drowned','meteor','malfunction'] as const;
+export type EnvironmentCause = typeof ENVIRONMENT_CAUSES[number];
+export const isEnvironmentCause = (value: unknown): value is EnvironmentCause => ENVIRONMENT_CAUSES.some(cause => cause === value);
 export type ServerMessage =
   | { type: 'chaos'; state: ChaosState }
   | {
@@ -263,6 +267,8 @@ export type ServerMessage =
       incoming?: Vec3Data;
       incident?: boolean;
       headshot?: true;
+      /** The special weapon that made the kill, when one did (the Mousetrap's snap, a laser, a Tommy Gun ball). */
+      weapon?: WeaponKind;
       /** The credited killer's kill streak including this kill. */
       killerStreak?: number;
     }

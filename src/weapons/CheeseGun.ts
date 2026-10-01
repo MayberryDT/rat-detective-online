@@ -5,12 +5,13 @@ import type {ShotTrace} from '../shared/LocalShotPresentation';
 import { MAX_HP, type ShotDescriptor } from '../shared/networkProtocol';
 import type { IncidentId } from '../shared/incidentCatalog';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
-import { GunshotAudio } from '../audio/GunshotAudio';
+import { GunshotAudio, type GunshotCue } from '../audio/GunshotAudio';
+import { playSynth } from '../audio/IncidentAudio';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from './CheeseProjectileModel';
 import { RatEntity } from '../entities/RatEntity';
 import { createShotId } from './shotId';
-import { badRound } from '../shared/shotPattern';
-import { playDudPop } from '../audio/IncidentAudio';
+import type { WeaponKind } from '../shared/pickups';
+import type { LaserCast } from '../shared/laser';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
 import { BALL_SPEED, BALL_RESTITUTION, BALL_GRAVITY, BALL_LIFETIME } from '../shared/ballTuning';
@@ -30,7 +31,7 @@ interface CheeseBall {
 
 export class CheeseGun {
     public authoritative = false;
-    public fireCue: 'normal' | 'malfunction' = 'normal';
+    public fireCue: GunshotCue = 'normal';
     private scene: THREE.Scene;
     private world: CANNON.World;
     private presentationRay?:SpatialRayQuery;
@@ -91,7 +92,7 @@ export class CheeseGun {
      * For the PLAYER: uses camera raycasting for precise aim convergence.
      * For NPCs: shoots directly at the provided targetPoint.
      */
-    shoot(owner: RatEntity, targetPoint: THREE.Vector3): ShotDescriptor | null {
+    shoot(owner: RatEntity, targetPoint: THREE.Vector3, weapon?: WeaponKind): ShotDescriptor | null {
         if (this.disposed) return null;
 
         let finalTarget: THREE.Vector3;
@@ -130,11 +131,11 @@ export class CheeseGun {
             finalTarget = targetPoint.clone();
         }
 
-        // ── Spawn Origin ──
-        owner.playShootAnimation(finalTarget);
+        // ── Spawn Origin ── (a Mousetrap press sets the trap down: no recoil, no report)
+        if (weapon !== 'mousetrap') owner.playShootAnimation(finalTarget);
         const origin = owner.getMuzzlePosition();
         const shotId = createShotId();
-        this.fireSound(shotId, origin, owner === this.playerEntity);
+        this.fireSound(origin, owner === this.playerEntity, weapon);
 
         // ── Direction (no gravity compensation — consistent power at all distances) ──
         const finalDir = new THREE.Vector3().subVectors(finalTarget, origin).normalize();
@@ -145,24 +146,26 @@ export class CheeseGun {
     }
 
     /** Replay the resolved trajectory; never re-aim from an interpolated remote rat. */
-    replayShot(owner: RatEntity, shot: ShotDescriptor): void {
+    replayShot(owner: RatEntity, shot: ShotDescriptor, weapon?: WeaponKind): void {
         if (this.disposed) return;
-        this.fireSound(shot.shotId, shot.origin, false);
+        this.fireSound(shot.origin, false, weapon);
         owner.playShootAnimation(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z)
             .addScaledVector(new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), 30));
         if(!this.authoritative)this.createBall(new THREE.Vector3(shot.origin.x, shot.origin.y, shot.origin.z),
             new THREE.Vector3(shot.direction.x, shot.direction.y, shot.direction.z), owner);
     }
 
-    /** Bad Ammunition: a jam makes no gunshot and a dud only pops; the feel layer adds the click and cough. */
-    private fireSound(shotId: string, origin: { x: number; y: number; z: number }, local: boolean): void {
-        const round = this.fireCue === 'malfunction' ? badRound(shotId).round : 'crooked';
-        if (round === 'crooked') this.fireAudio.play(origin, local, this.fireCue);
-        else if (round === 'dud') playDudPop(origin);
+    /** Bad Ammunition fires every round with the pitched-up malfunction shot; the feel layer adds each ball's personality.
+     * The Tommy Gun has its own recorded rounds; the Laser's zap is the beam's (ChaosView), and a Mousetrap is silent here. */
+    private fireSound(origin: { x: number; y: number; z: number }, local: boolean, weapon?: WeaponKind): void {
+        if (weapon) { if (weapon === 'tommy-gun') this.fireAudio.play(origin, local, 'tommy'); return; }
+        this.fireAudio.play(origin, local, this.fireCue);
+        // Scattershot: a heavy shotgun BLAM under the pistol.
+        if (this.fireCue === 'shotgun') playSynth('blam', local ? undefined : origin, .95 + Math.random() * .1, local ? 1 : .9);
     }
 
     setIncident(incident?: IncidentId): void {
-        this.fireCue = incident === 'bad-ammunition' ? 'malfunction' : 'normal';
+        this.fireCue = incident === 'bad-ammunition' ? 'malfunction' : incident === 'scattershot' ? 'shotgun' : 'normal';
     }
 
     /** Presentation sweeps never damage entities or emit hit feedback. Exclude
@@ -178,6 +181,18 @@ export class CheeseGun {
         return{p:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},
             n:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z},rat:!!entity&&!entity.dead,
             ...(entity&&this.protectedRats.has(entity)?{reflect:true}:{})};
+    };
+
+    /** The shooter's laser prediction (`laserPath`): city and rats, never your own body. Ironclad coats reflect;
+     * a head hit is a 'head'. Draws only; the authority traces its own beam. */
+    readonly traceLaser=(from:CANNON.Vec3,to:CANNON.Vec3):LaserCast|undefined=>{
+        this.presentationRay??=new SpatialRayQuery(this.world);
+        const hit=this.presentationRay.closest(from,to,GROUP_DEFAULT,this.acceptPresentationBody,GROUP_PROJECTILE,this.traceResult);
+        if(!hit.hasHit)return undefined;
+        const entity=(hit.body as CANNON.Body&{userData?:{entity?:RatEntity}}|null)?.userData?.entity;
+        const on=!entity||entity.dead?'world':this.protectedRats.has(entity)?'armor':hit.shape===entity.headShape?'head':'rat';
+        return {distance:hit.distance,point:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},
+            normal:{x:hit.hitNormalWorld.x,y:hit.hitNormalWorld.y,z:hit.hitNormalWorld.z},on};
     };
 
     /** Cosmetic visibility only; shares the existing static BVH with presentation. */

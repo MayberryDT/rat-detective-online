@@ -90,6 +90,13 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 .powerup-quick-fix .powerup-clock small{font-size:9px;letter-spacing:0;white-space:nowrap}
 .powerup-healed{margin-top:10px;padding:3px 0;border-top:1px dashed var(--powerup);color:var(--powerup);font:13px/1 var(--font-type);letter-spacing:.06em}
 .powerup-stakeout{--powerup:#e0b95a;rotate:1deg}
+.powerup-tommy-gun{--powerup:#e8873e;rotate:-1.5deg}
+.powerup-laser{--powerup:#5fd8e6;rotate:1.5deg}
+/* The Mousetrap is held until set down: no clock, only how to set it down (touch says FIRE). */
+.powerup-mousetrap{--powerup:#e6dcc4;rotate:-.5deg}
+.powerup-mousetrap .powerup-copy{padding-right:0}
+.powerup-touch-hint,.touch-mode .powerup-desktop-hint{display:none}
+.touch-mode .powerup-touch-hint{display:inline}
 /* Three or four rewards can be visible together, including landscape phones. */
 @media(max-width:1050px){.pickup-buffs:has(.powerup-card:nth-child(3)){gap:6px}.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-card{width:29vw}}
 @media(max-width:700px){.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-art{width:30px}.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-copy strong{font-size:18px}.powerup-healed{font-size:11px}}

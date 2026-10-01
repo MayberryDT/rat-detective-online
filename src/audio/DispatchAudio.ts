@@ -3,8 +3,8 @@ import { worldSoundGain } from './worldSoundGain';
 
 /** `clank`: a ball on a busy bell; `strike`: the ball that starts an incident;
  * `squawk`: the police radio, heard citywide; `tick`: each of the last three
- * seconds; `finale`: the incident's closing beat; `whistle`: the all clear. */
-export type DispatchCue = 'clank' | 'strike' | 'squawk' | 'tick' | 'finale' | 'whistle';
+ * seconds; `finale`: the incident's closing beat; `whistle`: the all clear; `yelp`: an All Units backup arriving. */
+export type DispatchCue = 'clank' | 'strike' | 'squawk' | 'tick' | 'finale' | 'whistle' | 'yelp';
 type Buffers = Partial<Record<DispatchCue | 'whoop' | 'ring', AudioBuffer>>;
 interface Voice {source:AudioBufferSourceNode;gain:GainNode;pan:StereoPannerNode;volume:number}
 /** Siren slots, bell slots and one-shot cues are each bounded. */
@@ -173,5 +173,12 @@ const CUES: Record<DispatchCue, (ctx: AudioContext) => AudioBuffer> = {
         const on = t < .32 ? Math.min(1, t / .02, (.32 - t) / .03) : t > .45 && t < 1.3 ? Math.min(1, (t - .45) / .02, (1.3 - t) / .06) : 0;
         phase += 2 * Math.PI * (2850 + 140 * Math.sin(2 * Math.PI * 27 * t)) / ctx.sampleRate;
         return on * (Math.sin(phase) * (.75 + .25 * Math.sin(2 * Math.PI * 27 * t)) + .12 * n());
+    }); },
+    // All Units backup arrival: a prowl car's two fast whoop-whoops, sweeping up and dropping.
+    yelp: ctx => { let phase = 0; return render(ctx, 1.1, .7, t => {
+        const cycle = (t % .5) / .5, frequency = 620 + 980 * Math.sin(Math.PI * Math.min(1, cycle * 1.25)) ** .7;
+        phase += 2 * Math.PI * frequency / ctx.sampleRate;
+        const envelope = Math.min(1, t / .03) * Math.min(1, (1.1 - t) / .12);
+        return (Math.sin(phase) + .35 * Math.sin(phase * 3) + .15 * Math.sin(phase * 5)) * envelope;
     }); },
 };

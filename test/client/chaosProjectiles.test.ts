@@ -45,9 +45,9 @@ describe('authoritative ball presentation', () => {
     if(incident){initial.dispatch={phase:'active',incident,started:at,until:at+25000,serial:1};sim=new ChaosSimulation(players,()=>{},initial);}
     const view=new ChaosView(scene,id=>id===rat.id?player.entity:undefined,undefined,true);view.setScores([],rat.id);view.apply(initial);
     try{
-      // Bad Ammunition: use a trigger that actually fires crooked balls (not a jam or dud).
+      // Bad Ammunition: a superball leaves at full muzzle speed, as the distances below expect.
       let descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
-      while(incident==='bad-ammunition'&&badRound(descriptor.shotId).round!=='crooked')descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
+      while(incident==='bad-ammunition'&&badRound(descriptor.shotId)!=='superball')descriptor=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
       const muzzle=player.entity.getMuzzlePosition();expect(descriptor.origin).toEqual(muzzle);
       const fired=sim.shoot(rat.id,descriptor);
       const birth={type:'playerShot' as const,shooterId:rat.id,...descriptor,launch:{at:sim.time,balls:fired.map(ball=>({id:ball.id,velocity:{...ball.v}}))}};
@@ -83,7 +83,7 @@ describe('authoritative ball presentation', () => {
     view.setScores([],rat.id);view.apply(initial);
     try{
       let shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
-      while(incident==='bad-ammunition'&&badRound(shot.shotId).round!=='crooked')shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
+      while(incident==='bad-ammunition'&&badRound(shot.shotId)!=='superball')shot=gun.shoot(player.entity,new THREE.Vector3(0,100,100))!;
       const muzzle=player.entity.getMuzzlePosition();view.fire(shot);
       const fired=sim.shoot(rat.id,shot);
       const balls=scene.getObjectByName('cheese-balls') as THREE.InstancedMesh,matrix=new THREE.Matrix4(),point=new THREE.Vector3();

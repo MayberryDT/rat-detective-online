@@ -14,8 +14,9 @@ export interface FeelSpec {
 
 export const FEEL={
     cameraSpring:{label:'Camera spring',toggle:false,params:{stiffness:260,damping:.78,maxTurn:.08,maxShift:.35,maxWiden:14,fovStiffness:60}},
-    /** Very subtle upward view nudge (rad/s impulse; peak ≈ 0.4°) and a tiny backward shove per local shot. Toned down 2026-09-27 at Tyler's request. */
-    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.28,yawJitter:.15,push:.15,scattershot:1.3}},
+    /** Very subtle upward view nudge (rad/s impulse; peak ≈ 0.4°) and a tiny backward shove per local shot. Toned down 2026-09-27 at Tyler's request.
+     * Scattershot is a shotgun: `scattershot`× the kick and a `scatterWiden`° field-of-view thump. */
+    shotKick:{label:'1 Shot kick',toggle:true,params:{pitch:.28,yawJitter:.15,push:.15,scattershot:3.2,scatterWiden:3}},
     /** Shove away from the attacker when you take nonlethal damage, scaled by damage. */
     hitJolt:{label:'2 Hit jolt',toggle:true,params:{push:7,yaw:1.4,dip:-1.1,perDamage:.35}},
     /** Red edge flash (scaled by Flash strength) and arrows tracking the attacker. */
@@ -53,7 +54,7 @@ export const FEEL={
     /** Movement: landing dip (rad/s impulse), launch/Hot Pursuit view widening (degrees), speed streaks, dust count. */
     movement:{label:'16 Movement',toggle:true,params:{dip:-1.6,dipPush:-5,launchWiden:9,pursuitWiden:3.5,streaks:.8,dust:8}},
     /** Synthesized sound pass (volumes before Effects volume): footsteps, rustle, jostle, squelch, whizz, brass, stings, wind; echo/muffle by space. */
-    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,hunch:.2,supply:.2,supplyRange:40,jam:.22,cough:.2,womp:.14,sting:.1,wind:.07,rain:.06,thunder:.16}},
+    sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,hunch:.2,supply:.2,supplyRange:40,jam:.22,sting:.1,wind:.07,rain:.06,thunder:.16}},
     /** Reactive city: a flock every N lamps, a trash can every N lamps, scare radius, seconds before props return. */
     city:{label:'18 City reacts',toggle:true,params:{flockEvery:5,canEvery:4,scare:7,respawn:25}},
     /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. */
@@ -89,10 +90,16 @@ export const FEEL={
      * intensity, cone half-angle `angle` rad, `penumbra`, `decay`) that carries to `FLASHLIGHT_REACH`. The city's own
      * lights go out; exposure stays, so what a beam lights reads bright. Muzzle flashes within `muzzleRange` lift the dark. */
     blackout:{label:'I3 Blackout',toggle:false,params:{fade:1.2,beam:320,angle:.42,penumbra:.12,decay:.6,muzzle:.7,muzzleRange:40}},
-    /** Bad Ammunition juice: jams click, duds wah-wah, backfires soot the lens, muzzle smoke and coughs; `wobble` is the balls' visual wobble (units). */
-    badAmmo:{label:'I2 Bad Ammunition juice',toggle:true,params:{wobble:.12}},
+    /** Bad Ammunition juice: muzzle `smoke` and each ball's personality sound (`volume`; a superball's boing at
+     * `superballPitch`, at launch and every bounce), and your own ball's word. The paths themselves are gameplay. */
+    badAmmo:{label:'I2 Bad Ammunition juice',toggle:true,params:{smoke:.6,volume:.8,superballPitch:1.7}},
+    /** Act of God juice: the meteor's whistle (`whistle` volume) as its shadow shows; at the impact a `boom`, a view shake up
+     * to `shake` degrees fading out to `shakeRange` units, pavement chunks and a crater, dust, and KA-BOOM! within `wordRange`. */
+    actOfGod:{label:'I4 Act of God juice',toggle:true,params:{whistle:.9,boom:1,shake:3.2,shakeRange:70,wordRange:45}},
+    /** Code Violation juice: sparks off supplies and machines with a zap (`zap` volume) when close. */
+    codeViolation:{label:'I5 Code Violation juice',toggle:true,params:{zap:.7}},
     /** The Hunch (gameplay, always on): at full health you see rats within `range` through walls as a pencil sketch
-     * (`strength` opacity); Clean Bill uses `superRange`/`superStrength`. `trail` is the pencil tail brightness. */
+     * (`strength` opacity); Stakeout (and the Most Wanted sketch) uses `superRange`/`superStrength`. `trail` is the pencil tail brightness. */
     hunch:{label:'H The Hunch',toggle:false,params:{range:40,strength:.6,superRange:400,superStrength:.9,trail:.8,photo:1.5,remake:10,cardGap:8}},
     /** H2: being made. Spotter: evidence photo corners, typed MADE line and shutter. Spotted: YOU'VE BEEN MADE card, violin sting and a watching eye. */
     made:{label:'H2 Made moments',toggle:true,params:{}},
@@ -171,6 +178,15 @@ export const FEEL={
      * jump looked like "torpedoing to the side") the coat stays upright, lagging only `sway` (rad), while the tail, hat
      * and ears trail by `drag` (rad), springing over when the rat reverses. */
     airActing:{label:'A1 Air acting',toggle:true,params:{takeOff:9,fall:7,stretch:.22,squash:.12,reach:.1,tuck:.55,arch:.14,lean:.12,sway:.05,drag:.5,pivot:.9,feet:1,ears:.7,tail:.6,hat:.1,land:.22}},
+    /** W1 Tommy Gun (protocol 27): each of your shots kicks the view hard (`kick` rad/s, `yaw` jitter share, `push` u/s back) and,
+     * while the trigger is held, the view rattles (`rattle`); every Tommy's muzzle throws a flash (`flash` size) and brass casings
+     * (`casings` in the pool, `casingLife` s), seen within `range` units. */
+    tommyGun:{label:'W1 Tommy Gun juice',toggle:true,params:{kick:1.1,yaw:.9,push:.45,rattle:.55,flash:1,casings:64,casingLife:1.6,range:70}},
+    /** W2 Laser: your shot's kick (`kick`, `push`); the beam's core and glow widths (units), glow opacity and zigzag (units);
+     * scorch marks on walls (`scorches` in the pool, `scorchSize` units, `scorchLife` s). The beam itself always draws. */
+    laser:{label:'W2 Laser juice',toggle:true,params:{kick:1.6,push:.9,core:.13,width:1.15,glow:.9,zigzag:.16,scorches:32,scorchSize:1.1,scorchLife:9}},
+    /** W3 Mousetrap: a kill's SNAP shakes the view within `snapRange` (`snap` rad/s); a refused placement nudges it (`refuse`). */
+    mousetrap:{label:'W3 Mousetrap juice',toggle:true,params:{snap:1.8,snapRange:24,refuse:.35}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

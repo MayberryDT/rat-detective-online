@@ -13,19 +13,18 @@ const PHOTOS=4, TRAIL_POINTS=16, TRAIL_EVERY=.11;
 interface Photo {node:HTMLElement;caption:HTMLElement;target?:RatEntity;age:number}
 interface Trail {line:THREE.Line;points:Float32Array;colors:Float32Array;count:number;timer:number}
 
-/** Rats this client's detective has on the Hunch, and the rats that have it on you.
- * `everyone`: Clean Bill gives every rat the Hunch whatever its health. A rat on
+/** Rats this client's detective has on the Hunch, and the rats that have it on you. A rat on
  * Stakeout has it whatever its health, out to `superRange`, for as long as it lasts. */
 export function hunchReads(self:RatEntity|undefined,rats:Iterable<[string,HunchRat]>,range:number,superRange:number,
-    sensed:Set<string>,watchers:RatEntity[],everyone=false):void {
+    sensed:Set<string>,watchers:RatEntity[]):void {
     sensed.clear();watchers.length=0;
     if(!self||self.dead)return;
-    const sharp=everyone||self.staking||self.hp>=MAX_HP,near=range*range,far=superRange*superRange,reach=self.staking?far:near;
+    const sharp=self.staking||self.hp>=MAX_HP,near=range*range,far=superRange*superRange,reach=self.staking?far:near;
     for(const [id,{entity}] of rats){
         if(entity.dead||entity.hp<=0)continue;
         const d=entity.mesh.position.distanceToSquared(self.mesh.position);
         if(sharp&&d<=reach)sensed.add(id);
-        if(entity.staking?d<=far:d<=near&&(everyone||entity.hp>=MAX_HP))watchers.push(entity);
+        if(entity.staking?d<=far:d<=near&&entity.hp>=MAX_HP)watchers.push(entity);
     }
 }
 
@@ -43,7 +42,6 @@ export class Hunch {
     private wasWatched=false;
     private holding=false;
     private lastCardAt=-Infinity;
-    private supercharged=false;
     /** C2: seconds left for a Stakeout claim to see its Stakeout begin; when each newly read rat lights up (`now` ms); shutters played. */
     private revealWait=0;
     private readonly revealAt=new Map<string,number>();
@@ -68,11 +66,8 @@ export class Hunch {
         this.warmLine.visible=false;this.warmLine.name='hunch-trail-warm';freezeStatic(this.warmLine);scene.add(this.warmLine);
     }
 
-    /** Clean Bill: everyone at full health with a city-wide, stronger Hunch. */
-    setSupercharged(on:boolean):void {this.supercharged=on;}
     /** C2: your Stakeout claim. When its Stakeout begins, the rats it newly reads light up nearest first, one at a time. */
     reveal():void {this.revealWait=1;}
-    get range():number {const p=FEEL.hunch.params;return this.supercharged?p.superRange:p.range;}
 
     /** `self` is undefined when there is no live local rat (title, observer, lineup).
      * `wanted`: Most Wanted's target, sketched through walls for everyone. */
@@ -80,16 +75,16 @@ export class Hunch {
         advanceHunchSketch(dt);
         const p=FEEL.hunch.params;
         this.previous.clear();for(const id of this.sensed)this.previous.add(id);
-        hunchReads(self,rats,this.range,p.superRange,this.sensed,this.watchers,this.supercharged);
+        hunchReads(self,rats,p.range,p.superRange,this.sensed,this.watchers);
         const staking=!!self&&self.staking;
-        const strength=this.supercharged||staking?p.superStrength:p.strength;
+        const strength=staking?p.superStrength:p.strength;
         const juice=this.state.on('made');
         if(this.revealWait>0){
             if(staking){this.revealWait=0;this.stagger(now,self,rats);}
             else this.revealWait-=dt;
         }
         // The Hunch as a power-up on your own nameplate: the eye opens at full health (or on Stakeout) and shuts on the first hit.
-        const holding=!!self&&!self.dead&&(self.hp>=MAX_HP||this.supercharged||staking);
+        const holding=!!self&&!self.dead&&(self.hp>=MAX_HP||staking);
         if(holding!==this.holding){
             if(holding)this.sound.hunchGained();else if(self&&!self.dead)this.sound.hunchLost();
             this.holding=holding;

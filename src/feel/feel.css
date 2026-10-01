@@ -61,12 +61,6 @@
 .feel-letterbox.top{top:0;transform:translateY(-100%)}.feel-letterbox.bottom{bottom:0;transform:translateY(100%)}
 .feel-screen.letterboxed .feel-letterbox{transform:translateY(0)}
 @media(prefers-reduced-motion:reduce){.feel-grain{animation:none}}
-/* Bad Ammunition backfire: soot smeared across the lens, then wiped away by time. */
-.feel-soot{position:absolute;inset:0;opacity:0;pointer-events:none;
-  background:radial-gradient(ellipse 22% 16% at var(--soot-x,55%) 58%,#0a0806f2,#0a080600 70%),radial-gradient(ellipse 12% 9% at calc(var(--soot-x,55%) + 9%) 49%,#140f0bd9,#140f0b00 70%),
-    radial-gradient(ellipse 9% 7% at calc(var(--soot-x,55%) - 11%) 66%,#0d0a08cc,#0d0a0800 70%),radial-gradient(ellipse 30% 24% at var(--soot-x,55%) 60%,#1a130c66,#1a130c00 75%)}
-.feel-soot.on{animation:feel-soot 1.9s ease-out both}
-@keyframes feel-soot{0%{opacity:0;transform:scale(.7)}8%{opacity:var(--soot,1);transform:scale(1)}40%{opacity:calc(var(--soot,1)*.85)}100%{opacity:0;transform:scale(1.04) translateY(2%)}}
 /* C1–C2 claim juice: an edge flash in the supply's colour; Stakeout's ink ripple from your rat and a brief magnifying-glass lens. No glows. */
 .feel-claim{position:absolute;inset:0;opacity:0;background:var(--claim,#fff);
   -webkit-mask:radial-gradient(ellipse at center,transparent 56%,#0005 80%,#000 100%);mask:radial-gradient(ellipse at center,transparent 56%,#0005 80%,#000 100%)}
@@ -101,12 +95,12 @@ body.reduced-motion :is(.feel-grain,.feel-speed){animation:none!important}
 body.reduced-motion .feel-letterbox{transition:none}
 body.reduced-motion .feel-word.on{animation:ui-fade-hold 1100ms linear both;transform:translate(-50%,-50%) rotate(var(--tilt))}
 body.reduced-motion .feel-callout.on{animation:ui-fade-hold 1500ms linear both}
-body.reduced-motion :is(.feel-kill-bloom,.feel-soot).on{animation:none}
+body.reduced-motion .feel-kill-bloom.on{animation:none}
 @media(prefers-reduced-motion:reduce){
   .feel-speed{animation:none}.feel-letterbox{transition:none}
   .feel-word.on{animation:ui-fade-hold 1100ms linear both;transform:translate(-50%,-50%) rotate(var(--tilt))}
   .feel-callout.on{animation:ui-fade-hold 1500ms linear both}
-  :is(.feel-kill-bloom,.feel-soot).on{animation:none}
+  .feel-kill-bloom.on{animation:none}
 }
 /* Blackout: the HUD turns black and white; the game view, screen effects and the Hunch keep their own look. */
 body.blackout>:not(canvas,script,#title-screen,.feel-screen,.hunch-screen,.player-settings){filter:grayscale(1) contrast(1.08)}

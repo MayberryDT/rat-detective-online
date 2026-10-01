@@ -16,10 +16,6 @@ function fixture(incident:IncidentId){
  const sim=new ChaosSimulation(players,()=>{},state);return {sim,players,now};
 }
 function shoot(sim:ChaosSimulation,id='shot'){sim.shoot('a',{shotId:id,origin:{x:0,y:200,z:0},direction:{x:0,y:0,z:1}});}
-function wall(sim:ChaosSimulation,z:number){
- const body=new C.Body({mass:0,shape:new C.Box(new C.Vec3(8,8,.05)),position:new C.Vec3(0,200,z)});
- sim.world.addBody(body);sim.targets.set(body,{kind:'world'});
-}
 /** Two tall facing walls 10 units apart across the shot's path. */
 function corridor(sim:ChaosSimulation){
  for(const z of [-5,5]){
@@ -35,21 +31,6 @@ describe('projectile-only replacement incidents',()=>{
   for(const ball of s.shots){expect(ball.owner).toBe('a');expect(ball.v.y).toBe(0);expect(Math.hypot(ball.v.x,ball.v.y,ball.v.z)).toBeCloseTo(BALL_SPEED);}
   for(let i=0;i<60;i++)shoot(sim,`shot-${i}`);s=sim.snapshot(false);
   expect(s.shots).toHaveLength(T.maxShots);expect(s.shots.slice(-5).some(b=>b.id==='shot-59')).toBe(true);
- });
- it('sticks a ball once on its first wall, then releases along the reflected path',()=>{
-  vi.spyOn(Math,'random').mockReturnValue(0);
-  const {sim,players,now}=fixture('delayed-reaction');wall(sim,2);shoot(sim);
-  sim.step(.02,now+20);let ball=sim.snapshot(false).shots[0];
-  expect(ball.delayed).toBe(true);expect(ball.stuckUntil).toBeGreaterThan(now);
-  expect(ball.v.z).toBeLessThan(0);const held=ball.p.z;
-  sim.step(.2,now+220);expect(sim.snapshot(false).shots[0].p.z).toBeCloseTo(held,3);
-  sim.step(.55,now+770);ball=sim.snapshot(false).shots[0];
-  expect(ball.stuckUntil).toBeUndefined();expect(ball.v.z).toBeLessThan(0);expect(ball.p.z).toBeLessThan(held);
-  wall(sim,ball.p.z-1);sim.step(.02,now+790);ball=sim.snapshot(false).shots[0];
-  expect(ball.v.z).toBeGreaterThan(0);expect(ball.stuckUntil).toBeUndefined();
-  expect(parseServerMessage({type:'chaos',state:sim.snapshot(false)})).not.toBeNull();
-  const restored=new ChaosSimulation(players,()=>{},sim.snapshot(false));
-  expect(restored.snapshot(false).shots[0].delayed).toBe(true);
  });
  it('launches Big Cheese slow at start size, then grows a step per real wall bounce to the largest',()=>{
   const {sim,now}=fixture('big-cheese');corridor(sim);
@@ -90,9 +71,9 @@ describe('projectile-only replacement incidents',()=>{
   expect(ball.radius).toBe(1.24);expect(ball.life).toBeUndefined();
   expect(ball.p.y).toBeCloseTo(100+1.24,1);expect(ball.p.x).toBeGreaterThan(15);
  });
- it.each(['scattershot','delayed-reaction','big-cheese'] as const)('%s stops modifying new projectiles when its window ends',incident=>{
+ it.each(['scattershot','big-cheese'] as const)('%s stops modifying new projectiles when its window ends',incident=>{
   const {sim,now}=fixture(incident);sim.step(0,now+T.activeMs);shoot(sim);sim.step(.81,now+T.activeMs+810);
-  const s=sim.snapshot(false);expect(s.shots).toHaveLength(1);expect(s.shots[0].v.z).toBe(BALL_SPEED);expect(s.shots[0].delayed).toBeUndefined();expect(s.pressure!.launches).toEqual([]);
+  const s=sim.snapshot(false);expect(s.shots).toHaveLength(1);expect(s.shots[0].v.z).toBe(BALL_SPEED);expect(s.pressure!.launches).toEqual([]);
  });
  it('migrates old Kickback snapshots to Scattershot and maps Return/Cheesequake onto the new roster',()=>{
   const {sim,players}=fixture('scattershot');const state=sim.snapshot(false);
@@ -101,7 +82,7 @@ describe('projectile-only replacement incidents',()=>{
   const restored=new ChaosSimulation(players,()=>{},legacy);shoot(restored);
   expect(restored.snapshot(false).shots).toHaveLength(5);expect(restored.snapshot(false).pressure!.launches).toHaveLength(0);
   expect(incidentInfo('kickback').id).toBe('scattershot');expect(INCIDENTS.some(i=>(i.id as string)==='kickback')).toBe(false);
-  expect(incidentInfo('return-to-sender').id).toBe('delayed-reaction');
+  expect(incidentInfo('return-to-sender').id).toBe('crossfire');expect(incidentInfo('delayed-reaction').id).toBe('crossfire');
   expect(incidentInfo('cheesequake').id).toBe('big-cheese');
   expect(INCIDENTS.some(i=>['return-to-sender','cheesequake'].includes(i.id))).toBe(false);
  });

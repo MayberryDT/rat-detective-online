@@ -1,7 +1,7 @@
 import {BALL_RADIUS} from './ballTuning';
-import {bounceShot,bounces,cheeseBounce,growIn,shotGravity,shotLife} from './shotBallistics';
+import {bounceShot,bounces,cheeseBounce,growIn,quirkBirth,quirkBounce,shotGravity,shotLife,steerQuirk} from './shotBallistics';
 import {CHAOS_TUNING,type ChaosShot,type ChaosState} from './chaosState';
-import {resolveShotPattern} from './shotPattern';
+import {resolveShotPattern,type ShotWeapon} from './shotPattern';
 import type {IncidentId} from './incidentCatalog';
 import type {ServerMessage,ShotDescriptor,Vec3Data} from './networkProtocol';
 
@@ -9,7 +9,7 @@ import type {ServerMessage,ShotDescriptor,Vec3Data} from './networkProtocol';
 export type ShotTrace=(from:Vec3Data,to:Vec3Data,radius?:number)=>{p:Vec3Data;n:Vec3Data;rat:boolean;reflect?:boolean}|undefined;
 interface LocalShot {
     shot:ChaosShot; trigger:string; fired:number; updated:number; first:boolean;
-    confirmed?:number; hidden:boolean; incident?:IncidentId;
+    confirmed?:number; hidden:boolean; incident?:IncidentId; weapon?:ShotWeapon;
     offset?:{p:Vec3Data;at:number};
 }
 const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -25,12 +25,16 @@ export class LocalShotPresentation {
     private readonly merged:ChaosShot[]=[];
     constructor(private readonly trace?:ShotTrace){}
     clear():void{this.shots.clear();this.retired.clear();this.merged.length=0;}
-    fire(owner:string,shot:ShotDescriptor,incident:IncidentId|undefined,now:number):void {
-        for(const ball of resolveShotPattern(shot,incident)){
+    /** `weapon` is the held special weapon (the Tommy Gun with its heat); it replaces the incident's pattern. A trigger
+     * with no ball (Laser, Mousetrap) is retired at once, so its confirmation is consumed without a muzzle replay. */
+    fire(owner:string,shot:ShotDescriptor,incident:IncidentId|undefined,now:number,weapon?:ShotWeapon):void {
+        const balls=resolveShotPattern(shot,incident,weapon);
+        if(!balls.length){this.retire(shot.shotId);return;}
+        for(const ball of balls){
             if(this.shots.has(ball.id)||this.retired.has(ball.id))continue;
             while(this.shots.size>=CHAOS_TUNING.maxShots)this.retire(this.shots.keys().next().value!);
-            this.shots.set(ball.id,{shot:{id:ball.id,owner,p:{...shot.origin},v:{...ball.velocity},age:0,...(ball.dud?{dud:true as const}:{})},
-                trigger:shot.shotId,fired:now,updated:now,first:true,hidden:false,incident});
+            this.shots.set(ball.id,{shot:{id:ball.id,owner,p:{...shot.origin},v:{...ball.velocity},age:0,...(ball.quirk?quirkBirth(ball.quirk,shot.direction):{})},
+                trigger:shot.shotId,fired:now,updated:now,first:true,hidden:false,...(weapon?{weapon}:{incident})});
         }
     }
     /** Returning true consumes the confirmation, including one already retired.
@@ -55,9 +59,11 @@ export class LocalShotPresentation {
             }
             local.confirmed=launch.at;
             // Usually this is identical. The authority wins a boundary change.
-            const expectedVelocity=resolveShotPattern(message,local.incident).find(b=>b.id===ball.id)?.velocity;
+            const expectedVelocity=resolveShotPattern(message,local.incident,local.weapon).find(b=>b.id===ball.id)?.velocity;
             if(!expectedVelocity||distance(expectedVelocity,ball.velocity)>.01){
-                const state={...local.shot,p:{...message.origin},v:{...ball.velocity},age:0};
+                // A Bad Ammunition ball the prediction did not expect (or a predicted one the authority did not fire) takes the authority's personality.
+                const quirk=resolveShotPattern(message,'bad-ammunition').find(b=>b.id===ball.id&&distance(b.velocity,ball.velocity)<=.01)?.quirk;
+                const state:ChaosShot={id:local.shot.id,owner:local.shot.owner,p:{...message.origin},v:{...ball.velocity},age:0,...(quirk?quirkBirth(quirk,message.direction):{})};
                 const hidden=this.advance(state,Math.min(.5,Math.max(0,(now-local.fired)/1000)),local.incident);
                 local.shot=state;local.hidden=hidden;local.offset=undefined;local.updated=now;
             }
@@ -86,7 +92,8 @@ export class LocalShotPresentation {
                 continue;
             }
             local.confirmed??=state.time;
-            local.incident=state.dispatch.phase==='active'?state.dispatch.incident:undefined;
+            // A special weapon's balls are plain whatever the incident (no Big Cheese growth).
+            if(!local.weapon)local.incident=state.dispatch.phase==='active'?state.dispatch.incident:undefined;
             if(local.first)continue; // first display frame still starts at muzzle
             this.update(local,now);
             const age=local.shot.age,elapsed=Math.max(0,age-authoritative.age);
@@ -94,6 +101,9 @@ export class LocalShotPresentation {
             // responsive local shot backwards across half the city.
             if(elapsed>.5)continue;
             const corrected=clone(authoritative);
+            // Snapshots never carry a personality: keep the predicted one while its path lasts (a superball's for good).
+            const quirk=local.shot.quirk;
+            if(quirk&&local.shot.aim&&(quirk==='superball'||!authoritative.wallBounced)){corrected.quirk=quirk;corrected.aim=local.shot.aim;}
             const hidden=this.advance(corrected,elapsed,local.incident);
             const before=this.position(local,now),error=distance(before,corrected.p);
             const bounced=!!authoritative.wallBounced!==!!local.shot.wallBounced;
@@ -114,10 +124,9 @@ export class LocalShotPresentation {
         for(let remaining=elapsed;remaining>1e-8;remaining-=STEP){
             const dt=Math.min(STEP,remaining);shot.age+=dt;
             if(shot.age>shotLife(shot))return true;
-            if(shot.stuckUntil){shot.age+=Math.max(0,remaining-dt);return shot.age>shotLife(shot);}
             if(heavy)growIn(shot);
             const radius=shot.radius??BALL_RADIUS;
-            shot.v.y+=shotGravity(radius)*dt;
+            if(steerQuirk(shot))shot.v.y+=shotGravity(radius)*dt;
             const next={x:shot.p.x+shot.v.x*dt,y:shot.p.y+shot.v.y*dt,z:shot.p.z+shot.v.z*dt};
             const big=radius>BALL_RADIUS+.001,hit=this.trace?.(shot.p,next,big?radius:undefined);
             if(!hit){shot.p=next;continue;}
@@ -126,10 +135,9 @@ export class LocalShotPresentation {
             shot.p={x:hit.p.x+hit.n.x*clear,y:hit.p.y+hit.n.y*clear,z:hit.p.z+hit.n.z*clear};
             // A reflective coat bounces the ball instead of consuming it, and it
             // stays a rat contact: it never counts as a wall bounce for incidents.
-            if(hit.rat&&!hit.reflect&&!shot.dud)return true;
+            if(hit.rat&&!hit.reflect)return true;
             if(!hit.rat)shot.wallBounced=true;
-            if(!hit.rat&&incident==='delayed-reaction'&&!shot.delayed){shot.delayed=true;shot.stuckUntil=Number.MAX_SAFE_INTEGER;shot.age+=Math.max(0,remaining-dt);return false;}
-            const contact=bounceShot(shot.v,hit.n,radius);
+            const contact=bounceShot(shot.v,hit.n,radius);quirkBounce(shot);
             if(heavy&&!hit.rat&&bounces(contact,radius))cheeseBounce(shot);
         }
         return false;

@@ -38,7 +38,8 @@ const OVERLAYS: Record<string, [string, string, boolean]> = {
   cases: ['Case spawns', '#c8963e', false], launchers: ['Launchers', '#e2352b', true], pillars: ['Dispatch pillars', '#ff7a1f', false],
   zones: ['Jurisdiction zones', '#8a5cf6', false], dest: ['Paper Chase stops', '#ffd23f', false],
 };
-const PICKUP_COLOR: Record<PickupKind, string> = { ironclad: '#d9dde3', hustle: '#ff3b3b', 'quick-fix': '#3ddc6a', stakeout: '#f3cf6f' };
+const PICKUP_COLOR: Record<PickupKind, string> = { ironclad: '#d9dde3', hustle: '#ff3b3b', 'quick-fix': '#3ddc6a', stakeout: '#f3cf6f',
+  'tommy-gun': '#ff9a2e', laser: '#4fe3ff', mousetrap: '#b5793a' };
 const COUNT_ROWS: Array<[string, string, boolean?]> = [
   ['human-s', 'Human time', true], ['bot-s', 'Bot time', true], ['deaths-human', 'Human deaths'], ['deaths-bot', 'Bot deaths'], ['kills', 'Kills made here'],
   ['shots-human', 'Human shots'], ['hits-human', 'Human hits'], ['bank-hits-human', '…banked off a wall'], ['shots-bot', 'Bot shots'],

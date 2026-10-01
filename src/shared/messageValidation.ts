@@ -15,6 +15,7 @@ import {
   MAX_SERVER_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   RACE_LIMIT,
+  isEnvironmentCause,
   type Award,
   type AwardId,
   type ClientMessage,
@@ -32,8 +33,8 @@ import {
   type WorldSpec,
 } from './networkProtocol';
 import type { ControlsInput } from './rat/controlTally';
-import { CHAOS_TUNING, INCIDENT_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, PRESSURE_TUNING, type ChaosState } from './chaosState';
-import { BUFF_FIELDS, PICKUP_ANCHORS, isPickupKind } from './pickups';
+import { CHAOS_TUNING, INCIDENT_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LASER_SURFACES, LAUNCH_MACHINES, MAX_BEAMS, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, MAX_TRAPS, PRESSURE_TUNING, type ChaosState } from './chaosState';
+import { BUFF_FIELDS, PICKUP_ANCHORS, WEAPON_TUNING, isPickupKind, isWeaponKind } from './pickups';
 import { isSupportedWorldVersion } from './worldSpec';
 
 const HAT_TYPES = new Set<HatTypeName>(['fedora', 'trilby', 'porkpie']);
@@ -508,20 +509,30 @@ function parseChaos(value:unknown):ChaosState|null{
         (p.availableAt===undefined||typeof p.availableAt==='number'&&Number.isFinite(p.availableAt)&&p.availableAt>=0&&p.availableAt<=Number.MAX_SAFE_INTEGER)))return null;
     if(new Set(value.pickups.map(p=>p.id)).size!==value.pickups.length)return null;
   }
+  if(value.meteors!==undefined&&(!Array.isArray(value.meteors)||value.meteors.length>INCIDENT_TUNING.meteorMax*2||
+    !value.meteors.every(m=>isRecord(m)&&nonEmptyString(m.id,64)&&[m.x,m.y,m.z,m.born,m.at].every(n=>finiteNumber(n)!==null))))return null;
+  if(value.traps!==undefined&&(!Array.isArray(value.traps)||value.traps.length>MAX_TRAPS||
+    !value.traps.every(t=>isRecord(t)&&nonEmptyString(t.id,64)&&nonEmptyString(t.owner,64)&&[t.x,t.y,t.z,t.yaw,t.at].every(n=>finiteNumber(n)!==null)&&
+      boundedInteger(t.hp,0,WEAPON_TUNING.trapHp)!==null&&[t.snapAt,t.hitAt,t.brokenAt].every(n=>n===undefined||finiteNumber(n)!==null))))return null;
+  if(value.beams!==undefined&&(!Array.isArray(value.beams)||value.beams.length>MAX_BEAMS||
+    !value.beams.every(b=>isRecord(b)&&nonEmptyString(b.id,64)&&nonEmptyString(b.owner,64)&&finiteNumber(b.at)!==null&&Array.isArray(b.points)&&
+      b.points.length>=1&&b.points.length<=WEAPON_TUNING.laserBounces+2&&
+      b.points.every(p=>isVec3(p)&&(p.on===undefined||LASER_SURFACES.some(on=>on===p.on))))))return null;
   if(value.buffs!==undefined){
     if(!isRecord(value.buffs)||Object.keys(value.buffs).length>100)return null;
     for(const entry of Object.values(value.buffs)){
       if(!isRecord(entry))return null;
-      if(Object.entries(entry).some(([key,until])=>!(BUFF_FIELDS as readonly string[]).includes(key)||finiteNumber(until)===null))return null;
+      if(Object.entries(entry).some(([key,v])=>key==='weapon'?!isWeaponKind(v):!(BUFF_FIELDS as readonly string[]).includes(key)&&key!=='weaponUntil'||finiteNumber(v)===null))return null;
     }
   }
   if(!['ready','rolling','active','cooldown'].includes(String(d.phase))||finiteNumber(d.started)===null||finiteNumber(d.until)===null||integer(d.serial)===null)return null;
   if(d.incident!==undefined&&!isLegacyIncidentId(d.incident)&&!INCIDENTS.some(incident=>incident.id===d.incident))return null;
   if(d.wanted!==undefined&&!nonEmptyString(d.wanted,64)||d.caller!==undefined&&!nonEmptyString(d.caller,64))return null;
+  if(d.bounty!==undefined&&!(isRecord(d.bounty)&&nonEmptyString(d.bounty.hunter,64)&&nonEmptyString(d.bounty.target,64)&&finiteNumber(d.bounty.at)!==null&&isPickupKind(d.bounty.pickup)))return null;
   if(Object.keys(value.possession).length>64||Object.values(value.possession).some(v=>finiteNumber(v)===null))return null;
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
   if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||c.owner===null||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
-  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&isVec3(s.p)&&isVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.delayed===undefined||typeof s.delayed==='boolean')&&(s.explosive===undefined||s.explosive===true)&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.stuckUntil===undefined||finiteNumber(s.stuckUntil)!==null)&&(s.life===undefined||finiteNumber(s.life)!==null)))return null;
+  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&isVec3(s.p)&&isVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.explosive===undefined||s.explosive===true)&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.life===undefined||finiteNumber(s.life)!==null)))return null;
   if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&isVec3(i.p)&&isVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit'||i.cue==='armor-clang')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
   if(value.pressure!==undefined){
     const p=value.pressure;
@@ -627,9 +638,9 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         for(const ball of balls){
           if(!isRecord(ball))return null;
           const id=nonEmptyString(ball.id,64),velocity=parseVec3(ball.velocity);
-          // Presentation-only sample: any speed a pattern can fire (a Bad Ammunition dud up to Rat Race).
+          // Presentation-only sample: any speed a pattern can fire (a Bad Ammunition floater up to a full-speed ball).
           const speed=velocity?Math.hypot(velocity.x,velocity.y,velocity.z):0;
-          if(!id||!velocity||ids.has(id)||!(speed>0)||speed>BALL_SPEED*INCIDENT_TUNING.ratRaceShotSpeed+.01)return null;
+          if(!id||!velocity||ids.has(id)||!(speed>0)||speed>BALL_SPEED+.01)return null;
           ids.add(id);resolved.push({id,velocity});
         }
         if(resolved[0].id!==shot.shotId)return null;
@@ -647,7 +658,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     case 'shotResult': {
       const shotId=nonEmptyString(parsed.shotId,64),ballId=nonEmptyString(parsed.ballId,64),epoch=nonEmptyString(parsed.epoch,64);
       const at=finiteNumber(parsed.at),tick=integer(parsed.tick),victimId=parsed.victimId===undefined?undefined:optionalString(parsed.victimId,64);
-      const outcomes=new Set(['first-step','rat-body','rat-head','ironclad-reflect','case-contact','world-bounce','dispatch-contact','pressure-contact','fake-case','lifetime','capacity','reset','rejected']);
+      const outcomes=new Set(['first-step','rat-body','rat-head','ironclad-reflect','case-contact','world-bounce','dispatch-contact','pressure-contact','fake-case','trap-contact','lifetime','capacity','reset','rejected']);
       const damage=parsed.damage===undefined?undefined:boundedInteger(parsed.damage,0,MAX_HP);
       const point=parsed.point===undefined?undefined:parseVec3(parsed.point),normal=parsed.normal===undefined?undefined:parseVec3(parsed.normal);
       const fallback=parsed.fallback===undefined?undefined:optionalString(parsed.fallback,80);
@@ -674,7 +685,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const id = nonEmptyString(parsed.id, 64);
       const hp = boundedInteger(parsed.hp, 0, MAX_HP);
       const attackerId = nonEmptyString(parsed.attackerId, 64);
-      const cause=parsed.cause==='evidence-tampering'||parsed.cause==='drowned'?parsed.cause:undefined;
+      const cause=isEnvironmentCause(parsed.cause)?parsed.cause:undefined;
       const environmental=!!cause&&parsed.attackerId===null;
       if (!id || hp === null || (!environmental&&!attackerId) ||
           (parsed.cause!==undefined&&!environmental)) return null;
@@ -683,8 +694,8 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     case 'playerHealed': {
       const id = nonEmptyString(parsed.id, 64);
       const hp = boundedInteger(parsed.hp, 1, MAX_HP);
-      if (!id || hp === null || (parsed.cause !== undefined && parsed.cause !== 'pickup' && parsed.cause !== 'incident' && parsed.cause !== 'bounty')) return null;
-      return { type: 'playerHealed', id, hp, ...(parsed.cause === 'pickup' || parsed.cause === 'incident' || parsed.cause === 'bounty' ? {cause:parsed.cause} : {}) };
+      if (!id || hp === null || (parsed.cause !== undefined && parsed.cause !== 'pickup' && parsed.cause !== 'case-kill')) return null;
+      return { type: 'playerHealed', id, hp, ...(parsed.cause === 'pickup' || parsed.cause === 'case-kill' ? {cause:parsed.cause} : {}) };
     }
     case 'playerDied': {
       const victimId = nonEmptyString(parsed.victimId, 64);
@@ -692,17 +703,18 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       const killerName = typeof parsed.killerName === 'string' && parsed.killerName.length <= 32 ? parsed.killerName : null;
       const victimName = typeof parsed.victimName === 'string' && parsed.victimName.length <= 32 ? parsed.victimName : null;
       const respawnAt = integer(parsed.respawnAt);
-      const cause=parsed.cause==='evidence-tampering'||parsed.cause==='drowned'?parsed.cause:undefined;
+      const cause=isEnvironmentCause(parsed.cause)?parsed.cause:undefined;
       const environmental=!!cause&&parsed.killerId===null&&parsed.killerName===null;
       if (!victimId || (!environmental&&(!killerId||killerName===null)) || victimName === null || respawnAt === null ||
           (parsed.cause!==undefined&&!environmental)) return null;
       const incoming=parsed.incoming===undefined?undefined:parseVec3(parsed.incoming);
-      if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean') || (parsed.headshot!==undefined&&parsed.headshot!==true))return null;
+      if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean') || (parsed.headshot!==undefined&&parsed.headshot!==true) ||
+        (parsed.weapon!==undefined&&(!isWeaponKind(parsed.weapon)||!killerId)))return null;
       const killerStreak=parsed.killerStreak===undefined?undefined:boundedInteger(parsed.killerStreak,1,10_000);
       if(killerStreak===null||(killerStreak!==undefined&&!killerId))return null;
       return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
         ...(environmental?{cause}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}),
-        ...(killerStreak!==undefined?{killerStreak}:{}) };
+        ...(isWeaponKind(parsed.weapon)?{weapon:parsed.weapon}:{}),...(killerStreak!==undefined?{killerStreak}:{}) };
     }
     case 'scoreboardUpdate': {
       const scores = parseScores(parsed.scores);

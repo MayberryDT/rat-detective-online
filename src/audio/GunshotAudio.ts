@@ -6,11 +6,17 @@ export { worldSoundGain as gunshotGain } from './worldSoundGain';
 
 const MAX_VOICES = 12;
 export const GUNSHOT_VOLUME = .4;
+/** Single Thompson rounds cut from a CC0 recording (scripts/generate-feedback-sounds.py, public/sounds/weapons/README.md). */
+const TOMMY_ROUNDS = 4;
+/** `shotgun`: Scattershot, the pistol pitched down under the BLAM layer (IncidentAudio). */
+export type GunshotCue = 'normal' | 'malfunction' | 'tommy' | 'shotgun';
 
 type Voice = { sound: THREE.Audio; priority: number };
 /** Independent, bounded voices keep distant AI from cutting off your own pistol. */
 export class GunshotAudio {
     private buffer?: AudioBuffer;
+    private readonly tommy: AudioBuffer[] = [];
+    private round = 0;
     private readonly pool: AudioVoicePool;
     private readonly voices = new Set<Voice>();
     private readonly ear = new THREE.Vector3();
@@ -20,9 +26,12 @@ export class GunshotAudio {
         const loader = new THREE.AudioLoader();
         loader.load('/sounds/gunshot.mp3', buffer => { if (!this.disposed) this.buffer = buffer; }, undefined,
             () => { if (!this.disposed) console.warn('Gunshot sound could not load'); });
+        for (let i = 0; i < TOMMY_ROUNDS; i++) loader.load(`/sounds/weapons/tommy-${i}.wav`, buffer => { if (!this.disposed) this.tommy.push(buffer); }, undefined,
+            () => { if (!this.disposed) console.warn('Tommy Gun sound could not load'); });
     }
-    play(origin: Vec3Data, local: boolean, cue: 'normal' | 'malfunction'): void {
-        const buffer = this.buffer;
+    play(origin: Vec3Data, local: boolean, cue: GunshotCue): void {
+        // The Tommy Gun rotates its recorded rounds so a held burst never machine-guns one sample.
+        const buffer = cue === 'tommy' ? this.tommy[this.round++ % Math.max(1, this.tommy.length)] : this.buffer;
         if (this.disposed || !buffer || this.listener.context.state !== 'running') return;
         this.listener.getWorldPosition(this.ear);
         const gain = local ? 1 : gunshotGain(Math.hypot(origin.x-this.ear.x, origin.y-this.ear.y, origin.z-this.ear.z));
@@ -39,7 +48,7 @@ export class GunshotAudio {
         if (!sound) return;
         sound.setBuffer(buffer);
         sound.setVolume(GUNSHOT_VOLUME * gain);
-        sound.setPlaybackRate(cue === 'malfunction' ? 1.45 : 1);
+        sound.setPlaybackRate(cue === 'malfunction' ? 1.45 : cue === 'tommy' ? .95 + Math.random() * .1 : cue === 'shotgun' ? .74 : 1);
         const voice = {sound, priority};
         sound.onEnded = () => { this.pool.finish(sound); this.voices.delete(voice); };
         this.voices.add(voice);
@@ -54,6 +63,6 @@ export class GunshotAudio {
         this.disposed = true;
         for (const voice of this.voices) this.release(voice);
         this.pool.dispose();
-        this.buffer = undefined;
+        this.buffer = undefined; this.tommy.length = 0;
     }
 }

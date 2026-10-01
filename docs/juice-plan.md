@@ -61,6 +61,28 @@ rat's identity stay as they are. Done means:
 - **Softer outline and nameplate reviewed (2026-09-27):** "That is great. Push it live." Released as Worker `80901b67…`.
 - **Next action:** Tyler's OK to put [the city map](city-map.md) recorder on production, then he plays and we read the digest; then step 4 (the page's Observe mode). See [Open decisions](#open-decisions).
 
+## Protocol 27: the arsenal and the incident rework (Tyler, 2026-10-01)
+
+Tyler: Big Cheese and Blackout are the best incidents because "they radically change the game … they make you think differently", and they make people laugh; Pressure Surge is next because it changes the map and pushes the game forward. "Those are the kind of things we're trying to double down on." Pickups must be juicy, and must never make anyone want to shoot less: "that's what drives the game forward … it's super fun to just shoot all the time". One big patch, then he playtests.
+
+- [x] **Targets:** Excessive Force 10 case kills, PAPER CHASE 10 deliveries, Jurisdiction 100 points (20 a zone). Tyler: "sometimes the numbers have to feel good."
+- [x] **Excessive Force carrier:** hits deal double damage (`carrierDamage`), and every case kill heals it to full (heal cause `case-kill`, the Quick Fix flash).
+- [ ] **Pickups** (one weapon at a time; claiming another replaces it; weapons replace the incident's shot pattern):
+  - **Tommy Gun:** hold to fire, about 10 balls a second, a wide cone that blooms while held, on a timer (never a drum). Screen shake, a big rattle, casings.
+  - **Laser:** hitscan, about one shot a second, 3 damage, headshots kill, ricochets off walls (two bounces), on a timer. The server rewinds rats to what the shooter saw (the existing 250 ms history).
+  - **Mousetrap:** the gun goes away and the rat carries a big trap; the next click sets it down. Anyone else who walks over it dies (Ironclad does not help); it takes many hits to destroy, so a doorway can be cleared; one trap per rat.
+  - New sites for the three, the reward draw includes them (Stakeout falls from one in three to about one in six), bots use all three and avoid and shoot traps.
+- [x] **Incidents** (what each now does: [the assignments](dispatch-assignments.md#incidents-changed-in-protocol-27-tyler-1-october)):
+  - [x] Rat Race, Delayed Reaction and Clean Bill removed (stored rooms map them to All Units, Crossfire and Most Wanted).
+  - [x] All Units told clearly: an ALL UNITS radio banner and squawk, backup rats strobing red and blue with a yelp, and a YOU'RE BACKUP card with an arrow to the action.
+  - [x] Most Wanted: the searchlight follows whoever is winning (checked every second, at once when the wanted rat dies), and the rat who kills them gets a random supply (WANTED poster, nameplate stamp, BOUNTY CLAIMED; city facts `bounty` and `reward` `why: 'bounty'`).
+  - [x] Scattershot: hits shove rats hard (shared `ChaosSimulation.shove`, city fact `shove`), no more balls.
+  - [x] New: **Bobbleheads** (huge heads and head hitboxes).
+  - [x] Bad Ammunition: funny paths that still land where you aim. One ball per trigger with a personality named by its shot ID (corkscrew, snake, floater, hiccup, superball), each with its own sound and words; jams, duds, crooked volleys and backfire soot are gone.
+  - [x] Malpractice becomes **Code Violation**: every supply hops away and 35% explode (death cause `malfunction`), launch machines fill themselves to bursting and shove, alarm pillars clang and shove; sparks, rattles and zaps (city fact `malfunction`).
+  - [x] New: **Act of God** (giant cheese meteors with shadow warnings; Tyler will name it after playing). Roofs shelter; a direct hit flattens (death cause `meteor`, nobody credited), the blast throws, the burst shares the ball cap. Bots step out of shadows they can see (city fact `meteor`).
+- [ ] Protocol 27, era, docs; full checks; staging for Tyler's playtest.
+
 ## The case (Tyler, 2026-10-01)
 
 Tyler: the case "is pretty out of date now … we need to make it juicy. Update the model, bring it up to par with our rats now. Add some animations … update the sound effects to it across the board … it needs to feel good when you pick up the case … something on your screen that's like, oh wow, you got the case". The old "YOU'RE ON THE CASE" callout was "kinda lame".

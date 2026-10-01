@@ -1,4 +1,5 @@
 import {TOUCH_SHOT_INTERVAL_MS} from '../shared/shotTiming';
+import {HeldFire} from './HeldFire';
 
 export type TouchRole = 'move' | 'look' | 'fire' | 'jump';
 export interface TouchMovement { x: number; y: number; jump: boolean }
@@ -10,14 +11,18 @@ export class TouchInput {
     readonly fingers = new Map<number, Finger>();
     private pendingShot = false;
     private nextShot = -Infinity;
+    private fireDown = false;
+    private readonly hold = new HeldFire();
     constructor(private readonly look: (dx: number, dy: number) => void) {}
+    /** FIRE is held down repeating the Tommy Gun. */
+    get holding(): boolean { return this.hold.active; }
     start(id: number, role: TouchRole, x: number, y: number): boolean {
         if (!Number.isFinite(id + x + y) || this.fingers.has(id)) return false;
         const aiming = (r: TouchRole) => r === 'look' || r === 'fire';
         if ([...this.fingers.values()].some(f => f.role === role || (aiming(role) && aiming(f.role)))) return false;
         this.fingers.set(id, {role, x, y, originX: x, originY: y});
         if (role === 'jump') this.movement.jump = true;
-        if (role === 'fire') this.pendingShot = true;
+        if (role === 'fire') { this.pendingShot = true; this.fireDown = true; }
         return true;
     }
     move(id: number, x: number, y: number): void {
@@ -38,18 +43,22 @@ export class TouchInput {
         this.fingers.delete(id);
         if (finger.role === 'move') { this.movement.x = 0; this.movement.y = 0; }
         if (finger.role === 'jump') this.movement.jump = false;
-        if (finger.role === 'fire') this.pendingShot = false;
+        if (finger.role === 'fire') { this.pendingShot = false; this.fireDown = false; this.hold.release(); }
     }
-    tick(now: number, shoot: () => void): void {
+    /** `holdMs`: the Tommy Gun's repeat while FIRE stays down; without it every tap is one shot. */
+    tick(now: number, shoot: () => void, holdMs?: number): void {
         if (this.pendingShot && Number.isFinite(now)) {
             // Consume this press even during cooldown. Holding, dragging, or a
             // slow frame must never turn one tap into another shot later.
             this.pendingShot = false;
             if (now >= this.nextShot) { this.nextShot = now + TOUCH_SHOT_INTERVAL_MS; shoot(); }
+            if (this.fireDown) this.hold.press(now, holdMs);
+            return;
         }
+        this.hold.tick(now, holdMs, shoot);
     }
     clear(): void {
-        this.fingers.clear(); this.pendingShot = false;
+        this.fingers.clear(); this.pendingShot = false; this.fireDown = false; this.hold.release();
         this.movement.x = 0; this.movement.y = 0; this.movement.jump = false;
     }
 }

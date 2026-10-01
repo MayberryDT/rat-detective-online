@@ -8,6 +8,12 @@ const ART:Record<PickupKind,string>={
     hustle:`<path d="m41 15 28 5-7 35 20 13 5 15-8 8H28l-7-14 6-21Z" fill="#fa5037" ${ink}/><path d="m29 58 22 9m-25-1 21 9M26 83h54" fill="none" stroke="#fff0cf" stroke-width="5"/><path d="M39 26 8 31l14 10L3 46l30 9" fill="#ffc763" ${ink}/><path d="m78 15-5 15 18-4-15 23 5-17-15 4Z" fill="#ffce63"/>`,
     // A brass magnifying glass with a pencil-sketch rat caught in the lens: the Hunch, city-wide.
     stakeout:`<path d="m59 63 7-7 30 30-7 7Z" fill="#a8683a" ${ink}/><circle cx="40" cy="42" r="32" fill="#f3cf6f" ${ink}/><circle cx="40" cy="42" r="22" fill="#e3e6d6" ${ink}/><path d="M26 55c1-8 7-13 14-13s13 5 15 10l-7 2c-7 4-15 4-22 1Zm4-10a5 5 0 1 1 7-3m6-1a5 5 0 1 1 7 3" fill="none" stroke="#b58a2e" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 3"/><path d="M26 36a16 16 0 0 1 9-10" fill="none" stroke="#fffbea" stroke-width="5" stroke-linecap="round"/><path d="m84 5 2 8 8 2-8 3-2 8-2-8-8-3 8-2Z" fill="#ffe7a3"/>`,
+    // A drum-fed Thompson: walnut stock and grips, finned barrel, a cheese-faced drum.
+    'tommy-gun':`<path d="M4 41 31 36 34 50 9 63Z" fill="#c27a3e" ${ink}/><path d="M28 33H68V48H28Z" fill="#8f99ab" ${ink}/><path d="M68 37H90V45H68Z" fill="#8f99ab" ${ink}/><path d="M72 34v14m6-14v14m6-14v14" stroke="#0a0e1a" stroke-width="3"/><path d="M89 34h8v14h-8Z" fill="#5d6576" ${ink}/><path d="M35 47h10l-4 19-10-3Z" fill="#c27a3e" ${ink}/><path d="M74 45h8l-1 18h-8Z" fill="#c27a3e" ${ink}/><circle cx="56" cy="62" r="16" fill="#f3c04a" ${ink}/><circle cx="56" cy="62" r="5" fill="#d29a3a" ${ink}/><circle cx="48" cy="55" r="2.6" fill="#b47a12"/><circle cx="64" cy="57" r="2.2" fill="#b47a12"/><circle cx="51" cy="71" r="2.4" fill="#b47a12"/><path d="m92 18 2 8 8 2-8 3-2 8-2-8-8-3 8-2Z" fill="#ffd27a"/>`,
+    // A pulp ray gun: chrome body, red fins, the coil glowing the beam's green, a zap from the dish.
+    laser:`<path d="m6 30 20 10-2 16-18 10Z" fill="#e0453a" ${ink}/><path d="M18 48c0-14 12-20 26-20 11 0 17 9 19 15h12v10H63c-2 6-8 15-19 15-14 0-26-6-26-20Z" fill="#c9d3dc" ${ink}/><circle cx="40" cy="30" r="7" fill="#d8ffe4" ${ink}/><path d="M68 41v14m6-14v14" stroke="#39ff7a" stroke-width="6"/><path d="m80 38 12-8v36l-12-8Z" fill="#c9d3dc" ${ink}/><path d="M30 64h11l-3 22H27Z" fill="#3a2a22" ${ink}/><path d="m92 48 4-6 4 7" fill="none" stroke="#39ff7a" stroke-width="4" stroke-linecap="round"/><path d="M28 40a14 14 0 0 1 10-7" fill="none" stroke="#fffbea" stroke-width="4" stroke-linecap="round"/>`,
+    // A big set Mousetrap: pine board, brass bar pulled back, a wedge of cheese on the pedal.
+    mousetrap:`<path d="M6 66 30 42H96L72 66Z" fill="#e8c88e" ${ink}/><path d="M6 66H72L96 42V52L72 76H6Z" fill="#a8743e" ${ink}/><path d="M22 56 40 38H70L52 56" fill="none" stroke="#0a0e1a" stroke-width="9" stroke-linejoin="round"/><path d="M22 56 40 38H70L52 56" fill="none" stroke="#e8b54a" stroke-width="4" stroke-linejoin="round"/><circle cx="44" cy="51" r="5" fill="#e8b54a" ${ink}/><path d="m64 52 22-13 2 12Z" fill="#ffd04a" ${ink}/><circle cx="78" cy="47" r="2" fill="#b47a12"/><path d="m10 22 4 10m10-16 1 11m14-7-6 9" stroke="#fff0cf" stroke-width="4" stroke-linecap="round"/>`,
 };
 export function pickupArtwork(kind:PickupKind):string {return `<svg viewBox="0 0 100 100" aria-hidden="true">${ART[kind]}</svg>`;}
 
@@ -17,11 +23,22 @@ const CARD:Record<PickupKind,{shout:string;title:string;stamp:string;label:strin
     hustle:{shout:'MOVE IT, DETECTIVE!',title:'HOT<br>PURSUIT',stamp:'IN PURSUIT',label:'Hot Pursuit'},
     'quick-fix':{shout:'FIT FOR DUTY!',title:'QUICK<br>FIX',stamp:'CLEARED FOR DUTY',label:'Quick Fix · health restored'},
     stakeout:{shout:'EYES ON THE CITY!',title:'STAKE-<br>OUT',stamp:'UNDER SURVEILLANCE',label:'Stakeout'},
+    'tommy-gun':{shout:'THE CHICAGO TYPEWRITER!',title:'TOMMY<br>GUN',stamp:'RAT-A-TAT-TAT',label:'Tommy Gun · hold fire'},
+    laser:{shout:'SCIENCE, DETECTIVE!',title:'LASER',stamp:'BOUNCES OFF WALLS',label:'Laser'},
+    mousetrap:{shout:'BAIT NOT INCLUDED!',title:'MOUSE-<br>TRAP',stamp:'ONE SNAP',label:'Mousetrap · fire to set it down'},
 };
+/** The status line under the title: health restored, how to set the trap down, or the time gauge. */
+const STATUS:Partial<Record<PickupKind,string>>={
+    'quick-fix':'<div class="powerup-healed">HEALTH RESTORED</div>',
+    mousetrap:'<div class="powerup-healed powerup-hint"><span class="powerup-desktop-hint">CLICK TO SET IT DOWN</span><span class="powerup-touch-hint">FIRE TO SET IT DOWN</span></div>',
+};
+/** One illustrated carbon card. Timed effects get a gauge and a seconds clock; Quick Fix a full-health stamp; the
+ * Mousetrap (held until set down) neither, only how to set it down. */
 export function powerupCard(kind:PickupKind):HTMLElement {
     const card=document.createElement('div');card.className=`powerup-card powerup-${kind}`;
     const healing=kind==='quick-fix',{shout,title,stamp,label}=CARD[kind];
-    card.innerHTML=`<div class="powerup-art">${pickupArtwork(kind)}</div><div class="powerup-copy"><small>${shout}</small><strong>${title}</strong>${healing?'<div class="powerup-healed">HEALTH RESTORED</div>':'<div class="powerup-gauge"><i></i></div>'}</div><div class="powerup-clock"><b>${healing?'+':''}</b><small>${healing?'FULL HP':'SEC'}</small></div><div class="powerup-stamp">${stamp}</div>`;
+    const clock=kind==='mousetrap'?'':`<div class="powerup-clock"><b>${healing?'+':''}</b><small>${healing?'FULL HP':'SEC'}</small></div>`;
+    card.innerHTML=`<div class="powerup-art">${pickupArtwork(kind)}</div><div class="powerup-copy"><small>${shout}</small><strong>${title}</strong>${STATUS[kind]??'<div class="powerup-gauge"><i></i></div>'}</div>${clock}<div class="powerup-stamp">${stamp}</div>`;
     card.setAttribute('aria-label',label);
     return card;
 }

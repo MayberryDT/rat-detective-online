@@ -135,30 +135,13 @@ export class FeelAudio {
         pop.connect(high).connect(env).connect(out);pop.start(at);pop.stop(at+.1);
         this.tone(out,at+.03,.5,'sine',5200,3900,.08);
     }
-    /** Bad Ammunition jam: the hammer falls on nothing, then a sad spring. */
+    /** A dry click: the hammer falls on nothing, then a sad spring (a trigger pulled before Big Cheese's gun is ready). */
     jam(volume:number):void {
         if(!this.allow('jam',.08))return;
         const at=this.context.currentTime,out=this.out(volume,0,.5);
         this.burst(out,at,.02,'highpass',2600,1,.001);
         this.burst(out,at+.07,.015,'highpass',3400,1,.001);
         this.tone(out,at+.09,.35,'triangle',520,180,.18);
-    }
-    /** Bad Ammunition: the cartridge coughs, a wheezy low burst with a second hitch. */
-    cough(volume:number,pan=0):void {
-        if(!this.allow('cough',.05))return;
-        const at=this.context.currentTime,out=this.out(volume,pan,.45);
-        this.burst(out,at,.12,'bandpass',420,1.4,.01);
-        this.burst(out,at+.13,.16,'bandpass',300,1.2,.015);
-        this.tone(out,at,.2,'sawtooth',110,62,.22);
-    }
-    /** Bad Ammunition dud: a muted trombone going wah-wah. */
-    womp(volume:number):void {
-        if(!this.allow('womp',.4))return;
-        const at=this.context.currentTime,out=this.out(volume,0,1.1);
-        const filter=this.context.createBiquadFilter();filter.type='lowpass';filter.Q.value=4;
-        filter.frequency.setValueAtTime(900,at);filter.frequency.linearRampToValueAtTime(500,at+.9);filter.connect(out);
-        this.tone(filter,at,.32,'sawtooth',233.1,220,.3);
-        this.tone(filter,at+.34,.6,'sawtooth',207.7,174.6,.3);
     }
     /** A supply snatched: a quick whoosh up and a bright double click, like a flashbulb latch. */
     supplyClaim(volume:number,pan:number):void {

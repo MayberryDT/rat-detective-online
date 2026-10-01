@@ -1,5 +1,5 @@
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
-import {distance,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
+import {distance,enemyTrap,TRAP_REACH,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
 import {activeZone} from '../jurisdiction';
 import {JURISDICTION_ZONE_IDS,JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {DISPATCH_STATIONS,type ChaosState} from '../chaosState';
@@ -126,11 +126,12 @@ export class BotGoals {
             .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
     }
 
-    /** Whether a stocked supply is of use to this rat now: never a Quick Fix at full health; a timed supply it
-     * already holds refreshes. A Jurisdiction carrier scoring in `zone` takes only supplies inside it. */
-    private usable(p:PickupState,self:PlayerData,state:ChaosState|undefined,now:number,zone?:JurisdictionZoneId):boolean {
+    /** Whether a stocked supply is of use to this rat now: never a Quick Fix at full health; a timed supply or weapon
+     * it already holds refreshes (another weapon replaces the held one). Never one with another rat's Mousetrap in
+     * sight beside it. A Jurisdiction carrier scoring in `zone` takes only supplies inside it. */
+    private usable(p:PickupState,self:PlayerData,state:ChaosState|undefined,now:number,clear:(p:Vec3Data)=>boolean,zone?:JurisdictionZoneId):boolean {
         return (p.availableAt??0)<=(state?.time??now)&&(p.kind!=='quick-fix'||self.hp<MAX_HP)&&Math.abs(p.y-.7-self.y)<REFLEX.floor&&
-            !this.motor.suppressed(`pickup:${p.id}`,p,now)&&!(zone&&!zoneContains(zone,{x:p.x,y:p.y-.7,z:p.z}));
+            !this.motor.suppressed(`pickup:${p.id}`,p,now)&&!(zone&&!zoneContains(zone,{x:p.x,y:p.y-.7,z:p.z}))&&!enemyTrap(self,p,TRAP_REACH,state,clear);
     }
     /** The pickup reflex: the nearest stocked, usable supply in sight within `REFLEX.range` on this floor,
      * whatever the goal (carrying the case too). A loose case nearer than the supply comes first. The supply
@@ -142,11 +143,11 @@ export class BotGoals {
         const caseAt=available?distance(self,available.value.p):Infinity;
         const kept=this.reflexSite&&state?.pickups?.find(p=>p.id===this.reflexSite!.id);
         if(kept&&now>=this.reflexUntil){this.motor.abandon(`pickup:${kept.id}`,kept,now,REFLEX.retryMs);this.reflexSite=undefined;}
-        else if(kept&&this.usable(kept,self,state,now,scoring)&&distance(self,kept)<Math.min(REFLEX.keep,caseAt))return this.reflexSite=kept;
+        else if(kept&&this.usable(kept,self,state,now,input.clear,scoring)&&distance(self,kept)<Math.min(REFLEX.keep,caseAt))return this.reflexSite=kept;
         let best:PickupState|undefined,bestAt=Math.min(REFLEX.range,caseAt);
         for(const p of state?.pickups??[]){
             const d=distance(self,p);
-            if(d<bestAt&&this.usable(p,self,state,now,scoring)&&input.clear(p)){best=p;bestAt=d;}
+            if(d<bestAt&&this.usable(p,self,state,now,input.clear,scoring)&&input.clear(p)){best=p;bestAt=d;}
         }
         if(best&&best.id!==this.reflexSite?.id)this.reflexUntil=now+REFLEX.ms;
         return this.reflexSite=best;
@@ -157,7 +158,7 @@ export class BotGoals {
         let best:PickupState|undefined,bestAt:number=SUPPLY_TRIP;
         for(const p of state?.pickups??[]){
             const d=distance(self,p);
-            if(d>=REFLEX.range&&d<bestAt&&this.usable(p,self,state,now)&&clear(p)){best=p;bestAt=d;}
+            if(d>=REFLEX.range&&d<bestAt&&this.usable(p,self,state,now,clear)&&clear(p)){best=p;bestAt=d;}
         }
         return best;
     }

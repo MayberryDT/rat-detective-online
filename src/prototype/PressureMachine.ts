@@ -96,8 +96,9 @@ export class PressureMachine {
         s.age=0;s.life=life*(.8+Math.random()*.4);s.size=size;
     }
 
-    /** `surging` while Pressure Surge is active: steam then rises from the streets around the camera. */
-    update(state:ChaosState['pressure'],now:number,camera?:THREE.Camera,surging=false){
+    /** `surging` while Pressure Surge is active: steam then rises from the streets around the camera. `haywire` (Code
+     * Violation): every machine rattles, its needle spins wild and its seams spit steam even when empty. */
+    update(state:ChaosState['pressure'],now:number,camera?:THREE.Camera,surging=false,haywire=false){
         const dt=Number.isFinite(this.lastNow)?Math.min(.1,Math.max(0,(now-this.lastNow)/1000)):0;this.lastNow=now;
         const t=now/1000;
         this.launchAudio.update(camera);
@@ -142,12 +143,13 @@ export class PressureMachine {
             const size=TRIGGER_BASE*(1+.04*pulse*intensity+(hang?.05:0));
             model.trigger.scale.set(size*(1+.16*punch),size*(1-.24*punch),size*(1+.16*punch));
             // The body swells and shudders; the whole machine bulges in the danger stage.
-            const shake=strain*.025+danger*.07+(hang?.06:0);
+            const shake=strain*.025+danger*.07+(hang?.06:0)+(haywire?.04*Math.abs(Math.sin(t*3.1+fired)):0);
             model.body.position.set(Math.sin(t*61)*shake+view.hitX*.18*punch,Math.abs(Math.sin(t*47))*shake*.6,Math.cos(t*53)*shake+view.hitZ*.18*punch);
             model.body.rotation.set(view.hitZ*.08*punch,0,-view.hitX*.08*punch);
             const swell=1+.035*intensity*intensity+.05*danger*Math.abs(Math.sin(t*28));
             model.body.scale.set(swell,1+.02*intensity+.03*danger*Math.abs(Math.sin(t*33)),swell);
-            if(model.needle)model.needle.rotation.z=2.36-(intensity+view.needleKick*(1-intensity))*4.71+Math.sin(t*40)*.06*danger;
+            if(model.needle)model.needle.rotation.z=haywire?Math.sin(t*9)*3+Math.sin(t*23)*.6:2.36-(intensity+view.needleKick*(1-intensity))*4.71+Math.sin(t*40)*.06*danger;
+            if(haywire&&Math.random()<dt*3){const seam=model.seams[Math.floor(Math.random()*model.seams.length)]!;this.world.copy(seam);model.base.localToWorld(this.world);this.puff(this.world,3+Math.random()*4,.7,.16);}
             // Additive and depth-free: at zero opacity it adds nothing, so skip the draw.
             const glow=model.glow.material as THREE.MeshBasicMaterial;glow.opacity=danger*.28*(.7+.3*Math.sin(t*14))+(hang?.3:0);model.glow.visible=glow.opacity>0;
             // Steam: wisps when building, more seams and a taller plume as it rises.

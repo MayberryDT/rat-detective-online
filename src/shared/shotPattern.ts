@@ -2,49 +2,52 @@ import * as C from 'cannon-es';
 import type {ShotDescriptor,Vec3Data} from './networkProtocol';
 import type {IncidentId} from './incidentCatalog';
 import {BALL_SPEED} from './ballTuning';
-import {launchSpeed} from './shotBallistics';
+import {BAD_ROUNDS,launchSpeed,quirkLaunch,type BadRound} from './shotBallistics';
+import {WEAPON_TUNING as W,type WeaponKind} from './pickups';
 
-function hash(text:string):number {
-    let n=2166136261;for(let i=0;i<text.length;i++)n=Math.imul(n^text.charCodeAt(i),16777619);return n>>>0;
+function hash(text:string,seed=2166136261):number {
+    let n=seed;for(let i=0;i<text.length;i++)n=Math.imul(n^text.charCodeAt(i),16777619);return n>>>0;
 }
-/** A trigger's random UUID gives client and authority the same random volley.
- * Authority still selects the active incident and validates/accepts the shot. */
-function shotRandom(id:string):()=>number {
-    let seed=hash(id);
-    return ()=>{seed+=0x6d2b79f5;let n=Math.imul(seed^(seed>>>15),1|seed);n^=n+Math.imul(n^(n>>>7),61|n);return ((n^(n>>>14))>>>0)/4294967296;};
+/** A well-mixed uniform value in [0, 1) from `seed`. */
+function unit(seed:number):number {
+    let n=Math.imul(seed^(seed>>>15),1|seed);n^=n+Math.imul(n^(n>>>7),61|n);return ((n^(n>>>14))>>>0)/4294967296;
 }
-export type BadRound='jam'|'dud'|'crooked';
-/** Bad Ammunition, per trigger: 12% jam (no ball), 20% dud (one harmless ball
- * that dribbles out of the barrel), otherwise 1–3 crooked balls. Its own seeded
- * stream, so every client names the same round (and backfire) for a shot ID. */
-export function badRound(shotId:string):{round:BadRound;backfire:boolean} {
-    const random=shotRandom(`${shotId}:bad-round`),roll=random();
-    return {round:roll<.12?'jam':roll<.32?'dud':'crooked',backfire:random()<.18};
+/** Bad Ammunition: the personality of a trigger's ball, named by its shot ID (the ball's own ID), so the shooter's
+ * prediction, the authority and every watching client agree. Allocation-free, so the view can ask every frame. */
+export function badRound(shotId:string):BadRound {
+    return BAD_ROUNDS[Math.floor(unit((hash(shotId,0x811c9dc5^0x5bd1e995)+0x6d2b79f5)|0)*BAD_ROUNDS.length)]!;
 }
-/** A dud leaves the muzzle at this fraction of ordinary speed, tipping down. */
-export const DUD_SPEED=.12;
-export interface PatternBall {id:string;velocity:Vec3Data;dud?:true}
-export function resolveShotPattern(shot:ShotDescriptor,incident?:IncidentId,random=shotRandom(shot.shotId)):PatternBall[] {
+export interface PatternBall {id:string;velocity:Vec3Data;quirk?:BadRound}
+/** The weapon a trigger fired with; `heat` is the Tommy Gun's held-shot count (`tommyHeat`). */
+export interface ShotWeapon {kind:WeaponKind;heat?:number}
+/** The Tommy Gun's held-shot count after a trigger at `now`: one more (to `tommyBloomShots`) within `tommyHeatMs`
+ * of the previous trigger at `lastAt`, else a fresh burst. Shooter and authority each count their own triggers. */
+export const tommyHeat=(heat:number,lastAt:number|undefined,now:number):number=>
+    lastAt!==undefined&&now-lastAt<=W.tommyHeatMs?Math.min(W.tommyBloomShots,heat+1):0;
+/** The Tommy Gun's cone half-angle (radians) at a held-shot count. */
+export const tommyCone=(heat:number):number=>W.tommyCone+(W.tommyBloom-W.tommyCone)*Math.min(1,Math.max(0,heat)/W.tommyBloomShots);
+/** A held special weapon replaces any incident's pattern: the Tommy Gun fires one plain ball within its cone (seeded
+ * by the shot ID); the Laser (a beam, `laserPath`) and the Mousetrap (set down, not fired) fire no ball. */
+export function resolveShotPattern(shot:ShotDescriptor,incident?:IncidentId,weapon?:ShotWeapon):PatternBall[] {
     const direction=new C.Vec3(shot.direction.x,shot.direction.y,shot.direction.z);direction.normalize();
     const baseId=shot.shotId.length<=60?shot.shotId:`${hash(shot.shotId).toString(16)}.${shot.shotId.slice(-48)}`;
     const result:PatternBall[]=[];
-    const add=(v:C.Vec3,dud=false)=>result.push({id:result.length?`${baseId}:${result.length}`:shot.shotId,velocity:{x:v.x,y:v.y,z:v.z},...(dud?{dud:true as const}:{})});
+    const add=(v:Vec3Data)=>result.push({id:result.length?`${baseId}:${result.length}`:shot.shotId,velocity:{x:v.x,y:v.y,z:v.z}});
+    if(weapon){
+        if(weapon.kind!=='tommy-gun')return result;
+        // Uniform over the cone's disc.
+        const seed=hash(shot.shotId,0x9e3779b9),angle=tommyCone(weapon.heat??0)*Math.sqrt(unit(seed)),azimuth=unit((seed+0x6d2b79f5)|0)*Math.PI*2;
+        const axis=Math.abs(direction.y)<.95?new C.Vec3(0,1,0):new C.Vec3(1,0,0);
+        const side=direction.cross(axis);side.normalize();const up=side.cross(direction);up.normalize();
+        add(direction.scale(Math.cos(angle)).vadd(side.scale(Math.sin(angle)*Math.cos(azimuth))).vadd(up.scale(Math.sin(angle)*Math.sin(azimuth))).scale(BALL_SPEED));
+        return result;
+    }
     if(incident==='scattershot'){
         const velocity=direction.scale(BALL_SPEED);add(velocity);
         for(const angle of [-.22,-.11,.11,.22]){const rotation=new C.Quaternion();rotation.setFromAxisAngle(new C.Vec3(0,1,0),angle);add(rotation.vmult(velocity));}
     }else if(incident==='bad-ammunition'){
-        const {round}=badRound(shot.shotId);
-        if(round==='jam')return result;
-        if(round==='dud'){const v=direction.scale(BALL_SPEED*DUD_SPEED);v.y-=BALL_SPEED*.03;add(v,true);return result;}
-        const roll=random(),count=roll<.7?1:roll<.9?2:3;
-        const axis=Math.abs(direction.y)<.95?new C.Vec3(0,1,0):new C.Vec3(1,0,0);
-        const side=direction.cross(axis);side.normalize();const up=side.cross(direction);up.normalize();
-        for(let i=0;i<count;i++){
-            const angle=.12+random()*.12,quadrant=random()*4;
-            const azimuth=Math.floor(quadrant)*Math.PI/2+Math.PI/6+(quadrant%1)*Math.PI/6;
-            add(direction.scale(Math.cos(angle)).vadd(side.scale(Math.sin(angle)*Math.cos(azimuth)))
-                .vadd(up.scale(Math.sin(angle)*Math.sin(azimuth))).scale(BALL_SPEED));
-        }
+        const quirk=badRound(shot.shotId);
+        result.push({id:shot.shotId,velocity:quirkLaunch(quirk,{x:direction.x,y:direction.y,z:direction.z}),quirk});
     }else add(direction.scale(launchSpeed(incident)));
     return result;
 }

@@ -162,7 +162,6 @@ const actions:Record<string,()=>void>={
     'Hunch: suspects back in the open':()=>suspects.forEach((s,i)=>{s.body.position.set(-22,.5,-18+(i-1)*4.2);s.mesh.position.set(-22,.5,-18+(i-1)*4.2);s.syncGlowTransform();}),
     'Hunch: you make them (photo)':()=>blink('you'),
     'Hunch: they make you (card)':()=>blink('them'),
-    'Hunch: Clean Bill supercharge':()=>feel.setIncident('clean-bill'),
     'Supplies: three props 7 ahead':()=>supplies(7),
     'Supplies: three props 22 ahead':()=>supplies(22),
     'Supplies: restocking':()=>{for(const prop of [coat,shoes,kit])prop.setAvailableAt(performance.now()+20_000);},

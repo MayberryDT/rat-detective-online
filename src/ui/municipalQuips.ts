@@ -1,4 +1,5 @@
 import type {IncidentId} from '../shared/incidentCatalog';
+import type {EnvironmentCause} from '../shared/networkProtocol';
 
 export const MUNICIPAL_QUIPS = {
     kill: [
@@ -53,6 +54,32 @@ export const MUNICIPAL_QUIPS = {
         '{name} was filed under WET WORK.',
         'The harbour master logged {name} as cargo, lost at sea.',
     ],
+    meteor: [
+        'The sky fell on {name}. It was cheese.',
+        '{name} was struck by an Act of God. Insurance will not cover it.',
+        'A meteor of aged cheddar flattened {name}. Vintage.',
+        '{name} looked up. That was the mistake.',
+        'Heaven sent {name} a cheese wheel. Express.',
+        '{name} is now a crater with a hat.',
+        'The forecast said cheese. {name} did not bring an umbrella.',
+        '{name} was in the wrong shadow at the wrong time.',
+        'Divine intervention, cheese-shaped, found {name}.',
+        '{name} has been filed under ACTS OF GOD. Case closed.',
+        'The heavens dropped a wheel of brie on {name}.',
+        '{name} was pressed into a fine cheese.',
+    ],
+    malfunction: [
+        'The city failed its inspection. So did {name}.',
+        '{name} was taken out by faulty municipal equipment.',
+        'A supply exploded on {name}. Please report defects.',
+        '{name} has been condemned by the building inspector.',
+        'Out of order: {name}.',
+        'The warranty did not cover {name}.',
+        '{name} touched the equipment. The equipment touched back.',
+        'A loose wire found {name}. The city denies all wires.',
+        '{name} was recalled by the manufacturer.',
+        'Code Violation 404: {name} not found.',
+    ],
     death: ['A MINOR CAREER SETBACK.', 'TEMPORARILY OUT OF OFFICE.', 'YOUR PENSION IS UNDER REVIEW.', 'UNSCHEDULED FLOOR INSPECTION.', 'PLEASE RESUBMIT YOURSELF.', 'ANOTHER WORKPLACE INCIDENT.', 'HORIZONTAL. STILL EMPLOYED.', 'THE REPORT WILL BE UNFLATTERING.', 'PAID LEAVE DENIED.', 'YOUR HAT HAS FILED A COMPLAINT.', 'CURRENTLY BETWEEN HEARTBEATS.', 'OFFICER DOWN. MORALE UNCLEAR.'],
     victory: ['PROMOTED?!', 'MANAGEMENT HAS QUESTIONS.', 'EMPLOYEE OF THE INCIDENT.', 'A RAISE IS NOT GUARANTEED.', 'YOUR METHODS WERE NOTED.', 'SOMEHOW, THIS COUNTS.', 'CORNER OFFICE. NO WINDOWS.', 'OUTSTANDING QUESTIONABLE CONDUCT.', 'THE MAYOR DENIES INVOLVEMENT.', 'PLEASE TRAIN YOUR REPLACEMENT.', 'A MODEL OF MUNICIPAL EFFICIENCY.', 'THE PAPERWORK CHECKS OUT.'],
     casePickup: [
@@ -96,33 +123,34 @@ export const MUNICIPAL_QUIPS = {
         'NOBODY SAW WHO DROPPED IT.', 'SMELLS LIKE UNSOLVED BUSINESS.',
     ],
 } as const;
+/** Which joke bag tells a death nobody is credited with. */
+const ENVIRONMENT_QUIPS:Record<EnvironmentCause,keyof typeof MUNICIPAL_QUIPS>={'evidence-tampering':'caseDeath',drowned:'drowned',meteor:'meteor',malfunction:'malfunction'};
 
 /** Flavor for incident broadcasts; the title, countdown and objective status
  * carry the actionable information without a recurring tutorial paragraph. */
 export const INCIDENT_QUIPS:Record<IncidentId,string>={
     'improper-disposal':'THE DECEASED HAVE PLACES TO BE.',
-    'bad-ammunition':'BALLISTICS HAS DECLINED TO COMMENT.',
+    'bad-ammunition':'EVERY ROUND HAS A PERSONALITY. NONE OF THEM ARE GOOD.',
     'pressure-surge':'THE CITY DENIES LIFTING YOU.',
     'evidence-tampering':'THE EVIDENCE IS FLEEING THE SCENE.',
     crossfire:'THE WALLS ARE ACCOMPLICES.',
-    scattershot:'ONE COMPLAINT. FIVE COPIES.',
-    'delayed-reaction':'THE WALL WOULD LIKE A WORD.',
+    scattershot:'EVERY COMPLAINT NOW ARRIVES WITH FORCE.',
     'big-cheese':'THE CHEDDAR BUDGET WAS APPROVED.',
     'planted-evidence':'SOMEBODY HAS BEEN VERY THOROUGH.',
     blackout:'THE POWER COMPANY IS INVESTIGATING ITSELF.',
-    'clean-bill':'THE DOCTOR SIGNED EVERYTHING. EVERYONE IS WATCHING.',
-    malpractice:'THE MEDICINE HAS LEGAL REPRESENTATION.',
-    'most-wanted':'THE CITY WOULD LIKE A WORD WITH THE LEADER.',
-    'rat-race':'ALL DETECTIVES ARE LATE FOR SOMETHING.',
+    'code-violation':'THE CITY HAS FAILED ITS SAFETY INSPECTION. EVERYTHING IS OUT OF ORDER.',
+    'most-wanted':'THE CITY WOULD LIKE A WORD WITH WHOEVER IS WINNING.',
     'all-units':'DEATH IS NO EXCUSE FOR MISSING THE ACTION.',
+    bobbleheads:'THE COMMISSIONER ORDERED BIGGER HEADS. NOBODY ASKED WHY.',
+    'act-of-god':'THE SKY IS FALLING. IT IS CHEESE. WATCH FOR SHADOWS.',
 };
 /** Local flavor only. Every phrase appears before reuse, with no boundary repeat. */
 export class MunicipalQuips {
     private readonly bags=new Map<keyof typeof MUNICIPAL_QUIPS,string[]>();
     private readonly last=new Map<keyof typeof MUNICIPAL_QUIPS,string>();
     constructor(private readonly random= Math.random){}
-    caseDeath(name:string):string{return this.next('caseDeath').replace(/\{name\}/g,()=>name);}
-    drowned(name:string):string{return this.next('drowned').replace(/\{name\}/g,()=>name);}
+    /** A death nobody is credited with, in words for its cause. */
+    environmental(cause:EnvironmentCause,name:string):string{return this.next(ENVIRONMENT_QUIPS[cause]).replace(/\{name\}/g,()=>name);}
     next(kind:keyof typeof MUNICIPAL_QUIPS):string {
         let bag=this.bags.get(kind);
         if(!bag?.length){

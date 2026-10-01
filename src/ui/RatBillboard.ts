@@ -50,6 +50,8 @@ export class RatBillboard {
     private hunch = false;
     private eyeAge = Infinity;
     private streak = 0;
+    /** Most Wanted: this rat is in the searchlight. */
+    private wanted = false;
     /** Seconds since the stamp last came down (a new kill while on a streak). */
     private stampAge = Infinity;
     private stampFont = false;
@@ -102,6 +104,17 @@ export class RatBillboard {
         const up = streak > this.streak;
         this.streak = streak;
         if (up && streakTier(streak) > 0) {
+            this.stampAge = 0; this.animating = this.health > 0;
+            if (!this.stampFont) { this.stampFont = true; void document.fonts?.load?.(STAMP_FONT).then(() => { if (!this.disposed) this.draw(); }, () => {}); }
+        }
+        this.draw();
+    }
+
+    /** Most Wanted: a solid red WANTED stamp comes down under the pips (in place of a streak stamp) while this rat is the target. */
+    public setWanted(on: boolean): void {
+        if (on === this.wanted) return;
+        this.wanted = on;
+        if (on) {
             this.stampAge = 0; this.animating = this.health > 0;
             if (!this.stampFont) { this.stampFont = true; void document.fonts?.load?.(STAMP_FONT).then(() => { if (!this.disposed) this.draw(); }, () => {}); }
         }
@@ -245,7 +258,8 @@ export class RatBillboard {
                 }
             }
         }
-        if (this.streak >= STREAK_TIERS[0]) this.drawStamp(w);
+        if (this.wanted) this.drawWanted(w);
+        else if (this.streak >= STREAK_TIERS[0]) this.drawStamp(w);
         ctx.globalAlpha = 1;
         this.texture.needsUpdate = true;
     }
@@ -276,6 +290,22 @@ export class RatBillboard {
         }
         ctx.stroke();
         if (more) ctx.fillText('+', x, 1);
+        ctx.restore();
+    }
+
+    /** WANTED: a filled stamp-red slab with cream letters, heavier than a streak stamp so it reads from across the city. */
+    private drawWanted(w: number): void {
+        const ctx = this.ctx, word = 'WANTED', t = Math.min(1, this.stampAge / STAMP_SECONDS);
+        ctx.save();
+        ctx.font = STAMP_FONT; ctx.letterSpacing = '4px'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const textW = typeof ctx.measureText === 'function' ? ctx.measureText(word).width : word.length * 17;
+        const boxW = textW + 36, boxH = 38;
+        const scale = Math.min(1, (w - 12) / boxW) * (t < 1 ? 1 + 1.3 * (1 - t) * (1 - t) - 0.08 * Math.sin(t * Math.PI) : 1);
+        ctx.translate(w / 2, 104); ctx.rotate(0.05); ctx.scale(scale, scale);
+        ctx.globalAlpha = Math.min(1, 0.25 + t * 1.5);
+        ctx.fillStyle = STAMP_RED; ctx.fillRect(-boxW / 2, -boxH / 2, boxW, boxH);
+        ctx.strokeStyle = CREAM; ctx.lineWidth = 2; ctx.strokeRect(-boxW / 2 + 4, -boxH / 2 + 4, boxW - 8, boxH - 8);
+        ctx.fillStyle = CREAM; ctx.fillText(word, 0, 2);
         ctx.restore();
     }
 

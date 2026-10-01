@@ -1,11 +1,12 @@
 import { expect, it } from 'vitest';
-import { ChaosEncoder, ChaosDecoder, prepareChaos } from '../../src/shared/chaosWire';
+import { ChaosEncoder, ChaosDecoder, prepareChaos, parseServerMessage } from '../../src/shared/chaosWire';
 import { ChaosDelivery, MAX_CHAOS_IN_FLIGHT, CHAOS_ACK_TIMEOUT_MS } from '../../src/worker/ChaosDelivery';
 import { serializeServerMessage } from '../../src/worker/serializeServerMessage';
 import { parseClientMessage } from '../../src/shared/messageValidation';
-import type { ChaosState } from '../../src/shared/chaosState';
+import { MAX_TRAPS, type ChaosState } from '../../src/shared/chaosState';
+import { WEAPON_TUNING } from '../../src/shared/pickups';
 function state(count=2):ChaosState {
- return {time:1000,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:1.123456,y:1,z:2},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},extraCases:[],dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},notice:{serial:0,text:'test 🧀'},corpses:[],impacts:[],shots:Array.from({length:count},(_,i)=>({id:`projectile-${String(i).padStart(26,'0')}`,owner:'owner-12345678-1234-1234-123456789012',p:{x:45.123456+i,y:7.456789,z:123.456789},v:{x:123.4567,y:8.34567,z:32.56789},age:1.234567,...(i%2?{wallBounced:true}:{}),...(i%3?{delayed:false}:{})}))};
+ return {time:1000,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:1.123456,y:1,z:2},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},extraCases:[],dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},notice:{serial:0,text:'test 🧀'},corpses:[],impacts:[],shots:Array.from({length:count},(_,i)=>({id:`projectile-${String(i).padStart(26,'0')}`,owner:'owner-12345678-1234-1234-123456789012',p:{x:45.123456+i,y:7.456789,z:123.456789},v:{x:123.4567,y:8.34567,z:32.56789},age:1.234567,...(i%2?{wallBounced:true}:{}),...(i%3?{wallBounced:false}:{})}))};
 }
 it('round trips keyframes, changing poses, stable metadata, deletion and recreation',()=>{
  const e=new ChaosEncoder(),d=new ChaosDecoder(),s=state();
@@ -61,6 +62,22 @@ it.each([false,true])('carries pickup claims and buff expiry through compact sna
  expect(cleared.rest.pickups).toBeNull();expect(cleared.rest.buffs).toBeNull();
  const fresh=new ChaosEncoder('fresh',delta).encode(s);
  expect(new ChaosDecoder().read(fresh.payload)?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));
+});
+it('carries held weapons, set traps and laser beams, and refuses unbounded or unknown ones',()=>{
+ const s=state(1),e=new ChaosEncoder('arsenal'),d=new ChaosDecoder();
+ s.buffs={rat:{weapon:'laser',weaponUntil:13040},trapper:{weapon:'mousetrap'}};
+ s.traps=[{id:'trap-1',owner:'trapper',x:70,y:0,z:-43,yaw:0,hp:5,at:s.time,hitAt:s.time}];
+ s.beams=[{id:'shot-1',owner:'rat',at:s.time,points:[{x:0,y:1,z:0},{x:0,y:1,z:9,on:'world'},{x:3,y:1,z:0,on:'head'}]}];
+ expect(d.read(e.encode(s).payload)?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));
+ delete s.traps;delete s.beams;
+ const cleared=d.read(e.encode(s).payload)?.message;
+ expect(cleared?.type==='chaos'&&[cleared.state.traps,cleared.state.beams]).toEqual([undefined,undefined]);
+ const parse=(patch:Record<string,unknown>)=>parseServerMessage(JSON.parse(serializeServerMessage({type:'chaos',state:{...s,...patch} as ChaosState})));
+ const trap={id:'t',owner:'o',x:0,y:0,z:0,yaw:0,hp:1,at:0};
+ expect(parse({traps:Array.from({length:MAX_TRAPS+1},(_,i)=>({...trap,id:`t${i}`}))})).toBeNull();
+ expect(parse({traps:[{...trap,hp:WEAPON_TUNING.trapHp+1}]})).toBeNull();
+ expect(parse({beams:[{id:'b',owner:'o',at:0,points:Array.from({length:WEAPON_TUNING.laserBounces+3},()=>({x:0,y:0,z:0}))}]})).toBeNull();
+ expect(parse({buffs:{rat:{weapon:'bazooka'}}})).toBeNull();
 });
 it('does not expose mutable decoder baselines to the game',()=>{
  const s=state(),e=new ChaosEncoder(),d=new ChaosDecoder();

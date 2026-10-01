@@ -46,8 +46,10 @@ const between=(r:()=>number,[a,b]:readonly [number,number])=>a+r()*(b-a);
  * with lag and imperfect lead. Shots leave along the crosshair, so every miss is one the rat actually made. */
 export class BotAim {
     yaw=0;pitch=0;
-    /** The active incident: its launch speed and drop set the lead. */
+    /** The incident whose launch speed and drop set the lead (none with a Tommy Gun's plain balls). */
     incident?:IncidentId;
+    /** A beam (the Laser) arrives at once: no lead, no drop. */
+    hitscan=false;
     private ready=false;
     private desiredYaw=0;private desiredPitch=0;
     private engaged=false;
@@ -122,7 +124,7 @@ export class BotAim {
         }
         this.last.x=target.x;this.last.y=target.y;this.last.z=target.z;
         if(now<this.readyAt)return;
-        const d=Math.hypot(this.seen.x-eye.x,this.seen.z-eye.z),travel=d/launchSpeed(this.incident);
+        const d=Math.hypot(this.seen.x-eye.x,this.seen.z-eye.z),travel=this.hitscan?0:d/launchSpeed(this.incident);
         const x=this.seen.x+(fixed?0:this.vx*travel*this.lead),z=this.seen.z+(fixed?0:this.vz*travel*this.lead);
         const y=this.seen.y+(fixed?0:CHEST)-launchGravity(this.incident)*travel*travel/2*.7;
         this.desiredYaw=Math.atan2(x-eye.x,z-eye.z);this.desiredPitch=Math.atan2(y-eye.y,Math.max(.5,Math.hypot(x-eye.x,z-eye.z)));
@@ -232,7 +234,9 @@ export const SPRAY={
 } as const;
 /** Fire at where a rat might be, with nobody in sight: groups of shots at the pre-aim point, in active
  * stretches and quiet ones. Cheese banks off walls, so this is round-corner fire, not waste. `amount` is the
- * rat's habit (1 usual): groups that many times as long, pauses and quiet stretches that many times as short. */
+ * rat's habit (1 usual): groups that many times as long, pauses and quiet stretches that many times as short.
+ * With `heldMs` (a Tommy Gun) the trigger is held through a group, a shot every `heldMs` for as long as the
+ * group's clicks would have taken. */
 export class BotSpray {
     private nextShot?:number;
     private remaining=0;
@@ -241,15 +245,18 @@ export class BotSpray {
     range=30;
     constructor(private readonly random:()=>number){}
     reset():void{this.nextShot=undefined;this.remaining=0;this.activeUntil=0;}
-    pull(now:number,enabled:boolean,allowed:boolean,amount=1):boolean {
+    pull(now:number,enabled:boolean,allowed:boolean,amount=1,heldMs?:number):boolean {
         if(!enabled){this.reset();return false;}
         if(this.nextShot===undefined){this.nextShot=now+800+this.random()*1000;return false;}
         if(this.activeUntil&&now>=this.activeUntil){this.activeUntil=0;this.remaining=0;this.nextShot=now+between(this.random,SPRAY.quietMs)/amount;}
         if(!allowed||now<this.nextShot)return false;
         if(!this.activeUntil)this.activeUntil=now+between(this.random,SPRAY.activeMs);
-        if(!this.remaining){this.remaining=Math.max(1,Math.round((this.random()<.4?1:2+Math.floor(this.random()*4))*amount));this.range=between(this.random,SPRAY.range);}
+        if(!this.remaining){
+            const clicks=Math.max(1,Math.round((this.random()<.4?1:2+Math.floor(this.random()*4))*amount));
+            this.remaining=heldMs?Math.max(1,Math.round(clicks*(SPRAY.shotMs[0]+SPRAY.shotMs[1])/2/heldMs)):clicks;this.range=between(this.random,SPRAY.range);
+        }
         this.remaining--;
-        this.nextShot=now+(this.remaining?between(this.random,SPRAY.shotMs):between(this.random,SPRAY.pauseMs)/amount);
+        this.nextShot=now+(this.remaining?heldMs??between(this.random,SPRAY.shotMs):between(this.random,SPRAY.pauseMs)/amount);
         return true;
     }
 }

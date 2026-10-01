@@ -144,8 +144,9 @@ export class DispatchPillars {
         }
     }
 
-    /** Each frame, with the authoritative dispatch state at presentation time `now` (ms). */
-    update(d:Dispatch,now:number,camera?:THREE.Camera){
+    /** Each frame, with the authoritative dispatch state at presentation time `now` (ms). `haywire` (Code Violation):
+     * every pillar rattles, its beacon stutters back and forth, and its bell spits sparks now and then. */
+    update(d:Dispatch,now:number,camera?:THREE.Camera,haywire=false){
         const dt=Number.isFinite(this.lastNow)?Math.min(.1,Math.max(0,(now-this.lastNow)/1000)):0;this.lastNow=now;
         const t=now/1000,state=feelState(),juice=state.on('dispatchPillar'),p=FEEL.dispatchPillar.params;
         if(d.phase==='ready'){this.shot=-1;for(const view of this.views)view.broken=false;}
@@ -163,7 +164,7 @@ export class DispatchPillars {
         }
         this.shotAge+=dt;this.finaleAge+=dt;this.tickAge+=dt;
         const beaconOn=d.phase!=='cooldown',finale=this.finaleAge<.9,rolling=d.phase==='rolling';
-        this.spin+=dt*(rolling||finale?9:4.5);
+        this.spin+=dt*(rolling||finale?9:haywire?(Math.sin(t*2.3)>0?14:-9):4.5);
         camera?.getWorldPosition(this.ear);
         this.kit.beacon.emissiveIntensity=beaconOn?(juice?1.1+Math.sin(t*9)*.35:1.1):.05;
         for(let i=0;i<this.views.length;i++){
@@ -187,7 +188,8 @@ export class DispatchPillars {
             model.ghosts.visible=view.ringing;
             // A hit rocks the pillar away from the ball and wobbles back; ringing makes it tremble.
             const punch=view.hitAge<.8?Math.exp(-view.hitAge*6)*Math.cos(view.hitAge*28)*(view.hitBusy?.5:1):0;
-            const shake=view.berserk?.045:view.ringing?.012:0;
+            const shake=view.berserk?.045:haywire?.03:view.ringing?.012:0;
+            if(haywire&&Math.random()<dt*.8){const b=view.station.target;this.hitAt.set(b.x,b.y,b.z);for(let s=0;s<5;s++)this.spark(this.hitAt,6,.45);}
             model.body.position.set(Math.sin(t*61+i)*shake,0,Math.cos(t*53+i)*shake);
             model.body.rotation.set(view.hitZ*.07*punch+Math.sin(t*47)*shake*.3,0,-view.hitX*.07*punch+Math.cos(t*43)*shake*.3);
             model.bell.rotation.set(view.hitZ*.18*punch+Math.sin(t*38)*shake*1.5,0,-view.hitX*.18*punch);

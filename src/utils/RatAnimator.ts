@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {INCIDENT_TUNING} from '../shared/chaosState';
+import {BOBBLEHEAD} from '../shared/rat/ratBody';
+/** Bobbleheads: how fast (1/s) a head swells or shrinks as the incident starts and ends. */
+const BOBBLE_RATE = 5;
+/** Bobbleheads: the head's pivot sits this far above its chin (model units). A swollen head rises by its growth
+ * times this, so the chin stays on the collar and the face fills the enlarged hit sphere above the neck. */
+const BOBBLE_CHIN = .28;
 
 /** Ordinary shot → spin, explosion → fling, neutral trap/case → flop, killed mid-launch → flail. */
 export type DeathStyle='default'|'spin'|'fling'|'flop'|'flail';
@@ -12,7 +18,8 @@ import {RatRagdoll} from './RatRagdoll';
 import {RatCorpseChain} from './RatCorpseChain';
 import {RAT_SPINE_JOINTS} from './RatModel';
 import {setDeformer} from './RigidMeshBatch';
-import type {TimedPickup} from '../shared/pickups';
+import type {TimedPickup,WeaponKind} from '../shared/pickups';
+import {heldWeaponModel,WEAPON_MUZZLE} from './WeaponModel';
 
 /** Polish 14 parts, present only on rats built with model touch-ups. */
 const EXTRA_PARTS = ['rat-brow-left','rat-brow-right','rat-whiskers-left','rat-whiskers-right','rat-shoe-left','rat-shoe-right',
@@ -64,6 +71,20 @@ export class RatAnimator {
     /** Big Cheese: the pistol swells chunky around the hand (eased in and out). */
     bigPistol = false;
     private pistolGrowth = 0;
+    /** The special weapon in hand (undefined: the pistol) and its model. The pistol's own parts shrink away under a
+     * weapon (they are drawn in the rigid batch), and a held weapon replaces Big Cheese's chunky pistol. */
+    private weapon?: WeaponKind;
+    private weaponModel?: THREE.Object3D;
+    private readonly pistolParts: THREE.Object3D[] = [];
+    private readonly muzzle: THREE.Object3D;
+    private readonly restMuzzle = new THREE.Vector3();
+    get weaponKind(): WeaponKind | undefined {return this.weapon;}
+    /** Bobbleheads: the head swells `BOBBLEHEAD.scale` times from the neck and wobbles on a spring; a hit boings it. */
+    bobblehead = false;
+    private headGrowth = 0;
+    private readonly bobblePhase = Math.random() * Math.PI * 2;
+    /** 0…1: how far the head has swollen (the nameplate rises with it). */
+    get bobbleGrowth(): number {return this.headGrowth;}
     private readonly rigs;
     private readonly spines;
     private readonly gunSleeves:GunSleeveRig[];
@@ -245,6 +266,8 @@ export class RatAnimator {
             const belly = model.getObjectByName('rat-spine-belly'), chest = model.getObjectByName('rat-spine-chest');
             return belly && chest ? {belly, chest} : undefined;
         });
+        for (const {pistol} of this.gunSleeves) for (const part of pistol.children) if (part instanceof THREE.Mesh) this.pistolParts.push(part);
+        this.muzzle = root.getObjectByName('rat-muzzle')!;this.restMuzzle.copy(this.muzzle.position);
     }
 
     takeHit(direction?:THREE.Vector3): void {
@@ -277,6 +300,19 @@ export class RatAnimator {
         this.acting.trigger(event,strength);this.applyPose();
     }
     setHustle(active:boolean):void {this.hustle=active;}
+    /** A special weapon replaces the pistol in hand (the Mousetrap is carried across the chest instead); the muzzle
+     * moves to the new barrel's end, so shots and the flash leave from it. Undefined puts the pistol back. */
+    setWeapon(kind?: WeaponKind): void {
+        if (kind === this.weapon) return;
+        this.weapon = kind;
+        this.weaponModel?.removeFromParent();this.weaponModel = undefined;
+        for (const part of this.pistolParts) part.scale.setScalar(kind ? 1e-3 : 1);
+        this.muzzle.position.copy(kind && kind !== 'mousetrap' ? WEAPON_MUZZLE[kind] : this.restMuzzle);
+        if (!kind) return;
+        this.weaponModel = heldWeaponModel(kind);
+        const holder = kind === 'mousetrap' ? this.root.getObjectByName('rat-spine-chest') ?? this.root.getObjectByName('rat-body') : this.root.getObjectByName('rat-pistol');
+        holder!.add(this.weaponModel);
+    }
     resetReactions():void {
         this.acting.reset();this.hustle=false;
         this.flight=0;this.wasLaunched=false;this.skidAge=this.nodAge=this.pulseAge=this.hatKnockAge=this.hatBlowAge=this.screamAge=10;
@@ -284,6 +320,17 @@ export class RatAnimator {
     }
     setActingEnabled(enabled:boolean):void {
         this.actingEnabled=enabled;this.acting.reset();this.applyPose();
+    }
+
+    /** Bobbleheads: swell `head` up from its chin and wobble it on its spring (`loose` 2 on a corpse, which flops more),
+     * boinging after a hit. */
+    private bobble(head: THREE.Object3D, time: number, loose: number): void {
+        const g = this.headGrowth, boing = this.hitAge < 2 ? Math.sin(this.hitAge * 19) * Math.exp(-this.hitAge * 3.2) : 0;
+        const size = 1 + (BOBBLEHEAD.scale - 1) * g;
+        head.scale.set(head.scale.x * size * (1 - boing * .08), head.scale.y * size * (1 + boing * .16), head.scale.z * size * (1 - boing * .08));
+        head.position.y += (size - 1) * BOBBLE_CHIN;
+        head.rotation.z += g * (Math.sin(time * 5.3 + this.bobblePhase) * .07 * loose + boing * .38);
+        head.rotation.x += g * (Math.sin(time * 4.1 + this.bobblePhase * 1.7) * .05 * loose - boing * .22);
     }
 
     /** Damped secondary motion reacts to actual tumble and contact impulses. With the
@@ -328,6 +375,7 @@ export class RatAnimator {
         // R4: the belly flattens against whatever it landed on; R5: a shot ripples the coat.
         const squash=this.landingPulse*bodyParams.squash,up=this.chain.bellyUp;
         const ripple=chain&&chain.rippleAge<.6?Math.sin(chain.rippleAge*26)*Math.exp(-chain.rippleAge*6)*.14:0;
+        this.headGrowth = THREE.MathUtils.lerp(this.headGrowth, this.bobblehead ? 1 : 0, 1 - Math.exp(-BOBBLE_RATE * dt));
         for (let i = 0; i < this.rigs.length; i++) {
             const rig = this.rigs[i], body = rig[0].part, head = rig[1].part, hat = rig[2].part, arm = rig[8].part, spine = this.spines[i];
             if (chain && spine) {
@@ -358,6 +406,7 @@ export class RatAnimator {
             hat.position.y += stretch * 0.55 + this.landingPulse * 0.035;
             // X eyes replace the closed lids on rats that have them (R3).
             rig[4].part.scale.y = rig[5].part.scale.y = this.hasDeadFace ? 1e-4 : 0.18;
+            if (this.headGrowth > .001) this.bobble(head, time, 2);
             if (this.hatHidden) hat.scale.setScalar(1e-4);
         }
         if (chain) {this.tailFall.set(0, 0, 0);this.tailTip.copy(chain.tailTip);}
@@ -656,7 +705,8 @@ export class RatAnimator {
         this.hit = Math.exp(-this.hitAge * 16) * Math.cos(this.hitAge * 22);
         this.aimHold = Math.max(0, this.aimHold - dt);
         this.aim = THREE.MathUtils.lerp(this.aim, this.aimHold > 0 ? 1 : 0, 1 - Math.exp(-7 * dt));
-        this.pistolGrowth = THREE.MathUtils.lerp(this.pistolGrowth, this.bigPistol ? 1 : 0, 1 - Math.exp(-INCIDENT_TUNING.cheesePistolRate * dt));
+        this.pistolGrowth = THREE.MathUtils.lerp(this.pistolGrowth, this.bigPistol && !this.weapon ? 1 : 0, 1 - Math.exp(-INCIDENT_TUNING.cheesePistolRate * dt));
+        this.headGrowth = THREE.MathUtils.lerp(this.headGrowth, this.bobblehead ? 1 : 0, 1 - Math.exp(-BOBBLE_RATE * dt));
         this.applyPose();
     }
 
@@ -821,6 +871,7 @@ export class RatAnimator {
                 pistol.scale.set(w, w, l);
                 pistol.position.x += RAT_PISTOL_GRIP.x * (1 - w); pistol.position.y += RAT_PISTOL_GRIP.y * (1 - w); pistol.position.z += RAT_PISTOL_GRIP.z * (1 - l);
             }
+            if (this.headGrowth > .001) this.bobble(head, this.time, 1);
             leftEye.scale.y = rightEye.scale.y = 1 - Math.max(blink, this.extras.length && this.hitAge < .14 ? Math.sin(this.hitAge / .14 * Math.PI) : 0) * 0.94;
             // Stakeout: a hard squint while peering forward.
             if (this.pulseKind === 'stakeout' && pulse) {leftEye.scale.y *= 1 - pulse * .6;rightEye.scale.y *= 1 - pulse * .6;}

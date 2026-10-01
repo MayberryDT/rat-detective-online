@@ -2,11 +2,17 @@ import type { Vec3Data } from './networkProtocol';
 import { DOCKS_JOBS } from './city/kit/parts/docks';
 import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
-/** The four approved pickups. Kept literal so snapshot validation can share it. */
-export const PICKUP_KINDS = ['ironclad', 'hustle', 'quick-fix', 'stakeout'] as const;
+/** The seven pickups: four supplies and three special weapons. Kept literal so snapshot validation can share it. */
+export const PICKUP_KINDS = ['ironclad', 'hustle', 'quick-fix', 'stakeout', 'tommy-gun', 'laser', 'mousetrap'] as const;
 export type PickupKind = typeof PICKUP_KINDS[number];
 export const isPickupKind = (value: unknown): value is PickupKind =>
     typeof value === 'string' && (PICKUP_KINDS as readonly string[]).includes(value);
+/** Special weapons. A rat holds at most one: a new claim replaces it, death and the round's reset clear it. While
+ * held it replaces the incident's shot pattern (the Excessive Force carrier's damage multiplier still applies). */
+export const WEAPON_KINDS = ['tommy-gun', 'laser', 'mousetrap'] as const;
+export type WeaponKind = typeof WEAPON_KINDS[number];
+export const isWeaponKind = (value: unknown): value is WeaponKind =>
+    typeof value === 'string' && (WEAPON_KINDS as readonly string[]).includes(value);
 
 /** Release tuning; subjective pickup feel still benefits from human playtests. */
 export const PICKUP_TUNING = {
@@ -22,14 +28,35 @@ export const PICKUP_TUNING = {
     hustleMultiplier: 1.45,
     /** Stakeout: the Hunch city-wide at any health, long enough to pick a target and get there. */
     stakeoutMs: 12_000,
+    /** Tommy Gun and Laser are on a timer, never a magazine: shooting is always rewarded. The Mousetrap has none: it is held until set down. */
+    tommyMs: 8_000,
+    laserMs: 10_000,
 } as const;
-/** Timed pickups (Quick Fix is instant), and the buff field and duration each one sets. */
+/** The special weapons' rules, the same for every rat, human or bot. */
+export const WEAPON_TUNING = {
+    /** Tommy Gun: held fire repeats every `tommyIntervalMs` (under `SHOOT_RATE`). Each ball leaves within a cone whose
+     * half-angle (radians) grows from `tommyCone` to `tommyBloom` over `tommyBloomShots` held shots; a shot within
+     * `tommyHeatMs` of the rat's previous one counts as held. Plain balls, one damage each, headshots kill. */
+    tommyIntervalMs: 100, tommyCone: .035, tommyBloom: .11, tommyBloomShots: 10, tommyHeatMs: 350,
+    /** Laser: an instant beam, spaced like Big Cheese (`INCIDENT_TUNING.cheeseShotIntervalMs`). It deals `laserDamage`
+     * (headshots kill), reflects off walls and Ironclad coats up to `laserBounces` times within `laserRange` units in
+     * all, `laserRadius` thick. Others draw it from the snapshot for `laserBeamMs`. */
+    laserDamage: 3, laserBounces: 2, laserRange: 180, laserRadius: .12, laserBeamMs: 600,
+    /** Mousetrap: set down `trapReach` ahead of the rat on a supported floor with `trapRadius` clear around it. Any other
+     * rat whose feet come within `trapRadius` + `trapFoot` (and `trapHeight` above or below) dies in one snap; it re-arms
+     * after `trapRearmMs`. `trapHp` ball hits destroy it (a laser hit counts `laserTrapHits`); a broken trap stays in the
+     * snapshot `trapBrokenMs` so clients can play the break. One per rat; it outlives its owner's death, not the round. */
+    trapReach: 2.6, trapRadius: 1.25, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapRearmMs: 900, trapBrokenMs: 700,
+} as const;
+/** Timed supplies (Quick Fix is instant, weapons have their own slot), and the buff field and duration each one sets. */
 export const TIMED_PICKUPS = ['ironclad', 'hustle', 'stakeout'] as const;
 export type TimedPickup = typeof TIMED_PICKUPS[number];
 export const BUFF_FIELD = { ironclad: 'ironcladUntil', hustle: 'hustleUntil', stakeout: 'stakeoutUntil' } as const satisfies Record<TimedPickup, keyof PlayerBuffs>;
 export const BUFF_MS: Record<TimedPickup, number> = { ironclad: PICKUP_TUNING.ironcladMs, hustle: PICKUP_TUNING.hustleMs, stakeout: PICKUP_TUNING.stakeoutMs };
 export const BUFF_FIELDS: readonly (keyof PlayerBuffs)[] = TIMED_PICKUPS.map(kind => BUFF_FIELD[kind]);
-export const isTimedPickup = (kind: PickupKind): kind is TimedPickup => kind !== 'quick-fix';
+export const isTimedPickup = (kind: PickupKind): kind is TimedPickup => (TIMED_PICKUPS as readonly string[]).includes(kind);
+/** A weapon's timer; the Mousetrap has none. */
+export const WEAPON_MS: Readonly<Partial<Record<WeaponKind, number>>> = { 'tommy-gun': PICKUP_TUNING.tommyMs, laser: PICKUP_TUNING.laserMs };
 
 export interface PickupCopy { title: string; effect: string; flavor: string }
 export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
@@ -37,6 +64,9 @@ export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
     hustle: { title: 'HOT PURSUIT', effect: 'Temporary speed boost', flavor: 'Move it, detective.' },
     'quick-fix': { title: 'QUICK FIX', effect: 'Full health', flavor: 'Fit for duty. Allegedly.' },
     stakeout: { title: 'STAKEOUT', effect: 'See every rat in the city through walls', flavor: 'Eyes on the whole town.' },
+    'tommy-gun': { title: 'TOMMY GUN', effect: 'Hold fire to spray cheese', flavor: 'The Chicago typewriter.' },
+    laser: { title: 'LASER', effect: 'Instant beam · 3 damage · bounces off walls', flavor: 'Science, detective.' },
+    mousetrap: { title: 'MOUSETRAP', effect: 'Fire to set it down · it kills any rat that steps on it', flavor: 'Bait not included.' },
 };
 
 /** Authored floor heights keep rewards on their intended routes. Every site has a
@@ -44,7 +74,10 @@ export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
  * each landmark's ground floor, never upstairs, where nobody went for it; Hot Pursuit
  * waits where long runs start; Quick Fix hides just off the fight lines, within about
  * four seconds' run of every place where rats die most. Stakeout (layout 5) stands on a
- * four-way crossroads in each corner of the city: see everyone, pick a target, go. */
+ * four-way crossroads in each corner of the city: see everyone, pick a target, go. The
+ * weapons (layout 6) stand in the fights that layout 5's play found: the Tommy Gun and the
+ * Laser in the deadliest open streets (the Laser between walls to bank off), the Mousetrap
+ * where rats must come back: beside the case's home and on the way into the south lot. */
 export interface PickupAnchor { id: string; kind: PickupKind; x: number; z: number; y?:number; near: string }
 export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
     {id:'alibi-records-forecourt',kind:'ironclad',x:8,z:-12,y:.7,near:'Street in front of Records Hall, east of the forecourt'},
@@ -71,19 +104,32 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
     {id:'stakeout-pier9-corner',kind:'stakeout',x:68,z:-104,y:.7,near:'Crossroads of the x 70 avenue and the -102 street, between the container yard and Pier 9'},
     {id:'stakeout-east-crossing',kind:'stakeout',x:92,z:44,y:.7,near:'Crossroads of the x 90 street and the 40 street, south of the Icebox shops'},
     {id:'stakeout-south-avenue',kind:'stakeout',x:-64,z:140,y:.7,near:'Crossroads of the x -60 avenue and the 145 street, south of the south crossing'},
+    {id:'tommy-x70-north',kind:'tommy-gun',x:70,z:-36,y:.7,near:'The x 70 avenue north of the -18 street, the north-east street fight'},
+    {id:'tommy-m18-west',kind:'tommy-gun',x:-88,z:-18,y:.7,near:'The -18 street west of the x -60 avenue, the west street fight'},
+    {id:'laser-m60-needleworks',kind:'laser',x:-60,z:72,y:.7,near:'The x -60 avenue beside Needleworks, a long straight to bank shots along'},
+    {id:'laser-28-west',kind:'laser',x:-88,z:28,y:.7,near:'The 28 street west of the x -60 avenue, walls on both sides for ricochets'},
+    {id:'trap-case-home',kind:'mousetrap',x:-16,z:-16,y:.7,near:'The -18 street in front of the Records forecourt, on the way to the case\'s home'},
+    {id:'trap-south-lot',kind:'mousetrap',x:3,z:72,y:.7,near:'The south lot, the city\'s second-deadliest place, on the way in'},
 ];
 
-/** Active timed effects on one rat. Absent keys mean no effect. */
-export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number }
+/** Active effects on one rat. Absent keys mean no effect. `weapon` is the one special weapon held, until
+ * `weaponUntil` (absent for the Mousetrap, held until set down). */
+export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number; weapon?: WeaponKind; weaponUntil?: number }
 export type BuffMap = Record<string, PlayerBuffs>;
 
 /** All sites remain advertised while empty; the authority supplies their restock deadline. */
 export interface PickupState { id: string; kind: PickupKind; x: number; y: number; z: number; availableAt?: number }
 
+/** The weapon an effects entry still holds at `now`. */
+export const entryWeapon = (entry: PlayerBuffs | undefined, now: number): WeaponKind | undefined =>
+    entry?.weapon && (entry.weapon === 'mousetrap' || (entry.weaponUntil ?? 0) > now) ? entry.weapon : undefined;
+export const heldWeapon = (buffs: BuffMap | undefined, id: string, now: number): WeaponKind | undefined => entryWeapon(buffs?.[id], now);
 export const activeBuffs = (buffs: BuffMap | undefined, id: string, now: number): PlayerBuffs => {
     const entry = buffs?.[id], active: PlayerBuffs = {};
     if (!entry) return active;
     for (const kind of TIMED_PICKUPS) { const until = entry[BUFF_FIELD[kind]]; if (until !== undefined && until > now) active[BUFF_FIELD[kind]] = until; }
+    const weapon = entryWeapon(entry, now);
+    if (weapon) { active.weapon = weapon; if (entry.weaponUntil !== undefined) active.weaponUntil = entry.weaponUntil; }
     return active;
 };
 export const hasIronclad = (buffs: BuffMap | undefined, id: string, now: number): boolean =>
@@ -95,10 +141,11 @@ export const hasStakeout = (buffs: BuffMap | undefined, id: string, now: number)
 
 /** True when the entry has fallen out of every effect and can be pruned. */
 export const buffExpired = (entry: PlayerBuffs | undefined, now: number): boolean =>
-    !entry || TIMED_PICKUPS.every(kind => (entry[BUFF_FIELD[kind]] ?? 0) <= now);
+    !entry || TIMED_PICKUPS.every(kind => (entry[BUFF_FIELD[kind]] ?? 0) <= now) && !entryWeapon(entry, now);
 
 /** Merge a fresh claim into a rat's existing effects. Re-collecting the same
- * benefit refreshes to the full duration; it never stacks or accumulates. */
+ * benefit refreshes to the full duration; it never stacks or accumulates.
+ * A weapon replaces whichever weapon the rat held. */
 export function mergePickup(
     existing: PlayerBuffs | undefined,
     pickup: PickupKind,
@@ -106,8 +153,16 @@ export function mergePickup(
 ): PlayerBuffs {
     const next: PlayerBuffs = { ...existing };
     if (isTimedPickup(pickup)) next[BUFF_FIELD[pickup]] = now + BUFF_MS[pickup];
+    else if (isWeaponKind(pickup)) {
+        next.weapon = pickup;
+        const ms = WEAPON_MS[pickup];
+        if (ms === undefined) delete next.weaponUntil; else next.weaponUntil = now + ms;
+    }
     return next;
 }
+/** When a claimed effect ends (undefined: instant, or held until used). */
+export const pickupEffectUntil = (entry: PlayerBuffs | undefined, kind: PickupKind): number | undefined =>
+    isTimedPickup(kind) ? entry?.[BUFF_FIELD[kind]] : isWeaponKind(kind) && entry?.weapon === kind ? entry.weaponUntil : undefined;
 
 export interface PickupPoint { id: string; kind: PickupKind; p: Vec3Data }
 

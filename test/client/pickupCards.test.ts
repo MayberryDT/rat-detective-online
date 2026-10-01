@@ -2,6 +2,7 @@ import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import {ChaosView} from '../../src/prototype/ChaosView';
 import {CASE_HOME,type ChaosState} from '../../src/shared/chaosState';
+import type {RatEntity} from '../../src/entities/RatEntity';
 
 vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SEWER_FLOOR:-7,grayboxBoxes:()=>[]}));
@@ -21,8 +22,8 @@ beforeEach(()=>{
     vi.stubGlobal('document',{createElement:()=>{const node=new Element();nodes.push(node);return node;},body:{appendChild(){}}});
 });
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
-function fixture(){
-    const feedback=vi.fn(),view=new ChaosView(new THREE.Scene(),()=>undefined,undefined,false,feedback);
+function fixture(rat?:Partial<RatEntity>){
+    const feedback=vi.fn(),view=new ChaosView(new THREE.Scene(),id=>id==='me'?rat as RatEntity|undefined:undefined,undefined,false,feedback);
     view.setScores([],'me');
     const state:ChaosState={time:1000,case:{p:{...CASE_HOME},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0},owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},
         dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},corpses:[],impacts:[],notice:{serial:0,text:''},shots:[],buffs:{me:{ironcladUntil:13000,hustleUntil:11000}}};
@@ -52,4 +53,25 @@ it('refreshes one healing card and clears all cards on a round reset',()=>{
     const {view,draw,cards}=fixture();view.showHealing();draw();clock+=2500;view.showHealing();draw();
     expect(cards()).toHaveLength(3);clock+=1000;draw();expect(cards()).toHaveLength(3);
     view.resetProjectiles();expect(cards()).toHaveLength(0);view.dispose();
+});
+it('shows the held weapon as one card, announces each new weapon once and arms the rat holding it',()=>{
+    vi.stubGlobal('innerWidth',1280);vi.stubGlobal('innerHeight',720);
+    const rat={dead:false,mesh:new THREE.Group(),setWeapon:vi.fn()};
+    const {view,state,draw,cards,feedback}=fixture(rat);
+    const claims=(kind:string)=>feedback.mock.calls.filter(([cue])=>cue===`pickup-${kind}`).length;
+    state.buffs={me:{weapon:'laser',weaponUntil:9000}};draw();
+    expect(claims('laser')).toBe(0); // A view's first state is only the baseline.
+    state.buffs={me:{weapon:'tommy-gun',weaponUntil:9000}};draw();draw();
+    expect(cards().map(c=>c.className)).toEqual(['powerup-card powerup-tommy-gun']);
+    expect(cards()[0]!.innerHTML).toContain('SEC');expect(claims('tommy-gun')).toBe(1);
+    expect(rat.setWeapon).toHaveBeenLastCalledWith('tommy-gun');
+    state.buffs={me:{weapon:'mousetrap'}};draw();draw();
+    expect(cards().map(c=>c.className)).toEqual(['powerup-card powerup-mousetrap']);
+    const trap=cards()[0]!.innerHTML;
+    expect(trap).toContain('CLICK TO SET IT DOWN');expect(trap).toContain('FIRE TO SET IT DOWN');expect(trap).not.toContain('SEC');
+    expect(claims('mousetrap')).toBe(1);expect(rat.setWeapon).toHaveBeenLastCalledWith('mousetrap');
+    // Set down (or expired): the card goes and the pistol comes back.
+    state.buffs={};draw();
+    expect(cards()).toHaveLength(0);expect(rat.setWeapon).toHaveBeenLastCalledWith(undefined);
+    view.dispose();
 });

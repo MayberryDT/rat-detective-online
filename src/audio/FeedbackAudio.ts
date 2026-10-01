@@ -2,12 +2,24 @@ import * as THREE from 'three';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {worldSoundGain} from './worldSoundGain';
 import {AudioVoicePool} from './AudioVoicePool';
-export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
+export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-tommy-gun'|'pickup-laser'|'pickup-mousetrap'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'laser-fire'|'laser-hit'|'trap-set'|'trap-snap'|'trap-splinter'|'trap-break'|'trap-refused'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
 const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
     'pickup-ironclad':{file:'pickup-ironclad',volume:.7,cooldown:150},
     'pickup-hustle':{file:'pickup-hustle',volume:.65,cooldown:150},
     'pickup-quick-fix':{file:'pickup-quick-fix',volume:.65,cooldown:150},
     'pickup-stakeout':{file:'pickup-stakeout',volume:.65,cooldown:150},
+    // The arsenal (protocol 27): claims and the Laser's pulp ray-gun zap and crack (scripts/generate-pickup-sounds.py);
+    // the Mousetrap's foley is cut from the cartoon recordings (scripts/generate-feedback-sounds.py).
+    'pickup-tommy-gun':{file:'pickup-tommy-gun',volume:.65,cooldown:150},
+    'pickup-laser':{file:'pickup-laser',volume:.65,cooldown:150},
+    'pickup-mousetrap':{file:'pickup-mousetrap',volume:.65,cooldown:150},
+    'laser-fire':{file:'laser-fire',volume:.6,cooldown:50},
+    'laser-hit':{file:'laser-hit',volume:.5,cooldown:50},
+    'trap-set':{file:'trap-set',volume:.55,cooldown:120},
+    'trap-snap':{file:'trap-snap',volume:.85,cooldown:80},
+    'trap-splinter':{file:'trap-splinter',volume:.32,cooldown:45},
+    'trap-break':{file:'trap-break',volume:.6,cooldown:150},
+    'trap-refused':{file:'trap-refused',volume:.45,cooldown:150},
     'pickup-slap':{file:'pickup-slap',volume:.58,cooldown:100},
     'armor-clang':{file:'armor-clang',volume:.8,cooldown:75},
     'stakeout-shutter':{file:'stakeout-shutter',volume:.35,cooldown:40},
@@ -59,7 +71,7 @@ export class FeedbackAudio {
         let gain=1;
         if(origin){this.listener.getWorldPosition(this.ear);gain=worldSoundGain(Math.hypot(origin.x-this.ear.x,origin.y-this.ear.y,origin.z-this.ear.z));}
         // Rapid impact/ledger/claim-payoff chatter never crowds out ownership or death cues.
-        if(this.voices.size>=6&&(cue==='case-hit'||cue==='tick'||cue==='notice'||cue==='stakeout-shutter'||cue==='pip-tick'))return;
+        if(this.voices.size>=6&&(cue==='case-hit'||cue==='tick'||cue==='notice'||cue==='stakeout-shutter'||cue==='pip-tick'||cue==='trap-splinter'))return;
         if(this.voices.size>=8)this.release(this.voices.values().next().value!);
         const sound=this.pool.acquire();if(!sound)return;
         sound.setBuffer(buffer);sound.setVolume(volume*gain);sound.setPlaybackRate(rate);

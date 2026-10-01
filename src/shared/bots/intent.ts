@@ -6,7 +6,7 @@ import type {JurisdictionZoneId} from '../jurisdictionZones';
  * Firing is not a goal: the motor fires whenever it has a shot, within the skill dials. */
 
 /** Raised by every change to the minds, questions, weights or dials; stamped on city facts next to `layoutVersion`. */
-export const MIND_VERSION=7;
+export const MIND_VERSION=8;
 
 /** When a bot decides (the bot learning plan, L4): on events (spawn, its goal ending or failing, the case changing
  * state, the assignment moving on) and at most `holdMs` after its last decision otherwise; between decisions it

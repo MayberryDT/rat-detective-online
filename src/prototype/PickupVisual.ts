@@ -5,6 +5,7 @@ import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {batchRigidMeshes} from '../utils/RigidMeshBatch';
 import {PickupRespawnVisual} from './PickupRespawnVisual';
 import type {PickupKind} from '../shared/pickups';
+import {PartKit,mousetrap,rayGun,tommyGun,weaponFinish,type WeaponFinish} from '../utils/WeaponModel';
 import {kickDust} from '../feel/Dust';
 import {supplyCue} from '../feel/supplyCues';
 import {freezeStatic} from '../utils/freezeStatic';
@@ -16,7 +17,7 @@ const LAMP_HEAD=new THREE.Vector3(0,2.75,0);
 /** Malpractice hop duration (ms) and height. */
 const HOP_MS=380, HOP_HEIGHT=1.5;
 /** Each supply's own colour for the far beam and the outline that finds it from across the street. */
-const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0xf3cf6f};
+const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0xf3cf6f,'tommy-gun':0xff8a24,laser:0x3fe8ff,mousetrap:0xf2e6c8};
 /** Claim pop and restock drop (seconds); beacon fades in with distance (units). */
 const POP=.32, DROP=.5, BEAM_HEIGHT=34;
 /** Part shapes built once and shared by every display: the welcome builds two dozen displays of up
@@ -27,6 +28,51 @@ function part(key:string,make:()=>THREE.BufferGeometry):THREE.BufferGeometry {
     let geometry=PARTS.get(key);
     if(!geometry){geometry=make();PARTS.set(key,geometry);}
     return geometry;
+}
+
+/** Where a frame puts a model: at `x,y,z`, rolled `rz`, pitched `rx`, then turned `ry` (YXZ), scaled by `s`. */
+function place(kit:PartKit,x:number,y:number,z:number,rx:number,ry:number,rz:number,s=1):void {
+    kit.frame.compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz,'YXZ')),new THREE.Vector3(s,s,s));
+}
+/** A violin case's outline, lying along x (the neck toward +x). */
+function violinCase():THREE.Shape {
+    const s=new THREE.Shape();s.moveTo(.8,.11);s.lineTo(.36,.13);
+    s.quadraticCurveTo(.3,.27,.12,.28);s.quadraticCurveTo(-.06,.28,-.12,.22);s.quadraticCurveTo(-.2,.37,-.42,.37);s.quadraticCurveTo(-.79,.36,-.79,0);
+    s.quadraticCurveTo(-.79,-.36,-.42,-.37);s.quadraticCurveTo(-.2,-.37,-.12,-.22);s.quadraticCurveTo(-.06,-.28,.12,-.28);s.quadraticCurveTo(.3,-.27,.36,-.13);
+    s.lineTo(.8,-.11);s.closePath();return s;
+}
+/** The three weapon displays, built on the shared weapon models: a Tommy Gun resting in an open violin case, a ray
+ * gun on a brass cradle, and a set Mousetrap. Each starts with a polished part: the batch takes its reflection. */
+function weaponDisplay(kind:'tommy-gun'|'laser'|'mousetrap',kit:PartKit,f:WeaponFinish):void {
+    const flat=(depth:number)=>new THREE.ExtrudeGeometry(violinCase(),{depth,bevelEnabled:true,bevelThickness:.02,bevelSize:.02,bevelSegments:2,curveSegments:10});
+    if(kind==='tommy-gun'){
+        // The gun rests in the case on its stock, barrel raised, in profile: drum, grips and finned barrel read at range.
+        place(kit,-.08,.7,.02,-.22,Math.PI/2,0);tommyGun(kit,f);
+        kit.frame.identity();
+        kit.add(flat(.2),f.leather,0,.12,0,-Math.PI/2);
+        kit.add(flat(.02),f.velvet,0,.33,0,-Math.PI/2,0,0,.96,.96,1);
+        for(const x of [-.5,.1])kit.box(.1,.08,.05,x,.26,.39,f.brass,.015);
+        // The lid, open on its hinge along the back edge, velvet inside.
+        const hinge=new THREE.Matrix4().makeTranslation(0,.34,-.37).multiply(new THREE.Matrix4().makeRotationX(1.2)).multiply(new THREE.Matrix4().makeTranslation(0,-.34,.37));
+        kit.frame.copy(hinge);
+        kit.add(flat(.07),f.leather,0,.34,-.74,-Math.PI/2);
+        kit.add(flat(.02),f.velvet,0,.43,-.74,-Math.PI/2,0,0,.94,.94,1);
+        kit.frame.identity();
+    }else if(kind==='laser'){
+        place(kit,0,.86,0,-.3,Math.PI/2,0,1.35);
+        rayGun(kit,f);
+        kit.frame.identity();
+        // A turned stand with a brass post and cradle.
+        kit.cylinder(.3,.36,.12,0,.18,0,f.walnut,20);
+        kit.cylinder(.12,.16,.06,0,.27,0,f.brass,16);
+        kit.cylinder(.03,.03,.44,0,.5,0,f.brass,8);
+        for(const x of [-.26,.24]){kit.box(.04,.2,.18,x,.72,0,f.brass,.015);kit.box(.04,.04,.2,x,.63,0,f.brass,.015);}
+        kit.box(.56,.04,.06,0,.62,0,f.brass,.015);
+    }else{
+        kit.box(.3,.16,.02,.42,.24,.62,f.brass,.01,-.3,.5);
+        place(kit,0,.12,0,0,.35,0,.55);mousetrap(()=>kit,f);
+        kit.frame.identity();
+    }
 }
 
 /** The display is lit by its own lamp, not by self-glow: surfaces facing up toward
@@ -167,6 +213,10 @@ export class PickupVisual {
                 const streak=box(lens,.05,.26,.02,-.19,1.37,face*.025,glint,.01);streak.rotation.z=.62;
                 box(lens,.05,.05,.02,-.06,1.47,face*.025,glint,.01);
             }
+        }else if(kind==='tommy-gun'||kind==='laser'||kind==='mousetrap'){
+            this.item.name={'tommy-gun':'tommy-gun-violin-case',laser:'ray-gun-cradle',mousetrap:'set-mousetrap'}[kind];
+            const kit=new PartKit();weaponDisplay(kind,kit,weaponFinish());
+            this.item.add(kit.build(this.item.name));
         }else{
             this.item.name='doctors-bag';
             const leather=new THREE.MeshStandardMaterial({color:0x221613,metalness:.1,roughness:.55});

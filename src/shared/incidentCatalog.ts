@@ -1,26 +1,27 @@
 /** Shared copy and stable IDs for authoritative Dispatch results. */
 export const INCIDENTS = [
     {id:'improper-disposal',title:'Improper Disposal',description:'Dead rats become ricocheting corpse missiles and burst into cheese.'},
-    {id:'bad-ammunition',title:'Bad Ammunition',description:'Unreliable cartridges produce crooked, uneven volleys.'},
+    {id:'bad-ammunition',title:'Bad Ammunition',description:'Every cartridge has a mind of its own. They still go roughly where you aim.'},
     {id:'pressure-surge',title:'Pressure Surge',description:'Every launcher fires at once. Mind your step.'},
     {id:'evidence-tampering',title:'Evidence Tampering',description:'Runaway case missiles! Dodge them or shoot them back.'},
     {id:'crossfire',title:'Crossfire',description:'Bounced cheese turns red-hot. One hit, lights out.'},
-    {id:'scattershot',title:'Scattershot',description:'Every shot becomes a five-ball fan.'},
-    {id:'delayed-reaction',title:'Delayed Reaction',description:'Cheese sticks to walls, then springs back at you.'},
+    {id:'scattershot',title:'Scattershot',description:'Every shot is a five-ball fan, and every ball knocks rats flying.'},
     {id:'big-cheese',title:'Big Cheese',description:'Heavy cheese. Slow trigger. Every rebound makes it bigger.'},
     {id:'planted-evidence',title:'Planted Evidence',description:'Fake cases explode. The real case still counts.'},
     {id:'blackout',title:'Blackout',description:'The power is out. Every rat has a flashlight.'},
-    {id:'clean-bill',title:'Clean Bill',description:'Everyone is fit for duty. Everyone is made.'},
-    {id:'malpractice',title:'Malpractice',description:'Quick Fix kits run for it. Some of them explode.'},
-    {id:'most-wanted',title:'Most Wanted',description:'The leader is in the searchlight. Take them down for a reward.'},
-    {id:'rat-race',title:'Rat Race',description:'Everybody hustles. The cheese flies faster.'},
-    {id:'all-units',title:'All Units',description:'The fallen respawn right beside the action.'},
+    {id:'code-violation',title:'Code Violation',description:'Every machine in the city is out of order.'},
+    {id:'most-wanted',title:'Most Wanted',description:'Whoever is winning is in the searchlight. Take them down for a supply.'},
+    {id:'all-units',title:'All Units',description:'The fallen respawn as backup, right beside the action.'},
+    {id:'bobbleheads',title:'Bobbleheads',description:'Every head is huge, and a headshot always kills. Aim high.'},
+    {id:'act-of-god',title:'Act of God',description:'The sky is falling. It is cheese.'},
 ] as const;
 export type IncidentId = typeof INCIDENTS[number]['id'];
 export const isIncidentId = (value: unknown): value is IncidentId => INCIDENTS.some(incident => incident.id === value);
 /** Retired IDs that stored rooms may still hold; each maps to a live incident. */
 export const LEGACY_INCIDENTS = {
-    'kickback':'scattershot','after-hours-collection':'crossfire','return-to-sender':'delayed-reaction',
+    'kickback':'scattershot','after-hours-collection':'crossfire','return-to-sender':'crossfire',
+    // Retired 1 October (protocol 27): stored rooms may still hold them.
+    'delayed-reaction':'crossfire','clean-bill':'most-wanted','rat-race':'all-units','malpractice':'code-violation',
     'cheesequake':'big-cheese','ricochet-racket':'scattershot','popcorn-panic':'scattershot',
 } as const satisfies Record<string,IncidentId>;
 export type LegacyIncidentId = keyof typeof LEGACY_INCIDENTS;

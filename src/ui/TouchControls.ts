@@ -5,6 +5,8 @@ import {uiMotion} from './motion';
 
 type Options = {
     canvas: HTMLElement; look: (dx: number, dy: number) => void; shoot: () => void;
+    /** The Tommy Gun's repeat while FIRE is held; undefined for one shot per tap. */
+    holdMs?: () => number | undefined;
     scores: (visible: boolean) => void; clearKeys: () => void;
     openSettings?:()=>void;blocked?:()=>boolean;
     doc?: Document; target?: Window;
@@ -114,7 +116,7 @@ export class TouchControls {
                 this.stick.classList.add('held');
             }
             this.drawActions();
-            if (role === 'fire') this.input.tick(performance.now(), this.options.shoot);
+            if (role === 'fire') this.input.tick(performance.now(), this.options.shoot, this.options.holdMs?.());
         }, {signal: this.events.signal, passive: false});
     }
     private drawActions(): void {
@@ -153,7 +155,7 @@ export class TouchControls {
     }
     update(now: number, alive: boolean): void {
         if (alive !== this.alive) { this.clear(); this.alive = alive; this.refresh(); }
-        if (this.canAct()) this.input.tick(now, this.options.shoot);
+        if (this.canAct()) this.input.tick(now, this.options.shoot, this.options.holdMs?.());
     }
     clear(): void {
         this.input.clear();

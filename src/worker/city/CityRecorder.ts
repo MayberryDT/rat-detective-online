@@ -1,13 +1,13 @@
 import type { ChaosState } from '../../shared/chaosState';
-import { MAX_HP, type PlayerData, type RoundState, type ShotResultOutcome, type Vec3Data } from '../../shared/networkProtocol';
-import type { PickupEvent, ShotResultEvent } from '../../shared/ChaosSimulation';
+import { MAX_HP, type EnvironmentCause, type PlayerData, type RoundState, type ShotResultOutcome, type Vec3Data } from '../../shared/networkProtocol';
+import type { IncidentEvent, PickupEvent, ShotResultEvent } from '../../shared/ChaosSimulation';
 import type { GrayboxBox } from '../../shared/grayboxLayout';
 import { CITY_BOUNDS } from '../../shared/grayboxLayout';
 import { DISPATCH_STATIONS } from '../../shared/chaosState';
 import { activeDestination, destinationPoint } from '../../shared/assignments';
 import { JURISDICTION_ZONES } from '../../shared/jurisdictionZones';
 import { activeZone } from '../../shared/jurisdiction';
-import { BUFF_FIELD, TIMED_PICKUPS, type PickupKind, type PlayerBuffs, type TimedPickup } from '../../shared/pickups';
+import { BUFF_FIELD, TIMED_PICKUPS, entryWeapon, type PickupKind, type PlayerBuffs, type TimedPickup, type WeaponKind } from '../../shared/pickups';
 import { cityPlaces } from '../../shared/city/places';
 import { cityFloor } from '../../shared/city/frame';
 import { CITY_SCHEMA_VERSION, p3, type CityFact, type DecisionInputs, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
@@ -55,7 +55,8 @@ const EYE = 1.5, CHEST = 1.3, HEAD = 1.9;
 /** Pickups passed: a supply this near (horizontally) and this little above or below a rat is in its reach; the rat has
  * gone past it once this far away or this far above or below. */
 const PASS_REACH = 12, PASS_LEAVE = 16, PASS_FLOOR = 3, PASS_OFF_FLOOR = 6;
-const PASSED: Record<PickupKind, string> = { ironclad: 'passed:ironclad', hustle: 'passed:hustle', 'quick-fix': 'passed:quick-fix', stakeout: 'passed:stakeout' };
+const PASSED: Record<PickupKind, string> = { ironclad: 'passed:ironclad', hustle: 'passed:hustle', 'quick-fix': 'passed:quick-fix', stakeout: 'passed:stakeout',
+  'tommy-gun': 'passed:tommy-gun', laser: 'passed:laser', mousetrap: 'passed:mousetrap' };
 
 export interface RecorderDeps {
   room: string;
@@ -74,7 +75,7 @@ export interface RecorderDeps {
   /** Axis-aligned solid boxes a rat must never be inside. */
   solids: readonly GrayboxBox[];
 }
-export interface HitRecord { attacker?: PlayerData; victim: PlayerData; damage: number; killed: boolean; headshot: boolean; explosive: boolean; incoming: boolean }
+export interface HitRecord { attacker?: PlayerData; victim: PlayerData; damage: number; killed: boolean; headshot: boolean; explosive: boolean; incoming: boolean; weapon?: WeaponKind; environment?: EnvironmentCause }
 /** One window of the Jev mind while it was on (`GameRoom.updateJev`). */
 export interface MindsWindow { ms: number; stats: JevStats; latencies: readonly number[]; p50?: number; p90?: number }
 /** A bot's current goal, from the decision that took it up to its end. */
@@ -169,7 +170,7 @@ export class SolidGrid {
 
 const BALL_LAYERS: Record<ShotResultOutcome, string> = { 'first-step': 'ball-first-step', 'rat-body': 'ball-rat-body', 'rat-head': 'ball-rat-head', 'ironclad-reflect': 'ball-ironclad-reflect',
   'case-contact': 'ball-case-contact', 'world-bounce': 'ball-world-bounce', 'dispatch-contact': 'ball-dispatch-contact', 'pressure-contact': 'ball-pressure-contact', 'fake-case': 'ball-fake-case',
-  lifetime: 'ball-lifetime', capacity: 'ball-capacity', reset: 'ball-reset', rejected: 'ball-rejected' };
+  'trap-contact': 'ball-trap-contact', lifetime: 'ball-lifetime', capacity: 'ball-capacity', reset: 'ball-reset', rejected: 'ball-rejected' };
 const SHOTS: Record<Who, string> = { human: 'shots-human', bot: 'shots-bot', agent: 'shots-agent' };
 const HITS: Record<Who, string> = { human: 'hits-human', bot: 'hits-bot', agent: 'hits-agent' };
 const BANK_HITS: Record<Who, string> = { human: 'bank-hits-human', bot: 'bank-hits-bot', agent: 'bank-hits-agent' };
@@ -225,6 +226,8 @@ export class CityRecorder {
   private loose: { since: number; x: number; y: number; z: number; lx: number; ly: number; lz: number; path: number; kicks: number } | null = null;
   private gripHits = 0;
   private dispatchKey = '';
+  /** The latest Most Wanted takedown recorded (`dispatch.bounty.at`). */
+  private bountyAt = 0;
   private zoneKey = '';
   private scorer: string | null = null;
   private frameAt = 0;
@@ -317,7 +320,7 @@ export class CityRecorder {
   }
 
   // ---- hooks from the room ----
-  shot(player: PlayerData, direction: Vec3Data, now: number): void {
+  shot(player: PlayerData, direction: Vec3Data, now: number, weapon?: WeaponKind): void {
     // Bots fire thousands of times an hour: their rate lives in the counts and situations, not one fact per shot.
     if (this.deps.isBot(player.id)) {
       const i = this.shotCount++, s = this.shotData;
@@ -328,7 +331,7 @@ export class CityRecorder {
       if (++this.botShots % BOT_SHOT_SAMPLE === 0) {
         this.drain();
         this.emit({ ...this.context(now), type: 'shot', a: this.actor(player.id), human: false, p: p3(player), place: this.places.at(player.x, player.y, player.z).id,
-          dir: d3(direction), sample: BOT_SHOT_SAMPLE, targets: this.shotTargets(player, direction) }, true);
+          dir: d3(direction), sample: BOT_SHOT_SAMPLE, targets: this.shotTargets(player, direction), ...(weapon ? { weapon } : {}) }, true);
       }
       return;
     }
@@ -339,7 +342,7 @@ export class CityRecorder {
     this.cell(now, SHOTS[who], player);
     this.measure(now, place, SHOTS[who]);
     this.emit({ ...this.context(now), type: 'shot', a: this.actor(player.id), human: who === 'human', ...(who === 'agent' ? { agent: true as const } : {}), p: p3(player), place,
-      dir: d3(direction), ...(gap === undefined ? {} : { gapMs: gap }), targets: this.shotTargets(player, direction) });
+      dir: d3(direction), ...(gap === undefined ? {} : { gapMs: gap }), targets: this.shotTargets(player, direction), ...(weapon ? { weapon } : {}) });
   }
 
   /** A human's camera look, sent with their movement. Only the aim rings read it. */
@@ -453,6 +456,13 @@ export class CityRecorder {
         this.emit({ ...this.context(now), type: 'reward', a: this.actor(player.id), kind: e.pickup, why: e.why, p: p3(player), place: this.places.at(player.x, player.y, player.z).id });
         continue;
       }
+      if (e.kind === 'trap') {
+        const place = this.places.at(e.p.x, e.p.y, e.p.z).id;
+        this.measure(now, place, `trap:${e.what}`);
+        this.emit({ ...this.context(now), type: 'trap', what: e.what, a: this.actor(player.id), trap: e.trapId, p: p3(e.p), place,
+          ...(e.victim ? { victim: this.actor(e.victim) } : {}), ...(e.by ? { by: this.actor(e.by) } : {}) });
+        continue;
+      }
       const place = this.places.at(player.x, player.y, player.z).id, life = this.life(player.id, now, player);
       life.lastPickup = { kind: e.pickup, at: now };
       const restocked = this.siteRestockedAt.get(e.pickupId);
@@ -477,13 +487,13 @@ export class CityRecorder {
     const life = this.life(v.id, now, v);
     life.lastHit = { at: now, ...(a && a.id !== v.id ? { by: a.id } : {}) };
     this.emit({ ...this.context(now), type: 'damage', ...(a ? { a: this.actor(a.id), ap: p3(a) } : {}), victim: this.actor(v.id), dmg: h.damage, head: h.headshot,
-      explosive: h.explosive, incoming: h.incoming, vp: p3(v), ...(dist === undefined ? {} : { dist }), hpAfter: v.hp });
+      explosive: h.explosive, incoming: h.incoming, vp: p3(v), ...(dist === undefined ? {} : { dist }), hpAfter: v.hp, ...(h.weapon ? { weapon: h.weapon } : {}) });
     this.openWindow([v.id, ...(a && a.id !== v.id ? [a.id] : [])], now);
     if (!h.killed) return;
     const killer = a && a.id !== v.id ? a : undefined;
     const assists = this.ledger.death(killer?.id ?? null, v.id, now).map(id => this.actor(id));
     // `incoming` is the ball's travel for the ragdoll (every shot has one), not a missile.
-    const cause = h.explosive ? 'explosion' : !killer && !a ? 'city' : h.headshot ? 'headshot' : 'shot';
+    const cause = h.explosive ? 'explosion' : h.weapon === 'mousetrap' ? 'trap' : !killer && !a ? 'city' : h.headshot ? 'headshot' : 'shot';
     this.cell(now, 'deaths', v); this.measure(now, vPlace, 'deaths'); this.measure(now, vPlace, `deaths-${this.who(v.id)}`);
     if (now - life.start < 5000) this.measure(now, life.spawnPlace, 'spawn-deaths-5s');
     if (killer && aPlace) {
@@ -491,11 +501,25 @@ export class CityRecorder {
       if (dist !== undefined) this.measure(now, aPlace, 'kill-dist-dm', Math.round(dist * 10));
     }
     this.emit({ ...this.context(now), type: 'death', ...(killer ? { a: this.actor(killer.id), ap: p3(killer), aplace: aPlace } : {}), victim: this.actor(v.id), cause,
-      vp: p3(v), vplace: vPlace, ...(killer && dist !== undefined ? { dist } : {}), lifeMs: now - life.start, assists });
+      vp: p3(v), vplace: vPlace, ...(killer && dist !== undefined ? { dist } : {}), lifeMs: now - life.start, assists, ...(h.weapon ? { weapon: h.weapon } : {}), ...(h.environment ? { env: h.environment } : {}) });
     this.alive.set(v.id, false);
     this.reach(killer, now, g => (g.goal === 'hunt' || g.goal === 'chase-carrier') && g.quarry === v.id);
     const open = this.goals.get(v.id);
     if (open) this.endGoal(v, open, 'died', now);
+  }
+  /** Act of God impacts and Code Violation malfunctions (`ChaosSimulation.drainIncidentEvents`). */
+  incidents(events: readonly IncidentEvent[], players: ReadonlyMap<string, PlayerData>, now: number): void {
+    for (const e of events) {
+      const place = this.places.at(e.p.x, e.p.y, e.p.z).id;
+      if (e.kind === 'meteor') {
+        this.measure(now, place, 'meteors');
+        this.emit({ ...this.context(now), type: 'meteor', p: p3(e.p), place, flattened: e.flattened.map(id => this.actor(id)), shoved: e.shoved });
+        continue;
+      }
+      this.measure(now, place, `malfunction:${e.what}`);
+      const victim = e.playerId ? players.get(e.playerId) : undefined;
+      this.emit({ ...this.context(now), type: 'malfunction', what: e.what, site: e.site, p: p3(e.p), place, ...(victim ? { a: this.actor(victim.id) } : {}), shoved: e.shoved });
+    }
   }
 
   session(what: 'join' | 'leave', id: string, now: number): void {
@@ -789,6 +813,9 @@ export class CityRecorder {
       this.dispatchKey = dispatchKey;
       if (d.phase === 'rolling') this.reach(caller, now, g => g.goal === 'mischief');
     }
+    const bounty = d.bounty, hunter = bounty && bounty.at !== this.bountyAt ? players.get(bounty.hunter) : undefined;
+    if (bounty) this.bountyAt = bounty.at;
+    if (bounty && hunter) this.emit({ ...this.context(now), type: 'bounty', a: this.actor(hunter.id), victim: this.actor(bounty.target), kind: bounty.pickup, p: p3(hunter), place: this.places.at(hunter.x, hunter.y, hunter.z).id });
     const j = a?.jurisdiction;
     if (j) {
       const zone = activeZone(j), zoneKey = `${j.serial}:${zone}`;
@@ -811,6 +838,14 @@ export class CityRecorder {
       this.flights.set(p.id, { ...(launch.machineId ? { machine: launch.machineId } : {}), start: now, apex: p.y });
       this.measure(now, place, 'launches');
       this.emit({ ...this.context(now), type: 'launch', a: this.actor(p.id), ...(launch.machineId ? { machine: launch.machineId } : {}), boost: !!launch.boost, p: p3(p), place });
+    }
+    for (const shove of state.pressure?.shoves ?? []) {
+      if (this.seenLaunches.has(shove.id)) continue;
+      this.seenLaunches.add(shove.id);
+      if (this.seenLaunches.size > 256) this.seenLaunches.delete(this.seenLaunches.values().next().value!);
+      const cause = shove.id.slice(0, shove.id.indexOf('-')), p = players.get(shove.playerId);
+      if (!p || cause === 'pull') continue;
+      this.emit({ ...this.context(now), type: 'shove', a: this.actor(p.id), cause, speed: Math.round(Math.hypot(shove.velocity.x, shove.velocity.z) * 10) / 10, p: p3(p), place: this.places.at(p.x, p.y, p.z).id });
     }
     for (const site of state.pickups ?? []) {
       const available = site.availableAt === undefined || site.availableAt <= now;
@@ -881,7 +916,7 @@ export class CityRecorder {
       const prev = life.prev, dt = prev ? (now - prev.at) / 1000 : 0;
       const v: [number, number] = prev && dt > 0 ? [round1((p.x - prev.x) / dt), round1((p.z - prev.z) / dt)] : [0, 0];
       life.prev = { x: p.x, z: p.z, at: now };
-      const b = state.buffs?.[p.id], carrying = state.case.owner === p.id;
+      const b = state.buffs?.[p.id], carrying = state.case.owner === p.id, weapon = entryWeapon(b, now);
       let visible = 0, nearest: number | undefined, nearestVisible: number | undefined;
       for (const o of players.values()) {
         if (o.id === p.id || o.hp <= 0 || !alive) continue;
@@ -896,7 +931,7 @@ export class CityRecorder {
       rats.push({ a: this.actor(p.id), human: who === 'human', ...(who === 'agent' ? { agent: true as const } : {}), p: p3(p), floor: cityFloor(p.y), place: place.id, v,
         yaw: round2(yaw(p)), pitch: round2(lookPitch),
         hp: p.hp, alive, ...(p.respawnAt !== undefined && !alive ? { respawnIn: Math.max(0, p.respawnAt - now) } : {}), lifeMs: now - life.start,
-        buffs: situationBuffs(b, now),
+        buffs: situationBuffs(b, now), ...(weapon ? { weapon } : {}),
         ...(life.lastPickup ? { lastPickup: { kind: life.lastPickup.kind, agoMs: now - life.lastPickup.at } } : {}),
         case: { carrying, ...(carrying && life.carryStart !== undefined ? { carryMs: now - life.carryStart } : {}), dist: round1(Math.hypot(state.case.p.x - p.x, state.case.p.y - p.y, state.case.p.z - p.z)) },
         ...(objective ? { objectiveDist: round1(Math.hypot(objective.x - p.x, objective.z - p.z)) } : {}),

@@ -175,6 +175,41 @@ def case_knock(t,n):
     # A carrier's grip takes a hit: a hard knock and a latch rattling in the paw.
     return leather(t,.9,1.5)+latch(t-.015,.55)+latch(t-.055,.35)
 
+# The arsenal (protocol 27): the Laser is a pulp ray gun, the Tommy a racked bolt and a brass stab, the Mousetrap sneaky.
+def ray(t,f0,f1,k,wobble=28,depth=2.6):
+    # A ray-gun tone: a falling (or rising) pitch, frequency-modulated into a warbling, slightly square buzz.
+    if t<0:return 0
+    return math.tanh(2.2*math.sin(glide(t,f0,f1,k)+depth*math.sin(TAU*wobble*t)))
+def laser_fire(t,n):
+    # Wheee-ZAP: a 70 ms charge whine climbing, then the beam's warbling "pew" diving from 2.6 kHz, a crackle of
+    # static and a soft sub thump under it.
+    whine=ray(t,700,3000,22,40,.4)*min(1,t/.05)*(1 if t<.07 else math.exp(-(t-.07)*90))*.45
+    u=t-.06
+    zap=0 if u<0 else ray(u,2600,150,7.5)*min(1,u/.004)*math.exp(-u*5.5)
+    static=0 if u<0 else noise(AIR,t)*math.exp(-u*30)*.4
+    return whine+zap*.75+static+thump(u,110,40,.09)*.45
+def laser_hit(t,n):
+    # Crack and sizzle: a hard broadband crack with a bright inharmonic ping, then frying static that spits and fades.
+    crack=noise(AIR,t)*math.exp(-t*260)*1.4+noise(MID,t)*math.exp(-t*90)*.6
+    ping=(math.sin(TAU*3130*t)+math.sin(TAU*4870*t)*.6)*math.exp(-t*45)*.3
+    spit=1 if (hash((int(t*600),7))%9)<2 else .25
+    sizzle=n*spit*math.exp(-t*6)*min(1,t/.03)*.55+noise(AIR,t)*math.exp(-t*9)*.25
+    return crack+ping+sizzle+thump(t,160,60,.05)*.4
+def claim_tommy(t,n):
+    # The bolt racks back and slams home, the drum slaps on, then two short trombone hits a fourth up over a brush.
+    bolt=latch(t,1.1)+latch(t-.09,1.3)+leather(t-.03,.9,.7)+thump(t-.09,140,60,.06)*.6
+    stab=bone(t-.28,98,.06)*.8+bone(t-.28,146.8,.06)*.5+bone(t-.4,130.8,.22)+bone(t-.4,196,.22)*.6
+    return bolt+brush(t-.2)*.4+stab*.55
+def claim_laser(t,n):
+    # The ray gun powers up (a rising whine and static), a theremin swoops up an octave, a vibraphone glints on top.
+    power=ray(t,180,1600,3.5,9,.6)*math.sin(math.pi*min(1,t/.42))**2*.35+noise(AIR,t)*math.sin(math.pi*min(1,t/.42))**3*.08
+    theremin=0 if t<.3 else math.sin(glide(t-.3,440,880,9)+.12*math.sin(TAU*6*(t-.3)))*min(1,(t-.3)/.05)*math.exp(-(t-.3)*2.6)*.4
+    return power+theremin+vibes(t-.5,1318.5,.4)*.18+vibes(t-.56,1760,.35)*.14
+def claim_mousetrap(t,n):
+    # A pine thunk, the spring creaking as it is pulled back, the bar's click, then two sneaky upright-bass notes.
+    creak=0 if t<.05 or t>.3 else math.tanh(3*math.sin(glide(t-.05,260,520,4)))*(1+math.sin(TAU*31*t))*.5*math.sin(math.pi*(t-.05)/.25)*.18
+    return leather(t,1,.9)+creak+latch(t-.3,.9)+(bass(t-.38,61.7,.14)+bass(t-.52,58.3,.3))*.7
+
 render('case-claim',.62,case_claim,.06)
 render('case-dropped',.95,case_dropped,.08)
 render('case-snatched',.62,case_snatched,.06)
@@ -189,3 +224,8 @@ render('pickup-quick-fix',1,quick_fix,.08)
 render('pickup-stakeout',.96,stakeout,.06)
 render('stakeout-shutter',.08,shutter,.01)
 render('pip-tick',.05,pip,.008)
+render('laser-fire',.62,laser_fire,.08)
+render('laser-hit',.5,laser_hit,.08)
+render('pickup-tommy-gun',.85,claim_tommy,.06)
+render('pickup-laser',.95,claim_laser,.08)
+render('pickup-mousetrap',.9,claim_mousetrap,.08)

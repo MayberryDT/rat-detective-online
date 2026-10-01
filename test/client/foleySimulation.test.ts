@@ -34,15 +34,13 @@ it('emits shared corpse contacts and shot kicks, retains shooter attribution and
     sim.shoot('a',{shotId:'kick',origin:{x:-2,y:4,z:0},direction:{x:1,y:0,z:0}});sim.step(.01,now+600);
     expect(sim.snapshot().impacts.some(e=>e.foley==='corpse-kick')).toBe(true);
 });
-it.each(['big-cheese','crossfire','delayed-reaction'] as const)('marks %s events while retaining launch speed and incident physics',incident=>{
+it.each(['big-cheese','crossfire'] as const)('marks %s events while retaining launch speed and incident physics',incident=>{
     const {sim:initial,players,now}=fixture(),saved=initial.snapshot();saved.dispatch={phase:'active',incident,serial:1,started:now,until:now+25000};
     const sim=new ChaosSimulation(players,()=>{},saved);
     sim.shoot('a',{shotId:'event',origin:{x:8,y:4,z:0},direction:{x:1,y:0,z:0}});
     expect(sim.snapshot(false).shots[0].v.x).toBe(launchSpeed(incident));sim.step(.015,now+15);
     const state=sim.snapshot();
-    if(incident==='delayed-reaction'){
-        expect(state.impacts.some(i=>i.cue==='thud')).toBe(true);sim.step(.001,now+1500);expect(sim.snapshot().impacts.some(i=>i.foley==='unstick')).toBe(true);
-    }else expect(state.impacts.some(i=>i.foley===({'big-cheese':'grow',crossfire:'charge'} as const)[incident])).toBe(true);
+    expect(state.impacts.some(i=>i.foley===({'big-cheese':'grow',crossfire:'charge'} as const)[incident])).toBe(true);
 });
 it('validates every additive sound annotation through full and compact frames and rejects malformed data',()=>{
     const {sim}=fixture(),state=sim.snapshot();

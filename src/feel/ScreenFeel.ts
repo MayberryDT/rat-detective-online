@@ -28,7 +28,6 @@ export class ScreenFeel {
     private irisNode?:HTMLElement;
     private speedNode?:HTMLElement;
     private calloutNode?:HTMLElement;
-    private sootNode?:HTMLElement;
     private grainNode?:HTMLElement;
     private vignetteNode?:HTMLElement;
     private claimNode?:HTMLElement;
@@ -100,14 +99,6 @@ export class ScreenFeel {
         if(!this.build()||!this.calloutNode)return;
         scrawl(this.calloutNode,text);
         replay(this.calloutNode,'on');
-    }
-
-    /** Bad Ammunition backfire: a smear of soot across the lens that fades. */
-    soot():void {
-        if(!this.build()||!this.sootNode)return;
-        this.sootNode.style.setProperty('--soot',String(Math.max(.5,this.flash())));
-        this.sootNode.style.setProperty('--soot-x',`${(40+Math.random()*30).toFixed(0)}%`);
-        replay(this.sootNode,'on');
     }
 
     /** Hot Pursuit edge streaks, `level` 0…1. */
@@ -230,7 +221,7 @@ export class ScreenFeel {
         if(this.noirEdge)this.noirEdge.style.opacity='0';
         if(this.irisNode)this.irisNode.style.opacity='0';
         if(this.speedNode){this.speedNode.style.opacity='0';this.speedNode.classList.remove('on');}
-        this.calloutNode?.classList.remove('on');this.sootNode?.classList.remove('on');
+        this.calloutNode?.classList.remove('on');
         for(const node of [this.claimNode,this.inkNode,this.lensNode,this.caseNode])node?.classList.remove('on');
         this.lastSpeed=0;
         this.lastFilm='';this.root?.classList.remove('letterboxed');
@@ -238,7 +229,7 @@ export class ScreenFeel {
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.sootNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=this.caseNode=undefined;this.caseSheets.length=0;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=this.caseNode=undefined;this.caseSheets.length=0;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -253,7 +244,6 @@ export class ScreenFeel {
         for(const edge of ['top','bottom']){const bar=this.doc.createElement('div');bar.className=`feel-letterbox ${edge}`;this.root.appendChild(bar);}
         this.speedNode=this.doc.createElement('div');this.speedNode.className='feel-speed';this.root.appendChild(this.speedNode);
         this.calloutNode=this.doc.createElement('div');this.calloutNode.className='feel-callout';this.root.appendChild(this.calloutNode);
-        this.sootNode=this.doc.createElement('div');this.sootNode.className='feel-soot';this.root.appendChild(this.sootNode);
         this.irisNode=this.doc.createElement('div');this.irisNode.className='feel-iris';this.root.appendChild(this.irisNode);
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
         this.inkNode=this.doc.createElement('div');this.inkNode.className='feel-ink';this.root.appendChild(this.inkNode);

@@ -50,7 +50,7 @@ describe('Dispatch alarm pillars',()=>{
  it('never starts a second roll from busy hits, yet acknowledges each one',()=>{
   const {sim}=fixture(),t=DISPATCH_STATIONS[0].target,other=DISPATCH_STATIONS.at(-1)!.target;
   // Bad Ammunition bends a busy-phase shot off the bell by design; pin a roll that leaves shots straight.
-  sim.forcedIncident='clean-bill';
+  sim.forcedIncident='blackout';
   fire(sim,t,around(t,0,0,4),1010);
   expect(sim.snapshot().dispatch).toMatchObject({phase:'rolling',serial:1});
   const checks:Array<[number,string]>=[[1100,'rolling'],[1010+T.rollMs+100,'active'],[1010+T.rollMs+T.activeMs+100,'cooldown']];
@@ -91,14 +91,12 @@ describe('Dispatch alarm pillars',()=>{
  });
  it('grants the caller exactly one supply, never to anyone else',()=>{
   const {sim}=fixture(),t=DISPATCH_STATIONS[0].target;
-  // Rat Race hands every rat a Hot Pursuit buff by design; pin a roll that grants no buffs of its own.
-  sim.forcedIncident='clean-bill';
+  // Pin a roll that grants no buffs of its own.
+  sim.forcedIncident='blackout';
   fire(sim,t,around(t,0,0,4),1010);
   const granted=sim.snapshot(false).buffs??{};
   expect(Object.keys(granted)).toEqual(['caller']);
-  const until=granted.caller!.ironcladUntil??granted.caller!.hustleUntil??granted.caller!.stakeoutUntil;
-  expect(until).toBeGreaterThan(1010);
-  sim.drainPickupEvents();
+  expect(sim.drainPickupEvents().filter(e=>e.kind==='rewarded')).toMatchObject([{playerId:'caller',why:'dispatch'}]);
   // Busy hits by the caller grant nothing more.
   fire(sim,t,around(t,0,0,-4),1500);sim.step(0,1010+T.rollMs+10);fire(sim,t,around(t,4,0,0),1010+T.rollMs+20);
   const after=sim.snapshot(false).buffs??{};
@@ -114,10 +112,11 @@ describe('Dispatch alarm pillars',()=>{
    expect(sim.drainPickupEvents().filter(e=>e.kind==='healed'),`roll ${roll}`).toEqual([]);
    expect(caller.hp).toBe(MAX_HP);
    const buff=sim.snapshot(false).buffs?.caller;
-   expect(buff?.ironcladUntil??buff?.hustleUntil??buff?.stakeoutUntil,`roll ${roll}`).toBeGreaterThan(1010);
+   expect(buff?.weapon==='mousetrap'||(buff?.ironcladUntil??buff?.hustleUntil??buff?.stakeoutUntil??buff?.weaponUntil??0)>1010,`roll ${roll}`).toBe(true);
    vi.restoreAllMocks();
   }
-  vi.spyOn(Math,'random').mockReturnValue(.99);
+  // Hurt, the draw is every kind in PICKUP_KINDS order; this roll lands on Quick Fix (third of seven).
+  vi.spyOn(Math,'random').mockReturnValue(2.5/7);
   const {sim,caller}=fixture(2);fire(sim,t,around(t,0,0,4),1010);
   expect(caller.hp).toBe(MAX_HP);
   expect(sim.drainPickupEvents()).toEqual([{kind:'healed',playerId:'caller',hp:MAX_HP,cause:'pickup'},{kind:'rewarded',playerId:'caller',pickup:'quick-fix',why:'dispatch'}]);

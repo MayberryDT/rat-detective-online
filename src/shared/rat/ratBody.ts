@@ -1,5 +1,6 @@
 import * as C from 'cannon-es';
 import type {Vec3Data} from '../networkProtocol';
+import type {WeaponKind} from '../pickups';
 import {LAUNCH_DRIFT_DECAY} from '../launcherVelocity';
 import {guardFastFall,touchingSlick} from '../ratSurfaces';
 
@@ -37,10 +38,30 @@ export function addRatShapes(body:C.Body):C.Sphere[] {
     return RAT_BODY.spheres.map(({radius,y})=>{const shape=new C.Sphere(radius);body.addShape(shape,new C.Vec3(0,y,0));return shape;});
 }
 
+/** Bobbleheads: every rat's head, and the head sphere a ball must hit for a headshot, is `scale` times bigger,
+ * grown from the neck (`neck` above the feet) so it sits on the shoulders. */
+export const BOBBLEHEAD={scale:3,neck:1.6} as const;
+/** Sets a rat's head sphere (the last of `addRatShapes`) to its everyday or Bobbleheads size. Only hit
+ * bodies use it (the server's and the client's view of other rats), never a moving body, so heads never
+ * catch on ceilings. The same for every rat, human or bot. Moves the sphere relative to where it is, so a body
+ * whose origin has shifted (a ragdoll) keeps its own offset. */
+export function setBobblehead(body:C.Body,head:C.Sphere,big:boolean):void {
+    const {radius,y}=RAT_BODY.spheres[2],size=big?radius*BOBBLEHEAD.scale:radius;
+    if(head.radius===size)return;
+    const centre=(r:number)=>BOBBLEHEAD.neck+(y-BOBBLEHEAD.neck)*r/radius;
+    const offset=body.shapeOffsets[body.shapes.indexOf(head)];
+    if(offset)offset.y+=centre(size)-centre(head.radius);
+    head.radius=size;head.updateBoundingSphereRadius();
+    body.updateBoundingRadius();body.aabbNeedsUpdate=true;
+}
+
 /** The rat model's raised firing arm (-.49, .91+.36, .09+.10) plus its muzzle anchor (0,.106,.28), turned by the
  * body's heading. Rendering recoil or walk animation never moves it. */
-export function ratMuzzle(position:Vec3Data,heading:number,out:Vec3Data={x:0,y:0,z:0}):Vec3Data {
-    const x=-.49,z=.47,c=Math.cos(heading),s=Math.sin(heading);
+/** How much further forward a held weapon's barrel ends than the pistol's (the model's muzzle moves with it). */
+export const MUZZLE_REACH:Readonly<Record<Exclude<WeaponKind,'mousetrap'>,number>>={'tommy-gun':.53,laser:.44};
+export const muzzleReach=(weapon?:WeaponKind):number=>weapon&&weapon!=='mousetrap'?MUZZLE_REACH[weapon]:0;
+export function ratMuzzle(position:Vec3Data,heading:number,out:Vec3Data={x:0,y:0,z:0},reach=0):Vec3Data {
+    const x=-.49,z=.47+reach,c=Math.cos(heading),s=Math.sin(heading);
     out.x=position.x+x*c+z*s;out.y=position.y+1.376;out.z=position.z-x*s+z*c;return out;
 }
 

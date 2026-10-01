@@ -1,0 +1,54 @@
+/* Incident storytelling (protocol 27), Carbon scrawl: see-through carbon sheets, typewriter ink, stamp red for you and
+ * for danger. No glow. Each card is hidden until `.on` slaps it in; dropping `.on` fades it out. */
+.incident-story{position:fixed;inset:0;z-index:36;pointer-events:none;overflow:hidden;contain:strict}
+.incident-story>div{position:absolute;left:50%;opacity:0;visibility:hidden;transition:opacity .35s ease,visibility 0s linear .35s}
+.incident-story>div.on{opacity:1;visibility:visible;transition:none;animation:story-slap .48s var(--ui-snap) both}
+.incident-story>div.on.still{animation:story-fade .3s ease-out both}
+@keyframes story-slap{0%{opacity:0;transform:translateX(-50%) scale(2.3) rotate(var(--tilt,-4deg))}55%{opacity:1;transform:translateX(-50%) scale(.93) rotate(var(--tilt,-4deg))}
+  75%{transform:translateX(-50%) scale(1.04) rotate(var(--tilt,-4deg))}100%{opacity:1;transform:translateX(-50%) rotate(var(--tilt,-4deg))}}
+@keyframes story-fade{from{opacity:0}to{opacity:1}}
+.incident-story>div{transform:translateX(-50%) rotate(var(--tilt,-4deg))}
+
+/* Most Wanted: a police WANTED poster with a scribbled mugshot, the target's name and the reward. Kept above the
+ * aiming area; it shares the top with BOUNTY CLAIMED, which it waits behind. */
+.story-poster{--tilt:-5deg;top:4%;width:200px;padding:10px 14px 12px;text-align:center;background:var(--carbon-sheet);border:2px dashed var(--carbon-line);
+  box-shadow:var(--carbon-drop),var(--carbon-smudge)}
+.story-poster-head{font:400 46px/1 var(--font-display);letter-spacing:.12em;color:var(--stamp-ink);-webkit-text-stroke:1px var(--carbon-deep)}
+.story-poster-mug{position:relative;width:104px;height:60px;margin:6px auto 5px;border:2px solid var(--carbon-line);background:#05070d80}
+.story-poster-mug::before{content:'';position:absolute;inset:8px 14px;background:var(--carbon-ink);-webkit-mask:var(--doodle-rat) center/contain no-repeat;mask:var(--doodle-rat) center/contain no-repeat}
+.story-poster-mug::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(#0000 0 11px,var(--carbon-faint) 11px 12px)}
+.story-poster-name{font:400 26px/1.05 var(--font-display);letter-spacing:.06em;color:var(--carbon-bright);overflow-wrap:anywhere}
+.story-poster-reward{margin-top:6px;font:400 12px/1.25 var(--font-type);color:var(--carbon-ink);letter-spacing:.04em;white-space:pre-line}
+.story-poster.story-self{border:3px double var(--stamp)}
+.story-poster.story-self .story-poster-name{color:var(--stamp-ink)}
+
+/* The takedown: a BOUNTY CLAIMED stamp beside the supply it paid, and who took down whom, above the aiming area. */
+.story-bounty{--tilt:-7deg;top:7%;display:grid;grid-template-columns:auto auto;align-items:center;justify-items:center;column-gap:12px;row-gap:6px}
+.story-bounty-art{width:68px;height:68px}
+.story-bounty-art svg{width:100%;height:100%}
+.story-bounty-stamp{white-space:nowrap;padding:.12em .5em .05em;border:5px double var(--stamp);color:var(--stamp-ink);background:var(--carbon);
+  box-shadow:var(--carbon-drop);font:400 56px/1 var(--font-display);letter-spacing:.07em}
+.story-bounty-line{grid-column:1/-1;padding:3px 10px;background:var(--carbon);font:400 18px/1.2 var(--font-type);color:var(--carbon-bright);white-space:nowrap}
+.story-bounty.story-self .story-bounty-line{color:var(--stamp-ink)}
+
+/* All Units: the police radio call across the top, a red transmit light and the dispatcher's line. */
+.story-radio{--tilt:-1.5deg;top:7%;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:12px;width:min(620px,88vw);padding:10px 18px;
+  background:repeating-linear-gradient(#0000 0 3px,#a5b9e10d 3px 4px),var(--carbon-sheet);border:2px solid var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge)}
+.story-radio-dot{grid-row:span 2;width:16px;height:16px;border-radius:50%;background:var(--stamp);border:2px solid var(--carbon-deep);animation:story-blink .5s steps(1) infinite}
+.story-radio-call{font:400 44px/1 var(--font-display);letter-spacing:.14em;color:var(--carbon-bright)}
+.story-radio-line{font:400 15px/1.2 var(--font-type);color:var(--carbon-ink);letter-spacing:.05em}
+@keyframes story-blink{50%{opacity:.25}}
+
+/* Your respawn as backup: a light bar strobing red and blue, the card, and an arrow that keeps pointing at the action. */
+.story-backup{--tilt:2deg;top:58%;display:grid;justify-items:center;gap:4px;padding:16px 26px 12px;background:var(--carbon-sheet);border:3px double var(--stamp);
+  box-shadow:var(--carbon-drop),var(--carbon-smudge)}
+.story-backup::before,.story-backup::after{content:'';position:absolute;top:-12px;width:46%;height:10px;border:2px solid var(--carbon-deep);animation:story-bar .36s steps(1) infinite}
+.story-backup::before{left:3%;background:#d8261a}
+.story-backup::after{right:3%;background:#2a5fe0;animation-delay:-.18s}
+@keyframes story-bar{50%{opacity:.18}}
+.story-backup-title{font:400 50px/1 var(--font-display);letter-spacing:.08em;color:var(--stamp-ink);white-space:nowrap}
+.story-backup-arrow{position:relative;width:64px;height:64px;transition:transform .08s linear}
+.story-backup-arrow::before{content:'';position:absolute;left:50%;top:2px;margin-left:-22px;border-left:22px solid transparent;border-right:22px solid transparent;border-bottom:30px solid var(--stamp-ink)}
+.story-backup-arrow::after{content:'';position:absolute;left:50%;top:30px;width:16px;height:28px;margin-left:-8px;background:var(--stamp-ink)}
+.story-backup-line{font:400 16px/1.2 var(--font-type);color:var(--carbon-bright);letter-spacing:.06em}
+@media (max-width:700px){.story-poster{width:170px}.story-poster-head{font-size:38px}.story-bounty-stamp{font-size:40px}.story-radio-call{font-size:30px}.story-backup-title{font-size:36px}}

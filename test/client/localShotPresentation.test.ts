@@ -36,11 +36,11 @@ describe('immediate single-ID local ball presentation',()=>{
     });
     it.each([undefined,'bad-ammunition','scattershot'] as const)('uses exactly the authority volley for %s before and after confirmation',incident=>{
         const view=new LocalShotPresentation(),expected=resolveShotPattern(descriptor,incident);view.fire('owner',descriptor,incident,0);
-        let balls=view.render([],0);expect(balls.map(b=>({id:b.id,velocity:b.v}))).toEqual(expected);
+        let balls=view.render([],0);expect(balls.map(b=>({id:b.id,velocity:b.v}))).toEqual(expected.map(b=>({id:b.id,velocity:b.velocity})));
         view.render([],16);expect(view.confirm(birth(incident),100)).toBe(true);
         balls=view.render([],116);expect(balls.map(b=>b.id)).toEqual(expected.map(b=>b.id));
         expect(new Set(balls.map(b=>b.id)).size).toBe(balls.length);
-        if(incident==='bad-ammunition')for(const b of balls)expect(Math.abs(b.p.z)).toBeGreaterThan(.1);
+        if(incident==='bad-ammunition')expect(balls[0]!.quirk).toBe(expected[0]!.quirk);
     });
     it('corrects an incident boundary without retaining stale volley members',()=>{
         const view=new LocalShotPresentation();view.fire('owner',descriptor,'scattershot',0);expect(view.render([],0)).toHaveLength(5);
@@ -67,28 +67,30 @@ describe('immediate single-ID local ball presentation',()=>{
         view.result({...base,outcome:'rat-body',victimId:'victim',damage:1});
         expect(view.render([authoritative(.1)],32)).toHaveLength(0);
     });
-    it('keeps delayed-reaction shots stopped until an authoritative unstuck sample arrives',()=>{
-        const trace:ShotTrace=(from,to)=>from.x<5&&to.x>=5?{p:{x:5,y:20,z:0},n:{x:-1,y:0,z:0},rat:false}:undefined;
-        const view=new LocalShotPresentation(trace);view.fire('owner',descriptor,'delayed-reaction',0);view.render([],0);
-        expect(view.render([],40)[0].p.x).toBe(4.95);expect(view.render([],100)[0].p.x).toBe(4.95);
-        view.confirm(birth('delayed-reaction'),100);
-        const released={...authoritative(.1),p:{x:4,y:20,z:0},v:{x:-157.5,y:0,z:0},wallBounced:true,delayed:true};
-        view.apply(state(1100,[released]),100);expect(view.render([],116)[0].p.x).toBeLessThan(4.95);
+    it('predicts the Tommy\'s bloomed ball (not the incident volley) and consumes a ball-less Laser or Mousetrap confirmation',()=>{
+        const tommy={kind:'tommy-gun' as const,heat:6},expected=resolveShotPattern(descriptor,'scattershot',tommy);
+        const view=new LocalShotPresentation();view.fire('owner',descriptor,'scattershot',0,tommy);
+        expect(view.render([],0).map(b=>({id:b.id,velocity:b.v}))).toEqual(expected);
+        const tommyBirth={...birth(),launch:{at:1000,balls:expected}};
+        view.render([],16);expect(view.confirm(tommyBirth,20)).toBe(true);
+        expect(view.render([],32).map(b=>b.id)).toEqual([descriptor.shotId]);
+        for(const kind of ['laser','mousetrap'] as const){
+            const beam=new LocalShotPresentation();beam.fire('owner',descriptor,undefined,0,{kind});
+            expect(beam.render([],0)).toHaveLength(0);
+            expect(beam.confirm({...birth(),launch:{at:1000,balls:[]}},50)).toBe(true);
+            expect(beam.owns(descriptor.shotId)).toBe(true);
+        }
     });
 });
 
 describe('shared shot pattern',()=>{
-    it.each([[0,1],[.69999,1],[.7,2],[.89999,2],[.9,3],[.99999,3]])('preserves Bad Ammunition count boundary %s', (roll,count)=>{
-        let first=true;const random=()=>{if(first){first=false;return roll;}return .5;};
-        expect(resolveShotPattern(descriptor,'bad-ammunition',random)).toHaveLength(count);
-    });
     it('keeps all volley IDs within the wire limit and repeats exactly across independent calls',()=>{
         for(let i=0;i<200;i++){
             const shot={...descriptor,shotId:String(i).padStart(64,'a')};
             for(const incident of ['scattershot','bad-ammunition'] as const){
                 const a=resolveShotPattern(shot,incident),b=resolveShotPattern(shot,incident);expect(a).toEqual(b);
                 expect(new Set(a.map(x=>x.id)).size).toBe(a.length);
-                for(const ball of a){expect(ball.id.length).toBeLessThanOrEqual(64);if(!ball.dud)expect(Math.hypot(ball.velocity.x,ball.velocity.y,ball.velocity.z)).toBeCloseTo(175);}
+                for(const ball of a){expect(ball.id.length).toBeLessThanOrEqual(64);if(incident==='scattershot')expect(Math.hypot(ball.velocity.x,ball.velocity.y,ball.velocity.z)).toBeCloseTo(175);}
             }
         }
     });

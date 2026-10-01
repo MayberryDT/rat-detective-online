@@ -1,7 +1,7 @@
 import type { Vec3Data } from '../networkProtocol';
 import type { AssignmentId } from '../assignments';
-import type { PickupKind, TimedPickup } from '../pickups';
-import type { ShotResultOutcome, HealCause } from '../networkProtocol';
+import type { PickupKind, TimedPickup, WeaponKind } from '../pickups';
+import type { ShotResultOutcome, HealCause, EnvironmentCause } from '../networkProtocol';
 import type { CityFloor } from './frame';
 import type { Goal, MotorMode, Personality, Stance } from '../bots/intent';
 import type { GoalOutcome, MindName } from './minds';
@@ -52,6 +52,8 @@ export interface RatSituation {
   v: [number, number]; yaw: number; pitch: number;
   hp: number; alive: boolean; respawnIn?: number; lifeMs: number;
   buffs: Partial<Record<TimedPickup, number>>;
+  /** The special weapon in its paw. */
+  weapon?: WeaponKind;
   lastPickup?: { kind: PickupKind; agoMs: number };
   case: { carrying: boolean; carryMs?: number; dist: number };
   objectiveDist?: number;
@@ -86,13 +88,22 @@ export type CityFact = FactContext & (
   | { type: 'window'; reason: 'damage'; from: number; to: number; samples: Record<string, Array<[number, number, number, number, number, number]>>; aim?: Record<string, Array<[number, number, number | null]>>;
       controls?: Record<string, Array<[number, number, number, number, number, number]>> }
   | { type: 'spawn'; a: number; p: P3; place: string; nearest?: number }
-  /** Every shot by a human or an agent; one bot shot in `sample` (archive only). `targets`: the rats in sight nearest the aim line. */
-  | { type: 'shot'; a: number; human: boolean; agent?: true; p: P3; place: string; dir: P3; gapMs?: number; sample?: number; targets?: ShotTarget[] }
+  /** Every shot by a human or an agent; one bot shot in `sample` (archive only). `targets`: the rats in sight nearest the aim line.
+   * `weapon`: fired with a Tommy Gun or a Laser (setting a Mousetrap down is a `trap` fact, not a shot). */
+  | { type: 'shot'; a: number; human: boolean; agent?: true; p: P3; place: string; dir: P3; gapMs?: number; sample?: number; targets?: ShotTarget[]; weapon?: WeaponKind }
   /** `bounces`: wall bounces before this end; a banked hit has at least one. */
   | { type: 'ball'; a?: number; outcome: ShotResultOutcome; p?: P3; place?: string; victim?: number; bounces?: number }
-  /** `incoming`: the hit came with a ball's travel direction (true for ordinary shots). */
-  | { type: 'damage'; a?: number; victim: number; dmg: number; head: boolean; explosive: boolean; incoming: boolean; ap?: P3; vp: P3; dist?: number; hpAfter: number }
-  | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[] }
+  /** `incoming`: the hit came with a ball's travel direction (true for ordinary shots). `weapon`: a special weapon's hit. */
+  | { type: 'damage'; a?: number; victim: number; dmg: number; head: boolean; explosive: boolean; incoming: boolean; ap?: P3; vp: P3; dist?: number; hpAfter: number; weapon?: WeaponKind }
+  /** `cause` 'trap': a Mousetrap's snap (`a` is its owner, wherever it was). `env`: what killed a rat nobody is credited with. */
+  | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'trap' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[]; weapon?: WeaponKind; env?: EnvironmentCause }
+  /** Act of God: a meteor landed at `p`; `flattened` the rats it landed on (dead, nobody credited), `shoved` the rats its blast threw. */
+  | { type: 'meteor'; p: P3; place: string; flattened: number[]; shoved: number }
+  /** Code Violation: equipment misbehaved at `p` (`site`: the supply, machine or pillar). `kit-explode` blew up on rat `a`;
+   * `machine` fired on its own or flung bystanders; `pillar` clanged. `shoved`: rats the blast threw. */
+  | { type: 'malfunction'; what: 'kit-explode' | 'machine' | 'pillar'; site: string; p: P3; place: string; a?: number; shoved: number }
+  /** A Mousetrap (`trap` id, owner `a`, at `p`): set down, snapped on `victim`, or broken (`by` whose hit finished it). */
+  | { type: 'trap'; what: 'set' | 'snap' | 'break'; a: number; trap: string; p: P3; place: string; victim?: number; by?: number }
   | { type: 'pickup'; a: number; site: string; kind: PickupKind; p: P3; place: string; hpBefore: number; waitedMs?: number }
   | { type: 'restock'; site: string; kind: PickupKind }
   | { type: 'heal'; a: number; cause: HealCause; hp: number }
@@ -103,6 +114,12 @@ export type CityFact = FactContext & (
   | { type: 'case'; what: 'take' | 'drop' | 'steal' | 'deliver' | 'respawn'; a?: number; from?: number; p: P3; place: string; carryMs?: number;
       cause?: 'death' | 'shot' | 'delivered' | 'left'; gripHits?: number; looseMs?: number; path?: number; moved?: number; kicks?: number }
   | { type: 'launch'; a: number; machine?: string; boost: boolean; p: P3; place: string }
+  /** A rat knocked away (`ChaosSimulation.shove`, the same for humans and bots): `cause` is what did it ('shove' a landing
+   * shockwave, 'blast' a Scattershot ball, or an incident's own kind such as 'meteor'), `speed` the sideways u/s. Pressure
+   * Surge's suction pulls are not recorded. */
+  | { type: 'shove'; a: number; cause: string; speed: number; p: P3; place: string }
+  /** Most Wanted: `a` took down the wanted rat `victim` and was handed `kind`. */
+  | { type: 'bounty'; a: number; victim: number; kind: PickupKind; p: P3; place: string }
   | { type: 'landing'; a: number; machine?: string; p: P3; place: string; airMs: number; apex: number; clip: boolean }
   | { type: 'dispatch'; phase: string; incident?: string; caller?: number; pillar?: string; wanted?: number }
   | { type: 'zone'; what: 'activate' | 'scorer'; zone: string; scorer?: number }
@@ -122,8 +139,8 @@ export type CityFact = FactContext & (
   /** A stocked supply the rat could use (not a Quick Fix at full health) came within 12 u on its floor in clear sight, and the
    * rat went more than 16 u away (or died) without claiming it while it stayed stocked. One per approach. `dist`, `p`,
    * `place` and `hp`: the nearest the rat came (horizontal, to 0.1 u), where, and its health there. */
-  /** A supply handed over on the spot: for taking the case, a kill streak title or calling Dispatch. */
-  | { type: 'reward'; a: number; kind: PickupKind; why: 'case' | 'streak' | 'dispatch'; p: P3; place: string }
+  /** A supply handed over on the spot: for taking the case, a kill streak title, calling Dispatch or a Most Wanted bounty. */
+  | { type: 'reward'; a: number; kind: PickupKind; why: 'case' | 'streak' | 'dispatch' | 'bounty'; p: P3; place: string }
   | { type: 'pickup-passed'; a: number; site: string; kind: PickupKind; dist: number; p: P3; place: string; hp: number }
   /** A bot's goal ended; `from` is where it was taken up, `p` and `place` where it ended. */
   | { type: 'goal-end'; a: number; goal: Goal; motor: MotorMode; mind: MindName; personality?: Personality; outcome: GoalOutcome; durationMs: number; from: string; p: P3; place: string }

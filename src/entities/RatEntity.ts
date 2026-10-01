@@ -16,13 +16,14 @@ import type {RatReaction} from '../utils/RatActing';
 import { RatAnimator } from '../utils/RatAnimator';
 import { setRagdollWorld } from '../utils/RatCorpseChain';
 import { MAX_HP, type Vec3Data, type PlayerData } from '../shared/networkProtocol';
+import type { WeaponKind } from '../shared/pickups';
 import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppearance';
 import { RatBillboard } from '../ui/RatBillboard';
 import { streakTier } from '../shared/streak';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { playEntitySound } from '../audio/EntityAudio';
 import { contactShadowsOf } from '../session/shadows';
-import { RAT_BODY, addRatShapes } from '../shared/rat/ratBody';
+import { RAT_BODY, addRatShapes, setBobblehead } from '../shared/rat/ratBody';
 export { initEntitySounds, disposeEntitySounds, playHitSound, playPlayerHitSound } from '../audio/EntityAudio';
 
 // ─── GAMEPLAY CONSTANTS ───
@@ -30,6 +31,10 @@ const FLASH_DURATION = 0.24;
 const DEATH_FORCE = 46;
 
 const DEATH_GLOW_FADE = 2.5;
+/** Bobbleheads: how far the nameplate rises on a fully swollen head (units), clearing the raised hat's crown. */
+const PLATE_LIFT = 1.9;
+/** All Units backup arrival: red/blue swaps a second, and the emissive strength (readable across the map). */
+const STROBE_RATE = 8, STROBE_INTENSITY = 1.1;
 
 // ─── OUTLINE GLOW CONFIG ───
 const GLOW_THICKNESS = 0.025;    // Surface offset, without moving body-part centers
@@ -93,7 +98,9 @@ export class RatEntity {
 
     // Physics
     public body: CANNON.Body;
-    public headShape: CANNON.Shape;
+    public headShape: CANNON.Sphere;
+    /** Seconds of All Units arrival strobe left. */
+    private strobeLeft = 0;
 
     // Visuals
     public mesh: THREE.Group;
@@ -384,8 +391,11 @@ export class RatEntity {
     /** Preserve the procedural rig and picking while batching its rigid leaves. */
     public enableRigidBatching():void {
         if(this.mesh.getObjectByName('rat-rigid-batch'))return;
+        // A held weapon is never batched (it comes and goes): batch without it.
+        const weapon=this.animator.weaponKind;this.animator.setWeapon(undefined);
         batchRigidMeshes(this.mesh);
         if(this.glowMesh)batchRigidMeshes(this.glowMesh);
+        this.animator.setWeapon(weapon);
     }
 
     /** The Hunch: `strength` 0 hides; otherwise the parts of this rat hidden
@@ -432,6 +442,20 @@ export class RatEntity {
 
     /** Big Cheese: this rat's pistol eases up to its chunky size, or back down. */
     public setBigPistol(on:boolean):void {this.animator.bigPistol=on;}
+    /** The special weapon this rat holds (undefined: its pistol). A dead rat holds none. */
+    public setWeapon(kind:WeaponKind|undefined):void {this.animator.setWeapon(this.dead?undefined:kind);}
+    /** Bobbleheads: the head swells and wobbles; another rat's head sphere (what your shots are predicted against)
+     * grows to match the authority's. Your own moving body never changes. */
+    public setBobblehead(on:boolean):void {
+        this.animator.bobblehead=on;
+        if(this.isRemote&&!this.dead)setBobblehead(this.body,this.headShape,on);
+    }
+    /** The nameplate's height over the feet; it rides up on a swollen Bobbleheads head. */
+    private get plateHeight():number {return 2.2+PLATE_LIFT*this.animator.bobbleGrowth;}
+    /** All Units: an arriving backup rat strobes red and blue for `seconds` (emissive only, no light). */
+    public backupStrobe(seconds:number):void {if(!this.dead)this.strobeLeft=seconds;}
+    /** Most Wanted: this rat's nameplate carries the WANTED stamp. */
+    public setWanted(on:boolean):void {this.billboard.setWanted(on);}
     /** Durations are relative to the latest authoritative snapshot, then expire locally. */
     public setPowerups(ironcladSeconds:number,hustleSeconds:number,stakeoutSeconds:number):void {
         const silver=this.ironcladRemaining>0;
@@ -461,7 +485,7 @@ export class RatEntity {
         this.shellOffset.value=pursuit?Math.max(.055,this.outlineReach):this.outlineReach;
         if(this.glowMesh)this.glowMesh.visible=!this.sharedDeath&&(pursuit||own>.01||far>.01);
     }
-    private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=this.stakeoutRemaining=0;this.powerupEffects.clear();this.streakSmoke.clear();this.updatePowerupOutline();this.resetColor();}
+    private clearPowerups():void {this.metalApplication=0;this.ironcladRemaining=this.hustleRemaining=this.stakeoutRemaining=0;this.animator.setWeapon(undefined);this.powerupEffects.clear();this.streakSmoke.clear();this.updatePowerupOutline();this.resetColor();}
 
     /** Kill streak: 3 or more stamps the nameplate and makes the fedora smoulder. A death ends it. */
     public setStreak(streak:number):void {this.streak=this.dead?0:streak;this.billboard.setStreak(this.streak);if(streakTier(this.streak)===0)this.streakSmoke.clear();}
@@ -486,11 +510,11 @@ export class RatEntity {
             // Keep the animator's motion baseline at the live pose (before pinning) so resuming isn't read as a skid.
             this.animator.holdMotion();
             if(this.freezeHold){p.copy(this.frozenPosition);this.mesh.quaternion.copy(this.frozenQuaternion);}
-            this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
+            this.billboard.sprite.position.set(p.x, p.y + this.plateHeight, p.z);
             this.syncGlowTransform();
             return;
         }
-        this.billboard.sprite.position.set(p.x, p.y + 2.2, p.z);
+        this.billboard.sprite.position.set(p.x, p.y + this.plateHeight, p.z);
         this.syncGlowTransform();
         this.animator.setHustle(this.hustleRemaining>0);
         this.animator.update(dt,previewSpeed);
@@ -515,6 +539,15 @@ export class RatEntity {
             this.flashTimer -= dt;
             if (this.flashTimer <= 0) this.resetColor();
             else this.applyHitColor();
+        }
+        // All Units backup arrival: the whole rat strobes police red and blue, then settles.
+        if (this.strobeLeft > 0) {
+            this.strobeLeft = Math.max(0, this.strobeLeft - dt);
+            if (this.strobeLeft === 0 || this.flashTimer > 0) this.resetColor();
+            if (this.strobeLeft > 0 && this.flashTimer <= 0) {
+                const red = Math.floor(this.strobeLeft * STROBE_RATE) % 2 === 0;
+                for (const m of this.allMaterials) { m.emissive.setHex(red ? 0xff2a1a : 0x2f6bff); m.emissiveIntensity = STROBE_INTENSITY; }
+            }
         }
     }
 
@@ -883,7 +916,7 @@ export class RatEntity {
             this.mesh.visible = true;
             this.scene.add(this.billboard.sprite);
             this.billboard.sprite.visible = true;
-            this.billboard.sprite.position.set(data.x, data.y + 2.2, data.z);
+            this.billboard.sprite.position.set(data.x, data.y + this.plateHeight, data.z);
             this.syncGlowTransform();
         }
         this.setStreak(data.streak ?? 0);
@@ -916,7 +949,7 @@ export class RatEntity {
         body.wakeUp();
         this.mesh.position.set(data.x, data.y, data.z);
         this.mesh.quaternion.set(0, 0, 0, 1);
-        this.billboard.sprite.position.set(data.x, data.y + 2.2, data.z);
+        this.billboard.sprite.position.set(data.x, data.y + this.plateHeight, data.z);
         this.body.aabbNeedsUpdate = true;
         this.syncGlowTransform();
     }
@@ -933,6 +966,8 @@ export class RatEntity {
         this.stains?.dispose();
         this.headStains?.dispose();
         this.flyingHat?.dispose();
+        // The held weapon's shapes are shared by every rat: it leaves the rig before its resources are disposed.
+        this.animator.setWeapon(undefined);
         this.scene.remove(this.mesh);
         contactShadowsOf(this.scene)?.remove(this.mesh);
         disposeMeshResources(this.mesh);

@@ -2,7 +2,8 @@
 
 All audible layers are recordings, cut/resampled/filtered and overlapped here.
 No musical notes, oscillators or generated pitch sweeps. Source/license details:
-assets/audio/cartoon-foley/README.md. Accepted Popcorn assets are untouched.
+assets/audio/cartoon-foley/README.md and assets/audio/README.md (the Thompson
+recording). Accepted Popcorn assets are untouched.
 """
 from pathlib import Path
 import array
@@ -54,8 +55,9 @@ def clip(name, length, rate=1, start=0, highpass=60, lowpass=10000, reverse=Fals
 
 
 class Cue:
-    def __init__(self, name, duration):
+    def __init__(self, name, duration, out=OUT):
         self.name = name
+        self.out = out
         self.samples = [0.0]*round(duration*RATE)
 
     def add(self, at, name, gain, length, **options):
@@ -84,7 +86,7 @@ class Cue:
         scale = .86/peak
         pcm = [round(v*scale*min(1, i/12, (len(self.samples)-1-i)/288)*32767)
                for i, v in enumerate(self.samples)]
-        with wave.open(str(OUT / f'{self.name}.wav'), 'wb') as out:
+        with wave.open(str(self.out / f'{self.name}.wav'), 'wb') as out:
             out.setparams((1, 2, RATE, 0, 'NONE', 'not compressed'))
             out.writeframes(struct.pack('<'+'h'*len(pcm), *pcm))
 
@@ -131,4 +133,46 @@ cue.add(.18, 'impactWood_heavy_000', 1, .18, rate=.85)
 cue.add(.23, 'impactTin_medium_001', .7, .17, rate=.9)
 cue.latch(.3, .3).save()
 Cue('tick', .055).add(0, 'impactWood_light_001', .7, .05, rate=1.4, highpass=700, decay=35).save()
-print('Rendered 10 edited physical cartoon foley cues')
+
+# The Mousetrap (protocol 27). Set down: a pine thunk, the bar latching and a little creak of the spring.
+cue = Cue('trap-set', .34)
+cue.add(0, 'impactWood_heavy_000', 1, .2, rate=.9, lowpass=3200)
+cue.add(.045, 'impactMetal_light_001', .45, .1, rate=1.1, highpass=900, decay=14)
+cue.spring(.07, .22, .16, rate=1.7).save()
+# SNAP: a sharp crack of the bar on the base, the steel slapping home, a body thump and the big spring twang.
+cue = Cue('trap-snap', .68)
+cue.add(0, 'impactWood_light_001', 1, .1, rate=1.35, highpass=350)
+cue.add(0, 'impactMetal_medium_002', .7, .12, rate=1.1, highpass=500)
+cue.add(.004, 'impactPunch_heavy_001', .55, .16, rate=1.2, lowpass=3000)
+cue.spring(.025, .9, .6, rate=1.05).save()
+# A ball chips the base: one small dry splinter.
+Cue('trap-splinter', .1).add(0, 'impactWood_light_001', .9, .08, rate=1.7, highpass=1400, decay=30).save()
+# Broken: the base crunches apart, splinters fly, and the freed spring sags out a slow sad boing.
+cue = Cue('trap-break', .95)
+cue.add(0, 'impactWood_heavy_000', 1, .22, rate=.75, lowpass=4000)
+for at, rate in [(.03, 1.25), (.075, 1.45), (.12, 1.1)]:
+    cue.add(at, 'impactWood_light_001', .45, .08, rate=rate, highpass=900)
+cue.spring(.13, .75, .8, rate=.55, start=8.155).save()
+# Refused (no room to set it): a dull wooden clack.
+cue = Cue('trap-refused', .2)
+cue.add(0, 'impactWood_heavy_000', 1, .16, rate=.7, lowpass=900, decay=18)
+cue.add(.01, 'impactSoft_heavy_000', .35, .1, lowpass=1200).save()
+
+# The Tommy Gun: single Thompson rounds cut from the CC0 burst recording at its full 48 kHz (a gun's crack lives up
+# high). Each is a burst's last round (no next round for at least 0.2 s), so its room tail is its own; the game
+# rotates them, ten a second, into the rattle.
+WEAPONS = ROOT / 'public/sounds/weapons'
+WEAPONS.mkdir(parents=True, exist_ok=True)
+FULL = 48000
+thompson = array.array('f', subprocess.check_output([
+    'ffmpeg', '-v', 'error', '-i', str(ROOT / 'assets/audio/tommy-gun-craigsmith.mp3'), '-ac', '1', '-ar', str(FULL), '-f', 'f32le', '-']))
+for index, (onset, seconds) in enumerate([(1.114, .195), (3.093, .26), (4.243, .2), (5.648, .26)]):
+    start, length = round((onset-.004)*FULL), round(seconds*FULL)
+    cut = thompson[start:start+length]
+    peak = max(map(abs, cut)) or 1
+    # 0.2 ms in, the recording's own decay, then a 50 ms close.
+    pcm = [round(v/peak*.86*min(1, i/10, (length-1-i)/(.05*FULL))*32767) for i, v in enumerate(cut)]
+    with wave.open(str(WEAPONS / f'tommy-{index}.wav'), 'wb') as out:
+        out.setparams((1, 2, FULL, 0, 'NONE', 'not compressed'))
+        out.writeframes(struct.pack('<'+'h'*len(pcm), *pcm))
+print('Rendered 15 edited physical cartoon foley cues and 4 Thompson rounds')

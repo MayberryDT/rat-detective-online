@@ -1,0 +1,35 @@
+{
+  "id": "proposal:supplies-v6",
+  "title": "Weapon sites (layout 6)",
+  "status": "Built on branch arsenal on 1 October 2026 (protocol 27); ships only on Tyler's OK",
+  "fromLayout": 5,
+  "toLayout": 6,
+  "summary": "Tyler, 1 October 2026: three special weapons, the Tommy Gun, the Laser and the Mousetrap; pickups must be juicy and never make anyone want to shoot less. Layout 6 adds two sites for each and changes nothing else (33 sites). They stand where layout 5's play fought (6,599 deaths, street level, 8-unit cells): the Tommy Gun on the x 70 avenue north of the -18 street (70, -36; the second-deadliest street cells) and on the -18 street in the west (-88, -18; the deadliest cell); the Laser on the x -60 avenue beside Needleworks (-60, 72) and the 28 street in the west (-88, 28), long streets with walls on both sides to bank a beam off; the Mousetrap where rats must come: on the -18 street in front of the Records forecourt, on the way to the case's home (-16, -16; 12 units from the nearest case spawn, outside the forecourt zone), and on the way into the south lot (3, 72; 321 deaths, the second-deadliest place). Each is supported and clear at its authored point, at least 22 units from every other supply site, 12 from case spawns, 13 from pillars and 33 from launcher pads.",
+  "goals": [
+    "A weapon is never far from a fight: each stands in a street or lot where layout 5's rats died most.",
+    "The Mousetrap is set where rats must come back (the case's home, the way into the south lot), so traps change routes rather than sit in empty streets."
+  ],
+  "predictions": [
+    {
+      "id": "human-shots",
+      "says": "Humans shoot more per hour alive: the Tommy Gun holds the trigger down.",
+      "expect": "up",
+      "measure": {
+        "kind": "rate",
+        "key": "shots-human",
+        "per": "human-s"
+      }
+    },
+    {
+      "id": "human-kills",
+      "says": "Humans make more kills per hour alive: the weapons land kills faster.",
+      "expect": "up",
+      "measure": {
+        "kind": "rate",
+        "key": "kills-human",
+        "per": "human-s"
+      }
+    }
+  ],
+  "baseline": "design/city/layouts/layout-5.json"
+}

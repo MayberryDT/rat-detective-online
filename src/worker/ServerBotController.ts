@@ -7,8 +7,8 @@ import {CITY_BARS_GROUP} from '../shared/boxFrame';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
 import {CITY_BOUNDS,GRAYBOX_VERSION,grayboxBoxes} from '../shared/grayboxLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
-import {hasHustle,PICKUP_TUNING} from '../shared/pickups';
-import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,ratMuzzle,turnFacing,type RatControls} from '../shared/rat/ratBody';
+import {hasHustle,heldWeapon,PICKUP_TUNING} from '../shared/pickups';
+import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,muzzleReach,ratMuzzle,turnFacing,type RatControls} from '../shared/rat/ratBody';
 import {FEEL} from '../feel/feelTuning';
 import type {PlayerData,Vec3Data} from '../shared/networkProtocol';
 import {ARCHETYPE_SKILL,BASE_SKILL,type Decision,type Mind,type Personality} from '../shared/bots/intent';
@@ -252,7 +252,7 @@ export class ServerBotController {
             if(controls.fire){
                 // Through the room's shot handling and rate limit, from the muzzle where the body faces.
                 const d=controls.fire.direction;
-                this.move(bot,now);this.callbacks.shoot(bot.id,ratMuzzle(body.position,bot.facing),{x:d.x,y:d.y,z:d.z});
+                this.move(bot,now);this.callbacks.shoot(bot.id,ratMuzzle(body.position,bot.facing,undefined,muzzleReach(heldWeapon(chaos?.buffs,bot.id,chaos?.time??now))),{x:d.x,y:d.y,z:d.z});
             }
         }
         this.recoverLooseCase(now,chaos);

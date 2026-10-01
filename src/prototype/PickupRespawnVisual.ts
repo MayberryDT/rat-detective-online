@@ -3,7 +3,7 @@ import {PICKUP_TUNING,type PickupKind} from '../shared/pickups';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 
 /** Each supply's dial ring colour. */
-const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0xe8c46a};
+const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0xe8c46a,'tommy-gun':0xe8873e,laser:0x5fd8e6,mousetrap:0xe6dcc4};
 /** One icon texture per supply kind, drawn and uploaded once (the load's stand-in dial) and shared by
  * every dial after, so a site's first claim in play draws no canvas and uploads nothing. */
 const ICONS=new Map<PickupKind,THREE.CanvasTexture>();
@@ -33,6 +33,22 @@ function icon(kind:PickupKind):THREE.CanvasTexture {
         path('M40 13a27 27 0 1 0 .01 0Z','#a8894a');
         path('M40 22a18 18 0 1 0 .01 0Z','#c8c4a6','#15101b',4);
         c.strokeStyle='#efe6c8';c.lineWidth=4;c.stroke(new Path2D('M29 36a12 12 0 0 1 9-9'));
+    }else if(kind==='tommy-gun'){
+        path('M8 40 30 36 33 48 10 58Z','#8e5a34');
+        path('M28 34H66V46H28ZM66 37H88V43H66Z','#7d8594');
+        path('M36 46h8l-3 16-9-2Z','#8e5a34');
+        path('M54 46a14 14 0 1 0 .01 0Z','#c9a04a');
+    }else if(kind==='laser'){
+        path('M14 38 26 30 26 66 14 58Z','#b04a3e');
+        path('M20 48c0-12 12-18 26-18 10 0 16 8 18 14h14v8H64c-2 6-8 14-18 14-14 0-26-6-26-18Z','#9ea8b2');
+        path('M78 38 90 32V64L78 58Z','#9ea8b2');
+        c.strokeStyle='#5fd88a';c.lineWidth=5;c.stroke(new Path2D('M68 40v16M74 40v16'));
+        path('M34 62h10l-2 20h-10Z','#3a2c26');
+    }else if(kind==='mousetrap'){
+        path('M10 60 30 40H90L70 60Z','#c8a46a');
+        path('M10 60H70L90 40V48L70 68H10Z','#8e6a40');
+        c.strokeStyle='#d7a84a';c.lineWidth=5;c.stroke(new Path2D('M26 50 40 36H68L54 50'));
+        path('M64 46 78 38 80 48Z','#e8bd4a');
     }else{
         path('M37 15H63V37H85V63H63V85H37V63H15V37H37Z','#75b792');
     }

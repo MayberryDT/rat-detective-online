@@ -1,7 +1,7 @@
 import {effectsOutput} from '../../src/audio/PlayerAudioMix';
 import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import {afterEach,expect,it,vi} from 'vitest';
-import {bindIncidentAudio,disposeIncidentAudio,playDelayedThud,playDudPop,startCaseBuzz} from '../../src/audio/IncidentAudio';
+import {bindIncidentAudio,disposeIncidentAudio,playSynth,playHic,startCaseBuzz} from '../../src/audio/IncidentAudio';
 afterEach(()=>{disposeIncidentAudio();vi.unstubAllGlobals();});
 async function fixture(){
  const nodes:any[]=[],gains:any[]=[];
@@ -16,9 +16,9 @@ async function fixture(){
 }
 it('preloads once, bounds overlapping cues, and frees ended voices',async()=>{
  const {ctx,nodes}=await fixture();bindIncidentAudio(ctx);
- for(let i=0;i<20;i++)playDudPop();
+ for(let i=0;i<20;i++)playHic();
  expect(fetch).toHaveBeenCalledTimes(4);expect(nodes).toHaveLength(10);
- nodes[0].onended();playDudPop();expect(nodes).toHaveLength(11);
+ nodes[0].onended();playHic();expect(nodes).toHaveLength(11);
  disposeIncidentAudio();expect(nodes[10].stop).toHaveBeenCalled();
 });
 it('keeps exactly one saw loop and stops it when the incident ends',async()=>{
@@ -28,27 +28,27 @@ it('keeps exactly one saw loop and stops it when the incident ends',async()=>{
 });
 it('does not start cues while the shared context is suspended',async()=>{
  const {ctx,nodes}=await fixture();ctx.state='suspended';
- playDudPop();startCaseBuzz(true);expect(nodes).toHaveLength(0);
+ playHic();startCaseBuzz(true);expect(nodes).toHaveLength(0);
  ctx.state='running';startCaseBuzz(true);expect(nodes).toHaveLength(1);
 });
 
-it('renders the delayed thud once per context, then reuses the identical PCM buffer',async()=>{
+it('renders a synthesized thud once per context, then reuses the identical PCM buffer',async()=>{
  const {ctx,nodes}=await fixture();
- for(let i=0;i<20;i++){playDelayedThud();nodes.at(-1).onended();}
+ for(let i=0;i<20;i++){playSynth('thud');nodes.at(-1).onended();}
  expect(ctx.createBuffer).toHaveBeenCalledTimes(1);
  expect(new Set(nodes.map(n=>n.buffer)).size).toBe(1);
 });
 
-it('keeps nearby popcorn full and applies the shared strong world fade, including height',async()=>{
- const {ctx,nodes,gains}=await fixture();bindIncidentAudio(ctx,{x:10,y:20,z:30});
- playDudPop({x:10,y:25,z:30});playDudPop({x:110,y:20,z:30});playDudPop({x:10,y:270,z:30});
- expect(gains.map(g=>g.gain.value)).toEqual([.82,.82*worldSoundGain(100),.82*worldSoundGain(250)]);
- expect(nodes.every(n=>n.playbackRate.value>=.97&&n.playbackRate.value<=1.03)).toBe(true);
+it('fades a distant hiccup by the shared strong world curve, including height',async()=>{
+ const {ctx,gains}=await fixture();bindIncidentAudio(ctx,{x:10,y:20,z:30});
+ playHic({x:10,y:25,z:30});playHic({x:110,y:20,z:30});playHic({x:10,y:270,z:30});
+ const [near,far,above]=gains.map(g=>g.gain.value);
+ expect(far/near).toBeCloseTo(worldSoundGain(100));expect(above/near).toBeCloseTo(worldSoundGain(250));
 });
 
-it('fades delayed wall thuds without regenerating PCM and disconnects every output on teardown',async()=>{
+it('fades distant thuds without regenerating PCM and disconnects every output on teardown',async()=>{
  const {ctx,gains}=await fixture();bindIncidentAudio(ctx,{x:0,y:10,z:0});
- playDelayedThud({x:0,y:10,z:0});playDelayedThud({x:0,y:260,z:0});
+ playSynth('thud',{x:0,y:10,z:0});playSynth('thud',{x:0,y:260,z:0});
  expect(gains.map(g=>g.gain.value)).toEqual([1,worldSoundGain(250)]);expect(ctx.createBuffer).toHaveBeenCalledTimes(1);
  disposeIncidentAudio();expect(gains.every(g=>g.disconnect.mock.calls.length===1)).toBe(true);
 });

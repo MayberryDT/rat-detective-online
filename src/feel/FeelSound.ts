@@ -85,14 +85,8 @@ export class FeelSound {
     squelch(at:Vec3Data|undefined,view:THREE.Camera):void {if(this.on)this.audio!.squelch(FEEL.sound.params.squelch,at?this.pan(at,view):0);}
     brass():void {if(this.on)this.audio!.brass(FEEL.sound.params.brass);}
     flashbulb():void {if(this.on)this.audio!.flashbulb(FEEL.sound.params.flashbulb);}
-    /** Bad Ammunition cues. Remote coughs fade and pan like any world sound. */
+    /** A trigger pulled before Big Cheese's gun is ready: a dry click. */
     jam():void {if(this.on)this.audio!.jam(FEEL.sound.params.jam);}
-    womp():void {if(this.on)this.audio!.womp(FEEL.sound.params.womp);}
-    cough(at:Vec3Data|undefined,view:THREE.Camera):void {
-        if(!this.on)return;
-        const fade=!at?1:Math.max(0,1-Math.hypot(at.x-view.position.x,at.y-view.position.y,at.z-view.position.z)/FEEL.sound.params.headshotRange)**2;
-        if(fade>.02)this.audio!.cough(FEEL.sound.params.cough*fade,at?this.pan(at,view):0);
-    }
     /** A supply claimed (any rat) or restocked; fades and pans like a world sound. */
     supply(cue:SupplyCue,at:Vec3Data,view:THREE.Camera):void {
         if(!this.on)return;
