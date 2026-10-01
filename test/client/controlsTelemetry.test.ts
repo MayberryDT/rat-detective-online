@@ -11,6 +11,7 @@ import {parseClientMessage} from '../../src/shared/messageValidation';
 import type {ClientMessage, MovementInput} from '../../src/shared/networkProtocol';
 import {FeelDirector} from '../../src/feel/FeelDirector';
 import {FeelState} from '../../src/feel/feelState';
+import {HeldFire} from '../../src/session/HeldFire';
 
 const canvasDocument = document;
 beforeEach(() => vi.stubGlobal('document', canvasDocument));
@@ -35,7 +36,7 @@ it('sends taps shorter than one send, at once, even while the rat holds still', 
         stage: {syncViewport: () => false, scene, world, camera, renderer: {render() {}}, flashlight: new THREE.SpotLight()},
         simulation: new SimulationClock(), city: {update() {}}, perf: {frame() {}},
         foleyWorld: {listener() {}, motion: new MotionFoley(() => {})},
-        feel: new FeelDirector(new FeelState('on'), undefined),
+        feel: new FeelDirector(new FeelState('on'), undefined), heldFire: new HeldFire(),
         transport: {state: 'playing', send(message: ClientMessage) {
             expect(parseClientMessage(message)).toEqual(message);
             if (message.type === 'updateMovement') sent.push(message);

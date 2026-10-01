@@ -8,7 +8,7 @@ import { MAX_HP, MAX_PLAYERS, PROTOCOL_VERSION, RESPAWN_DELAY_MS, WIN_DISPLAY_MS
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
 import { createAssignment } from '../../src/shared/assignments';
-import { activeZone } from '../../src/shared/jurisdiction';
+import { activeZone, JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
 import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { cityPlaces } from '../../src/shared/city/places';
 import { p3 } from '../../src/shared/city/facts';
@@ -188,7 +188,7 @@ describe('persistent hosted bots', () => {
         killer.kills = 19;
         await game.handleHit(killer.id, { type: 'hit', victimId: victim.id, damage: MAX_HP });
         expect(game.round.phase).toBe('playing');
-        const assignment=createAssignment('jurisdiction',now);assignment.liveAt=now;const zone=assignment.jurisdiction!;zone.heldMs[killer.id]=59_999;
+        const assignment=createAssignment('jurisdiction',now);assignment.liveAt=now;const zone=assignment.jurisdiction!;zone.heldMs[killer.id]=JURISDICTION_TUNING.targetMs-1;
         Object.assign(killer,JURISDICTION_ZONES[activeZone(zone)].posts[0]);
         game.chaos.setAssignment(assignment);
         game.chaos.caseBody.position.set(killer.x,killer.y+.8,killer.z);game.chaos.caseBody.velocity.setZero();

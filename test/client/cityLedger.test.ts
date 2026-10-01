@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RoundLedger, ASSIST_WINDOW_MS, standings } from '../../src/shared/city/ledger';
 import { ASSIGNMENT_TUNING, createAssignment } from '../../src/shared/assignments';
+import { JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
 
 // Ways the running K/D/A and standings could teach the future AI the wrong lesson, written first:
 // 1. The killer or the victim is also credited with an assist.
@@ -68,12 +69,12 @@ describe('standings', () => {
     a.caseKills = { x: 4, y: 4 };
     const s = standings(['x', 'y'], { assignment: a, kills: { x: 5, y: 7 } });
     expect(s.get('y')!.rank).toBe(1);
-    expect(s.get('x')!.progress).toBeCloseTo(.4);
+    expect(s.get('x')!.progress).toBeCloseTo(4 / ASSIGNMENT_TUNING.caseKillTarget);
   });
 
   it('reads Jurisdiction in zone time and no assignment as kills to 20', () => {
     const j = createAssignment('jurisdiction', 0);
-    j.jurisdiction!.heldMs = { x: 30_000 };
+    j.jurisdiction!.heldMs = { x: JURISDICTION_TUNING.targetMs / 2 };
     expect(standings(['x'], { assignment: j }).get('x')!.progress).toBeCloseTo(.5);
     expect(standings(['x'], { kills: { x: 10 } }).get('x')!.progress).toBeCloseTo(.5);
   });

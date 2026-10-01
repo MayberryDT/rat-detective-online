@@ -2,7 +2,7 @@ import {createMovementAllowance} from '../../src/worker/validation';
 import { readSocketMessage } from './socketMessages';
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
 import { createAssignment } from '../../src/shared/assignments';
-import { activeZone } from '../../src/shared/jurisdiction';
+import { activeZone, JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
 import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_HP, WIN_DISPLAY_MS, MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
@@ -554,7 +554,7 @@ describe('GameRoom websockets', () => {
       await game.handleHit(carrier.id, {type:'hit',victimId:victim.id,damage:MAX_HP}, {x:1,y:0,z:0});
       expect(champion.kills).toBe(20);
       expect(game.round.phase).toBe('playing');
-      const assignment=createAssignment('jurisdiction',now);assignment.liveAt=now;const zone=assignment.jurisdiction!;zone.heldMs[carrier.id]=59_999;
+      const assignment=createAssignment('jurisdiction',now);assignment.liveAt=now;const zone=assignment.jurisdiction!;zone.heldMs[carrier.id]=JURISDICTION_TUNING.targetMs-1;
       Object.assign(champion,JURISDICTION_ZONES[activeZone(zone)].posts[0]);
       game.chaos.setAssignment(assignment);game.chaos.step(.001,now+1);game.finishAssignment();
       expect(game.players.get(victim.id)!.deaths).toBe(1);

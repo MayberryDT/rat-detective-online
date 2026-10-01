@@ -1,6 +1,6 @@
 import { env, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { ASSIGNMENT_TUNING, createAssignment } from '../../src/shared/assignments';
+import { ASSIGNMENT_TUNING, createAssignment, objectiveTarget } from '../../src/shared/assignments';
 import {
   COMPANION_FRESHNESS_MS,
   COMPANION_SCHEMA_VERSION,
@@ -65,7 +65,7 @@ describe('companion projection', () => {
     force.caseKills.b = 7;
     const excessive = projectCompanionRoom({ ...base, round: round(force), assignment: force });
     expect(excessive.assignment).toMatchObject({
-      objectiveTarget: 10, objectiveUnit: 'case-kills', destination: null, zone: null,
+      objectiveTarget: objectiveTarget('excessive-force'), objectiveUnit: 'case-kills', destination: null, zone: null,
     });
     expect(excessive.scores[0]).toMatchObject({ id: 'b', objectiveScore: 7 });
 
@@ -79,7 +79,7 @@ describe('companion projection', () => {
     jurisdiction.jurisdiction!.scorerId = 'a';jurisdiction.jurisdiction!.remainingMs = JURISDICTION_TUNING.warningMs + 1;
     const hidden = projectCompanionRoom({ ...base, round: round(jurisdiction), assignment: jurisdiction });
     expect(hidden.assignment).toMatchObject({
-      objectiveTarget: 60, objectiveUnit: 'seconds', zone: expect.any(Object),
+      objectiveTarget: objectiveTarget('jurisdiction'), objectiveUnit: 'seconds', zone: expect.any(Object),
       nextZone: null, zoneRemainingMs: JURISDICTION_TUNING.warningMs + 1, clockRunning: true,
     });
     expect(hidden.scores.find(score => score.id === 'a')?.objectiveScore).toBe(12.5);
@@ -93,7 +93,7 @@ describe('companion projection', () => {
     const winner = player('winner', 'Winner');
     const assignment = createAssignment('excessive-force', now, 'result-round');
     assignment.phase = 'closed';
-    assignment.caseKills.winner = 10;
+    assignment.caseKills.winner = ASSIGNMENT_TUNING.caseKillTarget;
     assignment.result = {
       winnerId: winner.id, winnerName: winner.name, at: now + 0.5,
       method: 'kills', posthumous: false,

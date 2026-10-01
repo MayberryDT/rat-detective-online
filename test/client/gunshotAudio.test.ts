@@ -20,7 +20,7 @@ function fixture(){
  const ear=new THREE.Vector3(),context={state:'running'};
  const listener={context,getWorldPosition:(v:THREE.Vector3)=>v.copy(ear)} as THREE.AudioListener;
  const audio=new GunshotAudio(listener);created.push(audio);
- state.loads.slice(-1).forEach(load=>load({} as AudioBuffer));
+ state.loads.forEach(load=>load({} as AudioBuffer));
  return {audio,ear,context};
 }
 it('restores the stronger pistol and gentler world fade while keeping distant fire faint',()=>{

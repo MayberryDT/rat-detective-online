@@ -8,6 +8,7 @@ import {laserPath,type LaserCast} from '../../src/shared/laser';
 import {resolveShotPattern,tommyCone,tommyHeat} from '../../src/shared/shotPattern';
 import {ShotSpacing} from '../../src/shared/shotTiming';
 import {INCIDENT_TUNING} from '../../src/shared/chaosState';
+import {BALL_RADIUS} from '../../src/shared/ballTuning';
 
 afterEach(()=>vi.restoreAllMocks());
 const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
@@ -68,6 +69,18 @@ describe('the Tommy Gun',()=>{
         expect(spacing.allow('l',undefined,0,0,'laser')).toBe(true);
         expect(spacing.allow('l',undefined,INCIDENT_TUNING.cheeseShotIntervalMs-1,0,'laser')).toBe(false);
         expect(spacing.allow('l',undefined,INCIDENT_TUNING.cheeseShotIntervalMs,0,'laser')).toBe(true);
+    });
+    it('fires plain balls during Big Cheese: they never grow, in flight or on a bounce, and deal one damage',()=>{
+        const {sim:first,players,a,b,now}=fixture(),saved=first.snapshot(false);
+        saved.dispatch={phase:'active',incident:'big-cheese',serial:1,started:now,until:now+25000};
+        const hits:ChaosHit[]=[],sim=new ChaosSimulation(players,h=>hits.push(h),saved,{seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION});
+        arm(sim,'a','tommy-gun');
+        // One ball at b's chest, one into the street just ahead.
+        fire(sim,a,chest(b));fire(sim,a,{x:a.x,y:0,z:a.z+3});
+        const radii=new Set<number>();
+        for(let i=1;i<=60;i++){sim.step(1/60,now+i*1000/60);for(const s of sim.snapshot(false).shots)radii.add(s.radius??BALL_RADIUS);}
+        expect([...radii]).toEqual([BALL_RADIUS]);
+        expect(hits).toMatchObject([{victim:'b',damage:1,weapon:'tommy-gun'}]);
     });
 });
 
@@ -148,6 +161,18 @@ describe('the Mousetrap',()=>{
         expect(sim.placeTrap('a',{x:0,y:1,z:0})).toBe(false);
         expect(weaponOf(sim,'a')).toBe('mousetrap');
         expect(traps(sim)).toEqual([]);
+    });
+    it('is not set down on another living rat, only clear of it',()=>{
+        const {sim,a,b,hits,now}=fixture();
+        stand(b,{x:a.x,y:a.y,z:a.z+W.trapReach});
+        expect(setDown(sim,a)).toBe(false);
+        expect(weaponOf(sim,'a')).toBe('mousetrap');
+        sim.step(1/60,now+16);expect(hits).toEqual([]);
+        // A rat on the floor below is no obstacle, nor is a dead one.
+        stand(b,{x:a.x,y:a.y-W.trapHeight-1,z:a.z+W.trapReach});
+        expect(sim.placeTrap('a',{x:0,y:0,z:1})).toBe(true);
+        arm(sim,'a','mousetrap');stand(b,{x:a.x,y:a.y,z:a.z-W.trapReach});b.hp=0;
+        expect(sim.placeTrap('a',{x:0,y:0,z:-1})).toBe(true);
     });
     it('breaks after its hits: eight balls, or three laser hits; the breaker is recorded',()=>{
         const {sim,a,b,now}=fixture();

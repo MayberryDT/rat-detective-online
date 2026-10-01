@@ -1,9 +1,9 @@
-import { activeZone } from '../../src/shared/jurisdiction';
+import { activeZone, JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
 import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { env, evictDurableObject, runInDurableObject, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { GameRoom } from '../../src/worker/GameRoom';
-import { ASSIGNMENT_IDS, destinationPoint, type AssignmentId, type AssignmentState } from '../../src/shared/assignments';
+import { ASSIGNMENT_IDS, ASSIGNMENT_TUNING, activeDestination, destinationPoint, type AssignmentId, type AssignmentState } from '../../src/shared/assignments';
 import { DeliveryDecoder } from '../../src/shared/deliveryWire';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ChaosState } from '../../src/shared/chaosState';
@@ -93,10 +93,12 @@ describe('shared assignment room lifecycle',()=>{
                     Object.assign(a,{x:-16.74,y:.3,z:-30.02});sim.caseBody.position.set(-16,1.1,-30);sim.caseBody.velocity.setZero();sim.step(0,now);
                     expect(sim.caseHolderId).toBe(a.id);
                     if(assignment.id==='excessive-force'){
-                        for(let i=0;i<10;i++){b.hp=MAX_HP;await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:MAX_HP},{x:0,y:0,z:-1});}
+                        for(let i=0;i<ASSIGNMENT_TUNING.caseKillTarget;i++){b.hp=MAX_HP;await game.handleHit(a.id,{type:'hit',victimId:b.id,damage:MAX_HP},{x:0,y:0,z:-1});}
                     }else if(assignment.jurisdiction){
-                        const j=assignment.jurisdiction;Object.assign(a,JURISDICTION_ZONES[activeZone(j)].posts[0]);j.heldMs[a.id]=59999;now++;sim.step(.001,now);
-                    }else for(const id of assignment.destinations){
+                        const j=assignment.jurisdiction;Object.assign(a,JURISDICTION_ZONES[activeZone(j)].posts[0]);j.heldMs[a.id]=JURISDICTION_TUNING.targetMs-1;now++;sim.step(.001,now);
+                    }else for(let n=0;n<ASSIGNMENT_TUNING.deliveryTarget;n++){
+                        // Follow the live stop: the route reshuffles after each full cycle.
+                        const id=activeDestination(sim.assignmentState!)!;
                         if(sim.assignmentState!.result)break;
                         if(!sim.caseHolderId){const p=sim.caseBody.position;Object.assign(a,{x:p.x,y:p.y-.8,z:p.z});sim.step(0,++now);expect(sim.caseHolderId).toBe(a.id);}
                         const outside=destinationPoint(id),inside=destinationPoint(id,false);
@@ -111,7 +113,7 @@ describe('shared assignment room lifecycle',()=>{
             sequence.push(completed.id);
             const winA=await first.wait('gameWon'),winB=await second.wait('gameWon');
             expect(winA.assignment).toEqual(completed);expect(winB.assignment).toEqual(completed);
-            expect(winA.winnerId).toBe(first.welcome.id);expect(winA.kills).toBe(completed.id==='excessive-force'?10:0);
+            expect(winA.winnerId).toBe(first.welcome.id);expect(winA.kills).toBe(completed.id==='excessive-force'?ASSIGNMENT_TUNING.caseKillTarget:0);
             await runInDurableObject(stub,async(instance)=>{
                 const game=instance as unknown as Internals;const now=game.round.resetAt!;game.clock=()=>now;await instance.alarm();pause(game);
                 expect(game.chaos.assignmentState!.roundId).not.toBe(completed.roundId);
@@ -176,7 +178,7 @@ describe('shared assignment room lifecycle',()=>{
             const game=instance as unknown as Internals;pause(game);const sim=game.chaos,a=game.players.get(first.welcome.id)!;
             const now=sim.assignmentState!.liveAt+1;game.clock=()=>now;
             sim.caseBody.position.set(a.x,a.y+.8,a.z);sim.caseBody.velocity.setZero();sim.step(0,now);
-            Object.assign(a,JURISDICTION_ZONES[activeZone(sim.assignmentState!.jurisdiction!)].posts[0]);sim.assignmentState!.jurisdiction!.heldMs[a.id]=59999;
+            Object.assign(a,JURISDICTION_ZONES[activeZone(sim.assignmentState!.jurisdiction!)].posts[0]);sim.assignmentState!.jurisdiction!.heldMs[a.id]=JURISDICTION_TUNING.targetMs-1;
             sim.step(.001,now+1);game.finishAssignment();
             return {assignment:structuredClone(sim.assignmentState!) as AssignmentState,resetAt:now+WIN_DISPLAY_MS};
         });

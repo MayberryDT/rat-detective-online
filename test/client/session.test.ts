@@ -98,6 +98,8 @@ const harness = vi.hoisted(() => {
             body: { position: { x: number; y: number; z: number }; quaternion: { x: number; y: number; z: number; w: number } };
             applySnapshot: ReturnType<typeof vi.fn>;
             setBigPistol: ReturnType<typeof vi.fn>;
+            setBobblehead: ReturnType<typeof vi.fn>;
+            setWanted: ReturnType<typeof vi.fn>;
             respawn: ReturnType<typeof vi.fn>;
             takeDamage: ReturnType<typeof vi.fn>;
             freeze: ReturnType<typeof vi.fn>;
@@ -139,6 +141,8 @@ const harness = vi.hoisted(() => {
                 body: { position: { x: spawn.x, y: spawn.y, z: spawn.z }, quaternion: { x: 0, y: 0, z: 0, w: 1 } },
                 applySnapshot: vi.fn(),
                 setBigPistol: vi.fn(),
+                setBobblehead: vi.fn(),
+                setWanted: vi.fn(),
                 respawn: vi.fn(),
                 takeDamage: vi.fn(),
                 freeze: vi.fn(),
@@ -730,7 +734,8 @@ describe('GameSession', () => {
             type: 'playerShot', shooterId: 'other', shotId: 'shot-2',
             origin: { x: 0, y: 1.45, z: 0 }, direction: { x: 1, y: 0, z: 0 },
         });
-        expect(gun.replayShot).toHaveBeenCalledWith(remote, expect.objectContaining({ type: 'playerShot', shotId: 'shot-2' }));
+        // An unarmed shooter's shot replays with the pistol.
+        expect(gun.replayShot).toHaveBeenCalledWith(remote, expect.objectContaining({ type: 'playerShot', shotId: 'shot-2' }), undefined);
         const city = harness.cities[0];
         const rat = harness.rats[0];
         session.dispose();

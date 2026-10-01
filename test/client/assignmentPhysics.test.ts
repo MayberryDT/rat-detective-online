@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
-import { createAssignment, destinationPoint, destinationContains, CHAIN_ROUTE, ASSIGNMENT_DESTINATIONS, ASSIGNMENT_TUNING, type AssignmentId, type DestinationId } from '../../src/shared/assignments';
+import { createAssignment, destinationPoint, destinationContains, activeDestination, CHAIN_ROUTE, ASSIGNMENT_DESTINATIONS, ASSIGNMENT_TUNING, type AssignmentId, type DestinationId } from '../../src/shared/assignments';
 const WIN=ASSIGNMENT_TUNING.deliveryTarget;
 import { applyHit, createPlayer } from '../../src/worker/gameState';
 import { CHAOS_TUNING, CASE_SPAWNS, type ChaosState } from '../../src/shared/chaosState';
@@ -45,10 +45,11 @@ describe('assignments in the real city case simulation',()=>{
     });
     it('banks deliveries per carrier and preserves a thief’s earlier paperwork',()=>{
         const {sim,a,b}=fixture('chain-of-custody');pickup(sim,a,130,-25);
-        for(let i=0;i<2;i++){if(i)pickup(sim,a,-16,-30,NOW+100+i*10);carriedEntry(sim,a,CHAIN_ROUTE[i],NOW+101+i*10);}
+        for(let i=0;i<2;i++){if(i)pickup(sim,a,-16,-30,NOW+100+i*10);carriedEntry(sim,a,activeDestination(sim.assignmentState!)!,NOW+101+i*10);}
         expect(sim.assignmentState!.deliveries).toEqual({a:2});expect(sim.assignmentState!.result).toBeUndefined();
         sim.release(a.id);Object.assign(a,{x:100,z:100});pickup(sim,b,-16,-30,NOW+300);
-        for(let i=2;i<2+WIN;i++){if(i>2)pickup(sim,b,-16,-30,NOW+400+i*10);carriedEntry(sim,b,CHAIN_ROUTE[i],NOW+401+i*10);}
+        // Past the first eight stops the route reshuffles: follow whichever stop is live.
+        for(let i=2;i<2+WIN;i++){if(i>2)pickup(sim,b,-16,-30,NOW+400+i*10);carriedEntry(sim,b,activeDestination(sim.assignmentState!)!,NOW+401+i*10);}
         expect(sim.assignmentState!.deliveries).toEqual({a:2,b:WIN});
         expect(sim.assignmentState!.result).toMatchObject({winnerId:'b',method:'carried'});
     });
@@ -101,7 +102,8 @@ describe('assignments in the real city case simulation',()=>{
     });
     it.each(CHAIN_ROUTE)('Tampering expiry cannot award an edge-overlapping %s case to a waiting carrier',id=>{
         const initial=fixture('chain-of-custody');initial.sim.assignmentState!.destinations=[...CHAIN_ROUTE.filter(d=>d!==id),id];
-        const last=CHAIN_ROUTE.length-1;initial.sim.assignmentState!.deliverySerial=last;initial.sim.assignmentState!.deliveries.a=WIN-1;
+        // The last stop of a route cycle, late enough that `a` has banked one short of the win.
+        const last=CHAIN_ROUTE.length*Math.ceil(WIN/CHAIN_ROUTE.length)-1;initial.sim.assignmentState!.deliverySerial=last;initial.sim.assignmentState!.deliveries.a=WIN-1;
         const saved=initial.sim.snapshot(false);saved.dispatch={phase:'rolling',incident:'evidence-tampering',serial:1,started:NOW,until:NOW+100};
         const {sim,a}=fixture('chain-of-custody',saved);sim.step(0,NOW+100);
         const b=ASSIGNMENT_DESTINATIONS[id].bounds,inside=destinationPoint(id,false);

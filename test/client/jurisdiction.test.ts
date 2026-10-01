@@ -42,9 +42,10 @@ describe('Jurisdiction authority',()=>{
  it('splits a rotation interval, and a target at the boundary wins before relocating',()=>{
   const {a,state,j,rules}=fixture();const old=activeZone(j);j.remainingMs=250;
   rules.advance(NOW,NOW+1000,'a');expect(j.heldMs.a).toBe(250);expect(j.remainingMs).toBe(JURISDICTION_TUNING.zoneMs);expect(activeZone(j)).not.toBe(old);
-  Object.assign(a,JURISDICTION_ZONES[activeZone(j)].posts[0]);j.heldMs.a=59900;j.remainingMs=100;
+  const target=JURISDICTION_TUNING.targetMs;
+  Object.assign(a,JURISDICTION_ZONES[activeZone(j)].posts[0]);j.heldMs.a=target-100;j.remainingMs=100;
   rules.advance(NOW+1000,NOW+2000,'a');expect(state.result).toMatchObject({winnerId:'a',at:NOW+1100,method:'zone-held'});
-  expect(j.serial).toBe(1);expect(j.heldMs.a).toBe(60000);expect(j.scorerId).toBeNull();expect(parseAssignment(state)).toEqual(state);
+  expect(j.serial).toBe(1);expect(j.heldMs.a).toBe(target);expect(j.scorerId).toBeNull();expect(parseAssignment(state)).toEqual(state);
   rules.advance(NOW+2000,NOW+9000,'b');expect(state.result?.winnerId).toBe('a');
  });
  it('retains announced bags through restoration and runs every zone once per bag, never the smaller category twice running',()=>{
@@ -68,7 +69,8 @@ describe('Jurisdiction authority',()=>{
  it('rejects malformed mode state and preserves other stored modes',()=>{
   const {state,j}=fixture();
   const n=JURISDICTION_ZONE_IDS.length,smallerFirst=[...j.order].sort((x,y)=>JURISDICTION_ZONES[x].category===JURISDICTION_ZONES[y].category?0:JURISDICTION_ZONES[x].category==='enclosed'?-1:1);
-  for(const patch of [{remainingMs:NaN},{remainingMs:JURISDICTION_TUNING.zoneMs+1},{remainingMs:0},{serial:1},{index:n,serial:n},{scorerId:''},{order:Array(n).fill(activeZone(j))},{order:smallerFirst},{order:j.order.slice(1)},{heldMs:{a:60001}},{heldMs:{a:60000}},{heldMs:{a:-1}},{heldMs:Object.fromEntries(Array.from({length:17},(_,i)=>[String(i),1]))}]){
+  const target=JURISDICTION_TUNING.targetMs;
+  for(const patch of [{remainingMs:NaN},{remainingMs:JURISDICTION_TUNING.zoneMs+1},{remainingMs:0},{serial:1},{index:n,serial:n},{scorerId:''},{order:Array(n).fill(activeZone(j))},{order:smallerFirst},{order:j.order.slice(1)},{heldMs:{a:target+1}},{heldMs:{a:target}},{heldMs:{a:-1}},{heldMs:Object.fromEntries(Array.from({length:17},(_,i)=>[String(i),1]))}]){
    expect(parseAssignment({...state,jurisdiction:{...j,...patch}}),JSON.stringify(patch)).toBeNull();
   }
   for(const id of ASSIGNMENT_IDS.filter(id=>id!=='jurisdiction')){

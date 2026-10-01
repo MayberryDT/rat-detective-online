@@ -41,7 +41,7 @@ describe('natural briefcase carry',()=>{
         const carrier=player('carrier'),simulation=new ChaosSimulation(new Map([[carrier.id,carrier]]),()=>{});
         let now=Date.now();const assignment=createAssignment('chain-of-custody',now-3000);assignment.phase='active';simulation.setAssignment(assignment);
         const mesh=createRatMesh(),animator=new RatAnimator(mesh),playReaction=vi.fn(animator.playReaction.bind(animator));
-        const entity={mesh,hp:3,isPlayer:true,dead:false,name:'You',playReaction} as unknown as RatEntity;
+        const entity={mesh,hp:3,isPlayer:true,dead:false,name:'You',playReaction,setWeapon(){}} as unknown as RatEntity;
         const scene=new THREE.Scene(),view=new ChaosView(scene,()=>entity),camera=new THREE.PerspectiveCamera();
         const encoder=new ChaosEncoder('deliveries',true),decoder=new ChaosDecoder();
         const deliverSnapshot=()=>{
@@ -180,7 +180,7 @@ describe('natural briefcase carry',()=>{
             expect(simulation.snapshot().case.owner).toBe(carrier.id);
             const mesh=createRatMesh();mesh.position.set(carrier.x,carrier.y,carrier.z);
             mesh.quaternion.set(carrier.meshQx,carrier.meshQy,carrier.meshQz,carrier.meshQw);
-            const entity={mesh,isPlayer:true,dead:false,name:'You'} as RatEntity;
+            const entity={mesh,isPlayer:true,dead:false,name:'You',setWeapon(){}} as unknown as RatEntity;
             const scene=new THREE.Scene(),view=new ChaosView(scene,()=>entity,undefined,false);
             view.apply(simulation.snapshot());view.update(1/60,new THREE.PerspectiveCamera());
             const visual=scene.getObjectByName('hot-case')!;
@@ -206,7 +206,7 @@ describe('natural briefcase carry',()=>{
         const mesh=createRatMesh(),outline=createRatMesh();
         mesh.position.set(carrier.x,0,carrier.z);
         const animator=new RatAnimator(mesh,outline);
-        const entity={mesh,isPlayer:true,dead:false,name:'You'} as RatEntity;
+        const entity={mesh,isPlayer:true,dead:false,name:'You',setWeapon(){}} as unknown as RatEntity;
         const scene=new THREE.Scene(),view=new ChaosView(scene,()=>entity,undefined,false);
         const camera=new THREE.PerspectiveCamera();
         view.apply(simulation.snapshot());
@@ -237,7 +237,7 @@ describe('natural briefcase carry',()=>{
         const simulation=new ChaosSimulation(new Map([[carrier.id,carrier],[attacker.id,attacker]]),()=>{});
         simulation.step(1/60,1000);
         const mesh=createRatMesh();mesh.position.set(carrier.x,0,carrier.z);
-        const entity={mesh,isPlayer:true,dead:false,name:'You'} as RatEntity;
+        const entity={mesh,isPlayer:true,dead:false,name:'You',setWeapon(){}} as unknown as RatEntity;
         const view=new ChaosView(new THREE.Scene(),()=>entity,undefined,false),camera=new THREE.PerspectiveCamera();
         view.apply(simulation.snapshot());view.update(1/60,camera);
         const badge=elements.filter(element=>element.label==='Hot Case location').at(-1)!;

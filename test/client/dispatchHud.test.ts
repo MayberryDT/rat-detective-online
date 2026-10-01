@@ -190,7 +190,7 @@ it('keeps a case quip stable between events and rotates it on a later pickup whi
   const {hud,root,state,feedback}=fixture();hud.setScores([{id:'me',name:'Me',kills:3,deaths:1}],'me');
   state.assignment=createAssignment('jurisdiction',0);state.assignment.phase='active';const j=state.assignment.jurisdiction!;
   j.heldMs.me=12000;j.scorerId='me';state.case.owner='me';hud.update(state,5000,'Me',true);
-  expect(root.querySelector('.assignment-progress').textContent).toBe('YOU: 12 / 60');
+  expect(root.querySelector('.assignment-progress').textContent).toBe(`YOU: 12 / ${JURISDICTION_TUNING.targetMs/1000}`);
   expect(root.querySelector('.assignment-detail').textContent).toBe('SCORING');
   expect(root.querySelector('.jurisdiction-timer').hidden).toBe(false);
   expect(root.querySelector('.assignment-zone-clock').textContent).toBe(String(JURISDICTION_TUNING.zoneMs/1000));

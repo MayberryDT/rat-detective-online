@@ -10,7 +10,7 @@ import { playSynth } from '../audio/IncidentAudio';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from './CheeseProjectileModel';
 import { RatEntity } from '../entities/RatEntity';
 import { createShotId } from './shotId';
-import type { WeaponKind } from '../shared/pickups';
+import { WEAPON_TUNING, type WeaponKind } from '../shared/pickups';
 import type { LaserCast } from '../shared/laser';
 
 // ─── CHEESE BALL TUNING ────────────────────────────────────────────
@@ -183,11 +183,11 @@ export class CheeseGun {
             ...(entity&&this.protectedRats.has(entity)?{reflect:true}:{})};
     };
 
-    /** The shooter's laser prediction (`laserPath`): city and rats, never your own body. Ironclad coats reflect;
-     * a head hit is a 'head'. Draws only; the authority traces its own beam. */
+    /** The shooter's laser prediction (`laserPath`): city and rats, never your own body, swept `laserRadius` thick as
+     * the authority traces it. Ironclad coats reflect; a head hit is a 'head'. Draws only; the authority traces its own beam. */
     readonly traceLaser=(from:CANNON.Vec3,to:CANNON.Vec3):LaserCast|undefined=>{
         this.presentationRay??=new SpatialRayQuery(this.world);
-        const hit=this.presentationRay.closest(from,to,GROUP_DEFAULT,this.acceptPresentationBody,GROUP_PROJECTILE,this.traceResult);
+        const hit=this.presentationRay.sphere(from,to,WEAPON_TUNING.laserRadius,GROUP_DEFAULT,this.acceptPresentationBody);
         if(!hit.hasHit)return undefined;
         const entity=(hit.body as CANNON.Body&{userData?:{entity?:RatEntity}}|null)?.userData?.entity;
         const on=!entity||entity.dead?'world':this.protectedRats.has(entity)?'armor':hit.shape===entity.headShape?'head':'rat';

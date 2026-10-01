@@ -830,7 +830,8 @@ export class ChaosSimulation {
      * often as the incident goes on. Each lands when its shadow has warned for `meteorWarnMs`, even after the incident. */
     private stepMeteors(now:number,playing:boolean):void{
         for(const m of this.meteors)if(now>=m.at&&this.pendingMeteors.delete(m.id))this.landMeteor(m,playing);
-        if(this.meteors.length)this.meteors=this.meteors.filter(m=>now<m.at+METEOR_KEEP_MS);
+        let expired=0;while(expired<this.meteors.length&&now>=this.meteors[expired]!.at+METEOR_KEEP_MS)expired++;
+        if(expired)this.meteors.splice(0,expired);
         const d=this.dispatch;
         if(!playing||!this.incidentActive('act-of-god'))return;
         if(this.meteorIncident!==d.serial){this.meteorIncident=d.serial;this.meteorAt=now+600;this.tell('ACT OF GOD · THE SKY IS FALLING. IT IS CHEESE.');}
@@ -1068,7 +1069,7 @@ export class ChaosSimulation {
         this.world.addBody(body);this.targets.set(body,{kind:'trap',trapId:state.id});this.traps.set(state.id,{state,body});
     }
     /** A floor spot `reach` ahead: open line from the rat, flat floor near the rat's feet under the centre and all
-     * four corners, no wall within the trap, and clear of other traps. */
+     * four corners, no wall within the trap, and clear of other traps and of any other living rat it would snap at once. */
     private trapSpot(rat:PlayerData,fx:number,fz:number,reach:number):Vec3Data|undefined{
         const x=rat.x+fx*reach,z=rat.z+fz*reach,chest=new C.Vec3(rat.x,rat.y+.9,rat.z);
         const floorAt=(px:number,pz:number)=>{
@@ -1084,6 +1085,8 @@ export class ChaosSimulation {
             if(this.ray(lift,new C.Vec3(x+dx*1.2,y+.45,z+dz*1.2),1).hasHit)return;
         }
         for(const trap of this.traps.values())if(trap.state.owner!==rat.id&&trap.state.brokenAt===undefined&&Math.hypot(trap.state.x-x,trap.state.z-z)<W.trapRadius*2&&Math.abs(trap.state.y-y)<2)return;
+        const snap=W.trapRadius+W.trapFoot;
+        for(const other of this.players.values())if(other.id!==rat.id&&other.hp>0&&Math.abs(other.y-y)<=W.trapHeight&&Math.hypot(other.x-x,other.z-z)<=snap)return;
         return{x,y,z};
     }
     /** `hits` ball hits on a trap; at none left it breaks, credited to `by`. */
@@ -1623,7 +1626,8 @@ export class ChaosSimulation {
             const shot=this.shots[i];shot.age+=dt;
             if(this.shotTriggers.has(shot.id)&&!this.shotStepped.has(shot)){this.shotStepped.add(shot);this.noteShot(shot,'first-step');}
             if(shot.age>shotLife(shot)){this.finishShot(shot,'lifetime',{end:data(shot.p)});this.shots.splice(i,1);continue;}
-            if(heavy&&growIn(shot))this.clearOfWalls(shot);
+            // Weapon balls stay plain: Big Cheese never grows a Tommy Gun's ball.
+            if(heavy&&!this.tommyBalls.has(shot)&&growIn(shot))this.clearOfWalls(shot);
             const radius=shotRadius(shot);
             // Bad Ammunition: a path personality flies its own way along the aim, with no drop until its first contact.
             if(steerQuirk(shot))shot.v.y+=shotGravity(radius)*dt;
@@ -1712,7 +1716,7 @@ export class ChaosSimulation {
                 const pumped=this.pumpedBy.get(shot)??[];
                 if(!pumped.includes(target.machineId!)){pumped.push(target.machineId!);this.pumpedBy.set(shot,pumped);this.addPressure(target.machineId!,PRESSURE_TUNING.hit,true);}
             }
-            if(heavy&&target?.kind==='world')this.growShot(shot);
+            if(heavy&&!this.tommyBalls.has(shot)&&target?.kind==='world')this.growShot(shot);
             this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:superball?'boing' as const:shotRadius(shot)>radius?'grow' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,Math.hypot(shot.v.x,shot.v.y,shot.v.z))}:{})});
         }
         // A corpse knocked into the harbour sinks out of sight (the case rule's line: y -9).
@@ -1938,7 +1942,8 @@ export class ChaosSimulation {
         }
         if(elapsed>2&&!this.assignment)for(const c of this.cases.values())if(!c.owner)c.returningUntil=Date.now()+T.recoverMs;
         if(this.assignment?.state.phase==='suspended'&&!this.casesWeaponized)this.restoreObjectiveApproach(this.primaryCase);
-        for(const saved of (s.traps??[]).slice(0,MAX_TRAPS))if(saved.brokenAt===undefined&&saved.hp>0)this.addTrap({...saved});
+        // A trap needs its owner for the kill credit: one whose owner has left is not restored.
+        for(const saved of (s.traps??[]).slice(0,MAX_TRAPS))if(saved.brokenAt===undefined&&saved.hp>0&&this.players.has(saved.owner))this.addTrap({...saved});
         this.trapSerial=Math.max(0,...(s.traps??[]).map(t=>Number(t.id.split('-').pop())).filter(Number.isFinite));
     }
 }

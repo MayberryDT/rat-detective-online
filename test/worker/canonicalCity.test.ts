@@ -2,7 +2,7 @@ import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SEL
 import { afterEach, describe, expect, it } from 'vitest';
 import { RECONNECT_GRACE_MS } from '../../src/shared/reconnect';
 import { createAssignment } from '../../src/shared/assignments';
-import { activeZone } from '../../src/shared/jurisdiction';
+import { activeZone, JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
 import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { DEFAULT_ROOM_NAME, PROTOCOL_VERSION, WIN_DISPLAY_MS, type ServerMessage } from '../../src/shared/networkProtocol';
 import { BOT_HEARTBEAT_MS, type GameRoom } from '../../src/worker/GameRoom';
@@ -448,7 +448,7 @@ describe('canonical public city without humans', () => {
       assignment.liveAt = started;
       const zone = assignment.jurisdiction!;
       const winner = game.players.get(game.botRoster[0].id)!;
-      zone.heldMs[winner.id] = 59_999;
+      zone.heldMs[winner.id] = JURISDICTION_TUNING.targetMs - 1;
       Object.assign(winner, JURISDICTION_ZONES[activeZone(zone)].posts[0]);
       game.chaos.setAssignment(assignment);
       game.chaos.caseBody.position.set(winner.x, winner.y + .8, winner.z);
