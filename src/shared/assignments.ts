@@ -6,10 +6,10 @@ import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
 export const ASSIGNMENT_IDS = ['chain-of-custody', 'excessive-force', 'jurisdiction'] as const;
 export type AssignmentId = typeof ASSIGNMENT_IDS[number];
-export const ASSIGNMENT_TUNING = { caseKillTarget: 10, deliveryTarget: 3, briefingMs: 2_400 } as const;
+export const ASSIGNMENT_TUNING = { caseKillTarget: 10, deliveryTarget: 5, briefingMs: 2_400 } as const;
 export const ASSIGNMENTS = {
     jurisdiction: {title:'JURISDICTION',rule:'HOLD THE CASE IN THE ZONE. FIRST TO 60 WINS.',flavor:'Your jurisdiction. Their problem.'},
-    'chain-of-custody': { title: 'PAPER CHASE', rule: 'Deliver the paperwork. First to three wins.', flavor: 'Previous investigators need not be acknowledged.' },
+    'chain-of-custody': { title: 'PAPER CHASE', rule: 'Deliver the paperwork. First to five wins.', flavor: 'Previous investigators need not be acknowledged.' },
     'excessive-force': { title: 'EXCESSIVE FORCE', rule: 'HOLD THE CASE. GET 10 KILLS.', flavor: 'Disproportionate response. Impeccable paperwork.' },
 } satisfies Record<AssignmentId, { title: string; rule: string; flavor: string }>;
 

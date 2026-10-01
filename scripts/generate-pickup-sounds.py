@@ -1,4 +1,4 @@
-"""Original deterministic cartoon foley for pickup claims, armor reflection and the claim payoffs.
+"""Original deterministic cartoon foley for pickup claims, the case, armor reflection and the claim payoffs.
 Standard library only; generates 48 kHz mono PCM WAVs. No borrowed case samples.
 """
 import math, random, struct, wave
@@ -134,6 +134,53 @@ def pip(t,n):
     # Small bright tick: a glassy two-partial ping with a crisp edge.
     return (math.sin(TAU*2350*t)+math.sin(TAU*5640*t)*.3*math.exp(-t*80)+noise(AIR,t)*.25*math.exp(-t*900))*math.exp(-t*95)*(1-math.exp(-t*8000))
 
+def latch(t,g=1):
+    # A brass latch snapping shut: a hard click, a short bright ring and a little spring chatter.
+    if t<0:return 0
+    ring=(math.sin(TAU*2150*t)*.5+math.sin(TAU*3370*t)*.3)*math.exp(-t*60)
+    chatter=noise(MID,t)*.25*math.exp(-t*140)*(1+math.sin(TAU*95*t))
+    return (click(t,noise(AIR,t))*1.2+ring+chatter)*g
+def leather(t,g=1,pitch=1):
+    # A palm on leather: a dark slap with a soft body thump under it.
+    if t<0:return 0
+    return (noise(DARK,t)*.9*math.exp(-t*60)+noise(MID,t)*.35*math.exp(-t*160)+thump(t,150*pitch,70*pitch,.07)*.8)*(1-math.exp(-t*2500))*g
+def riffle(t,length=.28,g=1):
+    # Papers riffling: a burst of fluttering air that thins out.
+    if t<0 or t>length:return 0
+    u=t/length
+    return (noise(AIR,t)*.6+noise(MID,t)*.25)*math.sin(math.pi*u)**.7*(1+.6*math.sin(TAU*31*t))*(1-u)*g
+
+def case_claim(t,n):
+    # Yours: a weighty grab, both latches slam shut one after the other, a riffle of papers and a low thump that says got it.
+    return leather(t,1.2)+latch(t-.07,1)+latch(t-.15,1.15)+riffle(t-.04,.3,.35)+thump(t-.15,95,48,.12)*.8
+
+def case_dropped(t,n):
+    # You lost it: the latches pop open, papers spill, and a muted trombone sags down a minor third.
+    sag=bone(t-.18,146.8,.16)*.5+(trumpet(t-.36,174.6,146.8,.28,6)*.35 if t>=.36 else 0)
+    return latch(t,.9)+latch(t-.05,.6)+riffle(t-.03,.45,.6)+leather(t-.02,.7,.8)+sag*.55
+
+def case_snatched(t,n):
+    # Someone else took it: a quick snatch and latch, under two low upright-bass notes, ominous.
+    return leather(t,.8,1.1)+latch(t-.05,.7)+(bass(t-.1,73.4,.2)+bass(t-.26,69.3,.3))*.7
+
+def case_loose(t,n):
+    # Knocked loose: the case thuds down and its papers flutter.
+    return leather(t,1,.8)+thump(t,120,55,.1)*.6+riffle(t-.02,.36,.45)+latch(t-.04,.35)
+
+def case_thwack(t,n):
+    # A ball smacks the case: a leather thwack, the latches jingle, a few sheets rustle.
+    return leather(t,1,1.3)+latch(t-.02,.45)+latch(t-.07,.3)+riffle(t,.16,.25)
+
+def case_knock(t,n):
+    # A carrier's grip takes a hit: a hard knock and a latch rattling in the paw.
+    return leather(t,.9,1.5)+latch(t-.015,.55)+latch(t-.055,.35)
+
+render('case-claim',.62,case_claim,.06)
+render('case-dropped',.95,case_dropped,.08)
+render('case-snatched',.62,case_snatched,.06)
+render('case-loose',.46,case_loose,.05)
+render('case-thwack',.3,case_thwack,.04)
+render('case-knock',.24,case_knock,.03)
 render('armor-clang',.34,lambda t,n:plate(t,1,.11),.03)
 render('pickup-ironclad',.95,ironclad,.06)
 render('pickup-slap',.22,slap)

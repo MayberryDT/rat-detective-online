@@ -66,8 +66,8 @@ export interface GoalContext extends GoalInput {
     pillars:readonly Place[];
     delivery?:Post;
     intercept?:Post;
-    /** Where to hold or take the case: Jurisdiction's zone (or the next one, `early`), or a camper's spot (`camp`). */
-    zone?:Post&{id:JurisdictionZoneId;early:boolean;camp:boolean};
+    /** Where to hold the case: Jurisdiction's active zone, or a camper's spot (`camp`). */
+    zone?:Post&{id:JurisdictionZoneId;camp:boolean};
     offered:readonly Goal[];
     /** Candidate places for an open-ended goal (flee, ambush, roam, mischief), for a mind to pick an id from. */
     places(goal:Goal):readonly PlaceOption[];
@@ -229,20 +229,18 @@ export class BotGoals {
         const jurisdiction=active?assignment!.jurisdiction:undefined;
         let zone:GoalContext['zone'];
         if(jurisdiction&&carrying){
-            const current=activeZone(jurisdiction),upcoming=nextZone(jurisdiction);
-            const travelMs=distance(self,JURISDICTION_ZONES[upcoming].posts[0])/12*1000;
-            // A small travel estimate makes leaving early a real choice; ownership remains physical.
-            const early=!zoneContains(current,self)&&jurisdiction.remainingMs<=JURISDICTION_TUNING.warningMs&&jurisdiction.remainingMs<travelMs+1000&&this.zoneLane===0;
-            const id=early?upcoming:current,posts=JURISDICTION_ZONES[id].posts;
+            // A zone moves only once the case has been held in it long enough, so a carrier always makes for the active one.
+            const id=activeZone(jurisdiction),posts=JURISDICTION_ZONES[id].posts;
             if(!this.zonePostAt){this.zonePost=0;this.zonePostAt=now+3500;}
             else if(now>=this.zonePostAt&&visible.some(p=>distance(self,p)<22)&&distance(self,posts[(this.zonePost+this.zoneLane)%posts.length])<2){this.zonePost=(this.zonePost+1)%posts.length;this.zonePostAt=now+6000;}
             const post=(this.zonePost+this.zoneLane)%posts.length,point=jurisdictionTravelPoint(self,posts[post]);
             const key=`zone:${assignment!.roundId}:${jurisdiction.serial}:${id}:${post}:${point.x},${point.y},${point.z}`;
             if(motor.suppressed(key,point,now)){this.zonePost++;this.zonePostAt=now+6000;}
-            else zone={key,point,early,id,camp:false};
+            else zone={key,point,id,camp:false};
         }
         if(!jurisdiction&&carrying&&active&&assignment!.id==='excessive-force'&&input.personality==='camper'&&state?.case.owner===self.id)zone=this.camp(self,now,assignment!.roundId);
-        if(jurisdiction&&!carrying&&carrier&&this.zoneLane===0&&!zoneContains(activeZone(jurisdiction),carrier)&&jurisdiction.remainingMs<=JURISDICTION_TUNING.warningMs&&distance(self,carrier)>35){
+        // The zone is about to empty under the carrier: get to the next one first.
+        if(jurisdiction&&!carrying&&carrier&&this.zoneLane===0&&zoneContains(activeZone(jurisdiction),carrier)&&jurisdiction.remainingMs<=JURISDICTION_TUNING.warningMs&&distance(self,carrier)>35){
             const post=JURISDICTION_ZONES[nextZone(jurisdiction)].approaches[0];
             if(distance(self,post)<distance(carrier,post))intercept=post;
         }
@@ -291,7 +289,7 @@ export class BotGoals {
             if(ctx.intercept)return {goal,mode:'intercept',key:ctx.intercept.key,destination:ctx.intercept.point};
             return !ctx.carrying&&ctx.carrier?{goal,mode:'carrier',key:`carrier:${ctx.carrier.id}`,destination:ctx.carrier,follow:ctx.carrier.id}:undefined;
         case 'keep-case':
-            if(ctx.zone)return {goal,mode:ctx.zone.early?'delivery':'zone-hold',key:ctx.zone.key,destination:ctx.zone.point,zone:ctx.zone.id};
+            if(ctx.zone)return {goal,mode:'zone-hold',key:ctx.zone.key,destination:ctx.zone.point,zone:ctx.zone.id};
             if(ctx.delivery)return {goal,mode:'delivery',key:ctx.delivery.key,destination:ctx.delivery.point};
             return ctx.carrying&&ctx.active&&ctx.combat?{goal,mode:'combat',key:`combat:${ctx.combat.id}`,destination:ctx.combat,follow:ctx.combat.id}:undefined;
         case 'hold-zone':return undefined;
@@ -362,7 +360,7 @@ export class BotGoals {
         }
         if(!best)return;
         const zone=JURISDICTION_ZONES[best],post=zone.posts[this.zoneLane%zone.posts.length];
-        return {key:`camp:${roundId}:${best}`,point:jurisdictionTravelPoint(self,post),id:best,early:false,camp:true};
+        return {key:`camp:${roundId}:${best}`,point:jurisdictionTravelPoint(self,post),id:best,camp:true};
     }
     /** Where to run from the rats in sight. */
     private fleePlaces(ctx:GoalContext):Place[] {

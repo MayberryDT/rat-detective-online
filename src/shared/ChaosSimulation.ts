@@ -23,7 +23,7 @@ import { MAX_HP, type HealCause, type PickupRejectReason, type PickupTarget, typ
 import { AssignmentRules } from './AssignmentRules';
 import { activeZone } from './jurisdiction';
 import { JURISDICTION_ZONES } from './jurisdictionZones';
-import { activeDestination, ASSIGNMENT_DESTINATIONS, destinationPoint, restoreAssignment, type AssignmentState, type DestinationId } from './assignments';
+import { ASSIGNMENT_TUNING, activeDestination, ASSIGNMENT_DESTINATIONS, destinationPoint, restoreAssignment, type AssignmentState, type DestinationId } from './assignments';
 
 const caseCarryRotation=new C.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
 
@@ -129,6 +129,8 @@ export class ChaosSimulation {
     get time():number{return this.now;}
     private assignment?:AssignmentRules;
     private primaryAcquiredAt=0;
+    /** When each rat may next be rewarded for taking the case. */
+    private readonly caseRewards=new Map<string,number>();
     get assignmentState():AssignmentState|undefined{return this.assignment?.state;}
     /** All Units: where the fallen respawn beside the action, the active zone or the real case. */
     get allUnitsTarget():Vec3Data|undefined{
@@ -349,8 +351,14 @@ export class ChaosSimulation {
         if(closest.distanceTo(p)>T.pickupRadius)return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'too-far'};
         if(this.ray(closest,p,1).hasHit||this.ray(reach,p,1).hasHit)return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'blocked'};
         c.owner=player.id;c.grip=0;this.primaryAcquiredAt=now;this.carry(player,c);this.checkAssignmentLocation(c);
-        if(c.owner===player.id){this.tell('This rat is on the case · '+player.name);return{accepted:true,target:'case',targetId:'primary',playerId:player.id};}
+        if(c.owner===player.id){this.tell('This rat is on the case · '+player.name);this.rewardCasePickup(player.id,now);return{accepted:true,target:'case',targetId:'primary',playerId:player.id};}
         return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'ineligible'};
+    }
+    /** Taking the case brings a random supply, as a kill streak title does (Tyler, 1 October), at most once per
+     * `caseRewardMs` per rat so a dropped case can't be farmed. */
+    private rewardCasePickup(id:string,now:number){
+        if(now<(this.caseRewards.get(id)??-Infinity))return;
+        this.caseRewards.set(id,now+T.caseRewardMs);this.rewardSupply(id);
     }
     claimInteraction(playerId:string,target:PickupTarget,targetId:string,generation:number,now:number):PickupClaimResult {
         const player=this.players.get(playerId);
@@ -838,6 +846,7 @@ export class ChaosSimulation {
         this.tell('CASE LOOSE · This is no longer your problem.');
     }
     removePlayer(id:string){
+        this.caseRewards.delete(id);
         this.pickupApproaches.delete(id);
         this.assignment?.disconnect(id);
         this.release(id);delete this.possession[id];
@@ -1237,7 +1246,7 @@ export class ChaosSimulation {
             c.previousOwner=null;c.pickupAfter=0;c.returningUntil=0;c.looseSince=this.now;c.armed=false;c.missileOwner=undefined;
             c.launched=false;
             const next=activeDestination(rules.state);
-            this.tell(`PAPERWORK DELIVERED! ${holder.name} · ${rules.state.deliveries[holder.id]}/3 · CASE RELOCATED · NEXT: ${next?ASSIGNMENT_DESTINATIONS[next].label:''}`);
+            this.tell(`PAPERWORK DELIVERED! ${holder.name} · ${rules.state.deliveries[holder.id]}/${ASSIGNMENT_TUNING.deliveryTarget} · CASE RELOCATED · NEXT: ${next?ASSIGNMENT_DESTINATIONS[next].label:''}`);
         }
     }
     step(dt:number,now:number,playing=true){
@@ -1533,7 +1542,7 @@ export class ChaosSimulation {
             shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts.slice(-64),...(this.impacts.length<64?this.audioImpacts.slice(-(64-this.impacts.length)):[])].slice(0,64),notice:{...this.notice}};
         if(drain){this.impacts=[];this.audioImpacts=[];}return state;
     }
-    reset(){for(const shot of this.shots)this.finishShot(shot,'reset');this.pickupApproaches.clear();this.recentPickupClaims.clear();this.ratHistory.clear();this.caseHistory.length=0;this.ratLives.clear();this.shotViews.clear();this.shotTriggers.clear();this.epoch=crypto.randomUUID();this.tick=0;this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
+    reset(){for(const shot of this.shots)this.finishShot(shot,'reset');this.pickupApproaches.clear();this.caseRewards.clear();this.recentPickupClaims.clear();this.ratHistory.clear();this.caseHistory.length=0;this.ratLives.clear();this.shotViews.clear();this.shotTriggers.clear();this.epoch=crypto.randomUUID();this.tick=0;this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
         this.assignment=undefined;
         this.buffs={};this.pickupEvents.length=0;
         for(const site of this.pickups.values())site.availableAt=0;

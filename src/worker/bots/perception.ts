@@ -27,8 +27,8 @@ const HEARING={shotRange:60,shotAge:1,launchRange:100,launchMs:3000,alarmMs:4000
 const RECENT_HIT_MS=3000;
 const COMPASS=['north','north-east','east','south-east','south','south-west','west','north-west'];
 const RULES:Record<AssignmentId,string>={
-    'chain-of-custody':'Paper Chase: carry the case into the named drop-off; the first rat to make three deliveries wins.',
-    jurisdiction:'Jurisdiction: only the rat carrying the case scores, while it stands inside the active zone; the first to sixty zone points wins.',
+    'chain-of-custody':'Paper Chase: carry the case into the named drop-off; the first rat to make five deliveries wins.',
+    jurisdiction:'Jurisdiction: only the rat carrying the case scores, while it stands inside the active zone: each zone holds twenty points that drain to the carrier, then the zone moves; the first to sixty points wins.',
     'excessive-force':'Excessive Force: a kill counts only when made while carrying the case; the first to ten such kills wins.',
 };
 /** How `me` plays (its archetype, docs/bot-overhaul.md "Archetypes"), so Jev's scores fit the style. */
@@ -157,8 +157,8 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
     const j=active?.jurisdiction;
     if(j){
         const id=activeZone(j),upcoming=JURISDICTION_ZONES[nextZone(j)];
-        zone=`The active zone is the ${label(JURISDICTION_ZONES[id].label)}; ${zoneContains(id,self)?'I am inside it':`it is ${relative(self,JURISDICTION_ZONES[id].posts[0])}`}.`+
-            (j.remainingMs<=JURISDICTION_TUNING.warningMs?` It moves soon, to the ${label(upcoming.label)}, ${relative(self,upcoming.posts[0])}.`:'');
+        zone=`The active zone is the ${label(JURISDICTION_ZONES[id].label)}, with ${Math.ceil(j.remainingMs/1000)} points left in it; ${zoneContains(id,self)?'I am inside it':`it is ${relative(self,JURISDICTION_ZONES[id].posts[0])}`}.`+
+            (j.scorerId&&j.remainingMs<=JURISDICTION_TUNING.warningMs?` It is nearly emptied; next it moves to the ${label(upcoming.label)}, ${relative(self,upcoming.posts[0])}.`:'');
     }
     const destination=active&&activeDestination(active);
     const delivery=destination&&`The drop-off is the ${label(ASSIGNMENT_DESTINATIONS[destination].label)}, ${relative(self,destinationPoint(destination))}.`;
@@ -256,7 +256,7 @@ function describe(goal:Goal,ctx:GoalContext,alias:(id:string)=>string):string {
         return ctx.carrier?`Go after ${alias(ctx.carrier.id)}, who carries the case, to take it.`:'Go after the rat carrying the case, to take it.';
     case 'keep-case':
         if(ctx.zone)return ctx.zone.camp?`Carry the case to the ${label(JURISDICTION_ZONES[ctx.zone.id].label)}, a defensible spot ${relative(self,ctx.zone.point)}, and hold it there, shooting whoever comes.`:
-            ctx.zone.early?'Carry the case to the next zone before it moves there.':'Carry the case into the active zone and hold it there.';
+            'Carry the case into the active zone and hold it there.';
         if(ctx.delivery)return 'Carry the case to the drop-off.';
         return ctx.combat?`Keep the case and fight ${alias(ctx.combat.id)}.`:'Keep the case.';
     case 'hold-zone':return 'Get into the active zone and stay in it.';

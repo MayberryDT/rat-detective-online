@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { botPersonality, createRoundBotRoster, fillBotRoster, nextRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
+import { createRoundBotRoster, dealPersonalities, fillBotRoster, nextRoundBotRoster, PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
 import { PERSONALITIES } from '../../src/shared/bots/intent';
 import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from '../../src/shared/ratNames';
 
@@ -46,8 +46,18 @@ describe('round bot roster', () => {
 
 describe('bot archetypes', () => {
   const pool = RAT_TITLES.flatMap(title => RAT_SURNAMES.map(surname => `${title} ${surname}`)).filter(name => name.length <= NAME_MAX_LENGTH);
-  it('splits the name pool about evenly into the five archetypes', () => {
-    const share = (personality: string) => pool.filter(name => botPersonality(name) === personality).length / pool.length;
-    for (const personality of PERSONALITIES) { expect(share(personality)).toBeGreaterThan(.15); expect(share(personality)).toBeLessThan(.25); }
+  const counts = (dealt: Map<string, string>) => PERSONALITIES.map(p => [...dealt.values()].filter(x => x === p).length);
+  it('deals every room an even mix, whatever the names hash to', () => {
+    for (let start = 0; start < pool.length - 10; start += 37) for (const size of [6, 7, 9, 10]) {
+      const c = counts(dealPersonalities(pool.slice(start, start + size), new Map()));
+      expect(Math.max(...c) - Math.min(...c)).toBeLessThanOrEqual(1);
+    }
+  });
+  it('keeps a staying bot its archetype and gives a newcomer the rarest one', () => {
+    const first = dealPersonalities(pool.slice(0, 9), new Map());
+    const next = dealPersonalities([...pool.slice(1, 9), pool[100]!], first);
+    for (const name of pool.slice(1, 9)) expect(next.get(name)).toBe(first.get(name));
+    const c = counts(next);
+    expect(Math.max(...c) - Math.min(...c)).toBeLessThanOrEqual(1);
   });
 });

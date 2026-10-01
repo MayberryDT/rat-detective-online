@@ -5,8 +5,8 @@ import type { IncidentId } from './incidentCatalog';
 import type { ControlsInput } from './rat/controlTally';
 import type { PerfReport } from './perfReport';
 
-/** 25: Closing Time removed; Big Cheese heavy balls and fire interval; Blackout flashlights. */
-export const PROTOCOL_VERSION = 25;
+/** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there. */
+export const PROTOCOL_VERSION = 26;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;

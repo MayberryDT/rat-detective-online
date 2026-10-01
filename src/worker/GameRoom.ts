@@ -3,7 +3,7 @@ import {RoundAwards} from './RoundAwards';
 import type {Award} from '../shared/networkProtocol';
 import { RECONNECT_GRACE_MS, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
 import { newStreakTitle } from '../shared/streak';
-import { codeOnlyRound } from '../shared/bots/intent';
+import { codeOnlyRound, type Personality } from '../shared/bots/intent';
 import { ChaosDelivery } from './ChaosDelivery';
 import { ConnectionDelivery } from './ConnectionDelivery';
 import { wireBytes } from '../shared/networkProtocol';
@@ -52,7 +52,7 @@ import { ServerBotController } from './ServerBotController';
 import { JevClient, JEV_MODEL } from './bots/jevClient';
 import { JevMind } from './bots/jevMind';
 import { JevBudget, JEV_LEDGER } from './bots/jevBudget';
-import { botPersonality, createRoundBotRoster, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
+import { createRoundBotRoster, dealPersonalities, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { HEAT_CELL } from './HeatMap';
 import { buildName, CityStore, type Filter, type Range } from './city/CityStore';
@@ -486,8 +486,12 @@ export class GameRoom extends DurableObject<Env> {
           if (player) this.city.decision(player, decision, now, jev?.enabled && decision.answer.source === 'code' ? jev.outcome(id) : undefined);
         },
         controls: (id, controls, now) => { this.city.botControls(id, controls, now); },
-      }, id => { const bot = this.botRoster.find(entry => entry.id === id); return bot && botPersonality(bot.name); }, this.jev);
+      }, id => { const bot = this.botRoster.find(entry => entry.id === id); if (!bot) return undefined;
+        this.dealtPersonalities = dealPersonalities(this.botRoster.map(entry => entry.name), this.dealtPersonalities);
+        return this.dealtPersonalities.get(bot.name); }, this.jev);
   }
+  /** Each roster bot's dealt archetype, kept while it stays (`dealPersonalities`). */
+  private dealtPersonalities = new Map<string, Personality>();
 
   private get jev(): JevMind {
     return this.jevMind ??= new JevMind({ waitUntil: work => this.ctx.waitUntil(work),

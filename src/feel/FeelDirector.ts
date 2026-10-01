@@ -177,10 +177,24 @@ export class FeelDirector {
     /** Near-miss whizz for other rats' balls. */
     /** Near-miss whizzes; true when a ball just passed your head. */
     projectiles(shots:readonly ChaosShot[],myId:string,head:THREE.Vector3,view:THREE.Camera):boolean {return this.sound.projectiles(shots,myId,head,view);}
-    /** Case pickup, your delivery. */
+    /** Case pickup, your delivery. Your own take of the case gets the K1 stamp instead of the plain callout. */
     sting(kind:Sting):void {
         this.sound.sting(kind);
-        if(kind==='case')this.callout('ON THE CASE');
+        if(kind==='case'&&!this.state.on('caseClaim'))this.callout('ON THE CASE');
+    }
+    /** K1: you took the case: the ON THE CASE stamp and paper burst, a brass edge flash, a punch-in, a kick and a squash of your rat. */
+    caseClaimed(self:RatEntity|undefined):void {
+        if(!this.state.on('caseClaim'))return;
+        const p=FEEL.caseClaim.params;
+        this.screen.caseClaim(p.sheets,p.flash);
+        this.camera.widen(-p.punch);this.camera.kick(p.kick,(Math.random()*2-1)*p.kick*.4);
+        if(self&&!self.dead&&!reducedMotion())self.squashPop(p.squash);
+    }
+    /** K1, everyone: the case bursts paperwork where it is taken, knocked loose or shot. */
+    casePaper(at:Vec3Data,kind:'taken'|'loose'|'kick'):void {
+        if(!this.state.on('caseClaim'))return;
+        const p=FEEL.caseClaim.params;
+        this.launchJuice?.spill(this.impulse.set(at.x,at.y+.3,at.z),kind==='kick'?p.kickPaper:kind==='loose'?Math.round(p.paper*.6):p.paper);
     }
     /** C1–C4: your own supply claim (other rats' claims keep only their world effects): an edge flash in the supply's colour,
      * a punch-in, a small kick and a squash-and-pop, then the supply's signature. The card flight and Ironclad sparks are ChaosView's. */

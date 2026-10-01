@@ -97,7 +97,11 @@ export type CityFact = FactContext & (
   | { type: 'restock'; site: string; kind: PickupKind }
   | { type: 'heal'; a: number; cause: HealCause; hp: number }
   | { type: 'buff-end'; a: number; buff: TimedPickup }
-  | { type: 'case'; what: 'take' | 'drop' | 'steal' | 'deliver' | 'respawn'; a?: number; from?: number; p: P3; place: string; carryMs?: number }
+  /** The primary case changed hands. A `drop` says why (`cause`) and how many enemy balls its grip took that carry
+   * (`gripHits`). A `take`, `steal` or `respawn` ends a loose spell: `looseMs` loose, `path` units travelled, `moved`
+   * straight-line units from where it came loose (or appeared), `kicks` balls that hit it while loose (every rat's). */
+  | { type: 'case'; what: 'take' | 'drop' | 'steal' | 'deliver' | 'respawn'; a?: number; from?: number; p: P3; place: string; carryMs?: number;
+      cause?: 'death' | 'shot' | 'delivered' | 'left'; gripHits?: number; looseMs?: number; path?: number; moved?: number; kicks?: number }
   | { type: 'launch'; a: number; machine?: string; boost: boolean; p: P3; place: string }
   | { type: 'landing'; a: number; machine?: string; p: P3; place: string; airMs: number; apex: number; clip: boolean }
   | { type: 'dispatch'; phase: string; incident?: string; caller?: number; pillar?: string; wanted?: number }

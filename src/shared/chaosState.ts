@@ -8,10 +8,14 @@ import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
 export const CHAOS_TUNING = {
     pickupRadius: 2.25, formerCarrierDelay: 900,
-    caseShotKick: 30, caseShotLift: 10, caseShotMaxSpeed: 48, casePickupMaxSpeed: 18,
+    /** A shot case's kick, lift and speed cap: 20% under the original 30, 10 and 48 (Tyler, 1 October: everyone shot the
+     * case away from everyone else, so nobody could get it). */
+    caseShotKick: 24, caseShotLift: 8, caseShotMaxSpeed: 38.4, casePickupMaxSpeed: 18,
     /** Grip (Tyler, 1 October): a carried case is knocked loose by `caseGripHits` enemy balls, each within
      * `caseGripMs` of the last; after `caseGripMs` without a hit the grip is whole again. Killing the carrier still drops it. */
     caseGripHits: 3, caseGripMs: 2000,
+    /** Taking the case brings a random supply, at most once per this long per rat. */
+    caseRewardMs: 20000,
     rollMs: 2400, activeMs: 25000, cooldownMs: 21000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
     corpseHitMinSpeed: 12, corpseHitCooldownMs: 700, corpseShotKick: 19, deathBurstBalls: 120,

@@ -2,7 +2,7 @@ import {describe,it,expect,vi,afterEach} from 'vitest';
 import * as THREE from 'three';
 import {createAssignment,parseAssignment,restoreAssignment,ASSIGNMENT_IDS} from '../../src/shared/assignments';
 import {AssignmentRules} from '../../src/shared/AssignmentRules';
-import {activeZone,nextZone,rotateZone} from '../../src/shared/jurisdiction';
+import {activeZone,nextZone,rotateZone,JURISDICTION_TUNING} from '../../src/shared/jurisdiction';
 import {JURISDICTION_ZONES,JURISDICTION_ZONE_IDS,zoneContains,zoneSpawnExcluded,zoneTiles,type JurisdictionZoneId} from '../../src/shared/jurisdictionZones';
 import {createPlayer,spawnForWorld,resetRoundForWorld} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
@@ -26,6 +26,8 @@ describe('Jurisdiction authority',()=>{
  it('banks only living genuine held time and enemy presence never contests',()=>{
   const {a,b,state,j,rules}=fixture();rules.advance(NOW,NOW+1234.5,'a');expect(j.heldMs.a).toBe(1234.5);
   rules.advance(NOW+1234.5,NOW+2000,null);expect(j.heldMs.a).toBe(1234.5);expect(j.scorerId).toBeNull();
+  // The zone's points drain only while the case is held in it.
+  expect(j.remainingMs).toBe(JURISDICTION_TUNING.zoneMs-1234.5);
   rules.advance(NOW+2000,NOW+3000,'b');expect(j.heldMs.b).toBe(1000);
   b.hp=0;rules.advance(NOW+3000,NOW+4000,'b');expect(j.heldMs.b).toBe(1000);
   a.y=8;rules.advance(NOW+4000,NOW+5000,'a');expect(j.heldMs.a).toBe(1234.5);
@@ -33,13 +35,13 @@ describe('Jurisdiction authority',()=>{
  });
  it('pauses both clocks only during briefing and classic suspension',()=>{
   const {state,j,rules}=fixture();state.liveAt=NOW+2400;rules.setPhase(NOW,false);rules.advance(NOW,NOW+2000,'a');
-  expect(j.remainingMs).toBe(75000);rules.setPhase(NOW+2400,false);rules.advance(NOW+2400,NOW+3400,'a');
+  expect(j.remainingMs).toBe(JURISDICTION_TUNING.zoneMs);rules.setPhase(NOW+2400,false);rules.advance(NOW+2400,NOW+3400,'a');
   rules.setPhase(NOW+3400,true);const saved=structuredClone(j);rules.advance(NOW+3400,NOW+30000,'a');expect(j).toEqual(saved);
   rules.setPhase(NOW+30000,false);rules.advance(NOW+30000,NOW+31000,'a');expect(j.heldMs.a).toBe(2000);
  });
  it('splits a rotation interval, and a target at the boundary wins before relocating',()=>{
   const {a,state,j,rules}=fixture();const old=activeZone(j);j.remainingMs=250;
-  rules.advance(NOW,NOW+1000,'a');expect(j.heldMs.a).toBe(250);expect(j.remainingMs).toBe(74250);expect(activeZone(j)).not.toBe(old);
+  rules.advance(NOW,NOW+1000,'a');expect(j.heldMs.a).toBe(250);expect(j.remainingMs).toBe(JURISDICTION_TUNING.zoneMs);expect(activeZone(j)).not.toBe(old);
   Object.assign(a,JURISDICTION_ZONES[activeZone(j)].posts[0]);j.heldMs.a=59900;j.remainingMs=100;
   rules.advance(NOW+1000,NOW+2000,'a');expect(state.result).toMatchObject({winnerId:'a',at:NOW+1100,method:'zone-held'});
   expect(j.serial).toBe(1);expect(j.heldMs.a).toBe(60000);expect(j.scorerId).toBeNull();expect(parseAssignment(state)).toEqual(state);
@@ -66,7 +68,7 @@ describe('Jurisdiction authority',()=>{
  it('rejects malformed mode state and preserves other stored modes',()=>{
   const {state,j}=fixture();
   const n=JURISDICTION_ZONE_IDS.length,smallerFirst=[...j.order].sort((x,y)=>JURISDICTION_ZONES[x].category===JURISDICTION_ZONES[y].category?0:JURISDICTION_ZONES[x].category==='enclosed'?-1:1);
-  for(const patch of [{remainingMs:NaN},{remainingMs:75001},{remainingMs:0},{serial:1},{index:n,serial:n},{scorerId:''},{order:Array(n).fill(activeZone(j))},{order:smallerFirst},{order:j.order.slice(1)},{heldMs:{a:60001}},{heldMs:{a:60000}},{heldMs:{a:-1}},{heldMs:Object.fromEntries(Array.from({length:17},(_,i)=>[String(i),1]))}]){
+  for(const patch of [{remainingMs:NaN},{remainingMs:JURISDICTION_TUNING.zoneMs+1},{remainingMs:0},{serial:1},{index:n,serial:n},{scorerId:''},{order:Array(n).fill(activeZone(j))},{order:smallerFirst},{order:j.order.slice(1)},{heldMs:{a:60001}},{heldMs:{a:60000}},{heldMs:{a:-1}},{heldMs:Object.fromEntries(Array.from({length:17},(_,i)=>[String(i),1]))}]){
    expect(parseAssignment({...state,jurisdiction:{...j,...patch}}),JSON.stringify(patch)).toBeNull();
   }
   for(const id of ASSIGNMENT_IDS.filter(id=>id!=='jurisdiction')){
@@ -111,7 +113,8 @@ describe('Jurisdiction geometry and presentation',()=>{
  },20000);
  it('renders only active and preview footprints and disposes resources',()=>{
   const {state,j}=fixture(),scene=new THREE.Scene(),view=new JurisdictionZones(scene);view.update(state);
-  expect(view.root.children.filter(c=>c.visible)).toHaveLength(1);j.remainingMs=9000;view.update(state);expect(view.root.children.filter(c=>c.visible)).toHaveLength(2);
+  expect(view.root.children.filter(c=>c.visible)).toHaveLength(1);j.remainingMs=JURISDICTION_TUNING.warningMs;view.update(state);expect(view.root.children.filter(c=>c.visible)).toHaveLength(1);
+  j.scorerId='a';view.update(state);expect(view.root.children.filter(c=>c.visible)).toHaveLength(2);
   const geometries:THREE.BufferGeometry[]=[];view.root.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.LineSegments)geometries.push(o.geometry);});
   const disposals=vi.fn();for(const geometry of geometries)geometry.addEventListener('dispose',disposals);
   view.clear();expect(view.root.visible).toBe(false);view.dispose();expect(scene.children).toHaveLength(0);expect(disposals).toHaveBeenCalledTimes(geometries.length);
@@ -164,9 +167,9 @@ describe('Jurisdiction incident boundaries',()=>{
   initial.caseBody.position.set(a.x,a.y+.8,a.z);initial.caseBody.velocity.setZero();initial.step(0,NOW);
   const saved=initial.snapshot(false);saved.dispatch={phase:'rolling',incident:'evidence-tampering',serial:1,started:NOW,until:NOW+10};
   const sim=new ChaosSimulation(players,()=>{},saved,{seed:341283204,version:2});sim.step(.02,NOW+20);
-  const j=sim.assignmentState!.jurisdiction!;expect(j.heldMs.a).toBeCloseTo(10);expect(j.remainingMs).toBeCloseTo(74990);expect(sim.assignmentState!.phase).toBe('suspended');
+  const j=sim.assignmentState!.jurisdiction!;expect(j.heldMs.a).toBeCloseTo(10);expect(j.remainingMs).toBeCloseTo(JURISDICTION_TUNING.zoneMs-10);expect(sim.assignmentState!.phase).toBe('suspended');
   expect(sim.caseHolderId).toBeNull();sim.step(.1,NOW+120);expect(j.heldMs.a).toBeCloseTo(10);
-  Object.assign(a,{x:90,z:-90});sim.step(0,NOW+30000);expect(sim.assignmentState!.phase).toBe('active');expect(j.remainingMs).toBeCloseTo(74990);expect(j.scorerId).toBeNull();
+  Object.assign(a,{x:90,z:-90});sim.step(0,NOW+30000);expect(sim.assignmentState!.phase).toBe('active');expect(j.remainingMs).toBeCloseTo(JURISDICTION_TUNING.zoneMs-10);expect(j.scorerId).toBeNull();
  });
  it('stops a real enemy disarm without clearing banked zone points',()=>{
   vi.spyOn(Date,'now').mockReturnValue(NOW);

@@ -6,10 +6,8 @@ Source attribution, licenses and retained files: [cartoon-foley provenance](../.
 
 | Cue | Edit | Length |
 | --- | --- | --- |
-| Case pickup | Weighty grab, wound spring/ratchet, emphatic paired metal latches | 0.70 s |
-| Case lost | Slipping latch, low sagging spring and trailing tin clatter | 0.76 s |
-| Other carrier | Short snatch and latch pair, quieter in the mix | 0.31 s |
-| Case hit | Two sharp clinks 85 ms apart, with loose-metal chatter | 0.34 s |
+| Case pickup (now the victory and case-point cues only) | Weighty grab, wound spring/ratchet, emphatic paired metal latches | 0.70 s |
+| Other carrier (now the Dispatch ready cue only) | Short snatch and latch pair, quieter in the mix | 0.31 s |
 | Menu open | Short scrape, wooden snap and spring twang | 0.27 s |
 | Menu close | Scrape and clack shut | 0.22 s |
 | Death | Broad slapstick whack and loose spring under the rat voice | 0.66 s |
@@ -33,3 +31,16 @@ The supply and armour cues are the exception: original, deterministic synthesis 
 | Stakeout shutter | One dry leaf-shutter click pair, once per rat revealed | 0.08 s |
 | Pip tick | One small glassy tick, once per health pip refilled | 0.05 s |
 | Card slap | Unchanged | 0.22 s |
+
+## The case (synthesized, 1 October)
+
+Tyler asked for the case's sounds to be redone across the board. They are made by `python3 scripts/generate-pickup-sounds.py` beside the supply claims (48 kHz mono, 0.86 peak):
+
+| Cue | File | Design | Length |
+| --- | --- | --- | --- |
+| Your pickup | `case-claim` | A weighty leather grab, both brass latches slamming shut one after the other, a riffle of papers and a low thump | 0.62 s |
+| You lost it | `case-dropped` | The latches pop, papers spill, and a muted trombone sags down a minor third | 0.95 s |
+| Someone else took it | `case-snatched` | A quick snatch and latch over two low upright-bass notes | 0.62 s |
+| Knocked loose | `case-loose` | A leather thud and fluttering papers | 0.46 s |
+| A ball on the case | `case-thwack` | Leather thwack, latch jingle, a little paper | 0.30 s |
+| The grip takes a hit | `case-knock` | A hard knock and latch rattle, played faster as the grip weakens | 0.24 s |

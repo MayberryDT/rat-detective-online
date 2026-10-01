@@ -502,6 +502,11 @@ Iteration log (one line each):
 
 ## Archetypes (Tyler, 1 October)
 
+**Dealt evenly per room (1 October, after the first night on staging).** A name hash alone gave staging's persistent roster 62% joyriders and 2% gremlins. A room now deals archetypes (`dealPersonalities` in `src/shared/botRoster.ts`): a bot keeps its archetype while it stays; a newcomer takes the rarest in the room, its hashed preference first among equals.
+
+**The headshot share is not an aim bug (1 October).** On staging after the chest-height pre-aim, bots still took 51% of their kills by headshot (humans 35%) and 12.7% of their hits were heads (12.8% before). By distance they match humans (10–20 units: bots 15%, humans 14%; 20–30: 13% and 11%); bots simply fight closer (median hit 25 units against humans' 38) and more often from above, and a per-hit head chance p gives about 1 − (1 − p)^5 headshot kills over five hit points (12.7% → about 50%; 7.8% → about 33%). No change.
+
+
 Five human-like archetypes replace the tryhard, maverick and gremlin cast (`mindVersion` 7). Each has its own goal weights, tactics and `SkillDials`. No archetype's dials are sharper than `BASE_SKILL`, so base bots still stay below the median human.
 
 ### Why

@@ -266,11 +266,11 @@
       "environment": "production",
       "layout": 5,
       "mindVersion": 7,
-      "protocol": 25,
+      "protocol": 26,
       "commits": [],
-      "change": "Case grip, calmer bot aim and bot archetypes (Tyler, 1 October): a carried case is knocked loose by 3 enemy balls each within 2 s of the last (it was one ball); killing the carrier still drops it. Bots pre-aim at chest height, not head height, and play as five archetypes with their own dials, none sharper than base (sniper, hose, camper, joyrider, gremlin; mindVersion 7); joyriders use the launch machines. Perf reports carry ping and how far behind other rats are drawn (measurement only). Excessive Force stays at 10 kills; no time limits, ever.",
+      "change": "Case grip, calmer bot aim and bot archetypes (Tyler, 1 October): a carried case is knocked loose by 3 enemy balls each within 2 s of the last (it was one ball); killing the carrier still drops it. Bots pre-aim at chest height, not head height, and play as five archetypes with their own dials, none sharper than base (sniper, hose, camper, joyrider, gremlin; mindVersion 7); joyriders use the launch machines. Perf reports carry ping and how far behind other rats are drawn (measurement only). Excessive Force stays at 10 kills; no time limits, ever. Protocol 26 adds: archetypes dealt evenly per room; PAPER CHASE to 5 deliveries; Jurisdiction zones hold 20 points that drain only while the case is held there, then move; a shot case flies 20% slower; taking the case brings a random supply (once per 20 s per rat); the case rebuilt and made juicy (K1, K2, new sounds); loose-spell and drop-cause recording.",
       "baseline": "lighter-jev",
-      "notes": "Tyler's target: Excessive Force averages 15–20 minutes, the longest mode but not by much (it was 27.5 minutes over 45 rounds from 29 September to 1 October, bot-only rounds included). If Paper Chase or Jurisdiction get too short, raise their targets. Bot-only rounds count: the city runs them all day.",
+      "notes": "Tyler's target: Excessive Force averages 15–20 minutes, the longest mode but not by much (it was 27.5 minutes over 45 rounds from 29 September to 1 October, bot-only rounds included). If Paper Chase or Jurisdiction get too short, raise their targets. Bot-only rounds count: the city runs them all day. Paper Chase and Jurisdiction changed rules in this era, so their round lengths are a new baseline, not a prediction. Loose-spell measures (case.looseMedianS, loosePathMedian, looseKicksMean) start here; the earlier eras have none.",
       "predictions": [
         {
           "id": "ef-shorter",

@@ -150,6 +150,9 @@ table(['Measure', 'Before', 'After'], [
   ...modes.map(id => M(`Round length, ${id.slice('rounds.minutes.'.length)} (minutes)`, id, 'no rounds', [bAll, aAll])),
   M('Carries ended with the case knocked loose (not a death)', 'case.knockedLooseShare', 'no carries', [bAll, aAll]),
   M('Median carry (s)', 'case.carryMedianS', 'no carries', [bAll, aAll]),
+  M('Median time the case lay loose (s)', 'case.looseMedianS', 'not recorded', [bAll, aAll]),
+  M('Median distance a loose case travelled (units)', 'case.loosePathMedian', 'not recorded', [bAll, aAll]),
+  M('Balls that hit a loose case, mean per spell', 'case.looseKicksMean', 'not recorded', [bAll, aAll]),
   M('Headshot share of kills, humans', 'kills.headshotShare.human', 'no kills', [bAll, aAll]),
   M('Headshot share of kills, bots', 'kills.headshotShare.bot', 'no kills', [bAll, aAll]),
 ]);

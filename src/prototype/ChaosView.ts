@@ -38,6 +38,7 @@ import { BUFF_FIELD, BUFF_MS, PICKUP_TUNING, TIMED_PICKUPS, activeBuffs, type Bu
 import {closestPointOnSegment} from '../shared/netplay';
 
 import { slipCaseCarryPose, updateCaseCarryPose } from './CaseCarryPose';
+import { CaseMotion } from './CaseMotion';
 import {RatReactionEvents} from './RatReactionEvents';
 import {FlyingHat} from '../entities/FlyingHat';
 import {contactShadowsOf} from '../session/shadows';
@@ -90,6 +91,7 @@ export class ChaosView {
     private readonly reactions:RatReactionEvents;
     private readonly root=new THREE.Group();
     private readonly caseRoot=new THREE.Group();
+    private readonly caseMotion:CaseMotion;
     private readonly extraCases=new Map<string,ExtraCaseVisual>();
     private readonly pickups=new Map<string,PickupVisual>();
     private readonly buffBar=document.createElement('div');
@@ -155,6 +157,8 @@ export class ChaosView {
     onLanding?: (p:Vec3Data,speed:number)=>void;
     /** R3: a shot jolted a body at `p` (for its squeak). */
     onCorpseJolt?: (p:Vec3Data)=>void;
+    /** K1: the case burst paperwork at `p` (taken, knocked loose or shot): `kind` sizes it. */
+    onCasePaper?: (p:Vec3Data,kind:'taken'|'loose'|'kick')=>void;
     /** A launcher firing in the presented timeline. */
     set onLauncherFired(listener:((machine:LaunchMachine,boost:boolean)=>void)|undefined){this.pressureMachine.onFire=listener;}
     /** Latest render camera, for placing trigger-hit sounds raised from snapshots. */
@@ -180,7 +184,7 @@ export class ChaosView {
         this.root.name='records-chaos';freezeStatic(this.root);scene.add(this.root);scene.add(this.caseRoot);
         this.caseRoot.name='hot-case';
         this.caseBeacon=new CaseBeacon(scene);
-        addLeatherBriefcase(this.caseRoot);
+        addLeatherBriefcase(this.caseRoot);this.caseMotion=new CaseMotion(this.caseRoot);
         this.caseRoot.userData.aimTarget=true;
         this.pressureMachine=new PressureMachine(scene,this.audio);
         this.pillars=new DispatchPillars(scene,this.audio);
@@ -358,7 +362,12 @@ export class ChaosView {
         }
         const grip=state.case.owner?state.case.grip??0:0;
         if(grip>(previous?.case.owner===state.case.owner?previous?.case.grip??0:0)){
-            this.gripHitAt=performance.now();this.feedback?.(grip>=2?'case-grip-2':'case-grip-1',state.case.p);
+            this.gripHitAt=performance.now();this.caseMotion.kick();this.feedback?.(grip>=2?'case-grip-2':'case-grip-1',state.case.p);
+        }
+        // Taken or knocked loose: the case squashes into the paw, or bursts paperwork where it comes loose.
+        if(previous&&previous.case.owner!==state.case.owner&&previous.epoch===state.epoch){
+            if(state.case.owner)this.caseMotion.taken(performance.now());
+            this.onCasePaper?.(state.case.p,state.case.owner?'taken':'loose');
         }
         this.reactions.apply(state);
         this.foley?.apply(state);
@@ -397,6 +406,8 @@ export class ChaosView {
                 this.landings.push({at:performance.now()+(mine?0:this.presentation.delayMs),p:hit.p,speed:hit.energy??0});
             }
             if(hit.cue==='case-hit'||hit.cue==='armor-clang')this.feedback?.(hit.cue,hit.p);
+            // A ball on the loose case: the tag flaps and a few sheets fly.
+            if(hit.cue==='case-hit'&&!state.case.owner&&Math.hypot(hit.p.x-state.case.p.x,hit.p.y-state.case.p.y,hit.p.z-state.case.p.z)<2){this.caseMotion.kick();this.onCasePaper?.(hit.p,'kick');}
             if(hit.cue==='armor-clang')this.impacts.spark(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z));
             if(!hit.audioOnly){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='thud'?3:hit.scale??1);}
         }
@@ -510,9 +521,9 @@ export class ChaosView {
             const anchor=this.arm!.parent!;
             updateCaseCarryPose(this.caseRoot, anchor);
             // A weakened grip: the case swings out of the fist a step per hit and eases back once the grip is whole; each hit jolts it.
-            const grip=s.case.owner?s.case.grip??0:0,since=(wall-this.gripHitAt)/1000;
+            const grip=s.case.owner?s.case.grip??0:0,since=(wall-this.gripHitAt)/1000,swing=this.caseMotion.carried(dt);
             this.gripSwing+=(grip*GRIP_SWING-this.gripSwing)*Math.min(1,dt*(grip?14:4));
-            slipCaseCarryPose(this.caseRoot,this.gripSwing+(since<.45?Math.sin(since*38)*Math.exp(-since*8)*GRIP_JOLT:0),this.gripSwing/GRIP_SWING*GRIP_SAG);
+            slipCaseCarryPose(this.caseRoot,this.gripSwing+swing+(since<.45?Math.sin(since*38)*Math.exp(-since*8)*GRIP_JOLT:0),this.gripSwing/GRIP_SWING*GRIP_SAG);
             contactShadowsOf(this.scene)?.remove(this.caseRoot);
         }else{
             if(!this.extrapolate||!this.presentation.looseCase(renderTime,this.presented))copyPresentationPose(s.case,this.presented);
@@ -520,7 +531,9 @@ export class ChaosView {
             this.caseRoot.position.set(p.x,p.y,p.z);this.caseRoot.quaternion.set(q.x,q.y,q.z,q.w);
             // A loose case is grounded by a contact disc; a carried one by its carrier's.
             contactShadowsOf(this.scene)?.add(this.caseRoot,.5);
+            this.caseMotion.loose(wall,Math.hypot(s.case.v.x,s.case.v.y,s.case.v.z));
         }
+        this.caseMotion.finish(dt,wall);
         this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer||this.lastHitPoint);
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);

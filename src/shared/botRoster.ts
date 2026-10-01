@@ -3,13 +3,30 @@ import { NAME_MAX_LENGTH, RAT_SURNAMES, RAT_TITLES } from './ratNames';
 import { APPEARANCE_COUNT, appearanceAt } from './ratAppearance';
 import { PERSONALITIES, type Personality } from './bots/intent';
 
-/** A roster name's hidden archetype: a fixed FNV-1a hash of the name, so a rat keeps it across rounds and deploys.
- * Tenths 0–1 are snipers, 2–3 hoses, 4–5 campers, 6–7 joyriders, 8–9 gremlins (even over the name pool). Never
- * sent to clients: the server derives it from the name where the bot is driven. */
+/** A roster name's preferred archetype: a fixed FNV-1a hash of the name (tenths 0–1 snipers, 2–3 hoses, 4–5 campers,
+ * 6–7 joyriders, 8–9 gremlins). Only a preference: a room deals archetypes evenly (`dealPersonalities`). Never sent to
+ * clients: the server decides where the bot is driven. */
 export function botPersonality(name: string): Personality {
   let hash = 0x811c9dc5;
   for (let i = 0; i < name.length; i++) hash = Math.imul(hash ^ name.charCodeAt(i), 0x01000193);
   return PERSONALITIES[Math.floor((hash >>> 0) % 10 / 2)]!;
+}
+
+/** Deals the room's bots their archetypes so the mix stays even (Tyler, 1 October: name hashes alone gave one staging
+ * room 62% joyriders). A bot keeps its archetype while it stays in the roster; a newcomer takes the rarest archetype
+ * in the room, its own preference first among equals. Counts differ by at most one while no keeper leaves. */
+export function dealPersonalities(roster: readonly string[], dealt: ReadonlyMap<string, Personality>): Map<string, Personality> {
+  const out = new Map<string, Personality>(), counts = PERSONALITIES.map(() => 0);
+  for (const name of roster) { const p = dealt.get(name); if (p && !out.has(name)) { out.set(name, p); counts[PERSONALITIES.indexOf(p)]!++; } }
+  for (const name of roster) {
+    if (out.has(name)) continue;
+    const least = Math.min(...counts), start = PERSONALITIES.indexOf(botPersonality(name));
+    for (let i = 0; i < PERSONALITIES.length; i++) {
+      const k = (start + i) % PERSONALITIES.length;
+      if (counts[k] === least) { out.set(name, PERSONALITIES[k]!); counts[k]!++; break; }
+    }
+  }
+  return out;
 }
 
 const names = ['Constable Trap', 'Inspector Nibbles', 'Sergeant Stilton', 'Detective Crumbs',

@@ -61,7 +61,7 @@ function gap(h, b, enough) {
 // The era registry.
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
 /** Measures a prediction may name (the scorecard's keys). */
-const PREDICTABLE = /^(jev\.(requestsPerBotMinute|answerShare|staleShare|fallbackShare|dollarsPerJevHour|latencyP90)|goals\.holdMedianS|goals\.[a-z-]+\.(reached|replaced|failed|died|holdMedianS)|decisions\.(perBotMinute|trigger\.(event|beat|fallback)|stance\.(fight|focus))|pickups\.passedPerRatHour\.(human|bot)|likeness\.(hitRate\.(human|bot)|hitRateBandGap|blindShare\.(human|bot)|blindShotGap)|players\.(killsPerHumanHour|deathsPerHumanHour|humanKillsOfBotsPerHumanHour|botKillsOfHumansPerHumanHour|humanDuelShare)|rounds\.minutes\.[a-z-]+|case\.(knockedLooseShare|carryMedianS)|kills\.headshotShare\.(human|bot))$/;
+const PREDICTABLE = /^(jev\.(requestsPerBotMinute|answerShare|staleShare|fallbackShare|dollarsPerJevHour|latencyP90)|goals\.holdMedianS|goals\.[a-z-]+\.(reached|replaced|failed|died|holdMedianS)|decisions\.(perBotMinute|trigger\.(event|beat|fallback)|stance\.(fight|focus))|pickups\.passedPerRatHour\.(human|bot)|likeness\.(hitRate\.(human|bot)|hitRateBandGap|blindShare\.(human|bot)|blindShotGap)|players\.(killsPerHumanHour|deathsPerHumanHour|humanKillsOfBotsPerHumanHour|botKillsOfHumansPerHumanHour|humanDuelShare)|rounds\.minutes\.[a-z-]+|case\.(knockedLooseShare|carryMedianS|looseMedianS|loosePathMedian|looseKicksMean)|kills\.headshotShare\.(human|bot))$/;
 const EXPECT = ['up', 'down', 'not-up', 'not-down'];
 
 /** The registry, checked: unique ids, a window or a build for every era that has started, well-formed predictions. */
@@ -303,6 +303,13 @@ function score(facts, era, known) {
     const loose = drops.filter(c => !(deathsAt.get(`${c.round}:${c.a}`) ?? []).some(t => Math.abs(t - c.t) < 300)).length;
     put('case.knockedLooseShare', share(loose, drops.length));
     put('case.carryMedianS', median(drops.filter(c => c.carryMs >= 0).map(c => c.carryMs / 1000)));
+  }
+  // Loose spells (recorded from the case-grip build): how long the case lay loose, how far it travelled, balls that hit it.
+  const spells = by.case.filter(c => c.looseMs >= 0);
+  if (spells.length) {
+    put('case.looseMedianS', median(spells.map(c => c.looseMs / 1000)));
+    put('case.loosePathMedian', median(spells.map(c => c.path ?? 0)));
+    put('case.looseKicksMean', mean(spells.map(c => c.kicks ?? 0)));
   }
   for (const who of ['human', 'bot']) {
     const shot = by.death.filter(d => (d.cause === 'shot' || d.cause === 'headshot') && d.a !== undefined && d.a !== d.victim && classOf(d.round, d.a) === who);

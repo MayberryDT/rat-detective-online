@@ -48,7 +48,7 @@ it('holds the case through two enemy hits, knocks it loose on the third and give
     expect(sim.caseHolderId).toBe(carry.id);expect(sim.snapshot(false).case.grip).toBe(2);
     hitCase(sim,'grip-3',2400);
     expect(sim.caseHolderId).toBeNull();expect(sim.snapshot(false).case.grip).toBeUndefined();
-    expect(sim.caseBody.velocity.x).toBeLessThan(-25);expect(sim.caseBody.velocity.y).toBeGreaterThanOrEqual(10);
+    expect(sim.caseBody.velocity.x).toBeLessThan(-.8*T.caseShotKick);expect(sim.caseBody.velocity.y).toBeGreaterThanOrEqual(T.caseShotLift);
     // A slow case is still collectible; this does not add a fixed pickup delay for everyone.
     sim.caseBody.position.set(nearby.x,nearby.y+.8,nearby.z);sim.caseBody.velocity.setZero();
     sim.step(0,2420);expect(sim.caseHolderId).toBe(nearby.id);
@@ -62,6 +62,16 @@ it('makes a grip whole again after two seconds without a hit',()=>{
     sim.step(0,1500+T.caseGripMs+1);expect(sim.snapshot(false).case.grip).toBeUndefined();
     hitCase(sim,'fresh',1500+T.caseGripMs+50);
     expect(sim.caseHolderId).toBe(carry.id);expect(sim.snapshot(false).case.grip).toBe(1);
+});
+it('rewards taking the case with a supply, at most once per rat in each reward window',()=>{
+    const {sim,players}=fixture();
+    const carry=createPlayer('carry','Carry',appearance,{x:0,y:0,z:0});players.set(carry.id,carry);
+    const buffs=()=>JSON.stringify(sim.snapshot(false).buffs?.carry??{});
+    sim.step(0,1001);expect(sim.caseHolderId).toBe(carry.id);
+    const first=buffs();expect(first).not.toBe('{}');
+    sim.release(carry.id);sim.step(0,2001);expect(sim.caseHolderId).toBe(carry.id);expect(buffs()).toBe(first);
+    // The first supply has run out by now; a fresh one arrives.
+    sim.release(carry.id);sim.step(0,1001+T.caseRewardMs);expect(sim.caseHolderId).toBe(carry.id);expect(buffs()).not.toBe('{}');
 });
 it('bounds ordinary repeated-shot speed while keeping a useful lift',()=>{
     const {sim}=fixture();sim.caseBody.position.y=8;sim.caseBody.velocity.set(40,-30,0);

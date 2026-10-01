@@ -220,6 +220,10 @@ export class CityRecorder {
   private caseChangeAt = 0;
   private caseReturning = false;
   private deliverySerial = -1;
+  /** The primary case while loose: when and where it came loose (or appeared), its last point, path so far and the
+   * balls (every rat's) that hit it; and the enemy balls the current carrier's grip has taken. */
+  private loose: { since: number; x: number; y: number; z: number; lx: number; ly: number; lz: number; path: number; kicks: number } | null = null;
+  private gripHits = 0;
   private dispatchKey = '';
   private zoneKey = '';
   private scorer: string | null = null;
@@ -399,6 +403,7 @@ export class CityRecorder {
     if (!events.length) return;
     let shooters: number[] | undefined, fact = false;
     for (const e of events) {
+      if (e.outcome === 'case-contact') { if (this.caseOwner) this.gripHits++; else if (this.loose) this.loose.kicks++; }
       if (!e.owner || e.outcome === 'first-step' || e.outcome === 'world-bounce') continue;
       if (e.outcome === 'rat-body' || e.outcome === 'rat-head') { const s = this.last.get(e.owner); (shooters ??= []).push(s?.x ?? NaN, s?.y ?? NaN, s?.z ?? NaN); }
       if (!this.deps.isBot(e.owner)) fact = true;
@@ -635,7 +640,7 @@ export class CityRecorder {
       this.roundId = a.roundId; this.mode = a.id; this.liveAt = a.liveAt;
       this.ledger.reset(); this.actors.clear(); this.deliverySerial = a.deliverySerial;
       // Actors are per round: a goal open when the round changed ends unrecorded.
-      this.goals.clear(); this.approaches.clear();
+      this.goals.clear(); this.approaches.clear(); this.loose = null; this.gripHits = 0;
       this.emit({ ...this.context(now), type: 'round', what: 'start', ...this.census(players) });
     }
     if (round.phase !== this.phase) {
@@ -730,7 +735,15 @@ export class CityRecorder {
 
   /** Changes in the shared world: the case, Dispatch, zones, launches, pickup sites and buffs. */
   private watchWorld(now: number, players: ReadonlyMap<string, PlayerData>, state: ChaosState): void {
-    const c = state.case, owner = c.owner;
+    const c = state.case, owner = c.owner, returning = c.returningUntil > now, a = state.assignment;
+    // A loose case's path: a step over 25 units is a relocation, not travel.
+    if (!owner && !returning) {
+      const l = this.loose;
+      if (!l) this.loose = { since: now, x: c.p.x, y: c.p.y, z: c.p.z, lx: c.p.x, ly: c.p.y, lz: c.p.z, path: 0, kicks: 0 };
+      else { const step = Math.hypot(c.p.x - l.lx, c.p.y - l.ly, c.p.z - l.lz); if (step < 25) l.path += step; l.lx = c.p.x; l.ly = c.p.y; l.lz = c.p.z; }
+    }
+    const looseSpell = () => { const l = this.loose; this.loose = null;
+      return l ? { looseMs: now - l.since, path: round1(l.path), moved: round1(Math.hypot(c.p.x - l.x, c.p.y - l.y, c.p.z - l.z)), kicks: l.kicks } : {}; };
     if (owner !== this.caseOwner) {
       const place = this.places.at(c.p.x, c.p.y, c.p.z).id, prev = this.caseOwner;
       const prevLife = prev ? this.lives.get(prev) : undefined, carryMs = prevLife?.carryStart !== undefined ? now - prevLife.carryStart : undefined;
@@ -740,18 +753,19 @@ export class CityRecorder {
         this.life(owner, now, players.get(owner)).carryStart = now;
         const stolen = prev !== null;
         this.measure(now, place, stolen ? 'case-steal' : 'case-take');
-        this.emit({ ...this.context(now), type: 'case', what: stolen ? 'steal' : 'take', a: this.actor(owner), ...(prev ? { from: this.actor(prev) } : {}), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }) });
+        this.emit({ ...this.context(now), type: 'case', what: stolen ? 'steal' : 'take', a: this.actor(owner), ...(prev ? { from: this.actor(prev) } : {}), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), ...(stolen ? {} : looseSpell()) });
         this.reach(players.get(owner), now, g => g.goal === 'take-case' || g.goal === 'chase-carrier' && g.quarry === prev);
       } else if (prev) {
         this.measure(now, place, 'case-drop');
-        this.emit({ ...this.context(now), type: 'case', what: 'drop', a: this.actor(prev), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }) });
+        const carrier = players.get(prev), cause = !carrier ? 'left' : carrier.hp <= 0 ? 'death' : a && a.deliverySerial !== this.deliverySerial ? 'delivered' : 'shot';
+        this.emit({ ...this.context(now), type: 'case', what: 'drop', a: this.actor(prev), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), cause, gripHits: this.gripHits });
       }
+      this.gripHits = 0;
       this.caseOwner = owner; this.caseChangeAt = now;
     }
-    const returning = c.returningUntil > now;
-    if (returning && !this.caseReturning) this.emit({ ...this.context(now), type: 'case', what: 'respawn', p: p3(c.p), place: this.places.at(c.p.x, c.p.y, c.p.z).id });
+    if (returning && !this.caseReturning) this.emit({ ...this.context(now), type: 'case', what: 'respawn', p: p3(c.p), place: this.places.at(c.p.x, c.p.y, c.p.z).id, ...looseSpell() });
     this.caseReturning = returning;
-    const a = state.assignment;
+
     if (a && a.deliverySerial !== this.deliverySerial) {
       const by = a.lastDelivery?.playerId, p = by ? players.get(by) : undefined;
       if (by && p && this.deliverySerial >= 0) {

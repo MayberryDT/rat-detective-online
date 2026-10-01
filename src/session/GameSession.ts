@@ -338,6 +338,7 @@ export class GameSession {
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
+            this.chaos.onCasePaper=(p,kind)=>this.feel.casePaper(p,kind);
             this.chaos.onClaim=(kind,camera)=>this.feel.claimed(kind,this.rat?.entity,camera);
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onDispatchShot=(_station,at)=>this.feel.dispatchShot(at,this.stage.camera);
@@ -790,7 +791,7 @@ export class GameSession {
     /** Polish 17 music stings from consecutive snapshots. */
     private feelStings(previous:ChaosState|null,next:ChaosState):void {
         if(!previous||this.observing)return;
-        if(next.case?.owner===this.myId&&previous.case?.owner!==this.myId)this.feel.sting('case');
+        if(next.case?.owner===this.myId&&previous.case?.owner!==this.myId){this.feel.sting('case');this.feel.caseClaimed(this.rat?.entity);}
         const before=previous.assignment,after=next.assignment;
         if(!before||!after||before.roundId!==after.roundId)return;
         if((after.deliverySerial??0)>(before.deliverySerial??0)&&after.lastDelivery?.playerId===this.myId)this.feel.sting('delivery');

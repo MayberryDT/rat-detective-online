@@ -28,24 +28,24 @@ export class AssignmentRules {
         if(phase!=='active'&&this.state.jurisdiction)this.state.jurisdiction.scorerId=null;
         if (phase !== this.state.phase) { this.state.phase = phase; this.state.revision++; }
     }
-    /** Only elapsed simulated zone time counts. The caller divides intervals at
-     * actual incident deadlines; elapsed wall time while a room sleeps is absent. */
+    /** Only elapsed simulated time counts, and a zone's points drain only while the case is held in it (Tyler,
+     * 1 October: like Closing Time, the carrier runs the clock). Each point drained goes to the carrier; an emptied
+     * zone moves on. The caller divides intervals at actual incident deadlines; time while a room sleeps is absent. */
     advance(from:number,to:number,holder:string|null):void {
         const s=this.state.jurisdiction;if(!s||!this.active||this.closed)return;
         let at=Math.max(from,this.state.liveAt),left=Math.max(0,to-at);
         const p=this.living(holder);
         while(left>0&&!this.closed){
-            const ms=Math.min(left,s.remainingMs),eligible=!!p&&zoneContains(activeZone(s),p);
-            const scorer=eligible?p.id:null;
+            const eligible=!!p&&zoneContains(activeZone(s),p),scorer=eligible?p.id:null;
             if(s.scorerId!==scorer){s.scorerId=scorer;this.state.revision++;}
-            if(eligible){
-                const previous=Object.prototype.hasOwnProperty.call(s.heldMs,p.id)?s.heldMs[p.id]:0;
-                const credit=Math.min(ms,JURISDICTION_TUNING.targetMs-previous);
-                Object.defineProperty(s.heldMs,p.id,{value:previous+credit,writable:true,enumerable:true,configurable:true});
-                if(previous+credit>=JURISDICTION_TUNING.targetMs-1e-7){
-                    s.heldMs[p.id]=JURISDICTION_TUNING.targetMs;
-                    s.remainingMs=Math.max(.000001,s.remainingMs-credit);this.close(p,at+credit,'zone-held');return;
-                }
+            if(!eligible)return;
+            const ms=Math.min(left,s.remainingMs);
+            const previous=Object.prototype.hasOwnProperty.call(s.heldMs,p.id)?s.heldMs[p.id]:0;
+            const credit=Math.min(ms,JURISDICTION_TUNING.targetMs-previous);
+            Object.defineProperty(s.heldMs,p.id,{value:previous+credit,writable:true,enumerable:true,configurable:true});
+            if(previous+credit>=JURISDICTION_TUNING.targetMs-1e-7){
+                s.heldMs[p.id]=JURISDICTION_TUNING.targetMs;
+                s.remainingMs=Math.max(.000001,s.remainingMs-credit);this.close(p,at+credit,'zone-held');return;
             }
             s.remainingMs-=ms;left-=ms;at+=ms;
             if(s.remainingMs<1e-7){rotateZone(s,this.random);this.state.revision++;}

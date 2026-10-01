@@ -1,5 +1,7 @@
 import { JURISDICTION_ZONES, JURISDICTION_ZONE_IDS, isJurisdictionZoneId, type JurisdictionZone, type JurisdictionZoneId } from './jurisdictionZones';
-export const JURISDICTION_TUNING={targetMs:60_000,zoneMs:75_000,warningMs:10_000} as const;
+/** `zoneMs`: the points a zone holds (1 a second of the case held in it); they drain only while the case is held there,
+ * then the zone moves (Tyler, 1 October). Three zones' worth win (`targetMs`); the last `warningMs` show the move coming. */
+export const JURISDICTION_TUNING={targetMs:60_000,zoneMs:20_000,warningMs:5_000} as const;
 export interface JurisdictionState {
     order:JurisdictionZoneId[]; nextOrder:JurisdictionZoneId[]; index:number; serial:number;
     remainingMs:number; heldMs:Record<string,number>; scorerId:string|null;

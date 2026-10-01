@@ -182,7 +182,7 @@ export class DispatchHud {
             }else if(chain&&a.deliverySerial>this.previousDeliverySerial){
                 this.previousDeliverySerial=a.deliverySerial;this.feedback?.('verified');
                 const delivery=a.lastDelivery,local=delivery?.playerId===this.myId;
-                setText(this.confirmation,local?`PAPERWORK DELIVERED! +1 · ${points}/3`:`${delivery?.playerName??'A DETECTIVE'} DELIVERED · ${delivery?a.deliveries[delivery.playerId]??0:0}/3`);
+                setText(this.confirmation,local?`PAPERWORK DELIVERED! +1 · ${points}/${target}`:`${delivery?.playerName??'A DETECTIVE'} DELIVERED · ${delivery?a.deliveries[delivery.playerId]??0:0}/${target}`);
                 if(!a.result)setText(this.confirmation,`${this.confirmation.textContent} · CASE RELOCATED`);
                 replay(this.confirmation,'stamp-pop');
                 this.confirmationUntil=now+2800;
@@ -197,20 +197,22 @@ export class DispatchHud {
             setText(this.stats,score?`TOTAL KILLS ${score.kills} · DEATHS ${score.deaths}`:'');
             this.destinationLabel.hidden=!chain&&!j;
             setText(this.destinationLabel,j?`${JURISDICTION_ZONES[activeZone(j)].label} · ${JURISDICTION_ZONES[activeZone(j)].floor}`:destination?`DELIVER TO: ${ASSIGNMENT_DESTINATIONS[destination].label}`:'');
-            this.zoneNext.hidden=!j||j.remainingMs>JURISDICTION_TUNING.warningMs;
+            // A zone's points drain only while the case is held in it; it moves once they run out.
+            const draining=!!j&&a.phase==='active'&&!!j.scorerId,emptying=draining&&j!.remainingMs<=JURISDICTION_TUNING.warningMs;
+            this.zoneNext.hidden=!emptying;
             if(j){
-                setText(this.zoneClock,`${Math.ceil(j.remainingMs/1000)}s`);
-                setText(this.zoneTimerLabel,a.phase==='active'?'ZONE MOVES IN':a.phase==='suspended'?'ZONE TIMER PAUSED':'ZONE DURATION');
-                const urgent=a.phase==='active'&&j.remainingMs<=JURISDICTION_TUNING.warningMs,second=Math.ceil(j.remainingMs/1000);
-                this.zoneTimer.dataset.urgent=String(urgent);this.zoneTimer.dataset.final=String(urgent&&j.remainingMs<=3000);
-                // U4: the last seconds tick, louder for the final three, while the clock shakes (CSS).
-                if(urgent&&!newAssignment&&second!==this.zoneSecond&&second<Math.ceil(JURISDICTION_TUNING.warningMs/1000)){
+                setText(this.zoneClock,`${Math.ceil(j.remainingMs/1000)}`);
+                setText(this.zoneTimerLabel,a.phase==='suspended'?'ZONE PAUSED':draining?'ZONE PAYING OUT':'POINTS IN ZONE');
+                const second=Math.ceil(j.remainingMs/1000);
+                this.zoneTimer.dataset.urgent=String(emptying);this.zoneTimer.dataset.final=String(emptying&&j.remainingMs<=3000);
+                // U4: the last points tick, louder for the final three, while the clock shakes (CSS).
+                if(emptying&&!newAssignment&&second!==this.zoneSecond&&second<Math.ceil(JURISDICTION_TUNING.warningMs/1000)){
                     this.feedback?.(second<=3?'countdown-final':'tick');
                 }
                 this.zoneSecond=second;
                 setText(this.zoneNext,`NEXT: ${JURISDICTION_ZONES[nextZone(j)].label} · ${JURISDICTION_ZONES[nextZone(j)].floor}`);
                 if(!newAssignment&&this.zoneSerial!==j.serial){this.feedback?.('dispatch');this.zoneSerial=j.serial;}
-                if(!newAssignment&&a.phase==='active'&&j.remainingMs<=JURISDICTION_TUNING.warningMs&&this.zoneWarning!==j.serial){this.feedback?.('countdown');this.zoneWarning=j.serial;}
+                if(!newAssignment&&emptying&&this.zoneWarning!==j.serial){this.feedback?.('countdown');this.zoneWarning=j.serial;}
             }
             this.stats.hidden=chain||!score;
             const leaders=this.scores.map(s=>({...s,points:table[s.id]??0})).sort((x,y)=>y.points-x.points||x.name.localeCompare(y.name)||x.id.localeCompare(y.id));

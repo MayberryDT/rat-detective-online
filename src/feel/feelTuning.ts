@@ -155,6 +155,14 @@ export const FEEL={
     claimHustle:{label:'C4 Hot Pursuit claim',toggle:true,params:{widen:7,streaks:.5,dust:1}},
     /** C5 Quick Fix claim: the restored nameplate pips refill one at a time, `pip` s apart, with a tick each. */
     claimQuickFix:{label:'C5 Quick Fix claim',toggle:true,params:{pip:.07}},
+    /** K1 Case claim (Tyler, 1 October: "it needs to feel good when you pick up the case"): your own take of the case slams an
+     * ON THE CASE stamp over a burst of `sheets` paper sheets, with a brass edge `flash`, a `punch` (deg) in, a `kick` and
+     * a `squash` of your rat; everyone sees the case burst paperwork (`paper` sheets) wherever it is taken or knocked loose. */
+    caseClaim:{label:'K1 Case claim',toggle:true,params:{flash:.75,punch:4,kick:1.2,squash:2.4,sheets:12,paper:10,kickPaper:4}},
+    /** K2 Case motion: carried, the case swings on its handle against the paw's acceleration (`swing` gain, `spring` rad/s,
+     * `damping` ratio, at most `maxSwing` rad); taken, it squashes by `squash`; loose and still, it hops `hop` units for
+     * `hopMs` about every `idleEvery` s; its evidence tag flaps on every jolt. */
+    caseMotion:{label:'K2 Case motion',toggle:true,params:{swing:60,spring:9,damping:.22,maxSwing:.6,squash:.28,hop:.12,hopMs:320,idleEvery:3.5}},
     /** A1 Air acting (Tyler, 1 October: jumping rats were "stiff and lifeless", a salt shaker). Every rat, airborne from a
      * take-off over `takeOff` u/s or a fall over `fall` u/s until it lands: no walking stride in the air; `stretch` rising,
      * a `squash` and `tuck` (rad) ball at the apex with the feet pulled up (`feet`), a `reach` falling with ears (`ears`),

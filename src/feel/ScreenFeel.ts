@@ -34,6 +34,8 @@ export class ScreenFeel {
     private claimNode?:HTMLElement;
     private inkNode?:HTMLElement;
     private lensNode?:HTMLElement;
+    private caseNode?:HTMLElement;
+    private readonly caseSheets:HTMLElement[]=[];
     private lastFilm='';
     private lastSpeed=0;
     private canvas?:HTMLElement;
@@ -158,6 +160,20 @@ export class ScreenFeel {
         this.claimNode.style.setProperty('--claim',colour);this.claimNode.style.setProperty('--feel-flash',strength.toFixed(3));
         replay(this.claimNode,'on');
     }
+    /** K1: you took the case: an ON THE CASE stamp slams in over `sheets` paper sheets bursting out and fluttering down,
+     * with a brass edge flash (`flash` × Flash strength). Reduced interface motion keeps the stamp, fading, and no sheets. */
+    caseClaim(sheets:number,flash:number):void {
+        this.claim('#c39a55',flash);
+        if(!this.build()||!this.caseNode)return;
+        const still=reducedMotion();
+        this.caseSheets.forEach((sheet,i)=>{
+            const shown=!still&&i<sheets,angle=i/Math.max(1,sheets)*Math.PI*2+Math.random()*.5,reach=180+Math.random()*220;
+            sheet.style.display=shown?'':'none';if(!shown)return;
+            sheet.style.setProperty('--dx',`${(Math.cos(angle)*reach).toFixed(0)}px`);sheet.style.setProperty('--dy',`${(Math.sin(angle)*reach*.6-60).toFixed(0)}px`);
+            sheet.style.setProperty('--rot',`${((Math.random()*2-1)*220).toFixed(0)}deg`);sheet.style.setProperty('--delay',`${(Math.random()*90).toFixed(0)}ms`);
+        });
+        replay(this.caseNode,'on');
+    }
     /** C2: your Stakeout claim: an ink ripple spreads across the screen from `at`, under a brief magnifying-glass
      * lens vignette lasting `lens` s. Skipped under Reduced interface motion. */
     stakeout(at:THREE.Vector3,camera:THREE.Camera,lens:number):void {
@@ -215,14 +231,14 @@ export class ScreenFeel {
         if(this.irisNode)this.irisNode.style.opacity='0';
         if(this.speedNode){this.speedNode.style.opacity='0';this.speedNode.classList.remove('on');}
         this.calloutNode?.classList.remove('on');this.sootNode?.classList.remove('on');
-        for(const node of [this.claimNode,this.inkNode,this.lensNode])node?.classList.remove('on');
+        for(const node of [this.claimNode,this.inkNode,this.lensNode,this.caseNode])node?.classList.remove('on');
         this.lastSpeed=0;
         this.lastFilm='';this.root?.classList.remove('letterboxed');
         if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.sootNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.sootNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=this.caseNode=undefined;this.caseSheets.length=0;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -243,6 +259,10 @@ export class ScreenFeel {
         this.inkNode=this.doc.createElement('div');this.inkNode.className='feel-ink';this.root.appendChild(this.inkNode);
         this.lensNode=this.doc.createElement('div');this.lensNode.className='feel-lens';this.root.appendChild(this.lensNode);
         this.claimNode=this.doc.createElement('div');this.claimNode.className='feel-claim';this.root.appendChild(this.claimNode);
+        this.caseNode=this.doc.createElement('div');this.caseNode.className='feel-case';
+        for(let i=0;i<16;i++){const sheet=this.doc.createElement('div');sheet.className='feel-case-sheet';this.caseNode.appendChild(sheet);this.caseSheets.push(sheet);}
+        const stamp=this.doc.createElement('div');stamp.className='feel-case-stamp';stamp.textContent='ON THE CASE';this.caseNode.appendChild(stamp);
+        this.root.appendChild(this.caseNode);
         this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);
         for(let i=0;i<3;i++){const node=this.doc.createElement('div');node.className='feel-word';this.root.appendChild(node);this.words.push(node);}
         for(let i=0;i<ARROWS;i++){

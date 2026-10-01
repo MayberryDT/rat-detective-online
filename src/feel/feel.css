@@ -78,6 +78,24 @@
 .feel-lens{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 50% 50%,transparent 40vmin,#c9a24aa6 calc(40vmin + 1px),#c9a24aa6 calc(40vmin + 3px),#05070d73 calc(40vmin + 4px),#05070dcc 100%)}
 .feel-lens.on{animation:feel-lens var(--lens,400ms) ease-out both}
 @keyframes feel-lens{0%{opacity:0;transform:scale(1.25)}25%{opacity:var(--feel-flash,1);transform:scale(1)}65%{opacity:var(--feel-flash,1)}100%{opacity:0;transform:scale(1.03)}}
+/* K1 case claim: an ON THE CASE rubber stamp slams in on carbon paper over a burst of case papers that flutter down. */
+.feel-case{position:absolute;left:50%;top:32%;width:0;height:0}
+.feel-case-stamp{position:absolute;left:0;top:0;opacity:0;white-space:nowrap;padding:.2em .55em .12em;border:4px double var(--stamp,#c8322a);
+  color:var(--stamp-ink,#e65a50f2);background:#0c1224a8;box-shadow:3px 4px 0 #00000080;font:400 56px/1 var(--font-display,Impact,sans-serif);letter-spacing:.07em;
+  transform:translate(-50%,-50%) rotate(-6deg)}
+.feel-case.on .feel-case-stamp{animation:feel-case-stamp 1500ms cubic-bezier(.2,.9,.25,1.2) both}
+@keyframes feel-case-stamp{0%{opacity:0;transform:translate(-50%,-50%) rotate(-16deg) scale(2.8)}9%{opacity:1;transform:translate(-50%,-50%) rotate(-6deg) scale(.9)}
+  15%{transform:translate(-50%,-50%) rotate(-5deg) scale(1.06)}21%{transform:translate(-50%,-50%) rotate(-6deg) scale(1)}78%{opacity:1;transform:translate(-50%,-50%) rotate(-6deg) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-58%) rotate(-6deg) scale(.97)}}
+.feel-case-sheet{position:absolute;left:0;top:0;width:30px;height:39px;opacity:0;border-radius:2px;box-shadow:1px 2px 0 #00000066;
+  background:repeating-linear-gradient(to bottom,#e9dcb8d9 0 6px,#a8916bd9 6px 7px);transform:translate(-50%,-50%)}
+.feel-case.on .feel-case-sheet{animation:feel-case-sheet 1300ms cubic-bezier(.12,.75,.3,1) var(--delay,0ms) both}
+@keyframes feel-case-sheet{0%{opacity:0;transform:translate(-50%,-50%) rotate(0deg) scale(.3)}8%{opacity:.9}
+  55%{opacity:.9;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(var(--rot)) scale(1)}
+  100%{opacity:0;transform:translate(calc(-50% + var(--dx) * 1.1),calc(-50% + var(--dy) + 150px)) rotate(calc(var(--rot) * 1.7)) scale(.85)}}
+body.reduced-motion .feel-case.on .feel-case-stamp{animation:ui-fade-hold 1500ms linear both}
+@media(prefers-reduced-motion:reduce){.feel-case.on .feel-case-stamp{animation:ui-fade-hold 1500ms linear both}.feel-case-sheet{display:none}}
+@media(max-height:500px){.feel-case-stamp{font-size:36px}.feel-case{top:30%}}
 /* Reduced interface motion: informative words and cards fade in place; decoration holds still. */
 body.reduced-motion :is(.feel-grain,.feel-speed){animation:none!important}
 body.reduced-motion .feel-letterbox{transition:none}

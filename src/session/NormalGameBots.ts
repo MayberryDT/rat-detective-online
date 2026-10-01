@@ -3,7 +3,7 @@ import { NetworkManager, resolveWebSocketUrl } from '../network/NetworkManager';
 import { RatBot } from '../shared/bots/ratBot';
 import type { MotorNavigation } from '../shared/bots/motor';
 import type { Personality } from '../shared/bots/intent';
-import { botPersonality } from '../shared/botRoster';
+import { dealPersonalities } from '../shared/botRoster';
 import { BotNavigation } from '../shared/BotNavigation';
 import { StaticCityBroadphase, cityBoxBody } from '../shared/StaticCityBroadphase';
 import { CITY_BARS_GROUP } from '../shared/boxFrame';
@@ -24,6 +24,8 @@ export function normalGameBotCount(location: { hostname: string; search: string 
         /^graybox-practice-[a-z0-9-]+$/i.test(params.get('room') ?? '') && params.get('bots') === '11' ? 11 : 0;
 }
 const NAMES = ['Constable Trap', 'Inspector Nibbles', 'Sergeant Stilton', 'Detective Crumbs', 'Officer Whiskers', 'Captain Cheddar', 'Deputy Squeaks', 'Inspector Gouda', 'Constable Alley', 'Detective Rind', 'Sergeant Scurry'];
+/** The practice roster's archetypes, dealt evenly as a hosted room deals its bots. */
+const DEALT = dealPersonalities(NAMES, new Map());
 export interface BotTransport {
     state: string;
     onMessage: ((message: ServerMessage) => void) | null;
@@ -111,7 +113,7 @@ export class NormalGameBots {
             // The player's body; the local bots pass through each other.
             const body = new C.Body({mass:RAT_BODY.mass, fixedRotation:true, linearDamping:RAT_BODY.linearDamping, angularDamping:RAT_BODY.angularDamping, collisionFilterGroup:2, collisionFilterMask:1|CITY_BARS_GROUP});
             addRatShapes(body);
-            const bot: Bot = {transport,id:'',body,rat:new RatBody(body,this.world,bounds),brain:new RatBot(sharedNavigation,i,Math.random,{personality:(options.personality??botPersonality)(NAMES[i])}),facing:0,lived:false,lastLaunch:'',lastMovementAt:-Infinity};
+            const bot: Bot = {transport,id:'',body,rat:new RatBody(body,this.world,bounds),brain:new RatBot(sharedNavigation,i,Math.random,{personality:options.personality?.(NAMES[i]!)??DEALT.get(NAMES[i]!)}),facing:0,lived:false,lastLaunch:'',lastMovementAt:-Infinity};
             this.bots.push(bot);
             // The human's feed is the common source. Each extra socket only needs
             // its own welcome, including reconnection identity and server spawn.

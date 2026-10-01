@@ -12,14 +12,15 @@ const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:n
     'armor-clang':{file:'armor-clang',volume:.8,cooldown:75},
     'stakeout-shutter':{file:'stakeout-shutter',volume:.35,cooldown:40},
     'pip-tick':{file:'pip-tick',volume:.18,cooldown:40},
-    'case-pickup':{file:'case-pickup',volume:.6,cooldown:150},
-    'case-lost':{file:'case-lost',volume:.6,cooldown:150},
-    'case-taken':{file:'case-taken',volume:.24,cooldown:300},
-    'case-drop':{file:'menu-close',volume:.22,cooldown:300},
-    'case-hit':{file:'case-hit',volume:.48,cooldown:90},
-    // A carried case taking a hit without coming loose: the same case knock, rising as the grip weakens.
-    'case-grip-1':{file:'case-hit',volume:.62,cooldown:60,rate:1.25},
-    'case-grip-2':{file:'case-hit',volume:.75,cooldown:60,rate:1.6},
+    // The case's own foley (1 October, scripts/generate-pickup-sounds.py): yours, lost, someone else's, knocked loose, shot.
+    'case-pickup':{file:'case-claim',volume:.72,cooldown:150},
+    'case-lost':{file:'case-dropped',volume:.62,cooldown:150},
+    'case-taken':{file:'case-snatched',volume:.34,cooldown:300},
+    'case-drop':{file:'case-loose',volume:.36,cooldown:300},
+    'case-hit':{file:'case-thwack',volume:.5,cooldown:90},
+    // A carried case taking a hit without coming loose: a knock and latch rattle, rising as the grip weakens.
+    'case-grip-1':{file:'case-knock',volume:.62,cooldown:60,rate:1.15},
+    'case-grip-2':{file:'case-knock',volume:.75,cooldown:60,rate:1.4},
     'menu-open':{file:'menu-open',volume:.24,cooldown:150},
     'menu-close':{file:'menu-close',volume:.18,cooldown:150},
     death:{file:'death',volume:.42,cooldown:500},

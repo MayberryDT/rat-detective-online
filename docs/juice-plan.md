@@ -61,6 +61,16 @@ rat's identity stay as they are. Done means:
 - **Softer outline and nameplate reviewed (2026-09-27):** "That is great. Push it live." Released as Worker `80901b67…`.
 - **Next action:** Tyler's OK to put [the city map](city-map.md) recorder on production, then he plays and we read the digest; then step 4 (the page's Observe mode). See [Open decisions](#open-decisions).
 
+## The case (Tyler, 2026-10-01)
+
+Tyler: the case "is pretty out of date now … we need to make it juicy. Update the model, bring it up to par with our rats now. Add some animations … update the sound effects to it across the board … it needs to feel good when you pick up the case … something on your screen that's like, oh wow, you got the case". The old "YOU'RE ON THE CASE" callout was "kinda lame".
+
+- [x] **Model** (`src/prototype/CaseModel.ts`): soft rounded leather, a brass rim, corner caps and studs, two sprung latches and a keyed lock plate, buckled straps, stitching, a curved handle on brass loops, papers bursting from the seam and a red EVIDENCE tag on a string. Same collision size; fixed parts merge per material; the tag is the one moving part.
+- [x] **K1 `caseClaim`**: your take of the case slams an ON THE CASE rubber stamp (carbon paper, stamp red) over a burst of paper sheets, with a brass edge flash, a punch-in, a kick and a squash of your rat. Everyone sees the case burst paperwork where it is taken, knocked loose or shot (the L7 paper pool).
+- [x] **K2 `caseMotion`**: carried, it swings on its handle against the paw's acceleration (on top of the grip slip); taken, it squashes and springs back; loose and still, it hops now and then; its tag flaps on every jolt.
+- [x] **Sounds**, synthesized in `scripts/generate-pickup-sounds.py`: `case-claim`, `case-dropped`, `case-snatched`, `case-loose`, `case-thwack`, `case-knock` (the grip's rising knock). The old case-lost and case-hit samples are gone.
+- With it (gameplay): taking the case brings a random supply (once per 20 s per rat); a shot case flies 20% slower. See [the assignments](dispatch-assignments.md).
+
 ## Air acting (Tyler, 2026-10-01)
 
 Tyler, watching rats jump, bounce back and forth and fly: they look "stiff and lifeless", like a salt shaker, with "no character" and "no juice". The living body was a rigid cylinder in the air. The rule that kept the weapon-bearing body still covered only the animation pass. A firing rat's arm aims at its target whatever the body does, and walking already sways the body.

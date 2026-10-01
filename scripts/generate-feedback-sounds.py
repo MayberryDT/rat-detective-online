@@ -98,20 +98,8 @@ for at, gain in [(.13, .2), (.20, .3), (.25, .4)]:
     cue.add(at, 'impactMetal_medium_002', gain, .06, highpass=700)
 cue.latch(.30, 1).latch(.395, .65, 1.08).save()
 
-# The latch slips, the spring sags, and the case clatters away.
-cue = Cue('case-lost', .76).latch(0, .65)
-cue.spring(.025, 1, .62, rate=.72)
-cue.add(.38, 'impactSoft_heavy_000', .35, .22, rate=.82, lowpass=1800)
-for at, gain, rate in [(.45,.6,.92), (.54,.4,1.03), (.61,.25,.88)]:
-    cue.add(at, 'impactTin_medium_001', gain, .13, rate=rate, highpass=400)
-cue.save()
-
 # A quieter snatch/latch, with no reward jingle for someone else's pickup.
 Cue('case-taken', .31).add(0, 'impactSoft_heavy_000', .4, .1, reverse=True).latch(.025).latch(.115, .45).save()
-
-# Two explicit sharp clinks, then small loose-metal chatter; no low body thump.
-cue = Cue('case-hit', .34).latch(0, 1).latch(.085, .8, 1.13)
-cue.add(.165, 'impactTin_medium_001', .22, .1, rate=1.2, highpass=1100, decay=15).save()
 
 # Slapstick desk props: pop-up snaps into place; closing scrapes and clacks shut.
 cue = Cue('menu-open', .27)

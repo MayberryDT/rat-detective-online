@@ -72,7 +72,11 @@ describe('companion projection', () => {
     const jurisdiction = createAssignment('jurisdiction', now, 'zone-round', () => 0);
     jurisdiction.phase = 'active';
     jurisdiction.jurisdiction!.heldMs.a = 12_500;
-    jurisdiction.jurisdiction!.remainingMs = JURISDICTION_TUNING.warningMs + 1;
+    jurisdiction.jurisdiction!.remainingMs = JURISDICTION_TUNING.warningMs;
+    // Nobody holds the case in the zone: its points don't drain, so no clock and no next zone yet.
+    const idle = projectCompanionRoom({ ...base, round: round(jurisdiction), assignment: jurisdiction });
+    expect(idle.assignment).toMatchObject({ nextZone: null, clockRunning: false });
+    jurisdiction.jurisdiction!.scorerId = 'a';jurisdiction.jurisdiction!.remainingMs = JURISDICTION_TUNING.warningMs + 1;
     const hidden = projectCompanionRoom({ ...base, round: round(jurisdiction), assignment: jurisdiction });
     expect(hidden.assignment).toMatchObject({
       objectiveTarget: 60, objectiveUnit: 'seconds', zone: expect.any(Object),

@@ -38,10 +38,11 @@ function assignmentProjection(state: AssignmentState, round: RoundState): Compan
   const destinationId = activeDestination(state);
   const jurisdiction = state.jurisdiction;
   const zoneId = jurisdiction ? activeZone(jurisdiction) : undefined;
-  const revealNext = jurisdiction && state.phase === 'active' &&
-    jurisdiction.remainingMs <= JURISDICTION_TUNING.warningMs;
-  const nextZoneId = revealNext ? nextZone(jurisdiction) : undefined;
-  const clockRunning = round.phase === 'playing' && state.phase === 'active' && state.id === 'jurisdiction';
+  // Since protocol 26 a zone's points drain only while the case is held in it, so its clock runs only then.
+  const draining = !!jurisdiction && state.phase === 'active' && !!jurisdiction.scorerId;
+  const revealNext = draining && jurisdiction!.remainingMs <= JURISDICTION_TUNING.warningMs;
+  const nextZoneId = revealNext ? nextZone(jurisdiction!) : undefined;
+  const clockRunning = round.phase === 'playing' && draining && state.id === 'jurisdiction';
   return {
     id: state.id,
     title: ASSIGNMENTS[state.id].title,
