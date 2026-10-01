@@ -2,6 +2,15 @@
 
 Verified from source and production through **2026-10-01** (protocol 26). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Protocol 27: the arsenal and the incident rework — 1 October staging
+
+Tyler (1 October): double down on what Big Cheese and Blackout do, make pickups juicy, make the Excessive Force carrier stronger, round the targets. On staging (Worker `eb736ac5-886f-49da-be60-1c74edc29c1e`, build `staging-2026-10-01-da7bad3`, **protocol 27**, layout 6, `mindVersion` 8), not in production. See [the plan](juice-plan.md#protocol-27-the-arsenal-and-the-incident-rework-tyler-2026-10-01) and [the assignments](dispatch-assignments.md#incidents-changed-in-protocol-27-tyler-1-october).
+
+- **Targets:** PAPER CHASE 10 deliveries, Jurisdiction 100 points (zones of 20), Excessive Force 10 case kills.
+- **Excessive Force carrier:** double damage and a full heal on every case kill; its balls look heavier.
+- **Weapons** (one at a time; six new sites; also in the reward draw): Tommy Gun (hold to fire on a timer), Laser (hitscan, ricochets, 3 damage, headshots kill), Mousetrap (the gun goes away; the next click sets a big one-shot trap that takes 8 balls or 3 lasers to break).
+- **Incidents:** Rat Race, Delayed Reaction and Clean Bill removed; Code Violation replaces Malpractice; Bad Ammunition personalities; Scattershot shoves; Most Wanted follows the leader and pays a random supply; All Units told clearly; new Bobbleheads and Act of God.
+
 ## Case grip, bot archetypes and the case batch — 1 October production
 
 Tyler (1 October), after a 56-minute Excessive Force round: give the case grip, tone the bots down while making them more human, measure ping before touching the network, and never put a time limit on a mode. Tyler: "We can go ahead, commit everything, and merge the branch." Production Worker `a3b3d924-925f-47ac-a30e-5e5a93d46d33`, build `production-2026-10-01-6570125`, client `index-CnzpYiB8.js`, commit `6570125` on `main` (GitHub `master`), **protocol 26**, every incident ([receipt](verification/protocol-26-release-2026-10-01.md)):

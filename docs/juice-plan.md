@@ -67,11 +67,12 @@ Tyler: Big Cheese and Blackout are the best incidents because "they radically ch
 
 - [x] **Targets:** Excessive Force 10 case kills, PAPER CHASE 10 deliveries, Jurisdiction 100 points (20 a zone). Tyler: "sometimes the numbers have to feel good."
 - [x] **Excessive Force carrier:** hits deal double damage (`carrierDamage`), and every case kill heals it to full (heal cause `case-kill`, the Quick Fix flash).
-- [ ] **Pickups** (one weapon at a time; claiming another replaces it; weapons replace the incident's shot pattern):
+- [x] **Pickups** (one weapon at a time; claiming another replaces it; weapons replace the incident's shot pattern):
   - **Tommy Gun:** hold to fire, about 10 balls a second, a wide cone that blooms while held, on a timer (never a drum). Screen shake, a big rattle, casings.
   - **Laser:** hitscan, about one shot a second, 3 damage, headshots kill, ricochets off walls (two bounces), on a timer. The server rewinds rats to what the shooter saw (the existing 250 ms history).
   - **Mousetrap:** the gun goes away and the rat carries a big trap; the next click sets it down. Anyone else who walks over it dies (Ironclad does not help); it takes many hits to destroy, so a doorway can be cleared; one trap per rat.
-  - New sites for the three, the reward draw includes them (Stakeout falls from one in three to about one in six), bots use all three and avoid and shoot traps.
+  - New sites for the three (two each, layout 6, 33 sites), the reward draw includes them (Stakeout falls from one in three to about one in six), bots use all three and avoid and shoot traps. Models: a Tommy in a violin case, a pulp ray gun, a brass-and-wood trap (`src/utils/WeaponModel.ts`); the Tommy sound is a CC0 Thompson recording.
+  - The Excessive Force carrier's balls look heavier (1.35×).
 - [x] **Incidents** (what each now does: [the assignments](dispatch-assignments.md#incidents-changed-in-protocol-27-tyler-1-october)):
   - [x] Rat Race, Delayed Reaction and Clean Bill removed (stored rooms map them to All Units, Crossfire and Most Wanted).
   - [x] All Units told clearly: an ALL UNITS radio banner and squawk, backup rats strobing red and blue with a yelp, and a YOU'RE BACKUP card with an arrow to the action.
@@ -81,7 +82,8 @@ Tyler: Big Cheese and Blackout are the best incidents because "they radically ch
   - [x] Bad Ammunition: funny paths that still land where you aim. One ball per trigger with a personality named by its shot ID (corkscrew, snake, floater, hiccup, superball), each with its own sound and words; jams, duds, crooked volleys and backfire soot are gone.
   - [x] Malpractice becomes **Code Violation**: every supply hops away and 35% explode (death cause `malfunction`), launch machines fill themselves to bursting and shove, alarm pillars clang and shove; sparks, rattles and zaps (city fact `malfunction`).
   - [x] New: **Act of God** (giant cheese meteors with shadow warnings; Tyler will name it after playing). Roofs shelter; a direct hit flattens (death cause `meteor`, nobody credited), the blast throws, the burst shares the ball cap. Bots step out of shadows they can see (city fact `meteor`).
-- [ ] Protocol 27, era, docs; full checks; staging for Tyler's playtest.
+- [x] Protocol 27, `mindVersion` 8, era `arsenal`, docs. Independent review: five findings fixed (Tommy balls stayed plain in Big Cheese, no trap set on a rat, no orphan trap restore, the predicted laser traced as thick as the server's, no per-tick meteor reallocation). Full checks at `da7bad3`: worker 248/248, client 1,563/1,563, scripts 133/133, build.
+- [ ] **Next action:** Tyler playtests staging (Worker `eb736ac5-886f-49da-be60-1c74edc29c1e`, build `staging-2026-10-01-da7bad3`, layout 6). Production only on his OK.
 
 ## The case (Tyler, 2026-10-01)
 
