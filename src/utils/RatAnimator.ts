@@ -105,8 +105,9 @@ export class RatAnimator {
     private airVertical = 0;
     private airStill = 0;
     private airPitch = 0;
-    private airBank = 0;
-    private airBankRate = 0;
+    /** Sideways travel in the air (−1…1 of a full strafe), springy so it overshoots when the rat reverses. */
+    private airDrift = 0;
+    private airDriftRate = 0;
     private landAge = 10;
     private landSize = 0;
     /** This frame's air phases (0…1, already scaled by `air`), read by the extras. */
@@ -514,7 +515,7 @@ export class RatAnimator {
     }
 
     private clearAir(): void {
-        this.inAir = false;this.air = this.airVertical = this.airStill = this.airPitch = this.airBank = this.airBankRate = 0;
+        this.inAir = false;this.air = this.airVertical = this.airStill = this.airPitch = this.airDrift = this.airDriftRate = 0;
         this.airRise = this.airFall = this.airApex = 0;
     }
 
@@ -617,8 +618,8 @@ export class RatAnimator {
             const ahead=THREE.MathUtils.clamp((v.x*sin+v.z*cos)/18,-1,1),aside=THREE.MathUtils.clamp((v.x*cos-v.z*sin)/18,-1,1);
             this.airPitch=THREE.MathUtils.lerp(this.airPitch,ahead*airParams.lean*this.air,1-Math.exp(-10*dt));
             const h=Math.min(dt,1/30);
-            this.airBankRate+=((-aside*airParams.bank*this.air-this.airBank)*90-this.airBankRate*8)*h;
-            this.airBank+=this.airBankRate*h;
+            this.airDriftRate+=((aside*this.air-this.airDrift)*90-this.airDriftRate*8)*h;
+            this.airDrift+=this.airDriftRate*h;
         }
         this.landAge+=dt;
         this.verticalSpeed = verticalSpeed;
@@ -736,7 +737,8 @@ export class RatAnimator {
                 // all about the coat's middle. The landing squashes and wobbles back.
                 const stretch = air.stretch * this.airRise - air.squash * this.airApex + air.reach * this.airFall - air.land * landing;
                 body.scale.y += stretch;body.scale.x -= stretch * .45;body.scale.z -= stretch * .45;
-                const tuck = air.tuck * this.airApex, ax = this.airPitch - tuck - air.arch * this.airRise, az = this.airBank;
+                // Sideways the coat stays upright and only lags a touch (top behind); the tail, hat and ears trail.
+                const tuck = air.tuck * this.airApex, ax = this.airPitch - tuck - air.arch * this.airRise, az = this.airDrift * air.sway;
                 body.rotation.x += ax;body.rotation.z += az;
                 this.airPivot.set(0, air.pivot, 0).applyEuler(this.airTilt.set(ax, 0, az));
                 body.position.x -= this.airPivot.x;body.position.y += air.pivot - this.airPivot.y;body.position.z -= this.airPivot.z;
@@ -874,6 +876,12 @@ export class RatAnimator {
                 // M1: wide eyes with the scream.
                 const wide = 1 + .3 * this.mouthOpen;
                 leftEye.scale.x *= wide;leftEye.scale.y *= wide;rightEye.scale.x *= wide;rightEye.scale.y *= wide;
+            }
+            if (air) {
+                // A1 sideways: the tail swings out behind, the hat tips back and the ears blow over, against the travel.
+                const drift = this.airDrift * air.drag;
+                tail.rotation.y += drift;hat.rotation.z += drift * .35;
+                leftEar.rotation.z += drift * .7;rightEar.rotation.z += drift * .7;
             }
         }
         this.poseExtras(sway, stepLift);

@@ -70,10 +70,11 @@ Tyler, watching rats jump, bounce back and forth and fly: they look "stiff and l
   - **Rising:** the coat stretches tall, arches back a little, and the feet and tail trail.
   - **Apex:** a tuck. The body squashes, the belly curls over the hips with the chest nearly level, and the feet pull up.
   - **Falling:** the body opens up and reaches for the ground. The ears, whiskers and tail stream up, and the hat lifts off the head.
-  - **Lean and bank:** the body leans into its travel. A springy bank swings over when the rat reverses mid-air, so back-and-forth jumping reads.
+  - **Travel:** a small forward lean into travel. Sideways the coat stays upright and lags only a touch, while the tail swings out behind, the hat tips back and the ears blow over. A spring makes them swing over when the rat reverses mid-air.
+  - **Tyler's first look (1 October):** the first build banked the whole body into a strafe jump, and Tyler said it "looks ridiculous, it's like torpedoing to the side". **Do not tilt the body sideways into travel.** The `?feel=dev` panel "doesn't work" for him: it is a 65-item list of raw numbers. Its A1 switch and values do save and apply when tested, but tune from his descriptions instead of sending him to it.
   - **Landing:** a squash that wobbles back.
   - Everything is presentation only and switchable, with its numbers in `FEEL.airActing`.
-  - **Evidence:** a throwaway contact sheet of one jump arc, side and rear, with and without the switch, was inspected before the deploy. Tyler has not judged it in play.
+  - **Evidence:** throwaway contact sheets of one jump arc, side and rear (forward, sideways, and reversing mid-air), with and without the switch, inspected before each deploy. Tyler has seen the first build only.
 
 ## Kill streak mark (Tyler, 2026-09-30)
 

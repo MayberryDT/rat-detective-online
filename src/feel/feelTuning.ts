@@ -158,9 +158,11 @@ export const FEEL={
     /** A1 Air acting (Tyler, 1 October: jumping rats were "stiff and lifeless", a salt shaker). Every rat, airborne from a
      * take-off over `takeOff` u/s or a fall over `fall` u/s until it lands: no walking stride in the air; `stretch` rising,
      * a `squash` and `tuck` (rad) ball at the apex with the feet pulled up (`feet`), a `reach` falling with ears (`ears`),
-     * tail (`tail`) and hat (`hat`) streaming up; a `lean` (rad) and springy `bank` (rad) into travel about `pivot` units up the
-     * coat; `arch` (rad) back on the way up; a landing squash (`land`) that wobbles back. */
-    airActing:{label:'A1 Air acting',toggle:true,params:{takeOff:9,fall:7,stretch:.22,squash:.12,reach:.1,tuck:.55,arch:.14,lean:.32,bank:.34,pivot:.9,feet:1,ears:.7,tail:.6,hat:.1,land:.22}},
+     * tail (`tail`) and hat (`hat`) streaming up; a small forward `lean` (rad) into travel about `pivot` units up the coat;
+     * `arch` (rad) back on the way up; a landing squash (`land`) that wobbles back. Sideways (Tyler: banking into a strafe
+     * jump looked like "torpedoing to the side") the coat stays upright, lagging only `sway` (rad), while the tail, hat
+     * and ears trail by `drag` (rad), springing over when the rat reverses. */
+    airActing:{label:'A1 Air acting',toggle:true,params:{takeOff:9,fall:7,stretch:.22,squash:.12,reach:.1,tuck:.55,arch:.14,lean:.12,sway:.05,drag:.5,pivot:.9,feet:1,ears:.7,tail:.6,hat:.1,land:.22}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;
