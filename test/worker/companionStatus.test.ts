@@ -1,6 +1,6 @@
 import { env, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import { createAssignment } from '../../src/shared/assignments';
+import { ASSIGNMENT_TUNING, createAssignment } from '../../src/shared/assignments';
 import {
   COMPANION_FRESHNESS_MS,
   COMPANION_SCHEMA_VERSION,
@@ -53,7 +53,7 @@ describe('companion projection', () => {
     expect(paper).toMatchObject({
       players: 2, humans: 1, holderName: 'Basil', roundId: 'chain-round',
       assignment: {
-        id: 'chain-of-custody', title: 'PAPER CHASE', objectiveTarget: 3,
+        id: 'chain-of-custody', title: 'PAPER CHASE', objectiveTarget: ASSIGNMENT_TUNING.deliveryTarget,
         objectiveUnit: 'deliveries', destination: { id: chain.destinations[0] },
         clockRunning: false,
       },

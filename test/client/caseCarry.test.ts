@@ -76,7 +76,7 @@ describe('natural briefcase carry',()=>{
                 }else expect(snapshot.assignment!.result?.winnerId).toBe(carrier.id);
                 simulation.step(0,++now);deliverSnapshot();expect(simulation.assignmentState!.deliveries.carrier).toBe(points);
             }
-            expect(playReaction.mock.calls.filter(([event])=>event==='delivery')).toHaveLength(3);
+            expect(playReaction.mock.calls.filter(([event])=>event==='delivery')).toHaveLength(ASSIGNMENT_TUNING.deliveryTarget);
         }finally{view.dispose();}
     });
     it('detaches a confirmed carrier at reset even before the next snapshot arrives',()=>{

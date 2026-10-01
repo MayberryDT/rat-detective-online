@@ -203,7 +203,7 @@ it('keeps a case quip stable between events and rotates it on a later pickup whi
   j.scorerId=null;hud.update(state,7200,'Me',true);expect(root.querySelector('.assignment-detail').textContent).toBe('TAKE THE CASE TO THE ZONE');
   j.scorerId='other';hud.update(state,7300,'Other',false);expect(root.querySelector('.assignment-detail').textContent).toBe('DISARM THE CARRIER');
   state.assignment.phase='suspended';hud.update(state,7400);expect(root.querySelector('.assignment-detail').textContent).toContain('PROGRESS PAUSED');
-  expect(root.querySelector('.jurisdiction-timer-label').textContent).toBe('ZONE TIMER PAUSED');
+  expect(root.querySelector('.jurisdiction-timer-label').textContent).toBe('ZONE PAUSED');
   state.assignment=createAssignment('excessive-force',8000);hud.update(state,8000);expect(root.querySelector('.jurisdiction-timer').hidden).toBe(true);
   state.assignment=undefined;hud.update(state,8100);expect(root.querySelector('.jurisdiction-timer').hidden).toBe(true);hud.dispose();
  });
