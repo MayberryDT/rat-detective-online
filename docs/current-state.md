@@ -1,10 +1,10 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-10-01** (protocol 26). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-10-01** (protocol 27). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
-## Protocol 27: the arsenal and the incident rework — 1 October staging
+## Protocol 27: the arsenal and the incident rework — 1 October production
 
-Tyler (1 October): double down on what Big Cheese and Blackout do, make pickups juicy, make the Excessive Force carrier stronger, round the targets. On staging (Worker `7c566d1f-6395-47c4-8a52-82c86da0c545`, build `staging-2026-10-01-011af0f`, **protocol 27**, layout 6, `mindVersion` 8), not in production. See [the plan](juice-plan.md#protocol-27-the-arsenal-and-the-incident-rework-tyler-2026-10-01) and [the assignments](dispatch-assignments.md#incidents-changed-in-protocol-27-tyler-1-october).
+Tyler (1 October): double down on what Big Cheese and Blackout do, make pickups juicy, make the Excessive Force carrier stronger, round the targets. Tyler: "Let's push it live now. New release, baby." Production Worker `32902d92-a7c1-40f0-930a-d904573ced86`, build `production-2026-10-01-ed43d51`, client `index-CARmV9g5.js`, commit `ed43d51` on `main` (GitHub `master`), **protocol 27**, layout 6, `mindVersion` 8 ([receipt](verification/protocol-27-release-2026-10-01.md)). See [the plan](juice-plan.md#protocol-27-the-arsenal-and-the-incident-rework-tyler-2026-10-01) and [the assignments](dispatch-assignments.md#incidents-changed-in-protocol-27-tyler-1-october).
 
 - **Targets:** PAPER CHASE 10 deliveries, Jurisdiction 100 points (zones of 20), Excessive Force 10 case kills.
 - **Excessive Force carrier:** double damage and a full heal on every case kill; its balls look heavier.
