@@ -2,7 +2,19 @@
 
 Verified from source and production through **2026-09-30** (release A, protocol 24). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
-## Closing Time removed — staging (protocol 25)
+## Protocol 25 and the lighter Jev — 1 October production
+
+Tyler: "send it live." Production Worker `88171c4c-a93a-40a3-bc5c-3d0769c59c3d`, build `production-2026-10-01-6356f81`, client `index-Bw2kUX-i.js`, commit `6356f81`, `mindVersion` 6. Live:
+
+- Closing Time removed (below);
+- the Blackout flashlights and heavy Big Cheese;
+- the lighter Jev;
+- supply claim juice with heavy Ironclad sounds;
+- the reconnect fixes.
+
+See [the receipt](verification/protocol-25-release-2026-10-01.md).
+
+## Closing Time removed — production (protocol 25)
 
 Three assignments remain: Excessive Force, Jurisdiction and PAPER CHASE, shuffled with no immediate repeat. Closing Time's clock, HUD card, countdown ticks, closing music sting, last-second-steal highlight, bot evade goal and companion `remainingMs`/`last-holder` fields are gone. A room restored with a saved Closing Time round starts a fresh Jurisdiction round and clears any pending win screen; a stored playlist bag that names it is reshuffled. Sections below that describe four modes or Closing Time are history.
 
