@@ -74,9 +74,9 @@ export function addLeatherBriefcase(root:THREE.Group){
         part('document-lines',box(.1,.005,.009),ink,x,H*.5+.05,index%2?.04:-.03,0,0,sheet.rotation.z);
     }
     // A curved, stitched leather handle on brass loops.
-    part('case-handle-arc',new THREE.TorusGeometry(.12,.028,10,20,Math.PI),edge,0,H*.47+.02,0);
+    part('case-handle-arc',new THREE.TorusGeometry(.12,.028,10,20,Math.PI),edge,0,H*.47+.035,0);
     for(const x of [-.12,.12]){
-        part('handle-anchor',new THREE.TorusGeometry(.03,.009,6,12),brass,x,H*.47+.015,0,0,Math.PI/2);
+        part('handle-anchor',new THREE.TorusGeometry(.03,.009,6,12),brass,x,H*.47+.03,0,0,Math.PI/2);
         part('handle-anchor',box(.06,.018,.08,.006),brass,x,H*.46,0);
     }
     // Eight tumbling cases used to draw every stitch, clasp and sheet separately.

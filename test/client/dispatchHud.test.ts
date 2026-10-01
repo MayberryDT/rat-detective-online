@@ -2,7 +2,8 @@ import {afterEach,describe,it,expect,vi} from 'vitest';
 import {MUNICIPAL_QUIPS,INCIDENT_QUIPS} from '../../src/ui/municipalQuips';
 import {DispatchHud} from '../../src/prototype/DispatchHud';
 import type {ChaosState} from '../../src/shared/chaosState';
-import { createAssignment, CHAIN_ROUTE } from '../../src/shared/assignments';
+import { ASSIGNMENT_TUNING, createAssignment, CHAIN_ROUTE } from '../../src/shared/assignments';
+import { JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
 class Element {
  style:Record<string,string>={};dataset:Record<string,string>={};private text='';textWrites=0;private html='';htmlWrites=0;className='';hidden=false;offsetWidth=0;
  get innerHTML(){return this.html;}set innerHTML(value:string){this.html=value;this.htmlWrites++;}
@@ -39,7 +40,7 @@ describe('Dispatch broadcast lifecycle',()=>{
   hud.update(state,4000);state.case.owner='me';hud.update(state,4100,'Me',true);
   expect(root.querySelector('.case-broadcast span').textContent).not.toContain('DOUBLE');
   state.assignment=createAssignment('chain-of-custody',0);state.assignment.destinations=[...CHAIN_ROUTE];state.assignment.phase='active';state.assignment.deliverySerial=1;
-  hud.update(state,4200);expect(root.querySelector('.assignment-counter').textContent).toBe('TOP FIVE · FIRST TO 3');
+  hud.update(state,4200);expect(root.querySelector('.assignment-counter').textContent).toBe(`TOP FIVE · FIRST TO ${ASSIGNMENT_TUNING.deliveryTarget}`);
   expect(root.querySelector('.assignment-target').textContent).toBe('DELIVER TO: SEWER MAINTENANCE');
   state.assignment=createAssignment('excessive-force',0);state.assignment.phase='active';state.assignment.caseKills.me=6;hud.setScores([{id:'me',name:'Me',kills:12,deaths:2}],'me');
   hud.update(state,4300,undefined,false);expect(root.querySelector('.assignment-detail').textContent).toBe('GET THE CASE TO SCORE');expect(root.querySelector('.assignment-progress').textContent).toBe('YOU: 6 / 10');expect(root.querySelector('.assignment-stats').textContent).toContain('TOTAL KILLS 12');
@@ -76,7 +77,7 @@ describe('Dispatch broadcast lifecycle',()=>{
  it('confirms a personal delivery immediately and names the next landmark',()=>{
   const {hud,root,state,feedback}=fixture();state.assignment=createAssignment('chain-of-custody',0);state.assignment.destinations=[...CHAIN_ROUTE];state.assignment.phase='active';
   hud.setScores([{id:'me',name:'Me',kills:0,deaths:0}],'me');hud.update(state,5000);state.assignment.deliverySerial=1;state.assignment.deliveries.me=1;state.assignment.lastDelivery={playerId:'me',playerName:'Me',at:5010};hud.update(state,5010);
-  expect(root.querySelector('.assignment-confirmation').textContent).toContain('PAPERWORK DELIVERED! +1 · 1/3');
+  expect(root.querySelector('.assignment-confirmation').textContent).toContain(`PAPERWORK DELIVERED! +1 · 1/${ASSIGNMENT_TUNING.deliveryTarget}`);
   expect(root.querySelector('.assignment-target').textContent).toBe('DELIVER TO: SEWER MAINTENANCE');expect(feedback).toHaveBeenCalledWith('verified');hud.dispose();
  });
  it('does not rewrite stable HUD text during animation frames, including Evidence Tampering',()=>{
@@ -192,12 +193,12 @@ it('keeps a case quip stable between events and rotates it on a later pickup whi
   expect(root.querySelector('.assignment-progress').textContent).toBe('YOU: 12 / 60');
   expect(root.querySelector('.assignment-detail').textContent).toBe('SCORING');
   expect(root.querySelector('.jurisdiction-timer').hidden).toBe(false);
-  expect(root.querySelector('.assignment-zone-clock').textContent).toBe('75s');
+  expect(root.querySelector('.assignment-zone-clock').textContent).toBe(String(JURISDICTION_TUNING.zoneMs/1000));
   j.heldMs.me=13000;hud.update(state,6000,'Me',true);expect(feedback).not.toHaveBeenCalledWith('case-point');
-  j.remainingMs=9999;hud.update(state,7000,'Me',true);hud.update(state,7100,'Me',true);
+  j.remainingMs=JURISDICTION_TUNING.warningMs-1;hud.update(state,7000,'Me',true);hud.update(state,7100,'Me',true);
   expect(feedback.mock.calls.filter(([cue])=>cue==='countdown')).toHaveLength(1);
   expect(root.querySelector('.assignment-zone-next').hidden).toBe(false);
-  expect(root.querySelector('.assignment-zone-clock').textContent).toBe('10s');
+  expect(root.querySelector('.assignment-zone-clock').textContent).toBe(String(JURISDICTION_TUNING.warningMs/1000));
   expect(root.querySelector('.jurisdiction-timer').dataset.urgent).toBe('true');
   j.scorerId=null;hud.update(state,7200,'Me',true);expect(root.querySelector('.assignment-detail').textContent).toBe('TAKE THE CASE TO THE ZONE');
   j.scorerId='other';hud.update(state,7300,'Other',false);expect(root.querySelector('.assignment-detail').textContent).toBe('DISARM THE CARRIER');

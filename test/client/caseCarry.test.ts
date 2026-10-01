@@ -7,7 +7,7 @@ import type { PlayerData } from '../../src/shared/networkProtocol';
 import type { RatEntity } from '../../src/entities/RatEntity';
 import { createRatMesh } from '../../src/utils/RatModel';
 import { RatAnimator } from '../../src/utils/RatAnimator';
-import { createAssignment, destinationPoint, activeDestination } from '../../src/shared/assignments';
+import { createAssignment, destinationPoint, activeDestination, ASSIGNMENT_TUNING } from '../../src/shared/assignments';
 import { ChaosEncoder, ChaosDecoder } from '../../src/shared/chaosWire';
 
 vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
@@ -37,7 +37,7 @@ function player(id:string,yaw=0):PlayerData{
         hatType:'fedora',hatColor:0x343434,coatColor:0x555555,furColor:0xbe9767,hp:3,kills:0,deaths:0};
 }
 describe('natural briefcase carry',()=>{
-    it('shows both non-winning relocations immediately through compact snapshots with the accepted delivery animation, and wins only at three',()=>{
+    it('shows every non-winning relocation immediately through compact snapshots with the accepted delivery animation, and wins only at the target',()=>{
         const carrier=player('carrier'),simulation=new ChaosSimulation(new Map([[carrier.id,carrier]]),()=>{});
         let now=Date.now();const assignment=createAssignment('chain-of-custody',now-3000);assignment.phase='active';simulation.setAssignment(assignment);
         const mesh=createRatMesh(),animator=new RatAnimator(mesh),playReaction=vi.fn(animator.playReaction.bind(animator));
@@ -59,7 +59,7 @@ describe('natural briefcase carry',()=>{
         };
         try{
             view.setScores([],carrier.id);deliverSnapshot();
-            for(let points=1;points<=3;points++){
+            for(let points=1;points<=ASSIGNMENT_TUNING.deliveryTarget;points++){
                 const p=simulation.caseBody.position;Object.assign(carrier,{x:p.x,y:p.y-.8,z:p.z});
                 mesh.position.set(carrier.x,carrier.y,carrier.z);simulation.step(0,++now);deliverSnapshot();
                 expect(simulation.caseHolderId).toBe(carrier.id);expect(mesh.getObjectByName('hot-case-off-hand')).toBeDefined();
@@ -69,7 +69,7 @@ describe('natural briefcase carry',()=>{
                 simulation.step(0,++now);
                 const snapshot=deliverSnapshot();
                 expect(snapshot.assignment!.deliveries).toEqual({carrier:points});
-                if(points<3){
+                if(points<ASSIGNMENT_TUNING.deliveryTarget){
                     expect(snapshot.assignment!.result).toBeUndefined();expect(snapshot.case.owner).toBeNull();
                     expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
                     expect(scene.getObjectByName('hot-case')!.position.distanceTo(new THREE.Vector3(snapshot.case.p.x,snapshot.case.p.y,snapshot.case.p.z))).toBeLessThan(.002);

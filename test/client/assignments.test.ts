@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_HP } from '../../src/shared/networkProtocol';
 import { AssignmentRules } from '../../src/shared/AssignmentRules';
-import { ASSIGNMENT_IDS, CHAIN_ROUTE, destinationPoint, destinationContains, ASSIGNMENT_DESTINATIONS, createAssignment, nextAssignment, parseAssignment, restoreAssignment, type AssignmentId, type AssignmentRotation } from '../../src/shared/assignments';
+import { activeDestination, ASSIGNMENT_IDS, ASSIGNMENT_TUNING, CHAIN_ROUTE, destinationPoint, destinationContains, ASSIGNMENT_DESTINATIONS, createAssignment, nextAssignment, parseAssignment, restoreAssignment, type AssignmentId, type AssignmentRotation } from '../../src/shared/assignments';
 import { applyHit, createPlayer } from '../../src/worker/gameState';
 import { ChaosEncoder, ChaosDecoder } from '../../src/shared/chaosWire';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
@@ -33,20 +33,20 @@ describe('Dispatch assignment rules',()=>{
         delete restored.forced;restored.remaining=[];
         expect(nextAssignment(restored,()=>.9)).not.toBe('jurisdiction');
     });
-    it('awards personal delivery points through theft and ends only at three for one rat',()=>{
-        const {rules,state,first}=fixture('chain-of-custody'),route=[...state.destinations];
+    it('awards personal delivery points through theft and ends only at the target for one rat',()=>{
+        const {rules,state,first}=fixture('chain-of-custody'),route=[...state.destinations],win=ASSIGNMENT_TUNING.deliveryTarget,visits=2*win-1;
         expect(rules.visit('a',destinationPoint(route[1],false),1)).toBe('none');
-        for(let i=0;i<5;i++){
-            const who=i%2?'b':'a',point=destinationPoint(route[i],false);
+        for(let i=0;i<visits;i++){
+            const who=i%2?'b':'a',point=destinationPoint(activeDestination(state)!,false);
             expect(rules.visit(null,point,2+i*4)).toBe('carry-required');
             rules.setPhase(3+i*4,true);expect(rules.visit(who,point,3+i*4)).toBe('none');
             rules.setPhase(4+i*4,false);
-            expect(rules.visit(who,point,4+i*4)).toBe(i===4?'closed':'delivered');
-            expect(state.deliverySerial).toBe(i+1);expect(state.destinations).toEqual(route);
+            expect(rules.visit(who,point,4+i*4)).toBe(i===visits-1?'closed':'delivered');
+            expect(state.deliverySerial).toBe(i+1);if(i+1<route.length)expect(state.destinations).toEqual(route);
             expect(rules.visit(who,point,5+i*4)).toBe('none');
             if(i===0){first.hp=0;expect(state.deliveries.a).toBe(1);first.hp=3;}
         }
-        expect(state.deliveries).toEqual({a:3,b:2});expect(state.result?.winnerId).toBe('a');
+        expect(state.deliveries).toEqual({a:win,b:win-1});expect(state.result?.winnerId).toBe('a');
         expect(parseAssignment(state)).toEqual(state);
     });
     it('keeps rotating random landmarks beyond a whole bag of deliveries without an immediate repeat',()=>{
@@ -57,7 +57,7 @@ describe('Dispatch assignment rules',()=>{
         expect(state.deliveries).toEqual({a:2,b:2,c:2,d:2});expect(state.result).toBeUndefined();
         expect(new Set(state.destinations)).toEqual(new Set(CHAIN_ROUTE));expect(state.destinations[0]).not.toBe(route[n-1]);
         expect(parseAssignment(state)).toEqual(state);
-        expect(rules.visit('b',destinationPoint(state.destinations[0],false),10)).toBe('closed');
+        for(let left=ASSIGNMENT_TUNING.deliveryTarget-2;left>0;left--)expect(rules.visit('b',destinationPoint(activeDestination(state)!,false),20-left)).toBe(left===1?'closed':'delivered');
     });
     it('requires a living carrier inside every landmark, including the final stop',()=>{
         const {rules,state,first}=fixture('chain-of-custody');first.hp=0;

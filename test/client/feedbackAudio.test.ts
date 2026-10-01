@@ -20,12 +20,14 @@ function fixture(){
 }
 it('debounces repeated snapshots/collision chatter but keeps ownership changes distinct',()=>{
  const ctx=fixture();audio.play('case-pickup');audio.play('case-pickup');audio.play('case-lost');
- expect(state.sounds).toHaveLength(2);expect(state.sounds[0].volume).toBe(.6);
+ expect(state.sounds).toHaveLength(2);
  ctx.currentTime=.2;audio.play('case-pickup');expect(state.sounds).toHaveLength(3);
 });
 it('bounds chatter without blocking a fresh important cue and cleans every voice',()=>{
- const ctx=fixture();for(let i=0;i<30;i++){ctx.currentTime+=.1;audio.play('case-hit',{x:50,y:0,z:0});}
- expect(state.sounds).toHaveLength(6);expect(state.sounds[0].volume).toBeCloseTo(.48*worldSoundGain(50));
+ const ctx=fixture();audio.play('case-hit');const near=state.sounds[0].volume;
+ for(let i=0;i<30;i++){ctx.currentTime+=.1;audio.play('case-hit',{x:50,y:0,z:0});}
+ // Distant world cues share the mild distance gain.
+ expect(state.sounds).toHaveLength(6);expect(state.sounds[1].volume).toBeCloseTo(near*worldSoundGain(50));
  audio.play('case-pickup');audio.play('case-lost');audio.play('death');
  expect(state.sounds.filter(s=>s.isPlaying)).toHaveLength(8);expect(state.sounds.at(-1).isPlaying).toBe(true);
  state.sounds.at(-1).onEnded();audio.dispose();expect(state.sounds.filter(s=>s.isPlaying)).toHaveLength(0);

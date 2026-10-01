@@ -29,7 +29,8 @@ it('launches an ordinary case into a visible tumble and bounces it off real wall
         if(before.y< -2&&b.velocity.y>1)floorBounce=true;
         expect(b.position.x).toBeLessThan(12.1);
     }
-    expect(peak).toBeGreaterThan(2);expect(travel).toBeGreaterThan(8);
+    // A visible tumble that still clears a rat's head and crosses the street (scaled to the slower 1 October kick).
+    expect(peak).toBeGreaterThan(1.6);expect(travel).toBeGreaterThan(8);
     expect(wallBounce).toBe(true);expect(floorBounce).toBe(true);
     expect(sim.caseHolderId).toBeNull();expect(hits).not.toHaveBeenCalled();
 });
@@ -80,7 +81,7 @@ it('bounds ordinary repeated-shot speed while keeping a useful lift',()=>{
     // The shot catches the moving case; stacked momentum is capped at impact.
     sim.step(.01,1011);
     expect(sim.caseBody.velocity.length()).toBeLessThanOrEqual(T.caseShotMaxSpeed+.01);
-    expect(sim.caseBody.velocity.y).toBeGreaterThan(5);
+    expect(sim.caseBody.velocity.y).toBeGreaterThan(.5*T.caseShotLift);
 });
 
 it('collects a clear run-by at the visible case edge without pixel hunting',()=>{

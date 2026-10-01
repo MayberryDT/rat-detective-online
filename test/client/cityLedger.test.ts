@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RoundLedger, ASSIST_WINDOW_MS, standings } from '../../src/shared/city/ledger';
-import { createAssignment } from '../../src/shared/assignments';
+import { ASSIGNMENT_TUNING, createAssignment } from '../../src/shared/assignments';
 
 // Ways the running K/D/A and standings could teach the future AI the wrong lesson, written first:
 // 1. The killer or the victim is also credited with an assist.
@@ -56,9 +56,10 @@ describe('standings', () => {
     a.deliveries = { x: 2, y: 1 };
     const s = standings(['x', 'y', 'z'], { assignment: a, kills: { x: 0, y: 9, z: 3 } });
     expect(s.get('x')).toMatchObject({ rank: 1, raw: 2 });
-    expect(s.get('x')!.progress).toBeCloseTo(2 / 3);
-    expect(s.get('x')!.lead).toBeCloseTo(1 / 3);
-    expect(s.get('y')!.lead).toBeCloseTo(-1 / 3);
+    const target = ASSIGNMENT_TUNING.deliveryTarget;
+    expect(s.get('x')!.progress).toBeCloseTo(2 / target);
+    expect(s.get('x')!.lead).toBeCloseTo(1 / target);
+    expect(s.get('y')!.lead).toBeCloseTo(-1 / target);
     expect(s.get('z')).toMatchObject({ rank: 3, progress: 0 });
   });
 

@@ -157,7 +157,8 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
     const j=active?.jurisdiction;
     if(j){
         const id=activeZone(j),upcoming=JURISDICTION_ZONES[nextZone(j)];
-        zone=`The active zone is the ${label(JURISDICTION_ZONES[id].label)}, with ${Math.ceil(j.remainingMs/1000)} points left in it; ${zoneContains(id,self)?'I am inside it':`it is ${relative(self,JURISDICTION_ZONES[id].posts[0])}`}.`+
+        const left=j.remainingMs/JURISDICTION_TUNING.zoneMs,points=left>.66?'most of its points':left>.33?'about half its points':'only a few points';
+        zone=`The active zone is the ${label(JURISDICTION_ZONES[id].label)}, with ${points} left in it; ${zoneContains(id,self)?'I am inside it':`it is ${relative(self,JURISDICTION_ZONES[id].posts[0])}`}.`+
             (j.scorerId&&j.remainingMs<=JURISDICTION_TUNING.warningMs?` It is nearly emptied; next it moves to the ${label(upcoming.label)}, ${relative(self,upcoming.posts[0])}.`:'');
     }
     const destination=active&&activeDestination(active);

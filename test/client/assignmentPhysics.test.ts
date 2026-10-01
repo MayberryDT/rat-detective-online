@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
-import { createAssignment, destinationPoint, destinationContains, CHAIN_ROUTE, ASSIGNMENT_DESTINATIONS, type AssignmentId, type DestinationId } from '../../src/shared/assignments';
+import { createAssignment, destinationPoint, destinationContains, CHAIN_ROUTE, ASSIGNMENT_DESTINATIONS, ASSIGNMENT_TUNING, type AssignmentId, type DestinationId } from '../../src/shared/assignments';
+const WIN=ASSIGNMENT_TUNING.deliveryTarget;
 import { applyHit, createPlayer } from '../../src/worker/gameState';
 import { CHAOS_TUNING, CASE_SPAWNS, type ChaosState } from '../../src/shared/chaosState';
 import type { PlayerData } from '../../src/shared/networkProtocol';
@@ -47,8 +48,8 @@ describe('assignments in the real city case simulation',()=>{
         for(let i=0;i<2;i++){if(i)pickup(sim,a,-16,-30,NOW+100+i*10);carriedEntry(sim,a,CHAIN_ROUTE[i],NOW+101+i*10);}
         expect(sim.assignmentState!.deliveries).toEqual({a:2});expect(sim.assignmentState!.result).toBeUndefined();
         sim.release(a.id);Object.assign(a,{x:100,z:100});pickup(sim,b,-16,-30,NOW+300);
-        for(let i=2;i<5;i++){if(i>2)pickup(sim,b,-16,-30,NOW+400+i*10);carriedEntry(sim,b,CHAIN_ROUTE[i],NOW+401+i*10);}
-        expect(sim.assignmentState!.deliveries).toEqual({a:2,b:3});
+        for(let i=2;i<2+WIN;i++){if(i>2)pickup(sim,b,-16,-30,NOW+400+i*10);carriedEntry(sim,b,CHAIN_ROUTE[i],NOW+401+i*10);}
+        expect(sim.assignmentState!.deliveries).toEqual({a:2,b:WIN});
         expect(sim.assignmentState!.result).toMatchObject({winnerId:'b',method:'carried'});
     });
     it('does not score loose cases or turn an uncarried arrival into a third delivery',()=>{
@@ -100,7 +101,7 @@ describe('assignments in the real city case simulation',()=>{
     });
     it.each(CHAIN_ROUTE)('Tampering expiry cannot award an edge-overlapping %s case to a waiting carrier',id=>{
         const initial=fixture('chain-of-custody');initial.sim.assignmentState!.destinations=[...CHAIN_ROUTE.filter(d=>d!==id),id];
-        const last=CHAIN_ROUTE.length-1;initial.sim.assignmentState!.deliverySerial=last;initial.sim.assignmentState!.deliveries.a=2;
+        const last=CHAIN_ROUTE.length-1;initial.sim.assignmentState!.deliverySerial=last;initial.sim.assignmentState!.deliveries.a=WIN-1;
         const saved=initial.sim.snapshot(false);saved.dispatch={phase:'rolling',incident:'evidence-tampering',serial:1,started:NOW,until:NOW+100};
         const {sim,a}=fixture('chain-of-custody',saved);sim.step(0,NOW+100);
         const b=ASSIGNMENT_DESTINATIONS[id].bounds,inside=destinationPoint(id,false);
@@ -167,9 +168,9 @@ it.each(CHAIN_ROUTE)('respawns delivered %s evidence at a clear authored site an
     const next=restored.sim.assignmentState!.destinations[1];carriedEntry(restored.sim,restored.b,next,NOW+900);
     expect(restored.sim.assignmentState!.deliveries).toEqual({a:1,b:1});expect(restored.sim.caseHolderId).toBeNull();
 });
-it('keeps the winning third delivery in hand and records only one result',()=>{
-    const {sim,a}=fixture('chain-of-custody');sim.assignmentState!.deliveries.a=2;sim.assignmentState!.deliverySerial=2;
+it('keeps the winning delivery in hand and records only one result',()=>{
+    const {sim,a}=fixture('chain-of-custody');sim.assignmentState!.deliveries.a=WIN-1;sim.assignmentState!.deliverySerial=2;
     pickup(sim,a,-16,-30);carriedEntry(sim,a,CHAIN_ROUTE[2],NOW+100);
     const result=structuredClone(sim.assignmentState!.result);expect(result?.winnerId).toBe(a.id);expect(sim.caseHolderId).toBe(a.id);
-    frames(sim,10,NOW+101);expect(sim.assignmentState!.result).toEqual(result);expect(sim.assignmentState!.deliveries.a).toBe(3);
+    frames(sim,10,NOW+101);expect(sim.assignmentState!.result).toEqual(result);expect(sim.assignmentState!.deliveries.a).toBe(WIN);
 });
