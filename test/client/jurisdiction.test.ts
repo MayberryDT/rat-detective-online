@@ -7,6 +7,7 @@ import {JURISDICTION_ZONES,JURISDICTION_ZONE_IDS,zoneContains,zoneSpawnExcluded,
 import {createPlayer,spawnForWorld,resetRoundForWorld} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
+import {CHAOS_TUNING} from '../../src/shared/chaosState';
 import {ServerBotController} from '../../src/worker/ServerBotController';
 import {BotNavigation} from '../../src/shared/BotNavigation';
 import {ChaosEncoder,ChaosDecoder} from '../../src/shared/chaosWire';
@@ -173,8 +174,11 @@ describe('Jurisdiction incident boundaries',()=>{
   const sim=new ChaosSimulation(players,()=>{},undefined,{seed:341283204,version:2});sim.setAssignment(state);
   sim.caseBody.position.set(a.x,a.y+.8,a.z);sim.caseBody.velocity.setZero();sim.step(0,NOW);
   sim.step(.1,NOW+100);const c=sim.caseBody.position;
-  sim.shoot(b.id,{shotId:'zone-disarm',origin:{x:c.x,y:c.y,z:c.z+1.5},direction:{x:0,y:0,z:-1}});
-  sim.step(1/60,NOW+100+1000/60);expect(sim.caseHolderId).toBeNull();const earned=sim.assignmentState!.jurisdiction!.heldMs.a;
+  for(let i=0;i<CHAOS_TUNING.caseGripHits;i++){
+   sim.shoot(b.id,{shotId:`zone-disarm-${i}`,origin:{x:c.x,y:c.y,z:c.z+1.5},direction:{x:0,y:0,z:-1}});
+   sim.step(1/60,NOW+100+(i+1)*1000/60);
+  }
+  expect(sim.caseHolderId).toBeNull();const earned=sim.assignmentState!.jurisdiction!.heldMs.a;
   Object.assign(a,{x:90,z:-90});sim.step(.1,NOW+300);expect(sim.assignmentState!.jurisdiction!.heldMs.a).toBe(earned);expect(sim.assignmentState!.jurisdiction!.scorerId).toBeNull();
  });
 });

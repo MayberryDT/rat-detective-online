@@ -71,8 +71,11 @@ describe('assignments in the real city case simulation',()=>{
     it('retains case kills after a real disarm, death and reacquisition',()=>{
         const {sim,a,b}=fixture('excessive-force');pickup(sim,a,-16,-30);sim.creditCaseKill(a.id);
         const p=sim.caseBody.position;
-        sim.shoot(b.id,{shotId:'disarm',origin:{x:p.x,y:p.y,z:p.z+1.5},direction:{x:0,y:0,z:-1}});
-        frames(sim,1);expect(sim.caseHolderId).toBeNull();expect(sim.creditCaseKill(a.id)).toBe(false);
+        for(let i=0;i<CHAOS_TUNING.caseGripHits;i++){
+            sim.shoot(b.id,{shotId:`disarm-${i}`,origin:{x:p.x,y:p.y,z:p.z+1.5},direction:{x:0,y:0,z:-1}});
+            frames(sim,1,NOW+i*100);
+        }
+        expect(sim.caseHolderId).toBeNull();expect(sim.creditCaseKill(a.id)).toBe(false);
         a.hp=0;sim.death(a,{x:1,y:0,z:0},b.id);expect(sim.assignmentState!.caseKills.a).toBe(1);
         a.hp=3;pickup(sim,a,-30,-15,NOW+5000);expect(sim.creditCaseKill(a.id)).toBe(true);
         expect(sim.assignmentState!.caseKills.a).toBe(2);

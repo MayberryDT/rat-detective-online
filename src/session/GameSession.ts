@@ -167,6 +167,9 @@ export class GameSession {
         // The page's first pagehide listener (main.ts) closes the socket before the session's own runs.
         this.transport.onDestroy=()=>this.perf.leave();
         this.perf.quality=()=>{const q=qualityStatus();return{quality:q.mode==='auto'?`auto-${q.tier}`:q.tier,scale:q.scale};};
+        // Measurement only (Tyler, 1 October): real ping before any network change.
+        this.perf.network=()=>{const n=this.transport.getDiagnostics();
+            return{...(n.rttMinMs>0||n.rttMs>0?{rtt:Math.round(n.rttMs),rttJitter:Math.round(n.rttJitterMs),rttMin:Math.round(n.rttMinMs),rttMax:Math.round(n.rttMaxMs)}:{}),...this.remotes.viewDelays()};};
         const { scene, world, listener } = this.stage;
         initEntitySounds(listener);
         this.music = prepared.music ?? new SessionMusic(listener);

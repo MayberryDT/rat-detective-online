@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {worldSoundGain} from './worldSoundGain';
 import {AudioVoicePool} from './AudioVoicePool';
-export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
+export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
 const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
     'pickup-ironclad':{file:'pickup-ironclad',volume:.7,cooldown:150},
     'pickup-hustle':{file:'pickup-hustle',volume:.65,cooldown:150},
@@ -17,6 +17,9 @@ const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:n
     'case-taken':{file:'case-taken',volume:.24,cooldown:300},
     'case-drop':{file:'menu-close',volume:.22,cooldown:300},
     'case-hit':{file:'case-hit',volume:.48,cooldown:90},
+    // A carried case taking a hit without coming loose: the same case knock, rising as the grip weakens.
+    'case-grip-1':{file:'case-hit',volume:.62,cooldown:60,rate:1.25},
+    'case-grip-2':{file:'case-hit',volume:.75,cooldown:60,rate:1.6},
     'menu-open':{file:'menu-open',volume:.24,cooldown:150},
     'menu-close':{file:'menu-close',volume:.18,cooldown:150},
     death:{file:'death',volume:.42,cooldown:500},

@@ -54,6 +54,8 @@ are historical.
 | Jurisdiction | Earn 60 personal zone points | Hold the genuine case inside the active floor-specific zone; 1 point per second |
 | PAPER CHASE | Earn three personal paperwork delivery points | Carry the case anywhere inside the currently named whole landmark for one point. Respawn the case at a random clear pickup site and activate the next landmark immediately. Personal scores survive death, disarm, theft and Tampering |
 
+**The case's grip (Tyler, 1 October).** In every assignment, a carried case comes loose after three enemy balls, each within 2 seconds of the last (`CHAOS_TUNING.caseGripHits`, `caseGripMs`); a grip left alone for 2 seconds is whole again, and a new carrier starts with a whole grip. Until then each hit jolts the case and swings it a step further out of the paw, with a rising knock (`case.grip` in the snapshot, 1 or 2). Killing the carrier still drops it at once. Before, one ball knocked it loose, and about half of all carries ended that way (47% over 1,317 carries from 1 to 1 October; median carry 6.5 s). The goal is a 15–20 minute Excessive Force at 10 kills, reached through play; [no mode ever gets a time limit](../AGENTS.md).
+
 Chain landmarks rotate in a server-shuffled eight-landmark bag until someone earns three points. Every landmark appears once per bag; if a match needs another bag it reshuffles without repeating the previous destination immediately. There is no fixed first/last building, no full-bag match requirement and no stamp mechanic. Snapshots, theft, late joining and eviction retain the selected order and personal scores. Random shuffling does not promise that an entire permutation can never recur.
 
 | Landmark | Accepted player interior bounds: X / Z / Y | Existing navigation approach |

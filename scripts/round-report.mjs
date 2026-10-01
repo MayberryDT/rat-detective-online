@@ -144,7 +144,7 @@ const mind = { windows: minds.length, decisions: sum(minds, m => m.decisions ?? 
   fallbacks: sum(minds, m => m.fallbacks ?? 0), staleDrops: sum(minds, m => m.staleDrops ?? 0), failures: sum(minds, m => m.failures ?? 0), dollars: r3(sum(minds, m => m.dollars ?? 0)),
   p50: median(minds.map(m => m.p50).filter(Boolean)), p90: median(minds.map(m => m.p90).filter(Boolean)) };
 const perfSeries = humans.map(a => ({ a, label: label(a), color: color(a), gpu: perf.filter(p => p.a === a).at(-1)?.gpu ?? null,
-  pts: perf.filter(p => p.a === a).map(p => [r2(MIN(p.t)), p.fps, p.p95, p.cpu95, p.heapMb]) }));
+  pts: perf.filter(p => p.a === a).map(p => [r2(MIN(p.t)), p.fps, p.p95, p.cpu95, p.heapMb, p.rtt ?? null, p.viewBot ?? null, p.viewHuman ?? null]) }));
 
 // ---- Shooting.
 const GAP_EDGES = [0, 60, 90, 120, 150, 200, 250, 300, 400, 600, 1000, 2000, 5000];

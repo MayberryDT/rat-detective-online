@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { ChaosView } from '../../src/prototype/ChaosView';
 import { ChaosSimulation } from '../../src/shared/ChaosSimulation';
-import { CASE_HOME, CASE_SIZE } from '../../src/shared/chaosState';
+import { CASE_HOME, CASE_SIZE, CHAOS_TUNING } from '../../src/shared/chaosState';
 import type { PlayerData } from '../../src/shared/networkProtocol';
 import type { RatEntity } from '../../src/entities/RatEntity';
 import { createRatMesh } from '../../src/utils/RatModel';

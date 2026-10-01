@@ -215,7 +215,9 @@ G.push(card('Minds','The bots\' Jev mind',`${n(mind.decisions)} decisions; ${n(m
   tiles([{v:'$'+mind.dollars.toFixed(3),l:'Cost, whole round'},{v:pct(mind.fallbacks/mind.requests),l:'Fallbacks',s:`${n(mind.fallbacks)} requests`},{v:n(mind.staleDrops),l:'Stale answers dropped'},{v:n(D.rescues),l:'Stuck bots rescued'}]),6));
 G.push(card('Frame rate','Frames per second, each human',D.perf.map(p=>`${esc(p.label)}: ${esc(p.gpu??'')}`).join(' · '),
   lines({series:D.perf.map(p=>({name:p.label,color:p.color,pts:p.pts.map(q=>[q[0],q[1]]),dots:true})),xMax:Math.ceil(M.durationMin),yMax:60,h:200,xLabel:'minutes into the round'})+legend(D.perf.map(p=>[p.label,p.color])),6,
-  'Each dot is 30 seconds of play. Main-thread work at the 95th-percentile frame: '+D.perf.map(p=>`${esc(p.label)} ${Math.round(p.pts.reduce((s,q)=>s+q[3],0)/p.pts.length)} ms`).join(', ')+'.'));
+  'Each dot is 30 seconds of play. Main-thread work at the 95th-percentile frame: '+D.perf.map(p=>`${esc(p.label)} ${Math.round(p.pts.reduce((s,q)=>s+q[3],0)/p.pts.length)} ms`).join(', ')+'.'+
+  D.perf.map(p=>{const med=i=>{const v=p.pts.map(q=>q[i]).filter(x=>x!=null).sort((a,b)=>a-b);return v.length?v[v.length>>1]:null};const rtt=med(5),bot=med(6),hum=med(7);
+    return rtt==null?'':` ${esc(p.label)}: ping ${rtt} ms; bots drawn ${bot??'—'} ms and humans ${hum??'—'} ms in the past (medians).`}).join(''));
 document.getElementById('round').innerHTML=R.join('')+`<div class="grid">${G.join('')}</div>`;
 
 // ---- SHOOTING.

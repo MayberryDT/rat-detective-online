@@ -5,8 +5,9 @@ import type {SkillDials} from '../intent';
 
 /** Gun height above the feet (the hosted muzzle's height). Aim angles are taken from here. */
 export const EYE=1.376;
-/** Where on a rat the crosshair goes: the chest, just under the head. Pre-aim sits at head height. */
-const CHEST=1.2,HEAD=1.6;
+/** Where on a rat the crosshair goes: the chest, just under the head. Pre-aim sits there too: held at head height, a
+ * bot's first shot at a rat stepping into view was a headshot (half of all bot kills on 1 October, against 35% of humans'). */
+const CHEST=1.2;
 export const AIM={
     /** The fastest a crosshair moves, rad/s: a hard flick. */
     maxRate:14,
@@ -130,7 +131,7 @@ export class BotAim {
     /** A calm look at a point (pre-aim, a corner, a heard shot), or a deliberate trick shot's point when `exact`. */
     look(eye:Vec3Data,point:Vec3Data,exact=false):void {
         if(this.engaged)return;
-        const y=exact?point.y:point.y+HEAD;
+        const y=exact?point.y:point.y+CHEST;
         this.deliberate=exact;this.steering=false;
         this.desiredYaw=Math.atan2(point.x-eye.x,point.z-eye.z);this.desiredPitch=Math.atan2(y-eye.y,Math.max(.5,Math.hypot(point.x-eye.x,point.z-eye.z)));
     }

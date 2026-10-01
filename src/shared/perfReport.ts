@@ -27,6 +27,10 @@ export interface PerfReport {
   cores?: number; memGb?: number;
   /** Graphics quality tier and render scale, when the game adapts them. */
   quality?: string; scale?: number;
+  /** Round trip to the room (ms, from the 20 s ping): smoothed, its jitter, and the lowest and highest since joining. */
+  rtt?: number; rttJitter?: number; rttMin?: number; rttMax?: number;
+  /** How far in the past other rats are drawn (ms, the median playback delay), humans and bots apart. */
+  viewHuman?: number; viewBot?: number;
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -51,6 +55,8 @@ export function parsePerfReport(value: unknown): PerfReport | null {
     gpu: text(v.gpu, 160), gpuVendor: text(v.gpuVendor, 80), os: oneOf(PERF_OS, v.os), browser: oneOf(PERF_BROWSERS, v.browser),
     browserMajor: int(v.browserMajor, 1, 999), cores: int(v.cores, 1, 1024), memGb: num(v.memGb, .1, 1024, 100),
     quality: typeof v.quality === 'string' && /^[a-z0-9-]{1,24}$/.test(v.quality) ? v.quality : undefined, scale: num(v.scale, .05, 4, 100),
+    rtt: num(v.rtt, 0, 120_000, 1), rttJitter: num(v.rttJitter, 0, 120_000, 1), rttMin: num(v.rttMin, 0, 120_000, 1), rttMax: num(v.rttMax, 0, 120_000, 1),
+    viewHuman: num(v.viewHuman, 0, 10_000, 1), viewBot: num(v.viewBot, 0, 10_000, 1),
   };
   const report: PerfReport = { ms, frames, fps: r1(frames * 1000 / ms), fps50: p50 > 0 ? r1(1000 / p50) : 0, p50, p95, p99, worst, over33, over100 };
   for (const [key, field] of Object.entries(optional)) if (field !== undefined) Object.assign(report, { [key]: field });

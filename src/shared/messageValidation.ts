@@ -436,7 +436,8 @@ function parseChaos(value:unknown):ChaosState|null{
   const c=value.case,d=value.dispatch;
   const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
     (c.previousOwner===null||nonEmptyString(c.previousOwner,64))&&(c.missileOwner===undefined||nonEmptyString(c.missileOwner,64))&&
-    finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null&&(c.fake===undefined||typeof c.fake==='boolean');
+    finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null&&(c.fake===undefined||typeof c.fake==='boolean')&&
+    (c.grip===undefined||integer(c.grip)!==null&&Number(c.grip)>=1&&Number(c.grip)<CHAOS_TUNING.caseGripHits);
   if(!validCase(c))return null;
   if(value.extraCases!==undefined){
     const known=Math.max(EXTRA_CASE_IDS.length,COUNTERFEIT_IDS.length);

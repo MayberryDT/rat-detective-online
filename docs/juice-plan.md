@@ -131,6 +131,7 @@ Tyler's brain dump, sorted into now and later, with his answers.
 **Guiding rules (Tyler):**
 - Maximize fun through chaos, not balance: think Mario Kart, not Forza.
 - **The game must always move forward.** Nothing may make chasing the case or the assignment goal pointless or stall it. This is why Hot Potato and Line Shuffle were rejected. A teleport is welcome only if it speeds progress.
+- **No time limits on game modes, ever (Tyler, 2026-10-01: "a hard rule").** No round clock, deadline, overtime or sudden death. Timers only for short boosts and power-ups, or when a player directly controls them (as Closing Time's holder did). Round length is shaped through gameplay, "not taking shortcuts".
 
 **Agreed:**
 - **The Hunch (full-HP bonus):** at max HP you see enemies through walls as a charcoal sketch, with generous range. You lose it on the first hit. The noir word is **"made"**.

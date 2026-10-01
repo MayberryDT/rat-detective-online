@@ -43,6 +43,8 @@ type Target = { kind:'world'|'case'|'dispatch'|'pressure'|'corpse'|'rat'; player
 interface CaseRuntime {
     id:string;body:C.Body;owner:string|null;previousOwner:string|null;missileOwner?:string;
     hitAfter:Map<string,number>;pickupAfter:number;returningUntil:number;looseSince:number;
+    /** Grip: enemy balls taken by the carrier's case, the last at `gripAt` (`gripBall`, so one ball counts once). */
+    grip:number;gripAt:number;gripBall?:string;
     scale:number;lastSpawn:Vec3Data;armed:boolean;
     /** Ridden a municipal launcher pad. Swept flight with its own lift cap, and
      * exempt from the loose-case recovery watchdog until it settles. */
@@ -215,7 +217,7 @@ export class ChaosSimulation {
             position:vec(CASE_HOME),collisionFilterGroup:4,collisionFilterMask:1|8|16,linearDamping:.2,angularDamping:.25});
         body.addShape(new C.Box(new C.Vec3(.15,.035,.04)),new C.Vec3(0,.43,0));
         for(const x of [-.12,.12])body.addShape(new C.Box(new C.Vec3(.0275,.065,.04)),new C.Vec3(x,.36,0));
-        const c:CaseRuntime={id,body,owner:null,previousOwner:null,hitAfter:new Map(),pickupAfter:0,
+        const c:CaseRuntime={id,body,owner:null,previousOwner:null,hitAfter:new Map(),pickupAfter:0,grip:0,gripAt:0,
             returningUntil:0,looseSince:this.now,scale:1,lastSpawn:CASE_HOME,armed:false,
             launched:false,launchLift:0,fake};
         // A counterfeit is planted, not thrown: park it exactly where it was placed
@@ -346,7 +348,7 @@ export class ChaosSimulation {
         const closest=this.interactionPoint(player,data(p),now),reach=new C.Vec3(player.x,player.y+.8,player.z);
         if(closest.distanceTo(p)>T.pickupRadius)return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'too-far'};
         if(this.ray(closest,p,1).hasHit||this.ray(reach,p,1).hasHit)return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'blocked'};
-        c.owner=player.id;this.primaryAcquiredAt=now;this.carry(player,c);this.checkAssignmentLocation(c);
+        c.owner=player.id;c.grip=0;this.primaryAcquiredAt=now;this.carry(player,c);this.checkAssignmentLocation(c);
         if(c.owner===player.id){this.tell('This rat is on the case · '+player.name);return{accepted:true,target:'case',targetId:'primary',playerId:player.id};}
         return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'ineligible'};
     }
@@ -826,7 +828,7 @@ export class ChaosSimulation {
     }
     private releaseCase(c:CaseRuntime,incoming?:Vec3Data){
         if(!c.owner)return;
-        const id=c.owner;c.owner=null;
+        const id=c.owner;c.owner=null;c.grip=0;
         if(c===this.primaryCase&&this.assignment?.state.jurisdiction){this.assignment.state.jurisdiction.scorerId=null;this.assignment.state.revision++;}this.scaleCase(CASE_LOOSE_SCALE,c);
         c.body.position.y+=CASE_SIZE.y*(CASE_LOOSE_SCALE-1)/2;
         c.previousOwner=id;c.pickupAfter=this.now+T.formerCarrierDelay;c.looseSince=this.now;
@@ -1350,8 +1352,9 @@ export class ChaosSimulation {
                     if(c.owner)this.releaseCase(c);
                     this.launchCaseMissile(c,vec(incoming));
                     c.missileOwner=shot.owner??undefined;
-                }else{
-                    if(c.owner)this.releaseCase(c);
+                }else if(!c.owner||this.loosensGrip(c,shot.id,now)){
+                    // A held grip just jolts the case in the carrier's hand; the ball bounces off.
+                    this.releaseCase(c);
                     const kick=vec(incoming);kick.normalize();kick.scale(T.caseShotKick,kick);
                     c.body.velocity.vadd(kick,c.body.velocity);
                     c.body.velocity.y=Math.max(c.body.velocity.y,T.caseShotLift);
@@ -1491,7 +1494,14 @@ export class ChaosSimulation {
     }
     private caseSnapshot(c:CaseRuntime):CaseState{
         return {...pose(c.body),owner:c.owner,previousOwner:c.previousOwner,pickupAfter:c.pickupAfter,
-            returningUntil:c.returningUntil,...(c.missileOwner?{missileOwner:c.missileOwner}:{}),...(c.fake?{fake:true}:{})};
+            returningUntil:c.returningUntil,...(c.owner&&c.grip&&this.now-c.gripAt<=T.caseGripMs?{grip:c.grip}:{}),...(c.missileOwner?{missileOwner:c.missileOwner}:{}),...(c.fake?{fake:true}:{})};
+    }
+    /** One enemy ball on a carried case. True when this hit breaks the grip; a ball counts once, and a grip left alone for `caseGripMs` is whole again. */
+    private loosensGrip(c:CaseRuntime,ball:string,now:number):boolean{
+        if(c.gripBall===ball)return false;
+        if(now-c.gripAt>T.caseGripMs)c.grip=0;
+        c.grip++;c.gripAt=now;c.gripBall=ball;
+        return c.grip>=T.caseGripHits;
     }
     private buffSnapshot():BuffMap{
         const active:BuffMap={};

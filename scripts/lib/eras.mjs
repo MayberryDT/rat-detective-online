@@ -42,6 +42,15 @@ function median(xs) {
   const half = Z * Math.sqrt(n) / 2, at = i => s[Math.min(n - 1, Math.max(0, i))];
   return { value: n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2, lo: at(Math.floor(n / 2 - half)), hi: at(Math.ceil(n / 2 + half)), n, enough: n >= MIN_EVENTS };
 }
+/** Mean with a normal 95% interval; enough from `min` values. */
+function mean(xs, min = MIN_EVENTS) {
+  const n = xs.length;
+  if (!n) return undefined;
+  const m = xs.reduce((s, x) => s + x, 0) / n, se = n > 1 ? Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (n - 1) / n) : Infinity;
+  return { value: m, lo: Math.max(0, m - Z * se), hi: m + Z * se, n, enough: n >= min };
+}
+/** Round lengths settle from this many finished rounds of a mode. */
+export const MIN_ROUNDS = 10;
 /** |bot - human| for two proportions with variances; the interval of the difference, folded at 0. */
 function gap(h, b, enough) {
   if (!h || !b) return undefined;
@@ -52,7 +61,7 @@ function gap(h, b, enough) {
 // The era registry.
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
 /** Measures a prediction may name (the scorecard's keys). */
-const PREDICTABLE = /^(jev\.(requestsPerBotMinute|answerShare|staleShare|fallbackShare|dollarsPerJevHour|latencyP90)|goals\.holdMedianS|goals\.[a-z-]+\.(reached|replaced|failed|died|holdMedianS)|decisions\.(perBotMinute|trigger\.(event|beat|fallback)|stance\.(fight|focus))|pickups\.passedPerRatHour\.(human|bot)|likeness\.(hitRate\.(human|bot)|hitRateBandGap|blindShare\.(human|bot)|blindShotGap)|players\.(killsPerHumanHour|deathsPerHumanHour|humanKillsOfBotsPerHumanHour|botKillsOfHumansPerHumanHour|humanDuelShare))$/;
+const PREDICTABLE = /^(jev\.(requestsPerBotMinute|answerShare|staleShare|fallbackShare|dollarsPerJevHour|latencyP90)|goals\.holdMedianS|goals\.[a-z-]+\.(reached|replaced|failed|died|holdMedianS)|decisions\.(perBotMinute|trigger\.(event|beat|fallback)|stance\.(fight|focus))|pickups\.passedPerRatHour\.(human|bot)|likeness\.(hitRate\.(human|bot)|hitRateBandGap|blindShare\.(human|bot)|blindShotGap)|players\.(killsPerHumanHour|deathsPerHumanHour|humanKillsOfBotsPerHumanHour|botKillsOfHumansPerHumanHour|humanDuelShare)|rounds\.minutes\.[a-z-]+|case\.(knockedLooseShare|carryMedianS)|kills\.headshotShare\.(human|bot))$/;
 const EXPECT = ['up', 'down', 'not-up', 'not-down'];
 
 /** The registry, checked: unique ids, a window or a build for every era that has started, well-formed predictions. */
@@ -127,7 +136,7 @@ export function gpuName(gpu) {
   return name.length > 48 ? `${name.slice(0, 47)}…` : name;
 }
 
-const TYPES = ['frame', 'minds', 'decision', 'goal-end', 'shot', 'damage', 'death', 'session', 'perf', 'pickup-passed'];
+const TYPES = ['frame', 'minds', 'decision', 'goal-end', 'shot', 'damage', 'death', 'session', 'perf', 'pickup-passed', 'round', 'case'];
 export const TRIGGERS = ['event', 'beat', 'fallback'], STANCES = ['fight', 'focus'];
 
 /**
@@ -281,6 +290,24 @@ function score(facts, era, known) {
   put('players.botKillsOfHumansPerHumanHour', rate(kills['bot-human']));
   const duels = kills['human-bot'] + kills['bot-human'];
   put('players.humanDuelShare', share(kills['human-bot'], duels, humanEnough && duels >= MIN_EVENTS));
+
+  // The game: round length per mode (every finished round, bots only included), how carries end and how kills land.
+  const lengths = new Map();
+  for (const r of by.round) if (r.what === 'end' && r.mode && r.durationMs > 0) (lengths.get(r.mode) ?? lengths.set(r.mode, []).get(r.mode)).push(r.durationMs / 60_000);
+  for (const [mode, xs] of lengths) put(`rounds.minutes.${mode}`, mean(xs, MIN_ROUNDS));
+  const drops = by.case.filter(c => c.what === 'drop');
+  if (drops.length) {
+    // Knocked loose: the carrier did not die within 300 ms of the drop (a shot on the case, or before the grip, one ball).
+    const deathsAt = new Map();
+    for (const d of by.death) (deathsAt.get(`${d.round}:${d.victim}`) ?? deathsAt.set(`${d.round}:${d.victim}`, []).get(`${d.round}:${d.victim}`)).push(d.t);
+    const loose = drops.filter(c => !(deathsAt.get(`${c.round}:${c.a}`) ?? []).some(t => Math.abs(t - c.t) < 300)).length;
+    put('case.knockedLooseShare', share(loose, drops.length));
+    put('case.carryMedianS', median(drops.filter(c => c.carryMs >= 0).map(c => c.carryMs / 1000)));
+  }
+  for (const who of ['human', 'bot']) {
+    const shot = by.death.filter(d => (d.cause === 'shot' || d.cause === 'headshot') && d.a !== undefined && d.a !== d.victim && classOf(d.round, d.a) === who);
+    put(`kills.headshotShare.${who}`, share(shot.filter(d => d.cause === 'headshot').length, shot.length, shot.length >= MIN_EVENTS && (who === 'bot' || humanEnough)));
+  }
 
   // Game health: humans' perf reports by operating system and GPU.
   const perf = new Map();

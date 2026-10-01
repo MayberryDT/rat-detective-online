@@ -9,6 +9,9 @@ import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 export const CHAOS_TUNING = {
     pickupRadius: 2.25, formerCarrierDelay: 900,
     caseShotKick: 30, caseShotLift: 10, caseShotMaxSpeed: 48, casePickupMaxSpeed: 18,
+    /** Grip (Tyler, 1 October): a carried case is knocked loose by `caseGripHits` enemy balls, each within
+     * `caseGripMs` of the last; after `caseGripMs` without a hit the grip is whole again. Killing the carrier still drops it. */
+    caseGripHits: 3, caseGripMs: 2000,
     rollMs: 2400, activeMs: 25000, cooldownMs: 21000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
     corpseHitMinSpeed: 12, corpseHitCooldownMs: 700, corpseShotKick: 19, deathBurstBalls: 120,
@@ -144,6 +147,8 @@ export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: V
 export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'thud'|'buzz'|'case-hit'|'armor-clang'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
+    /** Hits the carrier's grip has taken (1 or 2; absent when whole). Each is within `caseGripMs` of the last. */
+    grip?: number;
     /** Planted Evidence counterfeits share the briefcase shape but are hazards, not objectives. */
     fake?: boolean;
 }

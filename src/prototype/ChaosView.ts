@@ -37,7 +37,7 @@ import {pickupArtwork, powerupCard} from './pickupArtwork';
 import { BUFF_FIELD, BUFF_MS, PICKUP_TUNING, TIMED_PICKUPS, activeBuffs, type BuffMap, type PickupKind, type TimedPickup } from '../shared/pickups';
 import {closestPointOnSegment} from '../shared/netplay';
 
-import { updateCaseCarryPose } from './CaseCarryPose';
+import { slipCaseCarryPose, updateCaseCarryPose } from './CaseCarryPose';
 import {RatReactionEvents} from './RatReactionEvents';
 import {FlyingHat} from '../entities/FlyingHat';
 import {contactShadowsOf} from '../session/shadows';
@@ -49,6 +49,8 @@ import {freezeStatic} from '../utils/freezeStatic';
 
 /** A corpse model's origin is its feet; its body lies around this point of its own frame. */
 const CORPSE_CENTRE=new THREE.Vector3(0,.95,0);
+/** Grip feedback: radians of swing and units of sag per hit taken, and the jolt's peak swing. */
+const GRIP_SWING=.34,GRIP_SAG=.05,GRIP_JOLT=.3;
 
 export interface InteractionCandidate {
     target:PickupTarget;targetId:string;generation:number;pickup?:import('../shared/pickups').PickupKind;
@@ -138,6 +140,8 @@ export class ChaosView {
     private arm:THREE.Group|null=null;
     private carrier:RatEntity|null=null;
     private state:ChaosState|null=null;
+    /** The carried case's slip: its eased swing (radians) and when the grip last took a hit (performance.now ms). */
+    private gripSwing=0;private gripHitAt=-Infinity;
     private receivedAt=0;
     private readonly presentation=new ChaosPresentation();
     private readonly localShots:LocalShotPresentation;
@@ -352,6 +356,10 @@ export class ChaosView {
             this.anticipatedCase=null;
             for(const [id,candidate] of this.pendingInteractions)if(candidate.target==='case')this.pendingInteractions.delete(id);
         }
+        const grip=state.case.owner?state.case.grip??0:0;
+        if(grip>(previous?.case.owner===state.case.owner?previous?.case.grip??0:0)){
+            this.gripHitAt=performance.now();this.feedback?.(grip>=2?'case-grip-2':'case-grip-1',state.case.p);
+        }
         this.reactions.apply(state);
         this.foley?.apply(state);
         this.state=state;this.root.visible=true;this.receivedAt=performance.now();
@@ -501,6 +509,10 @@ export class ChaosView {
         if(owner&&!owner.dead){
             const anchor=this.arm!.parent!;
             updateCaseCarryPose(this.caseRoot, anchor);
+            // A weakened grip: the case swings out of the fist a step per hit and eases back once the grip is whole; each hit jolts it.
+            const grip=s.case.owner?s.case.grip??0:0,since=(wall-this.gripHitAt)/1000;
+            this.gripSwing+=(grip*GRIP_SWING-this.gripSwing)*Math.min(1,dt*(grip?14:4));
+            slipCaseCarryPose(this.caseRoot,this.gripSwing+(since<.45?Math.sin(since*38)*Math.exp(-since*8)*GRIP_JOLT:0),this.gripSwing/GRIP_SWING*GRIP_SAG);
             contactShadowsOf(this.scene)?.remove(this.caseRoot);
         }else{
             if(!this.extrapolate||!this.presentation.looseCase(renderTime,this.presented))copyPresentationPose(s.case,this.presented);

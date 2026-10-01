@@ -71,6 +71,13 @@ export class RemotePlayers {
         const delays=[...this.rats.values()].map(({snapshots})=>({delayMs:snapshots.delayMs,viewAt:snapshots.presentedSourceTime??null}));
         return{rats:delays.length,minimumDelayMs:delays.length?Math.min(...delays.map(d=>d.delayMs)):0,maximumDelayMs:delays.length?Math.max(...delays.map(d=>d.delayMs)):0};
     }
+    /** The median playback delay of remote humans and of bots, ms (the perf report reads it every 30 s). */
+    viewDelays():{viewHuman?:number;viewBot?:number}{
+        const human:number[]=[],bot:number[]=[];
+        for(const [id,{snapshots}] of this.rats)(id.startsWith('rd-ai-')?bot:human).push(snapshots.delayMs);
+        const median=(a:number[])=>a.sort((x,y)=>x-y)[a.length>>1];
+        return{...(human.length?{viewHuman:Math.round(median(human)!)}:{}),...(bot.length?{viewBot:Math.round(median(bot)!)}:{})};
+    }
 
     /** Sample once per display frame, before fixed-step collision queries. */
     prepareFrame(now = this.now()): void {

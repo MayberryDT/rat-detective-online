@@ -260,6 +260,49 @@
         { "id": "likeness-hit-bands", "says": "Human-likeness gets no worse: the gap between bot and human hit rates across distance bands does not grow.", "measure": "likeness.hitRateBandGap", "expect": "not-up" },
         { "id": "likeness-blind-shots", "says": "Human-likeness gets no worse: the gap between the bots' and the humans' share of shots fired with no rat in sight does not grow.", "measure": "likeness.blindShotGap", "expect": "not-up" }
       ]
+    },
+    {
+      "id": "case-grip",
+      "environment": "production",
+      "layout": 5,
+      "mindVersion": 6,
+      "protocol": 25,
+      "commits": [],
+      "change": "Case grip and calmer bot aim (Tyler, 1 October): a carried case is knocked loose by 3 enemy balls each within 2 s of the last (it was one ball); killing the carrier still drops it. Bots pre-aim at chest height, not head height. Perf reports carry ping and how far behind other rats are drawn (measurement only). Excessive Force stays at 10 kills; no time limits, ever.",
+      "baseline": "lighter-jev",
+      "notes": "Tyler's target: Excessive Force averages 15–20 minutes, the longest mode but not by much (it was 27.5 minutes over 45 rounds from 29 September to 1 October, bot-only rounds included). If Paper Chase or Jurisdiction get too short, raise their targets. Bot-only rounds count: the city runs them all day.",
+      "predictions": [
+        {
+          "id": "ef-shorter",
+          "says": "Excessive Force rounds average under 20 minutes",
+          "measure": "rounds.minutes.excessive-force",
+          "expect": "down",
+          "target": {
+            "below": 20
+          }
+        },
+        {
+          "id": "fewer-knocked-loose",
+          "says": "Fewer carries end with the case knocked loose",
+          "measure": "case.knockedLooseShare",
+          "expect": "down"
+        },
+        {
+          "id": "longer-carries",
+          "says": "Carries last longer",
+          "measure": "case.carryMedianS",
+          "expect": "up"
+        },
+        {
+          "id": "fewer-bot-headshots",
+          "says": "Bots' headshot share of kills falls to humans' level or below",
+          "measure": "kills.headshotShare.bot",
+          "expect": "down",
+          "target": {
+            "below": "kills.headshotShare.human"
+          }
+        }
+      ]
     }
   ]
 }

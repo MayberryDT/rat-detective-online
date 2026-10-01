@@ -33,18 +33,35 @@ it('launches an ordinary case into a visible tumble and bounces it off real wall
     expect(wallBounce).toBe(true);expect(floorBounce).toBe(true);
     expect(sim.caseHolderId).toBeNull();expect(hits).not.toHaveBeenCalled();
 });
-it('disarms a carrier and gives the airborne case time to move before a nearby rat can collect it',()=>{
+const hitCase=(sim:ChaosSimulation,id:string,at:number)=>{
+    sim.shoot('shooter',{shotId:id,origin:{x:3,y:.55,z:.02},direction:{x:-1,y:0,z:0}});
+    sim.step(.02,at);
+};
+it('holds the case through two enemy hits, knocks it loose on the third and gives it time to move before a nearby rat can collect it',()=>{
     const {sim,players}=fixture();
     const carry=createPlayer('carry','Carry',appearance,{x:0,y:0,z:0});players.set(carry.id,carry);
     sim.step(0,1001);expect(sim.caseHolderId).toBe(carry.id);
     const nearby=createPlayer('nearby','Nearby',appearance,{x:.7,y:0,z:1});players.set(nearby.id,nearby);
-    sim.shoot('shooter',{shotId:'disarm',origin:{x:3,y:.55,z:.02},direction:{x:-1,y:0,z:0}});
-    sim.step(.02,1021);
-    expect(sim.caseHolderId).toBeNull();
+    hitCase(sim,'grip-1',1021);
+    expect(sim.caseHolderId).toBe(carry.id);expect(sim.snapshot(false).case.grip).toBe(1);
+    hitCase(sim,'grip-2',1600);
+    expect(sim.caseHolderId).toBe(carry.id);expect(sim.snapshot(false).case.grip).toBe(2);
+    hitCase(sim,'grip-3',2400);
+    expect(sim.caseHolderId).toBeNull();expect(sim.snapshot(false).case.grip).toBeUndefined();
     expect(sim.caseBody.velocity.x).toBeLessThan(-25);expect(sim.caseBody.velocity.y).toBeGreaterThanOrEqual(10);
     // A slow case is still collectible; this does not add a fixed pickup delay for everyone.
     sim.caseBody.position.set(nearby.x,nearby.y+.8,nearby.z);sim.caseBody.velocity.setZero();
-    sim.step(0,1040);expect(sim.caseHolderId).toBe(nearby.id);
+    sim.step(0,2420);expect(sim.caseHolderId).toBe(nearby.id);
+    expect(sim.snapshot(false).case.grip).toBeUndefined();
+});
+it('makes a grip whole again after two seconds without a hit',()=>{
+    const {sim,players}=fixture();
+    const carry=createPlayer('carry','Carry',appearance,{x:0,y:0,z:0});players.set(carry.id,carry);
+    sim.step(0,1001);
+    hitCase(sim,'first',1021);hitCase(sim,'second',1500);expect(sim.snapshot(false).case.grip).toBe(2);
+    sim.step(0,1500+T.caseGripMs+1);expect(sim.snapshot(false).case.grip).toBeUndefined();
+    hitCase(sim,'fresh',1500+T.caseGripMs+50);
+    expect(sim.caseHolderId).toBe(carry.id);expect(sim.snapshot(false).case.grip).toBe(1);
 });
 it('bounds ordinary repeated-shot speed while keeping a useful lift',()=>{
     const {sim}=fixture();sim.caseBody.position.y=8;sim.caseBody.velocity.set(40,-30,0);

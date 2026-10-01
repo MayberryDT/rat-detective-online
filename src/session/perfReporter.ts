@@ -22,6 +22,8 @@ export class PerfReporter {
   private machine?: Machine;
   /** The current graphics quality tier and render scale, once the game adapts them. */
   quality?: () => Pick<PerfReport, 'quality' | 'scale'>;
+  /** Ping and how far in the past other rats are drawn, read once a report. */
+  network?: () => Pick<PerfReport, 'rtt' | 'rttJitter' | 'rttMin' | 'rttMax' | 'viewHuman' | 'viewBot'>;
 
   constructor(private readonly renderer: THREE.WebGLRenderer, private readonly send: (report: PerfReport) => void, signal: AbortSignal) {
     // rAF stops in a hidden tab; the first frame back spans the whole absence.
@@ -48,7 +50,7 @@ export class PerfReporter {
     const p50 = at(frames, .5);
     this.send({ ms: Math.round(this.ms), frames: n, fps: r1(n * 1000 / this.ms), fps50: p50 > 0 ? r1(1000 / p50) : 0, p50, p95: at(frames, .95), p99: at(frames, .99),
       worst: r1(frames[n - 1]!), over33, over100, cpu50: at(cpu, .5), cpu95: at(cpu, .95), ...(heap ? { heapMb: r1(heap / 1048576) } : {}),
-      w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, dpr: window.devicePixelRatio || 1, pr: this.renderer.getPixelRatio(), ...this.machine, ...this.quality?.() });
+      w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, dpr: window.devicePixelRatio || 1, pr: this.renderer.getPixelRatio(), ...this.machine, ...this.quality?.(), ...this.network?.() });
     this.count = 0; this.ms = 0;
   }
 }

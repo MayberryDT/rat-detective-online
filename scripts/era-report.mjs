@@ -144,6 +144,15 @@ table(['', 'Before', 'After'], [
   M('Human kills per human rat-hour', 'players.killsPerHumanHour', undefined, [bAll, aAll]),
   M('Human deaths per human rat-hour', 'players.deathsPerHumanHour', undefined, [bAll, aAll]),
 ]);
+out('**The game** (every finished round, bot-only rounds included; mean minutes per mode; carries from `case` facts):', '');
+const modes = [...new Set([...Object.keys(bAll.measures), ...Object.keys(aAll.measures)].filter(id => id.startsWith('rounds.minutes.')))].sort();
+table(['Measure', 'Before', 'After'], [
+  ...modes.map(id => M(`Round length, ${id.slice('rounds.minutes.'.length)} (minutes)`, id, 'no rounds', [bAll, aAll])),
+  M('Carries ended with the case knocked loose (not a death)', 'case.knockedLooseShare', 'no carries', [bAll, aAll]),
+  M('Median carry (s)', 'case.carryMedianS', 'no carries', [bAll, aAll]),
+  M('Headshot share of kills, humans', 'kills.headshotShare.human', 'no kills', [bAll, aAll]),
+  M('Headshot share of kills, bots', 'kills.headshotShare.bot', 'no kills', [bAll, aAll]),
+]);
 
 out('## Jev against the code mind with humans playing', '');
 // Within one era: code-only rounds against ordinary ones. For the gaps (bot against human), lower is more human-like.
