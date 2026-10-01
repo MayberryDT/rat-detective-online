@@ -4,10 +4,11 @@ Verified from source and production through **2026-09-30** (release A, protocol 
 
 ## Case grip and bot archetypes — 1 October staging
 
-Tyler (1 October), after a 56-minute Excessive Force round: give the case grip, tone the bots down while making them more human, measure ping before touching the network, and never put a time limit on a mode. On staging (build `staging-2026-10-01-00abf27`, Worker `3501267e-a968-4f2e-95c4-477b0a17e165`, every incident), not in production:
+Tyler (1 October), after a 56-minute Excessive Force round: give the case grip, tone the bots down while making them more human, measure ping before touching the network, and never put a time limit on a mode. On staging (build `staging-2026-10-01-abcf560`, Worker `b2f4b52c-cb9d-4e4d-bd8f-291bca405ae7`, **protocol 26**, every incident), not in production:
 
 - **Grip:** a carried case comes loose after 3 enemy balls each within 2 s of the last; each hit before that jolts it a step out of the paw with a rising knock. Killing the carrier still drops it ([assignments](dispatch-assignments.md)).
 - **Bots:** pre-aim at chest height (half their kills had been first-shot headshots), and play as five archetypes with their own dials, none sharper than base: sniper, hose, camper, joyriders who use the launch machines, gremlin (`mindVersion` 7; [the bot overhaul](bot-overhaul.md)).
+- **The case batch (protocol 26, the same day):** PAPER CHASE to five deliveries; Jurisdiction zones hold 20 points that drain to the carrier only while the case is held there, then move (no zone clock); a shot case flies 20% slower; taking the case brings a random supply (once per 20 s per rat); the case rebuilt with brass fittings, straps and an EVIDENCE tag, an ON THE CASE stamp and paper burst when you take it, swing, squash and idle hops, and new case sounds; bot archetypes dealt evenly per room. See [the assignments](dispatch-assignments.md) and [the juice plan](juice-plan.md#the-case-tyler-2026-10-01).
 - **Ping:** perf reports carry `rtt` and how far behind other rats are drawn (`viewHuman`, `viewBot`); measurement only.
 - **Judged by** era `case-grip` in `design/data/eras.json` (Excessive Force under 20 minutes on average at 10 kills, fewer carries knocked loose, bots' headshot share at humans' level, bots still below humans' hit rate).
 
