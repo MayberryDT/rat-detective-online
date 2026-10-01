@@ -1,3 +1,4 @@
+import {feelState} from '../../src/feel/feelState';
 import {it,expect,vi} from 'vitest';
 import * as THREE from 'three';
 import {createRatMesh} from '../../src/utils/RatModel';
@@ -6,6 +7,8 @@ import {RAT_REACTIONS} from '../../src/utils/RatActing';
 import {batchRigidMeshes} from '../../src/utils/RigidMeshBatch';
 import {disposeMeshResources} from '../../src/utils/disposeMeshResources';
 it('preserves every vertex of the living rat (its bending tail included) and every rigid (non-coat) vertex of a bent corpse',()=>{
+ // The living rat's spine stays identity on the ground; A1 air acting bends it in mid-air, as a corpse's does.
+ feelState().set('airActing',false);
  const root=createRatMesh(),animator=new RatAnimator(root),batch=batchRigidMeshes(root)!;
  const sources=batch.userData.rigidSources as THREE.Mesh[],body=root.getObjectByName('rat-body');
  const tail=root.getObjectByName('rat-tail') as THREE.Mesh,tailRest=Array.from(tail.geometry.getAttribute('position').array);
@@ -35,6 +38,7 @@ it('preserves every vertex of the living rat (its bending tail included) and eve
  expect(wagged).toBeGreaterThan(.03);
  expect(root.getObjectByName('rat-muzzle')).toBeDefined();
  const dispose=vi.spyOn(batch.skeleton,'dispose');disposeMeshResources(root);expect(dispose).toHaveBeenCalledOnce();
+ feelState().set('airActing',true);
 });
 it('keeps original ray hits and does not batch transient or excluded shell geometry',()=>{
  const root=createRatMesh();root.updateMatrixWorld(true);

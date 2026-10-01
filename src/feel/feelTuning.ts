@@ -155,6 +155,12 @@ export const FEEL={
     claimHustle:{label:'C4 Hot Pursuit claim',toggle:true,params:{widen:7,streaks:.5,dust:1}},
     /** C5 Quick Fix claim: the restored nameplate pips refill one at a time, `pip` s apart, with a tick each. */
     claimQuickFix:{label:'C5 Quick Fix claim',toggle:true,params:{pip:.07}},
+    /** A1 Air acting (Tyler, 1 October: jumping rats were "stiff and lifeless", a salt shaker). Every rat, airborne from a
+     * take-off over `takeOff` u/s or a fall over `fall` u/s until it lands: no walking stride in the air; `stretch` rising,
+     * a `squash` and `tuck` (rad) ball at the apex with the feet pulled up (`feet`), a `reach` falling with ears (`ears`),
+     * tail (`tail`) and hat (`hat`) streaming up; a `lean` (rad) and springy `bank` (rad) into travel about `pivot` units up the
+     * coat; `arch` (rad) back on the way up; a landing squash (`land`) that wobbles back. */
+    airActing:{label:'A1 Air acting',toggle:true,params:{takeOff:9,fall:7,stretch:.22,squash:.12,reach:.1,tuck:.55,arch:.14,lean:.32,bank:.34,pivot:.9,feet:1,ears:.7,tail:.6,hat:.1,land:.22}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

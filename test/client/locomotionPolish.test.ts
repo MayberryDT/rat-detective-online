@@ -39,6 +39,9 @@ it('settles identically at 30/60/120Hz for the same elapsed movement and turns',
 });
 
 it.each([false,true])('preserves frozen accepted muzzle/weapon/carry trajectories and immediate repeated shots (polish=%s)',polished=>{
+    // On the ground the weapon-bearing body stays exactly the accepted one; A1 air acting deliberately moves it in mid-air
+    // (a firing rat's arm still aims at its target), and this run's lift would read as a jump.
+    feelState().set('airActing',false);
     const root=createRatMesh(),reference=createRatMesh();
     const animator=new RatAnimator(root),accepted=new AcceptedRatAnimator(reference);
     animator.setLocomotionPolish(polished);
@@ -71,7 +74,7 @@ it.each([false,true])('preserves frozen accepted muzzle/weapon/carry trajectorie
             }
         }
         animator.reset();accepted.reset();verify();
-    }finally{disposeMeshResources(root);disposeMeshResources(reference);}
+    }finally{disposeMeshResources(root);disposeMeshResources(reference);feelState().set('airActing',true);}
 });
 
 it('keeps secondary transforms finite, bounded and identical across visible/outline rigs under irregular dt',()=>{

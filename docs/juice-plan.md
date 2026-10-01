@@ -61,6 +61,20 @@ rat's identity stay as they are. Done means:
 - **Softer outline and nameplate reviewed (2026-09-27):** "That is great. Push it live." Released as Worker `80901b67…`.
 - **Next action:** Tyler's OK to put [the city map](city-map.md) recorder on production, then he plays and we read the digest; then step 4 (the page's Observe mode). See [Open decisions](#open-decisions).
 
+## Air acting (Tyler, 2026-10-01)
+
+Tyler, watching rats jump, bounce back and forth and fly: they look "stiff and lifeless", like a salt shaker, with "no character" and "no juice". The living body was a rigid cylinder in the air. The rule that kept the weapon-bearing body still covered only the animation pass. A firing rat's arm aims at its target whatever the body does, and walking already sways the body.
+
+- [x] **A1 `airActing`, built and on staging (not production).** Every rat, local or remote, from its rendered motion (a take-off over 9 u/s or a fall over 7 u/s, until it lands):
+  - The walking stride stops in mid-air.
+  - **Rising:** the coat stretches tall, arches back a little, and the feet and tail trail.
+  - **Apex:** a tuck. The body squashes, the belly curls over the hips with the chest nearly level, and the feet pull up.
+  - **Falling:** the body opens up and reaches for the ground. The ears, whiskers and tail stream up, and the hat lifts off the head.
+  - **Lean and bank:** the body leans into its travel. A springy bank swings over when the rat reverses mid-air, so back-and-forth jumping reads.
+  - **Landing:** a squash that wobbles back.
+  - Everything is presentation only and switchable, with its numbers in `FEEL.airActing`.
+  - **Evidence:** a throwaway contact sheet of one jump arc, side and rear, with and without the switch, was inspected before the deploy. Tyler has not judged it in play.
+
 ## Kill streak mark (Tyler, 2026-09-30)
 
 Tyler, after playing production with a friend: "i want a visual indicator for rats that are on a 3+ kill streak."
@@ -321,4 +335,5 @@ Tyler's direction (2026-09-27): push the noir theme harder in the city, meaning 
 
 - Current game: [current state](current-state.md), [documentation map](README.md).
 - Last release (seventh batch, title and load time): [receipt](verification/seventh-batch-release-2026-09-28.md).
+- Air acting contact sheets (local, not in the repo): `~/.cache/rd-shots/air/` on Veelox.
 - Reference only: [2026-09-12 animation handoff](handoffs/animation-polish-2026-09-12.md) (rig map and hazards), [foley history](chaos-foley.md), [player settings](player-settings.md).

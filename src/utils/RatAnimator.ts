@@ -98,6 +98,23 @@ export class RatAnimator {
     private hatBlowSpin = 1;
     /** L6: launcher-flight flailing, 0…1 (legs kick, tail whips, ears and whiskers stream). */
     private flail = 0;
+    /** A1 air acting: airborne (a take-off or a fall until the landing), its smoothed amount, the smoothed vertical
+     * speed, seconds standing still in the air, the lean and banking spring into travel, and the landing's wobble. */
+    private inAir = false;
+    private air = 0;
+    private airVertical = 0;
+    private airStill = 0;
+    private airPitch = 0;
+    private airBank = 0;
+    private airBankRate = 0;
+    private landAge = 10;
+    private landSize = 0;
+    /** This frame's air phases (0…1, already scaled by `air`), read by the extras. */
+    private airRise = 0;
+    private airFall = 0;
+    private airApex = 0;
+    private readonly airTilt = new THREE.Euler();
+    private readonly airPivot = new THREE.Vector3();
     /** M1: seconds since a scream (launch) or startle (near miss) began, and how big it was. */
     private screamAge = 10;
     private screamSize = 1;
@@ -427,6 +444,7 @@ export class RatAnimator {
         this.skidAge = this.nodAge = this.pulseAge = 10;this.flight = 0;this.skidStarted = false;this.landedFall = 0;this.launched = this.wasLaunched = false;this.lastVelocity.set(0, 0, 0);
         this.ragdoll.reset();this.ragdollStarted=false;this.deathHeadshot=false;this.chain.reset();
         this.tailFall.set(0, 0, 0);this.tailTip.set(0, 0, 0);
+        this.clearAir();this.landAge = 10;
         this.landingPulse = 0;
         this.deathAnimation = false;
         this.tailMotion = this.tailTurn = 0;
@@ -464,15 +482,21 @@ export class RatAnimator {
                 part.rotation.z += side * (.2 * this.aim - .25 * hitEnv);
             } else if (kind === 'whiskers') {
                 part.rotation.z += side * (sway * .22 + twitch) - side * .4 * hitEnv + side * this.flail * .5 + side * this.earFlop * .6;
+                part.rotation.z += side * (this.airFall - this.airRise * .5) * .45;
                 part.rotation.y += side * stepLift * this.movement * .12;
             } else if (kind === 'shoe') {
-                const step = Math.sin(this.stride + (side < 0 ? 0 : Math.PI));
-                part.position.z += step * .09 * this.movement;
-                part.position.y += Math.max(0, step) * .05 * this.movement;
-                part.rotation.x -= Math.max(0, step) * .35 * this.movement;
+                const step = Math.sin(this.stride + (side < 0 ? 0 : Math.PI)), striding = this.movement * (1 - this.air);
+                part.position.z += step * .09 * striding;
+                part.position.y += Math.max(0, step) * .05 * striding;
+                part.rotation.x -= Math.max(0, step) * .35 * striding;
                 // Legs kicking in the air during a launcher flight.
                 part.position.z += Math.sin(this.time * 19 + side) * this.flail * .12;
                 part.rotation.x += Math.sin(this.time * 19 + side * 2) * this.flail * .8;
+                // A1: feet trail on the way up, tuck up under the coat at the apex and reach down falling.
+                const air = FEEL.airActing.params.feet;
+                part.position.y += (this.airApex * .34 - this.airFall * .06) * air;
+                part.position.z += (this.airApex * .12 - this.airRise * .14 + side * this.airFall * .03) * air;
+                part.rotation.x += (this.airRise * .55 - this.airApex * .6 + this.airFall * .5) * air;
             } else {
                 part.position.x += (-side * .014 * this.aim + look * .016) * (side < 0 ? -1 : 1);
             }
@@ -485,8 +509,13 @@ export class RatAnimator {
         this.acting.resetMotion();
         if (this.locomotionPolish) this.tailMotion = this.tailTurn = 0;
         this.lastPosition = null;
-        this.verticalSpeed = this.airPose = this.jumpLift = this.jumpLanding = 0;
+        this.verticalSpeed = this.airPose = this.jumpLift = this.jumpLanding = 0;this.clearAir();
         this.movement = this.acceleration = this.turn = this.coatTurn = 0;
+    }
+
+    private clearAir(): void {
+        this.inAir = false;this.air = this.airVertical = this.airStill = this.airPitch = this.airBank = this.airBankRate = 0;
+        this.airRise = this.airFall = this.airApex = 0;
     }
 
     /** Workshop comparison on the accepted model; never changes control state. */
@@ -571,6 +600,27 @@ export class RatAnimator {
                 this.tailSwing += this.tailSwingRate * h;
             } else this.tailSwing = this.tailSwingRate = 0;
         }
+        // A1: airborne from a take-off or a real fall until the landing (or standing still in the air, on a ledge). The
+        // apex crosses zero vertical speed, so the state, not the speed, carries the rat through it.
+        const airParams=this.locomotionPolish&&feelState().on('airActing')?FEEL.airActing.params:undefined;
+        if(correction||!airParams)this.clearAir();
+        else{
+            const landed=this.inAir&&this.verticalSpeed<-2&&verticalSpeed>-1;
+            if(landed){this.landAge=0;this.landSize=Math.min(1,-this.verticalSpeed/18);}
+            this.airStill=this.inAir&&Math.abs(verticalSpeed)<.5?this.airStill+dt:0;
+            if(landed||this.airStill>.15)this.inAir=false;
+            else if(!this.inAir&&(verticalSpeed>airParams.takeOff||verticalSpeed<-airParams.fall))this.inAir=true;
+            this.air=THREE.MathUtils.lerp(this.air,this.inAir?1:0,1-Math.exp(-(this.inAir?16:22)*dt));
+            this.airVertical=THREE.MathUtils.lerp(this.airVertical,verticalSpeed,1-Math.exp(-18*dt));
+            // Lean into the travel: forward/back pitch and a banking spring that swings over when the rat reverses.
+            const sin=Math.sin(yaw),cos=Math.cos(yaw),v=this.velocity;
+            const ahead=THREE.MathUtils.clamp((v.x*sin+v.z*cos)/18,-1,1),aside=THREE.MathUtils.clamp((v.x*cos-v.z*sin)/18,-1,1);
+            this.airPitch=THREE.MathUtils.lerp(this.airPitch,ahead*airParams.lean*this.air,1-Math.exp(-10*dt));
+            const h=Math.min(dt,1/30);
+            this.airBankRate+=((-aside*airParams.bank*this.air-this.airBank)*90-this.airBankRate*8)*h;
+            this.airBank+=this.airBankRate*h;
+        }
+        this.landAge+=dt;
         this.verticalSpeed = verticalSpeed;
         const previousMovement = this.movement;
         this.movement = THREE.MathUtils.lerp(this.movement, Math.min(speed / 7, 1), blend);
@@ -613,10 +663,17 @@ export class RatAnimator {
         this.restore();
         const entrance = this.respawnAge < 0.65 ? Math.sin(this.respawnAge / 0.65 * Math.PI) * Math.exp(-this.respawnAge * 5) : 0;
         const breath = Math.sin(this.time * 2.3);
-        const sway = Math.sin(this.stride) * this.movement;
-        const stepLift = Math.abs(Math.sin(this.stride));
-        const compression = Math.cos(this.stride * 2) * this.movement;
-        const followThrough = Math.sin(this.stride - 0.65) * this.movement;
+        // A1: no walking stride in mid-air; the air pose takes over.
+        const striding = this.movement * (1 - this.air);
+        const sway = Math.sin(this.stride) * striding;
+        const stepLift = Math.abs(Math.sin(this.stride)) * (1 - this.air);
+        const compression = Math.cos(this.stride * 2) * striding;
+        const followThrough = Math.sin(this.stride - 0.65) * striding;
+        const air = this.locomotionPolish && feelState().on('airActing') ? FEEL.airActing.params : undefined;
+        // Rising stretches and trails, the apex tucks into a ball, falling opens up and reaches for the ground.
+        const rise = THREE.MathUtils.clamp(this.airVertical / 12, 0, 1), fall = THREE.MathUtils.clamp(-this.airVertical / 12, 0, 1);
+        this.airRise = this.air * rise;this.airFall = this.air * fall;this.airApex = this.air * (1 - Math.max(rise, fall));
+        const landing = air && this.landAge < .6 ? this.landSize * Math.cos(this.landAge * 24) * Math.exp(-this.landAge * 8) : 0;
         const blinkPhase = (this.time+(this.actingEnabled?this.acting.blinkOffset:0)) % 4.7;
         const blink = blinkPhase > 4.48 ? Math.sin((blinkPhase - 4.48) / 0.22 * Math.PI) : 0;
         const twitchPhase = this.time % 6.1;
@@ -648,7 +705,8 @@ export class RatAnimator {
         const blow=this.hatBlowAge<HAT_BLOW?this.hatBlowAge/HAT_BLOW:1,blowArc=blow<1?Math.sin(blow*Math.PI):0;
         const settle=FEEL.hatKnock.params.settle;
         const knock=this.hatKnockAge<4*settle?Math.min(1,this.hatKnockAge/.05)*Math.exp(-this.hatKnockAge/settle)*(1+.3*Math.cos(this.hatKnockAge*15)*Math.exp(-this.hatKnockAge*6)):0;
-        for (const rig of this.rigs) {
+        for (let r = 0; r < this.rigs.length; r++) {
+            const rig = this.rigs[r];
             // Indexed, not array-destructured: destructuring walks an iterator per rig per frame.
             const body = rig[0].part, head = rig[1].part, hat = rig[2].part, tail = rig[3].part, leftEye = rig[4].part,
                 rightEye = rig[5].part, leftEar = rig[6].part, rightEar = rig[7].part, arm = rig[8].part, pistol = rig[9].part;
@@ -672,6 +730,24 @@ export class RatAnimator {
             body.scale.z -= jumpStretch * .4;
             body.rotation.x -= this.airPose * .035;
             body.position.z = -this.recoil * 0.055;
+            if (air) {
+                // A1: squash and stretch through the arc, a tuck at the apex (the hem swings forward and the belly
+                // curls over it, the chest nearly level so the aimed arm barely moves), and a lean and bank into travel,
+                // all about the coat's middle. The landing squashes and wobbles back.
+                const stretch = air.stretch * this.airRise - air.squash * this.airApex + air.reach * this.airFall - air.land * landing;
+                body.scale.y += stretch;body.scale.x -= stretch * .45;body.scale.z -= stretch * .45;
+                const tuck = air.tuck * this.airApex, ax = this.airPitch - tuck - air.arch * this.airRise, az = this.airBank;
+                body.rotation.x += ax;body.rotation.z += az;
+                this.airPivot.set(0, air.pivot, 0).applyEuler(this.airTilt.set(ax, 0, az));
+                body.position.x -= this.airPivot.x;body.position.y += air.pivot - this.airPivot.y;body.position.z -= this.airPivot.z;
+                const spine = this.spines[r];
+                if (spine && (tuck > 1e-4 || this.airRise > 1e-4)) {
+                    spine.belly.rotation.x = tuck * 1.6 + air.arch * this.airRise * .6;
+                    spine.belly.position.set(0, HIP_JOINT, 0).applyQuaternion(spine.belly.quaternion).negate();spine.belly.position.y += HIP_JOINT;
+                    spine.chest.rotation.x = -tuck * .4;
+                    spine.chest.position.set(0, WAIST, 0).applyQuaternion(spine.chest.quaternion).negate();spine.chest.position.y += WAIST;
+                }
+            }
             head.rotation.y += this.turn * 0.9;
             head.rotation.z = -sway * 0.06;
             head.rotation.x = -this.hit * 0.025 + breath * 0.009 - compression * 0.02 - this.recoil * 0.035;
@@ -713,6 +789,13 @@ export class RatAnimator {
                 leftEar.rotation.x -= .5 * flinch;rightEar.rotation.x -= .5 * flinch;
             }
             if (face) {leftEar.rotation.x += this.earFlop;rightEar.rotation.x += this.earFlop;}
+            if (air) {
+                // Falling: ears and tail stream up and the hat lifts off the head; rising: they trail down; the apex curls the tail.
+                const up = this.airFall - this.airRise * .5;
+                leftEar.rotation.x += up * air.ears;rightEar.rotation.x += up * air.ears * .85;
+                tail.rotation.x += up * air.tail + this.airApex * air.tail * .6;
+                hat.position.y += this.airFall * air.hat - this.airRise * air.hat * .3;hat.rotation.x += this.airFall * air.hat * 1.5;
+            }
             if (this.hatHidden) hat.scale.setScalar(1e-4);
             // Keep the dragging section planted instead of inheriting the step bounce.
             tail.rotation.y = -this.turn * 0.2;
