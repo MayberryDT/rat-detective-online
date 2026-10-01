@@ -38,11 +38,15 @@
       "mindVersion": null,
       "protocol": 23,
       "worker": "d5c52eb9-ab32-471e-a439-8ec405e83899",
-      "commits": ["a0ef9eb"],
+      "commits": [
+        "a0ef9eb"
+      ],
       "change": "City overhaul, layout 3: the docks, the Panopticon precinct, cut corners, bank walls, Gate Lane, the Needleworks chutes, north sewer branches; old bots.",
       "receipt": "docs/verification/city-overhaul-release-2026-09-29.md",
       "baseline": "production-2026-09-29-recorder-fixes",
-      "proposals": ["overhaul-v3"],
+      "proposals": [
+        "overhaul-v3"
+      ],
       "notes": "Its predictions are the layout proposal's place measures (design/city/proposals/overhaul-v3.json), judged by /map's Design mode between layouts 2 and 3.",
       "predictions": []
     },
@@ -55,7 +59,9 @@
       "mindVersion": 3,
       "protocol": 23,
       "worker": "5113bba0-68ca-44c7-b78a-ef18bf50fe98",
-      "commits": ["c878e52"],
+      "commits": [
+        "c878e52"
+      ],
       "change": "The bot overhaul deployed before the Jev key was set (then redeployed as 16dcf333): six minutes of the code mind only, no humans.",
       "receipt": "docs/verification/bot-overhaul-release-2026-09-30.md",
       "predictions": []
@@ -69,14 +75,32 @@
       "mindVersion": 3,
       "protocol": 23,
       "worker": "aecb77d2-8d51-4792-a5fb-af077c036c3d",
-      "commits": ["c878e52"],
+      "commits": [
+        "c878e52"
+      ],
       "change": "Bot overhaul (mindVersion 3): the code mind for the empty city, the Jev mind (jev-1.13.0, asked about once a second) while a human plays, a $25 a day budget, bots on the shared rat body; controls recorded for every rat.",
       "receipt": "docs/verification/bot-overhaul-release-2026-09-30.md",
       "baseline": "production-2026-09-29-city-overhaul",
       "notes": "The code-mind gate (rescues, death spread, case flow) is judged by scripts/bot-gate.mjs against the B1 baseline (docs/bot-overhaul.md, Acceptance).",
       "predictions": [
-        { "id": "jev-latency", "says": "A Jev decision's reply latency at the 90th percentile stays under 600 ms.", "measure": "jev.latencyP90", "expect": "down", "target": { "below": 600 } },
-        { "id": "skill-bar-hit-rate", "says": "The bots hit a smaller share of their shots than the humans do (the skill bar; the acceptance names the median human, this pools every human shot).", "measure": "likeness.hitRate.bot", "expect": "down", "target": { "below": "likeness.hitRate.human" } }
+        {
+          "id": "jev-latency",
+          "says": "A Jev decision's reply latency at the 90th percentile stays under 600 ms.",
+          "measure": "jev.latencyP90",
+          "expect": "down",
+          "target": {
+            "below": 600
+          }
+        },
+        {
+          "id": "skill-bar-hit-rate",
+          "says": "The bots hit a smaller share of their shots than the humans do (the skill bar; the acceptance names the median human, this pools every human shot).",
+          "measure": "likeness.hitRate.bot",
+          "expect": "down",
+          "target": {
+            "below": "likeness.hitRate.human"
+          }
+        }
       ]
     },
     {
@@ -88,7 +112,10 @@
       "mindVersion": 1,
       "protocol": 23,
       "worker": "5775e468-6583-44c9-b438-9c999fe71165",
-      "commits": ["90fa5c7", "fb80312"],
+      "commits": [
+        "90fa5c7",
+        "fb80312"
+      ],
       "change": "Bot overhaul B0-B5 on staging: the code mind and the Jev mind, decision, goal-end and minds facts.",
       "receipt": "docs/bot-overhaul.md",
       "predictions": []
@@ -102,7 +129,9 @@
       "mindVersion": 1,
       "protocol": 23,
       "worker": "49fc0763-043f-4f13-95b5-247811f2f05e",
-      "commits": ["5a19806"],
+      "commits": [
+        "5a19806"
+      ],
       "change": "Bots leave Pier 9 by its stairs and doors and walk off off-graph roofs at once.",
       "receipt": "docs/bot-overhaul.md",
       "predictions": []
@@ -116,7 +145,10 @@
       "mindVersion": 2,
       "protocol": 23,
       "worker": "a496ae7d-af2a-4901-a765-b41481b4f0c0",
-      "commits": ["404ccea", "7574494"],
+      "commits": [
+        "404ccea",
+        "7574494"
+      ],
       "change": "Bot motor iteration 1 (pursuit running, hand-like aim, strafe and cover fighting); aim recorded (camera look, shot targets).",
       "receipt": "docs/bot-overhaul.md",
       "predictions": []
@@ -130,7 +162,9 @@
       "mindVersion": 3,
       "protocol": 23,
       "worker": "820c8057-aa51-432b-89f7-084a502b1367",
-      "commits": ["8ad85f3"],
+      "commits": [
+        "8ad85f3"
+      ],
       "change": "Motor iteration 2: bots press the player's controls through the shared rat step.",
       "receipt": "docs/bot-overhaul.md",
       "predictions": []
@@ -144,10 +178,16 @@
       "mindVersion": 3,
       "protocol": 23,
       "worker": "7b331917-5064-4203-b6b9-ea6b314f2f62",
-      "commits": ["21b4f36", "8fbecdc", "f09314e"],
+      "commits": [
+        "21b4f36",
+        "8fbecdc",
+        "f09314e"
+      ],
       "change": "Gameplay batch: low-health black and white, the kill streak mark, layout 4 (supplies moved to ground floors, Quick Fix 7 to 14), controls recording.",
       "receipt": "docs/verification/overnight-2026-09-30.md",
-      "proposals": ["supplies-v4"],
+      "proposals": [
+        "supplies-v4"
+      ],
       "predictions": []
     },
     {
@@ -159,7 +199,11 @@
       "mindVersion": 4,
       "protocol": 23,
       "worker": "44a71940-1a64-4ff1-956d-0f8325c77e9e",
-      "commits": ["e91e96b", "77ecc9c", "095494c"],
+      "commits": [
+        "e91e96b",
+        "77ecc9c",
+        "095494c"
+      ],
       "change": "Bot motor iteration 3 (mindVersion 4), the Graphics setting with Auto quality, perf telemetry, the first performance wave.",
       "receipt": "docs/verification/overnight-2026-09-30.md",
       "predictions": []
@@ -173,7 +217,11 @@
       "mindVersion": 4,
       "protocol": 23,
       "worker": "93fd2a2d-d227-43c9-9135-92824140bc64",
-      "commits": ["a71d941", "e68d6db", "7d9d580"],
+      "commits": [
+        "a71d941",
+        "e68d6db",
+        "7d9d580"
+      ],
       "change": "Bot motor iterations 4-5 and every performance commit through 7d9d580.",
       "receipt": "docs/verification/overnight-2026-09-30.md",
       "predictions": []
@@ -187,7 +235,9 @@
       "mindVersion": 4,
       "protocol": 23,
       "worker": "136bd427-024a-4cf3-b091-fb93c17a47ee",
-      "commits": ["e2102a7"],
+      "commits": [
+        "e2102a7"
+      ],
       "change": "Texture pre-upload and shared supply shapes (the overnight batch's final build).",
       "receipt": "docs/verification/overnight-2026-09-30.md",
       "predictions": []
@@ -201,7 +251,9 @@
       "mindVersion": 4,
       "protocol": 23,
       "worker": "4c39e3f2-c145-49d1-9473-8dbe3d80c605",
-      "commits": ["37551e0"],
+      "commits": [
+        "37551e0"
+      ],
       "change": "Graphics Medium and Low redraw the flashlight shadow every frame (the rat's own shadow had lagged and snapped).",
       "receipt": "docs/verification/overnight-2026-09-30.md",
       "predictions": []
@@ -215,10 +267,16 @@
       "mindVersion": 4,
       "protocol": 24,
       "worker": "a252ebcb-caa0-46c8-b0f5-d503834ea55f",
-      "commits": ["d48c7bd", "99acf64", "8d7d59e"],
+      "commits": [
+        "d48c7bd",
+        "99acf64",
+        "8d7d59e"
+      ],
       "change": "Round end 30 s, a random supply for each new kill streak title, the Stakeout pickup with four crossroads sites (layout 5, protocol 24).",
       "receipt": "docs/verification/overnight-2026-09-30.md",
-      "proposals": ["supplies-v5"],
+      "proposals": [
+        "supplies-v5"
+      ],
       "predictions": []
     },
     {
@@ -231,7 +289,9 @@
       "mindVersion": 5,
       "protocol": 24,
       "worker": "7888521b-9c3c-4baf-bbf8-6781a13d4dce",
-      "commits": ["76701ab"],
+      "commits": [
+        "76701ab"
+      ],
       "change": "Release A (L3 of the bot learning plan): the 30 September staging batch, the data foundation (build stamps, agent traffic, aggregates by build, decision inputs, pickups passed) and the pickup reflex, with Jev as it is today. The baseline era for the lighter Jev.",
       "baseline": "production-2026-09-30-bot-overhaul",
       "receipt": "docs/verification/release-a-2026-09-30.md",
@@ -241,35 +301,79 @@
     {
       "id": "lighter-jev",
       "environment": "production",
-      "build": ["production-2026-10-01-6356f81", "production-2026-10-01-4d9e649"],
+      "build": [
+        "production-2026-10-01-6356f81",
+        "production-2026-10-01-4d9e649"
+      ],
       "from": "2026-10-01T02:03:25.230Z",
-      "to": null,
+      "to": "2026-10-01T17:53:20.000Z",
       "layout": 5,
       "mindVersion": 6,
       "protocol": 25,
       "worker": "88171c4c-a93a-40a3-bc5c-3d0769c59c3d",
-      "commits": ["6356f81", "4d9e649"],
+      "commits": [
+        "6356f81",
+        "4d9e649"
+      ],
       "change": "The lighter Jev (L4, mindVersion 6): a bot decides only at decision moments (it spawns, its goal ends or fails, the case changes state, or 10 s pass) and holds its goal in between; Jev is asked at those moments, never within 3 s of the last request; each decision also sets a stance, fight or focus (ignore rats unless they block the way or shoot). Every decision moment is recorded with its stance. About 1 round in 5 is a code-only round: the bots keep the code mind even with humans playing, to measure what Jev is worth. Ships with protocol 25 (Tyler, 30 September): Closing Time dropped (three modes), Blackout with a hard flashlight beam on every rat, heavy Big Cheese (one shot per second, damage 2 plus one per size step); also supply claim juice with heavy Ironclad sounds, and the reconnect fixes (supply sites no longer doubled, the restored rat turns with the camera).",
       "baseline": "release-a",
       "notes": "Build production-2026-10-01-4d9e649 (Worker 4ec0fd2e, 1 October 04:26 UTC) adds only A1 air acting, presentation, so the era continues across it. Jev, decision and human-likeness measures and these verdicts read ordinary rounds only; the report compares code-only rounds with ordinary ones in their own section. Production's bot overhaul era measured 56 requests per bot-minute (bots counted from the frames, about 7 in the room); the plan's 48 matches about 9 bots. The bound of 12 stands either way. Protocol 25 changes modes and two incidents in the same era: compare per mode, and read Big Cheese and Blackout rounds apart (Big Cheese cuts shots per minute by design). Staging: build staging-2026-10-01-80ada3a (Worker 6f8d9b17), rolling only Blackout and Big Cheese for Tyler's playtest.",
       "receipt": "docs/verification/protocol-25-release-2026-10-01.md",
       "predictions": [
-        { "id": "jev-requests", "says": "Jev requests per bot-minute fall from about 48 to under 12.", "measure": "jev.requestsPerBotMinute", "expect": "down", "target": { "below": 12 } },
-        { "id": "jev-dollars", "says": "Dollars per hour Jev is on fall at least fivefold.", "measure": "jev.dollarsPerJevHour", "expect": "down", "target": { "factor": 5 } },
-        { "id": "take-case-held", "says": "The share of take-the-case goals replaced before they end falls well below 89%.", "measure": "goals.take-case.replaced", "expect": "down" },
-        { "id": "likeness-hit-bands", "says": "Human-likeness gets no worse: the gap between bot and human hit rates across distance bands does not grow.", "measure": "likeness.hitRateBandGap", "expect": "not-up" },
-        { "id": "likeness-blind-shots", "says": "Human-likeness gets no worse: the gap between the bots' and the humans' share of shots fired with no rat in sight does not grow.", "measure": "likeness.blindShotGap", "expect": "not-up" }
+        {
+          "id": "jev-requests",
+          "says": "Jev requests per bot-minute fall from about 48 to under 12.",
+          "measure": "jev.requestsPerBotMinute",
+          "expect": "down",
+          "target": {
+            "below": 12
+          }
+        },
+        {
+          "id": "jev-dollars",
+          "says": "Dollars per hour Jev is on fall at least fivefold.",
+          "measure": "jev.dollarsPerJevHour",
+          "expect": "down",
+          "target": {
+            "factor": 5
+          }
+        },
+        {
+          "id": "take-case-held",
+          "says": "The share of take-the-case goals replaced before they end falls well below 89%.",
+          "measure": "goals.take-case.replaced",
+          "expect": "down"
+        },
+        {
+          "id": "likeness-hit-bands",
+          "says": "Human-likeness gets no worse: the gap between bot and human hit rates across distance bands does not grow.",
+          "measure": "likeness.hitRateBandGap",
+          "expect": "not-up"
+        },
+        {
+          "id": "likeness-blind-shots",
+          "says": "Human-likeness gets no worse: the gap between the bots' and the humans' share of shots fired with no rat in sight does not grow.",
+          "measure": "likeness.blindShotGap",
+          "expect": "not-up"
+        }
       ]
     },
     {
       "id": "case-grip",
       "environment": "production",
+      "build": "production-2026-10-01-6570125",
+      "from": "2026-10-01T17:53:20.000Z",
+      "to": null,
       "layout": 5,
       "mindVersion": 7,
       "protocol": 26,
-      "commits": [],
+      "worker": "a3b3d924-925f-47ac-a30e-5e5a93d46d33",
+      "commits": [
+        "6570125"
+      ],
       "change": "Case grip, calmer bot aim and bot archetypes (Tyler, 1 October): a carried case is knocked loose by 3 enemy balls each within 2 s of the last (it was one ball); killing the carrier still drops it. Bots pre-aim at chest height, not head height, and play as five archetypes with their own dials, none sharper than base (sniper, hose, camper, joyrider, gremlin; mindVersion 7); joyriders use the launch machines. Perf reports carry ping and how far behind other rats are drawn (measurement only). Excessive Force stays at 10 kills; no time limits, ever. Protocol 26 adds: archetypes dealt evenly per room; PAPER CHASE to 5 deliveries; Jurisdiction zones hold 20 points that drain only while the case is held there, then move; a shot case flies 20% slower; taking the case brings a random supply (once per 20 s per rat); the case rebuilt and made juicy (K1, K2, new sounds); loose-spell and drop-cause recording.",
       "baseline": "lighter-jev",
+      "receipt": "docs/verification/protocol-26-release-2026-10-01.md",
       "notes": "Tyler's target: Excessive Force averages 15–20 minutes, the longest mode but not by much (it was 27.5 minutes over 45 rounds from 29 September to 1 October, bot-only rounds included). If Paper Chase or Jurisdiction get too short, raise their targets. Bot-only rounds count: the city runs them all day. Paper Chase and Jurisdiction changed rules in this era, so their round lengths are a new baseline, not a prediction. Loose-spell measures (case.looseMedianS, loosePathMedian, looseKicksMean) start here; the earlier eras have none.",
       "predictions": [
         {
