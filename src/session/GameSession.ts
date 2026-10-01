@@ -121,6 +121,8 @@ export class GameSession {
     private playFrameMarked=false;
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
+    /** C5: one tick per nameplate pip a Quick Fix refills. */
+    private readonly pipTick = () => this.feedback.play('pip-tick');
     /** The stage's own exposure (a Blackout leaves it alone: beam-lit surfaces read bright). */
     private baseExposure = 1;
     private readonly beamAim = new THREE.Vector3();
@@ -170,6 +172,7 @@ export class GameSession {
         this.music = prepared.music ?? new SessionMusic(listener);
         this.music.start();
         this.feedback = new FeedbackAudio(listener);
+        this.feel.cue = cue => this.feedback.play(cue);
         this.foley=new FoleyAudio(listener);
         this.foley.setEnabled(false);
         this.gun = new CheeseGun(scene, world, listener);
@@ -332,6 +335,7 @@ export class GameSession {
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
+            this.chaos.onClaim=(kind,camera)=>this.feel.claimed(kind,this.rat?.entity,camera);
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onDispatchShot=(_station,at)=>this.feel.dispatchShot(at,this.stage.camera);
             this.chaos.onVentErupted=vent=>{
@@ -470,7 +474,9 @@ export class GameSession {
             }
             case 'playerHealed': {
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
-                entity?.heal(message.hp);
+                // C5: your Quick Fix refills the nameplate pips one at a time, ticking each.
+                const fix = message.id === this.myId && message.cause !== 'bounty' && message.cause !== 'incident';
+                entity?.heal(message.hp, fix ? this.feel.pipStagger : 0, this.pipTick);
                 if (message.id === this.myId) {
                     // Clean Bill heals everyone without a Quick Fix card; a bounty gets its own callout.
                     if(message.cause==='bounty')this.feel.bounty();else if(message.cause!=='incident')this.chaos?.showHealing();

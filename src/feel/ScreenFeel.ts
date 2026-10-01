@@ -31,6 +31,9 @@ export class ScreenFeel {
     private sootNode?:HTMLElement;
     private grainNode?:HTMLElement;
     private vignetteNode?:HTMLElement;
+    private claimNode?:HTMLElement;
+    private inkNode?:HTMLElement;
+    private lensNode?:HTMLElement;
     private lastFilm='';
     private lastSpeed=0;
     private canvas?:HTMLElement;
@@ -148,6 +151,26 @@ export class ScreenFeel {
         replay(this.bloom,'on');
     }
 
+    /** C1: your supply claim: a brief edge flash in the supply's `colour`, `level` × Flash strength. */
+    claim(colour:string,level:number):void {
+        const strength=level*this.flash();
+        if(!(strength>0)||!this.build()||!this.claimNode)return;
+        this.claimNode.style.setProperty('--claim',colour);this.claimNode.style.setProperty('--feel-flash',strength.toFixed(3));
+        replay(this.claimNode,'on');
+    }
+    /** C2: your Stakeout claim: an ink ripple spreads across the screen from `at`, under a brief magnifying-glass
+     * lens vignette lasting `lens` s. Skipped under Reduced interface motion. */
+    stakeout(at:THREE.Vector3,camera:THREE.Camera,lens:number):void {
+        const strength=this.flash();
+        if(!(strength>0)||reducedMotion()||!this.build()||!this.inkNode||!this.lensNode)return;
+        this.projected.copy(at).project(camera);
+        const behind=this.projected.z>1,x=behind?.5:Math.min(1,Math.max(0,(this.projected.x+1)/2)),y=behind?.6:Math.min(1,Math.max(0,(1-this.projected.y)/2));
+        this.inkNode.style.left=`${(x*100).toFixed(1)}%`;this.inkNode.style.top=`${(y*100).toFixed(1)}%`;
+        this.inkNode.style.setProperty('--feel-flash',Math.min(1,strength).toFixed(3));replay(this.inkNode,'on');
+        this.lensNode.style.setProperty('--feel-flash',Math.min(1,strength).toFixed(3));this.lensNode.style.setProperty('--lens',`${Math.round(lens*1000)}ms`);
+        replay(this.lensNode,'on');
+    }
+
     /** U6: the crosshair opens with movement speed (units/s) … */
     crosshairMotion(speed:number):void {const p=FEEL.reactiveCrosshair.params;this.spreadTarget=Math.min(1,speed/p.speed)*p.move;}
     /** … and kicks open on each local shot, easing back as you settle. */
@@ -192,13 +215,14 @@ export class ScreenFeel {
         if(this.irisNode)this.irisNode.style.opacity='0';
         if(this.speedNode){this.speedNode.style.opacity='0';this.speedNode.classList.remove('on');}
         this.calloutNode?.classList.remove('on');this.sootNode?.classList.remove('on');
+        for(const node of [this.claimNode,this.inkNode,this.lensNode])node?.classList.remove('on');
         this.lastSpeed=0;
         this.lastFilm='';this.root?.classList.remove('letterboxed');
         if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.sootNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.sootNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=undefined;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -216,6 +240,9 @@ export class ScreenFeel {
         this.sootNode=this.doc.createElement('div');this.sootNode.className='feel-soot';this.root.appendChild(this.sootNode);
         this.irisNode=this.doc.createElement('div');this.irisNode.className='feel-iris';this.root.appendChild(this.irisNode);
         this.edge=this.doc.createElement('div');this.edge.className='feel-edge';this.root.appendChild(this.edge);
+        this.inkNode=this.doc.createElement('div');this.inkNode.className='feel-ink';this.root.appendChild(this.inkNode);
+        this.lensNode=this.doc.createElement('div');this.lensNode.className='feel-lens';this.root.appendChild(this.lensNode);
+        this.claimNode=this.doc.createElement('div');this.claimNode.className='feel-claim';this.root.appendChild(this.claimNode);
         this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);
         for(let i=0;i<3;i++){const node=this.doc.createElement('div');node.className='feel-word';this.root.appendChild(node);this.words.push(node);}
         for(let i=0;i<ARROWS;i++){

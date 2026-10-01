@@ -72,6 +72,9 @@ export class RatAnimator {
     private airPose = 0;
     private jumpLift = 0;
     private jumpLanding = 0;
+    /** Seconds until a supply claim's pop follows its squash (the jump stretch), and how big. */
+    private popIn = 0;
+    private popSize = 0;
     /** Bumped by every pose; a tail is deformed to it only when drawn (off-screen rats and hidden outline shells skip the work). */
     private tailPose = 0;
     private tailReset = false;
@@ -397,6 +400,8 @@ export class RatAnimator {
     nod():void {this.nodAge=0;}
     /** Pickup body reaction: Ironclad chest puff, Hot Pursuit bounce, Stakeout head-forward squint, Quick Fix relieved breath. */
     pulse(kind:TimedPickup|'heal'):void {this.pulseKind=kind;this.pulseAge=0;}
+    /** Your supply claim: the landing squash, then a pop up through the jump stretch; `size` scales both. */
+    squashPop(size:number):void {this.jumpLanding=size;this.popSize=size;this.popIn=.08;}
 
     /** The fedora has flown off as its own object; collapse the rig's copy until reset. */
     setHatHidden(hidden:boolean):void {this.hatHidden=hidden;}
@@ -410,7 +415,7 @@ export class RatAnimator {
         this.acting.reset();this.hustle=false;
         this.time = this.stride = this.movement = this.recoil = this.turn = this.hit = 0;
         this.acceleration = this.coatTurn = 0;
-        this.verticalSpeed = this.airPose = this.jumpLift = this.jumpLanding = 0;
+        this.verticalSpeed = this.airPose = this.jumpLift = this.jumpLanding = this.popIn = 0;
         this.respawnAge = 1;
         this.aimHold = this.aim = 0;
         this.aimTarget = null;
@@ -551,6 +556,7 @@ export class RatAnimator {
             this.airPose = THREE.MathUtils.lerp(this.airPose,airTarget,1-Math.exp(-22*dt));
             this.jumpLift *= Math.exp(-15 * dt);
             this.jumpLanding *= Math.exp(-18 * dt);
+            if (this.popIn > 0 && (this.popIn -= dt) <= 0) {this.popIn = 0;this.jumpLift = this.popSize;}
         }
         if (!correction && this.locomotionPolish) {
             // Semi-implicit springs, stable at game frame rates.

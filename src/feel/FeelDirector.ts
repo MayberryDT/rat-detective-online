@@ -29,6 +29,14 @@ import {registerSupplyCues} from './supplyCues';
 import {LaunchJuice} from './LaunchJuice';
 import {LampAlarm} from './LampAlarm';
 import type {LaunchMachineKind} from '../shared/chaosState';
+import type {PickupKind} from '../shared/pickups';
+import type {FeedbackCue} from '../audio/FeedbackAudio';
+import {reducedMotion} from '../ui/motion';
+
+/** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, brass Stakeout. */
+const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#d6a843'};
+/** C4: Hot Pursuit claim dust, a multiplier on the grey dust colour. */
+const CLAIM_DUST=new THREE.Color(3.2,.42,.26);
 
 /** One entry point from game events to presentation-only feel effects.
  * GameSession calls it at existing event sources; channels never parse
@@ -69,6 +77,10 @@ export class FeelDirector {
     private airVy=0;
     private flying=false;
     private pursuit=0;
+    /** C4: seconds of Hot Pursuit claim speed lines left. */
+    private claimStreaks=0;
+    /** Edited feedback cues (Stakeout claim shutters, Quick Fix pip ticks), wired by the session. */
+    cue?:(cue:FeedbackCue)=>void;
     /** Blackout: eased power-off level, and the brief lift from nearby muzzle flashes. */
     private blackout=0;
     private muzzleFlash=0;
@@ -98,7 +110,7 @@ export class FeelDirector {
     attachScene(scene:THREE.Scene):void {
         this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);
         this.launchJuice?.dispose();this.launchJuice=new LaunchJuice(scene);
-        this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);
+        this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);this.hunchView.onReveal=()=>this.cue?.('stakeout-shutter');
         this.searchlight?.dispose();this.searchlight=new WantedSearchlight(scene);
         registerSupplyCues((cue,at)=>{if(this.view)this.sound.supply(cue,at,this.view);});this.hunchView.setSupercharged(this.incident==='clean-bill');
     }
@@ -151,7 +163,9 @@ export class FeelDirector {
         this.camera.hold(!on?0:this.flying?p.launchWiden:this.pursuit*p.pursuitWiden);
         // Launcher flight streaks the screen by airspeed, like a Hot Pursuit sprint.
         const flightStreaks=this.flying&&this.state.on('launchFlight')?Math.min(1,Math.hypot(horizontalSpeed,verticalSpeed)/55)*FEEL.launchFlight.params.streaks:0;
-        this.screen.speed(Math.max(this.pursuit*p.streaks,flightStreaks));
+        this.claimStreaks=Math.max(0,this.claimStreaks-Math.max(0,dt));
+        const claimStreaks=this.claimStreaks>0?Math.min(1,this.claimStreaks/FEEL.claimHustle.params.streaks*2):0;
+        this.screen.speed(Math.max(this.pursuit*p.streaks,flightStreaks,claimStreaks));
         this.sound.localMotion(horizontalSpeed,landed,carrying,this.flying?Math.min(1,Math.hypot(horizontalSpeed,verticalSpeed)/45):0);
     }
 
@@ -168,6 +182,35 @@ export class FeelDirector {
         this.sound.sting(kind);
         if(kind==='case')this.callout('ON THE CASE');
     }
+    /** C1–C4: your own supply claim (other rats' claims keep only their world effects): an edge flash in the supply's colour,
+     * a punch-in, a small kick and a squash-and-pop, then the supply's signature. The card flight and Ironclad sparks are ChaosView's. */
+    claimed(kind:PickupKind,self:RatEntity|undefined,view:THREE.Camera):void {
+        if(!self||self.dead)return;
+        const widens=kind==='hustle'&&this.state.on('claimHustle');
+        if(this.state.on('claimMoment')){
+            const p=FEEL.claimMoment.params;
+            this.screen.claim(CLAIM_INK[kind],p.flash);
+            // Hot Pursuit widens instead of punching in.
+            if(!widens)this.camera.widen(-p.punch);
+            this.camera.kick(p.kick,(Math.random()*2-1)*p.kick*.4);
+            if(!reducedMotion())self.squashPop(p.squash);
+        }
+        if(kind==='stakeout'&&this.state.on('claimStakeout')){
+            this.screen.stakeout(self.mesh.position,view,FEEL.claimStakeout.params.lens);
+            this.hunchView?.reveal();
+        }else if(kind==='ironclad'&&this.state.on('claimIronclad')){
+            const p=FEEL.claimIronclad.params;
+            this.camera.kick(p.dip);this.camera.push(this.impulse.set(0,p.push,0));
+            self.shine(p.shine);
+        }else if(widens){
+            const p=FEEL.claimHustle.params;
+            this.camera.widen(p.widen);
+            if(!reducedMotion())this.claimStreaks=p.streaks;
+            this.dust?.puff(self.mesh.position,p.dust,CLAIM_DUST);
+        }
+    }
+    /** C5: seconds between your nameplate's restored pips refilling on a Quick Fix (0: all at once). */
+    get pipStagger():number {return this.state.on('claimQuickFix')&&!reducedMotion()?FEEL.claimQuickFix.params.pip:0;}
 
     private callout(text:string,now=performance.now()):void {
         if(!this.state.on('rewards')||now-this.lastCalloutAt<FEEL.rewards.params.calloutCooldown*1000)return;
@@ -515,6 +558,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.claimStreaks=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
     dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
 }

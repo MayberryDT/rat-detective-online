@@ -4,7 +4,7 @@ import type {FoleyWorld} from '../audio/FoleyWorld';
 import { createCaseGrip, disposeCaseGrip } from './CaseGrip';
 import {setText} from '../ui/setText';
 import {clearAimLabel} from '../ui/aimClearance';
-import {leave} from '../ui/motion';
+import {fly, leave} from '../ui/motion';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { ChaosState, CorpseState, LaunchMachine, SurgeVent } from '../shared/chaosState';
@@ -33,7 +33,7 @@ import { addLeatherBriefcase } from './CaseModel';
 import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentation';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
-import {powerupCard} from './pickupArtwork';
+import {pickupArtwork, powerupCard} from './pickupArtwork';
 import { BUFF_FIELD, BUFF_MS, PICKUP_TUNING, TIMED_PICKUPS, activeBuffs, type BuffMap, type PickupKind, type TimedPickup } from '../shared/pickups';
 import {closestPointOnSegment} from '../shared/netplay';
 
@@ -56,6 +56,8 @@ export interface InteractionCandidate {
 
 /** U9: a pickup card drops away instead of vanishing. */
 const CARD_EXIT:Keyframe[]=[{opacity:1,transform:'none'},{opacity:0,transform:'translateY(46px) rotate(6deg) scale(.9)'}];
+/** C1: a claimed supply this far (units) from your rat is the prop its card artwork flies from; otherwise it flies from your rat. */
+const CLAIM_REACH=5;
 
 /** Instanced shot draws: balls, Crossfire balls and glows, danger rims and trails, the case
  * missile's trail. Instance colours exist from the start, as play will need them, so the
@@ -91,6 +93,13 @@ export class ChaosView {
     private readonly buffBar=document.createElement('div');
     private readonly buffCards=new Map<PickupKind,HTMLElement>();
     private healingUntil=0;
+    /** C1: your claim waiting for this frame's card, and the pooled card-artwork chip per supply that flies into it. */
+    private claimed?:PickupKind;
+    private readonly claimChips=new Map<PickupKind,HTMLElement>();
+    private readonly claimAt=new THREE.Vector3();
+    private readonly claimFrom={x:0,y:0};
+    /** Your own supply claim (not other rats'), raised the frame its card is up. */
+    onClaim?:(kind:PickupKind,camera:THREE.Camera)=>void;
     private readonly localBuffs:Record<TimedPickup,number>={ironclad:0,hustle:0,stakeout:0};
     private readonly pendingInteractions=new Map<string,InteractionCandidate>();
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
@@ -192,10 +201,36 @@ export class ChaosView {
         this.pickupFeedback('quick-fix');
     }
     private pickupFeedback(kind:PickupKind):void {
-        this.feedback?.('pickup-slap');this.feedback?.(`pickup-${kind}`);
+        this.feedback?.('pickup-slap');this.feedback?.(`pickup-${kind}`);this.claimed=kind;
+    }
+    /** C1/C3: your claim's card artwork flies from the claimed prop (or your rat) into its card; Ironclad throws silver sparks. */
+    private claim(kind:PickupKind,camera:THREE.Camera):void {
+        const self=this.resolveRat(this.myId);
+        if(!self||self.dead)return;
+        const me=self.mesh.position;let best=CLAIM_REACH*CLAIM_REACH;
+        this.claimAt.set(me.x,me.y+1.2,me.z);
+        for(const pickup of this.state?.pickups??[]){
+            const d=(pickup.x-me.x)**2+(pickup.y-me.y)**2+(pickup.z-me.z)**2;
+            if(pickup.kind===kind&&d<best){best=d;this.claimAt.set(pickup.x,pickup.y,pickup.z);}
+        }
+        const card=this.buffCards.get(kind);
+        if(card){
+            let chip=this.claimChips.get(kind);
+            if(!chip){chip=document.createElement('div');chip.className=`claim-fly powerup-${kind}`;chip.innerHTML=pickupArtwork(kind);chip.setAttribute('aria-hidden','true');this.claimChips.set(kind,chip);}
+            this.impactPoint.copy(this.claimAt).project(camera);
+            const behind=this.impactPoint.z>1;
+            this.claimFrom.x=(behind?.5:Math.min(1,Math.max(0,(this.impactPoint.x+1)/2)))*innerWidth;
+            this.claimFrom.y=(behind?.6:Math.min(1,Math.max(0,(1-this.impactPoint.y)/2)))*innerHeight;
+            fly(document,chip,this.claimFrom,card,'claimMoment',FEEL.claimMoment.params.flight);
+        }
+        if(kind==='ironclad'&&feelState().on('claimIronclad'))for(let i=0;i<FEEL.claimIronclad.params.sparks;i++){
+            const angle=i*2.4+Math.random();
+            this.impacts.spark(this.impactPoint.set(me.x+Math.cos(angle)*.35,me.y+1.1+i*.25,me.z+Math.sin(angle)*.35),this.impactNormal.set(Math.cos(angle),.8,Math.sin(angle)));
+        }
+        this.onClaim?.(kind,camera);
     }
     private clearPickupCards():void {
-        this.healingUntil=0;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;
+        this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;
         for(const card of this.buffCards.values())leave(card,'paperSlide',CARD_EXIT);
         this.buffCards.clear();this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
@@ -476,6 +511,7 @@ export class ChaosView {
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
         this.updateBuffs(s.buffs,now);
+        if(this.claimed){const kind=this.claimed;this.claimed=undefined;this.claim(kind,camera);}
         this.updateCaseMarker(camera);
         if(this.fixXray)this.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
@@ -625,7 +661,7 @@ export class ChaosView {
     dispose(){
         for(const beacon of this.fixBeacons)beacon.remove();
         for(const c of this.corpses.values())c.hat?.dispose();
-        this.clearPickupCards();this.buffBar.remove();
+        this.clearPickupCards();this.buffBar.remove();for(const chip of this.claimChips.values())chip.remove();
         this.clearInteractions();
         this.localShots.clear();
         this.pillars.dispose();this.assignmentDestinations.dispose();this.jurisdictionZones.dispose();

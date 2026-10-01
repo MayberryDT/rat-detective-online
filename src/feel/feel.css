@@ -67,6 +67,17 @@
     radial-gradient(ellipse 9% 7% at calc(var(--soot-x,55%) - 11%) 66%,#0d0a08cc,#0d0a0800 70%),radial-gradient(ellipse 30% 24% at var(--soot-x,55%) 60%,#1a130c66,#1a130c00 75%)}
 .feel-soot.on{animation:feel-soot 1.9s ease-out both}
 @keyframes feel-soot{0%{opacity:0;transform:scale(.7)}8%{opacity:var(--soot,1);transform:scale(1)}40%{opacity:calc(var(--soot,1)*.85)}100%{opacity:0;transform:scale(1.04) translateY(2%)}}
+/* C1–C2 claim juice: an edge flash in the supply's colour; Stakeout's ink ripple from your rat and a brief magnifying-glass lens. No glows. */
+.feel-claim{position:absolute;inset:0;opacity:0;background:var(--claim,#fff);
+  -webkit-mask:radial-gradient(ellipse at center,transparent 56%,#0005 80%,#000 100%);mask:radial-gradient(ellipse at center,transparent 56%,#0005 80%,#000 100%)}
+.feel-claim.on{animation:feel-claim 420ms ease-out both}
+@keyframes feel-claim{0%{opacity:calc(var(--feel-flash,1)*.7)}100%{opacity:0}}
+.feel-ink{position:absolute;left:50%;top:50%;width:0;height:0;border-radius:50%;opacity:0;border:1.5px solid #d9cfb4c0;box-shadow:inset 0 0 0 7px #0a0d1833,0 0 0 1px #0a0d1880}
+.feel-ink.on{animation:feel-ink 560ms cubic-bezier(.25,.6,.4,1) both}
+@keyframes feel-ink{0%{opacity:var(--feel-flash,1);width:0;height:0;margin:0}70%{opacity:calc(var(--feel-flash,1)*.7)}100%{opacity:0;width:240vmax;height:240vmax;margin:-120vmax 0 0 -120vmax}}
+.feel-lens{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 50% 50%,transparent 40vmin,#c9a24aa6 calc(40vmin + 1px),#c9a24aa6 calc(40vmin + 3px),#05070d73 calc(40vmin + 4px),#05070dcc 100%)}
+.feel-lens.on{animation:feel-lens var(--lens,400ms) ease-out both}
+@keyframes feel-lens{0%{opacity:0;transform:scale(1.25)}25%{opacity:var(--feel-flash,1);transform:scale(1)}65%{opacity:var(--feel-flash,1)}100%{opacity:0;transform:scale(1.03)}}
 /* Reduced interface motion: informative words and cards fade in place; decoration holds still. */
 body.reduced-motion :is(.feel-grain,.feel-speed){animation:none!important}
 body.reduced-motion .feel-letterbox{transition:none}

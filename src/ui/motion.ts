@@ -96,20 +96,22 @@ export function countUp(el:HTMLElement,to:number,format:(value:number)=>string,i
     el.textContent=format(from);counting.set(el,requestAnimationFrame(step));
 }
 
-/** Points fly on an arc from a screen point to `target`, which bumps as they land. */
-export function fly(doc:Document,text:string,from:{x:number;y:number},target:HTMLElement,item:FeelItem):void {
+/** Points fly on an arc from a screen point to `target`, which bumps as they land. `chip` is the text, or a caller-owned
+ * element (pooled: it is detached after landing and skipped while still in flight). */
+export function fly(doc:Document,chip:string|HTMLElement,from:{x:number;y:number},target:HTMLElement,item:FeelItem,ms=780):void {
     if(!uiMotion(item)||!doc.body||typeof target.getBoundingClientRect!=='function')return;
+    if(typeof chip!=='string'&&chip.isConnected)return;
     const to=target.getBoundingClientRect();if(!to.width)return;
-    const chip=doc.createElement('div');chip.className='ui-fly';chip.textContent=text;chip.setAttribute('aria-hidden','true');
+    if(typeof chip==='string'){const text=chip;chip=doc.createElement('div');chip.className='ui-fly';chip.textContent=text;chip.setAttribute('aria-hidden','true');}
     chip.style.left=`${from.x}px`;chip.style.top=`${from.y}px`;doc.body.appendChild(chip);
     if(typeof chip.animate!=='function'){chip.remove();return;}
-    const dx=to.left+to.width*.5-from.x,dy=to.top+to.height*.5-from.y;
+    const dx=to.left+to.width*.5-from.x,dy=to.top+to.height*.5-from.y,landed=chip;
     chip.animate([
         {transform:'translate(-50%,-50%) scale(.3)',opacity:0},
         {transform:'translate(-50%,-50%) scale(1.5) rotate(-6deg)',opacity:1,offset:.16},
         {transform:`translate(calc(-50% + ${dx*.4}px),calc(-50% + ${dy*.4-70}px)) scale(1.1) rotate(4deg)`,opacity:1,offset:.5},
         {transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.5)`,opacity:.8},
-    ],{duration:780,easing:'cubic-bezier(.45,0,.55,1)'}).onfinish=()=>{chip.remove();replay(target,'ui-bump',true);};
+    ],{duration:ms,easing:'cubic-bezier(.45,0,.55,1)'}).onfinish=()=>{landed.remove();replay(target,'ui-bump',true);};
 }
 
 /** A paper ghost of `panel` slides away, so the real panel can close at once. */

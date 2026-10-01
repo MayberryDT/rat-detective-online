@@ -109,6 +109,9 @@ export class RatEntity {
     private streak=0;
     private ironcladRemaining=0;
     private metalApplication=0;
+    /** Your Ironclad claim: seconds into the one shine across the silver coat, and its length. */
+    private shineAge=Infinity;
+    private shineLength=1;
     private hustleRemaining=0;
     private stakeoutRemaining=0;
     private glowMaterial?:THREE.MeshBasicMaterial;
@@ -501,6 +504,7 @@ export class RatEntity {
         this.hustleRemaining=Math.max(0,this.hustleRemaining-dt);
         this.stakeoutRemaining=Math.max(0,this.stakeoutRemaining-dt);
         if(this.metalApplication>0){this.metalApplication=Math.max(0,this.metalApplication-dt);this.resetColor();}
+        else if(this.shineAge<this.shineLength){this.shineAge+=dt;this.resetColor();}
         if(silver&&this.ironcladRemaining===0)this.resetColor();
         if(pursuit&&this.hustleRemaining===0)this.updatePowerupOutline();
         this.powerupEffects.update(dt,p,this.hustleRemaining>0);
@@ -588,14 +592,19 @@ export class RatEntity {
         playEntitySound('ratDeath',.6, this.isPlayer ? undefined : this.body.position);
     }
 
-    /** Quick Fix: restore authoritative health without any death or respawn path. */
-    public heal(hp: number): void {
+    /** Quick Fix: restore authoritative health without any death or respawn path. With `stagger` (s) the
+     * restored nameplate pips refill one at a time, calling `tick` for each. */
+    public heal(hp: number, stagger = 0, tick?: () => void): void {
         if (this.dead || hp <= this.hp) return;
         this.hp = hp;
-        this.billboard.setHealth(this.hp);
+        this.billboard.setHealth(this.hp, stagger, tick);
         this.flashColor(0x8fffb0);this.powerupEffects.heal();
         this.playReaction('heal');this.animator.pulse('heal');
     }
+    /** Your supply claim: a quick squash-and-pop (`size` × the jump squash). */
+    public squashPop(size:number):void {if(!this.dead)this.animator.squashPop(size);}
+    /** Your Ironclad claim: one shine across the silver coat over `seconds`. */
+    public shine(seconds:number):void {this.shineAge=0;this.shineLength=Math.max(.05,seconds);}
 
     public takeDamage(amount: number, impactVel: THREE.Vector3) {
         if (this.dead) return;
@@ -678,14 +687,17 @@ export class RatEntity {
     }
 
     private resetColor() {
+        const count=this.allMaterials.length,shine=this.shineAge<this.shineLength?this.shineAge/this.shineLength:-1;
         this.allMaterials.forEach((m, i) => {
             const orig = this.originalColors[i];
             const envMap=this.ironcladRemaining>0?metalReflection():orig.envMap;
             if(m.envMap!==envMap){m.envMap=envMap;m.needsUpdate=true;}
-            m.envMapIntensity=this.ironcladRemaining>0?1.6:orig.envMapIntensity;
+            // The claim shine runs through the parts in model order, so it reads as one sweep across the coat.
+            const t=shine*1.4-.4*i/count,s=shine>=0&&t>0&&t<1?Math.sin(t*Math.PI):0;
+            m.envMapIntensity=this.ironcladRemaining>0?1.6+1.6*s:orig.envMapIntensity;
             if(this.ironcladRemaining>0){
-                m.color.setHex(0xdce4ed).lerp(orig.color,this.metalApplication/.28);m.emissive.setHex(0x9facbb);m.emissiveIntensity=.22*(1-this.blackout);
-                m.metalness=.88;m.roughness=.16;
+                m.color.setHex(0xdce4ed).lerp(orig.color,this.metalApplication/.28);m.emissive.setHex(0x9facbb);m.emissiveIntensity=(.22+.5*s)*(1-this.blackout);
+                m.metalness=.88;m.roughness=.16-.12*s;
             }else{
                 m.color.copy(orig.color);m.emissive.copy(orig.emissive);m.emissiveIntensity=orig.emissiveIntensity*(1-this.blackout);
                 m.metalness=orig.metalness;m.roughness=orig.roughness;

@@ -4,6 +4,7 @@ import {FEEL} from './feelTuning';
 import {freezeStatic} from '../utils/freezeStatic';
 
 const PUFFS=48;
+const PLAIN=new THREE.Color(1,1,1);
 
 /** Polish 16: soft dust puffs on hard landings, skids and launches. One pooled
  * instanced draw; cosmetic only. The game registers one scene-wide instance. */
@@ -11,7 +12,7 @@ export class Dust {
     private geometry?:THREE.IcosahedronGeometry;
     private material?:THREE.MeshStandardMaterial;
     private mesh?:THREE.InstancedMesh;
-    private readonly puffs=Array.from({length:PUFFS},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,life:1,size:1}));
+    private readonly puffs=Array.from({length:PUFFS},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,life:1,size:1,tint:new THREE.Color(1,1,1)}));
     private cursor=0;
     private active=false;
     private readonly dummy=new THREE.Object3D();
@@ -24,13 +25,15 @@ export class Dust {
         this.geometry=new THREE.IcosahedronGeometry(1,1);
         this.material=new THREE.MeshStandardMaterial({color:0x6d6474,roughness:1,transparent:true,opacity:.42,depthWrite:false});
         this.mesh=new THREE.InstancedMesh(this.geometry,this.material,PUFFS);
+        // Instance colours from the start (plain grey dust; a Hot Pursuit claim tints its own), so the program never changes.
+        for(let i=0;i<PUFFS;i++)this.mesh.setColorAt(i,PLAIN);
         this.mesh.name='feel-dust';this.mesh.count=0;this.mesh.frustumCulled=false;
         freezeStatic(this.mesh);this.scene.add(this.mesh);
         return this.mesh;
     }
 
-    /** A ring of puffs at a rat's feet; `strength` 0…1 scales count, spread and size. */
-    puff(at:THREE.Vector3,strength:number):void {
+    /** A ring of puffs at a rat's feet; `strength` 0…1 scales count, spread and size; `tint` multiplies the dust colour. */
+    puff(at:THREE.Vector3,strength:number,tint:THREE.Color=PLAIN):void {
         if(!feelState().on('movement'))return;
         this.build();
         const s=Math.max(.2,Math.min(1,strength)),count=Math.round(4+s*FEEL.movement.params.dust);
@@ -39,7 +42,7 @@ export class Dust {
             const puff=this.puffs[this.cursor++%PUFFS]!,angle=phase+i*Math.PI*2/count,speed=1.5+s*3.5;
             puff.position.set(at.x+Math.cos(angle)*.3,at.y+.12,at.z+Math.sin(angle)*.3);
             puff.velocity.set(Math.cos(angle)*speed,.8+s*.9,Math.sin(angle)*speed);
-            puff.age=0;puff.life=.45+s*.35;puff.size=.14+s*.2;
+            puff.age=0;puff.life=.45+s*.35;puff.size=.14+s*.2;puff.tint.copy(tint);
         }
         this.active=true;
     }
@@ -52,7 +55,7 @@ export class Dust {
             const puff=this.puffs[this.cursor++%PUFFS]!,spread=.6+Math.random()*.8;
             puff.position.copy(at);
             puff.velocity.copy(direction).multiplyScalar(2+Math.random()*3*strength).add({x:(Math.random()-.5)*spread,y:.6+Math.random()*.8,z:(Math.random()-.5)*spread});
-            puff.age=0;puff.life=.6+Math.random()*.5;puff.size=.1+strength*.14;
+            puff.age=0;puff.life=.6+Math.random()*.5;puff.size=.1+strength*.14;puff.tint.copy(PLAIN);
         }
         this.active=true;
     }
@@ -68,9 +71,10 @@ export class Dust {
             const t=puff.age/puff.life;
             this.dummy.position.copy(puff.position);
             this.dummy.scale.setScalar(puff.size*(.6+1.4*t)*(1-t*t));
-            this.dummy.updateMatrix();this.mesh.setMatrixAt(count++,this.dummy.matrix);
+            this.dummy.updateMatrix();this.mesh.setMatrixAt(count,this.dummy.matrix);this.mesh.setColorAt(count++,puff.tint);
         }
         this.mesh.count=count;this.mesh.instanceMatrix.needsUpdate=true;
+        if(this.mesh.instanceColor)this.mesh.instanceColor.needsUpdate=true;
         this.active=count>0;
     }
 

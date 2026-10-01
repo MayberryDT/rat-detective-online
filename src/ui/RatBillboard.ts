@@ -40,6 +40,9 @@ export class RatBillboard {
     /** Per pip: seconds since it was lost (negative: not animating) and since it was regained. */
     private readonly lost = new Array<number>(MAX_HP).fill(-1);
     private readonly gained = new Array<number>(MAX_HP).fill(-1);
+    /** Per pip: seconds a regained pip still waits, empty, before it refills (a staggered Quick Fix), and the tick for each. */
+    private readonly waiting = new Array<number>(MAX_HP).fill(0);
+    private onPip?: () => void;
     private animating = false;
     private disposed = false;
     /** The Hunch (your own plate only): a small eye sprite and its open/shut clock. */
@@ -105,18 +108,21 @@ export class RatBillboard {
         this.draw();
     }
 
-    public setHealth(hp: number) {
+    /** With `stagger` (s) the regained pips refill one at a time, left to right, calling `tick` as each fills. */
+    public setHealth(hp: number, stagger = 0, tick?: () => void) {
         // Dead: the eye resets without ceremony so the next life opens it again.
         if (hp <= 0 && this.hunch) { this.hunch = false; this.eyeAge = Infinity; if (this.eye) this.eye.visible = false; }
         if (this.health === hp) return;
+        let order = 0;
         for (let i = 0; i < MAX_HP; i++) {
             const was = i < this.health, now = i < hp;
-            if (was && !now) { this.lost[i] = 0; this.gained[i] = -1; }
-            else if (!was && now) { this.gained[i] = 0; this.lost[i] = -1; }
+            if (was && !now) { this.lost[i] = 0; this.gained[i] = -1; this.waiting[i] = 0; }
+            else if (!was && now) { this.gained[i] = 0; this.lost[i] = -1; this.waiting[i] = stagger > 0 ? ++order * stagger : 0; }
         }
+        if (order) this.onPip = tick;
         this.health = hp;
         this.animating = hp > 0;
-        if (!this.animating) { this.lost.fill(-1); this.gained.fill(-1); }
+        if (!this.animating) { this.lost.fill(-1); this.gained.fill(-1); this.waiting.fill(0); }
         this.draw();
     }
 
@@ -132,7 +138,15 @@ export class RatBillboard {
             times[i] = t + dt >= limit ? -1 : t + dt;
             running ||= times[i]! >= 0;
         };
-        for (let i = 0; i < MAX_HP; i++) { advance(this.lost, i, LOSS_SECONDS); advance(this.gained, i, GAIN_SECONDS); }
+        for (let i = 0; i < MAX_HP; i++) {
+            const wait = this.waiting[i]!;
+            if (wait > 0) {
+                running = true;
+                if ((this.waiting[i] = wait - dt) <= 0) { this.waiting[i] = 0; this.gained[i] = 0; this.onPip?.(); }
+                continue;
+            }
+            advance(this.lost, i, LOSS_SECONDS); advance(this.gained, i, GAIN_SECONDS);
+        }
         if (this.stampAge < STAMP_SECONDS) { this.stampAge += dt; running = true; }
         this.animating = running;
         this.draw();
@@ -212,7 +226,7 @@ export class RatBillboard {
             ctx.lineTo(x + PIP_W, PIP_Y + PIP_H);
             ctx.lineTo(x, PIP_Y + PIP_H);
             ctx.closePath();
-            if (i < this.health) {
+            if (i < this.health && this.waiting[i]! <= 0) {
                 // Filling left to right when regained.
                 ctx.globalAlpha = gained >= 0 ? 0.35 + 0.65 * gained / GAIN_SECONDS : 1;
                 ctx.fillStyle = last ? RED : this.hunch ? GOLD : CREAM;

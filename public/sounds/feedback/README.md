@@ -18,3 +18,18 @@ Source attribution, licenses and retained files: [cartoon-foley provenance](../.
 | Roulette tick | Dry wooden mechanism click | 0.055 s |
 
 24 kHz mono 16-bit PCM, normalized to 0.86 peak before runtime gain. Eight feedback voices maximum; chatter reserves space for important events and per-cue cooldowns suppress repeated snapshots. Case hits share the mild global distance gain of gunshots/rat reactions. Final character and mix require the user's listening playtest.
+
+## Supply claims and Ironclad (synthesized)
+
+The supply and armour cues are the exception: original, deterministic synthesis from `python3 scripts/generate-pickup-sounds.py` (standard library only, 48 kHz mono, 0.86 peak). Each claim is its pickup foley plus a short noir sting and a signature sound. Every Ironclad sound is a heavy plate: a falling sub thump, a dense short body of low modes and one dark anvil-bell ring, with no tin hiss.
+
+| Cue | Design | Length |
+| --- | --- | --- |
+| Armour clang | Cheese off the coat: the heavy plate alone, kept short for repeats | 0.34 s |
+| Ironclad claim | Coat seats with a dark scrape, locks on with a heavier plate, then two low trombone hits rising a fourth | 0.95 s |
+| Hot Pursuit claim | Engine rev blipping up into the rising whoosh, then a snare brush, an upright-bass pickup run and a muted-trumpet stab | 0.78 s |
+| Quick Fix claim | Lid click, bandage sweep and rubber snap over a heartbeat that slows and softens into a calm vibraphone Fmaj7 | 1.00 s |
+| Stakeout claim | Lens ratchet and click, a soft radar sweep, the low minor-third brass and a muted-trumpet "aha" bending up | 0.96 s |
+| Stakeout shutter | One dry leaf-shutter click pair, once per rat revealed | 0.08 s |
+| Pip tick | One small glassy tick, once per health pip refilled | 0.05 s |
+| Card slap | Unchanged | 0.22 s |

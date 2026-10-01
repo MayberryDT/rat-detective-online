@@ -142,6 +142,19 @@ export const FEEL={
     paperSlide:{label:'U9 Scoreboard, card exits, touch springs',toggle:true,params:{}},
     /** Carbon scrawl: headings and names on the in-game carbon copies jitter a hair, letter by letter. */
     scrawl:{label:'U10 Carbon scrawl letter jitter',toggle:true,params:{}},
+    /** C1 Claim juice (1 October), your own claims only: an edge flash in the supply's colour (`flash`), a `punch` zoom-in (degrees),
+     * a small `kick` (rad/s), the card artwork flying from the prop into its card over `flight` ms, and a squash-and-pop of your rat
+     * (`squash` × the jump squash). */
+    claimMoment:{label:'C1 Claim moment',toggle:true,params:{flash:.6,punch:3,kick:.9,flight:560,squash:1.8}},
+    /** C2 Stakeout claim: an ink ripple from your rat; rats light up in the Hunch nearest first, `stagger` s apart from `delay` s
+     * (a shutter each, at most `clicks`); a `lens` s magnifying-glass vignette. */
+    claimStakeout:{label:'C2 Stakeout claim',toggle:true,params:{delay:.12,stagger:.075,clicks:6,lens:.4}},
+    /** C3 Ironclad claim: a weighty `dip` (rad/s) and `push` down (u/s), one shine across the silver coat (`shine` s), `sparks` spark bursts. */
+    claimIronclad:{label:'C3 Ironclad claim',toggle:true,params:{dip:-2.4,push:-6,shine:.35,sparks:2}},
+    /** C4 Hot Pursuit claim: the view widens `widen` degrees with speed lines for `streaks` s, and red dust (`dust` strength) at your feet. */
+    claimHustle:{label:'C4 Hot Pursuit claim',toggle:true,params:{widen:7,streaks:.5,dust:1}},
+    /** C5 Quick Fix claim: the restored nameplate pips refill one at a time, `pip` s apart, with a tick each. */
+    claimQuickFix:{label:'C5 Quick Fix claim',toggle:true,params:{pip:.07}},
 } satisfies Record<string,FeelSpec>;
 
 export type FeelItem=keyof typeof FEEL;

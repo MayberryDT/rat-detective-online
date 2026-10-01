@@ -44,6 +44,12 @@ export class Hunch {
     private holding=false;
     private lastCardAt=-Infinity;
     private supercharged=false;
+    /** C2: seconds left for a Stakeout claim to see its Stakeout begin; when each newly read rat lights up (`now` ms); shutters played. */
+    private revealWait=0;
+    private readonly revealAt=new Map<string,number>();
+    private clicks=0;
+    /** One shutter per rat lit up by your Stakeout claim. */
+    onReveal?:()=>void;
     private root?:HTMLElement;
     private eye?:HTMLElement;
     private card?:HTMLElement;
@@ -64,6 +70,8 @@ export class Hunch {
 
     /** Clean Bill: everyone at full health with a city-wide, stronger Hunch. */
     setSupercharged(on:boolean):void {this.supercharged=on;}
+    /** C2: your Stakeout claim. When its Stakeout begins, the rats it newly reads light up nearest first, one at a time. */
+    reveal():void {this.revealWait=1;}
     get range():number {const p=FEEL.hunch.params;return this.supercharged?p.superRange:p.range;}
 
     /** `self` is undefined when there is no live local rat (title, observer, lineup).
@@ -76,6 +84,10 @@ export class Hunch {
         const staking=!!self&&self.staking;
         const strength=this.supercharged||staking?p.superStrength:p.strength;
         const juice=this.state.on('made');
+        if(this.revealWait>0){
+            if(staking){this.revealWait=0;this.stagger(now,self,rats);}
+            else this.revealWait-=dt;
+        }
         // The Hunch as a power-up on your own nameplate: the eye opens at full health (or on Stakeout) and shuts on the first hit.
         const holding=!!self&&!self.dead&&(self.hp>=MAX_HP||this.supercharged||staking);
         if(holding!==this.holding){
@@ -85,9 +97,18 @@ export class Hunch {
         self?.billboard.setHunch(holding);
         let shutter=false;
         for(const [id,{entity}] of rats){
-            const on=this.sensed.has(id);
+            let on=this.sensed.has(id);
+            // A rat still waiting its turn in the Stakeout reveal stays dark; lighting up is its read.
+            const at=this.revealAt.get(id);
+            if(at!==undefined){
+                if(on&&now<at)on=false;
+                else{
+                    this.revealAt.delete(id);
+                    if(on){this.lastMade.set(id,now);if(juice)this.photo(entity);if(this.clicks<FEEL.claimStakeout.params.clicks){this.clicks++;this.onReveal?.();}}
+                }
+            }
             entity.sense(id===wanted&&self?p.superStrength:on?strength:0);
-            if(on&&!this.previous.has(id)&&now-(this.lastMade.get(id)??-Infinity)>p.remake*1000){
+            if(on&&at===undefined&&!this.previous.has(id)&&now-(this.lastMade.get(id)??-Infinity)>p.remake*1000){
                 this.lastMade.set(id,now);
                 if(juice){shutter=true;this.photo(entity);}
             }
@@ -102,6 +123,18 @@ export class Hunch {
         }
         this.wasWatched=watched;
         this.present(dt,view,self,juice);
+    }
+    /** Order the rats this Stakeout newly reads, nearest first (`stagger` s apart from `delay` s; the rest after the last shutter). */
+    private stagger(now:number,self:RatEntity|undefined,rats:ReadonlyMap<string,HunchRat>):void {
+        this.revealAt.clear();this.clicks=0;
+        if(!self)return;
+        const p=FEEL.claimStakeout.params,order:{id:string;d:number}[]=[];
+        for(const id of this.sensed){
+            const rat=rats.get(id);
+            if(rat&&!this.previous.has(id))order.push({id,d:rat.entity.mesh.position.distanceToSquared(self.mesh.position)});
+        }
+        order.sort((a,b)=>a.d-b.d);
+        for(let rank=0;rank<order.length;rank++)this.revealAt.set(order[rank]!.id,now+(p.delay+Math.min(rank,p.clicks)*p.stagger)*1000);
     }
 
     private photo(entity:RatEntity):void {
@@ -189,7 +222,7 @@ export class Hunch {
     }
 
     reset():void {
-        this.sensed.clear();this.previous.clear();this.watchers.length=0;this.wasWatched=false;this.eyeLevel=0;this.holding=false;
+        this.sensed.clear();this.previous.clear();this.watchers.length=0;this.wasWatched=false;this.eyeLevel=0;this.holding=false;this.revealWait=0;this.revealAt.clear();
         for(const photo of this.photos){photo.target=undefined;photo.node.classList.remove('on');}
         this.card?.classList.remove('on');this.eye?.classList.remove('open');if(this.eye)this.eye.style.opacity='0';
         for(const trail of this.trails.values()){trail.line.visible=false;trail.count=0;}

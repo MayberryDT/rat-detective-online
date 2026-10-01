@@ -15,12 +15,13 @@ this before adding or changing audio.
 | Low-health muffle and heartbeat | From [spec §3](feel-spec.md#3-danger-and-death); lifts on heal or respawn |
 | Kill brass stab | Short noir brass hit for your kills; local only |
 | Music stings | Case pickup, delivery and the closing seconds of an assignment, over the existing gameplay track |
+| Supply claim stings | Your claim: each supply's foley plus a short noir sting and signature (armour clank, engine rev, heartbeat, lens sweep); a shutter click per rat revealed and a tick per health pip. Ironclad sounds are heavy plate, never tin. Local only. |
 
 ## Rules
 
 - **Keep the accepted mix.** Leave the existing gunshot, world, launcher and music gains as they are; new cues sit under them. Effects and Master volume apply.
 - **Stay within the existing limits.** Reuse `FoleyAudio`'s 8 voices, at most 3 world voices and one world onset per 160 ms; add a separate small pool only if footsteps need one. Use the world distance fade (`worldSoundGain`), camera-frustum and occlusion checks, and per-source cooldowns. Nothing queues for later playback.
-- **Sourcing (as built).** Every new cue is original Web Audio synthesis at runtime (`src/feel/FeelAudio.ts`, `NoirAudio.ts`): filtered noise, oscillators and one damped echo send. No asset files were added, so there is no download cost or third-party provenance. The workshop renders all cues offline into one WAV cue sheet for listening review. The September 10 rejected clips stay rejected.
+- **Sourcing (as built).** Every new cue is original Web Audio synthesis at runtime (`src/feel/FeelAudio.ts`, `NoirAudio.ts`): filtered noise, oscillators and one damped echo send. No asset files were added, so there is no download cost or third-party provenance. The workshop renders all cues offline into one WAV cue sheet for listening review. The September 10 rejected clips stay rejected. The exception is the supply claim and armour cues: small WAVs rendered offline by `scripts/generate-pickup-sounds.py` (also original synthesis) and played through `FeedbackAudio`.
 - **Local previews.** Agent browser checks stay muted (`&mute=1`). Tyler's review preview is audible.
 - **Verification.** File, gain and bounds checks, plus event tests for trigger correctness (for example, no footsteps from a stationary rat or interpolation noise). Tyler judges the character of the sound.
 
