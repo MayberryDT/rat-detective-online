@@ -1,4 +1,4 @@
-import { activeZone, nextZone, JURISDICTION_TUNING } from '../shared/jurisdiction';
+import { activeZone, JURISDICTION_TUNING } from '../shared/jurisdiction';
 import {feelState} from '../feel/feelState';
 import { JURISDICTION_ZONES } from '../shared/jurisdictionZones';
 import type {ScoreEntry,Vec3Data} from '../shared/networkProtocol';
@@ -60,7 +60,6 @@ export class DispatchHud {
     private zoneTimer:HTMLElement;
     private zoneTimerLabel:HTMLElement;
     private zoneClock:HTMLElement;
-    private zoneNext:HTMLElement;
     private previousDeliverySerial=0;
     private myId='';
     observing=false;
@@ -84,9 +83,9 @@ export class DispatchHud {
     constructor(private sound:(frequency:number)=>void,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
         this.root.className='dispatch-hud';
         this.root.innerHTML=`<div class="dispatch-ledger"><div class="dispatch-alert-label"></div><div class="dispatch-status-row"><div class="dispatch-artwork" aria-hidden="true"></div><strong class="dispatch-status"></strong></div><p class="dispatch-brief"></p><div class="dispatch-clock"><small class="dispatch-next"></small><span class="dispatch-timer"></span></div><div class="dispatch-time-track"><div></div></div><div class="case-ledger"><strong></strong><small></small></div></div><div class="case-broadcast" hidden aria-live="polite"><small>HOT CASE</small><strong></strong><span></span></div><div class="dispatch-roulette" hidden><div class="roulette-heading"><span>! DISPATCH !</span><b>SELECTING INCIDENT</b></div><div class="roulette-caller" hidden></div><div class="roulette-window"><div class="roulette-strip"></div><i class="roulette-pointer">▶</i></div><div class="roulette-stamp">CITYWIDE EMERGENCY!</div><p class="roulette-description"></p><div class="roulette-footer"><span>● LIVE</span></div></div>`;
-        this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><span class="assignment-zone-next" hidden></span><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="jurisdiction-timer" hidden role="timer" aria-label="Zone relocation countdown"><small class="jurisdiction-timer-label">ZONE MOVES IN</small><strong class="assignment-zone-clock"></strong></div><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><strong></strong><p></p><span></span></div>`;
+        this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="jurisdiction-timer" hidden role="timer" aria-label="Zone relocation countdown"><small class="jurisdiction-timer-label">ZONE MOVES IN</small><strong class="assignment-zone-clock"></strong></div><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><strong></strong><p></p><span></span></div>`;
         const get=(q:string)=>this.root.querySelector<HTMLElement>(q)!;
-        this.rankings=get('.assignment-rankings');this.counter=get('.assignment-counter');this.destinationLabel=get('.assignment-target');this.zoneTimer=get('.jurisdiction-timer');this.zoneTimerLabel=get('.jurisdiction-timer-label');this.zoneClock=get('.assignment-zone-clock');this.zoneNext=get('.assignment-zone-next');
+        this.rankings=get('.assignment-rankings');this.counter=get('.assignment-counter');this.destinationLabel=get('.assignment-target');this.zoneTimer=get('.jurisdiction-timer');this.zoneTimerLabel=get('.jurisdiction-timer-label');this.zoneClock=get('.assignment-zone-clock');
         this.confirmation=get('.assignment-confirmation');this.stats=get('.assignment-stats');this.leader=get('.assignment-leader');
         this.assignmentPanel=get('.assignment-ledger');this.assignmentTitle=get('.assignment-title');this.assignmentRule=get('.assignment-rule');
         this.assignmentProgress=get('.assignment-progress');this.assignmentDetail=get('.assignment-detail');this.assignmentBar=get('.assignment-track i');
@@ -199,7 +198,6 @@ export class DispatchHud {
             setText(this.destinationLabel,j?`${JURISDICTION_ZONES[activeZone(j)].label} · ${JURISDICTION_ZONES[activeZone(j)].floor}`:destination?`DELIVER TO: ${ASSIGNMENT_DESTINATIONS[destination].label}`:'');
             // A zone's points drain only while the case is held in it; it moves once they run out.
             const draining=!!j&&a.phase==='active'&&!!j.scorerId,emptying=draining&&j!.remainingMs<=JURISDICTION_TUNING.warningMs;
-            this.zoneNext.hidden=!emptying;
             if(j){
                 setText(this.zoneClock,`${Math.ceil(j.remainingMs/1000)}`);
                 setText(this.zoneTimerLabel,a.phase==='suspended'?'ZONE PAUSED':draining?'ZONE PAYING OUT':'POINTS IN ZONE');
@@ -210,7 +208,6 @@ export class DispatchHud {
                     this.feedback?.(second<=3?'countdown-final':'tick');
                 }
                 this.zoneSecond=second;
-                setText(this.zoneNext,`NEXT: ${JURISDICTION_ZONES[nextZone(j)].label} · ${JURISDICTION_ZONES[nextZone(j)].floor}`);
                 if(!newAssignment&&this.zoneSerial!==j.serial){this.feedback?.('dispatch');this.zoneSerial=j.serial;}
                 if(!newAssignment&&emptying&&this.zoneWarning!==j.serial){this.feedback?.('countdown');this.zoneWarning=j.serial;}
             }

@@ -449,6 +449,10 @@ export class CityRecorder {
       const player = players.get(e.playerId);
       if (!player) continue;
       if (e.kind === 'healed') { this.emit({ ...this.context(now), type: 'heal', a: this.actor(player.id), cause: e.cause, hp: e.hp }); continue; }
+      if (e.kind === 'rewarded') {
+        this.emit({ ...this.context(now), type: 'reward', a: this.actor(player.id), kind: e.pickup, why: e.why, p: p3(player), place: this.places.at(player.x, player.y, player.z).id });
+        continue;
+      }
       const place = this.places.at(player.x, player.y, player.z).id, life = this.life(player.id, now, player);
       life.lastPickup = { kind: e.pickup, at: now };
       const restocked = this.siteRestockedAt.get(e.pickupId);

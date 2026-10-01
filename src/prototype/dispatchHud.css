@@ -17,8 +17,6 @@
 
 /* The score card stays visible in every mode, including roulette and briefing. */
 .assignment-ledger{z-index:2;position:absolute;left:20px;top:24px;width:308px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;color:var(--carbon-ink);background:var(--carbon-sheet);box-shadow:var(--carbon-drop),var(--carbon-smudge);rotate:-2.2deg}
-/* A coffee ring someone left on the copy. */
-.assignment-ledger::after{content:'';position:absolute;right:-20px;bottom:-24px;width:74px;height:74px;border-radius:50%;border:6px solid #5a3c1e59;border-left-color:transparent;rotate:20deg;pointer-events:none}
 .assignment-title{font:32px/.95 var(--font-display);letter-spacing:.04em;color:var(--carbon-bright);text-shadow:2px 1px 0 #506ebe73}.assignment-counter{font:11px/1 var(--font-type);letter-spacing:.14em;color:var(--carbon-dim)}.assignment-rule{display:none;margin:0}.assignment-progress{font:25px/1 var(--font-display);letter-spacing:.04em;color:var(--carbon-bright)}.assignment-detail{padding:4px 8px;border:1px dashed var(--carbon-line);color:var(--carbon-ink);font:14px/1.15 var(--font-type);rotate:1deg;text-align:center;overflow-wrap:anywhere}
 .assignment-track{height:5px;background:var(--carbon-faint)}.assignment-track i{display:block;height:100%;background:#a5b9e18c;transform-origin:left;clip-path:polygon(0 20%,100% 0,97% 100%,2% 80%)}
 .assignment-rankings{padding:0;margin:0;list-style:none;display:grid;gap:2px}.assignment-rankings li{display:flex;align-items:center;gap:7px;padding:3px 6px;font:17px/1.1 var(--font-type)}.assignment-rankings li i{color:var(--carbon-dim);font:15px/1 var(--font-type);font-style:normal;width:14px}.assignment-rankings li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.assignment-rankings li b{font-weight:400;color:var(--carbon-ink);font-variant-numeric:tabular-nums}.assignment-rankings li[data-local=true]{background:var(--stamp-wash);color:var(--carbon-bright);rotate:-.6deg}
@@ -113,14 +111,12 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 .assignment-ledger[data-mode=jurisdiction] .assignment-title{font-size:30px}
 .assignment-ledger[data-mode=jurisdiction] .assignment-progress{font-size:26px}
 .assignment-ledger[data-mode=jurisdiction] .assignment-target{font-size:21px;line-height:1.1}
-.assignment-zone-next{font:13px/1.2 var(--font-type);color:var(--carbon-dim)}
 @media(max-height:620px),(max-width:700px){
  .assignment-ledger[data-mode=jurisdiction]{width:250px;max-width:calc(50vw - 24px);padding:10px;gap:4px}
  .assignment-ledger[data-mode=jurisdiction] .assignment-title{font-size:23px}
  .assignment-ledger[data-mode=jurisdiction] .assignment-target{font-size:17px}
  .assignment-ledger[data-mode=jurisdiction] .assignment-rankings li{font-size:14px;padding:1px 6px}
  .assignment-ledger[data-mode=jurisdiction] .assignment-detail{font-size:13px;padding:3px}
- .assignment-zone-next{font-size:11px}
 }
 /* Keep destination guidance visible; its layout avoids broadcast rectangles. */
 .dispatch-hud[data-mode=jurisdiction]:has(.dispatch-roulette:not([hidden])) .case-broadcast{visibility:hidden}

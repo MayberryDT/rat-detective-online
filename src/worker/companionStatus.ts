@@ -2,7 +2,7 @@ import {
   activeDestination,
   ASSIGNMENTS,
   ASSIGNMENT_DESTINATIONS,
-  ASSIGNMENT_TUNING,
+  objectiveTarget,
   type AssignmentState,
 } from '../shared/assignments';
 import {
@@ -11,7 +11,7 @@ import {
   type CompanionRoomPublication,
   type CompanionScore,
 } from '../shared/companionStatus';
-import { activeZone, JURISDICTION_TUNING, nextZone } from '../shared/jurisdiction';
+import { activeZone } from '../shared/jurisdiction';
 import { JURISDICTION_ZONES } from '../shared/jurisdictionZones';
 import type { PlayerData, RoundState } from '../shared/networkProtocol';
 
@@ -40,22 +40,20 @@ function assignmentProjection(state: AssignmentState, round: RoundState): Compan
   const zoneId = jurisdiction ? activeZone(jurisdiction) : undefined;
   // Since protocol 26 a zone's points drain only while the case is held in it, so its clock runs only then.
   const draining = !!jurisdiction && state.phase === 'active' && !!jurisdiction.scorerId;
-  const revealNext = draining && jurisdiction!.remainingMs <= JURISDICTION_TUNING.warningMs;
-  const nextZoneId = revealNext ? nextZone(jurisdiction!) : undefined;
   const clockRunning = round.phase === 'playing' && draining && state.id === 'jurisdiction';
   return {
     id: state.id,
     title: ASSIGNMENTS[state.id].title,
     phase: state.phase,
     clockRunning,
-    objectiveTarget: state.id === 'chain-of-custody' ? ASSIGNMENT_TUNING.deliveryTarget :
-      state.id === 'jurisdiction' ? JURISDICTION_TUNING.targetMs / 1_000 : ASSIGNMENT_TUNING.caseKillTarget,
+    objectiveTarget: objectiveTarget(state.id),
     objectiveUnit: state.id === 'chain-of-custody' ? 'deliveries' :
       state.id === 'jurisdiction' ? 'seconds' : 'case-kills',
     destination: destinationId ?
       { id: destinationId, label: ASSIGNMENT_DESTINATIONS[destinationId].label } : null,
     zone: zoneId ? { id: zoneId, label: JURISDICTION_ZONES[zoneId].label } : null,
-    nextZone: nextZoneId ? { id: nextZoneId, label: JURISDICTION_ZONES[nextZoneId].label } : null,
+    // Kept for the published companion: the next zone is never announced before the active one empties.
+    nextZone: null,
     zoneRemainingMs: jurisdiction ? jurisdiction.remainingMs : null,
   };
 }

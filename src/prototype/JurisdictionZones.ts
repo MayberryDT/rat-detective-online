@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { AssignmentState } from '../shared/assignments';
-import { activeZone, nextZone, JURISDICTION_TUNING } from '../shared/jurisdiction';
+import { activeZone } from '../shared/jurisdiction';
 import { JURISDICTION_ZONES, JURISDICTION_ZONE_IDS, zoneTiles, type JurisdictionZoneId } from '../shared/jurisdictionZones';
 import { freezeStatic } from '../utils/freezeStatic';
 
@@ -37,11 +37,11 @@ export class JurisdictionZones {
     update(a?:AssignmentState):void {
         this.root.visible=!!a?.jurisdiction&&a.phase!=='closed';
         if(!this.root.visible||!a?.jurisdiction)return;
-        // The next zone shows once the active one is nearly emptied under a carrier: it drains only while held.
-        const s=a.jurisdiction,id=activeZone(s),next=s.scorerId&&s.remainingMs<=JURISDICTION_TUNING.warningMs?nextZone(s):undefined;
+        // Only the active zone is ever on the map; the next appears when it is emptied.
+        const id=activeZone(a.jurisdiction);
         for(const key of JURISDICTION_ZONE_IDS){
             const v=this.views.get(key);if(!v)continue;
-            v.group.visible=key===id||key===next;v.fill.opacity=key===id?.09:.025;v.line.opacity=key===id?.85:.25;
+            v.group.visible=key===id;
         }
     }
     clear():void {this.root.visible=false;}

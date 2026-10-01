@@ -61,7 +61,10 @@ export interface PickupClaimResult {accepted:boolean;target:PickupTarget;targetI
  * persist and broadcast the restored health without the sim owning networking. */
 export type PickupEvent =
     | { kind:'collected'; pickupId:string; pickup:PickupKind; playerId:string }
-    | { kind:'healed'; playerId:string; hp:number; cause:HealCause };
+    | { kind:'healed'; playerId:string; hp:number; cause:HealCause }
+    /** A supply handed over on the spot (`rewardSupply`), not from a site. */
+    | { kind:'rewarded'; playerId:string; pickup:PickupKind; why:RewardReason };
+export type RewardReason='case'|'streak'|'dispatch';
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
 export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
@@ -358,7 +361,7 @@ export class ChaosSimulation {
      * `caseRewardMs` per rat so a dropped case can't be farmed. */
     private rewardCasePickup(id:string,now:number){
         if(now<(this.caseRewards.get(id)??-Infinity))return;
-        this.caseRewards.set(id,now+T.caseRewardMs);this.rewardSupply(id);
+        this.caseRewards.set(id,now+T.caseRewardMs);this.rewardSupply(id,'case');
     }
     claimInteraction(playerId:string,target:PickupTarget,targetId:string,generation:number,now:number):PickupClaimResult {
         const player=this.players.get(playerId);
@@ -750,17 +753,18 @@ export class ChaosSimulation {
         const incident=forced??choices[Math.floor(Math.random()*choices.length)].id;
         const caller=owner?this.players.get(owner):undefined;
         this.dispatch={phase:'rolling',started:this.now,until:this.now+T.rollMs,serial:this.dispatch.serial+1,incident,...(caller?{caller:caller.id}:{})};
-        if(caller)this.rewardSupply(caller.id);
+        if(caller)this.rewardSupply(caller.id,'dispatch');
     }
     /** A random supply on the spot through the ordinary claim effects: the Dispatch caller's reward
      * and each new kill streak title's. Quick Fix is only in the draw when it would heal. */
-    rewardSupply(playerId:string):PickupKind|undefined{
+    rewardSupply(playerId:string,why:RewardReason):PickupKind|undefined{
         const player=this.players.get(playerId);
         if(!player||player.hp<=0)return undefined;
         const supplies:PickupKind[]=player.hp<MAX_HP?['ironclad','hustle','stakeout','quick-fix']:['ironclad','hustle','stakeout'];
         const supply=supplies[Math.floor(Math.random()*supplies.length)]!;
         if(supply==='quick-fix'){player.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:player.id,hp:MAX_HP,cause:'pickup'});}
         else this.buffs[player.id]=mergePickup(this.buffs[player.id],supply,this.now);
+        this.pickupEvents.push({kind:'rewarded',playerId:player.id,pickup:supply,why});
         return supply;
     }
     private reserveShots(count:number){

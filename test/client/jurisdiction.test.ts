@@ -2,7 +2,7 @@ import {describe,it,expect,vi,afterEach} from 'vitest';
 import * as THREE from 'three';
 import {createAssignment,parseAssignment,restoreAssignment,ASSIGNMENT_IDS} from '../../src/shared/assignments';
 import {AssignmentRules} from '../../src/shared/AssignmentRules';
-import {activeZone,nextZone,rotateZone,JURISDICTION_TUNING} from '../../src/shared/jurisdiction';
+import {activeZone,rotateZone,JURISDICTION_TUNING} from '../../src/shared/jurisdiction';
 import {JURISDICTION_ZONES,JURISDICTION_ZONE_IDS,zoneContains,zoneSpawnExcluded,zoneTiles,type JurisdictionZoneId} from '../../src/shared/jurisdictionZones';
 import {createPlayer,spawnForWorld,resetRoundForWorld} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
@@ -52,7 +52,7 @@ describe('Jurisdiction authority',()=>{
   const count=(c:'outdoor'|'enclosed')=>JURISDICTION_ZONE_IDS.filter(id=>JURISDICTION_ZONES[id].category===c).length;
   const smaller=count('outdoor')<count('enclosed')?'outdoor':'enclosed';
   for(let i=0;i<4*n;i++){
-   sequence.push(activeZone(j));const announced=nextZone(j);j.remainingMs=9000;
+   sequence.push(activeZone(j));const announced=j.order[j.index+1]??j.nextOrder[0];j.remainingMs=9000;
    const restored=restoreAssignment(state,NOW+999999)!;expect(restored).toEqual(state);
    rotateZone(j,()=>.7);expect(activeZone(j)).toBe(announced);
   }
@@ -114,7 +114,7 @@ describe('Jurisdiction geometry and presentation',()=>{
  it('renders only active and preview footprints and disposes resources',()=>{
   const {state,j}=fixture(),scene=new THREE.Scene(),view=new JurisdictionZones(scene);view.update(state);
   expect(view.root.children.filter(c=>c.visible)).toHaveLength(1);j.remainingMs=JURISDICTION_TUNING.warningMs;view.update(state);expect(view.root.children.filter(c=>c.visible)).toHaveLength(1);
-  j.scorerId='a';view.update(state);expect(view.root.children.filter(c=>c.visible)).toHaveLength(2);
+  j.scorerId='a';view.update(state);expect(view.root.children.filter(c=>c.visible)).toHaveLength(1);
   const geometries:THREE.BufferGeometry[]=[];view.root.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.LineSegments)geometries.push(o.geometry);});
   const disposals=vi.fn();for(const geometry of geometries)geometry.addEventListener('dispose',disposals);
   view.clear();expect(view.root.visible).toBe(false);view.dispose();expect(scene.children).toHaveLength(0);expect(disposals).toHaveBeenCalledTimes(geometries.length);

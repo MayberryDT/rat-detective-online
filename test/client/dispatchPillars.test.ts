@@ -111,7 +111,7 @@ describe('Dispatch alarm pillars',()=>{
   for(let roll=0;roll<1;roll+=.1){
    vi.spyOn(Math,'random').mockReturnValue(roll);
    const {sim,caller}=fixture();fire(sim,t,around(t,0,0,4),1010);
-   expect(sim.drainPickupEvents(),`roll ${roll}`).toEqual([]);
+   expect(sim.drainPickupEvents().filter(e=>e.kind==='healed'),`roll ${roll}`).toEqual([]);
    expect(caller.hp).toBe(MAX_HP);
    const buff=sim.snapshot(false).buffs?.caller;
    expect(buff?.ironcladUntil??buff?.hustleUntil??buff?.stakeoutUntil,`roll ${roll}`).toBeGreaterThan(1010);
@@ -120,7 +120,7 @@ describe('Dispatch alarm pillars',()=>{
   vi.spyOn(Math,'random').mockReturnValue(.99);
   const {sim,caller}=fixture(2);fire(sim,t,around(t,0,0,4),1010);
   expect(caller.hp).toBe(MAX_HP);
-  expect(sim.drainPickupEvents()).toEqual([{kind:'healed',playerId:'caller',hp:MAX_HP,cause:'pickup'}]);
+  expect(sim.drainPickupEvents()).toEqual([{kind:'healed',playerId:'caller',hp:MAX_HP,cause:'pickup'},{kind:'rewarded',playerId:'caller',pickup:'quick-fix',why:'dispatch'}]);
  });
  it('carries the caller on the wire and rejects a malformed one',()=>{
   const {sim}=fixture(),t=DISPATCH_STATIONS[0].target;

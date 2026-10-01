@@ -1,4 +1,4 @@
-import {ASSIGNMENTS, type AssignmentState} from '../shared/assignments';
+import {ASSIGNMENTS, objectiveTarget, type AssignmentState} from '../shared/assignments';
 import type {ChaosState} from '../shared/chaosState';
 import {MAX_HP, type PlayerData, type ScoreEntry, type ServerMessage} from '../shared/networkProtocol';
 import './matchScoreboard.css';
@@ -127,7 +127,7 @@ export class MatchScoreboard {
         text(this.summary, `${rows.length} INVESTIGATORS · ${totalKills} KILLS`);
         text(this.mode, mode ? ASSIGNMENTS[mode].title : 'DEATHMATCH');
         text(this.context, assignment?.result ? `${assignment.result.winnerName} WINS` : assignment?.phase === 'suspended' ? 'TAMPERING · OBJECTIVE PAUSED' :
-            mode === 'jurisdiction' ? 'FIRST TO 60 ZONE POINTS' : mode === 'chain-of-custody' ? 'FIRST TO 3 DELIVERIES' : mode === 'excessive-force' ? 'FIRST TO 10 CASE KILLS' : 'THIS ROUND');
+            mode ? `FIRST TO ${objectiveTarget(mode)} ${mode === 'jurisdiction' ? 'ZONE POINTS' : mode === 'chain-of-custody' ? 'DELIVERIES' : 'CASE KILLS'}` : 'THIS ROUND');
         const columns = ['#', 'INVESTIGATOR', ...(mode === 'jurisdiction' ? ['ZONE POINTS'] : mode === 'excessive-force' ? ['CASE KILLS'] : mode === 'chain-of-custody' ? ['DELIVERIES'] : []), 'KILLS', 'DEATHS', 'K/D', 'CASE TIME', 'CASE SHARE', 'STATUS'];
         const columnSignature = columns.join('|');
         if (columnSignature !== this.columns) {
@@ -145,7 +145,7 @@ export class MatchScoreboard {
             const holder = p.id === this.state?.case.owner;
             const status = p.id === winner ? 'WINNER' : p.hp === 0 ? 'RAT DOWN' : holder ? 'ON THE CASE' : p.hp === undefined ? 'IN THE CITY' : `${p.hp} / ${MAX_HP} HP`;
             return {id: p.id, local, holder, down: p.hp === 0, name: p.name, tag: local ? 'YOU' : '',
-                cells: [String(i + 1), ...(mode === 'jurisdiction' ? [`${Math.floor(points(p.id))} / 60`] : mode === 'excessive-force' ? [`${points(p.id)} / 10`] : mode === 'chain-of-custody' ? [`${points(p.id)} / 3`] : []),
+                cells: [String(i + 1), ...(mode ? [`${Math.floor(points(p.id))} / ${objectiveTarget(mode)}`] : []),
                     String(p.kills), String(p.deaths), p.deaths ? (p.kills / p.deaths).toFixed(2) : p.kills ? '∞' : '—',
                     this.state ? caseTime(held(p.id)) : '—', this.state && totalHeld ? `${Math.round(held(p.id) / totalHeld * 100)}%` : '—', status]};
         });

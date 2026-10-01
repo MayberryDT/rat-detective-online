@@ -1,6 +1,6 @@
 import { JURISDICTION_ZONES, JURISDICTION_ZONE_IDS, isJurisdictionZoneId, type JurisdictionZone, type JurisdictionZoneId } from './jurisdictionZones';
 /** `zoneMs`: the points a zone holds (1 a second of the case held in it); they drain only while the case is held there,
- * then the zone moves (Tyler, 1 October). Three zones' worth win (`targetMs`); the last `warningMs` show the move coming. */
+ * then the zone moves (Tyler, 1 October). Three zones' worth win (`targetMs`); the last `warningMs` tick down. Only the active zone is ever shown. */
 export const JURISDICTION_TUNING={targetMs:60_000,zoneMs:20_000,warningMs:5_000} as const;
 export interface JurisdictionState {
     order:JurisdictionZoneId[]; nextOrder:JurisdictionZoneId[]; index:number; serial:number;
@@ -38,7 +38,6 @@ export function createJurisdiction(random=Math.random):JurisdictionState {
     return {order,nextOrder:shuffleZones(random,JURISDICTION_ZONES[order[0]].category),index:0,serial:0,remainingMs:JURISDICTION_TUNING.zoneMs,heldMs:{},scorerId:null};
 }
 export const activeZone=(s:JurisdictionState)=>s.order[s.index];
-export const nextZone=(s:JurisdictionState)=>s.order[s.index+1]??s.nextOrder[0];
 export function rotateZone(s:JurisdictionState,random=Math.random):void {
     s.serial++;s.index++;
     if(s.index===s.order.length){s.order=s.nextOrder;s.nextOrder=shuffleZones(random,JURISDICTION_ZONES[s.order[0]].category);s.index=0;}

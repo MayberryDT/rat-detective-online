@@ -85,7 +85,7 @@ describe('companion projection', () => {
     expect(hidden.scores.find(score => score.id === 'a')?.objectiveScore).toBe(12.5);
     jurisdiction.jurisdiction!.remainingMs = JURISDICTION_TUNING.warningMs;
     const announced = projectCompanionRoom({ ...base, round: round(jurisdiction), assignment: jurisdiction });
-    expect(announced.assignment.nextZone).toEqual(expect.any(Object));
+    expect(announced.assignment.nextZone).toBeNull();
   });
 
   it('publishes only committed results and freezes suspended clocks', () => {

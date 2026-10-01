@@ -197,7 +197,6 @@ it('keeps a case quip stable between events and rotates it on a later pickup whi
   j.heldMs.me=13000;hud.update(state,6000,'Me',true);expect(feedback).not.toHaveBeenCalledWith('case-point');
   j.remainingMs=JURISDICTION_TUNING.warningMs-1;hud.update(state,7000,'Me',true);hud.update(state,7100,'Me',true);
   expect(feedback.mock.calls.filter(([cue])=>cue==='countdown')).toHaveLength(1);
-  expect(root.querySelector('.assignment-zone-next').hidden).toBe(false);
   expect(root.querySelector('.assignment-zone-clock').textContent).toBe(String(JURISDICTION_TUNING.warningMs/1000));
   expect(root.querySelector('.jurisdiction-timer').dataset.urgent).toBe('true');
   j.scorerId=null;hud.update(state,7200,'Me',true);expect(root.querySelector('.assignment-detail').textContent).toBe('TAKE THE CASE TO THE ZONE');

@@ -1352,7 +1352,7 @@ export class GameRoom extends DurableObject<Env> {
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
     // Each new kill streak title (3, 5, 8) earns a random supply on the spot; a round's final kill earns nothing.
-    if(!result.roundWon&&shooter&&shooter!==victim&&newStreakTitle(shooter.streak??0)&&this.chaos?.rewardSupply(shooter.id))this.applyPickupEvents();
+    if(!result.roundWon&&shooter&&shooter!==victim&&newStreakTitle(shooter.streak??0)&&this.chaos?.rewardSupply(shooter.id,'streak'))this.applyPickupEvents();
     if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt,...this.caseFile(shooter.id)});
     await this.scheduleNextAlarm();
   }

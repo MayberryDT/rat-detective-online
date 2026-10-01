@@ -122,6 +122,8 @@ export type CityFact = FactContext & (
   /** A stocked supply the rat could use (not a Quick Fix at full health) came within 12 u on its floor in clear sight, and the
    * rat went more than 16 u away (or died) without claiming it while it stayed stocked. One per approach. `dist`, `p`,
    * `place` and `hp`: the nearest the rat came (horizontal, to 0.1 u), where, and its health there. */
+  /** A supply handed over on the spot: for taking the case, a kill streak title or calling Dispatch. */
+  | { type: 'reward'; a: number; kind: PickupKind; why: 'case' | 'streak' | 'dispatch'; p: P3; place: string }
   | { type: 'pickup-passed'; a: number; site: string; kind: PickupKind; dist: number; p: P3; place: string; hp: number }
   /** A bot's goal ended; `from` is where it was taken up, `p` and `place` where it ended. */
   | { type: 'goal-end'; a: number; goal: Goal; motor: MotorMode; mind: MindName; personality?: Personality; outcome: GoalOutcome; durationMs: number; from: string; p: P3; place: string }

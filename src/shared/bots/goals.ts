@@ -1,6 +1,6 @@
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
-import {activeZone,nextZone} from '../jurisdiction';
+import {activeZone} from '../jurisdiction';
 import {JURISDICTION_ZONE_IDS,JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {DISPATCH_STATIONS,type ChaosState} from '../chaosState';
 import {incidentInfo} from '../incidentCatalog';
@@ -394,8 +394,8 @@ export class BotGoals {
             if(next){const point=destinationPoint(next);posts.push({key:`intercept:${next}`,index:posts.length,point,what:`the ${ASSIGNMENT_DESTINATIONS[next].label.toLowerCase()} drop-off, ${where(self,point)}`});}
             const j=assignment.jurisdiction;
             if(j){
-                const upcoming=JURISDICTION_ZONES[nextZone(j)],current=JURISDICTION_ZONES[activeZone(j)];
-                for(const [zone,approaches] of [[upcoming,upcoming.approaches.slice(0,1)],[current,current.approaches]] as const)for(const post of approaches){
+                const zone=JURISDICTION_ZONES[activeZone(j)];
+                for(const post of zone.approaches){
                     const point=jurisdictionTravelPoint(self,post);
                     posts.push({key:`intercept:${post.x},${post.z}`,index:posts.length,point,what:`an approach to ${zone.label.toLowerCase()}, ${where(self,point)}`});
                 }

@@ -7,6 +7,9 @@ import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 export const ASSIGNMENT_IDS = ['chain-of-custody', 'excessive-force', 'jurisdiction'] as const;
 export type AssignmentId = typeof ASSIGNMENT_IDS[number];
 export const ASSIGNMENT_TUNING = { caseKillTarget: 10, deliveryTarget: 5, briefingMs: 2_400 } as const;
+/** What wins an assignment: deliveries, zone points or case kills. */
+export const objectiveTarget = (id: AssignmentId): number => id === 'chain-of-custody' ? ASSIGNMENT_TUNING.deliveryTarget :
+    id === 'jurisdiction' ? JURISDICTION_TUNING.targetMs / 1_000 : ASSIGNMENT_TUNING.caseKillTarget;
 export const ASSIGNMENTS = {
     jurisdiction: {title:'JURISDICTION',rule:'HOLD THE CASE IN THE ZONE. FIRST TO 60 WINS.',flavor:'Your jurisdiction. Their problem.'},
     'chain-of-custody': { title: 'PAPER CHASE', rule: 'Deliver the paperwork. First to five wins.', flavor: 'Previous investigators need not be acknowledged.' },

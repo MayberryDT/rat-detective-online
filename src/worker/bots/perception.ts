@@ -4,7 +4,7 @@ import {BANK} from '../../shared/bots/motor/bankShot';
 import {STEER} from '../../shared/bots/motor/steer';
 import type {GoalContext} from '../../shared/bots/goals';
 import type {Goal,Personality,PlaceOption} from '../../shared/bots/intent';
-import {activeZone,nextZone,JURISDICTION_TUNING} from '../../shared/jurisdiction';
+import {activeZone,JURISDICTION_TUNING} from '../../shared/jurisdiction';
 import {JURISDICTION_ZONES,zoneContains} from '../../shared/jurisdictionZones';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS,ASSIGNMENT_TUNING,type AssignmentId} from '../../shared/assignments';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES} from '../../shared/chaosState';
@@ -156,10 +156,9 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
     let zone:string|undefined;
     const j=active?.jurisdiction;
     if(j){
-        const id=activeZone(j),upcoming=JURISDICTION_ZONES[nextZone(j)];
+        const id=activeZone(j);
         const left=j.remainingMs/JURISDICTION_TUNING.zoneMs,points=left>.66?'most of its points':left>.33?'about half its points':'only a few points';
-        zone=`The active zone is the ${label(JURISDICTION_ZONES[id].label)}, with ${points} left in it; ${zoneContains(id,self)?'I am inside it':`it is ${relative(self,JURISDICTION_ZONES[id].posts[0])}`}.`+
-            (j.scorerId&&j.remainingMs<=JURISDICTION_TUNING.warningMs?` It is nearly emptied; next it moves to the ${label(upcoming.label)}, ${relative(self,upcoming.posts[0])}.`:'');
+        zone=`The active zone is the ${label(JURISDICTION_ZONES[id].label)}, with ${points} left in it; ${zoneContains(id,self)?'I am inside it':`it is ${relative(self,JURISDICTION_ZONES[id].posts[0])}`}.`;
     }
     const destination=active&&activeDestination(active);
     const delivery=destination&&`The drop-off is the ${label(ASSIGNMENT_DESTINATIONS[destination].label)}, ${relative(self,destinationPoint(destination))}.`;

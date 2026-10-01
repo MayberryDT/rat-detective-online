@@ -1,7 +1,7 @@
 import './roundEnd.css';
 import { awardValue } from '../shared/awardUnits';
 import type {FoleyPlay} from '../audio/foleyCatalog';
-import { ASSIGNMENTS, type AssignmentState } from '../shared/assignments';
+import { ASSIGNMENTS, objectiveTarget, type AssignmentState } from '../shared/assignments';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import { MunicipalQuips } from './municipalQuips';
 import type { Award } from '../shared/networkProtocol';
@@ -169,7 +169,7 @@ export class GameHud {
             ['victory-kicker', assignment ? ASSIGNMENTS[assignment.id].title : 'OUTSTANDING MISCONDUCT'],
             ['victory-headline', 'CASE CLOSED!'],
             ['victory-winner', winnerName],
-            ['victory-verdict', assignment?.id==='jurisdiction'?'60 POINTS. JURISDICTION SECURED.':assignment?.id==='chain-of-custody'?'3 DELIVERIES. CASE CLOSED.':assignment?'10 CASE KILLS. ZERO RESTRAINT.':`${kills} KILLS. ZERO RESTRAINT.`],
+            ['victory-verdict', !assignment?`${kills} KILLS. ZERO RESTRAINT.`:`${objectiveTarget(assignment.id)} ${assignment.id==='jurisdiction'?'POINTS. JURISDICTION SECURED.':assignment.id==='chain-of-custody'?'DELIVERIES. CASE CLOSED.':'CASE KILLS. ZERO RESTRAINT.'}`],
             ['victory-stamp', this.victoryQuip],
         ];
         for(const [className,text] of lines){
