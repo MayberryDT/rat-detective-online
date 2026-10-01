@@ -746,7 +746,7 @@ export class GameSession {
         // The round-end lineup owns the flashlight's intensity (it reads the everyday one) once it is on its way.
         const lineup=!!this.pendingLineup||!!this.lineup?.active,shape=lineup?0:level;
         flashlight.angle=base.angle+(p.angle-base.angle)*shape;flashlight.penumbra=base.penumbra+(p.penumbra-base.penumbra)*shape;
-        flashlight.decay=base.decay+(p.decay-base.decay)*shape;
+        flashlight.decay=base.decay+(p.decay-base.decay)*shape;flashlight.distance=base.distance+(FLASHLIGHT_REACH-base.distance)*shape;
         if(!lineup)flashlight.intensity=base.intensity+(p.beam-base.intensity)*level;
         // The beam points where you aim: at the crosshair, out to its reach (every day it lights the ground ahead).
         if(shape>0&&this.rat)flashlight.target.position.lerp(this.beamAim.copy(camera.position).addScaledVector(this.direction,FLASHLIGHT_REACH),shape);

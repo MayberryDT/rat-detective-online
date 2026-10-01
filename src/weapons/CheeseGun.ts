@@ -167,10 +167,12 @@ export class CheeseGun {
 
     /** Presentation sweeps never damage entities or emit hit feedback. Exclude
      * the owner before selecting the closest hit, so it cannot mask a wall. */
-    readonly tracePresentation:ShotTrace=(from,to)=>{
+    readonly tracePresentation:ShotTrace=(from,to,radius)=>{
         this.rayFrom.set(from.x,from.y,from.z);this.rayTo.set(to.x,to.y,to.z);
         this.presentationRay??=new SpatialRayQuery(this.world);
-        const hit=this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptPresentationBody,GROUP_PROJECTILE,this.traceResult);
+        // A Big Cheese ball sweeps its whole sphere, so its edge never passes into a wall before its centre arrives.
+        const hit=radius?this.presentationRay.sphere(this.rayFrom,this.rayTo,radius,GROUP_DEFAULT,this.acceptPresentationBody):
+            this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptPresentationBody,GROUP_PROJECTILE,this.traceResult);
         if(!hit.hasHit)return undefined;
         const entity=(hit.body as CANNON.Body&{userData?:{entity?:RatEntity}}|null)?.userData?.entity;
         return{p:{x:hit.hitPointWorld.x,y:hit.hitPointWorld.y,z:hit.hitPointWorld.z},

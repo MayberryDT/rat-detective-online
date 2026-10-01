@@ -5,7 +5,8 @@ import {resolveShotPattern} from './shotPattern';
 import type {IncidentId} from './incidentCatalog';
 import type {ServerMessage,ShotDescriptor,Vec3Data} from './networkProtocol';
 
-export type ShotTrace=(from:Vec3Data,to:Vec3Data)=>{p:Vec3Data;n:Vec3Data;rat:boolean;reflect?:boolean}|undefined;
+/** `radius` is passed only for a Big Cheese ball: the trace then sweeps that sphere, as the authority does. */
+export type ShotTrace=(from:Vec3Data,to:Vec3Data,radius?:number)=>{p:Vec3Data;n:Vec3Data;rat:boolean;reflect?:boolean}|undefined;
 interface LocalShot {
     shot:ChaosShot; trigger:string; fired:number; updated:number; first:boolean;
     confirmed?:number; hidden:boolean; incident?:IncidentId;
@@ -118,9 +119,11 @@ export class LocalShotPresentation {
             const radius=shot.radius??BALL_RADIUS;
             shot.v.y+=shotGravity(radius)*dt;
             const next={x:shot.p.x+shot.v.x*dt,y:shot.p.y+shot.v.y*dt,z:shot.p.z+shot.v.z*dt};
-            const hit=this.trace?.(shot.p,next);
+            const big=radius>BALL_RADIUS+.001,hit=this.trace?.(shot.p,next,big?radius:undefined);
             if(!hit){shot.p=next;continue;}
-            shot.p={x:hit.p.x+hit.n.x*.05,y:hit.p.y+hit.n.y*.05,z:hit.p.z+hit.n.z*.05};
+            // A big ball rests on the surface, clear by its own radius (the authority's offset), never half buried.
+            const clear=big?radius+.01:.05;
+            shot.p={x:hit.p.x+hit.n.x*clear,y:hit.p.y+hit.n.y*clear,z:hit.p.z+hit.n.z*clear};
             // A reflective coat bounces the ball instead of consuming it, and it
             // stays a rat contact: it never counts as a wall bounce for incidents.
             if(hit.rat&&!hit.reflect&&!shot.dud)return true;
