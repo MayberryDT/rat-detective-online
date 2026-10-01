@@ -1,6 +1,6 @@
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
-import {activeZone,nextZone,JURISDICTION_TUNING} from '../jurisdiction';
+import {activeZone,nextZone} from '../jurisdiction';
 import {JURISDICTION_ZONE_IDS,JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {DISPATCH_STATIONS,type ChaosState} from '../chaosState';
 import {incidentInfo} from '../incidentCatalog';
@@ -239,11 +239,6 @@ export class BotGoals {
             else zone={key,point,id,camp:false};
         }
         if(!jurisdiction&&carrying&&active&&assignment!.id==='excessive-force'&&input.personality==='camper'&&state?.case.owner===self.id)zone=this.camp(self,now,assignment!.roundId);
-        // The zone is about to empty under the carrier: get to the next one first.
-        if(jurisdiction&&!carrying&&carrier&&this.zoneLane===0&&zoneContains(activeZone(jurisdiction),carrier)&&jurisdiction.remainingMs<=JURISDICTION_TUNING.warningMs&&distance(self,carrier)>35){
-            const post=JURISDICTION_ZONES[nextZone(jurisdiction)].approaches[0];
-            if(distance(self,post)<distance(carrier,post))intercept=post;
-        }
         if(jurisdiction&&!carrying&&carrier&&!intercept&&this.zoneLane!==0&&zoneContains(activeZone(jurisdiction),carrier)&&distance(self,carrier)>45){
             const approaches=JURISDICTION_ZONES[activeZone(jurisdiction)].approaches,post=approaches[this.zoneLane%approaches.length];
             if(distance(self,post)>5&&distance(self,post)+distance(post,carrier)<distance(self,carrier)+8&&!motor.suppressed(`intercept:${post.x},${post.z}`,post,now))intercept=jurisdictionTravelPoint(self,post);
