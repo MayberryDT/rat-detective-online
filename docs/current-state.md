@@ -2,6 +2,15 @@
 
 Verified from source and production through **2026-09-30** (release A, protocol 24). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Case grip and bot archetypes — 1 October staging
+
+Tyler (1 October), after a 56-minute Excessive Force round: give the case grip, tone the bots down while making them more human, measure ping before touching the network, and never put a time limit on a mode. On staging (build `staging-2026-10-01-00abf27`, Worker `3501267e-a968-4f2e-95c4-477b0a17e165`, every incident), not in production:
+
+- **Grip:** a carried case comes loose after 3 enemy balls each within 2 s of the last; each hit before that jolts it a step out of the paw with a rising knock. Killing the carrier still drops it ([assignments](dispatch-assignments.md)).
+- **Bots:** pre-aim at chest height (half their kills had been first-shot headshots), and play as five archetypes with their own dials, none sharper than base: sniper, hose, camper, joyriders who use the launch machines, gremlin (`mindVersion` 7; [the bot overhaul](bot-overhaul.md)).
+- **Ping:** perf reports carry `rtt` and how far behind other rats are drawn (`viewHuman`, `viewBot`); measurement only.
+- **Judged by** era `case-grip` in `design/data/eras.json` (Excessive Force under 20 minutes on average at 10 kills, fewer carries knocked loose, bots' headshot share at humans' level, bots still below humans' hit rate).
+
 ## A1 air acting — 1 October production
 
 Tyler: "Let's send it live." Production Worker `4ec0fd2e-ae80-4124-a445-14311df7e11b`, build `production-2026-10-01-4d9e649`, client `index-Fm0zLxiU.js`. Airborne rats now:
