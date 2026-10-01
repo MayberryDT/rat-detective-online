@@ -2,6 +2,17 @@
 
 Verified from source and production through **2026-09-30** (release A, protocol 24). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## A1 air acting — 1 October production
+
+Tyler: "Let's send it live." Production Worker `4ec0fd2e-ae80-4124-a445-14311df7e11b`, build `production-2026-10-01-4d9e649`, client `index-Fm0zLxiU.js`. Airborne rats now:
+
+- stretch as they rise;
+- tuck into a hunch at the apex;
+- reach for the ground as they fall;
+- squash on landing.
+
+Sideways, only the tail, hat and ears trail. See [the juice plan](juice-plan.md#air-acting-tyler-2026-10-01) and [the receipt](verification/air-acting-release-2026-10-01.md).
+
 ## Protocol 25 and the lighter Jev — 1 October production
 
 Tyler: "send it live." Production Worker `88171c4c-a93a-40a3-bc5c-3d0769c59c3d`, build `production-2026-10-01-6356f81`, client `index-Bw2kUX-i.js`, commit `6356f81`, `mindVersion` 6. Live:

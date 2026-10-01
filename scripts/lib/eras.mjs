@@ -1,6 +1,7 @@
 // Eras, the scorecard and verdicts (docs/data-plan.md, sections 1, 4 and 5), read from a city mirror (scripts/city-mirror.mjs).
 // An era is a period in one environment in which nothing that affects play changed (design/data/eras.json). Eras from
-// before build stamps are an environment's time window (and layout and mindVersion); stamped eras are their `build`.
+// before build stamps are an environment's time window (and layout and mindVersion); stamped eras are their `build`, or
+// a list of builds when a later deploy changed only presentation (nothing that affects play).
 // Every measure is a Reading: a value, its 95% interval, its sample size and whether it clears the city map's minimums.
 import { actorClasses, ratClass } from './traffic.mjs';
 
@@ -68,7 +69,8 @@ export function parseEras(value) {
     if (typeof e.change !== 'string' || !e.change) fail(`${at}: change is missing`);
     for (const k of ['from', 'to']) if (e[k] !== undefined && e[k] !== null && !(typeof e[k] === 'string' && ISO.test(e[k]))) fail(`${at}: ${k} is not a UTC time`);
     if (e.from && e.to && Date.parse(e.to) <= Date.parse(e.from)) fail(`${at}: ends before it starts`);
-    if (e.build !== undefined && e.build !== null && (typeof e.build !== 'string' || !e.build)) fail(`${at}: build is not a string`);
+    const builds = e.build === undefined || e.build === null ? [] : Array.isArray(e.build) ? e.build : [e.build];
+    if ((Array.isArray(e.build) && !e.build.length) || builds.some(b => typeof b !== 'string' || !b)) fail(`${at}: build is not a string or a list of them`);
     if (e.layout !== undefined && !Number.isInteger(e.layout)) fail(`${at}: layout is not a version`);
     if (e.mindVersion !== undefined && e.mindVersion !== null && !Number.isInteger(e.mindVersion)) fail(`${at}: mindVersion is not a version`);
     if (e.baseline !== undefined && typeof e.baseline !== 'string') fail(`${at}: baseline is not an era id`);
@@ -100,11 +102,12 @@ export function eraFacts(db, era, types, now = Date.now()) {
   const hasBuild = !!db.prepare("SELECT 1 FROM pragma_table_info('facts') WHERE name = 'build'").get();
   const where = ['t >= ?', 't < ?', `type IN (${types.map(() => '?').join(', ')})`], params = [from, to, ...types];
   if (era.layout !== undefined) { where.push('layout = ?'); params.push(era.layout); }
-  if (era.build && hasBuild) { where.push('build = ?'); params.push(era.build); }
+  const builds = !era.build ? undefined : Array.isArray(era.build) ? era.build : [era.build];
+  if (builds && hasBuild) { where.push(`build IN (${builds.map(() => '?').join(', ')})`); params.push(...builds); }
   const out = [];
   for (const row of db.prepare(`SELECT data FROM facts WHERE ${where.join(' AND ')} ORDER BY t`).iterate(...params)) {
     const f = JSON.parse(row.data);
-    if (era.build && f.build !== era.build) continue;
+    if (builds && !builds.includes(f.build)) continue;
     if (era.mindVersion === null && f.mindVersion !== undefined) continue;
     if (Number.isInteger(era.mindVersion) && f.mindVersion !== era.mindVersion) continue;
     out.push(f);

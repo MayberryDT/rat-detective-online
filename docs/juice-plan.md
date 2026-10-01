@@ -65,7 +65,7 @@ rat's identity stay as they are. Done means:
 
 Tyler, watching rats jump, bounce back and forth and fly: they look "stiff and lifeless", like a salt shaker, with "no character" and "no juice". The living body was a rigid cylinder in the air. The rule that kept the weapon-bearing body still covered only the animation pass. A firing rat's arm aims at its target whatever the body does, and walking already sways the body.
 
-- [x] **A1 `airActing`, built and on staging (not production).** Every rat, local or remote, from its rendered motion (a take-off over 9 u/s or a fall over 7 u/s, until it lands):
+- [x] **A1 `airActing`, live in production since 1 October** ([receipt](verification/air-acting-release-2026-10-01.md)). Every rat, local or remote, from its rendered motion (a take-off over 9 u/s or a fall over 7 u/s, until it lands):
   - The walking stride stops in mid-air.
   - **Rising:** the coat stretches tall, arches back a little, and the feet and tail trail.
   - **Apex:** a tuck. The body squashes, the belly curls over the hips with the chest nearly level, and the feet pull up.
@@ -74,7 +74,7 @@ Tyler, watching rats jump, bounce back and forth and fly: they look "stiff and l
   - **Tyler's first look (1 October):** the first build banked the whole body into a strafe jump, and Tyler said it "looks ridiculous, it's like torpedoing to the side". **Do not tilt the body sideways into travel.** The `?feel=dev` panel "doesn't work" for him: it is a 65-item list of raw numbers. Its A1 switch and values do save and apply when tested, but tune from his descriptions instead of sending him to it.
   - **Landing:** a squash that wobbles back.
   - Everything is presentation only and switchable, with its numbers in `FEEL.airActing`.
-  - **Evidence:** throwaway contact sheets of one jump arc, side and rear (forward, sideways, and reversing mid-air), with and without the switch, inspected before each deploy. Tyler has seen the first build only.
+  - **Evidence:** throwaway contact sheets of one jump arc, side and rear (forward, sideways, and reversing mid-air), with and without the switch, inspected before each deploy. Tyler played the upright-sideways build on staging: "looks pretty great now".
 
 ## Kill streak mark (Tyler, 2026-09-30)
 
