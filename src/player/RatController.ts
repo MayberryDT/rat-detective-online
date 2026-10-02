@@ -9,17 +9,12 @@ import { ControlTally } from '../shared/rat/controlTally';
 import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
 import type {TouchMovement} from '../session/TouchInput';
+import {CameraBlockers} from './CameraBlockers';
 
 const CAM_RADIUS = 6.0;
 const CAM_PIVOT_Y = 3.5;
 const CAM_SHOULDER = 1.25;
 const MOUSE_SENS = 0.002;
-
-/** three's recursive `intersect` without its sort: every hit under `object`, children in order. */
-function castInto(object:THREE.Object3D,ray:THREE.Raycaster,hits:THREE.Intersection[]):void {
-    if(object.layers.test(ray.layers)){const result:unknown=object.raycast(ray,hits);if(result===false)return;}
-    for(let i=0;i<object.children.length;i++)castInto(object.children[i]!,ray,hits);
-}
 
 /** The player's rat: keys, mouse and touch read into `RatControls`, the shared rat body (`RatBody`, the same
  * step every bot runs) and the shoulder camera. */
@@ -33,13 +28,8 @@ export class RatController {
     /** The controls pressed since the last movement send (the city map's record; authority never reads it). */
     readonly tally = new ControlTally();
 
-    /** Frozen city solids (2,400, mostly hidden behind the baked city) never move, so their world
-     * bounding spheres are kept (x, y, z, radius) and a camera ray only raycasts the few it can
-     * reach; each ray used to sphere-test every solid. Rats and props with parts raycast as before. */
-    private readonly solids: THREE.Mesh[];
-    private readonly solidSpheres: Float64Array;
-    private readonly movingBlockers: THREE.Object3D[];
-    private readonly rayHits: THREE.Intersection[] = [];
+    /** What the shoulder camera's rays stop at: the city's blockers when the rat was made. */
+    private readonly blockers: CameraBlockers;
     private readonly cameraRay = new THREE.Raycaster();
     get grounded():boolean {return this.movement.grounded;}
     private readonly appliedLaunches = new Set<string>();
@@ -63,16 +53,7 @@ export class RatController {
     ) {
         this.camera = camera;
         scene.updateMatrixWorld(true);
-        const blockers = scene.children.filter(o=>o.userData.aimTarget===true);
-        this.solids = blockers.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh&&!o.matrixAutoUpdate&&!o.children.length);
-        const solids = new Set<THREE.Object3D>(this.solids), sphere = new THREE.Sphere();
-        this.movingBlockers = blockers.filter(o=>!solids.has(o));
-        this.solidSpheres = new Float64Array(this.solids.length*4);
-        this.solids.forEach((mesh,i)=>{
-            if(!mesh.geometry.boundingSphere)mesh.geometry.computeBoundingSphere();
-            sphere.copy(mesh.geometry.boundingSphere!).applyMatrix4(mesh.matrixWorld);
-            this.solidSpheres.set([sphere.center.x,sphere.center.y,sphere.center.z,sphere.radius],i*4);
-        });
+        this.blockers = new CameraBlockers(scene.children.filter(o=>o.userData.aimTarget===true));
 
         // Create the Player Entity with the player's chosen name and appearance
         const pos = spawnPos ?? new THREE.Vector3(15, 2, 15);
@@ -180,33 +161,15 @@ export class RatController {
         // shorten distance without collapsing the view back onto the rat.
         this.cameraRay.set(pivot,this.shoulderDirection.copy(this.shoulder).normalize());
         this.cameraRay.far=CAM_SHOULDER;
-        const shoulderHit=this.firstBlockerHit();
+        const shoulderHit=this.blockers.first(this.cameraRay);
         if(shoulderHit)this.shoulder.setLength(Math.max(0,shoulderHit.distance-.3));
         this.camera.position.add(this.shoulder);
         pivot.add(this.shoulder);
         offset.copy(this.camera.position).sub(pivot);
         this.cameraRay.far = offset.length();
         this.cameraRay.set(pivot, offset.normalize());
-        const hit = this.firstBlockerHit();
+        const hit = this.blockers.first(this.cameraRay);
         if(hit) this.camera.position.copy(pivot).addScaledVector(this.cameraRay.ray.direction,Math.max(.3,hit.distance-.3));
         this.camera.lookAt(this.offset.copy(this.camera.position).add(this.viewDirection));
-    }
-
-    /** The nearest blocker along `cameraRay` within its `far`: the same hit as raycasting every blocker. */
-    private firstBlockerHit(): THREE.Intersection|undefined {
-        const ray=this.cameraRay,{origin,direction}=ray.ray,far=ray.far,spheres=this.solidSpheres,hits=this.rayHits;
-        hits.length=0;
-        for(let i=0;i<this.solids.length;i++){
-            const x=spheres[i*4]-origin.x,y=spheres[i*4+1]-origin.y,z=spheres[i*4+2]-origin.z,r=spheres[i*4+3];
-            const along=x*direction.x+y*direction.y+z*direction.z;
-            // Wholly behind the origin, wholly past `far`, or off the line: no hit is possible.
-            if(along<-r||along>far+r||x*x+y*y+z*z-along*along>r*r)continue;
-            castInto(this.solids[i]!,ray,hits);
-        }
-        for(let i=0;i<this.movingBlockers.length;i++)castInto(this.movingBlockers[i]!,ray,hits);
-        // The nearest, and the first found among equals: what three's stable sort puts first.
-        let nearest=hits[0];
-        for(let i=1;i<hits.length;i++)if(hits[i]!.distance<nearest!.distance)nearest=hits[i];
-        return nearest;
     }
 }

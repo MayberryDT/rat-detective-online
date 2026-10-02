@@ -69,7 +69,23 @@ const SYNTH = {
         Math.sin(2 * Math.PI * (64 * t - 52 * t * t)) * Math.min(1, t * 400) * Math.exp(-t * 13) + n() * Math.exp(-t * 220) * .25},
 } as const;
 export type SynthCue = keyof typeof SYNTH;
-let synthBuffers: Partial<Record<SynthCue, AudioBuffer>> = {};
+const synthBuffers = new WeakMap<BaseAudioContext, Partial<Record<SynthCue, AudioBuffer>>>();
+/** The PCM of a synthesized cue on `ctx`, built once per context (exhibit replays play it on their own bus). */
+export function synthBuffer(ctx: BaseAudioContext, cue: SynthCue): AudioBuffer {
+    let cache = synthBuffers.get(ctx);
+    if (!cache) synthBuffers.set(ctx, cache = {});
+    let buffer = cache[cue];
+    if (!buffer) {
+        const {seconds, peak, sample} = SYNTH[cue];
+        buffer = cache[cue] = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * seconds), ctx.sampleRate);
+        const pcm = buffer.getChannelData(0);
+        let seed = 7, max = 0;
+        const noise = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x3fffffff - 1; };
+        for (let i = 0; i < pcm.length; i++) { pcm[i] = sample(i / ctx.sampleRate, noise); max = Math.max(max, Math.abs(pcm[i]!)); }
+        if (max > 0) for (let i = 0; i < pcm.length; i++) pcm[i] = pcm[i]! * peak / max;
+    }
+    return buffer;
+}
 
 function preload(ctx: AudioContext): Promise<void> {
     if (loading) return loading;
@@ -106,17 +122,7 @@ function playBuffer(buffer: AudioBuffer, volume: number, pitch = 1, world = fals
 /** A synthesized incident cue from `origin` (full volume without one); `pitch` under 1 plays it lower. */
 export function playSynth(cue: SynthCue, origin?: Vec3Data, pitch = 1, volume = 1): void {
     const ctx = context; if (!ctx || ctx.state !== 'running' || voices.size >= MAX_VOICES) return;
-    let buffer = synthBuffers[cue];
-    if (!buffer) {
-        const {seconds, peak, sample} = SYNTH[cue];
-        buffer = synthBuffers[cue] = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * seconds), ctx.sampleRate);
-        const pcm = buffer.getChannelData(0);
-        let seed = 7, max = 0;
-        const noise = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x3fffffff - 1; };
-        for (let i = 0; i < pcm.length; i++) { pcm[i] = sample(i / ctx.sampleRate, noise); max = Math.max(max, Math.abs(pcm[i]!)); }
-        if (max > 0) for (let i = 0; i < pcm.length; i++) pcm[i] = pcm[i]! * peak / max;
-    }
-    playBuffer(buffer, volume * distanceGain(origin), pitch, !!origin);
+    playBuffer(synthBuffer(ctx, cue), volume * distanceGain(origin), pitch, !!origin);
 }
 
 /** Bad Ammunition: a hiccuping ball stops dead in the air: the recorded cartoon mouth pop, pitched up into a HIC! */
@@ -168,6 +174,6 @@ export function bindIncidentAudio(next?: AudioContext, position?: Vec3Data): voi
 export function disposeIncidentAudio(): void {
     buzzWanted = false; stopSaw(); generation++;
     for (const [voice,end] of voices) { voice.onended=null;voice.stop();end(); }
-    voices.clear(); buffers = new Map(); loading = undefined; context = undefined; synthBuffers = {};
+    voices.clear(); buffers = new Map(); loading = undefined; context = undefined;
     listener.x=listener.y=listener.z=0; buzzVolume=CASE_BUZZ_VOLUME;
 }

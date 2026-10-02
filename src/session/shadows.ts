@@ -61,6 +61,8 @@ export class StaticMoonShadow {
         for(const root of this.scenery)root.traverse(object=>{if(object instanceof THREE.Mesh)useShadowDepthForm(object);});
         this.pending=true;this.light.shadow.autoUpdate=false;
     }
+    /** Whether a scene child is the adopted city's scenery (an exhibit replay draws the city, never live things). */
+    isScenery(object:THREE.Object3D):boolean {return this.scenery.has(object);}
 
     /** Scene `onBeforeRender`: on a redraw frame, cast only the scenery. Nothing on other frames. */
     beforeRender(scene:THREE.Scene):void {

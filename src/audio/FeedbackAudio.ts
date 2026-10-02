@@ -4,7 +4,8 @@ import {worldSoundGain} from './worldSoundGain';
 import {AudioVoicePool} from './AudioVoicePool';
 import {admitWorldVoice,duckWorld,endWorldVoice,type WorldVoice} from './PlayerAudioMix';
 export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-tommy-gun'|'pickup-laser'|'pickup-mousetrap'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'laser-fire'|'laser-hit'|'trap-set'|'trap-snap'|'trap-splinter'|'trap-break'|'trap-refused'|'trap-ready'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
-const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
+/** Each cue's recording (`/sounds/feedback/<file>.wav`), level, minimum spacing (ms) and playback rate; exhibit replays play the world ones. */
+export const FEEDBACK_CUES:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
     'pickup-ironclad':{file:'pickup-ironclad',volume:.7,cooldown:150},
     'pickup-hustle':{file:'pickup-hustle',volume:.65,cooldown:150},
     'pickup-quick-fix':{file:'pickup-quick-fix',volume:.65,cooldown:150},
@@ -64,12 +65,12 @@ export class FeedbackAudio {
     constructor(private readonly listener:THREE.AudioListener){
         this.pool=new AudioVoicePool(listener,8);
         const loader=new THREE.AudioLoader();
-        for(const file of new Set(Object.values(cues).map(c=>c.file)))
+        for(const file of new Set(Object.values(FEEDBACK_CUES).map(c=>c.file)))
             loader.load(`/sounds/feedback/${file}.wav`,buffer=>{if(!this.disposed)this.buffers.set(file,buffer);},undefined,
                 ()=>{if(!this.disposed)console.warn(`Feedback sound could not load: ${file}`);});
     }
     play(cue:FeedbackCue,origin?:Vec3Data):void {
-        const {file,volume,cooldown,rate=1}=cues[cue],buffer=this.buffers.get(file);
+        const {file,volume,cooldown,rate=1}=FEEDBACK_CUES[cue],buffer=this.buffers.get(file);
         if(this.disposed||!buffer||this.listener.context.state!=='running')return;
         const now=this.listener.context.currentTime*1000;
         if(now-(this.last.get(cue)??-Infinity)<cooldown)return;

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {DISPATCH_STATIONS,type ChaosState} from '../shared/chaosState';
 import {INCIDENTS,incidentInfo} from '../shared/incidentCatalog';
 import {DispatchAudio,DISPATCH_VOICES,sirenVolume} from '../audio/DispatchAudio';
+import type {VoiceRoute} from '../audio/PlayerAudioMix';
 import {worldSoundGain} from '../audio/worldSoundGain';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
@@ -60,8 +61,8 @@ export class DispatchPillars {
     private readonly scratch=new THREE.Vector3();
     private readonly axis=new THREE.Vector3(0,0,1);
 
-    constructor(scene:THREE.Scene,audio?:AudioContext){
-        this.audio=new DispatchAudio(audio);
+    constructor(scene:THREE.Scene,audio?:AudioContext,route?:VoiceRoute){
+        this.audio=new DispatchAudio(audio,route);
         this.kit=createPillarKit();
         this.root.name='dispatch-alarm-pillars';this.root.userData.aimTarget=true;this.root.userData.noNoir=true;
         for(const station of DISPATCH_STATIONS){

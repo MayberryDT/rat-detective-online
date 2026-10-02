@@ -7,6 +7,7 @@ import { parsePerfReport } from './perfReport';
 import { isAssignmentId, parseAssignment } from './assignments';
 import { INCIDENTS, incidentInfo, isIncidentId, isLegacyIncidentId, type IncidentId } from './incidentCatalog';
 import { ADMIN_TOKEN_MAX, type AdminCommand, type AdminResult, type AdminStatus } from './admin';
+import { HIGHLIGHT_TUNING, isExhibitAction, isHighlightKind, MAX_HIGHLIGHT_ACTORS } from './highlights';
 import {
   MAX_HP,
   MAX_SCORE_ENTRIES,
@@ -487,6 +488,10 @@ function parseClientBody(parsed:Record<string,unknown>):ClientMessage|null {
     return report ? { type: 'perf', report } : null;
   }
   if (parsed.type === 'ready') return { type: 'ready' };
+  if (parsed.type === 'exhibit') {
+    const id = nonEmptyString(parsed.id, 64);
+    return id && isHighlightKind(parsed.kind) && isExhibitAction(parsed.action) ? { type: 'exhibit', id, kind: parsed.kind, action: parsed.action } : null;
+  }
   if (parsed.type === 'admin') {
     const command = parseAdminCommand(parsed.command), token = optionalString(parsed.token, ADMIN_TOKEN_MAX);
     return command && token !== null ? { type: 'admin', ...(token ? { token } : {}), command } : null;
@@ -839,6 +844,13 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         : null;
       if (parsed.code !== undefined && parsed.code !== 'resume-unavailable') return null;
       return message ? { type: 'error', message, ...(parsed.code === 'resume-unavailable' ? {code:parsed.code} : {}) } : null;
+    }
+    case 'highlight': {
+      const id = nonEmptyString(parsed.id, 64), at = integer(parsed.at), p = parseVec3(parsed.p), score = finiteNumber(parsed.score);
+      const leadMs = boundedInteger(parsed.leadMs, 0, HIGHLIGHT_TUNING.maxLeadMs), trailMs = boundedInteger(parsed.trailMs, 0, HIGHLIGHT_TUNING.maxTrailMs);
+      const actors = Array.isArray(parsed.actors) && parsed.actors.length >= 1 && parsed.actors.length <= MAX_HIGHLIGHT_ACTORS ? parsed.actors.map(a => nonEmptyString(a, 64)) : null;
+      if (!id || !isHighlightKind(parsed.kind) || at === null || at < 0 || !p || score === null || score < 0 || leadMs === null || trailMs === null || !actors || actors.some(a => !a)) return null;
+      return { type: 'highlight', id, kind: parsed.kind, at, actors: actors.filter((a): a is string => !!a), p, score, leadMs, trailMs };
     }
     case 'adminResult': { const result = parseAdminResult(parsed); return result ? { type: 'adminResult', ...result } : null; }
     default:

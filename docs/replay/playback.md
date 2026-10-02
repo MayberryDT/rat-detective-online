@@ -48,6 +48,8 @@ The city is shared. Live and replay objects are kept apart with three.js layers:
 
 While an exhibit plays, the next round may be running behind the board. Its rats must not appear in the replay, and the replay must not appear in the live view.
 
+As built (`src/replay/ReplayStage.ts`): three.js layers are not inherited, and a replay creates objects every frame, so the separation is by scene membership instead. The replay's own `THREE.Scene` joins the live scene only for the director's draw, and every live scene root that is not the city's scenery (`StaticMoonShadow.isScenery`), a light or the ground is hidden for that draw. The live camera and the live gun's raycasts therefore never meet a replay object, and the director never draws a live rat or live chaos. Replay rats live in their own physics world (`isolateRagdollWorld`), so they never collide with your rat. Nameplates keep layer 1, which the director's camera enables.
+
 ### Rendering
 
 There is one canvas and no post-processing pass; grain and vignette are CSS overlays (`ScreenFeel`). Two ways to draw an exhibit:

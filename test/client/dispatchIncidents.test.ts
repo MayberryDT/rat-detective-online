@@ -73,6 +73,8 @@ describe('authoritative Dispatch incidents',()=>{
   expect(standard.sim.snapshot(false).dispatch.incident).not.toBe('evidence-tampering');
  });
  it('keeps rolling when the room runs a single incident (a staging INCIDENTS list)',()=>{
+  // The caller's reward is a random supply: a Mousetrap would make the second pull set a trap instead of ringing the bell.
+  vi.spyOn(Math,'random').mockReturnValue(0);
   const {sim}=fixture();sim.onlyIncidents=['crossfire'];
   fireDispatch(sim);expect(sim.snapshot(false).dispatch.incident).toBe('crossfire');
   const at=now+T.rollMs+T.activeMs+T.cooldownMs;

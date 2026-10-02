@@ -60,6 +60,7 @@ import { HEAT_CELL } from './HeatMap';
 import { buildName, CityStore, type Filter, type Range } from './city/CityStore';
 import { CityArchive } from './city/CityArchive';
 import { CityRecorder } from './city/CityRecorder';
+import { HighlightDetector } from './HighlightDetector';
 import { SpatialRayQuery } from '../shared/SpatialRayQuery';
 import * as CANNON from 'cannon-es';
 import { logClientDiagnostics, allowsLocalDiagnostics } from './clientDiagnostics';
@@ -68,6 +69,7 @@ import type { AdminCommand, AdminResult, AdminStatus, AdminVia } from '../shared
 import { companionProjectionDue, companionProjectionSignature, projectCompanionRoom } from './companionStatus';
 import {
   clampPosition,
+  EXHIBIT_RATE,
   HIT_RATE,
   JOIN_RATE,
   MOVEMENT_RATE,
@@ -207,6 +209,13 @@ export class GameRoom extends DurableObject<Env> {
   private readonly hidden = new Set<string>();
   /** The city map's recorder (docs/city-map.md); built on first use from this room's world. */
   private cityRecorder: CityRecorder | null = null;
+  /** Highlight replays (docs/replay/detection.md): the moments sent to every player as `highlight` markers. */
+  private readonly highlights = new HighlightDetector({
+    send: marker => this.broadcast(marker),
+    record: marker => this.city.highlight(marker, this.now()),
+    isHuman: id => !this.isManagedBot(id) && !this.sessions.get(id)?.agent,
+    corpseAt: id => this.chaos?.corpseAt(id),
+  });
   /** The Jev mind for this room's server bots, and the day's budget (docs/bot-overhaul.md, B4). */
   private jevMind: JevMind | null = null;
   private jevBudgetState: JevBudget | null = null;
@@ -808,6 +817,11 @@ export class GameRoom extends DurableObject<Env> {
       return;
     }
 
+    if (message.type === 'exhibit') {
+      if (this.rateLimiter.allow(`${playerId}:exhibit`, EXHIBIT_RATE.limit, EXHIBIT_RATE.windowMs, this.now())) this.city.exhibit(playerId, message, this.now());
+      return;
+    }
+
     if (message.type === 'updateMovement') {
       if (!this.rateLimiter.allow(`${playerId}:move`, MOVEMENT_RATE.limit, MOVEMENT_RATE.windowMs, this.now())) return;
       this.noteMovementInput(playerId, message);
@@ -1336,7 +1350,10 @@ export class GameRoom extends DurableObject<Env> {
     const events=this.chaos.drainPickupEvents();
     this.city.pickups(events,this.players,this.now());
     for (const event of events) {
-      if (event.kind === 'collected' || event.kind === 'rewarded') this.awards.pickup(event.playerId, event.pickup);
+      if (event.kind === 'collected' || event.kind === 'rewarded') {
+        this.awards.pickup(event.playerId, event.pickup);
+        if (event.pickup === 'quick-fix') this.highlights.quickFix(event.playerId, this.now());
+      }
       if (event.kind !== 'healed') continue;
       const player = this.players.get(event.playerId);
       if (!player) continue;
@@ -1345,7 +1362,9 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false, environment:EnvironmentCause = 'evidence-tampering', weapon?:WeaponKind, bank?:Required<Pick<ChaosHit,'bounces'|'path'>>): Promise<void> {
+  /** `detail`: a simulation hit's step time and highlight details (`ChaosHit`). */
+  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false, environment:EnvironmentCause = 'evidence-tampering', weapon?:WeaponKind, bank?:Required<Pick<ChaosHit,'bounces'|'path'>>,
+    detail?:Pick<ChaosHit,'squashAirMs'|'corpse'|'reflections'|'ballRadius'>&{at:number}): Promise<void> {
     if (this.round.phase !== 'playing') return;
 
     const victim = this.players.get(message.victimId);
@@ -1354,6 +1373,9 @@ export class GameRoom extends DurableObject<Env> {
     const result = applyHit(this.players, playerId, message.victimId, message.damage, !!incoming, playerId && this.chaos?.isCaseHolder(playerId) ? playerId : null, !!this.chaos?.assignmentState, explosive);
     if (!result.applied || !victim) return;
     const cause = playerId === null ? {cause:environment} : {};
+    // Read before the death lets go of the case and the trap.
+    const moment = { carrier: this.chaos?.caseHolderId === victim.id, victimTrapped: !!this.chaos?.trapped(victim.id), victimAirborne: !!this.chaos?.airborne(victim.id),
+      attackerAirborne: !!shooter && !!this.chaos?.airborne(shooter.id) };
 
     // Final mutations precede persistence and externally visible events.
     // Nonlethal hits do not change the shooter; lethal hits persist the victim
@@ -1384,6 +1406,8 @@ export class GameRoom extends DurableObject<Env> {
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
     this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming, ...(weapon?{weapon}:{}), ...(playerId === null ? { environment } : {}), ...(bank ? { bounces: bank.bounces } : {}) }, now);
     if (this.isManagedBot(victim.id)) this.jevMind?.hit(victim.id, shooter?.id, now);
+    this.highlights.hit({ at: detail?.at ?? now, ...(shooter ? { attacker: shooter } : {}), victim, killed: result.killed, headshot, ...(weapon ? { weapon } : {}),
+      ...(playerId === null ? { environment } : {}), ...(bank ? { bounces: bank.bounces } : {}), ...detail, ...moment, assignment: this.chaos?.assignmentState });
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
       respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{}),...(explosive?{blast:true as const}:{}),...(weapon?{weapon}:{}),
@@ -1392,7 +1416,10 @@ export class GameRoom extends DurableObject<Env> {
     if(assignmentWon){this.finishAssignment();return;}
     // Each new kill streak title (3, 5, 8) earns a random supply on the spot; a round's final kill earns nothing.
     if(!result.roundWon&&shooter&&shooter!==victim&&newStreakTitle(shooter.streak??0)&&this.chaos?.rewardSupply(shooter.id,'streak'))this.applyPickupEvents();
-    if(result.roundWon&&shooter)this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt,...this.caseFile(shooter.id)});
+    if(result.roundWon&&shooter){
+      this.highlights.roundWon(shooter,detail?.at??now);
+      this.broadcast({type:'gameWon',winnerId:shooter.id,winnerName:shooter.name,kills:shooter.kills,resetAt:respawnAt,...this.caseFile(shooter.id)});
+    }
     await this.scheduleNextAlarm();
   }
 
@@ -1444,6 +1471,7 @@ export class GameRoom extends DurableObject<Env> {
         this.chaos?.reset();
         this.applyShotEvents();
         this.round = playingRound(this.now());
+        this.highlights.reset();
         this.beginAssignment();
 
         const readers = this.readers;this.readers = new Set();
@@ -1619,7 +1647,8 @@ export class GameRoom extends DurableObject<Env> {
       const retiredAssignment=previous?.id==='misfiled-evidence'||previous?.id==='closing-time'||(previous?.id==='chain-of-custody'&&previous.destinations?.includes('icebox-check'));
       if(retiredAssignment){this.round=playingRound(this.now());this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");}
       this.chaos=new ChaosSimulation(this.players,hit=>{
-        void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true,hit.headshot===true,hit.cause,hit.weapon,hit.bounces&&hit.path?{bounces:hit.bounces,path:hit.path}:undefined)
+        void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true,hit.headshot===true,hit.cause,hit.weapon,hit.bounces&&hit.path?{bounces:hit.bounces,path:hit.path}:undefined,
+          {at:this.chaos?.time??this.now(),squashAirMs:hit.squashAirMs,corpse:hit.corpse,reflections:hit.reflections,ballRadius:hit.ballRadius})
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
       },saved,this.world);
       this.chaos.evidenceMode=this.evidenceMode;
@@ -1662,7 +1691,9 @@ export class GameRoom extends DurableObject<Env> {
         this.chaos.step(1/60,stepAt,this.round.phase==='playing');
         this.applyPickupEvents();
         this.applyShotEvents();
-        this.city.incidents(this.chaos.drainIncidentEvents(),this.players,this.now());
+        const incidents=this.chaos.drainIncidentEvents();
+        this.city.incidents(incidents,this.players,this.now());
+        for(const e of incidents){const rat=e.what==='faulty'&&e.playerId?this.players.get(e.playerId):undefined;if(rat)this.highlights.backfire(rat,e.shoved>0,this.chaos.time);}
         this.finishAssignment();
       }
       this.diagnostics.work({...this.serverBots?.takeWork(),...this.chaos.takeWork()});
@@ -1670,6 +1701,7 @@ export class GameRoom extends DurableObject<Env> {
       const state=this.chaos.snapshot();
       if (this.serverBots) this.botState = state;
       this.city.tick(now,this.players,state,this.round);
+      this.highlights.tick(now,this.players,this.chaos.caseHolderId,this.chaos.assignmentState);
       if(this.round.phase==='playing')this.awards.sample(this.players.values(),Math.min(.2,gapMs/1000),state.case.owner,state.assignment?.deliverySerial??0,state.pressure?.launches,state.dispatch,state.assignment);
       const signature=state.case.owner+':'+state.case.returningUntil+':'+state.dispatch.serial+':'+state.dispatch.phase+':'+state.assignment?.revision;
       // Ownership/Dispatch/assignment changes persist before any client sees them.
@@ -1874,6 +1906,8 @@ export class GameRoom extends DurableObject<Env> {
       this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',crypto.randomUUID(),'reset',null,resetAt);
       this.checkpointGame();
     });
+    const winner=this.players.get(result.winnerId);
+    if(winner)this.highlights.roundWon(winner,result.at);
     this.broadcast({type:'gameWon',winnerId:result.winnerId,winnerName:result.winnerName,kills,resetAt,assignment:structuredClone(assignment),...this.caseFile(result.winnerId,assignment)});
     this.publishCompanion(true);
     this.ctx.waitUntil(this.scheduleNextAlarm());

@@ -8,6 +8,7 @@ import type { GoalOutcome, MindName } from './minds';
 import type { PerfReport } from '../perfReport';
 import type { AdminCommandName, AdminVia } from '../admin';
 import type { IncidentId } from '../incidentCatalog';
+import type { ExhibitAction, HighlightKind } from '../highlights';
 
 /** Layer 2 of the city map (docs/city-map.md): one JSON line per fact in the R2 archive.
  * Positions are rounded to 0.1 u, times are UTC ms. Actors are per-round numbers, never names or IDs. */
@@ -161,4 +162,9 @@ export type CityFact = FactContext & (
    * or an admin's game socket, whose rat is `a`. `next`: the mode chosen for the next round; `roll`: the incident rolled; `winner`:
    * the leader an `end-round` declared the winner. A round with any admin fact is admin-touched: analysis can leave it out by `round`. */
   | { type: 'admin'; command: Exclude<AdminCommandName, 'status'>; via: AdminVia; ok: boolean; a?: number; next?: AssignmentId; roll?: IncidentId; winner?: number }
+  /** Highlight replays (docs/replay/detection.md): a moment sent to every player. `a` its main actor (the killer or doer),
+   * `victim` the first rat it happened to; `p`/`place` where; `score` as sent (a multi-kill or pileup: its final score). */
+  | { type: 'highlight'; kind: HighlightKind; a: number; victim?: number; p: P3; place: string; score: number }
+  /** A player's results board showed, played or saved an exhibit of this kind (an agent's is `human: false, agent: true`). */
+  | { type: 'exhibit'; kind: HighlightKind; action: ExhibitAction; a: number; human: boolean; agent?: true }
 );

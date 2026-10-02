@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RatEntity } from '../entities/RatEntity';
 import type { PlayerData, Vec3Data } from '../shared/networkProtocol';
-import { SnapshotBuffer, BotSnapshotBuffer } from '../shared/SnapshotBuffer';
+import { SnapshotBuffer, BotSnapshotBuffer, type SnapshotPose } from '../shared/SnapshotBuffer';
 
 interface RemoteRat {
     entity: RatEntity;
@@ -95,6 +95,21 @@ export class RemotePlayers {
             entity.mesh.position.set(pose.x, pose.y, pose.z);
             entity.mesh.quaternion.set(pose.qx, pose.qy, pose.qz, pose.qw);
             entity.body.position.set(pose.x, pose.y, pose.z);
+            entity.body.aabbNeedsUpdate = true;
+        }
+    }
+    /** An exhibit replay: place every living rat at `pose(id)` (its recorded track, not snapshot playback) for a
+     * frame of `dt` seconds; `cut` (a seek or loop) clears motion history. */
+    placeFrame(dt: number, pose: (id: string) => SnapshotPose | undefined, cut: boolean): void {
+        this.frameDt = dt;
+        for (const [id, { entity }] of this.rats) {
+            if (entity.dead) continue;
+            const p = pose(id);
+            if (!p) continue;
+            if (cut) entity.resetMotionHistory();
+            entity.mesh.position.set(p.x, p.y, p.z);
+            entity.mesh.quaternion.set(p.qx, p.qy, p.qz, p.qw);
+            entity.body.position.set(p.x, p.y, p.z);
             entity.body.aabbNeedsUpdate = true;
         }
     }

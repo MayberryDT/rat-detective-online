@@ -60,8 +60,11 @@ interface CaseRuntime {
     launched:boolean;launchLift:number;
 }
 /** null ownership is an environmental hit, including neutral chains; `cause` names it when it is not Tampering. `weapon`: a special weapon made the hit.
- * `bounces`/`path`: a Crossfire bank shot's world bounces and the ball's path (`CROSSFIRE`). */
-export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true; weapon?:WeaponKind; cause?:EnvironmentCause; bounces?:number; path?:Vec3Data[] }
+ * `bounces`/`path`: a Crossfire bank shot's world bounces and the ball's path (`CROSSFIRE`). For highlight detection only:
+ * `squashAirMs` a launched rat landing on the victim after that long in the air, `corpse` a flying corpse, `reflections` the
+ * walls a laser beam came off, `ballRadius` the size of the Big Cheese ball. */
+export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true; weapon?:WeaponKind; cause?:EnvironmentCause; bounces?:number; path?:Vec3Data[];
+    squashAirMs?:number; corpse?:true; reflections?:number; ballRadius?:number }
 /** Code Violation malfunctions, for the city map (`drainIncidentEvents`). `faulty`: a supply came out as the `pickup`
  * dud on `playerId`. */
 export type IncidentEvent =
@@ -188,6 +191,16 @@ export class ChaosSimulation {
         return owner!==null&&owner===this.primaryCase.owner&&this.assignment?.active?T.carrierDamage:1;
     }
     isCaseHolder(id:string):boolean{for(const c of this.cases.values())if(c.owner===id)return true;return false;}
+    /** Riding a launcher throw, not yet landed. */
+    airborne(id:string):boolean{return this.flights.has(id);}
+    /** Held by a Mousetrap now. */
+    trapped(id:string):boolean{return (this.buffs[id]?.trappedUntil??0)>this.now;}
+    /** Where the newest corpse of `victimId` is, while it lasts. */
+    corpseAt(victimId:string):Vec3Data|undefined{
+        let found:C.Body|undefined;
+        for(const c of this.corpses.values())if(c.state.victimId===victimId)found=c.body;
+        return found?data(found.position):undefined;
+    }
     constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, spec?:WorldSpec) {
         // The city is mostly static boxes; sweep-and-prune avoids testing every
         // static pair whenever a case or corpse moves.
@@ -607,12 +620,12 @@ export class ChaosSimulation {
             const feet=new C.Vec3(player.x,player.y+.5,player.z);
             if(!this.ray(feet,new C.Vec3(player.x,player.y-.7,player.z),1).hasHit)continue;
             this.flights.delete(id);this.thrownUntil.set(id,now+1500);
-            this.landingShockwave(player,flight.machineId,drop,playing);
+            this.landingShockwave(player,flight.machineId,drop,playing,now-flight.at);
         }
     }
     /** Shove everything nearby away from the landing, squash anyone underneath, and
      * fire another machine whose pad the rat came down on. */
-    private landingShockwave(lander:PlayerData,machineId:string,drop:number,playing:boolean){
+    private landingShockwave(lander:PlayerData,machineId:string,drop:number,playing:boolean,airMs:number){
         const W=LANDING_SHOCKWAVE,p={x:lander.x,y:lander.y,z:lander.z};
         const speed=Math.sqrt(2*25*drop);
         this.impacts.push({p:{...p},n:{x:0,y:1,z:0},surface:false,audioOnly:true,foley:'launch-landing',energy:Math.min(300,speed)});
@@ -625,7 +638,7 @@ export class ChaosSimulation {
         for(const player of this.players.values()){
             if(player.id===lander.id||player.hp<=0)continue;
             const push=away(player);if(!push)continue;
-            if(playing&&push.d<W.squash)this.hit({owner:lander.id,victim:player.id,damage:1,incoming:{x:0,y:-speed,z:0}});
+            if(playing&&push.d<W.squash)this.hit({owner:lander.id,victim:player.id,damage:1,incoming:{x:0,y:-speed,z:0},squashAirMs:Math.round(airMs)});
             this.shove(player.id,{x:push.x,y:push.y,z:push.z});
         }
         for(const c of this.cases.values()){
@@ -915,7 +928,8 @@ export class ChaosSimulation {
         const from=points[points.length-2]!,incoming=new C.Vec3(end.x-from.x,end.y-from.y,end.z-from.z);incoming.normalize();incoming.scale(BALL_SPEED,incoming);
         if(target?.kind==='rat'&&target.player){
             const headshot=end.on==='head',damage=headshot?MAX_HP:Math.min(MAX_HP,W.laserDamage*this.carrierPower(owner));
-            this.hit({owner,victim:target.player.id,damage,incoming:data(incoming),shotId:shot.shotId,ballId:shot.shotId,point,normal,compensated:hit.compensated,weapon:'laser',...(headshot?{headshot:true as const}:{})});
+            const reflections=points.slice(1,-1).filter(p=>p.on==='world').length;
+            this.hit({owner,victim:target.player.id,damage,incoming:data(incoming),shotId:shot.shotId,ballId:shot.shotId,point,normal,compensated:hit.compensated,weapon:'laser',...(headshot?{headshot:true as const}:{}),...(reflections?{reflections}:{})});
             result(headshot?'rat-head':'rat-body',{victimId:target.player.id,damage,point,normal,compensated:hit.compensated,...(viewAt===undefined?{}:{rewindMs:hit.rewindMs,targetDelta:hit.targetDelta})});
             return;
         }
@@ -1242,7 +1256,7 @@ export class ChaosSimulation {
                     const nearest=p.vadd(delta.scale(fraction));
                     if(nearest.distanceTo(center)>1.15||this.ray(nearest,center,1).hasHit)continue;
                     c.hitAfter.set(player.id,this.now+T.corpseHitCooldownMs);
-                    this.hit({owner,victim:player.id,damage:v.length()>55?2:1,incoming:data(v)});
+                    this.hit({owner,victim:player.id,damage:v.length()>55?2:1,incoming:data(v),corpse:true});
                     this.impacts.push({p:data(center),n:data(v.unit()),surface:false,foley:'corpse-hit',energy:Math.min(300,v.length())});
                 }
             }
@@ -1626,6 +1640,7 @@ export class ChaosSimulation {
                 const compensated=useRat&&ratHit!.compensated,viewAttempted=!!this.shotViews.get(shot.id)&&shot.age<=this.shotViews.get(shot.id)!.untilAge;
                 if(playing)this.hit({owner:shot.owner,victim:target.player.id,damage,incoming,shotId:this.shotTriggers.get(shot.id)??shot.id,ballId:shot.id,
                     point:data(hit.hitPointWorld),normal:data(normal),compensated,...(shot.explosive?{explosive:true}:{}),...(headshot?{headshot:true}:{}),...(shot.cause?{cause:shot.cause}:{}),...(this.tommyBalls.has(shot)?{weapon:'tommy-gun' as const}:{}),
+                    ...(heavy&&!this.tommyBalls.has(shot)?{ballRadius:radius}:{}),
                     ...(shot.wallBounced&&this.incidentActive('crossfire')?this.bankReport(shot,hit.hitPointWorld):undefined)});
                 // Scattershot: every ball knocks its rat flying along the shot (five at close range send it far).
                 if(playing&&this.scatterShots.has(shot)){

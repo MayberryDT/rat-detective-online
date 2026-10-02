@@ -3,6 +3,7 @@ import { divergence, measurePlaces, MIN_EVENTS, MIN_HUMAN_SECONDS, type Rate } f
 import { jevSummary, tallyMinds } from '../../shared/city/minds';
 import { GOALS, PERSONALITIES } from '../../shared/bots/intent';
 import { PICKUP_KINDS } from '../../shared/pickups';
+import { HIGHLIGHT_KINDS } from '../../shared/highlights';
 
 /** Layer 4 of the city map: a short Markdown reading, each line with an evidence handle
  * that `/api/city/v1/places` or `/flows` answers exactly (docs/city-map.md). */
@@ -79,6 +80,11 @@ export function cityDigest(input: DigestInput): string {
   out.push(`- Launches ${total('launches')}, landings ${total('landings')}, landings inside geometry ${total('landing-clips')}.`);
   const faults = rows.map(r => [r, Object.entries(r.raw).filter(([k]) => k.startsWith('anomaly:')).reduce((t, [, n]) => t + n, 0)] as const).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 6);
   for (const [r, n] of faults) out.push(`- Fault spot: ${r.place.name}, ${n} anomalies (${Object.entries(r.raw).filter(([k]) => k.startsWith('anomaly:')).map(([k, v]) => `${k.slice(8)} ${v}`).join(', ')}) ${handle(r.place.id, 'anomaly')}`);
+  out.push('');
+  // Highlight replays (docs/replay/detection.md): how often each kind of moment fires.
+  const highlights = HIGHLIGHT_KINDS.map(kind => [kind, total(`highlight:${kind}`)] as const);
+  out.push('## Highlights');
+  out.push(`- Moments sent: ${highlights.reduce((t, [, n]) => t + n, 0)} (${highlights.map(([k, n]) => `${k} ${n}`).join(', ')}).`);
   out.push('');
   // Bots against humans: where they spend their time.
   if (humanS >= MIN_HUMAN_SECONDS && botS > 0) {

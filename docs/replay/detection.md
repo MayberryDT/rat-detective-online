@@ -69,6 +69,17 @@ The selection on the board takes the best moment of each kind, so the 3 exhibits
 
 Start the weights from the order above and tune them in X6. Keep them in one tuning object (`HIGHLIGHT_TUNING`), like `CHAOS_TUNING`.
 
+### As built (X1)
+
+The detector is `src/worker/HighlightDetector.ts`; the shapes and weights are in `src/shared/highlights.ts`. `GameRoom` feeds it every applied hit (`handleHit`, with the hit's simulation step time and the `ChaosHit` details: `squashAirMs`, `corpse`, `reflections`, `ballRadius`), Quick Fixes, Code Violation duds, each tick's case holder and assignment, and the round's win.
+
+- One kill is one moment. A kill waits 2 seconds while its body is measured, then sends its highest-scoring kind; every other kind it also qualified for adds a quarter of its base score. So a carrier headshot from 45 units is one long shot, not a long shot and a carrier down.
+- A squash or a flying body that only hurts is sent at once.
+- A multi-kill counts kills by one rat each within 6 seconds of the one before. A pileup counts deaths within 18 units of the first death and within 4 seconds after it. Both are sent once 2 seconds pass with no new kill or death joining them. If one grows after that, it is sent again with the same `id` and a higher score; the later marker replaces the earlier. Each is recorded once, as a city fact, when its window closes.
+- A steal is the case taken within 5 seconds of another rat losing it. It scores on a PAPER CHASE delivery, an Excessive Force case kill or a Jurisdiction carrier starting to score.
+- So close measures from the carrier to the active drop-off building's bounds. In Jurisdiction it needs the carrier in the active zone with 15 seconds or less of its hold left.
+- The round winner folds in the winner's kill from the last second, or a steal it scored. Every open moment is sent before `gameWon`, and nothing more is detected until the next round.
+
 ## Facts
 
 Every marker is also a city fact, so we can see what fires and how often ([city map](../city-map.md): a feature is not done until it emits its facts):

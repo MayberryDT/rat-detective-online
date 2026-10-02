@@ -1,4 +1,4 @@
-import { effectsOutput } from '../audio/PlayerAudioMix';
+import { effectsOutput, type VoiceRoute } from '../audio/PlayerAudioMix';
 import { JurisdictionZones } from './JurisdictionZones';
 import type {FoleyWorld} from '../audio/FoleyWorld';
 import { createCaseGrip, disposeCaseGrip } from './CaseGrip';
@@ -85,6 +85,37 @@ export const THREAT={range:26,miss:2.6,near:4,dim:.55} as const;
 /** From this far (units) from its scoring target a carried case's beacon beats at the plain rate. */
 const CASE_TARGET_FAR=120;
 
+/** An exhibit replay's view (docs/replay/playback.md): no case tag, buff bar, Dispatch HUD or fix beacons on the
+ * page, no headlines, no city reactions and no live sound; its own pools. */
+export interface ChaosReplay {
+    /** The replay's clock (server ms), in place of `performance.now()`; a state counts as received at its own time. */
+    clock:()=>number;
+    /** Sounds on the replay bus. */
+    synth:typeof playSynth;
+    route:VoiceRoute;
+    /** Bodies are posed on this fixed step (s), `delay` ms behind the clock, from their own recorded samples, so a
+     * body falls the same way each time the clip plays. */
+    corpseStep:number;
+    delay:number;
+}
+type CorpseSample={time:number;p:Vec3Data;q:{x:number;y:number;z:number;w:number};v:Vec3Data};
+/** `speed`: last presented speed, so a sudden stop reads as an impact for the limbs. In a replay, `since` is the
+ * state time it appeared, `samples` its recorded poses and `last` its previous stepped position. */
+type CorpseModel={mesh:THREE.Group;animator:RatAnimator;state:CorpseState;hat?:FlyingHat;hatPending:boolean;speed:number;
+    since?:number;samples?:CorpseSample[];last?:THREE.Vector3};
+const REPLAY_SAMPLES=16;
+const SLERP_A=new THREE.Quaternion(),SLERP_B=new THREE.Quaternion();
+/** The recorded pose of a replay body at `time` (between its samples; held at either end). */
+function replayPose(samples:readonly CorpseSample[],time:number,out:PresentationPose):void {
+    let i=0;while(i<samples.length-1&&samples[i+1]!.time<=time)i++;
+    const a=samples[i]!,b=samples[Math.min(i+1,samples.length-1)]!,span=b.time-a.time,k=span>0?Math.max(0,Math.min(1,(time-a.time)/span)):0;
+    out.p.x=a.p.x+(b.p.x-a.p.x)*k;out.p.y=a.p.y+(b.p.y-a.p.y)*k;out.p.z=a.p.z+(b.p.z-a.p.z)*k;
+    SLERP_A.set(a.q.x,a.q.y,a.q.z,a.q.w).slerp(SLERP_B.set(b.q.x,b.q.y,b.q.z,b.q.w),k);
+    out.q.x=SLERP_A.x;out.q.y=SLERP_A.y;out.q.z=SLERP_A.z;out.q.w=SLERP_A.w;
+}
+/** A body's twitch seed from its id, the same on every play of a clip. */
+function seedOf(id:string):number {let h=7;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))%997;return h;}
+
 /** Instanced shot draws: balls, Crossfire balls and glows, danger rims and trails, the case
  * missile's trail. Instance colours exist from the start, as play will need them, so the
  * programs never change. The title warm-up builds a one-instance set as a stand-in; the
@@ -127,7 +158,7 @@ export class ChaosView {
     onTrap?:(event:TrapEvent,trap:TrapState)=>void;
     /** Rats shown holding a special weapon. */
     private readonly armed=new Set<string>();
-    private readonly buffBar=document.createElement('div');
+    private readonly buffBar?:HTMLElement;
     private readonly buffCards=new Map<PickupKind,HTMLElement>();
     private healingUntil=0;
     /** C1: your claim waiting for this frame's card, and the pooled card-artwork chip per supply that flies into it. */
@@ -164,13 +195,13 @@ export class ChaosView {
     private readonly carrierFlash:CarrierPingFlash;
     private readonly pillars:DispatchPillars;
     private readonly pressureMachine:PressureMachine;
-    private readonly hud:DispatchHud;
+    private readonly hud?:DispatchHud;
     private readonly jurisdictionZones:JurisdictionZones;
-    private readonly assignmentDestinations:AssignmentDestinations;
-    private readonly caseMarker=document.createElement('div');
-    private readonly caseMarkerDetail=document.createElement('div');
+    private readonly assignmentDestinations?:AssignmentDestinations;
+    private readonly caseMarker?:HTMLElement;
+    private readonly caseMarkerDetail?:HTMLElement;
     /** At a ping, an arrow on the screen edge toward an off-screen carrier; `markerPunch` the tag's snap as written. */
-    private readonly caseArrow=document.createElement('i');
+    private readonly caseArrow?:HTMLElement;
     private markerPunch=-1;
     private readonly impacts:CheeseImpactEffects;
     /** Crossfire's bounce sparks, scorches and ricochets, a bank kill's path and your aim guide. */
@@ -208,8 +239,12 @@ export class ChaosView {
     private readonly ballPose=new THREE.Object3D();
     /** Polish 12: recent death causes by victim, consumed when the shared corpse appears. */
     private readonly deathStyles=new Map<string,{style:DeathStyle;headshot:boolean;at:number}>();
-    /** `speed`: last presented speed, so a sudden stop reads as an impact for the limbs. */
-    private corpses=new Map<string,{mesh:THREE.Group;animator:RatAnimator;state:CorpseState;hat?:FlyingHat;hatPending:boolean;speed:number}>();
+    private corpses=new Map<string,CorpseModel>();
+    /** A replay's last corpse step (server ms), and shots that jolted bodies waiting for the step at their time. */
+    private replayTick=-Infinity;
+    private readonly replayJolts:{at:number;p:Vec3Data;n:Vec3Data;kick:boolean}[]=[];
+    private readonly clock:()=>number;
+    private readonly synth:typeof playSynth;
     private arm:THREE.Group|null=null;
     private carrier:RatEntity|null=null;
     private state:ChaosState|null=null;
@@ -247,45 +282,52 @@ export class ChaosView {
     /** The ball that started an incident struck a Dispatch pillar's bell. */
     set onDispatchShot(listener:((station:DispatchStation,at:THREE.Vector3)=>void)|undefined){this.pillars.onShot=listener;}
     private readonly landings:{at:number;p:Vec3Data;speed:number}[]=[];
-    setObserving(value:boolean):void {this.hud.observing=value;}
-    setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud.setScores(scores,myId);}
+    setObserving(value:boolean):void {if(this.hud)this.hud.observing=value;}
+    setScores(scores: readonly import('../shared/networkProtocol').ScoreEntry[], myId: string):void {this.myId=myId;this.hud?.setScores(scores,myId);}
     setIncidentRoster(incidents: readonly import('../shared/incidentCatalog').IncidentId[]|undefined):void {
-        this.hud.setRoster(incidents?.length?incidents.map(id=>incidentInfo(id)):undefined);
+        this.hud?.setRoster(incidents?.length?incidents.map(id=>incidentInfo(id)):undefined);
     }
-    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace){
+    /** `replay`: an exhibit replay's view (`ChaosReplay`); `audio` then only voices its machines and pillars on the replay route. */
+    constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace,private readonly replay?:ChaosReplay){
+        this.clock=replay?.clock??(()=>performance.now());this.synth=replay?.synth??playSynth;
         this.reactions=new RatReactionEvents(resolveRat);
         this.localShots=new LocalShotPresentation(traceShot);
         this.root.add(this.draws.root);
-        bindIncidentAudio(this.audio);
+        if(!replay)bindIncidentAudio(this.audio);
         // The root and the shot draws (moved by instance) stay put; corpses added later keep updating.
         this.root.name='records-chaos';freezeStatic(this.root);scene.add(this.root);scene.add(this.caseRoot);
         this.caseRoot.name='hot-case';
         this.caseBeacon=new CaseBeacon(scene);this.carrierFlash=new CarrierPingFlash(scene);
         this.hotLook=new HotCaseLook(scene,this.caseRoot,addLeatherBriefcase(this.caseRoot));this.caseMotion=new CaseMotion(this.caseRoot);
         this.caseRoot.userData.aimTarget=true;
-        this.pressureMachine=new PressureMachine(scene,this.audio);
-        this.pillars=new DispatchPillars(scene,this.audio);
-        this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
-        this.assignmentDestinations=new AssignmentDestinations();this.jurisdictionZones=new JurisdictionZones(scene);
-        // DOM projection stays crisp at city scale and visible through all architecture.
-        // It adds no dynamic lights, raycasts, or physics to the physical case.
-        // U1, Carbon scrawl in the case red (dispatchHud.css .hot-case-tag); its position is set each frame.
-        this.caseMarker.className='hot-case-tag';this.caseMarker.style.display='none';
-        this.caseMarker.setAttribute('aria-label','Hot Case location');
-        const title=document.createElement('div');title.className='hot-case-title';title.textContent='HOT CASE';
-        this.caseMarkerDetail.className='hot-case-detail';
-        this.caseArrow.className='hot-case-arrow';this.caseArrow.hidden=true;
-        for(const child of [this.caseArrow,title,this.caseMarkerDetail])this.caseMarker.appendChild(child);
-        document.body.appendChild(this.caseMarker);
-        this.buffBar.className='pickup-buffs';this.buffBar.style.display='none';
-        document.body.appendChild(this.buffBar);
-        this.impacts=new CheeseImpactEffects(scene);this.crossfire=new CrossfireVisual(scene);
+        this.pressureMachine=new PressureMachine(scene,this.audio,replay?.route);
+        this.pillars=new DispatchPillars(scene,this.audio,replay?.route);
+        this.jurisdictionZones=new JurisdictionZones(scene);
+        if(!replay){
+            this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
+            this.assignmentDestinations=new AssignmentDestinations();
+            // DOM projection stays crisp at city scale and visible through all architecture.
+            // It adds no dynamic lights, raycasts, or physics to the physical case.
+            // U1, Carbon scrawl in the case red (dispatchHud.css .hot-case-tag); its position is set each frame.
+            const marker=this.caseMarker=document.createElement('div'),detail=this.caseMarkerDetail=document.createElement('div'),arrow=this.caseArrow=document.createElement('i');
+            marker.className='hot-case-tag';marker.style.display='none';
+            marker.setAttribute('aria-label','Hot Case location');
+            const title=document.createElement('div');title.className='hot-case-title';title.textContent='HOT CASE';
+            detail.className='hot-case-detail';
+            arrow.className='hot-case-arrow';arrow.hidden=true;
+            for(const child of [arrow,title,detail])marker.appendChild(child);
+            document.body.appendChild(marker);
+            const bar=this.buffBar=document.createElement('div');
+            bar.className='pickup-buffs';bar.style.display='none';
+            document.body.appendChild(bar);
+        }
+        this.impacts=new CheeseImpactEffects(scene);this.crossfire=new CrossfireVisual(scene,this.synth);
         this.beams=new LaserBeamVisual(scene,(cue,at)=>this.feedback?.(cue,at));
         this.traps.onEvent=(event,p)=>this.onTrap?.(event,p);
     }
     /** Only the authoritative heal event confirms this instant pickup. */
     showHealing():void {
-        this.healingUntil=performance.now()+3200;
+        this.healingUntil=this.clock()+3200;
         const healing=this.buffCards.get('quick-fix');if(healing)leave(healing,'paperSlide',CARD_EXIT);this.buffCards.delete('quick-fix');
         this.pickupFeedback('quick-fix');
     }
@@ -324,16 +366,16 @@ export class ChaosView {
         if(this.dud){leave(this.dud.card,'paperSlide',CARD_EXIT);this.dud=undefined;}
         if(this.held){leave(this.held,'paperSlide',CARD_EXIT);this.held=undefined;}
         if(this.hotCase){leave(this.hotCase,'paperSlide',CARD_EXIT);this.hotCase=undefined;}
-        this.buffCards.clear();this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
+        this.buffCards.clear();if(this.buffBar)this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
     resetProjectiles():void{
         this.localShots.clear();this.beams.clear();this.presentation.clear();this.landings.length=0;this.clearPickupCards();this.clearInteractions();this.reactions.reset();
         // gameReset precedes the new chaos snapshot. Do not render or interact
         // with the previous round's confirmed carrier during that gap.
         this.state=null;this.setCarrier(null);this.hotLook.clear();this.root.visible=false;
-        this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.carrierFlash.hide();this.caseMarker.style.display='none';
+        this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.carrierFlash.hide();if(this.caseMarker)this.caseMarker.style.display='none';
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
-        this.assignmentDestinations.clear();this.jurisdictionZones.clear();
+        this.assignmentDestinations?.clear();this.jurisdictionZones.clear();
     }
     /** Your trigger: `weapon` is the held special weapon (with the Tommy's heat); `beam` your Laser's predicted path. */
     fire(shot:ShotDescriptor,weapon?:ShotWeapon,beam?:LaserBeam['points']):void {
@@ -341,11 +383,11 @@ export class ChaosView {
         if(!this.extrapolate)return;
         const dispatch=this.state?.dispatch;
         const incident=dispatch?.phase==='active'?incidentInfo(dispatch.incident).id:undefined;
-        this.localShots.fire(this.myId,shot,incident,performance.now(),weapon);
+        this.localShots.fire(this.myId,shot,incident,this.clock(),weapon);
     }
     private readonly localMuzzle=()=>this.resolveRat(this.myId)?.getMuzzlePosition()??this.presented.p;
     launch(message:Extract<ServerMessage,{type:'playerShot'}>):void {
-        if(this.extrapolate&&!this.localShots.confirm(message,performance.now()))this.presentation.launch(message,performance.now());
+        if(this.extrapolate&&!this.localShots.confirm(message,this.clock()))this.presentation.launch(message,this.clock());
     }
     /** The live position of `victimId`'s shared corpse model, if one is shown. */
     /** Juice T2: at your last hit point the case loses its outline, badge and
@@ -362,7 +404,7 @@ export class ChaosView {
     setLastHitPoint(on:boolean):void {
         if(on===this.lastHitPoint)return;
         this.lastHitPoint=on;
-        if(on){this.caseBeacon.root.visible=false;this.caseMarker.style.display='none';this.assignmentDestinations.clear();}
+        if(on){this.caseBeacon.root.visible=false;if(this.caseMarker)this.caseMarker.style.display='none';this.assignmentDestinations?.clear();}
     }
     setFixXray(on:boolean):void {
         if(on===this.fixXray)return;
@@ -381,7 +423,7 @@ export class ChaosView {
     /** K3: a buffed carrier's ball hit a rat at `point`: a bigger cheese burst and a spray of case-red sparks. */
     carrierHit(point:THREE.Vector3,normal:THREE.Vector3):void {this.impacts.emit(point,normal,false,1.8);this.impacts.spark(point,normal,true);}
     noteDeathStyle(victimId:string,style:DeathStyle,headshot=false):void {
-        this.deathStyles.set(victimId,{style,headshot,at:performance.now()});
+        this.deathStyles.set(victimId,{style,headshot,at:this.clock()});
         if(this.deathStyles.size>32)this.deathStyles.delete(this.deathStyles.keys().next().value!);
     }
     shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {this.localShots.result(message);this.reactions.shotResult(message);}
@@ -389,7 +431,7 @@ export class ChaosView {
      * cannot step over a small pickup between render samples. */
     interaction(from:Vec3Data,to:Vec3Data,fullHealth:boolean):InteractionCandidate|undefined {
         const state=this.state;if(!state)return;
-        const now=state.time+Math.min(80,Math.max(0,performance.now()-this.receivedAt));
+        const now=state.time+Math.min(80,Math.max(0,this.clock()-this.receivedAt));
         let best:InteractionCandidate|undefined,bestDistance=Infinity;
         const consider=(candidate:InteractionCandidate,p:Vec3Data,radius:number)=>{
             const closest=closestPointOnSegment(from,to,p),distance=Math.hypot(closest.x-p.x,closest.y-p.y,closest.z-p.z);
@@ -449,16 +491,17 @@ export class ChaosView {
         }
         const grip=state.case.owner?state.case.grip??0:0;
         if(grip>(previous?.case.owner===state.case.owner?previous?.case.grip??0:0)){
-            this.gripHitAt=performance.now();this.caseMotion.kick();this.feedback?.(grip>=2?'case-grip-2':'case-grip-1',state.case.p);
+            this.gripHitAt=this.clock();this.caseMotion.kick();this.feedback?.(grip>=2?'case-grip-2':'case-grip-1',state.case.p);
         }
         // Taken or knocked loose: the case squashes into the paw, or bursts paperwork where it comes loose.
         if(previous&&previous.case.owner!==state.case.owner&&previous.epoch===state.epoch){
-            if(state.case.owner)this.caseMotion.taken(performance.now());
+            if(state.case.owner)this.caseMotion.taken(this.clock());
             this.onCasePaper?.(state.case.p,state.case.owner?'taken':'loose');
         }
         this.reactions.apply(state);
         this.foley?.apply(state);
-        this.state=state;this.root.visible=true;this.receivedAt=performance.now();
+        this.state=state;this.root.visible=true;this.receivedAt=this.replay?state.time:this.clock();
+        if(this.replay&&!Number.isFinite(this.replayTick))this.replayTick=Math.floor(state.time/(this.replay.corpseStep*1000))*this.replay.corpseStep*1000;
         if(this.anticipatedCase?.acceptedTick!==undefined&&state.epoch===this.anticipatedCase.epoch&&(state.tick??0)>=this.anticipatedCase.acceptedTick)
             this.anticipatedCase=null;
         if(this.extrapolate){this.presentation.apply(state,this.receivedAt);this.localShots.apply(state,this.receivedAt);}
@@ -476,18 +519,13 @@ export class ChaosView {
         this.noteLocalBuffs(state);
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
-            if(hit.cue==='thud')playSynth('thud',hit.p);
+            if(hit.cue==='thud')this.synth('thud',hit.p);
             if(hit.bounces)this.crossfire.bounce(hit.p,hit.n,hit.bounces);
             if(hit.foley==='boing')this.onSuperball?.(hit.p);
             if(hit.foley==='corpse-kick'||hit.foley==='corpse-bounce'&&(hit.energy??0)>16){
-                // The nearest body within reach takes the jolt.
-                let nearest:{animator:RatAnimator}|undefined,best=2.5*2.5;
-                for(const corpse of this.corpses.values()){
-                    const q=corpse.mesh.position,d=(q.x-hit.p.x)**2+(q.y+.9-hit.p.y)**2+(q.z-hit.p.z)**2;
-                    if(d<best){best=d;nearest=corpse;}
-                }
-                nearest?.animator.joltDeath(hit.foley==='corpse-kick'?1:.5,hit.p,hit.foley==='corpse-kick'?hit.n:undefined);
-                if(nearest&&hit.foley==='corpse-kick')this.onCorpseJolt?.(hit.p);
+                // A replay jolts its bodies on their fixed step, at the hit's time.
+                if(this.replay)this.replayJolts.push({at:state.time,p:hit.p,n:hit.n,kick:hit.foley==='corpse-kick'});
+                else this.jolt(hit.p,hit.n,hit.foley==='corpse-kick');
             }
             // A ball the authority counted on a launcher's trigger or, failing that, a Dispatch bell.
             if((hit.foley==='trigger'||hit.foley==='trigger-busy')&&this.cameraForTriggers&&!this.pressureMachine.triggerHit(hit.p,hit.foley==='trigger-busy',this.cameraForTriggers))
@@ -495,13 +533,13 @@ export class ChaosView {
             if(hit.foley==='launch-landing'){
                 // Other rats are shown a playback delay behind; your own landing already happened.
                 const self=this.resolveRat(this.myId)?.mesh.position,mine=!!self&&Math.hypot(self.x-hit.p.x,self.z-hit.p.z)<3;
-                this.landings.push({at:performance.now()+(mine?0:this.presentation.delayMs),p:hit.p,speed:hit.energy??0});
+                this.landings.push({at:this.clock()+(mine?0:this.presentation.delayMs),p:hit.p,speed:hit.energy??0});
             }
             if(hit.cue==='case-hit'||hit.cue==='armor-clang')this.feedback?.(hit.cue,hit.p);
             // A ball on the loose case: the tag flaps and a few sheets fly.
             if(hit.cue==='case-hit'&&!state.case.owner&&Math.hypot(hit.p.x-state.case.p.x,hit.p.y-state.case.p.y,hit.p.z-state.case.p.z)<2){this.caseMotion.kick();this.onCasePaper?.(hit.p,'kick');}
             if(hit.cue==='armor-clang')this.impacts.spark(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z));
-            if(!hit.audioOnly){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='thud'?3:hit.scale??1);}
+            if(!hit.audioOnly&&!this.replay){reactToLandmarkImpact(this.root.parent as THREE.Scene,hit.p);cityImpact(hit.p,hit.cue==='thud'?3:hit.scale??1);}
         }
         const corpses=new Set(state.corpses.map(c=>c.id));
         for(const [id,c] of this.corpses)if(!corpses.has(id)){c.hat?.dispose();this.root.remove(c.mesh);contactShadowsOf(this.scene)?.remove(c.mesh);disposeMeshResources(c.mesh);this.corpses.delete(id);}
@@ -514,14 +552,17 @@ export class ChaosView {
                 // Polish 11: a fresh corpse pops its fedora (not one already lying there on join).
                 const hatPending=feelState().on('hatPop')&&state.time-c.born<600;
                 model={mesh,animator:new RatAnimator(mesh),state:c,hatPending,speed:0};this.corpses.set(c.id,model);this.root.add(mesh);
+                // A replay's body: the same twitch and every limb ray each step, whatever else is falling (RatCorpseChain).
+                if(this.replay){model.since=state.time;model.samples=[];model.animator.deathSeed=seedOf(c.id);model.animator.chain.unmetered=true;}
                 contactShadowsOf(this.scene)?.add(mesh,.9,CORPSE_CENTRE);
                 // Up to 16 corpses: one skinned draw each instead of ~40 per pass.
                 batchRigidMeshes(mesh);
                 const noted=this.deathStyles.get(c.victimId);
-                if(noted&&performance.now()-noted.at<2000)model.animator.setDeathStyle(noted.style,noted.headshot);
+                if(noted&&this.clock()-noted.at<2000)model.animator.setDeathStyle(noted.style,noted.headshot);
                 this.deathStyles.delete(c.victimId);
             }
             model.state=c;
+            if(model.samples){model.samples.push({time:state.time,p:c.p,q:c.q,v:c.v});if(model.samples.length>REPLAY_SAMPLES)model.samples.shift();}
         }
     }
     /** Pickups are static world props: build and place on the snapshot, animate each frame. */
@@ -569,19 +610,19 @@ export class ChaosView {
         if(seen&&dud&&dudUntil!==this.localDudUntil){
             this.feedback?.('pickup-slap');
             const me=this.resolveRat(this.myId)?.mesh.position;
-            if(me&&feelState().on('codeViolation'))playSynth('zap',me,.8,FEEL.codeViolation.params.zap*1.4);
+            if(me&&feelState().on('codeViolation'))this.synth('zap',me,.8,FEEL.codeViolation.params.zap*1.4);
         }
         this.localDudUntil=dudUntil;
     }
     private updateBuffs(buffs:BuffMap|undefined,now:number):void{
         if(this.resolveRat(this.myId)?.dead){this.clearPickupCards();return;}
         const mine=activeBuffs(buffs,this.myId,now);
-        if(typeof this.buffBar.replaceChildren!=='function')return;
+        if(!this.buffBar||typeof this.buffBar.replaceChildren!=='function')return;
         for(const kind of TIMED_PICKUPS)this.showCard(kind,mine[BUFF_FIELD[kind]],now);
         // One special weapon at most: a timed one has a clock like a supply, the Mousetrap is held until set down.
         for(const kind of WEAPON_KINDS)this.showCard(kind,mine.weapon===kind?mine.weaponUntil??Infinity:undefined,now);
         const healing=this.buffCards.get('quick-fix');
-        if(performance.now()<this.healingUntil){
+        if(this.clock()<this.healingUntil){
             if(!healing){const card=powerupCard('quick-fix');card.setAttribute('role','status');
                 this.buffCards.set('quick-fix',card);this.buffBar.appendChild(card);}
         }else {if(healing)leave(healing,'paperSlide',CARD_EXIT);this.buffCards.delete('quick-fix');}
@@ -607,6 +648,7 @@ export class ChaosView {
     }
     /** Show, tick or drop the card of an effect running until `until` (Infinity: held until used). */
     private showCard(kind:TimedPickup|WeaponKind,until:number|undefined,now:number):void{
+        if(!this.buffBar)return;
         let card=this.buffCards.get(kind);
         if(!until){if(card)leave(card,'paperSlide',CARD_EXIT);this.buffCards.delete(kind);return;}
         if(!card){
@@ -634,18 +676,18 @@ export class ChaosView {
         this.arm=createCaseGrip(entity);
     }
     /** `renderTime` is the presentation clock (slowed briefly for the victory moment). */
-    update(dt:number,camera:THREE.Camera,renderTime=performance.now()){
+    update(dt:number,camera:THREE.Camera,renderTime=this.clock()){
         this.impacts.update(dt);this.crossfire.update(dt,camera);
         this.beams.update(dt,camera);
         this.traps.update(dt);
-        const wall=performance.now();
+        const wall=this.clock();
         for(let i=0;i<this.landings.length;){
             const landing=this.landings[i]!;
             if(landing.at>wall){i++;continue;}
             this.landings.splice(i,1);this.onLanding?.(landing.p,landing.speed);
         }
         camera.getWorldPosition(this.audioPosition);
-        if(this.audio)bindIncidentAudio(this.audio,this.audioPosition);
+        if(this.audio&&!this.replay)bindIncidentAudio(this.audio,this.audioPosition);
         const s=this.state;if(!s)return;
         // The solo preview already stepped physics this frame. Extrapolating it
         // again counted CPU/render preparation time as extra ball travel.
@@ -689,13 +731,13 @@ export class ChaosView {
         this.pingPunch=punch;
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
-        this.updateBuffs(s.buffs,now);
+        if(this.buffBar)this.updateBuffs(s.buffs,now);
         if(this.onCarry){
             const self=this.resolveRat(this.myId),mine=s.case.owner===this.myId&&s.assignment?.phase==='active'&&!!self&&!self.dead;
             this.onCarry(mine?s.case:null,now,mine?this.caseUrgency(s):0);
         }
         if(this.claimed){const kind=this.claimed;this.claimed=undefined;this.claim(kind,camera);}
-        this.updateCaseMarker(camera,flash);
+        if(this.caseMarker)this.updateCaseMarker(camera,flash);
         if(this.fixXray)this.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const active=s.dispatch.phase==='active'?incidentInfo(s.dispatch.incident).id:undefined,crossfire=active==='crossfire';
@@ -763,7 +805,7 @@ export class ChaosView {
             const distance=(this.audioPosition.x-missile.p.x)**2+(this.audioPosition.y-missile.p.y)**2+(this.audioPosition.z-missile.p.z)**2;
             if(distance<nearestDistance){nearestDistance=distance;nearestCase=missile;}
         }
-        startCaseBuzz(evidence&&!!nearestCase,nearestCase?.p);
+        if(!this.replay)startCaseBuzz(evidence&&!!nearestCase,nearestCase?.p);
         for(const missile of missiles.slice(0,8)){
             const visual=missile===s.case?this.caseRoot:'id' in missile&&typeof missile.id==='string'?this.extraCases.get(missile.id)?.root:undefined;
             if(!visual)continue;
@@ -773,7 +815,8 @@ export class ChaosView {
         }
         // An empty pool still costs a program bind and uniform upload per frame, and its instance buffer an upload.
         for(const mesh of this.shotMeshes){mesh.visible=mesh.count>0;if(mesh.count){mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}}
-        for(const c of this.corpses.values()){
+        if(this.replay)this.stepReplayCorpses(renderTime,this.replay);
+        else for(const c of this.corpses.values()){
             const b=c.state;
             if(!this.extrapolate||!this.presentation.corpse(b.id,renderTime,this.presented))copyPresentationPose(b,this.presented);
             const {p,q}=this.presented;c.mesh.quaternion.set(q.x,q.y,q.z,q.w);
@@ -782,33 +825,70 @@ export class ChaosView {
             // The server box has no contact events here: a sharp drop in speed is the landing.
             const speed=Math.hypot(b.v.x,b.v.y,b.v.z),impact=Math.max(0,Math.min(1,(c.speed-speed-4)/20));c.speed=speed;
             c.animator.poseDeath((now-b.born)/1000,dt,b.spin,impact,speed<.6);
-            if(c.hatPending){
-                c.hatPending=false;c.mesh.updateMatrixWorld(true);
-                const hat=c.mesh.getObjectByName('rat-hat');
-                if(hat){
-                    const params=FEEL.hatPop.params;
-                    // Ground under the body: the lowest point the corpse box has reached (never rises).
-                    let floor=Infinity;const mesh=c.mesh,e=new THREE.Matrix4();
-                    c.hat=new FlyingHat(this.root.parent as THREE.Scene,hat,this.p.set(b.v.x,0,b.v.z),()=>{
-                        e.makeRotationFromQuaternion(mesh.quaternion);const m=e.elements;
-                        const centre=mesh.position.y+m[5]*.95,extent=Math.abs(m[1])*.48+Math.abs(m[5])*.92+Math.abs(m[9])*.38;
-                        return floor=Math.min(floor,centre-extent);
-                    },params.speed,params.lift,b.born%97);
-                    c.animator.setHatHidden(true);c.animator.poseDeath((now-b.born)/1000,0,b.spin,0,false);
-                }
-            }
+            if(c.hatPending)this.popCorpseHat(c,now,b.v);
             c.hat?.update(dt);
         }
         const d=s.dispatch;
         const localCase=[s.case,...s.extraCases??[]].find(c=>c.owner&&this.resolveRat(c.owner)?.isPlayer);
         const hudCase=localCase??s.case,hudOwner=hudCase.owner?this.resolveRat(hudCase.owner):undefined;
         const caller=d.caller?this.resolveRat(d.caller):undefined;
-        this.hud.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer,caller?.isPlayer?'you':caller?.name);
-        if(this.lastHitPoint)this.assignmentDestinations.clear();else this.assignmentDestinations.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
+        this.hud?.update(hudCase===s.case?s:{...s,case:hudCase},now,hudOwner?.name,!!hudOwner?.isPlayer,caller?.isPlayer?'you':caller?.name);
+        if(this.lastHitPoint)this.assignmentDestinations?.clear();else this.assignmentDestinations?.updateCue(s.assignment,camera,this.resolveRat(this.myId)?.mesh.position);this.jurisdictionZones.update(s.assignment);
         this.cameraForTriggers=camera;
         const haywire=active==='code-violation';
         this.pressureMachine.update(s.pressure,now,camera,active==='pressure-surge',haywire);
         this.pillars.update(d,now,camera,haywire);
+    }
+    /** Polish 11: a fresh body pops its fedora on its first pose; `now` the body's clock (server ms), `v` its velocity. */
+    private popCorpseHat(c:CorpseModel,now:number,v:Vec3Data):void {
+        c.hatPending=false;c.mesh.updateMatrixWorld(true);
+        const hat=c.mesh.getObjectByName('rat-hat'),b=c.state;
+        if(!hat)return;
+        const params=FEEL.hatPop.params;
+        // Ground under the body: the lowest point the corpse box has reached (never rises).
+        let floor=Infinity;const mesh=c.mesh,e=new THREE.Matrix4();
+        c.hat=new FlyingHat(this.root.parent as THREE.Scene,hat,this.p.set(v.x,0,v.z),()=>{
+            e.makeRotationFromQuaternion(mesh.quaternion);const m=e.elements;
+            const centre=mesh.position.y+m[5]*.95,extent=Math.abs(m[1])*.48+Math.abs(m[5])*.92+Math.abs(m[9])*.38;
+            return floor=Math.min(floor,centre-extent);
+        },params.speed,params.lift,b.born%97);
+        c.animator.setHatHidden(true);c.animator.poseDeath((now-b.born)/1000,0,b.spin,0,false);
+    }
+    /** R3: a shot or bounce at `p` jolts the nearest body within reach (a kick harder, pushed along `n`). */
+    private jolt(p:Vec3Data,n:Vec3Data,kick:boolean):void {
+        let nearest:{animator:RatAnimator}|undefined,best=2.5*2.5;
+        for(const corpse of this.corpses.values()){
+            const q=corpse.mesh.position,d=(q.x-p.x)**2+(q.y+.9-p.y)**2+(q.z-p.z)**2;
+            if(d<best){best=d;nearest=corpse;}
+        }
+        nearest?.animator.joltDeath(kick?1:.5,p,kick?n:undefined);
+        if(nearest&&kick)this.onCorpseJolt?.(p);
+    }
+    /** An exhibit replay's bodies, on the replay's fixed step up to `renderTime`: each pose is read `delay` ms back
+     * from its own samples, and jolts land on the step at their time, so the fall never depends on the frame rate. */
+    private stepReplayCorpses(renderTime:number,replay:ChaosReplay):void {
+        const step=replay.corpseStep*1000;
+        while(this.replayTick+step<=renderTime){
+            const t=this.replayTick+=step,seen=t-replay.delay;
+            for(let i=0;i<this.replayJolts.length;){
+                const jolt=this.replayJolts[i]!;
+                if(jolt.at>t){i++;continue;}
+                this.replayJolts.splice(i,1);this.jolt(jolt.p,jolt.n,jolt.kick);
+            }
+            for(const c of this.corpses.values()){
+                if(c.since!>t||!c.samples?.length)continue;
+                const b=c.state;
+                replayPose(c.samples,seen,this.presented);
+                const {p,q}=this.presented;c.mesh.quaternion.set(q.x,q.y,q.z,q.w);
+                c.mesh.position.set(p.x,p.y,p.z).sub(this.p.set(0,.95,0).applyQuaternion(c.mesh.quaternion));
+                // The landing reads from the stepped body itself (no velocity from a later state).
+                const speed=c.last?c.last.distanceTo(c.mesh.position)/replay.corpseStep:0,impact=Math.max(0,Math.min(1,(c.speed-speed-4)/20));
+                (c.last??=new THREE.Vector3()).copy(c.mesh.position);c.speed=speed;
+                c.animator.poseDeath(Math.max(0,seen-b.born)/1000,replay.corpseStep,b.spin,impact,speed<.6);
+                if(c.hatPending)this.popCorpseHat(c,seen,c.samples[0]!.v);
+                c.hat?.update(replay.corpseStep);
+            }
+        }
     }
     /** Whether a ball at `p` moving at `v` threatens your rat this frame (`THREAT`); never while you are dead or away. */
     private threatens(p:Vec3Data,v:Vec3Data):boolean {
@@ -866,6 +946,7 @@ export class ChaosView {
     private pingPunch=0;
     private updateCaseMarker(camera:THREE.Camera,flash:number){
         const s=this.state!,ping=s.case.owner?s.case.ping:undefined;
+        if(!this.caseMarker||!this.caseArrow||!this.caseMarkerDetail)return;
         if(this.carrier?.isPlayer||this.lastHitPoint||s.case.owner&&(!ping||flash<=0)){this.caseMarker.style.display='none';return;}
         // Float the badge above the case so it does not cover the physical pickup
         // or a carrier's gun at close range. The bright shell outline marks its body.
@@ -909,19 +990,21 @@ export class ChaosView {
     dispose(){
         for(const beacon of this.fixBeacons)beacon.remove();
         for(const c of this.corpses.values())c.hat?.dispose();
-        this.clearPickupCards();this.buffBar.remove();for(const chip of this.claimChips.values())chip.remove();
+        this.clearPickupCards();this.buffBar?.remove();for(const chip of this.claimChips.values())chip.remove();
         this.clearInteractions();
         this.localShots.clear();
-        this.pillars.dispose();this.assignmentDestinations.dispose();this.jurisdictionZones.dispose();
+        this.pillars.dispose();this.assignmentDestinations?.dispose();this.jurisdictionZones.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         // Supply sites live at the scene root: a reconnect's new view would otherwise draw over stale ones.
         for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
         this.traps.dispose();for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
-        this.pressureMachine.dispose();this.caseBeacon.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();
+        this.pressureMachine.dispose();this.caseBeacon.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.caseMarker?.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);
-        startCaseBuzz(false);disposeIncidentAudio();this.impacts.dispose();this.crossfire.dispose();this.beams.dispose();
+        // The incident sounds are the live view's (module-wide); a replay's own voices end with its bus.
+        if(!this.replay){startCaseBuzz(false);disposeIncidentAudio();}
+        this.impacts.dispose();this.crossfire.dispose();this.beams.dispose();
         this.draws.dispose();disposeMeshResources(this.root);
     }
 }

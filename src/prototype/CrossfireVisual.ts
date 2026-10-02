@@ -76,7 +76,8 @@ export class CrossfireVisual {
     private readonly color=new THREE.Color();
     private readonly emberRing=new THREE.Color(2.2,.7,.1);
     private readonly emberCool=new THREE.Color(.9,.06,0);
-    constructor(scene:THREE.Scene){
+    /** `synth` plays its ricochets (an exhibit replay passes its own bus's). */
+    constructor(scene:THREE.Scene,private readonly synth:typeof playSynth=playSynth){
         // A burn mark is a disc darkest at its centre, fading to nothing at its rim; its ember ring a soft thin band just
         // inside the rim, brightest along its middle (additive: black is invisible).
         const disc=new THREE.CircleGeometry(J.scorch/2,18),colors=new Float32Array(disc.getAttribute('position').count*3);
@@ -119,8 +120,8 @@ export class CrossfireVisual {
         this.scorchGlows.setMatrixAt(index,this.dummy.matrix);this.scorchGlows.instanceMatrix.needsUpdate=true;
         this.scorches.count=this.scorchGlows.count=Math.max(this.scorches.count,index+1);this.scorches.visible=this.scorchGlows.visible=this.scorchesLive=true;
         this.flames.splash(p,normal,heat);
-        playSynth('ricochet',p,1+J.pitchStep*(Math.min(bounces,J.pitchSteps+1)-1),J.ricochet);
-        playSynth('fwoomp',p,1-J.fwoompDrop*heat,J.fwoomp);
+        this.synth('ricochet',p,1+J.pitchStep*(Math.min(bounces,J.pitchSteps+1)-1),J.ricochet);
+        this.synth('fwoomp',p,1-J.fwoompDrop*heat,J.fwoomp);
     }
 
     /** A bank kill you made or took: its path (muzzle, bounces, hit) glows red and fades. */

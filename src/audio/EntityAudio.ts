@@ -6,6 +6,8 @@ import { admitWorldVoice, endWorldVoice, type WorldVoice } from './PlayerAudioMi
 
 type SoundName = 'ratHit' | 'ratDeath' | 'playerHit';
 const paths: Record<SoundName, string> = { ratHit: '/sounds/rathit.mp3', ratDeath: '/sounds/ratdeath.mp3', playerHit: '/sounds/playerhit.mp3' };
+/** Another bus to play rat reactions on (an exhibit replay's), instead of the live listener's pool and world budget. */
+export interface EntitySoundBus { play(buffer: AudioBuffer, volume: number, origin?: Vec3Data): void }
 let listener: THREE.AudioListener | null = null;
 let generation = 0;
 const buffers = new Map<SoundName, AudioBuffer>();
@@ -38,9 +40,10 @@ export function initEntitySounds(next: THREE.AudioListener): void {
     }
 }
 
-/** Omit origin for your own reactions; world reactions share the distance mix. */
-export function playEntitySound(name: SoundName, volume = 0.5, origin?: Vec3Data): void {
+/** Omit origin for your own reactions; world reactions share the distance mix. With `bus` the sound plays there. */
+export function playEntitySound(name: SoundName, volume = 0.5, origin?: Vec3Data, bus?: EntitySoundBus): void {
     const buffer = buffers.get(name);
+    if (bus) { if (buffer) bus.play(buffer, volume, origin); return; }
     // Hits during a suspended context should not queue up and burst on unlock.
     if (!buffer || !listener || !pool || listener.context.state !== 'running') return;
     let gain = 1;

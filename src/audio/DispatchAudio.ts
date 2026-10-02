@@ -1,4 +1,4 @@
-import { effectsOutput, worldOutput } from './PlayerAudioMix';
+import { LIVE_ROUTE, effectsOutput, type VoiceRoute } from './PlayerAudioMix';
 import { worldSoundGain } from './worldSoundGain';
 
 /** `clank`: a ball on a busy bell; `strike`: the ball that starts an incident;
@@ -25,7 +25,8 @@ export class DispatchAudio {
     private readonly bells: Array<(Voice & {station:number}) | undefined> = [];
     private readonly cues: Voice[] = [];
     private disposed = false;
-    constructor(private readonly context?: AudioContext) {}
+    /** `route`: the live mix, or an exhibit replay's bus (which takes the announcements too). */
+    constructor(private readonly context?: AudioContext, private readonly route: VoiceRoute = LIVE_ROUTE) {}
 
     private running(): AudioContext | undefined {
         const ctx = this.context;
@@ -36,7 +37,7 @@ export class DispatchAudio {
         const ctx = this.context!, source = ctx.createBufferSource(), gain = ctx.createGain(), panner = ctx.createStereoPanner();
         source.buffer = buffer; source.loop = loop; source.playbackRate.value = rate;
         gain.gain.value = volume; panner.pan.value = pan;
-        source.connect(gain); gain.connect(panner); panner.connect(world ? worldOutput(ctx) : effectsOutput(ctx));
+        source.connect(gain); gain.connect(panner); panner.connect(world || this.route.replay ? this.route.output(ctx) : effectsOutput(ctx));
         const voice = {source, gain, pan: panner, volume};
         try { source.start(ctx.currentTime + delay); } catch { this.stop(voice); return undefined; }
         return voice;
