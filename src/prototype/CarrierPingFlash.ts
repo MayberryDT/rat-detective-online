@@ -10,10 +10,10 @@ import {CASE_RED} from './caseRed';
  * rat stands about `ratHeight` units); each flash swells it `swell`× (none with reduced motion). `silhouette` is the
  * exact rat's peak opacity. Scenery must stand `hiddenBy` units nearer than the rat (`signHiddenBy` than the sign's
  * feet) to count as hiding it, so a rat's own far arm or the street it stands on never does. */
-export const PING_FLASH={minPixels:96,ratHeight:2.3,swell:.15,punch:.55,strength:2.4,silhouette:1,hiddenBy:1.2,signHiddenBy:1.5} as const;
+export const PING_FLASH={minPixels:64,ratHeight:2.3,swell:.1,punch:.2,strength:2.4,silhouette:1,hiddenBy:1.2,signHiddenBy:1.5} as const;
 /** Each ping sends `count` radar rings out from the carrier, `gapMs` apart, each growing from the rat's size to `grow`×
  * over `ms` and fading: wherever the carrier is on screen, the eye is pulled to it. Drawn over everything. */
-export const PING_RINGS={count:2,gapMs:170,ms:850,grow:3.2,opacity:.85,width:.16} as const;
+export const PING_RINGS={count:2,gapMs:170,ms:850,grow:1.6,opacity:.85,width:.22,size:.3} as const;
 
 /** The sign's right half, feet at the origin, facing the camera: body, neck, head, an ear poking out under the fedora's
  * brim, the brim and a pinched crown; mirrored for the left. */
@@ -102,9 +102,9 @@ export class CarrierPingFlash {
             if(!carrier||carrier.dead||!(t>=0&&t<1)||still&&i>0){ring.visible=false;continue;}
             const p=carrier.mesh.position,distance=camera.position.distanceTo(p);
             const height=Math.max(1,window.innerHeight),projection=camera.projectionMatrix.elements[5];
-            const size=Math.max(1,PING_FLASH.minPixels*2*distance/(PING_FLASH.ratHeight*height*projection))*PING_FLASH.ratHeight*.55;
+            const size=Math.max(1,PING_FLASH.minPixels*2*distance/(PING_FLASH.ratHeight*height*projection))*PING_FLASH.ratHeight*PING_RINGS.size;
             const grow=still?1.4:1+(PING_RINGS.grow-1)*(1-(1-t)*(1-t));
-            ring.position.set(p.x,p.y+size*.9,p.z);ring.quaternion.copy(camera.quaternion);ring.scale.setScalar(size*grow);
+            ring.position.set(p.x,p.y+PING_FLASH.ratHeight*.5*Math.max(1,size/(PING_FLASH.ratHeight*PING_RINGS.size)),p.z);ring.quaternion.copy(camera.quaternion);ring.scale.setScalar(size*grow);
             this.ringMaterials[i]!.opacity=PING_RINGS.opacity*(1-t)*(1-t);ring.visible=true;
         }
     }

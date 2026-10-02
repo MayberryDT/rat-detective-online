@@ -7,6 +7,7 @@ import {RatController} from '../../src/player/RatController';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {createPlayer} from '../../src/worker/gameState';
 import { ChaosView, THREAT } from '../../src/prototype/ChaosView';
+import { heatPalette } from '../../src/prototype/CrossfireVisual';
 import { CASE_HOME, CHAOS_TUNING, type ChaosState } from '../../src/shared/chaosState';
 
 vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
@@ -184,13 +185,14 @@ it('changes danger cues with the viewer, including owned Crossfire ricochets and
   state.dispatch={phase:'active',incident,started:1000,until:26000,serial:1};
   for(const [viewer,enemyX] of [['alice',1],['bob',0]] as const){
    view.setScores([],viewer);view.apply(state);view.update(1/60,camera);
-   expect(rim.count+lethal.count).toBe(1);expect(trails.count).toBe(1);
+   // Only the enemy's ball wears a danger rim; in Crossfire your own fiery ricochet gets its streak too.
+   expect(rim.count+lethal.count).toBe(1);expect(trails.count).toBe(incident==='crossfire'?2:1);
    const red=root.getObjectByName('crossfire-balls') as THREE.InstancedMesh;
    expect(red.count).toBe(incident==='crossfire'?2:0);
    if(incident==='crossfire'){
-    const tint=new THREE.Color();red.getColorAt(viewer==='alice'?0:1,tint);expect(tint.toArray()).toEqual([1,1,1]);
-    // No living viewer rat here, so the enemy's bright red ricochet is not a threat and draws at the calm level.
-    red.getColorAt(viewer==='alice'?1:0,tint);expect(tint.r).toBeCloseTo(2.4*THREAT.dim);
+    // No living viewer rat here, so the enemy's ricochet is not a threat and draws at the calm level, under its full tint.
+    const own=new THREE.Color(),enemy=new THREE.Color();red.getColorAt(viewer==='alice'?0:1,own);red.getColorAt(viewer==='alice'?1:0,enemy);
+    expect(enemy.equals(own)).toBe(false);expect(enemy.r).toBeCloseTo(heatPalette(1).enemy[2]!.r*THREAT.dim);
    }
    const visible=incident==='crossfire'?lethal:rim;visible.getMatrixAt(0,matrix);
    expect(point.setFromMatrixPosition(matrix).x).toBe(enemyX);
@@ -200,7 +202,8 @@ it('changes danger cues with the viewer, including owned Crossfire ricochets and
  expect(rim.count+lethal.count+trails.count).toBe(0);
  state.dispatch.incident='crossfire';view.apply(state);view.update(1/60,camera);
  expect((root.getObjectByName('crossfire-balls') as THREE.InstancedMesh).count).toBe(1);
- expect(rim.count+lethal.count+trails.count).toBe(0); // Own lethal shot is red, without enemy glow.
+ expect(rim.count+lethal.count).toBe(0); // Own lethal shot has no enemy glow…
+ expect(trails.count).toBe(1); // …but burns with its streak like any fiery ricochet.
  view.dispose();
 });
 

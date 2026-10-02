@@ -13,7 +13,7 @@ import {reducedMotion} from '../ui/motion';
  * across for `flashMs`. Fixed additive pools (smoke a soft normal blend), no lights, nothing allocated per frame. */
 export const CROSSFIRE_FLAMES={flames:6,hotFlames:2,reach:3,reachStep:2.5,minLife:.03,flameLife:.18,flameSize:.2,budget:60,embers:1.2,emberLife:.7,
     smokeChance:.35,smokeLife:1.1,fireball:2.4,splash:12,splashEmbers:8,splashSpeed:8,flash:.9,flashMs:90,
-    streakMin:1.4,streakMax:12,streakPerSpeed:.016,edge:.09,edgeStep:.03} as const;
+    streakMin:1.4,streakMax:12,streakPerSpeed:.034,edge:.09,edgeStep:.03} as const;
 const F=CROSSFIRE_FLAMES,FLAMES=512,EMBERS=192,SMOKES=64,FLASHES=8,GLOWS=128,CORES=64,BALL=.15,SPLASH=3;
 /** A hot ball's streak in units at `speed` u/s: `streakPerSpeed` a unit of speed, from `streakMin` (a fresh ricochet)
  * to `streakMax` (a tracer round at full heat). Its fire-orange edge is `edge` (+ `edgeStep` a heat step) units thick. */

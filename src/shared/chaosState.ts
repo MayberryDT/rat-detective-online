@@ -64,13 +64,13 @@ export const INCIDENT_TUNING = {
     cheeseShakeRadius: 1.24, cheeseShakeRange: 25, cheeseShake: .9, cheeseShakeMs: 250, cheeseThudPitch: .6,
     cheesePistolWidth: 1.8, cheesePistolLength: 1.15, cheesePistolRate: 6,
 } as const;
-/** Crossfire (Tyler, 2 October: "make the whole city a pinball table"; "flaming balls of cheese that really speed up
- * off walls, almost laser-like"). Each real world bounce heats a ball a step, up to `maxHeat`: it leaves the wall
- * `speedUp`× as fast as it arrived (175, 280, 448, 717 u/s; at full heat it keeps its speed off every wall) and lives
- * `life` s longer (at most `maxLife` s in all). A
- * ball that has bounced kills in one hit; the kill reports its world bounces (counted to `maxBounces`) and its path: the
- * muzzle, its first `pathPoints` bounces and the hit. */
-export const CROSSFIRE = { maxHeat: 3, speedUp: 1.6, life: .5, maxLife: 3, pathPoints: 6, maxBounces: 99 } as const;
+/** Crossfire (Tyler, 2 October). Fired like any ball; at its first real world bounce it catches fire all at once
+ * ("the player only really sees the first bank off the wall"; three escalating steps to 717 u/s were "too fast … don't
+ * make it feel like the laser"): heat `maxHeat` (1), it leaves the wall `speedUp`× as fast (350 u/s) and lives `life`
+ * s longer (at most `maxLife`), then keeps its speed off every later wall. A ball that has bounced kills in one hit; the
+ * kill reports its world bounces (counted to `maxBounces`) and its path: the muzzle, its first `pathPoints` bounces
+ * and the hit. */
+export const CROSSFIRE = { maxHeat: 1, speedUp: 2, life: .5, maxLife: 2.5, pathPoints: 6, maxBounces: 99 } as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
 export const CASE_LOOSE_SCALE = 2;
 // Street-level frontages distributed around the city, and the north's slots from its kit

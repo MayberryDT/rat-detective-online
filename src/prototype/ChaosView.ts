@@ -44,7 +44,7 @@ import {CrossfireVisual,heatPalette} from './CrossfireVisual';
 import {heatStreak} from './CrossfireFlames';
 import {badRound} from '../shared/shotPattern';
 import {BAD_AMMO} from '../shared/shotBallistics';
-import {CROSSFIRE,LAUNCH_MACHINES} from '../shared/chaosState';
+import {LAUNCH_MACHINES} from '../shared/chaosState';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
 import {faultyCard, heldCard, hotCaseCard, pickupArtwork, powerupCard} from './pickupArtwork';
@@ -733,7 +733,8 @@ export class ChaosView {
             const calm=!own&&!this.threatens(p,shot.v);
             // Crossfire: a bounced ball is on fire, and each bounce heats it on through orange to white-hot, faster, its streak
             // stretching with its speed out to a tracer round's.
-            const hot=crossfire&&shot.wallBounced,level=Math.min(CROSSFIRE.maxHeat,shot.heat??1)-1;
+            // One bounce and it is fully on fire: every hot ball wears the top fire look (visual level 2).
+            const hot=crossfire&&shot.wallBounced,level=2;
             // A carrier's ball is drawn in the red cheese (the Crossfire material), so its core reads deep red, not orange.
             const batch=hot||carried?this.chargedBullets:this.bullets;
             const ballIndex=batch.count++;batch.setMatrixAt(ballIndex,this.ballPose.matrix);
@@ -754,7 +755,7 @@ export class ChaosView {
                     this.dangerTrails.setColorAt(at,hot?(calm?this.heat.calmTrail:this.heat.trail)[level]!:carried?(calm?this.calmCarrierStreak:this.carrierStreak):own?this.quirkColor:calm?this.calmDanger:this.dangerColor);
                 }
             }
-            if(hot)this.crossfire.flames.ball(p,shot.v,level,calm?THREAT.dim:own?.7:1,dt,own&&level===0?0:heatStreak(Math.hypot(shot.v.x,shot.v.y,shot.v.z)));
+            if(hot)this.crossfire.flames.ball(p,shot.v,level,calm?THREAT.dim:own?.7:1,dt,heatStreak(Math.hypot(shot.v.x,shot.v.y,shot.v.z)));
         }
         const missiles=[s.case,...s.extraCases??[]].filter(c=>!c.owner&&(c.missileOwner||evidence));
         let nearestCase=missiles[0],nearestDistance=Infinity;
@@ -880,7 +881,7 @@ export class ChaosView {
         if(opacity!==this.markerFlash){this.markerFlash=opacity;this.caseMarker.style.opacity=opacity<0?'':String(opacity);}
         // A ping's tag lands big and settles; off screen, an arrow on the edge points the way while the flash lasts.
         const punch=ping?Math.round(this.pingPunch*20)/20:0;
-        if(punch!==this.markerPunch){this.markerPunch=punch;this.caseMarker.style.scale=punch?String(1+.7*punch):'';}
+        if(punch!==this.markerPunch){this.markerPunch=punch;this.caseMarker.style.scale=punch?String(1+.25*punch):'';}
         const arrow=!!ping&&location.edge;this.caseArrow.hidden=!arrow;
         if(arrow)this.caseArrow.style.transform=`rotate(${location.angle}rad)`;
         if(ping)return;

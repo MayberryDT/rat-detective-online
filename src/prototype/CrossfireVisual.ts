@@ -99,7 +99,7 @@ export class CrossfireVisual {
     /** A Crossfire world bounce at `p` off a surface facing `normal`, the ball's `bounces`th: sparks, a fire splash, a
      * scorch, a ricochet and a fwoomp. */
     bounce(p:Vec3Data,normal:Vec3Data,bounces:number):void {
-        const heat=Math.min(CROSSFIRE.maxHeat,bounces)-1,glow=this.glow[heat]!;
+        const heat=2,glow=this.glow[heat]!;
         this.n.set(normal.x,normal.y,normal.z).normalize();
         this.side.set(Math.abs(this.n.y)<.9?0:1,Math.abs(this.n.y)<.9?1:0,0).cross(this.n).normalize();this.up.crossVectors(this.n,this.side);
         for(let i=0;i<J.sparks;i++){
