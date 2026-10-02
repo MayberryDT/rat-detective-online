@@ -69,6 +69,8 @@ What landed: the detective look, the bots ("so good"), the sewers, the Tommy Gun
 
 ### Quick patch (agreed; protocol 28)
 
+Released 2 October: Worker `ea258468-6c17-4831-9901-6208aaf401b6`, build `production-2026-10-02-6668ade` ([receipt](verification/protocol-28-release-2026-10-02.md)). Built without test runs, as Tyler asked; the CONTINUE flow is unexercised live.
+
 - [x] PAPER CHASE back to 5 deliveries (10 ran 52 minutes).
 - [x] Planted Evidence removed ("If I get even within two feet of the case, I get blown up"). Stored rooms run Improper Disposal; Evidence Tampering stays behind the private classic toggle.
 - [x] Bobbleheads removed (your own huge head blocked your view). Stored rooms run Crossfire.

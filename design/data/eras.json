@@ -422,7 +422,7 @@
       "environment": "production",
       "build": "production-2026-10-01-ed43d51",
       "from": "2026-10-01T21:46:20.000Z",
-      "to": null,
+      "to": "2026-10-02T00:32:00.000Z",
       "layout": 6,
       "mindVersion": 8,
       "protocol": 27,
@@ -458,6 +458,62 @@
           "says": "Jurisdiction rounds average under 25 minutes at a hundred points",
           "measure": "rounds.minutes.jurisdiction",
           "expect": "up",
+          "target": {
+            "below": 25
+          }
+        },
+        {
+          "id": "bots-below-humans",
+          "says": "Bots still hit less often than humans",
+          "measure": "likeness.hitRate.bot",
+          "expect": "not-up",
+          "target": {
+            "below": "likeness.hitRate.human"
+          }
+        }
+      ]
+    },
+    {
+      "id": "playtest-patch",
+      "environment": "production",
+      "build": "production-2026-10-02-6668ade",
+      "from": "2026-10-02T00:32:00.000Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 9,
+      "protocol": 28,
+      "worker": "ea258468-6c17-4831-9901-6208aaf401b6",
+      "commits": [
+        "6668ade"
+      ],
+      "change": "Protocol 28 quick patch after the four-human playtest (2 October): PAPER CHASE to 5; Planted Evidence and Bobbleheads removed; 40 s between incidents; whole-building Harbour Master and precinct drop-offs (layout 7); Laser at the cheese gun's rate, 1 damage, 15 s; Mousetrap holds 3 s instead of killing; carrier buff (double damage, heal on kill) in every mode; results you leave with CONTINUE; more stats and a download.",
+      "baseline": "arsenal",
+      "receipt": "docs/verification/protocol-28-release-2026-10-02.md",
+      "notes": "The carrier buff now applies in every mode, so compare round lengths per mode against arsenal with that in mind. Mousetrap no longer kills, so trap kills disappear from kill measures.",
+      "predictions": [
+        {
+          "id": "paper-chase-in-band",
+          "says": "PAPER CHASE rounds average under 20 minutes at five deliveries",
+          "measure": "rounds.minutes.chain-of-custody",
+          "expect": "down",
+          "target": {
+            "below": 20
+          }
+        },
+        {
+          "id": "ef-in-band",
+          "says": "Excessive Force rounds average under 20 minutes",
+          "measure": "rounds.minutes.excessive-force",
+          "expect": "not-up",
+          "target": {
+            "below": 20
+          }
+        },
+        {
+          "id": "jurisdiction-in-band",
+          "says": "Jurisdiction rounds average under 25 minutes",
+          "measure": "rounds.minutes.jurisdiction",
+          "expect": "down",
           "target": {
             "below": 25
           }

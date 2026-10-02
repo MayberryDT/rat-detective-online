@@ -1,6 +1,10 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-10-01** (protocol 27). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-10-02** (protocol 28). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+
+## Protocol 28: the playtest quick patch — 2 October production
+
+Tyler, after the four-human playtest: "make that quick patch, and push it live." Production Worker `ea258468-6c17-4831-9901-6208aaf401b6`, build `production-2026-10-02-6668ade`, client `index-COP7Rh_L.js`, commit `6668ade`, **protocol 28**, layout 7, `mindVersion` 9 ([receipt](verification/protocol-28-release-2026-10-02.md); the playtest notes and backlog are in [the juice plan](juice-plan.md#four-human-playtest-tyler-2026-10-01-evening)). PAPER CHASE to 5; Planted Evidence and Bobbleheads removed; 40 s between incidents; Harbour Master and precinct deliver anywhere in the building; the Laser fires like the cheese gun for 1 damage over 15 s; the Mousetrap holds 3 s instead of killing; the carrier buff in every mode; results you leave with CONTINUE, with more stats, hover, scrolling and DOWNLOAD STATS.
 
 ## Protocol 27: the arsenal and the incident rework — 1 October production
 
