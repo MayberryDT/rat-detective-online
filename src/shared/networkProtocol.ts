@@ -7,8 +7,9 @@ import type { PerfReport } from './perfReport';
 import type { WeaponKind } from './pickups';
 
 /** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there.
- * 27: Tommy Gun, Laser and Mousetrap pickups; a stronger Excessive Force carrier; targets of 10 / 100 / 10; the incident rework. */
-export const PROTOCOL_VERSION = 27;
+ * 27: Tommy Gun, Laser and Mousetrap pickups; a stronger Excessive Force carrier; targets of 10 / 100 / 10; the incident rework.
+ * 28: playtest quick patch: Planted Evidence and Bobbleheads removed, hitscan Laser at the cheese gun's rate, holding traps, carrier buff in every mode, results you leave when you choose. */
+export const PROTOCOL_VERSION = 28;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;

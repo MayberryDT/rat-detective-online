@@ -61,6 +61,45 @@ rat's identity stay as they are. Done means:
 - **Softer outline and nameplate reviewed (2026-09-27):** "That is great. Push it live." Released as Worker `80901b67…`.
 - **Next action:** Tyler's OK to put [the city map](city-map.md) recorder on production, then he plays and we read the digest; then step 4 (the page's Observe mode). See [Open decisions](#open-decisions).
 
+## Four-human playtest (Tyler, 2026-10-01 evening)
+
+Production protocol 27, PAPER CHASE round `2d72a5ad` (52 minutes; Inspector Vermin, a bot, won). The players were Tyler (Operative Cheddar), Cam (Shamus Crawley), Andrew (Shamus Burrow) and Trey (Operative Gnawcroft). The transcript is `~/Documents/Meetings/202610011537 rat-detective-playthrough/transcript.md`; the case file is `output/reports/round-2d72a5ad.html` (`node scripts/round-report.mjs 2d72a5ad-0755-4161-badd-8b13c15b2295`).
+
+What landed: the detective look, the bots ("so good"), the sewers, the Tommy Gun ("solid"), the stats ("I need to see those stats"), "a lot of good pieces", "I like the direction".
+
+### Quick patch (agreed; protocol 28)
+
+- [ ] PAPER CHASE back to 5 deliveries (10 ran 52 minutes).
+- [ ] Planted Evidence removed ("If I get even within two feet of the case, I get blown up").
+- [ ] Bobbleheads removed (your own huge head blocked your view).
+- [ ] Calmer incidents: a longer quiet stretch between them (62 incidents in 52 minutes; "too chaotic", motion sickness).
+- [ ] Harbour Master and the precinct deliver anywhere in the building, like every other landmark (humans searched Pier 9 and never found the room; bots delivered there 5 times).
+- [ ] Laser: fires like the cheese gun (same rate), 1 damage, hitscan, lasts a little longer ("a downgrade": 10 kills from 67 pickups). Its look stays for now.
+- [ ] Mousetrap holds a rat in place instead of killing it (Cam's idea).
+- [ ] Carrier buff in every mode (flat double damage; a kill while carrying heals to full).
+- [ ] Results: each player leaves the stats screen when they choose; the next round starts without them meanwhile. A download button for the round's stats; more stats; the board scrolls with the mouse and has hover effects.
+- [ ] New Scattershot sound ("I hate it").
+- [ ] "You've been made" keeps the phrase but says what it means: someone can see you through walls.
+
+### Everything else raised (to address, not yet scheduled)
+
+- [ ] **Shooting feel:** Andrew wants more intentional shots, not spam. Data: Andrew and Cam fired about 1.6 a second and hit 6.5%; Tyler and Trey fired over 3 a second and hit 2.3–4.5%, yet Tyler had the most kills per minute alive. Tyler wants no hard fire limit; find another lever.
+- [ ] **Mega laser:** a second laser pickup: a huge beam with 3–5 shots that clears an alleyway (Andrew, Trey). The instant-hit laser stays.
+- [ ] **Laser theme:** less sci-fi, more Rat Detective (Andrew: cheese-shaped yellow beams with holes).
+- [ ] **Case carrier visibility:** a ping every 5–10 seconds instead of always seen (Andrew; Tyler liked it).
+- [ ] **PAPER CHASE flow:** keep the case after a delivery and get a new drop-off, rather than fighting for it again (Cam).
+- [ ] **Chaos overall:** "maximum chaos limits"; "I don't even know where the case is"; Cam felt sick. Revisit after the quick patch's calmer incidents.
+- [ ] **Bad Ammunition:** Tyler: still not working. Trey and Cam: "make it shoot like garbage", in every direction. Kept for now.
+- [ ] **Cheddar Shower:** Trey wants it gone ("raining on me"); the data shows meteors fell near him no more than his share. Kept; consider a clearer warning and fewer meteors.
+- [ ] **Lag with four humans:** average ping 80–151 ms, spikes to 731 ms (Tyler); Trey at 43 fps; Andrew lost connection once. Investigate the server tick and snapshot size with four humans.
+- [ ] **A case that resets after a carrier dies on top of the dock containers** looked like a bug ("The case just despawned right in front of me"); make the reset readable.
+- [ ] **Ironclad does not stop traps** confused Cam ("Why can I get trapped with a steel jacket on?"). The hold trap may settle it; tell it either way.
+- [ ] **Loud on first load** (Cam); settings already have volume. Lower the default.
+- [ ] **More launch pads** (Trey).
+- [ ] **More music:** two or three more tracks like the theme (Andrew).
+- [ ] **Game master controls** for Tyler during a match (end the round, pick the mode).
+- [ ] **Ideas to explore:** a cheese web to swing like Spider-Man (Trey); criminal NPC rats guarding the case (Andrew); teams, such as five teams of two with no friendly fire (Andrew, Trey); something huge at a 20-kill streak ("Super Saiyan", a giant cheese block drop); a Rat Detective MOBA (Tyler, half joking).
+
 ## Protocol 27: the arsenal and the incident rework (Tyler, 2026-10-01)
 
 Tyler: Big Cheese and Blackout are the best incidents because "they radically change the game … they make you think differently", and they make people laugh; Pressure Surge is next because it changes the map and pushes the game forward. "Those are the kind of things we're trying to double down on." Pickups must be juicy, and must never make anyone want to shoot less: "that's what drives the game forward … it's super fun to just shoot all the time". One big patch, then he playtests.
