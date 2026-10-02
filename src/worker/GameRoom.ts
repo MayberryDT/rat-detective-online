@@ -829,6 +829,7 @@ export class GameRoom extends DurableObject<Env> {
 
     if (message.type === 'admin') {
       if (this.rateLimiter.allow(`${playerId}:admin`, 6, 10_000, this.now())) await this.handleAdminMessage(ws, playerId, message);
+      else this.sendToPlayer(playerId, { type: 'adminResult', ok: false, message: 'Too many admin commands; wait a moment.' });
       return;
     }
 
