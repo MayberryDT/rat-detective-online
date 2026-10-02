@@ -3,6 +3,14 @@
 const KEY = 'rat-detective-admin-key';
 /** Settings' OPEN ADMIN PANEL button asks the match's AdminPanel to open through this document event. */
 export const ADMIN_OPEN_EVENT = 'rat-admin-open';
+/** A one-time setup link, `/#admin-key=<key>`: the fragment never leaves the browser (not sent to the server or logged); the
+ * key is saved and the fragment removed from the address bar and history. */
+export function claimAdminKeyFromLink(win: Window): void {
+    const match = /^#admin-key=([^&]{1,256})$/.exec(win.location.hash);
+    if (!match) return;
+    try { win.localStorage.setItem(KEY, decodeURIComponent(match[1]!)); } catch { /* Private mode: nothing to keep. */ }
+    win.history.replaceState(null, '', win.location.pathname + win.location.search);
+}
 export function storedAdminKey(): string | null {
     try { return localStorage.getItem(KEY); } catch { return null; }
 }

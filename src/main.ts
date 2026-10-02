@@ -1,4 +1,5 @@
 import { PlayerSettings } from './ui/PlayerSettings';
+import { claimAdminKeyFromLink } from './ui/adminKey';
 import { TitleScreen } from './ui/TitleScreen';
 import { TitleMusic } from './ui/TitleMusic';
 import { unlockEffectsAudio } from './audio/effectsAudio';
@@ -35,6 +36,7 @@ function showWebGLError(error: unknown): void {
 
 const startup = new AbortController();
 const title = new TitleScreen();
+claimAdminKeyFromLink(window);
 title.settings = new PlayerSettings();
 showComfortHint(document.getElementById('title-screen'), title.settings);
 const music = new TitleMusic();
