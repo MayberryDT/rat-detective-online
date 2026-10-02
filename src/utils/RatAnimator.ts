@@ -157,6 +157,8 @@ export class RatAnimator {
     private deathHeadshot = false;
     /** Seventh batch R2: the corpse's point chain; `chain.ignore` is its own local physics body. */
     readonly chain = new RatCorpseChain();
+    /** The chain's twitch seed for the next death (an exhibit replay fixes it, so a body falls the same way each time); random otherwise. */
+    deathSeed?: number;
     private readonly anchor = new THREE.Vector3();
     private readonly joltPush = new THREE.Vector3();
     /** Tail tip offset from the chain (tail space); zero otherwise. */
@@ -362,7 +364,7 @@ export class RatAnimator {
         if(chain){
             // The physics body's centre drags the chain; its spin is never shown.
             this.anchor.set(0,WAIST,0).applyQuaternion(this.root.quaternion).add(this.root.position);
-            if(!chain.active)chain.begin(this.root,this.anchor,cause,Math.floor(Math.random()*997));
+            if(!chain.active)chain.begin(this.root,this.anchor,cause,this.deathSeed??Math.floor(Math.random()*997));
             if(impact>0)chain.land(Math.min(1.5,impact*gain));
             chain.step(dt,this.anchor,resting,cause,time,bodyParams.drag,bodyParams.twitch);
             // A corpse shown from a snapshot (posed, not yet stepped) keeps the pose it was given.

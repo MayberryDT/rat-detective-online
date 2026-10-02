@@ -150,7 +150,7 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
 
 
     groundMesh.userData.aimTarget = true;
-    return { renderer: appRenderer, scene, camera, listener, world, flashlight, moonShadow, contacts, syncViewport, dispose() {
+    return { renderer: appRenderer, scene, camera, listener, world, flashlight, moonShadow, contacts, ground: groundMesh, syncViewport, dispose() {
       groundGeo.dispose(); groundMat.dispose(); world.removeBody(groundBody);
       moonLight.shadow.dispose(); flashlight.shadow.dispose(); contacts.dispose();
       scene.clear(); appRenderer.dispose(); appRenderer.domElement.remove();

@@ -1,6 +1,6 @@
 # Replay plan: exhibits on the results board
 
-Status (2 October 2026): planned, not started. Tyler agreed the design on 2 October. This file owns the order, status and acceptance for in-game highlight replays. The desktop recorder it replaces was removed the same day ([Omarchy](omarchy.md)).
+Status (2 October 2026): X1 to X5 are built and on staging (build `staging-2026-10-02-f6d2d90`, branch `replays`); production waits for Tyler's OK ([staging receipt](verification/replays-staging-2026-10-02.md)). Tyler agreed the design on 2 October. This file owns the order, status and acceptance for in-game highlight replays. The desktop recorder it replaces was removed the same day ([Omarchy](omarchy.md)).
 
 ## Outcome
 
@@ -9,10 +9,10 @@ At the end of every round, the results board shows the round's 3 best moments as
 It is done when:
 
 - the server spots funny, chaotic and big moments for every rat and records them as city facts
-- each player's game keeps short clips of those moments for the round, in under 8 MB of memory
+- each player's game keeps short clips of those moments for the round, within a 16 MB size estimate (overlapping clips share their data)
 - the results board plays 3 exhibits: the best from anyone, with at least one that involves you when you had one
 - each exhibit has its own camera work, slow motion on the key beat, the game's own sounds and a noir caption
-- a save button downloads the exhibit as an MP4 (WebM where the browser cannot make MP4)
+- a save button downloads the exhibit as a video file (WebM with its duration; MP4 only where the browser cannot record WebM)
 - facts show how often each kind fires and which exhibits players watch and save
 
 ## Decisions (Tyler, 2 October)
@@ -38,18 +38,18 @@ It is done when:
 
 | Step | What it gives | Status |
 | --- | --- | --- |
-| X1 | Server detection and `highlight` markers, recorded as city facts; no picture yet | Next |
-| X2 | Each client records the last 12 seconds and keeps clips for the round | After X1 |
-| X3 | The replay player: isolated view, director camera, slow motion, replay sound | After X2 |
-| X4 | Exhibits on the results board, with the tape look and captions | After X3 |
-| X5 | Save as video, plus watched and saved facts | After X4 |
+| X1 | Server detection and `highlight` markers, recorded as city facts; no picture yet | Built, on staging |
+| X2 | Each client records the last 12 seconds and keeps clips for the round | Built, on staging |
+| X3 | The replay player: isolated view, director camera, slow motion, replay sound | Built, on staging |
+| X4 | Exhibits on the results board, with the tape look and captions | Built, on staging |
+| X5 | Save as video, plus watched and saved facts | Built, on staging |
 | X6 | Tune detection weights from a week of facts | After X5 is live |
 
-X1 can go to production on its own: it is data only. X2 to X5 can ship as one release.
+Tyler asked for the whole plan at once (2 October), so X1 to X5 ship together.
 
 ## Next action
 
-X1: write the server detector and the `highlight` marker. Run it on staging with a bot-only room for 30 minutes. Read the counts per kind from the city digest. Show Tyler the rates before any replay work.
+Tyler plays a round on staging with sound and judges the exhibits. On his OK: merge `replays` into `main`, deploy production from a clean tree, add an era to `design/data/eras.json` and write the release receipt. Then X6: after a week of live facts, tune the weights. On staging, sent flying is half of all moments.
 
 ## Detail
 

@@ -12,6 +12,7 @@ import { FEEL } from '../feel/feelTuning';
 import { countUp, leave, measure, reducedMotion, replay, scrawl, slide, uiMotion } from './motion';
 import { headlines } from './Headlines';
 import type { DeathRecap } from './deathRecap';
+import { EXHIBITS_LAYOUT_EVENT } from './Exhibits';
 
 const KILL_FEED_LIMIT = 5;
 const KILL_FEED_FADE_MS = 4000;
@@ -269,10 +270,10 @@ export class GameHud {
             // Out of the banner, whose rotate would otherwise become the fixed panel's containing block.
             const fileElement=this.caseFile?.list.parentElement;if(fileElement)this.victoryOverlay.appendChild(fileElement);
             // Again next frame (the standings are shown just after this call), and once fonts first used there have loaded.
-            this.layoutResults();view?.addEventListener('resize',this.layoutResults);
+            this.layoutResults();view?.addEventListener('resize',this.layoutResults);view?.addEventListener(EXHIBITS_LAYOUT_EVENT,this.layoutResults);
             view?.requestAnimationFrame(()=>{this.layoutResults();void this.doc.fonts?.ready.then(this.layoutResults);});
         }else{
-            this.doc.body?.classList.remove('round-results');view?.removeEventListener('resize',this.layoutResults);
+            this.doc.body?.classList.remove('round-results');view?.removeEventListener('resize',this.layoutResults);view?.removeEventListener(EXHIBITS_LAYOUT_EVENT,this.layoutResults);
             this.setContinue({kind:'off'});
         }
         const file=this.caseFile;
@@ -433,24 +434,28 @@ export class GameHud {
         for (const id of this.timeouts) clearTimeout(id);
         this.timeouts.clear();
         this.retryButton.removeEventListener('click', this.handleRetry);
-        this.doc.defaultView?.removeEventListener('resize',this.layoutResults);
+        this.doc.defaultView?.removeEventListener('resize',this.layoutResults);this.doc.defaultView?.removeEventListener(EXHIBITS_LAYOUT_EVENT,this.layoutResults);
         clearInterval(this.continueTimer??undefined);this.actions.remove();
         this.statusPanel.remove();
     }
 
-    /** Results board: the strip of big numbers, then the standings and the Case File side by side,
-     * as one centred group just under the winner banner, above the CONTINUE bar, all inside the screen.
-     * The banner's height varies with the winner's name, so it is measured; the standings scroll for
-     * whatever does not fit. Small screens keep roundEnd.css's own placement below the banner and strip. */
+    /** Results board: the strip of big numbers, then the standings and the right column (the exhibits above the
+     * Case File) side by side, as one centred group just under the winner banner, above the CONTINUE bar, all inside
+     * the screen. The banner's height varies with the winner's name and the exhibits' with their fonts, so both are
+     * measured; the standings scroll for whatever does not fit. Small screens keep roundEnd.css's and exhibits.css's
+     * own placement below the banner and strip, with the exhibits just above the Case File. */
     private layoutResults = (): void => {
         const view=this.doc.defaultView, body=this.doc.body;
         if(!view||!body?.classList.contains('round-results'))return;
         const small=view.matchMedia(SMALL_RESULTS).matches;
+        const exhibits=this.doc.querySelector<HTMLElement>('.results-exhibits:not([hidden])');
+        const right=!!(this.caseFile||exhibits);
         const banner=[...this.victoryText.children].filter(el=>el.getBoundingClientRect().height>0);
         const bannerBottom=Math.max(0,...banner.map(el=>el.getBoundingClientRect().bottom));
-        const w=view.innerWidth,h=view.innerHeight,margin=small?8:Math.max(16,Math.min(40,w*.025)),gap=small?10:Math.max(18,Math.min(32,w*.018));
-        const group=Math.min(1480,w-margin*2),fileWidth=this.caseFile?Math.max(360,Math.min(540,group*.36)):0;
-        const board=this.caseFile?group-fileWidth-gap:Math.min(1100,group),width=board+(fileWidth?fileWidth+gap:0),left=(w-width)/2;
+        const w=view.innerWidth,h=view.innerHeight,margin=small?8:Math.max(12,Math.min(28,w*.015)),gap=small?10:Math.max(14,Math.min(24,w*.012));
+        // The board takes the screen (Tyler, 2 October: more room for stats, highlights still visible).
+        const group=Math.min(1900,w-margin*2),fileWidth=right?Math.max(380,Math.min(760,group*.4)):0;
+        const board=right?group-fileWidth-gap:Math.min(1100,group),width=board+(fileWidth?fileWidth+gap:0),left=(w-width)/2;
         const stripTop=Math.round(bannerBottom+gap*.6);
         body.style.setProperty('--results-strip-top',`${stripTop}px`);
         body.style.setProperty('--results-strip-left',`${left}px`);body.style.setProperty('--results-strip-w',`${width}px`);
@@ -461,30 +466,42 @@ export class GameHud {
         const vars:Record<string,string>={'--results-top':`${top}px`,'--results-h':`${available}px`,
             '--results-board-left':`${left}px`,'--results-board-w':`${board}px`,'--results-file-left':`${left+board+gap}px`,'--results-file-w':`${fileWidth}px`};
         for(const [key,value] of Object.entries(vars))body.style.setProperty(key,value);
-        body.style.removeProperty('--results-panel-h');
+        for(const key of ['--results-panel-h','--results-file-panel-h','--results-exhibits-h','--results-exhibits-bottom'])body.style.removeProperty(key);
         const standings=this.doc.querySelector<HTMLElement>('.match-scoreboard:not([hidden])');
         const file=this.caseFile?.list.parentElement;
-        if(small){if(file)this.fitCaseFile(file,file.clientHeight);return;}
-        // The pair should read as one spread: fit the Case File within the standings' height
-        // when it can (always within the screen), then give both the taller height.
-        const standingsHeight=standings?.getBoundingClientRect().height??0;
-        // A little taller than the standings beats shrinking the type another step.
-        if(file)this.fitCaseFile(file,standingsHeight>0?Math.min(standingsHeight*1.12,available):available);
-        const tallest=Math.max(standingsHeight,file?.getBoundingClientRect().height??0);
-        if(!tallest)return;
-        body.style.setProperty('--results-panel-h',`${Math.ceil(tallest)}px`);
-        // Ease the whole spread down into spare room rather than leaving it all below.
-        const ease=Math.round(Math.min(60,Math.max(0,available-tallest)/3));
-        body.style.setProperty('--results-top',`${top+ease}px`);body.style.setProperty('--results-strip-top',`${stripTop+ease}px`);
+        // The exhibit screen (16:9) sits beside its cards (a row), so the Case File keeps most of the column under it.
+        let exhibitsBlock=0;
+        if(exhibits){
+            const row=view.getComputedStyle(exhibits).flexDirection==='row';
+            const screen=Math.min(small?exhibits.clientWidth*(row?.45:1):fileWidth*(row?.56:1),(small?h*.2:available*.36)*16/9);
+            body.style.setProperty('--results-exhibit-screen-w',`${Math.floor(screen)}px`);
+            exhibitsBlock=Math.ceil(exhibits.getBoundingClientRect().height)+(small?8:file?gap:0);
+            body.style.setProperty('--results-exhibits-h',`${exhibitsBlock}px`);
+        }
+        body.style.setProperty('--results-file-top',`${top+exhibitsBlock}px`);
+        body.style.setProperty('--results-file-h',`${Math.max(80,available-exhibitsBlock)}px`);
+        if(small){
+            if(file)this.fitCaseFile(file,file.clientHeight);
+            if(exhibits)body.style.setProperty('--results-exhibits-bottom',`${Math.ceil(16+actions+(file?file.getBoundingClientRect().height+8:0))}px`);
+            return;
+        }
+        // The spread runs to the actions: the standings and the right column both take the full height.
+        if(!standings&&!file)return;
+        if(file)this.fitCaseFile(file,Math.max(80,available-exhibitsBlock));
+        body.style.setProperty('--results-panel-h',`${Math.ceil(available)}px`);
+        if(exhibitsBlock)body.style.setProperty('--results-file-panel-h',`${Math.ceil(available-exhibitsBlock)}px`);
     };
 
-    /** Awards never run off the screen: two columns for a long list, then smaller type, then three columns. */
+    /** Awards never run off the screen: two columns for a long list, then three and four columns (a wide column only),
+     * then smaller type. */
     private fitCaseFile(file: HTMLElement, target: number): void {
-        file.classList.remove('fit-2','fit-compact','fit-3');
+        file.classList.remove('fit-2','fit-compact','fit-3','fit-4');
         // A long list reads better as two short columns than one tall one.
         if(this.caseFile!.rows.length>6)file.classList.add('fit-2');
-        for(const step of ['fit-2','fit-compact','fit-3']){
-            if(file.scrollHeight<=target+1)break;
+        // Laid-out height (offsets ignore the stamping's scale, which would inflate scrollHeight mid-stamp).
+        const list=this.caseFile!.list,pad=parseFloat(this.doc.defaultView?.getComputedStyle(file).paddingBottom??'0')||0;
+        for(const step of ['fit-2','fit-3',...(file.clientWidth>=640?['fit-4']:[]),'fit-compact']){
+            if(list.offsetTop+list.offsetHeight+pad<=target+1)break;
             file.classList.add(step);
         }
     }

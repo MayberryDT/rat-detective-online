@@ -83,9 +83,10 @@ export class Dust {
     dispose():void {this.mesh?.removeFromParent();this.mesh?.dispose();this.geometry?.dispose();this.material?.dispose();}
 }
 
-let registered:Dust|undefined;
-/** Scene-wide dust used by every rat's animation events. */
-export function registerDust(dust:Dust|undefined):void {registered=dust;}
-export function kickDust(at:THREE.Vector3,strength:number):void {registered?.puff(at,strength);}
-/** Bad Ammunition muzzle smoke. */
-export function muzzleSmoke(at:THREE.Vector3,direction:THREE.Vector3,strength:number):void {registered?.smoke(at,direction,strength);}
+/** The scene of `object`: its top ancestor (a detached exhibit replay's scene is its own). */
+export function sceneRoot(object:THREE.Object3D):THREE.Object3D {let root=object;while(root.parent)root=root.parent;return root;}
+const registered=new WeakMap<THREE.Object3D,Dust>();
+/** The dust for every rat's animation events in `scene` (the live game's, or an exhibit replay's own pool). */
+export function registerDust(scene:THREE.Scene,dust:Dust|undefined):void {if(dust)registered.set(scene,dust);else registered.delete(scene);}
+/** A puff in the scene `from` belongs to; none when that scene has no dust. */
+export function kickDust(from:THREE.Object3D,at:THREE.Vector3,strength:number):void {registered.get(sceneRoot(from))?.puff(at,strength);}

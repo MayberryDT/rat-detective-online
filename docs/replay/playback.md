@@ -20,7 +20,7 @@ When a marker arrives, wait until its trail has passed, then copy the window int
 - the 8 highest-scoring clips
 - plus the best clip that involves the local player, if it is not already in the 8
 
-At about 0.5 MB a clip, the shelf stays under 8 MB. The buffer is about 1 MB. Clear both on `welcome` and `gameReset`. A round-winning marker's trail ends before the board appears (the board shows 5 seconds after `gameWon`).
+On staging (2 October) the estimate (`entryBytes`, which ignores data shared between chaos states, so it overstates) was about 2 MB a clip and 3 to 5 MB for the 12 second buffer, at about 290 entries a second in a 10-rat room. The shelf keeps under 16 MB of that estimate, counting entries that overlapping clips share once. Clear both on `welcome` and `gameReset`. A round-winning marker's trail ends before the board appears (the board shows 5 seconds after `gameWon`).
 
 ## X3: the replay view
 
@@ -47,6 +47,8 @@ The city is shared. Live and replay objects are kept apart with three.js layers:
 - the director camera sees the city and replay objects
 
 While an exhibit plays, the next round may be running behind the board. Its rats must not appear in the replay, and the replay must not appear in the live view.
+
+As built (`src/replay/ReplayStage.ts`): three.js layers are not inherited, and a replay creates objects every frame, so the separation is by scene membership instead. The replay's own `THREE.Scene` joins the live scene only for the director's draw, and every live scene root that is not the city's scenery (`StaticMoonShadow.isScenery`), a light or the ground is hidden for that draw. The live camera and the live gun's raycasts therefore never meet a replay object, and the director never draws a live rat or live chaos. Replay rats live in their own physics world (`isolateRagdollWorld`), so they never collide with your rat. Nameplates keep layer 1, which the director's camera enables.
 
 ### Rendering
 
@@ -88,6 +90,6 @@ The replay plays the game's own sounds from its recorded events, through a new r
 ## Checks
 
 - A dev entry, `?replay=dev` on a private staging room, lists the clips kept this round with their size, and plays the newest fullscreen.
-- Memory stays under 8 MB for clips after a full Excessive Force round.
+- The shelf stays under its 16 MB estimate after a full Excessive Force round.
 - A replay leaves no DOM nodes, pooled meshes or audio voices behind. Count them before and after 20 replays.
 - Playing a clip twice shows the same body fall.

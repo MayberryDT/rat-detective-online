@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "cannon-es": "^0.20.0",
+    "fix-webm-duration": "^1.0.6",
     "three": "^0.182.0"
   }
 }

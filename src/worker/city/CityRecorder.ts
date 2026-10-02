@@ -14,6 +14,7 @@ import { cityPlaces } from '../../shared/city/places';
 import { cityFloor } from '../../shared/city/frame';
 import { CITY_SCHEMA_VERSION, p3, type CityFact, type DecisionInputs, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
 import type { PerfReport } from '../../shared/perfReport';
+import type { ExhibitMessage, HighlightMarker } from '../../shared/highlights';
 import { decideMeasure, goalMeasure, JEV_COUNTS, latencyBucket, type GoalOutcome, type MindName } from '../../shared/city/minds';
 import { MIND_VERSION, codeOnlyRound, type Decision, type Goal, type MotorMode, type Personality } from '../../shared/bots/intent';
 import { RoundLedger, standings } from '../../shared/city/ledger';
@@ -532,6 +533,18 @@ export class CityRecorder {
   /** A player's client frame performance; a bot has no screen. */
   perf(id: string, report: PerfReport, now: number): void {
     if (!this.deps.isBot(id)) this.emit({ ...this.context(now), type: 'perf', a: this.actor(id), ...this.ratFlags(id), ...report });
+  }
+
+  /** A highlight marker the room sent (docs/replay/detection.md), counted per kind for the digest. */
+  highlight(m: HighlightMarker, now: number): void {
+    const [main, victim] = m.actors, place = this.places.at(m.p.x, m.p.y, m.p.z).id;
+    this.measure(now, place, `highlight:${m.kind}`);
+    this.emit({ ...this.context(now), type: 'highlight', kind: m.kind, a: this.actor(main!), ...(victim ? { victim: this.actor(victim) } : {}), p: p3(m.p), place, score: m.score });
+  }
+
+  /** A player's results board showed, played or saved an exhibit; an agent browser never counts as human. */
+  exhibit(id: string, m: ExhibitMessage, now: number): void {
+    this.emit({ ...this.context(now), type: 'exhibit', kind: m.kind, action: m.action, a: this.actor(id), ...this.ratFlags(id) });
   }
 
   /** A stuck bot is about to be moved to a spawn point: recorded where it was stuck. */

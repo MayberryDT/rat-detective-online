@@ -48,7 +48,10 @@ import {NetplayAuditLog} from '../shared/netplay';
 import {createShotId} from '../weapons/shotId';
 import type {CameoView,CameoVisitor} from '../cameos/CameoView';
 import {loadCameos} from '../cameos/loadCameos';
-import {HighlightBridge} from '../highlights/HighlightBridge';
+import {ReplayRecorder} from '../replay/ReplayRecorder';
+import {ReplayStage} from '../replay/ReplayStage';
+import type {ReplayClip} from '../replay/types';
+import {Exhibits} from '../ui/Exhibits';
 import {FeelDirector} from '../feel/FeelDirector';
 import {IncidentStory,STORY} from '../feel/IncidentStory';
 import {headlines} from '../ui/Headlines';
@@ -144,7 +147,13 @@ export class GameSession {
     private roundWon = false;
     private releasePreparedModels?:()=>void;
     private playFrameMarked=false;
-    private readonly highlights = new HighlightBridge();
+    /** Exhibits (docs/replay-plan.md): the round's recording, its replay player and the results board's exhibits. */
+    private readonly recorder = new ReplayRecorder(() => Date.now() + this.serverOffset);
+    private readonly replay: ReplayStage;
+    /** Built with the first results board, on the board's `#victory-overlay`. */
+    private exhibits?: Exhibits;
+    /** `?replay=dev`: kept clips are listed in the console and F8 plays the newest fullscreen. */
+    private replayDev = false;
     private readonly feel = new FeelDirector();
     /** Incident storytelling overlays (WANTED poster, BOUNTY CLAIMED, ALL UNITS squawk, YOU'RE BACKUP card). */
     private story?: IncidentStory;
@@ -174,20 +183,12 @@ export class GameSession {
     private nextRoundAt=0;
     private resultsShownAt=0;
     private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
-    private lastHighlightObserve = 0;
     private lastChaos: ChaosState | null = null;
-    private localLaunchY = 0;
-    private localLaunchAt = 0;
-    private highlightBaseline = true;
-    private seenHighlightLaunches = new Set<string>();
     /** Launch events already given their scream and view kick (L5/L6). */
     private readonly feltLaunches = new Set<string>();
     /** Code Violation: each rat's dud deadline as last seen (a new one goes in the feed once), after the first snapshot. */
     private readonly dudsSeen = new Map<string, number>();
     private dudsPrimed = false;
-    private highlightCorpseSeen = new Map<string, number>();
-    private readonly highlightFrustum = new THREE.Frustum();
-    private readonly highlightMatrix = new THREE.Matrix4();
 
     constructor(renderer: THREE.WebGLRenderer, initialWorld?: WorldSpec, prepared: {
         title?: TitleScreen; transport?: NetworkManager; music?: Pick<SessionMusic, 'start' | 'unlock' | 'dispose'>;
@@ -242,7 +243,6 @@ export class GameSession {
             this.hud.setConnection(state, message);
             this.scoreboard.setAvailable(state === 'playing');
             this.touch?.setPlaying(state === 'playing');
-            if (state !== 'playing') this.highlights.setIdentity(false, this.observing);
             if (state === 'playing') {
                 this.hud.enterPlaying();
                 if(message)this.hud.addKillFeed({kind:'note',text:message});
@@ -254,7 +254,10 @@ export class GameSession {
         };
         this.bindInput();
         this.title.focus();
-        this.highlights.attach();
+        // The replay draws the city (scenery, the stage's lights and ground) and its own scene, never live things.
+        this.replay=new ReplayStage({renderer:this.stage.renderer,scene,listener,flashlight:this.stage.flashlight,recorder:this.recorder,
+            shared:object=>this.stage.moonShadow.isScenery(object)||object===this.stage.ground||object instanceof THREE.Light});
+        if(new URLSearchParams(window.location.search).get('replay')==='dev')this.bindReplayDev();
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 
@@ -446,17 +449,8 @@ export class GameSession {
         this.lastMovementAt = 0;
         this.lastInteractionPosition.set(player.x,player.y+.8,player.z);
         this.pendingInteractions.clear();this.netplay.clear();
-        this.highlightBaseline = true;
         this.lastChaos = null;
-        this.seenHighlightLaunches.clear();
-        this.highlights.detector.welcome({
-            localId: this.myId,
-            epoch: '',
-            roundId: message.round.assignment?.roundId ?? '',
-            deliverySerial: 0,
-            owner: null,
-        });
-        this.highlights.setIdentity(!this.observing, this.observing);
+        this.recorder.welcome(message);
         if(!this.observing && normalGameBotCount(window.location) && this.worldSpec.version===GRAYBOX_VERSION){
             this.bots=new NormalGameBots(this.worldSpec,message.players,{muzzle:(id,position,facing)=>{
                 const entity=this.remotes.get(id);
@@ -480,6 +474,7 @@ export class GameSession {
 
     private receive(message: ServerMessage): void {
         this.scoreboard.receive(message);
+        this.recorder.record(message);
         if(message.type==='chaos'){this.diagnosticChaos={receivedAt:Date.now(),serverTime:message.state.time,shots:message.state.shots.length,tick:message.state.tick??0,epoch:message.state.epoch??'legacy'};}
 
         this.bots?.receive(message);
@@ -502,7 +497,7 @@ export class GameSession {
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
                 this.feelStings(this.lastChaos,message.state);
                 this.feelLaunches(message.state);
-                this.noteHighlightSnapshot(message.state);
+                this.lastChaos = message.state;
                 break;
             case 'welcome': this.admin.reset(); this.welcome(message); break;
             case 'currentPlayers': break; // Atomic welcome already applied the complete state.
@@ -612,15 +607,6 @@ export class GameSession {
                     if(message.killerId===this.myId)this.feel.bankShot();
                     this.chaos?.crossfire.showPath(message.path);
                 }
-                this.highlights.emit(this.highlights.detector.onDeath({
-                    victimId: message.victimId,
-                    killerId: message.killerId,
-                    eventKey: `${this.lastChaos?.epoch ?? ''}:${message.victimId}:${message.respawnAt}`,
-                    presentedAtMs: performance.now(),
-                    incident: message.incident === true,
-                    local: message.victimId === this.myId,
-                    localKill: message.killerId === this.myId && message.victimId !== this.myId,
-                }));
                 const entity = message.victimId === this.myId ? this.rat?.entity : this.remotes.get(message.victimId);
                 // R2: killed mid-launch flails all the way down.
                 const deathStyle = entity?.launchFlight && feelState().on('launchFlight') ? 'flail' : this.feel.deathStyle(message.killerId, message.cause);
@@ -685,7 +671,6 @@ export class GameSession {
                 const won=performance.now(),entries=feelState().on('lineup')?this.lineupEntries(message):[];
                 if(entries.length)this.pendingLineup={entries,at:won+(hold+ROUND_END.card)*1000};
                 this.pendingResults=won+ROUND_END.results*1000;
-                this.highlights.emit(this.highlights.detector.onWin(message.winnerId, performance.now()));
                 break;
             }
             case 'gameReset': {
@@ -699,21 +684,14 @@ export class GameSession {
                     if(this.resultsShown)this.hud.setContinue({kind:'held',until:this.heldUntil});else this.showResultsBoard();
                 }else this.endResults();
                 this.cameos?.reset();
-                this.highlights.detector.beginRound({
-                    epoch: '',
-                    roundId: message.round?.assignment?.roundId ?? '',
-                    deliverySerial: 0,
-                    owner: null,
-                });
-                this.highlightBaseline = true;
-                this.seenHighlightLaunches.clear();
-                this.highlightCorpseSeen.clear();
+                this.recorder.reset();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0,0);entity.resetReactions();entity.setStreak(0);}
                 this.rat?.setLegs(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); if(!keep)this.hud.hideVictory(); this.hud.hideRespawn(); break;
             }
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
+            case 'highlight': if(this.replayDev)this.logReplays(); break;
             case 'adminResult': this.admin.receive(message); break;
         }
     }
@@ -827,7 +805,8 @@ export class GameSession {
             this.feel.tommyHeld(this.heldFire.active||!!this.touch?.input.holding);
             this.checkInteractions(now);
             this.sendMovement(now);
-            this.observeHighlights(now);
+            // Your rat's track for exhibits: the recorder copies the numbers only on its 30 Hz samples.
+            if(this.rat&&!this.observing&&!this.rat.entity.dead)this.recorder?.recordLocal(this.rat.entity.body.position,this.rat.entity.mesh.quaternion,this.lookDirection());
             if (this.rat) {
                 const position = this.rat.entity.mesh.position;
                 camera.getWorldDirection(this.direction);
@@ -890,13 +869,18 @@ export class GameSession {
         if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon)this.showResultsBoard();
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
+        this.replay?.update(dt);
         if(!this.compiling){
             renderer.toneMappingExposure=this.baseExposure;
-            this.feel.beforeRender(camera);
-            this.stats?.gpu.begin();
-            renderer.render(scene, camera);
-            this.stats?.gpu.end();
-            this.feel.afterRender(camera);
+            // A fullscreen exhibit takes the screen: the live frame is not drawn under it.
+            if(!this.replay?.fullscreen){
+                this.feel.beforeRender(camera);
+                this.stats?.gpu.begin();
+                renderer.render(scene, camera);
+                this.stats?.gpu.end();
+                this.feel.afterRender(camera);
+            }
+            this.replay?.render();
             if(this.transport.state==='playing')qualityFrame(now);
         }
         // The prepared stand-ins live until the session ends: their programs (round-end lineup
@@ -939,6 +923,10 @@ export class GameSession {
         this.pendingResults=undefined;this.resultsShown=true;this.resultsShownAt=performance.now();
         if(this.awaitingContinue&&!this.continued)this.hud.setContinue(this.held?{kind:'held',until:this.heldUntil}:{kind:'reading'});
         this.hud.showResults(true);this.scoreboard.setVisible(true);
+        this.recorder.freeze();
+        const host=document.getElementById('victory-overlay');
+        if(host)this.exhibits??=new Exhibits({player:this.replay,myId:()=>this.myId,send:message=>this.transport.send(message),host});
+        this.exhibits?.show();
         if(this.reading&&document.pointerLockElement)document.exitPointerLock();
     }
     /** A reader on the results board, still to CONTINUE. */
@@ -949,7 +937,7 @@ export class GameSession {
         if(!this.reading)return;
         this.transport.send({type:'ready'});
         if(this.held){this.endResults();this.hud.hideVictory();}
-        else{this.continued=true;this.hud.setContinue({kind:'ready',until:this.nextRoundAt});}
+        else{this.continued=true;this.hud.setContinue({kind:'ready',until:this.nextRoundAt});this.exhibits?.hide();}
         this.requestPointerLock();
     }
     /** Leave the round-end results board (reset, reconnect, leaving play, CONTINUE); `closeBoard` returns the standings to the live round. */
@@ -957,7 +945,7 @@ export class GameSession {
         const shown=this.resultsShown;this.pendingResults=undefined;this.resultsShown=false;
         this.awaitingContinue=false;this.continued=false;this.held=false;
         if(closeBoard)this.scoreboard.closeResults();
-        if(shown){this.hud.showResults(false);this.scoreboard.setVisible(false);}
+        if(shown){this.hud.showResults(false);this.scoreboard.setVisible(false);this.exhibits?.hide();this.recorder.release();}
     }
 
     /** Juice T5: the lineup's rats, winner first, rebuilt from the rats this client knows. */
@@ -1046,61 +1034,27 @@ export class GameSession {
         for(const [id,{entity}] of this.remotes.rats)yield {id,position:entity.mesh.position,dead:entity.dead};
     }
 
-    private noteHighlightSnapshot(state: ChaosState): void {
-        if (!this.highlights?.detectorActive) { this.lastChaos = state; return; }
-        this.lastChaos = state;
-        const presentedAtMs = performance.now();
-        for (const launch of state.pressure?.launches ?? []) {
-            if (launch.playerId !== this.myId || this.seenHighlightLaunches.has(launch.id)) continue;
-            this.seenHighlightLaunches.add(launch.id);
-            this.highlights.detector.noteLocalLaunch(presentedAtMs, this.rat?.entity.mesh.position.y ?? 0);
-            this.localLaunchY = this.rat?.entity.mesh.position.y ?? 0;
-            this.localLaunchAt = presentedAtMs;
-        }
-        this.highlights.emit(this.highlights.detector.onSnapshot({
-            epoch: state.epoch ?? '',
-            roundId: state.assignment?.roundId ?? '',
-            deliverySerial: state.assignment?.deliverySerial ?? 0,
-            owner: state.case.owner,
-            lastDeliveryPlayerId: state.assignment?.lastDelivery?.playerId,
-            launches: (state.pressure?.launches ?? []).map(launch => ({id: launch.id, playerId: launch.playerId, at: launch.at})),
-            presentedAtMs,
-            silent: this.highlightBaseline,
-        }));
-        this.highlightBaseline = false;
+    /** `?replay=dev` (docs/replay/playback.md, Checks): F8 lists the kept clips and plays the newest fullscreen; F8 again stops it. */
+    private bindReplayDev():void {
+        this.replayDev=true;
+        document.addEventListener('keydown',event=>{
+            if(event.code!=='F8'||event.repeat)return;
+            event.preventDefault();this.logReplays();
+            if(this.replay.current()){this.replay.stop();return;}
+            const newest=this.recorder.clips().reduce<ReplayClip|undefined>((best,clip)=>!best||clip.at>best.at?clip:best,undefined);
+            if(newest)this.replay.play(newest,{mode:'fullscreen',onEnd:()=>this.replay.stop()});
+        },{signal:this.events.signal});
     }
-
-    private observeHighlights(now: number): void {
-        if (!this.highlights?.live || !this.lastChaos || now - this.lastHighlightObserve < 100) return;
-        this.lastHighlightObserve = now;
-        const camera = this.stage.camera;
-        this.highlightMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-        this.highlightFrustum.setFromProjectionMatrix(this.highlightMatrix);
-        const local = this.rat?.entity.mesh.position;
-        const live = new Set(this.lastChaos.corpses.map(corpse => corpse.id));
-        for (const id of [...this.highlightCorpseSeen.keys()]) if (!live.has(id)) this.highlightCorpseSeen.delete(id);
-        const corpses = this.lastChaos.corpses.map(corpse => {
-            if (!this.highlightCorpseSeen.has(corpse.id)) this.highlightCorpseSeen.set(corpse.id, now);
-            const point = new THREE.Vector3(corpse.p.x, corpse.p.y, corpse.p.z);
-            const onScreen = this.highlightFrustum.containsPoint(point);
-            const nearby = !local || Math.hypot(point.x - local.x, point.z - local.z) <= 20;
-            const visible = onScreen && nearby && this.gun.sceneryClear(camera.position, point);
-            return {id: corpse.id, presentedAtMs: this.highlightCorpseSeen.get(corpse.id) || now, x: corpse.p.x, y: corpse.p.y, z: corpse.p.z, onScreen, visible};
-        });
-        this.highlights.emit(this.highlights.detector.observePhysical({
-            presentedAtMs: now,
-            localY: this.rat?.entity.mesh.position.y ?? 0,
-            localLaunchedAtMs: this.localLaunchAt || undefined,
-            localLaunchY: this.localLaunchAt ? this.localLaunchY : undefined,
-            nearbyEruption: (this.lastChaos.impacts ?? []).some(hit => hit.cue === 'thud'),
-            corpses,
-        }));
+    private logReplays():void {
+        const {clips,bufferBytes,bufferEntries}=this.recorder.describe();
+        console.info(`[replay] ${clips.length} clips kept (~${Math.round(clips.reduce((sum,clip)=>sum+clip.bytes,0)/1024)} KB); buffer ${bufferEntries} entries (~${Math.round(bufferBytes/1024)} KB)`);
+        console.table(clips.map(clip=>({id:clip.id,kind:clip.kind,score:Math.round(clip.score),entries:clip.entries,kb:Math.round(clip.bytes/1024)})));
     }
 
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
-        this.highlights.dispose();
+        this.exhibits?.dispose();this.replay.dispose();
         document.body.classList.remove('observing');
         this.title.dispose();
         this.releasePreparedModels?.();this.releasePreparedModels=undefined;

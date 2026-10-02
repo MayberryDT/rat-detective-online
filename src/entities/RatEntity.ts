@@ -21,7 +21,7 @@ import { DEFAULT_APPEARANCE, generateRandomAppearance } from '../shared/ratAppea
 import { RatBillboard } from '../ui/RatBillboard';
 import { streakTier } from '../shared/streak';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
-import { playEntitySound } from '../audio/EntityAudio';
+import { playEntitySound, type EntitySoundBus } from '../audio/EntityAudio';
 import { contactShadowsOf } from '../session/shadows';
 import { RAT_BODY, addRatShapes } from '../shared/rat/ratBody';
 import { CASE_RED } from '../prototype/caseRed';
@@ -96,6 +96,8 @@ export class RatEntity {
     public isRemote: boolean = false;
     public scene: THREE.Scene;
     public world: CANNON.World;
+    /** Where this rat's hits and deaths sound: an exhibit replay's bus, or the live mix (undefined). */
+    public soundBus?: EntitySoundBus;
 
     // Physics
     public body: CANNON.Body;
@@ -195,7 +197,7 @@ export class RatEntity {
         this.deathContactTime = this.deathTimer;
         this.deathContacts++;
         this.deathImpact = Math.min(speed / 12, 1);
-        playEntitySound('ratHit', Math.min(0.25 + speed * 0.025, 0.65), this.body.position);
+        this.sound('ratHit', Math.min(0.25 + speed * 0.025, 0.65), this.body.position);
     };
 
     constructor(
@@ -517,9 +519,9 @@ export class RatEntity {
         this.animator.setHustle(this.hustleRemaining>0);
         this.animator.update(dt,previewSpeed);
         // Polish 16: dust from this frame's animation events (consumed once).
-        if(this.animator.skidStarted){this.animator.skidStarted=false;kickDust(p,.45);}
-        if(this.animator.landedFall>0){kickDust(p,Math.min(1,.3+(this.animator.landedFall-12)/25));this.animator.landedFall=0;}
-        if(this.animator.launched){this.animator.launched=false;kickDust(p,1);}
+        if(this.animator.skidStarted){this.animator.skidStarted=false;kickDust(this.scene,p,.45);}
+        if(this.animator.landedFall>0){kickDust(this.scene,p,Math.min(1,.3+(this.animator.landedFall-12)/25));this.animator.landedFall=0;}
+        if(this.animator.launched){this.animator.launched=false;kickDust(this.scene,p,1);}
 
         const silver=this.ironcladRemaining>0,pursuit=this.hustleRemaining>0;
         this.ironcladRemaining=Math.max(0,this.ironcladRemaining-dt);
@@ -620,7 +622,12 @@ export class RatEntity {
         this.billboard.sprite.removeFromParent();
         this.body.velocity.setZero();this.body.angularVelocity.setZero();
         this.body.collisionFilterMask=0;this.body.sleep();
-        playEntitySound('ratDeath',.6, this.isPlayer ? undefined : this.body.position);
+        this.sound('ratDeath',.6, this.isPlayer ? undefined : this.body.position);
+    }
+    /** A hit or death sound: on this rat's `soundBus` when it has one (an exhibit replay), otherwise the live mix as called. */
+    private sound(...args: [name: Parameters<typeof playEntitySound>[0], volume: number, origin?: Vec3Data]): void {
+        if (this.soundBus) playEntitySound(args[0], args[1], args[2], this.soundBus);
+        else playEntitySound(...args);
     }
 
     /** Quick Fix: restore authoritative health without any death or respawn path. With `stagger` (s) the
@@ -652,9 +659,9 @@ export class RatEntity {
         if (this.hp > 0) {
             this.animator.takeHit(impactVel);
             if (this.isPlayer) {
-                playEntitySound('playerHit', 0.6);
+                this.sound('playerHit', 0.6);
             } else {
-                playEntitySound('ratHit', 0.5, this.body.position);
+                this.sound('ratHit', 0.5, this.body.position);
             }
         }
 
@@ -755,11 +762,11 @@ export class RatEntity {
         if (headshot) this.splatHead(impactVel);
 
         // ── DEATH SOUND ──
-        playEntitySound('ratDeath', 0.6, this.isPlayer ? undefined : this.body.position);
+        this.sound('ratDeath', 0.6, this.isPlayer ? undefined : this.body.position);
         if (this.isPlayer) {
-            playEntitySound('playerHit', 0.6);
+            this.sound('playerHit', 0.6);
         } else {
-            playEntitySound('ratHit', 0.4, this.body.position);
+            this.sound('ratHit', 0.4, this.body.position);
         }
 
         // ── COMPUTE "LAYING DOWN" TARGET QUATERNION ──

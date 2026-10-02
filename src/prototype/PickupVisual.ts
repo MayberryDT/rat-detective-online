@@ -342,8 +342,8 @@ export class PickupVisual {
         // Claim: the lamp stutters out, the prop pops up and vanishes in a flash. Restock: the
         // lamp clicks on and the prop drops back onto the plinth. A site first seen empty does neither.
         if(this.lastUpdate&&dt>0){
-            if(empty&&!this.wasEmpty&&this.lit===1){this.flicker=.42;this.popAge=0;this.flashBurst();supplyCue('claim',{x:world.x,y:world.y+1,z:world.z});}
-            if(!empty&&this.wasEmpty&&this.lit===0){this.dropAge=0;this.flashBurst();supplyCue('restock',{x:world.x,y:world.y+1,z:world.z});}
+            if(empty&&!this.wasEmpty&&this.lit===1){this.flicker=.42;this.popAge=0;this.flashBurst();supplyCue(this.root,'claim',{x:world.x,y:world.y+1,z:world.z});}
+            if(!empty&&this.wasEmpty&&this.lit===0){this.dropAge=0;this.flashBurst();supplyCue(this.root,'restock',{x:world.x,y:world.y+1,z:world.z});}
         }
         this.wasEmpty=empty;
         this.popAge+=dt;this.dropAge+=dt;
@@ -393,7 +393,7 @@ export class PickupVisual {
     /** A burst of the supply's colour and a puff of dust at the plinth. */
     private flashBurst():void {
         this.burst.opacity=.7;
-        kickDust(this.root.position,.5);
+        kickDust(this.root,this.root.position,.5);
     }
     dispose():void {this.restock?.dispose();this.root.removeFromParent();disposeMeshResources(this.root);}
 }

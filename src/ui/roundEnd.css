@@ -12,13 +12,23 @@ body.lineup-on:not(.round-results) .victory-casefile{display:none}
 @keyframes round-banner{from{opacity:0;translate:0 -24px}to{opacity:1;translate:0 0}}
 /* The banner may keep a rotate (the build drops rotate:none), so GameHud moves the Case File
  * out of it into the overlay for the results; a rotated parent would otherwise capture it. */
-body.round-results #victory-text{animation:none;transform:none}
+body.round-results #victory-text{animation:none;transform:none;margin-top:1.2vh}
+body.round-results .victory-kicker{font-size:clamp(14px,1.3vw,19px);margin-bottom:2px}
+body.round-results .victory-winner{font-size:clamp(28px,3.2vw,46px)}
+body.round-results .victory-verdict{margin-top:4px;font-size:clamp(15px,1.4vw,21px)}
 body.round-results #victory-overlay{visibility:visible;background:radial-gradient(ellipse at 50% 60%,#0c1224d9,#05070df5)}
 body.round-results.scoreboard-open #victory-overlay{visibility:visible}
+/* Exhibits (Exhibits.ts): the replay draws into the game canvas under the board, so the dim moves to a layer with a
+ * hole at the exhibit's frame (--exhibit-*, kept by Exhibits each frame). */
+body.round-results.exhibits-on #victory-overlay{background:none}
+body.round-results.exhibits-on #victory-overlay::before{display:block;position:fixed;inset:0;width:auto;height:auto;animation:none;
+    background:radial-gradient(ellipse at 50% 60%,#0c1224d9,#05070df5);
+    -webkit-mask:linear-gradient(#000 0 0) var(--exhibit-x,0) var(--exhibit-y,0)/var(--exhibit-w,0) var(--exhibit-h,0) no-repeat,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+    mask:linear-gradient(#000 0 0) var(--exhibit-x,0) var(--exhibit-y,0)/var(--exhibit-w,0) var(--exhibit-h,0) no-repeat,linear-gradient(#000 0 0);mask-composite:exclude}
 body.round-results #police-lineup{opacity:0;transition:opacity .5s}
 /* GameHud.layoutResults sets the --results-* positions from the measured banner. */
 body.round-results .match-scoreboard{left:var(--results-board-left,3vw);top:var(--results-top,calc(3vh + 150px));transform:none;width:var(--results-board-w,min(840px,62vw));max-height:var(--results-h,calc(100dvh - 3vh - 172px));animation:round-panel .45s .1s cubic-bezier(.2,.8,.3,1.1) both}
-body.round-results .victory-casefile{position:fixed;left:var(--results-file-left,auto);top:var(--results-top,calc(3vh + 150px));width:var(--results-file-w,min(420px,31vw));max-height:var(--results-h,calc(100dvh - 3vh - 172px));box-sizing:border-box;overflow:hidden;margin:0;padding:18px 22px;rotate:0deg;pointer-events:auto;
+body.round-results .victory-casefile{position:fixed;left:var(--results-file-left,auto);top:var(--results-file-top,var(--results-top,calc(3vh + 150px)));width:var(--results-file-w,min(420px,31vw));max-height:var(--results-file-h,var(--results-h,calc(100dvh - 3vh - 172px)));box-sizing:border-box;overflow:hidden;margin:0;padding:18px 22px;rotate:0deg;pointer-events:auto;
     text-align:left;background:radial-gradient(ellipse 30% 20% at 90% 94%,#4a68a82e,#0000 70%),linear-gradient(#0c1224cc,#0c1224cc);border-top:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge);animation:round-panel .45s .25s cubic-bezier(.2,.8,.3,1.1) both}
 body.round-results .match-scoreboard::after{display:none}
 body.round-results .victory-casefile.photo-corners::before{left:5px;top:5px}body.round-results .victory-casefile.photo-corners::after{right:5px;bottom:5px}
@@ -30,7 +40,7 @@ body.round-results .victory-casefile b{grid-area:title;font-size:20px;letter-spa
 body.round-results .victory-casefile span{grid-area:who;font-size:14px}
 body.round-results .victory-casefile strong{grid-area:value;align-self:center;font-size:26px;color:var(--carbon-bright)}
 /* Fitting steps (GameHud.fitCaseFile): two columns of stamp, value and who (nothing shares a
- * narrow column's width), then smaller type, then three columns. */
+ * narrow column's width), then three and four columns at about the same size, then smaller type. */
 body.round-results .victory-casefile:is(.fit-2,.fit-3) ul{grid-template-columns:1fr 1fr;gap:clamp(6px,.9vh,12px) 18px}
 body.round-results .victory-casefile:is(.fit-2,.fit-3) li{grid-template-columns:minmax(0,1fr);grid-template-areas:'title' 'value' 'who';align-content:start;gap:1px;padding-bottom:5px}
 body.round-results .victory-casefile:is(.fit-2,.fit-3) b{justify-self:start;white-space:nowrap;font-size:clamp(17px,1.1vw,22px)}
@@ -43,11 +53,17 @@ body.round-results .victory-casefile.fit-compact li{padding-bottom:3px;gap:0 8px
 body.round-results .victory-casefile.fit-compact b{font-size:15px}
 body.round-results .victory-casefile.fit-compact strong{font-size:15px;margin-top:1px}
 body.round-results .victory-casefile.fit-compact span{font-size:11.5px}
-body.round-results .victory-casefile.fit-3 ul{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 10px}
-body.round-results .victory-casefile.fit-3 :is(b,strong){max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
-body.round-results .victory-casefile.fit-3 span{font-size:10px}
+body.round-results .victory-casefile.fit-3 ul{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:12px}
+body.round-results .victory-casefile.fit-3 :is(b,strong){max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.round-results .victory-casefile.fit-4 ul{grid-template-columns:repeat(4,minmax(0,1fr));column-gap:10px}
+body.round-results .victory-casefile.fit-4 b{font-size:clamp(15px,.95vw,19px)}
+body.round-results .victory-casefile.fit-4 strong{font-size:clamp(16px,1vw,20px)}
+body.round-results .victory-casefile.fit-3.fit-compact :is(b,strong){font-size:13px}
+body.round-results .victory-casefile.fit-3.fit-compact span{font-size:10px}
 /* Equal heights (--results-panel-h from GameHud); the standings' footer stays at the bottom. */
 body.round-results :is(.match-scoreboard,.victory-casefile){min-height:min(var(--results-panel-h,0px),var(--results-h,100dvh))}
+/* Under the exhibits the Case File is shorter by the exhibits block, so the column's bottom meets the standings'. */
+body.round-results .victory-casefile{min-height:min(var(--results-file-panel-h,var(--results-panel-h,0px)),var(--results-file-h,var(--results-h,100dvh)))}
 @keyframes round-panel{from{opacity:0;translate:0 26px}to{opacity:1;translate:0 0}}
 /* The strip of the round's big numbers (GameHud.headlineStrip), between the banner and the panels. */
 .results-headline{display:none}
@@ -114,7 +130,7 @@ body.round-results .victory-casefile li.you span::after{content:' · YOU';font-s
     body.round-results .results-headline dd{font-size:22px}
     body.round-results .results-headline dt{font-size:9.5px;letter-spacing:1px;margin-top:2px}
     body.round-results .results-headline small{font-size:10.5px}
-    body.round-results .match-scoreboard{left:50%;transform:translateX(-50%);width:calc(100vw - 24px);top:var(--results-top,calc(2vh + 118px));max-height:calc(100dvh - var(--results-top,calc(2vh + 118px)) - 30dvh - 22px - var(--results-actions-h,0px))}
+    body.round-results .match-scoreboard{left:50%;transform:translateX(-50%);width:calc(100vw - 24px);top:var(--results-top,calc(2vh + 118px));max-height:calc(100dvh - var(--results-top,calc(2vh + 118px)) - 30dvh - 22px - var(--results-actions-h,0px) - var(--results-exhibits-h,0px))}
     body.round-results .match-scoreboard-heading{display:none}
     body.round-results .victory-casefile{left:12px;right:12px;width:auto;top:auto;bottom:calc(16px + var(--results-actions-h,0px));max-height:30dvh;padding:10px 14px}
     body.round-results .results-actions{gap:6px 8px;flex-wrap:wrap;padding-inline:8px}
@@ -128,7 +144,7 @@ body.round-results .victory-casefile li.you span::after{content:' · YOU';font-s
 /* Landscape phones: standings and Case File side by side under the strip, so both stay readable. */
 @media(max-height:640px) and (min-width:700px){
     body.round-results .match-scoreboard{left:2vw;transform:none;width:60vw;max-height:var(--results-h,calc(100dvh - 2vh - 112px))}
-    body.round-results .victory-casefile{left:auto;right:2vw;width:35vw;top:var(--results-top,calc(2vh + 104px));bottom:auto;max-height:var(--results-h,calc(100dvh - 2vh - 112px))}
+    body.round-results .victory-casefile{left:auto;right:2vw;width:35vw;top:calc(var(--results-top,calc(2vh + 104px)) + var(--results-exhibits-h,0px));bottom:auto;max-height:calc(var(--results-h,calc(100dvh - 2vh - 112px)) - var(--results-exhibits-h,0px))}
     body.round-results .victory-casefile ul{grid-template-columns:1fr}
     body.round-results .match-scoreboard[data-results=true] table{min-width:0}
     body.round-results .match-scoreboard thead th{overflow-wrap:anywhere}

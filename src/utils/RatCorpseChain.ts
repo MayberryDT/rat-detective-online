@@ -61,8 +61,11 @@ let rayWorld: C.World | undefined, rayTokens = RAY_BURST, rayClock = 0;
 const rayFrom = new C.Vec3(), rayTo = new C.Vec3(), rayResult = new C.RaycastResult();
 // A fixed callback: Cannon would otherwise make a new no-op closure per ray.
 const rayOptions: C.RayOptions = {collisionFilterMask: 1, skipBackfaces: true, callback: () => {}};
+/** Worlds that never become the ray world: an exhibit replay's rats live in one, apart from the live city. */
+const isolated = new WeakSet<C.World>();
+export function isolateRagdollWorld(world: C.World): void {isolated.add(world);}
 /** The client physics world whose city (and bodies) corpse limbs rest on. */
-export function setRagdollWorld(world: C.World | undefined): void {rayWorld = world;}
+export function setRagdollWorld(world: C.World | undefined): void {if (!world || !isolated.has(world)) rayWorld = world;}
 
 const basis = new THREE.Matrix4(), scratch = new THREE.Vector3(), mid = new THREE.Vector3();
 /** Orthonormal frame with +Y along from→to and +X toward `side`; `x` receives the lateral axis
@@ -89,6 +92,9 @@ const REST_FRAMES = (() => {
 export class RatCorpseChain {
     /** This corpse's own local physics body, skipped by its rays. */
     ignore?: C.Body;
+    /** An exhibit replay's chain: every point casts its rays each step, outside the shared budget, so a body
+     * falls the same way each time the clip plays (the budget depends on frame timing). */
+    unmetered = false;
     active = false;
     /** True once the chain has advanced; until then the corpse keeps the pose it was given. */
     stepped = false;
@@ -289,13 +295,12 @@ export class RatCorpseChain {
             for (let i = 0; i < REST.length; i++) {const ground = this.planes[i][0];ground.on = true;ground.n.copy(UP);ground.d = this.floor;}
             return;
         }
-        const now = performance.now();
-        rayTokens = Math.min(RAY_BURST, rayTokens + Math.max(0, now - rayClock) / 1000 * RAY_RATE);rayClock = now;
+        if (!this.unmetered) {const now = performance.now();rayTokens = Math.min(RAY_BURST, rayTokens + Math.max(0, now - rayClock) / 1000 * RAY_RATE);rayClock = now;}
         const group = this.ignore?.collisionFilterGroup ?? 0;
         if (this.ignore) this.ignore.collisionFilterGroup = 0;
-        for (let n = 0; n < REST.length && rayTokens >= 2; n++) {
+        for (let n = 0; n < REST.length && (this.unmetered || rayTokens >= 2); n++) {
             const i = (this.cursor + n) % REST.length, p = this.p[i], r = RADIUS[i];
-            rayTokens -= 2;
+            if (!this.unmetered) rayTokens -= 2;
             const reach = this.delta.subVectors(p, anchor), length = reach.length();
             const wall = this.planes[i][1];wall.on = false;
             if (length > 1e-4) {

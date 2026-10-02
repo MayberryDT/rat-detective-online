@@ -3,6 +3,7 @@ import {LAUNCH_MACHINES,PRESSURE_TUNING,type LaunchMachine,type ChaosState,type 
 import {SURGE} from '../shared/launcherVelocity';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {LauncherAudio} from '../audio/LauncherAudio';
+import type {VoiceRoute} from '../audio/PlayerAudioMix';
 import {buildMachine,createMachineMaterials,TRIGGER_SCALE as TRIGGER_BASE,type MachineMaterials,type MachineModel} from './LaunchMachineModels';
 import {freezeStatic} from '../utils/freezeStatic';
 
@@ -51,8 +52,8 @@ export class PressureMachine {
     private readonly levels=new Map<string,number>();
     private readonly hitAt=new THREE.Vector3();
 
-    constructor(scene:THREE.Scene,audio?:AudioContext){
-        this.launchAudio=new LauncherAudio(audio);
+    constructor(scene:THREE.Scene,audio?:AudioContext,route?:VoiceRoute){
+        this.launchAudio=new LauncherAudio(audio,route);
         this.root.name='municipal-launch-contraptions';
         this.materials=createMachineMaterials();
         for(const machine of LAUNCH_MACHINES){

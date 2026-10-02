@@ -6,12 +6,14 @@ import type { ControlsInput } from './rat/controlTally';
 import type { PerfReport } from './perfReport';
 import type { PickupKind, WeaponKind } from './pickups';
 import type { AdminCommand, AdminResult } from './admin';
+import type { ExhibitMessage, HighlightMarker } from './highlights';
 
 /** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there.
  * 27: Tommy Gun, Laser and Mousetrap pickups; a stronger Excessive Force carrier; targets of 10 / 100 / 10; the incident rework.
  * 28: playtest quick patch: Planted Evidence and Bobbleheads removed, hitscan Laser at the cheese gun's rate, holding traps, carrier buff in every mode, results you leave when you choose.
- * 29: clarity: the hot case heartbeat (the carrier flashes red through walls every 4 s, red-hot cuffed case), Cheddar Shower removed, flaming Crossfire streaks and bank-shot paths, admin controls. */
-export const PROTOCOL_VERSION = 29;
+ * 29: clarity: the hot case heartbeat (the carrier flashes red through walls every 4 s, red-hot cuffed case), Cheddar Shower removed, flaming Crossfire streaks and bank-shot paths, admin controls.
+ * 30: highlight replays: the server's `highlight` markers and the client's `exhibit` reports (docs/replay-plan.md). */
+export const PROTOCOL_VERSION = 30;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
@@ -222,6 +224,8 @@ export type ClientMessage = (
   | { type: 'ready' }
   /** Admin controls (protocol 29): `token` once, until the room answers; then the socket is admin. Never echoed. */
   | { type: 'admin'; token?: string; command: AdminCommand }
+  /** Highlight replays (protocol 30): an exhibit the results board showed, played or saved, for the city map only. */
+  | ExhibitMessage
 ) & { deliveryAck?: {stream:string;seq:number} };
 
 /** Why a rat was healed: a Quick Fix (site or reward), or an Excessive Force case kill. */
@@ -312,6 +316,8 @@ export type ServerMessage =
   | { type: 'gameReset'; round: RoundState }
   | { type: 'pong'; sentAt: number; receivedAt: number }
   | { type: 'error'; message: string; code?: 'resume-unavailable' }
+  /** Highlight replays (protocol 30): a moment worth replaying (docs/replay/detection.md). */
+  | HighlightMarker
   /** The answer to an `admin` message, to that socket only. */
   | ({ type: 'adminResult' } & AdminResult);
 

@@ -135,7 +135,7 @@ const actions:Record<string,()=>void>={
     'Respawn suspects':()=>{for(const v of suspects)if(v.dead)v.respawn({x:v.body.position.x,y:.5,z:v.body.position.z,hp:3});},
     'Your death (camera + iris)':()=>{rat.entity.hp=1;rat.entity.takeDamage(1,new THREE.Vector3(0,6,-14));feel.died(()=>rat.entity.mesh.position);},
     'Respawn you':()=>{rat.entity.respawn({x:-32,y:.5,z:-18,hp:3});feel.reset();},
-    'Hard landing (dip + dust)':()=>{feel.motion(1/60,false,-30,0,1);feel.motion(1/60,true,0,0,1);kickDust(rat.entity.mesh.position,.9);},
+    'Hard landing (dip + dust)':()=>{feel.motion(1/60,false,-30,0,1);feel.motion(1/60,true,0,0,1);kickDust(stage.scene,rat.entity.mesh.position,.9);},
     'Launch view (hold 1.5 s)':()=>{feel.motion(1/60,false,60,0,1);setTimeout(()=>feel.motion(1/60,true,0,0,1),1500);},
     'Hot Pursuit streaks (2 s)':()=>{const t=setInterval(()=>feel.motion(1/60,true,0,16,1.45),16);setTimeout(()=>{clearInterval(t);feel.motion(1/60,true,0,0,1);},2000);},
     'City: blast near the rat (props react)':()=>{const p=rat.entity.mesh.position;for(const lamp of city.streetLamps){if(Math.hypot(lamp[0]-p.x,lamp[1]-p.z)<30)cityImpact({x:lamp[0]+2,y:.5,z:lamp[1]+2},4);}},
