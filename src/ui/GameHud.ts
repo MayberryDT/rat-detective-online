@@ -497,8 +497,10 @@ export class GameHud {
         file.classList.remove('fit-2','fit-compact','fit-3');
         // A long list reads better as two short columns than one tall one.
         if(this.caseFile!.rows.length>6)file.classList.add('fit-2');
+        // Laid-out height (offsets ignore the stamping's scale, which would inflate scrollHeight mid-stamp).
+        const list=this.caseFile!.list,pad=parseFloat(this.doc.defaultView?.getComputedStyle(file).paddingBottom??'0')||0;
         for(const step of ['fit-2','fit-compact','fit-3']){
-            if(file.scrollHeight<=target+1)break;
+            if(list.offsetTop+list.offsetHeight+pad<=target+1)break;
             file.classList.add(step);
         }
     }
