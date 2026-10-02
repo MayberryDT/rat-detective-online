@@ -23,7 +23,7 @@ async function json(u,init){for(let i=0;i<100;i++){try{return await (await fetch
 /** Before the page's scripts: the last raw socket messages, to name one the client rejects. */
 const HOOK=`(()=>{window.__raw=[];const W=window.WebSocket;window.WebSocket=class extends W{constructor(...a){super(...a);
  this.addEventListener('message',e=>{if(typeof e.data==='string'&&!e.data.startsWith('{"type":"movementFrame"')){__raw.push(/"type":"(gameWon|welcome)"/.test(e.data)?e.data:e.data.slice(0,4000));if(__raw.length>40)__raw.shift();}});}};})();`;
-const checks=[],errors=[],markers=[];let board=null,file=null,raw=[];
+const checks=[],errors=[],markers=[];let board=null,file=null,raw=[],layout=null;
 try{
     const tab=await json(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'});
     const socket=new WebSocket(tab.webSocketDebuggerUrl);await new Promise(r=>socket.addEventListener('open',r,{once:true}));
@@ -49,6 +49,7 @@ try{
     checks.push({check:'results board shows exhibits',pass:shown});
     board=await evaluate(`[...document.querySelectorAll('.exhibit-card')].map(c=>({letter:c.dataset.letter,kind:c.dataset.kind,text:c.innerText.replace(/\\s+/g,' ').trim()}))`);
     await sleep(2500);await screenshot('exhibits-1-board');
+    layout=await evaluate(`(()=>{const s=document.body.style,r=e=>{const b=document.querySelector(e)?.getBoundingClientRect();return b&&[Math.round(b.left),Math.round(b.top),Math.round(b.width),Math.round(b.height)];};return {viewport:[innerWidth,innerHeight],vars:Object.fromEntries([...s].filter(k=>k.startsWith('--results')).map(k=>[k,s.getPropertyValue(k)])),standings:r('.match-scoreboard'),file:r('.victory-casefile'),exhibits:r('.results-exhibits'),screen:r('.exhibit-screen')};})()`);
     const t1=await evaluate(`document.querySelector('.exhibit-rec-time')?.textContent`);await sleep(1500);
     const t2=await evaluate(`document.querySelector('.exhibit-rec-time')?.textContent`);
     checks.push({check:'board stats still readable beside the exhibits',pass:await evaluate(`!!document.querySelector('.match-scoreboard, .results-board, #match-scoreboard')`)});
@@ -77,7 +78,7 @@ try{
 finally{
     chrome.kill();await new Promise(r=>chrome.exitCode===null?chrome.once('exit',r):r());rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:200});
     const pass=checks.length>0&&checks.every(c=>c.pass);
-    writeFileSync(join(out,'exhibits.json'),JSON.stringify({url:values.url,at:new Date().toISOString(),pass,checks,board,file,markers,errors,raw},null,2));
+    writeFileSync(join(out,'exhibits.json'),JSON.stringify({url:values.url,at:new Date().toISOString(),pass,checks,board,layout,file,markers,errors,raw},null,2));
     console.log(JSON.stringify({pass,checks:checks.map(({check,pass})=>({check,pass})),board,file}));
     process.exitCode=pass?0:1;
 }

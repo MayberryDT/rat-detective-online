@@ -154,11 +154,11 @@ export function parseAssignment(value: unknown): AssignmentState | null {
     if (a.result !== undefined) {
         if (!a.result || typeof a.result !== 'object') return null;
         const r = a.result as Record<string, unknown>;
-        // An admin end of round (`award`) closes at any time after the reveal with the mode's own method, below its target.
+        // An admin end of round (`award`) closes at any time after the reveal with the mode's own method, below its
+        // target, and may award a leader who is dead at that moment (posthumous).
         if (!str(r.winnerId, 64) || !str(r.winnerName, 32) || !number(r.at) || r.at < a.revealedAt ||
             !['carried', 'kills', 'zone-held'].includes(String(r.method)) || typeof r.posthumous !== 'boolean') return null;
         if (r.method !== (a.id === 'jurisdiction' ? 'zone-held' : a.id === 'chain-of-custody' ? 'carried' : 'kills')) return null;
-        if (r.posthumous) return null;
         result = { winnerId: r.winnerId, winnerName: r.winnerName, at: r.at, method: r.method as AssignmentResult['method'], posthumous: r.posthumous };
     }
     if(jurisdiction&&Object.entries(jurisdiction.heldMs).some(([id,ms])=>ms===JURISDICTION_TUNING.targetMs&&id!==result?.winnerId))return null;
