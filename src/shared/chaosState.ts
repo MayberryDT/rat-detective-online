@@ -67,7 +67,7 @@ export const INCIDENT_TUNING = {
 /** Crossfire (Tyler, 2 October). Fired like any ball; at its first real world bounce it catches fire all at once
  * ("the player only really sees the first bank off the wall"; three escalating steps to 717 u/s were "too fast … don't
  * make it feel like the laser"): heat `maxHeat` (1), it leaves the wall `speedUp`× as fast (350 u/s) and lives `life`
- * s longer (at most `maxLife`), then keeps its speed off every later wall. A ball that has bounced kills in one hit; the
+ * s longer (at most `maxLife`), then keeps its speed off every later wall. It deals ordinary damage (no one-shot kill since 2 October); the
  * kill reports its world bounces (counted to `maxBounces`) and its path: the muzzle, its first `pathPoints` bounces
  * and the hit. */
 export const CROSSFIRE = { maxHeat: 1, speedUp: 2, life: .5, maxLife: 2.5, pathPoints: 6, maxBounces: 99 } as const;

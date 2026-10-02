@@ -1610,9 +1610,10 @@ export class ChaosSimulation {
             shot.p=data(point);
             const incoming={...shot.v};
             if(target?.kind==='rat' && target.player && target.player.hp>0){
-                // Body hits take one hit point (a Big Cheese ball more, by its size); a headshot or a Crossfire bank shot is lethal.
+                // Body hits take one hit point (a Big Cheese ball more, by its size); a headshot is lethal. A Crossfire bank
+                // shot deals ordinary damage (Tyler, 2 October: no more one-shot kills); a finishing one is still a BANK SHOT.
                 const headshot=hit.shape===target.head;
-                const damage=headshot||(this.incidentActive('crossfire')&&shot.wallBounced)?MAX_HP:Math.min(MAX_HP,cheeseDamage(radius,MAX_HP)*this.carrierPower(shot.owner));
+                const damage=headshot?MAX_HP:Math.min(MAX_HP,cheeseDamage(radius,MAX_HP)*this.carrierPower(shot.owner));
                 if((useRat?ratHit!.ironclad:hasIronclad(this.buffs,target.player.id,now))){
                     // A reflective coat, not a hit shield: keep the original shooter
                     // and finite budget, and never treat a rat contact as a wall bounce.

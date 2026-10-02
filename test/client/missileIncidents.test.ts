@@ -1,5 +1,6 @@
 import {describe,expect,it,vi} from 'vitest';
 import { MAX_HP } from '../../src/shared/networkProtocol';
+import { BALL_SPEED } from '../../src/shared/ballTuning';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
 import {INCIDENT_TUNING as I,CHAOS_TUNING as T} from '../../src/shared/chaosState';
@@ -152,12 +153,13 @@ describe('Crossfire bank shots',()=>{
  function fire(f:ReturnType<typeof fixture>){
   f.sim.shoot(f.shooter.id,{shotId:'bank',origin:{x:0,y:20.7,z:0},direction:{x:1,y:0,z:0}});
  }
- it('keeps direct body hits ordinary but makes a world ricochet lethal',()=>{
+ it('deals ordinary damage with a world ricochet as with a direct hit, faster after the wall',()=>{
   const direct=fixture('crossfire');direct.victim.x=1;fire(direct);direct.sim.step(.01,direct.now+10);
-  expect(direct.hits[0].damage).toBe(1);
   const bank=fixture('crossfire');bank.victim.x=-1;wall(bank.sim,2);fire(bank);
-  bank.sim.step(.02,bank.now+20);expect(bank.sim.snapshot(false).shots[0].wallBounced).toBe(true);
-  bank.sim.step(.03,bank.now+50);expect(bank.hits[0].damage).toBe(MAX_HP);
+  bank.sim.step(.02,bank.now+20);const banked=bank.sim.snapshot(false).shots[0]!;
+  expect(banked.wallBounced).toBe(true);expect(Math.hypot(banked.v.x,banked.v.y,banked.v.z)).toBeGreaterThan(BALL_SPEED);
+  bank.sim.step(.03,bank.now+50);
+  expect(bank.hits[0].damage).toBe(direct.hits[0].damage);expect(bank.hits[0].damage).toBeLessThan(MAX_HP);
  });
  it('does not treat a launcher target reflection as a world bank shot',()=>{
   const f=fixture('crossfire');f.victim.x=-1;wall(f.sim,2,'pressure');fire(f);
