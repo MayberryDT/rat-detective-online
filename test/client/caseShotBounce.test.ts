@@ -67,7 +67,7 @@ it('makes a grip whole again after two seconds without a hit',()=>{
 it('rewards taking the case with a supply, at most once per rat in each reward window',()=>{
     const {sim,players}=fixture();
     const carry=createPlayer('carry','Carry',appearance,{x:0,y:0,z:0});players.set(carry.id,carry);
-    const buffs=()=>JSON.stringify(sim.snapshot(false).buffs?.carry??{});
+    const buffs=()=>{const {weaponReadyAt:_,...held}=sim.snapshot(false).buffs?.carry??{};return JSON.stringify(held);};
     sim.step(0,1001);expect(sim.caseHolderId).toBe(carry.id);
     const first=buffs();expect(first).not.toBe('{}');
     sim.release(carry.id);sim.step(0,2001);expect(sim.caseHolderId).toBe(carry.id);expect(buffs()).toBe(first);

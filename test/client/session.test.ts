@@ -458,7 +458,7 @@ describe('GameSession', () => {
         transport.onMessage?.({type:'playerDamaged',id:'other',hp:0,attackerId:snapshot.id});
         transport.onMessage?.({type:'playerDied',victimId:'other',killerId:snapshot.id,killerName:'Me',victimName:'Other',respawnAt:5000});
         expect(hud.showKillConfirmation).toHaveBeenCalledTimes(1);
-        expect(hud.showKillConfirmation).toHaveBeenLastCalledWith('Other',false);
+        expect(hud.showKillConfirmation).toHaveBeenLastCalledWith('Other',false,undefined);
         expect(hud.showHitMarker).not.toHaveBeenCalled();
         // No dependency on a preceding damage packet or an extant remote mesh.
         transport.onMessage?.({type:'playerDied',victimId:'another',killerId:snapshot.id,killerName:'Me',victimName:'Another',respawnAt:5000});
