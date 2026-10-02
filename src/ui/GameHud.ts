@@ -492,14 +492,14 @@ export class GameHud {
         if(exhibitsBlock)body.style.setProperty('--results-file-panel-h',`${Math.ceil(available-exhibitsBlock)}px`);
     };
 
-    /** Awards never run off the screen: two columns for a long list, then smaller type, then three columns. */
+    /** Awards never run off the screen: two columns for a long list, then three columns, then smaller type. */
     private fitCaseFile(file: HTMLElement, target: number): void {
         file.classList.remove('fit-2','fit-compact','fit-3');
         // A long list reads better as two short columns than one tall one.
         if(this.caseFile!.rows.length>6)file.classList.add('fit-2');
         // Laid-out height (offsets ignore the stamping's scale, which would inflate scrollHeight mid-stamp).
         const list=this.caseFile!.list,pad=parseFloat(this.doc.defaultView?.getComputedStyle(file).paddingBottom??'0')||0;
-        for(const step of ['fit-2','fit-compact','fit-3']){
+        for(const step of ['fit-2','fit-3','fit-compact']){
             if(list.offsetTop+list.offsetHeight+pad<=target+1)break;
             file.classList.add(step);
         }
