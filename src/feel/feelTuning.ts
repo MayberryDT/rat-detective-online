@@ -176,7 +176,7 @@ export const FEEL={
      * the target quickening to `fast` (120 bpm) beside it. Any carrier's balls draw heavier and red-cored with a `thump`
      * (volume) under the shot and `sparks` red sparks on its hits. A kill while carrying: a red heal flare up your rat,
      * `surge` fast beats `surgeGap` s apart and the CASE CLOSED · HEALED stamp. */
-    hotCase:{label:'K3 Hot case carrier feel',toggle:true,params:{edge:.6,still:.6,beat:.2,accent:1.6,slow:5,fast:8,thump:.9,sparks:14,surge:4,surgeGap:.26}},
+    hotCase:{label:'K3 Hot case carrier feel',toggle:true,params:{edge:.35,still:.6,beat:.2,accent:1.6,slow:5,fast:8,thump:.9,sparks:14,surge:4,surgeGap:.26}},
     /** A1 Air acting (Tyler, 1 October: jumping rats were "stiff and lifeless", a salt shaker). Every rat, airborne from a
      * take-off over `takeOff` u/s or a fall over `fall` u/s until it lands: no walking stride in the air; `stretch` rising,
      * a `squash` and `tuck` (rad) ball at the apex with the feet pulled up (`feet`), a `reach` falling with ears (`ears`),
