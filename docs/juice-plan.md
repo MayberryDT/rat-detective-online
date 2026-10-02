@@ -83,24 +83,34 @@ Released 2 October: Worker `ea258468-6c17-4831-9901-6208aaf401b6`, build `produc
 - [x] New Scattershot sound ("I hate it"). `public/sounds/weapons/scattershot.wav` from `scripts/generate-feedback-sounds.py`: five cheese gun shots stacked a few ms apart over a cartoon whoomph (the mouth pop pitched far down plus a slowed soft impact); the pitched-down pistol and BLAM are gone. Not listened to yet.
 - [x] "You've been made" keeps the phrase but says what it means: someone can see you through walls. The card adds SOMEONE CAN SEE YOU THROUGH WALLS (Hunch, Stakeout and Staked Out share it).
 
-### Everything else raised (to address, not yet scheduled)
+### Clarity batch (agreed 2 October; protocol 29)
 
-- [ ] **Shooting feel:** Andrew wants more intentional shots, not spam. Data: Andrew and Cam fired about 1.6 a second and hit 6.5%; Tyler and Trey fired over 3 a second and hit 2.3–4.5%, yet Tyler had the most kills per minute alive. Tyler wants no hard fire limit; find another lever.
-- [ ] **Mega laser:** a second laser pickup: a huge beam with 3–5 shots that clears an alleyway (Andrew, Trey). The instant-hit laser stays.
-- [ ] **Laser theme:** less sci-fi, more Rat Detective (Andrew: cheese-shaped yellow beams with holes).
-- [ ] **Case carrier visibility:** a ping every 5–10 seconds instead of always seen (Andrew; Tyler liked it).
-- [ ] **PAPER CHASE flow:** keep the case after a delivery and get a new drop-off, rather than fighting for it again (Cam).
-- [ ] **Chaos overall:** "maximum chaos limits"; "I don't even know where the case is"; Cam felt sick. Revisit after the quick patch's calmer incidents.
+Tyler: "We finally reached the point where there's too much chaos … we gotta double down on clarity." He approved every idea below ("I love all of it").
+
+- [ ] **Case ping:** the carrier is not marked between pings. Every 4 s the case pings: a gold flare and spreading ring, a short tall light column visible across the city, and a ping sound from its direction, seen and heard by everyone through walls. The case HUD and screen-edge arrow show the last ping ("LAST SEEN · 80 m · NORTH"), flash on each ping and fade between. The carrier gets a soft tick and edge flash when pinged. A loose case keeps a steady glow. Bots know the carrier's position only from pings and their own sight.
+- [ ] **One gold language:** the case, its ping, its arrow, the drop-off and the active Jurisdiction zone share one cheese gold that nothing else uses.
+- [ ] **One headline at a time:** one queue for big messages; the most important wins (you got the case, you died, an incident started); the rest shrink to a single line.
+- [ ] **Incidents told, then out of the way:** a big 2 s title with its picture and a one-line rule, then a small tag with the time left.
+- [ ] **Death recap:** who killed you, with what (weapon, headshot, meteor, drowning), and an arrow to the case.
+- [ ] **Calmer by default:** lower default screen shake and camera kick; on first launch point to the shake slider and Reduced Motion.
+- [ ] **Words explained once:** "made", the Hunch, Ironclad and the bad versions get a one-line explanation the first time; afterwards only the word.
+- [ ] **A sound mix that ranks things:** your hits, kills, case pings and case events cut through other fights; fewer voices at once.
+- [ ] **Fewer things competing visually:** other rats' balls slightly dimmer than threats near you; caps on casings, gobs, meteor debris and similar effects.
+- [ ] **Default volume 50%** for new players (Cam: loud on first load); saved settings unchanged.
+- [ ] **Admin controls for Tyler:** a server-held admin key, pasted once into a hidden Settings field on his machine; an F10 panel in live matches (end the round with the leader winning, pick the next mode, roll or end an incident, reset the case); the same commands from `scripts/admin.mjs`; every admin action recorded as a fact; no gameplay advantage.
+- [ ] **Lag research:** pings spiked to 2.8 s (Tyler) and 2.0 s (Andrew), averaging 80–151 ms; Cheddar Shower raised average ping to 163 ms (119 ms without an incident); Trey averaged 43 fps with 37 ms of CPU on slow frames; other rats are drawn about 0.3 s in the past. Measure the server tick with 4 humans and 6 bots per incident and the bytes sent per tick, profile a busy client, then fix what the numbers show.
+
+### Still open from the playtest
+
 - [ ] **Bad Ammunition:** Tyler: still not working. Trey and Cam: "make it shoot like garbage", in every direction. Kept for now.
 - [ ] **Cheddar Shower:** Trey wants it gone ("raining on me"); the data shows meteors fell near him no more than his share. Kept; consider a clearer warning and fewer meteors.
-- [ ] **Lag with four humans:** average ping 80–151 ms, spikes to 731 ms (Tyler); Trey at 43 fps; Andrew lost connection once. Investigate the server tick and snapshot size with four humans.
 - [ ] **A case that resets after a carrier dies on top of the dock containers** looked like a bug ("The case just despawned right in front of me"); make the reset readable.
-- [ ] **Ironclad does not stop traps** confused Cam ("Why can I get trapped with a steel jacket on?"). The hold trap may settle it; tell it either way.
-- [ ] **Loud on first load** (Cam); settings already have volume. Lower the default.
-- [ ] **More launch pads** (Trey).
-- [ ] **More music:** two or three more tracks like the theme (Andrew).
-- [ ] **Game master controls** for Tyler during a match (end the round, pick the mode).
-- [ ] **Ideas to explore:** a cheese web to swing like Spider-Man (Trey); criminal NPC rats guarding the case (Andrew); teams, such as five teams of two with no friendly fire (Andrew, Trey); something huge at a 20-kill streak ("Super Saiyan", a giant cheese block drop); a Rat Detective MOBA (Tyler, half joking).
+- [ ] **Ironclad does not stop traps** confused Cam; the hold trap and the one-time explanations should settle it.
+
+### Decided against (Tyler, 2 October)
+
+- Shooting feel changes ("not a common opinion"); the mega laser and a new laser look ("the laser landed in a good spot"); keeping the case after a delivery; new launch pads; new music.
+- Parked for now, to focus on clarity: a cheese web, criminal NPC rats, teams, a 20-kill streak reward, a MOBA.
 
 ## Protocol 27: the arsenal and the incident rework (Tyler, 2026-10-01)
 
