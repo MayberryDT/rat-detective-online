@@ -196,6 +196,10 @@ metadata; production Worker code and all 57 other existing assets are unchanged.
 Protocol 18 and client `index-BL9xcsnh.js` / `createGame-BSxvfOuu.js` remain.
 See [release verification](verification/social-share-2026-09-22.md).
 
+## Exhibits (highlight replays) — 2 October, on staging
+
+The results board shows the round's 3 best moments as replays, rebuilt by the game from recorded data, with a save button (WebM). The server detects moments (protocol 30). Staging only: build `staging-2026-10-02-f6d2d90`, branch `replays`; production waits for Tyler. It also fixes admin end of round, which on production (protocol 29) makes every client reject the round result. See [the replay plan](replay-plan.md) and [the staging receipt](verification/replays-staging-2026-10-02.md).
+
 ## Omarchy alert plugin 2.1.0 — 2 October, installed on Veelox only
 
 Tyler: "all I want it to do is just be a bare bones alert system that tells me when people are playing." The plugin is now the rat in the bar, lit with the number of people playing (click opens the game), plus one service (no panel, launcher helper, shortcut installer or recording): every 30 s it reads `/api/companion/v1/status` with `curl` and sends one Omarchy notification when the public rooms go from no people to some, re-arming only when they are empty again; nothing while the game window is focused; clicking opens or focuses the game. See [Omarchy](omarchy.md).
