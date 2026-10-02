@@ -10,7 +10,7 @@ import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { CaseState, ChaosState, CorpseState, LaunchMachine, SurgeVent, TrapState } from '../shared/chaosState';
 import { CHAOS_TUNING, CASE_LOOSE_SCALE } from '../shared/chaosState';
-import { pingFlash } from '../shared/caseHeartbeat';
+import { pingFlash, pingPunch, sincePing } from '../shared/caseHeartbeat';
 import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh, ratAccessory } from '../utils/RatModel';
 import { RatAnimator } from '../utils/RatAnimator';
@@ -169,6 +169,9 @@ export class ChaosView {
     private readonly assignmentDestinations:AssignmentDestinations;
     private readonly caseMarker=document.createElement('div');
     private readonly caseMarkerDetail=document.createElement('div');
+    /** At a ping, an arrow on the screen edge toward an off-screen carrier; `markerPunch` the tag's snap as written. */
+    private readonly caseArrow=document.createElement('i');
+    private markerPunch=-1;
     private readonly impacts:CheeseImpactEffects;
     /** Crossfire's bounce sparks, scorches and ricochets, a bank kill's path and your aim guide. */
     readonly crossfire:CrossfireVisual;
@@ -271,7 +274,8 @@ export class ChaosView {
         this.caseMarker.setAttribute('aria-label','Hot Case location');
         const title=document.createElement('div');title.className='hot-case-title';title.textContent='HOT CASE';
         this.caseMarkerDetail.className='hot-case-detail';
-        for(const child of [title,this.caseMarkerDetail])this.caseMarker.appendChild(child);
+        this.caseArrow.className='hot-case-arrow';this.caseArrow.hidden=true;
+        for(const child of [this.caseArrow,title,this.caseMarkerDetail])this.caseMarker.appendChild(child);
         document.body.appendChild(this.caseMarker);
         this.buffBar.className='pickup-buffs';this.buffBar.style.display='none';
         document.body.appendChild(this.buffBar);
@@ -679,9 +683,10 @@ export class ChaosView {
         this.hotLook.update(camera,renderTime,s.case,now,this.carrier,this.arm?.parent??null);
         // The hot case's red outline through walls: a loose case's gentle pulse; someone else's carried case, and its
         // carrier's whole body, only at each heartbeat ping (a bright flash fading to nothing), never between.
-        const flash=s.case.owner&&s.case.owner!==this.myId?pingFlash(s.case,now):0;
+        const others=!!s.case.owner&&s.case.owner!==this.myId,flash=others?pingFlash(s.case,now):0,punch=others?pingPunch(s.case,now):0;
         this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer||this.lastHitPoint,wall,s.case.owner?flash:null);
-        this.carrierFlash.update(camera,this.lastHitPoint||this.carrier?.isPlayer?null:this.carrier,flash);
+        this.carrierFlash.update(camera,this.lastHitPoint||this.carrier?.isPlayer?null:this.carrier,flash,punch,others?sincePing(s.case,now):Infinity);
+        this.pingPunch=punch;
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
         this.updateBuffs(s.buffs,now);
@@ -857,6 +862,7 @@ export class ChaosView {
     private markerFlash=-1;
     /** The HOT CASE tag: over a loose or returning case with its status and distance; over someone else's carried case
      * only at a heartbeat ping (`flash`), where it pinged, fading with the flash; never over your own. */
+    private pingPunch=0;
     private updateCaseMarker(camera:THREE.Camera,flash:number){
         const s=this.state!,ping=s.case.owner?s.case.ping:undefined;
         if(this.carrier?.isPlayer||this.lastHitPoint||s.case.owner&&(!ping||flash<=0)){this.caseMarker.style.display='none';return;}
@@ -872,6 +878,11 @@ export class ChaosView {
         const tag=ping?'hot-case-tag carried':'hot-case-tag';if(this.caseMarker.className!==tag)this.caseMarker.className=tag;
         const opacity=ping?Math.round(flash*20)/20:-1;
         if(opacity!==this.markerFlash){this.markerFlash=opacity;this.caseMarker.style.opacity=opacity<0?'':String(opacity);}
+        // A ping's tag lands big and settles; off screen, an arrow on the edge points the way while the flash lasts.
+        const punch=ping?Math.round(this.pingPunch*20)/20:0;
+        if(punch!==this.markerPunch){this.markerPunch=punch;this.caseMarker.style.scale=punch?String(1+.7*punch):'';}
+        const arrow=!!ping&&location.edge;this.caseArrow.hidden=!arrow;
+        if(arrow)this.caseArrow.style.transform=`rotate(${location.angle}rad)`;
         if(ping)return;
         setText(this.caseMarkerDetail,`${s.case.returningUntil?'RETURNING':'LOOSE'} · ${Math.round(location.distance)} m${location.behind?' · BEHIND':''}`);
     }

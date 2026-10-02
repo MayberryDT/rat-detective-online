@@ -10,7 +10,10 @@ import {CASE_RED} from './caseRed';
  * rat stands about `ratHeight` units); each flash swells it `swell`× (none with reduced motion). `silhouette` is the
  * exact rat's peak opacity. Scenery must stand `hiddenBy` units nearer than the rat (`signHiddenBy` than the sign's
  * feet) to count as hiding it, so a rat's own far arm or the street it stands on never does. */
-export const PING_FLASH={minPixels:64,ratHeight:2.3,swell:.15,strength:1.8,silhouette:.9,hiddenBy:1.2,signHiddenBy:1.5} as const;
+export const PING_FLASH={minPixels:96,ratHeight:2.3,swell:.15,punch:.55,strength:2.4,silhouette:1,hiddenBy:1.2,signHiddenBy:1.5} as const;
+/** Each ping sends `count` radar rings out from the carrier, `gapMs` apart, each growing from the rat's size to `grow`×
+ * over `ms` and fading: wherever the carrier is on screen, the eye is pulled to it. Drawn over everything. */
+export const PING_RINGS={count:2,gapMs:170,ms:850,grow:3.2,opacity:.85,width:.16} as const;
 
 /** The sign's right half, feet at the origin, facing the camera: body, neck, head, an ear poking out under the fedora's
  * brim, the brim and a pinched crown; mirrored for the left. */
@@ -43,7 +46,14 @@ export class CarrierPingFlash {
     private entity:RatEntity|null=null;
     private silhouette?:THREE.SkinnedMesh;
     private signTop:number=PING_FLASH.ratHeight;
+    private readonly ringMaterials=Array.from({length:PING_RINGS.count},()=>new THREE.MeshBasicMaterial({color:CASE_RED,transparent:true,opacity:0,
+        blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,fog:false,toneMapped:false,side:THREE.DoubleSide}));
+    private readonly ringGeometry=new THREE.RingGeometry(1-PING_RINGS.width,1,64);
+    private readonly rings=this.ringMaterials.map(material=>{
+        const ring=new THREE.Mesh(this.ringGeometry,material);ring.name='carrier-ping-ring';ring.visible=false;ring.renderOrder=2002;ring.raycast=()=>{};return ring;
+    });
     constructor(private readonly scene:THREE.Scene){
+        for(const ring of this.rings)scene.add(ring);
         this.sign=new THREE.Mesh(signGeometry(),this.signMaterial);
         this.sign.name='carrier-ping-flash';this.sign.visible=false;this.sign.renderOrder=2001;this.sign.raycast=()=>{};
         freezeStatic(this.sign,[this.sign]);scene.add(this.sign);
@@ -58,15 +68,17 @@ export class CarrierPingFlash {
     /** How high above the carrier's feet the flash reaches now (world units): the HOT CASE tag sits above it. */
     get top():number {return this.signTop;}
 
-    /** Each frame: `carrier` is someone else's living carrier (null: none, or yours), `flash` its ping flash 0…1. */
-    update(camera:THREE.Camera,carrier:RatEntity|null,flash:number):void {
+    /** Each frame: `carrier` is someone else's living carrier (null: none, or yours), `flash` its ping flash 0…1,
+     * `punch` the ping's snap 1…0 and `since` milliseconds since the ping. */
+    update(camera:THREE.Camera,carrier:RatEntity|null,flash:number,punch=0,since=Infinity):void {
         if(carrier!==this.entity){this.release();this.entity=carrier;}
+        this.updateRings(camera,carrier,since);
         if(!carrier||carrier.dead||flash<=0){this.hide();return;}
         const p=carrier.mesh.position,distance=camera.position.distanceTo(p);
         const height=Math.max(1,window.innerHeight),projection=camera.projectionMatrix.elements[5];
         // How many times the rat must grow to stay `minPixels` tall: below 1 it is big enough as it is.
         const reach=PING_FLASH.minPixels*2*distance/(PING_FLASH.ratHeight*height*projection);
-        const swell=reducedMotion()?1:1+PING_FLASH.swell*flash;
+        const swell=reducedMotion()?1:1+PING_FLASH.swell*flash+PING_FLASH.punch*punch;
         const far=THREE.MathUtils.smoothstep(reach,.7,1.4),near=1-THREE.MathUtils.smoothstep(reach,1.5,3);
         this.sign.visible=far>0;
         if(far>0){
@@ -81,11 +93,27 @@ export class CarrierPingFlash {
         if(this.silhouette)this.silhouette.visible=!!silhouette;
         this.silhouetteMaterial.opacity=PING_FLASH.silhouette*flash*near;
     }
+    /** The radar rings: each a flat red ring facing the camera around the carrier's middle, at least the size the far sign
+     * keeps, growing and fading after the ping. Reduced motion keeps one steady ring that fades. */
+    private updateRings(camera:THREE.Camera,carrier:RatEntity|null,since:number):void {
+        const still=reducedMotion();
+        for(let i=0;i<this.rings.length;i++){
+            const ring=this.rings[i]!,t=(since-i*PING_RINGS.gapMs)/PING_RINGS.ms;
+            if(!carrier||carrier.dead||!(t>=0&&t<1)||still&&i>0){ring.visible=false;continue;}
+            const p=carrier.mesh.position,distance=camera.position.distanceTo(p);
+            const height=Math.max(1,window.innerHeight),projection=camera.projectionMatrix.elements[5];
+            const size=Math.max(1,PING_FLASH.minPixels*2*distance/(PING_FLASH.ratHeight*height*projection))*PING_FLASH.ratHeight*.55;
+            const grow=still?1.4:1+(PING_RINGS.grow-1)*(1-(1-t)*(1-t));
+            ring.position.set(p.x,p.y+size*.9,p.z);ring.quaternion.copy(camera.quaternion);ring.scale.setScalar(size*grow);
+            this.ringMaterials[i]!.opacity=PING_RINGS.opacity*(1-t)*(1-t);ring.visible=true;
+        }
+    }
     /** Nothing shows until the next flash. */
-    hide():void {this.sign.visible=false;this.signTop=PING_FLASH.ratHeight;if(this.silhouette)this.silhouette.visible=false;}
+    hide():void {for(const ring of this.rings)ring.visible=false;this.sign.visible=false;this.signTop=PING_FLASH.ratHeight;if(this.silhouette)this.silhouette.visible=false;}
 
     dispose():void {
         this.release();this.sign.removeFromParent();this.sign.geometry.dispose();
+        for(const ring of this.rings)ring.removeFromParent();this.ringGeometry.dispose();for(const m of this.ringMaterials)m.dispose();
         this.signMaterial.dispose();this.silhouetteMaterial.dispose();
     }
 

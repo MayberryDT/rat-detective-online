@@ -72,6 +72,14 @@ describe('authoritative Dispatch incidents',()=>{
   fireDispatch(standard.sim,now);
   expect(standard.sim.snapshot(false).dispatch.incident).not.toBe('evidence-tampering');
  });
+ it('keeps rolling when the room runs a single incident (a staging INCIDENTS list)',()=>{
+  const {sim}=fixture();sim.onlyIncidents=['crossfire'];
+  fireDispatch(sim);expect(sim.snapshot(false).dispatch.incident).toBe('crossfire');
+  const at=now+T.rollMs+T.activeMs+T.cooldownMs;
+  sim.step(0,at);sim.step(0,at+10);expect(sim.snapshot(false).dispatch.phase).toBe('ready');
+  fireDispatch(sim,at+20);
+  expect(sim.snapshot(false).dispatch).toMatchObject({phase:'rolling',incident:'crossfire'});
+ });
  it('selects once, persists through restore and busy hits, and avoids immediately repeating',()=>{
   vi.spyOn(Math,'random').mockReturnValue(0);const {sim,players}=fixture();fireDispatch(sim);
   const selected=sim.snapshot(false);expect(selected.dispatch.incident).toBe('improper-disposal');

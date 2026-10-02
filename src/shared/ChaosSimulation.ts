@@ -801,10 +801,11 @@ export class ChaosSimulation {
         if(this.dispatch.phase!=='ready')return;
         const previous=this.dispatch.incident??(this.dispatch.serial>0?incidentInfo().id:undefined);
         const roster=incidentRoster(this.evidenceMode,this.onlyIncidents);
-        // A forced practice roll may repeat; a normal roll keeps the no-repeat rule.
+        // A forced practice roll may repeat; a normal roll keeps the no-repeat rule unless the roster has one incident
+        // (a staging playtest's `INCIDENTS=crossfire`: the empty draw threw and Dispatch never rolled).
         const forced=this.forcedIncident&&roster.some(incident=>incident.id===this.forcedIncident)?this.forcedIncident:undefined;
-        const choices=roster.filter(incident=>incident.id!==previous);
-        const incident=forced??choices[Math.floor(Math.random()*choices.length)].id;
+        const fresh=roster.filter(incident=>incident.id!==previous),choices=fresh.length?fresh:roster;
+        const incident=forced??choices[Math.floor(Math.random()*choices.length)]!.id;
         const caller=owner?this.players.get(owner):undefined;
         this.dispatch={phase:'rolling',started:this.now,until:this.now+T.rollMs,serial:this.dispatch.serial+1,incident,...(caller?{caller:caller.id}:{})};
         if(caller)this.rewardSupply(caller.id,'dispatch');
