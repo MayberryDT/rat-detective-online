@@ -9,7 +9,7 @@ import {JURISDICTION_ZONES,zoneContains} from '../../shared/jurisdictionZones';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS,ASSIGNMENT_TUNING,type AssignmentId} from '../../shared/assignments';
 import {DISPATCH_STATIONS,INCIDENT_TUNING,LAUNCH_MACHINES,type Meteor} from '../../shared/chaosState';
 import {incidentInfo} from '../../shared/incidentCatalog';
-import {FAULTY_COPY,hasHustle,hasIronclad,heldWeapon,faultyOf,stakedOut,type FaultyKind,type PickupKind,type PickupState,type WeaponKind} from '../../shared/pickups';
+import {FAULTY_COPY,hasHustle,hasIronclad,heldWeapon,faultyOf,stakedOut,trapped,type FaultyKind,type PickupKind,type PickupState,type WeaponKind} from '../../shared/pickups';
 import {MAX_HP,type Vec3Data} from '../../shared/networkProtocol';
 
 /** Perception (docs/bot-overhaul.md, B3): what one rat can honestly know, in the words the city map uses.
@@ -27,8 +27,8 @@ const HEARING={shotRange:60,shotAge:1,launchRange:100,launchMs:3000,alarmMs:4000
 const RECENT_HIT_MS=3000;
 const COMPASS=['north','north-east','east','south-east','south','south-west','west','north-west'];
 const RULES:Record<AssignmentId,string>={
-    'chain-of-custody':'Paper Chase: carry the case into the named drop-off; the first rat to make ten deliveries wins.',
-    jurisdiction:'Jurisdiction: only the rat carrying the case scores, while it stands inside the active zone: each zone holds twenty points that drain to the carrier, then the zone moves; the first to a hundred points wins.',
+    'chain-of-custody':'Paper Chase: carry the case into the named drop-off building; the first rat to make five deliveries wins. The carrier hits twice as hard and every kill it makes heals it to full.',
+    jurisdiction:'Jurisdiction: only the rat carrying the case scores, while it stands inside the active zone: each zone holds twenty points that drain to the carrier, then the zone moves; the first to a hundred points wins. The carrier hits twice as hard and every kill it makes heals it to full.',
     'excessive-force':'Excessive Force: a kill counts only when made while carrying the case; the first to ten such kills wins. The carrier hits twice as hard and every kill it makes heals it to full.',
 };
 /** How `me` plays (its archetype, docs/bot-overhaul.md "Archetypes"), so Jev's scores fit the style. */
@@ -37,7 +37,7 @@ const STYLES:Record<Personality,string>={
     hose:'A hose: aggressive; closes in, sprays long bursts and keeps hunting.',
     camper:'A camper: takes the case to a defensible spot and holds it there, shooting whoever comes; still delivers and scores.',
     joyrider:'A joyrider: loves the launch machines; rides them on the way and fights from the air.',
-    gremlin:'A gremlin: causes chaos; rings alarm pillars and shoots launch triggers and counterfeits next to other rats.',
+    gremlin:'A gremlin: causes chaos; rings alarm pillars and shoots launch triggers under other rats.',
 };
 const PICKUPS:Record<PickupKind,string>={
     'quick-fix':'a Quick Fix medkit (restores full HP)',
@@ -45,13 +45,13 @@ const PICKUPS:Record<PickupKind,string>={
     hustle:'a Hot Pursuit (run much faster for a while)',
     stakeout:'a Stakeout magnifying glass (see every rat in the city through walls for a while)',
     'tommy-gun':'a Tommy Gun (hold the trigger to spray cheese for a while)',
-    laser:'a Laser (an instant beam that bounces off walls, one shot a second, for a while)',
-    mousetrap:'a Mousetrap (set it down; any other rat that steps on it dies)',
+    laser:'a Laser (an instant beam that bounces off walls, fired as fast as I click, for a while)',
+    mousetrap:'a Mousetrap (set it down; any other rat that steps on it is held in place for a few seconds)',
 };
 const WEAPONS:Record<WeaponKind,string>={
     'tommy-gun':'I hold a Tommy Gun: holding the trigger sprays cheese, for a while.',
-    laser:'I hold a laser: an instant beam that bounces off walls, one shot a second, for a while.',
-    mousetrap:'I carry a mousetrap to set down: my next shot puts it on the floor just ahead, and any other rat that steps on it dies. It cannot hurt me.',
+    laser:'I hold a laser: an instant beam that bounces off walls, fired as fast as I click, for a while.',
+    mousetrap:'I carry a mousetrap to set down: my next shot puts it on the floor just ahead, and any other rat that steps on it is held in place for a few seconds (it can still turn and shoot). It cannot catch me.',
 };
 /** My own Code Violation dud (`FAULTY_KINDS`), in my words. */
 const MY_DUD:Record<FaultyKind,string>={
@@ -70,7 +70,7 @@ export interface RatMemory {
     /** Hits taken, oldest first: when (room clock) and from whom (absent: the city). */
     hits:readonly {at:number;by?:string}[];
 }
-export interface RatSeen {id:string;where:string;hp:string;armour?:string;speed?:string;faulty?:string;carrying?:string;shooting_at_me?:string}
+export interface RatSeen {id:string;where:string;hp:string;armour?:string;speed?:string;faulty?:string;held?:string;carrying?:string;shooting_at_me?:string}
 /** The situation sent to Jev as `state`. */
 export interface Situation {
     assignment:string;
@@ -154,6 +154,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
             ...(hasIronclad(buffs,p.id,time)?{armour:'Ironclad Alibi: reflects every cheese ball back at the shooter'}:{}),
             ...(hasHustle(buffs,p.id,time)&&dud!=='hustle'?{speed:'Hot Pursuit: running much faster'}:{}),
             ...(dud?{faulty:`a Code Violation dud, ${FAULTY_COPY[dud].title.toLowerCase()}: ${FAULTY_COPY[dud].effect}`}:{}),
+            ...(trapped(buffs,p.id,time)?{held:'caught in a mousetrap: cannot move for a few seconds, can still turn and shoot'}:{}),
             ...(ctx.cases.some(c=>c.value.owner===p.id)?{carrying:'the case'}:{}),
             ...(recentHit(p.id)||aimedAtMe(p.id,self,state?.shots)?{shooting_at_me:'yes'}:{})};
     });
@@ -194,7 +195,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
     const pickups=[...nearest.values()].filter(p=>ctx.clear(p)).map(p=>`${PICKUPS[p.kind]}, ${where(self,p)}`);
     const traps=(state?.traps??[]).filter(t=>t.brokenAt===undefined&&distance(self,t)<9*RUN_SPEED&&ctx.clear(t))
         .sort((a,b)=>distance(self,a)-distance(self,b)).slice(0,TRAPS_LISTED)
-        .map(t=>`${t.owner===self.id?'my mousetrap (harmless to me)':'another rat\'s mousetrap (it kills me if I step on it; shooting breaks it)'}, ${where(self,t)}`);
+        .map(t=>`${t.owner===self.id?'my mousetrap (harmless to me)':'another rat\'s mousetrap (stepping on it holds me in place for a few seconds; shooting breaks it)'}, ${where(self,t)}`);
     const weapon=heldWeapon(buffs,self.id,time);
 
     const s=ctx.sighting,quarry=s&&!visible.has(s.id)&&now-s.at<=BANK.memoryMs&&distance(self,s.p)<=BANK.range&&ctx.living.some(p=>p.id===s.id)?s:undefined;
@@ -244,7 +245,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
     const place=placeOf(self);
     const myDud=faultyOf(buffs,self.id,time);
     const myBuffs=[hasIronclad(buffs,self.id,time)&&'Ironclad Alibi (cheese balls bounce off me)',hasHustle(buffs,self.id,time)&&myDud!=='hustle'&&'Hot Pursuit (running much faster)',
-        myDud&&MY_DUD[myDud]].filter(Boolean).join(' and ');
+        myDud&&MY_DUD[myDud],trapped(buffs,self.id,time)&&'caught in another rat\'s mousetrap (I cannot move for a few seconds; I can still turn and shoot)'].filter(Boolean).join(' and ');
 
     const goals:Partial<Record<Goal,string>>={},places:Partial<Record<Goal,readonly PlaceOption[]>>={};
     for(const goal of ctx.offered){

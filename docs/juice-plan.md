@@ -69,17 +69,17 @@ What landed: the detective look, the bots ("so good"), the sewers, the Tommy Gun
 
 ### Quick patch (agreed; protocol 28)
 
-- [ ] PAPER CHASE back to 5 deliveries (10 ran 52 minutes).
-- [ ] Planted Evidence removed ("If I get even within two feet of the case, I get blown up").
-- [ ] Bobbleheads removed (your own huge head blocked your view).
-- [ ] Calmer incidents: a longer quiet stretch between them (62 incidents in 52 minutes; "too chaotic", motion sickness).
-- [ ] Harbour Master and the precinct deliver anywhere in the building, like every other landmark (humans searched Pier 9 and never found the room; bots delivered there 5 times).
-- [ ] Laser: fires like the cheese gun (same rate), 1 damage, hitscan, lasts a little longer ("a downgrade": 10 kills from 67 pickups). Its look stays for now.
-- [ ] Mousetrap holds a rat in place instead of killing it (Cam's idea).
-- [ ] Carrier buff in every mode (flat double damage; a kill while carrying heals to full).
-- [ ] Results: each player leaves the stats screen when they choose; the next round starts without them meanwhile. A download button for the round's stats; more stats; the board scrolls with the mouse and has hover effects.
-- [ ] New Scattershot sound ("I hate it").
-- [ ] "You've been made" keeps the phrase but says what it means: someone can see you through walls.
+- [x] PAPER CHASE back to 5 deliveries (10 ran 52 minutes).
+- [x] Planted Evidence removed ("If I get even within two feet of the case, I get blown up"). Stored rooms run Improper Disposal; Evidence Tampering stays behind the private classic toggle.
+- [x] Bobbleheads removed (your own huge head blocked your view). Stored rooms run Crossfire.
+- [x] Calmer incidents: a longer quiet stretch between them (62 incidents in 52 minutes; "too chaotic", motion sickness). 40 s, was 21 s; an incident still lasts 25 s.
+- [x] Harbour Master and the precinct deliver anywhere in the building, like every other landmark (humans searched Pier 9 and never found the room; bots delivered there 5 times). All of Pier 9 and the whole precinct house; layout 7.
+- [x] Laser: fires like the cheese gun (same rate), 1 damage, hitscan, lasts a little longer ("a downgrade": 10 kills from 67 pickups). Its look stays for now. One click a shot under `SHOOT_RATE` (no 1 s spacing, bots too), 1 damage (headshots kill, carrier double applies), 15 s.
+- [x] Mousetrap holds a rat in place instead of killing it (Cam's idea). Held 3 s (`trapHoldMs`, `PlayerBuffs.trappedUntil`): turn and shoot, no moving or jumping, no damage, no kill; the trap stays clamped shut, re-arms 0.9 s after letting go and ignores the rat it let go until it steps clear; 8 balls or 3 lasers still break it and free the rat. HELD card and nameplate; death cause `trap` gone; the `trap` fact's `snap` carries `holdMs`.
+- [x] Carrier buff in every mode (flat double damage; a kill while carrying heals to full).
+- [x] Results: each player leaves the stats screen when they choose; the next round starts without them meanwhile. A download button for the round's stats; more stats; the board scrolls with the mouse and has hover effects. CONTINUE (or any key) on the board; the server holds a reader who has not continued out of the new round (dead, hidden) until their `ready`, a resume or 3 minutes, and bots never wait. The report adds assists, damage dealt, time alive (kills per minute), case takes and longest carry, kills by weapon, supplies by kind, deaths by cause and the incidents rolled; hover files on names, awards and race lines; DOWNLOAD STATS saves a self-contained page with the JSON embedded. Screenshots `~/.cache/rd-shots/qp-results-*.png`.
+- [x] New Scattershot sound ("I hate it"). `public/sounds/weapons/scattershot.wav` from `scripts/generate-feedback-sounds.py`: five cheese gun shots stacked a few ms apart over a cartoon whoomph (the mouth pop pitched far down plus a slowed soft impact); the pitched-down pistol and BLAM are gone. Not listened to yet.
+- [x] "You've been made" keeps the phrase but says what it means: someone can see you through walls. The card adds SOMEONE CAN SEE YOU THROUGH WALLS (Hunch, Stakeout and Staked Out share it).
 
 ### Everything else raised (to address, not yet scheduled)
 

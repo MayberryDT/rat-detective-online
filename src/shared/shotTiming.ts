@@ -7,10 +7,10 @@ export const SHOOT_RATE = { limit: 12, windowMs: 1_000 };
 // Bound rapid taps without queuing a delayed shot. Holding repeats fire only with the Tommy Gun.
 export const TOUCH_SHOT_INTERVAL_MS = Math.ceil(SHOOT_RATE.windowMs / SHOOT_RATE.limit) + 1;
 /** The least time between one rat's shots (0: only `SHOOT_RATE`). A held special weapon replaces the incident's
- * rule: the Laser fires once per Big Cheese interval, the Tommy Gun and Mousetrap only under `SHOOT_RATE`.
- * The same for every rat, human or bot. */
+ * rule: the Laser, Tommy Gun and Mousetrap fire only under `SHOOT_RATE` (the Laser one click a shot, like the
+ * cheese gun). The same for every rat, human or bot. */
 export const shotIntervalMs = (incident?: IncidentId, weapon?: WeaponKind): number =>
-    weapon ? weapon === 'laser' ? INCIDENT_TUNING.cheeseShotIntervalMs : 0 : incident === 'big-cheese' ? INCIDENT_TUNING.cheeseShotIntervalMs : 0;
+    !weapon && incident === 'big-cheese' ? INCIDENT_TUNING.cheeseShotIntervalMs : 0;
 
 /** Each rat's last admitted shot. `allow` admits a shot at least the interval (less `slackMs`) after that rat's
  * previous one and records it; a refused shot records nothing. */

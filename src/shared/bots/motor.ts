@@ -91,10 +91,8 @@ export function enemyTrap(self:PlayerData,p:Vec3Data,reach:number,state:ChaosSta
 export interface Tactics {
     /** Bank shots at a rat that just went behind cover. */
     bank:boolean;
-    /** Shoot counterfeits next to other rats and launch triggers under them. */
+    /** Shoot launch triggers under other rats. */
     mischief:boolean;
-    /** Shoot launch triggers under other rats (counterfeits only with `mischief`). */
-    triggers?:boolean;
     /** Ride launch machines on the way (`RIDE`). */
     joyride?:boolean;
     /** The preferred fight range's span, and how near a rival must be for the fight to take over the movement,
@@ -429,9 +427,7 @@ export class BotMotor {
 
     /** Case lifecycle and failure bookkeeping, every tick before any decision. */
     observe(now:number,self:PlayerData,state:ChaosState|undefined):{ownershipChanged:boolean;assignmentChanged:boolean} {
-        // Counterfeits are lethal hazards, never objectives: a bot that routed to one
-        // would simply kill itself on loop. Only genuine cases are collectible goals.
-        const cases=this.cases=state?[{key:'case',value:state.case},...(state.extraCases??[]).filter(value=>!value.fake).map(value=>({key:`case:${value.id}`,value}))]:[];
+        const cases=this.cases=state?[{key:'case',value:state.case},...(state.extraCases??[]).map(value=>({key:`case:${value.id}`,value}))]:[];
         // Keep each case's failed position independent. Picking up one extra
         // must not erase the evidence that the primary case is unreachable.
         let ownershipChanged=false,assignmentChanged=false;
@@ -621,7 +617,7 @@ export class BotMotor {
         if(!holdingZone&&!approachingCase&&!this.jumpTravel&&grounded&&now>=this.jumpProbeAt&&routeDestination&&!waypoint?.launch&&!waypoint?.drop){
             this.jumpProbeAt=now+900;
             const landing=this.navigation.jumpStep?.(self,routeDestination);
-            if(landing&&!state?.extraCases?.some(c=>c.fake&&distance(c.p,landing)<3&&clear(c.p))&&!enemyTrap(self,landing,3,state,clear)){
+            if(landing&&!enemyTrap(self,landing,3,state,clear)){
                 waypoint=landing;obstacleJump=true;
                 // A hop bypasses the old walking detour. Reattach on landing.
                 this.route=[];this.routeIndex=0;this.pendingPlan=undefined;this.plannedDestination=undefined;this.recoverUntil=0;this.planAt=now;
@@ -731,7 +727,7 @@ export class BotMotor {
         // Aim and fire: a bell, another rat's Mousetrap in the way, a gremlin's trick, the rival in sight, a bank at one
         // just hidden, fire where one just was, and otherwise a look ahead with the odd speculative group.
         const laser=this.weapon==='laser',tommy=this.weapon==='tommy-gun',trapping=this.weapon==='mousetrap';
-        const mischief=(this.tactics.mischief||this.tactics.triggers)&&!holdingZone&&!dispatchReady?this.tricks.mischief(now,self,state,this.visible,clearControl,this.tactics.mischief,this.ballistics,laser):undefined;
+        const mischief=this.tactics.mischief&&!holdingZone&&!dispatchReady?this.tricks.mischief(now,self,state,this.visible,clearControl,this.ballistics,laser):undefined;
         const clearing=!trapping&&!visibleTarget&&!dispatchReady?this.tricks.clearTrap(now,self,state,x,z,this.destination,clear,this.ballistics,laser):undefined;
         if(visibleTarget&&target){
             const point=casePoint??target;
@@ -755,8 +751,8 @@ export class BotMotor {
         this.aim.difficulty(visibleTarget&&target?distance(self,target):25,visibleTarget?this.aim.targetSpeed:0,this.ownSpeed);
         this.aim.update(now);
         const facing=this.aim.yaw;
-        // Big Cheese and the Laser space every rat's shots; hold the trigger until the gun is ready. The Tommy Gun's
-        // trigger is held down (a shot every `tommyIntervalMs`); a Mousetrap's press sets it down instead.
+        // Big Cheese spaces every rat's shots; hold the trigger until the gun is ready (the Laser clicks like the cheese
+        // gun). The Tommy Gun's trigger is held down (a shot every `tommyIntervalMs`); a Mousetrap's press sets it down instead.
         if(trapping){if(this.setTrap(now,self,state,grounded,visibleTarget))shoot=this.aim.point(eye,30);}
         else if(now>=this.shotAt&&now-this.firedAt>=shotIntervalMs(this.incident,this.weapon)){
             if(dispatchReady&&bell&&!visibleTarget){
@@ -768,17 +764,16 @@ export class BotMotor {
                 // Fire once the crosshair is roughly where the rat believes the target is (it cannot see its own miss),
                 // as a hand does, not when it is perfect; a player jumping in a fight clicks as the space bar goes down
                 // and just after, once the crosshair is near the rival (three times as loose).
-                const range=distance(eye,casePoint??target),tolerance=Math.atan2(1.5,range)+.04,click=!laser&&this.hopClicks>0&&now>=this.hopClickAt;
+                const range=distance(eye,casePoint??target),tolerance=Math.atan2(1.5,range)+.04,click=this.hopClicks>0&&now>=this.hopClickAt;
                 if(tommy){if(this.aim.onTarget&&!this.aim.flicking&&this.aim.felt<tolerance*2)shoot=this.aim.point(eye,range);}
                 else if(this.aim.onTarget&&!this.aim.flicking&&this.aim.felt<(click?tolerance*3:tolerance)&&this.trigger.pull(now,click)){
                     shoot=this.aim.point(eye,range);
                     if(click){this.hopClicks--;this.hopClickAt=now+HOP.clickMs[0]+this.motorRandom()*(HOP.clickMs[1]-HOP.clickMs[0]);}
                 }
             }else if(suppressing){
-                if(!laser&&this.aim.error<.08&&(tommy||this.trigger.pull(now)))shoot=this.aim.point(eye,Math.max(8,distance(self,seen!.p)));
+                if(this.aim.error<.08&&(tommy||this.trigger.pull(now)))shoot=this.aim.point(eye,Math.max(8,distance(self,seen!.p)));
             }else{
-                // A Laser shot a second is never wasted on a guess.
-                const spray=!laser&&!holdingZone&&!dispatchReady&&!this.protectedVisible.length&&!(this.mode==='case'&&this.destination&&distance(self,this.destination)<24);
+                const spray=!holdingZone&&!dispatchReady&&!this.protectedVisible.length&&!(this.mode==='case'&&this.destination&&distance(self,this.destination)<24);
                 if(this.spray.pull(now,spray,!bank&&!mischief&&this.aim.error<.3,this.tactics.spray,tommy?WEAPON_TUNING.tommyIntervalMs:undefined))shoot=this.aim.point(eye,this.spray.range);
             }
             // Held, the Tommy Gun fires on the first tick no more than `HELD_SLACK_MS` short of its interval.
@@ -793,14 +788,13 @@ export class BotMotor {
             const dx=this.jumpTravel.goal.x-self.x,dz=this.jumpTravel.goal.z-self.z,d=Math.hypot(dx,dz);
             const speed=Math.min(CAREFUL,d*5);x=d>.15?dx/d*speed:0;z=d>.15?dz/d*speed:0;
         }
-        // Steer around any planted counterfeit, another rat's Mousetrap or a falling meteor's shadow the current step
-        // would enter. Local, bounded and visible-only: the bot never reads hidden traps, it
+        // Steer around another rat's Mousetrap or a falling meteor's shadow the current step would enter.
+        // Local, bounded and visible-only: the bot never reads hidden traps, it
         // simply refuses to walk into one it can see ahead of it. Its own trap is harmless to it.
-        const fakes=state?.extraCases,traps=state?.traps,meteors=state?.meteors;
-        if((fakes?.length||traps?.length||meteors?.length)&&(x||z)){
+        const traps=state?.traps,meteors=state?.meteors;
+        if((traps?.length||meteors?.length)&&(x||z)){
             const stepLength=Math.hypot(x,z)||1,nx=x/stepLength,nz=z/stepLength,veered=this.veered;
             veered.x=x;veered.z=z;
-            if(fakes)for(const fake of fakes)if(fake.fake)this.veer(self,fake.p,nx,nz,stepLength,clear);
             if(traps)for(const trap of traps)if(trap.owner!==self.id&&trap.brokenAt===undefined)this.veer(self,trap,nx,nz,stepLength,clear);
             if(meteors)for(const m of meteors)if(m.at>time)this.veer(self,this.shadowOf(m),nx,nz,stepLength,clear);
             x=veered.x;z=veered.z;

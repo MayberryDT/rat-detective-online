@@ -39,19 +39,17 @@ function bodyKick(sim:ChaosSimulation,victim:ReturnType<typeof createPlayer>,tim
  return body;
 }
 describe('authoritative Dispatch incidents',()=>{
- it('can select every roster result and retires only the incident the mode leaves out',()=>{
+ it('can select every roster result and adds Evidence Tampering only in classic mode',()=>{
   const random=vi.spyOn(Math,'random');
-  const roster=incidentRoster('planted');
+  const roster=incidentRoster('standard');
   roster.forEach((incident,index)=>{
    random.mockReturnValue((index+.1)/roster.length);const {sim}=fixture();fireDispatch(sim);
    expect(sim.snapshot(false).dispatch.incident).toBe(incident.id);
   });
-  // Planted Evidence is the shipped default; the missile case is behind the toggle.
+  // The missile case is behind the classic toggle.
   expect(roster.some(i=>i.id==='evidence-tampering')).toBe(false);
-  expect(roster.some(i=>i.id==='planted-evidence')).toBe(true);
   const classic=incidentRoster('classic');
-  expect(classic.some(i=>i.id==='evidence-tampering')).toBe(true);
-  expect(classic.some(i=>i.id==='planted-evidence')).toBe(false);
+  expect(classic.filter(i=>i.id!=='evidence-tampering')).toEqual(roster);expect(classic).toHaveLength(roster.length+1);
   const index=classic.findIndex(i=>i.id==='evidence-tampering');
   random.mockReturnValue((index+.1)/classic.length);
   const {sim}=fixture();sim.evidenceMode='classic';fireDispatch(sim);
@@ -59,20 +57,20 @@ describe('authoritative Dispatch incidents',()=>{
  });
  it('pins one incident for private practice, repeats it, and ignores a pin outside the mode',()=>{
   const random=vi.spyOn(Math,'random').mockReturnValue(0);
-  const {sim}=fixture();sim.forcedIncident='planted-evidence';
+  const {sim}=fixture();sim.forcedIncident='scattershot';
   fireDispatch(sim);
-  expect(sim.snapshot(false).dispatch.incident).toBe('planted-evidence');
+  expect(sim.snapshot(false).dispatch.incident).toBe('scattershot');
   // A pin is meant for review: it survives the no-immediate-repeat rule.
   let at=now+T.rollMs+T.activeMs+T.cooldownMs;
   sim.step(0,at);sim.step(0,at+10);
   expect(sim.snapshot(false).dispatch.phase).toBe('ready');
   fireDispatch(sim,at+20);
-  expect(sim.snapshot(false).dispatch.incident).toBe('planted-evidence');
+  expect(sim.snapshot(false).dispatch.incident).toBe('scattershot');
   // A pin the current mode does not run is ignored rather than leaking the incident back.
-  const planted=fixture();planted.sim.evidenceMode='classic';planted.sim.forcedIncident='planted-evidence';
+  const standard=fixture();standard.sim.forcedIncident='evidence-tampering';
   random.mockReturnValue(0);
-  fireDispatch(planted.sim,now);
-  expect(planted.sim.snapshot(false).dispatch.incident).not.toBe('planted-evidence');
+  fireDispatch(standard.sim,now);
+  expect(standard.sim.snapshot(false).dispatch.incident).not.toBe('evidence-tampering');
  });
  it('selects once, persists through restore and busy hits, and avoids immediately repeating',()=>{
   vi.spyOn(Math,'random').mockReturnValue(0);const {sim,players}=fixture();fireDispatch(sim);

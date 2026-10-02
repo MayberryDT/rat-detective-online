@@ -16,14 +16,14 @@ it('rejects shortcuts over the sewer missing corner and excluded pump machinery'
  expect(zoneStepSafe('records-forecourt',{x:-4.05,y:0,z:-27},{x:-6.5,y:0,z:-27})).toBe(true);
  expect(zoneStepSafe('records-forecourt',{x:-4.05,y:0,z:-27},{x:-3,y:0,z:-27})).toBe(false);
 });
-it('keeps final counterfeit avoidance inside the zone and transitions on case loss, death and relocation',()=>{
+it('keeps final trap avoidance inside the zone and transitions on case loss, death and relocation',()=>{
  const a=createAssignment('jurisdiction',1000,'transition',()=>.3);a.liveAt=1000;a.phase='active';const j=a.jurisdiction!,id=activeZone(j),p=JURISDICTION_ZONES[id].posts[0];
  const self=createPlayer('self','Self',DEFAULT_APPEARANCE,p),other=createPlayer('other','Other',DEFAULT_APPEARANCE,{...p,x:p.x+8});
  const sim=new ChaosSimulation(new Map([[self.id,self],[other.id,other]]),()=>{},undefined,{seed:341283204,version:2});sim.setAssignment(a);
  const s=sim.snapshot(false);s.case.owner=self.id;s.pickups=[];
  const nav:MotorNavigation={route:(_from,to)=>[to],localStep:(_from,to)=>to,explorationTargets:()=>[p]};const brain=new RatBot(nav,2,()=>.3);
  for(let t=1000;t<3000;t+=50){
-  s.extraCases=[{...s.case,id:'fake',fake:true,owner:null,p:{x:self.x+1,y:self.y,z:self.z+1}}];
+  s.traps=[{id:'trap',owner:other.id,x:self.x+1,y:self.y,z:self.z+1,yaw:0,hp:3,at:0}];
   const intent=worldIntent(brain.step(t,self,[other],s,()=>true,false,true),self);
   expect(brain.objective).toBe('zone-hold');expect(zoneContains(id,{x:self.x+intent.x*.35,y:self.y,z:self.z+intent.z*.35})).toBe(true);
  }

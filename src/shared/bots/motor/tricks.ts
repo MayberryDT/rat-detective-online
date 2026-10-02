@@ -7,9 +7,8 @@ import type {MotorNavigation} from '../motor';
 import {BANK,bankShot} from './bankShot';
 import {EYE} from './aim';
 
-/** Mischief: a counterfeit is shot when another rat is within `bait` of it and this rat further than `safe`; a
- * trigger when another rat stands on its pad. Targets within `range`, looked for every `lookMs`. */
-export const MISCHIEF={bait:5,safe:10,range:50,lookMs:200} as const;
+/** Mischief: a launch trigger is shot when another rat stands on its pad, within `range`, looked for every `lookMs`. */
+export const MISCHIEF={range:50,lookMs:200} as const;
 /** Another rat's Mousetrap in the way is shot: one in sight within `range` on this level (`level`), in the lane the
  * rat runs along (`lane` either side) or within `near` of where it is going; looked for every `lookMs`, aimed
  * `lift` above its floor. */
@@ -68,20 +67,15 @@ export class BotTricks {
         return this.trapAim=p;
     }
 
-    /** A chaos shot: with `fakes`, a visible counterfeit with another rat beside it (never one close to this rat);
-     * else the trigger of a launch machine that is not cooling while another rat stands on its pad. Ordinary
-     * shots; the server decides what they do. A `beam` (the Laser) needs no lob. */
-    mischief(now:number,self:Vec3Data,state:ChaosState|undefined,visible:readonly PlayerData[],clearControl:(p:Vec3Data)=>boolean,fakes:boolean,incident?:IncidentId,beam=false):Vec3Data|undefined {
+    /** A chaos shot: the trigger of a launch machine that is not cooling while another rat stands on its pad.
+     * Ordinary shots; the server decides what they do. A `beam` (the Laser) needs no lob. */
+    mischief(now:number,self:Vec3Data,state:ChaosState|undefined,visible:readonly PlayerData[],clearControl:(p:Vec3Data)=>boolean,incident?:IncidentId,beam=false):Vec3Data|undefined {
         if(now<this.mischiefAt)return this.mischiefAim;
         this.mischiefAt=now+MISCHIEF.lookMs;this.mischiefAim=undefined;
         if(!state)return;
         const others=visible.filter(p=>p.hp>0);
         const speed=launchSpeed(incident),gravity=launchGravity(incident);
         const lob=(p:Vec3Data)=>{const travel=beam?0:Math.hypot(p.x-self.x,p.z-self.z)/speed;return this.mischiefAim={x:p.x,y:p.y-gravity*travel*travel/2,z:p.z};};
-        if(fakes)for(const fake of state.extraCases??[]){
-            const d=distance(self,fake.p);
-            if(fake.fake&&d>MISCHIEF.safe&&d<MISCHIEF.range&&others.some(p=>distance(p,fake.p)<MISCHIEF.bait)&&clearControl(fake.p))return lob(fake.p);
-        }
         for(const machine of LAUNCH_MACHINES){
             const pad=machine.pad,onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;
             const cooling=state.time<(state.pressure?.fired?.[machine.id]??-Infinity)+PRESSURE_TUNING.cooldownMs;

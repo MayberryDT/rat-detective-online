@@ -14,7 +14,7 @@ import { RatController } from '../player/RatController';
 import { CheeseGun } from '../weapons/CheeseGun';
 import { initEntitySounds, disposeEntitySounds } from '../entities/RatEntity';
 import { generateRandomAppearance } from '../shared/ratAppearance';
-import { MAX_HP, type ClientMessage, type MovementInput, type ServerMessage } from '../shared/networkProtocol';
+import { MAX_HP, READING_CAP_MS, type ClientMessage, type MovementInput, type ServerMessage } from '../shared/networkProtocol';
 import { NetworkManager } from '../network/NetworkManager';
 import { GameHud } from '../ui/GameHud';
 import { TitleScreen } from '../ui/TitleScreen';
@@ -31,7 +31,7 @@ import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import { ShotSpacing } from '../shared/shotTiming';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
-import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, weaponArming, type WeaponKind } from '../shared/pickups';
+import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, trapped, weaponArming, type WeaponKind } from '../shared/pickups';
 import { tommyHeat } from '../shared/shotPattern';
 import { laserPath } from '../shared/laser';
 import { HeldFire } from './HeldFire';
@@ -48,7 +48,6 @@ import {loadCameos} from '../cameos/loadCameos';
 import {HighlightBridge} from '../highlights/HighlightBridge';
 import {FeelDirector} from '../feel/FeelDirector';
 import {IncidentStory,STORY} from '../feel/IncidentStory';
-import {playSynth} from '../audio/IncidentAudio';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {FLASHLIGHT,FLASHLIGHT_REACH} from '../shared/rat/ratBody';
@@ -151,6 +150,15 @@ export class GameSession {
     /** Round end, last beat: when the Case File and final standings take over. */
     private pendingResults?:number;
     private resultsShown=false;
+    /** Results (protocol 28): this human still owes the round a CONTINUE (set by `gameWon`; observers never do), has
+     * continued before the next round started, or is held out of the round already under way until they continue. */
+    private awaitingContinue=false;
+    private continued=false;
+    private held=false;
+    private heldUntil=0;
+    /** When the next round starts (local clock), and when the results board appeared. */
+    private nextRoundAt=0;
+    private resultsShownAt=0;
     private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
     private lastHighlightObserve = 0;
     private lastChaos: ChaosState | null = null;
@@ -260,14 +268,23 @@ export class GameSession {
         if (touchControlsAvailable()) this.touch = new TouchControls({canvas:this.stage.renderer.domElement,
             look:(dx,dy)=>this.rat?.onMouseMove(dx,dy),shoot:()=>this.shoot(),holdMs:()=>this.tommyRepeatMs(),
             openSettings:()=>this.title.settings?.open(),blocked:()=>!!this.title.settings?.isOpen,
-            scores:visible=>this.scoreboard.setVisible(visible),clearKeys:()=>this.input.clear()});
+            scores:visible=>{if(!this.resultsShown)this.scoreboard.setVisible(visible);},clearKeys:()=>this.input.clear()});
+        // While a reader is on the results the mouse belongs to the board: no lock from stray clicks, no pause menu on unlock.
         this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
-            playing:()=>this.transport.state==='playing',enabled:()=>!this.touch?.active,signal:this.events.signal,
+            playing:()=>this.transport.state==='playing'&&!this.reading,enabled:()=>!this.touch?.active,signal:this.events.signal,
             allowUnlockedClick:target=>!!this.title.settings?.contains(target)||credits.allowUnlockedClick(target),
             record:(type,detail)=>this.stats?.event(type,detail)});
-        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing',touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock(),cue:cue=>this.feedback?.play(cue)});
-        bindScoreboardHold({available:()=>this.transport.state==='playing'&&!this.title.settings?.isOpen,
-            show:visible=>this.scoreboard.setVisible(visible),scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
+        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing'&&!this.reading,touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock(),cue:cue=>this.feedback?.play(cue)});
+        bindScoreboardHold({available:()=>this.transport.state==='playing'&&!this.title.settings?.isOpen&&!this.resultsShown,
+            show:visible=>{if(!this.resultsShown)this.scoreboard.setVisible(visible);},scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
+        this.hud.onContinue=()=>this.continueFromResults();
+        // Any key leaves the results too, once they have been up long enough not to catch a key held from play.
+        document.addEventListener('keydown',event=>{
+            if(!this.reading||event.repeat||event.altKey||event.ctrlKey||event.metaKey||this.title.settings?.isOpen||performance.now()-this.resultsShownAt<800)return;
+            if(['Escape','Tab','CapsLock','ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight'].includes(event.code)||/^F\d+$/.test(event.code))return;
+            if((event.target as HTMLElement|null)?.tagName==='BUTTON'&&(event.code==='Enter'||event.code==='Space'))return;
+            event.preventDefault();this.continueFromResults();
+        },options);
         document.addEventListener('visibilitychange', () => {
             this.foleyWorld.setEnabled(!document.hidden&&this.transport.state==='playing');
         }, options);
@@ -303,7 +320,7 @@ export class GameSession {
     /** Both input devices use the real camera ray, animated muzzle and transport. */
     private shoot(): void {
         if (this.observing || this.title.settings?.isOpen || this.transport.state !== 'playing' || this.roundWon || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
-        // Big Cheese and the Laser space every rat's shots, as the room does; an early press only dry-clicks.
+        // Big Cheese spaces every rat's shots, as the room does; an early press only dry-clicks.
         const dispatch=this.lastChaos?.dispatch,incident=dispatch?.phase==='active'?incidentInfo(dispatch.incident).id:undefined;
         const now=performance.now(),weapon=this.weaponNow();
         // A Mousetrap just taken is still coming up into the paw: the press does nothing (no shot, no set-down predicted;
@@ -338,7 +355,8 @@ export class GameSession {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
-        this.feel.reset();this.feel.resetRound();this.story?.reset();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults();
+        // The scoreboard has already taken this welcome's round (its results when the round is won).
+        this.feel.reset();this.feel.resetRound();this.story?.reset();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults(false);
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -380,7 +398,11 @@ export class GameSession {
         if(this.chaos){
             this.chaos.onPresentedShot=(id,p,radius)=>this.cameos?.observeShot(id,p,radius,this.gun.sceneryClear);
             // W3: the trap's own foley where it happens: set down, SNAP with a spring twang, splinters per hit, a sad boing as it breaks.
-            this.chaos.onTrap=(event,p)=>this.feedback.play(event==='set'?'trap-set':event==='snap'?'trap-snap':event==='hit'?'trap-splinter':'trap-break',p);
+            this.chaos.onTrap=(event,trap)=>{
+                this.feedback.play(event==='set'?'trap-set':event==='snap'?'trap-snap':event==='hit'?'trap-splinter':'trap-break',trap);
+                // The SNAP! where a trap catches a rat (the word always for its owner and anyone near).
+                if(event==='snap')this.feel.trapSnapped(TRAP_SPOT.set(trap.x,trap.y,trap.z),this.stage.camera,trap.owner===this.myId);
+            };
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
@@ -402,7 +424,7 @@ export class GameSession {
         this.hud.hideRespawn();
         this.hud.hideVictory();
         if (player.hp <= 0 && player.respawnAt) this.hud.showRespawn(player.respawnAt - this.serverOffset);
-        if (message.round.phase === 'won') {this.hud.hideRespawn();this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0,{assignment:message.round.assignment,localId:this.myId});}
+        if (message.round.phase === 'won') {this.hud.hideRespawn();this.hud.showVictory(message.round.winnerName ?? '', message.round.kills ?? 0,{assignment:message.round.assignment,localId:this.myId,...(message.round.winnerId?{winnerId:message.round.winnerId}:{})});}
         this.lastMovement = [];
         this.lastMovementAt = 0;
         this.lastInteractionPosition.set(player.x,player.y+.8,player.z);
@@ -453,10 +475,10 @@ export class GameSession {
                 if(caller)this.hud.addKillFeed({kind:'dispatch',caller:caller.name,...(d.caller===this.myId?{local:true}:{})});
                 // Big Cheese: every rat's pistol goes big, and big balls landing nearby thud.
                 const big=incident==='big-cheese';this.rat?.entity.setBigPistol(big);
-                // Bobbleheads: every rat's head swells (other rats' head spheres with it); Most Wanted stamps the target's nameplate.
-                const bobble=incident==='bobbleheads',wanted=incident==='most-wanted'?d.wanted:undefined;
-                this.rat?.entity.setBobblehead(bobble);this.rat?.entity.setWanted(!!wanted&&wanted===this.myId);
-                for(const [id,{entity}] of this.remotes.rats){entity.setBigPistol(big);entity.setBobblehead(bobble);entity.setWanted(id===wanted);}
+                // Most Wanted stamps the target's nameplate.
+                const wanted=incident==='most-wanted'?d.wanted:undefined;
+                this.rat?.entity.setWanted(!!wanted&&wanted===this.myId);
+                for(const [id,{entity}] of this.remotes.rats){entity.setBigPistol(big);entity.setWanted(id===wanted);}
                 if(big)this.feel.cheeseLandings(message.state.impacts,this.stage.camera);
                 if(!this.observing)this.story?.apply(message.state,this.myId,id=>id===this.myId?this.rat?.entity.name:this.remotes.get(id)?.name);}
                 this.applyPickupState(message.state);
@@ -536,8 +558,6 @@ export class GameSession {
                         if(message.id===this.myId)this.feel.hurt(entity.hp-message.hp,entity.mesh.position,attacker?.mesh.position,this.stage.camera);
                         if(message.id===this.myId||message.attackerId===this.myId)this.feel.impact(entity,message.id===this.myId);
                         entity.takeDamage(entity.hp - message.hp, direction);
-                        // Bobbleheads: every hit boings the big head.
-                        if(this.activeIncident==='bobbleheads')playSynth('boing',entity.mesh.position,.9+Math.random()*.25);
                     }
                 }
                 break;
@@ -572,8 +592,6 @@ export class GameSession {
                 const deathStyle = entity?.launchFlight && feelState().on('launchFlight') ? 'flail' : this.feel.deathStyle(message.killerId, message.cause);
                 entity?.setDeathStyle(deathStyle);this.chaos?.noteDeathStyle(message.victimId, deathStyle, headshot);
                 const killer = message.killerId === null ? undefined : message.killerId === this.myId ? this.rat?.entity : this.remotes.get(message.killerId);
-                // W3: the trap's SNAP! (its sound comes with the trap's own snap in the snapshot).
-                if(message.weapon==='mousetrap'&&entity)this.feel.trapSnapped(entity.mesh.position,this.stage.camera,message.killerId===this.myId||message.victimId===this.myId);
                 // Kill streaks: the victim's ends; the credited killer takes the server's count.
                 entity?.setStreak(0);if(killer&&killer!==entity)killer.setStreak(message.killerStreak??0);
                 if (entity && !entity.dead) {
@@ -588,7 +606,6 @@ export class GameSession {
                         const head=entity.mesh.getObjectByName('rat-head')?.getWorldPosition(HEAD_POSITION)??HEAD_POSITION.copy(entity.mesh.position).setY(entity.mesh.position.y+1.6);
                         if(feelState().on('headshot'))this.chaos?.burst(head,HEADSHOT_NORMAL.copy(impact).negate(),FEEL.headshot.params.burst);
                         this.feel.headshot(head,this.stage.camera,message.killerId===this.myId||message.victimId===this.myId);
-                        if(this.activeIncident==='bobbleheads')playSynth('boing',head,.7);
                     }
                     entity.takeDamage(entity.hp, impact.multiplyScalar(50));
                     }
@@ -609,6 +626,8 @@ export class GameSession {
                 if (message.id === this.myId && this.rat) this.rat.setLegs(1);
                 if (message.id === this.myId) {
                     this.stats?.event('respawn'); this.rat?.entity.respawn(message); this.rat?.resetGrounding(); this.feel.reset(); this.feel.health(message.hp); settleQuality();
+                    // Held out of the round, then brought in (CONTINUE, a resume or the server's cap): the results go.
+                    if(this.held){this.endResults();this.hud.hideVictory();}
                     this.lastInteractionPosition.set(message.x,message.y+.8,message.z);this.clearInput(); this.hud.hideRespawn();
                 } else this.remotes.respawn(message.id, message);
                 // All Units: the fallen arrive as backup, strobing red and blue to a prowl-car yelp; yours gets the card.
@@ -622,10 +641,11 @@ export class GameSession {
             case 'scoreboardUpdate': this.chaos?.setScores(message.scores, this.myId); break;
             case 'gameWon': {
                 this.roundWon=true;this.clearInput();this.hud.hideRespawn();
+                this.awaitingContinue=!this.observing;this.continued=false;this.held=false;this.nextRoundAt=message.resetAt-this.serverOffset;
                 // Polish 19: let the winning moment play in slow motion before the card slams in.
                 const hold=this.feel.victory();
                 if(hold>0)this.pendingVictory={message,at:performance.now()+hold*1000};
-                else this.hud.showVictory(message.winnerName,message.kills,{assignment:message.assignment,awards:message.awards,report:message.report,localId:this.myId});
+                else this.hud.showVictory(message.winnerName,message.kills,{assignment:message.assignment,awards:message.awards,report:message.report,localId:this.myId,winnerId:message.winnerId});
                 // Round end: the CASE CLOSED card holds the screen, then the police lineup,
                 // then the Case File and final standings for the rest of the 30 seconds.
                 const won=performance.now(),entries=feelState().on('lineup')?this.lineupEntries(message):[];
@@ -634,8 +654,16 @@ export class GameSession {
                 this.highlights.emit(this.highlights.detector.onWin(message.winnerId, performance.now()));
                 break;
             }
-            case 'gameReset':
-                this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults();
+            case 'gameReset': {
+                // A reader who has not continued stays on the results while the round starts without them (the server
+                // holds their rat until they continue); everyone else leaves them now.
+                const keep=this.awaitingContinue&&!this.continued,pending=this.pendingVictory;
+                this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();
+                if(keep){
+                    if(pending)this.hud.showVictory(pending.message.winnerName,pending.message.kills,{assignment:pending.message.assignment,awards:pending.message.awards,report:pending.message.report,localId:this.myId,winnerId:pending.message.winnerId});
+                    this.held=true;this.heldUntil=Date.now()+READING_CAP_MS;
+                    if(this.resultsShown)this.hud.setContinue({kind:'held',until:this.heldUntil});else this.showResultsBoard();
+                }else this.endResults();
                 this.cameos?.reset();
                 this.highlights.detector.beginRound({
                     epoch: '',
@@ -648,7 +676,8 @@ export class GameSession {
                 this.highlightCorpseSeen.clear();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0,0);entity.resetReactions();entity.setStreak(0);}
-                this.rat?.setLegs(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); this.hud.hideVictory(); this.hud.hideRespawn(); break;
+                this.rat?.setLegs(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); if(!keep)this.hud.hideVictory(); this.hud.hideRespawn(); break;
+            }
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
         }
@@ -666,7 +695,8 @@ export class GameSession {
             entity.setPowerups(ironclad,hustle,stakeout);
             // Code Violation: a rat's dud is stamped on its nameplate, told once in the feed, and Staked Out puts it on everyone's Hunch.
             const dud=faultyOf(state.buffs,id,state.time),until=dud?buff!.faultyUntil!:0;
-            entity.setDud(dud&&FAULTY_COPY[dud].title);entity.exposed=dud==='stakeout';
+            // A rat held in a Mousetrap shows HELD on its nameplate.
+            entity.setDud(trapped(state.buffs,id,state.time)?'HELD':dud&&FAULTY_COPY[dud].title);entity.exposed=dud==='stakeout';
             if(dud&&until!==this.dudsSeen.get(id)&&this.dudsPrimed){
                 const {title,effect}=FAULTY_COPY[dud],mine=id===this.myId;
                 this.hud.addKillFeed({kind:'note',text:`CODE VIOLATION · ${mine?'YOU':entity.name.toUpperCase()}: ${title}${mine?'':`, ${effect}`}`});
@@ -790,7 +820,7 @@ export class GameSession {
         this.chaos?.update(dt*this.feel.timeScale,camera,this.feel.presentTime(performance.now()));
         if(this.pendingVictory&&now>=this.pendingVictory.at){
             const won=this.pendingVictory.message;this.pendingVictory=undefined;
-            if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,{assignment:won.assignment,awards:won.awards,report:won.report,localId:this.myId});
+            if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,{assignment:won.assignment,awards:won.awards,report:won.report,localId:this.myId,winnerId:won.winnerId});
         }
         if(this.transport.state==='playing'&&!document.hidden)this.cameos?.update(this.cameoVisitors,this.gun.sceneryClear);
         this.blackoutFrame(camera);
@@ -807,9 +837,7 @@ export class GameSession {
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
-        if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon){
-            this.pendingResults=undefined;this.resultsShown=true;this.hud.showResults(true);this.scoreboard.setVisible(true);
-        }
+        if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon)this.showResultsBoard();
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
         if(!this.compiling){
@@ -856,9 +884,29 @@ export class GameSession {
         }
     }
 
-    /** Leave the round-end results board (reset, reconnect, leaving play). */
-    private endResults():void {
+    /** The round-end results board takes the screen; a reader gets the mouse back to read it (pointer lock released). */
+    private showResultsBoard():void {
+        this.pendingResults=undefined;this.resultsShown=true;this.resultsShownAt=performance.now();
+        if(this.awaitingContinue&&!this.continued)this.hud.setContinue(this.held?{kind:'held',until:this.heldUntil}:{kind:'reading'});
+        this.hud.showResults(true);this.scoreboard.setVisible(true);
+        if(this.reading&&document.pointerLockElement)document.exitPointerLock();
+    }
+    /** A reader on the results board, still to CONTINUE. */
+    private get reading():boolean { return this.resultsShown&&this.awaitingContinue&&!this.continued; }
+    /** CONTINUE (button or key): tell the room, and take the mouse back for play. Before the next round starts the board
+     * waits for it with everyone; once it is under way without you, the board goes and the room brings your rat in. */
+    private continueFromResults():void {
+        if(!this.reading)return;
+        this.transport.send({type:'ready'});
+        if(this.held){this.endResults();this.hud.hideVictory();}
+        else{this.continued=true;this.hud.setContinue({kind:'ready',until:this.nextRoundAt});}
+        this.requestPointerLock();
+    }
+    /** Leave the round-end results board (reset, reconnect, leaving play, CONTINUE); `closeBoard` returns the standings to the live round. */
+    private endResults(closeBoard=true):void {
         const shown=this.resultsShown;this.pendingResults=undefined;this.resultsShown=false;
+        this.awaitingContinue=false;this.continued=false;this.held=false;
+        if(closeBoard)this.scoreboard.closeResults();
         if(shown){this.hud.showResults(false);this.scoreboard.setVisible(false);}
     }
 

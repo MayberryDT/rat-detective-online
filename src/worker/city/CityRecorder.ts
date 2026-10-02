@@ -7,7 +7,7 @@ import { DISPATCH_STATIONS } from '../../shared/chaosState';
 import { activeDestination, destinationPoint } from '../../shared/assignments';
 import { JURISDICTION_ZONES } from '../../shared/jurisdictionZones';
 import { activeZone } from '../../shared/jurisdiction';
-import { BUFF_FIELD, TIMED_PICKUPS, entryWeapon, type PickupKind, type PlayerBuffs, type TimedPickup, type WeaponKind } from '../../shared/pickups';
+import { BUFF_FIELD, TIMED_PICKUPS, WEAPON_TUNING, entryWeapon, type PickupKind, type PlayerBuffs, type TimedPickup, type WeaponKind } from '../../shared/pickups';
 import { cityPlaces } from '../../shared/city/places';
 import { cityFloor } from '../../shared/city/frame';
 import { CITY_SCHEMA_VERSION, p3, type CityFact, type DecisionInputs, type FactContext, type RatSituation, type ShotTarget, type WorldSituation } from '../../shared/city/facts';
@@ -169,7 +169,7 @@ export class SolidGrid {
 }
 
 const BALL_LAYERS: Record<ShotResultOutcome, string> = { 'first-step': 'ball-first-step', 'rat-body': 'ball-rat-body', 'rat-head': 'ball-rat-head', 'ironclad-reflect': 'ball-ironclad-reflect',
-  'case-contact': 'ball-case-contact', 'world-bounce': 'ball-world-bounce', 'dispatch-contact': 'ball-dispatch-contact', 'pressure-contact': 'ball-pressure-contact', 'fake-case': 'ball-fake-case',
+  'case-contact': 'ball-case-contact', 'world-bounce': 'ball-world-bounce', 'dispatch-contact': 'ball-dispatch-contact', 'pressure-contact': 'ball-pressure-contact',
   'trap-contact': 'ball-trap-contact', lifetime: 'ball-lifetime', capacity: 'ball-capacity', reset: 'ball-reset', rejected: 'ball-rejected' };
 const SHOTS: Record<Who, string> = { human: 'shots-human', bot: 'shots-bot', agent: 'shots-agent' };
 const HITS: Record<Who, string> = { human: 'hits-human', bot: 'hits-bot', agent: 'hits-agent' };
@@ -460,7 +460,7 @@ export class CityRecorder {
         const place = this.places.at(e.p.x, e.p.y, e.p.z).id;
         this.measure(now, place, `trap:${e.what}`);
         this.emit({ ...this.context(now), type: 'trap', what: e.what, a: this.actor(player.id), trap: e.trapId, p: p3(e.p), place,
-          ...(e.victim ? { victim: this.actor(e.victim) } : {}), ...(e.by ? { by: this.actor(e.by) } : {}) });
+          ...(e.victim ? { victim: this.actor(e.victim) } : {}), ...(e.by ? { by: this.actor(e.by) } : {}), ...(e.what === 'snap' ? { holdMs: WEAPON_TUNING.trapHoldMs } : {}) });
         continue;
       }
       const place = this.places.at(player.x, player.y, player.z).id, life = this.life(player.id, now, player);
@@ -493,7 +493,7 @@ export class CityRecorder {
     const killer = a && a.id !== v.id ? a : undefined;
     const assists = this.ledger.death(killer?.id ?? null, v.id, now).map(id => this.actor(id));
     // `incoming` is the ball's travel for the ragdoll (every shot has one), not a missile.
-    const cause = h.explosive ? 'explosion' : h.weapon === 'mousetrap' ? 'trap' : !killer && !a ? 'city' : h.headshot ? 'headshot' : 'shot';
+    const cause = h.explosive ? 'explosion' : !killer && !a ? 'city' : h.headshot ? 'headshot' : 'shot';
     this.cell(now, 'deaths', v); this.measure(now, vPlace, 'deaths'); this.measure(now, vPlace, `deaths-${this.who(v.id)}`);
     if (now - life.start < 5000) this.measure(now, life.spawnPlace, 'spawn-deaths-5s');
     if (killer && aPlace) {

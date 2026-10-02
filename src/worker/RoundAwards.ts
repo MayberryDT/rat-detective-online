@@ -1,15 +1,22 @@
-import {RACE_LIMIT,type Award,type AwardId,type PlayerData,type RoundReport} from '../shared/networkProtocol';
+import {RACE_LIMIT,type Award,type AwardId,type DeathCause,type EnvironmentCause,type KillWeapon,type PlayerData,type ReportRat,type RoundReport} from '../shared/networkProtocol';
 import type {AssignmentState} from '../shared/assignments';
 import type {ChaosState} from '../shared/chaosState';
+import {isIncidentId,type IncidentId} from '../shared/incidentCatalog';
+import type {PickupKind,WeaponKind} from '../shared/pickups';
+import {ASSIST_WINDOW_MS} from '../shared/city/ledger';
 
 interface Stats {
     cheesed:number;drops:number;sewer:number;peak:number;
     shots:number;hits:number;headshots:number;longest:number;caseSeconds:number;flights:number;pickups:number;distance:number;calls:number;
-    streak:number;
+    streak:number;dealt:number;assists:number;takes:number;carry:number;alive:number;
+    weapons:Partial<Record<KillWeapon,number>>;kinds:Partial<Record<PickupKind,number>>;deathsBy:Partial<Record<DeathCause,number>>;
     last?:{x:number;z:number};
     /** The race: objective progress at each sample, padded with zeros before the rat arrived. */
     race?:number[];
 }
+/** How a death happened, as `GameRoom.handleHit` saw it. */
+export interface DeathHow {headshot:boolean;explosive:boolean;weapon?:WeaponKind;environment?:EnvironmentCause}
+const bump=<K extends string>(table:Partial<Record<K,number>>,key:K)=>{table[key]=(table[key]??0)+1;};
 
 const TITLES:Record<AwardId,string>={
     'top-gun':'TOP GUN','most-cheesed':'MOST CHEESED','butterfingers':'BUTTERFINGERS',
@@ -61,13 +68,27 @@ export class RoundAwards {
     private longestCarry?:{playerId:string;playerName:string;seconds:number};
     private raceStep=RACE_STEP;
     private raceSamples=0;
+    /** Victim -> attacker -> when that attacker last damaged it (for assists). */
+    private readonly recent=new Map<string,Map<string,number>>();
+    /** Dispatch incidents rolled, and the serial last counted: one per roll. */
+    private incidents:Partial<Record<IncidentId,number>>={};
+    private incidentSerial=-1;
 
     private of(id:string):Stats {
         let stats=this.stats.get(id);
-        if(!stats){stats={cheesed:0,drops:0,sewer:0,peak:0,shots:0,hits:0,headshots:0,longest:0,caseSeconds:0,flights:0,pickups:0,distance:0,calls:0,streak:0};this.stats.set(id,stats);}
+        if(!stats){stats={cheesed:0,drops:0,sewer:0,peak:0,shots:0,hits:0,headshots:0,longest:0,caseSeconds:0,flights:0,pickups:0,distance:0,calls:0,streak:0,
+            dealt:0,assists:0,takes:0,carry:0,alive:0,weapons:{},kinds:{},deathsBy:{}};this.stats.set(id,stats);}
         return stats;
     }
-    damage(victimId:string,amount:number):void {if(amount>0)this.of(victimId).cheesed+=amount;}
+    /** Damage taken by `victimId`, dealt by `attackerId` (none for the city or the rat's own). */
+    damage(victimId:string,attackerId:string|null,amount:number,at:number):void {
+        if(amount<=0)return;
+        this.of(victimId).cheesed+=amount;
+        if(!attackerId||attackerId===victimId)return;
+        this.of(attackerId).dealt+=amount;
+        let by=this.recent.get(victimId);if(!by){by=new Map();this.recent.set(victimId,by);}
+        by.set(attackerId,at);
+    }
     /** An accepted trigger pull. */
     shot(playerId:string,shotId:string):void {
         this.of(playerId).shots++;
@@ -80,24 +101,31 @@ export class RoundAwards {
         this.hitShots.add(shotId);if(this.hitShots.size>4096)this.hitShots.delete(this.hitShots.values().next().value!);
         this.of(playerId).hits++;
     }
-    /** After the kill is applied: `killer.streak` already includes it. */
-    kill(killer:PlayerData,victim:PlayerData,headshot:boolean):void {
+    /** After the death is applied (`killer.streak` already includes it): the victim's cause, the credited killer's
+     * kill (none for the city or a rat's own blast), and assists for everyone else who hurt the victim lately. */
+    death(victim:PlayerData,killer:PlayerData|undefined,how:DeathHow,at:number):void {
+        bump(this.of(victim.id).deathsBy,how.environment??(how.explosive?'blast':how.headshot?'headshot':'shot'));
+        const recent=this.recent.get(victim.id);this.recent.delete(victim.id);
+        for(const [id,t] of recent??[])if(id!==killer?.id&&at-t<=ASSIST_WINDOW_MS)this.of(id).assists++;
+        if(!killer)return;
         const stats=this.of(killer.id);
         this.kills++;
-        if(headshot)stats.headshots++;
+        if(how.headshot)stats.headshots++;
+        bump(stats.weapons,how.explosive?'blast':how.weapon==='tommy-gun'||how.weapon==='laser'?how.weapon:'cheese');
         stats.streak=Math.max(stats.streak,killer.streak??0);
         stats.longest=Math.max(stats.longest,Math.hypot(killer.x-victim.x,killer.y-victim.y,killer.z-victim.z));
     }
     /** A supply taken from a site or given as a reward. */
-    pickup(playerId:string):void {this.of(playerId).pickups++;}
+    pickup(playerId:string,kind:PickupKind):void {const stats=this.of(playerId);stats.pickups++;bump(stats.kinds,kind);}
     /** Per tick: case losses (not deliveries), hand-offs and carries, case time, sewer seconds, highest altitude,
      * distance, launcher rides, Dispatch calls and, every race step, each rat's objective progress. */
     sample(players:Iterable<PlayerData>,dt:number,caseOwner:string|null,deliveries:number,launches:readonly {id:string;playerId:string}[]=[],dispatch?:ChaosState['dispatch'],assignment?:AssignmentState):void {
         if(dispatch?.caller&&dispatch.serial!==this.calledSerial){this.calledSerial=dispatch.serial;this.of(dispatch.caller).calls++;}
+        if(dispatch?.incident&&dispatch.serial!==this.incidentSerial&&isIncidentId(dispatch.incident)){this.incidentSerial=dispatch.serial;bump(this.incidents,dispatch.incident);}
         if(this.caseOwner&&caseOwner!==this.caseOwner&&deliveries===this.deliveries)this.of(this.caseOwner).drops++;
         if(caseOwner!==this.caseOwner){
             this.endCarry();
-            if(caseOwner&&caseOwner!==this.lastHolder){this.handoffs++;this.lastHolder=caseOwner;}
+            if(caseOwner){this.of(caseOwner).takes++;if(caseOwner!==this.lastHolder){this.handoffs++;this.lastHolder=caseOwner;}}
         }
         this.caseOwner=caseOwner;this.deliveries=deliveries;
         if(caseOwner){this.of(caseOwner).caseSeconds+=dt;this.carry+=dt;}
@@ -112,6 +140,7 @@ export class RoundAwards {
                 stats.race.push(Math.round(progress(player,assignment)*10)/10);
             }
             if(player.hp<=0){stats.last=undefined;continue;}
+            stats.alive+=dt;
             if(player.y<-.5)stats.sewer+=dt;
             stats.peak=Math.max(stats.peak,player.y);
             if(stats.last){const stride=Math.hypot(player.x-stats.last.x,player.z-stats.last.z);if(stride<MAX_STRIDE)stats.distance+=stride;}
@@ -128,12 +157,14 @@ export class RoundAwards {
         this.raceSamples=Math.ceil(this.raceSamples/2);this.raceStep*=2;
     }
     private endCarry():void {
+        if(this.caseOwner){const stats=this.of(this.caseOwner);stats.carry=Math.max(stats.carry,this.carry);}
         if(this.caseOwner&&this.carry>(this.longestCarry?.seconds??0))this.longestCarry={playerId:this.caseOwner,playerName:this.carrierName,seconds:this.carry};
         this.carry=0;
     }
     reset():void {
-        this.stats.clear();this.triggers.clear();this.hitShots.clear();this.seenLaunches.clear();this.caseOwner=null;this.deliveries=0;this.calledSerial=-1;
+        this.stats.clear();this.triggers.clear();this.hitShots.clear();this.seenLaunches.clear();this.recent.clear();this.caseOwner=null;this.deliveries=0;this.calledSerial=-1;
         this.kills=0;this.elapsed=0;this.lastHolder=null;this.handoffs=0;this.carry=0;this.carrierName='';this.longestCarry=undefined;this.raceStep=RACE_STEP;this.raceSamples=0;
+        this.incidents={};this.incidentSerial=-1;
     }
 
     private value(id:AwardId,player:PlayerData):number {
@@ -182,16 +213,19 @@ export class RoundAwards {
         this.endCarry();
         let supplies=0,flights=0,calls=0;
         for(const stats of this.stats.values()){supplies+=stats.pickups;flights+=stats.flights;calls+=stats.calls;}
-        const rats=[...players.values()].map(player=>{
+        const rats=[...players.values()].map((player):ReportRat=>{
             const s=this.of(player.id);
-            return {id:player.id,shots:s.shots,hits:s.hits,headshots:s.headshots,longest:Math.round(s.longest),caseSeconds:Math.round(s.caseSeconds),
-                streak:s.streak,supplies:s.pickups,flights:s.flights,damage:s.cheesed};
+            return {id:player.id,name:player.name,kills:player.kills,deaths:player.deaths,assists:s.assists,shots:s.shots,hits:s.hits,headshots:s.headshots,
+                longest:Math.round(s.longest),caseSeconds:Math.round(s.caseSeconds),takes:s.takes,carry:Math.round(s.carry),streak:s.streak,
+                supplies:s.pickups,flights:s.flights,damage:s.cheesed,dealt:s.dealt,alive:Math.round(s.alive),
+                weapons:{...s.weapons},kinds:{...s.kinds},deathsBy:{...s.deathsBy}};
         });
         const leaders=[...players.values()].filter(player=>this.stats.get(player.id)?.race&&progress(player,assignment)>0)
             .sort((a,b)=>progress(b,assignment)-progress(a,assignment)||b.kills-a.kills||a.name.localeCompare(b.name)).slice(0,RACE_LIMIT.rats);
         const race=leaders.length?{step:this.raceStep,ids:leaders.map(player=>player.id),
             points:leaders.map(player=>[...this.stats.get(player.id)!.race!,Math.round(progress(player,assignment)*10)/10])}:undefined;
         const carry=this.longestCarry&&{...this.longestCarry,seconds:Math.round(this.longestCarry.seconds)};
-        return {seconds:Math.round(Math.max(0,seconds)),kills:this.kills,handoffs:this.handoffs,...(carry?{carry}:{}),supplies,flights,calls,rats,...(race?{race}:{})};
+        return {seconds:Math.round(Math.max(0,seconds)),kills:this.kills,handoffs:this.handoffs,...(carry?{carry}:{}),supplies,flights,calls,
+            incidents:{...this.incidents},rats,...(race?{race}:{})};
     }
 }

@@ -7,7 +7,7 @@ import { bollard, chain, crate, line, railing } from './docksKit';
 import { gantryCrane, CRANE_RAILS } from './docksCrane';
 import { freighter, GANGWAY_X, SHIP, SHIP_Z } from './docksShip';
 import { containerYard } from './docksYard';
-import { HARBOUR_MASTER, pier9 } from './docksWarehouse';
+import { PIER9, pier9 } from './docksWarehouse';
 
 /**
  * The docks (plan W4): the quay apron with bollards, chains and crane rails, three timber
@@ -212,8 +212,10 @@ export const DOCKS_JOBS = {
         areas:[{xmin:25,xmax:46,zmin:-170,zmax:-151}],exclusions:[],
         approaches:[{x:-4,y:.3,z:-162},{x:70,y:.3,z:-158},{x:33,y:.3,z:-128}],
         posts:[{x:33,y:.3,z:-160},{x:28,y:.3,z:-156},{x:39,y:.3,z:-164}]}} satisfies Record<string,JurisdictionZone>,
-    destination:{harbourMaster:{label:'HARBOUR MASTER',short:'HARBOUR MASTER',
-        center:{x:(HARBOUR_MASTER.x0+HARBOUR_MASTER.x1)/2,y:3,z:(HARBOUR_MASTER.z0+HARBOUR_MASTER.z1)/2},
-        bounds:{xmin:HARBOUR_MASTER.x0,xmax:HARBOUR_MASTER.x1,ymin:-.5,ymax:HARBOUR_MASTER.height,zmin:HARBOUR_MASTER.z0,zmax:HARBOUR_MASTER.z1},
-        approach:{x:125.3,y:.3,z:-128},arrival:{x:125.3,y:.3,z:-122.5}}},
+    /** The Harbour Master stop is the whole Pier 9 warehouse, mezzanine and office included, like every other
+     * landmark (quick patch, layout 7). Bots come in by the big east door. */
+    destination:{harbourMaster:{label:'HARBOUR MASTER · PIER 9',short:'PIER 9',
+        center:{x:(PIER9.x0+PIER9.x1)/2,y:PIER9.height/2,z:(PIER9.z0+PIER9.z1)/2},
+        bounds:{xmin:PIER9.x0,xmax:PIER9.x1,ymin:-.5,ymax:PIER9.height,zmin:PIER9.z0,zmax:PIER9.z1},
+        approach:{x:PIER9.x1+4,y:.3,z:-129},arrival:{x:130,y:.3,z:-127.5}}},
 } as const;

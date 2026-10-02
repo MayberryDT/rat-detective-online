@@ -22,14 +22,11 @@ let popVariant = 0;
 const SYNTH = {
     // A heavy ball's dull landing (case missiles; Big Cheese replays it lower).
     thud: {seconds: .18, peak: .16, sample: (t: number) => Math.sin(2 * Math.PI * (90 * t - 130 * t * t)) * Math.exp(-t * 28)},
-    // Bobbleheads: a cartoon spring, the pitch wobbling up and settling.
+    // Bad Ammunition's superball: a cartoon spring, the pitch wobbling up and settling.
     boing: {seconds: .62, peak: .5, sample: (t: number) => {
         const f = 190 + 140 * Math.min(1, t * 9) + 70 * Math.sin(2 * Math.PI * 13 * t) * Math.exp(-t * 4);
         return (Math.sin(2 * Math.PI * f * t) + .35 * Math.sin(4 * Math.PI * f * t)) * Math.min(1, t * 300) * Math.exp(-t * 5.5);
     }},
-    // Scattershot: a shotgun BLAM under the ordinary gunshot: a hard crack, a low chest thump and a rolling tail.
-    blam: {seconds: .9, peak: .8, sample: (t: number, n: () => number) =>
-        n() * Math.exp(-t * 38) * .9 + Math.sin(2 * Math.PI * (58 * t - 24 * t * t)) * Math.exp(-t * 6.5) * 1.1 + n() * Math.exp(-t * 4.5) * .12},
     // Bad Ammunition corkscrew: a toy drill whirring up, its tremolo the ball's spin.
     corkscrew: {seconds: .55, peak: .42, sample: (t: number) => {
         const phase = 2 * Math.PI * (380 * t + 650 * t * t);

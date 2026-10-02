@@ -26,6 +26,7 @@ import {
   MAX_HP,
   DEFAULT_ROOM_NAME,
   PROTOCOL_VERSION,
+  READING_CAP_MS,
   RESPAWN_DELAY_MS,
   WIN_DISPLAY_MS,
   type ClientMessage,
@@ -110,7 +111,8 @@ interface StoredPlayerRow extends Record<string, SqlStorageValue> {
 
 interface PendingEventRow extends Record<string, SqlStorageValue> {
   id: string;
-  type: 'respawn' | 'reset';
+  /** `continue`: a held reader's spawn at `READING_CAP_MS` if they have not continued before. */
+  type: 'respawn' | 'reset' | 'continue';
   player_id: string | null;
   due_at: number;
 }
@@ -182,8 +184,8 @@ export class GameRoom extends DurableObject<Env> {
   private readonly sessions = new Map<string, {token:string; until:number | null; agent?: true}>();
   private round: RoundState = playingRound();
   private assignmentRotation: AssignmentRotation = { remaining: [] };
-  /** Shipped default is Planted Evidence; the missile incident is an opt-in mode. */
-  private evidenceMode: EvidenceMode = 'planted';
+  /** The standard roster ships; `classic` adds the retired Evidence Tampering missile incident (private practice only). */
+  private evidenceMode: EvidenceMode = 'standard';
   /** Practice-only: force every Dispatch roll to one incident. Null = normal shuffle. */
   private forcedIncident: IncidentId | null = null;
   private world: WorldSpec = createWorldSpec();
@@ -194,6 +196,11 @@ export class GameRoom extends DurableObject<Env> {
   private readonly dueCheckpoints = new Set<string>();
   /** Polish 19: cosmetic per-round Case File tallies (memory only). */
   private readonly awards = new RoundAwards();
+  /** Results (protocol 28): the humans the round-end frame reached; at the reset, those still reading sit the new round
+   * out (`holdReader`). Memory only: a restart before the reset starts everyone. */
+  private readers = new Set<string>();
+  /** Held readers: dead, out of everyone else's city and the welcome, until they continue. Rebuilt from `continue` rows. */
+  private readonly hidden = new Set<string>();
   /** The city map's recorder (docs/city-map.md); built on first use from this room's world. */
   private cityRecorder: CityRecorder | null = null;
   /** The Jev mind for this room's server bots, and the day's budget (docs/bot-overhaul.md, B4). */
@@ -317,8 +324,8 @@ export class GameRoom extends DurableObject<Env> {
     return true;
   }
 
-  /** Private-room opt-in for the retired missile incident. The default ships as
-   * Planted Evidence; a live room must be empty so every client agrees on the mode. */
+  /** Private-room opt-in for the retired missile incident (`classic`); `standard` is the shipped roster.
+   * A live room must be empty so every client agrees on the mode. */
   configureIncidents(mode: EvidenceMode): boolean {
     if (!isEvidenceMode(mode)) return false;
     if (this.evidenceMode === mode) return true;
@@ -820,6 +827,11 @@ export class GameRoom extends DurableObject<Env> {
     // Shots and hit claims are play; a background tab sends neither.
     if (message.type === 'shoot' || message.type === 'hit') this.lastInputAt.set(playerId, this.now());
 
+    if (message.type === 'ready') {
+      if (this.rateLimiter.allow(`${playerId}:ready`, 4, 1000, this.now())) this.continueReading(playerId);
+      return;
+    }
+
     if (message.type === 'shoot') {
       if (!this.admitShot(playerId)) {
         this.diagnostics.shot('rateLimited');
@@ -1019,6 +1031,7 @@ export class GameRoom extends DurableObject<Env> {
         this.ctx.storage.sql.exec('DELETE FROM players WHERE id = ?', row.id);
       }
     }
+    for (const row of this.ctx.storage.sql.exec<{ player_id: string }>("SELECT player_id FROM pending_events WHERE type = 'continue'")) this.hidden.add(row.player_id);
 
     this.ctx.storage.sql.exec(
       'DELETE FROM pending_events WHERE player_id IS NOT NULL AND player_id NOT IN (SELECT id FROM players)',
@@ -1065,6 +1078,9 @@ export class GameRoom extends DurableObject<Env> {
         old.close(SESSION_REPLACED_CLOSE_CODE,'Connected on a new transport');
       }
       const player=this.players.get(resumedId)!;
+      // A new page has no results board to read: a held reader resumes in the round.
+      if(this.round.phase==='won')this.readers.delete(resumedId);
+      else if(this.hidden.has(resumedId))this.releaseReader(player);
       this.persistPlayer(player,true);
       this.finishJoin(ws,player,false);
       this.ctx.waitUntil(this.scheduleNextAlarm());
@@ -1310,7 +1326,7 @@ export class GameRoom extends DurableObject<Env> {
     const events=this.chaos.drainPickupEvents();
     this.city.pickups(events,this.players,this.now());
     for (const event of events) {
-      if (event.kind === 'collected' || event.kind === 'rewarded') this.awards.pickup(event.playerId);
+      if (event.kind === 'collected' || event.kind === 'rewarded') this.awards.pickup(event.playerId, event.pickup);
       if (event.kind !== 'healed') continue;
       const player = this.players.get(event.playerId);
       if (!player) continue;
@@ -1338,8 +1354,10 @@ export class GameRoom extends DurableObject<Env> {
     this.persistPlayer(victim, true);
     if (result.killed && shooter && shooter !== victim) this.persistPlayer(shooter, true);
 
+    // A kill credits the case (Excessive Force) and heals a killer carrying it (every assignment).
     const casePoint=result.killed && playerId !== victim.id && (this.chaos?.creditCaseKill(playerId)??false);
-    if(casePoint){this.checkpointGame();this.applyPickupEvents();}
+    if(casePoint)this.checkpointGame();
+    if(result.killed)this.applyPickupEvents();
     const incident=result.killed && incoming?this.chaos?.death(victim,incoming,playerId):false;
     const assignmentWon=casePoint && !!this.chaos?.assignmentState?.result;
     if (result.killed && !assignmentWon) {
@@ -1351,8 +1369,8 @@ export class GameRoom extends DurableObject<Env> {
       this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)',
         crypto.randomUUID(),result.roundWon?'reset':'respawn',result.roundWon?null:victim.id,respawnAt);
     }
-    this.awards.damage(victim.id, hpBefore - victim.hp);
-    if (result.killed && shooter && shooter !== victim) this.awards.kill(shooter, victim, headshot);
+    this.awards.damage(victim.id, playerId, hpBefore - victim.hp, now);
+    if (result.killed) this.awards.death(victim, shooter && shooter !== victim ? shooter : undefined, { headshot, explosive, ...(weapon ? { weapon } : {}), ...(playerId === null ? { environment } : {}) }, now);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
     this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming, ...(weapon?{weapon}:{}), ...(playerId === null ? { environment } : {}) }, now);
     if (this.isManagedBot(victim.id)) this.jevMind?.hit(victim.id, shooter?.id, now);
@@ -1403,6 +1421,10 @@ export class GameRoom extends DurableObject<Env> {
         this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
       }
 
+      if (event.type === 'continue' && event.player_id) {
+        const player = this.players.get(event.player_id);
+        if (this.round.phase === 'playing' && player && this.hidden.has(player.id)) this.releaseReader(player);
+      }
       if (event.type === 'reset') {
         // Only this assignment's committed result may reset it. An old match
         // deadline cannot consume held time, change mode or choose a winner.
@@ -1414,13 +1436,17 @@ export class GameRoom extends DurableObject<Env> {
         this.round = playingRound(this.now());
         this.beginAssignment();
 
+        const readers = this.readers;this.readers = new Set();
         const resetPlayers = resetRoundForWorld(
-          [...this.players.values()].filter(player => !this.isManagedBot(player.id)), this.world,Math.random,this.chaos?.assignmentState);
+          [...this.players.values()].filter(player => !this.isManagedBot(player.id) && !readers.has(player.id)), this.world,Math.random,this.chaos?.assignmentState);
         for (const player of resetPlayers) {
           this.movementAllowances.set(player.id,createMovementAllowance(now));
           this.persistPlayer(player, true);
+          // A rat held through the last round's end comes back into everyone else's city.
+          if (this.hidden.delete(player.id)) this.broadcast({ type: 'playerJoined', player }, player.id);
           this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
         }
+        for (const id of readers) { const player = this.players.get(id); if (player) this.holdReader(player, now); }
         if (this.persistentBots) this.replaceRoundBots();
         this.checkpointGame();
         this.broadcast({ type: 'gameReset', round: this.currentRound() });
@@ -1513,6 +1539,7 @@ export class GameRoom extends DurableObject<Env> {
     this.pendingMovement.delete(playerId);
     this.ctx.storage.sql.exec('DELETE FROM players WHERE id = ?', playerId);
     this.ctx.storage.sql.exec('DELETE FROM pending_events WHERE player_id = ?', playerId);
+    this.hidden.delete(playerId);this.readers.delete(playerId);
     this.lastCheckpointAt.delete(playerId);
     this.dueCheckpoints.delete(playerId);
     this.lastActiveAt.delete(playerId);
@@ -1528,14 +1555,43 @@ export class GameRoom extends DurableObject<Env> {
     this.logMetrics('leave');
   }
 
-  /** Victory screen owns the next spawn: drop queued respawns and pin every corpse to resetAt. */
+  /** Victory screen owns the next spawn: drop queued respawns and held readers' caps, and pin every corpse to resetAt. */
   private reconcileDeadlinesOnWin(resetAt: number): void {
-    this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type = 'respawn'");
+    this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type IN ('respawn', 'continue')");
     for (const player of this.players.values()) {
       if (player.hp > 0) continue;
       player.respawnAt = resetAt;
       this.persistPlayer(player, true);
     }
+  }
+
+  /** Results (protocol 28): a reader who continues. Before the reset they start the next round with everyone; after
+   * it, a held reader spawns now. Anyone else's `ready` changes nothing. */
+  private continueReading(playerId: string): void {
+    if (this.round.phase === 'won') { this.readers.delete(playerId); return; }
+    const player = this.players.get(playerId);
+    if (player && this.hidden.has(playerId)) this.releaseReader(player);
+  }
+  /** At the reset: a human still reading sits the new round out, dead and gone from everyone else's city, until it
+   * continues or `READING_CAP_MS` passes. */
+  private holdReader(player: PlayerData, now: number): void {
+    clearRecord(player);
+    player.hp = 0; player.respawnAt = now + READING_CAP_MS;
+    this.persistPlayer(player, true);
+    this.ctx.storage.sql.exec('INSERT INTO pending_events (id, type, player_id, due_at) VALUES (?, ?, ?, ?)', crypto.randomUUID(), 'continue', player.id, player.respawnAt);
+    this.hidden.add(player.id);
+    this.broadcast({ type: 'playerLeft', id: player.id }, player.id);
+  }
+  /** A held reader enters the round: spawned like any respawn and back in everyone else's city. */
+  private releaseReader(player: PlayerData): void {
+    const now = this.now();
+    this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type = 'continue' AND player_id = ?", player.id);
+    this.hidden.delete(player.id);
+    respawnPlayer(player, spawnForWorld(this.world, Math.random, this.players.values(), player.id, this.chaos?.assignmentState));
+    this.lastMovementBroadcast.delete(player.id); this.movementAllowances.set(player.id, createMovementAllowance(now));
+    this.persistPlayer(player, true);
+    this.broadcast({ type: 'playerJoined', player }, player.id);
+    this.broadcast({ type: 'playerRespawn', id: player.id, x: player.x, y: player.y, z: player.z, hp: player.hp });
   }
 
   private startChaos(preparing=false):void {
@@ -1751,9 +1807,11 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.waitUntil(this.scheduleNextAlarm());
   }
 
-  /** The round-end frame's Case File (omitted when nothing qualifies), lineup and round report. */
+  /** The round-end frame's Case File (omitted when nothing qualifies), lineup and round report. The humans it reaches
+   * become this round's readers (`holdReader`). */
   private caseFile(winnerId:string,assignment?:AssignmentState):{awards?:Award[];lineup:string[];report:RoundReport} {
     const awards=this.awards.awards(this.players),now=this.now();
+    this.readers=new Set(this.recipients().map(ws=>this.getAttachment(ws).playerId).filter((id):id is string=>!!id&&this.players.has(id)&&!this.isManagedBot(id)));
     return {...(awards.length?{awards}:{}),lineup:this.awards.lineup(this.players,winnerId,assignment),
       report:this.awards.report(this.players,(now-(this.round.startedAt??now))/1000,assignment)};
   }
@@ -1835,7 +1893,7 @@ export class GameRoom extends DurableObject<Env> {
   private playersRecord(): Record<string, PlayerData> {
     const players: Record<string, PlayerData> = {};
     for (const [id, player] of this.players) {
-      players[id] = player;
+      if (!this.hidden.has(id)) players[id] = player;
     }
     return players;
   }

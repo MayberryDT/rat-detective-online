@@ -405,7 +405,7 @@ export class FeelDirector {
     deathStyle(killerId:string|null,cause?:string):DeathStyle {
         if(cause==='meteor')return 'fling';
         if(killerId===null||cause==='evidence-tampering')return 'flop';
-        return this.incident==='improper-disposal'||this.incident==='planted-evidence'?'fling':'spin';
+        return this.incident==='improper-disposal'?'fling':'spin';
     }
 
     /** You scored a kill on the rat at `victim`; `airborne` when you were in flight. */

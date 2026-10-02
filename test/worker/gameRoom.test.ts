@@ -5,7 +5,7 @@ import { createAssignment } from '../../src/shared/assignments';
 import { activeZone, JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
 import { JURISDICTION_ZONES } from '../../src/shared/jurisdictionZones';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MAX_HP, WIN_DISPLAY_MS, MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
+import { MAX_HP, READING_CAP_MS, WIN_DISPLAY_MS, MAX_CONNECTIONS, MAX_PLAYERS, PROTOCOL_VERSION, DEFAULT_ROOM_NAME, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import { worldSpawnPoints } from '../../src/shared/playerSpawns';
 import { parseServerMessage } from '../../src/shared/messageValidation';
@@ -550,7 +550,7 @@ describe('GameRoom websockets', () => {
     expect(reset.round.phase).toBe('playing');
   });
 
-  it('keeps playing at twenty actual kills, then closes the assignment, freezes combat and resets', async () => {
+  it('keeps playing at twenty actual kills, then closes the assignment, freezes combat, resets and holds a reader until they continue', async () => {
     const room = `graybox-case-win-${crypto.randomUUID()}`;
     const first = await openClient(room);
     first.ws.send(joinPayload('Carrier'));
@@ -570,6 +570,7 @@ describe('GameRoom websockets', () => {
       round: RoundState;
       now: () => number;
       finishAssignment: () => void;
+      continueReading: (id: string) => void;
       handleHit: (id: string, hit: Extract<ClientMessage, {type:'hit'}>, incoming?: {x:number;y:number;z:number}) => Promise<void>;
     };
     await runInDurableObject(stub, async (instance: GameRoom, state) => {
@@ -604,7 +605,10 @@ describe('GameRoom websockets', () => {
     const board = await first.inbox.waitFor('scoreboardUpdate', message => message.scores.some(p => p.id === carrier.id && p.kills === 20));
     expect(board.scores.find(p => p.id === victim.id)!.deaths).toBe(1);
     await runInDurableObject(stub, async (instance:GameRoom) => {
-      (instance as unknown as Internals).now=()=>now+WIN_DISPLAY_MS;
+      const game = instance as unknown as Internals;
+      // Carrier and Victim continue before the reset; the third human is still reading the results.
+      game.continueReading(carrier.id); game.continueReading(victim.id);
+      game.now=()=>now+WIN_DISPLAY_MS;
       await instance.alarm();
     });
     await first.inbox.waitFor('gameReset');
@@ -612,10 +616,20 @@ describe('GameRoom websockets', () => {
       const game = instance as unknown as Internals;
       expect(game.round.phase).toBe('playing');
       expect(game.chaos.caseHolderId).toBeNull();
-      for (const player of game.players.values()) {
-        expect(player).toMatchObject({hp:MAX_HP,kills:0,deaths:0});
-        expect(player.respawnAt).toBeUndefined();
+      for (const id of [carrier.id, victim.id]) {
+        expect(game.players.get(id)).toMatchObject({hp:MAX_HP,kills:0,deaths:0});
+        expect(game.players.get(id)!.respawnAt).toBeUndefined();
       }
+      // The reader sits the new round out, gone from the others' city, until they continue or the cap passes.
+      expect(game.players.get(observer.id)).toMatchObject({hp:0,kills:0,deaths:0,respawnAt:now+WIN_DISPLAY_MS+READING_CAP_MS});
+      expect(state.storage.sql.exec('SELECT type, player_id FROM pending_events').toArray()).toEqual([{type:'continue',player_id:observer.id}]);
+    });
+    await first.inbox.waitFor('playerLeft', message => message.id === observer.id);
+    third.ws.send(JSON.stringify({type:'ready'}));
+    await first.inbox.waitFor('playerJoined', message => message.player.id === observer.id);
+    await third.inbox.waitFor('playerRespawn', message => message.id === observer.id);
+    await runInDurableObject(stub, (instance: GameRoom, state) => {
+      expect((instance as unknown as Internals).players.get(observer.id)).toMatchObject({hp:MAX_HP});
       expect(state.storage.sql.exec('SELECT * FROM pending_events').toArray()).toEqual([]);
     });
     expect(first.inbox.messages.filter(message => message.type === 'gameWon')).toHaveLength(0);

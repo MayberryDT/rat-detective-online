@@ -4,7 +4,7 @@ import type { AssignmentState } from './assignments';
 import type { IncidentId } from './incidentCatalog';
 import type { ControlsInput } from './rat/controlTally';
 import type { PerfReport } from './perfReport';
-import type { WeaponKind } from './pickups';
+import type { PickupKind, WeaponKind } from './pickups';
 
 /** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there.
  * 27: Tommy Gun, Laser and Mousetrap pickups; a stronger Excessive Force carrier; targets of 10 / 100 / 10; the incident rework.
@@ -17,6 +17,9 @@ export const RESPAWN_DELAY_MS = 3_000;
 /** Round end: the slow-motion finish, the Case File, the police lineup, then the results board to
  * read at leisure (Tyler, 30 September: players want to sit and read the stats). */
 export const WIN_DISPLAY_MS = 30_000;
+/** Results (protocol 28): a human still reading the results board when the next round starts sits it out until
+ * they continue (`ready`), or this long at most. Bots never wait. */
+export const READING_CAP_MS = 180_000;
 export const DEFAULT_ROOM_NAME = 'public-live-v2';
 /** Wire-format ceiling for private capacity experiments; not an admission limit. */
 export const MAX_SCORE_ENTRIES = 100;
@@ -102,19 +105,31 @@ export type AwardId = 'top-gun' | 'most-cheesed' | 'butterfingers' | 'sewer-dwel
 export interface Award { id: AwardId; title: string; playerId: string; playerName: string; value: number }
 /** The round report's race: at most this many rats, each with at most this many points. */
 export const RACE_LIMIT = { rats: 5, points: 64 } as const;
+/** What a kill was made with: the cheese gun, a special weapon, or a blast (an owned explosion). The Mousetrap holds, never kills. */
+export const KILL_WEAPONS = ['cheese', 'tommy-gun', 'laser', 'blast'] as const;
+export type KillWeapon = typeof KILL_WEAPONS[number];
 /** One present rat's round, server-counted (cosmetic; never scoring). */
 export interface ReportRat {
-  id: string; shots: number; hits: number; headshots: number;
+  id: string; name: string;
+  /** The scoreboard's kills and deaths at the finish; assists are damage within `ASSIST_WINDOW_MS` of someone else's kill. */
+  kills: number; deaths: number; assists: number;
+  shots: number; hits: number; headshots: number;
   /** Longest kill, in metres (world units). */
   longest: number;
-  /** Whole seconds carrying the case. */
-  caseSeconds: number;
+  /** Whole seconds carrying the case, times this rat took it, and its longest single carry (whole seconds). */
+  caseSeconds: number; takes: number; carry: number;
   /** Best kill streak this round. */
   streak: number;
-  /** Site pickups plus rewarded supplies. */
+  /** Site pickups plus rewarded supplies; launcher rides. */
   supplies: number; flights: number;
-  /** Damage taken. */
-  damage: number;
+  /** Damage taken and dealt. */
+  damage: number; dealt: number;
+  /** Whole seconds alive this round. */
+  alive: number;
+  /** Kills by what made them, supplies by kind and deaths by cause; zero counts are omitted. */
+  weapons: Partial<Record<KillWeapon, number>>;
+  kinds: Partial<Record<PickupKind, number>>;
+  deathsBy: Partial<Record<DeathCause, number>>;
 }
 /** The results board's round report on `gameWon`: the round's big numbers, every present rat's
  * line, and the race (the leading rats' objective progress every `step` seconds, last point at the finish). */
@@ -124,6 +139,8 @@ export interface RoundReport {
   handoffs: number;
   carry?: { playerId: string; playerName: string; seconds: number };
   supplies: number; flights: number; calls: number;
+  /** Dispatch incidents rolled this round, by incident. */
+  incidents: Partial<Record<IncidentId, number>>;
   rats: ReportRat[];
   race?: { step: number; ids: string[]; points: number[][] };
 }
@@ -185,7 +202,7 @@ export interface ShotDescriptor {
 
 export type PickupTarget = 'case' | 'pickup';
 export type PickupRejectReason = 'stale'|'unavailable'|'blocked'|'ineligible'|'too-far'|'invalid-target'|'rate-limited';
-export type ShotResultOutcome = 'first-step'|'rat-body'|'rat-head'|'ironclad-reflect'|'case-contact'|'world-bounce'|'dispatch-contact'|'pressure-contact'|'fake-case'|'trap-contact'|'lifetime'|'capacity'|'reset'|'rejected';
+export type ShotResultOutcome = 'first-step'|'rat-body'|'rat-head'|'ironclad-reflect'|'case-contact'|'world-bounce'|'dispatch-contact'|'pressure-contact'|'trap-contact'|'lifetime'|'capacity'|'reset'|'rejected';
 
 export type ClientMessage = (
   | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance; resumeToken?: string }
@@ -199,6 +216,8 @@ export type ClientMessage = (
   | { type: 'diagnostics'; report: Record<string, unknown> }
   /** Frame performance on the player's machine, for the city map only; authority never reads it. */
   | { type: 'perf'; report: PerfReport }
+  /** Results (protocol 28): this human has finished reading the results board. */
+  | { type: 'ready' }
 ) & { deliveryAck?: {stream:string;seq:number} };
 
 /** Why a rat was healed: a Quick Fix (site or reward), or an Excessive Force case kill. */
@@ -208,6 +227,9 @@ export type HealCause = 'pickup' | 'case-kill';
 export const ENVIRONMENT_CAUSES = ['evidence-tampering','drowned','meteor'] as const;
 export type EnvironmentCause = typeof ENVIRONMENT_CAUSES[number];
 export const isEnvironmentCause = (value: unknown): value is EnvironmentCause => ENVIRONMENT_CAUSES.some(cause => cause === value);
+/** How a rat died: a shot, a headshot, a blast, or the city. */
+export const DEATH_CAUSES = ['shot', 'headshot', 'blast', ...ENVIRONMENT_CAUSES] as const;
+export type DeathCause = typeof DEATH_CAUSES[number];
 export type ServerMessage =
   | { type: 'chaos'; state: ChaosState }
   | {
@@ -269,7 +291,7 @@ export type ServerMessage =
       incoming?: Vec3Data;
       incident?: boolean;
       headshot?: true;
-      /** The special weapon that made the kill, when one did (the Mousetrap's snap, a laser, a Tommy Gun ball). */
+      /** The special weapon that made the kill, when one did (a laser, a Tommy Gun ball). */
       weapon?: WeaponKind;
       /** The credited killer's kill streak including this kill. */
       killerStreak?: number;

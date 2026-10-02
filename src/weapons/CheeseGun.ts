@@ -6,7 +6,6 @@ import { MAX_HP, type ShotDescriptor } from '../shared/networkProtocol';
 import type { IncidentId } from '../shared/incidentCatalog';
 import { CheeseImpactEffects } from './CheeseImpactEffects';
 import { GunshotAudio, type GunshotCue } from '../audio/GunshotAudio';
-import { playSynth } from '../audio/IncidentAudio';
 import { createCheeseBallGeometry, createCheeseBallMaterial } from './CheeseProjectileModel';
 import { RatEntity } from '../entities/RatEntity';
 import { createShotId } from './shotId';
@@ -156,12 +155,11 @@ export class CheeseGun {
     }
 
     /** Bad Ammunition fires every round with the pitched-up malfunction shot; the feel layer adds each ball's personality.
-     * The Tommy Gun has its own recorded rounds; the Laser's zap is the beam's (ChaosView), and a Mousetrap is silent here. */
+     * Scattershot has its own five-ball blast. The Tommy Gun has its own recorded rounds; the Laser's zap is the beam's
+     * (ChaosView), and a Mousetrap is silent here. */
     private fireSound(origin: { x: number; y: number; z: number }, local: boolean, weapon?: WeaponKind): void {
         if (weapon) { if (weapon === 'tommy-gun') this.fireAudio.play(origin, local, 'tommy'); return; }
         this.fireAudio.play(origin, local, this.fireCue);
-        // Scattershot: a heavy shotgun BLAM under the pistol.
-        if (this.fireCue === 'shotgun') playSynth('blam', local ? undefined : origin, .95 + Math.random() * .1, local ? 1 : .9);
     }
 
     setIncident(incident?: IncidentId): void {

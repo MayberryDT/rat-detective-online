@@ -5,10 +5,9 @@ import {freezeStatic} from '../utils/freezeStatic';
 export class CaseBeacon {
     readonly root=new THREE.Group();
     private readonly material:THREE.ShaderMaterial;
-    /** A counterfeit outline obeys ordinary occlusion and never reads through a wall. */
-    constructor(scene:THREE.Scene,private readonly occluded=false){
+    constructor(scene:THREE.Scene){
         this.material=new THREE.ShaderMaterial({
-            transparent:true,depthTest:occluded?true:false,depthWrite:false,blending:THREE.AdditiveBlending,
+            transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,
             uniforms:{strength:{value:1}},
             vertexShader:`varying vec3 n;varying vec3 eye;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);eye=-p.xyz;gl_Position=projectionMatrix*p;}`,
             fragmentShader:`uniform float strength;varying vec3 n;varying vec3 eye;void main(){float rim=1.-abs(dot(normalize(n),normalize(eye)));float a=smoothstep(.42,.87,rim)*strength;gl_FragColor=vec4(1.,.025,.008,a);}`,
@@ -21,14 +20,6 @@ export class CaseBeacon {
     update(target:THREE.Object3D,camera:THREE.Camera,hidden:boolean){
         this.root.position.copy(target.position);this.root.quaternion.copy(target.quaternion);
         const distance=camera.position.distanceTo(target.position);
-        if(this.occluded){
-            // Idle at the object's own size and fade out with range; architecture
-            // hides it exactly like the briefcase beneath.
-            this.root.visible=!hidden&&distance<34&&target.visible;
-            this.root.scale.setScalar(target.scale.x*1.06);
-            this.material.uniforms.strength.value=THREE.MathUtils.smoothstep(34-distance,0,14)*.85;
-            return;
-        }
         this.root.visible=!hidden&&distance>14&&target.visible;
         const height=Math.max(1,window.innerHeight),projection=camera.projectionMatrix.elements[5];
         this.root.scale.setScalar(Math.max(target.scale.x,24*2*distance/(.66*height*projection)));

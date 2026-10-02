@@ -6,7 +6,7 @@ import { JURISDICTION_TUNING } from '../shared/jurisdiction';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import { MunicipalQuips } from './municipalQuips';
 import type { Award, RoundReport } from '../shared/networkProtocol';
-import { caseTime } from './MatchScoreboard';
+import { caseTime, downloadRoundStats, type RoundStats } from './roundStats';
 import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
 import { countUp, leave, measure, reducedMotion, replay, scrawl, slide, uiMotion } from './motion';
@@ -25,7 +25,10 @@ export type FeedEntry =
     | { kind: 'dispatch'; caller: string; local?: boolean }
     | { kind: 'note'; text: string };
 /** What the round-end screens show beyond the winner: all optional, from the `gameWon` frame. */
-export interface RoundEnd { assignment?: AssignmentState; awards?: readonly Award[]; report?: RoundReport; localId?: string }
+export interface RoundEnd { assignment?: AssignmentState; awards?: readonly Award[]; report?: RoundReport; localId?: string; winnerId?: string }
+/** CONTINUE on the results board: off (nothing to wait for), reading (the button), ready (continued before the next round,
+ * which starts at `until`), or held (the next round is under way without you; the server brings you in by `until`). */
+export type ContinueState = { kind: 'off' } | { kind: 'reading' } | { kind: 'ready'; until: number } | { kind: 'held'; until: number };
 
 /** Owns title, kill feed, overlays, and connection status. */
 /** Matches roundEnd.css: below this the results use their own stacked and phone layouts. */
@@ -62,6 +65,15 @@ export class GameHud {
     private caseFile: {list: HTMLElement; rows: {row: HTMLElement; value: HTMLElement; award: Award}[]; stamped: boolean} | undefined;
     /** The results board's strip of the round's big numbers. */
     private headline?: HTMLElement;
+    /** The results' CONTINUE and DOWNLOAD STATS bar, and the round it would save. */
+    private readonly actions: HTMLElement;
+    private readonly continueButton: HTMLButtonElement;
+    private readonly continueNote: HTMLElement;
+    private continueState: ContinueState = { kind: 'off' };
+    private continueTimer: ReturnType<typeof setInterval> | null = null;
+    private roundStats?: RoundStats;
+    /** The reader chose to leave the results (CONTINUE). */
+    onContinue?: () => void;
     private feedLines = 0;
 
     constructor(doc: Document = document, onRetry?: () => void, private readonly feedback:(cue:FeedbackCue)=>void=()=>{},private readonly foley?:FoleyPlay) {
@@ -81,6 +93,14 @@ export class GameHud {
         this.killQuip=this.doc.createElement('div');this.killQuip.className='kill-confirmation-quip';
         this.killConfirmation.appendChild(this.killTitle);this.killConfirmation.appendChild(this.killQuip);this.killConfirmation.style.display='none';
         this.doc.body.appendChild(this.killConfirmation);
+        this.actions=this.doc.createElement('div');this.actions.className='results-actions';
+        this.continueNote=this.doc.createElement('p');this.continueNote.className='results-continue-note';
+        const download=this.doc.createElement('button');download.type='button';download.className='results-download';download.textContent='DOWNLOAD STATS';
+        download.addEventListener('click',()=>{if(this.roundStats)downloadRoundStats(this.doc,this.roundStats);});
+        this.continueButton=this.doc.createElement('button');this.continueButton.type='button';this.continueButton.className='results-continue';this.continueButton.textContent='CONTINUE ▸';
+        this.continueButton.addEventListener('click',()=>this.onContinue?.());
+        this.actions.appendChild(this.continueNote);this.actions.appendChild(download);this.actions.appendChild(this.continueButton);
+        this.victoryOverlay.appendChild(this.actions);
         const status = this.mountConnectionStatus();
         this.statusPanel = status.panel;
         this.statusMessage = status.message;
@@ -167,11 +187,12 @@ export class GameHud {
         slide(this.killFeed, before, 'telegramFeed', 240, false);
     }
 
-    showVictory(winnerName: string, kills: number, {assignment, awards, report, localId}: RoundEnd = {}): void {
+    showVictory(winnerName: string, kills: number, {assignment, awards, report, localId, winnerId}: RoundEnd = {}): void {
         if (this.disposed) return;
         if(!this.victoryVisible)this.victoryQuip=this.quips.next('victory');
         this.caseFile?.list.parentElement?.remove();this.victoryText.replaceChildren();this.caseFile=undefined;
         this.headline?.remove();this.headline=report&&this.headlineStrip(report,assignment,localId);
+        this.roundStats=report&&{winnerId:winnerId??'',winnerName,kills,...(assignment?{assignment}:{}),...(awards?{awards}:{}),report,...(localId?{localId}:{})};
         const lines = [
             ['victory-kicker', assignment ? ASSIGNMENTS[assignment.id].title : 'OUTSTANDING MISCONDUCT'],
             ['victory-headline', 'CASE CLOSED!'],
@@ -192,6 +213,7 @@ export class GameHud {
                 const row=this.doc.createElement('li'),title=this.doc.createElement('b'),who=this.doc.createElement('span'),value=this.doc.createElement('strong');
                 title.textContent=award.title;who.textContent=award.playerName;value.textContent=awardValue(award);
                 if(award.playerId===localId)row.classList.add('you');
+                row.dataset.rat=award.playerId;
                 row.appendChild(title);row.appendChild(who);row.appendChild(value);list.appendChild(row);
                 rows.push({row,value,award});
             }
@@ -234,13 +256,15 @@ export class GameHud {
         const view=this.doc.defaultView;
         if(on){
             this.doc.body?.classList.add('round-results');
+            this.actions.classList.toggle('no-report',!this.roundStats);
             // Out of the banner, whose rotate would otherwise become the fixed panel's containing block.
             const fileElement=this.caseFile?.list.parentElement;if(fileElement)this.victoryOverlay.appendChild(fileElement);
             // Again next frame (the standings are shown just after this call), and once fonts first used there have loaded.
             this.layoutResults();view?.addEventListener('resize',this.layoutResults);
             view?.requestAnimationFrame(()=>{this.layoutResults();void this.doc.fonts?.ready.then(this.layoutResults);});
         }else{
-            this.doc.body?.classList.remove('round-results','results-tight');view?.removeEventListener('resize',this.layoutResults);
+            this.doc.body?.classList.remove('round-results');view?.removeEventListener('resize',this.layoutResults);
+            this.setContinue({kind:'off'});
         }
         const file=this.caseFile;
         if(!on||!file||file.stamped)return;
@@ -252,6 +276,22 @@ export class GameHud {
             row.classList.add('stamped');this.foley?.('name-stamp',undefined,{rate:.9+i*.05});
             countUp(value,award.value,v=>awardValue({id:award.id,value:v}),'caseFileStamps',Math.max(200,gap*.9));
         },450+i*gap));
+    }
+
+    /** The results' CONTINUE: the button while reading, then a countdown to the round you join (ready), or to the
+     * server's latest moment to bring you into the round already under way (held). */
+    setContinue(state: ContinueState): void {
+        clearInterval(this.continueTimer??undefined);this.continueTimer=null;
+        this.continueState=state;
+        this.actions.dataset.continue=state.kind;
+        this.continueButton.hidden=state.kind==='off'||state.kind==='ready';
+        const note=()=>{
+            const s=this.continueState,left='until' in s?caseTime(Math.ceil(Math.max(0,s.until-Date.now())/1000)):'';
+            this.continueNote.textContent=s.kind==='reading'?'TAKE YOUR TIME · CONTINUE OR PRESS ANY KEY':s.kind==='ready'?`READY · NEXT CASE IN ${left}`
+                :s.kind==='held'?`THE NEXT CASE IS UNDER WAY WITHOUT YOU · CONTINUE TO JOIN (AUTOMATIC IN ${left})`:'';
+        };
+        note();
+        if('until' in state)this.continueTimer=setInterval(note,RESPAWN_TICK_MS);
     }
 
     hideVictory(): void {
@@ -361,13 +401,14 @@ export class GameHud {
         this.timeouts.clear();
         this.retryButton.removeEventListener('click', this.handleRetry);
         this.doc.defaultView?.removeEventListener('resize',this.layoutResults);
+        clearInterval(this.continueTimer??undefined);this.actions.remove();
         this.statusPanel.remove();
     }
 
     /** Results board: the strip of big numbers, then the standings and the Case File side by side,
-     * as one centred group just under the winner banner, all inside the screen. The banner's height
-     * varies with the winner's name, so it is measured. Small screens keep roundEnd.css's own placement
-     * of the panels below the measured banner and strip. */
+     * as one centred group just under the winner banner, above the CONTINUE bar, all inside the screen.
+     * The banner's height varies with the winner's name, so it is measured; the standings scroll for
+     * whatever does not fit. Small screens keep roundEnd.css's own placement below the banner and strip. */
     private layoutResults = (): void => {
         const view=this.doc.defaultView, body=this.doc.body;
         if(!view||!body?.classList.contains('round-results'))return;
@@ -380,16 +421,15 @@ export class GameHud {
         const stripTop=Math.round(bannerBottom+gap*.6);
         body.style.setProperty('--results-strip-top',`${stripTop}px`);
         body.style.setProperty('--results-strip-left',`${left}px`);body.style.setProperty('--results-strip-w',`${width}px`);
+        const actions=this.actions.getBoundingClientRect().height;
+        body.style.setProperty('--results-actions-h',`${Math.ceil(actions)}px`);
         const strip=this.headline?.getBoundingClientRect().height??0;
-        const top=strip?Math.round(stripTop+strip+gap*.6):Math.round(bannerBottom+gap),available=Math.max(120,h-top-margin);
+        const top=strip?Math.round(stripTop+strip+gap*.6):Math.round(bannerBottom+gap),available=Math.max(120,h-top-margin-(actions?actions+gap*.5:0));
         const vars:Record<string,string>={'--results-top':`${top}px`,'--results-h':`${available}px`,
             '--results-board-left':`${left}px`,'--results-board-w':`${board}px`,'--results-file-left':`${left+board+gap}px`,'--results-file-w':`${fileWidth}px`};
         for(const [key,value] of Object.entries(vars))body.style.setProperty(key,value);
-        body.style.removeProperty('--results-panel-h');body.classList.remove('results-tight');
+        body.style.removeProperty('--results-panel-h');
         const standings=this.doc.querySelector<HTMLElement>('.match-scoreboard:not([hidden])');
-        // Every standings row stays in view: the race below the table goes first when they do not fit.
-        const tight=!!standings&&standings.scrollHeight>standings.clientHeight+1;
-        body.classList.toggle('results-tight',tight);
         const file=this.caseFile?.list.parentElement;
         if(small){if(file)this.fitCaseFile(file,file.clientHeight);return;}
         // The pair should read as one spread: fit the Case File within the standings' height
@@ -401,7 +441,7 @@ export class GameHud {
         if(!tallest)return;
         body.style.setProperty('--results-panel-h',`${Math.ceil(tallest)}px`);
         // Ease the whole spread down into spare room rather than leaving it all below.
-        const ease=tight?0:Math.round(Math.min(60,Math.max(0,available-tallest)/3));
+        const ease=Math.round(Math.min(60,Math.max(0,available-tallest)/3));
         body.style.setProperty('--results-top',`${top+ease}px`);body.style.setProperty('--results-strip-top',`${stripTop+ease}px`);
     };
 

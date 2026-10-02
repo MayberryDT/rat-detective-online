@@ -17,9 +17,10 @@ export const CHAOS_TUNING = {
     caseGripHits: 3, caseGripMs: 2000,
     /** Taking the case brings a random supply, at most once per this long per rat. */
     caseRewardMs: 20000,
-    /** Excessive Force: the carrier's hits deal this many times their damage, and each case kill heals it to full. */
+    /** The case carrier's hits deal this many times their damage in every assignment, and any kill it makes heals it to full. */
     carrierDamage: 2,
-    rollMs: 2400, activeMs: 25000, cooldownMs: 21000,
+    /** The quiet stretch between incidents was 21 s until the four-human playtest ("too chaotic"; protocol 28). */
+    rollMs: 2400, activeMs: 25000, cooldownMs: 40000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
     corpseHitMinSpeed: 12, corpseHitCooldownMs: 700, corpseShotKick: 19, deathBurstBalls: 120,
     maxShots: 256, recoverMs: 900, stuckMs: 18000,
@@ -67,9 +68,6 @@ export const INCIDENT_TUNING = {
     cheeseShakeRadius: 1.24, cheeseShakeRange: 25, cheeseShake: .9, cheeseShakeMs: 250, cheeseThudPitch: .6,
     cheesePistolWidth: 1.8, cheesePistolLength: 1.15, cheesePistolRate: 6,
 } as const;
-/** Planted Evidence: additional hazards, never objectives. Bursts share deathBurstBalls. */
-export const COUNTERFEIT_IDS = ['fake-01','fake-02','fake-03','fake-04','fake-05',
-    'fake-06','fake-07','fake-08','fake-09','fake-10'] as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
 export const CASE_LOOSE_SCALE = 2;
 // Street-level frontages distributed around the city, and the north's slots from its kit
@@ -176,13 +174,11 @@ export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
     /** Hits the carrier's grip has taken (1 or 2; absent when whole). Each is within `caseGripMs` of the last. */
     grip?: number;
-    /** Planted Evidence counterfeits share the briefcase shape but are hazards, not objectives. */
-    fake?: boolean;
 }
 export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
-/** A set Mousetrap (`WEAPON_TUNING`): kills any other rat that steps on it. `hp` ball hits left; `at` when set;
- * `snapAt` its latest kill (it re-arms after `trapRearmMs`); `hitAt` the latest hit it took; `brokenAt` when it was
- * destroyed (inert, kept `trapBrokenMs` so clients can play the break). At most one per rat. */
+/** A set Mousetrap (`WEAPON_TUNING`): holds any other rat that steps on it in place for `trapHoldMs`. `hp` ball hits
+ * left; `at` when set; `snapAt` its latest catch (shut while it holds, it re-arms `trapRearmMs` after letting go); `hitAt`
+ * the latest hit it took; `brokenAt` when it was destroyed (inert, kept `trapBrokenMs` so clients can play the break). At most one per rat. */
 export interface TrapState { id:string; owner:string; x:number; y:number; z:number; yaw:number; hp:number; at:number; snapAt?:number; hitAt?:number; brokenAt?:number }
 export const MAX_TRAPS = 16;
 /** Cheddar Shower: a cheese meteor landing on (`x`,`y`,`z`), the floor under it, at `at`; its shadow shows from `born`.

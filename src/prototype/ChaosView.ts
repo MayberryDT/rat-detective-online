@@ -7,7 +7,7 @@ import {clearAimLabel} from '../ui/aimClearance';
 import {fly, leave} from '../ui/motion';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
-import type { ChaosState, CorpseState, LaunchMachine, SurgeVent } from '../shared/chaosState';
+import type { ChaosState, CorpseState, LaunchMachine, SurgeVent, TrapState } from '../shared/chaosState';
 import { CHAOS_TUNING, CASE_LOOSE_SCALE } from '../shared/chaosState';
 import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh, ratAccessory } from '../utils/RatModel';
@@ -40,8 +40,8 @@ import {BAD_AMMO} from '../shared/shotBallistics';
 import {LAUNCH_MACHINES} from '../shared/chaosState';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
-import {faultyCard, pickupArtwork, powerupCard} from './pickupArtwork';
-import { BUFF_FIELD, BUFF_MS, FAULTY_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, activeBuffs, entryFaulty, entryWeapon, heldWeapon, isTimedPickup, weaponArming, type BuffMap, type FaultyKind, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
+import {faultyCard, heldCard, pickupArtwork, powerupCard} from './pickupArtwork';
+import { BUFF_FIELD, BUFF_MS, FAULTY_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, WEAPON_TUNING, activeBuffs, entryFaulty, entryWeapon, heldWeapon, isTimedPickup, weaponArming, type BuffMap, type FaultyKind, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
 import {TrapField,type TrapEvent} from './TrapVisual';
 import {closestPointOnSegment} from '../shared/netplay';
 
@@ -104,8 +104,8 @@ export class ChaosView {
     private readonly pickups=new Map<string,PickupVisual>();
     /** Placed Mousetraps, pooled. */
     private readonly traps=new TrapField(this.root);
-    /** A placed trap set down, snapped, hit or broke (after the view's first state), for sounds. */
-    onTrap?:(event:TrapEvent,p:Vec3Data)=>void;
+    /** A placed trap set down, snapped, hit or broke (after the view's first state), for sounds and the SNAP. */
+    onTrap?:(event:TrapEvent,trap:TrapState)=>void;
     /** Rats shown holding a special weapon. */
     private readonly armed=new Set<string>();
     private readonly buffBar=document.createElement('div');
@@ -130,6 +130,8 @@ export class ChaosView {
     /** Your Code Violation dud's deadline as last seen (so a new one is announced once), and its card. */
     private localDudUntil=0;
     private dud?:{kind:FaultyKind;card:HTMLElement};
+    /** HELD: another rat's Mousetrap has you, until it lets go. */
+    private held?:HTMLElement;
     private readonly pendingInteractions=new Map<string,InteractionCandidate>();
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
     private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
@@ -282,6 +284,7 @@ export class ChaosView {
         this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;this.localWeapon=undefined;this.localWeaponUntil=0;this.localArming=false;this.localDudUntil=0;
         for(const card of this.buffCards.values())leave(card,'paperSlide',CARD_EXIT);
         if(this.dud){leave(this.dud.card,'paperSlide',CARD_EXIT);this.dud=undefined;}
+        if(this.held){leave(this.held,'paperSlide',CARD_EXIT);this.held=undefined;}
         this.buffCards.clear();this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
     resetProjectiles():void{
@@ -423,7 +426,7 @@ export class ChaosView {
         for(const [id,visual] of this.extraCases)if(!extraIds.has(id)){visual.dispose();this.extraCases.delete(id);}
         for(const extra of state.extraCases??[]){
             let visual=this.extraCases.get(extra.id);
-            if(!visual){visual=new ExtraCaseVisual(this.scene,extra.id,this.resolveRat,this.extrapolate,extra.fake===true);this.extraCases.set(extra.id,visual);}
+            if(!visual){visual=new ExtraCaseVisual(this.scene,extra.id,this.resolveRat,this.extrapolate);this.extraCases.set(extra.id,visual);}
             visual.apply(state,extra,this.receivedAt);
         }
         this.syncPickups(state);
@@ -476,8 +479,7 @@ export class ChaosView {
                 if(noted&&performance.now()-noted.at<2000)model.animator.setDeathStyle(noted.style,noted.headshot);
                 this.deathStyles.delete(c.victimId);
             }
-            // Bobbleheads: the fallen keep their big heads.
-            model.state=c;model.animator.bobblehead=state.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='bobbleheads';
+            model.state=c;
         }
     }
     /** Pickups are static world props: build and place on the snapshot, animate each frame. */
@@ -547,6 +549,11 @@ export class ChaosView {
             if(!this.dud){this.dud={kind:mine.faulty,card:faultyCard(mine.faulty)};this.buffBar.appendChild(this.dud.card);}
             this.tickCard(this.dud.card,mine.faultyUntil-now,FAULTY_MS[mine.faulty]);
         }
+        // A Mousetrap's hold: the HELD card and its clock until the trap lets go.
+        if(mine.trappedUntil!==undefined){
+            if(!this.held){this.held=heldCard();this.buffBar.appendChild(this.held);}
+            this.tickCard(this.held,mine.trappedUntil-now,WEAPON_TUNING.trapHoldMs);
+        }else if(this.held){leave(this.held,'paperSlide',CARD_EXIT);this.held=undefined;}
         this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
     /** Show, tick or drop the card of an effect running until `until` (Infinity: held until used). */
@@ -635,7 +642,7 @@ export class ChaosView {
         // hard, a snake waggles; each trails a pale streak so its path reads. Your own carry their personality; other
         // rats' are named by their id (never a special weapon's ball, never neutral debris).
         const bad=active==='bad-ammunition'&&feelState().on('badAmmo');
-        const heavy=s.assignment?.id==='excessive-force'&&s.assignment.phase==='active'&&!!s.case.owner;
+        const heavy=s.assignment?.phase==='active'&&!!s.case.owner;
         const shots=this.extrapolate?this.localShots.render(this.presentation.renderShots(s.shots,renderTime),renderTime):s.shots;
         for(let i=0;i<Math.min(shots.length,CHAOS_TUNING.maxShots);i++){
             const shot=shots[i];
@@ -645,7 +652,7 @@ export class ChaosView {
             this.ballPose.position.set(p.x,p.y,p.z);
             let quirk=shot.quirk;
             if(!quirk&&bad&&shot.owner&&!heldWeapon(s.buffs,shot.owner,s.time)){quirk=badRound(shot.id);if(quirk!=='superball'&&shot.wallBounced)quirk=undefined;}
-            // Excessive Force: the carrier's balls hit twice as hard, and look heavier.
+            // The case carrier's balls hit twice as hard in every assignment, and look heavier.
             let look=heavy&&shot.owner===s.case.owner?1.35:1,spin=1;
             if(quirk==='superball'){look=1.4+.12*Math.sin(now*.05+i);spin=3;}
             else if(quirk==='floater'){look=1.7+.12*Math.sin(now*.008+i);spin=.3;}

@@ -10,7 +10,7 @@ import type { ChaosState } from '../../src/shared/chaosState';
 import { MAX_HP, PROTOCOL_VERSION, WIN_DISPLAY_MS, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
 
 type Internals={handleHit:(id:string,hit:{type:'hit';victimId:string;damage:number},incoming?:{x:number;y:number;z:number})=>Promise<void>;players:Map<string,PlayerData>;chaos:ChaosSimulation;chaosTimer:ReturnType<typeof setInterval>|null;
-    clock:()=>number;round:RoundState;finishAssignment:()=>void;checkpointGame:()=>void;persistPlayer:(p:PlayerData,force:boolean)=>void};
+    clock:()=>number;round:RoundState;finishAssignment:()=>void;checkpointGame:()=>void;persistPlayer:(p:PlayerData,force:boolean)=>void;continueReading:(id:string)=>void};
 const sockets:WebSocket[]=[];
 const rooms:DurableObjectStub<GameRoom>[]=[];
 const appearance={hatType:'fedora',hatColor:1,furColor:2,coatColor:3};
@@ -115,7 +115,9 @@ describe('shared assignment room lifecycle',()=>{
             expect(winA.assignment).toEqual(completed);expect(winB.assignment).toEqual(completed);
             expect(winA.winnerId).toBe(first.welcome.id);expect(winA.kills).toBe(completed.id==='excessive-force'?ASSIGNMENT_TUNING.caseKillTarget:0);
             await runInDurableObject(stub,async(instance)=>{
-                const game=instance as unknown as Internals;const now=game.round.resetAt!;game.clock=()=>now;await instance.alarm();pause(game);
+                // Both humans continue from the results before the next round, so they start it with everyone.
+                const game=instance as unknown as Internals;game.continueReading(first.welcome.id);game.continueReading(second.welcome.id);
+                const now=game.round.resetAt!;game.clock=()=>now;await instance.alarm();pause(game);
                 expect(game.chaos.assignmentState!.roundId).not.toBe(completed.roundId);
                 expect(game.chaos.assignmentState!.result).toBeUndefined();
             });

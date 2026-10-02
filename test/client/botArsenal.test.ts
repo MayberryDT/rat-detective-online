@@ -39,13 +39,11 @@ describe('bots with the arsenal',()=>{
         expect(Math.min(...gaps(shots))).toBeGreaterThanOrEqual(WEAPON_TUNING.tommyIntervalMs-1);
     });
 
-    it('fires the Laser at a rival at most once a second, and never on a guess',()=>{
+    it('fires the Laser like the cheese gun: clicks faster than once a second, and sprays round corners',()=>{
         const shots=fired(state('laser'),[player('rival',0,20)],6000);
-        expect(shots.length).toBeGreaterThan(2);
-        expect(Math.min(...gaps(shots))).toBeGreaterThanOrEqual(1000);
-        // Nobody in sight: a pistol sprays round corners, a Laser stays quiet.
-        expect(fired(state(),[],10000).length).toBeGreaterThan(0);
-        expect(fired(state('laser'),[],10000)).toEqual([]);
+        expect(shots.length).toBeGreaterThan(6);
+        expect(Math.min(...gaps(shots))).toBeLessThan(1000);
+        expect(fired(state('laser'),[],10000).length).toBeGreaterThan(0);
     });
 
     it('sets a Mousetrap down within a few seconds, and retries a refused spot without spamming',()=>{

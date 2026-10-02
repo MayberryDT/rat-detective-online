@@ -14,7 +14,6 @@ import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballTuning';
 import { bounceShot, bounces, cheeseBounce, cheeseDamage, growIn, quirkBirth, quirkBounce, shotGravity, shotLife, steerQuirk } from './shotBallistics';
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
-    COUNTERFEIT_IDS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState, type TrapState, type LaserBeam, MAX_TRAPS, MAX_BEAMS,
     type Meteor, METEOR_KEEP_MS } from './chaosState';
 import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, shortedOut, weaponArming, FAULTY_COPY, FAULTY_TUNING, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, TRAP_SCALE, TRAP_TALL, resolvePickupPoints,
@@ -22,7 +21,7 @@ import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWe
 import { overWater } from './city/kit/city';
 import type { WorldSpec } from './worldSpec';
 import { worldSpawnPoints } from './playerSpawns';
-import { addRatShapes, setBobblehead } from './rat/ratBody';
+import { addRatShapes } from './rat/ratBody';
 import { MAX_HP, type EnvironmentCause, type HealCause, type PickupRejectReason, type PickupTarget, type PlayerData, type ShotDescriptor, type ShotResultOutcome, type Vec3Data } from './networkProtocol';
 import { AssignmentRules } from './AssignmentRules';
 import { allUnitsPoint } from './allUnits';
@@ -58,8 +57,6 @@ interface CaseRuntime {
     /** Ridden a municipal launcher pad. Swept flight with its own lift cap, and
      * exempt from the loose-case recovery watchdog until it settles. */
     launched:boolean;launchLift:number;
-    /** Planted Evidence counterfeit: a hazard that never equips or grants objective status. */
-    fake:boolean;
 }
 /** null ownership is an environmental hit, including neutral chains; `cause` names it when it is not Tampering. `weapon`: a special weapon made the hit. */
 export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true; weapon?:WeaponKind; cause?:EnvironmentCause }
@@ -79,7 +76,7 @@ export type PickupEvent =
     | { kind:'healed'; playerId:string; hp:number; cause:HealCause }
     /** A supply handed over on the spot (`rewardSupply`), not from a site. */
     | { kind:'rewarded'; playerId:string; pickup:PickupKind; why:RewardReason }
-    /** A Mousetrap was set down, snapped on a rat (`victim`), or destroyed (`by` the rat whose hit broke it). */
+    /** A Mousetrap was set down, snapped on a rat and holds it (`victim`), or destroyed (`by` the rat whose hit broke it). */
     | { kind:'trap'; what:'set'|'snap'|'break'; trapId:string; playerId:string; p:Vec3Data; victim?:string; by?:string|null; hits?:number };
 export type RewardReason='case'|'streak'|'dispatch'|'bounty';
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
@@ -114,8 +111,9 @@ export class ChaosSimulation {
     private readonly pickupEvents:PickupEvent[]=[];
     private readonly recentPickupClaims=new Map<string,{playerId:string;generation:number;at:number;pickup:PickupKind;effectUntil?:number;faulty?:true}>();
     private pickupPoints?:PickupPoint[];
-    /** Set Mousetraps by id, each with its shootable static body; at most one per rat. */
-    private readonly traps=new Map<string,{state:TrapState;body:C.Body}>();
+    /** Set Mousetraps by id, each with its shootable static body and the rat it holds (or just let go, until that rat
+     * steps clear); at most one per rat. */
+    private readonly traps=new Map<string,{state:TrapState;body:C.Body;held?:string}>();
     private trapSerial=0;
     /** Recent laser beams for the snapshot, newest last. */
     private beams:LaserBeam[]=[];
@@ -144,9 +142,8 @@ export class ChaosSimulation {
     private meteorIncident=-1;
     private readonly incidentEvents:IncidentEvent[]=[];
     private casesWeaponized=false;
-    private plantedSerial:number|undefined;
-    /** Room-selected evidence incident. Defaults to the shipped Planted Evidence. */
-    evidenceMode:EvidenceMode='planted';
+    /** Room-selected Dispatch roster: `classic` adds the retired Evidence Tampering (private practice only). */
+    evidenceMode:EvidenceMode='standard';
     /** Practice-only override: force every roll to one incident id. */
     forcedIncident:IncidentId|null=null;
     /** A deploy's allow-list (`INCIDENTS`, staging playtests): rolls draw only these. Empty = every incident. */
@@ -185,16 +182,16 @@ export class ChaosSimulation {
     get caseHolderId():string|null{return this.primaryCase.owner;}
     /** Called synchronously by authoritative damage resolution, never at launch. */
     creditCaseKill(killerId:string|null):boolean {
-        if(killerId===null || this.casesWeaponized || this.primaryCase.returningUntil)return false;
-        const credited=this.assignment?.kill(killerId,this.primaryCase.owner,this.now)??false;
-        // Excessive Force: every case kill heals the carrier to full (Tyler, 1 October).
-        const killer=credited&&this.assignment?.state.id==='excessive-force'?this.players.get(killerId):undefined;
-        if(killer&&killer.hp>0&&killer.hp<MAX_HP){killer.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:killer.id,hp:MAX_HP,cause:'case-kill'});}
-        return credited;
+        if(killerId===null)return false;
+        // Every assignment: a kill made while carrying the case heals the carrier to full (quick patch, protocol 28).
+        const carrier=this.carrierPower(killerId)>1?this.players.get(killerId):undefined;
+        if(carrier&&carrier.hp>0&&carrier.hp<MAX_HP){carrier.hp=MAX_HP;this.pickupEvents.push({kind:'healed',playerId:carrier.id,hp:MAX_HP,cause:'case-kill'});}
+        if(this.casesWeaponized||this.primaryCase.returningUntil)return false;
+        return this.assignment?.kill(killerId,this.primaryCase.owner,this.now)??false;
     }
-    /** Damage multiplier for a shooter's hits: the Excessive Force carrier hits twice as hard (Tyler, 1 October). */
+    /** Damage multiplier for a shooter's hits: the case carrier hits twice as hard in every assignment (quick patch, protocol 28). */
     carrierPower(owner:string|null):number {
-        return owner!==null&&owner===this.primaryCase.owner&&this.assignment?.active&&this.assignment.state.id==='excessive-force'?T.carrierDamage:1;
+        return owner!==null&&owner===this.primaryCase.owner&&this.assignment?.active?T.carrierDamage:1;
     }
     isCaseHolder(id:string):boolean{for(const c of this.cases.values())if(c.owner===id)return true;return false;}
     constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, spec?:WorldSpec) {
@@ -262,94 +259,28 @@ export class ChaosSimulation {
         for(let i=0;i<8;i++)if(ray(new C.Vec3(p.x,foot+1.3,p.z),new C.Vec3(p.x+Math.cos(i*Math.PI/4),foot+1.3,p.z+Math.sin(i*Math.PI/4))).hasHit)return false;
         return true;
     }
-    private createCase(id:string,fake=false):CaseRuntime{
+    private createCase(id:string):CaseRuntime{
         const body=new C.Body({mass:1.5,shape:new C.Box(new C.Vec3(CASE_SIZE.x/2,CASE_SIZE.y/2,CASE_SIZE.z/2)),material:CASE_MATERIAL,
             position:vec(CASE_HOME),collisionFilterGroup:4,collisionFilterMask:1|8|16,linearDamping:.2,angularDamping:.25});
         body.addShape(new C.Box(new C.Vec3(.15,.035,.04)),new C.Vec3(0,.43,0));
         for(const x of [-.12,.12])body.addShape(new C.Box(new C.Vec3(.0275,.065,.04)),new C.Vec3(x,.36,0));
         const c:CaseRuntime={id,body,owner:null,previousOwner:null,hitAfter:new Map(),pickupAfter:0,grip:0,gripAt:0,
             returningUntil:0,looseSince:this.now,scale:1,lastSpawn:CASE_HOME,armed:false,
-            launched:false,launchLift:0,fake};
-        // A counterfeit is planted, not thrown: park it exactly where it was placed
-        // so a validated spawn can never drift into geometry or a passing rat.
-        if(fake){body.type=C.Body.STATIC;body.mass=0;body.collisionFilterMask=16;body.updateMassProperties();}
+            launched:false,launchLift:0};
         this.world.addBody(body);this.targets.set(body,{kind:'case',caseId:id});this.cases.set(id,c);
         this.listenForContacts(body,'case-bounce');
         this.scaleCase(CASE_LOOSE_SCALE,c);return c;
     }
     private syncExtraCases(){
         if(this.incidentActive('evidence-tampering')){
-            this.dropFakes();
             for(const id of EXTRA_CASE_IDS)if(!this.cases.has(id))this.placeCaseAtSpawn(this.createCase(id));
-        }else if(this.incidentActive('planted-evidence')){
-            // Leave no weaponized missiles behind if the mode changed mid-room.
-            for(const [id,c] of [...this.cases])if(id!=='primary'&&!c.fake)this.removeCaseBody(id,c);
-            if(this.plantedSerial!==this.dispatch.serial){
-                this.plantedSerial=this.dispatch.serial;
-                for(const id of COUNTERFEIT_IDS)if(!this.cases.has(id))this.placeFake(this.createCase(id,true));
-            }
-        }else {this.plantedSerial=undefined;this.dropExtras();}
+        }else this.dropExtras();
     }
     private removeCaseBody(id:string,c:CaseRuntime):void{
         this.world.removeBody(c.body);this.targets.delete(c.body);this.cases.delete(id);
     }
-    /** Quietly retire every extra case or counterfeit without an unannounced detonation. */
+    /** Quietly retire every extra case without an unannounced detonation. */
     private dropExtras():void{for(const [id,c] of [...this.cases])if(id!=='primary')this.removeCaseBody(id,c);}
-    private dropFakes():void{for(const [id,c] of [...this.cases])if(id!=='primary'&&c.fake)this.removeCaseBody(id,c);}
-    private placeFake(c:CaseRuntime):void{
-        this.rayQuery.refresh();
-        const walls=[...this.targets].filter(([,target])=>target.kind==='world');
-        for(const [body] of walls)body.updateAABB();
-        const clear=CASE_SPAWNS.filter(p=>{
-            const y=p.y??1.3;
-            for(const x of [-.95,0,.95])for(const z of [-.5,0,.5]){
-                const floor=this.ray(new C.Vec3(p.x+x,y+.2,p.z+z),new C.Vec3(p.x+x,y-1.8,p.z+z),1);
-                if(!floor.hasHit)return false;
-            }
-            return !walls.some(([body])=>{
-                const {lowerBound:a,upperBound:b}=body.aabb;
-                return b.y>y-.35&&a.y<y+.65&&b.x>p.x-.95&&a.x<p.x+.95&&b.z>p.z-.5&&a.z<p.z+.5;
-            });
-        });
-        const apart=clear.filter(p=>![...this.cases.values()].some(other=>other!==c&&Math.hypot(other.body.position.x-p.x,other.body.position.z-p.z)<10));
-        let available=apart.length?apart:clear;
-        // Never arm a trap inside a living rat's contact range: every player needs
-        // a chance to see it and choose to shoot it, walk around, or risk it.
-        const unoccupied=available.filter(p=>![...this.players.values()].some(r=>r.hp>0&&Math.hypot(r.x-p.x,r.y-p.y,r.z-p.z)<12));
-        if(unoccupied.length)available=unoccupied;
-        const candidates=available.filter(p=>p.x!==c.lastSpawn.x||p.z!==c.lastSpawn.z);
-        const pool=candidates.length?candidates:available;
-        const spawn=pool.length?pool[Math.floor(Math.random()*pool.length)]:CASE_HOME;
-        c.lastSpawn=spawn;c.body.position.copy(vec(spawn));c.body.velocity.setZero();c.body.angularVelocity.setZero();c.body.updateAABB();
-    }
-    /** One counterfeit detonates once. Emitted balls keep the initiating shot's
-     * ownership; a contact trap uses neutral attribution and kills its collector. */
-    private detonateFake(c:CaseRuntime,owner:string|null,killerId?:string):void{
-        if(!this.cases.has(c.id))return;
-        const origin=c.body.position.clone();
-        this.removeCaseBody(c.id,c);
-        this.cheeseBurst(data(origin),owner);
-        this.impacts.push({p:data(origin),n:{x:0,y:1,z:0},surface:false,scale:2.6,cue:'case-hit'});
-        if(killerId){
-            // The trap is a world hazard, not a player kill: no self-kill credit and
-            // no invented credit to whoever happened to be carrying the real case.
-            this.hit({owner:null,victim:killerId,damage:MAX_HP,incoming:{x:0,y:1,z:0}});
-        }
-    }
-    /** Living rats that step into a counterfeit's close range trigger the lethal trap. */
-    private stepFakes(playing:boolean):void{
-        if(!playing||!this.incidentActive('planted-evidence'))return;
-        for(const c of [...this.cases.values()]){
-            if(!c.fake||c.owner)continue;
-            const p=c.body.position;
-            for(const player of this.players.values()){
-                if(player.hp<=0)continue;
-                const reach=new C.Vec3(player.x,player.y+.8,player.z);
-                if(reach.distanceTo(p)>PICKUP_TUNING.claimRadius)continue;
-                this.detonateFake(c,null,player.id);break;
-            }
-        }
-    }
     /** Preserve the last accepted network segment instead of letting unchanged
      * simulation ticks erase the path a human actually traversed. */
     recordMovement(playerId:string,from:Vec3Data,to:Vec3Data,at:number,seq:number):void {
@@ -607,7 +538,7 @@ export class ChaosSimulation {
                     const toward=pull(player,machine.pad);if(!toward)continue;
                     this.shove(player.id,{x:toward.x*SURGE.suction,y:SURGE.suctionLift,z:toward.z*SURGE.suction},'pull');
                 }
-                for(const body of [...[...this.cases.values()].filter(c=>!c.owner&&!c.fake&&!c.armed&&c.body.type===C.Body.DYNAMIC).map(c=>c.body),...[...this.corpses.values()].map(c=>c.body)]){
+                for(const body of [...[...this.cases.values()].filter(c=>!c.owner&&!c.armed&&c.body.type===C.Body.DYNAMIC).map(c=>c.body),...[...this.corpses.values()].map(c=>c.body)]){
                     const toward=pull(body.position,machine.pad);if(!toward)continue;
                     body.velocity.x+=toward.x*6;body.velocity.z+=toward.z*6;body.velocity.y+=2;body.wakeUp();
                 }
@@ -641,8 +572,8 @@ export class ChaosSimulation {
         if(this.incidentActive('code-violation'))
             this.incidentEvents.push({kind:'malfunction',what:'machine',site:machine.id,p:{...machine.pad},shoved:this.blast(machine.pad,I.violationFling,machine.pad.radius,'misfire')});
     }
-    /** Throw everything loose on a pad (or over a street launcher): rats, evidence
-     * (counterfeits too; they re-plant where they land), bodies and cheese. A carried
+    /** Throw everything loose on a pad (or over a street launcher): rats, evidence,
+     * bodies and cheese. A carried
      * case needs no handling, because carry() pins it to its rat every tick.
      * `machineId` names the machine in launch events; street launchers have none. */
     private throwFrom(source:ThrowSource,boost:boolean,machineId?:string,ventId?:string){
@@ -710,7 +641,7 @@ export class ChaosSimulation {
             this.shove(player.id,{x:push.x,y:push.y,z:push.z});
         }
         for(const c of this.cases.values()){
-            if(c.owner||c.fake||c.armed||c.body.type!==C.Body.DYNAMIC)continue;
+            if(c.owner||c.armed||c.body.type!==C.Body.DYNAMIC)continue;
             const push=away(c.body.position);if(!push)continue;
             c.body.velocity.vadd(new C.Vec3(push.x,push.y,push.z),c.body.velocity);c.body.wakeUp();
         }
@@ -912,7 +843,7 @@ export class ChaosSimulation {
             body.velocity.x+=dx*k;body.velocity.z+=dz*k;body.velocity.y+=I.meteorLift;body.wakeUp();
         };
         for(const corpse of this.corpses.values())kick(corpse.body);
-        for(const c of this.cases.values())if(!c.owner&&!c.fake&&!c.armed&&c.body.type===C.Body.DYNAMIC)kick(c.body);
+        for(const c of this.cases.values())if(!c.owner&&!c.armed&&c.body.type===C.Body.DYNAMIC)kick(c.body);
         this.cheeseBurst({x:m.x,y:m.y+.8,z:m.z},null,'meteor');
         this.incidentEvents.push({kind:'meteor',p,flattened,shoved});
     }
@@ -1028,7 +959,6 @@ export class ChaosSimulation {
         if(target?.kind==='trap'&&target.trapId){this.damageTrap(target.trapId,W.laserTrapHits,owner);result('trap-contact',{point,normal});return;}
         if(target?.kind==='case'){
             const c=this.cases.get(target.caseId??'primary');
-            if(c?.fake){this.detonateFake(c,owner);result('fake-case',{point,normal});return;}
             if(c)this.shootCase(c,incoming,shot.shotId,owner);
             result('case-contact',{point,normal});return;
         }
@@ -1105,7 +1035,7 @@ export class ChaosSimulation {
         this.pickupEvents.push({kind:'trap',what:'set',trapId:id,playerId:owner,p:{x:spot.x,y:spot.y,z:spot.z}});
         return true;
     }
-    /** A trap and its shootable block, for balls and beams only: rats walk onto it (and die), cases and corpses pass. */
+    /** A trap and its shootable block, for balls and beams only: rats walk onto it (and are held), cases and corpses pass. */
     private addTrap(state:TrapState):void{
         const body=new C.Body({mass:0,type:C.Body.STATIC,shape:new C.Box(new C.Vec3(.75*TRAP_SCALE+.05,.3*TRAP_TALL,W.trapRadius)),position:new C.Vec3(state.x,state.y+.3*TRAP_TALL,state.z),
             collisionFilterGroup:4,collisionFilterMask:16});
@@ -1138,30 +1068,36 @@ export class ChaosSimulation {
         const trap=this.traps.get(id);if(!trap||trap.state.brokenAt!==undefined)return;
         trap.state.hp=Math.max(0,trap.state.hp-hits);trap.state.hitAt=this.now;
         if(trap.state.hp>0)return;
-        trap.state.brokenAt=this.now;this.world.removeBody(trap.body);this.targets.delete(trap.body);
+        trap.state.brokenAt=this.now;this.world.removeBody(trap.body);this.targets.delete(trap.body);this.freeTrapped(trap);
         this.pickupEvents.push({kind:'trap',what:'break',trapId:id,playerId:trap.state.owner,p:{x:trap.state.x,y:trap.state.y,z:trap.state.z},by,hits:W.trapHp});
     }
     private removeTrap(id:string):void{
         const trap=this.traps.get(id);if(!trap)return;
-        if(trap.state.brokenAt===undefined){this.world.removeBody(trap.body);this.targets.delete(trap.body);}
+        if(trap.state.brokenAt===undefined){this.world.removeBody(trap.body);this.targets.delete(trap.body);this.freeTrapped(trap);}
         this.traps.delete(id);
     }
+    /** A trap that breaks or goes lets go of the rat it holds at once. */
+    private freeTrapped(trap:{state:TrapState;held?:string}):void{
+        const entry=trap.held===undefined?undefined:this.buffs[trap.held];
+        if(entry&&(entry.trappedUntil??0)>this.now)delete entry.trappedUntil;
+        trap.held=undefined;
+    }
     /** Each step: a broken trap leaves after `trapBrokenMs`; an armed one snaps on any other living rat whose feet
-     * reach it (Ironclad does not help), credited to its owner, and re-arms after `trapRearmMs`. */
+     * reach it (Ironclad does not help) and holds it in place for `trapHoldMs` (no damage, no kill); it re-arms
+     * `trapRearmMs` after letting go, and leaves the rat it held alone until that rat has stepped clear. */
     private stepTraps(now:number,playing:boolean):void{
+        const reach=W.trapRadius+W.trapFoot;
+        const within=(rat:PlayerData,s:TrapState)=>{const dx=rat.x-s.x,dz=rat.z-s.z;return rat.hp>0&&Math.abs(rat.y-s.y)<=W.trapHeight&&dx*dx+dz*dz<=reach*reach;};
         for(const [id,trap] of this.traps){
             const s=trap.state;
             if(s.brokenAt!==undefined){if(now-s.brokenAt>=W.trapBrokenMs)this.traps.delete(id);continue;}
-            if(!playing||now-(s.snapAt??-Infinity)<W.trapRearmMs)continue;
-            const reach=W.trapRadius+W.trapFoot;
+            if(trap.held!==undefined&&now-(s.snapAt??-Infinity)>=W.trapHoldMs){const held=this.players.get(trap.held);if(!held||!within(held,s))trap.held=undefined;}
+            if(!playing||now-(s.snapAt??-Infinity)<W.trapHoldMs+W.trapRearmMs)continue;
             for(const rat of this.players.values()){
-                if(rat.id===s.owner||rat.hp<=0||Math.abs(rat.y-s.y)>W.trapHeight)continue;
-                const dx=rat.x-s.x,dz=rat.z-s.z;if(dx*dx+dz*dz>reach*reach)continue;
-                s.snapAt=now;
-                // The bar flings the victim up and back out the way it came.
-                const out=Math.hypot(dx,dz)||1,incoming={x:dx/out*40,y:150,z:dz/out*40};
+                if(rat.id===s.owner||rat.id===trap.held||!within(rat,s)||(this.buffs[rat.id]?.trappedUntil??0)>now)continue;
+                s.snapAt=now;trap.held=rat.id;
+                this.buffs[rat.id]={...this.buffs[rat.id],trappedUntil:now+W.trapHoldMs};
                 this.pickupEvents.push({kind:'trap',what:'snap',trapId:id,playerId:s.owner,p:{x:s.x,y:s.y,z:s.z},victim:rat.id});
-                this.hit({owner:s.owner,victim:rat.id,damage:MAX_HP,incoming,weapon:'mousetrap'});
                 break;
             }
         }
@@ -1182,7 +1118,6 @@ export class ChaosSimulation {
         for(const [id,b] of this.rats)if(!this.players.has(id)||this.players.get(id)!.hp<=0){
             this.world.removeBody(b);this.targets.delete(b);this.rats.delete(id);
         }
-        const big=this.incidentActive('bobbleheads');
         for(const [id,p] of this.players){
             if(p.hp<=0)continue;
             let b=this.rats.get(id),target=b&&this.targets.get(b);
@@ -1191,8 +1126,6 @@ export class ChaosSimulation {
                 target={kind:'rat',player:p,head:addRatShapes(b)[2]};
                 this.rats.set(id,b);this.targets.set(b,target);this.world.addBody(b);
             }
-            // Bobbleheads: the same giant head sphere every client shows and predicts.
-            if(target.head)setBobblehead(b,target.head,big);
             b.position.set(p.x,p.y,p.z);b.updateAABB();
         }
     }
@@ -1224,7 +1157,7 @@ export class ChaosSimulation {
         this.pickupApproaches.delete(id);
         this.assignment?.disconnect(id);
         this.release(id);delete this.possession[id];this.tommyHeat.delete(id);
-        // A trap needs its owner for the kill credit: it leaves with them.
+        // A rat's trap leaves with its owner (letting go of anyone it holds).
         for(const [trapId,trap] of this.traps)if(trap.state.owner===id)this.removeTrap(trapId);
         if(this.dispatch.caller===id){this.dispatch={...this.dispatch};delete this.dispatch.caller;}
     }
@@ -1270,7 +1203,7 @@ export class ChaosSimulation {
     private deathBurst(corpse:CorpseState){
         this.cheeseBurst(corpse.p,corpse.owner===undefined?corpse.victimId:corpse.owner);
     }
-    /** Identical radial eruption for Improper Disposal, Planted Evidence and meteors. Neutral debris
+    /** Identical radial eruption for Improper Disposal and meteors. Neutral debris
      * (`owner` null) reports `cause` for the deaths it deals. */
     private cheeseBurst(origin:Vec3Data,owner:string|null,cause?:EnvironmentCause):void {
         this.sound('burst',origin);
@@ -1660,7 +1593,6 @@ export class ChaosSimulation {
         for(const c of this.cases.values())this.updateCase(c,dt,playing);
         this.recordCaseHistory(now);
         this.stepPickups(now,playing);
-        this.stepFakes(playing);
         this.stepTraps(now,playing);
         while(this.beams.length&&now-this.beams[0]!.at>W.laserBeamMs)this.beams.shift();
         // Small physical steps keep the theatrical bodies within their collision surfaces.
@@ -1734,14 +1666,6 @@ export class ChaosSimulation {
             }
             if(target?.kind==='case'){
                 const c=this.cases.get(target.caseId??'primary')!;
-                if(c.fake){
-                    // The triggering ball is consumed by the blast, matching the
-                    // established shot-prop convention; no fake missile state.
-                    this.detonateFake(c,shot.owner??null);
-                    this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:false,scale:1.6,cue:'case-hit'});
-                    this.finishShot(shot,'fake-case',{point:data(hit.hitPointWorld),normal:data(normal)});
-                    this.shots.splice(i,1);continue;
-                }
                 this.noteShot(shot,'case-contact',{point:data(hit.hitPointWorld),normal:data(normal)});
                 this.shootCase(c,incoming,shot.id,shot.owner);
             }
@@ -1777,21 +1701,6 @@ export class ChaosSimulation {
         if(this.impacts.length>64)this.impacts.splice(0,this.impacts.length-64);
     }
     private stepLooseCase(c:CaseRuntime,now:number,playing:boolean){
-        // Counterfeits never equip, never recover and never return: they only
-        // wait to be shot or to detonate on the first rat that reaches them.
-        // A thrown one re-plants where it lands, or somewhere valid if it escaped.
-        if(c.fake){
-            const p=c.body.position;
-            // Parked for good, so it must be slow and actually resting on something.
-            const landed=c.body.velocity.length()<=T.casePickupMaxSpeed&&this.ray(p,new C.Vec3(p.x,p.y-.8,p.z),1).hasHit;
-            if(c.launched&&(landed||p.y< -9||outsideCity(p.x,p.z))){
-                c.launched=false;
-                c.body.type=C.Body.STATIC;c.body.mass=0;c.body.collisionFilterMask=16;
-                c.body.velocity.setZero();c.body.angularVelocity.setZero();c.body.updateMassProperties();
-                if(p.y< -9||outsideCity(p.x,p.z))this.placeFake(c);else c.body.updateAABB();
-            }
-            return;
-        }
         if(!c.owner){
             const p=c.body.position;
             // A launched case is mid-flight, not lost. Its apex is slow and high,
@@ -1858,7 +1767,7 @@ export class ChaosSimulation {
     }
     private caseSnapshot(c:CaseRuntime):CaseState{
         return {...pose(c.body),owner:c.owner,previousOwner:c.previousOwner,pickupAfter:c.pickupAfter,
-            returningUntil:c.returningUntil,...(c.owner&&c.grip&&this.now-c.gripAt<=T.caseGripMs?{grip:c.grip}:{}),...(c.missileOwner?{missileOwner:c.missileOwner}:{}),...(c.fake?{fake:true}:{})};
+            returningUntil:c.returningUntil,...(c.owner&&c.grip&&this.now-c.gripAt<=T.caseGripMs?{grip:c.grip}:{}),...(c.missileOwner?{missileOwner:c.missileOwner}:{})};
     }
     /** One enemy ball on a carried case. True when this hit breaks the grip; a ball counts once, and a grip left alone for `caseGripMs` is whole again. */
     private loosensGrip(c:CaseRuntime,ball:string,now:number):boolean{
@@ -1917,15 +1826,10 @@ export class ChaosSimulation {
         c.launched=false;
         c.body.position.copy(vec(saved.p));c.body.velocity.copy(vec(saved.v));c.body.angularVelocity.copy(vec(saved.spin));
         Object.assign(c.body.quaternion,saved.q);
-        // Counterfeits stay parked where they were planted, exactly like a fresh one.
-        const parked=c.fake;
-        c.body.type=parked?C.Body.STATIC:c.owner?C.Body.KINEMATIC:C.Body.DYNAMIC;
-        c.body.collisionFilterMask=(c.owner||parked)?16:1|8|16;
+        c.body.type=c.owner?C.Body.KINEMATIC:C.Body.DYNAMIC;
+        c.body.collisionFilterMask=c.owner?16:1|8|16;
         c.body.updateMassProperties();c.body.updateAABB();
-        c.armed=!parked&&this.incidentActive('evidence-tampering')&&!c.owner;
-        // A counterfeit checkpointed mid-throw would otherwise hang in the air as a trap.
-        const p=saved.p;
-        if(parked&&(vec(saved.v).length()>T.casePickupMaxSpeed||p.y>1.5&&!isReachableLandmarkPosition(p.x,p.y,p.z)&&!isReachableVehiclePosition(p.x,p.y,p.z)))this.placeFake(c);
+        c.armed=this.incidentActive('evidence-tampering')&&!c.owner;
     }
     private restore(s:ChaosState){
         // Room hibernation/reconnection must not restock consumed supplies early.
@@ -1960,16 +1864,6 @@ export class ChaosSimulation {
                 else {c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;c.body.wakeUp();}
             }
         }
-        // Restore only surviving traps; a missing ID has already detonated.
-        if(this.incidentActive('planted-evidence')&&s.dispatch.until>Date.now()){
-            this.plantedSerial=this.dispatch.serial;
-            for(const id of COUNTERFEIT_IDS){
-                const saved=s.extraCases?.find(x=>x.id===id);
-                if(s.extraCases&&!saved)continue;
-                const c=this.createCase(id,true);
-                if(saved)this.restoreCase(c,saved,s.time);else this.placeFake(c);
-            }
-        }
         const elapsed=Math.max(0,(Date.now()-s.time)/1000);
         // Meteors still falling keep their landing time; the incident carries on calling them without a second announcement.
         this.meteors=(s.meteors??[]).filter(m=>m.at+METEOR_KEEP_MS>s.time).map(m=>({...m}));
@@ -1986,7 +1880,7 @@ export class ChaosSimulation {
         }
         if(elapsed>2&&!this.assignment)for(const c of this.cases.values())if(!c.owner)c.returningUntil=Date.now()+T.recoverMs;
         if(this.assignment?.state.phase==='suspended'&&!this.casesWeaponized)this.restoreObjectiveApproach(this.primaryCase);
-        // A trap needs its owner for the kill credit: one whose owner has left is not restored.
+        // A trap leaves with its owner: one whose owner has left is not restored.
         for(const saved of (s.traps??[]).slice(0,MAX_TRAPS))if(saved.brokenAt===undefined&&saved.hp>0&&this.players.has(saved.owner))this.addTrap({...saved});
         this.trapSerial=Math.max(0,...(s.traps??[]).map(t=>Number(t.id.split('-').pop())).filter(Number.isFinite));
     }

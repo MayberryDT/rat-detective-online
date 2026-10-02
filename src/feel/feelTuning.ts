@@ -189,7 +189,7 @@ export const FEEL={
      * (units); `gobs` dripped per beam (`gobSize` units); cheese splats on walls (`splats` in the pool, `splatSize` units,
      * `splatLife` s). The beam itself always draws. */
     laser:{label:'W2 Laser juice',toggle:true,params:{kick:1.6,push:.9,core:.08,strand:.26,sheen:1.1,glow:.9,wobble:.12,sag:.8,gobs:9,gobSize:.07,splats:32,splatSize:1.1,splatLife:9}},
-    /** W3 Mousetrap: a kill's SNAP shakes the view within `snapRange` (`snap` rad/s); a refused placement nudges it (`refuse`).
+    /** W3 Mousetrap: a catch's SNAP shakes the view within `snapRange` (`snap` rad/s); a refused placement nudges it (`refuse`).
      * Taking one up: the TRAP IN PAW moment's pine edge flash (`inPaw` × Flash strength) and the view's heave (`heave` rad/s). */
     mousetrap:{label:'W3 Mousetrap juice',toggle:true,params:{snap:1.8,snapRange:24,refuse:.35,inPaw:.9,heave:.9}},
 } satisfies Record<string,FeelSpec>;

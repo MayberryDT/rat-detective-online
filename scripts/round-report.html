@@ -197,7 +197,7 @@ G.push(card('The case','How carries ended',`<b>${cs.dropsLoose} of ${cs.dropsKil
   bars([{l:'carrier killed',v:cs.dropsKilled,c:RED},{l:'knocked loose',v:cs.dropsLoose,c:HC},...(cs.dropsDelivered?[{l:'delivered',v:cs.dropsDelivered,c:'#7fe0c0'}]:[]),{l:'case respawned',v:cs.respawns,c:BC}]),6));
 G.push(card('Deaths','How long a life lasted',`Median life: humans <b>${D.lifeMedian.H} s</b>, bots <b>${D.lifeMedian.B} s</b>. Share of each group's deaths.`,
   cols({labels:binLabels(D.lifeEdges,' s'),series:[{name:'humans',color:HC,values:share(D.life.H)},{name:'bots',color:BC,values:share(D.life.B)}],fmt:v=>pct(v,0),yFmt:v=>pct(v,0),h:200})+legend([['humans',HC],['bots',BC]]),6));
-G.push(card('Deaths','How rats died','Shots, headshots, explosions (Planted Evidence, Improper Disposal) and the city (drowning, falls).',
+G.push(card('Deaths','How rats died','Shots, headshots, explosions (Improper Disposal; Planted Evidence before protocol 28) and the city (drowning, falls).',
   cols({labels:D.causes.map(c=>c.c),series:[{name:'humans',color:HC,values:D.causes.map(c=>c.H)},{name:'bots',color:BC,values:D.causes.map(c=>c.B)}],h:200})+legend([['human deaths',HC],['bot deaths',BC]]),6));
 G.push(card('Kills','Who killed whom','Rows are killers, columns are victims. Gold cells involve a human.',matrix(D.killMatrix,'killer ↓ victim →'),6));
 const deathDots=D.map.deaths.map(([x,z,k,v])=>`<circle cx="${x}" cy="${z}" r="${v==='H'?2.4:1.5}" fill="${k==='H'?HC:k==='B'?'#b9c9ee':'#888'}" stroke="${v==='H'?RED:'none'}" stroke-width=".9" opacity=".9"/>`).join('');

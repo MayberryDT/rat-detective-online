@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import {MAX_TRAPS,type TrapState} from '../shared/chaosState';
 import {TRAP_SCALE,TRAP_TALL,WEAPON_TUNING} from '../shared/pickups';
-import type {Vec3Data} from '../shared/networkProtocol';
 import {kickDust} from '../feel/Dust';
 import {PartKit,TRAP_PIECES,TRAP_PIVOTS,mousetrap,weaponFinish,type TrapPiece,type WeaponFinish} from '../utils/WeaponModel';
 
 /** What a placed trap just did, for sounds: set down, snapped on a rat, took a hit, broke. */
 export type TrapEvent='set'|'snap'|'hit'|'break';
-/** Seconds: the set-down drop and settle, the snap's slam and hop, the bar's re-cock, a hit's jolt. */
+/** Seconds: the set-down drop and settle, the snap's slam and hop, the bar's re-cock, a hit's jolt. The bar stays
+ * clamped shut through the hold (`trapHoldMs`, the held rat tugging at it) and is re-cocked before it re-arms. */
 const DROP=.16,SETTLE=.45,SLAM=.07,HOP=.36,COCK=.3,JOLT=.18;
-const REARM=WEAPON_TUNING.trapRearmMs/1000,BREAK=WEAPON_TUNING.trapBrokenMs/1000;
+const HOLD=WEAPON_TUNING.trapHoldMs/1000,REARM=(WEAPON_TUNING.trapHoldMs+WEAPON_TUNING.trapRearmMs)/1000,BREAK=WEAPON_TUNING.trapBrokenMs/1000;
 /** Damage (0…1, from lost hit points) at which each crack opens and each corner chips off. */
 const CRACKS=[.2,.45,.7] as const,CORNERS=[.3,.6] as const;
 const GRAVITY=-24;
@@ -73,9 +73,9 @@ class TrapDebris {
     }
 }
 
-/** One placed Mousetrap: set down with a thunk, SNAPs (the bar slams over, the whole trap hops) on each kill,
- * splinters on each hit and looks more battered as it loses hit points, and bursts apart (springs fly, pieces
- * scatter) when it breaks. Animated from snapshot changes on the local clock. */
+/** One placed Mousetrap: set down with a thunk, SNAPs (the bar slams over, the whole trap hops) on each catch and
+ * stays clamped, tugging, while it holds the rat; splinters on each hit and looks more battered as it loses hit
+ * points, and bursts apart (springs fly, pieces scatter) when it breaks. Animated from snapshot changes on the local clock. */
 class TrapVisual {
     readonly root=new THREE.Group();
     /** Trap space scaled to the gameplay footprint (`TRAP_SCALE`, `TRAP_TALL`): what you see is what snaps. */
@@ -112,7 +112,7 @@ class TrapVisual {
         this.root.position.set(trap.x,trap.y,trap.z);this.root.rotation.set(0,trap.yaw,0);
     }
     /** Read a snapshot's entry: start the animations its changes call for and announce them. */
-    sync(trap:TrapState,debris:TrapDebris,announce?:(event:TrapEvent,p:Vec3Data)=>void):void {
+    sync(trap:TrapState,debris:TrapDebris,announce?:(event:TrapEvent,trap:TrapState)=>void):void {
         this.root.position.set(trap.x,trap.y,trap.z);this.root.rotation.y=trap.yaw;
         if(trap.snapAt!==undefined&&trap.snapAt!==this.snapAt&&!this.broken){this.snapAge=0;announce?.('snap',trap);}
         if(trap.hitAt!==undefined&&trap.hitAt!==this.hitAt){
@@ -163,6 +163,8 @@ class TrapVisual {
         else if(this.snapAge<HOP+.2)squash+=Math.sin((this.snapAge-HOP)/.2*Math.PI)*.22;
         // A hit: a hard jolt.
         if(this.hitAge<JOLT){const s=this.hitAge/JOLT;x=Math.sin(s*42)*.08*(1-s);rz+=Math.sin(s*31)*.06*(1-s);}
+        // Held: the caught rat tugs at the trap in fits.
+        else if(this.snapAge>HOP+.2&&this.snapAge<HOLD){const tug=Math.max(0,Math.sin(this.snapAge*5.3))**3;x+=Math.sin(this.snapAge*37)*.035*tug;rz+=Math.sin(this.snapAge*23)*.04*tug;}
         this.body.position.set(x,y,0);this.body.rotation.set(rx,0,rz);this.body.scale.set(1+squash*.5,1-squash,1+squash*.5);
         // The bar slams over the hinge, bounces, and is cocked back before the trap re-arms.
         let bar=0;
@@ -202,7 +204,7 @@ class TrapVisual {
  * there when the view starts (a join or a reconnect) is simply there. Disposed with the view. */
 export class TrapField {
     /** Raised for each change after the view's first state, for sounds. */
-    onEvent?:(event:TrapEvent,p:Vec3Data)=>void;
+    onEvent?:(event:TrapEvent,trap:TrapState)=>void;
     private readonly active=new Map<string,TrapVisual>();
     private readonly free:TrapVisual[]=[];
     private templates?:Record<TrapPiece,THREE.Group>;

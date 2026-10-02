@@ -38,23 +38,6 @@ export function addRatShapes(body:C.Body):C.Sphere[] {
     return RAT_BODY.spheres.map(({radius,y})=>{const shape=new C.Sphere(radius);body.addShape(shape,new C.Vec3(0,y,0));return shape;});
 }
 
-/** Bobbleheads: every rat's head, and the head sphere a ball must hit for a headshot, is `scale` times bigger,
- * grown from the neck (`neck` above the feet) so it sits on the shoulders. */
-export const BOBBLEHEAD={scale:3,neck:1.6} as const;
-/** Sets a rat's head sphere (the last of `addRatShapes`) to its everyday or Bobbleheads size. Only hit
- * bodies use it (the server's and the client's view of other rats), never a moving body, so heads never
- * catch on ceilings. The same for every rat, human or bot. Moves the sphere relative to where it is, so a body
- * whose origin has shifted (a ragdoll) keeps its own offset. */
-export function setBobblehead(body:C.Body,head:C.Sphere,big:boolean):void {
-    const {radius,y}=RAT_BODY.spheres[2],size=big?radius*BOBBLEHEAD.scale:radius;
-    if(head.radius===size)return;
-    const centre=(r:number)=>BOBBLEHEAD.neck+(y-BOBBLEHEAD.neck)*r/radius;
-    const offset=body.shapeOffsets[body.shapes.indexOf(head)];
-    if(offset)offset.y+=centre(size)-centre(head.radius);
-    head.radius=size;head.updateBoundingSphereRadius();
-    body.updateBoundingRadius();body.aabbNeedsUpdate=true;
-}
-
 /** The rat model's raised firing arm (-.49, .91+.36, .09+.10) plus its muzzle anchor (0,.106,.28), turned by the
  * body's heading. Rendering recoil or walk animation never moves it. */
 /** How much further forward a held weapon's barrel ends than the pistol's (the model's muzzle moves with it). */
@@ -87,10 +70,10 @@ function rotateY(vx:number,vy:number,vz:number,angle:number,out:{x:number;z:numb
 export class RatBody {
     /** Seconds this rat may still jump since its feet last touched a floor. */
     groundGrace=0;
-    /** The legs' speed (`legScale`): Hot Pursuit speeds them up, Code Violation's Cold Feet slows them and Snapped Paw
-     * pins them (0); 1 otherwise. */
+    /** The legs' speed (`legScale`): Hot Pursuit speeds them up, Code Violation's Cold Feet slows them, and Snapped Paw
+     * and a Mousetrap's hold pin them (0); 1 otherwise. */
     speedScale=1;
-    /** Code Violation's Rust Bucket and Snapped Paw (`jumpBlocked`): no jumping. */
+    /** Code Violation's Rust Bucket and Snapped Paw, and a Mousetrap's hold (`jumpBlocked`): no jumping. */
     jumpBlocked=false;
     /** A launcher throw's sideways speed, kept (and slowly fading) under the rat's own steering until landing. */
     driftX=0;driftZ=0;

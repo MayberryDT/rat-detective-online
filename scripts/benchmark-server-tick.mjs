@@ -91,7 +91,7 @@ for(let tick=0;tick<TICKS;tick++){
         await session.post('Profiler.start');
     }
     if(tick===RECREATE){bot.dispose();bot=controller();}
-    // Improper Disposal / Planted Evidence eruption beside a rotating bot.
+    // Improper Disposal eruption beside a rotating bot.
     if(scenario==='burst'&&tick%BURST_EVERY===45){const p=players.get(ids[bursts++%ids.length]);sim.cheeseBurst({x:p.x,y:p.y+1,z:p.z},null);}
     const now=1000+tick*1000/30,c=cost[tick];simClock=now;shotMs=0;
     for(let s=0;s<2;s++){

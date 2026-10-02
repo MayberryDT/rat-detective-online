@@ -174,7 +174,7 @@ Each step lists what it delivers and how it is proven.
   - **Personality** (`botPersonality` in `botRoster.ts`): a fixed FNV-1a hash of the roster name, 846 / 106 / 104 over the 1,056-name pool. The server derives it where the bot is driven; it is never sent.
   - **Skill dials** (`BASE_SKILL` in `intent.ts`): at B2b, today's numbers exactly (reaction 200–450 ms, aim error 2.8–5.6°, burst gaps 200–240 ms, 200 ms between motor shots). The motor rewrite redefined them (see "Motor rewrite").
   - **Bank shots** (`src/shared/bots/motor/bankShot.ts`): at a rat last seen at most 2.5 s ago within 35 units, now behind cover: six wall probes, then the shortest mirror bounce whose two legs check clear; at most 12 rays an attempt, one attempt every 600 ms, fired within 400 ms with the dials' aim error. Mavericks always; any rat whose answer's `bank` is at least 0.6.
-  - **Gremlin fire:** a visible counterfeit with another rat within 5 units, from more than 10 units away; a launch trigger with another rat on its pad while the machine is not cooling; targets within 50 units. Gremlins also look for alarm pillars up to 90 units away (others 45).
+  - **Gremlin fire:** a launch trigger with another rat on its pad while the machine is not cooling; targets within 50 units (counterfeit shots went with Planted Evidence in protocol 28). Gremlins also look for alarm pillars up to 90 units away (others 45).
   - **Parity:** with every bot a tryhard on the code mind, B2a and B2b match frame by frame (all four assignments, 6 and 10 rats, 60 s, seeded).
 
 ### B3. Perception
@@ -533,7 +533,7 @@ Roster names are split evenly by the FNV-1a hash in `botRoster.ts`: tenths 0 to 
 | Hose | aim wander 1.6×, flick error 0.3 (base 0.2), bursts of 8 to 20, 90 to 140 ms clicks (the 100 ms `fireGapMs` still floors each shot), 60 to 300 ms pauses | hunt 1.35, chase the carrier 1.15, flee 0.7 | fights at 12 to 22 units, twice the speculative fire, fights on the way, bank shots |
 | Camper | side notice 220 to 420 ms (base 120 to 260), rear 520 to 900 ms (base 320 to 600) | take the case 1.15, keep it 1.3, ambush 1.3, roam 0.8 | with the case in Excessive Force, holds the nearest defensible spot in 70 units: a Jurisdiction zone (enclosed ones count as 0.7 times as far), using the zone hold's post and watch of the approaches, fighting on the zone leash and shooting whoever comes; delivers in Paper Chase and holds the zone in Jurisdiction as before |
 | Joyrider | aim wander 1.3× | roam 1.25, hunt 1.1 | rides launch machines on the way (below), shoots triggers under other rats, fights from the air |
-| Gremlin | reaction 260 to 500 ms (base 240 to 480), aim wander 1.2×, flick error 0.22 | mischief 1.8, roam 1.25, hunt 1.1, keep the case 0.85 | as before: counterfeit and trigger mischief, alarm pillars up to 90 units |
+| Gremlin | reaction 260 to 500 ms (base 240 to 480), aim wander 1.2×, flick error 0.22 | mischief 1.8, roam 1.25, hunt 1.1, keep the case 0.85 | trigger mischief, alarm pillars up to 90 units (counterfeit mischief went with Planted Evidence in protocol 28) |
 
 Base burst habits are unchanged: bursts of 3 to 9, 100 to 170 ms clicks and 60 to 460 ms pauses. Burst length, click speed and pauses are now `SkillDials` fields (`burst`, `burstShotMs`, `burstPauseMs`), as are `sideMs`, `rearMs` and `pointBlankMiss`. One invariant test (`test/client/botArchetypeSkill.test.ts`) checks that no archetype reacts, notices or tracks faster, aims steadier, misses less up close, fires faster or leads truer than base.
 

@@ -124,12 +124,10 @@ export const INCIDENT_QUIPS:Record<IncidentId,string>={
     crossfire:'THE WALLS ARE ACCOMPLICES.',
     scattershot:'EVERY COMPLAINT NOW ARRIVES WITH FORCE.',
     'big-cheese':'THE CHEDDAR BUDGET WAS APPROVED.',
-    'planted-evidence':'SOMEBODY HAS BEEN VERY THOROUGH.',
     blackout:'THE POWER COMPANY IS INVESTIGATING ITSELF.',
     'code-violation':'THE CITY HAS FAILED ITS SAFETY INSPECTION. EVERYTHING IS OUT OF ORDER.',
     'most-wanted':'THE CITY WOULD LIKE A WORD WITH WHOEVER IS WINNING.',
     'all-units':'DEATH IS NO EXCUSE FOR MISSING THE ACTION.',
-    bobbleheads:'THE COMMISSIONER ORDERED BIGGER HEADS. NOBODY ASKED WHY.',
     'cheddar-shower':'THE FORECAST IS CHEESE. FIND A ROOF.',
 };
 /** Local flavor only. Every phrase appears before reuse, with no boundary repeat. */

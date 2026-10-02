@@ -114,18 +114,13 @@ export class DispatchHud {
         const holder=ownerName||'A detective';
         let caseTitle=state.case.owner?`${ownerIsLocal?'YOU':holder} · ON THE CASE`:'LOOSE CASE';
         let caseDetail=state.case.returningUntil?'CASE RETURNING':'';
-        const counterfeits=(state.extraCases??[]).filter(c=>c.fake).length;
-        if(info.id==='planted-evidence'&&d.phase==='active'){
-            // The real case keeps its normal identity; only the fakes change the ledger.
-            caseTitle='FAKE CASES · SHOOT, DO NOT COLLECT';
-            caseDetail=counterfeits?`${counterfeits} COUNTERFEITS PLANTED`:'';
-        }else if(info.id==='evidence-tampering'&&d.phase==='active'){
+        if(info.id==='evidence-tampering'&&d.phase==='active'){
             caseTitle=`${(state.extraCases?.length??0)+1} CASES ARE MISSILES`;
             caseDetail='PICKUP SUSPENDED';
         }else if(state.extraCases?.length){
-            const missiles=state.extraCases.filter(c=>!c.fake).length;
-            if(missiles&&!ownerIsLocal)caseTitle=`${missiles+1} HOT CASES IN PLAY`;
-            caseDetail=missiles?`${missiles+1} CASES IN PLAY`:'';
+            const missiles=state.extraCases.length;
+            if(!ownerIsLocal)caseTitle=`${missiles+1} HOT CASES IN PLAY`;
+            caseDetail=`${missiles+1} CASES IN PLAY`;
         }
         setText(this.caseLine,caseTitle);setText(this.caseDetail,caseDetail);
         this.caseDetail.hidden=!this.caseDetail.textContent;

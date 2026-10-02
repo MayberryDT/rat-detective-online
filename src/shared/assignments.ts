@@ -6,14 +6,14 @@ import { PRECINCT_JOBS } from './city/kit/parts/precinct';
 
 export const ASSIGNMENT_IDS = ['chain-of-custody', 'excessive-force', 'jurisdiction'] as const;
 export type AssignmentId = typeof ASSIGNMENT_IDS[number];
-export const ASSIGNMENT_TUNING = { caseKillTarget: 10, deliveryTarget: 10, briefingMs: 2_400 } as const;
+export const ASSIGNMENT_TUNING = { caseKillTarget: 10, deliveryTarget: 5, briefingMs: 2_400 } as const;
 /** What wins an assignment: deliveries, zone points or case kills. */
 export const objectiveTarget = (id: AssignmentId): number => id === 'chain-of-custody' ? ASSIGNMENT_TUNING.deliveryTarget :
     id === 'jurisdiction' ? JURISDICTION_TUNING.targetMs / 1_000 : ASSIGNMENT_TUNING.caseKillTarget;
 export const ASSIGNMENTS = {
-    jurisdiction: {title:'JURISDICTION',rule:'HOLD THE CASE IN THE ZONE. FIRST TO 100 WINS.',flavor:'Your jurisdiction. Their problem.'},
-    'chain-of-custody': { title: 'PAPER CHASE', rule: 'Deliver the paperwork. First to ten wins.', flavor: 'Previous investigators need not be acknowledged.' },
-    'excessive-force': { title: 'EXCESSIVE FORCE', rule: 'HOLD THE CASE. GET 10 KILLS. THE CASE HITS TWICE AS HARD.', flavor: 'Disproportionate response. Impeccable paperwork.' },
+    jurisdiction: {title:'JURISDICTION',rule:'HOLD THE CASE IN THE ZONE. FIRST TO 100 WINS. THE CASE HITS TWICE AS HARD; ITS KILLS HEAL.',flavor:'Your jurisdiction. Their problem.'},
+    'chain-of-custody': { title: 'PAPER CHASE', rule: 'Deliver the paperwork. First to five wins. The case hits twice as hard; its kills heal.', flavor: 'Previous investigators need not be acknowledged.' },
+    'excessive-force': { title: 'EXCESSIVE FORCE', rule: 'HOLD THE CASE. GET 10 KILLS. THE CASE HITS TWICE AS HARD; ITS KILLS HEAL.', flavor: 'Disproportionate response. Impeccable paperwork.' },
 } satisfies Record<AssignmentId, { title: string; rule: string; flavor: string }>;
 
 /** Entire playable interiors are checkpoints. Approach points only help bots
@@ -33,7 +33,7 @@ export const ASSIGNMENT_DESTINATIONS = {
     sluice:{label:'WEST SLUICE',short:'WEST SLUICE',center:{x:-137,y:12,z:0},
         bounds:{xmin:-146,xmax:-128,ymin:-.5,ymax:24,zmin:-32,zmax:32},approach:{x:-123,y:.3,z:8},arrival:{x:-133,y:.3,z:8}},
     records:building('records','RECORDS BUREAU',{x:-16,y:.3,z:-32},{x:-16,y:.3,z:-41}),
-    // The north's slots: rooms rather than whole landmarks, each with its own bounds.
+    // The north's slots, each a whole building like the rest: Pier 9 and the precinct house.
     'harbour-master':DOCKS_JOBS.destination.harbourMaster,
     precinct:PRECINCT_JOBS.destination,
 } as const;

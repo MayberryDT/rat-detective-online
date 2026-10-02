@@ -62,3 +62,10 @@ export function faultyCard(kind:FaultyKind):HTMLElement {
     card.setAttribute('role','status');card.setAttribute('aria-label',`Code Violation: ${label}`);
     return card;
 }
+/** Another rat's Mousetrap has you by the foot: the trap's drawing, what it means and its clock. */
+export function heldCard():HTMLElement {
+    const card=document.createElement('div');card.className='powerup-card powerup-held';
+    card.innerHTML=`<div class="powerup-art">${pickupArtwork('mousetrap')}</div><div class="powerup-copy"><small>SNAPPED IN A TRAP</small><strong>HELD</strong><div class="powerup-healed powerup-dud">YOU CAN TURN AND SHOOT, NOT MOVE</div><div class="powerup-gauge"><i></i></div></div><div class="powerup-clock"><b></b><small>SEC</small></div><div class="powerup-stamp">SNAP!</div>`;
+    card.setAttribute('role','status');card.setAttribute('aria-label','Held in a trap · you can turn and shoot, not move');
+    return card;
+}

@@ -27,11 +27,12 @@
 @keyframes hunch-card{0%{opacity:0;transform:scale(1.9)}9%{opacity:1;transform:scale(1)}12%{transform:scale(1.04)}16%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
 .hunch-card-kicker{font:11px/1 var(--font-type);letter-spacing:3px;color:var(--carbon-dim)}
 .hunch-card-title{font:400 36px/1 var(--font-display);letter-spacing:2.5px;color:var(--carbon-bright);text-shadow:2px 2px 0 #7a1c18}
+.hunch-card-meaning{font:13px/1.1 var(--font-type);letter-spacing:2px;color:var(--carbon-bright)}
 .hunch-card-stamp{position:absolute;right:-18px;top:-12px;padding:2px 8px;font:15px/1 var(--font-type);letter-spacing:3px;color:var(--stamp-ink);
   border:2px solid var(--stamp-ink);rotate:12deg;opacity:.9;mix-blend-mode:screen}
 .hunch-card.on .hunch-card-stamp{animation:hunch-stamp 2.3s ease-out both}
 @keyframes hunch-stamp{0%,14%{opacity:0;transform:scale(2.4)}20%{opacity:.95;transform:scale(1)}80%{opacity:.95}100%{opacity:0}}
-@media(max-height:500px){.hunch-card{top:26%;padding:6px 16px 8px}.hunch-card-title{font-size:26px}.hunch-eye{width:48px;height:30px;margin:-15px 0 0 -24px}}
+@media(max-height:500px){.hunch-card{top:26%;padding:6px 16px 8px}.hunch-card-title{font-size:26px}.hunch-card-meaning{font-size:11px}.hunch-eye{width:48px;height:30px;margin:-15px 0 0 -24px}}
 /* Reduced interface motion: the photo, eye and card appear and fade without moving. */
 body.reduced-motion .hunch-photo.on{animation:ui-fade-hold var(--hunch-life,1500ms) linear both}
 body.reduced-motion .hunch-photo.on :is(.hunch-flash,.hunch-caption){animation:none}body.reduced-motion .hunch-photo.on .hunch-caption{width:auto;padding-inline:6px}

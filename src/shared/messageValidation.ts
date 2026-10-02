@@ -15,6 +15,8 @@ import {
   MAX_SERVER_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   RACE_LIMIT,
+  DEATH_CAUSES,
+  KILL_WEAPONS,
   isEnvironmentCause,
   type Award,
   type AwardId,
@@ -33,8 +35,8 @@ import {
   type WorldSpec,
 } from './networkProtocol';
 import type { ControlsInput } from './rat/controlTally';
-import { CHAOS_TUNING, INCIDENT_TUNING, COUNTERFEIT_IDS, EXTRA_CASE_IDS, LASER_SURFACES, LAUNCH_MACHINES, MAX_BEAMS, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, MAX_TRAPS, PRESSURE_TUNING, type ChaosState } from './chaosState';
-import { BUFF_FIELDS, PICKUP_ANCHORS, WEAPON_TUNING, isFaultyKind, isPickupKind, isWeaponKind } from './pickups';
+import { CHAOS_TUNING, INCIDENT_TUNING, EXTRA_CASE_IDS, LASER_SURFACES, LAUNCH_MACHINES, MAX_BEAMS, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, MAX_TRAPS, PRESSURE_TUNING, type ChaosState } from './chaosState';
+import { BUFF_FIELDS, PICKUP_ANCHORS, PICKUP_KINDS, WEAPON_TUNING, isFaultyKind, isPickupKind, isWeaponKind } from './pickups';
 import { isSupportedWorldVersion } from './worldSpec';
 
 const HAT_TYPES = new Set<HatTypeName>(['fedora', 'trilby', 'porkpie']);
@@ -168,14 +170,30 @@ function measure(value: unknown): number | null {
   const number = finiteNumber(value);
   return number !== null && number >= 0 && number <= REPORT_MAX ? number : null;
 }
+/** A report's tallies by kind: only the listed keys, each a whole tally. */
+function counts<K extends string>(value: unknown, keys: readonly K[]): Partial<Record<K, number>> | null {
+  if (!isRecord(value)) return null;
+  const out: Partial<Record<K, number>> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const n = tally(raw);
+    if (!(keys as readonly string[]).includes(key) || n === null) return null;
+    out[key as K] = n;
+  }
+  return out;
+}
+const INCIDENT_IDS = INCIDENTS.map(incident => incident.id);
 function parseReportRat(value: unknown): ReportRat | null {
   if (!isRecord(value)) return null;
-  const id = nonEmptyString(value.id, 64), shots = tally(value.shots), hits = tally(value.hits), headshots = tally(value.headshots),
-    longest = tally(value.longest), caseSeconds = tally(value.caseSeconds), streak = tally(value.streak),
-    supplies = tally(value.supplies), flights = tally(value.flights), damage = tally(value.damage);
-  if (!id || shots === null || hits === null || hits > shots || headshots === null || longest === null || caseSeconds === null ||
-    streak === null || supplies === null || flights === null || damage === null) return null;
-  return { id, shots, hits, headshots, longest, caseSeconds, streak, supplies, flights, damage };
+  const id = nonEmptyString(value.id, 64), name = typeof value.name === 'string' && value.name.length <= 32 ? value.name : null;
+  const [kills, deaths, assists, shots, hits, headshots, longest, caseSeconds, takes, carry, streak, supplies, flights, damage, dealt, alive] =
+    [value.kills, value.deaths, value.assists, value.shots, value.hits, value.headshots, value.longest, value.caseSeconds, value.takes, value.carry,
+      value.streak, value.supplies, value.flights, value.damage, value.dealt, value.alive].map(tally);
+  const weapons = counts(value.weapons, KILL_WEAPONS), kinds = counts(value.kinds, PICKUP_KINDS), deathsBy = counts(value.deathsBy, DEATH_CAUSES);
+  if (!id || name === null || kills == null || deaths == null || assists == null || shots == null || hits == null || hits > shots || headshots == null ||
+    longest == null || caseSeconds == null || takes == null || carry == null || streak == null || supplies == null || flights == null ||
+    damage == null || dealt == null || alive == null || !weapons || !kinds || !deathsBy) return null;
+  return { id, name, kills, deaths, assists, shots, hits, headshots, longest, caseSeconds, takes, carry, streak, supplies, flights, damage, dealt, alive,
+    weapons, kinds, deathsBy };
 }
 function parseRace(value: unknown): NonNullable<RoundReport['race']> | null {
   if (!isRecord(value) || !Array.isArray(value.ids) || !Array.isArray(value.points)) return null;
@@ -195,8 +213,8 @@ function parseRace(value: unknown): NonNullable<RoundReport['race']> | null {
 function parseRoundReport(value: unknown): RoundReport | null {
   if (!isRecord(value) || !Array.isArray(value.rats) || value.rats.length > MAX_SCORE_ENTRIES) return null;
   const seconds = measure(value.seconds), kills = tally(value.kills), handoffs = tally(value.handoffs),
-    supplies = tally(value.supplies), flights = tally(value.flights), calls = tally(value.calls);
-  if (seconds === null || kills === null || handoffs === null || supplies === null || flights === null || calls === null) return null;
+    supplies = tally(value.supplies), flights = tally(value.flights), calls = tally(value.calls), incidents = counts(value.incidents, INCIDENT_IDS);
+  if (seconds === null || kills === null || handoffs === null || supplies === null || flights === null || calls === null || !incidents) return null;
   const rats: ReportRat[] = [];
   for (const entry of value.rats) { const rat = parseReportRat(entry); if (!rat) return null; rats.push(rat); }
   let carry: RoundReport['carry'];
@@ -208,7 +226,7 @@ function parseRoundReport(value: unknown): RoundReport | null {
   }
   const race = value.race === undefined ? undefined : parseRace(value.race);
   if (race === null) return null;
-  return { seconds, kills, handoffs, ...(carry ? { carry } : {}), supplies, flights, calls, rats, ...(race ? { race } : {}) };
+  return { seconds, kills, handoffs, ...(carry ? { carry } : {}), supplies, flights, calls, incidents, rats, ...(race ? { race } : {}) };
 }
 
 function parseRound(value: unknown): RoundState | null {
@@ -423,6 +441,7 @@ function parseClientBody(parsed:Record<string,unknown>):ClientMessage|null {
     const report = parsePerfReport(parsed.report);
     return report ? { type: 'perf', report } : null;
   }
+  if (parsed.type === 'ready') return { type: 'ready' };
 
   if (parsed.type === 'join') {
     const protocolVersion = integer(parsed.protocolVersion);
@@ -491,13 +510,12 @@ function parseChaos(value:unknown):ChaosState|null{
   const c=value.case,d=value.dispatch;
   const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
     (c.previousOwner===null||nonEmptyString(c.previousOwner,64))&&(c.missileOwner===undefined||nonEmptyString(c.missileOwner,64))&&
-    finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null&&(c.fake===undefined||typeof c.fake==='boolean')&&
+    finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null&&
     (c.grip===undefined||integer(c.grip)!==null&&Number(c.grip)>=1&&Number(c.grip)<CHAOS_TUNING.caseGripHits);
   if(!validCase(c))return null;
   if(value.extraCases!==undefined){
-    const known=Math.max(EXTRA_CASE_IDS.length,COUNTERFEIT_IDS.length);
-    if(!Array.isArray(value.extraCases)||value.extraCases.length>known||
-      !value.extraCases.every(c=>isRecord(c)&&(EXTRA_CASE_IDS.some(id=>id===c.id)||COUNTERFEIT_IDS.some(id=>id===c.id))&&validCase(c)))return null;
+    if(!Array.isArray(value.extraCases)||value.extraCases.length>EXTRA_CASE_IDS.length||
+      !value.extraCases.every(c=>isRecord(c)&&EXTRA_CASE_IDS.some(id=>id===c.id)&&validCase(c)))return null;
     if(new Set(value.extraCases.map(c=>c.id)).size!==value.extraCases.length)return null;
     const owners=[c,...value.extraCases].map(c=>c.owner).filter(owner=>owner!==null);
     if(new Set(owners).size!==owners.length)return null;
@@ -523,7 +541,7 @@ function parseChaos(value:unknown):ChaosState|null{
     for(const entry of Object.values(value.buffs)){
       if(!isRecord(entry))return null;
       if(Object.entries(entry).some(([key,v])=>key==='weapon'?!isWeaponKind(v):key==='faulty'?!isFaultyKind(v):
-        !(BUFF_FIELDS as readonly string[]).includes(key)&&key!=='weaponUntil'&&key!=='weaponReadyAt'&&key!=='faultyUntil'||finiteNumber(v)===null))return null;
+        !(BUFF_FIELDS as readonly string[]).includes(key)&&key!=='weaponUntil'&&key!=='weaponReadyAt'&&key!=='faultyUntil'&&key!=='trappedUntil'||finiteNumber(v)===null))return null;
     }
   }
   if(!['ready','rolling','active','cooldown'].includes(String(d.phase))||finiteNumber(d.started)===null||finiteNumber(d.until)===null||integer(d.serial)===null)return null;
@@ -659,7 +677,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
     case 'shotResult': {
       const shotId=nonEmptyString(parsed.shotId,64),ballId=nonEmptyString(parsed.ballId,64),epoch=nonEmptyString(parsed.epoch,64);
       const at=finiteNumber(parsed.at),tick=integer(parsed.tick),victimId=parsed.victimId===undefined?undefined:optionalString(parsed.victimId,64);
-      const outcomes=new Set(['first-step','rat-body','rat-head','ironclad-reflect','case-contact','world-bounce','dispatch-contact','pressure-contact','fake-case','trap-contact','lifetime','capacity','reset','rejected']);
+      const outcomes=new Set(['first-step','rat-body','rat-head','ironclad-reflect','case-contact','world-bounce','dispatch-contact','pressure-contact','trap-contact','lifetime','capacity','reset','rejected']);
       const damage=parsed.damage===undefined?undefined:boundedInteger(parsed.damage,0,MAX_HP);
       const point=parsed.point===undefined?undefined:parseVec3(parsed.point),normal=parsed.normal===undefined?undefined:parseVec3(parsed.normal);
       const fallback=parsed.fallback===undefined?undefined:optionalString(parsed.fallback,80);

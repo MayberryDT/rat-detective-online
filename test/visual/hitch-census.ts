@@ -11,7 +11,7 @@ import type {NetworkManager} from '../../src/network/NetworkManager';
 import {createPlayer} from '../../src/worker/gameState';
 import {PROTOCOL_VERSION,type ServerMessage,type PlayerData} from '../../src/shared/networkProtocol';
 import {GRAYBOX_VERSION} from '../../src/shared/grayboxLayout';
-import {LAUNCH_MACHINES,CASE_HOME,COUNTERFEIT_IDS,EXTRA_CASE_IDS,type ChaosState,type ChaosShot,type CorpseState} from '../../src/shared/chaosState';
+import {LAUNCH_MACHINES,CASE_HOME,EXTRA_CASE_IDS,type ChaosState,type ChaosShot,type CorpseState} from '../../src/shared/chaosState';
 import {PICKUP_ANCHORS,type PickupState} from '../../src/shared/pickups';
 import type {IncidentId} from '../../src/shared/incidentCatalog';
 
@@ -121,7 +121,7 @@ const me=createPlayer('me','Census',appearance,{x:-10,y:1,z:-27});
 const rivals:PlayerData[]=Array.from({length:8},(_,i)=>createPlayer(`rat-${i}`,`Rival ${i}`,{...appearance,hatColor:0x224466+i*0x101010,coatColor:0x553322+i*0x080808},{x:-4+i*1.6,y:1,z:-29+(i%3)*1.8}));
 const players=Object.fromEntries([me,...rivals].map(p=>[p.id,p]));
 transport.welcome={type:'welcome',id:me.id,player:me,players,round:{phase:'playing',assignment:{roundId:'census',id:'chain-of-custody',phase:'active',revealedAt:now(),liveAt:now(),deliverySerial:0,destinations:['records'],deliveries:{},caseKills:{},revision:1}},
-    world:{seed:341283204,version:GRAYBOX_VERSION},protocolVersion:PROTOCOL_VERSION,serverTime:now(),incidents:['improper-disposal','bad-ammunition','pressure-surge','crossfire','scattershot','big-cheese','planted-evidence','blackout','code-violation','most-wanted','all-units','bobbleheads']};
+    world:{seed:341283204,version:GRAYBOX_VERSION},protocolVersion:PROTOCOL_VERSION,serverTime:now(),incidents:['improper-disposal','bad-ammunition','pressure-surge','crossfire','scattershot','big-cheese','blackout','code-violation','most-wanted','all-units','cheddar-shower']};
 const pose=(x:number,y:number,z:number)=>({p:{x,y,z},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}});
 const near:PickupState[]=[{id:'near-ironclad',kind:'ironclad',x:-6,y:.7,z:-25},{id:'near-hustle',kind:'hustle',x:-3,y:.7,z:-25},{id:'near-fix',kind:'quick-fix',x:0,y:.7,z:-25}];
 const state:ChaosState={time:now(),epoch:'census',tick:0,case:{...pose(CASE_HOME.x,CASE_HOME.y,CASE_HOME.z),owner:null,previousOwner:null,pickupAfter:0,returningUntil:0},
@@ -140,7 +140,7 @@ const volley=(owner:string|null,extra:Partial<ChaosShot>={},count=24)=>(t:number
     const age=((t/1000+i*.13)%1.4);return {id:`s-${i}-${Math.floor(t/1400)}`,owner,p:{x:-8+age*12,y:1.2+(i%4)*.4,z:-29+(i%6)*.7},v:{x:12,y:0,z:0},age,...extra};
 });
 const incident=(id:IncidentId|undefined)=>{
-    state.dispatch=id?{phase:'active',started:now(),until:now()+25_000,serial:state.dispatch.serial+1,incident:id,caller:'rat-0'}:{phase:'cooldown',started:now(),until:now()+21_000,serial:state.dispatch.serial};
+    state.dispatch=id?{phase:'active',started:now(),until:now()+25_000,serial:state.dispatch.serial+1,incident:id,caller:'rat-0'}:{phase:'cooldown',started:now(),until:now()+40_000,serial:state.dispatch.serial};
 };
 const corpse=(i:number,moving=false):CorpseState=>({id:`corpse-${i}-${now()}`,victimId:`gone-${i}`,owner:null,appearance,born:now(),expires:now()+10_000,
     ...pose(-6+i*1.5,.6,-24),...(moving?{v:{x:20,y:4,z:0},spin:{x:3,y:2,z:1}}:{})});
@@ -184,12 +184,11 @@ const script:[string,()=>void,number?][]=[
     ['pressure building',()=>{state.pressure={serial:1,levels:Object.fromEntries(LAUNCH_MACHINES.map(m=>[m.id,8])),launches:[]};},40],
     ['you launched',()=>{const m=LAUNCH_MACHINES[1]!;state.pressure={serial:2,levels:{},fired:{[m.id]:now()},launches:[{id:'launch-1',playerId:'me',at:now(),velocity:{x:0,y:60,z:0},machineId:m.id}]};},150],
     ['rival launched (boost)',()=>{const m=LAUNCH_MACHINES[1]!;state.pressure={serial:3,levels:{},fired:{[m.id]:now()},boosts:{[m.id]:now()},launches:[{id:'launch-2',playerId:'rat-5',at:now(),velocity:{x:5,y:70,z:0},machineId:m.id,boost:true}]};},150],
-    ...(['improper-disposal','bad-ammunition','crossfire','scattershot','big-cheese','all-units','code-violation','bobbleheads','blackout'] as IncidentId[]).map((id):[string,()=>void,number]=>
+    ...(['improper-disposal','bad-ammunition','crossfire','scattershot','big-cheese','all-units','code-violation','blackout'] as IncidentId[]).map((id):[string,()=>void,number]=>
         [`incident ${id}`,()=>{incident(id);shotPattern=volley('rat-1',id==='crossfire'?{wallBounced:true}:id==='big-cheese'?{radius:1.9}:{});
             if(id==='improper-disposal')state.corpses=[corpse(1,true),corpse(3,true)];},120]),
     ['crossfire, your own bank shots',()=>{incident('crossfire');shotPattern=volley('me',{wallBounced:true});},60],
     ['incident pressure-surge',()=>{incident('pressure-surge');state.pressure={serial:4,levels:{},launches:[],vents:[{id:'vent-1',x:-4,y:0,z:-27,at:now()+800},{id:'vent-2',x:2,y:0,z:-29,at:now()+800,boost:true}]};},150],
-    ['incident planted-evidence',()=>{incident('planted-evidence');state.extraCases=COUNTERFEIT_IDS.slice(0,4).map((id,i)=>({id,...pose(-6+i*2,1.3,-25),owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,fake:true}));},120],
     ['incident evidence-tampering',()=>{incident('evidence-tampering');state.extraCases=EXTRA_CASE_IDS.slice(0,4).map((id,i)=>({id,...pose(-6+i*2,1.3,-25),v:{x:0,y:4,z:30},owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,missileOwner:'rat-1'}));},120],
     ['incident most-wanted (a rival)',()=>{state.extraCases=[];incident('most-wanted');state.dispatch.wanted='rat-1';},120],
     ['incident most-wanted (you)',()=>{state.dispatch.wanted='me';},90],

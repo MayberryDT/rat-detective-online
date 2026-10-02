@@ -66,8 +66,8 @@ describe('network session transport', () => {
         expect(url.searchParams.get('room')).toBe('graybox-practice-review');
         expect(url.searchParams.get('incidents')).toBe('classic');
         expect(url.searchParams.get('incident')).toBe('evidence-tampering');
-        const explicit = new URL(resolveWebSocketUrl('ws://localhost/ws?incidents=planted&incident=auto'));
-        expect(explicit.searchParams.get('incidents')).toBe('planted');
+        const explicit = new URL(resolveWebSocketUrl('ws://localhost/ws?incidents=standard&incident=auto'));
+        expect(explicit.searchParams.get('incidents')).toBe('standard');
         expect(explicit.searchParams.get('incident')).toBe('auto');
     });
 

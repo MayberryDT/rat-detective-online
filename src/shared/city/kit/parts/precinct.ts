@@ -650,7 +650,9 @@ export const PRECINCT_JOBS={
         exclusions:[{xmin:CX-3.2,xmax:CX+3.2,zmin:CZ-3.2,zmax:CZ+3.2}],
         posts:[{x:CX,y:.3,z:CZ+6.5},{x:CX,y:.3,z:CZ-6.5},{x:CX+3,y:.3,z:CZ+6}],
         approaches:[{x:-82,y:.3,z:CZ},{x:-105,y:.3,z:-122},{x:-105,y:.3,z:-100}]} satisfies JurisdictionZone,
-    destination:{label:'PRECINCT FRONT DESK',short:'FRONT DESK',center:{x:-105,y:2,z:-113.7},
-        bounds:{xmin:WEST_ROOM.xmax,xmax:PARTITION_X,ymin:-.5,ymax:CEILING,zmin:WEST_ROOM.zmin,zmax:IZ1},
+    /** The precinct stop is the whole station house, every floor, like every other landmark (quick patch, layout 7).
+     * Bots come in by the front door to the lobby. */
+    destination:{label:'PRECINCT HOUSE',short:'PRECINCT',center:{x:(H.xmin+H.xmax)/2,y:12,z:(H.zmin+H.zmax)/2},
+        bounds:{xmin:H.xmin,xmax:H.xmax,ymin:-.5,ymax:24,zmin:H.zmin,zmax:H.zmax},
         approach:{x:-105,y:.3,z:-100},arrival:{x:-105,y:.3,z:-112.2}},
 } as const;

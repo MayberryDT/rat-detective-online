@@ -26,6 +26,29 @@
 .race-legend b{font-weight:400;color:var(--carbon-bright);font-variant-numeric:tabular-nums}
 .race-legend li[data-local=true] span{color:var(--stamp-ink)}
 .race-legend li[data-winner=true] span{color:var(--cheese)}
+/* Results: pointing at the race reads every line at that moment. */
+.race-cursor{position:absolute;top:0;bottom:18px;width:0;border-left:1px dashed #eef2fb99;pointer-events:none}
+.race-tip{position:absolute;top:0;z-index:2;margin-left:10px;display:grid;gap:2px;padding:6px 9px;background:#05070de0;border:1px dashed var(--carbon-line);color:var(--carbon-ink);font-size:12px;white-space:nowrap;pointer-events:none}
+.race-tip.flip{translate:calc(-100% - 20px) 0}
+.race-tip>b{font-weight:400;color:var(--carbon-dim);letter-spacing:1px}
+.race-tip span{display:grid;grid-template-columns:12px auto minmax(2ch,auto);align-items:center;gap:7px;text-transform:uppercase}
+.race-tip i{height:3px}.race-tip em{font-style:normal;color:var(--carbon-bright);text-align:right;font-variant-numeric:tabular-nums}
+:is(.race-cursor,.race-tip)[hidden]{display:none}
+/* Results: the round's incidents and its kills, deaths and supplies by kind, under the race. */
+.match-scoreboard-dossier[hidden]{display:none}
+.match-scoreboard-dossier{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 22px;margin:10px 22px 6px;padding-top:10px;border-top:1px dashed var(--carbon-faint)}
+.match-scoreboard-dossier h4{margin:0 0 4px;color:var(--carbon-dim);font-size:11px;font-weight:400;letter-spacing:1.4px}
+.match-scoreboard-dossier ul{margin:0;padding:0;list-style:none}
+.match-scoreboard-dossier li{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-bottom:1px dashed #a5b9e114;font-size:13px}
+.match-scoreboard-dossier b{font-weight:400;color:var(--carbon-bright);font-variant-numeric:tabular-nums}
+/* Results: a rat's whole round beside the pointer (MatchScoreboard.pointCard). */
+.rat-file-card{position:fixed;z-index:400;width:min(390px,calc(100vw - 16px));box-sizing:border-box;padding:10px 14px 12px;background:#070b16db;backdrop-filter:blur(3px);border-top:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge);color:var(--carbon-ink);font:13px/1.35 var(--font-type);pointer-events:none}
+.rat-file-card[hidden]{display:none}
+.rat-file-card h4{margin:0 0 7px;font:400 22px/1 var(--font-display);letter-spacing:.04em;color:var(--carbon-bright);text-transform:uppercase}
+.rat-file-card h4.winner{color:var(--cheese)}.rat-file-card h4.you{color:var(--stamp-ink)}
+.rat-file-card dl{display:grid;grid-template-columns:max-content 1fr;gap:3px 10px;margin:0}
+.rat-file-card dt{padding-top:2px;color:var(--carbon-dim);font-size:10.5px;letter-spacing:1.2px}
+.rat-file-card dd{margin:0}
 /* U9: the sheet's entrance and row slides are Web Animations in MatchScoreboard.ts. */
 @media(max-width:900px){.match-scoreboard{width:calc(100vw - 24px)}.match-scoreboard-heading{padding:12px 14px 8px}.match-scoreboard h2{font-size:31px}.match-scoreboard-mode{margin-inline:14px}.match-scoreboard table{font-size:13px}.match-scoreboard-summary{font-size:11px}.match-scoreboard footer{padding:9px 14px;font-size:10px}}
 @media(max-height:620px){.match-scoreboard{max-height:calc(100dvh - 36px)}.match-scoreboard-heading{padding-block:8px}.match-scoreboard-heading small{display:none}.match-scoreboard h2{font-size:27px}.match-scoreboard-mode{padding-block:4px;margin-bottom:4px}.match-scoreboard td,.match-scoreboard tbody th{padding-block:4px}.match-scoreboard footer{padding-block:7px}}

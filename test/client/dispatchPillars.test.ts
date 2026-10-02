@@ -65,8 +65,7 @@ describe('Dispatch alarm pillars',()=>{
    }
   }
  });
- it('keeps the caller through the incident and LINE BUSY, then clears it after exactly 21 seconds',()=>{
-  expect(T.cooldownMs).toBe(21000);
+ it('keeps the caller through the incident and LINE BUSY, then clears it after the cooldown',()=>{
   const {sim}=fixture(),t=DISPATCH_STATIONS[0].target;
   fire(sim,t,around(t,0,0,4),1010);
   const rolling=sim.snapshot(false).dispatch;
@@ -75,7 +74,7 @@ describe('Dispatch alarm pillars',()=>{
   const active=sim.snapshot(false).dispatch;
   sim.step(0,active.until);expect(sim.snapshot(false).dispatch).toMatchObject({phase:'cooldown',caller:'caller'});
   const cooldown=sim.snapshot(false).dispatch;
-  expect(cooldown.until-cooldown.started).toBe(21000);
+  expect(cooldown.until-cooldown.started).toBe(T.cooldownMs);
   sim.step(0,cooldown.until-1);expect(sim.snapshot(false).dispatch.phase).toBe('cooldown');
   sim.step(0,cooldown.until);
   const ready=sim.snapshot(false).dispatch;

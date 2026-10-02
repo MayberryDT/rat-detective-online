@@ -214,4 +214,36 @@ for index, (onset, seconds) in enumerate([(1.114, .195), (3.093, .26), (4.243, .
     with wave.open(str(WEAPONS / f'tommy-{index}.wav'), 'wb') as out:
         out.setparams((1, 2, FULL, 0, 'NONE', 'not compressed'))
         out.writeframes(struct.pack('<'+'h'*len(pcm), *pcm))
-print('Rendered 16 edited physical cartoon foley cues and 4 cheese-gun Thompson rounds')
+
+# Scattershot (protocol 28; Tyler hated the pitched-down pistol under a synthesized BLAM): five cheese gun shots
+# stacked a few milliseconds apart at slightly different pitches (the five balls leaving at once, a chunky BRAP), over
+# a cartoon WHOOMPH: the mouth pop pitched far down and low-passed, with a slowed soft heavy impact for the body.
+def resampled(samples, at, rate, gain, length, cutoff=None):
+    # Linear resampling of a recording (peak-normalized) into a layer starting `at` seconds in.
+    peak = max(map(abs, samples)) or 1
+    count = min(round(length*FULL), int((len(samples)-2)/rate))
+    layer = [(samples[int(i*rate)]*(1-i*rate+int(i*rate))+samples[int(i*rate)+1]*(i*rate-int(i*rate)))/peak for i in range(count)]
+    if cutoff:
+        layer = lowpass(layer, cutoff)
+    return round(at*FULL), [v*gain for v in layer]
+
+
+pop = decode(ROOT / 'assets/audio/cartoon-pop-unfa.mp3')
+soft = decode(ROOT / 'assets/audio/cartoon-foley/impactSoft_heavy_000.ogg')
+SCATTER_SECONDS = .46
+layers = [resampled(cheese[round((CHEESE_ONSET-.004)*FULL):], at, rate, gain, .2)
+          for at, rate, gain in [(0, .9, 1), (.006, 1.02, .55), (.013, .84, .5), (.02, 1.1, .42), (.029, .95, .38)]]
+layers.append(resampled(pop, 0, .42, .9, .4, cutoff=1400))
+layers.append(resampled(soft, 0, .55, .7, .45, cutoff=900))
+mix = [0.]*round(SCATTER_SECONDS*FULL)
+for offset, layer in layers:
+    for i, v in enumerate(layer):
+        if offset+i < len(mix):
+            mix[offset+i] += v
+peak = max(map(abs, mix)) or 1
+length = len(mix)
+pcm = [round(v/peak*.86*min(1, i/10, (length-1-i)/(.08*FULL))*32767) for i, v in enumerate(mix)]
+with wave.open(str(WEAPONS / 'scattershot.wav'), 'wb') as out:
+    out.setparams((1, 2, FULL, 0, 'NONE', 'not compressed'))
+    out.writeframes(struct.pack('<'+'h'*len(pcm), *pcm))
+print('Rendered 16 edited physical cartoon foley cues, 4 cheese-gun Thompson rounds and the Scattershot blast')

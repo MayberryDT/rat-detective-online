@@ -32,10 +32,10 @@ it('counts drops but not deliveries, and only living rats earn sewer time and al
 
 it('names only present players, respects the floors and clears on reset',()=>{
     const awards=new RoundAwards(),a=rat('a');
-    awards.damage('gone',9);awards.damage('a',2);
+    awards.damage('gone',null,9,0);awards.damage('a',null,2,0);
     const present=new Map([['a',a]]);
     expect(awards.awards(present).find(w=>w.id==='most-cheesed')).toBeUndefined();
-    awards.damage('a',1);
+    awards.damage('a',null,1,0);
     expect(awards.awards(present).find(w=>w.id==='most-cheesed')).toMatchObject({playerId:'a',value:3});
     awards.reset();
     expect(awards.awards(present)).toEqual([]);
@@ -132,8 +132,9 @@ it('keeps a long round\'s race within its bound, ending on each leader\'s final 
     expect(parseServerMessage(JSON.stringify({type:'gameWon',winnerId:'r2',winnerName:'R2',kills:0,resetAt:1,report}))).toMatchObject({report:{race:{ids:race.ids}}});
 });
 it('rejects oversized, out-of-range or inconsistent round reports',()=>{
-    const line={id:'a',shots:10,hits:4,headshots:1,longest:30,caseSeconds:12,streak:2,supplies:3,flights:1,damage:6};
-    const report:RoundReport={seconds:600,kills:9,handoffs:4,supplies:3,flights:1,calls:0,rats:[line],race:{step:10,ids:['a'],points:[[0,1,2]]}};
+    const line={id:'a',name:'A',kills:3,deaths:2,assists:1,shots:10,hits:4,headshots:1,longest:30,caseSeconds:12,takes:2,carry:9,streak:2,supplies:3,flights:1,
+        damage:6,dealt:8,alive:540,weapons:{cheese:2,laser:1},kinds:{hustle:2,'tommy-gun':1},deathsBy:{shot:1,drowned:1}};
+    const report:RoundReport={seconds:600,kills:9,handoffs:4,supplies:3,flights:1,calls:0,incidents:{'pressure-surge':2},rats:[line],race:{step:10,ids:['a'],points:[[0,1,2]]}};
     const won=(r:unknown)=>parseServerMessage(JSON.stringify({type:'gameWon',winnerId:'a',winnerName:'A',kills:3,resetAt:1,report:r}));
     expect(won(report)).toMatchObject({report});
     expect(won({...report,rats:Array.from({length:MAX_SCORE_ENTRIES+1},(_,i)=>({...line,id:`r${i}`}))})).toBeNull();
@@ -144,4 +145,18 @@ it('rejects oversized, out-of-range or inconsistent round reports',()=>{
     expect(won({...report,race:{step:10,ids:['a','b'],points:[[0,1],[0]]}})).toBeNull();
     expect(won({...report,race:{step:10,ids:['a'],points:[Array.from({length:RACE_LIMIT.points+1},()=>0)]}})).toBeNull();
     expect(won({...report,race:{step:0,ids:['a'],points:[[1]]}})).toBeNull();
+    expect(won({...report,incidents:{'no-such-incident':1}})).toBeNull();
+    expect(won({...report,rats:[{...line,weapons:{bazooka:1}}]})).toBeNull();
+    expect(won({...report,rats:[{...line,deathsBy:{shot:-1}}]})).toBeNull();
+});
+// 18. The killer also earns an assist, stale damage earns one, or a kill's weapon and the victim's cause are misfiled.
+it('credits assists within the window only, and files kills by weapon and deaths by cause',()=>{
+    const awards=new RoundAwards(),a=rat('a'),b=rat('b'),c=rat('c'),v=rat('v'),players=new Map([['a',a],['b',b],['c',c],['v',v]]);
+    awards.damage('v','c',1,0);awards.damage('v','b',1,15_000);awards.damage('v','a',2,20_000);
+    awards.death(v,a,{headshot:false,explosive:false,weapon:'laser'},20_000);
+    awards.death(a,undefined,{headshot:false,explosive:false,environment:'drowned'},21_000);
+    const lines=Object.fromEntries(awards.report(players,30).rats.map(r=>[r.id,r]));
+    expect([lines.a!.assists,lines.b!.assists,lines.c!.assists]).toEqual([0,1,0]);
+    expect(lines.a!.dealt).toBe(2);expect(lines.a!.weapons).toEqual({laser:1});
+    expect(lines.v!.deathsBy).toEqual({shot:1});expect(lines.a!.deathsBy).toEqual({drowned:1});
 });

@@ -104,6 +104,9 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 .powerup-faulty .powerup-copy strong{font-size:28px}
 .powerup-dud{margin-top:5px;padding:2px 0;font-size:11px;line-height:1.15}
 .powerup-faulty .powerup-gauge{margin-top:5px}
+/* Held in another rat's Mousetrap: the trap's pine ink, a clamped tilt and the clock until it lets go. */
+.powerup-held{--powerup:#e6b85a;rotate:-1.5deg}
+.powerup-held .powerup-gauge{margin-top:5px}
 /* Three or four rewards can be visible together, including landscape phones. */
 @media(max-width:1050px){.pickup-buffs:has(.powerup-card:nth-child(3)){gap:6px}.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-card{width:29vw}}
 @media(max-width:700px){.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-art{width:30px}.pickup-buffs:has(.powerup-card:nth-child(3)) .powerup-copy strong{font-size:18px}.powerup-healed{font-size:11px}}

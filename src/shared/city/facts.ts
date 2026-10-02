@@ -95,16 +95,17 @@ export type CityFact = FactContext & (
   | { type: 'ball'; a?: number; outcome: ShotResultOutcome; p?: P3; place?: string; victim?: number; bounces?: number }
   /** `incoming`: the hit came with a ball's travel direction (true for ordinary shots). `weapon`: a special weapon's hit. */
   | { type: 'damage'; a?: number; victim: number; dmg: number; head: boolean; explosive: boolean; incoming: boolean; ap?: P3; vp: P3; dist?: number; hpAfter: number; weapon?: WeaponKind }
-  /** `cause` 'trap': a Mousetrap's snap (`a` is its owner, wherever it was). `env`: what killed a rat nobody is credited with. */
-  | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'trap' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[]; weapon?: WeaponKind; env?: EnvironmentCause }
+  /** `env`: what killed a rat nobody is credited with. (Before protocol 28 a Mousetrap's snap killed, cause 'trap'.) */
+  | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[]; weapon?: WeaponKind; env?: EnvironmentCause }
   /** Cheddar Shower: a meteor landed at `p`; `flattened` the rats it landed on (dead, nobody credited), `shoved` the rats its blast threw. */
   | { type: 'meteor'; p: P3; place: string; flattened: number[]; shoved: number }
   /** Code Violation: equipment misbehaved at `p` (`site`: the supply, machine or pillar). `faulty`: the supply rat `a`
    * claimed came out as its dud `kind` (`FAULTY_KINDS`); `machine` fired on its own or flung bystanders; `pillar` clanged.
    * `shoved`: rats the blast threw (a Backfire throws its own rat). Nothing here kills. */
   | { type: 'malfunction'; what: 'faulty' | 'machine' | 'pillar'; site: string; p: P3; place: string; a?: number; kind?: FaultyKind; shoved: number }
-  /** A Mousetrap (`trap` id, owner `a`, at `p`): set down, snapped on `victim`, or broken (`by` whose hit finished it). */
-  | { type: 'trap'; what: 'set' | 'snap' | 'break'; a: number; trap: string; p: P3; place: string; victim?: number; by?: number }
+  /** A Mousetrap (`trap` id, owner `a`, at `p`): set down, snapped on `victim` (since protocol 28 a hold, not a death:
+   * `holdMs` the victim is held in place), or broken (`by` whose hit finished it; it lets go of anyone it held). */
+  | { type: 'trap'; what: 'set' | 'snap' | 'break'; a: number; trap: string; p: P3; place: string; victim?: number; by?: number; holdMs?: number }
   /** `faulty`: Code Violation made the claim its dud instead of the supply (the `malfunction` fact has which). */
   | { type: 'pickup'; a: number; site: string; kind: PickupKind; p: P3; place: string; hpBefore: number; waitedMs?: number; faulty?: true }
   | { type: 'restock'; site: string; kind: PickupKind }

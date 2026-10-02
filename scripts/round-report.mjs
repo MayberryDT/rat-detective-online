@@ -175,6 +175,7 @@ const LEAD_EDGES = [-90, -8, -4, -2, -1, 0, 1, 2, 4, 8];
 const crossing = c => aimed(c).filter(s => target(s)?.lead != null && target(s).lat >= 3 && target(s).e * DEG < 12);
 const lead = c => hist(LEAD_EDGES, crossing(c), s => Math.asin(Math.max(-1, Math.min(1, target(s).lead))) * DEG, botWeight);
 const neededLead = r2(Math.atan((median([...crossing('H'), ...crossing('B')].map(s => target(s).lat)) ?? 0) / 175) * DEG);
+// `fake-case` (a Planted Evidence counterfeit) only appears in archives from before protocol 28.
 const OUTCOMES = ['rat-body', 'rat-head', 'case-contact', 'pressure-contact', 'dispatch-contact', 'ironclad-reflect', 'fake-case', 'capacity', 'lifetime'];
 const fates = humans.map(a => { const mine = balls.filter(b => b.a === a); return { a, label: label(a), color: color(a), total: mine.length, counts: Object.fromEntries([...new Set([...OUTCOMES, ...mine.map(b => b.outcome)])].map(o => [o, mine.filter(b => b.outcome === o).length])) }; });
 const bank = humans.map(a => { const hits = balls.filter(b => b.a === a && (b.outcome === 'rat-body' || b.outcome === 'rat-head')); return { a, label: label(a), color: color(a), hits: hits.length, banked: hits.filter(b => (b.bounces ?? 0) >= 1).length, bounces: hist([0, 1, 2, 3, 4], hits, b => b.bounces ?? 0) }; });

@@ -20,13 +20,13 @@ export interface RatBotOptions {
 /** What each archetype does beyond its goal weights (cast.ts) and dials (`ARCHETYPE_SKILL`), docs/bot-overhaul.md
  * "Archetypes". Snipers fight from 38–55 units and keep fighting out to 70 (backing off a rival that comes inside
  * the range), banking now and then, with half the speculative fire; hoses close in to 12–22 and spray twice as
- * much, banking too; joyriders ride launch machines and shoot their triggers under other rats; gremlins make
- * mischief. A camper's difference is where it holds the case (goals.ts). */
+ * much, banking too; joyriders ride launch machines, and they and gremlins shoot launch triggers under other
+ * rats. A camper's difference is where it holds the case (goals.ts). */
 export const ARCHETYPE_TACTICS:Record<Personality,Omit<Tactics,'danger'|'stance'>>={
     sniper:{bank:true,mischief:false,range:[38,55],reach:70,spray:.5},
     hose:{bank:true,mischief:false,range:[12,22],spray:2},
     camper:{bank:false,mischief:false},
-    joyrider:{bank:false,mischief:false,triggers:true,joyride:true},
+    joyrider:{bank:false,mischief:true,joyride:true},
     gremlin:{bank:false,mischief:true},
 };
 const BASE_TACTICS:Omit<Tactics,'danger'|'stance'>={bank:false,mischief:false};

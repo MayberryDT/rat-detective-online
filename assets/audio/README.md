@@ -8,6 +8,7 @@
 - Retrieved September 9, 2026. The creator describes a human mouth pop recorded with a Zoom H2.
 - Used as a game sound effect, not for model training.
 - Converted to mono 24 kHz PCM without a synthetic layer or pitch envelope. The three existing runtime slots use the same recording; runtime pitch variation is 0.97–1.03.
+- Since protocol 28 `scripts/generate-feedback-sounds.py` also pitches it far down into the WHOOMPH of the Scattershot blast (`public/sounds/weapons/README.md`).
 
 # Thompson submachine gun recording
 

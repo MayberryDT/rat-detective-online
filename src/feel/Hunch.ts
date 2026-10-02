@@ -242,7 +242,7 @@ export class Hunch {
         this.eye=make('hunch-eye',this.root);
         this.eye.innerHTML='<svg viewBox="0 0 64 40"><path class="brim" d="M2 13Q32-3 62 13Q48 9 32 9T2 13Z"/><path class="lid" d="M8 24Q32 6 56 24Q32 40 8 24Z"/><circle class="iris" cx="32" cy="24" r="7"/><circle class="pupil" cx="32" cy="24" r="3"/></svg>';
         this.card=make('hunch-card',this.root);
-        this.card.innerHTML='<span class="hunch-card-kicker">CASE FILE · SURVEILLANCE</span><span class="hunch-card-title">YOU\u2019VE BEEN MADE</span><span class="hunch-card-stamp">MADE</span>';
+        this.card.innerHTML='<span class="hunch-card-kicker">CASE FILE · SURVEILLANCE</span><span class="hunch-card-title">YOU\u2019VE BEEN MADE</span><span class="hunch-card-meaning">SOMEONE CAN SEE YOU THROUGH WALLS</span><span class="hunch-card-stamp">MADE</span>';
         this.doc.body.appendChild(this.root);
         return true;
     }

@@ -30,7 +30,7 @@ export const PICKUP_TUNING = {
     stakeoutMs: 12_000,
     /** Tommy Gun and Laser are on a timer, never a magazine: shooting is always rewarded. The Mousetrap has none: it is held until set down. */
     tommyMs: 8_000,
-    laserMs: 10_000,
+    laserMs: 15_000,
 } as const;
 /** The special weapons' rules, the same for every rat, human or bot. */
 export const WEAPON_TUNING = {
@@ -38,17 +38,20 @@ export const WEAPON_TUNING = {
      * half-angle (radians) grows from `tommyCone` to `tommyBloom` over `tommyBloomShots` held shots; a shot within
      * `tommyHeatMs` of the rat's previous one counts as held. Plain balls, one damage each, headshots kill. */
     tommyIntervalMs: 100, tommyCone: .035, tommyBloom: .11, tommyBloomShots: 10, tommyHeatMs: 350,
-    /** Laser: an instant beam, spaced like Big Cheese (`INCIDENT_TUNING.cheeseShotIntervalMs`). It deals `laserDamage`
-     * (headshots kill), reflects off walls and Ironclad coats up to `laserBounces` times within `laserRange` units in
-     * all, `laserRadius` thick. Others draw it from the snapshot for `laserBeamMs`. */
-    laserDamage: 3, laserBounces: 2, laserRange: 180, laserRadius: .12, laserBeamMs: 600,
+    /** Laser: an instant beam fired like the cheese gun (one click a shot, only under `SHOOT_RATE`). It deals
+     * `laserDamage` (headshots kill), reflects off walls and Ironclad coats up to `laserBounces` times within
+     * `laserRange` units in all, `laserRadius` thick. Others draw it from the snapshot for `laserBeamMs`. */
+    laserDamage: 1, laserBounces: 2, laserRange: 180, laserRadius: .12, laserBeamMs: 600,
     /** Mousetrap: set down `trapReach` ahead of the rat on a supported floor with `trapRadius` clear around it (the
      * board's half-length as drawn: the model scales with it). Any other rat whose feet come within `trapRadius` +
-     * `trapFoot` (and `trapHeight` above or below) dies in one snap; it re-arms after `trapRearmMs`. `trapHp` ball hits
-     * destroy it (a laser hit counts `laserTrapHits`); a broken trap stays in the snapshot `trapBrokenMs` so clients can
-     * play the break. One per rat; it outlives its owner's death, not the round. A rat that gets one cannot set it down
-     * (nor fire) for `trapLockMs` (`PlayerBuffs.weaponReadyAt`) while the gun goes away and the trap comes up. */
-    trapReach: 2.9, trapRadius: 1.5, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapRearmMs: 900, trapBrokenMs: 700, trapLockMs: 1000,
+     * `trapFoot` (and `trapHeight` above or below) is snapped and held in place for `trapHoldMs` (`PlayerBuffs.trappedUntil`:
+     * it can still turn and shoot, not move or jump; no damage, no kill; Ironclad does not help). The trap stays shut
+     * while it holds, re-arms `trapRearmMs` after letting go, and never snaps the rat it just let go until that rat has
+     * stepped clear. `trapHp` ball hits destroy it (a laser hit counts `laserTrapHits`) and free whoever it holds; a
+     * broken trap stays in the snapshot `trapBrokenMs` so clients can play the break. One per rat; it outlives its
+     * owner's death, not the round. A rat that gets one cannot set it down (nor fire) for `trapLockMs`
+     * (`PlayerBuffs.weaponReadyAt`) while the gun goes away and the trap comes up. */
+    trapReach: 2.9, trapRadius: 1.5, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapHoldMs: 3000, trapRearmMs: 900, trapBrokenMs: 700, trapLockMs: 1000,
 } as const;
 /** The placed Mousetrap's size: the model's board (1.5 wide, 2.5 long) scaled so its half-length is `trapRadius`, and
  * a little taller again. The drawn trap and its shootable block share it, so what you see is what snaps and stops balls. */
@@ -70,8 +73,8 @@ export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
     'quick-fix': { title: 'QUICK FIX', effect: 'Full health', flavor: 'Fit for duty. Allegedly.' },
     stakeout: { title: 'STAKEOUT', effect: 'See every rat in the city through walls', flavor: 'Eyes on the whole town.' },
     'tommy-gun': { title: 'TOMMY GUN', effect: 'Hold fire to spray cheese', flavor: 'The Chicago typewriter.' },
-    laser: { title: 'LASER', effect: 'Instant beam · 3 damage · bounces off walls', flavor: 'Science, detective.' },
-    mousetrap: { title: 'MOUSETRAP', effect: 'Fire to set it down · it kills any rat that steps on it', flavor: 'Bait not included.' },
+    laser: { title: 'LASER', effect: 'Instant beam · bounces off walls', flavor: 'Science, detective.' },
+    mousetrap: { title: 'MOUSETRAP', effect: 'Fire to set it down · it holds any rat that steps on it', flavor: 'Bait not included.' },
 };
 
 /** Authored floor heights keep rewards on their intended routes. Every site has a
@@ -119,8 +122,9 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
 
 /** Active effects on one rat. Absent keys mean no effect. `weapon` is the one special weapon held, until
  * `weaponUntil` (absent for the Mousetrap, held until set down). A Mousetrap just taken cannot be set down before
- * `weaponReadyAt` (`WEAPON_TUNING.trapLockMs`). `faulty` is a Code Violation dud running until `faultyUntil`. */
-export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number; weapon?: WeaponKind; weaponUntil?: number; weaponReadyAt?: number; faulty?: FaultyKind; faultyUntil?: number }
+ * `weaponReadyAt` (`WEAPON_TUNING.trapLockMs`). `faulty` is a Code Violation dud running until `faultyUntil`.
+ * `trappedUntil`: another rat's Mousetrap holds this one in place until then (`WEAPON_TUNING.trapHoldMs`). */
+export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number; weapon?: WeaponKind; weaponUntil?: number; weaponReadyAt?: number; faulty?: FaultyKind; faultyUntil?: number; trappedUntil?: number }
 export type BuffMap = Record<string, PlayerBuffs>;
 
 /** All sites remain advertised while empty; the authority supplies their restock deadline. */
@@ -141,6 +145,7 @@ export const activeBuffs = (buffs: BuffMap | undefined, id: string, now: number)
     }
     const faulty = entryFaulty(entry, now);
     if (faulty) { active.faulty = faulty; active.faultyUntil = entry.faultyUntil; }
+    if ((entry.trappedUntil ?? 0) > now) active.trappedUntil = entry.trappedUntil;
     return active;
 };
 export const hasIronclad = (buffs: BuffMap | undefined, id: string, now: number): boolean =>
@@ -180,15 +185,17 @@ export const FAULTY_COPY: Record<FaultyKind, { title: string; effect: string }> 
 export const entryFaulty = (entry: PlayerBuffs | undefined, now: number): FaultyKind | undefined =>
     entry?.faulty && (entry.faultyUntil ?? 0) > now ? entry.faulty : undefined;
 export const faultyOf = (buffs: BuffMap | undefined, id: string, now: number): FaultyKind | undefined => entryFaulty(buffs?.[id], now);
-/** How fast a rat's legs carry it: Snapped Paw pins it, Cold Feet slows it, Hot Pursuit speeds it up. */
+/** Another rat's Mousetrap holds this one in place (`trapHoldMs`). */
+export const trapped = (buffs: BuffMap | undefined, id: string, now: number): boolean => (buffs?.[id]?.trappedUntil ?? 0) > now;
+/** How fast a rat's legs carry it: a Mousetrap's hold and Snapped Paw pin it, Cold Feet slows it, Hot Pursuit speeds it up. */
 export function legScale(buffs: BuffMap | undefined, id: string, now: number): number {
     const faulty = faultyOf(buffs, id, now);
-    return faulty === 'mousetrap' ? 0 : faulty === 'hustle' ? FAULTY_TUNING.coldFeet : hasHustle(buffs, id, now) ? PICKUP_TUNING.hustleMultiplier : 1;
+    return faulty === 'mousetrap' || trapped(buffs, id, now) ? 0 : faulty === 'hustle' ? FAULTY_TUNING.coldFeet : hasHustle(buffs, id, now) ? PICKUP_TUNING.hustleMultiplier : 1;
 }
-/** Rust Bucket and Snapped Paw: the rat cannot jump. */
+/** Rust Bucket, Snapped Paw and a Mousetrap's hold: the rat cannot jump. */
 export const jumpBlocked = (buffs: BuffMap | undefined, id: string, now: number): boolean => {
     const faulty = faultyOf(buffs, id, now);
-    return faulty === 'ironclad' || faulty === 'mousetrap';
+    return faulty === 'ironclad' || faulty === 'mousetrap' || trapped(buffs, id, now);
 };
 /** Short Circuit: the rat's gun does not fire. */
 export const shortedOut = (buffs: BuffMap | undefined, id: string, now: number): boolean => faultyOf(buffs, id, now) === 'laser';
@@ -200,7 +207,7 @@ export const mergeFaulty = (existing: PlayerBuffs | undefined, kind: FaultyKind,
 
 /** True when the entry has fallen out of every effect and can be pruned. */
 export const buffExpired = (entry: PlayerBuffs | undefined, now: number): boolean =>
-    !entry || TIMED_PICKUPS.every(kind => (entry[BUFF_FIELD[kind]] ?? 0) <= now) && !entryWeapon(entry, now) && !entryFaulty(entry, now);
+    !entry || TIMED_PICKUPS.every(kind => (entry[BUFF_FIELD[kind]] ?? 0) <= now) && !entryWeapon(entry, now) && !entryFaulty(entry, now) && (entry.trappedUntil ?? 0) <= now;
 
 /** Merge a fresh claim into a rat's existing effects. Re-collecting the same
  * benefit refreshes to the full duration; it never stacks or accumulates.

@@ -7,7 +7,6 @@ import {createPlayer} from '../../src/worker/gameState';
 import {laserPath,type LaserCast} from '../../src/shared/laser';
 import {resolveShotPattern,tommyCone,tommyHeat} from '../../src/shared/shotPattern';
 import {ShotSpacing} from '../../src/shared/shotTiming';
-import {INCIDENT_TUNING} from '../../src/shared/chaosState';
 import {BALL_RADIUS} from '../../src/shared/ballTuning';
 
 afterEach(()=>vi.restoreAllMocks());
@@ -62,13 +61,12 @@ describe('the Tommy Gun',()=>{
         expect(tommyHeat(3,1000,1000+W.tommyHeatMs)).toBe(4);
         expect(tommyHeat(3,1000,1001+W.tommyHeatMs)).toBe(0);
     });
-    it('is not held to the Big Cheese interval, while the Laser always is',()=>{
+    it('is not held to the Big Cheese interval, and neither is the Laser',()=>{
         const spacing=new ShotSpacing();
         expect(spacing.allow('t',undefined,0,0,'tommy-gun')).toBe(true);
         expect(spacing.allow('t','big-cheese',W.tommyIntervalMs,0,'tommy-gun')).toBe(true);
-        expect(spacing.allow('l',undefined,0,0,'laser')).toBe(true);
-        expect(spacing.allow('l',undefined,INCIDENT_TUNING.cheeseShotIntervalMs-1,0,'laser')).toBe(false);
-        expect(spacing.allow('l',undefined,INCIDENT_TUNING.cheeseShotIntervalMs,0,'laser')).toBe(true);
+        expect(spacing.allow('l','big-cheese',0,0,'laser')).toBe(true);
+        expect(spacing.allow('l','big-cheese',1,0,'laser')).toBe(true);
     });
     it('fires plain balls during Big Cheese: they never grow, in flight or on a bounce, and deal one damage',()=>{
         const {sim:first,players,a,b,now}=fixture(),saved=first.snapshot(false);
@@ -132,7 +130,7 @@ describe('the Mousetrap',()=>{
     const traps=(sim:ChaosSimulation)=>sim.snapshot(false).traps??[];
     /** Take up a Mousetrap, wait out its lockout (`trapLockMs`), and press. */
     const setDown=(sim:ChaosSimulation,p:PlayerData,direction={x:0,y:0,z:1})=>{arm(sim,p.id,'mousetrap');sim.step(0,sim.time+W.trapLockMs);return sim.placeTrap(p.id,direction);};
-    it('is set down ahead, never kills its owner, and snaps any other rat, coat or not, for its owner',()=>{
+    it('is set down ahead, never catches its owner, and holds any other rat, coat or not, without harm',()=>{
         const {sim,a,b,hits}=fixture();
         expect(setDown(sim,a)).toBe(true);
         const [trap]=traps(sim);
@@ -140,10 +138,13 @@ describe('the Mousetrap',()=>{
         expect(Math.hypot(trap!.x-a.x,trap!.z-(a.z+W.trapReach))).toBeLessThan(1);
         expect(weaponOf(sim,'a')).toBeUndefined();
         stand(a,trap!);sim.step(1/60,sim.time+16);
-        expect(hits).toEqual([]);
+        expect(sim.snapshot(false).buffs?.a?.trappedUntil).toBeUndefined();
         arm(sim,'b','ironclad');stand(b,{x:trap!.x+.8,y:trap!.y,z:trap!.z});sim.step(1/60,sim.time+16);
-        expect(hits).toMatchObject([{owner:'a',victim:'b',damage:MAX_HP,weapon:'mousetrap'}]);
-        expect(hits[0]!.incoming.y).toBeGreaterThan(0);
+        expect(hits).toEqual([]);
+        expect(sim.snapshot(false).buffs?.b?.trappedUntil).toBe(sim.time+W.trapHoldMs);
+        // Let go after the hold, it does not catch b again while b still stands on it.
+        sim.step(1/60,sim.time+W.trapHoldMs+W.trapRearmMs+16);
+        expect(sim.snapshot(false).buffs?.b?.trappedUntil).toBeUndefined();
     });
     it('keeps one trap per rat, and the trap outlives its owner',()=>{
         const {sim,a}=fixture();

@@ -11,8 +11,8 @@ const cellKey=(x:number,z:number)=>(x+1024)*2048+(z+1024);
  * bounds), block rays (`aabbQuery`, used by `world.raycast*`) and feed
  * SpatialRayQuery. They must never move, resize or change type.
  *
- * Moving bodies (rats, cases, corpses, anything added with `world.addBody`,
- * including a counterfeit case parked as static) keep sweep-and-prune among
+ * Moving bodies (rats, cases, corpses, anything added with `world.addBody`)
+ * keep sweep-and-prune among
  * themselves, skipping pairs Cannon rejects because both are static or asleep. */
 export class StaticCityBroadphase extends C.SAPBroadphase {
     readonly fixed:C.Body[]=[];

@@ -17,7 +17,7 @@ class Element {
     querySelector(selector: string) { if (!this.selectors.has(selector)) this.selectors.set(selector, new Element()); return this.selectors.get(selector)!; }
 }
 function fixture(mode: AssignmentId = 'excessive-force', count = 8) {
-    const body = new Element(), doc = {body, createElement: () => new Element()};
+    const body = new Element(), doc = {body, createElement: () => new Element(), addEventListener() {}};
     const board = new MatchScoreboard(doc as unknown as Document), root = body.children[0];
     const people = Array.from({length: count}, (_, i) => ({...createPlayer(i === 0 ? 'me' : `rd-ai-${i}`, i === 0 ? '<img onerror="bad">' : `Rat ${i}`,
         {hatType: 'fedora', hatColor: 1, coatColor: 2, furColor: 3}, {x: 0, y: 0, z: 0}), kills: i === 0 ? 19 : i, deaths: i === 0 ? 2 : 0}));
@@ -78,11 +78,12 @@ describe('full lobby scoreboard', () => {
         f.assignment.phase = 'suspended'; f.board.receive({type: 'chaos', state: f.state});
         expect(f.cells('me')).toContain('0:30'); expect(f.root.querySelector('.match-scoreboard-mode span').textContent).toContain('PAUSED');
         f.assignment.phase = 'closed'; f.assignment.result = {winnerId: 'me', winnerName: 'You', at: 10_000, method: 'kills', posthumous: false};
-        const report = {seconds: 600, kills: 21, handoffs: 3, supplies: 0, flights: 0, calls: 0, rats: [{id: 'me', shots: 20, hits: 8, headshots: 3, longest: 40, caseSeconds: 31, streak: 6, supplies: 0, flights: 0, damage: 4}]};
+        const report = {seconds: 600, kills: 21, handoffs: 3, supplies: 0, flights: 0, calls: 0, incidents: {}, rats: [{id: 'me', name: 'You', kills: 19, deaths: 2, assists: 4, shots: 20, hits: 8, headshots: 3,
+            longest: 40, caseSeconds: 31, takes: 2, carry: 20, streak: 6, supplies: 0, flights: 0, damage: 4, dealt: 13, alive: 300, weapons: {cheese: 19}, kinds: {}, deathsBy: {shot: 2}}]};
         f.board.receive({type: 'gameWon', assignment: f.assignment, report} as ServerMessage);
         expect(f.rows()[0].dataset.player).toBe('me'); expect(f.row('me').dataset.winner).toBe('true');
-        // The results board shows the report's line (accuracy, headshots, best streak), not live health.
-        expect(f.cells('me')).toEqual(expect.arrayContaining(['40%', '3', '6'])); expect(f.cells('me')).not.toContain(`${MAX_HP} / ${MAX_HP} HP`);
+        // The results board shows the report's line (assists, kills per minute alive, accuracy, damage dealt), not live health.
+        expect(f.cells('me')).toEqual(expect.arrayContaining(['4', '3.80', '40%', '13'])); expect(f.cells('me')).not.toContain(`${MAX_HP} / ${MAX_HP} HP`);
         expect(f.cells('rd-ai-1')).toContain('—'); f.board.dispose();
     });
     it('reconciles join/leave, resets round totals, replaces a reconnect roster, and cleans up', () => {
