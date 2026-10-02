@@ -14,10 +14,15 @@ If the round had fewer than 3 moments, show what there is. If it had none, the b
 
 ## X4: the board
 
-The results board keeps its layout (`GameHud.layoutResults`): standings on the left, Case File on the right. The exhibits go in the right column, above the Case File:
+The board takes the screen (`GameHud.layoutResults`; Tyler, 2 October: more room for stats, highlights still visible). The spread is up to 1,900 px wide with small margins. The standings are on the left, and a right column of about 40% holds the exhibits above the Case File. Both columns run down to the actions, and the banner is tighter. The exhibits block holds:
 
-- a framed screen, 16 by 9, that starts playing Exhibit A when the board appears
-- below it, 3 exhibit cards: letter, caption and the rats' names, with the playing one marked
+- a framed screen, 16 by 9, about 56% of the column wide, that starts playing Exhibit A when the board appears
+- beside it, 3 exhibit cards: letter, caption (up to 2 lines) and the rats' names, with the playing one marked
+
+The Case File fills the rest of the column. Its awards fit in 2, then 3, then 4 columns at full size (4 only in a column at least 640 px wide), and only then in smaller type. The fit uses laid-out height, because the stamping's scale inflated `scrollHeight` and forced the smallest type.
+
+Exhibits controls:
+
 - click a card to play it; each exhibit loops until you pick another
 - a fullscreen button and a save button on the screen
 
