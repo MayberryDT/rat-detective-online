@@ -2,7 +2,7 @@
 // admin key, then check the results board shows exhibits, the frame plays, and SAVE downloads a clip with video and sound.
 // Writes <out>/exhibits.json, screenshots and the saved clip; exits 1 on a failed check.
 //
-// usage: node scripts/exhibits-check.mjs --url=<game url> --out=<dir> [--play=<seconds before ending the round, default 120>]
+// usage: node scripts/exhibits-check.mjs --url=<game url> --out=<dir> [--play=<seconds before ending the round, default 120>] [--size=<w,h>, default 1600,900]
 // env: CHROME_BIN (default google-chrome), ANGLE (default gl-egl); the admin key from ~/.config/rat-detective/admin-token
 import {execFileSync,spawn} from 'node:child_process';
 import {mkdirSync,mkdtempSync,readdirSync,rmSync,statSync,writeFileSync} from 'node:fs';
@@ -10,13 +10,13 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {parseArgs} from 'node:util';
 
-const {values}=parseArgs({options:{url:{type:'string'},out:{type:'string'},play:{type:'string',default:'120'}}});
+const {values}=parseArgs({options:{url:{type:'string'},out:{type:'string'},play:{type:'string',default:'120'},size:{type:'string',default:'1600,900'}}});
 if(!values.url||!values.out)throw Error('--url and --out are required');
 const out=resolve(values.out);mkdirSync(out,{recursive:true});
 
 const port=9800+Math.floor(Math.random()*150),profile=mkdtempSync(join(tmpdir(),'rat-exhibits-'));
 const chrome=spawn(process.env.CHROME_BIN??'google-chrome',['--headless=new',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,
-    '--window-size=1600,900','--no-first-run','--password-store=basic','--mute-audio','--autoplay-policy=no-user-gesture-required',
+    `--window-size=${values.size}`,'--no-first-run','--password-store=basic','--mute-audio','--autoplay-policy=no-user-gesture-required',
     '--ignore-gpu-blocklist',`--use-angle=${process.env.ANGLE??'gl-egl'}`,'about:blank'],{stdio:'ignore'});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function json(u,init){for(let i=0;i<100;i++){try{return await (await fetch(u,init)).json();}catch{await sleep(100);}}throw Error(u);}

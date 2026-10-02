@@ -452,8 +452,9 @@ export class GameHud {
         const right=!!(this.caseFile||exhibits);
         const banner=[...this.victoryText.children].filter(el=>el.getBoundingClientRect().height>0);
         const bannerBottom=Math.max(0,...banner.map(el=>el.getBoundingClientRect().bottom));
-        const w=view.innerWidth,h=view.innerHeight,margin=small?8:Math.max(16,Math.min(40,w*.025)),gap=small?10:Math.max(18,Math.min(32,w*.018));
-        const group=Math.min(1480,w-margin*2),fileWidth=right?Math.max(360,Math.min(540,group*.36)):0;
+        const w=view.innerWidth,h=view.innerHeight,margin=small?8:Math.max(12,Math.min(28,w*.015)),gap=small?10:Math.max(14,Math.min(24,w*.012));
+        // The board takes the screen (Tyler, 2 October: more room for stats, highlights still visible).
+        const group=Math.min(1900,w-margin*2),fileWidth=right?Math.max(380,Math.min(760,group*.4)):0;
         const board=right?group-fileWidth-gap:Math.min(1100,group),width=board+(fileWidth?fileWidth+gap:0),left=(w-width)/2;
         const stripTop=Math.round(bannerBottom+gap*.6);
         body.style.setProperty('--results-strip-top',`${stripTop}px`);
@@ -468,12 +469,11 @@ export class GameHud {
         for(const key of ['--results-panel-h','--results-file-panel-h','--results-exhibits-h','--results-exhibits-bottom'])body.style.removeProperty(key);
         const standings=this.doc.querySelector<HTMLElement>('.match-scoreboard:not([hidden])');
         const file=this.caseFile?.list.parentElement;
-        // The exhibit screen (16:9) stays the smaller part of the column, so the Case File keeps room under it;
-        // on small screens it sits beside its cards when the block is a row.
+        // The exhibit screen (16:9) sits beside its cards (a row), so the Case File keeps most of the column under it.
         let exhibitsBlock=0;
         if(exhibits){
             const row=view.getComputedStyle(exhibits).flexDirection==='row';
-            const screen=Math.min(small?exhibits.clientWidth*(row?.45:1):fileWidth,(small?h*.2:available*.38)*16/9);
+            const screen=Math.min(small?exhibits.clientWidth*(row?.45:1):fileWidth*(row?.56:1),(small?h*.2:available*.36)*16/9);
             body.style.setProperty('--results-exhibit-screen-w',`${Math.floor(screen)}px`);
             exhibitsBlock=Math.ceil(exhibits.getBoundingClientRect().height)+(small?8:file?gap:0);
             body.style.setProperty('--results-exhibits-h',`${exhibitsBlock}px`);
@@ -485,20 +485,11 @@ export class GameHud {
             if(exhibits)body.style.setProperty('--results-exhibits-bottom',`${Math.ceil(16+actions+(file?file.getBoundingClientRect().height+8:0))}px`);
             return;
         }
-        // The pair should read as one spread: fit the right column within the standings' height
-        // when it can (always within the screen), then give both the taller height.
-        const standingsHeight=standings?.getBoundingClientRect().height??0;
-        // A little taller than the standings beats shrinking the type another step.
-        if(file)this.fitCaseFile(file,Math.max(80,(standingsHeight>0?Math.min(standingsHeight*1.12,available):available)-exhibitsBlock));
-        const column=exhibitsBlock+(file?.getBoundingClientRect().height??0);
-        const tallest=Math.max(standingsHeight,column);
-        if(!tallest)return;
-        body.style.setProperty('--results-panel-h',`${Math.ceil(tallest)}px`);
-        if(exhibitsBlock)body.style.setProperty('--results-file-panel-h',`${Math.ceil(tallest-exhibitsBlock)}px`);
-        // Ease the whole spread down into spare room rather than leaving it all below.
-        const ease=Math.round(Math.min(60,Math.max(0,available-tallest)/3));
-        body.style.setProperty('--results-top',`${top+ease}px`);body.style.setProperty('--results-strip-top',`${stripTop+ease}px`);
-        body.style.setProperty('--results-file-top',`${top+ease+exhibitsBlock}px`);
+        // The spread runs to the actions: the standings and the right column both take the full height.
+        if(!standings&&!file)return;
+        if(file)this.fitCaseFile(file,Math.max(80,available-exhibitsBlock));
+        body.style.setProperty('--results-panel-h',`${Math.ceil(available)}px`);
+        if(exhibitsBlock)body.style.setProperty('--results-file-panel-h',`${Math.ceil(available-exhibitsBlock)}px`);
     };
 
     /** Awards never run off the screen: two columns for a long list, then smaller type, then three columns. */

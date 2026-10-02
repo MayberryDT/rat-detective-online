@@ -59,6 +59,14 @@ body.exhibit-recording :is(.exhibit-tape,.exhibit-rec,.exhibit-caption){display:
 body.exhibit-recording .exhibit-back{left:50%;right:auto;top:14px;translate:-50% 0;border:3px double var(--stamp);color:var(--stamp-ink);font-size:15px}
 body.reduced-motion :is(.exhibit-rec-dot,.results-exhibits),body.reduced-motion .exhibit-tape::before{animation:none!important}
 @media(prefers-reduced-motion:reduce){:is(.exhibit-rec-dot,.results-exhibits),.exhibit-tape::before{animation:none!important}}
+/* Desktop: the screen beside its cards, so the Case File keeps the column's height. */
+@media(min-width:1101px) and (min-height:641px){
+    body.round-results .results-exhibits:not([hidden]){flex-direction:row;align-items:flex-start;gap:10px}
+    .exhibit-cards{flex:1 1 0;min-width:0;align-self:stretch;grid-auto-rows:1fr}
+    .exhibit-card{grid-template-columns:auto auto minmax(0,1fr);align-content:center;row-gap:3px}
+    .exhibit-card-caption{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .exhibit-card-names{grid-column:1/-1}
+}
 /* Small screens (GameHud's SMALL_RESULTS): the screen and its cards side by side, just above the Case File. */
 @media(max-width:1100px),(max-height:640px){
     body.round-results .results-exhibits:not([hidden]){left:12px;right:12px;width:auto;top:auto;bottom:var(--results-exhibits-bottom,calc(16px + 30dvh));flex-direction:row;align-items:flex-start;gap:8px}
