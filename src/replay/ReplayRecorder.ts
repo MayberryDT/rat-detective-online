@@ -4,7 +4,7 @@ import type { ReplayClip } from './types';
 
 /** Recording (docs/replay/playback.md, X2): the ring buffer covers this much server time. A kill marker arrives
  * about 2 s after its moment with up to 6 s of lead, so 12 s always holds its window. */
-export const RECORDING={windowMs:12_000,localHz:30,keyframeMs:500,clips:8,shelfBytes:8_000_000} as const;
+export const RECORDING={windowMs:12_000,localHz:30,keyframeMs:500,clips:8,shelfBytes:16_000_000} as const;
 
 /** The decoded server messages a replay plays back. `ChaosDecoder` builds fresh arrays and objects for every state
  * (an unchanged part is the previous state's own, never mutated), so states are kept as they arrive, uncopied. */
@@ -143,17 +143,15 @@ export class ReplayRecorder {
         this.shelf.push({clip,entries,bytes});
         this.keepBest();
     }
-    /** The `RECORDING.clips` best, plus the best that involves you; the lowest go first past the byte budget. */
+    /** The `RECORDING.clips` best, plus the best that involves you; the lowest go first past the byte budget. Clips
+     * that overlap share their entries, so each entry counts once. */
     private keepBest():void {
         const sorted=this.shelf.sort((a,b)=>b.clip.score-a.clip.score);
         const mine=sorted.find(data=>data.clip.involvesLocal);
         const kept=sorted.slice(0,RECORDING.clips);
         if(mine&&!kept.includes(mine))kept.push(mine);
-        let total=kept.reduce((sum,data)=>sum+data.bytes,0);
-        for(let i=kept.length-1;i>=0&&total>RECORDING.shelfBytes;i--){
-            if(kept[i]===mine||kept.length===1)continue;
-            total-=kept[i]!.bytes;kept.splice(i,1);
-        }
+        const total=()=>{const seen=new Set<RecordedEntry>();let sum=0;for(const data of kept)for(const entry of data.entries)if(!seen.has(entry)){seen.add(entry);sum+=entryBytes(entry);}return sum;};
+        for(let i=kept.length-1;i>=0&&kept.length>1&&total()>RECORDING.shelfBytes;i--)if(kept[i]!==mine)kept.splice(i,1);
         this.shelf=kept;
     }
 }

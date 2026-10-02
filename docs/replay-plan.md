@@ -9,7 +9,7 @@ At the end of every round, the results board shows the round's 3 best moments as
 It is done when:
 
 - the server spots funny, chaotic and big moments for every rat and records them as city facts
-- each player's game keeps short clips of those moments for the round, in under 8 MB of memory
+- each player's game keeps short clips of those moments for the round, within a 16 MB size estimate (overlapping clips share their data)
 - the results board plays 3 exhibits: the best from anyone, with at least one that involves you when you had one
 - each exhibit has its own camera work, slow motion on the key beat, the game's own sounds and a noir caption
 - a save button downloads the exhibit as an MP4 (WebM where the browser cannot make MP4)

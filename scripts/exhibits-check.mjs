@@ -20,7 +20,10 @@ const chrome=spawn(process.env.CHROME_BIN??'google-chrome',['--headless=new',`--
     '--ignore-gpu-blocklist',`--use-angle=${process.env.ANGLE??'gl-egl'}`,'about:blank'],{stdio:'ignore'});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function json(u,init){for(let i=0;i<100;i++){try{return await (await fetch(u,init)).json();}catch{await sleep(100);}}throw Error(u);}
-const checks=[],errors=[],markers=[];let board=null,file=null;
+/** Before the page's scripts: the last raw socket messages, to name one the client rejects. */
+const HOOK=`(()=>{window.__raw=[];const W=window.WebSocket;window.WebSocket=class extends W{constructor(...a){super(...a);
+ this.addEventListener('message',e=>{if(typeof e.data==='string'&&!e.data.startsWith('{"type":"movementFrame"')){__raw.push(/"type":"(gameWon|welcome)"/.test(e.data)?e.data:e.data.slice(0,4000));if(__raw.length>40)__raw.shift();}});}};})();`;
+const checks=[],errors=[],markers=[];let board=null,file=null,raw=[];
 try{
     const tab=await json(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'});
     const socket=new WebSocket(tab.webSocketDebuggerUrl);await new Promise(r=>socket.addEventListener('open',r,{once:true}));
@@ -33,7 +36,7 @@ try{
     const evaluate=async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.result?.value;
     const screenshot=async name=>writeFileSync(join(out,`${name}.png`),Buffer.from((await send('Page.captureScreenshot',{format:'png'})).result.data,'base64'));
     const waitFor=async(expression,ms)=>{for(const end=Date.now()+ms;Date.now()<end;await sleep(250))if(await evaluate(expression))return true;return false;};
-    await send('Runtime.enable');await send('Page.enable');
+    await send('Runtime.enable');await send('Page.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:HOOK});
     await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:out,eventsEnabled:true});
     const target=new URL(values.url);for(const [k,v] of [['agent','1'],['mute','1'],['replay','dev']])target.searchParams.set(k,v);
     await send('Page.navigate',{url:target.toString()});
@@ -65,12 +68,13 @@ try{
         }else checks.push({check:'saved clip downloaded',pass:false});
         await screenshot('exhibits-3-after-save');
     }
+    raw=await evaluate('window.__raw')??[];
     checks.push({check:'no page errors',pass:errors.length===0});
 }catch(error){checks.push({check:'run',pass:false,error:String(error)});}
 finally{
     chrome.kill();await new Promise(r=>chrome.exitCode===null?chrome.once('exit',r):r());rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:200});
     const pass=checks.length>0&&checks.every(c=>c.pass);
-    writeFileSync(join(out,'exhibits.json'),JSON.stringify({url:values.url,at:new Date().toISOString(),pass,checks,board,file,markers,errors},null,2));
+    writeFileSync(join(out,'exhibits.json'),JSON.stringify({url:values.url,at:new Date().toISOString(),pass,checks,board,file,markers,errors,raw},null,2));
     console.log(JSON.stringify({pass,checks:checks.map(({check,pass})=>({check,pass})),board,file}));
     process.exitCode=pass?0:1;
 }
