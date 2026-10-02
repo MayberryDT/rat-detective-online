@@ -17,7 +17,7 @@ Jev comes first because it gives thousands of decisions a day. Human hours come 
 - The decision tree stays small, because the game revolves around the case. A bot chooses a goal, then decides whether to fight or ignore the rats in its way.
 - Humans never run past a usable pickup. The only exception is a Quick Fix at full health. This replaces the 13 September rule that limited pickups on the way to an objective.
 - Copy Jev first, tune to humans second.
-- Jev keeps running for about a month on a frozen build, to gather data. The build freezes before these changes reach production. Tyler has more changes to add before the freeze.
+- No data freeze (Tyler, 2 October: "I'm not worried about the JEV data freeze anymore. We can drop that"). Jev keeps running on live builds; eras keep each build's data apart. This replaces the 30 September plan for a month on a frozen build.
 - Every change gets a before-and-after comparison, using eras from the data plan.
 
 ## How a bot will decide
@@ -51,8 +51,8 @@ At least 3 seconds separate 2 requests to Jev. Between decisions, the bot keeps 
 | L2 | Pickup reflex | Built (`6d08299`, `10fc4b6`) |
 | L3 | Release A: the baseline era, with Jev as it is today | Was live: production `7888521b`, build `production-2026-09-30-76701ab`, until 1 October |
 | L4 | Lighter Jev: event-driven decisions, stance, goals held, code-only rounds | Live: production `88171c4c`, build `production-2026-10-01-6356f81`, with protocol 25 (1 October) |
-| L5 | Tyler's further changes, then the frozen build and a month of data | Queued from Tyler's list: an incident engagement audit and a larger pickup system; first the case batch (protocol 26) and the round-end results board finish on staging |
-| L6 | Copy Jev into the code mind | After a fortnight of frozen data |
+| L5 | Tyler's further changes (the freeze was dropped on 2 October) | Queued from Tyler's list: an incident engagement audit and a larger pickup system; first the case batch (protocol 26) and the round-end results board finish on staging |
+| L6 | Copy Jev into the code mind | When enough Jev decisions exist, era by era |
 | L7 | Switch Jev off, then tune to humans | After L6 passes |
 
 ### L1. Data foundation (built)
@@ -129,24 +129,20 @@ Checks before shipping (30 September, commits `f5cf0b9` and `8a86be3`):
   - Paper Chase deliveries per room-hour went from 49 and 33 to 35 and 55; the sets moved in opposite directions, which is noise
 - On staging with bots only, the code mind decided about 6.6 times a bot-minute. On production, `mindVersion` 3 recorded 16.7 decisions a bot-minute. Jev's request rate needs a human session.
 
-### L5. The frozen build
+### L5. Tyler's further changes
 
 Tyler's further changes go in first. Queued, not started (Tyler, 1 October: "don't do this yet, just add it to the plan"):
 
 - **Incident engagement audit.** How engaging is each incident? Read every incident's facts (what players and bots do during it, kills, case movement, pickups, deaths to it, how often it is noticed) and Tyler's playtest notes, then rank them and propose cuts, changes and new ones.
 - **Expand the pickup system.** More kinds of supply and more ways to get them, built on the four supplies, the 27 sites and the reward draw (`rewardSupply`: kill streak titles, Dispatch calls and, since protocol 26, taking the case).
 
-Then one build freezes for about a month:
-
-- the rules, layout, supplies, incidents, bot mind and Jev model (`jev-1.13.0`) stay fixed
-- performance, crash and recording fixes are allowed, because players cannot see them
-- a weekly note reports human hours, Jev spend and anything readable
+There is no freeze afterwards (Tyler, 2 October). Jev data is gathered on live builds and compared within eras.
 
 Agreed by Tyler (30 September): code-only rounds. In 1 round in 5 with humans present, the bots use the code mind instead of Jev. These rounds are the only fair test of whether Jev is worth its cost. Without them, the code mind is only seen in the empty city, where it plays bots alone. They ship with L4, so the comparison starts early; the L4 era report compares Jev rounds only with release A.
 
 ### L6. Copy Jev into the code mind
 
-Fit the code mind's goal and stance scores, per archetype, to Jev's decisions from the frozen build. Check the fit on rounds held back from the fitting.
+Fit the code mind's goal and stance scores, per archetype, to Jev's decisions, within eras whose rules match the code mind being fitted. Check the fit on rounds held back from the fitting.
 
 Done when:
 
@@ -161,7 +157,7 @@ Then tune the code mind towards humans. Humans' goals are inferred from what the
 
 ## Risks
 
-- Rule changes during the freeze would split the data into small piles. Only changes players cannot see are allowed.
+- Without a freeze, frequent rule changes split Jev's data into small eras. Fit on the eras with the most decisions.
 - Human hours may stay thin. More playtest sessions help more than any code.
 - Jev's choices may not be human-like. The code-only rounds and the scorecard show this. If Jev is no closer to humans than the code mind, we stop paying for it.
 - Deterministic bots can become predictable. Seeded randomness and the five archetypes (sniper, hose, camper, joyrider, gremlin; 1 October) stay.

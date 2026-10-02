@@ -33,7 +33,6 @@ It is done when:
 - Never read pixels back from the GPU (`readPixels`, `toDataURL`). It freezes the game for 90 to 380 ms ([perf overhaul](verification/perf-overhaul-2026-09-28.md)).
 - The replay never touches the live HUD, headlines, kill feed, camera shake or live sound budget.
 - Agent browsers stay muted (`&mute=1`). Human playtests stay audible.
-- Exhibits are visible changes. They must reach production before the Jev data freeze ([bot learning plan, L5](bot-learning-plan.md)), or wait until it ends. Tyler decides which.
 
 ## Order of work
 
@@ -60,4 +59,4 @@ X1: write the server detector and the `highlight` marker. Run it on staging with
 
 ## Blockers
 
-None. One choice is open: whether exhibits ship before or after the Jev freeze.
+None. (The Jev data freeze was dropped on 2 October, so exhibits can ship whenever they are ready.)
