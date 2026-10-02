@@ -9,7 +9,7 @@ function fixture(){
     const recorder=new ReplayRecorder(()=>now);
     recorder.welcome({type:'welcome',id:'me',player:rat('me'),players:{bot:rat('bot')},round:{phase:'playing'},serverTime:now} as unknown as Extract<ServerMessage,{type:'welcome'}>);
     /** Play on to `to`, your rat recorded at 30 Hz. */
-    const until=(to:number)=>{while(now<to){now=Math.min(to,now+34);recorder.recordLocal({x:0,y:0,z:0,qx:0,qy:0,qz:0,qw:1,aim:{x:0,y:0,z:1}});}};
+    const until=(to:number)=>{while(now<to){now=Math.min(to,now+34);recorder.recordLocal({x:0,y:0,z:0},{x:0,y:0,z:0,w:1},{x:0,y:0,z:1});}};
     const mark=(id:string,score:number,at:number,actors=['bot']):void=>recorder.record({type:'highlight',id,kind:'sent-flying',at,actors,p:{x:0,y:0,z:0},score,leadMs:4000,trailMs:2000} satisfies HighlightMarker);
     return {recorder,until,mark};
 }

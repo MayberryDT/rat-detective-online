@@ -1,4 +1,4 @@
-import type { PlayerData, ServerMessage } from '../shared/networkProtocol';
+import type { PlayerData, QuatData, ServerMessage, Vec3Data } from '../shared/networkProtocol';
 import type { HighlightMarker } from '../shared/highlights';
 import type { ReplayClip } from './types';
 
@@ -77,11 +77,14 @@ export class ReplayRecorder {
         }
         this.advance(now);
     }
-    /** Your rat this frame (body position, mesh rotation, aim); kept at `RECORDING.localHz`, none while dead. */
-    recordLocal(pose:Omit<LocalPose,'id'>):void {
+    /** Your rat this frame (body position `p`, mesh rotation `q`, look `aim`): the numbers are copied into a kept pose at
+     * `RECORDING.localHz` only, none while you have no rat. Each frame also cuts the moments whose trail has just passed. */
+    recordLocal(p:Vec3Data,q:QuatData,aim:Vec3Data):void {
         const at=this.serverNow();
-        if(this.myId&&this.roster.has(this.myId)&&at-this.lastPose>=1000/RECORDING.localHz){this.lastPose=at;this.entries.push({at,pose:{id:this.myId,...pose}});}
-        // Each frame also cuts the moments whose trail has just passed.
+        if(this.myId&&this.roster.has(this.myId)&&at-this.lastPose>=1000/RECORDING.localHz){
+            this.lastPose=at;
+            this.entries.push({at,pose:{id:this.myId,x:p.x,y:p.y,z:p.z,qx:q.x,qy:q.y,qz:q.z,qw:q.w,aim:{x:aim.x,y:aim.y,z:aim.z}}});
+        }
         this.advance(at);
     }
 

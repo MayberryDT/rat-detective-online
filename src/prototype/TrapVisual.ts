@@ -155,7 +155,7 @@ class TrapVisual {
         // Set down: dropped from a little height, then a thunk and a wobble.
         if(this.setAge<DROP){const t=this.setAge/DROP;y=(1-t*t)*1.2;squash=-.12*t;}
         else if(this.setAge<DROP+SETTLE){
-            if(!this.landed){this.landed=true;kickDust(this.root.position,.8);}
+            if(!this.landed){this.landed=true;kickDust(this.root,this.root.position,.8);}
             const s=(this.setAge-DROP)/SETTLE;squash=Math.sin(s*Math.PI*2.5)*(1-s)*.32;
         }
         // SNAP: the whole trap hops and lands.
@@ -245,6 +245,8 @@ export class TrapField {
         for(const visual of this.active.values())visual.update(dt);
         this.debris.update(dt);
     }
+    /** Every placed trap goes back to the pool (an exhibit replay rewinding its clip). */
+    clear():void {for(const visual of this.active.values()){visual.root.removeFromParent();this.free.push(visual);}this.active.clear();}
     dispose():void {
         for(const visual of this.active.values())visual.root.removeFromParent();
         this.active.clear();this.free.length=0;

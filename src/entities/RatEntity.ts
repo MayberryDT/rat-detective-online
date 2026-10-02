@@ -519,9 +519,9 @@ export class RatEntity {
         this.animator.setHustle(this.hustleRemaining>0);
         this.animator.update(dt,previewSpeed);
         // Polish 16: dust from this frame's animation events (consumed once).
-        if(this.animator.skidStarted){this.animator.skidStarted=false;kickDust(p,.45);}
-        if(this.animator.landedFall>0){kickDust(p,Math.min(1,.3+(this.animator.landedFall-12)/25));this.animator.landedFall=0;}
-        if(this.animator.launched){this.animator.launched=false;kickDust(p,1);}
+        if(this.animator.skidStarted){this.animator.skidStarted=false;kickDust(this.scene,p,.45);}
+        if(this.animator.landedFall>0){kickDust(this.scene,p,Math.min(1,.3+(this.animator.landedFall-12)/25));this.animator.landedFall=0;}
+        if(this.animator.launched){this.animator.launched=false;kickDust(this.scene,p,1);}
 
         const silver=this.ironcladRemaining>0,pursuit=this.hustleRemaining>0;
         this.ironcladRemaining=Math.max(0,this.ironcladRemaining-dt);

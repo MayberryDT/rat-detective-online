@@ -6,6 +6,7 @@ import { CameraBlockers } from '../player/CameraBlockers';
 import { REPLAY_ROUTE } from '../audio/PlayerAudioMix';
 import type { GunshotCue } from '../audio/GunshotAudio';
 import { isolateRagdollWorld } from '../utils/RatCorpseChain';
+import { Dust, registerDust } from '../feel/Dust';
 import type { DeathStyle } from '../utils/RatAnimator';
 import type { SnapshotPose } from '../shared/SnapshotBuffer';
 import type { PlayerData } from '../shared/networkProtocol';
@@ -44,13 +45,17 @@ const POSE:SnapshotPose={x:0,y:0,z:0,qx:0,qy:0,qz:0,qw:1};
 const QA=new THREE.Quaternion(),QB=new THREE.Quaternion();
 const HEAD=new THREE.Vector3(),IMPACT=new THREE.Vector3(),HIT=new THREE.Vector3(),SPRAY=new THREE.Vector3();
 
-/** One run of a clip: everything it creates lives in its own scene, physics world and pools, and goes with `dispose`. */
+/** One clip on the stage: everything it creates lives in its own scene, physics world, dust and pools, is kept across
+ * its loops (`rewind`) and goes with `dispose`. */
 class Playback {
     readonly scene=new THREE.Scene();
     private readonly world=new CANNON.World();
+    private readonly dust:Dust;
     private readonly remotes:RemotePlayers;
     private readonly chaos:ChaosView;
-    readonly director:ReplayDirector;
+    private director!:ReplayDirector;
+    private readonly view:DirectorView;
+    private roster?:Extract<ClipData['entries'][number],{roster:unknown}>;
     private readonly tracks=new Map<string,Track>();
     private readonly events:{at:number;event:RecordedEvent}[]=[];
     private readonly killTimes=new Map<string,number[]>();
@@ -58,19 +63,19 @@ class Playback {
     private cut=true;
     private lastChaos:ChaosState|null=null;
     /** The clip's clock, server ms. */
-    t:number;
-    constructor(readonly data:ClipData,private readonly audio:ReplayAudio,context:AudioContext,blockers:CameraBlockers,private readonly camera:THREE.PerspectiveCamera) {
-        const clip=data.clip;
+    t=0;
+    constructor(readonly data:ClipData,private readonly audio:ReplayAudio,context:AudioContext,private readonly blockers:CameraBlockers,private readonly camera:THREE.PerspectiveCamera) {
         this.scene.matrixAutoUpdate=false;this.scene.name='exhibit-replay';
         // The replay's rats never touch the live world: no collisions with your rat, no corpse ray world of theirs.
         isolateRagdollWorld(this.world);
+        // Its rats, supplies and traps puff into its own dust (supply cues have no sink here: they stay silent).
+        this.dust=new Dust(this.scene);registerDust(this.scene,this.dust);
         this.remotes=new RemotePlayers(this.scene,this.world,()=>0);
         this.chaos=new ChaosView(this.scene,id=>this.remotes.get(id),context,true,audio.feedback,undefined,undefined,
             {clock:()=>this.t,synth:audio.synth,route:REPLAY_ROUTE,corpseStep:PLAYBACK.corpseStep,delay:PLAYBACK.viewDelay});
         this.chaos.onTrap=(event,trap)=>audio.feedback(TRAP_CUES[event],trap);
-        let roster:Extract<ClipData['entries'][number],{roster:unknown}>|undefined;
         for(const entry of data.entries){
-            if('roster' in entry){roster??=entry;continue;}
+            if('roster' in entry){this.roster??=entry;continue;}
             if('pose' in entry){const p=entry.pose;this.sample(p.id,entry.at,p);continue;}
             const event=entry.event;
             if(event.type==='playerMoved'||event.type==='playerCorrected'){
@@ -83,17 +88,26 @@ class Playback {
         }
         this.events.sort((a,b)=>a.at-b.at);
         for(const track of this.tracks.values())this.sortTrack(track);
-        const view:DirectorView={
+        this.view={
             body:id=>{const rat=this.remotes.get(id);return rat&&!rat.dead?rat.mesh.position:this.chaos.corpseOf(id);},
             facing:id=>{const rat=this.remotes.get(id);return rat&&!rat.dead?rat.mesh.quaternion:undefined;},
             state:()=>this.lastChaos,
             kills:id=>this.killTimes.get(id)??[],
         };
-        this.director=new ReplayDirector(clip,view,blockers,reducedMotion());
-        // Seek: the roster at its keyframe, then everything up to the clip's start, silently.
-        this.t=roster?.at??clip.startAt;
-        audio.muted=true;
-        for(const rat of roster?.roster??[]){
+        this.rewind();
+    }
+
+    /** Back to the clip's start: the rats from the roster keyframe, the view's moving things cleared, then everything
+     * up to the start applied silently. The scene, its machines, pillars and pools stay. */
+    rewind():void {
+        const clip=this.data.clip;
+        // The view first, while its carrier and armed rats still exist; the rats are rebuilt from the roster below.
+        this.chaos.rewind();this.remotes.clear();this.dust.clear();this.audio.stopAll();
+        this.director=new ReplayDirector(clip,this.view,this.blockers,reducedMotion());
+        this.next=0;this.cut=true;this.lastChaos=null;
+        this.t=this.roster?.at??clip.startAt;
+        this.audio.muted=true;
+        for(const rat of this.roster?.roster??[]){
             this.join({...rat.data,hp:rat.hp});
             if(rat.dead)this.remotes.get(rat.data.id)?.useSharedCorpse();
         }
@@ -104,7 +118,7 @@ class Playback {
             if(event.type!=='chaos'||this.next===lastChaos)this.apply(event,at,true);
             this.next++;
         }
-        audio.muted=false;
+        this.audio.muted=false;
         this.t=clip.startAt;
     }
 
@@ -118,6 +132,7 @@ class Playback {
         this.director.frame(this.camera,this.t,dt);
         this.camera.updateMatrixWorld();this.audio.listen(this.camera);
         this.chaos.update(clipDt,this.camera,this.t);
+        this.dust.update(clipDt);
         return this.t<this.data.clip.endAt;
     }
 
@@ -233,6 +248,7 @@ class Playback {
 
     dispose():void {
         this.chaos.dispose();this.remotes.dispose();
+        registerDust(this.scene,undefined);this.dust.dispose();
         this.scene.removeFromParent();this.scene.clear();
     }
 }
@@ -279,15 +295,19 @@ export class ReplayStage implements ReplayPlayer {
     }
     audioStream():MediaStream {return this.audio.stream();}
     canvas():HTMLCanvasElement {return this.deps.renderer.domElement;}
-    setRecordingOverlay(source:HTMLCanvasElement|null):void {
+    setRecordingOverlay(source:HTMLCanvasElement|null):()=>void {
         if(this.overlay&&this.overlay.texture.image!==source){
             this.overlay.texture.dispose();this.overlay.mesh.geometry.dispose();this.overlay.mesh.material.dispose();this.overlay=undefined;
         }
-        if(!source||this.overlay)return;
-        const texture=new THREE.CanvasTexture(source);texture.colorSpace=THREE.SRGBColorSpace;
-        const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}));
-        const scene=new THREE.Scene();scene.add(mesh);
-        this.overlay={scene,camera:new THREE.OrthographicCamera(-1,1,1,-1,0,1),texture,mesh};
+        if(source&&!this.overlay){
+            // A CanvasTexture uploads on its first draw; after that only when the painter says it redrew.
+            const texture=new THREE.CanvasTexture(source);texture.colorSpace=THREE.SRGBColorSpace;
+            const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}));
+            const scene=new THREE.Scene();scene.add(mesh);
+            this.overlay={scene,camera:new THREE.OrthographicCamera(-1,1,1,-1,0,1),texture,mesh};
+        }
+        const texture=this.overlay?.texture;
+        return ()=>{if(texture&&this.overlay?.texture===texture)texture.needsUpdate=true;};
     }
 
     /** Advance the playing clip by `dt` seconds on screen (looping, or holding its last frame once it has ended). */
@@ -295,7 +315,7 @@ export class ReplayStage implements ReplayPlayer {
         const playback=this.playback;
         if(!playback||this.ended)return;
         if(playback.update(dt))return;
-        if(this.options?.loop){playback.dispose();this.start(playback.data);return;}
+        if(this.options?.loop){playback.rewind();return;}
         this.ended=true;this.options?.onEnd?.();
     }
     /** Draw the replay: into the frame's rectangle after the live frame, or fullscreen in its place. */
@@ -322,8 +342,7 @@ export class ReplayStage implements ReplayPlayer {
         renderer.render(scene,this.camera);
         if(frame){renderer.setScissorTest(false);renderer.setViewport(0,0,this.size.x,this.size.y);}
         else if(this.overlay){
-            // The recording's marks: a texture upload of the 2D canvas, drawn over the picture (never read back).
-            this.overlay.texture.needsUpdate=true;
+            // The recording's marks: the 2D canvas's texture (uploaded only when repainted), drawn over the picture.
             const clear=renderer.autoClear;renderer.autoClear=false;renderer.render(this.overlay.scene,this.overlay.camera);renderer.autoClear=clear;
         }
         flashlight.intensity=beam;scene.remove(playback.scene);
@@ -335,7 +354,7 @@ export class ReplayStage implements ReplayPlayer {
     }
 
     private start(data:ClipData):void {
-        // The camera's ray checks see the city only (live rats would block a view they are not in).
+        // The camera's ray checks see the city only (live rats would block a view they are not in); built once a play.
         this.deps.scene.updateMatrixWorld();
         const blockers=new CameraBlockers(this.deps.scene.children.filter(o=>o.userData.aimTarget===true&&this.deps.shared(o)));
         this.playback=new Playback(data,this.audio,this.deps.listener.context as AudioContext,blockers,this.camera);

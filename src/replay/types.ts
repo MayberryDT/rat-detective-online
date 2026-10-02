@@ -16,6 +16,7 @@ export interface ReplayPlayer {
   audioStream(): MediaStream;
   /** The game's WebGL canvas. */
   canvas(): HTMLCanvasElement;
-  /** A 2D canvas drawn over a fullscreen replay as a WebGL screen quad (texture upload each frame, never a readback). */
-  setRecordingOverlay(source:HTMLCanvasElement|null): void;
+  /** A 2D canvas drawn over a fullscreen replay as a WebGL screen quad (a texture upload, never a readback). Returns
+   * `repainted`, to call after each redraw of `source`: the texture is uploaded when set and after each call only. */
+  setRecordingOverlay(source:HTMLCanvasElement|null): ()=>void;
 }

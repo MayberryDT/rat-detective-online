@@ -5,7 +5,7 @@ import type {DeathStyle} from '../utils/RatAnimator';
 import {CameraFeel} from './CameraFeel';
 import {ScreenFeel} from './ScreenFeel';
 import {NoirAudio} from './NoirAudio';
-import {Dust,registerDust,muzzleSmoke} from './Dust';
+import {Dust,registerDust} from './Dust';
 import {badRound} from '../shared/shotPattern';
 import {BAD_AMMO,type BadRound} from '../shared/shotBallistics';
 import type {Vec3Data} from '../shared/networkProtocol';
@@ -64,6 +64,8 @@ export class FeelDirector {
     private deathTarget?:()=>THREE.Vector3|undefined;
     private deathAge=0;
     private dust?:Dust;
+    /** The live scene its dust and supply cues are registered on. */
+    private scene?:THREE.Scene;
     private launchJuice?:LaunchJuice;
     /** Thrown cases being watched for the whistle (true once it played) until they land. */
     private readonly fallingCases=new Map<string,boolean>();
@@ -121,12 +123,14 @@ export class FeelDirector {
 
     /** Scene-wide dust for every rat's landings, skids and launches. */
     attachScene(scene:THREE.Scene):void {
-        this.dust?.dispose();this.dust=new Dust(scene);registerDust(this.dust);
+        if(this.scene){registerDust(this.scene,undefined);registerSupplyCues(this.scene,undefined);}
+        this.scene=scene;
+        this.dust?.dispose();this.dust=new Dust(scene);registerDust(scene,this.dust);
         this.launchJuice?.dispose();this.launchJuice=new LaunchJuice(scene);
         this.tommy?.dispose();this.tommy=new TommyJuice(scene);
         this.hunchView?.dispose();this.hunchView=new Hunch(scene,this.state,this.sound);this.hunchView.onReveal=()=>this.cue?.('stakeout-shutter');
         this.searchlight?.dispose();this.searchlight=new WantedSearchlight(scene);
-        registerSupplyCues((cue,at)=>{if(this.view)this.sound.supply(cue,at,this.view);});
+        registerSupplyCues(scene,(cue,at)=>{if(this.view)this.sound.supply(cue,at,this.view);});
     }
     /** Most Wanted each frame: the searchlight follows `target` (the leader's feet);
      * `me` when the leader is you, which gets its own callout. */
@@ -359,7 +363,7 @@ export class FeelDirector {
         if(plain||this.incident!=='bad-ammunition'||!this.state.on('badAmmo'))return;
         const quirk=badRound(shotId),p=FEEL.badAmmo.params,muzzle=new THREE.Vector3(origin.x,origin.y,origin.z);
         const aim=new THREE.Vector3(direction.x,direction.y,direction.z).normalize();
-        muzzleSmoke(muzzle,aim,p.smoke);
+        this.dust?.smoke(muzzle,aim,p.smoke);
         if(quirk==='hiccup'){
             // It hangs in the air where it stops, the hiccup's own spot along the aim.
             const at=muzzle.clone().addScaledVector(aim,BAD_AMMO.hiccup.speed*BAD_AMMO.hiccup.stopAt);
@@ -640,5 +644,5 @@ export class FeelDirector {
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
     reset():void {this.camera.reset();this.screen.reset();this.carrier.stop();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.tommy?.clear();this.rattle=false;this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.claimStreaks=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.carrier.dispose();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.tommy?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
+    dispose():void {this.camera.reset();this.carrier.dispose();this.screen.dispose();this.noirAudio?.dispose();if(this.scene){registerDust(this.scene,undefined);registerSupplyCues(this.scene,undefined);}this.dust?.dispose();this.launchJuice?.dispose();this.tommy?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
 }

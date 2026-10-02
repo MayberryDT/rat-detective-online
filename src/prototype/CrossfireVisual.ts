@@ -205,6 +205,13 @@ export class CrossfireVisual {
             else this.pathMaterial.opacity=.9*Math.min(1,left*2.5);
         }
     }
+    /** Every spark, scorch and bank path goes at once (an exhibit replay rewinding its clip); flames burn out on their own. */
+    clear():void {
+        for(const spark of this.sparkSlots)spark.age=Infinity;
+        for(const slot of this.scorchSlots)slot.age=Infinity;
+        this.sparks.visible=this.sparksLive=false;this.scorches.visible=this.scorchGlows.visible=this.scorchesLive=false;
+        this.pathAge=Infinity;this.path.visible=false;
+    }
 
     dispose():void {
         this.root.removeFromParent();disposeMeshResources(this.root);this.flames.dispose();

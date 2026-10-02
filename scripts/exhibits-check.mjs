@@ -64,7 +64,10 @@ try{
             const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=duration:stream=codec_type,codec_name,width,height','-of','json',join(out,file)]).toString());
             const kinds=probe.streams.map(s=>s.codec_type);
             checks.push({check:'saved clip has video and sound',pass:kinds.includes('video')&&kinds.includes('audio'),file,bytes:statSync(join(out,file)).size,probe});
-            checks.push({check:'saved clip runs 3 to 15 seconds',pass:Number(probe.format.duration)>=3&&Number(probe.format.duration)<=15,duration:probe.format.duration});
+            // MediaRecorder files may carry no duration: the last video frame's time measures the clip.
+            const last=execFileSync('ffprobe',['-v','error','-select_streams','v','-show_entries','packet=pts_time','-of','csv=p=0',join(out,file)]).toString().trim().split('\n').map(Number).filter(Number.isFinite);
+            const seconds=Number(probe.format.duration)||Math.max(0,...last);
+            checks.push({check:'saved clip runs 3 to 15 seconds',pass:seconds>=3&&seconds<=15,seconds,containerDuration:probe.format.duration??null});
         }else checks.push({check:'saved clip downloaded',pass:false});
         await screenshot('exhibits-3-after-save');
     }

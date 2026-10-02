@@ -377,6 +377,19 @@ export class ChaosView {
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         this.assignmentDestinations?.clear();this.jurisdictionZones.clear();
     }
+    /** An exhibit replay starting its clip again: every moving thing and body goes, its static machines, pillars,
+     * zones and pools stay. Call before its rats are cleared (a carried case lets go of its carrier's paw). */
+    rewind():void {
+        this.resetProjectiles();
+        const contacts=contactShadowsOf(this.scene);
+        for(const c of this.corpses.values()){c.hat?.dispose();this.root.remove(c.mesh);contacts?.remove(c.mesh);disposeMeshResources(c.mesh);}
+        this.corpses.clear();this.deathStyles.clear();this.replayTick=-Infinity;this.replayJolts.length=0;
+        for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
+        // Supply sites remember what they last showed (their claim and restock bursts): they start the clip afresh.
+        for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
+        this.traps.clear();this.impacts.clear();this.crossfire.clear();
+        this.gripSwing=0;this.gripHitAt=-Infinity;this.sparkAt=0;
+    }
     /** Your trigger: `weapon` is the held special weapon (with the Tommy's heat); `beam` your Laser's predicted path. */
     fire(shot:ShotDescriptor,weapon?:ShotWeapon,beam?:LaserBeam['points']):void {
         if(beam)this.beams.predict(shot.shotId,beam);
@@ -909,7 +922,7 @@ export class ChaosView {
             for(const visual of this.pickups.values())if(i++===pick){this.impactPoint.copy(visual.root.position);this.impactPoint.y+=1.2;break;}
         }else{const m=LAUNCH_MACHINES[pick-this.pickups.size]!;this.impactPoint.set(m.box.x,m.box.y+m.box.h/2,m.box.z);}
         this.impacts.spark(this.impactPoint,this.impactNormal.set(Math.random()-.5,1,Math.random()-.5).normalize());
-        if(this.impactPoint.distanceToSquared(camera.position)<30*30)playSynth('zap',this.impactPoint,.85+Math.random()*.3,FEEL.codeViolation.params.zap);
+        if(this.impactPoint.distanceToSquared(camera.position)<30*30)this.synth('zap',this.impactPoint,.85+Math.random()*.3,FEEL.codeViolation.params.zap);
     }
     private updateFixBeacons(camera:THREE.Camera,now:number){
         // The three nearest ready kits, kept sorted by insertion; equal distances keep pickup order.

@@ -805,10 +805,8 @@ export class GameSession {
             this.feel.tommyHeld(this.heldFire.active||!!this.touch?.input.holding);
             this.checkInteractions(now);
             this.sendMovement(now);
-            if(this.rat&&!this.observing&&!this.rat.entity.dead){
-                const p=this.rat.entity.body.position,q=this.rat.entity.mesh.quaternion,a=this.lookDirection();
-                this.recorder?.recordLocal({x:p.x,y:p.y,z:p.z,qx:q.x,qy:q.y,qz:q.z,qw:q.w,aim:{x:a.x,y:a.y,z:a.z}});
-            }
+            // Your rat's track for exhibits: the recorder copies the numbers only on its 30 Hz samples.
+            if(this.rat&&!this.observing&&!this.rat.entity.dead)this.recorder?.recordLocal(this.rat.entity.body.position,this.rat.entity.mesh.quaternion,this.lookDirection());
             if (this.rat) {
                 const position = this.rat.entity.mesh.position;
                 camera.getWorldDirection(this.direction);

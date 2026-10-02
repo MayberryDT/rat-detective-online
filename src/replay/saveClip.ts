@@ -9,6 +9,8 @@ import type {ReplayClip, ReplayPlayer} from './types';
 
 const TYPES = [
     {mimeType: 'video/mp4;codecs=avc1,mp4a', ext: 'mp4'},
+    // Chromium on Linux has no AAC encoder: H.264 with Opus is its MP4.
+    {mimeType: 'video/mp4;codecs=avc1,opus', ext: 'mp4'},
     {mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm'},
     {mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm'},
 ] as const;
@@ -58,15 +60,16 @@ export function saveClip(player: ReplayPlayer, clip: ReplayClip, letter: string,
     overlay.width = Math.max(1, Math.round(canvas.width * scale));
     overlay.height = Math.max(1, Math.round(canvas.height * scale));
     const marks = overlayPainter(overlay, clip, letter);
-    let frame = 0, lastKey = '';
+    let frame = 0, lastKey = '', repainted: (() => void) | undefined;
     const paint = () => {
         const ms = player.clock().ms, blink = reducedMotion() || Math.floor(performance.now() / 500) % 2 === 0;
         const key = `${Math.floor(ms / 1000)}|${blink}`;
-        if (key !== lastKey) {lastKey = key; marks(ms, blink);}
+        // The overlay texture is uploaded only after a repaint (about twice a second), never every frame.
+        if (key !== lastKey) {lastKey = key; marks(ms, blink); repainted?.();}
         frame = view.requestAnimationFrame(paint);
     };
     paint();
-    player.setRecordingOverlay(overlay);
+    repainted = player.setRecordingOverlay(overlay);
 
     let cancelled = false, finished = false;
     let settle!: (saved: boolean) => void;
