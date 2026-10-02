@@ -17,12 +17,14 @@ const J=CROSSFIRE_JUICE,SPARKS=48,SEGMENTS=CROSSFIRE.pathPoints+1,BOUNCE_DOTS=Ma
  * material (your own; another rat's glow brighter); glows and trails are absolute. `dim` is the clarity batch's level
  * for another rat's ball that is no threat to you. */
 export function heatPalette(dim:number){
-    const own=[new THREE.Color(1,1,1),new THREE.Color(1.27,5.8,1.25),new THREE.Color(1.27,17.5,22)];
-    const enemy=[new THREE.Color(2.4,1.4,1.2),new THREE.Color(2.4,8,1.6),new THREE.Color(2.4,26,30)];
+    const own=[new THREE.Color(1,1,1),new THREE.Color(1.27,5.8,1.25),new THREE.Color(4,22,26)];
+    const enemy=[new THREE.Color(2.4,1.4,1.2),new THREE.Color(2.4,8,1.6),new THREE.Color(6,32,36)];
     const glow=[new THREE.Color(0xff240b),new THREE.Color(0xff7a14),new THREE.Color(0xfff1c8)];
+    // Another rat's ball keeps a hot red-orange rim at heat 3, so the white-hot core still reads as a threat.
+    const rim=[glow[0]!,glow[1]!,new THREE.Color(0xff4a12)];
     const trail=[new THREE.Color(0xff3015),new THREE.Color(0xff8a20),new THREE.Color(0xfff0c8)];
     const calm=(colors:THREE.Color[])=>colors.map(c=>c.clone().multiplyScalar(dim));
-    return {own,enemy,calm:calm(enemy),glow,calmGlow:calm(glow),trail,calmTrail:calm(trail)};
+    return {own,enemy,calm:calm(enemy),glow,rim,calmRim:calm(rim),trail,calmTrail:calm(trail)};
 }
 /** One world ray from `from` to `to`: true on a hit, with its point and outward normal written out. */
 export type SceneryCast=(from:Vec3Data,to:Vec3Data,point:THREE.Vector3,normal:THREE.Vector3)=>boolean;
@@ -44,8 +46,8 @@ export class CrossfireVisual {
     private readonly pathMaterial=new THREE.MeshBasicMaterial({color:0xff2a10,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false,toneMapped:false});
     private readonly path=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),this.pathMaterial,SEGMENTS);
     private pathAge=Infinity;
-    private readonly dots=new THREE.InstancedMesh(new THREE.SphereGeometry(.045,6,4),
-        new THREE.MeshBasicMaterial({transparent:true,opacity:.5,depthWrite:false,toneMapped:false}),J.guideDots);
+    private readonly dots=new THREE.InstancedMesh(new THREE.SphereGeometry(.07,6,4),
+        new THREE.MeshBasicMaterial({transparent:true,opacity:.6,depthWrite:false,toneMapped:false}),J.guideDots);
     private readonly dotNear=new THREE.Color(1,.85,.7);
     private readonly dotFar=new THREE.Color(1,.3,.16);
     private readonly dummy=new THREE.Object3D();
@@ -63,6 +65,7 @@ export class CrossfireVisual {
     private muzzleNode?:THREE.Object3D;
     private readonly muzzle=new THREE.Vector3();
     private readonly black=new THREE.Color(0,0,0);
+    private readonly white=new THREE.Color(1,1,1);
     private readonly color=new THREE.Color();
     constructor(scene:THREE.Scene){
         // A scorch is a disc hottest at its centre, fading to nothing at its rim (additive: black is invisible).
@@ -92,7 +95,8 @@ export class CrossfireVisual {
         this.sparks.count=SPARKS;this.sparks.visible=this.sparksLive=true;this.sparks.instanceColor!.needsUpdate=true;
         const index=this.scorchCursor++%J.scorches,slot=this.scorchSlots[index]!;
         slot.age=0;slot.heat=heat;
-        this.dummy.position.set(p.x,p.y,p.z).addScaledVector(this.n,.02);this.dummy.quaternion.setFromUnitVectors(this.faceAxis,this.n);
+        // The drawn facade usually stands 0.2–0.3 in front of the collision surface the bounce hit.
+        this.dummy.position.set(p.x,p.y,p.z).addScaledVector(this.n,.32);this.dummy.quaternion.setFromUnitVectors(this.faceAxis,this.n);
         this.dummy.scale.setScalar(.8+.25*heat);this.dummy.updateMatrix();
         this.scorches.setMatrixAt(index,this.dummy.matrix);this.scorches.instanceMatrix.needsUpdate=true;
         this.scorches.count=Math.max(this.scorches.count,index+1);this.scorches.visible=this.scorchesLive=true;
@@ -108,9 +112,9 @@ export class CrossfireVisual {
             const length=this.a.distanceTo(this.b);if(length<.01)continue;
             this.dummy.position.addVectors(this.a,this.b).multiplyScalar(.5);this.dummy.lookAt(this.b);
             this.dummy.scale.set(J.pathWidth,J.pathWidth,length);this.dummy.updateMatrix();
-            this.path.setMatrixAt(count++,this.dummy.matrix);
+            this.path.setColorAt(count,this.white);this.path.setMatrixAt(count++,this.dummy.matrix);
         }
-        this.path.count=count;this.path.visible=count>0;this.path.instanceMatrix.needsUpdate=true;this.pathAge=count?0:Infinity;
+        this.path.count=count;this.path.visible=count>0;this.path.instanceMatrix.needsUpdate=true;if(this.path.instanceColor)this.path.instanceColor.needsUpdate=true;this.pathAge=count?0:Infinity;
     }
 
     /** Your aim guide: dots from your `rat`'s muzzle along the crosshair to the first wall, then `guideBounce` units of the

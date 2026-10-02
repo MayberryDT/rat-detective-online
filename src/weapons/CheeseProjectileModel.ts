@@ -27,12 +27,14 @@ export function createCheeseBallGeometry(): THREE.SphereGeometry {
 }
 
 /** Yellow ordinary cheese; red cheese after a lethal Crossfire bank shot.
- * Pores and surface shading remain visible in both materials. */
+ * Pores and surface shading remain visible in both materials. A Crossfire ball's instance tint at heat 3
+ * (`heatPalette`, green far above 8) also emits white, so it reads white-hot rather than a clipped pink. */
 export function createCheeseBallMaterial(crossfire=false):THREE.MeshStandardMaterial {
     const material=new THREE.MeshStandardMaterial({color:crossfire?0xe64032:0xffdb3d,emissive:crossfire?0x9c2015:0xe0ad25,emissiveIntensity:.35,roughness:.68,vertexColors:true});
+    const whiteHot=crossfire?'\n totalEmissiveRadiance += vec3(1.,.93,.82)*smoothstep(8.,20.,vColor.g);':'';
     material.onBeforeCompile=shader=>{
-        shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor;');
+        shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor;${whiteHot}`);
     };
-    material.customProgramCacheKey=()=> 'cheese-pore-emission-v1';
+    material.customProgramCacheKey=()=>crossfire?'cheese-pore-emission-v1-hot':'cheese-pore-emission-v1';
     return material;
 }

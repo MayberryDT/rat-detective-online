@@ -696,7 +696,7 @@ export class ChaosView {
             // Your own hot ball gets no enemy glow, but once it has heated past red it trails its heat too.
             if(!own||quirk||hot&&level>0){
                 this.ballPose.scale.setScalar(scale*look*(hot?1.14+.08*level:1));this.ballPose.updateMatrix();
-                if(!own){const rim=hot?this.chargedGlow:this.dangerGlow,at=rim.count++;rim.setMatrixAt(at,this.ballPose.matrix);rim.setColorAt(at,hot?(calm?this.heat.calmGlow:this.heat.glow)[level]!:calm?this.calmTint:this.fullTint);}
+                if(!own){const rim=hot?this.chargedGlow:this.dangerGlow,at=rim.count++;rim.setMatrixAt(at,this.ballPose.matrix);rim.setColorAt(at,hot?(calm?this.heat.calmRim:this.heat.rim)[level]!:calm?this.calmTint:this.fullTint);}
                 this.trailDirection.set(shot.v.x,shot.v.y,shot.v.z);
                 if(this.trailDirection.lengthSq()>.01){
                     this.trailDirection.normalize();const length=Math.min(hot?3.4:2.4,(hot?1.4+.7*level:.85)*Math.sqrt(scale));

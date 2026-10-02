@@ -107,7 +107,7 @@ He played `staging-2026-10-02-9f3980b` and asked for three fixes, all agreed ("I
 - [x] **The case ping goes; the red outline comes back and pulses** ("the most annoying thing I've ever seen … go back to the red glowy outline … make it pulse and add a lot of juice … don't add noise … don't say it's been seen"). Ping, LAST SEEN, its sound, the carrier's pinged flash and ping-only bot knowledge are deleted. The carried case's red rim shows through walls again with a heartbeat (swell to 1.35× about once a second, an echo outline spreading to 2×), a pickup flare (about 2.2× for 0.5 s), and a faster beat within 120 units of the carrier's scoring target; a loose case beats gently; no sound or new text. All case colour red. `mindVersion` 11.
 - [x] **Cheddar Shower removed** ("the most laggy thing in the world"). Stored rooms run Big Cheese.
 - [x] **Crossfire made a pinball table** ("the most basic, boring incident we have"): each bounce heats the ball (faster, longer-lived, red → orange → white-hot), sparks, scorches the wall and plays a rising ricochet; a banked kill gives the killer BANK SHOT / TRICK SHOT and a short slow-down, and killer and victim see the path; a dotted aim guide shows your first bounce; bots try bank shots; death facts record `bounces`.
-- [ ] **Next action:** Tyler plays staging again; production on his OK (set `ADMIN_TOKEN` on production with the same key first).
+- [ ] **Next action:** Tyler plays staging again (Worker `a4177b6c-1ab4-4ac9-bc1a-7b7ce7aa9e83`, build `staging-2026-10-02-e368f32`); production on his OK (set `ADMIN_TOKEN` on production with the same key first).
 
 ### Still open from the playtest
 
