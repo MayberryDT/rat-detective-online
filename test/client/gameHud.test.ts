@@ -9,6 +9,7 @@ type FakeNode = {
     type?: string;
     textContent: string;
     style: Record<string, string>;
+    dataset: Record<string, string>;
     classList: { add(name: string): void; remove(name: string): void; contains(name: string): boolean };
     children: FakeNode[];
     parent: FakeNode | null;
@@ -35,6 +36,7 @@ function createHudDocument() {
             tagName: tag.toUpperCase(),
             className: '',
             textContent: '',
+            dataset: {},
             style: {},
             classList: {
                 add(name: string) {

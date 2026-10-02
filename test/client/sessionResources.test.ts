@@ -97,6 +97,7 @@ class FakeNode extends EventTarget {
     parent: FakeNode | null = null;
     children: FakeNode[] = [];
     style: Record<string, string> = {};
+    dataset: Record<string, string> = {};
     private classes = new Set<string>();
     private selectors = new Map<string, FakeNode>();
     readonly classList = {

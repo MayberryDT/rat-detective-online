@@ -34,6 +34,8 @@ const harness = vi.hoisted(() => {
         showHitMarker = vi.fn();
         showKillConfirmation = vi.fn();
         hideRespawn = vi.fn();
+        setContinue = vi.fn();
+        showResults = vi.fn();
         dispose = vi.fn();
         constructor(_doc: Document, public onRetry?: () => void) { harness.huds.push(this); }
     }
@@ -43,6 +45,7 @@ const harness = vi.hoisted(() => {
         setVisible = vi.fn();
         scroll = vi.fn();
         receive = vi.fn();
+        closeResults = vi.fn();
         dispose = vi.fn();
         constructor() { harness.scoreboards.push(this); }
     }
