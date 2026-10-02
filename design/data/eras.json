@@ -478,7 +478,7 @@
       "environment": "production",
       "build": "production-2026-10-02-6668ade",
       "from": "2026-10-02T00:32:00.000Z",
-      "to": null,
+      "to": "2026-10-02T19:58:26.515Z",
       "layout": 7,
       "mindVersion": 9,
       "protocol": 28,
@@ -514,6 +514,62 @@
           "says": "Jurisdiction rounds average under 25 minutes",
           "measure": "rounds.minutes.jurisdiction",
           "expect": "down",
+          "target": {
+            "below": 25
+          }
+        },
+        {
+          "id": "bots-below-humans",
+          "says": "Bots still hit less often than humans",
+          "measure": "likeness.hitRate.bot",
+          "expect": "not-up",
+          "target": {
+            "below": "likeness.hitRate.human"
+          }
+        }
+      ]
+    },
+    {
+      "id": "clarity",
+      "environment": "production",
+      "build": "production-2026-10-02-bef8f9c",
+      "from": "2026-10-02T19:58:26.515Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 12,
+      "protocol": 29,
+      "worker": "5a23e371-16d2-4792-91dd-f51b51674db5",
+      "commits": [
+        "bef8f9c"
+      ],
+      "change": "Protocol 29, the clarity batch with Tyler's staging changes (2 October): the hot case heartbeat (a carried case is hidden from rats that cannot see it except a red through-wall flash of the carrier every 4 s; bots know an unseen carrier only from pings and sight; red-hot cuffed case and red-hot carrier; carrier-only heartbeat, HOT CASE card and heavier shots; no supply for taking the case); one case red; one headline at a time, incident title then tag, death recap, words explained once; calmer defaults (shake 60%, volume 50%), ranked sound mix, dimmer non-threat balls, effect caps; Cheddar Shower removed (stored rooms run Big Cheese); Crossfire balls catch fire at the first wall and double their speed (350 u/s), ordinary damage, bank-shot moments and aim guide, bots bank; admin controls; a smaller lossless chaos wire.",
+      "baseline": "playtest-patch",
+      "receipt": "docs/verification/protocol-29-release-2026-10-02.md",
+      "notes": "Hiding the carrier between pings should make carries longer and case kills harder to find; read case measures against playtest-patch. Cheddar Shower is gone and Crossfire no longer one-shots, so compare kill and death measures per incident. Admin-touched rounds (an admin fact) should be left out.",
+      "predictions": [
+        {
+          "id": "paper-chase-in-band",
+          "says": "PAPER CHASE rounds average under 20 minutes",
+          "measure": "rounds.minutes.chain-of-custody",
+          "expect": "not-up",
+          "target": {
+            "below": 20
+          }
+        },
+        {
+          "id": "ef-in-band",
+          "says": "Excessive Force rounds average under 20 minutes",
+          "measure": "rounds.minutes.excessive-force",
+          "expect": "not-up",
+          "target": {
+            "below": 20
+          }
+        },
+        {
+          "id": "jurisdiction-in-band",
+          "says": "Jurisdiction rounds average under 25 minutes",
+          "measure": "rounds.minutes.jurisdiction",
+          "expect": "not-up",
           "target": {
             "below": 25
           }

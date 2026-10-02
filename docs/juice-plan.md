@@ -113,7 +113,8 @@ He played `staging-2026-10-02-9f3980b` and asked for three fixes, all agreed ("I
 - [x] **Dispatch never rolled on staging:** with one incident allowed (`INCIDENTS=crossfire`) the no-repeat draw was empty and threw, so the bell rang and nothing rolled. A one-incident roster now repeats (regression test in `dispatchIncidents.test.ts`).
 - [x] **Tyler, after playing it:** the ping "is better, but it's way too big … keep the strength, make it one third the size" (rings now grow from 0.3 to about 0.5 of the far sign's size, a smaller snap and stamp); Crossfire "is actually too fast … don't make it feel like the laser … the player only really sees the first bank off the wall": fired as normal, the first wall doubles its speed (350 u/s, held) and it wears the whole exaggerated fire look and long trail at once.
 - [x] **Crossfire no longer one-shot kills** (Tyler: "it just needs to do normal damage"); a headshot still kills, and a banked finishing hit is still a BANK SHOT.
-- [ ] **Next action:** Tyler plays staging again (Worker `8eb3916c-d85d-4c05-a9e6-85013e6c2ed5`, build `staging-2026-10-02-dce864d`, every incident Crossfire); production on his OK (set `ADMIN_TOKEN` on production with the same key first).
+- [x] **Released** on Tyler's word ("perfect. push it live."): Worker `5a23e371-16d2-4792-91dd-f51b51674db5`, build `production-2026-10-02-bef8f9c` ([receipt](verification/protocol-29-release-2026-10-02.md)).
+- [ ] **Next action:** Tyler plays production; the still-open playtest items below.
 
 #### The hot case heartbeat and flaming Crossfire (agreed 2 October, second staging playtest)
 
