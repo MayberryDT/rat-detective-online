@@ -196,9 +196,9 @@ metadata; production Worker code and all 57 other existing assets are unchanged.
 Protocol 18 and client `index-BL9xcsnh.js` / `createGame-BSxvfOuu.js` remain.
 See [release verification](verification/social-share-2026-09-22.md).
 
-## Exhibits (highlight replays) — 2 October, on staging
+## Exhibits (highlight replays) — 2 October, live in production
 
-The results board shows the round's 3 best moments as replays, rebuilt by the game from recorded data, with a save button (WebM). The server detects moments (protocol 30). Staging only: build `staging-2026-10-02-f6d2d90`, branch `replays`; production waits for Tyler. It also fixes admin end of round, which on production (protocol 29) makes every client reject the round result. See [the replay plan](replay-plan.md) and [the staging receipt](verification/replays-staging-2026-10-02.md).
+The results board takes the screen and shows the round's 3 best moments as replays, rebuilt by the game from recorded data, with a save button (WebM). The server detects moments (protocol 30). Production Worker `583fa765-d3e6-44c7-bb23-4f71cb40e17f`, build `production-2026-10-02-c7c67bb`, era `exhibits`. It also fixed admin end of round, which under protocol 29 made every client reject the round result. See [the replay plan](replay-plan.md) and [the release receipt](verification/exhibits-release-2026-10-02.md).
 
 ## Omarchy alert plugin 2.1.0 — 2 October, installed on Veelox only
 

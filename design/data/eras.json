@@ -534,7 +534,7 @@
       "environment": "production",
       "build": "production-2026-10-02-bef8f9c",
       "from": "2026-10-02T19:58:26.515Z",
-      "to": null,
+      "to": "2026-10-02T23:27:30.503Z",
       "layout": 7,
       "mindVersion": 12,
       "protocol": 29,
@@ -581,6 +581,35 @@
           "expect": "not-up",
           "target": {
             "below": "likeness.hitRate.human"
+          }
+        }
+      ]
+    },
+    {
+      "id": "exhibits",
+      "environment": "production",
+      "build": "production-2026-10-02-c7c67bb",
+      "from": "2026-10-02T23:27:30.503Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 12,
+      "protocol": 30,
+      "worker": "583fa765-d3e6-44c7-bb23-4f71cb40e17f",
+      "commits": [
+        "c7c67bb"
+      ],
+      "change": "Protocol 30 (2 October): exhibits. The server detects highlight moments (21 kinds: sent flying, splashdown, pileup, multi-kill, carrier down, steal and score, bank shot and more) and records them as `highlight` facts; the results board replays the round's 3 best from recorded game data with a director camera, the game's sounds and a save button (WebM); the board takes the screen. Also: admin end of round no longer makes clients reject the result (below target or a dead leader).",
+      "baseline": "clarity",
+      "receipt": "docs/verification/exhibits-release-2026-10-02.md",
+      "notes": "Presentation and facts only; play is unchanged, so play measures should match clarity. New facts: `highlight` per moment and `exhibit` (shown, played, saved). Admin-touched rounds should be left out.",
+      "predictions": [
+        {
+          "id": "highlights-every-round",
+          "says": "Every finished round sends at least 3 highlight moments",
+          "measure": "highlight.per-round",
+          "expect": "up",
+          "target": {
+            "above": 3
           }
         }
       ]

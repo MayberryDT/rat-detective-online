@@ -1,6 +1,6 @@
 # Replay plan: exhibits on the results board
 
-Status (2 October 2026): X1 to X5 are built and on staging (build `staging-2026-10-02-f6d2d90`, branch `replays`); production waits for Tyler's OK ([staging receipt](verification/replays-staging-2026-10-02.md)). Tyler agreed the design on 2 October. This file owns the order, status and acceptance for in-game highlight replays. The desktop recorder it replaces was removed the same day ([Omarchy](omarchy.md)).
+Status (2 October 2026): X1 to X5 are live in production (build `production-2026-10-02-c7c67bb`, protocol 30, era `exhibits`; [release receipt](verification/exhibits-release-2026-10-02.md), [staging receipt](verification/replays-staging-2026-10-02.md)). X6 is next. Tyler agreed the design on 2 October. This file owns the order, status and acceptance for in-game highlight replays. The desktop recorder it replaces was removed the same day ([Omarchy](omarchy.md)).
 
 ## Outcome
 
@@ -38,18 +38,18 @@ It is done when:
 
 | Step | What it gives | Status |
 | --- | --- | --- |
-| X1 | Server detection and `highlight` markers, recorded as city facts; no picture yet | Built, on staging |
-| X2 | Each client records the last 12 seconds and keeps clips for the round | Built, on staging |
-| X3 | The replay player: isolated view, director camera, slow motion, replay sound | Built, on staging |
-| X4 | Exhibits on the results board, with the tape look and captions | Built, on staging |
-| X5 | Save as video, plus watched and saved facts | Built, on staging |
+| X1 | Server detection and `highlight` markers, recorded as city facts; no picture yet | Live (2 October) |
+| X2 | Each client records the last 12 seconds and keeps clips for the round | Live (2 October) |
+| X3 | The replay player: isolated view, director camera, slow motion, replay sound | Live (2 October) |
+| X4 | Exhibits on the results board, with the tape look and captions | Live (2 October) |
+| X5 | Save as video, plus watched and saved facts | Live (2 October) |
 | X6 | Tune detection weights from a week of facts | After X5 is live |
 
 Tyler asked for the whole plan at once (2 October), so X1 to X5 ship together.
 
 ## Next action
 
-Tyler plays a round on staging with sound and judges the exhibits. On his OK: merge `replays` into `main`, deploy production from a clean tree, add an era to `design/data/eras.json` and write the release receipt. Then X6: after a week of live facts, tune the weights. On staging, sent flying is half of all moments.
+X6: after a week of live facts (era `exhibits`), tune the weights: compare how often each kind fires with how often it is played and saved. On staging, sent flying is half of all moments.
 
 ## Detail
 
