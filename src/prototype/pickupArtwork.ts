@@ -74,7 +74,7 @@ const HOT_CASE_ART=`<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M36 3
 /** K3: while you carry the hot case, its buff in the supply cards' family (case red): no clock, held until you lose it. */
 export function hotCaseCard():HTMLElement {
     const card=document.createElement('div');card.className='powerup-card powerup-hot-case';
-    card.innerHTML=`<div class="powerup-art">${HOT_CASE_ART}</div><div class="powerup-copy"><small>YOU’RE CARRYING THE</small><strong>HOT<br>CASE</strong><div class="powerup-healed">2× DAMAGE · A KILL HEALS YOU FULL</div></div><div class="powerup-stamp">EVIDENCE</div>`;
+    card.innerHTML=`<div class="powerup-art">${HOT_CASE_ART}</div><div class="powerup-copy"><small>YOU’RE CARRYING THE</small><strong>HOT<br>CASE</strong><div class="powerup-healed">2× DAMAGE<br>A KILL HEALS YOU FULL</div></div><div class="powerup-stamp">EVIDENCE</div>`;
     card.setAttribute('role','status');card.setAttribute('aria-label','Hot case · 2× damage · a kill heals you full');
     return card;
 }

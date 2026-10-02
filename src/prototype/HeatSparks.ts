@@ -53,11 +53,11 @@ export class HeatSparks {
                         float a=smoothstep(.5,.1,r)*k*.32;
                         gl_FragColor=vec4(vec3(.1,.075,.065)*a,a);
                     }else{
-                        // Heat shimmer: thin wavering bands rising through a soft column.
-                        float column=(1.-smoothstep(.18,.5,abs(q.x)))*smoothstep(-.5,-.3,q.y)*(1.-smoothstep(0.,.5,q.y));
-                        float wave=sin(q.y*34.-heatTime*7.+sin(q.x*10.+heatTime*2.6+vSeed)*2.4);
-                        float a=column*(.2+.8*pow(.5+.5*wave,3.))*k;
-                        gl_FragColor=vec4(vec3(1.,.16,.03)*a*.24,0.);
+                        // Heat haze: a soft warm column whose brightness only ripples gently as it rises (no lines).
+                        float column=(1.-smoothstep(.1,.5,abs(q.x)))*smoothstep(-.5,-.25,q.y)*(1.-smoothstep(-.1,.5,q.y));
+                        float wave=sin(q.y*9.-heatTime*3.+sin(q.x*6.+heatTime*1.3+vSeed)*1.2);
+                        float a=column*(.8+.2*wave)*k;
+                        gl_FragColor=vec4(vec3(1.,.14,.03)*a*.07,0.);
                     }
                 }`,
         });

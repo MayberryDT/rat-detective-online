@@ -123,7 +123,8 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 /* K3 the hot case while you carry it: case-red ink, no clock (it is yours until you lose it), and what it gives you. */
 .powerup-hot-case{--powerup:var(--case-red);rotate:1.5deg}
 .powerup-hot-case .powerup-copy{padding-right:0}
-.powerup-hot-case .powerup-healed{font-size:12px;line-height:1.15}
+.powerup-hot-case .powerup-healed{margin-top:6px;font-size:12px;line-height:1.2;white-space:nowrap}
+@media(max-width:600px){.powerup-hot-case .powerup-healed{white-space:normal;font-size:10px}}
 /* Words explained once per browser (Headlines.firstTime): after the first HELD or dud card, only the word. */
 .powerup-card.explained .powerup-dud{display:none}
 .powerup-card.explained .powerup-gauge{margin-top:10px}

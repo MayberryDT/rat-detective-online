@@ -2,16 +2,17 @@ import * as THREE from 'three';
 import {CROSSFIRE} from '../shared/chaosState';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {playSynth} from '../audio/IncidentAudio';
-import {CrossfireFlames} from './CrossfireFlames';
+import {CrossfireFlames,fadeByInstanceColor} from './CrossfireFlames';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 
 /** Crossfire juice (Tyler, 2 October: "make the whole city a pinball table"). Each bounce throws `sparks` sparks (living
- * `sparkLife` s, flying up to `sparkSpeed` u/s), splashes fire (`CrossfireFlames`) and leaves a glowing scorch `scorch`
- * units across that fades over `scorchMs` (at most `scorches` at once), and rings a ricochet at `ricochet` volume whose
- * pitch rises `pitchStep` a bounce for `pitchSteps` bounces, over a flame "fwoomp" at `fwoomp` volume, deeper `fwoompDrop`
- * a heat step. A bank kill's path glows `pathWidth` thick for `pathMs`. The aim guide dots the way to the first wall
- * (dots at least `guideGap` apart, `guideDots` in all) and `guideBounce` units of the rebound. */
-export const CROSSFIRE_JUICE={sparks:7,sparkLife:.35,sparkSpeed:14,scorch:.42,scorchMs:3500,scorches:24,ricochet:.75,pitchStep:.14,pitchSteps:5,
+ * `sparkLife` s, flying up to `sparkSpeed` u/s), splashes fire (`CrossfireFlames`) and leaves a sooty burn mark `scorch`
+ * units across that fades over `scorchMs` (at most `scorches` at once), its centre glowing like an ember for
+ * `scorchGlowMs`, and rings a ricochet at `ricochet` volume whose pitch rises `pitchStep` a bounce for `pitchSteps`
+ * bounces, over a flame "fwoomp" at `fwoomp` volume, deeper `fwoompDrop` a heat step. A bank kill's path glows
+ * `pathWidth` thick for `pathMs`. The aim guide dots the way to the first wall (dots at least `guideGap` apart,
+ * `guideDots` in all) and `guideBounce` units of the rebound. */
+export const CROSSFIRE_JUICE={sparks:7,sparkLife:.35,sparkSpeed:14,scorch:.75,scorchMs:4000,scorchGlowMs:1200,scorches:24,ricochet:.75,pitchStep:.14,pitchSteps:5,
     fwoomp:.6,fwoompDrop:.1,pathWidth:.08,pathMs:2500,guideGap:1.1,guideDots:40,guideBounce:12} as const;
 const J=CROSSFIRE_JUICE,SPARKS=48,SEGMENTS=CROSSFIRE.pathPoints+1,BOUNCE_DOTS=Math.ceil(J.guideBounce/J.guideGap);
 
@@ -43,7 +44,9 @@ export class CrossfireVisual {
     private readonly sparkSlots=Array.from({length:SPARKS},()=>({p:new THREE.Vector3(),v:new THREE.Vector3(),age:Infinity,life:1}));
     private sparkCursor=0;
     private sparksLive=false;
+    /** Sooty burn marks, and the ember glow at each one's centre. */
     private readonly scorches:THREE.InstancedMesh;
+    private readonly scorchGlows:THREE.InstancedMesh;
     private readonly scorchSlots=Array.from({length:J.scorches},()=>({age:Infinity,heat:0}));
     private scorchCursor=0;
     private scorchesLive=false;
@@ -72,13 +75,15 @@ export class CrossfireVisual {
     private readonly white=new THREE.Color(1,1,1);
     private readonly color=new THREE.Color();
     constructor(scene:THREE.Scene){
-        // A scorch is a disc hottest at its centre, fading to nothing at its rim (additive: black is invisible).
+        // A burn mark is a disc darkest at its centre, fading to nothing at its rim; its glow the same disc, additive and smaller.
         const disc=new THREE.CircleGeometry(J.scorch/2,18),colors=new Float32Array(disc.getAttribute('position').count*3);
         colors.set([1,1,1],0);disc.setAttribute('color',new THREE.BufferAttribute(colors,3));
-        this.scorches=new THREE.InstancedMesh(disc,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
-            toneMapped:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),J.scorches);
-        const names=['crossfire-sparks','crossfire-scorches','crossfire-bank-path','crossfire-aim-guide'];
-        [this.sparks,this.scorches,this.path,this.dots].forEach((mesh,i)=>{
+        this.scorches=new THREE.InstancedMesh(disc,fadeByInstanceColor(new THREE.MeshBasicMaterial({color:0x0b0706,vertexColors:true,transparent:true,depthWrite:false,
+            polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),'crossfire-soot'),J.scorches);
+        this.scorchGlows=new THREE.InstancedMesh(disc,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
+            toneMapped:false,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3}),J.scorches);
+        const names=['crossfire-sparks','crossfire-scorches','crossfire-scorch-glows','crossfire-bank-path','crossfire-aim-guide'];
+        [this.sparks,this.scorches,this.scorchGlows,this.path,this.dots].forEach((mesh,i)=>{
             mesh.name=names[i]!;mesh.frustumCulled=false;mesh.visible=false;mesh.count=0;mesh.setColorAt(0,this.black);this.root.add(mesh);
         });
         this.path.renderOrder=10;
@@ -105,7 +110,9 @@ export class CrossfireVisual {
         this.dummy.position.set(p.x,p.y,p.z).addScaledVector(this.n,.32);this.dummy.quaternion.setFromUnitVectors(this.faceAxis,this.n);
         this.dummy.scale.setScalar(.8+.25*heat);this.dummy.updateMatrix();
         this.scorches.setMatrixAt(index,this.dummy.matrix);this.scorches.instanceMatrix.needsUpdate=true;
-        this.scorches.count=Math.max(this.scorches.count,index+1);this.scorches.visible=this.scorchesLive=true;
+        this.dummy.position.addScaledVector(this.n,.005);this.dummy.scale.multiplyScalar(.4);this.dummy.updateMatrix();
+        this.scorchGlows.setMatrixAt(index,this.dummy.matrix);this.scorchGlows.instanceMatrix.needsUpdate=true;
+        this.scorches.count=this.scorchGlows.count=Math.max(this.scorches.count,index+1);this.scorches.visible=this.scorchGlows.visible=this.scorchesLive=true;
         this.flames.splash(p,normal,heat);
         playSynth('ricochet',p,1+J.pitchStep*(Math.min(bounces,J.pitchSteps+1)-1),J.ricochet);
         playSynth('fwoomp',p,1-J.fwoompDrop*heat,J.fwoomp);
@@ -155,8 +162,8 @@ export class CrossfireVisual {
         this.dots.count=count;this.dots.visible=count>0;this.dots.instanceMatrix.needsUpdate=true;this.dots.instanceColor!.needsUpdate=true;
     }
 
-    update(dt:number):void {
-        this.flames.update(dt);
+    update(dt:number,camera:THREE.Camera):void {
+        this.flames.update(dt,camera);
         if(this.sparksLive){
             let live=false;
             for(let i=0;i<SPARKS;i++){
@@ -175,12 +182,15 @@ export class CrossfireVisual {
         if(this.scorchesLive){
             let live=false;
             for(let i=0;i<this.scorches.count;i++){
-                const slot=this.scorchSlots[i]!,fade=1-(slot.age+=dt)*1000/J.scorchMs;
+                const slot=this.scorchSlots[i]!,age=(slot.age+=dt)*1000,fade=1-age/J.scorchMs,glow=1-age/J.scorchGlowMs;
                 if(fade>0)live=true;
-                // Bright at first, cooling slowly, then gone.
-                this.scorches.setColorAt(i,fade>0?this.color.copy(this.glow[slot.heat]!).multiplyScalar(fade*fade*1.4):this.black);
+                // Soot stays dark, then fades out at the end; the ember at its centre cools first.
+                const soot=fade>0?.85*Math.min(1,fade*3):0;
+                this.scorches.setColorAt(i,this.color.setRGB(soot,soot,soot));
+                this.scorchGlows.setColorAt(i,glow>0?this.color.copy(this.glow[slot.heat]!).multiplyScalar(glow*glow*.8):this.black);
             }
-            this.scorches.instanceColor!.needsUpdate=true;this.scorches.visible=this.scorchesLive=live;
+            this.scorches.instanceColor!.needsUpdate=true;this.scorchGlows.instanceColor!.needsUpdate=true;
+            this.scorches.visible=this.scorchGlows.visible=this.scorchesLive=live;
         }
         if(this.pathAge<Infinity){
             this.pathAge+=dt*1000;
@@ -192,6 +202,6 @@ export class CrossfireVisual {
 
     dispose():void {
         this.root.removeFromParent();disposeMeshResources(this.root);this.flames.dispose();
-        for(const mesh of [this.sparks,this.scorches,this.path,this.dots])mesh.dispose();
+        for(const mesh of [this.sparks,this.scorches,this.scorchGlows,this.path,this.dots])mesh.dispose();
     }
 }

@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
 const PRINTS = 24;
-/** Seconds a print glows; stride (units) between prints; how far apart the paws fall; viewer range (units). */
-const LIFE = 1, STRIDE = .5, GAIT = .13, RANGE = 12;
+/** Seconds a print glows; stride (units) between prints; how far apart the paws fall; camera range (units: the
+ * camera rides some 7 behind its own rat), fading out over the last `FADE`. */
+const LIFE = 1, STRIDE = .5, GAIT = .15, RANGE = 22, FADE = 4;
 
 /** The hot-case carrier's glowing red paw prints (Tyler, 2 October): left on the ground as it walks, fading over a
  * second, drawn only within `RANGE` of the viewer. A bounded ring of flat instanced quads, one draw, written in place. */
@@ -31,7 +32,7 @@ export class HeatPrints {
             blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8,
             vertexShader: `attribute vec4 aPrint;attribute float aFade;varying vec2 vUv;varying float vFade;
                 void main(){vUv=uv;vFade=aFade;
-                vec2 l=position.xy*vec2(.24,.32);float c=cos(aPrint.w),s=sin(aPrint.w);
+                vec2 l=position.xy*vec2(.36,.46);float c=cos(aPrint.w),s=sin(aPrint.w);
                 vec3 w=vec3(aPrint.x+l.x*c+l.y*s,aPrint.y,aPrint.z-l.x*s+l.y*c);
                 gl_Position=projectionMatrix*viewMatrix*vec4(w,1.);}`,
             fragmentShader: `varying vec2 vUv;varying float vFade;
@@ -39,13 +40,14 @@ export class HeatPrints {
                 void main(){
                     if(vFade<=0.)discard;
                     vec2 q=vUv-.5;
-                    // A heel pad and four toes.
-                    float paw=blob(q*vec2(1.,1.3),vec2(0.,-.16),.2);
-                    paw=max(paw,blob(q,vec2(-.22,.1),.085));paw=max(paw,blob(q,vec2(-.08,.24),.085));
-                    paw=max(paw,blob(q,vec2(.08,.24),.085));paw=max(paw,blob(q,vec2(.22,.1),.085));
+                    // A heel pad and four toes, in a soft glow.
+                    float paw=blob(q*vec2(1.,1.3),vec2(0.,-.14),.19);
+                    paw=max(paw,blob(q,vec2(-.21,.11),.08));paw=max(paw,blob(q,vec2(-.075,.24),.08));
+                    paw=max(paw,blob(q,vec2(.075,.24),.08));paw=max(paw,blob(q,vec2(.21,.11),.08));
+                    float halo=1.-smoothstep(.05,.5,length(q*vec2(1.,.85)));
                     // Burns at full for the first half of its life, then fades to nothing.
-                    float a=paw*smoothstep(0.,.55,vFade);if(a<=.002)discard;
-                    gl_FragColor=vec4(mix(vec3(1.,.05,.02),vec3(1.,.4,.12),vFade*vFade),a);
+                    float k=smoothstep(0.,.55,vFade),a=(paw+halo*halo*.45)*k;if(a<=.002)discard;
+                    gl_FragColor=vec4(mix(vec3(1.,.06,.015),vec3(1.,.42,.12),paw*vFade),a);
                 }`,
         });
         this.mesh = new THREE.Mesh(this.geometry, material);
@@ -81,7 +83,7 @@ export class HeatPrints {
             let fade = age < LIFE ? 1 - age / LIFE : 0;
             if (fade > 0) {
                 const d = Math.hypot(this.prints[j] - viewer.x, this.prints[j + 1] - viewer.y, this.prints[j + 2] - viewer.z);
-                fade *= (1 - THREE.MathUtils.smoothstep(d, RANGE - 2, RANGE)) * strength;
+                fade *= (1 - THREE.MathUtils.smoothstep(d, RANGE - FADE, RANGE)) * strength;
             }
             this.fades[i] = fade; any ||= fade > 0;
         }

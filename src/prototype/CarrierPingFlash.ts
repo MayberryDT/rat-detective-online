@@ -6,40 +6,57 @@ import type {RatEntity} from '../entities/RatEntity';
 import {caseRimMaterial} from './CaseBeacon';
 import {CASE_RED} from './caseRed';
 
-/** The ping flash's look: the far stand-in keeps the carrier at least `minPixels` tall on screen (a rat stands about
- * `ratHeight` units, scaled about `centre` units up, where the case rides); each flash swells it `swell`× (none with
- * reduced motion). `silhouette` is the exact rat's peak opacity. */
-export const PING_FLASH={minPixels:64,ratHeight:2.3,centre:1,swell:.15,strength:1.8,silhouette:.9} as const;
+/** The ping flash's look: far away a flat rat-in-a-fedora sign keeps the carrier at least `minPixels` tall on screen (a
+ * rat stands about `ratHeight` units); each flash swells it `swell`× (none with reduced motion). `silhouette` is the
+ * exact rat's peak opacity. Scenery must stand `hiddenBy` units nearer than the rat (`signHiddenBy` than the sign's
+ * feet) to count as hiding it, so a rat's own far arm or the street it stands on never does. */
+export const PING_FLASH={minPixels:64,ratHeight:2.3,swell:.15,strength:1.8,silhouette:.9,hiddenBy:1.2,signHiddenBy:1.5} as const;
+
+/** The sign's right half, feet at the origin, facing the camera: body, neck, head, an ear poking out under the fedora's
+ * brim, the brim and a pinched crown; mirrored for the left. */
+const SIGN_HALF:readonly (readonly [number,number])[]=[[0,0],[.5,0],[.6,.15],[.66,.45],[.62,.8],[.52,1.1],[.38,1.35],[.36,1.5],[.38,1.7],
+    [.44,1.8],[.56,1.84],[.6,1.94],[.47,1.99],[.64,1.99],[.66,2.04],[.62,2.08],[.28,2.08],[.26,2.3],[.17,2.39],[0,2.34]];
+/** The tail curling out to the sign's right: its outer edge out to the tip, then its inner edge back to the body. */
+const SIGN_TAIL:readonly (readonly [number,number])[]=[[.56,.1],[.9,.12],[1.14,.3],[1.24,.6],[1.14,.92],[1.04,.9],[1.1,.62],[1.02,.4],[.84,.26],[.6,.26]];
+/** The sign's height above its feet. */
+const SIGN_TOP=2.39;
+
+function signGeometry():THREE.BufferGeometry {
+    const outline=[...SIGN_HALF,...SIGN_HALF.slice(1,-1).reverse().map(([x,y])=>[-x,y] as const)];
+    const body=new THREE.Shape(outline.map(([x,y])=>new THREE.Vector2(x,y)));
+    const tail=new THREE.Shape(SIGN_TAIL.map(([x,y])=>new THREE.Vector2(x,y)));
+    return new THREE.ShapeGeometry([body,tail]);
+}
 
 /** The hot case heartbeat seen by everyone else (Tyler, 2 October): at each ping the carrier's whole body flashes bright
- * red through walls, then fades to nothing (the case's own rim flashes with it, `CaseBeacon`). Close up the rat's exact
- * pose is drawn over the city from its own skinned buffers (like the Hunch sketch); far away, where the rat would be a
- * few pixels, a rim-lit stand-in of a rat in a fedora keeps it `PING_FLASH.minPixels` tall so it reads across the city.
- * No lights; nothing allocated per frame. Never shown for your own rat (the caller passes no carrier). */
+ * red where walls hide it, then fades to nothing (the case's own rim flashes with it, `CaseBeacon`); in plain sight the
+ * rat's own hot look carries the ping. Close up the rat's exact pose is drawn from its own skinned buffers, only its
+ * hidden parts (like the Hunch sketch); far away, where the rat would be a few pixels, a flat red sign of a rat in a
+ * fedora keeps it `PING_FLASH.minPixels` tall so it reads across the city, shown where scenery stands in front of the
+ * rat. No lights; nothing allocated per frame. Never shown for your own rat (the caller passes no carrier). */
 export class CarrierPingFlash {
-    private readonly proxy=new THREE.Group();
-    private readonly proxyMaterial=caseRimMaterial();
+    private readonly sign:THREE.Mesh;
+    private readonly signMaterial=caseRimMaterial(true,true,PING_FLASH.signHiddenBy);
     private readonly silhouetteMaterial=new THREE.MeshBasicMaterial({color:CASE_RED,transparent:true,opacity:0,blending:THREE.AdditiveBlending,
-        depthTest:false,depthWrite:false,fog:false,toneMapped:false});
+        depthFunc:THREE.GreaterDepth,depthWrite:false,fog:false,toneMapped:false});
     /** The rat the silhouette is bound to, and the silhouette (the rat's batch buffers and skeleton, drawn without its tail). */
     private entity:RatEntity|null=null;
     private silhouette?:THREE.SkinnedMesh;
+    private signTop:number=PING_FLASH.ratHeight;
     constructor(private readonly scene:THREE.Scene){
-        const sphere=new THREE.SphereGeometry(1,16,12),cylinder=new THREE.CylinderGeometry(1,1,1,20);
-        // Rat-local parts (feet at 0): haunches, chest, head, ears and the fedora, the authority's body spheres.
-        const parts:[THREE.BufferGeometry,number,number,number,number,number,number][]=[
-            [sphere,0,.62,0,.6,.66,.54],[sphere,0,1.3,0,.45,.45,.42],[sphere,0,1.88,.04,.29,.27,.3],
-            [sphere,-.2,2.04,0,.1,.12,.06],[sphere,.2,2.04,0,.1,.12,.06],
-            [cylinder,0,2.12,0,.44,.035,.44],[cylinder,0,2.25,0,.24,.22,.24],
-        ];
-        for(const [geometry,x,y,z,sx,sy,sz] of parts){
-            const mesh=new THREE.Mesh(geometry,this.proxyMaterial);
-            mesh.position.set(x,y-PING_FLASH.centre,z);mesh.scale.set(sx,sy,sz);mesh.renderOrder=2001;mesh.raycast=()=>{};
-            this.proxy.add(mesh);
-        }
-        this.proxy.name='carrier-ping-flash';this.proxy.visible=false;
-        freezeStatic(this.proxy,[this.proxy]);scene.add(this.proxy);
+        this.sign=new THREE.Mesh(signGeometry(),this.signMaterial);
+        this.sign.name='carrier-ping-flash';this.sign.visible=false;this.sign.renderOrder=2001;this.sign.raycast=()=>{};
+        freezeStatic(this.sign,[this.sign]);scene.add(this.sign);
+        // Hidden parts only, as the Hunch: each vertex is moved `hiddenBy` nearer before the depth test.
+        this.silhouetteMaterial.onBeforeCompile=shader=>{
+            shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>',`#include <project_vertex>
+                vec4 pingHidden=projectionMatrix*vec4(mvPosition.xy,min(mvPosition.z+${PING_FLASH.hiddenBy.toFixed(2)},-.2),1.);
+                gl_Position.z=pingHidden.z/pingHidden.w*gl_Position.w;`);
+        };
+        this.silhouetteMaterial.customProgramCacheKey=()=>'carrier-ping-silhouette-v1';
     }
+    /** How high above the carrier's feet the flash reaches now (world units): the HOT CASE tag sits above it. */
+    get top():number {return this.signTop;}
 
     /** Each frame: `carrier` is someone else's living carrier (null: none, or yours), `flash` its ping flash 0…1. */
     update(camera:THREE.Camera,carrier:RatEntity|null,flash:number):void {
@@ -51,24 +68,25 @@ export class CarrierPingFlash {
         const reach=PING_FLASH.minPixels*2*distance/(PING_FLASH.ratHeight*height*projection);
         const swell=reducedMotion()?1:1+PING_FLASH.swell*flash;
         const far=THREE.MathUtils.smoothstep(reach,.7,1.4),near=1-THREE.MathUtils.smoothstep(reach,1.5,3);
-        this.proxy.visible=far>0;
+        this.sign.visible=far>0;
         if(far>0){
-            this.proxy.position.set(p.x,p.y+PING_FLASH.centre,p.z);this.proxy.quaternion.copy(carrier.mesh.quaternion);
-            this.proxy.scale.setScalar(Math.max(1,reach)*swell);
-            this.proxyMaterial.uniforms.strength.value=PING_FLASH.strength*flash*far;
-            this.proxyMaterial.uniforms.heat.value=flash;
-        }
+            // Stands on the rat's feet and faces the camera, growing upward so it never reaches below the street.
+            const scale=Math.max(1,reach)*swell;
+            this.sign.position.copy(p);this.sign.quaternion.copy(camera.quaternion);this.sign.scale.setScalar(scale);
+            this.signMaterial.uniforms.strength.value=PING_FLASH.strength*flash*far;
+            this.signMaterial.uniforms.heat.value=flash;
+            this.signTop=Math.max(PING_FLASH.ratHeight,SIGN_TOP*scale);
+        }else this.signTop=PING_FLASH.ratHeight;
         const silhouette=near>0?this.bind(carrier):undefined;
         if(this.silhouette)this.silhouette.visible=!!silhouette;
         this.silhouetteMaterial.opacity=PING_FLASH.silhouette*flash*near;
     }
     /** Nothing shows until the next flash. */
-    hide():void {this.proxy.visible=false;if(this.silhouette)this.silhouette.visible=false;}
+    hide():void {this.sign.visible=false;this.signTop=PING_FLASH.ratHeight;if(this.silhouette)this.silhouette.visible=false;}
 
     dispose():void {
-        this.release();this.proxy.removeFromParent();
-        (this.proxy.children[0] as THREE.Mesh).geometry.dispose();(this.proxy.children[5] as THREE.Mesh).geometry.dispose();
-        this.proxyMaterial.dispose();this.silhouetteMaterial.dispose();
+        this.release();this.sign.removeFromParent();this.sign.geometry.dispose();
+        this.signMaterial.dispose();this.silhouetteMaterial.dispose();
     }
 
     /** The carrier's exact silhouette, built once per rat from its rigid batch (none without one). */

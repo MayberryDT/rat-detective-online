@@ -189,10 +189,12 @@ export class ChaosView {
     private readonly fullTint=new THREE.Color(1,1,1);
     private readonly calmTint=new THREE.Color(THREAT.dim,THREAT.dim,THREAT.dim);
     private readonly calmDanger=this.dangerColor.clone().multiplyScalar(THREAT.dim);
-    /** K3: a buffed carrier's ball: the cheese glowing red at its core, and its case-red streak, full and calm. */
-    private readonly carrierTint=new THREE.Color(1,.42,.3);
+    /** K3: a buffed carrier's ball on the red cheese: a deep red core, a bright case-red rim and a case-red streak, full and calm. */
+    private readonly carrierTint=new THREE.Color(1.3,.6,.5);
     private readonly calmCarrierTint=this.carrierTint.clone().multiplyScalar(THREAT.dim);
-    private readonly carrierStreak=new THREE.Color(CASE_RED);
+    private readonly carrierRim=new THREE.Color(CASE_RED).multiplyScalar(1.6);
+    private readonly calmCarrierRim=this.carrierRim.clone().multiplyScalar(THREAT.dim);
+    private readonly carrierStreak=new THREE.Color(CASE_RED).multiplyScalar(1.3);
     private readonly calmCarrierStreak=this.carrierStreak.clone().multiplyScalar(THREAT.dim);
     /** Crossfire heat colours (red, orange, white-hot) for ball tints, glows and trails, full and calm. */
     private readonly heat=heatPalette(THREAT.dim);
@@ -629,7 +631,7 @@ export class ChaosView {
     }
     /** `renderTime` is the presentation clock (slowed briefly for the victory moment). */
     update(dt:number,camera:THREE.Camera,renderTime=performance.now()){
-        this.impacts.update(dt);this.crossfire.update(dt);
+        this.impacts.update(dt);this.crossfire.update(dt,camera);
         this.beams.update(dt,camera);
         this.traps.update(dt);
         const wall=performance.now();
@@ -727,20 +729,22 @@ export class ChaosView {
             // Crossfire: a bounced ball is on fire, and each bounce heats it on through orange to white-hot, faster, its streak
             // stretching with its speed out to a tracer round's.
             const hot=crossfire&&shot.wallBounced,level=Math.min(CROSSFIRE.maxHeat,shot.heat??1)-1;
-            const batch=hot?this.chargedBullets:this.bullets;
+            // A carrier's ball is drawn in the red cheese (the Crossfire material), so its core reads deep red, not orange.
+            const batch=hot||carried?this.chargedBullets:this.bullets;
             const ballIndex=batch.count++;batch.setMatrixAt(ballIndex,this.ballPose.matrix);
             batch.setColorAt(ballIndex,hot?(own?this.heat.own:calm?this.heat.calm:this.heat.enemy)[level]!:carried?(calm?this.calmCarrierTint:this.carrierTint):calm?this.calmTint:this.fullTint);
             // Your own hot ball gets no enemy glow, but once it has heated past red it trails its heat too.
             if(!own||quirk||carried||hot&&level>0){
-                this.ballPose.scale.setScalar(scale*look*(hot?1.14+.08*level:1));this.ballPose.updateMatrix();
-                if(!own||carried&&!hot){const rim=hot?this.chargedGlow:this.dangerGlow,at=rim.count++;rim.setMatrixAt(at,this.ballPose.matrix);rim.setColorAt(at,hot?(calm?this.heat.calmRim:this.heat.rim)[level]!:calm?this.calmTint:this.fullTint);}
+                this.ballPose.scale.setScalar(scale*look*(hot?1.14+.08*level:carried?1.22:1));this.ballPose.updateMatrix();
+                if(!own||carried&&!hot){const rim=hot||carried?this.chargedGlow:this.dangerGlow,at=rim.count++;rim.setMatrixAt(at,this.ballPose.matrix);rim.setColorAt(at,hot?(calm?this.heat.calmRim:this.heat.rim)[level]!:carried?(calm?this.calmCarrierRim:this.carrierRim):calm?this.calmTint:this.fullTint);}
                 this.trailDirection.set(shot.v.x,shot.v.y,shot.v.z);
                 if(this.trailDirection.lengthSq()>.01){
                     const speed=this.trailDirection.length();this.trailDirection.divideScalar(speed);
-                    const length=hot?heatStreak(speed):Math.min(2.4,.85*Math.sqrt(scale));
+                    // A carrier's streak: about four ball lengths of case red, twice as thick.
+                    const length=hot?heatStreak(speed):carried?8*BALL_RADIUS*scale*look:Math.min(2.4,.85*Math.sqrt(scale)),width=(carried&&!hot?1:.5)*Math.sqrt(scale);
                     this.trailPose.position.copy(this.ballPose.position).addScaledVector(this.trailDirection,-scale*BALL_RADIUS-length/2);
                     this.trailPose.quaternion.setFromUnitVectors(this.trailAxis,this.trailDirection);
-                    this.trailPose.scale.set(.5*Math.sqrt(scale),.5*Math.sqrt(scale),length/.2);this.trailPose.updateMatrix();
+                    this.trailPose.scale.set(width,width,length/.2);this.trailPose.updateMatrix();
                     const at=this.dangerTrails.count++;this.dangerTrails.setMatrixAt(at,this.trailPose.matrix);
                     this.dangerTrails.setColorAt(at,hot?(calm?this.heat.calmTrail:this.heat.trail)[level]!:carried?(calm?this.calmCarrierStreak:this.carrierStreak):own?this.quirkColor:calm?this.calmDanger:this.dangerColor);
                 }
@@ -858,7 +862,8 @@ export class ChaosView {
         if(this.carrier?.isPlayer||this.lastHitPoint||s.case.owner&&(!ping||flash<=0)){this.caseMarker.style.display='none';return;}
         // Float the badge above the case so it does not cover the physical pickup
         // or a carrier's gun at close range. The bright shell outline marks its body.
-        if(ping)this.p.set(ping.p.x,ping.p.y+2.1,ping.p.z);else{this.p.copy(this.caseRoot.position);this.p.y+=2.1;}
+        // A ping's tag floats clear above the carrier's flash, however tall the far sign has grown.
+        if(ping)this.p.set(ping.p.x,ping.p.y+Math.max(2.1,this.carrierFlash.top+.4),ping.p.z);else{this.p.copy(this.caseRoot.position);this.p.y+=2.1;}
         const location=locateCase(this.p,camera,window.innerWidth,window.innerHeight);
         this.caseMarker.style.display='block';
         // The badge follows the case in world space; its label hangs below it.

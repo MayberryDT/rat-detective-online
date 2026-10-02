@@ -30,15 +30,17 @@ const HEAT_UP = .3;
 // The cuff and chain, in the carry anchor's frame (the case grip's sleeve runs from the shoulder to the hand).
 const GRIP = new THREE.Vector3(CASE_HAND.x, CASE_HAND.y + .43, CASE_HAND.z).sub(RAT_CARRY_SHOULDER);
 const SLEEVE = GRIP.clone().normalize();
-/** The handcuff closes round the sleeve's cuff just behind the paw. */
-const WRIST = GRIP.clone().addScaledVector(SLEEVE, -.07);
+/** The handcuff closes round the coat sleeve just behind the shirt cuff, where it reads against the sleeve. */
+const WRIST = GRIP.clone().addScaledVector(SLEEVE, -.19);
 const WRIST_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), SLEEVE);
 /** The case end: a small cuff through one of the handle's brass loops (case space). */
 const LOOP = new THREE.Vector3(.12, CASE_SIZE.y * .47 + .03, 0);
-/** Cuff radii; the chain's length (it hangs slack between them, units at rat scale 1) and most links. */
-const WRIST_CUFF = .125, CASE_CUFF = .055, CHAIN = .46, MAX_LINKS = 9;
+/** Wrist and case cuff radii; the chain's length (slack between them, units at rat scale 1), each link's ring radius
+ * (its long axis 1.6×, so its hole shows), the pitch at which links interlock, and the most links. */
+const WRIST_CUFF = .118, CASE_CUFF = .05, CHAIN = .56, LINK = .03, LINK_PITCH = .072, MAX_LINKS = 10;
 const LINK_TWIST = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-const STEEL_GLOW = new THREE.Color(0x5c6372), COAL = new THREE.Color(0xff3a10);
+/** Dark steel never quite black; it glows coal red only at a ping. */
+const STEEL_BASE = new THREE.Color(0x14171c), COAL = new THREE.Color(0xff3a10);
 /** The hat band overlay sits just proud of the band it covers. */
 const BAND_GROW = new THREE.Matrix4().makeScale(1.035, 1.05, 1.035);
 
@@ -49,28 +51,30 @@ const loop = new THREE.Vector3(), from = new THREE.Vector3(), to = new THREE.Vec
 const point = new THREE.Vector3(), tangent = new THREE.Vector3(), scale = new THREE.Vector3(), turn = new THREE.Quaternion(), bow = new THREE.Vector3();
 const matrix = new THREE.Matrix4(), viewer = new THREE.Vector3();
 
-/** The coat's red-hot rim: the carrier's batched rig drawn again additively, only its coat, bright where the surface
- * turns away from the eye and crackling like coal, flaring with each heartbeat ping. */
-function coatHeatMaterial(uniforms: { heatGlow: { value: number }; heatFlare: { value: number }; heatTime: { value: number }; heatCoat: { value: number } }): THREE.MeshBasicMaterial {
-    const material = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, depthFunc: THREE.LessEqualDepth,
-        blending: THREE.AdditiveBlending, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+/** The coat's red-hot edges: the carrier's batched rig drawn again as a hair-thin shell over its coat only, painted
+ * only along the silhouette where the coat turns away from the eye, and blended over (not added to) the coat so a
+ * coat of any colour stays its own colour face-on and goes red-orange only at its edge. Each ping widens and heats it. */
+function coatHeatMaterial(uniforms: { heatGlow: { value: number }; heatFlare: { value: number }; heatCoat: { value: number } }): THREE.MeshBasicMaterial {
+    const material = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, fog: false, toneMapped: false });
     material.onBeforeCompile = shader => {
         Object.assign(shader.uniforms, uniforms);
-        shader.vertexShader = 'attribute float ratMaterial;uniform float heatCoat;varying vec3 vHeatView;varying vec3 vHeatNormal;varying vec3 vHeatLocal;varying float vHeatMask;\n'
-            + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
-            vHeatView=mvPosition.xyz;vHeatNormal=normalize(transformedNormal);vHeatLocal=position;
+        shader.vertexShader = 'attribute float ratMaterial;uniform float heatCoat;varying vec3 vHeatView;varying vec3 vHeatNormal;varying float vHeatMask;\n'
+            + shader.vertexShader.replace('#include <skinning_vertex>', `#include <skinning_vertex>
+            // Just proud of the coat, so the overlay never depth-fights it.
+            transformed+=normalize(objectNormal)*.012;`).replace('#include <project_vertex>', `#include <project_vertex>
+            vHeatView=mvPosition.xyz;vHeatNormal=normalize(transformedNormal);
             vHeatMask=heatCoat<0.?1.:1.-step(.5,abs(ratMaterial-heatCoat));`);
-        shader.fragmentShader = 'uniform float heatGlow;uniform float heatFlare;uniform float heatTime;varying vec3 vHeatView;varying vec3 vHeatNormal;varying vec3 vHeatLocal;varying float vHeatMask;\n'
+        shader.fragmentShader = 'uniform float heatGlow;uniform float heatFlare;varying vec3 vHeatView;varying vec3 vHeatNormal;varying float vHeatMask;\n'
             + shader.fragmentShader.replace('#include <opaque_fragment>', `
             if(vHeatMask<.5)discard;
-            float facing=abs(dot(normalize(vHeatNormal),normalize(-vHeatView)));
-            float rim=pow(1.-facing,1.8);
-            float coal=.6+.4*sin(vHeatLocal.y*29.+heatTime*2.1)*sin(vHeatLocal.x*23.+vHeatLocal.z*17.-heatTime*1.6);
-            float edge=rim*coal*(heatGlow+heatFlare*1.6);
-            // Deep red at the coat's turn, orange where it grazes; each ping also warms the whole coat a little.
-            gl_FragColor=vec4(mix(vec3(.75,.03,0.),vec3(1.,.4,.08),rim*rim)*edge+vec3(.7,.02,0.)*(heatFlare*.12+heatGlow*.03),1.);`);
+            float turn=1.-abs(dot(normalize(vHeatNormal),normalize(-vHeatView)));
+            float rim=smoothstep(.6-.18*heatFlare,.93,turn);
+            float a=rim*min(1.,heatGlow*.9+heatFlare);
+            if(a<.004)discard;
+            // Coal red inside the edge, orange-hot right at the turn.
+            gl_FragColor=vec4(mix(vec3(.95,.1,.02),vec3(1.,.5,.12),smoothstep(.8,1.,turn)*(.5+.5*heatFlare)),a);`);
     };
-    material.customProgramCacheKey = () => 'hot-case-coat-v1';
+    material.customProgramCacheKey = () => 'hot-case-coat-v2';
     return material;
 }
 
@@ -78,9 +82,9 @@ interface HeatedMaterial { material: THREE.MeshStandardMaterial; heat: Heat; col
     roughness: number; metalness: number; hotColor: THREE.Color; hotEmissive: THREE.Color; phase: number }
 
 /** The carried hot case and its carrier (Tyler, 2 October), in direct sight and depth-tested for everyone, the carrier
- * included: the case turns red-hot metal (coal-glowing seams, edges and corners, heat shimmer, smoke) and is
- * handcuffed to the rat's wrist by a short chain; the rat gets red-hot coat edges, a red hat band, embers and shimmer
- * rising off it and glowing paw prints up close. Every glow beats on the case's heartbeat (`caseHeartbeat`): a big
+ * included: the case turns red-hot metal (coal-glowing seams, edges and corners, a faint heat haze, smoke) and is
+ * handcuffed to the rat's wrist by a short steel chain; the rat gets red-hot coat edges, a red hat band, embers rising
+ * off it and glowing paw prints near the camera. Every glow beats on the case's heartbeat (`caseHeartbeat`): a big
  * flare at each ping. The through-wall ping flash is `HeartbeatPing`'s. A loose case keeps its leather look.
  *
  * About five draws while carried (chain, sparks, prints, coat rim, hat band), none loose; all buffers preallocated. */
@@ -92,7 +96,7 @@ export class HotCaseLook {
     private readonly steel: THREE.MeshStandardMaterial;
     private readonly sparks = new HeatSparks();
     private readonly prints = new HeatPrints();
-    private readonly coatUniforms = { heatGlow: { value: 0 }, heatFlare: { value: 0 }, heatTime: { value: 0 }, heatCoat: { value: -1 } };
+    private readonly coatUniforms = { heatGlow: { value: 0 }, heatFlare: { value: 0 }, heatCoat: { value: -1 } };
     private readonly coatMaterial = coatHeatMaterial(this.coatUniforms);
     private coat: THREE.SkinnedMesh | null = null;
     private readonly bandMaterial = new THREE.MeshBasicMaterial({ color: 0xff2a10, toneMapped: false });
@@ -118,9 +122,10 @@ export class HotCaseLook {
                 phase: this.heated.length * 1.9 });
         }
         for (const material of materials.shells) this.shells.push({ material, opacity: material.opacity });
-        this.steel = new THREE.MeshStandardMaterial({ color: 0xe1e6ee, metalness: .85, roughness: .25, envMap: metalReflection(), envMapIntensity: 1.2,
-            emissive: STEEL_GLOW, emissiveIntensity: .9 });
-        this.chain = new THREE.InstancedMesh(new THREE.TorusGeometry(1, .3, 6, 14), this.steel, 2 + MAX_LINKS);
+        // Dark, polished: the reflection bands give it the bright specular edge that reads as steel at a distance.
+        this.steel = new THREE.MeshStandardMaterial({ color: 0x7d838c, metalness: .92, roughness: .3, envMap: metalReflection(), envMapIntensity: 1.6,
+            emissive: STEEL_BASE, emissiveIntensity: 1 });
+        this.chain = new THREE.InstancedMesh(new THREE.TorusGeometry(1, .26, 6, 12), this.steel, 2 + MAX_LINKS);
         this.chain.name = 'hot-case-handcuff'; this.chain.frustumCulled = false; this.chain.raycast = () => {}; this.chain.count = 0;
         this.band = new THREE.Mesh(this.noBand, this.bandMaterial);
         this.band.name = 'hot-case-hat-band'; this.band.frustumCulled = false; this.band.raycast = () => {};
@@ -151,7 +156,7 @@ export class HotCaseLook {
         this.root.visible = true; this.hot = true;
         const shown = carrier.mesh.visible, p = carrier.mesh.position;
         if (anchor) this.cuff(anchor, p, flare); else this.chain.count = 0;
-        this.coatUniforms.heatGlow.value = glow * this.heat; this.coatUniforms.heatFlare.value = flare; this.coatUniforms.heatTime.value = this.time;
+        this.coatUniforms.heatGlow.value = glow * this.heat; this.coatUniforms.heatFlare.value = flare;
         if (this.coat) this.coat.visible = shown;
         this.band.visible = shown && !!this.bandSource;
         const k = Math.min(1, glow * .55 * this.heat + flare);
@@ -257,7 +262,7 @@ export class HotCaseLook {
         wrist.copy(WRIST).applyMatrix4(anchor.matrixWorld);
         wristQuaternion.copy(anchorQuaternion).multiply(WRIST_TURN);
         axis.set(0, 0, 1).applyQuaternion(wristQuaternion);
-        this.chain.setMatrixAt(0, matrix.compose(wrist, wristQuaternion, scale.set(WRIST_CUFF * size, WRIST_CUFF * size, WRIST_CUFF * size * 1.6)));
+        this.chain.setMatrixAt(0, matrix.compose(wrist, wristQuaternion, scale.set(WRIST_CUFF * size, WRIST_CUFF * size, WRIST_CUFF * size * 1.8)));
         const q = this.caseRoot.quaternion;
         loop.copy(LOOP).multiplyScalar(caseSize).applyQuaternion(q).add(this.caseRoot.position);
         this.chain.setMatrixAt(1, matrix.compose(loop, q, scale.setScalar(CASE_CUFF * caseSize)));
@@ -273,7 +278,7 @@ export class HotCaseLook {
         bow.normalize(); bow.y = -.25;
         // A parabola of span L and depth s runs about √(L² + 16s²/3) long: deep enough that the chain is `CHAIN` long.
         const length = span.length(), chain = Math.max(length, CHAIN * size), sag = Math.sqrt((chain * chain - length * length) * 3 / 16);
-        const links = Math.max(1, Math.min(MAX_LINKS, Math.round(chain / .05))), ring = Math.max(.02, Math.min(.03, chain / links * .5));
+        const links = Math.max(1, Math.min(MAX_LINKS, Math.round(chain / LINK_PITCH))), ring = LINK * size;
         for (let i = 0; i < links; i++) {
             const t = (i + .5) / links;
             point.copy(from).addScaledVector(span, t).addScaledVector(bow, sag * 4 * t * (1 - t));
@@ -281,18 +286,18 @@ export class HotCaseLook {
             if (tangent.lengthSq() < 1e-10) tangent.copy(Y);
             turn.setFromUnitVectors(Y, tangent.normalize());
             if (i % 2) turn.multiply(LINK_TWIST);
-            this.chain.setMatrixAt(2 + i, matrix.compose(point, turn, scale.set(ring, ring * 1.4, ring)));
+            this.chain.setMatrixAt(2 + i, matrix.compose(point, turn, scale.set(ring, ring * 1.6, ring)));
         }
         this.chain.count = 2 + links;
         this.chain.instanceMatrix.needsUpdate = true;
-        // The steel picks up the case's heat on each beat.
-        this.steel.emissive.lerpColors(STEEL_GLOW, COAL, .08 + .25 * flare);
+        // The steel takes the case's heat only on the beat.
+        this.steel.emissive.copy(STEEL_BASE).lerp(COAL, .55 * flare);
     }
 
     private emit(dt: number, p: THREE.Vector3, shown: boolean, glow: number, flare: number, pinged: boolean): void {
         const c = this.caseRoot.position, h = this.heat;
-        this.sparks.shimmer(c.x, c.y + .62, c.z, .95, 1.15, (.45 + .25 * glow + .6 * flare) * h);
-        if (shown) this.sparks.shimmer(p.x, p.y + 1.25, p.z, 1.3, 2.5, (.22 + .1 * glow + .45 * flare) * h);
+        // A faint haze of heat over the case only; the rat gets embers, not a shimmer.
+        this.sparks.shimmer(c.x, c.y + .6, c.z, .9, 1.05, (.3 + .15 * glow + .5 * flare) * h);
         this.emberDue += dt * 16 * h + (pinged && shown ? 14 : 0);
         this.caseEmberDue += dt * 9 * h + (pinged ? 8 : 0);
         this.smokeDue += dt * 3.5 * h;

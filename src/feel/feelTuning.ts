@@ -170,13 +170,13 @@ export const FEEL={
      * `hopMs` about every `idleEvery` s; its evidence tag flaps on every jolt. */
     caseMotion:{label:'K2 Case motion',toggle:true,params:{swing:60,spring:9,damping:.22,maxSwing:.6,squash:.28,hop:.12,hopMs:320,idleEvery:3.5}},
     /** K3 Hot case, the carrier's own feel (Tyler, 2 October: the buff is felt). While you carry a
-     * buffed case: its HOT CASE card; on each ping (`HEARTBEAT`) a case-red screen-edge pulse (`edge` × Flash strength,
-     * `still` of it under Reduced interface motion) so you know you were seen; a heartbeat only you hear, a muted upright
+     * buffed case: its HOT CASE card; on each ping (`HEARTBEAT`) a brief, strong case-red screen-edge pulse (`edge` × Flash
+     * strength, `still` of it under Reduced interface motion) so you know you were just seen; a heartbeat only you hear, a muted upright
      * bass lub-dub (`beat` volume, `accent` × on the beat that lands on a ping) at `slow` beats a ping (75 bpm) far from
      * the target quickening to `fast` (120 bpm) beside it. Any carrier's balls draw heavier and red-cored with a `thump`
      * (volume) under the shot and `sparks` red sparks on its hits. A kill while carrying: a red heal flare up your rat,
      * `surge` fast beats `surgeGap` s apart and the CASE CLOSED · HEALED stamp. */
-    hotCase:{label:'K3 Hot case carrier feel',toggle:true,params:{edge:.42,still:.6,beat:.2,accent:1.6,slow:5,fast:8,thump:.9,sparks:14,surge:4,surgeGap:.26}},
+    hotCase:{label:'K3 Hot case carrier feel',toggle:true,params:{edge:1,still:.6,beat:.2,accent:1.6,slow:5,fast:8,thump:.9,sparks:14,surge:4,surgeGap:.26}},
     /** A1 Air acting (Tyler, 1 October: jumping rats were "stiff and lifeless", a salt shaker). Every rat, airborne from a
      * take-off over `takeOff` u/s or a fall over `fall` u/s until it lands: no walking stride in the air; `stretch` rising,
      * a `squash` and `tuck` (rad) ball at the apex with the feet pulled up (`feet`), a `reach` falling with ears (`ears`),

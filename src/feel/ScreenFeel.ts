@@ -177,7 +177,7 @@ export class ScreenFeel {
         });
         replay(this.caseNode,'on');
     }
-    /** K3: the hot case you carry pinged (every rat saw you): the case-red edge at `level` (0…1, from `pingFlash`) ×
+    /** K3: the hot case you carry pinged (every rat saw you): the case-red edge at `level` (0…1, CarrierFeel's pulse) ×
      * Flash strength. Written only when it changes; 0 between pings. */
     casePing(level:number):void {
         const value=Math.round(level*this.flash()*100)/100;

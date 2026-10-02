@@ -6,29 +6,43 @@ import {CASE_RIM_RED} from './caseRed';
 
 /** The loose case's gentle pulse, `rate` beats a second: each beat swells the rim to `swell`× (`reducedSwell`× with
  * reduced motion) and brightens it by `depth`, and an echo of the outline grows to `echo`× and fades. A carried case
- * shows only at its heartbeat ping (`pingFlash`): `flashStrength` bright at the flash, swollen `flashSwell`×. */
-export const CASE_BEAT={rate:.6,depth:.4,swell:.35,echo:1,reducedSwell:.04,flashSwell:.5,flashStrength:2.2} as const;
+ * shows only at its heartbeat ping (`pingFlash`) and only where it is hidden: `flashStrength` bright at the flash,
+ * swollen `flashSwell`×; scenery must stand `hiddenBy` units nearer than the case to count as hiding it (so the carrier's
+ * own body and the case's near faces never do). */
+export const CASE_BEAT={rate:.6,depth:.4,swell:.35,echo:1,reducedSwell:.04,flashSwell:.5,flashStrength:2.2,hiddenBy:1.5} as const;
 
-const VERTEX=`varying vec3 n;varying vec3 eye;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);eye=-p.xyz;gl_Position=projectionMatrix*p;}`;
-// `heat` lifts the red toward orange-white at the peak of a beat or a ping flash.
-const FRAGMENT=`uniform float strength;uniform float heat;uniform vec3 color;varying vec3 n;varying vec3 eye;void main(){float rim=1.-abs(dot(normalize(n),normalize(eye)));float a=smoothstep(.42,.87,rim)*strength;gl_FragColor=vec4(color+vec3(.0,.3,.12)*heat,a);}`;
+// Every fragment takes the depth of the object's origin, `bias` units nearer: an enlarged outline is hidden or shown by
+// what stands in front of the thing itself, not by its own inflated size. Only used with the occluded-only depth test.
+const VERTEX=`uniform float bias;varying vec3 n;varying vec3 eye;void main(){vec4 p=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);eye=-p.xyz;gl_Position=projectionMatrix*p;
+vec4 o=modelViewMatrix*vec4(0.,0.,0.,1.);vec4 d=projectionMatrix*vec4(p.xy,min(o.z+bias,-.2),1.);gl_Position.z=d.z/d.w*gl_Position.w;}`;
+// `heat` lifts the red toward orange-white at the peak of a beat or a ping flash. FILL: a flat shape, solid; otherwise a rim.
+const FRAGMENT=`uniform float strength;uniform float heat;uniform vec3 color;varying vec3 n;varying vec3 eye;void main(){
+#ifdef FILL
+float a=strength;
+#else
+float rim=1.-abs(dot(normalize(n),normalize(eye)));float a=smoothstep(.42,.87,rim)*strength;
+#endif
+gl_FragColor=vec4(color+vec3(.0,.3,.12)*heat,a);}`;
 
-/** The through-wall rim in the hot-case red: additive, drawn over the city, `strength` and `heat` uniforms. Shared by the
- * case beacon and the carrier's ping flash. */
-export function caseRimMaterial():THREE.ShaderMaterial {
-    return new THREE.ShaderMaterial({transparent:true,depthTest:false,depthWrite:false,blending:THREE.AdditiveBlending,
-        uniforms:{strength:{value:1},heat:{value:0},color:{value:new THREE.Vector3(...CASE_RIM_RED)}},vertexShader:VERTEX,fragmentShader:FRAGMENT});
+/** The hot-case red glow, additive, `strength` and `heat` uniforms: a view-dependent rim, or with `fill` a solid flat
+ * shape. Drawn over the city (depth test off) unless `occluded`: then only where scenery more than `bias` units nearer
+ * than the object's origin hides it. Shared by the case beacon and the carrier's ping flash. */
+export function caseRimMaterial(fill=false,occluded=false,bias=0):THREE.ShaderMaterial {
+    return new THREE.ShaderMaterial({transparent:true,depthTest:occluded,depthFunc:THREE.GreaterDepth,depthWrite:false,blending:THREE.AdditiveBlending,
+        uniforms:{strength:{value:1},heat:{value:0},bias:{value:bias},color:{value:new THREE.Vector3(...CASE_RIM_RED)}},
+        ...(fill?{defines:{FILL:''}}:{}),vertexShader:VERTEX,fragmentShader:FRAGMENT});
 }
 
 /** Enlarged view-dependent rim of the actual case shape in the hot-case red, visible through the city. A loose case
  * pulses gently and an echo of the outline expands off it (hidden close up). A carried case is invisible through walls
- * except at its heartbeat ping, when the rim flashes bright at any distance and fades to nothing. Hidden for your own
- * carried case. Two shared materials, one pair of geometries, uniforms and transforms only per frame. Reduced motion
- * keeps the glow, not the swell. */
+ * except at its heartbeat ping, when the rim flashes bright at any distance where the case is hidden, and fades to
+ * nothing (in plain sight the case's own hot look carries the ping). Hidden for your own carried case. Two shared
+ * materials, one pair of geometries, uniforms, transforms and the depth test only per frame. Reduced motion keeps the
+ * glow, not the swell. */
 export class CaseBeacon {
     readonly root=new THREE.Group();
     private readonly echo=new THREE.Group();
-    private readonly material=caseRimMaterial();
+    private readonly material=caseRimMaterial(false,false,CASE_BEAT.hiddenBy);
     private readonly echoMaterial=caseRimMaterial();
     /** Loose beat phase 0…1 and the last frame's time. */
     private phase=0;
@@ -52,6 +66,8 @@ export class CaseBeacon {
         this.root.visible=!hidden&&target.visible&&(flash===null?distance>14:flash>0);
         const height=Math.max(1,window.innerHeight),projection=camera.projectionMatrix.elements[5];
         const base=Math.max(target.scale.x,24*2*distance/(.66*height*projection)),still=reducedMotion();
+        // A carried case's rim draws only where scenery hides the case; a loose one's over everything.
+        this.material.depthTest=flash!==null;
         if(flash!==null){
             // The heartbeat ping: bright at any distance (the carrier flashes with it), then gone.
             this.echo.visible=false;

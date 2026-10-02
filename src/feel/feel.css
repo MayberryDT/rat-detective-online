@@ -90,9 +90,9 @@
 body.reduced-motion .feel-case.on .feel-case-stamp{animation:ui-fade-hold 1500ms linear both}
 @media(prefers-reduced-motion:reduce){.feel-case.on .feel-case-stamp{animation:ui-fade-hold 1500ms linear both}.feel-case-sheet{display:none}}
 @media(max-height:500px){.feel-case-stamp{font-size:36px}.feel-case{top:30%}}
-/* K3 hot case: each ping the carrier was seen by every rat, so the screen edge glows case red (opacity set from the ping
- * flash); a kill while carrying heals you under a short CASE CLOSED · HEALED stamp in the case red. */
-.feel-case-ping{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 58%,#ff302433 76%,#ff3024b3 100%);will-change:opacity}
+/* K3 hot case: each ping the carrier was seen by every rat, so the screen edge flares case red for a moment (opacity set
+ * per frame from the ping); a kill while carrying heals you under a short CASE CLOSED · HEALED stamp in the case red. */
+.feel-case-ping{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 44%,#ff302455 64%,#ff3024d0 86%,#ff3024 100%);will-change:opacity}
 .feel-case-closed .feel-case-stamp{font-size:44px;border-color:var(--case-red,#ff3024);color:var(--case-red,#ff3024);transform:translate(-50%,-50%) rotate(4deg)}
 .feel-case-closed.on .feel-case-stamp{animation-duration:1100ms}
 body.reduced-motion .feel-case-closed.on .feel-case-stamp{animation:ui-fade-hold 1100ms linear both}
