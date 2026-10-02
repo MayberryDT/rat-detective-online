@@ -53,6 +53,20 @@ const SYNTH = {
         const phase = 2 * Math.PI * (1050 * t + 1550 * (1 - Math.exp(-14 * t)) / 14);
         return (Math.sin(phase) + .35 * Math.sin(2.76 * phase) * Math.exp(-t * 18) + n() * Math.exp(-t * 260) * .8) * Math.min(1, t * 900) * Math.exp(-t * 11);
     }},
+    // Crossfire: a flame "fwoomp" under each ricochet, noise through a filter that swells open and closes, over a low
+    // whump. Hotter balls play it deeper.
+    fwoomp: (() => {
+        let low = 0, body = 0;
+        return {seconds: .45, peak: .3, sample: (t: number, n: () => number) => {
+            if (t === 0) { low = 0; body = 0; }
+            low += (n() - low) * (.03 + .22 * Math.exp(-t * 9) * Math.min(1, t * 40)); body += (low - body) * .25;
+            const whump = Math.sin(2 * Math.PI * (52 * t + 40 * (1 - Math.exp(-t * 12)) / 12)) * Math.exp(-t * 14);
+            return (body * 2.2 + .6 * whump) * Math.min(1, t * 45) * Math.exp(-t * 6.5);
+        }};
+    })(),
+    // The hot case's carrier fires heavier (K3): a low boom gliding down under the shot, with a felt-mallet tap on top.
+    thump: {seconds: .32, peak: .3, sample: (t: number, n: () => number) =>
+        Math.sin(2 * Math.PI * (64 * t - 52 * t * t)) * Math.min(1, t * 400) * Math.exp(-t * 13) + n() * Math.exp(-t * 220) * .25},
 } as const;
 export type SynthCue = keyof typeof SYNTH;
 let synthBuffers: Partial<Record<SynthCue, AudioBuffer>> = {};

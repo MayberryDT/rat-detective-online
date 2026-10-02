@@ -56,7 +56,7 @@ export function bankShot(eye:Vec3Data,target:Vec3Data,ray:RayCast,avoid:readonly
         if(avoid.some(p=>segmentDistance(bounce,target,p)<1.2))continue;
         if(beam)return bounce;
         // Lift the aim so the drop over both legs (the second slowed by the bounce, or sped up by Crossfire's heat) lands on the target.
-        const speed=launchSpeed(incident),t=out/speed+back/(speed*BALL_RESTITUTION*(incident==='crossfire'?CROSSFIRE.speedUp:1));
+        const speed=launchSpeed(incident),t=out/speed+back/(speed*(incident==='crossfire'?CROSSFIRE.speedUp:BALL_RESTITUTION));
         return {x:bounce.x,y:bounce.y-launchGravity(incident)*t*t/2*out/(out+back),z:bounce.z};
     }
 }

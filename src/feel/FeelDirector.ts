@@ -35,6 +35,8 @@ import type {PickupKind,WeaponKind} from '../shared/pickups';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {reducedMotion} from '../ui/motion';
 import {pickupArtwork} from '../prototype/pickupArtwork';
+import {CarrierFeel} from './CarrierFeel';
+import type {CaseState} from '../shared/chaosState';
 /** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, cold lens cyan Stakeout; the
  * arsenal's orange Tommy Gun, the Laser's greasy cheesy yellow-green and the Mousetrap's pale pine. */
 const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#7ad8e8','tommy-gun':'#e8873e',laser:'#c8f040',mousetrap:'#e6dcc4'};
@@ -101,15 +103,18 @@ export class FeelDirector {
     private readonly impulse=new THREE.Vector3();
     private readonly up=new THREE.Vector3();
     private readonly inverse=new THREE.Quaternion();
+    /** K3: the hot case's carrier feel (yours only). */
+    private readonly carrier:CarrierFeel;
     constructor(readonly state:FeelState=feelState(),private readonly doc:Document|undefined=globalThis.document){
         this.camera=new CameraFeel(()=>this.state.shake());
         this.screen=new ScreenFeel(()=>this.state.flash(),doc);
         this.sound=new FeelSound(this.state);
+        this.carrier=new CarrierFeel(this.state,this.screen);
     }
     /** Connect the game canvas (colour drain) and audio listener (muffle, heartbeat). */
     attach(canvas:HTMLElement,listener?:THREE.AudioListener,touch=false):void {
         this.screen.attachCanvas(canvas);
-        if(listener){this.noirAudio=new NoirAudio(listener);this.sound.attach(listener.context);}
+        if(listener){this.noirAudio=new NoirAudio(listener);this.sound.attach(listener.context);this.carrier.attach(listener.context);}
         // Phones skip the full-canvas colour filter; the vignette and audio remain.
         this.colourFilter=!touch;
     }
@@ -197,6 +202,14 @@ export class FeelDirector {
         this.camera.widen(-p.punch);this.camera.kick(p.kick,(Math.random()*2-1)*p.kick*.4);
         if(self&&!self.dead&&!reducedMotion())self.squashPop(p.squash);
     }
+    /** K3, each frame: `mine` is the buffed hot case you carry (null when you do not, or are dead), `now` the chaos view's
+     * server time, `urgency` its nearness to scoring (0…1): the ping's red edge and your heartbeat. */
+    hotCase(mine:CaseState|null,now:number,urgency:number):void {this.carrier.update(mine,now,urgency);}
+    /** K3: a kill while carrying healed you (heal cause `case-kill`): the heartbeat surges, CASE CLOSED · HEALED. */
+    caseKillHealed():void {this.carrier.healed();}
+    /** K3: a buffed carrier fired (`origin` for another rat's, placed in the world; yours at full): the low thump
+     * under its shot. */
+    carrierShot(origin?:Vec3Data):void {if(this.state.on('hotCase'))playSynth('thump',origin,1,FEEL.hotCase.params.thump);}
     /** K1, everyone: the case bursts paperwork where it is taken, knocked loose or shot. */
     casePaper(at:Vec3Data,kind:'taken'|'loose'|'kick'):void {
         if(!this.state.on('caseClaim'))return;
@@ -596,7 +609,7 @@ export class FeelDirector {
         this.screen.film(this.colourFilter&&GRAPHICS.grain?grain:0,film*f.vignette,film>0&&(!!this.deathTarget||this.slowAge<FEEL.rewards.params.slowmo));
         if(this.noirAudio){
             this.noirAudio.space=this.state.on('sound')&&self?spaceAt(self):'open';
-            this.noirAudio.update(dt,this.danger,p.closed,p.period,on?p.heartbeat:0);
+            this.noirAudio.update(dt,this.danger,p.closed,p.period,on&&!this.carrier.active?p.heartbeat:0);
         }
     }
     /** P4: the rumble and a restless view build over the surge. */
@@ -626,6 +639,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.tommy?.clear();this.rattle=false;this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.claimStreaks=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.tommy?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
+    reset():void {this.camera.reset();this.screen.reset();this.carrier.stop();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.tommy?.clear();this.rattle=false;this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.claimStreaks=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    dispose():void {this.camera.reset();this.carrier.dispose();this.screen.dispose();this.noirAudio?.dispose();registerDust(undefined);this.dust?.dispose();this.launchJuice?.dispose();this.tommy?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();registerSupplyCues(undefined);RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
 }

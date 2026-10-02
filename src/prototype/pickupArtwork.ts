@@ -69,3 +69,12 @@ export function heldCard():HTMLElement {
     card.setAttribute('role','status');card.setAttribute('aria-label','Held in a trap · you can turn and shoot, not move');
     return card;
 }
+/** K3: the case red-hot in your paw, cuffed to a chain, heat rising off it. */
+const HOT_CASE_ART=`<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M36 34v-8a5 5 0 0 1 5-5h18a5 5 0 0 1 5 5v8" fill="none" ${ink}/><path d="M12 36h76l-3 46H15Z" fill="#ff3024" ${ink}/><path d="M14 52h72" stroke="#ffb27a" stroke-width="3"/><path d="M44 47h12v10H44Z" fill="#ffd28a" ${ink}/><path d="M21 42v34m58-34v34" stroke="#ff9a5c" stroke-width="2" opacity=".8"/><path d="M26 18c-4-5 4-8 0-13m22 11c-4-5 4-8 0-13m22 13c-4-5 4-8 0-13" fill="none" stroke="#ff7a4a" stroke-width="3" stroke-linecap="round"/><circle cx="92" cy="74" r="7" fill="none" stroke="#c9d3dc" stroke-width="4"/><path d="M85 72l-4-3m-2-2-4-3" stroke="#c9d3dc" stroke-width="4" stroke-linecap="round"/></svg>`;
+/** K3: while you carry the hot case, its buff in the supply cards' family (case red): no clock, held until you lose it. */
+export function hotCaseCard():HTMLElement {
+    const card=document.createElement('div');card.className='powerup-card powerup-hot-case';
+    card.innerHTML=`<div class="powerup-art">${HOT_CASE_ART}</div><div class="powerup-copy"><small>YOU’RE CARRYING THE</small><strong>HOT<br>CASE</strong><div class="powerup-healed">2× DAMAGE · A KILL HEALS YOU FULL</div></div><div class="powerup-stamp">EVIDENCE</div>`;
+    card.setAttribute('role','status');card.setAttribute('aria-label','Hot case · 2× damage · a kill heals you full');
+    return card;
+}

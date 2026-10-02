@@ -170,8 +170,9 @@ describe('natural briefcase carry',()=>{
         for(let i=1;i<=3;i++)expect(scene.getObjectByName(`hot-case-evidence-${i}`)).toBeUndefined();
         expect(mesh.getObjectByName('hot-case-off-hand')).toBeUndefined();
         expect(scene.getObjectByName('hot-case')).toBeDefined();
-        // Each extra case leaves the scene root whole: its body, and its beacon's rim and echo.
-        expect(scene.children.length).toBe(initialChildren-9);view.dispose();
+        // Each extra case leaves the scene root whole: its body, its beacon's rim and echo, and its hot look's root;
+        // the carried one also its carrier's hat band overlay.
+        expect(scene.children.length).toBe(initialChildren-13);view.dispose();
     });
     it('keeps the visible case and authoritative deflection body aligned through turns',()=>{
         for(const yaw of [0,Math.PI/2,Math.PI,Math.PI*1.6]){

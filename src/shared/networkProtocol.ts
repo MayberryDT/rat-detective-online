@@ -10,7 +10,7 @@ import type { AdminCommand, AdminResult } from './admin';
 /** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there.
  * 27: Tommy Gun, Laser and Mousetrap pickups; a stronger Excessive Force carrier; targets of 10 / 100 / 10; the incident rework.
  * 28: playtest quick patch: Planted Evidence and Bobbleheads removed, hitscan Laser at the cheese gun's rate, holding traps, carrier buff in every mode, results you leave when you choose.
- * 29: clarity: a pulsing red hot-case outline, Cheddar Shower removed, Crossfire heat and bank-shot paths, admin controls. */
+ * 29: clarity: the hot case heartbeat (the carrier flashes red through walls every 4 s, red-hot cuffed case), Cheddar Shower removed, flaming Crossfire streaks and bank-shot paths, admin controls. */
 export const PROTOCOL_VERSION = 29;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;

@@ -110,6 +110,18 @@ He played `staging-2026-10-02-9f3980b` and asked for three fixes, all agreed ("I
 - [x] Checked before handing back: full checks at `e368f32` (worker 255/255, client 1,561/1,561, scripts 133/133, build); the staging reconnect check; on staging bots made 4 Crossfire bank kills in the first minutes (death facts `bounces` 6, 3, 1, 1). Screenshots (`~/.cache/rd-shots/pf-*.png`) caught four look bugs, fixed in `7a25bc7`: the path's first leg did not draw, scorches sat behind the drawn facades, heat 3 read pink (it now emits white-hot, with a red-orange rim on another rat's ball) and the guide dots were tiny.
 - [ ] **Next action:** Tyler plays staging again (Worker `ebb024d3-a1bc-44d2-b4c8-e4ee8729aa45`, build `staging-2026-10-02-7a25bc7`); production on his OK (set `ADMIN_TOKEN` on production with the same key first).
 
+#### The hot case heartbeat and flaming Crossfire (agreed 2 October, second staging playtest)
+
+Tyler: Crossfire should be "flaming balls of cheese" that "really speed up when they hit a wall … almost look like the laser"; the carrier buff "is actually working really well" but "it needs to be much more clear that you are buffed while you're holding the case … double down on the rat detective thing, like you're on a hot case"; the case should not be visible all the time: "every few seconds … a really bright ping of the case, bright red, there's no mistaking it … you can't track the case 24/7 … you just kind of have an idea of where it's going"; the carried case should look different, tied to how the buffed rat looks. Agreed (and this supersedes the earlier "no case ping" call: the rejected ping was a gold flare, column, sonar and LAST SEEN text; this one is the carrier itself flashing red, silent and wordless):
+
+- [ ] **Flaming Crossfire:** about 1.6× speed per bounce (175 → 280 → 450 → 720 u/s), a speed-scaled tracer streak (white-hot with a fire-orange edge at heat 3), flames, embers and smoke off bounced balls, a fire splash and a flame "fwoomp" on each bounce.
+- [ ] **The heartbeat ping (4 s):** between pings others see the carrier only in direct sight; at each ping the carrier and case flash bright red through walls and fade in about 0.75 s. No sound or text for others. Bots know an unseen carrier only from pings and their own sight.
+- [ ] **The carried case:** handcuffed to the wrist on a short chain, and red-hot metal (seams glowing like coal, heat shimmer, smoke). The loose case stays red leather.
+- [ ] **The buffed rat:** red-hot coat edges, a red hat band, shimmer and embers, its glow beating on the heartbeat with a flare at each ping, glowing red footprints visible only close up.
+- [ ] **Feeling the buff:** a HOT CASE card (2× damage, a kill heals you full), a red screen-edge pulse at each ping, a Rat Detective heartbeat only the carrier hears (quickening near the score), heavier red-cored carrier shots with a thump and bigger hit sparks, and a kill while carrying gives a red heal flare, a heartbeat surge and CASE CLOSED · HEALED.
+- [ ] **No random supply for taking the case;** the buff gets that juice instead.
+- [ ] **Staging only:** every incident is Crossfire (`INCIDENTS=crossfire npm run deploy:staging`); production keeps the full rotation.
+
 ### Still open from the playtest
 
 - [ ] **Bad Ammunition:** Tyler: still not working. Trey and Cam: "make it shoot like garbage", in every direction. Kept for now.
@@ -120,7 +132,7 @@ He played `staging-2026-10-02-9f3980b` and asked for three fixes, all agreed ("I
 ### Decided against (Tyler, 2 October)
 
 - Shooting feel changes ("not a common opinion"); the mega laser and a new laser look ("the laser landed in a good spot"); keeping the case after a delivery; new launch pads; new music.
-- A case ping or LAST SEEN tracking (tried on staging; "barely useful", "so busy and annoying"); a sound on the case outline.
+- The gold case ping with a light column, sonar and LAST SEEN tracking (tried on staging; "barely useful", "so busy and annoying"), and any sound or text for others when the case pings.
 - Parked for now, to focus on clarity: a cheese web, criminal NPC rats, teams, a 20-kill streak reward, a MOBA.
 
 ## Protocol 27: the arsenal and the incident rework (Tyler, 2026-10-01)

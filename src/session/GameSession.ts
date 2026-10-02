@@ -32,6 +32,7 @@ import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import { ShotSpacing } from '../shared/shotTiming';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
+import { caseLastSeen } from '../shared/caseHeartbeat';
 import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, trapped, weaponArming, type WeaponKind } from '../shared/pickups';
 import { tommyHeat } from '../shared/shotPattern';
 import { laserPath } from '../shared/laser';
@@ -70,6 +71,8 @@ const LANDING_POSITION=new THREE.Vector3();
 /** Where a refused Mousetrap would have gone (its NO ROOM word). */
 const TRAP_SPOT=new THREE.Vector3();
 const HEADSHOT_NORMAL=new THREE.Vector3();
+/** K3: where a buffed carrier's ball struck a rat, and the way its red sparks spray. */
+const CARRIER_HIT=new THREE.Vector3(),CARRIER_SPRAY=new THREE.Vector3();
 /** Longest a welcome waits for off-thread shader links before drawing anyway. */
 const WELCOME_COMPILE_MS=2500;
 /** Fill slot `n` of the reused footstep list in place; returns the next slot. */
@@ -347,6 +350,7 @@ export class GameSession {
         const shot = this.gun.shoot(this.rat.entity, target, weapon);
         if(!shot)return;
         this.feel.shot(weapon);
+        if(weapon!=='mousetrap'&&this.carriesHotCase(this.myId))this.feel.carrierShot();
         if(weapon!=='mousetrap')this.feel.fired(shot.shotId,shot.origin,shot.direction,true,this.stage.camera,now,weapon!==undefined);
         if(weapon==='tommy-gun')this.feel.tommyRound(shot.origin,shot.direction,this.stage.camera);
         const movement=this.movementInput(),viewAt=this.remotes.viewAt?.(shot.origin,shot.direction);
@@ -361,6 +365,8 @@ export class GameSession {
         }
     }
     private requestPointerLock(): void { if (!this.title.settings?.isOpen && !this.touch?.active) this.pointerLock.request(); }
+    /** K3: `id` carries the buffed hot case (twice the damage, a kill heals it), as the authority's `carrierPower` judges. */
+    private carriesHotCase(id:string|null|undefined):boolean {const s=this.lastChaos;return !!id&&!!s&&s.case.owner===id&&s.assignment?.phase==='active';}
 
     private welcome(message: Extract<ServerMessage, { type: 'welcome' }>): void {
         this.clearInput(); this.touch?.showScores(false); this.roundWon = message.round.phase === 'won';
@@ -407,6 +413,8 @@ export class GameSession {
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
         if(this.chaos){
+            // K3: your ping pulse and heartbeat while you carry the buffed case (never while observing).
+            this.chaos.onCarry=(mine,now,urgency)=>this.feel.hotCase(this.observing?null:mine,now,urgency);
             this.chaos.onPresentedShot=(id,p,radius)=>this.cameos?.observeShot(id,p,radius,this.gun.sceneryClear);
             // W3: the trap's own foley where it happens: set down, SNAP with a spring twang, splinters per hit, a sad boing as it breaks.
             this.chaos.onTrap=(event,trap)=>{
@@ -524,6 +532,7 @@ export class GameSession {
                     // Observers read the shooter's weapon from the buffs: the Tommy's own report, flash and brass; the Laser's zap comes with its beam.
                     const weapon=heldWeapon(this.lastChaos?.buffs,message.shooterId,Date.now()+this.serverOffset);
                     this.gun.replayShot(owner,message,weapon);this.feel.fired(message.shotId,message.origin,message.direction,false,this.stage.camera,performance.now(),weapon!==undefined);
+                    if(weapon!=='mousetrap'&&this.carriesHotCase(message.shooterId))this.feel.carrierShot(message.origin);
                     if(weapon==='tommy-gun')this.feel.tommyRound(message.origin,message.direction,this.stage.camera);
                 }
                 break;
@@ -550,6 +559,14 @@ export class GameSession {
             case 'playerDamaged': {
                 if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){const victim=this.remotes.get(message.id);this.hud.showHitMarker(victim?victim.hp-message.hp:1);this.foley.play('hit-confirm');duckWorld(this.stage.listener.context,.5);if(victim)this.feel.hitDealt(victim.mesh.position,this.stage.camera);}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
+                // K3: a buffed carrier's hit sprays case-red sparks out of its victim, away from the carrier.
+                if(entity&&!entity.dead&&message.attackerId&&message.attackerId!==message.id&&this.carriesHotCase(message.attackerId)){
+                    const attacker=message.attackerId===this.myId?this.rat?.entity:this.remotes.get(message.attackerId);
+                    CARRIER_HIT.copy(entity.mesh.position);CARRIER_HIT.y+=1;
+                    if(attacker)CARRIER_SPRAY.copy(CARRIER_HIT).sub(attacker.mesh.position).setY(0);
+                    if(!attacker||CARRIER_SPRAY.lengthSq()<1e-6)CARRIER_SPRAY.set(0,1,0);
+                    this.chaos?.carrierHit(CARRIER_HIT,CARRIER_SPRAY.normalize().setY(.6));
+                }
                 if (message.id === this.myId) this.feel.health(message.hp);
                 if (entity && !entity.dead) {
                     if (message.hp === 0) {
@@ -573,11 +590,12 @@ export class GameSession {
             }
             case 'playerHealed': {
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
-                // C5: your Quick Fix refills the nameplate pips one at a time, ticking each.
-                const fix = message.id === this.myId;
-                entity?.heal(message.hp, fix ? this.feel.pipStagger : 0, this.pipTick);
+                // C5: your Quick Fix refills the nameplate pips one at a time, ticking each. K3: a case kill's heal flares
+                // case red up the rat instead (yours gets its surge and stamp from the kill itself).
+                const fix = message.id === this.myId, caseKill = message.cause === 'case-kill';
+                entity?.heal(message.hp, fix ? this.feel.pipStagger : 0, this.pipTick, caseKill);
                 if (message.id === this.myId) {
-                    this.chaos?.showHealing();
+                    if (!caseKill) this.chaos?.showHealing();
                     this.feel.health(message.hp,true);
                 }
                 break;
@@ -587,6 +605,8 @@ export class GameSession {
                 // damage packet or whether world playback already hid the rat.
                 const headshot=message.headshot===true,bank=message.bounces?message.bounces>=2?'TRICK SHOT':'BANK SHOT':undefined;
                 if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName,headshot,bank);this.foley.play('hit-confirm');duckWorld(this.stage.listener.context,1);const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId,headshot);}
+                // K3: a kill while you carry the buffed case: the heartbeat surges and CASE CLOSED · HEALED.
+                if(message.killerId===this.myId&&message.victimId!==this.myId&&this.carriesHotCase(this.myId))this.feel.caseKillHealed();
                 // A Crossfire bank kill: its killer's BANK SHOT (above) and slow-motion; killer and victim both see the ball's path.
                 if(message.path&&message.victimId!==message.killerId&&(message.killerId===this.myId||message.victimId===this.myId)){
                     if(message.killerId===this.myId)this.feel.bankShot();
@@ -856,12 +876,16 @@ export class GameSession {
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
-        // Dead: the recap's arrow toward the case (seen by everyone through walls).
+        // Dead: the recap's arrow toward the case: a loose one where it lies, someone else's at its latest heartbeat ping
+        // (never the live carrier; none before the first ping).
         if(this.rat?.entity.dead&&this.lastChaos){
-            const seen=this.lastChaos.case.p;
-            RECAP_LOCAL.set(seen.x,seen.y,seen.z).sub(camera.position);const metres=RECAP_LOCAL.length();
-            RECAP_LOCAL.applyQuaternion(RECAP_INVERSE.copy(camera.quaternion).invert());
-            this.hud.pointRecap(Math.atan2(RECAP_LOCAL.x,-RECAP_LOCAL.z),metres,'THE CASE');
+            const seen=caseLastSeen(this.lastChaos.case,this.myId);
+            if(!seen)this.hud.pointRecap(undefined,0,'');
+            else{
+                RECAP_LOCAL.set(seen.x,seen.y,seen.z).sub(camera.position);const metres=RECAP_LOCAL.length();
+                RECAP_LOCAL.applyQuaternion(RECAP_INVERSE.copy(camera.quaternion).invert());
+                this.hud.pointRecap(Math.atan2(RECAP_LOCAL.x,-RECAP_LOCAL.z),metres,'THE CASE');
+            }
         }
         if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon)this.showResultsBoard();
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}

@@ -153,8 +153,7 @@ export class DispatchHud {
             this.announcement.dataset.tone=lost?'lost':ownerIsLocal?'gained':'neutral';
             // Your take is the top headline, but the ON THE CASE stamp (K1) already says it: this one stays down unless that
             // is off. Everything else about the case is news. A join announces nothing; a delivery's filing credit says
-            // CASE RELOCATED itself.
-            if(initialized&&ownerIsLocal)headlines.explain('carrier');
+            // CASE RELOCATED itself. What carrying gives you is on the HOT CASE card (ChaosView) while you carry.
             const told=initialized&&!deliveryRespawn&&!(ownerIsLocal&&feelState().on('caseClaim'))&&headlines.claim(ownerIsLocal?'case':'case-news',ownerIsLocal?'case':'news',
                 `${title.toUpperCase()} · ${detail}`,2800,()=>{this.announceUntil=0;this.announcement.hidden=true;});
             this.announceUntil=told?now+2800:0;

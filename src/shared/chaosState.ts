@@ -15,8 +15,10 @@ export const CHAOS_TUNING = {
     /** Grip (Tyler, 1 October): a carried case is knocked loose by `caseGripHits` enemy balls, each within
      * `caseGripMs` of the last; after `caseGripMs` without a hit the grip is whole again. Killing the carrier still drops it. */
     caseGripHits: 3, caseGripMs: 2000,
-    /** Taking the case brings a random supply, at most once per this long per rat. */
-    caseRewardMs: 20000,
+    /** The hot case's heartbeat (Tyler, 2 October): a carried case is hidden from rats that cannot see it, except that it
+     * pings once when taken and then every `casePingMs` while carried (`CaseState.ping`), the whole carrier flashing red
+     * through walls. */
+    casePingMs: 4000,
     /** The case carrier's hits deal this many times their damage in every assignment, and any kill it makes heals it to full. */
     carrierDamage: 2,
     /** The quiet stretch between incidents was 21 s until the four-human playtest ("too chaotic"; protocol 28). */
@@ -62,11 +64,13 @@ export const INCIDENT_TUNING = {
     cheeseShakeRadius: 1.24, cheeseShakeRange: 25, cheeseShake: .9, cheeseShakeMs: 250, cheeseThudPitch: .6,
     cheesePistolWidth: 1.8, cheesePistolLength: 1.15, cheesePistolRate: 6,
 } as const;
-/** Crossfire (Tyler, 2 October: "make the whole city a pinball table"). Each real world bounce heats a ball a step, up
- * to `maxHeat`: it leaves the wall `speedUp`× faster and lives `life` s longer (at most `maxLife` s in all). A ball that
- * has bounced kills in one hit; the kill reports its world bounces (counted to `maxBounces`) and its path: the muzzle,
- * its first `pathPoints` bounces and the hit. */
-export const CROSSFIRE = { maxHeat: 3, speedUp: 1.15, life: .5, maxLife: 3, pathPoints: 6, maxBounces: 99 } as const;
+/** Crossfire (Tyler, 2 October: "make the whole city a pinball table"; "flaming balls of cheese that really speed up
+ * off walls, almost laser-like"). Each real world bounce heats a ball a step, up to `maxHeat`: it leaves the wall
+ * `speedUp`× as fast as it arrived (175, 280, 448, 717 u/s; at full heat it keeps its speed off every wall) and lives
+ * `life` s longer (at most `maxLife` s in all). A
+ * ball that has bounced kills in one hit; the kill reports its world bounces (counted to `maxBounces`) and its path: the
+ * muzzle, its first `pathPoints` bounces and the hit. */
+export const CROSSFIRE = { maxHeat: 3, speedUp: 1.6, life: .5, maxLife: 3, pathPoints: 6, maxBounces: 99 } as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
 export const CASE_LOOSE_SCALE = 2;
 // Street-level frontages distributed around the city, and the north's slots from its kit
@@ -176,6 +180,8 @@ export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
     /** Hits the carrier's grip has taken (1 or 2; absent when whole). Each is within `caseGripMs` of the last. */
     grip?: number;
+    /** The latest heartbeat ping while carried: when (server time) and where the case was. Absent when loose. */
+    ping?: { at:number; p:Vec3Data };
 }
 export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
 /** A set Mousetrap (`WEAPON_TUNING`): holds any other rat that steps on it in place for `trapHoldMs`. `hp` ball hits

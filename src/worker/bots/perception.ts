@@ -159,10 +159,14 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
             ...(recentHit(p.id)||aimedAtMe(p.id,self,state?.shots)?{shooting_at_me:'yes'}:{})};
     });
 
-    const c=state?.case,carrier=c?.owner?ctx.living.find(p=>p.id===c.owner):undefined;
+    // A carrier out of sight is known only where it was last seen or pinged (the hot case heartbeat); pings come
+    // every 4 s, so the age is in words, like every other number but HP.
+    const c=state?.case,carrier=c?.owner?ctx.carriers.find(k=>k.id===c.owner):undefined;
+    const carried=!carrier?'; I do not know where':carrier.seen?`, ${where(self,carrier.rat)}`
+        :`, last ${carrier.pinged?'pinged':'seen'} ${where(self,carrier.p)} ${time-carrier.at<1000?'just now':time-carrier.at<6000?'a few seconds ago':'a while ago'}`;
     const caseText=!c?'There is no case in play.':c.owner===self.id?'I am carrying the case.'
         :c.returningUntil>time?'The case is being returned and cannot be taken yet.'
-        :c.owner?`${alias(c.owner)} carries the case${carrier?`, ${where(self,carrier)}`:''}.`
+        :c.owner?`${alias(c.owner)} carries the case${carried}.`
         :`Nobody holds the case; it lies ${where(self,c.p)}.`;
 
     let standing='No assignment is running.';

@@ -2,15 +2,17 @@ import * as THREE from 'three';
 import {CROSSFIRE} from '../shared/chaosState';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {playSynth} from '../audio/IncidentAudio';
+import {CrossfireFlames} from './CrossfireFlames';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 
 /** Crossfire juice (Tyler, 2 October: "make the whole city a pinball table"). Each bounce throws `sparks` sparks (living
- * `sparkLife` s, flying up to `sparkSpeed` u/s) and leaves a glowing scorch `scorch` units across that fades over
- * `scorchMs` (at most `scorches` at once), and rings a ricochet at `ricochet` volume whose pitch rises `pitchStep` a
- * bounce for `pitchSteps` bounces. A bank kill's path glows `pathWidth` thick for `pathMs`. The aim guide dots the way
- * to the first wall (dots at least `guideGap` apart, `guideDots` in all) and `guideBounce` units of the rebound. */
+ * `sparkLife` s, flying up to `sparkSpeed` u/s), splashes fire (`CrossfireFlames`) and leaves a glowing scorch `scorch`
+ * units across that fades over `scorchMs` (at most `scorches` at once), and rings a ricochet at `ricochet` volume whose
+ * pitch rises `pitchStep` a bounce for `pitchSteps` bounces, over a flame "fwoomp" at `fwoomp` volume, deeper `fwoompDrop`
+ * a heat step. A bank kill's path glows `pathWidth` thick for `pathMs`. The aim guide dots the way to the first wall
+ * (dots at least `guideGap` apart, `guideDots` in all) and `guideBounce` units of the rebound. */
 export const CROSSFIRE_JUICE={sparks:7,sparkLife:.35,sparkSpeed:14,scorch:.42,scorchMs:3500,scorches:24,ricochet:.75,pitchStep:.14,pitchSteps:5,
-    pathWidth:.08,pathMs:2500,guideGap:1.1,guideDots:40,guideBounce:12} as const;
+    fwoomp:.6,fwoompDrop:.1,pathWidth:.08,pathMs:2500,guideGap:1.1,guideDots:40,guideBounce:12} as const;
 const J=CROSSFIRE_JUICE,SPARKS=48,SEGMENTS=CROSSFIRE.pathPoints+1,BOUNCE_DOTS=Math.ceil(J.guideBounce/J.guideGap);
 
 /** Linear colours by Crossfire heat (index heat − 1): red, orange, white-hot. Ball tints multiply the red Crossfire ball
@@ -29,9 +31,11 @@ export function heatPalette(dim:number){
 /** One world ray from `from` to `to`: true on a hit, with its point and outward normal written out. */
 export type SceneryCast=(from:Vec3Data,to:Vec3Data,point:THREE.Vector3,normal:THREE.Vector3)=>boolean;
 
-/** Every Crossfire bounce's sparks, scorch and ricochet; a bank kill's glowing path; your aim guide. Fixed pools, no
- * lights, nothing allocated per frame. */
+/** Every Crossfire bounce's sparks, fire splash, scorch and ricochet; the hot balls' fire; a bank kill's glowing path;
+ * your aim guide. Fixed pools, no lights, nothing allocated per frame. */
 export class CrossfireVisual {
+    /** The hot balls' flames, embers, smoke and fireballs, and every bounce's fire splash. */
+    readonly flames:CrossfireFlames;
     private readonly root=new THREE.Group();
     private readonly glow=heatPalette(1).glow;
     private readonly sparks=new THREE.InstancedMesh(new THREE.BoxGeometry(.035,.035,1),
@@ -79,9 +83,11 @@ export class CrossfireVisual {
         });
         this.path.renderOrder=10;
         this.root.name='crossfire-juice';scene.add(this.root);
+        this.flames=new CrossfireFlames(scene);
     }
 
-    /** A Crossfire world bounce at `p` off a surface facing `normal`, the ball's `bounces`th: sparks, a scorch and a ricochet. */
+    /** A Crossfire world bounce at `p` off a surface facing `normal`, the ball's `bounces`th: sparks, a fire splash, a
+     * scorch, a ricochet and a fwoomp. */
     bounce(p:Vec3Data,normal:Vec3Data,bounces:number):void {
         const heat=Math.min(CROSSFIRE.maxHeat,bounces)-1,glow=this.glow[heat]!;
         this.n.set(normal.x,normal.y,normal.z).normalize();
@@ -100,7 +106,9 @@ export class CrossfireVisual {
         this.dummy.scale.setScalar(.8+.25*heat);this.dummy.updateMatrix();
         this.scorches.setMatrixAt(index,this.dummy.matrix);this.scorches.instanceMatrix.needsUpdate=true;
         this.scorches.count=Math.max(this.scorches.count,index+1);this.scorches.visible=this.scorchesLive=true;
+        this.flames.splash(p,normal,heat);
         playSynth('ricochet',p,1+J.pitchStep*(Math.min(bounces,J.pitchSteps+1)-1),J.ricochet);
+        playSynth('fwoomp',p,1-J.fwoompDrop*heat,J.fwoomp);
     }
 
     /** A bank kill you made or took: its path (muzzle, bounces, hit) glows red and fades. */
@@ -148,6 +156,7 @@ export class CrossfireVisual {
     }
 
     update(dt:number):void {
+        this.flames.update(dt);
         if(this.sparksLive){
             let live=false;
             for(let i=0;i<SPARKS;i++){
@@ -182,7 +191,7 @@ export class CrossfireVisual {
     }
 
     dispose():void {
-        this.root.removeFromParent();disposeMeshResources(this.root);
+        this.root.removeFromParent();disposeMeshResources(this.root);this.flames.dispose();
         for(const mesh of [this.sparks,this.scorches,this.path,this.dots])mesh.dispose();
     }
 }

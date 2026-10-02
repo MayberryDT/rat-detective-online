@@ -43,7 +43,8 @@ export class RatPowerupEffects {
         this.trail.visible=this.wave.visible=this.applyWave.visible=false;this.root.add(this.applyWave);this.root.name="rat-powerup-effects";this.root.add(this.trail,this.wave);
         this.root.visible=false;scene.add(this.root);
     }
-    heal():void {this.healing=.7;}
+    /** The upward healing sweep, Quick Fix green or (a case-kill heal) `color`. */
+    heal(color=0x63ff9a):void {this.healing=.7;this.healMaterial.color.setHex(color);}
     apply(kind:TimedPickup):void {this.applying=.42;this.applyMaterial.color.setHex(APPLY_COLOR[kind]);}
     clear():void {this.root.visible=false;this.count=0;this.healing=0;this.applying=0;this.lastSample=-Infinity;this.trail.visible=this.wave.visible=this.applyWave.visible=false;this.trailGeometry.setDrawRange(0,0);}
     update(dt:number,position:THREE.Vector3,hustle:boolean):void {

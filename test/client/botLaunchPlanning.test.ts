@@ -12,7 +12,7 @@ const STOPPED={x:expect.closeTo(0),z:expect.closeTo(0)};
 
 function fixture(){
  const link=BOT_LAUNCH_LINKS[0],self=createPlayer('bot','Bot',DEFAULT_APPEARANCE,link.machine.pad),human=createPlayer('human','Human',DEFAULT_APPEARANCE,link.landing);
- const state:ChaosState={time:1000,case:{owner:human.id,previousOwner:null,pickupAfter:0,returningUntil:0,p:link.landing,q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'cooldown',started:0,until:5000,serial:0},possession:{},shots:[],corpses:[],impacts:[],notice:{serial:0,text:''}};
+ const state:ChaosState={time:1000,case:{owner:human.id,previousOwner:null,pickupAfter:0,returningUntil:0,p:link.landing,q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0},ping:{at:1000,p:{...link.landing}}},dispatch:{phase:'cooldown',started:0,until:5000,serial:0},possession:{},shots:[],corpses:[],impacts:[],notice:{serial:0,text:''}};
  const route=vi.fn(()=>[{...link.machine.pad,launch:link},{...link.landing}]);
  const brain=new RatBot({route,explorationTargets:()=>[]},0,()=>.5);
  return {brain,link,self,human,state,route};

@@ -120,6 +120,10 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 /* Held in another rat's Mousetrap: the trap's pale pine ink, a clamped tilt and the clock until it lets go. */
 .powerup-held{--powerup:#e6dcc4;rotate:-1.5deg}
 .powerup-held .powerup-gauge{margin-top:5px}
+/* K3 the hot case while you carry it: case-red ink, no clock (it is yours until you lose it), and what it gives you. */
+.powerup-hot-case{--powerup:var(--case-red);rotate:1.5deg}
+.powerup-hot-case .powerup-copy{padding-right:0}
+.powerup-hot-case .powerup-healed{font-size:12px;line-height:1.15}
 /* Words explained once per browser (Headlines.firstTime): after the first HELD or dud card, only the word. */
 .powerup-card.explained .powerup-dud{display:none}
 .powerup-card.explained .powerup-gauge{margin-top:10px}
@@ -185,7 +189,8 @@ body:has(.dispatch-hud) #kill-feed{top:280px}
 .hot-case-tag{position:fixed;left:0;top:0;z-index:6;display:none;width:174px;text-align:center;pointer-events:none;will-change:transform;color:var(--case-red);opacity:.85;text-shadow:0 1px 2px #000,0 0 4px #000}
 .hot-case-tag>*{animation:carbon-bob 1.6s ease-in-out infinite}
 .hot-case-title{display:block;font:13px/1 var(--font-type);letter-spacing:.14em}
-.hot-case-tag.carried{opacity:.7}
+/* Someone else's carried case: just HOT CASE where it pinged, fading with the ping flash (inline opacity). */
+.hot-case-tag.carried .hot-case-detail{display:none}
 .hot-case-detail{margin-top:3px;font:10px/1.2 var(--font-type);letter-spacing:.06em;color:var(--carbon-ink)}
 /* Quick Fix x-ray beacons: a faded green first-aid mark on a carbon ring. */
 .quick-fix-beacon{position:fixed;left:0;top:0;z-index:36;pointer-events:none;width:40px;height:40px;border-radius:50%;border:2px dashed #7fbf92b3;background:radial-gradient(circle,#0c1224cc 55%,#0c122400 72%);

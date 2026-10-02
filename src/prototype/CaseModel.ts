@@ -8,11 +8,19 @@ import { CASE_RED } from './caseRed';
 /** The evidence tag's pivot on the handle; `CaseMotion` swings it. */
 export const CASE_TAG = 'case-tag';
 
+/** The case's own materials (fresh per case), for looks that recolour one case: the carried hot case (`HotCaseLook`). */
+export interface CaseMaterials {
+    leather:THREE.MeshStandardMaterial;panel:THREE.MeshStandardMaterial;edge:THREE.MeshStandardMaterial;brass:THREE.MeshStandardMaterial;
+    paper:THREE.MeshStandardMaterial;ink:THREE.MeshStandardMaterial;red:THREE.MeshStandardMaterial;
+    /** The red back-face silhouette shells, innermost first. */
+    shells:THREE.MeshBasicMaterial[];
+}
+
 /** An overstuffed attorney's briefcase, brought up to the rats' detail (1 October): soft rounded leather, a brass top
  * frame, corner caps, two sprung latches and a keyed lock plate, buckled straps, a curved stitched handle on brass loops,
  * papers bursting from the seam and a red EVIDENCE tag on a string. The shell keeps the physical collision size; every
  * fixed part merges per material, and only the tag moves. */
-export function addLeatherBriefcase(root:THREE.Group){
+export function addLeatherBriefcase(root:THREE.Group):CaseMaterials {
     const firstChild=root.children.length;
     const {x:W,y:H,z:D}=CASE_SIZE;
     const leather=new THREE.MeshStandardMaterial({color:0x633d29,roughness:.72,emissive:0x633d29,emissiveIntensity:.28});
@@ -28,12 +36,13 @@ export function addLeatherBriefcase(root:THREE.Group){
     const box=(w:number,h:number,d:number,radius=0)=>radius?new RoundedBoxGeometry(w,h,d,3,radius):new THREE.BoxGeometry(w,h,d);
     // Back-face shells draw only the silhouette, never the hidden box edges, in the hot-case red.
     // Depth testing preserves the solid leather body and nearby character occlusion.
+    const shells:THREE.MeshBasicMaterial[]=[];
     for (const [expansion, opacity] of [[.025,1],[.055,.36],[.085,.14]]) {
         const material=new THREE.MeshBasicMaterial({color:CASE_RED,side:THREE.BackSide,
             transparent:true,opacity,depthTest:true,depthWrite:false,
             blending:THREE.AdditiveBlending,toneMapped:false});
         const shell=new THREE.Mesh(new RoundedBoxGeometry(W+expansion*2,H+expansion*2,D+expansion*2,3,.03),material);
-        shell.name='case-silhouette-glow';shell.raycast=()=>{};root.add(shell);
+        shell.name='case-silhouette-glow';shell.raycast=()=>{};root.add(shell);shells.push(material);
     }
     // The body: soft rounded leather bulging a little at the middle, a darker gusset band and a brass top frame.
     part('leather-case-shell',box(W,H*.92,D,.07),leather,0,-H*.04,0);
@@ -105,4 +114,5 @@ export function addLeatherBriefcase(root:THREE.Group){
     root.add(tag);
     // The case moves as one: its parts never move within it, except the tag's pivot, which `CaseMotion` swings.
     for(const child of root.children)freezeStatic(child,[tag]);
+    return {leather,panel,edge,brass,paper,ink,red,shells};
 }

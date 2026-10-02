@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {freezeStatic} from '../utils/freezeStatic';
+import {CASE_RED} from '../prototype/caseRed';
 
 /** Clarity batch visual budget (protocol 29): crumbs 160 → 96, wall splats 40 → 24, drips 60 → 32 at once. */
 const CRUMBS=96,MARKS=24;
@@ -29,7 +30,10 @@ export class CheeseImpactEffects {
     private readonly sparkGeometry = new THREE.BoxGeometry(.04, .04, 1);
     private readonly sparkMaterial = new THREE.MeshBasicMaterial({color: 0xf2f6ff, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false});
     private readonly sparks = new THREE.InstancedMesh(this.sparkGeometry, this.sparkMaterial, SPARKS);
-    private readonly sparkSlots = Array.from({length:SPARKS},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,life:0}));
+    private readonly sparkSlots = Array.from({length:SPARKS},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,life:0,hot:false}));
+    /** Per-spark tint: Ironclad silver, or (K3) the case red off a carrier's hit. */
+    private readonly sparkSilver = new THREE.Color(1, 1, 1);
+    private readonly sparkHot = new THREE.Color(CASE_RED);
     private sparkCursor=0;
     private readonly look=new THREE.Vector3();
     private readonly basis=new THREE.Matrix4();
@@ -58,6 +62,7 @@ export class CheeseImpactEffects {
         this.splats = new THREE.InstancedMesh(this.splatGeometry, this.splatMaterial, MARKS);
         this.root.name = 'cheese-impact-effects';this.root.userData.noNoir = true;
         this.crumbs.count = this.splats.count = this.drips.count = this.sparks.count = 0;
+        this.sparks.setColorAt(0, this.sparkSilver);
         this.crumbs.visible = this.splats.visible = this.drips.visible = this.sparks.visible = false;
         this.crumbs.frustumCulled = this.splats.frustumCulled = this.drips.frustumCulled = this.sparks.frustumCulled = false;
         this.root.add(this.crumbs, this.splats, this.drips, this.sparks); freezeStatic(this.root); scene.add(this.root);
@@ -142,28 +147,30 @@ export class CheeseImpactEffects {
             this.dummy.lookAt(this.look.copy(spark.position).add(spark.velocity));
             const fade=1-spark.age/spark.life;
             this.dummy.scale.set(fade,fade,Math.max(.02,spark.velocity.length()*.055*fade));
-            this.dummy.updateMatrix();this.sparks.setMatrixAt(sparkCount++,this.dummy.matrix);
+            this.dummy.updateMatrix();this.sparks.setColorAt(sparkCount,spark.hot?this.sparkHot:this.sparkSilver);this.sparks.setMatrixAt(sparkCount++,this.dummy.matrix);
         }
         this.crumbs.count=particleCount;this.splats.count=markCount;this.drips.count=dripCount;this.sparks.count=sparkCount;
         // Empty pools skip the draw setup entirely.
         this.crumbs.visible=particleCount>0;this.splats.visible=markCount>0;this.drips.visible=dripCount>0;this.sparks.visible=sparkCount>0;
         this.active=particleCount+markCount+dripCount+sparkCount>0;
         this.crumbs.instanceMatrix.needsUpdate = this.splats.instanceMatrix.needsUpdate = this.drips.instanceMatrix.needsUpdate = this.sparks.instanceMatrix.needsUpdate = true;
+        if (this.sparks.instanceColor) this.sparks.instanceColor.needsUpdate = sparkCount > 0;
     }
 
-    /** A bright burst off an Ironclad coat at `point`, sprayed around `normal`. */
-    spark(point: THREE.Vector3, normal: THREE.Vector3): void {
-        if (this.disposed || !feelState().on('ironcladSparks')) return;
-        const p=FEEL.ironcladSparks.params;
+    /** A bright burst off an Ironclad coat at `point`, sprayed around `normal`. `hot` (K3): a carrier's hit instead,
+     * `hotCase.sparks` case-red sparks flung faster. */
+    spark(point: THREE.Vector3, normal: THREE.Vector3, hot = false): void {
+        if (this.disposed || !feelState().on(hot ? 'hotCase' : 'ironcladSparks')) return;
+        const p=FEEL.ironcladSparks.params,speedUp=hot?1.3:1;
         this.normal.copy(normal).normalize();
         this.tangent.set(Math.abs(this.normal.y) < 0.9 ? 0 : 1, Math.abs(this.normal.y) < 0.9 ? 1 : 0, 0).cross(this.normal).normalize();
         this.bitangent.crossVectors(this.normal, this.tangent);
-        const count=Math.max(1,Math.min(SPARKS/2,Math.round(p.count))),phase=++this.sequence*2.39996;
+        const count=Math.max(1,Math.min(SPARKS/2,Math.round(hot?FEEL.hotCase.params.sparks:p.count))),phase=++this.sequence*2.39996;
         for(let i=0;i<count;i++){
-            const spark=this.sparkSlots[this.sparkCursor++%SPARKS],angle=phase+i*2.39996,speed=p.speed*(.6+.4*((i*7)%5)/4);
+            const spark=this.sparkSlots[this.sparkCursor++%SPARKS],angle=phase+i*2.39996,speed=p.speed*speedUp*(.6+.4*((i*7)%5)/4);
             spark.velocity.copy(this.normal).multiplyScalar(speed*.8)
                 .addScaledVector(this.tangent,Math.cos(angle)*speed*.7).addScaledVector(this.bitangent,Math.sin(angle)*speed*.7);
-            spark.position.copy(point);spark.age=0;spark.life=p.life*(.7+.3*((i*3)%4)/3);
+            spark.position.copy(point);spark.age=0;spark.life=p.life*(.7+.3*((i*3)%4)/3);spark.hot=hot;
         }
         this.active=true;
     }

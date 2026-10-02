@@ -187,3 +187,17 @@ it('sends only changed list items and impacts as rows, rebuilding every list and
  check();
  for(let frame=0;frame<300;frame++){s.corpses[2].p.y+=.01;check();}
 });
+it('carries the hot case heartbeat ping exactly while carried, clears it when loose, and refuses a malformed or loose ping',()=>{
+ const s=state(0),e=new ChaosEncoder('ping',true),d=new ChaosDecoder();
+ const check=()=>{const message=d.read(e.encode(s).payload)?.message;expect(message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));return message?.type==='chaos'?message.state.case.ping:null;};
+ s.case.owner='rat';s.case.ping={at:1000,p:{x:3.25,y:1,z:-2.5}};
+ expect(check()).toEqual(s.case.ping);
+ s.case.p.x+=4;s.case.ping={at:5000,p:{x:7.25,y:1,z:-2.5}};
+ expect(check()).toEqual(s.case.ping);
+ s.case.owner=null;delete s.case.ping;
+ expect(check()).toBeUndefined();
+ const parse=(c:Record<string,unknown>)=>parseServerMessage(JSON.parse(serializeServerMessage({type:'chaos',state:{...s,case:{...s.case,...c} as ChaosState['case']}})));
+ expect(parse({ping:{at:1000,p:{x:0,y:0,z:0}}})).toBeNull();
+ expect(parse({owner:'rat',ping:{at:'soon',p:{x:0,y:0,z:0}}})).toBeNull();
+ expect(parse({owner:'rat',ping:{at:1000}})).toBeNull();
+});

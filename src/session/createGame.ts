@@ -17,6 +17,7 @@ import { readLightingMode } from './lightingMode';
 import { PickupVisual } from '../prototype/PickupVisual';
 import { PickupRespawnVisual } from '../prototype/PickupRespawnVisual';
 import { addLeatherBriefcase } from '../prototype/CaseModel';
+import { HotCaseLook } from '../prototype/HotCaseLook';
 import { PICKUP_KINDS } from '../shared/pickups';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { PressureMachine } from '../prototype/PressureMachine';
@@ -64,7 +65,8 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         ironclad.setPowerups(1e6,0,0);ironclad.enableRigidBatching();models.push(ironclad);
         // Quick Fix kits grow an x-ray shell at low health.
         for(const kind of PICKUP_KINDS){const pickup=new PickupVisual(stage.scene,kind);pickup.setXray(true);pickups.push(pickup);}
-        addLeatherBriefcase(briefcase);stage.scene.add(briefcase);
+        // The carried case's red-hot look (its own coat-rim, spark, print and chain programs) on the batched opponent.
+        const hotLook=new HotCaseLook(stage.scene,briefcase,addLeatherBriefcase(briefcase));stage.scene.add(briefcase);hotLook.warm(enemy);street.push(hotLook);
         // The welcome builds the launchers, Dispatch pillars, the case's beacon, the zones, the
         // flying cheese and the supplies' restock dials (one per kind: each draws its shared icon); warm them too.
         const shots=createShotDraws(1),restocks=PICKUP_KINDS.map(kind=>new PickupRespawnVisual(kind));stage.scene.add(shots.root,...restocks.map(dial=>dial.root));

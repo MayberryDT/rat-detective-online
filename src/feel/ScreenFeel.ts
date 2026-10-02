@@ -37,6 +37,9 @@ export class ScreenFeel {
     private inkNode?:HTMLElement;
     private lensNode?:HTMLElement;
     private caseNode?:HTMLElement;
+    private caseClosedNode?:HTMLElement;
+    private casePingNode?:HTMLElement;
+    private lastCasePing=0;
     private trapNode?:HTMLElement;
     private readonly caseSheets:HTMLElement[]=[];
     private lastFilm='';
@@ -174,6 +177,22 @@ export class ScreenFeel {
         });
         replay(this.caseNode,'on');
     }
+    /** K3: the hot case you carry pinged (every rat saw you): the case-red edge at `level` (0…1, from `pingFlash`) ×
+     * Flash strength. Written only when it changes; 0 between pings. */
+    casePing(level:number):void {
+        const value=Math.round(level*this.flash()*100)/100;
+        if(value===this.lastCasePing)return;
+        this.lastCasePing=value;
+        if(!this.build()||!this.casePingNode)return;
+        this.casePingNode.style.opacity=String(value);
+    }
+    /** K3: a kill while carrying healed you: a short CASE CLOSED · HEALED stamp, the top headline. */
+    caseClosed():void {
+        if(!this.build()||!this.caseClosedNode)return;
+        const node=this.caseClosedNode;
+        if(!headlines.claim('case-closed','case','CASE CLOSED · HEALED',1100,()=>node.classList.remove('on')))return;
+        replay(node,'on');
+    }
     /** W3: you took up a Mousetrap: the trap (`art`) comes up big from the bottom of the screen, a TRAP IN PAW stamp slams
      * on, and a fuse burns for `lockMs` (the trigger's lockout) before SET IT DOWN! says the next press sets it. A pale pine
      * edge flash (`flash` × Flash strength). Reduced interface motion fades it in place. A lesser headline: when something
@@ -247,14 +266,14 @@ export class ScreenFeel {
         if(this.irisNode)this.irisNode.style.opacity='0';
         if(this.speedNode){this.speedNode.style.opacity='0';this.speedNode.classList.remove('on');}
         this.calloutNode?.classList.remove('on');
-        for(const node of [this.claimNode,this.inkNode,this.lensNode,this.caseNode,this.trapNode])node?.classList.remove('on');
-        this.lastSpeed=0;
+        for(const node of [this.claimNode,this.inkNode,this.lensNode,this.caseNode,this.caseClosedNode,this.trapNode])node?.classList.remove('on');
+        this.lastSpeed=0;this.lastCasePing=0;if(this.casePingNode)this.casePingNode.style.opacity='0';
         this.lastFilm='';this.root?.classList.remove('letterboxed');
         if(this.canvas&&this.lastFilter){this.canvas.style.filter='';this.lastFilter='';}
         this.lastNoir=0;
     }
 
-    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=this.caseNode=this.trapNode=undefined;this.caseSheets.length=0;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
+    dispose():void {this.reset();this.root?.remove();this.noirEdge=undefined;this.irisNode=undefined;this.speedNode=undefined;this.calloutNode=undefined;this.grainNode=undefined;this.vignetteNode=undefined;this.claimNode=this.inkNode=this.lensNode=this.caseNode=this.caseClosedNode=this.casePingNode=this.trapNode=undefined;this.caseSheets.length=0;this.root=undefined;this.edge=undefined;this.bloom=undefined;this.arrows.length=0;this.words.length=0;}
 
     private build():boolean {
         if(this.root)return true;
@@ -278,6 +297,10 @@ export class ScreenFeel {
         for(let i=0;i<16;i++){const sheet=this.doc.createElement('div');sheet.className='feel-case-sheet';this.caseNode.appendChild(sheet);this.caseSheets.push(sheet);}
         const stamp=this.doc.createElement('div');stamp.className='feel-case-stamp';stamp.textContent='ON THE CASE';this.caseNode.appendChild(stamp);
         this.root.appendChild(this.caseNode);
+        this.casePingNode=this.doc.createElement('div');this.casePingNode.className='feel-case-ping';this.root.appendChild(this.casePingNode);
+        this.caseClosedNode=this.doc.createElement('div');this.caseClosedNode.className='feel-case feel-case-closed';
+        const closed=this.doc.createElement('div');closed.className='feel-case-stamp';closed.textContent='CASE CLOSED · HEALED';this.caseClosedNode.appendChild(closed);
+        this.root.appendChild(this.caseClosedNode);
         this.bloom=this.doc.createElement('div');this.bloom.className='feel-kill-bloom';this.root.appendChild(this.bloom);
         for(let i=0;i<3;i++){const node=this.doc.createElement('div');node.className='feel-word';this.root.appendChild(node);this.words.push(node);}
         for(let i=0;i<ARROWS;i++){

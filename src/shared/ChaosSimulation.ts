@@ -52,6 +52,8 @@ interface CaseRuntime {
     hitAfter:Map<string,number>;pickupAfter:number;returningUntil:number;looseSince:number;
     /** Grip: enemy balls taken by the carrier's case, the last at `gripAt` (`gripBall`, so one ball counts once). */
     grip:number;gripAt:number;gripBall?:string;
+    /** The latest heartbeat ping while carried (`CaseState.ping`); cleared when the case comes loose. */
+    ping?:NonNullable<CaseState['ping']>;
     scale:number;lastSpawn:Vec3Data;armed:boolean;
     /** Ridden a municipal launcher pad. Swept flight with its own lift cap, and
      * exempt from the loose-case recovery watchdog until it settles. */
@@ -77,7 +79,7 @@ export type PickupEvent =
     | { kind:'rewarded'; playerId:string; pickup:PickupKind; why:RewardReason }
     /** A Mousetrap was set down, snapped on a rat and holds it (`victim`), or destroyed (`by` the rat whose hit broke it). */
     | { kind:'trap'; what:'set'|'snap'|'break'; trapId:string; playerId:string; p:Vec3Data; victim?:string; by?:string|null; hits?:number };
-export type RewardReason='case'|'streak'|'dispatch'|'bounty';
+export type RewardReason='streak'|'dispatch'|'bounty';
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
 export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
@@ -162,8 +164,6 @@ export class ChaosSimulation {
     get time():number{return this.now;}
     private assignment?:AssignmentRules;
     private primaryAcquiredAt=0;
-    /** When each rat may next be rewarded for taking the case. */
-    private readonly caseRewards=new Map<string,number>();
     get assignmentState():AssignmentState|undefined{return this.assignment?.state;}
     /** All Units: where the fallen respawn beside the action, the active zone or the real case. */
     get allUnitsTarget():Vec3Data|undefined{
@@ -339,14 +339,8 @@ export class ChaosSimulation {
         if(closest.distanceTo(p)>T.pickupRadius)return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'too-far'};
         if(this.ray(closest,p,1).hasHit||this.ray(reach,p,1).hasHit)return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'blocked'};
         c.owner=player.id;c.grip=0;this.primaryAcquiredAt=now;this.carry(player,c);this.checkAssignmentLocation(c);
-        if(c.owner===player.id){this.tell('This rat is on the case · '+player.name);this.rewardCasePickup(player.id,now);return{accepted:true,target:'case',targetId:'primary',playerId:player.id};}
+        if(c.owner===player.id){this.tell('This rat is on the case · '+player.name);return{accepted:true,target:'case',targetId:'primary',playerId:player.id};}
         return{accepted:false,target:'case',targetId:'primary',playerId:player.id,reason:'ineligible'};
-    }
-    /** Taking the case brings a random supply, as a kill streak title does (Tyler, 1 October), at most once per
-     * `caseRewardMs` per rat so a dropped case can't be farmed. */
-    private rewardCasePickup(id:string,now:number){
-        if(now<(this.caseRewards.get(id)??-Infinity))return;
-        this.caseRewards.set(id,now+T.caseRewardMs);this.rewardSupply(id,'case');
     }
     claimInteraction(playerId:string,target:PickupTarget,targetId:string,generation:number,now:number):PickupClaimResult {
         const player=this.players.get(playerId);
@@ -1105,13 +1099,15 @@ export class ChaosSimulation {
         c.body.position.vadd(new C.Vec3(p.x,p.y,p.z),c.body.position);
         q.mult(caseCarryRotation,c.body.quaternion);c.body.velocity.setZero();c.body.angularVelocity.setZero();
         c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;c.body.updateAABB();
+        // The heartbeat ping: once when taken, then every `casePingMs` while carried.
+        if(!c.ping||this.now-c.ping.at>=T.casePingMs)c.ping={at:this.now,p:{x:c.body.position.x,y:c.body.position.y,z:c.body.position.z}};
     }
     release(id:string,incoming?:Vec3Data){
         for(const c of this.cases.values())if(c.owner===id)this.releaseCase(c,incoming);
     }
     private releaseCase(c:CaseRuntime,incoming?:Vec3Data){
         if(!c.owner)return;
-        const id=c.owner;c.owner=null;c.grip=0;
+        const id=c.owner;c.owner=null;c.grip=0;c.ping=undefined;
         if(c===this.primaryCase&&this.assignment?.state.jurisdiction){this.assignment.state.jurisdiction.scorerId=null;this.assignment.state.revision++;}this.scaleCase(CASE_LOOSE_SCALE,c);
         c.body.position.y+=CASE_SIZE.y*(CASE_LOOSE_SCALE-1)/2;
         c.previousOwner=id;c.pickupAfter=this.now+T.formerCarrierDelay;c.looseSince=this.now;
@@ -1121,7 +1117,6 @@ export class ChaosSimulation {
         this.tell('CASE LOOSE · This is no longer your problem.');
     }
     removePlayer(id:string){
-        this.caseRewards.delete(id);
         this.pickupApproaches.delete(id);
         this.assignment?.disconnect(id);
         this.release(id);delete this.possession[id];this.tommyHeat.delete(id);
@@ -1753,7 +1748,8 @@ export class ChaosSimulation {
     }
     private caseSnapshot(c:CaseRuntime):CaseState{
         return {...pose(c.body),owner:c.owner,previousOwner:c.previousOwner,pickupAfter:c.pickupAfter,
-            returningUntil:c.returningUntil,...(c.owner&&c.grip&&this.now-c.gripAt<=T.caseGripMs?{grip:c.grip}:{}),...(c.missileOwner?{missileOwner:c.missileOwner}:{})};
+            returningUntil:c.returningUntil,...(c.owner&&c.grip&&this.now-c.gripAt<=T.caseGripMs?{grip:c.grip}:{}),...(c.missileOwner?{missileOwner:c.missileOwner}:{}),
+            ...(c.owner&&c.ping?{ping:{at:c.ping.at,p:{...c.ping.p}}}:{})};
     }
     /** One enemy ball on a carried case. True when this hit breaks the grip; a ball counts once, and a grip left alone for `caseGripMs` is whole again. */
     private loosensGrip(c:CaseRuntime,ball:string,now:number):boolean{
@@ -1792,7 +1788,7 @@ export class ChaosSimulation {
             shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts.slice(-64),...(this.impacts.length<64?this.audioImpacts.slice(-(64-this.impacts.length)):[])].slice(0,64),notice:{...this.notice}};
         if(drain){this.impacts=[];this.audioImpacts=[];}return state;
     }
-    reset(){for(const shot of this.shots)this.finishShot(shot,'reset');this.pickupApproaches.clear();this.caseRewards.clear();this.recentPickupClaims.clear();this.ratHistory.clear();this.caseHistory.length=0;this.ratLives.clear();this.shotViews.clear();this.shotTriggers.clear();this.epoch=crypto.randomUUID();this.tick=0;this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
+    reset(){for(const shot of this.shots)this.finishShot(shot,'reset');this.pickupApproaches.clear();this.recentPickupClaims.clear();this.ratHistory.clear();this.caseHistory.length=0;this.ratLives.clear();this.shotViews.clear();this.shotTriggers.clear();this.epoch=crypto.randomUUID();this.tick=0;this.impacts=[];this.audioImpacts=[];for(const id of [...this.corpses.keys()])this.removeCorpse(id);this.shots=[];this.primaryCase.owner=null;this.primaryCase.missileOwner=undefined;this.primaryCase.hitAfter.clear();this.primaryCase.armed=false;this.possession={};
         this.assignment=undefined;
         this.buffs={};this.pickupEvents.length=0;this.tommyHeat.clear();this.beams=[];
         for(const id of [...this.traps.keys()])this.removeTrap(id);
@@ -1802,11 +1798,12 @@ export class ChaosSimulation {
         this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();this.pendingVents.clear();
         this.misfireAt.clear();this.clangAt=0;this.incidentEvents.length=0;
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
-        this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}
+        this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;this.primaryCase.ping=undefined;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){
         c.owner=saved.owner&&!this.isCaseHolder(saved.owner)?saved.owner:null;
         c.previousOwner=saved.previousOwner;c.pickupAfter=saved.pickupAfter;c.missileOwner=saved.missileOwner;
         c.returningUntil=saved.returningUntil;c.looseSince=time;this.scaleCase(c.owner?1:CASE_LOOSE_SCALE,c);
+        c.ping=c.owner&&saved.ping?{at:saved.ping.at,p:{...saved.ping.p}}:undefined;
         // A restored case is never mid-flight; the checkpoint carries its velocity.
         c.launched=false;
         c.body.position.copy(vec(saved.p));c.body.velocity.copy(vec(saved.v));c.body.angularVelocity.copy(vec(saved.spin));

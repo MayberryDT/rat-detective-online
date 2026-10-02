@@ -44,11 +44,14 @@ export function cheeseBounce(shot:ChaosShot):void {
     shot.radius=nextCheeseRadius(shot.radius??BALL_RADIUS);
     shot.life=Math.min(I.cheeseMaxLife,shotLife(shot)+I.cheeseBounceLife);
 }
-/** Crossfire, one real world bounce: a step hotter, up to `CROSSFIRE.maxHeat`; each step leaves the wall `speedUp`× faster
- * and lives a little longer, up to the cap. */
+/** Crossfire, one real world bounce, after `bounceShot`: a step hotter, up to `CROSSFIRE.maxHeat`; each step leaves the
+ * wall `speedUp`× as fast as it arrived (undoing the bounce's restitution) and lives a little longer, up to the cap. At
+ * full heat it leaves every wall as fast as it arrived, a white-hot streak however long the ricochet. */
 export function crossfireBounce(shot:ChaosShot):void {
-    const heat=shot.heat??0;if(heat>=CROSSFIRE.maxHeat)return;
-    shot.heat=heat+1;shot.v.x*=CROSSFIRE.speedUp;shot.v.y*=CROSSFIRE.speedUp;shot.v.z*=CROSSFIRE.speedUp;
+    const heat=shot.heat??0,full=heat>=CROSSFIRE.maxHeat,gain=(full?1:CROSSFIRE.speedUp)/BALL_RESTITUTION;
+    shot.v.x*=gain;shot.v.y*=gain;shot.v.z*=gain;
+    if(full)return;
+    shot.heat=heat+1;
     shot.life=Math.max(shotLife(shot),Math.min(CROSSFIRE.maxLife,shotLife(shot)+CROSSFIRE.life));
 }
 /** Bounce velocity `v` in place off a surface with unit normal `n`; returns the contact's normal speed. An

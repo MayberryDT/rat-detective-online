@@ -24,6 +24,7 @@ import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { playEntitySound } from '../audio/EntityAudio';
 import { contactShadowsOf } from '../session/shadows';
 import { RAT_BODY, addRatShapes } from '../shared/rat/ratBody';
+import { CASE_RED } from '../prototype/caseRed';
 export { initEntitySounds, disposeEntitySounds, playHitSound, playPlayerHitSound } from '../audio/EntityAudio';
 
 // ─── GAMEPLAY CONSTANTS ───
@@ -623,12 +624,13 @@ export class RatEntity {
     }
 
     /** Quick Fix: restore authoritative health without any death or respawn path. With `stagger` (s) the
-     * restored nameplate pips refill one at a time, calling `tick` for each. */
-    public heal(hp: number, stagger = 0, tick?: () => void): void {
+     * restored nameplate pips refill one at a time, calling `tick` for each. A case-kill heal (`caseKill`, K3) flares
+     * case red up the body instead of Quick Fix green. */
+    public heal(hp: number, stagger = 0, tick?: () => void, caseKill = false): void {
         if (this.dead || hp <= this.hp) return;
         this.hp = hp;
         this.billboard.setHealth(this.hp, stagger, tick);
-        this.flashColor(0x8fffb0);this.powerupEffects.heal();
+        this.flashColor(caseKill?CASE_RED:0x8fffb0);this.powerupEffects.heal(caseKill?CASE_RED:undefined);
         this.playReaction('heal');this.animator.pulse('heal');
     }
     /** Your supply claim: a quick squash-and-pop (`size` × the jump squash). */

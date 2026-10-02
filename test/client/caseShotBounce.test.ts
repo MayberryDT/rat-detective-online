@@ -64,15 +64,17 @@ it('makes a grip whole again after two seconds without a hit',()=>{
     hitCase(sim,'fresh',1500+T.caseGripMs+50);
     expect(sim.caseHolderId).toBe(carry.id);expect(sim.snapshot(false).case.grip).toBe(1);
 });
-it('rewards taking the case with a supply, at most once per rat in each reward window',()=>{
+it('pings a carried case once when taken, then every casePingMs where it is, and forgets the ping when it comes loose',()=>{
     const {sim,players}=fixture();
     const carry=createPlayer('carry','Carry',appearance,{x:0,y:0,z:0});players.set(carry.id,carry);
-    const buffs=()=>{const {weaponReadyAt:_,...held}=sim.snapshot(false).buffs?.carry??{};return JSON.stringify(held);};
     sim.step(0,1001);expect(sim.caseHolderId).toBe(carry.id);
-    const first=buffs();expect(first).not.toBe('{}');
-    sim.release(carry.id);sim.step(0,2001);expect(sim.caseHolderId).toBe(carry.id);expect(buffs()).toBe(first);
-    // The first supply has run out by now; a fresh one arrives.
-    sim.release(carry.id);sim.step(0,1001+T.caseRewardMs);expect(sim.caseHolderId).toBe(carry.id);expect(buffs()).not.toBe('{}');
+    const taken=sim.snapshot(false).case.ping!;expect(taken.at).toBe(1001);expect(Math.hypot(taken.p.x,taken.p.z)).toBeLessThan(1.5);
+    carry.x=20;sim.step(0,1001+T.casePingMs-1);
+    expect(sim.snapshot(false).case.ping).toEqual(taken);
+    sim.step(0,1001+T.casePingMs);
+    const next=sim.snapshot(false).case.ping!;expect(next.at).toBe(1001+T.casePingMs);expect(Math.abs(next.p.x-20)).toBeLessThan(1.5);
+    sim.release(carry.id);
+    expect(sim.snapshot(false).case.ping).toBeUndefined();
 });
 it('bounds ordinary repeated-shot speed while keeping a useful lift',()=>{
     const {sim}=fixture();sim.caseBody.position.y=8;sim.caseBody.velocity.set(40,-30,0);

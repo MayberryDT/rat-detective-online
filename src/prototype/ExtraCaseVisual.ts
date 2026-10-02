@@ -8,6 +8,7 @@ import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {addLeatherBriefcase} from './CaseModel';
 import {CaseBeacon} from './CaseBeacon';
 import {createCaseGrip,disposeCaseGrip} from './CaseGrip';
+import {HotCaseLook} from './HotCaseLook';
 /** Seven bounded incident props, using the same model, outline, grip and smoothing. */
 export class ExtraCaseVisual {
     readonly root=new THREE.Group();
@@ -18,9 +19,10 @@ export class ExtraCaseVisual {
     private incident?:ChaosState['dispatch'];
     private carrier:RatEntity|null=null;
     private arm:THREE.Group|null=null;
+    private readonly hotLook:HotCaseLook;
     constructor(scene:THREE.Scene,id:string,private readonly resolve:(id:string)=>RatEntity|undefined,private readonly extrapolate=true){
         this.root.name='hot-case-'+id;this.root.userData.aimTarget=true;
-        addLeatherBriefcase(this.root);scene.add(this.root);this.beacon=new CaseBeacon(scene);
+        this.hotLook=new HotCaseLook(scene,this.root,addLeatherBriefcase(this.root));scene.add(this.root);this.beacon=new CaseBeacon(scene);
     }
     apply(state:ChaosState,extra:ChaosState['case'],arrival:number):void {
         this.state=extra;this.incident=state.dispatch;
@@ -50,10 +52,12 @@ export class ExtraCaseVisual {
             if(!this.extrapolate||!this.presentation.looseCase(renderTime,this.pose))copyPresentationPose(state,this.pose);
             const {p,q}=this.pose;this.root.position.set(p.x,p.y,p.z);this.root.quaternion.set(q.x,q.y,q.z,q.w);
         }
-        this.beacon.update(this.root,camera,!!state.owner,now,false,0);
+        // Every carried case reads the same: red-hot, cuffed to its carrier.
+        this.hotLook.update(camera,renderTime,state,now,carrier&&this.arm?.parent?carrier:null,this.arm?.parent??null);
+        this.beacon.update(this.root,camera,!!state.owner,now,null);
     }
     dispose():void {
         if(this.arm){disposeCaseGrip(this.arm);this.arm=null;}
-        this.carrier=null;this.presentation.clear();this.beacon.dispose();this.root.removeFromParent();disposeMeshResources(this.root);
+        this.carrier=null;this.hotLook.dispose();this.presentation.clear();this.beacon.dispose();this.root.removeFromParent();disposeMeshResources(this.root);
     }
 }

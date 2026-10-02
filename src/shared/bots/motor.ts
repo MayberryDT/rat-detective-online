@@ -19,6 +19,7 @@ import {BotFight,FIGHT,type FightView} from './motor/fight';
 import {BotZoneHold} from './motor/zoneHold';
 import {BotTricks} from './motor/tricks';
 import {zoneStepSafe} from './motor/zoneStepSafe';
+import {CarrierSight,type KnownCarrier} from './motor/carriers';
 import {FLASHLIGHT_REACH,RAT_MOVEMENT,lookHeading,muzzleReach,noControls,ratMuzzle,type RatControls} from '../rat/ratBody';
 
 export interface MotorNavigation {
@@ -183,6 +184,8 @@ export class BotMotor {
     private recoverUntil = 0;
     private cases:CaseEntry[]=[];
     private readonly caseLifecycles=new Map<string,{owner:string|null;returning:boolean}>();
+    /** Where this rat knows other rats' carried cases are: its own sight or the latest heartbeat ping. */
+    private readonly carrierSight=new CarrierSight();
     private assignmentSignature = '';
     private assignmentActive=false;
     private progress=0;
@@ -277,6 +280,9 @@ export class BotMotor {
     get ringing():boolean{return !!this.bell;}
     /** The genuine cases seen this tick. */
     get genuineCases():readonly CaseEntry[]{return this.cases;}
+    /** Other rats carrying a case whose place this rat knows, nearest first, as of the last decision: the live rat
+     * while in sight, else its last sighting or the case's latest ping. The same array, refreshed in place. */
+    get carriers():readonly KnownCarrier[]{return this.carrierSight.known;}
     /** The rat last shot at while in sight, where and when: a bank shot's quarry once it hides. */
     get sighted():Readonly<{id:string;p:Vec3Data;at:number}>|undefined{return this.sighting;}
     reset(): void {
@@ -287,7 +293,7 @@ export class BotMotor {
         this.plannedDestination=undefined;this.pendingPlan=undefined;this.planAt=0;this.progressSet=false;this.recoverUntil=0;
         this.routeWaitStarted=undefined;this.failedGoals.clear();this.failedCase=undefined;this.stalled=false;
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
-        this.caseLifecycles.clear();this.cases=[];
+        this.caseLifecycles.clear();this.cases=[];this.carrierSight.reset();
         this.flight=undefined;this.launchWaitAt=undefined;this.ride=undefined;this.rideAt=0;
         this.assignmentSignature='';this.urgent=false;
         this.sighting=undefined;this.post=undefined;this.postAt=0;this.heard.until=0;this.listenAt=0;this.rivalShots=0;this.rivalNewest=Infinity;
@@ -450,6 +456,7 @@ export class BotMotor {
         }
         if(ownershipChanged)this.urgent=true;
         if(this.failedCase&&state&&distance(this.failedCase,state.case.p)>7){this.failedCase=undefined;this.failedGoals.delete('case');this.urgent=true;}
+        this.carrierSight.observe(cases,self.id);
         this.followCase();
         if(this.routeWaitStarted!==undefined&&this.routeProgressGoal){
             const remaining=distance(self,this.routeProgressGoal);
@@ -466,15 +473,16 @@ export class BotMotor {
         if(selected&&!selected.value.owner)this.destination=selected.value.p;
     }
 
-    /** At a decision: who is in sight, whom to shoot and whether to ring a bell in passing. Visible carriers
-     * first (their exposed case through Ironclad), then Most Wanted, the retained target, the nearest
-     * vulnerable rat. A preferred rat (the mind's target) wins when it is visible and shootable. In a Blackout
-     * sight reaches only as far as a flashlight. */
-    perceive(now:number,self:PlayerData,living:readonly PlayerData[],carriers:readonly PlayerData[],state:ChaosState|undefined,
+    /** At a decision: who is in sight, where the case carriers are, whom to shoot and whether to ring a bell in
+     * passing. Visible carriers first (their exposed case through Ironclad), then Most Wanted, the retained target,
+     * the nearest vulnerable rat. A preferred rat (the mind's target) wins when it is visible and shootable. In a
+     * Blackout sight reaches only as far as a flashlight. */
+    perceive(now:number,self:PlayerData,living:readonly PlayerData[],state:ChaosState|undefined,
         clear:(p:Vec3Data)=>boolean,clearControl:(p:Vec3Data)=>boolean,quietBell:boolean,preferred?:string):void {
         const time=state?.time??now,sight=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='blackout'?FLASHLIGHT_REACH:80;
         const visible=living.filter(p=>distance(self,p)<sight&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
         this.visible=visible;
+        this.carrierSight.see(self,visible,living,time);
         // A rat seen dying (the kill feed) is not banked at.
         if(this.sighting&&!living.some(p=>p.id===this.sighting?.id))this.sighting=undefined;
         this.protectedVisible=visible.filter(p=>hasIronclad(state?.buffs,p.id,time));
@@ -485,7 +493,9 @@ export class BotMotor {
         // Most Wanted: the leader is in a searchlight everyone can see; hunt them for the bounty.
         const wantedId=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='most-wanted'?state.dispatch.wanted:undefined;
         const chosen=preferred?visible.find(p=>p.id===preferred&&shootable(p)):undefined;
-        this.shotTarget=chosen??carriers.find(p=>visible.includes(p)&&shootable(p))??vulnerable.find(p=>p.id===wantedId)??vulnerable.find(p=>p.id===this.shotTarget?.id)??vulnerable[0];
+        let carrier:PlayerData|undefined;
+        for(const c of this.carrierSight.known)if(c.seen&&shootable(c.rat)){carrier=c.rat;break;}
+        this.shotTarget=chosen??carrier??vulnerable.find(p=>p.id===wantedId)??vulnerable.find(p=>p.id===this.shotTarget?.id)??vulnerable[0];
         // Do not interrupt your own scoring, or keep shooting a nearby
         // loose case away while attempting to collect it.
         this.bell=state?.dispatch.phase==='ready'&&!quietBell&&!this.shotTarget ? DISPATCH_STATIONS.map(station=>station.target)
@@ -815,7 +825,8 @@ export class BotMotor {
         if(now<this.heard.until){this.aim.look(eye,this.heard);return;}
         if(holding&&this.zoneHold.look){this.aim.look(eye,this.zoneHold.look);return;}
         if(this.mode==='case'&&this.destination&&distance(self,this.destination)<30){this.aim.look(eye,this.destination,true);return;}
-        if(this.mode==='intercept'&&this.post!==undefined&&state?.case.owner&&state.case.owner!==self.id){this.aim.look(eye,state.case.p);return;}
+        const carried=this.mode==='intercept'&&this.post!==undefined&&state?.case.owner&&state.case.owner!==self.id?this.carrierSight.caseAt('case',state.case,self.id):undefined;
+        if(carried){this.aim.look(eye,carried);return;}
         if(now>=this.glanceAt){this.glanceAt=now+8000+this.motorRandom()*12000;this.glanceUntil=now+350+this.motorRandom()*450;this.glanceTurn=(this.motorRandom()<.5?-1:1)*(.5+this.motorRandom()*.5);}
         const running=Math.hypot(x,z)>1;
         if(now<this.glanceUntil&&running){this.aim.lookAlong(Math.atan2(x,z)+this.glanceTurn);return;}
@@ -849,7 +860,7 @@ export class BotMotor {
         if(nav.supported&&!nav.supported(spot))return false;
         from.x=self.x;from.y=self.y+.5;from.z=self.z;to.x=spot.x;to.y=self.y+.5;to.z=spot.z;
         if(ray?.(from,to))return false;
-        let useful=rival||now-since>=this.trapPatience||this.nearObjective(spot,state);
+        let useful=rival||now-since>=this.trapPatience||this.nearObjective(spot,self.id,state);
         if(!useful&&ray){
             // A doorway or an alley: walls close on both sides of the spot.
             from.x=spot.x;from.y=self.y+.8;from.z=spot.z;to.y=from.y;
@@ -859,10 +870,11 @@ export class BotMotor {
         if(useful)this.trapPressAt=now+TRAP.retryMs;
         return useful;
     }
-    /** The spot is within `TRAP.objective` of the case, the active Jurisdiction zone or the drop-off. */
-    private nearObjective(spot:Vec3Data,state:ChaosState|undefined):boolean {
+    /** The spot is within `TRAP.objective` of the case (where this rat knows it is), the active Jurisdiction zone or the drop-off. */
+    private nearObjective(spot:Vec3Data,selfId:string,state:ChaosState|undefined):boolean {
         if(!state)return false;
-        if(distance(spot,state.case.p)<TRAP.objective)return true;
+        const known=this.carrierSight.caseAt('case',state.case,selfId);
+        if(known&&distance(spot,known)<TRAP.objective)return true;
         const assignment=state.assignment;
         if(assignment?.phase!=='active')return false;
         const j=assignment.jurisdiction;

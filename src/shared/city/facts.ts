@@ -114,10 +114,11 @@ export type CityFact = FactContext & (
   | { type: 'heal'; a: number; cause: HealCause; hp: number }
   | { type: 'buff-end'; a: number; buff: TimedPickup }
   /** The primary case changed hands. A `drop` says why (`cause`) and how many enemy balls its grip took that carry
-   * (`gripHits`). A `take`, `steal` or `respawn` ends a loose spell: `looseMs` loose, `path` units travelled, `moved`
+   * (`gripHits`). A `drop` or `steal` says how many heartbeat pings the carry ended gave away (`pings`; the take's own
+   * ping counts). A `take`, `steal` or `respawn` ends a loose spell: `looseMs` loose, `path` units travelled, `moved`
    * straight-line units from where it came loose (or appeared), `kicks` balls that hit it while loose (every rat's). */
   | { type: 'case'; what: 'take' | 'drop' | 'steal' | 'deliver' | 'respawn'; a?: number; from?: number; p: P3; place: string; carryMs?: number;
-      cause?: 'death' | 'shot' | 'delivered' | 'left'; gripHits?: number; looseMs?: number; path?: number; moved?: number; kicks?: number }
+      cause?: 'death' | 'shot' | 'delivered' | 'left'; gripHits?: number; pings?: number; looseMs?: number; path?: number; moved?: number; kicks?: number }
   | { type: 'launch'; a: number; machine?: string; boost: boolean; p: P3; place: string }
   /** A rat knocked away (`ChaosSimulation.shove`, the same for humans and bots): `cause` is what did it ('shove' a landing
    * shockwave, 'blast' a Scattershot ball, or an incident's own kind), `speed` the sideways u/s. Pressure
@@ -144,7 +145,8 @@ export type CityFact = FactContext & (
   /** A stocked supply the rat could use (not a Quick Fix at full health) came within 12 u on its floor in clear sight, and the
    * rat went more than 16 u away (or died) without claiming it while it stayed stocked. One per approach. `dist`, `p`,
    * `place` and `hp`: the nearest the rat came (horizontal, to 0.1 u), where, and its health there. */
-  /** A supply handed over on the spot: for taking the case, a kill streak title, calling Dispatch or a Most Wanted bounty. */
+  /** A supply handed over on the spot: for a kill streak title, calling Dispatch or a Most Wanted bounty (and, before the
+   * hot case heartbeat in protocol 29, for taking the case: old facts may say 'case'). */
   | { type: 'reward'; a: number; kind: PickupKind; why: 'case' | 'streak' | 'dispatch' | 'bounty'; p: P3; place: string }
   | { type: 'pickup-passed'; a: number; site: string; kind: PickupKind; dist: number; p: P3; place: string; hp: number }
   /** A bot's goal ended; `from` is where it was taken up, `p` and `place` where it ended. */

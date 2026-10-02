@@ -4,7 +4,7 @@ export const INCIDENTS = [
     {id:'bad-ammunition',title:'Bad Ammunition',description:'Every cartridge has a mind of its own. They still go roughly where you aim.'},
     {id:'pressure-surge',title:'Pressure Surge',description:'Every launcher fires at once. Mind your step.'},
     {id:'evidence-tampering',title:'Evidence Tampering',description:'Runaway case missiles! Dodge them or shoot them back.'},
-    {id:'crossfire',title:'Crossfire',description:'Every bounce heats the cheese. One banked hit, lights out.'},
+    {id:'crossfire',title:'Crossfire',description:'Every bounce sets the cheese burning faster. One banked hit, lights out.'},
     {id:'scattershot',title:'Scattershot',description:'Every shot is a five-ball fan, and every ball knocks rats flying.'},
     {id:'big-cheese',title:'Big Cheese',description:'Heavy cheese. Slow trigger. Every rebound makes it bigger.'},
     {id:'blackout',title:'Blackout',description:'The power is out. Every rat has a flashlight.'},
