@@ -120,7 +120,7 @@ interface PendingEventRow extends Record<string, SqlStorageValue> {
 const WORLD_KEY = 'world';
 /** City layouts the room upgrades from on load (layout 3 added the harbour, docks and precinct; layout 4 moved the supplies; layout 5 added Stakeout;
  * layout 6 added the weapon sites). */
-const PREVIOUS_GRAYBOX_VERSIONS: readonly number[] = [2, 3, 4, 5];
+const PREVIOUS_GRAYBOX_VERSIONS: readonly number[] = [2, 3, 4, 5, 6];
 const ROUND_KEY = 'round';
 const ASSIGNMENT_ROTATION_KEY = 'assignment-rotation-v1';
 const PERSISTENT_BOTS_KEY = 'persistent-bots-v1';
