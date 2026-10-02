@@ -14,7 +14,7 @@ import {reducedMotion} from '../ui/motion';
 export const CROSSFIRE_FLAMES={flames:6,hotFlames:2,reach:3,reachStep:2.5,minLife:.03,flameLife:.18,flameSize:.2,budget:60,embers:1.2,emberLife:.7,
     smokeChance:.35,smokeLife:1.1,fireball:2.4,splash:12,splashEmbers:8,splashSpeed:8,flash:.9,flashMs:90,
     streakMin:1.4,streakMax:12,streakPerSpeed:.016,edge:.09,edgeStep:.03} as const;
-const F=CROSSFIRE_FLAMES,FLAMES=512,EMBERS=192,SMOKES=64,FLASHES=8,GLOWS=128,CORES=64,BALL=.15;
+const F=CROSSFIRE_FLAMES,FLAMES=512,EMBERS=192,SMOKES=64,FLASHES=8,GLOWS=128,CORES=64,BALL=.15,SPLASH=3;
 /** A hot ball's streak in units at `speed` u/s: `streakPerSpeed` a unit of speed, from `streakMin` (a fresh ricochet)
  * to `streakMax` (a tracer round at full heat). Its fire-orange edge is `edge` (+ `edgeStep` a heat step) units thick. */
 export const heatStreak=(speed:number)=>Math.min(F.streakMax,Math.max(F.streakMin,speed*F.streakPerSpeed));
@@ -44,8 +44,9 @@ function spriteTexture(width:number,height:number,shape:(x:number,y:number)=>num
     return texture;
 }
 
-interface Particle {p:THREE.Vector3;v:THREE.Vector3;d:THREE.Vector3;age:number;life:number;size:number;stretch:number;bright:number;hot:boolean;follow:boolean;live:boolean}
-const particles=(count:number):Particle[]=>Array.from({length:count},()=>({p:new THREE.Vector3(),v:new THREE.Vector3(),d:new THREE.Vector3(1,0,0),age:0,life:1,size:1,stretch:1,bright:1,hot:false,follow:false,live:false}));
+/** `heat`: a flame's colour index (heat step 0 to 2, or `SPLASH`). */
+interface Particle {p:THREE.Vector3;v:THREE.Vector3;d:THREE.Vector3;age:number;life:number;size:number;stretch:number;bright:number;heat:number;follow:boolean;live:boolean}
+const particles=(count:number):Particle[]=>Array.from({length:count},()=>({p:new THREE.Vector3(),v:new THREE.Vector3(),d:new THREE.Vector3(1,0,0),age:0,life:1,size:1,stretch:1,bright:1,heat:0,follow:false,live:false}));
 
 export class CrossfireFlames {
     private readonly root=new THREE.Group();
@@ -86,10 +87,14 @@ export class CrossfireFlames {
     private readonly lift=new THREE.Vector3();
     private readonly toward=new THREE.Vector3();
     private readonly color=new THREE.Color();
-    // Fire colours (linear, additive, modest so overlap builds the heat rather than one tongue clipping to white):
-    // yellow-white at the ball (whiter at full heat), orange, deep red at the tail.
-    private readonly whiteHot=new THREE.Color(.95,.85,.62);
-    private readonly yellow=new THREE.Color(.95,.66,.26);
+    // Fire colours (linear, additive, modest so overlap builds the heat rather than one tongue clipping to white). A
+    // tongue starts at its heat's colour (red-orange, orange, white-yellow; a bounce's splash bright yellow) and cools
+    // through orange to deep red at the tail, the splash staying yellow longer.
+    private readonly starts=[new THREE.Color(.95,.28,.05),new THREE.Color(1,.5,.1),new THREE.Color(1,.88,.6),new THREE.Color(1.5,.95,.35)];
+    private readonly cools=[.3,.3,.3,.55];
+    /** The streak's edge by heat step: red-orange, orange, hot orange. */
+    private readonly edges=[new THREE.Color(.95,.16,.03),new THREE.Color(1.15,.42,.07),new THREE.Color(1.3,.55,.12)];
+    private readonly whiteHot=new THREE.Color(1.1,.98,.72);
     private readonly orange=new THREE.Color(.8,.27,.04);
     private readonly red=new THREE.Color(.28,.02,0);
     private readonly emberColor=new THREE.Color(2,.75,.18);
@@ -128,7 +133,7 @@ export class CrossfireFlames {
             slot.v.set((Math.random()-.5)*1.2,1.2+Math.random(),(Math.random()-.5)*1.2);slot.d.copy(this.dir);slot.follow=false;
             slot.life=life*(.7+.3*Math.random());slot.age=travel>0?slot.life*.5*back/travel:0;
             slot.size=F.flameSize*(1+.3*level)*(.8+.4*Math.random());slot.stretch=Math.max(1.8,(spacing*1.8+slot.size)/slot.size);
-            slot.bright=bright;slot.hot=full;
+            slot.bright=bright;slot.heat=level;
             this.place(this.flames,index,slot,1-slot.age/slot.life);this.flames.count=Math.max(this.flames.count,index+1);this.flames.visible=true;
         }
         for(let n=Math.floor(F.embers*frames+Math.random());n>0;n--)this.ember(p,travel*Math.random(),speed,bright);
@@ -140,18 +145,18 @@ export class CrossfireFlames {
             this.place(this.smoke,index,slot,1);this.smoke.count=Math.max(this.smoke.count,index+1);this.smoke.visible=true;
         }
         if(full&&this.cores.count<CORES-1){
-            // An orange fireball around a smaller yellow-white heart, both tongues pointing along the flight.
+            // A visible orange fireball halo around a smaller white-yellow heart, both tongues pointing along the flight.
             const flicker=this.still?1:.88+.24*Math.random(),r=BALL*F.fireball*flicker;
             this.dummy.position.set(p.x,p.y,p.z).addScaledVector(this.dir,-r*.4);this.face(this.dir,p);
-            this.dummy.scale.set(r*2.6,r*1.3,1);this.core(this.color.copy(this.fire).multiplyScalar(.55*bright*flicker));
-            this.dummy.scale.set(r*1.4,r*.65,1);this.core(this.color.copy(this.whiteHot).multiplyScalar(.8*bright));
+            this.dummy.scale.set(r*3.4,r*2.2,1);this.core(this.color.copy(this.fire).multiplyScalar(1.1*bright*flicker));
+            this.dummy.scale.set(r*1.7,r*.95,1);this.core(this.color.copy(this.whiteHot).multiplyScalar(bright));
         }
         if(streak>0&&this.glows.count<GLOWS){
             // The streak's fire-orange edge, around the core trail the view draws.
             const w=F.edge+F.edgeStep*level;
             this.dummy.position.set(p.x,p.y,p.z).addScaledVector(this.dir,-BALL-streak/2);this.dummy.quaternion.setFromUnitVectors(this.axis,this.dir);
             this.dummy.scale.set(w,w,streak/2+w);this.dummy.updateMatrix();
-            const at=this.glows.count++;this.glows.setMatrixAt(at,this.dummy.matrix);this.glows.setColorAt(at,this.color.copy(this.fire).multiplyScalar(bright*.8));
+            const at=this.glows.count++;this.glows.setMatrixAt(at,this.dummy.matrix);this.glows.setColorAt(at,this.color.copy(this.edges[Math.min(2,level)]!).multiplyScalar(bright*.8));
             this.glows.visible=true;this.glows.instanceMatrix.needsUpdate=true;this.glows.instanceColor!.needsUpdate=true;
         }
     }
@@ -188,7 +193,7 @@ export class CrossfireFlames {
             slot.p.set(p.x,p.y,p.z).addScaledVector(this.dir,.25);
             slot.v.copy(this.dir).multiplyScalar(speed*.8).addScaledVector(this.side,Math.cos(angle)*speed*.6).addScaledVector(this.up,Math.sin(angle)*speed*.6);
             slot.d.copy(slot.v).normalize();slot.follow=true;
-            slot.age=0;slot.life=.22+.15*Math.random();slot.size=F.flameSize*(1.3+.3*heat)*(.7+.6*Math.random());slot.stretch=1.7;slot.bright=1;slot.hot=heat>=2;
+            slot.age=0;slot.life=.25+.15*Math.random();slot.size=F.flameSize*(1.4+.3*heat)*(.7+.6*Math.random());slot.stretch=1.7;slot.bright=1.6;slot.heat=SPLASH;
             this.place(this.flames,index,slot,1);this.flames.count=Math.max(this.flames.count,index+1);
         }
         this.flames.visible=true;
@@ -233,12 +238,11 @@ export class CrossfireFlames {
         slot.live=true;const f=1-left;
         this.dummy.position.copy(slot.p);
         if(mesh===this.flames){
-            // A tongue along its way, swelling a little then guttering out, flickering: yellow-white (whiter at full
-            // heat), orange, deep red.
+            // A tongue along its way, swelling a little then guttering out, flickering: its start colour, orange, deep red.
             const flicker=this.still?1:.75+.5*Math.random(),size=slot.size*(.75+.6*f)*Math.min(1,left*3)*(this.still?1:.85+.3*Math.random());
             this.face(slot.d,slot.p);this.dummy.scale.set(size*slot.stretch,size,1);
-            const start=slot.hot?this.whiteHot:this.yellow;
-            if(f<.3)this.color.copy(start).lerp(this.orange,f/.3);else this.color.copy(this.orange).lerp(this.red,(f-.3)/.7);
+            const start=this.starts[slot.heat]!,cool=this.cools[slot.heat]!;
+            if(f<cool)this.color.copy(start).lerp(this.orange,f/cool);else this.color.copy(this.orange).lerp(this.red,(f-cool)/(1-cool));
             mesh.setColorAt(i,this.color.multiplyScalar(slot.bright*Math.pow(left,.7)*flicker));
         }else if(mesh===this.embers){
             this.dummy.quaternion.identity();this.dummy.scale.setScalar(slot.size*(.6+.4*left));

@@ -866,8 +866,8 @@ export class ChaosView {
         if(ping)this.p.set(ping.p.x,ping.p.y+Math.max(2.1,this.carrierFlash.top+.4),ping.p.z);else{this.p.copy(this.caseRoot.position);this.p.y+=2.1;}
         const location=locateCase(this.p,camera,window.innerWidth,window.innerHeight);
         this.caseMarker.style.display='block';
-        // The badge follows the case in world space; its label hangs below it.
-        const label=clearAimLabel(location.x,location.y+15,190,90,window.innerWidth,window.innerHeight);
+        // The badge follows the case in world space; its label hangs below it (a ping's sits above the flash instead).
+        const label=clearAimLabel(location.x,location.y+(ping?-24:15),190,90,window.innerWidth,window.innerHeight);
         this.caseMarker.style.transform=`translate(${label.x-87}px,${label.y-32}px)`;
         const tag=ping?'hot-case-tag carried':'hot-case-tag';if(this.caseMarker.className!==tag)this.caseMarker.className=tag;
         const opacity=ping?Math.round(flash*20)/20:-1;

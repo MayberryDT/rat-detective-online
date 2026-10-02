@@ -7,12 +7,12 @@ import {disposeMeshResources} from '../utils/disposeMeshResources';
 
 /** Crossfire juice (Tyler, 2 October: "make the whole city a pinball table"). Each bounce throws `sparks` sparks (living
  * `sparkLife` s, flying up to `sparkSpeed` u/s), splashes fire (`CrossfireFlames`) and leaves a sooty burn mark `scorch`
- * units across that fades over `scorchMs` (at most `scorches` at once), its centre glowing like an ember for
- * `scorchGlowMs`, and rings a ricochet at `ricochet` volume whose pitch rises `pitchStep` a bounce for `pitchSteps`
- * bounces, over a flame "fwoomp" at `fwoomp` volume, deeper `fwoompDrop` a heat step. A bank kill's path glows
+ * units across that fades over `scorchMs` (at most `scorches` at once), ringed by a thin glowing ember edge cooling
+ * from orange to red over `scorchGlowMs`, and rings a ricochet at `ricochet` volume whose pitch rises `pitchStep` a
+ * bounce for `pitchSteps` bounces, over a flame "fwoomp" at `fwoomp` volume, deeper `fwoompDrop` a heat step. A bank kill's path glows
  * `pathWidth` thick for `pathMs`. The aim guide dots the way to the first wall (dots at least `guideGap` apart,
  * `guideDots` in all) and `guideBounce` units of the rebound. */
-export const CROSSFIRE_JUICE={sparks:7,sparkLife:.35,sparkSpeed:14,scorch:.75,scorchMs:4000,scorchGlowMs:1200,scorches:24,ricochet:.75,pitchStep:.14,pitchSteps:5,
+export const CROSSFIRE_JUICE={sparks:7,sparkLife:.35,sparkSpeed:14,scorch:.75,scorchMs:4000,scorchGlowMs:1500,scorches:24,ricochet:.75,pitchStep:.14,pitchSteps:5,
     fwoomp:.6,fwoompDrop:.1,pathWidth:.08,pathMs:2500,guideGap:1.1,guideDots:40,guideBounce:12} as const;
 const J=CROSSFIRE_JUICE,SPARKS=48,SEGMENTS=CROSSFIRE.pathPoints+1,BOUNCE_DOTS=Math.ceil(J.guideBounce/J.guideGap);
 
@@ -44,7 +44,7 @@ export class CrossfireVisual {
     private readonly sparkSlots=Array.from({length:SPARKS},()=>({p:new THREE.Vector3(),v:new THREE.Vector3(),age:Infinity,life:1}));
     private sparkCursor=0;
     private sparksLive=false;
-    /** Sooty burn marks, and the ember glow at each one's centre. */
+    /** Sooty burn marks, and the ember ring round each one's edge. */
     private readonly scorches:THREE.InstancedMesh;
     private readonly scorchGlows:THREE.InstancedMesh;
     private readonly scorchSlots=Array.from({length:J.scorches},()=>({age:Infinity,heat:0}));
@@ -74,13 +74,18 @@ export class CrossfireVisual {
     private readonly black=new THREE.Color(0,0,0);
     private readonly white=new THREE.Color(1,1,1);
     private readonly color=new THREE.Color();
+    private readonly emberRing=new THREE.Color(2.2,.7,.1);
+    private readonly emberCool=new THREE.Color(.9,.06,0);
     constructor(scene:THREE.Scene){
-        // A burn mark is a disc darkest at its centre, fading to nothing at its rim; its glow the same disc, additive and smaller.
+        // A burn mark is a disc darkest at its centre, fading to nothing at its rim; its ember ring a soft thin band just
+        // inside the rim, brightest along its middle (additive: black is invisible).
         const disc=new THREE.CircleGeometry(J.scorch/2,18),colors=new Float32Array(disc.getAttribute('position').count*3);
         colors.set([1,1,1],0);disc.setAttribute('color',new THREE.BufferAttribute(colors,3));
         this.scorches=new THREE.InstancedMesh(disc,fadeByInstanceColor(new THREE.MeshBasicMaterial({color:0x0b0706,vertexColors:true,transparent:true,depthWrite:false,
             polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),'crossfire-soot'),J.scorches);
-        this.scorchGlows=new THREE.InstancedMesh(disc,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
+        const ring=new THREE.RingGeometry(J.scorch*.34,J.scorch*.5,36,2),ringColors=new Float32Array(ring.getAttribute('position').count*3);
+        ringColors.fill(1,37*3,74*3);ring.setAttribute('color',new THREE.BufferAttribute(ringColors,3));
+        this.scorchGlows=new THREE.InstancedMesh(ring,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
             toneMapped:false,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3}),J.scorches);
         const names=['crossfire-sparks','crossfire-scorches','crossfire-scorch-glows','crossfire-bank-path','crossfire-aim-guide'];
         [this.sparks,this.scorches,this.scorchGlows,this.path,this.dots].forEach((mesh,i)=>{
@@ -110,7 +115,7 @@ export class CrossfireVisual {
         this.dummy.position.set(p.x,p.y,p.z).addScaledVector(this.n,.32);this.dummy.quaternion.setFromUnitVectors(this.faceAxis,this.n);
         this.dummy.scale.setScalar(.8+.25*heat);this.dummy.updateMatrix();
         this.scorches.setMatrixAt(index,this.dummy.matrix);this.scorches.instanceMatrix.needsUpdate=true;
-        this.dummy.position.addScaledVector(this.n,.005);this.dummy.scale.multiplyScalar(.4);this.dummy.updateMatrix();
+        this.dummy.position.addScaledVector(this.n,.005);this.dummy.updateMatrix();
         this.scorchGlows.setMatrixAt(index,this.dummy.matrix);this.scorchGlows.instanceMatrix.needsUpdate=true;
         this.scorches.count=this.scorchGlows.count=Math.max(this.scorches.count,index+1);this.scorches.visible=this.scorchGlows.visible=this.scorchesLive=true;
         this.flames.splash(p,normal,heat);
@@ -184,10 +189,10 @@ export class CrossfireVisual {
             for(let i=0;i<this.scorches.count;i++){
                 const slot=this.scorchSlots[i]!,age=(slot.age+=dt)*1000,fade=1-age/J.scorchMs,glow=1-age/J.scorchGlowMs;
                 if(fade>0)live=true;
-                // Soot stays dark, then fades out at the end; the ember at its centre cools first.
+                // Soot stays dark, then fades out at the end; its ember ring cools first, orange to red to nothing.
                 const soot=fade>0?.85*Math.min(1,fade*3):0;
                 this.scorches.setColorAt(i,this.color.setRGB(soot,soot,soot));
-                this.scorchGlows.setColorAt(i,glow>0?this.color.copy(this.glow[slot.heat]!).multiplyScalar(glow*glow*.8):this.black);
+                this.scorchGlows.setColorAt(i,glow>0?this.color.copy(this.emberRing).lerp(this.emberCool,1-glow).multiplyScalar(glow*(.6+.15*slot.heat)):this.black);
             }
             this.scorches.instanceColor!.needsUpdate=true;this.scorchGlows.instanceColor!.needsUpdate=true;
             this.scorches.visible=this.scorchGlows.visible=this.scorchesLive=live;
