@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type {TimedPickup} from '../shared/pickups';
 
-/** Each timed supply's apply-wave colour: silver coat, red speed, Hunch gold. */
-const APPLY_COLOR:Record<TimedPickup,number>={ironclad:0xd9eeff,hustle:0xff2108,stakeout:0xf3cf6f};
+/** Each timed supply's apply-wave colour: silver coat, red speed, Hunch lens cyan. */
+const APPLY_COLOR:Record<TimedPickup,number>={ironclad:0xd9eeff,hustle:0xff2108,stakeout:0x6fe2f4};
 
 const SAMPLES=32, TRAIL_SECONDS=.45;
 /** Bounded world-space ribbon and a brief upward healing sweep. No lights,

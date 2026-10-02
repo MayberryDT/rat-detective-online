@@ -1,4 +1,4 @@
-import { effectsOutput } from './PlayerAudioMix';
+import { admitWorldVoice, endWorldVoice, worldOutput, type WorldVoice } from './PlayerAudioMix';
 import * as THREE from 'three';
 import type {LaunchMachine} from '../shared/chaosState';
 import {worldSoundGain} from './worldSoundGain';
@@ -58,11 +58,14 @@ export class LauncherAudio {
         const spatial = this.spatial(pad, camera);
         if (spatial.volume <= 0) return;
         if (this.voices.size >= MAX_VOICES) this.voices.values().next().value!.release();
+        // Machines are world voices: ducked under your hits and kills, sharing the ranked mix's budget.
+        const ranked: WorldVoice = {level: spatial.volume, cut: () => voice.release()};
+        if (!admitWorldVoice(ctx, ranked)) return;
         const now = ctx.currentTime;
         const pitch = {pressure:95,dumpster:65,freight:125,geyser:180,mousetrap:240,fan:75}[kind];
         const output = ctx.createGain(), pan = ctx.createStereoPanner();
         output.gain.value = spatial.volume; pan.pan.value = spatial.pan;
-        output.connect(pan); pan.connect(effectsOutput(ctx));
+        output.connect(pan); pan.connect(worldOutput(ctx));
         const nodes: AudioNode[] = [output, pan];
         const sources: AudioScheduledSourceNode[] = [];
         const tone = (type: OscillatorType, from: number, to: number, peak: number, attack: number, end: number, start = 0) => {
@@ -124,6 +127,7 @@ export class LauncherAudio {
         }
         const voice: Voice = {pad, output, pan, volume: spatial.volume, release: () => {
             if (!this.voices.delete(voice)) return;
+            endWorldVoice(ctx, ranked);
             last.onended = null;
             for (const source of sources) { try { source.stop(); } catch { /* Already ended. */ } }
             for (const node of nodes) node.disconnect();
@@ -149,7 +153,7 @@ export class LauncherAudio {
             const siren = ctx!.createOscillator(), sirenGain = ctx!.createGain(), wobble = ctx!.createOscillator(), depth = ctx!.createGain();
             hum.type = 'sawtooth'; filter.type = 'lowpass'; filter.Q.value = 4; siren.type = 'sine'; wobble.frequency.value = 3.2; depth.gain.value = 140;
             hum.connect(filter); filter.connect(output); siren.connect(sirenGain); sirenGain.connect(output); wobble.connect(depth); depth.connect(siren.frequency);
-            output.gain.value = 0; sirenGain.gain.value = 0; output.connect(pan); pan.connect(effectsOutput(ctx!));
+            output.gain.value = 0; sirenGain.gain.value = 0; output.connect(pan); pan.connect(worldOutput(ctx!));
             hum.start(); siren.start(); wobble.start();
             loop = {pad, output, pan, hum, filter, siren, sirenGain, wobble, depth}; this.loops.set(id, loop);
         }

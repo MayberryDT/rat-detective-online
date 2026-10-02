@@ -1,4 +1,4 @@
-import { effectsOutput } from './PlayerAudioMix';
+import { effectsOutput, worldOutput } from './PlayerAudioMix';
 import { worldSoundGain } from './worldSoundGain';
 
 /** `clank`: a ball on a busy bell; `strike`: the ball that starts an incident;
@@ -31,11 +31,12 @@ export class DispatchAudio {
         const ctx = this.context;
         return !this.disposed && ctx?.state === 'running' ? ctx : undefined;
     }
-    private voice(buffer: AudioBuffer, volume: number, pan: number, loop = false, rate = 1, delay = 0): Voice | undefined {
+    /** `world` (sirens, bells, a ball's clank) feeds the ranked mix's world duck; announcements stay on the effects bus. */
+    private voice(buffer: AudioBuffer, volume: number, pan: number, world: boolean, loop = false, rate = 1, delay = 0): Voice | undefined {
         const ctx = this.context!, source = ctx.createBufferSource(), gain = ctx.createGain(), panner = ctx.createStereoPanner();
         source.buffer = buffer; source.loop = loop; source.playbackRate.value = rate;
         gain.gain.value = volume; panner.pan.value = pan;
-        source.connect(gain); gain.connect(panner); panner.connect(effectsOutput(ctx));
+        source.connect(gain); gain.connect(panner); panner.connect(world ? worldOutput(ctx) : effectsOutput(ctx));
         const voice = {source, gain, pan: panner, volume};
         try { source.start(ctx.currentTime + delay); } catch { this.stop(voice); return undefined; }
         return voice;
@@ -58,7 +59,7 @@ export class DispatchAudio {
         // The second pillar answers the first half a cycle later, so the two directions stay distinct.
         if (!this.sirenNext[slot]) this.sirenNext[slot] = slot > 0 ? ctx.currentTime + SIREN_EVERY / 2 : ctx.currentTime;
         if (ctx.currentTime < this.sirenNext[slot]!) return;
-        const started = this.voice(this.buffers.whoop ??= whoop(ctx), volume, pan);
+        const started = this.voice(this.buffers.whoop ??= whoop(ctx), volume, pan, true);
         if (!started) return;
         this.sirens[slot] = started; this.sirenNext[slot] = ctx.currentTime + SIREN_EVERY;
         started.source.onended = () => { this.stop(started); if (this.sirens[slot] === started) this.sirens[slot] = undefined; };
@@ -71,7 +72,7 @@ export class DispatchAudio {
         if (voice && (!ctx || station < 0 || voice.station !== station || !(volume > 0))) { this.bells[slot] = undefined; this.stop(voice); }
         else if (voice) { this.retarget(voice, volume, pan); voice.source.playbackRate.value = rate; return; }
         if (!ctx || station < 0 || !(volume > 0)) return;
-        const started = this.voice(this.buffers.ring ??= ring(ctx), volume, pan, true, rate);
+        const started = this.voice(this.buffers.ring ??= ring(ctx), volume, pan, true, true, rate);
         if (started) this.bells[slot] = {...started, station};
     }
 
@@ -81,7 +82,7 @@ export class DispatchAudio {
         if (!ctx || !(volume > 0)) return;
         if (this.cues.length >= DISPATCH_VOICES.cue) this.stop(this.cues.shift()!);
         const buffer = this.buffers[cue] ??= CUES[cue](ctx);
-        const started = this.voice(buffer, volume, pan, false, 1, delay);
+        const started = this.voice(buffer, volume, pan, cue === 'clank', false, 1, delay);
         if (!started) return;
         this.cues.push(started);
         started.source.onended = () => { this.stop(started); const i = this.cues.indexOf(started); if (i >= 0) this.cues.splice(i, 1); };

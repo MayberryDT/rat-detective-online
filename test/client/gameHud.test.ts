@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GameHud } from '../../src/ui/GameHud';
 import { MUNICIPAL_QUIPS } from '../../src/ui/municipalQuips';
+import { headlines } from '../../src/ui/Headlines';
 
 type FakeNode = {
     id: string;
@@ -147,9 +148,30 @@ describe('GameHud', () => {
         expect(foley.mock.calls.filter(([cue])=>cue==='respawn-tick')).toHaveLength(3);
         hud.dispose();const count=foley.mock.calls.length;vi.advanceTimersByTime(5000);expect(foley).toHaveBeenCalledTimes(count);
     });
+    it('recaps who got you and with what, points at the case while dead, and shows no recap on a rejoin',()=>{
+        const {doc,byId}=createHudDocument();
+        for(const id of ['respawn-recap','recap-killer','recap-how','recap-case','recap-arrow','recap-distance']){const node=doc.createElement('div');node.id=id;doc.body.appendChild(node);}
+        const node=(id:string)=>byId.get(id) as unknown as {hidden?:boolean;textContent:string;style:Record<string,string>};
+        const hud=new GameHud(doc);
+        hud.showRespawn(Date.now()+3000,{killer:'INSPECTOR VERMIN',how:'TOMMY GUN · HEADSHOT'});
+        expect(node('respawn-recap').hidden).toBe(false);
+        expect(node('recap-killer').textContent).toBe('INSPECTOR VERMIN');
+        expect(node('recap-how').textContent).toBe('WITH TOMMY GUN · HEADSHOT');
+        expect(node('recap-case').hidden).toBe(true);
+        hud.pointRecap(Math.PI/2,80.4,'CASE LAST SEEN');
+        expect(node('recap-case').hidden).toBe(false);
+        expect(node('recap-distance').textContent).toBe('CASE LAST SEEN · 80 M');
+        expect(node('recap-arrow').style.transform).toBe('rotate(1.58rad)');
+        hud.pointRecap(undefined,0,'');expect(node('recap-case').hidden).toBe(true);
+        hud.hideRespawn();hud.pointRecap(0,5,'THE CASE');expect(node('recap-case').hidden).toBe(true);
+        hud.showRespawn(Date.now()+3000);expect(node('respawn-recap').hidden).toBe(true);
+        hud.dispose();
+    });
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-09-05T12:00:00Z'));
+        // One headline queue for the page: a death screen left up by an earlier test must not hold it.
+        headlines.reset();
     });
 
     afterEach(() => {

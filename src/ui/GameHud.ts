@@ -10,6 +10,8 @@ import { caseTime, downloadRoundStats, type RoundStats } from './roundStats';
 import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
 import { countUp, leave, measure, reducedMotion, replay, scrawl, slide, uiMotion } from './motion';
+import { headlines } from './Headlines';
+import type { DeathRecap } from './deathRecap';
 
 const KILL_FEED_LIMIT = 5;
 const KILL_FEED_FADE_MS = 4000;
@@ -61,6 +63,11 @@ export class GameHud {
     private readonly killTitle: HTMLElement;
     private readonly killQuip: HTMLElement;
     private readonly overlayAnimations = new Map<HTMLElement, Animation>();
+    /** The death recap on the respawn screen: who, with what, and an arrow to the case. */
+    private readonly recap: {root: HTMLElement | null; killer: HTMLElement | null; how: HTMLElement | null; caseRow: HTMLElement | null; arrow: HTMLElement | null; distance: HTMLElement | null};
+    private recapAngle = NaN;
+    private recapMetres = NaN;
+    private recapLabel = '';
     private swoop?: HTMLElement;
     private caseFile: {list: HTMLElement; rows: {row: HTMLElement; value: HTMLElement; award: Award}[]; stamped: boolean} | undefined;
     /** The results board's strip of the round's big numbers. */
@@ -87,6 +94,8 @@ export class GameHud {
         this.respawnTimer = this.require('respawn-timer');
         const label = this.respawnOverlay.querySelector?.<HTMLElement>('.respawn-label');
         if (label) scrawl(label, label.textContent ?? '');
+        const byId = (id: string) => this.doc.getElementById(id);
+        this.recap = {root: byId('respawn-recap'), killer: byId('recap-killer'), how: byId('recap-how'), caseRow: byId('recap-case'), arrow: byId('recap-arrow'), distance: byId('recap-distance')};
         this.killConfirmation=this.doc.createElement('div');this.killConfirmation.id='kill-confirmation';
         this.killConfirmation.setAttribute('role','status');this.killConfirmation.setAttribute('aria-live','polite');
         this.killTitle=this.doc.createElement('div');this.killTitle.className='kill-confirmation-title';
@@ -302,12 +311,19 @@ export class GameHud {
         if(wasVisible)this.feedback('menu-close');this.overlay(this.victoryOverlay,false);
     }
 
-    showRespawn(respawnAt: number): void {
+    /** RAT DOWN, the countdown, and the recap of who got you and with what when `recap` is known (not on a rejoin).
+     * Your death takes the headline from anything else until you are back. */
+    showRespawn(respawnAt: number, recap?: DeathRecap): void {
         if (this.disposed) return;
         this.clearRespawnTimer();
         let firstTick=!this.respawnVisible;
         if(!this.respawnVisible){
+            headlines.take('death','death',Infinity);
             const note=this.doc.getElementById('respawn-note');if(note)note.textContent=this.quips.next('death');
+            const {root,killer,how,caseRow}=this.recap;
+            if(root)root.hidden=!recap;
+            if(recap&&killer&&how){scrawl(killer,recap.killer);how.textContent=`WITH ${recap.how}`;}
+            if(caseRow)caseRow.hidden=true;this.recapAngle=NaN;this.recapMetres=NaN;
             this.feedback('death');
             // U7: RAT DOWN waits for the death camera and iris to play first.
             if(feelState().on('deathBeat')&&feelState().on('deathCam'))this.respawnOverlay.classList.add('death-beat');
@@ -331,7 +347,20 @@ export class GameHud {
         if (this.disposed) return;
         this.clearRespawnTimer();
         const wasVisible=this.respawnVisible;this.respawnVisible=false;
-        if(wasVisible)this.feedback('respawn');this.overlay(this.respawnOverlay,false);
+        if(wasVisible){headlines.release('death');this.feedback('respawn');}
+        this.overlay(this.respawnOverlay,false);
+    }
+
+    /** While the death screen is up: the recap's arrow toward the case (`angle` radians, 0 straight ahead, clockwise) and
+     * how far it is, from what you may know of it (undefined: no case to point at). Writes only on change. */
+    pointRecap(angle: number | undefined, metres: number, label: string): void {
+        const {caseRow,arrow,distance}=this.recap;
+        if(!this.respawnVisible||!caseRow||!arrow||!distance)return;
+        if(caseRow.hidden!==(angle===undefined))caseRow.hidden=angle===undefined;
+        if(angle===undefined)return;
+        const rounded=Math.round(angle*50)/50,whole=Math.round(metres);
+        if(rounded!==this.recapAngle){this.recapAngle=rounded;arrow.style.transform=`rotate(${rounded}rad)`;}
+        if(whole!==this.recapMetres||label!==this.recapLabel){this.recapMetres=whole;this.recapLabel=label;distance.textContent=`${label} · ${whole} M`;}
     }
 
     /** U6: the X grows with damage and with hits landing while it still shows. */
@@ -355,13 +384,16 @@ export class GameHud {
             void reticle.offsetWidth;reticle.classList.add('kill-confirmed');if(headshot)reticle.classList.add('headshot');
             this.hitTimer=setTimeout(()=>{this.hitTimer=null;reticle.classList.remove('kill-confirmed');reticle.classList.remove('headshot');},headshot?700:500);
         }
-        if(this.killTimer!==null)clearTimeout(this.killTimer);
-        this.killTitle.textContent=`${headshot?'HEADSHOT':'RAT DOWN'} · ${victimName}`;
+        clearTimeout(this.killTimer??undefined);this.killTimer=null;
+        const title=`${headshot?'HEADSHOT':'RAT DOWN'} · ${victimName}`;
+        // A lesser headline: when something bigger is up, the kill is told as the compact line.
+        if(!headlines.claim('kill','news',title,2400,()=>{this.killConfirmation.style.display='none';})){this.killConfirmation.style.display='none';return;}
+        this.killTitle.textContent=title;
         this.killQuip.textContent=this.quips.next('kill');
         // Replace rapid kills in one bounded notice, restarting its full lifetime.
         this.killConfirmation.style.display='none';void this.killConfirmation.offsetWidth;
         this.killConfirmation.style.display='block';
-        this.killTimer=setTimeout(()=>{this.killTimer=null;this.killConfirmation.style.display='none';},2400);
+        this.killTimer=setTimeout(()=>{this.killTimer=null;this.killConfirmation.style.display='none';headlines.release('kill');},2400);
     }
 
     private clearCombatFeedback():void {

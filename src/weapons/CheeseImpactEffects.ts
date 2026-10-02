@@ -3,7 +3,9 @@ import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {freezeStatic} from '../utils/freezeStatic';
 
-const DRIPS=60;
+/** Clarity batch visual budget (protocol 29): crumbs 160 → 96, wall splats 40 → 24, drips 60 → 32 at once. */
+const CRUMBS=96,MARKS=24;
+const DRIPS=32;
 const SPARKS=48;
 
 /** Bounded, cosmetic-only crumbs and surface splashes; no physics bodies or aim targets. */
@@ -13,11 +15,11 @@ export class CheeseImpactEffects {
     private readonly crumbMaterial = new THREE.MeshStandardMaterial({color: 0xffc24d, emissive: 0xe79b20, emissiveIntensity: 0.4, roughness: 0.7});
     private readonly splatGeometry;
     private readonly splatMaterial = new THREE.MeshBasicMaterial({color: 0xdba32f, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true});
-    private readonly crumbs = new THREE.InstancedMesh(this.crumbGeometry, this.crumbMaterial, 160);
+    private readonly crumbs = new THREE.InstancedMesh(this.crumbGeometry, this.crumbMaterial, CRUMBS);
     private readonly splats;
-    private readonly particles = Array.from({length:160},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,lifetime:0,spin:0,size:1}));
+    private readonly particles = Array.from({length:CRUMBS},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),age:Infinity,lifetime:0,spin:0,size:1}));
     private particleCursor=0;
-    private readonly marks = Array.from({length:40},()=>({position:new THREE.Vector3(),rotation:new THREE.Quaternion(),age:Infinity,size:0,life:3}));
+    private readonly marks = Array.from({length:MARKS},()=>({position:new THREE.Vector3(),rotation:new THREE.Quaternion(),age:Infinity,size:0,life:3}));
     /** Polish 5: runs of cheese sliding down walls under fresh splats. */
     private readonly dripGeometry = new THREE.PlaneGeometry(1, 1).translate(0, -.5, 0);
     private readonly drips = new THREE.InstancedMesh(this.dripGeometry, this.splatMaterial, DRIPS);
@@ -53,7 +55,7 @@ export class CheeseImpactEffects {
             if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
         }
         shape.closePath(); this.splatGeometry = new THREE.ShapeGeometry(shape);
-        this.splats = new THREE.InstancedMesh(this.splatGeometry, this.splatMaterial, 40);
+        this.splats = new THREE.InstancedMesh(this.splatGeometry, this.splatMaterial, MARKS);
         this.root.name = 'cheese-impact-effects';this.root.userData.noNoir = true;
         this.crumbs.count = this.splats.count = this.drips.count = this.sparks.count = 0;
         this.crumbs.visible = this.splats.visible = this.drips.visible = this.sparks.visible = false;
@@ -71,7 +73,7 @@ export class CheeseImpactEffects {
         const crumbs=Math.min(12,5+Math.round(size*2));
         for (let i = 0; i < crumbs; i++) {
             const angle = phase + i * Math.PI * 2 / crumbs;
-            const particle=this.particles[this.particleCursor++%160];
+            const particle=this.particles[this.particleCursor++%CRUMBS];
             particle.velocity.copy(this.normal).multiplyScalar((1.5+(i%3)*.6)*Math.min(2.4,size))
                 .addScaledVector(this.tangent,Math.cos(angle)*2.2*Math.min(2.2,size))
                 .addScaledVector(this.bitangent,Math.sin(angle)*2.2*Math.min(2.2,size));
@@ -80,7 +82,7 @@ export class CheeseImpactEffects {
         }
         if(surface){
             const polish=feelState().on('splats'),p=FEEL.splats.params;
-            const mark=this.marks[this.markCursor++%40];
+            const mark=this.marks[this.markCursor++%MARKS];
             mark.rotation.setFromUnitVectors(this.axis,this.normal);
             mark.rotation.multiply(this.twist.setFromAxisAngle(this.axis,phase));
             mark.position.copy(point).addScaledVector(this.normal,.035);
@@ -95,8 +97,8 @@ export class CheeseImpactEffects {
         if(this.disposed||!this.active)return;
         let particleCount=0,markCount=0;
         // Ring order preserves oldest-to-newest draw order when slots wrap.
-        for(let slot=0;slot<160;slot++){
-            const particle=this.particles[(this.particleCursor+slot)%160];
+        for(let slot=0;slot<CRUMBS;slot++){
+            const particle=this.particles[(this.particleCursor+slot)%CRUMBS];
             if((particle.age+=dt)>=particle.lifetime)continue;
             particle.velocity.y -= dt * 10;
             particle.position.addScaledVector(particle.velocity, dt);
@@ -109,8 +111,8 @@ export class CheeseImpactEffects {
             this.dummy.scale.setScalar(particle.size*Math.min(1, (particle.lifetime - particle.age) * 7));
             this.dummy.updateMatrix(); this.crumbs.setMatrixAt(particleCount++, this.dummy.matrix);
         }
-        for(let slot=0;slot<40;slot++){
-            const mark=this.marks[(this.markCursor+slot)%40];
+        for(let slot=0;slot<MARKS;slot++){
+            const mark=this.marks[(this.markCursor+slot)%MARKS];
             if((mark.age+=dt)>=mark.life)continue;
             this.dummy.position.copy(mark.position); this.dummy.quaternion.copy(mark.rotation);
             const grow = 0.4 + 0.6 * Math.min(1, mark.age / 0.07);

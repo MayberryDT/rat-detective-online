@@ -264,6 +264,12 @@ describe('parseServerMessage', () => {
     expect(parseServerMessage({ ...kill, killerId: null, killerName: null, cause: 'drowned' })).toBeNull();
   });
 
+  it('carries a blast kill for the death recap and rejects anything but true', () => {
+    const kill = { type: 'playerDied', victimId: 'a', killerId: 'b', killerName: 'B', victimName: 'A', respawnAt: 123, blast: true };
+    expect(parseServerMessage(kill)).toEqual(kill);
+    for (const blast of [false, 1, 'true']) expect(parseServerMessage({ ...kill, blast })).toBeNull();
+  });
+
   it.each(['evidence-tampering','drowned'])('accepts explicit environmental deaths (%s) while rejecting mixed or missing attribution',cause=>{
     const death={type:'playerDied',victimId:'v',victimName:'Captain Crawley',killerId:null,killerName:null,cause,respawnAt:1000};
     expect(parseServerMessage(death)).toEqual(death);

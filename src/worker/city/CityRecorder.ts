@@ -4,7 +4,9 @@ import type { IncidentEvent, PickupEvent, ShotResultEvent } from '../../shared/C
 import type { GrayboxBox } from '../../shared/grayboxLayout';
 import { CITY_BOUNDS } from '../../shared/grayboxLayout';
 import { DISPATCH_STATIONS } from '../../shared/chaosState';
-import { activeDestination, destinationPoint } from '../../shared/assignments';
+import { activeDestination, destinationPoint, type AssignmentId } from '../../shared/assignments';
+import type { AdminCommandName, AdminVia } from '../../shared/admin';
+import type { IncidentId } from '../../shared/incidentCatalog';
 import { JURISDICTION_ZONES } from '../../shared/jurisdictionZones';
 import { activeZone } from '../../shared/jurisdiction';
 import { BUFF_FIELD, TIMED_PICKUPS, WEAPON_TUNING, entryWeapon, type PickupKind, type PlayerBuffs, type TimedPickup, type WeaponKind } from '../../shared/pickups';
@@ -225,6 +227,9 @@ export class CityRecorder {
    * balls (every rat's) that hit it; and the enemy balls the current carrier's grip has taken. */
   private loose: { since: number; x: number; y: number; z: number; lx: number; ly: number; lz: number; path: number; kicks: number } | null = null;
   private gripHits = 0;
+  /** Case pings during the current carry, and the latest one counted (`CaseState.ping.at`). */
+  private casePings = 0;
+  private casePingAt = 0;
   private dispatchKey = '';
   /** The latest Most Wanted takedown recorded (`dispatch.bounty.at`). */
   private bountyAt = 0;
@@ -539,6 +544,12 @@ export class CityRecorder {
     this.emit({ ...this.context(now), type: 'rescue', a: this.actor(p.id), from: p3(p), place });
   }
 
+  /** One of Tyler's admin commands (docs/live-service.md); `round` the room's round (the recorder may not have seen it
+   * yet), `by` the admin's rat when it came from a game socket. */
+  admin(fact: { command: Exclude<AdminCommandName, 'status'>; via: AdminVia; ok: boolean; next?: AssignmentId; roll?: IncidentId }, now: number, round?: string, by?: string, winner?: string): void {
+    this.emit({ ...this.context(now), ...(round ? { round } : {}), type: 'admin', ...fact, ...(by ? { a: this.actor(by) } : {}), ...(winner ? { winner: this.actor(winner) } : {}) });
+  }
+
   // ---- the minds (docs/bot-overhaul.md, B5) ----
   /** A bot's decision. Since L4 of the bot learning plan every `Decision` is a decision moment (an event, or the
    * 10 s hold running out; the goal is only refreshed in between), so each is recorded, keeping the same goal
@@ -669,7 +680,7 @@ export class CityRecorder {
       this.roundId = a.roundId; this.mode = a.id; this.liveAt = a.liveAt;
       this.ledger.reset(); this.actors.clear(); this.deliverySerial = a.deliverySerial;
       // Actors are per round: a goal open when the round changed ends unrecorded.
-      this.goals.clear(); this.approaches.clear(); this.loose = null; this.gripHits = 0;
+      this.goals.clear(); this.approaches.clear(); this.loose = null; this.gripHits = 0; this.casePings = 0;
       this.emit({ ...this.context(now), type: 'round', what: 'start', ...this.census(players) });
     }
     if (round.phase !== this.phase) {
@@ -782,16 +793,17 @@ export class CityRecorder {
         this.life(owner, now, players.get(owner)).carryStart = now;
         const stolen = prev !== null;
         this.measure(now, place, stolen ? 'case-steal' : 'case-take');
-        this.emit({ ...this.context(now), type: 'case', what: stolen ? 'steal' : 'take', a: this.actor(owner), ...(prev ? { from: this.actor(prev) } : {}), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), ...(stolen ? {} : looseSpell()) });
+        this.emit({ ...this.context(now), type: 'case', what: stolen ? 'steal' : 'take', a: this.actor(owner), ...(prev ? { from: this.actor(prev), pings: this.casePings } : {}), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), ...(stolen ? {} : looseSpell()) });
         this.reach(players.get(owner), now, g => g.goal === 'take-case' || g.goal === 'chase-carrier' && g.quarry === prev);
       } else if (prev) {
         this.measure(now, place, 'case-drop');
         const carrier = players.get(prev), cause = !carrier ? 'left' : carrier.hp <= 0 ? 'death' : a && a.deliverySerial !== this.deliverySerial ? 'delivered' : 'shot';
-        this.emit({ ...this.context(now), type: 'case', what: 'drop', a: this.actor(prev), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), cause, gripHits: this.gripHits });
+        this.emit({ ...this.context(now), type: 'case', what: 'drop', a: this.actor(prev), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), cause, gripHits: this.gripHits, pings: this.casePings });
       }
-      this.gripHits = 0;
+      this.gripHits = 0; this.casePings = 0;
       this.caseOwner = owner; this.caseChangeAt = now;
     }
+    if (owner && c.ping && c.ping.at !== this.casePingAt) { this.casePingAt = c.ping.at; this.casePings++; }
     if (returning && !this.caseReturning) this.emit({ ...this.context(now), type: 'case', what: 'respawn', p: p3(c.p), place: this.places.at(c.p.x, c.p.y, c.p.z).id, ...looseSpell() });
     this.caseReturning = returning;
 

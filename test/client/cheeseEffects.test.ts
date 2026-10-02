@@ -13,8 +13,9 @@ it('caps impact debris and splats, expires them, and disposes shared resources o
     const disposals = resources.map(resource => vi.spyOn(resource, 'dispose'));
     for (let i = 0; i < 100; i++) effects.emit(new THREE.Vector3(i,0,0), new THREE.Vector3(0,1,0), true);
     effects.update(0);
-    expect(crumbs.count).toBe(160); expect(splats.count).toBe(40);
-    effects.update(0.9); expect(crumbs.count).toBe(0); expect(splats.count).toBe(40);
+    // The clarity batch's visual budget: 96 crumbs and 24 splats at once, however busy the fight.
+    expect(crumbs.count).toBe(96); expect(splats.count).toBe(24);
+    effects.update(0.9); expect(crumbs.count).toBe(0); expect(splats.count).toBe(24);
     effects.update(FEEL.splats.params.life); expect(splats.count).toBe(0);
     effects.emit(new THREE.Vector3(),new THREE.Vector3(1,0,0),false);
     effects.update(0);
@@ -47,7 +48,7 @@ it('flushes a burst once per frame instead of rebuilding instance buffers per im
     for(let i=0;i<64;i++)effects.emit(point,normal,true);
     expect(crumbWrites).not.toHaveBeenCalled();expect(splatWrites).not.toHaveBeenCalled();
     effects.update(1/60);
-    expect(crumbWrites).toHaveBeenCalledTimes(160);expect(splatWrites).toHaveBeenCalledTimes(40);
+    expect(crumbWrites).toHaveBeenCalledTimes(96);expect(splatWrites).toHaveBeenCalledTimes(24);
     effects.update(FEEL.splats.params.life+1);expect(crumbs.count+splats.count).toBe(0);
     crumbWrites.mockClear();splatWrites.mockClear();effects.update(1/60);
     expect(crumbWrites).not.toHaveBeenCalled();expect(splatWrites).not.toHaveBeenCalled();

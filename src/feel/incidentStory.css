@@ -10,7 +10,7 @@
 .incident-story>div{transform:translateX(-50%) rotate(var(--tilt,-4deg))}
 
 /* Most Wanted: a police WANTED poster with a scribbled mugshot, the target's name and the reward. Kept above the
- * aiming area; it shares the top with BOUNTY CLAIMED, which it waits behind. */
+ * aiming area. */
 .story-poster{--tilt:-5deg;top:4%;width:200px;padding:10px 14px 12px;text-align:center;background:var(--carbon-sheet);border:2px dashed var(--carbon-line);
   box-shadow:var(--carbon-drop),var(--carbon-smudge)}
 .story-poster-head{font:400 46px/1 var(--font-display);letter-spacing:.12em;color:var(--stamp-ink);-webkit-text-stroke:1px var(--carbon-deep)}
@@ -31,14 +31,6 @@
 .story-bounty-line{grid-column:1/-1;padding:3px 10px;background:var(--carbon);font:400 18px/1.2 var(--font-type);color:var(--carbon-bright);white-space:nowrap}
 .story-bounty.story-self .story-bounty-line{color:var(--stamp-ink)}
 
-/* All Units: the police radio call across the top, a red transmit light and the dispatcher's line. */
-.story-radio{--tilt:-1.5deg;top:7%;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:12px;width:min(620px,88vw);padding:10px 18px;
-  background:repeating-linear-gradient(#0000 0 3px,#a5b9e10d 3px 4px),var(--carbon-sheet);border:2px solid var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge)}
-.story-radio-dot{grid-row:span 2;width:16px;height:16px;border-radius:50%;background:var(--stamp);border:2px solid var(--carbon-deep);animation:story-blink .5s steps(1) infinite}
-.story-radio-call{font:400 44px/1 var(--font-display);letter-spacing:.14em;color:var(--carbon-bright)}
-.story-radio-line{font:400 15px/1.2 var(--font-type);color:var(--carbon-ink);letter-spacing:.05em}
-@keyframes story-blink{50%{opacity:.25}}
-
 /* Your respawn as backup: a light bar strobing red and blue, the card, and an arrow that keeps pointing at the action. */
 .story-backup{--tilt:2deg;top:58%;display:grid;justify-items:center;gap:4px;padding:16px 26px 12px;background:var(--carbon-sheet);border:3px double var(--stamp);
   box-shadow:var(--carbon-drop),var(--carbon-smudge)}
@@ -51,4 +43,4 @@
 .story-backup-arrow::before{content:'';position:absolute;left:50%;top:2px;margin-left:-22px;border-left:22px solid transparent;border-right:22px solid transparent;border-bottom:30px solid var(--stamp-ink)}
 .story-backup-arrow::after{content:'';position:absolute;left:50%;top:30px;width:16px;height:28px;margin-left:-8px;background:var(--stamp-ink)}
 .story-backup-line{font:400 16px/1.2 var(--font-type);color:var(--carbon-bright);letter-spacing:.06em}
-@media (max-width:700px){.story-poster{width:170px}.story-poster-head{font-size:38px}.story-bounty-stamp{font-size:40px}.story-radio-call{font-size:30px}.story-backup-title{font-size:36px}}
+@media (max-width:700px){.story-poster{width:170px}.story-poster-head{font-size:38px}.story-bounty-stamp{font-size:40px}.story-backup-title{font-size:36px}}

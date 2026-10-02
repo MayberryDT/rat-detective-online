@@ -257,7 +257,8 @@ export class DispatchPillars {
         if(key===this.faceKey)return;
         this.faceKey=key;
         const ctx=this.kit.faceCanvas.getContext('2d');if(!ctx)return;
-        const W=256,H=192,cream='#f1dfb4',amber='#e8b04a',red='#ff3b2a';
+        // Police blue, cream and alarm red: gold belongs to the case alone.
+        const W=256,H=192,cream='#f1dfb4',blue='#7fa8ff',red='#ff3b2a';
         ctx.fillStyle='#0f0b0e';ctx.fillRect(0,0,W,H);
         ctx.fillStyle='#3a2a1e';ctx.fillRect(6,6,W-12,3);ctx.fillRect(6,H-9,W-12,3);ctx.fillRect(6,6,3,H-12);ctx.fillRect(W-9,6,3,H-12);
         ctx.textAlign='center';ctx.textBaseline='middle';
@@ -270,17 +271,17 @@ export class DispatchPillars {
             if(space<0||words.length<=11){text(words,y,max,color);return;}
             text(words.slice(0,space),y-max*.5,max,color);text(words.slice(space+1),y+max*.5,max,color);
         };
-        if(d.phase==='ready'){text('POLICE · FIRE',34,20,amber);text('DISPATCH',92,44,cream);text('SHOOT THE BELL',152,24,red);}
-        else if(d.phase==='rolling'&&!landed){text('DISPATCHING',30,22,amber);title(INCIDENTS[spinning]!.title,108,34,cream);}
+        if(d.phase==='ready'){text('POLICE · FIRE',34,20,blue);text('DISPATCH',92,44,cream);text('SHOOT THE BELL',152,24,red);}
+        else if(d.phase==='rolling'&&!landed){text('DISPATCHING',30,22,blue);title(INCIDENTS[spinning]!.title,108,34,cream);}
         else if(d.phase==='rolling'){
-            text('DISPATCHED',30,22,amber);
+            text('DISPATCHED',30,22,blue);
             ctx.fillStyle=red;ctx.fillRect(18,58,W-36,5);ctx.fillRect(18,160,W-36,5);ctx.fillRect(18,58,5,107);ctx.fillRect(W-23,58,5,107);
             title(INCIDENTS[incident]!.title,111,36,red);
         }else if(d.phase==='active'){
-            title(INCIDENTS[incident]!.title,40,24,amber);
+            title(INCIDENTS[incident]!.title,40,24,blue);
             if(left<=3)text(String(left),128,110,red);
-            else{text(`0:${String(left).padStart(2,'0')}`,122,64,cream);text('IN PROGRESS',172,16,amber);}
-        }else{text('DISPATCH',34,20,amber);text('LINE BUSY',96,40,red);text(`OPEN IN ${left}`,152,22,cream);}
+            else{text(`0:${String(left).padStart(2,'0')}`,122,64,cream);text('IN PROGRESS',172,16,blue);}
+        }else{text('DISPATCH',34,20,blue);text('LINE BUSY',96,40,red);text(`OPEN IN ${left}`,152,22,cream);}
         this.kit.faceTexture.needsUpdate=true;
     }
 

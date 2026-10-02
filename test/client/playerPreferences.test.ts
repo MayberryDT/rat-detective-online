@@ -21,6 +21,11 @@ it('keeps a chosen graphics mode across reloads and falls back to Auto for anyth
  store.update({graphics:'low'});expect(new PreferenceStore(disk).current.graphics).toBe('low');
  for(const graphics of ['ultra','constructor',3,null])expect(validatePreferences({version:1,graphics}).graphics).toBe('auto');
 });
+it('starts new players at half volume and 60% shake while saved settings keep their values',()=>{
+ expect(new PreferenceStore(storage()).current).toMatchObject({masterVolume:.5,cameraShake:.6});
+ const saved={...DEFAULT_PREFERENCES,masterVolume:1,cameraShake:1,mouseSensitivity:.4};
+ expect(new PreferenceStore(storage({[PREFERENCES_KEY]:JSON.stringify(saved)})).current).toMatchObject({masterVolume:1,cameraShake:1,mouseSensitivity:.4});
+});
 it('scales and inverts each input exactly once without coupling devices',()=>{
  const p={...DEFAULT_PREFERENCES,mouseSensitivity:.25,touchSensitivity:2,invertMouseY:true};
  expect(lookDelta(100,20,'mouse',p)).toEqual([25,-5]);expect(lookDelta(100,20,'touch',p)).toEqual([200,40]);

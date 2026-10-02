@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 import {AudioVoicePool} from './AudioVoicePool';
+import {admitWorldVoice,endWorldVoice,worldInput,type WorldVoice} from './PlayerAudioMix';
 import {FOLEY,type FoleyCue,type FoleyPlay} from './foleyCatalog';
 import {worldSoundGain} from './worldSoundGain';
 
 type Point={x:number;y:number;z:number};
-type Voice={sound:THREE.Audio;pan:StereoPannerNode;cue:FoleyCue;origin?:Point;gain:number};
+type Voice=WorldVoice&{sound:THREE.Audio;pan:StereoPannerNode;cue:FoleyCue;origin?:Point;gain:number};
 /** Brief world accents and fuller menu/result cues. No ambient loops or backlog. */
 export class FoleyAudio {
     private readonly pool:AudioVoicePool;
     private readonly voices=new Set<Voice>();
     private readonly panners=new Map<THREE.Audio,StereoPannerNode>();
+    /** Whether each panner feeds the ranked mix's world duck (world accents) or the listener (personal cues). */
+    private readonly routes=new Map<StereoPannerNode,boolean>();
     private readonly buffers=new Map<FoleyCue,AudioBuffer>();
     private readonly last=new Map<string,number>();
     private readonly ear=new THREE.Vector3();
@@ -71,20 +74,23 @@ export class FoleyAudio {
         }
         const sound=this.pool.acquire();if(!sound)return;
         let pan=this.panners.get(sound);
-        if(!pan){pan=ctx.createStereoPanner();sound.gain.disconnect();sound.gain.connect(pan);pan.connect(this.listener.getInput());this.panners.set(sound,pan);}
-        const voice:Voice={sound,pan,cue,origin:origin?{...origin}:undefined,gain};
+        if(!pan){pan=ctx.createStereoPanner();sound.gain.disconnect();sound.gain.connect(pan);this.panners.set(sound,pan);}
+        if(this.routes.get(pan)!==world){pan.disconnect();pan.connect((world?worldInput(this.listener):undefined)??this.listener.getInput());this.routes.set(pan,world);}
+        const voice:Voice={sound,pan,cue,origin:origin?{...origin}:undefined,gain,level:gain*this.distanceGain(cue,origin),cut:()=>this.release(voice)};
+        // World accents share the ranked mix's budget with the guns and hits.
+        if(world&&!admitWorldVoice(ctx,voice)){this.pool.release(sound);return;}
         this.voices.add(voice);sound.setBuffer(buffer);sound.setLoop(false);
         // Fixed playback by default; no random pitch variation.
         const rate=options.rate??1;sound.setPlaybackRate(Math.max(.65,Math.min(1.5,Number.isFinite(rate)?rate:1)));
-        this.position(voice);sound.onEnded=()=>{this.pool.finish(sound);this.voices.delete(voice);};
+        this.position(voice);sound.onEnded=()=>{this.pool.finish(sound);this.voices.delete(voice);endWorldVoice(ctx,voice);};
         try{sound.play();}catch{this.release(voice);return;}
         this.last.delete(key);this.last.set(key,now);this.last.set(cue,now);if(world)this.worldAt=now;
         while(this.last.size>128)this.last.delete(this.last.keys().next().value!);
     };
-    private release(voice:Voice):void {if(this.voices.delete(voice))this.pool.release(voice.sound);}
+    private release(voice:Voice):void {if(this.voices.delete(voice)){endWorldVoice(this.listener.context,voice);this.pool.release(voice.sound);}}
     private stopAll():void {for(const voice of this.voices)this.release(voice);}
     dispose():void {
         if(this.disposed)return;this.disposed=true;this.stopAll();this.pool.dispose();
-        for(const pan of this.panners.values())pan.disconnect();this.panners.clear();this.buffers.clear();this.last.clear();
+        for(const pan of this.panners.values())pan.disconnect();this.panners.clear();this.routes.clear();this.buffers.clear();this.last.clear();
     }
 }

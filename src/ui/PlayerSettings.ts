@@ -1,6 +1,7 @@
 import { ACTIONS, GRAPHICS_MODES, RANGES, bindingLabel, playerPreferences, type Action, type GraphicsMode, type NumericPreference, type PreferenceStore } from '../settings/PlayerPreferences';
 import { onQualityChange, qualityStatus, type QualityStatus } from '../session/graphicsQuality';
 import { mountFeelReview } from '../feel/FeelReviewSection';
+import { mountAdminKeyField } from './adminKey';
 import './playerSettings.css';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import { ghost, replay, uiMotion } from './motion';
@@ -124,6 +125,7 @@ export class PlayerSettings {
                 this.refreshers.push(()=>{button.textContent=bindingLabel(this.store.current.bindings[action][slot]);button.setAttribute('aria-label',`${ACTIONS[action]}, ${slot?'alternate':'primary'}: ${button.textContent}`);});
             }
         }
+        mountAdminKeyField(this.content,this.doc,this.events.signal);
     }
     /** Auto, High, Medium, Low as a row of stamps, and what Auto is drawing right now. */
     private graphics(parent:HTMLElement):void {
@@ -203,9 +205,12 @@ export class PlayerSettings {
         if(this.doc.pointerLockElement)this.doc.exitPointerLock();
         this.status.textContent='';this.back.focus({preventScroll:true});this.root.scrollTop=0;
     }
-    open():void {
+    /** Open Settings, on the page titled `section` (its legend, e.g. 'SCREEN EFFECTS') when given. */
+    open(section?:string):void {
         this.page='settings';this.content.hidden=false;this.root.dataset.page='settings';
         this.heading.textContent='PLAYER SETTINGS';this.note.textContent=this.session?.playing()?'The online match continues. Your rat is still vulnerable. Changes save on this browser.':'Saved on this browser. Changes apply immediately.';
+        const index=section?this.pages.findIndex(p=>p.tab.textContent===section):-1;
+        if(index>=0)this.tab(index,false);
         this.back.textContent='Back';this.refresh();this.show();
     }
     pause():void {

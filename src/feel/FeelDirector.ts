@@ -35,10 +35,13 @@ import type {PickupKind,WeaponKind} from '../shared/pickups';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {reducedMotion} from '../ui/motion';
 import {pickupArtwork} from '../prototype/pickupArtwork';
+import {CASE_GOLD} from '../prototype/caseGold';
+/** The case gold as CSS ink, for screen flashes about the case. */
+const CASE_GOLD_INK=`#${CASE_GOLD.toString(16).padStart(6,'0')}`;
 
-/** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, brass Stakeout; the arsenal's
- * gunmetal-brass Tommy Gun, the Laser's greasy cheesy yellow-green and the Mousetrap's raw pine. */
-const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#d6a843','tommy-gun':'#c8a060',laser:'#c8f040',mousetrap:'#d9b27a'};
+/** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, cold lens cyan Stakeout; the
+ * arsenal's orange Tommy Gun, the Laser's greasy cheesy yellow-green and the Mousetrap's pale pine. */
+const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#7ad8e8','tommy-gun':'#e8873e',laser:'#c8f040',mousetrap:'#e6dcc4'};
 /** C4: Hot Pursuit claim dust, a multiplier on the grey dust colour. */
 const CLAIM_DUST=new THREE.Color(3.2,.42,.26);
 /** Bad Ammunition: the word over your own ball, by its personality. */
@@ -204,6 +207,10 @@ export class FeelDirector {
         const p=FEEL.caseClaim.params;
         this.launchJuice?.spill(this.impulse.set(at.x,at.y+.3,at.z),kind==='kick'?p.kickPaper:kind==='loose'?Math.round(p.paper*.6):p.paper);
     }
+    /** The case ping: the case you carry just pinged (everyone else now sees where you are): a soft case-gold edge flash. */
+    casePinged():void {
+        if(this.state.on('casePing'))this.screen.claim(CASE_GOLD_INK,FEEL.casePing.params.flash);
+    }
     /** C1–C4: your own supply claim (other rats' claims keep only their world effects): an edge flash in the supply's colour,
      * a punch-in, a small kick and a squash-and-pop, then the supply's signature. The card flight and Ironclad sparks are ChaosView's.
      * W3: a Mousetrap just taken (`lockMs` of its trigger lockout left) gets the TRAP IN PAW moment and a heave of the view. */
@@ -368,8 +375,8 @@ export class FeelDirector {
         if(!this.state.on('cheddarShower'))return;
         const p=FEEL.cheddarShower.params;
         playSynth('meteor-boom',at,.9+Math.random()*.2,p.boom);
-        this.launchJuice?.landed(at,1,FEEL.launchLanding.params.decalLife);
-        for(let i=0;i<8;i++){const a=i*Math.PI/4;this.dust?.puff(this.impulse.set(at.x+Math.cos(a)*3,at.y+.2,at.z+Math.sin(a)*3),1);}
+        this.launchJuice?.landed(at,1,FEEL.launchLanding.params.decalLife,p.debris);
+        for(let i=0;i<p.dust;i++){const a=i*Math.PI*2/p.dust;this.dust?.puff(this.impulse.set(at.x+Math.cos(a)*3,at.y+.2,at.z+Math.sin(a)*3),1);}
         for(let i=0;i<3;i++)this.dust?.smoke(this.impulse.set(at.x,at.y+.6,at.z),this.up.set(0,1,0),1);
         const d=at.distanceTo(view.position);
         if(d<p.shakeRange){

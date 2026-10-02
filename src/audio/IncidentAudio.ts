@@ -1,4 +1,4 @@
-import { effectsOutput } from './PlayerAudioMix';
+import { admitWorldVoice, effectsOutput, endWorldVoice, worldOutput } from './PlayerAudioMix';
 import type {Vec3Data} from '../shared/networkProtocol';
 import { previewMuted } from './previewMuted';
 import {worldSoundGain} from './worldSoundGain';
@@ -16,7 +16,8 @@ const CASE_BUZZ_VOLUME = .055;
 let buzzVolume = CASE_BUZZ_VOLUME;
 let saw: {source: AudioBufferSourceNode; gain: GainNode; volume: number} | undefined;
 const listener = {x:0,y:0,z:0};
-const voices = new Map<AudioBufferSourceNode, GainNode>();
+/** Each playing cue and how to free it (its nodes and its ranked-mix world voice). */
+const voices = new Map<AudioBufferSourceNode, () => void>();
 let popVariant = 0;
 /** Short synthesized cues, rendered once per audio context: `seconds` long, `sample(t, noise)` normalised to `peak`. */
 const SYNTH = {
@@ -76,13 +77,17 @@ function distanceGain(origin?: Vec3Data): number {
     return origin ? worldSoundGain(Math.hypot(origin.x-listener.x,origin.y-listener.y,origin.z-listener.z)) : 1;
 }
 
-function playBuffer(buffer: AudioBuffer, volume: number, pitch = 1): void {
+/** `world` (a placed cue) joins the ranked mix: ducked under your hits and kills, sharing its voice budget. */
+function playBuffer(buffer: AudioBuffer, volume: number, pitch = 1, world = false): void {
     const ctx = context;
     if (!ctx || ctx.state !== 'running' || voices.size >= MAX_VOICES) return;
     const source = ctx.createBufferSource(), gain = ctx.createGain();
+    const end = () => { voices.delete(source); source.disconnect(); gain.disconnect(); if (ranked) endWorldVoice(ctx, ranked); };
+    const ranked = world ? {level: volume, cut: () => { source.onended = null; source.stop(); end(); }} : undefined;
+    if (ranked && !admitWorldVoice(ctx, ranked)) return;
     source.buffer = buffer; source.playbackRate.value = pitch; gain.gain.value = volume;
-    source.connect(gain); gain.connect(effectsOutput(ctx)); voices.set(source,gain);
-    source.onended = () => { voices.delete(source); source.disconnect(); gain.disconnect(); };
+    source.connect(gain); gain.connect(world ? worldOutput(ctx) : effectsOutput(ctx)); voices.set(source, end);
+    source.onended = end;
     source.start();
 }
 
@@ -99,13 +104,13 @@ export function playSynth(cue: SynthCue, origin?: Vec3Data, pitch = 1, volume = 
         for (let i = 0; i < pcm.length; i++) { pcm[i] = sample(i / ctx.sampleRate, noise); max = Math.max(max, Math.abs(pcm[i]!)); }
         if (max > 0) for (let i = 0; i < pcm.length; i++) pcm[i] = pcm[i]! * peak / max;
     }
-    playBuffer(buffer, volume * distanceGain(origin), pitch);
+    playBuffer(buffer, volume * distanceGain(origin), pitch, !!origin);
 }
 
 /** Bad Ammunition: a hiccuping ball stops dead in the air: the recorded cartoon mouth pop, pitched up into a HIC! */
 export function playHic(origin?: Vec3Data): void {
     const buffer = buffers.get(`pop-${popVariant++ % 3}` as Cue);
-    if (buffer) playBuffer(buffer, .9 * distanceGain(origin), 1.35 + Math.random() * .1);
+    if (buffer) playBuffer(buffer, .9 * distanceGain(origin), 1.35 + Math.random() * .1, !!origin);
 }
 
 function stopSaw(): void {
@@ -150,7 +155,7 @@ export function bindIncidentAudio(next?: AudioContext, position?: Vec3Data): voi
 
 export function disposeIncidentAudio(): void {
     buzzWanted = false; stopSaw(); generation++;
-    for (const [voice,gain] of voices) { voice.onended=null;voice.stop();voice.disconnect();gain.disconnect(); }
+    for (const [voice,end] of voices) { voice.onended=null;voice.stop();end(); }
     voices.clear(); buffers = new Map(); loading = undefined; context = undefined; synthBuffers = {};
     listener.x=listener.y=listener.z=0; buzzVolume=CASE_BUZZ_VOLUME;
 }

@@ -1,4 +1,3 @@
-import type {IncidentId} from '../shared/incidentCatalog';
 import type {EnvironmentCause} from '../shared/networkProtocol';
 
 export const MUNICIPAL_QUIPS = {
@@ -114,22 +113,6 @@ export const MUNICIPAL_QUIPS = {
 /** Which joke bag tells a death nobody is credited with. */
 const ENVIRONMENT_QUIPS:Record<EnvironmentCause,keyof typeof MUNICIPAL_QUIPS>={'evidence-tampering':'caseDeath',drowned:'drowned',meteor:'meteor'};
 
-/** Flavor for incident broadcasts; the title, countdown and objective status
- * carry the actionable information without a recurring tutorial paragraph. */
-export const INCIDENT_QUIPS:Record<IncidentId,string>={
-    'improper-disposal':'THE DECEASED HAVE PLACES TO BE.',
-    'bad-ammunition':'EVERY ROUND HAS A PERSONALITY. NONE OF THEM ARE GOOD.',
-    'pressure-surge':'THE CITY DENIES LIFTING YOU.',
-    'evidence-tampering':'THE EVIDENCE IS FLEEING THE SCENE.',
-    crossfire:'THE WALLS ARE ACCOMPLICES.',
-    scattershot:'EVERY COMPLAINT NOW ARRIVES WITH FORCE.',
-    'big-cheese':'THE CHEDDAR BUDGET WAS APPROVED.',
-    blackout:'THE POWER COMPANY IS INVESTIGATING ITSELF.',
-    'code-violation':'THE CITY HAS FAILED ITS SAFETY INSPECTION. EVERYTHING IS OUT OF ORDER.',
-    'most-wanted':'THE CITY WOULD LIKE A WORD WITH WHOEVER IS WINNING.',
-    'all-units':'DEATH IS NO EXCUSE FOR MISSING THE ACTION.',
-    'cheddar-shower':'THE FORECAST IS CHEESE. FIND A ROOF.',
-};
 /** Local flavor only. Every phrase appears before reuse, with no boundary repeat. */
 export class MunicipalQuips {
     private readonly bags=new Map<keyof typeof MUNICIPAL_QUIPS,string[]>();

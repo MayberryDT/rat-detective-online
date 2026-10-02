@@ -88,3 +88,6 @@ body.observing #hud{color:var(--carbon-bright)}
 .feel-review-param{display:grid;grid-template-columns:1fr 120px;gap:10px;align-items:center;margin:6px 0 6px 28px;color:var(--carbon-ink);font-size:14px}
 .feel-review-param input[type=number]{padding:4px 6px}
 .feel-review-actions{display:flex;gap:10px;align-items:center;margin-top:12px}
+/* `?admin=1`: the admin key field (adminKey.ts). */
+.settings-admin input{box-sizing:border-box;width:100%;margin:4px 0 8px;padding:7px 9px;font:14px var(--font-type);background:var(--carbon-deep);color:var(--carbon-bright);border:1px dashed var(--carbon-line);border-radius:0}
+.settings-admin-actions{display:flex;gap:8px}

@@ -8,7 +8,8 @@ const HEIGHT=150,SLANT=.42;
 /** The meteor's size (a giant wheel-chunk of cheese) and its fiery trail's length. */
 const SIZE=2.4,TRAIL=26;
 const NONE:readonly Meteor[]=[];
-const SMOKE=160;
+/** Trail smoke puffs alive at once across every meteor (clarity batch: 160 → 64). */
+const SMOKE=64;
 
 /** A radial alpha falloff for the trail glow and the smoke. */
 function falloff():THREE.DataTexture {

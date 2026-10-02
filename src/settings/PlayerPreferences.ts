@@ -12,8 +12,9 @@ export interface PlayerPreferences {
     cameraShake:number; flashStrength:number;
     graphics:GraphicsMode;
 }
+/** Clarity batch (protocol 29): new players start at half volume and 60% camera shake/kick; saved settings keep their values. */
 export const DEFAULT_PREFERENCES:PlayerPreferences={version:1,mouseSensitivity:1,touchSensitivity:1.5,
-    invertMouseY:false,invertTouchY:false,masterVolume:1,effectsVolume:1,uiScale:1,reducedMotion:false,cameraShake:1,flashStrength:1,graphics:'auto',
+    invertMouseY:false,invertTouchY:false,masterVolume:.5,effectsVolume:1,uiScale:1,reducedMotion:false,cameraShake:.6,flashStrength:1,graphics:'auto',
     bindings:{forward:['KeyW','ArrowUp'],back:['KeyS','ArrowDown'],left:['KeyA','ArrowLeft'],right:['KeyD','ArrowRight'],jump:['Space',''],fire:['Mouse0',''],scores:['Tab','']}};
 export const RANGES={mouseSensitivity:[.1,3,.05],touchSensitivity:[.2,3,.05],masterVolume:[0,1,.01],effectsVolume:[0,1,.01],uiScale:[.8,1.3,.05],cameraShake:[0,1,.01],flashStrength:[0,1,.01]} as const;
 export type NumericPreference=keyof typeof RANGES;

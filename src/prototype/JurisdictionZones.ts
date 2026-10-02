@@ -3,6 +3,7 @@ import type { AssignmentState } from '../shared/assignments';
 import { activeZone } from '../shared/jurisdiction';
 import { JURISDICTION_ZONES, JURISDICTION_ZONE_IDS, zoneTiles, type JurisdictionZoneId } from '../shared/jurisdictionZones';
 import { freezeStatic } from '../utils/freezeStatic';
+import { CASE_GOLD } from './caseGold';
 
 /** Two static draws per visible footprint. No lights, polling, colliders or wall outlines.
  * Every zone's draws exist (hidden) from the start, so the title's warm-up compiles them. */
@@ -27,8 +28,9 @@ export class JurisdictionZones {
             vertices.push(a,y,c,a,y,d,b,y,d,a,y,c,b,y,d,b,y,c);
             edge(a,c,a,d);edge(a,d,b,d);edge(b,d,b,c);edge(b,c,a,c);
         }
-        const fill=new THREE.MeshBasicMaterial({color:0xd6bc73,transparent:true,opacity:.09,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,polygonOffset:true,polygonOffsetFactor:-1});
-        const line=new THREE.LineBasicMaterial({color:0xf4d590,transparent:true,opacity:.85,depthWrite:false});
+        // The case gold: the active zone is where the case scores. The line is a touch stronger than the fill's tint.
+        const fill=new THREE.MeshBasicMaterial({color:CASE_GOLD,transparent:true,opacity:.11,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,polygonOffset:true,polygonOffsetFactor:-1});
+        const line=new THREE.LineBasicMaterial({color:CASE_GOLD,transparent:true,opacity:.95,depthWrite:false});
         const group=new THREE.Group();
         group.add(new THREE.Mesh(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(vertices,3)),fill));
         group.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute([...edges.values()].flat(),3)),line));

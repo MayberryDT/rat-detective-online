@@ -3,7 +3,7 @@ import {PICKUP_TUNING,type PickupKind} from '../shared/pickups';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 
 /** Each supply's dial ring colour. */
-const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0xe8c46a,'tommy-gun':0xe8873e,laser:0xc6e64a,mousetrap:0xe6dcc4};
+const ACCENT:Record<PickupKind,number>={ironclad:0xc4d2df,hustle:0xe16a59,'quick-fix':0x87d8a5,stakeout:0x7ad8e8,'tommy-gun':0xe8873e,laser:0xc6e64a,mousetrap:0xe6dcc4};
 /** One icon texture per supply kind, drawn and uploaded once (the load's stand-in dial) and shared by
  * every dial after, so a site's first claim in play draws no canvas and uploads nothing. */
 const ICONS=new Map<PickupKind,THREE.CanvasTexture>();

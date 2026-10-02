@@ -1,5 +1,6 @@
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,enemyTrap,TRAP_REACH,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
+import type {KnownCarrier} from './motor/carriers';
 import {activeZone} from '../jurisdiction';
 import {JURISDICTION_ZONE_IDS,JURISDICTION_ZONES,jurisdictionTravelPoint,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {DISPATCH_STATIONS,type ChaosState} from '../chaosState';
@@ -32,8 +33,8 @@ export interface GoalInput {
     cases:readonly CaseEntry[];
     /** Other living rats. */
     living:readonly PlayerData[];
-    /** Rats carrying a genuine case, nearest first. */
-    carriers:readonly PlayerData[];
+    /** Other rats carrying a genuine case whose place this rat knows (in sight, else last seen or pinged), nearest first. */
+    carriers:readonly KnownCarrier[];
     carrying:boolean;
     /** A case changed hands (or started or stopped returning) this tick. */
     ownershipChanged:boolean;
@@ -50,8 +51,8 @@ export interface GoalContext extends GoalInput {
     active:boolean;
     /** Rats in sight, nearest first. */
     visible:readonly PlayerData[];
-    /** The nearest carrier this rat has not failed to reach. */
-    carrier?:PlayerData;
+    /** The nearest known carrier this rat has not failed to reach. */
+    carrier?:KnownCarrier;
     /** The nearest case this rat can take. */
     available?:CaseEntry;
     /** The rat to fight. */
@@ -179,7 +180,7 @@ export class BotGoals {
     survey(input:GoalInput,available:CaseEntry|undefined):GoalContext {
         const {now,self,state,carriers,carrying}=input,motor=this.motor,time=state?.time??now;
         const assignment=state?.assignment,active=assignment?.phase==='active';
-        const carrier=carriers.find(p=>!motor.suppressed(`carrier:${p.id}`,p,now));
+        const carrier=carriers.find(c=>!motor.suppressed(`carrier:${c.id}`,c.p,now));
         const visible=motor.visibleRats;
         const vulnerable=visible.filter(p=>!hasIronclad(state?.buffs,p.id,time));
         const wantedId=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='most-wanted'?state.dispatch.wanted:undefined;
@@ -203,7 +204,7 @@ export class BotGoals {
         // whenever the case is further than the pillar). A bell still unrung after
         // DISPATCH_DETOUR_MS is given up for a while, so a bad angle never parks the bot there.
         if(motor.mode==='dispatch'&&now>=this.dispatchGiveUpAt){motor.failGoal(now);this.dispatchDetour='';}
-        const chase=Math.min(available?distance(self,available.value.p):Infinity,carrier?distance(self,carrier):Infinity);
+        const chase=Math.min(available?distance(self,available.value.p):Infinity,carrier?distance(self,carrier.p):Infinity);
         const reach=PILLAR_REACH[input.personality==='gremlin'?'gremlin':'other'];
         const pillars=state?.dispatch.phase==='ready'&&!motor.ringing&&!carrying&&!motor.target&&chase>=24?DISPATCH_STATIONS
             .map((station,index)=>{const point={x:station.x+Math.sin(station.face)*5,y:station.y,z:station.z+Math.cos(station.face)*5};
@@ -223,9 +224,9 @@ export class BotGoals {
         }else {this.deliveryKey='';this.deliveryEntering=false;}
         let intercept:Vec3Data|undefined;
         const next=active?activeDestination(assignment!):undefined;
-        if(!carrying&&carrier&&next&&motor.wander%3===0&&distance(self,carrier)>35){
+        if(!carrying&&carrier&&next&&motor.wander%3===0&&distance(self,carrier.p)>35){
             const approach=destinationPoint(next);
-            if(distance(self,approach)+12<distance(carrier,approach)&&!motor.suppressed(`intercept:${next}`,approach,now))intercept=approach;
+            if(distance(self,approach)+12<distance(carrier.p,approach)&&!motor.suppressed(`intercept:${next}`,approach,now))intercept=approach;
         }
         const jurisdiction=active?assignment!.jurisdiction:undefined;
         let zone:GoalContext['zone'];
@@ -240,11 +241,11 @@ export class BotGoals {
             else zone={key,point,id,camp:false};
         }
         if(!jurisdiction&&carrying&&active&&assignment!.id==='excessive-force'&&input.personality==='camper'&&state?.case.owner===self.id)zone=this.camp(self,now,assignment!.roundId);
-        if(jurisdiction&&!carrying&&carrier&&!intercept&&this.zoneLane!==0&&zoneContains(activeZone(jurisdiction),carrier)&&distance(self,carrier)>45){
+        if(jurisdiction&&!carrying&&carrier&&!intercept&&this.zoneLane!==0&&zoneContains(activeZone(jurisdiction),carrier.p)&&distance(self,carrier.p)>45){
             const approaches=JURISDICTION_ZONES[activeZone(jurisdiction)].approaches,post=approaches[this.zoneLane%approaches.length];
-            if(distance(self,post)>5&&distance(self,post)+distance(post,carrier)<distance(self,carrier)+8&&!motor.suppressed(`intercept:${post.x},${post.z}`,post,now))intercept=jurisdictionTravelPoint(self,post);
+            if(distance(self,post)>5&&distance(self,post)+distance(post,carrier.p)<distance(self,carrier.p)+8&&!motor.suppressed(`intercept:${post.x},${post.z}`,post,now))intercept=jurisdictionTravelPoint(self,post);
         }
-        const goal=available?.value.p??(!carrying?carrier:undefined)??zone?.point??delivery?.point??(carrying&&active?combat:undefined);
+        const goal=available?.value.p??(!carrying?carrier?.p:undefined)??zone?.point??delivery?.point??(carrying&&active?combat:undefined);
         const pickup=active&&goal?undefined:this.wantedPickup(state,self,now,input.clear);
         const ctx:GoalContext={...input,active,visible,carrier,available,combat,sighting:motor.sighted,pickup,armor,pillars,delivery,
             intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,offered:[],memo:{},
@@ -281,9 +282,12 @@ export class BotGoals {
         }
         case 'mischief':{const pillar=pick(ctx.pillars);return pillar&&{goal,mode:'dispatch',key:pillar.key,destination:pillar.point};}
         case 'take-case':return ctx.available&&{goal,mode:'case',key:ctx.available.key,destination:ctx.available.value.p};
-        case 'chase-carrier':
+        case 'chase-carrier':{
             if(ctx.intercept)return {goal,mode:'intercept',key:ctx.intercept.key,destination:ctx.intercept.point};
-            return !ctx.carrying&&ctx.carrier?{goal,mode:'carrier',key:`carrier:${ctx.carrier.id}`,destination:ctx.carrier,follow:ctx.carrier.id}:undefined;
+            // A carrier in sight is followed live; one out of sight is run at where it was last seen or pinged.
+            const c=ctx.carrying?undefined:ctx.carrier;
+            return c&&{goal,mode:'carrier',key:`carrier:${c.id}`,destination:c.p,...(c.seen?{follow:c.id}:{})};
+        }
         case 'keep-case':
             if(ctx.zone)return {goal,mode:'zone-hold',key:ctx.zone.key,destination:ctx.zone.point,zone:ctx.zone.id};
             if(ctx.delivery)return {goal,mode:'delivery',key:ctx.delivery.key,destination:ctx.delivery.point};

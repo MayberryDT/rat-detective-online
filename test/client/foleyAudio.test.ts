@@ -2,6 +2,7 @@ import {worldSoundGain} from '../../src/audio/worldSoundGain';
 import {afterEach,expect,it,vi} from 'vitest';
 import * as THREE from 'three';
 import {FoleyAudio} from '../../src/audio/FoleyAudio';
+import {worldInput} from '../../src/audio/PlayerAudioMix';
 import {FOLEY} from '../../src/audio/foleyCatalog';
 vi.unmock('three');
 const node=()=>({connect:vi.fn(),disconnect:vi.fn()});
@@ -14,14 +15,17 @@ function fixture(){
         createStereoPanner:()=>{const n={...node(),pan:param()};panners.push(n);return n;},
     };
     vi.spyOn(THREE.AudioLoader.prototype,'load').mockImplementation((url,onLoad)=>{onLoad?.({duration:url.includes('victory')?2.1:.2} as AudioBuffer);});
-    const audio=new FoleyAudio({context:ctx,getInput:()=>({})} as THREE.AudioListener);
-    return {audio,ctx,sources,gains,panners};
+    const listener={context:ctx,getInput:()=>({})} as THREE.AudioListener;
+    // The ranked mix's shared buses belong to the context, not to this voice pool.
+    const duck=worldInput(listener);gains.length=0;
+    const audio=new FoleyAudio(listener);
+    return {audio,ctx,sources,gains,panners,duck};
 }
 afterEach(()=>vi.restoreAllMocks());
 it('keeps three world voices and eight total, leaving room for personal feedback',()=>{
-    const {audio,ctx,sources,gains,panners}=fixture();
+    const {audio,ctx,sources,gains,panners,duck}=fixture();
     for(let i=0;i<200;i++){ctx.currentTime+=.5;audio.play('jump',{x:0,y:0,z:-3});sources.at(-1).onended();}
-    expect(gains).toHaveLength(1);expect(panners).toHaveLength(1);
+    expect(gains).toHaveLength(1);expect(panners).toHaveLength(1);expect(panners[0].connect).toHaveBeenLastCalledWith(duck);
     for(let i=0;i<10;i++){ctx.currentTime+=1;audio.play('case-floor',{x:0,y:0,z:-3},{key:String(i)});}
     expect((audio as any).voices.size).toBe(3);
     for(let i=0;i<10;i++){ctx.currentTime+=.2;audio.play('hit-confirm');}

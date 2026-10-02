@@ -41,7 +41,7 @@
 @media(max-height:500px){.feel-callout{font-size:28px;top:30%}}
 /* U8: the Case File is a carbon folder of rubber-stamped awards; the rows stamp in one at a time at results. */
 .victory-casefile{margin-top:14px;padding:10px 16px;border:1px dashed var(--carbon-line);background:var(--carbon-sheet);box-shadow:var(--carbon-drop),var(--carbon-smudge);font:600 14px/1.5 'Outfit',Arial,sans-serif;letter-spacing:.6px;rotate:3deg;text-transform:none}
-.victory-casefile h3{margin:0 0 4px;font:400 22px/1 var(--font-display);letter-spacing:1.5px;color:var(--cheese)}
+.victory-casefile h3{margin:0 0 4px;font:400 22px/1 var(--font-display);letter-spacing:1.5px;color:var(--paper)}
 .victory-casefile li{list-style:none;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px 10px}.victory-casefile ul{margin:0;padding:0}
 .victory-casefile b{justify-self:start;padding:1px 6px;border:2px solid #e65a5099;color:var(--stamp-ink);font:400 16px/1.1 var(--font-display);letter-spacing:1px;rotate:-3deg;text-transform:uppercase}
 .victory-casefile li:nth-child(even) b{border-color:var(--carbon-line);color:var(--carbon-bright);rotate:2deg}
@@ -69,7 +69,7 @@
 .feel-ink{position:absolute;left:50%;top:50%;width:0;height:0;border-radius:50%;opacity:0;border:1.5px solid #d9cfb4c0;box-shadow:inset 0 0 0 7px #0a0d1833,0 0 0 1px #0a0d1880}
 .feel-ink.on{animation:feel-ink 560ms cubic-bezier(.25,.6,.4,1) both}
 @keyframes feel-ink{0%{opacity:var(--feel-flash,1);width:0;height:0;margin:0}70%{opacity:calc(var(--feel-flash,1)*.7)}100%{opacity:0;width:240vmax;height:240vmax;margin:-120vmax 0 0 -120vmax}}
-.feel-lens{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 50% 50%,transparent 40vmin,#c9a24aa6 calc(40vmin + 1px),#c9a24aa6 calc(40vmin + 3px),#05070d73 calc(40vmin + 4px),#05070dcc 100%)}
+.feel-lens{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 50% 50%,transparent 40vmin,#7ad8e8a6 calc(40vmin + 1px),#7ad8e8a6 calc(40vmin + 3px),#05070d73 calc(40vmin + 4px),#05070dcc 100%)}
 .feel-lens.on{animation:feel-lens var(--lens,400ms) ease-out both}
 @keyframes feel-lens{0%{opacity:0;transform:scale(1.25)}25%{opacity:var(--feel-flash,1);transform:scale(1)}65%{opacity:var(--feel-flash,1)}100%{opacity:0;transform:scale(1.03)}}
 /* K1 case claim: an ON THE CASE rubber stamp slams in on carbon paper over a burst of case papers that flutter down. */
@@ -95,25 +95,25 @@ body.reduced-motion .feel-case.on .feel-case-stamp{animation:ui-fade-hold 1500ms
  * IT DOWN! (the next press sets it); then the trap drops toward its card. */
 .feel-trap{position:absolute;left:73%;top:57%;width:0;height:0}
 .feel-trap>*{position:absolute;left:0;top:0;opacity:0;transform:translate(-50%,-50%)}
-.feel-trap-art{width:190px;height:190px;filter:drop-shadow(4px 6px 0 #000000a0) drop-shadow(0 0 22px #e8b54a59)}
+.feel-trap-art{width:190px;height:190px;filter:drop-shadow(4px 6px 0 #000000a0) drop-shadow(0 0 22px #e6dcc440)}
 .feel-trap-art svg{width:100%;height:100%}
 .feel-trap.on .feel-trap-art{animation:feel-trap-art 1800ms cubic-bezier(.2,.8,.3,1) both}
 @keyframes feel-trap-art{0%{opacity:1;transform:translate(-50%,60vh) rotate(-24deg) scale(.45)}26%{opacity:1;transform:translate(-50%,-50%) rotate(5deg) scale(1.55)}
   36%{transform:translate(-50%,-50%) rotate(-3deg) scale(1.12)}46%{transform:translate(-50%,-50%) rotate(1deg) scale(1.28)}56%{transform:translate(-50%,-50%) rotate(0deg) scale(1.22)}
   82%{opacity:1;transform:translate(-50%,-50%) rotate(0deg) scale(1.22)}100%{opacity:0;transform:translate(-50%,34vh) rotate(8deg) scale(.4)}}
-.feel-trap-stamp{top:-125px;white-space:nowrap;padding:.2em .55em .12em;border:4px double #e8b54a;color:#f6d488f2;background:#0c1224b8;box-shadow:3px 4px 0 #00000080;
+.feel-trap-stamp{top:-125px;white-space:nowrap;padding:.2em .55em .12em;border:4px double #e6dcc4;color:#efe6cff2;background:#0c1224b8;box-shadow:3px 4px 0 #00000080;
   font:400 50px/1 var(--font-display,Impact,sans-serif);letter-spacing:.07em}
 .feel-trap.on .feel-trap-stamp{animation:feel-trap-stamp 1700ms cubic-bezier(.2,.9,.25,1.2) 160ms both}
 @keyframes feel-trap-stamp{0%{opacity:0;transform:translate(-50%,-50%) rotate(-15deg) scale(3)}10%{opacity:1;transform:translate(-50%,-50%) rotate(-5deg) scale(.88)}
   16%{transform:translate(-50%,-50%) rotate(-4deg) scale(1.07)}22%{transform:translate(-50%,-50%) rotate(-5deg) scale(1)}80%{opacity:1;transform:translate(-50%,-50%) rotate(-5deg) scale(1)}
   100%{opacity:0;transform:translate(-50%,-62%) rotate(-5deg) scale(.96)}}
-.feel-trap-fuse{top:128px;width:240px;height:12px;border:2px solid #e8b54acc;background:#0c1224b8;box-shadow:2px 3px 0 #00000080;overflow:hidden}
-.feel-trap-fuse i{display:block;height:100%;width:0;background:linear-gradient(90deg,#b87a22,#ffd36a)}
+.feel-trap-fuse{top:128px;width:240px;height:12px;border:2px solid #e6dcc4cc;background:#0c1224b8;box-shadow:2px 3px 0 #00000080;overflow:hidden}
+.feel-trap-fuse i{display:block;height:100%;width:0;background:linear-gradient(90deg,#8a1c14,#ff594b)}
 .feel-trap.on .feel-trap-fuse{animation:feel-trap-fuse calc(var(--lock,1000ms) + 250ms) linear both}
 .feel-trap.on .feel-trap-fuse i{animation:feel-trap-burn var(--lock,1000ms) linear both}
 @keyframes feel-trap-fuse{0%{opacity:0}10%{opacity:1}85%{opacity:1}100%{opacity:0}}
 @keyframes feel-trap-burn{to{width:100%}}
-.feel-trap-ready{top:128px;white-space:nowrap;color:#ffe6a0;font:400 40px/1 var(--font-display,Impact,sans-serif);letter-spacing:.08em;text-shadow:3px 3px 0 #000000b0,0 0 14px #e8b54a80}
+.feel-trap-ready{top:128px;white-space:nowrap;color:#efe6cf;font:400 40px/1 var(--font-display,Impact,sans-serif);letter-spacing:.08em;text-shadow:3px 3px 0 #000000b0}
 .feel-trap.on .feel-trap-ready{animation:feel-trap-ready 900ms cubic-bezier(.2,.9,.25,1.2) var(--lock,1000ms) both}
 @keyframes feel-trap-ready{0%{opacity:0;transform:translate(-50%,-50%) scale(1.9)}18%{opacity:1;transform:translate(-50%,-50%) scale(.94)}28%{transform:translate(-50%,-50%) scale(1)}
   75%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(1)}}

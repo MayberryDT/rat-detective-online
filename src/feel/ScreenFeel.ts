@@ -2,8 +2,11 @@ import * as THREE from 'three';
 import {FEEL} from './feelTuning';
 import './feel.css';
 import {reducedMotion,replay,scrawl,uiMotion} from '../ui/motion';
+import {headlines} from '../ui/Headlines';
+import {CASE_GOLD} from '../prototype/caseGold';
 
 const ARROWS=4;
+const CASE_GOLD_CSS=`#${CASE_GOLD.toString(16).padStart(6,'0')}`;
 
 /** A small tile of monochrome noise for the film-grain overlay, as a data URL: an 8-bit grey BMP
  * written directly. Drawing and encoding a canvas instead cost 90–380 ms on its first use (a GPU
@@ -95,11 +98,13 @@ export class ScreenFeel {
         this.root!.classList.toggle('letterboxed',letterbox);
     }
 
-    /** A noir streak callout scrawled near the top of the screen. */
+    /** A noir streak callout scrawled near the top of the screen; a lesser headline (one at a time). */
     callout(text:string):void {
         if(!this.build()||!this.calloutNode)return;
-        scrawl(this.calloutNode,text);
-        replay(this.calloutNode,'on');
+        const node=this.calloutNode;
+        if(!headlines.claim('callout','news',text,1500,()=>node.classList.remove('on')))return;
+        scrawl(node,text);
+        replay(node,'on');
     }
 
     /** Hot Pursuit edge streaks, `level` 0…1. */
@@ -153,10 +158,13 @@ export class ScreenFeel {
         replay(this.claimNode,'on');
     }
     /** K1: you took the case: an ON THE CASE stamp slams in over `sheets` paper sheets bursting out and fluttering down,
-     * with a brass edge flash (`flash` × Flash strength). Reduced interface motion keeps the stamp, fading, and no sheets. */
+     * with a case-gold edge flash (`flash` × Flash strength). Reduced interface motion keeps the stamp, fading, and no sheets.
+     * The top headline: it takes the screen from anything else. */
     caseClaim(sheets:number,flash:number):void {
-        this.claim('#c39a55',flash);
+        this.claim(CASE_GOLD_CSS,flash);
         if(!this.build()||!this.caseNode)return;
+        const node=this.caseNode;
+        headlines.claim('case','case','ON THE CASE',1500,()=>node.classList.remove('on'));
         const still=reducedMotion();
         this.caseSheets.forEach((sheet,i)=>{
             const shown=!still&&i<sheets,angle=i/Math.max(1,sheets)*Math.PI*2+Math.random()*.5,reach=180+Math.random()*220;
@@ -167,11 +175,13 @@ export class ScreenFeel {
         replay(this.caseNode,'on');
     }
     /** W3: you took up a Mousetrap: the trap (`art`) comes up big from the bottom of the screen, a TRAP IN PAW stamp slams
-     * on, and a fuse burns for `lockMs` (the trigger's lockout) before SET IT DOWN! says the next press sets it. A pine
-     * edge flash (`flash` × Flash strength). Reduced interface motion fades it in place. */
+     * on, and a fuse burns for `lockMs` (the trigger's lockout) before SET IT DOWN! says the next press sets it. A pale pine
+     * edge flash (`flash` × Flash strength). Reduced interface motion fades it in place. A lesser headline: when something
+     * bigger is up it is told as the compact line. */
     trapInPaw(art:string,lockMs:number,flash:number):void {
-        this.claim('#e2b46e',flash);
+        this.claim('#e6dcc4',flash);
         if(!this.build()||!this.root)return;
+        if(!headlines.claim('trap','news','TRAP IN PAW · FIRE TO SET IT DOWN',1800,()=>this.trapNode?.classList.remove('on')))return;
         if(!this.trapNode){
             this.trapNode=this.doc!.createElement('div');this.trapNode.className='feel-trap';
             this.trapNode.innerHTML=`<div class="feel-trap-art">${art}</div><div class="feel-trap-stamp">TRAP IN PAW</div><div class="feel-trap-fuse"><i></i></div><div class="feel-trap-ready">SET IT DOWN!</div>`;

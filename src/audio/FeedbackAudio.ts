@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {worldSoundGain} from './worldSoundGain';
 import {AudioVoicePool} from './AudioVoicePool';
+import {admitWorldVoice,duckWorld,endWorldVoice,type WorldVoice} from './PlayerAudioMix';
 export type FeedbackCue='pickup-ironclad'|'pickup-hustle'|'pickup-quick-fix'|'pickup-stakeout'|'pickup-tommy-gun'|'pickup-laser'|'pickup-mousetrap'|'pickup-slap'|'armor-clang'|'stakeout-shutter'|'pip-tick'|'case-pickup'|'case-lost'|'case-taken'|'case-drop'|'case-hit'|'case-grip-1'|'case-grip-2'|'laser-fire'|'laser-hit'|'trap-set'|'trap-snap'|'trap-splinter'|'trap-break'|'trap-refused'|'trap-ready'|'menu-open'|'menu-close'|'death'|'respawn'|'victory'|'dispatch'|'ready'|'tick'|'notice'|'case-point'|'verified'|'countdown'|'countdown-final';
 const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:number}>={
     'pickup-ironclad':{file:'pickup-ironclad',volume:.7,cooldown:150},
@@ -49,10 +50,13 @@ const cues:Record<FeedbackCue,{file:string;volume:number;cooldown:number;rate?:n
     'countdown-final':{file:'tick',volume:.48,cooldown:200,rate:1.5},
     notice:{file:'menu-open',volume:.1,cooldown:200},
 };
+/** The ranked mix: case events dip the world sounds (strength 0…1) so they cut through other fights. */
+const DUCKS:Partial<Record<FeedbackCue,number>>={'case-pickup':1,'case-lost':1,'case-taken':.8,'case-drop':.8,'case-point':1,verified:1};
 /** Edited cartoon foley, with no backlog and bounded overlap. */
 export class FeedbackAudio {
     private readonly buffers=new Map<string,AudioBuffer>();
-    private readonly voices=new Set<THREE.Audio>();
+    /** Each playing sound, with its ranked-mix world voice when it is a world sound (placed, and not the case's). */
+    private readonly voices=new Map<THREE.Audio,WorldVoice|undefined>();
     private readonly last=new Map<FeedbackCue,number>();
     private readonly ear=new THREE.Vector3();
     private disposed=false;
@@ -74,15 +78,22 @@ export class FeedbackAudio {
         if(origin){this.listener.getWorldPosition(this.ear);gain=worldSoundGain(Math.hypot(origin.x-this.ear.x,origin.y-this.ear.y,origin.z-this.ear.z));}
         // Rapid impact/ledger/claim-payoff chatter never crowds out ownership or death cues.
         if(this.voices.size>=6&&(cue==='case-hit'||cue==='tick'||cue==='notice'||cue==='stakeout-shutter'||cue==='pip-tick'||cue==='trap-splinter'))return;
-        if(this.voices.size>=8)this.release(this.voices.values().next().value!);
-        const sound=this.pool.acquire();if(!sound)return;
+        const duck=DUCKS[cue];if(duck)duckWorld(this.listener.context,duck);
+        if(this.voices.size>=8)this.release(this.voices.keys().next().value!);
+        // Placed sounds are world voices (ducked, sharing the ranked budget); the case's own sounds always cut through.
+        const world=!!origin&&!cue.startsWith('case-');
+        const sound=this.pool.acquire(world);if(!sound)return;
+        const voice=world?{level:volume*gain,cut:()=>this.release(sound)}:undefined;
+        if(voice&&!admitWorldVoice(this.listener.context,voice)){this.pool.release(sound);return;}
         sound.setBuffer(buffer);sound.setVolume(volume*gain);sound.setPlaybackRate(rate);
-        sound.onEnded=()=>{this.pool.finish(sound);this.voices.delete(sound);};
-        this.voices.add(sound);try{sound.play();}catch{this.release(sound);}
+        sound.onEnded=()=>{this.pool.finish(sound);this.voices.delete(sound);if(voice)endWorldVoice(this.listener.context,voice);};
+        this.voices.set(sound,voice);try{sound.play();}catch{this.release(sound);}
     }
     private release(sound:THREE.Audio):void{
-        if(!this.voices.delete(sound))return;
+        if(!this.voices.has(sound))return;
+        const voice=this.voices.get(sound);this.voices.delete(sound);
+        if(voice)endWorldVoice(this.listener.context,voice);
         this.pool.release(sound);
     }
-    dispose():void{this.disposed=true;for(const sound of this.voices)this.release(sound);this.pool.dispose();this.buffers.clear();this.last.clear();}
+    dispose():void{this.disposed=true;for(const sound of this.voices.keys())this.release(sound);this.pool.dispose();this.buffers.clear();this.last.clear();}
 }

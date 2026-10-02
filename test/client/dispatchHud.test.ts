@@ -1,6 +1,8 @@
-import {afterEach,describe,it,expect,vi} from 'vitest';
-import {MUNICIPAL_QUIPS,INCIDENT_QUIPS} from '../../src/ui/municipalQuips';
-import {DispatchHud} from '../../src/prototype/DispatchHud';
+import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
+import {MUNICIPAL_QUIPS} from '../../src/ui/municipalQuips';
+import {DispatchHud,INCIDENT_TITLE_MS} from '../../src/prototype/DispatchHud';
+import {headlines} from '../../src/ui/Headlines';
+import {incidentInfo} from '../../src/shared/incidentCatalog';
 import type {ChaosState} from '../../src/shared/chaosState';
 import { ASSIGNMENT_TUNING, createAssignment, CHAIN_ROUTE } from '../../src/shared/assignments';
 import { JURISDICTION_TUNING } from '../../src/shared/jurisdiction';
@@ -10,11 +12,13 @@ class Element {
  get textContent(){return this.text;}set textContent(value:string){this.text=value;this.textWrites++;}
  children:Element[]=[];selectors=new Map<string,Element>();removed=false;
  classList={add:vi.fn(),remove:vi.fn(),toggle:vi.fn()};
- appendChild(e:Element){this.children.push(e);return e;}replaceChildren(){this.children=[];}remove(){this.removed=true;}
+ appendChild(e:Element){this.children.push(e);return e;}replaceChildren(){this.children=[];}remove(){this.removed=true;}setAttribute(){}
  querySelector(s:string){if(!this.selectors.has(s))this.selectors.set(s,new Element());return this.selectors.get(s)!;}
 }
 const originalDocument=globalThis.document;
 afterEach(()=>vi.stubGlobal('document',originalDocument));
+// One headline queue for the whole page: each test starts with nothing holding the screen.
+beforeEach(()=>headlines.reset());
 function fixture(){
  const body=new Element();vi.stubGlobal('document',{body,createElement:()=>new Element()});
  const sound=vi.fn(),feedback=vi.fn(),hud=new DispatchHud(sound,feedback),root=body.children[0];
@@ -94,17 +98,30 @@ describe('Dispatch broadcast lifecycle',()=>{
   hud.update(state,6000);expect(writes()).toBe(before+1);
   expect(root.querySelector('.dispatch-timer').textContent).toBe('20s');hud.dispose();
  });
- it('shows the active incident drawing and explanation, then restores the dispatch sign',()=>{
+ it('tells a starting incident with its picture and one-line rule for about two seconds, then only the tag',()=>{
   const {hud,root,state}=fixture();
   state.dispatch={phase:'active',started:1000,until:26000,serial:1,incident:'blackout'};
-  hud.update(state,5000);
+  hud.update(state,1100);
+  expect(root.querySelector('.dispatch-roulette').hidden).toBe(false);
+  expect(root.querySelector('.roulette-art').dataset.incident).toBe('blackout');
+  expect(root.querySelector('.roulette-art').innerHTML).toContain('<svg');
+  expect(root.querySelector('.roulette-description').textContent).toBe(incidentInfo('blackout').description);
+  hud.update(state,1000+INCIDENT_TITLE_MS+200);
+  expect(root.querySelector('.dispatch-roulette').hidden).toBe(true);
   expect(root.querySelector('.dispatch-artwork').dataset.incident).toBe('blackout');
-  expect(root.querySelector('.dispatch-artwork').innerHTML).toContain('<svg');
-  expect(root.querySelector('.dispatch-alert-label').textContent).toBe('CITYWIDE EMERGENCY');
-  expect(root.querySelector('.dispatch-brief').textContent).toBe(INCIDENT_QUIPS['blackout']);
+  expect(root.querySelector('.dispatch-status').textContent).toBe('Blackout');
+  expect(root.querySelector('.dispatch-brief').textContent).toBe('');
   state.dispatch={phase:'cooldown',started:26000,until:42000,serial:1};hud.update(state,27000);
-  expect(root.querySelector('.dispatch-artwork').dataset.incident).toBe('dispatch');
-  expect(root.querySelector('.dispatch-brief').textContent).not.toBe(INCIDENT_QUIPS['blackout']);hud.dispose();
+  expect(root.querySelector('.dispatch-artwork').dataset.incident).toBe('dispatch');hud.dispose();
+ });
+ it('tells an incident that starts under a bigger headline as the compact line, not the title',()=>{
+  const {hud,root,state}=fixture();
+  headlines.take('death','death',Infinity);
+  const shrink=vi.spyOn(headlines,'shrink');
+  state.dispatch={phase:'active',started:1000,until:26000,serial:1,incident:'blackout'};hud.update(state,1100);
+  expect(root.querySelector('.dispatch-roulette').hidden).toBe(true);
+  expect(shrink).toHaveBeenCalledWith(`INCIDENT · BLACKOUT · ${incidentInfo('blackout').description}`);
+  shrink.mockRestore();hud.dispose();
  });
  it('explains that Evidence Tampering weaponizes every case and restores ordinary copy afterward',()=>{
   const {hud,root,state}=fixture();
@@ -116,10 +133,9 @@ describe('Dispatch broadcast lifecycle',()=>{
   expect(root.querySelector('.case-ledger strong').textContent).toBe('LOOSE CASE');
   expect(root.querySelector('.case-ledger small').textContent).not.toContain('DOUBLE');hud.dispose();
  });
- it('announces ownership changes once, retaining a quiet readable status afterward',()=>{
+ it('announces ownership changes once (a join announces nothing), retaining a quiet readable status afterward',()=>{
   const {hud,root,state}=fixture();hud.update(state,1000);
-  const banner=root.querySelector('.case-broadcast');expect(banner.hidden).toBe(false);
-  hud.update(state,4000);expect(banner.hidden).toBe(true);
+  const banner=root.querySelector('.case-broadcast');expect(banner.hidden).toBe(true);
   state.case.owner='new';hud.update(state,4100,'Constable Trap');
   expect(root.querySelector('.case-broadcast strong').textContent).toBe('Constable Trap is on the case');
   expect(banner.hidden).toBe(false);hud.update(state,7100,'Constable Trap');expect(banner.hidden).toBe(true);
@@ -168,7 +184,7 @@ it('celebrates delivery and relocation without playing the lost-case penalty cue
  hud.update(state,4100,undefined,false);
  expect(feedback).toHaveBeenCalledWith('verified');expect(feedback).not.toHaveBeenCalledWith('case-lost');
  expect(root.querySelector('.assignment-confirmation').textContent).toContain('CASE RELOCATED');
- expect(root.querySelector('.case-broadcast strong').textContent).toBe('CASE RELOCATED');
+ expect(root.querySelector('.assignment-confirmation').hidden).toBe(false);
  expect(root.querySelector('.case-broadcast').hidden).toBe(true);
  hud.dispose();
 });

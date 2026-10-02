@@ -6,7 +6,7 @@ import {CheeseGun} from '../../src/weapons/CheeseGun';
 import {RatController} from '../../src/player/RatController';
 import {ChaosSimulation} from '../../src/shared/ChaosSimulation';
 import {createPlayer} from '../../src/worker/gameState';
-import { ChaosView } from '../../src/prototype/ChaosView';
+import { ChaosView, THREAT } from '../../src/prototype/ChaosView';
 import { CASE_HOME, CHAOS_TUNING, type ChaosState } from '../../src/shared/chaosState';
 
 vi.mock('../../src/prototype/DispatchHud',()=>({DispatchHud:class{update(){} setScores(){} dispose(){}}}));
@@ -189,7 +189,8 @@ it('changes danger cues with the viewer, including owned Crossfire ricochets and
    expect(red.count).toBe(incident==='crossfire'?2:0);
    if(incident==='crossfire'){
     const tint=new THREE.Color();red.getColorAt(viewer==='alice'?0:1,tint);expect(tint.toArray()).toEqual([1,1,1]);
-    red.getColorAt(viewer==='alice'?1:0,tint);expect(tint.r).toBeGreaterThan(2);
+    // No living viewer rat here, so the enemy's bright red ricochet is not a threat and draws at the calm level.
+    red.getColorAt(viewer==='alice'?1:0,tint);expect(tint.r).toBeCloseTo(2.4*THREAT.dim);
    }
    const visible=incident==='crossfire'?lethal:rim;visible.getMatrixAt(0,matrix);
    expect(point.setFromMatrixPosition(matrix).x).toBe(enemyX);
@@ -202,6 +203,23 @@ it('changes danger cues with the viewer, including owned Crossfire ricochets and
  expect(rim.count+lethal.count+trails.count).toBe(0); // Own lethal shot is red, without enemy glow.
  view.dispose();
 });
+
+it('draws other rats\' balls that are not coming at you dimmer than threats, and your own always full',()=>{
+ const me={mesh:{position:new THREE.Vector3(0,0,0)},dead:false,isPlayer:true};
+ const scene=new THREE.Scene(),view=new ChaosView(scene,id=>id==='me'?me as never:undefined,undefined,false),state=snapshot();
+ const ball=(id:string,owner:string,x:number,vx:number,z=0)=>({id,owner,p:{x,y:1,z},v:{x:vx,y:0,z:0},age:0});
+ // At you from 20 units; the same ball flying away; one passing 8 units wide; one beside you; one far off heading in; your own.
+ state.shots=[ball('in','bob',-20,40),ball('away','bob',-20,-40),ball('wide','bob',-20,40,8),ball('close','bob',2,-40),ball('far','bob',-60,40),ball('mine','me',-20,-40)];
+ view.setScores([],'me');view.apply(state);view.update(1/60,camera);
+ const root=scene.getObjectByName('records-chaos')!,balls=root.getObjectByName('cheese-balls') as THREE.InstancedMesh;
+ const rims=root.getObjectByName('danger-cheese-rims') as THREE.InstancedMesh,tint=new THREE.Color();
+ const level=(mesh:THREE.InstancedMesh,i:number)=>{mesh.getColorAt(i,tint);return tint.r;};
+ expect([0,1,2,3,4,5].map(i=>level(balls,i))).toEqual([1,THREAT.dim,THREAT.dim,1,THREAT.dim,1].map(v=>Math.fround(v)));
+ expect([0,1,2,3,4].map(i=>level(rims,i))).toEqual([1,THREAT.dim,THREAT.dim,1,THREAT.dim].map(v=>Math.fround(v)));
+ me.dead=true;view.update(1/60,camera);expect(level(balls,0)).toBeCloseTo(THREAT.dim);
+ view.dispose();
+});
+
 it('keeps pore contrast within the original spherical cheese silhouette',async()=>{
  const {createCheeseBallGeometry}=await import('../../src/weapons/CheeseProjectileModel');
  const geometry=createCheeseBallGeometry(),p=geometry.getAttribute('position'),c=geometry.getAttribute('color');

@@ -17,7 +17,7 @@ const LAMP_HEAD=new THREE.Vector3(0,2.75,0);
 /** Malpractice hop duration (ms) and height. */
 const HOP_MS=380, HOP_HEIGHT=1.5;
 /** Each supply's own colour for the far beam and the outline that finds it from across the street. */
-const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0xf3cf6f,'tommy-gun':0xff8a24,laser:0xc8ff3a,mousetrap:0xf2e6c8};
+const KIND_COLOR:Record<PickupKind,number>={ironclad:0xc9dcf0,hustle:0xff4a32,'quick-fix':0x5dff95,stakeout:0x6fe2f4,'tommy-gun':0xff8a24,laser:0xc8ff3a,mousetrap:0xf2e6c8};
 /** Claim pop and restock drop (seconds); beacon fades in with distance (units). */
 const POP=.32, DROP=.5, BEAM_HEIGHT=34;
 /** Part shapes built once and shared by every display: the welcome builds two dozen displays of up

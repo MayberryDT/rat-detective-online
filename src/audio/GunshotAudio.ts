@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Vec3Data } from '../shared/networkProtocol';
 import { AudioVoicePool } from './AudioVoicePool';
+import { admitWorldVoice, endWorldVoice, type WorldVoice } from './PlayerAudioMix';
 import { worldSoundGain as gunshotGain } from './worldSoundGain';
 export { worldSoundGain as gunshotGain } from './worldSoundGain';
 
@@ -11,7 +12,7 @@ const TOMMY_ROUNDS = 4;
 /** `shotgun`: Scattershot's own five-ball cheese blast (`scattershot.wav`, the same generator). */
 export type GunshotCue = 'normal' | 'malfunction' | 'tommy' | 'shotgun';
 
-type Voice = { sound: THREE.Audio; priority: number };
+type Voice = WorldVoice & { sound: THREE.Audio; priority: number };
 /** Independent, bounded voices keep distant AI from cutting off your own pistol. */
 export class GunshotAudio {
     private buffer?: AudioBuffer;
@@ -46,20 +47,23 @@ export class GunshotAudio {
             if (quietest.priority > priority) return;
             this.release(quietest);
         }
-        // Match the local gun's global playback, including when firing behind you.
-        const sound = this.pool.acquire();
+        // Match the local gun's global playback, including when firing behind you. Other rats' shots are world
+        // voices: ducked under your hits and kills, and sharing the ranked mix's budget.
+        const sound = this.pool.acquire(!local);
         if (!sound) return;
+        const voice: Voice = {sound, priority, level: GUNSHOT_VOLUME * gain, cut: () => this.release(voice)};
+        if (!local && !admitWorldVoice(this.listener.context, voice)) { this.pool.release(sound); return; }
         sound.setBuffer(buffer);
         sound.setVolume(GUNSHOT_VOLUME * gain);
         sound.setPlaybackRate(cue === 'malfunction' ? 1.45 : cue === 'tommy' || cue === 'shotgun' ? .95 + Math.random() * .1 : 1);
-        const voice = {sound, priority};
-        sound.onEnded = () => { this.pool.finish(sound); this.voices.delete(voice); };
+        sound.onEnded = () => { this.pool.finish(sound); this.voices.delete(voice); endWorldVoice(this.listener.context, voice); };
         this.voices.add(voice);
         try { sound.play(); }
         catch { this.release(voice); }
     }
     private release(voice: Voice): void {
         if (!this.voices.delete(voice)) return;
+        endWorldVoice(this.listener.context, voice);
         this.pool.release(voice.sound);
     }
     dispose(): void {

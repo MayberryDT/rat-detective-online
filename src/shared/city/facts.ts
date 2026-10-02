@@ -6,6 +6,8 @@ import type { CityFloor } from './frame';
 import type { Goal, MotorMode, Personality, Stance } from '../bots/intent';
 import type { GoalOutcome, MindName } from './minds';
 import type { PerfReport } from '../perfReport';
+import type { AdminCommandName, AdminVia } from '../admin';
+import type { IncidentId } from '../incidentCatalog';
 
 /** Layer 2 of the city map (docs/city-map.md): one JSON line per fact in the R2 archive.
  * Positions are rounded to 0.1 u, times are UTC ms. Actors are per-round numbers, never names or IDs. */
@@ -112,10 +114,11 @@ export type CityFact = FactContext & (
   | { type: 'heal'; a: number; cause: HealCause; hp: number }
   | { type: 'buff-end'; a: number; buff: TimedPickup }
   /** The primary case changed hands. A `drop` says why (`cause`) and how many enemy balls its grip took that carry
-   * (`gripHits`). A `take`, `steal` or `respawn` ends a loose spell: `looseMs` loose, `path` units travelled, `moved`
+   * (`gripHits`). A `drop` or `steal` says how many case pings the carry ended gave away (`pings`; the take's own ping
+   * counts). A `take`, `steal` or `respawn` ends a loose spell: `looseMs` loose, `path` units travelled, `moved`
    * straight-line units from where it came loose (or appeared), `kicks` balls that hit it while loose (every rat's). */
   | { type: 'case'; what: 'take' | 'drop' | 'steal' | 'deliver' | 'respawn'; a?: number; from?: number; p: P3; place: string; carryMs?: number;
-      cause?: 'death' | 'shot' | 'delivered' | 'left'; gripHits?: number; looseMs?: number; path?: number; moved?: number; kicks?: number }
+      cause?: 'death' | 'shot' | 'delivered' | 'left'; gripHits?: number; pings?: number; looseMs?: number; path?: number; moved?: number; kicks?: number }
   | { type: 'launch'; a: number; machine?: string; boost: boolean; p: P3; place: string }
   /** A rat knocked away (`ChaosSimulation.shove`, the same for humans and bots): `cause` is what did it ('shove' a landing
    * shockwave, 'blast' a Scattershot ball, or an incident's own kind such as 'meteor'), `speed` the sideways u/s. Pressure
@@ -153,4 +156,8 @@ export type CityFact = FactContext & (
       throttled: number; tokens: number; dollars: number; p50?: number; p90?: number; hist: Record<string, number> }
   /** A player's client frame performance over about 30 s of play (`PerfReport`); never bots. An agent's is `human: false, agent: true`. */
   | ({ type: 'perf'; a: number; human: boolean; agent?: true } & PerfReport)
+  /** Tyler's admin controls (docs/live-service.md): one per command, `ok` whether it took effect. `via` the HTTP endpoint (the CLI)
+   * or an admin's game socket, whose rat is `a`. `next`: the mode chosen for the next round; `roll`: the incident rolled; `winner`:
+   * the leader an `end-round` declared the winner. A round with any admin fact is admin-touched: analysis can leave it out by `round`. */
+  | { type: 'admin'; command: Exclude<AdminCommandName, 'status'>; via: AdminVia; ok: boolean; a?: number; next?: AssignmentId; roll?: IncidentId; winner?: number }
 );

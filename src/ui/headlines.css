@@ -1,0 +1,18 @@
+/* Clarity batch: one headline at a time. What lost the screen is told as one compact carbon line at the top; a word met
+ * for the first time gets a one-line slip above the supply cards. Carbon scrawl, see-through, no glow. Above the death
+ * screen (150), under the results (200). */
+.headlines{position:fixed;inset:0;z-index:160;pointer-events:none;overflow:hidden;contain:strict}
+.headline-line,.headline-explain{position:absolute;left:50%;max-width:min(640px,86vw);opacity:0;translate:-50% 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background:var(--carbon);border:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop);color:var(--carbon-bright);font:400 15px/1.2 var(--font-type);letter-spacing:.06em;text-transform:uppercase}
+.headline-line{top:calc(14px + env(safe-area-inset-top,0px));padding:4px 14px;rotate:-1deg}
+.headline-line.on{animation:headline-line 3.2s var(--ui-out) both}
+.headline-explain{bottom:166px;padding:5px 14px;rotate:1deg;border-style:solid;color:var(--carbon-ink)}
+.headline-explain.on{animation:headline-explain 6s var(--ui-out) both}
+.headline-line.on.still,.headline-explain.on.still{animation-name:ui-fade-hold;animation-timing-function:linear}
+@keyframes headline-line{0%{opacity:0;transform:translateY(-10px)}8%,82%{opacity:1;transform:none}100%{opacity:0}}
+@keyframes headline-explain{0%{opacity:0;transform:translateY(8px)}6%,88%{opacity:1;transform:none}100%{opacity:0}}
+/* Clear of the Jurisdiction relocation clock at the top centre. */
+body:has(.jurisdiction-timer:not([hidden])) .headline-line{top:calc(104px + env(safe-area-inset-top,0px))}
+@media(max-width:900px),(max-height:600px){.headline-line,.headline-explain{font-size:12px}.headline-explain{bottom:128px}
+  body:has(.jurisdiction-timer:not([hidden])) .headline-line{top:calc(76px + env(safe-area-inset-top,0px))}}
+:is(body.lineup-on,body.round-results,.scoreboard-open) .headlines{visibility:hidden}

@@ -7,6 +7,7 @@ import { allowsLocalDiagnostics } from './clientDiagnostics';
 import { verifyBearerToken } from './auth';
 import { companionPageSize, isCompanionCursor } from '../shared/companionStatus';
 import { cityApi, type CityEnv } from './city/cityApi';
+import { adminApi, type AdminEnv } from './adminApi';
 import { buildName } from './city/CityStore';
 
 export { GameRoom } from './GameRoom';
@@ -146,6 +147,8 @@ export default {
 
       const city = await cityApi(request, url, env as CityEnv);
       if (city) return respond(city);
+      const admin = await adminApi(request, url, env as AdminEnv);
+      if (admin) return respond(admin);
 
       if (url.pathname === '/ws') {
         if (request.headers.get('Upgrade') !== 'websocket') {

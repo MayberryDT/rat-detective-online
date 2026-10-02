@@ -634,7 +634,7 @@ describe('GameSession', () => {
             victimName: '<Rat & Co>', respawnAt: Date.now() + 5_000,
         });
         expect(rat.entity.takeDamage).toHaveBeenCalled();
-        expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 5_000);
+        expect(hud.showRespawn).toHaveBeenCalledWith(Date.now() + 5_000, {killer:'OTHER',how:'CHEESE GUN'});
         expect(hud.addKillFeed).toHaveBeenCalledWith(expect.objectContaining({kind:'kill',killer:'other',victim:'<Rat & Co>'}));
         transport.onMessage?.({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: MAX_HP });
         expect(rat.entity.respawn).toHaveBeenCalledWith({ type: 'playerRespawn', id: 'me', x: 20, y: 2, z: -10, hp: MAX_HP });
@@ -662,7 +662,7 @@ describe('GameSession', () => {
         expect(hud.addKillFeed).toHaveBeenCalledWith({kind:'note',text:expect.stringContaining('Captain Crawley')});
         expect(hud.addKillFeed.mock.calls.at(-1)![0].kind).toBe('note');
         expect(remotes.get).not.toHaveBeenCalledWith(null);
-        expect(hud.showRespawn).toHaveBeenCalledWith(Date.now()+3000);
+        expect(hud.showRespawn).toHaveBeenCalledWith(Date.now()+3000,{killer:'THE CITY',how:'A RUNAWAY CASE'});
     });
 
     it('tells a drowning with a harbour joke, never a case joke or a kill line',()=>{

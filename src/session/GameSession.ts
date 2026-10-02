@@ -2,6 +2,7 @@ import { SURGE } from '../shared/launcherVelocity';
 import { actionBound, lookDelta } from '../settings/PlayerPreferences';
 import {FoleyAudio} from '../audio/FoleyAudio';
 import { unlockEffectsAudio } from '../audio/effectsAudio';
+import { duckWorld } from '../audio/PlayerAudioMix';
 import {FoleyWorld} from '../audio/FoleyWorld';
 import * as THREE from 'three';
 import { ChaosView } from '../prototype/ChaosView';
@@ -39,6 +40,7 @@ import type { RatEntity } from '../entities/RatEntity';
 import { bindGamePointerLock } from './GamePointerLock';
 import { FeedbackAudio } from '../audio/FeedbackAudio';
 import { MatchScoreboard } from '../ui/MatchScoreboard';
+import { AdminPanel } from '../ui/AdminPanel';
 import { bindScoreboardHold } from './ScoreboardHold';
 import {TouchControls, touchControlsAvailable} from '../ui/TouchControls';
 import {NetplayAuditLog} from '../shared/netplay';
@@ -48,6 +50,9 @@ import {loadCameos} from '../cameos/loadCameos';
 import {HighlightBridge} from '../highlights/HighlightBridge';
 import {FeelDirector} from '../feel/FeelDirector';
 import {IncidentStory,STORY} from '../feel/IncidentStory';
+import {headlines} from '../ui/Headlines';
+import {deathRecap} from '../ui/deathRecap';
+import {caseLastSeen} from '../shared/casePing';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {FLASHLIGHT,FLASHLIGHT_REACH} from '../shared/rat/ratBody';
@@ -59,6 +64,9 @@ import {qualityFrame,qualityStatus,settleQuality} from './graphicsQuality';
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean}[]=[];
 const HEAD_POSITION=new THREE.Vector3();
+/** The death recap's arrow: the case in the camera's frame. */
+const RECAP_LOCAL=new THREE.Vector3();
+const RECAP_INVERSE=new THREE.Quaternion();
 const LANDING_POSITION=new THREE.Vector3();
 /** Where a refused Mousetrap would have gone (its NO ROOM word). */
 const TRAP_SPOT=new THREE.Vector3();
@@ -84,6 +92,10 @@ export class GameSession {
     private readonly hud = new GameHud(document, () => this.transport.retry(), cue => this.feedback?.play(cue),(...args)=>this.foley?.play(...args));
     private readonly deathQuips = new MunicipalQuips();
     private readonly scoreboard = new MatchScoreboard(document, cue => this.feedback?.play(cue));
+    /** F10 with a saved admin key (docs/live-service.md, "Admin controls"); the mouse belongs to it while it is open. */
+    private readonly admin = new AdminPanel(document, message => this.transport.send(message),
+        () => this.transport.state === 'playing' && !this.observing && !this.title.settings?.isOpen,
+        open => { this.clearInput(); if (open) document.exitPointerLock(); else if (!this.reading) this.requestPointerLock(); });
     private readonly input = new InputState(window,document,()=>!this.title?.settings?.isOpen && this.transport?.state==='playing' && (this.touch?.active || document.pointerLockElement===this.stage?.renderer.domElement));
     private readonly events = new AbortController();
     private readonly gun;
@@ -132,7 +144,7 @@ export class GameSession {
     private playFrameMarked=false;
     private readonly highlights = new HighlightBridge();
     private readonly feel = new FeelDirector();
-    /** Incident storytelling overlays (WANTED poster, BOUNTY CLAIMED, ALL UNITS radio call, YOU'RE BACKUP card). */
+    /** Incident storytelling overlays (WANTED poster, BOUNTY CLAIMED, ALL UNITS squawk, YOU'RE BACKUP card). */
     private story?: IncidentStory;
     /** The running Dispatch incident, from the latest chaos snapshot. */
     private activeIncident: IncidentId | undefined;
@@ -271,10 +283,10 @@ export class GameSession {
             scores:visible=>{if(!this.resultsShown)this.scoreboard.setVisible(visible);},clearKeys:()=>this.input.clear()});
         // While a reader is on the results the mouse belongs to the board: no lock from stray clicks, no pause menu on unlock.
         this.pointerLock=bindGamePointerLock({canvas:this.stage.renderer.domElement,
-            playing:()=>this.transport.state==='playing'&&!this.reading,enabled:()=>!this.touch?.active,signal:this.events.signal,
+            playing:()=>this.transport.state==='playing'&&!this.reading&&!this.admin.isOpen,enabled:()=>!this.touch?.active,signal:this.events.signal,
             allowUnlockedClick:target=>!!this.title.settings?.contains(target)||credits.allowUnlockedClick(target),
             record:(type,detail)=>this.stats?.event(type,detail)});
-        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing'&&!this.reading,touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock(),cue:cue=>this.feedback?.play(cue)});
+        this.title.settings?.attach({observing:()=>this.observing,playing:()=>this.transport.state==='playing'&&!this.reading&&!this.admin.isOpen,touch:()=>!!this.touch?.active,clear:()=>{this.clearInput();this.scoreboard.setVisible(false);},resume:()=>this.requestPointerLock(),cue:cue=>this.feedback?.play(cue)});
         bindScoreboardHold({available:()=>this.transport.state==='playing'&&!this.title.settings?.isOpen&&!this.resultsShown,
             show:visible=>{if(!this.resultsShown)this.scoreboard.setVisible(visible);},scroll:(dy,dx)=>this.scoreboard.scroll(dy,dx),signal:this.events.signal});
         this.hud.onContinue=()=>this.continueFromResults();
@@ -356,7 +368,7 @@ export class GameSession {
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
         // The scoreboard has already taken this welcome's round (its results when the round is won).
-        this.feel.reset();this.feel.resetRound();this.story?.reset();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults(false);
+        this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults(false);
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -410,6 +422,7 @@ export class GameSession {
             this.chaos.onMeteorImpact=at=>this.feel.meteorLanded(at,this.stage.camera);
             this.chaos.onSuperball=p=>this.feel.superballBounce(p);
             this.chaos.onCasePaper=(p,kind)=>this.feel.casePaper(p,kind);
+            this.chaos.onCasePinged=()=>this.feel.casePinged();
             this.chaos.onClaim=(kind,camera,lockMs)=>this.feel.claimed(kind,this.rat?.entity,camera,lockMs);
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onDispatchShot=(_station,at)=>this.feel.dispatchShot(at,this.stage.camera);
@@ -487,7 +500,7 @@ export class GameSession {
                 this.feelLaunches(message.state);
                 this.noteHighlightSnapshot(message.state);
                 break;
-            case 'welcome': this.welcome(message); break;
+            case 'welcome': this.admin.reset(); this.welcome(message); break;
             case 'currentPlayers': break; // Atomic welcome already applied the complete state.
             case 'playerJoined': if (message.player.id !== this.myId) this.remotes.add(message.player); break;
             case 'playerMoved': this.remotes.move(message.player, message.at); break;
@@ -539,7 +552,7 @@ export class GameSession {
                 if(message.accepted&&message.pickup==='hustle'&&!message.faulty)this.rat?.setLegs(PICKUP_TUNING.hustleMultiplier);
                 break;
             case 'playerDamaged': {
-                if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){const victim=this.remotes.get(message.id);this.hud.showHitMarker(victim?victim.hp-message.hp:1);this.foley.play('hit-confirm');if(victim)this.feel.hitDealt(victim.mesh.position,this.stage.camera);}
+                if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){const victim=this.remotes.get(message.id);this.hud.showHitMarker(victim?victim.hp-message.hp:1);this.foley.play('hit-confirm');duckWorld(this.stage.listener.context,.5);if(victim)this.feel.hitDealt(victim.mesh.position,this.stage.camera);}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
                 if (message.id === this.myId) this.feel.health(message.hp);
                 if (entity && !entity.dead) {
@@ -577,7 +590,7 @@ export class GameSession {
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
                 const headshot=message.headshot===true;
-                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName,headshot);this.foley.play('hit-confirm');const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId,headshot);}
+                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName,headshot);this.foley.play('hit-confirm');duckWorld(this.stage.listener.context,1);const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId,headshot);}
                 this.highlights.emit(this.highlights.detector.onDeath({
                     victimId: message.victimId,
                     killerId: message.killerId,
@@ -614,7 +627,7 @@ export class GameSession {
                     this.feel.died(()=>this.chaos?.corpseOf(this.myId)??this.rat?.entity.mesh.position);
                     this.clearInput();
                     this.stats?.event('death',{respawnAt:message.respawnAt-this.serverOffset,incident:message.incident});
-                    this.hud.showRespawn(message.respawnAt - this.serverOffset);
+                    this.hud.showRespawn(message.respawnAt - this.serverOffset, deathRecap(message,this.myId,this.activeIncident));
                 }
                 this.hud.addKillFeed(message.cause
                     ? {kind:'note',text:this.deathQuips.environmental(message.cause,message.victimName)}
@@ -676,10 +689,11 @@ export class GameSession {
                 this.highlightCorpseSeen.clear();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0,0);entity.resetReactions();entity.setStreak(0);}
-                this.rat?.setLegs(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); if(!keep)this.hud.hideVictory(); this.hud.hideRespawn(); break;
+                this.rat?.setLegs(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); if(!keep)this.hud.hideVictory(); this.hud.hideRespawn(); break;
             }
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
+            case 'adminResult': this.admin.receive(message); break;
         }
     }
 
@@ -837,6 +851,16 @@ export class GameSession {
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
+        // Dead: the recap's arrow toward the case, where you may know it is (a loose case, or a carrier's latest ping).
+        if(this.rat?.entity.dead&&this.lastChaos){
+            const c=this.lastChaos.case,seen=caseLastSeen(c,this.myId);
+            if(!seen)this.hud.pointRecap(undefined,0,'');
+            else{
+                RECAP_LOCAL.set(seen.x,seen.y,seen.z).sub(camera.position);const metres=RECAP_LOCAL.length();
+                RECAP_LOCAL.applyQuaternion(RECAP_INVERSE.copy(camera.quaternion).invert());
+                this.hud.pointRecap(Math.atan2(RECAP_LOCAL.x,-RECAP_LOCAL.z),metres,c.owner?'CASE LAST SEEN':'THE CASE');
+            }
+        }
         if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon)this.showResultsBoard();
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);
@@ -1061,6 +1085,7 @@ export class GameSession {
         this.bots?.dispose();this.bots=null;
         this.transport.destroy();
         this.hud.dispose();
+        this.admin.dispose();
         this.scoreboard.dispose();
         this.chaos?.dispose();
         this.gun.dispose();

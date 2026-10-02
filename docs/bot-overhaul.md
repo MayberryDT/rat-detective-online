@@ -181,7 +181,7 @@ Each step lists what it delivers and how it is proven.
 - `RatView` from the room:
   - place and floor;
   - HP and buffs;
-  - the case;
+  - the case (a carrier out of sight only where it was last seen or pinged);
   - visible rats (same sight rules as humans: 150 units, the Hunch at full HP);
   - sounds heard (shots, alarms, launcher throws);
   - candidate places.
@@ -190,6 +190,7 @@ Each step lists what it delivers and how it is proven.
   - a `Situation` object in words: the assignment's rule, standing and time pressure, me (place, level, HP as "3 of 5", buffs, carrying, hit a moment ago and by whom), the case, the zone, the drop-off, stocked pickups in sight, rats in view, a rat just gone behind cover, sounds heard, the Hunch and the Dispatch incident;
   - distances are run times at sprint speed ("right here", "a few steps", "a short run", "a long run", "across the city") with a compass direction and above/below; places are named without their coordinates (street, pier and quay names carry them, so they become "a north–south street in the west" and the like); no number reaches Jev except HP;
   - rats in view are the motor's own (80 units, or the flashlight's 40 in a Blackout, and a clear ray, the rays that aim), not the recorder's 150; the Hunch (within 40 at full HP) and sounds (gunfire within 60, alarm pillars, launchers within 100) have fields of their own, and an unseen shooter gets no alias;
+  - **Case ping (clarity batch, protocol 29, `mindVersion` 10):** a bot knows where a carrier it cannot see is only from the case's latest ping (every 4 s) or its own latest sight of the carrier (the motor's sight: in range with a clear ray), whichever is newer, kept per case and dropped when the case changes hands (`src/shared/bots/motor/carriers.ts`). Chasing, intercepts, ambush, pillar-detour distances, the intercept post's watch and Mousetrap spots near the case use that point; the chase follows the live rat only while it is in sight, otherwise it runs at the point. Jev reads "r2 carries the case, last pinged a long run north (…) a few seconds ago"; a carrier in view is described live as before.
   - rats are `r1`… for one request only, nearest in view first; a chosen name is never read.
 
 ### B4. Jev mind

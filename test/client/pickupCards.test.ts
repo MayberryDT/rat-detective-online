@@ -9,7 +9,7 @@ vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},SE
 class Element {
     width=0;height=0;className='';innerHTML='';textContent='';removed=false;
     style={display:'',setProperty:vi.fn()};children:Element[]=[];selectors=new Map<string,Element>();
-    classList={toggle:vi.fn()};
+    classList={toggle:vi.fn(),add:vi.fn(),remove:vi.fn()};
     appendChild(child:Element){this.children.push(child);}replaceChildren(){this.children=[];}
     remove(){this.removed=true;}setAttribute(){}
     querySelector(s:string){if(!this.selectors.has(s))this.selectors.set(s,new Element());return this.selectors.get(s)!;}

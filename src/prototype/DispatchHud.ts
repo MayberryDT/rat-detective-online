@@ -8,12 +8,17 @@ import {INCIDENTS,incidentInfo} from '../shared/incidentCatalog';
 import './dispatchHud.css';
 import {setText} from '../ui/setText';
 import {arrange, fly, replay, scrawl, uiMotion} from '../ui/motion';
-import {MunicipalQuips,INCIDENT_QUIPS} from '../ui/municipalQuips';
+import {MunicipalQuips} from '../ui/municipalQuips';
+import {headlines} from '../ui/Headlines';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {incidentArtwork} from './incidentArtwork';
 import {activeDestination, ASSIGNMENTS, ASSIGNMENT_DESTINATIONS, ASSIGNMENT_TUNING} from '../shared/assignments';
 
-/** Municipal broadcast graphics: brief interruptions, then a readable running ledger. */
+/** How long (ms) an incident's title (its picture and one-line rule) stays up once it starts; then only the small tag. */
+export const INCIDENT_TITLE_MS=2200;
+/** Municipal broadcast graphics: brief interruptions, then a readable running ledger. Every big one goes through the
+ * headline queue (`headlines`): the roll and the incident's title hold it as an incident, case news and filing credit
+ * as news, your own take of the case above all. */
 export class DispatchHud {
     private root=document.createElement('div');
     private readonly quips=new MunicipalQuips();
@@ -26,6 +31,11 @@ export class DispatchHud {
     private nextPhase:HTMLElement;
     private caseLine:HTMLElement;
     private caseDetail:HTMLElement;
+    /** Set by ChaosView before `update` (the case ping): while someone else carries the case, its last-seen line
+     * ('LAST SEEN · 80 m · NORTH') and how fresh that ping is (1 at the ping, fading toward 0 until the next). */
+    lastSeen='';
+    lastSeenFresh=0;
+    private lastSeenShown=-1;
     private announcement:HTMLElement;
     private announcementTitle:HTMLElement;
     private announcementDetail:HTMLElement;
@@ -35,6 +45,7 @@ export class DispatchHud {
     private strip:HTMLElement;
     private stamp:HTMLElement;
     private description:HTMLElement;
+    private rouletteArt:HTMLElement;
     private previousOwner:string|null|undefined=undefined;
     private previousPhase='';
     private previousLocal=false;
@@ -44,6 +55,12 @@ export class DispatchHud {
     private tick=-1;
     private lastSound=0;
     private finalIndex=0;
+    /** The Dispatch serial whose roll and title have asked for the screen, and whether they have it. */
+    private titleSerial=-1;
+    private titled=false;
+    /** The round whose briefing has asked for the screen, and whether it has it. */
+    private briefedRound='';
+    private briefed=false;
     private assignmentPanel:HTMLElement;
     private assignmentTitle:HTMLElement;
     private assignmentRule:HTMLElement;
@@ -82,7 +99,7 @@ export class DispatchHud {
     setScores(scores:readonly ScoreEntry[], myId:string):void {this.scores=scores;this.myId=myId;}
     constructor(private sound:(frequency:number)=>void,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void){
         this.root.className='dispatch-hud';
-        this.root.innerHTML=`<div class="dispatch-ledger"><div class="dispatch-alert-label"></div><div class="dispatch-status-row"><div class="dispatch-artwork" aria-hidden="true"></div><strong class="dispatch-status"></strong></div><p class="dispatch-brief"></p><div class="dispatch-clock"><small class="dispatch-next"></small><span class="dispatch-timer"></span></div><div class="dispatch-time-track"><div></div></div><div class="case-ledger"><strong></strong><small></small></div></div><div class="case-broadcast" hidden aria-live="polite"><small>HOT CASE</small><strong></strong><span></span></div><div class="dispatch-roulette" hidden><div class="roulette-heading"><span>! DISPATCH !</span><b>SELECTING INCIDENT</b></div><div class="roulette-caller" hidden></div><div class="roulette-window"><div class="roulette-strip"></div><i class="roulette-pointer">▶</i></div><div class="roulette-stamp">CITYWIDE EMERGENCY!</div><p class="roulette-description"></p><div class="roulette-footer"><span>● LIVE</span></div></div>`;
+        this.root.innerHTML=`<div class="dispatch-ledger"><div class="dispatch-alert-label"></div><div class="dispatch-status-row"><div class="dispatch-artwork" aria-hidden="true"></div><strong class="dispatch-status"></strong></div><p class="dispatch-brief"></p><div class="dispatch-clock"><small class="dispatch-next"></small><span class="dispatch-timer"></span></div><div class="dispatch-time-track"><div></div></div><div class="case-ledger"><strong></strong><small></small></div></div><div class="case-broadcast" hidden aria-live="polite"><small>HOT CASE</small><strong></strong><span></span></div><div class="dispatch-roulette" hidden><div class="roulette-heading"><span>! DISPATCH !</span><b>SELECTING INCIDENT</b></div><div class="roulette-caller" hidden></div><div class="roulette-window"><div class="roulette-strip"></div><i class="roulette-pointer">▶</i><div class="roulette-art" aria-hidden="true"></div></div><div class="roulette-stamp">CITYWIDE EMERGENCY!</div><p class="roulette-description"></p><div class="roulette-footer"><span>● LIVE</span></div></div>`;
         this.root.innerHTML+=`<section class="assignment-ledger" hidden aria-label="Current assignment"><small class="assignment-counter"></small><strong class="assignment-title"></strong><p class="assignment-rule"></p><b class="assignment-progress"></b><span class="assignment-detail"></span><div class="assignment-track"><i></i></div><strong class="assignment-target"></strong><ol class="assignment-rankings" aria-label="Top five investigators"></ol><span class="assignment-leader"></span><small class="assignment-stats"></small></section><div class="jurisdiction-timer" hidden role="timer" aria-label="Zone relocation countdown"><small class="jurisdiction-timer-label">ZONE MOVES IN</small><strong class="assignment-zone-clock"></strong></div><div class="assignment-confirmation" hidden role="status" aria-live="polite"></div><div class="assignment-reveal" hidden><small>NEW CASE ASSIGNED</small><strong></strong><p></p><span></span></div>`;
         const get=(q:string)=>this.root.querySelector<HTMLElement>(q)!;
         this.rankings=get('.assignment-rankings');this.counter=get('.assignment-counter');this.destinationLabel=get('.assignment-target');this.zoneTimer=get('.jurisdiction-timer');this.zoneTimerLabel=get('.jurisdiction-timer-label');this.zoneClock=get('.assignment-zone-clock');
@@ -93,7 +110,7 @@ export class DispatchHud {
         this.status=get('.dispatch-status');this.timer=get('.dispatch-timer');this.timeBar=get('.dispatch-time-track div');this.nextPhase=get('.dispatch-next');this.caseLine=get('.case-ledger strong');this.caseDetail=get('.case-ledger small');
         this.alertLabel=get('.dispatch-alert-label');this.artwork=get('.dispatch-artwork');this.brief=get('.dispatch-brief');
         this.announcement=get('.case-broadcast');this.announcementTitle=get('.case-broadcast strong');this.announcementDetail=get('.case-broadcast span');
-        this.roulette=get('.dispatch-roulette');this.rouletteHeading=get('.roulette-heading b');this.rouletteCaller=get('.roulette-caller');this.strip=get('.roulette-strip');this.stamp=get('.roulette-stamp');this.description=get('.roulette-description');
+        this.roulette=get('.dispatch-roulette');this.rouletteHeading=get('.roulette-heading b');this.rouletteCaller=get('.roulette-caller');this.strip=get('.roulette-strip');this.stamp=get('.roulette-stamp');this.description=get('.roulette-description');this.rouletteArt=get('.roulette-art');
         document.body.appendChild(this.root);
     }
     /** `callerName`: the rat whose shot started this roll (`YOU` for yours), when known. */
@@ -103,7 +120,7 @@ export class DispatchHud {
         const artwork=d.phase==='active'?info.id:'dispatch';
         if(this.artwork.dataset.incident!==artwork){this.artwork.dataset.incident=artwork;this.artwork.innerHTML=incidentArtwork(artwork);}
         setText(this.alertLabel,d.phase==='active'?'CITYWIDE EMERGENCY':d.phase==='rolling'?'BRACE YOURSELF!':d.phase==='cooldown'?'PLEASE STAND BY':'DISPATCH READY');
-        setText(this.brief,d.phase==='active'?INCIDENT_QUIPS[info.id]:d.phase==='rolling'?'Something extremely unwise is on its way.':d.phase==='cooldown'?'Cleaning up the paperwork.':'One little bell. Citywide consequences.');
+        setText(this.brief,d.phase==='active'?'':d.phase==='rolling'?'Something extremely unwise is on its way.':d.phase==='cooldown'?'Cleaning up the paperwork.':'One little bell. Citywide consequences.');
         scrawl(this.status,d.phase==='ready'?'DISPATCH READY':d.phase==='rolling'?'DISPATCH INCOMING':d.phase==='active'?info.title:'LINE BUSY');
         setText(this.timer,d.phase==='ready'?'READY':`${remaining}s`);
         const total=d.phase==='rolling'?CHAOS_TUNING.rollMs:d.phase==='active'?CHAOS_TUNING.activeMs:CHAOS_TUNING.cooldownMs;
@@ -113,7 +130,7 @@ export class DispatchHud {
         this.nextPhase.hidden=d.phase==='ready';
         const holder=ownerName||'A detective';
         let caseTitle=state.case.owner?`${ownerIsLocal?'YOU':holder} · ON THE CASE`:'LOOSE CASE';
-        let caseDetail=state.case.returningUntil?'CASE RETURNING':'';
+        let caseDetail=state.case.returningUntil?'CASE RETURNING':this.lastSeen;
         if(info.id==='evidence-tampering'&&d.phase==='active'){
             caseTitle=`${(state.extraCases?.length??0)+1} CASES ARE MISSILES`;
             caseDetail='PICKUP SUSPENDED';
@@ -124,6 +141,9 @@ export class DispatchHud {
         }
         setText(this.caseLine,caseTitle);setText(this.caseDetail,caseDetail);
         this.caseDetail.hidden=!this.caseDetail.textContent;
+        // The last-seen line turns case gold, flashes on each ping and fades between.
+        const fresh=caseDetail===this.lastSeen&&this.lastSeen?Math.round(this.lastSeenFresh*20)/20:-1;
+        if(fresh!==this.lastSeenShown){this.lastSeenShown=fresh;this.caseDetail.dataset.ping=String(fresh>=0);this.caseDetail.style.opacity=fresh>=0?String(.45+.55*fresh):'';}
         const deliveryRespawn=state.assignment?.id==='chain-of-custody'&&state.assignment.roundId===this.previousAssignment&&state.assignment.deliverySerial>this.previousDeliverySerial&&!state.assignment.result;
         if(this.previousOwner!==state.case.owner||this.previousLocal!==ownerIsLocal||deliveryRespawn){
             const wasLocal=this.previousLocal,initialized=this.previousOwner!==undefined;
@@ -133,13 +153,20 @@ export class DispatchHud {
                 else this.feedback?.(state.case.owner?'case-taken':'case-drop',state.case.p);
             }
             this.previousLocal=ownerIsLocal;
-            this.previousOwner=state.case.owner;this.announceUntil=now+2800;
-            scrawl(this.announcementTitle,wasLocal&&!ownerIsLocal?'YOU LOST THE CASE':state.case.owner?(ownerIsLocal?"YOU’RE ON THE CASE":`${holder} is on the case`):'LOOSE CASE');
-            const kind=wasLocal&&!ownerIsLocal?'caseLost':ownerIsLocal?'casePickup':state.case.owner?'caseTaken':'caseLoose';
-            setText(this.announcementDetail,this.quips.next(kind));
-            this.announcement.dataset.tone=wasLocal&&!ownerIsLocal?'lost':ownerIsLocal?'gained':'neutral';
-            if(deliveryRespawn){scrawl(this.announcementTitle,'CASE RELOCATED');setText(this.announcementDetail,'FORWARDED TO THE WRONG DEPARTMENT.');this.announcement.dataset.tone='neutral';}
-            this.announcement.classList.remove('broadcast-enter');void this.announcement.offsetWidth;this.announcement.classList.add('broadcast-enter');
+            this.previousOwner=state.case.owner;
+            const lost=wasLocal&&!ownerIsLocal;
+            const title=lost?'YOU LOST THE CASE':state.case.owner?(ownerIsLocal?'YOU’RE ON THE CASE':`${holder} is on the case`):'LOOSE CASE';
+            const detail=this.quips.next(lost?'caseLost':ownerIsLocal?'casePickup':state.case.owner?'caseTaken':'caseLoose');
+            scrawl(this.announcementTitle,title);setText(this.announcementDetail,detail);
+            this.announcement.dataset.tone=lost?'lost':ownerIsLocal?'gained':'neutral';
+            // Your take is the top headline, but the ON THE CASE stamp (K1) already says it: this one stays down unless that
+            // is off. Everything else about the case is news. A join announces nothing; a delivery's filing credit says
+            // CASE RELOCATED itself.
+            if(initialized&&ownerIsLocal)headlines.explain('carrier');
+            const told=initialized&&!deliveryRespawn&&!(ownerIsLocal&&feelState().on('caseClaim'))&&headlines.claim(ownerIsLocal?'case':'case-news',ownerIsLocal?'case':'news',
+                `${title.toUpperCase()} · ${detail}`,2800,()=>{this.announceUntil=0;this.announcement.hidden=true;});
+            this.announceUntil=told?now+2800:0;
+            if(told)replay(this.announcement,'broadcast-enter');
         }
         this.announcement.hidden=now>=this.announceUntil;
         if(d.serial!==this.serial){
@@ -155,12 +182,25 @@ export class DispatchHud {
                 row.appendChild(number);row.appendChild(label);this.strip.appendChild(row);
             }
         }
-        const rolling=d.phase==='rolling',reveal=d.phase==='active'&&now-d.started<2980;
-        const leaving=reveal&&now-d.started>=2800;
-        const showRoulette=rolling||(reveal&&!leaving);
+        const rolling=d.phase==='rolling',reveal=d.phase==='active'&&now-d.started<INCIDENT_TITLE_MS+180;
+        const leaving=reveal&&now-d.started>=INCIDENT_TITLE_MS;
+        // The roll and the incident's title (its picture and one-line rule) hold the screen as an incident; when something
+        // bigger is up, or takes the screen from them, the incident is told as the compact line instead.
+        if((rolling||reveal&&!leaving)&&this.titleSerial!==d.serial){
+            this.titleSerial=d.serial;
+            const line=`INCIDENT · ${info.title.toUpperCase()} · ${info.description}`;
+            this.titled=headlines.claim('incident','incident',line,rolling?d.until-now+INCIDENT_TITLE_MS:INCIDENT_TITLE_MS-(now-d.started),
+                ()=>{this.titled=false;headlines.shrink(line);});
+        }
+        const titled=this.titled&&this.titleSerial===d.serial,showRoulette=titled&&(rolling||(reveal&&!leaving));
         const a=state.assignment;
+        // A new round's briefing is news too.
+        if(a&&a.roundId!==this.briefedRound){
+            this.briefedRound=a.roundId;const brief=ASSIGNMENTS[a.id];
+            this.briefed=now<a.liveAt&&a.phase!=='closed'&&headlines.claim('briefing','news',`${brief.title} · ${brief.rule}`,a.liveAt-now,()=>{this.briefed=false;});
+        }
         this.zoneTimer.hidden=!a?.jurisdiction||a.phase==='closed';
-        this.assignmentPanel.hidden=!a;this.assignmentReveal.hidden=!a||now>=a.liveAt||a.phase==='closed'||showRoulette;
+        this.assignmentPanel.hidden=!a;this.assignmentReveal.hidden=!a||now>=a.liveAt||a.phase==='closed'||!this.briefed;
         if(a){
             const info=ASSIGNMENTS[a.id],destination=activeDestination(a);
             const newAssignment=a.roundId!==this.previousAssignment;
@@ -176,14 +216,11 @@ export class DispatchHud {
             }else if(chain&&a.deliverySerial>this.previousDeliverySerial){
                 this.previousDeliverySerial=a.deliverySerial;this.feedback?.('verified');
                 const delivery=a.lastDelivery,local=delivery?.playerId===this.myId;
-                setText(this.confirmation,local?`PAPERWORK DELIVERED! +1 · ${points}/${target}`:`${delivery?.playerName??'A DETECTIVE'} DELIVERED · ${delivery?a.deliveries[delivery.playerId]??0:0}/${target}`);
-                if(!a.result)setText(this.confirmation,`${this.confirmation.textContent} · CASE RELOCATED`);
-                replay(this.confirmation,'stamp-pop');
-                this.confirmationUntil=now+2800;
+                const credit=local?`PAPERWORK DELIVERED! +1 · ${points}/${target}`:`${delivery?.playerName??'A DETECTIVE'} DELIVERED · ${delivery?a.deliveries[delivery.playerId]??0:0}/${target}`;
+                this.confirm(a.result?credit:`${credit} · CASE RELOCATED`,local,now,2800);
             }
             if(!newAssignment&&a.id==='excessive-force'&&points>this.previousPoints){
-                replay(this.confirmation,'stamp-pop');
-                this.feedback?.('case-point');setText(this.confirmation,`CASE KILL +${points-this.previousPoints} · ${points}/${target}`);this.confirmationUntil=now+2400;
+                this.feedback?.('case-point');this.confirm(`CASE KILL +${points-this.previousPoints} · ${points}/${target}`,true,now,2400);
             }
             const gained=newAssignment?0:points-this.previousPoints;
             this.previousPoints=points;
@@ -260,17 +297,18 @@ export class DispatchHud {
             }
         }
         this.confirmation.hidden=now>=this.confirmationUntil||!a||a.phase==='suspended';
-        if(!this.confirmation.hidden)this.announcement.hidden=true;
         if(showRoulette!==this.rouletteVisible){
             this.feedback?.(showRoulette?'menu-open':'menu-close');this.rouletteVisible=showRoulette;
         }
-        this.roulette.hidden=!(rolling||reveal);
+        this.roulette.hidden=!(rolling||reveal)||!titled;
         this.roulette.classList.toggle('roulette-leaving',leaving);
         this.roulette.classList.toggle('is-settled',reveal);
         this.stamp.hidden=!reveal;setText(this.rouletteHeading,reveal?'INCIDENT ACTIVE':'SELECTING INCIDENT');
         this.rouletteCaller.hidden=!callerName;if(callerName)setText(this.rouletteCaller,`DISPATCHED BY ${callerName.toUpperCase()}`);
-        setText(this.description,rolling?'SELECTING INCIDENT…':INCIDENT_QUIPS[info.id]);
-        if(rolling){
+        // The title: the incident's picture beside its name, and its one-line rule.
+        if(reveal&&this.rouletteArt.dataset.incident!==info.id){this.rouletteArt.dataset.incident=info.id;this.rouletteArt.innerHTML=incidentArtwork(info.id);}
+        setText(this.description,rolling?'SELECTING INCIDENT…':info.description);
+        if(rolling&&titled){
             const progress=Math.max(0,Math.min(1,(now-d.started)/Math.max(1,d.until-d.started)));
             const position=this.finalIndex*(1-Math.pow(1-progress,3));
             this.strip.style.transform=`translateY(${-position*100}%)`;
@@ -282,6 +320,12 @@ export class DispatchHud {
             if(this.previousPhase&&d.phase==='ready'){if(this.feedback)this.feedback('ready');else this.sound(740);}
             this.previousPhase=d.phase;
         }
+    }
+    /** Filing credit (a delivery, a case kill): yours ranks with your case, anyone else's is news. */
+    private confirm(text:string,yours:boolean,now:number,ms:number):void {
+        setText(this.confirmation,text);
+        if(!headlines.claim('credit',yours?'case':'news',text,ms,()=>{this.confirmationUntil=0;this.confirmation.hidden=true;})){this.confirmationUntil=0;return;}
+        replay(this.confirmation,'stamp-pop');this.confirmationUntil=now+ms;
     }
     dispose(){this.root.remove();}
 }

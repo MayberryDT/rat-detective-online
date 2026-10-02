@@ -1,0 +1,15 @@
+/* Tyler's admin panel (F10, AdminPanel.ts): a small dark carbon sheet, top left, nothing glowing. */
+.admin-panel{position:fixed;z-index:420;left:18px;top:18px;width:min(370px,calc(100vw - 36px));box-sizing:border-box;padding:10px 14px 10px;background:#070b16e0;backdrop-filter:blur(3px);border-top:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge);color:var(--carbon-ink);font:13px/1.35 var(--font-type);rotate:-.4deg}
+.admin-panel[hidden]{display:none}
+.admin-panel h3{margin:0 0 6px;font:400 22px/1 var(--font-display);letter-spacing:.06em;color:var(--carbon-bright)}
+.admin-panel dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:0 0 8px}
+.admin-panel dt{padding-top:2px;color:var(--carbon-dim);font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase}
+.admin-panel dd{margin:0;overflow-wrap:anywhere}
+.admin-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.admin-panel button,.admin-panel select{font:13px var(--font-type);background:var(--carbon-raised);color:var(--carbon-bright);border:1px dashed var(--carbon-line);border-radius:0;padding:6px 9px;min-height:32px;cursor:pointer}
+.admin-panel select{flex:1 1 150px;min-width:0}
+.admin-panel button:hover,.admin-panel select:hover{border-style:solid}
+.admin-row:first-of-type button{flex:1;border:3px double var(--stamp);color:var(--stamp-ink);background:#c8322a14}
+.admin-note{min-height:1.35em;margin:8px 0 2px;color:var(--carbon-bright)}
+.admin-note[data-ok=false]{color:var(--stamp-ink)}
+.admin-panel small{color:var(--carbon-dim);font-size:10.5px;letter-spacing:1px}

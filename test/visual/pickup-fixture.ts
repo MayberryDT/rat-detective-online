@@ -28,7 +28,7 @@ let previous=performance.now(),heal=0;
 renderer.setAnimationLoop(now=>{
     const dt=Math.min(.05,(now-previous)/1000);previous=now;
     rats[0].setPowerups(12,0,0);rats[1].setPowerups(0,10,0);
-    // Stakeout re-granted every two seconds so its peer and gold wave repeat.
+    // Stakeout re-granted every two seconds so its peer and lens-cyan wave repeat.
     rats[3].setPowerups(0,0,2-now/1000%2);
     rats[1].mesh.position.z=-Math.sin(now*.0015)*3;
     rats[1].mesh.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),Math.cos(now*.0015)<0?0:Math.PI);

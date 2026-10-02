@@ -19,6 +19,9 @@ export const CHAOS_TUNING = {
     caseRewardMs: 20000,
     /** The case carrier's hits deal this many times their damage in every assignment, and any kill it makes heals it to full. */
     carrierDamage: 2,
+    /** Case ping (clarity batch, protocol 29): a carried case is not marked; every `casePingMs` the authority records
+     * where it is (`CaseState.ping`), and everyone sees and hears that spot. A loose case keeps its steady glow. */
+    casePingMs: 4000,
     /** The quiet stretch between incidents was 21 s until the four-human playtest ("too chaotic"; protocol 28). */
     rollMs: 2400, activeMs: 25000, cooldownMs: 40000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
@@ -174,7 +177,10 @@ export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
     /** Hits the carrier's grip has taken (1 or 2; absent when whole). Each is within `caseGripMs` of the last. */
     grip?: number;
+    /** The latest ping while carried: authority time `at` and where the case was. Absent while loose. */
+    ping?: CasePing;
 }
+export interface CasePing { at:number; p:Vec3Data }
 export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
 /** A set Mousetrap (`WEAPON_TUNING`): holds any other rat that steps on it in place for `trapHoldMs`. `hp` ball hits
  * left; `at` when set; `snapAt` its latest catch (shut while it holds, it re-arms `trapRearmMs` after letting go); `hitAt`

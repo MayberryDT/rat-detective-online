@@ -91,6 +91,23 @@ A rollback changes code/assets, not arbitrary stored state. Review the prior ver
 
 The private `rat-detective-network-test` Worker is separate. Its last recorded restoration was `b959490c-28cc-4915-8765-64098bef4393`; verify before use. Stored persistent-bot flags may survive a rollback, so deploying modern code there can reactivate a second continuous room. Do not assume the private backend automatically matches production.
 
+## Admin controls
+
+Tyler's controls for the canonical room (protocol 29, clarity batch): end the round now with the current leader winning (the normal round end, results and lineup; the leader is counted dead or alive, mode progress then kills), choose the next round's mode, roll an incident now (a chosen one or the ordinary draw; no caller, so nobody gets the Dispatch supply) or end the one rolling or under way (Dispatch then cools down as usual), and send the case back to a fresh spot through the ordinary recovery. The admin's own rat gains nothing. Every command but `status` is recorded as an `admin` city fact ([city map](city-map.md)) and logged as `admin command` (command, source, outcome; never the key).
+
+- **The key** is the Worker secret `ADMIN_TOKEN`, not in `wrangler.jsonc` or any committed file. Unset, every admin request is refused. Set it per environment with a long random value (agents do not set it):
+
+  ```sh
+  openssl rand -hex 32                                   # the key
+  npx wrangler secret put ADMIN_TOKEN --env staging      # paste it when asked
+  npx wrangler secret put ADMIN_TOKEN --env production
+  ```
+
+  Keep the same value in `~/.config/rat-detective/admin-token` (mode 600) for the CLI. Locally, `npx wrangler dev --var ADMIN_TOKEN:<key>`.
+- **CLI:** `node scripts/admin.mjs [--base=https://ratdetective.online] status | end-round | next-mode <chain-of-custody|excessive-force|jurisdiction> | incident [<id>|end] | reset-case`. The key comes from `ADMIN_TOKEN` or the file above. Exit 0 when the command took effect, 1 when it did not (for example, no round in play) or the key was refused.
+- **HTTP:** `GET /api/admin/v1/status`, `POST /api/admin/v1/{end-round,next-mode,incident,end-incident,reset-case}` with `Authorization: Bearer <key>` and a small JSON body (`{"mode":…}`, `{"incident":…}`); answers `{ok, message, status}` (409 when nothing changed, 401 without the right key). Always the canonical room (`public-live-v2`), never an overflow room. `src/worker/adminApi.ts`.
+- **In game:** open `/?admin=1`, Settings → ADMIN, paste the key once (stored in that browser's `localStorage` as `rat-detective-admin-key`, never in the bundle). In a match, **F10** opens a small panel (Esc or F10 closes; it frees the mouse without the pause menu). The socket sends the key with its `admin` messages until the room answers with a status, then the room marks that socket admin; the key is never echoed. Ending the round takes a second press within 3 s. Socket commands act on the room that socket is in. At most 6 admin messages per 10 s per rat.
+
 ## Verification history and limits
 
 | Release | Evidence |

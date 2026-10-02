@@ -8,8 +8,8 @@ import {accuracy, caseTime, killsPerMinute, objectivePoints, objectiveUnit, race
 
 type Investigator = ScoreEntry & {hp?: number};
 const text = (node: HTMLElement, value: string) => { if (node.textContent !== value) node.textContent = value; };
-/** The race's inks: the winner in cheese, you in stamp red, everyone else in faded carbon. */
-const RACE_INKS = {winner: '#d9b95e', you: '#e65a50', others: ['#9fcfd6', '#b5cfa6', '#cdbfae', '#b9c9ec']};
+/** The race's inks: the winner in paper cream, you in stamp red, everyone else in faded carbon. */
+const RACE_INKS = {winner: '#efe6cf', you: '#e65a50', others: ['#9fcfd6', '#b5cfa6', '#cdbfae', '#b9c9ec']};
 /** Round end, frozen at the finish: the next round may start underneath while you read. */
 interface Final { winnerId?: string; assignment?: AssignmentState; report?: RoundReport; players: Investigator[] }
 /** Server totals only: opening the board never starts a local stats clock. At round end the

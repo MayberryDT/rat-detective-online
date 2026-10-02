@@ -10,7 +10,8 @@ const RED = '#e2382e';
 const PIP_W = 30, PIP_H = 9, PIP_GAP = 7, PIP_SLANT = 6, PIP_Y = 70;
 /** Seconds a lost pip flashes before draining, and a regained pip takes to fill. */
 const LOSS_SECONDS = 0.45, GAIN_SECONDS = 0.3;
-const GOLD = '#f3cf6f';
+/** The Hunch's lens cyan (Stakeout's colour): the case gold is only for the case. */
+const LENS = '#7ad8e8';
 /** The Hunch eye beside your own pips: world size, and its centre relative to the plate's anchor (bottom centre). */
 const EYE_SIZE = 0.2, EYE_GAP = 0.14;
 /** Seconds for the eye to open, and to shut then fade. */
@@ -185,11 +186,11 @@ export class RatBillboard {
         const canvas = document.createElement('canvas'); canvas.width = canvas.height = 128;
         const c = canvas.getContext('2d');
         if (!c || typeof c.beginPath !== 'function') return;
-        // A plain open eye with a gold iris: the detective's hunch.
+        // A plain open eye with a lens-cyan iris: the detective's hunch.
         c.lineJoin = 'round';
         c.fillStyle = '#f5ecd2'; c.strokeStyle = '#1a1208'; c.lineWidth = 6;
         c.beginPath(); c.moveTo(12, 64); c.quadraticCurveTo(64, 22, 116, 64); c.quadraticCurveTo(64, 106, 12, 64); c.closePath(); c.fill(); c.stroke();
-        c.fillStyle = '#c8922e'; c.beginPath(); c.arc(64, 64, 19, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#2f8a9c'; c.beginPath(); c.arc(64, 64, 19, 0, Math.PI * 2); c.fill();
         c.fillStyle = '#050308'; c.beginPath(); c.arc(64, 64, 9, 0, Math.PI * 2); c.fill();
         const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
         this.eye = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: true, depthWrite: false, toneMapped: false }));
@@ -257,8 +258,8 @@ export class RatBillboard {
             if (i < this.health && this.waiting[i]! <= 0) {
                 // Filling left to right when regained.
                 ctx.globalAlpha = gained >= 0 ? 0.35 + 0.65 * gained / GAIN_SECONDS : 1;
-                ctx.fillStyle = last ? RED : this.hunch ? GOLD : CREAM;
-                if (this.hunch && !last) { ctx.shadowColor = 'rgba(240,181,60,.6)'; ctx.shadowBlur = 5; }
+                ctx.fillStyle = last ? RED : this.hunch ? LENS : CREAM;
+                if (this.hunch && !last) { ctx.shadowColor = 'rgba(122,216,232,.6)'; ctx.shadowBlur = 5; }
                 ctx.fill();
                 ctx.shadowBlur = 0;
             } else {

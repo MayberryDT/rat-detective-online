@@ -16,8 +16,8 @@ import { INCIDENT_TUNING, type ChaosState } from '../shared/chaosState';
 import { ShotSpacing } from '../shared/shotTiming';
 import { GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
 import { drowned } from '../shared/city/kit/city';
-import { ASSIGNMENT_IDS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
-import { incidentRoster, isEvidenceMode, isIncidentId, parseIncidentList, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
+import { ASSIGNMENT_IDS, ASSIGNMENTS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
+import { incidentInfo, incidentRoster, isEvidenceMode, isIncidentId, parseIncidentList, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
 import { DurableObject } from 'cloudflare:workers';
 import {
   MAX_CONNECTIONS,
@@ -63,6 +63,8 @@ import { CityRecorder } from './city/CityRecorder';
 import { SpatialRayQuery } from '../shared/SpatialRayQuery';
 import * as CANNON from 'cannon-es';
 import { logClientDiagnostics, allowsLocalDiagnostics } from './clientDiagnostics';
+import { verifyBearerToken } from './auth';
+import type { AdminCommand, AdminResult, AdminStatus, AdminVia } from '../shared/admin';
 import { companionProjectionDue, companionProjectionSignature, projectCompanionRoom } from './companionStatus';
 import {
   clampPosition,
@@ -100,6 +102,8 @@ interface SocketAttachment {
   titleUntil?: number;
   /** Joined with `agent=1`: a headless agent browser, recorded as `agent`, never `human` (docs/city-map.md). */
   agent?: boolean;
+  /** Proved the room's `ADMIN_TOKEN` in an `admin` message; the token itself is never kept. */
+  admin?: boolean;
 }
 
 interface StoredPlayerRow extends Record<string, SqlStorageValue> {
@@ -823,6 +827,11 @@ export class GameRoom extends DurableObject<Env> {
       this.handlePickupIntent(playerId,message);return;
     }
 
+    if (message.type === 'admin') {
+      if (this.rateLimiter.allow(`${playerId}:admin`, 6, 10_000, this.now())) await this.handleAdminMessage(ws, playerId, message);
+      return;
+    }
+
     this.touchActivity(playerId);
     // Shots and hit claims are play; a background tab sends neither.
     if (message.type === 'shoot' || message.type === 'hit') this.lastInputAt.set(playerId, this.now());
@@ -1376,7 +1385,7 @@ export class GameRoom extends DurableObject<Env> {
     if (this.isManagedBot(victim.id)) this.jevMind?.hit(victim.id, shooter?.id, now);
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
-      respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{}),...(weapon?{weapon}:{}),
+      respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{}),...(explosive?{blast:true as const}:{}),...(weapon?{weapon}:{}),
       ...(shooter&&shooter!==victim&&shooter.streak?{killerStreak:shooter.streak}:{})});
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
@@ -1789,6 +1798,68 @@ export class GameRoom extends DurableObject<Env> {
         if(player)this.writePlayer(player,now,this.lastActiveAt.get(id)??now);else this.dueCheckpoints.delete(id);
       }
     });
+  }
+  /** Trusted Worker RPC for the authenticated `/api/admin/v1/*` endpoint (index.ts). */
+  async admin(command: AdminCommand): Promise<AdminResult> { return this.runAdmin(command, 'http'); }
+  /** An `admin` message: the socket proves `ADMIN_TOKEN` once, then sends commands without it. */
+  private async handleAdminMessage(ws: WebSocket, playerId: string, message: Extract<ClientMessage, { type: 'admin' }>): Promise<void> {
+    if (!this.getAttachment(ws).admin) {
+      if (!message.token || !await verifyBearerToken(`Bearer ${message.token}`, (this.env as Env & { ADMIN_TOKEN?: string }).ADMIN_TOKEN)) {
+        log('warn', 'admin socket refused', { playerId });
+        this.send(ws, { type: 'adminResult', ok: false, message: 'Admin key refused.' });
+        return;
+      }
+      this.setAttachment(ws, { ...this.getAttachment(ws), admin: true });
+    }
+    this.send(ws, { type: 'adminResult', ...this.runAdmin(message.command, 'game', playerId) });
+  }
+  /** Tyler's admin controls (docs/live-service.md). No rat gains anything: an ended round goes to the current leader
+   * through the ordinary round end, a rolled incident has no caller, and a reset case returns by the ordinary recovery. */
+  private runAdmin(command: AdminCommand, via: AdminVia, by?: string): AdminResult {
+    const chaos = this.chaos, now = this.now(), round = chaos?.assignmentState?.roundId;
+    if (command.command === 'status') return { ok: true, message: 'Status.', status: this.adminStatus() };
+    let ok = false, message = 'The city is not running.', winner: string | undefined, roll: IncidentId | undefined;
+    if (command.command === 'next-mode') {
+      const rotation = this.assignmentRotation;
+      ok = !rotation.forced;
+      if (ok) rotation.remaining = [command.mode, ...rotation.remaining.filter(id => id !== command.mode)];
+      message = ok ? `Next round: ${ASSIGNMENTS[command.mode].title}.` : 'This room is pinned to one mode.';
+    } else if (chaos) switch (command.command) {
+      case 'end-round': {
+        const result = this.round.phase === 'playing' ? chaos.concede(now) : undefined;
+        ok = !!result; winner = result?.winnerId;
+        message = result ? `Round ended: ${result.winnerName} wins.` : 'No round in play to end.';
+        if (result) this.finishAssignment();
+        break;
+      }
+      case 'incident':
+        roll = chaos.rollIncident(command.incident);
+        ok = !!roll; message = roll ? `Rolling ${incidentInfo(roll).title}.` : 'That incident is not in this room.';
+        break;
+      case 'end-incident':
+        ok = chaos.endIncident(); message = ok ? 'Incident ended.' : 'No incident under way.';
+        break;
+      case 'reset-case':
+        ok = chaos.resetCase(); message = ok ? 'Case returning to a fresh spot.' : 'The case is already returning.';
+        break;
+    }
+    this.city.admin({ command: command.command, via, ok, ...(command.command === 'next-mode' ? { next: command.mode } : {}), ...(roll ? { roll } : {}) }, now, round, by, winner);
+    log('info', 'admin command', { command: command.command, via, ok });
+    if (ok && command.command !== 'end-round') this.checkpointGame();
+    return { ok, message, status: this.adminStatus() };
+  }
+  private adminStatus(): AdminStatus {
+    const d = this.chaos?.snapshot(false).dispatch, assignment = this.chaos?.assignmentState, leader = this.chaos?.leaderId;
+    const bots = [...this.players.keys()].filter(id => this.isManagedBot(id)).length, now = this.now();
+    const next = this.assignmentRotation.forced ?? this.assignmentRotation.remaining[0];
+    return {
+      room: this.matchRoom ?? this.ctx.id.name ?? 'room', phase: this.round.phase,
+      ...(assignment ? { mode: assignment.id } : {}), ...(next ? { nextMode: next } : {}),
+      ...(leader ? { leader: this.players.get(leader)?.name ?? leader } : {}),
+      incident: { phase: d?.phase ?? 'ready', ...(d?.incident ? { id: incidentInfo(d.incident).id } : {}), ...(d && d.phase !== 'ready' ? { leftMs: Math.max(0, d.until - now) } : {}) },
+      incidents: incidentRoster(this.evidenceMode, parseIncidentList(this.env.INCIDENTS)).map(incident => incident.id),
+      humans: this.players.size - bots, bots,
+    };
   }
   private finishAssignment():void {
     const assignment=this.chaos?.assignmentState,result=assignment?.result;

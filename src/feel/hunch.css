@@ -28,6 +28,8 @@
 .hunch-card-kicker{font:11px/1 var(--font-type);letter-spacing:3px;color:var(--carbon-dim)}
 .hunch-card-title{font:400 36px/1 var(--font-display);letter-spacing:2.5px;color:var(--carbon-bright);text-shadow:2px 2px 0 #7a1c18}
 .hunch-card-meaning{font:13px/1.1 var(--font-type);letter-spacing:2px;color:var(--carbon-bright)}
+/* Explained once per browser (Headlines.firstTime): afterwards only the word. */
+.hunch-card.explained .hunch-card-meaning{display:none}
 .hunch-card-stamp{position:absolute;right:-18px;top:-12px;padding:2px 8px;font:15px/1 var(--font-type);letter-spacing:3px;color:var(--stamp-ink);
   border:2px solid var(--stamp-ink);rotate:12deg;opacity:.9;mix-blend-mode:screen}
 .hunch-card.on .hunch-card-stamp{animation:hunch-stamp 2.3s ease-out both}

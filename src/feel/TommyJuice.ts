@@ -6,8 +6,8 @@ import {FEEL} from './feelTuning';
 const MUZZLE_HEIGHT=1.376;
 /** Flash and puff sprites (one each a round; ten rounds a second outlive neither pool). */
 const FLASHES=10;
-/** Cheese crumbs in flight at once across every Tommy in range. */
-const CRUMBS=96;
+/** Cheese crumbs in flight at once across every Tommy in range (clarity batch: 96 → 48). */
+const CRUMBS=48;
 const GRAVITY=-24;
 /** Half a cheese-cube casing's edge (it rests on the floor on a face). */
 const CUBE=.042;

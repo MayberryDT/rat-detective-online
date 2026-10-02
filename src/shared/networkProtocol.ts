@@ -5,6 +5,7 @@ import type { IncidentId } from './incidentCatalog';
 import type { ControlsInput } from './rat/controlTally';
 import type { PerfReport } from './perfReport';
 import type { PickupKind, WeaponKind } from './pickups';
+import type { AdminCommand, AdminResult } from './admin';
 
 /** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there.
  * 27: Tommy Gun, Laser and Mousetrap pickups; a stronger Excessive Force carrier; targets of 10 / 100 / 10; the incident rework.
@@ -219,6 +220,8 @@ export type ClientMessage = (
   | { type: 'perf'; report: PerfReport }
   /** Results (protocol 28): this human has finished reading the results board. */
   | { type: 'ready' }
+  /** Admin controls (protocol 29): `token` once, until the room answers; then the socket is admin. Never echoed. */
+  | { type: 'admin'; token?: string; command: AdminCommand }
 ) & { deliveryAck?: {stream:string;seq:number} };
 
 /** Why a rat was healed: a Quick Fix (site or reward), or an Excessive Force case kill. */
@@ -292,6 +295,8 @@ export type ServerMessage =
       incoming?: Vec3Data;
       incident?: boolean;
       headshot?: true;
+      /** An explosion made the kill (Improper Disposal's burst): the death recap says so. */
+      blast?: true;
       /** The special weapon that made the kill, when one did (a laser, a Tommy Gun ball). */
       weapon?: WeaponKind;
       /** The credited killer's kill streak including this kill. */
@@ -303,6 +308,8 @@ export type ServerMessage =
   | { type: 'gameWon'; winnerId: string; winnerName: string; kills: number; resetAt: number; assignment?: AssignmentState; awards?: Award[]; lineup?: string[]; report?: RoundReport }
   | { type: 'gameReset'; round: RoundState }
   | { type: 'pong'; sentAt: number; receivedAt: number }
-  | { type: 'error'; message: string; code?: 'resume-unavailable' };
+  | { type: 'error'; message: string; code?: 'resume-unavailable' }
+  /** The answer to an `admin` message, to that socket only. */
+  | ({ type: 'adminResult' } & AdminResult);
 
 export type { WorldSpec };

@@ -64,7 +64,7 @@ Check the port is free first. `/model-preview.html` is the rat model tool, `/sta
 
 ### Performance measurement
 
-- `scripts/benchmark-server-tick.mjs`: deterministic room-tick benchmark. An optimization must keep its trajectory hash; `--ref=<commit>` builds another revision for back-to-back comparison.
+- `scripts/benchmark-server-tick.mjs`: deterministic room-tick benchmark. An optimization must keep its trajectory hash; `--ref=<commit>` builds another revision for back-to-back comparison. `--room` adds what GameRoom does beyond the plain loop (hits, deaths with their 120-ball bursts, 3 s respawns, a PAPER CHASE assignment, shot limits and spacing, Mousetraps, a special weapon handed to every unarmed rat each 10 s) and counts each recipient's movement frames and other rats' shots beside the chaos frame; `--incident=<id>` holds one incident active. It reports tick time and bytes per tick per client (median, p95, p99, max), the chaos frame's bytes by field and the client's decode time. Four humans and six bots: `--room --bots=10 --recipients=4` ([lag receipt](verification/lag-2026-10-02.md)).
 - `scripts/profile-client.mjs`: headless, muted Chrome CPU and allocation profile of a game page, with source-map attribution for `vite build --sourcemap` builds.
 - `scripts/reconnect-check.mjs --url=<game> --out=<dir>`: end-to-end reconnect check in a muted agent browser. It looks backwards, drops the socket and lets the rat resume, then checks that supply sites are not duplicated, the view keeps its direction and the rat still turns with the camera. It writes `reconnect.json` and before/after screenshots, and exits 1 on a failure.
 - `?diagnostics=quiet` reports frame, per-phase mean/max and GPU render time; `window.ratDiagnostics.snapshot()` reads them.

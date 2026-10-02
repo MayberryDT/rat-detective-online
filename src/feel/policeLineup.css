@@ -11,8 +11,8 @@
     font:400 17px/1 'Bangers',Impact,sans-serif;letter-spacing:1.2px;text-transform:uppercase;white-space:nowrap;text-shadow:0 0 1px #3b0c09}
 .lineup-stamp span{font:9px/1.3 var(--font-type);letter-spacing:1px}
 .lineup-stamp.on{animation:lineup-stamp 260ms cubic-bezier(.2,.9,.3,1.2) both}
-.lineup-stamp.winner{border-color:var(--cheese);color:var(--cheese);font-size:23px;background:#1c160866}
-.lineup-plate.winner{border-color:var(--cheese-dim)}.lineup-plate.winner b{color:var(--cheese)}
+.lineup-stamp.winner{border-color:var(--paper);color:var(--paper);font-size:23px;background:#0c122466}
+.lineup-plate.winner{border-color:var(--paper-dim)}.lineup-plate.winner b{color:var(--paper)}
 @keyframes lineup-stamp{0%{opacity:0;transform:translate(-50%,-50%) rotate(-8deg) scale(2.6)}100%{opacity:1;transform:translate(-50%,-50%) rotate(-8deg) scale(1)}}
 /* Reduced interface motion: no flashbulb, and each stamp is simply there. */
 body.reduced-motion #police-lineup .lineup-flash.on{animation:none!important}

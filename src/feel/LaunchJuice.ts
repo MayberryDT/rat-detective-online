@@ -3,7 +3,8 @@ import type {LaunchMachineKind} from '../shared/chaosState';
 import {LaunchBlast} from './LaunchBlast';
 import {freezeStatic} from '../utils/freezeStatic';
 
-const BITS=220;
+/** Debris pieces (machine spit, landing chunks, trigger chips, paperwork) alive at once (clarity batch: 220 → 140). */
+const BITS=140;
 const SPARKS=64;
 const PUFFS=180;
 const DECALS=10;
@@ -125,16 +126,17 @@ export class LaunchJuice {
     /** Forget a rat's contrail timer once it lands. */
     endTrail(id:string):void {this.trails.delete(id);}
 
-    /** A launched rat hits the ground: asphalt chunks and a crater of cracked pavement scaled by `energy` (0…1). */
-    landed(at:THREE.Vector3,energy:number,life:number):void {
+    /** A launched rat (or a meteor) hits the ground: `chunks` asphalt chunks (by default from `energy`) and a crater of
+     * cracked pavement scaled by `energy` (0…1). */
+    landed(at:THREE.Vector3,energy:number,life:number,chunks?:number):void {
         const e=Math.max(.2,Math.min(1,energy));
-        this.debris(at,Math.round(6+e*14),CHUNKS,[.18,.1,.16],5+e*7,6+e*8,0,1.6);
+        this.debris(at,chunks??Math.round(6+e*14),CHUNKS,[.18,.1,.16],5+e*7,6+e*8,0,1.6);
         this.decal(at,2.6+e*3.4,life);
     }
     /** A ball hits a trigger: cheese crumbs and chips of red paint spit off it. */
     chips(at:THREE.Vector3,count:number):void {this.debris(at,count,TRIGGER_CHIPS,[.18,.06,.14],6,8,0,1);}
-    /** The thrown case bursts open: paperwork flutters down around it. */
-    spill(at:THREE.Vector3,count:number):void {this.debris(at,count,PAPER,[.34,.012,.26],3.5,9,1,4.5);}
+    /** The thrown case bursts open: paperwork flutters down around it (3 s; was 4.5 s before the clarity batch). */
+    spill(at:THREE.Vector3,count:number):void {this.debris(at,count,PAPER,[.34,.012,.26],3.5,9,1,3);}
 
     private decal(at:THREE.Vector3,size:number,life:number){
         if(!this.crackTexture){

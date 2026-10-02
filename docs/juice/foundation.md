@@ -29,7 +29,7 @@ Add one director call at each source. Don't duplicate event parsing.
 | --- | --- |
 | `?feel=off` | Every feel effect disabled; today's presentation. Read like `lightingMode.ts`. |
 | `?feel=dev` | Adds a live dials panel (sliders per tuning group, copy-as-JSON). For choosing values in review; not linked from the UI. |
-| Settings → Camera shake | 0–100%, default 100%. Scales all camera offsets. |
+| Settings → Camera shake | 0–100%, default 60% for new players since the protocol 29 clarity batch (100% before; saved values kept). Scales all camera offsets, shake and kick alike. |
 | Settings → Flash strength | 0–100%, default 100%. Scales edge flashes, colour drain and comic-word flashes. |
 | Reduced interface motion (existing) | Also zeroes camera shake, punch-in and slow-motion |
 

@@ -22,6 +22,10 @@ export class AssignmentRules {
         this.state.result = { winnerId: player.id, winnerName: player.name, at, method, posthumous: player.hp <= 0 };
         this.state.revision++;
     }
+    /** Admin end of round (docs/live-service.md): `player` wins now by the mode's own method. */
+    award(player: PlayerData, at: number): void {
+        this.close(player, at, this.state.id === 'chain-of-custody' ? 'carried' : this.state.id === 'jurisdiction' ? 'zone-held' : 'kills');
+    }
     setPhase(now: number, tampering: boolean): void {
         if (this.closed) return;
         const phase = tampering ? 'suspended' : now < this.state.liveAt ? 'briefing' : 'active';

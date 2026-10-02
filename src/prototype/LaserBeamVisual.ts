@@ -11,8 +11,9 @@ import {FEEL} from '../feel/feelTuning';
 const HOT=0xfff2a6,SHEEN=0x8cff2e,FLARE_END=0xffdf4a,FLARE_BOUNCE=0xdcff48;
 /** Points per straight leg, and the most a beam can have (muzzle, two reflections, stop). */
 const SEGMENTS=16,MAX_LEGS=W.laserBounces+1,MAX_PATH=MAX_LEGS*SEGMENTS+1;
-/** Beams in flight at once: every rat's (`MAX_BEAMS`) plus your own predictions; strike flares; falling gobs. */
-const POOL=20,FLARES=24,GOBS=120;
+/** Beams in flight at once: every rat's (`MAX_BEAMS`) plus your own predictions; strike flares; falling gobs
+ * (clarity batch: flares 24 → 12, gobs 120 → 40). */
+const POOL=20,FLARES=12,GOBS=40;
 /** Gobs fall a little slower than a ball: melted cheese is heavy but sticky. */
 const GRAVITY=8;
 export type LaserSound=(cue:'laser-fire'|'laser-hit',at?:Vec3Data)=>void;

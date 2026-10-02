@@ -53,10 +53,10 @@
     25%,70% { transform:translate(-50%,-50%) rotate(45deg) scale(2.15); }
     100% { transform:translate(-50%,-50%) rotate(45deg) scale(1.7); }
 }
-/* Juice T4: a headshot holds a bigger brass X with a ring. */
-#crosshair.kill-confirmed.headshot { animation:headshot-confirmation 700ms ease-out both;filter:drop-shadow(0 0 2px #180707) drop-shadow(0 0 7px #ffc84acc); }
+/* Juice T4: a headshot holds a bigger white-hot X with a ring. */
+#crosshair.kill-confirmed.headshot { animation:headshot-confirmation 700ms ease-out both;filter:drop-shadow(0 0 2px #180707) drop-shadow(0 0 7px #ff594bcc); }
 #crosshair.kill-confirmed.headshot::before,
-#crosshair.kill-confirmed.headshot::after { --tick:#ffd76a; }
+#crosshair.kill-confirmed.headshot::after { --tick:#fff4f0; }
 @keyframes headshot-confirmation {
     0% { transform:translate(-50%,-50%) rotate(45deg) scale(4.2); }
     20%,72% { transform:translate(-50%,-50%) rotate(45deg) scale(2.7); }

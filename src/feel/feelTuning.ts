@@ -95,8 +95,9 @@ export const FEEL={
      * `superballPitch`, at launch and every bounce), and your own ball's word. The paths themselves are gameplay. */
     badAmmo:{label:'I2 Bad Ammunition juice',toggle:true,params:{smoke:.6,volume:.8,superballPitch:1.7}},
     /** Cheddar Shower juice: the meteor's whistle (`whistle` volume) as its shadow shows; at the impact a `boom`, a view shake
-     * up to `shake` degrees fading out to `shakeRange` units, pavement chunks and a crater, dust, and KA-BOOM! within `wordRange`. */
-    cheddarShower:{label:'I4 Cheddar Shower juice',toggle:true,params:{whistle:.9,boom:1,shake:3.2,shakeRange:70,wordRange:45}},
+     * up to `shake` degrees fading out to `shakeRange` units, `debris` pavement chunks and a crater, `dust` puffs, and
+     * KA-BOOM! within `wordRange`. Clarity batch: 10 chunks and 4 puffs a meteor (were 20 and 8). */
+    cheddarShower:{label:'I4 Cheddar Shower juice',toggle:true,params:{whistle:.9,boom:1,shake:3.2,shakeRange:70,wordRange:45,debris:10,dust:4}},
     /** Code Violation juice: sparks off supplies and machines with a zap (`zap` volume) when close. */
     codeViolation:{label:'I5 Code Violation juice',toggle:true,params:{zap:.7}},
     /** The Hunch (gameplay, always on): at full health you see rats within `range` through walls as a pencil sketch
@@ -110,7 +111,7 @@ export const FEEL={
     /** L6: flight: scream, flail, contrails behind every launched rat, speed lines; `hang` seconds of floaty apex. */
     launchFlight:{label:'L6 Flight',toggle:true,params:{scream:.2,screamRange:60,trailEvery:.035,streaks:1,hang:.45,hangLift:.75}},
     /** L7: landing: crater and cracked pavement, dust, THUD, shake within `shakeRange`; the thrown case whistles and spills paperwork. */
-    launchLanding:{label:'L7 Landing',toggle:true,params:{thud:.35,shake:2.2,shakeRange:35,decalLife:9,whistle:.14,paper:14}},
+    launchLanding:{label:'L7 Landing',toggle:true,params:{thud:.35,shake:2.2,shakeRange:35,decalLife:9,whistle:.14,paper:8}},
     /** P4: Pressure Surge look: the city rumble (`rumble` volume) and view shake (`shake`) rise over the incident;
      * each eruption or firing flickers the city lights by `flicker`. Street steam comes from the launchers. */
     surgeLook:{label:'P4 Surge look',toggle:true,params:{rumble:.16,shake:.5,flicker:.45}},
@@ -166,11 +167,14 @@ export const FEEL={
     /** K1 Case claim (Tyler, 1 October: "it needs to feel good when you pick up the case"): your own take of the case slams an
      * ON THE CASE stamp over a burst of `sheets` paper sheets, with a brass edge `flash`, a `punch` (deg) in, a `kick` and
      * a `squash` of your rat; everyone sees the case burst paperwork (`paper` sheets) wherever it is taken or knocked loose. */
-    caseClaim:{label:'K1 Case claim',toggle:true,params:{flash:.75,punch:4,kick:1.2,squash:2.4,sheets:12,paper:10,kickPaper:4}},
+    caseClaim:{label:'K1 Case claim',toggle:true,params:{flash:.75,punch:4,kick:1.2,squash:2.4,sheets:12,paper:8,kickPaper:3}},
     /** K2 Case motion: carried, the case swings on its handle against the paw's acceleration (`swing` gain, `spring` rad/s,
      * `damping` ratio, at most `maxSwing` rad); taken, it squashes by `squash`; loose and still, it hops `hop` units for
      * `hopMs` about every `idleEvery` s; its evidence tag flaps on every jolt. */
     caseMotion:{label:'K2 Case motion',toggle:true,params:{swing:60,spring:9,damping:.22,maxSwing:.6,squash:.28,hop:.12,hopMs:320,idleEvery:3.5}},
+    /** The case ping (clarity batch, protocol 29): when the case you carry pings, a soft case-gold edge `flash` (the tick is
+     * the ping's own sound) tells you everyone now knows where you are. */
+    casePing:{label:'K3 Case ping (carrier)',toggle:true,params:{flash:.3}},
     /** A1 Air acting (Tyler, 1 October: jumping rats were "stiff and lifeless", a salt shaker). Every rat, airborne from a
      * take-off over `takeOff` u/s or a fall over `fall` u/s until it lands: no walking stride in the air; `stretch` rising,
      * a `squash` and `tuck` (rad) ball at the apex with the feet pulled up (`feet`), a `reach` falling with ears (`ears`),
@@ -182,13 +186,14 @@ export const FEEL={
     /** W1 Tommy Gun (protocol 27; halved after Tyler's playtest, still above Scattershot): each of your shots kicks the view
      * (`kick` rad/s, `yaw` jitter share, `push` u/s back) and, while the trigger is held, the view rattles (`rattle`); every
      * Tommy's muzzle throws a cheese-yellow flash (`flash` size) and puff (`puff` size), `crumbs` cheese crumbs a round and
-     * cheese-cube casings (`casings` in the pool, `casingLife` s), seen within `range` units. */
-    tommyGun:{label:'W1 Tommy Gun juice',toggle:true,params:{kick:.55,yaw:.9,push:.22,rattle:.28,flash:1,puff:1,crumbs:4,casings:64,casingLife:1.6,range:70}},
+     * cheese-cube casings (`casings` in the pool, `casingLife` s), seen within `range` units. Clarity batch: 24 casings and
+     * 3 crumbs a round (were 64 and 4). */
+    tommyGun:{label:'W1 Tommy Gun juice',toggle:true,params:{kick:.55,yaw:.9,push:.22,rattle:.28,flash:1,puff:1,crumbs:3,casings:24,casingLife:1.6,range:70}},
     /** W2 Laser, a molten cheese beam: your shot's kick (`kick`, `push`); widths (units) of the hot centre (`core`), the
      * cheese strand (`strand`) and its greasy green sheen (`sheen`, opacity `glow`); its gooey wobble and end-of-life sag
      * (units); `gobs` dripped per beam (`gobSize` units); cheese splats on walls (`splats` in the pool, `splatSize` units,
-     * `splatLife` s). The beam itself always draws. */
-    laser:{label:'W2 Laser juice',toggle:true,params:{kick:1.6,push:.9,core:.08,strand:.26,sheen:1.1,glow:.9,wobble:.12,sag:.8,gobs:9,gobSize:.07,splats:32,splatSize:1.1,splatLife:9}},
+     * `splatLife` s). The beam itself always draws. Clarity batch: 5 gobs a beam, 12 splats for 6 s (were 9, 32 and 9 s). */
+    laser:{label:'W2 Laser juice',toggle:true,params:{kick:1.6,push:.9,core:.08,strand:.26,sheen:1.1,glow:.9,wobble:.12,sag:.8,gobs:5,gobSize:.07,splats:12,splatSize:1.1,splatLife:6}},
     /** W3 Mousetrap: a catch's SNAP shakes the view within `snapRange` (`snap` rad/s); a refused placement nudges it (`refuse`).
      * Taking one up: the TRAP IN PAW moment's pine edge flash (`inPaw` × Flash strength) and the view's heave (`heave` rad/s). */
     mousetrap:{label:'W3 Mousetrap juice',toggle:true,params:{snap:1.8,snapRange:24,refuse:.35,inPaw:.9,heave:.9}},

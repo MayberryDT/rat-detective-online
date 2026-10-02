@@ -6,6 +6,7 @@ import type {FeelSound} from './FeelSound';
 import {FEEL} from './feelTuning';
 import {freezeStatic} from '../utils/freezeStatic';
 import './hunch.css';
+import {headlines} from '../ui/Headlines';
 
 export interface HunchRat {readonly entity:RatEntity}
 const PHOTOS=4, TRAIL_POINTS=16, TRAIL_EVERY=.11;
@@ -111,7 +112,8 @@ export class Hunch {
             this.trail(id,entity,on&&juice,dt);
         }
         for(const id of this.trails.keys())if(!rats.has(id))this.dropTrail(id);
-        if(shutter)this.sound.shutter();
+        // The first rat you ever make: what the sketch through the wall means.
+        if(shutter){this.sound.shutter();headlines.explain('hunch');}
         // Being made: the card and sting when someone first gets a read on you.
         const watched=this.watchers.length>0;
         if(watched&&!this.wasWatched&&juice&&now-this.lastCardAt>p.cardGap*1000){
@@ -143,9 +145,13 @@ export class Hunch {
         photo.node.classList.remove('on');void photo.node.offsetWidth;photo.node.classList.add('on');
     }
 
+    /** YOU'VE BEEN MADE, a lesser headline; what it means only the first time this browser sees it. */
     private showCard():void {
         if(!this.build()||!this.card)return;
-        this.card.classList.remove('on');void this.card.offsetWidth;this.card.classList.add('on');
+        const card=this.card,first=headlines.firstTime('made');
+        card.classList.toggle('explained',!first);
+        if(!headlines.claim('made','news',first?'YOU\u2019VE BEEN MADE · SOMEONE CAN SEE YOU THROUGH WALLS':'YOU\u2019VE BEEN MADE',2300,()=>card.classList.remove('on')))return;
+        card.classList.remove('on');void card.offsetWidth;card.classList.add('on');
     }
 
     /** A faint pencil tail behind a rat you have a read on, only where scenery hides it. */

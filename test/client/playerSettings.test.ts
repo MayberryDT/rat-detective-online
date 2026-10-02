@@ -37,7 +37,7 @@ it('stamped −/+ step on the grid, clamp at the ends and apply like typing',()=
  by('Mouse sensitivity value').value='1.03';press('Lower mouse sensitivity');expect(f.store.current.mouseSensitivity).toBe(1);
  f.store.update({mouseSensitivity:2.98});press('Raise mouse sensitivity');press('Raise mouse sensitivity');expect(f.store.current.mouseSensitivity).toBe(3);
  f.store.update({mouseSensitivity:.1});press('Lower mouse sensitivity');expect(f.store.current.mouseSensitivity).toBe(.1);
- press('Raise master volume');expect(f.store.current.masterVolume).toBe(1);press('Lower master volume');expect(f.store.current.masterVolume).toBe(.99);
+ f.store.update({masterVolume:1});press('Raise master volume');expect(f.store.current.masterVolume).toBe(1);press('Lower master volume');expect(f.store.current.masterVolume).toBe(.99);
 });
 it('clears input on Escape/unlock, keeps the match vulnerable and requires the Resume button',()=>{
  const f=setup(),clear=vi.fn(),resume=vi.fn();f.menu.attach({playing:()=>true,touch:()=>false,clear,resume});

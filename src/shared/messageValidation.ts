@@ -4,8 +4,9 @@ import {BALL_SPEED} from './ballTuning';
 import {isWorldFoleyCue} from './foleyEvents';
 import { sanitizeDiagnosticReport } from './diagnosticReport';
 import { parsePerfReport } from './perfReport';
-import { parseAssignment } from './assignments';
-import { INCIDENTS, incidentInfo, isLegacyIncidentId, type IncidentId } from './incidentCatalog';
+import { isAssignmentId, parseAssignment } from './assignments';
+import { INCIDENTS, incidentInfo, isIncidentId, isLegacyIncidentId, type IncidentId } from './incidentCatalog';
+import { ADMIN_TOKEN_MAX, type AdminCommand, type AdminResult, type AdminStatus } from './admin';
 import {
   MAX_HP,
   MAX_SCORE_ENTRIES,
@@ -79,6 +80,50 @@ function nonEmptyString(value: unknown, maxLength: number): string | null {
 function optionalString(value: unknown, maxLength: number): string | undefined | null {
   if (value === undefined) return undefined;
   return nonEmptyString(value, maxLength);
+}
+
+/** An admin command (shared/admin.ts), from an admin socket or the HTTP endpoint's path and body. */
+export function parseAdminCommand(value: unknown): AdminCommand | null {
+  if (!isRecord(value)) return null;
+  switch (value.command) {
+    case 'status': case 'end-round': case 'end-incident': case 'reset-case': return { command: value.command };
+    case 'next-mode': return isAssignmentId(value.mode) ? { command: 'next-mode', mode: value.mode } : null;
+    case 'incident':
+      if (value.incident === undefined) return { command: 'incident' };
+      return isIncidentId(value.incident) ? { command: 'incident', incident: value.incident } : null;
+    default: return null;
+  }
+}
+
+const DISPATCH_PHASES = ['ready', 'rolling', 'active', 'cooldown'] as const;
+function parseAdminStatus(value: unknown): AdminStatus | null {
+  if (!isRecord(value)) return null;
+  const room = nonEmptyString(value.room, 160), phase = value.phase === 'playing' || value.phase === 'won' ? value.phase : null;
+  const mode = value.mode === undefined ? undefined : isAssignmentId(value.mode) ? value.mode : null;
+  const nextMode = value.nextMode === undefined ? undefined : isAssignmentId(value.nextMode) ? value.nextMode : null;
+  const leader = optionalString(value.leader, 32), humans = boundedInteger(value.humans, 0, 1000), bots = boundedInteger(value.bots, 0, 1000);
+  if (!room || !phase || mode === null || nextMode === null || leader === null || humans === null || bots === null) return null;
+  const i = value.incident;
+  if (!isRecord(i)) return null;
+  const dispatch = DISPATCH_PHASES.find(p => p === i.phase), id = i.id === undefined ? undefined : isIncidentId(i.id) ? i.id : null;
+  const leftMs = i.leftMs === undefined ? undefined : finiteNumber(i.leftMs);
+  if (!dispatch || id === null || leftMs === null || leftMs !== undefined && leftMs < 0) return null;
+  if (!Array.isArray(value.incidents) || value.incidents.length > INCIDENTS.length) return null;
+  const incidents: IncidentId[] = [];
+  for (const incident of value.incidents) { if (!isIncidentId(incident)) return null; incidents.push(incident); }
+  return {
+    room, phase, ...(mode ? { mode } : {}), ...(nextMode ? { nextMode } : {}), ...(leader ? { leader } : {}),
+    incident: { phase: dispatch, ...(id ? { id } : {}), ...(leftMs === undefined ? {} : { leftMs }) },
+    incidents, humans, bots,
+  };
+}
+
+function parseAdminResult(value: Record<string, unknown>): AdminResult | null {
+  const message = nonEmptyString(value.message, 200);
+  if (typeof value.ok !== 'boolean' || !message) return null;
+  if (value.status === undefined) return { ok: value.ok, message };
+  const status = parseAdminStatus(value.status);
+  return status ? { ok: value.ok, message, status } : null;
 }
 
 function parseVec3(value: unknown): Vec3Data | null {
@@ -442,6 +487,10 @@ function parseClientBody(parsed:Record<string,unknown>):ClientMessage|null {
     return report ? { type: 'perf', report } : null;
   }
   if (parsed.type === 'ready') return { type: 'ready' };
+  if (parsed.type === 'admin') {
+    const command = parseAdminCommand(parsed.command), token = optionalString(parsed.token, ADMIN_TOKEN_MAX);
+    return command && token !== null ? { type: 'admin', ...(token ? { token } : {}), command } : null;
+  }
 
   if (parsed.type === 'join') {
     const protocolVersion = integer(parsed.protocolVersion);
@@ -511,7 +560,8 @@ function parseChaos(value:unknown):ChaosState|null{
   const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
     (c.previousOwner===null||nonEmptyString(c.previousOwner,64))&&(c.missileOwner===undefined||nonEmptyString(c.missileOwner,64))&&
     finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null&&
-    (c.grip===undefined||integer(c.grip)!==null&&Number(c.grip)>=1&&Number(c.grip)<CHAOS_TUNING.caseGripHits);
+    (c.grip===undefined||integer(c.grip)!==null&&Number(c.grip)>=1&&Number(c.grip)<CHAOS_TUNING.caseGripHits)&&
+    (c.ping===undefined||c.owner!==null&&isRecord(c.ping)&&finiteNumber(c.ping.at)!==null&&isVec3(c.ping.p));
   if(!validCase(c))return null;
   if(value.extraCases!==undefined){
     if(!Array.isArray(value.extraCases)||value.extraCases.length>EXTRA_CASE_IDS.length||
@@ -727,12 +777,12 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       if (!victimId || (!environmental&&(!killerId||killerName===null)) || victimName === null || respawnAt === null ||
           (parsed.cause!==undefined&&!environmental)) return null;
       const incoming=parsed.incoming===undefined?undefined:parseVec3(parsed.incoming);
-      if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean') || (parsed.headshot!==undefined&&parsed.headshot!==true) ||
+      if(incoming===null || (parsed.incident!==undefined&&typeof parsed.incident!=='boolean') || (parsed.headshot!==undefined&&parsed.headshot!==true) || (parsed.blast!==undefined&&parsed.blast!==true) ||
         (parsed.weapon!==undefined&&(!isWeaponKind(parsed.weapon)||!killerId)))return null;
       const killerStreak=parsed.killerStreak===undefined?undefined:boundedInteger(parsed.killerStreak,1,10_000);
       if(killerStreak===null||(killerStreak!==undefined&&!killerId))return null;
       return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
-        ...(environmental?{cause}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}),
+        ...(environmental?{cause}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}),...(parsed.blast===true?{blast:true as const}:{}),
         ...(isWeaponKind(parsed.weapon)?{weapon:parsed.weapon}:{}),...(killerStreak!==undefined?{killerStreak}:{}) };
     }
     case 'scoreboardUpdate': {
@@ -787,6 +837,7 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
       if (parsed.code !== undefined && parsed.code !== 'resume-unavailable') return null;
       return message ? { type: 'error', message, ...(parsed.code === 'resume-unavailable' ? {code:parsed.code} : {}) } : null;
     }
+    case 'adminResult': { const result = parseAdminResult(parsed); return result ? { type: 'adminResult', ...result } : null; }
     default:
       return null;
   }

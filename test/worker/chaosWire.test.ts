@@ -165,3 +165,25 @@ it('rejects delta corruption without advancing the valid motion baseline',()=>{
  expect(d.read(valid)?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));
  const badFull=JSON.parse(first);badFull.motion[0][0]*=-1;expect(new ChaosDecoder().read(JSON.stringify(badFull))).toBeNull();
 });
+it('sends only changed list items and impacts as rows, rebuilding every list and impact exactly',()=>{
+ const s=state(0),e=new ChaosEncoder('keyed',true),d=new ChaosDecoder();
+ const corpse=(i:number)=>({id:`corpse-${i}`,victimId:`rat-${i}`,owner:null,appearance:{hatType:'fedora' as const,hatColor:1,furColor:2,coatColor:3},born:0,expires:9000,
+  p:{x:i,y:0,z:0},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}});
+ const beam=(i:number)=>({id:`beam-${i}`,owner:'rat',at:i,points:[{x:0,y:1,z:0},{x:i,y:1,z:9,on:'world' as const}]});
+ s.corpses=[0,1,2,3].map(corpse);s.beams=[0,1,2].map(beam);
+ const check=()=>{const payload=e.encode(s).payload;expect(d.read(payload)?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));return JSON.parse(payload).rest;};
+ check();
+ s.corpses[1].p.x+=.5;
+ expect(JSON.stringify(check().corpses).length).toBeLessThan(JSON.stringify(s.corpses).length/2);
+ s.beams.shift();s.beams.push(beam(3));
+ expect(JSON.stringify(check().beams).length).toBeLessThan(JSON.stringify(s.beams).length/2);
+ s.corpses.splice(2,1);s.corpses.push(corpse(4));s.corpses[0].v.y=2;check();
+ // A reordered list, a cleared one and one back again.
+ s.corpses.reverse();check();
+ delete s.beams;check();
+ s.beams=[beam(5)];check();
+ s.impacts=[{p:{x:1.23456,y:2,z:3},n:{x:0,y:1,z:0},surface:true,scale:1.4,cue:'thud'},{p:{x:0,y:0,z:0},n:{x:1,y:0,z:0},surface:false,audioOnly:false,foley:'case-bounce',energy:12.3456},
+  {p:{x:0,y:0,z:0},n:{x:0,y:0,z:-1},surface:false,audioOnly:true,energy:0}];
+ check();
+ for(let frame=0;frame<300;frame++){s.corpses[2].p.y+=.01;check();}
+});
