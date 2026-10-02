@@ -77,7 +77,8 @@ export interface RecorderDeps {
   /** Axis-aligned solid boxes a rat must never be inside. */
   solids: readonly GrayboxBox[];
 }
-export interface HitRecord { attacker?: PlayerData; victim: PlayerData; damage: number; killed: boolean; headshot: boolean; explosive: boolean; incoming: boolean; weapon?: WeaponKind; environment?: EnvironmentCause }
+/** `bounces`: a Crossfire bank shot's world bounces. */
+export interface HitRecord { attacker?: PlayerData; victim: PlayerData; damage: number; killed: boolean; headshot: boolean; explosive: boolean; incoming: boolean; weapon?: WeaponKind; environment?: EnvironmentCause; bounces?: number }
 /** One window of the Jev mind while it was on (`GameRoom.updateJev`). */
 export interface MindsWindow { ms: number; stats: JevStats; latencies: readonly number[]; p50?: number; p90?: number }
 /** A bot's current goal, from the decision that took it up to its end. */
@@ -227,9 +228,6 @@ export class CityRecorder {
    * balls (every rat's) that hit it; and the enemy balls the current carrier's grip has taken. */
   private loose: { since: number; x: number; y: number; z: number; lx: number; ly: number; lz: number; path: number; kicks: number } | null = null;
   private gripHits = 0;
-  /** Case pings during the current carry, and the latest one counted (`CaseState.ping.at`). */
-  private casePings = 0;
-  private casePingAt = 0;
   private dispatchKey = '';
   /** The latest Most Wanted takedown recorded (`dispatch.bounty.at`). */
   private bountyAt = 0;
@@ -506,21 +504,17 @@ export class CityRecorder {
       if (dist !== undefined) this.measure(now, aPlace, 'kill-dist-dm', Math.round(dist * 10));
     }
     this.emit({ ...this.context(now), type: 'death', ...(killer ? { a: this.actor(killer.id), ap: p3(killer), aplace: aPlace } : {}), victim: this.actor(v.id), cause,
-      vp: p3(v), vplace: vPlace, ...(killer && dist !== undefined ? { dist } : {}), lifeMs: now - life.start, assists, ...(h.weapon ? { weapon: h.weapon } : {}), ...(h.environment ? { env: h.environment } : {}) });
+      vp: p3(v), vplace: vPlace, ...(killer && dist !== undefined ? { dist } : {}), lifeMs: now - life.start, assists, ...(h.weapon ? { weapon: h.weapon } : {}), ...(h.environment ? { env: h.environment } : {}),
+      ...(h.bounces ? { bounces: h.bounces } : {}) });
     this.alive.set(v.id, false);
     this.reach(killer, now, g => (g.goal === 'hunt' || g.goal === 'chase-carrier') && g.quarry === v.id);
     const open = this.goals.get(v.id);
     if (open) this.endGoal(v, open, 'died', now);
   }
-  /** Cheddar Shower impacts and Code Violation malfunctions (`ChaosSimulation.drainIncidentEvents`). */
+  /** Code Violation malfunctions (`ChaosSimulation.drainIncidentEvents`). */
   incidents(events: readonly IncidentEvent[], players: ReadonlyMap<string, PlayerData>, now: number): void {
     for (const e of events) {
       const place = this.places.at(e.p.x, e.p.y, e.p.z).id;
-      if (e.kind === 'meteor') {
-        this.measure(now, place, 'meteors');
-        this.emit({ ...this.context(now), type: 'meteor', p: p3(e.p), place, flattened: e.flattened.map(id => this.actor(id)), shoved: e.shoved });
-        continue;
-      }
       this.measure(now, place, `malfunction:${e.what}`);
       const victim = e.playerId ? players.get(e.playerId) : undefined;
       this.emit({ ...this.context(now), type: 'malfunction', what: e.what, site: e.site, p: p3(e.p), place, ...(victim ? { a: this.actor(victim.id) } : {}),
@@ -680,7 +674,7 @@ export class CityRecorder {
       this.roundId = a.roundId; this.mode = a.id; this.liveAt = a.liveAt;
       this.ledger.reset(); this.actors.clear(); this.deliverySerial = a.deliverySerial;
       // Actors are per round: a goal open when the round changed ends unrecorded.
-      this.goals.clear(); this.approaches.clear(); this.loose = null; this.gripHits = 0; this.casePings = 0;
+      this.goals.clear(); this.approaches.clear(); this.loose = null; this.gripHits = 0;
       this.emit({ ...this.context(now), type: 'round', what: 'start', ...this.census(players) });
     }
     if (round.phase !== this.phase) {
@@ -793,17 +787,16 @@ export class CityRecorder {
         this.life(owner, now, players.get(owner)).carryStart = now;
         const stolen = prev !== null;
         this.measure(now, place, stolen ? 'case-steal' : 'case-take');
-        this.emit({ ...this.context(now), type: 'case', what: stolen ? 'steal' : 'take', a: this.actor(owner), ...(prev ? { from: this.actor(prev), pings: this.casePings } : {}), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), ...(stolen ? {} : looseSpell()) });
+        this.emit({ ...this.context(now), type: 'case', what: stolen ? 'steal' : 'take', a: this.actor(owner), ...(prev ? { from: this.actor(prev) } : {}), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), ...(stolen ? {} : looseSpell()) });
         this.reach(players.get(owner), now, g => g.goal === 'take-case' || g.goal === 'chase-carrier' && g.quarry === prev);
       } else if (prev) {
         this.measure(now, place, 'case-drop');
         const carrier = players.get(prev), cause = !carrier ? 'left' : carrier.hp <= 0 ? 'death' : a && a.deliverySerial !== this.deliverySerial ? 'delivered' : 'shot';
-        this.emit({ ...this.context(now), type: 'case', what: 'drop', a: this.actor(prev), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), cause, gripHits: this.gripHits, pings: this.casePings });
+        this.emit({ ...this.context(now), type: 'case', what: 'drop', a: this.actor(prev), p: p3(c.p), place, ...(carryMs === undefined ? {} : { carryMs }), cause, gripHits: this.gripHits });
       }
-      this.gripHits = 0; this.casePings = 0;
+      this.gripHits = 0;
       this.caseOwner = owner; this.caseChangeAt = now;
     }
-    if (owner && c.ping && c.ping.at !== this.casePingAt) { this.casePingAt = c.ping.at; this.casePings++; }
     if (returning && !this.caseReturning) this.emit({ ...this.context(now), type: 'case', what: 'respawn', p: p3(c.p), place: this.places.at(c.p.x, c.p.y, c.p.z).id, ...looseSpell() });
     this.caseReturning = returning;
 

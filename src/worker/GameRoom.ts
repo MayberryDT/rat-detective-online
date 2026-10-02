@@ -1345,7 +1345,7 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false, environment:EnvironmentCause = 'evidence-tampering', weapon?:WeaponKind): Promise<void> {
+  private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false, environment:EnvironmentCause = 'evidence-tampering', weapon?:WeaponKind, bank?:Required<Pick<ChaosHit,'bounces'|'path'>>): Promise<void> {
     if (this.round.phase !== 'playing') return;
 
     const victim = this.players.get(message.victimId);
@@ -1382,12 +1382,12 @@ export class GameRoom extends DurableObject<Env> {
     this.awards.damage(victim.id, playerId, hpBefore - victim.hp, now);
     if (result.killed) this.awards.death(victim, shooter && shooter !== victim ? shooter : undefined, { headshot, explosive, ...(weapon ? { weapon } : {}), ...(playerId === null ? { environment } : {}) }, now);
     this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
-    this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming, ...(weapon?{weapon}:{}), ...(playerId === null ? { environment } : {}) }, now);
+    this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming, ...(weapon?{weapon}:{}), ...(playerId === null ? { environment } : {}), ...(bank ? { bounces: bank.bounces } : {}) }, now);
     if (this.isManagedBot(victim.id)) this.jevMind?.hit(victim.id, shooter?.id, now);
     if (!result.killed) return;
     this.broadcast({type:'playerDied',victimId:victim.id,killerId:shooter?.id??null,killerName:shooter?.name??null,victimName:victim.name,
       respawnAt,...cause,...(incoming?{incoming,incident:!!incident}:{}),...(headshot?{headshot:true as const}:{}),...(explosive?{blast:true as const}:{}),...(weapon?{weapon}:{}),
-      ...(shooter&&shooter!==victim&&shooter.streak?{killerStreak:shooter.streak}:{})});
+      ...(shooter&&shooter!==victim&&shooter.streak?{killerStreak:shooter.streak}:{}),...(bank?{bounces:bank.bounces,path:bank.path}:{})});
     this.broadcastScoreboard();
     if(assignmentWon){this.finishAssignment();return;}
     // Each new kill streak title (3, 5, 8) earns a random supply on the spot; a round's final kill earns nothing.
@@ -1619,7 +1619,7 @@ export class GameRoom extends DurableObject<Env> {
       const retiredAssignment=previous?.id==='misfiled-evidence'||previous?.id==='closing-time'||(previous?.id==='chain-of-custody'&&previous.destinations?.includes('icebox-check'));
       if(retiredAssignment){this.round=playingRound(this.now());this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");}
       this.chaos=new ChaosSimulation(this.players,hit=>{
-        void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true,hit.headshot===true,hit.cause,hit.weapon)
+        void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true,hit.headshot===true,hit.cause,hit.weapon,hit.bounces&&hit.path?{bounces:hit.bounces,path:hit.path}:undefined)
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
       },saved,this.world);
       this.chaos.evidenceMode=this.evidenceMode;

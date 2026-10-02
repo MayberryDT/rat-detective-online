@@ -38,8 +38,8 @@ const CASE_GOALS:Partial<Record<Goal,true>>={'take-case':true,'chase-carrier':tr
  * that plan every tick. Like a player it decides rarely: on events (spawn, its goal ending or failing, a case
  * changing hands, the assignment moving on) and at most `DECIDE.holdMs` after its last decision; in between it
  * holds its goal and code only refreshes the plan every 180–300 ms. Objective choice knows the same globally
- * advertised case position as a human: a loose case where it lies, a carrier where it was last seen or pinged. The
- * pickup reflex comes before any decision: while it takes a supply, the goal waits and no mind is asked. */
+ * advertised case position as a human. The pickup reflex comes before any decision: while it takes a supply,
+ * the goal waits and no mind is asked. */
 export class RatBot {
     private readonly motor:BotMotor;
     private readonly goals:BotGoals;
@@ -102,11 +102,11 @@ export class RatBot {
         const cases=this.motor.genuineCases;
         const living=rats.filter(p=>p.id!==self.id&&p.hp>0);
         const carrying=cases.some(c=>c.value.owner===self.id);
-        // The motor's known carriers, refreshed in place by `perceive` below before any goal reads them.
-        const input:GoalInput={now,self,state,cases,living,carriers:this.motor.carriers,carrying,ownershipChanged,trigger,clear,personality};
+        const carriers=living.filter(p=>cases.some(c=>c.value.owner===p.id)).sort((a,b)=>distance(self,a)-distance(self,b));
+        const input:GoalInput={now,self,state,cases,living,carriers,carrying,ownershipChanged,trigger,clear,personality};
         const available=this.goals.takeable(input);
         // The mind's preferred target arrives with its answer, so it steers the motor from the next decision.
-        this.motor.perceive(now,self,living,state,clear,clearControl,carrying||!!available&&distance(self,available.value.p)<24,this.last?.answer.target);
+        this.motor.perceive(now,self,living,carriers,state,clear,clearControl,carrying||!!available&&distance(self,available.value.p)<24,this.last?.answer.target);
         const supply=this.goals.reflex(input,available);
         if(supply){
             this.reflexing=true;this.held=trigger==='event';

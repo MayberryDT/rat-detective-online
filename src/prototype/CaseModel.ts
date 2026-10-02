@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASE_SIZE } from '../shared/chaosState';
 import { freezeStatic } from '../utils/freezeStatic';
-import { CASE_GOLD } from './caseGold';
+import { CASE_RED } from './caseRed';
 
 /** The evidence tag's pivot on the handle; `CaseMotion` swings it. */
 export const CASE_TAG = 'case-tag';
@@ -26,10 +26,10 @@ export function addLeatherBriefcase(root:THREE.Group){
         const mesh=new THREE.Mesh(geometry,mat);mesh.name=name;mesh.position.set(x,y,z);mesh.rotation.set(rx,ry,rz);root.add(mesh);return mesh;
     };
     const box=(w:number,h:number,d:number,radius=0)=>radius?new RoundedBoxGeometry(w,h,d,3,radius):new THREE.BoxGeometry(w,h,d);
-    // Back-face shells draw only the silhouette, never the hidden box edges, in the case gold (the one gold language).
+    // Back-face shells draw only the silhouette, never the hidden box edges, in the hot-case red.
     // Depth testing preserves the solid leather body and nearby character occlusion.
     for (const [expansion, opacity] of [[.025,1],[.055,.36],[.085,.14]]) {
-        const material=new THREE.MeshBasicMaterial({color:CASE_GOLD,side:THREE.BackSide,
+        const material=new THREE.MeshBasicMaterial({color:CASE_RED,side:THREE.BackSide,
             transparent:true,opacity,depthTest:true,depthWrite:false,
             blending:THREE.AdditiveBlending,toneMapped:false});
         const shell=new THREE.Mesh(new RoundedBoxGeometry(W+expansion*2,H+expansion*2,D+expansion*2,3,.03),material);

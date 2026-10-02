@@ -4,14 +4,13 @@ export const INCIDENTS = [
     {id:'bad-ammunition',title:'Bad Ammunition',description:'Every cartridge has a mind of its own. They still go roughly where you aim.'},
     {id:'pressure-surge',title:'Pressure Surge',description:'Every launcher fires at once. Mind your step.'},
     {id:'evidence-tampering',title:'Evidence Tampering',description:'Runaway case missiles! Dodge them or shoot them back.'},
-    {id:'crossfire',title:'Crossfire',description:'Bounced cheese turns red-hot. One hit, lights out.'},
+    {id:'crossfire',title:'Crossfire',description:'Every bounce heats the cheese. One banked hit, lights out.'},
     {id:'scattershot',title:'Scattershot',description:'Every shot is a five-ball fan, and every ball knocks rats flying.'},
     {id:'big-cheese',title:'Big Cheese',description:'Heavy cheese. Slow trigger. Every rebound makes it bigger.'},
     {id:'blackout',title:'Blackout',description:'The power is out. Every rat has a flashlight.'},
     {id:'code-violation',title:'Code Violation',description:'Every machine is out of order and supplies come out faulty. Quick Fix still heals.'},
     {id:'most-wanted',title:'Most Wanted',description:'Whoever is winning is in the searchlight. Take them down for a supply.'},
     {id:'all-units',title:'All Units',description:'The fallen respawn as backup, right beside the action.'},
-    {id:'cheddar-shower',title:'Cheddar Shower',description:'Today\'s forecast: scattered cheese, heavy at times. Watch for shadows.'},
 ] as const;
 export type IncidentId = typeof INCIDENTS[number]['id'];
 export const isIncidentId = (value: unknown): value is IncidentId => INCIDENTS.some(incident => incident.id === value);
@@ -21,10 +20,12 @@ export const LEGACY_INCIDENTS = {
     // Retired 1 October (protocol 27): stored rooms may still hold them.
     'delayed-reaction':'crossfire','clean-bill':'most-wanted','rat-race':'all-units','malpractice':'code-violation',
     'cheesequake':'big-cheese','ricochet-racket':'scattershot','popcorn-panic':'scattershot',
-    // Renamed after Tyler's playtest (1 October, "nothing about God"): stored staging rooms may still hold it.
-    'act-of-god':'cheddar-shower',
+    // Renamed after Tyler's playtest (1 October, "nothing about God"), then removed with Cheddar Shower.
+    'act-of-god':'big-cheese',
     // Removed after the four-human playtest (1 October evening, protocol 28).
     'planted-evidence':'improper-disposal','bobbleheads':'crossfire',
+    // Removed after the clarity playtest (2 October, protocol 29): its meteor bursts filled the ball cap (lag).
+    'cheddar-shower':'big-cheese',
 } as const satisfies Record<string,IncidentId>;
 export type LegacyIncidentId = keyof typeof LEGACY_INCIDENTS;
 export const isLegacyIncidentId = (value: unknown): value is LegacyIncidentId => typeof value === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_INCIDENTS, value);

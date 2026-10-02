@@ -53,20 +53,6 @@ export const MUNICIPAL_QUIPS = {
         '{name} was filed under WET WORK.',
         'The harbour master logged {name} as cargo, lost at sea.',
     ],
-    meteor: [
-        'The sky fell on {name}. It was cheese.',
-        '{name} got caught in the Cheddar Shower. Heavy at times.',
-        'A meteor of aged cheddar flattened {name}. Vintage.',
-        '{name} looked up. That was the mistake.',
-        'The clouds sent {name} a cheese wheel. Express.',
-        '{name} is now a crater with a hat.',
-        'The forecast said cheese. {name} did not bring an umbrella.',
-        '{name} was in the wrong shadow at the wrong time.',
-        'Scattered cheese, heavy at times. Mostly on {name}.',
-        '{name} has been filed under WEATHER. Case closed.',
-        'A passing cloud dropped a wheel of brie on {name}.',
-        '{name} was pressed into a fine cheese.',
-    ],
     death: ['A MINOR CAREER SETBACK.', 'TEMPORARILY OUT OF OFFICE.', 'YOUR PENSION IS UNDER REVIEW.', 'UNSCHEDULED FLOOR INSPECTION.', 'PLEASE RESUBMIT YOURSELF.', 'ANOTHER WORKPLACE INCIDENT.', 'HORIZONTAL. STILL EMPLOYED.', 'THE REPORT WILL BE UNFLATTERING.', 'PAID LEAVE DENIED.', 'YOUR HAT HAS FILED A COMPLAINT.', 'CURRENTLY BETWEEN HEARTBEATS.', 'OFFICER DOWN. MORALE UNCLEAR.'],
     victory: ['PROMOTED?!', 'MANAGEMENT HAS QUESTIONS.', 'EMPLOYEE OF THE INCIDENT.', 'A RAISE IS NOT GUARANTEED.', 'YOUR METHODS WERE NOTED.', 'SOMEHOW, THIS COUNTS.', 'CORNER OFFICE. NO WINDOWS.', 'OUTSTANDING QUESTIONABLE CONDUCT.', 'THE MAYOR DENIES INVOLVEMENT.', 'PLEASE TRAIN YOUR REPLACEMENT.', 'A MODEL OF MUNICIPAL EFFICIENCY.', 'THE PAPERWORK CHECKS OUT.'],
     casePickup: [
@@ -111,7 +97,7 @@ export const MUNICIPAL_QUIPS = {
     ],
 } as const;
 /** Which joke bag tells a death nobody is credited with. */
-const ENVIRONMENT_QUIPS:Record<EnvironmentCause,keyof typeof MUNICIPAL_QUIPS>={'evidence-tampering':'caseDeath',drowned:'drowned',meteor:'meteor'};
+const ENVIRONMENT_QUIPS:Record<EnvironmentCause,keyof typeof MUNICIPAL_QUIPS>={'evidence-tampering':'caseDeath',drowned:'drowned'};
 
 /** Local flavor only. Every phrase appears before reuse, with no boundary repeat. */
 export class MunicipalQuips {

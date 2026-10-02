@@ -1,5 +1,6 @@
 import type {Vec3Data} from '../../networkProtocol';
 import {BALL_RADIUS,BALL_RESTITUTION} from '../../ballTuning';
+import {CROSSFIRE} from '../../chaosState';
 import type {IncidentId} from '../../incidentCatalog';
 import {launchGravity,launchSpeed} from '../../shotBallistics';
 
@@ -54,8 +55,8 @@ export function bankShot(eye:Vec3Data,target:Vec3Data,ray:RayCast,avoid:readonly
         if(ray({x:bounce.x+normal.x*.3,y:bounce.y,z:bounce.z+normal.z*.3},target))continue;
         if(avoid.some(p=>segmentDistance(bounce,target,p)<1.2))continue;
         if(beam)return bounce;
-        // Lift the aim so the drop over both legs (the second slowed by the bounce) lands on the target.
-        const speed=launchSpeed(incident),t=out/speed+back/(speed*BALL_RESTITUTION);
+        // Lift the aim so the drop over both legs (the second slowed by the bounce, or sped up by Crossfire's heat) lands on the target.
+        const speed=launchSpeed(incident),t=out/speed+back/(speed*BALL_RESTITUTION*(incident==='crossfire'?CROSSFIRE.speedUp:1));
         return {x:bounce.x,y:bounce.y-launchGravity(incident)*t*t/2*out/(out+back),z:bounce.z};
     }
 }

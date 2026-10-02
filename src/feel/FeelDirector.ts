@@ -35,10 +35,6 @@ import type {PickupKind,WeaponKind} from '../shared/pickups';
 import type {FeedbackCue} from '../audio/FeedbackAudio';
 import {reducedMotion} from '../ui/motion';
 import {pickupArtwork} from '../prototype/pickupArtwork';
-import {CASE_GOLD} from '../prototype/caseGold';
-/** The case gold as CSS ink, for screen flashes about the case. */
-const CASE_GOLD_INK=`#${CASE_GOLD.toString(16).padStart(6,'0')}`;
-
 /** C1: each supply's claim flash colour: silver Ironclad, red Hot Pursuit, green Quick Fix, cold lens cyan Stakeout; the
  * arsenal's orange Tommy Gun, the Laser's greasy cheesy yellow-green and the Mousetrap's pale pine. */
 const CLAIM_INK:Record<PickupKind,string>={ironclad:'#c9d3de',hustle:'#d9473a','quick-fix':'#5fc884',stakeout:'#7ad8e8','tommy-gun':'#e8873e',laser:'#c8f040',mousetrap:'#e6dcc4'};
@@ -207,10 +203,6 @@ export class FeelDirector {
         const p=FEEL.caseClaim.params;
         this.launchJuice?.spill(this.impulse.set(at.x,at.y+.3,at.z),kind==='kick'?p.kickPaper:kind==='loose'?Math.round(p.paper*.6):p.paper);
     }
-    /** The case ping: the case you carry just pinged (everyone else now sees where you are): a soft case-gold edge flash. */
-    casePinged():void {
-        if(this.state.on('casePing'))this.screen.claim(CASE_GOLD_INK,FEEL.casePing.params.flash);
-    }
     /** C1–C4: your own supply claim (other rats' claims keep only their world effects): an edge flash in the supply's colour,
      * a punch-in, a small kick and a squash-and-pop, then the supply's signature. The card flight and Ironclad sparks are ChaosView's.
      * W3: a Mousetrap just taken (`lockMs` of its trigger lockout left) gets the TRAP IN PAW moment and a heave of the view. */
@@ -262,6 +254,11 @@ export class FeelDirector {
     presentTime(realNow:number):number {return realNow-this.lag;}
     /** Presentation dt scale matching `presentTime`. */
     get timeScale():number {return this.slowAge<FEEL.rewards.params.slowmo?FEEL.rewards.params.slowRate:this.lag>0?1+FEEL.rewards.params.catchup:1;}
+    /** You made a Crossfire bank kill: a moment (`rewards.bank` seconds) of the victory slow-motion, unless a longer one is running. */
+    bankShot():void {
+        const r=FEEL.rewards.params;
+        if(this.state.on('rewards')&&this.state.shake()>0)this.slowAge=Math.min(this.slowAge,r.slowmo-r.bank);
+    }
 
     /** Authoritative local health changed; `healed` floods colour back. */
     health(hp:number,healed=false):void {
@@ -363,29 +360,6 @@ export class FeelDirector {
     superballBounce(at:Vec3Data):void {
         if(this.state.on('badAmmo'))playSynth('boing',at,FEEL.badAmmo.params.superballPitch*(.9+Math.random()*.2),FEEL.badAmmo.params.volume*.7);
     }
-    /** Cheddar Shower: a meteor's shadow showed at `at`, landing in `seconds`: its whistle swells as it falls (shortened to fit). */
-    meteorWarned(at:Vec3Data,seconds:number):void {
-        if(!this.state.on('cheddarShower'))return;
-        const whistle=INCIDENT_TUNING.meteorWarnMs/1000;
-        playSynth('meteor-whistle',at,Math.min(2,Math.max(1,whistle/seconds)),FEEL.cheddarShower.params.whistle);
-    }
-    /** Cheddar Shower: a meteor landed at `at`: a boom, a crater with pavement flying, dust, and the view shaken harder the
-     * nearer you are; KA-BOOM! close by. */
-    meteorLanded(at:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
-        if(!this.state.on('cheddarShower'))return;
-        const p=FEEL.cheddarShower.params;
-        playSynth('meteor-boom',at,.9+Math.random()*.2,p.boom);
-        this.launchJuice?.landed(at,1,FEEL.launchLanding.params.decalLife,p.debris);
-        for(let i=0;i<p.dust;i++){const a=i*Math.PI*2/p.dust;this.dust?.puff(this.impulse.set(at.x+Math.cos(a)*3,at.y+.2,at.z+Math.sin(a)*3),1);}
-        for(let i=0;i<3;i++)this.dust?.smoke(this.impulse.set(at.x,at.y+.6,at.z),this.up.set(0,1,0),1);
-        const d=at.distanceTo(view.position);
-        if(d<p.shakeRange){
-            const s=(1-d/p.shakeRange)**1.5;
-            this.camera.kick(-p.shake*s,(Math.random()*2-1)*p.shake*s*.5);this.camera.push(this.impulse.set(0,-6*s,0));
-        }
-        if(d<p.wordRange)this.word('KA-BOOM!',this.impulse.copy(at).setY(at.y+2),view,now,true);
-    }
-
     /** You took nonlethal damage. `from` is the attacker's live position when known. */
     hurt(damage:number,victim:THREE.Vector3,from:THREE.Vector3|undefined,view:THREE.Camera):void {
         if(this.state.on('damageDirection'))this.screen.damage(from,damage);
@@ -407,10 +381,9 @@ export class FeelDirector {
         this.deathTarget=target;this.deathAge=0;
     }
 
-    /** Cause-flavoured corpse motion: meteors fling, other neutral traps and case missiles flop,
+    /** Cause-flavoured corpse motion: neutral traps and case missiles flop,
      * explosive incidents fling, ordinary shots spin. */
     deathStyle(killerId:string|null,cause?:string):DeathStyle {
-        if(cause==='meteor')return 'fling';
         if(killerId===null||cause==='evidence-tampering')return 'flop';
         return this.incident==='improper-disposal'?'fling':'spin';
     }

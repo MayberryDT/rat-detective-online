@@ -91,7 +91,7 @@ it('a carrier repositions while turning, fights, cancels body fire on armor and 
 it('sees rats only within flashlight reach in a Blackout, and as far as ever otherwise',()=>{
  const self=player('self'),near=player('near',0,FLASHLIGHT_REACH-5),far=player('far',FLASHLIGHT_REACH+15,0);
  const state=new ChaosSimulation(new Map([self,near,far].map(p=>[p.id,p])),()=>{}).snapshot(false),motor=new BotMotor(nav,0,()=>.5);
- const seen=()=>{motor.perceive(0,self,[near,far],state,()=>true,()=>true,true);return motor.visibleRats.map(p=>p.id);};
+ const seen=()=>{motor.perceive(0,self,[near,far],[],state,()=>true,()=>true,true);return motor.visibleRats.map(p=>p.id);};
  state.dispatch={phase:'active',started:0,until:25000,serial:1,incident:'blackout'};
  expect(seen()).toEqual(['near']);
  state.dispatch={phase:'cooldown',started:25000,until:40000,serial:1,incident:'blackout'};

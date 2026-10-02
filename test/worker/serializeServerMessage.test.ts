@@ -23,20 +23,6 @@ it('encodes initial and periodic chaos with wire precision without changing sour
     expect(new TextEncoder().encode(wire).byteLength).toBeLessThan(65536);
 });
 
-it('carries a carried case ping and refuses a ping on a loose case or a malformed one', () => {
-    const base: ChaosState = {
-        time: 5000, case: { owner: 'rat', previousOwner: null, pickupAfter: 0, returningUntil: 0, ping: { at: 4000, p: { x: 3, y: 1, z: -2 } },
-            p: { x: 3, y: 1, z: -2 }, v: { x: 0, y: 0, z: 0 }, q: { x: 0, y: 0, z: 0, w: 1 }, spin: { x: 0, y: 0, z: 0 } },
-        dispatch: { phase: 'ready', started: 0, until: 0, serial: 0 }, possession: {}, corpses: [], shots: [], impacts: [], notice: { serial: 0, text: '' },
-    };
-    const parse = (c: Record<string, unknown>) => parseServerMessage(serializeServerMessage({ type: 'chaos', state: { ...base, case: { ...base.case, ...c } as ChaosState['case'] } }));
-    const carried = parse({});
-    expect(carried?.type === 'chaos' && carried.state.case.ping).toEqual(base.case.ping);
-    expect(parse({ owner: null })).toBeNull();
-    expect(parse({ ping: { at: 'soon', p: { x: 0, y: 0, z: 0 } } })).toBeNull();
-    expect(parse({ ping: { at: 4000 } })).toBeNull();
-});
-
 it('keeps precision unchanged for other message types', () => {
     const message = { type: 'pong' as const, sentAt: 12.3456789, receivedAt: 23.456789 };
     expect(serializeServerMessage(message)).toBe(JSON.stringify(message));

@@ -158,9 +158,9 @@ describe('GameHud', () => {
         expect(node('recap-killer').textContent).toBe('INSPECTOR VERMIN');
         expect(node('recap-how').textContent).toBe('WITH TOMMY GUN · HEADSHOT');
         expect(node('recap-case').hidden).toBe(true);
-        hud.pointRecap(Math.PI/2,80.4,'CASE LAST SEEN');
+        hud.pointRecap(Math.PI/2,80.4,'THE CASE');
         expect(node('recap-case').hidden).toBe(false);
-        expect(node('recap-distance').textContent).toBe('CASE LAST SEEN · 80 M');
+        expect(node('recap-distance').textContent).toBe('THE CASE · 80 M');
         expect(node('recap-arrow').style.transform).toBe('rotate(1.58rad)');
         hud.pointRecap(undefined,0,'');expect(node('recap-case').hidden).toBe(true);
         hud.hideRespawn();hud.pointRecap(0,5,'THE CASE');expect(node('recap-case').hidden).toBe(true);

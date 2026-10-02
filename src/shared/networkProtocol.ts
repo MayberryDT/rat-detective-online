@@ -10,7 +10,7 @@ import type { AdminCommand, AdminResult } from './admin';
 /** 26: case grip; Paper Chase to five; Jurisdiction zones hold points that drain only while the case is held there.
  * 27: Tommy Gun, Laser and Mousetrap pickups; a stronger Excessive Force carrier; targets of 10 / 100 / 10; the incident rework.
  * 28: playtest quick patch: Planted Evidence and Bobbleheads removed, hitscan Laser at the cheese gun's rate, holding traps, carrier buff in every mode, results you leave when you choose.
- * 29: clarity: the case pings instead of always showing its carrier; admin controls. */
+ * 29: clarity: a pulsing red hot-case outline, Cheddar Shower removed, Crossfire heat and bank-shot paths, admin controls. */
 export const PROTOCOL_VERSION = 29;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
@@ -226,9 +226,8 @@ export type ClientMessage = (
 
 /** Why a rat was healed: a Quick Fix (site or reward), or an Excessive Force case kill. */
 export type HealCause = 'pickup' | 'case-kill';
-/** A death nobody is credited with: a runaway case missile, the harbour, or a Cheddar Shower meteor. Code Violation
- * kills nobody (Tyler, 1 October). */
-export const ENVIRONMENT_CAUSES = ['evidence-tampering','drowned','meteor'] as const;
+/** A death nobody is credited with: a runaway case missile or the harbour. Code Violation kills nobody (Tyler, 1 October). */
+export const ENVIRONMENT_CAUSES = ['evidence-tampering','drowned'] as const;
 export type EnvironmentCause = typeof ENVIRONMENT_CAUSES[number];
 export const isEnvironmentCause = (value: unknown): value is EnvironmentCause => ENVIRONMENT_CAUSES.some(cause => cause === value);
 /** How a rat died: a shot, a headshot, a blast, or the city. */
@@ -301,6 +300,10 @@ export type ServerMessage =
       weapon?: WeaponKind;
       /** The credited killer's kill streak including this kill. */
       killerStreak?: number;
+      /** A Crossfire bank kill: the ball's world bounces, and its path (the muzzle when known, its first bounces and the
+       * hit; `CROSSFIRE` in chaosState.ts). */
+      bounces?: number;
+      path?: Vec3Data[];
     }
   | { type: 'scoreboardUpdate'; scores: ScoreEntry[] }
   | { type: 'playerRespawn'; id: string; x: number; y: number; z: number; hp: number }

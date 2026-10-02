@@ -6,7 +6,7 @@ import type {WeaponKind} from '../shared/pickups';
 export interface DeathRecap {killer:string;how:string}
 
 const WEAPONS:Record<WeaponKind,string>={'tommy-gun':'TOMMY GUN',laser:'LASER',mousetrap:'MOUSETRAP'};
-const CITY:Record<EnvironmentCause,string>={drowned:'DROWNED IN THE HARBOUR',meteor:'A CHEESE METEOR','evidence-tampering':'A RUNAWAY CASE'};
+const CITY:Record<EnvironmentCause,string>={drowned:'DROWNED IN THE HARBOUR','evidence-tampering':'A RUNAWAY CASE'};
 /** Incidents that change the cheese gun's ball; a special weapon replaces them. */
 const SHOT_PATTERNS:Partial<Record<IncidentId,string>>={'big-cheese':'BIG CHEESE',scattershot:'SCATTERSHOT',crossfire:'RED-HOT RICOCHET','bad-ammunition':'BAD AMMUNITION'};
 
@@ -15,5 +15,7 @@ export function deathRecap(death:Extract<ServerMessage,{type:'playerDied'}>,myId
     const killer=death.killerId===null?'THE CITY':death.killerId===myId?'YOURSELF':(death.killerName??'SOMEBODY').toUpperCase();
     const weapon=death.blast?'AN EXPLOSION':death.weapon?WEAPONS[death.weapon]:death.killerId===null&&death.cause?CITY[death.cause]
         :(incident&&SHOT_PATTERNS[incident])??'CHEESE GUN';
-    return {killer,how:death.headshot?`${weapon} · HEADSHOT`:weapon};
+    // A Crossfire bank kill names the shot and its bounces instead of the gun.
+    const how=death.bounces?`BANK SHOT · ${death.bounces} ${death.bounces===1?'BOUNCE':'BOUNCES'}`:weapon;
+    return {killer,how:death.headshot?`${how} · HEADSHOT`:how};
 }

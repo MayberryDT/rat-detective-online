@@ -376,7 +376,8 @@ export class GameHud {
         this.hitTimer=setTimeout(()=>{this.hitTimer=null;this.clearHitMarker();},180);
     }
 
-    showKillConfirmation(victimName:string,headshot=false):void {
+    /** `shot` names a special kill in place of RAT DOWN or HEADSHOT (a Crossfire BANK SHOT or TRICK SHOT). */
+    showKillConfirmation(victimName:string,headshot=false,shot?:string):void {
         if(this.disposed)return;
         this.clearHitMarker();
         const reticle=this.doc.getElementById('crosshair');
@@ -385,7 +386,7 @@ export class GameHud {
             this.hitTimer=setTimeout(()=>{this.hitTimer=null;reticle.classList.remove('kill-confirmed');reticle.classList.remove('headshot');},headshot?700:500);
         }
         clearTimeout(this.killTimer??undefined);this.killTimer=null;
-        const title=`${headshot?'HEADSHOT':'RAT DOWN'} · ${victimName}`;
+        const title=`${shot??(headshot?'HEADSHOT':'RAT DOWN')} · ${victimName}`;
         // A lesser headline: when something bigger is up, the kill is told as the compact line.
         if(!headlines.claim('kill','news',title,2400,()=>{this.killConfirmation.style.display='none';})){this.killConfirmation.style.display='none';return;}
         this.killTitle.textContent=title;

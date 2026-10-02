@@ -58,8 +58,9 @@ export const FEEL={
     sound:{label:'17 Sound',toggle:true,params:{step:.07,remoteStep:.05,stepRange:14,rustle:.05,jostle:.08,squelch:.1,whizz:.2,whizzRange:1.8,brass:.12,headshot:.22,headshotRange:45,flashbulb:.18,shutter:.2,made:.16,hunch:.2,supply:.2,supplyRange:40,jam:.22,sting:.1,wind:.07,rain:.06,thunder:.16}},
     /** Reactive city: a flock every N lamps, a trash can every N lamps, scare radius, seconds before props return. */
     city:{label:'18 City reacts',toggle:true,params:{flockEvery:5,canEvery:4,scare:7,respawn:25}},
-    /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. */
-    rewards:{label:'19 Rewards',toggle:true,params:{slowmo:1.4,slowRate:.3,catchup:.8,calloutCooldown:3}},
+    /** Rewards: victory slow-motion (seconds, rate, catch-up), callout cooldown, score punch and Case File. `bank`: the
+     * seconds of the same slow-motion a Crossfire bank kill gives its killer. */
+    rewards:{label:'19 Rewards',toggle:true,params:{slowmo:1.4,slowRate:.3,catchup:.8,calloutCooldown:3,bank:.55}},
     /** Shared noir strength for the city look (Tyler chose Bold ≈ .65). Rats are never affected. */
     noir:{label:'Noir strength',toggle:false,params:{strength:.65,clear:.2},sliders:{strength:[0,1,.01],clear:[0,1,.01]}},
     /** N1: contrast curve on city surfaces (dark areas sink, lamp pools stay bright). */
@@ -94,10 +95,6 @@ export const FEEL={
     /** Bad Ammunition juice: muzzle `smoke` and each ball's personality sound (`volume`; a superball's boing at
      * `superballPitch`, at launch and every bounce), and your own ball's word. The paths themselves are gameplay. */
     badAmmo:{label:'I2 Bad Ammunition juice',toggle:true,params:{smoke:.6,volume:.8,superballPitch:1.7}},
-    /** Cheddar Shower juice: the meteor's whistle (`whistle` volume) as its shadow shows; at the impact a `boom`, a view shake
-     * up to `shake` degrees fading out to `shakeRange` units, `debris` pavement chunks and a crater, `dust` puffs, and
-     * KA-BOOM! within `wordRange`. Clarity batch: 10 chunks and 4 puffs a meteor (were 20 and 8). */
-    cheddarShower:{label:'I4 Cheddar Shower juice',toggle:true,params:{whistle:.9,boom:1,shake:3.2,shakeRange:70,wordRange:45,debris:10,dust:4}},
     /** Code Violation juice: sparks off supplies and machines with a zap (`zap` volume) when close. */
     codeViolation:{label:'I5 Code Violation juice',toggle:true,params:{zap:.7}},
     /** The Hunch (gameplay, always on): at full health you see rats within `range` through walls as a pencil sketch
@@ -172,9 +169,6 @@ export const FEEL={
      * `damping` ratio, at most `maxSwing` rad); taken, it squashes by `squash`; loose and still, it hops `hop` units for
      * `hopMs` about every `idleEvery` s; its evidence tag flaps on every jolt. */
     caseMotion:{label:'K2 Case motion',toggle:true,params:{swing:60,spring:9,damping:.22,maxSwing:.6,squash:.28,hop:.12,hopMs:320,idleEvery:3.5}},
-    /** The case ping (clarity batch, protocol 29): when the case you carry pings, a soft case-gold edge `flash` (the tick is
-     * the ping's own sound) tells you everyone now knows where you are. */
-    casePing:{label:'K3 Case ping (carrier)',toggle:true,params:{flash:.3}},
     /** A1 Air acting (Tyler, 1 October: jumping rats were "stiff and lifeless", a salt shaker). Every rat, airborne from a
      * take-off over `takeOff` u/s or a fall over `fall` u/s until it lands: no walking stride in the air; `stretch` rising,
      * a `squash` and `tuck` (rad) ball at the apex with the feet pulled up (`feet`), a `reach` falling with ears (`ears`),

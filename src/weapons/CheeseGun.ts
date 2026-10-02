@@ -199,6 +199,15 @@ export class CheeseGun {
         this.presentationRay??=new SpatialRayQuery(this.world);
         return !this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptSceneryBody,GROUP_PROJECTILE,this.traceResult).hasHit;
     };
+    /** Cosmetic only (the Crossfire aim guide): the first static surface on the segment, its point and normal written out. */
+    readonly sceneryHit=(from:{x:number;y:number;z:number},to:{x:number;y:number;z:number},point:THREE.Vector3,normal:THREE.Vector3):boolean=>{
+        this.rayFrom.set(from.x,from.y,from.z);this.rayTo.set(to.x,to.y,to.z);
+        this.presentationRay??=new SpatialRayQuery(this.world);
+        const hit=this.presentationRay.closest(this.rayFrom,this.rayTo,GROUP_DEFAULT,this.acceptSceneryBody,GROUP_PROJECTILE,this.traceResult);
+        if(!hit.hasHit)return false;
+        point.set(hit.hitPointWorld.x,hit.hitPointWorld.y,hit.hitPointWorld.z);normal.set(hit.hitNormalWorld.x,hit.hitNormalWorld.y,hit.hitNormalWorld.z);
+        return true;
+    };
 
     clearProjectiles(): void {
         while (this.balls.length) this.removeBall(this.balls.length - 1);

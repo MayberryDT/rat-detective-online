@@ -7,7 +7,7 @@ import type {Goal,Personality,PlaceOption} from '../../shared/bots/intent';
 import {activeZone,JURISDICTION_TUNING} from '../../shared/jurisdiction';
 import {JURISDICTION_ZONES,zoneContains} from '../../shared/jurisdictionZones';
 import {activeDestination,destinationPoint,ASSIGNMENT_DESTINATIONS,ASSIGNMENT_TUNING,type AssignmentId} from '../../shared/assignments';
-import {DISPATCH_STATIONS,INCIDENT_TUNING,LAUNCH_MACHINES,type Meteor} from '../../shared/chaosState';
+import {DISPATCH_STATIONS,LAUNCH_MACHINES} from '../../shared/chaosState';
 import {incidentInfo} from '../../shared/incidentCatalog';
 import {FAULTY_COPY,hasHustle,hasIronclad,heldWeapon,faultyOf,stakedOut,trapped,type FaultyKind,type PickupKind,type PickupState,type WeaponKind} from '../../shared/pickups';
 import {MAX_HP,type Vec3Data} from '../../shared/networkProtocol';
@@ -159,14 +159,10 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
             ...(recentHit(p.id)||aimedAtMe(p.id,self,state?.shots)?{shooting_at_me:'yes'}:{})};
     });
 
-    // A carrier out of sight is known only where it was last seen or pinged (clarity batch "Case ping"); pings come
-    // every 4 s, so the age is in words, like every other number but HP.
-    const c=state?.case,carrier=c?.owner?ctx.carriers.find(k=>k.id===c.owner):undefined;
-    const carried=!carrier?'; I do not know where':carrier.seen?`, ${where(self,carrier.rat)}`
-        :`, last ${carrier.pinged?'pinged':'seen'} ${where(self,carrier.p)} ${time-carrier.at<1000?'just now':time-carrier.at<6000?'a few seconds ago':'a while ago'}`;
+    const c=state?.case,carrier=c?.owner?ctx.living.find(p=>p.id===c.owner):undefined;
     const caseText=!c?'There is no case in play.':c.owner===self.id?'I am carrying the case.'
         :c.returningUntil>time?'The case is being returned and cannot be taken yet.'
-        :c.owner?`${alias(c.owner)} carries the case${carried}.`
+        :c.owner?`${alias(c.owner)} carries the case${carrier?`, ${where(self,carrier)}`:''}.`
         :`Nobody holds the case; it lies ${where(self,c.p)}.`;
 
     let standing='No assignment is running.';
@@ -239,8 +235,7 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
             ?dispatch.wanted===self.id?' I am the wanted rat.':` The wanted rat is ${alias(dispatch.wanted)}.`
             :info.id==='blackout'?' I see rats only as far as my flashlight reaches.'
             :info.id==='bad-ammunition'?' Every ball I fire has a quirk: it corkscrews, snakes, bounces without slowing, floats or hiccups.'
-            :info.id==='code-violation'?' Supplies hop away from rats, and the Quick Fix hops furthest and fastest; every other supply I claim now comes out as a short, harmless dud (slower legs, no jumping, seen through walls, a gun that blows up in my paws, a gun that cannot fire, or a paw stuck in a trap); a Quick Fix still heals fully. Launch machines fire on their own and alarm pillars clang; both shove rats beside them, but never into the water. Nothing in this incident can kill me.'
-            :info.id==='cheddar-shower'?` Cheese meteors fall near rats; a dark shadow marks each landing a moment ahead. Standing in a shadow flattens me, the blast throws rats nearby, and a roof overhead shelters me.${shadows(self,time,state?.meteors,ctx.clear)}`:'');
+            :info.id==='code-violation'?' Supplies hop away from rats, and the Quick Fix hops furthest and fastest; every other supply I claim now comes out as a short, harmless dud (slower legs, no jumping, seen through walls, a gun that blows up in my paws, a gun that cannot fire, or a paw stuck in a trap); a Quick Fix still heals fully. Launch machines fire on their own and alarm pillars clang; both shove rats beside them, but never into the water. Nothing in this incident can kill me.':'');
     }
 
     // Only aliases already given: an unseen attacker stays unnamed.
@@ -271,14 +266,6 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         rats_in_view,
         ...(last_target?{last_target}:{}),...(heard.length?{heard}:{}),...(sensed.length?{sensed_through_walls:sensed}:{}),...(incident?{dispatch:incident}:{}),
     }};
-}
-
-/** Cheddar Shower: the falling meteors' shadows in sight within a long run, nearest first, in words. */
-function shadows(self:Vec3Data,time:number,meteors:readonly Meteor[]|undefined,clear:(p:Vec3Data)=>boolean):string {
-    const seen=(meteors??[]).filter(m=>m.at>time&&distance(self,m)<9*RUN_SPEED&&clear({x:m.x,y:m.y+.5,z:m.z}))
-        .sort((a,b)=>distance(self,a)-distance(self,b)).slice(0,TRAPS_LISTED);
-    const under=seen.some(m=>Math.abs(m.y-self.y)<=3&&Math.hypot(m.x-self.x,m.z-self.z)<INCIDENT_TUNING.meteorRadius+1.5);
-    return (under?' A meteor shadow is under me: step out of it now.':'')+(seen.length?` Meteor shadows I see: ${seen.map(m=>relative(self,m)).join('; ')}.`:'');
 }
 
 /** A ball of this rat's still flying, less than a second old, whose line passes within a body of me. */

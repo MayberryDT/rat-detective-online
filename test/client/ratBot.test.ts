@@ -19,8 +19,6 @@ const RUNNING=STEER.pace[0]*.9;
 function state(owner:string|null=null):ChaosState {
     return {time:1000,case:{owner,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:40,y:0,z:0},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'cooldown',started:0,until:1e9,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
 }
-/** The authority's latest ping of the carried case: at `p`, at state time (an unseen carrier is known only by it). */
-function ping(s:ChaosState,p:Vec3Data,at=s.time){s.case.ping={at,p:{x:p.x,y:p.y,z:p.z}};}
 function fixture(seed=0){
     const navigation:MotorNavigation={route:vi.fn((_from,to)=>[{...to}]),explorationTargets:()=>Array.from({length:24},(_,i)=>({x:i*4+20,y:i%2?-7:0,z:60}))};
     return {brain:new RatBot(navigation,seed,()=>.5),navigation,self:player('me',0),near:player('near',0,8),holder:player('holder',35)};
@@ -108,22 +106,9 @@ describe('case-first normal match bots',()=>{
         aimedNear(later.shoot,self,holder);expect(Math.abs(intent.facing)).toBeLessThan(.12);expect(Math.abs(later.facing-Math.PI/2)).toBeLessThan(.15);
     });
     it('pursues an unseen carrier via navigation but never shoots through walls',()=>{
-        const {brain,self,holder}=fixture(),s=state('holder');ping(s,holder);
-        const intent=act(brain,1000,self,[self,holder],s,()=>false,false,true);
+        const {brain,self,holder}=fixture();
+        const intent=act(brain,1000,self,[self,holder],state('holder'),()=>false,false,true);
         expect(brain.objective).toBe('carrier');expect(intent.x).toBeGreaterThan(0);expect(intent.shoot).toBeUndefined();
-    });
-    // Case ping: a carrier out of sight is known only where the case was last pinged, never where it really is
-    // (the case's live position or the rat's own); a new ping moves the chase; sight follows it live again.
-    it('chases an unseen carrier toward its latest ping, refreshed by each new ping, and follows it once seen',()=>{
-        const {brain,self,holder,navigation}=fixture(),s=state('holder'),route=vi.mocked(navigation.route),first={x:10,y:0,z:30},second={x:-20,y:0,z:-30};
-        ping(s,first);brain.step(1000,self,[holder],s,()=>false,false,true);
-        expect(brain.objective).toBe('carrier');expect(brain.decision?.plan.follow).toBeUndefined();expect(route).toHaveBeenLastCalledWith(expect.any(Object),first);
-        // The carrier runs on between pings: the chase does not know.
-        holder.x=60;s.time=3000;brain.step(3000,self,[holder],s,()=>false,false,true);expect(route).toHaveBeenLastCalledWith(expect.any(Object),first);
-        s.time=5000;ping(s,second);brain.step(5000,self,[holder],s,()=>false,false,true);
-        expect(brain.objective).toBe('carrier');expect(route).toHaveBeenLastCalledWith(expect.any(Object),second);
-        for(let now=7000;now<=8500;now+=100){s.time=now;brain.step(now,self,[holder],s,()=>true,false,true);}
-        expect(brain.objective).toBe('carrier');expect(route).toHaveBeenLastCalledWith(expect.any(Object),holder);
     });
     it('engages a visible enemy when carrying the case itself',()=>{
         const {brain,self,near}=fixture();
@@ -440,7 +425,7 @@ it('sprints along short flat navigation cells, slows at pickup, and does not bla
 });
 it('intercepts a distant Chain carrier at the next landmark when already closer to it',()=>{
  const {brain,self,holder,navigation}=fixture(0),s=state('holder');s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';s.assignment.destinations=[...CHAIN_ROUTE];
- Object.assign(self,destinationPoint('icebox'));self.x-=8;holder.x=-100;holder.z=-100;ping(s,holder);
+ Object.assign(self,destinationPoint('icebox'));self.x-=8;holder.x=-100;holder.z=-100;
  brain.step(1000,self,[self,holder],s,()=>false,false,true);
  expect(brain.objective).toBe('intercept');expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('icebox'));
  s.assignment.deliverySerial=1;brain.step(1010,self,[self,holder],s,()=>false,false,true);
@@ -509,7 +494,7 @@ it('keeps firing when two visible opponents repeatedly trade nearest position',(
 it('patrols a defended landmark on supported steps while waiting for its carrier',()=>{
     const {brain,self,holder,navigation}=fixture(0),s=state('holder');
     s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';s.assignment.destinations=[...CHAIN_ROUTE];
-    Object.assign(self,destinationPoint('icebox'));holder.x=-100;holder.z=-100;ping(s,holder);
+    Object.assign(self,destinationPoint('icebox'));holder.x=-100;holder.z=-100;
     navigation.localStep=vi.fn((_from,to)=>to);
     const first=act(brain,1000,self,[holder],s,()=>false,false,true);
     expect(brain.objective).toBe('intercept');expect(Math.hypot(first.x,first.z)).toBeGreaterThan(0);
@@ -531,7 +516,7 @@ it('plans a bounded trip to mapped upstairs armor, then resumes work when claime
 });
 
 it('pursues a rooftop carrier instead of taking a long armor detour',()=>{
-    const {brain,self,holder}=fixture(),s=state('holder');holder.y=36;ping(s,holder);
+    const {brain,self,holder}=fixture(),s=state('holder');holder.y=36;
     s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:15,y:8.7,z:0}];
     brain.step(1000,self,[holder],s,()=>false,false,true);
@@ -580,7 +565,7 @@ describe('assignment commitment',()=>{
  });
  it('pursues the currently scoring carrier rather than camping the announced next zone',()=>{
   const {brain,self,holder}=fixture(0),s=state('holder');s.assignment=createAssignment('jurisdiction',0);s.assignment.phase='active';
-  const j=s.assignment.jurisdiction!;j.remainingMs=5000;Object.assign(holder,JURISDICTION_ZONES[activeZone(j)].posts[0]);self.x=holder.x+70;self.z=holder.z;self.y=holder.y;ping(s,holder);
+  const j=s.assignment.jurisdiction!;j.remainingMs=5000;Object.assign(holder,JURISDICTION_ZONES[activeZone(j)].posts[0]);self.x=holder.x+70;self.z=holder.z;self.y=holder.y;
   brain.step(1000,self,[holder],s,()=>false,false,true);expect(brain.objective).toBe('carrier');
  });
 });

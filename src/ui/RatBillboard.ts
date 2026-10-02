@@ -10,7 +10,7 @@ const RED = '#e2382e';
 const PIP_W = 30, PIP_H = 9, PIP_GAP = 7, PIP_SLANT = 6, PIP_Y = 70;
 /** Seconds a lost pip flashes before draining, and a regained pip takes to fill. */
 const LOSS_SECONDS = 0.45, GAIN_SECONDS = 0.3;
-/** The Hunch's lens cyan (Stakeout's colour): the case gold is only for the case. */
+/** The Hunch's lens cyan (Stakeout's colour): the case red is only for the case. */
 const LENS = '#7ad8e8';
 /** The Hunch eye beside your own pips: world size, and its centre relative to the plate's anchor (bottom centre). */
 const EYE_SIZE = 0.2, EYE_GAP = 0.14;

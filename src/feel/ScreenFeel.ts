@@ -3,10 +3,10 @@ import {FEEL} from './feelTuning';
 import './feel.css';
 import {reducedMotion,replay,scrawl,uiMotion} from '../ui/motion';
 import {headlines} from '../ui/Headlines';
-import {CASE_GOLD} from '../prototype/caseGold';
+import {CASE_RED} from '../prototype/caseRed';
 
 const ARROWS=4;
-const CASE_GOLD_CSS=`#${CASE_GOLD.toString(16).padStart(6,'0')}`;
+const CASE_RED_CSS=`#${CASE_RED.toString(16).padStart(6,'0')}`;
 
 /** A small tile of monochrome noise for the film-grain overlay, as a data URL: an 8-bit grey BMP
  * written directly. Drawing and encoding a canvas instead cost 90–380 ms on its first use (a GPU
@@ -158,10 +158,10 @@ export class ScreenFeel {
         replay(this.claimNode,'on');
     }
     /** K1: you took the case: an ON THE CASE stamp slams in over `sheets` paper sheets bursting out and fluttering down,
-     * with a case-gold edge flash (`flash` × Flash strength). Reduced interface motion keeps the stamp, fading, and no sheets.
+     * with a case-red edge flash (`flash` × Flash strength). Reduced interface motion keeps the stamp, fading, and no sheets.
      * The top headline: it takes the screen from anything else. */
     caseClaim(sheets:number,flash:number):void {
-        this.claim(CASE_GOLD_CSS,flash);
+        this.claim(CASE_RED_CSS,flash);
         if(!this.build()||!this.caseNode)return;
         const node=this.caseNode;
         headlines.claim('case','case','ON THE CASE',1500,()=>node.classList.remove('on'));

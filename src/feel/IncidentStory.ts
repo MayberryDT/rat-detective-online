@@ -6,7 +6,6 @@ import {DispatchAudio} from '../audio/DispatchAudio';
 import {worldSoundGain} from '../audio/worldSoundGain';
 import {incidentInfo} from '../shared/incidentCatalog';
 import {allUnitsPoint} from '../shared/allUnits';
-import {caseLastSeen} from '../shared/casePing';
 import {pickupArtwork} from '../prototype/pickupArtwork';
 import type {ChaosState} from '../shared/chaosState';
 import type {Vec3Data} from '../shared/networkProtocol';
@@ -26,7 +25,6 @@ export class IncidentStory {
     private backupCard?:HTMLElement;private arrow?:HTMLElement;
     private readonly audio:DispatchAudio;
     private previous?:ChaosState;
-    private myId='';
     private readonly hideAt={poster:0,bounty:0,backup:0};
     /** Where the YOU'RE BACKUP arrow points (the action), while the card is up. */
     private readonly target=new THREE.Vector3();
@@ -37,7 +35,7 @@ export class IncidentStory {
 
     /** Each chaos snapshot: `name` resolves a rat's display name. */
     apply(state:ChaosState,myId:string,name:(id:string)=>string|undefined,now=performance.now()):void {
-        const before=this.previous;this.previous=state;this.myId=myId;
+        const before=this.previous;this.previous=state;
         const d=state.dispatch,incident=d.phase==='active'?incidentInfo(d.incident).id:undefined;
         if(!before||before.epoch!==state.epoch)return;
         const was=before.dispatch;
@@ -68,9 +66,7 @@ export class IncidentStory {
         const distance=Math.hypot(at.x-listener.x,at.y-listener.y,at.z-listener.z);
         this.audio.play('yelp',local?.55:.55*worldSoundGain(distance,Math.max(0,1-distance/140)));
         if(!local||!this.previous||!this.build())return;
-        // Only what this client may know: a loose case, or the carrier's last ping (never its live position).
-        const known=caseLastSeen(this.previous.case,this.myId);
-        if(known||this.previous.assignment?.jurisdiction){const p=allUnitsPoint(this.previous.assignment,known??this.previous.case.p);this.target.set(p.x,p.y,p.z);this.lastAngle=NaN;}
+        const p=allUnitsPoint(this.previous.assignment,this.previous.case.p);this.target.set(p.x,p.y,p.z);this.lastAngle=NaN;
         this.show('backup',this.backupCard!,now,STORY.backupMs,'YOU\u2019RE BACKUP · GET TO THE ACTION');
     }
 

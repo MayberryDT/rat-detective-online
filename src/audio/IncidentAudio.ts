@@ -44,17 +44,15 @@ const SYNTH = {
         let buzz = 0; for (let k = 1; k <= 6; k++) buzz += Math.sin(k * phase) / k;
         return buzz * (.85 + .15 * Math.sin(2 * Math.PI * 6 * t)) * Math.min(1, t * 30) * Math.min(1, (.9 - t) * 12);
     }},
-    // Cheddar Shower: the falling meteor's whistle, sliding down and swelling until it lands (its shadow's warning, 2.2 s).
-    'meteor-whistle': {seconds: 2.2, peak: .5, sample: (t: number, n: () => number) => {
-        const k = Math.log(2300 / 650) / 2.2, phase = 2 * Math.PI * 2300 * (1 - Math.exp(-k * t)) / k;
-        return (Math.sin(phase) + .15 * n()) * Math.pow(t / 2.2, 1.6) * Math.min(1, (2.2 - t) * 40);
-    }},
-    // Cheddar Shower: the meteor hits, a deep boom, a crunch of pavement and a long rumble.
-    'meteor-boom': {seconds: 2, peak: .9, sample: (t: number, n: () => number) =>
-        Math.sin(2 * Math.PI * (42 * t - 8 * t * t)) * Math.exp(-t * 2.2) + n() * Math.exp(-t * 9) * .8 + n() * Math.exp(-t * 1.5) * .15 + Math.sin(2 * Math.PI * 28 * t) * Math.exp(-t * 1.2) * .5},
     // Code Violation: a faulty fitting arcing, a crackle over a mains buzz.
     zap: {seconds: .35, peak: .3, sample: (t: number, n: () => number) =>
         (n() * (Math.sin(2 * Math.PI * 120 * t) > .3 ? 1 : .2) + .3 * Math.sign(Math.sin(2 * Math.PI * 100 * t))) * Math.exp(-t * 7)},
+    // Crossfire: a bright ricochet "pyew", a whine gliding down from 2.6 kHz with a ringing metal partial and a click of
+    // contact. Each bounce of a ball plays it higher.
+    ricochet: {seconds: .3, peak: .34, sample: (t: number, n: () => number) => {
+        const phase = 2 * Math.PI * (1050 * t + 1550 * (1 - Math.exp(-14 * t)) / 14);
+        return (Math.sin(phase) + .35 * Math.sin(2.76 * phase) * Math.exp(-t * 18) + n() * Math.exp(-t * 260) * .8) * Math.min(1, t * 900) * Math.exp(-t * 11);
+    }},
 } as const;
 export type SynthCue = keyof typeof SYNTH;
 let synthBuffers: Partial<Record<SynthCue, AudioBuffer>> = {};

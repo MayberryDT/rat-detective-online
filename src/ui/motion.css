@@ -1,14 +1,14 @@
 /* U1 motion kit, in the Carbon scrawl look (2026-09-28): the in-game UI is your carbon copy, knocked crooked.
  * See-through blue-black carbon with an inner ink smudge and a hard offset shadow; faded blue-white typewriter
- * ink (Special Elite) with Bangers headings. Stamp red only for you, headshots and danger; the case gold (cheese gold)
- * only for the case: it, its ping and arrow, the drop-off and the active zone. Nothing bright or glowing during play. */
+ * ink (Special Elite) with Bangers headings. Stamp red only for you, headshots and danger; the hot-case red (brighter)
+ * only for the case: it, its outline and arrow, the drop-off and the active zone. Nothing bright or glowing during play. */
 :root{
   --carbon:#0c1224a8;--carbon-solid:#0c1224;--carbon-deep:#05070d;--carbon-raised:#1b2848b8;--carbon-shade:#0a0e1ae6;
   --carbon-ink:#a5b9e1d9;--carbon-bright:#becdf0e6;--carbon-dim:#a5b9e18c;--carbon-line:#a5b9e166;--carbon-faint:#a5b9e124;
   --carbon-drop:3px 4px 0 #00000080;--carbon-smudge:inset 0 0 26px #283c785a;
   /* The sheet itself: carbon with a blue ink smudge in one corner and a lighter thumbprint in another. */
   --carbon-sheet:radial-gradient(ellipse 34% 26% at 84% 86%,#4a68a82e,#0000 70%),radial-gradient(ellipse 18% 12% at 10% 12%,#4a68a81c,#0000 70%),linear-gradient(#0c1224a8,#0c1224a8);
-  --case-gold:#d9b95e;--case-gold-dim:#d9b95ea6;--paper:#efe6cf;--paper-dim:#efe6cfa6;--stamp:#c8322a;--stamp-ink:#e65a50f2;--stamp-wash:#c8323247;--stamp-hot:#ff594b;
+  --case-red:#ff3024;--case-red-dim:#ff3024a6;--paper:#efe6cf;--paper-dim:#efe6cfa6;--stamp:#c8322a;--stamp-ink:#e65a50f2;--stamp-wash:#c8323247;--stamp-hot:#ff594b;
   --font-display:'Bangers',Impact,sans-serif;--font-body:'Outfit',Arial,sans-serif;--font-type:'Special Elite','Courier New',Courier,monospace;
   --ui-snap:cubic-bezier(.2,.9,.3,1.25);--ui-out:cubic-bezier(.2,.8,.3,1);--ui-spring:cubic-bezier(.3,1.7,.5,1);
   --ui-fast:.16s;--ui-med:.32s;--ui-slow:.6s;
@@ -35,8 +35,8 @@ rd-l:nth-child(3n+1){animation-delay:-.8s}rd-l:nth-child(3n+2){animation-delay:-
 @keyframes ui-bump{0%{transform:scale(1)}35%{transform:scale(1.14);filter:brightness(1.5)}100%{transform:scale(1)}}
 @keyframes ui-shake{0%,100%{translate:0 0}20%{translate:-2px 1px}40%{translate:2px -1px}60%{translate:-1px -1px}80%{translate:1px 1px}}
 @keyframes ui-fade-hold{0%{opacity:0}12%,80%{opacity:1}100%{opacity:0}}
-/* Points flying to the score card (positioned from script): case points, so the case gold, with no glow. */
-.ui-fly{position:fixed;z-index:260;pointer-events:none;font:400 38px/1 var(--font-display);letter-spacing:1px;color:var(--case-gold);
+/* Points flying to the score card (positioned from script): case points, so the case red, with no glow. */
+.ui-fly{position:fixed;z-index:260;pointer-events:none;font:400 38px/1 var(--font-display);letter-spacing:1px;color:var(--case-red);
   -webkit-text-stroke:1.5px var(--carbon-deep);text-shadow:3px 3px 0 var(--carbon-deep);white-space:nowrap;rotate:-4deg}
 /* A carbon ghost of a closing panel. */
 .ui-ghost{position:fixed;z-index:400;pointer-events:none;background:var(--carbon-sheet);border:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge)}

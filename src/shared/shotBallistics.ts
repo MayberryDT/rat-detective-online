@@ -1,5 +1,5 @@
 import {BALL_GRAVITY,BALL_LIFETIME,BALL_RADIUS,BALL_RESTITUTION,BALL_SPEED} from './ballTuning';
-import {INCIDENT_TUNING as I,type ChaosShot} from './chaosState';
+import {CROSSFIRE,INCIDENT_TUNING as I,type ChaosShot} from './chaosState';
 import type {IncidentId} from './incidentCatalog';
 import type {Vec3Data} from './networkProtocol';
 
@@ -15,7 +15,7 @@ export const shotGravity=(radius:number)=>BALL_GRAVITY*(1+(I.cheeseGravity-1)*he
 export const launchSpeed=(incident?:IncidentId)=>incident==='big-cheese'?I.cheeseShotSpeed:BALL_SPEED;
 /** The gravity a fresh shot flies under (Big Cheese balls leave the muzzle heavy). */
 export const launchGravity=(incident?:IncidentId)=>incident==='big-cheese'?shotGravity(I.cheeseStartRadius):BALL_GRAVITY;
-/** Seconds a ball lives, including Big Cheese extensions. */
+/** Seconds a ball lives, including Big Cheese and Crossfire extensions. */
 export const shotLife=(shot:ChaosShot)=>shot.life??BALL_LIFETIME;
 
 /** The next Big Cheese size up from `current`, or the largest. */
@@ -43,6 +43,13 @@ export function cheeseDamage(radius:number,maxHp:number):number {
 export function cheeseBounce(shot:ChaosShot):void {
     shot.radius=nextCheeseRadius(shot.radius??BALL_RADIUS);
     shot.life=Math.min(I.cheeseMaxLife,shotLife(shot)+I.cheeseBounceLife);
+}
+/** Crossfire, one real world bounce: a step hotter, up to `CROSSFIRE.maxHeat`; each step leaves the wall `speedUp`× faster
+ * and lives a little longer, up to the cap. */
+export function crossfireBounce(shot:ChaosShot):void {
+    const heat=shot.heat??0;if(heat>=CROSSFIRE.maxHeat)return;
+    shot.heat=heat+1;shot.v.x*=CROSSFIRE.speedUp;shot.v.y*=CROSSFIRE.speedUp;shot.v.z*=CROSSFIRE.speedUp;
+    shot.life=Math.max(shotLife(shot),Math.min(CROSSFIRE.maxLife,shotLife(shot)+CROSSFIRE.life));
 }
 /** Bounce velocity `v` in place off a surface with unit normal `n`; returns the contact's normal speed. An
  * ordinary ball keeps .9 of everything. A heavy one keeps less of its normal speed (a thud and a small hop) and

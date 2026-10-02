@@ -19,9 +19,6 @@ export const CHAOS_TUNING = {
     caseRewardMs: 20000,
     /** The case carrier's hits deal this many times their damage in every assignment, and any kill it makes heals it to full. */
     carrierDamage: 2,
-    /** Case ping (clarity batch, protocol 29): a carried case is not marked; every `casePingMs` the authority records
-     * where it is (`CaseState.ping`), and everyone sees and hears that spot. A loose case keeps its steady glow. */
-    casePingMs: 4000,
     /** The quiet stretch between incidents was 21 s until the four-human playtest ("too chaotic"; protocol 28). */
     rollMs: 2400, activeMs: 25000, cooldownMs: 40000,
     corpseSpeed: 95, normalCorpseSpeed: 32, corpseMs: 10000, maxCorpses: 16,
@@ -49,12 +46,6 @@ export const INCIDENT_TUNING = {
     violationFixScare: 10, violationFixHop: 7, violationFixHopMs: 480, violationFixLeash: 16,
     violationMachineMs: [3500,7500] as const, violationFling: 11, violationClangMs: [1800,4200] as const, violationClang: 7,
     violationShove: 26, violationLift: 13,
-    /** Cheddar Shower: a giant cheese meteor every `meteorEveryMs` (from the first value to the second as the incident
-     * runs), aimed within `meteorSpread` of a random living rat, at most `meteorMax` falling at once. Its shadow warns for
-     * `meteorWarnMs`. On impact rats within `meteorRadius` are flattened (lethal, nobody credited), rats within
-     * `meteorBlast` are shoved out (`meteorShove` u/s, edge to centre) and `meteorLift` up, and it bursts into cheese. */
-    meteorEveryMs: [1400,700] as const, meteorSpread: 6, meteorMax: 8, meteorWarnMs: 2200,
-    meteorRadius: 3, meteorBlast: 13, meteorShove: [14,36] as const, meteorLift: 16,
     /** Big Cheese: every rat fires at most once per `cheeseShotIntervalMs` (the room admits a shot up to
      * `cheeseShotSlackMs` early, for network jitter). Balls launch at `cheeseShotSpeed` and swell from ordinary
      * to `cheeseStartRadius` (a `cheeseRadii` step) over `cheeseGrowIn` s. A real world bounce, one whose normal
@@ -71,6 +62,11 @@ export const INCIDENT_TUNING = {
     cheeseShakeRadius: 1.24, cheeseShakeRange: 25, cheeseShake: .9, cheeseShakeMs: 250, cheeseThudPitch: .6,
     cheesePistolWidth: 1.8, cheesePistolLength: 1.15, cheesePistolRate: 6,
 } as const;
+/** Crossfire (Tyler, 2 October: "make the whole city a pinball table"). Each real world bounce heats a ball a step, up
+ * to `maxHeat`: it leaves the wall `speedUp`× faster and lives `life` s longer (at most `maxLife` s in all). A ball that
+ * has bounced kills in one hit; the kill reports its world bounces (counted to `maxBounces`) and its path: the muzzle,
+ * its first `pathPoints` bounces and the hit. */
+export const CROSSFIRE = { maxHeat: 3, speedUp: 1.15, life: .5, maxLife: 3, pathPoints: 6, maxBounces: 99 } as const;
 export const CASE_HOME = { x: -16, y: 1.3, z: -28 };
 export const CASE_LOOSE_SCALE = 2;
 // Street-level frontages distributed around the city, and the north's slots from its kit
@@ -161,8 +157,10 @@ export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
 export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; radius?: number;
-    /** Seconds this ball lives when Big Cheese bounces extended it; absent is the ordinary lifetime. */
+    /** Seconds this ball lives when Big Cheese or Crossfire bounces extended it; absent is the ordinary lifetime. */
     life?: number;
+    /** Crossfire: how hot its world bounces made this ball (1 to `CROSSFIRE.maxHeat`); absent while cold. */
+    heat?: number;
     /** Bad Ammunition: this ball's personality and the unit aim its path keeps to (`steerQuirk`). A path personality
      * ends at the ball's first contact; a superball keeps bouncing. Authority and local prediction only; not on the wire. */
     quirk?: BadRound; aim?: Vec3Data;
@@ -172,25 +170,19 @@ export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: V
      * snapshots omit it: clients never decide projectile damage eligibility. */
     explosive?: true;
 }
-export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'thud'|'buzz'|'case-hit'|'armor-clang'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean }
+/** `bounces`: a Crossfire world bounce, this ball's world bounces so far including this one (to `CROSSFIRE.maxBounces`). */
+export interface ChaosImpact { p: Vec3Data; n: Vec3Data; surface: boolean; scale?: number; cue?: 'thud'|'buzz'|'case-hit'|'armor-clang'; foley?:WorldFoleyCue; energy?:number; audioOnly?:boolean; bounces?:number }
 export interface CaseState extends PhysicalPose {
     owner:string|null; previousOwner:string|null; pickupAfter:number; returningUntil:number; missileOwner?:string;
     /** Hits the carrier's grip has taken (1 or 2; absent when whole). Each is within `caseGripMs` of the last. */
     grip?: number;
-    /** The latest ping while carried: authority time `at` and where the case was. Absent while loose. */
-    ping?: CasePing;
 }
-export interface CasePing { at:number; p:Vec3Data }
 export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-4','evidence-5','evidence-6','evidence-7'] as const;
 /** A set Mousetrap (`WEAPON_TUNING`): holds any other rat that steps on it in place for `trapHoldMs`. `hp` ball hits
  * left; `at` when set; `snapAt` its latest catch (shut while it holds, it re-arms `trapRearmMs` after letting go); `hitAt`
  * the latest hit it took; `brokenAt` when it was destroyed (inert, kept `trapBrokenMs` so clients can play the break). At most one per rat. */
 export interface TrapState { id:string; owner:string; x:number; y:number; z:number; yaw:number; hp:number; at:number; snapAt?:number; hitAt?:number; brokenAt?:number }
 export const MAX_TRAPS = 16;
-/** Cheddar Shower: a cheese meteor landing on (`x`,`y`,`z`), the floor under it, at `at`; its shadow shows from `born`.
- * Kept `METEOR_KEEP_MS` after impact so every client plays the landing. */
-export interface Meteor { id:string; x:number; y:number; z:number; born:number; at:number }
-export const METEOR_KEEP_MS = 800;
 /** What a laser beam struck at a point. */
 export const LASER_SURFACES = ['world','armor','rat','head','trap','case','trigger','corpse'] as const;
 export type LaserSurface = typeof LASER_SURFACES[number];
@@ -221,8 +213,6 @@ export interface ChaosState {
     buffs?: BuffMap;
     /** Set Mousetraps. */
     traps?: TrapState[];
-    /** Cheddar Shower: meteors falling or just landed. */
-    meteors?: Meteor[];
     /** Recent laser beams, newest last. */
     beams?: LaserBeam[];
     possession: Record<string, number>;

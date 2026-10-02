@@ -12,10 +12,9 @@ import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
 import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballTuning';
-import { bounceShot, bounces, cheeseBounce, cheeseDamage, growIn, quirkBirth, quirkBounce, shotGravity, shotLife, steerQuirk } from './shotBallistics';
-import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
-    type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState, type TrapState, type LaserBeam, MAX_TRAPS, MAX_BEAMS,
-    type Meteor, type CasePing, METEOR_KEEP_MS } from './chaosState';
+import { bounceShot, bounces, cheeseBounce, cheeseDamage, crossfireBounce, growIn, quirkBirth, quirkBounce, shotGravity, shotLife, steerQuirk } from './shotBallistics';
+import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, CROSSFIRE, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
+    type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState, type TrapState, type LaserBeam, MAX_TRAPS, MAX_BEAMS } from './chaosState';
 import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, shortedOut, weaponArming, FAULTY_COPY, FAULTY_TUNING, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, TRAP_SCALE, TRAP_TALL, resolvePickupPoints,
     type BuffMap, type FaultyKind, type PickupKind, type PickupPoint, type WeaponKind } from './pickups';
 import { overWater } from './city/kit/city';
@@ -53,19 +52,17 @@ interface CaseRuntime {
     hitAfter:Map<string,number>;pickupAfter:number;returningUntil:number;looseSince:number;
     /** Grip: enemy balls taken by the carrier's case, the last at `gripAt` (`gripBall`, so one ball counts once). */
     grip:number;gripAt:number;gripBall?:string;
-    /** The latest ping while carried (`CaseState.ping`); cleared when the case comes loose. */
-    ping?:CasePing;
     scale:number;lastSpawn:Vec3Data;armed:boolean;
     /** Ridden a municipal launcher pad. Swept flight with its own lift cap, and
      * exempt from the loose-case recovery watchdog until it settles. */
     launched:boolean;launchLift:number;
 }
-/** null ownership is an environmental hit, including neutral chains; `cause` names it when it is not Tampering. `weapon`: a special weapon made the hit. */
-export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true; weapon?:WeaponKind; cause?:EnvironmentCause }
-/** Code Violation malfunctions and Cheddar Shower impacts, for the city map (`drainIncidentEvents`). `flattened`: rats a
- * meteor landed on; `shoved`: rats a blast threw; `faulty`: a supply came out as the `pickup` dud on `playerId`. */
+/** null ownership is an environmental hit, including neutral chains; `cause` names it when it is not Tampering. `weapon`: a special weapon made the hit.
+ * `bounces`/`path`: a Crossfire bank shot's world bounces and the ball's path (`CROSSFIRE`). */
+export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true; weapon?:WeaponKind; cause?:EnvironmentCause; bounces?:number; path?:Vec3Data[] }
+/** Code Violation malfunctions, for the city map (`drainIncidentEvents`). `faulty`: a supply came out as the `pickup`
+ * dud on `playerId`. */
 export type IncidentEvent =
-    | { kind:'meteor'; p:Vec3Data; flattened:string[]; shoved:number }
     | { kind:'malfunction'; what:'faulty'|'machine'|'pillar'; site:string; p:Vec3Data; playerId?:string; pickup?:FaultyKind; shoved:number };
 /** `end` is where a ball's life ran out (city map facts only; never sent to clients). */
 export interface ShotResultEvent {owner:string|null;shotId:string;ballId:string;outcome:ShotResultOutcome;at:number;tick:number;epoch:string;victimId?:string;damage?:number;point?:Vec3Data;normal?:Vec3Data;compensated?:boolean;fallback?:string;rewindMs?:number;targetDelta?:number;end?:Vec3Data}
@@ -101,6 +98,8 @@ export class ChaosSimulation {
     private readonly shotStepped=new WeakSet<ChaosShot>();
     /** Machines each ball has already pumped: one ball is one hit, however it ricochets. */
     private readonly pumpedBy=new WeakMap<ChaosShot,string[]>();
+    /** Crossfire: each ball's muzzle (when fired during Crossfire), its first `CROSSFIRE.pathPoints` world bounces and its bounce count. */
+    private readonly bankPaths=new WeakMap<ChaosShot,{origin?:Vec3Data;points:Vec3Data[];bounces:number}>();
     private corpses=new Map<string,{body:C.Body;state:CorpseState;hitAfter:Map<string,number>}>();
     private shots:ChaosShot[]=[];
     private readonly burstShots=new WeakSet<ChaosShot>();
@@ -135,13 +134,6 @@ export class ChaosSimulation {
     private readonly siteHopAt=new Map<string,number>();
     private readonly misfireAt=new Map<string,number>();
     private clangAt=0;
-    /** Cheddar Shower: meteors falling or just landed, when the next is called down, and the id counter. */
-    private meteors:Meteor[]=[];
-    private meteorAt=0;
-    private meteorSerial=0;
-    /** Meteors that have not landed yet, and the Dispatch serial whose Cheddar Shower is calling them down. */
-    private readonly pendingMeteors=new Set<string>();
-    private meteorIncident=-1;
     private readonly incidentEvents:IncidentEvent[]=[];
     private casesWeaponized=false;
     /** Room-selected Dispatch roster: `classic` adds the retired Evidence Tampering (private practice only). */
@@ -676,7 +668,7 @@ export class ChaosSimulation {
         return true;
     }
     private tell(text:string){this.notice={serial:this.notice.serial+1,text};}
-    /** Most Wanted, Code Violation and Cheddar Shower act on rats, supplies and machines each step. */
+    /** Most Wanted and Code Violation act on rats, supplies and machines each step. */
     private stepIncidentEffects(now:number,playing:boolean):void{
         const d=this.dispatch;
         if(this.incidentActive('most-wanted')){
@@ -694,7 +686,6 @@ export class ChaosSimulation {
             }
         }else if(d.wanted!==undefined||d.bounty!==undefined){this.dispatch={...d};delete this.dispatch.wanted;delete this.dispatch.bounty;this.wantedAt=0;}
         this.stepCodeViolation(now,playing);
-        this.stepMeteors(now,playing);
     }
     /** Whoever is winning among living rats (assignment progress, then kills); Most Wanted's target.
      * `current` keeps the light on a tie, so it only moves when the lead really changes. `living: false` counts the dead too. */
@@ -807,57 +798,7 @@ export class ChaosSimulation {
         }
         return false;
     }
-    /** Cheddar Shower: giant cheese meteors called down near random living rats, at most `meteorMax` falling at once, more
-     * often as the incident goes on. Each lands when its shadow has warned for `meteorWarnMs`, even after the incident. */
-    private stepMeteors(now:number,playing:boolean):void{
-        for(const m of this.meteors)if(now>=m.at&&this.pendingMeteors.delete(m.id))this.landMeteor(m,playing);
-        let expired=0;while(expired<this.meteors.length&&now>=this.meteors[expired]!.at+METEOR_KEEP_MS)expired++;
-        if(expired)this.meteors.splice(0,expired);
-        const d=this.dispatch;
-        if(!playing||!this.incidentActive('cheddar-shower'))return;
-        if(this.meteorIncident!==d.serial){this.meteorIncident=d.serial;this.meteorAt=now+600;this.tell('CHEDDAR SHOWER · SCATTERED CHEESE, HEAVY AT TIMES. WATCH FOR SHADOWS.');}
-        if(now<this.meteorAt)return;
-        const progress=Math.max(0,Math.min(1,(now-d.started)/T.activeMs));
-        this.meteorAt=now+I.meteorEveryMs[0]+(I.meteorEveryMs[1]-I.meteorEveryMs[0])*progress;
-        if(this.pendingMeteors.size>=I.meteorMax)return;
-        const living=[...this.players.values()].filter(p=>p.hp>0),rat=living[Math.floor(Math.random()*living.length)];
-        if(!rat)return;
-        const angle=Math.random()*Math.PI*2,r=Math.sqrt(Math.random())*I.meteorSpread;
-        const x=Math.max(CITY_BOUNDS.min+2,Math.min(CITY_BOUNDS.max-2,rat.x+Math.cos(angle)*r)),z=Math.max(CITY_BOUNDS.min+2,Math.min(CITY_BOUNDS.max-2,rat.z+Math.sin(angle)*r));
-        // It lands on the first thing under the open sky: a roof shelters the rats inside.
-        const down=this.ray(new C.Vec3(x,120,z),new C.Vec3(x,rat.y-6,z),1);
-        if(!down.hasHit)return;
-        const meteor:Meteor={id:`meteor-${d.serial}-${this.meteorSerial++}`,x,y:down.hitPointWorld.y,z,born:now,at:now+I.meteorWarnMs};
-        this.meteors.push(meteor);this.pendingMeteors.add(meteor.id);
-    }
-    /** A meteor lands: rats under it are flattened (nobody is credited), rats around it thrown clear, bodies, loose cases
-     * and balls kicked away, and it bursts into cheese. */
-    private landMeteor(m:Meteor,playing:boolean):void{
-        const p={x:m.x,y:m.y,z:m.z},flattened:string[]=[];
-        if(playing)for(const player of this.players.values()){
-            if(player.hp<=0||Math.abs(player.y-m.y)>3||Math.hypot(player.x-m.x,player.z-m.z)>I.meteorRadius)continue;
-            flattened.push(player.id);this.hit({owner:null,victim:player.id,damage:MAX_HP,incoming:{x:0,y:-60,z:0},cause:'meteor'});
-        }
-        let shoved=0;
-        for(const player of this.players.values()){
-            if(player.hp<=0||flattened.includes(player.id)||Math.abs(player.y-m.y)>4)continue;
-            const dx=player.x-m.x,dz=player.z-m.z,d=Math.hypot(dx,dz);
-            if(d>I.meteorBlast)continue;
-            const angle=d>.05?Math.atan2(dx,dz):Math.random()*Math.PI*2,k=1-d/I.meteorBlast,speed=I.meteorShove[0]+(I.meteorShove[1]-I.meteorShove[0])*k;
-            if(this.shove(player.id,{x:Math.sin(angle)*speed,y:I.meteorLift*(.5+.5*k),z:Math.cos(angle)*speed},'meteor'))shoved++;
-        }
-        const kick=(body:C.Body)=>{
-            const dx=body.position.x-m.x,dz=body.position.z-m.z,d=Math.hypot(dx,dz);
-            if(d>I.meteorBlast||Math.abs(body.position.y-m.y)>4)return;
-            const k=(1-d/I.meteorBlast)*I.meteorShove[1]/Math.max(d,.5);
-            body.velocity.x+=dx*k;body.velocity.z+=dz*k;body.velocity.y+=I.meteorLift;body.wakeUp();
-        };
-        for(const corpse of this.corpses.values())kick(corpse.body);
-        for(const c of this.cases.values())if(!c.owner&&!c.armed&&c.body.type===C.Body.DYNAMIC)kick(c.body);
-        this.cheeseBurst({x:m.x,y:m.y+.8,z:m.z},null,'meteor');
-        this.incidentEvents.push({kind:'meteor',p,flattened,shoved});
-    }
-    /** Code Violation malfunctions and Cheddar Shower impacts since the previous call (the city map). */
+    /** Code Violation malfunctions since the previous call (the city map). */
     drainIncidentEvents():IncidentEvent[]{return this.incidentEvents.length?this.incidentEvents.splice(0,this.incidentEvents.length):[];}
     /** The running Dispatch incident, if any. */
     get activeIncident():IncidentId|undefined {return this.dispatch.phase==='active'?incidentInfo(this.dispatch.incident).id:undefined;}
@@ -915,6 +856,7 @@ export class ChaosSimulation {
     private emitShot(owner:string,origin:Vec3Data,velocity:C.Vec3,id:string=crypto.randomUUID(),extra:Partial<ChaosShot>={}){
         if(!this.roomForShot())return undefined;
         const shot:ChaosShot={id,owner,p:{...origin},v:data(velocity),age:0,...extra};
+        if(this.incidentActive('crossfire'))this.bankPaths.set(shot,{origin:{...origin},points:[],bounces:0});
         this.shots.push(shot);return shot;
     }
     /** The special weapon a rat holds now, if any. */
@@ -1163,15 +1105,13 @@ export class ChaosSimulation {
         c.body.position.vadd(new C.Vec3(p.x,p.y,p.z),c.body.position);
         q.mult(caseCarryRotation,c.body.quaternion);c.body.velocity.setZero();c.body.angularVelocity.setZero();
         c.body.type=C.Body.KINEMATIC;c.body.collisionFilterMask=16;c.body.updateAABB();
-        // The case ping: once when taken, then every `casePingMs` while carried.
-        if(!c.ping||this.now-c.ping.at>=T.casePingMs)c.ping={at:this.now,p:{x:c.body.position.x,y:c.body.position.y,z:c.body.position.z}};
     }
     release(id:string,incoming?:Vec3Data){
         for(const c of this.cases.values())if(c.owner===id)this.releaseCase(c,incoming);
     }
     private releaseCase(c:CaseRuntime,incoming?:Vec3Data){
         if(!c.owner)return;
-        const id=c.owner;c.owner=null;c.grip=0;c.ping=undefined;
+        const id=c.owner;c.owner=null;c.grip=0;
         if(c===this.primaryCase&&this.assignment?.state.jurisdiction){this.assignment.state.jurisdiction.scorerId=null;this.assignment.state.revision++;}this.scaleCase(CASE_LOOSE_SCALE,c);
         c.body.position.y+=CASE_SIZE.y*(CASE_LOOSE_SCALE-1)/2;
         c.previousOwner=id;c.pickupAfter=this.now+T.formerCarrierDelay;c.looseSince=this.now;
@@ -1233,9 +1173,8 @@ export class ChaosSimulation {
     private deathBurst(corpse:CorpseState){
         this.cheeseBurst(corpse.p,corpse.owner===undefined?corpse.victimId:corpse.owner);
     }
-    /** Identical radial eruption for Improper Disposal and meteors. Neutral debris
-     * (`owner` null) reports `cause` for the deaths it deals. */
-    private cheeseBurst(origin:Vec3Data,owner:string|null,cause?:EnvironmentCause):void {
+    /** Identical radial eruption for Improper Disposal. */
+    private cheeseBurst(origin:Vec3Data,owner:string|null):void {
         this.sound('burst',origin);
         // Shared global shot capacity and fixed lifetime bound even a chain reaction.
         // Start inside the body so rays leave it without striking an artificial shell.
@@ -1244,7 +1183,7 @@ export class ChaosSimulation {
             const direction=new C.Vec3(Math.cos(angle),.12+(i%3)*.12,Math.sin(angle));direction.normalize();
             direction.scale(BALL_SPEED,direction);
             const shot:ChaosShot={id:crypto.randomUUID(),owner,
-                p:{...origin},v:data(direction),age:0,radius:BALL_RADIUS,explosive:true,...(cause?{cause}:{})};
+                p:{...origin},v:data(direction),age:0,radius:BALL_RADIUS,explosive:true};
             this.burstShots.add(shot);this.shots.push(shot);
         }
     }
@@ -1476,6 +1415,20 @@ export class ChaosSimulation {
         const radius=shotRadius(shot);cheeseBounce(shot);
         if(shotRadius(shot)>radius+.001)this.clearOfWalls(shot);
     }
+    /** Crossfire, a real world bounce at `at`: the ball heats a step and the bounce joins its path. Returns its world bounces so far. */
+    private heatShot(shot:ChaosShot,at:Vec3Data):number{
+        crossfireBounce(shot);
+        let record=this.bankPaths.get(shot);
+        if(!record){record={points:[],bounces:0};this.bankPaths.set(shot,record);}
+        if(record.points.length<CROSSFIRE.pathPoints)record.points.push(data(at));
+        return record.bounces=Math.min(CROSSFIRE.maxBounces,record.bounces+1);
+    }
+    /** A bank shot hitting at `at`: its world bounces and its path (muzzle, bounces, hit, to the centimetre); nothing unbanked. */
+    private bankReport(shot:ChaosShot,at:Vec3Data):{bounces:number;path:Vec3Data[]}|undefined{
+        const record=this.bankPaths.get(shot);if(!record?.bounces)return undefined;
+        const path=[...(record.origin?[record.origin]:[]),...record.points,at];
+        return {bounces:record.bounces,path:path.map(p=>({x:Math.round(p.x*100)/100,y:Math.round(p.y*100)/100,z:Math.round(p.z*100)/100}))};
+    }
     private recordRatHistory(now:number):void {
         for(const [id,player] of this.players){
             const alive=player.hp>0,previous=this.ratLives.get(id);
@@ -1675,7 +1628,8 @@ export class ChaosSimulation {
                 }
                 const compensated=useRat&&ratHit!.compensated,viewAttempted=!!this.shotViews.get(shot.id)&&shot.age<=this.shotViews.get(shot.id)!.untilAge;
                 if(playing)this.hit({owner:shot.owner,victim:target.player.id,damage,incoming,shotId:this.shotTriggers.get(shot.id)??shot.id,ballId:shot.id,
-                    point:data(hit.hitPointWorld),normal:data(normal),compensated,...(shot.explosive?{explosive:true}:{}),...(headshot?{headshot:true}:{}),...(shot.cause?{cause:shot.cause}:{}),...(this.tommyBalls.has(shot)?{weapon:'tommy-gun' as const}:{})});
+                    point:data(hit.hitPointWorld),normal:data(normal),compensated,...(shot.explosive?{explosive:true}:{}),...(headshot?{headshot:true}:{}),...(shot.cause?{cause:shot.cause}:{}),...(this.tommyBalls.has(shot)?{weapon:'tommy-gun' as const}:{}),
+                    ...(shot.wallBounced&&this.incidentActive('crossfire')?this.bankReport(shot,hit.hitPointWorld):undefined)});
                 // Scattershot: every ball knocks its rat flying along the shot (five at close range send it far).
                 if(playing&&this.scatterShots.has(shot)){
                     const along=Math.hypot(incoming.x,incoming.z)||1;
@@ -1705,6 +1659,8 @@ export class ChaosSimulation {
             if(target?.kind==='world')shot.wallBounced=true;
             // A heavy ball rolling or resting on a surface is not bouncing: no event, growth, life, trigger or sound.
             if(!bounces(impact,radius))continue;
+            // Crossfire: every real world bounce heats the ball and is remembered for a bank kill's path.
+            const banked=target?.kind==='world'&&this.incidentActive('crossfire')?this.heatShot(shot,hit.hitPointWorld):0;
             if(target?.kind==='world')this.noteShot(shot,'world-bounce',{point:data(hit.hitPointWorld),normal:data(normal)});
             if(target?.kind==='dispatch')this.noteShot(shot,'dispatch-contact',{point:data(hit.hitPointWorld),normal:data(normal)});
             if(target?.kind==='pressure')this.noteShot(shot,'pressure-contact',{point:data(hit.hitPointWorld),normal:data(normal)});
@@ -1715,7 +1671,7 @@ export class ChaosSimulation {
                 if(!pumped.includes(target.machineId!)){pumped.push(target.machineId!);this.pumpedBy.set(shot,pumped);this.addPressure(target.machineId!,PRESSURE_TUNING.hit,true);}
             }
             if(heavy&&!this.tommyBalls.has(shot)&&target?.kind==='world')this.growShot(shot);
-            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:superball?'boing' as const:shotRadius(shot)>radius?'grow' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,Math.hypot(shot.v.x,shot.v.y,shot.v.z))}:{})});
+            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:superball?'boing' as const:shotRadius(shot)>radius?'grow' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,Math.hypot(shot.v.x,shot.v.y,shot.v.z))}:{}),...(banked?{bounces:banked}:{})});
         }
         // A corpse knocked into the harbour sinks out of sight (the case rule's line: y -9).
         for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -9||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
@@ -1797,8 +1753,7 @@ export class ChaosSimulation {
     }
     private caseSnapshot(c:CaseRuntime):CaseState{
         return {...pose(c.body),owner:c.owner,previousOwner:c.previousOwner,pickupAfter:c.pickupAfter,
-            returningUntil:c.returningUntil,...(c.owner&&c.grip&&this.now-c.gripAt<=T.caseGripMs?{grip:c.grip}:{}),...(c.missileOwner?{missileOwner:c.missileOwner}:{}),
-            ...(c.owner&&c.ping?{ping:{at:c.ping.at,p:{...c.ping.p}}}:{})};
+            returningUntil:c.returningUntil,...(c.owner&&c.grip&&this.now-c.gripAt<=T.caseGripMs?{grip:c.grip}:{}),...(c.missileOwner?{missileOwner:c.missileOwner}:{})};
     }
     /** One enemy ball on a carried case. True when this hit breaks the grip; a ball counts once, and a grip left alone for `caseGripMs` is whole again. */
     private loosensGrip(c:CaseRuntime,ball:string,now:number):boolean{
@@ -1833,7 +1788,6 @@ export class ChaosSimulation {
             buffs:this.buffSnapshot(),
             ...(this.traps.size?{traps:[...this.traps.values()].map(t=>({...t.state}))}:{}),
             ...(this.beams.length?{beams:this.beams.map(b=>({...b,points:b.points.map(p=>({...p}))}))}:{}),
-            ...(this.meteors.length?{meteors:this.meteors.map(m=>({...m}))}:{}),
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
             shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts.slice(-64),...(this.impacts.length<64?this.audioImpacts.slice(-(64-this.impacts.length)):[])].slice(0,64),notice:{...this.notice}};
         if(drain){this.impacts=[];this.audioImpacts=[];}return state;
@@ -1846,14 +1800,13 @@ export class ChaosSimulation {
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();this.pendingVents.clear();
-        this.meteors=[];this.pendingMeteors.clear();this.meteorIncident=-1;this.misfireAt.clear();this.clangAt=0;this.incidentEvents.length=0;
+        this.misfireAt.clear();this.clangAt=0;this.incidentEvents.length=0;
         this.primaryCase.body.type=C.Body.DYNAMIC;this.primaryCase.body.collisionFilterMask=1|8|16;this.scaleCase(CASE_LOOSE_SCALE);this.placeCaseAtSpawn();
-        this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;this.primaryCase.ping=undefined;}
+        this.primaryCase.body.velocity.setZero();this.primaryCase.body.angularVelocity.setZero();this.primaryCase.body.wakeUp();this.primaryCase.looseSince=this.now;this.primaryCase.returningUntil=0;this.primaryCase.launched=false;}
     private restoreCase(c:CaseRuntime,saved:CaseState,time:number){
         c.owner=saved.owner&&!this.isCaseHolder(saved.owner)?saved.owner:null;
         c.previousOwner=saved.previousOwner;c.pickupAfter=saved.pickupAfter;c.missileOwner=saved.missileOwner;
         c.returningUntil=saved.returningUntil;c.looseSince=time;this.scaleCase(c.owner?1:CASE_LOOSE_SCALE,c);
-        c.ping=c.owner&&saved.ping?{at:saved.ping.at,p:{...saved.ping.p}}:undefined;
         // A restored case is never mid-flight; the checkpoint carries its velocity.
         c.launched=false;
         c.body.position.copy(vec(saved.p));c.body.velocity.copy(vec(saved.v));c.body.angularVelocity.copy(vec(saved.spin));
@@ -1897,11 +1850,6 @@ export class ChaosSimulation {
             }
         }
         const elapsed=Math.max(0,(Date.now()-s.time)/1000);
-        // Meteors still falling keep their landing time; the incident carries on calling them without a second announcement.
-        this.meteors=(s.meteors??[]).filter(m=>m.at+METEOR_KEEP_MS>s.time).map(m=>({...m}));
-        for(const m of this.meteors)if(m.at>s.time)this.pendingMeteors.add(m.id);
-        this.meteorSerial=1+Math.max(-1,...this.meteors.map(m=>Number(m.id.split('-').pop())).filter(Number.isFinite));
-        if(this.incidentActive('cheddar-shower'))this.meteorIncident=this.dispatch.serial;
         this.shots=s.shots.filter(shot=>shot.age+elapsed<shotLife(shot)).map(shot=>({...shot,p:{...shot.p},v:{...shot.v},age:shot.age+elapsed,
             radius:shot.radius??BALL_RADIUS}));
         for(const c of s.corpses){

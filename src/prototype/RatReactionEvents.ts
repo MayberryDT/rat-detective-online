@@ -41,7 +41,7 @@ export class RatReactionEvents {
             this.launches.add(launch.id);
             if(fresh&&state.time>=launch.at&&state.time-launch.at<300)this.play(launch.playerId,'launch');
         }
-        // A hard shove (a Scattershot blast, a meteor) flings the rat like a launch: scream and flail.
+        // A hard shove (a Scattershot blast) flings the rat like a launch: scream and flail.
         for(const shove of state.pressure?.shoves??[]){
             if(this.launches.has(shove.id))continue;
             this.launches.add(shove.id);

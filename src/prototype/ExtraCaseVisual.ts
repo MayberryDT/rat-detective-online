@@ -50,7 +50,7 @@ export class ExtraCaseVisual {
             if(!this.extrapolate||!this.presentation.looseCase(renderTime,this.pose))copyPresentationPose(state,this.pose);
             const {p,q}=this.pose;this.root.position.set(p.x,p.y,p.z);this.root.quaternion.set(q.x,q.y,q.z,q.w);
         }
-        this.beacon.update(this.root,camera,!!state.owner);
+        this.beacon.update(this.root,camera,!!state.owner,now,false,0);
     }
     dispose():void {
         if(this.arm){disposeCaseGrip(this.arm);this.arm=null;}

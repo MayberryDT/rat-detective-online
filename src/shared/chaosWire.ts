@@ -1,5 +1,5 @@
 import type { ChaosState, ChaosShot, ChaosImpact } from './chaosState';
-import { CHAOS_TUNING } from './chaosState';
+import { CHAOS_TUNING, CROSSFIRE } from './chaosState';
 import { BALL_RADIUS } from './ballTuning';
 import { MAX_SERVER_MESSAGE_BYTES, wireBytes, type ServerMessage } from './networkProtocol';
 import { parseServerMessage } from './messageValidation';
@@ -11,12 +11,12 @@ export const CHAOS_WIRE_MODE = 'compact-v2';
  * the miss of a straight-line prediction from them (balls fly smooth arcs, so most rows are a few small numbers).
  * Trailing zeros are left off. */
 export const MOTION_ENCODING = 'predict-v1';
-const REST_KEYS = ['case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs','meteors','traps','beams'] as const;
+const REST_KEYS = ['case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs','traps','beams'] as const;
 /** Lists of things with ids. While a list changes only by edits, removals and additions at its end, it travels as
  * `{put,drop}` (changed and new items, ids gone) when that is shorter than the whole list. */
-const KEYED_KEYS: Record<string, true> = { corpses: true, beams: true, traps: true, meteors: true };
+const KEYED_KEYS: Record<string, true> = { corpses: true, beams: true, traps: true };
 const restValue=(state:ChaosState,key:typeof REST_KEYS[number]):unknown=>
-  state[key]??(key==='extraCases'?[]:key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'||key==='meteors'||key==='traps'||key==='beams'?null:undefined);
+  state[key]??(key==='extraCases'?[]:key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'||key==='traps'||key==='beams'?null:undefined);
 type Definition = [number, string, string | null];
 type KeyedItem = {id:string;text:string};
 export interface ChaosAck { type:'chaosAck'; stream:string; seq:number }
@@ -26,9 +26,9 @@ const record = (v: unknown): v is Record<string,unknown> => !!v && typeof v==='o
 const id = (v: unknown): v is string => typeof v==='string' && v.length>0 && v.length<=64;
 
 /** An impact as a row: position, normal, flags (1 surface, 2 audio only, 4 `audioOnly: false`), then scale, cue,
- * foley and energy, null where absent and trailing nulls left off. */
+ * foley, energy and Crossfire bounces, null where absent and trailing nulls left off. */
 function impactRow(i:ChaosImpact):unknown[] {
-  const row:unknown[]=[i.p.x,i.p.y,i.p.z,i.n.x,i.n.y,i.n.z,(i.surface?1:0)|(i.audioOnly===true?2:i.audioOnly===false?4:0),i.scale??null,i.cue??null,i.foley??null,i.energy??null];
+  const row:unknown[]=[i.p.x,i.p.y,i.p.z,i.n.x,i.n.y,i.n.z,(i.surface?1:0)|(i.audioOnly===true?2:i.audioOnly===false?4:0),i.scale??null,i.cue??null,i.foley??null,i.energy??null,i.bounces??null];
   while(row.length>7&&row[row.length-1]===null)row.pop();
   return row;
 }
@@ -84,10 +84,11 @@ export interface PreparedChaos {
 export function prepareChaos(state:ChaosState):PreparedChaos {
   const flag=(v:boolean|undefined)=>v===undefined?0:v?2:1;
   return {shots:state.shots.map(s=>{
-    const flags=flag(s.wallBounced);
+    // Flags: the bounce flag (0 absent, 1 false, 2 true) plus three times the Crossfire heat.
+    const flags=flag(s.wallBounced)+3*(s.heat??0);
     const radius=Math.round((s.radius??BALL_RADIUS)*1000),life=s.life===undefined?0:Math.round(s.life*1000);
     const values=[...[s.p.x,s.p.y,s.p.z,s.v.x,s.v.y,s.v.z,s.age].map(n=>Math.round(n*1000)),flags];
-    // Optional tail: radius, then a Big Cheese lifetime.
+    // Optional tail: radius, then a longer lifetime (Big Cheese, Crossfire, Bad Ammunition).
     if(radius!==Math.round(BALL_RADIUS*1000)||life)values.push(radius);
     if(life)values.push(life);
     return {id:s.id,owner:s.owner,values,motion:values.join(','),relative:new WeakMap<number[],{base:number[]|undefined;text:string}>()};
@@ -212,12 +213,13 @@ export class ChaosDecoder {
         row=encoded.slice(1);
       }
       const d=definitions.get(handle),flags=row[7];
-      if(!d||ids.has(d[0])||flags<0||flags>2)return null;
+      if(!d||ids.has(d[0])||flags<0||flags>2+3*CROSSFIRE.maxHeat)return null;
       active.add(handle);ids.add(d[0]);motions.set(handle,row);
       if(!fresh&&previous&&previous.length===row.length)bases.set(handle,previous);
       const radius=row[8],life=row[9];
       const shot:ChaosShot={id:d[0],owner:d[1],p:{x:row[0]/1000,y:row[1]/1000,z:row[2]/1000},v:{x:row[3]/1000,y:row[4]/1000,z:row[5]/1000},age:row[6]/1000};
-      if(flags)shot.wallBounced=flags===2;
+      if(flags%3)shot.wallBounced=flags%3===2;
+      if(flags>=3)shot.heat=Math.floor(flags/3);
       if(radius&&radius!==Math.round(BALL_RADIUS*1000))shot.radius=radius/1000;
       if(life)shot.life=life/1000;
       shots.push(shot);
@@ -236,7 +238,6 @@ export class ChaosDecoder {
     if(rest.assignment===null)delete rest.assignment;
     if(rest.pickups===null)delete rest.pickups;
     if(rest.buffs===null)delete rest.buffs;
-    if(rest.meteors===null)delete rest.meteors;
     if(rest.traps===null)delete rest.traps;
     if(rest.beams===null)delete rest.beams;
     const message=parseServerMessage({type:'chaos',state:{...rest,time:f.time,...(f.epoch===undefined?{}:{epoch:f.epoch}),...(f.tick===undefined?{}:{tick:f.tick}),shots,impacts}});
@@ -266,14 +267,15 @@ function impactObjects(rows:unknown):unknown[]|null {
   if(!Array.isArray(rows)||rows.length>64)return null;
   const impacts:unknown[]=[];
   for(const row of rows){
-    if(!Array.isArray(row)||row.length<7||row.length>11)return null;
-    const [x,y,z,nx,ny,nz,flags,scale,cue,foley,energy]=row;
+    if(!Array.isArray(row)||row.length<7||row.length>12)return null;
+    const [x,y,z,nx,ny,nz,flags,scale,cue,foley,energy,bounces]=row;
     if(!integer(flags)||flags<0||flags>5||(flags&6)===6)return null;
     const impact:Record<string,unknown>={p:{x,y,z},n:{x:nx,y:ny,z:nz},surface:(flags&1)===1};
     if(scale!==undefined&&scale!==null)impact.scale=scale;
     if(cue!==undefined&&cue!==null)impact.cue=cue;
     if(foley!==undefined&&foley!==null)impact.foley=foley;
     if(energy!==undefined&&energy!==null)impact.energy=energy;
+    if(bounces!==undefined&&bounces!==null)impact.bounces=bounces;
     if(flags&2)impact.audioOnly=true;else if(flags&4)impact.audioOnly=false;
     impacts.push(impact);
   }

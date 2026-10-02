@@ -3,7 +3,7 @@ import {JURISDICTION_ZONES,zoneContains,type JurisdictionZoneId} from '../jurisd
 import {activeZone} from '../jurisdiction';
 import {activeDestination,destinationPoint} from '../assignments';
 import {exposedCarrierCase,shotHitsIronclad} from '../BotTargeting';
-import {DISPATCH_STATIONS,INCIDENT_TUNING,LAUNCH_MACHINES,PRESSURE_TUNING,type CaseState,type ChaosState,type LaunchMachine,type Meteor} from '../chaosState';
+import {DISPATCH_STATIONS,LAUNCH_MACHINES,PRESSURE_TUNING,type CaseState,type ChaosState,type LaunchMachine} from '../chaosState';
 import {incidentInfo,type IncidentId} from '../incidentCatalog';
 import {hasIronclad,heldWeapon,legScale,weaponArming,WEAPON_TUNING,type WeaponKind} from '../pickups';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
@@ -19,7 +19,6 @@ import {BotFight,FIGHT,type FightView} from './motor/fight';
 import {BotZoneHold} from './motor/zoneHold';
 import {BotTricks} from './motor/tricks';
 import {zoneStepSafe} from './motor/zoneStepSafe';
-import {CarrierSight,type KnownCarrier} from './motor/carriers';
 import {FLASHLIGHT_REACH,RAT_MOVEMENT,lookHeading,muzzleReach,noControls,ratMuzzle,type RatControls} from '../rat/ratBody';
 
 export interface MotorNavigation {
@@ -79,8 +78,6 @@ const TRAP={settleMs:400,patienceMs:[2000,4500],lookMs:250,retryMs:1200,choke:3.
 const HELD_SLACK_MS=8;
 /** Another rat's Mousetrap counts as underfoot this near (its snap reach and a margin), units. */
 export const TRAP_REACH=WEAPON_TUNING.trapRadius+WEAPON_TUNING.trapFoot+.5;
-/** Cheddar Shower: a falling meteor's shadow counts as overhead this far beyond the reach it flattens, units. */
-const METEOR_MARGIN=1.5;
 /** Another rat's unbroken Mousetrap in sight within `reach` of `p` (horizontally, on its level). A rat's own trap
  * is harmless to it; hidden ones are never read. */
 export function enemyTrap(self:PlayerData,p:Vec3Data,reach:number,state:ChaosState|undefined,clear:(p:Vec3Data)=>boolean):boolean {
@@ -180,16 +177,12 @@ export class BotMotor {
     private readonly trapTo={x:0,y:0,z:0};
     /** The step after turning aside from hazards (`veer`), reused every tick. */
     private readonly veered={x:0,z:0};
-    /** A meteor's shadow on the ground, looked at for line of sight; reused every tick. */
-    private readonly shadow={x:0,y:0,z:0};
     private progressAt = 0;
     private readonly progressPosition={x:0,y:0,z:0};
     private progressSet=false;
     private recoverUntil = 0;
     private cases:CaseEntry[]=[];
     private readonly caseLifecycles=new Map<string,{owner:string|null;returning:boolean}>();
-    /** Where this rat knows other rats' carried cases are: its own sight or the latest ping (clarity batch "Case ping"). */
-    private readonly carrierSight=new CarrierSight();
     private assignmentSignature = '';
     private assignmentActive=false;
     private progress=0;
@@ -284,9 +277,6 @@ export class BotMotor {
     get ringing():boolean{return !!this.bell;}
     /** The genuine cases seen this tick. */
     get genuineCases():readonly CaseEntry[]{return this.cases;}
-    /** Other rats carrying a case whose place this rat knows, nearest first, as of the last decision: the live rat
-     * while in sight, else its last sighting or the case's latest ping. The same array, refreshed in place. */
-    get carriers():readonly KnownCarrier[]{return this.carrierSight.known;}
     /** The rat last shot at while in sight, where and when: a bank shot's quarry once it hides. */
     get sighted():Readonly<{id:string;p:Vec3Data;at:number}>|undefined{return this.sighting;}
     reset(): void {
@@ -297,7 +287,7 @@ export class BotMotor {
         this.plannedDestination=undefined;this.pendingPlan=undefined;this.planAt=0;this.progressSet=false;this.recoverUntil=0;
         this.routeWaitStarted=undefined;this.failedGoals.clear();this.failedCase=undefined;this.stalled=false;
         this.routeProgressGoal=undefined;this.bestRouteDistance=Infinity;this.localWaypoint=undefined;this.localStepAt=0;
-        this.caseLifecycles.clear();this.cases=[];this.carrierSight.reset();
+        this.caseLifecycles.clear();this.cases=[];
         this.flight=undefined;this.launchWaitAt=undefined;this.ride=undefined;this.rideAt=0;
         this.assignmentSignature='';this.urgent=false;
         this.sighting=undefined;this.post=undefined;this.postAt=0;this.heard.until=0;this.listenAt=0;this.rivalShots=0;this.rivalNewest=Infinity;
@@ -460,7 +450,6 @@ export class BotMotor {
         }
         if(ownershipChanged)this.urgent=true;
         if(this.failedCase&&state&&distance(this.failedCase,state.case.p)>7){this.failedCase=undefined;this.failedGoals.delete('case');this.urgent=true;}
-        this.carrierSight.observe(cases,self.id);
         this.followCase();
         if(this.routeWaitStarted!==undefined&&this.routeProgressGoal){
             const remaining=distance(self,this.routeProgressGoal);
@@ -477,16 +466,15 @@ export class BotMotor {
         if(selected&&!selected.value.owner)this.destination=selected.value.p;
     }
 
-    /** At a decision: who is in sight, where the case carriers are, whom to shoot and whether to ring a bell in
-     * passing. Visible carriers first (their exposed case through Ironclad), then Most Wanted, the retained target,
-     * the nearest vulnerable rat. A preferred rat (the mind's target) wins when it is visible and shootable. In a
-     * Blackout sight reaches only as far as a flashlight. */
-    perceive(now:number,self:PlayerData,living:readonly PlayerData[],state:ChaosState|undefined,
+    /** At a decision: who is in sight, whom to shoot and whether to ring a bell in passing. Visible carriers
+     * first (their exposed case through Ironclad), then Most Wanted, the retained target, the nearest
+     * vulnerable rat. A preferred rat (the mind's target) wins when it is visible and shootable. In a Blackout
+     * sight reaches only as far as a flashlight. */
+    perceive(now:number,self:PlayerData,living:readonly PlayerData[],carriers:readonly PlayerData[],state:ChaosState|undefined,
         clear:(p:Vec3Data)=>boolean,clearControl:(p:Vec3Data)=>boolean,quietBell:boolean,preferred?:string):void {
         const time=state?.time??now,sight=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='blackout'?FLASHLIGHT_REACH:80;
         const visible=living.filter(p=>distance(self,p)<sight&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
         this.visible=visible;
-        this.carrierSight.see(self,visible,living,time);
         // A rat seen dying (the kill feed) is not banked at.
         if(this.sighting&&!living.some(p=>p.id===this.sighting?.id))this.sighting=undefined;
         this.protectedVisible=visible.filter(p=>hasIronclad(state?.buffs,p.id,time));
@@ -497,9 +485,7 @@ export class BotMotor {
         // Most Wanted: the leader is in a searchlight everyone can see; hunt them for the bounty.
         const wantedId=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='most-wanted'?state.dispatch.wanted:undefined;
         const chosen=preferred?visible.find(p=>p.id===preferred&&shootable(p)):undefined;
-        let carrier:PlayerData|undefined;
-        for(const c of this.carrierSight.known)if(c.seen&&shootable(c.rat)){carrier=c.rat;break;}
-        this.shotTarget=chosen??carrier??vulnerable.find(p=>p.id===wantedId)??vulnerable.find(p=>p.id===this.shotTarget?.id)??vulnerable[0];
+        this.shotTarget=chosen??carriers.find(p=>visible.includes(p)&&shootable(p))??vulnerable.find(p=>p.id===wantedId)??vulnerable.find(p=>p.id===this.shotTarget?.id)??vulnerable[0];
         // Do not interrupt your own scoring, or keep shooting a nearby
         // loose case away while attempting to collect it.
         this.bell=state?.dispatch.phase==='ready'&&!quietBell&&!this.shotTarget ? DISPATCH_STATIONS.map(station=>station.target)
@@ -747,7 +733,8 @@ export class BotMotor {
             this.aim.disengage(now);
             if(this.motorRandom()<.35)this.suppressUntil=now+200+this.motorRandom()*500;
         }
-        const bank=this.tactics.bank&&!visibleTarget&&!holdingZone&&!dispatchReady&&!mischief&&!clearing?this.tricks.bank(now,self,state,this.sighting,this.protectedVisible,this.navigation,this.ballistics,laser):undefined;
+        // Crossfire makes a banked ball lethal: every rat with the cheese gun tries bank shots then, whatever its tactics.
+        const bank=(this.tactics.bank||this.ballistics==='crossfire')&&!visibleTarget&&!holdingZone&&!dispatchReady&&!mischief&&!clearing?this.tricks.bank(now,self,state,this.sighting,this.protectedVisible,this.navigation,this.ballistics,laser):undefined;
         const suppressing=!visibleTarget&&now<this.suppressUntil&&!!seen;
         const trick=clearing??mischief??bank;
         let shoot:Vec3Data|undefined;
@@ -798,19 +785,16 @@ export class BotMotor {
             const dx=this.jumpTravel.goal.x-self.x,dz=this.jumpTravel.goal.z-self.z,d=Math.hypot(dx,dz);
             const speed=Math.min(CAREFUL,d*5);x=d>.15?dx/d*speed:0;z=d>.15?dz/d*speed:0;
         }
-        // Steer around another rat's Mousetrap or a falling meteor's shadow the current step would enter.
+        // Steer around another rat's Mousetrap the current step would enter.
         // Local, bounded and visible-only: the bot never reads hidden traps, it
         // simply refuses to walk into one it can see ahead of it. Its own trap is harmless to it.
-        const traps=state?.traps,meteors=state?.meteors;
-        if((traps?.length||meteors?.length)&&(x||z)){
+        const traps=state?.traps;
+        if(traps?.length&&(x||z)){
             const stepLength=Math.hypot(x,z)||1,nx=x/stepLength,nz=z/stepLength,veered=this.veered;
             veered.x=x;veered.z=z;
-            if(traps)for(const trap of traps)if(trap.owner!==self.id&&trap.brokenAt===undefined)this.veer(self,trap,nx,nz,stepLength,clear);
-            if(meteors)for(const m of meteors)if(m.at>time)this.veer(self,this.shadowOf(m),nx,nz,stepLength,clear);
+            for(const trap of traps)if(trap.owner!==self.id&&trap.brokenAt===undefined)this.veer(self,trap,nx,nz,stepLength,clear);
             x=veered.x;z=veered.z;
         }
-        // Already under a meteor's shadow it can see: run straight out from under it, as a player would.
-        if(meteors?.length&&this.meteorEscape(self,time,meteors,clear)){x=this.veered.x;z=this.veered.z;}
         if(jump&&!hop&&Math.hypot(x,z)>.5){
             const speed=Math.hypot(x,z),goal=waypoint&&!holdingZone?waypoint:{x:self.x+x/speed*3,y:self.y,z:self.z+z/speed*3};
             this.jumpTravel={goal:{x:goal.x,y:goal.y,z:goal.z},started:now};
@@ -831,8 +815,7 @@ export class BotMotor {
         if(now<this.heard.until){this.aim.look(eye,this.heard);return;}
         if(holding&&this.zoneHold.look){this.aim.look(eye,this.zoneHold.look);return;}
         if(this.mode==='case'&&this.destination&&distance(self,this.destination)<30){this.aim.look(eye,this.destination,true);return;}
-        const carried=this.mode==='intercept'&&this.post!==undefined&&state?.case.owner&&state.case.owner!==self.id?this.carrierSight.caseAt('case',state.case,self.id):undefined;
-        if(carried){this.aim.look(eye,carried);return;}
+        if(this.mode==='intercept'&&this.post!==undefined&&state?.case.owner&&state.case.owner!==self.id){this.aim.look(eye,state.case.p);return;}
         if(now>=this.glanceAt){this.glanceAt=now+8000+this.motorRandom()*12000;this.glanceUntil=now+350+this.motorRandom()*450;this.glanceTurn=(this.motorRandom()<.5?-1:1)*(.5+this.motorRandom()*.5);}
         const running=Math.hypot(x,z)>1;
         if(now<this.glanceUntil&&running){this.aim.lookAlong(Math.atan2(x,z)+this.glanceTurn);return;}
@@ -853,29 +836,6 @@ export class BotMotor {
         this.veered.z=nz*stepLength*.5-nx*away*stepLength*1.2;
     }
 
-    /** A falling meteor's shadow, a little above the ground it lands on (`shadow`, reused). */
-    private shadowOf(m:Meteor):Vec3Data {const s=this.shadow;s.x=m.x;s.y=m.y+.5;s.z=m.z;return s;}
-
-    /** Cheddar Shower: the way out (into `veered`, at a run) from under every falling meteor's shadow in sight on this
-     * level within the reach it flattens plus `METEOR_MARGIN`, nearest centres pushing hardest; dead centre runs on
-     * along the facing. False when no shadow it sees is underfoot. */
-    private meteorEscape(self:Vec3Data,time:number,meteors:readonly Meteor[],clear:(p:Vec3Data)=>boolean):boolean {
-        const reach=INCIDENT_TUNING.meteorRadius+METEOR_MARGIN;
-        let ax=0,az=0,under=false;
-        for(const m of meteors){
-            if(m.at<=time||Math.abs(m.y-self.y)>3)continue;
-            const dx=self.x-m.x,dz=self.z-m.z,d=Math.hypot(dx,dz);
-            if(d>=reach||!clear(this.shadowOf(m)))continue;
-            const k=(reach-d)/reach;under=true;
-            if(d>.05){ax+=dx/d*k;az+=dz/d*k;}
-            else{ax+=Math.sin(this.aim.yaw)*k;az+=Math.cos(this.aim.yaw)*k;}
-        }
-        if(!under)return false;
-        const length=Math.hypot(ax,az)||1;
-        this.veered.x=ax/length*RAT_MOVEMENT.run;this.veered.z=az/length*RAT_MOVEMENT.run;
-        return true;
-    }
-
     /** Whether to press fire now to set the Mousetrap in paw down (`TRAP`): on the ground, once it has come up into the
      * paw (the swap a human watches, `trapLockMs`; the room refuses earlier presses), where the press puts it
      * (`trapReach` ahead along the crosshair) is a floor with nothing solid in between, and the spot is useful. */
@@ -889,7 +849,7 @@ export class BotMotor {
         if(nav.supported&&!nav.supported(spot))return false;
         from.x=self.x;from.y=self.y+.5;from.z=self.z;to.x=spot.x;to.y=self.y+.5;to.z=spot.z;
         if(ray?.(from,to))return false;
-        let useful=rival||now-since>=this.trapPatience||this.nearObjective(spot,self.id,state);
+        let useful=rival||now-since>=this.trapPatience||this.nearObjective(spot,state);
         if(!useful&&ray){
             // A doorway or an alley: walls close on both sides of the spot.
             from.x=spot.x;from.y=self.y+.8;from.z=spot.z;to.y=from.y;
@@ -899,11 +859,10 @@ export class BotMotor {
         if(useful)this.trapPressAt=now+TRAP.retryMs;
         return useful;
     }
-    /** The spot is within `TRAP.objective` of the case (where this rat knows it is), the active Jurisdiction zone or the drop-off. */
-    private nearObjective(spot:Vec3Data,selfId:string,state:ChaosState|undefined):boolean {
+    /** The spot is within `TRAP.objective` of the case, the active Jurisdiction zone or the drop-off. */
+    private nearObjective(spot:Vec3Data,state:ChaosState|undefined):boolean {
         if(!state)return false;
-        const known=this.carrierSight.caseAt('case',state.case,selfId);
-        if(known&&distance(spot,known)<TRAP.objective)return true;
+        if(distance(spot,state.case.p)<TRAP.objective)return true;
         const assignment=state.assignment;
         if(assignment?.phase!=='active')return false;
         const j=assignment.jurisdiction;

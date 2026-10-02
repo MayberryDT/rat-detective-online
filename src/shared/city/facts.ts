@@ -97,10 +97,10 @@ export type CityFact = FactContext & (
   | { type: 'ball'; a?: number; outcome: ShotResultOutcome; p?: P3; place?: string; victim?: number; bounces?: number }
   /** `incoming`: the hit came with a ball's travel direction (true for ordinary shots). `weapon`: a special weapon's hit. */
   | { type: 'damage'; a?: number; victim: number; dmg: number; head: boolean; explosive: boolean; incoming: boolean; ap?: P3; vp: P3; dist?: number; hpAfter: number; weapon?: WeaponKind }
-  /** `env`: what killed a rat nobody is credited with. (Before protocol 28 a Mousetrap's snap killed, cause 'trap'.) */
-  | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[]; weapon?: WeaponKind; env?: EnvironmentCause }
-  /** Cheddar Shower: a meteor landed at `p`; `flattened` the rats it landed on (dead, nobody credited), `shoved` the rats its blast threw. */
-  | { type: 'meteor'; p: P3; place: string; flattened: number[]; shoved: number }
+  /** `env`: what killed a rat nobody is credited with. (Before protocol 28 a Mousetrap's snap killed, cause 'trap'; until
+   * protocol 29 Cheddar Shower's meteors did, env 'meteor', with their own 'meteor' facts. Old facts may hold either.)
+   * `bounces`: a Crossfire bank kill's world bounces (since protocol 29). */
+  | { type: 'death'; a?: number; victim: number; cause: 'shot' | 'headshot' | 'explosion' | 'city'; ap?: P3; aplace?: string; vp: P3; vplace: string; dist?: number; lifeMs: number; assists: number[]; weapon?: WeaponKind; env?: EnvironmentCause; bounces?: number }
   /** Code Violation: equipment misbehaved at `p` (`site`: the supply, machine or pillar). `faulty`: the supply rat `a`
    * claimed came out as its dud `kind` (`FAULTY_KINDS`); `machine` fired on its own or flung bystanders; `pillar` clanged.
    * `shoved`: rats the blast threw (a Backfire throws its own rat). Nothing here kills. */
@@ -114,14 +114,13 @@ export type CityFact = FactContext & (
   | { type: 'heal'; a: number; cause: HealCause; hp: number }
   | { type: 'buff-end'; a: number; buff: TimedPickup }
   /** The primary case changed hands. A `drop` says why (`cause`) and how many enemy balls its grip took that carry
-   * (`gripHits`). A `drop` or `steal` says how many case pings the carry ended gave away (`pings`; the take's own ping
-   * counts). A `take`, `steal` or `respawn` ends a loose spell: `looseMs` loose, `path` units travelled, `moved`
+   * (`gripHits`). A `take`, `steal` or `respawn` ends a loose spell: `looseMs` loose, `path` units travelled, `moved`
    * straight-line units from where it came loose (or appeared), `kicks` balls that hit it while loose (every rat's). */
   | { type: 'case'; what: 'take' | 'drop' | 'steal' | 'deliver' | 'respawn'; a?: number; from?: number; p: P3; place: string; carryMs?: number;
-      cause?: 'death' | 'shot' | 'delivered' | 'left'; gripHits?: number; pings?: number; looseMs?: number; path?: number; moved?: number; kicks?: number }
+      cause?: 'death' | 'shot' | 'delivered' | 'left'; gripHits?: number; looseMs?: number; path?: number; moved?: number; kicks?: number }
   | { type: 'launch'; a: number; machine?: string; boost: boolean; p: P3; place: string }
   /** A rat knocked away (`ChaosSimulation.shove`, the same for humans and bots): `cause` is what did it ('shove' a landing
-   * shockwave, 'blast' a Scattershot ball, or an incident's own kind such as 'meteor'), `speed` the sideways u/s. Pressure
+   * shockwave, 'blast' a Scattershot ball, or an incident's own kind), `speed` the sideways u/s. Pressure
    * Surge's suction pulls are not recorded. */
   | { type: 'shove'; a: number; cause: string; speed: number; p: P3; place: string }
   /** Most Wanted: `a` took down the wanted rat `victim` and was handed `kind`. */

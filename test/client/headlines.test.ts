@@ -74,7 +74,6 @@ describe('the death recap',()=>{
         expect(deathRecap(death,'me','blackout').how).toBe('CHEESE GUN');
         expect(deathRecap({...death,blast:true},'me','improper-disposal').how).toBe('AN EXPLOSION');
         expect(deathRecap({...death,killerId:'me',killerName:'Cheddar',blast:true},'me').killer).toBe('YOURSELF');
-        expect(deathRecap({...death,killerId:null,killerName:null,cause:'meteor'},'me')).toEqual({killer:'THE CITY',how:'A CHEESE METEOR'});
-        expect(deathRecap({...death,killerId:null,killerName:null,cause:'drowned'},'me').how).toBe('DROWNED IN THE HARBOUR');
+        expect(deathRecap({...death,killerId:null,killerName:null,cause:'drowned'},'me')).toEqual({killer:'THE CITY',how:'DROWNED IN THE HARBOUR'});
     });
 });

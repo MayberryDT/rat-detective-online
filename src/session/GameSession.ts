@@ -52,7 +52,6 @@ import {FeelDirector} from '../feel/FeelDirector';
 import {IncidentStory,STORY} from '../feel/IncidentStory';
 import {headlines} from '../ui/Headlines';
 import {deathRecap} from '../ui/deathRecap';
-import {caseLastSeen} from '../shared/casePing';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {FLASHLIGHT,FLASHLIGHT_REACH} from '../shared/rat/ratBody';
@@ -418,11 +417,8 @@ export class GameSession {
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
-            this.chaos.onMeteorWarn=(at,seconds)=>this.feel.meteorWarned(at,seconds);
-            this.chaos.onMeteorImpact=at=>this.feel.meteorLanded(at,this.stage.camera);
             this.chaos.onSuperball=p=>this.feel.superballBounce(p);
             this.chaos.onCasePaper=(p,kind)=>this.feel.casePaper(p,kind);
-            this.chaos.onCasePinged=()=>this.feel.casePinged();
             this.chaos.onClaim=(kind,camera,lockMs)=>this.feel.claimed(kind,this.rat?.entity,camera,lockMs);
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onDispatchShot=(_station,at)=>this.feel.dispatchShot(at,this.stage.camera);
@@ -589,8 +585,13 @@ export class GameSession {
             case 'playerDied': {
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
-                const headshot=message.headshot===true;
-                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName,headshot);this.foley.play('hit-confirm');duckWorld(this.stage.listener.context,1);const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId,headshot);}
+                const headshot=message.headshot===true,bank=message.bounces?message.bounces>=2?'TRICK SHOT':'BANK SHOT':undefined;
+                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName,headshot,bank);this.foley.play('hit-confirm');duckWorld(this.stage.listener.context,1);const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId,headshot);}
+                // A Crossfire bank kill: its killer's BANK SHOT (above) and slow-motion; killer and victim both see the ball's path.
+                if(message.path&&message.victimId!==message.killerId&&(message.killerId===this.myId||message.victimId===this.myId)){
+                    if(message.killerId===this.myId)this.feel.bankShot();
+                    this.chaos?.crossfire.showPath(message.path);
+                }
                 this.highlights.emit(this.highlights.detector.onDeath({
                     victimId: message.victimId,
                     killerId: message.killerId,
@@ -832,6 +833,10 @@ export class GameSession {
         this.chaos?.setLastHitPoint(!this.observing&&this.feel.lastHitPoint);
         this.chaos?.setFixXray(!this.observing&&this.feel.fixXray);
         this.chaos?.update(dt*this.feel.timeScale,camera,this.feel.presentTime(performance.now()));
+        // Crossfire: your aim guide to the first bounce while you hold a gun whose balls ricochet (not the Laser or a trap).
+        const weapon=this.activeIncident==='crossfire'?this.weaponNow():undefined;
+        const guiding=this.activeIncident==='crossfire'&&this.transport.state==='playing'&&!this.observing&&!this.roundWon&&!!this.rat&&!this.rat.entity.dead&&(!weapon||weapon==='tommy-gun');
+        this.chaos?.crossfire.guide(guiding?this.rat?.entity.mesh:undefined,camera,this.gun.sceneryHit);
         if(this.pendingVictory&&now>=this.pendingVictory.at){
             const won=this.pendingVictory.message;this.pendingVictory=undefined;
             if(this.roundWon)this.hud.showVictory(won.winnerName,won.kills,{assignment:won.assignment,awards:won.awards,report:won.report,localId:this.myId,winnerId:won.winnerId});
@@ -851,15 +856,12 @@ export class GameSession {
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
-        // Dead: the recap's arrow toward the case, where you may know it is (a loose case, or a carrier's latest ping).
+        // Dead: the recap's arrow toward the case (seen by everyone through walls).
         if(this.rat?.entity.dead&&this.lastChaos){
-            const c=this.lastChaos.case,seen=caseLastSeen(c,this.myId);
-            if(!seen)this.hud.pointRecap(undefined,0,'');
-            else{
-                RECAP_LOCAL.set(seen.x,seen.y,seen.z).sub(camera.position);const metres=RECAP_LOCAL.length();
-                RECAP_LOCAL.applyQuaternion(RECAP_INVERSE.copy(camera.quaternion).invert());
-                this.hud.pointRecap(Math.atan2(RECAP_LOCAL.x,-RECAP_LOCAL.z),metres,c.owner?'CASE LAST SEEN':'THE CASE');
-            }
+            const seen=this.lastChaos.case.p;
+            RECAP_LOCAL.set(seen.x,seen.y,seen.z).sub(camera.position);const metres=RECAP_LOCAL.length();
+            RECAP_LOCAL.applyQuaternion(RECAP_INVERSE.copy(camera.quaternion).invert());
+            this.hud.pointRecap(Math.atan2(RECAP_LOCAL.x,-RECAP_LOCAL.z),metres,'THE CASE');
         }
         if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon)this.showResultsBoard();
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
@@ -976,7 +978,7 @@ export class GameSession {
             const local=launch.playerId===this.myId,entity=local?this.rat?.entity:this.remotes.get(launch.playerId);
             if(entity&&!entity.dead)this.feel.launched(entity.mesh.position,local,!!launch.boost,this.stage.camera);
         }
-        // A hard shove (Scattershot, a meteor) is felt like a small launch: the scream, and your view kicks.
+        // A hard shove (Scattershot) is felt like a small launch: the scream, and your view kicks.
         for(const shove of state.pressure?.shoves??[]){
             if(this.feltLaunches.has(shove.id)||Math.hypot(shove.velocity.x,shove.velocity.z)<HARD_SHOVE)continue;
             this.feltLaunches.add(shove.id);

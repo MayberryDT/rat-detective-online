@@ -4,7 +4,7 @@ import {CHAOS_TUNING as T,DISPATCH_STATIONS,INCIDENT_TUNING as I,type ChaosState
 import {createAssignment} from '../../src/shared/assignments';
 import {CITY_BOUNDS,CITY_PREVIEW_SEED,GRAYBOX_VERSION} from '../../src/shared/grayboxLayout';
 import {MAX_HP,type PlayerData,type Vec3Data} from '../../src/shared/networkProtocol';
-import {applyHit,createPlayer,spawnForWorld} from '../../src/worker/gameState';
+import {createPlayer,spawnForWorld} from '../../src/worker/gameState';
 import type {IncidentId} from '../../src/shared/incidentCatalog';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {FAULTY_KINDS,type FaultyKind} from '../../src/shared/pickups';
@@ -141,48 +141,12 @@ describe('fourth-batch incidents',()=>{
         expect(hits).toEqual([]);
     });
 
-    it('a stored room still running Act of God keeps raining Cheddar Shower meteors',()=>{
-        const {sim,players}=active('cheddar-shower',['a']);
-        const legacy={...sim.snapshot(false),dispatch:{phase:'active',incident:'act-of-god',started:now,until:now+T.activeMs,serial:7}} as unknown as ChaosState;
-        expect(parseServerMessage({type:'chaos',state:legacy})).toMatchObject({state:{dispatch:{incident:'cheddar-shower'}}});
-        const restored=new ChaosSimulation(players,()=>{},legacy,spec);
-        expect(restored.activeIncident).toBe('cheddar-shower');
-        restored.step(1/60,now+16);restored.step(1/60,now+700);
-        expect(restored.snapshot(false).meteors?.length).toBeGreaterThan(0);
-    });
-
-    it('a meteor flattens the rat under its shadow for nobody\'s credit, counts its death, and only shoves the rat beside it',()=>{
-        const {sim,players,rats:[a,b]}=active('cheddar-shower',['a','b']);
-        // Every meteor is aimed straight at the first living rat.
-        vi.spyOn(Math,'random').mockReturnValue(0);
-        sim.step(1/60,now+16);sim.step(1/60,now+700);
-        const meteor=sim.snapshot(false).meteors![0]!;
-        stand(a!,meteor.x,meteor.y+1,meteor.z);stand(b!,meteor.x+I.meteorRadius+4,meteor.y+1,meteor.z);
-        const kills=b!.kills;
-        sim.step(1/60,meteor.at+1);
-        const flattened=hits.filter(hit=>hit.victim==='a');
-        expect(flattened[0]).toMatchObject({owner:null,cause:'meteor',damage:MAX_HP});
-        expect(hits.some(hit=>hit.victim==='b')).toBe(false);
-        expect(sim.drainIncidentEvents()).toContainEqual(expect.objectContaining({kind:'meteor',flattened:['a'],shoved:1}));
-        // The room applies it as it does any city hit: the victim dies, nobody scores.
-        const result=applyHit(players,flattened[0]!.owner,'a',flattened[0]!.damage,true);
-        expect(result).toMatchObject({applied:true,killed:true,roundWon:false});
-        expect(a!.deaths).toBe(1);expect(b!.kills).toBe(kills);
-    });
-
-    it('meteor bursts never push the ball count past the cap, and a rat\'s own shot still gets in',()=>{
-        const {sim,players}=active('cheddar-shower',['a','b','c']);
-        // A busy sky: four meteors landing in the same step (480 balls of burst), well away from every rat.
-        const saved=sim.snapshot(false);
-        saved.meteors=[0,1,2,3].map(i=>({id:`meteor-7-${i}`,x:40+i*8,y:0,z:40,born:now,at:now+100}));
-        const busy=new ChaosSimulation(players,()=>{},saved,spec);
-        busy.step(1/60,now+120);
-        expect(busy.drainIncidentEvents().filter(e=>e.kind==='meteor')).toHaveLength(4);
-        expect(busy.snapshot(false).shots).toHaveLength(T.maxShots);
-        busy.shoot('a',{shotId:'own-shot',origin:{x:0,y:30,z:0},direction:{x:1,y:0,z:0}});
-        const shots=busy.snapshot(false).shots;
-        expect(shots).toHaveLength(T.maxShots);
-        expect(shots.some(s=>s.id==='own-shot')).toBe(true);
+    it('a stored room still running Cheddar Shower (or Act of God) runs Big Cheese',()=>{
+        const {sim}=active('big-cheese',['a']);
+        for(const incident of ['cheddar-shower','act-of-god']){
+            const legacy={...sim.snapshot(false),dispatch:{phase:'active',incident,started:now,until:now+T.activeMs,serial:7}} as unknown as ChaosState;
+            expect(parseServerMessage({type:'chaos',state:legacy})).toMatchObject({state:{dispatch:{incident:'big-cheese'}}});
+        }
     });
 
     it('All Units respawns the fallen beside the real case instead of far from everyone',()=>{

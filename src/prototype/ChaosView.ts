@@ -23,11 +23,12 @@ import type { RatEntity } from '../entities/RatEntity';
 import { incidentInfo } from '../shared/incidentCatalog';
 import { DispatchHud } from './DispatchHud';
 import { AssignmentDestinations } from './AssignmentDestinations';
+import { ASSIGNMENT_DESTINATIONS, activeDestination } from '../shared/assignments';
+import { activeZone } from '../shared/jurisdiction';
+import { JURISDICTION_ZONES } from '../shared/jurisdictionZones';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import type { Vec3Data, ServerMessage, ShotDescriptor, PickupTarget } from '../shared/networkProtocol';
 import { locateCase } from './caseLocator';
-import { CasePingVisual } from './CasePingVisual';
-import { compassPoint } from '../shared/city/frame';
 import { PressureMachine } from './PressureMachine';
 import { CaseBeacon } from './CaseBeacon';
 import { DispatchPillars, type DispatchStation } from './DispatchPillars';
@@ -37,10 +38,10 @@ import {LocalShotPresentation,type ShotTrace} from '../shared/LocalShotPresentat
 import type {ShotWeapon} from '../shared/shotPattern';
 import type {LaserBeam} from '../shared/chaosState';
 import {LaserBeamVisual} from './LaserBeamVisual';
-import {MeteorVisual} from './MeteorVisual';
+import {CrossfireVisual,heatPalette} from './CrossfireVisual';
 import {badRound} from '../shared/shotPattern';
 import {BAD_AMMO} from '../shared/shotBallistics';
-import {LAUNCH_MACHINES} from '../shared/chaosState';
+import {CROSSFIRE,LAUNCH_MACHINES} from '../shared/chaosState';
 import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '../shared/ChaosPresentation';
 import { PickupVisual } from './PickupVisual';
 import {faultyCard, heldCard, pickupArtwork, powerupCard} from './pickupArtwork';
@@ -76,6 +77,8 @@ const CLAIM_REACH=5;
  * trail), so the ones that are stand out. A threat is within `near` units of your chest, or within `range` and heading
  * to pass within `miss` of it. Your own balls always draw full. */
 export const THREAT={range:26,miss:2.6,near:4,dim:.55} as const;
+/** From this far (units) from its scoring target a carried case's beacon beats at the plain rate. */
+const CASE_TARGET_FAR=120;
 
 /** Instanced shot draws: balls, Crossfire balls and glows, danger rims and trails, the case
  * missile's trail. Instance colours exist from the start, as play will need them, so the
@@ -90,7 +93,8 @@ export function createShotDraws(capacity:number){
     const draws={root:new THREE.Group(),
         bullets:new THREE.InstancedMesh(ballGeometry,createCheeseBallMaterial(),capacity),
         chargedBullets:new THREE.InstancedMesh(instanceGeometry(ballGeometry),createCheeseBallMaterial(true),capacity),
-        chargedGlow:new THREE.InstancedMesh(glowGeometry,glow(0xff240b,.96),capacity),
+        // White: each Crossfire glow takes its heat's colour per instance.
+        chargedGlow:new THREE.InstancedMesh(glowGeometry,glow(0xffffff,.96),capacity),
         dangerGlow:new THREE.InstancedMesh(instanceGeometry(glowGeometry),glow(0xff4822,.9),capacity),
         dangerTrails:trail(.1,8,6,0xffffff,.65,capacity),
         missileTrail:trail(.18,8,8,0xff2a12,.42,12),
@@ -151,15 +155,9 @@ export class ChaosView {
     private readonly assignmentDestinations:AssignmentDestinations;
     private readonly caseMarker=document.createElement('div');
     private readonly caseMarkerDetail=document.createElement('div');
-    private readonly caseMarkerTitle=document.createElement('div');
-    private readonly caseArrow=document.createElement('i');
-    /** The case ping's flare, ring, column and sound; `lastSeenDistance`/`lastSeenBearing` the HUD's last-seen line as
-     * written, and `pingShown` the marker's ping glow as written (both rewritten only when they change). */
-    private readonly casePing:CasePingVisual;
-    private lastSeenDistance=-1;
-    private lastSeenBearing='';
-    private pingShown=-1;
     private readonly impacts:CheeseImpactEffects;
+    /** Crossfire's bounce sparks, scorches and ricochets, a bank kill's path and your aim guide. */
+    readonly crossfire:CrossfireVisual;
     private readonly draws=createShotDraws(CHAOS_TUNING.maxShots);
     private readonly bullets=this.draws.bullets;
     private readonly chargedBullets=this.draws.chargedBullets;
@@ -172,16 +170,13 @@ export class ChaosView {
     private readonly trailDirection=new THREE.Vector3();
     private readonly trailAxis=new THREE.Vector3(0,0,1);
     private readonly dangerColor=new THREE.Color(0xff602a);
-    private readonly lethalColor=new THREE.Color(0xff3015);
     /** Bad Ammunition: the pale cheese streak behind your own personality balls (enemy balls keep their red-orange). */
     private readonly quirkColor=new THREE.Color(0xffe7a0);
-    private readonly ownCrossfireTint=new THREE.Color(1,1,1);
-    private readonly enemyCrossfireTint=new THREE.Color(2.4,1.4,1.2);
     private readonly fullTint=new THREE.Color(1,1,1);
     private readonly calmTint=new THREE.Color(THREAT.dim,THREAT.dim,THREAT.dim);
     private readonly calmDanger=this.dangerColor.clone().multiplyScalar(THREAT.dim);
-    private readonly calmLethal=this.lethalColor.clone().multiplyScalar(THREAT.dim);
-    private readonly calmCrossfireTint=this.enemyCrossfireTint.clone().multiplyScalar(THREAT.dim);
+    /** Crossfire heat colours (red, orange, white-hot) for ball tints, glows and trails, full and calm. */
+    private readonly heat=heatPalette(THREAT.dim);
     /** Your rat's chest this frame, when you are alive: what other rats' balls are judged a threat to. */
     private readonly threatTarget=new THREE.Vector3();
     private threatAlive=false;
@@ -201,8 +196,6 @@ export class ChaosView {
     private readonly localShots:LocalShotPresentation;
     /** W2: every rat's laser beams, scorches and their zap/crack (yours drawn on the press). */
     private readonly beams:LaserBeamVisual;
-    /** Cheddar Shower: falling meteors, their shadows and shock rings. */
-    private readonly meteors:MeteorVisual;
     /** Code Violation: when the next malfunction spark (and its zap) may fly. */
     private sparkAt=0;
     private readonly presented:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
@@ -217,11 +210,6 @@ export class ChaosView {
     onCorpseJolt?: (p:Vec3Data)=>void;
     /** K1: the case burst paperwork at `p` (taken, knocked loose or shot): `kind` sizes it. */
     onCasePaper?: (p:Vec3Data,kind:'taken'|'loose'|'kick')=>void;
-    /** The case ping: the case you carry just pinged (everyone else now sees where you are). */
-    onCasePinged?: ()=>void;
-    /** Cheddar Shower: a meteor's shadow first shows (`seconds` before it lands), and its landing, in the presented timeline. */
-    set onMeteorWarn(listener:((at:THREE.Vector3,seconds:number)=>void)|undefined){this.meteors.onWarn=listener;}
-    set onMeteorImpact(listener:((at:THREE.Vector3)=>void)|undefined){this.meteors.onImpact=listener;}
     /** Bad Ammunition: a superball bounced off the world at `p`. */
     onSuperball?: (p:Vec3Data)=>void;
     /** A launcher firing in the presented timeline. */
@@ -248,27 +236,25 @@ export class ChaosView {
         // The root and the shot draws (moved by instance) stay put; corpses added later keep updating.
         this.root.name='records-chaos';freezeStatic(this.root);scene.add(this.root);scene.add(this.caseRoot);
         this.caseRoot.name='hot-case';
-        this.caseBeacon=new CaseBeacon(scene);this.casePing=new CasePingVisual(scene,this.audio);
+        this.caseBeacon=new CaseBeacon(scene);
         addLeatherBriefcase(this.caseRoot);this.caseMotion=new CaseMotion(this.caseRoot);
         this.caseRoot.userData.aimTarget=true;
         this.pressureMachine=new PressureMachine(scene,this.audio);
         this.pillars=new DispatchPillars(scene,this.audio);
-        this.meteors=new MeteorVisual(scene);
         this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
         this.assignmentDestinations=new AssignmentDestinations();this.jurisdictionZones=new JurisdictionZones(scene);
         // DOM projection stays crisp at city scale and visible through all architecture.
         // It adds no dynamic lights, raycasts, or physics to the physical case.
-        // U1, Carbon scrawl in the case gold (dispatchHud.css .hot-case-tag); its position is set each frame. A carried case
-        // is marked only where it last pinged; off screen, its arrow points the way.
+        // U1, Carbon scrawl in the case red (dispatchHud.css .hot-case-tag); its position is set each frame.
         this.caseMarker.className='hot-case-tag';this.caseMarker.style.display='none';
         this.caseMarker.setAttribute('aria-label','Hot Case location');
-        this.caseMarkerTitle.className='hot-case-title';this.caseMarkerTitle.textContent='HOT CASE';
-        this.caseMarkerDetail.className='hot-case-detail';this.caseArrow.hidden=true;
-        for(const child of [this.caseArrow,this.caseMarkerTitle,this.caseMarkerDetail])this.caseMarker.appendChild(child);
+        const title=document.createElement('div');title.className='hot-case-title';title.textContent='HOT CASE';
+        this.caseMarkerDetail.className='hot-case-detail';
+        for(const child of [title,this.caseMarkerDetail])this.caseMarker.appendChild(child);
         document.body.appendChild(this.caseMarker);
         this.buffBar.className='pickup-buffs';this.buffBar.style.display='none';
         document.body.appendChild(this.buffBar);
-        this.impacts=new CheeseImpactEffects(scene);
+        this.impacts=new CheeseImpactEffects(scene);this.crossfire=new CrossfireVisual(scene);
         this.beams=new LaserBeamVisual(scene,(cue,at)=>this.feedback?.(cue,at));
         this.traps.onEvent=(event,p)=>this.onTrap?.(event,p);
     }
@@ -315,11 +301,11 @@ export class ChaosView {
         this.buffCards.clear();this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
     resetProjectiles():void{
-        this.localShots.clear();this.beams.clear();this.meteors.clear();this.presentation.clear();this.landings.length=0;this.clearPickupCards();this.clearInteractions();this.reactions.reset();
+        this.localShots.clear();this.beams.clear();this.presentation.clear();this.landings.length=0;this.clearPickupCards();this.clearInteractions();this.reactions.reset();
         // gameReset precedes the new chaos snapshot. Do not render or interact
         // with the previous round's confirmed carrier during that gap.
         this.state=null;this.setCarrier(null);this.root.visible=false;
-        this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.caseMarker.style.display='none';this.casePing.clear();
+        this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.caseMarker.style.display='none';
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         this.assignmentDestinations.clear();this.jurisdictionZones.clear();
     }
@@ -463,6 +449,7 @@ export class ChaosView {
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
             if(hit.cue==='thud')playSynth('thud',hit.p);
+            if(hit.bounces)this.crossfire.bounce(hit.p,hit.n,hit.bounces);
             if(hit.foley==='boing')this.onSuperball?.(hit.p);
             if(hit.foley==='corpse-kick'||hit.foley==='corpse-bounce'&&(hit.energy??0)>16){
                 // The nearest body within reach takes the jolt.
@@ -616,7 +603,7 @@ export class ChaosView {
     }
     /** `renderTime` is the presentation clock (slowed briefly for the victory moment). */
     update(dt:number,camera:THREE.Camera,renderTime=performance.now()){
-        this.impacts.update(dt);
+        this.impacts.update(dt);this.crossfire.update(dt);
         this.beams.update(dt,camera);
         this.traps.update(dt);
         const wall=performance.now();
@@ -661,9 +648,8 @@ export class ChaosView {
             this.caseMotion.loose(wall,Math.hypot(s.case.v.x,s.case.v.y,s.case.v.z));
         }
         this.caseMotion.finish(dt,wall);
-        // The case ping: nobody's carried case is marked between pings (the loose case keeps its glow).
-        this.caseBeacon.update(this.caseRoot,camera,!!s.case.owner||!!this.carrier?.isPlayer||this.lastHitPoint);
-        if(this.casePing.update(s.case,this.myId,now,camera,wall)==='mine')this.onCasePinged?.();
+        // The hot case's red outline, through walls, beating faster as its carrier nears the target.
+        this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer||this.lastHitPoint,wall,!!owner,this.caseUrgency(s));
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
         this.updateBuffs(s.buffs,now);
@@ -702,21 +688,23 @@ export class ChaosView {
             const own=shot.owner===this.myId||!!(shot.owner&&this.resolveRat(shot.owner)?.isPlayer);
             // Clarity: other rats' balls that are not coming at you draw dimmer, so the ones that are stand out.
             const calm=!own&&!this.threatens(p,shot.v);
-            const hot=crossfire&&shot.wallBounced;
+            // Crossfire: a bounced ball is red-hot, and each bounce heats it on through orange to white-hot with a longer trail.
+            const hot=crossfire&&shot.wallBounced,level=Math.min(CROSSFIRE.maxHeat,shot.heat??1)-1;
             const batch=hot?this.chargedBullets:this.bullets;
             const ballIndex=batch.count++;batch.setMatrixAt(ballIndex,this.ballPose.matrix);
-            batch.setColorAt(ballIndex,hot?own?this.ownCrossfireTint:calm?this.calmCrossfireTint:this.enemyCrossfireTint:calm?this.calmTint:this.fullTint);
-            if(!own||quirk){
-                this.ballPose.scale.setScalar(scale*look*(hot?1.14:1));this.ballPose.updateMatrix();
-                if(!own){const rim=hot?this.chargedGlow:this.dangerGlow,at=rim.count++;rim.setMatrixAt(at,this.ballPose.matrix);rim.setColorAt(at,calm?this.calmTint:this.fullTint);}
+            batch.setColorAt(ballIndex,hot?(own?this.heat.own:calm?this.heat.calm:this.heat.enemy)[level]!:calm?this.calmTint:this.fullTint);
+            // Your own hot ball gets no enemy glow, but once it has heated past red it trails its heat too.
+            if(!own||quirk||hot&&level>0){
+                this.ballPose.scale.setScalar(scale*look*(hot?1.14+.08*level:1));this.ballPose.updateMatrix();
+                if(!own){const rim=hot?this.chargedGlow:this.dangerGlow,at=rim.count++;rim.setMatrixAt(at,this.ballPose.matrix);rim.setColorAt(at,hot?(calm?this.heat.calmGlow:this.heat.glow)[level]!:calm?this.calmTint:this.fullTint);}
                 this.trailDirection.set(shot.v.x,shot.v.y,shot.v.z);
                 if(this.trailDirection.lengthSq()>.01){
-                    this.trailDirection.normalize();const length=Math.min(2.4,(hot?1.4:.85)*Math.sqrt(scale));
+                    this.trailDirection.normalize();const length=Math.min(hot?3.4:2.4,(hot?1.4+.7*level:.85)*Math.sqrt(scale));
                     this.trailPose.position.copy(this.ballPose.position).addScaledVector(this.trailDirection,-scale*BALL_RADIUS-length/2);
                     this.trailPose.quaternion.setFromUnitVectors(this.trailAxis,this.trailDirection);
                     this.trailPose.scale.set(.5*Math.sqrt(scale),.5*Math.sqrt(scale),length/.2);this.trailPose.updateMatrix();
                     const at=this.dangerTrails.count++;this.dangerTrails.setMatrixAt(at,this.trailPose.matrix);
-                    this.dangerTrails.setColorAt(at,hot?calm?this.calmLethal:this.lethalColor:own?this.quirkColor:calm?this.calmDanger:this.dangerColor);
+                    this.dangerTrails.setColorAt(at,hot?(calm?this.heat.calmTrail:this.heat.trail)[level]!:own?this.quirkColor:calm?this.calmDanger:this.dangerColor);
                 }
             }
         }
@@ -772,7 +760,6 @@ export class ChaosView {
         const haywire=active==='code-violation';
         this.pressureMachine.update(s.pressure,now,camera,active==='pressure-surge',haywire);
         this.pillars.update(d,now,camera,haywire);
-        this.meteors.update(s.meteors,now,camera);
     }
     /** Whether a ball at `p` moving at `v` threatens your rat this frame (`THREAT`); never while you are dead or away. */
     private threatens(p:Vec3Data,v:Vec3Data):boolean {
@@ -824,36 +811,28 @@ export class ChaosView {
         }
     }
     private updateCaseMarker(camera:THREE.Camera){
-        const s=this.state!,ping=s.case.owner&&s.case.owner!==this.myId&&!this.carrier?.isPlayer?s.case.ping:undefined;
-        // Someone else's case: the ledger reads LAST SEEN · distance · compass point from you, from its latest ping.
-        let distance=-1,bearing='';
-        if(ping){
-            const dx=ping.p.x-this.audioPosition.x,dz=ping.p.z-this.audioPosition.z;
-            distance=Math.round(Math.hypot(dx,ping.p.y-this.audioPosition.y,dz));bearing=compassPoint(dx,dz);
-        }
-        if(distance!==this.lastSeenDistance||bearing!==this.lastSeenBearing){
-            this.lastSeenDistance=distance;this.lastSeenBearing=bearing;
-            this.hud.lastSeen=ping?`LAST SEEN · ${distance} m · ${bearing.toUpperCase()}`:'';
-            if(ping)setText(this.caseMarkerDetail,`${distance} m · ${bearing.toUpperCase()}`);
-        }
-        this.hud.lastSeenFresh=this.casePing.fresh;
-        if(this.carrier?.isPlayer||this.lastHitPoint||s.case.owner&&!ping){this.caseMarker.style.display='none';return;}
-        // Float the badge above the case (or its last ping) so it does not cover the physical pickup
-        // or a carrier's gun at close range.
-        if(ping)this.p.set(ping.p.x,ping.p.y+2.1,ping.p.z);else{this.p.copy(this.caseRoot.position);this.p.y+=2.1;}
+        const s=this.state!;
+        if(this.carrier?.isPlayer||this.lastHitPoint){this.caseMarker.style.display='none';return;}
+        // Float the badge above the case so it does not cover the physical pickup
+        // or a carrier's gun at close range. The bright shell outline marks its body.
+        this.p.copy(this.caseRoot.position);this.p.y+=2.1;
         const location=locateCase(this.p,camera,window.innerWidth,window.innerHeight);
         this.caseMarker.style.display='block';
         // The badge follows the case in world space; its label hangs below it.
         const label=clearAimLabel(location.x,location.y+15,190,90,window.innerWidth,window.innerHeight);
         this.caseMarker.style.transform=`translate(${label.x-87}px,${label.y-32}px)`;
-        this.caseArrow.hidden=!location.edge;
-        if(location.edge)this.caseArrow.style.transform=`rotate(${location.angle}rad)`;
-        const tag=ping?'hot-case-tag carried':'hot-case-tag';
-        if(this.caseMarker.className!==tag){this.caseMarker.className=tag;setText(this.caseMarkerTitle,ping?'LAST SEEN':'HOT CASE');}
-        // Bright at each ping and fading until the next; a loose case keeps the stylesheet's steady look.
-        const glow=ping?Math.round(this.casePing.fresh*20)/20:-1;
-        if(glow!==this.pingShown){this.pingShown=glow;this.caseMarker.style.opacity=ping?String(.35+.65*glow):'';this.caseMarkerTitle.style.scale=ping?String(1+.3*glow):'';}
-        if(!ping)setText(this.caseMarkerDetail,`${s.case.returningUntil?'RETURNING':'LOOSE'} · ${Math.round(location.distance)} m${location.behind?' · BEHIND':''}`);
+        const tag=s.case.owner?'hot-case-tag carried':'hot-case-tag';if(this.caseMarker.className!==tag)this.caseMarker.className=tag;
+        const status=s.case.returningUntil?'RETURNING':s.case.owner?'CARRIED':'LOOSE';
+        setText(this.caseMarkerDetail,`${status} · ${Math.round(location.distance)} m${location.behind?' · BEHIND':''}`);
+    }
+    /** How near a carried case is to where it scores (the Paper Chase drop-off or the active Jurisdiction zone): 0 from
+     * `CASE_TARGET_FAR` units or with no target, 1 there. Drives the beacon's heartbeat. */
+    private caseUrgency(s:ChaosState):number {
+        const a=s.assignment;if(!s.case.owner||a?.phase!=='active')return 0;
+        const next=activeDestination(a);
+        const t=next?ASSIGNMENT_DESTINATIONS[next].approach:a.jurisdiction?JURISDICTION_ZONES[activeZone(a.jurisdiction)].posts[0]:undefined;
+        if(!t)return 0;
+        return 1-Math.min(1,Math.hypot(t.x-s.case.p.x,t.z-s.case.p.z)/CASE_TARGET_FAR);
     }
     private bell(frequency:number){
         const context=this.audio;if(!context || context.state!=='running')return;
@@ -871,16 +850,16 @@ export class ChaosView {
         this.clearPickupCards();this.buffBar.remove();for(const chip of this.claimChips.values())chip.remove();
         this.clearInteractions();
         this.localShots.clear();
-        this.pillars.dispose();this.meteors.dispose();this.assignmentDestinations.dispose();this.jurisdictionZones.dispose();
+        this.pillars.dispose();this.assignmentDestinations.dispose();this.jurisdictionZones.dispose();
         this.presentation.clear();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         // Supply sites live at the scene root: a reconnect's new view would otherwise draw over stale ones.
         for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
         this.traps.dispose();for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
-        this.pressureMachine.dispose();this.caseBeacon.dispose();this.casePing.dispose();this.setCarrier(null);this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();
+        this.pressureMachine.dispose();this.caseBeacon.dispose();this.setCarrier(null);this.hud.dispose();this.caseMarker.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);
-        startCaseBuzz(false);disposeIncidentAudio();this.impacts.dispose();this.beams.dispose();
+        startCaseBuzz(false);disposeIncidentAudio();this.impacts.dispose();this.crossfire.dispose();this.beams.dispose();
         this.draws.dispose();disposeMeshResources(this.root);
     }
 }

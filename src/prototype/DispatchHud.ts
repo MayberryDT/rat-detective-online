@@ -31,11 +31,6 @@ export class DispatchHud {
     private nextPhase:HTMLElement;
     private caseLine:HTMLElement;
     private caseDetail:HTMLElement;
-    /** Set by ChaosView before `update` (the case ping): while someone else carries the case, its last-seen line
-     * ('LAST SEEN · 80 m · NORTH') and how fresh that ping is (1 at the ping, fading toward 0 until the next). */
-    lastSeen='';
-    lastSeenFresh=0;
-    private lastSeenShown=-1;
     private announcement:HTMLElement;
     private announcementTitle:HTMLElement;
     private announcementDetail:HTMLElement;
@@ -130,7 +125,7 @@ export class DispatchHud {
         this.nextPhase.hidden=d.phase==='ready';
         const holder=ownerName||'A detective';
         let caseTitle=state.case.owner?`${ownerIsLocal?'YOU':holder} · ON THE CASE`:'LOOSE CASE';
-        let caseDetail=state.case.returningUntil?'CASE RETURNING':this.lastSeen;
+        let caseDetail=state.case.returningUntil?'CASE RETURNING':'';
         if(info.id==='evidence-tampering'&&d.phase==='active'){
             caseTitle=`${(state.extraCases?.length??0)+1} CASES ARE MISSILES`;
             caseDetail='PICKUP SUSPENDED';
@@ -141,9 +136,6 @@ export class DispatchHud {
         }
         setText(this.caseLine,caseTitle);setText(this.caseDetail,caseDetail);
         this.caseDetail.hidden=!this.caseDetail.textContent;
-        // The last-seen line turns case gold, flashes on each ping and fades between.
-        const fresh=caseDetail===this.lastSeen&&this.lastSeen?Math.round(this.lastSeenFresh*20)/20:-1;
-        if(fresh!==this.lastSeenShown){this.lastSeenShown=fresh;this.caseDetail.dataset.ping=String(fresh>=0);this.caseDetail.style.opacity=fresh>=0?String(.45+.55*fresh):'';}
         const deliveryRespawn=state.assignment?.id==='chain-of-custody'&&state.assignment.roundId===this.previousAssignment&&state.assignment.deliverySerial>this.previousDeliverySerial&&!state.assignment.result;
         if(this.previousOwner!==state.case.owner||this.previousLocal!==ownerIsLocal||deliveryRespawn){
             const wasLocal=this.previousLocal,initialized=this.previousOwner!==undefined;

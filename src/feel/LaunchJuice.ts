@@ -126,11 +126,10 @@ export class LaunchJuice {
     /** Forget a rat's contrail timer once it lands. */
     endTrail(id:string):void {this.trails.delete(id);}
 
-    /** A launched rat (or a meteor) hits the ground: `chunks` asphalt chunks (by default from `energy`) and a crater of
-     * cracked pavement scaled by `energy` (0…1). */
-    landed(at:THREE.Vector3,energy:number,life:number,chunks?:number):void {
+    /** A launched rat hits the ground: asphalt chunks and a crater of cracked pavement scaled by `energy` (0…1). */
+    landed(at:THREE.Vector3,energy:number,life:number):void {
         const e=Math.max(.2,Math.min(1,energy));
-        this.debris(at,chunks??Math.round(6+e*14),CHUNKS,[.18,.1,.16],5+e*7,6+e*8,0,1.6);
+        this.debris(at,Math.round(6+e*14),CHUNKS,[.18,.1,.16],5+e*7,6+e*8,0,1.6);
         this.decal(at,2.6+e*3.4,life);
     }
     /** A ball hits a trigger: cheese crumbs and chips of red paint spit off it. */

@@ -25,10 +25,6 @@ export const DISTRICTS: readonly District[] = GRID.flat();
 export const isDistrict = (v: string): v is District => DISTRICTS.some(d => d === v);
 /** Thirds of the city on each axis; north is the -z third. */
 export const districtAt = (x: number, z: number): District => GRID[band(z)]![band(x)]!;
-export type Compass = Exclude<District, 'centre'>;
-const COMPASS: readonly Compass[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
-/** The nearest of eight compass points for a direction (`dx` east, `dz` south), as the case ping's LAST SEEN reads it. */
-export const compassPoint = (dx: number, dz: number): Compass => COMPASS[(Math.round(Math.atan2(dx, -dz) / (Math.PI / 4)) + 8) % 8]!;
 
 /** `m` for minus keeps coordinates safe inside IDs: -18 -> m18. */
 export const coordLabel = (v: number): string => (v < 0 ? `m${-Math.round(v)}` : String(Math.round(v)));

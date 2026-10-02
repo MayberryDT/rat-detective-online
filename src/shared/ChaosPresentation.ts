@@ -2,7 +2,8 @@ import { CHAOS_TUNING, type ChaosShot, type ChaosState, type PhysicalPose } from
 import type { QuatData, Vec3Data, ServerMessage } from './networkProtocol';
 
 export interface PresentationPose { p: Vec3Data; q: QuatData }
-interface Sample { time:number; p:Vec3Data; v:Vec3Data; q:QuatData; charged:boolean; corner?:{time:number;p:Vec3Data} }
+/** `charged`: 0 before a ball's first world bounce, then 1 plus its Crossfire heat; a change is a bounce. */
+interface Sample { time:number; p:Vec3Data; v:Vec3Data; q:QuatData; charged:number; corner?:{time:number;p:Vec3Data} }
 interface Track { samples:Sample[]; seen:number; blockExtrapolation:boolean; lastTime:number; clockCorrection:number; sampledAt:number; birth?:Sample; muzzleOffset?:{p:Vec3Data;at:number} }
 const identity:QuatData={x:0,y:0,z:0,w:1};
 const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -53,7 +54,7 @@ export class ChaosPresentation {
                 const oldest=this.shots.keys().next().value!;this.shots.delete(oldest);this.launches.delete(oldest);
             }
             const shot:ChaosShot={id:ball.id,owner:message.shooterId,p:{...message.origin},v:{...ball.velocity},age:0};
-            const track=this.push(undefined,launch.at,arrival,shot.p,shot.v,identity,false);
+            const track=this.push(undefined,launch.at,arrival,shot.p,shot.v,identity,0);
             track.birth=track.samples[0];this.shots.set(ball.id,track);
             this.launches.set(ball.id,{shot,at:launch.at,arrival});
             this.renderDirty=true;
@@ -89,21 +90,21 @@ export class ChaosPresentation {
         this.renderDirty=true;
         for(let i=0;i<Math.min(state.shots.length,CHAOS_TUNING.maxShots);i++){
             const shot=state.shots[i];
-            this.shots.set(shot.id,this.push(this.shots.get(shot.id),state.time,arrival,shot.p,shot.v,identity,!!shot.wallBounced));
+            this.shots.set(shot.id,this.push(this.shots.get(shot.id),state.time,arrival,shot.p,shot.v,identity,shot.wallBounced?1+(shot.heat??0):0));
         }
         for(const [id,track] of this.shots)if(track.seen!==this.serial&&(this.launches.get(id)?.at??-Infinity)<=state.time)this.shots.delete(id);
         for(const [id,launch] of this.launches)if(this.shots.get(id)?.seen===this.serial||state.time>=launch.at)this.launches.delete(id);
         for(let i=0;i<Math.min(state.corpses.length,CHAOS_TUNING.maxCorpses);i++){
             const corpse=state.corpses[i];
-            this.corpses.set(corpse.id,this.push(this.corpses.get(corpse.id),state.time,arrival,corpse.p,corpse.v,corpse.q,false));
+            this.corpses.set(corpse.id,this.push(this.corpses.get(corpse.id),state.time,arrival,corpse.p,corpse.v,corpse.q,0));
         }
         for(const [id,track] of this.corpses)if(track.seen!==this.serial)this.corpses.delete(id);
         const lifecycle=`${state.case.owner??'loose'}:${state.case.returningUntil}`;
         if(lifecycle!==this.caseLifecycle){this.caseTrack=undefined;this.caseLifecycle=lifecycle;}
         if(state.case.owner)this.caseTrack=undefined;
-        else this.caseTrack=this.push(this.caseTrack,state.time,arrival,state.case.p,state.case.v,state.case.q,false);
+        else this.caseTrack=this.push(this.caseTrack,state.time,arrival,state.case.p,state.case.v,state.case.q,0);
     }
-    private push(track:Track|undefined,time:number,arrival:number,p:Vec3Data,v:Vec3Data,q:QuatData,charged:boolean):Track {
+    private push(track:Track|undefined,time:number,arrival:number,p:Vec3Data,v:Vec3Data,q:QuatData,charged:number):Track {
         const sample:Sample={time,p,v,q,charged};
         if(!track)return{samples:[sample],seen:this.serial,blockExtrapolation:false,lastTime:-Infinity,clockCorrection:time-this.clock(arrival),sampledAt:arrival};
         const previous=track.samples[track.samples.length-1],dt=Math.max(0,(time-previous.time)/1000);

@@ -36,7 +36,7 @@ import {
   type WorldSpec,
 } from './networkProtocol';
 import type { ControlsInput } from './rat/controlTally';
-import { CHAOS_TUNING, INCIDENT_TUNING, EXTRA_CASE_IDS, LASER_SURFACES, LAUNCH_MACHINES, MAX_BEAMS, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, MAX_TRAPS, PRESSURE_TUNING, type ChaosState } from './chaosState';
+import { CHAOS_TUNING, CROSSFIRE, EXTRA_CASE_IDS, LASER_SURFACES, LAUNCH_MACHINES, MAX_BEAMS, MAX_LAUNCH_EVENTS, MAX_LAUNCH_SPEED, MAX_TRAPS, PRESSURE_TUNING, type ChaosState } from './chaosState';
 import { BUFF_FIELDS, PICKUP_ANCHORS, PICKUP_KINDS, WEAPON_TUNING, isFaultyKind, isPickupKind, isWeaponKind } from './pickups';
 import { isSupportedWorldVersion } from './worldSpec';
 
@@ -560,8 +560,7 @@ function parseChaos(value:unknown):ChaosState|null{
   const validCase=(c:unknown)=>isRecord(c)&&pose(c)&&(c.owner===null||nonEmptyString(c.owner,64))&&
     (c.previousOwner===null||nonEmptyString(c.previousOwner,64))&&(c.missileOwner===undefined||nonEmptyString(c.missileOwner,64))&&
     finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null&&
-    (c.grip===undefined||integer(c.grip)!==null&&Number(c.grip)>=1&&Number(c.grip)<CHAOS_TUNING.caseGripHits)&&
-    (c.ping===undefined||c.owner!==null&&isRecord(c.ping)&&finiteNumber(c.ping.at)!==null&&isVec3(c.ping.p));
+    (c.grip===undefined||integer(c.grip)!==null&&Number(c.grip)>=1&&Number(c.grip)<CHAOS_TUNING.caseGripHits);
   if(!validCase(c))return null;
   if(value.extraCases!==undefined){
     if(!Array.isArray(value.extraCases)||value.extraCases.length>EXTRA_CASE_IDS.length||
@@ -577,8 +576,6 @@ function parseChaos(value:unknown):ChaosState|null{
         (p.availableAt===undefined||typeof p.availableAt==='number'&&Number.isFinite(p.availableAt)&&p.availableAt>=0&&p.availableAt<=Number.MAX_SAFE_INTEGER)))return null;
     if(new Set(value.pickups.map(p=>p.id)).size!==value.pickups.length)return null;
   }
-  if(value.meteors!==undefined&&(!Array.isArray(value.meteors)||value.meteors.length>INCIDENT_TUNING.meteorMax*2||
-    !value.meteors.every(m=>isRecord(m)&&nonEmptyString(m.id,64)&&[m.x,m.y,m.z,m.born,m.at].every(n=>finiteNumber(n)!==null))))return null;
   if(value.traps!==undefined&&(!Array.isArray(value.traps)||value.traps.length>MAX_TRAPS||
     !value.traps.every(t=>isRecord(t)&&nonEmptyString(t.id,64)&&nonEmptyString(t.owner,64)&&[t.x,t.y,t.z,t.yaw,t.at].every(n=>finiteNumber(n)!==null)&&
       boundedInteger(t.hp,0,WEAPON_TUNING.trapHp)!==null&&[t.snapAt,t.hitAt,t.brokenAt].every(n=>n===undefined||finiteNumber(n)!==null))))return null;
@@ -601,8 +598,8 @@ function parseChaos(value:unknown):ChaosState|null{
   if(Object.keys(value.possession).length>64||Object.values(value.possession).some(v=>finiteNumber(v)===null))return null;
   if(integer(value.notice.serial)===null||typeof value.notice.text!=='string'||value.notice.text.length>256)return null;
   if(!Array.isArray(value.corpses)||value.corpses.length>16||!value.corpses.every(c=>pose(c)&&isRecord(c)&&nonEmptyString(c.id,64)&&nonEmptyString(c.victimId,64)&&(c.owner===undefined||c.owner===null||!!nonEmptyString(c.owner,64))&&parseAppearance(c.appearance)&&finiteNumber(c.born)!==null&&finiteNumber(c.expires)!==null))return null;
-  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&isVec3(s.p)&&isVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.explosive===undefined||s.explosive===true)&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.life===undefined||finiteNumber(s.life)!==null)))return null;
-  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&isVec3(i.p)&&isVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit'||i.cue==='armor-clang')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')))return null;
+  if(!Array.isArray(value.shots)||value.shots.length>CHAOS_TUNING.maxShots||!value.shots.every(s=>isRecord(s)&&nonEmptyString(s.id,64)&&(s.owner===null||nonEmptyString(s.owner,64))&&isVec3(s.p)&&isVec3(s.v)&&finiteNumber(s.age)!==null&&(s.wallBounced===undefined||typeof s.wallBounced==='boolean')&&(s.explosive===undefined||s.explosive===true)&&(s.radius===undefined||finiteNumber(s.radius)!==null)&&(s.life===undefined||finiteNumber(s.life)!==null)&&(s.heat===undefined||boundedInteger(s.heat,1,CROSSFIRE.maxHeat)!==null)))return null;
+  if(!Array.isArray(value.impacts)||value.impacts.length>64||!value.impacts.every(i=>isRecord(i)&&isVec3(i.p)&&isVec3(i.n)&&typeof i.surface==='boolean'&&(i.scale===undefined||finiteNumber(i.scale)!==null)&&(i.cue===undefined||i.cue==='thud'||i.cue==='buzz'||i.cue==='case-hit'||i.cue==='armor-clang')&&(i.foley===undefined||isWorldFoleyCue(i.foley))&&(i.energy===undefined||(typeof i.energy==='number'&&Number.isFinite(i.energy)&&i.energy>=0&&i.energy<=300))&&(i.audioOnly===undefined||typeof i.audioOnly==='boolean')&&(i.bounces===undefined||boundedInteger(i.bounces,1,CROSSFIRE.maxBounces)!==null)))return null;
   if(value.pressure!==undefined){
     const p=value.pressure;
     if(!isRecord(p)||integer(p.serial)===null)return null;
@@ -781,9 +778,14 @@ export function parseServerMessage(raw: unknown): ServerMessage | null {
         (parsed.weapon!==undefined&&(!isWeaponKind(parsed.weapon)||!killerId)))return null;
       const killerStreak=parsed.killerStreak===undefined?undefined:boundedInteger(parsed.killerStreak,1,10_000);
       if(killerStreak===null||(killerStreak!==undefined&&!killerId))return null;
+      // A bank kill names its bounces and its path (muzzle, first bounces, hit) together.
+      const bounces=parsed.bounces===undefined?undefined:boundedInteger(parsed.bounces,1,CROSSFIRE.maxBounces);
+      const raw=parsed.path===undefined?undefined:Array.isArray(parsed.path)&&parsed.path.length>=2&&parsed.path.length<=CROSSFIRE.pathPoints+2?parsed.path:null;
+      const path=raw?.map(parseVec3).filter((p):p is Vec3Data=>p!==null);
+      if(bounces===null||raw===null||(bounces===undefined)!==(raw===undefined)||path?.length!==raw?.length)return null;
       return { type: 'playerDied', victimId, killerId, killerName, victimName, respawnAt,
         ...(environmental?{cause}:{}),...(incoming?{incoming,incident:parsed.incident===true}:{}),...(parsed.headshot===true?{headshot:true as const}:{}),...(parsed.blast===true?{blast:true as const}:{}),
-        ...(isWeaponKind(parsed.weapon)?{weapon:parsed.weapon}:{}),...(killerStreak!==undefined?{killerStreak}:{}) };
+        ...(isWeaponKind(parsed.weapon)?{weapon:parsed.weapon}:{}),...(killerStreak!==undefined?{killerStreak}:{}),...(bounces!==undefined&&path?{bounces,path}:{}) };
     }
     case 'scoreboardUpdate': {
       const scores = parseScores(parsed.scores);

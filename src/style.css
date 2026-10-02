@@ -58,16 +58,16 @@ body.reduced-motion #respawn-overlay.death-beat::after,body.reduced-motion #resp
 @keyframes death-beat-appear{from{visibility:hidden}to{visibility:visible}}
 .death-burst{position:absolute;font:clamp(150px,32vw,440px)/1 var(--font-display);color:#c8322a1c;-webkit-text-stroke:4px #e65a502e;rotate:12deg;letter-spacing:-10px;z-index:-1}
 .respawn-label{font:clamp(64px,12vw,156px)/.92 var(--font-display);color:var(--carbon-bright);letter-spacing:3px;rotate:-8deg;-webkit-text-stroke:2px var(--carbon-deep);text-shadow:5px 5px var(--carbon-deep),10px 10px #7a1c1899}.respawn-note{font:clamp(17px,2.1vw,25px)/1.2 var(--font-type);color:var(--carbon-ink);rotate:-3deg;margin-top:20px;text-shadow:2px 2px 0 var(--carbon-shade)}
-/* Death recap (clarity batch): who got you, with what, and an arrow toward the case (the case's gold, nothing else). */
+/* Death recap (clarity batch): who got you, with what, and an arrow toward the case (the case's red, nothing else). */
 .respawn-recap{display:grid;justify-items:center;gap:6px;margin-top:18px;padding:10px 22px 12px;background:var(--carbon-sheet);border:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge);rotate:-2deg;text-align:center}
 .respawn-recap[hidden],.recap-case[hidden]{display:none}
 .recap-who small{font:13px/1 var(--font-type);letter-spacing:.14em;color:var(--carbon-dim)}
 .recap-who b{font:400 clamp(26px,3.2vw,40px)/1 var(--font-display);letter-spacing:.05em;color:var(--stamp-ink);font-weight:400}
 .recap-how{font:clamp(15px,1.6vw,19px)/1.2 var(--font-type);letter-spacing:.08em;color:var(--carbon-bright)}
-.recap-case{display:flex;align-items:center;gap:10px;margin-top:2px;font:14px/1 var(--font-type);letter-spacing:.1em;color:var(--case-gold,#d9b95e)}
+.recap-case{display:flex;align-items:center;gap:10px;margin-top:2px;font:14px/1 var(--font-type);letter-spacing:.1em;color:var(--case-red,#ff3024)}
 .recap-case i{position:relative;width:26px;height:26px;transition:transform .1s linear}
-.recap-case i::before{content:'';position:absolute;left:50%;top:0;margin-left:-9px;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:12px solid var(--case-gold,#d9b95e)}
-.recap-case i::after{content:'';position:absolute;left:50%;top:11px;width:6px;height:13px;margin-left:-3px;background:var(--case-gold,#d9b95e)}
+.recap-case i::before{content:'';position:absolute;left:50%;top:0;margin-left:-9px;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:12px solid var(--case-red,#ff3024)}
+.recap-case i::after{content:'';position:absolute;left:50%;top:11px;width:6px;height:13px;margin-left:-3px;background:var(--case-red,#ff3024)}
 @media(max-height:500px){.respawn-recap{margin-top:8px;padding:5px 14px 7px;gap:3px}.recap-who b{font-size:22px}.recap-how,.recap-case{font-size:12px}}
 /* The respawn countdown is a pocket watch on a carbon slip; its red wedge sweeps to the respawn. */
 .respawn-count{position:relative;display:flex;align-items:center;gap:16px;margin-top:24px;padding:8px 22px 8px 12px;background:var(--carbon-sheet);color:var(--carbon-ink);border:1px dashed var(--carbon-line);box-shadow:var(--carbon-drop),var(--carbon-smudge);rotate:5deg;font:26px/1 var(--font-type);letter-spacing:1px}

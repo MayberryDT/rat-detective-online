@@ -22,7 +22,7 @@ export const effectsOutput=(context:BaseAudioContext)=>mix(context).effects;
 export const musicOutput=(context:BaseAudioContext)=>mix(context).music;
 
 /** The ranked mix (clarity batch, protocol 29). World sounds (other rats' guns and hits, world foley, launchers,
- * pillar bells, incident foley) pass a duck that your own hits, kills, case pings and case events dip briefly
+ * pillar bells, incident foley) pass a duck that your own hits, kills and case events dip briefly
  * (`duckWorld`), and share one budget of `voices` that drops the quietest (softest or furthest) first.
  * Your own gun and hurt, the case, UI and announcements stay on the plain effects path. */
 export const RANKED_MIX={voices:12,depth:.5,attack:.015,hold:.22,release:.12} as const;
