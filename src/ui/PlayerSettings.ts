@@ -1,7 +1,7 @@
 import { ACTIONS, GRAPHICS_MODES, RANGES, bindingLabel, playerPreferences, type Action, type GraphicsMode, type NumericPreference, type PreferenceStore } from '../settings/PlayerPreferences';
 import { onQualityChange, qualityStatus, type QualityStatus } from '../session/graphicsQuality';
 import { mountFeelReview } from '../feel/FeelReviewSection';
-import { mountAdminKeyField } from './adminKey';
+import { ADMIN_OPEN_EVENT, mountAdminKeyField } from './adminKey';
 import './playerSettings.css';
 import type { FeedbackCue } from '../audio/FeedbackAudio';
 import { ghost, replay, uiMotion } from './motion';
@@ -125,7 +125,8 @@ export class PlayerSettings {
                 this.refreshers.push(()=>{button.textContent=bindingLabel(this.store.current.bindings[action][slot]);button.setAttribute('aria-label',`${ACTIONS[action]}, ${slot?'alternate':'primary'}: ${button.textContent}`);});
             }
         }
-        mountAdminKeyField(this.content,this.doc,this.events.signal);
+        // The admin panel can always be reached from here (F10 may be taken by the OS, a laptop's Fn row or the browser).
+        mountAdminKeyField(this.content,this.doc,this.events.signal,()=>{this.close();this.doc.dispatchEvent(new CustomEvent(ADMIN_OPEN_EVENT));});
     }
     /** Auto, High, Medium, Low as a row of stamps, and what Auto is drawing right now. */
     private graphics(parent:HTMLElement):void {

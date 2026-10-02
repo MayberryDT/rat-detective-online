@@ -2,7 +2,7 @@ import { ASSIGNMENT_IDS, ASSIGNMENTS } from '../shared/assignments';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import type { AdminCommand, AdminResult, AdminStatus } from '../shared/admin';
 import type { ClientMessage } from '../shared/networkProtocol';
-import { storedAdminKey } from './adminKey';
+import { ADMIN_OPEN_EVENT, storedAdminKey } from './adminKey';
 import './adminPanel.css';
 
 const PHASE: Record<AdminStatus['incident']['phase'], string> = { ready: 'none', rolling: 'rolling', active: 'active', cooldown: 'cooling down' };
@@ -16,9 +16,12 @@ export class AdminPanel {
         private readonly available: () => boolean, private readonly toggled: (open: boolean) => void) {
         doc.addEventListener('keydown', event => {
             if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
-            if (event.code === 'F10' && (this.isOpen || storedAdminKey() && this.available())) { event.preventDefault(); this.setOpen(!this.isOpen); }
+            // F10, or ` (backquote) where the OS, a laptop's Fn row or the browser takes F10.
+            if ((event.code === 'F10' || event.code === 'Backquote') && (this.isOpen || storedAdminKey() && this.available())) { event.preventDefault(); this.setOpen(!this.isOpen); }
             else if (event.code === 'Escape' && this.isOpen) { event.preventDefault(); this.setOpen(false); }
         }, { signal: this.events.signal, capture: true });
+        // Settings' OPEN ADMIN PANEL (after Settings has closed itself).
+        doc.addEventListener(ADMIN_OPEN_EVENT, () => { if (!this.isOpen && storedAdminKey() && this.available()) this.setOpen(true); }, { signal: this.events.signal });
     }
     get isOpen(): boolean { return !!this.sheet?.isOpen; }
     setOpen(open: boolean): void { (this.sheet ??= new AdminSheet(this.doc, this.send, this.toggled)).setOpen(open); }
@@ -69,7 +72,7 @@ class AdminSheet {
         button(incidentRow, 'End incident', () => this.command({ command: 'end-incident' }));
         button(row(), 'Reset case', () => this.command({ command: 'reset-case' }));
         this.note = doc.createElement('p'); this.note.className = 'admin-note'; this.note.setAttribute('role', 'status'); this.root.appendChild(this.note);
-        const hint = doc.createElement('small'); hint.textContent = 'F10 or Esc closes'; this.root.appendChild(hint);
+        const hint = doc.createElement('small'); hint.textContent = 'F10, ` or Esc closes'; this.root.appendChild(hint);
         doc.body.appendChild(this.root);
         this.fillIncidents([]);
     }
