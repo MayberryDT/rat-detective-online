@@ -391,7 +391,7 @@ marker stages separately from catalog publication and no longer treats an
 accepted heartbeat as proof of a clip. Production Worker
 `9dc57656-314d-4f86-88d2-86a5af809b7c` now serves that client
 (`createGame-CvRNTVU1.js`). Close the game window and Enter City again.
-See [highlights](highlights.md), the
+See the
 [pipeline repair](verification/automatic-highlights-pipeline-2026-09-20.md),
 [repair receipt](verification/automatic-highlights-repair.md) and the dated
 [audit](verification/automatic-highlights-audit-2026-09-19.md).
