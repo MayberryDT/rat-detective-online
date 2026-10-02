@@ -65,9 +65,9 @@ The save button records the exhibit in the browser and downloads it:
 
 Details:
 
-- use MP4 (`video/mp4;codecs=avc1,mp4a`) when `MediaRecorder.isTypeSupported` allows it, otherwise WebM (VP9 and Opus)
+- use WebM (VP9 and Opus, then VP8), with its duration written in by `fix-webm-duration` so players can seek it; MP4 only where WebM cannot be recorded (Safari). Chrome 153's MP4 recording of the canvas decoded as corrupt after a second or two on staging (2 October), while VP9 WebM was clean
 - the canvas recording cannot see CSS overlays, so while recording, draw the REC dot, timestamp, caption and a small ratdetective.online mark inside WebGL, as a screen-space quad with a 2D canvas texture (upload only, no readback)
-- name the file `rat-detective-<kind>-<YYYY-MM-DD-HHMM>.mp4`
+- name the file `rat-detective-<kind>-<YYYY-MM-DD-HHMM>.webm` (`.mp4` when recorded as MP4)
 - record at the canvas's current size; with reduced resolution set, the video is smaller too
 - Esc cancels a recording and returns to the board
 

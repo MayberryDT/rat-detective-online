@@ -12,7 +12,7 @@ It is done when:
 - each player's game keeps short clips of those moments for the round, within a 16 MB size estimate (overlapping clips share their data)
 - the results board plays 3 exhibits: the best from anyone, with at least one that involves you when you had one
 - each exhibit has its own camera work, slow motion on the key beat, the game's own sounds and a noir caption
-- a save button downloads the exhibit as an MP4 (WebM where the browser cannot make MP4)
+- a save button downloads the exhibit as a video file (WebM with its duration; MP4 only where the browser cannot record WebM)
 - facts show how often each kind fires and which exhibits players watch and save
 
 ## Decisions (Tyler, 2 October)

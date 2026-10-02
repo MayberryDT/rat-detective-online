@@ -1,3 +1,4 @@
+import fixWebmDuration from 'fix-webm-duration';
 import {caseTime} from '../ui/roundStats';
 import {reducedMotion} from '../ui/motion';
 import {caption, CASE_KINDS} from './captions';
@@ -7,12 +8,12 @@ import type {ReplayClip, ReplayPlayer} from './types';
  * canvas (`captureStream`, no pixel readback) and the replay sound bus. A canvas recording cannot see CSS, so the tape
  * marks (REC dot, timestamp, caption, site mark) are drawn into a 2D canvas the replay shows as a WebGL screen quad. */
 
+/** WebM first: Chrome 153's MP4 recording of the game canvas decoded as corrupt after a second or two in testing
+ * (2 October), while its VP9 WebM was clean. MP4 is kept for browsers without WebM recording (Safari). */
 const TYPES = [
-    {mimeType: 'video/mp4;codecs=avc1,mp4a', ext: 'mp4'},
-    // Chromium on Linux has no AAC encoder: H.264 with Opus is its MP4.
-    {mimeType: 'video/mp4;codecs=avc1,opus', ext: 'mp4'},
     {mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm'},
     {mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm'},
+    {mimeType: 'video/mp4;codecs=avc1,mp4a', ext: 'mp4'},
 ] as const;
 /** The overlay's widest size: it is stretched over the frame, so a full-resolution texture would only cost uploads. */
 const OVERLAY_MAX_W = 1280;
@@ -71,7 +72,7 @@ export function saveClip(player: ReplayPlayer, clip: ReplayClip, letter: string,
     paint();
     repainted = player.setRecordingOverlay(overlay);
 
-    let cancelled = false, finished = false;
+    let cancelled = false, finished = false, startedAt = 0;
     let settle!: (saved: boolean) => void;
     const done = new Promise<boolean>(resolve => {settle = resolve;});
     const cleanup = () => {
@@ -82,11 +83,16 @@ export function saveClip(player: ReplayPlayer, clip: ReplayClip, letter: string,
     recorder.addEventListener('stop', () => {
         cleanup();
         if (cancelled || !chunks.length) {settle(false); return;}
-        const url = URL.createObjectURL(new Blob(chunks, {type: recorder.mimeType || type.mimeType || 'video/webm'}));
-        const link = doc.createElement('a');link.href = url;link.download = clipFileName(clip, type.ext);
-        doc.body.appendChild(link);link.click();link.remove();
-        view.setTimeout(() => URL.revokeObjectURL(url), 1000);
-        settle(true);
+        const recorded = new Blob(chunks, {type: recorder.mimeType || type.mimeType || 'video/webm'});
+        // MediaRecorder writes WebM without a duration, so players cannot seek it or show its length.
+        const file = type.ext === 'webm' ? fixWebmDuration(recorded, performance.now() - startedAt, {logger: false}) : Promise.resolve(recorded);
+        void file.then(blob => {
+            const url = URL.createObjectURL(blob);
+            const link = doc.createElement('a');link.href = url;link.download = clipFileName(clip, type.ext);
+            doc.body.appendChild(link);link.click();link.remove();
+            view.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            settle(true);
+        }, () => settle(false));
     });
     const finish = () => {
         if (finished) return;
@@ -94,6 +100,7 @@ export function saveClip(player: ReplayPlayer, clip: ReplayClip, letter: string,
         if (recorder.state === 'inactive') {cleanup(); settle(false);} else recorder.stop();
     };
     try {
+        startedAt = performance.now();
         recorder.start(1000);
         player.play(clip, {mode: 'fullscreen', loop: false, onEnd: finish});
     } catch (error) {
