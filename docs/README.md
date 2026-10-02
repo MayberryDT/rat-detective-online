@@ -27,7 +27,6 @@ Reviewed against repository source and the latest release receipts through **202
 | [Omarchy plugin 1.3.1 release](verification/omarchy-plugin-release-2026-09-21.md) | Public repository, immutable tag/release, CI, Veelox install and marketplace validation status |
 | [Omarchy plugin acceptance](verification/omarchy-plugin-acceptance-2026-09-21.md) | Ibara acceptance, repaired lease/helper teardown, exact export identity, restoration and later release closure |
 | [Automatic highlights audit](verification/automatic-highlights-audit-2026-09-19.md) | Confirmed implementation defects and missing installation; includes runnable evidence |
-| [Automatic highlights](highlights.md) | Veelox 1.3.1 installed and enabled; document-clock correction included in the public release |
 | [Clips audio and export settings](verification/clips-audio-export-2026-09-21.md) | Source-only repair; regression/media/native evidence, preserved originals and explicit live-audio acceptance gap; not installed |
 | [Fullscreen and capture bounds](verification/window-resize-capture-2026-09-21.md) | Production fullscreen fix and installed recorder-region correction |
 | [Highlight document clock](verification/highlights-clock-2026-09-21.md) | Missing clips after reopening the game: local helper fix, regressions and installation |
@@ -116,8 +115,7 @@ Reviewed against repository source and the latest release receipts through **202
 | [Network and scaling audit, September 10](network-audit-2026-09-10.md) | Prioritized gameplay-preserving fixes, isolated reproductions and human-capacity verification gaps; audit only |
 | [Network fixes, September 10](verification/network-fixes-2026-09-10.md) | Protocol-6 delivery bounds and optimizations, regression checks, 24-client local results and remaining hosted/rendering limits; superseded by live protocol 7 |
 | [Model follow-ups](model-playtest-followups.md) | Remaining art work and accepted visual direction |
-| [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Assignment-aware Dispatch desk, launcher and public rooms |
-| [Omarchy Dispatch desk plan](omarchy-dispatch-plan.md) | Accepted implementation scope; see the linked release receipt for shipped status |
+| [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Alert plugin 2.0.0: one notification when people start playing |
 | [Visual fixtures](../test/visual/README.md) | Isolated visual tools and dated model history |
 | [Contributing](../CONTRIBUTING.md) / [Security](../SECURITY.md) | Project contribution and trust policies |
 

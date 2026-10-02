@@ -2,34 +2,13 @@
   "schemaVersion": 1,
   "id": "co.animasai.rat-detective",
   "name": "Rat Detective",
-  "version": "1.3.2",
+  "version": "2.0.0",
   "author": "Tyler Mayberry",
   "license": "MIT",
   "homepage": "https://ratdetective.online",
-  "description": "A live Dispatch desk for Rat Detective assignments, rooms, alerts, launching and captures.",
-  "kinds": ["service", "bar-widget"],
+  "description": "A notification when people start playing Rat Detective.",
+  "kinds": ["service"],
   "entryPoints": {
-    "service": "Service.qml",
-    "barWidget": "BarWidget.qml"
-  },
-  "barWidget": {
-    "displayName": "Rat Detective",
-    "description": "See the live assignment, objective leaders and city activity, then play or return.",
-    "category": "Fun",
-    "allowMultiple": false,
-    "defaultSection": "right",
-    "defaults": {
-      "appearance": "Omarchy",
-      "openRefreshSec": 2,
-      "closedRefreshSec": 30,
-      "staleAfterSec": 90,
-      "alertsEnabled": false,
-      "alertHumanThreshold": 2
-    },
-    "schema": [
-      {"key":"appearance","type":"enum","label":"Appearance","options":["Omarchy","Rat Detective"],"defaultValue":"Omarchy","description":"Follow the current Omarchy theme or use Rat Detective's noir palette and type."},
-      {"key":"alertsEnabled","type":"boolean","label":"Notify when people are playing","defaultValue":false},
-      {"key":"alertHumanThreshold","type":"integer","label":"At least","min":1,"max":10,"step":1,"defaultValue":2,"description":"Notify when at least this many people are in the same fresh public room."}
-    ]
+    "service": "Service.qml"
   }
 }
