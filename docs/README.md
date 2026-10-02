@@ -115,7 +115,7 @@ Reviewed against repository source and the latest release receipts through **202
 | [Network and scaling audit, September 10](network-audit-2026-09-10.md) | Prioritized gameplay-preserving fixes, isolated reproductions and human-capacity verification gaps; audit only |
 | [Network fixes, September 10](verification/network-fixes-2026-09-10.md) | Protocol-6 delivery bounds and optimizations, regression checks, 24-client local results and remaining hosted/rendering limits; superseded by live protocol 7 |
 | [Model follow-ups](model-playtest-followups.md) | Remaining art work and accepted visual direction |
-| [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Alert plugin 2.0.0: one notification when people start playing |
+| [Omarchy](omarchy.md) / [plugin guide](../omarchy/plugin/README.md) | Alert plugin 2.1.0: the bar rat lights up while people play, plus one notification |
 | [Visual fixtures](../test/visual/README.md) | Isolated visual tools and dated model history |
 | [Contributing](../CONTRIBUTING.md) / [Security](../SECURITY.md) | Project contribution and trust policies |
 

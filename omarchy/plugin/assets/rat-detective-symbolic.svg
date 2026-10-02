@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="65 65 1170 1170">
+  <title>Rat Detective — selected angular profile A</title>
+  <g fill="white">
+    <!-- Broad tilted fedora; the transparent band stays open at toolbar size. -->
+    <path d="M447 298 550 112Q556 105 568 112L779 222Q796 227 823 220L910 212 953 425Z"/>
+    <!-- One large rat ear, opening into the sweeping brim. -->
+    <path d="M457 415C508 337 452 245 370 221 212 174 98 266 96 407 91 530 166 624 276 607 330 598 370 566 400 540L276 448Z"/>
+    <path d="M283 445C459 417 739 417 937 486L1086 600C823 553 596 520 403 506Z"/>
+    <!-- Wedge muzzle, eye cutout and the descending collar point. -->
+    <path fill-rule="evenodd" d="M409 583C480 518 532 502 585 513L1125 711 1180 712 1180 766 959 813C795 845 730 869 706 914 692 946 730 1016 746 1068L802 1182 659 1094 583 929 330 724ZM691 562 803 613C779 659 753 665 728 650 700 635 687 603 691 562Z"/>
+    <!-- Angular trench-coat lapel, separated by generous negative space. -->
+    <path d="M270 690 516 887 449 925 660 1050 710 1148 181 967 296 827Z"/>
+  </g>
+</svg>

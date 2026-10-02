@@ -1,8 +1,9 @@
 # Rat Detective alert
 
-An Omarchy 4 plugin that sends one notification when people start playing
-[Rat Detective](https://ratdetective.online/). Nothing else: no bar widget, panel,
-recording or helper processes.
+An Omarchy 4 plugin that tells you when people are playing
+[Rat Detective](https://ratdetective.online/): the rat in the bar lights up with the
+number of people playing, and one notification says when they start. Clicking the rat
+opens or focuses the game. No panel, recording or helper processes.
 
 - Every 30 seconds it reads the public room report (`curl`, at most 256 KiB, 10 s).
 - When the public rooms go from no people to some, it notifies once ("Someone is
@@ -17,6 +18,6 @@ omarchy plugin add https://github.com/MayberryDT/rat-detective-omarchy.git --ena
 omarchy plugin remove co.animasai.rat-detective
 ```
 
-Version 2.0.0 replaced the 1.x Dispatch desk (scoreboard panel, launcher helper,
+Version 2.0 replaced the 1.x Dispatch desk (scoreboard panel, launcher helper,
 shortcut installer and automatic highlight recording). Clips that 1.x saved stay in
 `~/Videos/Rat Detective/Highlights/`; this version never reads or deletes them.

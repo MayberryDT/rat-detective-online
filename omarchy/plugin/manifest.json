@@ -2,13 +2,24 @@
   "schemaVersion": 1,
   "id": "co.animasai.rat-detective",
   "name": "Rat Detective",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "Tyler Mayberry",
   "license": "MIT",
   "homepage": "https://ratdetective.online",
-  "description": "A notification when people start playing Rat Detective.",
-  "kinds": ["service"],
+  "description": "The rat in the bar lights up while people play Rat Detective, with a notification when they start.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
   "entryPoints": {
-    "service": "Service.qml"
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Rat Detective",
+    "description": "Lights up with the number of people playing; click to open the game.",
+    "category": "Fun",
+    "allowMultiple": false,
+    "defaultSection": "right"
   }
 }

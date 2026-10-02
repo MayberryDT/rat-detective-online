@@ -196,13 +196,13 @@ metadata; production Worker code and all 57 other existing assets are unchanged.
 Protocol 18 and client `index-BL9xcsnh.js` / `createGame-BSxvfOuu.js` remain.
 See [release verification](verification/social-share-2026-09-22.md).
 
-## Omarchy alert plugin 2.0.0 — 2 October, installed on Veelox only
+## Omarchy alert plugin 2.1.0 — 2 October, installed on Veelox only
 
-Tyler: "all I want it to do is just be a bare bones alert system that tells me when people are playing." The plugin is now one headless `Service.qml` (no bar widget, panel, launcher helper, shortcut installer or recording): every 30 s it reads `/api/companion/v1/status` with `curl` and sends one Omarchy notification when the public rooms go from no people to some, re-arming only when they are empty again; nothing while the game window is focused; clicking opens or focuses the game. See [Omarchy](omarchy.md).
+Tyler: "all I want it to do is just be a bare bones alert system that tells me when people are playing." The plugin is now the rat in the bar, lit with the number of people playing (click opens the game), plus one service (no panel, launcher helper, shortcut installer or recording): every 30 s it reads `/api/companion/v1/status` with `curl` and sends one Omarchy notification when the public rooms go from no people to some, re-arming only when they are empty again; nothing while the game window is focused; clicking opens or focuses the game. See [Omarchy](omarchy.md).
 
 Desktop automatic highlights are retired: the Python helper, browser connector, native host, `gpu-screen-recorder` buffer, clip library window and the 5174 matching preview service were removed from the repo and from Veelox. The 191 saved clips in `~/Videos/Rat Detective/Highlights/` and their catalog in `~/.local/state/rat-detective/highlights/` were left untouched. In-game replays are being planned instead. The game still carries `src/highlights/` (detector and the now-unheard `postMessage` bridge) until that plan replaces it.
 
-GitHub `MayberryDT/rat-detective-omarchy` and marketplace issue #6926 still hold 1.3.2; publishing 2.0.0 needs Tyler's OK (1.2.0 was once published without it).
+GitHub `MayberryDT/rat-detective-omarchy` and marketplace issue #6926 still hold 1.3.2; Tyler doesn't care about them.
 
 ## Window resize corrections — 21 September production
 

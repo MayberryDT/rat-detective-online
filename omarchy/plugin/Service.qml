@@ -1,7 +1,8 @@
 import QtQuick
 import Quickshell.Io
+import "ServiceBridge.js" as ServiceBridge
 
-// Rat Detective alert: one notification when people start playing in a public room.
+// Rat Detective alert: the bar rat lights up while people play, and one notification when they start.
 // Polls the public companion report; re-arms only after every public room is empty again.
 Item {
   id: root
@@ -49,6 +50,12 @@ Item {
   }
 
   Process { id: notify }
+  Process { id: launch; command: ["omarchy-launch-or-focus-webapp", "ratdetective.online", "https://ratdetective.online/"] }
+
+  function openGame() { if (!launch.running) launch.running = true }
+
+  Component.onCompleted: ServiceBridge.publish(root)
+  Component.onDestruction: ServiceBridge.clear(root)
 
   IpcHandler {
     target: "co.animasai.rat-detective"
