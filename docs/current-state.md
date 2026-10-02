@@ -2,6 +2,16 @@
 
 Verified from source and production through **2026-10-02** (protocol 28). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Protocol 29: clarity — 2 October staging
+
+Tyler: "we finally reached the point where there's too much chaos … we gotta double down on clarity." On staging (Worker `1675fe8c-0db4-41dc-9959-809702f4c366`, build `staging-2026-10-02-9f3980b`, **protocol 29**, layout 7, `mindVersion` 10), not in production. Spec and results: [the juice plan](juice-plan.md#clarity-batch-agreed-2-october-protocol-29); lag measurements: [lag receipt](verification/lag-2026-10-02.md).
+
+- **Case ping:** a carried case pings every 4 s (gold flare, ring and light column through walls, a sonar ping); between pings the carrier is not marked, and the HUD shows LAST SEEN with a screen-edge arrow. Bots know an unseen carrier only from pings.
+- **Clarity:** one case gold; one big headline at a time; incidents get a 2.2 s title then a small tag; a death recap (who, with what, an arrow to the case); jargon explained once per browser.
+- **Calmer:** camera shake 60% and master volume 50% for new players; a first-launch comfort hint; a ranked sound mix (12 shared world voices, ducking for your hits, kills and case events); other rats' balls dimmer than threats; effect caps.
+- **Admin:** `ADMIN_TOKEN` (staging set); F10 panel with a key pasted once in Settings (`?admin=1`); `scripts/admin.mjs` with the key in `~/.config/rat-detective/admin-token`; every command is an `admin` fact.
+- **Wire:** chaos frames 32–40% smaller per client, lossless; the server tick was not the lag (median 2–3 ms against 33 ms).
+
 ## Protocol 28: the playtest quick patch — 2 October production
 
 Tyler, after the four-human playtest: "make that quick patch, and push it live." Production Worker `ea258468-6c17-4831-9901-6208aaf401b6`, build `production-2026-10-02-6668ade`, client `index-COP7Rh_L.js`, commit `6668ade`, **protocol 28**, layout 7, `mindVersion` 9 ([receipt](verification/protocol-28-release-2026-10-02.md); the playtest notes and backlog are in [the juice plan](juice-plan.md#four-human-playtest-tyler-2026-10-01-evening)). PAPER CHASE to 5; Planted Evidence and Bobbleheads removed; 40 s between incidents; Harbour Master and precinct deliver anywhere in the building; the Laser fires like the cheese gun for 1 damage over 15 s; the Mousetrap holds 3 s instead of killing; the carrier buff in every mode; results you leave with CONTINUE, with more stats, hover, scrolling and DOWNLOAD STATS.
