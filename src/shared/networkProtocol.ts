@@ -13,8 +13,9 @@ import type { ExhibitMessage, HighlightMarker } from './highlights';
  * 28: playtest quick patch: Planted Evidence and Bobbleheads removed, hitscan Laser at the cheese gun's rate, holding traps, carrier buff in every mode, results you leave when you choose.
  * 29: clarity: the hot case heartbeat (the carrier flashes red through walls every 4 s, red-hot cuffed case), Cheddar Shower removed, flaming Crossfire streaks and bank-shot paths, admin controls.
  * 30: highlight replays: the server's `highlight` markers and the client's `exhibit` reports (docs/replay-plan.md).
- * 31: three-human playtest batch: Tommy Gun 20 shots a second for 12 s, Ironclad 8 s, Big Cheese removed, shared exhibits. */
-export const PROTOCOL_VERSION = 31;
+ * 31: three-human playtest batch: Tommy Gun 20 shots a second for 12 s, Ironclad 8 s, Big Cheese removed, shared exhibits.
+ * 32: random supplies: every site but Quick Fix holds a random pickup, rolled at each claim and round (a site's kind changes). */
+export const PROTOCOL_VERSION = 32;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;

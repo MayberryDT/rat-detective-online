@@ -136,7 +136,9 @@ export class PickupVisual {
     private spin=Math.random()*Math.PI*2;
     private readonly phase=Math.random()*10;
     private restock?:PickupRespawnVisual;
-    constructor(scene:THREE.Scene,private readonly kind:PickupKind){
+    /** No claim pop is playing, so a site whose next pickup was rolled can be rebuilt without cutting it short. */
+    get settled():boolean {return this.popAge>=POP;}
+    constructor(scene:THREE.Scene,readonly kind:PickupKind){
         const iron=new THREE.MeshStandardMaterial({color:0x5d656f,metalness:.9,roughness:.36});
         const rivet=new THREE.MeshStandardMaterial({color:0x2d2b2e,metalness:.9,roughness:.4});
         const dark=new THREE.MeshStandardMaterial({color:0x1d191c,metalness:.35,roughness:.62});

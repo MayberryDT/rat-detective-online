@@ -6,6 +6,7 @@ import {MAX_HP,type PlayerData,type Vec3Data} from '../../src/shared/networkProt
 import {createPlayer} from '../../src/worker/gameState';
 import {laserPath,type LaserCast} from '../../src/shared/laser';
 import {resolveShotPattern,tommyCone,tommyHeat} from '../../src/shared/shotPattern';
+import {stockSite} from './stockSite';
 
 afterEach(()=>vi.restoreAllMocks());
 const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
@@ -17,6 +18,8 @@ function fixture(){
     const players=new Map([a,b].map(p=>[p.id,p]));
     const hits:ChaosHit[]=[];
     const sim=new ChaosSimulation(players,hit=>{hits.push(hit);const v=players.get(hit.victim)!;v.hp=Math.max(0,v.hp-hit.damage);},undefined,{seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION});
+    // B starts on the x 70 site: keep it the Tommy Gun it was authored as (sites roll since protocol 32), never a coat.
+    stockSite(sim,'tommy-gun','tommy-x70-north');
     sim.step(0,now);
     return {sim,players,a,b,hits,now};
 }

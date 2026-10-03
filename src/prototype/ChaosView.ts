@@ -342,7 +342,8 @@ export class ChaosView {
         this.claimAt.set(me.x,me.y+1.2,me.z);
         for(const pickup of this.state?.pickups??[]){
             const d=(pickup.x-me.x)**2+(pickup.y-me.y)**2+(pickup.z-me.z)**2;
-            if(pickup.kind===kind&&d<best){best=d;this.claimAt.set(pickup.x,pickup.y,pickup.z);}
+            // The claimed site has already rolled its next pickup, so it is the nearest empty one (or still of this kind).
+            if((pickup.kind===kind||(pickup.availableAt??0)>(this.state?.time??0))&&d<best){best=d;this.claimAt.set(pickup.x,pickup.y,pickup.z);}
         }
         const card=this.buffCards.get(kind);
         if(card){
@@ -584,6 +585,8 @@ export class ChaosView {
         for(const [id,visual] of this.pickups)if(!live.has(id)){visual.dispose();this.pickups.delete(id);}
         for(const pickup of state.pickups??[]){
             let visual=this.pickups.get(pickup.id);
+            // A site rolls its next pickup on each claim and round: rebuild its prop once the claim pop has played.
+            if(visual&&visual.kind!==pickup.kind&&visual.settled){visual.dispose();this.pickups.delete(pickup.id);visual=undefined;}
             if(!visual){visual=new PickupVisual(this.scene,pickup.kind);visual.setXray(this.fixXray);this.pickups.set(pickup.id,visual);}
             visual.setPosition(pickup.x,pickup.y,pickup.z);
             visual.setNervous(state.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='code-violation');

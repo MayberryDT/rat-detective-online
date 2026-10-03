@@ -7,6 +7,7 @@ import {applyHit,createPlayer} from '../../src/worker/gameState';
 import {parseServerMessage} from '../../src/shared/messageValidation';
 import {ChaosEncoder,ChaosDecoder} from '../../src/shared/chaosWire';
 import {serializeServerMessage} from '../../src/worker/serializeServerMessage';
+import {stockSite} from './stockSite';
 
 const NOW=1_000_000,appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
 afterEach(()=>vi.restoreAllMocks());
@@ -30,7 +31,7 @@ function fixture(protectedOwner=false){
     };
     sim=new ChaosSimulation(players,hit,seed);
     if(protectedOwner){
-        const site=sim.snapshot(false).pickups!.find(p=>p.kind==='ironclad')!;
+        const site=stockSite(sim,'ironclad');
         Object.assign(owner,{x:site.x,y:site.y-.8,z:site.z});
         expect(sim.claimInteraction(owner.id,'pickup',site.id,site.availableAt??0,NOW).accepted).toBe(true);
         Object.assign(owner,{x:-3,y:59,z:0});

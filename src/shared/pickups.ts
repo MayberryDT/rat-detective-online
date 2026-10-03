@@ -13,6 +13,12 @@ export const WEAPON_KINDS = ['tommy-gun', 'laser', 'mousetrap'] as const;
 export type WeaponKind = typeof WEAPON_KINDS[number];
 export const isWeaponKind = (value: unknown): value is WeaponKind =>
     typeof value === 'string' && (WEAPON_KINDS as readonly string[]).includes(value);
+/** Every supply site but a Quick Fix one holds a random pickup of these, rolled at the start, at every round and again
+ * at every claim, so the restock dial shows what comes next (Tyler, 3 October, protocol 32: "whatever pickup that
+ * spawns is always random", the heal excepted). Quick Fix sites stay Quick Fix. */
+export const RANDOM_SITE_KINDS: readonly PickupKind[] = PICKUP_KINDS.filter(kind => kind !== 'quick-fix');
+export const randomSiteKind = (random: () => number = Math.random): PickupKind =>
+    RANDOM_SITE_KINDS[Math.floor(random() * RANDOM_SITE_KINDS.length)]!;
 
 /** Release tuning; subjective pickup feel still benefits from human playtests. */
 export const PICKUP_TUNING = {

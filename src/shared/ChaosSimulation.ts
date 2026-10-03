@@ -15,7 +15,7 @@ import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballT
 import { bounceShot, crossfireBounce, quirkBirth, quirkBounce, shotLife, steerQuirk } from './shotBallistics';
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, CROSSFIRE, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState, type TrapState, type LaserBeam, MAX_TRAPS, MAX_BEAMS } from './chaosState';
-import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, shortedOut, weaponArming, FAULTY_COPY, FAULTY_TUNING, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, TRAP_SCALE, TRAP_TALL, resolvePickupPoints,
+import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, shortedOut, weaponArming, FAULTY_COPY, FAULTY_TUNING, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, TRAP_SCALE, TRAP_TALL, resolvePickupPoints, randomSiteKind,
     type BuffMap, type FaultyKind, type PickupKind, type PickupPoint, type WeaponKind } from './pickups';
 import { overWater } from './city/kit/city';
 import type { WorldSpec } from './worldSpec';
@@ -27,6 +27,8 @@ import { allUnitsPoint } from './allUnits';
 import { ASSIGNMENT_TUNING, activeDestination, ASSIGNMENT_DESTINATIONS, destinationPoint, restoreAssignment, type AssignmentState, type DestinationId } from './assignments';
 
 const caseCarryRotation=new C.Quaternion(CASE_CARRY_ROTATION.x,CASE_CARRY_ROTATION.y,CASE_CARRY_ROTATION.z,CASE_CARRY_ROTATION.w);
+/** A site's next pickup: Quick Fix sites keep the heal; every other site rolls a random one (`RANDOM_SITE_KINDS`). */
+const siteKind=(kind:PickupKind):PickupKind=>kind==='quick-fix'?kind:randomSiteKind();
 
 /** A launched case lands rather than ping-ponging: balls keep their 0.9 bounce,
  * but a heavy briefcase sheds most of its speed on each ground contact. */
@@ -234,7 +236,7 @@ export class ChaosSimulation {
         try{clear=spec?worldSpawnPoints(spec):CASE_SPAWNS;}catch{clear=CASE_SPAWNS;}
         this.streetPoints=clear;
         this.pickupPoints=resolvePickupPoints(clear,14,p=>this.supportedSpot(p));
-        for(const point of this.pickupPoints){this.pickups.set(point.id,{kind:point.kind,p:{...point.p},availableAt:0});this.siteHomes.set(point.id,{...point.p});}
+        for(const point of this.pickupPoints){this.pickups.set(point.id,{kind:siteKind(point.kind),p:{...point.p},availableAt:0});this.siteHomes.set(point.id,{...point.p});}
     }
     /** A supply-sized volume at `p` (prop height .7 above the foot) is clear of
      * static boxes, stands on flat floor with headroom, and has no wall hugging it. */
@@ -323,6 +325,7 @@ export class ChaosSimulation {
         const accepted={accepted:true as const,target:'pickup' as const,targetId:id,playerId:player.id,pickup:site.kind,
             ...(effectUntil===undefined?{}:{effectUntil}),...dud};
         this.recentPickupClaims.set(id,{playerId:player.id,generation,at:now,pickup:site.kind,...(effectUntil===undefined?{}:{effectUntil}),...dud});
+        site.kind=siteKind(site.kind);
         return accepted;
     }
     /** Code Violation (Tyler, 1 October): a claimed supply comes out as its dud (`FAULTY_KINDS`) instead, told to the
@@ -1781,7 +1784,7 @@ export class ChaosSimulation {
         this.assignment=undefined;
         this.buffs={};this.pickupEvents.length=0;this.tommyHeat.clear();this.beams=[];
         for(const id of [...this.traps.keys()])this.removeTrap(id);
-        for(const site of this.pickups.values())site.availableAt=0;
+        for(const site of this.pickups.values()){site.availableAt=0;site.kind=siteKind(site.kind);}
         this.primaryCase.previousOwner=null;this.primaryCase.pickupAfter=0;
         this.dispatch={phase:'ready',started:this.now,until:0,serial:this.dispatch.serial+1};this.casesWeaponized=false;this.syncExtraCases();
         this.pressure={serial:this.pressure.serial+1,levels:{},launches:[]};this.flights.clear();this.thrownUntil.clear();this.pendingVents.clear();
@@ -1806,7 +1809,7 @@ export class ChaosSimulation {
         // Room hibernation/reconnection must not restock consumed supplies early.
         for(const saved of s.pickups??[]){
             const site=this.pickups.get(saved.id);
-            if(site&&saved.kind===site.kind&&Number.isFinite(saved.availableAt))site.availableAt=Math.max(0,saved.availableAt!);
+            if(site&&(saved.kind==='quick-fix')===(site.kind==='quick-fix')&&Number.isFinite(saved.availableAt)){site.kind=saved.kind;site.availableAt=Math.max(0,saved.availableAt!);}
         }
         const assignment=restoreAssignment(s.assignment,Date.now());if(assignment)this.setAssignment(assignment);
         // Pressure is kept through a restore (it never leaks), including a machine

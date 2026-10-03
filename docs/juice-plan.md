@@ -137,6 +137,7 @@ Tyler and two friends on protocol 30. Liked: the laser ("fun, not broken"), the 
 - [x] **Big Cheese removed** ("I hate the big cheese"; one shot a second for everyone slowed play). Stored rooms run Crossfire.
 - [x] **Exhibits:** everyone sees the same Exhibits A–C (the round's best, chosen the same on every client); your own best moment, when it is not among them, is an extra card. "Sent flying" no longer fills the reel.
 - [x] **Exhibits from the player's view** (Tyler: "no one likes these unnatural camera angles"): each replay is seen through the game's own shoulder camera on the rat doing the thing, one view for the whole clip.
+- [x] **Random supplies** (Tyler, 3 October, protocol 32: "The Tommy gun feels way better … whatever pickup that spawns is always random", the heal excepted): every site but a Quick Fix one holds a random pickup of the other six (`RANDOM_SITE_KINDS`), rolled at the start, at each round and at each claim, so the restock dial shows what comes next. Quick Fix sites stay Quick Fix.
 - [ ] **Watch:** the carrier's double damage may be too much (Tyler); keep it a week of data, then 1.5× if needed. A Mousetrap incident (traps everywhere) is an idea, not agreed.
 
 ### Still open from the playtest

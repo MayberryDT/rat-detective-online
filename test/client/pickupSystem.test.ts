@@ -1,7 +1,8 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import * as C from 'cannon-es';
 import {ChaosSimulation,type ChaosHit} from '../../src/shared/ChaosSimulation';
-import {PICKUP_ANCHORS,PICKUP_KINDS,PICKUP_TUNING} from '../../src/shared/pickups';
+import {PICKUP_ANCHORS,PICKUP_TUNING,RANDOM_SITE_KINDS} from '../../src/shared/pickups';
+import {stockSite} from './stockSite';
 import {LANDMARK_FURNISHINGS} from '../../src/shared/landmarkLayout';
 import {SEWER_PIPE_ENTRANCES,sewerPipePoint} from '../../src/shared/sewerLayout';
 import {MAX_HP} from '../../src/shared/networkProtocol';
@@ -27,21 +28,29 @@ function fixture(){
 }
 const stand=(player:PlayerData,p:Vec3Data)=>{player.x=p.x;player.y=p.y;player.z=p.z;};
 const sites=(sim:ChaosSimulation)=>{const s=sim.snapshot(false);return s.pickups!.filter(p=>(p.availableAt??0)<=s.time);};
-const site=(sim:ChaosSimulation,kind:string)=>sites(sim).find(p=>p.kind===kind);
+const site=stockSite;
 
 describe('pickup system',()=>{
-    it.each([341283204,CITY_PREVIEW_SEED])('gives every supply site a reason: lone armor, sprint starts, sheltered medkits (seed %i)',seed=>{
+    it.each([341283204,CITY_PREVIEW_SEED])('keeps medkits sheltered, and every other site holds a random non-heal pickup (seed %i)',seed=>{
         const sim=new ChaosSimulation(new Map(),()=>{},undefined,{seed,version:GRAYBOX_VERSION});
         const all=sim.snapshot(false).pickups!;
         expect(all).toHaveLength(PICKUP_ANCHORS.length);
-        const armor=all.filter(p=>p.kind==='ironclad'),kits=all.filter(p=>p.kind==='quick-fix');
-        // Ironclad is rare and never stacked floor-over-roof on one landmark.
-        expect(armor.length).toBeLessThanOrEqual(5);
-        for(const a of armor)for(const b of armor)if(a!==b)expect(Math.hypot(a.x-b.x,a.z-b.z),`${a.id} / ${b.id}`).toBeGreaterThan(40);
+        const kits=all.filter(p=>p.kind==='quick-fix');
+        expect(kits.map(p=>p.id).sort()).toEqual(PICKUP_ANCHORS.filter(a=>a.kind==='quick-fix').map(a=>a.id).sort());
+        for(const p of all)if(p.kind!=='quick-fix')expect(RANDOM_SITE_KINDS).toContain(p.kind);
         // Medkits stand off the open ground: walls within reach on at least two sides, never mid-avenue.
         const walled=(p:{x:number;y:number;z:number},a:number)=>sim.world.raycastClosest(new C.Vec3(p.x,p.y+.3,p.z),
             new C.Vec3(p.x+Math.cos(a)*10,p.y+.3,p.z+Math.sin(a)*10),{collisionFilterMask:1});
         for(const kit of kits)expect(Array.from({length:8},(_,i)=>i*Math.PI/4).filter(a=>walled(kit,a)).length,kit.id).toBeGreaterThanOrEqual(2);
+    });
+    it('rolls a non-heal site again at each claim and each round; a Quick Fix site stays Quick Fix',()=>{
+        const {sim,a,now}=fixture();
+        const random=vi.spyOn(Math,'random');
+        const target=site(sim,'hustle');random.mockReturnValue(.99);
+        stand(a,target);sim.step(1/60,now);
+        expect(sim.snapshot(false).pickups!.find(p=>p.id===target.id)!.kind).toBe(RANDOM_SITE_KINDS.at(-1));
+        random.mockReturnValue(0);sim.reset();
+        for(const p of sim.snapshot(false).pickups!)expect(p.kind,p.id).toBe(PICKUP_ANCHORS.find(a=>a.id===p.id)!.kind==='quick-fix'?'quick-fix':RANDOM_SITE_KINDS[0]);
     });
 
     it('retires sites that are no longer authored when restoring a room while retaining other supply deadlines',()=>{
@@ -54,7 +63,7 @@ describe('pickup system',()=>{
         expect(restored.find(p=>p.id===saved.pickups![0]!.id)?.availableAt).toBe(now+30_000);
     });
 
-    it('keeps supplies clear of landmark furniture and speed packs six units in front of the long-tunnel portals',()=>{
+    it('keeps supplies clear of landmark furniture and a supply six units in front of the long-tunnel portals',()=>{
         const {sim}=fixture(),all=sites(sim);
         for(const site of all)for(const f of LANDMARK_FURNISHINGS){
             const foot=site.y-.7;
@@ -63,7 +72,7 @@ describe('pickup system',()=>{
         }
         for(const entry of SEWER_PIPE_ENTRANCES.filter(e=>e.axis==='x')){
             const front=sewerPipePoint(entry,-6);
-            expect(all.some(p=>p.kind==='hustle'&&Math.hypot(p.x-front.x,p.z-front.z)<.01)).toBe(true);
+            expect(all.some(p=>p.kind!=='quick-fix'&&Math.hypot(p.x-front.x,p.z-front.z)<.01)).toBe(true);
         }
     });
 
@@ -89,7 +98,7 @@ describe('pickup system',()=>{
         const pickups=sites(sim);
         expect(pickups.length).toBe(PICKUP_ANCHORS.length);
         expect(new Set(pickups.map(p=>p.id)).size).toBe(pickups.length);
-        expect(new Set(pickups.map(p=>p.kind))).toEqual(new Set(PICKUP_KINDS));
+        expect(pickups.filter(p=>p.kind==='quick-fix').length).toBe(PICKUP_ANCHORS.filter(a=>a.kind==='quick-fix').length);
         for(const pickup of pickups){
             expect(PICKUP_ANCHORS.some(a=>a.id===pickup.id)).toBe(true);
             const anchor=PICKUP_ANCHORS.find(a=>a.id===pickup.id)!;
@@ -121,7 +130,7 @@ describe('pickup system',()=>{
         const claimed=sim.claimInteraction(a.id,'pickup',target.id,target.availableAt??0,now+20);
         expect(claimed).toMatchObject({accepted:true,pickup:'quick-fix'});expect(a.hp).toBe(MAX_HP);
 
-        const other=sites(sim).find(p=>p.kind==='hustle')!;
+        const other=site(sim,'hustle');
         const farFrom={x:other.x-4,y:other.y-.8,z:other.z},farTo={x:other.x+4,y:other.y-.8,z:other.z};
         stand(a,farFrom);sim.recordMovement(a.id,farFrom,farTo,now+40,2);
         expect(sim.claimInteraction(a.id,'pickup',other.id,other.availableAt??0,now+40)).toMatchObject({accepted:false,reason:'too-far'});
@@ -141,7 +150,7 @@ describe('pickup system',()=>{
     });
     it('refreshes the same benefit to full duration instead of stacking it',()=>{
         const {sim,a,now}=fixture();
-        const [first,second]=sites(sim).filter(p=>p.kind==='hustle');
+        const first=site(sim,'hustle'),second=site(sim,'hustle',1);
         stand(a,first);sim.step(1/60,now);
         const base=sim.snapshot(false).buffs![a.id].hustleUntil!;
         stand(a,second);sim.step(1/60,now+PICKUP_TUNING.hustleMs/2);
@@ -227,8 +236,8 @@ it('keeps a ground-floor reward out of reach of a rat on the floor above it',()=
     stand(a,{...armor,y:0});sim.step(1/60,now+40);
     expect(sites(sim).some(p=>p.id===armor.id)).toBe(false);
 });
-it('keeps armor out of every Jurisdiction zone, so holding a zone never hands out Ironclad',()=>{
+it('keeps every non-heal site out of every Jurisdiction zone, so holding a zone never hands out Ironclad',()=>{
     const {sim}=fixture();
-    for(const p of sites(sim).filter(p=>p.kind==='ironclad'))for(const id of JURISDICTION_ZONE_IDS)
+    for(const p of sites(sim).filter(p=>p.kind!=='quick-fix'))for(const id of JURISDICTION_ZONE_IDS)
         expect(zoneContains(id,{x:p.x,y:p.y-.7,z:p.z}),`${p.id} in ${id}`).toBe(false);
 });

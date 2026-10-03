@@ -7,7 +7,8 @@ import {MAX_HP,type PlayerData,type Vec3Data} from '../../src/shared/networkProt
 import {createPlayer,spawnForWorld} from '../../src/worker/gameState';
 import type {IncidentId} from '../../src/shared/incidentCatalog';
 import {parseServerMessage} from '../../src/shared/messageValidation';
-import {FAULTY_KINDS,type FaultyKind} from '../../src/shared/pickups';
+import {FAULTY_KINDS,type FaultyKind,type PickupKind} from '../../src/shared/pickups';
+import {stockSite} from './stockSite';
 import {overWater} from '../../src/shared/city/kit/city';
 
 afterEach(()=>vi.restoreAllMocks());
@@ -73,8 +74,8 @@ describe('fourth-batch incidents',()=>{
     });
 
     /** Catch the `kind` supply the way a rat does: it bolts as you arrive, so run onto where it fled before its next hop. */
-    const claim=(sim:ChaosSimulation,a:PlayerData,kind:string)=>{
-        const kit=sim.snapshot(false).pickups!.find(p=>p.kind===kind)!;
+    const claim=(sim:ChaosSimulation,a:PlayerData,kind:PickupKind)=>{
+        const kit=stockSite(sim,kind);
         stand(a,kit.x+3,kit.y-.7,kit.z);sim.step(1/60,now+16);
         const fled=sim.snapshot(false).pickups!.find(p=>p.id===kit.id)!;
         stand(a,fled.x,fled.y-.7,fled.z);sim.step(1/60,now+32);
