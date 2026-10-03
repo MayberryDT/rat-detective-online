@@ -619,7 +619,7 @@
       "environment": "production",
       "build": "production-2026-10-03-2cac486",
       "from": "2026-10-03T07:57:57.353Z",
-      "to": null,
+      "to": "2026-10-03T15:54:27.871Z",
       "layout": 7,
       "mindVersion": 12,
       "protocol": 31,
@@ -646,6 +646,32 @@
           "target": {
             "above": 3
           }
+        }
+      ]
+    },
+    {
+      "id": "random-supplies",
+      "environment": "production",
+      "build": "production-2026-10-03-6b47caf",
+      "from": "2026-10-03T15:54:27.871Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 12,
+      "protocol": 32,
+      "worker": "02bf9e68-9699-4138-a586-ddc93de49847",
+      "commits": [
+        "6b47caf"
+      ],
+      "change": "Protocol 32 (3 October): random supplies. Every site but a Quick Fix one holds a random non-heal pickup (Ironclad, Hot Pursuit, Stakeout, Tommy Gun, Laser, Mousetrap), rolled at the start, each round and each claim; Quick Fix sites stay Quick Fix.",
+      "baseline": "playtest-three",
+      "receipt": "docs/verification/random-supplies-release-2026-10-03.md",
+      "notes": "A site's kind now changes: read the kind from each `pickup`/`restock` fact, not from the layout's site id. Sites restored from the protocol 31 room keep their authored kinds until first claimed or the next round. Admin-touched rounds should be left out.",
+      "predictions": [
+        {
+          "id": "excessive-force-not-longer",
+          "says": "Excessive Force rounds do not get longer with weapons at more sites",
+          "measure": "rounds.minutes.excessive-force",
+          "expect": "not-up"
         }
       ]
     }

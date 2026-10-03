@@ -1,6 +1,10 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-10-03** (protocol 31). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-10-03** (protocol 32). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+
+## Protocol 32: random supplies — 3 October production
+
+Tyler: "The Tommy gun feels way better, but now I want to change all the pickups except for the heel. I want them to be random … deploy it live." **Production** Worker `02bf9e68-9699-4138-a586-ddc93de49847`, build `production-2026-10-03-6b47caf`, client `index-93gja5OR.js`, commit `6b47caf`, **protocol 32**, layout 7, `mindVersion` 12, era `random-supplies` ([receipt](verification/random-supplies-release-2026-10-03.md)). Every supply site but a Quick Fix one holds a random pickup of the other six, rolled at the start, each round and each claim (the restock dial shows the next one); the 14 Quick Fix sites stay Quick Fix. Staging runs the same build.
 
 ## Protocol 31: the three-human playtest batch — 3 October production
 
