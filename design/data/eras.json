@@ -590,7 +590,7 @@
       "environment": "production",
       "build": "production-2026-10-02-c7c67bb",
       "from": "2026-10-02T23:27:30.503Z",
-      "to": null,
+      "to": "2026-10-03T07:57:57.353Z",
       "layout": 7,
       "mindVersion": 12,
       "protocol": 30,
@@ -608,6 +608,41 @@
           "says": "Every finished round sends at least 3 highlight moments",
           "measure": "highlight.per-round",
           "expect": "up",
+          "target": {
+            "above": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "playtest-three",
+      "environment": "production",
+      "build": "production-2026-10-03-2cac486",
+      "from": "2026-10-03T07:57:57.353Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 12,
+      "protocol": 31,
+      "worker": "f2fc905a-47da-4b11-af0b-84c95317c9da",
+      "commits": [
+        "2cac486"
+      ],
+      "change": "Protocol 31 (2 October, after the three-human playtest): Tommy Gun 20 balls a second for 12 s (admitted at 22 a second in its own window; other guns keep 12), Ironclad Alibi 8 s, Big Cheese removed (stored ids run Crossfire), the same Exhibits A-C for everyone plus your own as D, sent flying needs 40 u or 8 up, replays through the gameplay shoulder camera.",
+      "baseline": "exhibits",
+      "receipt": "docs/verification/protocol-31-release-2026-10-03.md",
+      "notes": "mindVersion not bumped: bot minds are unchanged; the motor fires the Tommy at 20 a second and no longer spaces shots for Big Cheese. Fewer `highlight` facts of kind sent-flying by design. Admin-touched rounds should be left out.",
+      "predictions": [
+        {
+          "id": "excessive-force-not-longer",
+          "says": "Excessive Force rounds do not get longer without Big Cheese's slow trigger and with a stronger Tommy",
+          "measure": "rounds.minutes.excessive-force",
+          "expect": "not-up"
+        },
+        {
+          "id": "highlights-still-every-round",
+          "says": "Every finished round still sends at least 3 highlight moments with the stricter sent flying",
+          "measure": "highlight.per-round",
+          "expect": "not-down",
           "target": {
             "above": 3
           }

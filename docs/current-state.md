@@ -1,10 +1,10 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-10-02** (protocol 30 in production; protocol 31 below on staging). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-10-03** (protocol 31). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
-## Protocol 31: the three-human playtest batch — 2 October (staging)
+## Protocol 31: the three-human playtest batch — 3 October production
 
-Tyler and two friends played protocol 30; Tyler: "go" on the batch ([the juice plan](juice-plan.md#three-human-playtest-2-october-night-protocol-31)).
+Tyler and two friends played protocol 30; Tyler: "go" on the batch, then "send it live". **Production** Worker `f2fc905a-47da-4b11-af0b-84c95317c9da`, build `production-2026-10-03-2cac486`, client `index-B6gbUF69.js`, commit `2cac486`, **protocol 31**, layout 7, `mindVersion` 12, era `playtest-three` ([receipt](verification/protocol-31-release-2026-10-03.md); [the juice plan](juice-plan.md#three-human-playtest-2-october-night-protocol-31)). Staging runs the same build with every incident.
 
 - **Tommy Gun:** 20 balls a second held (`tommyIntervalMs` 50), 12 s. The server admits a rat holding it at `TOMMY_SHOOT_RATE` (22 a second) in its own window; every other gun keeps `SHOOT_RATE` (12). Feel per shot halved (kick, push) and casings shorter-lived so the pools hold.
 - **Ironclad Alibi:** 8 s.
