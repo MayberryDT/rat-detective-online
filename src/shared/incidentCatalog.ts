@@ -6,7 +6,6 @@ export const INCIDENTS = [
     {id:'evidence-tampering',title:'Evidence Tampering',description:'Runaway case missiles! Dodge them or shoot them back.'},
     {id:'crossfire',title:'Crossfire',description:'Off the first wall the cheese catches fire and doubles its speed.'},
     {id:'scattershot',title:'Scattershot',description:'Every shot is a five-ball fan, and every ball knocks rats flying.'},
-    {id:'big-cheese',title:'Big Cheese',description:'Heavy cheese. Slow trigger. Every rebound makes it bigger.'},
     {id:'blackout',title:'Blackout',description:'The power is out. Every rat has a flashlight.'},
     {id:'code-violation',title:'Code Violation',description:'Every machine is out of order and supplies come out faulty. Quick Fix still heals.'},
     {id:'most-wanted',title:'Most Wanted',description:'Whoever is winning is in the searchlight. Take them down for a supply.'},
@@ -19,13 +18,15 @@ export const LEGACY_INCIDENTS = {
     'kickback':'scattershot','after-hours-collection':'crossfire','return-to-sender':'crossfire',
     // Retired 1 October (protocol 27): stored rooms may still hold them.
     'delayed-reaction':'crossfire','clean-bill':'most-wanted','rat-race':'all-units','malpractice':'code-violation',
-    'cheesequake':'big-cheese','ricochet-racket':'scattershot','popcorn-panic':'scattershot',
-    // Renamed after Tyler's playtest (1 October, "nothing about God"), then removed with Cheddar Shower.
-    'act-of-god':'big-cheese',
+    'cheesequake':'crossfire','ricochet-racket':'scattershot','popcorn-panic':'scattershot',
+    // Renamed after Tyler's playtest (1 October, "nothing about God"), then removed with Cheddar Shower and Big Cheese.
+    'act-of-god':'crossfire',
     // Removed after the four-human playtest (1 October evening, protocol 28).
     'planted-evidence':'improper-disposal','bobbleheads':'crossfire',
     // Removed after the clarity playtest (2 October, protocol 29): its meteor bursts filled the ball cap (lag).
-    'cheddar-shower':'big-cheese',
+    'cheddar-shower':'crossfire',
+    // Removed after the three-human playtest (2 October, protocol 31): one shot a second for everyone slowed play.
+    'big-cheese':'crossfire',
 } as const satisfies Record<string,IncidentId>;
 export type LegacyIncidentId = keyof typeof LEGACY_INCIDENTS;
 export const isLegacyIncidentId = (value: unknown): value is LegacyIncidentId => typeof value === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_INCIDENTS, value);

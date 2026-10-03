@@ -15,7 +15,7 @@
 //   --human    with --city, the recorder counts rd-ai-0 as a connected human (1 Hz frames, human facts)
 //   --incident=<id>  hold that Dispatch incident active the whole run (a fresh serial every 25 s, as a new roll)
 //   --room     GameRoom's rules the plain loop leaves out: hits, deaths (corpse and 120-ball burst) and 3 s respawns,
-//              a PAPER CHASE assignment, the shot ceiling and fire spacing, Mousetraps set down, a special weapon handed
+//              a PAPER CHASE assignment, the shot ceiling, Mousetraps set down, a special weapon handed
 //              to every unarmed living rat each 10 s, UUID shot ids, and each recipient's other per-tick frames
 //              (the movement frame and every other rat's playerShot) counted beside the chaos frame
 import {build} from 'esbuild';
@@ -37,7 +37,7 @@ const ref=values.ref&&execFileSync('git',['rev-parse',values.ref],{encoding:'utf
 const label=values.label??`${ref?ref.slice(0,7):'worktree'}-${scenario}${values.incident?'-'+values.incident:''}${values.room?'-room':''}`;
 const outfile=resolve(out,`runtime-${ref?ref.slice(0,12):'worktree'}.mjs`);
 await build({stdin:{contents:"export {CityRecorder} from './src/worker/city/CityRecorder.ts';export {grayboxBoxes,GRAYBOX_VERSION} from './src/shared/grayboxLayout.ts';export {SpatialRayQuery} from './src/shared/SpatialRayQuery.ts';export {ServerBotController} from './src/worker/ServerBotController.ts';export {ChaosSimulation} from './src/shared/ChaosSimulation.ts';export {createPlayer,applyHit,respawnPlayer,spawnForWorld} from './src/worker/gameState.ts';export {prepareChaos,ChaosDecoder} from './src/shared/chaosWire.ts';export {ChaosDelivery} from './src/worker/ChaosDelivery.ts';"+
-    "export {isIncidentId} from './src/shared/incidentCatalog.ts';export {createAssignment} from './src/shared/assignments.ts';export {mergePickup,WEAPON_KINDS} from './src/shared/pickups.ts';export {ShotSpacing,SHOOT_RATE} from './src/shared/shotTiming.ts';export {RateLimiter} from './src/worker/validation.ts';export {serializeMovement,POSE_FIELDS} from './src/shared/movementWire.ts';export {INCIDENT_TUNING} from './src/shared/chaosState.ts';",resolveDir:root,loader:'ts'},
+    "export {isIncidentId} from './src/shared/incidentCatalog.ts';export {createAssignment} from './src/shared/assignments.ts';export {mergePickup,WEAPON_KINDS} from './src/shared/pickups.ts';export {shootRate} from './src/shared/shotTiming.ts';export {RateLimiter} from './src/worker/validation.ts';export {serializeMovement,POSE_FIELDS} from './src/shared/movementWire.ts';",resolveDir:root,loader:'ts'},
     outfile,bundle:true,packages:'external',platform:'node',format:'esm',logLevel:'error',define:{'performance.now':'__simClock'},
     plugins:ref?[{name:'ref',setup(b){b.onLoad({filter:/\/src\/.*\.ts$/},args=>({contents:execFileSync('git',['show',`${ref}:${relative(root,args.path)}`],{encoding:'utf8'}),loader:'ts'}));}}]:[]});
 // Deterministic randomness, installed before any module captures Math.random.
@@ -45,7 +45,7 @@ let seed=341283204;Math.random=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(see
 let simClock=0,uuid=0;globalThis.__simClock=()=>simClock;
 globalThis.crypto.randomUUID=()=>`00000000-0000-4000-8000-${String(++uuid).padStart(12,'0')}`;
 const {ServerBotController,ChaosSimulation,createPlayer,applyHit,respawnPlayer,spawnForWorld,prepareChaos,ChaosDecoder,ChaosDelivery,CityRecorder,grayboxBoxes,GRAYBOX_VERSION,SpatialRayQuery,
-    isIncidentId,createAssignment,mergePickup,WEAPON_KINDS,ShotSpacing,SHOOT_RATE,RateLimiter,serializeMovement,POSE_FIELDS,INCIDENT_TUNING}=await import(pathToFileURL(outfile)+'?'+Date.now());
+    isIncidentId,createAssignment,mergePickup,WEAPON_KINDS,shootRate,RateLimiter,serializeMovement,POSE_FIELDS}=await import(pathToFileURL(outfile)+'?'+Date.now());
 if(values.incident&&!isIncidentId(values.incident))throw Error(`unknown incident ${values.incident}`);
 const {ObjectCollisionMatrix,Vec3}=await import('cannon-es');
 
@@ -84,10 +84,9 @@ const round={phase:'playing'};
 // The recorder's shot and decision hooks run inside the bots' step; their time is moved from bots to city.
 let shotMs=0;
 // --room: GameRoom.admitShot and handleShoot's Mousetrap branch; each recipient's other frames (GameRoom.broadcast).
-const limiter=new RateLimiter(),spacing=new ShotSpacing(),moved=new Set(),poses=new Map(),others={bytes:0,messages:0};
+const limiter=new RateLimiter(),moved=new Set(),poses=new Map(),others={bytes:0,messages:0};
 const pose=id=>{const p=players.get(id),out={id};for(const k of POSE_FIELDS)out[k]=p[k];return out;};
-const admit=id=>!sim.shorted(id)&&limiter.allow(`${id}:shoot`,SHOOT_RATE.limit,SHOOT_RATE.windowMs,simClock)&&
-    spacing.allow(id,sim.activeIncident,simClock,INCIDENT_TUNING.cheeseShotSlackMs,sim.weapon(id));
+const admit=id=>{const tommy=sim.weapon(id)==='tommy-gun',rate=shootRate(tommy?'tommy-gun':undefined);return !sim.shorted(id)&&limiter.allow(`${id}:${tommy?'tommy':'shoot'}`,rate.limit,rate.windowMs,simClock);};
 const controller=()=>new ServerBotController(spec,ids,{
     move:room?(id,p,facing,at)=>{const player=players.get(id);if(!player||player.hp<=0)return;Object.assign(player,p);player.meshQy=Math.sin(facing/2);player.meshQw=Math.cos(facing/2);moved.add(id);poses.set(id,at??simClock);}
         :(id,p)=>Object.assign(players.get(id),p),

@@ -128,6 +128,17 @@ Tyler: Crossfire should be "flaming balls of cheese" that "really speed up when 
 - [x] **No random supply for taking the case;** the buff gets that juice instead.
 - [x] **Staging only:** every incident is Crossfire (`INCIDENTS=crossfire npm run deploy:staging`); production keeps the full rotation.
 
+### Three-human playtest (2 October night; protocol 31)
+
+Tyler and two friends on protocol 30. Liked: the laser ("fun, not broken"), the launches, the power-ups, the stronger case ("the case buffs did fix the game length … let it ride"). Tyler: "go" on this batch.
+
+- [x] **Tommy Gun:** held fire 20 balls a second (was 10, no better than a fast clicker under the 12-a-second cap), 12 s (was 8). The server admits the Tommy at its own rate; every other gun keeps the cap.
+- [x] **Ironclad Alibi:** 8 s (was 12; "lasts too long").
+- [x] **Big Cheese removed** ("I hate the big cheese"; one shot a second for everyone slowed play). Stored rooms run Crossfire.
+- [x] **Exhibits:** everyone sees the same Exhibits A–C (the round's best, chosen the same on every client); your own best moment, when it is not among them, is an extra card. "Sent flying" no longer fills the reel.
+- [x] **Exhibits from the player's view** (Tyler: "no one likes these unnatural camera angles"): each replay is seen through the game's own shoulder camera on the rat doing the thing, one view for the whole clip.
+- [ ] **Watch:** the carrier's double damage may be too much (Tyler); keep it a week of data, then 1.5× if needed. A Mousetrap incident (traps everywhere) is an idea, not agreed.
+
 ### Still open from the playtest
 
 - [ ] **Bad Ammunition:** Tyler: still not working. Trey and Cam: "make it shoot like garbage", in every direction. Kept for now.

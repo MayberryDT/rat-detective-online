@@ -1,6 +1,6 @@
 /** Highlight replays (docs/replay/detection.md): the moments the server spots, the marker it broadcasts for each, and
  * what a client tells it about the exhibits it showed. */
-export const HIGHLIGHT_KINDS = ['sent-flying','splashdown','pileup','squashed','snapped','body-blow','big-cheese','backfire','so-close','last-meal','fresh-spawn','from-beyond','bank-shot','laser-ricochet','long-shot','airborne','multi-kill','carrier-down','steal-score','delivery','round-winner'] as const;
+export const HIGHLIGHT_KINDS = ['sent-flying','splashdown','pileup','squashed','snapped','body-blow','backfire','so-close','last-meal','fresh-spawn','from-beyond','bank-shot','laser-ricochet','long-shot','airborne','multi-kill','carrier-down','steal-score','delivery','round-winner'] as const;
 export type HighlightKind = typeof HIGHLIGHT_KINDS[number];
 export const isHighlightKind = (value: unknown): value is HighlightKind => HIGHLIGHT_KINDS.some(kind => kind === value);
 /** `at`: server time of the moment (the movement samples' and chaos `serverTime` clock). `actors[0]` is the main actor
@@ -18,13 +18,15 @@ export const MAX_HIGHLIGHT_ACTORS = 10;
  * plan's order: funny and chaotic moments first, then multi-kills, scoring and trick shots. */
 export const HIGHLIGHT_TUNING = {
   base: {
-    'sent-flying': 100, splashdown: 95, pileup: 95, squashed: 90, snapped: 85, 'body-blow': 85, 'big-cheese': 80, backfire: 75,
+    'sent-flying': 100, splashdown: 95, pileup: 95, squashed: 90, snapped: 85, 'body-blow': 85, backfire: 75,
     'so-close': 75, 'from-beyond': 75, 'last-meal': 70, 'fresh-spawn': 60,
     'multi-kill': 60, 'round-winner': 60, 'steal-score': 55, 'carrier-down': 45, delivery: 40,
     'bank-shot': 50, airborne: 50, 'laser-ricochet': 45, 'long-shot': 45,
   } satisfies Record<HighlightKind, number>,
-  /** A dead rat's body sent this far (straight line from where it fell) or this high, within `sentFlyingMs`. */
-  sentFlying: { distance: 22, height: 5 },
+  /** A dead rat's body sent this far (straight line from where it fell) or this high, within `sentFlyingMs`. Raised from 22 u
+   * and 5 u (Tyler, 2 October, protocol 31: sent flying was half of all moments): every kill throws its body at
+   * `normalCorpseSpeed` 32 u/s, so 22 u caught ordinary kills; real launches (incidents, blasts) still clear 40 u. */
+  sentFlying: { distance: 40, height: 8 },
   sentFlyingMs: 2_000,
   pileup: { deaths: 3, radius: 18, windowMs: 4_000 },
   /** A carrier killed within this many units of the PAPER CHASE drop-off. */
@@ -37,8 +39,6 @@ export const HIGHLIGHT_TUNING = {
   longShotDistance: 40,
   bankShotBounces: 2,
   laserReflections: 1,
-  /** A Big Cheese ball grown at least one step past its muzzle size (`cheeseStartRadius` .52). */
-  bigCheeseRadius: .7,
   /** Kills by one rat, each within `windowMs` of the one before. */
   multiKill: { kills: 2, windowMs: 6_000 },
   /** A multi-kill or pileup is sent after this long without a new kill or death joining it (sent again if one does). */

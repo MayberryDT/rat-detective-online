@@ -160,7 +160,7 @@ export function folderLabel():THREE.CanvasTexture {
         const f=c.createLinearGradient(0,0,1024,700);f.addColorStop(0,'#cfb27a');f.addColorStop(1,'#b8945a');c.fillStyle=f;c.fillRect(0,0,1024,700);age(c,1024,700,'rgba(0,0,0,0)',3);
         c.save();c.translate(560,380);c.rotate(-.12);c.strokeStyle='rgba(170,25,25,.85)';c.lineWidth=10;c.strokeRect(-300,-70,600,140);
         c.fillStyle='rgba(170,25,25,.85)';c.font='96px Bangers';c.textAlign='center';c.fillText('CONFIDENTIAL',0,34);c.restore();
-        c.fillStyle='#2a2320';c.font='34px "Special Elite"';c.fillText('CASE No. 0417 — THE BIG CHEESE',80,120);lines(c,80,560,520,3,24,'rgba(40,30,20,.5)');
+        c.fillStyle='#2a2320';c.font='34px "Special Elite"';c.fillText('CASE No. 0417 — THE GOUDA JOB',80,120);lines(c,80,560,520,3,24,'rgba(40,30,20,.5)');
     });
 }
 

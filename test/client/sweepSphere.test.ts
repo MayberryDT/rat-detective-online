@@ -6,7 +6,7 @@ import {createPlayer} from '../../src/worker/gameState';
 import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 vi.mock('../../src/shared/grayboxLayout',()=>({CITY_BOUNDS:{min:-196,max:166},grayboxBoxes:()=>[]}));
 const point=(x:number,y=0,z=0)=>new C.Vec3(x,y,z);
-describe('Big Cheese swept collision volume',()=>{
+describe('swept-sphere collision volume',()=>{
  it('hits a thin wall with its leading surface before its center reaches the wall',()=>{
   const wall=new C.Body({shape:new C.Box(point(.025,5,5))});
   const hit=sweepSphereBody(point(-5),point(5),2,wall);
@@ -29,24 +29,22 @@ describe('Big Cheese swept collision volume',()=>{
   expect(hit.hasHit).toBe(true);expect(hit.distance).toBeCloseTo(3);
   expect(hit.hitNormalWorld.distanceTo(box.quaternion.vmult(point(-1)))).toBeLessThan(1e-7);
  });
- it('allows a growing overlapping ball to move away from a surface',()=>{
+ it('allows an overlapping ball to move away from a surface',()=>{
   const box=new C.Body({shape:new C.Box(point(1,1,1))});
   expect(sweepSphereBody(point(1.3),point(3),.5,box).hasHit).toBe(false);
   expect(sweepSphereBody(point(1.3),point(0),.5,box).distance).toBe(0);
  });
- it.each([[1.5,true],[1.9,false]] as const)('uses the actual rat spheres for a lateral graze at %s', (z,expected)=>{
+ it.each([[.5,true],[1.2,false]] as const)('uses the actual rat spheres for a lateral graze at %s', (z,expected)=>{
   const now=Date.now(),a=createPlayer('a','A',DEFAULT_APPEARANCE,{x:-20,y:20,z:0}),b=createPlayer('b','B',DEFAULT_APPEARANCE,{x:4,y:20,z});
   const players=new Map([[a.id,a],[b.id,b]]),initial=new ChaosSimulation(players,()=>{}),saved=initial.snapshot(false),hits:any[]=[];
-  saved.dispatch={phase:'active',incident:'big-cheese',started:now,until:now+25000,serial:1};
-  saved.shots=[{id:'large',owner:'a',age:0,p:{x:0,y:20.6,z:0},v:{x:175,y:0,z:0},radius:1}];
+  saved.shots=[{id:'ball',owner:'a',age:0,p:{x:0,y:20.6,z:0},v:{x:175,y:0,z:0}}];
   const sim=new ChaosSimulation(players,h=>hits.push(h),saved);sim.step(.04,now+40);
   expect(hits.some(h=>h.victim==='b')).toBe(expected);expect(hits.some(h=>h.victim==='a')).toBe(false);
  });
  it('resolves the nearer wall before a rat and retains shooter immunity',()=>{
   const now=Date.now(),a=createPlayer('a','A',DEFAULT_APPEARANCE,{x:0,y:20,z:0}),b=createPlayer('b','B',DEFAULT_APPEARANCE,{x:5,y:20,z:0});
   const players=new Map([[a.id,a],[b.id,b]]),initial=new ChaosSimulation(players,()=>{}),saved=initial.snapshot(false),hits:any[]=[];
-  saved.dispatch={phase:'active',incident:'big-cheese',started:now,until:now+25000,serial:1};
-  saved.shots=[{id:'large',owner:'a',age:0,p:{x:0,y:20.6,z:0},v:{x:175,y:0,z:0},radius:1}];
+  saved.shots=[{id:'ball',owner:'a',age:0,p:{x:0,y:20.6,z:0},v:{x:175,y:0,z:0}}];
   const sim=new ChaosSimulation(players,h=>hits.push(h),saved),wall=new C.Body({position:point(3,21,0),shape:new C.Box(point(.025,4,4))});
   sim.world.addBody(wall);sim.targets.set(wall,{kind:'world'});sim.step(.04,now+40);
   expect(hits).toHaveLength(0);expect(sim.snapshot(false).shots[0].v.x).toBeLessThan(0);

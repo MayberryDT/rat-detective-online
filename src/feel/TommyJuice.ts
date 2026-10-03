@@ -4,7 +4,7 @@ import {FEEL} from './feelTuning';
 
 /** Muzzle height above the feet (`ratMuzzle`): casings and crumbs land about here below the muzzle. */
 const MUZZLE_HEIGHT=1.376;
-/** Flash and puff sprites (one each a round; ten rounds a second outlive neither pool). */
+/** Flash and puff sprites (one each a round; one Tommy's twenty rounds a second outlive neither pool). */
 const FLASHES=10;
 /** Cheese crumbs in flight at once across every Tommy in range (clarity batch: 96 → 48). */
 const CRUMBS=48;

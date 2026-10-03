@@ -12,7 +12,7 @@ import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
 import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballTuning';
-import { bounceShot, bounces, cheeseBounce, cheeseDamage, crossfireBounce, growIn, quirkBirth, quirkBounce, shotGravity, shotLife, steerQuirk } from './shotBallistics';
+import { bounceShot, crossfireBounce, quirkBirth, quirkBounce, shotLife, steerQuirk } from './shotBallistics';
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, CROSSFIRE, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState, type TrapState, type LaserBeam, MAX_TRAPS, MAX_BEAMS } from './chaosState';
 import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, shortedOut, weaponArming, FAULTY_COPY, FAULTY_TUNING, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, TRAP_SCALE, TRAP_TALL, resolvePickupPoints,
@@ -43,7 +43,6 @@ const SAFE_SHOVE_TURNS=[0,.5,-.5,1,-1,1.6,-1.6,2.3,-2.3,Math.PI];
 const vec=(v:Vec3Data)=>new C.Vec3(v.x,v.y,v.z);
 const data=(v:Vec3Data)=>({x:v.x,y:v.y,z:v.z});
 const pose=(b:C.Body):PhysicalPose=>({p:data(b.position),q:{x:b.quaternion.x,y:b.quaternion.y,z:b.quaternion.z,w:b.quaternion.w},v:data(b.velocity),spin:data(b.angularVelocity)});
-const shotRadius=(shot:ChaosShot)=>shot.radius??BALL_RADIUS;
 type Target = { kind:'world'|'case'|'dispatch'|'pressure'|'corpse'|'rat'|'trap'; player?:PlayerData; head?:C.Sphere; corpseId?:string; machineId?:string; caseId?:string; trapId?:string };
 /** A rat a swept ball or beam reached, rewound to the shooter's view when `compensated`. */
 interface RatContact {hit:C.RaycastResult;target:Target;compensated:boolean;ironclad:boolean;rewindMs:number;targetDelta:number}
@@ -62,9 +61,9 @@ interface CaseRuntime {
 /** null ownership is an environmental hit, including neutral chains; `cause` names it when it is not Tampering. `weapon`: a special weapon made the hit.
  * `bounces`/`path`: a Crossfire bank shot's world bounces and the ball's path (`CROSSFIRE`). For highlight detection only:
  * `squashAirMs` a launched rat landing on the victim after that long in the air, `corpse` a flying corpse, `reflections` the
- * walls a laser beam came off, `ballRadius` the size of the Big Cheese ball. */
+ * walls a laser beam came off. */
 export interface ChaosHit { owner:string|null; victim:string; damage:number; incoming:Vec3Data; shotId?:string; ballId?:string; point?:Vec3Data; normal?:Vec3Data; compensated?:boolean; explosive?:true; headshot?:true; weapon?:WeaponKind; cause?:EnvironmentCause; bounces?:number; path?:Vec3Data[];
-    squashAirMs?:number; corpse?:true; reflections?:number; ballRadius?:number }
+    squashAirMs?:number; corpse?:true; reflections?:number }
 /** Code Violation malfunctions, for the city map (`drainIncidentEvents`). `faulty`: a supply came out as the `pickup`
  * dud on `playerId`. */
 export type IncidentEvent =
@@ -1193,7 +1192,7 @@ export class ChaosSimulation {
             const direction=new C.Vec3(Math.cos(angle),.12+(i%3)*.12,Math.sin(angle));direction.normalize();
             direction.scale(BALL_SPEED,direction);
             const shot:ChaosShot={id:crypto.randomUUID(),owner,
-                p:{...origin},v:data(direction),age:0,radius:BALL_RADIUS,explosive:true};
+                p:{...origin},v:data(direction),age:0,explosive:true};
             this.burstShots.add(shot);this.shots.push(shot);
         }
     }
@@ -1409,22 +1408,6 @@ export class ChaosSimulation {
     private ray(from:C.Vec3,to:C.Vec3,mask:number){
         return this.rayQuery.closest(from,to,mask);
     }
-    /** Push a ball clear of any wall it overlaps (a Big Cheese ball that just grew or shrank). */
-    private clearOfWalls(shot:ChaosShot){
-        const radius=shotRadius(shot),origin=vec(shot.p);
-        for(const dir of [new C.Vec3(1,0,0),new C.Vec3(-1,0,0),new C.Vec3(0,1,0),new C.Vec3(0,-1,0),new C.Vec3(0,0,1),new C.Vec3(0,0,-1)]){
-            const hit=this.ray(origin,origin.vadd(dir.scale(radius+.05)),1);
-            if(!hit.hasHit)continue;
-            const overlap=radius-hit.distance+.04;
-            if(overlap>0)origin.vadd(hit.hitNormalWorld.scale(overlap),origin);
-        }
-        shot.p=data(origin);
-    }
-    /** Big Cheese, a real world bounce: a step bigger (clear of the wall) and longer-lived. */
-    private growShot(shot:ChaosShot){
-        const radius=shotRadius(shot);cheeseBounce(shot);
-        if(shotRadius(shot)>radius+.001)this.clearOfWalls(shot);
-    }
     /** Crossfire, a real world bounce at `at`: the ball heats a step and the bounce joins its path. Returns its world bounces so far. */
     private heatShot(shot:ChaosShot,at:Vec3Data):number{
         crossfireBounce(shot);
@@ -1577,10 +1560,6 @@ export class ChaosSimulation {
         this.stepPressure(dt,now,playing);
         this.stepSurge(now,playing);
         this.stepFlights(now,playing);
-        const heavy=this.incidentActive('big-cheese');
-        if(!heavy){
-            for(const shot of this.shots)if((shot.radius??BALL_RADIUS)>BALL_RADIUS+.001){shot.radius=BALL_RADIUS;this.clearOfWalls(shot);}
-        }
         this.stepIncidentEffects(now,playing);
         this.syncExtraCases();
         for(const c of this.cases.values())this.updateCase(c,dt,playing);
@@ -1595,11 +1574,9 @@ export class ChaosSimulation {
             const shot=this.shots[i];shot.age+=dt;
             if(this.shotTriggers.has(shot.id)&&!this.shotStepped.has(shot)){this.shotStepped.add(shot);this.noteShot(shot,'first-step');}
             if(shot.age>shotLife(shot)){this.finishShot(shot,'lifetime',{end:data(shot.p)});this.shots.splice(i,1);continue;}
-            // Weapon balls stay plain: Big Cheese never grows a Tommy Gun's ball.
-            if(heavy&&!this.tommyBalls.has(shot)&&growIn(shot))this.clearOfWalls(shot);
-            const radius=shotRadius(shot);
+            const radius=BALL_RADIUS;
             // Bad Ammunition: a path personality flies its own way along the aim, with no drop until its first contact.
-            if(steerQuirk(shot))shot.v.y+=shotGravity(radius)*dt;
+            if(steerQuirk(shot))shot.v.y+=BALL_GRAVITY*dt;
             const from=vec(shot.p),motion=vec(shot.v).scale(dt),to=from.vadd(motion);
             const travel=motion.length()||1;
             // Ordinary rounds skip their shooter; explosive debris can hit them.
@@ -1624,14 +1601,14 @@ export class ChaosSimulation {
             shot.p=data(point);
             const incoming={...shot.v};
             if(target?.kind==='rat' && target.player && target.player.hp>0){
-                // Body hits take one hit point (a Big Cheese ball more, by its size); a headshot is lethal. A Crossfire bank
+                // Body hits take one hit point; a headshot is lethal. A Crossfire bank
                 // shot deals ordinary damage (Tyler, 2 October: no more one-shot kills); a finishing one is still a BANK SHOT.
                 const headshot=hit.shape===target.head;
-                const damage=headshot?MAX_HP:Math.min(MAX_HP,cheeseDamage(radius,MAX_HP)*this.carrierPower(shot.owner));
+                const damage=headshot?MAX_HP:Math.min(MAX_HP,this.carrierPower(shot.owner));
                 if((useRat?ratHit!.ironclad:hasIronclad(this.buffs,target.player.id,now))){
                     // A reflective coat, not a hit shield: keep the original shooter
                     // and finite budget, and never treat a rat contact as a wall bounce.
-                    bounceShot(shot.v,normal,radius);quirkBounce(shot);
+                    bounceShot(shot.v,normal);quirkBounce(shot);
                     this.impacts.push({p:data(point),n:data(normal),surface:false,scale:1.1,cue:'armor-clang'});
                     this.noteShot(shot,'ironclad-reflect',{victimId:target.player.id,point:data(hit.hitPointWorld),normal:data(normal),
                         compensated:useRat&&ratHit!.compensated,...(useRat?{rewindMs:ratHit!.rewindMs,targetDelta:ratHit!.targetDelta}:{})});
@@ -1640,7 +1617,6 @@ export class ChaosSimulation {
                 const compensated=useRat&&ratHit!.compensated,viewAttempted=!!this.shotViews.get(shot.id)&&shot.age<=this.shotViews.get(shot.id)!.untilAge;
                 if(playing)this.hit({owner:shot.owner,victim:target.player.id,damage,incoming,shotId:this.shotTriggers.get(shot.id)??shot.id,ballId:shot.id,
                     point:data(hit.hitPointWorld),normal:data(normal),compensated,...(shot.explosive?{explosive:true}:{}),...(headshot?{headshot:true}:{}),...(shot.cause?{cause:shot.cause}:{}),...(this.tommyBalls.has(shot)?{weapon:'tommy-gun' as const}:{}),
-                    ...(heavy&&!this.tommyBalls.has(shot)?{ballRadius:radius}:{}),
                     ...(shot.wallBounced&&this.incidentActive('crossfire')?this.bankReport(shot,hit.hitPointWorld):undefined)});
                 // Scattershot: every ball knocks its rat flying along the shot (five at close range send it far).
                 if(playing&&this.scatterShots.has(shot)){
@@ -1667,10 +1643,8 @@ export class ChaosSimulation {
             }
             if(target?.kind==='corpse' && target.corpseId)this.kickCorpse(target.corpseId,incoming,shot.owner,hit.hitPointWorld,normal);
             const firstWorld=target?.kind==='world'&&!shot.wallBounced;
-            const impact=bounceShot(shot.v,normal,radius),superball=shot.quirk==='superball';quirkBounce(shot);
+            bounceShot(shot.v,normal);const superball=shot.quirk==='superball';quirkBounce(shot);
             if(target?.kind==='world')shot.wallBounced=true;
-            // A heavy ball rolling or resting on a surface is not bouncing: no event, growth, life, trigger or sound.
-            if(!bounces(impact,radius))continue;
             // Crossfire: every real world bounce heats the ball and is remembered for a bank kill's path.
             const banked=target?.kind==='world'&&this.incidentActive('crossfire')?this.heatShot(shot,hit.hitPointWorld):0;
             if(target?.kind==='world')this.noteShot(shot,'world-bounce',{point:data(hit.hitPointWorld),normal:data(normal)});
@@ -1682,8 +1656,7 @@ export class ChaosSimulation {
                 const pumped=this.pumpedBy.get(shot)??[];
                 if(!pumped.includes(target.machineId!)){pumped.push(target.machineId!);this.pumpedBy.set(shot,pumped);this.addPressure(target.machineId!,PRESSURE_TUNING.hit,true);}
             }
-            if(heavy&&!this.tommyBalls.has(shot)&&target?.kind==='world')this.growShot(shot);
-            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,scale:shotRadius(shot)/BALL_RADIUS,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:superball?'boing' as const:shotRadius(shot)>radius?'grow' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,Math.hypot(shot.v.x,shot.v.y,shot.v.z))}:{}),...(banked?{bounces:banked}:{})});
+            this.impacts.push({p:data(hit.hitPointWorld),n:data(normal),surface:true,...(target?.kind==='case'?{cue:'case-hit' as const}:target?.kind==='world'?{foley:superball?'boing' as const:firstWorld&&this.incidentActive('crossfire')?'charge' as const:'bounce' as const,energy:Math.min(300,Math.hypot(shot.v.x,shot.v.y,shot.v.z))}:{}),...(banked?{bounces:banked}:{})});
         }
         // A corpse knocked into the harbour sinks out of sight (the case rule's line: y -9).
         for(const [id,c] of this.corpses)if(now>=c.state.expires||c.body.position.y< -9||outsideCity(c.body.position.x,c.body.position.z))this.removeCorpse(id);
@@ -1785,8 +1758,7 @@ export class ChaosSimulation {
     }
     private shotSnapshot(s:ChaosShot):ChaosShot{
         return {...s,p:{...s.p},v:{...s.v},
-            ...(s.wallBounced?{wallBounced:true}:{}),
-            ...((s.radius??BALL_RADIUS)!==BALL_RADIUS?{radius:s.radius}:{})};
+            ...(s.wallBounced?{wallBounced:true}:{})};
     }
     /** Physics substeps and ray/sphere queries since the previous call (Worker diagnostics). */
     takeWork():{rays:number;substeps:number}{
@@ -1864,8 +1836,7 @@ export class ChaosSimulation {
             }
         }
         const elapsed=Math.max(0,(Date.now()-s.time)/1000);
-        this.shots=s.shots.filter(shot=>shot.age+elapsed<shotLife(shot)).map(shot=>({...shot,p:{...shot.p},v:{...shot.v},age:shot.age+elapsed,
-            radius:shot.radius??BALL_RADIUS}));
+        this.shots=s.shots.filter(shot=>shot.age+elapsed<shotLife(shot)).map(shot=>({...shot,p:{...shot.p},v:{...shot.v},age:shot.age+elapsed}));
         for(const c of s.corpses){
             if(c.expires<=Date.now())continue;
             const body=new C.Body({mass:2,shape:new C.Box(new C.Vec3(.48,.92,.38)),

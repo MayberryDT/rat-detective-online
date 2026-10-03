@@ -4,11 +4,11 @@ Part of the [replay plan](../replay-plan.md), which owns status and order.
 
 ## X4: choosing the 3 exhibits
 
-When the round ends, the client picks 3 clips from its shelf ([playback](playback.md)):
+When the round ends, every client picks the same 3 clips (Tyler's playtest, 2 October: "everyone should see the same highlights", plus a personal one; protocol 31):
 
-1. Take the highest-scoring clip that involves you, if you had one.
-2. Add the highest-scoring clips from anyone until there are 3, at most one of each kind.
-3. Order them best first, as Exhibit A, B and C.
+1. From the server's `highlight` markers, which every player receives, take the highest-scoring moments, at most one of each kind, ordered by score, then time, then id (`sharedExhibits` in `src/replay/ReplayRecorder.ts`). These are Exhibits A, B and C on every screen. The recorder always keeps their clips, past its top-8 limit and byte budget.
+2. If your best moment is not among them, it is an extra card, Exhibit D, marked YOURS.
+3. A client with no recording of a shared moment leaves that card out; the other letters stay, so B is the same moment everywhere. A player who joined mid-round misses earlier markers and can see a different A–C.
 
 If the round had fewer than 3 moments, show what there is. If it had none, the board looks as it does today.
 

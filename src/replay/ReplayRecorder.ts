@@ -21,6 +21,17 @@ export type RecordedEntry={at:number;event:RecordedEvent}|{at:number;pose:LocalP
 /** A kept clip: its window's entries from the roster keyframe before `startAt`, in arrival order. */
 export interface ClipData {clip:ReplayClip;entries:RecordedEntry[];bytes:number}
 
+/** Exhibits A, B, C (Tyler, 2 October, protocol 31: everyone sees the same highlights): the round's best markers, one
+ * per kind, best first, ties by time then id. Every rat in the round gets every marker (`GameRoom` broadcasts them and
+ * flushes the open ones before `gameWon`), so every client picks the same; a rat that joined mid-round lacks the earlier ones. */
+export const SHARED_EXHIBITS=3;
+export function sharedExhibits(markers:Iterable<Pick<HighlightMarker,'id'|'kind'|'score'|'at'>>):string[] {
+    const ranked=[...markers].sort((a,b)=>b.score-a.score||a.at-b.at||(a.id<b.id?-1:a.id>b.id?1:0));
+    const picked:typeof ranked=[];
+    for(const marker of ranked)if(picked.length<SHARED_EXHIBITS&&!picked.some(other=>other.kind===marker.kind))picked.push(marker);
+    return picked.map(marker=>marker.id);
+}
+
 /** Rough heap size of an entry (bytes), for the shelf's budget and the dev listing. */
 function entryBytes(entry:RecordedEntry):number {
     if('pose' in entry)return 140;
@@ -39,9 +50,12 @@ export class ReplayRecorder {
     /** Every rat named this round, kept after it leaves (actors' names). */
     private readonly names=new Map<string,string>();
     private readonly pending=new Map<string,HighlightMarker>();
+    /** Every marker this round, the latest of each id: the shared exhibits are picked from these, not from the kept clips. */
+    private readonly marks=new Map<string,HighlightMarker>();
     private shelf:ClipData[]=[];
     /** The clips the results board shows, frozen when it appears; they outlive the next round's reset. */
     private board?:ClipData[];
+    private boardShared:string[]=[];
     private myId='';
     private lastKeyframe=-Infinity;
     private lastPose=-Infinity;
@@ -49,7 +63,7 @@ export class ReplayRecorder {
 
     /** A new session state: everything goes, the roster is the welcome's. */
     welcome(message:Extract<ServerMessage,{type:'welcome'}>):void {
-        this.entries=[];this.shelf=[];this.board=undefined;this.pending.clear();this.roster.clear();this.names.clear();
+        this.entries=[];this.shelf=[];this.board=undefined;this.boardShared=[];this.pending.clear();this.marks.clear();this.roster.clear();this.names.clear();
         this.myId=message.id;this.lastKeyframe=this.lastPose=-Infinity;
         for(const player of [message.player,...Object.values(message.players)])this.join(player);
         // An observer's camera avatar is no rat.
@@ -58,7 +72,7 @@ export class ReplayRecorder {
     }
     /** The next round: the buffer and this round's shelf go (the board keeps its own clips). */
     reset():void {
-        this.entries=[];this.shelf=[];this.pending.clear();this.lastKeyframe=this.lastPose=-Infinity;
+        this.entries=[];this.shelf=[];this.pending.clear();this.marks.clear();this.lastKeyframe=this.lastPose=-Infinity;
         this.names.clear();for(const [id,rat] of this.roster)this.names.set(id,rat.data.name);
     }
 
@@ -93,12 +107,14 @@ export class ReplayRecorder {
         const now=this.serverNow();
         for(const marker of this.pending.values())if(marker.at<=now)this.cut(marker,Math.min(marker.at+marker.trailMs,now));
         this.pending.clear();
-        this.board=this.shelf.slice();
+        this.board=this.shelf.slice();this.boardShared=sharedExhibits(this.marks.values());
     }
     /** The board has gone. */
-    release():void {this.board=undefined;}
+    release():void {this.board=undefined;this.boardShared=[];}
     /** The board's clips (the round's so far without one), best first. */
     clips():ReplayClip[] {return (this.board??this.shelf).map(data=>data.clip);}
+    /** The ids of Exhibits A, B, C in order (`sharedExhibits`); one may have no clip here (`data` undefined). */
+    shared():string[] {return this.board?this.boardShared:sharedExhibits(this.marks.values());}
     data(id:string):ClipData|undefined {return (this.board??this.shelf).find(data=>data.clip.id===id);}
     /** Kept clips with their estimated size, and the buffer's (the `?replay=dev` listing). */
     describe():{clips:{id:string;kind:string;score:number;bytes:number;entries:number}[];bufferBytes:number;bufferEntries:number} {
@@ -116,7 +132,7 @@ export class ReplayRecorder {
     }
     /** A marker: kept until its trail has passed. A grown one (the same id) replaces the earlier marker and its clip. */
     private mark(marker:HighlightMarker):void {
-        this.pending.set(marker.id,marker);
+        this.pending.set(marker.id,marker);this.marks.set(marker.id,marker);
         this.shelf=this.shelf.filter(data=>data.clip.id!==marker.id);
         this.advance(this.serverNow());
     }
@@ -146,15 +162,16 @@ export class ReplayRecorder {
         this.shelf.push({clip,entries,bytes});
         this.keepBest();
     }
-    /** The `RECORDING.clips` best, plus the best that involves you; the lowest go first past the byte budget. Clips
-     * that overlap share their entries, so each entry counts once. */
+    /** The `RECORDING.clips` best, the shared exhibits and the best that involves you; the lowest go first past the byte
+     * budget, never a shared exhibit or yours. Clips that overlap share their entries, so each entry counts once. */
     private keepBest():void {
         const sorted=this.shelf.sort((a,b)=>b.clip.score-a.clip.score);
-        const mine=sorted.find(data=>data.clip.involvesLocal);
-        const kept=sorted.slice(0,RECORDING.clips);
-        if(mine&&!kept.includes(mine))kept.push(mine);
+        const shared=new Set(sharedExhibits(this.marks.values()));
+        const mine=sorted.find(data=>data.clip.involvesLocal&&!shared.has(data.clip.id));
+        const keep=(data:ClipData)=>data===mine||shared.has(data.clip.id);
+        const kept=sorted.filter((data,i)=>i<RECORDING.clips||keep(data));
         const total=()=>{const seen=new Set<RecordedEntry>();let sum=0;for(const data of kept)for(const entry of data.entries)if(!seen.has(entry)){seen.add(entry);sum+=entryBytes(entry);}return sum;};
-        for(let i=kept.length-1;i>=0&&kept.length>1&&total()>RECORDING.shelfBytes;i--)if(kept[i]!==mine)kept.splice(i,1);
+        for(let i=kept.length-1;i>=0&&kept.length>1&&total()>RECORDING.shelfBytes;i--)if(!keep(kept[i]!))kept.splice(i,1);
         this.shelf=kept;
     }
 }

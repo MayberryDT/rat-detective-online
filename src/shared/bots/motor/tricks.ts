@@ -1,6 +1,6 @@
+import {BALL_GRAVITY,BALL_SPEED} from '../../ballTuning';
 import {LAUNCH_MACHINES,PRESSURE_TUNING,type ChaosState,type TrapState} from '../../chaosState';
 import type {IncidentId} from '../../incidentCatalog';
-import {launchGravity,launchSpeed} from '../../shotBallistics';
 import {hasIronclad} from '../../pickups';
 import type {PlayerData,Vec3Data} from '../../networkProtocol';
 import type {MotorNavigation} from '../motor';
@@ -47,7 +47,7 @@ export class BotTricks {
     /** Another rat's Mousetrap in the way (`TRAP_CLEAR`): the nearest one in sight in the lane of the step (x, z)
      * or beside `to`. A rat's own trap never is. Ordinary shots break it; the crosshair still has to get there. */
     clearTrap(now:number,self:PlayerData,state:ChaosState|undefined,x:number,z:number,to:Vec3Data|undefined,clear:(p:Vec3Data)=>boolean,
-        incident?:IncidentId,beam=false):Vec3Data|undefined {
+        beam=false):Vec3Data|undefined {
         if(now<this.trapAt)return this.trapAim;
         this.trapAt=now+TRAP_CLEAR.lookMs;this.trapAim=undefined;
         const traps=state?.traps;if(!traps?.length)return;
@@ -62,19 +62,19 @@ export class BotTricks {
             best=trap;bestAt=d;
         }
         if(!best)return;
-        const travel=beam?0:bestAt/launchSpeed(incident),p=this.trapPoint;
-        p.x=best.x;p.y=best.y+TRAP_CLEAR.lift-launchGravity(incident)*travel*travel/2;p.z=best.z;
+        const travel=beam?0:bestAt/BALL_SPEED,p=this.trapPoint;
+        p.x=best.x;p.y=best.y+TRAP_CLEAR.lift-BALL_GRAVITY*travel*travel/2;p.z=best.z;
         return this.trapAim=p;
     }
 
     /** A chaos shot: the trigger of a launch machine that is not cooling while another rat stands on its pad.
      * Ordinary shots; the server decides what they do. A `beam` (the Laser) needs no lob. */
-    mischief(now:number,self:Vec3Data,state:ChaosState|undefined,visible:readonly PlayerData[],clearControl:(p:Vec3Data)=>boolean,incident?:IncidentId,beam=false):Vec3Data|undefined {
+    mischief(now:number,self:Vec3Data,state:ChaosState|undefined,visible:readonly PlayerData[],clearControl:(p:Vec3Data)=>boolean,beam=false):Vec3Data|undefined {
         if(now<this.mischiefAt)return this.mischiefAim;
         this.mischiefAt=now+MISCHIEF.lookMs;this.mischiefAim=undefined;
         if(!state)return;
         const others=visible.filter(p=>p.hp>0);
-        const speed=launchSpeed(incident),gravity=launchGravity(incident);
+        const speed=BALL_SPEED,gravity=BALL_GRAVITY;
         const lob=(p:Vec3Data)=>{const travel=beam?0:Math.hypot(p.x-self.x,p.z-self.z)/speed;return this.mischiefAim={x:p.x,y:p.y-gravity*travel*travel/2,z:p.z};};
         for(const machine of LAUNCH_MACHINES){
             const pad=machine.pad,onPad=(p:Vec3Data)=>Math.abs(p.y-pad.y)<2&&Math.hypot(p.x-pad.x,p.z-pad.z)<=pad.radius;

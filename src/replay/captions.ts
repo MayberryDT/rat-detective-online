@@ -11,7 +11,6 @@ export const CAPTIONS: Record<HighlightKind, readonly string[]> = {
     squashed: ['{killer} drops in on {victim}', '{victim} is flattened, officially', '{killer} lands the case on {victim}', '{victim} never looked up', 'Death from above, signed {killer}'],
     snapped: ['{victim} was already in a jam', '{killer} shoots a trapped rat', '{victim} walks into the cheese', 'Snapped, then shot: {victim}', '{victim} sticks around too long'],
     'body-blow': ['{killer} uses {victim} as a weapon', '{victim} is hit by a falling witness', 'Corpse at speed, {victim} at fault', '{killer} throws the book, and {victim}', 'Dead rats tell no tales, they hit'],
-    'big-cheese': ['{killer} rolls the big one', '{victim} meets the Big Cheese', 'Too much cheese for {victim}', '{killer} lets it ride', 'The Big Cheese runs over {victim}'],
     backfire: ['{name} trusted the wrong supply', 'Code violation: {name}', '{name} reads the fine print too late', 'The supply files charges on {name}', '{name} gets what the city pays for'],
     'so-close': ['{carrier} could smell the paperwork', '{carrier} almost made it home', 'So close, {carrier}. So close', '{killer} stops {carrier} at the door', 'The drop-off waits for {carrier}'],
     'last-meal': ['{victim} enjoys a last meal', '{victim} heals up for nothing', '{killer} skips the dessert course', '{victim} patched up, packed off', 'The Quick Fix was not quick enough'],
@@ -31,12 +30,12 @@ export const CAPTIONS: Record<HighlightKind, readonly string[]> = {
 /** Short labels and one-character glyphs for the exhibit cards (text, not images: no GPU readback). */
 export const KIND_LABEL: Record<HighlightKind, string> = {
     'sent-flying': 'SENT FLYING', splashdown: 'SPLASHDOWN', pileup: 'PILEUP', squashed: 'SQUASHED', snapped: 'SNAPPED', 'body-blow': 'BODY BLOW',
-    'big-cheese': 'BIG CHEESE', backfire: 'BACKFIRE', 'so-close': 'SO CLOSE', 'last-meal': 'LAST MEAL', 'fresh-spawn': 'FRESH OFF THE BOAT',
+    backfire: 'BACKFIRE', 'so-close': 'SO CLOSE', 'last-meal': 'LAST MEAL', 'fresh-spawn': 'FRESH OFF THE BOAT',
     'from-beyond': 'FROM BEYOND', 'bank-shot': 'BANK SHOT', 'laser-ricochet': 'LASER RICOCHET', 'long-shot': 'LONG SHOT', airborne: 'AIRBORNE',
     'multi-kill': 'MULTI-KILL', 'carrier-down': 'CARRIER DOWN', 'steal-score': 'STEAL AND SCORE', delivery: 'DELIVERY', 'round-winner': 'ROUND WINNER',
 };
 export const KIND_GLYPH: Record<HighlightKind, string> = {
-    'sent-flying': '↗', splashdown: '≈', pileup: '☰', squashed: '▼', snapped: '⊓', 'body-blow': '✸', 'big-cheese': '◉', backfire: '⚠',
+    'sent-flying': '↗', splashdown: '≈', pileup: '☰', squashed: '▼', snapped: '⊓', 'body-blow': '✸', backfire: '⚠',
     'so-close': '⌖', 'last-meal': '✚', 'fresh-spawn': '⚓', 'from-beyond': '✝', 'bank-shot': '⟋', 'laser-ricochet': '⋀', 'long-shot': '⊕',
     airborne: '☁', 'multi-kill': '✕', 'carrier-down': '◆', 'steal-score': '⇄', delivery: '✉', 'round-winner': '★',
 };

@@ -443,8 +443,6 @@ export class RatEntity {
         if(!this.dead&&this.hp>0)this.animator.playReaction(event,strength);
     }
 
-    /** Big Cheese: this rat's pistol eases up to its chunky size, or back down. */
-    public setBigPistol(on:boolean):void {this.animator.bigPistol=on;}
     /** The special weapon this rat holds (undefined: its pistol). A dead rat holds none. `swap`: a Mousetrap just taken
      * (in its lockout) plays the swap: the gun drops away and the trap heaves up big. */
     public setWeapon(kind:WeaponKind|undefined,swap=false):void {this.animator.setWeapon(this.dead?undefined:kind,swap);}

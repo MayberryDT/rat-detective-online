@@ -12,8 +12,8 @@ import { CHAOS_WIRE_MODE, prepareChaos, type PreparedChaos } from '../shared/cha
 import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import type { WeaponKind } from '../shared/pickups';
 import { serializeServerMessage } from './serializeServerMessage';
-import { INCIDENT_TUNING, type ChaosState } from '../shared/chaosState';
-import { ShotSpacing } from '../shared/shotTiming';
+import { type ChaosState } from '../shared/chaosState';
+import { shootRate } from '../shared/shotTiming';
 import { GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
 import { drowned } from '../shared/city/kit/city';
 import { ASSIGNMENT_IDS, ASSIGNMENTS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
@@ -76,7 +76,6 @@ import {
   PING_RATE,
   PERF_RATE,
   RateLimiter,
-  SHOOT_RATE,
   createMovementAllowance,
   consumeMovementAllowance,
   MOVEMENT_ENVELOPE,
@@ -237,7 +236,6 @@ export class GameRoom extends DurableObject<Env> {
   private readonly shotAcceptedAt = new Map<string, number>();
   private lastMovementBroadcast = new Map<string, { pose: MovementPose; at: number; stationary: boolean }>();
   private readonly rateLimiter = new RateLimiter();
-  private readonly shotSpacing = new ShotSpacing();
   private messagesIn = 0;
   private broadcasts = 0;
   private readonly pendingMovement=new Map<string,Extract<ServerMessage,{type:'playersMoved'}>['players'][number]>();
@@ -1264,11 +1262,11 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   /** Every rat's trigger, human or bot: nothing while its gun is shorted out (Code Violation's Short Circuit), then the
-   * shared rate ceiling, then the incident's (or held weapon's) fire interval (a little early is admitted, for network jitter). */
+   * shared rate ceiling (`TOMMY_SHOOT_RATE` while holding the Tommy Gun, else `SHOOT_RATE`). */
   private admitShot(id: string): boolean {
-    const now = this.now();
-    return !this.chaos?.shorted(id) && this.rateLimiter.allow(`${id}:shoot`, SHOOT_RATE.limit, SHOOT_RATE.windowMs, now) &&
-      this.shotSpacing.allow(id, this.chaos?.activeIncident, now, INCIDENT_TUNING.cheeseShotSlackMs, this.chaos?.weapon(id));
+    const now = this.now(), tommy = this.chaos?.weapon(id) === 'tommy-gun', rate = shootRate(tommy ? 'tommy-gun' : undefined);
+    // Own window per rate: Tommy shots never use up the plain gun's count, so the first clicks after it runs out are admitted.
+    return !this.chaos?.shorted(id) && this.rateLimiter.allow(`${id}:${tommy ? 'tommy' : 'shoot'}`, rate.limit, rate.windowMs, now);
   }
 
   private handleShoot(playerId: string, message: Extract<ClientMessage, { type: 'shoot' }>): void {
@@ -1364,7 +1362,7 @@ export class GameRoom extends DurableObject<Env> {
 
   /** `detail`: a simulation hit's step time and highlight details (`ChaosHit`). */
   private async handleHit(playerId: string | null, message: Extract<ClientMessage, { type: 'hit' }>, incoming?:ChaosHit['incoming'], explosive = false, headshot = false, environment:EnvironmentCause = 'evidence-tampering', weapon?:WeaponKind, bank?:Required<Pick<ChaosHit,'bounces'|'path'>>,
-    detail?:Pick<ChaosHit,'squashAirMs'|'corpse'|'reflections'|'ballRadius'>&{at:number}): Promise<void> {
+    detail?:Pick<ChaosHit,'squashAirMs'|'corpse'|'reflections'>&{at:number}): Promise<void> {
     if (this.round.phase !== 'playing') return;
 
     const victim = this.players.get(message.victimId);
@@ -1648,7 +1646,7 @@ export class GameRoom extends DurableObject<Env> {
       if(retiredAssignment){this.round=playingRound(this.now());this.ctx.storage.sql.exec("DELETE FROM pending_events WHERE type='reset'");}
       this.chaos=new ChaosSimulation(this.players,hit=>{
         void this.handleHit(hit.owner,{type:'hit',victimId:hit.victim,damage:hit.damage},hit.incoming,hit.explosive===true,hit.headshot===true,hit.cause,hit.weapon,hit.bounces&&hit.path?{bounces:hit.bounces,path:hit.path}:undefined,
-          {at:this.chaos?.time??this.now(),squashAirMs:hit.squashAirMs,corpse:hit.corpse,reflections:hit.reflections,ballRadius:hit.ballRadius})
+          {at:this.chaos?.time??this.now(),squashAirMs:hit.squashAirMs,corpse:hit.corpse,reflections:hit.reflections})
           .catch(error=>log('error','incident hit failed',{error:String(error)}));
       },saved,this.world);
       this.chaos.evidenceMode=this.evidenceMode;

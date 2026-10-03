@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
-import {INCIDENT_TUNING} from '../shared/chaosState';
 /** Ordinary shot → spin, explosion → fling, neutral trap/case → flop, killed mid-launch → flail. */
 export type DeathStyle='default'|'spin'|'fling'|'flop'|'flail';
-import {RAT_PISTOL_GRIP,updateGunSleeve,type GunSleeveRig} from './RatArmModel';
+import {updateGunSleeve,type GunSleeveRig} from './RatArmModel';
 import { RatLocomotionFollowThrough } from './RatLocomotionFollowThrough';
 import {RatActing,type RatReaction} from './RatActing';
 import {RatRagdoll} from './RatRagdoll';
@@ -63,11 +62,8 @@ export class RatAnimator {
     private readonly acting:RatActing;
     private actingEnabled = true;
     private hustle = false;
-    /** Big Cheese: the pistol swells chunky around the hand (eased in and out). */
-    bigPistol = false;
-    private pistolGrowth = 0;
     /** The special weapon in hand (undefined: the pistol) and its model. The pistol's own parts shrink away under a
-     * weapon (they are drawn in the rigid batch), and a held weapon replaces Big Cheese's chunky pistol. */
+     * weapon (they are drawn in the rigid batch). */
     private weapon?: WeaponKind;
     private weaponModel?: THREE.Object3D;
     /** W3, taking up a Mousetrap: seconds into the swap (the gun drops away for `TRAP_SWAP.out`, then the trap heaves up big
@@ -718,7 +714,6 @@ export class RatAnimator {
         this.hit = Math.exp(-this.hitAge * 16) * Math.cos(this.hitAge * 22);
         this.aimHold = Math.max(0, this.aimHold - dt);
         this.aim = THREE.MathUtils.lerp(this.aim, this.aimHold > 0 ? 1 : 0, 1 - Math.exp(-7 * dt));
-        this.pistolGrowth = THREE.MathUtils.lerp(this.pistolGrowth, this.bigPistol && !this.weapon ? 1 : 0, 1 - Math.exp(-INCIDENT_TUNING.cheesePistolRate * dt));
         if (this.swapAge < TRAP_SWAP.total + .1) {this.swapAge += dt;if (this.outPending && this.swapAge >= TRAP_SWAP.out) this.dropOutgoing();}
         this.applyPose();
         this.poseTrapSwap();
@@ -879,12 +874,6 @@ export class RatAnimator {
             }
             pistol.rotation.x = -this.recoil * 0.14;
             pistol.position.z = -this.recoil * 0.035;
-            if (this.pistolGrowth > .001) {
-                // Scale about the grip (the cuff's point); the muzzle, a child, rides along to the new barrel.
-                const g = this.pistolGrowth, w = 1 + (INCIDENT_TUNING.cheesePistolWidth - 1) * g, l = 1 + (INCIDENT_TUNING.cheesePistolLength - 1) * g;
-                pistol.scale.set(w, w, l);
-                pistol.position.x += RAT_PISTOL_GRIP.x * (1 - w); pistol.position.y += RAT_PISTOL_GRIP.y * (1 - w); pistol.position.z += RAT_PISTOL_GRIP.z * (1 - l);
-            }
             if (this.outPending) {
                 // W3: the gun in hand tips down and drops away, shrinking, before the trap comes up.
                 const e = THREE.MathUtils.smoothstep(this.swapAge / TRAP_SWAP.out, 0, 1);

@@ -1,3 +1,4 @@
+import {BALL_GRAVITY,BALL_SPEED} from '../ballTuning';
 import {sewerRampAt} from '../sewerLayout';
 import {JURISDICTION_ZONES,zoneContains,type JurisdictionZoneId} from '../jurisdictionZones';
 import {activeZone} from '../jurisdiction';
@@ -8,12 +9,10 @@ import {incidentInfo,type IncidentId} from '../incidentCatalog';
 import {hasIronclad,heldWeapon,legScale,weaponArming,WEAPON_TUNING,type WeaponKind} from '../pickups';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
 import type {BotWaypoint} from '../BotLaunchRoutes';
-import {launchGravity,launchSpeed} from '../shotBallistics';
-import {shotIntervalMs} from '../shotTiming';
 import {BASE_SKILL,type Goal,type MotorMode,type Plan,type SkillDials,type Stance} from './intent';
 import type {RayHit} from './motor/bankShot';
 import {seededRandom} from './random';
-import {BotAim,BotSpray,BotTrigger,EYE} from './motor/aim';
+import {BotAim,BotSpray,BotTrigger,EYE,HELD_SLACK_MS} from './motor/aim';
 import {BotSteer} from './motor/steer';
 import {BotFight,FIGHT,type FightView} from './motor/fight';
 import {BotZoneHold} from './motor/zoneHold';
@@ -74,9 +73,6 @@ const RIDE={reach:45,detour:25,far:40,checkMs:1000,ms:16000,retryMs:30000,restMs
  * rival in sight (the press brings the gun back); anywhere on the way after `patienceMs`. Spots are looked at every
  * `lookMs`; the authority may refuse one unseen, so a press is retried no sooner than `retryMs`. */
 const TRAP={settleMs:400,patienceMs:[2000,4500],lookMs:250,retryMs:1200,choke:3.5,objective:12} as const;
-/** A held Tommy Gun fires on the first tick this little short of its interval (half a 60 Hz frame), ms: the beat
- * stays at the gun's interval instead of slipping a frame, and never packs shots past `SHOOT_RATE`. */
-const HELD_SLACK_MS=8;
 /** Another rat's Mousetrap counts as underfoot this near (its snap reach and a margin), units. */
 export const TRAP_REACH=WEAPON_TUNING.trapRadius+WEAPON_TUNING.trapFoot+.5;
 /** Another rat's unbroken Mousetrap in sight within `reach` of `p` (horizontally, on its level). A rat's own trap
@@ -162,8 +158,7 @@ export class BotMotor {
     private stalled=false;
     private planAt = 0;
     private shotAt = 0;
-    /** When this rat last fired, and this tick's incident (its fire interval, lead and drop) and held weapon. */
-    private firedAt = -Infinity;
+    /** This tick's incident and held weapon. */
     private incident?: IncidentId;
     private weapon?: WeaponKind;
     /** The incident the rat's balls fly under: none with a Tommy Gun (plain balls) or a Laser (a beam). */
@@ -400,7 +395,7 @@ export class BotMotor {
         this.incident=state?.dispatch.phase==='active'?incidentInfo(state.dispatch.incident).id:undefined;
         // A held weapon replaces the incident's shot: plain Tommy Gun balls, a Laser beam that needs no lead or drop.
         const weapon=this.weapon=heldWeapon(state?.buffs,self.id,state?.time??now);
-        this.ballistics=weapon?undefined:this.incident;this.aim.incident=this.ballistics;this.aim.hitscan=weapon==='laser';
+        this.ballistics=weapon?undefined:this.incident;this.aim.hitscan=weapon==='laser';
         if(weapon!=='mousetrap')this.trapHeldAt=undefined;
         else if(this.trapHeldAt===undefined){this.trapHeldAt=now;this.trapPatience=TRAP.patienceMs[0]+this.motorRandom()*(TRAP.patienceMs[1]-TRAP.patienceMs[0]);}
         this.see(now,self,state,grounded);
@@ -733,8 +728,8 @@ export class BotMotor {
         // Aim and fire: a bell, another rat's Mousetrap in the way, a gremlin's trick, the rival in sight, a bank at one
         // just hidden, fire where one just was, and otherwise a look ahead with the odd speculative group.
         const laser=this.weapon==='laser',tommy=this.weapon==='tommy-gun',trapping=this.weapon==='mousetrap';
-        const mischief=this.tactics.mischief&&!holdingZone&&!dispatchReady?this.tricks.mischief(now,self,state,this.visible,clearControl,this.ballistics,laser):undefined;
-        const clearing=!trapping&&!visibleTarget&&!dispatchReady?this.tricks.clearTrap(now,self,state,x,z,this.destination,clear,this.ballistics,laser):undefined;
+        const mischief=this.tactics.mischief&&!holdingZone&&!dispatchReady?this.tricks.mischief(now,self,state,this.visible,clearControl,laser):undefined;
+        const clearing=!trapping&&!visibleTarget&&!dispatchReady?this.tricks.clearTrap(now,self,state,x,z,this.destination,clear,laser):undefined;
         if(visibleTarget&&target){
             const point=casePoint??target;
             if(this.aim.engagedId!==target.id)this.trigger.reset();
@@ -758,10 +753,9 @@ export class BotMotor {
         this.aim.difficulty(visibleTarget&&target?distance(self,target):25,visibleTarget?this.aim.targetSpeed:0,this.ownSpeed);
         this.aim.update(now);
         const facing=this.aim.yaw;
-        // Big Cheese spaces every rat's shots; hold the trigger until the gun is ready (the Laser clicks like the cheese
-        // gun). The Tommy Gun's trigger is held down (a shot every `tommyIntervalMs`); a Mousetrap's press sets it down instead.
+        // The Tommy Gun's trigger is held down (a shot every `tommyIntervalMs`); a Mousetrap's press sets it down instead.
         if(trapping){if(this.setTrap(now,self,state,grounded,visibleTarget))shoot=this.aim.point(eye,30);}
-        else if(now>=this.shotAt&&now-this.firedAt>=shotIntervalMs(this.incident,this.weapon)){
+        else if(now>=this.shotAt){
             if(dispatchReady&&bell&&!visibleTarget){
                 if(this.aim.offBy(eye,this.bellAim)<.06){shoot=this.aim.point(eye,distance(eye,this.bellAim));this.shotAt=now+350+this.random()*400;}
             }else if(trick&&!visibleTarget){
@@ -787,7 +781,6 @@ export class BotMotor {
             if(shoot&&!(dispatchReady&&bell&&!visibleTarget))this.shotAt=now+(tommy?WEAPON_TUNING.tommyIntervalMs-HELD_SLACK_MS:this.skill.fireGapMs);
         }
         if(shoot&&!trapping&&shotHitsIronclad(self,facing,shoot,this.protectedVisible,state))shoot=undefined;
-        if(shoot)this.firedAt=now;
         if(this.jumpTravel&&!grounded){
             // A floor probe is expected to fail in the air. Keep steering toward
             // the takeoff's landing target, then brake there instead of jumping
@@ -889,15 +882,15 @@ export class BotMotor {
         const target=machine.target,eye=this.eye;
         const dx=machine.pad.x-self.x,dz=machine.pad.z-self.z,d=Math.hypot(dx,dz);
         // A ball is lobbed onto the trigger; a Laser beam goes straight.
-        const travel=this.weapon==='laser'?0:Math.hypot(target.x-self.x,target.z-self.z)/launchSpeed(this.ballistics);
-        const lob={x:target.x,y:target.y-launchGravity(this.ballistics)*travel*travel/2,z:target.z};
+        const travel=this.weapon==='laser'?0:Math.hypot(target.x-self.x,target.z-self.z)/BALL_SPEED;
+        const lob={x:target.x,y:target.y-BALL_GRAVITY*travel*travel/2,z:target.z};
         this.aim.look(eye,lob,true);this.aim.update(now);
         let shoot:Vec3Data|undefined;
         // Standing builds pressure; every hit on the trigger adds more. Keep pumping it (a Mousetrap in paw is kept
         // for a better spot than the pad).
         const cooling=(state?.time??now)<(state?.pressure?.fired?.[machine.id]??-Infinity)+PRESSURE_TUNING.cooldownMs;
-        if(d<.6&&grounded&&this.weapon!=='mousetrap'&&now>=this.shotAt&&now-this.firedAt>=shotIntervalMs(this.incident,this.weapon)&&!cooling&&this.aim.offBy(eye,lob)<.05&&clearControl(target)){
-            shoot=this.aim.point(eye,distance(eye,lob));this.shotAt=now+350;this.firedAt=now;
+        if(d<.6&&grounded&&this.weapon!=='mousetrap'&&now>=this.shotAt&&!cooling&&this.aim.offBy(eye,lob)<.05&&clearControl(target)){
+            shoot=this.aim.point(eye,distance(eye,lob));this.shotAt=now+350;
         }
         const speed=d>.25?Math.min(6,d*4):0;
         this.stalled=false;this.progress++;

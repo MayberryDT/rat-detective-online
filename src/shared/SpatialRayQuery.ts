@@ -188,7 +188,7 @@ export class SpatialRayQuery {
         ray.collisionFilterGroup=group;ray.collisionFilterMask=mask;
         ray.intersectBodies(this.candidates,result);return result;
     }
-    /** Reuse the static BVH for the larger Big Cheese collision volume. */
+    /** Reuse the static BVH for a swept sphere (every ball, the Laser's beam). */
     sphere(from:C.Vec3,to:C.Vec3,radius:number,mask:number,accept:(body:C.Body)=>boolean):C.RaycastResult {
         const broadphase=this.world.broadphase;
         if(this.changed||broadphase instanceof StaticCityBroadphase&&broadphase.fixedVersion!==this.cityVersion)this.refresh();this.queries++;

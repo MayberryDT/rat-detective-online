@@ -32,7 +32,7 @@ export const FEEL={
     ironcladSparks:{label:'7 Ironclad sparks',toggle:true,params:{count:18,speed:11,life:.36}},
     /** Ring burst around the crosshair plus a brief zoom-in (degrees) on your kills. */
     killBloom:{label:'8 Kill bloom and punch-in',toggle:true,params:{punch:4}},
-    /** Comic words: kill streaks within `streakWindow` s, air kills, Big Cheese hits; `cooldown` s between non-streak words. */
+    /** Comic words: kill streaks within `streakWindow` s, air kills; `cooldown` s between non-streak words. */
     comicWords:{label:'9 Comic words',toggle:true,params:{streakWindow:4,cooldown:6}},
     /** Noir low health, by danger (linear from max HP to the last hit point): the city fades to black and white with its shadows
      * lifted to `lift` (a gamma, so the last hit point reads clearer, not darker) and old-film `grain`; a light edge `vignette`;
@@ -189,8 +189,10 @@ export const FEEL={
      * (`kick` rad/s, `yaw` jitter share, `push` u/s back) and, while the trigger is held, the view rattles (`rattle`); every
      * Tommy's muzzle throws a cheese-yellow flash (`flash` size) and puff (`puff` size), `crumbs` cheese crumbs a round and
      * cheese-cube casings (`casings` in the pool, `casingLife` s), seen within `range` units. Clarity batch: 24 casings and
-     * 3 crumbs a round (were 64 and 4). */
-    tommyGun:{label:'W1 Tommy Gun juice',toggle:true,params:{kick:.55,yaw:.9,push:.22,rattle:.28,flash:1,puff:1,crumbs:3,casings:24,casingLife:1.6,range:70}},
+     * 3 crumbs a round (were 64 and 4). At 20 rounds a second (Tyler, 2 October, protocol 31) each round kicks half as
+     * hard (were .55 and .22), so a held second shakes as before, and casings live 1.2 s (were 1.6) so one held Tommy's
+     * 24 fill the pool without snapping the oldest away early. */
+    tommyGun:{label:'W1 Tommy Gun juice',toggle:true,params:{kick:.28,yaw:.9,push:.11,rattle:.28,flash:1,puff:1,crumbs:3,casings:24,casingLife:1.2,range:70}},
     /** W2 Laser, a molten cheese beam: your shot's kick (`kick`, `push`); widths (units) of the hot centre (`core`), the
      * cheese strand (`strand`) and its greasy green sheen (`sheen`, opacity `glow`); its gooey wobble and end-of-life sag
      * (units); `gobs` dripped per beam (`gobSize` units); cheese splats on walls (`splats` in the pool, `splatSize` units,

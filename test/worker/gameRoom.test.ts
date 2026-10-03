@@ -13,6 +13,7 @@ import { WORLD_LAYOUT_VERSION } from '../../src/shared/worldSpec';
 import { CHECKPOINT_MS, GameRoom, STALE_PLAYER_MS } from '../../src/worker/GameRoom';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import { PICKUP_KINDS, WEAPON_TUNING, type PickupKind } from '../../src/shared/pickups';
+import { SHOOT_RATE } from '../../src/shared/shotTiming';
 import type { ClientMessage, RoundState } from '../../src/shared/networkProtocol';
 
 const appearance = {
@@ -421,6 +422,24 @@ describe('GameRoom websockets', () => {
       expect(game.chaos.snapshot(false).traps).toMatchObject([{owner:welcome.id}]);
       expect(game.chaos.snapshot(false).buffs?.[welcome.id]?.weapon).toBeUndefined();
       rejected.mockRestore();
+    });
+  });
+
+  it('admits a held Tommy Gun at its 20 balls a second while every other gun stays under SHOOT_RATE',async()=>{
+    const room=`graybox-tommy-rate-${crypto.randomUUID()}`,client=await openClient(room);
+    client.ws.send(joinPayload('Gunner'));const welcome=await client.inbox.waitFor('welcome');
+    await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
+      const game=instance as unknown as {chaosTimer:number|null;now:()=>number;startChaos():void;chaos:ChaosSimulation;admitShot(id:string):boolean};
+      clearInterval(game.chaosTimer??undefined);game.chaosTimer=null;
+      let now=Date.now();game.now=()=>now;game.startChaos();
+      const kinds:readonly PickupKind[]=PICKUP_KINDS.filter(k=>k!=='quick-fix');
+      const random=vi.spyOn(Math,'random').mockReturnValue((kinds.indexOf('tommy-gun')+.5)/kinds.length);
+      try{game.chaos.rewardSupply(welcome.id,'streak');}finally{random.mockRestore();}
+      expect(game.chaos.weapon(welcome.id)).toBe('tommy-gun');
+      // A second of held fire at the Tommy's beat (bots send the same shoot through the same gate).
+      const admitted=(id:string)=>{let n=0;for(let t=0;t<1000;t+=WEAPON_TUNING.tommyIntervalMs){if(game.admitShot(id))n++;now+=WEAPON_TUNING.tommyIntervalMs;}return n;};
+      expect(admitted(welcome.id)).toBe(1000/WEAPON_TUNING.tommyIntervalMs);
+      expect(admitted('plain-gun')).toBe(SHOOT_RATE.limit);
     });
   });
 

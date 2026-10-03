@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {BALL_RADIUS} from '../shared/ballTuning';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {CameoAnimator,CAMEO_DURATIONS,type CameoReaction} from './CameoAnimator';
@@ -73,8 +74,8 @@ export class CameoView {
         return true;
     }
     /** Consume actual displayed ball segments, including ricochets and local prediction. */
-    observeShot(id:string,p:Vec3Data,radius:number,clear:(from:Vec3Data,to:Vec3Data)=>boolean){
-        if(this.disposed||!this.awake||!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.z)||!Number.isFinite(radius))return;
+    observeShot(id:string,p:Vec3Data,clear:(from:Vec3Data,to:Vec3Data)=>boolean){
+        if(this.disposed||!this.awake||!Number.isFinite(p.x)||!Number.isFinite(p.y)||!Number.isFinite(p.z))return;
         let previous=this.shots.get(id);
         if(!previous){
             if(this.shots.size>=256)return;
@@ -87,7 +88,7 @@ export class CameoView {
             const s=this.states[i];if(!s.model.visible||(previous.triggered&(1<<i)))continue;
             const t=sweep&&lengthSq>0?THREE.MathUtils.clamp(((s.center.x-previous.x)*dx+(s.center.y-previous.y)*dy+(s.center.z-previous.z)*dz)/lengthSq,0,1):1;
             this.from.x=previous.x+dx*t;this.from.y=previous.y+dy*t;this.from.z=previous.z+dz*t;
-            const reach=.8+Math.max(0,Math.min(radius,2.4));
+            const reach=.8+BALL_RADIUS;
             if(Math.hypot(this.from.x-s.center.x,this.from.y-s.center.y,this.from.z-s.center.z)>reach)continue;
             if(!clear(this.from,s.center))continue;
             previous.triggered|=1<<i;this.react(s,'shot',p);

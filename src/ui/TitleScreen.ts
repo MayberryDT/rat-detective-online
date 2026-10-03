@@ -11,7 +11,7 @@ const PHONE_LINES = [
     'Wrong number, pal. …Or is it?',
     '*heavy breathing* …squeak.',
     'Meet me at the docks. Bring crackers.',
-    'The Big Cheese wants a word. Alone.',
+    'The Commissioner wants a word. Alone.',
     "Somebody's been nibbling the evidence again.",
     'Your mother called. Eat something.',
     'The dame said Gouda. I heard Gouda.',

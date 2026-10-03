@@ -67,10 +67,10 @@ describe('the death recap',()=>{
     it('names the killer and the weapon, with a headshot',()=>{
         expect(deathRecap(death,'me')).toEqual({killer:'INSPECTOR VERMIN',how:'CHEESE GUN'});
         expect(deathRecap({...death,weapon:'tommy-gun',headshot:true},'me')).toEqual({killer:'INSPECTOR VERMIN',how:'TOMMY GUN · HEADSHOT'});
-        expect(deathRecap({...death,weapon:'laser'},'me','big-cheese').how).toBe('LASER');
+        expect(deathRecap({...death,weapon:'laser'},'me','scattershot').how).toBe('LASER');
     });
     it('says an incident changed the cheese gun, an explosion, or the city',()=>{
-        expect(deathRecap(death,'me','big-cheese').how).toBe('BIG CHEESE');
+        expect(deathRecap(death,'me','scattershot').how).toBe('SCATTERSHOT');
         expect(deathRecap(death,'me','blackout').how).toBe('CHEESE GUN');
         expect(deathRecap({...death,blast:true},'me','improper-disposal').how).toBe('AN EXPLOSION');
         expect(deathRecap({...death,killerId:'me',killerName:'Cheddar',blast:true},'me').killer).toBe('YOURSELF');

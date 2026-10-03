@@ -6,6 +6,8 @@ export type ReplayMode = 'frame'|'fullscreen';
 export interface ReplayPlayer {
   /** This round's kept clips, best first. */
   clips(): ReplayClip[];
+  /** The ids of the round's shared Exhibits A, B, C in order, the same on every client (`sharedExhibits`). */
+  shared(): string[];
   /** 'frame' draws into `rect` (CSS pixels) after the live frame; 'fullscreen' draws only the replay. */
   play(clip:ReplayClip, opts:{ mode:ReplayMode; rect?:()=>DOMRect; loop?:boolean; onEnd?:()=>void }): void;
   stop(): void;

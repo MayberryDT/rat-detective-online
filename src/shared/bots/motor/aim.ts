@@ -1,8 +1,11 @@
 import type {Vec3Data} from '../../networkProtocol';
-import type {IncidentId} from '../../incidentCatalog';
-import {launchGravity,launchSpeed} from '../../shotBallistics';
+import {BALL_GRAVITY,BALL_SPEED} from '../../ballTuning';
 import type {SkillDials} from '../intent';
 
+/** A held Tommy Gun fires on the first tick this little short of its interval (half a 60 Hz frame), ms: the beat
+ * stays at the gun's interval (20 a second since protocol 31) instead of slipping a frame, and never packs shots
+ * past `TOMMY_SHOOT_RATE`. Both the aimed trigger and round-corner spray use it. */
+export const HELD_SLACK_MS=8;
 /** Gun height above the feet (the hosted muzzle's height). Aim angles are taken from here. */
 export const EYE=1.376;
 /** Where on a rat the crosshair goes: the chest, just under the head. Pre-aim sits there too: held at head height, a
@@ -46,8 +49,6 @@ const between=(r:()=>number,[a,b]:readonly [number,number])=>a+r()*(b-a);
  * with lag and imperfect lead. Shots leave along the crosshair, so every miss is one the rat actually made. */
 export class BotAim {
     yaw=0;pitch=0;
-    /** The incident whose launch speed and drop set the lead (none with a Tommy Gun's plain balls). */
-    incident?:IncidentId;
     /** A beam (the Laser) arrives at once: no lead, no drop. */
     hitscan=false;
     private ready=false;
@@ -124,9 +125,9 @@ export class BotAim {
         }
         this.last.x=target.x;this.last.y=target.y;this.last.z=target.z;
         if(now<this.readyAt)return;
-        const d=Math.hypot(this.seen.x-eye.x,this.seen.z-eye.z),travel=this.hitscan?0:d/launchSpeed(this.incident);
+        const d=Math.hypot(this.seen.x-eye.x,this.seen.z-eye.z),travel=this.hitscan?0:d/BALL_SPEED;
         const x=this.seen.x+(fixed?0:this.vx*travel*this.lead),z=this.seen.z+(fixed?0:this.vz*travel*this.lead);
-        const y=this.seen.y+(fixed?0:CHEST)-launchGravity(this.incident)*travel*travel/2*.7;
+        const y=this.seen.y+(fixed?0:CHEST)-BALL_GRAVITY*travel*travel/2*.7;
         this.desiredYaw=Math.atan2(x-eye.x,z-eye.z);this.desiredPitch=Math.atan2(y-eye.y,Math.max(.5,Math.hypot(x-eye.x,z-eye.z)));
     }
     /** A calm look at a point (pre-aim, a corner, a heard shot), or a deliberate trick shot's point when `exact`. */
@@ -256,7 +257,7 @@ export class BotSpray {
             this.remaining=heldMs?Math.max(1,Math.round(clicks*(SPRAY.shotMs[0]+SPRAY.shotMs[1])/2/heldMs)):clicks;this.range=between(this.random,SPRAY.range);
         }
         this.remaining--;
-        this.nextShot=now+(this.remaining?heldMs??between(this.random,SPRAY.shotMs):between(this.random,SPRAY.pauseMs)/amount);
+        this.nextShot=now+(this.remaining?heldMs?heldMs-HELD_SLACK_MS:between(this.random,SPRAY.shotMs):between(this.random,SPRAY.pauseMs)/amount);
         return true;
     }
 }

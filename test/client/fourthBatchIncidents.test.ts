@@ -141,11 +141,11 @@ describe('fourth-batch incidents',()=>{
         expect(hits).toEqual([]);
     });
 
-    it('a stored room still running Cheddar Shower (or Act of God) runs Big Cheese',()=>{
-        const {sim}=active('big-cheese',['a']);
-        for(const incident of ['cheddar-shower','act-of-god']){
+    it('a stored room still running Big Cheese, Cheddar Shower or Act of God runs Crossfire',()=>{
+        const {sim}=active('crossfire',['a']);
+        for(const incident of ['big-cheese','cheddar-shower','act-of-god']){
             const legacy={...sim.snapshot(false),dispatch:{phase:'active',incident,started:now,until:now+T.activeMs,serial:7}} as unknown as ChaosState;
-            expect(parseServerMessage({type:'chaos',state:legacy})).toMatchObject({state:{dispatch:{incident:'big-cheese'}}});
+            expect(parseServerMessage({type:'chaos',state:legacy})).toMatchObject({state:{dispatch:{incident:'crossfire'}}});
         }
     });
 

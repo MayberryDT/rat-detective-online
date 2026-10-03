@@ -10,6 +10,7 @@ import { ContactShadows, StaticMoonShadow, attachContactShadows, fitMoonShadow }
 import { renderScale } from './graphicsQuality';
 import { guardLightLoops } from '../utils/lightLoopGuard';
 import { FLASHLIGHT } from '../shared/rat/ratBody';
+import { SHOULDER } from '../player/ShoulderCamera';
 
 export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMode=readLightingMode()) {
     guardLightLoops();
@@ -37,7 +38,7 @@ export function createStage(appRenderer: THREE.WebGLRenderer,lighting:LightingMo
 
     // ─── CAMERA ───────────────────────────────────────────────────────
     const camera = new THREE.PerspectiveCamera(
-      60,
+      SHOULDER.fov,
       window.innerWidth / window.innerHeight,
       0.1,
       600

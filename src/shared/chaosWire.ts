@@ -1,6 +1,5 @@
 import type { ChaosState, ChaosShot, ChaosImpact } from './chaosState';
 import { CHAOS_TUNING, CROSSFIRE } from './chaosState';
-import { BALL_RADIUS } from './ballTuning';
 import { MAX_SERVER_MESSAGE_BYTES, wireBytes, type ServerMessage } from './networkProtocol';
 import { parseServerMessage } from './messageValidation';
 import { expandMovement } from './movementWire';
@@ -86,10 +85,9 @@ export function prepareChaos(state:ChaosState):PreparedChaos {
   return {shots:state.shots.map(s=>{
     // Flags: the bounce flag (0 absent, 1 false, 2 true) plus three times the Crossfire heat.
     const flags=flag(s.wallBounced)+3*(s.heat??0);
-    const radius=Math.round((s.radius??BALL_RADIUS)*1000),life=s.life===undefined?0:Math.round(s.life*1000);
+    const life=s.life===undefined?0:Math.round(s.life*1000);
     const values=[...[s.p.x,s.p.y,s.p.z,s.v.x,s.v.y,s.v.z,s.age].map(n=>Math.round(n*1000)),flags];
-    // Optional tail: radius, then a longer lifetime (Big Cheese, Crossfire, Bad Ammunition).
-    if(radius!==Math.round(BALL_RADIUS*1000)||life)values.push(radius);
+    // Optional tail: a longer lifetime (Crossfire, Bad Ammunition).
     if(life)values.push(life);
     return {id:s.id,owner:s.owner,values,motion:values.join(','),relative:new WeakMap<number[],{base:number[]|undefined;text:string}>()};
   }),
@@ -216,11 +214,10 @@ export class ChaosDecoder {
       if(!d||ids.has(d[0])||flags<0||flags>2+3*CROSSFIRE.maxHeat)return null;
       active.add(handle);ids.add(d[0]);motions.set(handle,row);
       if(!fresh&&previous&&previous.length===row.length)bases.set(handle,previous);
-      const radius=row[8],life=row[9];
+      const life=row[8];
       const shot:ChaosShot={id:d[0],owner:d[1],p:{x:row[0]/1000,y:row[1]/1000,z:row[2]/1000},v:{x:row[3]/1000,y:row[4]/1000,z:row[5]/1000},age:row[6]/1000};
       if(flags%3)shot.wallBounced=flags%3===2;
       if(flags>=3)shot.heat=Math.floor(flags/3);
-      if(radius&&radius!==Math.round(BALL_RADIUS*1000))shot.radius=radius/1000;
       if(life)shot.life=life/1000;
       shots.push(shot);
     }

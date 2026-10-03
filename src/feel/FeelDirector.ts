@@ -17,8 +17,7 @@ import {NoirDressing} from './NoirDressing';
 import type {StreetLampPosition} from '../shared/streetLampLayout';
 import {FeelSound,spaceAt,type FootstepSource} from './FeelSound';
 import type {Sting} from './FeelAudio';
-import {INCIDENT_TUNING,type ChaosImpact,type ChaosShot} from '../shared/chaosState';
-import {BALL_RADIUS} from '../shared/ballTuning';
+import {type ChaosShot} from '../shared/chaosState';
 import {playHic,playSynth} from '../audio/IncidentAudio';
 import {MAX_HP} from '../shared/networkProtocol';
 import {feelState,type FeelState} from './feelState';
@@ -55,7 +54,6 @@ export class FeelDirector {
     private incident?:IncidentId;
     private readonly killTimes:number[]=[];
     private lastWordAt=-Infinity;
-    private cheeseLandedAt=-Infinity;
     private danger=0;
     private dangerTarget=0;
     private flood=0;
@@ -512,22 +510,6 @@ export class FeelDirector {
         }
         this.word(heavy>.6?'KA-THUD!':'THUD!',at,view,now,heavy>.6);
     }
-    /** Big Cheese, per snapshot: a big ball landing nearby shakes the view a little, more for bigger and
-     * nearer, with a low thud; at most one every `cheeseShakeMs`. */
-    cheeseLandings(impacts:readonly ChaosImpact[],view:THREE.Camera,now=performance.now()):void {
-        const I=INCIDENT_TUNING,big=I.cheeseShakeRadius/BALL_RADIUS,max=I.cheeseRadii[I.cheeseRadii.length-1]/BALL_RADIUS;
-        if(now-this.cheeseLandedAt<I.cheeseShakeMs)return;
-        for(const hit of impacts){
-            const scale=hit.scale??1;
-            if(hit.foley!=='bounce'&&hit.foley!=='grow'||hit.n.y<.5||scale<big)continue;
-            const d=this.impulse.set(hit.p.x,hit.p.y,hit.p.z).distanceTo(view.position);
-            if(d>=I.cheeseShakeRange)continue;
-            const s=(.5+.5*Math.min(1,(scale-big)/(max-big)))*(1-d/I.cheeseShakeRange);
-            this.camera.kick(-I.cheeseShake*s,(Math.random()*2-1)*I.cheeseShake*s*.4);
-            playSynth('thud',hit.p,I.cheeseThudPitch);
-            this.cheeseLandedAt=now;return;
-        }
-    }
     /** L7, per snapshot: a thrown case whistles as it falls and bursts paperwork where it lands. */
     cases(list:readonly {id?:string;p:Vec3Data;v:Vec3Data;owner:string|null}[],view:THREE.Camera):void {
         if(!this.state.on('launchLanding')){this.fallingCases.clear();return;}
@@ -552,10 +534,7 @@ export class FeelDirector {
     corpseJolt(at:Vec3Data,view:THREE.Camera):void {if(this.state.on('ragdoll'))this.sound.squeak(at,view);}
 
     /** Your cheese hit someone (nonlethal). */
-    hitDealt(victim:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {
-        this.sound.squelch(victim,view);
-        if(this.incident==='big-cheese')this.word('KER-CHEESE!',victim,view,now,false);
-    }
+    hitDealt(victim:THREE.Vector3,view:THREE.Camera):void {this.sound.squelch(victim,view);}
 
     private word(text:string,at:THREE.Vector3,view:THREE.Camera,now:number,escalation:boolean):void {
         if(!this.state.on('comicWords'))return;

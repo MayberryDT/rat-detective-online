@@ -33,7 +33,6 @@ export const INCIDENT_TUNING = {
     scatterShove: 22, scatterLift: 9, shoveMax: 60,
     /** Most Wanted: how often (ms) the searchlight looks again for whoever is winning. */
     wantedEveryMs: 1000,
-    cheeseRadii: [0.15, 0.24, 0.36, 0.52, 0.72, 0.96, 1.24, 1.55, 1.9, 2.4] as const,
     caseMissileSpeed: 145, caseShotSpeed: 160, caseMissileLift: 6, caseEjectSpeed: 22,
     caseRicochetMinSpeed: 140, caseBounceLift: 7, caseMaxLift: 10,
     /** Code Violation (Tyler, 1 October: "every machine in the city misbehaves", and "no one should die from code
@@ -48,21 +47,6 @@ export const INCIDENT_TUNING = {
     violationFixScare: 10, violationFixHop: 7, violationFixHopMs: 480, violationFixLeash: 16,
     violationMachineMs: [3500,7500] as const, violationFling: 11, violationClangMs: [1800,4200] as const, violationClang: 7,
     violationShove: 26, violationLift: 13,
-    /** Big Cheese: every rat fires at most once per `cheeseShotIntervalMs` (the room admits a shot up to
-     * `cheeseShotSlackMs` early, for network jitter). Balls launch at `cheeseShotSpeed` and swell from ordinary
-     * to `cheeseStartRadius` (a `cheeseRadii` step) over `cheeseGrowIn` s. A real world bounce, one whose normal
-     * speed beats `cheeseBounceMin`, grows the ball a step and adds `cheeseBounceLife` s of life, at most
-     * `cheeseMaxLife` s in all. At the largest radius gravity is `cheeseGravity`× and a bounce keeps
-     * `cheeseRestitution` of the normal and `cheeseTangent` of the tangential speed (ordinary: .9 of both). */
-    cheeseShotIntervalMs: 1000, cheeseShotSlackMs: 250, cheeseShotSpeed: 110, cheeseStartRadius: .52, cheeseGrowIn: .08,
-    /** Big Cheese damage: `cheeseDamage` from the muzzle (a bigger ball), one more per size step it has grown. */
-    cheeseDamage: 2,
-    cheeseBounceMin: 5, cheeseBounceLife: .5, cheeseMaxLife: 5, cheeseGravity: 2.2, cheeseRestitution: .35, cheeseTangent: .85,
-    /** Big Cheese juice: a ball of at least `cheeseShakeRadius` landing within `cheeseShakeRange` shakes the view
-     * up to `cheeseShake` (at most every `cheeseShakeMs`) with the thud pitched to `cheeseThudPitch`. Pistols grow
-     * `cheesePistolWidth`× thicker and `cheesePistolLength`× longer, easing at `cheesePistolRate` per second. */
-    cheeseShakeRadius: 1.24, cheeseShakeRange: 25, cheeseShake: .9, cheeseShakeMs: 250, cheeseThudPitch: .6,
-    cheesePistolWidth: 1.8, cheesePistolLength: 1.15, cheesePistolRate: 6,
 } as const;
 /** Crossfire (Tyler, 2 October). Fired like any ball; at its first real world bounce it catches fire all at once
  * ("the player only really sees the first bank off the wall"; three escalating steps to 717 u/s were "too fast … don't
@@ -160,8 +144,8 @@ export interface PhysicalPose { p: Vec3Data; q: QuatData; v: Vec3Data; spin: Vec
 export interface CorpseState extends PhysicalPose {
     id: string; victimId: string; owner?: string | null; appearance: RatAppearance; born: number; expires: number;
 }
-export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean; radius?: number;
-    /** Seconds this ball lives when Big Cheese or Crossfire bounces extended it; absent is the ordinary lifetime. */
+export interface ChaosShot { id: string; owner: string | null; p: Vec3Data; v: Vec3Data; age: number; wallBounced?: boolean;
+    /** Seconds this ball lives when Crossfire or Bad Ammunition extended it; absent is the ordinary lifetime. */
     life?: number;
     /** Crossfire: how hot its world bounces made this ball (1 to `CROSSFIRE.maxHeat`); absent while cold. */
     heat?: number;

@@ -85,7 +85,7 @@ export class FeelSound {
     squelch(at:Vec3Data|undefined,view:THREE.Camera):void {if(this.on)this.audio!.squelch(FEEL.sound.params.squelch,at?this.pan(at,view):0);}
     brass():void {if(this.on)this.audio!.brass(FEEL.sound.params.brass);}
     flashbulb():void {if(this.on)this.audio!.flashbulb(FEEL.sound.params.flashbulb);}
-    /** A trigger pulled before Big Cheese's gun is ready: a dry click. */
+    /** A shorted-out gun's trigger: a dry click. */
     jam():void {if(this.on)this.audio!.jam(FEEL.sound.params.jam);}
     /** A supply claimed (any rat) or restocked; fades and pans like a world sound. */
     supply(cue:SupplyCue,at:Vec3Data,view:THREE.Camera):void {

@@ -31,11 +31,11 @@ function fired(s:ChaosState,others:PlayerData[],ms:number,navigation=nav):number
 const gaps=(times:readonly number[])=>times.slice(1).map((t,i)=>t-times[i]!);
 
 describe('bots with the arsenal',()=>{
-    it('holds the Tommy Gun trigger on a rival at about ten a second, never faster than the gun',()=>{
+    it('holds the Tommy Gun trigger on a rival at about twenty a second, never faster than the gun',()=>{
         const shots=fired(state('tommy-gun'),[player('rival',0,20)],4000);
         const held=shots.filter(t=>t>=shots[0]!+500);
         // Tapping, the same rat manages under eight a second.
-        expect(held.length/((4000-shots[0]!-500)/1000)).toBeGreaterThan(9);
+        expect(held.length/((4000-shots[0]!-500)/1000)).toBeGreaterThan(18);
         expect(Math.min(...gaps(shots))).toBeGreaterThanOrEqual(WEAPON_TUNING.tommyIntervalMs-1);
     });
 

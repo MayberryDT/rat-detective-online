@@ -21,7 +21,7 @@ const voices = new Map<AudioBufferSourceNode, () => void>();
 let popVariant = 0;
 /** Short synthesized cues, rendered once per audio context: `seconds` long, `sample(t, noise)` normalised to `peak`. */
 const SYNTH = {
-    // A heavy ball's dull landing (case missiles; Big Cheese replays it lower).
+    // A heavy ball's dull landing (case missiles).
     thud: {seconds: .18, peak: .16, sample: (t: number) => Math.sin(2 * Math.PI * (90 * t - 130 * t * t)) * Math.exp(-t * 28)},
     // Bad Ammunition's superball: a cartoon spring, the pitch wobbling up and settling.
     boing: {seconds: .62, peak: .5, sample: (t: number) => {

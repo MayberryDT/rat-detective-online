@@ -6,8 +6,6 @@ import {MAX_HP,type PlayerData,type Vec3Data} from '../../src/shared/networkProt
 import {createPlayer} from '../../src/worker/gameState';
 import {laserPath,type LaserCast} from '../../src/shared/laser';
 import {resolveShotPattern,tommyCone,tommyHeat} from '../../src/shared/shotPattern';
-import {ShotSpacing} from '../../src/shared/shotTiming';
-import {BALL_RADIUS} from '../../src/shared/ballTuning';
 
 afterEach(()=>vi.restoreAllMocks());
 const appearance={hatType:'fedora' as const,hatColor:1,coatColor:2,furColor:3};
@@ -49,7 +47,7 @@ describe('the weapon slot',()=>{
 describe('the Tommy Gun',()=>{
     it('replaces any incident pattern with one ball in a cone that blooms while held, the same on every machine',()=>{
         const shot={shotId:'tommy-1',origin:{x:0,y:1,z:0},direction:{x:0,y:0,z:1}};
-        for(const incident of ['scattershot','bad-ammunition','big-cheese'] as const){
+        for(const incident of ['scattershot','bad-ammunition','crossfire'] as const){
             const balls=resolveShotPattern(shot,incident,{kind:'tommy-gun',heat:W.tommyBloomShots});
             expect(balls).toHaveLength(1);
             const v=balls[0]!.velocity,off=Math.acos(v.z/Math.hypot(v.x,v.y,v.z));
@@ -60,25 +58,6 @@ describe('the Tommy Gun',()=>{
         expect(resolveShotPattern(shot,undefined,{kind:'mousetrap'})).toEqual([]);
         expect(tommyHeat(3,1000,1000+W.tommyHeatMs)).toBe(4);
         expect(tommyHeat(3,1000,1001+W.tommyHeatMs)).toBe(0);
-    });
-    it('is not held to the Big Cheese interval, and neither is the Laser',()=>{
-        const spacing=new ShotSpacing();
-        expect(spacing.allow('t',undefined,0,0,'tommy-gun')).toBe(true);
-        expect(spacing.allow('t','big-cheese',W.tommyIntervalMs,0,'tommy-gun')).toBe(true);
-        expect(spacing.allow('l','big-cheese',0,0,'laser')).toBe(true);
-        expect(spacing.allow('l','big-cheese',1,0,'laser')).toBe(true);
-    });
-    it('fires plain balls during Big Cheese: they never grow, in flight or on a bounce, and deal one damage',()=>{
-        const {sim:first,players,a,b,now}=fixture(),saved=first.snapshot(false);
-        saved.dispatch={phase:'active',incident:'big-cheese',serial:1,started:now,until:now+25000};
-        const hits:ChaosHit[]=[],sim=new ChaosSimulation(players,h=>hits.push(h),saved,{seed:CITY_PREVIEW_SEED,version:GRAYBOX_VERSION});
-        arm(sim,'a','tommy-gun');
-        // One ball at b's chest, one into the street just ahead.
-        fire(sim,a,chest(b));fire(sim,a,{x:a.x,y:0,z:a.z+3});
-        const radii=new Set<number>();
-        for(let i=1;i<=60;i++){sim.step(1/60,now+i*1000/60);for(const s of sim.snapshot(false).shots)radii.add(s.radius??BALL_RADIUS);}
-        expect([...radii]).toEqual([BALL_RADIUS]);
-        expect(hits).toMatchObject([{victim:'b',damage:1,weapon:'tommy-gun'}]);
     });
 });
 

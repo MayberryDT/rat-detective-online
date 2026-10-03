@@ -135,7 +135,7 @@ export class FeelAudio {
         pop.connect(high).connect(env).connect(out);pop.start(at);pop.stop(at+.1);
         this.tone(out,at+.03,.5,'sine',5200,3900,.08);
     }
-    /** A dry click: the hammer falls on nothing, then a sad spring (a trigger pulled before Big Cheese's gun is ready). */
+    /** A dry click: the hammer falls on nothing, then a sad spring (a shorted-out gun's trigger). */
     jam(volume:number):void {
         if(!this.allow('jam',.08))return;
         const at=this.context.currentTime,out=this.out(volume,0,.5);

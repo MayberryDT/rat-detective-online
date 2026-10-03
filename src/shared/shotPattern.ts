@@ -2,7 +2,7 @@ import * as C from 'cannon-es';
 import type {ShotDescriptor,Vec3Data} from './networkProtocol';
 import type {IncidentId} from './incidentCatalog';
 import {BALL_SPEED} from './ballTuning';
-import {BAD_ROUNDS,launchSpeed,quirkLaunch,type BadRound} from './shotBallistics';
+import {BAD_ROUNDS,quirkLaunch,type BadRound} from './shotBallistics';
 import {WEAPON_TUNING as W,type WeaponKind} from './pickups';
 
 function hash(text:string,seed=2166136261):number {
@@ -48,6 +48,6 @@ export function resolveShotPattern(shot:ShotDescriptor,incident?:IncidentId,weap
     }else if(incident==='bad-ammunition'){
         const quirk=badRound(shot.shotId);
         result.push({id:shot.shotId,velocity:quirkLaunch(quirk,{x:direction.x,y:direction.y,z:direction.z}),quirk});
-    }else add(direction.scale(launchSpeed(incident)));
+    }else add(direction.scale(BALL_SPEED));
     return result;
 }

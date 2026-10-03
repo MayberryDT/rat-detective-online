@@ -3,13 +3,14 @@ import * as CANNON from 'cannon-es';
 import { RemotePlayers } from '../session/RemotePlayers';
 import { ChaosView } from '../prototype/ChaosView';
 import { CameraBlockers } from '../player/CameraBlockers';
+import { SHOULDER } from '../player/ShoulderCamera';
 import { REPLAY_ROUTE } from '../audio/PlayerAudioMix';
 import type { GunshotCue } from '../audio/GunshotAudio';
 import { isolateRagdollWorld } from '../utils/RatCorpseChain';
 import { Dust, registerDust } from '../feel/Dust';
 import type { DeathStyle } from '../utils/RatAnimator';
 import type { SnapshotPose } from '../shared/SnapshotBuffer';
-import type { PlayerData } from '../shared/networkProtocol';
+import type { PlayerData, Vec3Data } from '../shared/networkProtocol';
 import type { ChaosState } from '../shared/chaosState';
 import { incidentInfo } from '../shared/incidentCatalog';
 import { FAULTY_COPY, faultyOf, heldWeapon, trapped } from '../shared/pickups';
@@ -22,8 +23,9 @@ import type { ClipData, RecordedEvent, ReplayRecorder } from './ReplayRecorder';
 import type { ReplayClip, ReplayMode, ReplayPlayer } from './types';
 
 /** Playback (docs/replay/playback.md, X3): rats and bodies are shown `viewDelay` ms behind the clip's clock, as live
- * play shows other rats; bodies step at `corpseStep` seconds. */
-export const PLAYBACK={viewDelay:100,corpseStep:1/60} as const;
+ * play shows other rats; bodies step at `corpseStep` seconds. Another rat's look is known only from its shots: each
+ * shot's direction is its look for `shotLook` ms either side. */
+export const PLAYBACK={viewDelay:100,corpseStep:1/60,shotLook:500} as const;
 
 export interface ReplayStageDeps {
     renderer:THREE.WebGLRenderer;
@@ -43,7 +45,8 @@ const TRAP_CUES={set:'trap-set',snap:'trap-snap',hit:'trap-splinter',break:'trap
 type Track={times:number[];poses:number[]};
 const POSE:SnapshotPose={x:0,y:0,z:0,qx:0,qy:0,qz:0,qw:1};
 const QA=new THREE.Quaternion(),QB=new THREE.Quaternion();
-const HEAD=new THREE.Vector3(),IMPACT=new THREE.Vector3(),HIT=new THREE.Vector3(),SPRAY=new THREE.Vector3();
+const HEAD=new THREE.Vector3(),IMPACT=new THREE.Vector3(),HIT=new THREE.Vector3(),SPRAY=new THREE.Vector3(),AIM=new THREE.Vector3();
+const LOOK={look:AIM,exact:false};
 
 /** One clip on the stage: everything it creates lives in its own scene, physics world, dust and pools, is kept across
  * its loops (`rewind`) and goes with `dispose`. */
@@ -58,7 +61,8 @@ class Playback {
     private roster?:Extract<ClipData['entries'][number],{roster:unknown}>;
     private readonly tracks=new Map<string,Track>();
     private readonly events:{at:number;event:RecordedEvent}[]=[];
-    private readonly killTimes=new Map<string,number[]>();
+    /** Recorded looks by rat: your own aim samples (`own`), else its shots' directions. Sorted by time. */
+    private readonly aims=new Map<string,{own:boolean;times:number[];dirs:Vec3Data[]}>();
     private next=0;
     private cut=true;
     private lastChaos:ChaosState|null=null;
@@ -76,23 +80,24 @@ class Playback {
         this.chaos.onTrap=(event,trap)=>audio.feedback(TRAP_CUES[event],trap);
         for(const entry of data.entries){
             if('roster' in entry){this.roster??=entry;continue;}
-            if('pose' in entry){const p=entry.pose;this.sample(p.id,entry.at,p);continue;}
+            if('pose' in entry){const p=entry.pose;this.sample(p.id,entry.at,p);this.noteAim(p.id,entry.at,p.aim,true);continue;}
             const event=entry.event;
             if(event.type==='playerMoved'||event.type==='playerCorrected'){
                 const p=event.player;this.sample(p.id,entry.at,{x:p.x,y:p.y,z:p.z,qx:p.meshQx,qy:p.meshQy,qz:p.meshQz,qw:p.meshQw});continue;
             }
             this.events.push({at:entry.at,event});
-            if(event.type==='playerDied'&&event.killerId&&event.killerId!==event.victimId){
-                let kills=this.killTimes.get(event.killerId);if(!kills)this.killTimes.set(event.killerId,kills=[]);kills.push(entry.at);
-            }
+            if(event.type==='playerShot')this.noteAim(event.shooterId,entry.at,event.direction,false);
         }
         this.events.sort((a,b)=>a.at-b.at);
         for(const track of this.tracks.values())this.sortTrack(track);
+        for(const aims of this.aims.values()){
+            const order=aims.times.map((_,i)=>i).sort((a,b)=>aims.times[a]!-aims.times[b]!);
+            aims.dirs=order.map(i=>aims.dirs[i]!);aims.times=order.map(i=>aims.times[i]!);
+        }
         this.view={
             body:id=>{const rat=this.remotes.get(id);return rat&&!rat.dead?rat.mesh.position:this.chaos.corpseOf(id);},
             facing:id=>{const rat=this.remotes.get(id);return rat&&!rat.dead?rat.mesh.quaternion:undefined;},
-            state:()=>this.lastChaos,
-            kills:id=>this.killTimes.get(id)??[],
+            aim:id=>this.aim(id,this.t-PLAYBACK.viewDelay),
         };
         this.rewind();
     }
@@ -129,7 +134,10 @@ class Playback {
         while(this.next<this.events.length&&this.events[this.next]!.at<=this.t){const {at,event}=this.events[this.next++]!;this.apply(event,at,false);}
         this.remotes.placeFrame(clipDt||1/60,id=>this.pose(id,this.t-PLAYBACK.viewDelay),this.cut);this.cut=false;
         this.remotes.presentFrame();
-        this.director.frame(this.camera,this.t,dt);
+        this.director.frame(this.camera,dt);
+        // The rat whose eyes these are looks as your own rat does in play (its outline and streak rules, its case cues).
+        const pov=this.director.subject,own=pov&&this.remotes.get(pov);
+        if(own&&!own.isPlayer)own.isPlayer=true;
         this.camera.updateMatrixWorld();this.audio.listen(this.camera);
         this.chaos.update(clipDt,this.camera,this.t);
         this.dust.update(clipDt);
@@ -162,6 +170,27 @@ class Playback {
         POSE.qx=QA.x;POSE.qy=QA.y;POSE.qz=QA.z;POSE.qw=QA.w;
         return POSE;
     }
+    private noteAim(id:string,at:number,direction:Vec3Data,own:boolean):void {
+        let aims=this.aims.get(id);
+        if(!aims||own&&!aims.own)this.aims.set(id,aims={own,times:[],dirs:[]});
+        else if(aims.own&&!own)return;
+        aims.times.push(at);aims.dirs.push(direction);
+    }
+    /** Where `id` looked at `time` (unit): your own aim between samples (held at either end), or the nearest shot's. */
+    private aim(id:string,time:number):{look:Vec3Data;exact:boolean}|undefined {
+        const aims=this.aims.get(id);if(!aims?.times.length)return;
+        const {times,dirs}=aims;let lo=0,hi=times.length-1;
+        if(time<=times[0]!)hi=0;else if(time>=times[hi]!)lo=hi;
+        else while(hi-lo>1){const mid=(lo+hi)>>1;if(times[mid]!<=time)lo=mid;else hi=mid;}
+        LOOK.exact=aims.own;
+        if(!aims.own){
+            const near=time-times[lo]!<=times[hi]!-time?lo:hi,d=dirs[near]!;
+            if(Math.abs(times[near]!-time)>PLAYBACK.shotLook)return;
+            AIM.set(d.x,d.y,d.z).normalize();return LOOK;
+        }
+        const span=times[hi]!-times[lo]!,k=span>0?(time-times[lo]!)/span:0,a=dirs[lo]!,b=dirs[hi]!;
+        AIM.set(a.x+(b.x-a.x)*k,a.y+(b.y-a.y)*k,a.z+(b.z-a.z)*k).normalize();return LOOK;
+    }
     private carriesHotCase(id:string|null|undefined):boolean {const s=this.lastChaos;return !!id&&!!s&&s.case.owner===id&&s.assignment?.phase==='active';}
 
     /** A recorded event, as live play applies it to the world (no HUD, feel or headlines); `seek` keeps only its state. */
@@ -171,7 +200,7 @@ class Playback {
                 const s=event.state;this.lastChaos=s;this.chaos.apply(s);
                 const d=s.dispatch,incident=d.phase==='active'?incidentInfo(d.incident).id:undefined,wanted=incident==='most-wanted'?d.wanted:undefined;
                 for(const [id,{entity}] of this.remotes.rats){
-                    entity.setBigPistol(incident==='big-cheese');entity.setWanted(id===wanted);
+                    entity.setWanted(id===wanted);
                     const buff=s.buffs?.[id],left=(until?:number)=>Math.max(0,((until??0)-s.time)/1000);
                     entity.setPowerups(left(buff?.ironcladUntil),left(buff?.hustleUntil),left(buff?.stakeoutUntil));
                     const dud=faultyOf(s.buffs,id,s.time);
@@ -260,7 +289,8 @@ export class ReplayStage implements ReplayPlayer {
     private playback?:Playback;
     private options?:{mode:ReplayMode;rect?:()=>DOMRect;loop?:boolean;onEnd?:()=>void};
     private ended=false;
-    private readonly camera=new THREE.PerspectiveCamera(55,16/9,.1,600);
+    /** The gameplay camera's lens: an exhibit plays as its rat saw it. */
+    private readonly camera=new THREE.PerspectiveCamera(SHOULDER.fov,16/9,.1,600);
     private readonly audio:ReplayAudio;
     private readonly hidden:THREE.Object3D[]=[];
     private readonly size=new THREE.Vector2();
@@ -272,6 +302,7 @@ export class ReplayStage implements ReplayPlayer {
     }
 
     clips():ReplayClip[] {return this.deps.recorder.clips();}
+    shared():string[] {return this.deps.recorder.shared();}
     current():ReplayClip|null {return this.playback?.data.clip??null;}
     /** True while a replay takes the whole screen (the live frame is not drawn). */
     get fullscreen():boolean {return !!this.playback&&this.options?.mode==='fullscreen';}

@@ -24,7 +24,6 @@ export interface HighlightHit {
   squashAirMs?: number;
   corpse?: boolean;
   reflections?: number;
-  ballRadius?: number;
   attackerAirborne?: boolean;
   victimAirborne?: boolean;
   victimTrapped?: boolean;
@@ -126,7 +125,6 @@ export class HighlightDetector {
     }
     if (h.environment === 'drowned') qualifiers.push({ kind: 'splashdown', bonus: 0 });
     if (h.victimTrapped) qualifiers.push({ kind: 'snapped', bonus: 0 });
-    if (h.ballRadius !== undefined && h.ballRadius >= H.bigCheeseRadius) qualifiers.push({ kind: 'big-cheese', bonus: (h.ballRadius - H.bigCheeseRadius) * 25 });
     if (h.carrier) {
       const gap = objectiveGap(h.assignment, victim.id, victim);
       if (gap.dropoff !== undefined && gap.dropoff <= H.soCloseDistance) qualifiers.push({ kind: 'so-close', bonus: (H.soCloseDistance - gap.dropoff) * 2 });

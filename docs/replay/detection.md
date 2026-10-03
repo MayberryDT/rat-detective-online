@@ -25,13 +25,12 @@ The detector is one module in `src/shared/` or `src/worker/`, called from the pl
 
 Chaos and comedy:
 
-- sent flying: a dead rat's body travels far or high (corpse velocity in `ChaosSimulation` death handling, measured over the next 2 seconds)
+- sent flying: a dead rat's body travels far or high (corpse velocity in `ChaosSimulation` death handling, measured over the next 2 seconds). Since protocol 31 it needs 40 units or 8 up (was 22 or 5): every kill throws the body at 32 u/s, so ordinary kills filled the reel.
 - splashdown: a rat drowns at the docks (`drowned` in `GameRoom`)
 - pileup: 3 or more deaths within 18 units and 4 seconds (a short list of recent deaths in `GameRoom`)
 - squashed: a launched rat lands on another rat (the squash hit in `stepFlights`)
 - snapped and shot: a rat dies while a mousetrap holds it (`trappedUntil` in `PlayerBuffs`)
 - body blow: a flying corpse hits or kills a living rat (corpse-hit damage in `stepBodies`)
-- Big Cheese wreck: a kill by a grown Big Cheese ball, scored by its size
 - Code Violation backfire: a dud supply goes wrong on the rat who grabbed it
 
 Irony:

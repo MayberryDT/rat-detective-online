@@ -41,7 +41,7 @@ it('uses the fixed Gate roof and clear Maintenance floor, without adding collide
 it('does no animation or visibility ray work while distant, and pauses correctly when disabled',()=>{
     const view=setup(),sample=vi.spyOn(CameoAnimator.prototype,'sample'),visible=vi.fn(clear);
     view.beginFrame(.05,{x:0,y:0,z:0});view.update(()=>[],visible);
-    view.observeShot('far',{x:0,y:0,z:0},.2,visible);
+    view.observeShot('far',{x:0,y:0,z:0},visible);
     expect(sample).not.toHaveBeenCalled();expect(visible).not.toHaveBeenCalled();
     view.setEnabled(false);view.beginFrame(.05,camera);view.update(()=>[],visible);
     expect(sample).not.toHaveBeenCalled();expect(view.root.visible).toBe(false);
@@ -63,17 +63,17 @@ it('greets a new nearby rat once, with floor and wall checks, then rearms after 
 it('reacts to a swept ball even between frames and interrupts a greeting without moving the cape',()=>{
     const view=setup(),sample=vi.spyOn(CameoAnimator.prototype,'sample');
     tick(view,.2,()=>[{id:'rat',position:{x:bat.x+2,y:bat.y,z:bat.z}}]);
-    view.beginFrame(.05,camera);view.observeShot('ball',{x:bat.x-2,y:bat.y+1.1,z:bat.z},.2,clear);
-    view.beginFrame(.05,camera);view.observeShot('ball',{x:bat.x+2,y:bat.y+1.1,z:bat.z},.2,clear);view.update(()=>[],clear);
+    view.beginFrame(.05,camera);view.observeShot('ball',{x:bat.x-2,y:bat.y+1.1,z:bat.z},clear);
+    view.beginFrame(.05,camera);view.observeShot('ball',{x:bat.x+2,y:bat.y+1.1,z:bat.z},clear);view.update(()=>[],clear);
     expect(sample).toHaveBeenLastCalledWith('shot',expect.any(Number),expect.any(Number));
     const cape=view.root.getObjectByName('cameo-cape')!;expect(cape.rotation.y).toBe(0);
 });
 
 it('rejects wall-hidden balls and large reconciliation jumps',()=>{
     const view=setup(),sample=vi.spyOn(CameoAnimator.prototype,'sample');
-    view.beginFrame(.05,camera);view.observeShot('wall',{x:bat.x,y:bat.y+1.1,z:bat.z},.2,()=>false);view.update(()=>[],clear);
-    view.observeShot('jump',{x:bat.x-20,y:bat.y+1.1,z:bat.z},.2,clear);
-    view.beginFrame(.05,camera);view.observeShot('jump',{x:bat.x+20,y:bat.y+1.1,z:bat.z},.2,clear);view.update(()=>[],clear);
+    view.beginFrame(.05,camera);view.observeShot('wall',{x:bat.x,y:bat.y+1.1,z:bat.z},()=>false);view.update(()=>[],clear);
+    view.observeShot('jump',{x:bat.x-20,y:bat.y+1.1,z:bat.z},clear);
+    view.beginFrame(.05,camera);view.observeShot('jump',{x:bat.x+20,y:bat.y+1.1,z:bat.z},clear);view.update(()=>[],clear);
     expect(sample.mock.calls.every(args=>args[0]==='idle')).toBe(true);
 });
 
@@ -81,12 +81,12 @@ it('bounds projectile history, deduplicates repeated ball samples and clears on 
     const view=setup(),sample=vi.spyOn(CameoAnimator.prototype,'sample');
     const p={x:bat.x,y:bat.y+1.1,z:bat.z};
     for(let frame=0;frame<180;frame++){
-        view.beginFrame(.05,camera);view.observeShot('one',p,.2,clear);view.update(()=>[],clear);
+        view.beginFrame(.05,camera);view.observeShot('one',p,clear);view.update(()=>[],clear);
     }
     expect(sample).toHaveBeenLastCalledWith('idle',expect.any(Number),expect.any(Number));
-    view.reset();view.beginFrame(.05,camera);view.observeShot('one',p,.2,clear);view.update(()=>[],clear);
+    view.reset();view.beginFrame(.05,camera);view.observeShot('one',p,clear);view.update(()=>[],clear);
     expect(sample).toHaveBeenLastCalledWith('shot',expect.any(Number),expect.any(Number));
-    for(let i=0;i<300;i++)view.observeShot(`ball-${i}`,{x:bat.x+10,y:-7,z:0},.2,clear);
+    for(let i=0;i<300;i++)view.observeShot(`ball-${i}`,{x:bat.x+10,y:-7,z:0},clear);
     expect((view as unknown as {shots:Map<string,unknown>}).shots.size).toBeLessThanOrEqual(256);
     view.reset();expect((view as unknown as {shots:Map<string,unknown>}).shots.size).toBe(0);
 });

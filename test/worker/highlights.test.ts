@@ -97,8 +97,8 @@ describe('highlight thresholds', () => {
     }
   });
 
-  it('a body sent 21 u is a plain kill; 23 u, or 5.1 u up, is sent flying', () => {
-    for (const [end, flying] of [[{ x: 21, y: 1, z: 0 }, false], [{ x: 23, y: 1, z: 0 }, true], [{ x: 3, y: 6.1, z: 0 }, true]] as const) {
+  it('a body sent 39 u is a plain kill; 41 u, or 8.1 u up, is sent flying', () => {
+    for (const [end, flying] of [[{ x: 39, y: 1, z: 0 }, false], [{ x: 41, y: 1, z: 0 }, true], [{ x: 3, y: 9.1, z: 0 }, true]] as const) {
       const h = harness();
       h.corpses.set('v', { x: 0, y: 1, z: 0 });
       h.kill(0, rat('k', 5, 0), rat('v'));
@@ -145,7 +145,6 @@ describe('highlight thresholds', () => {
     const cases: Array<[Partial<HighlightHit>, string[]]> = [
       [{ bounces: 1 }, []], [{ bounces: 2 }, ['bank-shot']],
       [{ weapon: 'laser', reflections: 0 }, []], [{ weapon: 'laser', reflections: 1 }, ['laser-ricochet']],
-      [{ ballRadius: .52 }, []], [{ ballRadius: .96 }, ['big-cheese']],
     ];
     for (const [extra, kinds] of cases) {
       const h = harness();

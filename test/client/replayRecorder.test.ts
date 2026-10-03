@@ -10,7 +10,7 @@ function fixture(){
     recorder.welcome({type:'welcome',id:'me',player:rat('me'),players:{bot:rat('bot')},round:{phase:'playing'},serverTime:now} as unknown as Extract<ServerMessage,{type:'welcome'}>);
     /** Play on to `to`, your rat recorded at 30 Hz. */
     const until=(to:number)=>{while(now<to){now=Math.min(to,now+34);recorder.recordLocal({x:0,y:0,z:0},{x:0,y:0,z:0,w:1},{x:0,y:0,z:1});}};
-    const mark=(id:string,score:number,at:number,actors=['bot']):void=>recorder.record({type:'highlight',id,kind:'sent-flying',at,actors,p:{x:0,y:0,z:0},score,leadMs:4000,trailMs:2000} satisfies HighlightMarker);
+    const mark=(id:string,score:number,at:number,actors=['bot'],kind:HighlightMarker['kind']='sent-flying'):void=>recorder.record({type:'highlight',id,kind,at,actors,p:{x:0,y:0,z:0},score,leadMs:4000,trailMs:2000} satisfies HighlightMarker);
     return {recorder,until,mark};
 }
 
@@ -25,6 +25,19 @@ it('keeps the 8 best clips plus your best one, even when it scores below them',(
     const clips=recorder.clips();
     expect(clips.map(clip=>clip.score)).toEqual([100,90,80,70,60,50,40,30,5]);
     expect(clips.at(-1)).toMatchObject({id:'mine',involvesLocal:true,names:{bot:'BOT',me:'ME'}});
+});
+
+it('keeps the shared exhibits (one per kind) even below the 8 best, and freezes their order with the board',()=>{
+    const {recorder,until,mark}=fixture();
+    until(11_500);
+    for(let i=0;i<10;i++)mark(`fly-${i}`,100+i,11_000);
+    mark('pile',20,11_000,['bot'],'pileup');
+    until(13_000);
+    expect(recorder.clips().map(clip=>clip.id)).toContain('pile');
+    recorder.freeze();
+    expect(recorder.shared()).toEqual(['fly-9','pile']);
+    recorder.reset();
+    expect(recorder.shared()).toEqual(['fly-9','pile']);
 });
 
 it('replaces a grown moment (the same id) instead of keeping two clips of it',()=>{

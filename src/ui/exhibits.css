@@ -46,6 +46,10 @@ body.round-results .results-exhibits:not([hidden]){position:fixed;z-index:245;le
 .exhibit-card-caption{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .exhibit-card-names{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--carbon-dim);font-size:11px;letter-spacing:.4px}
 .exhibit-card-names .you{color:var(--stamp-ink)}
+/* Exhibit D, yours (Tyler, 2 October, protocol 31): your own moment beside the shared three, in the stamp's colour. */
+.exhibit-card.yours{border:3px double var(--stamp);padding:3px 7px 2px}
+.exhibit-card.yours .exhibit-card-letter,.results-exhibits.yours .exhibit-caption-letter{color:var(--stamp-ink)}
+.exhibit-card-yours{margin-left:5px;font:400 9px/1 var(--font-type);font-style:normal;letter-spacing:.8px;vertical-align:2px;color:var(--stamp-ink)}
 /* Fullscreen and recording: the replay owns the screen; the board waits underneath, hidden. */
 body.round-results.exhibit-fullscreen :is(#victory-overlay,.match-scoreboard,.results-actions,.results-headline,.rat-file-card,.results-exhibits){visibility:hidden}
 body.exhibit-fullscreen .exhibit-frame{visibility:visible;position:fixed;inset:0;z-index:300;width:auto;aspect-ratio:auto;outline:0}
@@ -65,6 +69,8 @@ body.reduced-motion :is(.exhibit-rec-dot,.results-exhibits),body.reduced-motion 
     .exhibit-cards{flex:1 1 0;min-width:0;align-self:stretch;grid-auto-rows:1fr}
     .exhibit-card{grid-template-columns:auto auto minmax(0,1fr);align-content:center;row-gap:3px}
     .exhibit-card-caption{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    /* Four cards (the shared three and yours): one caption line each, so the cards stay about the screen's height. */
+    .exhibit-cards:has(> li:nth-child(4)) .exhibit-card-caption{-webkit-line-clamp:1}
     .exhibit-card-names{grid-column:1/-1}
 }
 /* Small screens (GameHud's SMALL_RESULTS): the screen and its cards side by side, just above the Case File. */

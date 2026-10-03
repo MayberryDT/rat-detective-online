@@ -10,10 +10,8 @@ import { feelState } from '../feel/feelState';
 import { FEEL } from '../feel/feelTuning';
 import type {TouchMovement} from '../session/TouchInput';
 import {CameraBlockers} from './CameraBlockers';
+import {SHOULDER, ShoulderCamera} from './ShoulderCamera';
 
-const CAM_RADIUS = 6.0;
-const CAM_PIVOT_Y = 3.5;
-const CAM_SHOULDER = 1.25;
 const MOUSE_SENS = 0.002;
 
 /** The player's rat: keys, mouse and touch read into `RatControls`, the shared rat body (`RatBody`, the same
@@ -23,23 +21,16 @@ export class RatController {
     /** The rat's movement: the one body step every rat shares. */
     readonly movement: RatBody;
     private camera: THREE.PerspectiveCamera;
-    private spherical = new THREE.Spherical(CAM_RADIUS, Math.PI * 0.4, Math.PI);
+    private spherical = new THREE.Spherical(SHOULDER.radius, SHOULDER.phi, Math.PI);
     private readonly controls = noControls();
     /** The controls pressed since the last movement send (the city map's record; authority never reads it). */
     readonly tally = new ControlTally();
 
-    /** What the shoulder camera's rays stop at: the city's blockers when the rat was made. */
-    private readonly blockers: CameraBlockers;
-    private readonly cameraRay = new THREE.Raycaster();
+    /** The shoulder camera, its rays stopping at the city's blockers when the rat was made. */
+    private readonly view: ShoulderCamera;
     get grounded():boolean {return this.movement.grounded;}
     private readonly appliedLaunches = new Set<string>();
     private disposed = false;
-    private readonly up = new THREE.Vector3(0, 1, 0);
-    private readonly pivot = new THREE.Vector3();
-    private readonly viewDirection = new THREE.Vector3();
-    private readonly shoulder = new THREE.Vector3();
-    private readonly shoulderDirection = new THREE.Vector3();
-    private readonly offset = new THREE.Vector3();
 
     constructor(
         scene: THREE.Scene,
@@ -53,7 +44,7 @@ export class RatController {
     ) {
         this.camera = camera;
         scene.updateMatrixWorld(true);
-        this.blockers = new CameraBlockers(scene.children.filter(o=>o.userData.aimTarget===true));
+        this.view = new ShoulderCamera(new CameraBlockers(scene.children.filter(o=>o.userData.aimTarget===true)));
 
         // Create the Player Entity with the player's chosen name and appearance
         const pos = spawnPos ?? new THREE.Vector3(15, 2, 15);
@@ -144,32 +135,5 @@ export class RatController {
         this.entity.dispose();
     }
 
-    private updateCamera(): void {
-        const mesh = this.entity.mesh;
-        const pivot = this.pivot.set(mesh.position.x, mesh.position.y + CAM_PIVOT_Y, mesh.position.z);
-        const offset = this.offset.setFromSpherical(this.spherical);
-
-
-        // Direct copy — NO lerp. Lerp causes snap-back when whipping around fast
-        // because it interpolates through 3D space, not spherical space.
-        this.camera.position.copy(pivot).add(offset);
-        pivot.y = mesh.position.y + 2.2;
-        // Translate the view sideways without toeing it back into the rat's head.
-        this.viewDirection.copy(pivot).sub(this.camera.position).normalize();
-        this.shoulder.set(1,0,0).applyAxisAngle(this.up,this.spherical.theta).multiplyScalar(CAM_SHOULDER);
-        // Resolve the shoulder first, then the boom: backing into a wall must
-        // shorten distance without collapsing the view back onto the rat.
-        this.cameraRay.set(pivot,this.shoulderDirection.copy(this.shoulder).normalize());
-        this.cameraRay.far=CAM_SHOULDER;
-        const shoulderHit=this.blockers.first(this.cameraRay);
-        if(shoulderHit)this.shoulder.setLength(Math.max(0,shoulderHit.distance-.3));
-        this.camera.position.add(this.shoulder);
-        pivot.add(this.shoulder);
-        offset.copy(this.camera.position).sub(pivot);
-        this.cameraRay.far = offset.length();
-        this.cameraRay.set(pivot, offset.normalize());
-        const hit = this.blockers.first(this.cameraRay);
-        if(hit) this.camera.position.copy(pivot).addScaledVector(this.cameraRay.ray.direction,Math.max(.3,hit.distance-.3));
-        this.camera.lookAt(this.offset.copy(this.camera.position).add(this.viewDirection));
-    }
+    private updateCamera(): void { this.view.place(this.camera, this.entity.mesh.position, this.spherical); }
 }

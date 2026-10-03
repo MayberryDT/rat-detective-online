@@ -6,27 +6,30 @@ import {canSave, saveClip, type SaveRun} from '../replay/saveClip';
 import {caseTime} from './roundStats';
 
 const LETTERS = ['A', 'B', 'C'] as const;
+/** The personal exhibit's letter, after the shared three. */
+const YOURS = 'D';
 /** GameHud.layoutResults listens for this on the window: the exhibits block appeared, left or changed size. */
 export const EXHIBITS_LAYOUT_EVENT = 'results-exhibits';
 
-/** X4: the round's exhibits. Your best moment if you had one, then the best from anyone, one per kind, at most 3,
- * best first (Exhibit A, B, C). */
-export function pickExhibits(clips: ReplayClip[], myId: string): ReplayClip[] {
-    const ranked = [...clips].sort((a, b) => b.score - a.score);
-    const picked: ReplayClip[] = [];
-    const yours = ranked.find(clip => clip.actors.includes(myId));
-    if (yours) picked.push(yours);
-    for (const clip of ranked) {
-        if (picked.length >= LETTERS.length) break;
-        if (!picked.some(other => other.kind === clip.kind)) picked.push(clip);
-    }
-    return picked.sort((a, b) => b.score - a.score);
+/** One exhibit card: its clip, its letter and whether it is your own extra. */
+export type Exhibit = {clip: ReplayClip; letter: string; yours: boolean};
+
+/** X4: the round's exhibits (Tyler, 2 October, protocol 31). Exhibits A, B, C are the same for everyone: `shared` (the
+ * recorder's `sharedExhibits` ids, from the markers every client gets) in order. A shared one this client has no clip of
+ * keeps its letter and is left out, so B means the same moment on every screen. Then Exhibit D, yours: your best moment
+ * that is not already among them. */
+export function pickExhibits(clips: ReplayClip[], shared: string[], myId: string): Exhibit[] {
+    const picked: Exhibit[] = [];
+    shared.slice(0, LETTERS.length).forEach((id, i) => {const clip = clips.find(c => c.id === id);if (clip) picked.push({clip, letter: LETTERS[i]!, yours: false});});
+    const yours = clips.filter(c => c.actors.includes(myId) && !shared.includes(c.id)).sort((a, b) => b.score - a.score)[0];
+    if (yours) picked.push({clip: yours, letter: YOURS, yours: true});
+    return picked;
 }
 
-type Card = {clip: ReplayClip; button: HTMLButtonElement};
+type Card = Exhibit & {button: HTMLButtonElement};
 
 /** The exhibits on the results board: a framed 16:9 screen the replay draws into (the tape look is CSS over it),
- * three text cards, fullscreen and save. GameHud places the block above the Case File. */
+ * up to four text cards (three shared, one yours), fullscreen and save. GameHud places the block above the Case File. */
 export class Exhibits {
     private readonly doc: Document;
     private readonly root: HTMLElement;
@@ -75,11 +78,11 @@ export class Exhibits {
 
     show(): void {
         const myId = this.deps.myId();
-        const picked = pickExhibits(this.deps.player.clips(), myId);
-        if (!this.root.hidden && picked.length === this.cards.length && picked.every((clip, i) => clip.id === this.cards[i]!.clip.id)) return;
+        const picked = pickExhibits(this.deps.player.clips(), this.deps.player.shared(), myId);
+        if (!this.root.hidden && picked.length === this.cards.length && picked.every((exhibit, i) => exhibit.clip.id === this.cards[i]!.clip.id && exhibit.letter === this.cards[i]!.letter)) return;
         this.hide();
         if (!picked.length) return;
-        this.cards = picked.map((clip, i) => this.card(clip, LETTERS[i]!, myId));
+        this.cards = picked.map(exhibit => this.card(exhibit, myId));
         this.saveButton.hidden = !canSave(this.deps.player);
         this.root.hidden = false;
         this.doc.body.classList.add('exhibits-on');
@@ -110,13 +113,17 @@ export class Exhibits {
         this.root.remove();
     }
 
-    private card(clip: ReplayClip, letter: string, myId: string): Card {
+    private card(exhibit: Exhibit, myId: string): Card {
+        const {clip, letter, yours} = exhibit;
         const item = this.doc.createElement('li');
         const button = this.doc.createElement('button');button.type = 'button';button.className = 'exhibit-card';
         button.dataset.kind = clip.kind;button.dataset.letter = letter;
         if (CASE_KINDS[clip.kind]) button.classList.add('case');
+        if (yours) button.classList.add('yours');
         const part = (tag: string, className: string, text: string) => {const node = this.doc.createElement(tag);node.className = className;node.textContent = text;button.appendChild(node);return node;};
-        part('b', 'exhibit-card-letter', letter);
+        const mark = part('b', 'exhibit-card-letter', letter);
+        // Inside the letter's cell, so the card's grid stays the shared cards' grid.
+        if (yours) {const tag = this.doc.createElement('em');tag.className = 'exhibit-card-yours';tag.textContent = 'YOURS';mark.appendChild(tag);}
         part('i', 'exhibit-card-glyph', KIND_GLYPH[clip.kind]).title = KIND_LABEL[clip.kind];
         part('span', 'exhibit-card-caption', caption(clip));
         const names = part('small', 'exhibit-card-names', '');
@@ -126,8 +133,8 @@ export class Exhibits {
             if (id === myId) name.className = 'you';
             names.appendChild(name);
         });
-        button.setAttribute('aria-label', `Exhibit ${letter}: ${KIND_LABEL[clip.kind]}. ${caption(clip)}`);
-        const card = {clip, button};
+        button.setAttribute('aria-label', `Exhibit ${letter}${yours ? ', your moment' : ''}: ${KIND_LABEL[clip.kind]}. ${caption(clip)}`);
+        const card = {...exhibit, button};
         button.addEventListener('click', () => {
             if (this.mode !== 'board') return;
             this.select(card);this.report(clip, 'played');
@@ -140,8 +147,8 @@ export class Exhibits {
     private select(card: Card): void {
         this.playing = card;
         for (const other of this.cards) other.button.setAttribute('aria-pressed', String(other === card));
-        const letter = card.button.dataset.letter ?? 'A';
-        this.exhibitLabel.textContent = `EXHIBIT ${letter}`;this.captionText.textContent = caption(card.clip);
+        this.exhibitLabel.textContent = `EXHIBIT ${card.letter}${card.yours ? ' · YOURS' : ''}`;this.captionText.textContent = caption(card.clip);
+        this.root.classList.toggle('yours', card.yours);
         this.root.classList.toggle('case', !!CASE_KINDS[card.clip.kind]);
         this.deps.player.play(card.clip, {mode: 'frame', rect: () => this.frame.getBoundingClientRect(), loop: true});
     }
@@ -157,7 +164,7 @@ export class Exhibits {
         const card = this.playing;
         if (!card || this.mode !== 'board' || !canSave(this.deps.player)) return;
         let run: SaveRun;
-        try {run = saveClip(this.deps.player, card.clip, card.button.dataset.letter ?? 'A', this.doc);}
+        try {run = saveClip(this.deps.player, card.clip, card.letter, this.doc);}
         catch (error) {console.warn('[exhibits] cannot record this exhibit', error);return;}
         this.saving = run;this.setMode('saving');
         void run.done.then(saved => {

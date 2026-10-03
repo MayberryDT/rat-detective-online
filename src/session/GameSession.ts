@@ -30,7 +30,6 @@ import { SimulationClock } from './SimulationClock';
 import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
-import { ShotSpacing } from '../shared/shotTiming';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
 import { caseLastSeen } from '../shared/caseHeartbeat';
 import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, trapped, weaponArming, type WeaponKind } from '../shared/pickups';
@@ -115,7 +114,6 @@ export class GameSession {
     private diagnosticChaos:{receivedAt:number;serverTime:number;shots:number;tick:number;epoch:string}={receivedAt:0,serverTime:0,shots:0,tick:0,epoch:''};
     private shotsAttempted=0;
     private shotsSent=0;
-    private readonly shotSpacing=new ShotSpacing();
     /** The Tommy Gun's held trigger (mouse/key), and its bloom count of your own triggers. */
     private readonly heldFire=new HeldFire();
     private tommyHeat=0;
@@ -337,15 +335,12 @@ export class GameSession {
     /** Both input devices use the real camera ray, animated muzzle and transport. */
     private shoot(): void {
         if (this.observing || this.title.settings?.isOpen || this.transport.state !== 'playing' || this.roundWon || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
-        // Big Cheese spaces every rat's shots, as the room does; an early press only dry-clicks.
-        const dispatch=this.lastChaos?.dispatch,incident=dispatch?.phase==='active'?incidentInfo(dispatch.incident).id:undefined;
         const now=performance.now(),weapon=this.weaponNow();
         // A Mousetrap just taken is still coming up into the paw: the press does nothing (no shot, no set-down predicted;
         // the room refuses it too). Only a press after that sets it down: a held trigger never repeats into it.
         if (weaponArming(this.lastChaos?.buffs?.[this.myId], Date.now() + this.serverOffset)) return;
         // Short Circuit (a Code Violation dud): the gun is shorted out and only dry-clicks, as the room refuses it.
         if (shortedOut(this.lastChaos?.buffs, this.myId, Date.now() + this.serverOffset)) { this.feel.sound.jam(); return; }
-        if (!this.shotSpacing.allow(this.myId, incident, now, 0, weapon)) { this.feel.sound.jam(); return; }
         this.rat.updateView();
         this.stage.camera.getWorldDirection(this.direction);
         const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
@@ -418,7 +413,7 @@ export class GameSession {
         if(this.chaos){
             // K3: your ping pulse and heartbeat while you carry the buffed case (never while observing).
             this.chaos.onCarry=(mine,now,urgency)=>this.feel.hotCase(this.observing?null:mine,now,urgency);
-            this.chaos.onPresentedShot=(id,p,radius)=>this.cameos?.observeShot(id,p,radius,this.gun.sceneryClear);
+            this.chaos.onPresentedShot=(id,p)=>this.cameos?.observeShot(id,p,this.gun.sceneryClear);
             // W3: the trap's own foley where it happens: set down, SNAP with a spring twang, splinters per hit, a sad boing as it breaks.
             this.chaos.onTrap=(event,trap)=>{
                 this.feedback.play(event==='set'?'trap-set':event==='snap'?'trap-snap':event==='hit'?'trap-splinter':'trap-break',trap);
@@ -485,13 +480,10 @@ export class GameSession {
                 // A new call: everyone reads who rang Dispatch.
                 const d=message.state.dispatch,caller=d.caller&&this.lastChaos&&d.serial!==this.lastChaos.dispatch.serial?d.caller===this.myId?this.rat?.entity:this.remotes.get(d.caller):undefined;
                 if(caller)this.hud.addKillFeed({kind:'dispatch',caller:caller.name,...(d.caller===this.myId?{local:true}:{})});
-                // Big Cheese: every rat's pistol goes big, and big balls landing nearby thud.
-                const big=incident==='big-cheese';this.rat?.entity.setBigPistol(big);
                 // Most Wanted stamps the target's nameplate.
                 const wanted=incident==='most-wanted'?d.wanted:undefined;
                 this.rat?.entity.setWanted(!!wanted&&wanted===this.myId);
-                for(const [id,{entity}] of this.remotes.rats){entity.setBigPistol(big);entity.setWanted(id===wanted);}
-                if(big)this.feel.cheeseLandings(message.state.impacts,this.stage.camera);
+                for(const [id,{entity}] of this.remotes.rats)entity.setWanted(id===wanted);
                 if(!this.observing)this.story?.apply(message.state,this.myId,id=>id===this.myId?this.rat?.entity.name:this.remotes.get(id)?.name);}
                 this.applyPickupState(message.state);
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);

@@ -1,12 +1,11 @@
-import {BALL_RADIUS} from './ballTuning';
-import {bounceShot,bounces,cheeseBounce,crossfireBounce,growIn,quirkBirth,quirkBounce,shotGravity,shotLife,steerQuirk} from './shotBallistics';
+import {BALL_GRAVITY} from './ballTuning';
+import {bounceShot,crossfireBounce,quirkBirth,quirkBounce,shotLife,steerQuirk} from './shotBallistics';
 import {CHAOS_TUNING,type ChaosShot,type ChaosState} from './chaosState';
 import {resolveShotPattern,type ShotWeapon} from './shotPattern';
 import type {IncidentId} from './incidentCatalog';
 import type {ServerMessage,ShotDescriptor,Vec3Data} from './networkProtocol';
 
-/** `radius` is passed only for a Big Cheese ball: the trace then sweeps that sphere, as the authority does. */
-export type ShotTrace=(from:Vec3Data,to:Vec3Data,radius?:number)=>{p:Vec3Data;n:Vec3Data;rat:boolean;reflect?:boolean}|undefined;
+export type ShotTrace=(from:Vec3Data,to:Vec3Data)=>{p:Vec3Data;n:Vec3Data;rat:boolean;reflect?:boolean}|undefined;
 interface LocalShot {
     shot:ChaosShot; trigger:string; fired:number; updated:number; first:boolean;
     confirmed?:number; hidden:boolean; incident?:IncidentId; weapon?:ShotWeapon;
@@ -66,7 +65,7 @@ export class LocalShotPresentation {
                 // A Bad Ammunition ball the prediction did not expect (or a predicted one the authority did not fire) takes the authority's personality.
                 const quirk=resolveShotPattern(message,'bad-ammunition').find(b=>b.id===ball.id&&distance(b.velocity,ball.velocity)<=.01)?.quirk;
                 const state:ChaosShot={id:local.shot.id,owner:local.shot.owner,p:{...message.origin},v:{...ball.velocity},age:0,...(quirk?quirkBirth(quirk,message.direction):{})};
-                const hidden=this.advance(state,Math.min(.5,Math.max(0,(now-local.fired)/1000)),local.incident,local.hot);
+                const hidden=this.advance(state,Math.min(.5,Math.max(0,(now-local.fired)/1000)),local.hot);
                 local.shot=state;local.hidden=hidden;local.offset=undefined;local.updated=now;
             }
         }
@@ -94,7 +93,7 @@ export class LocalShotPresentation {
                 continue;
             }
             local.confirmed??=state.time;
-            // A special weapon's balls are plain whatever the incident (no Big Cheese growth).
+            // A special weapon's balls keep their own pattern whatever the incident.
             if(!local.weapon)local.incident=state.dispatch.phase==='active'?state.dispatch.incident:undefined;
             local.hot=state.dispatch.phase==='active'&&state.dispatch.incident==='crossfire';
             if(local.first)continue; // first display frame still starts at muzzle
@@ -107,7 +106,7 @@ export class LocalShotPresentation {
             // Snapshots never carry a personality: keep the predicted one while its path lasts (a superball's for good).
             const quirk=local.shot.quirk;
             if(quirk&&local.shot.aim&&(quirk==='superball'||!authoritative.wallBounced)){corrected.quirk=quirk;corrected.aim=local.shot.aim;}
-            const hidden=this.advance(corrected,elapsed,local.incident,local.hot);
+            const hidden=this.advance(corrected,elapsed,local.hot);
             const before=this.position(local,now),error=distance(before,corrected.p);
             const bounced=!!authoritative.wallBounced!==!!local.shot.wallBounced||(authoritative.heat??0)!==(local.shot.heat??0);
             if(error>.03&&!bounced&&!hidden&&error<3){
@@ -120,35 +119,29 @@ export class LocalShotPresentation {
         this.shots.delete(id);this.retired.add(id);
         if(this.retired.size>CHAOS_TUNING.maxShots*2)this.retired.delete(this.retired.values().next().value!);
     }
-    private advance(shot:ChaosShot,elapsed:number,incident:IncidentId|undefined,hot:boolean):boolean {
-        // Match the authoritative semi-implicit 60 Hz integration, Big Cheese and Crossfire heat included. At
+    private advance(shot:ChaosShot,elapsed:number,hot:boolean):boolean {
+        // Match the authoritative semi-implicit 60 Hz integration, Crossfire heat included. At
         // most 30 replay steps reconcile a received snapshot; no per-ball world copy.
-        const heavy=incident==='big-cheese';
         for(let remaining=elapsed;remaining>1e-8;remaining-=STEP){
             const dt=Math.min(STEP,remaining);shot.age+=dt;
             if(shot.age>shotLife(shot))return true;
-            if(heavy)growIn(shot);
-            const radius=shot.radius??BALL_RADIUS;
-            if(steerQuirk(shot))shot.v.y+=shotGravity(radius)*dt;
+            if(steerQuirk(shot))shot.v.y+=BALL_GRAVITY*dt;
             const next={x:shot.p.x+shot.v.x*dt,y:shot.p.y+shot.v.y*dt,z:shot.p.z+shot.v.z*dt};
-            const big=radius>BALL_RADIUS+.001,hit=this.trace?.(shot.p,next,big?radius:undefined);
+            const hit=this.trace?.(shot.p,next);
             if(!hit){shot.p=next;continue;}
-            // A big ball rests on the surface, clear by its own radius (the authority's offset), never half buried.
-            const clear=big?radius+.01:.05;
-            shot.p={x:hit.p.x+hit.n.x*clear,y:hit.p.y+hit.n.y*clear,z:hit.p.z+hit.n.z*clear};
+            shot.p={x:hit.p.x+hit.n.x*.05,y:hit.p.y+hit.n.y*.05,z:hit.p.z+hit.n.z*.05};
             // A reflective coat bounces the ball instead of consuming it, and it
             // stays a rat contact: it never counts as a wall bounce for incidents.
             if(hit.rat&&!hit.reflect)return true;
             if(!hit.rat)shot.wallBounced=true;
-            const contact=bounceShot(shot.v,hit.n,radius);quirkBounce(shot);
-            if(heavy&&!hit.rat&&bounces(contact,radius))cheeseBounce(shot);
-            if(hot&&!hit.rat&&bounces(contact,radius))crossfireBounce(shot);
+            bounceShot(shot.v,hit.n);quirkBounce(shot);
+            if(hot&&!hit.rat)crossfireBounce(shot);
         }
         return false;
     }
     private update(local:LocalShot,now:number):void {
         const dt=Math.min(.1,Math.max(0,(now-local.updated)/1000));local.updated=now;
-        if(!local.hidden)local.hidden=this.advance(local.shot,dt,local.incident,local.hot);
+        if(!local.hidden)local.hidden=this.advance(local.shot,dt,local.hot);
     }
     private position(local:LocalShot,now:number):Vec3Data {
         const p=local.shot.p,offset=local.offset;if(!offset)return p;

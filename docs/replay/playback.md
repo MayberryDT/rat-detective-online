@@ -54,7 +54,7 @@ As built (`src/replay/ReplayStage.ts`): three.js layers are not inherited, and a
 
 There is one canvas and no post-processing pass; grain and vignette are CSS overlays (`ScreenFeel`). Two ways to draw an exhibit:
 
-- in the board's frame: draw the replay with the director camera into the frame's rectangle using `setViewport` and `setScissor`, after the live frame
+- in the board's frame: draw the replay with the replay camera into the frame's rectangle using `setViewport` and `setScissor`, after the live frame
 - fullscreen: draw only the replay, with the live scene hidden
 
 Both draw the city twice in one frame when the frame is used. That is acceptable on the results board, where you are not playing, but measure it on Halla and a weak laptop.
@@ -63,18 +63,16 @@ Both draw the city twice in one frame when the frame is used. That is acceptable
 
 Bodies follow the server's corpse position, and `RatCorpseChain` adds the limbs on the client. Step the chain at a fixed rate during a replay, so a body falls the same way each time you watch.
 
-## X3: the director
+## X3: the camera (player's view since protocol 31)
 
-Each kind of moment has its own shot. The director picks the camera from the clip's actors and the moment's position:
+Tyler, after the three-human playtest (2 October): "highlights need to be from the player's perspective. no one likes these unnatural camera angles." The orbits, wide shots and cuts are gone. Every exhibit is seen through the game's own shoulder camera (`src/player/ShoulderCamera.ts`, shared with `RatController`; same offsets, wall checks and 60° field of view) on one rat for the whole clip:
 
-- trick shots: behind the shooter, then follow the ball to the hit
-- sent flying, splashdown and body blow: follow the body
-- pileup and Big Cheese: a wide, slow orbit around the spot
-- long shot: over the shooter's shoulder, then cut to the victim
-- multi-kill: behind the killer, a quick cut at each kill
-- so close and carrier down: on the carrier, then a pull back to show the drop-off or zone
+- whose eyes: the doer, `actors[0]` (the killer, launcher or shooter; for so close, the carrier). If that rat is not in the recording, the next actor; as a last resort a still view of the spot, clear of walls.
+- where it looks: your own recorded camera direction when it is your rat; for other rats, the direction of their nearest shot within 500 ms (`PLAYBACK.shotLook`), its pitch held within 0.35 rad of the default (bots lob far steeper than players look); otherwise behind the rat's facing.
+- the view rat is drawn as your own rat is in play (`isPlayer`): its own nameplate, no distance outline.
+- if it dies, the game's death camera runs (`FEEL.deathCam`); in flight the camera follows as in play.
 
-On the key beat, time slows to 30% for about 1 second, then speeds back up. The camera never shakes. It avoids walls with the same ray checks the shoulder camera uses. With reduced motion turned on, the camera holds still shots and slow motion is shorter.
+On the key beat, time slows to 30% for about 1 second, then speeds back up. The camera never shakes.
 
 ## X3: replay sound
 

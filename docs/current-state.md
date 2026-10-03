@@ -1,6 +1,15 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-10-02** (protocol 28). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-10-02** (protocol 30 in production; protocol 31 below on staging). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+
+## Protocol 31: the three-human playtest batch — 2 October (staging)
+
+Tyler and two friends played protocol 30; Tyler: "go" on the batch ([the juice plan](juice-plan.md#three-human-playtest-2-october-night-protocol-31)).
+
+- **Tommy Gun:** 20 balls a second held (`tommyIntervalMs` 50), 12 s. The server admits a rat holding it at `TOMMY_SHOOT_RATE` (22 a second) in its own window; every other gun keeps `SHOOT_RATE` (12). Feel per shot halved (kick, push) and casings shorter-lived so the pools hold.
+- **Ironclad Alibi:** 8 s.
+- **Big Cheese removed:** stored rooms naming it, `cheesequake`, `act-of-god` or `cheddar-shower` run Crossfire. Shots no longer carry a radius; ordinary balls are unchanged. Nine incidents remain in the standard roster.
+- **Exhibits:** everyone sees the same A–C from the server's markers; your own best moment is an extra Exhibit D marked YOURS; sent flying needs 40 units or 8 up. Replays are seen through the game's shoulder camera on the rat doing the thing ([playback](replay/playback.md#x3-the-camera-players-view-since-protocol-31)).
 
 ## Protocol 29: clarity — 2 October production
 

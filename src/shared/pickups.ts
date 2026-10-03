@@ -20,24 +20,26 @@ export const PICKUP_TUNING = {
     claimRadius: 1.5,
     /** A claimed site returns after this long, keeping the route choice alive all match. */
     respawnMs: 45_000,
-    /** Reflection coat: long enough to cross a street under fire, short enough to track. */
-    ironcladMs: 12_000,
+    /** Reflection coat: long enough to cross a street under fire, short enough to track (8 s: Tyler, 2 October, protocol 31). */
+    ironcladMs: 8_000,
     /** Speed: a burst, not a new base movement state. */
     hustleMs: 10_000,
     /** Clearly noticeable without breaking the established camera and steering. */
     hustleMultiplier: 1.45,
     /** Stakeout: the Hunch city-wide at any health, long enough to pick a target and get there. */
     stakeoutMs: 12_000,
-    /** Tommy Gun and Laser are on a timer, never a magazine: shooting is always rewarded. The Mousetrap has none: it is held until set down. */
-    tommyMs: 8_000,
+    /** Tommy Gun and Laser are on a timer, never a magazine: shooting is always rewarded. The Mousetrap has none: it is held until set down.
+     * The Tommy Gun lasts 12 s (Tyler, 2 October, protocol 31). */
+    tommyMs: 12_000,
     laserMs: 15_000,
 } as const;
 /** The special weapons' rules, the same for every rat, human or bot. */
 export const WEAPON_TUNING = {
-    /** Tommy Gun: held fire repeats every `tommyIntervalMs` (under `SHOOT_RATE`). Each ball leaves within a cone whose
+    /** Tommy Gun: held fire repeats every `tommyIntervalMs`, 20 balls a second (Tyler, 2 October, protocol 31: holding it
+     * must beat clicking the plain gun's 12), admitted under `TOMMY_SHOOT_RATE`. Each ball leaves within a cone whose
      * half-angle (radians) grows from `tommyCone` to `tommyBloom` over `tommyBloomShots` held shots; a shot within
      * `tommyHeatMs` of the rat's previous one counts as held. Plain balls, one damage each, headshots kill. */
-    tommyIntervalMs: 100, tommyCone: .035, tommyBloom: .11, tommyBloomShots: 10, tommyHeatMs: 350,
+    tommyIntervalMs: 50, tommyCone: .035, tommyBloom: .11, tommyBloomShots: 10, tommyHeatMs: 350,
     /** Laser: an instant beam fired like the cheese gun (one click a shot, only under `SHOOT_RATE`). It deals
      * `laserDamage` (headshots kill), reflects off walls and Ironclad coats up to `laserBounces` times within
      * `laserRange` units in all, `laserRadius` thick. Others draw it from the snapshot for `laserBeamMs`. */

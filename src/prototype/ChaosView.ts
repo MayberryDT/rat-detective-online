@@ -262,7 +262,7 @@ export class ChaosView {
     private readonly impactPoint=new THREE.Vector3();
     private readonly impactNormal=new THREE.Vector3();
     private readonly audioPosition=new THREE.Vector3();
-    onPresentedShot?: (id:string,p:Vec3Data,radius:number)=>void;
+    onPresentedShot?: (id:string,p:Vec3Data)=>void;
     /** A launched rat's landing, raised when the playback shows it (your own at once); `speed` is its fall speed. */
     onLanding?: (p:Vec3Data,speed:number)=>void;
     /** R3: a shot jolted a body at `p` (for its squeak). */
@@ -767,8 +767,7 @@ export class ChaosView {
         for(let i=0;i<Math.min(shots.length,CHAOS_TUNING.maxShots);i++){
             const shot=shots[i];
             const p=this.localShots.owns(shot.id)||!(this.extrapolate&&this.presentation.shot(shot.id,renderTime,this.presented,shot.owner===this.myId?this.localMuzzle:undefined))?shot.p:this.presented.p;
-            this.onPresentedShot?.(shot.id,p,shot.radius??BALL_RADIUS);
-            const scale=(shot.radius??BALL_RADIUS)/BALL_RADIUS;
+            this.onPresentedShot?.(shot.id,p);
             this.ballPose.position.set(p.x,p.y,p.z);
             let quirk=shot.quirk;
             if(!quirk&&bad&&shot.owner&&!heldWeapon(s.buffs,shot.owner,s.time)){quirk=badRound(shot.id);if(quirk!=='superball'&&shot.wallBounced)quirk=undefined;}
@@ -782,7 +781,7 @@ export class ChaosView {
             else if(quirk==='corkscrew')spin=5;
             else if(quirk==='snake')spin=2;
             this.ballPose.rotation.set(now*.015*spin+i,now*.009*spin,quirk==='snake'?Math.sin(now*.02)*.8:0);
-            this.ballPose.scale.setScalar(scale*look);this.ballPose.updateMatrix();
+            this.ballPose.scale.setScalar(look);this.ballPose.updateMatrix();
             const own=shot.owner===this.myId||!!(shot.owner&&this.resolveRat(shot.owner)?.isPlayer);
             // Clarity: other rats' balls that are not coming at you draw dimmer, so the ones that are stand out.
             const calm=!own&&!this.threatens(p,shot.v);
@@ -796,14 +795,14 @@ export class ChaosView {
             batch.setColorAt(ballIndex,hot?(own?this.heat.own:calm?this.heat.calm:this.heat.enemy)[level]!:carried?(calm?this.calmCarrierTint:this.carrierTint):calm?this.calmTint:this.fullTint);
             // Your own hot ball gets no enemy glow, but once it has heated past red it trails its heat too.
             if(!own||quirk||carried||hot&&level>0){
-                this.ballPose.scale.setScalar(scale*look*(hot?1.14+.08*level:carried?1.22:1));this.ballPose.updateMatrix();
+                this.ballPose.scale.setScalar(look*(hot?1.14+.08*level:carried?1.22:1));this.ballPose.updateMatrix();
                 if(!own||carried&&!hot){const rim=hot||carried?this.chargedGlow:this.dangerGlow,at=rim.count++;rim.setMatrixAt(at,this.ballPose.matrix);rim.setColorAt(at,hot?(calm?this.heat.calmRim:this.heat.rim)[level]!:carried?(calm?this.calmCarrierRim:this.carrierRim):calm?this.calmTint:this.fullTint);}
                 this.trailDirection.set(shot.v.x,shot.v.y,shot.v.z);
                 if(this.trailDirection.lengthSq()>.01){
                     const speed=this.trailDirection.length();this.trailDirection.divideScalar(speed);
                     // A carrier's streak: about four ball lengths of case red, twice as thick.
-                    const length=hot?heatStreak(speed):carried?8*BALL_RADIUS*scale*look:Math.min(2.4,.85*Math.sqrt(scale)),width=(carried&&!hot?1:.5)*Math.sqrt(scale);
-                    this.trailPose.position.copy(this.ballPose.position).addScaledVector(this.trailDirection,-scale*BALL_RADIUS-length/2);
+                    const length=hot?heatStreak(speed):carried?8*BALL_RADIUS*look:.85,width=carried&&!hot?1:.5;
+                    this.trailPose.position.copy(this.ballPose.position).addScaledVector(this.trailDirection,-BALL_RADIUS-length/2);
                     this.trailPose.quaternion.setFromUnitVectors(this.trailAxis,this.trailDirection);
                     this.trailPose.scale.set(width,width,length/.2);this.trailPose.updateMatrix();
                     const at=this.dangerTrails.count++;this.dangerTrails.setMatrixAt(at,this.trailPose.matrix);
