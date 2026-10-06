@@ -1,5 +1,5 @@
 import * as C from 'cannon-es';
-import {trapLaunch,trapAdvance,trapVelocity,TRAP_THROW} from './trapThrow';
+import {trapOrigin,trapLaunch,trapAdvance,trapVelocity,TRAP_THROW} from './trapThrow';
 import {resolveShotPattern,tommyHeat} from './shotPattern';
 import {laserPath,type LaserCast} from './laser';
 import type {WorldFoleyCue} from './foleyEvents';
@@ -997,8 +997,9 @@ export class ChaosSimulation {
     placeTrap(owner:string,direction:Vec3Data,origin?:Vec3Data,shotId?:string):boolean{
         const rat=this.players.get(owner);
         if(!rat||rat.hp<=0||this.weapon(owner)!=='mousetrap')return false;
-        const start=data(origin??{x:rat.x,y:rat.y+1.3,z:rat.z});
-        if(![rat.x,rat.y,rat.z,start.x,start.y,start.z,direction.x,direction.y,direction.z].every(Number.isFinite)||Math.hypot(direction.x,direction.y,direction.z)<.001||outsideCity(rat.x,rat.z))return false;
+        const supplied=origin??{x:rat.x,y:rat.y+1.3,z:rat.z};
+        const start=trapOrigin(rat,direction,this.world,{x:rat.meshQx,y:rat.meshQy,z:rat.meshQz,w:rat.meshQw});
+        if(![rat.x,rat.y,rat.z,supplied.x,supplied.y,supplied.z,start.x,start.y,start.z,direction.x,direction.y,direction.z].every(Number.isFinite)||Math.hypot(direction.x,direction.y,direction.z)<.001||outsideCity(rat.x,rat.z))return false;
         // A legal rat at the edge may have its paw just outside it: clip launch, never consume without a board.
         start.x=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,start.x));start.z=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,start.z));
         for(const [id,trap] of this.traps)if(trap.state.owner===owner)this.removeTrap(id);

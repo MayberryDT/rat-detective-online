@@ -1,3 +1,4 @@
+import {trapOrigin} from '../shared/trapThrow';
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
@@ -130,8 +131,14 @@ export class CheeseGun {
             finalTarget = targetPoint.clone();
         }
 
-        // ── Spawn Origin ── (a Mousetrap press sets the trap down: no recoil, no report)
-        if (weapon !== 'mousetrap') owner.playShootAnimation(finalTarget);
+        // Trap aim is sampled from the rendered camera, not the hidden pistol muzzle.
+        if(weapon==='mousetrap'){
+            const direction=this.camera&&owner===this.playerEntity?this.aimRay.ray.direction.clone():finalTarget.clone().sub(owner.mesh.position.clone().add(new THREE.Vector3(0,1.3,0))).normalize();
+            const origin=trapOrigin(owner.mesh.position,direction,this.world,owner.mesh.quaternion);
+            return {shotId:createShotId(),origin,direction:{x:direction.x,y:direction.y,z:direction.z}};
+        }
+        // ── Ordinary gun spawn origin ──
+        owner.playShootAnimation(finalTarget);
         const origin = owner.getMuzzlePosition();
         const shotId = createShotId();
         this.fireSound(origin, owner === this.playerEntity, weapon);
