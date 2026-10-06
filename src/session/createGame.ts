@@ -1,3 +1,5 @@
+import {HeavyCheese} from '../feel/HeavyCheese';
+import {TrapField} from '../prototype/TrapVisual';
 import * as THREE from 'three';
 import {loadCameos,warmCameoBuffers} from '../cameos/loadCameos';
 import type {CameoView} from '../cameos/CameoView';
@@ -71,6 +73,7 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         // flying cheese and the supplies' restock dials (one per kind: each draws its shared icon); warm them too.
         const shots=createShotDraws(1),restocks=PICKUP_KINDS.map(kind=>new PickupRespawnVisual(kind));stage.scene.add(shots.root,...restocks.map(dial=>dial.root));
         street.push(new PressureMachine(stage.scene),new DispatchPillars(stage.scene),new CaseBeacon(stage.scene),new JurisdictionZones(stage.scene),shots,...restocks);
+        const heavyWarm=new HeavyCheese(stage.scene),trapWarm=new TrapField(stage.scene,true);trapWarm.apply([{id:'warm-trap',owner:'warm',x:0,y:0,z:0,yaw:0,hp:8,at:0}],false);street.push(heavyWarm,trapWarm);
         const standIns=stage.scene.children.filter(object=>!scenery.has(object));
         for(const model of models)stage.world.removeBody(model.body);
         if(early)await issuePrograms(renderer,stage.scene,stage.camera,signal,standIns);

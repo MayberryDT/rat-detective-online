@@ -182,6 +182,7 @@ export class GameSession {
     private resultsShownAt=0;
     private pendingVictory?:{message:Extract<ServerMessage,{type:'gameWon'}>;at:number};
     private lastChaos: ChaosState | null = null;
+    private readonly caughtTraps=new Set<string>();
     /** Launch events already given their scream and view kick (L5/L6). */
     private readonly feltLaunches = new Set<string>();
     /** Code Violation: each rat's dud deadline as last seen (a new one goes in the feed once), after the first snapshot. */
@@ -222,6 +223,10 @@ export class GameSession {
         this.feel.attach(this.stage.renderer.domElement, listener, touchControlsAvailable());
         this.baseExposure=this.stage.renderer.toneMappingExposure;
         this.feel.attachScene(scene);
+        this.feel.enableHeavyCheese(scene);
+        this.gun.localReport=()=>this.feel.heavyReport();
+        this.gun.localWeaponReport=kind=>this.feel.heavyArsenal(kind);
+        document.body.classList.add('heavy-cheese');
         this.story=new IncidentStory(typeof document==='undefined'?undefined:document,listener.context as AudioContext);
         this.lineup=new PoliceLineup(scene,typeof document==='undefined'?undefined:document,()=>this.feel.flashbulb());
         this.remotes = new RemotePlayers(scene, world);
@@ -353,9 +358,10 @@ export class GameSession {
         }
         if(!shot)return;
         this.feel.shot(weapon);
+        if(weapon!=='mousetrap')this.feel.heavyWeaponLaunch(new THREE.Vector3(shot.origin.x,shot.origin.y,shot.origin.z),new THREE.Vector3(shot.direction.x,shot.direction.y,shot.direction.z),weapon);
         if(weapon!=='mousetrap'&&this.carriesHotCase(this.myId))this.feel.carrierShot();
         if(weapon!=='mousetrap')this.feel.fired(shot.shotId,shot.origin,shot.direction,true,this.stage.camera,now,weapon!==undefined);
-        if(weapon==='tommy-gun')this.feel.tommyRound(shot.origin,shot.direction,this.stage.camera);
+        if(weapon==='tommy-gun'){const model=this.rat.entity.mesh.getObjectByName('rat-weapon-tommy-gun');const port=model?.localToWorld(new THREE.Vector3(.18,.13,0));this.feel.tommyRound(shot.origin,shot.direction,this.stage.camera,port);}
         const movement=this.movementInput(),viewAt=this.remotes.viewAt?.(shot.origin,shot.direction);
         if (movement && this.transport.send({type:'shoot', ...shot, movement, ...(viewAt===undefined?{}:{viewAt})})) {
             this.rememberMovement(movement,now);
@@ -377,7 +383,7 @@ export class GameSession {
         this.serverOffset = message.serverTime - Date.now();
         this.foleyWorld.reset();
         // The scoreboard has already taken this welcome's round (its results when the round is won).
-        this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults(false);
+        this.caughtTraps.clear();this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.pendingVictory=undefined;this.pendingLineup=undefined;this.lineup?.end();this.endResults(false);
         this.cameos?.reset();
         this.bots?.dispose();this.bots=null;
         this.chaos?.dispose();this.chaos=null;
@@ -422,17 +428,18 @@ export class GameSession {
             this.chaos.onPresentedShot=(id,p)=>this.cameos?.observeShot(id,p,this.gun.sceneryClear);
             // W3: the trap's own foley where it happens: set down, SNAP with a spring twang, splinters per hit, a sad boing as it breaks.
             this.chaos.onTrap=(event,trap)=>{
-                if(event==='launch'){this.feedback.play('pickup-slap',trap);return;}
-                this.feedback.play(event==='set'?'trap-set':event==='snap'?'trap-snap':event==='hit'?'trap-splinter':'trap-break',trap);
+                if(event==='launch'){if(trap.owner===this.myId)this.feel.heavyArsenal('trap-launch');return;}
+                if(event==='set'&&trap.owner===this.myId){this.feel.heavyArsenal('mousetrap');return;}
+                if(event==='snap'){if(trap.owner===this.myId){this.feel.heavyArsenal('trap-snap');this.feel.heavyTrapCaught(TRAP_SPOT.set(trap.x,trap.y,trap.z),this.stage.camera);}if(trap.held){if(trap.owner===this.myId)this.caughtTraps.add(trap.held);const victim=trap.held===this.myId?this.rat?.entity:this.remotes.get(trap.held);victim?.heavyReaction(new THREE.Vector3(0,0,-1));}return;}
+                this.feedback.play(event==='set'?'trap-set':event==='hit'?'trap-splinter':'trap-break',trap);
                 // The SNAP! where a trap catches a rat (the word always for its owner and anyone near).
-                if(event==='snap')this.feel.trapSnapped(TRAP_SPOT.set(trap.x,trap.y,trap.z),this.stage.camera,trap.owner===this.myId);
             };
             this.chaos.onLanding=(p,speed)=>this.feel.landed(LANDING_POSITION.set(p.x,p.y,p.z),speed,this.stage.camera);
             this.chaos.onLauncherFired=(machine,boost)=>this.launcherFired(machine,boost);
             this.chaos.onCorpseJolt=p=>this.feel.corpseJolt(p,this.stage.camera);
             this.chaos.onSuperball=p=>this.feel.superballBounce(p);
             this.chaos.onCasePaper=(p,kind)=>this.feel.casePaper(p,kind);
-            this.chaos.onClaim=(kind,camera,lockMs)=>this.feel.claimed(kind,this.rat?.entity,camera,lockMs);
+            this.chaos.onClaim=(kind,camera,lockMs)=>{this.feel.claimed(kind,this.rat?.entity,camera,lockMs);if(['laser','tommy-gun','mousetrap'].includes(kind)){this.feel.heavyPickup(kind);this.feel.heavyArsenal(kind==='laser'?'laser-pickup':kind==='tommy-gun'?'tommy-pickup':'trap-pickup');}};
             this.chaos.onTriggerHit=(_machine,at,busy,level)=>this.feel.triggerHit(at,busy,level,this.stage.camera);
             this.chaos.onDispatchShot=(_station,at)=>this.feel.dispatchShot(at,this.stage.camera);
             this.chaos.onVentErupted=vent=>{
@@ -496,6 +503,7 @@ export class GameSession {
                 this.rat?.applyPressureLaunches(message.state,this.myId);this.chaos?.apply(message.state);
                 this.feelStings(this.lastChaos,message.state);
                 this.feelLaunches(message.state);
+                for(const id of this.caughtTraps)if((message.state.buffs?.[id]?.trappedUntil??0)<=message.state.time){this.caughtTraps.delete(id);this.feel.heavyArsenal('trap-release');}
                 this.lastChaos = message.state;
                 break;
             case 'welcome': this.admin.reset(); this.welcome(message); break;
@@ -545,8 +553,20 @@ export class GameSession {
                 if(message.accepted&&message.pickup==='hustle'&&!message.faulty)this.rat?.setLegs(PICKUP_TUNING.hustleMultiplier);
                 break;
             case 'playerDamaged': {
-                if(message.hp>0 && message.attackerId===this.myId && message.id!==this.myId){const victim=this.remotes.get(message.id);this.hud.showHitMarker(victim?victim.hp-message.hp:1);this.foley.play('hit-confirm');duckWorld(this.stage.listener.context,.5);if(victim)this.feel.hitDealt(victim.mesh.position,this.stage.camera);}
                 const entity = message.id === this.myId ? this.rat?.entity : this.remotes.get(message.id);
+                // Only the ordered authoritative health decrease owns this positive body response.
+                if(entity&&!entity.dead&&message.hp<entity.hp&&message.attackerId&&message.attackerId!==message.id){
+                    const attacker=message.attackerId===this.myId?this.rat?.entity:this.remotes.get(message.attackerId);
+                    const incoming=attacker?entity.mesh.position.clone().sub(attacker.mesh.position).normalize():new THREE.Vector3(0,0,1);
+                    entity.heavyReaction(incoming,message.weapon);
+                    if(message.attackerId===this.myId){
+                        if(message.hp>0)this.hud.showHitMarker(entity.hp-message.hp);
+                        const at=entity.mesh.position.clone().add(new THREE.Vector3(0,1,0)),normal=incoming.clone().negate();
+                        this.feel.heavyImpact(at,normal,entity.mesh);
+                        if(message.weapon==='laser'||message.weapon==='tommy-gun'){this.feel.heavyArsenal(message.weapon==='laser'?'laser-hit':'tommy-hit');this.feel.heavyWeaponImpact(at,normal,message.weapon);}
+                        duckWorld(this.stage.listener.context,message.hp===0?1:.5);
+                    }
+                }
                 // K3: a buffed carrier's hit sprays case-red sparks out of its victim, away from the carrier.
                 if(entity&&!entity.dead&&message.attackerId&&message.attackerId!==message.id&&this.carriesHotCase(message.attackerId)){
                     const attacker=message.attackerId===this.myId?this.rat?.entity:this.remotes.get(message.attackerId);
@@ -570,8 +590,8 @@ export class GameSession {
                         const direction=new THREE.Vector3();
                         if(attacker)direction.copy(entity.mesh.position).sub(attacker.mesh.position).setY(0);
                         if(message.id===this.myId)this.feel.hurt(entity.hp-message.hp,entity.mesh.position,attacker?.mesh.position,this.stage.camera);
-                        if(message.id===this.myId||message.attackerId===this.myId)this.feel.impact(entity,message.id===this.myId);
-                        entity.takeDamage(entity.hp - message.hp, direction);
+                        entity.takeDamage(entity.hp - message.hp, direction, true);
+                        if(message.weapon==='laser')entity.heavyReaction(direction,message.weapon);
                     }
                 }
                 break;
@@ -592,7 +612,7 @@ export class GameSession {
                 // The kill event owns lethal confirmation, independently of the
                 // damage packet or whether world playback already hid the rat.
                 const headshot=message.headshot===true,bank=message.bounces?message.bounces>=2?'TRICK SHOT':'BANK SHOT':undefined;
-                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName,headshot,bank);this.foley.play('hit-confirm');duckWorld(this.stage.listener.context,1);const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId,headshot);}
+                if(message.killerId===this.myId && message.victimId!==this.myId){this.hud.showKillConfirmation(message.victimName,headshot,bank);duckWorld(this.stage.listener.context,1);const victim=this.remotes.get(message.victimId);this.rat?.entity.nod();if(victim&&this.rat)this.feel.killed(victim.mesh.position,!this.rat.grounded&&this.rat.entity.mesh.position.y>4,this.stage.camera,performance.now(),this.lastChaos?.case?.owner===message.victimId,headshot);}
                 // K3: a kill while you carry the buffed case: the heartbeat surges and CASE CLOSED · HEALED.
                 if(message.killerId===this.myId&&message.victimId!==this.myId&&this.carriesHotCase(this.myId))this.feel.caseKillHealed();
                 // A Crossfire bank kill: its killer's BANK SHOT (above) and slow-motion; killer and victim both see the ball's path.
@@ -680,7 +700,7 @@ export class GameSession {
                 this.recorder.reset();
                 this.roundWon=false;this.rat?.entity.setPowerups(0,0,0);this.rat?.entity.resetReactions();this.rat?.entity.setStreak(0);
                 for(const {entity} of this.remotes.rats.values()){entity.setPowerups(0,0,0);entity.resetReactions();entity.setStreak(0);}
-                this.rat?.setLegs(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); if(!keep)this.hud.hideVictory(); this.hud.hideRespawn(); break;
+                this.rat?.setLegs(1);this.gun.setProtectedRats(new Set());this.clearInput();this.foleyWorld.reset();this.caughtTraps.clear();this.feel.reset();this.feel.resetRound();this.story?.reset();headlines.reset();this.gun.clearProjectiles();this.chaos?.resetProjectiles(); if(!keep)this.hud.hideVictory(); this.hud.hideRespawn(); break;
             }
             case 'error': this.hud.setConnection('notice', message.message); break;
             case 'pong': break;
@@ -868,10 +888,11 @@ export class GameSession {
             // A fullscreen exhibit takes the screen: the live frame is not drawn under it.
             if(!this.replay?.fullscreen){
                 this.feel.beforeRender(camera);
-                this.stats?.gpu.begin();
-                renderer.render(scene, camera);
-                this.stats?.gpu.end();
-                this.feel.afterRender(camera);
+                this.feel.heavyBeforeRender(this.rat?.entity.mesh??scene);
+                const actors=[...(this.rat?[this.rat.entity]:[]),...[...this.remotes.rats.values()].map(r=>r.entity)];
+                for(const actor of actors)actor.applyHeavyRender();
+                try{this.stats?.gpu.begin();renderer.render(scene,camera);this.stats?.gpu.end();}
+                finally{this.feel.heavyAfterRender();for(const actor of actors)actor.restoreHeavyRender();this.feel.afterRender(camera);}
             }
             this.replay?.render();
             if(this.transport.state==='playing')qualityFrame(now);

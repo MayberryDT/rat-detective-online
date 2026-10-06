@@ -93,3 +93,8 @@ body.reduced-motion #crosshair.kill-confirmed.headshot { transform:translate(-50
     #crosshair.kill-confirmed.headshot { animation:none;transform:translate(-50%,-50%) rotate(45deg) scale(2.5); }
     #kill-confirmation { animation:none; }
 }
+
+/* Accepted HeavyCheese contact attack/settle; the geometric aim center is unchanged. */
+body.heavy-cheese #crosshair.hit-confirmed{animation:heavy-contact 180ms ease-out both}
+@keyframes heavy-contact{0%{transform:translate(-50%,-50%) rotate(45deg) scale(2.7)}18%,38%{transform:translate(-50%,-50%) rotate(45deg) scale(1.85)}100%{transform:translate(-50%,-50%) rotate(45deg) scale(1)}}
+body.reduced-motion.heavy-cheese #crosshair.hit-confirmed{animation:none;transform:translate(-50%,-50%) rotate(45deg) scale(1.6)}

@@ -153,7 +153,7 @@ export class ChaosView {
     private readonly extraCases=new Map<string,ExtraCaseVisual>();
     private readonly pickups=new Map<string,PickupVisual>();
     /** Placed Mousetraps, pooled. */
-    private readonly traps=new TrapField(this.root);
+    private readonly traps=new TrapField(this.root,true);
     /** A placed trap set down, snapped, hit or broke (after the view's first state), for sounds and the SNAP. */
     onTrap?:(event:TrapEvent,trap:TrapState)=>void;
     /** Rats shown holding a special weapon. */
@@ -318,7 +318,7 @@ export class ChaosView {
             document.body.appendChild(bar);
         }
         this.impacts=new CheeseImpactEffects(scene);this.crossfire=new CrossfireVisual(scene,this.synth);
-        this.beams=new LaserBeamVisual(scene,(cue,at)=>this.feedback?.(cue,at));
+        this.beams=new LaserBeamVisual(scene);
         this.traps.onEvent=(event,p)=>this.onTrap?.(event,p);
     }
     /** Only the authoritative heal event confirms this instant pickup. */
