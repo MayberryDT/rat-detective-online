@@ -188,9 +188,10 @@ class TrapVisual {
         p.bait.position.y=TRAP_PIVOTS.bait[1]+hop*.55;p.bait.rotation.y=hop*.8;
         // Battered: springs askew, cracks open, corners gone.
         const armed=this.heavy&&t>=REARM&&!playerPreferences().current.reducedMotion;
-        const tension=armed?Math.sin(this.setAge*3.4)*.045:0;
+        const phase=Number.isFinite(this.setAge)?this.setAge*3.4:0;
+        const tension=armed?Math.sin(phase)*.045:0;
         p.springLeft.rotation.x=damage*.5+tension;p.springRight.rotation.x=-damage*.35-tension;
-        if(armed){p.bait.position.y+=.035*(1+Math.sin(this.setAge*3.4));p.arm.rotation.x=-.07-.025*Math.sin(this.setAge*3.4);}
+        if(armed){p.bait.position.y+=.035*(1+Math.sin(phase));p.arm.rotation.x=-.07-.025*Math.sin(phase);}
 
         for(let i=0;i<CRACK_PIECES.length;i++)p[CRACK_PIECES[i]!].visible=damage>=CRACKS[i]!;
         for(let i=0;i<CORNER_PIECES.length;i++)p[CORNER_PIECES[i]!].visible=i>=this.corners;
