@@ -387,8 +387,10 @@ export class ChaosView {
         this.traps.clear();this.impacts.clear();this.crossfire.clear();
         this.gripSwing=0;this.gripHitAt=-Infinity;this.sparkAt=0;
     }
+    get trapPending():boolean{return this.traps.pending;}
     /** Your trigger: `weapon` is the held special weapon (with the Tommy's heat); `beam` your Laser's predicted path. */
     fire(shot:ShotDescriptor,weapon?:ShotWeapon,beam?:LaserBeam['points']):void {
+        if(weapon?.kind==='mousetrap'){this.traps.predict(this.myId,shot);return;}
         if(beam)this.beams.predict(shot.shotId,beam);
         if(!this.extrapolate)return;
         const dispatch=this.state?.dispatch;
@@ -436,7 +438,7 @@ export class ChaosView {
         this.deathStyles.set(victimId,{style,headshot,at:this.clock()});
         if(this.deathStyles.size>32)this.deathStyles.delete(this.deathStyles.keys().next().value!);
     }
-    shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {this.localShots.result(message);this.reactions.shotResult(message);}
+    shotResult(message:Extract<ServerMessage,{type:'shotResult'}>):void {if(message.outcome==='rejected'){this.traps.reject(message.shotId);if(this.state)this.syncWeapons(this.state);}this.localShots.result(message);this.reactions.shotResult(message);}
     /** Use the exact segment crossed this display frame so high-speed movement
      * cannot step over a small pickup between render samples. */
     interaction(from:Vec3Data,to:Vec3Data,fullHealth:boolean):InteractionCandidate|undefined {
@@ -525,7 +527,7 @@ export class ChaosView {
         }
         this.syncPickups(state);
         this.syncWeapons(state);
-        this.traps.apply(state.traps,previous!==undefined);
+        this.traps.apply(state.traps,previous!==undefined,state.time);
         this.noteLocalBuffs(state);
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);
@@ -599,7 +601,7 @@ export class ChaosView {
         for(const id in state.buffs){
             const weapon=heldWeapon(state.buffs,id,state.time);
             // A new weapon is shown immediately; acquisition does not lock the trigger.
-            if(weapon){this.resolveRat(id)?.setWeapon(weapon);this.armed.add(id);}
+            if(weapon){if(id===this.myId&&weapon==='mousetrap'&&this.traps.pending)continue;this.resolveRat(id)?.setWeapon(weapon);this.armed.add(id);}
         }
     }
     /** Announce a claim locally when the authoritative buff first appears; a new view's first state (a reconnect
@@ -614,7 +616,7 @@ export class ChaosView {
         }
         const weapon=entryWeapon(mine,state.time),until=mine?.weaponUntil??0;
         if(seen&&weapon&&(weapon!==this.localWeapon||until!==this.localWeaponUntil)){this.pickupFeedback(weapon);}
-        // W3: the trap is up in your paws: the next press sets it down.
+        // W3: the trap is up in your paws: the next press launches it.
         this.localWeapon=weapon;this.localWeaponUntil=until;
         // A Code Violation dud: the slap of a claim, then the faulty fitting's zap.
         const dud=entryFaulty(mine,state.time),dudUntil=dud?mine!.faultyUntil!:0;
@@ -630,7 +632,7 @@ export class ChaosView {
         const mine=activeBuffs(buffs,this.myId,now);
         if(!this.buffBar||typeof this.buffBar.replaceChildren!=='function')return;
         for(const kind of TIMED_PICKUPS)this.showCard(kind,mine[BUFF_FIELD[kind]],now);
-        // One special weapon at most: a timed one has a clock like a supply, the Mousetrap is held until set down.
+        // One special weapon at most: a timed one has a clock like a supply, the Mousetrap is held until thrown.
         for(const kind of WEAPON_KINDS)this.showCard(kind,mine.weapon===kind?mine.weaponUntil??Infinity:undefined,now);
         const healing=this.buffCards.get('quick-fix');
         if(this.clock()<this.healingUntil){

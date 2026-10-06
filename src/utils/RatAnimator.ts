@@ -39,7 +39,7 @@ const HIP_JOINT = RAT_SPINE_JOINTS[0], WAIST = RAT_SPINE_JOINTS[1];
 
 /** L5 hat blow-off, seconds from lift to landing back on the head. */
 const HAT_BLOW = 1.1;
-/** W3, taking up a Mousetrap: seconds the gun takes to drop away, and the whole swap (the trigger's lockout). */
+/** W3, taking up a Mousetrap: seconds the gun takes to drop away, and the legacy cosmetic swap (never a trigger lockout). */
 const TRAP_SWAP = {out: .3, total: WEAPON_TUNING.trapLockMs / 1000} as const;
 
 export const RAT_CARRY_SHOULDER = new THREE.Vector3(.43, 1.23, .02);
@@ -107,6 +107,8 @@ export class RatAnimator {
     private hitAge = 10;
     private heavyAge=10;
     private heavySide=1;
+    private heavyLaser=false;
+    private zapSaved:Array<{part:THREE.Object3D;r:THREE.Euler;s:THREE.Vector3}>=[];
     /** Polish 11: fedora knocked askew by a hit, then settling; hidden after it pops off. */
     private hatKnockAge = 10;
     /** L5: a launcher blast lifts the hat off, spins it and drops it back on. */
@@ -268,8 +270,8 @@ export class RatAnimator {
     }
 
     /** Opt-in confirmed reaction: secondary parts only, no weapon/body/root transform. */
-    heavyHit(direction:THREE.Vector3):void {
-        this.heavyAge=0;
+    heavyHit(direction:THREE.Vector3,weapon?:string):void {
+        this.heavyLaser=weapon==='laser';this.heavyAge=0;
         this.parentRotation.copy(this.root.quaternion).invert();
         this.aimDirection.copy(direction).normalize().applyQuaternion(this.parentRotation);
         this.heavySide=this.aimDirection.x<0?-1:1;
@@ -279,6 +281,20 @@ export class RatAnimator {
     private heavySaved:number[]=[];
     /** Draw-only offsets: restore before any input/raycast can run. */
     applyHeavyRender():void {
+        if(this.heavyLaser){
+            if(this.heavyAge>=.45)return;
+            const reduced=playerPreferences().current.reducedMotion,t=this.heavyAge,k=Math.exp(-t*7)*(reduced?.2:1),twitch=Math.sin(t*40)*k;
+            for(const rig of this.rigs)for(const index of [0,1,2,3,6,7,8]){
+                const part=rig[index].part;this.zapSaved.push({part,r:part.rotation.clone(),s:part.scale.clone()});
+                if(index===0){part.scale.y*=1+.18*k;part.scale.x*=1-.12*k;part.rotation.x-=.22*k;part.rotation.z+=this.heavySide*.22*twitch;}
+                else if(index===1){part.rotation.x-=.48*k;part.rotation.z+=.18*twitch;}
+                else if(index===2){part.rotation.z+=.3*twitch;}
+                else if(index===3){part.rotation.z+=.4*twitch;}
+                else if(index===8){part.rotation.z-=.55*k;}
+                else {part.rotation.x-=1.15*k;part.rotation.z+=(index===6?1:-1)*.3*twitch;}
+            }
+            this.root.updateMatrixWorld(true);return;
+        }
         if(this.heavyAge>=.18||playerPreferences().current.reducedMotion)return;
         const h=this.heavyAge,w=h<.025?Math.max(.25,h/.025):h<.055?1:Math.max(0,1-(h-.055)/.125)**2;
         for(const rig of this.rigs){
@@ -289,7 +305,8 @@ export class RatAnimator {
         }
     }
     restoreHeavyRender():void {
-        if(!this.heavySaved.length)return;
+        for(const {part,r,s} of this.zapSaved){part.rotation.copy(r);part.scale.copy(s);}this.zapSaved.length=0;
+        if(!this.heavySaved.length){this.root.updateMatrixWorld(true);return;}
         let i=0;for(const rig of this.rigs){
             rig[1].part.rotation.x=this.heavySaved[i++];rig[1].part.rotation.z=this.heavySaved[i++];
             rig[2].part.rotation.z=this.heavySaved[i++];rig[6].part.rotation.x=this.heavySaved[i++];rig[7].part.rotation.x=this.heavySaved[i++];
@@ -329,7 +346,7 @@ export class RatAnimator {
     setHustle(active:boolean):void {this.hustle=active;}
     /** A special weapon replaces the pistol in hand (the Mousetrap is carried across the chest instead); the muzzle
      * moves to the new barrel's end, so shots and the flash leave from it. Undefined puts the pistol back. `swap` (a
-     * Mousetrap just taken, in its lockout) plays W3's swap: the gun in hand drops away, then the trap heaves up big. */
+     * Mousetrap just taken; legacy cosmetic swap) plays W3's swap: the gun in hand drops away, then the trap heaves up big. */
     setWeapon(kind?: WeaponKind, swap = false): void {
         if (kind === this.weapon) return;
         if (this.outPending) this.dropOutgoing();

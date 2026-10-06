@@ -41,7 +41,7 @@ export interface ReplayStageDeps {
     recorder:ReplayRecorder;
 }
 
-const TRAP_CUES={set:'trap-set',snap:'trap-snap',hit:'trap-splinter',break:'trap-break'} as const;
+const TRAP_CUES={launch:'pickup-slap',set:'trap-set',snap:'trap-snap',hit:'trap-splinter',break:'trap-break'} as const;
 type Track={times:number[];poses:number[]};
 const POSE:SnapshotPose={x:0,y:0,z:0,qx:0,qy:0,qz:0,qw:1};
 const QA=new THREE.Quaternion(),QB=new THREE.Quaternion();

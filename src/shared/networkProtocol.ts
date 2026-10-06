@@ -287,7 +287,7 @@ export type ServerMessage =
       rewindMs?:number; targetDelta?:number }
   | { type:'pickupResult'; interactionId:string; target:PickupTarget; targetId:string; accepted:boolean; at:number; tick:number;
       epoch:string; playerId:string; pickup?:import('./pickups').PickupKind; effectUntil?:number; faulty?:true; reason?:PickupRejectReason }
-  | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: EnvironmentCause }
+  | { type: 'playerDamaged'; id: string; hp: number; attackerId: string | null; cause?: EnvironmentCause; weapon?:WeaponKind }
   | { type: 'playerHealed'; id: string; hp: number; cause?: HealCause }
   | {
       type: 'playerDied';

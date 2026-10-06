@@ -52,7 +52,9 @@ export class FeelDirector {
     private heavy?:HeavyCheese;
     /** Review opt-in only. Normal sessions never call this. */
     enableHeavyCheese(scene:THREE.Scene):void {this.heavy?.dispose();this.heavy=new HeavyCheese(scene);}
-    heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {if(this.heavy)this.sound.arsenal(kind);}
+    /** Range W1 only: no city dust, lights or unrelated scene systems. */
+    attachTommy(scene:THREE.Scene):void {this.tommy?.dispose();this.tommy=new TommyJuice(scene);}
+    heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {if(this.heavy)this.sound.arsenal(kind);}
     /** Real catch only: projected punctuation, without moving the aiming view. */
     heavyTrapCaught(at:THREE.Vector3,view:THREE.Camera):void {if(this.heavy)this.word('SNAP!',at,view,performance.now(),true);}
     heavyPickup(kind:string):void {this.heavy?.pickup(kind);}
@@ -344,10 +346,10 @@ export class FeelDirector {
     /** W1, each frame: your Tommy's trigger is held (its rounds rattle the view between kicks). */
     tommyHeld(held:boolean):void {this.rattle=held&&this.state.on('tommyGun');}
     /** W1: any rat's Tommy round within range: muzzle flash and a flung casing. */
-    tommyRound(origin:Vec3Data,direction:Vec3Data,view:THREE.Camera):void {
+    tommyRound(origin:Vec3Data,direction:Vec3Data,view:THREE.Camera,port?:Vec3Data):void {
         if(!this.state.on('tommyGun'))return;
         const reach=FEEL.tommyGun.params.range;
-        if(Math.hypot(origin.x-view.position.x,origin.y-view.position.y,origin.z-view.position.z)<reach)this.tommy?.fired(origin,direction);
+        if(Math.hypot(origin.x-view.position.x,origin.y-view.position.y,origin.z-view.position.z)<reach)this.tommy?.fired(origin,direction,port);
     }
     /** W3: your trap would not go down here: a small shake and the word, at the spot you tried. */
     trapRefused(at:THREE.Vector3,view:THREE.Camera,now=performance.now()):void {

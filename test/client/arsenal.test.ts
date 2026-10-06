@@ -112,12 +112,15 @@ describe('the Mousetrap',()=>{
     const traps=(sim:ChaosSimulation)=>sim.snapshot(false).traps??[];
     /** Take up a Mousetrap and press immediately through shared authority. */
     const setDown=(sim:ChaosSimulation,p:PlayerData,direction={x:0,y:0,z:1})=>{arm(sim,p.id,'mousetrap');return sim.placeTrap(p.id,direction);};
-    it('is set down ahead, never catches its owner, and holds any other rat, coat or not, without harm',()=>{
+    const land=(sim:ChaosSimulation)=>{for(let i=0;i<240&&traps(sim).some(t=>t.flight);i++)sim.step(1/60,sim.time+1000/60);expect(traps(sim).every(t=>!t.flight&&Number.isFinite(t.x+t.y+t.z))).toBe(true);};
+    it('launches immediately, lands a short distance ahead, never catches its owner, and holds another rat without harm',()=>{
         const {sim,a,b,hits}=fixture();
         expect(setDown(sim,a)).toBe(true);
+        expect(traps(sim)[0]?.flight).toBeDefined();
+        expect(sim.snapshot(false).buffs?.b?.trappedUntil).toBeUndefined();land(sim);
         const [trap]=traps(sim);
         expect(trap).toMatchObject({owner:'a',hp:W.trapHp});
-        expect(Math.hypot(trap!.x-a.x,trap!.z-(a.z+W.trapReach))).toBeLessThan(1);
+        expect(Math.hypot(trap!.x-a.x,trap!.z-a.z)).toBeGreaterThan(4);expect(Math.hypot(trap!.x-a.x,trap!.z-a.z)).toBeLessThan(8);
         expect(weaponOf(sim,'a')).toBeUndefined();
         stand(a,trap!);sim.step(1/60,sim.time+16);
         expect(sim.snapshot(false).buffs?.a?.trappedUntil).toBeUndefined();
@@ -137,16 +140,16 @@ describe('the Mousetrap',()=>{
         a.hp=0;sim.step(1/60,sim.time+16);
         expect(traps(sim)).toHaveLength(1);
     });
-    it('places immediately beside a wall and under vertical aim, consuming the held trap',()=>{
+    it('launches immediately beside a wall and under vertical aim, then lands finite, consuming the held trap',()=>{
         const {sim,a}=fixture();
         stand(a,{x:STREET.x-7,y:0,z:STREET.z});
         expect(setDown(sim,a,{x:-1,y:0,z:0})).toBe(true);
-        const wall=traps(sim)[0]!;
+        expect(traps(sim)[0]?.flight).toBeDefined();land(sim);const wall=traps(sim)[0]!;
         expect([wall.x,wall.y,wall.z].every(Number.isFinite)).toBe(true);
         expect(wall.x).toBeLessThan(a.x);
         expect(weaponOf(sim,'a')).toBeUndefined();
         expect(setDown(sim,a,{x:0,y:1,z:0})).toBe(true);
-        const vertical=traps(sim)[0]!;
+        expect(traps(sim)[0]?.flight).toBeDefined();land(sim);const vertical=traps(sim)[0]!;
         expect([vertical.x,vertical.y,vertical.z].every(Number.isFinite)).toBe(true);
         expect(traps(sim)).toHaveLength(1);
         expect(weaponOf(sim,'a')).toBeUndefined();
@@ -157,10 +160,11 @@ describe('the Mousetrap',()=>{
         const hp=b.hp;
         expect(setDown(sim,a)).toBe(true);
         expect(weaponOf(sim,'a')).toBeUndefined();
-        const placed=traps(sim)[0]!;
+        expect(traps(sim)[0]?.flight).toBeDefined();land(sim);const placed=traps(sim)[0]!;stand(b,placed);
         expect([placed.x,placed.y,placed.z].every(Number.isFinite)).toBe(true);
         sim.step(1/60,sim.time+16);
-        expect(sim.snapshot(false).buffs?.b?.trappedUntil).toBe(sim.time+W.trapHoldMs);
+        // Contact can occur on the landing step, before the following observation step.
+        expect(sim.snapshot(false).buffs?.b?.trappedUntil).toBe(traps(sim)[0]!.snapAt!+W.trapHoldMs);
         expect(b.hp).toBe(hp);expect(hits).toEqual([]);
         // Floor-separated and dead rats still never veto placement.
         stand(b,{x:a.x,y:a.y-W.trapHeight-1,z:a.z+W.trapReach});
@@ -170,7 +174,7 @@ describe('the Mousetrap',()=>{
     });
     it('breaks after its hits: eight balls, or three laser hits; the breaker is recorded',()=>{
         const {sim,a,b}=fixture();
-        setDown(sim,a);const trap=traps(sim)[0]!,target={x:trap.x,y:trap.y+.3,z:trap.z};
+        setDown(sim,a);land(sim);const trap=traps(sim)[0]!,target={x:trap.x,y:trap.y+.3,z:trap.z};
         stand(b,{x:trap.x,y:0,z:trap.z+6});
         let t=sim.time;
         for(let i=1;i<=W.trapHp;i++){
@@ -182,7 +186,7 @@ describe('the Mousetrap',()=>{
         expect(events.at(-1)).toMatchObject({what:'break',by:'b',playerId:'a'});
         sim.step(1/60,t+W.trapBrokenMs+16);
         expect(traps(sim)).toEqual([]);
-        setDown(sim,a);arm(sim,'b','laser');
+        setDown(sim,a);land(sim);arm(sim,'b','laser');
         const fresh=traps(sim)[0]!;
         for(let i=0;i<Math.ceil(W.trapHp/W.laserTrapHits);i++)fire(sim,b,{x:fresh.x,y:fresh.y+.3,z:fresh.z});
         expect(traps(sim)[0]?.brokenAt).toBeDefined();

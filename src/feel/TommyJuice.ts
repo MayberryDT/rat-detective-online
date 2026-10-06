@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {playerPreferences} from '../settings/PlayerPreferences';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {FEEL} from './feelTuning';
 
@@ -98,7 +99,7 @@ export class TommyJuice {
         for(let i=0;i<CRUMBS;i++)this.crumbs.push({p:new THREE.Vector3(),v:new THREE.Vector3(),q:new THREE.Quaternion(),size:1,floor:0,age:0,alive:false});
     }
     /** A Tommy round left `origin` along `direction`. */
-    fired(origin:Vec3Data,direction:Vec3Data):void {
+    fired(origin:Vec3Data,direction:Vec3Data,port?:Vec3Data):void {
         const p=FEEL.tommyGun.params;
         const flash=this.flashes[this.nextFlash]!;this.nextFlash=(this.nextFlash+1)%FLASHES;
         flash.sprite.position.set(origin.x+direction.x*.25,origin.y+direction.y*.25,origin.z+direction.z*.25);
@@ -122,10 +123,11 @@ export class TommyJuice {
         this.right.set(direction.x,0,direction.z).cross(this.up);
         if(this.right.lengthSq()<1e-6)this.right.set(1,0,0);
         this.right.normalize();
-        casing.p.set(origin.x-direction.x*.2+this.right.x*.08,origin.y+.05,origin.z-direction.z*.2+this.right.z*.08);
+        if(port)casing.p.set(port.x,port.y,port.z);else casing.p.set(origin.x-direction.x*.2+this.right.x*.08,origin.y+.05,origin.z-direction.z*.2+this.right.z*.08);
         casing.v.copy(this.right).multiplyScalar(3+Math.random()*1.5).addScaledVector(this.up,3.2+Math.random()*1.4);
         casing.v.x-=direction.x*.8;casing.v.z-=direction.z*.8;
         casing.spin.set((Math.random()-.5)*30,(Math.random()-.5)*16,(Math.random()-.5)*30);
+        if(playerPreferences().current.reducedMotion)casing.spin.multiplyScalar(.15);
         casing.q.identity();casing.floor=floor+CUBE;casing.age=0;casing.alive=true;casing.bounced=false;
     }
     update(dt:number):void {
@@ -134,7 +136,7 @@ export class TommyJuice {
             if(!flash.sprite.visible)continue;
             flash.age+=dt;
             if(flash.age>=FLASH_LIFE){flash.sprite.visible=false;continue;}
-            flash.sprite.material.opacity=1-flash.age/FLASH_LIFE;
+            flash.sprite.material.opacity=(1-flash.age/FLASH_LIFE)*playerPreferences().current.flashStrength;
         }
         for(const puff of this.puffs){
             if(!puff.sprite.visible)continue;

@@ -38,7 +38,7 @@ const gun=new CheeseGun(stage.scene,stage.world,stage.listener);
 gun.setPlayer(stage.camera,player.entity);gun.authoritative=true;
 const feel=new FeelDirector();feel.attach(stage.renderer.domElement,stage.listener);
 const foley=new FoleyAudio(stage.listener);const feedback=new FeedbackAudio(stage.listener);
-if(candidate){feel.enableHeavyCheese(stage.scene);gun.localReport=()=>feel.heavyReport();gun.localWeaponReport=weapon=>feel.heavyArsenal(weapon);}
+if(candidate){feel.enableHeavyCheese(stage.scene);feel.attachTommy(stage.scene);gun.localReport=()=>feel.heavyReport();gun.localWeaponReport=weapon=>feel.heavyArsenal(weapon);}
 const diagnostics={candidate,shots:0,hits:0,kills:0,jumps:0,maxY:0,steps:0,events:[] as object[]};
 const note=(event:object)=>{diagnostics.events.push({at:performance.now(),...event});if(diagnostics.events.length>100)diagnostics.events.shift();};
 Object.assign(window,{__practice:()=>({...diagnostics,position:{...player.entity.body.position},camera:stage.camera.position.toArray(),quaternion:stage.camera.quaternion.toArray(),targets:[...practice.players.values()].map(p=>({id:p.id,x:p.x,y:p.y,z:p.z,hp:p.hp,screen:new THREE.Vector3(p.x,p.y+1,p.z).project(stage.camera).toArray()})),weapon:practice.simulation.weapon('local'),traps:practice.simulation.snapshot(false).traps??[],locked:document.pointerLockElement===stage.renderer.domElement})});
@@ -68,8 +68,8 @@ if(!crypto.randomUUID)crypto.randomUUID=()=>('10000000-1000-4000-8000-1000000000
 const practice=new HitboxPractice(hit=>{
     const entity=targets.get(hit.target)!;
     hitDirection.set(hit.incoming.x,hit.incoming.y,hit.incoming.z).normalize();
-    if(!hit.killed){entity.takeDamage(hit.damage,hitDirection,candidate);if(!candidate)feel.impact(entity,false);}
-    else {entity.hp=MAX_HP;entity.billboard.setHealth(MAX_HP);if(candidate)entity.heavyReaction(hitDirection);}
+    if(!hit.killed){entity.takeDamage(hit.damage,hitDirection,candidate);if(candidate&&hit.weapon==='laser')entity.heavyReaction(hitDirection,hit.weapon);if(!candidate)feel.impact(entity,false);}
+    else {entity.hp=MAX_HP;entity.billboard.setHealth(MAX_HP);if(candidate)entity.heavyReaction(hitDirection,hit.weapon);}
     if(candidate){
         if(hit.point)contact.set(hit.point.x,hit.point.y,hit.point.z);else contact.copy(entity.mesh.position).add(new THREE.Vector3(0,1,0));
         feel.heavyImpact(contact,outward.copy(hitDirection).negate(),entity.mesh);
@@ -163,7 +163,7 @@ function returnToLine(){
     input.clear();player.updateView();
 }
 function trapTestLine(occupied:boolean){
-    const p=occupied?{x:-16.9,y:0,z:-22}:{x:63,y:0,z:-46};
+    const p=occupied?{x:-20,y:0,z:-22}:{x:63,y:0,z:-46};
     player.entity.respawn({...p,hp:MAX_HP});player.entity.billboard.sprite.visible=false;player.resetGrounding();
     Object.assign(practice.players.get('local')!,p);input.clear();player.updateView();
     result.textContent=occupied?'Occupied target line · aim at blue coat and set trap':'Wall test line · aim west toward wall and set trap';
@@ -222,9 +222,9 @@ function fire(){
         stage.camera.getWorldDirection(direction);
         shot=gun.shoot(player.entity,point.copy(stage.camera.position).addScaledVector(direction,200),weapon);
     }finally{feel.afterRender(stage.camera);}
-    if(shot&&practice.shoot(shot)){feel.shot(weapon);
+    if(shot&&practice.shoot(shot)){feel.shot(weapon);if(candidate&&weapon==='tommy-gun'){const model=player.entity.mesh.getObjectByName('rat-weapon-tommy-gun');model?.updateWorldMatrix(true,false);const port=model?model.localToWorld(new THREE.Vector3(.18,.13,0)):undefined;feel.tommyRound(shot.origin,shot.direction,stage.camera,port);}
         if(candidate&&weapon!=='mousetrap')feel.heavyWeaponLaunch(point.set(shot.origin.x,shot.origin.y,shot.origin.z),direction.set(shot.direction.x,shot.direction.y,shot.direction.z),weapon);
-        diagnostics.shots=practice.shots;note({kind:'shot',weapon,shot,...(aimProbe?{aim:aimBefore}: {})});}
+        diagnostics.shots=practice.shots;note({kind:'shot',weapon,shot,...(weapon==='mousetrap'?{launched:practice.simulation.snapshot(false).traps}:{}),...(aimProbe?{aim:aimBefore}: {})});}
 }
 window.addEventListener('mousedown',event=>{if(document.pointerLockElement!==canvas||event.button!==0)return;event.preventDefault();event.stopImmediatePropagation();fire();held.press(performance.now(),practice.simulation.weapon('local')==='tommy-gun'?WEAPON_TUNING.tommyIntervalMs:undefined);},{...options,capture:true});
 window.addEventListener('mouseup',()=>held.release(),options);
@@ -248,12 +248,13 @@ stage.renderer.setAnimationLoop(now=>{
     diagnostics.maxY=Math.max(diagnostics.maxY,player.entity.body.position.y);
     const state=practice.simulation.snapshot();
     const weapon=practice.simulation.weapon('local');player.entity.setWeapon(weapon);
-    laser.apply(state.beams);laser.update(dt,stage.camera);trapField.apply(state.traps,true);trapField.update(dt);
+    laser.apply(state.beams);laser.update(dt,stage.camera);trapField.apply(state.traps,true,state.time);trapField.update(dt);
     for(const site of state.pickups??[]){const visual=supplies.get(site.id);if(visual){visual.setAvailableAt(site.availableAt??0);visual.update(Date.now(),stage.camera);}}
     for(const event of practice.simulation.drainPickupEvents()){
         note({kind:'authority-pickup',event});
         if(event.kind==='collected'&&event.playerId==='local'){if(candidate){feel.heavyArsenal(event.pickup==='laser'?'laser-pickup':event.pickup==='tommy-gun'?'tommy-pickup':'trap-pickup');feel.heavyPickup(event.pickup);}else feedback.play('pickup-slap');result.textContent=`${event.pickup} picked up · T returns to firing line`;}
         if(event.kind==='trap'&&event.what==='snap'&&candidate){feel.heavyArsenal('trap-snap');feel.heavyTrapCaught(point.set(event.p.x,event.p.y,event.p.z),stage.camera);if(event.victim){caught.add(event.victim);targets.get(event.victim)?.heavyReaction(new THREE.Vector3(0,0,-1));}result.textContent='SNAP · CAUGHT';}
+        if(event.kind==='trap'&&event.what==='launch'){if(candidate)feel.heavyArsenal('trap-launch');note({kind:'trap-launch',trapId:event.trapId});}
         if(event.kind==='trap'&&event.what==='set'){if(candidate)feel.heavyArsenal('mousetrap');else feedback.play('trap-set',event.p);result.textContent='TRAP SET · pistol restored';}
     }
     for(const id of caught)if(!practice.simulation.trapped(id)){caught.delete(id);if(candidate)feel.heavyArsenal('trap-release');note({kind:'trap-release',victim:id});result.textContent='SPRING RELEASED';}
@@ -281,7 +282,7 @@ stage.renderer.setAnimationLoop(now=>{
     try{if(aimProbe){
         renderedCamera.copy(stage.camera);
         const cr=crosshair.getBoundingClientRect(),vr=canvas.getBoundingClientRect();
-        lastDraw={at:performance.now(),steps:diagnostics.steps,ray:aimSample(stage.camera),crosshair:[cr.x+cr.width/2,cr.y+cr.height/2],viewport:[vr.x,vr.y,vr.width,vr.height]};
+        lastDraw={physical:{gun:[...['tommy-bolt','tommy-feed','laser-cell-0','laser-jaw-0']].map(name=>{const o=player.entity.mesh.getObjectByName(name);return o?{name,p:o.position.toArray(),r:o.rotation.toArray()}:null;}),victim:[...targets.entries()].map(([id,e])=>({id,root:e.mesh.position.toArray(),head:e.mesh.getObjectByName('rat-head')?.rotation.toArray(),body:e.mesh.getObjectByName('rat-body')?.rotation.toArray()}))},at:performance.now(),steps:diagnostics.steps,ray:aimSample(stage.camera),crosshair:[cr.x+cr.width/2,cr.y+cr.height/2],viewport:[vr.x,vr.y,vr.width,vr.height]};
     }stage.renderer.render(stage.scene,stage.camera);}finally{feel.heavyAfterRender();for(const target of targets.values())target.restoreHeavyRender();feel.afterRender(stage.camera);}
     if(!ready){ready=true;play.disabled=overlay.disabled=false;play.textContent='Enter target practice';}
 });

@@ -326,7 +326,7 @@ export class GameSession {
     private clearInput(): void { this.input.clear(); this.touch?.clear(); this.heldFire.release(); }
 
     /** The special weapon your rat holds now, by the server's clock. */
-    private weaponNow(): WeaponKind | undefined { return heldWeapon(this.lastChaos?.buffs, this.myId, Date.now() + this.serverOffset); }
+    private weaponNow(): WeaponKind | undefined { if(this.chaos?.trapPending)return undefined;return heldWeapon(this.lastChaos?.buffs, this.myId, Date.now() + this.serverOffset); }
     /** The Tommy Gun's held-fire repeat; undefined (one shot per press) for every other gun. */
     private tommyRepeatMs(): number | undefined { return this.weaponNow() === 'tommy-gun' ? WEAPON_TUNING.tommyIntervalMs : undefined; }
     private pressFire(): void { this.shoot(); this.heldFire.press(performance.now(), this.tommyRepeatMs()); }
@@ -359,12 +359,13 @@ export class GameSession {
         const movement=this.movementInput(),viewAt=this.remotes.viewAt?.(shot.origin,shot.direction);
         if (movement && this.transport.send({type:'shoot', ...shot, movement, ...(viewAt===undefined?{}:{viewAt})})) {
             this.rememberMovement(movement,now);
-            // A Mousetrap press sets a trap down: no ball, so no netplay shot timing.
+            // A Mousetrap press launches a board: no ball, so no netplay shot timing.
             if(weapon!=='mousetrap')this.netplay?.begin(shot.shotId,'shot');
             this.shotsSent++;
             // Shooter and authority each count their own Tommy triggers for its bloom.
             if(weapon==='tommy-gun'){this.tommyHeat=tommyHeat(this.tommyHeat,this.tommyAt,now);this.tommyAt=now;}
             this.chaos?.fire(shot,weapon&&{kind:weapon,heat:this.tommyHeat},weapon==='laser'?laserPath(shot.origin,shot.direction,this.gun.traceLaser):undefined);
+            if(weapon==='mousetrap')this.rat.entity.setWeapon(undefined);
         }
     }
     private requestPointerLock(): void { if (!this.title.settings?.isOpen && !this.touch?.active) this.pointerLock.request(); }
@@ -421,6 +422,7 @@ export class GameSession {
             this.chaos.onPresentedShot=(id,p)=>this.cameos?.observeShot(id,p,this.gun.sceneryClear);
             // W3: the trap's own foley where it happens: set down, SNAP with a spring twang, splinters per hit, a sad boing as it breaks.
             this.chaos.onTrap=(event,trap)=>{
+                if(event==='launch'){this.feedback.play('pickup-slap',trap);return;}
                 this.feedback.play(event==='set'?'trap-set':event==='snap'?'trap-snap':event==='hit'?'trap-splinter':'trap-break',trap);
                 // The SNAP! where a trap catches a rat (the word always for its owner and anyone near).
                 if(event==='snap')this.feel.trapSnapped(TRAP_SPOT.set(trap.x,trap.y,trap.z),this.stage.camera,trap.owner===this.myId);

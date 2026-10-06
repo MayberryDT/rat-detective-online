@@ -1269,9 +1269,9 @@ export class GameRoom extends DurableObject<Env> {
     if (!isPlausibleShot(message.origin, message.direction, player)) { reject('implausible'); return; }
     if (!this.rememberShot(playerId, message.shotId)) { reject('duplicate'); return; }
     const weapon=this.chaos?.weapon(playerId);
-    // A held Mousetrap is set immediately, not fired: no muzzle or accuracy count.
+    // A held Mousetrap launches immediately, not fired: no muzzle or accuracy count.
     if(weapon==='mousetrap'){
-      if(this.chaos!.placeTrap(playerId,message.direction))this.applyPickupEvents();
+      if(this.chaos!.placeTrap(playerId,message.direction,message.origin,message.shotId))this.applyPickupEvents();
       else this.sendShotRejection(playerId,message.shotId,'invalid-state');
       return;
     }
@@ -1387,7 +1387,7 @@ export class GameRoom extends DurableObject<Env> {
     }
     this.awards.damage(victim.id, playerId, hpBefore - victim.hp, now);
     if (result.killed) this.awards.death(victim, shooter && shooter !== victim ? shooter : undefined, { headshot, explosive, ...(weapon ? { weapon } : {}), ...(playerId === null ? { environment } : {}) }, now);
-    this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause });
+    this.broadcast({ type: 'playerDamaged', id: victim.id, hp: victim.hp, attackerId: playerId, ...cause,...(weapon?{weapon}:{}) });
     this.city.hit({ ...(shooter ? { attacker: shooter } : {}), victim, damage: hpBefore - victim.hp, killed: result.killed, headshot, explosive, incoming: !!incoming, ...(weapon?{weapon}:{}), ...(playerId === null ? { environment } : {}), ...(bank ? { bounces: bank.bounces } : {}) }, now);
     if (this.isManagedBot(victim.id)) this.jevMind?.hit(victim.id, shooter?.id, now);
     this.highlights.hit({ at: detail?.at ?? now, ...(shooter ? { attacker: shooter } : {}), victim, killed: result.killed, headshot, ...(weapon ? { weapon } : {}),

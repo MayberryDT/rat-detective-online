@@ -228,6 +228,21 @@ export function heldWeaponModel(kind:WeaponKind):THREE.Group {
             if(kind==='tommy-gun')tommyGun(kit,f);else rayGun(kit,f);
             template=kit.build('rat-weapon-'+kind);
         }
+        // Separate moving mechanisms. Draw-only animation leaves the canonical muzzle unchanged.
+        if(kind==='tommy-gun'){
+            const bolt=new PartKit();bolt.box(.13,.12,.28,.11,BORE+.025,.01,f.brass,.02);bolt.box(.23,.055,.055,.2,BORE+.025,-.075,f.steel,.01);
+            template.add(bolt.build('tommy-bolt'));
+            const feed=new PartKit();feed.box(.10,.13,.16,-.10,BORE-.08,.16,f.cheese,.02);feed.cylinder(.055,.055,.06,-.15,BORE-.13,.18,f.brass,10,0,0,Math.PI/2);template.add(feed.build('tommy-feed'));
+        }
+        if(kind==='laser'){
+            for(let i=0;i<3;i++){
+                const cell=new PartKit(),angle=i*Math.PI*2/3;
+                cell.box(.09,.14,.44,Math.sin(angle)*.22,BORE+Math.cos(angle)*.22,.39,f.coil,.02,0,0,-angle);
+                cell.torus(.105,.025,0,BORE,.31+i*.12,f.core);
+                template.add(cell.build('laser-cell-'+i));
+                const jaw=new PartKit();jaw.box(.10,.16,.18,Math.sin(angle)*.18,BORE+Math.cos(angle)*.18,.65,f.brass,.02,0,0,-angle);template.add(jaw.build('laser-jaw-'+i));
+            }
+        }
         HELD.set(kind,template);
     }
     const model=template.clone();

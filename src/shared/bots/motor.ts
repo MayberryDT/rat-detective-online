@@ -78,7 +78,7 @@ export const TRAP_REACH=WEAPON_TUNING.trapRadius+WEAPON_TUNING.trapFoot+.5;
 /** Another rat's unbroken Mousetrap in sight within `reach` of `p` (horizontally, on its level). A rat's own trap
  * is harmless to it; hidden ones are never read. */
 export function enemyTrap(self:PlayerData,p:Vec3Data,reach:number,state:ChaosState|undefined,clear:(p:Vec3Data)=>boolean):boolean {
-    for(const t of state?.traps??[])if(t.owner!==self.id&&t.brokenAt===undefined&&Math.abs(t.y-p.y)<2.5&&Math.hypot(t.x-p.x,t.z-p.z)<reach&&clear(t))return true;
+    for(const t of state?.traps??[])if(t.owner!==self.id&&t.brokenAt===undefined&&!t.flight&&Math.abs(t.y-p.y)<2.5&&Math.hypot(t.x-p.x,t.z-p.z)<reach&&clear(t))return true;
     return false;
 }
 
@@ -795,7 +795,7 @@ export class BotMotor {
         if(traps?.length&&(x||z)){
             const stepLength=Math.hypot(x,z)||1,nx=x/stepLength,nz=z/stepLength,veered=this.veered;
             veered.x=x;veered.z=z;
-            for(const trap of traps)if(trap.owner!==self.id&&trap.brokenAt===undefined)this.veer(self,trap,nx,nz,stepLength,clear);
+            for(const trap of traps)if(trap.owner!==self.id&&trap.brokenAt===undefined&&!trap.flight)this.veer(self,trap,nx,nz,stepLength,clear);
             x=veered.x;z=veered.z;
         }
         if(jump&&!hop&&Math.hypot(x,z)>.5){

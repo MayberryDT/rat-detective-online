@@ -1,4 +1,5 @@
 import * as C from 'cannon-es';
+import {trapLaunch,trapAdvance,trapVelocity,TRAP_THROW} from './trapThrow';
 import {resolveShotPattern,tommyHeat} from './shotPattern';
 import {laserPath,type LaserCast} from './laser';
 import type {WorldFoleyCue} from './foleyEvents';
@@ -82,7 +83,7 @@ export type PickupEvent =
     /** A supply handed over on the spot (`rewardSupply`), not from a site. */
     | { kind:'rewarded'; playerId:string; pickup:PickupKind; why:RewardReason }
     /** A Mousetrap was set down, snapped on a rat and holds it (`victim`), or destroyed (`by` the rat whose hit broke it). */
-    | { kind:'trap'; what:'set'|'snap'|'break'; trapId:string; playerId:string; p:Vec3Data; victim?:string; by?:string|null; hits?:number };
+    | { kind:'trap'; what:'launch'|'set'|'snap'|'break'; trapId:string; playerId:string; p:Vec3Data; victim?:string; by?:string|null; hits?:number };
 export type RewardReason='streak'|'dispatch'|'bounty';
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
 export class ChaosSimulation {
@@ -992,44 +993,29 @@ export class ChaosSimulation {
         this.sound('corpse-kick',point,normal);
         corpse.body.angularVelocity.x+=kick.z*.3;corpse.body.angularVelocity.z-=kick.x*.3;
     }
-    /** Immediate Mousetrap placement. Only invalid/dead ownership or nonfinite input refuses it; occupied footprints do not. */
-    placeTrap(owner:string,direction:Vec3Data):boolean{
+    /** Immediate authoritative short throw; only invalid ownership/input refuses. */
+    placeTrap(owner:string,direction:Vec3Data,origin?:Vec3Data,shotId?:string):boolean{
         const rat=this.players.get(owner);
         if(!rat||rat.hp<=0||this.weapon(owner)!=='mousetrap')return false;
-        if(![rat.x,rat.y,rat.z,direction.x,direction.y,direction.z].every(Number.isFinite))return false;
-        const length=Math.hypot(direction.x,direction.z);
-        // Looking straight up/down still places in the rat's facing direction.
-        const yaw=Number.isFinite(rat.meshQy)&&Number.isFinite(rat.meshQw)?2*Math.atan2(rat.meshQy,rat.meshQw):0;
-        const fx=length>.05?direction.x/length:Math.sin(yaw),fz=length>.05?direction.z/length:Math.cos(yaw);
-        this.rayQuery.refresh();
-        const spot=this.trapSpot(rat,fx,fz,W.trapReach);
+        const start=data(origin??{x:rat.x,y:rat.y+1.3,z:rat.z});
+        if(![rat.x,rat.y,rat.z,start.x,start.y,start.z,direction.x,direction.y,direction.z].every(Number.isFinite)||Math.hypot(direction.x,direction.y,direction.z)<.001||outsideCity(rat.x,rat.z))return false;
+        // A legal rat at the edge may have its paw just outside it: clip launch, never consume without a board.
+        start.x=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,start.x));start.z=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,start.z));
         for(const [id,trap] of this.traps)if(trap.state.owner===owner)this.removeTrap(id);
         if(this.traps.size>=MAX_TRAPS)this.removeTrap(this.traps.keys().next().value!);
         const entry=this.buffs[owner]!;delete entry.weapon;delete entry.weaponUntil;delete entry.weaponReadyAt;
         const id=`trap-${++this.trapSerial}`;
-        this.addTrap({id,owner,x:spot.x,y:spot.y,z:spot.z,yaw:Math.atan2(fx,fz),hp:W.trapHp,at:this.now});
-        this.pickupEvents.push({kind:'trap',what:'set',trapId:id,playerId:owner,p:{x:spot.x,y:spot.y,z:spot.z}});
+        this.addTrap({id,owner,x:start.x,y:start.y,z:start.z,yaw:Math.atan2(direction.x,direction.z),hp:W.trapHp,at:this.now,flight:trapLaunch(direction),...(shotId?{shotId}:{})});
+        this.pickupEvents.push({kind:'trap',what:'launch',trapId:id,playerId:owner,p:data(start)});
         return true;
     }
     /** A trap and its shootable block, for balls and beams only: rats walk onto it (and are held), cases and corpses pass. */
     private addTrap(state:TrapState):void{
+        state={...state,...(state.flight?{flight:data(state.flight)}:{})};
         const body=new C.Body({mass:0,type:C.Body.STATIC,shape:new C.Box(new C.Vec3(.75*TRAP_SCALE+.05,.3*TRAP_TALL,W.trapRadius)),position:new C.Vec3(state.x,state.y+.3*TRAP_TALL,state.z),
             collisionFilterGroup:4,collisionFilterMask:16});
         body.quaternion.setFromAxisAngle(new C.Vec3(0,1,0),state.yaw);
         this.world.addBody(body);this.targets.set(body,{kind:'trap',trapId:state.id});this.traps.set(state.id,{state,body});
-    }
-    /** Resolve a visible placement, never reject occupied footprints. Walls choose their near surface;
-     * uneven floors, other traps and live rats do not refuse the deployment. Air/edge placement falls
-     * back to the rat's foot level when no floor exists, inside the existing horizontal city bounds. */
-    private trapSpot(rat:PlayerData,fx:number,fz:number,reach:number):Vec3Data {
-        let x=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,rat.x+fx*reach));
-        let z=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,rat.z+fz*reach));
-        const chest=new C.Vec3(rat.x,rat.y+.9,rat.z);
-        const wall=this.ray(chest,new C.Vec3(x,rat.y+.9,z),1);
-        if(wall.hasHit){x=wall.hitPointWorld.x-fx*.18;z=wall.hitPointWorld.z-fz*.18;}
-        const floor=this.ray(new C.Vec3(x,rat.y+1.6,z),new C.Vec3(x,rat.y-80,z),1);
-        const y=floor.hasHit&&floor.hitNormalWorld.y>.5&&!(rat.y>=0&&floor.hitPointWorld.y< -1)?floor.hitPointWorld.y:rat.y;
-        return{x:Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,x)),y,z:Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,z))};
     }
     /** `hits` ball hits on a trap; at none left it breaks, credited to `by`. */
     private damageTrap(id:string,hits:number,by:string|null):void{
@@ -1053,12 +1039,44 @@ export class ChaosSimulation {
     /** Each step: a broken trap leaves after `trapBrokenMs`; an armed one snaps on any other living rat whose feet
      * reach it (Ironclad does not help) and holds it in place for `trapHoldMs` (no damage, no kill); it re-arms
      * `trapRearmMs` after letting go, and leaves the rat it held alone until that rat has stepped clear. */
-    private stepTraps(now:number,playing:boolean):void{
+    private stepTraps(now:number,playing:boolean,dt:number):void{
+        let moved=false;
         const reach=W.trapRadius+W.trapFoot;
         const within=(rat:PlayerData,s:TrapState)=>{const dx=rat.x-s.x,dz=rat.z-s.z;return rat.hp>0&&Math.abs(rat.y-s.y)<=W.trapHeight&&dx*dx+dz*dz<=reach*reach;};
         for(const [id,trap] of this.traps){
             const s=trap.state;
             if(s.brokenAt!==undefined){if(now-s.brokenAt>=W.trapBrokenMs)this.traps.delete(id);continue;}
+            if(s.flight){
+                if(!playing)continue;
+                moved=true;
+                // Sweep the board's contact thickness against city geometry only. No rat pushing or occupied veto.
+                let remaining=Math.min(dt,.1);
+                while(remaining>1e-7&&s.flight){
+                    const step=Math.min(remaining,1/120),v=s.flight,age=Math.max(0,(now-s.at)/1000-remaining),next=trapAdvance(s,v,step,age);
+                    const r=TRAP_THROW.radius,from=new C.Vec3(s.x,s.y+r,s.z),to=new C.Vec3(next.x,next.y+r,next.z);
+                    let hit=this.rayQuery.sphere(from,to,r,1,()=>true),offsetX=0,offsetZ=0;
+                    // The real board footprint, not only its centre, must clear walls/floors.
+                    const c=Math.cos(s.yaw),sn=Math.sin(s.yaw);
+                    for(const side of [-1,0,1])for(const end of [-1,0,1]){
+                        if(!side&&!end)continue;
+                        const ox=side*(.75*TRAP_SCALE-r)*c+end*(W.trapRadius-r)*sn,oz=-side*(.75*TRAP_SCALE-r)*sn+end*(W.trapRadius-r)*c;
+                        const candidate=this.rayQuery.sphere(new C.Vec3(from.x+ox,from.y,from.z+oz),new C.Vec3(to.x+ox,to.y,to.z+oz),r,1,()=>true);
+                        if(candidate.hasHit&&(!hit.hasHit||candidate.distance<hit.distance)){hit=candidate;offsetX=ox;offsetZ=oz;}
+                    }
+                    Object.assign(v,trapVelocity(v,step,age));
+                    if(hit.hasHit){
+                        const n=hit.hitNormalWorld;
+                        s.x=hit.hitPointWorld.x-offsetX+n.x*(r+.01);s.y=hit.hitPointWorld.y+n.y*(r+.01)-r;s.z=hit.hitPointWorld.z-offsetZ+n.z*(r+.01);
+                        if(n.y>.5){delete s.flight;s.landedAt=now;this.pickupEvents.push({kind:'trap',what:'set',trapId:id,playerId:s.owner,p:{x:s.x,y:s.y,z:s.z}});}
+                        else {const inward=v.x*n.x+v.y*n.y+v.z*n.z;if(inward<0){v.x-=inward*n.x;v.y-=inward*n.y;v.z-=inward*n.z;}v.x*=.3;v.z*=.3;}
+                    }else {s.x=next.x;s.y=next.y;s.z=next.z;}
+                    const x=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,s.x)),z=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,s.z));
+                    if(x!==s.x)v.x=0;if(z!==s.z)v.z=0;s.x=x;s.z=z;
+                    trap.body.position.set(s.x,s.y+.3*TRAP_TALL,s.z);trap.body.updateAABB();
+                    remaining-=step;
+                }
+                if(s.flight)continue;
+            }
             if(trap.held!==undefined&&now-(s.snapAt??-Infinity)>=W.trapHoldMs){const held=this.players.get(trap.held);if(!held||!within(held,s))trap.held=undefined;}
             if(!playing||now-(s.snapAt??-Infinity)<W.trapHoldMs+W.trapRearmMs)continue;
             for(const rat of this.players.values()){
@@ -1069,6 +1087,8 @@ export class ChaosSimulation {
                 break;
             }
         }
+        // Shot sweeps later in this same step must see the new shootable board position.
+        if(moved)this.rayQuery.refresh();
     }
 
     private noteShot(shot:ChaosShot,outcome:ShotResultOutcome,extra:Partial<ShotResultEvent>={}):void {
@@ -1557,7 +1577,7 @@ export class ChaosSimulation {
         for(const c of this.cases.values())this.updateCase(c,dt,playing);
         this.recordCaseHistory(now);
         this.stepPickups(now,playing);
-        this.stepTraps(now,playing);
+        this.stepTraps(now,playing,dt);
         while(this.beams.length&&now-this.beams[0]!.at>W.laserBeamMs)this.beams.shift();
         // Small physical steps keep the theatrical bodies within their collision surfaces.
         this.stepBodies(dt,playing);
@@ -1763,7 +1783,7 @@ export class ChaosSimulation {
             extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,levels:{...this.pressure.levels},...(this.pressure.blowing?{blowing:{...this.pressure.blowing}}:{}),...(this.pressure.fired?{fired:{...this.pressure.fired}}:{}),...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),...(this.pressure.vents?{vents:this.pressure.vents.map(v=>({...v}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
             buffs:this.buffSnapshot(),
-            ...(this.traps.size?{traps:[...this.traps.values()].map(t=>({...t.state}))}:{}),
+            ...(this.traps.size?{traps:[...this.traps.values()].map(t=>({...t.state,...(t.state.flight?{flight:data(t.state.flight)}:{})}))}:{}),
             ...(this.beams.length?{beams:this.beams.map(b=>({...b,points:b.points.map(p=>({...p}))}))}:{}),
             corpses:[...this.corpses.values()].map(c=>({...c.state,...pose(c.body)})),
             shots:this.shots.map(s=>this.shotSnapshot(s)),impacts:[...this.impacts.slice(-64),...(this.impacts.length<64?this.audioImpacts.slice(-(64-this.impacts.length)):[])].slice(0,64),notice:{...this.notice}};

@@ -34,7 +34,7 @@ export const PICKUP_TUNING = {
     hustleMultiplier: 1.45,
     /** Stakeout: the Hunch city-wide at any health, long enough to pick a target and get there. */
     stakeoutMs: 12_000,
-    /** Tommy Gun and Laser are on a timer, never a magazine: shooting is always rewarded. The Mousetrap has none: it is held until set down.
+    /** Tommy Gun and Laser are on a timer, never a magazine: shooting is always rewarded. The Mousetrap has none: it is held until thrown.
      * The Tommy Gun lasts 12 s (Tyler, 2 October, protocol 31). */
     tommyMs: 12_000,
     laserMs: 15_000,
@@ -50,8 +50,8 @@ export const WEAPON_TUNING = {
      * `laserDamage` (headshots kill), reflects off walls and Ironclad coats up to `laserBounces` times within
      * `laserRange` units in all, `laserRadius` thick. Others draw it from the snapshot for `laserBeamMs`. */
     laserDamage: 1, laserBounces: 2, laserRange: 180, laserRadius: .12, laserBeamMs: 600,
-    /** Mousetrap: set down `trapReach` ahead of the rat on a supported floor with `trapRadius` clear around it (the
-     * board's half-length as drawn: the model scales with it). Any other rat whose feet come within `trapRadius` +
+    /** Mousetrap: launch immediately in aim direction through `trapThrow`, then arm at actual world landing.
+     * `trapReach` is a retained legacy descriptor, not the short throw solver; `trapRadius` is the board's half-length. Any other rat whose feet come within `trapRadius` +
      * `trapFoot` (and `trapHeight` above or below) is snapped and held in place for `trapHoldMs` (`PlayerBuffs.trappedUntil`:
      * it can still turn and shoot, not move or jump; no damage, no kill; Ironclad does not help). The trap stays shut
      * while it holds, re-arms `trapRearmMs` after letting go, and never snaps the rat it just let go until that rat has
@@ -81,7 +81,7 @@ export const PICKUP_COPY: Record<PickupKind, PickupCopy> = {
     stakeout: { title: 'STAKEOUT', effect: 'See every rat in the city through walls', flavor: 'Eyes on the whole town.' },
     'tommy-gun': { title: 'TOMMY GUN', effect: 'Hold fire to spray cheese', flavor: 'The Chicago typewriter.' },
     laser: { title: 'LASER', effect: 'Instant beam · bounces off walls', flavor: 'Science, detective.' },
-    mousetrap: { title: 'MOUSETRAP', effect: 'Fire to set it down · it holds any rat that steps on it', flavor: 'Bait not included.' },
+    mousetrap: { title: 'MOUSETRAP', effect: 'Fire to lob it a short distance · it holds any rat that steps on it', flavor: 'Bait not included.' },
 };
 
 /** Authored floor heights keep rewards on their intended routes. Every site has a
@@ -128,7 +128,7 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
 ];
 
 /** Active effects on one rat. Absent keys mean no effect. `weapon` is the one special weapon held, until
- * `weaponUntil` (absent for the Mousetrap, held until set down). `weaponReadyAt` is retained for old snapshots; it does not delay Mousetrap placement. `faulty` is a Code Violation dud running until `faultyUntil`.
+ * `weaponUntil` (absent for the Mousetrap, held until thrown). `weaponReadyAt` is retained for old snapshots; it does not delay Mousetrap placement. `faulty` is a Code Violation dud running until `faultyUntil`.
  * `trappedUntil`: another rat's Mousetrap holds this one in place until then (`WEAPON_TUNING.trapHoldMs`). */
 export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number; weapon?: WeaponKind; weaponUntil?: number; weaponReadyAt?: number; faulty?: FaultyKind; faultyUntil?: number; trappedUntil?: number }
 export type BuffMap = Record<string, PlayerBuffs>;

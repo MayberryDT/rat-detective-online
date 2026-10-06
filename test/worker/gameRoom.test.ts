@@ -394,7 +394,7 @@ describe('GameRoom websockets', () => {
     });
   });
 
-  it('holds a just-taken Mousetrap for its lockout: a press then neither shoots nor sets it down, a fresh press after does',async()=>{
+  it('launches a just-taken Mousetrap immediately through the real room and only arms on landing',async()=>{
     const room=`graybox-trap-lock-${crypto.randomUUID()}`,client=await openClient(room);
     client.ws.send(joinPayload('Trapper'));const welcome=await client.inbox.waitFor('welcome');
     await runInDurableObject(env.GAME_ROOM.getByName(room),(instance:GameRoom)=>{
@@ -413,14 +413,14 @@ describe('GameRoom websockets', () => {
       const rejected=vi.spyOn(game,'sendShotRejection');
       // Every rat's trigger, human or bot, lands here (bots through the room's own shoot hook).
       const press=(shotId:string)=>game.handleShoot(welcome.id,{type:'shoot',shotId,origin:{x:rat.x,y:rat.y+1.4,z:rat.z},direction:{x:0,y:0,z:1}});
-      press('held-1');now+=WEAPON_TUNING.trapLockMs-100;game.chaos.step(0,now);press('held-2');
+      press('held-1');
       const state=game.chaos.snapshot(false);
-      expect(state.traps??[]).toEqual([]);expect(state.shots.filter(ball=>ball.owner===welcome.id)).toEqual([]);
-      expect(state.buffs?.[welcome.id]?.weapon).toBe('mousetrap');
-      expect(rejected.mock.calls.map(call=>call[2])).toEqual(['trap-arming','trap-arming']);
-      now+=100;game.chaos.step(0,now);press('fresh');
-      expect(game.chaos.snapshot(false).traps).toMatchObject([{owner:welcome.id}]);
-      expect(game.chaos.snapshot(false).buffs?.[welcome.id]?.weapon).toBeUndefined();
+      expect(state.traps).toMatchObject([{owner:welcome.id,shotId:'held-1',flight:expect.any(Object)}]);
+      expect(state.shots.filter(ball=>ball.owner===welcome.id)).toEqual([]);
+      expect(state.buffs?.[welcome.id]?.weapon).toBeUndefined();expect(rejected).not.toHaveBeenCalled();
+      for(let i=0;i<90;i++){now+=1000/60;game.chaos.step(1/60,now);}
+      const landed=game.chaos.snapshot(false).traps![0]!;
+      expect(landed.flight).toBeUndefined();expect(landed.landedAt).toBeDefined();expect(landed.z-rat.z).toBeGreaterThan(4);expect(landed.z-rat.z).toBeLessThan(8);
       rejected.mockRestore();
     });
   });

@@ -15,9 +15,9 @@ export const PRACTICE_TARGETS = [
     {id:'dummy-4', name:'04 · FAR', x:26, y:0, z:-28, yaw:-Math.PI/2, coatColor:0x7b5593},
 ] as const;
 export const PRACTICE_SUPPLIES:PickupPoint[]=[
- {id:'rack-laser',kind:'laser',p:{x:-24,y:.7,z:-15}},
- {id:'rack-tommy',kind:'tommy-gun',p:{x:-28,y:.7,z:-15}},
- {id:'rack-trap',kind:'mousetrap',p:{x:-32,y:.7,z:-15}},
+ {id:'rack-laser',kind:'laser',p:{x:-24,y:.7,z:-8}},
+ {id:'rack-tommy',kind:'tommy-gun',p:{x:-28,y:.7,z:-8}},
+ {id:'rack-trap',kind:'mousetrap',p:{x:-32,y:.7,z:-8}},
 ];
 export interface PracticeHit {weapon?:string; shotId?:string; target:string; region:'HEAD'|'BODY'; damage:number; remaining:number; killed:boolean; incoming:Vec3Data; point?:Vec3Data}
 
@@ -81,7 +81,7 @@ export class HitboxPractice {
         if(site&&authored){site.kind=authored.kind;site.availableAt=0;this.simulation=this.createSimulation(saved);}
     }
     shoot(shot:ShotDescriptor):boolean {
-        if(this.simulation.weapon('local')==='mousetrap')return this.simulation.placeTrap('local',shot.direction);
+        if(this.simulation.weapon('local')==='mousetrap')return this.simulation.placeTrap('local',shot.direction,shot.origin,shot.shotId);
         this.shots++;this.simulation.shoot('local',shot);return true;
     }
     step(dt:number,now:number):void {

@@ -20,6 +20,7 @@ export class HeavyCheese {
     private pickupKind?:string;
     private saved?:{model:THREE.Object3D;position:THREE.Vector3;rotation:THREE.Euler};
     private cursor=0;
+    private mechanismSaved:Array<{part:THREE.Object3D;p:THREE.Vector3;r:THREE.Euler;s:THREE.Vector3}>=[];
     private readonly axis=new THREE.Vector3(0,0,1);
     constructor(private readonly scene:THREE.Scene){for(const slot of this.slots)scene.add(slot.mesh);for(const a of this.accents)scene.add(a.mesh);}
     launch(origin:THREE.Vector3,direction:THREE.Vector3):void {this.emit(origin,direction,true);}
@@ -45,17 +46,29 @@ export class HeavyCheese {
     }
     /** Render-only receiver follow-through; restore before any input/raycast/muzzle sampling. */
     beforeRender(rat:THREE.Object3D):void {
-        if(playerPreferences().current.reducedMotion)return;
+        const reduced=playerPreferences().current.reducedMotion;
         const picking=this.pickupAge<.35;const kind=picking?this.pickupKind:this.weaponKind;
         if(!kind||(!picking&&this.weaponAge>.3))return;
         const model=rat.getObjectByName('rat-weapon-'+kind);if(!model)return;
         this.saved={model,position:model.position.clone(),rotation:model.rotation.clone()};
+        if(!picking){
+            const stroke=kind==='tommy-gun'?Math.exp(-this.weaponAge*18)*(this.pulse%2?1:.55):Math.exp(-this.weaponAge*9);
+            const amount=reduced?.35:1;
+            for(const part of model.children){
+                if(!/^(tommy-(bolt|feed)|laser-(cell|jaw)-)/.test(part.name))continue;
+                this.mechanismSaved.push({part,p:part.position.clone(),r:part.rotation.clone(),s:part.scale.clone()});
+                if(part.name==='tommy-bolt'){part.position.z-=.30*stroke*amount;part.rotation.x-=.10*stroke*amount;}
+                else if(part.name==='tommy-feed'){part.position.y+=.14*stroke*amount;part.rotation.z-=.45*stroke*amount;}
+                else {const i=Number(part.name.slice(-1)),a=i*Math.PI*2/3,jaw=part.name.includes('jaw');part.position.x+=Math.sin(a)*stroke*(jaw?.13:.07)*amount;part.position.y+=Math.cos(a)*stroke*(jaw?.13:.07)*amount;part.position.z-=(jaw?.08:.19)*stroke*amount;part.rotation.z+=(i%2?1:-1)*.16*stroke*amount;}
+            }
+        }
+        if(reduced)return;
         if(picking){const k=Math.sin(this.pickupAge/.35*Math.PI)*(1-this.pickupAge/.35);model.position.y-=k*.12;model.rotation.z+=k*.12;return;}
         const t=this.weaponAge/(this.weaponKind==='laser'?.22:.09),kick=Math.exp(-t*5)*Math.sin(Math.min(1,t*4)*Math.PI*.5);
         model.position.z-=kick*(this.weaponKind==='laser'?.12:.075);
         model.rotation.x-=kick*.08;model.rotation.z+=kick*.025*(this.pulse%2?1:-1);
     }
-    afterRender():void {if(this.saved){this.saved.model.position.copy(this.saved.position);this.saved.model.rotation.copy(this.saved.rotation);this.saved=undefined;}}
+    afterRender():void {for(const {part,p,r,s} of this.mechanismSaved){part.position.copy(p);part.rotation.copy(r);part.scale.copy(s);}this.mechanismSaved.length=0;if(this.saved){this.saved.model.position.copy(this.saved.position);this.saved.model.rotation.copy(this.saved.rotation);this.saved=undefined;}}
     update(dt:number):void {
         this.weaponAge+=dt;this.pickupAge+=dt;
         for(const a of this.accents){if(!a.mesh.visible)continue;a.age+=dt;const t=a.age/a.life;if(t>=1){a.mesh.visible=false;continue;}const prefs=playerPreferences().current;

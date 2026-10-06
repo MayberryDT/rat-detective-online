@@ -69,7 +69,7 @@ export class FeelSound {
         if(this.frame%120===0)for(const [id,walker] of this.walkers)if(walker.seen!==this.frame)this.walkers.delete(id);
     }
 
-    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {if(this.on)this.audio!.arsenal(kind);}
+    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {if(this.on)this.audio!.arsenal(kind);}
     pressure():void {if(this.on)this.audio!.pressure();}
     bodySmack():void {if(this.on)this.audio!.bodySmack();}
 

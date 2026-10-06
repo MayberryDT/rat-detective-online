@@ -672,7 +672,7 @@ export class RatEntity {
     /** Secondary reaction for instant-refill practice kills; health remains authority-owned. */
     applyHeavyRender():void {this.animator.applyHeavyRender();}
     restoreHeavyRender():void {this.animator.restoreHeavyRender();}
-    heavyReaction(direction:THREE.Vector3):void {this.animator.heavyHit(direction);}
+    heavyReaction(direction:THREE.Vector3,weapon?:string):void {this.animator.heavyHit(direction,weapon);}
 
     /** Polish 15: composed kill nod. */
     public nod(): void { if (!this.dead) this.animator.nod(); }

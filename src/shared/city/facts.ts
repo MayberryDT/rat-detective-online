@@ -108,7 +108,7 @@ export type CityFact = FactContext & (
   | { type: 'malfunction'; what: 'faulty' | 'machine' | 'pillar'; site: string; p: P3; place: string; a?: number; kind?: FaultyKind; shoved: number }
   /** A Mousetrap (`trap` id, owner `a`, at `p`): set down, snapped on `victim` (since protocol 28 a hold, not a death:
    * `holdMs` the victim is held in place), or broken (`by` whose hit finished it; it lets go of anyone it held). */
-  | { type: 'trap'; what: 'set' | 'snap' | 'break'; a: number; trap: string; p: P3; place: string; victim?: number; by?: number; holdMs?: number }
+  | { type: 'trap'; what: 'launch' | 'set' | 'snap' | 'break'; a: number; trap: string; p: P3; place: string; victim?: number; by?: number; holdMs?: number }
   /** `faulty`: Code Violation made the claim its dud instead of the supply (the `malfunction` fact has which). */
   | { type: 'pickup'; a: number; site: string; kind: PickupKind; p: P3; place: string; hpBefore: number; waitedMs?: number; faulty?: true }
   | { type: 'restock'; site: string; kind: PickupKind }

@@ -139,7 +139,7 @@ export class FeelAudio {
         source.connect(filter).connect(env).connect(out);source.start(t,Math.random()*.4,.18);
     }
 
-    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {
+    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {
         const priority=kind==='laser-hit'||kind==='tommy-hit'?0:kind==='trap-release'?1:2;
         // Firing cadence and significant event identity already belong to their callers.
         // RAF/audio-clock jitter must not suppress a legitimate onset; only decorative
@@ -174,6 +174,10 @@ export class FeelAudio {
             const out=this.arsenalOut(.18,kind==='laser-hit'?.2:.07,priority);if(!out)return;
             this.burst(out,t,kind==='laser-hit'?.12:.035,'bandpass',kind==='laser-hit'?3100:550,3,.001);
             this.tone(out,t,.06,'triangle',kind==='laser-hit'?700:180,90,.6);
+        }else if(kind==='trap-launch'){
+            const out=this.arsenalOut(.28,.15,priority);if(!out)return;
+            this.burst(out,t,.035,'bandpass',620,.65,.001);this.tone(out,t,.11,'triangle',180,65,.9);
+            this.burst(out,t+.008,.09,'lowpass',1500,.5,.002);
         }else if(kind==='trap-release'){
             const out=this.arsenalOut(.18,.2,priority);if(!out)return;
             this.tone(out,t,.13,'sine',430,860,.4);
