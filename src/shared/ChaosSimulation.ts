@@ -1005,7 +1005,7 @@ export class ChaosSimulation {
         if(this.traps.size>=MAX_TRAPS)this.removeTrap(this.traps.keys().next().value!);
         const entry=this.buffs[owner]!;delete entry.weapon;delete entry.weaponUntil;delete entry.weaponReadyAt;
         const id=`trap-${++this.trapSerial}`;
-        this.addTrap({id,owner,x:start.x,y:start.y,z:start.z,yaw:Math.atan2(direction.x,direction.z),hp:W.trapHp,at:this.now,flight:trapLaunch(direction),...(shotId?{shotId}:{})});
+        this.addTrap({id,owner,x:start.x,y:start.y,z:start.z,yaw:Math.atan2(direction.x,direction.z),hp:W.trapHp,at:this.now,flightAge:0,flight:trapLaunch(direction),...(shotId?{shotId}:{})});
         this.pickupEvents.push({kind:'trap',what:'launch',trapId:id,playerId:owner,p:data(start)});
         return true;
     }
@@ -1052,7 +1052,7 @@ export class ChaosSimulation {
                 // Sweep the board's contact thickness against city geometry only. No rat pushing or occupied veto.
                 let remaining=Math.min(dt,.1);
                 while(remaining>1e-7&&s.flight){
-                    const step=Math.min(remaining,1/120),v=s.flight,age=Math.max(0,(now-s.at)/1000-remaining),next=trapAdvance(s,v,step,age);
+                    const step=Math.min(remaining,1/120),v=s.flight,age=s.flightAge??0,next=trapAdvance(s,v,step,age);
                     const r=TRAP_THROW.radius,from=new C.Vec3(s.x,s.y+r,s.z),to=new C.Vec3(next.x,next.y+r,next.z);
                     let hit=this.rayQuery.sphere(from,to,r,1,()=>true),offsetX=0,offsetZ=0;
                     // The real board footprint, not only its centre, must clear walls/floors.
@@ -1063,7 +1063,7 @@ export class ChaosSimulation {
                         const candidate=this.rayQuery.sphere(new C.Vec3(from.x+ox,from.y,from.z+oz),new C.Vec3(to.x+ox,to.y,to.z+oz),r,1,()=>true);
                         if(candidate.hasHit&&(!hit.hasHit||candidate.distance<hit.distance)){hit=candidate;offsetX=ox;offsetZ=oz;}
                     }
-                    Object.assign(v,trapVelocity(v,step,age));
+                    Object.assign(v,trapVelocity(v,step,age));s.flightAge=age+step;
                     if(hit.hasHit){
                         const n=hit.hitNormalWorld;
                         s.x=hit.hitPointWorld.x-offsetX+n.x*(r+.01);s.y=hit.hitPointWorld.y+n.y*(r+.01)-r;s.z=hit.hitPointWorld.z-offsetZ+n.z*(r+.01);

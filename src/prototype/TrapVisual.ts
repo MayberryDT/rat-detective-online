@@ -113,16 +113,16 @@ class TrapVisual {
     /** Take over `trap`; `fresh` plays the set-down. */
     reset(trap:TrapState,fresh:boolean):void {
         this.id=trap.id;this.hp=trap.hp;this.snapAt=trap.snapAt;this.hitAt=trap.hitAt;this.broken=trap.brokenAt!==undefined;
-        this.flying=!!trap.flight;this.flightVelocity=trap.flight?{...trap.flight}:undefined;this.sampleAge=0;this.landedAt=trap.landedAt;this.setAge=fresh&&!trap.flight?DROP:Infinity;this.landed=!fresh;this.snapAge=this.hitAge=Infinity;this.breakAge=this.broken?BREAK:Infinity;
+        this.flying=!!trap.flight;this.flightVelocity=trap.flight?{...trap.flight}:undefined;this.sampleAge=0;this.flightAge=trap.flightAge??0;this.landedAt=trap.landedAt;this.setAge=fresh&&!trap.flight?DROP:Infinity;this.landed=!fresh;this.snapAge=this.hitAge=Infinity;this.breakAge=this.broken?BREAK:Infinity;
         this.corners=this.lostCorners();
         for(const piece of TRAP_PIECES){const part=this.pieces[piece],[x,y,z]=TRAP_PIVOTS[piece];part.position.set(x,y,z);part.rotation.set(0,0,0);part.scale.setScalar(1);part.visible=true;}
         this.root.visible=!this.broken;
         this.root.position.set(trap.x,trap.y,trap.z);this.root.rotation.set(0,trap.yaw,0);
     }
     /** Read a snapshot's entry: start the animations its changes call for and announce them. */
-    sync(trap:TrapState,debris:TrapDebris,announce?:((event:TrapEvent,trap:TrapState)=>void),now=Date.now()):void {
+    sync(trap:TrapState,debris:TrapDebris,announce?:((event:TrapEvent,trap:TrapState)=>void)):void {
         this.root.position.set(trap.x,trap.y,trap.z);this.root.rotation.set(0,trap.yaw,0);
-        this.flying=!!trap.flight;this.flightVelocity=trap.flight?{...trap.flight}:undefined;this.sampleAge=0;this.flightAge=Math.max(0,(now-trap.at)/1000);
+        this.flying=!!trap.flight;this.flightVelocity=trap.flight?{...trap.flight}:undefined;this.sampleAge=0;this.flightAge=trap.flightAge??0;
         if(trap.landedAt!==undefined&&trap.landedAt!==this.landedAt){this.setAge=DROP;this.landed=false;announce?.('set',trap);}this.landedAt=trap.landedAt;
         if(trap.snapAt!==undefined&&trap.snapAt!==this.snapAt&&!this.broken){this.snapAge=0;announce?.('snap',trap);}
         if(trap.hitAt!==undefined&&trap.hitAt!==this.hitAt){
@@ -262,14 +262,14 @@ export class TrapField {
         return this.templates=templates as Record<TrapPiece,THREE.Group>;
     }
     /** Follow the snapshot's traps; `announce` is false for a view's first state. */
-    apply(traps:readonly TrapState[]|undefined,announce:boolean,now=Date.now()):void {
+    apply(traps:readonly TrapState[]|undefined,announce:boolean):void {
         for(const trap of traps??[])if(trap.shotId&&this.predicted.has(trap.shotId))this.reject(trap.shotId);
         const all=[...(traps??[]),...[...this.predicted.values()].map(p=>p.state)];traps=all;
         for(const [id,visual] of this.active)if(!listed(traps,id)){visual.root.removeFromParent();this.active.delete(id);this.free.push(visual);}
         for(let i=0;i<Math.min(traps?.length??0,MAX_TRAPS);i++){
             const trap=traps![i]!;
             const visual=this.active.get(trap.id);
-            if(visual){visual.sync(trap,this.debris,announce?this.onEvent:undefined,now);continue;}
+            if(visual){visual.sync(trap,this.debris,announce?this.onEvent:undefined);continue;}
             const fresh=this.free.pop()??new TrapVisual(this.parts(),this.heavy);
             fresh.reset(trap,announce&&trap.brokenAt===undefined);
             this.active.set(trap.id,fresh);this.parent.add(fresh.root);

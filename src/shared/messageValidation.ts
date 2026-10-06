@@ -584,7 +584,7 @@ function parseChaos(value:unknown):ChaosState|null{
   }
   if(value.traps!==undefined&&(!Array.isArray(value.traps)||value.traps.length>MAX_TRAPS||
     !value.traps.every(t=>isRecord(t)&&nonEmptyString(t.id,64)&&nonEmptyString(t.owner,64)&&[t.x,t.y,t.z,t.yaw,t.at].every(n=>finiteNumber(n)!==null)&&
-      boundedInteger(t.hp,0,WEAPON_TUNING.trapHp)!==null&&(t.flight===undefined||isVec3(t.flight))&&(t.shotId===undefined||nonEmptyString(t.shotId,96))&&[t.landedAt,t.snapAt,t.hitAt,t.brokenAt].every(n=>n===undefined||finiteNumber(n)!==null))))return null;
+      boundedInteger(t.hp,0,WEAPON_TUNING.trapHp)!==null&&(t.flight===undefined||isVec3(t.flight))&&(t.shotId===undefined||nonEmptyString(t.shotId,96))&&[t.flightAge,t.landedAt,t.snapAt,t.hitAt,t.brokenAt].every(n=>n===undefined||finiteNumber(n)!==null))))return null;
   if(value.beams!==undefined&&(!Array.isArray(value.beams)||value.beams.length>MAX_BEAMS||
     !value.beams.every(b=>isRecord(b)&&nonEmptyString(b.id,64)&&nonEmptyString(b.owner,64)&&finiteNumber(b.at)!==null&&Array.isArray(b.points)&&
       b.points.length>=1&&b.points.length<=WEAPON_TUNING.laserBounces+2&&

@@ -66,7 +66,7 @@ it.each([false,true])('carries pickup claims and buff expiry through compact sna
 it('carries held weapons, flying and landed traps and laser beams, and refuses unbounded or unknown ones',()=>{
  const s=state(1),e=new ChaosEncoder('arsenal'),d=new ChaosDecoder();
  s.buffs={rat:{weapon:'laser',weaponUntil:13040},trapper:{weapon:'mousetrap'}};
- s.traps=[{id:'trap-1',owner:'trapper',x:70,y:0,z:-43,yaw:0,hp:5,at:s.time,hitAt:s.time,shotId:'throw-1',flight:{x:0,y:2,z:11}}];
+ s.traps=[{id:'trap-1',owner:'trapper',x:70,y:0,z:-43,yaw:0,hp:5,at:s.time,hitAt:s.time,shotId:'throw-1',flightAge:.12,flight:{x:0,y:2,z:11}}];
  s.beams=[{id:'shot-1',owner:'rat',at:s.time,points:[{x:0,y:1,z:0},{x:0,y:1,z:9,on:'world'},{x:3,y:1,z:0,on:'head'}]}];
  expect(d.read(e.encode(s).payload)?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));
  s.traps![0]!.flight=undefined;s.traps![0]!.landedAt=s.time+500;expect(d.read(e.encode(s).payload)?.message).toEqual(JSON.parse(serializeServerMessage({type:'chaos',state:s})));
