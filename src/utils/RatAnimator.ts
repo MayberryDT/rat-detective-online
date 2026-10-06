@@ -1,3 +1,4 @@
+import {playerPreferences} from '../settings/PlayerPreferences';
 import * as THREE from 'three';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
@@ -104,6 +105,8 @@ export class RatAnimator {
     private respawnAge = 1;
     private hit = 0;
     private hitAge = 10;
+    private heavyAge=10;
+    private heavySide=1;
     /** Polish 11: fedora knocked askew by a hit, then settling; hidden after it pops off. */
     private hatKnockAge = 10;
     /** L5: a launcher blast lifts the hat off, spins it and drops it back on. */
@@ -262,6 +265,36 @@ export class RatAnimator {
         });
         for (const {pistol} of this.gunSleeves) for (const part of pistol.children) if (part instanceof THREE.Mesh) this.pistolParts.push(part);
         this.muzzle = root.getObjectByName('rat-muzzle')!;this.restMuzzle.copy(this.muzzle.position);
+    }
+
+    /** Opt-in confirmed reaction: secondary parts only, no weapon/body/root transform. */
+    heavyHit(direction:THREE.Vector3):void {
+        this.heavyAge=0;
+        this.parentRotation.copy(this.root.quaternion).invert();
+        this.aimDirection.copy(direction).normalize().applyQuaternion(this.parentRotation);
+        this.heavySide=this.aimDirection.x<0?-1:1;
+        this.applyPose();
+    }
+
+    private heavySaved:number[]=[];
+    /** Draw-only offsets: restore before any input/raycast can run. */
+    applyHeavyRender():void {
+        if(this.heavyAge>=.18||playerPreferences().current.reducedMotion)return;
+        const h=this.heavyAge,w=h<.025?Math.max(.25,h/.025):h<.055?1:Math.max(0,1-(h-.055)/.125)**2;
+        for(const rig of this.rigs){
+            const head=rig[1].part,hat=rig[2].part,left=rig[6].part,right=rig[7].part;
+            this.heavySaved.push(head.rotation.x,head.rotation.z,hat.rotation.z,left.rotation.x,right.rotation.x);
+            head.rotation.x-=.10*w;head.rotation.z-=this.heavySide*.16*w;
+            hat.rotation.z-=this.heavySide*.22*w;left.rotation.x-=.3*w;right.rotation.x-=.3*w;
+        }
+    }
+    restoreHeavyRender():void {
+        if(!this.heavySaved.length)return;
+        let i=0;for(const rig of this.rigs){
+            rig[1].part.rotation.x=this.heavySaved[i++];rig[1].part.rotation.z=this.heavySaved[i++];
+            rig[2].part.rotation.z=this.heavySaved[i++];rig[6].part.rotation.x=this.heavySaved[i++];rig[7].part.rotation.x=this.heavySaved[i++];
+        }
+        this.heavySaved.length=0;this.root.updateMatrixWorld(true);
     }
 
     takeHit(direction?:THREE.Vector3): void {
@@ -498,7 +531,7 @@ export class RatAnimator {
         this.flashAge = 1;
         this.muzzleFlash.visible = false;
         this.lastPosition = null;
-        this.hitAge = 10;
+        this.hitAge = this.heavyAge = 10;
         this.hatKnockAge = this.hatBlowAge = this.screamAge = 10;this.flail = this.mouthOpen = this.earFlop = this.earFlopRate = this.tailSwing = this.tailSwingRate = 0;this.hatKnockZ = this.hatKnockX = 0;this.hatHidden = false;this.deathStyle = 'default';
         this.skidAge = this.nodAge = this.pulseAge = 10;this.flight = 0;this.skidStarted = false;this.landedFall = 0;this.launched = this.wasLaunched = false;this.lastVelocity.set(0, 0, 0);
         this.ragdoll.reset();this.ragdollStarted=false;this.deathHeadshot=false;this.chain.reset();
@@ -704,7 +737,7 @@ export class RatAnimator {
         this.flashAge += dt;
         this.muzzleFlash.visible = this.flashAge < .065;
         this.muzzleFlash.material.opacity = Math.max(0, 1 - this.flashAge / .065);
-        this.hitAge += dt;
+        this.hitAge += dt;this.heavyAge+=dt;
         this.hatKnockAge += dt;this.hatBlowAge += dt;this.skidAge += dt;this.nodAge += dt;this.pulseAge += dt;
         const launchFlight = this.actingEnabled && this.acting.launchFlight;
         if (launchFlight && !this.wasLaunched) {this.launched = true;this.screamAge = 0;this.screamSize = 1;}

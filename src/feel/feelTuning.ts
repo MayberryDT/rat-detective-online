@@ -13,6 +13,7 @@ export interface FeelSpec {
 }
 
 export const FEEL={
+    heavyCheese:{label:"Heavy cheese review",toggle:true,defaultOff:true,params:{muzzleLife:.07,impactLife:.18,muzzleSize:.20,impactSize:.36}},
     cameraSpring:{label:'Camera spring',toggle:false,params:{stiffness:260,damping:.78,maxTurn:.08,maxShift:.35,maxWiden:14,fovStiffness:60}},
     /** Very subtle upward view nudge (rad/s impulse; peak ≈ 0.4°) and a tiny backward shove per local shot. Toned down 2026-09-27 at Tyler's request.
      * Scattershot is a shotgun: `scattershot`× the kick and a `scatterWiden`° field-of-view thump (trimmed about 80% on

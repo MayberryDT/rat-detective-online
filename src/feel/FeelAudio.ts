@@ -84,6 +84,55 @@ export class FeelAudio {
         const at=this.context.currentTime,out=this.out(volume,0,.2);
         this.tone(out,at,.05,'square',1650,1500,.35);this.tone(out,at+.055,.05,'square',1320,1250,.25);
     }
+    private readonly combatGains=new Set<GainNode>();
+    resetCombat():void {for(const gain of this.combatGains)gain.disconnect();this.combatGains.clear();}
+    private combatOut(volume:number,duration:number):GainNode {
+        const gain=this.out(volume,0,duration);this.combatGains.add(gain);
+        setTimeout(()=>this.combatGains.delete(gain),(duration+.08)*1000);return gain;
+    }
+    /** Heavy cheese review: dry pressure attack, hollow push, sticky air. No borrowed sample. */
+    pressure():void {
+        if(!this.allow('pressure',.025))return;
+        const t=this.context.currentTime,out=this.combatOut(.38,.18);
+        this.burst(out,t,.018,'highpass',1900,.7,.001);
+        this.tone(out,t,.095,'triangle',360,125,.85);
+        this.tone(out,t,.07,'sine',175,95,.8);
+        this.burst(out,t+.012,.105,'bandpass',850,2,.002);
+    }
+    /** Confirmed body contact only: broad slap + mass + descending wet formant. */
+    bodySmack():void {
+        if(!this.allow('body-smack',.025))return;
+        const t=this.context.currentTime,out=this.combatOut(.34,.22);
+        this.burst(out,t,.026,'bandpass',1850,.65,.001);
+        this.tone(out,t,.13,'sine',260,85,1.15);
+        const source=this.context.createBufferSource(),filter=this.context.createBiquadFilter(),env=this.context.createGain();
+        source.buffer=this.white();filter.type='bandpass';filter.Q.value=3.5;
+        filter.frequency.setValueAtTime(1900,t);filter.frequency.exponentialRampToValueAtTime(350,t+.13);
+        env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.85,t+.008);env.gain.exponentialRampToValueAtTime(.001,t+.17);
+        source.connect(filter).connect(env).connect(out);source.start(t,Math.random()*.4,.18);
+    }
+
+    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'):void {
+        const t=this.context.currentTime;
+        if(kind==='tommy-gun'){
+            const out=this.combatOut(.26,.085);
+            this.burst(out,t,.009,'highpass',2400,.7,.001);
+            this.tone(out,t,.055,'triangle',290+Math.random()*35,100,.8);
+            this.burst(out,t+.009,.048,'bandpass',650,2,.002);
+        }else if(kind==='laser'){
+            const out=this.combatOut(.32,.28);
+            this.burst(out,t,.018,'highpass',3100,.8,.001);
+            this.tone(out,t,.18,'sawtooth',1200,220,.42);
+            this.tone(out,t,.12,'sine',240,70,.75);
+            this.burst(out,t+.035,.18,'bandpass',1100,5,.002);
+        }else{
+            const out=this.combatOut(.32,.2);
+            this.tone(out,t,.075,'triangle',kind==='pickup'?410:210,90,.9);
+            this.burst(out,t,.035,'bandpass',800,1,.001);
+            this.tone(out,t+.04,.1,'square',kind==='pickup'?950:1500,380,.25);
+        }
+    }
+
     /** Wet cheese layer on a hit. */
     squelch(volume:number,pan:number):void {
         if(!this.allow('squelch',.08))return;

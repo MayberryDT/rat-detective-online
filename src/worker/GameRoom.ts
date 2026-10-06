@@ -1269,12 +1269,10 @@ export class GameRoom extends DurableObject<Env> {
     if (!isPlausibleShot(message.origin, message.direction, player)) { reject('implausible'); return; }
     if (!this.rememberShot(playerId, message.shotId)) { reject('duplicate'); return; }
     const weapon=this.chaos?.weapon(playerId);
-    // A held Mousetrap is set down, not fired: no shot, no muzzle, no accuracy count. No room for it keeps it in paw;
-    // so does a press while it is still coming up into the paw (`trapLockMs`, every rat alike).
+    // A held Mousetrap is set immediately, not fired: no muzzle or accuracy count.
     if(weapon==='mousetrap'){
-      if(this.chaos!.trapArming(playerId))this.sendShotRejection(playerId,message.shotId,'trap-arming');
-      else if(this.chaos!.placeTrap(playerId,message.direction))this.applyPickupEvents();
-      else this.sendShotRejection(playerId,message.shotId,'trap-blocked');
+      if(this.chaos!.placeTrap(playerId,message.direction))this.applyPickupEvents();
+      else this.sendShotRejection(playerId,message.shotId,'invalid-state');
       return;
     }
     this.shotAcceptedAt.set(message.shotId,performance.now());

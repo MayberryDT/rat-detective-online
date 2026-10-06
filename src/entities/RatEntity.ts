@@ -643,7 +643,7 @@ export class RatEntity {
     /** Your Ironclad claim: one shine across the silver coat over `seconds`. */
     public shine(seconds:number):void {this.shineAge=0;this.shineLength=Math.max(.05,seconds);}
 
-    public takeDamage(amount: number, impactVel: THREE.Vector3) {
+    public takeDamage(amount: number, impactVel: THREE.Vector3, heavy=false) {
         if (this.dead) return;
 
         this.hp -= amount;
@@ -655,7 +655,8 @@ export class RatEntity {
 
         // ── SOUND EFFECTS ──
         if (this.hp > 0) {
-            this.animator.takeHit(impactVel);
+            if(heavy)this.animator.heavyHit(impactVel);else this.animator.takeHit(impactVel);
+            if(heavy)return; // The opt-in director owns this confirmed impact's sound.
             if (this.isPlayer) {
                 this.sound('playerHit', 0.6);
             } else {
@@ -667,6 +668,11 @@ export class RatEntity {
             this.die(impactVel);
         }
     }
+
+    /** Secondary reaction for instant-refill practice kills; health remains authority-owned. */
+    applyHeavyRender():void {this.animator.applyHeavyRender();}
+    restoreHeavyRender():void {this.animator.restoreHeavyRender();}
+    heavyReaction(direction:THREE.Vector3):void {this.animator.heavyHit(direction);}
 
     /** Polish 15: composed kill nod. */
     public nod(): void { if (!this.dead) this.animator.nod(); }

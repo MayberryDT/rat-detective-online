@@ -1,3 +1,4 @@
+import {HeavyCheese} from './HeavyCheese';
 import * as THREE from 'three';
 import type {IncidentId} from '../shared/incidentCatalog';
 import {RAT_BLACKOUT,type RatEntity} from '../entities/RatEntity';
@@ -48,6 +49,14 @@ const BAD_WORDS:Record<BadRound,string>={corkscrew:'WHEEE!',snake:'WIGGLE!',supe
  * GameSession calls it at existing event sources; channels never parse
  * network messages themselves. */
 export class FeelDirector {
+    private heavy?:HeavyCheese;
+    /** Review opt-in only. Normal sessions never call this. */
+    enableHeavyCheese(scene:THREE.Scene):void {this.heavy?.dispose();this.heavy=new HeavyCheese(scene);}
+    heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'):void {if(this.heavy)this.sound.arsenal(kind);}
+    heavyReport():void {if(this.heavy)this.sound.pressure();}
+    heavyWeaponLaunch(origin:THREE.Vector3,direction:THREE.Vector3,weapon?:string):void {this.heavy?.launchWeapon(origin,direction,weapon);}
+    heavyLaunch(origin:THREE.Vector3,direction:THREE.Vector3):void {this.heavy?.launch(origin,direction);}
+    heavyImpact(at:THREE.Vector3,normal:THREE.Vector3,target:THREE.Object3D):void {if(this.heavy){this.sound.bodySmack();this.heavy.hit(at,normal,target);}}
     readonly camera:CameraFeel;
     readonly screen:ScreenFeel;
     readonly sound:FeelSound;
@@ -552,6 +561,7 @@ export class FeelDirector {
 
     /** `self` is the local rat's position, for direction arrows. */
     update(dt:number,view:THREE.Camera,self?:THREE.Vector3):void {
+        this.heavy?.update(dt);
         const r=FEEL.rewards.params;this.view=view;
         if(this.slowAge<r.slowmo){this.slowAge+=dt;this.lag+=dt*1000*(1-r.slowRate);}
         else if(this.lag>0)this.lag=Math.max(0,this.lag-dt*1000*r.catchup);
@@ -622,6 +632,6 @@ export class FeelDirector {
     beforeRender(camera:THREE.PerspectiveCamera):void {this.camera.apply(camera);}
     afterRender(camera:THREE.PerspectiveCamera):void {this.camera.restore(camera);}
     /** Respawn, reconnect, round reset, leaving play. */
-    reset():void {this.camera.reset();this.screen.reset();this.carrier.stop();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.tommy?.clear();this.rattle=false;this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.claimStreaks=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
-    dispose():void {this.camera.reset();this.carrier.dispose();this.screen.dispose();this.noirAudio?.dispose();if(this.scene){registerDust(this.scene,undefined);registerSupplyCues(this.scene,undefined);}this.dust?.dispose();this.launchJuice?.dispose();this.tommy?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
+    reset():void {this.heavy?.clear();this.camera.reset();this.screen.reset();this.carrier.stop();this.killTimes.length=0;this.danger=this.dangerTarget=this.flood=0;this.hp=MAX_HP;this.noirAudio?.reset();this.deathTarget=undefined;this.deathAge=0;this.dust?.clear();this.launchJuice?.clear();this.tommy?.clear();this.rattle=false;this.fallingCases.clear();this.flying=false;this.airVy=0;this.pursuit=0;this.claimStreaks=0;this.wasGrounded=true;this.muzzleFlash=0;this.surgeAge=this.surgeFlicker=0;this.sound.reset();this.lifeKills=0;this.hunchView?.reset();}
+    dispose():void {this.heavy?.dispose();this.camera.reset();this.carrier.dispose();this.screen.dispose();this.noirAudio?.dispose();if(this.scene){registerDust(this.scene,undefined);registerSupplyCues(this.scene,undefined);}this.dust?.dispose();this.launchJuice?.dispose();this.tommy?.dispose();this.sound.dispose();registerCity(undefined);this.city?.dispose();this.noirCity?.dispose();this.noirRain?.dispose();this.noirAtmosphere?.dispose();this.noirDressing?.dispose();this.lampAlarm?.dispose();this.hunchView?.dispose();this.searchlight?.dispose();RAT_BLACKOUT.value=0;this.doc?.body.classList.remove('blackout');}
 }

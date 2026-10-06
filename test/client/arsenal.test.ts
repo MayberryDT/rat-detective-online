@@ -110,8 +110,8 @@ describe('the Laser',()=>{
 });
 describe('the Mousetrap',()=>{
     const traps=(sim:ChaosSimulation)=>sim.snapshot(false).traps??[];
-    /** Take up a Mousetrap, wait out its lockout (`trapLockMs`), and press. */
-    const setDown=(sim:ChaosSimulation,p:PlayerData,direction={x:0,y:0,z:1})=>{arm(sim,p.id,'mousetrap');sim.step(0,sim.time+W.trapLockMs);return sim.placeTrap(p.id,direction);};
+    /** Take up a Mousetrap and press immediately through shared authority. */
+    const setDown=(sim:ChaosSimulation,p:PlayerData,direction={x:0,y:0,z:1})=>{arm(sim,p.id,'mousetrap');return sim.placeTrap(p.id,direction);};
     it('is set down ahead, never catches its owner, and holds any other rat, coat or not, without harm',()=>{
         const {sim,a,b,hits}=fixture();
         expect(setDown(sim,a)).toBe(true);
@@ -137,24 +137,34 @@ describe('the Mousetrap',()=>{
         a.hp=0;sim.step(1/60,sim.time+16);
         expect(traps(sim)).toHaveLength(1);
     });
-    it('stays in paw when there is no room ahead',()=>{
+    it('places immediately beside a wall and under vertical aim, consuming the held trap',()=>{
         const {sim,a}=fixture();
-        // A wall stands about 10 units west of the avenue's middle.
         stand(a,{x:STREET.x-7,y:0,z:STREET.z});
-        expect(setDown(sim,a,{x:-1,y:0,z:0})).toBe(false);
-        expect(sim.placeTrap('a',{x:0,y:1,z:0})).toBe(false);
-        expect(weaponOf(sim,'a')).toBe('mousetrap');
-        expect(traps(sim)).toEqual([]);
+        expect(setDown(sim,a,{x:-1,y:0,z:0})).toBe(true);
+        const wall=traps(sim)[0]!;
+        expect([wall.x,wall.y,wall.z].every(Number.isFinite)).toBe(true);
+        expect(wall.x).toBeLessThan(a.x);
+        expect(weaponOf(sim,'a')).toBeUndefined();
+        expect(setDown(sim,a,{x:0,y:1,z:0})).toBe(true);
+        const vertical=traps(sim)[0]!;
+        expect([vertical.x,vertical.y,vertical.z].every(Number.isFinite)).toBe(true);
+        expect(traps(sim)).toHaveLength(1);
+        expect(weaponOf(sim,'a')).toBeUndefined();
     });
-    it('is not set down on another living rat, only clear of it',()=>{
+    it('accepts occupied ground and holds the living rat without damage',()=>{
         const {sim,a,b,hits}=fixture();
         stand(b,{x:a.x,y:a.y,z:a.z+W.trapReach});
-        expect(setDown(sim,a)).toBe(false);
-        expect(weaponOf(sim,'a')).toBe('mousetrap');
-        sim.step(1/60,sim.time+16);expect(hits).toEqual([]);
-        // A rat on the floor below is no obstacle, nor is a dead one.
+        const hp=b.hp;
+        expect(setDown(sim,a)).toBe(true);
+        expect(weaponOf(sim,'a')).toBeUndefined();
+        const placed=traps(sim)[0]!;
+        expect([placed.x,placed.y,placed.z].every(Number.isFinite)).toBe(true);
+        sim.step(1/60,sim.time+16);
+        expect(sim.snapshot(false).buffs?.b?.trappedUntil).toBe(sim.time+W.trapHoldMs);
+        expect(b.hp).toBe(hp);expect(hits).toEqual([]);
+        // Floor-separated and dead rats still never veto placement.
         stand(b,{x:a.x,y:a.y-W.trapHeight-1,z:a.z+W.trapReach});
-        expect(sim.placeTrap('a',{x:0,y:0,z:1})).toBe(true);
+        expect(setDown(sim,a)).toBe(true);
         stand(b,{x:a.x,y:a.y,z:a.z-W.trapReach});b.hp=0;
         expect(setDown(sim,a,{x:0,y:0,z:-1})).toBe(true);
     });

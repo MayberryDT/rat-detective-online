@@ -158,9 +158,14 @@ export class CheeseGun {
      * Scattershot has its own five-ball blast. The Tommy Gun has its own recorded rounds; the Laser's zap is the beam's
      * (ChaosView), and a Mousetrap is silent here. */
     private fireSound(origin: { x: number; y: number; z: number }, local: boolean, weapon?: WeaponKind): void {
-        if (weapon) { if (weapon === 'tommy-gun') this.fireAudio.play(origin, local, 'tommy'); return; }
+        if (weapon) { if(local&&this.localWeaponReport&&weapon!=='mousetrap'){this.localWeaponReport(weapon);return;} if (weapon === 'tommy-gun') this.fireAudio.play(origin, local, 'tommy'); return; }
+        if(local&&this.localReport&&this.fireCue==='normal'){this.localReport();return;}
         this.fireAudio.play(origin, local, this.fireCue);
     }
+
+    /** Explicit local presentation override; unset in normal gameplay. Never changes a shot descriptor. */
+    localReport?: () => void;
+    localWeaponReport?: (weapon:'laser'|'tommy-gun')=>void;
 
     setIncident(incident?: IncidentId): void {
         this.fireCue = incident === 'bad-ammunition' ? 'malfunction' : incident === 'scattershot' ? 'shotgun' : 'normal';

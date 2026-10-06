@@ -6,7 +6,7 @@ import {activeDestination,destinationPoint} from '../assignments';
 import {exposedCarrierCase,shotHitsIronclad} from '../BotTargeting';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,PRESSURE_TUNING,type CaseState,type ChaosState,type LaunchMachine} from '../chaosState';
 import {incidentInfo,type IncidentId} from '../incidentCatalog';
-import {hasIronclad,heldWeapon,legScale,weaponArming,WEAPON_TUNING,type WeaponKind} from '../pickups';
+import {hasIronclad,heldWeapon,legScale,WEAPON_TUNING,type WeaponKind} from '../pickups';
 import type {PlayerData,Vec3Data} from '../networkProtocol';
 import type {BotWaypoint} from '../BotLaunchRoutes';
 import {BASE_SKILL,type Goal,type MotorMode,type Plan,type SkillDials,type Stance} from './intent';
@@ -845,7 +845,7 @@ export class BotMotor {
      * (`trapReach` ahead along the crosshair) is a floor with nothing solid in between, and the spot is useful. */
     private setTrap(now:number,self:PlayerData,state:ChaosState|undefined,grounded:boolean,rival:boolean):boolean {
         const since=this.trapHeldAt;
-        if(since===undefined||now-since<TRAP.settleMs||weaponArming(state?.buffs?.[self.id],state?.time??now)||now<this.trapPressAt||now<this.trapLookAt||!grounded||this.jumpTravel||this.flight)return false;
+        if(since===undefined||now-since<TRAP.settleMs||now<this.trapPressAt||now<this.trapLookAt||!grounded||this.jumpTravel||this.flight)return false;
         this.trapLookAt=now+TRAP.lookMs;
         const nav=this.navigation,ray=nav.ray,reach=WEAPON_TUNING.trapReach,sx=Math.sin(this.aim.yaw),sz=Math.cos(this.aim.yaw);
         const spot=this.trapSpot,from=this.trapRay,to=this.trapTo;

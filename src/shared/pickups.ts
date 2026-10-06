@@ -57,9 +57,8 @@ export const WEAPON_TUNING = {
      * while it holds, re-arms `trapRearmMs` after letting go, and never snaps the rat it just let go until that rat has
      * stepped clear. `trapHp` ball hits destroy it (a laser hit counts `laserTrapHits`) and free whoever it holds; a
      * broken trap stays in the snapshot `trapBrokenMs` so clients can play the break. One per rat; it outlives its
-     * owner's death, not the round. A rat that gets one cannot set it down (nor fire) for `trapLockMs`
-     * (`PlayerBuffs.weaponReadyAt`) while the gun goes away and the trap comes up. */
-    trapReach: 2.9, trapRadius: 1.5, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapHoldMs: 3000, trapRearmMs: 900, trapBrokenMs: 700, trapLockMs: 1000,
+     * owner's death, not the round. Acquisition is immediately ready; `trapLockMs` remains zero for legacy presentation callers. */
+    trapReach: 2.9, trapRadius: 1.5, trapFoot: .35, trapHeight: 1.2, trapHp: 8, laserTrapHits: 3, trapHoldMs: 3000, trapRearmMs: 900, trapBrokenMs: 700, trapLockMs: 0,
 } as const;
 /** The placed Mousetrap's size: the model's board (1.5 wide, 2.5 long) scaled so its half-length is `trapRadius`, and
  * a little taller again. The drawn trap and its shootable block share it, so what you see is what snaps and stops balls. */
@@ -129,8 +128,7 @@ export const PICKUP_ANCHORS: readonly PickupAnchor[] = [
 ];
 
 /** Active effects on one rat. Absent keys mean no effect. `weapon` is the one special weapon held, until
- * `weaponUntil` (absent for the Mousetrap, held until set down). A Mousetrap just taken cannot be set down before
- * `weaponReadyAt` (`WEAPON_TUNING.trapLockMs`). `faulty` is a Code Violation dud running until `faultyUntil`.
+ * `weaponUntil` (absent for the Mousetrap, held until set down). `weaponReadyAt` is retained for old snapshots; it does not delay Mousetrap placement. `faulty` is a Code Violation dud running until `faultyUntil`.
  * `trappedUntil`: another rat's Mousetrap holds this one in place until then (`WEAPON_TUNING.trapHoldMs`). */
 export interface PlayerBuffs { ironcladUntil?: number; hustleUntil?: number; stakeoutUntil?: number; weapon?: WeaponKind; weaponUntil?: number; weaponReadyAt?: number; faulty?: FaultyKind; faultyUntil?: number; trappedUntil?: number }
 export type BuffMap = Record<string, PlayerBuffs>;
@@ -163,9 +161,9 @@ export const hasHustle = (buffs: BuffMap | undefined, id: string, now: number): 
 export const hasStakeout = (buffs: BuffMap | undefined, id: string, now: number): boolean =>
     (buffs?.[id]?.stakeoutUntil ?? 0) > now;
 
-/** Whether a held weapon is still being taken up (a Mousetrap's `trapLockMs`): no shot and no set-down yet. */
+/** Legacy swap presentation for non-trap entries. Mousetraps are immediately ready. */
 export const weaponArming = (entry: PlayerBuffs | undefined, now: number): boolean =>
-    !!entryWeapon(entry, now) && (entry?.weaponReadyAt ?? -Infinity) > now;
+    !!entryWeapon(entry, now) && entryWeapon(entry, now)!=='mousetrap' && (entry?.weaponReadyAt ?? -Infinity) > now;
 
 /** Code Violation (Tyler, 1 October: "no one should die from code violation … but let's give negative effects"): a
  * supply claimed while it runs comes out faulty, a short, harmless bad version that never kills and never stalls the
@@ -219,8 +217,7 @@ export const buffExpired = (entry: PlayerBuffs | undefined, now: number): boolea
 
 /** Merge a fresh claim into a rat's existing effects. Re-collecting the same
  * benefit refreshes to the full duration; it never stacks or accumulates.
- * A weapon replaces whichever weapon the rat held. Taking up a Mousetrap (not
- * already in paw) locks the trigger for `trapLockMs`. */
+ * A weapon replaces whichever weapon the rat held. Taking up a Mousetrap is immediately ready. */
 export function mergePickup(
     existing: PlayerBuffs | undefined,
     pickup: PickupKind,
@@ -230,8 +227,7 @@ export function mergePickup(
     if (isTimedPickup(pickup)) next[BUFF_FIELD[pickup]] = now + BUFF_MS[pickup];
     else if (isWeaponKind(pickup)) {
         const ms = WEAPON_MS[pickup];
-        if (pickup !== 'mousetrap') delete next.weaponReadyAt;
-        else if (entryWeapon(existing, now) !== 'mousetrap') next.weaponReadyAt = now + WEAPON_TUNING.trapLockMs;
+        delete next.weaponReadyAt;
         next.weapon = pickup;
         if (ms === undefined) delete next.weaponUntil; else next.weaponUntil = now + ms;
     }

@@ -49,7 +49,7 @@ import { ChaosPresentation, copyPresentationPose, type PresentationPose } from '
 import { PickupVisual } from './PickupVisual';
 import {faultyCard, heldCard, hotCaseCard, pickupArtwork, powerupCard} from './pickupArtwork';
 import {CASE_RED} from './caseRed';
-import { BUFF_FIELD, BUFF_MS, FAULTY_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, WEAPON_TUNING, activeBuffs, entryFaulty, entryWeapon, heldWeapon, isTimedPickup, weaponArming, type BuffMap, type FaultyKind, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
+import { BUFF_FIELD, BUFF_MS, FAULTY_MS, PICKUP_TUNING, TIMED_PICKUPS, WEAPON_KINDS, WEAPON_MS, WEAPON_TUNING, activeBuffs, entryFaulty, entryWeapon, heldWeapon, isTimedPickup, type BuffMap, type FaultyKind, type PickupKind, type TimedPickup, type WeaponKind } from '../shared/pickups';
 import {TrapField,type TrapEvent} from './TrapVisual';
 import {closestPointOnSegment} from '../shared/netplay';
 
@@ -166,17 +166,13 @@ export class ChaosView {
     private readonly claimChips=new Map<PickupKind,HTMLElement>();
     private readonly claimAt=new THREE.Vector3();
     private readonly claimFrom={x:0,y:0};
-    /** Your own supply claim (not other rats'), raised the frame its card is up; `lockMs` is what is left of a
-     * just-taken Mousetrap's trigger lockout (0 otherwise). */
+    /** Your own supply claim (not other rats'), raised once the card is up. Legacy lockMs is always zero. */
     onClaim?:(kind:PickupKind,camera:THREE.Camera,lockMs:number)=>void;
     private readonly localBuffs:Record<TimedPickup,number>={ironclad:0,hustle:0,stakeout:0};
     private buffsSeen=false;
     /** Your special weapon and its deadline as last seen, so a new claim (or a refresh) is announced once. */
     private localWeapon?:WeaponKind;
     private localWeaponUntil=0;
-    /** Your Mousetrap is still coming up into the paw (its lockout), and the lockout left at its claim. */
-    private localArming=false;
-    private trapLockMs=0;
     /** Your Code Violation dud's deadline as last seen (so a new one is announced once), and its card. */
     private localDudUntil=0;
     private dud?:{kind:FaultyKind;card:HTMLElement};
@@ -359,10 +355,10 @@ export class ChaosView {
             const angle=i*2.4+Math.random();
             this.impacts.spark(this.impactPoint.set(me.x+Math.cos(angle)*.35,me.y+1.1+i*.25,me.z+Math.sin(angle)*.35),this.impactNormal.set(Math.cos(angle),.8,Math.sin(angle)));
         }
-        this.onClaim?.(kind,camera,kind==='mousetrap'?this.trapLockMs:0);
+        this.onClaim?.(kind,camera,0);
     }
     private clearPickupCards():void {
-        this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;this.localWeapon=undefined;this.localWeaponUntil=0;this.localArming=false;this.localDudUntil=0;
+        this.healingUntil=0;this.claimed=undefined;for(const kind of TIMED_PICKUPS)this.localBuffs[kind]=0;this.localWeapon=undefined;this.localWeaponUntil=0;this.localDudUntil=0;
         for(const card of this.buffCards.values())leave(card,'paperSlide',CARD_EXIT);
         if(this.dud){leave(this.dud.card,'paperSlide',CARD_EXIT);this.dud=undefined;}
         if(this.held){leave(this.held,'paperSlide',CARD_EXIT);this.held=undefined;}
@@ -602,8 +598,8 @@ export class ChaosView {
         for(const id of this.armed)if(!heldWeapon(state.buffs,id,state.time)){this.resolveRat(id)?.setWeapon(undefined);this.armed.delete(id);}
         for(const id in state.buffs){
             const weapon=heldWeapon(state.buffs,id,state.time);
-            // A Mousetrap just taken (still in its lockout) is swapped in: the gun goes away and the trap comes up big.
-            if(weapon){this.resolveRat(id)?.setWeapon(weapon,weaponArming(state.buffs?.[id],state.time));this.armed.add(id);}
+            // A new weapon is shown immediately; acquisition does not lock the trigger.
+            if(weapon){this.resolveRat(id)?.setWeapon(weapon);this.armed.add(id);}
         }
     }
     /** Announce a claim locally when the authoritative buff first appears; a new view's first state (a reconnect
@@ -616,11 +612,10 @@ export class ChaosView {
             if(seen&&until!==this.localBuffs[kind]&&until>state.time)this.pickupFeedback(kind);
             this.localBuffs[kind]=until;
         }
-        const weapon=entryWeapon(mine,state.time),until=mine?.weaponUntil??0,arming=weaponArming(mine,state.time);
-        if(seen&&weapon&&(weapon!==this.localWeapon||until!==this.localWeaponUntil)){this.trapLockMs=arming?mine!.weaponReadyAt!-state.time:0;this.pickupFeedback(weapon);}
+        const weapon=entryWeapon(mine,state.time),until=mine?.weaponUntil??0;
+        if(seen&&weapon&&(weapon!==this.localWeapon||until!==this.localWeaponUntil)){this.pickupFeedback(weapon);}
         // W3: the trap is up in your paws: the next press sets it down.
-        if(seen&&weapon==='mousetrap'&&this.localArming&&!arming)this.feedback?.('trap-ready');
-        this.localWeapon=weapon;this.localWeaponUntil=until;this.localArming=arming;
+        this.localWeapon=weapon;this.localWeaponUntil=until;
         // A Code Violation dud: the slap of a claim, then the faulty fitting's zap.
         const dud=entryFaulty(mine,state.time),dudUntil=dud?mine!.faultyUntil!:0;
         if(seen&&dud&&dudUntil!==this.localDudUntil){

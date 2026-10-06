@@ -15,7 +15,7 @@ import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballT
 import { bounceShot, crossfireBounce, quirkBirth, quirkBounce, shotLife, steerQuirk } from './shotBallistics';
 import { CASE_HOME, CASE_HAND, CASE_CARRY_ROTATION, CASE_SIZE, CASE_LOOSE_SCALE, CASE_SPAWNS, EXTRA_CASE_IDS, CHAOS_TUNING as T, CROSSFIRE, INCIDENT_TUNING as I, DISPATCH_STATIONS, PRESSURE_LAUNCH, PRESSURE_TUNING, LAUNCH_MACHINES, MAX_LAUNCH_EVENTS,
     type CaseState, type ChaosState, type ChaosShot, type CorpseState, type PhysicalPose, type LaunchMachine, type PressureState, type TrapState, type LaserBeam, MAX_TRAPS, MAX_BEAMS } from './chaosState';
-import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, shortedOut, weaponArming, FAULTY_COPY, FAULTY_TUNING, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, TRAP_SCALE, TRAP_TALL, resolvePickupPoints, randomSiteKind,
+import { hasIronclad, mergePickup, mergeFaulty, activeBuffs, buffExpired, heldWeapon, pickupEffectUntil, shortedOut, FAULTY_COPY, FAULTY_TUNING, PICKUP_KINDS, PICKUP_TUNING, WEAPON_TUNING as W, TRAP_SCALE, TRAP_TALL, resolvePickupPoints, randomSiteKind,
     type BuffMap, type FaultyKind, type PickupKind, type PickupPoint, type WeaponKind } from './pickups';
 import { overWater } from './city/kit/city';
 import type { WorldSpec } from './worldSpec';
@@ -202,7 +202,7 @@ export class ChaosSimulation {
         for(const c of this.corpses.values())if(c.state.victimId===victimId)found=c.body;
         return found?data(found.position):undefined;
     }
-    constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, spec?:WorldSpec) {
+    constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, spec?:WorldSpec, private readonly fixtureSupplies?:readonly PickupPoint[]) {
         // The city is mostly static boxes; sweep-and-prune avoids testing every
         // static pair whenever a case or corpse moves.
         this.world.broadphase=new StaticCityBroadphase(this.world);
@@ -235,8 +235,8 @@ export class ChaosSimulation {
         let clear:readonly Vec3Data[];
         try{clear=spec?worldSpawnPoints(spec):CASE_SPAWNS;}catch{clear=CASE_SPAWNS;}
         this.streetPoints=clear;
-        this.pickupPoints=resolvePickupPoints(clear,14,p=>this.supportedSpot(p));
-        for(const point of this.pickupPoints){this.pickups.set(point.id,{kind:siteKind(point.kind),p:{...point.p},availableAt:0});this.siteHomes.set(point.id,{...point.p});}
+        this.pickupPoints=this.fixtureSupplies?[...this.fixtureSupplies]:resolvePickupPoints(clear,14,p=>this.supportedSpot(p));
+        for(const point of this.pickupPoints){this.pickups.set(point.id,{kind:this.fixtureSupplies?point.kind:siteKind(point.kind),p:{...point.p},availableAt:0});this.siteHomes.set(point.id,{...point.p});}
     }
     /** A supply-sized volume at `p` (prop height .7 above the foot) is clear of
      * static boxes, stands on flat floor with headroom, and has no wall hugging it. */
@@ -325,7 +325,7 @@ export class ChaosSimulation {
         const accepted={accepted:true as const,target:'pickup' as const,targetId:id,playerId:player.id,pickup:site.kind,
             ...(effectUntil===undefined?{}:{effectUntil}),...dud};
         this.recentPickupClaims.set(id,{playerId:player.id,generation,at:now,pickup:site.kind,...(effectUntil===undefined?{}:{effectUntil}),...dud});
-        site.kind=siteKind(site.kind);
+        site.kind=this.fixtureSupplies?.find(p=>p.id===id)?.kind??siteKind(site.kind);
         return accepted;
     }
     /** Code Violation (Tyler, 1 October): a claimed supply comes out as its dud (`FAULTY_KINDS`) instead, told to the
@@ -992,20 +992,17 @@ export class ChaosSimulation {
         this.sound('corpse-kick',point,normal);
         corpse.body.angularVelocity.x+=kick.z*.3;corpse.body.angularVelocity.z-=kick.x*.3;
     }
-    /** A Mousetrap just taken is still coming up into the paw (`trapLockMs`): it cannot be set down yet. */
-    trapArming(owner:string):boolean{return weaponArming(this.buffs[owner],this.now);}
-    /** The Mousetrap: set down `trapReach` ahead along the rat's horizontal aim, on a supported floor with room around
-     * it and nothing between. It leaves the paw and replaces the rat's earlier trap. False (the trap stays in paw) while
-     * it is still coming up (`trapArming`) or when there is no such spot. */
+    /** Immediate Mousetrap placement. Only invalid/dead ownership or nonfinite input refuses it; occupied footprints do not. */
     placeTrap(owner:string,direction:Vec3Data):boolean{
         const rat=this.players.get(owner);
-        if(!rat||rat.hp<=0||this.weapon(owner)!=='mousetrap'||this.trapArming(owner))return false;
-        const length=Math.hypot(direction.x,direction.z);if(!(length>.05))return false;
-        const fx=direction.x/length,fz=direction.z/length;
+        if(!rat||rat.hp<=0||this.weapon(owner)!=='mousetrap')return false;
+        if(![rat.x,rat.y,rat.z,direction.x,direction.y,direction.z].every(Number.isFinite))return false;
+        const length=Math.hypot(direction.x,direction.z);
+        // Looking straight up/down still places in the rat's facing direction.
+        const yaw=Number.isFinite(rat.meshQy)&&Number.isFinite(rat.meshQw)?2*Math.atan2(rat.meshQy,rat.meshQw):0;
+        const fx=length>.05?direction.x/length:Math.sin(yaw),fz=length>.05?direction.z/length:Math.cos(yaw);
         this.rayQuery.refresh();
-        let spot:Vec3Data|undefined;
-        for(const reach of [W.trapReach,W.trapReach-.6,W.trapReach+.8]){spot=this.trapSpot(rat,fx,fz,reach);if(spot)break;}
-        if(!spot)return false;
+        const spot=this.trapSpot(rat,fx,fz,W.trapReach);
         for(const [id,trap] of this.traps)if(trap.state.owner===owner)this.removeTrap(id);
         if(this.traps.size>=MAX_TRAPS)this.removeTrap(this.traps.keys().next().value!);
         const entry=this.buffs[owner]!;delete entry.weapon;delete entry.weaponUntil;delete entry.weaponReadyAt;
@@ -1021,26 +1018,18 @@ export class ChaosSimulation {
         body.quaternion.setFromAxisAngle(new C.Vec3(0,1,0),state.yaw);
         this.world.addBody(body);this.targets.set(body,{kind:'trap',trapId:state.id});this.traps.set(state.id,{state,body});
     }
-    /** A floor spot `reach` ahead: open line from the rat, flat floor near the rat's feet under the centre and all
-     * four corners, no wall within the trap, and clear of other traps and of any other living rat it would snap at once. */
-    private trapSpot(rat:PlayerData,fx:number,fz:number,reach:number):Vec3Data|undefined{
-        const x=rat.x+fx*reach,z=rat.z+fz*reach,chest=new C.Vec3(rat.x,rat.y+.9,rat.z);
-        const floorAt=(px:number,pz:number)=>{
-            const hit=this.ray(new C.Vec3(px,rat.y+1.6,pz),new C.Vec3(px,rat.y-2.4,pz),1);
-            return hit.hasHit&&hit.hitNormalWorld.y>.8?hit.hitPointWorld.y:undefined;
-        };
-        const y=floorAt(x,z);if(y===undefined||y<rat.y-1.8||y>rat.y+.7)return;
-        const lift=new C.Vec3(x,y+.45,z);
-        if(this.ray(chest,lift,1).hasHit)return;
-        const r=W.trapRadius*.75;
-        for(const [dx,dz] of [[r,r],[r,-r],[-r,r],[-r,-r]] as const){
-            const corner=floorAt(x+dx,z+dz);if(corner===undefined||Math.abs(corner-y)>.3)return;
-            if(this.ray(lift,new C.Vec3(x+dx*1.2,y+.45,z+dz*1.2),1).hasHit)return;
-        }
-        for(const trap of this.traps.values())if(trap.state.owner!==rat.id&&trap.state.brokenAt===undefined&&Math.hypot(trap.state.x-x,trap.state.z-z)<W.trapRadius*2&&Math.abs(trap.state.y-y)<2)return;
-        const snap=W.trapRadius+W.trapFoot;
-        for(const other of this.players.values())if(other.id!==rat.id&&other.hp>0&&Math.abs(other.y-y)<=W.trapHeight&&Math.hypot(other.x-x,other.z-z)<=snap)return;
-        return{x,y,z};
+    /** Resolve a visible placement, never reject occupied footprints. Walls choose their near surface;
+     * uneven floors, other traps and live rats do not refuse the deployment. Air/edge placement falls
+     * back to the rat's foot level when no floor exists, inside the existing horizontal city bounds. */
+    private trapSpot(rat:PlayerData,fx:number,fz:number,reach:number):Vec3Data {
+        let x=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,rat.x+fx*reach));
+        let z=Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,rat.z+fz*reach));
+        const chest=new C.Vec3(rat.x,rat.y+.9,rat.z);
+        const wall=this.ray(chest,new C.Vec3(x,rat.y+.9,z),1);
+        if(wall.hasHit){x=wall.hitPointWorld.x-fx*.18;z=wall.hitPointWorld.z-fz*.18;}
+        const floor=this.ray(new C.Vec3(x,rat.y+1.6,z),new C.Vec3(x,rat.y-80,z),1);
+        const y=floor.hasHit&&floor.hitNormalWorld.y>.5&&!(rat.y>=0&&floor.hitPointWorld.y< -1)?floor.hitPointWorld.y:rat.y;
+        return{x:Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,x)),y,z:Math.max(CITY_BOUNDS.min,Math.min(CITY_BOUNDS.max,z))};
     }
     /** `hits` ball hits on a trap; at none left it breaks, credited to `by`. */
     private damageTrap(id:string,hits:number,by:string|null):void{

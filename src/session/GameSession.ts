@@ -32,7 +32,7 @@ import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
 import { caseLastSeen } from '../shared/caseHeartbeat';
-import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, trapped, weaponArming, type WeaponKind } from '../shared/pickups';
+import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, trapped, type WeaponKind } from '../shared/pickups';
 import { tommyHeat } from '../shared/shotPattern';
 import { laserPath } from '../shared/laser';
 import { HeldFire } from './HeldFire';
@@ -336,9 +336,6 @@ export class GameSession {
     private shoot(): void {
         if (this.observing || this.title.settings?.isOpen || this.transport.state !== 'playing' || this.roundWon || !this.rat || this.rat.entity.dead || this.rat.entity.hp <= 0) return;
         const now=performance.now(),weapon=this.weaponNow();
-        // A Mousetrap just taken is still coming up into the paw: the press does nothing (no shot, no set-down predicted;
-        // the room refuses it too). Only a press after that sets it down: a held trigger never repeats into it.
-        if (weaponArming(this.lastChaos?.buffs?.[this.myId], Date.now() + this.serverOffset)) return;
         // Short Circuit (a Code Violation dud): the gun is shorted out and only dry-clicks, as the room refuses it.
         if (shortedOut(this.lastChaos?.buffs, this.myId, Date.now() + this.serverOffset)) { this.feel.sound.jam(); return; }
         this.rat.updateView();
@@ -538,12 +535,6 @@ export class GameSession {
                 else if(message.ballId===message.shotId)this.netplay?.end(message.shotId,message.outcome,message.compensated?`rewind:${Math.round(message.rewindMs??0)}ms/delta:${(message.targetDelta??0).toFixed(2)}`:message.fallback);
                 else this.netplay?.count('shot-ball',message.outcome,message.compensated?'compensated':message.fallback);
                 this.chaos?.shotResult(message);
-                // W3: the Mousetrap would not go down there; it stays in your paw.
-                if(message.outcome==='rejected'&&message.fallback==='trap-blocked'&&this.rat){
-                    this.stage.camera.getWorldDirection(this.direction).setY(0).normalize();
-                    TRAP_SPOT.copy(this.rat.entity.mesh.position).addScaledVector(this.direction,WEAPON_TUNING.trapReach);
-                    this.feedback.play('trap-refused');this.feel.trapRefused(TRAP_SPOT,this.stage.camera);
-                }
                 break;
             case 'pickupResult':
                 this.pendingInteractions.delete(message.interactionId);

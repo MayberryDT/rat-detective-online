@@ -5,29 +5,32 @@
   <title>Rat Detective · Target practice</title>
   <link rel="stylesheet" href="../../src/ui/crosshair.css">
   <style>
-    *{box-sizing:border-box}body{margin:0;overflow:hidden;background:#100b19;color:#f3e9d5;font:14px/1.6 system-ui,sans-serif}canvas{display:block}
-    [hidden]{display:none!important}#veil{position:fixed;inset:0;background:#100b19aa;z-index:2}
-    #panel{position:fixed;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);width:min(430px,calc(100vw - 32px));max-height:90vh;overflow:auto;padding:28px;background:#1a1222f5;border:1px solid #796580;box-shadow:0 16px 70px #0008}
+    *{box-sizing:border-box}a{color:#ffdc87}input{accent-color:#f1c66b}body{margin:0;overflow:hidden;background:#121922;color:#f3e9d5;font:14px/1.6 system-ui,sans-serif}canvas{display:block}
+    [hidden]{display:none!important}#veil{position:fixed;inset:0;background:#121922aa;z-index:2}
+    #panel{position:fixed;z-index:3;left:50%;top:50%;transform:translate(-50%,-50%);width:min(430px,calc(100vw - 32px));max-height:90vh;overflow:auto;padding:28px;background:#18222bf5;border:1px solid #796580;box-shadow:0 16px 70px #0008}
     .eyebrow{color:#cfb477;font-size:11px;letter-spacing:.17em;font-weight:800}h1{font-size:29px;line-height:1.15;margin:8px 0 18px}p{color:#c8becb;margin:12px 0}strong{color:#f3e9d5}
-    button{font:inherit;cursor:pointer;border:1px solid #796580;background:#302039;color:#f3e9d5;padding:10px 15px;margin:6px 5px 0 0}button:focus-visible{outline:2px solid #f0d795;outline-offset:3px}#play{background:#e0c884;border-color:#e0c884;color:#201724;font-weight:800}button:disabled{opacity:.5;cursor:wait}
-    #hud{position:fixed;top:20px;left:20px;min-width:240px;padding:14px 18px;background:#1a1222e8;border-left:3px solid #cfb477;pointer-events:none}#totals{font-variant-numeric:tabular-nums;color:#c8becb}#result{margin-top:7px;color:#f0d795;max-width:330px}#overlay-status{color:#aee2d1;font-size:12px}
-    #controls{position:fixed;bottom:14px;left:16px;padding:5px 9px;background:#1a1222df;color:#c8becb;font-size:12px;pointer-events:none}#crosshair{display:none}body.playing #crosshair{display:block}
-    #credit{position:fixed;right:14px;bottom:12px;font-size:10px;color:#a69aaf;pointer-events:none}@media(max-width:900px),(max-height:500px){body.playing #credit{display:none}}
+    button{font:inherit;cursor:pointer;border:1px solid #796580;background:#29343d;color:#f3e9d5;padding:10px 15px;margin:6px 5px 0 0}button:focus-visible{outline:2px solid #f0d795;outline-offset:3px}#play{background:#e0c884;border-color:#e0c884;color:#201724;font-weight:800}button:disabled{opacity:.5;cursor:wait}
+    #hud{z-index:1;position:fixed;top:20px;left:20px;min-width:240px;padding:14px 18px;background:#18222be8;border-left:3px solid #cfb477;pointer-events:none}#totals{font-variant-numeric:tabular-nums;color:#c8becb}#result{margin-top:7px;color:#f0d795;max-width:330px}#overlay-status{color:#aee2d1;font-size:12px}
+    #controls{z-index:1;position:fixed;bottom:14px;left:16px;padding:5px 9px;background:#18222bdf;color:#c8becb;font-size:12px;pointer-events:none}#crosshair{display:none}body.playing #crosshair{display:block}
+    #credit{z-index:1;position:fixed;right:14px;bottom:12px;font-size:10px;color:#a69aaf;pointer-events:none}@media(max-width:900px),(max-height:500px){body.playing #credit{display:none}}
+    body.heavy-cheese #crosshair.hit-confirmed{animation:heavy-contact 180ms ease-out both}
+    @keyframes heavy-contact{0%{transform:translate(-50%,-50%) rotate(45deg) scale(2.7)}18%,38%{transform:translate(-50%,-50%) rotate(45deg) scale(1.85)}100%{transform:translate(-50%,-50%) rotate(45deg) scale(1)}}
+    body.reduced-motion.heavy-cheese #crosshair.hit-confirmed{animation:none;transform:translate(-50%,-50%) rotate(45deg) scale(1.6)}
   </style>
 </head>
 <body>
   <div id="veil"></div>
   <section id="panel">
     <div class="eyebrow">RAT DETECTIVE · LOCAL PRACTICE</div>
-    <h1>The usual suspects.</h1>
-    <p>Four stationary rats, from close range to across the street. Walk around them and test any angle. They never move or shoot.</p>
-    <p><strong>Normal weapons and hit detection.</strong> Three health per target, restored immediately after a kill. Head hits deal 3 damage; body hits deal 1.</p>
+    <h1>Make the cheese land.</h1><p><a href="?shooting=heavy&agent=1">Heavy cheese</a> · <a href="?shooting=stock&agent=1">Stock presentation</a> · switching reloads the range.</p>
+    <p>Move, jump and fire at four suspects. Target 02 crosses the street; the others stay put. None shoots back. Try the nearest blue coat first; aim below the hat for body hits.</p>
+    <p><strong>Normal weapons and hit detection.</strong> Five health per target, restored immediately after a kill. Headshots kill; body hits deal 1. Local shared simulation, no network or bots.</p>
     <p><strong>H</strong> shows the actual hitboxes: gold head, cyan body. <strong>R</strong> resets targets and counters. <strong>T</strong> returns you to the firing line.</p>
-    <button id="play" disabled>Preparing city…</button><button id="overlay" disabled>Show hitboxes</button>
-    <p>WASD move · Mouse aim · Click fire · Space jump · Esc menu</p>
+    <p><label>Volume <input id="volume" type="range" min="0" max="1" step=".05"></label> <label><input id="calm" type="checkbox"> Reduced motion / flashes</label></p><button id="play" disabled>Preparing city…</button><button id="overlay" disabled>Show hitboxes</button>
+    <p>1 pistol/reset · 2 Laser rack · 3 Tommy rack (hold click) · 4 Trap rack · 5 wall line · 6 occupied line · T firing line · WASD move · Mouse aim · Click fire · Space jump · Esc menu</p>
   </section>
-  <aside id="hud"><div class="eyebrow">TARGET PRACTICE</div><div id="totals">0 shots · 0 hits · 0 kills</div><div id="result">Aim at a suspect to begin.</div><div id="overlay-status">Hitboxes hidden · H to show</div></aside>
-  <div id="controls">WASD move · Click fire · H hitboxes · R reset · T firing line · Esc menu</div>
+  <aside id="hud"><div class="eyebrow" id="variant">TARGET PRACTICE</div><div id="totals">0 shots · 0 hits · 0 kills</div><div id="result">Aim at a suspect to begin.</div><div id="overlay-status">Hitboxes hidden · H to show</div></aside>
+  <div id="controls">1 pistol/reset · 2 Laser · 3 Tommy · 4 Trap rack · 5 wall · 6 occupied · WASD move · Space jump · Click fire · M moving target · H hitboxes · R reset · T firing line · Esc menu</div>
   <div id="crosshair"></div><div id="credit">Made by Tyler Mayberry</div>
   <script type="module" src="./hitbox-practice.ts"></script>
 </body>

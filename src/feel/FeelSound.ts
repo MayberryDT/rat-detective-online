@@ -69,6 +69,10 @@ export class FeelSound {
         if(this.frame%120===0)for(const [id,walker] of this.walkers)if(walker.seen!==this.frame)this.walkers.delete(id);
     }
 
+    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'):void {if(this.on)this.audio!.arsenal(kind);}
+    pressure():void {if(this.on)this.audio!.pressure();}
+    bodySmack():void {if(this.on)this.audio!.bodySmack();}
+
     /** Local-only motion cues: coat rustle on a burst start, case rattle on landing, flight wind. */
     localMotion(horizontalSpeed:number,landed:number,carrying:boolean,flight:number):void {
         if(!this.on){this.audio?.setWind(0,0);return;}
@@ -159,6 +163,6 @@ export class FeelSound {
         return whizzed;
     }
 
-    reset():void {this.walkers.clear();this.whizzed.clear();this.wasFast=false;this.audio?.setWind(0,0);this.audio?.setRumble(0,0);}
+    reset():void {this.audio?.resetCombat();this.walkers.clear();this.whizzed.clear();this.wasFast=false;this.audio?.setWind(0,0);this.audio?.setRumble(0,0);}
     dispose():void {this.reset();this.audio?.dispose();}
 }
