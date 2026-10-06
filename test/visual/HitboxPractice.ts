@@ -19,7 +19,7 @@ export const PRACTICE_SUPPLIES:PickupPoint[]=[
  {id:'rack-tommy',kind:'tommy-gun',p:{x:-28,y:.7,z:-15}},
  {id:'rack-trap',kind:'mousetrap',p:{x:-32,y:.7,z:-15}},
 ];
-export interface PracticeHit {shotId?:string; target:string; region:'HEAD'|'BODY'; damage:number; remaining:number; killed:boolean; incoming:Vec3Data; point?:Vec3Data}
+export interface PracticeHit {weapon?:string; shotId?:string; target:string; region:'HEAD'|'BODY'; damage:number; remaining:number; killed:boolean; incoming:Vec3Data; point?:Vec3Data}
 
 /** Local fixture only: the real simulation owns every trajectory and hit shape.
  * No bot brain, incident, ragdoll or network session is created here.
@@ -69,7 +69,7 @@ export class HitboxPractice {
         if(!result.applied)return;
         const victim=this.players.get(hit.victim)!;
         this.hits++;this.headshots+=Number(hit.headshot===true);this.kills+=Number(result.killed);
-        this.lastHit={shotId:hit.shotId,target:hit.victim,region:hit.headshot?'HEAD':'BODY',damage:result.damage,remaining:victim.hp,killed:result.killed,incoming:hit.incoming,point:hit.point};
+        this.lastHit={weapon:hit.weapon,shotId:hit.shotId,target:hit.victim,region:hit.headshot?'HEAD':'BODY',damage:result.damage,remaining:victim.hp,killed:result.killed,incoming:hit.incoming,point:hit.point};
         // Only health resets. Positions, orientation and visible pose never move.
         // Restoring immediately also keeps the dummy hittable for the next shot.
         if(result.killed)victim.hp=MAX_HP;

@@ -112,24 +112,57 @@ export class FeelAudio {
         source.connect(filter).connect(env).connect(out);source.start(t,Math.random()*.4,.18);
     }
 
-    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'):void {
+    arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {
+        if(this.combatGains.size>=12)return;
+        if(!this.allow('arsenal-'+kind,kind==='tommy-gun'?.035:kind==='tommy-hit'?.045:.08))return;
         const t=this.context.currentTime;
         if(kind==='tommy-gun'){
-            const out=this.combatOut(.26,.085);
-            this.burst(out,t,.009,'highpass',2400,.7,.001);
-            this.tone(out,t,.055,'triangle',290+Math.random()*35,100,.8);
-            this.burst(out,t+.009,.048,'bandpass',650,2,.002);
+            // CHUK, then the bolt's dry return. Short enough to leave gaps at 20/s.
+            const out=this.combatOut(.27,.09);
+            this.burst(out,t,.012,'bandpass',1250,.7,.001);
+            this.tone(out,t,.04,'triangle',430+Math.random()*25,115,.95);
+            this.tone(out,t,.032,'sine',185,80,.8);
+            this.burst(out,t+.026,.013,'highpass',2600,1,.001);
         }else if(kind==='laser'){
-            const out=this.combatOut(.32,.28);
-            this.burst(out,t,.018,'highpass',3100,.8,.001);
-            this.tone(out,t,.18,'sawtooth',1200,220,.42);
-            this.tone(out,t,.12,'sine',240,70,.75);
-            this.burst(out,t+.035,.18,'bandpass',1100,5,.002);
+            // A heavy pressure punch underneath a tearing, descending electrical strand.
+            const out=this.combatOut(.32,.32);
+            this.tone(out,t,.11,'sine',310,65,1.05);
+            this.burst(out,t,.022,'bandpass',1450,.7,.001);
+            this.tone(out,t,.21,'sawtooth',1850,180,.4);
+            this.tone(out,t+.012,.16,'triangle',720,140,.4);
+            this.burst(out,t+.035,.19,'bandpass',2100,7,.003);
+            this.burst(out,t+.17,.055,'lowpass',650,1,.002);
+        }else if(kind==='trap-snap'){
+            const out=this.combatOut(.34,.36);
+            this.burst(out,t,.018,'highpass',2200,.8,.001);
+            this.tone(out,t,.15,'triangle',155,48,1.1);
+            this.burst(out,t+.008,.07,'bandpass',430,1,.001);
+            this.tone(out,t+.016,.24,'sine',1120,740,.3);
+            this.tone(out,t+.024,.19,'sine',1670,1130,.18);
+            this.burst(out,t+.09,.04,'bandpass',750,2,.002);
+        }else if(kind==='laser-hit'||kind==='tommy-hit'){
+            const out=this.combatOut(.18,kind==='laser-hit'?.2:.07);
+            this.burst(out,t,kind==='laser-hit'?.12:.035,'bandpass',kind==='laser-hit'?3100:550,3,.001);
+            this.tone(out,t,.06,'triangle',kind==='laser-hit'?700:180,90,.6);
+        }else if(kind==='trap-release'){
+            const out=this.combatOut(.18,.2);
+            this.tone(out,t,.13,'sine',430,860,.4);
+            this.burst(out,t,.025,'bandpass',1100,3,.001);
+        }else if(kind==='pickup'||kind.endsWith('-pickup')){
+            // Board/receiver weight first; spring/coil catches into the hand afterwards.
+            const out=this.combatOut(.3,.3);
+            this.tone(out,t,.12,'triangle',190,65,.9);
+            this.burst(out,t,.03,'bandpass',550,1,.001);
+            if(kind==='laser-pickup'){this.tone(out,t+.035,.23,'sawtooth',240,1100,.22);this.burst(out,t+.045,.12,'bandpass',2400,5,.002);}
+            else if(kind==='tommy-pickup'){this.burst(out,t+.04,.025,'bandpass',1100,1,.001);this.burst(out,t+.11,.02,'highpass',2300,2,.001);this.tone(out,t+.08,.08,'triangle',300,90,.5);}
+            else {this.tone(out,t+.045,.17,'sine',660,1050,.5);this.tone(out,t+.05,.2,'sine',1320,1570,.18);}
+            this.burst(out,t+.09,.025,'highpass',2200,2,.001);
         }else{
-            const out=this.combatOut(.32,.2);
-            this.tone(out,t,.075,'triangle',kind==='pickup'?410:210,90,.9);
-            this.burst(out,t,.035,'bandpass',800,1,.001);
-            this.tone(out,t+.04,.1,'square',kind==='pickup'?950:1500,380,.25);
+            const out=this.combatOut(.32,.27);
+            this.tone(out,t,.13,'triangle',145,55,1);
+            this.burst(out,t,.055,'bandpass',500,.8,.001);
+            this.tone(out,t+.015,.22,'sine',870,530,.3);
+            this.burst(out,t+.075,.024,'bandpass',1400,3,.001);
         }
     }
 

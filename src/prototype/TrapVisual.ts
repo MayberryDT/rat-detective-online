@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {playerPreferences} from '../settings/PlayerPreferences';
 import {MAX_TRAPS,type TrapState} from '../shared/chaosState';
 import {TRAP_SCALE,TRAP_TALL,WEAPON_TUNING} from '../shared/pickups';
 import {kickDust} from '../feel/Dust';
@@ -96,7 +97,7 @@ class TrapVisual {
     /** Per piece while breaking: velocity, then spin. */
     private readonly flight=new Float32Array(TRAP_PIECES.length*6);
     private readonly at=new THREE.Vector3();
-    constructor(templates:Record<TrapPiece,THREE.Group>){
+    constructor(templates:Record<TrapPiece,THREE.Group>,private readonly heavy=false){
         this.root.name='mousetrap';this.sized.scale.set(TRAP_SCALE,TRAP_TALL,TRAP_SCALE);this.sized.add(this.body);this.root.add(this.sized);
         const pieces:Partial<Record<TrapPiece,THREE.Object3D>>={};
         for(const piece of TRAP_PIECES){const part=templates[piece].clone();this.body.add(part);pieces[piece]=part;}
@@ -165,6 +166,13 @@ class TrapVisual {
         if(this.hitAge<JOLT){const s=this.hitAge/JOLT;x=Math.sin(s*42)*.08*(1-s);rz+=Math.sin(s*31)*.06*(1-s);}
         // Held: the caught rat tugs at the trap in fits.
         else if(this.snapAge>HOP+.2&&this.snapAge<HOLD){const tug=Math.max(0,Math.sin(this.snapAge*5.3))**3;x+=Math.sin(this.snapAge*37)*.035*tug;rz+=Math.sin(this.snapAge*23)*.04*tug;}
+        if(this.heavy){
+            // The actual board is visible at its legal location on the first frame;
+            // spring take-up/impact happen inside it, never delaying placement.
+            if(this.setAge<DROP)y=0;
+            if(this.snapAge<HOP){y*=.45;rx*=1.8;rz*=1.5;squash+=Math.sin(Math.min(1,this.snapAge/.12)*Math.PI)*.22;}
+            if(playerPreferences().current.reducedMotion){x=y=rx=rz=squash=0;}
+        }
         this.body.position.set(x,y,0);this.body.rotation.set(rx,0,rz);this.body.scale.set(1+squash*.5,1-squash,1+squash*.5);
         // The bar slams over the hinge, bounces, and is cocked back before the trap re-arms.
         let bar=0;
@@ -176,10 +184,14 @@ class TrapVisual {
         p.bar.rotation.set(bar,0,damage*.22);
         p.arm.rotation.x=t<REARM-.04?-1.5*Math.min(1,t/.06):0;
         // The cheese jumps on the pedal.
-        const hop=t<.45?Math.sin(t/.45*Math.PI):0;
+        const hop=this.heavy&&playerPreferences().current.reducedMotion?0:t<.45?Math.sin(t/.45*Math.PI):0;
         p.bait.position.y=TRAP_PIVOTS.bait[1]+hop*.55;p.bait.rotation.y=hop*.8;
         // Battered: springs askew, cracks open, corners gone.
-        p.springLeft.rotation.x=damage*.5;p.springRight.rotation.x=-damage*.35;
+        const armed=this.heavy&&t>=REARM&&!playerPreferences().current.reducedMotion;
+        const tension=armed?Math.sin(this.setAge*3.4)*.045:0;
+        p.springLeft.rotation.x=damage*.5+tension;p.springRight.rotation.x=-damage*.35-tension;
+        if(armed){p.bait.position.y+=.035*(1+Math.sin(this.setAge*3.4));p.arm.rotation.x=-.07-.025*Math.sin(this.setAge*3.4);}
+
         for(let i=0;i<CRACK_PIECES.length;i++)p[CRACK_PIECES[i]!].visible=damage>=CRACKS[i]!;
         for(let i=0;i<CORNER_PIECES.length;i++)p[CORNER_PIECES[i]!].visible=i>=this.corners;
     }
@@ -210,7 +222,7 @@ export class TrapField {
     private templates?:Record<TrapPiece,THREE.Group>;
     private readonly finish:WeaponFinish=weaponFinish();
     private readonly debris:TrapDebris;
-    constructor(private readonly parent:THREE.Object3D){this.debris=new TrapDebris(parent);}
+    constructor(private readonly parent:THREE.Object3D,private readonly heavy=false){this.debris=new TrapDebris(parent);}
     /** The pieces, built once: every trap shares their shapes and finishes. */
     private parts():Record<TrapPiece,THREE.Group> {
         if(this.templates)return this.templates;
@@ -235,7 +247,7 @@ export class TrapField {
             const trap=traps![i]!;
             const visual=this.active.get(trap.id);
             if(visual){visual.sync(trap,this.debris,announce?this.onEvent:undefined);continue;}
-            const fresh=this.free.pop()??new TrapVisual(this.parts());
+            const fresh=this.free.pop()??new TrapVisual(this.parts(),this.heavy);
             fresh.reset(trap,announce&&trap.brokenAt===undefined);
             this.active.set(trap.id,fresh);this.parent.add(fresh.root);
             if(announce&&trap.brokenAt===undefined)this.onEvent?.('set',trap);

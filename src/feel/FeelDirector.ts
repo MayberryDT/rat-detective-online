@@ -52,7 +52,11 @@ export class FeelDirector {
     private heavy?:HeavyCheese;
     /** Review opt-in only. Normal sessions never call this. */
     enableHeavyCheese(scene:THREE.Scene):void {this.heavy?.dispose();this.heavy=new HeavyCheese(scene);}
-    heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'):void {if(this.heavy)this.sound.arsenal(kind);}
+    heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {if(this.heavy)this.sound.arsenal(kind);}
+    heavyPickup(kind:string):void {this.heavy?.pickup(kind);}
+    heavyWeaponImpact(at:THREE.Vector3,normal:THREE.Vector3,weapon:string):void {this.heavy?.weaponHit(at,normal,weapon);}
+    heavyBeforeRender(rat:THREE.Object3D):void {this.heavy?.beforeRender(rat);}
+    heavyAfterRender():void {this.heavy?.afterRender();}
     heavyReport():void {if(this.heavy)this.sound.pressure();}
     heavyWeaponLaunch(origin:THREE.Vector3,direction:THREE.Vector3,weapon?:string):void {this.heavy?.launchWeapon(origin,direction,weapon);}
     heavyLaunch(origin:THREE.Vector3,direction:THREE.Vector3):void {this.heavy?.launch(origin,direction);}

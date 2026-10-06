@@ -60,6 +60,7 @@ const result=document.getElementById('result')!;
 const totals=document.getElementById('totals')!;
 const crosshair=document.getElementById('crosshair')!;
 let hitUntil=0;
+let arsenalKillUntil=0;
 const hitDirection=new THREE.Vector3(),contact=new THREE.Vector3(),outward=new THREE.Vector3();
 // This private range is served on tailnet HTTP. randomUUID is secure-context-only;
 // preserve UUID entropy using the Web Crypto primitive available on HTTP too.
@@ -72,9 +73,10 @@ const practice=new HitboxPractice(hit=>{
     if(candidate){
         if(hit.point)contact.set(hit.point.x,hit.point.y,hit.point.z);else contact.copy(entity.mesh.position).add(new THREE.Vector3(0,1,0));
         feel.heavyImpact(contact,outward.copy(hitDirection).negate(),entity.mesh);
+        if(hit.weapon==='laser'||hit.weapon==='tommy-gun'){feel.heavyArsenal(hit.weapon==='laser'?'laser-hit':'tommy-hit');feel.heavyWeaponImpact(contact,outward,hit.weapon);}
     }else {foley.play('hit-confirm');if(!hit.killed)feel.hitDealt(entity.mesh.position,stage.camera);}
     duckWorld(stage.listener.context,hit.killed?1:.5);
-    if(hit.killed){feel.killed(entity.mesh.position,false,stage.camera,performance.now(),false,hit.region==='HEAD');if(hit.region==='HEAD')feel.headshot(entity.mesh.position,stage.camera,true);}
+    if(hit.killed&&(!candidate||!hit.weapon||performance.now()>=arsenalKillUntil)){if(candidate&&hit.weapon)arsenalKillUntil=performance.now()+1200;feel.killed(entity.mesh.position,false,stage.camera,performance.now(),false,hit.region==='HEAD');if(hit.region==='HEAD')feel.headshot(entity.mesh.position,stage.camera,true);}
     result.textContent=`${entity.name} · ${hit.region} · ${hit.damage} damage · ${hit.killed?'KILL / REFILLED':`${hit.remaining} HP left`}`;
     if(hit.killed||!crosshair.classList.contains('kill-confirmed')){
     hitUntil=performance.now()+(hit.killed?hit.region==='HEAD'?700:500:180);
@@ -95,7 +97,8 @@ for(const target of PRACTICE_TARGETS){
 
 const held=new HeldFire();
 const laser=new LaserBeamVisual(stage.scene,(cue,at)=>{if(!candidate)feedback.play(cue,at);});laser.apply([]);
-const trapField=new TrapField(stage.scene);
+const trapField=new TrapField(stage.scene,candidate);
+const caught=new Set<string>();
 const supplies=new Map(PRACTICE_SUPPLIES.map(site=>{const visual=new PickupVisual(stage.scene,site.kind);visual.setPosition(site.p.x,site.p.y,site.p.z);return[site.id,visual] as const;}));
 function visitRack(index:number){
     const site=PRACTICE_SUPPLIES[index];
@@ -166,7 +169,7 @@ function trapTestLine(occupied:boolean){
     result.textContent=occupied?'Occupied target line · aim at blue coat and set trap':'Wall test line · aim west toward wall and set trap';
 }
 function reset(){
-    practice.reset();held.release();laser.clear();laser.apply([]);trapField.clear();gun.clearProjectiles();impacts.clear();feel.reset();balls.count=0;
+    caught.clear();arsenalKillUntil=0;practice.reset();held.release();laser.clear();laser.apply([]);trapField.clear();gun.clearProjectiles();impacts.clear();feel.reset();balls.count=0;
     for(const wire of wireTargets){const entry=[...practice.simulation.targets].find(([,t])=>t.kind==='rat'&&t.player?.id===wire.id);if(entry)wire.body=entry[0];}
     shotTimes.length=0;
     diagnostics.shots=diagnostics.hits=diagnostics.kills=diagnostics.jumps=0;diagnostics.maxY=0;diagnostics.events.length=0;
@@ -249,9 +252,11 @@ stage.renderer.setAnimationLoop(now=>{
     for(const site of state.pickups??[]){const visual=supplies.get(site.id);if(visual){visual.setAvailableAt(site.availableAt??0);visual.update(Date.now(),stage.camera);}}
     for(const event of practice.simulation.drainPickupEvents()){
         note({kind:'authority-pickup',event});
-        if(event.kind==='collected'&&event.playerId==='local'){if(candidate)feel.heavyArsenal('pickup');else feedback.play('pickup-slap');result.textContent=`${event.pickup} picked up · T returns to firing line`;}
+        if(event.kind==='collected'&&event.playerId==='local'){if(candidate){feel.heavyArsenal(event.pickup==='laser'?'laser-pickup':event.pickup==='tommy-gun'?'tommy-pickup':'trap-pickup');feel.heavyPickup(event.pickup);}else feedback.play('pickup-slap');result.textContent=`${event.pickup} picked up · T returns to firing line`;}
+        if(event.kind==='trap'&&event.what==='snap'&&candidate){feel.heavyArsenal('trap-snap');if(event.victim){caught.add(event.victim);targets.get(event.victim)?.heavyReaction(new THREE.Vector3(0,0,-1));}result.textContent='SNAP · CAUGHT · NO DAMAGE';}
         if(event.kind==='trap'&&event.what==='set'){if(candidate)feel.heavyArsenal('mousetrap');else feedback.play('trap-set',event.p);result.textContent='TRAP SET · pistol restored';}
     }
+    for(const id of caught)if(!practice.simulation.trapped(id)){caught.delete(id);if(candidate)feel.heavyArsenal('trap-release');note({kind:'trap-release',victim:id});result.textContent='SPRING RELEASED';}
     for(const event of practice.simulation.drainShotEvents())note({kind:'authority-shot',event});
     balls.count=state.shots.length;
     state.shots.forEach((shot,index)=>{
@@ -272,12 +277,12 @@ stage.renderer.setAnimationLoop(now=>{
     neighborhood.update(dt,stage.camera,player.entity.body.position);feel.update(dt,stage.camera,player.entity.mesh.position);
     totals.textContent=`${weapon??'pistol'} · ${practice.shots} shots · ${practice.hits} hits · ${practice.headshots} head · ${practice.kills} kills`;
     if(now>=hitUntil)crosshair.classList.remove('hit-confirmed','kill-confirmed','headshot');
-    feel.beforeRender(stage.camera);for(const target of targets.values())target.applyHeavyRender();
+    feel.beforeRender(stage.camera);if(candidate)feel.heavyBeforeRender(player.entity.mesh);for(const target of targets.values())target.applyHeavyRender();
     try{if(aimProbe){
         renderedCamera.copy(stage.camera);
         const cr=crosshair.getBoundingClientRect(),vr=canvas.getBoundingClientRect();
         lastDraw={at:performance.now(),steps:diagnostics.steps,ray:aimSample(stage.camera),crosshair:[cr.x+cr.width/2,cr.y+cr.height/2],viewport:[vr.x,vr.y,vr.width,vr.height]};
-    }stage.renderer.render(stage.scene,stage.camera);}finally{for(const target of targets.values())target.restoreHeavyRender();feel.afterRender(stage.camera);}
+    }stage.renderer.render(stage.scene,stage.camera);}finally{feel.heavyAfterRender();for(const target of targets.values())target.restoreHeavyRender();feel.afterRender(stage.camera);}
     if(!ready){ready=true;play.disabled=overlay.disabled=false;play.textContent='Enter target practice';}
 });
 window.addEventListener('pagehide',()=>{
