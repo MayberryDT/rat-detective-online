@@ -4,6 +4,7 @@ import worker from '../../src/worker/index';
 import { DEFAULT_ROOM_NAME, PROTOCOL_VERSION, type PlayerData, type RoundState, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { GameRoom } from '../../src/worker/GameRoom';
 import { readSocketMessage } from './socketMessages';
+import { seatHuman } from './humanSeat';
 
 const TOKEN = 'admin-test-token-0123456789';
 const adminEnv = { ...env, ADMIN_TOKEN: TOKEN } as Env;
@@ -42,6 +43,7 @@ describe('admin controls', () => {
     rooms.add(DEFAULT_ROOM_NAME);
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
     await stub.enableMatchmaking(DEFAULT_ROOM_NAME);
+    sockets.push((await seatHuman(stub)).ws); // A city plays only with a human in it.
     const leader = await runInDurableObject(stub, (instance: GameRoom) => {
       const game = instance as unknown as Game;
       if (game.chaosTimer) clearInterval(game.chaosTimer);
@@ -72,6 +74,7 @@ describe('admin controls', () => {
     rooms.add(DEFAULT_ROOM_NAME);
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
     await stub.enableMatchmaking(DEFAULT_ROOM_NAME);
+    sockets.push((await seatHuman(stub)).ws); // A city plays only with a human in it.
     type Snapshot = { dispatch: { phase: string; incident?: string; caller?: string }; case: { owner: string | null; returningUntil: number } };
     const chaos = () => runInDurableObject(stub, (instance: GameRoom) => {
       const game = instance as unknown as Game & { chaos: { snapshot(drain: boolean): Snapshot } };

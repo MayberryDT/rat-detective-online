@@ -65,9 +65,11 @@ describe('automatic public room population',()=>{
     }
     expect(await stub.occupiedSlots()).toBe(0);
     const idle=await stub.status();
-    expect(idle.bots).toBeGreaterThanOrEqual(6);expect(idle.bots).toBeLessThanOrEqual(9);
-    expect(idle.players).toBe(idle.bots);
-    await runInDurableObject(stub,(instance:GameRoom)=>expect((instance as any).chaosTimer).not.toBeNull());
+    expect(idle).toMatchObject({players:0,bots:0});
+    await runInDurableObject(stub,(instance:GameRoom)=>{
+      const game=instance as unknown as {chaosTimer:object|null;serverBots:object|null};
+      expect(game.chaosTimer).toBeNull();expect(game.serverBots).toBeNull();
+    });
     const extra=await matcher.fetch(new Request('https://game.test/ws?prepare=1',{headers:{Upgrade:'websocket'}}));
     expect(extra.status).toBe(503);
     await runInDurableObject(matcher,(_instance,ctx)=>{
@@ -80,7 +82,8 @@ describe('automatic public room population',()=>{
     await until(()=>messages.some(m=>m.type==='welcome'));
     expect(await stub.occupiedSlots()).toBe(1);
     const playing=await stub.status();
-    expect(playing.bots).toBe(idle.bots);expect(playing.players).toBe(idle.bots+1);
+    expect(playing.bots).toBeGreaterThanOrEqual(6);expect(playing.bots).toBeLessThanOrEqual(9);
+    expect(playing.players).toBe(playing.bots+1);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as any,now=Date.now();game.clock=()=>now+31_000;await instance.alarm();
     });

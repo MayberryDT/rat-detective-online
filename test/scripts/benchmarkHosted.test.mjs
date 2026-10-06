@@ -61,7 +61,7 @@ for(const capacity of [10,12,16])test(`${capacity}-rat full-lobby fixture fills 
   assert.equal(fixture.fullLobby,true);
   assert.match(await readFile(join(fixture.stage,'src/shared/networkProtocol.ts'),'utf8'),new RegExp(`MAX_PLAYERS = ${capacity};`));
   const room=await readFile(join(fixture.stage,'src/worker/GameRoom.ts'),'utf8');
-  assert.match(room,/const desired = this.matchRoom\?\.startsWith\('graybox-benchmark-ai-'\) \? Math.max\(0, MAX_PLAYERS - humans\)/);
+  assert.match(room,/const target = this.matchRoom\?\.startsWith\('graybox-benchmark-ai-'\) \? Math.max\(0, MAX_PLAYERS - humans\)/);
   assert.match(room,/if \(this.matchRoom\) roster = roster.slice\(0, this.matchRoom.startsWith\('graybox-benchmark-ai-'\) \? Math.max\(0, MAX_PLAYERS - humans\)/);
   assert.match(room,/if \(this.players.size >= MAX_PLAYERS && this.botRoster.length\)/);
   assert.match(room,/Private fixture expired/);

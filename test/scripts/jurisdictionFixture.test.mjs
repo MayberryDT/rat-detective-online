@@ -15,6 +15,6 @@ test('pins Jurisdiction only in the frozen hosted copy, preserving production so
   assert.match(stage,/this.assignmentRotation.forced="jurisdiction"/);
   assert.equal(await readFile(join(projectRoot,'src/worker/GameRoom.ts'),'utf8'),source);
   assert.equal(f.assignment,'jurisdiction');assert.equal(f.fullLobby,false);assert.equal(f.checkpointControl,false);
-  assert.match(stage,/const desired = humans \? Math.min\(this.ensureRoundBotRoster\(humans\), MAX_PLAYERS - humans\) : 0/);
+  assert.match(stage,/const target = humans \? Math.min\(this.ensureRoundBotRoster\(humans\), MAX_PLAYERS - humans\) : 0/);
  }finally{await rm(out,{recursive:true,force:true});}
 });

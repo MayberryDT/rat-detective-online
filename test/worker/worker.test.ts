@@ -80,20 +80,14 @@ describe('worker', () => {
     const empty = await SELF.fetch('https://rat-detective.test/status');
     expect(empty.status).toBe(200);
     const board = await empty.json<{room:string;players:number;bots:number;phase:string;startedAt:number;scores:Array<{name:string;kills:number;deaths:number}>}>();
-    expect(board).toMatchObject({room:DEFAULT_ROOM_NAME,phase:'playing',startedAt:expect.any(Number)});
-    expect(board.bots).toBeGreaterThanOrEqual(6);
-    expect(board.bots).toBeLessThanOrEqual(9);
-    expect(board.players).toBe(board.bots);expect(board.scores).toHaveLength(board.bots);
-    expect(new Set(board.scores.map(p=>p.name)).size).toBe(board.bots);
-    expect(board.scores.every(p=>p.kills===0&&p.deaths===0)).toBe(true);
-    expect(board.scores.map(p=>p.name)).toEqual(board.scores.map(p=>p.name).sort((a,b)=>a.localeCompare(b)));
+    expect(board).toMatchObject({room:DEFAULT_ROOM_NAME,players:0,bots:0,scores:[],startedAt:expect.any(Number)});
     expect(empty.headers.get('access-control-allow-origin')).toBe('*');
     expect(empty.headers.get('cache-control')).toBe('no-store');
 
     const world=(board as typeof board & {world:{seed:number;version:number}}).world;
     expect(world).toEqual({seed:expect.any(Number),version:GRAYBOX_VERSION});
-    const prepared=await (await SELF.fetch('https://rat-detective.test/status')).json();
-    expect(prepared).toMatchObject({world,players:board.bots,bots:board.bots});
+    const again=await (await SELF.fetch('https://rat-detective.test/status')).json();
+    expect(again).toMatchObject({world,players:0,bots:0,scores:[]});
 
     const options = await SELF.fetch('https://rat-detective.test/status', { method: 'OPTIONS' });
     expect(options.status).toBe(204);

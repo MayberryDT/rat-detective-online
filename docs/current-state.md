@@ -2,6 +2,10 @@
 
 Verified from source and production through **2026-10-03** (protocol 32). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
 
+## Rooms play only with a human — 3 October (source; not deployed)
+
+Tyler: the room must not run at all times (the Cloudflare bill: since 29 September production's and staging's `GameRoom` objects each ran 3600 s an hour with no WebSocket messages, writing about 95 SQLite rows a second, some 16 USD a day for the pair). **Every room, the canonical `public-live-v2` included and on every deploy, plays only while a human holds a seat**: joined, inside the 30 s reconnect grace, or admitted and joining (`GameRoom.humanSlots()`). The first human brings that round's 6–9 bots, the tick and the companion feed; when the last seat goes, the room removes its bots, stops the tick, checkpoints once, leaves the companion feed and sets no alarm, so the object hibernates. `GET /status` and the title's prepare socket no longer start anything (an empty city reads 0 humans, 0 bots), and the Omarchy companion lists no public room while it is empty. There is no switch to bring the always-on city back. This supersedes the 14 September persistent city below. Verified locally end to end with `node scripts/verify-idle-room.mjs` ([receipt](verification/idle-room-2026-10-03.md)); not yet deployed.
+
 ## Protocol 32: random supplies — 3 October production
 
 Tyler: "The Tommy gun feels way better, but now I want to change all the pickups except for the heel. I want them to be random … deploy it live." **Production** Worker `02bf9e68-9699-4138-a586-ddc93de49847`, build `production-2026-10-03-6b47caf`, client `index-93gja5OR.js`, commit `6b47caf`, **protocol 32**, layout 7, `mindVersion` 12, era `random-supplies` ([receipt](verification/random-supplies-release-2026-10-03.md)). Every supply site but a Quick Fix one holds a random pickup of the other six, rolled at the start, each round and each claim (the restock dial shows the next one); the 14 Quick Fix sites stay Quick Fix. Staging runs the same build.
@@ -277,7 +281,7 @@ Private matching preview remains [http://127.0.0.1:5193/?room=graybox-benchmark-
 
 Ordinary cheese balls now last **1.5 seconds**, down from 2.5. Shared `BALL_LIFETIME` covers authority, local presentation and restored shots. Speed 175, gravity −25 and restitution 0.9 are unchanged. This is live. Dated September 10 receipts keep the 2.5-second measurement.
 
-## Persistent public city — deployed September 14
+## Persistent public city — deployed September 14 (superseded 3 October: rooms play only with a human)
 
 Tyler confirmed games should always be running and the city is always alive.
 This supersedes empty-room-sleeps for the canonical room only. `public-live-v2`

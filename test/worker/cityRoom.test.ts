@@ -7,6 +7,7 @@ import { PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
 import { MAX_HP, PROTOCOL_VERSION, WIN_DISPLAY_MS, type PlayerData, type RoundState } from '../../src/shared/networkProtocol';
 import type { PerfReport } from '../../src/shared/perfReport';
 import { readSocketMessage } from './socketMessages';
+import { seatHuman } from './humanSeat';
 import type { ChaosSimulation } from '../../src/shared/ChaosSimulation';
 import type { ServerBotController } from '../../src/worker/ServerBotController';
 import type { CityFact } from '../../src/shared/city/facts';
@@ -33,6 +34,7 @@ type Internals = {
 };
 type Room = DurableObjectStub<GameRoom>;
 const rooms: Room[] = [];
+const seats: WebSocket[] = [];
 // Far from the real clock, so the room's own ticking cannot land on the same UTC days.
 const DAY = Date.parse('2030-03-14T12:00:00Z');
 const all = { from: '0000-01-01', to: '9999-12-31' };
@@ -42,12 +44,15 @@ function quiet(game: Internals) {
   if (game.chaosTimer) clearInterval(game.chaosTimer);
   game.chaosTimer = null; game.serverBots?.dispose(); game.serverBots = null;
 }
-/** One bot, a live human, a corpse and a disconnected human, each on a known street cell. */
+/** One bot, a live human, a corpse and a disconnected human, each on a known street cell. A real human
+ * seat starts the bots (a room plays only with a human); its rat is then cleared so only the fixture remains. */
 async function cityRoom(): Promise<Room> {
   const stub = env.GAME_ROOM.getByName(`city-test-${crypto.randomUUID()}`); rooms.push(stub);
   await stub.ensurePersistentBots();
+  const seat = await seatHuman(stub); seats.push(seat.ws);
   await runInDurableObject(stub, (instance: GameRoom) => {
     const game = instance as unknown as Internals; quiet(game);
+    game.sessions.delete(seat.id);
     const bot = game.players.get(PERSISTENT_BOT_IDS[0])!;
     for (const id of [...game.players.keys()]) if (id !== bot.id) game.players.delete(id);
     Object.assign(bot, { x: 10, y: 0.3, z: 10, hp: MAX_HP, kills: 0, deaths: 0 });
@@ -71,6 +76,7 @@ async function archived(): Promise<CityFact[]> {
   return facts;
 }
 afterEach(async () => {
+  for (const ws of seats.splice(0)) ws.close();
   for (const stub of rooms.splice(0)) await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
     const game = instance as unknown as Internals; quiet(game); game.persistentBots = false;
     await ctx.storage.deleteAlarm();

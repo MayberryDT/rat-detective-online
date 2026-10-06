@@ -1,4 +1,4 @@
-import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject, SELF } from 'cloudflare:test';
+import { env, evictDurableObject, runInDurableObject, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RECONNECT_GRACE_MS } from '../../src/shared/reconnect';
 import { createAssignment } from '../../src/shared/assignments';
@@ -101,36 +101,64 @@ afterEach(async () => {
   rooms.clear();
 });
 
-describe('canonical public city without humans', () => {
-  it('starts a six-to-nine-bot match and publishes roster, mode and scores from /status', async () => {
+describe('canonical public city lifecycle', () => {
+  it('stays idle on /status with no humans: no bots, no tick, no alarm, no companion feed', async () => {
     rooms.add(DEFAULT_ROOM_NAME);
     const board = await (await SELF.fetch('https://rat-detective.test/status')).json() as {
-      room: string; players: number; bots: number; phase: string;
-      scores: Array<{ name: string; kills: number; deaths: number }>;
+      room: string; players: number; bots: number; scores: unknown[];
     };
-    expect(board.room).toBe(DEFAULT_ROOM_NAME);
+    expect(board).toMatchObject({ room: DEFAULT_ROOM_NAME, players: 0, bots: 0, scores: [] });
+    const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
+    expect(await stub.occupiedSlots()).toBe(0);
+    await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
+      const game = instance as unknown as {
+        chaosTimer: object | null;
+        serverBots: object | null;
+        botRoster: unknown[];
+        players: Map<string, unknown>;
+        companionActive: boolean;
+      };
+      expect(game.chaosTimer).toBeNull();
+      expect(game.serverBots).toBeNull();
+      expect(game.botRoster).toHaveLength(0);
+      expect(game.players.size).toBe(0);
+      expect(game.companionActive).toBe(false);
+      expect(await ctx.storage.getAlarm()).toBeNull();
+    });
+    expect(await companionRoom()).toBeUndefined();
+  });
+
+  it('starts six to nine bots, the tick and the companion feed when a human joins', async () => {
+    rooms.add(DEFAULT_ROOM_NAME);
+    const joined = await join('First Rat', DEFAULT_ROOM_NAME);
+    expect(joined.welcome.matchRoom).toBe(DEFAULT_ROOM_NAME);
+    const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
+    const board = await stub.status();
     expect(board.phase).toBe('playing');
     expect(board.bots).toBeGreaterThanOrEqual(6);
     expect(board.bots).toBeLessThanOrEqual(9);
-    expect(board.players).toBe(board.bots);
-    expect(board.scores).toHaveLength(board.bots);
-    expect(new Set(board.scores.map(score => score.name)).size).toBe(board.bots);
+    expect(board.players).toBe(board.bots + 1);
+    expect(new Set(board.scores.map(score => score.name)).size).toBe(board.players);
+    expect(await stub.occupiedSlots()).toBe(1);
 
-    const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
-    expect(await stub.occupiedSlots()).toBe(0);
-    const before = await runInDurableObject(stub, (instance: GameRoom) => {
+    const before = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as {
-        chaosTimer: ReturnType<typeof setInterval> | null;
+        chaosTimer: object | null;
         serverBots: object | null;
         chaos: { snapshot(full?: boolean): { time: number }; assignmentState?: { id: string; phase: string } };
+        botRoster: Array<{ id: string }>;
         players: Map<string, { x: number; y: number; z: number }>;
       };
       expect(game.chaosTimer).not.toBeNull();
       expect(game.serverBots).not.toBeNull();
       expect(game.chaos.assignmentState).toMatchObject({ id: expect.any(String), phase: expect.any(String) });
+      expect(await ctx.storage.getAlarm()).toBeGreaterThan(Date.now());
       return {
         time: game.chaos.snapshot(false).time,
-        positions: [...game.players.values()].map(player => [player.x, player.y, player.z] as const),
+        positions: game.botRoster.map(bot => {
+          const player = game.players.get(bot.id)!;
+          return [bot.id, player.x, player.y, player.z] as const;
+        }),
       };
     });
 
@@ -141,24 +169,19 @@ describe('canonical public city without humans', () => {
         players: Map<string, { x: number; y: number; z: number }>;
       };
       expect(game.chaos.snapshot(false).time).toBeGreaterThan(before.time);
-      expect([...game.players.values()].some((player, index) =>
-        player.x !== before.positions[index][0] ||
-        player.y !== before.positions[index][1] ||
-        player.z !== before.positions[index][2])).toBe(true);
+      expect(before.positions.some(([id, x, y, z]) => {
+        const player = game.players.get(id)!;
+        return player.x !== x || player.y !== y || player.z !== z;
+      })).toBe(true);
     });
 
     await until(async () => {
       const city = await companionRoom();
-      return !!city && city.humans === 0 && city.players === board.bots && city.scores.length === board.bots && !!city.assignment.id;
+      return city?.humans === 1 && city.players === board.players && city.scores.length === board.players && !!city.assignment.id;
     });
-    const city = await companionRoom();
-    expect(city).toMatchObject({
-      room: DEFAULT_ROOM_NAME, humans: 0, players: board.bots, holderName: null,
-    });
-    expect(city!.scores.every(score => score.kills === 0 && score.deaths === 0)).toBe(true);
   });
 
-  it('keeps the match and companion feed after the last reserved human expires', async () => {
+  it('stops the match, the bots and the companion feed once the last human\'s grace expires', async () => {
     rooms.add(DEFAULT_ROOM_NAME);
     const first = await join('First Rat', DEFAULT_ROOM_NAME);
     const second = await join('Second Rat', DEFAULT_ROOM_NAME);
@@ -167,48 +190,57 @@ describe('canonical public city without humans', () => {
     await close(second.ws);
 
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
-    await runInDurableObject(stub, async (instance: GameRoom) => {
+    expect((await stub.status()).bots).toBeGreaterThanOrEqual(6);
+    const stopped = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as {
         clock: () => number;
         alarm(): Promise<void>;
         publishCompanion(force?: boolean): void;
+        chaosTimer: object | null;
+        serverBots: object | null;
+        botRoster: unknown[];
+        players: Map<string, unknown>;
+        chaos: { snapshot(full?: boolean): { time: number } };
       };
       const now = Date.now();
       game.clock = () => now + RECONNECT_GRACE_MS + 1;
       await game.alarm();
       game.clock = () => Date.now();
       game.publishCompanion(true);
-    });
-
-    const after = await stub.status();
-    await until(async () => {
-      const city = await companionRoom();
-      return city?.humans === 0 && city.players === after.bots && city.scores.length === after.bots;
+      expect(game.chaosTimer).toBeNull();
+      expect(game.serverBots).toBeNull();
+      expect(game.botRoster).toHaveLength(0);
+      expect(game.players.size).toBe(0);
+      expect(await ctx.storage.getAlarm()).toBeNull();
+      return {
+        time: game.chaos.snapshot(false).time,
+        state: ctx.storage.sql.exec('SELECT key, value FROM room_state ORDER BY key').toArray(),
+      };
     });
     expect(await stub.occupiedSlots()).toBe(0);
-    expect(after.phase).toBe('playing');
-    expect(after.bots).toBeGreaterThanOrEqual(6);
-    expect(after.bots).toBeLessThanOrEqual(9);
-    expect(after.players).toBe(after.bots);
-    await runInDurableObject(stub, (instance: GameRoom) => {
-      const game = instance as unknown as {
-        chaosTimer: ReturnType<typeof setInterval> | null;
-        serverBots: object | null;
-        chaos: { assignmentState?: { id: string } };
-      };
-      expect(game.chaosTimer).not.toBeNull();
-      expect(game.serverBots).not.toBeNull();
-      expect(game.chaos.assignmentState?.id).toEqual(expect.any(String));
+    expect(await stub.status()).toMatchObject({ players: 0, bots: 0 });
+    await until(async () => await companionRoom() === undefined);
+
+    // Real wall time on purpose: a stopped room must not tick its own interval timer, which only real time can show.
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
+      const game = instance as unknown as { chaosTimer: object | null; chaos: { snapshot(full?: boolean): { time: number } } };
+      expect(game.chaosTimer).toBeNull();
+      expect(game.chaos.snapshot(false).time).toBe(stopped.time);
+      expect(ctx.storage.sql.exec('SELECT key, value FROM room_state ORDER BY key').toArray()).toEqual(stopped.state);
+      expect(await ctx.storage.getAlarm()).toBeNull();
     });
+    expect(await companionRoom()).toBeUndefined();
   });
 
-  it('restores the zero-human city through eviction and the recovery alarm', async () => {
+  it('resumes the same bots and assignment through eviction while a human is inside the reconnect grace', async () => {
     rooms.add(DEFAULT_ROOM_NAME);
-    await env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME).enableMatchmaking(DEFAULT_ROOM_NAME);
+    const joined = await join('Grace Rat', DEFAULT_ROOM_NAME);
+    await close(joined.ws);
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
     const before = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as {
-        botRoster: Array<{ id: string; name: string }>;
+        botRoster: Array<{ id: string }>;
         chaos: { assignmentState?: { id: string; roundId: string } };
         world: { seed: number };
       };
@@ -216,7 +248,6 @@ describe('canonical public city without humans', () => {
       expect(game.botRoster.length).toBeGreaterThanOrEqual(6);
       expect(game.botRoster.length).toBeLessThanOrEqual(9);
       expect(await ctx.storage.getAlarm()).toBeGreaterThan(Date.now());
-      expect(await ctx.storage.getAlarm()).toBeLessThanOrEqual(Date.now() + BOT_HEARTBEAT_MS + RECONNECT_GRACE_MS);
       return {
         roster: game.botRoster.map(bot => bot.id),
         seed: game.world.seed,
@@ -226,10 +257,9 @@ describe('canonical public city without humans', () => {
     });
 
     await evictDurableObject(stub);
-    await runDurableObjectAlarm(stub);
     await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as {
-        chaosTimer: ReturnType<typeof setInterval> | null;
+        chaosTimer: object | null;
         serverBots: object | null;
         botRoster: Array<{ id: string }>;
         chaos: { assignmentState?: { id: string; roundId: string } };
@@ -240,16 +270,14 @@ describe('canonical public city without humans', () => {
       expect(game.botRoster.map(bot => bot.id)).toEqual(before.roster);
       expect(game.chaosTimer).not.toBeNull();
       expect(game.serverBots).not.toBeNull();
-      expect(game.chaos.assignmentState).toMatchObject({
-        id: before.assignmentId, roundId: before.roundId,
-      });
+      expect(game.chaos.assignmentState).toMatchObject({ id: before.assignmentId, roundId: before.roundId });
       expect(game.companionActive).toBe(true);
       expect(await ctx.storage.getAlarm()).toBeGreaterThan(Date.now());
     });
     const restored = await stub.status();
     expect(restored.bots).toBe(before.roster.length);
-    expect(restored.players).toBe(before.roster.length);
-    await until(async () => (await companionRoom())?.players === before.roster.length && (await companionRoom())?.humans === 0);
+    expect(restored.players).toBe(before.roster.length); // the board lists attached rats; the grace seat shows in occupiedSlots
+    expect(await stub.occupiedSlots()).toBe(1);
   });
 
   it('still sleeps and retires an empty public overflow room', async () => {
@@ -277,15 +305,15 @@ describe('canonical public city without humans', () => {
     await until(async () => await companionRoom(overflow) === undefined);
   });
 
-  it('keeps a bounded future wake after an injected alarm failure, then recovers', async () => {
+  it('keeps a bounded future wake after an injected alarm failure while a human plays, then recovers', async () => {
     rooms.add(DEFAULT_ROOM_NAME);
+    await join('Fault Rat', DEFAULT_ROOM_NAME);
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
-    await stub.enableMatchmaking(DEFAULT_ROOM_NAME);
     await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as {
         reconcileLiveness(): void;
         botRoster: Array<{ id: string }>;
-        chaosTimer: ReturnType<typeof setInterval> | null;
+        chaosTimer: object | null;
         serverBots: object | null;
       };
       stopTimer(instance);
@@ -308,6 +336,7 @@ describe('canonical public city without humans', () => {
       } finally {
         game.reconcileLiveness = original;
       }
+      ctx.storage.sql.exec("DELETE FROM pending_events WHERE id = 'soon-fault'");
       await instance.alarm();
       expect(game.botRoster.length).toBeGreaterThanOrEqual(6);
       expect(game.botRoster.length).toBeLessThanOrEqual(9);
@@ -321,8 +350,9 @@ describe('canonical public city without humans', () => {
 
   it('preserves an exact sooner stored alarm across constructor hydration', async () => {
     rooms.add(DEFAULT_ROOM_NAME);
+    const joined = await join('Alarm Rat', DEFAULT_ROOM_NAME);
+    await close(joined.ws);
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
-    await stub.enableMatchmaking(DEFAULT_ROOM_NAME);
     const deadline = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       stopTimer(instance);
       const soon = Date.now() + 4_250;
@@ -334,7 +364,7 @@ describe('canonical public city without humans', () => {
     await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as {
         botRoster: Array<{ id: string }>;
-        chaosTimer: ReturnType<typeof setInterval> | null;
+        chaosTimer: object | null;
       };
       expect(await ctx.storage.getAlarm()).toBe(deadline);
       expect(game.botRoster.length).toBeGreaterThanOrEqual(6);
@@ -345,8 +375,8 @@ describe('canonical public city without humans', () => {
 
   it('does not postpone an already-due stored alarm during constructor scheduling', async () => {
     rooms.add(DEFAULT_ROOM_NAME);
+    await join('Due Rat', DEFAULT_ROOM_NAME);
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
-    await stub.enableMatchmaking(DEFAULT_ROOM_NAME);
     await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as {
         scheduleNextAlarm(opts?: { preserveExisting?: boolean }): Promise<void>;
@@ -410,10 +440,10 @@ describe('canonical public city without humans', () => {
     });
   });
 
-  it('rotates the ordinary playlist and eight fresh bot names after a zero-human win', async () => {
+  it('rotates the ordinary playlist and keeps fresh bot names after a bot wins with a human seated', async () => {
     rooms.add(DEFAULT_ROOM_NAME);
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
-    await stub.enableMatchmaking(DEFAULT_ROOM_NAME);
+    await join('Witness Rat', DEFAULT_ROOM_NAME);
     const after = await runInDurableObject(stub, async (instance: GameRoom) => {
       const game = instance as unknown as {
         clock: () => number;
@@ -474,15 +504,15 @@ describe('canonical public city without humans', () => {
     });
     await until(async () => {
       const city = await companionRoom();
-      return city?.assignment.id === after.mode && city.players === after.names.length && city.humans === 0 &&
+      return city?.assignment.id === after.mode && city.players === after.names.length + 1 && city.humans === 1 &&
         after.names.every(name => city.scores.some(score => score.name === name));
     });
   });
 
-  it('publishes zero-human score, objective and K/D changes through the real projection cadence', async () => {
+  it('publishes score, objective and K/D changes through the real projection cadence', async () => {
     rooms.add(DEFAULT_ROOM_NAME);
     const stub = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME);
-    await stub.enableMatchmaking(DEFAULT_ROOM_NAME);
+    await join('Scoring Rat', DEFAULT_ROOM_NAME);
     const published = await runInDurableObject(stub, (instance: GameRoom) => {
       const game = instance as unknown as {
         clock: () => number;
@@ -524,7 +554,7 @@ describe('canonical public city without humans', () => {
     await until(async () => {
       const city = await companionRoom();
       const row = city?.scores.find(score => score.id === published.id);
-      return city?.humans === 0 && city.players === city.scores.length && city.players >= 6 && row?.name === published.name &&
+      return city?.humans === 1 && city.players === city.scores.length && city.players >= 7 && row?.name === published.name &&
         row.kills === published.kills && row.deaths === published.deaths &&
         row.objectiveScore === 2.5;
     });

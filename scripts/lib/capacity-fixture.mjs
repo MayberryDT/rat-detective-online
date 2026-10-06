@@ -63,11 +63,11 @@ export async function prepareFixture(out, { hosted = false, expiresAt = 0, windo
     // Only the copied private Worker runs bots before humans arrive. Existing
     // admission and join code performs the actual bot-to-human replacement.
     await patch('src/worker/index.ts', "if (roomName.startsWith('graybox-benchmark-ai-')) await room.ensurePersistentBots();", "if (roomName.startsWith('graybox-benchmark-ai-')) await room.enableMatchmaking(roomName);");
-    await patch('src/worker/GameRoom.ts', 'const desired = humans ? Math.min(this.ensureRoundBotRoster(humans), MAX_PLAYERS - humans) : 0;', "const desired = this.matchRoom?.startsWith('graybox-benchmark-ai-') ? Math.max(0, MAX_PLAYERS - humans) : humans ? Math.min(this.ensureRoundBotRoster(humans), MAX_PLAYERS - humans) : 0;");
+    await patch('src/worker/GameRoom.ts', 'const target = humans ? Math.min(this.ensureRoundBotRoster(humans), MAX_PLAYERS - humans) : 0;', "const target = this.matchRoom?.startsWith('graybox-benchmark-ai-') ? Math.max(0, MAX_PLAYERS - humans) : humans ? Math.min(this.ensureRoundBotRoster(humans), MAX_PLAYERS - humans) : 0;");
     await patch('src/worker/GameRoom.ts', 'if (this.matchRoom) roster = roster.slice(0, Math.max(0, MAX_PLAYERS - humans));', "if (this.matchRoom) roster = roster.slice(0, this.matchRoom.startsWith('graybox-benchmark-ai-') ? Math.max(0, MAX_PLAYERS - humans) : Math.max(0, MAX_PLAYERS - humans));");
-    await patch('src/worker/GameRoom.ts', 'if (humans) { if (rosterChanged || !this.serverBots)', 'if (humans || desired) { if (rosterChanged || !this.serverBots)');
-    await patch('src/worker/GameRoom.ts', '    if (this.matchRoom && !this.humanSlots()) return;', "    if (this.matchRoom && !this.matchRoom.startsWith('graybox-benchmark-ai-') && !this.humanSlots()) return;");
-    await patch('src/worker/GameRoom.ts', "      if(this.matchRoom && !retainedHuman){this.rebalanceBots();return;}", "      if(this.matchRoom && !this.matchRoom.startsWith('graybox-benchmark-ai-') && !retainedHuman){this.rebalanceBots();return;}");
+    await patch('src/worker/GameRoom.ts', 'if (humans) { if (rosterChanged || !this.serverBots)', 'if (humans || target) { if (rosterChanged || !this.serverBots)');
+    await patch('src/worker/GameRoom.ts', '    if (!this.humanSlots()) return;', "    if (!this.matchRoom?.startsWith('graybox-benchmark-ai-') && !this.humanSlots()) return;");
+    await patch('src/worker/GameRoom.ts', "      if(!retainedHuman){", "      if(!retainedHuman&&!this.matchRoom?.startsWith('graybox-benchmark-ai-')){");
     await patch('src/worker/GameRoom.ts', '      if (!this.humanSlots() && this.matchPool) this.retireFromMatchmaker();', "      if (!this.humanSlots() && this.matchPool && !this.matchRoom?.startsWith('graybox-benchmark-ai-')) this.retireFromMatchmaker();");
     await patch('src/worker/capacityTest.ts', "    if (url.pathname === '/health')", `    if(url.pathname==='/lobby-status'){
       const name=url.searchParams.get('room')??'';

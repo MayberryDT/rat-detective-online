@@ -1,4 +1,5 @@
 import { readSocketMessage } from './socketMessages';
+import { seatHuman } from './humanSeat';
 import { env, evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOT_HEARTBEAT_MS, GameRoom, STALE_PLAYER_MS } from '../../src/worker/GameRoom';
@@ -33,6 +34,8 @@ async function bootstrapCount(stub: Stub, random: number) {
     try { await instance.ensurePersistentBots(); } finally { rng.mockRestore(); }
   });
 }
+/** Rolls the roster and seats one human so the bots actually play. */
+async function live(stub: Stub) { await stub.ensurePersistentBots(); const seat = await seatHuman(stub); sockets.push(seat.ws); return seat; }
 function room() { const stub = env.GAME_ROOM.getByName(`persistent-test-${crypto.randomUUID()}`); rooms.push(stub); return stub; }
 afterEach(async () => {
   for (const ws of sockets.splice(0)) if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'done');
@@ -49,7 +52,7 @@ afterEach(async () => {
 
 describe('persistent hosted bots', () => {
   it('blocks extra-case pickup during Evidence Tampering and retains actual kill counts afterward',async()=>{
-    const stub=room();await stub.ensurePersistentBots();
+    const stub=room();await live(stub);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as unknown as Internals;
       if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;
@@ -70,7 +73,7 @@ describe('persistent hosted bots', () => {
     });
   });
   it('rescues only the stranded bot, keeps scores/health, and returns its case without resetting the match',async()=>{
-    const stub=room();await stub.ensurePersistentBots();
+    const stub=room();await live(stub);
     await runInDurableObject(stub,async(instance:GameRoom)=>{
       const game=instance as unknown as Internals;
       if(game.chaosTimer)clearInterval(game.chaosTimer);game.chaosTimer=null;
@@ -92,34 +95,42 @@ describe('persistent hosted bots', () => {
       expect(cityPlaces().at(stuck.x,stuck.y,stuck.z).id).not.toBe(cityPlaces().at(bot.x,bot.y,bot.z).id);
     });
   });
-  it('boots one random roster once and advances with no sockets', async () => {
+  it('stores one random roster once but plays nothing until a human joins', async () => {
     const stub = room();
     await Promise.all([stub.ensurePersistentBots(), stub.ensurePersistentBots(), stub.ensurePersistentBots()]);
-    const before = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
+    const roster = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as Internals;
       expect(ctx.getWebSockets()).toHaveLength(0);
       expect(game.world.version).toBe(GRAYBOX_VERSION);
-      expect(game.players.size).toBeGreaterThanOrEqual(6);
-      expect(game.players.size).toBeLessThanOrEqual(9);
-      expect([...game.players.keys()]).toEqual(game.botRoster.map(bot => bot.id));
-      expect(ctx.storage.sql.exec<{ count: number }>('SELECT count(*) AS count FROM players').one().count).toBe(game.botRoster.length);
-      expect(await ctx.storage.getAlarm()).toBeLessThanOrEqual(Date.now() + BOT_HEARTBEAT_MS);
-      return { roster: game.botRoster, time: game.chaos.snapshot(false).time, positions: [...game.players.values()].map(p => [p.x, p.y, p.z]) };
+      expect(game.botRoster.length).toBeGreaterThanOrEqual(6);
+      expect(game.botRoster.length).toBeLessThanOrEqual(9);
+      expect(ctx.storage.sql.exec("SELECT value FROM room_state WHERE key = 'persistent-bot-roster-v1'").toArray()).toHaveLength(1);
+      expect(game.players.size).toBe(0);
+      expect(game.serverBots).toBeNull(); expect(game.chaosTimer).toBeNull();
+      expect(await ctx.storage.getAlarm()).toBeNull();
+      return game.botRoster;
+    });
+    const seat = await seatHuman(stub); sockets.push(seat.ws);
+    const before = await runInDurableObject(stub, (instance: GameRoom) => {
+      const game = instance as unknown as Internals;
+      expect(game.botRoster).toEqual(roster);
+      expect([...game.players.keys()].filter(id => id !== seat.id)).toEqual(roster.map(bot => bot.id));
+      expect(game.serverBots).not.toBeNull(); expect(game.chaosTimer).not.toBeNull();
+      return { time: game.chaos.snapshot(false).time, positions: roster.map(bot => { const p = game.players.get(bot.id)!; return [p.x, p.y, p.z]; }) };
     });
     await new Promise(resolve => setTimeout(resolve, 400));
     await runInDurableObject(stub, (instance: GameRoom) => {
       const game = instance as unknown as Internals;
       expect(game.chaos.snapshot(false).time).toBeGreaterThan(before.time);
-      expect([...game.players.values()].some((p, i) => p.x !== before.positions[i][0] || p.y !== before.positions[i][1] || p.z !== before.positions[i][2])).toBe(true);
-      expect(game.botRoster).toEqual(before.roster);
-      expect(game.players.size).toBe(before.roster.length);
+      expect(roster.some((bot, i) => { const p = game.players.get(bot.id)!; return p.x !== before.positions[i][0] || p.y !== before.positions[i][1] || p.z !== before.positions[i][2]; })).toBe(true);
+      expect(game.botRoster).toEqual(roster);
     });
     await stub.ensurePersistentBots();
-    expect((await stub.status()).players).toBe(before.roster.length);
+    expect((await stub.status()).players).toBe(roster.length + 1);
   });
 
   it('retains managed identities and scores through stale hydration and re-arms the heartbeat', async () => {
-    const stub = room(); await stub.ensurePersistentBots();
+    const stub = room(); await live(stub);
     const before = await runInDurableObject(stub, (instance: GameRoom, ctx) => {
       const game = instance as unknown as Internals;
       // The test helper waits for timer I/O to drain before eviction. Stop only
@@ -128,7 +139,7 @@ describe('persistent hosted bots', () => {
       game.serverBots?.dispose(); game.serverBots = null;
       const rat = game.players.get(PERSISTENT_BOT_IDS[0])!; rat.kills = 7; game.persistPlayer(rat, true);
       const old = Date.now() - STALE_PLAYER_MS - 1000;
-      ctx.storage.sql.exec('UPDATE players SET updated_at = ?, last_active_at = ?', old, old);
+      ctx.storage.sql.exec("UPDATE players SET updated_at = ?, last_active_at = ? WHERE id LIKE 'rd-ai-%'", old, old);
       return { seed: game.world.seed, roster: game.botRoster };
     });
     await evictDurableObject(stub);
@@ -136,17 +147,17 @@ describe('persistent hosted bots', () => {
     await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as Internals;
       expect(game.world).toMatchObject({ seed: before.seed, version: GRAYBOX_VERSION });
-      expect(game.players.size).toBe(before.roster.length);
+      expect(game.players.size).toBe(before.roster.length + 1);
       expect(game.botRoster).toEqual(before.roster);
       expect(game.players.get(PERSISTENT_BOT_IDS[0])!.kills).toBe(7);
       expect(game.serverBots).not.toBeNull(); expect(game.chaosTimer).not.toBeNull();
       expect(await ctx.storage.getAlarm()).toBeGreaterThan(Date.now());
     });
-    await stub.ensurePersistentBots(); expect((await stub.status()).players).toBe(before.roster.length);
+    await stub.ensurePersistentBots(); expect((await stub.status()).players).toBe(before.roster.length + 1);
   });
 
   it('brings a city stored on the previous layout back on the current one, its old checkpoint dropped', async () => {
-    const stub = room(); await stub.ensurePersistentBots();
+    const stub = room(); await live(stub);
     const seed = await runInDurableObject(stub, (instance: GameRoom, ctx) => {
       const game = instance as unknown as Internals;
       clearInterval(game.chaosTimer ?? undefined); game.chaosTimer = null;
@@ -172,7 +183,7 @@ describe('persistent hosted bots', () => {
   });
 
   it('gives bot deaths and wins the ordinary deadlines without replacing them with the heartbeat', async () => {
-    const stub = room(); await stub.ensurePersistentBots();
+    const stub = room(); await live(stub);
     await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as Internals;
       if (game.chaosTimer) clearInterval(game.chaosTimer); game.chaosTimer = null;
@@ -203,7 +214,8 @@ describe('persistent hosted bots', () => {
         expect(await ctx.storage.getAlarm()).toBe(won + WIN_DISPLAY_MS);
         now = won + WIN_DISPLAY_MS; await instance.alarm();
         expect(game.round.phase).toBe('playing');
-        expect([...game.players.values()].every(p => p.hp === MAX_HP && p.kills === 0 && p.deaths === 0)).toBe(true);
+        // Only the bots: the seated human never closes the case file, so it sits the new round out as a reader.
+        expect([...game.players.values()].filter(p => p.id.startsWith('rd-ai-')).every(p => p.hp === MAX_HP && p.kills === 0 && p.deaths === 0)).toBe(true);
         expect(game.players.get(killer.id)).toBe(killer);
         expect(game.players.get(killer.id)!.name).toBe(killer.name);
         expect(await ctx.storage.getAlarm()).toBe(now + BOT_HEARTBEAT_MS);
@@ -213,7 +225,7 @@ describe('persistent hosted bots', () => {
 
   it.each([0, 0.999999])('lets humans join over rolled bots until the ten-rat cap with random %s', async random => {
     const stub = room(); await bootstrapCount(stub, random);
-    const bots = (await stub.status()).bots;
+    let bots = 0;
     const join = JSON.stringify({ type: 'join', protocolVersion: PROTOCOL_VERSION, name: 'Human',
       appearance: { hatType: 'fedora', hatColor: 0xdc4a3c, furColor: 0xe8b84d, coatColor: 0xbe4545 } });
     for (let i = 0; i <= MAX_PLAYERS; i++) {
@@ -223,6 +235,7 @@ describe('persistent hosted bots', () => {
         ws.addEventListener('message', event => { const message=readSocketMessage(ws,event.data);if(message?.type==='welcome'||message?.type==='error')resolve(message); });
       });
       ws.send(join); const message = await first;
+      if (i === 0) bots = (await stub.status()).bots;
       if (i < MAX_PLAYERS) expect(message.type).toBe('welcome');
       else expect(message).toMatchObject({ type: 'error', message: 'This room is full' });
     }
@@ -259,6 +272,7 @@ describe('persistent hosted bots', () => {
 
   it('shrinks a nine-bot round to six keepers, clears leavers, and keeps overlapping names', async () => {
     const stub = room(); await bootstrapCount(stub, 0.999999);
+    const seat = await seatHuman(stub); sockets.push(seat.ws);
     const after = await runInDurableObject(stub, async (instance: GameRoom, ctx) => {
       const game = instance as unknown as Internals;
       if (game.chaosTimer) clearInterval(game.chaosTimer); game.chaosTimer = null;
@@ -286,7 +300,7 @@ describe('persistent hosted bots', () => {
         expect(human).toMatchObject({ name: 'Human Name', ...appearance, hp: MAX_HP, kills: 0, deaths: 0 });
         // A new round ends every kill streak, bots' and humans' alike.
         expect([human.streak, game.players.get(previous[0].id)!.streak]).toEqual([undefined, undefined]);
-        expect(game.players.size).toBe(7);
+        expect(game.players.size).toBe(8);
         expect(ctx.storage.sql.exec('SELECT id FROM pending_events WHERE player_id IS NOT NULL').toArray()).toHaveLength(0);
         for (const id of PERSISTENT_BOT_IDS.slice(6)) {
           expect(game.players.has(id)).toBe(false);

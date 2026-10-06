@@ -29,18 +29,18 @@ afterEach(async () => {
       await ctx.storage.deleteAlarm();
     });
   }
+  for (const o of (await env.CITY_ARCHIVE.list()).objects) await env.CITY_ARCHIVE.delete(o.key);
 });
 
 /** Round ids of each kind: about 1 round in 5 is code-only, with Jev off whoever plays. */
 const ROUND_IDS = Array.from({ length: 50 }, (_, i) => `round-${i}`);
 const ORDINARY_ROUND = ROUND_IDS.find(id => !codeOnlyRound(id))!, CODE_ROUND = ROUND_IDS.find(codeOnlyRound)!;
 /** A room of server bots whose Jev requests land in `bodies`, answered at once, or, with `held`, when the test calls
- * them. Its round is an ordinary one, so Jev's switch depends only on who plays. */
+ * them. The bots start with the first human (see `join`). */
 async function room(key: { value?: string }, held?: Array<() => void>): Promise<{ stub: Stub; bodies: string[] }> {
   const stub = env.GAME_ROOM.getByName(`jev-test-${crypto.randomUUID()}`), bodies: string[] = [];
   rooms.push(stub);
   await stub.ensurePersistentBots();
-  await setRound(stub, ORDINARY_ROUND);
   await runInDurableObject(stub, (instance: GameRoom) => {
     const game = instance as unknown as Internals;
     game.jevKey = () => key.value;
@@ -60,6 +60,8 @@ const setRound = (stub: Stub, id: string) => runInDurableObject(stub, (instance:
   if (assignment) assignment.roundId = id;
 });
 type Welcome = { player: { x: number; y: number; z: number } };
+/** Seats a human (or an agent), which starts the room, then makes its round an ordinary one, so Jev's switch
+ * depends only on who plays. */
 async function join(stub: Stub, agent = false): Promise<{ ws: WebSocket; welcome: Welcome }> {
   const response = await stub.fetch(`https://rat-detective.test/ws${agent ? '?agent=1' : ''}`, { headers: { Upgrade: 'websocket' } });
   const ws = response.webSocket!; ws.accept(); sockets.push(ws);
@@ -69,7 +71,9 @@ async function join(stub: Stub, agent = false): Promise<{ ws: WebSocket; welcome
   }));
   ws.send(JSON.stringify({ type: 'join', protocolVersion: PROTOCOL_VERSION, name: CHOSEN,
     appearance: { hatType: 'fedora', hatColor: 0xdc4a3c, furColor: 0xe8b84d, coatColor: 0xbe4545 } }));
-  return { ws, welcome: await welcome };
+  const joined = { ws, welcome: await welcome };
+  await setRound(stub, ORDINARY_ROUND);
+  return joined;
 }
 // The room's own 30 Hz simulation interval drives the bots and the mind here, so these waits are real time.
 const play = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -105,10 +109,12 @@ describe('Jev in a room', () => {
   }, 20000);
 
   it('keeps Jev off in a code-only round with a human playing, and back on in the next ordinary round', async () => {
-    const { stub, bodies } = await room({ value: 'test-key' });
-    await setRound(stub, CODE_ROUND);
+    // The key waits until the round is code-only: the room's own first round starts with the human.
+    const key: { value?: string } = {};
+    const { stub, bodies } = await room(key);
     const { ws, welcome } = await join(stub);
     await setRound(stub, CODE_ROUND);
+    key.value = 'test-key';
     const { x, y, z } = welcome.player;
     const move = (seq: number) => ws.send(JSON.stringify({ type: 'updateMovement', seq, position: { x, y, z }, rotation: { x: 0, y: .38, z: 0, w: .92 }, meshRotation: { x: 0, y: .38, z: 0, w: .92 } }));
     move(1); await play(1500); move(2);
@@ -137,7 +143,8 @@ describe('Jev in a room', () => {
   }, 20000);
 
   it('records only the code mind\'s goal changes while Jev is off, Jev\'s answers while on, and its minute when it stops', async () => {
-    const { stub } = await room({ value: 'test-key' });
+    const key: { value?: string } = {};
+    const { stub } = await room(key);
     // Decisions are archived, not kept in SQL: flush the room's archive and read it back.
     const facts = async () => {
       await runInDurableObject(stub, async (instance: GameRoom) => {
@@ -156,10 +163,12 @@ describe('Jev in a room', () => {
     const factsUntil = async (test: (facts: CityFact[]) => boolean, ms: number) => {
       for (const end = Date.now() + ms; ; await play(250)) { const out = await facts(); if (test(out) || Date.now() > end) return out; }
     };
-    const alone = await factsUntil(out => out.some(f => f.type === 'decision'), 3000);
-    expect(alone.some(f => f.type === 'decision')).toBe(true);
-    expect(alone.filter(f => f.type === 'decision' && f.mind === 'jev' || f.type === 'minds')).toEqual([]);
+    // A human plays with Jev off (no key): only the code mind decides.
     const { ws } = await join(stub);
+    const off = await factsUntil(out => out.some(f => f.type === 'decision'), 3000);
+    expect(off.some(f => f.type === 'decision')).toBe(true);
+    expect(off.filter(f => f.type === 'decision' && f.mind === 'jev' || f.type === 'minds')).toEqual([]);
+    key.value = 'test-key';
     const jev = (out: CityFact[]) => out.some(f => f.type === 'decision' && f.mind === 'jev' && f.tokens === 900);
     expect(jev(await factsUntil(jev, 5000))).toBe(true);
     ws.close(1000, 'left');

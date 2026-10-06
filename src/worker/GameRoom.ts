@@ -260,9 +260,7 @@ export class GameRoom extends DurableObject<Env> {
         if (this.matchRoom) this.rebalanceBots();
         else this.activatePersistentBots();
       }
-      if (this.isPublicMatchRoom() && (
-        this.keepsPersistentCity() || [...this.players.keys()].some(id => !this.isManagedBot(id))
-      )) this.activateCompanion();
+      if (this.isPublicMatchRoom() && [...this.players.keys()].some(id => !this.isManagedBot(id))) this.activateCompanion();
       await this.scheduleNextAlarm({ preserveExisting: true });
     });
   }
@@ -377,6 +375,8 @@ export class GameRoom extends DurableObject<Env> {
 
   async occupiedSlots(): Promise<number> { this.reconcileLiveness(); this.expireAdmissions(); return this.humanSlots(); }
 
+  /** Humans holding a seat: joined, inside the reconnect grace, or admitted and joining. A room plays only while
+   * this is above zero; at zero it stops the tick and the bots, checkpoints once and sets no wake, so it hibernates. */
   private humanSlots(): number {
     const humanIds = new Set([...this.players.keys()].filter(id => !this.isManagedBot(id)));
     let pending = 0;
@@ -385,15 +385,6 @@ export class GameRoom extends DurableObject<Env> {
       if (!a.playerId && (a.admissionUntil ?? 0) > this.now()) pending++;
     }
     return humanIds.size + pending;
-  }
-
-  /** Only the canonical public city keeps a bot match with zero humans. */
-  private keepsPersistentCity(): boolean {
-    return this.matchRoom === DEFAULT_ROOM_NAME;
-  }
-
-  private cityShouldRun(): boolean {
-    return !this.matchRoom || this.humanSlots() > 0 || this.keepsPersistentCity();
   }
 
   private writeRoundBotCount(): void {
@@ -425,8 +416,7 @@ export class GameRoom extends DurableObject<Env> {
     const wasRunning = this.chaosTimer !== null || this.botRoster.length > 0;
     const humans = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
     const previousLength = this.botRoster.length;
-    const desired = humans ? Math.min(this.ensureRoundBotRoster(humans), MAX_PLAYERS - humans) : 0;
-    const target = this.keepsPersistentCity() && !humans ? this.ensureRoundBotRoster(0) : desired;
+    const target = humans ? Math.min(this.ensureRoundBotRoster(humans), MAX_PLAYERS - humans) : 0;
     if (target > this.botRoster.length && this.refillAt > this.now()) return;
     if (this.refillAt) { this.refillAt = 0; this.writeRoomState('bot-refill-at', '0'); }
     const rosterChanged = previousLength !== target;
@@ -438,22 +428,23 @@ export class GameRoom extends DurableObject<Env> {
       this.botRoster = fillBotRoster(this.botRoster, target, [...this.players.values()].map(player => player.name));
     }
     if (rosterChanged) this.writeRoomState(BOT_ROSTER_KEY, JSON.stringify(this.botRoster));
-    if (humans) { if (rosterChanged || !this.serverBots) this.activatePersistentBots();
-      if (this.keepsPersistentCity()) this.activateCompanion();
-    } else if (this.keepsPersistentCity()) {
-      if (rosterChanged || !this.serverBots) this.activatePersistentBots();
-      this.activateCompanion();
-    } else {
-      this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined; this.updateJev(this.now());
-      if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; this.cityRecorder?.flush(this.now(), true); }
+    if (humans) { if (rosterChanged || !this.serverBots) this.activatePersistentBots(); }
+    else {
+      this.stopPlaying();
       if (this.chaos && wasRunning) this.checkpointGame();
-      this.nextBotHeartbeat = 0;
       if (this.roundBotCount) { this.roundBotCount = 0; this.writeRoundBotCount(); }
       if (wasRunning && this.matchPool && !this.humanSlots()) this.retireFromMatchmaker();
     }
   }
 
-  /** Trusted Worker RPC; only the explicit public-room route invokes this. */
+  /** Stop the tick and the bots' minds; the caller checkpoints. */
+  private stopPlaying(): void {
+    this.serverBots?.dispose(); this.serverBots = null; this.botState = undefined; this.updateJev(this.now());
+    if (this.chaosTimer) { clearInterval(this.chaosTimer); this.chaosTimer = null; this.cityRecorder?.flush(this.now(), true); }
+    this.nextBotHeartbeat = 0;
+  }
+
+  /** Trusted Worker RPC (via `enableMatchmaking`): sets up the managed roster. Bots join and play only with a human. */
   async ensurePersistentBots(): Promise<void> {
     if (!this.persistentBots) {
       this.reconcileLiveness();
@@ -557,9 +548,7 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private activatePersistentBots(): void {
-    if (!this.keepsPersistentCity()) {
-    if (this.matchRoom && !this.humanSlots()) return;
-    }
+    if (!this.humanSlots()) return;
     const added: string[] = [];
     for (const entry of this.botRoster) {
       if (this.players.has(entry.id)) continue;
@@ -606,7 +595,7 @@ export class GameRoom extends DurableObject<Env> {
     const humans = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
     const names = [...this.players.values()].map(player => player.name);
     let roster = nextRoundBotRoster(this.botRoster, names);
-    if (this.matchRoom && !humans && !this.keepsPersistentCity()) {
+    if (this.matchRoom && !humans) {
       roster = [];
       this.roundBotCount = 0;
     } else {
@@ -700,7 +689,7 @@ export class GameRoom extends DurableObject<Env> {
     if (!companionProjectionDue(now, this.companionLastProjectedAt, force)) return;
     this.companionLastProjectedAt = now;
     const retainedHumanIds = new Set([...this.players.keys()].filter(id => !this.isManagedBot(id)));
-    if (!retainedHumanIds.size && !this.keepsPersistentCity()) return;
+    if (!retainedHumanIds.size) return;
     const humanIds = new Set([...this.attachedPlayerIds()].filter(id => retainedHumanIds.has(id)));
     const nextRevision = this.companionRevision + 1;
     const publication = projectCompanionRoom({
@@ -888,20 +877,18 @@ export class GameRoom extends DurableObject<Env> {
       this.reconcileLiveness();
       if (this.matchRoom) {
         this.expireAdmissions(); this.rebalanceBots();
-        if (!this.keepsPersistentCity()) {
         if (!this.humanSlots() && this.matchPool) this.retireFromMatchmaker();
-        }
       }
-      if (this.persistentBots && this.cityShouldRun()) {
+      if (this.persistentBots && this.humanSlots()) {
         this.activatePersistentBots();
         this.nextBotHeartbeat = this.now() + BOT_HEARTBEAT_MS;
       }
       await this.processDueEvents();
     } catch (error) {
-      // Success already schedules from processDueEvents. Only a failed
-      // canonical city needs a bounded future wake so six retries cannot
-      // strand it; overflow/private keep the ordinary platform retry.
-      if (this.keepsPersistentCity() && this.persistentBots) {
+      // Success already schedules from processDueEvents. A failed alarm while
+      // humans play needs a bounded future wake so six retries cannot strand
+      // their match; an empty room keeps the ordinary platform retry.
+      if (this.persistentBots && this.humanSlots()) {
         try { await this.scheduleNextAlarm({ ignorePastDue: true }); }
         catch (reschedule) { log('error', 'alarm reschedule failed', { error: reschedule instanceof Error ? reschedule.message : String(reschedule) }); }
       }
@@ -1143,6 +1130,7 @@ export class GameRoom extends DurableObject<Env> {
     this.joining.add(ws);this.audience=null;
     this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined, titleUntil:undefined, delivery: true });
     if (this.matchRoom) this.rebalanceBots();
+    else if (this.persistentBots) this.activatePersistentBots();
 
     this.chaosDelivery.delete(ws);
     this.startChaos();
@@ -1509,7 +1497,7 @@ export class GameRoom extends DurableObject<Env> {
         ...(opts?.ignorePastDue ? [now] : []))
       .one();
     const future = (value: number) => opts?.ignorePastDue && value <= now ? Infinity : value;
-    const cityWake = this.persistentBots && this.cityShouldRun()
+    const cityWake = this.persistentBots && this.humanSlots()
       ? (opts?.ignorePastDue
         ? (this.nextBotHeartbeat > now ? this.nextBotHeartbeat : now + BOT_HEARTBEAT_MS)
         : (this.nextBotHeartbeat || now + BOT_HEARTBEAT_MS))
@@ -1665,12 +1653,9 @@ export class GameRoom extends DurableObject<Env> {
       if(!this.chaos)return;
       this.reconcileLiveness();
       const retainedHuman=[...this.players.keys()].some(id=>!this.isManagedBot(id));
-      if(!this.keepsPersistentCity()){
-      if(this.matchRoom && !retainedHuman){this.rebalanceBots();return;}
-      }
-      if(!this.persistentBots && !retainedHuman){
-        this.checkpointGame();
-        clearInterval(this.chaosTimer!);this.chaosTimer=null;return;
+      if(!retainedHuman){
+        if(this.matchRoom){this.rebalanceBots();return;}
+        this.stopPlaying();this.checkpointGame();return;
       }
       // Workers may freeze high-resolution clocks within one event; cost=0 is
       // not proof of free CPU. These gaps are source-clock spans too, and

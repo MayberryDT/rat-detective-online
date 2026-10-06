@@ -135,9 +135,6 @@ describe('companion publication lifecycle', () => {
       game.clock = () => Date.now();
       game.publishCompanion(true);
     });
-    await until(async () => {
-      const city = await summary();
-      return city?.humans === 0 && city.players >= 6 && city.players <= 9;
-    });
+    await until(async () => await summary() === undefined);
   }, 20_000);
 });
