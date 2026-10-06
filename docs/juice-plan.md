@@ -1,5 +1,7 @@
 # Rat Detective juice plan
 
+**6 October: accepted shooting first slice LIVE.** Tyler accepted V3 and corrected front origin. Actual GameSession pistol/Tommy/Laser/trap consumers are integrated, protocol 33; production `2822d1a`, Worker `9d2c12a6-a89f-485c-9ca8-87d76b02e661`. [Release and hosted proof](verification/task74-release-2026-10-06.md). Later proposals and detective work remain deferred. Historical batch decisions below remain preserved.
+
 Living plan, started **2026-09-27**. This file owns current status and order.
 Older plans, handoffs and receipts are **reference only**; Tyler asked to start fresh.
 Where an older decision conflicts with this plan, this plan wins (see

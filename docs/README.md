@@ -1,6 +1,8 @@
 # Documentation map
 
-Reviewed against repository source and the latest release receipts through **2026-09-22**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
+Latest release: [accepted shooting and short trap throw, protocol 33 — 6 October](verification/task74-release-2026-10-06.md).
+
+Reviewed against repository source and the latest release receipts through **2026-10-06**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.
 
 ## Planned work
 

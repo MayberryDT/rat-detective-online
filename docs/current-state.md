@@ -1,6 +1,10 @@
 # Current Rat Detective state
 
-Verified from source and production through **2026-10-06** (protocol 32). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+Verified from source and production through **2026-10-06** (protocol 33). Prior gameplay receipts remain **2026-09-17**. Deployment details live in [live-service.md](live-service.md).
+
+## Accepted shooting and short trap throw — 6 October production
+
+Tyler accepted V3 and corrected shared front origin, then authorized release. Production Worker `9d2c12a6-a89f-485c-9ca8-87d76b02e661`, build `production-2026-10-06-2822d1a`, client `index-In17n5ua.js`, **protocol 33**, layout 7 / mindVersion 12. Accepted pistol, Tommy casing/mechanism, Laser gun/confirmed victim reaction and immediate heavy short front trap flight now run in real GameSession consumers. Trap authority owns launch, landing, catch and release; occupied space never vetoes. Ordinary gun physics/damage/cadence/ricochet, composed aim, packed storage and human-seat hibernation remain protected. Matching client/Worker reload is required; protocol-32 trap rollback is not qualified. [Release receipt and actual hosted proof](verification/task74-release-2026-10-06.md).
 
 ## Rooms play only with a human — 6 October production
 

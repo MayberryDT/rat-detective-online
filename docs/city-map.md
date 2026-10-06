@@ -1,5 +1,7 @@
 # The city map
 
+**6 October / protocol 33:** accepted shooting and short front trap throw are [live](verification/task74-release-2026-10-06.md), layout 7 unchanged. Trap `launch` records real departure, `set` real landing, `snap` real catch (3 s, no damage), and break remains a real authority outcome. Trap launches are not ordinary gun-shot facts.
+
 Status (2026-09-29): **steps 1–3 are live** on production, Worker `00e3129e-6a33-40e0-acb8-f5810a251f60` (Tyler: "go ahead and deploy it to the live game"), then the recorder fixes in `a57db85b-bad7-483d-9dbf-51368235a768`, with the same client and protocol 22. See [the receipt](verification/heat-map-release-2026-09-28.md). **Steps 4–6 (the `/map` page's Observe, Analyse and Design modes) shipped with the city overhaul** in Worker `d5c52eb9-ab32-471e-a439-8ec405e83899`. **First answer (Tyler's 12-minute Excessive Force session, 2026-09-29):** humans fire 176 shots per minute alive and hit 6%; bots fire 108 and hit 3%. Tyler clicks every shot (there is no hold-to-fire) and won 36/9/9. The session also exposed two recorder bugs, since fixed in source: every death was filed as `missile`, and sight stopped at 60 units.
 
 **Layout 3 (2026-09-29):** live in production since Worker `d5c52eb9-ab32-471e-a439-8ec405e83899` (protocol 23), so the recorder now writes layout-3 facts, and `proposal:overhaul-v3` is judged as human play builds up on both layouts. Staging runs the same build and records to `rat-detective-city-staging`. See [the release receipt](verification/city-overhaul-release-2026-09-29.md).

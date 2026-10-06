@@ -374,7 +374,7 @@
       "change": "Case grip, calmer bot aim and bot archetypes (Tyler, 1 October): a carried case is knocked loose by 3 enemy balls each within 2 s of the last (it was one ball); killing the carrier still drops it. Bots pre-aim at chest height, not head height, and play as five archetypes with their own dials, none sharper than base (sniper, hose, camper, joyrider, gremlin; mindVersion 7); joyriders use the launch machines. Perf reports carry ping and how far behind other rats are drawn (measurement only). Excessive Force stays at 10 kills; no time limits, ever. Protocol 26 adds: archetypes dealt evenly per room; PAPER CHASE to 5 deliveries; Jurisdiction zones hold 20 points that drain only while the case is held there, then move; a shot case flies 20% slower; taking the case brings a random supply (once per 20 s per rat); the case rebuilt and made juicy (K1, K2, new sounds); loose-spell and drop-cause recording.",
       "baseline": "lighter-jev",
       "receipt": "docs/verification/protocol-26-release-2026-10-01.md",
-      "notes": "Tyler's target: Excessive Force averages 15–20 minutes, the longest mode but not by much (it was 27.5 minutes over 45 rounds from 29 September to 1 October, bot-only rounds included). If Paper Chase or Jurisdiction get too short, raise their targets. Bot-only rounds count: the city runs them all day. Paper Chase and Jurisdiction changed rules in this era, so their round lengths are a new baseline, not a prediction. Loose-spell measures (case.looseMedianS, loosePathMedian, looseKicksMean) start here; the earlier eras have none.",
+      "notes": "Tyler's target: Excessive Force averages 15\u201320 minutes, the longest mode but not by much (it was 27.5 minutes over 45 rounds from 29 September to 1 October, bot-only rounds included). If Paper Chase or Jurisdiction get too short, raise their targets. Bot-only rounds count: the city runs them all day. Paper Chase and Jurisdiction changed rules in this era, so their round lengths are a new baseline, not a prediction. Loose-spell measures (case.looseMedianS, loosePathMedian, looseKicksMean) start here; the earlier eras have none.",
       "predictions": [
         {
           "id": "ef-shorter",
@@ -655,10 +655,11 @@
       "build": [
         "production-2026-10-03-6b47caf",
         "production-2026-10-06-bd2e668",
-        "production-2026-10-06-2476135"
+        "production-2026-10-06-2476135",
+        "production-2026-10-06-748340a"
       ],
       "from": "2026-10-03T15:54:27.871Z",
-      "to": null,
+      "to": "2026-10-06T20:04:06.037Z",
       "layout": 7,
       "mindVersion": 12,
       "protocol": 32,
@@ -666,12 +667,13 @@
       "commits": [
         "6b47caf",
         "bd2e668",
-        "2476135"
+        "2476135",
+        "748340a"
       ],
       "change": "Protocol 32 (3 October): random supplies. Every site but a Quick Fix one holds a random non-heal pickup (Ironclad, Hot Pursuit, Stakeout, Tommy Gun, Laser, Mousetrap), rolled at the start, each round and each claim; Quick Fix sites stay Quick Fix.",
       "baseline": "playtest-three",
       "receipt": "docs/verification/random-supplies-release-2026-10-03.md",
-      "notes": "A site's kind now changes: read the kind from each `pickup`/`restock` fact, not from the layout's site id. Sites restored from the protocol 31 room keep their authored kinds until first claimed or the next round. Admin-touched rounds should be left out. Build production-2026-10-06-bd2e668 (Worker 4fbb94c7, 6 October 03:29 UTC) adds only the human-seats-only room lifecycle (docs/verification/idle-room-release-2026-10-06.md): with a human present play is unchanged, so the era continues across it; from then on no round is played with zero humans. Build production-2026-10-06-2476135 (Worker e99a51a7, 6 October 15:19 UTC) changes only how city aggregates are stored (packed rows, docs/verification/data-cost-release-2026-10-06.md); play is unchanged, so the era continues across it.",
+      "notes": "A site's kind now changes: read the kind from each `pickup`/`restock` fact, not from the layout's site id. Sites restored from the protocol 31 room keep their authored kinds until first claimed or the next round. Admin-touched rounds should be left out. Build production-2026-10-06-bd2e668 (Worker 4fbb94c7, 6 October 03:29 UTC) adds only the human-seats-only room lifecycle (docs/verification/idle-room-release-2026-10-06.md): with a human present play is unchanged, so the era continues across it; from then on no round is played with zero humans. Build production-2026-10-06-2476135 (Worker e99a51a7, 6 October 15:19 UTC) changes only how city aggregates are stored (packed rows, docs/verification/data-cost-release-2026-10-06.md); play is unchanged, so the era continues across it. The accepted aiming repair 748340a continues this era with unchanged gameplay rules.",
       "predictions": [
         {
           "id": "excessive-force-not-longer",
@@ -680,6 +682,25 @@
           "expect": "not-up"
         }
       ]
+    },
+    {
+      "id": "heavy-cheese",
+      "environment": "production",
+      "build": "production-2026-10-06-2822d1a",
+      "from": "2026-10-06T20:04:06.037Z",
+      "to": null,
+      "layout": 7,
+      "mindVersion": 12,
+      "protocol": 33,
+      "worker": "9d2c12a6-a89f-485c-9ca8-87d76b02e661",
+      "commits": [
+        "2822d1a"
+      ],
+      "change": "Accepted HeavyCheese pistol, physical Tommy/Laser presentation and confirmed target response; immediate authoritative short front trap throw, actual flight/landing/catch, no occupied-space refusal.",
+      "baseline": "random-supplies",
+      "receipt": "docs/verification/task74-release-2026-10-06.md",
+      "notes": "Exact BUILD membership is authoritative. Boundary is observed deployment-log completion, not a provider timestamp. No measurement establishes subjective feel. Packed storage, human-seat hibernation and ordinary gun balance/ballistics remain preserved.",
+      "predictions": []
     }
   ]
 }
