@@ -652,7 +652,10 @@
     {
       "id": "random-supplies",
       "environment": "production",
-      "build": "production-2026-10-03-6b47caf",
+      "build": [
+        "production-2026-10-03-6b47caf",
+        "production-2026-10-06-bd2e668"
+      ],
       "from": "2026-10-03T15:54:27.871Z",
       "to": null,
       "layout": 7,
@@ -660,12 +663,13 @@
       "protocol": 32,
       "worker": "02bf9e68-9699-4138-a586-ddc93de49847",
       "commits": [
-        "6b47caf"
+        "6b47caf",
+        "bd2e668"
       ],
       "change": "Protocol 32 (3 October): random supplies. Every site but a Quick Fix one holds a random non-heal pickup (Ironclad, Hot Pursuit, Stakeout, Tommy Gun, Laser, Mousetrap), rolled at the start, each round and each claim; Quick Fix sites stay Quick Fix.",
       "baseline": "playtest-three",
       "receipt": "docs/verification/random-supplies-release-2026-10-03.md",
-      "notes": "A site's kind now changes: read the kind from each `pickup`/`restock` fact, not from the layout's site id. Sites restored from the protocol 31 room keep their authored kinds until first claimed or the next round. Admin-touched rounds should be left out.",
+      "notes": "A site's kind now changes: read the kind from each `pickup`/`restock` fact, not from the layout's site id. Sites restored from the protocol 31 room keep their authored kinds until first claimed or the next round. Admin-touched rounds should be left out. Build production-2026-10-06-bd2e668 (Worker 4fbb94c7, 6 October 03:29 UTC) adds only the human-seats-only room lifecycle (docs/verification/idle-room-release-2026-10-06.md): with a human present play is unchanged, so the era continues across it; from then on no round is played with zero humans.",
       "predictions": [
         {
           "id": "excessive-force-not-longer",

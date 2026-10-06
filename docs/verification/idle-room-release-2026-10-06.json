@@ -1,0 +1,198 @@
+{
+  "verifiedAt": "2026-10-06T03:29:29.566Z",
+  "origin": "http://127.0.0.1:43409",
+  "phases": {
+    "empty": {
+      "label": "empty",
+      "ms": 20030,
+      "bots": [
+        0,
+        0
+      ],
+      "players": [
+        0,
+        0
+      ],
+      "tickLogs": 0,
+      "storageBefore": {
+        "files": {
+          "rat-detective-local-GameRoom/40891f66f4b4e026f639d7f9513c88190abd40a5d2ee08e8a053c87b1df14d10.sqlite": {
+            "dumpBytes": 2704,
+            "sha256": "fbe075ee191d090b"
+          },
+          "rat-detective-local-GameRoom/metadata.sqlite": {
+            "dumpBytes": 183,
+            "sha256": "0cde4c62ed258d62",
+            "dump": "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE _cf_ALARM (\n      actor_id TEXT PRIMARY KEY,\n      scheduled_time INTEGER,\n      actor_name TEXT\n    ) WITHOUT ROWID;\nCOMMIT;\n"
+          }
+        },
+        "digest": "d9db4283b5e61abdd3c0309e97429a323f640ff217b2424b04436d995edd4a79"
+      },
+      "storageAfter": {
+        "files": {
+          "rat-detective-local-GameRoom/40891f66f4b4e026f639d7f9513c88190abd40a5d2ee08e8a053c87b1df14d10.sqlite": {
+            "dumpBytes": 2704,
+            "sha256": "fbe075ee191d090b"
+          },
+          "rat-detective-local-GameRoom/metadata.sqlite": {
+            "dumpBytes": 183,
+            "sha256": "0cde4c62ed258d62",
+            "dump": "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE _cf_ALARM (\n      actor_id TEXT PRIMARY KEY,\n      scheduled_time INTEGER,\n      actor_name TEXT\n    ) WITHOUT ROWID;\nCOMMIT;\n"
+          }
+        },
+        "digest": "d9db4283b5e61abdd3c0309e97429a323f640ff217b2424b04436d995edd4a79"
+      },
+      "storageChanged": false
+    },
+    "playing": {
+      "welcomeBots": 8,
+      "status": {
+        "room": "public-live-v2",
+        "world": {
+          "seed": 2052619188,
+          "version": 7
+        },
+        "players": 9,
+        "bots": 8,
+        "phase": "playing",
+        "startedAt": 1791257279146,
+        "scores": [
+          {
+            "name": "Captain Fleabite",
+            "kills": 1,
+            "deaths": 0
+          },
+          {
+            "name": "Detective Ratter",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "name": "Gumshoe Grate",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "name": "Idle Check",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "name": "Inspector Bolthole",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "name": "Lieutenant Chewett",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "name": "Lieutenant Skulk",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "name": "Sleuth Claw",
+            "kills": 0,
+            "deaths": 0
+          },
+          {
+            "name": "Constable Rusk",
+            "kills": 0,
+            "deaths": 1
+          }
+        ]
+      },
+      "chaosFrames": 396,
+      "tickLogs": 2,
+      "storageBefore": {
+        "files": {
+          "rat-detective-local-GameRoom/40891f66f4b4e026f639d7f9513c88190abd40a5d2ee08e8a053c87b1df14d10.sqlite": {
+            "dumpBytes": 12544,
+            "sha256": "451201b8e1f7b258"
+          },
+          "rat-detective-local-GameRoom/metadata.sqlite": {
+            "dumpBytes": 318,
+            "sha256": "27e76cef6352f850",
+            "dump": "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE _cf_ALARM (\n      actor_id TEXT PRIMARY KEY,\n      scheduled_time INTEGER,\n      actor_name TEXT\n    ) WITHOUT ROWID;\nINSERT INTO _cf_ALARM VALUES('40891f66f4b4e026f639d7f9513c88190abd40a5d2ee08e8a053c87b1df14d10',1791257309227000000,'public-live-v2');\nCOMMIT;\n"
+          }
+        },
+        "digest": "1c751ca1cfe5b38dc46f77f2cf9fbe71994f75f39d905342cdb57f55b0af7001"
+      },
+      "storageAfter": {
+        "files": {
+          "rat-detective-local-GameRoom/40891f66f4b4e026f639d7f9513c88190abd40a5d2ee08e8a053c87b1df14d10.sqlite": {
+            "dumpBytes": 66969,
+            "sha256": "2af43c02debffdf8"
+          },
+          "rat-detective-local-GameRoom/metadata.sqlite": {
+            "dumpBytes": 318,
+            "sha256": "abb40d9565be76d6",
+            "dump": "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE _cf_ALARM (\n      actor_id TEXT PRIMARY KEY,\n      scheduled_time INTEGER,\n      actor_name TEXT\n    ) WITHOUT ROWID;\nINSERT INTO _cf_ALARM VALUES('40891f66f4b4e026f639d7f9513c88190abd40a5d2ee08e8a053c87b1df14d10',1791257316451000000,'public-live-v2');\nCOMMIT;\n"
+          }
+        },
+        "digest": "dde2eb161e0d3a351f597a34e195de8c5bdf248f8e1a62d5225c0d47eec1b7a3"
+      },
+      "storageChanged": true
+    },
+    "left": {
+      "graceMs": 35010,
+      "status": {
+        "room": "public-live-v2",
+        "world": {
+          "seed": 2052619188,
+          "version": 7
+        },
+        "players": 0,
+        "bots": 0,
+        "phase": "playing",
+        "startedAt": 1791257279146,
+        "scores": []
+      },
+      "lastTickLogMsAfterLeave": 25138
+    },
+    "idle": {
+      "label": "after the last human",
+      "ms": 20028,
+      "bots": [
+        0,
+        0
+      ],
+      "players": [
+        0,
+        0
+      ],
+      "tickLogs": 0,
+      "storageBefore": {
+        "files": {
+          "rat-detective-local-GameRoom/40891f66f4b4e026f639d7f9513c88190abd40a5d2ee08e8a053c87b1df14d10.sqlite": {
+            "dumpBytes": 594049,
+            "sha256": "a81faf895ed26207"
+          },
+          "rat-detective-local-GameRoom/metadata.sqlite": {
+            "dumpBytes": 183,
+            "sha256": "0cde4c62ed258d62",
+            "dump": "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE _cf_ALARM (\n      actor_id TEXT PRIMARY KEY,\n      scheduled_time INTEGER,\n      actor_name TEXT\n    ) WITHOUT ROWID;\nCOMMIT;\n"
+          }
+        },
+        "digest": "b030242d8389814cc40adba1fddf20610ed42b9efe0f577a66895e72b611189e"
+      },
+      "storageAfter": {
+        "files": {
+          "rat-detective-local-GameRoom/40891f66f4b4e026f639d7f9513c88190abd40a5d2ee08e8a053c87b1df14d10.sqlite": {
+            "dumpBytes": 594049,
+            "sha256": "a81faf895ed26207"
+          },
+          "rat-detective-local-GameRoom/metadata.sqlite": {
+            "dumpBytes": 183,
+            "sha256": "0cde4c62ed258d62",
+            "dump": "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE _cf_ALARM (\n      actor_id TEXT PRIMARY KEY,\n      scheduled_time INTEGER,\n      actor_name TEXT\n    ) WITHOUT ROWID;\nCOMMIT;\n"
+          }
+        },
+        "digest": "b030242d8389814cc40adba1fddf20610ed42b9efe0f577a66895e72b611189e"
+      },
+      "storageChanged": false
+    }
+  }
+}
