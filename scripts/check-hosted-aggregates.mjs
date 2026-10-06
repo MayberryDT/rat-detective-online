@@ -36,7 +36,9 @@ if (command === 'snapshot') {
   const [heat, places, flows, health] = [await get('/api/heat/v1?days=all'), await get('/api/city/v1/places?days=all'), await get('/api/city/v1/flows?days=all'), await get('/health')];
   const snap = sorted({ heat, places, flows });
   const counts = flatten(snap), total = Object.values(counts).reduce((t, n) => t + n, 0);
-  const result = { at, base: values.base, build: health.build, keys: Object.keys(counts).length, total, sha256: createHash('sha256').update(JSON.stringify(counts)).digest('hex'), days: heat.allDays?.length, snapshot: snap };
+  // Hashed in key order: equal counts may come back in another order (flows with equal n).
+  const result = { at, base: values.base, build: health.build, keys: Object.keys(counts).length, total,
+    sha256: createHash('sha256').update(JSON.stringify(Object.entries(counts).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0))).digest('hex'), days: heat.allDays?.length, snapshot: snap };
   writeFileSync(values.out, JSON.stringify(result) + '\n');
   console.log(JSON.stringify({ ...result, snapshot: undefined }));
 } else if (command === 'compare') {
@@ -44,8 +46,8 @@ if (command === 'snapshot') {
   const ca = flatten(a.snapshot), cb = flatten(b.snapshot);
   const missing = Object.keys(ca).filter(k => !(k in cb)), lower = Object.keys(ca).filter(k => k in cb && cb[k] < ca[k]);
   const added = Object.keys(cb).filter(k => !(k in ca)).length, grown = Object.keys(ca).filter(k => k in cb && cb[k] > ca[k]).length;
-  const result = { before: { at: a.at, build: a.build, keys: a.keys, total: a.total, sha256: a.sha256 }, after: { at: b.at, build: b.build, keys: b.keys, total: b.total, sha256: b.sha256 },
-    equal: a.sha256 === b.sha256, missing: missing.length, lower: lower.length, added, grown, examples: [...missing, ...lower].slice(0, 5) };
+  const result = { before: { at: a.at, build: a.build, keys: a.keys, total: a.total }, after: { at: b.at, build: b.build, keys: b.keys, total: b.total },
+    equal: !missing.length && !lower.length && !added && !grown, missing: missing.length, lower: lower.length, added, grown, examples: [...missing, ...lower].slice(0, 5) };
   console.log(JSON.stringify(result, null, 2));
   if (missing.length || lower.length) process.exit(1);
 } else if (command === 'play') {
