@@ -4,6 +4,8 @@ export type Surface='pavement'|'water'|'metal'|'wood';
 export type Sting='case'|'delivery';
 
 const MAX_VOICES=6;
+/** New review arsenal has its own six outputs: legacy six + arsenal six, never twelve new voices. */
+const MAX_ARSENAL_VOICES=6;
 
 /** Polish 17: restrained, synthesized feel cues (no new asset files). Every cue
  * is short, bounded to a small voice budget with per-cue cooldowns, and routed
@@ -12,6 +14,8 @@ const MAX_VOICES=6;
 export class FeelAudio {
     private noise?:AudioBuffer;
     private voices=0;
+    private readonly releaseOutput=new Map<GainNode,()=>void>();
+    private readonly arsenalVoices=new Map<GainNode,number>();
     private readonly lastAt=new Map<string,number>();
 
     constructor(private readonly context:AudioContext){}
@@ -21,8 +25,8 @@ export class FeelAudio {
         const offline=typeof OfflineAudioContext!=='undefined'&&this.context instanceof OfflineAudioContext;
         return (offline||this.context.state==='running')&&typeof this.context.createBiquadFilter==='function';
     }
-    private allow(key:string,cooldown:number):boolean {
-        if(!this.ready()||this.voices>=MAX_VOICES)return false;
+    private allow(key:string,cooldown:number,legacy=true):boolean {
+        if(!this.ready()||(legacy&&this.voices>=MAX_VOICES))return false;
         const now=this.context.currentTime;
         if(now-(this.lastAt.get(key)??-1e9)<cooldown)return false;
         this.lastAt.set(key,now);return true;
@@ -35,13 +39,20 @@ export class FeelAudio {
         return this.noise=buffer;
     }
     /** Output chain: gain → optional pan → effects bus. Returns the input node. */
-    private out(volume:number,pan:number,duration:number):GainNode {
+    private out(volume:number,pan:number,duration:number,legacy=true):GainNode {
         const gain=this.context.createGain();gain.gain.value=volume;
         let tail:AudioNode=gain;
         if(pan!==0&&typeof this.context.createStereoPanner==='function'){const p=this.context.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,pan));gain.connect(p);tail=p;}
         tail.connect(effectsOutput(this.context));
-        this.voices++;
-        setTimeout(()=>{this.voices--;gain.disconnect();if(tail!==gain)tail.disconnect();},duration*1000+80);
+        if(legacy)this.voices++;
+        // Natural expiry, priority preemption and reset share exactly-once cleanup.
+        let active=true;
+        const release=()=>{if(!active)return;active=false;if(legacy)this.voices--;
+            gain.disconnect();if(tail!==gain)tail.disconnect();
+            this.releaseOutput.delete(gain);this.combatGains.delete(gain);this.arsenalVoices.delete(gain);
+        };
+        this.releaseOutput.set(gain,release);
+        setTimeout(release,duration*1000+80);
         return gain;
     }
     private burst(into:AudioNode,at:number,duration:number,type:BiquadFilterType,frequency:number,q:number,attack=.004):void {
@@ -85,10 +96,26 @@ export class FeelAudio {
         this.tone(out,at,.05,'square',1650,1500,.35);this.tone(out,at+.055,.05,'square',1320,1250,.25);
     }
     private readonly combatGains=new Set<GainNode>();
-    resetCombat():void {for(const gain of this.combatGains)gain.disconnect();this.combatGains.clear();}
+    resetCombat():void {
+        for(const gain of this.combatGains)this.releaseOutput.get(gain)?.();
+        this.combatGains.clear();this.arsenalVoices.clear();
+        for(const key of this.lastAt.keys())if(key==='pressure'||key==='body-smack'||key.startsWith('arsenal-'))this.lastAt.delete(key);
+    }
     private combatOut(volume:number,duration:number):GainNode {
         const gain=this.out(volume,0,duration);this.combatGains.add(gain);
         setTimeout(()=>this.combatGains.delete(gain),(duration+.08)*1000);return gain;
+    }
+    /** No queue: a priority onset cuts the oldest lowest-priority new tail immediately.
+     * Legacy voices/gains/envelopes are never preempted by this pool. */
+    private arsenalOut(volume:number,duration:number,priority:number):GainNode|undefined {
+        if(this.arsenalVoices.size>=MAX_ARSENAL_VOICES){
+            let victim:GainNode|undefined,rank=Infinity;
+            for(const [gain,p] of this.arsenalVoices)if(p<rank){victim=gain;rank=p;}
+            if(!victim||priority<rank)return;
+            this.releaseOutput.get(victim)?.();
+        }
+        const gain=this.out(volume,0,duration,false);
+        this.combatGains.add(gain);this.arsenalVoices.set(gain,priority);return gain;
     }
     /** Heavy cheese review: dry pressure attack, hollow push, sticky air. No borrowed sample. */
     pressure():void {
@@ -113,19 +140,22 @@ export class FeelAudio {
     }
 
     arsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {
-        if(this.combatGains.size>=12)return;
-        if(!this.allow('arsenal-'+kind,kind==='tommy-gun'?.035:kind==='tommy-hit'?.045:.08))return;
+        const priority=kind==='laser-hit'||kind==='tommy-hit'?0:kind==='trap-release'?1:2;
+        // Firing cadence and significant event identity already belong to their callers.
+        // RAF/audio-clock jitter must not suppress a legitimate onset; only decorative
+        // contact tails retain the secondary cooldown. The output pool stays bounded.
+        if(!this.allow('arsenal-'+kind,priority>0?0:kind==='tommy-hit'?.045:.08,false))return;
         const t=this.context.currentTime;
         if(kind==='tommy-gun'){
             // CHUK, then the bolt's dry return. Short enough to leave gaps at 20/s.
-            const out=this.combatOut(.27,.09);
+            const out=this.arsenalOut(.27,.09,priority);if(!out)return;
             this.burst(out,t,.012,'bandpass',1250,.7,.001);
             this.tone(out,t,.04,'triangle',430+Math.random()*25,115,.95);
             this.tone(out,t,.032,'sine',185,80,.8);
             this.burst(out,t+.026,.013,'highpass',2600,1,.001);
         }else if(kind==='laser'){
             // A heavy pressure punch underneath a tearing, descending electrical strand.
-            const out=this.combatOut(.32,.32);
+            const out=this.arsenalOut(.32,.32,priority);if(!out)return;
             this.tone(out,t,.11,'sine',310,65,1.05);
             this.burst(out,t,.022,'bandpass',1450,.7,.001);
             this.tone(out,t,.21,'sawtooth',1850,180,.4);
@@ -133,7 +163,7 @@ export class FeelAudio {
             this.burst(out,t+.035,.19,'bandpass',2100,7,.003);
             this.burst(out,t+.17,.055,'lowpass',650,1,.002);
         }else if(kind==='trap-snap'){
-            const out=this.combatOut(.34,.36);
+            const out=this.arsenalOut(.34,.36,priority);if(!out)return;
             this.burst(out,t,.018,'highpass',2200,.8,.001);
             this.tone(out,t,.15,'triangle',155,48,1.1);
             this.burst(out,t+.008,.07,'bandpass',430,1,.001);
@@ -141,16 +171,16 @@ export class FeelAudio {
             this.tone(out,t+.024,.19,'sine',1670,1130,.18);
             this.burst(out,t+.09,.04,'bandpass',750,2,.002);
         }else if(kind==='laser-hit'||kind==='tommy-hit'){
-            const out=this.combatOut(.18,kind==='laser-hit'?.2:.07);
+            const out=this.arsenalOut(.18,kind==='laser-hit'?.2:.07,priority);if(!out)return;
             this.burst(out,t,kind==='laser-hit'?.12:.035,'bandpass',kind==='laser-hit'?3100:550,3,.001);
             this.tone(out,t,.06,'triangle',kind==='laser-hit'?700:180,90,.6);
         }else if(kind==='trap-release'){
-            const out=this.combatOut(.18,.2);
+            const out=this.arsenalOut(.18,.2,priority);if(!out)return;
             this.tone(out,t,.13,'sine',430,860,.4);
             this.burst(out,t,.025,'bandpass',1100,3,.001);
         }else if(kind==='pickup'||kind.endsWith('-pickup')){
             // Board/receiver weight first; spring/coil catches into the hand afterwards.
-            const out=this.combatOut(.3,.3);
+            const out=this.arsenalOut(.3,.3,priority);if(!out)return;
             this.tone(out,t,.12,'triangle',190,65,.9);
             this.burst(out,t,.03,'bandpass',550,1,.001);
             if(kind==='laser-pickup'){this.tone(out,t+.035,.23,'sawtooth',240,1100,.22);this.burst(out,t+.045,.12,'bandpass',2400,5,.002);}
@@ -158,7 +188,7 @@ export class FeelAudio {
             else {this.tone(out,t+.045,.17,'sine',660,1050,.5);this.tone(out,t+.05,.2,'sine',1320,1570,.18);}
             this.burst(out,t+.09,.025,'highpass',2200,2,.001);
         }else{
-            const out=this.combatOut(.32,.27);
+            const out=this.arsenalOut(.32,.27,priority);if(!out)return;
             this.tone(out,t,.13,'triangle',145,55,1);
             this.burst(out,t,.055,'bandpass',500,.8,.001);
             this.tone(out,t+.015,.22,'sine',870,530,.3);
@@ -351,5 +381,5 @@ export class FeelAudio {
         bed.filter.frequency.setTargetAtTime(frequency,at,.2);
         if(level<=.001){const done=bed;this.loops.delete(name);setTimeout(()=>{done.source.stop();done.source.disconnect();done.filter.disconnect();done.gain.disconnect();},600);}
     }
-    dispose():void {for(const name of [...this.loops.keys()])this.loop(name,0,0,1,1);this.lastAt.clear();}
+    dispose():void {this.resetCombat();for(const name of [...this.loops.keys()])this.loop(name,0,0,1,1);this.lastAt.clear();}
 }
