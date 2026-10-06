@@ -1013,3 +1013,5 @@ HUD design follow-up: removed the newly added border/shadow frame from the cente
 The user selected HUD option 1, **Evidence Scraps**. The scoreboard now uses compact 228px paper slips, red-ink ranks, lightly irregular edges and a larger separate personal slip. The incident panel uses matching warm paper at 190px. Rank animations, full-roster personal rank and the unframed center broadcast remain intact.
 
 Evidence Scraps palette follow-up: charcoal paper, muted parchment lettering and subdued rust accents replace the bright cream cards after the user’s in-game feedback. Card geometry, compact spacing and animations are unchanged.
+
+**6 October accepted aiming release:** production `1bdd31df-e7f3-47bb-bf23-fa1c537828ae`, build `production-2026-10-06-748340a`, client `index-OLrhffSa.js`; protocol 32 unchanged. Real GameSession shots use the composed rendered camera. Data-cost `2476135` and packed-aggregate rollback retained. HeavyCheese remains private-range-only. [Receipt](verification/aim-release-2026-10-06.md).

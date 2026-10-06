@@ -115,3 +115,5 @@ Read [docs/current-state.md](docs/current-state.md) first, then [docs/README.md]
 ## Validation and handoff
 
 For application changes: focused tests, then `npm run typecheck`, `npm test`, and `npm run build` as appropriate. For docs-only changes, check facts, relative links and stale instructions; no gameplay or load test is needed. Report what changed, what was actually checked, remaining uncertainty and any deployed version. Update current docs when behavior changes; keep historical reports dated rather than rewriting their measured results.
+
+**6 October accepted aiming release:** production `1bdd31df-e7f3-47bb-bf23-fa1c537828ae`, build `production-2026-10-06-748340a`, client `index-OLrhffSa.js`; protocol 32 unchanged. Real GameSession shots use the composed rendered camera. Data-cost `2476135` and packed-aggregate rollback retained. HeavyCheese remains private-range-only. [Receipt](docs/verification/aim-release-2026-10-06.md).
