@@ -53,6 +53,8 @@ export class FeelDirector {
     /** Review opt-in only. Normal sessions never call this. */
     enableHeavyCheese(scene:THREE.Scene):void {this.heavy?.dispose();this.heavy=new HeavyCheese(scene);}
     heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {if(this.heavy)this.sound.arsenal(kind);}
+    /** Real catch only: projected punctuation, without moving the aiming view. */
+    heavyTrapCaught(at:THREE.Vector3,view:THREE.Camera):void {if(this.heavy)this.word('SNAP!',at,view,performance.now(),true);}
     heavyPickup(kind:string):void {this.heavy?.pickup(kind);}
     heavyWeaponImpact(at:THREE.Vector3,normal:THREE.Vector3,weapon:string):void {this.heavy?.weaponHit(at,normal,weapon);}
     heavyBeforeRender(rat:THREE.Object3D):void {this.heavy?.beforeRender(rat);}

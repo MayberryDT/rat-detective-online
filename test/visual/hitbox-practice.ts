@@ -253,7 +253,7 @@ stage.renderer.setAnimationLoop(now=>{
     for(const event of practice.simulation.drainPickupEvents()){
         note({kind:'authority-pickup',event});
         if(event.kind==='collected'&&event.playerId==='local'){if(candidate){feel.heavyArsenal(event.pickup==='laser'?'laser-pickup':event.pickup==='tommy-gun'?'tommy-pickup':'trap-pickup');feel.heavyPickup(event.pickup);}else feedback.play('pickup-slap');result.textContent=`${event.pickup} picked up · T returns to firing line`;}
-        if(event.kind==='trap'&&event.what==='snap'&&candidate){feel.heavyArsenal('trap-snap');if(event.victim){caught.add(event.victim);targets.get(event.victim)?.heavyReaction(new THREE.Vector3(0,0,-1));}result.textContent='SNAP · CAUGHT · NO DAMAGE';}
+        if(event.kind==='trap'&&event.what==='snap'&&candidate){feel.heavyArsenal('trap-snap');feel.heavyTrapCaught(point.set(event.p.x,event.p.y,event.p.z),stage.camera);if(event.victim){caught.add(event.victim);targets.get(event.victim)?.heavyReaction(new THREE.Vector3(0,0,-1));}result.textContent='SNAP · CAUGHT';}
         if(event.kind==='trap'&&event.what==='set'){if(candidate)feel.heavyArsenal('mousetrap');else feedback.play('trap-set',event.p);result.textContent='TRAP SET · pistol restored';}
     }
     for(const id of caught)if(!practice.simulation.trapped(id)){caught.delete(id);if(candidate)feel.heavyArsenal('trap-release');note({kind:'trap-release',victim:id});result.textContent='SPRING RELEASED';}
