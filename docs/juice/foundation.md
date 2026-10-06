@@ -39,7 +39,7 @@ defaults. Old saved settings must keep loading. Update
 
 ## Invariants
 
-1. **Aim stays exact.** Aim direction, crosshair target and projectile origin come from the controller's un-offset view and the real animated muzzle. Camera offsets are applied only to the rendered camera, after aim is computed. No shot, even one fired mid-kick, may read the offset camera.
+1. **Aim follows the rendered center.** The 6 October aim-correction candidate refreshes the controller view, composes the existing camera offset for target selection, then restores it before adding the new shot impulse or sending movement. The real animated muzzle converges toward that rendered-center target; gravity, collision and authority still decide the outcome. Camera effects do not alter the physical muzzle or add spread. This supersedes the older un-offset firing rule, which disagreed with the visible center during kick. Release status belongs to the juice plan.
 2. **Frame-rate independent.** Every effect decays over the same elapsed time at 30, 60 and 120 Hz and stays finite and bounded under large frame gaps.
 3. **Clean resets.** Respawn, round reset, reconnect, observation, title return and teardown clear all feel state. No leftover flash, offset, freeze, hat or slow-motion.
 4. **Authoritative triggers only.** Effects come from server events or local input, never from snapshot interpolation or network corrections, so a correction can't replay a landing or hit.

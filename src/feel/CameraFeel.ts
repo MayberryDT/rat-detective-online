@@ -9,8 +9,9 @@ const STALE_GAP=.5;
 
 /** View-only camera motion layered over the controller's shoulder camera.
  * `apply` offsets the camera just before rendering and `restore` puts back the
- * exact aimed pose immediately afterwards, so no aim, shot or raycast can read
- * the offset view. Springs integrate in fixed substeps for frame-rate
+ * controller pose immediately afterwards. Firing also composes this view while
+ * selecting the crosshair target, then restores before its new impulse.
+ * Springs integrate in fixed substeps for frame-rate
  * independent settling. */
 export class CameraFeel {
     private pitch=0;private yaw=0;private pitchV=0;private yawV=0;

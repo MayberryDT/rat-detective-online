@@ -1,3 +1,4 @@
+import { PerspectiveCamera } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { MAX_HP, PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosState } from '../../src/shared/chaosState';
@@ -245,13 +246,7 @@ vi.mock('../../src/session/createStage', () => ({
             renderer,
             syncViewport: () => false,
             scene: { children: [], add: vi.fn() },
-            camera: {
-                aspect: 1,
-                position: { clone: () => ({ addScaledVector: () => ({ x: 0, y: 4, z: 10 }) }) },
-                getWorldDirection: (target: Record<string, unknown>) => Object.assign(target, { x: 0, y: 0, z: -1 }),
-                quaternion: { x: 0, y: 0, z: 0, w: 1 },
-                updateProjectionMatrix: vi.fn(),
-            },
+            camera: new PerspectiveCamera(60, 1, 0.1, 1000),
             listener: {context:{state:'running',resume:vi.fn(async()=>{})}},
             world: { step: vi.fn() },
             flashlight: {

@@ -342,10 +342,18 @@ export class GameSession {
         // Short Circuit (a Code Violation dud): the gun is shorted out and only dry-clicks, as the room refuses it.
         if (shortedOut(this.lastChaos?.buffs, this.myId, Date.now() + this.serverOffset)) { this.feel.sound.jam(); return; }
         this.rat.updateView();
-        this.stage.camera.getWorldDirection(this.direction);
-        const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
-        this.shotsAttempted++;
-        const shot = this.gun.shoot(this.rat.entity, target, weapon);
+        // Aim through the current rendered view, including the existing feel offset.
+        // Compose after fresh input, restore before adding this shot's impulse or sending movement.
+        let shot: ReturnType<CheeseGun['shoot']>;
+        this.feel.beforeRender(this.stage.camera);
+        try {
+            this.stage.camera.getWorldDirection(this.direction);
+            const target = this.stage.camera.position.clone().addScaledVector(this.direction, 200);
+            this.shotsAttempted++;
+            shot = this.gun.shoot(this.rat.entity, target, weapon);
+        } finally {
+            this.feel.afterRender(this.stage.camera);
+        }
         if(!shot)return;
         this.feel.shot(weapon);
         if(weapon!=='mousetrap'&&this.carriesHotCase(this.myId))this.feel.carrierShot();
