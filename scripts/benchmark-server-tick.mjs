@@ -74,7 +74,7 @@ let shot=0;
 const archivedLines=[],stored=[];
 const sight=values.city?{query:new SpatialRayQuery(sim.world),refreshedAt:-Infinity}:null;
 const city=values.city?new CityRecorder({room:'bench',build:'bench',layout:()=>GRAYBOX_VERSION,isBot:id=>!values.human||id!==ids[0],connected:()=>true,
-    store:{addCell:(...a)=>stored.push(['cell',...a]),addPlace:(...a)=>stored.push(['place',...a]),addFlow:(...a)=>stored.push(['flow',...a]),addMind:(...a)=>stored.push(['mind',...a]),addEvent:(...a)=>stored.push(['event',...a]),pruneEvents(){}},
+    store:{addCell:(...a)=>stored.push(['cell',...a]),addPlace:(...a)=>stored.push(['place',...a]),addFlow:(...a)=>stored.push(['flow',...a]),addMind:(...a)=>stored.push(['mind',...a]),addEvent:(...a)=>stored.push(['event',...a]),commit(){},pruneEvents(){}},
     archive:{push:f=>archivedLines.push(JSON.stringify(f)),due:()=>false,flush(){},settled:async()=>{}},
     // GameRoom.lineOfSight: the chaos world's bodies, the index refreshed at most once a second (`closest` before `blocked` existed).
     sight:(from,to)=>{if(simClock-sight.refreshedAt>=1000){sight.query.refresh();sight.refreshedAt=simClock;}const a=new Vec3(from.x,from.y,from.z),b=new Vec3(to.x,to.y,to.z);

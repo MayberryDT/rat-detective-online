@@ -11,6 +11,8 @@ export type CityEnv = Env & { CITY_TOKEN?: string };
 const PUBLIC = { 'access-control-allow-origin': '*', 'cache-control': 'no-store' };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: PUBLIC });
 let model: CityModel | undefined;
+/** About this much packed JSON moves per unpack call (a few tens of thousands of per-key rows). */
+const UNPACK_BYTES = 1024 * 1024;
 
 function filterOf(params: URLSearchParams): Filter | null {
   const mode = params.get('mode'), layout = params.get('layout'), build = params.get('build');
@@ -24,7 +26,8 @@ function filterOf(params: URLSearchParams): Filter | null {
 export async function cityApi(request: Request, url: URL, env: CityEnv): Promise<Response | null> {
   const path = url.pathname;
   if (path !== '/api/heat/v1' && !path.startsWith('/api/city/v1/')) return null;
-  if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+  const unpack = path === '/api/city/v1/unpack';
+  if (request.method !== (unpack ? 'POST' : 'GET')) return json({ error: 'Method not allowed' }, 405);
   const room = env.GAME_ROOM.getByName(DEFAULT_ROOM_NAME), now = Date.now();
   const range = heatRange(url.searchParams, now), filter = filterOf(url.searchParams);
   const badRange = () => json({ error: 'Use days=1-3650, days=all, or from and to as YYYY-MM-DD; mode, layout and build are optional' }, 400);
@@ -51,6 +54,19 @@ export async function cityApi(request: Request, url: URL, env: CityEnv): Promise
   }
   // Private surfaces below.
   if (!await verifyBearerToken(request.headers.get('authorization'), env.CITY_TOKEN)) return json({ error: 'Unauthorized' }, 401);
+  // The rollback step (docs/live-service.md): moves a batch of packed aggregates into the per-key tables; repeat until
+  // `left` is 0. Every GameRoom keeps its own aggregates (overflow and private rooms too), so `id=<object id>` addresses
+  // any of them; without it, the canonical room.
+  if (unpack) {
+    const id = url.searchParams.get('id');
+    if (id !== null && !/^[0-9a-f]{64}$/.test(id)) return json({ error: 'Bad object id' }, 400);
+    let target = room;
+    if (id !== null) {
+      try { target = env.GAME_ROOM.get(env.GAME_ROOM.idFromString(id)); } catch { return json({ error: 'Not a GameRoom object id' }, 400); }
+    }
+    const result = await target.cityUnpack(UNPACK_BYTES);
+    return json(result, result.ok ? 200 : 409);
+  }
   if (path === '/api/city/v1/events') {
     const type = url.searchParams.get('type'), round = url.searchParams.get('round'), since = url.searchParams.get('since'), limit = Number(url.searchParams.get('limit') ?? 1000);
     if ((type && !/^[a-z-]{1,20}$/.test(type)) || (round && !/^[\w-]{1,80}$/.test(round)) || (since && !/^\d{1,16}$/.test(since)) || !(limit >= 1 && limit <= 10_000)) return json({ error: 'Bad event filter' }, 400);

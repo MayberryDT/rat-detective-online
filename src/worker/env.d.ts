@@ -7,4 +7,6 @@ interface Env {
 	BUILD?: string;
 	/** Staging playtests only: a comma-separated incident allow-list, set by scripts/deploy.mjs from `INCIDENTS`. */
 	INCIDENTS?: string;
+	/** `rows` only to roll back past packed aggregates (docs/live-service.md); set by scripts/deploy.mjs from `CITY_AGGREGATES`. */
+	CITY_AGGREGATES?: string;
 }

@@ -25,7 +25,7 @@ function recorder() {
   const store = {
     addPlace: (_day: string, _build: string, _layout: number, _mode: string, place: string, measure: string, n: number) => { const row = counts[place] ??= {}; row[measure] = (row[measure] ?? 0) + n; },
     addMind: (_day: string, _build: string, _layout: number, _mode: string, measure: string, n: number) => { minds[measure] = (minds[measure] ?? 0) + n; },
-    addEvent: (_t: number, _round: string | undefined, type: string) => { sql.push(type); }, addCell: () => {}, addFlow: () => {}, pruneEvents: () => {},
+    addEvent: (_t: number, _round: string | undefined, type: string) => { sql.push(type); }, addCell: () => {}, addFlow: () => {}, commit: () => {}, pruneEvents: () => {},
   } as unknown as CityStore;
   // Decisions and goal ends are archived, not kept in SQL: the archive sees every fact as it is made.
   const archive = { push: (fact: CityFact) => { facts.push(fact); }, due: () => false, flush: () => {}, settled: async () => {} } as unknown as CityArchive;

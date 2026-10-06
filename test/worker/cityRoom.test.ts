@@ -1,8 +1,10 @@
 import { env, evictDurableObject, runInDurableObject, SELF } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { GameRoom } from '../../src/worker/GameRoom';
+import worker from '../../src/worker/index';
 import type { CityRecorder } from '../../src/worker/city/CityRecorder';
-import { HeatDay } from '../../src/worker/HeatMap';
+import { CityStore, PACK_BYTES, PACK_MERGE_AT } from '../../src/worker/city/CityStore';
+import { HeatDay, validHeatKey } from '../../src/worker/HeatMap';
 import { PERSISTENT_BOT_IDS } from '../../src/shared/botRoster';
 import { MAX_HP, PROTOCOL_VERSION, WIN_DISPLAY_MS, type PlayerData, type RoundState } from '../../src/shared/networkProtocol';
 import type { PerfReport } from '../../src/shared/perfReport';
@@ -25,6 +27,19 @@ import { cityDigest } from '../../src/worker/city/digest';
 // 8. The archive misses facts: situations without K/D/A, standing or fire rate; fight windows without the seconds before the hit.
 // 9. Private facts leak without the token, or public aggregates are unreadable from a file page.
 // 10. A banked hit is missed, a direct hit counts as banked, or one ball's wall bounce leaks onto another.
+// Packed aggregates (docs/plans/data-cost-2026-10.md, P1), the ways they could fail:
+// 11. Merging a bucket's packs loses a count, counts one twice, or deletes a pack it did not sum.
+// 12. A merge or a read mixes buckets: another day, build, layout, mode or layer leaks through a filter.
+// 13. A busy bucket grows one row past SQLite's row limit.
+// 14. Counts written per key before packing stop being read, or a key held both ways is counted once.
+// 15. A failed write half lands, or its counts are lost or counted twice when the next flush retries them.
+// 16. Events are pruned inside the 30 days, or never pruned.
+// The rollback mode (CITY_AGGREGATES=rows) and unpack, the ways they could fail:
+// 17. Rows mode still writes packs, which a release from before packing never reads; or loses or doubles its counts.
+// 18. Unpack loses a count, counts one twice, moves a pack without deleting it (doubled once the old release reads the
+//     rows) or deletes one it did not move.
+// 19. After unpack, the per-key tables alone (all an older release reads) differ from the totals before.
+// 20. Unpack runs in packs mode, where new packs keep arriving behind it.
 type Internals = {
   players: Map<string, PlayerData>; round: RoundState; chaos: ChaosSimulation;
   sessions: Map<string, { token: string; until: number | null; agent?: true }>;
@@ -358,6 +373,158 @@ describe('city recorder in the room', () => {
     expect((await stub.cityFlows(synthetic, { build: 'unknown' }, DAY + 1000)).flows).toEqual([{ src: 'a', dst: 'b', who: 'human', n: 4 }]);
     expect((await stub.cityFlows(synthetic, { build: 'dev' }, DAY + 1000)).flows).toEqual([]);
   });
+
+  it('packs each flush per bucket and merges piled-up packs, keeping every count apart by bucket and through eviction', async () => {
+    const stub = await cityRoom();
+    const day = '2030-03-14', flushes = PACK_MERGE_AT * 2 + 3;
+    // Valid cells on every floor, enough that one flush of the bucket overflows a pack row.
+    const big: string[] = [];
+    for (const floor of ['street', 'sewer', 'upper', 'air']) for (let x = -80; x < 80; x++) for (let z = -80; z < 80; z++) {
+      const cell = `${floor}:${x}:${z}`;
+      if (validHeatKey(cell) && big.length * 20 < PACK_BYTES * 1.5) big.push(cell);
+    }
+    await runInDurableObject(stub, (instance: GameRoom, ctx) => {
+      quiet(instance as unknown as Internals);
+      // A key counted per row before packing, read beside its packs.
+      ctx.storage.sql.exec("INSERT INTO city_cells VALUES (?, 'dev', 7, 'jurisdiction', 'bots', 'street:2:2', 100)", day);
+      const store = (instance as unknown as { cityStore: CityStore }).cityStore;
+      for (let i = 0; i < flushes; i++) {
+        store.addCell(day, 'dev', 7, 'jurisdiction', 'bots', 'street:2:2', 1);
+        store.addCell(day, 'dev', 7, 'jurisdiction', 'humans', 'street:2:2', 2);
+        store.addCell(day, 'other', 7, 'jurisdiction', 'bots', 'street:2:2', 4);
+        store.addCell(day, 'dev', 7, 'chain-of-custody', 'bots', 'street:2:2', 8);
+        store.addCell('2030-03-15', 'dev', 7, 'jurisdiction', 'bots', 'street:2:2', 16);
+        store.addPlace(day, 'dev', 7, 'jurisdiction', 'street:a', 'human-s', 3);
+        store.addFlow(day, 'dev', 7, 'jurisdiction', 'a', 'b', 'human', 5);
+        store.addMind(day, 'dev', 7, 'jurisdiction', 'requests', 6);
+        if (i < 3) for (const cell of big) store.addCell(day, 'dev', 7, 'jurisdiction', 'deaths', cell, 1);
+        store.commit();
+      }
+      const rows = ctx.storage.sql.exec<{ layer: string; build: string; mode: string; day: string; n: number; bytes: number }>(
+        'SELECT layer, build, mode, day, COUNT(*) AS n, MAX(bytes) AS bytes FROM city_packs GROUP BY kind, day, build, layout, mode, layer').toArray();
+      for (const row of rows) expect(row.n, JSON.stringify(row)).toBeLessThan(PACK_MERGE_AT + 2);
+      expect(Math.max(...rows.map(r => r.bytes))).toBeLessThanOrEqual(PACK_BYTES);
+      expect(rows.find(r => r.layer === 'deaths')!.n).toBeGreaterThan(1);
+    });
+    for (const evicted of [false, true]) {
+      if (evicted) await evictDurableObject(stub);
+      const one = { from: day, to: day }, label = evicted ? 'after eviction' : 'before eviction';
+      const heat = await stub.cityHeat(one, { mode: 'jurisdiction', build: 'dev' });
+      expect(heat.layers['bots'], label).toEqual({ 'street:2:2': 100 + flushes });
+      expect(heat.layers['humans'], label).toEqual({ 'street:2:2': 2 * flushes });
+      expect(Object.keys(heat.layers['deaths']!).length, label).toBe(big.length);
+      expect(Object.values(heat.layers['deaths']!).every(n => n === 3), label).toBe(true);
+      expect((await stub.cityHeat(one, { build: 'other' })).layers['bots'], label).toEqual({ 'street:2:2': 4 * flushes });
+      expect((await stub.cityHeat(one, { mode: 'chain-of-custody' })).layers['bots'], label).toEqual({ 'street:2:2': 8 * flushes });
+      expect((await stub.cityHeat({ from: '2030-03-15', to: '2030-03-15' })).layers['bots'], label).toEqual({ 'street:2:2': 16 * flushes });
+      expect((await stub.cityHeat(one)).layers['bots'], label).toEqual({ 'street:2:2': 100 + 13 * flushes });
+      const places = await stub.cityPlaces(one, { build: 'dev' });
+      expect(places.places['street:a'], label).toEqual({ 'human-s': 3 * flushes });
+      expect(places.minds, label).toEqual({ requests: 6 * flushes });
+      expect(places.modes, label).toEqual({ jurisdiction: 3 * flushes });
+      expect(places.builds['dev'], label).toEqual({ 'human-s': 3 * flushes });
+      expect((await stub.cityFlows(one, { mode: 'jurisdiction' })).flows, label).toEqual([{ src: 'a', dst: 'b', who: 'human', n: 5 * flushes }]);
+      expect(heat.days, label).toEqual([day]);
+      expect(heat.allDays, label).toEqual(expect.arrayContaining([day, '2030-03-15']));
+    }
+  });
+
+  it('writes nothing from a failed flush and counts it once when the next flush retries', async () => {
+    const stub = await cityRoom();
+    await runInDurableObject(stub, (instance: GameRoom, ctx) => {
+      const game = instance as unknown as Internals;
+      quiet(game);
+      let fail = true;
+      // Fails after its writes ran, so a rollback (not a skipped write) is what keeps them out.
+      const flaky = new CityStore(ctx.storage.sql, fn => ctx.storage.transactionSync(() => { fn(); if (fail) throw new Error('storage failed'); }));
+      game.city.flush(DAY); // a fresh flush clock, so only the explicit flush below writes
+      (game.city as unknown as { deps: { store: CityStore } }).deps.store = flaky;
+      play(game, DAY, 0);
+      game.city.admin({ command: 'end-incident', via: 'http', ok: true }, DAY);
+      expect(() => game.city.flush(DAY)).toThrow('storage failed');
+      expect(ctx.storage.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM city_packs WHERE day = '2030-03-14'").one().n).toBe(0);
+      expect(ctx.storage.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM city_events WHERE type = 'admin'").one().n).toBe(0);
+      fail = false;
+      game.city.flush(DAY + 1);
+      expect(ctx.storage.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM city_events WHERE type = 'admin'").one().n).toBe(1);
+    });
+    expect((await stub.cityHeat(synthetic, {}, DAY + 2)).layers['bots']).toEqual({ 'street:2:2': 1 });
+  });
+
+  it('keeps events for 30 days and prunes older ones', async () => {
+    const stub = await cityRoom();
+    const now = Date.parse('2030-03-14T12:00:00Z'), day = 86_400_000;
+    await runInDurableObject(stub, (instance: GameRoom, ctx) => {
+      quiet(instance as unknown as Internals);
+      const store = (instance as unknown as { cityStore: CityStore }).cityStore;
+      for (const age of [31, 30, 29, 0]) store.addEvent(now - age * day, undefined, 'probe', JSON.stringify({ age }));
+      store.commit();
+      store.pruneEvents(now);
+      expect(ctx.storage.sql.exec<{ data: string }>("SELECT data FROM city_events WHERE type = 'probe' ORDER BY seq").toArray().map(r => JSON.parse(r.data).age)).toEqual([29, 0]);
+    });
+  });
+
+  it('in rows mode writes per-key rows and unpacks every pack into them, so the per-key tables alone hold every total', async () => {
+    const stub = await cityRoom();
+    const day = '2030-03-14', one = { from: day, to: day };
+    // The read queries of the release before packing (4041deb CityStore), verbatim.
+    const oldRelease = (sql: SqlStorage) => ({
+      cells: sql.exec('SELECT layer, cell, SUM(n) AS n FROM city_cells WHERE day BETWEEN ? AND ? GROUP BY layer, cell ORDER BY layer, cell', day, day).toArray(),
+      places: sql.exec('SELECT place, measure, SUM(n) AS n FROM city_places WHERE day BETWEEN ? AND ? GROUP BY place, measure ORDER BY place, measure', day, day).toArray(),
+      flows: sql.exec('SELECT src, dst, who, SUM(n) AS n FROM city_flows WHERE day BETWEEN ? AND ? GROUP BY src, dst, who ORDER BY src, dst, who', day, day).toArray(),
+      minds: sql.exec('SELECT measure, SUM(n) AS n FROM city_minds WHERE day BETWEEN ? AND ? GROUP BY measure ORDER BY measure', day, day).toArray(),
+    });
+    const totals = async () => ({ heat: (await stub.cityHeat(one)).layers, places: await stub.cityPlaces(one), flows: (await stub.cityFlows(one)).flows });
+    const cells: string[] = [];
+    for (let x = -30; x < 30; x++) for (let z = -30; z < 30; z++) cells.push(`street:${x}:${z}`);
+    await runInDurableObject(stub, (instance: GameRoom, ctx) => {
+      quiet(instance as unknown as Internals);
+      ctx.storage.sql.exec("INSERT INTO city_cells VALUES (?, 'dev', 7, 'jurisdiction', 'bots', 'street:2:2', 100)", day);
+      const store = (instance as unknown as { cityStore: CityStore }).cityStore;
+      for (let i = 0; i < PACK_MERGE_AT + 5; i++) {
+        store.addCell(day, 'dev', 7, 'jurisdiction', 'bots', 'street:2:2', 1);
+        for (const cell of cells) store.addCell(day, i % 2 ? 'dev' : 'other', 7, 'jurisdiction', 'deaths', cell, 1);
+        store.addPlace(day, 'dev', 7, 'jurisdiction', 'street:a', 'human-s', 3);
+        store.addFlow(day, 'dev', 7, 'jurisdiction', 'a', 'b', 'human', 5);
+        store.addMind(day, 'dev', 7, 'jurisdiction', 'requests', 6);
+        store.commit();
+      }
+      expect(() => store.unpackBatch(64 * 1024)).toThrow();
+    });
+    const packed = await totals();
+    let rowsPacked: Record<'cells' | 'places' | 'flows' | 'minds', Array<Record<string, SqlStorageValue>>> | undefined;
+    await runInDurableObject(stub, (instance: GameRoom, ctx) => {
+      const sql = ctx.storage.sql, packsBefore = sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM city_packs').one().n;
+      expect(packsBefore).toBeGreaterThan(0);
+      const rows = new CityStore(sql, fn => ctx.storage.transactionSync(fn), 'rows');
+      Object.assign(instance, { cityStore: rows });
+      rows.addCell(day, 'dev', 7, 'jurisdiction', 'bots', 'street:2:2', 1000);
+      rows.addPlace(day, 'dev', 7, 'jurisdiction', 'street:a', 'human-s', 7000);
+      rows.commit();
+      expect(sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM city_packs').one().n).toBe(packsBefore);
+      // A small budget, so the packs move over several batches.
+      let left = packsBefore, batches = 0;
+      while (left > 0) { left = rows.unpackBatch(16 * 1024).left; batches++; }
+      expect(batches).toBeGreaterThan(2);
+      rowsPacked = oldRelease(sql);
+    });
+    const unpacked = await totals();
+    expect(unpacked.heat['bots']).toEqual({ 'street:2:2': 100 + PACK_MERGE_AT + 5 + 1000 });
+    expect(unpacked.places.places['street:a']).toEqual({ 'human-s': 3 * (PACK_MERGE_AT + 5) + 7000 });
+    // Everything but the rows-mode additions is unchanged by the move.
+    expect(unpacked.heat['deaths']).toEqual(packed.heat['deaths']);
+    expect(unpacked.flows).toEqual(packed.flows);
+    expect(unpacked.places.minds).toEqual(packed.places.minds);
+    // What the old release reads from the per-key tables alone is every total.
+    const old = rowsPacked!;
+    expect(Object.fromEntries(old.cells.filter(r => r.layer === 'deaths').map(r => [r.cell, r.n]))).toEqual(unpacked.heat['deaths']);
+    expect(old.cells.filter(r => r.layer === 'bots')).toEqual([{ layer: 'bots', cell: 'street:2:2', n: 100 + PACK_MERGE_AT + 5 + 1000 }]);
+    expect(old.places).toEqual([{ place: 'street:a', measure: 'human-s', n: 3 * (PACK_MERGE_AT + 5) + 7000 }]);
+    expect(old.flows).toEqual([{ src: 'a', dst: 'b', who: 'human', n: 5 * (PACK_MERGE_AT + 5) }]);
+    expect(old.minds).toEqual([{ measure: 'requests', n: 6 * (PACK_MERGE_AT + 5) }]);
+    await runInDurableObject(stub, (_instance: GameRoom, ctx) =>
+      expect(ctx.storage.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM city_packs').one().n).toBe(0));
+  });
 });
 
 describe('city endpoints', () => {
@@ -376,5 +543,20 @@ describe('city endpoints', () => {
     for (const path of ['/city/v1/events', '/city/v1/archive']) expect((await SELF.fetch(base + path)).status, path).toBe(401);
     for (const query of ['days=0', 'from=2026-09-29', 'mode=Bad!', 'days=7&build=no|pipes']) expect((await SELF.fetch(`${base}/city/v1/places?${query}`)).status, query).toBe(400);
     expect((await SELF.fetch(`${base}/heat/v1`, { method: 'POST' })).status).toBe(405);
+  });
+
+  it('moves packs only behind the city token, only in rows mode, and addresses any room by object id', async () => {
+    const token = 'city-test-token-0123456789', cityEnv = { ...env, CITY_TOKEN: token } as Env;
+    const unpack = (query = '', auth?: string, method = 'POST') => worker.fetch(new Request(`https://ratdetective.online/api/city/v1/unpack${query}`,
+      { method, headers: auth ? { authorization: `Bearer ${auth}` } : {} }), cityEnv);
+    expect((await unpack()).status).toBe(401);
+    expect((await unpack('', 'wrong')).status).toBe(401);
+    expect((await unpack('', token, 'GET')).status).toBe(405);
+    expect((await unpack('?id=not-an-object-id', token)).status).toBe(400);
+    for (const query of ['', `?id=${env.GAME_ROOM.idFromName('graybox-practice-unpack-check').toString()}`]) {
+      const response = await unpack(query, token);
+      expect(response.status, query).toBe(409);
+      expect(await response.json(), query).toMatchObject({ ok: false, mode: 'packs' });
+    }
   });
 });

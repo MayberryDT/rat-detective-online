@@ -24,5 +24,12 @@ console.log(`Deploying build ${name}`);
 // Staging playtests only: `INCIDENTS=blackout,crossfire npm run deploy:staging` limits every room's incident rolls.
 const incidents = target === 'staging' && process.env.INCIDENTS ? ['--var', `INCIDENTS:${process.env.INCIDENTS}`] : [];
 if (incidents.length) console.log(`Incidents limited to ${process.env.INCIDENTS}`);
-const deploy = spawnSync('npx', ['wrangler', 'deploy', '--env', target, '--var', `BUILD:${name}`, ...incidents], { stdio: 'inherit' });
+// Rolling back past packed aggregates only (docs/live-service.md): `CITY_AGGREGATES=rows npm run deploy:<env>`.
+if (process.env.CITY_AGGREGATES && process.env.CITY_AGGREGATES !== 'rows') {
+  console.error('CITY_AGGREGATES may only be rows.');
+  process.exit(2);
+}
+const aggregates = process.env.CITY_AGGREGATES ? ['--var', 'CITY_AGGREGATES:rows'] : [];
+if (aggregates.length) console.log('Aggregates written per key (rollback mode)');
+const deploy = spawnSync('npx', ['wrangler', 'deploy', '--env', target, '--var', `BUILD:${name}`, ...incidents, ...aggregates], { stdio: 'inherit' });
 process.exit(deploy.status ?? 1);

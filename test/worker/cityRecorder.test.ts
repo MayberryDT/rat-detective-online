@@ -66,7 +66,7 @@ describe('city recorder rescues', () => {
   const recorder = () => {
     const facts: CityFact[] = [];
     const store = { addEvent: (_t: number, _round: string | undefined, _type: string, data: string) => { facts.push(JSON.parse(data) as CityFact); },
-      addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
+      addCell: () => {}, addPlace: () => {}, addFlow: () => {}, commit: () => {}, pruneEvents: () => {} } as unknown as CityStore;
     const city = new CityRecorder({ room: 'test', build: 'test', store, archive: new CityArchive('test', undefined, () => {}), layout: () => 3,
       isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
     return { city, facts };
@@ -95,7 +95,7 @@ describe('city recorder aim', () => {
   const setup = (sight?: (from: Vec3Data, to: Vec3Data) => boolean) => {
     const sql: CityFact[] = [], archived: CityFact[] = [];
     const store = { addEvent: (_t: number, _round: string | undefined, _type: string, data: string) => { sql.push(JSON.parse(data) as CityFact); },
-      addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
+      addCell: () => {}, addPlace: () => {}, addFlow: () => {}, commit: () => {}, pruneEvents: () => {} } as unknown as CityStore;
     const archive = { push: (fact: CityFact) => { archived.push(JSON.parse(JSON.stringify(fact)) as CityFact); }, due: () => false, flush: () => {} } as unknown as CityArchive;
     const city = new CityRecorder({ room: 'test', build: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [], ...(sight ? { sight } : {}) });
     const human = createPlayer('human', 'Tyler', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 0 });
@@ -170,7 +170,7 @@ describe('city recorder controls', () => {
   const now = Date.UTC(2026, 8, 30, 12);
   it('keeps humans\' and bots\' presses in the same 20 Hz shape, taps shorter than a slot included', () => {
     const archived: CityFact[] = [];
-    const store = { addEvent: () => {}, addCell: () => {}, addPlace: () => {}, addFlow: () => {}, pruneEvents: () => {} } as unknown as CityStore;
+    const store = { addEvent: () => {}, addCell: () => {}, addPlace: () => {}, addFlow: () => {}, commit: () => {}, pruneEvents: () => {} } as unknown as CityStore;
     const archive = { push: (fact: CityFact) => { archived.push(JSON.parse(JSON.stringify(fact)) as CityFact); }, due: () => false, flush: () => {} } as unknown as CityArchive;
     const city = new CityRecorder({ room: 'test', build: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [] });
     const human = createPlayer('human', 'Tyler', DEFAULT_APPEARANCE, { x: 0, y: 0, z: 0 });
@@ -218,7 +218,7 @@ describe('city recorder pickups passed', () => {
   const T = Date.UTC(2026, 8, 30, 12);
   const setup = (sight?: (from: Vec3Data, to: Vec3Data) => boolean) => {
     const archived: CityFact[] = [], counts: Record<string, number> = {};
-    const store = { addEvent: () => {}, addCell: () => {}, addFlow: () => {}, pruneEvents: () => {},
+    const store = { addEvent: () => {}, addCell: () => {}, addFlow: () => {}, commit: () => {}, pruneEvents: () => {},
       addPlace: (_day: string, _build: string, _layout: number, _mode: string, _place: string, measure: string, n: number) => { counts[measure] = (counts[measure] ?? 0) + n; } } as unknown as CityStore;
     const archive = { push: (fact: CityFact) => { archived.push(fact); }, due: () => false, flush: () => {} } as unknown as CityArchive;
     const city = new CityRecorder({ room: 'test', build: 'test', store, archive, layout: () => 3, isBot: id => id.startsWith('bot'), connected: () => true, solids: [], ...(sight ? { sight } : {}) });

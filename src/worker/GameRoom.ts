@@ -57,7 +57,7 @@ import { JevBudget, JEV_LEDGER } from './bots/jevBudget';
 import { createRoundBotRoster, dealPersonalities, fillBotRoster, nextRoundBotRoster, MAX_PERSISTENT_BOTS, MIN_PERSISTENT_BOTS, PERSISTENT_BOT_IDS, PERSISTENT_BOT_ROSTER, type PersistentBot } from '../shared/botRoster';
 import { NAME_MAX_LENGTH } from '../shared/ratNames';
 import { HEAT_CELL } from './HeatMap';
-import { buildName, CityStore, type Filter, type Range } from './city/CityStore';
+import { aggregateMode, buildName, CityStore, type AggregateMode, type Filter, type Range, type UnpackResult } from './city/CityStore';
 import { CityArchive } from './city/CityArchive';
 import { CityRecorder } from './city/CityRecorder';
 import { HighlightDetector } from './HighlightDetector';
@@ -252,7 +252,7 @@ export class GameRoom extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.cityStore = new CityStore(ctx.storage.sql);
+    this.cityStore = new CityStore(ctx.storage.sql, fn => ctx.storage.transactionSync(fn), aggregateMode(env.CITY_AGGREGATES));
     ctx.blockConcurrencyWhile(async () => {
       this.migrate();
       this.hydrate();
@@ -1956,6 +1956,13 @@ export class GameRoom extends DurableObject<Env> {
     this.cityRecorder?.flush(now);
     return this.cityStore.events(filter).map(row => JSON.parse(row.data) as unknown);
   }
+  /** The rollback step (docs/live-service.md, "Rolling back past packed aggregates"): with `CITY_AGGREGATES=rows`, moves
+   * a batch of packed aggregates into the per-key tables a release from before packing reads. */
+  async cityUnpack(maxBytes: number, now = this.now()): Promise<{ ok: true; mode: 'rows' } & UnpackResult | { ok: false; mode: AggregateMode; message: string }> {
+    if (this.cityStore.mode !== 'rows') return { ok: false, mode: this.cityStore.mode, message: 'Deploy with CITY_AGGREGATES=rows first: packs keep arriving otherwise.' };
+    this.cityRecorder?.flush(now);
+    return { ok: true, mode: 'rows', ...this.cityStore.unpackBatch(maxBytes) };
+  }
 
   private readRoomState(key: string): string | undefined {
     return this.ctx.storage.sql
@@ -1965,10 +1972,12 @@ export class GameRoom extends DurableObject<Env> {
 
   private writeRoomState(key: string, value: string): void {
     this.diagnostics.count('roomWrite');
+    // A value equal to the stored one updates nothing, so SQLite writes (and Cloudflare bills) no row for it: the
+    // routine checkpoint rewrites the assignment rotation and often the round unchanged every second.
     this.ctx.storage.sql.exec(
       `INSERT INTO room_state (key, value)
        VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE room_state.value IS NOT excluded.value`,
       key,
       value,
     );

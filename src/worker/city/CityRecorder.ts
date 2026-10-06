@@ -1028,6 +1028,8 @@ export class CityRecorder {
     for (const [key, n] of this.flows) { const [day, build, layout, mode, src, dst, who] = key.split('|') as [string, string, string, string, string, string, string]; this.deps.store.addFlow(day, build, Number(layout), mode, src, dst, who, n); }
     for (const [key, n] of this.mindCounts) { const [day, build, layout, mode, measure] = key.split('|') as [string, string, string, string, string]; this.deps.store.addMind(day, build, Number(layout), mode, measure, n); }
     for (const e of this.events) this.deps.store.addEvent(e.t, e.round, e.type, e.data);
+    // Before the clears: a failed commit writes nothing and these counts are added again at the next flush.
+    this.deps.store.commit();
     this.cells.clear(); this.placeCounts.clear(); this.flows.clear(); this.mindCounts.clear(); this.events = [];
     this.deps.store.pruneEvents(now);
     if (archive || this.deps.archive.due(now)) this.deps.archive.flush(now);

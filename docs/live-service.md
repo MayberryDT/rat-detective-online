@@ -84,6 +84,16 @@ A rollback changes code/assets, not arbitrary stored state. Review the prior ver
 
 The private `rat-detective-network-test` Worker is separate. Its last recorded restoration was `b959490c-28cc-4915-8765-64098bef4393`; verify before use. Stored persistent-bot flags may survive a rollback; code from before 3 October would then run its canonical room continuously again. Do not assume the private backend automatically matches production.
 
+### Rolling back past packed aggregates
+
+**Not deployed yet; this applies once the data-cost release is live** ([plan](plans/data-cost-2026-10.md)). That release writes the city aggregates as packed rows in `city_packs` ([city map](city-map.md)). Releases from before it read only the per-key tables, so a plain rollback would hide every count recorded since the upgrade. Nothing would be deleted, and the counts would show again on rolling forward. To roll back without hiding anything:
+
+1. `CITY_AGGREGATES=rows npm run deploy:<env>` from the same commit, as an ordinary full deploy (never a gradual one, which leaves some rooms packing). The rooms restart and write per key again, and nothing new is packed.
+2. Drain every room: `node scripts/unpack-city-aggregates.mjs --base <origin> --env <env> --output <receipt.json>`. Every GameRoom keeps its own aggregates, including overflow and private rooms and rooms the matchmaker has forgotten. The script lists every GameRoom object with storage through the Cloudflare API. For each one it calls `POST /api/city/v1/unpack?id=<object id>` (bearer `CITY_TOKEN`) until `left` is 0, then sweeps them all once more. Each call moves about 1 MB of packs into the per-key tables in one transaction, so a count is never in both places or in neither and the totals do not change. A 409 means the deploy is still in packs mode. The script exits non-zero if any room still holds a pack.
+3. Roll back to the older version. It now reads every count.
+
+`node scripts/verify-aggregate-rollback.mjs --old <checkout of the older release>` proves the sequence on one persisted local state, with two rooms (the canonical one and a private one) and both checkouts built. It runs: the old release plays; upgrade; play; rows mode, play, drain every room; the old release reads; roll forward. The canonical room's public aggregates and every room's stored totals must match at every step.
+
 ## Admin controls
 
 Tyler's controls for the canonical room (protocol 29, clarity batch): end the round now with the current leader winning (the normal round end, results and lineup; the leader is counted dead or alive, mode progress then kills), choose the next round's mode, roll an incident now (a chosen one or the ordinary draw; no caller, so nobody gets the Dispatch supply) or end the one rolling or under way (Dispatch then cools down as usual), and send the case back to a fresh spot through the ordinary recovery. The admin's own rat gains nothing. Every command but `status` is recorded as an `admin` city fact ([city map](city-map.md)) and logged as `admin command` (command, source, outcome; never the key).
