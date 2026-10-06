@@ -16,7 +16,7 @@ const SEGMENTS=16,MAX_LEGS=W.laserBounces+1,MAX_PATH=MAX_LEGS*SEGMENTS+1;
 const POOL=20,FLARES=12,GOBS=40;
 /** Gobs fall a little slower than a ball: melted cheese is heavy but sticky. */
 const GRAVITY=8;
-export type LaserSound=(cue:'laser-fire'|'laser-hit',at?:Vec3Data)=>void;
+export type LaserSound=(cue:'laser-fire'|'laser-hit',at?:Vec3Data,local?:boolean)=>void;
 
 /** Byte texture helper: `paint` returns [r, g, b, a] (0…255, sRGB colour) for u, v in −1…1 (v up). */
 function texture(width:number,height:number,srgb:boolean,paint:(u:number,v:number)=>readonly [number,number,number,number]):THREE.DataTexture {
@@ -177,13 +177,13 @@ export class LaserBeamVisual {
         beam.legCount=legs;beam.count=(legs-1)*SEGMENTS+1;beam.age=0;beam.life=W.laserBeamMs/1000;beam.seed=(beam.seed*7+13)%9973;
         beam.gobs=feel?Math.round(FEEL.laser.params.gobs):0;beam.shedAt=.03;
         beam.sheen.mesh.visible=beam.strand.mesh.visible=beam.hot.mesh.visible=true;
-        this.sound?.('laser-fire',local?undefined:points[0]);
+        this.sound?.('laser-fire',local?undefined:points[0],local);
         for(let i=1;i<legs;i++){
             const p=points[i]!;if(!p.on)continue;
             this.flare(p,points[i-1]!,i===legs-1);
             if(p.on==='world'&&feel)this.splat(points,i);
         }
-        const end=points[legs-1]!;if(end.on)this.sound?.('laser-hit',end);
+        const end=points[legs-1]!;if(end.on)this.sound?.('laser-hit',end,local);
     }
     /** A strike flare, pulled back along the arriving leg so the wall or body it hit does not hide it. */
     private flare(at:Vec3Data,from:Vec3Data,end:boolean):void {

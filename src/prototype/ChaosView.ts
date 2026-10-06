@@ -318,7 +318,7 @@ export class ChaosView {
             document.body.appendChild(bar);
         }
         this.impacts=new CheeseImpactEffects(scene);this.crossfire=new CrossfireVisual(scene,this.synth);
-        this.beams=new LaserBeamVisual(scene);
+        this.beams=new LaserBeamVisual(scene,(cue,at,local)=>{if(!local||!feelState().on('heavyCheese'))this.feedback?.(cue,at);});
         this.traps.onEvent=(event,p)=>this.onTrap?.(event,p);
     }
     /** Only the authoritative heal event confirms this instant pickup. */

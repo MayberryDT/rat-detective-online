@@ -643,7 +643,7 @@ export class RatEntity {
     /** Your Ironclad claim: one shine across the silver coat over `seconds`. */
     public shine(seconds:number):void {this.shineAge=0;this.shineLength=Math.max(.05,seconds);}
 
-    public takeDamage(amount: number, impactVel: THREE.Vector3, heavy=false) {
+    public takeDamage(amount: number, impactVel: THREE.Vector3, heavy=false, weapon?:string, heavySoundOwned=true) {
         if (this.dead) return;
 
         this.hp -= amount;
@@ -655,8 +655,8 @@ export class RatEntity {
 
         // ── SOUND EFFECTS ──
         if (this.hp > 0) {
-            if(heavy)this.animator.heavyHit(impactVel);else this.animator.takeHit(impactVel);
-            if(heavy)return; // The opt-in director owns this confirmed impact's sound.
+            if(heavy)this.animator.heavyHit(impactVel,weapon);else this.animator.takeHit(impactVel);
+            if(heavy&&heavySoundOwned)return; // The director owns sound only for its local shooter.
             if (this.isPlayer) {
                 this.sound('playerHit', 0.6);
             } else {

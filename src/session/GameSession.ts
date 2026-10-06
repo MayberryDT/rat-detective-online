@@ -226,7 +226,7 @@ export class GameSession {
         this.feel.enableHeavyCheese(scene);
         this.gun.localReport=()=>this.feel.heavyReport();
         this.gun.localWeaponReport=kind=>this.feel.heavyArsenal(kind);
-        document.body.classList.add('heavy-cheese');
+        document.body.classList.toggle('heavy-cheese',this.feel.heavyActive);
         this.story=new IncidentStory(typeof document==='undefined'?undefined:document,listener.context as AudioContext);
         this.lineup=new PoliceLineup(scene,typeof document==='undefined'?undefined:document,()=>this.feel.flashbulb());
         this.remotes = new RemotePlayers(scene, world);
@@ -428,9 +428,9 @@ export class GameSession {
             this.chaos.onPresentedShot=(id,p)=>this.cameos?.observeShot(id,p,this.gun.sceneryClear);
             // W3: the trap's own foley where it happens: set down, SNAP with a spring twang, splinters per hit, a sad boing as it breaks.
             this.chaos.onTrap=(event,trap)=>{
-                if(event==='launch'){if(trap.owner===this.myId)this.feel.heavyArsenal('trap-launch');return;}
-                if(event==='set'&&trap.owner===this.myId){this.feel.heavyArsenal('mousetrap');return;}
-                if(event==='snap'){if(trap.owner===this.myId){this.feel.heavyArsenal('trap-snap');this.feel.heavyTrapCaught(TRAP_SPOT.set(trap.x,trap.y,trap.z),this.stage.camera);}if(trap.held){if(trap.owner===this.myId)this.caughtTraps.add(trap.held);const victim=trap.held===this.myId?this.rat?.entity:this.remotes.get(trap.held);victim?.heavyReaction(new THREE.Vector3(0,0,-1));}return;}
+                if(event==='launch'){if(trap.owner===this.myId&&!this.feel.heavyArsenal('trap-launch'))this.feedback.play('pickup-slap',trap);return;}
+                if(event==='set'&&trap.owner===this.myId){if(!this.feel.heavyArsenal('mousetrap'))this.feedback.play('trap-set',trap);return;}
+                if(event==='snap'){if(trap.owner===this.myId&&this.feel.heavyActive){this.feel.heavyArsenal('trap-snap');this.feel.heavyTrapCaught(TRAP_SPOT.set(trap.x,trap.y,trap.z),this.stage.camera);}else{this.feedback.play('trap-snap',trap);this.feel.trapSnapped(TRAP_SPOT.set(trap.x,trap.y,trap.z),this.stage.camera,trap.owner===this.myId);}if(trap.held){if(trap.owner===this.myId)this.caughtTraps.add(trap.held);const victim=trap.held===this.myId?this.rat?.entity:this.remotes.get(trap.held);victim?.heavyReaction(new THREE.Vector3(0,0,-1));}return;}
                 this.feedback.play(event==='set'?'trap-set':event==='hit'?'trap-splinter':'trap-break',trap);
                 // The SNAP! where a trap catches a rat (the word always for its owner and anyone near).
             };
@@ -558,8 +558,9 @@ export class GameSession {
                 if(entity&&!entity.dead&&message.hp<entity.hp&&message.attackerId&&message.attackerId!==message.id){
                     const attacker=message.attackerId===this.myId?this.rat?.entity:this.remotes.get(message.attackerId);
                     const incoming=attacker?entity.mesh.position.clone().sub(attacker.mesh.position).normalize():new THREE.Vector3(0,0,1);
-                    entity.heavyReaction(incoming,message.weapon);
+                    if(message.hp===0&&this.feel.heavyActive)entity.heavyReaction(incoming,message.weapon);
                     if(message.attackerId===this.myId){
+                        if(!this.feel.heavyActive){this.foley.play('hit-confirm');this.feel.hitDealt(entity.mesh.position,this.stage.camera);}
                         if(message.hp>0)this.hud.showHitMarker(entity.hp-message.hp);
                         const at=entity.mesh.position.clone().add(new THREE.Vector3(0,1,0)),normal=incoming.clone().negate();
                         this.feel.heavyImpact(at,normal,entity.mesh);
@@ -590,8 +591,7 @@ export class GameSession {
                         const direction=new THREE.Vector3();
                         if(attacker)direction.copy(entity.mesh.position).sub(attacker.mesh.position).setY(0);
                         if(message.id===this.myId)this.feel.hurt(entity.hp-message.hp,entity.mesh.position,attacker?.mesh.position,this.stage.camera);
-                        entity.takeDamage(entity.hp - message.hp, direction, true);
-                        if(message.weapon==='laser')entity.heavyReaction(direction,message.weapon);
+                        entity.takeDamage(entity.hp-message.hp,direction,this.feel.heavyActive,message.weapon,message.attackerId===this.myId&&this.feel.heavyActive);
                     }
                 }
                 break;
@@ -867,6 +867,7 @@ export class GameSession {
         this.feel.wanted(dt,wantedRat&&!wantedRat.dead?wantedRat.mesh.position:undefined,!!wanted&&wanted===this.myId);
         const presentationEnd=measure?performance.now():0;
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
+        document.body.classList.toggle('heavy-cheese',this.feel.heavyActive);
         this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
         // Dead: the recap's arrow toward the case: a loose one where it lies, someone else's at its latest heartbeat ping
         // (never the live carrier; none before the first ping).

@@ -54,14 +54,15 @@ export class FeelDirector {
     enableHeavyCheese(scene:THREE.Scene):void {this.heavy?.dispose();this.heavy=new HeavyCheese(scene);if(this.state.mode==='on')this.state.set('heavyCheese',true);}
     /** Range W1 only: no city dust, lights or unrelated scene systems. */
     attachTommy(scene:THREE.Scene):void {this.tommy?.dispose();this.tommy=new TommyJuice(scene);}
-    heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):void {if(this.heavy&&this.state.on('heavyCheese'))this.sound.arsenal(kind);}
+    get heavyActive():boolean{return !!this.heavy&&this.state.on('heavyCheese');}
+    heavyArsenal(kind:'laser'|'tommy-gun'|'mousetrap'|'pickup'|'trap-snap'|'trap-launch'|'trap-release'|'laser-hit'|'tommy-hit'|'laser-pickup'|'tommy-pickup'|'trap-pickup'):boolean {if(!this.heavyActive)return false;this.sound.arsenal(kind);return true;}
     /** Real catch only: projected punctuation, without moving the aiming view. */
     heavyTrapCaught(at:THREE.Vector3,view:THREE.Camera):void {if(this.heavy&&this.state.on('heavyCheese'))this.word('SNAP!',at,view,performance.now(),true);}
     heavyPickup(kind:string):void {if(this.state.on('heavyCheese'))this.heavy?.pickup(kind);}
     heavyWeaponImpact(at:THREE.Vector3,normal:THREE.Vector3,weapon:string):void {if(this.state.on('heavyCheese'))this.heavy?.weaponHit(at,normal,weapon);}
     heavyBeforeRender(rat:THREE.Object3D):void {if(this.state.on('heavyCheese'))this.heavy?.beforeRender(rat);}
     heavyAfterRender():void {this.heavy?.afterRender();}
-    heavyReport():void {if(this.heavy&&this.state.on('heavyCheese'))this.sound.pressure();}
+    heavyReport():boolean {if(!this.heavyActive)return false;this.sound.pressure();return true;}
     heavyWeaponLaunch(origin:THREE.Vector3,direction:THREE.Vector3,weapon?:string):void {if(this.state.on('heavyCheese'))this.heavy?.launchWeapon(origin,direction,weapon);}
     heavyLaunch(origin:THREE.Vector3,direction:THREE.Vector3):void {if(this.state.on('heavyCheese'))this.heavy?.launch(origin,direction);}
     heavyImpact(at:THREE.Vector3,normal:THREE.Vector3,target:THREE.Object3D):void {if(this.heavy&&this.state.on('heavyCheese')){this.sound.bodySmack();this.heavy.hit(at,normal,target);}}
