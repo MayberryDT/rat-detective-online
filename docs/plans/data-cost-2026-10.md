@@ -1,6 +1,6 @@
 # Data cost plan (October 2026)
 
-**Status, 2026-10-06: P1, P2's daily pruning and P3's lossless part are built and verified on branch `data-cost-20261006` (Halla), with a rollback mode that keeps every count readable by older releases. They are not deployed, and no production data or schema has been touched. Deploying needs Tyler's approval of the live migration ([section 4](#4-implementation-6-october-not-deployed)).** Goal: keep every piece of data Rat Detective records (heat map and city aggregates, the R2 city archive, highlight markers, telemetry facts, Jev measures, room state) while cutting Cloudflare spend.
+**Status, 2026-10-06: live.** P1, P2's daily pruning and P3's lossless part shipped, with a rollback mode that keeps every count readable by older releases. Production Worker `e99a51a7` (build `production-2026-10-06-2476135`, 15:19 UTC) and staging `993e377f`, after staging migration, recovery, drain and rollback checks on Cloudflare ([release receipt](../verification/data-cost-release-2026-10-06.md)). No billing saving is measured yet. Goal: keep every piece of data Rat Detective records (heat map and city aggregates, the R2 city archive, highlight markers, telemetry facts, Jev measures, room state) while cutting Cloudflare spend.
 
 Every number below is labelled:
 
@@ -160,7 +160,7 @@ Savings are per room-hour beyond the allowance (production rate, $1 per million 
 | Slower companion publishing | ~3k rows/h (1%); the Omarchy widget's freshness depends on it. |
 | Staging-specific cuts | Staging now sleeps like production and shares the allowance; it costs only while someone holds a seat. |
 
-## 4. Implementation (6 October, not deployed)
+## 4. Implementation (6 October; released 15:19 UTC)
 
 Receipt: [data cost verification](../verification/data-cost-2026-10-06.md). Code is on branch `data-cost-20261006` in `/home/halla/workspaces/rat-detective-data-cost-20261006`, based on `4041deb`.
 
@@ -184,7 +184,7 @@ Receipt: [data cost verification](../verification/data-cost-2026-10-06.md). Code
 
 Rows read in the 45 minutes fell from 109,670 to 27,863: the per-minute prune scan is gone. The bot roll differs between sides (6–9 bots), so the per rat-hour figure is the fairer comparison. What remains on the branch: events 54% (unchanged per event), player checkpoints 25%, room state 11%, packs 4%, respawn timers 4%, alarms 2%.
 
-**Projected for production [ESTIMATE].** The measured production rate (342k rows per room-hour, 5 Oct) times the observed 45-minute ratio (0.115) gives **about 39k rows per room-hour**. Not measured on Cloudflare: nothing is deployed.
+**Projected for production [ESTIMATE].** The measured production rate (342k rows per room-hour, 5 Oct) times the observed 45-minute ratio (0.115) gives **about 39k rows per room-hour**. Not yet measured on Cloudflare. The release's live minutes mixed in another human's play, and staging's ~740 rows a minute with one agent seat is a different workload; see the [release receipt](../verification/data-cost-release-2026-10-06.md).
 
 | H (room-hours/day) | Before, $/day (measured rates) | After, $/day (projected) |
 | --- | --- | --- |
@@ -202,7 +202,7 @@ The rows written included each month then cover about 1,280 room-hours instead o
 
 ## 5. Decisions for Tyler
 
-1. **Approve the live migration and deploy?** Staging, then production, with the rollback procedure above. Nothing has been deployed.
+1. **Approve the live migration and deploy?** Approved and done on 6 October ([release receipt](../verification/data-cost-release-2026-10-06.md)).
 2. **Drop `AUTOINCREMENT` from `city_events`?** It would save about 5k of the ~38k rows per room-hour that remain. It needs a table rebuild or rename: a schema migration with its own rollback and read-path work. Recommendation: not now.
 3. **Slower checkpoints (P3 cadence)?** Player poses every 10 s instead of 2.5 s, and the round every 5 s instead of 1 s, would save about 7k rows per room-hour. A room restored after a crash or deploy would then resume from older state. Not built, because it widens the restore window.
 4. **Jev:** the TypeSafe cap (`JEV_DAILY_BUDGET_USD` = 25) is now the largest possible daily spend, and it is outside Cloudflare. Actual spend was **not measured** (the token cannot read Workers Logs; the `jev` log line every 60 s and the `jev-budget` ledger in `Matchmaker` hold it). Is the cap still right?
