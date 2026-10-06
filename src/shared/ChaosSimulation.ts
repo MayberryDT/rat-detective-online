@@ -1015,7 +1015,7 @@ export class ChaosSimulation {
         const body=new C.Body({mass:0,type:C.Body.STATIC,shape:new C.Box(new C.Vec3(.75*TRAP_SCALE+.05,.3*TRAP_TALL,W.trapRadius)),position:new C.Vec3(state.x,state.y+.3*TRAP_TALL,state.z),
             collisionFilterGroup:4,collisionFilterMask:16});
         body.quaternion.setFromAxisAngle(new C.Vec3(0,1,0),state.yaw);
-        this.world.addBody(body);this.targets.set(body,{kind:'trap',trapId:state.id});this.traps.set(state.id,{state,body});
+        this.world.addBody(body);this.targets.set(body,{kind:'trap',trapId:state.id});this.traps.set(state.id,{state,body,held:state.held});
     }
     /** `hits` ball hits on a trap; at none left it breaks, credited to `by`. */
     private damageTrap(id:string,hits:number,by:string|null):void{
@@ -1034,7 +1034,7 @@ export class ChaosSimulation {
     private freeTrapped(trap:{state:TrapState;held?:string}):void{
         const entry=trap.held===undefined?undefined:this.buffs[trap.held];
         if(entry&&(entry.trappedUntil??0)>this.now)delete entry.trappedUntil;
-        trap.held=undefined;
+        trap.held=undefined;delete trap.state.held;
     }
     /** Each step: a broken trap leaves after `trapBrokenMs`; an armed one snaps on any other living rat whose feet
      * reach it (Ironclad does not help) and holds it in place for `trapHoldMs` (no damage, no kill); it re-arms
@@ -1077,11 +1077,11 @@ export class ChaosSimulation {
                 }
                 if(s.flight)continue;
             }
-            if(trap.held!==undefined&&now-(s.snapAt??-Infinity)>=W.trapHoldMs){const held=this.players.get(trap.held);if(!held||!within(held,s))trap.held=undefined;}
+            if(trap.held!==undefined&&now-(s.snapAt??-Infinity)>=W.trapHoldMs){const held=this.players.get(trap.held);if(!held||!within(held,s)){trap.held=undefined;delete s.held;}}
             if(!playing||now-(s.snapAt??-Infinity)<W.trapHoldMs+W.trapRearmMs)continue;
             for(const rat of this.players.values()){
                 if(rat.id===s.owner||rat.id===trap.held||!within(rat,s)||(this.buffs[rat.id]?.trappedUntil??0)>now)continue;
-                s.snapAt=now;trap.held=rat.id;
+                s.snapAt=now;s.held=trap.held=rat.id;
                 this.buffs[rat.id]={...this.buffs[rat.id],trappedUntil:now+W.trapHoldMs};
                 this.pickupEvents.push({kind:'trap',what:'snap',trapId:id,playerId:s.owner,p:{x:s.x,y:s.y,z:s.z},victim:rat.id});
                 break;

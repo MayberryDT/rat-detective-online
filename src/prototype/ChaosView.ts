@@ -527,7 +527,7 @@ export class ChaosView {
         }
         this.syncPickups(state);
         this.syncWeapons(state);
-        this.traps.apply(state.traps,previous!==undefined);
+        this.traps.apply(state.traps,previous!==undefined,state.time);
         this.noteLocalBuffs(state);
         for(const hit of state.impacts){
             if(!hit.audioOnly)this.impacts.emit(this.impactPoint.set(hit.p.x,hit.p.y,hit.p.z),this.impactNormal.set(hit.n.x,hit.n.y,hit.n.z),hit.surface,hit.scale??1);

@@ -248,7 +248,7 @@ stage.renderer.setAnimationLoop(now=>{
     diagnostics.maxY=Math.max(diagnostics.maxY,player.entity.body.position.y);
     const state=practice.simulation.snapshot();
     const weapon=practice.simulation.weapon('local');player.entity.setWeapon(weapon);
-    laser.apply(state.beams);laser.update(dt,stage.camera);trapField.apply(state.traps,true);trapField.update(dt);
+    laser.apply(state.beams);laser.update(dt,stage.camera);trapField.apply(state.traps,true,state.time);trapField.update(dt);
     for(const site of state.pickups??[]){const visual=supplies.get(site.id);if(visual){visual.setAvailableAt(site.availableAt??0);visual.update(Date.now(),stage.camera);}}
     for(const event of practice.simulation.drainPickupEvents()){
         note({kind:'authority-pickup',event});

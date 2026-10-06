@@ -172,7 +172,7 @@ export const EXTRA_CASE_IDS = ['evidence-1','evidence-2','evidence-3','evidence-
  * Only landed traps catch rats. A set Mousetrap (`WEAPON_TUNING`): holds any other rat that steps on it in place for `trapHoldMs`. `hp` ball hits
  * left; `at` when set; `snapAt` its latest catch (shut while it holds, it re-arms `trapRearmMs` after letting go); `hitAt`
  * the latest hit it took; `brokenAt` when it was destroyed (inert, kept `trapBrokenMs` so clients can play the break). At most one per rat. */
-export interface TrapState { id:string; owner:string; x:number; y:number; z:number; yaw:number; hp:number; at:number; shotId?:string; flight?:Vec3Data; flightAge?:number; landedAt?:number; snapAt?:number; hitAt?:number; brokenAt?:number }
+export interface TrapState { id:string; owner:string; x:number; y:number; z:number; yaw:number; hp:number; at:number; shotId?:string; held?:string; flight?:Vec3Data; flightAge?:number; landedAt?:number; snapAt?:number; hitAt?:number; brokenAt?:number }
 export const MAX_TRAPS = 16;
 /** What a laser beam struck at a point. */
 export const LASER_SURFACES = ['world','armor','rat','head','trap','case','trigger','corpse'] as const;
