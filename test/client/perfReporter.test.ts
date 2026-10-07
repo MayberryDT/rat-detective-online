@@ -1,7 +1,7 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import type {WebGLRenderer} from 'three';
 import {PerfReporter,browserOf,osOf} from '../../src/session/perfReporter';
-import type {PerfReport} from '../../src/shared/perfReport';
+import {parsePerfReport, type PerfReport} from '../../src/shared/perfReport';
 
 afterEach(()=>{vi.unstubAllGlobals();});
 function fixture(){
@@ -14,6 +14,18 @@ function fixture(){
 }
 
 describe('perf reports from the player\'s machine',()=>{
+  // Optional diagnostics must survive the real report/parser seam, while arbitrary text,
+  // nonfinite timings, and oversized counters must not enter stored city facts.
+  it('records callback scheduling separately and validates bounded connection context',()=>{
+    const {sent,reporter}=fixture();
+    reporter.network=()=>({netFailure:'delivery-timeout',netCloseCode:1013,netRetries:2,netRecoverMs:700,netLastMessageMs:5100,netHidden:1,netInvalid:0,netSendFailures:0});
+    for(let i=0;i<1800;i++)reporter.frame(17,4,12);
+    const parsed=parsePerfReport(sent[0]);
+    expect(parsed).toMatchObject({cpu50:4,schedule50:12,schedule95:12,netFailure:'delivery-timeout',netCloseCode:1013,netRetries:2,netRecoverMs:700,netLastMessageMs:5100,netHidden:1});
+    const invalid=parsePerfReport({...sent[0],netFailure:'secret-token',netRetries:Infinity,netCloseCode:999999,schedule50:-1});
+    expect(invalid).not.toHaveProperty('netFailure');expect(invalid).not.toHaveProperty('netRetries');expect(invalid).not.toHaveProperty('netCloseCode');expect(invalid).not.toHaveProperty('schedule50');
+  });
+
   // A player who alt-tabs for eight seconds did not see an eight-second frame.
   it('reports every 30 s of play, counts hitches, and does not count a hidden tab as a frame',()=>{
     const {doc,sent,reporter}=fixture();

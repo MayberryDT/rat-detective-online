@@ -39,6 +39,30 @@ describe('network session transport', () => {
     });
     afterEach(() => { network.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+    // Failure cases: diagnostics disappear on recovery; stale sockets overwrite the latest
+    // failure; raw close reasons leak credentials; intentional teardown counts as a failure.
+    it('keeps bounded failure context through recovery without keeping raw close reasons',()=>{
+        network.connect('Rat',appearance);sockets[0].open();sockets[0].receive(welcome());
+        vi.advanceTimersByTime(250);
+        const close=new Event('close');Object.defineProperties(close,{code:{value:1013},reason:{value:'secret-resume-token'}});
+        sockets[0].dispatchEvent(close);
+        expect(network.getDiagnostics()).toMatchObject({lastCloseCode:1013,lastFailure:'close',lastMessageAgeMs:250,reconnectCount:1});
+        vi.advanceTimersByTime(500);sockets[1].open();sockets[1].receive(welcome());
+        expect(network.getDiagnostics()).toMatchObject({lastFailure:'close',recoveryMs:500});
+        expect(JSON.stringify(network.getDiagnostics())).not.toContain('secret-resume-token');
+        const stale=new Event('close');Object.defineProperty(stale,'code',{value:1008});sockets[0].dispatchEvent(stale);
+        expect(network.getDiagnostics().lastCloseCode).toBe(1013);
+        network.destroy();expect(network.getDiagnostics().reconnectCount).toBe(1);
+    });
+    it('distinguishes a local join timeout from a server delivery reset',()=>{
+        network.connect('Rat',appearance);vi.advanceTimersByTime(100);
+        expect(network.getDiagnostics()).toMatchObject({lastFailure:'join-timeout',lastCloseCode:0});
+        vi.advanceTimersByTime(500);sockets[1].open();sockets[1].receive(welcome());
+        const close=new Event('close');Object.defineProperties(close,{code:{value:1013},reason:{value:'delivery-timeout'}});
+        sockets[1].dispatchEvent(close);
+        expect(network.getDiagnostics()).toMatchObject({lastFailure:'delivery-timeout',lastCloseCode:1013});
+    });
+
     it('keeps observation separate from saved player credentials and preserves it on retry',()=>{
         network.destroy();const storage={getItem:vi.fn(()=>JSON.stringify({scope:'ws://localhost/ws?room=graybox-benchmark-ai-watch',token:crypto.randomUUID()})),setItem:vi.fn(),removeItem:vi.fn()};
         const urls:string[]=[];

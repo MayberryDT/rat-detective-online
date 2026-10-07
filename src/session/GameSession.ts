@@ -205,9 +205,9 @@ export class GameSession {
         // The page's first pagehide listener (main.ts) closes the socket before the session's own runs.
         this.transport.onDestroy=()=>this.perf.leave();
         this.perf.quality=()=>{const q=qualityStatus();return{quality:q.mode==='auto'?`auto-${q.tier}`:q.tier,scale:q.scale};};
-        // Measurement only (Tyler, 1 October): real ping before any network change.
+        // Lifetime connection context survives a reconnect until a normal perf report can carry it.
         this.perf.network=()=>{const n=this.transport.getDiagnostics();
-            return{...(n.rttMinMs>0||n.rttMs>0?{rtt:Math.round(n.rttMs),rttJitter:Math.round(n.rttJitterMs),rttMin:Math.round(n.rttMinMs),rttMax:Math.round(n.rttMaxMs)}:{}),...this.remotes.viewDelays()};};
+            return{netFailure:n.lastFailure,netCloseCode:n.lastCloseCode,netRetries:Math.min(1_000_000,n.reconnectCount),netRecoverMs:Math.round(n.recoveryMs),netLastMessageMs:n.lastMessageAgeMs,netHidden:n.failureHidden,netInvalid:Math.min(1_000_000,n.invalidCount),netSendFailures:Math.min(1_000_000,n.sendFailures),...(n.rttMinMs>0||n.rttMs>0?{rtt:Math.round(n.rttMs),rttJitter:Math.round(n.rttJitterMs),rttMin:Math.round(n.rttMinMs),rttMax:Math.round(n.rttMaxMs)}:{}),...this.remotes.viewDelays()};};
         const { scene, world, listener } = this.stage;
         initEntitySounds(listener);
         this.music = prepared.music ?? new SessionMusic(listener);
@@ -794,6 +794,7 @@ export class GameSession {
 
     private animate(now: number): void {
         if (this.disposed) return;
+        const callbackStarted=performance.now();
         const resized = this.stage.syncViewport();
         // The prepared title backdrop is static; do not spend phone frame time
         // drawing the whole city while somebody is choosing a name.
@@ -906,7 +907,7 @@ export class GameSession {
             if(this.city instanceof Neighborhood)this.city.saveBake();
         }
         this.stats?.record(frameMs, now, this.worldSpec,{simulationMs:simulationEnd-start,botsMs,presentationMs:presentationEnd-simulationEnd,renderMs:performance.now()-presentationEnd},{network:this.transport.getDiagnostics(),netplay:this.netplay.snapshot(),remoteTiming:this.remotes.timingDiagnostics(),shotsAttempted:this.shotsAttempted,shotsSent:this.shotsSent,chaos:this.diagnosticChaos,snapshotAgeMs:this.diagnosticChaos.receivedAt?Date.now()-this.diagnosticChaos.receivedAt:null,projectiles:this.chaos?.getDiagnostics()});
-        if(this.transport.state==='playing'&&!this.observing)this.perf.frame(frameMs,performance.now()-now);
+        if(this.transport.state==='playing'&&!this.observing)this.perf.frame(frameMs,performance.now()-callbackStarted,Math.max(0,callbackStarted-now));
         this.frame = requestAnimationFrame(time => this.animate(time));
     }
 

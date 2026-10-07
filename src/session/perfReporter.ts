@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import type { PerfBrowser, PerfOs, PerfReport } from '../shared/perfReport';
+import type { ConnectionReport, PerfBrowser, PerfOs, PerfReport } from '../shared/perfReport';
 
 /** Play time per report; a leaving player sends what it has from this much. */
 const REPORT_MS = 30_000, LEAVE_MIN_MS = 5_000;
@@ -12,10 +12,11 @@ type Machine = Pick<PerfReport, 'gpu' | 'gpuVendor' | 'os' | 'browser' | 'browse
 type UserAgentData = { platform?: string; brands?: Array<{ brand: string; version: string }> };
 
 /** Measures play frames and sends a `perf` report every 30 s of play and on leave (docs/city-map.md).
- * Recording a frame writes two floats into fixed buffers; the sort and the report happen once a window. */
+ * Recording a frame writes three floats into fixed buffers; the sort and the report happen once a window. */
 export class PerfReporter {
   private readonly frames = new Float32Array(CAPACITY);
   private readonly cpu = new Float32Array(CAPACITY);
+  private readonly schedule = new Float32Array(CAPACITY);
   private count = 0;
   private ms = 0;
   private skip = false;
@@ -23,7 +24,7 @@ export class PerfReporter {
   /** The current graphics quality tier and render scale, once the game adapts them. */
   quality?: () => Pick<PerfReport, 'quality' | 'scale'>;
   /** Ping and how far in the past other rats are drawn, read once a report. */
-  network?: () => Pick<PerfReport, 'rtt' | 'rttJitter' | 'rttMin' | 'rttMax' | 'viewHuman' | 'viewBot'>;
+  network?: () => ConnectionReport & Pick<PerfReport, 'rtt' | 'rttJitter' | 'rttMin' | 'rttMax' | 'viewHuman' | 'viewBot'>;
 
   constructor(private readonly renderer: THREE.WebGLRenderer, private readonly send: (report: PerfReport) => void, signal: AbortSignal) {
     // rAF stops in a hidden tab; the first frame back spans the whole absence.
@@ -32,15 +33,15 @@ export class PerfReporter {
   /** The page is leaving: what it has, from 5 s of play. */
   leave(): void { if (this.ms >= LEAVE_MIN_MS) this.flush(); }
 
-  /** One play frame: `frameMs` since the previous rAF, `cpuMs` of work inside this one. */
-  frame(frameMs: number, cpuMs: number): void {
+  /** One play frame: `frameMs` since the previous rAF, `cpuMs` of work inside this one, `scheduleMs` of delay before entry. */
+  frame(frameMs: number, cpuMs: number, scheduleMs = 0): void {
     if (this.skip || !(frameMs > 0) || frameMs >= PAUSE_MS) { this.skip = false; return; }
-    this.frames[this.count] = frameMs; this.cpu[this.count] = cpuMs; this.count++; this.ms += frameMs;
+    this.frames[this.count] = frameMs; this.cpu[this.count] = cpuMs; this.schedule[this.count] = scheduleMs; this.count++; this.ms += frameMs;
     if (this.ms >= REPORT_MS || this.count === CAPACITY) this.flush();
   }
 
   private flush(): void {
-    const n = this.count, frames = this.frames.subarray(0, n).sort(), cpu = this.cpu.subarray(0, n).sort();
+    const n = this.count, frames = this.frames.subarray(0, n).sort(), cpu = this.cpu.subarray(0, n).sort(), schedule = this.schedule.subarray(0, n).sort();
     const at = (a: Float32Array, q: number) => r1(a[Math.min(n - 1, Math.floor(n * q))]!);
     let over33 = 0, over100 = 0;
     for (let i = 0; i < n; i++) { if (frames[i]! > 33.4) over33++; if (frames[i]! > 100) over100++; }
@@ -49,7 +50,7 @@ export class PerfReporter {
     this.machine ??= machine(gl);
     const p50 = at(frames, .5);
     this.send({ ms: Math.round(this.ms), frames: n, fps: r1(n * 1000 / this.ms), fps50: p50 > 0 ? r1(1000 / p50) : 0, p50, p95: at(frames, .95), p99: at(frames, .99),
-      worst: r1(frames[n - 1]!), over33, over100, cpu50: at(cpu, .5), cpu95: at(cpu, .95), ...(heap ? { heapMb: r1(heap / 1048576) } : {}),
+      worst: r1(frames[n - 1]!), over33, over100, cpu50: at(cpu, .5), cpu95: at(cpu, .95), schedule50: at(schedule, .5), schedule95: at(schedule, .95), ...(heap ? { heapMb: r1(heap / 1048576) } : {}),
       w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, dpr: window.devicePixelRatio || 1, pr: this.renderer.getPixelRatio(), ...this.machine, ...this.quality?.(), ...this.network?.() });
     this.count = 0; this.ms = 0;
   }

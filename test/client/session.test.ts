@@ -1,4 +1,4 @@
-import { PerspectiveCamera } from 'three';
+import { PerspectiveCamera, Vector3 } from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { MAX_HP, PROTOCOL_VERSION, type PlayerData, type ServerMessage } from '../../src/shared/networkProtocol';
 import type { ChaosState } from '../../src/shared/chaosState';
@@ -245,7 +245,7 @@ vi.mock('../../src/session/createStage', () => ({
         const stage = {
             renderer,
             syncViewport: () => false,
-            scene: { children: [], add: vi.fn() },
+            scene: { children: [], add: vi.fn(), remove: vi.fn() },
             camera: new PerspectiveCamera(60, 1, 0.1, 1000),
             listener: {context:{state:'running',resume:vi.fn(async()=>{})}},
             world: { step: vi.fn() },
@@ -439,6 +439,10 @@ describe('GameSession', () => {
 
     it('shows hit confirmation only for damage credited to this player',()=>{
         const {transport,hud,session}=start(),snapshot=welcome();transport.onMessage?.(snapshot);
+        // Accepted protocol33 feedback is owned by an authoritative health decrease
+        // on an actual presented victim, not an arbitrary damage packet.
+        const victim={hp:3,dead:false,mesh:{position:new Vector3(2,1,2)},takeDamage:vi.fn((damage:number)=>{victim.hp-=damage;})};
+        harness.remotes.at(-1)!.get.mockImplementation(id=>id==='other'?victim:undefined);
         transport.onMessage?.({type:'playerDamaged',id:'other',hp:2,attackerId:snapshot.id});
         expect(hud.showHitMarker).toHaveBeenCalledTimes(1);
         transport.onMessage?.({type:'playerDamaged',id:snapshot.id,hp:2,attackerId:'other'});

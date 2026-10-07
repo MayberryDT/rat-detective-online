@@ -20,7 +20,7 @@ const player: PlayerData = { id: 'remote', name: 'Remote', hatType: 'fedora', ha
     meshQx: 0, meshQy: 0, meshQz: 0, meshQw: 1, hp: 3, kills: 0, deaths: 0 };
 
 const canvasDocument = document;
-beforeEach(() => vi.stubGlobal('document', canvasDocument));
+beforeEach(() => vi.stubGlobal('document', {...canvasDocument,body:{classList:{toggle(){}}}}));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function replay(fps: number, speed: number) {
@@ -35,7 +35,7 @@ function replay(fps: number, speed: number) {
         transport: { state: 'playing' }, simulation: new SimulationClock(), remotes,
         gun: { update() {} }, city: { update() {} }, perf: { frame() {} },
         foleyWorld:{listener(){},motion:new MotionFoley(()=>{})},
-        feel:new FeelDirector(new FeelState('on'),undefined),heldFire:new HeldFire(),
+        feel:new FeelDirector(new FeelState('on'),{} as Document),heldFire:new HeldFire(),
     });
     vi.stubGlobal('requestAnimationFrame', () => 1);
     vi.spyOn(performance, 'now').mockImplementation(() => now);

@@ -30,6 +30,8 @@ function makeDb(path) {
   const db = new DatabaseSync(path);
   db.exec(`CREATE TABLE facts (t INTEGER, type TEXT, room TEXT, round TEXT, mode TEXT, layout INTEGER, incident TEXT, a INTEGER, place TEXT, data TEXT, build TEXT, agent INTEGER);
     CREATE TABLE situations (t INTEGER, round TEXT, a INTEGER, human INTEGER, agent INTEGER);`);
+  // Populate one synthetic database atomically; per-row fsyncs dominate this fixture.
+  db.exec('BEGIN');
   const insert = db.prepare('INSERT INTO facts (t, type, room, round, layout, data, build) VALUES (?, ?, ?, ?, 3, ?, ?)');
   const fact = f => insert.run(f.t, f.type, 'public-live-v2', f.round, JSON.stringify({ room: 'public-live-v2', layout: 3, ...f }), f.build ?? null);
 
@@ -69,6 +71,7 @@ function makeDb(path) {
   for (let i = 0; i < 60; i++) fact({ ...code, t: T + 2.5 * H + 100_000 + i, type: 'decision', a: 2, mind: 'code', goal: 'take-case', trigger: 'event', stance: 'fight' });
   for (let i = 0; i < 300; i++) fact({ ...code, t: T + 2.5 * H + 200_000 + i, type: 'goal-end', a: 2, goal: 'take-case', outcome: 'replaced', durationMs: 1000 });
   for (let i = 0; i < 40; i++) fact({ ...code, t: T + 2.5 * H + 300_000 + i, type: 'shot', a: 2, human: false, sample: 10, targets: i % 10 ? [] : [{ d: 3 }] });
+  db.exec('COMMIT');
   db.close();
 }
 

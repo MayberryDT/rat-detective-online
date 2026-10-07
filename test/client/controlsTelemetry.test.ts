@@ -14,7 +14,7 @@ import {FeelState} from '../../src/feel/feelState';
 import {HeldFire} from '../../src/session/HeldFire';
 
 const canvasDocument = document;
-beforeEach(() => vi.stubGlobal('document', canvasDocument));
+beforeEach(() => vi.stubGlobal('document', {...canvasDocument,body:{classList:{toggle(){}}}}));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 // The player's controls ride their movement sends for the city map. Ways it could go wrong: a key tap or jump
@@ -36,7 +36,7 @@ it('sends taps shorter than one send, at once, even while the rat holds still', 
         stage: {syncViewport: () => false, scene, world, camera, renderer: {render() {}}, flashlight: new THREE.SpotLight()},
         simulation: new SimulationClock(), city: {update() {}}, perf: {frame() {}},
         foleyWorld: {listener() {}, motion: new MotionFoley(() => {})},
-        feel: new FeelDirector(new FeelState('on'), undefined), heldFire: new HeldFire(),
+        feel: new FeelDirector(new FeelState('on'), {} as Document), heldFire: new HeldFire(),
         transport: {state: 'playing', send(message: ClientMessage) {
             expect(parseClientMessage(message)).toEqual(message);
             if (message.type === 'updateMovement') sent.push(message);

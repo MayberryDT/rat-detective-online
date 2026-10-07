@@ -56,7 +56,7 @@ describe('bots with the arsenal',()=>{
         expect(door[0]).toBeLessThan(1000);
     });
 
-    it('waits out a just-taken Mousetrap\'s lockout like anyone, then sets it down',()=>{
+    it('ignores a legacy Mousetrap arming deadline under protocol 33',()=>{
         // A doorway: without the lockout it goes down within the first second.
         const doorway:MotorNavigation={...nav,ray:(from,to)=>from.y>.7?{point:to,normal:{x:1,y:0,z:0}}:undefined};
         const s=state('mousetrap'),ready=WEAPON_TUNING.trapLockMs+500;s.buffs!.me!.weaponReadyAt=ready;
@@ -65,7 +65,7 @@ describe('bots with the arsenal',()=>{
             s.time=now;
             if(worldIntent(bot.step(now,self,[self],s,()=>true,false,true),self).shoot)presses.push(now);
         }
-        expect(presses[0]).toBeGreaterThanOrEqual(ready);
+        expect(presses[0]).toBeLessThan(ready);
         expect(presses[0]).toBeLessThan(ready+1000);
     });
 

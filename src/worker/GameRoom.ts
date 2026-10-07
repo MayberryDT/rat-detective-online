@@ -2055,7 +2055,8 @@ export class GameRoom extends DurableObject<Env> {
     this.failedSockets.add(ws); this.audience = null;
     this.diagnostics.closed(code);
     log('warn', 'connection reset', { reason, code });
-    try { ws.close(code, 'Connection needs reconnect'); } catch { /* Transport already gone. */ }
+    const category=reason.includes('acknowledgement timed out')?'delivery-timeout':reason.includes('backlog exceeded')?'delivery-backlog':'Connection needs reconnect';
+    try { ws.close(code, category); } catch { /* Transport already gone. */ }
     // Never recursively change the roster in the middle of a broadcast/death.
     this.ctx.waitUntil(Promise.resolve().then(() => this.removePlayer(ws)));
   }

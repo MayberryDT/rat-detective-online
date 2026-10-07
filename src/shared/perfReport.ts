@@ -1,13 +1,24 @@
 /** How the game runs on a player's machine: a window of about 30 s of play, sent by the client and kept
  * as a `perf` city fact (docs/city-map.md). Frame times in ms, from one rAF timestamp to the next;
- * `cpu*` is the main-thread work inside the frame callback, so a slow frame with little CPU work is GPU- or
- * compositor-bound. No names or IDs: the renderer string names a GPU model, not a person. */
+ * `cpu*` is the main-thread work inside the frame callback, while `schedule*` records callback scheduling delay. A slow interval alone does not identify
+ * GPU, compositor, browser or game work as its cause. No names or IDs: the renderer string names a GPU model, not a person. */
 export const PERF_OS = ['windows', 'mac', 'linux', 'android', 'ios', 'chromeos', 'other'] as const;
 export const PERF_BROWSERS = ['chrome', 'edge', 'firefox', 'safari', 'opera', 'samsung', 'other'] as const;
 export type PerfOs = typeof PERF_OS[number];
 export type PerfBrowser = typeof PERF_BROWSERS[number];
 
-export interface PerfReport {
+/** Fixed categories only; never retain arbitrary socket reasons or credentials. */
+export const CONNECTION_FAILURES = ['close','delivery-timeout','delivery-backlog','socket-error','join-timeout','heartbeat-timeout','invalid-update','apply-error','congestion','send-error','connect-error','server-error','session-replaced'] as const;
+export type ConnectionFailure = typeof CONNECTION_FAILURES[number];
+export interface ConnectionReport {
+  netFailure?: ConnectionFailure;
+  netCloseCode?: number; netRetries?: number; netRecoverMs?: number;
+  /** Age of the last received message and tab visibility at failure, not at report time. */
+  netLastMessageMs?: number; netHidden?: number;
+  netInvalid?: number; netSendFailures?: number;
+}
+
+export interface PerfReport extends ConnectionReport {
   /** Play time the window covers, and the frames drawn in it. */
   ms: number; frames: number;
   /** Frames a second over the window, and at the median frame (1000 / p50). */
@@ -17,6 +28,8 @@ export interface PerfReport {
   over33: number; over100: number;
   /** Main-thread work inside the frame callback, median and 95th percentile. */
   cpu50?: number; cpu95?: number;
+  /** Delay from the rAF timestamp to entering the callback; separate from its work. */
+  schedule50?: number; schedule95?: number;
   /** Used JS heap, where the browser tells (Chromium). */
   heapMb?: number;
   /** Drawing buffer size; the device pixel ratio and the ratio the game renders at. */
@@ -50,6 +63,11 @@ export function parsePerfReport(value: unknown): PerfReport | null {
   const over33 = int(v.over33, 0, frames), over100 = int(v.over100, 0, frames);
   if (over33 === undefined || over100 === undefined) return null;
   const optional: Omit<PerfReport, 'ms' | 'frames' | 'fps' | 'fps50' | 'p50' | 'p95' | 'p99' | 'worst' | 'over33' | 'over100'> = {
+    schedule50: num(v.schedule50, 0, 60_000), schedule95: num(v.schedule95, 0, 60_000),
+    netFailure: oneOf(CONNECTION_FAILURES, v.netFailure), netCloseCode: int(v.netCloseCode, 0, 4999),
+    netRetries: int(v.netRetries, 0, 1_000_000), netRecoverMs: num(v.netRecoverMs, 0, 86_400_000, 1),
+    netLastMessageMs: num(v.netLastMessageMs, 0, 86_400_000, 1), netHidden: int(v.netHidden, 0, 1),
+    netInvalid: int(v.netInvalid, 0, 1_000_000), netSendFailures: int(v.netSendFailures, 0, 1_000_000),
     cpu50: num(v.cpu50, 0, 60_000), cpu95: num(v.cpu95, 0, 60_000), heapMb: num(v.heapMb, 0, 65_536),
     w: int(v.w, 1, 16_384), h: int(v.h, 1, 16_384), dpr: num(v.dpr, .1, 10, 100), pr: num(v.pr, .1, 10, 100),
     gpu: text(v.gpu, 160), gpuVendor: text(v.gpuVendor, 80), os: oneOf(PERF_OS, v.os), browser: oneOf(PERF_BROWSERS, v.browser),

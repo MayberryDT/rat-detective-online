@@ -1,3 +1,4 @@
+import { CONNECTION_FAILURES, type ConnectionFailure } from '../shared/perfReport';
 import { isResumeToken, SESSION_REPLACED_CLOSE_CODE } from '../shared/reconnect';
 import { DEFAULT_ROOM_NAME, PROTOCOL_VERSION, type ClientMessage, type RatAppearance, type ServerMessage } from '../shared/networkProtocol';
 import { isSupportedWorldVersion } from '../shared/worldSpec';
@@ -41,6 +42,10 @@ export interface NetworkDiagnostics {
     joinMs: number;
     reconnectCount: number;
     lastCloseCode: number;
+    lastFailure?: ConnectionFailure;
+    lastMessageAgeMs: number;
+    failureHidden: number;
+    recoveryMs: number;
     rttMs: number;
     rttMinMs: number;
     rttMaxMs: number;
@@ -102,6 +107,7 @@ export class NetworkManager {
     private retries = 0;
     private generation = 0;
     private lastReceived = 0;
+    private recoveryStarted?: number;
     private url: string;
     private resumeToken?: string;
     private readonly resumeScope: string;
@@ -122,6 +128,7 @@ export class NetworkManager {
         receivedCount: 0, receivedChars: 0, parseMs: 0, parseMaxMs: 0,
         invalidCount: 0, ignoredCount: 0, sentCount: 0, sendFailures: 0,
         receivedBytes: 0, applyMs: 0, applyMaxMs: 0, joinMs: 0, reconnectCount: 0, lastCloseCode: 0,
+        lastFailure:undefined as ConnectionFailure | undefined,lastMessageAgeMs:0,failureHidden:0,recoveryMs:0,
         rttMs:0,rttMinMs:0,rttMaxMs:0,rttJitterMs:0,
     };
 
@@ -177,7 +184,7 @@ export class NetworkManager {
             const generation = this.generation;
             if (this.socket?.readyState === WebSocket.OPEN && this.credentials) {
                 this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, ...(this.resumeToken ? {resumeToken:this.resumeToken} : {}) });
-                this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
+                this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.', 'join-timeout'), this.options.joinTimeoutMs ?? 8_000);
             }
             // Still opening: its open handler sends the real join now that `held` is clear.
             return;
@@ -240,7 +247,7 @@ export class NetworkManager {
             socket = prepared && prepared.socket.readyState<=WebSocket.OPEN ? prepared.socket
                 : (this.options.createSocket ?? (url => new WebSocket(url)))(this.url);
         } catch {
-            this.failed(generation, 'Could not connect to the game.');
+            this.failed(generation, 'Could not connect to the game.', 'connect-error');
             return;
         }
         this.socket = socket;
@@ -248,11 +255,11 @@ export class NetworkManager {
         const openedAt=performance.now();
         const current = () => generation === this.generation && this.socket === socket;
         // A held join waits for the real one before the join clock starts (`connect`).
-        if (!this.held) this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
+        if (!this.held) this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.', 'join-timeout'), this.options.joinTimeoutMs ?? 8_000);
         const join = () => {
             if (!current() || !this.credentials) return;
             this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, ...(this.resumeToken ? {resumeToken:this.resumeToken} : {}), ...(this.held ? {hold:true as const} : {}) });
-            if (!this.held && !this.joinTimer) this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
+            if (!this.held && !this.joinTimer) this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.', 'join-timeout'), this.options.joinTimeoutMs ?? 8_000);
         };
         socket.addEventListener('open', join, {once:true});
         socket.addEventListener('message', event => {
@@ -275,7 +282,7 @@ export class NetworkManager {
             if (!message) {
                 if (decoded?.ack) { this.acknowledge(decoded.ack); return; }
                 this.diagnostics.invalidCount++;
-                this.failed(generation, 'The server sent an incompatible game update.');
+                this.failed(generation, 'The server sent an incompatible game update.', 'invalid-update');
                 return;
             }
             this.lastReceived = Date.now();
@@ -306,7 +313,7 @@ export class NetworkManager {
                 // Apply the complete snapshot before enabling input.
                 try { this.apply(message); } catch (error) {
                     console.error('Could not restore game state', error);
-                    this.failed(generation, 'Could not restore the game.');
+                    this.failed(generation, 'Could not restore the game.', 'apply-error');
                     return;
                 }
                 const actualRoom=assignedRoom??this.pool;
@@ -316,6 +323,7 @@ export class NetworkManager {
                         : `Invited ${publicRoomLabel(this.requestedRoom)} was unavailable. Joined ${publicRoomLabel(actualRoom)}.`
                     : undefined;
                 if(this.invitationIntent)this.invitationReported=true;
+                if(this.recoveryStarted!==undefined){this.diagnostics.recoveryMs=Math.min(86_400_000,Math.max(0,performance.now()-this.recoveryStarted));this.recoveryStarted=undefined;}
                 this.setState('playing',routeMessage);
                 this.startHeartbeat(generation);
                 if (this.stableTimer) clearTimeout(this.stableTimer);
@@ -325,7 +333,7 @@ export class NetworkManager {
             }
             if (message.type === 'error' && this.state !== 'playing') {
                 if (message.code === 'resume-unavailable') this.rememberResume();
-                this.failed(generation, message.message);
+                this.failed(generation, message.message, 'server-error');
                 return;
             }
             if (this.options.receiveMode === 'welcome-only' && SHARED_UPDATES.has(message.type)) {
@@ -335,20 +343,20 @@ export class NetworkManager {
                     this.apply(message);
                 } catch(error) {
                     console.error('Could not apply game update',error);
-                    this.failed(generation,'Could not apply the game update.');return;
+                    this.failed(generation,'Could not apply the game update.', 'apply-error');return;
                 }
             }
             if(decoded?.ack)this.acknowledge(decoded.ack);
         });
         socket.addEventListener('close', event => {
             if (!current()) return;
-            this.diagnostics.lastCloseCode=event.code;
+            this.diagnostics.lastCloseCode=Number.isInteger(event.code)?event.code:0;
             if (event.code===SESSION_REPLACED_CLOSE_CODE) {
-                this.cancelConnection();this.rememberResume();
+                this.recordFailure('session-replaced',this.diagnostics.lastCloseCode);this.cancelConnection();this.rememberResume();
                 this.setState('disconnected','Your rat resumed in another connection.');
-            } else this.failed(generation, 'Connection lost.');
+            } else this.failed(generation, 'Connection lost.', CONNECTION_FAILURES.find(reason=>reason===event.reason)??'close', this.diagnostics.lastCloseCode);
         });
-        socket.addEventListener('error', () => { if (current()) this.failed(generation, 'Connection failed.'); });
+        socket.addEventListener('error', () => { if (current()) this.failed(generation, 'Connection failed.', 'socket-error'); });
         if(socket.readyState===WebSocket.OPEN)join();
     }
 
@@ -358,15 +366,23 @@ export class NetworkManager {
         this.heartbeat = setInterval(() => {
             if (generation !== this.generation) return;
             if (Date.now() - this.lastReceived > interval * 3) {
-                this.failed(generation, 'The connection stopped responding.');
+                this.failed(generation, 'The connection stopped responding.', 'heartbeat-timeout');
                 return;
             }
             this.send({ type: 'ping', sentAt: Date.now() });
         }, interval);
     }
 
-    private failed(generation: number, message: string): void {
+    private recordFailure(kind: ConnectionFailure, code=0): void {
+        this.diagnostics.lastFailure=kind;this.diagnostics.lastCloseCode=code;
+        this.diagnostics.lastMessageAgeMs=this.lastReceived?Math.min(86_400_000,Math.max(0,Date.now()-this.lastReceived)):0;
+        this.diagnostics.failureHidden=typeof document!=='undefined'&&document.hidden?1:0;
+        this.recoveryStarted??=performance.now();
+    }
+
+    private failed(generation: number, message: string, kind: ConnectionFailure, code=0): void {
         if (generation !== this.generation || this.state === 'stopped') return;
+        this.recordFailure(kind,code);
         this.cancelConnection();
         if (this.retries >= (this.options.maxRetries ?? 5)) {
             this.setState('disconnected', `${message} Retry when ready.`);
@@ -390,7 +406,7 @@ export class NetworkManager {
         }
         if (this.socket.bufferedAmount > 256 * 1024) {
             this.diagnostics.sendFailures++;
-            this.failed(this.generation,'The connection is congested.');
+            this.failed(this.generation,'The connection is congested.', 'congestion');
             return false;
         }
         try {
@@ -401,7 +417,7 @@ export class NetworkManager {
             return true;
         } catch {
             this.diagnostics.sendFailures++;
-            this.failed(this.generation, 'Sending a game update failed.');
+            this.failed(this.generation, 'Sending a game update failed.', 'send-error');
             return false;
         }
     }

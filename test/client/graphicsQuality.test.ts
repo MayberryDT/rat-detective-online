@@ -71,10 +71,13 @@ it('recovers when the load drops, slowly, and backs off from a level that failed
 it('keeps the full look on a machine that resolution cannot help',()=>{
     const q=new QualityController(1.5),cpuBound=()=>25;
     const {changes,t}=run(q,0,200,cpuBound);
+    // The sample may end inside a bounded probe; it must restore the full look
+    // within the two-window assessment, not remain degraded on this CPU-bound input.
+    const settled=run(q,t,6,cpuBound);
     expect(q.scale).toBe(1.5);expect(q.tier).toBe('high');
     // Each kind is tried, found useless and put back within seconds; retries wait longer each time.
     expect(changes.length).toBeLessThanOrEqual(12);
-    expect(run(q,t,200,cpuBound).changes.length).toBeLessThanOrEqual(4);
+    expect(run(q,settled.t,200,cpuBound).changes.length).toBeLessThanOrEqual(4);
 });
 
 it('manual modes hold their level whatever the frame time',()=>{
@@ -100,4 +103,22 @@ it('climbs back to the full look when it is slow for reasons the lower levels do
     const {changes}=run(q,0,180,()=>25);
     expect([q.scale,q.tier]).toEqual([1.5,'high']);
     expect(changes.filter(c=>c.scale<.7+1e-9&&c.t>60_000)).toEqual([]);
+});
+
+// A first step can be below the noise margin even when the strongest step pays off.
+// Failure cases: blocking the whole kind after one weak step; staying degraded when
+// even the strongest step fails; repeated unbounded probes on a CPU-bound machine.
+it('tries the stronger extras before rejecting the whole extras ladder',()=>{
+    const q=new QualityController(1);
+    const cost=(c:QualityController)=>c.tier==='low'?26:c.tier==='medium'?39:40;
+    const {changes}=run(q,0,60,cost);
+    expect(changes.some(c=>c.tier==='low'&&c.t<25_000)).toBe(true);
+    expect(run(q,60_000,60,cost).slowShare).toBe(1);
+    expect(q.tier).toBe('low');
+});
+it('tries a stronger resolution when the first reduction is below the gain margin',()=>{
+    const q=new QualityController(1),cost=(c:QualityController)=>c.scale<=.7?25:c.scale<1?38:40;
+    const {changes}=run(q,0,60,cost);
+    expect(changes.some(c=>c.scale===.7&&c.t<30_000)).toBe(true);
+    expect(q.scale).toBe(.7);
 });

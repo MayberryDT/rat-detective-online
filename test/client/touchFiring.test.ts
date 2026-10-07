@@ -15,7 +15,7 @@ import {FeelState} from '../../src/feel/feelState';
 import {HeldFire} from '../../src/session/HeldFire';
 
 const canvasDocument = document;
-beforeEach(() => vi.stubGlobal('document', canvasDocument));
+beforeEach(() => vi.stubGlobal('document', {...canvasDocument,body:{classList:{toggle(){}}}}));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it.each([true, false])('keeps rendering and sends one shot per tap when randomUUID is available: %s', secure => {
@@ -41,7 +41,7 @@ it.each([true, false])('keeps rendering and sends one shot per tap when randomUU
         stage: {syncViewport: () => false, scene, world, camera, renderer: {render}, flashlight: new THREE.SpotLight()},
         simulation: new SimulationClock(), city: {update() {}}, perf: {frame() {}},
         foleyWorld: {listener() {}, motion: new MotionFoley(() => {})},
-        feel: new FeelDirector(new FeelState('on'), undefined),
+        feel: new FeelDirector(new FeelState('on'), {} as Document),
         transport: {state: 'playing', send(message: ClientMessage) {
             expect(parseClientMessage(message)).toEqual(message);
             if (message.type === 'shoot') shots.push(message);

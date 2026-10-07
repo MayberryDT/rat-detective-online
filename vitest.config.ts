@@ -8,6 +8,9 @@ export default defineConfig({
     }),
   ],
   test: {
+    // Each file owns live bot rooms. Bound competing workerd isolates so host
+    // saturation is not mistaken for a five-second delivery failure.
+    maxWorkers: 2,
     include: ['test/worker/**/*.test.ts'],
   },
 });

@@ -24,7 +24,7 @@ by `title-props.ts`. The mugshots are the game's own rats (`src/utils/RatModel.t
 
 ## Rendering
 
-The path tracer is not a project dependency. Install it without saving, then serve `test/visual`:
+The path tracer is not a project dependency. This offline asset generator is excluded from the normal test TypeScript project; install its optional dependencies before rendering it. Install it without saving, then serve `test/visual`:
 
 ```sh
 test/visual/title-assets/fetch.sh

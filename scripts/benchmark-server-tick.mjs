@@ -54,7 +54,7 @@ const spec={seed:341283204,version:GRAYBOX_VERSION};
 const ids=Array.from({length:bots},(_,i)=>`rd-ai-${i}`);
 const players=new Map(ids.map((id,i)=>[id,createPlayer(id,`Rat ${i}`,{hatType:'fedora',hatColor:1,furColor:2,coatColor:3},{x:-100+i*4,y:2,z:-18})]));
 // --room: GameRoom.handleHit's outcome (applyHit, the corpse and death burst, a respawn 3 s later), without its storage and sockets.
-// `rejected`: Mousetrap presses GameRoom answers with a shotResult rejection (still arming, or no room to set it).
+// `rejected`: Mousetrap presses GameRoom answers with a shotResult rejection (no room to set it).
 const room=values.room,hits={hits:0,deaths:0,rejected:0};let sim;
 const onHit=hit=>{
     const victim=players.get(hit.victim);if(!victim||victim.hp<=0)return;

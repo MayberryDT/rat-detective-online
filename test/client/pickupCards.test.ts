@@ -64,16 +64,16 @@ it('shows the held weapon as one card, announces each new weapon once and arms t
     state.buffs={me:{weapon:'tommy-gun',weaponUntil:9000}};draw();draw();
     expect(cards().map(c=>c.className)).toEqual(['powerup-card powerup-tommy-gun']);
     expect(cards()[0]!.innerHTML).toContain('SEC');expect(claims('tommy-gun')).toBe(1);
-    expect(rat.setWeapon).toHaveBeenLastCalledWith('tommy-gun',false);
-    // A Mousetrap just taken is swapped in (its lockout running), and says when it is ready to set down.
+    expect(rat.setWeapon).toHaveBeenLastCalledWith('tommy-gun');
+    // Protocol33 swaps the trap in immediately, ignoring old arming timestamps.
     state.buffs={me:{weapon:'mousetrap',weaponReadyAt:state.time+1000}};draw();draw();
     expect(cards().map(c=>c.className)).toEqual(['powerup-card powerup-mousetrap']);
     const trap=cards()[0]!.innerHTML;
     expect(trap).toContain('CLICK TO SET IT DOWN');expect(trap).toContain('FIRE TO SET IT DOWN');expect(trap).not.toContain('SEC');
-    expect(claims('mousetrap')).toBe(1);expect(rat.setWeapon).toHaveBeenLastCalledWith('mousetrap',true);
+    expect(claims('mousetrap')).toBe(1);expect(rat.setWeapon).toHaveBeenLastCalledWith('mousetrap');
     expect(feedback.mock.calls.filter(([cue])=>cue==='trap-ready')).toHaveLength(0);
     state.time+=1000;state.buffs={me:{weapon:'mousetrap'}};draw();draw();
-    expect(feedback.mock.calls.filter(([cue])=>cue==='trap-ready')).toHaveLength(1);
+    expect(feedback.mock.calls.filter(([cue])=>cue==='trap-ready')).toHaveLength(0);
     // Set down (or expired): the card goes and the pistol comes back.
     state.buffs={};draw();
     expect(cards()).toHaveLength(0);expect(rat.setWeapon).toHaveBeenLastCalledWith(undefined);

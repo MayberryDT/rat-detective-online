@@ -40,7 +40,8 @@ function stepOrder(ladder:number[]):Step[] {
  * share of frames, so one long hitch cannot move anything; gaps over `gap` (hidden tab, title,
  * loading) and the first `warm` ms after them or a respawn are not measured. A step whose next two
  * windows are not `gain` faster than the two before is undone and that kind waits `block` (doubling).
- * Both margins sit above ordinary frame-to-frame noise; a resolution step moves 28-38% of the pixels. */
+ * Before blocking a kind, one bounded probe checks its strongest level against the same baseline;
+ * an ineffective probe restores every step it added. Both margins sit above ordinary frame-to-frame noise; a resolution step moves 28-38% of the pixels. */
 export const AUTO={window:1500,slow:1000/55,calm:1000/58.5,trim:.05,gap:1000,warm:4000,settle:600,gain:.08,cost:.1,probe:8000,probeMax:120000,probeFail:8000,block:60000,blockMax:600000} as const;
 
 /** The quality decision alone: no DOM, fed one timestamp per presented frame. */
@@ -56,7 +57,8 @@ export class QualityController {
     /** The step just taken back up: judged on the two windows after it against the two before. */
     private probe?:{step:Step;before:number;after:number;at:number;stuck:boolean};
     private probeWait=AUTO.probe as number;
-    private check?:{step:Step;before:number;after:number};
+    private check?:{step:Step;before:number;after:number;added:number;deep:boolean};
+    private readonly deepUntil:Record<Step,number>={scale:0,tier:0};
     private readonly blocked:Record<Step,{until:number;wait:number}>={scale:{until:0,wait:AUTO.block},tier:{until:0,wait:AUTO.block}};
 
     constructor(dpr:number,public mode:GraphicsMode='auto',start?:{scale:number;tier:number}){
@@ -76,6 +78,7 @@ export class QualityController {
     /** The window moved to a screen with another pixel ratio: the same steps on the new ladder. */
     setDpr(dpr:number):void {
         if(dpr===this.dpr)return;
+        this.deepUntil.scale=this.deepUntil.tier=0;
         this.dpr=dpr;this.ladder=scaleLadder(dpr);this.order=stepOrder(this.ladder);
         // Medium: about ¾ of High's width, never below native.
         this.medium=this.ladder.findIndex(s=>s<=Math.max(1,this.ladder[0]!*.75)+.01);
@@ -85,6 +88,7 @@ export class QualityController {
         if(mode===this.mode)return;
         this.mode=mode;this.restore(0,0);this.probeWait=AUTO.probe;this.probe=undefined;
         for(const b of Object.values(this.blocked)){b.until=0;b.wait=AUTO.block;}
+        this.deepUntil.scale=this.deepUntil.tier=0;
         this.settle(this.last);
     }
     /** Do not measure for `ms` from `now` (load, respawn, a hidden tab). */
@@ -117,9 +121,19 @@ export class QualityController {
         else if(check){
             this.check=undefined;
             if((check.after+mean)/2>check.before*(1-AUTO.gain)){
-                // No gain: this machine is not limited by what that step saves. Put it back.
+                // One small step below the noise margin does not rule out the whole kind:
+                // medium only thins rain; low also removes grain/haze. Probe the strongest
+                // remaining level once, against the original baseline, before blocking it.
+                const limit=check.step==='tier'?2:this.ladder.length-1;
+                if(!check.deep&&now>=this.deepUntil[check.step]&&this.count[check.step]<limit){
+                    while(this.count[check.step]<limit){this.push(check.step);check.added++;}
+                    this.check={...check,after:0,deep:true};
+                    this.quiet(now,AUTO.settle);return true;
+                }
+                if(check.deep)this.deepUntil[check.step]=now+AUTO.blockMax;
                 const b=this.blocked[check.step];b.until=now+b.wait;b.wait=Math.min(b.wait*2,AUTO.blockMax);
-                this.pop();this.quiet(now,AUTO.settle);return true;
+                for(let i=0;i<check.added;i++)this.pop();
+                this.quiet(now,AUTO.settle);return true;
             }
             this.blocked[check.step].wait=AUTO.block;
         }
@@ -132,12 +146,16 @@ export class QualityController {
                 this.quiet(now,AUTO.settle);return true;
             }
             // Slow before and no worse now: that step was never the bottleneck, so do not take it again soon.
-            if(probe.stuck)this.blocked[probe.step].until=now+this.blocked[probe.step].wait;
+            if(probe.stuck){
+                this.blocked[probe.step].until=now+this.blocked[probe.step].wait;
+                const limit=probe.step==='tier'?2:this.ladder.length-1;
+                if(this.count[probe.step]===limit-1)this.deepUntil[probe.step]=now+AUTO.blockMax;
+            }
         }
         if(this.slowRun>=2){
             const step=this.next(now);
             if(step){
-                this.push(step);this.check={step,before:(mean+before)/2,after:0};
+                this.push(step);this.check={step,before:(mean+before)/2,after:0,added:1,deep:false};
                 this.quiet(now,AUTO.settle);return true;
             }
             // Slow with nothing left worth trying (a processor-bound spell, or a start from last visit's level).

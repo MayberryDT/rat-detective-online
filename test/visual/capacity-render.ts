@@ -1,3 +1,4 @@
+import { GRAYBOX_VERSION } from '../../src/shared/grayboxLayout';
 import * as THREE from 'three';
 import {gpuTimer} from '../../src/session/gpuTimer';
 import {createStage} from '../../src/session/createStage';
@@ -13,7 +14,7 @@ const stage=createStage(new THREE.WebGLRenderer({antialias:true}));
 stage.renderer.setPixelRatio(1);
 stage.renderer.info.autoReset=false;
 const gpu=gpuTimer(stage.renderer.getContext() as WebGL2RenderingContext);let gpuWarm=false;
-const spec={seed:341283204,version:2};
+const spec={seed:341283204,version:GRAYBOX_VERSION};
 const beforeCity=new Set(stage.scene.children);
 const city=new Neighborhood(stage.scene,stage.world,spec);city.generate();
 stage.moonShadow.adoptCity(stage.scene,beforeCity);
