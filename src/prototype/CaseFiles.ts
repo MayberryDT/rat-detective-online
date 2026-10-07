@@ -4,7 +4,7 @@ import {CLUES,visibleClues,type CaseClue} from '../shared/caseClues';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {CASE_RED} from './caseRed';
 
-/** Bright physical paperwork, depth-tested against the city. Three instanced draws for the whole trail. */
+/** Small weathered sheets with a thin red perimeter; three instanced draws for the trail. */
 export class CaseFiles {
     readonly root=new THREE.Group();
     private readonly batches:THREE.InstancedMesh[]=[];
@@ -17,19 +17,46 @@ export class CaseFiles {
     constructor(){
         this.root.name='physical-case-files';
         const parts:THREE.BufferGeometry[][]=[[],[],[]];
-        const part=(kind:number,x:number,y:number,z:number,w:number,h:number,d:number,tilt=0)=>{
-            const geometry=new THREE.BoxGeometry(w,h,d);geometry.rotateZ(tilt);geometry.translate(x,y,z);parts[kind]!.push(geometry);
+        const sheet=(w:number,d:number,x:number,z:number,y:number,yaw:number)=>{
+            const transform=(g:THREE.BufferGeometry)=>{g.rotateY(yaw);g.translate(x,y,z);return g;};
+            // A shallow crease; both paper and rim follow the same piecewise-planar surface.
+            const height=(px:number,_pz:number)=>.025*Math.abs(px)/(w/2);
+            const paper=new THREE.PlaneGeometry(w,d,4,6);paper.rotateX(-Math.PI/2);
+            const positions=paper.getAttribute('position');
+            for(let i=0;i<positions.count;i++)positions.setY(i,height(positions.getX(i),positions.getZ(i)));
+            paper.computeVertexNormals();parts[1]!.push(transform(paper));
+            const border:number[]=[];
+            const edge=(ax:number,az:number,bx:number,bz:number)=>{
+                for(let i=0;i<6;i++){
+                    const t=i/6,u=(i+1)/6;
+                    const a=[ax+(bx-ax)*t,az+(bz-az)*t],b=[ax+(bx-ax)*u,az+(bz-az)*u];
+                    const inner=(p:number[])=>[p[0]!*(1-.024/w),p[1]!*(1-.024/d)];
+                    const c=inner(a),e=inner(b);
+                    for(const p of [a,c,b,b,c,e])border.push(p[0]!,height(p[0]!,p[1]!)+.003,p[1]!);
+                }
+            };
+            edge(-w/2,-d/2,w/2,-d/2);edge(w/2,-d/2,w/2,d/2);
+            edge(w/2,d/2,-w/2,d/2);edge(-w/2,d/2,-w/2,-d/2);
+            const rim=new THREE.BufferGeometry();rim.setAttribute('position',new THREE.Float32BufferAttribute(border,3));rim.computeVertexNormals();parts[0]!.push(transform(rim));
+            for(let k=0;k<5;k++){
+                const line=new THREE.PlaneGeometry(w*(k===4?.35:.58),.009,8);line.rotateX(-Math.PI/2);
+                line.translate(-w*.06,0,-d*.25+k*d*.10);
+                const ink=line.getAttribute('position');
+                for(let i=0;i<ink.count;i++)ink.setY(i,height(ink.getX(i),ink.getZ(i))+.004);
+                line.computeVertexNormals();parts[2]!.push(transform(line));
+            }
         };
-        part(0,0,.025,0,2.6,.05,1.85);part(1,0,.065,0,2.36,.035,1.61);
-        part(0,-.65,.028,-.99,.88,.05,.25);part(1,-.65,.068,-.97,.67,.03,.16);
-        part(0,.38,.20,.11,1.72,.045,1.24,.16);part(1,.38,.235,.11,1.55,.045,1.07,.16);
-        part(0,.18,.30,-.16,.90,.018,.34);part(1,.18,.32,-.16,.70,.012,.16);
-        for(let k=0;k<3;k++)part(2,.19,.32,.19+k*.16,.81-k*.10,.012,.025);
-        for(const [i,color] of [CASE_RED,0xfff4d4,0x403327].entries()){
+        sheet(.72,1.02,0,0,0,-.12);
+        sheet(.60,.85,.22,.08,.012,.38);
+        const materials=[
+            new THREE.MeshBasicMaterial({color:CASE_RED,side:THREE.DoubleSide,toneMapped:false}),
+            new THREE.MeshStandardMaterial({color:0xb9ad8f,roughness:1,side:THREE.DoubleSide}),
+            new THREE.MeshStandardMaterial({color:0x514b40,roughness:1,side:THREE.DoubleSide}),
+        ];
+        for(const [i,material] of materials.entries()){
             const geometry=mergeGeometries(parts[i]!)!;for(const part of parts[i]!)part.dispose();
-            const material=new THREE.MeshBasicMaterial({color,toneMapped:false,fog:false,depthTest:true});
             const mesh=new THREE.InstancedMesh(geometry,material,CLUES.visible);mesh.count=0;mesh.frustumCulled=false;mesh.raycast=()=>{};
-            mesh.name='case-paper-'+i;mesh.userData.noNoir=true;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            mesh.name='case-paper-'+i;mesh.userData.noNoir=i===0;mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
             this.batches.push(mesh);this.root.add(mesh);
         }
     }
@@ -40,7 +67,7 @@ export class CaseFiles {
         this.visibleIds=visible.map(c=>c.id);
         for(const [i,c] of visible.entries()){
             let hash=0;for(const char of c.id)hash=Math.imul(hash,31)+char.charCodeAt(0)|0;
-            this.pose.position.set(c.p.x,c.p.y,c.p.z);this.pose.rotation.y=(hash>>>0)%628/100;this.pose.updateMatrix();
+            this.pose.position.set(c.p.x,c.p.y,c.p.z);this.pose.rotation.y=(hash>>>0)%628/100;this.pose.scale.setScalar(.88+((hash>>>8)%25)/100);this.pose.updateMatrix();
             for(const mesh of this.batches)mesh.setMatrixAt(i,this.pose.matrix);
         }
         for(const mesh of this.batches){mesh.count=visible.length;mesh.instanceMatrix.needsUpdate=true;}
