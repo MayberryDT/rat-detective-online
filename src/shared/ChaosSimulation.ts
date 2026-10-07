@@ -90,7 +90,7 @@ export type RewardReason='streak'|'dispatch'|'bounty';
 export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
     private primaryCase!:CaseRuntime;
-    private clues=new CaseClues();
+    private clues:CaseClues;
     drainClueEvents(){return this.clues.drain();}
     private readonly cases=new Map<string,CaseRuntime>();
     get caseBody():C.Body{return this.primaryCase.body;}
@@ -206,7 +206,8 @@ export class ChaosSimulation {
         for(const c of this.corpses.values())if(c.state.victimId===victimId)found=c.body;
         return found?data(found.position):undefined;
     }
-    constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, spec?:WorldSpec, private readonly fixtureSupplies?:readonly PickupPoint[]) {
+    constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, private readonly spec?:WorldSpec, private readonly fixtureSupplies?:readonly PickupPoint[]) {
+        this.clues=new CaseClues(spec,saved?.clues);
         // The city is mostly static boxes; sweep-and-prune avoids testing every
         // static pair whenever a case or corpse moves.
         this.world.broadphase=new StaticCityBroadphase(this.world);
@@ -1730,18 +1731,12 @@ export class ChaosSimulation {
         }
     }
     private stepClues(now:number):void {
-        const c=this.primaryCase,rat=c.owner?this.players.get(c.owner):undefined;
-        if(c.returningUntil||this.casesWeaponized||this.assignment?.closed){this.clues.step(undefined,now);return;}
-        const p=rat??c.body.position;
-        const floor=this.ray(new C.Vec3(p.x,p.y+.15,p.z),new C.Vec3(p.x,p.y-(rat?.35:1.4),p.z),1);
-        if(!floor.hasHit||floor.hitNormalWorld.y<.7||!rat&&c.body.velocity.length()>1.5){this.clues.step(undefined,now);return;}
-        const y=floor.hitPointWorld.y;
-        // A folder needs a supported footprint, not just its centre on a ledge.
-        for(const [dx,dz] of [[-1.25,-1.25],[1.25,-1.25],[-1.25,1.25],[1.25,1.25]]){
-            const edge=this.ray(new C.Vec3(p.x+dx,y+.2,p.z+dz),new C.Vec3(p.x+dx,y-.25,p.z+dz),1);
-            if(!edge.hasHit||edge.hitNormalWorld.y<.7||Math.abs(edge.hitPointWorld.y-y)>.18){this.clues.step(undefined,now);return;}
-        }
-        this.clues.step({x:p.x,y:y+.035,z:p.z},now);
+        const c=this.primaryCase;
+        if(c.returningUntil||this.assignment?.closed){this.clues.clear();return;}
+        const p=c.owner?this.players.get(c.owner)??c.body.position:c.body.position;
+        const floor=this.ray(new C.Vec3(p.x,p.y+.2,p.z),new C.Vec3(p.x,p.y-40,p.z),1);
+        if(!floor.hasHit||floor.hitNormalWorld.y<.7)return;
+        this.clues.guide(this.players.values(),{x:p.x,y:floor.hitPointWorld.y,z:p.z},now,(a,b)=>!this.ray(new C.Vec3(a.x,a.y+.8,a.z),new C.Vec3(b.x,b.y+.8,b.z),1).hasHit);
     }
     private updateCase(c:CaseRuntime,dt:number,playing:boolean){
         if(c.owner){
@@ -1835,7 +1830,7 @@ export class ChaosSimulation {
         c.armed=this.incidentActive('evidence-tampering')&&!c.owner;
     }
     private restore(s:ChaosState){
-        this.clues=new CaseClues(s.clues);
+        this.clues=new CaseClues(this.spec,s.clues);
         // Room hibernation/reconnection must not restock consumed supplies early.
         for(const saved of s.pickups??[]){
             const site=this.pickups.get(saved.id);

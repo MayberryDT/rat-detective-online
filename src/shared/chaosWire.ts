@@ -249,7 +249,7 @@ export class ChaosDecoder {
  * place or appended. Null when the previous value is no list, an id is unknown, or the delta is malformed. */
 function keyedList(previous:unknown,delta:Record<string,unknown>):unknown[]|null {
   const {put,drop}=delta;
-  if(!Array.isArray(previous)||!Array.isArray(put)||!Array.isArray(drop)||Object.keys(delta).length!==2||put.length>64||drop.length>64||!drop.every(id))return null;
+  if(!Array.isArray(previous)||!Array.isArray(put)||!Array.isArray(drop)||Object.keys(delta).length!==2||put.length>128||drop.length>128||!drop.every(id))return null;
   const gone=new Set<unknown>(drop);
   const list=previous.filter(item=>!(record(item)&&gone.has(item.id)));
   if(gone.size!==drop.length||list.length!==previous.length-gone.size)return null;

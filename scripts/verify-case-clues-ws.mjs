@@ -19,7 +19,7 @@ async function open(resume){
   if(m.type==='error')errors.push(m.message);
   if(m.type==='welcome')c.welcome=m;
   const s=m.type==='chaos'?m.state:m.type==='welcome'?m.chaos:undefined;
-  if(s){assert.ok(Array.isArray(s.clues));assert.ok(s.clues.length<=64);assert.equal(new Set(s.clues.map(x=>x.id)).size,s.clues.length);
+  if(s){assert.ok(Array.isArray(s.clues));assert.ok(s.clues.length<=128);assert.equal(new Set(s.clues.map(x=>x.id)).size,s.clues.length);
    c.states.set(s.time,s.clues);if(c.states.size>1000)c.states.delete(c.states.keys().next().value);
    receipt.frames++;receipt.maxClues=Math.max(receipt.maxClues,s.clues.length);for(const clue of s.clues)receipt.clueIds.add(clue.id);
   }

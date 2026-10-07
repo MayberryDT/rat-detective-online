@@ -125,14 +125,14 @@ export class BotNavigation {
         nodes=this.surfaces(gx*GRID,gz*GRID).map(y=>({id:`${key},${Math.round(y*100)}`,gx,gz,x:gx*GRID,y,z:gz*GRID}));
         this.columns.set(key,nodes);return nodes;
     }
-    private nearest(p:Vec3Data):Node|undefined {
+    private nearest(p:Vec3Data,accept?:(n:Vec3Data)=>boolean):Node|undefined {
         let best:Node|undefined,score=Infinity;
         const gx=Math.round(p.x/GRID),gz=Math.round(p.z/GRID);
         for(let radius=0;radius<=3;radius++) {
             for(let dx=-radius;dx<=radius;dx++)for(let dz=-radius;dz<=radius;dz++) {
                 if(radius&&Math.abs(dx)!==radius&&Math.abs(dz)!==radius)continue;
                 for(const n of this.column(gx+dx,gz+dz)) {
-                    if(Math.abs(p.y-n.y)>4)continue;
+                    if(Math.abs(p.y-n.y)>4||accept&&!accept(n))continue;
                     const d=Math.hypot(n.x-p.x,n.z-p.z)+Math.abs(n.y-p.y)*2;
                     if(d<score){score=d;best=n;}
                 }
@@ -267,6 +267,56 @@ export class BotNavigation {
             if(node.id===goal.id)return path;
             if(!next)return [];
             node=next;
+        }
+        return [];
+    }
+    /** Small visible spill around the start of a route, only on connected supported ground. */
+    paperStart(from:Vec3Data):Vec3Data[]{
+        const start=this.nearest(from);if(!start)return [];
+        return this.neighbors(start).filter(p=>p.gx===start.gx||p.gz===start.gz).map(p=>({x:p.x,y:p.y,z:p.z}));
+    }
+    /** A bounded A* route for physical paperwork. Reuses the same support/body-clearance
+     * graph as rat navigation; never invents a straight segment through the city. */
+    *paperRouteSteps(from:Vec3Data,to:Vec3Data,clear?:(a:Vec3Data,b:Vec3Data)=>boolean):Generator<void,BotWaypoint[]> {
+        const start=this.nearest(from,clear?n=>clear(from,n):undefined),goal=this.nearest(to,clear?n=>clear(to,n):undefined);if(!start||!goal)return [];
+        type Entry={node:Node;cost:number;rank:number};
+        const heap:Entry[]=[],costs=new Map<string,number>([[start.id,0]]),parents=new Map<string,Node>();
+        const push=(e:Entry)=>{let i=heap.length;heap.push(e);while(i){const p=(i-1)>>1;if(heap[p]!.rank<=e.rank)break;heap[i]=heap[p]!;i=p;}heap[i]=e;};
+        const pop=()=>{const first=heap[0]!,last=heap.pop()!;if(heap.length){let i=0;while(i*2+1<heap.length){let c=i*2+1;if(c+1<heap.length&&heap[c+1]!.rank<heap[c]!.rank)c++;if(heap[c]!.rank>=last.rank)break;heap[i]=heap[c]!;i=c;}heap[i]=last;}return first;};
+        // A high roof is approached through its existing launcher, not by searching
+        // every street cell directly below an unreachable vertical destination.
+        const entrance=goal.y>24&&start.y<goal.y-4?[...this.launchEdges.values()]
+            .filter(e=>Math.abs(e.to.y-goal.y)<2&&Math.hypot(e.to.x-goal.x,e.to.z-goal.z)<50)
+            .sort((a,b)=>Math.hypot(a.to.x-goal.x,a.to.z-goal.z)-Math.hypot(b.to.x-goal.x,b.to.z-goal.z))[0]?.from:undefined;
+        const estimate=(p:Vec3Data)=>{const aim=entrance&&p.y<goal.y-4?entrance:goal;return Math.hypot(p.x-aim.x,p.z-aim.z)+Math.abs(p.y-aim.y);};
+        push({node:start,cost:0,rank:estimate(start)});
+        for(let expanded=0;heap.length&&expanded<12000;expanded++){
+            if(expanded&&expanded%64===0)yield;
+            const e=pop(),node=e.node;if(e.cost!==costs.get(node.id))continue;
+            if(node.id===goal.id){
+                const path:BotWaypoint[]=[];let at:Node|undefined=node;
+                while(at){path.push({x:at.x,y:at.y,z:at.z});at=parents.get(at.id);}path.reverse();
+                for(let i=0;i+1<path.length;i++){
+                    const a=path[i]!,b=path[i+1]!;
+                    for(const edge of this.launchEdges.values()){
+                        if(a.x===edge.from.x&&a.y===edge.from.y&&a.z===edge.from.z&&b.x===edge.to.x&&b.y===edge.to.y&&b.z===edge.to.z)a.launch=edge.link;
+                        if(b.x===edge.from.x&&b.y===edge.from.y&&b.z===edge.from.z&&a.x===edge.to.x&&a.y===edge.to.y&&a.z===edge.to.z)a.drop=edge.link.machine.pad;
+                    }
+                }
+                const approach=this.approachStep(goal,{x:to.x,y:to.y+.8,z:to.z});
+                if(approach&&Math.hypot(approach.x-goal.x,approach.z-goal.z)>.1)path.push(approach);
+                return path;
+            }
+            const neighbors=[...this.neighbors(node)];
+            for(const edge of this.launchEdges.values()){
+                if(edge.from.id===node.id)neighbors.push(edge.to);
+                if(edge.to.id===node.id)neighbors.push(edge.from);
+            }
+            for(const next of neighbors){
+                const cost=e.cost+Math.hypot(next.x-node.x,next.y-node.y,next.z-node.z);
+                if(cost>=(costs.get(next.id)??Infinity))continue;
+                costs.set(next.id,cost);parents.set(next.id,node);push({node:next,cost,rank:cost+estimate(next)*2});
+            }
         }
         return [];
     }

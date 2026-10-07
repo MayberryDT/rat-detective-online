@@ -1,6 +1,9 @@
+import {BotNavigation} from './BotNavigation';
+import type {WorldSpec} from './worldSpec';
+import type {PlayerData} from './networkProtocol';
 import type {Vec3Data} from './networkProtocol';
 
-export const CLUES={max:64,visible:3,range:25,spacing:10,lifeMs:25000,freshMs:3000,wornMs:10000} as const;
+export const CLUES={max:128,visible:48,range:65,spacing:4,lifeMs:25000,freshMs:3000,wornMs:10000} as const;
 export interface CaseClue {id:string;p:Vec3Data;at:number;anchored?:true}
 export interface ClueEvent {what:'shed'|'clear';id:string;p:Vec3Data}
 export function clueAge(c:CaseClue,now:number):0|1|2{return now-c.at<CLUES.freshMs?0:now-c.at<CLUES.wornMs?1:2;}
@@ -20,37 +23,64 @@ export function visibleClues(clues:readonly CaseClue[],eye:Vec3Data,now:number,c
     for(const c of nearby)if(canSee(c.p)){visible.push(c);if(visible.length===CLUES.visible)break;}
     return visible;
 }
-/** Bounded authority history, no physics or per-player paths. Only real supported passage emits evidence. */
+/** Shared physical routes, refreshed from each rat toward the current case. Tyler, 7 October:
+ * multiple obvious paper trails at every spawn; no x-ray guidance. */
 export class CaseClues {
     items:CaseClue[]=[];
-    private serial=0;
-    private previous?:Vec3Data;
-    private travelled=0;
+    private readonly navigation?:BotNavigation;
+    private paths=new Map<string,{points:Vec3Data[];target:Vec3Data;at:number}>();
     private events:ClueEvent[]=[];
-    constructor(saved?:CaseClue[]){if(validClues(saved))this.items=structuredClone(saved);}
+    private pending?:{id:string;from:Vec3Data;target:Vec3Data;search:Generator<void,Vec3Data[]>};
+    constructor(spec?:WorldSpec,saved?:CaseClue[]){
+        if(spec)this.navigation=new BotNavigation(spec);
+        if(validClues(saved))this.items=structuredClone(saved);
+    }
     clear():void {
         if(this.items.length)this.events.push({what:'clear',id:this.items[0]!.id,p:{...this.items[0]!.p}});
-        this.items=[];this.previous=undefined;this.travelled=0;
+        this.items=[];this.paths.clear();this.pending=undefined;
     }
-    step(p:Vec3Data|undefined,now:number):void {
-        this.items=this.items.filter(c=>c.anchored||now-c.at<CLUES.lifeMs);
-        if(!p){for(const c of this.items)delete c.anchored;this.previous=undefined;this.travelled=0;return;}
-        const before=this.previous,delta=before?Math.hypot(p.x-before.x,p.y-before.y,p.z-before.z):0;
-        if(delta>6){this.previous=undefined;this.travelled=0;} // discontinuity: no interpolated trail
-        else this.travelled+=delta;
-        // Restore a stationary endpoint without duplicating it on wake.
-        const endpoint=this.items.find(c=>c.anchored);
-        if(!this.previous&&endpoint&&Math.hypot(endpoint.p.x-p.x,endpoint.p.y-p.y,endpoint.p.z-p.z)<1){
-            this.previous={...p};return;
+    guide(players:Iterable<PlayerData>,target:Vec3Data,now:number,clear?:(a:Vec3Data,b:Vec3Data)=>boolean):void {
+        const nav=this.navigation;if(!nav)return;
+        const living=[...players].filter(p=>p.hp>0).sort((a,b)=>Number(a.id.startsWith('rd-ai-'))-Number(b.id.startsWith('rd-ai-')));
+        const ids=new Set(living.map(p=>p.id));for(const id of this.paths.keys())if(!ids.has(id))this.paths.delete(id);
+        const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+        // One bounded slice of the shared walk graph per simulation step; new humans first.
+        if(this.pending&&(!ids.has(this.pending.id)||distance(living.find(p=>p.id===this.pending!.id)!,this.pending.from)>40))this.pending=undefined;
+        if(this.pending?.id.startsWith('rd-ai-')&&living.some(p=>!p.id.startsWith('rd-ai-')&&!this.paths.has(p.id)))this.pending=undefined;
+        if(!this.pending)for(const player of living){
+            const old=this.paths.get(player.id);
+            if(old&&now-old.at<1000)continue;
+            if(old&&distance(old.target,target)<8&&old.points.some(p=>distance(p,player)<6))continue;
+            this.pending={id:player.id,from:{x:player.x,y:player.y,z:player.z},target:{...target},search:nav.paperRouteSteps(player,target,clear)};break;
         }
-        if(!this.previous||this.travelled>=CLUES.spacing){
-            for(const c of this.items)delete c.anchored;
-            const clue:CaseClue={id:'paper-'+now.toString(36)+'-'+(++this.serial).toString(36),p:{...p},at:now,anchored:true};
-            this.items.push(clue);if(this.items.length>CLUES.max)this.items.shift();
-            this.events.push({what:'shed',id:clue.id,p:{...p}});
-            this.travelled=0;
+        if(this.pending){
+            const job=this.pending,result=job.search.next();
+            if(result.done){
+                this.paths.set(job.id,{points:result.value,target:job.target,at:now});
+                if(result.value.length)this.events.push({what:'shed',id:'trail-'+job.id,p:{...result.value[0]!}});
+                this.pending=undefined;
+            }
         }
-        this.previous={...p};
+        const previousClues=new Map(this.items.map(c=>[c.id,c]));
+        const next=new Map<string,CaseClue>();
+        for(const player of living){
+            const points=this.paths.get(player.id)?.points;if(!points?.length)continue;
+            let start=0,nearest=Infinity;
+            points.forEach((p,i)=>{const d=distance(p,player);if(d<nearest){nearest=d;start=i;}});
+            const add=(p:Vec3Data)=>{
+                const id=`paper-${p.x}-${Math.round(p.y*100)}-${p.z}`;
+                next.set(id,{id,p:{x:p.x,y:p.y+.08,z:p.z},at:previousClues.get(id)?.at??now,anchored:true});
+            };
+            const spill=nav.paperStart(points[start]!);for(const p of spill)add(p);
+            let travelled:number=CLUES.spacing;let count=spill.length,previous=points[start]!;
+            for(let i=start;i<points.length&&count<12;i++){
+                const p=points[i]!;travelled+=distance(previous,p);previous=p;
+                if(travelled<CLUES.spacing)continue;
+                travelled=0;count++;
+                add(p);
+            }
+        }
+        this.items=[...next.values()].slice(0,CLUES.max);
     }
     drain():ClueEvent[]{return this.events.splice(0);}
 }

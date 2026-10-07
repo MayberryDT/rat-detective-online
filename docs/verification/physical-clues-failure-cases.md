@@ -18,3 +18,9 @@ Proof: bounded physics/authority → snapshot → compact wire → two receivers
 
 - The retired CaseBeacon leaves its independently scene-parented echo visible at the origin while only its main root is hidden. A reload reconstructs the same phantom case; the real authority objective is elsewhere.
 - A fix must remove every retired beacon mesh from live gameplay, including after welcome/reconnect, while retaining the real case and physical clues. Verify the actual staged browser scene: no visible case-rim echo at render order 1999, a real hot-case object present, and no runtime exceptions.
+
+## Spawn-to-case trails — Tyler's revised direction
+
+Tyler: “just make multiple clues/paper trails that lead to the case every time. no seeing things through buildings anymore.” This supersedes the historical-travel-only research constraint and the three-cluster budget. Keep existing spawns.
+
+Failure scenarios to verify before acceptance: new spawn far from a stationary case has no first papers; path crosses a wall/water or wrong storey; sharp corners disconnect the visual trail; moved/carried/relocated case leaves every trail pointing at an obsolete endpoint; reconnect loses the trail; all ten players overflow the wire/render budget; route computation stalls the room; paper rendering is buried, unreadable, or visible through buildings. Walk-route geometry and browser spawn views are required, not just close-up art.

@@ -1,4 +1,4 @@
-import {visibleClues,clueAge,type CaseClue} from '../caseClues';
+import {visibleClues,type CaseClue} from '../caseClues';
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,enemyTrap,TRAP_REACH,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
 import type {KnownCarrier} from './motor/carriers';
@@ -260,9 +260,8 @@ export class BotGoals {
             return (d<2||(dx*forward.x+dz*forward.z)/d>.64)&&input.clear({...p,y:p.y+.15});
         });
         for(const c of seen)if(distance(self,c.p)<3)this.inspectedClues.add(c.id);
-        // Only the material's three coarse age classes; never sort by hidden timestamps or serial ids.
-        const clue=seen.filter(c=>!this.inspectedClues.has(c.id)&&!motor.suppressed('clue:'+c.id,c.p,now))
-            .sort((a,b)=>clueAge(a,time)-clueAge(b,time))[0];
+        // Follow the same visible paperwork as a person, without hidden timestamps.
+        const clue=seen.find(c=>!this.inspectedClues.has(c.id)&&!motor.suppressed('clue:'+c.id,c.p,now));
         const ctx:GoalContext={...input,active,visible,carrier,available,combat,clue,sighting:motor.sighted,pickup,armor,pillars,delivery,
             intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,offered:[],memo:{},
             places:goal=>(ctx.memo.options??={})[goal]??=this.placeOptions(goal,ctx)};
@@ -350,7 +349,7 @@ export class BotGoals {
     private exploration(ctx:GoalContext):Exploration {
         if(ctx.memo.explore)return ctx.memo.explore;
         const {now,self}=ctx,m=this.motor;
-        if(ctx.clue&&!ctx.carrying){const c=ctx.clue,place={key:'clue:'+c.id,index:m.wander,point:{...c.p},what:['fresh','worn','old'][clueAge(c,ctx.state?.time??now)]+' paperwork, '+where(self,c.p)};
+        if(ctx.clue&&!ctx.carrying){const c=ctx.clue,place={key:'clue:'+c.id,index:m.wander,point:{...c.p},what:'paper trail, '+where(self,c.p)};
             return ctx.memo.explore={kept:false,options:[place],choice:place};}
         if(m.mode==='explore'&&m.destination&&!m.suppressed(m.key,m.destination,now)&&distance(self,m.destination)>=3&&now<=this.explorationAt+20000){
             const point=m.destination;
