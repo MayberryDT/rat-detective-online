@@ -1,3 +1,4 @@
+import {visibleClues,clueAge,type CaseClue} from '../caseClues';
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
 import {distance,enemyTrap,TRAP_REACH,type BotMotor,type CaseEntry,type MotorNavigation} from './motor';
 import type {KnownCarrier} from './motor/carriers';
@@ -33,7 +34,7 @@ export interface GoalInput {
     cases:readonly CaseEntry[];
     /** Other living rats. */
     living:readonly PlayerData[];
-    /** Other rats carrying a genuine case whose place this rat knows (in sight, else last seen or pinged), nearest first. */
+    /** Other rats carrying a genuine case whose place this rat knows (in sight, else last seen), nearest first. */
     carriers:readonly KnownCarrier[];
     carrying:boolean;
     /** A case changed hands (or started or stopped returning) this tick. */
@@ -48,6 +49,7 @@ interface Post {key:string;point:Vec3Data}
 interface Place extends Post {index:number;what:string}
 /** The situation as goal code sees it: every candidate the old priority ladder weighed. Built once per decision. */
 export interface GoalContext extends GoalInput {
+    clue?:CaseClue;
     active:boolean;
     /** Rats in sight, nearest first. */
     visible:readonly PlayerData[];
@@ -91,6 +93,7 @@ function where(self:Vec3Data,point:Vec3Data):string {
  * time. Holds the per-rat timers those candidates need. Only a carrier scores in a Jurisdiction zone, so the
  * zone is part of keeping the case, never a goal of its own. */
 export class BotGoals {
+    private inspectedClues=new Set<string>();
     private supplyTripAt=0;
     /** The supply the pickup reflex is taking, and when it gives up. */
     private reflexSite?:PickupState;
@@ -112,6 +115,7 @@ export class BotGoals {
         this.places=navigation.explorationTargets();
     }
     reset():void {
+        this.inspectedClues.clear();
         this.reflexSite=undefined;this.reflexUntil=0;this.supplyTripAt=0;this.dispatchGiveUpAt=0;this.dispatchDetour='';
         this.deliveryKey='';this.deliveryEntering=false;this.fleeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
@@ -123,6 +127,7 @@ export class BotGoals {
         const {now,self,state}=input,time=state?.time??now;
         const evidence=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='evidence-tampering';
         return input.carrying||evidence?undefined:input.cases.filter(({key,value})=>!value.owner&&value.returningUntil<=time&&
+            distance(self,value.p)<60&&input.clear(value.p)&&
             (value.previousOwner!==self.id||value.pickupAfter<=time)&&!this.motor.suppressed(key,value.p,now))
             .sort((a,b)=>distance(self,a.value.p)-distance(self,b.value.p))[0];
     }
@@ -247,7 +252,18 @@ export class BotGoals {
         }
         const goal=available?.value.p??(!carrying?carrier?.p:undefined)??zone?.point??delivery?.point??(carrying&&active?combat:undefined);
         const pickup=active&&goal?undefined:this.wantedPickup(state,self,now,input.clear);
-        const ctx:GoalContext={...input,active,visible,carrier,available,combat,sighting:motor.sighted,pickup,armor,pillars,delivery,
+        const papers=state?.clues??[],ids=new Set(papers.map(c=>c.id));
+        for(const id of this.inspectedClues)if(!ids.has(id))this.inspectedClues.delete(id);
+        const forward={x:2*(self.meshQx*self.meshQz+self.meshQw*self.meshQy),z:1-2*(self.meshQx*self.meshQx+self.meshQy*self.meshQy)};
+        const seen=visibleClues(papers,self,time,p=>{
+            const dx=p.x-self.x,dz=p.z-self.z,d=Math.hypot(dx,dz);
+            return (d<2||(dx*forward.x+dz*forward.z)/d>.64)&&input.clear({...p,y:p.y+.15});
+        });
+        for(const c of seen)if(distance(self,c.p)<3)this.inspectedClues.add(c.id);
+        // Only the material's three coarse age classes; never sort by hidden timestamps or serial ids.
+        const clue=seen.filter(c=>!this.inspectedClues.has(c.id)&&!motor.suppressed('clue:'+c.id,c.p,now))
+            .sort((a,b)=>clueAge(a,time)-clueAge(b,time))[0];
+        const ctx:GoalContext={...input,active,visible,carrier,available,combat,clue,sighting:motor.sighted,pickup,armor,pillars,delivery,
             intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,offered:[],memo:{},
             places:goal=>(ctx.memo.options??={})[goal]??=this.placeOptions(goal,ctx)};
         ctx.offered=GOALS.filter(goal=>this.offers(goal,ctx));
@@ -281,10 +297,10 @@ export class BotGoals {
             return supply&&{goal,mode:'pickup',key:`pickup:${supply.id}`,destination:supply};
         }
         case 'mischief':{const pillar=pick(ctx.pillars);return pillar&&{goal,mode:'dispatch',key:pillar.key,destination:pillar.point};}
-        case 'take-case':return ctx.available&&{goal,mode:'case',key:ctx.available.key,destination:ctx.available.value.p};
+        case 'take-case':return ctx.available&&{goal,mode:'case',key:ctx.available.key,destination:{...ctx.available.value.p}};
         case 'chase-carrier':{
             if(ctx.intercept)return {goal,mode:'intercept',key:ctx.intercept.key,destination:ctx.intercept.point};
-            // A carrier in sight is followed live; one out of sight is run at where it was last seen or pinged.
+            // A carrier in sight is followed live; one out of sight is run at where it was last seen.
             const c=ctx.carrying?undefined:ctx.carrier;
             return c&&{goal,mode:'carrier',key:`carrier:${c.id}`,destination:c.p,...(c.seen?{follow:c.id}:{})};
         }
@@ -334,6 +350,8 @@ export class BotGoals {
     private exploration(ctx:GoalContext):Exploration {
         if(ctx.memo.explore)return ctx.memo.explore;
         const {now,self}=ctx,m=this.motor;
+        if(ctx.clue&&!ctx.carrying){const c=ctx.clue,place={key:'clue:'+c.id,index:m.wander,point:{...c.p},what:['fresh','worn','old'][clueAge(c,ctx.state?.time??now)]+' paperwork, '+where(self,c.p)};
+            return ctx.memo.explore={kept:false,options:[place],choice:place};}
         if(m.mode==='explore'&&m.destination&&!m.suppressed(m.key,m.destination,now)&&distance(self,m.destination)>=3&&now<=this.explorationAt+20000){
             const point=m.destination;
             return ctx.memo.explore={kept:true,options:[{key:`explore:${m.wander}`,index:m.wander,point,what:`where I was heading, ${where(self,point)}`}]};

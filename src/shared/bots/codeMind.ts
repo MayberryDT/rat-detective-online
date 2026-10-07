@@ -13,7 +13,7 @@ function ladderRank(goal:Goal,ctx:GoalContext):number|undefined {
     case 'chase-carrier':return ctx.intercept?4:5;
     case 'keep-case':return ctx.zone?6:ctx.delivery?7:8;
     case 'hunt':return 10;
-    case 'roam':return 11;
+    case 'roam':return ctx.clue&&!ctx.carrying?5.5:11;
     default:return undefined;
     }
 }

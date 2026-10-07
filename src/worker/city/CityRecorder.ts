@@ -526,7 +526,14 @@ export class CityRecorder {
     }
   }
 
-  session(what: 'join' | 'leave', id: string, now: number): void {
+  clues(events:readonly import('../../shared/caseClues').ClueEvent[],now:number):void {
+    for(const e of events){const place=this.places.at(e.p.x,e.p.y,e.p.z).id;
+      this.measure(now,place,'clue:'+e.what);
+      this.emit({...this.context(now),type:'clue',what:e.what,id:e.id,p:[e.p.x,e.p.y,e.p.z],place});
+    }
+  }
+
+  session(what: 'join' | 'leave' , id: string, now: number): void {
     this.emit({ ...this.context(now), type: 'session', what, a: this.actor(id), ...this.ratFlags(id) });
   }
 

@@ -27,9 +27,7 @@ export function beatPhase(c: CaseState, now: number): number {
     const t = sincePing(c, now);
     return t === Infinity ? 0 : (t % CHAOS_TUNING.casePingMs) / CHAOS_TUNING.casePingMs;
 }
-/** Where a rat may know a case is without seeing it: a loose case where it lies, a case it carries itself, and a case
- * someone else carries at its latest ping (null before the first). The same rule for humans and bots; sight of the
- * carrier is the only other source. */
+/** Only one's own case is known from this state alone. Other knowledge must come from direct sight. */
 export function caseLastSeen(c: CaseState, viewerId: string | null): Vec3Data | null {
-    return !c.owner || c.owner === viewerId ? c.p : c.ping?.p ?? null;
+    return c.owner !== null && c.owner === viewerId ? c.p : null;
 }

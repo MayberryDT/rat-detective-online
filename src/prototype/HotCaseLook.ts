@@ -8,7 +8,6 @@ import { beatPhase, pingFlash } from '../shared/caseHeartbeat';
 import { reducedMotion } from '../ui/motion';
 import type { CaseMaterials } from './CaseModel';
 import { HeatSparks, SPARK_EMBER, SPARK_SMOKE } from './HeatSparks';
-import { HeatPrints } from './HeatPrints';
 
 /** One case material's red-hot look: albedo, emissive colour, emissive at rest (`base`) and added at a ping (`flare`),
  * surface, and how much it flickers like coal. */
@@ -49,7 +48,7 @@ const anchorPosition = new THREE.Vector3(), anchorQuaternion = new THREE.Quatern
 const wrist = new THREE.Vector3(), wristQuaternion = new THREE.Quaternion(), axis = new THREE.Vector3(), up = new THREE.Vector3();
 const loop = new THREE.Vector3(), from = new THREE.Vector3(), to = new THREE.Vector3(), span = new THREE.Vector3(), reach = new THREE.Vector3();
 const point = new THREE.Vector3(), tangent = new THREE.Vector3(), scale = new THREE.Vector3(), turn = new THREE.Quaternion(), bow = new THREE.Vector3();
-const matrix = new THREE.Matrix4(), viewer = new THREE.Vector3();
+const matrix = new THREE.Matrix4();
 
 /** The coat's red-hot edges: the carrier's batched rig drawn again as a hair-thin shell over its coat only, painted
  * only along the silhouette where the coat turns away from the eye, and blended over (not added to) the coat so a
@@ -84,10 +83,10 @@ interface HeatedMaterial { material: THREE.MeshStandardMaterial; heat: Heat; col
 /** The carried hot case and its carrier (Tyler, 2 October), in direct sight and depth-tested for everyone, the carrier
  * included: the case turns red-hot metal (coal-glowing seams, edges and corners, a faint heat haze, smoke) and is
  * handcuffed to the rat's wrist by a short steel chain; the rat gets red-hot coat edges, a red hat band, embers rising
- * off it and glowing paw prints near the camera. Every glow beats on the case's heartbeat (`caseHeartbeat`): a big
+ * off it. Every glow beats on the case's heartbeat (`caseHeartbeat`): a big
  * flare at each ping. The through-wall ping flash is `HeartbeatPing`'s. A loose case keeps its leather look.
  *
- * About five draws while carried (chain, sparks, prints, coat rim, hat band), none loose; all buffers preallocated. */
+ * About four draws while carried (chain, sparks, coat rim, hat band), none loose; all buffers preallocated. */
 export class HotCaseLook {
     private readonly root = new THREE.Group();
     private readonly heated: HeatedMaterial[] = [];
@@ -95,7 +94,6 @@ export class HotCaseLook {
     private readonly chain: THREE.InstancedMesh;
     private readonly steel: THREE.MeshStandardMaterial;
     private readonly sparks = new HeatSparks();
-    private readonly prints = new HeatPrints();
     private readonly coatUniforms = { heatGlow: { value: 0 }, heatFlare: { value: 0 }, heatCoat: { value: -1 } };
     private readonly coatMaterial = coatHeatMaterial(this.coatUniforms);
     private coat: THREE.SkinnedMesh | null = null;
@@ -110,7 +108,6 @@ export class HotCaseLook {
     private time = 0;
     private lastRender = NaN;
     private pingAt = NaN;
-    private ratY = 0;
     private emberDue = 0; private caseEmberDue = 0; private smokeDue = 0;
 
     constructor(private readonly scene: THREE.Scene, private readonly caseRoot: THREE.Object3D, materials: CaseMaterials) {
@@ -132,14 +129,14 @@ export class HotCaseLook {
         // Follows the carrier's (hidden, batched) hat band leaf exactly, at draw time.
         this.band.matrixAutoUpdate = false; this.band.matrixWorldAutoUpdate = false;
         this.band.onBeforeRender = () => { if (this.bandSource) this.band.matrixWorld.multiplyMatrices(this.bandSource.matrixWorld, BAND_GROW); };
-        this.root.add(this.chain, this.sparks.mesh, this.prints.mesh);
+        this.root.add(this.chain, this.sparks.mesh);
         this.root.visible = false;
         scene.add(this.root);
     }
 
     /** Per frame, after the case's pose. `state` is this case, `now` the view's server-time clock, `renderTime` the
      * presentation clock (ms); `carrier` the live rat carrying it (null loose) and `anchor` its case grip's anchor. */
-    update(camera: THREE.Camera, renderTime: number, state: CaseState, now: number, carrier: RatEntity | null, anchor: THREE.Object3D | null): void {
+    update(_camera: THREE.Camera, renderTime: number, state: CaseState, now: number, carrier: RatEntity | null, anchor: THREE.Object3D | null): void {
         const dt = Number.isFinite(this.lastRender) ? Math.max(0, Math.min(.1, (renderTime - this.lastRender) / 1000)) : 0;
         this.lastRender = renderTime;
         if (carrier !== this.rat) { this.detach(); if (carrier) this.attach(carrier); }
@@ -163,10 +160,6 @@ export class HotCaseLook {
         this.bandMaterial.color.setRGB(.55 + .45 * k, .015 + .1 * k * k, .008 + .04 * k * k);
         // Embers, smoke and shimmer move; reduced motion keeps only the glow.
         if (motion) { this.emit(dt, p, shown, glow, flare, pinged); this.sparks.step(dt); } else this.sparks.clear();
-        const vy = dt > 0 ? (p.y - this.ratY) / dt : 0;
-        this.ratY = p.y;
-        viewer.setFromMatrixPosition(camera.matrixWorld);
-        this.prints.update(dt, p.x, p.y, p.z, shown && Math.abs(vy) < 1.5 && !carrier.launchFlight, viewer, Math.min(1, .7 * this.heat + .3 * flare + .2));
     }
 
     /** Back to the loose look at once (round reset, reconnect). */
@@ -179,20 +172,18 @@ export class HotCaseLook {
         this.sparks.shimmer(this.caseRoot.position.x, this.caseRoot.position.y + .6, this.caseRoot.position.z, 1, 1, 1);
         this.sparks.emit(SPARK_EMBER, 0, 1, 0, 0, 0, 0, 1, .1); this.sparks.emit(SPARK_SMOKE, 0, 1, 0, 0, 0, 0, 1, .3);
         this.sparks.step(0);
-        this.prints.update(0, 0, 0, 0, false, rat.mesh.position, 1);
-        this.prints.mesh.visible = true;
     }
 
     dispose(): void {
         this.detach();
         this.root.removeFromParent();
         this.chain.geometry.dispose(); this.chain.dispose(); this.steel.dispose();
-        this.sparks.dispose(); this.prints.dispose();
+        this.sparks.dispose();
         this.coatMaterial.dispose(); this.bandMaterial.dispose(); this.noBand.dispose();
     }
 
     private attach(rat: RatEntity): void {
-        this.rat = rat; this.heat = 0; this.pingAt = NaN; this.ratY = rat.mesh.position.y;
+        this.rat = rat; this.heat = 0; this.pingAt = NaN;
         const batch = rat.mesh.getObjectByName('rat-rigid-batch');
         if (batch instanceof RigidBatch) {
             // The batch's buffers drawn again (without the tail), skinned by the same bones, as the sketch does.
@@ -222,7 +213,7 @@ export class HotCaseLook {
         }
         this.band.removeFromParent(); this.band.geometry = this.noBand; this.bandSource = null;
         this.rat = null; this.heat = 0;
-        this.sparks.clear(); this.prints.clear(); this.chain.count = 0;
+        this.sparks.clear(); this.chain.count = 0;
         this.emberDue = this.caseEmberDue = this.smokeDue = 0;
         this.root.visible = false;
         if (this.hot) this.cool();

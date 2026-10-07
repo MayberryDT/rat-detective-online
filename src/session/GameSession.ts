@@ -1,3 +1,4 @@
+import * as CANNON from 'cannon-es';
 import { SURGE } from '../shared/launcherVelocity';
 import { actionBound, lookDelta } from '../settings/PlayerPreferences';
 import {FoleyAudio} from '../audio/FoleyAudio';
@@ -31,7 +32,6 @@ import { NormalGameBots, normalGameBotCount } from './NormalGameBots';
 import { muzzleAtPose } from '../utils/muzzlePose';
 import { incidentInfo, type IncidentId } from '../shared/incidentCatalog';
 import { LAUNCH_MACHINES, PRESSURE_TUNING, type ChaosState, type LaunchMachine } from '../shared/chaosState';
-import { caseLastSeen } from '../shared/caseHeartbeat';
 import { FAULTY_COPY, PICKUP_TUNING, WEAPON_TUNING, faultyOf, heldWeapon, jumpBlocked, legScale, shortedOut, trapped, type WeaponKind } from '../shared/pickups';
 import { tommyHeat } from '../shared/shotPattern';
 import { laserPath } from '../shared/laser';
@@ -66,9 +66,6 @@ import {qualityFrame,qualityStatus,settleQuality} from './graphicsQuality';
 /** Reused per-frame scratch for polish-17 audio (one live session at a time). */
 const FOOTSTEP_SOURCES:{id:string;position:THREE.Vector3;grounded?:boolean}[]=[];
 const HEAD_POSITION=new THREE.Vector3();
-/** The death recap's arrow: the case in the camera's frame. */
-const RECAP_LOCAL=new THREE.Vector3();
-const RECAP_INVERSE=new THREE.Quaternion();
 const LANDING_POSITION=new THREE.Vector3();
 /** Where a refused Mousetrap would have gone (its NO ROOM word). */
 const TRAP_SPOT=new THREE.Vector3();
@@ -422,6 +419,14 @@ export class GameSession {
         this.remotes.snapshot(message.players, this.myId);
         this.gun.authoritative=this.worldSpec.version===GRAYBOX_VERSION;
         if(this.gun.authoritative)this.chaos=new ChaosView(this.stage.scene,id=>id===this.myId?this.rat?.entity:this.remotes.get(id),this.stage.listener.context as AudioContext,true,(cue,origin)=>this.feedback.play(cue,origin),this.foleyWorld,this.gun.tracePresentation);
+        if(this.chaos){
+            const hit=new CANNON.RaycastResult(),from=new CANNON.Vec3(),to=new CANNON.Vec3();
+            this.chaos.caseFiles.clearSight=p=>{
+                const eye=this.stage.camera.position;from.set(eye.x,eye.y,eye.z);to.set(p.x,p.y+.2,p.z);hit.reset();
+                return !this.stage.world.raycastClosest(from,to,{collisionFilterMask:1,skipBackfaces:true},hit);
+            };
+        }
+
         if(this.chaos){
             // K3: your ping pulse and heartbeat while you carry the buffed case (never while observing).
             this.chaos.onCarry=(mine,now,urgency)=>this.feel.hotCase(this.observing?null:mine,now,urgency);
@@ -869,17 +874,7 @@ export class GameSession {
         this.feel.update(dt,camera,this.rat?.entity.mesh.position);
         document.body.classList.toggle('heavy-cheese',this.feel.heavyActive);
         this.story?.update(camera,this.rat&&!this.rat.entity.dead?this.rat.entity.mesh.position:undefined);
-        // Dead: the recap's arrow toward the case: a loose one where it lies, someone else's at its latest heartbeat ping
-        // (never the live carrier; none before the first ping).
-        if(this.rat?.entity.dead&&this.lastChaos){
-            const seen=caseLastSeen(this.lastChaos.case,this.myId);
-            if(!seen)this.hud.pointRecap(undefined,0,'');
-            else{
-                RECAP_LOCAL.set(seen.x,seen.y,seen.z).sub(camera.position);const metres=RECAP_LOCAL.length();
-                RECAP_LOCAL.applyQuaternion(RECAP_INVERSE.copy(camera.quaternion).invert());
-                this.hud.pointRecap(Math.atan2(RECAP_LOCAL.x,-RECAP_LOCAL.z),metres,'THE CASE');
-            }
-        }
+        if(this.rat?.entity.dead)this.hud.pointRecap(undefined,0,'');
         if(this.pendingResults!==undefined&&now>=this.pendingResults&&this.roundWon)this.showResultsBoard();
         if(this.pendingLineup&&now>=this.pendingLineup.at){this.lineup?.start(this.pendingLineup.entries);this.feel.endDeathCamera(camera);this.pendingLineup=undefined;}
         if(this.lineup?.active)this.lineup.update(dt,camera,flashlight);

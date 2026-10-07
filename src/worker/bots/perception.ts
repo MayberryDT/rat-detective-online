@@ -166,8 +166,8 @@ export function perceive(ctx:GoalContext,memory:RatMemory):RatView {
         :`, last ${carrier.pinged?'pinged':'seen'} ${where(self,carrier.p)} ${time-carrier.at<1000?'just now':time-carrier.at<6000?'a few seconds ago':'a while ago'}`;
     const caseText=!c?'There is no case in play.':c.owner===self.id?'I am carrying the case.'
         :c.returningUntil>time?'The case is being returned and cannot be taken yet.'
-        :c.owner?`${alias(c.owner)} carries the case${carried}.`
-        :`Nobody holds the case; it lies ${where(self,c.p)}.`;
+        :c.owner?carrier?`${alias(c.owner)} carries the case${carried}.`:'Someone has the case; I have not seen where.'
+        :ctx.available?`Nobody holds the case; I can see it ${where(self,ctx.available.value.p)}.`:'The case is loose; I have not seen where.';
 
     let standing='No assignment is running.';
     if(assignment)standing=assignment.phase==='briefing'?'The assignment is about to start.':assignment.phase==='suspended'?'The assignment is paused.'
@@ -305,6 +305,6 @@ function describe(goal:Goal,ctx:GoalContext,alias:(id:string)=>string):string {
     }
     case 'ambush':return 'Wait where the rat carrying the case must pass, and shoot it as it arrives.';
     case 'mischief':return 'Ring a Dispatch alarm pillar to start a random city incident.';
-    case 'roam':return 'Move on through the city, looking for a fight or an opening.';
+    case 'roam':return ctx.clue?'Investigate the visible paperwork, then search nearby for the case or more evidence.':'Move on through the city, looking for a fight or an opening.';
     }
 }

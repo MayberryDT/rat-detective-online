@@ -1,16 +1,14 @@
+import {CaseFiles} from './CaseFiles';
 import { effectsOutput, type VoiceRoute } from '../audio/PlayerAudioMix';
 import { JurisdictionZones } from './JurisdictionZones';
 import type {FoleyWorld} from '../audio/FoleyWorld';
 import { createCaseGrip, disposeCaseGrip } from './CaseGrip';
-import {setText} from '../ui/setText';
-import {clearAimLabel} from '../ui/aimClearance';
 import {fly, leave} from '../ui/motion';
 import {headlines} from '../ui/Headlines';
 import { ExtraCaseVisual } from './ExtraCaseVisual';
 import * as THREE from 'three';
 import type { CaseState, ChaosState, CorpseState, LaunchMachine, SurgeVent, TrapState } from '../shared/chaosState';
 import { CHAOS_TUNING, CASE_LOOSE_SCALE } from '../shared/chaosState';
-import { pingFlash, pingPunch, sincePing } from '../shared/caseHeartbeat';
 import { BALL_RADIUS } from '../shared/ballTuning';
 import { createRatMesh, ratAccessory } from '../utils/RatModel';
 import { RatAnimator } from '../utils/RatAnimator';
@@ -184,6 +182,7 @@ export class ChaosView {
      * near it is to scoring (`caseUrgency`), for the carrier's ping pulse and heartbeat. */
     onCarry?:(mine:CaseState|null,now:number,urgency:number)=>void;
     private readonly pendingInteractions=new Map<string,InteractionCandidate>();
+    readonly caseFiles=new CaseFiles();
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
     private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
     private readonly caseBeacon:CaseBeacon;
@@ -194,11 +193,6 @@ export class ChaosView {
     private readonly hud?:DispatchHud;
     private readonly jurisdictionZones:JurisdictionZones;
     private readonly assignmentDestinations?:AssignmentDestinations;
-    private readonly caseMarker?:HTMLElement;
-    private readonly caseMarkerDetail?:HTMLElement;
-    /** At a ping, an arrow on the screen edge toward an off-screen carrier; `markerPunch` the tag's snap as written. */
-    private readonly caseArrow?:HTMLElement;
-    private markerPunch=-1;
     private readonly impacts:CheeseImpactEffects;
     /** Crossfire's bounce sparks, scorches and ricochets, a bank kill's path and your aim guide. */
     readonly crossfire:CrossfireVisual;
@@ -285,6 +279,7 @@ export class ChaosView {
     }
     /** `replay`: an exhibit replay's view (`ChaosReplay`); `audio` then only voices its machines and pillars on the replay route. */
     constructor(private readonly scene:THREE.Scene,private resolveRat:(id:string)=>RatEntity|undefined,private audio?:AudioContext,private extrapolate=true,private feedback?:(cue:FeedbackCue,origin?:Vec3Data)=>void,private foley?:FoleyWorld,traceShot?:ShotTrace,private readonly replay?:ChaosReplay){
+        scene.add(this.caseFiles.root);
         this.clock=replay?.clock??(()=>performance.now());this.synth=replay?.synth??playSynth;
         this.reactions=new RatReactionEvents(resolveRat);
         this.localShots=new LocalShotPresentation(traceShot);
@@ -302,17 +297,6 @@ export class ChaosView {
         if(!replay){
             this.hud=new DispatchHud(frequency=>this.feedback?this.feedback('tick'):this.bell(frequency),this.feedback);
             this.assignmentDestinations=new AssignmentDestinations();
-            // DOM projection stays crisp at city scale and visible through all architecture.
-            // It adds no dynamic lights, raycasts, or physics to the physical case.
-            // U1, Carbon scrawl in the case red (dispatchHud.css .hot-case-tag); its position is set each frame.
-            const marker=this.caseMarker=document.createElement('div'),detail=this.caseMarkerDetail=document.createElement('div'),arrow=this.caseArrow=document.createElement('i');
-            marker.className='hot-case-tag';marker.style.display='none';
-            marker.setAttribute('aria-label','Hot Case location');
-            const title=document.createElement('div');title.className='hot-case-title';title.textContent='HOT CASE';
-            detail.className='hot-case-detail';
-            arrow.className='hot-case-arrow';arrow.hidden=true;
-            for(const child of [arrow,title,detail])marker.appendChild(child);
-            document.body.appendChild(marker);
             const bar=this.buffBar=document.createElement('div');
             bar.className='pickup-buffs';bar.style.display='none';
             document.body.appendChild(bar);
@@ -366,11 +350,12 @@ export class ChaosView {
         this.buffCards.clear();if(this.buffBar)this.buffBar.style.display=this.buffBar.childElementCount?'flex':'none';
     }
     resetProjectiles():void{
+        this.caseFiles.clear();
         this.localShots.clear();this.beams.clear();this.presentation.clear();this.landings.length=0;this.clearPickupCards();this.clearInteractions();this.reactions.reset();
         // gameReset precedes the new chaos snapshot. Do not render or interact
         // with the previous round's confirmed carrier during that gap.
         this.state=null;this.setCarrier(null);this.hotLook.clear();this.root.visible=false;
-        this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.carrierFlash.hide();if(this.caseMarker)this.caseMarker.style.display='none';
+        this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.carrierFlash.hide();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         this.assignmentDestinations?.clear();this.jurisdictionZones.clear();
     }
@@ -416,7 +401,7 @@ export class ChaosView {
     setLastHitPoint(on:boolean):void {
         if(on===this.lastHitPoint)return;
         this.lastHitPoint=on;
-        if(on){this.caseBeacon.root.visible=false;if(this.caseMarker)this.caseMarker.style.display='none';this.assignmentDestinations?.clear();}
+        if(on){this.caseBeacon.root.visible=false;this.assignmentDestinations?.clear();}
     }
     setFixXray(on:boolean):void {
         if(on===this.fixXray)return;
@@ -735,13 +720,11 @@ export class ChaosView {
             this.caseMotion.loose(wall,Math.hypot(s.case.v.x,s.case.v.y,s.case.v.z));
         }
         this.caseMotion.finish(dt,wall);
+        this.caseFiles.update(s.clues??[],now,camera);
         this.hotLook.update(camera,renderTime,s.case,now,this.carrier,this.arm?.parent??null);
-        // The hot case's red outline through walls: a loose case's gentle pulse; someone else's carried case, and its
-        // carrier's whole body, only at each heartbeat ping (a bright flash fading to nothing), never between.
-        const others=!!s.case.owner&&s.case.owner!==this.myId,flash=others?pingFlash(s.case,now):0,punch=others?pingPunch(s.case,now):0;
-        this.caseBeacon.update(this.caseRoot,camera,!!this.carrier?.isPlayer||this.lastHitPoint,wall,s.case.owner?flash:null);
-        this.carrierFlash.update(camera,this.lastHitPoint||this.carrier?.isPlayer?null:this.carrier,flash,punch,others?sincePing(s.case,now):Infinity);
-        this.pingPunch=punch;
+        // Physical evidence replaces the primary case's through-wall and screen locators.
+        this.caseBeacon.root.visible=false;
+        this.carrierFlash.hide();
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
         if(this.buffBar)this.updateBuffs(s.buffs,now);
@@ -750,7 +733,7 @@ export class ChaosView {
             this.onCarry(mine?s.case:null,now,mine?this.caseUrgency(s):0);
         }
         if(this.claimed){const kind=this.claimed;this.claimed=undefined;this.claim(kind,camera);}
-        if(this.caseMarker)this.updateCaseMarker(camera,flash);
+
         if(this.fixXray)this.updateFixBeacons(camera,now);
         this.bullets.count=0;this.chargedBullets.count=0;this.chargedGlow.count=0;this.missileTrail.count=0;this.dangerGlow.count=0;this.dangerTrails.count=0;
         const active=s.dispatch.phase==='active'?incidentInfo(s.dispatch.incident).id:undefined,crossfire=active==='crossfire';
@@ -952,34 +935,6 @@ export class ChaosView {
         }
     }
     /** The marker's inline opacity while it shows a ping (-1: the stylesheet's). */
-    private markerFlash=-1;
-    /** The HOT CASE tag: over a loose or returning case with its status and distance; over someone else's carried case
-     * only at a heartbeat ping (`flash`), where it pinged, fading with the flash; never over your own. */
-    private pingPunch=0;
-    private updateCaseMarker(camera:THREE.Camera,flash:number){
-        const s=this.state!,ping=s.case.owner?s.case.ping:undefined;
-        if(!this.caseMarker||!this.caseArrow||!this.caseMarkerDetail)return;
-        if(this.carrier?.isPlayer||this.lastHitPoint||s.case.owner&&(!ping||flash<=0)){this.caseMarker.style.display='none';return;}
-        // Float the badge above the case so it does not cover the physical pickup
-        // or a carrier's gun at close range. The bright shell outline marks its body.
-        // A ping's tag floats clear above the carrier's flash, however tall the far sign has grown.
-        if(ping)this.p.set(ping.p.x,ping.p.y+Math.max(2.1,this.carrierFlash.top+.4),ping.p.z);else{this.p.copy(this.caseRoot.position);this.p.y+=2.1;}
-        const location=locateCase(this.p,camera,window.innerWidth,window.innerHeight);
-        this.caseMarker.style.display='block';
-        // The badge follows the case in world space; its label hangs below it (a ping's sits above the flash instead).
-        const label=clearAimLabel(location.x,location.y+(ping?-24:15),190,90,window.innerWidth,window.innerHeight);
-        this.caseMarker.style.transform=`translate(${label.x-87}px,${label.y-32}px)`;
-        const tag=ping?'hot-case-tag carried':'hot-case-tag';if(this.caseMarker.className!==tag)this.caseMarker.className=tag;
-        const opacity=ping?Math.round(flash*20)/20:-1;
-        if(opacity!==this.markerFlash){this.markerFlash=opacity;this.caseMarker.style.opacity=opacity<0?'':String(opacity);}
-        // A ping's tag lands big and settles; off screen, an arrow on the edge points the way while the flash lasts.
-        const punch=ping?Math.round(this.pingPunch*20)/20:0;
-        if(punch!==this.markerPunch){this.markerPunch=punch;this.caseMarker.style.scale=punch?String(1+.25*punch):'';}
-        const arrow=!!ping&&location.edge;this.caseArrow.hidden=!arrow;
-        if(arrow)this.caseArrow.style.transform=`rotate(${location.angle}rad)`;
-        if(ping)return;
-        setText(this.caseMarkerDetail,`${s.case.returningUntil?'RETURNING':'LOOSE'} · ${Math.round(location.distance)} m${location.behind?' · BEHIND':''}`);
-    }
     /** How near a carried case is to where it scores (the Paper Chase drop-off or the active Jurisdiction zone): 0 from
      * `CASE_TARGET_FAR` units or with no target, 1 there: the hot case heartbeat quickens with it. */
     caseUrgency(s:ChaosState):number {
@@ -998,8 +953,9 @@ export class ChaosView {
         oscillator.connect(gain);gain.connect(effectsOutput(context));oscillator.start();oscillator.stop(context.currentTime+duration);
         oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};
     }
-    getDiagnostics(){return {receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
+    getDiagnostics(){return {clues:this.caseFiles.visibleIds,receivedShots:this.state?.shots.length??0,renderedBalls:this.bullets.count+this.chargedBullets.count,corpses:this.corpses.size,snapshotAgeMs:this.receivedAt?performance.now()-this.receivedAt:null,presentation:this.extrapolate?this.presentation.diagnostics():null};}
     dispose(){
+        this.caseFiles.dispose();
         for(const beacon of this.fixBeacons)beacon.remove();
         for(const c of this.corpses.values())c.hat?.dispose();
         this.clearPickupCards();this.buffBar?.remove();for(const chip of this.claimChips.values())chip.remove();
@@ -1011,7 +967,7 @@ export class ChaosView {
         // Supply sites live at the scene root: a reconnect's new view would otherwise draw over stale ones.
         for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
         this.traps.dispose();for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
-        this.pressureMachine.dispose();this.caseBeacon.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.caseMarker?.remove();this.root.removeFromParent();this.caseRoot.removeFromParent();
+        this.pressureMachine.dispose();this.caseBeacon.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.root.removeFromParent();this.caseRoot.removeFromParent();
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);
         // The incident sounds are the live view's (module-wide); a replay's own voices end with its bus.

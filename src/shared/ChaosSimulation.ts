@@ -1,4 +1,5 @@
 import * as C from 'cannon-es';
+import {CaseClues} from './caseClues';
 import {trapOrigin,trapLaunch,trapAdvance,trapVelocity,TRAP_THROW} from './trapThrow';
 import {resolveShotPattern,tommyHeat} from './shotPattern';
 import {laserPath,type LaserCast} from './laser';
@@ -89,6 +90,8 @@ export type RewardReason='streak'|'dispatch'|'bounty';
 export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
     private primaryCase!:CaseRuntime;
+    private clues=new CaseClues();
+    drainClueEvents(){return this.clues.drain();}
     private readonly cases=new Map<string,CaseRuntime>();
     get caseBody():C.Body{return this.primaryCase.body;}
     private readonly rayQuery=new SpatialRayQuery(this.world);
@@ -424,6 +427,7 @@ export class ChaosSimulation {
         c.body.updateMassProperties();c.body.updateAABB();
     }
     private placeCaseAtSpawn(c=this.primaryCase,awayFrom?:Vec3Data){
+        if(c===this.primaryCase)this.clues.clear();
         this.rayQuery.refresh();
         const walls=[...this.targets].filter(([,target])=>target.kind==='world');
         for(const [body] of walls)body.updateAABB();
@@ -1577,6 +1581,7 @@ export class ChaosSimulation {
         this.syncExtraCases();
         for(const c of this.cases.values())this.updateCase(c,dt,playing);
         this.recordCaseHistory(now);
+        if(playing)this.stepClues(now);
         this.stepPickups(now,playing);
         this.stepTraps(now,playing,dt);
         while(this.beams.length&&now-this.beams[0]!.at>W.laserBeamMs)this.beams.shift();
@@ -1724,6 +1729,20 @@ export class ChaosSimulation {
             }
         }
     }
+    private stepClues(now:number):void {
+        const c=this.primaryCase,rat=c.owner?this.players.get(c.owner):undefined;
+        if(c.returningUntil||this.casesWeaponized||this.assignment?.closed){this.clues.step(undefined,now);return;}
+        const p=rat??c.body.position;
+        const floor=this.ray(new C.Vec3(p.x,p.y+.15,p.z),new C.Vec3(p.x,p.y-(rat?.35:1.4),p.z),1);
+        if(!floor.hasHit||floor.hitNormalWorld.y<.7||!rat&&c.body.velocity.length()>1.5){this.clues.step(undefined,now);return;}
+        const y=floor.hitPointWorld.y;
+        // A folder needs a supported footprint, not just its centre on a ledge.
+        for(const [dx,dz] of [[-1.25,-1.25],[1.25,-1.25],[-1.25,1.25],[1.25,1.25]]){
+            const edge=this.ray(new C.Vec3(p.x+dx,y+.2,p.z+dz),new C.Vec3(p.x+dx,y-.25,p.z+dz),1);
+            if(!edge.hasHit||edge.hitNormalWorld.y<.7||Math.abs(edge.hitPointWorld.y-y)>.18){this.clues.step(undefined,now);return;}
+        }
+        this.clues.step({x:p.x,y:y+.035,z:p.z},now);
+    }
     private updateCase(c:CaseRuntime,dt:number,playing:boolean){
         if(c.owner){
             const p=this.players.get(c.owner);
@@ -1779,7 +1798,7 @@ export class ChaosSimulation {
         this.rayQuery.queries=0;this.substepCount=0;return work;
     }
     snapshot(drain=true):ChaosState{
-        const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,case:this.caseSnapshot(this.primaryCase),
+        const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,clues:structuredClone(this.clues.items),case:this.caseSnapshot(this.primaryCase),
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
             extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,levels:{...this.pressure.levels},...(this.pressure.blowing?{blowing:{...this.pressure.blowing}}:{}),...(this.pressure.fired?{fired:{...this.pressure.fired}}:{}),...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),...(this.pressure.vents?{vents:this.pressure.vents.map(v=>({...v}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
@@ -1816,6 +1835,7 @@ export class ChaosSimulation {
         c.armed=this.incidentActive('evidence-tampering')&&!c.owner;
     }
     private restore(s:ChaosState){
+        this.clues=new CaseClues(s.clues);
         // Room hibernation/reconnection must not restock consumed supplies early.
         for(const saved of s.pickups??[]){
             const site=this.pickups.get(saved.id);

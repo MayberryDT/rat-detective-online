@@ -182,6 +182,8 @@ export type LaserSurface = typeof LASER_SURFACES[number];
 export interface LaserBeam { id:string; owner:string; at:number; points:Array<Vec3Data&{on?:LaserSurface}> }
 export const MAX_BEAMS = 16;
 export interface ChaosState {
+    /** Shared physical paperwork; absent only in older checkpoints. */
+    clues?: import('./caseClues').CaseClue[];
     time: number;
     /** Monotonic simulation identity for time-aligned interactions. Optional only
      * while restoring pre-protocol-15 checkpoints and older test fixtures. */

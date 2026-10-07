@@ -6,13 +6,11 @@ import {ChaosPresentation,copyPresentationPose,type PresentationPose} from '../s
 import {updateCaseCarryPose} from './CaseCarryPose';
 import {disposeMeshResources} from '../utils/disposeMeshResources';
 import {addLeatherBriefcase} from './CaseModel';
-import {CaseBeacon} from './CaseBeacon';
 import {createCaseGrip,disposeCaseGrip} from './CaseGrip';
 import {HotCaseLook} from './HotCaseLook';
 /** Seven bounded incident props, using the same model, outline, grip and smoothing. */
 export class ExtraCaseVisual {
     readonly root=new THREE.Group();
-    private readonly beacon:CaseBeacon;
     private readonly presentation=new ChaosPresentation();
     private readonly pose:PresentationPose={p:{x:0,y:0,z:0},q:{x:0,y:0,z:0,w:1}};
     private state?:ChaosState['case'];
@@ -22,7 +20,7 @@ export class ExtraCaseVisual {
     private readonly hotLook:HotCaseLook;
     constructor(scene:THREE.Scene,id:string,private readonly resolve:(id:string)=>RatEntity|undefined,private readonly extrapolate=true){
         this.root.name='hot-case-'+id;this.root.userData.aimTarget=true;
-        this.hotLook=new HotCaseLook(scene,this.root,addLeatherBriefcase(this.root));scene.add(this.root);this.beacon=new CaseBeacon(scene);
+        this.hotLook=new HotCaseLook(scene,this.root,addLeatherBriefcase(this.root));scene.add(this.root);
     }
     apply(state:ChaosState,extra:ChaosState['case'],arrival:number):void {
         this.state=extra;this.incident=state.dispatch;
@@ -54,10 +52,9 @@ export class ExtraCaseVisual {
         }
         // Every carried case reads the same: red-hot, cuffed to its carrier.
         this.hotLook.update(camera,renderTime,state,now,carrier&&this.arm?.parent?carrier:null,this.arm?.parent??null);
-        this.beacon.update(this.root,camera,!!state.owner,now,null);
     }
     dispose():void {
         if(this.arm){disposeCaseGrip(this.arm);this.arm=null;}
-        this.carrier=null;this.hotLook.dispose();this.presentation.clear();this.beacon.dispose();this.root.removeFromParent();disposeMeshResources(this.root);
+        this.carrier=null;this.hotLook.dispose();this.presentation.clear();this.root.removeFromParent();disposeMeshResources(this.root);
     }
 }

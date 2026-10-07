@@ -1670,6 +1670,7 @@ export class GameRoom extends DurableObject<Env> {
         const stepAt = now-this.chaosAccumulator*1000;
         this.serverBots?.step(1/60, stepAt, this.players, this.botState, this.round.phase==='playing');
         this.chaos.step(1/60,stepAt,this.round.phase==='playing');
+        this.city.clues(this.chaos.drainClueEvents(),stepAt);
         this.applyPickupEvents();
         this.applyShotEvents();
         const incidents=this.chaos.drainIncidentEvents();

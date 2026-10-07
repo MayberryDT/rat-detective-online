@@ -452,7 +452,7 @@ export class BotMotor {
         if(ownershipChanged)this.urgent=true;
         if(this.failedCase&&state&&distance(this.failedCase,state.case.p)>7){this.failedCase=undefined;this.failedGoals.delete('case');this.urgent=true;}
         this.carrierSight.observe(cases,self.id);
-        this.followCase();
+        // Loose-case goals retain the point actually seen, never a live hidden coordinate.
         if(this.routeWaitStarted!==undefined&&this.routeProgressGoal){
             const remaining=distance(self,this.routeProgressGoal);
             // Only new net progress earns more search time. Walking back and
@@ -461,11 +461,6 @@ export class BotMotor {
         }
         if(!ownershipChanged&&this.pendingPlan&&this.routeWaitStarted!==undefined&&now-this.routeWaitStarted>=ROUTE_WAIT_MS)this.failGoal(now);
         return {ownershipChanged,assignmentChanged};
-    }
-    private followCase():void {
-        if(this.mode!=='case')return;
-        const selected=this.cases.find(c=>c.key===this.key);
-        if(selected&&!selected.value.owner)this.destination=selected.value.p;
     }
 
     /** At a decision: who is in sight, where the case carriers are, whom to shoot and whether to ring a bell in
@@ -476,6 +471,11 @@ export class BotMotor {
         clear:(p:Vec3Data)=>boolean,clearControl:(p:Vec3Data)=>boolean,quietBell:boolean,preferred?:string):void {
         const time=state?.time??now,sight=state?.dispatch.phase==='active'&&incidentInfo(state.dispatch.incident).id==='blackout'?FLASHLIGHT_REACH:80;
         const visible=living.filter(p=>distance(self,p)<sight&&clear(p)).sort((a,b)=>distance(self,a)-distance(self,b));
+        if(this.mode==='case'){
+            const selected=this.cases.find(c=>c.key===this.key);
+            if(selected&&!selected.value.owner&&distance(self,selected.value.p)<Math.min(60,sight)&&clearControl(selected.value.p))this.destination={...selected.value.p};
+            else if(this.destination&&distance(self,this.destination)<3)this.failGoal(now);
+        }
         this.visible=visible;
         this.carrierSight.see(self,visible,living,time);
         // A rat seen dying (the kill feed) is not banked at.
@@ -530,7 +530,7 @@ export class BotMotor {
         this.aim.begin(this.bodyFacing(self));
         // Follow moving objectives without retaining an obsolete snapshot vector. A followed rat's
         // destination is its own record, so it tracks the rat's live position already.
-        this.followCase();
+        // Loose-case goals retain the point actually seen, never a live hidden coordinate.
         if(this.shotTarget&&this.shotTarget.hp<=0){this.aim.disengage(now);this.shotTarget=undefined;}
         if(!this.progressSet){
             this.progressSet=true;this.progressPosition.x=self.x;this.progressPosition.y=self.y;this.progressPosition.z=self.z;this.progressAt=now;
