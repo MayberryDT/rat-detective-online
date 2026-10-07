@@ -26,6 +26,14 @@ for(let i=0;i<180;i++)s=step();
 assert.ok(s.clues.some(c=>Math.hypot(c.p.x-chaser.x,c.p.z-chaser.z)<5),'follower retains an obvious start');
 const follow=sim.clues.paths.get(chaser.id);assert.ok(follow?.points.length);assert.ok(Math.hypot(follow.target.x-walker.x,follow.target.z-walker.z)<8,'route destination follows moved carrier');
 const before=s.clues.map(c=>c.id);sim.reset();s=step();assert.ok(!s.clues.some(c=>before.includes(c.id)),'relocation clears obsolete route papers');
+// Exact staging failure: distant street spawn with an underground case, and the reverse.
+const sewerRoutes=[];
+for(const [from,to] of [[{x:90,y:0,z:-150},{x:-4.277,y:-7,z:-3.52}],[{x:-4,y:-7,z:-4},{x:90,y:0,z:-150}],...spawns.filter((_,i)=>i%97===0).map(p=>[{...p,y:0},{x:-4,y:-7,z:-4}])]){
+ const search=nav.paperRouteSteps(from,to);let r,slices=0;do{r=search.next();slices++;}while(!r.done);
+ assert.ok(r.value.length,'street/sewer route exists');
+ for(let i=1;i<r.value.length;i++)assert.ok(nav.walkable(r.value[i-1],r.value[i])||r.value[i-1].launch||r.value[i-1].drop,'supported sewer route');
+ sewerRoutes.push({from,to,slices,points:r.value.length});
+}
 const roofRoutes=[];
 for(const link of BOT_LAUNCH_LINKS){
  const search=nav.paperRouteSteps({...spawns[10],y:0},link.landing);let r;do{r=search.next();}while(!r.done);
@@ -33,4 +41,4 @@ for(const link of BOT_LAUNCH_LINKS){
  for(let i=1;i<r.value.length;i++){const a=r.value[i-1],b=r.value[i];if(Math.hypot(a.x-b.x,a.z-b.z)>4)assert.ok(a.launch||a.drop,'no invented unsupported route segment');}
  roofRoutes.push({machine:link.machine.id,points:r.value.length});
 }
-const receipt={passed:true,kind:'real authority/walk-route/wire integration; not human gameplay acceptance',spawns:rows,roofRoutes,frames,maxBytes,maxStepMs,checks:['ten separated spawns each get papers','bounded compact frames decode','restore retains shared papers','supported route reaches real case pickup','launcher roofs have explicit supported routes','route follows moving carrier','relocation removes old routes']};writeFileSync(out+'/trail-integration.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt,null,2));
+const receipt={passed:true,kind:'real authority/walk-route/wire integration; not human gameplay acceptance',spawns:rows,sewerRoutes,roofRoutes,frames,maxBytes,maxStepMs,checks:['ten separated spawns each get papers','bounded compact frames decode','restore retains shared papers','supported route reaches real case pickup','launcher roofs have explicit supported routes','route follows moving carrier','relocation removes old routes']};writeFileSync(out+'/trail-integration.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt,null,2));

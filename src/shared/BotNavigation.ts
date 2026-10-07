@@ -2,7 +2,7 @@ import {DISPATCH_STATIONS,LAUNCH_MACHINES} from './chaosState';
 import { CITY_BOUNDS, GRAYBOX_SPAWNS, grayboxBoxes, type GrayboxBox } from './grayboxLayout';
 import { LANDMARK_INTERIORS, landmarkExitPoint } from './landmarkLayout';
 import { pier9ExitPoint } from './city/kit/parts/docksWarehouse';
-import { SEWER_LIGHTS,sewerRampTravelPoint } from './sewerLayout';
+import { SEWER_LIGHTS,SEWER_PIPE_ENTRANCES,sewerPipePoint,sewerRampTravelPoint } from './sewerLayout';
 import type { Vec3Data } from './networkProtocol';
 import type { WorldSpec } from './worldSpec';
 import { boxBasis, boxHalfExtents, type Basis } from './boxFrame';
@@ -288,7 +288,18 @@ export class BotNavigation {
         const entrance=goal.y>24&&start.y<goal.y-4?[...this.launchEdges.values()]
             .filter(e=>Math.abs(e.to.y-goal.y)<2&&Math.hypot(e.to.x-goal.x,e.to.z-goal.z)<50)
             .sort((a,b)=>Math.hypot(a.to.x-goal.x,a.to.z-goal.z)-Math.hypot(b.to.x-goal.x,b.to.z-goal.z))[0]?.from:undefined;
-        const estimate=(p:Vec3Data)=>{const aim=entrance&&p.y<goal.y-4?entrance:goal;return Math.hypot(p.x-aim.x,p.z-aim.z)+Math.abs(p.y-aim.y);};
+        const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.z-b.z)+Math.abs(a.y-b.y);
+        const portals=SEWER_PIPE_ENTRANCES.map(e=>{
+            const top=sewerPipePoint(e,0),bottom=sewerPipePoint(e,30);
+            return {top:{x:top.x,y:top.floorY,z:top.z},bottom:{x:bottom.x,y:bottom.floorY,z:bottom.z}};
+        });
+        const estimate=(p:Vec3Data)=>{
+            // Reach the actual ramp before searching toward a different floor.
+            // Otherwise the heuristic spends its whole budget under/over the case.
+            if(goal.y < -5 && p.y > -1)return Math.min(...portals.map(e=>distance(p,e.top)+distance(e.top,e.bottom)+distance(e.bottom,goal)));
+            if(goal.y > -1 && p.y < -5)return Math.min(...portals.map(e=>distance(p,e.bottom)+distance(e.bottom,e.top)+distance(e.top,goal)));
+            const aim=entrance&&p.y<goal.y-4?entrance:goal;return distance(p,aim);
+        };
         push({node:start,cost:0,rank:estimate(start)});
         for(let expanded=0;heap.length&&expanded<12000;expanded++){
             if(expanded&&expanded%64===0)yield;

@@ -24,3 +24,5 @@ Proof: bounded physics/authority → snapshot → compact wire → two receivers
 Tyler: “just make multiple clues/paper trails that lead to the case every time. no seeing things through buildings anymore.” This supersedes the historical-travel-only research constraint and the three-cluster budget. Keep existing spawns.
 
 Failure scenarios to verify before acceptance: new spawn far from a stationary case has no first papers; path crosses a wall/water or wrong storey; sharp corners disconnect the visual trail; moved/carried/relocated case leaves every trail pointing at an obsolete endpoint; reconnect loses the trail; all ten players overflow the wire/render budget; route computation stalls the room; paper rendering is buried, unreadable, or visible through buildings. Walk-route geometry and browser spawn views are required, not just close-up art.
+
+- Staging regression: spawn near (90, 0, -150) with case in sewer near (-4, -7, -4) must find a supported ramp route within the bounded search; underground destinations must not exhaust the search under the street. Verify both street-to-sewer and sewer-to-street.
