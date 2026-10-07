@@ -2,7 +2,31 @@
 
 7 October 2026. Tyler: “do it all” after the research sequence. Branch `feature/physical-case-clues`, based on production-ancestry receipt `6af05f2` (gameplay `2822d1a`). Halla checkout `/home/halla/workspaces/rat-detective-physical-clues`. Canonical Veelox checkout and its dirty work are preserved.
 
-## Stuck-case repair — current staging
+## Current staging: obvious paper routes at spawn
+
+Tyler's latest direction supersedes the historical-only, three-cluster experiment below: multiple physical clues/paper trails lead to the case at every spawn, without seeing the clues or case through buildings. Existing spawn positions remain. This receipt's older prototype/gallery sections describe prior builds, not the current design.
+
+Staging is **staging-2026-10-07-376c735**, Worker **dc6c6c33-97d3-4bc3-9046-b85b5a9e2e8f**, client **index-B09djU6r.js**, protocol **35**. Implementation commits `ea4bde8` and `376c735`, deployed through `npm run deploy:staging` from a clean tree. Production remains `production-2026-10-06-2822d1a`.
+
+The authority builds shared supported routes from living rats to the current case, prioritizing newly joined humans. A spill starts around each rat and up to twelve paper positions form each nearby route segment, extending as the rat advances and refreshing as the case moves. The shared list caps at 128; up to 48 nearby, in-view, unoccluded papers render within 65 units, roughly four units apart. Larger cream sheets, red folder borders and dark ink remain obvious in the noir lighting. Three pooled instance batches keep rendering bounded. Papers use normal depth testing plus static-world sight checks, never x-ray. Existing case locators remain removed; Hunch/Stakeout and destination guidance retain their separate existing behavior.
+
+Navigation reuses the existing supported walk graph, ramps and authored launcher links. Search work is sliced to 64 expansions per simulation step. The first staging verification caught a real failure: a distant street spawn could exhaust the search above an underground case, leaving no papers. Commit `376c735` steers inter-floor search toward actual sewer entrances. The exact failed coordinates now produce a 123-node path in eight slices, with the reverse route in six slices. Failed routes clear rather than retain obsolete paths.
+
+Verification artifacts under `/home/halla/build/rat-detective/physical-clues-20261007`:
+
+- `trail-integration.json`: ten separated spawns receive nearby papers; compact frames decode within the shared bound; restored evidence matches; a fixture follows supported route positions to an authoritative case pickup; moving-carrier routes update; reset clears old papers; five launcher roof routes and twelve street/sewer routes pass. The fixture moves through route positions, so this is authority/navigation integration, not a human-input traversal test.
+- `trails-staging-final/case-visuals.json`: actual hosted GPU-rendered Chrome loads the exact build/assets above. Fresh spawn and reconnect show physical papers, the real case is present, no retired case echo returns, and no runtime exceptions occur. Inspected `first-spawn-papers.png` and `reconnected-papers.png`: a visible paper line and nearby spill during actual Blackout gameplay. Ordinary combat can kill/respawn the stationary agent; this does not prove every possible spawn/camera state.
+- `trails-browser-final/case-visuals.json`: local real-browser spawn/reconnect proof before the final sewer heuristic correction. `trails-idle-room.json`: empty and post-grace rooms have zero bots, ticks, alarms or changing storage. The final change only affects route search priority.
+- App TypeScript and production build pass (`trails-build.log`). Focused independent reviews found no remaining material defect. Full historical test suites were not rerun or declared green; earlier baseline/obsolete locator assertions remain documented below. Actual human launcher usability and human play acceptance remain unverified.
+
+Repeat the current checks on Halla:
+
+```sh
+node scripts/verify-case-trails.mjs
+ANGLE=vulkan node scripts/verify-spawn-trails.mjs --url=https://rat-detective-staging.mayberrydt.workers.dev/ --out=/home/halla/build/rat-detective/physical-clues-20261007/trails-recheck
+```
+
+## Earlier stuck-case repair
 
 Tyler reported a stationary red case without papers that could not be picked up, surviving reload. Reproduced in the actual hosted browser: the retired `CaseBeacon` added its echo as a separate scene root, default-visible at (0,0,0); the prototype hid only the main root and stopped calling the updater. The real case was elsewhere. The screenshot object was a presentation ghost, not an authoritative pickup.
 
