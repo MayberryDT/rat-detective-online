@@ -2,7 +2,15 @@
 
 7 October 2026. Tyler: “do it all” after the research sequence. Branch `feature/physical-case-clues`, based on production-ancestry receipt `6af05f2` (gameplay `2822d1a`). Halla checkout `/home/halla/workspaces/rat-detective-physical-clues`. Canonical Veelox checkout and its dirty work are preserved.
 
-## Current staging: obvious paper routes at spawn
+## Current staging: natural paper with a red outline
+
+Tyler rejected the oversized, distracting bright folders and requested natural paper with just a red outline. Commit `e862f87` replaces those props with two small, gently creased sheets (0.72×1.02 and 0.60×0.85 world units), muted aged-paper and ink materials that receive normal scene lighting, stable rotation/size variation, and a thin 0.012-unit red perimeter. No red stamp, broad red backing or fullbright paper. Three instanced batches and ordinary world occlusion remain; route generation is unchanged.
+
+Staging build **staging-2026-10-07-e862f87**, Worker **6a508a1a-44cf-4a2b-8748-62a953c9d90b**, client **index-CpqviDK1.js**; protocol35 unchanged. Deployed from the clean source commit with `npm run deploy:staging`. No production deployment.
+
+Build passes. Actual hosted GPU Chrome fresh-spawn/reconnect check passes all five checks, with exact loaded build/assets recorded in `natural-papers-staging/case-visuals.json` under the existing artifact directory. Inspected its first-spawn screenshot: thin red edges, shaded paper beside the rat and along the street. Local browser checks also passed. Independent review caught a rim/surface mismatch in the first revision; paper and rim now share a piecewise-planar crease, with ink following the same surface. Follow-up review found no remaining material issue. This is rendered verification, not Tyler's aesthetic acceptance.
+
+## Earlier route implementation: obvious paper routes at spawn
 
 Tyler's latest direction supersedes the historical-only, three-cluster experiment below: multiple physical clues/paper trails lead to the case at every spawn, without seeing the clues or case through buildings. Existing spawn positions remain. This receipt's older prototype/gallery sections describe prior builds, not the current design.
 
