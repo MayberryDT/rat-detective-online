@@ -2,6 +2,17 @@
 
 7 October 2026. Tyler: “do it all” after the research sequence. Branch `feature/physical-case-clues`, based on production-ancestry receipt `6af05f2` (gameplay `2822d1a`). Halla checkout `/home/halla/workspaces/rat-detective-physical-clues`. Canonical Veelox checkout and its dirty work are preserved.
 
+## Review links and staging receipt
+
+- [Playable staging candidate](https://rat-detective-staging.mayberrydt.workers.dev/)
+- [Stills, real-browser clip and interactive art fixture](http://100.105.117.93:5186/proof/)
+
+Deployed from clean commit `7a9a8d2` with `npm run deploy:staging`: Worker `cb1d30f0-2b30-4e66-87ea-ab54993549ed`, build `staging-2026-10-07-7a9a8d2`, client `index-DKv9ulT3.js`. The prior staging build was `staging-2026-10-06-2822d1a`, with zero players and zero bots before deployment. Production health remains `production-2026-10-06-2822d1a`; no production deploy was run.
+
+The hosted E2E passes: 244 frames, two clients agreeing on 31 exact authority frames, normal eight-bot roster, late join and same-player reconnect retaining the shared evidence (`hosted-e2e.json`). An ibara browser smoke check on AcePC AK2 entered actual Excessive Force gameplay, rendered city/rat/HUD and combat damage, and showed no old case locator. The agent tab was closed after checking. A hosted `muted=1` query is ineffective; the staging site was muted through Chrome instead. This smoke check does not establish searching, clue readability in live combat, or performance.
+
+The gallery is served by the task's temporary Halla static server on port 5186. Its durable files are under the artifact directory below. No worker/service unit, machine migration or PR was created.
+
 ## What changed
 
 The authority sheds a shared folder cluster after each 10 units of supported case travel. Only three nearby, in-view, unoccluded clusters render within 25 units. The list caps at 64. Evidence ages in three material/shape stages and expires after 25 seconds; a stationary endpoint stays, without pretending to be newly made. Possession changes keep truthful history. Relocation clears the episode. No trail is projected across flight, teleports, unsupported ledges or a returning case. Four support probes bound the rotated folder footprint.
