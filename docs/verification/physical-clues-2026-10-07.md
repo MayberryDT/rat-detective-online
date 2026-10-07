@@ -2,6 +2,18 @@
 
 7 October 2026. Tyler: “do it all” after the research sequence. Branch `feature/physical-case-clues`, based on production-ancestry receipt `6af05f2` (gameplay `2822d1a`). Halla checkout `/home/halla/workspaces/rat-detective-physical-clues`. Canonical Veelox checkout and its dirty work are preserved.
 
+## Stuck-case repair — current staging
+
+Tyler reported a stationary red case without papers that could not be picked up, surviving reload. Reproduced in the actual hosted browser: the retired `CaseBeacon` added its echo as a separate scene root, default-visible at (0,0,0); the prototype hid only the main root and stopped calling the updater. The real case was elsewhere. The screenshot object was a presentation ghost, not an authoritative pickup.
+
+Removed the unused beacon allocation from `ChaosView` and loading preparation. Actual case, pickup authority and physical clue rules are unchanged. Independent focused review found no material defects.
+
+Staging repair: commit `6475704`, Worker `00bf4c3a-37cf-494f-9f29-b0cb9aea1ca1`, build `staging-2026-10-07-6475704`, client `index-Bw-apdge.js`. Protocol 34 unchanged. Production health still reports `production-2026-10-06-2822d1a`.
+
+Verification: production build and the 13 authority/wire/clue integration checks pass. The new `scripts/verify-case-visuals.mjs` uses the actual hosted client in GPU-rendered Chrome. Before repair it found the visible echo at world origin while the real case was at (-85.112,-6.66,41.269). Final check recorded the repaired build and loaded asset URLs: real case present, no orphan echo on fresh load or socket reconnect, rebuilt real case on reconnect, no runtime exceptions. Inspected world-origin screenshots before/after. The first immediate post-deploy browser run still observed the old echo; the subsequent build-identified check passed. No claim of a fresh human walk-up pickup test or broader clue-search acceptance.
+
+Artifacts under `/home/halla/build/rat-detective/physical-clues-20261007`: `ghost-before/reconnect.json`, `ghost-after/world-origin.png` (ghost), `ghost-after-confirm/case-visuals.json` and `ghost-after-confirm/world-origin.png` (removed), plus `ghost-build.log`, `ghost-integration.log`, `ghost-deploy.log`. Rerun `ANGLE=vulkan node scripts/verify-case-visuals.mjs --url=https://rat-detective-staging.mayberrydt.workers.dev/ --out=<Halla artifact directory>`.
+
 ## Review links and staging receipt
 
 - [Playable staging candidate](https://rat-detective-staging.mayberrydt.workers.dev/)
