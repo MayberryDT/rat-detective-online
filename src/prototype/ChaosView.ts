@@ -29,7 +29,6 @@ import type { FeedbackCue } from '../audio/FeedbackAudio';
 import type { Vec3Data, ServerMessage, ShotDescriptor, PickupTarget } from '../shared/networkProtocol';
 import { locateCase } from './caseLocator';
 import { PressureMachine } from './PressureMachine';
-import { CaseBeacon } from './CaseBeacon';
 import { CarrierPingFlash } from './CarrierPingFlash';
 import { DispatchPillars, type DispatchStation } from './DispatchPillars';
 import { reactToLandmarkImpact } from './LandmarkReactions';
@@ -185,7 +184,6 @@ export class ChaosView {
     readonly caseFiles=new CaseFiles();
     private readonly acceptedPickups=new Map<string,{generation:number;tick:number;epoch:string}>();
     private anticipatedCase:{acceptedTick?:number;epoch?:string}|null=null;
-    private readonly caseBeacon:CaseBeacon;
     /** Someone else's carrier flashing red through walls at each heartbeat ping. */
     private readonly carrierFlash:CarrierPingFlash;
     private readonly pillars:DispatchPillars;
@@ -288,7 +286,7 @@ export class ChaosView {
         // The root and the shot draws (moved by instance) stay put; corpses added later keep updating.
         this.root.name='records-chaos';freezeStatic(this.root);scene.add(this.root);scene.add(this.caseRoot);
         this.caseRoot.name='hot-case';
-        this.caseBeacon=new CaseBeacon(scene);this.carrierFlash=new CarrierPingFlash(scene);
+        this.carrierFlash=new CarrierPingFlash(scene);
         this.hotLook=new HotCaseLook(scene,this.caseRoot,addLeatherBriefcase(this.caseRoot));this.caseMotion=new CaseMotion(this.caseRoot);
         this.caseRoot.userData.aimTarget=true;
         this.pressureMachine=new PressureMachine(scene,this.audio,replay?.route);
@@ -355,7 +353,7 @@ export class ChaosView {
         // gameReset precedes the new chaos snapshot. Do not render or interact
         // with the previous round's confirmed carrier during that gap.
         this.state=null;this.setCarrier(null);this.hotLook.clear();this.root.visible=false;
-        this.caseRoot.visible=false;this.caseBeacon.root.visible=false;this.carrierFlash.hide();
+        this.caseRoot.visible=false;this.carrierFlash.hide();
         for(const visual of this.extraCases.values())visual.dispose();this.extraCases.clear();
         this.assignmentDestinations?.clear();this.jurisdictionZones.clear();
     }
@@ -401,7 +399,7 @@ export class ChaosView {
     setLastHitPoint(on:boolean):void {
         if(on===this.lastHitPoint)return;
         this.lastHitPoint=on;
-        if(on){this.caseBeacon.root.visible=false;this.assignmentDestinations?.clear();}
+        if(on){this.assignmentDestinations?.clear();}
     }
     setFixXray(on:boolean):void {
         if(on===this.fixXray)return;
@@ -723,7 +721,6 @@ export class ChaosView {
         this.caseFiles.update(s.clues??[],now,camera);
         this.hotLook.update(camera,renderTime,s.case,now,this.carrier,this.arm?.parent??null);
         // Physical evidence replaces the primary case's through-wall and screen locators.
-        this.caseBeacon.root.visible=false;
         this.carrierFlash.hide();
         for(const visual of this.extraCases.values())visual.update(camera,renderTime,now);
         for(const visual of this.pickups.values())visual.update(now,camera);
@@ -967,7 +964,7 @@ export class ChaosView {
         // Supply sites live at the scene root: a reconnect's new view would otherwise draw over stale ones.
         for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
         this.traps.dispose();for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
-        this.pressureMachine.dispose();this.caseBeacon.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.root.removeFromParent();this.caseRoot.removeFromParent();
+        this.pressureMachine.dispose();this.carrierFlash.dispose();this.setCarrier(null);this.hotLook.dispose();this.hud?.dispose();this.root.removeFromParent();this.caseRoot.removeFromParent();
         const contacts=contactShadowsOf(this.scene);contacts?.remove(this.caseRoot);for(const c of this.corpses.values())contacts?.remove(c.mesh);
         disposeMeshResources(this.caseRoot);
         // The incident sounds are the live view's (module-wide); a replay's own voices end with its bus.

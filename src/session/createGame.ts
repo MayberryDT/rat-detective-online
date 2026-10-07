@@ -25,7 +25,6 @@ import { PICKUP_KINDS } from '../shared/pickups';
 import { disposeMeshResources } from '../utils/disposeMeshResources';
 import { PressureMachine } from '../prototype/PressureMachine';
 import { DispatchPillars } from '../prototype/DispatchPillars';
-import { CaseBeacon } from '../prototype/CaseBeacon';
 import { JurisdictionZones } from '../prototype/JurisdictionZones';
 import { createShotDraws } from '../prototype/ChaosView';
 import type { NetworkManager } from '../network/NetworkManager';
@@ -70,10 +69,10 @@ export async function createGame(title:TitleScreen,music:TitleMusic,transport:Ne
         for(const kind of PICKUP_KINDS){const pickup=new PickupVisual(stage.scene,kind);pickup.setXray(true);pickups.push(pickup);}
         // The carried case's red-hot look (its own coat-rim, spark, print and chain programs) on the batched opponent.
         const hotLook=new HotCaseLook(stage.scene,briefcase,addLeatherBriefcase(briefcase));stage.scene.add(briefcase);hotLook.warm(enemy);street.push(hotLook);
-        // The welcome builds the launchers, Dispatch pillars, the case's beacon, the zones, the
+        // The welcome builds the launchers, Dispatch pillars, the zones, the
         // flying cheese and the supplies' restock dials (one per kind: each draws its shared icon); warm them too.
         const shots=createShotDraws(1),restocks=PICKUP_KINDS.map(kind=>new PickupRespawnVisual(kind));stage.scene.add(shots.root,...restocks.map(dial=>dial.root));
-        street.push(new PressureMachine(stage.scene),new DispatchPillars(stage.scene),new CaseBeacon(stage.scene),new JurisdictionZones(stage.scene),shots,...restocks);
+        street.push(new PressureMachine(stage.scene),new DispatchPillars(stage.scene),new JurisdictionZones(stage.scene),shots,...restocks);
         const heavyWarm=new HeavyCheese(stage.scene),trapWarm=new TrapField(stage.scene,true);trapWarm.apply([{id:'warm-trap',owner:'warm',x:0,y:0,z:0,yaw:0,hp:8,at:0}],false);street.push(heavyWarm,trapWarm);
         const filesWarm=new CaseFiles();filesWarm.warm();stage.scene.add(filesWarm.root);street.push(filesWarm);
         const standIns=stage.scene.children.filter(object=>!scenery.has(object));

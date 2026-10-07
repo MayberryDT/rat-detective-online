@@ -13,3 +13,8 @@
 - Case/trap/weapon rules, mode targets, movement, packed aggregates, or room hibernation regress.
 
 Proof: bounded physics/authority → snapshot → compact wire → two receivers/restore, actual bot perception/goals, and a repeatable rendered scene. These integration checks cannot establish human understanding. Private human Excessive Force comparison remains the acceptance gate for search enjoyment.
+
+## Stuck-case regression (before repair)
+
+- The retired CaseBeacon leaves its independently scene-parented echo visible at the origin while only its main root is hidden. A reload reconstructs the same phantom case; the real authority objective is elsewhere.
+- A fix must remove every retired beacon mesh from live gameplay, including after welcome/reconnect, while retaining the real case and physical clues. Verify the actual staged browser scene: no visible case-rim echo at render order 1999, a real hot-case object present, and no runtime exceptions.
