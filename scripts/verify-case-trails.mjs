@@ -16,7 +16,7 @@
 //   P1 a paper group on a trail has no prints                   P2 prints point away from the way to the case
 //   P3 looking where the prints point shows no further paper    P4 a print run changes, comes back or blinks, or is
 //      re-laid in place while the case lies still               P5 prints crowd the view
-//   P6 a print floats, sinks, lies under a sheet or on another print
+//   P6 a print floats, sinks, lies under a sheet or on another print (or another run's, within a unit: runs tangled)
 //   P7 a restore drops the prints or a reset leaves them        P8 print bytes push the wire past the baseline
 //   P9 prints do not help: a follower that sees only its screen and turns where the prints point needs no fewer looks
 //      round than one that ignores them, or misses the case
@@ -202,7 +202,7 @@ if(values.only===undefined){
         for(const r of room.prints)if(!knownRuns.has(r.id)){
             const own=printsOf(r),others=room.prints.filter(o=>o.id!==r.id).flatMap(printsOf);
             for(const q of own){printsChecked++;
-                const floats=!ground(q),under=clues.find(c=>[c.p,c.q].some(s=>s&&Math.abs(s.y-q.y)<1&&flat(s,q)<.75)),onPrint=others.find(o=>Math.abs(o.y-q.y)<1&&flat(o,q)<.35);
+                const floats=!ground(q),under=clues.find(c=>[c.p,c.q].some(s=>s&&Math.abs(s.y-q.y)<1&&flat(s,q)<.75)),onPrint=others.find(o=>Math.abs(o.y-q.y)<1&&flat(o,q)<1);
                 if(floats||under||onPrint)misplaced.push({run:r.id,q,floats,under:under?.id,onPrint:!!onPrint});}
         }
         if(k%30===0){
@@ -277,7 +277,7 @@ if(values.only===undefined){
     check('P4 no print run changes, comes back or blinks (under 2 s outside a clear)',P.adds>0&&!P.violations.look&&!P.violations.comeback&&!P.violations.blink,P.violations);
     check('P4 prints are re-laid in place only when the case moved',P.relaidWhileStill===0,{relaid:P.relaid,whileStill:P.examples.relaidWhileStill});
     check('P5 prints stay sparse (every rat each second, on screen within 30 units: median ≤ 8, p90 ≤ 16)',(P.onScreen.median??0)<=8&&(P.onScreen.p90??0)<=16,P.onScreen);
-    check('P6 every print has ground under heel and toe, none under a sheet or on another print',printsChecked>0&&P.misplaced===0,{checked:printsChecked,misplaced:P.misplaced,examples:P.misplacedExamples});
+    check('P6 every print has ground under heel and toe, none under a sheet or within a unit of another run',printsChecked>0&&P.misplaced===0,{checked:printsChecked,misplaced:P.misplaced,examples:P.misplacedExamples});
     if(values.baseline){const base=JSON.parse(readFileSync(values.baseline,'utf8')).room;
         check('P8 paper and print bytes together no more than the baseline\'s paper bytes',report.room.clueBytesPerSecond+P.bytesPerSecond<=(base.clueBytesPerSecond??Infinity),{papers:report.room.clueBytesPerSecond,prints:P.bytesPerSecond,baseline:base.clueBytesPerSecond});}
     // F9: restore keeps the papers while the routes reclaim them.

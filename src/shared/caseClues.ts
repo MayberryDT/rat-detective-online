@@ -89,10 +89,10 @@ const PLAN={
     endMerge:10,
     /** A spot a sheet just blew away from stays bare this long: a new sheet landing there at once would read as a swap. */
     restMs:4000,
-    /** Prints start this far past a group's farthest sheet along the way, keep this clear of any sheet's spot and of
-     * other prints, and turn to a new run only once the case is this far from where they pointed and the way from the
-     * group has turned this much (radians). */
-    printLead:.9,printClear:.75,printApart:.35,printTurn:1.2,
+    /** Prints start this far past a group's farthest sheet along the way, keep this clear of any sheet's spot, of each
+     * other and of another run's prints (two runs never tangle into one cluster), and turn to a new run only once the
+     * case is this far from where they pointed and the way from the group has turned this much (radians). */
+    printLead:.9,printClear:.75,printApart:.35,printRuns:1,printTurn:1.2,
     /** A run lies at least this long before it may turn (a case thrown about would turn it back and forth). */
     printKeepMs:5000,
 };
@@ -580,9 +580,9 @@ export class CaseClues {
     /** No print on or beside a sheet's spot (either of a loose sheet's), nor on another print (`replacing` aside). */
     private printRoom(p:Vec3Data,fresh:readonly number[],replacing?:CasePrints):boolean {
         for(const c of this.items)for(const q of [c.p,c.q])if(q&&Math.abs(q.y-p.y)<1&&flat(q,p)<PLAN.printClear)return false;
-        const near=(f:readonly number[])=>{for(let i=0;i+3<f.length;i+=4)if(Math.abs(f[i+1]!-p.y)<1&&Math.hypot(f[i]!-p.x,f[i+2]!-p.z)<PLAN.printApart)return true;return false;};
-        if(near(fresh))return false;
-        for(const r of this.prints)if(r!==replacing&&near(r.f))return false;
+        const near=(f:readonly number[],apart:number)=>{for(let i=0;i+3<f.length;i+=4)if(Math.abs(f[i+1]!-p.y)<1&&Math.hypot(f[i]!-p.x,f[i+2]!-p.z)<apart)return true;return false;};
+        if(near(fresh,PLAN.printApart))return false;
+        for(const r of this.prints)if(r!==replacing&&near(r.f,PLAN.printRuns))return false;
         return true;
     }
     private roomFor(p:Vec3Data,fresh:readonly CaseClue[]):boolean {
