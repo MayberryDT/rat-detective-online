@@ -6,6 +6,9 @@ import { worldSoundGain } from './worldSoundGain';
  * seconds; `finale`: the incident's closing beat; `whistle`: the all clear; `yelp`: an All Units backup arriving. */
 export type DispatchCue = 'clank' | 'strike' | 'squawk' | 'tick' | 'finale' | 'whistle' | 'yelp';
 type Buffers = Partial<Record<DispatchCue | 'whoop' | 'ring', AudioBuffer>>;
+/** Synthesised once per audio context: each exhibit replay has its own player, and a squawk takes ~20 ms to build. */
+const SHARED = new WeakMap<AudioContext, Buffers>();
+const buffersOf = (ctx: AudioContext): Buffers => { let buffers = SHARED.get(ctx); if (!buffers) SHARED.set(ctx, buffers = {}); return buffers; };
 interface Voice {source:AudioBufferSourceNode;gain:GainNode;pan:StereoPannerNode;volume:number}
 /** Siren slots, bell slots and one-shot cues are each bounded. */
 export const DISPATCH_VOICES = {siren:2, bell:3, cue:6} as const;
@@ -19,7 +22,6 @@ export function sirenVolume(distance: number): number {
  * nothing resumes the context or plays while it is suspended, and cues missed
  * while it was suspended are dropped rather than queued. */
 export class DispatchAudio {
-    private readonly buffers: Buffers = {};
     private readonly sirens: Array<Voice | undefined> = [];
     private readonly sirenNext: number[] = [];
     private readonly bells: Array<(Voice & {station:number}) | undefined> = [];
@@ -60,7 +62,7 @@ export class DispatchAudio {
         // The second pillar answers the first half a cycle later, so the two directions stay distinct.
         if (!this.sirenNext[slot]) this.sirenNext[slot] = slot > 0 ? ctx.currentTime + SIREN_EVERY / 2 : ctx.currentTime;
         if (ctx.currentTime < this.sirenNext[slot]!) return;
-        const started = this.voice(this.buffers.whoop ??= whoop(ctx), volume, pan, true);
+        const started = this.voice(buffersOf(ctx).whoop ??= whoop(ctx), volume, pan, true);
         if (!started) return;
         this.sirens[slot] = started; this.sirenNext[slot] = ctx.currentTime + SIREN_EVERY;
         started.source.onended = () => { this.stop(started); if (this.sirens[slot] === started) this.sirens[slot] = undefined; };
@@ -73,7 +75,7 @@ export class DispatchAudio {
         if (voice && (!ctx || station < 0 || voice.station !== station || !(volume > 0))) { this.bells[slot] = undefined; this.stop(voice); }
         else if (voice) { this.retarget(voice, volume, pan); voice.source.playbackRate.value = rate; return; }
         if (!ctx || station < 0 || !(volume > 0)) return;
-        const started = this.voice(this.buffers.ring ??= ring(ctx), volume, pan, true, true, rate);
+        const started = this.voice(buffersOf(ctx).ring ??= ring(ctx), volume, pan, true, true, rate);
         if (started) this.bells[slot] = {...started, station};
     }
 
@@ -82,7 +84,7 @@ export class DispatchAudio {
         const ctx = this.running();
         if (!ctx || !(volume > 0)) return;
         if (this.cues.length >= DISPATCH_VOICES.cue) this.stop(this.cues.shift()!);
-        const buffer = this.buffers[cue] ??= CUES[cue](ctx);
+        const buffer = buffersOf(ctx)[cue] ??= CUES[cue](ctx);
         const started = this.voice(buffer, volume, pan, cue === 'clank', false, 1, delay);
         if (!started) return;
         this.cues.push(started);
@@ -93,7 +95,6 @@ export class DispatchAudio {
         this.disposed = true;
         for (const voice of [...this.sirens, ...this.bells, ...this.cues]) if (voice) this.stop(voice);
         this.sirens.length = this.bells.length = this.cues.length = 0;
-        for (const key of Object.keys(this.buffers) as Array<keyof Buffers>) delete this.buffers[key];
     }
 }
 

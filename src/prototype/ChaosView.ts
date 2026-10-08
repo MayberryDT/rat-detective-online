@@ -365,8 +365,9 @@ export class ChaosView {
         for(const c of this.corpses.values()){c.hat?.dispose();this.root.remove(c.mesh);contacts?.remove(c.mesh);disposeMeshResources(c.mesh);}
         this.corpses.clear();this.deathStyles.clear();this.replayTick=-Infinity;this.replayJolts.length=0;
         for(const id of this.armed)this.resolveRat(id)?.setWeapon(undefined);this.armed.clear();
-        // Supply sites remember what they last showed (their claim and restock bursts): they start the clip afresh.
-        for(const visual of this.pickups.values())visual.dispose();this.pickups.clear();
+        // Supply sites remember what they last showed (their claim and restock bursts): they start the clip afresh,
+        // keeping their built props (rebuilding every site's was a quarter of each loop's restart).
+        for(const visual of this.pickups.values())visual.restart();
         this.traps.clear();this.impacts.clear();this.crossfire.clear();
         this.gripSwing=0;this.gripHitAt=-Infinity;this.sparkAt=0;
     }

@@ -392,6 +392,11 @@ export class PickupVisual {
         const fidget=this.nervous&&!empty;
         this.item.rotation.set(fidget?Math.sin(now*.05)*.06:0,fidget?Math.sin(now*.031)*.12:this.spin,fidget?Math.cos(now*.043)*.05:0);
     }
+    /** An exhibit replay starting its clip again: the prop stays built, but forgets what it last showed, as a new one. */
+    restart():void {
+        this.availableAt=0;this.pending=false;this.nervous=false;this.lit=-1;this.flicker=0;this.lastUpdate=0;this.wasEmpty=true;
+        this.hopAt=-Infinity;this.placed=false;this.popAge=this.dropAge=Infinity;this.burstMesh.visible=false;
+    }
     /** A burst of the supply's colour and a puff of dust at the plinth. */
     private flashBurst():void {
         this.burst.opacity=.7;
