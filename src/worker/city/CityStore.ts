@@ -84,7 +84,7 @@ export class CityStore {
   /** The retention cut-off last applied by this instance: events are pruned once a day, not every flush. */
   private prunedBefore: string | undefined;
   /** The once-a-wake whole-table statements' rows (the room's diagnostics log takes them). */
-  readonly scans: { what: string; rowsRead: number; rowsWritten?: number }[] = [];
+  readonly scans: { what: string; rowsRead: number; rowsWritten?: number; bytes?: number }[] = [];
 
   /** `transaction` runs a synchronous block atomically (the room passes `transactionSync`). */
   constructor(private readonly sql: SqlStorage, private readonly transaction: (fn: () => void) => void = fn => fn(),
@@ -106,6 +106,7 @@ export class CityStore {
       CREATE TABLE IF NOT EXISTS city_packs (kind TEXT NOT NULL, day TEXT NOT NULL, build TEXT NOT NULL, layout INTEGER NOT NULL, mode TEXT NOT NULL,
         layer TEXT NOT NULL, id INTEGER NOT NULL, bytes INTEGER NOT NULL, data TEXT NOT NULL,
         PRIMARY KEY (kind, day, build, layout, mode, layer, id)) WITHOUT ROWID;
+      CREATE INDEX IF NOT EXISTS idx_city_packs_id ON city_packs(id);
       CREATE TABLE IF NOT EXISTS city_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, t INTEGER NOT NULL, round TEXT, type TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS idx_city_events_type ON city_events(type, t);
       CREATE INDEX IF NOT EXISTS idx_city_events_round ON city_events(round, t);
@@ -177,10 +178,13 @@ export class CityStore {
   /** Replaces a bucket's oldest small packs with their sums once PACK_MERGE_AT of them pile up. The rows merged are
    * exactly the small ones from the first to the last id read, so the delete takes nothing that was not summed. */
   private mergeIfDue(bucket: Bucket): void {
-    const small = this.sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM city_packs WHERE ${BUCKET_WHERE} AND bytes < ?`, ...bucketArgs(bucket), PACK_FULL).one().n;
+    const counted = this.sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM city_packs WHERE ${BUCKET_WHERE} AND bytes < ?`, ...bucketArgs(bucket), PACK_FULL);
+    const small = counted.one().n;
+    if (counted.rowsRead > 64) this.scans.push({ what: 'merge-count', rowsRead: counted.rowsRead });
     if (small < PACK_MERGE_AT) return;
     const rows = this.sql.exec<{ id: number; data: string }>(`SELECT id, data FROM city_packs WHERE ${BUCKET_WHERE} AND bytes < ? ORDER BY id LIMIT ?`,
       ...bucketArgs(bucket), PACK_FULL, PACK_MERGE_ROWS).toArray();
+    this.scans.push({ what: 'merge', rowsRead: rows.length, bytes: rows.reduce((sum, row) => sum + row.data.length, 0) });
     const sums = new Map<string, number>();
     for (const row of rows) for (const [key, n] of unpack(row.data)) sums.set(key, (sums.get(key) ?? 0) + n);
     this.sql.exec(`DELETE FROM city_packs WHERE ${BUCKET_WHERE} AND bytes < ? AND id BETWEEN ? AND ?`, ...bucketArgs(bucket), PACK_FULL, rows[0]!.id, rows[rows.length - 1]!.id);
