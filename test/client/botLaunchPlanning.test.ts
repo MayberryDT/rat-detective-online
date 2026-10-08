@@ -12,9 +12,11 @@ const STOPPED={x:expect.closeTo(0),z:expect.closeTo(0)};
 
 function fixture(){
  const link=BOT_LAUNCH_LINKS[0],self=createPlayer('bot','Bot',DEFAULT_APPEARANCE,link.machine.pad),human=createPlayer('human','Human',DEFAULT_APPEARANCE,link.landing);
- const state:ChaosState={time:1000,case:{owner:human.id,previousOwner:null,pickupAfter:0,returningUntil:0,p:link.landing,q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0},ping:{at:1000,p:{...link.landing}}},dispatch:{phase:'cooldown',started:0,until:5000,serial:0},possession:{},shots:[],corpses:[],impacts:[],notice:{serial:0,text:''}};
+ const state:ChaosState={time:1000,case:{owner:human.id,previousOwner:null,pickupAfter:0,returningUntil:0,p:link.landing,q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'cooldown',started:0,until:5000,serial:0},possession:{},shots:[],corpses:[],impacts:[],notice:{serial:0,text:''}};
  const route=vi.fn(()=>[{...link.machine.pad,launch:link},{...link.landing}]);
  const brain=new RatBot({route,explorationTargets:()=>[]},0,()=>.5);
+ // The carrier shows itself on the roof once, then stays out of sight: a bot knows an unseen carrier only from its own sight.
+ brain.step(980,self,[human],state,()=>true,true,true,()=>false);
  return {brain,link,self,human,state,route};
 }
 it('holds the pad, respects cooldown/occlusion and waits for the real launch before steering',()=>{
@@ -39,6 +41,7 @@ it('holds the pad, respects cooldown/occlusion and waits for the real launch bef
 });
 it('abandons a blocked launcher within a bounded wait and reset discards stale flight/events',()=>{
  const {brain,link,self,human,state}=fixture();
+ expect(brain.goalKey).toBe('carrier:human');
  for(let now=1000;now<=14000;now+=250){state.time=now;brain.step(now,self,[human],state,()=>false,false,true,()=>false);}
  expect(brain.goalKey).not.toBe('carrier:human');
  brain.reset();state.pressure={serial:1,levels:{},launches:[{id:'old',playerId:self.id,machineId:link.machine.id,at:1000,velocity:{x:0,y:90,z:0}}]};

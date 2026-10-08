@@ -59,7 +59,8 @@ describe('hosted server bot controller',()=>{
     });
     it('recovers stationary loose evidence after multiple failed approaches, but respects a nearby human',()=>{
         navigation.route.mockReturnValue([]);
-        const bots=[0,1,2].map(i=>createPlayer(`bot-${i}`,'Bot',DEFAULT_APPEARANCE,{x:-80+i*10,y:0,z:-80}));
+        // Within sight of the case (60 units): a bot knows a loose case only by seeing it.
+        const bots=[0,1,2].map(i=>createPlayer(`bot-${i}`,'Bot',DEFAULT_APPEARANCE,{x:10+i*10,y:0,z:-30}));
         const players=new Map(bots.map(p=>[p.id,p])),recoverCase=vi.fn();
         const controller=new ServerBotController({...createWorldSpec(42),version:2},bots.map(p=>p.id),{
             move:(id,p)=>Object.assign(players.get(id)!,p),shoot:()=>{},recoverCase,
@@ -144,7 +145,9 @@ describe('hosted server bot controller',()=>{
     });
     it('jumps with the player impulse when its keys push into a wall without moving it',()=>{
         const {controller,players}=fixture();players.delete('human');
-        controller.world.addBody(new C.Body({mass:0,shape:new C.Box(new C.Vec3(.2,15,4)),position:new C.Vec3(1.2,15,0)}));
+        // A wall with a slit at eye height: the bot sees the case through it (it knows the case only by sight) but cannot pass.
+        controller.world.addBody(new C.Body({mass:0,shape:new C.Box(new C.Vec3(.2,.65,4)),position:new C.Vec3(1.2,.65,0)}));
+        controller.world.addBody(new C.Body({mass:0,shape:new C.Box(new C.Vec3(.2,14,4)),position:new C.Vec3(1.2,15.75,0)}));
         controller.step(1/60,1000,players,state(),true);
         const body=controller.world.bodies.find(body=>body.mass>0)!;
         let rise=0;

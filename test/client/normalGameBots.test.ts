@@ -70,7 +70,8 @@ describe('ordinary local practice match clients',()=>{
  });
  it('feeds the shared authoritative case objective to every bot within one shared route budget',()=>{
   const {coordinator,joined,navigation}=fixture();for(let i=0;i<11;i++)joined(i);
-  const state:ChaosState={time:1000,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:-100,y:0,z:-100},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
+  // In the bots' sight (within 60 units, nothing between): a bot knows a loose case only by seeing it.
+  const state:ChaosState={time:1000,case:{owner:null,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:30,y:0,z:-30},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'ready',started:0,until:0,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
   coordinator.receive({type:'chaos',state});coordinator.step(1/60,1000);
   expect(navigation.route).toHaveBeenCalledTimes(1);expect(navigation.route.mock.calls[0][1]).toEqual(state.case.p);
   coordinator.step(1/60,1000);expect(navigation.route).toHaveBeenCalledTimes(1);expect(navigation.update).toHaveBeenCalledTimes(1);

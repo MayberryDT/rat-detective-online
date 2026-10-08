@@ -12,7 +12,8 @@ import type {PlayerData} from '../../src/shared/networkProtocol';
 afterEach(()=>vi.restoreAllMocks());
 const NOW=1_000_000,PRODUCTION=341283204,STAGING=2383011301;
 
-/** A deterministic room: seeded Math.random, a frame clock for Date.now and performance.now (count-bounded planner work). */
+/** A deterministic room: seeded Math.random, a frame clock for Date.now and performance.now (count-bounded planner work).
+ * Moves turn the rat as GameRoom does, so a bot's view cone (case papers) faces where it looks. */
 function room(seed:number,placed:Record<string,{x:number;y:number;z:number}>,roamers:number,mode:'jurisdiction'|'excessive-force',world=PRODUCTION){
     const spec={seed:world,version:GRAYBOX_VERSION};
     let s=seed*2654435761>>>0;
@@ -24,7 +25,7 @@ function room(seed:number,placed:Record<string,{x:number;y:number;z:number}>,roa
     const sim=new ChaosSimulation(players,()=>{},undefined,spec);
     const assignment=createAssignment(mode,NOW-3000);assignment.phase='active';sim.setAssignment(assignment);
     const recovered:string[]=[];
-    const controller=new ServerBotController(spec,[...players.keys()],{move:(id,p)=>Object.assign(players.get(id)!,p),shoot:()=>{},recover:id=>recovered.push(id)});
+    const controller=new ServerBotController(spec,[...players.keys()],{move:(id,p,facing)=>Object.assign(players.get(id)!,p,{meshQy:Math.sin(facing/2),meshQw:Math.cos(facing/2)}),shoot:()=>{},recover:id=>recovered.push(id)});
     const run=(seconds:number,each:(t:number)=>boolean|void=()=>{})=>{
         for(let frame=1;frame<=seconds*60;frame++){
             clock=NOW+frame*1000/60;

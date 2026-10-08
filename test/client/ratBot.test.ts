@@ -19,7 +19,7 @@ const RUNNING=STEER.pace[0]*.9;
 function state(owner:string|null=null):ChaosState {
     return {time:1000,case:{owner,previousOwner:null,pickupAfter:0,returningUntil:0,p:{x:40,y:0,z:0},q:{x:0,y:0,z:0,w:1},v:{x:0,y:0,z:0},spin:{x:0,y:0,z:0}},dispatch:{phase:'cooldown',started:0,until:1e9,serial:0},possession:{},corpses:[],shots:[],impacts:[],notice:{serial:0,text:''}};
 }
-/** The authority's latest ping of the carried case: at `p`, at state time (an unseen carrier is known only by it). */
+/** The authority's latest ping of the carried case: at `p`, at state time. Bots ignore it (P4: they know an unseen carrier only where they last saw it). */
 function ping(s:ChaosState,p:Vec3Data,at=s.time){s.case.ping={at,p:{x:p.x,y:p.y,z:p.z}};}
 function fixture(seed=0){
     const navigation:MotorNavigation={route:vi.fn((_from,to)=>[{...to}]),explorationTargets:()=>Array.from({length:24},(_,i)=>({x:i*4+20,y:i%2?-7:0,z:60}))};
@@ -55,7 +55,8 @@ describe('case-first normal match bots',()=>{
     it('detours to ring a nearby ready pillar only when nothing more urgent is closer',()=>{
         const station=DISPATCH_STATIONS[0]!,decide=(s:ChaosState,dx:number,owner:string|null=null)=>{
             const {brain,self,navigation}=fixture();self.x=station.x+dx;self.z=station.z;s.case.owner=owner;
-            brain.step(1000,self,[self],s,()=>false,false,true,()=>false);return {brain,navigation};
+            // The pillar is out of sight; a case within 60 units is in sight (a bot knows a loose case only by seeing it).
+            brain.step(1000,self,[self],s,()=>true,false,true,()=>false);return {brain,navigation};
         };
         const ready=()=>{const s=state();s.dispatch={phase:'ready',started:0,until:0,serial:3};s.case.p={x:station.x+150,y:0,z:station.z};return s;};
         const {brain,navigation}=decide(ready(),30);
@@ -108,20 +109,25 @@ describe('case-first normal match bots',()=>{
         aimedNear(later.shoot,self,holder);expect(Math.abs(intent.facing)).toBeLessThan(.12);expect(Math.abs(later.facing-Math.PI/2)).toBeLessThan(.15);
     });
     it('pursues an unseen carrier via navigation but never shoots through walls',()=>{
-        const {brain,self,holder}=fixture(),s=state('holder');ping(s,holder);
+        const {brain,self,holder}=fixture(),s=state('holder');
+        // Seen a moment ago, now behind a wall.
+        brain.step(980,self,[self,holder],s,()=>true,false,true);
         const intent=act(brain,1000,self,[self,holder],s,()=>false,false,true);
         expect(brain.objective).toBe('carrier');expect(intent.x).toBeGreaterThan(0);expect(intent.shoot).toBeUndefined();
     });
-    // Heartbeat: a carrier out of sight is known only where the case was last pinged, never where it really is
-    // (the case's live position or the rat's own); a new ping moves the chase; sight follows it live again.
-    it('chases an unseen carrier toward its latest ping, refreshed by each new ping, and follows it once seen',()=>{
-        const {brain,self,holder,navigation}=fixture(),s=state('holder'),route=vi.mocked(navigation.route),first={x:10,y:0,z:30},second={x:-20,y:0,z:-30};
-        ping(s,first);brain.step(1000,self,[holder],s,()=>false,false,true);
-        expect(brain.objective).toBe('carrier');expect(brain.decision?.plan.follow).toBeUndefined();expect(route).toHaveBeenLastCalledWith(expect.any(Object),first);
-        // The carrier runs on between pings: the chase does not know.
-        holder.x=60;s.time=3000;brain.step(3000,self,[holder],s,()=>false,false,true);expect(route).toHaveBeenLastCalledWith(expect.any(Object),first);
-        s.time=5000;ping(s,second);brain.step(5000,self,[holder],s,()=>false,false,true);
-        expect(brain.objective).toBe('carrier');expect(route).toHaveBeenLastCalledWith(expect.any(Object),second);
+    // P4: a carrier out of sight is known only where this rat last saw it, never where it really is (the case's live
+    // position or the rat's own) and never from the case's pings; sight follows it live again.
+    it('chases an unseen carrier toward where it was last seen, ignores pings, and follows it once seen again',()=>{
+        const {brain,self,holder,navigation}=fixture(),s=state('holder'),route=vi.mocked(navigation.route),seen={x:10,y:0,z:30},pinged={x:-20,y:0,z:-30};
+        ping(s,pinged);brain.step(1000,self,[holder],s,()=>false,false,true);
+        expect(brain.objective).not.toBe('carrier');expect(route).not.toHaveBeenCalledWith(expect.any(Object),pinged);
+        Object.assign(holder,seen);s.time=1500;brain.step(1500,self,[holder],s,()=>true,false,true);
+        expect(brain.objective).toBe('carrier');expect(brain.decision?.plan.follow).toBe('holder');
+        // Out of sight it runs on: the chase goes where it was last seen.
+        holder.x=60;s.time=3000;brain.step(3000,self,[holder],s,()=>false,false,true);
+        expect(brain.objective).toBe('carrier');expect(route.mock.calls.at(-1)![1]).toMatchObject(seen);
+        s.time=5000;ping(s,pinged);brain.step(5000,self,[holder],s,()=>false,false,true);
+        expect(brain.objective).toBe('carrier');expect(route.mock.calls.at(-1)![1]).toMatchObject(seen);expect(route).not.toHaveBeenCalledWith(expect.any(Object),pinged);
         for(let now=7000;now<=8500;now+=100){s.time=now;brain.step(now,self,[holder],s,()=>true,false,true);}
         expect(brain.objective).toBe('carrier');expect(route).toHaveBeenLastCalledWith(expect.any(Object),holder);
     });
@@ -144,7 +150,7 @@ describe('case-first normal match bots',()=>{
         // At spawn and each time 10 s run out (the 180–300 ms beat adds a little to each): about 1, 11, 21 and 31 s.
         expect(decisions.size).toBe(4);
         expect([...decisions].map(d=>d?.trigger)).toEqual(['event','beat','beat','beat']);
-        s.case.owner=null;s.time=33100;brain.step(33100,self,[self,holder],s,()=>false,false,true);
+        s.case.owner=null;s.time=33100;brain.step(33100,self,[self,holder],s,()=>true,false,true);
         expect(brain.decision).toMatchObject({trigger:'event',plan:{goal:'take-case'}});
     });
     it('respects the former-carrier pickup delay and immediately drops old plans after reset',()=>{
@@ -190,13 +196,13 @@ describe('case-first normal match bots',()=>{
     it('keeps the grounded search origin through a jump and adopts the result after landing',()=>{
         const {brain,self,navigation}=fixture(),loose=state();
         vi.mocked(navigation.route).mockReturnValue([]);
-        brain.step(1000,self,[self],loose,()=>false,false,true);
+        brain.step(1000,self,[self],loose,()=>true,false,true);
         self.y=5.5;
         vi.mocked(navigation.route).mockReturnValue([{x:0,y:0,z:0},{x:10,y:0,z:0}]);
-        brain.step(1400,self,[self],loose,()=>false,false,false);
+        brain.step(1400,self,[self],loose,()=>true,false,false);
         expect(navigation.route).toHaveBeenCalledTimes(1);
         self.y=0;
-        expect(act(brain,1700,self,[self],loose,()=>false,false,true).x).toBeGreaterThan(0);
+        expect(act(brain,1700,self,[self],loose,()=>true,false,true).x).toBeGreaterThan(0);
         expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},loose.case.p);
     });
     it('rejects an upstairs first waypoint even when the search origin is still nearby',()=>{
@@ -209,29 +215,29 @@ describe('case-first normal match bots',()=>{
     });
     it('polls stable pending endpoints despite physical drift and never runs stuck recovery while waiting',()=>{
         const {brain,self,navigation}=fixture(),loose=state();vi.mocked(navigation.route).mockReturnValue([]);
-        brain.step(1000,self,[self],loose,()=>false,false,true);
+        brain.step(1000,self,[self],loose,()=>true,false,true);
         const originalFrom={x:self.x,y:self.y,z:self.z},originalTo={...loose.case.p};
         for(let t=1250;t<=4250;t+=250){
             self.x+=.03;loose.case.p.x+=.03;
-            expect(act(brain,t,self,[self],loose,()=>false,true,true)).toMatchObject(STILL);
+            expect(act(brain,t,self,[self],loose,()=>true,true,true)).toMatchObject(STILL);
         }
         expect(navigation.route).toHaveBeenCalledTimes(14);
         for(const [from,to] of vi.mocked(navigation.route).mock.calls){expect(from).toEqual(originalFrom);expect(to).toEqual(originalTo);}
         vi.mocked(navigation.route).mockReturnValue([{x:20,y:0,z:0}]);
-        expect(act(brain,4500,self,[self],loose,()=>false,false,true).x).toBeGreaterThan(0);
+        expect(act(brain,4500,self,[self],loose,()=>true,false,true).x).toBeGreaterThan(0);
     });
     it('replaces a pending goal only for meaningful movement and bounds replacement frequency',()=>{
         const {brain,self,navigation}=fixture(),loose=state();vi.mocked(navigation.route).mockReturnValue([]);
-        brain.step(1000,self,[self],loose,()=>false,false,true);
-        loose.case.p.x=80;brain.step(1250,self,[self],loose,()=>false,false,true);
+        brain.step(1000,self,[self],loose,()=>true,false,true);
+        loose.case.p.x=55;brain.step(1250,self,[self],loose,()=>true,false,true);
         expect(vi.mocked(navigation.route).mock.calls.at(-1)?.[1].x).toBe(40);
-        brain.step(2000,self,[self],loose,()=>false,false,true);
-        expect(vi.mocked(navigation.route).mock.calls.at(-1)?.[1].x).toBe(80);
+        brain.step(2000,self,[self],loose,()=>true,false,true);
+        expect(vi.mocked(navigation.route).mock.calls.at(-1)?.[1].x).toBe(55);
     });
     it('shoots a visible ready Dispatch button in a quiet stretch, then prioritizes an enemy',()=>{
         const {brain,self,near}=fixture(),loose=state(),target=DISPATCH_STATIONS[0].target;
         loose.dispatch={phase:'ready',started:0,until:0,serial:0};
-        self.x=target.x;self.z=target.z+12;
+        self.x=target.x;self.z=target.z+12;loose.case.p={x:self.x+40,y:0,z:self.z}; // In sight (a bot knows a loose case only by seeing it).
         const clearControl=vi.fn(()=>true);
         expect(act(brain,1000,self,[self],loose,()=>true,false,true,clearControl).shoot).toBeUndefined();
         const intent=firstShot(brain,1020,4000,self,[self],loose,clearControl,target);
@@ -310,9 +316,9 @@ describe('case-first normal match bots',()=>{
     it('handles an empty exploration inventory and clears failure state on ownership change/reset',()=>{
         const navigation:MotorNavigation={route:vi.fn(()=>[]),explorationTargets:()=>[]};
         const brain=new RatBot(navigation,0,()=>.5),self=player('me',0),loose=state();
-        brain.step(1000,self,[self],loose,()=>false,false,true);brain.step(7000,self,[self],loose,()=>false,false,true);
+        brain.step(1000,self,[self],loose,()=>true,false,true);brain.step(7000,self,[self],loose,()=>true,false,true);
         expect(brain.objective).toBe('explore');expect(brain.navigationStalled).toBe(true);expect(brain.failedCasePosition).toEqual(loose.case.p);
-        brain.step(7010,self,[self],state('me'),()=>false,false,true);expect(brain.failedCasePosition).toBeUndefined();
+        brain.step(7010,self,[self],state('me'),()=>true,false,true);expect(brain.failedCasePosition).toBeUndefined();
         brain.reset();expect(brain.navigationStalled).toBe(false);expect(brain.failedCasePosition).toBeUndefined();
     });
     it('chooses the nearest available case across the primary and three extras',()=>{
@@ -322,28 +328,28 @@ describe('case-first normal match bots',()=>{
             {...primary.case,id:'extra-b',p:{x:-8,y:0,z:0}},
             {...primary.case,id:'extra-c',p:{x:60,y:0,z:0}},
         ]};
-        const intent=act(brain,1000,self,[self],multiple,()=>false,false,true);
+        const intent=act(brain,1000,self,[self],multiple,()=>true,false,true);
         expect(brain.objective).toBe('case');expect(intent.x).toBeLessThan(0);
         expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},multiple.extraCases[1].p);
     });
     it('falls through an unreachable primary to an extra and preserves the primary failure vote',()=>{
         const {brain,self,navigation}=fixture(),primary=state();
-        const multiple={...primary,extraCases:[{...primary.case,id:'extra-a',p:{x:60,y:0,z:0}}]};
+        const multiple={...primary,extraCases:[{...primary.case,id:'extra-a',p:{x:55,y:0,z:0}}]};
         vi.mocked(navigation.route).mockImplementation((_from,to)=>to.x===40?[]:[{...to}]);
-        brain.step(1000,self,[self],multiple,()=>false,false,true);
-        brain.step(7000,self,[self],multiple,()=>false,false,true);
+        brain.step(1000,self,[self],multiple,()=>true,false,true);
+        brain.step(7000,self,[self],multiple,()=>true,false,true);
         expect(brain.objective).toBe('case');expect(brain.navigationStalled).toBe(false);
         expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},multiple.extraCases[0].p);
         expect(brain.failedCasePosition).toEqual(primary.case.p);
-        multiple.extraCases[0].owner='someone';brain.step(7010,self,[self],multiple,()=>false,false,true);
+        multiple.extraCases[0].owner='someone';brain.step(7010,self,[self],multiple,()=>true,false,true);
         expect(brain.failedCasePosition).toEqual(primary.case.p); // Another case's pickup cannot erase this vote.
     });
     it('keeps extra-case suppression keyed by stable ID and never reports it as a failed primary',()=>{
         const {brain,self,navigation}=fixture(),primary=state();
         const a={...primary.case,id:'extra-a',p:{x:8,y:0,z:0}},b={...primary.case,id:'extra-b',p:{x:-12,y:0,z:0}};
         const multiple={...primary,extraCases:[a,b]};vi.mocked(navigation.route).mockImplementation((_from,to)=>to.x===8?[]:[{...to}]);
-        brain.step(1000,self,[self],multiple,()=>false,false,true);
-        multiple.extraCases=[b,a];brain.step(7000,self,[self],multiple,()=>false,false,true);
+        brain.step(1000,self,[self],multiple,()=>true,false,true);
+        multiple.extraCases=[b,a];brain.step(7000,self,[self],multiple,()=>true,false,true);
         expect(navigation.route).toHaveBeenLastCalledWith({x:0,y:0,z:0},b.p);expect(brain.failedCasePosition).toBeUndefined();
     });
     it('does not collect a second case when carrying any extra',()=>{
@@ -384,9 +390,9 @@ describe('case-first normal match bots',()=>{
     it('keeps a usable old waypoint while a moved-case replacement route is pending',()=>{
         const {brain,self,navigation}=fixture(),loose=state();
         vi.mocked(navigation.route).mockReturnValueOnce([{x:20,y:0,z:0},{x:40,y:0,z:0}]).mockReturnValue([]);
-        brain.step(1000,self,[self],loose,()=>false,false,true);
-        self.x=6;loose.case.p.x=70;
-        const intent=act(brain,2500,self,[self],loose,()=>false,false,true);
+        brain.step(1000,self,[self],loose,()=>true,false,true);
+        self.x=6;loose.case.p.x=60;
+        const intent=act(brain,2500,self,[self],loose,()=>true,false,true);
         expect(navigation.route).toHaveBeenCalledTimes(2);expect(intent.x).toBeGreaterThan(RUNNING);expect(brain.navigationStalled).toBe(false);
     });
     it('trims a completed route to nearby progress instead of walking back to its old start',()=>{
@@ -403,7 +409,7 @@ describe('case-first normal match bots',()=>{
         navigation.localStep=vi.fn(from=>({x:from.x+2,y:0,z:0}));
         for(let now=1000;now<=10000;now+=250){
             self.x=(now-1000)*.002;
-            brain.step(now,self,[self],state(),()=>false,false,true);
+            brain.step(now,self,[self],state(),()=>true,false,true);
             expect(brain.objective).toBe('case');expect(brain.failedCasePosition).toBeUndefined();
         }
     });
@@ -411,13 +417,13 @@ describe('case-first normal match bots',()=>{
         const {brain,self,navigation}=fixture();vi.mocked(navigation.route).mockReturnValue([]);
         navigation.localStep=vi.fn(from=>({x:from.x+2,y:0,z:0}));
         for(let now=1000;now<=8500;now+=250){
-            self.x=now%500===0?1:0;brain.step(now,self,[self],state(),()=>false,false,true);
+            self.x=now%500===0?1:0;brain.step(now,self,[self],state(),()=>true,false,true);
         }
         expect(brain.failedCasePosition).toEqual(state().case.p);expect(brain.objective).toBe('explore');
     });
     it('does not label shared planner-budget denial a failed case search',()=>{
         const {brain,self,navigation}=fixture();vi.mocked(navigation.route).mockReturnValue(undefined);
-        for(let now=1000;now<=14000;now+=250)brain.step(now,self,[self],state(),()=>false,false,true);
+        for(let now=1000;now<=14000;now+=250)brain.step(now,self,[self],state(),()=>true,false,true);
         expect(brain.objective).toBe('case');expect(brain.failedCasePosition).toBeUndefined();expect(brain.navigationStalled).toBe(true);
     });
     it('keeps roof/no-support local failures stopped and prefers a nearby exploration location',()=>{
@@ -434,13 +440,15 @@ describe('case-first normal match bots',()=>{
 it('sprints along short flat navigation cells, slows at pickup, and does not blast the nearby case away',()=>{
  const {brain,self,navigation}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
  vi.mocked(navigation.route).mockReturnValue([{x:2,y:0,z:0},{x:4,y:0,z:0},{x:40,y:0,z:0}]);
- expect(act(brain,1000,self,[self],s,()=>false,false,true).x).toBeGreaterThan(RUNNING);
+ expect(act(brain,1000,self,[self],s,()=>true,false,true).x).toBeGreaterThan(RUNNING);
  brain.reset();s.case.p.x=4;
- for(let now=2000;now<8000;now+=100){const intent=act(brain,now,self,[self],s,()=>false,false,true);expect(Math.hypot(intent.x,intent.z)).toBeLessThanOrEqual(6.5+1e-9);expect(intent.shoot).toBeUndefined();}
+ for(let now=2000;now<8000;now+=100){const intent=act(brain,now,self,[self],s,()=>true,false,true);expect(Math.hypot(intent.x,intent.z)).toBeLessThanOrEqual(6.5+1e-9);expect(intent.shoot).toBeUndefined();}
 });
 it('intercepts a distant Chain carrier at the next landmark when already closer to it',()=>{
  const {brain,self,holder,navigation}=fixture(0),s=state('holder');s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';s.assignment.destinations=[...CHAIN_ROUTE];
- Object.assign(self,destinationPoint('icebox'));self.x-=8;holder.x=-100;holder.z=-100;ping(s,holder);
+ Object.assign(self,destinationPoint('icebox'));self.x-=8;
+ // Seen 40 units beyond the drop-off, then gone out of sight across the city.
+ Object.assign(holder,destinationPoint('icebox'));holder.x+=40;brain.step(980,self,[self,holder],s,()=>true,false,true);holder.x=-100;holder.z=-100;
  brain.step(1000,self,[self,holder],s,()=>false,false,true);
  expect(brain.objective).toBe('intercept');expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),destinationPoint('icebox'));
  s.assignment.deliverySerial=1;brain.step(1010,self,[self,holder],s,()=>false,false,true);
@@ -493,7 +501,8 @@ it('leaves full-health medkits alone but seeks them when injured, even while car
 it.each(['hidden','distant','other-floor','empty'] as const)('does not abandon a nearby case for a %s supply trip',reason=>{
     const {brain,self,navigation}=fixture(),s=state();s.case.p.x=10;
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:reason==='distant'?40:5,y:reason==='other-floor'?8.7:.7,z:0,availableAt:reason==='empty'?46_000:0}];
-    brain.step(1000,self,[],s,()=>reason!=='hidden',false,true);
+    // The case is in sight (a bot knows a loose case only by seeing it); only the supply may be hidden.
+    brain.step(1000,self,[],s,p=>reason!=='hidden'||p.x===s.case.p.x,false,true);
     expect(brain.objective).toBe('case');
     expect(navigation.route).toHaveBeenCalled();
 });
@@ -509,7 +518,9 @@ it('keeps firing when two visible opponents repeatedly trade nearest position',(
 it('patrols a defended landmark on supported steps while waiting for its carrier',()=>{
     const {brain,self,holder,navigation}=fixture(0),s=state('holder');
     s.assignment=createAssignment('chain-of-custody',0);s.assignment.phase='active';s.assignment.destinations=[...CHAIN_ROUTE];
-    Object.assign(self,destinationPoint('icebox'));holder.x=-100;holder.z=-100;ping(s,holder);
+    Object.assign(self,destinationPoint('icebox'));
+    // Seen 40 units beyond the drop-off, then gone out of sight across the city.
+    Object.assign(holder,destinationPoint('icebox'));holder.x+=40;brain.step(980,self,[holder],s,()=>true,false,true);holder.x=-100;holder.z=-100;
     navigation.localStep=vi.fn((_from,to)=>to);
     const first=act(brain,1000,self,[holder],s,()=>false,false,true);
     expect(brain.objective).toBe('intercept');expect(Math.hypot(first.x,first.z)).toBeGreaterThan(0);
@@ -519,21 +530,24 @@ it('patrols a defended landmark on supported steps while waiting for its carrier
 });
 
 it('plans a bounded trip to mapped upstairs armor, then resumes work when claimed',()=>{
-    const {brain,self,navigation}=fixture(),s=state();s.case.p.x=100;
+    // The case lies in sight further off than the armor; the armor upstairs is out of sight (known from the map).
+    const {brain,self,navigation}=fixture(),s=state();s.case.p.x=55;const sight=(p:Vec3Data)=>p.x===s.case.p.x;
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:15,y:8.7,z:0}];
-    brain.step(1000,self,[],s,()=>false,false,true);
+    brain.step(1000,self,[],s,sight,false,true);
     expect(brain.goalKey).toBe('pickup:alibi-records-upper');
     expect(navigation.route).toHaveBeenLastCalledWith(expect.any(Object),s.pickups[0]);
     s.pickups[0].availableAt=46000;s.time=1400;
-    brain.step(1400,self,[],s,()=>false,false,true);expect(brain.objective).toBe('case');
+    brain.step(1400,self,[],s,sight,false,true);expect(brain.objective).toBe('case');
     s.pickups.push({id:'another-roof',kind:'ironclad',x:15,y:36.7,z:0});
-    brain.step(1800,self,[],s,()=>false,false,true);expect(brain.objective).toBe('case');
+    brain.step(1800,self,[],s,sight,false,true);expect(brain.objective).toBe('case');
 });
 
 it('pursues a rooftop carrier instead of taking a long armor detour',()=>{
-    const {brain,self,holder}=fixture(),s=state('holder');holder.y=36;ping(s,holder);
+    const {brain,self,holder}=fixture(),s=state('holder');holder.y=36;
     s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';
     s.pickups=[{id:'alibi-records-upper',kind:'ironclad',x:15,y:8.7,z:0}];
+    // Seen up there a moment ago, now out of sight.
+    brain.step(980,self,[holder],s,p=>p===holder,false,true);
     brain.step(1000,self,[holder],s,()=>false,false,true);
     expect(brain.objective).toBe('carrier');
 });
@@ -553,10 +567,11 @@ describe('assignment commitment',()=>{
   s.case.p.x=10;brain.step(1400,self,[],s,()=>true,false,true);expect(brain.goalKey).toBe('pickup:heal');
  });
  it('does not start a mapped roof excursion while a live assignment case is available',()=>{
-  const {brain,self}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';s.case.p.x=100;
+  // The case lies in sight further off than the armor; the armor upstairs is out of sight (known from the map).
+  const {brain,self}=fixture(),s=state();s.assignment=createAssignment('excessive-force',0);s.assignment.phase='active';s.case.p.x=55;const sight=(p:Vec3Data)=>p.x===s.case.p.x;
   s.pickups=[{id:'upper-armor',kind:'ironclad',x:15,y:8.7,z:0}];
-  brain.step(1000,self,[],s,()=>false,false,true);expect(brain.objective).toBe('case');
-  s.case.returningUntil=10000;brain.step(1400,self,[],s,()=>false,false,true);expect(brain.objective).toBe('pickup');
+  brain.step(1000,self,[],s,sight,false,true);expect(brain.objective).toBe('case');
+  s.case.returningUntil=10000;brain.step(1400,self,[],s,sight,false,true);expect(brain.objective).toBe('pickup');
  });
  it.each([0,1,2])('Jurisdiction carrier lane %s keeps scoring through the warning instead of leaving early',seed=>{
   const {brain,self}=fixture(seed),s=state('me');s.assignment=createAssignment('jurisdiction',0);s.assignment.phase='active';
@@ -580,7 +595,9 @@ describe('assignment commitment',()=>{
  });
  it('pursues the currently scoring carrier rather than camping the announced next zone',()=>{
   const {brain,self,holder}=fixture(0),s=state('holder');s.assignment=createAssignment('jurisdiction',0);s.assignment.phase='active';
-  const j=s.assignment.jurisdiction!;j.remainingMs=5000;Object.assign(holder,JURISDICTION_ZONES[activeZone(j)].posts[0]);self.x=holder.x+70;self.z=holder.z;self.y=holder.y;ping(s,holder);
+  const j=s.assignment.jurisdiction!;j.remainingMs=5000;Object.assign(holder,JURISDICTION_ZONES[activeZone(j)].posts[0]);self.x=holder.x+70;self.z=holder.z;self.y=holder.y;
+  // Seen there a moment ago (70 units off), now out of sight.
+  brain.step(980,self,[holder],s,()=>true,false,true);
   brain.step(1000,self,[holder],s,()=>false,false,true);expect(brain.objective).toBe('carrier');
  });
 });
