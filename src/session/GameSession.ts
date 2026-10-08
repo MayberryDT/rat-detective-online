@@ -204,6 +204,8 @@ export class GameSession {
         this.perf=new PerfReporter(renderer,report=>this.transport.send({type:'perf',report}),this.events.signal);
         // The page's first pagehide listener (main.ts) closes the socket before the session's own runs.
         this.transport.onDestroy=()=>this.perf.leave();
+        this.transport.observeMessage=()=>this.perf.message();
+        this.perf.connection=()=>this.transport.state;
         this.perf.quality=()=>{const q=qualityStatus();return{quality:q.mode==='auto'?`auto-${q.tier}`:q.tier,scale:q.scale};};
         // Lifetime connection context survives a reconnect until a normal perf report can carry it.
         this.perf.network=()=>{const n=this.transport.getDiagnostics();

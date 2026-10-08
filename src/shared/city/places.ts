@@ -1,4 +1,4 @@
-import { grayboxBoxes, GRAYBOX_VERSION, CITY_PREVIEW_SEED, CITY_BOUNDS, type GrayboxBox } from '../grayboxLayout';
+import { sharedGrayboxBoxes, GRAYBOX_VERSION, CITY_PREVIEW_SEED, CITY_BOUNDS, type GrayboxBox } from '../grayboxLayout';
 import { CITY_STREETS } from '../cityPlan';
 import { LANDMARK_INTERIORS } from '../landmarkLayout';
 import { SEWER_HALLS, SEWER_HALL_NAMES, SEWER_ENTRIES } from '../sewerLayout';
@@ -110,7 +110,7 @@ function build(): CityPlaces {
     const top = b.y + b.h / 2, e = boxHalfExtents(b);
     return top > -1 && top < 2.5 && e.hx >= 1 && e.hz >= 1 && b.z - e.hz < QUAY_EDGE_Z;
   });
-  const tenements = grayboxBoxes({ seed: CITY_PREVIEW_SEED, version: GRAYBOX_VERSION })
+  const tenements = sharedGrayboxBoxes({ seed: CITY_PREVIEW_SEED, version: GRAYBOX_VERSION })
     .filter(b => b.building && !b.hidden && b.y - b.h / 2 < 1.5 && b.y + b.h / 2 > 2.5)
     .map(b => rectOf(b.x, b.z, b.w, b.d));
   const quayCrossings = streets.filter(s => !s.named && crosses(s, QUAY)).map(s => s.xmin).sort((a, b) => a - b);

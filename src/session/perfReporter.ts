@@ -1,12 +1,17 @@
 import type * as THREE from 'three';
-import type { ConnectionReport, PerfBrowser, PerfOs, PerfReport } from '../shared/perfReport';
+import { PERF_STALLS, type ConnectionReport, type PerfBrowser, type PerfOs, type PerfReport, type PerfStall } from '../shared/perfReport';
 
 /** Play time per report; a leaving player sends what it has from this much. */
 const REPORT_MS = 30_000, LEAVE_MIN_MS = 5_000;
 /** 30 s at 240 Hz; a faster screen reports early. */
 const CAPACITY = 8192;
-/** A gap this long is a paused tab or a debugger, not a frame. */
+/** A gap this long is a paused tab or a debugger, not a frame (it is still kept as a stall when the tab was visible). */
 const PAUSE_MS = 10_000;
+/** A frame this long is a stall: recorded with what ran in it (smooth-play plan, F1). */
+const STALL_MS = 1_000;
+/** Long animation frames are kept this long, to match against a stall. */
+const LOAF_KEEP_MS = 30_000;
+type LongFrame = { start: number; end: number; script: number; render: number; top?: string; topMs: number };
 
 type Machine = Pick<PerfReport, 'gpu' | 'gpuVendor' | 'os' | 'browser' | 'browserMajor' | 'cores' | 'memGb'>;
 type UserAgentData = { platform?: string; brands?: Array<{ brand: string; version: string }> };
@@ -21,6 +26,16 @@ export class PerfReporter {
   private ms = 0;
   private skip = false;
   private machine?: Machine;
+  private stalls: PerfStall[] = [];
+  private longFrames: LongFrame[] = [];
+  private longFrameCount = 0;
+  private messages = 0;
+  private firstMessageAt?: number;
+  private lastHeap?: number;
+  private lastPrograms = 0;
+  private sampled = 0;
+  /** The connection's state, read at a stall. */
+  connection?: () => string;
   /** The current graphics quality tier and render scale, once the game adapts them. */
   quality?: () => Pick<PerfReport, 'quality' | 'scale'>;
   /** Ping and how far in the past other rats are drawn, read once a report. */
@@ -29,12 +44,26 @@ export class PerfReporter {
   constructor(private readonly renderer: THREE.WebGLRenderer, private readonly send: (report: PerfReport) => void, signal: AbortSignal) {
     // rAF stops in a hidden tab; the first frame back spans the whole absence.
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.skip = true; }, { signal });
+    // What the browser ran in each long frame (Chromium's long-animation-frame timing; elsewhere stalls carry no attribution).
+    try {
+      if (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')) {
+        const observer = new PerformanceObserver(list => { for (const entry of list.getEntries()) this.longFrame(entry); });
+        observer.observe({ type: 'long-animation-frame', buffered: false });
+        signal.addEventListener('abort', () => observer.disconnect(), { once: true });
+      }
+    } catch { /* Attribution is optional. */ }
   }
+  /** A server message was handled (`NetworkManager.observeMessage`): a page that keeps handling them is alive. */
+  message(): void { this.messages++; this.firstMessageAt ??= performance.now(); }
   /** The page is leaving: what it has, from 5 s of play. */
   leave(): void { if (this.ms >= LEAVE_MIN_MS) this.flush(); }
 
   /** One play frame: `frameMs` since the previous rAF, `cpuMs` of work inside this one, `scheduleMs` of delay before entry. */
   frame(frameMs: number, cpuMs: number, scheduleMs = 0): void {
+    const now = performance.now(), visible = !this.skip;
+    if (visible && frameMs >= STALL_MS && this.stalls.length < PERF_STALLS) this.stall(frameMs, now);
+    this.firstMessageAt = undefined; this.messages = 0;
+    if (++this.sampled >= 60) { this.sampled = 0; this.lastHeap = heapMb(); this.lastPrograms = this.renderer.info.programs?.length ?? 0; }
     if (this.skip || !(frameMs > 0) || frameMs >= PAUSE_MS) { this.skip = false; return; }
     this.frames[this.count] = frameMs; this.cpu[this.count] = cpuMs; this.schedule[this.count] = scheduleMs; this.count++; this.ms += frameMs;
     if (this.ms >= REPORT_MS || this.count === CAPACITY) this.flush();
@@ -49,11 +78,47 @@ export class PerfReporter {
     const heap = memory && typeof memory === 'object' && 'usedJSHeapSize' in memory && typeof memory.usedJSHeapSize === 'number' ? memory.usedJSHeapSize : undefined;
     this.machine ??= machine(gl);
     const p50 = at(frames, .5);
-    this.send({ ms: Math.round(this.ms), frames: n, fps: r1(n * 1000 / this.ms), fps50: p50 > 0 ? r1(1000 / p50) : 0, p50, p95: at(frames, .95), p99: at(frames, .99),
+    const info = this.renderer.info, stalls = this.stalls.length ? this.stalls : undefined;
+    this.send({ ...(stalls ? { stalls } : {}), longFrames: this.longFrameCount, programs: info.programs?.length ?? 0, textures: info.memory.textures, geometries: info.memory.geometries,
+      ms: Math.round(this.ms), frames: n, fps: r1(n * 1000 / this.ms), fps50: p50 > 0 ? r1(1000 / p50) : 0, p50, p95: at(frames, .95), p99: at(frames, .99),
       worst: r1(frames[n - 1]!), over33, over100, cpu50: at(cpu, .5), cpu95: at(cpu, .95), schedule50: at(schedule, .5), schedule95: at(schedule, .95), ...(heap ? { heapMb: r1(heap / 1048576) } : {}),
       w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, dpr: window.devicePixelRatio || 1, pr: this.renderer.getPixelRatio(), ...this.machine, ...this.quality?.(), ...this.network?.() });
-    this.count = 0; this.ms = 0;
+    this.count = 0; this.ms = 0; this.stalls = []; this.longFrameCount = 0;
   }
+
+  private stall(frameMs: number, now: number): void {
+    const start = now - frameMs, heap = heapMb(), programs = this.renderer.info.programs?.length ?? 0;
+    let script = 0, render = 0, top: string | undefined, topMs = 0;
+    for (const f of this.longFrames) {
+      if (f.end < start || f.start > now) continue;
+      script += f.script; render += f.render;
+      if (f.top && f.topMs > topMs) { top = f.top; topMs = f.topMs; }
+    }
+    this.stalls.push({ ms: r1(frameMs), at: Math.round(this.ms), msgs: this.messages, firstMsg: this.firstMessageAt !== undefined ? Math.round(this.firstMessageAt - start) : -1,
+      hidden: document.hidden ? 1 : 0, focus: document.hasFocus() ? 1 : 0, ...(this.connection ? { net: this.connection() } : {}),
+      ...(this.longFrames.length ? { script: Math.round(script), render: Math.round(render) } : {}), ...(top ? { top } : {}),
+      programs: Math.max(0, programs - this.lastPrograms), ...(this.lastHeap !== undefined ? { heapBefore: this.lastHeap } : {}), ...(heap !== undefined ? { heapAfter: heap } : {}) });
+  }
+
+  private longFrame(entry: PerformanceEntry): void {
+    const e = entry as PerformanceEntry & { renderStart?: number; scripts?: Array<{ duration: number; sourceURL?: string; sourceFunctionName?: string; invoker?: string }> };
+    if (e.duration > 200) this.longFrameCount++;
+    let script = 0, top: string | undefined, topMs = 0;
+    for (const s of e.scripts ?? []) {
+      script += s.duration;
+      if (s.duration > topMs) { topMs = s.duration; top = `${(s.sourceURL ?? '').split('/').pop()?.split('?')[0] ?? ''}:${s.sourceFunctionName || s.invoker || ''}`.replace(/[^\x20-\x7e]/g, '?').slice(0, 80); }
+    }
+    const end = e.startTime + e.duration, render = e.renderStart ? Math.max(0, end - e.renderStart) : 0;
+    this.longFrames.push({ start: e.startTime, end, script, render, ...(top ? { top } : {}), topMs });
+    const cutoff = end - LOAF_KEEP_MS;
+    while (this.longFrames.length && this.longFrames[0]!.end < cutoff) this.longFrames.shift();
+    if (this.longFrames.length > 200) this.longFrames.shift();
+  }
+}
+
+function heapMb(): number | undefined {
+  const memory = 'memory' in performance ? (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory : undefined;
+  return typeof memory?.usedJSHeapSize === 'number' ? r1(memory.usedJSHeapSize / 1048576) : undefined;
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;

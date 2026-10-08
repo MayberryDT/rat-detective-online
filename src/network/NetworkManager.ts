@@ -90,6 +90,8 @@ export function resolveWebSocketUrl(serverUrl?: string): string {
 /** Owns the connection only. Session code applies validated messages to the game. */
 /** Renewals of a title's preparation, 20 s apart (three minutes). */
 const PREPARE_RENEWALS = 9;
+/** Renewals of a held join, 10 s apart (a minute of loading). */
+const HOLD_RENEWALS = 5;
 export class NetworkManager {
     public state: ConnectionState = 'idle';
     public onState: ((state: ConnectionState, message?: string) => void) | null = null;
@@ -121,6 +123,8 @@ export class NetworkManager {
     /** Enter City was pressed while the game still loads: the join went out held (the room wakes meanwhile) and the
      * real join follows from `connect`. */
     private held = false;
+    /** Renews a held seat (its lease is 20 s) while a slow machine is still loading, for up to a minute. */
+    private holdTimer: ReturnType<typeof setInterval> | null = null;
     /** Times the title's preparation has been renewed (`prepare`). */
     private renewals = 0;
     private readonly options: TransportOptions;
@@ -181,6 +185,7 @@ export class NetworkManager {
         // A held join (`hold`) becomes the real one on the same socket; its rat keeps the name and look it was given.
         if (this.held) {
             this.held = false;
+            if (this.holdTimer) { clearInterval(this.holdTimer); this.holdTimer = null; }
             const generation = this.generation;
             if (this.socket?.readyState === WebSocket.OPEN && this.credentials) {
                 this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, ...(this.resumeToken ? {resumeToken:this.resumeToken} : {}) });
@@ -195,6 +200,8 @@ export class NetworkManager {
         this.open();
     }
 
+    /** Called as each server message is handled (the perf reporter's stall evidence). */
+    observeMessage?: () => void;
     get isHeld(): boolean { return this.held; }
     /** Enter City pressed before the game has loaded: send the join now, held, so the room wakes while the browser
      * finishes; `connect` sends the real join once the session is ready. A resume is not held (its room is awake). */
@@ -259,6 +266,14 @@ export class NetworkManager {
         const join = () => {
             if (!current() || !this.credentials) return;
             this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, ...(this.resumeToken ? {resumeToken:this.resumeToken} : {}), ...(this.held ? {hold:true as const} : {}) });
+            if (this.held) {
+                let renewals = 0;
+                if (this.holdTimer) clearInterval(this.holdTimer);
+                this.holdTimer = setInterval(() => {
+                    if (!current() || !this.held || ++renewals > HOLD_RENEWALS || !this.credentials) { if (this.holdTimer) clearInterval(this.holdTimer); this.holdTimer = null; return; }
+                    this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, hold: true });
+                }, 10_000);
+            }
             if (!this.held && !this.joinTimer) this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.', 'join-timeout'), this.options.joinTimeoutMs ?? 8_000);
         };
         socket.addEventListener('open', join, {once:true});
@@ -286,6 +301,7 @@ export class NetworkManager {
                 return;
             }
             this.lastReceived = Date.now();
+            this.observeMessage?.();
             if(message.type==='pong'){
                 const sample=Math.max(0,Date.now()-message.sentAt),previous=this.diagnostics.rttMs;
                 if(sample<=120_000){

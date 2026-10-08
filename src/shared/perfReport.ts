@@ -18,6 +18,17 @@ export interface ConnectionReport {
   netInvalid?: number; netSendFailures?: number;
 }
 
+/** One frame over a second (smooth-play plan, F1): how long, what the browser says ran in it, and whether the page
+ * stayed alive. `script`/`render`: main-thread script and rendering time from long-animation-frame timing that
+ * overlaps it (none: the main thread was free, so the stall was in the GPU, compositor or system). `top`: the
+ * longest script there, as a short `file:function`. `msgs`: server messages handled during it; `firstMsg`: when the
+ * first was handled, from the stall's start (-1 none). `programs`: shader programs linked during it. */
+export interface PerfStall {
+  ms: number; at: number; script?: number; render?: number; top?: string; msgs: number; firstMsg: number;
+  hidden: number; focus: number; net?: string; programs?: number; heapBefore?: number; heapAfter?: number;
+}
+export const PERF_STALLS = 4;
+
 export interface PerfReport extends ConnectionReport {
   /** Play time the window covers, and the frames drawn in it. */
   ms: number; frames: number;
@@ -44,6 +55,12 @@ export interface PerfReport extends ConnectionReport {
   rtt?: number; rttJitter?: number; rttMin?: number; rttMax?: number;
   /** How far in the past other rats are drawn (ms, the median playback delay), humans and bots apart. */
   viewHuman?: number; viewBot?: number;
+  /** Frames over a second in the window, at most `PERF_STALLS` (the first ones). */
+  stalls?: PerfStall[];
+  /** Long animation frames (over 200 ms) the browser reported in the window. */
+  longFrames?: number;
+  /** Shader programs, textures and geometries the renderer holds at report time. */
+  programs?: number; textures?: number; geometries?: number;
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -52,6 +69,20 @@ const num = (v: unknown, min: number, max: number, per = 10) => typeof v === 'nu
 const int = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max ? v : undefined;
 const text = (v: unknown, max: number) => typeof v === 'string' && v.length > 0 && v.length <= max && /^[\x20-\x7e]+$/.test(v) ? v : undefined;
 const oneOf = <T extends string>(list: readonly T[], v: unknown): T | undefined => list.find(x => x === v);
+
+function parseStall(value: unknown): PerfStall | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const ms = num(v.ms, 0, 3_600_000), at = num(v.at, 0, 3_600_000, 1), msgs = int(v.msgs, 0, 1_000_000), firstMsg = num(v.firstMsg, -1, 3_600_000, 1);
+  const hidden = int(v.hidden, 0, 1), focus = int(v.focus, 0, 1);
+  if (ms === undefined || at === undefined || msgs === undefined || firstMsg === undefined || hidden === undefined || focus === undefined) return null;
+  const stall: PerfStall = { ms, at, msgs, firstMsg, hidden, focus };
+  const optional = { script: num(v.script, 0, 3_600_000, 1), render: num(v.render, 0, 3_600_000, 1), top: text(v.top, 80),
+    net: typeof v.net === 'string' && /^[a-z]{1,16}$/.test(v.net) ? v.net : undefined, programs: int(v.programs, 0, 10_000),
+    heapBefore: num(v.heapBefore, 0, 65_536), heapAfter: num(v.heapAfter, 0, 65_536) };
+  for (const [key, field] of Object.entries(optional)) if (field !== undefined) Object.assign(stall, { [key]: field });
+  return stall;
+}
 
 /** The frame counts are the report; without them it is dropped. Every other field is dropped alone when bad. */
 export function parsePerfReport(value: unknown): PerfReport | null {
@@ -75,7 +106,10 @@ export function parsePerfReport(value: unknown): PerfReport | null {
     quality: typeof v.quality === 'string' && /^[a-z0-9-]{1,24}$/.test(v.quality) ? v.quality : undefined, scale: num(v.scale, .05, 4, 100),
     rtt: num(v.rtt, 0, 120_000, 1), rttJitter: num(v.rttJitter, 0, 120_000, 1), rttMin: num(v.rttMin, 0, 120_000, 1), rttMax: num(v.rttMax, 0, 120_000, 1),
     viewHuman: num(v.viewHuman, 0, 10_000, 1), viewBot: num(v.viewBot, 0, 10_000, 1),
+    stalls: Array.isArray(v.stalls) ? v.stalls.slice(0, PERF_STALLS).map(parseStall).filter((s): s is PerfStall => !!s) : undefined,
+    longFrames: int(v.longFrames, 0, 100_000), programs: int(v.programs, 0, 100_000), textures: int(v.textures, 0, 1_000_000), geometries: int(v.geometries, 0, 1_000_000),
   };
+  if (optional.stalls && !optional.stalls.length) optional.stalls = undefined;
   const report: PerfReport = { ms, frames, fps: r1(frames * 1000 / ms), fps50: p50 > 0 ? r1(1000 / p50) : 0, p50, p95, p99, worst, over33, over100 };
   for (const [key, field] of Object.entries(optional)) if (field !== undefined) Object.assign(report, { [key]: field });
   return report;

@@ -1127,8 +1127,10 @@ export class GameRoom extends DurableObject<Env> {
         this.audience = null;
         this.rebalanceBots();
         this.startChaos();
+        // The city recorder (places, aggregates) is built now too, not at the welcome.
+        void this.city;
         this.ctx.waitUntil(this.scheduleNextAlarm());
-      }
+      } else this.setAttachment(ws, { ...attachment, admissionUntil: Math.max(attachment.admissionUntil ?? 0, this.now() + HELD_JOIN_MS) });
       return;
     }
     if (this.players.size >= MAX_PLAYERS && this.botRoster.length) {
@@ -1159,12 +1161,13 @@ export class GameRoom extends DurableObject<Env> {
 
     this.chaosDelivery.delete(ws);
     this.startChaos();
-    this.activateCompanion();
     const snapshot = this.welcomeMessage(id, player);
     this.send(ws, snapshot);
     if (this.getAttachment(ws).receiveMode !== 'welcome-only') {
       if(this.chaos)this.sendChaos(ws,this.chaos.snapshot(false));
     }
+    // The room's listing for the matchmaker can follow the welcome.
+    this.activateCompanion();
     this.joining.delete(ws);this.audience=null;
     if(fresh)this.broadcast({ type: 'playerJoined', player }, id);
     this.broadcastScoreboard();
