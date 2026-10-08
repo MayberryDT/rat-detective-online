@@ -15,7 +15,7 @@ const TAU=Math.PI*2;
 /** How a family's stock takes the wind: receipts flutter, photographs barely stir. `lift`: edge lift in a full gust. */
 const STOCK=[{gain:.7,lift:.075},{gain:.6,lift:.065},{gain:1,lift:.1},{gain:.25,lift:.03}] as const;
 /** Blowing in and away (ms), how recently born a sheet must be to blow in, and how many may be in the air at once. */
-const ARRIVE_MS=1150,LEAVE_MS=1900,ARRIVING_WINDOW=2600,MAX_FLYING=8;
+const ARRIVE_MS=1150,LEAVE_MS=1900,ARRIVING_WINDOW=2600,MAX_FLYING=12;
 
 /** Rest shapes: two per family, none of them tents. (x, z) run 0…1 across the sheet's width and depth. */
 const SHAPES:readonly ((x:number,z:number)=>number)[][]=[
@@ -215,7 +215,8 @@ export class CaseFiles {
         }
         for(const [id,sheet] of this.sheets){
             if(live.has(id)||sheet.leave)continue;
-            const rest=sheet.current,near=Math.hypot(rest.at.x-eye.x,rest.at.z-eye.z)<45;
+            // Every sheet on screen in range blows away; one out of sight simply goes.
+            const rest=sheet.current,near=Math.hypot(rest.at.x-eye.x,(rest.support?.y??rest.at.y)-eye.y,rest.at.z-eye.z)<CLUES.range+4;
             if(!motion||!sheet.shown||!near||!rest.support||flying>=MAX_FLYING){if(sheet.shown&&motion)this.stats.popped++;this.sheets.delete(id);continue;}
             flying++;sheet.arrive=undefined;this.stats.departures++;
             sheet.leave={start:now+(sheet.hash>>>9)%500,to:new THREE.Vector3(),far:false,rest};

@@ -57,7 +57,8 @@ try{
     const send=(method,params={})=>new Promise(r=>{const n=++id;pending.set(n,r);socket.send(JSON.stringify({id:n,method,params}));});
     const evaluate=async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.result?.value;
     const screenshot=async name=>writeFileSync(join(values.out,`${label}-${name}.png`),Buffer.from((await send('Page.captureScreenshot',{format:'png'})).result.data,'base64'));
-    const key=(type,k)=>send('Input.dispatchKeyEvent',{type,key:k.toLowerCase(),code:'Key'+k,windowsVirtualKeyCode:k.charCodeAt(0)});
+    const key=(type,k)=>k==='Space'?send('Input.dispatchKeyEvent',{type,key:' ',code:'Space',windowsVirtualKeyCode:32})
+        :send('Input.dispatchKeyEvent',{type,key:k.toLowerCase(),code:'Key'+k,windowsVirtualKeyCode:k.charCodeAt(0)});
     let mouseX=width/2;const look=async dx=>{mouseX+=dx;await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:Math.round(mouseX),y:Math.round(height/2)});};
     await send('Runtime.enable');await send('Page.enable');await send('Page.addScriptToEvaluateOnNewDocument',{source:HOOK});
     await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
@@ -84,7 +85,7 @@ try{
     checks.push({check:'papers on screen in the spawn view',pass:(spawnView?.sheets?.length??0)>0,shown:spawnView?.sheets?.length??0});
     await sleep(3000);
     // 2. Follow what is on screen: the nearest unread paper, else turn to look; the case itself once it is in view.
-    const read=new Set(),start=Date.now();let forward=false,shots=0,turns=0;
+    const read=new Set(),start=Date.now();let forward=false,shots=0,turns=0,stuck=0,lastAt={x:0,z:0};
     while(Date.now()-start<(seconds-6)*1000){
         const p=await evaluate(PROBE);if(!p?.me){await sleep(150);continue;}
         for(const s of p.sheets)if(Math.hypot(s.x-p.me.x,s.z-p.me.z)<2.2)read.add(s.id);
@@ -96,6 +97,9 @@ try{
         for(let i=0;i<4;i++){await look(turn/perPixel/4);await sleep(8);}
         const go=Math.abs(turn)<.7;
         if(go&&!forward){await key('keyDown','W');forward=true;}else if(!go&&forward){await key('keyUp','W');forward=false;}
+        // Held against a wall or a kerb: hop and side-step, as a player would, then carry on.
+        const moved=Math.hypot(p.me.x-lastAt.x,p.me.z-lastAt.z);lastAt=p.me;
+        if(forward&&moved<.05){stuck++;if(stuck>8){stuck=0;const side=Math.random()<.5?'A':'D';await key('keyDown','Space');await key('keyDown',side);await sleep(450);await key('keyUp','Space');await key('keyUp',side);}}else stuck=0;
         if(Date.now()-start>shots*15000+7000){await screenshot('follow-'+shots);shots++;}
         await sleep(90);
     }
