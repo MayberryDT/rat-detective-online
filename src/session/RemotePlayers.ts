@@ -38,6 +38,16 @@ export class RemotePlayers {
         this.rats.set(player.id, { entity, snapshots, generation: snapshots.generation });
         this.ids.set(entity, player.id);
     }
+    /** An exhibit replay starting its clip again: an existing rat takes `player`'s state as on a respawn (its powerups,
+     * stains, hat, death and colours reset) instead of being rebuilt. False when there is no such rat. */
+    restart(player: PlayerData): boolean {
+        const remote = this.rats.get(player.id);
+        if (!remote) return false;
+        this.previousFrameAt = undefined;
+        remote.entity.setDeathStyle('default');remote.entity.applySnapshot(player);
+        remote.snapshots.reset({ ...player, qx: player.meshQx, qy: player.meshQy, qz: player.meshQz, qw: player.meshQw }, this.now());
+        return true;
+    }
     move(player: Pick<PlayerData, 'id' | 'x' | 'y' | 'z' | 'meshQx' | 'meshQy' | 'meshQz' | 'meshQw'>, serverAt?: number): void {
         const remote = this.rats.get(player.id);
         if (!remote) return;

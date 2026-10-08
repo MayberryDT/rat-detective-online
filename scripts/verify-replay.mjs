@@ -56,7 +56,11 @@ try{
     await send('Page.navigate',{url:url.toString()});
     for(let i=0;i<400&&!await ev(`!!document.querySelector('#enter-city-btn')&&!document.querySelector('#enter-city-btn').disabled`);i++)await sleep(100);
     await ev(`document.querySelector('#enter-city-btn').click()`);
-    for(let i=0;i<300&&!await ev(`!!performance.getEntriesByName('city-first-play-frame')[0]&&!!window.__ratReplay`);i++)await sleep(200);
+    // The first entry after a deploy can be slow (cold room, cold caches): wait up to 3 minutes and say how long it took.
+    const clicked=Date.now();
+    for(let i=0;i<900&&!await ev(`!!performance.getEntriesByName('city-first-play-frame')[0]&&!!window.__ratReplay&&!!window.__renderer`);i++)await sleep(200);
+    report.entryMs=Date.now()-clicked;
+    if(!await ev('!!window.__renderer'))throw new Error(`never reached play: no game frame ${report.entryMs} ms after Enter`);
     report.build=await ev('fetch("/health").then(r=>r.json()).then(r=>r.build).catch(()=>null)');
     await sleep(1500);await click();await sleep(400);
     await ev(`window.__ratReplay&&(window.__recordCams=true)`);

@@ -111,19 +111,24 @@ class Playback {
     }
 
     /** Back to the clip's start: the rats from the roster keyframe, the view's moving things cleared, then everything
-     * up to the start applied silently. The scene, its machines, pillars and pools stay. */
+     * up to the start applied silently. The scene, its machines, pillars, pools and supply props stay, and so do the
+     * rats: one in the roster takes its keyframe state as on a respawn (rebuilding them was most of each loop). */
     rewind():void {
         const started=performance.now();
         const clip=this.data.clip;
-        // The view first, while its carrier and armed rats still exist; the rats are rebuilt from the roster below.
-        this.chaos.rewind();const viewAt=performance.now();this.remotes.clear();this.dust.clear();this.audio.stopAll();
+        // The view first, while its carrier and armed rats still exist; the rats are reset from the roster below.
+        this.chaos.rewind();const viewAt=performance.now();
+        const roster=this.roster?.roster??[],kept=new Set(roster.map(rat=>rat.data.id));
+        for(const id of [...this.remotes.rats.keys()])if(!kept.has(id))this.remotes.remove(id);
+        this.dust.clear();this.audio.stopAll();
         const clearedAt=performance.now();
         this.director=new ReplayDirector(clip,this.view,this.blockers);
         this.next=0;this.cut=true;this.lastChaos=null;
         this.t=this.roster?.at??clip.startAt;
         this.audio.muted=true;
-        for(const rat of this.roster?.roster??[]){
-            this.join({...rat.data,hp:rat.hp});
+        for(const rat of roster){
+            const data={...rat.data,hp:rat.hp};
+            if(!this.remotes.restart(data))this.join(data);
             if(rat.dead)this.remotes.get(rat.data.id)?.useSharedCorpse();
         }
         const joinedAt=performance.now();
