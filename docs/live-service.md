@@ -15,7 +15,7 @@ Last release receipt: **2026-10-06**. [Accepted shooting / protocol 33](verifica
 | Public Durable Object room | `public-live-v2`; the former `public` room is separate |
 | Shared world | Version 7 / layout 7 unchanged; persisted public seed 341283204. |
 | Admission | 10 total rats per room; each round rolls 6–9 bots and humans join on top until the cap, kicking a bot only when the room is already full; automatic overflow rooms. Every room, `public-live-v2` included, sleeps without a human (below; live on both Workers since 6 October) |
-| Staging | https://rat-detective-staging.mayberrydt.workers.dev/ — Worker `51f8b718-4095-4c4e-a26b-e5aeccf15135`, build `staging-2026-10-06-2822d1a`, protocol 33, layout 7 / mindVersion 12. Same source and assets as production. |
+| Staging | https://rat-detective-staging.mayberrydt.workers.dev/ — Worker `7cc1dea5-65c8-4ba3-aed5-2dad758d0899`, build `staging-2026-10-08-f958014` (branch `feature/physical-case-clues`), client `index-DO7MeUYW.js`, **protocol 36**, layout 7 / mindVersion 14: the P4 case papers repair for Tyler's review ([receipt](verification/noir-papers-v2-2026-10-08.md)). Not production's source: a protocol 33 production client cannot join it. |
 
 Protocol 24 requires matching client and Worker; open protocol-23 tabs must reload. Before any rollback to protocol 15,
 review stored Jurisdiction rounds: the old validator does not understand that mode. Existing older game tabs should
