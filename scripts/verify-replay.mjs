@@ -31,7 +31,7 @@ const check=(name,pass,detail)=>report.checks.push({check:name,pass:!!pass,...(d
 const HOOK=`(()=>{const d=window.__THREE_DEVTOOLS__=new EventTarget();window.__cams=[];window.__recordCams=false;
 d.addEventListener('observe',e=>{const o=e.detail;if(o.render&&o.domElement&&!o.__wrapped){o.__wrapped=1;const r=o.render.bind(o);
  o.render=(s,c)=>{if(c&&c.isPerspectiveCamera&&s.children.length>50){window.__renderer=o;if(window.__recordCams){c.updateMatrixWorld();const m=c.matrixWorld.elements;
-  window.__cams.push([performance.now(),c.uuid,m[12],m[13],m[14],-m[8],-m[9],-m[10],window.__ratReplay?.serverNow()??0]);}}return r(s,c);};}});})();`;
+  const st=window.__ratReplay?.state();window.__cams.push([performance.now(),c.uuid,m[12],m[13],m[14],-m[8],-m[9],-m[10],window.__ratReplay?.serverNow()??0,st?.t??0,st?.pov??null]);}}return r(s,c);};}});})();`;
 
 const port=9500+Math.floor(Math.random()*300),profile=mkdtempSync(join(tmpdir(),'rat-replay-'));
 const chrome=spawn(process.env.CHROME_BIN??'google-chrome',['--headless=new',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,`--window-size=${width},${height}`,
@@ -86,13 +86,14 @@ try{
     for(const clip of clips.slice(0,3)){
         const data=await ev(`window.__ratReplay.data(${JSON.stringify(clip.id)})`);
         const camsBefore=await ev('window.__cams.length');
-        await ev(`window.__replayStates=[];const tok=window.__replayToken=(window.__replayToken||0)+1;window.__ratReplay.play(${JSON.stringify(clip.id)},true);(function s(){if(window.__replayToken!==tok)return;const st=window.__ratReplay.state();window.__replayStates.push([performance.now(),st.t,st.pov??null,st.clip??null]);if(window.__replayStates.length<20000)requestAnimationFrame(s);})();void 0`);
+        await ev(`(()=>{window.__replayStates=[];const tok=window.__replayToken=(window.__replayToken||0)+1;window.__ratReplay.play(${JSON.stringify(clip.id)},true);(function s(){if(window.__replayToken!==tok)return;const st=window.__ratReplay.state();window.__replayStates.push([performance.now(),st.t,st.pov??null,st.clip??null]);if(window.__replayStates.length<20000)requestAnimationFrame(s);})();})()`);
         if(values.profile&&clip===clips[0]){await send('Profiler.enable');await send('Profiler.setSamplingInterval',{interval:250});await send('Profiler.start');}
         await sleep(clip.endAt-clip.startAt+3500);
         if(values.profile&&clip===clips[0]){const {result}=await send('Profiler.stop');writeFileSync(join(values.out,`replay-${values.label}.cpuprofile`),JSON.stringify(result.profile));}
         await ev('window.__ratReplay.stop()');
         const states=await ev('window.__replayStates.splice(0)'),cams=await ev(`window.__cams.slice(${camsBefore})`);
-        report.clips.push({clip,data,states,cams});
+        const measures=await ev(`(()=>{const m=performance.getEntriesByType('measure').filter(e=>e.name.startsWith('replay-')).map(e=>[e.name,+e.duration.toFixed(1)]);performance.clearMeasures();return m;})()`);
+        report.clips.push({clip,data,states,cams,measures});
     }
     await ev('window.__ratReplay.release?.()');
     await ev('window.__recordCams=false;window.__stopMovie()');
@@ -123,13 +124,14 @@ for(const {clip,data,states,cams} of report.clips){
     // RP5: frame gaps while playing (rendered replay frames).
     for(let i=1;i<replayCams.length;i++){const g=replayCams[i][0]-replayCams[i-1][0];frameGaps.push(g);worstFrame=Math.max(worstFrame,g);}
     // RP2: the subject's look track.
-    const ownPov=pov===report.myId,rows=ownPov?null:data.moves[pov];
-    if(!ownPov&&!(rows?.some(r=>Number.isFinite(r[4]))))noTrack.push({clip:clip.id,pov});
+    // Rows without a look (an older stream) are not a look: interpolate only between recorded looks.
+    const ownPov=pov===report.myId,rows=ownPov?null:(data.moves[pov]??[]).filter(r=>Number.isFinite(r[4])&&Number.isFinite(r[5]));
+    if(!ownPov&&!rows?.length)noTrack.push({clip:clip.id,pov});
     const died=data.deaths.find(([,v])=>v===pov)?.[0]??Infinity;
     // RP1 / RP3: each replay frame's camera against the subject's recorded look at the replay's clock (less the view delay).
+    // The replay's clock and subject as each frame was drawn (read in the same render call).
     for(const c of replayCams){
-        const s=states.reduce((best,x)=>Math.abs(x[0]-c[0])<Math.abs(best[0]-c[0])?x:best,states[0]);
-        const t=s[1]-VIEW_DELAY;if(!pov||t>=died)continue;
+        const t=c[9]-VIEW_DELAY;if(!pov||!c[10]||t>=died)continue;
         const dir=[c[5],c[6],c[7]];
         if(ownPov){
             const live=report.live.reduce((best,x)=>Math.abs(x[8]-t)<Math.abs(best[8]-t)?x:best,report.live[0]);
@@ -153,7 +155,7 @@ check('RP6 no slow motion: the clip clock runs at real time (0.9–1.1)',S.speed
 check('the session ran with no page errors',!errors.length&&!report.error,{errors,error:report.error});
 report.passed=report.checks.every(c=>c.pass);
 const {clips:raw,live,...light}=report;
-writeFileSync(join(values.out,`replay-${values.label}.json`),JSON.stringify({...light,clips:raw.map(c=>({clip:c.clip,frames:c.cams.length,states:c.states.length}))},null,1));
+writeFileSync(join(values.out,`replay-${values.label}.json`),JSON.stringify({...light,clips:raw.map(c=>({clip:c.clip,frames:c.cams.length,states:c.states.length,measures:c.measures}))},null,1));
 writeFileSync(join(values.out,`replay-${values.label}-raw.json`),JSON.stringify({clips:raw,live}));
 console.log(JSON.stringify({label:values.label,build:report.build,passed:report.passed,summary:S,checks:report.checks.map(c=>`${c.pass?'PASS':'FAIL'} ${c.check}`)},null,1));
 process.exitCode=report.passed?0:1;

@@ -113,6 +113,7 @@ class Playback {
     /** Back to the clip's start: the rats from the roster keyframe, the view's moving things cleared, then everything
      * up to the start applied silently. The scene, its machines, pillars and pools stay. */
     rewind():void {
+        const started=performance.now();
         const clip=this.data.clip;
         // The view first, while its carrier and armed rats still exist; the rats are rebuilt from the roster below.
         this.chaos.rewind();this.remotes.clear();this.dust.clear();this.audio.stopAll();
@@ -133,6 +134,8 @@ class Playback {
         }
         this.audio.muted=false;
         this.t=clip.startAt;
+        // Timings for replay checks (scripts/verify-replay.mjs): a rewind is each loop's restart.
+        performance.measure('replay-rewind',{start:started,end:performance.now()});
     }
 
     /** Advance by `dt` seconds on screen; false once the clip has ended. */
@@ -397,9 +400,11 @@ export class ReplayStage implements ReplayPlayer {
     }
 
     private start(data:ClipData):void {
+        const started=performance.now();
         // The camera's ray checks see the city only (live rats would block a view they are not in); built once a play.
         this.deps.scene.updateMatrixWorld();
         const blockers=new CameraBlockers(this.deps.scene.children.filter(o=>o.userData.aimTarget===true&&this.deps.shared(o)));
         this.playback=new Playback(data,this.audio,this.deps.listener.context as AudioContext,blockers,this.camera);
+        performance.measure('replay-start',{start:started,end:performance.now()});
     }
 }

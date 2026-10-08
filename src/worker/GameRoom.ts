@@ -7,7 +7,7 @@ import { codeOnlyRound, type Personality } from '../shared/bots/intent';
 import { ChaosDelivery } from './ChaosDelivery';
 import { ConnectionDelivery } from './ConnectionDelivery';
 import { wireBytes } from '../shared/networkProtocol';
-import { serializeMovement } from '../shared/movementWire';
+import { movementRow, serializeMovement } from '../shared/movementWire';
 import { CHAOS_WIRE_MODE, prepareChaos, type PreparedChaos } from '../shared/chaosWire';
 import { ChaosSimulation, type ChaosHit } from '../shared/ChaosSimulation';
 import type { WeaponKind } from '../shared/pickups';
@@ -2124,7 +2124,7 @@ export class GameRoom extends DurableObject<Env> {
     if(message.type==='playerShot' && this.pendingMovement.has(message.shooterId)){
       const sample=this.pendingMovement.get(message.shooterId)!;this.pendingMovement.delete(message.shooterId);
       const plain=serializeServerMessage(message),batch=serializeServerMessage({type:'playersMoved',players:[sample]});
-      const combined=JSON.stringify({...message,move:[sample.player.id,sample.at,...POSE_FIELDS.map(key=>sample.player[key])]});
+      const combined=JSON.stringify({...message,move:movementRow(sample)});
       const plainBytes=wireBytes(plain),combinedBytes=wireBytes(combined),batchBytes=wireBytes(batch);
       this.diagnostics.movementBatch('event',1);this.broadcasts++;
       for(const ws of audience){
