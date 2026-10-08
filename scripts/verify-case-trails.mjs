@@ -169,8 +169,10 @@ const printsHere=(see,f,runs,done)=>{let best,bd=Infinity;
     return best;};
 /** P6: ground under heel and toe in the real collision world (not the walk graph the authority lays them from). */
 const grounding=world=>{const query=new R.SpatialRayQuery(world);
-    // On a ramp the print lies on the slope: its height is the mean of heel and toe.
-    return q=>{const ys=[-.2,.2].map(a=>{const x=q.x+Math.sin(q.h)*a,z=q.z+Math.cos(q.h)*a,hit=query.closest(new Vec3(x,q.y+.4,z),new Vec3(x,q.y-.6,z),1);return hit.hasHit?hit.hitPointWorld.y:undefined;});
+    // On a ramp the print lies on the slope: its height is the mean of heel and toe. A ray straight down a seam between
+    // two ground boxes can slip through: then 3 cm to either side.
+    const down=(x,z,y)=>{for(const o of [0,.03,-.03]){const hit=query.closest(new Vec3(x+o,y+.4,z+o),new Vec3(x+o,y-.6,z+o),1);if(hit.hasHit)return hit.hitPointWorld.y;}return undefined;};
+    return q=>{const ys=[-.2,.2].map(a=>down(q.x+Math.sin(q.h)*a,q.z+Math.cos(q.h)*a,q.y));
         return ys.every(y=>y!==undefined)&&Math.abs((ys[0]+ys[1])/2-q.y)<.06&&Math.abs(ys[0]-ys[1])<.2;};};
 
 // ---- A: a populated room, ten rats (a still observer, a walker crossing its starter's edge, eight bots) ----
