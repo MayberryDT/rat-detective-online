@@ -328,6 +328,8 @@ export class ReplayStage implements ReplayPlayer {
     get fullscreen():boolean {return !!this.playback&&this.options?.mode==='fullscreen';}
     play(clip:ReplayClip,options:{mode:ReplayMode;rect?:()=>DOMRect;loop?:boolean;onEnd?:()=>void}):void {
         const data=this.deps.recorder.data(clip.id);
+        // The clip already built (going fullscreen, saving): start it again in place instead of building it anew.
+        if(data&&this.playback?.data===data){this.options=options;this.ended=false;this.playback.rewind();return;}
         this.stop();
         if(!data)return;
         this.options=options;this.ended=false;
