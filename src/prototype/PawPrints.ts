@@ -103,10 +103,12 @@ export class PawPrints {
         this.mesh.count=n;this.mesh.visible=n>0;
         this.mesh.instanceMatrix.needsUpdate=true;this.inks.needsUpdate=true;
     }
-    /** This view of every live run, for E2E continuity traces: where it starts and ends, and the last print's heading. */
-    trace():{id:string;state:string;shown:boolean;first:Vec3Data;end:Vec3Data;h:number}[] {
+    /** This view of every live run, for E2E continuity traces: where it starts and ends, the last print's heading, and
+     * every print (x, z, heading). */
+    trace():{id:string;state:string;shown:boolean;first:Vec3Data;end:Vec3Data;h:number;points:[number,number,number][]}[] {
         return [...this.runs.values()].map(run=>{const a=run.prints[0]!,b=run.prints[run.prints.length-1]!;
-            return {id:run.r.id,state:run.leave!==undefined?'fading':run.arrive!==undefined?'stamping':'down',shown:run.shown,first:{x:a.x,y:a.y,z:a.z},end:{x:b.x,y:b.y,z:b.z},h:b.h};});
+            return {id:run.r.id,state:run.leave!==undefined?'fading':run.arrive!==undefined?'stamping':'down',shown:run.shown,first:{x:a.x,y:a.y,z:a.z},end:{x:b.x,y:b.y,z:b.z},h:b.h,
+                points:run.prints.map(p=>[p.x,p.z,p.h] as [number,number,number])};});
     }
     warm():void {this.mesh.count=1;this.mesh.visible=true;this.mesh.setMatrixAt(0,new THREE.Matrix4());this.mesh.instanceMatrix.needsUpdate=true;}
     clear():void {this.runs.clear();this.primed=false;this.mesh.count=0;this.mesh.visible=false;}

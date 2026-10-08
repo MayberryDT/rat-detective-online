@@ -40,7 +40,7 @@ const files=s.getObjectByName('physical-case-files')?.userData.caseFiles;
 const cam={x:c.position.x,y:c.position.y,z:c.position.z},seen=t=>files.clearPath(cam,{x:t.x,y:t.y+.15,z:t.z});
 const caseSeen=hot&&hot.visible&&files&&files.clearPath(cam,{x:p.x,y:p.y,z:p.z});
 return {camera:Math.atan2(d.x,d.z),me:me&&{x:me.x,y:me.y,z:me.z},case:caseSeen?{x:p.x,y:p.y,z:p.z}:undefined,stats:files&&{...files.stats},paws:files&&{...files.paws.stats},
- prints:(files?.paws.trace()??[]).filter(r=>r.shown&&r.state!=='fading'&&seen(r.end)).map(r=>({id:r.id,first:r.first,end:r.end,h:r.h})),
+ prints:(files?.paws.trace()??[]).filter(r=>r.shown&&r.state!=='fading').map(r=>({id:r.id,first:r.first,end:r.end,h:r.h,points:r.points})),
  sheets:(files?.trace()??[]).filter(t=>t.shown&&(t.state==='p'||t.state==='q')&&seen(t)).map(t=>({id:t.id,x:t.x,y:t.y,z:t.z}))};})()`;
 
 const port=9600+Math.floor(Math.random()*150),profile=mkdtempSync(join(tmpdir(),'rat-papers-'));
@@ -94,17 +94,23 @@ try{
         const p=await evaluate(PROBE);if(!p?.me){await sleep(150);continue;}
         for(const s of p.sheets)if(Math.hypot(s.x-p.me.x,s.z-p.me.z)<2.2)read.add(s.id);
         const c=p.case&&Math.hypot(p.case.x-p.me.x,p.case.z-p.me.z)<25?p.case:undefined;
-        // At the end of the prints being followed: look the way they point.
-        if(tracking&&Math.hypot(tracking.end.x-p.me.x,tracking.end.z-p.me.z)<1.2){
-            if(forward){await key('keyUp','W');forward=false;}
-            const turn=wrap(tracking.h-p.camera);for(let i=0;i<6;i++){await look(turn/perPixel/6);await sleep(30);}
-            tracking=undefined;await sleep(250);continue;
+        // Following prints pair by pair, as a player would: the next print not yet passed; at the last, look the way
+        // they point. A run that leads nowhere for 8 s is given up.
+        if(tracking){
+            const pts=tracking.points;while(tracking.i<pts.length&&Math.hypot(pts[tracking.i][0]-p.me.x,pts[tracking.i][1]-p.me.z)<1.6)tracking.i++;
+            if(tracking.i>=pts.length||Date.now()-tracking.since>8000&&tracking.i===tracking.at){
+                if(forward){await key('keyUp','W');forward=false;}
+                const turn=wrap(pts[pts.length-1][2]-p.camera);for(let i=0;i<6;i++){await look(turn/perPixel/6);await sleep(30);}
+                tracking=undefined;await sleep(250);continue;
+            }
+            if(tracking.i!==tracking.at){tracking.at=tracking.i;tracking.since=Date.now();}
         }
         // Standing by a paper with prints beside it that this player has not followed: follow them first.
         const prints=!c&&!tracking?p.prints.find(r=>!walked.has(r.id)&&Math.hypot(r.first.x-p.me.x,r.first.z-p.me.z)<4):undefined;
-        if(prints){walked.add(prints.id);tracking=prints;}
-        const next=c??tracking?.end??p.sheets.filter(s=>!read.has(s.id)).sort((x,y)=>Math.hypot(x.x-p.me.x,x.z-p.me.z)-Math.hypot(y.x-p.me.x,y.z-p.me.z))[0];
-        route.push({t:Date.now()-start,me:p.me,target:next?{x:next.x,z:next.z,id:tracking&&next===tracking.end?'prints:'+tracking.id:next.id??'case'}:null});
+        if(prints){walked.add(prints.id);tracking={...prints,i:0,at:0,since:Date.now()};}
+        const step=tracking&&{x:tracking.points[tracking.i][0],z:tracking.points[tracking.i][1]};
+        const next=c??step??p.sheets.filter(s=>!read.has(s.id)).sort((x,y)=>Math.hypot(x.x-p.me.x,x.z-p.me.z)-Math.hypot(y.x-p.me.x,y.z-p.me.z))[0];
+        route.push({t:Date.now()-start,me:p.me,target:next?{x:next.x,z:next.z,id:tracking&&next===step?'prints:'+tracking.id:next.id??'case'}:null});
         if(!next){if(forward){await key('keyUp','W');forward=false;}await look(.5/perPixel/12);turns++;await sleep(60);continue;}
         const turn=wrap(Math.atan2(next.x-p.me.x,next.z-p.me.z)-p.camera);
         for(let i=0;i<4;i++){await look(turn/perPixel/4);await sleep(8);}
