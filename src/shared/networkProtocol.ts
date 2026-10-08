@@ -18,8 +18,9 @@ import type { ExhibitMessage, HighlightMarker } from './highlights';
  * 33: HeavyCheese presentation and short front Mousetrap throws.
  * 34: shared physical case papers replace the carrier ping and through-wall case locators (staging only).
  * 35: paper trails lead from every spawn to the case (staging only).
- * 36: case papers are persistent sheets in small groups: a fixed id, place and look `s` for life, an optional gust spot `q`. */
-export const PROTOCOL_VERSION = 36;
+ * 36: case papers are persistent sheets in small groups: a fixed id, place and look `s` for life, an optional gust spot `q`.
+ * 37: paw prints beside the papers (`prints`, keyed runs leaving a group the way the trail goes on). */
+export const PROTOCOL_VERSION = 37;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;

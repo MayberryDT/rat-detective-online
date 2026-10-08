@@ -207,7 +207,7 @@ export class ChaosSimulation {
         return found?data(found.position):undefined;
     }
     constructor(private players:Map<string,PlayerData>,private onHit:(hit:ChaosHit)=>void, saved?:ChaosState, private readonly spec?:WorldSpec, private readonly fixtureSupplies?:readonly PickupPoint[]) {
-        this.clues=new CaseClues(spec,saved?.clues);
+        this.clues=new CaseClues(spec,saved?.clues,saved?.prints);
         // The city is mostly static boxes; sweep-and-prune avoids testing every
         // static pair whenever a case or corpse moves.
         this.world.broadphase=new StaticCityBroadphase(this.world);
@@ -1794,8 +1794,9 @@ export class ChaosSimulation {
         const work={rays:this.rayQuery.queries,substeps:this.substepCount};
         this.rayQuery.queries=0;this.substepCount=0;return work;
     }
+    /** Sheets and print runs never change once laid, so the snapshot shares them (the wire caches their text). */
     snapshot(drain=true):ChaosState{
-        const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,clues:structuredClone(this.clues.items),case:this.caseSnapshot(this.primaryCase),
+        const state:ChaosState={time:this.now,epoch:this.epoch,tick:this.tick,clues:this.clues.items.slice(),prints:this.clues.prints.slice(),case:this.caseSnapshot(this.primaryCase),
             ...(this.assignment?{assignment:structuredClone(this.assignment.state)}:{}),
             extraCases:[...this.cases.values()].filter(c=>c!==this.primaryCase).map(c=>({id:c.id,...this.caseSnapshot(c)})),dispatch:{...this.dispatch},pressure:{...this.pressure,levels:{...this.pressure.levels},...(this.pressure.blowing?{blowing:{...this.pressure.blowing}}:{}),...(this.pressure.fired?{fired:{...this.pressure.fired}}:{}),...(this.pressure.boosts?{boosts:{...this.pressure.boosts}}:{}),...(this.pressure.shoves?{shoves:this.pressure.shoves.map(e=>({...e,velocity:{...e.velocity}}))}:{}),...(this.pressure.vents?{vents:this.pressure.vents.map(v=>({...v}))}:{}),launches:this.pressure.launches.map(e=>({...e,velocity:{...e.velocity}}))},possession:{...this.possession},
             pickups:[...this.pickups].map(([id,site])=>({id,kind:site.kind,x:site.p.x,y:site.p.y,z:site.p.z,availableAt:site.availableAt})),
@@ -1832,7 +1833,7 @@ export class ChaosSimulation {
         c.armed=this.incidentActive('evidence-tampering')&&!c.owner;
     }
     private restore(s:ChaosState){
-        this.clues=new CaseClues(this.spec,s.clues);
+        this.clues=new CaseClues(this.spec,s.clues,s.prints);
         // Room hibernation/reconnection must not restock consumed supplies early.
         for(const saved of s.pickups??[]){
             const site=this.pickups.get(saved.id);

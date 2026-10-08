@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import {CLUES,paperArt,paperFamily,paperShape,type CaseClue} from '../shared/caseClues';
+import {CLUES,paperArt,paperFamily,paperShape,type CaseClue,type CasePrints} from '../shared/caseClues';
 import type {Vec3Data} from '../shared/networkProtocol';
 import {gustAt,LOOSE,looseLifts,paperHash,windAt,type LooseLift} from '../shared/paperWind';
 import {casePaperArt,PAPER_BACK,paperCellOffset,paperUv} from './CasePaperArt';
+import {PawPrints} from './PawPrints';
 import {feelState} from '../feel/feelState';
 import {FEEL} from '../feel/feelTuning';
 import {reducedMotion} from '../ui/motion';
@@ -16,6 +17,10 @@ const TAU=Math.PI*2;
 const STOCK=[{gain:.7,lift:.075},{gain:.6,lift:.065},{gain:1,lift:.1},{gain:.25,lift:.03}] as const;
 /** Blowing in and away (ms), how recently born a sheet must be to blow in, and how many may be in the air at once. */
 const ARRIVE_MS=1150,LEAVE_MS=1900,ARRIVING_WINDOW=2600,MAX_FLYING=12;
+/** The eye-catch (Tyler, 8 October): the first time a sheet lying `near`…`far` from the rat comes into the camera's
+ * clear view, a gust lifts it and sets it back down where it lay (`ms`). At most one in `apart` units every `quietMs`,
+ * none closer together than `gapMs` anywhere, and `rays` sight checks a frame. */
+const CATCH={near:9,far:45,ms:1200,apart:5,quietMs:10000,gapMs:1500,rays:2,retryMs:400} as const;
 
 /** Rest shapes: two per family, none of them tents. (x, z) run 0…1 across the sheet's width and depth. */
 const SHAPES:readonly ((x:number,z:number)=>number)[][]=[
@@ -46,6 +51,9 @@ interface Sheet {
     leave?:{start:number;to:THREE.Vector3;far:boolean;rest:Rest};
     loose:{lifts:LooseLift[];next:number;count:number};
     seenAt:number;shown:boolean;
+    /** Seen in the clear from this view (`noticed`), the last sight check, and when a gust lifted it to catch the eye
+     * (until it lands again). */
+    noticed?:true;lookedAt?:number;caught?:number;
 }
 
 /** P4 case papers, presentation only: the authority owns every sheet's id, place and look. A sheet keeps one record
@@ -65,6 +73,7 @@ export class CaseFiles {
     private readonly turn=new THREE.Quaternion();
     private readonly euler=new THREE.Euler(0,0,0,'YXZ');
     private readonly flightAt=new THREE.Vector3();
+    private readonly cameraAt=new THREE.Vector3();
     private readonly sheets=new Map<string,Sheet>();
     private readonly candidates:{sheet:Sheet;distance:number}[]=[];
     private readonly live=new Set<string>();
@@ -72,8 +81,14 @@ export class CaseFiles {
     private time=0;
     visibleIds:string[]=[];
     /** Continuity counters for E2E traces: sheets blown in and away, sheets dropped from view while still in range and
-     * in the frustum (`evicted`: the budget), and sheets that left without blowing away while on screen (`popped`). */
-    readonly stats={arrivals:0,departures:0,evicted:0,popped:0};
+     * in the frustum (`evicted`: the budget), sheets that left without blowing away while on screen (`popped`), and
+     * eye-catching gusts (`caught`). */
+    readonly stats={arrivals:0,departures:0,evicted:0,popped:0,caught:0};
+    /** The paw prints beside the papers, drawn with them. */
+    readonly paws=new PawPrints();
+    private lastCatch=-Infinity;
+    private catches:{x:number;z:number;at:number}[]=[];
+    private catchRays=0;
     /** Replays: papers lie still (no wind, no blowing in or away). */
     still=false;
     /** Cached static-city support under a sheet, not a visibility test. Called once per resting spot. */
@@ -84,6 +99,7 @@ export class CaseFiles {
         this.root.name='physical-case-files';
         this.root.userData.noNoir=true; // adopted explicitly with the dynamic dressing path
         this.root.userData.caseFiles=this;
+        this.paws.support=p=>this.support(p);this.root.add(this.paws.mesh);
         const art=casePaperArt();
         this.material=new THREE.MeshStandardMaterial({map:art.map,emissiveMap:art.edge,
             emissive:0xffffff,emissiveIntensity:.55,roughness:1,metalness:0,side:THREE.FrontSide});
@@ -118,18 +134,20 @@ export class CaseFiles {
     }
     /** `now`: the authority's clock, so gusts and loose sheets agree across clients. `focus`: the local rat, which reads
      * papers out to `CLUES.range` like any rat; the orbiting camera must not move that edge. */
-    update(clues:readonly CaseClue[],now:number,camera:THREE.Camera,dt=1/60,focus?:THREE.Vector3):void {
+    update(clues:readonly CaseClue[],now:number,camera:THREE.Camera,dt=1/60,focus?:THREE.Vector3,prints:readonly CasePrints[]=[]):void {
         camera.updateMatrixWorld();this.time=now;
         this.frustum.setFromProjectionMatrix(this.matrix.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
         const motion=this.motion(),eye=focus??camera.position;
         this.sync(clues,now,motion,eye);
+        this.paws.update(prints,now,eye,this.frustum,motion,this.still);
+        this.catchRays=0;camera.getWorldPosition(this.cameraAt);
         const candidates=this.candidates;candidates.length=0;
         for(const sheet of this.sheets.values()){
             // A sheet that landed out of sight has simply landed.
             if(sheet.arrive&&now>=sheet.arrive.start+ARRIVE_MS)sheet.arrive=undefined;
             if(sheet.arrive&&now<sheet.arrive.start)continue;
             const rest=this.place(sheet,now,motion);if(!rest)continue;
-            const y=rest.support!.y,distance=Math.hypot(rest.at.x-eye.x,y-eye.y,rest.at.z-eye.z),moving=!!(sheet.leave||sheet.arrive||sheet.flying);
+            const y=rest.support!.y,distance=Math.hypot(rest.at.x-eye.x,y-eye.y,rest.at.z-eye.z),moving=!!(sheet.leave||sheet.arrive||sheet.flying||sheet.caught!==undefined);
             // Leaving sheets were on screen in range; everything else reads only out to a rat's range.
             if(!sheet.leave&&distance>(sheet.shown?CLUES.range+4:CLUES.range))continue;
             this.sphere.center.set(rest.at.x,y,rest.at.z);this.sphere.radius=moving?7:1.2;
@@ -144,6 +162,7 @@ export class CaseFiles {
         for(const sheet of this.sheets.values())sheet.shown=false;
         for(let i=0;i<Math.min(CLUES.visible,candidates.length);i++){const {sheet,distance}=candidates[i]!;
             if(distance<70)this.animate(sheet,now,dt,motion);
+            this.notice(sheet,distance,now,motion);
             const batch=sheet.family*2+sheet.shape;
             this.write(sheet,now,motion,this.batches[batch]!,counts[batch]!++);
             sheet.shown=true;sheet.seenAt=now;this.visibleIds.push(sheet.c.id);
@@ -159,7 +178,7 @@ export class CaseFiles {
     rats(positions:readonly {position:Vec3Data}[]):void {
         if(!this.motion())return;
         for(const {position:r} of positions)for(const sheet of this.sheets.values()){
-            if(!sheet.shown||sheet.leave||sheet.arrive||this.time-sheet.touchedAt<1200)continue;
+            if(!sheet.shown||sheet.leave||sheet.arrive||sheet.caught!==undefined||this.time-sheet.touchedAt<1200)continue;
             const at=sheet.current.at,dx=at.x-r.x,dz=at.z-r.z;
             if(Math.abs((sheet.current.support?.y??at.y)-r.y)>1.2||dx*dx+dz*dz>1.7*1.7)continue;
             sheet.touchedAt=this.time;sheet.liftV=Math.min(4,sheet.liftV+2.2);sheet.bendTo=Math.atan2(-dz,-dx);
@@ -170,7 +189,7 @@ export class CaseFiles {
         if(!this.motion())return;
         const reach=1.4+Math.min(2,strength)*.6;
         for(const sheet of this.sheets.values()){
-            if(!sheet.shown||sheet.leave||sheet.arrive)continue;
+            if(!sheet.shown||sheet.leave||sheet.arrive||sheet.caught!==undefined)continue;
             const at=sheet.current.at,d=Math.hypot(at.x-p.x,(sheet.current.support?.y??at.y)-p.y,at.z-p.z);
             if(d>reach)continue;
             const k=1-d/reach;sheet.hopV=Math.min(3,sheet.hopV+1.8*k*Math.min(2,strength));sheet.liftV=Math.min(4,sheet.liftV+3*k);sheet.bendTo=Math.atan2(p.z-at.z,p.x-at.x);
@@ -180,7 +199,7 @@ export class CaseFiles {
     trace():{id:string;s:number;state:string;x:number;y:number;z:number;yaw:number;shown:boolean}[] {
         const out=[];
         for(const sheet of this.sheets.values()){
-            const state=sheet.leave?'leaving':sheet.arrive?(this.time<sheet.arrive.start?'waiting':'arriving'):sheet.current===sheet.q?'q':'p';
+            const state=sheet.leave?'leaving':sheet.arrive?(this.time<sheet.arrive.start?'waiting':'arriving'):sheet.caught!==undefined?'caught':sheet.current===sheet.q?'q':'p';
             const rest=sheet.leave?.rest??sheet.current;
             out.push({id:sheet.c.id,s:sheet.c.s,state,x:rest.at.x,y:rest.support?.y??rest.at.y,z:rest.at.z,yaw:rest.yaw,shown:sheet.shown});
         }
@@ -188,12 +207,28 @@ export class CaseFiles {
     }
     warm():void{
         for(const mesh of this.batches){mesh.count=1;mesh.visible=true;mesh.setMatrixAt(0,this.matrix.identity());mesh.instanceMatrix.needsUpdate=true;}
+        this.paws.warm();
     }
-    clear():void{this.visibleIds=[];this.sheets.clear();this.primed=false;for(const mesh of this.batches){mesh.count=0;mesh.visible=false;}}
+    clear():void{this.visibleIds=[];this.sheets.clear();this.primed=false;this.lastCatch=-Infinity;this.catches=[];for(const mesh of this.batches){mesh.count=0;mesh.visible=false;}this.paws.clear();}
     /** The atlas is shared for the page's life; only this view's meshes and material go. */
-    dispose():void{this.root.removeFromParent();this.clear();for(const mesh of this.batches){mesh.geometry.dispose();mesh.dispose();}this.material.dispose();}
+    dispose():void{this.root.removeFromParent();this.clear();for(const mesh of this.batches){mesh.geometry.dispose();mesh.dispose();}this.material.dispose();this.paws.dispose();}
 
     private motion():boolean {return !this.still&&feelState().on('paperWind')&&!reducedMotion();}
+    /** The eye-catch: a sheet lying out in the open, first seen in the clear from this camera at a middle distance,
+     * catches a gust and settles back (CATCH). Close sheets are plain to see; moving ones already catch the eye. */
+    private notice(sheet:Sheet,distance:number,now:number,motion:boolean):void {
+        if(sheet.noticed)return;
+        if(sheet.arrive||sheet.leave||sheet.flying||distance<CATCH.near){sheet.noticed=true;return;}
+        if(distance>CATCH.far||this.catchRays>=CATCH.rays||now-(sheet.lookedAt??-Infinity)<CATCH.retryMs)return;
+        const rest=sheet.current,y=rest.support!.y+.25;
+        this.catchRays++;sheet.lookedAt=now;
+        if(!this.clearPath(this.cameraAt,{x:rest.at.x,y,z:rest.at.z}))return;
+        sheet.noticed=true;
+        if(!motion||sheet.sheltered!==false||sheet.q&&sheet.current!==sheet.p||now-this.lastCatch<CATCH.gapMs)return;
+        this.catches=this.catches.filter(c=>now-c.at<CATCH.quietMs);
+        if(this.catches.some(c=>Math.hypot(c.x-rest.at.x,c.z-rest.at.z)<CATCH.apart))return;
+        sheet.caught=now;this.lastCatch=now;this.stats.caught++;this.catches.push({x:rest.at.x,z:rest.at.z,at:now});
+    }
     /** New ids arrive (blowing in, if born moments ago while this view watched); gone ids blow away if on screen nearby. */
     private sync(clues:readonly CaseClue[],now:number,motion:boolean,eye:THREE.Vector3):void {
         const live=this.live;live.clear();let flying=0;
@@ -318,6 +353,16 @@ export class CaseFiles {
             // One in the open sails off out of sight; one with nowhere to fly flips over once and is gone.
             const scale=sheet.leave.far?(u<.72?1:Math.max(0,1-(u-.72)/.28)):(u<.35?1:Math.max(0,1-(u-.35)/.3));
             return {at:out,roll:u*2.4*side,pitch:Math.sin(u*6)*.5,yaw:rest.yaw+u*side*2,scale,flap:Math.sin(u*16)};
+        }
+        if(sheet.caught!==undefined){
+            const u=(now-sheet.caught)/CATCH.ms;
+            if(u>=1||!motion){sheet.caught=undefined;sheet.liftV+=1.2;}
+            else{
+                // Up off the ground, a little downwind and back, a half roll that flashes its back, and down where it lay.
+                const up=Math.sin(u*Math.PI),drift=Math.sin(u*Math.PI)*.35;
+                out.set(rest.at.x+w.x*drift,rest.support!.y+.012+up*.55,rest.at.z+w.z*drift);
+                return {at:out,roll:Math.sin(u*Math.PI)*1.05*side,pitch:Math.sin(u*TAU)*.3,yaw:rest.yaw+Math.sin(u*Math.PI)*.5*side,scale:1,flap:Math.sin(u*16)};
+            }
         }
         if(!motion||!sheet.q?.support||!sheet.p.support)return undefined;
         const last=sheet.loose.lifts[sheet.loose.lifts.length-1];

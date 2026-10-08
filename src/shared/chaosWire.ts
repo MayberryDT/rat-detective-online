@@ -10,12 +10,12 @@ export const CHAOS_WIRE_MODE = 'compact-v2';
  * the miss of a straight-line prediction from them (balls fly smooth arcs, so most rows are a few small numbers).
  * Trailing zeros are left off. */
 export const MOTION_ENCODING = 'predict-v1';
-const REST_KEYS = ['clues','case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs','traps','beams'] as const;
+const REST_KEYS = ['clues','prints','case','extraCases','dispatch','pressure','possession','corpses','notice','assignment','pickups','buffs','traps','beams'] as const;
 /** Lists of things with ids. While a list changes only by edits, removals and additions at its end, it travels as
  * `{put,drop}` (changed and new items, ids gone) when that is shorter than the whole list. */
-const KEYED_KEYS: Record<string, true> = { clues: true, corpses: true, beams: true, traps: true };
+const KEYED_KEYS: Record<string, true> = { clues: true, prints: true, corpses: true, beams: true, traps: true };
 const restValue=(state:ChaosState,key:typeof REST_KEYS[number]):unknown=>
-  state[key]??(key==='extraCases'?[]:key==='clues'||key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'||key==='traps'||key==='beams'?null:undefined);
+  state[key]??(key==='extraCases'?[]:key==='clues'||key==='prints'||key==='pressure'||key==='assignment'||key==='pickups'||key==='buffs'||key==='traps'||key==='beams'?null:undefined);
 type Definition = [number, string, string | null];
 type KeyedItem = {id:string;text:string};
 export interface ChaosAck { type:'chaosAck'; stream:string; seq:number }
@@ -31,12 +31,17 @@ function impactRow(i:ChaosImpact):unknown[] {
   while(row.length>7&&row[row.length-1]===null)row.pop();
   return row;
 }
+/** Lists whose items never change once made (case papers, paw prints): an item's text is kept with the item. */
+const STABLE_KEYS: Record<string, true> = { clues: true, prints: true };
+const stableText=new WeakMap<object,string>();
 /** Each item's rounded text, or undefined when an item has no id or two share one (the list then travels whole). */
-function keyedItems(value:readonly unknown[]):KeyedItem[]|undefined {
+function keyedItems(value:readonly unknown[],stable=false):KeyedItem[]|undefined {
   const items:KeyedItem[]=[],seen=new Set<string>();
   for(const item of value){
     if(!record(item)||typeof item.id!=='string'||seen.has(item.id))return undefined;
-    seen.add(item.id);items.push({id:item.id,text:rounded(item)});
+    let text=stable?stableText.get(item):undefined;
+    if(text===undefined){text=rounded(item);if(stable)stableText.set(item,text);}
+    seen.add(item.id);items.push({id:item.id,text});
   }
   return items;
 }
@@ -98,7 +103,7 @@ function restTexts(state:ChaosState):Pick<PreparedChaos,'rest'|'items'> {
   const rest=new Map<string,string>(),items=new Map<string,KeyedItem[]>();
   for(const key of REST_KEYS){
     if(key==='pressure')continue;
-    const value=restValue(state,key),list=KEYED_KEYS[key]&&Array.isArray(value)?keyedItems(value):undefined;
+    const value=restValue(state,key),list=KEYED_KEYS[key]&&Array.isArray(value)?keyedItems(value,!!STABLE_KEYS[key]):undefined;
     if(list){items.set(key,list);rest.set(key,'['+list.map(item=>item.text).join(',')+']');}
     else rest.set(key,rounded(value));
   }
@@ -232,6 +237,7 @@ export class ChaosDecoder {
     }
     const impacts=impactObjects(f.impacts);if(!impacts)return null;
     if(rest.clues===null)delete rest.clues;
+    if(rest.prints===null)delete rest.prints;
     if(rest.pressure===null)delete rest.pressure;
     if(rest.assignment===null)delete rest.assignment;
     if(rest.pickups===null)delete rest.pickups;

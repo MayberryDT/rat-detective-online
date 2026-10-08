@@ -14,6 +14,20 @@ export const paperShape=(s:number):number=>(s>>4)&1;
 /** One physical sheet. Everything here is fixed for the sheet's life: `id`, place `p`, birth `at` and look `s`.
  * `q`: a second resting spot a gust can carry it to and back (paperWind `looseLifts`); bots read `p`. */
 export interface CaseClue {id:string;p:Vec3Data;at:number;s:number;q?:Vec3Data}
+/** Paw prints (Tyler, 8 October: "sparse paw prints on the ground that go along with the papers"): a short run leaving a
+ * paper group the way the trail goes on, toes pointing that way. `g`: the group's first sheet. `f`: x, y, z and heading
+ * per print (atan2 of the toes' dx, dz, as a rat's look is measured), first nearest the papers, paws alternating from
+ * the left. Fixed for its life; when the case has moved and the way from a group turns, the group gets a new run. */
+export interface CasePrints {id:string;g:string;at:number;f:number[]}
+/** Prints a run (at most), the stride between them along the way and how far each paw falls to its side. */
+export const PRINTS={run:4,stride:.62,gait:.15} as const;
+export function validPrints(value:unknown):value is CasePrints[]{
+    if(!Array.isArray(value)||value.length>CLUES.max)return false;
+    const ids=new Set<string>();
+    return value.every(r=>r&&typeof r.id==='string'&&r.id.length>0&&r.id.length<=64&&!ids.has(r.id)&&(ids.add(r.id),true)&&
+        typeof r.g==='string'&&r.g.length>0&&r.g.length<=64&&Number.isFinite(r.at)&&Array.isArray(r.f)&&r.f.length>=4&&r.f.length<=PRINTS.run*4&&
+        r.f.length%4===0&&r.f.every((n:unknown)=>Number.isFinite(n)));
+}
 /** City-map facts: a starter spill at a fresh spawn, a rat's first route of a case placement, the trail cleared. */
 export interface ClueEvent {what:'lead'|'route'|'clear';player?:string;p:Vec3Data;n?:number}
 const finite=(p:unknown):p is Vec3Data=>!!p&&typeof p==='object'&&[(p as Vec3Data).x,(p as Vec3Data).y,(p as Vec3Data).z].every(Number.isFinite);
@@ -75,19 +89,29 @@ const PLAN={
     endMerge:10,
     /** A spot a sheet just blew away from stays bare this long: a new sheet landing there at once would read as a swap. */
     restMs:4000,
+    /** Prints start this far past a group's farthest sheet along the way, keep this clear of any sheet's spot and of
+     * other prints, and turn to a new run only once the case is this far from where they pointed and the way from the
+     * group has turned this much (radians). */
+    printLead:.9,printClear:.75,printApart:.35,printTurn:1.2,
+    /** A run lies at least this long before it may turn (a case thrown about would turn it back and forth). */
+    printKeepMs:5000,
 };
 type AnchorKind='start'|'turn'|'level'|'launch'|'gap'|'end'|'lead';
-/** `how`: how it was placed (diagnostics): `sheets` in sight of the previous group's sheets, `anchor` of its anchor, `own` only its own; `+n` slid n nodes. */
-interface Group {id:number;anchor:Vec3Data;ids:string[];refs:Set<string>;idle?:number;how?:string;lead?:true}
-/** `step`, `bridge`: how far the search for a place to lay this group got (it resumes there on a later step, after
+/** `how`: how it was placed (diagnostics): `sheets` in sight of the previous group's sheets, `anchor` of its anchor,
+ * `prints` of where the previous group's prints end, `own` only its own; `+n` slid n nodes. `prints`: its run of paw
+ * prints; `toward`: where the trail led when they were laid; `printed`: its prints were tried. */
+interface Group {id:number;kind:AnchorKind;anchor:Vec3Data;ids:string[];refs:Set<string>;idle?:number;how?:string;lead?:true;prints?:string;toward?:Vec3Data;printed?:true}
+/** `step`, `bridge`, `tracks`: how far the search for a place to lay this group got (it resumes there on a later step, after
  * `prior`, the group it reads from, stays the same). */
-interface Anchor {i:number;kind:AnchorKind;group?:number;retryAt?:number;step?:number;bridge?:number;prior?:number}
+interface Anchor {i:number;kind:AnchorKind;group?:number;retryAt?:number;step?:number;bridge?:number;tracks?:number;prior?:number}
 interface Path {points:BotWaypoint[];dist:number[];target:Vec3Data;at:number;progress:number;anchors:Anchor[];scan:{a:number;j:number;last:number;gap:number;slope:boolean;slopeY:number;done:boolean};refs:Set<number>;carried:boolean}
 interface Life {alive:boolean;since:number;pending:boolean;lead?:number;leadAt?:Vec3Data;announced:boolean}
 type Clear=(a:Vec3Data,b:Vec3Data)=>boolean;
 const distance=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const flat=(a:Vec3Data,b:Vec3Data)=>Math.hypot(a.x-b.x,a.z-b.z);
 const isBot=(id:string)=>id.startsWith('rd-ai-');
+const turnBetween=(a:number,b:number)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
+const round3=(n:number)=>Math.round(n*1000)/1000;
 /** Whether the ground at `p` is in sight of someone standing at `eye`: from a rat's own eyes (1.6, how bots see) and
  * from the shoulder camera's pivot (3.5, where a player's view never drops below). Awnings and arcades can block one
  * and not the other. `clear` lifts both ends by .8. */
@@ -99,6 +123,7 @@ const groundSeen=(clear:Clear,eye:Vec3Data,p:Vec3Data)=>clear({x:eye.x,y:eye.y+.
  * nobody wants lingers briefly, then goes. Clearing (the case relocated, returning, reset) retires everything at once. */
 export class CaseClues {
     items:CaseClue[]=[];
+    prints:CasePrints[]=[];
     private readonly navigation?:BotNavigation;
     private groups=new Map<number,Group>();
     private paths=new Map<string,Path>();
@@ -107,6 +132,9 @@ export class CaseClues {
     private pending?:{id:string;from:Vec3Data;target:Vec3Data;search:Generator<void,BotWaypoint[]>};
     private nextGroup=1;
     private nextSheet=1;
+    private nextPrint=1;
+    /** Where the trail leads this step (the floor under the case or its carrier). */
+    private aim?:Vec3Data;
     private restored:boolean;
     private resetLives=false;
     private rays=0;
@@ -123,16 +151,25 @@ export class CaseClues {
     /** Spots sheets just left. `cleared`: left in a clear, so they only keep new sheets off the very spot (a fresh
      * trail is not held back), where an ordinary retirement also holds back a whole group laid there. */
     private vacated:{p:Vec3Data;at:number;cleared?:true}[]=[];
-    constructor(spec?:WorldSpec,saved?:CaseClue[]){
+    constructor(spec?:WorldSpec,saved?:CaseClue[],savedPrints?:CasePrints[]){
         if(spec)this.navigation=new BotNavigation(spec);
         this.restored=validClues(saved);
         if(this.restored){
             this.items=structuredClone(saved!);
             for(const c of this.items){const n=parseInt(c.id.slice(1),36);if(c.id[0]==='c'&&Number.isFinite(n))this.nextSheet=Math.max(this.nextSheet,n+1);}
-            // Saved groups are not recorded: sheets within a step of each other are one group, waiting to be claimed.
+            // Saved groups are not recorded: each saved run of prints keeps the sheet it leaves from as its group, then
+            // sheets within a step of a group join it (or start their own), all waiting to be claimed.
+            const claimed=new Set<string>();
+            if(validPrints(savedPrints))for(const r of savedPrints){
+                const c=this.items.find(c=>c.id===r.g);if(!c||claimed.has(c.id))continue;
+                claimed.add(c.id);this.prints.push(structuredClone(r));
+                const id=this.nextGroup++;this.groups.set(id,{id,kind:'gap',anchor:{...c.p},ids:[c.id],refs:new Set(),prints:r.id,printed:true});
+                const n=parseInt(r.id.slice(1),36);if(r.id[0]==='p'&&Number.isFinite(n))this.nextPrint=Math.max(this.nextPrint,n+1);
+            }
             for(const c of this.items){
+                if(claimed.has(c.id))continue;
                 const near=[...this.groups.values()].find(g=>Math.abs(g.anchor.y-c.p.y)<1.5&&flat(g.anchor,c.p)<3.5);
-                if(near)near.ids.push(c.id);else{const id=this.nextGroup++;this.groups.set(id,{id,anchor:{...c.p},ids:[c.id],refs:new Set()});}
+                if(near)near.ids.push(c.id);else{const id=this.nextGroup++;this.groups.set(id,{id,kind:'gap',anchor:{...c.p},ids:[c.id],refs:new Set()});}
             }
         }
     }
@@ -141,20 +178,20 @@ export class CaseClues {
     clear(reset=false,at?:Vec3Data):void {
         if(this.items.length)this.events.push({what:'clear',p:{...(at??this.items[0]!.p)},n:this.items.length});
         for(const c of this.items)this.vacated.push({p:c.p,at:this.lastNow,cleared:true});
-        this.items=[];this.groups.clear();this.paths.clear();this.pending=undefined;
+        this.items=[];this.prints=[];this.groups.clear();this.paths.clear();this.pending=undefined;
         for(const life of this.lives.values()){life.lead=undefined;life.leadAt=undefined;life.announced=false;}
         if(reset)this.resetLives=true;
     }
     /** One simulation step. `target`: the floor under the case (or its carrier); `carried` leaves the route's end bare. */
     guide(players:Iterable<PlayerData>,target:Vec3Data,now:number,clear?:Clear,carried=false):void {
         const nav=this.navigation;if(!nav)return;
-        this.lastNow=now;this.placeRays=0;
+        this.lastNow=now;this.placeRays=0;this.aim=target;
         const sight:Clear=clear??(()=>true);
         const all=[...players],living=all.filter(p=>p.hp>0).sort((a,b)=>Number(isBot(a.id))-Number(isBot(b.id)));
         this.rays=0;
         this.trackLives(all,living,now);
         // Restored sheets wait for the routes to claim them, then go like any other unwanted group.
-        if(this.restored){for(const g of this.groups.values())g.idle=now+PLAN.restoreMs-PLAN.graceMs;this.restored=false;}
+        if(this.restored){for(const g of this.groups.values()){g.idle=now+PLAN.restoreMs-PLAN.graceMs;if(g.prints)g.toward={...target};}this.restored=false;}
         let made=0;
         for(const player of living){
             const life=this.lives.get(player.id)!;
@@ -258,6 +295,12 @@ export class CaseClues {
         let best=path.progress,nearest=distance(P[best]!,player);
         for(let i=path.progress+1;i<Math.min(P.length,path.progress+13);i++){const d=distance(P[i]!,player);if(d<nearest-.01){nearest=d;best=i;}}
         path.progress=best;
+        // A starter's prints wait for its rat's route: from the spill toward where that route goes.
+        const life=this.lives.get(player.id),lead=life?.lead!==undefined?this.groups.get(life.lead):undefined;
+        if(lead&&P.length>1&&this.wantsPrints(lead)){
+            let j=0;for(let k=1;k<Math.min(P.length,15);k++)if(Math.abs(P[k]!.y-lead.anchor.y)<1.5&&flat(P[k]!,lead.anchor)<flat(P[j]!,lead.anchor))j=k;
+            this.printFor(lead,flat(P[j]!,lead.anchor)<1.5?P.slice(j,j+10):[lead.anchor,...P.slice(j,j+10)],now);
+        }
         const here=path.dist[best]!;
         this.scan(path,here+PLAN.ahead+PLAN.gap[1],sight);
         const within=(anchor:Anchor)=>{const at=path.dist[anchor.i]!;return at>=here-PLAN.behind&&at<=here+PLAN.ahead;};
@@ -336,22 +379,22 @@ export class CaseClues {
         // In sight from one of the previous group's sheets (a player reads each), else from the previous anchor. A corner
         // group never slides back up the street it turns from: from there nobody sees round the corner.
         // Best: in sight from every one of them, wherever a player finishes reading the last group.
-        const ladder:{sources:Vec3Data[];every:boolean}[]=[...(from.length>1?[{sources:from,every:true}]:[]),{sources:from,every:false}];
-        if(before&&prior)ladder.push({sources:[P[before.i]!],every:false});
+        const ladder:{sources:Vec3Data[];every:boolean;how:string}[]=[...(from.length>1?[{sources:from,every:true,how:'all-sheets'}]:[]),{sources:from,every:false,how:'sheets'}];
+        if(before&&prior)ladder.push({sources:[P[before.i]!],every:false,how:'anchor'});
         const shifts=anchor.kind==='turn'?[0,1,2,3]:[0,-1,1,-2,2,-3];
         const counted:Clear=(a,b)=>{this.placeRays++;return sight(a,b);};
         // The search resumes where a busy step left it, unless the group it reads from has changed.
-        if(anchor.prior!==prior?.id){anchor.prior=prior?.id;anchor.step=0;anchor.bridge=undefined;}
+        if(anchor.prior!==prior?.id){anchor.prior=prior?.id;anchor.step=0;anchor.bridge=undefined;anchor.tracks=undefined;}
         const tries=ladder.flatMap(l=>shifts.map(shift=>({...l,shift})));
         for(let t=anchor.step??0;t<tries.length;t++){
-            const {sources,every,shift}=tries[t]!,k=i+shift;if(k<1||k>=P.length)continue;
+            const {sources,every,shift,how}=tries[t]!,k=i+shift;if(k<1||k>=P.length)continue;
             if(this.placeRays>PLAN.placeRays){anchor.step=t;this.capped=this.budgeted=true;return undefined;}
             // Cheap first: if the route node itself is out of sight from there, so are the sheets around it.
             if(sources.length&&!(every?sources.every(f=>groundSeen(counted,f,P[k]!)):sources.some(f=>groundSeen(counted,f,P[k]!))))continue;
             // The way on (a few nodes past this place) must be in sight from the group's first sheet.
             const next=P[Math.min(P.length-1,k+3)]!;
-            const group=this.groupAt(P[k]!,anchor.kind,now,sight,{out,into,count,from:sources,every,strict:true,next,...(prior?{not:prior.id}:{})});
-            if(group!==undefined){const g=this.groups.get(group);if(g&&!g.how)g.how=(sources===from?(every?'all-sheets':'sheets'):'anchor')+(shift?(shift>0?'+':'')+shift:'');return group;}
+            const group=this.groupAt(P[k]!,anchor.kind,now,sight,{out,into,count,from:sources,every,strict:true,next,way:P.slice(k,k+10),...(prior?{not:prior.id}:{})});
+            if(group!==undefined){const g=this.groups.get(group);if(g&&!g.how)g.how=how+(shift?(shift>0?'+':'')+shift:'');return group;}
             if(this.capped){anchor.step=t;return undefined;}
         }
         anchor.step=tries.length;
@@ -360,26 +403,40 @@ export class CaseClues {
         if(prior&&before&&from.length)for(let m=anchor.bridge??i-1;m>before.i;m--){
             if(this.placeRays>PLAN.placeRays){anchor.bridge=m;this.capped=this.budgeted=true;return undefined;}
             if(!from.some(f=>groundSeen(counted,f,P[m]!)))continue;
-            const bridge=this.groupAt(P[m]!,'turn',now,sight,{out:dir(P[m]!,A)??out,count:1,from,strict:true,next:A,not:prior.id});
+            const bridge=this.groupAt(P[m]!,'turn',now,sight,{out:dir(P[m]!,A)??out,count:1,from,strict:true,next:A,way:P.slice(m,m+10),not:prior.id});
             if(bridge===undefined){if(this.capped){anchor.bridge=m;return undefined;}continue;}
             const b=this.groups.get(bridge)!;b.how??='bridge';
             path.anchors.splice(path.anchors.indexOf(anchor),0,{i:m,kind:'turn',group:bridge});
             const sheets=b.ids.map(id=>this.items.find(c=>c.id===id)?.p).filter((p):p is Vec3Data=>!!p);
             for(const shift of shifts){
                 const k=i+shift;if(k<1||k>=P.length)continue;
-                const group=this.groupAt(P[k]!,anchor.kind,now,sight,{out,into,count,from:sheets,strict:true,next:P[Math.min(P.length-1,k+3)]!,not:bridge});
+                const group=this.groupAt(P[k]!,anchor.kind,now,sight,{out,into,count,from:sheets,strict:true,next:P[Math.min(P.length-1,k+3)]!,way:P.slice(k,k+10),not:bridge});
                 if(group!==undefined){const g=this.groups.get(group);if(g&&!g.how)g.how='bridged';return group;}
                 if(this.capped)return undefined;
             }
             break;
         }
-        const group=this.groupAt(A,anchor.kind,now,sight,{out,into,count,...(prior?{not:prior.id}:{})});
+        // No bridge either: in sight from where the previous group's prints end (a player follows them there and looks
+        // again).
+        const tracks=prior?.prints!==undefined?this.prints.find(r=>r.id===prior.prints)?.f:undefined;
+        if(tracks){
+            const end={x:tracks[tracks.length-4]!,y:tracks[tracks.length-3]!,z:tracks[tracks.length-2]!};
+            for(let t=anchor.tracks??0;t<shifts.length;t++){
+                if(this.placeRays>PLAN.placeRays){anchor.tracks=t;this.capped=this.budgeted=true;return undefined;}
+                const k=i+shifts[t]!;if(k<1||k>=P.length||!groundSeen(counted,end,P[k]!))continue;
+                const group=this.groupAt(P[k]!,anchor.kind,now,sight,{out,into,count,from:[end],strict:true,next:P[Math.min(P.length-1,k+3)]!,way:P.slice(k,k+10),...(prior?{not:prior.id}:{})});
+                if(group!==undefined){const g=this.groups.get(group);if(g&&!g.how)g.how='prints'+(shifts[t]?(shifts[t]!>0?'+':'')+shifts[t]:'');return group;}
+                if(this.capped){anchor.tracks=t;return undefined;}
+            }
+            anchor.tracks=shifts.length;
+        }
+        const group=this.groupAt(A,anchor.kind,now,sight,{out,into,count,way:P.slice(i,i+10),...(prior?{not:prior.id}:{})});
         const g=group!==undefined?this.groups.get(group):undefined;if(g&&!g.how)g.how='own';
         return group;
     }
     /** The group for an anchor: an existing one close by on the same floor and in sight, else a new spill of `count`
      * supported sheets around it. A turn puts its second sheet into the new street. */
-    private groupAt(A:Vec3Data,kind:AnchorKind,now:number,sight:Clear,shape:{points?:Vec3Data[];out?:{x:number;z:number};into?:{x:number;z:number};from?:Vec3Data[];every?:boolean;strict?:boolean;not?:number;next?:Vec3Data;count:number}):number|undefined {
+    private groupAt(A:Vec3Data,kind:AnchorKind,now:number,sight:Clear,shape:{points?:Vec3Data[];out?:{x:number;z:number};into?:{x:number;z:number};from?:Vec3Data[];every?:boolean;strict?:boolean;not?:number;next?:Vec3Data;way?:readonly Vec3Data[];count:number}):number|undefined {
         // A player's eye (1.6) to a sheet on the ground (.15); the authority's `clear` lifts both ends by .8.
         // Starters are never held back by the step's placement work: a fresh spawn's lead comes first.
         if(kind!=='lead'&&this.placeRays>PLAN.placeRays){this.capped=this.budgeted=true;return undefined;}
@@ -407,6 +464,7 @@ export class CaseClues {
             // Shared only if it still reads from where this route's player stands.
             const first=this.items.find(c=>c.id===g.ids[0]);
             if(shape.strict&&shape.from?.length&&first&&!shape.from.some(f=>seen(f,first.p)))continue;
+            if(this.wantsPrints(g))this.printFor(g,shape.way,now);
             return g.id;
         }
         if(this.items.length+shape.count>CLUES.max-(kind==='lead'?0:PLAN.leadReserve)){this.capped=true;return undefined;}
@@ -419,7 +477,7 @@ export class CaseClues {
             const lateral=(k===0?.5+r*.8:(k%2?-1:1)*(.3+r*.9));
             bases.push({x:A.x+out.x*along+perp.x*lateral,y:A.y,z:A.z+out.z*along+perp.z*lateral});
         }
-        const sheets:CaseClue[]=[],group:Group={id:this.nextGroup++,anchor:{...A},ids:[],refs:new Set()};
+        const sheets:CaseClue[]=[],group:Group={id:this.nextGroup++,kind,anchor:{...A},ids:[],refs:new Set()};
         for(const [k,base] of bases.slice(0,shape.count).entries()){
             let placed:Vec3Data|undefined,crowded=false;
             // First choice: in sight from a sheet of the previous group, so the way reads from where a player stands.
@@ -448,7 +506,84 @@ export class CaseClues {
         for(const s of sheets){group.ids.push(s.id);this.items.push(s);}
         if(kind==='lead')group.lead=true;
         this.groups.set(group.id,group);
+        if(kind!=='lead')this.printFor(group,shape.way,now);
         return group.id;
+    }
+    /** Whether a group still needs its prints looked at: never tried, or the case has moved well away from where they
+     * pointed (the trail's end has no prints: the case lies beside it). */
+    private wantsPrints(g:Group):boolean {
+        return g.kind!=='end'&&!!this.aim&&(!g.printed||!!g.prints&&!!g.toward&&flat(g.toward,this.aim)>PLAN.moved);
+    }
+    /** Lay a group's prints along `way` (the route on from it): from just past its farthest sheet along the way, up to
+     * `PRINTS.run` prints a stride apart, paws alternating, each on supported ground clear of every sheet and print. Two
+     * at least, or none. */
+    private printFor(g:Group,way:readonly Vec3Data[]|undefined,now:number):void {
+        if(!way||!this.wantsPrints(g))return;
+        const line=this.printLine(g,way);
+        // Laid already: turn to a new run only once it has lain a while and the way from here has turned. The old run
+        // stays unless the new one can be laid.
+        let old:CasePrints|undefined;
+        if(g.printed){
+            old=this.prints.find(r=>r.id===g.prints);
+            if(old&&now-old.at<PLAN.printKeepMs)return;
+            g.toward={...this.aim!};
+            if(!old||!line||turnBetween(line.heading(line.start+1),old.f[old.f.length-1]!)<=PLAN.printTurn)return;
+        }
+        g.printed=true;g.toward={...this.aim!};
+        if(!line)return;
+        const nav=this.navigation!;
+        for(let shift=0;shift<3;shift++){
+            const f:number[]=[];
+            for(let k=0;k<PRINTS.run;k++){
+                const s=line.start+shift+k*PRINTS.stride;if(s>line.total-.2)break;
+                // Smoothed over the walk graph's two-unit steps, so a run reads as one line round a corner.
+                const a=line.at(s-.7),b=line.at(s),c=line.at(s+.7),h=line.heading(s),side=k%2?-1:1;
+                // A rat facing h has its left at (cos h, −sin h).
+                const p={x:(a.x+b.x+c.x)/3+Math.cos(h)*PRINTS.gait*side,y:b.y,z:(a.z+b.z+c.z)/3-Math.sin(h)*PRINTS.gait*side};
+                this.placeRays+=2;
+                const y=nav.printGround(p,h);
+                if(y===undefined||!this.printRoom({x:p.x,y,z:p.z},f,old))continue;
+                f.push(round3(p.x),round3(y+.012),round3(p.z),round3(h));
+            }
+            if(f.length>=8){
+                if(old)this.prints=this.prints.filter(r=>r!==old);
+                const run:CasePrints={id:'p'+(this.nextPrint++).toString(36),g:g.ids[0]!,at:Math.round(now),f};this.prints.push(run);g.prints=run.id;return;
+            }
+        }
+    }
+    /** The way on from a group as a line to lay prints along: stops at a launcher (the way flies from there). `start`:
+     * just past the farthest of its sheets along the way. `heading(s)`: the line's direction around `s`. */
+    private printLine(g:Group,way:readonly Vec3Data[]):{total:number;start:number;at:(s:number)=>Vec3Data;heading:(s:number)=>number}|undefined {
+        const pts:Vec3Data[]=[];
+        for(const p of way){pts.push(p);if((p as BotWaypoint).launch||(p as BotWaypoint).drop)break;}
+        if(pts.length<2)return undefined;
+        const arc=[0];for(let i=1;i<pts.length;i++)arc.push(arc[i-1]!+flat(pts[i-1]!,pts[i]!));
+        const total=arc[arc.length-1]!;
+        const at=(s:number):Vec3Data=>{
+            s=Math.max(0,Math.min(total,s));let i=1;while(i<pts.length-1&&arc[i]!<s)i++;
+            const a=pts[i-1]!,b=pts[i]!,len=arc[i]!-arc[i-1]!,u=len>1e-6?(s-arc[i-1]!)/len:0;
+            return {x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u,z:a.z+(b.z-a.z)*u};
+        };
+        const heading=(s:number)=>{const a=at(s-1.2),b=at(s+2);return Math.atan2(b.x-a.x,b.z-a.z);};
+        let start=0;
+        for(const id of g.ids){
+            const c=this.items.find(c=>c.id===id);if(!c)continue;
+            let best=Infinity,along=0;
+            for(let i=1;i<pts.length;i++){
+                const a=pts[i-1]!,b=pts[i]!,dx=b.x-a.x,dz=b.z-a.z,l2=dx*dx+dz*dz,u=l2>1e-9?Math.max(0,Math.min(1,((c.p.x-a.x)*dx+(c.p.z-a.z)*dz)/l2)):0;
+                const d=Math.hypot(a.x+dx*u-c.p.x,a.z+dz*u-c.p.z);if(d<best){best=d;along=arc[i-1]!+u*(arc[i]!-arc[i-1]!);}
+            }
+            start=Math.max(start,along);
+        }
+        return start+PLAN.printLead+PRINTS.stride<total?{total,start:start+PLAN.printLead,at,heading}:undefined;
+    }
+    /** No print on or beside a sheet's spot (either of a loose sheet's), nor on another print (`replacing` aside). */
+    private printRoom(p:Vec3Data,fresh:readonly number[],replacing?:CasePrints):boolean {
+        for(const c of this.items)for(const q of [c.p,c.q])if(q&&Math.abs(q.y-p.y)<1&&flat(q,p)<PLAN.printClear)return false;
+        const near=(f:readonly number[])=>{for(let i=0;i+3<f.length;i+=4)if(Math.abs(f[i+1]!-p.y)<1&&Math.hypot(f[i]!-p.x,f[i+2]!-p.z)<PLAN.printApart)return true;return false;};
+        if(near(fresh))return false;
+        for(const r of this.prints)if(r!==replacing&&near(r.f))return false;
+        return true;
     }
     private roomFor(p:Vec3Data,fresh:readonly CaseClue[]):boolean {
         // A spot a sheet just blew away from counts as taken until it has rested (PLAN.restMs).
@@ -456,7 +591,10 @@ export class CaseClues {
         for(const c of [...this.items,...fresh]){
             if(Math.abs(c.p.y-p.y)<1&&flat(c.p,p)<PLAN.spacing)return false;
             if(c.q&&Math.abs(c.q.y-p.y)<1&&flat(c.q,p)<PLAN.spacing)return false;
-        }return true;
+        }
+        // Nor on prints.
+        for(const r of this.prints)for(let i=0;i+3<r.f.length;i+=4)if(Math.abs(r.f[i+1]!-p.y)<1&&Math.hypot(r.f[i]!-p.x,r.f[i+2]!-p.z)<PLAN.printClear)return false;
+        return true;
     }
     /** A look unlike its neighbours: a family not yet in the group, the least-seen art nearby. */
     private look(p:Vec3Data,group:readonly CaseClue[],h:number):number {
@@ -496,6 +634,7 @@ export class CaseClues {
         const gone=new Set(g.ids);
         for(const c of this.items)if(gone.has(c.id))this.vacated.push({p:c.p,at:now});
         this.items=this.items.filter(c=>!gone.has(c.id));this.groups.delete(g.id);
+        if(g.prints)this.prints=this.prints.filter(r=>r.id!==g.prints);
         for(const path of this.paths.values()){path.refs.delete(g.id);for(const a of path.anchors)if(a.group===g.id)a.group=undefined;}
     }
 }

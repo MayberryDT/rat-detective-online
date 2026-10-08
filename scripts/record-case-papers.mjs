@@ -1,8 +1,10 @@
-// P4 gameplay review recording on a hosted game (Tyler allowed scripted movement for this review, 7 October): a muted
-// agent browser joins, stands at its spawn, then follows the case papers it can see on screen (keys and the mouse, as a
-// player) toward the case. Writes a continuous WebM of the game canvas, screenshots, and papers.json: the build, a
-// per-frame trace of every sheet this client drew (id, look, state, place) and the client-side continuity checks
-// (a sheet never changes look under its id, never jumps while it lies still, never comes back). Not human acceptance.
+// P4 gameplay review recording on a hosted game (Tyler allowed scripted movement for this review, 7 October, and for
+// the paw prints review, 8 October): a muted agent browser joins, stands at its spawn, then follows the case papers it
+// can see on screen (keys and the mouse, as a player) toward the case; from a paper with paw prints beside it, it walks
+// the prints to their end and looks the way they point. Writes a continuous WebM of the game canvas, screenshots, and
+// papers.json: the build, a per-frame trace of every sheet and print run this client drew and the client-side
+// continuity checks (a sheet never changes look under its id, never jumps while it lies still, never comes back; a print
+// run never vanishes on screen without fading). Not human acceptance.
 //
 // usage: node scripts/record-case-papers.mjs --url=<game url> --out=<dir> [--seconds=80] [--size=1600x900] [--label=desktop]
 // env: CHROME_BIN (default google-chrome), ANGLE (default vulkan on Halla)
@@ -26,7 +28,8 @@ const frame=()=>{requestAnimationFrame(frame);if(!window.__tracing||!window.__sc
  const files=window.__scene.getObjectByName('physical-case-files')?.userData.caseFiles,rat=window.__me?.();
  if(!files)return;const shown=files.trace().filter(s=>s.shown||s.state==='leaving'||s.state==='arriving');
  window.__trace.push({t:Math.round(performance.now()),rat:rat&&[+rat.x.toFixed(2),+rat.y.toFixed(2),+rat.z.toFixed(2)],
-  sheets:shown.map(s=>[s.id,s.s,s.state,+s.x.toFixed(3),+s.y.toFixed(3),+s.z.toFixed(3),+s.yaw.toFixed(3)])});};
+  sheets:shown.map(s=>[s.id,s.s,s.state,+s.x.toFixed(3),+s.y.toFixed(3),+s.z.toFixed(3),+s.yaw.toFixed(3)]),
+  prints:files.paws.trace().filter(r=>r.shown||r.state==='fading').map(r=>[r.id,r.state])});};
 requestAnimationFrame(frame);})();`;
 /** The local rat (the camera trails it), the camera's yaw, the case and the papers on screen. */
 const PROBE=`(()=>{const s=window.__scene,c=window.__cam;if(!s||!c)return null;const V=c.position.constructor,d=new V();c.getWorldDirection(d);
@@ -36,7 +39,8 @@ const files=s.getObjectByName('physical-case-files')?.userData.caseFiles;
 // On screen means drawn and in the camera's clear sight (the static city, the same check blown sheets use).
 const cam={x:c.position.x,y:c.position.y,z:c.position.z},seen=t=>files.clearPath(cam,{x:t.x,y:t.y+.15,z:t.z});
 const caseSeen=hot&&hot.visible&&files&&files.clearPath(cam,{x:p.x,y:p.y,z:p.z});
-return {camera:Math.atan2(d.x,d.z),me:me&&{x:me.x,y:me.y,z:me.z},case:caseSeen?{x:p.x,y:p.y,z:p.z}:undefined,stats:files&&{...files.stats},
+return {camera:Math.atan2(d.x,d.z),me:me&&{x:me.x,y:me.y,z:me.z},case:caseSeen?{x:p.x,y:p.y,z:p.z}:undefined,stats:files&&{...files.stats},paws:files&&{...files.paws.stats},
+ prints:(files?.paws.trace()??[]).filter(r=>r.shown&&r.state!=='fading'&&seen(r.end)).map(r=>({id:r.id,first:r.first,end:r.end,h:r.h})),
  sheets:(files?.trace()??[]).filter(t=>t.shown&&(t.state==='p'||t.state==='q')&&seen(t)).map(t=>({id:t.id,x:t.x,y:t.y,z:t.z}))};})()`;
 
 const port=9600+Math.floor(Math.random()*150),profile=mkdtempSync(join(tmpdir(),'rat-papers-'));
@@ -82,16 +86,25 @@ try{
         `recorder.start(1000);window.__stopMovie=()=>recorder.stop();});void 0`);
     // 1. The spawn view, still: the first lead should be in it.
     await sleep(1500);await screenshot('spawn');const spawnView=await evaluate(PROBE);
-    checks.push({check:'papers on screen in the spawn view',pass:(spawnView?.sheets?.length??0)>0,shown:spawnView?.sheets?.length??0});
+    checks.push({check:'papers on screen in the spawn view',pass:(spawnView?.sheets?.length??0)>0,shown:spawnView?.sheets?.length??0,prints:spawnView?.prints?.length??0});
     await sleep(3000);
     // 2. Follow what is on screen: the nearest unread paper, else turn to look; the case itself once it is in view.
-    const read=new Set(),start=Date.now();let forward=false,shots=0,turns=0,stuck=0,lastAt={x:0,z:0};
+    const read=new Set(),walked=new Set(),start=Date.now();let forward=false,shots=0,turns=0,stuck=0,lastAt={x:0,z:0},tracking;
     while(Date.now()-start<(seconds-6)*1000){
         const p=await evaluate(PROBE);if(!p?.me){await sleep(150);continue;}
         for(const s of p.sheets)if(Math.hypot(s.x-p.me.x,s.z-p.me.z)<2.2)read.add(s.id);
         const c=p.case&&Math.hypot(p.case.x-p.me.x,p.case.z-p.me.z)<25?p.case:undefined;
-        const next=c??p.sheets.filter(s=>!read.has(s.id)).sort((x,y)=>Math.hypot(x.x-p.me.x,x.z-p.me.z)-Math.hypot(y.x-p.me.x,y.z-p.me.z))[0];
-        route.push({t:Date.now()-start,me:p.me,target:next?{x:next.x,z:next.z,id:next.id??'case'}:null});
+        // At the end of the prints being followed: look the way they point.
+        if(tracking&&Math.hypot(tracking.end.x-p.me.x,tracking.end.z-p.me.z)<1.2){
+            if(forward){await key('keyUp','W');forward=false;}
+            const turn=wrap(tracking.h-p.camera);for(let i=0;i<6;i++){await look(turn/perPixel/6);await sleep(30);}
+            tracking=undefined;await sleep(250);continue;
+        }
+        // Standing by a paper with prints beside it that this player has not followed: follow them first.
+        const prints=!c&&!tracking?p.prints.find(r=>!walked.has(r.id)&&Math.hypot(r.first.x-p.me.x,r.first.z-p.me.z)<4):undefined;
+        if(prints){walked.add(prints.id);tracking=prints;}
+        const next=c??tracking?.end??p.sheets.filter(s=>!read.has(s.id)).sort((x,y)=>Math.hypot(x.x-p.me.x,x.z-p.me.z)-Math.hypot(y.x-p.me.x,y.z-p.me.z))[0];
+        route.push({t:Date.now()-start,me:p.me,target:next?{x:next.x,z:next.z,id:tracking&&next===tracking.end?'prints:'+tracking.id:next.id??'case'}:null});
         if(!next){if(forward){await key('keyUp','W');forward=false;}await look(.5/perPixel/12);turns++;await sleep(60);continue;}
         const turn=wrap(Math.atan2(next.x-p.me.x,next.z-p.me.z)-p.camera);
         for(let i=0;i<4;i++){await look(turn/perPixel/4);await sleep(8);}
@@ -132,11 +145,21 @@ try{
     checks.push({check:'no sheet dropped from view by the budget while in range and in view',pass:counted.evicted===0,counted});
     checks.push({check:'no sheet vanished on screen without blowing away',pass:counted.popped===0,counted});
     checks.push({check:'no sheet comes back after blowing away',pass:bad.comeback.length===0,examples:bad.comeback.slice(0,3)});
+    // Prints: stamped in, faded out, never vanished on screen; a run seen leaving never comes back.
+    const pawsBefore=spawnView?.paws??{stamped:0,faded:0,popped:0},pawsAfter=(await evaluate(PROBE))?.paws??pawsBefore;
+    const paws=Object.fromEntries(Object.keys(pawsAfter).map(k=>[k,pawsAfter[k]-(pawsBefore[k]??0)]));
+    const fading=new Set(),runsGone=new Set(),runsBack=[],runsSeen=new Set();
+    for(const f of trace){const now=new Set(f.prints.map(r=>r[0]));
+        for(const r of f.prints){if(runsGone.has(r[0]))runsBack.push(r[0]);runsSeen.add(r[0]);if(r[1]==='fading')fading.add(r[0]);}
+        for(const id of fading)if(!now.has(id)){fading.delete(id);runsGone.add(id);}}
+    checks.push({check:'paw prints were drawn and followed',pass:runsSeen.size>0&&walked.size>0,runs:runsSeen.size,followed:walked.size});
+    checks.push({check:'no print run vanished on screen without fading, none came back',pass:paws.popped===0&&runsBack.length===0,paws,examples:runsBack.slice(0,3)});
+    checks.push({check:'eye-catch gusts lifted far papers as they came into view',pass:(counted.caught??0)>0,caught:counted.caught});
     checks.push({check:'the follower read papers and moved',pass:read.size>0&&route.length>1&&Math.hypot(route.at(-1).me.x-route[0].me.x,route.at(-1).me.z-route[0].me.z)>10,read:read.size});
     checks.push({check:'no runtime exceptions',pass:errors.length===0});
     writeFileSync(join(values.out,`${label}-papers.json`),JSON.stringify({url:values.url,label,size:values.size,build,assets,at:new Date().toISOString(),
         kind:'hosted game, muted agent browser, scripted keys and mouse following on-screen papers; not human acceptance',
-        frames:trace.length,sheets:seen.size,maxShownAtOnce:maxShown,arrivals,departures,read:read.size,turnsLooking:turns,checks,errors,route,trace},null,1));
+        frames:trace.length,sheets:seen.size,maxShownAtOnce:maxShown,arrivals,departures,read:read.size,printsFollowed:walked.size,turnsLooking:turns,checks,errors,route,trace},null,1));
 }catch(error){checks.push({check:'run',pass:false,error:String(error)});}
 finally{
     chrome.kill();await new Promise(r=>chrome.exitCode===null?chrome.once('exit',r):r());rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:200});

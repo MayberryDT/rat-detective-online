@@ -12,8 +12,20 @@
 //   F9 a restore drops the papers at once                       F10 a clear leaves a sheet of the old placement
 //   F11 a street view holds too many sheets                     F12 wire bytes or step time regress against the baseline
 //
+// Paw prints (Tyler, 8 October: sparse prints beside the papers that show the way), written before the code:
+//   P1 a paper group on a trail has no prints                   P2 prints point away from the way to the case
+//   P3 looking where the prints point shows no further paper    P4 a print run changes, comes back or blinks, or is
+//      re-laid in place while the case lies still               P5 prints crowd the view
+//   P6 a print floats, sinks, lies under a sheet or on another print
+//   P7 a restore drops the prints or a reset leaves them        P8 print bytes push the wire past the baseline
+//   P9 prints do not help: a follower that sees only its screen and turns where the prints point needs no fewer looks
+//      round than one that ignores them, or misses the case
+//
 // usage: node scripts/verify-case-trails.mjs [--out=<dir>] [--ref=<git rev>] [--minutes=6] [--spawns=62] [--measure]
+//   [--followers=sight,prints,screen]
 //   --ref      build src/ from that commit (the baseline); with --measure nothing is asserted, only measured
+//   --followers  sight: sees every paper in sight around it (F7, F8); prints: sees only its screen and faces the
+//              prints at each paper; screen: sees only its screen and keeps facing the way it walked (P9's comparison)
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {execFileSync} from 'node:child_process';
@@ -23,7 +35,8 @@ import {pathToFileURL} from 'node:url';
 import {parseArgs} from 'node:util';
 
 const {values}=parseArgs({options:{out:{type:'string',default:'/home/halla/build/rat-detective/noir-papers-v2-20261007/authority'},ref:{type:'string'},
-    minutes:{type:'string',default:'6'},spawns:{type:'string',default:'62'},measure:{type:'boolean',default:false},only:{type:'string'},debug:{type:'string'},baseline:{type:'string'}}});
+    minutes:{type:'string',default:'6'},spawns:{type:'string',default:'62'},measure:{type:'boolean',default:false},only:{type:'string'},debug:{type:'string'},baseline:{type:'string'},
+    followers:{type:'string',default:'sight,prints,screen'}}});
 const root=process.cwd(),out=resolve(values.out);mkdirSync(out,{recursive:true});
 const ref=values.ref&&execFileSync('git',['rev-parse',values.ref],{encoding:'utf8'}).trim();
 const label=ref?ref.slice(0,7):'worktree',measureOnly=values.measure;
@@ -51,6 +64,10 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z),flat=(a,b)=>Math.hypot(a.x
 const stats=a=>{const s=[...a].sort((x,y)=>x-y),q=f=>s.length?s[Math.min(s.length-1,Math.floor(f*s.length))]:null;return {n:s.length,median:q(.5),p90:q(.9),max:s.length?s[s.length-1]:null};};
 const look=c=>JSON.stringify({p:c.p,s:c.s,q:c.q,at:c.at,id:c.id});
 const trace=createWriteStream(resolve(out,`papers-${label}-trace.jsonl`));
+/** A print run's prints: x, y, z and heading (atan2 of the toes' dx, dz), first nearest the papers. */
+const printsOf=run=>{const out=[];for(let i=0;i+3<run.f.length;i+=4)out.push({x:run.f[i],y:run.f[i+1],z:run.f[i+2],h:run.f[i+3]});return out;};
+const runLook=r=>JSON.stringify({g:r.g,at:r.at,f:r.f,id:r.id});
+const angle=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
 
 /** A room as GameRoom runs it: 30 Hz ticks of two 60 Hz steps, the production bots, deaths and 3 s respawns, a PAPER
  * CHASE assignment, and one compact receiver decoding every frame like a client. */
@@ -60,7 +77,7 @@ function makeRoom(humans,botCount,saved){
         for(const id of humans)players.set(id,R.createPlayer(id,id,R.DEFAULT_APPEARANCE,{...R.spawnForWorld(spec,Math.random,players.values(),id),y:0}));
         for(let i=0;i<botCount;i++){const id=`rd-ai-${i}`;players.set(id,R.createPlayer(id,`Rat ${i}`,R.DEFAULT_APPEARANCE,R.spawnForWorld(spec,Math.random,players.values(),id)));}
     }
-    const room={players,sim:undefined,bots:undefined,delivery:new R.ChaosDelivery(true),decoder:new R.ChaosDecoder(),state:undefined,now:saved?.now??simClock,events:[],stepMs:[],clueBytes:[]};
+    const room={players,sim:undefined,bots:undefined,delivery:new R.ChaosDelivery(true),decoder:new R.ChaosDecoder(),state:undefined,now:saved?.now??simClock,events:[],stepMs:[],clueBytes:[],printBytes:[],prints:[]};
     const onHit=hit=>{
         const victim=players.get(hit.victim);if(!victim||victim.hp<=0)return;
         const result=R.applyHit(players,hit.owner,hit.victim,hit.damage,!!hit.incoming,hit.owner&&room.sim.isCaseHolder(hit.owner)?hit.owner:null,!!room.sim.assignmentState,hit.explosive===true);
@@ -96,25 +113,26 @@ function tick(room,move){
     room.state=room.sim.snapshot();
     const payload=room.delivery.offer(room.state,room.now);
     if(payload){room.delivery.acknowledge({type:'chaosAck',stream:room.delivery.lastFrame.ack.stream,seq:room.delivery.lastFrame.seq});
-        const f=JSON.parse(payload);room.clueBytes.push(JSON.stringify(f.rest?.clues??null).length);
-        const d=room.decoder.read(payload);assert.ok(d?.message?.type==='chaos','frame decodes');room.received=d.message.state.clues??[];}
+        const f=JSON.parse(payload);room.clueBytes.push(JSON.stringify(f.rest?.clues??null).length);room.printBytes.push(f.rest?.prints===undefined?0:JSON.stringify(f.rest.prints).length);
+        const d=room.decoder.read(payload);assert.ok(d?.message?.type==='chaos','frame decodes');room.received=d.message.state.clues??[];room.prints=d.message.state.prints??[];}
     return room.received??[];
 }
 /** What a receiver saw: every sheet's life, look changes, comebacks, replacements in place and blinks. */
 class Ledger {
-    constructor(){this.live=new Map();this.gone=new Map();this.lives=[];this.violations={look:[],comeback:[],replaced:[],blink:[]};this.adds=[];this.drops=[];}
+    /** `of`: how to read an item (the sheets by default; print runs by their first print). */
+    constructor(of={look,at:c=>c.p,add:'add',drop:'drop'}){this.of=of;this.live=new Map();this.gone=new Map();this.lives=[];this.violations={look:[],comeback:[],replaced:[],blink:[]};this.adds=[];this.drops=[];}
     see(clues,t,clearAt){
-        const now=new Map(clues.map(c=>[c.id,c]));
+        const now=new Map(clues.map(c=>[c.id,c])),of=this.of;
         for(const [id,c] of now){
             const known=this.live.get(id);
-            if(known){if(look(known.c)!==look(c))this.violations.look.push({id,t,was:known.c,now:c});continue;}
+            if(known){if(of.look(known.c)!==of.look(c))this.violations.look.push({id,t,was:known.c,now:c});continue;}
             if(this.gone.has(id))this.violations.comeback.push({id,t});
-            this.live.set(id,{c,born:t});this.adds.push({id,t,p:c.p});trace.write(JSON.stringify({t,add:c})+'\n');
+            this.live.set(id,{c,born:t});this.adds.push({id,t,p:of.at(c)});trace.write(JSON.stringify({t,[of.add]:c})+'\n');
         }
         for(const [id,known] of this.live)if(!now.has(id)){
             const cleared=clearAt.some(at=>Math.abs(at-t)<100);
             this.live.delete(id);this.gone.set(id,t);this.lives.push({id,ms:t-known.born,cleared});
-            this.drops.push({id,t,p:known.c.p,cleared});trace.write(JSON.stringify({t,drop:id,cleared})+'\n');
+            this.drops.push({id,t,p:of.at(known.c),cleared});trace.write(JSON.stringify({t,[of.drop]:id,cleared})+'\n');
             if(!cleared&&t-known.born<2000)this.violations.blink.push({id,ms:t-known.born});
         }
     }
@@ -140,6 +158,20 @@ const camera=(see,p,f)=>{const pivot={x:p.x,y:p.y+3.5,z:p.z};
     for(let t=1;t>.1;t-=.05){const c={x:pivot.x-f.x*5.7*t,y:pivot.y+1.85*t,z:pivot.z-f.z*5.7*t};if(see(pivot,c))return c;}return pivot;};
 const onScreen=(see,p,clues)=>{const yaw=2*Math.atan2(p.meshQy??0,p.meshQw??1),f={x:Math.sin(yaw),z:Math.cos(yaw)},cam=camera(see,p,f);
     return clues.filter(c=>{const d=flat(cam,c.p);return dist(p,c.p)<=65&&d>.5&&((c.p.x-cam.x)*f.x+(c.p.z-cam.z)*f.z)/d>Math.cos(Math.PI/4)&&see(cam,{...c.p,y:c.p.y+.15});});};
+const printLedger=()=>new Ledger({look:runLook,at:r=>printsOf(r)[0]??{x:0,y:0,z:0},add:'addPrints',drop:'dropPrints'});
+/** Every print of these runs as a point ({p, run, h}), for the same screen and sight tests as sheets. A print is a
+ * mark on the ground: it reads within 30 units of the rat (past that, a smudge). */
+const printPoints=runs=>runs.flatMap(r=>printsOf(r).map(q=>({id:r.id,run:r,h:q.h,p:{x:q.x,y:q.y,z:q.z}})));
+/** Prints a player standing here takes in: a print within 4 units and in sight from its eyes. The run read is the one
+ * whose nearest print is closest, one not followed yet (`done`) first. */
+const printsHere=(see,f,runs,done)=>{let best,bd=Infinity;
+    for(const r of runs)for(const q of printsOf(r)){const d=flat(f,q)+(done?.has(r.id)?4:0);if(flat(f,q)<4&&d<bd&&Math.abs(q.y-f.y)<1.2&&see({x:f.x,y:f.y+1.6,z:f.z},{x:q.x,y:q.y+.1,z:q.z})){bd=d;best=r;}}
+    return best;};
+/** P6: ground under heel and toe in the real collision world (not the walk graph the authority lays them from). */
+const grounding=world=>{const query=new R.SpatialRayQuery(world);
+    // On a ramp the print lies on the slope: its height is the mean of heel and toe.
+    return q=>{const ys=[-.2,.2].map(a=>{const x=q.x+Math.sin(q.h)*a,z=q.z+Math.cos(q.h)*a,hit=query.closest(new Vec3(x,q.y+.4,z),new Vec3(x,q.y-.6,z),1);return hit.hasHit?hit.hitPointWorld.y:undefined;});
+        return ys.every(y=>y!==undefined)&&Math.abs((ys[0]+ys[1])/2-q.y)<.06&&Math.abs(ys[0]-ys[1])<.2;};};
 
 // ---- A: a populated room, ten rats (a still observer, a walker crossing its starter's edge, eight bots) ----
 if(values.only===undefined){
@@ -156,11 +188,36 @@ if(values.only===undefined){
     const home={x:walker.x,y:walker.y,z:walker.z};let away;
     for(let a=0;a<16&&!away;a++){const t={x:home.x+Math.cos(a*Math.PI/8)*14,y:home.y,z:home.z+Math.sin(a*Math.PI/8)*14};const r=nav.paperRouteSteps(home,t);let s;do{s=r.next();}while(!s.done);if(s.value.length>3&&flat(s.value.at(-1),t)<3)away=s.value;}
     const pace=t=>{if(!away||walker.hp<=0)return;const u=(t/1000%12)/12,leg=u<.5?u*2:2-u*2,i=Math.min(away.length-1,Math.floor(leg*(away.length-1)));Object.assign(walker,{x:away[i].x,y:away[i].y,z:away[i].z});};
-    const counts={published:[],stillSees:[],stillNear:[],walkerSees:[],ratSees:[],ratScreen:[]},stillChurn={near:0,minutes},dense=[];
+    const counts={published:[],stillSees:[],stillNear:[],walkerSees:[],ratSees:[],ratScreen:[],ratScreenPrints:[],runs:[]},stillChurn={near:0,minutes},dense=[];
+    // Prints: their own ledger (P4), placement of every new run (P6), and where the case lay each second (P4's re-lays).
+    const prints=printLedger(),ground=grounding(room.sim.world),misplaced=[],caseTrack=[];let printsChecked=0;
+    // Bots read prints as a player does (P9's parity measure, reported): after a bot reads a paper with prints beside it,
+    // the next paper it reaches lies within 45° of where they point.
+    const botReads=new Map(),botFollow={reads:0,along:0,examples:[]};
     let clearAt=[];const ticks=minutes*60*30;
     for(let k=0;k<ticks;k++){
         const clues=tick(room,pace);clearAt=room.events.filter(e=>e.what==='clear').map(e=>e.t);
         const before=new Map([...ledger.live].map(([id,v])=>[id,v.c]));ledger.see(clues,room.now,clearAt);
+        const knownRuns=new Set(prints.live.keys());prints.see(room.prints,room.now,clearAt);
+        for(const r of room.prints)if(!knownRuns.has(r.id)){
+            const own=printsOf(r),others=room.prints.filter(o=>o.id!==r.id).flatMap(printsOf);
+            for(const q of own){printsChecked++;
+                const floats=!ground(q),under=clues.find(c=>[c.p,c.q].some(s=>s&&Math.abs(s.y-q.y)<1&&flat(s,q)<.75)),onPrint=others.find(o=>Math.abs(o.y-q.y)<1&&flat(o,q)<.35);
+                if(floats||under||onPrint)misplaced.push({run:r.id,q,floats,under:under?.id,onPrint:!!onPrint});}
+        }
+        if(k%30===0){
+            caseTrack.push({t:room.now,p:{...room.state.case.p},carried:!!room.state.case.owner});
+            counts.runs.push(room.prints.length);
+            for(const p of room.players.values())if(p.hp>0)counts.ratScreenPrints.push(onScreen(see,p,printPoints(room.prints)).filter(c=>dist(p,c.p)<=30).length);
+        }
+        if(k%10===0)for(const p of room.players.values()){if(!p.id.startsWith('rd-ai-')||p.hp<=0)continue;
+            const read=clues.find(c=>dist(p,c.p)<3);if(!read)continue;
+            const last=botReads.get(p.id);
+            if(last&&last.sheet!==read.id&&flat(last.at,read.p)>5&&room.now-last.t<20000){
+                botFollow.reads++;const along=angle(Math.atan2(read.p.x-last.at.x,read.p.z-last.at.z),last.h)<Math.PI/4;if(along)botFollow.along++;
+                else if(botFollow.examples.length<5)botFollow.examples.push({bot:p.id,from:last.at,to:read.p,h:+last.h.toFixed(2)});}
+            if(last?.sheet!==read.id){const run=printsHere(see,p,room.prints);botReads.set(p.id,run?{sheet:read.id,at:{...read.p},t:room.now,h:printsOf(run).at(-1).h}:{sheet:read.id,at:{...read.p},t:-Infinity,h:0});}
+        }
         if(k%30===0){
             counts.published.push(clues.length);
             if(still.hp>0){const v=visibleFrom(see,still,clues);counts.stillSees.push(v.length);counts.stillNear.push(v.filter(c=>dist(still,c.p)<30).length);}
@@ -206,33 +263,60 @@ if(values.only===undefined){
     check('F4 no sheet blinks (lives under 2 s) outside a clear',ledger.violations.blink.length===0,ledger.violations.blink.slice(0,3));
     check('F11 a street view stays sparse (every rat each second, the shoulder camera\'s view: median ≤ 4, p90 ≤ 8 sheets)',
         (report.room.everyRatOnScreen.median??0)<=4&&(report.room.everyRatOnScreen.p90??0)<=8,report.room.everyRatOnScreen);
+    // Prints. A re-lay in place (a run dropped and another added within 3 s and 1.2 units, outside a clear) is the way
+    // turning because the case moved: allowed only if it was carried or moved more than 2 units in the 20 s before.
+    const moved=t=>{const window=caseTrack.filter(s=>s.t>=t-20000&&s.t<=t+1000);return window.some(s=>s.carried)||window.some(s=>flat(s.p,window[0].p)>2);};
+    const relaid=prints.replacements(),stillRelays=relaid.filter(r=>!moved(r.t));
+    report.room.prints={runs:stats(counts.runs),onScreen:stats(counts.ratScreenPrints),printsChecked,misplaced:misplaced.length,misplacedExamples:misplaced.slice(0,5),
+        runLives:stats(prints.lives.filter(l=>!l.cleared).map(l=>l.ms)),adds:prints.adds.length,relaid:relaid.length,relaidWhileStill:stillRelays.length,
+        violations:{look:prints.violations.look.length,comeback:prints.violations.comeback.length,blink:prints.violations.blink.length},
+        examples:{look:prints.violations.look.slice(0,2),comeback:prints.violations.comeback.slice(0,2),blink:prints.violations.blink.slice(0,3),relaidWhileStill:stillRelays.slice(0,3)},
+        bytesPerSecond:Math.round(room.printBytes.reduce((t,b)=>t+b,0)/(minutes*60)),
+        botsFollowPrints:{...botFollow,share:botFollow.reads?+(botFollow.along/botFollow.reads).toFixed(2):null}};
+    const P=report.room.prints;
+    check('P4 no print run changes, comes back or blinks (under 2 s outside a clear)',P.adds>0&&!P.violations.look&&!P.violations.comeback&&!P.violations.blink,P.violations);
+    check('P4 prints are re-laid in place only when the case moved',P.relaidWhileStill===0,{relaid:P.relaid,whileStill:P.examples.relaidWhileStill});
+    check('P5 prints stay sparse (every rat each second, on screen within 30 units: median ≤ 8, p90 ≤ 16)',(P.onScreen.median??0)<=8&&(P.onScreen.p90??0)<=16,P.onScreen);
+    check('P6 every print has ground under heel and toe, none under a sheet or on another print',printsChecked>0&&P.misplaced===0,{checked:printsChecked,misplaced:P.misplaced,examples:P.misplacedExamples});
+    if(values.baseline){const base=JSON.parse(readFileSync(values.baseline,'utf8')).room;
+        check('P8 paper and print bytes together no more than the baseline\'s paper bytes',report.room.clueBytesPerSecond+P.bytesPerSecond<=(base.clueBytesPerSecond??Infinity),{papers:report.room.clueBytesPerSecond,prints:P.bytesPerSecond,baseline:base.clueBytesPerSecond});}
     // F9: restore keeps the papers while the routes reclaim them.
     const saved=JSON.parse(JSON.stringify(room.sim.snapshot(false))),before=new Set(saved.clues?.map(c=>c.id)??[]);
     const restored=makeRoom([],0,{players:[...room.players].map(([id,p])=>[id,structuredClone(p)]),state:saved,now:room.now});
     const kept=[];
-    for(let k=0;k<300;k++){const clues=tick(restored);if([1,30,150,299].includes(k))kept.push({afterMs:Math.round((k+1)*1000/30),kept:clues.filter(c=>before.has(c.id)).length,of:before.size});}
+    const runsBefore=new Set(saved.prints?.map(r=>r.id)??[]);
+    for(let k=0;k<300;k++){const clues=tick(restored);if([1,30,150,299].includes(k))kept.push({afterMs:Math.round((k+1)*1000/30),kept:clues.filter(c=>before.has(c.id)).length,of:before.size,
+        runsKept:restored.prints.filter(r=>runsBefore.has(r.id)).length,runsOf:runsBefore.size});}
     report.lifecycle.restore=kept;
     check('F9 a restore keeps its sheets through the first second',before.size===0||kept[1].kept>=before.size*.9,kept);
+    check('P7 a restore keeps its prints through the first second',runsBefore.size>0&&kept[1].runsKept>=runsBefore.size*.9,kept);
     // F10: a reset retires every sheet of the old placement (the ones live just before it).
-    const live=new Set(tick(restored).map(c=>c.id));restored.sim.reset();const after=tick(restored);
-    report.lifecycle.reset={liveBefore:live.size,survivors:after.filter(c=>live.has(c.id)).length,after:after.length};
+    const live=new Set(tick(restored).map(c=>c.id)),liveRuns=new Set(restored.prints.map(r=>r.id));restored.sim.reset();const after=tick(restored);
+    report.lifecycle.reset={liveBefore:live.size,survivors:after.filter(c=>live.has(c.id)).length,after:after.length,runsBefore:liveRuns.size,runSurvivors:restored.prints.filter(r=>liveRuns.has(r.id)).length};
     check('F10 a reset leaves none of the old placement',live.size>0&&after.every(c=>!live.has(c.id)),report.lifecycle.reset);
+    check('P7 a reset leaves none of the old prints',liveRuns.size>0&&report.lifecycle.reset.runSurvivors===0,report.lifecycle.reset);
     room.bots?.dispose();restored.bots?.dispose();
 }
 
-// ---- B: a paper follower from sampled spawns to the real case, using only papers it can see ----
-{
+// ---- B: paper followers from sampled spawns to the real case, using only what they can see ----
+// sight: every paper in sight around it (F7, F8). prints: only its screen, and at each paper it faces where the prints
+// beside it point. screen: only its screen, still facing the way it walked (P9 compares the two).
+const followers={};
+for(const mode of values.followers.split(',').filter(Boolean)){
     const stride=Math.max(1,Math.floor(spawns.length/Number(values.spawns))),runs=[],how={};let room,see;
-    const SPEED=14/60;
+    const SPEED=14/60,screenOnly=mode!=='sight';
+    const setYaw=(f,yaw)=>Object.assign(f,{meshQx:0,meshQz:0,meshQy:Math.sin(yaw/2),meshQw:Math.cos(yaw/2)});
+    const yawOf=f=>2*Math.atan2(f.meshQy??0,f.meshQw??1);
     const walk=(f,route,until)=>{ // along `route` at running speed, one simulation step at a time; true when `until()` holds
         for(let i=1;i<route.length;i++){
             const a=route[i-1],b=route[i],n=Math.max(1,Math.ceil(dist(a,b)/SPEED));
-            for(let s=1;s<=n;s++){const u=s/n,yaw=Math.atan2(b.x-a.x,b.z-a.z);
-                Object.assign(f,{x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u,z:a.z+(b.z-a.z)*u,meshQx:0,meshQz:0,meshQy:Math.sin(yaw/2),meshQw:Math.cos(yaw/2)});
+            for(let s=1;s<=n;s++){const u=s/n;
+                Object.assign(f,{x:a.x+(b.x-a.x)*u,y:a.y+(b.y-a.y)*u,z:a.z+(b.z-a.z)*u});if(flat(a,b)>.05)setYaw(f,Math.atan2(b.x-a.x,b.z-a.z));
                 if(s%2===0){room.clues=tick(room);if(until())return true;}}
         }return false;
     };
     const routeTo=(from,to)=>{const r=nav.paperRouteSteps(from,to);let s;do{s=r.next();}while(!s.done);return s.value;};
+    const printReads={runs:0,along:0,ahead:0,examples:[]},groupsWithPrints={groups:0,printed:0,bare:[]};
     for(let n=0,i=0;i<spawns.length;i+=stride,n++){
         if(values.only!==undefined&&i!==Number(values.only))continue;
         // Each sample in its own room on its own random stream and clock, so `--only` reproduces one exactly.
@@ -242,25 +326,57 @@ if(values.only===undefined){
         const spawn={...spawns[i],y:0},yaw=n%2?0:((n*2.399)%(2*Math.PI)),id=`follower-${n}`;
         // The authority spawns a rat facing +z; the client's own facing arrives one way later (about 200 ms here).
         const f=R.createPlayer(id,id,R.DEFAULT_APPEARANCE,spawn);room.players.set(id,f);
-        for(let k=0;k<15;k++){if(k===6)Object.assign(f,{meshQy:Math.sin(yaw/2),meshQw:Math.cos(yaw/2)});room.clues=tick(room);}
+        for(let k=0;k<15;k++){if(k===6)setYaw(f,yaw);room.clues=tick(room);}
         // In the opening view: the shoulder camera sits about 5.7 behind and 5.4 above the rat (SHOULDER); a sheet within
         // 40° of its view axis, within 14 units of the rat and in the camera's sight.
         const facing={x:Math.sin(yaw),z:Math.cos(yaw)},cam=camera(see,f,facing);
         const inView=room.clues.filter(c=>{const d=flat(cam,c.p);return flat(f,c.p)<14&&((c.p.x-cam.x)*facing.x+(c.p.z-cam.z)*facing.z)/d>Math.cos(40*Math.PI/180)&&see(cam,{...c.p,y:c.p.y+.15});});
-        const run={spawn:i,yaw:+yaw.toFixed(2),firstLead:inView.length?+Math.min(...inView.map(c=>flat(f,c.p))).toFixed(1):null,followed:0,seconds:0,ok:false};
+        const run={spawn:i,yaw:+yaw.toFixed(2),firstLead:inView.length?+Math.min(...inView.map(c=>flat(f,c.p))).toFixed(1):null,followed:0,seconds:0,ok:false,looks:[],farLooks:[]};
         if(!inView.length)run.noLead={f:{x:f.x,y:f.y,z:f.z},near:room.clues.filter(c=>flat(f,c.p)<20).map(c=>({p:c.p,d:+flat(f,c.p).toFixed(1),seen:see(eye(f),{...c.p,y:c.p.y+.15}),ahead:+(((c.p.x-f.x)*facing.x+(c.p.z-f.z)*facing.z)/Math.max(.01,flat(f,c.p))).toFixed(2)})),events:room.events.slice(-4)};
-        const start=room.now,visited=new Set(),read=[],caseAt=()=>room.state.case;
+        const start=room.now,visited=new Set(),read=[],caseAt=()=>room.state.case,seenRuns=new Set(),walkedRuns=new Set();
         const got=()=>caseAt().owner===id;
+        // What a player sees now: everything in sight around it, or only its screen (turning a quarter at a time, half
+        // a second each, until something new is on it).
+        const nearestNew=list=>list.filter(c=>!visited.has(c.id)).sort((a,b)=>dist(f,a.p)-dist(f,b.p))[0];
+        const fresh=()=>{
+            if(!screenOnly)return nearestNew(visibleFrom(see,f,room.clues));
+            for(let turn=0;turn<4;turn++){
+                let c=nearestNew(onScreen(see,f,room.clues));
+                // Nothing where the prints point: follow them to their end and look on from there (once a run).
+                if(!c&&turn===0&&mode==='prints'){const r=printsHere(see,f,room.prints,walkedRuns);
+                    if(r&&!walkedRuns.has(r.id)){walkedRuns.add(r.id);const end=printsOf(r).at(-1),way=routeTo(f,end);
+                        if(way.length){walk(f,[...way,end],()=>false);setYaw(f,end.h);run.walkedPrints=(run.walkedPrints??0)+1;c=nearestNew(onScreen(see,f,room.clues));}}}
+                if(c){run.looks.push(turn);if(dist(f,c.p)>=5)run.farLooks.push(turn);return c;}
+                setYaw(f,yawOf(f)+Math.PI/2);for(let k=0;k<15;k++)room.clues=tick(room);
+            }
+            return undefined;
+        };
+        // Reaching a paper: the prints beside it (a player looks where they point). P2 and P3 read each run once.
+        const reachPaper=()=>{
+            const r=printsHere(see,f,room.prints,walkedRuns);if(!r)return;
+            const last=printsOf(r).at(-1);
+            if(mode==='prints')setYaw(f,last.h);
+            if(mode!=='prints'||seenRuns.has(r.id))return;
+            seenRuns.add(r.id);printReads.runs++;
+            const c=caseAt(),target=c.owner?room.players.get(c.owner)??c.p:c.p,way=routeTo(last,target);
+            let along=false;
+            if(way.length>1){let s=0,k=1;for(;k<way.length-1&&s+dist(way[k-1],way[k])<5;k++)s+=dist(way[k-1],way[k]);along=angle(Math.atan2(way[k].x-last.x,way[k].z-last.z),last.h)<Math.PI/4;}
+            else along=flat(last,target)<3;
+            const stand={x:last.x,y:last.y,z:last.z,meshQx:0,meshQz:0,meshQy:Math.sin(last.h/2),meshQw:Math.cos(last.h/2)},first=printsOf(r)[0];
+            const ahead=onScreen(see,stand,room.clues).some(p=>dist(stand,p.p)<=40&&flat(p.p,first)>5&&!visited.has(p.id))||
+                (dist(stand,c.p)<=40&&onScreen(see,stand,[{p:c.p}]).length>0);
+            if(along)printReads.along++;if(ahead)printReads.ahead++;
+            if((!along||!ahead)&&printReads.examples.length<8)printReads.examples.push({spawn:i,run:r.id,last,along,ahead,target:{x:+target.x.toFixed(1),y:+target.y.toFixed(1),z:+target.z.toFixed(1)},way:way.slice(0,4)});
+        };
         while(room.now-start<150000&&!got()){
             const c=caseAt();
             // The case in plain sight: a player simply runs to it.
             if(!c.owner&&dist(f,c.p)<30&&see(eye(f),c.p)){const r=routeTo(f,c.p);if(!r.length){run.noRoute=true;break;}walk(f,r,got);for(let k=0;k<30&&!got();k++)room.clues=tick(room);break;}
             for(const c of room.clues)if(dist(f,c.p)<3&&!visited.has(c.id)){visited.add(c.id);read.push(c.p);}
             let next;
-            const fresh=()=>visibleFrom(see,f,room.clues).filter(c=>!visited.has(c.id)).sort((a,b)=>dist(f,a.p)-dist(f,b.p))[0];
             // Nothing new in sight: a player looks round a moment (papers may still be blowing in), then steps back onto
             // the papers just read and looks again from each.
-            for(let wait=0;wait<12&&!next;wait++){next=fresh();if(!next){for(let k=0;k<8;k++)room.clues=tick(room);run.waited=(run.waited??0)+.25;}}
+            for(let wait=0;wait<(screenOnly?4:12)&&!next;wait++){next=fresh();if(!next){for(let k=0;k<8;k++)room.clues=tick(room);run.waited=(run.waited??0)+.25;}}
             // The front of the trail where it first stopped reading (diagnostics for a failure).
             if(!next&&!run.stuck){const path=room.sim.clues?.paths?.get?.(id);run.stuck={f:{x:+f.x.toFixed(1),y:+f.y.toFixed(1),z:+f.z.toFixed(1)},t:+((room.now-start)/1000).toFixed(1),
                 ahead:room.clues.filter(c=>!visited.has(c.id)&&dist(f,c.p)<70).map(c=>({id:c.id,d:+dist(f,c.p).toFixed(1),p:c.p,from:room.clues.filter(v=>visited.has(v.id)&&dist(v.p,c.p)<65&&see(eye(v.p),{...c.p,y:c.p.y+.15})).map(v=>v.id),
@@ -268,7 +384,7 @@ if(values.only===undefined){
                 last:read.slice(-3),path:path?.anchors&&{progress:path.progress,here:path.dist[path.progress],anchors:path.anchors.filter(a=>Math.abs(path.dist[a.i]-path.dist[path.progress])<90).map(a=>({kind:a.kind,d:+path.dist[a.i].toFixed(1),group:a.group,at:path.points[a.i]}))}};}
             // Back over the papers read last, in the order read, looking again from each.
             let back=0;
-            for(let k=read.length-1;k>=0&&!next&&back<60;k--){const r=routeTo(f,read[k]);if(!r.length)continue;back+=dist(f,read[k]);walk(f,[...r,{x:read[k].x,y:read[k].y-.018,z:read[k].z}],()=>false);next=fresh();run.stepped=(run.stepped??0)+1;}
+            for(let k=read.length-1;k>=0&&!next&&back<60;k--){const r=routeTo(f,read[k]);if(!r.length)continue;back+=dist(f,read[k]);walk(f,[...r,{x:read[k].x,y:read[k].y-.018,z:read[k].z}],()=>false);reachPaper();next=fresh();run.stepped=(run.stepped??0)+1;}
             if(!next){
                 run.lost=true;
                 // Where and why: the follower, the case, the sheets around it and the authority's reading of its route.
@@ -285,16 +401,40 @@ if(values.only===undefined){
             // Up to the paper, as a player reading it would.
             (run.leadDistances??=[]).push(+dist(f,next.p).toFixed(1));
             run.followed++;walk(f,[...r,{x:next.p.x,y:next.p.y-.018,z:next.p.z}],()=>got()||flat(f,next.p)<.3);if(!visited.has(next.id)){visited.add(next.id);read.push({...next.p});}
+            if(!got())reachPaper();
         }
         run.ok=got();run.seconds=+((room.now-start)/1000).toFixed(1);runs.push(run);
-        for(const g of room.sim.clues?.groups?.values?.()??[])if(g.how){const k=g.how.replace(/[+-]\d+$/,'');how[k]=(how[k]??0)+1;}
+        for(const g of room.sim.clues?.groups?.values?.()??[]){
+            if(g.how){const k=g.how.replace(/[+-]\d+$/,'');how[k]=(how[k]??0)+1;}
+            // P1: a trail group (not the spill beside the case) carries its prints.
+            if(mode==='prints'&&g.ids?.length&&g.kind!=='end'){groupsWithPrints.groups++;if(g.prints&&room.prints.some(r=>r.id===g.prints))groupsWithPrints.printed++;else if(groupsWithPrints.bare.length<8)groupsWithPrints.bare.push({spawn:i,group:g.id,kind:g.kind,anchor:g.anchor,how:g.how});}
+        }
     }
-    const ok=runs.filter(r=>r.ok);
-    report.follower={placement:how,runs:runs.length,reachedCase:ok.length,firstLeadInView:runs.filter(r=>r.firstLead!==null).length,firstLead:stats(runs.filter(r=>r.firstLead!==null).map(r=>r.firstLead)),
-        seconds:stats(ok.map(r=>r.seconds)),leadDistance:stats(runs.flatMap(r=>r.leadDistances??[])),sheetsFollowed:stats(ok.map(r=>r.followed)),failures:runs.filter(r=>!r.ok).slice(0,12),withoutLead:runs.filter(r=>r.noLead).map(r=>({spawn:r.spawn,yaw:r.yaw,...r.noLead}))};
-    check('F7 every sampled spawn shows a lead in its view within 14 units',report.follower.firstLeadInView===runs.length,runs.filter(r=>r.firstLead===null).map(r=>r.spawn));
-    check('F8 the papers followed are near reads: median next paper within 25 units',(report.follower.leadDistance.median??99)<=25,report.follower.leadDistance);
-    check('F8 a sight-only follower reaches the real case from ≥ 95% of sampled spawns',ok.length>=runs.length*.95,{reached:ok.length,of:runs.length});
+    const ok=runs.filter(r=>r.ok),looks=runs.flatMap(r=>r.farLooks),mean=a=>a.length?+(a.reduce((t,x)=>t+x,0)/a.length).toFixed(2):null;
+    followers[mode]={placement:how,runs:runs.length,reachedCase:ok.length,firstLeadInView:runs.filter(r=>r.firstLead!==null).length,firstLead:stats(runs.filter(r=>r.firstLead!==null).map(r=>r.firstLead)),
+        seconds:stats(ok.map(r=>r.seconds)),leadDistance:stats(runs.flatMap(r=>r.leadDistances??[])),sheetsFollowed:stats(ok.map(r=>r.followed)),
+        ...(screenOnly?{farReads:looks.length,firstLook:looks.length?+(looks.filter(t=>t===0).length/looks.length).toFixed(2):null,turnsPerRead:mean(looks),walkedPrints:runs.reduce((t,r)=>t+(r.walkedPrints??0),0)}:{}),
+        ...(mode==='prints'?{printReads,groupsWithPrints}:{}),
+        failures:runs.filter(r=>!r.ok).slice(0,12),withoutLead:runs.filter(r=>r.noLead).map(r=>({spawn:r.spawn,yaw:r.yaw,...r.noLead}))};
+    const F=followers[mode];
+    if(mode==='sight'){
+        check('F7 every sampled spawn shows a lead in its view within 14 units',F.firstLeadInView===runs.length,runs.filter(r=>r.firstLead===null).map(r=>r.spawn));
+        check('F8 the papers followed are near reads: median next paper within 25 units',(F.leadDistance.median??99)<=25,F.leadDistance);
+        check('F8 a sight-only follower reaches the real case from ≥ 95% of sampled spawns',ok.length>=runs.length*.95,{reached:ok.length,of:runs.length});
+    }
+    if(mode==='prints'){
+        const g=F.groupsWithPrints,p=F.printReads;
+        check('P1 ≥ 90% of trail groups (all but the spill beside the case) carry prints',g.groups>0&&g.printed>=g.groups*.9,{groups:g.groups,printed:g.printed,bare:g.bare.slice(0,4)});
+        check('P2 from ≥ 90% of print runs read, the way to the case leaves within 45° of where they point',p.runs>0&&p.along>=p.runs*.9,{runs:p.runs,along:p.along,examples:p.examples.filter(e=>!e.along).slice(0,3)});
+        check('P3 looking where ≥ 85% of print runs point shows a further paper or the case (screen, 40 units)',p.runs>0&&p.ahead>=p.runs*.85,{runs:p.runs,ahead:p.ahead,examples:p.examples.filter(e=>!e.ahead).slice(0,3)});
+        check('P9 a screen-only follower facing the prints reaches the case from ≥ 95% of sampled spawns',ok.length>=runs.length*.95,{reached:ok.length,of:runs.length});
+    }
+}
+report.follower=followers.sight??{};report.followers=followers;
+if(followers.prints&&followers.screen){
+    const a=followers.prints,b=followers.screen;
+    check('P9 facing the prints finds the next paper on the first look more often and with fewer turns than ignoring them',
+        a.firstLook!==null&&b.firstLook!==null&&a.firstLook>b.firstLook&&a.turnsPerRead<b.turnsPerRead&&a.firstLook>=.8,{prints:{firstLook:a.firstLook,turns:a.turnsPerRead,reads:a.farReads},screen:{firstLook:b.firstLook,turns:b.turnsPerRead,reads:b.farReads}});
 }
 
 // ---- C: walking out past the starter and back (one rat alone) ----
@@ -345,4 +485,4 @@ await new Promise(r=>trace.end(r));
 report.passed=report.checks.every(c=>c.pass);
 if(!measureOnly&&!report.passed)process.exitCode=1;
 writeFileSync(resolve(out,`papers-${label}.json`),JSON.stringify(report,null,2)+'\n');
-console.log(JSON.stringify({label,passed:report.passed,checks:report.checks.map(c=>`${c.pass?'PASS':'FAIL'} ${c.check}`),room:report.room,follower:{...report.follower,failures:undefined}},null,2));
+console.log(JSON.stringify({label,passed:report.passed,checks:report.checks.map(c=>`${c.pass?'PASS':'FAIL'} ${c.check}`),room:report.room,followers:Object.fromEntries(Object.entries(report.followers).map(([k,v])=>[k,{...v,failures:undefined,withoutLead:undefined}]))},null,2));

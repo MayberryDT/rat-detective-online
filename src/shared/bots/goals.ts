@@ -1,4 +1,4 @@
-import {visibleClues,type CaseClue} from '../caseClues';
+import {visibleClues,type CaseClue,type CasePrints} from '../caseClues';
 import {looseLifts,type LooseLift} from '../paperWind';
 import {FLASHLIGHT_REACH} from '../rat/ratBody';
 import {GOALS,type Goal,type Personality,type Plan,type PlaceOption} from './intent';
@@ -91,6 +91,19 @@ function where(self:Vec3Data,point:Vec3Data):string {
     return `${band} ${COMPASS[Math.round(Math.atan2(dx,-dz)/(Math.PI/4))&7]}${level}`;
 }
 
+/** The paw prints a rat standing at `self` takes in: the run with a print within 4 units on its floor and in sight
+ * (within a flashlight's reach in a Blackout too), one not followed yet (`done`) first. `yaw`: its last print's heading
+ * (where the toes point); `end`: where the run ends. */
+function printsHere(runs:readonly CasePrints[],self:Vec3Data,clear:(p:Vec3Data)=>boolean,done:ReadonlySet<string>):{id:string;yaw:number;end:Vec3Data}|undefined {
+    let best=Infinity,run:CasePrints|undefined;
+    for(const r of runs)for(let i=0;i+3<r.f.length;i+=4){
+        const d=Math.hypot(r.f[i]!-self.x,r.f[i+2]!-self.z),score=d+(done.has('print:'+r.id)?4:0);
+        if(d<4&&score<best&&Math.abs(r.f[i+1]!-self.y)<1.2&&clear({x:r.f[i]!,y:r.f[i+1]!+.1,z:r.f[i+2]!})){best=score;run=r;}
+    }
+    if(!run)return undefined;
+    const n=run.f.length;
+    return {id:'print:'+run.id,yaw:run.f[n-1]!,end:{x:run.f[n-4]!,y:run.f[n-3]!,z:run.f[n-2]!}};
+}
 /** Which goals are valid now and the plan each makes: the old priority ladder's candidates, one goal at a
  * time. Holds the per-rat timers those candidates need. Only a carrier scores in a Jurisdiction zone, so the
  * zone is part of keeping the case, never a goal of its own. */
@@ -98,6 +111,9 @@ export class BotGoals {
     private inspectedClues=new Set<string>();
     /** When the last paper was reached: a lead that ends there sends the eyes looking for the next. */
     private inspectedAt=-Infinity;
+    /** Paw prints beside the paper just read: until `until`, the next paper is one the way they point (`yaw`); with
+     * none that way by then, the bot follows them to their `end` (`id`) and looks again from there. */
+    private printLook:{until:number;yaw:number;id?:string;end?:Vec3Data}={until:-Infinity,yaw:0};
     /** Each loose sheet's gust timetable so far (paperWind `looseLifts`), to see it where players see it. */
     private readonly loose=new Map<string,{lifts:LooseLift[];next:number;count:number}>();
     private supplyTripAt=0;
@@ -121,7 +137,7 @@ export class BotGoals {
         this.places=navigation.explorationTargets();
     }
     reset():void {
-        this.inspectedClues.clear();this.inspectedAt=-Infinity;this.loose.clear();
+        this.inspectedClues.clear();this.inspectedAt=-Infinity;this.loose.clear();this.printLook={until:-Infinity,yaw:0};
         this.reflexSite=undefined;this.reflexUntil=0;this.supplyTripAt=0;this.dispatchGiveUpAt=0;this.dispatchDetour='';
         this.deliveryKey='';this.deliveryEntering=false;this.fleeAt=0;this.zonePostAt=0;this.zonePost=0;
     }
@@ -258,7 +274,7 @@ export class BotGoals {
         }
         const goal=available?.value.p??(!carrying?carrier?.p:undefined)??zone?.point??delivery?.point??(carrying&&active?combat:undefined);
         const pickup=active&&goal?undefined:this.wantedPickup(state,self,now,input.clear);
-        const ids=new Set((state?.clues??[]).map(c=>c.id));
+        const ids=new Set([...(state?.clues??[]).map(c=>c.id),...(state?.prints??[]).map(r=>'print:'+r.id)]);
         for(const id of this.inspectedClues)if(!ids.has(id))this.inspectedClues.delete(id);
         for(const id of this.loose.keys())if(!ids.has(id))this.loose.delete(id);
         // A loose sheet lies where the wind left it (its `q` after an odd number of lifts), as every player sees it.
@@ -276,9 +292,19 @@ export class BotGoals {
             return (d<2||(dx*forward.x+dz*forward.z)/d>.64)&&input.clear({...p,y:p.y+.15});
         },blackout?FLASHLIGHT_REACH:undefined);
         for(const c of seen)if(distance(self,c.p)<3&&!this.inspectedClues.has(c.id)){this.inspectedClues.add(c.id);this.inspectedAt=now;}
+        const look=this.printLook;
+        if(look.id&&look.end&&!this.inspectedClues.has(look.id)&&distance(self,look.end)<1.5){this.inspectedClues.add(look.id);this.inspectedAt=now;}
+        // Paw prints beside a paper just read: look where they point first, as a player does (mindVersion 15).
+        if(this.inspectedAt===now&&!carrying){const here=printsHere(state?.prints??[],self,input.clear,this.inspectedClues);if(here){this.printLook={until:now+1500,...here};motor.searchAround(now,here.yaw);}}
+        // Nothing the way the prints point by the end of the look: follow them to where they end, as a player follows
+        // tracks; until then the next paper is one that way.
+        const prints=this.printLook,walking=!carrying&&!!prints.id&&!!prints.end&&now>=prints.until&&now-prints.until<6000&&
+            !this.inspectedClues.has(prints.id)&&!motor.suppressed('clue:'+prints.id,prints.end,now);
+        const along=(c:CaseClue)=>{if(now>=prints.until&&!walking)return true;const a=Math.atan2(c.p.x-self.x,c.p.z-self.z)-prints.yaw;return Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<Math.PI/4;};
         // Follow the same visible paperwork as a person, without hidden timestamps.
-        const clue=seen.find(c=>!this.inspectedClues.has(c.id)&&!motor.suppressed('clue:'+c.id,c.p,now));
-        if(!clue&&!carrying&&now-this.inspectedAt<2500)motor.searchAround(now);
+        let clue=seen.find(c=>!this.inspectedClues.has(c.id)&&along(c)&&!motor.suppressed('clue:'+c.id,c.p,now));
+        if(!clue&&walking)clue={id:prints.id!,p:{...prints.end!},at:0,s:0};
+        if(!clue&&!carrying&&now-this.inspectedAt<2500&&now>=prints.until)motor.searchAround(now);
         const ctx:GoalContext={...input,active,visible,carrier,available,combat,clue,sighting:motor.sighted,pickup,armor,pillars,delivery,
             intercept:intercept&&{key:`intercept:${jurisdiction?`${intercept.x},${intercept.z}`:next}`,point:intercept},zone,offered:[],memo:{},
             places:goal=>(ctx.memo.options??={})[goal]??=this.placeOptions(goal,ctx)};

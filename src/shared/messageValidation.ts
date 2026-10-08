@@ -1,4 +1,4 @@
-import {validClues} from './caseClues';
+import {validClues,validPrints} from './caseClues';
 import { isResumeToken } from './reconnect';
 import {expandMovement} from './movementWire';
 import {BALL_SPEED} from './ballTuning';
@@ -568,7 +568,7 @@ function parseChaos(value:unknown):ChaosState|null{
     finiteNumber(c.pickupAfter)!==null&&finiteNumber(c.returningUntil)!==null&&
     (c.grip===undefined||integer(c.grip)!==null&&Number(c.grip)>=1&&Number(c.grip)<CHAOS_TUNING.caseGripHits)&&
     (c.ping===undefined||c.owner!==null&&isRecord(c.ping)&&finiteNumber(c.ping.at)!==null&&isVec3(c.ping.p));
-  if(!validCase(c)||value.clues!==undefined&&!validClues(value.clues))return null;
+  if(!validCase(c)||value.clues!==undefined&&!validClues(value.clues)||value.prints!==undefined&&!validPrints(value.prints))return null;
   if(value.extraCases!==undefined){
     if(!Array.isArray(value.extraCases)||value.extraCases.length>EXTRA_CASE_IDS.length||
       !value.extraCases.every(c=>isRecord(c)&&EXTRA_CASE_IDS.some(id=>id===c.id)&&validCase(c)))return null;

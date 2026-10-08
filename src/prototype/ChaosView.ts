@@ -718,7 +718,7 @@ export class ChaosView {
             this.caseMotion.loose(wall,Math.hypot(s.case.v.x,s.case.v.y,s.case.v.z));
         }
         this.caseMotion.finish(dt,wall);
-        this.caseFiles.update(s.clues??[],now,camera,dt,this.resolveRat(this.myId)?.mesh.position);
+        this.caseFiles.update(s.clues??[],now,camera,dt,this.resolveRat(this.myId)?.mesh.position,s.prints??[]);
         this.hotLook.update(camera,renderTime,s.case,now,this.carrier,this.arm?.parent??null);
         // Physical evidence replaces the primary case's through-wall and screen locators.
         this.carrierFlash.hide();

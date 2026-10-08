@@ -4,6 +4,7 @@ import {NoirCity} from '../../src/feel/NoirCity';
 import {createStage} from '../../src/session/createStage';
 import {Neighborhood} from '../../src/prototype/Neighborhood';
 import {CaseFiles} from '../../src/prototype/CaseFiles';
+import {PAW_INK} from '../../src/prototype/PawPrints';
 import {ShoulderCamera,SHOULDER} from '../../src/player/ShoulderCamera';
 import {CameraBlockers} from '../../src/player/CameraBlockers';
 import {RatEntity} from '../../src/entities/RatEntity';
@@ -11,7 +12,7 @@ import {DEFAULT_APPEARANCE} from '../../src/shared/ratAppearance';
 import {FLASHLIGHT,FLASHLIGHT_REACH} from '../../src/shared/rat/ratBody';
 import {FEEL} from '../../src/feel/feelTuning';
 import {gustAt,looseLifts} from '../../src/shared/paperWind';
-import type {CaseClue} from '../../src/shared/caseClues';
+import {PRINTS,type CaseClue,type CasePrints} from '../../src/shared/caseClues';
 // Static art and motion fixture (P4): fixed sheets in the real city materials and camera, scripted wind time,
 // sheets that blow in and away, a rat brushing past and a ball striking nearby. Not gameplay, not human acceptance.
 const stage=createStage(new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}));
@@ -28,30 +29,43 @@ files.support=p=>{from.set(p.x,p.y+.3,p.z);to.set(p.x,p.y-.4,p.z);ray.reset();
  return {y:ray.hitPointWorld.y,normal:{x:ray.hitNormalWorld.x,y:ray.hitNormalWorld.y,z:ray.hitNormalWorld.z}};};
 files.clearPath=(a,b)=>{from.set(a.x,a.y,a.z);to.set(b.x,b.y,b.z);ray.reset();return !stage.world.raycastClosest(from,to,{collisionFilterMask:1},ray);};
 const params=new URLSearchParams(location.search);
+// `ink=chalk` compares pale chalk prints with the case-red ink.
+files.paws.setInk(PAW_INK[(params.get('ink')??'red') as keyof typeof PAW_INK]??PAW_INK.red);
 // Fixed wind time: the first strong gust at the street origin a few seconds in, found the same way on every run.
 let base=100000;while(gustAt(-10,-35,base+3500)<.85&&base<2e6)base+=250;
-let closeView=false,walk=false,time=0,view='street',clues:CaseClue[]=[],script:{at:number;add?:CaseClue;drop?:string;hit?:THREE.Vector3}[]=[];
+let closeView=false,walk=false,time=0,view='street',clues:CaseClue[]=[],prints:CasePrints[]=[],script:{at:number;add?:CaseClue;drop?:string;hit?:THREE.Vector3;addPrints?:CasePrints}[]=[];
 const origin=new THREE.Vector3(-10,0,-27);
 const sheet=(id:string,x:number,y:number,z:number,s:number,born=base-60000,q?:[number,number]):CaseClue=>({id,p:{x,y:y+.018,z},at:born,s,...(q?{q:{x:q[0],y:y+.018,z:q[1]}}:{})});
+/** A run of `n` prints from (x, z) heading `h` (toes toward sin h, cos h), turning `turn` a print, paws alternating. */
+const run=(id:string,g:string,x:number,z:number,h:number,n=4,turn=0,y=0,born=base-60000):CasePrints=>{
+ const f:number[]=[];let px=x,pz=z,ph=h;
+ for(let k=0;k<n;k++){const side=k%2?-1:1;f.push(px+Math.cos(ph)*PRINTS.gait*side,y+.012,pz-Math.sin(ph)*PRINTS.gait*side,ph);px+=Math.sin(ph)*PRINTS.stride;pz+=Math.cos(ph)*PRINTS.stride;ph+=turn;}
+ return {id,g,at:born,f};};
 // A loose sheet whose gust timetable lifts it inside the clip (searched once, deterministically).
 function looseSheet(id:string,x:number,z:number,s:number,q:[number,number]):CaseClue {
  for(let k=0;k<400;k++){const born=base-26000*(1+k%9)-k*911,c=sheet(id+'-'+k,x,0,z,s,born,q);
   const lifts=looseLifts(c.id,c.at,c.p,base+16000).lifts;if(lifts.some(l=>l.at>base+2500&&l.at<base+14000))return c;}
  return sheet(id,x,0,z,s,base-60000,q);
 }
-const views:Record<string,{p:number[];build:()=>CaseClue[];script?:()=>typeof script}>={
+const views:Record<string,{p:number[];build:()=>CaseClue[];prints?:()=>CasePrints[];script?:()=>typeof script}>={
  street:{p:[-10,0,-27],build:()=>[sheet('st-0',-9.6,0,-31.5,0),sheet('st-1',-10.9,0,-33.2,5+16),sheet('st-2',-9.2,0,-41,2),sheet('st-3',-10.8,0,-42.8,7+16)],
-  script:()=>[{at:5000,add:sheet('st-new',-9.4,0,-37,3+8,base+5000)},{at:9000,drop:'st-2'},{at:12000,hit:new THREE.Vector3(-10.2,.3,-34)}]},
- corner:{p:[-10,0,-34],build:()=>[sheet('co-0',-10.4,0,-42,1+4),sheet('co-1',-12.6,0,-44.2,2+8+16),sheet('co-2',-21,0,-44,0+8)]},
+  prints:()=>[run('pr-st','st-0',-10.2,-34.6,Math.PI)],
+  script:()=>[{at:5000,add:sheet('st-new',-9.4,0,-37,3+8,base+5000)},{at:5000,addPrints:run('pr-new','st-new',-9.6,-38.4,Math.PI,4,0,0,base+5000)},{at:9000,drop:'st-2'},{at:12000,hit:new THREE.Vector3(-10.2,.3,-34)}]},
+ corner:{p:[-10,0,-34],build:()=>[sheet('co-0',-10.4,0,-42,1+4),sheet('co-1',-12.6,0,-44.2,2+8+16),sheet('co-2',-21,0,-44,0+8)],
+  prints:()=>[run('pr-co','co-1',-14,-44.4,-Math.PI/2-.25,4,.08)]},
+ // Paw prints at reading distance: a group with its prints close by, and the next group's prints turning the corner.
+ prints:{p:[-10,0,-27],build:()=>[sheet('pp-0',-9.6,0,-31.5,0),sheet('pp-1',-10.9,0,-33.2,5+16),sheet('pp-2',-10.4,0,-42,1+4),sheet('pp-3',-12.6,0,-44.2,2+8+16)],
+  prints:()=>[run('pr-pp-0','pp-0',-10.2,-34.6,Math.PI),run('pr-pp-1','pp-2',-14,-44.4,-Math.PI/2-.25,4,.08)]},
  sewer:{p:[0,-7,18],build:()=>[sheet('se-0',.3,-7,10,1),sheet('se-1',-.4,-7,0,3+4+16),sheet('se-2',.2,-7,-10,2+4)]},
- blackout:{p:[-10,0,-27],build:()=>[sheet('bo-0',-9.6,0,-31.5,0),sheet('bo-1',-10.9,0,-33.2,5+16),sheet('bo-2',-9.2,0,-41,2),sheet('bo-3',-10.8,0,-42.8,7+16)]},
+ blackout:{p:[-10,0,-27],build:()=>[sheet('bo-0',-9.6,0,-31.5,0),sheet('bo-1',-10.9,0,-33.2,5+16),sheet('bo-2',-9.2,0,-41,2),sheet('bo-3',-10.8,0,-42.8,7+16)],
+  prints:()=>[run('pr-bo','bo-0',-10.2,-34.6,Math.PI)]},
  // Every front document and both shapes of each family, in two rows on the pavement.
  gallery:{p:[-10,0,-27],build:()=>Array.from({length:12},(_,i)=>{const family=i%4,art=Math.floor(i/4);return sheet('ga-'+i,-13.2+(i%6)*1.3,0,-31.4-Math.floor(i/6)*1.6,family+4*art+16*(i%2));})},
  wind:{p:[-10,0,-27],build:()=>[looseSheet('wi-loose',-9.5,-33,2+4,[-9.2,-35.2]),sheet('wi-0',-10.8,0,-32.4,1),sheet('wi-1',-9.2,0,-38.5,0+8+16),sheet('wi-2',-10.6,0,-40.6,3)]},
 };
 function setView(name:string){
  view=name;walk=false;closeView=false;const v=views[name]??views.street;origin.set(v.p[0],v.p[1],v.p[2]);time=0;
- files.clear();clues=v.build();script=v.script?.()??[];
+ files.clear();clues=v.build();prints=v.prints?.()??[];script=v.script?.()??[];
  const dark=name==='blackout',beam=FEEL.blackout.params;
  city.power=dark?0:1;noir.setDark(dark?1:0);noir.setEvidenceDark(dark?1:0);noir.update();
  Object.assign(stage.flashlight,{intensity:dark?beam.beam:FLASHLIGHT.intensity,distance:dark?FLASHLIGHT_REACH:FLASHLIGHT.distance,angle:dark?beam.angle:FLASHLIGHT.angle,penumbra:dark?beam.penumbra:FLASHLIGHT.penumbra,decay:dark?beam.decay:FLASHLIGHT.decay});
@@ -62,7 +76,7 @@ function setView(name:string){
 function render(dt:number){
  const now=base+time*1000;
  for(const step of script)if(step.at<=time*1000){
-  if(step.add)clues=[...clues,step.add];if(step.drop)clues=clues.filter(c=>c.id!==step.drop);if(step.hit)files.impact(step.hit,2);
+  if(step.add)clues=[...clues,step.add];if(step.addPrints)prints=[...prints,step.addPrints];if(step.drop)clues=clues.filter(c=>c.id!==step.drop);if(step.hit)files.impact(step.hit,2);
   script=script.filter(s=>s!==step);
  }
  const p=origin.clone();if(walk)p.z-=4-4*Math.cos(time*Math.PI/10);
@@ -71,7 +85,7 @@ function render(dt:number){
  if(closeView){stage.camera.position.set(-10.6,1.9,-31.2);stage.camera.lookAt(-10.9,0,-33.2);}
  if(view==='gallery'&&!walk){stage.camera.position.set(-9.95,3.4,-28.3);stage.camera.lookAt(-9.95,0,-32.3);}
  stage.flashlight.position.copy(stage.camera.position);stage.flashlight.target.position.copy(p).add(new THREE.Vector3(0,0,-20));
- files.update(clues,now,stage.camera,dt,p);files.rats([{position:p}]);city.update(1/60,stage.camera);
+ files.update(clues,now,stage.camera,dt,p,prints);files.rats([{position:p}]);city.update(1/60,stage.camera);
  stage.syncViewport();if(params.has('low'))stage.renderer.setPixelRatio(.7);stage.renderer.render(stage.scene,stage.camera);
 }
 document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view!));
@@ -86,7 +100,7 @@ document.getElementById('record')!.onclick=()=>{
 setView(params.get('view')??'street');
 let last=performance.now();
 stage.renderer.setAnimationLoop(at=>{const dt=Math.min(.1,(at-last)/1000);time+=dt;last=at;render(dt);});
-Object.assign(window,{clueFixture:{setView,visible:()=>files.visibleIds,trace:()=>files.trace(),render:()=>render(0),
+Object.assign(window,{clueFixture:{setView,visible:()=>files.visibleIds,trace:()=>files.trace(),prints:()=>({runs:files.paws.trace(),stats:files.paws.stats,caught:files.stats.caught}),render:()=>render(0),
  metrics:()=>({calls:stage.renderer.info.render.calls,triangles:stage.renderer.info.render.triangles,
  textures:stage.renderer.info.memory.textures,geometries:stage.renderer.info.memory.geometries,
  paperDraws:files.root.children.filter(o=>(o as THREE.InstancedMesh).count>0).length,

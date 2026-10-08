@@ -105,18 +105,31 @@ try{
   await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
   await send('Page.navigate',{url:origin+'/case-clues.html?agent=1&mute=1'+(low?'&low=1':'')});
   let ready=false;for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"!!window.clueFixture",returnByValue:true});if(r.result?.result.value){ready=true;break;}await pause(250);}if(!ready)throw Error('fixture did not load');
-  for(const view of ['street','corner','sewer','blackout','gallery','wind']){
-   await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}')`});await pause(400);
+  for(const view of ['street','corner','prints','sewer','blackout','gallery','wind']){
+   // Long enough for a far sheet's eye-catch gust (1.2 s) to land again.
+   await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}')`});await pause(1600);
    const seen=await send('Runtime.evaluate',{expression:'window.clueFixture.visible()',returnByValue:true});
    const shot=await send('Page.captureScreenshot',{format:'png'});const name=label+'-'+view+'.png';writeFileSync(join(proof,name),Buffer.from(shot.result.data,'base64'));
    const metrics=await send('Runtime.evaluate',{expression:'window.clueFixture.metrics?.()',returnByValue:true});
    report.captures.push({label,view,width,height,visible:seen.result.result.value,metrics:metrics.result?.result?.value,render:await (async()=>{const p=await send('Runtime.evaluate',{expression:'({samples:window.__paperPerf,render:window.__paperRenderer?.info.render,memory:window.__paperRenderer?.info.memory})',returnByValue:true});return p.result?.result?.value;})(),file:name});
   }
+  // The prints in pale chalk beside the case-red ink, by light and in a Blackout.
+  if(!low){
+   await send('Page.navigate',{url:origin+'/case-clues.html?agent=1&mute=1&ink=chalk'});
+   for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"!!window.clueFixture",returnByValue:true});if(r.result?.result.value)break;await pause(250);}
+   for(const view of ['prints','blackout']){
+    await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}')`});await pause(1600);
+    const shot=await send('Page.captureScreenshot',{format:'png'});const name=`${label}-${view}-chalk.png`;writeFileSync(join(proof,name),Buffer.from(shot.result.data,'base64'));
+    report.captures.push({label,view,ink:'chalk',file:name});
+   }
+   await send('Page.navigate',{url:origin+'/case-clues.html?agent=1&mute=1'});
+   for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"!!window.clueFixture",returnByValue:true});if(r.result?.result.value)break;await pause(250);}
+  }
   // Clips: the street walk (a sheet blows in, one blows away, a ball lands by them) and the wind over a still view.
   for(const view of ['street','wind']){
    const clip=`physical-files-${view}.webm`;rmSync(join(proof,clip),{force:true});
    await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}');document.getElementById('record').click()`});
-   const traced=[];for(let i=0;i<180&&!existsSync(join(proof,clip));i++){await pause(250);if(i%2===0){const t=await send('Runtime.evaluate',{expression:'window.clueFixture.trace()',returnByValue:true});traced.push(t.result?.result?.value);}}
+   const traced=[];for(let i=0;i<180&&!existsSync(join(proof,clip));i++){await pause(250);if(i%2===0){const t=await send('Runtime.evaluate',{expression:'({sheets:window.clueFixture.trace(),prints:window.clueFixture.prints()})',returnByValue:true});traced.push(t.result?.result?.value);}}
    if(!existsSync(join(proof,clip)))throw Error('motion clip not saved');
    writeFileSync(join(proof,`${label}-${view}-motion.webm`),await import('node:fs/promises').then(fs=>fs.readFile(join(proof,clip))));
    report.captures.push({label,view,clip:`${label}-${view}-motion.webm`,trace:traced});

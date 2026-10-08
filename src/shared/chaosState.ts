@@ -184,6 +184,8 @@ export const MAX_BEAMS = 16;
 export interface ChaosState {
     /** Shared physical paperwork; absent only in older checkpoints. */
     clues?: import('./caseClues').CaseClue[];
+    /** Paw prints beside the paperwork, showing the way on; absent in older checkpoints. */
+    prints?: import('./caseClues').CasePrints[];
     time: number;
     /** Monotonic simulation identity for time-aligned interactions. Optional only
      * while restoring pre-protocol-15 checkpoints and older test fixtures. */

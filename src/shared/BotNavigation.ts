@@ -305,6 +305,16 @@ export class BotNavigation {
         }
         return undefined;
     }
+    /** The ground height for a paw print at `p` facing `heading` (within .5 of `p.y`): heel and toe, and both sides,
+     * on one plane within 3 cm (a ramp will do, a kerb or a step will not). */
+    printGround(p:Vec3Data,heading:number):number|undefined {
+        const find=(x:number,z:number)=>{let best:number|undefined;for(const y of this.surfaces(x,z))if(Math.abs(y-p.y)<.5&&(best===undefined||Math.abs(y-p.y)<Math.abs(best-p.y)))best=y;return best;};
+        const y=find(p.x,p.z);if(y===undefined)return undefined;
+        const fx=Math.sin(heading),fz=Math.cos(heading),at=(a:number,b:number)=>find(p.x+fx*a+fz*b,p.z+fz*a-fx*b);
+        const toe=at(.24,0),heel=at(-.24,0),left=at(0,.2),right=at(0,-.2);
+        if(toe===undefined||heel===undefined||left===undefined||right===undefined)return undefined;
+        return Math.abs(toe+heel-2*y)<.03&&Math.abs(left+right-2*y)<.03&&Math.abs(toe-heel)<.18&&Math.abs(left-right)<.15?y:undefined;
+    }
     /** A bounded A* route for physical paperwork. Reuses the same support/body-clearance
      * graph as rat navigation; never invents a straight segment through the city. */
     *paperRouteSteps(from:Vec3Data,to:Vec3Data,clear?:(a:Vec3Data,b:Vec3Data)=>boolean):Generator<void,BotWaypoint[]> {
