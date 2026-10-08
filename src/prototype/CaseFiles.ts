@@ -20,7 +20,7 @@ const ARRIVE_MS=1150,LEAVE_MS=1900,ARRIVING_WINDOW=2600,MAX_FLYING=12;
 /** The eye-catch (Tyler, 8 October): the first time a sheet lying `near`…`far` from the rat comes into the camera's
  * clear view, a gust lifts it and sets it back down where it lay (`ms`). At most one in `apart` units every `quietMs`,
  * none closer together than `gapMs` anywhere, and `rays` sight checks a frame. */
-const CATCH={near:9,far:45,ms:1200,apart:5,quietMs:10000,gapMs:1500,rays:2,retryMs:400} as const;
+const CATCH={near:9,far:45,ms:1300,lift:.8,roll:1.3,apart:5,quietMs:10000,gapMs:1500,rays:2,retryMs:400} as const;
 
 /** Rest shapes: two per family, none of them tents. (x, z) run 0…1 across the sheet's width and depth. */
 const SHAPES:readonly ((x:number,z:number)=>number)[][]=[
@@ -358,10 +358,10 @@ export class CaseFiles {
             const u=(now-sheet.caught)/CATCH.ms;
             if(u>=1||!motion){sheet.caught=undefined;sheet.liftV+=1.2;}
             else{
-                // Up off the ground, a little downwind and back, a half roll that flashes its back, and down where it lay.
+                // Up off the ground, a little downwind and back, tipping up nearly on edge (a flash of paper), and down where it lay.
                 const up=Math.sin(u*Math.PI),drift=Math.sin(u*Math.PI)*.35;
-                out.set(rest.at.x+w.x*drift,rest.support!.y+.012+up*.55,rest.at.z+w.z*drift);
-                return {at:out,roll:Math.sin(u*Math.PI)*1.05*side,pitch:Math.sin(u*TAU)*.3,yaw:rest.yaw+Math.sin(u*Math.PI)*.5*side,scale:1,flap:Math.sin(u*16)};
+                out.set(rest.at.x+w.x*drift,rest.support!.y+.012+up*CATCH.lift,rest.at.z+w.z*drift);
+                return {at:out,roll:Math.sin(u*Math.PI)*CATCH.roll*side,pitch:Math.sin(u*TAU)*.3,yaw:rest.yaw+Math.sin(u*Math.PI)*.5*side,scale:1,flap:Math.sin(u*16)};
             }
         }
         if(!motion||!sheet.q?.support||!sheet.p.support)return undefined;

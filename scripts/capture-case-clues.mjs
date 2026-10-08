@@ -126,13 +126,13 @@ try{
    for(let i=0;i<120;i++){const r=await send('Runtime.evaluate',{expression:"!!window.clueFixture",returnByValue:true});if(r.result?.result.value)break;await pause(250);}
   }
   // Clips: the street walk (a sheet blows in, one blows away, a ball lands by them) and the wind over a still view.
-  for(const view of ['street','wind']){
+  for(const view of ['street','wind','eyecatch']){
    const clip=`physical-files-${view}.webm`;rmSync(join(proof,clip),{force:true});
    await send('Runtime.evaluate',{expression:`window.clueFixture.setView('${view}');document.getElementById('record').click()`});
    const traced=[];for(let i=0;i<180&&!existsSync(join(proof,clip));i++){await pause(250);if(i%2===0){const t=await send('Runtime.evaluate',{expression:'({sheets:window.clueFixture.trace(),prints:window.clueFixture.prints()})',returnByValue:true});traced.push(t.result?.result?.value);}}
    if(!existsSync(join(proof,clip)))throw Error('motion clip not saved');
    writeFileSync(join(proof,`${label}-${view}-motion.webm`),await import('node:fs/promises').then(fs=>fs.readFile(join(proof,clip))));
-   report.captures.push({label,view,clip:`${label}-${view}-motion.webm`,trace:traced});
+   report.captures.push({label,view,clip:`${label}-${view}-motion.webm`,caught:traced.at(-1)?.prints?.caught,trace:traced});
   }
  }
  await send('Runtime.evaluate',{expression:"window.clueFixture.setView('street');window.clueFixture.close?.()"});

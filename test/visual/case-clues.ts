@@ -47,7 +47,7 @@ function looseSheet(id:string,x:number,z:number,s:number,q:[number,number]):Case
   const lifts=looseLifts(c.id,c.at,c.p,base+16000).lifts;if(lifts.some(l=>l.at>base+2500&&l.at<base+14000))return c;}
  return sheet(id,x,0,z,s,base-60000,q);
 }
-const views:Record<string,{p:number[];build:()=>CaseClue[];prints?:()=>CasePrints[];script?:()=>typeof script}>={
+const views:Record<string,{p:number[];build:()=>CaseClue[];prints?:()=>CasePrints[];script?:()=>typeof script;turn?:true}>={
  street:{p:[-10,0,-27],build:()=>[sheet('st-0',-9.6,0,-31.5,0),sheet('st-1',-10.9,0,-33.2,5+16),sheet('st-2',-9.2,0,-41,2),sheet('st-3',-10.8,0,-42.8,7+16)],
   prints:()=>[run('pr-st','st-0',-10.2,-34.6,Math.PI)],
   script:()=>[{at:5000,add:sheet('st-new',-9.4,0,-37,3+8,base+5000)},{at:5000,addPrints:run('pr-new','st-new',-9.6,-38.4,Math.PI,4,0,0,base+5000)},{at:9000,drop:'st-2'},{at:12000,hit:new THREE.Vector3(-10.2,.3,-34)}]},
@@ -57,6 +57,10 @@ const views:Record<string,{p:number[];build:()=>CaseClue[];prints?:()=>CasePrint
  prints:{p:[-10,0,-27],build:()=>[sheet('pp-0',-9.6,0,-31.5,0),sheet('pp-1',-10.9,0,-33.2,5+16),sheet('pp-2',-10.4,0,-42,1+4),sheet('pp-3',-12.6,0,-44.2,2+8+16)],
   prints:()=>[run('pr-pp-0','pp-0',-10.2,-34.6,Math.PI),run('pr-pp-1','pp-2',-14,-44.4,-Math.PI/2-.25,4,.08)]},
  sewer:{p:[0,-7,18],build:()=>[sheet('se-0',.3,-7,10,1),sheet('se-1',-.4,-7,0,3+4+16),sheet('se-2',.2,-7,-10,2+4)]},
+ // The eye-catch: the camera starts turned away and swings back at 2 s; a paper lying in the open 25 units down the street
+ // comes into view, lifts in a gust and lands where it lay.
+ eyecatch:{p:[-10,0,-27],turn:true,build:()=>[sheet('ec-0',-9.6,0,-31.5,0),sheet('ec-1',-14,0,-52.5,2+4),sheet('ec-2',-13.6,0,-55,1+8+16)],
+  prints:()=>[run('pr-ec-0','ec-0',-10.2,-33.6,Math.PI-.15),run('pr-ec-1','ec-1',-14.2,-56.8,Math.PI)]},
  blackout:{p:[-10,0,-27],build:()=>[sheet('bo-0',-9.6,0,-31.5,0),sheet('bo-1',-10.9,0,-33.2,5+16),sheet('bo-2',-9.2,0,-41,2),sheet('bo-3',-10.8,0,-42.8,7+16)],
   prints:()=>[run('pr-bo','bo-0',-10.2,-34.6,Math.PI)]},
  // Every front document and both shapes of each family, in two rows on the pavement.
@@ -81,7 +85,8 @@ function render(dt:number){
  }
  const p=origin.clone();if(walk)p.z-=4-4*Math.cos(time*Math.PI/10);
  rat.mesh.position.copy(p);rat.mesh.rotation.y=Math.PI;rat.syncGlowTransform();
- camera.place(stage.camera,p,new THREE.Spherical(SHOULDER.radius,SHOULDER.phi,walk?.10*Math.sin(time*.7):0));
+ const turned=views[view]?.turn?Math.max(0,1.3-Math.max(0,time-2)*1.6):0;
+ camera.place(stage.camera,p,new THREE.Spherical(SHOULDER.radius,SHOULDER.phi,walk?.10*Math.sin(time*.7):turned));
  if(closeView){stage.camera.position.set(-10.6,1.9,-31.2);stage.camera.lookAt(-10.9,0,-33.2);}
  if(view==='gallery'&&!walk){stage.camera.position.set(-9.95,3.4,-28.3);stage.camera.lookAt(-9.95,0,-32.3);}
  stage.flashlight.position.copy(stage.camera.position);stage.flashlight.target.position.copy(p).add(new THREE.Vector3(0,0,-20));
@@ -92,7 +97,8 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b=>b.onclick
 document.getElementById('walk')!.onclick=()=>{walk=!walk;time=0;};
 document.getElementById('record')!.onclick=()=>{
  const canvas=stage.renderer.domElement,stream=canvas.captureStream(30),chunks:Blob[]=[];
- const recorder=new MediaRecorder(stream,{mimeType:'video/webm'});walk=view!=='wind'&&view!=='gallery';time=0;setView(view);walk=view!=='wind'&&view!=='gallery';
+ const moving=view!=='wind'&&view!=='gallery'&&view!=='eyecatch';
+ const recorder=new MediaRecorder(stream,{mimeType:'video/webm'});walk=moving;time=0;setView(view);walk=moving;
  recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
  recorder.onstop=()=>{const url=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));const a=document.createElement('a');a.href=url;a.download='physical-files-'+view+'.webm';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);for(const track of stream.getTracks())track.stop();walk=false;};
  recorder.start();setTimeout(()=>recorder.stop(),20000);
@@ -100,7 +106,7 @@ document.getElementById('record')!.onclick=()=>{
 setView(params.get('view')??'street');
 let last=performance.now();
 stage.renderer.setAnimationLoop(at=>{const dt=Math.min(.1,(at-last)/1000);time+=dt;last=at;render(dt);});
-Object.assign(window,{clueFixture:{setView,visible:()=>files.visibleIds,trace:()=>files.trace(),prints:()=>({runs:files.paws.trace(),stats:files.paws.stats,caught:files.stats.caught}),render:()=>render(0),
+Object.assign(window,{clueFixture:{files,setView,visible:()=>files.visibleIds,trace:()=>files.trace(),prints:()=>({runs:files.paws.trace(),stats:files.paws.stats,caught:files.stats.caught}),render:()=>render(0),
  metrics:()=>({calls:stage.renderer.info.render.calls,triangles:stage.renderer.info.render.triangles,
  textures:stage.renderer.info.memory.textures,geometries:stage.renderer.info.memory.geometries,
  paperDraws:files.root.children.filter(o=>(o as THREE.InstancedMesh).count>0).length,
