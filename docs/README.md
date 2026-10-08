@@ -1,5 +1,10 @@
 # Documentation map
 
+## P4 physical clues — local implementation, 7 October 2026
+
+- [Natural noir evidence implementation plan](plans/noir-physical-clues.md): implemented direction, file responsibilities, failure diagnosis, acceptance matrix and review artifacts. [Implementation receipt](verification/noir-physical-clues-2026-10-07.md): local build and E2E evidence; visual acceptance pending, no deployment.
+- [Game-reference research](research/noir-detective-clues-reference-study-2026-10-07.md): real examples, primary sources and rationale behind the plan.
+
 Latest release: [accepted shooting and short trap throw, protocol 33 — 6 October](verification/task74-release-2026-10-06.md).
 
 Reviewed against repository source and the latest release receipts through **2026-10-06**. Start with current documents below. Historical plans and research describe past decisions or proposals, not instructions to undo the present game.

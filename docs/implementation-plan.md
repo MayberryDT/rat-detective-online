@@ -1,5 +1,8 @@
 # Rat Detective improvement plan
 
+## Current follow-up — 2026-10-07: P4 physical clues
+
+Tyler endorsed the natural noir case-file direction and requested its implementation plan for review. The [P4 implementation plan](plans/noir-physical-clues.md) owns this slice: varied related documents, restrained red outlines, immediate spawn leads, stable traversable routes, flicker diagnosis, native rendering and E2E motion evidence. **Implemented locally on Halla; visual acceptance pending.** See the [implementation receipt](verification/noir-physical-clues-2026-10-07.md). No staging or production deployment. This is separate from the broader deferred detective-mechanics work below and does not reopen the completed architecture plan.
 
 > **Historical record — completed early architecture plan.** Classified on 2026-09-08. Statements below describe that pass, including its then-current code, deployment, authorization and test counts. They are not present-day instructions or a current feature inventory. Use [the current reference](current-state.md) before acting. Preserve the measurements; do not restore obsolete behavior from this report.
 
