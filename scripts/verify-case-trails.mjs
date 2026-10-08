@@ -10,7 +10,9 @@ const rows=[],enc=new ChaosEncoder('trail-proof'),dec=new ChaosDecoder();let fra
 function step(){now+=1000/60;const t=performance.now();sim.step(1/60,now,true);maxStepMs=Math.max(maxStepMs,performance.now()-t);const s=sim.snapshot(false),f=enc.encode(s),d=dec.read(f.payload);assert.ok(d?.message?.type==='chaos');assert.equal(d.message.state.clues.length,s.clues.length);assert.ok(s.clues.length<=CLUES.max);frames++;maxBytes=Math.max(maxBytes,f.payload.length);return s;}
 for(let i=0;i<120;i++)step();
 for(let i=0;i<10;i++){const p=spawns[(i*97)%spawns.length];players.set('human-'+i,createPlayer('human-'+i,'Spawn '+i,DEFAULT_APPEARANCE,{...p,y:0}));}
-let s;for(let i=0;i<240;i++)s=step();
+let s=step();
+for(const p of players.values())assert.ok(s.clues.some(c=>c.p.z-p.z>-.5&&Math.hypot(c.p.x-p.x,c.p.z-p.z)<7&&Math.abs(c.p.y-p.y)<1),'first step has supported lead in spawn facing: '+p.id);
+for(let i=0;i<239;i++)s=step();
 // Failure: stationary evidence churns, or unchanged IDs move on a window refresh.
 const anchored=new Map(s.clues.map(c=>[c.id,c.p]));
 for(let i=0;i<60;i++)s=step();
@@ -30,7 +32,7 @@ for(const point of run.value.slice(0,40)){Object.assign(walker,{x:point.x,y:poin
 for(let i=0;i<180;i++)s=step();
 assert.ok(s.clues.some(c=>Math.hypot(c.p.x-chaser.x,c.p.z-chaser.z)<5),'follower retains an obvious start');
 const follow=sim.clues.paths.get(chaser.id);assert.ok(follow?.points.length);assert.ok(Math.hypot(follow.target.x-walker.x,follow.target.z-walker.z)<8,'route destination follows moved carrier');
-const before=s.clues.map(c=>c.id);sim.reset();s=step();assert.ok(!s.clues.some(c=>before.includes(c.id)),'relocation clears obsolete route papers');
+const before=s.clues.map(c=>c.id);sim.reset();s=step();assert.equal(sim.clues.paths.size,0,'relocation discards cached routes');assert.ok(s.clues.filter(c=>before.includes(c.id)).length<=players.size*2,'only current local starter papers may recur after relocation');
 // Exact staging failure: distant street spawn with an underground case, and the reverse.
 const sewerRoutes=[];
 for(const [from,to] of [[{x:90,y:0,z:-150},{x:-4.277,y:-7,z:-3.52}],[{x:-4,y:-7,z:-4},{x:90,y:0,z:-150}],...spawns.filter((_,i)=>i%97===0).map(p=>[{...p,y:0},{x:-4,y:-7,z:-4}])]){
@@ -46,4 +48,5 @@ for(const link of BOT_LAUNCH_LINKS){
  for(let i=1;i<r.value.length;i++){const a=r.value[i-1],b=r.value[i];if(Math.hypot(a.x-b.x,a.z-b.z)>4)assert.ok(a.launch||a.drop,'no invented unsupported route segment');}
  roofRoutes.push({machine:link.machine.id,points:r.value.length});
 }
-const receipt={passed:true,stableCount,kind:'real authority/walk-route/wire integration; not human gameplay acceptance',spawns:rows,sewerRoutes,roofRoutes,frames,maxBytes,maxStepMs,checks:['ten separated spawns each get papers','bounded compact frames decode','restore retains shared papers','supported route reaches real case pickup','launcher roofs have explicit supported routes','route follows moving carrier','relocation removes old routes']};writeFileSync(out+'/trail-integration.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt,null,2));
+const missingSpawns=spawns.filter(p=>!nav.paperLead({...p,y:0},{x:0,y:0,z:1}).length);assert.equal(missingSpawns.length,0,'every spawn has a supported starter in its initial view sector');
+const receipt={passed:true,spawnCoverage:spawns.length,stableCount,kind:'real authority/walk-route/wire integration; not human gameplay acceptance',spawns:rows,sewerRoutes,roofRoutes,frames,maxBytes,maxStepMs,checks:['ten separated spawns each get papers','bounded compact frames decode','restore retains shared papers','supported route reaches real case pickup','launcher roofs have explicit supported routes','route follows moving carrier','relocation removes old routes']};writeFileSync(out+'/trail-integration.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt,null,2));

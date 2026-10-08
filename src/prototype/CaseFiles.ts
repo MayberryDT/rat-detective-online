@@ -28,7 +28,7 @@ export class CaseFiles {
         this.root.name='physical-case-files';
         this.root.userData.noNoir=true; // adopted explicitly with the dynamic dressing path
         this.material=new THREE.MeshStandardMaterial({map:this.art.map,emissiveMap:this.art.edge,
-            emissive:0xffffff,emissiveIntensity:.22,roughness:1,metalness:0,side:THREE.DoubleSide});
+            emissive:0xffffff,emissiveIntensity:.55,roughness:1,metalness:0,side:THREE.DoubleSide});
         for(let family=0;family<4;family++){
             const [w,d]=[[.82,1.10],[.79,1.03],[.43,.96],[.76,.65]][family];
             const geometry=new THREE.PlaneGeometry(w,d,4,6);geometry.rotateX(-Math.PI/2);
@@ -65,7 +65,7 @@ export class CaseFiles {
             if(this.visibleIds.length===CLUES.visible)break;
             if(!this.supports.has(c.id))this.supports.set(c.id,this.support(c.p)??null);
             const ground=this.supports.get(c.id);if(!ground)continue;
-            const hash=hashId(c.id),family=hash%4;
+            const hash=hashId(c.id),family=c.id.startsWith('lead-')?hash%2:hash%4;
             this.pose.position.set(c.p.x,ground.y+.012,c.p.z);
             this.normal.set(ground.normal.x,ground.normal.y,ground.normal.z).normalize();
             this.pose.quaternion.setFromUnitVectors(UP,this.normal);
