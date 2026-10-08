@@ -138,7 +138,7 @@ export class CaseClues {
     private nextGroup=1;
     private nextSheet=1;
     private nextPrint=1;
-    /** `prints` by 2-unit cell (`printsNear`); undefined after a change. */
+    /** `prints` by 2-unit cell (`printNear`); undefined after a change. */
     private printCells?:Map<string,{x:number;y:number;z:number;run:CasePrints}[]>;
     /** Where the trail leads this step (the floor under the case or its carrier). */
     private aim?:Vec3Data;
@@ -609,9 +609,10 @@ export class CaseClues {
         }
         return start+PLAN.printLead+PRINTS.stride<total?{total,start:start+PLAN.printLead,at,heading}:undefined;
     }
-    /** Prints in the 2-unit cells around `p` (every check here reaches at most a unit): a city of runs is not scanned
-     * whole for each spot tried. Rebuilt after prints change. */
-    private printsNear(p:Vec3Data):{x:number;y:number;z:number;run:CasePrints}[] {
+    /** Whether a print (of a run other than `skip`) lies within `reach` (at most 2) of `p` on its floor, looking only in
+     * the 2-unit cells around it: a city of runs is not scanned whole for each spot tried. Cells are rebuilt after
+     * prints change. */
+    private printNear(p:Vec3Data,reach:number,skip?:CasePrints):boolean {
         if(!this.printCells){
             this.printCells=new Map();
             for(const run of this.prints)for(let i=0;i+3<run.f.length;i+=4){
@@ -620,16 +621,19 @@ export class CaseClues {
                 cell.push({x,y:run.f[i+1]!,z,run});
             }
         }
-        const out:{x:number;y:number;z:number;run:CasePrints}[]=[],cx=Math.floor(p.x/2),cz=Math.floor(p.z/2);
-        for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){const cell=this.printCells.get((cx+dx)+','+(cz+dz));if(cell)out.push(...cell);}
-        return out;
+        const cx=Math.floor(p.x/2),cz=Math.floor(p.z/2);
+        for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++){
+            const cell=this.printCells.get((cx+dx)+','+(cz+dz));if(!cell)continue;
+            for(const q of cell)if(q.run!==skip&&Math.abs(q.y-p.y)<1&&Math.hypot(q.x-p.x,q.z-p.z)<reach)return true;
+        }
+        return false;
     }
     /** No print on or beside a sheet's spot (either of a loose sheet's), nor on another print (`replacing` aside). */
     private printRoom(p:Vec3Data,fresh:readonly number[],replacing?:CasePrints):boolean {
         for(const c of this.items)for(const q of [c.p,c.q])if(q&&Math.abs(q.y-p.y)<1&&flat(q,p)<PLAN.printClear)return false;
         const near=(f:readonly number[],apart:number)=>{for(let i=0;i+3<f.length;i+=4)if(Math.abs(f[i+1]!-p.y)<1&&Math.hypot(f[i]!-p.x,f[i+2]!-p.z)<apart)return true;return false;};
         if(near(fresh,PLAN.printApart))return false;
-        for(const q of this.printsNear(p))if(q.run!==replacing&&Math.abs(q.y-p.y)<1&&Math.hypot(q.x-p.x,q.z-p.z)<PLAN.printRuns)return false;
+        if(this.printNear(p,PLAN.printRuns,replacing))return false;
         return true;
     }
     private roomFor(p:Vec3Data,fresh:readonly CaseClue[]):boolean {
@@ -640,7 +644,7 @@ export class CaseClues {
             if(c.q&&Math.abs(c.q.y-p.y)<1&&flat(c.q,p)<PLAN.spacing)return false;
         }
         // Nor on prints.
-        for(const q of this.printsNear(p))if(Math.abs(q.y-p.y)<1&&Math.hypot(q.x-p.x,q.z-p.z)<PLAN.printClear)return false;
+        if(this.printNear(p,PLAN.printClear))return false;
         return true;
     }
     /** A look unlike its neighbours: a family not yet in the group, the least-seen art nearby. */
