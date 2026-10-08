@@ -493,6 +493,10 @@ export class GameSession {
     }
 
     private receive(message: ServerMessage): void {
+        // The server clock: the welcome's reading is late by however long the welcome waited (behind loading work it
+        // can be seconds, and the replay recorder then cut clips without their events). A chaos state is never stamped
+        // after it is sent, so the largest offset any state shows is the best estimate (smooth-play plan, R2).
+        if(message.type==='chaos'){const offset=message.state.time-Date.now();if(offset>this.serverOffset)this.serverOffset=offset;}
         this.scoreboard.receive(message);
         this.recorder.record(message);
         if(message.type==='chaos'){this.diagnosticChaos={receivedAt:Date.now(),serverTime:message.state.time,shots:message.state.shots.length,tick:message.state.tick??0,epoch:message.state.epoch??'legacy'};}
