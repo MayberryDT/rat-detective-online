@@ -57,7 +57,7 @@ requestAnimationFrame(() => setTimeout(() => {
   if (startup.signal.aborted) return;
   document.getElementById('title-screen')?.classList.add('awake');
   music.start();
-  void import('./session/prepareGame').then(module => module.prepareGame(title,music,startup.signal)).then(session => {
+  void import('./session/prepareGame').then(module => module.prepareGame(title,music,startup.signal,()=>requested)).then(session => {
     if (!session) return;
     if (startup.signal.aborted) { session.dispose(); return; }
     performance.mark('city-entry-ready');

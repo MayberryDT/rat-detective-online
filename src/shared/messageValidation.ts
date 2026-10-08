@@ -509,6 +509,7 @@ function parseClientBody(parsed:Record<string,unknown>):ClientMessage|null {
       protocolVersion,
       name: parsed.name,
       ...(isResumeToken(parsed.resumeToken) ? {resumeToken:parsed.resumeToken} : {}),
+      ...(parsed.hold === true ? {hold:true as const} : {}),
       appearance,
     };
   }

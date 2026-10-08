@@ -10,7 +10,7 @@ import { closestPointOnSegment, INTERACTION_SWEEP_DISTANCE, INTERACTION_SWEEP_MS
 import { SLICK_MATERIAL, StaticCityBroadphase, addCityBody, cityBoxBody } from './StaticCityBroadphase';
 import { boundedIncidentVelocity, launcherVelocity, LANDING_SHOCKWAVE, SURGE, type ThrowSource } from './launcherVelocity';
 import { incidentInfo, incidentRoster, type EvidenceMode, type IncidentId } from './incidentCatalog';
-import { CITY_BOUNDS, grayboxBoxes } from './grayboxLayout';
+import { CITY_BOUNDS, sharedGrayboxBoxes } from './grayboxLayout';
 import { isReachableLandmarkPosition } from './landmarkLayout';
 import { isReachableVehiclePosition } from './vehicleLayout';
 import { BALL_SPEED, BALL_GRAVITY, BALL_RESTITUTION, BALL_RADIUS } from './ballTuning';
@@ -86,6 +86,8 @@ export type PickupEvent =
     /** A Mousetrap was set down, snapped on a rat and holds it (`victim`), or destroyed (`by` the rat whose hit broke it). */
     | { kind:'trap'; what:'launch'|'set'|'snap'|'break'; trapId:string; playerId:string; p:Vec3Data; victim?:string; by?:string|null; hits?:number };
 export type RewardReason='streak'|'dispatch'|'bounty';
+/** Supply sites per world (`seedPickups`): the same layout always resolves the same points. */
+const SUPPLY_POINTS=new Map<string,PickupPoint[]>();
 /** One authoritative simulation, also usable by the solo preview. No rendering or DOM. */
 export class ChaosSimulation {
     readonly world = new C.World({gravity:new C.Vec3(0,-25,0)});
@@ -220,7 +222,7 @@ export class ChaosSimulation {
         this.world.defaultContactMaterial.restitution=.72;
         // A loose case that falls into a chute rides it to the street; it never snags upstairs.
         this.world.addContactMaterial(new C.ContactMaterial(SLICK_MATERIAL,CASE_MATERIAL,{friction:0,restitution:.1}));
-        for(const b of grayboxBoxes(spec)){
+        for(const b of sharedGrayboxBoxes(spec)){
             const body=cityBoxBody(b);
             addCityBody(this.world,body);this.targets.set(body,{kind:'world'});
         }
@@ -240,7 +242,11 @@ export class ChaosSimulation {
         let clear:readonly Vec3Data[];
         try{clear=spec?worldSpawnPoints(spec):CASE_SPAWNS;}catch{clear=CASE_SPAWNS;}
         this.streetPoints=clear;
-        this.pickupPoints=this.fixtureSupplies?[...this.fixtureSupplies]:resolvePickupPoints(clear,14,p=>this.supportedSpot(p));
+        // Where supplies can stand depends only on the layout: worked out once per world, not at every room wake.
+        const key=spec&&`${spec.version}:${spec.seed}`;
+        let points=key?SUPPLY_POINTS.get(key):undefined;
+        if(!this.fixtureSupplies&&!points){points=resolvePickupPoints(clear,14,p=>this.supportedSpot(p));if(key)SUPPLY_POINTS.set(key,points);}
+        this.pickupPoints=this.fixtureSupplies?[...this.fixtureSupplies]:[...points!];
         for(const point of this.pickupPoints){this.pickups.set(point.id,{kind:this.fixtureSupplies?point.kind:siteKind(point.kind),p:{...point.p},availableAt:0});this.siteHomes.set(point.id,{...point.p});}
     }
     /** A supply-sized volume at `p` (prop height .7 above the foot) is clear of

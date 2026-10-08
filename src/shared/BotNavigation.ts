@@ -1,5 +1,5 @@
 import {DISPATCH_STATIONS,LAUNCH_MACHINES} from './chaosState';
-import { CITY_BOUNDS, GRAYBOX_SPAWNS, grayboxBoxes, type GrayboxBox } from './grayboxLayout';
+import { CITY_BOUNDS, GRAYBOX_SPAWNS, sharedGrayboxBoxes, type GrayboxBox } from './grayboxLayout';
 import { LANDMARK_INTERIORS, landmarkExitPoint } from './landmarkLayout';
 import { pier9ExitPoint } from './city/kit/parts/docksWarehouse';
 import { SEWER_LIGHTS,SEWER_PIPE_ENTRANCES,sewerPipePoint,sewerRampTravelPoint } from './sewerLayout';
@@ -65,7 +65,7 @@ export class BotNavigation {
         // Omitting them from navigation sends routes through machines near objectives.
         const controls=[...DISPATCH_STATIONS,...LAUNCH_MACHINES].flatMap(c=>[c.box,c.target])
             .map(box=>({...box,rx:0,ry:0,rz:0,color:0}));
-        for(const box of [...grayboxBoxes(spec),...controls]) {
+        for(const box of [...sharedGrayboxBoxes(spec),...controls]) {
             const m=boxBasis(box),{hx:dx,hz:dz}=boxHalfExtents(box);
             const solid:Solid={box,m,nx:m[1],ny:m[4],nz:m[7],minX:box.x-dx,maxX:box.x+dx,minZ:box.z-dz,maxZ:box.z+dz};
             for(let x=Math.floor((solid.minX-1)/BUCKET);x<=Math.floor((solid.maxX+1)/BUCKET);x++)for(let z=Math.floor((solid.minZ-1)/BUCKET);z<=Math.floor((solid.maxZ+1)/BUCKET);z++) {

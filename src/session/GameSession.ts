@@ -262,7 +262,8 @@ export class GameSession {
     }
 
     enterCity(): void {
-        if (this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
+        // A held join (Enter pressed while loading, `NetworkManager.hold`) is released here.
+        if (!this.transport.isHeld && this.transport.state !== 'idle' && this.transport.state !== 'disconnected') return;
         entryRequested();
         this.transport.connect(this.title.name, generateRandomAppearance());
         this.title.onGesture();

@@ -5,7 +5,7 @@ import type {MotorNavigation} from '../shared/bots/motor';
 import {StaticCityBroadphase,addCityBody,cityBoxBody} from '../shared/StaticCityBroadphase';
 import {CITY_BARS_GROUP} from '../shared/boxFrame';
 import {SpatialRayQuery} from '../shared/SpatialRayQuery';
-import {CITY_BOUNDS,GRAYBOX_VERSION,grayboxBoxes} from '../shared/grayboxLayout';
+import {CITY_BOUNDS, GRAYBOX_VERSION, sharedGrayboxBoxes} from '../shared/grayboxLayout';
 import {DISPATCH_STATIONS,LAUNCH_MACHINES,MAX_LAUNCH_EVENTS,type ChaosState} from '../shared/chaosState';
 import {heldWeapon,jumpBlocked,legScale} from '../shared/pickups';
 import {RAT_BODY,RAT_MOVEMENT,RatBody,addRatShapes,lookHeading,muzzleReach,ratMuzzle,turnFacing,type RatControls} from '../shared/rat/ratBody';
@@ -73,7 +73,7 @@ export class ServerBotController {
         this.world.collisionMatrix=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
         this.world.collisionMatrixPrevious=new C.ObjectCollisionMatrix() as unknown as C.ArrayCollisionMatrix;
         this.world.defaultContactMaterial.friction=0;this.world.defaultContactMaterial.restitution=.05;
-        for(const box of grayboxBoxes(spec)){
+        for(const box of sharedGrayboxBoxes(spec)){
             addCityBody(this.world,cityBoxBody(box));
         }
         for(const control of [...DISPATCH_STATIONS,...LAUNCH_MACHINES])for(const box of [control.box,control.target]){

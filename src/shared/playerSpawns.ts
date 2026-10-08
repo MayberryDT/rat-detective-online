@@ -1,5 +1,5 @@
 import { DISPATCH_STATIONS, LAUNCH_MACHINES } from './chaosState';
-import { CITY_BOUNDS, GRAYBOX_VERSION, grayboxBoxes, isRampOpening } from './grayboxLayout';
+import { CITY_BOUNDS, GRAYBOX_VERSION, sharedGrayboxBoxes, isRampOpening } from './grayboxLayout';
 import type { Vec3Data } from './networkProtocol';
 import { boxHalfExtents } from './boxFrame';
 import { DEFAULT_CITY_OPTIONS, generateBuildingLayout, overlapsBuildingFootprint, type WorldSpec } from './worldSpec';
@@ -17,7 +17,7 @@ export function worldSpawnPoints(spec: WorldSpec): readonly Vec3Data[] {
   if (cached) return cached;
   const points: Vec3Data[] = [];
   if (spec.version === GRAYBOX_VERSION) {
-    const boxes = grayboxBoxes(spec).map(b => ({ x:b.x, y:b.y, z:b.z, ...boxHalfExtents(b) }));
+    const boxes = sharedGrayboxBoxes(spec).map(b => ({ x:b.x, y:b.y, z:b.z, ...boxHalfExtents(b) }));
     for (const control of [...DISPATCH_STATIONS, ...LAUNCH_MACHINES]) {
       for (const b of [control.box, control.target]) boxes.push({x:b.x,y:b.y,z:b.z,hx:b.w/2,hy:b.h/2,hz:b.d/2});
     }

@@ -14,7 +14,7 @@ import type { WeaponKind } from '../shared/pickups';
 import { serializeServerMessage } from './serializeServerMessage';
 import { type ChaosState } from '../shared/chaosState';
 import { shootRate } from '../shared/shotTiming';
-import { GRAYBOX_VERSION, grayboxBoxes } from '../shared/grayboxLayout';
+import { GRAYBOX_VERSION, sharedGrayboxBoxes } from '../shared/grayboxLayout';
 import { drowned } from '../shared/city/kit/city';
 import { ASSIGNMENT_IDS, ASSIGNMENTS, createAssignment, isAssignmentId, nextAssignment, type AssignmentId, type AssignmentRotation, type AssignmentState } from '../shared/assignments';
 import { incidentInfo, incidentRoster, isEvidenceMode, isIncidentId, parseIncidentList, type EvidenceMode, type IncidentId } from '../shared/incidentCatalog';
@@ -101,6 +101,9 @@ interface SocketAttachment {
   delivered?: boolean;
   admissionUntil?: number;
   titleUntil?: number;
+  /** Pressed Enter City (a held join): the room wakes for this seat while its browser finishes loading; the welcome
+   * waits for the real join. Counts as a human for the bots until then (`admissionUntil` is its lease). */
+  held?: true;
   /** Joined with `agent=1`: a headless agent browser, recorded as `agent`, never `human` (docs/city-map.md). */
   agent?: boolean;
   /** Proved the room's `ADMIN_TOKEN` in an `admin` message; the token itself is never kept. */
@@ -140,6 +143,8 @@ const COMPANION_ACTIVE_KEY = 'companion-active-v1';
 const COMPANION_REFRESH_MS = 20_000;
 export const BOT_REFILL_MS = 10_000;
 const JOIN_LEASE_MS = 10_000;
+/** How long a held join (Enter pressed, browser still loading) keeps its seat before the real join must come. */
+const HELD_JOIN_MS = 20_000;
 export const BOT_HEARTBEAT_MS = 15_000;
 export const STALE_PLAYER_MS = 2 * 60_000;
 export const CHECKPOINT_MS = 2_500;
@@ -387,6 +392,13 @@ export class GameRoom extends DurableObject<Env> {
     return humanIds.size + pending;
   }
 
+  /** Seats held by a pressed Enter City, not joined yet, inside their lease. */
+  private heldSeats(): number {
+    let held = 0;
+    for (const ws of this.ctx.getWebSockets()) { const a = this.getAttachment(ws); if (a.held && !a.playerId && (a.admissionUntil ?? 0) > this.now()) held++; }
+    return held;
+  }
+
   private writeRoundBotCount(): void {
     this.writeRoomState(ROUND_BOT_COUNT_KEY, String(this.roundBotCount));
   }
@@ -414,7 +426,8 @@ export class GameRoom extends DurableObject<Env> {
   private rebalanceBots(): void {
     if (!this.matchRoom) return;
     const wasRunning = this.chaosTimer !== null || this.botRoster.length > 0;
-    const humans = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length;
+    // A held seat (Enter pressed, browser still loading) brings the round's bots like a joined human.
+    const humans = [...this.players.keys()].filter(id => !this.isManagedBot(id)).length + this.heldSeats();
     const previousLength = this.botRoster.length;
     const target = humans ? Math.min(this.ensureRoundBotRoster(humans), MAX_PLAYERS - humans) : 0;
     if (target > this.botRoster.length && this.refillAt > this.now()) return;
@@ -1106,6 +1119,18 @@ export class GameRoom extends DurableObject<Env> {
       this.send(ws, { type: 'error', message: 'This room is full' });
       return;
     }
+    // Enter City pressed while the browser is still loading: wake the room now (bots, simulation, tick) so the wake
+    // overlaps the load. No rat yet (nothing can shoot a player who cannot move); the welcome waits for the real join.
+    if (message.hold && this.matchRoom && !existingPlayerId) {
+      if (!attachment.held) {
+        this.setAttachment(ws, { ...attachment, held: true, admissionUntil: this.now() + HELD_JOIN_MS, titleUntil: undefined });
+        this.audience = null;
+        this.rebalanceBots();
+        this.startChaos();
+        this.ctx.waitUntil(this.scheduleNextAlarm());
+      }
+      return;
+    }
     if (this.players.size >= MAX_PLAYERS && this.botRoster.length) {
       const bot = this.botRoster[this.botRoster.length - 1];
       this.removePlayerById(bot.id, true); this.botRoster.pop();
@@ -1128,7 +1153,7 @@ export class GameRoom extends DurableObject<Env> {
     this.city.session('join',id,this.now());
     this.movementAllowances.set(id,createMovementAllowance(this.now()));
     this.joining.add(ws);this.audience=null;
-    this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined, titleUntil:undefined, delivery: true });
+    this.setAttachment(ws, { ...this.getAttachment(ws), playerId: id, admissionUntil: undefined, titleUntil:undefined, held: undefined, delivery: true });
     if (this.matchRoom) this.rebalanceBots();
     else if (this.persistentBots) this.activatePersistentBots();
 
@@ -1538,6 +1563,8 @@ export class GameRoom extends DurableObject<Env> {
       this.setAttachment(ws, { ...this.getAttachment(ws), playerId: undefined, admissionUntil: undefined });
       this.publishCompanion(true);
     }
+    // A held seat goes with its socket: the room may sleep at once instead of at the end of the lease.
+    if (this.getAttachment(ws).held) this.setAttachment(ws, { ...this.getAttachment(ws), held: undefined, admissionUntil: undefined });
     this.ctx.waitUntil(this.scheduleNextAlarm());
     if (this.matchRoom) {
       this.refillAt = this.now() + BOT_REFILL_MS;
@@ -1921,7 +1948,7 @@ export class GameRoom extends DurableObject<Env> {
       isAgent: id => this.sessions.get(id)?.agent === true,
       connected: id => this.sessions.get(id)?.until == null,
       sight: (from, to) => this.lineOfSight(from, to),
-      solids: grayboxBoxes({ seed: this.world.seed, version: GRAYBOX_VERSION }).filter(b => !b.rx && !b.ry && !b.rz && !b.passBalls && b.w >= .5 && b.h >= .5 && b.d >= .5),
+      solids: sharedGrayboxBoxes({ seed: this.world.seed, version: GRAYBOX_VERSION }).filter(b => !b.rx && !b.ry && !b.rz && !b.passBalls && b.w >= .5 && b.h >= .5 && b.d >= .5),
     });
     return this.cityRecorder;
   }

@@ -19,8 +19,10 @@ import type { ExhibitMessage, HighlightMarker } from './highlights';
  * 34: shared physical case papers replace the carrier ping and through-wall case locators (staging only).
  * 35: paper trails lead from every spawn to the case (staging only).
  * 36: case papers are persistent sheets in small groups: a fixed id, place and look `s` for life, an optional gust spot `q`.
- * 37: paw prints beside the papers (`prints`, keyed runs leaving a group the way the trail goes on). */
-export const PROTOCOL_VERSION = 37;
+ * 37: paw prints beside the papers (`prints`, keyed runs leaving a group the way the trail goes on).
+ * 38: a held join (`join` with `hold`): Enter City wakes the room while the browser loads; the welcome waits for the
+ *     real join. */
+export const PROTOCOL_VERSION = 38;
 /** Body hits deal 1; a headshot is always lethal. */
 export const MAX_HP = 5;
 export const KILLS_TO_WIN = 20;
@@ -216,7 +218,7 @@ export type PickupRejectReason = 'stale'|'unavailable'|'blocked'|'ineligible'|'t
 export type ShotResultOutcome = 'first-step'|'rat-body'|'rat-head'|'ironclad-reflect'|'case-contact'|'world-bounce'|'dispatch-contact'|'pressure-contact'|'trap-contact'|'lifetime'|'capacity'|'reset'|'rejected';
 
 export type ClientMessage = (
-  | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance; resumeToken?: string }
+  | { type: 'join'; protocolVersion: number; name: string; appearance: RatAppearance; resumeToken?: string; hold?: true }
   | ({ type: 'updateMovement' } & MovementInput)
   | ({ type: 'shoot'; movement?: MovementInput } & ShotDescriptor)
   | { type:'pickupIntent'; interactionId:string; target:PickupTarget; targetId:string; generation:number; movement:MovementInput }

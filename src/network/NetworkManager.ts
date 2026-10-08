@@ -83,6 +83,8 @@ export function resolveWebSocketUrl(serverUrl?: string): string {
 }
 
 /** Owns the connection only. Session code applies validated messages to the game. */
+/** Renewals of a title's preparation, 20 s apart (three minutes). */
+const PREPARE_RENEWALS = 9;
 export class NetworkManager {
     public state: ConnectionState = 'idle';
     public onState: ((state: ConnectionState, message?: string) => void) | null = null;
@@ -110,6 +112,11 @@ export class NetworkManager {
     private invitationReported = false;
     private resumeStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
     private prepared: {socket:WebSocket; cleanup:()=>void} | null = null;
+    /** Enter City was pressed while the game still loads: the join went out held (the room wakes meanwhile) and the
+     * real join follows from `connect`. */
+    private held = false;
+    /** Times the title's preparation has been renewed (`prepare`). */
+    private renewals = 0;
     private readonly options: TransportOptions;
     private readonly diagnostics = {
         receivedCount: 0, receivedChars: 0, parseMs: 0, parseMaxMs: 0,
@@ -164,9 +171,31 @@ export class NetworkManager {
     }
 
     connect(name: string, appearance: RatAppearance): void {
+        // A held join (`hold`) becomes the real one on the same socket; its rat keeps the name and look it was given.
+        if (this.held) {
+            this.held = false;
+            const generation = this.generation;
+            if (this.socket?.readyState === WebSocket.OPEN && this.credentials) {
+                this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, ...(this.resumeToken ? {resumeToken:this.resumeToken} : {}) });
+                this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
+            }
+            // Still opening: its open handler sends the real join now that `held` is clear.
+            return;
+        }
         if (this.state === 'playing' || this.state === 'connecting' || this.state === 'reconnecting') return;
         this.credentials = { name, appearance };
         this.retries = 0;
+        this.open();
+    }
+
+    get isHeld(): boolean { return this.held; }
+    /** Enter City pressed before the game has loaded: send the join now, held, so the room wakes while the browser
+     * finishes; `connect` sends the real join once the session is ready. A resume is not held (its room is awake). */
+    hold(name: string, appearance: RatAppearance): void {
+        if (this.state !== 'idle' || this.held || this.resumeToken) return;
+        this.credentials = { name, appearance };
+        this.retries = 0;
+        this.held = true;
         this.open();
     }
 
@@ -182,7 +211,9 @@ export class NetworkManager {
         const events=new AbortController();
         const cleanup=()=>{clearTimeout(timer);events.abort();};
         const discard=()=>{if(this.prepared?.socket===socket)this.prepared=null;cleanup();socket.close();};
-        const timer=setTimeout(discard,25_000);
+        // The room drops a title's preparation after 30 s: a title left open renews it every 20 s, for three
+        // minutes, so a later Enter still finds the room prepared; after that an idle title costs nothing.
+        const timer=setTimeout(()=>{discard();if(this.state==='idle'&&!this.held&&++this.renewals<=PREPARE_RENEWALS)this.prepare();},20_000);
         this.prepared={socket,cleanup};
         for(const event of ['close','error','message'])socket.addEventListener(event,discard,{signal:events.signal});
     }
@@ -216,10 +247,12 @@ export class NetworkManager {
         const decoder=new DeliveryDecoder();
         const openedAt=performance.now();
         const current = () => generation === this.generation && this.socket === socket;
-        this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
+        // A held join waits for the real one before the join clock starts (`connect`).
+        if (!this.held) this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
         const join = () => {
             if (!current() || !this.credentials) return;
-            this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, ...(this.resumeToken ? {resumeToken:this.resumeToken} : {}) });
+            this.send({ type: 'join', protocolVersion: PROTOCOL_VERSION, ...this.credentials, ...(this.resumeToken ? {resumeToken:this.resumeToken} : {}), ...(this.held ? {hold:true as const} : {}) });
+            if (!this.held && !this.joinTimer) this.joinTimer = setTimeout(() => this.failed(generation, 'Joining timed out.'), this.options.joinTimeoutMs ?? 8_000);
         };
         socket.addEventListener('open', join, {once:true});
         socket.addEventListener('message', event => {
