@@ -116,7 +116,8 @@ class Playback {
         const started=performance.now();
         const clip=this.data.clip;
         // The view first, while its carrier and armed rats still exist; the rats are rebuilt from the roster below.
-        this.chaos.rewind();this.remotes.clear();this.dust.clear();this.audio.stopAll();
+        this.chaos.rewind();const viewAt=performance.now();this.remotes.clear();this.dust.clear();this.audio.stopAll();
+        const clearedAt=performance.now();
         this.director=new ReplayDirector(clip,this.view,this.blockers);
         this.next=0;this.cut=true;this.lastChaos=null;
         this.t=this.roster?.at??clip.startAt;
@@ -125,6 +126,7 @@ class Playback {
             this.join({...rat.data,hp:rat.hp});
             if(rat.dead)this.remotes.get(rat.data.id)?.useSharedCorpse();
         }
+        const joinedAt=performance.now();
         let lastChaos=-1;
         for(let i=0;i<this.events.length&&this.events[i]!.at<=clip.startAt;i++)if(this.events[i]!.event.type==='chaos')lastChaos=i;
         while(this.next<this.events.length&&this.events[this.next]!.at<=clip.startAt){
@@ -136,6 +138,8 @@ class Playback {
         this.t=clip.startAt;
         // Timings for replay checks (scripts/verify-replay.mjs): a rewind is each loop's restart.
         performance.measure('replay-rewind',{start:started,end:performance.now()});
+        performance.measure('replay-rewind-view',{start:started,end:viewAt});performance.measure('replay-rewind-clear',{start:viewAt,end:clearedAt});
+        performance.measure('replay-rewind-rats',{start:clearedAt,end:joinedAt});performance.measure('replay-rewind-events',{start:joinedAt,end:performance.now()});
     }
 
     /** Advance by `dt` seconds on screen; false once the clip has ended. */
@@ -404,6 +408,7 @@ export class ReplayStage implements ReplayPlayer {
         // The camera's ray checks see the city only (live rats would block a view they are not in); built once a play.
         this.deps.scene.updateMatrixWorld();
         const blockers=new CameraBlockers(this.deps.scene.children.filter(o=>o.userData.aimTarget===true&&this.deps.shared(o)));
+        performance.measure('replay-start-blockers',{start:started,end:performance.now()});
         this.playback=new Playback(data,this.audio,this.deps.listener.context as AudioContext,blockers,this.camera);
         performance.measure('replay-start',{start:started,end:performance.now()});
     }

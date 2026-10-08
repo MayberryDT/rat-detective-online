@@ -27,11 +27,12 @@ const [width,height]=values.size.split('x').map(Number),sleep=ms=>new Promise(r=
 const report={url:values.url,label:values.label,at:new Date().toISOString(),kind:'hosted game, muted headless agent with scripted keys and mouse; not human acceptance',checks:[],clips:[]};
 const check=(name,pass,detail)=>report.checks.push({check:name,pass:!!pass,...(detail===undefined?{}:{detail})});
 
-/** Every perspective render: when, which camera, where it was and where it looked; the server clock estimate with it. */
+/** Every perspective render: when, which camera, where it was and where it looked; the server clock estimate with it;
+ * the renderer's programs, geometries and textures (a stall with a new program is a shader compile). */
 const HOOK=`(()=>{const d=window.__THREE_DEVTOOLS__=new EventTarget();window.__cams=[];window.__recordCams=false;
 d.addEventListener('observe',e=>{const o=e.detail;if(o.render&&o.domElement&&!o.__wrapped){o.__wrapped=1;const r=o.render.bind(o);
  o.render=(s,c)=>{if(c&&c.isPerspectiveCamera&&s.children.length>50){window.__renderer=o;if(window.__recordCams){c.updateMatrixWorld();const m=c.matrixWorld.elements;
-  const st=window.__ratReplay?.state();window.__cams.push([performance.now(),c.uuid,m[12],m[13],m[14],-m[8],-m[9],-m[10],window.__ratReplay?.serverNow()??0,st?.t??0,st?.pov??null]);}}return r(s,c);};}});})();`;
+  const st=window.__ratReplay?.state();window.__cams.push([performance.now(),c.uuid,m[12],m[13],m[14],-m[8],-m[9],-m[10],window.__ratReplay?.serverNow()??0,st?.t??0,st?.pov??null,o.info.programs?.length??0,o.info.memory.geometries,o.info.memory.textures]);}}return r(s,c);};}});})();`;
 
 const port=9500+Math.floor(Math.random()*300),profile=mkdtempSync(join(tmpdir(),'rat-replay-'));
 const chrome=spawn(process.env.CHROME_BIN??'google-chrome',['--headless=new',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,`--window-size=${width},${height}`,
