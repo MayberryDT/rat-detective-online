@@ -1,6 +1,6 @@
 # P4 handoff: stable, sparse, living noir evidence
 
-> **Implemented 7–8 October.** Tyler started the work ("move forward"; scripted movement for the review recording and a staging deploy allowed). The repair is on staging (`staging-2026-10-08-f958014`, protocol 36); results, artifacts and limits are in the [repair receipt](../verification/noir-papers-v2-2026-10-08.md). Production is not deployed. The diagnosis below is history.
+> **Implemented 7–8 October.** Tyler started the work ("move forward"; scripted movement for the review recording and a staging deploy allowed). The repair is on staging (`staging-2026-10-08-f958014`, protocol 36); results, artifacts and limits are in the [repair receipt](../verification/noir-papers-v2-2026-10-08.md). Production is not deployed. The diagnosis below is history. **8 October, later:** Tyler asked for paw prints beside the papers for clarity; they and an eye-catching gust are on staging (protocol 37), see the [paw prints receipt](../verification/paw-prints-2026-10-08.md).
 
 Prepared 7 October 2026 for **[P4] Rat Detective physical clues**. Preserve the thread title/ID.
 
